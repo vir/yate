@@ -458,7 +458,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"oss"))
 	return false;
-    msg.retValue() << "oss,osschan=" << (s_chan != 0 ) << "\n";
+    msg.retValue() << "name=oss,type=misc;osschan=" << (s_chan != 0 ) << "\n";
     return false;
 }
 

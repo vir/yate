@@ -172,8 +172,8 @@ bool EngineStatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"engine"))
 	return false;
-    msg.retValue() << "engine";
-    msg.retValue() << ",plugins=" << plugins.count();
+    msg.retValue() << "name=engine,type=system";
+    msg.retValue() << ";plugins=" << plugins.count();
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
@@ -272,6 +272,7 @@ int Engine::run()
 	enqueue(m);
 	Thread::yield();
     }
+    s_haltcode &= 0xff;
     Debug(DebugInfo,"Engine exiting with code %d",s_haltcode);
     dispatch("engine.halt");
     m_dispatcher.dequeue();
@@ -526,7 +527,7 @@ static int supervise(void)
 	}
 	::close(wdogfd[0]);
 	if (s_childpid > 0) {
-	    // Child failed to proof sanity. Kill it - noo need to be gentle.
+	    // Child failed to proof sanity. Kill it - no need to be gentle.
 	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
 	    // If -Da was specified try to get a corefile
 	    if (s_sigabrt) {

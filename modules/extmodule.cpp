@@ -795,9 +795,7 @@ bool ExtModCommand::received(Message &msg)
 	msg.retValue() = r ? "External start attempt\n" : "External command failed!\n";
 	return true;
     }
-    if (line.startsWith("stop",true)) {
-	line >> "stop";
-	line.trimBlanks();
+    if (line.startSkip("stop")) {
 	if (line.null())
 	    return false;
 	ExtModReceiver *r = ExtModReceiver::find(line);

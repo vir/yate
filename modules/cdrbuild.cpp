@@ -202,8 +202,8 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
-    String st("cdrbuild,type=cdr,cdrs=");
-    st << cdrs.count() << ",[LIST]";
+    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called");
+    st << ";cdrs=" << cdrs.count() << ";";
     ObjList *l = &cdrs;
     for (; l; l=l->next()) {
 	CdrBuilder *b = static_cast<CdrBuilder *>(l->get());

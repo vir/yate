@@ -246,7 +246,7 @@ bool RouteHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    msg.retValue() << "Register,conn=" << (conn != 0) <<"\n";
+    msg.retValue() << "name=register,type=misc;conn=" << (conn != 0) <<"\n";
     return false;
 }
 

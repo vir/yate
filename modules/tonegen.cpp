@@ -352,7 +352,8 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"tonegen"))
 	return false;
-    msg.retValue() << "tonegen,tones=" << tones.count()
+    msg.retValue() << "name=tonegen,type=misc"
+		   << ";tones=" << tones.count()
 		   << ",chans=" << chans.count() << "\n";
     return false;
 }

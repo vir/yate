@@ -1220,17 +1220,22 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"h323chan") && ::strcmp(sel,"varchans"))
 	return false;
-    String st("h323chan,type=varchans");
+    String st("name=h323chan,type=varchans,format=Status|Address");
     Lock lock(s_calls);
-    st << ",routed=" << H323MsgThread::routed() << ",routers=" << H323MsgThread::count();
-    st << ",total=" << YateH323Connection::total() << ",chans=" << hplugin.calls().count() << ",[LIST]";
+    st << ";routed=" << H323MsgThread::routed() << ",routers=" << H323MsgThread::count();
+    st << ",total=" << YateH323Connection::total() << ",chans=" << hplugin.calls().count() << ";";
     ObjList *l = &hplugin.calls();
+    bool first = true;
     for (; l; l=l->next()) {
 	YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
 	if (c) {
+	    if (first)
+		first = false;
+	    else
+		st << ",";
 	    // HACK: we assume transport$address/callref format
 	    String s((const char *)c->GetCallToken());
-	    st << "," << c->id() << "=" << s.substr(0,s.rfind('/')) << "/" << c->status();
+	    st << c->id() << "=" << c->status() << "|" << s.substr(0,s.rfind('/'));
 	}
     }
     msg.retValue() << st << "\n";

@@ -80,8 +80,7 @@ public:
 
 bool StatusHandler::received(Message &msg)
 {
-//    msg.addParam("mod","cdrpgsql");
-    msg.retValue() << "CdrPgsql,conn=" << (conn != 0) <<"\n";
+    msg.retValue() << "name=cdrpgsql,type=misc;conn=" << (conn != 0) <<"\n";
     return false;
 }
 

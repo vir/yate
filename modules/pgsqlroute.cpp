@@ -161,7 +161,8 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"pgsqlroute"))
 	return false;
 
-    msg.retValue() << "PgSQLroute,conn=" << (conn != 0);
+    msg.retValue() << "name=pgsqlroute,type=misc";
+    msg.retValue() << ";conn=" << (conn != 0);
     msg.retValue() << ",total=" << s_route_rq << ",errors=" << s_route_err;
     msg.retValue() << ",routed=" << s_route_yes << ",noroute=" << s_route_no;
     msg.retValue() << "\n";

@@ -1277,18 +1277,36 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"zapchan") && ::strcmp(sel,"fixchans"))
 	return false;
-    String st("zapchan,type=fixchans,spans=");
+    String st("name=zapchan,type=fixchans,format=Span|Chan|Status");
     zplugin.mutex.lock();
-    st << zplugin.m_spans.count() << ",[LIST]";
     const ObjList *l = &zplugin.m_spans;
+    st << ",spans=" << l->count() << ",spanlen=";
+    bool first = true;
+    for (; l; l=l->next()) {
+	PriSpan *s = static_cast<PriSpan *>(l->get());
+	if (s) {
+	    if (first)
+		first = false;
+	    else
+		st << "|";
+	    st << s->chans();
+	}
+    }
+    st << ";buflen=" << s_buflen << ";";
+    l = &zplugin.m_spans;
+    first = true;
     for (; l; l=l->next()) {
 	PriSpan *s = static_cast<PriSpan *>(l->get());
 	if (s) {
 	    for (int n=1; n<=s->chans(); n++) {
 		ZapChan *c = s->getChan(n);
 		if (c) {
-		    st << ",zap/" << c->absChan() << "=";
-		    st << s->span() << "/" << n << "/" << c->status();
+		    if (first)
+			first = false;
+		    else
+			st << ",";
+		    st << "zap/" << c->absChan() << "=";
+		    st << s->span() << "|" << n << "|" << c->status();
 		}
 	    }
 	}

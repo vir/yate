@@ -925,13 +925,18 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"iaxchan") && ::strcmp(sel,"varchans"))
 	return false;
-    String st("iaxchan,type=varchans");
-    st << ",chans=" << iplugin.m_endpoint->calls().count() << ",[LIST]";
+    String st("name=iaxchan,type=varchans,format=CalledAddress|PartyCallId");
+    st << ";chans=" << iplugin.m_endpoint->calls().count() << ";";
     ObjList *l = &iplugin.m_endpoint->calls();
+    bool first = true;
     for (; l; l=l->next()) {
 	YateIAXConnection *c = static_cast<YateIAXConnection *>(l->get());
 	if (c) {
-	    st << "," << c->ourcallid << "=" << c->calledaddress << "/" << c->partycallid;
+	    if (first)
+		first = false;
+	    else
+		st << ",";
+	    st << c->ourcallid << "=" << c->calledaddress << "|" << c->partycallid;
 	}
     }
     msg.retValue() << st << "\n";

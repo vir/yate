@@ -90,7 +90,7 @@ ObjList *ObjList::operator[](int index) const
 
 ObjList *ObjList::find(const GenObject *obj) const
 {
-    DDebug("ObjList::find(%p) [%p]",obj,this);
+    DDebug(DebugAll,"ObjList::find(%p) [%p]",obj,this);
     const ObjList *n = this;
     while (n && (n->get() != obj))
 	n = n->next();
@@ -100,7 +100,7 @@ ObjList *ObjList::find(const GenObject *obj) const
 
 ObjList *ObjList::find(const String &str) const
 {
-    DDebug("ObjList::find(\"%s\") [%p]",str.c_str(),this);
+    DDebug(DebugAll,"ObjList::find(\"%s\") [%p]",str.c_str(),this);
     const ObjList *n = this;
     while (n) {
 	if (n->get() && str.matches(n->get()->toString()))
@@ -161,8 +161,9 @@ GenObject *ObjList::remove(bool delobj)
 
     if (m_next) {
 	ObjList *n = m_next;
-	m_obj = n->get();
 	m_next = n->next();
+	m_obj = n->get();
+	m_delete = n->m_delete;
 	n->m_obj = 0;
 	n->m_next = 0;
 	n->destruct();
@@ -189,9 +190,10 @@ void ObjList::clear()
 #ifdef DEBUG
     Debugger debug("ObjList::clear()"," [%p]",this);
 #endif
+    while (m_obj)
+	remove(m_delete);
     ObjList *n = m_next;
     m_next = 0;
-    remove(m_delete);
     if (n)
 	n->destruct();
 }

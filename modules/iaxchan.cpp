@@ -296,6 +296,7 @@ void YateIAXEndPoint::run(void)
 		case IAX_EVENT_CONNECT:
 		    answer(e);
 		    break;
+		case IAX_EVENT_TIMEOUT:
 		case IAX_EVENT_REJECT:
 		case IAX_EVENT_HANGUP:
 		    if ((conn = findconn(e->session)) != 0) {
@@ -720,6 +721,7 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
 	m_ast_format = format;
 	setSource(new IAXSource(frm));
 	getSource()->deref();
+	// this is for some clients to work out with yate (firefly)
 	startAudio(format,0);	
     }
     if ((format == m_ast_format) && getSource()) {

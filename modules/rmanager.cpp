@@ -77,6 +77,7 @@ public:
     RManager();
     ~RManager();
     virtual void initialize();
+    virtual bool isBusy() const;
 private:
     bool m_first;
 };
@@ -115,7 +116,9 @@ void RManagerThread::run()
 Connection *Connection::checkCreate(int sock)
 {
     // should check IP address here
-    return new Connection(sock);
+    Connection *conn = new Connection(sock);
+    conn->startup();
+    return conn;
 }
 
 Connection::Connection(int sock)
@@ -404,6 +407,11 @@ RManager::~RManager()
     Debugger::setIntOut(0);
 }
 
+bool RManager::isBusy() const
+{
+    return (connectionlist.count() != 0);
+}
+
 void RManager::initialize()
 {
     Output("Initializing module RManager");
@@ -448,7 +456,8 @@ void RManager::initialize()
     if (m_first) {
 	m_first = false;
 	Engine::self()->setHook(postHook);
-	new RManagerThread;
+	RManagerThread *mt = new RManagerThread;
+	mt->startup();
     }
 }
 

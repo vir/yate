@@ -30,6 +30,7 @@ public:
     GsmPlugin();
     ~GsmPlugin();
     virtual void initialize() { }
+    virtual bool isBusy() const;
     virtual DataTranslator *create(const String &sFormat, const String &dFormat);
     virtual const TranslatorCaps *getCapabilities() const;
 };
@@ -117,6 +118,11 @@ GsmPlugin::GsmPlugin()
 GsmPlugin::~GsmPlugin()
 {
     Output("Unloading module GSM with %d codecs still in use",count);
+}
+
+bool GsmPlugin::isBusy() const
+{
+    return (count != 0);
 }
 
 DataTranslator *GsmPlugin::create(const String &sFormat, const String &dFormat)

@@ -99,7 +99,7 @@ public:
     YateIAXConnection *findconn(iax_session *session);
     YateIAXConnection *findconn(const String& ourcallid);
     void handleEvent(iax_event *event);
-    
+
     inline ObjList &calls()
 	{ return m_calls; }
 private:
@@ -138,6 +138,7 @@ public:
     IAXPlugin();
     virtual ~IAXPlugin();
     virtual void initialize();
+    virtual bool isBusy() const;
     void cleanup();
     YateIAXEndPoint *m_endpoint;
 private:
@@ -995,6 +996,10 @@ IAXPlugin::~IAXPlugin()
     cleanup();
 }
 
+bool IAXPlugin::isBusy() const
+{
+    return m_endpoint && (m_endpoint->calls().count() != 0);
+}
 
 void IAXPlugin::initialize()
 {
@@ -1005,6 +1010,7 @@ void IAXPlugin::initialize()
 	if (!YateIAXEndPoint::Init())
 	    return;
 	m_endpoint = new YateIAXEndPoint;
+	m_endpoint->startup();
     }
     YateIAXEndPoint::Setup();
     if (m_first) {

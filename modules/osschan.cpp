@@ -115,6 +115,7 @@ class OssPlugin : public Plugin
 public:
     OssPlugin();
     virtual void initialize();
+    virtual bool isBusy() const;
 private:
     OssHandler *m_handler;
 };
@@ -475,6 +476,11 @@ void OssPlugin::initialize()
 	Engine::install(m_handler);
 	Engine::install(new StatusHandler);
     }
+}
+
+bool OssPlugin::isBusy() const
+{
+    return (s_chan != 0);
 }
 
 INIT_PLUGIN(OssPlugin);

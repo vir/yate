@@ -1591,6 +1591,12 @@ public:
     virtual void cleanup();
 
     /**
+     * Actually starts running the new thread which lingers after creation
+     * @return True if an error occured, false if started ok
+     */
+    bool startup();
+
+    /**
      * Check if the thread creation failed
      * @return True if an error occured, false if created ok
      */
@@ -1598,7 +1604,7 @@ public:
 
     /**
      * Check if the thread is running or not
-     * @return True if running, false if it has terminated
+     * @return True if running, false if it has terminated or no startup called
      */
     bool running() const;
 
@@ -1774,6 +1780,13 @@ public:
      * Initialize the plugin after it was loaded and registered.
      */
     virtual void initialize() = 0;
+
+    /**
+     * Check if the module is actively used.
+     * @return True if the plugin is in use, false if should be ok to restart
+     */
+    virtual bool isBusy() const
+	{ return false; }
 };
 
 /**
@@ -1921,6 +1934,12 @@ public:
      */
     inline void setHook(void (*hookFunc)(Message &, bool) = 0)
 	{ m_dispatcher.setHook(hookFunc); }
+
+    /**
+     * Get a count of plugins that are actively in use
+     * @return Count of plugins in use
+     */
+    int usedPlugins();
 
 protected:
     /**

@@ -87,7 +87,8 @@ void TestPlugin1::initialize()
 	m_first = false;
 	for (int i=0; i<n; i++) {
 	    ::usleep(10000);
-	    new TestThread;
+	    TestThread *t = new TestThread;
+	    t->startup();
 	}
     }
 }

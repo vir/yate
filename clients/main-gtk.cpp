@@ -569,6 +569,8 @@ public:
     GtkClientPlugin();
     ~GtkClientPlugin();
     virtual void initialize();
+    virtual bool isBusy() const
+	{ return true; }
 private:
     MessageHandler *m_route;
     bool m_init;
@@ -602,7 +604,8 @@ void GtkClientPlugin::initialize()
 	{
 	    m_route = new GtkClientHandler(priority);
 	    Engine::install(m_route);
-	    new GtkClient;
+	    GtkClient *gtk = new GtkClient;
+	    gtk->startup();
 	}
     }
 //    int argc = 0;

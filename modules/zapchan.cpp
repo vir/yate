@@ -475,6 +475,7 @@ public:
     ZaptelPlugin();
     virtual ~ZaptelPlugin();
     virtual void initialize();
+    virtual bool isBusy() const;
     PriSpan *findSpan(int chan);
     ZapChan *findChan(const char *id);
     ZapChan *findChan(int first = -1, int last = -1);
@@ -501,7 +502,9 @@ PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
 	::close(fd);
 	return 0;
     }
-    return new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation);
+    PriSpan *ps = new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation);
+    ps->startup();
+    return ps;
 }
 
 struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype,
@@ -1337,6 +1340,22 @@ ZapChan *ZaptelPlugin::findChan(int first, int last)
 	}
     }
     return 0;
+}
+
+bool ZaptelPlugin::isBusy() const
+{
+    const ObjList *l = &m_spans;
+    for (; l; l=l->next()) {
+	PriSpan *s = static_cast<PriSpan *>(l->get());
+	if (s) {
+	    for (int n=1; n<=s->chans(); n++) {
+		ZapChan *c = s->getChan(n);
+		if (c && c->inUse())
+		    return true;
+	    }
+	}
+    }
+    return false;
 }
 
 void ZaptelPlugin::initialize()

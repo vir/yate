@@ -52,6 +52,7 @@ using namespace TelEngine;
 #define MAX_SANITY 5
 
 static unsigned long long s_nextinit = 0;
+static unsigned long long s_restarts = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
 static int s_super_handle = -1;
@@ -158,6 +159,7 @@ bool EngineStatusHandler::received(Message &msg)
 	return false;
     msg.retValue() << "engine";
     msg.retValue() << ",plugins=" << plugins.count();
+    msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
@@ -198,10 +200,17 @@ int Engine::run()
 {
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
-    if (s_super_handle >= 0)
-	install(new EngineSuperHandler);
     loadPlugins();
     Debug(DebugInfo,"plugins.count() = %d",plugins.count());
+    if (s_super_handle >= 0) {
+	install(new EngineSuperHandler);
+	if (s_restarts)
+	    s_restarts = 1000000 * s_restarts + Time::now();
+    }
+    else if (s_restarts) {
+	Debug(DebugWarn,"No supervisor - disabling automatic restarts");
+	s_restarts = 0;
+    }
     initPlugins();
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
@@ -219,10 +228,20 @@ int Engine::run()
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
 	    Debug(DebugInfo,"Creating new message dispatching thread");
-	    new EnginePrivate;
+	    EnginePrivate *prv = new EnginePrivate;
+	    prv->startup();
 	}
 	else
 	    s_makeworker = true;
+
+	if (s_restarts && (Time::now() >= s_restarts)) {
+	    if (!(usedPlugins() || dispatch("engine.busy"))) {
+		s_haltcode = 128;
+		break;
+	    }
+	    // If we cannot restart now try again in 10s
+	    s_restarts = Time::now() + 10000000;
+	}
 
 	// Attempt to sleep until the next full second
 	unsigned long t = (Time::now() + corr) % 1000000;
@@ -298,6 +317,8 @@ void Engine::loadPlugins()
     const char *name = cfg.getValue("general","modpath");
     if (name)
 	s_modpath = name;
+    s_maxworkers = cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_restarts = cfg.getIntValue("general","restarts");
     NamedList *l = cfg.getSection("preload");
     if (l) {
         unsigned int len = l->length();
@@ -349,6 +370,18 @@ void Engine::initPlugins()
 	if (p)
 	    p->initialize();
     }
+}
+
+int Engine::usedPlugins()
+{
+    int used = 0;
+    ObjList *l = &plugins;
+    for (; l; l = l->next()) {
+	Plugin *p = static_cast<Plugin *>(l->get());
+	if (p && p->isBusy())
+	    used++;
+    }
+    return used;
 }
 
 void Engine::halt(unsigned int code)
@@ -453,8 +486,11 @@ static int supervise(void)
 	    if (tmp > 0) {
 		// Child exited for some reason
 		if (WIFEXITED(status)) {
-		    s_runagain = false;
 		    retcode = WEXITSTATUS(status);
+		    if (retcode <= 127)
+			s_runagain = false;
+		    else
+			retcode &= 127;
 		}
 		else if (WIFSIGNALED(status)) {
 		    retcode = WTERMSIG(status);
@@ -484,7 +520,7 @@ static int supervise(void)
 	    // If -Da was specified try to get a corefile
 	    if (s_sigabrt) {
 		::kill(s_childpid,SIGABRT);
-		::usleep(10000);
+		::usleep(250000);
 	    }
 	    ::kill(s_childpid,SIGKILL);
 	    ::usleep(10000);
@@ -616,7 +652,6 @@ int Engine::main(int argc, const char **argv, const char **environ)
 			while (*++pc) {
 			    switch (*pc) {
 				case 'a':
-				    abortOnBug(true);
 				    s_sigabrt = true;
 				    break;
 				case 'c':
@@ -681,6 +716,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	}
     }
     debugLevel(debug_level);
+    abortOnBug(s_sigabrt);
 
     int retcode = supervised ? supervise() : -1;
     if (retcode >= 0)

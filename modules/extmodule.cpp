@@ -164,6 +164,7 @@ public:
     ExtModulePlugin();
     ~ExtModulePlugin();
     virtual void initialize();
+    virtual bool isBusy() const;
 private:
     ExtModHandler *m_handler;
 };
@@ -360,7 +361,8 @@ ExtModReceiver::~ExtModReceiver()
 bool ExtModReceiver::start()
 {
     if (m_pid < 0) {
-	new ExtThread(this);
+	ExtThread *ext = new ExtThread(this);
+	ext->startup();
 	while (m_pid < 0)
 	    Thread::yield();
     }
@@ -825,6 +827,11 @@ ExtModulePlugin::~ExtModulePlugin()
     s_modules.clear();
     // the receivers destroyed above should also clear chans but better be sure
     s_chans.clear();
+}
+
+bool ExtModulePlugin::isBusy() const
+{
+    return (s_chans.count() != 0);
 }
 
 void ExtModulePlugin::initialize()

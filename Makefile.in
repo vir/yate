@@ -13,7 +13,7 @@ DEFS :=
 LIBAUX:= -ldl
 LIBTHR:= -lpthread
 INCLUDES := -I@srcdir@
-CFLAGS := -O2 @MODULE_CFLAGS@ -finline -Winline
+CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 
 PROGS:= yate
@@ -83,18 +83,6 @@ love:
 .PHONY: war
 war:
 	@echo 'Please make love instead!'
-
-.PHONY: run
-run: all
-	-./run
-
-.PHONY: gdb-run
-gdb-run: all
-	-./run --gdb
-
-.PHONY: gdb-core
-gdb-core: all
-	-./run --core
 
 .PHONY: test
 test: engine

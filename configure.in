@@ -41,6 +41,26 @@ AC_CACHE_SAVE
 AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This library is required.])])
 AC_CHECK_LIB([pthread], [pthread_create], , [AC_MSG_ERROR([This library is required.])])
 
+# Check for compile options
+INLINE_FLAGS=""
+AC_ARG_ENABLE(inline,AC_HELP_STRING([--enable-inline],[Enable inlining of functions]),want_inline=$enableval,want_inline=auto)
+AC_MSG_CHECKING([whether to use inline functions])
+case "x$want_inline" in
+    xyes)
+	INLINE_FLAGS="-finline -Winline"
+	;;
+    xno)
+	INLINE_FLAGS="-fno-inline"
+	;;
+    xauto)
+	;;
+    *)
+	AC_ERROR([Invalid argument passed to --enable-inline])
+	;;
+esac
+AC_MSG_RESULT([$want_inline])
+AC_SUBST(INLINE_FLAGS)
+
 # Checks for optional libraries.
 
 HAVE_PGSQL=no

@@ -283,12 +283,10 @@ class H323MsgThread : public Thread
 {
 public:
     H323MsgThread(Message *msg, const char *id)
-	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { m_mutex.lock(); }
+	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { }
     virtual void run();
     virtual void cleanup();
     bool route();
-    inline void resume()
-	{ m_mutex.unlock(); }
     inline static int count()
 	{ return s_count; }
     inline static int routed()
@@ -296,7 +294,6 @@ public:
 private:
     Message *m_msg;
     String m_id;
-    Mutex m_mutex;
     static int s_count;
     static int s_routed;
 };
@@ -314,6 +311,7 @@ public:
     H323Plugin();
     virtual ~H323Plugin();
     virtual void initialize();
+    virtual bool isBusy() const;
     void cleanup();
     YateH323Connection *findConnectionLock(const char *id);
     inline YateH323EndPoint *ep()
@@ -335,6 +333,7 @@ int YateH323Connection::s_total = 0;
 int H323MsgThread::s_count = 0;
 int H323MsgThread::s_routed = 0;
 
+
 bool H323MsgThread::route()
 {
     Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
@@ -345,7 +344,7 @@ bool H323MsgThread::route()
     bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
     YateH323Connection *conn = hplugin.findConnectionLock(m_id);
     if (!conn) {
-	Debug(DebugMild,"YateH323Connection '%s' wanished while routing!",m_id.c_str());
+	Debug(DebugMild,"YateH323Connection '%s' vanished while routing!",m_id.c_str());
 	return false;
     }
     if (ok) {
@@ -381,8 +380,6 @@ void H323MsgThread::run()
     s_count++;
     s_route.unlock();
     Debug(DebugAll,"Started routing thread for %s [%p]",m_id.c_str(),this);
-    m_mutex.lock();
-    m_mutex.unlock();
     bool ok = route();
     s_route.lock();
     s_count--;
@@ -438,6 +435,10 @@ YateH323EndPoint::~YateH323EndPoint()
 H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
     void *userData, H323Transport *transport, H323SignalPDU *setupPDU)
 {
+    if (Engine::exiting()) {
+	Debug(DebugWarn,"Refusing new connection, engine is exiting");
+	return 0;
+    }
     if (s_maxconns > 0) {
 	s_calls.lock();
 	int cnt = hplugin.calls().count();
@@ -579,7 +580,8 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
 
 YateH323Connection::~YateH323Connection()
 {
-    Debug(DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
+    Debug(DebugAll,"YateH323Connection::~YateH323Connection() %s %s [%p]",
+	m_status.c_str(),m_id.c_str(),this);
     setStatus("destroyed");
     s_calls.lock();
     hplugin.calls().remove(this,false);
@@ -591,7 +593,8 @@ YateH323Connection::~YateH323Connection()
 H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PString &caller,
     const H323SignalPDU &setupPDU, H323SignalPDU &connectPDU)
 {
-    Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s' [%p]",(const char *)caller,this);
+    Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s' in %s [%p]",
+	(const char *)caller,m_id.c_str(),this);
     setStatus("incoming");
 
     if (Engine::exiting()) {
@@ -640,14 +643,12 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	m->addParam("calledname",s);
 #endif
     H323MsgThread *t = new H323MsgThread(m,id());
-    if (t->error()) {
+    if (!t->startup()) {
 	Debug(DebugWarn,"Error starting routing thread! [%p]",this);
-	t->resume();
 	delete t;
 	setStatus("dropped");
 	return H323Connection::AnswerCallDenied;
     }
-    t->resume();
     return H323Connection::AnswerCallDeferred;
 }
 
@@ -1305,19 +1306,26 @@ YateH323Connection *H323Plugin::findConnectionLock(const char *id)
 {
     s_calls.lock();
     ObjList *l = &m_calls;
-    for (; l; l=l->next()) {
+    while (l) {
 	YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
+	l=l->next();
 	if (c && (c->id() == id)) {
-	    if (c->TryLock() > 0) {
+	    int res = c->TryLock();
+	    if (res > 0) {
 		s_calls.unlock();
 		return c;
 	    }
-	    else {
-		// Yield and try scanning the list again
-		l = &m_calls;
+	    else if (res < 0) {
+		// Connection locked - yield and try scanning the list again
 		s_calls.unlock();
 		Thread::yield();
 		s_calls.lock();
+		l = &m_calls;
+	    }
+	    else {
+		// Connection shutting down - we can't lock it anymore
+		s_calls.unlock();
+		return 0;
 	    }
 	}
     }
@@ -1325,13 +1333,19 @@ YateH323Connection *H323Plugin::findConnectionLock(const char *id)
     return 0;
 }
 
+bool H323Plugin::isBusy() const
+{
+    return (m_calls.count() != 0);
+}
+
 void H323Plugin::initialize()
 {
     Output("Initializing module H.323 - based on OpenH323-" OPENH323_VERSION);
     s_cfg = Engine::configFile("h323chan");
     s_cfg.load();
-    if (!m_process)
+    if (!m_process){
 	m_process = new H323Process;
+    }
     s_maxqueue = s_cfg.getIntValue("incoming","maxqueue",5);
     s_maxconns = s_cfg.getIntValue("ep","maxconns",0);
     int dbg=s_cfg.getIntValue("general","debug");

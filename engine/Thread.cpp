@@ -27,6 +27,7 @@ public:
     Thread *m_thread;
     pthread_t thread;
     bool m_running;
+    bool m_started;
     bool m_updest;
     const char *m_name;
 private:
@@ -66,7 +67,7 @@ ThreadPrivate *ThreadPrivate::create(Thread *t,const char *name)
 }
 
 ThreadPrivate::ThreadPrivate(Thread *t,const char *name)
-    : m_thread(t), m_running(false), m_updest(true), m_name(name)
+    : m_thread(t), m_running(false), m_started(false), m_updest(true), m_name(name)
 {
 #ifdef DEBUG
     Debugger debug("ThreadPrivate::ThreadPrivate","(%p,\"%s\") [%p]",t,name,this);
@@ -121,8 +122,9 @@ void ThreadPrivate::run()
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
     ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,0);
+    ::pthread_detach(::pthread_self());
     
-    while (!m_running)
+    while (!m_started)
 	::usleep(10);
     m_thread->run();
     pthread_cleanup_pop(1);
@@ -289,7 +291,15 @@ bool Thread::error() const
 
 bool Thread::running() const
 {
-    return m_private ? m_private->m_running : false;
+    return m_private ? m_private->m_started : false;
+}
+
+bool Thread::startup()
+{
+    if (!m_private)
+	return false;
+    m_private->m_started = true;
+    return true;
 }
 
 Thread *Thread::current()

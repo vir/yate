@@ -86,8 +86,10 @@ RandPlugin::RandPlugin()
 void RandPlugin::initialize()
 {
     Output("Initializing module RandPlugin");
-    if (!m_thread)
+    if (!m_thread) {
 	m_thread = new RandThread;
+	m_thread->startup();
+    }
 }
 
 INIT_PLUGIN(RandPlugin);

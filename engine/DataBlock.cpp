@@ -427,10 +427,13 @@ ThreadedSource::~ThreadedSource()
 	delete m_thread;
 }
 
-void ThreadedSource::start(const char *name)
+bool ThreadedSource::start(const char *name)
 {
-    if (!m_thread)
+    if (!m_thread) {
 	m_thread = new ThreadedSourcePrivate(this,name);
+	m_thread->startup();
+    }
+    return m_thread->running();
 }
 
 void ThreadedSource::cleanup()

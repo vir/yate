@@ -324,9 +324,10 @@ public:
     virtual ~ThreadedSource();
 
     /**
-     * Start the worker thread
+     * Starts the worker thread
+     * @return True if started, false if an error occured
      */
-    void start(const char *name = "ThreadedSource");
+    bool start(const char *name = "ThreadedSource");
 
 protected:
     /**

@@ -143,6 +143,7 @@ faxchan.yate: LOCALLIBS = @SPANDSP_LIB@
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
+gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 
 gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@
 

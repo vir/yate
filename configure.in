@@ -151,14 +151,24 @@ fi
 AC_SUBST(HAVE_PRI)
 
 HAVE_GSM=no
+GSM_INC=""
 AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])
-if [[ "x$ac_cv_use_libgsm" != "xno" ]]; then
-AC_CHECK_HEADER(gsm.h, , [ac_cv_use_libgsm=no])
+if [[ "x$ac_cv_use_libgsm" = "xyes" ]]; then
+for i in /usr/include /usr/include/gsm; do
+    ac_cv_use_libgsm="$i"
+    test -f "$ac_cv_use_libgsm/gsm.h" && break
+done
 fi
 if [[ "x$ac_cv_use_libgsm" != "xno" ]]; then
-AC_CHECK_LIB([gsm], [gsm_create], [HAVE_GSM=yes])
+AC_MSG_CHECKING([for gsm.h in $ac_cv_use_libgsm])
+if [[ -f "$ac_cv_use_libgsm/gsm.h" ]]; then
+    HAVE_GSM=yes
+    GSM_INC="-I$ac_cv_use_libgsm"
+fi
+AC_MSG_RESULT([$HAVE_GSM])
 fi
 AC_SUBST(HAVE_GSM)
+AC_SUBST(GSM_INC)
 
 HAVE_PWLIB=no
 PWLIB_RTTI=none

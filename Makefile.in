@@ -113,7 +113,7 @@ modules: engine
 	$(MAKE) -C ./modules all
 
 contrib: engine
-	for i in contrib/*; do \
+	@for i in contrib/*; do \
 	    test "$${i##*/}" != "CVS" && $(MAKE) -C "$$i" all ; \
 	done
 

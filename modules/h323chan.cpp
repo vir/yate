@@ -680,7 +680,7 @@ BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel)
 
 BOOL YateH323Connection::OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) 
 {
-    Debug(DebugInfo,"YateH323Connection::OnCreateLogicalChannel('%s',%d) [%p]",(const char *)capability.GetFormatName(),dir,this);
+    Debug(DebugInfo,"YateH323Connection::OnCreateLogicalChannel('%s',%s) [%p]",(const char *)capability.GetFormatName(),lookup(dir,dict_h323_dir),this);
     return H323Connection::OnCreateLogicalChannel(capability,dir,errorCode);
 }
 
@@ -746,8 +746,8 @@ YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
 	WORD dataPort)
 	: H323_ExternalRTPChannel(connection, capability, direction, sessionID, ip, dataPort),m_conn(&connection)
 { 
-    Debug(DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel dir=%d addr=%s:%u",
-	GetDirection(), (const char *)ip.AsString(), dataPort);
+    Debug(DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u",
+	lookup(GetDirection(),dict_h323_dir), (const char *)ip.AsString(), dataPort);
     SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
 }
 

@@ -120,6 +120,8 @@ public:
 	{ return m_session; }
     String ourcallid;
     String partycallid;
+    String calleraddress;
+    String calledaddress;
 private: 
     iax_session *m_session;
     bool m_final;
@@ -157,6 +159,20 @@ class DTMFHandler : public MessageHandler
 {
 public:
     DTMFHandler(const char *name) : MessageHandler(name,100) { }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler(const char *name) : MessageHandler(name,100) { }
+    virtual bool received(Message &msg);
+};
+
+class DropHandler : public MessageHandler
+{
+public:
+    DropHandler(const char *name) : MessageHandler(name,100) { }
     virtual bool received(Message &msg);
 };
 
@@ -401,6 +417,8 @@ void YateIAXEndPoint::answer(iax_event *e)
     Engine::dispatch(m);
     if (m->retValue() != NULL) {
 	YateIAXConnection *conn = new YateIAXConnection(e->session);
+	//this have to be here to get the right called_address.
+	conn->calledaddress = m->retValue();
 	
 	*m = "call";
 	m->userData(conn);
@@ -816,9 +834,9 @@ bool IAXHandler::received(Message &msg)
     /* i do this to setup the peercallid by getting ourcallid 
      * from the other party */
     String ourcallid(msg.getValue("ourcallid"));
-    Debug(DebugInfo,"partycallid %s",ourcallid.c_str());
     if (ourcallid)
 	conn->partycallid = ourcallid;
+    conn->calledaddress = dest;
     int i = conn->makeCall((char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.matchString(1).safe());
     if (i < 0) {
 	Debug(DebugInfo,"call failed in iax_call with code %d",i);
@@ -830,6 +848,49 @@ bool IAXHandler::received(Message &msg)
 	conn->deref();
     return true;	
 };
+
+bool StatusHandler::received(Message &msg)
+{
+    const char *sel = msg.getValue("module");
+    if (sel && ::strcmp(sel,"iaxchan") && ::strcmp(sel,"varchans"))
+	return false;
+    String st("iaxchan,type=varchans");
+    st << ",chans=" << iplugin.m_endpoint->calls().count() << ",[LIST]";
+    ObjList *l = &iplugin.m_endpoint->calls();
+    for (; l; l=l->next()) {
+	YateIAXConnection *c = static_cast<YateIAXConnection *>(l->get());
+	if (c) {
+	    st << ",iax/" << c->ourcallid << "=" << c->calledaddress << "/" << c->partycallid;
+	}
+    }
+    msg.retValue() << st << "\n";
+    return false;
+}
+
+bool DropHandler::received(Message &msg)
+{
+    String id(msg.getValue("id"));
+    if (id.null()) {
+	Debug("IAXDroper",DebugInfo,"Dropping all calls");
+	ObjList *l = &iplugin.m_endpoint->calls();
+	for (; l; l=l->next()) {
+	    YateIAXConnection *c = static_cast<YateIAXConnection *>(l->get());
+	    if(c)
+		delete c;
+	}
+    }
+    if (!id.startsWith("iax"))
+	return false;
+    id >> "/";
+    YateIAXConnection *conn = iplugin.m_endpoint->findconn(id);
+    if (conn) {
+	Debug("IAXDropper",DebugInfo,"Dropping call '%s' [%p]",conn->ourcallid.c_str(),conn);
+	delete conn;
+	return true;
+    }
+    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",id.c_str());
+    return false;
+}
 
 IAXPlugin::IAXPlugin()
     : m_endpoint(0), m_first(true)
@@ -867,6 +928,8 @@ void IAXPlugin::initialize()
 	Engine::install(new IAXHandler("call"));
 	Engine::install(new SMSHandler("sms"));
 	Engine::install(new DTMFHandler("dtmf"));
+	Engine::install(new StatusHandler("status"));
+	Engine::install(new DropHandler("drop"));
     }
 }
 

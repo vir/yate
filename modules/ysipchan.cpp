@@ -331,6 +331,8 @@ bool YateUDPParty::setParty(const URI& uri)
 {
     if (m_partyPort && m_party && s_cfg.getBoolValue("general","ignorevia"))
 	return true;
+    if (uri.getHost().null())
+	return false;
     int port = uri.getPort();
     if (port <= 0)
 	port = 5060;
@@ -340,6 +342,11 @@ bool YateUDPParty::setParty(const URI& uri)
     if (::gethostbyname_r(uri.getHost().safe(),&he,buf,sizeof(buf),&res,&err)) {
 	Debug("YateUDPParty",DebugWarn,"Error %d resolving name '%s' [%p]",
 	    err,uri.getHost().safe(),this);
+	return false;
+    }
+    if (he.h_addrtype != AF_INET) {
+	Debug("YateUDPParty",DebugWarn,"Address family %d not supported yet [%p]",
+	    he.h_addrtype,this);
 	return false;
     }
     m_sin.sin_family = he.h_addrtype;
@@ -402,6 +409,11 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     char buf[1024];
     if (::gethostbyname_r(host,&he,buf,sizeof(buf),&res,&err)) {
 	Debug(DebugWarn,"Error %d resolving name '%s'",err,host);
+	return false;
+    }
+    if (he.h_addrtype != AF_INET) {
+	Debug("YateUDPParty",DebugWarn,"Address family %d not supported yet [%p]",
+	    he.h_addrtype,this);
 	return false;
     }
     struct sockaddr_in sin;

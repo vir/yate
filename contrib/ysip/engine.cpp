@@ -84,11 +84,12 @@ void URI::parse() const
 	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
     }
 
-    // proto:[user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
-    // proto:[user@]hostname[:port][/path][;params][?params][&params]
-    r = "^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
+    // [proto:][user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
+    // [proto:][user@]hostname[:port][/path][;params][?params][&params]
+    r = "^\\([[:alpha:]]\\+:\\)\\?\\([[:alnum:]._-]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
     if (tmp.matches(r)) {
 	m_proto = tmp.matchString(1).toLower();
+	m_proto = m_proto.substr(0,m_proto.length()-1);
 	m_user = tmp.matchString(2);
 	m_user = m_user.substr(0,m_user.length()-1);
 	m_host = tmp.matchString(3).toLower();

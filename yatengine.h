@@ -636,7 +636,7 @@ public:
      * @see TelEngine::strcpy
      */
     inline String& operator=(const String *value)
-	{ return operator=(value ? value->c_str() : 0); }
+	{ return operator=(value ? value->c_str() : ""); }
 
     /**
      * Assignment from char* operator.

@@ -232,11 +232,12 @@ int Engine::run()
     initPlugins();
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
-    Debug(DebugInfo,"Engine entering main loop");
+    Debug(DebugInfo,"Engine dispatching start message");
     dispatch("engine.start");
     unsigned long corr = 0;
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
+    Output("Yate engine is initialized and starting up");
     while (s_haltcode == -1) {
 	if (s_init) {
 	    s_init = false;
@@ -276,7 +277,7 @@ int Engine::run()
 	Thread::yield();
     }
     s_haltcode &= 0xff;
-    Debug(DebugInfo,"Engine exiting with code %d",s_haltcode);
+    Output("Yate engine is shutting down with code %d",s_haltcode);
     dispatch("engine.halt");
     m_dispatcher.dequeue();
     Thread::killall();

@@ -112,6 +112,10 @@ public:
     inline void use()
 	{ m_use++; }
     bool unuse();
+    inline const String &scriptFile() const
+	{ return m_script; }
+    inline const String &commandArg() const
+	{ return m_args; }
 private:
     ExtModReceiver(const char *script, const char *args,
 	int ain = -1, int aout = -1, ExtModChan *chan = 0);
@@ -317,7 +321,7 @@ ExtModReceiver* ExtModReceiver::find(const String &script)
     ObjList *l = &s_modules;
     for (; l; l=l->next()) {
 	ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
-	if (r && (r->m_script == script))
+	if (r && (r->scriptFile() == script))
 	    return r;
     }
     return 0;
@@ -768,26 +772,45 @@ bool ExtModHandler::received(Message &msg)
 bool ExtModCommand::received(Message &msg)
 {
     String line(msg.getValue("line"));
-    if (!line.startsWith("script",true))
+    if (!line.startsWith("external",true))
 	return false;
-    line >> "script";
+    line >> "external";
     line.trimBlanks();
-    if (line.null())
-	return false;
+    if (line.null()) {
+	msg.retValue() = "";
+	ObjList *l = &s_modules;
+	for (; l; l=l->next()) {
+	    ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
+	    if (r)
+		msg.retValue() << r->scriptFile() << " " << r->commandArg() << "\n";
+	}
+	return true;
+    }
     int blank = line.find(' ');
-    if (blank <= 0)
-	return ExtModReceiver::build(line,0) != 0;
+    if (blank <= 0) {
+	if (line == "stop")
+	    return false;
+	ExtModReceiver *r = ExtModReceiver::build(line,0);
+	msg.retValue() = r ? "External start attempt\n" : "External command failed!\n";
+	return true;
+    }
     if (line.startsWith("stop",true)) {
 	line >> "stop";
 	line.trimBlanks();
+	if (line.null())
+	    return false;
 	ExtModReceiver *r = ExtModReceiver::find(line);
 	if (r) {
 	    r->destruct();
-	    return true;
+	    msg.retValue() = "External command stopped\n";
 	}
-	return false;
+	else
+	    msg.retValue() = "External not running\n";
+	return true;
     }
-    return ExtModReceiver::build(line.substr(0,blank),line.substr(blank+1)) != 0;
+    ExtModReceiver *r = ExtModReceiver::build(line.substr(0,blank),line.substr(blank+1));
+    msg.retValue() = r ? "External start attempt\n" : "External command failed\n";
+    return true;
 }
 
 ExtModulePlugin::ExtModulePlugin()

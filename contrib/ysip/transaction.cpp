@@ -37,11 +37,14 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     Debug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p) [%p]",message,engine,this);
     if (m_firstMessage) {
 	m_firstMessage->ref();
-	const NamedString* br = message->getParam("Via","branch");
-	if (br)
-	    m_branch = *br;
+	const NamedString* ns = message->getParam("Via","branch");
+	if (ns)
+	    m_branch = *ns;
 	if (!m_branch.startsWith("z9hG4bK"))
 	    m_branch.clear();
+	const HeaderLine* hl = message->getHeader("Call-ID");
+	if (hl)
+	    m_callid = *hl;
     }
     m_invite = (getMethod() == "INVITE");
     m_engine->TransList.append(this);
@@ -204,6 +207,12 @@ SIPEvent* SIPTransaction::getEvent(int state, int timeout)
     switch (state) {
 	case Initial:
 	    if (getMethod() == "INVITE") {
+		setLatestMessage(new SIPMessage(m_firstMessage, 100, "Trying"));
+		m_lastMessage->deref();
+		e = new SIPEvent(m_lastMessage,this);
+		changeState(Trying);
+	    }
+	    else if (getMethod() == "CANCEL") {
 		setLatestMessage(new SIPMessage(m_firstMessage, 100, "Trying"));
 		m_lastMessage->deref();
 		e = new SIPEvent(m_lastMessage,this);

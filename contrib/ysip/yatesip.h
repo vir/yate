@@ -420,6 +420,13 @@ public:
 	{ return m_branch; }
 
     /**
+     * The call ID may identify this transaction
+     * @return The Call-ID parameter taken from the message
+     */
+    inline const String& getCallID() const
+	{ return m_callid; }
+
+    /**
      * The local tag that may identify this transaction
      * @return The local tag parameter
      */
@@ -517,6 +524,7 @@ protected:
     SIPMessage* m_lastMessage;
     SIPEngine* m_engine;
     String m_branch;
+    String m_callid;
     String m_tag;
     void *m_private;
 };
@@ -555,6 +563,13 @@ public:
      */
     inline bool isOutgoing() const
 	{ return m_message && m_message->isOutgoing(); }
+
+    /**
+     * Check if the message is an incoming message
+     * @return True if the message is coming from remote
+     */
+    inline bool isIncoming() const
+	{ return m_message && !m_message->isOutgoing(); }
 
     /**
      * Get the pointer to the endpoint this event uses

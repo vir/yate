@@ -256,8 +256,14 @@ static TokenDict dict_str2pres[] = {
     { 0, -1 }
 };
 
+#ifdef PRI_NSF_NONE
+#define YATE_NSF_DEFAULT PRI_NSF_NONE
+#else
+#define YATE_NSF_DEFAULT -1
+#endif
 /* Network Specific Facilities (AT&T) */
 static TokenDict dict_str2nsf[] = {
+#ifdef PRI_NSF_NONE
     { "none", PRI_NSF_NONE },
     { "sid_preferred", PRI_NSF_SID_PREFERRED },
     { "ani_preferred", PRI_NSF_ANI_PREFERRED },
@@ -275,6 +281,7 @@ static TokenDict dict_str2nsf[] = {
     { "international_toll_free", PRI_NSF_INTERNATIONAL_TOLL_FREE },
     { "at&t_multiquest", PRI_NSF_ATT_MULTIQUEST },
     { "call_redirection", PRI_NSF_CALL_REDIRECTION_SERVICE },
+#endif
     { 0, -1 }
 };
 
@@ -301,7 +308,7 @@ class PriSpan : public GenObject, public Thread
 {
 public:
     static PriSpan *create(int span, int chan1, int nChans, int dChan, bool isNet,
-			   int switchType, int dialPlan, int presentation, int nsf = PRI_NSF_NONE);
+			   int switchType, int dialPlan, int presentation, int nsf = YATE_NSF_DEFAULT);
     virtual ~PriSpan();
     virtual void run();
     inline struct pri *pri()
@@ -517,8 +524,10 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf
 	}
     }
     struct pri *ret = ::pri_new(fd, nettype, swtype);
+#ifdef PRI_NSF_NONE
     if (ret)
 	::pri_set_nsf(ret, nsf);
+#endif
     return ret;
 }
 
@@ -1283,7 +1292,7 @@ void ZaptelPlugin::initialize()
 		    cfg.getIntValue(sect,"presentation",dict_str2pres,
 			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED),
 		    cfg.getIntValue(sect,"facilities",dict_str2nsf,
-			PRI_NSF_NONE)
+			YATE_NSF_DEFAULT)
 		);
 		chan1 += num;
 	    }

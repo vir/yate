@@ -99,6 +99,7 @@ class ExtModReceiver : public MessageReceiver
 public:
     static ExtModReceiver* build(const char *script, const char *args,
 	int ain = -1, int aout = -1, ExtModChan *chan = 0);
+    static ExtModReceiver* find(const String &script);
     ~ExtModReceiver();
     virtual bool received(Message &msg, int id);
     void processLine(const char *line);
@@ -143,6 +144,13 @@ class ExtModHandler : public MessageHandler
 {
 public:
     ExtModHandler(const char *name) : MessageHandler(name) { }
+    virtual bool received(Message &msg);
+};
+
+class ExtModCommand : public MessageHandler
+{
+public:
+    ExtModCommand(const char *name) : MessageHandler(name) { }
     virtual bool received(Message &msg);
 };
 
@@ -304,6 +312,17 @@ ExtModReceiver* ExtModReceiver::build(const char *script, const char *args,
     return recv;
 }
 
+ExtModReceiver* ExtModReceiver::find(const String &script)
+{
+    ObjList *l = &s_modules;
+    for (; l; l=l->next()) {
+	ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
+	if (r && (r->m_script == script))
+	    return r;
+    }
+    return 0;
+}
+
 bool ExtModReceiver::unuse()
 {
     int u = --m_use;
@@ -317,6 +336,8 @@ ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, in
       m_chan(chan), m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
+    m_script.trimBlanks();
+    m_args.trimBlanks();
     s_modules.append(this);
 }
 
@@ -744,6 +765,31 @@ bool ExtModHandler::received(Message &msg)
     return true;
 }
 
+bool ExtModCommand::received(Message &msg)
+{
+    String line(msg.getValue("line"));
+    if (!line.startsWith("script",true))
+	return false;
+    line >> "script";
+    line.trimBlanks();
+    if (line.null())
+	return false;
+    int blank = line.find(' ');
+    if (blank <= 0)
+	return ExtModReceiver::build(line,0) != 0;
+    if (line.startsWith("stop",true)) {
+	line >> "stop";
+	line.trimBlanks();
+	ExtModReceiver *r = ExtModReceiver::find(line);
+	if (r) {
+	    r->destruct();
+	    return true;
+	}
+	return false;
+    }
+    return ExtModReceiver::build(line.substr(0,blank),line.substr(blank+1)) != 0;
+}
+
 ExtModulePlugin::ExtModulePlugin()
     : m_handler(0)
 {
@@ -766,6 +812,7 @@ void ExtModulePlugin::initialize()
     if (!m_handler) {
 	m_handler = new ExtModHandler("call");
 	Engine::install(m_handler);
+	Engine::install(new ExtModCommand("command"));
 	NamedList *list = s_cfg.getSection("scripts");
 	if (list)
 	{

@@ -171,12 +171,12 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     m_valid = true;
 }
 
-SIPMessage::SIPMessage(const SIPMessage* message)
+SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
     : method("ACK"),
       body(), m_ep(0), m_valid(false),
       m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage(%p) [%p]",message,this);
+    Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]",message,newtran,this);
     if (!(message && message->isValid()))
 	return;
     m_ep = message->getParty();
@@ -185,6 +185,19 @@ SIPMessage::SIPMessage(const SIPMessage* message)
     version = message->version;
     uri = message->uri;
     copyAllHeaders(message,"Via");
+    HeaderLine* hl = const_cast<HeaderLine*>(getLastHeader("Via"));
+    if (!hl) {
+	String tmp;
+	tmp << version << "/" << getParty()->getProtoName();
+	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
+	hl = new HeaderLine("Via",tmp);
+	header.append(hl);
+    }
+    if (newtran) {
+	String tmp("z9hG4bK");
+	tmp << (int)::random();
+	hl->setParam("branch",tmp);
+    }
     copyHeader(message,"From");
     copyHeader(message,"To");
     copyHeader(message,"Call-ID");
@@ -246,7 +259,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     hl = const_cast<HeaderLine*>(getHeader("From"));
     if (!hl) {
 	String tmp;
-	tmp << "<" << user << "@" << domain << ">";
+	tmp << "<sip:" << user << "@" << domain << ">";
 	hl = new HeaderLine("From",tmp);
 	header.append(hl);
     }

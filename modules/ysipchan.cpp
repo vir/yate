@@ -577,7 +577,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     m_formats = msg.getValue("formats");
     int q = m_formats.find(',');
     m_rtpFormat = m_formats.substr(0,q);
-    Debug(DebugAll,"addr '%s' port %s formats '%s' format '%s'",
+    Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
 }
 
@@ -773,8 +773,20 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_tr->deref();
 	    m_tr = 0;
 	}
+	return false;
     }
-    else if (ev->getMessage() && ev->getMessage()->isACK()) {
+    if (!ev->getMessage())
+	return false;
+    if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
+	Debug(DebugInfo,"YateSIPConnection got SDP [%p]",this);
+	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),
+	    m_rtpAddr,m_rtpPort,m_formats);
+	int q = m_formats.find(',');
+	m_rtpFormat = m_formats.substr(0,q);
+	Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
+	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+    }
+    if (ev->getMessage()->isACK()) {
 	Debug(DebugInfo,"YateSIPConnection got ACK [%p]",this);
 	startRtp();
     }

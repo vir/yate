@@ -296,21 +296,25 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 {
     switch (state) {
 	case Trying:
-	    if (message->code > 100)
-		setPendingEvent(new SIPEvent(message,this));
-	    if (message->code >= 200) {
-		setTimeout();
-		changeState(isInvite() ? Finish : Cleared);
-	    }
-	    else
-		changeState(Process);
-	    break;
+	    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F'));
+	    changeState(Process);
+	    if (message->code == 100)
+		break;
+	    // fall trough for non-100 answers
 	case Process:
 	    if (message->code > 100)
 		setPendingEvent(new SIPEvent(message,this));
 	    if (message->code >= 200) {
 		setTimeout();
-		changeState(isInvite() ? Finish : Cleared);
+		if (isInvite()) {
+		    setLatestMessage(new SIPMessage(m_firstMessage,(message->code == 200)));
+		    m_lastMessage->deref();
+		    setTransmit();
+		    if (changeState(Retrans))
+			setTimeout(m_engine->getTimer('I'));
+		}
+		else
+		    changeState(Cleared);
 	    }
 	    break;
 	case Retrans:
@@ -337,18 +341,13 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 	    else
 		changeState(Cleared);
 	    break;
-	case Finish:
-	    if (isInvite()) {
-		setLatestMessage(new SIPMessage(m_firstMessage));
-		m_lastMessage->deref();
-		setTransmit();
-		if (changeState(Retrans))
-		    setTimeout(m_engine->getTimer('4'));
-	    }
-	    else {
-		setTimeout();
+	case Process:
+	    if (timeout == 0)
 		changeState(Cleared);
-	    }
+	    break;
+	case Finish:
+	    setTimeout();
+	    changeState(Cleared);
 	    break;
     }
     return e;

@@ -230,25 +230,39 @@ SIPEvent* SIPEngine::getEvent()
 
 void SIPEngine::processEvent(SIPEvent *event)
 {
+    if (!event)
+	return;
     Lock lock(m_mutex);
-    if (event) {
-	const char* type = "unknown";
-	if (event->isOutgoing())
-	    type = "outgoing";
-	if (event->isIncoming())
-	    type = "incoming";
-	Debug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
-	    type,event,event->getMessage(),this);
-	if (event->isOutgoing() && event->getParty())
-	    event->getParty()->transmit(event);
-	if (event->isIncoming() && (event->getState() == SIPTransaction::Trying) &&
-	    event->getMessage() && !event->getMessage()->isAnswer()) {
-	    Debug("SIPEngine",DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
-		event->getMessage()->method.c_str(),event,this);
-	    event->getTransaction()->setResponse(501,"Not Implemented");
+    const char* type = "unknown";
+    if (event->isOutgoing())
+	type = "outgoing";
+    if (event->isIncoming())
+	type = "incoming";
+    Debug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
+	type,event,event->getMessage(),this);
+    if (event->getMessage()) {
+	if (event->isOutgoing()) {
+	    switch (event->getState()) {
+		case SIPTransaction::Invalid:
+		    break;
+		case SIPTransaction::Cleared:
+		    if (!event->getMessage()->isAnswer())
+			break;
+		default:
+		    if (event->getParty())
+			event->getParty()->transmit(event);
+	    }
 	}
-	delete event;
+	if (event->isIncoming()) {
+	    if ((event->getState() == SIPTransaction::Trying) &&
+		!event->getMessage()->isAnswer()) {
+		Debug("SIPEngine",DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
+		    event->getMessage()->method.c_str(),event,this);
+		event->getTransaction()->setResponse(501,"Not Implemented");
+	    }
+	}
     }
+    delete event;
 }
 
 unsigned long long SIPEngine::getTimer(char which, bool reliable) const

@@ -336,6 +336,7 @@ private:
     void infoChan(int chan, pri_event_ring &ev);
     void hangupChan(int chan,pri_event_hangup &ev);
     void ackChan(int chan);
+    void answerChan(int chan);
     void proceedingChan(int chan);
     int m_span;
     int m_offs;
@@ -639,6 +640,7 @@ void PriSpan::handleEvent(pri_event &ev)
 	    break;
 	case PRI_EVENT_ANSWER:
 	    Debug(DebugInfo,"Answered channel %d on span %d",ev.answer.channel,m_span);
+	    answerChan(ev.setup_ack.channel);
 	    break;
 	case PRI_EVENT_HANGUP_ACK:
 	    Debug(DebugInfo,"Hangup ACK on channel %d on span %d",ev.hangup.channel,m_span);
@@ -790,6 +792,16 @@ void PriSpan::ackChan(int chan)
 	return;
     }
     Debug(DebugInfo,"ACKnowledging channel %d on span %d",chan,m_span);
+    getChan(chan)->setTimeout(0);
+}
+
+void PriSpan::answerChan(int chan)
+{
+    if (!validChan(chan)) {
+	Debug(DebugInfo,"ANSWER on invalid channel %d on span %d",chan,m_span);
+	return;
+    }
+    Debug(DebugInfo,"ANSWERing channel %d on span %d",chan,m_span);
     getChan(chan)->setTimeout(0);
 }
 

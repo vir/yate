@@ -5,7 +5,7 @@ CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
-CFLAGS := -O0 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O0 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
@@ -34,7 +34,7 @@ strip: all
 
 .PHONY: clean
 clean:
-	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @top_srcdir@/telengine.h
 	$(COMPILE) -c $<

@@ -30,7 +30,7 @@ strip: all
 
 .PHONY: clean
 clean:
-	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.c
 	$(COMPILE) -c $<

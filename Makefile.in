@@ -13,7 +13,7 @@ DEFS :=
 LIBAUX:= -ldl
 LIBTHR:= -lpthread
 INCLUDES := -I. -I@srcdir@
-CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
 
@@ -55,12 +55,12 @@ everything: engine contrib modules test apidocs
 
 .PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:
-	-rm $(CLEANS) 2>/dev/null
+	@-$(RM) $(CLEANS) 2>/dev/null
 	$(MAKE) -C ./modules $@
 	$(MAKE) -C ./test $@
-	$(MAKE) -C ./contrib/iax $@
-	$(MAKE) -C ./contrib/qt $@
-	$(MAKE) -C ./contrib/ysip $@
+	@for i in contrib/*; do \
+	    test -f "$$i/Makefile" && $(MAKE) -C "$$i" clean ; \
+	done
 
 check-topdir:
 	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
@@ -114,7 +114,7 @@ modules: engine
 
 contrib: engine
 	@for i in contrib/*; do \
-	    test "$${i##*/}" != "CVS" && $(MAKE) -C "$$i" all ; \
+	    test -f "$$i/Makefile" && $(MAKE) -C "$$i" all ; \
 	done
 
 tables: @srcdir@/tables/all.h

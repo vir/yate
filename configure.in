@@ -262,7 +262,21 @@ AC_SUBST(H323_RUN)
 HAVE_ORTP=no
 ORTP_INC=""
 ORTP_LIB=""
-AC_ARG_WITH(libortp,AC_HELP_STRING([--with-libortp=DIR],[use oRTP from DIR (default /usr)]),[ac_cv_use_libortp=$withval],[ac_cv_use_libortp=/usr])
+ORTP_DEP=""
+AC_ARG_WITH(libortp,AC_HELP_STRING([--with-libortp=DIR],[use oRTP from DIR (default: included)]),[ac_cv_use_libortp=$withval],[ac_cv_use_libortp=included])
+if [[ "x$ac_cv_use_libortp" = "xincluded" ]]; then
+    ac_cv_use_libortp="no"
+    basedir=`cd "$srcdir" && pwd`
+    AC_MSG_CHECKING([for oRTP in contrib])
+    incor="contrib/ortp"
+    if [[ -f "$basedir/$incor/ortp.h" ]]; then
+	HAVE_ORTP=yes
+	ORTP_INC="-I$basedir/$incor"
+	ORTP_DEP="../$incor/libortp.a"
+	ORTP_LIB="-L../$incor -lortp"
+    fi
+    AC_MSG_RESULT([$HAVE_ORTP])
+fi
 if [[ "x$ac_cv_use_libortp" != "xno" ]]; then
 AC_MSG_CHECKING([for oRTP in $ac_cv_use_libortp])
 incor="$ac_cv_use_libortp/include/ortp"
@@ -277,6 +291,7 @@ fi
 AC_SUBST(HAVE_ORTP)
 AC_SUBST(ORTP_INC)
 AC_SUBST(ORTP_LIB)
+AC_SUBST(ORTP_DEP)
 
 HAVE_GLIB1=no
 GLIB1_INC=""
@@ -516,10 +531,12 @@ AC_MSG_WARN([Mismatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_
 fi
 fi
 
-MODULE_CFLAGS="-fno-exceptions -fno-check-new -fPIC $RTTI_OPT $HAVE_GCC_FORMAT_CHECK"
+MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
+MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDFLAGS="-export-dynamic -shared"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
+AC_SUBST(MODULE_CPPFLAGS)
 AC_SUBST(MODULE_LDFLAGS)
 AC_SUBST(MODULE_SYMBOLS)
 
@@ -531,6 +548,7 @@ AC_CONFIG_FILES([yate.spec
                  scripts/Makefile
                  conf.d/Makefile
                  contrib/iax/Makefile
+                 contrib/ortp/Makefile
                  contrib/ysip/Makefile
                  contrib/qt/Makefile
                  test/Makefile])

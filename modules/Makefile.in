@@ -11,7 +11,7 @@ CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
-CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
@@ -37,7 +37,7 @@ ifneq (@HAVE_H323@,no)
 PROGS := $(PROGS) h323chan.yate
 endif
 
-ifeq (@HAVE_ORTP@_@HAVE_GLIB@,yes_yes)
+ifneq (@HAVE_ORTP@,no)
 PROGS := $(PROGS) ortpchan.yate
 endif
 
@@ -81,8 +81,7 @@ strip: all do-strip
 
 .PHONY: clean
 clean: do-clean
-	@echo rm $(PROGS) $(LIBS) *.o core
-	@rm $(PROGS) $(LIBS) *.o core 2>/dev/null; true
+	@-$(RM) $(PROGS) $(LIBS) *.o core 2>/dev/null
 
 .PHONY: install
 install: all do-install
@@ -127,7 +126,9 @@ h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H3
 
 pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
-ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB_INC@ @ORTP_LIB@
+ortpchan.yate: @ORTP_DEP@
+ortpchan.yate: LOCALLIBS = @ORTP_LIB@
+ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB_INC@
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@
@@ -151,6 +152,9 @@ ysipchan.yate: LOCALLIBS = ../contrib/ysip/libysip.a
 
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
+
+../contrib/ortp/libortp.a:
+	$(MAKE) -C ../contrib/ortp
 
 ../contrib/qt/libqtclientform.a:
 	$(MAKE) -C ../contrib/qt

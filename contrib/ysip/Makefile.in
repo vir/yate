@@ -7,7 +7,7 @@ CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
-CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h \
 	@srcdir@/ysip.h @srcdir@/util.h
@@ -33,7 +33,7 @@ strip: all
 
 .PHONY: clean
 clean:
-	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<

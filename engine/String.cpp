@@ -320,6 +320,28 @@ bool String::toBoolean(bool defvalue) const
     return defvalue;
 }
 
+String& String::toUpper()
+{
+    if (m_string) {
+	for (char *s = m_string; char c = *s; s++) {
+	    if (('a' <= c) && (c <= 'z'))
+		*s = c + 'A' - 'a';
+	}
+    }
+    return *this;
+}
+
+String& String::toLower()
+{
+    if (m_string) {
+	for (char *s = m_string; char c = *s; s++) {
+	    if (('A' <= c) && (c <= 'Z'))
+		*s = c + 'a' - 'Z';
+	}
+    }
+    return *this;
+}
+
 String& String::trimBlanks()
 {
     if (m_string) {

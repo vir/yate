@@ -587,6 +587,18 @@ public:
     bool toBoolean(bool defvalue = false) const;
 
     /**
+     * Turn the string to an all-uppercase string
+     * @return A reference to this String
+     */
+    String& toUpper();
+
+    /**
+     * Turn the string to an all-lowercase string
+     * @return A reference to this String
+     */
+    String& toLower();
+
+    /**
      * Indexing operator
      * @param index Index of character in string
      * @return Character at given index or 0 if out of range

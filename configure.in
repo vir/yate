@@ -13,6 +13,7 @@ AC_MSG_CHECKING([for gcc printf format typechecks])
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
 AC_TRY_COMPILE([],[void f(void*x,const char*f,...) __attribute__((format(printf,2,3))); ],[ac_cv_format_checks=yes],[ac_cv_format_checks=no])
+CFLAGS="$SAVE_CFLAGS"
 if [[ "x$ac_cv_format_checks" = "xyes" ]]; then
     HAVE_GCC_FORMAT_CHECK="-DHAVE_GCC_FORMAT_CHECK"
 fi

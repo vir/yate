@@ -66,6 +66,40 @@ make install DESTDIR=%{buildroot}
 rm -rf %{buildroot}
 
 %changelog
+* Mon Nov 01 2004 Diana Cionoiu <diana@diana.null.ro>
+- Fixed a serious memory leak in threads
+
+* Sun Oct 31 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added supervised running and periodic restart
+- Fixed lots of locking bugs
+
+* Wed Sep 29 2004 Paul Chitescu <paulc-devel@null.ro>
+- Bumped version to 0.8.4
+- Added timestamps to all data channels
+- Added separate oRTP based RTP channel
+- H.323 can optionally use the RTP channel
+- RTTI support is configurable - defaults like pwlib which should be ok
+
+* Sat Sep 11 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added printf-style parameter/format checks for gcc
+- Filter for kdoc to parse trough said checks which it doesn't understand
+
+* Mon Sep 06 2004 Paul Chitescu <paulc-devel@null.ro>
+- Created a contrib directory to hold libiax2 fork
+- Build system uses the included static libiax2 by default
+- Yate can write its main thread PID to a file
+
+* Mon Sep 06 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added a fork of libiax2 modified for server usage
+- Many features added in the IAX channel
+
+* Sat Jun 26 2004 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.3
+- Minor fixes in tone generator and external module
+
+* Sat Jun 26 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added an OSS local sound channel
+
 * Sat May 15 2004 Paul Chitescu <paulc-devel@null.ro>
 - Added pkgconfig support
 - Improved detection of Postgress' include file path

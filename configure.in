@@ -278,25 +278,6 @@ AC_SUBST(HAVE_ORTP)
 AC_SUBST(ORTP_INC)
 AC_SUBST(ORTP_LIB)
 
-HAVE_EXOSIP=no
-EXOSIP_INC=""
-EXOSIP_LIB=""
-AC_ARG_WITH(libexosip,AC_HELP_STRING([--with-libexosip=DIR],[use eXosip from DIR (default /usr)]),[ac_cv_use_libexosip=$withval],[ac_cv_use_libexosip=/usr])
-if [[ "x$ac_cv_use_libexosip" != "xno" ]]; then
-AC_MSG_CHECKING([for eXosip in $ac_cv_use_libexosip])
-incexo="$ac_cv_use_libexosip/include/eXosip"
-libexo="$ac_cv_use_libexosip/lib/libeXosip.so"
-if [[ -f "$incexo/eXosip.h" -a -f "$libexo" ]]; then
-    HAVE_EXOSIP=yes
-    EXOSIP_INC="-I$incexo"
-    EXOSIP_LIB="-L$ac_cv_use_libexosip/lib -leXosip"
-fi
-AC_MSG_RESULT([$HAVE_EXOSIP])
-fi
-AC_SUBST(HAVE_EXOSIP)
-AC_SUBST(EXOSIP_INC)
-AC_SUBST(EXOSIP_LIB)
-
 HAVE_GLIB1=no
 GLIB1_INC=""
 GLIB1_LIB=""

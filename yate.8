@@ -22,6 +22,7 @@
 .SH SYNOPSIS
 .B yate
 .RI [options]
+.RI [commands]
 .SH DESCRIPTION
 .B yate
 is a telephony engine that supports client, PBX and IVR functions trough plugins.
@@ -43,21 +44,20 @@ Daemonify, suppress output unless logged
 .B \-s
 Supervised, restart if crashes or locks up
 .TP
-.B \-l filename
+.B \-l \fIfilename\fR
 Log to file \- should be used whenever running in daemon mode
 .TP
-.B \-p filename
+.B \-p \fIfilename\fR
 Write PID of the supervisor or primary thread to file
 .TP
-.B \-n configname
+.B \-n \fIconfigname\fR
 Use specified configuration name, overrides default "yate"
 .TP
-.B \-c pathname
+.B \-c \fIpathname\fR
 Path to conf files directory, overrides compiled-in value
 .TP
-.B \-m pathname
-Path to modules directory, overrides compiled-in value
-.SS Debugging (may not be compiled in)
+.B \-m \fIpathname\fR
+Path to modules directory, overrides compiled-in value.SS Debugging (may not be compiled in)
 .TP
 .B \-D[options]
 Special debugging options
@@ -66,7 +66,9 @@ Special debugging options
 Abort (coredumps if allowed) if bugs are encountered
 .TP
 .B \-Dc
-Call dlclose() until it gets an error
+Call
+.I dlclose()
+until it gets an error
 .TP
 .B \-Di
 Reinitialize after first initialization
@@ -76,6 +78,10 @@ Exit immediately after initialization
 .TP
 .B \-Dw
 Delay for one second the creation of the first worker thread
+.SH COMMANDS
+Each command is sent to the YATE modules immediately after initialization.
+Modules define command syntax so that is not described here. Please look at
+the documentation for each module.
 .SH SIGNALS
 .TP
 \- SIGTERM and SIGINT (Ctrl\-C) will cleanly stop the engine

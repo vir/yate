@@ -105,6 +105,7 @@ int EnginePrivate::count = 0;
 
 const char* s_cfgfile = 0;
 ObjList plugins;
+ObjList *s_cmds = 0;
 
 class SLib : public GenObject
 {
@@ -236,6 +237,25 @@ int Engine::run()
     ::signal(SIGPIPE,SIG_IGN);
     Output("Yate engine is initialized and starting up");
     while (s_haltcode == -1) {
+	if (s_cmds) {
+	    Output("Executing initial commands");
+	    for (ObjList* c = s_cmds; c; c=c->next()) {
+		String* s = static_cast<String*>(c->get());
+		if (s) {
+		    Message m("engine.command");
+		    m.addParam("line",*s);
+		    if (dispatch(m)) {
+			if (m.retValue())
+			    Output("%s",m.retValue().c_str());
+		    }
+		    else
+			Debug(DebugWarn,"Unrecognized command '%s'",s->c_str());
+		}
+	    }
+	    s_cmds->destruct();
+	    s_cmds = 0;
+	}
+
 	if (s_init) {
 	    s_init = false;
 	    initPlugins();
@@ -550,7 +570,7 @@ static int supervise(void)
 static void usage(FILE *f)
 {
     ::fprintf(f,
-"Usage: yate [options]\n"
+"Usage: yate [options] [commands ...]\n"
 "   -h             Help message (this one)\n"
 "   -v             Verbose debugging (you can use more than once)\n"
 "   -q             Quieter debugging (you can use more than once)\n"
@@ -710,9 +730,9 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    }
 	}
 	else {
-	    ::fprintf(stderr,"Invalid non-option '%s'\n",pc);
-	    usage(stderr);
-	    return EINVAL;
+	    if (!s_cmds)
+		s_cmds = new ObjList;
+	    s_cmds->append(new String(argv[i]));
 	}
     }
 

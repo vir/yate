@@ -103,7 +103,7 @@ bool Engine::s_dynplugin = false;
 int Engine::s_maxworkers = 10;
 int EnginePrivate::count = 0;
 
-const char* s_cfgfile = "yate";
+const char* s_cfgfile = 0;
 ObjList plugins;
 
 class SLib : public GenObject
@@ -561,7 +561,7 @@ static void usage(FILE *f)
 "   -s             Supervised, restart if crashes or locks up\n"
 "   -l filename    Log to file\n"
 "   -p filename    Write PID to file\n"
-"   -n configname  Use specified configuration name (yate)\n"
+"   -n configname  Use specified configuration name (%s)\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 #ifndef NDEBUG
@@ -572,7 +572,7 @@ static void usage(FILE *f)
 "     x            Exit immediately after initialization\n"
 "     w            Delay creation of 1st worker thread\n"
 #endif
-    );
+    ,s_cfgfile);
 }
 
 static void badopt(char chr, const char *opt)
@@ -597,6 +597,13 @@ int Engine::main(int argc, const char **argv, const char **environ)
     int debug_level = debugLevel();
     const char *logfile = 0;
     const char *pidfile = 0;
+
+    s_cfgfile = ::strrchr(argv[0],'/');
+    if (s_cfgfile)
+	s_cfgfile++;
+    else
+	s_cfgfile = "yate";
+
     int i;
     bool inopt = true;
     for (i=1;i<argc;i++) {
@@ -711,6 +718,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    return EINVAL;
 	}
     }
+
     if (daemonic) {
 	Debugger::enableOutput(false);
 	if (::daemon(1,0) == -1) {
@@ -719,6 +727,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    return err;
 	}
     }
+
     if (pidfile) {
 	int fd = ::open(pidfile,O_WRONLY|O_CREAT,0644);
 	if (fd >= 0) {
@@ -728,6 +737,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    ::close(fd);
 	}
     }
+
     if (logfile) {
 	int fd = ::open(logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
 	if (fd >= 0) {
@@ -740,6 +750,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    Debugger::enableOutput(true);
 	}
     }
+
     debugLevel(debug_level);
     abortOnBug(s_sigabrt);
 

@@ -1,8 +1,10 @@
 Mon Jan 10 2005 Paul Chitescu <paulc-devel@null.ro>
 - Improved detection of Qt-3 headers
 - SIP channel supports reinvite and config file
-- Versioned libyate.so (full version, also mathes soname)
+- Versioned libyate.so (full version, also matches soname)
 - Improved detection of Qt-3 and PostgesSQL headers
+- Main config file name can be changed from command line
+- Default config file name matches executable name argv[0]
 
 Sun Jan 09 2005 Dorin Lazar <lazar@deuromedia.ro>
 - Improved the Qt-3 client, added call history support

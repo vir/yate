@@ -120,7 +120,7 @@ private:
 SLib::SLib(void *handle, const char *file)
     : m_handle(handle)
 {
-    DDebug(DebugAll,"SLib::SLib(%p,\"%s\") [%p]",handle,file,this);
+    DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
 }
 
 SLib::~SLib()
@@ -143,9 +143,7 @@ SLib::~SLib()
 
 SLib *SLib::load(const char *file)
 {
-#ifdef DEBUG
-    Debugger debug("SLib::load","(\"%s\")",file);
-#endif
+    DDebug("SLib::load('%s')",file);
     void *handle = ::dlopen(file,RTLD_NOW);
     if (handle)
 	return new SLib(handle,file);
@@ -197,9 +195,7 @@ void EnginePrivate::run()
 
 Engine::Engine()
 {
-#ifdef DEBUG
-    Debugger debug("Engine::Engine()"," [%p]",this);
-#endif
+    DDebug("Engine::Engine()"," [%p]",this);
 }
 
 Engine::~Engine()
@@ -526,7 +522,7 @@ static int supervise(void)
 	    }
 	    else if ((errno != EINTR) && (errno != EAGAIN))
 		break;
-	    // Consume sanity points slighly slower than added
+	    // Consume sanity points slightly slower than added
 	    ::usleep(1200000);
 	}
 	::close(wdogfd[0]);
@@ -721,6 +717,8 @@ int Engine::main(int argc, const char **argv, const char **environ)
 
     if (daemonic) {
 	Debugger::enableOutput(false);
+	// Make sure X client modules fail initialization in daemon mode
+	::unsetenv("DISPLAY");
 	if (::daemon(1,0) == -1) {
 	    int err = errno;
 	    ::fprintf(stderr,"Daemonification failed: %s (%d)\n",::strerror(err),err);

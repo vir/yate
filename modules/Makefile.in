@@ -39,6 +39,10 @@ ifeq (@HAVE_EXOSIP@_@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes_yes)
 PROGS := $(PROGS) sipchan.yate
 endif
 
+ifeq (@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes)
+PROGS := $(PROGS) rtpchan.yate
+endif
+
 ifneq (@HAVE_IAX2@,no)
 PROGS := $(PROGS) iaxchan.yate
 endif
@@ -121,6 +125,8 @@ h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H3
 pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORTP_LIB@ @GLIB2_LIB@
+
+rtpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB2_INC@ @ORTP_LIB@ @GLIB2_LIB@
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

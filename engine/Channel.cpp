@@ -98,6 +98,10 @@ void Channel::setPeer(Channel* peer, const char* reason)
 void Channel::complete(Message& msg) const
 {
     msg.setParam("id",m_id);
+    if (m_driver)
+	msg.setParam("driver",m_driver->name());
+    if (m_status)
+	msg.setParam("status",m_status);
     if (m_targetid)
 	msg.setParam("targetid",m_targetid);
     if (m_billid)
@@ -132,8 +136,11 @@ bool Channel::msgDrop(Message& msg)
 }
 
 Driver::Driver(const char* name)
-    : Plugin(name), Mutex(true), m_init(false)
+    : Plugin(name), Mutex(true), m_init(false), m_name(name)
 {
+    m_prefix = m_name;
+    if (m_prefix && !m_prefix.endsWith("/"))
+	m_prefix += "/";
 }
 
 void Driver::setup(const char* prefix)
@@ -141,7 +148,8 @@ void Driver::setup(const char* prefix)
     if (m_init)
 	return;
     m_init = true;
-    m_prefix = prefix;
+    if (prefix)
+	m_prefix = prefix;
     Engine::install(new MessageRelay("call.ringing",this,Ringing));
     Engine::install(new MessageRelay("call.answered",this,Answered));
     Engine::install(new MessageRelay("chan.dtmf",this,Tone));
@@ -153,6 +161,9 @@ void Driver::setup(const char* prefix)
 
 bool Driver::received(Message &msg, int id)
 {
+    if (!m_prefix)
+	return false;
+    // pick destination depending on message type
     String dest;
     switch (id) {
 	case Execute:
@@ -166,7 +177,7 @@ bool Driver::received(Message &msg, int id)
 	    dest = msg.getValue("targetid");
 	    break;
     }
-    if ((id == Drop) && dest.null()) {
+    if ((id == Drop) && (dest.null() || (dest == m_prefix))) {
 	dropAll();
 	return false;
     }

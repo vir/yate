@@ -35,6 +35,26 @@
 namespace TelEngine {
 
 /**
+ * A structure to hold information about a static picture or video frame.
+ */
+struct ImageInfo {
+    /**
+     * Width of the image in pixels
+     */
+    int width;
+
+    /**
+     * Height of the image in pixels
+     */
+    int height;
+
+    /**
+     * Bit depth of the image, 0 for unknown/irrelevant
+     */
+    int depth;
+};
+
+/**
  * A structure to hold information about a data format.
  */
 struct FormatInfo {
@@ -281,33 +301,55 @@ class DataNode : public RefObject
 public:
     /**
      * Construct a DataNode
+     * @param format Description of the data format, default none
+     */
+    inline DataNode(const FormatInfo* format = 0)
+	: m_format(format), m_timestamp(0) { }
+
+    /**
+     * Construct a DataNode from a format name
      * @param format Name of the data format, default none
      */
-    DataNode(const char* format = 0)
-	: m_format(format), m_timestamp(0) { }
+    inline DataNode(const String& format)
+	: m_format(FormatRepository::getFormat(format)), m_timestamp(0) { }
 
     /**
      * Get the computing cost of converting the data to the format asked
      * @param format Name of the format to check for
      * @return -1 if unsupported, 0 for native format else cost in KIPS
      */
-    virtual int costFormat(const String& format)
+    virtual int costFormat(const FormatInfo* format)
 	{ return -1; }
+
+    /**
+     * Change the format used to transfer data
+     * @param format Description of the format to set for data
+     * @return True if the format changed successfully, false if not changed
+     */
+    virtual bool setFormat(const FormatInfo* format = 0)
+	{ return false; }
 
     /**
      * Change the format used to transfer data
      * @param format Name of the format to set for data
      * @return True if the format changed successfully, false if not changed
      */
-    virtual bool setFormat(const String& format)
-	{ return false; }
+    inline bool setFormat(const String& format)
+	{ return setFormat(FormatRepository::getFormat(format)); }
+
+    /**
+     * Get the description of the format currently in use
+     * @return Pointer to the data format
+     */
+    inline const FormatInfo* getFormat() const
+	{ return m_format; }
 
     /**
      * Get the name of the format currently in use
      * @return Name of the data format
      */
-    inline const String& getFormat() const
-	{ return m_format; }
+    inline const char* getFormatName() const
+	{ return m_format ? m_format->name : 0; }
 
     /**
      * Get the current position in the data stream
@@ -317,7 +359,23 @@ public:
 	{ return m_timestamp; }
 
 protected:
-    String m_format;
+    /**
+     * Change the format used to transfer data
+     * @param format Description of the format to set for data
+     * @return True if the format changed successfully, false if not changed
+     */
+    inline void setFormatInternal(const FormatInfo* format = 0)
+	{ m_format = format; }
+
+    /**
+     * Change the format used to transfer data
+     * @param format Name of the format to set for data
+     * @return True if the format changed successfully, false if not changed
+     */
+    inline void setFormatInternal(const String& format)
+	{ setFormatInternal(FormatRepository::getFormat(format)); }
+
+    const FormatInfo* m_format;
     unsigned long m_timestamp;
 };
 
@@ -330,9 +388,16 @@ class DataConsumer : public DataNode
 public:
     /**
      * Consumer constructor
+     * @param format Description of the data format
+     */
+    inline DataConsumer(const FormatInfo *format)
+	: DataNode(format), m_source(0) { }
+
+    /**
+     * Consumer constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    DataConsumer(const char *format = "slin")
+    inline DataConsumer(const String& format = "slin")
 	: DataNode(format), m_source(0) { }
 
     /**
@@ -346,7 +411,7 @@ public:
      * Get the data source of this object if it's connected
      * @return A pointer to the DataSource object or NULL
      */
-    DataSource* getConnSource() const
+    inline DataSource* getConnSource() const
 	{ return m_source; }
 
     /**
@@ -371,15 +436,22 @@ class DataSource : public DataNode
 public:
     /**
      * Source constructor
+     * @param format Description of the data format
+     */
+    inline DataSource(const FormatInfo* format)
+	: DataNode(format), m_translator(0) { }
+
+    /**
+     * Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    DataSource(const char* format = "slin")
+    inline DataSource(const String& format = "slin")
 	: DataNode(format), m_translator(0) { }
 
     /**
      * Source's destructor - detaches all consumers
      */
-    ~DataSource();
+    virtual ~DataSource();
     
     /**
      * Forwards the data to its consumers
@@ -412,7 +484,7 @@ public:
      * Get the master translator object if this source is part of a translator
      * @return A pointer to the DataTranslator object or NULL
      */
-    DataTranslator* getTranslator() const
+    inline DataTranslator* getTranslator() const
 	{ return m_translator; }
 
 protected:
@@ -458,9 +530,16 @@ public:
 protected:
     /**
      * Threaded Source constructor
+     * @param format Description of the data format
+     */
+    inline ThreadedSource(const FormatInfo* format)
+	: DataSource(format), m_thread(0) { }
+
+    /**
+     * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    ThreadedSource(const char* format = "slin")
+    inline ThreadedSource(const String& format = "slin")
 	: DataSource(format), m_thread(0) { }
 
     /**
@@ -902,10 +981,18 @@ class Driver : public Plugin, public Mutex, public MessageReceiver
 {
 private:
     bool m_init;
+    String m_name;
     String m_prefix;
     ObjList m_chans;
 
 public:
+    /**
+     * Retrive the name of the driver
+     * @return The driver's name as String
+     */
+    inline const String& name() const
+	{ return m_name; }
+
     /**
      * Retrive the prefix that is used as base for all channels
      * @return The driver's prefix
@@ -946,7 +1033,7 @@ protected:
      * Install standard message relays and set up the prefix
      * @param prefix Prefix to use with channels of this driver
      */
-    void setup(const char* prefix);
+    void setup(const char* prefix = 0);
 
     /**
      * Message receiver handler

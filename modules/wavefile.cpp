@@ -135,19 +135,19 @@ WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
     if (m_fd < 0) {
 	Debug(DebugGoOn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
-	m_format = "";
+	m_format = 0;
 	return;
     }
     if (file.endsWith(".gsm")) {
-	m_format = "gsm";
+	setFormatInternal("gsm");
 	m_brate = 1650;
     }
     else if (file.endsWith(".alaw") || file.endsWith(".A")) {
-	m_format = "alaw";
+	setFormatInternal("alaw");
 	m_brate = 8000;
     }
     else if (file.endsWith(".mulaw") || file.endsWith(".u")) {
-	m_format = "mulaw";
+	setFormatInternal("mulaw");
 	m_brate = 8000;
     }
     else if (file.endsWith(".au"))
@@ -197,10 +197,10 @@ void WaveSource::detectAuFormat()
     m_brate = samp;
     switch (ntohl(header.form)) {
 	case 1:
-	    m_format = "mulaw";
+	    setFormatInternal("mulaw");
 	    break;
 	case 27:
-	    m_format = "alaw";
+	    setFormatInternal("alaw");
 	    break;
 	case 3:
 	    m_brate *= 2;
@@ -209,10 +209,12 @@ void WaveSource::detectAuFormat()
 	default:
 	    Debug(DebugMild,"Unknown .au format 0x%0X, assuming signed linear",ntohl(header.form));
     }
+#if 0
     if (samp != 8000)
 	m_format = String(samp) + "/" + m_format;
     if (chan != 1)
 	m_format = String(chan) + "*" + m_format;
+#endif
 }
 
 void WaveSource::detectWavFormat()
@@ -278,11 +280,11 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
     if (file == "-")
 	return;
     else if (file.endsWith(".gsm"))
-	m_format = "gsm";
+	setFormatInternal("gsm");
     else if (file.endsWith(".alaw") || file.endsWith(".A"))
-	m_format = "alaw";
+	setFormatInternal("alaw");
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
-	m_format = "mulaw";
+	setFormatInternal("mulaw");
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugGoOn,"Creating '%s': error %d: %s",

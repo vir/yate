@@ -98,9 +98,11 @@ static const FormatInfo s_formats[] = {
     FormatInfo("g726", 4000),
     FormatInfo("g729", 1000, 20),
     FormatInfo("plain", 0, 0, "text", 0),
+    FormatInfo("raw", 0, 0, "data", 0),
 };
 
 static flist* s_flist = 0;
+static const FormatInfo* s_slin = &s_formats[0];
 
 const FormatInfo* FormatRepository::getFormat(const String& name)
 {
@@ -498,7 +500,7 @@ DataTranslator* DataTranslator::create(const String& sFormat, const String& dFor
 
 bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 {
-    if (!source || !consumer || source->getFormat().null() || consumer->getFormat().null())
+    if (!source || !consumer || !source->getFormat() || !consumer->getFormat())
 	return false;
 
     bool retv = false;
@@ -518,10 +520,10 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 	    retv = true;
 	}
 	// finally, try to convert trough "slin" if possible
-	else if ((source->getFormat() != "slin") && (consumer->getFormat() != "slin")) {
-	    trans = create(source->getFormat(),"slin");
+	else if ((source->getFormat() != s_slin) && (consumer->getFormat() != s_slin)) {
+	    trans = create(source->getFormat(),s_slin);
 	    if (trans) {
-		DataTranslator *trans2 = create("slin",consumer->getFormat());
+		DataTranslator *trans2 = create(s_slin,consumer->getFormat());
 		if (trans2) {
 		    trans2->getTransSource()->attach(consumer);
 		    trans->getTransSource()->attach(trans2);
@@ -534,7 +536,7 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 	}
     }
     NDebug(retv ? DebugAll : DebugWarn,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
-	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str(),
+	source,source->getFormatName(),consumer,consumer->getFormatName(),
 	retv ? "succeeded" : "failed");
     return retv;
 }

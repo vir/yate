@@ -22,6 +22,10 @@
 ; status: keyword: Code status: alpha, beta or release
 ;status=alpha
 
+; Use an external rtp module instead of the native OpenH323 RTP stack, which is
+; very cpu intensive. The no external rtp can be found it will fallback to the
+; native stack. The only external rtp now is oRTP (see ortpchan module).
+external_rtp=no
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -54,7 +58,7 @@ alias = yate
 ; ident: string: Sets the hostname part of the outgoing e.164 (numeric) aliases
 ident = yate
 
-; maxconns: int: Maximum number of simultaneous connections (0 = no limit)
+; maxconns: int: Maximum number of simultaneous connections (0 = no limit). 
 ;maxconns = 0
 
 ; dtmfinband: bool: Wheter to decode inband DTMF (CPU intensive)
@@ -80,6 +84,24 @@ gkclient = false
 ; using gkip; then, if gkip is unset or is not corect, will try gkname and
 ; then will try to brodcast in the network.
 
+[gk]
+; If server is true the gatekeeper of yate will start. You must understand that
+; the H323EndPoint and H323GateKeeper share the calls. So you can make a call
+; to a registered endpoint of this gatekeeper even if in the [ep] section 
+; you haven't register the local H323EndPoint to the local H323Gatekeeper. In
+; fact is not recomanded to register the local EndPoint to the local GateKeeper.
+; The local H323EndPoint is used as proxy for calls to local non h323 
+; destinations. If you wanna call let's say tone/dial from a registered 
+; endpoint to the local gatekeeper, you must make a route in regexroute (or 
+; whatever you use) and then just dial the number.
+; If you wanna call a registered endpoint you must use now as a module register 
+; since is the only module who can record prefixes right now.
+server=false
+
+; You must define the binding interfaces. Right now the multi hosted boxes don't; work very well because OpenH323 mechanism, but we will fix that if someone
+; have any problem.
+
+interface1=10.0.0.1
 
 [incoming]
 ; This section sets defaults for the incoming H.323 calls
@@ -88,6 +110,8 @@ gkclient = false
 context=default
 
 ; maxqueue: int: Maximum length of the routing queue
+; Normaly you will like to have this setup to a certain value so someone can't
+; do a DoS attack over your server.
 ;maxqueue=5
 
 ; called: string: Default number to call

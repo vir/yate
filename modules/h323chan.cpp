@@ -541,7 +541,7 @@ bool YateH323EndPoint::Init(void)
 	    }
 	}
     }
-    	    if (s_cfg.getBoolValue("gk","server",true))
+    	    if (s_cfg.getBoolValue("gk","server",false))
 	    {
 		gkServer = new YateGatekeeperServer(*this);
 	   	gkServer->Init();

@@ -372,6 +372,9 @@ void YateIAXEndPoint::run(void)
 			conn->abort(e->etype);
 			conn->destruct();
 		    }
+		    else
+			Debug("IAX",DebugInfo,"Could not find connection to handle %d in session %p",
+			    e->etype,e->session);
 		    break;
 		case IAX_EVENT_REGREQ:
 		    reg(e);
@@ -805,9 +808,9 @@ void YateIAXConnection::handleEvent(iax_event *event)
 void YateIAXConnection::abort(int type)
 {
     Debug(DebugAll,"YateIAXConnection::abort(%d) [%p]",type,this);
-    m_final = true;
+    // Session is / will be gone... get rid of all these really fast!
     m_session = 0;
-    // Session is gone... get rid of these two really fast!
+    m_final = true;
     setConsumer();
     setSource();
     switch (type) {

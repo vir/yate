@@ -325,6 +325,11 @@ static int inaddrcmp(struct sockaddr_in *sin1, struct sockaddr_in *sin2)
 	return (sin1->sin_addr.s_addr != sin2->sin_addr.s_addr) || (sin1->sin_port != sin2->sin_port);
 }
 
+static void iax_event_drop(struct iax_event *event)
+{
+	free(event);
+}
+
 static int iax_sched_event(struct iax_event *event, struct iax_frame *frame, int ms)
 {
 
@@ -866,7 +871,7 @@ static void destroy_session(struct iax_session *session)
 			else
 				schedq = nexts;
 			if (curs->event)
-				iax_event_free(curs->event);
+				iax_event_drop(curs->event);
 			free(curs);
 		} else {
 			prevs = curs;
@@ -902,26 +907,21 @@ static struct iax_event *handle_event(struct iax_event *event)
 			/* Lag requests are never actually sent to the client, but
 			   other than that are handled as normal packets */
 			switch(event->etype) {
-			case IAX_EVENT_REJECT:
-			case IAX_EVENT_HANGUP:
-				/* Destroy this session -- it's no longer valid */
-				destroy_session(event->session);
-				return event;
 			case IAX_EVENT_LAGRQ:
 				event->etype = IAX_EVENT_LAGRP;
 				iax_send_lagrp(event->session, event->ts);
-				iax_event_free(event);
+				iax_event_drop(event);
 				break;
 			case IAX_EVENT_PING:
 				event->etype = IAX_EVENT_PONG;
 				iax_send_pong(event->session, event->ts);
-				iax_event_free(event);
+				iax_event_drop(event);
 				break;
 			default:
 				return event;
 			}
 		} else 
-			iax_event_free(event);
+			iax_event_drop(event);
 	}
 	return NULL;
 }
@@ -2195,6 +2195,14 @@ struct sockaddr_in iax_get_peer_addr(struct iax_session *session)
 
 void iax_event_free(struct iax_event *event)
 {
+	if (!event)
+		return;
+	switch (event->etype) {
+		case IAX_EVENT_REJECT:
+		case IAX_EVENT_HANGUP:
+		/* Destroy this session -- it's no longer valid */
+		destroy_session(event->session);
+	}
 	free(event);
 }
 

@@ -1,7 +1,7 @@
 # Makefile
 # This file holds the make rules for the libiax2 - Yate version
 
-CC  := gcc -Wall
+CC  := @CC@ -Wall
 AR  := ar
 RANLIB:= ranlib
 SED := sed

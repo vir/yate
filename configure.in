@@ -311,9 +311,9 @@ AC_ARG_WITH(libIAX2,AC_HELP_STRING([--with-libiax2=DIR],[use IAX 2 from DIR (def
 if [[ "x$ac_cv_use_libiax2" = "xincluded" ]]; then
     AC_MSG_CHECKING([for IAX 2 in contrib])
     inci2="contrib/iax"
-    if [[ -f "$inci2/iax2.h" ]]; then
+    if [[ -f "$srcdir/$inci2/iax2.h" ]]; then
 	HAVE_IAX2=yes
-	IAX2_INC="-I../$inci2"
+	IAX2_INC="-I$srcdir/../$inci2"
 	IAX2_DEP="../$inci2/libiax.a"
 	ac_cv_use_libiax2="no"
     fi

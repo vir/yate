@@ -1,7 +1,7 @@
 # Makefile
 # This file holds the make rules for the Telephony Engine test cases
 
-CC  := g++ -Wall
+CC  := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@

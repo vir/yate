@@ -864,11 +864,15 @@ void YateH323Connection::OnEstablished()
     if (m_targetid)
 	m->addParam("targetid",m_targetid);
     m->addParam("status","answered");
-    if (m_passtrough && m_remotePort) {
-	m->addParam("rtp_forward","yes");
-	m->addParam("rtp_addr",m_remoteAddr);
-	m->addParam("rtp_port",String(m_remotePort));
-	m->addParam("formats",m_remoteFormats);
+    if (m_passtrough) {
+	if (m_remotePort) {
+	    m->addParam("rtp_forward","yes");
+	    m->addParam("rtp_addr",m_remoteAddr);
+	    m->addParam("rtp_port",String(m_remotePort));
+	    m->addParam("formats",m_remoteFormats);
+	}
+	else
+	    Debug(DebugWarn,"H323 RTP passtrough with no remote address! [%p]",this);
     }
     Engine::enqueue(m);
 }

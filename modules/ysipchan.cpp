@@ -191,6 +191,7 @@ private:
     bool m_hungup;
     bool m_byebye;
     int m_state;
+    String m_reason;
     SIPDialog m_id;
     URI m_uri;
     String m_target;
@@ -692,7 +693,7 @@ void YateSIPConnection::clearTransaction()
     if (m_tr) {
 	m_tr->setUserData(0);
 	if (m_tr->isIncoming())
-	    m_tr->setResponse(487,"Request Terminated");
+	    m_tr->setResponse(487,m_reason.null() ? "Request Terminated" : m_reason.c_str());
 	m_tr->deref();
 	m_tr = 0;
     }
@@ -890,6 +891,8 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 void YateSIPConnection::disconnected(bool final, const char *reason)
 {
     Debug(DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
+    if (reason)
+	m_reason = reason;
     setStatus("disconnected");
     setTarget();
 }

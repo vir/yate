@@ -69,6 +69,14 @@ public:
 
 using namespace TelEngine;
 
+
+static DataBlock s_empty;
+
+const DataBlock& DataBlock::empty()
+{
+    return s_empty;
+}
+
 DataBlock::DataBlock()
     : m_data(0), m_length(0)
 {
@@ -172,6 +180,21 @@ void DataBlock::append(const DataBlock &value)
     }
     else
 	assign(value.data(),value.length());
+}
+
+void DataBlock::append(const String &value)
+{
+    if (m_length) {
+	if (value.length()) {
+	    unsigned int len = m_length+value.length();
+	    void *data = ::malloc(len);
+	    ::memcpy(data,m_data,m_length);
+	    ::memcpy(m_length+(char*)data,value.safe(),value.length());
+	    assign(data,len,false);
+	}
+    }
+    else
+	assign((void*)value.c_str(),value.length());
 }
 
 void DataBlock::insert(const DataBlock &value)

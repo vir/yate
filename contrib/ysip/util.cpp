@@ -26,7 +26,7 @@
 namespace TelEngine {
 
 // Utility function, checks if a character is a folded line continuation
-static bool isContinuation(char c)
+bool isContinuationBlank(char c)
 {
     return ((c == ' ') || (c == '\t'));
 }
@@ -57,13 +57,13 @@ String* getUnfoldedLine(const char** buf, int* len)
 		}
 		// Skip over any continuation characters at start of next line
 		goOut = true;
-		while ((l > 1) && isContinuation(b[1])) {
+		while ((l > 1) && isContinuationBlank(b[1])) {
 		    ++b;
 		    --l;
 		    goOut = false;
 		}
 		s = b;
-		if (isContinuation(s[0]))
+		if (isContinuationBlank(s[0]))
 		    ++s;
 		e = 0;
 		break;

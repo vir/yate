@@ -61,11 +61,21 @@ SIPBody* SIPBody::build(const char *buf, int len, const String& type)
     return new BinaryBody(type,buf,len);
 }
 
+SDPBody::SDPBody()
+    : SIPBody("application/sdp")
+{
+}
+
 SDPBody::SDPBody(const String& type, const char *buf, int len)
     : SIPBody(type)
 {
-    while (len > 0)
-        m_lines.append(getUnfoldedLine(&buf,&len));
+    while (len > 0) {
+        String* line = getUnfoldedLine(&buf,&len);
+	int eq = line->find('=');
+	if (eq > 0)
+	    m_lines.append(new NamedString(line->substr(0,eq),line->substr(eq+1)));
+	line->destruct();
+    }
 }
 
 SDPBody::SDPBody(const SDPBody& original)
@@ -73,9 +83,9 @@ SDPBody::SDPBody(const SDPBody& original)
 {
     const ObjList* l = &original.m_lines;
     for (; l; l = l->next()) {
-    	String* t = static_cast<String*>(l->get());
+    	const NamedString* t = static_cast<NamedString*>(l->get());
         if (t)
-	    m_lines.append(new String(*t));
+	    m_lines.append(new NamedString(t->name(),*t));
     }
 }
 
@@ -86,14 +96,13 @@ SDPBody::~SDPBody()
 void SDPBody::buildBody() const
 {
     Debug(DebugAll,"SDPBody::buildBody() [%p]",this);
-    DataBlock EOL((void*)"\r\n",2);
     const ObjList* l = &m_lines;
     for (; l; l = l->next()) {
-    	String* t = static_cast<String*>(l->get());
+    	const NamedString* t = static_cast<NamedString*>(l->get());
         if (t) {
-	    DataBlock line((void*)t->c_str(),t->length());
+	    String line;
+	    line << t->name() << "=" << *t << "\r\n";
 	    m_body += line;
-	    m_body += EOL;
 	}
     }
 }

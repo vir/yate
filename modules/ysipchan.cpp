@@ -77,6 +77,7 @@ public:
    // YateSIPConnection *findconn(int did);
   //  void terminateall(void);
     void run(void);
+    void incoming(SIPEvent* e);
     inline ObjList &calls()
 	{ return m_calls; }
 private:
@@ -217,14 +218,38 @@ void YateSIPEndPoint::run ()
 	    //	Output("res %d buf %s",res,buf);
 	    }
 	}
-	m_engine->process();
+//	m_engine->process();
+	SIPEvent* e = m_engine->getEvent();
+	if (e) {
+	    if ((e->getState() == SIPTransaction::Trying) && !e->isOutgoing()) {
+		incoming(e);
+		delete e;
+	    }
+	    else
+		m_engine->processEvent(e);
+	}
     }
+}
+
+void YateSIPEndPoint::incoming(SIPEvent* e)
+{
+    Message *m = new Message("call.preroute");
+    m->addParam("driver","sip");
+    Engine::dispatch(m);
+    *m = "call.route";
+    m->retValue().clear();
+    if (Engine::dispatch(m) && m->retValue()) {
+	e->getTransaction()->setResponse(500, "Server Internal Error");
+    }
+    else
+	e->getTransaction()->setResponse(404, "Not Found");
+    delete m;
 }
 
 bool SIPHandler::received(Message &msg)
 {
-	Debug(DebugInfo,msg.getValue("called"));
-	return false;
+    Debug(DebugInfo,msg.getValue("called"));
+    return false;
 }
 
 SIPPlugin::SIPPlugin()
@@ -255,7 +280,7 @@ void SIPPlugin::initialize()
 	    m_endpoint->startup();
     }
     if (!m_handler) {
-	m_handler = new SIPHandler("call");
+	m_handler = new SIPHandler("call.execute");
 	Engine::install(m_handler);
     }
 }

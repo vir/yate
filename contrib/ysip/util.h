@@ -25,6 +25,9 @@
 
 namespace TelEngine {
 
+// Utility finction, checks if a character is a line continuation blank
+bool isContinuationBlank(char c);
+
 // Utility function, returns an unfolded line and advances the pointer
 String* getUnfoldedLine(const char** buf, int* len);
 

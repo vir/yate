@@ -91,6 +91,11 @@ public:
     virtual ~DataBlock();
 
     /**
+     * A static empty data block
+     */
+    static const DataBlock& empty();
+
+    /**
      * Get a pointer to the stored data.
      * @return A pointer to the data or NULL.
      */
@@ -132,6 +137,12 @@ public:
     void append(const DataBlock &value);
 
     /**
+     * Append a String to the current block
+     * @param value String to append
+     */
+    void append(const String &value);
+
+    /**
      * Insert data before the current block
      * @param value Data to insert
      */
@@ -158,6 +169,12 @@ public:
      * Appending operator.
      */
     inline DataBlock& operator+=(const DataBlock &value)
+	{ append(value); return *this; }
+
+    /**
+     * Appending operator for Strings.
+     */
+    inline DataBlock& operator+=(const String &value)
 	{ append(value); return *this; }
 
     /**

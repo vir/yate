@@ -31,8 +31,79 @@
 
 using namespace TelEngine;
 
-SIPMessage::SIPMessage()
-    : body(0), m_ep(0), m_valid(false), m_answer(false), m_outgoing(true)
+HeaderLine::HeaderLine(const char *name, const String& value)
+    : NamedString(name)
+{
+    Debug(DebugAll,"HeaderLine::HeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    if (value.null())
+	return;
+    int sp = value.find(';');
+    if (sp < 0) {
+	assign(value);
+	return;
+    }
+    assign(value,sp);
+    trimBlanks();
+    while (sp < (int)value.length()) {
+	int ep = value.find(';',sp+1);
+	if (ep <= sp)
+	    ep = value.length();
+	int eq = value.find('=',sp+1);
+	if ((eq > 0) && (eq < ep)) {
+	    String pname(value.substr(sp+1,eq-sp-1));
+	    String pvalue(value.substr(eq+1,ep-eq-1));
+	    pname.trimBlanks();
+	    pvalue.trimBlanks();
+	    if (!pname.null()) {
+		Debug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		m_params.append(new NamedString(pname,pvalue));
+	    }
+	}
+	else {
+	    String pname(value.substr(sp+1,ep-sp-1));
+	    pname.trimBlanks();
+	    if (!pname.null()) {
+		Debug(DebugAll,"param name='%s' (no value)",pname.c_str());
+		m_params.append(new NamedString(pname));
+	    }
+	}
+	sp = ep+1;
+    }
+}
+
+HeaderLine::HeaderLine(const HeaderLine& original)
+    : NamedString(original.name(),original)
+{
+    Debug(DebugAll,"HeaderLine::HeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
+    const ObjList* l = &original.params();
+    for (; l; l = l->next()) {
+	const NamedString* t = static_cast<const NamedString*>(l->get());
+	if (t)
+	    m_params.append(new NamedString(t->name(),*t));
+    }
+}
+
+HeaderLine::~HeaderLine()
+{
+    Debug(DebugAll,"HeaderLine::~HeaderLine() [%p]",this);
+}
+
+const NamedString* HeaderLine::getParam(const char *name) const
+{
+    if (!(name && *name))
+	return 0;
+    const ObjList* l = &m_params;
+    for (; l; l = l->next()) {
+	const NamedString* t = static_cast<const NamedString*>(l->get());
+	if (t && (t->name() &= name))
+	    return t;
+    }
+    return 0;
+}
+
+SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
+    : version(_version), method(_method), uri(_uri),
+      body(0), m_ep(0), m_valid(true), m_answer(false), m_outgoing(true)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage() [%p]",this);
 }
@@ -67,13 +138,14 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     version = message->version;
     uri = message->uri;
     method = message->method;
-    const ObjList* l = &message->header;
-    for (; l; l = l->next()) {
-	NamedString* t = static_cast<NamedString*>(l->get());
-	if (t)
-	    header.append(new NamedString(t->name(),*t));
-    }
+    copyAllHeaders(message,"via");
+    copyHeader(message,"to");
+    copyHeader(message,"from");
+    copyHeader(message,"cseq");
+    copyHeader(message,"call-id");
+#if 0
     body = message->body ? message->body->clone() : 0;
+#endif
     m_valid = true;
 }
 
@@ -87,6 +159,32 @@ SIPMessage::~SIPMessage()
     if (body)
 	delete body;
     body = 0;
+}
+
+bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
+{
+    const HeaderLine* hl = message ? message->getHeader(name) : 0;
+    if (hl) {
+	header.append(new HeaderLine(*hl));
+	return true;
+    }
+    return false;
+}
+
+int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
+{
+    if (!(message && name && *name))
+	return 0;
+    int c = 0;
+    const ObjList* l = &message->header;
+    for (; l; l = l->next()) {
+	const HeaderLine* hl = static_cast<const HeaderLine*>(l->get());
+	if (hl && (hl->name() &= name)) {
+	    ++c;
+	    header.append(new HeaderLine(*hl));
+	}
+    }
+    return c;
 }
 
 bool SIPMessage::parseFirst(String& line)
@@ -123,7 +221,7 @@ bool SIPMessage::parseFirst(String& line)
     return true;
 }
 
-bool SIPMessage::parse(const char *buf, int len)
+bool SIPMessage::parse(const char* buf, int len)
 {
     Debug(DebugAll,"SIPMessage::parse(%p,%d) [%p]",buf,len,this);
     String* line = 0;
@@ -164,7 +262,7 @@ bool SIPMessage::parse(const char *buf, int len)
 	*line >> ":";
 	line->trimBlanks();
 	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
-	header.append(new NamedString(name.c_str(),*line));
+	header.append(new HeaderLine(name.c_str(),*line));
 	if (content.null() && (name &= "content-type")) {
 	    content = *line;
 	    content.toLower();
@@ -187,6 +285,25 @@ SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char *buf, int len)
     return 0;
 }
 
+const HeaderLine* SIPMessage::getHeader(const char* name) const
+{
+    if (!(name && *name))
+	return 0;
+    const ObjList* l = &header;
+    for (; l; l = l->next()) {
+	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	if (t && (t->name() &= name))
+	    return t;
+    }
+    return 0;
+}
+
+const NamedString* SIPMessage::getParam(const char* name, const char* param) const
+{
+    const HeaderLine* hl = getHeader(name);
+    return hl ? hl->getParam(param) : 0;
+}
+
 const String& SIPMessage::getHeaders() const
 {
     if (isValid() && m_string.null()) {
@@ -197,12 +314,18 @@ const String& SIPMessage::getHeaders() const
 
 	const ObjList* l = &header;
 	for (; l; l = l->next()) {
-	    NamedString* t = static_cast<NamedString*>(l->get());
-	    if (t)
-		m_string << t->name() << ": " << t->c_str() << "\r\n";
+	    HeaderLine* t = static_cast<HeaderLine*>(l->get());
+	    if (t) {
+		m_string << t->name() << ": " << t->c_str();
+		const ObjList* p = &(t->params());
+		for (; p; p = p->next()) {
+		    NamedString* s = static_cast<NamedString*>(p->get());
+		    if (s)
+			m_string << ";" << s->name() << "=" << *s;
+		}
+		m_string << "\r\n";
+	    }
 	}
-
-	m_string << "\r\n";
     }
     return m_string;
 }
@@ -211,6 +334,14 @@ const DataBlock& SIPMessage::getBuffer() const
 {
     if (isValid() && m_data.null()) {
 	m_data.assign((void*)(getHeaders().c_str()),getHeaders().length());
+	if (body) {
+	    String s;
+	    s << "Content-Type: " << body->getType() << "\r\n";
+	    s << "Content-Length: " << body->getBody().length() << "\r\n\r\n";
+	    m_data += s;
+	}
+	else
+	    m_data += "Content-Length: 0\r\n\r\n";
 	if (body)
 	    m_data += body->getBody();
     }

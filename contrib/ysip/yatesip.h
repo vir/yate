@@ -37,8 +37,13 @@ class SIPParty : public RefObject
 {
 public:
     SIPParty();
+    SIPParty(bool reliable);
     virtual ~SIPParty();
     virtual void transmit(SIPEvent* event) = 0;
+    inline bool isReliable() const
+	{ return m_reliable; }
+protected:
+    bool m_reliable;
 };
 
 class SIPBody
@@ -60,6 +65,7 @@ protected:
 class SDPBody : public SIPBody
 {
 public:
+    SDPBody();
     SDPBody(const String& type, const char *buf, int len);
     virtual ~SDPBody();
     virtual SIPBody* clone() const;
@@ -92,6 +98,21 @@ protected:
     String m_text;
 };
 
+class HeaderLine : public NamedString
+{
+public:
+    HeaderLine(const char *name, const String& value);
+    HeaderLine(const HeaderLine& original);
+    virtual ~HeaderLine();
+    inline const ObjList& params() const
+	{ return m_params; }
+    inline void addParam(const char *name, const char *value = 0)
+	{ m_params.append(new NamedString(name,value)); }
+    const NamedString* getParam(const char *name) const;
+protected:
+    ObjList m_params;
+};
+
 /**
  * An object that holds the sip message parsed into this library model.
  * This class can be used to parse a sip message from a text buffer, or it
@@ -101,9 +122,9 @@ class SIPMessage : public RefObject
 {
 public:
     /**
-     * Creates a new, empty SIPMessage.
+     * Creates a new, empty, outgoing SIPMessage.
      */
-    SIPMessage();
+    SIPMessage(const char* _method, const char* _uri, const char* _version = "SIP/2.0");
 
     /**
      * Creates a new SIPMessage from parsing a text buffer.
@@ -127,7 +148,24 @@ public:
     static SIPMessage* fromParsing(SIPParty* ep, const char *buf, int len = -1);
 
     /**
-     * Get the pointer to the endpoint this message uses
+     * Copy an entire header line (including all parameters) from another message
+     * @param message Pointer to the message to copy the header from
+     * @param name Name of the header to copy
+     * @return True if the header was found and copied
+     */
+    bool copyHeader(const SIPMessage* message, const char* name);
+
+    /**
+     * Copy multiple header lines (including all parameters) from another message
+     * @param message Pointer to the message to copy the header from
+     * @param name Name of the headers to copy
+     * @return Number of headers found and copied
+     */
+    int copyAllHeaders(const SIPMessage* message, const char* name);
+
+    /**
+     * Get the endpoint this message uses
+     * @return Pointer to the endpoint of this message
      */
     inline SIPParty* getParty() const
 	{ return m_ep; }
@@ -150,6 +188,28 @@ public:
      */
     inline bool isOutgoing() const
 	{ return m_outgoing; }
+
+    /**
+     * Check if this message is handled by a reliable protocol
+     * @return True if a reliable protocol (TCP, SCTP) is used
+     */
+    inline bool isReliable() const
+	{ return m_ep ? m_ep->isReliable() : false; }
+
+    /**
+     * Find a header line by name
+     * @param name Name of the header to locate
+     * @return A pointer to the first matching header line or 0 if not found
+     */
+    const HeaderLine* getHeader(const char* name) const;
+
+    /**
+     * Find a header parameter by name
+     * @param name Name of the header to locate
+     * @param param Name of the parameter to locate in the tag
+     * @return A pointer to the first matching header line or 0 if not found
+     */
+    const NamedString* getParam(const char* name, const char* param) const;
 
     /**
      * Creates a binary buffer from a SIPMessage.
@@ -198,12 +258,13 @@ public:
     SIPBody* body;
 
 protected:
-    bool parse(const char *buf, int len);
+    bool parse(const char* buf, int len);
     bool parseFirst(String& line);
     SIPParty* m_ep;
     bool m_valid;
     bool m_answer;
     bool m_outgoing;
+    String m_branch;
     mutable String m_string;
     mutable DataBlock m_data;
 };
@@ -219,18 +280,37 @@ public:
 	 * Invalid state - before constructor or after destructor
 	 */
 	Invalid,
+
 	/**
 	 * Initial state - after the initial message was inserted
 	 */
 	Initial,
+
+	/**
+	 * Trying state - got the message but no decision made yet
+	 */
+	Trying,
+
 	/**
 	 * Process state - while locally processing the event
 	 */
 	Process,
+
 	/**
 	 * Retrans state - waiting for cleanup, retransmits latest message
 	 */
 	Retrans,
+
+	/**
+	 * Timeout state - generates a timeout messages and cleans up
+	 */
+	Timeout,
+
+	/**
+	 * Finish state - transmits the last message and goes to Retrans
+	 */
+	Finish,
+
 	/**
 	 * Cleared state - removed from engine, awaiting destruction
 	 */
@@ -272,7 +352,7 @@ public:
      * The SIPEngine this transaction belongs to
      */
     inline SIPEngine* getEngine() const
-	{ return m_ownerEngine; }
+	{ return m_engine; }
 
     /**
      * Check if this transaction was initiated by the remote peer or locally
@@ -289,6 +369,13 @@ public:
 	{ return m_invite; }
 
     /**
+     * Check if this transaction is handled by a reliable protocol
+     * @return True if a reliable protocol (TCP, SCTP) is used
+     */
+    inline bool isReliable() const
+	{ return m_firstMessage ? m_firstMessage->isReliable() : false; }
+
+    /**
      * The SIP method this transaction handles
      */
     inline const String& getMethod() const
@@ -301,13 +388,35 @@ public:
 	{ return m_firstMessage ? m_firstMessage->uri : String::empty(); }
 
     /**
+     * The Via branch that may uniquely identify this transaction
+     * @return The branch parameter taken from the Via header
+     */
+    inline const String& getBranch() const
+	{ return m_branch; }
+
+    /**
+     * The local tag that may identify this transaction
+     * @return The local tag parameter
+     */
+    inline const String& getLocalTag() const
+	{ return m_tag; }
+
+    /**
+     * Set the (re)transmission flag that allows the latest outgoing message
+     *  to be send over the wire
+     */
+    inline void setTransmit()
+	{ m_transmit = true; }
+
+    /**
      * Check if a message belongs to this transaction and process it if so
      * @param message A pointer to the message to check, should not be used
      *  afterwards if this method returned True
+     * @param branch The branch parameter extracted from first Via header
      * @return True if the message was handled by this transaction, in
      *  which case it takes ownership over the message
      */
-    virtual bool processMessage(SIPMessage* message);
+    virtual bool processMessage(SIPMessage* message, const String& branch);
 
     /**
      * Get an event for this transaction if any is available.
@@ -328,6 +437,11 @@ public:
      * @return A newly allocated event or NULL if none is needed
      */
     virtual SIPEvent* getEvent(int state, int timeout);
+
+    /**
+     * Creates a final response message
+     */
+    void setResponse(int code, const char* reason);
 
     /**
      * Set an arbitrary pointer as user specific data
@@ -364,13 +478,16 @@ protected:
 
     bool m_outgoing;
     bool m_invite;
+    bool m_transmit;
     int m_state;
     unsigned int m_timeouts;
     unsigned long long m_delay;
     unsigned long long m_timeout;
     SIPMessage* m_firstMessage;
     SIPMessage* m_lastMessage;
-    SIPEngine* m_ownerEngine;
+    SIPEngine* m_engine;
+    String m_branch;
+    String m_tag;
     void *m_private;
 };
 
@@ -442,7 +559,7 @@ public:
     /**
      * Create the SIP Engine
      */
-    SIPEngine();
+    SIPEngine(const char* userAgent = 0);
 
     /**
      * Destroy the SIP Engine
@@ -453,17 +570,17 @@ public:
      * Add a message into the transaction list
      * @param buf A buffer containing the SIP message text
      * @param len The length of the message or -1 to interpret as C string
-     * @return True if the buffer contained a valid SIP message and was added
+     * @return Pointer to the transaction or NULL if message was invalid
      */
-    bool addMessage(SIPParty* ep, const char *buf, int len = -1);
+    SIPTransaction* addMessage(SIPParty* ep, const char *buf, int len = -1);
 
     /**
      * Add a message into the transaction list
      * This method is thread safe
      * @param message A parsed SIP message to add to the transactions
-     * @return True if the message was added to a transaction
+     * @return Pointer to the transaction or NULL if message was invalid
      */
-    bool addMessage(SIPMessage* message);
+    SIPTransaction* addMessage(SIPMessage* message);
 
     /**
      * Get a SIPEvent from the queue. 
@@ -490,6 +607,27 @@ public:
     virtual void processEvent(SIPEvent *event);
 
     /**
+     * Get the length of a timer
+     * @param which A one-character constant that selects which timer to return
+     * @param reliable Whether we request the timer value for a reliable protocol
+     * @return Duration of the selected timer or 0 if invalid
+     */
+    unsigned long long getTimer(char which, bool reliable = false) const;
+
+    /**
+     * Get the default value of the Max-Forwards header for this engine
+     * @return The maximum number of hops the request is allowed to pass
+     */
+    inline unsigned int getMaxForwards() const
+	{ return m_maxForwards; }
+
+    /**
+     * Get the User agent for this SIP engine
+     */
+    inline const String& getUserAgent() const
+	{ return m_userAgent; }
+
+    /**
      * TransList is the key. 
      * Is the list that holds all the transactions.
      */
@@ -497,7 +635,10 @@ public:
 
 protected:
     Mutex m_mutex;
-
+    unsigned long long m_t1;
+    unsigned long long m_t4;
+    unsigned int m_maxForwards;
+    String m_userAgent;
 };
 
 }

@@ -3,6 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * This is a generated file. You should never need to modify it.
+ * Take a look at the source file yateversn.h.in instead.
  */
 
 #ifndef __YATEVERSN_H
@@ -11,5 +12,9 @@
 #define YATE_MAJOR @PACKAGE_VERSION_MAJOR@
 #define YATE_MINOR @PACKAGE_VERSION_MINOR@
 #define YATE_BUILD @PACKAGE_VERSION_BUILD@
+#define YATE_MAJOR_S "@PACKAGE_VERSION_MAJOR@"
+#define YATE_MINOR_S "@PACKAGE_VERSION_MINOR@"
+#define YATE_BUILD_S "@PACKAGE_VERSION_BUILD@"
+#define YATE_VERSION "@PACKAGE_VERSION@"
 
 #endif /* __YATEVERSN_H */

@@ -22,6 +22,7 @@
  */
 
 #include <telengine.h>
+#include <yateversn.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -31,8 +32,15 @@
 using namespace TelEngine;
 
 SIPParty::SIPParty()
+    : m_reliable(false)
 {
     Debug(DebugAll,"SIPParty::SIPParty() [%p]",this);
+}
+
+SIPParty::SIPParty(bool reliable)
+    : m_reliable(reliable)
+{
+    Debug(DebugAll,"SIPParty::SIPParty(%d) [%p]",reliable,this);
 }
 
 SIPParty::~SIPParty()
@@ -62,9 +70,12 @@ SIPEvent::~SIPEvent()
 	m_message->deref();
 }
 
-SIPEngine::SIPEngine()
+SIPEngine::SIPEngine(const char* userAgent)
+    : m_t1(500000), m_t4(5000000), m_maxForwards(70), m_userAgent(userAgent)
 {
     Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
+    if (m_userAgent.null())
+	m_userAgent << "YATE/" << YATE_VERSION;
 }
 
 SIPEngine::~SIPEngine()
@@ -72,36 +83,41 @@ SIPEngine::~SIPEngine()
     Debug(DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
 }
 
-bool SIPEngine::addMessage(SIPParty* ep, const char *buf, int len)
+SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char *buf, int len)
 {
     Debug("SIPEngine",DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
     SIPMessage* msg = SIPMessage::fromParsing(ep,buf,len);
     if (ep)
 	ep->deref();
     if (msg) {
-	bool ok = addMessage(msg);
+	SIPTransaction* tr = addMessage(msg);
 	msg->deref();
-	return ok;
+	return tr;
     }
-    return false;
+    return 0;
 }
 
-bool SIPEngine::addMessage(SIPMessage* message)
+SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 {
     Debug("SIPEngine",DebugInfo,"addMessage(%p) [%p]",message,this);
+    if (!message)
+	return 0;
+    const NamedString* br = message->getParam("Via","branch");
+    String branch(br ? *br : 0);
+    if (!branch.startsWith("z9hG4bK"))
+	branch.clear();
     Lock lock(m_mutex);
     ObjList* l = &TransList;
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
-	if (t && t->processMessage(message))
-	    return true;
+	if (t && t->processMessage(message,branch))
+	    return t;
     }
     if (message->isAnswer()) {
 	Debug("SIPEngine",DebugInfo,"Message %p was an unhandled answer [%p]",message,this);
-	return false;
+	return 0;
     }
-    new SIPTransaction(message,this,false);
-    return true;
+    return new SIPTransaction(message,this,false);
 }
 
 bool SIPEngine::process()
@@ -122,8 +138,11 @@ SIPEvent* SIPEngine::getEvent()
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (t) {
 	    SIPEvent* e = t->getEvent();
-	    if (e)
+	    if (e) {
+		Debug("SIPEngine",DebugInfo,"Got event %p (%d) from transaction %p [%p]",
+		    e,e->getState(),t,this);
 		return e;
+	    }
 	}
     }
     return 0;
@@ -137,6 +156,57 @@ void SIPEngine::processEvent(SIPEvent *event)
 	    event->getParty()->transmit(event);
 	delete event;
     }
+}
+
+unsigned long long SIPEngine::getTimer(char which, bool reliable) const
+{
+    switch (which) {
+	case '1':
+	    // T1: RTT Estimate 500ms default
+	    return m_t1;
+	case '2':
+	    // T2: Maximum retransmit interval
+	    //  for non-INVITE requests and INVITE responses
+	    return 4000000;
+	case '4':
+	    // T4: Maximum duration a message will remain in the network
+	    return m_t4;
+	case 'A':
+	    // A: INVITE request retransmit interval, for UDP only
+	    return m_t1;
+	case 'B':
+	    // B: INVITE transaction timeout timer
+	    return 64*m_t1;
+	case 'C':
+	    // C: proxy INVITE transaction timeout
+	    return 180000000;
+	case 'D':
+	    // D: Wait time for response retransmits
+	    return reliable ? 0 : 32000000;
+	case 'E':
+	    // E: non-INVITE request retransmit interval, UDP only
+	    return m_t1;
+	case 'F':
+	    // F: non-INVITE transaction timeout timer
+	    return 64*m_t1;
+	case 'G':
+	    // G: INVITE response retransmit interval
+	    return m_t1;
+	case 'H':
+	    // H: Wait time for ACK receipt
+	    return 64*m_t1;
+	case 'I':
+	    // I: Wait time for ACK retransmits
+	    return reliable ? 0 : m_t4;
+	case 'J':
+	    // J: Wait time for non-INVITE request retransmits
+	    return reliable ? 0 : 64*m_t1;
+	case 'K':
+	    // K: Wait time for response retransmits
+	    return reliable ? 0 : m_t4;
+    }
+    Debug("SIPEngine",DebugInfo,"Requested invalid timer '%c' [%p]",which,this);
+    return 0;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

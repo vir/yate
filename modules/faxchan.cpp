@@ -360,7 +360,7 @@ bool FaxHandler::received(Message &msg)
 	if (Engine::dispatch(m)) {
 	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
-	    m.retValue() = 0;
+	    m.retValue().clear();
 	    if (Engine::dispatch(m)) {
 		fc->deref();
 		return true;

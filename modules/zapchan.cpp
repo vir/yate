@@ -804,7 +804,7 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
     if (Engine::dispatch(m)) {
 	*m = "call.execute";
 	m->addParam("callto",m->retValue());
-	m->retValue() = 0;
+	m->retValue().clear();
 	int dataLaw = -1;
 	switch (ev.layer1) {
 	    case PRI_LAYER_1_ALAW:

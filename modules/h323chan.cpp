@@ -458,7 +458,7 @@ bool H323MsgThread::route()
 	conn->AnsweringCall(H323Connection::AnswerCallPending);
 	*m_msg = "call.execute";
 	m_msg->addParam("callto",m_msg->retValue());
-	m_msg->retValue() = 0;
+	m_msg->retValue().clear();
 	m_msg->userData(static_cast<DataEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
 	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));

@@ -146,15 +146,15 @@ bool GenConnection::oneCall(String* target)
 {
     Message m("call.route");
     m.addParam("driver","callgen");
-    m.addParam("caller",s_cfg.getValue("general","caller","yate"));
-    String callto(s_cfg.getValue("general","callto"));
+    m.addParam("caller",s_cfg.getValue("parameters","caller","yate"));
+    String callto(s_cfg.getValue("parameters","callto"));
     if (callto.null()) {
-	String called(s_cfg.getValue("general","called"));
+	String called(s_cfg.getValue("parameters","called"));
 	if (called.null()) {
-	    int n_min = s_cfg.getIntValue("general","minnum");
+	    int n_min = s_cfg.getIntValue("parameters","minnum");
 	    if (n_min <= 0)
 		return false;
-	    int n_max = s_cfg.getIntValue("general","maxnum",n_min);
+	    int n_max = s_cfg.getIntValue("parameters","maxnum",n_min);
 	    if (n_max < n_min)
 		return false;
 	    called = (unsigned)(n_min + (((n_max - n_min) * (long long)::random()) / RAND_MAX));
@@ -205,7 +205,7 @@ void GenConnection::ringing()
     Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
     s_mutex.lock();
     ++s_ringing;
-    bool media =s_cfg.getBoolValue("general","earlymedia",true);
+    bool media =s_cfg.getBoolValue("parameters","earlymedia",true);
     s_mutex.unlock();
     if (media)
 	makeSource();
@@ -229,7 +229,7 @@ void GenConnection::makeSource()
     if (getSource())
 	return;
     s_mutex.lock();
-    String src(s_cfg.getValue("general","source"));
+    String src(s_cfg.getValue("parameters","source"));
     s_mutex.unlock();
     if (src) {
 	Message m("chan.attach");
@@ -271,7 +271,7 @@ void GenThread::run()
     for (;;) {
 	::usleep(1000000);
 	Lock lock(s_mutex);
-	int maxcalls = s_cfg.getIntValue("general","maxcalls",5);
+	int maxcalls = s_cfg.getIntValue("parameters","maxcalls",5);
 	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))
 	    continue;
 	--s_numcalls;
@@ -288,12 +288,12 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	if (q >= 0) {
 	    String val = line.substr(q+1).trimBlanks();
 	    line = line.substr(0,q).trimBlanks().toLower();
-	    s_cfg.setValue("general",line,val.c_str());
+	    s_cfg.setValue("parameters",line,val.c_str());
 	    rval << "Set '" << line << "' to '" << val << "'";
 	}
 	else {
 	    line.toLower();
-	    rval << "Value of '" << line << "' is '" << s_cfg.getValue("general",line) << "'";
+	    rval << "Value of '" << line << "' is '" << s_cfg.getValue("parameters",line) << "'";
 	}
 	s_mutex.unlock();
     }
@@ -309,7 +309,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
     }
     else if (line == "start") {
 	s_mutex.lock();
-	s_numcalls = s_cfg.getIntValue("general","numcalls",100);
+	s_numcalls = s_cfg.getIntValue("parameters","numcalls",100);
 	rval << "Generating " << s_numcalls << " new calls";
 	s_runs = true;
 	s_mutex.unlock();
@@ -364,7 +364,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	    rval << "Saved config to " << s_cfg;
 	}
 	else
-	    rval << "Saving is disabled - to enable: callgen set cansave=true";
+	    rval << "Saving is disabled from config file";
 	s_mutex.unlock();
     }
     else if (line.null() || (line == "help") || (line == "?"))

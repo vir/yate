@@ -46,6 +46,7 @@ public:
 	{ m_id = id; }
 private:
     DataEndpoint *m_chan;
+    DataBlock m_data;
     int m_fd;
     unsigned m_brate;
     unsigned m_total;
@@ -82,6 +83,17 @@ public:
 private:
     String m_id;
     static int s_nextid;
+};
+
+class ChanDisconnector : public Thread
+{
+public:
+    ChanDisconnector(DataEndpoint *chan)
+	: m_chan(chan) { }
+    virtual void run()
+	{ m_chan->disconnect(); }
+private:
+    DataEndpoint *m_chan;
 };
 
 class WaveHandler : public MessageHandler
@@ -149,12 +161,12 @@ WaveSource::~WaveSource()
 
 void WaveSource::run()
 {
-    DataBlock data(0,480);
+    m_data.assign(0,(m_brate*20)/1000);
     int r = 0;
     unsigned long long tpos = Time::now();
     m_time = tpos;
     do {
-	r = ::read(m_fd,data.data(),data.length());
+	r = ::read(m_fd,m_data.data(),m_data.length());
 	if (r < 0) {
 	    if (errno == EINTR) {
 		r = 1;
@@ -162,14 +174,14 @@ void WaveSource::run()
 	    }
 	    break;
 	}
-	if (r < (int)data.length())
-	    data.assign(data.data(),r);
+	if (r < (int)m_data.length())
+	    m_data.assign(m_data.data(),r);
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
 	    DDebug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data,data.length()*8000/m_brate);
+	Forward(m_data,m_data.length()*8000/m_brate);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
@@ -245,11 +257,15 @@ void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 		m->userData(m_chan);
 		Engine::enqueue(m);
 	    }
-#if 0
-	    // This is no good - this should be done in another thread
-	    if (m_chan)
-		m_chan->disconnect();
-#endif
+	    if (m_chan) {
+		ChanDisconnector *disc = new ChanDisconnector(m_chan);
+		if (disc->error()) {
+		    Debug(DebugFail,"Error creating disconnector thread %p",disc);
+		    delete disc;
+		}
+		else
+		    disc->startup();
+	    }
 	}
     }
 }

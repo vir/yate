@@ -272,12 +272,32 @@ void Time::toTimeval(struct timeval *tv, unsigned long long usec)
     }
 }
 
+Mutex s_refmutex;
+
 RefObject::~RefObject()
 {
 #ifndef NDEBUG
-    if (m_refcount)
+    if (m_refcount > 0)
 	Debug(DebugMild,"RefObject [%p] destroyed with count=%d",this,m_refcount);
 #endif
+}
+
+int RefObject::ref()
+{
+    Lock lock(s_refmutex);
+    return ++m_refcount;
+}
+
+bool RefObject::deref()
+{
+    s_refmutex.lock();
+    int i = --m_refcount;
+    if (i == 0)
+	m_refcount = -1;
+    s_refmutex.unlock();
+    if (i == 0)
+	delete this;
+    return (i <= 0);
 }
 
 };

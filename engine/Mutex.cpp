@@ -48,8 +48,7 @@ private:
 class GlobalMutex {
 public:
     GlobalMutex();
-    inline static void init()
-	{ if (s_init) { s_init = false; ::pthread_mutex_init(&s_mutex,0); } }
+    static void init();
     static void lock();
     static void unlock();
 private:
@@ -71,6 +70,18 @@ pthread_mutex_t GlobalMutex::s_mutex;
 // WARNING!!!
 // No debug messages are allowed in mutexes since the debug output itself
 // is serialized using a mutex!
+
+void GlobalMutex::init()
+{
+    if (s_init) {
+	s_init = false;
+	pthread_mutexattr_t attr;
+	::pthread_mutexattr_init(&attr);
+	::pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE_NP);
+	::pthread_mutex_init(&s_mutex,&attr);
+	::pthread_mutexattr_destroy(&attr);
+    }
+}
 
 GlobalMutex::GlobalMutex()
 {
@@ -114,7 +125,9 @@ MutexPrivate::~MutexPrivate()
 bool MutexPrivate::lock(long long int maxwait)
 {
     bool rval = false;
+    GlobalMutex::lock();
     ref();
+    GlobalMutex::unlock();
     if (maxwait < 0)
 	rval = !::pthread_mutex_lock(&m_mutex);
     else if (!maxwait)
@@ -145,19 +158,14 @@ void MutexPrivate::unlock()
     GlobalMutex::lock();
     if (m_locked) {
 	m_locked = false;
-	if (--s_locks < 0) {
-	    GlobalMutex::unlock();
+	if (--s_locks < 0)
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
-	    GlobalMutex::lock();
-	}
 	::pthread_mutex_unlock(&m_mutex);
-	GlobalMutex::unlock();
 	deref();
     }
-    else {
-	GlobalMutex::unlock();
+    else
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex [%p]",this);
-    }
+    GlobalMutex::unlock();
 }
 
 Mutex::Mutex()

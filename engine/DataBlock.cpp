@@ -434,8 +434,7 @@ void DataEndpoint::setConsumer(DataConsumer *consumer)
 
 ThreadedSource::~ThreadedSource()
 {
-    if (m_thread)
-	delete m_thread;
+    stop();
 }
 
 bool ThreadedSource::start(const char *name)
@@ -447,8 +446,21 @@ bool ThreadedSource::start(const char *name)
     return m_thread->running();
 }
 
+void ThreadedSource::stop()
+{
+    if (m_thread) {
+	delete m_thread;
+	m_thread = 0;
+    }
+}
+
 void ThreadedSource::cleanup()
 {
+}
+
+Thread *ThreadedSource::thread() const
+{
+    return m_thread;
 }
 
 DataTranslator::DataTranslator(const char *sFormat, const char *dFormat)

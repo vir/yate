@@ -178,7 +178,9 @@ MessageDispatcher::MessageDispatcher()
 MessageDispatcher::~MessageDispatcher()
 {
     DDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
+    m_mutex.lock();
     m_handlers.clear();
+    m_mutex.unlock();
 }
 
 bool MessageDispatcher::install(MessageHandler *handler)
@@ -186,6 +188,7 @@ bool MessageDispatcher::install(MessageHandler *handler)
     DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
 	return false;
+    Lock lock(m_mutex);
     ObjList *l = m_handlers.find(handler);
     if (l)
 	return false;
@@ -213,6 +216,7 @@ bool MessageDispatcher::install(MessageHandler *handler)
 bool MessageDispatcher::uninstall(MessageHandler *handler)
 {
     DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
+    Lock lock(m_mutex);
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
     if (handler)
 	handler->m_dispatcher = 0;

@@ -347,6 +347,17 @@ public:
      */
     bool start(const char *name = "ThreadedSource");
 
+    /**
+     * Stops and destroys the worker thread if running
+     */
+    void stop();
+
+    /**
+     * Return a pointer to the worker thread
+     * @return Pointer to running worker thread or NULL
+     */
+    Thread *thread() const;
+
 protected:
     /**
      * Threaded Source constructor

@@ -503,6 +503,8 @@ bool YateH323EndPoint::Init(void)
 
     AddAllUserInputCapabilities(0,1);
     DisableDetectInBandDTMF(!s_cfg.getBoolValue("ep","dtmfinband",false));
+    DisableFastStart(!s_cfg.getBoolValue("ep","faststart",false));
+    DisableH245Tunneling(!s_cfg.getBoolValue("ep","h245tunneling",false));
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
 	(s_cfg.getIntValue("ep","silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)));
 

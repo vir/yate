@@ -149,6 +149,7 @@ ToneSource::~ToneSource()
 {
     Lock lock(mutex);
     Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
+    tones.remove(this,false);
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
@@ -156,7 +157,6 @@ ToneSource::~ToneSource()
 	    Debug(DebugInfo,"ToneSource rate=%llu b/s",m_time);
 	}
     }
-    tones.remove(this,false);
 }
 
 const Tone *ToneSource::getBlock(const String &tone)
@@ -181,7 +181,6 @@ const Tone *ToneSource::getBlock(const String &tone)
 
 ToneSource *ToneSource::getTone(const String &tone)
 {
-    Lock lock(mutex);
     ObjList *l = &tones;
     for (; l; l = l->next()) {
 	ToneSource *t = static_cast<ToneSource *>(l->get());
@@ -244,10 +243,9 @@ ToneChan::ToneChan(const String &tone)
     : DataEndpoint("tone")
 {
     Debug(DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
-    mutex.lock();
+    Lock lock(mutex);
     m_id << "tone/" << s_nextid++;
     chans.append(this);
-    mutex.unlock();
     ToneSource *t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
@@ -333,6 +331,7 @@ bool AttachHandler::received(Message &msg)
     src = src.matchString(1);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
+	Lock lock(mutex);
 	ToneSource *t = ToneSource::getTone(src);
 	if (t) {
 	    dd->setSource(t);

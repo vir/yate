@@ -36,6 +36,13 @@ public:
     virtual void run();
 };
 
+class RouteThread : public Thread
+{
+public:
+    RouteThread() : Thread("RandRouteThread") { }
+    virtual void run();
+};
+
 class RandPlugin : public Plugin
 {
 public:
@@ -53,10 +60,31 @@ public:
 
 void RandThread::run()
 {
-    for (;;) {
-	::usleep(::random() % 5000000);
-	String id("random/"+String((int)::random() %1000));
-	Message *m = new Message("preroute");
+    for (int i = 0; i < 10; i++) {
+	::usleep(::random() % 10000);
+	RouteThread *thread = new RouteThread;
+	if (thread->error()) {
+	    Debug(DebugFail,"New thread error!");
+	    break;
+	}
+	thread->startup();
+    }
+    Debug(DebugInfo,"No longer creating new calls");
+}
+
+void RouteThread::run()
+{
+    ::usleep(::random() % 1000000);
+    Message *m = new Message("call");
+    m->addParam("callto","wave/play//dev/zero");
+    m->addParam("target",String((int)(::random() % 1000000)));
+    if (!Engine::dispatch(m))
+	Debug(DebugMild,"Noone processed call from '%s' to '%s'",
+	    m->getValue("callto"),m->getValue("target"));
+    delete m;
+#if 0
+    String id("random/"+String((int)::random() %1000));
+    Message *m = new Message("preroute");
 	m->addParam("id",id);
 	m->addParam("caller",String((int)(::random() % 1000000)));
 	m->addParam("called",String((int)(::random() % 1000000)));
@@ -66,6 +94,7 @@ void RandThread::run()
 	Debug(DebugMild,"Routed %ssuccessfully in %llu usec",(routed ? "" : "un"),
 	    Time::now()-m->msgTime().usec());
 	if (routed) {
+	    ::usleep(::random() % 1000000);
 	    m->addParam("callto",m->retValue());
 	    m->retValue() = "";
 	    *m = "call";
@@ -93,7 +122,7 @@ void RandThread::run()
 	    Engine::dispatch(m);
 	}
 	delete m;
-    }
+#endif
 }
 
 RandPlugin::RandPlugin()

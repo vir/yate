@@ -263,8 +263,7 @@ public:
      * Increments the reference counter
      * @return The new reference count
      */
-    inline int ref()
-	{ return ++m_refcount; }
+    int ref();
 
     /**
      * Decrements the reference counter, destroys the object if it reaches zero
@@ -274,8 +273,7 @@ public:
      * </pre>
      * @return True if the object was deleted, false if it still exists
      */
-    inline bool deref()
-	{ int i = --m_refcount; if (i == 0) delete this; return (i <= 0); }
+    bool deref();
 
     /**
      * Get the current value of the reference counter

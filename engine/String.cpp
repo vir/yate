@@ -336,7 +336,7 @@ String& String::toLower()
     if (m_string) {
 	for (char *s = m_string; char c = *s; s++) {
 	    if (('A' <= c) && (c <= 'Z'))
-		*s = c + 'a' - 'Z';
+		*s = c + 'a' - 'A';
 	}
     }
     return *this;

@@ -751,6 +751,18 @@ public:
     bool endsWith(const char *what, bool wordBreak = false) const;
 
     /**
+     * Checks if the string starts with a substring and removes it
+     * @param what Substring to search for
+     * @param wordBreak Check if a word boundary follows the substring;
+     *  this parameter defaults to True because the intended use of this
+     *  method is to separate commands from their parameters
+     * @return True if the substring occurs at the beginning of the string
+     *  and also removes the substring; if wordBreak is True any word
+     *  breaking characters are also removed
+     */
+    bool startSkip(const char *what, bool wordBreak = true);
+
+    /**
      * Checks if matches another string
      * @param value String to check for match
      * @return True if matches, false otherwise
@@ -1300,6 +1312,14 @@ public:
      * @param key Name of the key to delete
      */
     void clearKey(const String &sect, const String &key);
+
+    /**
+     * Add the value of a key in a section.
+     * @param sect Name of the section, will be created if missing
+     * @param key Name of the key to add in the section
+     * @param value Value to set in the key
+     */
+    void addValue(const String &sect, const char *key, const char *value = 0);
 
     /**
      * Set the value of a key in a section.

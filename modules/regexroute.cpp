@@ -45,6 +45,20 @@ static void setMessage(Message &msg, String &line)
     bool first = true;
     for (ObjList *p = strs; p; p=p->next()) {
 	String *s = static_cast<String*>(p->get());
+	if (s) {
+	    int p1;
+	    while ((p1 = s->find("${")) >= 0) {
+		// handle ${paramname} replacements
+		int p2 = s->find('}',p1+2);
+		if (p2 > 0) {
+		    String v = s->substr(p1+2,p2-p1-2);
+		    v.trimBlanks();
+		    DDebug("RegexRoute",DebugAll,"Replacing parameter '%s'",
+			v.c_str());
+		    *s = s->substr(0,p1) + msg.getValue(v) + s->substr(p2+1);
+		}
+	    }
+	}
 	if (first) {
 	    first = false;
 	    line = s ? *s : "";
@@ -67,12 +81,12 @@ static void setMessage(Message &msg, String &line)
     strs->destruct();
 }
 
-static bool oneContext(Message &msg, String &called, const String &context, int depth = 0)
+static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
 {
     if (!(context && *context))
 	return false;
     if (depth > 5) {
-	Debug("RegexRoute",DebugWarn,"Loop detected, current context '%s'",context.c_str());
+	Debug("RegexRoute",DebugWarn,"Possible loop detected, current context '%s'",context.c_str());
 	return false;
     }
     NamedList *l = s_cfg.getSection(context);
@@ -82,51 +96,75 @@ static bool oneContext(Message &msg, String &called, const String &context, int 
 	    NamedString *n = l->getParam(i);
 	    if (n) {
 		Regexp r(n->name());
-		if (called.matches(r)) {
-		    String val = called.replaceMatches(*n);
+		String val;
+		if (r.startsWith("${")) {
+		    // handle special case ${paramname}regexp=value
+		    int p = r.find('}');
+		    if (p < 3) {
+			Debug("RegexRoute",DebugWarn,"Invalid parameter match '%s' in rule #%u in context '%s'",
+			    r.c_str(),i+1,context.c_str());
+			continue;
+		    }
+		    val = r.substr(2,p-2);
+		    r = r.substr(p+1);
+		    val.trimBlanks();
+		    r.trimBlanks();
+		    if (val.null() || r.null()) {
+			Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
+			    i+1,context.c_str());
+			continue;
+		    }
+		    NDebug("RegexRoute",DebugAll,"Using message parameter '%s'",
+			val.c_str());
+		    val = msg.getValue(val);
+		}
+		else
+		    val = str;
+		val.trimBlanks();
+
+		if (val.matches(r)) {
+		    val = val.replaceMatches(*n);
 		    setMessage(msg,val);
 		    val.trimBlanks();
-		    switch (val[0]) {
-			case 0:
-			    break;
-			case '-':
-			    return false;
-			case '>':
-			    val >> ">";
-			    val.trimBlanks();
-			    NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
-				val.c_str(),i+1,r.c_str());
-			    return oneContext(msg,called,val,depth+1);
-			case '<':
-			    val >> "<";
-			    val.trimBlanks();
-			    NDebug("RegexRoute",DebugAll,"Calling context '%s' by rule #%u '%s'",
-				val.c_str(),i+1,r.c_str());
-			    if (oneContext(msg,called,val,depth+1)) {
-				DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
-				return true;
-			    }
-			    break;
-			case '!':
-			    val >> "!";
-			    val.trimBlanks();
-			    if (!val.null()) {
-				NDebug("RegexRoute",DebugAll,"Setting called '%s' by rule #%u '%s'",
-				    val.c_str(),i+1,r.c_str());
-				called = val;
-			    }
-			    break;
-			default:
-			    DDebug("RegexRoute",DebugAll,"Routing call to '%s' in context '%s' via `%s' by rule #%u '%s'",
-				called.c_str(),context.c_str(),val.c_str(),i+1,r.c_str());
-			    msg.retValue() = val;
+		    if (val.null()) {
+			// special case: do nothing on empty target
+			continue;
+		    }
+		    else if (val == "return") {
+			NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
+			return false;
+		    }
+		    else if (val.startSkip("jump")) {
+			NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
+			    val.c_str(),i+1,n->name().c_str());
+			return oneContext(msg,str,val,ret,depth+1);
+		    }
+		    else if (val.startSkip("include")) {
+			NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
+			    val.c_str(),i+1,n->name().c_str());
+			if (oneContext(msg,str,val,ret,depth+1)) {
+			    DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
 			    return true;
+			}
+		    }
+		    else if (val.startSkip("match")) {
+			if (!val.null()) {
+			    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
+				val.c_str(),i+1,n->name().c_str(),context.c_str());
+			    str = val;
+			}
+		    }
+		    else {
+			DDebug("RegexRoute",DebugAll,"Returning '%s' for '%s' in context '%s' by rule #%u '%s'",
+			    val.c_str(),str.c_str(),context.c_str(),i+1,n->name().c_str());
+			ret = val;
+			return true;
 		    }
 		}
 	    }
 	}
     }
-    DDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
+    DDebug("RegexRoute",DebugAll,"Returning false at end of context '%s'", context.c_str());
     return false;
 }
 	
@@ -137,9 +175,11 @@ bool RouteHandler::received(Message &msg)
     if (called.null())
 	return false;
     const char *context = msg.getValue("context","default");
-    if (oneContext(msg,called,context)) {
-	Debug(DebugInfo,"Routing call to '%s' in context '%s' via `%s' in %llu usec",
-	    called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
+    String ret;
+    if (oneContext(msg,called,context,ret)) {
+	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in %llu usec",
+	    called.c_str(),context,ret.c_str(),Time::now()-tmr);
+	msg.retValue() = ret;
 	return true;
     }
     Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted %llu usec",
@@ -161,32 +201,25 @@ bool PrerouteHandler::received(Message &msg)
     // return immediately if there is already a context
     if (msg.getValue("context"))
 	return false;
- //   String s(msg.getValue("caller"));
-    String s(msg.getValue("driver")); s+="/";
-    s+=msg.getValue("span"); s+="/";
-    s+=msg.getValue("channel"); s+="/";
-    s+=msg.getValue("caller");
-			
-    if (s.null())
+
+    String caller(msg.getValue("caller"));
+    if (caller.null()) {
+	caller << msg.getValue("driver") << "/";
+	caller << msg.getValue("span") << "/";
+	caller << msg.getValue("channel");
+    }
+    if (caller == "//")
 	return false;
-    NamedList *l = s_cfg.getSection("contexts");
-    if (l) {
-	unsigned int len = l->length();
-	for (unsigned int i=0; i<len; i++) {
-	    NamedString *n = l->getParam(i);
-	    if (n) {
-		Regexp r(n->name());
-		if (s.matches(r)) {
-		    msg.addParam("context",s.replaceMatches(*n));
-		    Debug(DebugInfo,"Classifying caller '%s' in context '%s' by rule #%u '%s' in %llu usec",
-			s.c_str(),msg.getValue("context"),i+1,r.c_str(),Time::now()-tmr);
-		    return true;
-		}
-	    }
-	}
+
+    String ret;
+    if (oneContext(msg,caller,"contexts",ret)) {
+	Debug(DebugInfo,"Classifying caller '%s' in context '%s' in %llu usec",
+	    caller.c_str(),ret.c_str(),Time::now()-tmr);
+	msg.addParam("context",ret);
+	return true;
     }
     Debug(DebugInfo,"Could not classify call from '%s', wasted %llu usec",
-	s.c_str(),Time::now()-tmr);
+	caller.c_str(),Time::now()-tmr);
     return false;
 };
 		    

@@ -224,16 +224,6 @@ void Connection::run()
     }	
 }
 
-static bool startSkip(String &s, const char *keyword)
-{
-    if (s.startsWith(keyword,true)) {
-	s >> keyword;
-	s.trimBlanks();
-	return true;
-    }
-    return false;
-}
-
 void Connection::processLine(const char *line)
 {
     DDebug("RManager",DebugInfo,"processLine = %s",line);
@@ -242,7 +232,7 @@ void Connection::processLine(const char *line)
     if (str.null())
 	return;
 
-    if (startSkip(str,"status"))
+    if (str.startSkip("status"))
     {
 	Message m("status");
 	if (!str.null()) {
@@ -254,7 +244,7 @@ void Connection::processLine(const char *line)
 	str << m.retValue() << "%%-status\n";
 	write(str);
     }
-    else if (startSkip(str,"drop"))
+    else if (str.startSkip("drop"))
     {
 	if (str.null()) {
 	    write(m_machine ? "%%=drop:fail=noarg\n" : "You must specify what connection to drop!\n");
@@ -276,7 +266,7 @@ void Connection::processLine(const char *line)
 	    str = (m_machine ? "%%=drop:fail:" : "Could not drop ") + str + "\n";
 	write(str);
     }
-    else if (startSkip(str,"call"))
+    else if (str.startSkip("call"))
     {
 	int pos = str.find(' ');
 	if (pos <= 0) {
@@ -293,9 +283,9 @@ void Connection::processLine(const char *line)
 	    str = (m_machine ? "%%=call:fail:" : "Could not call ") + str + "\n";
 	write(str);
     }
-    else if (startSkip(str,"debug"))
+    else if (str.startSkip("debug"))
     {
-	if (startSkip(str,"level")) {
+	if (str.startSkip("level")) {
 	    int dbg = debugLevel();
 	    str >> dbg;
 	    dbg = debugLevel(dbg);
@@ -312,31 +302,31 @@ void Connection::processLine(const char *line)
 	}
 	write(str);
     }
-    else if (startSkip(str,"machine"))
+    else if (str.startSkip("machine"))
     {
 	str >> m_machine;
 	str = "Machine mode: ";
 	str += (m_machine ? "on\n" : "off\n");
 	write(str);
     }
-    else if (startSkip(str,"reload"))
+    else if (str.startSkip("reload"))
     {
 	write(m_machine ? "%%=reload\n" : "Reinitializing...\n");
 	Engine::init();
     }
-    else if (startSkip(str,"quit"))
+    else if (str.startSkip("quit"))
     {
 	write(m_machine ? "%%=quit\n" : "Goodbye!\n");
 	cancel();
     }
-    else if (startSkip(str,"stop"))
+    else if (str.startSkip("stop"))
     {
 	unsigned code = 0;
 	str >> code;
 	write(m_machine ? "%%=shutdown\n" : "Engine shutting down - bye!\n");
 	Engine::halt(code);
     }
-    else if (startSkip(str,"help") || startSkip(str,"?"))
+    else if (str.startSkip("help") || str.startSkip("?"))
     {
 	Message m("help");
 	if (!str.null())

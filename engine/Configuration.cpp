@@ -120,6 +120,17 @@ void Configuration::clearKey(const String &sect, const String &key)
 	l->clearParam(key);
 }
 
+void Configuration::addValue(const String &sect, const char *key, const char *value)
+{
+    DDebug(DebugInfo,"Configuration::addValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
+    ObjList *l = makeSectHolder(sect);
+    if (!l)
+	return;
+    NamedList *n = static_cast<NamedList *>(l->get());
+    if (n)
+	n->addParam(key,value);
+}
+
 void Configuration::setValue(const String &sect, const char *key, const char *value)
 {
     DDebug(DebugInfo,"Configuration::setValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
@@ -181,7 +192,7 @@ bool Configuration::load()
 	    }
 	    int q = s.find('=');
 	    if (q > 0)
-		setValue(sect,s.substr(0,q).trimBlanks(),s.substr(q+1).trimBlanks());
+		addValue(sect,s.substr(0,q).trimBlanks(),s.substr(q+1).trimBlanks());
 	}
 	::fclose(f);
 	return true;

@@ -533,6 +533,19 @@ bool String::startsWith(const char *what, bool wordBreak) const
     return (::strncmp(m_string,what,l) == 0);
 }
 
+bool String::startSkip(const char *what, bool wordBreak)
+{
+    if (startsWith(what,wordBreak)) {
+	const char *p = m_string + ::strlen(what);
+	if (wordBreak)
+	    while (isWordBreak(*p))
+		p++;
+	assign(p);
+	return true;
+    }
+    return false;
+}
+
 bool String::endsWith(const char *what, bool wordBreak) const
 {
     if (!(m_string && what && *what))
@@ -586,19 +599,23 @@ String String::replaceMatches(const String &templ) const
     for (;;) {
 	pos = templ.find('\\',ofs);
 	if (pos < 0) {
-	    s += templ.substr(ofs);
+	    s << templ.substr(ofs);
 	    break;
 	}
-	s += templ.substr(ofs,pos-ofs);
+	s << templ.substr(ofs,pos-ofs);
 	pos++;
 	char c = templ[pos];
 	if (c == '\\') {
 	    pos++;
-	    s += "\\";
+	    s << "\\";
 	}
 	else if ('0' <= c && c <= '9') {
 	    pos++;
-	    s += matchString(c - '0');
+	    s << matchString(c - '0');
+	}
+	else {
+	    pos++;
+	    s << "\\" << c;
 	}
 	ofs = pos;
     }

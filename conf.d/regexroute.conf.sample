@@ -34,9 +34,12 @@
 ; Expressions are scanned from top to bottom; the first match returns the value
 ; Each line must be of the form:
 ;   regexp=context_name
+; To match a message parameter you can use the format:
+;   ${paramname}regexp=context_name
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the context name using \1, \2, \3, ... while \0 holds the entire
 ;  matched regexp even if no capture was used
+; Message parameters can be inserted in the context name using ${paramname}
 ;
 ; Example:
 ;^$=empty
@@ -54,18 +57,24 @@
 ; Expressions are scanned from top to bottom; the first match returns the value
 ; Each line must be of the form:
 ;   regexp=target
+; To match a message parameter you can use the format:
+;   ${paramname}regexp=target
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the target using \1, \2, \3, ...
+; Message parameters can be inserted in the target using ${paramname}
 ;
-; First character of a matched target can have a special meaning
-; - returns immediately from the context without routing
-; < calls another context, returns at the next entry if the other context
-    did not return successfully
-; > jumps another context, does not return to this context
-; ! modify the called string instead of specifying a target
+; First word of a matched target can have a special meaning
+; return - returns immediately from the context without routing
+; include - calls another context, returns at the next entry if the other
+;   context did not return successfully
+; jump - jumps another context, does not return to this context
+; match - modify the matched string instead of specifying a target
 ;
 ; It is possible to set message parameters by appending them as name=value
 ;  while separating them with semicolons (;)
+; Please note that the match string is not changed together with the message
+;  parameter from which it was copied; for example in routing stage using
+;  "match 123" and ";called=123" have different effects
 ;
 ; Example:
 ;   route the emergency 112 and 911 numbers to POTS, any channel on an E1,

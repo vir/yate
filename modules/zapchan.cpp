@@ -340,7 +340,7 @@ private:
     static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int nsf);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
-    void restartChan(int chan, bool force = false);
+    void restartChan(int chan, bool outgoing, bool force = false);
     void ringChan(int chan, pri_event_ring &ev);
     void infoChan(int chan, pri_event_ring &ev);
     void hangupChan(int chan,pri_event_hangup &ev);
@@ -380,7 +380,7 @@ public:
     bool call(Message &msg, const char *called = 0);
     bool answer();
     void idle();
-    void restart();
+    void restart(bool outgoing = false);
     bool open(int defLaw = -1);
     void close();
     inline void setTimeout(unsigned long long tout)
@@ -610,7 +610,7 @@ void PriSpan::idle()
 	m_restart = Time::now() + restartPeriod;
 	Debug("PriSpan",DebugInfo,"Restarting idle channels on span %d",m_span);
 	for (int i=1; i<m_nchans; i++)
-	    restartChan(i);
+	    restartChan(i,true);
     }
     if (!m_chans)
 	return;
@@ -634,7 +634,7 @@ void PriSpan::handleEvent(pri_event &ev)
 		    m_chans[i]->hangup(PRI_CAUSE_NETWORK_OUT_OF_ORDER);
 	    break;
 	case PRI_EVENT_RESTART:
-	    restartChan(ev.restart.channel,true);
+	    restartChan(ev.restart.channel,false,true);
 	    break;
 	case PRI_EVENT_CONFIG_ERR:
 	    Debug(DebugWarn,"Error on span %d: %s",m_span,ev.err.err);
@@ -705,7 +705,7 @@ ZapChan *PriSpan::getChan(int chan) const
     return validChan(chan) ? m_chans[chan-1] : 0;
 }
 
-void PriSpan::restartChan(int chan, bool force)
+void PriSpan::restartChan(int chan, bool outgoing, bool force)
 {
     if (chan < 0) {
 	Debug(DebugInfo,"Restart request on entire span %d",m_span);
@@ -717,7 +717,7 @@ void PriSpan::restartChan(int chan, bool force)
     }
     if (force || !getChan(chan)->inUse()) {
 	Debug(DebugInfo,"Restarting B-channel %d on span %d",chan,m_span);
-	getChan(chan)->restart();
+	getChan(chan)->restart(outgoing);
     }
 }
 
@@ -971,11 +971,12 @@ void ZapChan::idle()
     }
 }
 
-void ZapChan::restart()
+void ZapChan::restart(bool outgoing)
 {
     disconnect();
     close();
-    ::pri_reset(m_span->pri(),m_chan);
+    if (outgoing)
+	::pri_reset(m_span->pri(),m_chan);
 }
 
 void ZapChan::close()

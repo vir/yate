@@ -43,6 +43,7 @@
 using namespace TelEngine;
 
 static Mutex s_calls;
+static Mutex s_route;
 
 static bool s_externalRtp;
 
@@ -140,13 +141,13 @@ public:
     YateH323AudioSource()
 	: m_exit(false)
 	{ Debug(DebugAll,"h.323 source [%p] created",this); }
-    ~YateH323AudioSource()
-	{ Debug(DebugAll,"h.323 source [%p] deleted",this); }
+    ~YateH323AudioSource();
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Write(const void *buf, PINDEX len);
 private:
     PAdaptiveDelay writeDelay;
+    DataBlock m_data;
     bool m_exit;
 };
 
@@ -157,8 +158,7 @@ public:
     YateH323AudioConsumer()
 	: m_exit(false)
 	{ Debug(DebugAll,"h.323 consumer [%p] created",this); }
-    ~YateH323AudioConsumer()
-	{ Debug(DebugAll,"h.323 consumer [%p] deleted",this); }
+    ~YateH323AudioConsumer();
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Read(void *buf, PINDEX len);
@@ -210,9 +210,15 @@ public:
     virtual void disconnected();
     inline const String &id() const
 	{ return m_id; }
+    inline const String &status() const
+	{ return m_status; }
+    inline static int total()
+	{ return s_total; }
 private:
     bool m_nativeRtp;
     String m_id;
+    String m_status;
+    static int s_total;
 };
 
 // this part have been inspired (more or less) from chan_h323 of project asterisk, credits to Jeremy McNamara for chan_h323 and to Mark Spencer for asterisk.
@@ -268,9 +274,16 @@ public:
 	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { }
     virtual void run();
     virtual void cleanup();
+    bool route();
+    inline static int count()
+	{ return s_count; }
+    inline static int routed()
+	{ return s_routed; }
 private:
     Message *m_msg;
     String m_id;
+    static int s_count;
+    static int s_routed;
 };
 
 class StatusHandler : public MessageHandler
@@ -302,9 +315,14 @@ private:
 H323Process *H323Plugin::m_process = 0;
 static H323Plugin hplugin;
 
-void H323MsgThread::run()
+int YateH323Connection::s_total = 0;
+
+int H323MsgThread::s_count = 0;
+int H323MsgThread::s_routed = 0;
+
+bool H323MsgThread::route()
 {
-    ::usleep(1000);
+    Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
     Engine::dispatch(m_msg);
     *m_msg = "preroute";
     Engine::dispatch(m_msg);
@@ -313,7 +331,7 @@ void H323MsgThread::run()
     YateH323Connection *conn = hplugin.findConnectionLock(m_id);
     if (!conn) {
 	Debug(DebugMild,"YateH323Connection '%s' wanished while routing!",m_id.c_str());
-	return;
+	return false;
     }
     if (ok) {
 	conn->AnsweringCall(H323Connection::AnswerCallPending);
@@ -322,23 +340,40 @@ void H323MsgThread::run()
 	m_msg->retValue() = 0;
 	m_msg->userData(static_cast<DataEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
-	    Debug(DebugInfo,"Routing H.323 [%p] call to '%s'",conn,m_msg->getValue("callto"));
+	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));
 	    conn->AnsweringCall(H323Connection::AnswerCallNow);
 	    conn->deref();
 	}
 	else {
+	    Debug(DebugInfo,"Rejecting unconnected H.323 call %s [%p]",m_id.c_str(),conn);
 	    conn->AnsweringCall(H323Connection::AnswerCallDenied);
 	}
     }
     else {
-	Debug(DebugInfo,"Rejecting unrouted H.323 [%p] call",conn);
+	Debug(DebugInfo,"Rejecting unrouted H.323 call %s [%p]",m_id.c_str(),conn);
 	conn->AnsweringCall(H323Connection::AnswerCallDenied);
     }
     conn->Unlock();
+    return ok;
+}
+
+void H323MsgThread::run()
+{
+    Debug(DebugAll,"Started routing thread for %s [%p]",m_id.c_str(),this);
+    s_route.lock();
+    s_count++;
+    s_route.unlock();
+    bool ok = route();
+    s_route.lock();
+    s_count--;
+    if (ok)
+	s_routed++;
+    s_route.unlock();
 }
 
 void H323MsgThread::cleanup()
 {
+    Debug(DebugAll,"Cleaning up routing thread for %s [%p]",m_id.c_str(),this);
     delete m_msg;
 }
 
@@ -501,20 +536,19 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
 	&endpoint,callReference,userdata,this);
     m_id = "h323/";
     m_id << callReference;
-/*    
-    setSource(new YateH323AudioSource);
-    getSource()->deref();
-    setConsumer(new YateH323AudioConsumer);
-    getConsumer()->deref();*/
+    m_status = "new";
+    s_calls.lock();
+    hplugin.calls().append(this)->setDelete(false);
+    s_calls.unlock();
     DataEndpoint *dd = static_cast<DataEndpoint *>(userdata);
     if (dd && connect(dd))
 	deref();
-    hplugin.calls().append(this)->setDelete(false);
 }
 
 YateH323Connection::~YateH323Connection()
 {
     Debug(DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
+    m_status = "destroyed";
     s_calls.lock();
     hplugin.calls().remove(this,false);
     s_calls.unlock();
@@ -526,6 +560,12 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     const H323SignalPDU &setupPDU, H323SignalPDU &connectPDU)
 {
     Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s' [%p]",(const char *)caller,this);
+    m_status = "incoming";
+
+    if (int cnt = H323MsgThread::count() > s_cfg.getIntValue("incoming","maxqueue",5)) {
+	Debug(DebugWarn,"Dropping call, there are already %d waiting",cnt);
+	return H323Connection::AnswerCallDeferred;
+    }
 
     Message *m = new Message("ring");
     m->addParam("driver","h323");
@@ -560,13 +600,25 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     if (s)
 	m->addParam("calledname",s);
 #endif
+    s_route.lock();
     H323MsgThread *t = new H323MsgThread(m,id());
-    return t->error() ? H323Connection::AnswerCallDenied : H323Connection::AnswerCallDeferred;
+    if (t->error()) {
+	Debug(DebugWarn,"Error starting routing thread! [%p]",this);
+	s_route.unlock();
+	delete t;
+	return H323Connection::AnswerCallDenied;
+    }
+    s_route.unlock();
+    return H323Connection::AnswerCallDeferred;
 }
 
 void YateH323Connection::OnEstablished()
 {
     Debug(DebugInfo,"YateH323Connection::OnEstablished() [%p]",this);
+    s_calls.lock();
+    s_total++;
+    m_status = "connected";
+    s_calls.unlock();
     if (!HadAnsweredCall())
 	return;
     Message *m = new Message("answer");
@@ -579,6 +631,7 @@ void YateH323Connection::OnEstablished()
 void YateH323Connection::OnCleared()
 {
     Debug(DebugInfo,"YateH323Connection::OnCleared() [%p]",this);
+    m_status = "cleared";
     bool ans = HadAnsweredCall();
     disconnect();
     if (!ans)
@@ -592,6 +645,7 @@ void YateH323Connection::OnCleared()
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)
 {
     Debug(DebugInfo,"YateH323Connection::OnAlerting '%s' [%p]",(const char *)user,this);
+    m_status = "ringing";
     Message *m = new Message("ringing");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
@@ -644,6 +698,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 void YateH323Connection::disconnected()
 {
     Debugger debug("YateH323Connection::disconnected()"," [%p]",this);
+    m_status = "disconnected";
     // we must bypass the normal Yate refcounted destruction as OpenH323 will destroy the object
     ref();
     if (getSource() && m_nativeRtp)
@@ -816,6 +871,25 @@ BOOL YateH323_ExternalRTPChannel::OnReceivedAckPDU(const H245_H2250LogicalChanne
     return H323_ExternalRTPChannel::OnReceivedAckPDU(param);
 }
 
+YateH323AudioSource::~YateH323AudioSource()
+{
+    Debug(DebugAll,"h.323 source [%p] deleted",this);
+    m_exit = true;
+    // Delay actual destruction until the mutex is released
+    m_mutex.lock();
+    m_data.clear(false);
+    m_mutex.unlock();
+}
+
+YateH323AudioConsumer::~YateH323AudioConsumer()
+{
+    Debug(DebugAll,"h.323 consumer [%p] deleted",this);
+    m_exit = true;
+    // Delay actual destruction until the mutex is released
+    m_mutex.lock();
+    m_mutex.unlock();
+}
+
 BOOL YateH323AudioConsumer::Close()
 {
     m_exit = true;
@@ -846,9 +920,8 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
     while (!m_exit) {
 	Lock lock(m_mutex);
 	if (len >= (int)m_buffer.length()) {
-	    ref();
 	    Thread::yield();
-	    if (deref() || m_exit || Engine::exiting())
+	    if (m_exit || Engine::exiting())
 		return false;
 	    continue;
 	}
@@ -881,12 +954,12 @@ BOOL YateH323AudioSource::IsOpen() const
 BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
 {
     if (!m_exit) {
-	DataBlock data((void *)buf,len,false);
-	Forward(data,len/2);
-	data.clear(false);
+	m_data.assign((void *)buf,len,false);
+	Forward(m_data,len/2);
+	m_data.clear(false);
+	writeDelay.Delay(len/16);
     }
     lastWriteCount = len;
-    writeDelay.Delay(len/16);
     return true;
 }
 
@@ -1108,10 +1181,8 @@ bool H323Dropper::received(Message &msg)
 	ObjList *l = &hplugin.calls();
 	for (; l; l=l->next()) {
 	    YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
-	    if (c && c->Lock()) {
+	    if (c)
 		c->ClearCall(H323Connection::EndedByGatekeeper);
-		c->Unlock();
-	    }
 	}
 	return false;
     }
@@ -1135,15 +1206,15 @@ bool StatusHandler::received(Message &msg)
 	return false;
     String st("h323chan,type=varchans");
     Lock lock(s_calls);
-    st << ",chans=" << hplugin.calls().count() << ",[LIST]";
+    st << ",routed=" << H323MsgThread::routed() << ",routers=" << H323MsgThread::count();
+    st << ",total=" << YateH323Connection::total() << ",chans=" << hplugin.calls().count() << ",[LIST]";
     ObjList *l = &hplugin.calls();
     for (; l; l=l->next()) {
 	YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
-	if (c && c->Lock()) {
+	if (c) {
 	    // HACK: we assume transport$address/callref format
 	    String s((const char *)c->GetCallToken());
-	    st << "," << c->id() << "=" << s.substr(0,s.rfind('/'));
-	    c->Unlock();
+	    st << "," << c->id() << "=" << s.substr(0,s.rfind('/')) << "/" << c->status();
 	}
     }
     msg.retValue() << st << "\n";
@@ -1186,16 +1257,25 @@ H323Plugin::~H323Plugin()
 
 YateH323Connection *H323Plugin::findConnectionLock(const char *id)
 {
-    Lock lock(s_calls);
+    s_calls.lock();
     ObjList *l = &m_calls;
     for (; l; l=l->next()) {
 	YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
-	if (c && c->Lock()) {
-	    if (c->id() == id)
+	if (c && (c->id() == id)) {
+	    if (c->TryLock() > 0) {
+		s_calls.unlock();
 		return c;
-	    c->Unlock();
+	    }
+	    else {
+		// Yield and try scanning the list again
+		l = &m_calls;
+		s_calls.unlock();
+		Thread::yield();
+		s_calls.lock();
+	    }
 	}
     }
+    s_calls.unlock();
     return 0;
 }
 

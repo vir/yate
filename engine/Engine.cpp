@@ -397,6 +397,7 @@ bool Engine::dispatch(const char *name)
 
 static pid_t s_childpid = -1;
 static bool s_runagain = true;
+static bool s_sigabrt = false;
 
 static void superhandler(int signal)
 {
@@ -480,6 +481,11 @@ static int supervise(void)
 	if (s_childpid > 0) {
 	    // Child failed to proof sanity. Kill it - noo need to be gentle.
 	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
+	    // If -Da was specified try to get a corefile
+	    if (s_sigabrt) {
+		::kill(s_childpid,SIGABRT);
+		::usleep(10000);
+	    }
 	    ::kill(s_childpid,SIGKILL);
 	    ::usleep(10000);
 	    ::waitpid(s_childpid,0,WNOHANG);
@@ -611,6 +617,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 			    switch (*pc) {
 				case 'a':
 				    abortOnBug(true);
+				    s_sigabrt = true;
 				    break;
 				case 'c':
 				    s_keepclosing = true;

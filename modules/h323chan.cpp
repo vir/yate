@@ -989,12 +989,14 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	const char* sdir = lookup(dir,dict_h323_dir);
 	const char *format = 0;
 	decodeCapability(capability,&format);
-	Debug(DebugInfo,"capability '%s' format '%s' session %u %s",
+	Debug(DebugAll,"capability '%s' format '%s' session %u %s",
 	    (const char *)capability.GetFormatName(),format,sessionID,sdir);
 
 	// disallow codecs not supported by remote receiver
-	if (!(s_externalRtp || m_formats.null() || (m_formats.find(format) >= 0)))
+	if (s_passtrough && !(m_formats.null() || (m_formats.find(format) >= 0))) {
+	    Debug(DebugInfo,"Refusing '%s' not in remote '%s'",format,m_formats.c_str());
 	    return 0;
+	}
 
 	if (s_passtrough && (dir == H323Channel::IsReceiver)) {
 	    if (format && (m_remoteFormats.find(format) < 0) && s_cfg.getBoolValue("codecs",format,true)) {

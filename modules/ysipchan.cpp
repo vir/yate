@@ -329,6 +329,8 @@ const char* YateUDPParty::getProtoName() const
 
 bool YateUDPParty::setParty(const URI& uri)
 {
+    if (m_partyPort && m_party && s_cfg.getBoolValue("general","ignorevia"))
+	return true;
     int port = uri.getPort();
     if (port <= 0)
 	port = 5060;
@@ -712,6 +714,8 @@ void YateSIPConnection::hangup()
     if (m_hungup)
 	return;
     m_hungup = true;
+    Debug(DebugAll,"YateSIPConnection::hangup() state=%d trans=%p code=%d reason='%s' [%p]",
+	m_state,m_tr,m_reasonCode,m_reason.c_str(),this);
     Message *msg = new Message("call.hangup");
     msg->addParam("driver","sip");
     msg->addParam("id",id());

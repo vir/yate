@@ -1,3 +1,10 @@
+Sat Jun 26 2004 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.3
+- Minor fixes in tone generator and external module
+
+Sat Jun 26 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added an OSS local sound channel
+
 Sat May 15 2004 Paul Chitescu <paulc-devel@null.ro>
 - Added pkgconfig support
 - Improved detection of Postgress' include file path

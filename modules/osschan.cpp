@@ -395,6 +395,19 @@ bool OssHandler::received(Message &msg)
     if (dd)
 	dd->connect(chan);
     else {
+        const char *direct = msg.getValue("direct");
+	if (direct)
+	{
+	    Message m("call");
+	    m.addParam("id",dest);
+	    m.addParam("caller",dest);
+	    m.addParam("callto",direct);
+	    m.userData(chan);
+	    if (Engine::dispatch(m))
+		return true;
+	    Debug(DebugFail,"OSS outgoing call not accepted!");
+	    return false;
+	}	
 	const char *targ = msg.getValue("target");
 	if (!targ) {
 	    Debug(DebugWarn,"OSS outgoing call with no target!");

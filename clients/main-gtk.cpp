@@ -428,10 +428,13 @@ void GtkClient::gtk_call (GtkWidget *button, gpointer data)
     {
 	case STATUS_IDLE:
 	    {
-	    gchar *address = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(s_client->m_address)->entry));
 	    Message m("call");
+	    gchar *address = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(s_client->m_address)->entry));
+	    if (::strchr(address,'/'))
+		m.addParam("direct",address);
+	    else
+		m.addParam("target",address);
 	    m.addParam("callto","oss///dev/dsp");
-	    m.addParam("target",address);
 	    m.addParam("caller","oss///dev/dsp");
 	    m.addParam("id","oss///dev/dsp");
 	    if (Engine::dispatch(m))

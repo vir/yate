@@ -734,8 +734,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 	m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
     Message *ms = new Message("chan.startup");
     ms->addParam("driver","sip");
-    ms->addParam("direction","incoming");
     ms->addParam("id",m_id);
+    String addr(m_host);
+    addr << ":" << m_port;
+    ms->addParam("address",addr);
+    ms->addParam("direction","incoming");
     Engine::enqueue(ms);
 }
 
@@ -768,8 +771,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     s_mutex.unlock();
     Message *ms = new Message("chan.startup");
     ms->addParam("driver","sip");
-    ms->addParam("direction","outgoing");
     ms->addParam("id",m_id);
+    String addr(m_host);
+    addr << ":" << m_port;
+    ms->addParam("address",addr);
+    ms->addParam("direction","outgoing");
     Engine::enqueue(ms);
 }
 
@@ -883,6 +889,7 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 {
     Message m("chan.rtp");
+    m.addParam("driver","sip");
     m.addParam("id",id());
     m.addParam("direction","bidir");
     m.addParam("remoteip",msg->getParty()->getPartyAddr());
@@ -903,6 +910,7 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
 	return createSDP(m_rtpLocal,0,m_formats);
     }
     Message m("chan.rtp");
+    m.addParam("driver","sip");
     m.addParam("id",id());
     m.addParam("direction","bidir");
     m.addParam("remoteip",m_rtpAddr);
@@ -928,6 +936,7 @@ bool YateSIPConnection::startRtp()
 	return false;
     Debug(DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
+    m.addParam("driver","sip");
     m.addParam("id",id());
     m.addParam("rtpid",m_rtpid);
     m.addParam("direction","bidir");

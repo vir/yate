@@ -274,7 +274,7 @@ class YateH323Connection :  public H323Connection, public DataEndpoint
 {
     PCLASSINFO(YateH323Connection, H323Connection)
 public:
-    YateH323Connection(YateH323EndPoint &endpoint, unsigned callReference, void *userdata);
+    YateH323Connection(YateH323EndPoint &endpoint, H323Transport *transport, unsigned callReference, void *userdata);
     ~YateH323Connection();
     virtual H323Connection::AnswerCallResponse OnAnswerCall(const PString &caller,
 	const H323SignalPDU &signalPDU, H323SignalPDU &connectPDU);
@@ -556,7 +556,7 @@ H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
 	    return 0;
 	}
     }
-    return new YateH323Connection(*this,callReference,userData);
+    return new YateH323Connection(*this,transport,callReference,userData);
 }
 
 #ifdef USE_CAPABILITY_FACTORY
@@ -711,7 +711,7 @@ bool YateH323EndPoint::Init(void)
 }
 
 YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
-    unsigned callReference, void *userdata)
+    H323Transport *transport, unsigned callReference, void *userdata)
     : H323Connection(endpoint,callReference), DataEndpoint("h323"),
       m_nativeRtp(false), m_passtrough(false), m_rtpPort(0), m_remotePort(0)
 {
@@ -724,9 +724,12 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     hplugin.calls().append(this)->setDelete(false);
     s_calls.unlock();
     Message* m = new Message("chan.startup");
+    m->addParam("driver","h323");
     m->addParam("id",m_id);
     m->addParam("direction",userdata ? "outgoing" : "incoming");
     m->addParam("status","new");
+    if (transport)
+	m->addParam("address",transport->GetRemoteAddress());
     Engine::enqueue(m);
     DataEndpoint *dd = static_cast<DataEndpoint *>(userdata);
     if (dd && connect(dd))

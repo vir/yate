@@ -444,6 +444,7 @@ bool OssHandler::received(Message &msg)
 	if (direct)
 	{
 	    Message m("call.execute");
+	    m.addParam("driver","oss");
 	    m.addParam("id",dest);
 	    m.addParam("caller",dest);
 	    m.addParam("callto",direct);
@@ -465,6 +466,7 @@ bool OssHandler::received(Message &msg)
 	    return false;
 	}
 	Message m("call.route");
+	m.addParam("driver","oss");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);

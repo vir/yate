@@ -1269,6 +1269,7 @@ bool ZapChan::call(Message &msg, const char *called)
     m->addParam("id",id());
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
+    m->addParam("address",String(m_span->span()) + "/" + String(m_chan));
     m->addParam("direction","outgoing");
     Engine::enqueue(m);
     return true;
@@ -1286,6 +1287,7 @@ void ZapChan::ring(q931_call *call)
 	m->addParam("id",id());
 	m->addParam("span",String(m_span->span()));
 	m->addParam("channel",String(m_chan));
+	m->addParam("address",String(m_span->span()) + "/" + String(m_chan));
 	m->addParam("direction","incoming");
 	Engine::enqueue(m);
     }

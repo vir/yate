@@ -294,6 +294,7 @@ bool ToneHandler::received(Message &msg)
 	    return false;
 	}
 	Message m("call.route");
+	m.addParam("driver","tone");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);

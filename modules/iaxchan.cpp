@@ -34,6 +34,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 
 extern "C" {
@@ -129,7 +130,7 @@ private:
 class YateIAXConnection :  public DataEndpoint
 {
 public:
-    YateIAXConnection(iax_session *session = 0);
+    YateIAXConnection(const char* addr, iax_session *session = 0);
     ~YateIAXConnection();
     virtual void disconnected(bool final, const char *reason);
     void abort(int type = 0);
@@ -494,7 +495,9 @@ void YateIAXEndPoint::answer(iax_event *e)
 {
     if (!accepting(e))
 	return;
-    YateIAXConnection *conn = new YateIAXConnection(e->session);
+    String addr(::inet_ntoa(e->session->peeraddr.sin_addr));
+    addr << ":" << ntohs(e->session->peeraddr.sin_port);
+    YateIAXConnection *conn = new YateIAXConnection(addr,e->session);
     if (!conn->startRouting(e))
 	conn->reject("Server error");
 }
@@ -639,8 +642,9 @@ void IAXMsgThread::cleanup()
     delete m_msg;
 }
 
-YateIAXConnection::YateIAXConnection(iax_session *session)
-    : m_session(session), m_final(false), m_muted(false), m_ast_format(0), m_reason(0)
+YateIAXConnection::YateIAXConnection(const char* addr, iax_session *session)
+    : address(addr), m_session(session), m_final(false), m_muted(false),
+      m_ast_format(0), m_reason(0)
 {
     Debug(DebugAll,"YateIAXConnection::YateIAXConnection() [%p]",this);
     s_mutex.lock();
@@ -660,7 +664,9 @@ YateIAXConnection::YateIAXConnection(iax_session *session)
     s_mutex.unlock();
     Message* m = new Message("chan.startup");
     m->addParam("id",id);
+    m->addParam("driver","iax");
     m->addParam("direction",m_status);
+    m->addParam("address",address);
     m->addParam("status","new");
     Engine::enqueue(m);
 }
@@ -751,6 +757,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"TEXT inside a call: '%s' [%p]",(char *)event->data,this);
 	    {
 		Message* m = new Message("chan.text");
+		m->addParam("driver","iax");
 		m->addParam("id",id);
 		m->addParam("text",(char *)event->data);
 		m->addParam("targetid",targetid.c_str());
@@ -767,6 +774,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 		char buf[2];
 		buf[0] = event->subclass;
 		buf[1] = 0;
+		m->addParam("driver","iax");
 		m->addParam("id",id);
 		m->addParam("text",buf);
 		m->addParam("targetid",targetid.c_str());
@@ -785,6 +793,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"RING inside a call [%p]",this);
 	    {
 		Message* m = new Message("call.ringing");
+		m->addParam("driver","iax");
 		m->addParam("id",id);
 		m->addParam("targetid",targetid.c_str());
 		Engine::enqueue(m);
@@ -794,6 +803,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"ANSWER inside a call [%p]",this);
 	    {
 		Message* m = new Message("call.answered");
+		m->addParam("driver","iax");
 		m->addParam("id",id);
 		m->addParam("targetid",targetid.c_str());
 		Engine::enqueue(m);
@@ -841,6 +851,7 @@ void YateIAXConnection::hangup(const char *reason)
 	s_mutex.unlock();
     }
     Message* m = new Message("chan.hangup");
+    m->addParam("driver","iax");
     m->addParam("id",id);
     m->addParam("status","hangup");
     m->addParam("reason",reason);
@@ -1061,6 +1072,7 @@ bool IAXConnHandler::received(Message &msg, int id)
 		Debug(DebugInfo,"Transferring connection '%s' [%p] to '%s'",
 		    callid.c_str(),conn,callto.c_str());
 		Message m("call.execute");
+		m.addParam("driver","iax");
 		m.addParam("callto",callto.c_str());
 		m.addParam("id",conn->id);
 		m.userData(conn);
@@ -1101,7 +1113,7 @@ bool IAXHandler::received(Message &msg)
 	return false;
     }
     String ip = dest.matchString(1);
-    YateIAXConnection *conn = new YateIAXConnection();
+    YateIAXConnection *conn = new YateIAXConnection(ip);
     /* i do this to setup the peercallid by getting id 
      * from the other party */
     conn->targetid = msg.getValue("id");

@@ -193,6 +193,7 @@ static void pri_msg_cb(char *s)
     Debug("PRI",DebugInfo,"%s",s);
 }
 
+/* Switch types */
 static TokenDict dict_str2switch[] = {
     { "unknown", PRI_SWITCH_UNKNOWN },
     { "ni2", PRI_SWITCH_NI2 },
@@ -205,6 +206,8 @@ static TokenDict dict_str2switch[] = {
     { 0, -1 }
 };
 
+#if 0
+/* Numbering plan identifier */
 static TokenDict dict_str2nplan[] = {
     { "unknown", PRI_NPI_UNKNOWN },
     { "e164", PRI_NPI_E163_E164 },
@@ -216,6 +219,7 @@ static TokenDict dict_str2nplan[] = {
     { 0, -1 }
 };
 
+/* Type of number */
 static TokenDict dict_str2ntype[] = {
     { "unknown", PRI_TON_UNKNOWN },
     { "international", PRI_TON_INTERNATIONAL },
@@ -226,7 +230,9 @@ static TokenDict dict_str2ntype[] = {
     { "reserved", PRI_TON_RESERVED },
     { 0, -1 }
 };
+#endif
 
+/* Dialing plan */
 static TokenDict dict_str2dplan[] = {
     { "unknown", PRI_UNKNOWN },
     { "international", PRI_INTERNATIONAL_ISDN },
@@ -236,6 +242,7 @@ static TokenDict dict_str2dplan[] = {
     { 0, -1 }
 };
 
+/* Presentation */
 static TokenDict dict_str2pres[] = {
     { "allow_user_not_screened", PRES_ALLOWED_USER_NUMBER_NOT_SCREENED },
     { "allow_user_passed", PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN },
@@ -249,6 +256,29 @@ static TokenDict dict_str2pres[] = {
     { 0, -1 }
 };
 
+/* Network Specific Facilities (AT&T) */
+static TokenDict dict_str2nsf[] = {
+    { "none", PRI_NSF_NONE },
+    { "sid_preferred", PRI_NSF_SID_PREFERRED },
+    { "ani_preferred", PRI_NSF_ANI_PREFERRED },
+    { "sid_only", PRI_NSF_SID_ONLY },
+    { "ani_only", PRI_NSF_ANI_ONLY },
+    { "call_assoc_tsc", PRI_NSF_CALL_ASSOC_TSC },
+    { "notif_catsc_clearing", PRI_NSF_NOTIF_CATSC_CLEARING },
+    { "operator", PRI_NSF_OPERATOR },
+    { "pcco", PRI_NSF_PCCO },
+    { "sdn", PRI_NSF_SDN },
+    { "toll_free_megacom", PRI_NSF_TOLL_FREE_MEGACOM },
+    { "megacom", PRI_NSF_MEGACOM },
+    { "accunet", PRI_NSF_ACCUNET },
+    { "long_distance", PRI_NSF_LONG_DISTANCE_SERVICE },
+    { "international_toll_free", PRI_NSF_INTERNATIONAL_TOLL_FREE },
+    { "at&t_multiquest", PRI_NSF_ATT_MULTIQUEST },
+    { "call_redirection", PRI_NSF_CALL_REDIRECTION_SERVICE },
+    { 0, -1 }
+};
+
+/* Layer 1 formats */
 static TokenDict dict_str2law[] = {
     { "mulaw", PRI_LAYER_1_ULAW },
     { "alaw", PRI_LAYER_1_ALAW },
@@ -256,6 +286,7 @@ static TokenDict dict_str2law[] = {
     { 0, -1 }
 };
 
+/* Zaptel formats */
 static TokenDict dict_str2ztlaw[] = {
     { "slin", -1 },
     { "default", ZT_LAW_DEFAULT },
@@ -269,7 +300,8 @@ class ZapChan;
 class PriSpan : public GenObject, public Thread
 {
 public:
-    static PriSpan *create(int span, int chan1, int nChans, int dChan, bool isNet, int switchType, int dialPlan, int presentation);
+    static PriSpan *create(int span, int chan1, int nChans, int dChan, bool isNet,
+			   int switchType, int dialPlan, int presentation, int nsf = PRI_NSF_NONE);
     virtual ~PriSpan();
     virtual void run();
     inline struct pri *pri()
@@ -296,7 +328,7 @@ public:
 
 private:
     PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype);
+    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int nsf);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
     void restartChan(int chan, bool force = false);
@@ -333,7 +365,7 @@ public:
     inline bool inUse() const
 	{ return (m_ring || m_call); }
     void ring(q931_call *call = 0);
-    void hangup(int cause = PRI_CAUSE_NORMAL_CLEARING);
+    void hangup(int cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED);
     void sendDigit(char digit);
     bool call(Message &msg, const char *called = 0);
     bool answer();
@@ -357,6 +389,7 @@ private:
     int m_abschan;
     int m_fd;
     int m_law;
+    bool m_isdn;
 };
 
 class ZapSource : public ThreadedSource
@@ -427,6 +460,7 @@ public:
     virtual ~ZaptelPlugin();
     virtual void initialize();
     PriSpan *findSpan(int chan);
+    ZapChan *findChan(const char *id);
     ZapChan *findChan(int first = -1, int last = -1);
     ObjList m_spans;
 };
@@ -435,7 +469,8 @@ ZaptelPlugin zplugin;
 unsigned long long PriSpan::restartPeriod = 0;
 bool PriSpan::dumpEvents = false;
 
-PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet, int switchType, int dialPlan, int presentation)
+PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
+			 int switchType, int dialPlan, int presentation, int nsf)
 {
     int fd = ::open("/dev/zap/channel", O_RDWR, 0600);
     if (fd < 0)
@@ -443,7 +478,7 @@ PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
     struct pri *p = makePri(fd,
 	(dChan >= 0) ? dChan+chan1-1 : -1,
 	(isNet ? PRI_NETWORK : PRI_CPE),
-	switchType);
+	switchType, nsf);
     if (!p) {
 	::close(fd);
 	return 0;
@@ -451,7 +486,7 @@ PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
     return new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation);
 }
 
-struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype)
+struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf)
 {
     if (dchan >= 0) {
 	// Set up the D channel if we have one
@@ -480,7 +515,10 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype)
 	    return 0;
 	}
     }
-    return ::pri_new(fd, nettype, swtype);
+    struct pri *ret = ::pri_new(fd, nettype, swtype);
+    if (ret)
+	::pri_set_nsf(ret, nsf);
+    return ret;
 }
 
 PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres)
@@ -505,7 +543,7 @@ PriSpan::~PriSpan()
 	ZapChan *c = m_chans[i];
 	m_chans[i] = 0;
 	if (c) {
-	    c->hangup();
+	    c->hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
 	    c->destruct();
 	}
     }
@@ -632,6 +670,8 @@ bool PriSpan::validChan(int chan) const
 
 int PriSpan::findEmptyChan(int first, int last) const
 {
+    if (!m_ok)
+	return -1;
     first -= m_offs;
     last -= m_offs;
     if (first < 0)
@@ -740,7 +780,7 @@ void PriSpan::hangupChan(int chan,pri_event_hangup &ev)
 	return;
     }
     Debug(DebugInfo,"Hanging up channel %d on span %d",chan,m_span);
-    getChan(chan)->hangup();
+    getChan(chan)->hangup(ev.cause);
 }
 
 void PriSpan::ackChan(int chan)
@@ -851,18 +891,19 @@ ZapChan::ZapChan(PriSpan *parent, int chan, unsigned int bufsize)
     Debug(DebugAll,"ZapChan::ZapChan(%p,%d) [%p]",parent,chan,this);
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
+    m_isdn = true;
 }
 
 ZapChan::~ZapChan()
 {
     Debug(DebugAll,"ZapChan::~ZapChan() [%p] %d",this,m_chan);
-    hangup();
+    hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
 }
 
 void ZapChan::disconnected()
 {
     Debugger debug("ZapChan::disconnected()");
-    hangup();
+    hangup(PRI_CAUSE_NORMAL_CLEARING);
 }
 
 bool ZapChan::nativeConnect(DataEndpoint *peer)
@@ -898,7 +939,7 @@ void ZapChan::idle()
 	Debug("ZapChan",DebugWarn,"Timeout %s channel %d on span %d",
 	    status(),m_chan,m_span->span());
 	m_timeout = 0;
-	hangup();
+	hangup(PRI_CAUSE_RECOVERY_ON_TIMER_EXPIRE);
     }
 }
 
@@ -912,13 +953,13 @@ void ZapChan::restart()
 
 bool ZapChan::open(int defLaw)
 {
+    m_fd = zt_open(m_abschan,false,m_bufsize);
+    if (m_fd == -1)
+	return false;
     setSource(new ZapSource(this,m_bufsize));
     getSource()->deref();
     setConsumer(new ZapConsumer(this,m_bufsize));
     getConsumer()->deref();
-    m_fd = zt_open(m_abschan,false,m_bufsize);
-    if (m_fd == -1)
-	return false;
     if (zt_set_law(m_fd,defLaw)) {
 	m_law = defLaw;
 	Debug(DebugInfo,"Opened Zap channel %d, law is: %s (desired)",m_abschan,lookup(m_law,dict_str2ztlaw,"unknown"));
@@ -940,6 +981,8 @@ bool ZapChan::open(int defLaw)
 	    Debug(DebugInfo,"Opened Zap channel %d, law is: %s (fallback)",m_abschan,lookup(m_law,dict_str2ztlaw,"unknown"));
 	    return true;
 	}
+    setSource();
+    setConsumer();
     zt_close(m_fd);
     m_fd = -1;
     Debug(DebugFail,"Unable to set zap to any known format");
@@ -956,7 +999,7 @@ bool ZapChan::answer()
     m_ring = false;
     m_timeout = 0;
     Output("Answering on zap/%d (%d/%d)",m_abschan,m_span->span(),m_chan);
-    ::pri_answer(m_span->pri(),m_call,m_chan,0);
+    ::pri_answer(m_span->pri(),m_call,m_chan,!m_isdn);
     Message *m = new Message("answer");
     m->addParam("driver","zap");
     m->addParam("span",String(m_span->span()));
@@ -1003,7 +1046,7 @@ bool ZapChan::call(Message &msg, const char *called)
     Debug("ZapChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
     int layer1 = lookup(msg.getValue("dataformat"),dict_str2law,0);
-    hangup();
+    hangup(PRI_CAUSE_PRE_EMPTED);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
 	int dataLaw = -1;
@@ -1022,7 +1065,7 @@ bool ZapChan::call(Message &msg, const char *called)
 	msg.userData(this);
     Output("Calling '%s' on zap/%d (%d/%d)",called,m_abschan,m_span->span(),m_chan);
     m_call =::pri_new_call(span()->pri());
-    ::pri_call(m_span->pri(),m_call,0,m_chan,1,0,
+    ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
 	(char *)msg.getValue("caller"),
 	lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan()),
 	(char *)msg.getValue("callername"),
@@ -1043,7 +1086,7 @@ void ZapChan::ring(q931_call *call)
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
     }
     else
-	hangup();
+	hangup(PRI_CAUSE_WRONG_CALL_STATE);
 }
 
 bool ZapHandler::received(Message &msg)
@@ -1094,9 +1137,8 @@ bool ZapDropper::received(Message &msg)
 	    if (s) {
 		for (int n=1; n<=s->chans(); n++) {
 		    ZapChan *c = s->getChan(n);
-		    if (c) {
-			c->hangup();
-		    }
+		    if (c)
+			c->hangup(PRI_CAUSE_INTERWORKING);
 		}
 	    }
 	}
@@ -1110,7 +1152,7 @@ bool ZapDropper::received(Message &msg)
     if ((n > 0) && (c = zplugin.findChan(n))) {
         Debug("ZapDropper",DebugInfo,"Dropping zap/%d (%d/%d)",
 	    n,c->span()->span(),c->chan());
-	c->hangup();
+	c->hangup(PRI_CAUSE_INTERWORKING);
 	return true;
     }
     Debug("ZapDropper",DebugInfo,"Could not find zap/%s",id.c_str());
@@ -1162,6 +1204,16 @@ PriSpan *ZaptelPlugin::findSpan(int chan)
 	    return s;
     }
     return 0;
+}
+
+ZapChan *ZaptelPlugin::findChan(const char *id)
+{
+    String s(id);
+    if (!s.startsWith("zap/"))
+        return 0;
+    s >> "zap/";
+    int n = s.toInteger();
+    return (n > 0) ? findChan(n) : 0;
 }
 
 ZapChan *ZaptelPlugin::findChan(int first, int last)
@@ -1217,7 +1269,9 @@ void ZaptelPlugin::initialize()
 		    cfg.getIntValue(sect,"dialplan",dict_str2dplan,
 			PRI_UNKNOWN),
 		    cfg.getIntValue(sect,"presentation",dict_str2pres,
-			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED)
+			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED),
+		    cfg.getIntValue(sect,"facilities",dict_str2nsf,
+			PRI_NSF_NONE)
 		);
 		chan1 += num;
 	    }

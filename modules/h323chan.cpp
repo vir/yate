@@ -17,6 +17,10 @@
 #include <ptclib/delaychan.h>
 #include <gkserver.h>
 
+#ifndef OPENH323_VERSION
+#define OPENH323_VERSION "SomethingOld"
+#endif
+
 /* Define a easily comparable version, 2 digits for each component */
 #define OPENH323_NUMVERSION ((OPENH323_MAJOR)*10000 + (OPENH323_MINOR)*100 + (OPENH323_BUILD))
 

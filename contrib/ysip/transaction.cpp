@@ -269,7 +269,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 		(getCallID() != message->getHeaderValue("Call-ID")) ||
 		(getDialogTag() != message->getParamValue("To","tag")))
 		return false;
-	    Debug("SIPTransaction",DebugWarn,"Found non-branch ACK response to our 2xx");
+	    Debug("SIPTransaction",DebugInfo,"Found non-branch ACK response to our 2xx");
 	}
 	else if (getMethod() != message->method) {
 	    if (!(isIncoming() && isInvite() && message->isACK()))

@@ -94,6 +94,7 @@ public:
     void run(void);
     void terminateall(void);
     YateIAXConnection *findconn(iax_session *session);
+    YateIAXConnection *findconn(String ourcallid);
     void handleEvent(iax_event *event);
     
     inline ObjList &calls()
@@ -117,6 +118,8 @@ public:
     void handleEvent(iax_event *event);
     inline iax_session *session() const
 	{ return m_session; }
+    String ourcallid;
+    String partycallid;
 private: 
     iax_session *m_session;
     bool m_final;
@@ -140,6 +143,20 @@ class IAXHandler : public MessageHandler
 {
 public:
     IAXHandler(const char *name) : MessageHandler(name) { }
+    virtual bool received(Message &msg);
+};
+
+class SMSHandler : public MessageHandler
+{
+public:
+    SMSHandler(const char *name) : MessageHandler(name,100) { }
+    virtual bool received(Message &msg);
+};
+
+class DTMFHandler : public MessageHandler
+{
+public:
+    DTMFHandler(const char *name) : MessageHandler(name,100) { }
     virtual bool received(Message &msg);
 };
 
@@ -228,7 +245,7 @@ void YateIAXEndPoint::handleEvent(iax_event *event)
 #endif
 	case IAX_EVENT_TEXT:
 	    {
-		Debug(DebugInfo,"this text is inside a call: %s",(char *)event->data);
+		Debug(DebugInfo,"this text is outside a call: %s , a handle for this dosen't yet exist",(char *)event->data);
 	    }
 	    break;
 	default:
@@ -369,7 +386,6 @@ void YateIAXEndPoint::answer(iax_event *e)
 {
     if (!accepting(e))
 	return;
-    Debug(DebugInfo,"answer 1");
     Message *m = new Message("route");
     m->addParam("driver","iax");
 //  m->addParam("id",String(e->did));
@@ -389,6 +405,7 @@ void YateIAXEndPoint::answer(iax_event *e)
 	*m = "call";
 	m->userData(conn);
 	m->addParam("callto",m->retValue());
+	m->addParam("partycallid",conn->ourcallid);
 	m->retValue() = 0;
 	if (!Engine::dispatch(m))
 	{
@@ -397,6 +414,12 @@ void YateIAXEndPoint::answer(iax_event *e)
 	    delete m;
 	    return;
 	}
+	/* i do this to setup the peercallid by getting ourcallid 
+	* from the other party */
+	String ourcallid(m->getValue("ourcallid"));
+	Debug(DebugInfo,"partycallid %s",ourcallid.c_str());
+	if (ourcallid)
+	    conn->partycallid = ourcallid;
 	conn->deref();
 	s_mutex.lock();
 	::iax_answer(e->session);
@@ -495,6 +518,19 @@ YateIAXConnection * YateIAXEndPoint::findconn(iax_session *session)
     return 0; 
 }
 
+YateIAXConnection * YateIAXEndPoint::findconn(String ourcallid)
+{ 
+    ObjList *p = &m_calls; 
+    for (; p; p=p->next()) { 
+	YateIAXConnection *t = static_cast<YateIAXConnection *>(p->get()); 
+	if (t && (t->ourcallid == ourcallid))
+	{
+	    return t; 
+	}
+    }
+    return 0; 
+}
+
 YateIAXConnection::YateIAXConnection(iax_session *session)
     : m_session(session), m_final(false), m_ast_format(0)
 {
@@ -506,6 +542,9 @@ YateIAXConnection::YateIAXConnection(iax_session *session)
     }
     iplugin.m_endpoint->calls().append(this);
     ::iax_set_private(m_session,this);
+    char buf[64];
+    snprintf(buf,sizeof(buf),"%p",m_session);
+    ourcallid=buf;
 }
 
 
@@ -542,12 +581,33 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    break;
 	case IAX_EVENT_TEXT:
 	    {
-		Debug(DebugInfo,"this text is outside a call: %s",(char *)event->data);
+		Message m("sms");
+		m.addParam("text",(char *)event->data);
+		m.addParam("ourcallid",ourcallid.c_str());
+		m.addParam("partycallid",partycallid.c_str());
+		m.addParam("callerid",event->session->callerid);
+		m.addParam("calledid",event->session->dnid);
+		Engine::dispatch(m);
+		Debug(DebugInfo,"this text is inside a call: %s",(char *)event->data);
+	    }
+	    break;
+	case IAX_EVENT_DTMF:
+	    {
+		Message m("dtmf");
+		/* this is because Paul wants this to be usable on non i386 */
+		char buf[2];
+		buf[0] = event->subclass;
+		buf[1] = 0;
+		m.addParam("text",buf);
+		m.addParam("ourcallid",ourcallid.c_str());
+		m.addParam("partycallid",partycallid.c_str());
+		m.addParam("callerid",event->session->callerid);
+		m.addParam("calledid",event->session->dnid);
+		Engine::dispatch(m); 
+		Debug(DebugInfo,"this text is inside a call: %d",event->subclass);
 	    }
 	    break;
 #if 0
-	case IAX_EVENT_DTMF:
-	    break;
 	case IAX_EVENT_TIMEOUT:
 	    break;
 	case IAX_EVENT_RINGA:
@@ -699,6 +759,46 @@ void YateIAXAudioConsumer::Consume(const DataBlock &data)
     ::iax_send_voice(m_session,m_ast_format,(char *)data.data(),data.length());
 }
 
+bool SMSHandler::received(Message &msg)
+{
+    String partycallid(msg.getValue("partycallid"));
+    if (!partycallid)
+	return false;
+    String text(msg.getValue("text"));
+    if (!text)
+	return false;
+    Debug(DebugInfo,"text %s partycallid %s",text.c_str(),partycallid.c_str());
+    YateIAXConnection *conn= iplugin.m_endpoint->findconn(partycallid);  
+    if (!conn)
+	Debug(DebugInfo,"conn is null");
+    else {
+	text << "\0";
+	::iax_send_text(conn->session(),(char *)(text.c_str()));
+	return true;
+    }
+    return false;
+}
+
+bool DTMFHandler::received(Message &msg)
+{
+    String partycallid(msg.getValue("partycallid"));
+    if (!partycallid)
+	return false;
+    String text(msg.getValue("text"));
+    if (!text)
+	return false;
+    Debug(DebugInfo,"text %s partycallid %s",text.c_str(),partycallid.c_str());
+    YateIAXConnection *conn= iplugin.m_endpoint->findconn(partycallid);  
+    if (!conn)
+	Debug(DebugInfo,"conn is null");
+    else {
+	for (unsigned int i=0;i<text.length();i++)
+	    ::iax_send_dtmf(conn->session(),(text[i]));
+	return true;
+    }
+    return false;
+}
+    
 bool IAXHandler::received(Message &msg)
 {
     String dest(msg.getValue("callto"));
@@ -713,6 +813,12 @@ bool IAXHandler::received(Message &msg)
     }
     String ip = dest.matchString(1);
     YateIAXConnection *conn = new YateIAXConnection();
+    /* i do this to setup the peercallid by getting ourcallid 
+     * from the other party */
+    String ourcallid(msg.getValue("ourcallid"));
+    Debug(DebugInfo,"partycallid %s",ourcallid.c_str());
+    if (ourcallid)
+	conn->partycallid = ourcallid;
     int i = conn->makeCall((char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.matchString(1).safe());
     if (i < 0) {
 	Debug(DebugInfo,"call failed in iax_call with code %d",i);
@@ -759,9 +865,8 @@ void IAXPlugin::initialize()
     if (m_first) {
 	m_first = false;
 	Engine::install(new IAXHandler("call"));
-/*	Engine::install(new H323Dropper("drop"));
-	Engine::install(new H323Stopper("engine.halt"));
-	Engine::install(new StatusHandler);*/
+	Engine::install(new SMSHandler("sms"));
+	Engine::install(new DTMFHandler("dtmf"));
     }
 }
 

@@ -332,7 +332,7 @@ public:
     void ring(q931_call *call = 0);
     void hangup(int cause = PRI_CAUSE_NORMAL_CLEARING);
     void sendDigit(char digit);
-    void call(Message &msg);
+    void call(Message &msg, const char *called = 0);
     bool answer();
     void idle();
     void restart();
@@ -981,9 +981,10 @@ void ZapChan::sendDigit(char digit)
 	::pri_information(m_span->pri(),m_call,digit);
 }
 
-void ZapChan::call(Message &msg)
+void ZapChan::call(Message &msg, const char *called)
 {
-    char *called = (char *)msg.getValue("called");
+    if (!called)
+	called = msg.getValue("called");
     Debug("ZapChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
     int layer1 = lookup(msg.getValue("dataformat"),dict_str2law,0);
@@ -1011,7 +1012,7 @@ void ZapChan::call(Message &msg)
 	lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan()),
 	(char *)msg.getValue("callername"),
 	lookup(msg.getValue("callerpres"),dict_str2pres,m_span->pres()),
-	called,
+	(char *)called,
 	lookup(msg.getValue("calledplan"),dict_str2dplan,m_span->dplan()),
 	layer1);
     setTimeout(10000000);
@@ -1042,9 +1043,10 @@ bool ZapHandler::received(Message &msg)
 	return false;
     }
     String chan = dest.matchString(1);
+    String num = dest.matchString(2);
 #ifdef DEBUG
     Debug(DebugInfo,"Found call to Zaptel chan='%s' name='%s'",
-	chan.c_str(),dest.matchString(2).c_str());
+	chan.c_str(),num.c_str());
 #endif
     ZapChan *c = 0;
 
@@ -1056,9 +1058,9 @@ bool ZapHandler::received(Message &msg)
 	c = zplugin.findChan(chan.toInteger(-1));
 
     if (c) {
-	Debug(DebugInfo,"Will call chan zap/%d (%d/%d)",
-	    c->absChan(),c->span()->span(),c->chan());
-	c->call(msg);
+	Debug(DebugInfo,"Will call '%s' on chan zap/%d (%d/%d)",
+	    num.c_str(),c->absChan(),c->span()->span(),c->chan());
+	c->call(msg,num);
 	return true;
     }
     else

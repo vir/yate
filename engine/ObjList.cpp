@@ -27,19 +27,19 @@ using namespace TelEngine;
 ObjList::ObjList()
     : m_next(0), m_obj(0), m_delete(true)
 {
-    DDebug(DebugAll,"ObjList::ObjList() [%p]",this);
+    XDebug(DebugAll,"ObjList::ObjList() [%p]",this);
 }
 
 ObjList::~ObjList()
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("ObjList::~ObjList()"," [%p]",this);
 #endif
     if (m_obj) {
 	GenObject *tmp = m_obj;
 	m_obj = 0;
 	if (m_delete) {
-	    DDebug(DebugInfo,"ObjList::~ObjList() deleting %p",tmp);
+	    XDebug(DebugInfo,"ObjList::~ObjList() deleting %p",tmp);
 	    tmp->destruct();
 	}
     }
@@ -96,24 +96,24 @@ GenObject* ObjList::operator[](int index) const
 
 ObjList* ObjList::find(const GenObject* obj) const
 {
-    DDebug(DebugAll,"ObjList::find(%p) [%p]",obj,this);
+    XDebug(DebugAll,"ObjList::find(%p) [%p]",obj,this);
     const ObjList *n = this;
     while (n && (n->get() != obj))
 	n = n->next();
-    DDebug(DebugInfo,"ObjList::find returning %p",n);
+    XDebug(DebugInfo,"ObjList::find returning %p",n);
     return const_cast<ObjList*>(n);
 }
 
 ObjList* ObjList::find(const String& str) const
 {
-    DDebug(DebugAll,"ObjList::find(\"%s\") [%p]",str.c_str(),this);
+    XDebug(DebugAll,"ObjList::find(\"%s\") [%p]",str.c_str(),this);
     const ObjList *n = this;
     while (n) {
 	if (n->get() && str.matches(n->get()->toString()))
 	    break;
 	n = n->next();
     }
-    DDebug(DebugInfo,"ObjList::find returning %p",n);
+    XDebug(DebugInfo,"ObjList::find returning %p",n);
     return const_cast<ObjList*>(n);
 }
 
@@ -132,7 +132,7 @@ GenObject* ObjList::set(const GenObject* obj, bool delold)
 
 ObjList* ObjList::insert(const GenObject* obj)
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("ObjList::insert","(%p) [%p]",obj,this);
 #endif
     if (m_obj) {
@@ -149,7 +149,7 @@ ObjList* ObjList::insert(const GenObject* obj)
 
 ObjList* ObjList::append(const GenObject* obj)
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("ObjList::append","(%p) [%p]",obj,this);
 #endif
     ObjList *n = last();
@@ -193,7 +193,7 @@ GenObject* ObjList::remove(GenObject* obj, bool delobj)
 
 void ObjList::clear()
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("ObjList::clear()"," [%p]",this);
 #endif
     while (m_obj)

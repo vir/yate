@@ -134,7 +134,7 @@ struct TranslatorCaps {
  * This is just a holder for the list of media formats supported by Yate
  * @short A repository for media formats
  */
-class FormatRepository
+class YATE_API FormatRepository
 {
 private:
     FormatRepository();
@@ -166,7 +166,7 @@ public:
  * The DataBlock holds a data buffer with no specific formatting.
  * @short A class that holds just a block of raw data
  */
-class DataBlock : public GenObject
+class YATE_API DataBlock : public GenObject
 {
 public:
 
@@ -299,7 +299,7 @@ private:
 /**
  * A generic data handling object
  */
-class DataNode : public RefObject
+class YATE_API DataNode : public RefObject
 {
 public:
     /**
@@ -385,7 +385,7 @@ protected:
 /**
  * A data consumer
  */
-class DataConsumer : public DataNode
+class YATE_API DataConsumer : public DataNode
 {
     friend class DataSource;
 public:
@@ -433,7 +433,7 @@ private:
 /**
  * A data source
  */
-class DataSource : public DataNode
+class YATE_API DataSource : public DataNode
 {
     friend class DataTranslator;
 public:
@@ -504,7 +504,7 @@ protected:
 /**
  * A data source with a thread of its own
  */
-class ThreadedSource : public DataSource
+class YATE_API ThreadedSource : public DataSource
 {
     friend class ThreadedSourcePrivate;
 public:
@@ -564,7 +564,7 @@ private:
  * conversion of data from one type to another.
  * @short An unidirectional data translator (codec)
  */
-class DataTranslator : public DataConsumer
+class YATE_API DataTranslator : public DataConsumer
 {
     friend class TranslatorFactory;
 public:
@@ -666,7 +666,7 @@ private:
  * conversion of data from one type to another
  * @short An unidirectional data translator (codec)
  */
-class TranslatorFactory : public GenObject
+class YATE_API TranslatorFactory : public GenObject
 {
 public:
     TranslatorFactory()
@@ -695,7 +695,7 @@ public:
  * or bidirectional data transfers
  * @short A data transfer endpoint capable of sending and/or receiving data
  */
-class DataEndpoint : public RefObject
+class YATE_API DataEndpoint : public RefObject
 {
 public:
 
@@ -814,13 +814,13 @@ private:
  * Module is a descendent of Plugin specialized in implementing modules
  * @short A Plugin that implements a module
  */
-class Module : public Plugin, public Mutex, public MessageReceiver, public DebugEnabler
+class YATE_API Module : public Plugin, public Mutex, public MessageReceiver, public DebugEnabler
 {
 private:
     bool m_init;
     String m_name;
     String m_type;
-    unsigned long long m_changed;
+    u_int64_t m_changed;
     static unsigned int s_delay;
 
 public:
@@ -949,7 +949,7 @@ private:
  * A class that holds common channel related features (a.k.a. call leg)
  * @short An abstract communication channel
  */
-class Channel : public RefObject, public DebugEnabler
+class YATE_API Channel : public RefObject, public DebugEnabler
 {
     friend class Driver;
     friend class Router;
@@ -1226,7 +1226,7 @@ private:
  * Driver is a module specialized for implementing channel drivers
  * @short A Channel driver module
  */
-class Driver : public Module
+class YATE_API Driver : public Module
 {
     friend class Router;
 
@@ -1352,7 +1352,7 @@ private:
  * Asynchronous call routing thread
  * @short Call routing thread
  */
-class Router : public Thread
+class YATE_API Router : public Thread
 {
 private:
     Driver* m_driver;

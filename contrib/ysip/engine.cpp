@@ -271,7 +271,7 @@ void SIPEngine::processEvent(SIPEvent *event)
     delete event;
 }
 
-unsigned long long SIPEngine::getTimer(char which, bool reliable) const
+u_int64_t SIPEngine::getTimer(char which, bool reliable) const
 {
     switch (which) {
 	case '1':

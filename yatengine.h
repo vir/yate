@@ -29,6 +29,36 @@
 
 #include <stddef.h>
 
+#ifndef _WINDOWS
+#ifdef WIN32
+#define _WINDOWS
+#endif
+#endif
+
+#ifdef _WINDOWS
+typedef signed __int32 int32_t;
+typedef unsigned __int32 u_int32_t;
+typedef signed __int64 int64_t;
+typedef unsigned __int64 u_int64_t;
+
+#define vsnprintf _vsnprintf
+#define snprintf _snprintf
+#define strcasecmp _stricmp
+#define strdup _strdup
+#define random rand
+
+#ifdef LIBYATE_EXPORTS
+#define YATE_API __declspec(dllexport)
+#else
+#define YATE_API __declspec(dllimport)
+#endif
+
+#else
+
+#define YATE_API
+
+#endif
+
 struct timeval;
 	
 /**
@@ -46,13 +76,13 @@ namespace TelEngine {
  * Abort execution (and coredump if allowed) if the abort flag is set.
  * This function may not return.
  */
-void abortOnBug();
+YATE_API void abortOnBug();
 
 /**
  * Set the abort on bug flag. The default flag state is false.
  * @return The old state of the flag.
  */
-bool abortOnBug(bool doAbort);
+YATE_API bool abortOnBug(bool doAbort);
 
 /**
  * Standard debugging levels.
@@ -72,28 +102,28 @@ enum DebugLevel {
  * Retrive the current global debug level
  * @return The current global debug level
  */
-int debugLevel();
+YATE_API int debugLevel();
 
 /**
  * Set the current global debug level.
  * @param level The desired debug level
  * @return The new global debug level (may be different)
  */
-int debugLevel(int level);
+YATE_API int debugLevel(int level);
 
 /**
  * Check if debugging output should be generated
  * @param level The global debug level we are testing
  * @return True if messages should be output, false otherwise
  */
-bool debugAt(int level);
+YATE_API bool debugAt(int level);
 
 /**
  * Holds a local debugging level that can be modified separately from the
  *  global debugging
  * @short A holder for a debug level
  */
-class DebugEnabler
+class YATE_API DebugEnabler
 {
 public:
     /**
@@ -196,27 +226,44 @@ bool NDebug(int level, const char* format, ...);
 bool NDebug(const char* facility, int level, const char* format, ...);
 #endif
 
+#ifdef _DEBUG
+#undef DEBUG
+#define DEBUG
+#endif
+
 #ifdef XDEBUG
 #undef DEBUG
 #define DEBUG
 #endif
 
 #ifdef DEBUG
-#define DDebug(arg...) Debug(arg)
+#define DDebug Debug
+#else
+#ifdef _WINDOWS
+#define DDebug
 #else
 #define DDebug(arg...)
 #endif
+#endif
 
 #ifdef XDEBUG
-#define XDebug(arg...) Debug(arg)
+#define XDebug Debug
+#else
+#ifdef _WINDOWS
+#define XDebug
 #else
 #define XDebug(arg...)
 #endif
+#endif
 
 #ifndef NDEBUG
-#define NDebug(arg...) Debug(arg)
+#define NDebug Debug
+#else
+#ifdef _WINDOWS
+#define NDebug
 #else
 #define NDebug(arg...)
+#endif
 #endif
 
 /**
@@ -225,7 +272,7 @@ bool NDebug(const char* facility, int level, const char* format, ...);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(int level, const char* format, ...) FORMAT_CHECK(2);
+YATE_API bool Debug(int level, const char* format, ...) FORMAT_CHECK(2);
 
 /**
  * Outputs a debug string for a specific facility.
@@ -234,7 +281,7 @@ bool Debug(int level, const char* format, ...) FORMAT_CHECK(2);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(const char* facility, int level, const char* format, ...) FORMAT_CHECK(3);
+YATE_API bool Debug(const char* facility, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a debug string for a specific facility.
@@ -243,14 +290,14 @@ bool Debug(const char* facility, int level, const char* format, ...) FORMAT_CHEC
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
+YATE_API bool Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a string to the debug console with formatting
  * @param facility Facility that outputs the message
  * @param format A printf() style format string
  */
-void Output(const char* format, ...) FORMAT_CHECK(1);
+YATE_API void Output(const char* format, ...) FORMAT_CHECK(1);
 
 /**
  * This class is used as an automatic variable that logs messages on creation
@@ -258,7 +305,7 @@ void Output(const char* format, ...) FORMAT_CHECK(1);
  * IMPORTANT: the name is not copied so it should best be static.
  * @short An object that logs messages on creation and destruction
  */
-class Debugger
+class YATE_API Debugger
 {
 public:
     /**
@@ -316,7 +363,7 @@ class String;
 /**
  * An object with just a public virtual destructor
  */
-class GenObject
+class YATE_API GenObject
 {
 public:
     /**
@@ -343,7 +390,7 @@ public:
  * A reference counted object.
  * Whenever using multiple inheritance you should inherit this class virtually.
  */
-class RefObject : public GenObject
+class YATE_API RefObject : public GenObject
 {
 public:
     /**
@@ -397,7 +444,7 @@ private:
  * Please don't use this class directly, use @ref RefPointer instead.
  * @short Internal helper class
  */
-class RefPointerBase
+class YATE_API RefPointerBase
 {
 protected:
     /**
@@ -503,7 +550,7 @@ public:
  * A simple single-linked object list handling class
  * @short An object list class
  */
-class ObjList : public GenObject
+class YATE_API ObjList : public GenObject
 {
 public:
     /**
@@ -648,7 +695,7 @@ class StringMatchPrivate;
  * for fast inequality check.
  * @short A C-style string handling class
  */
-class String : public GenObject
+class YATE_API String : public GenObject
 {
 public:
     /**
@@ -1184,17 +1231,17 @@ inline bool null(const char* str)
 /**
  * Concatenation operator for strings.
  */
-String operator+(const String& s1, const String& s2);
+YATE_API String operator+(const String& s1, const String& s2);
 
 /**
  * Concatenation operator for strings.
  */
-String operator+(const String& s1, const char* s2);
+YATE_API String operator+(const String& s1, const char* s2);
 
 /**
  * Concatenation operator for strings.
  */
-String operator+(const char* s1, const String& s2);
+YATE_API String operator+(const char* s1, const String& s2);
 
 /**
  * Prevent careless programmers from overwriting the string
@@ -1218,7 +1265,7 @@ inline const char *strcat(String& dest, const char* src)
  * @param defvalue Value to return if lookup and conversion fail
  * @param base Default base to use to convert to number
  */
-int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, int base = 0);
+YATE_API int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, int base = 0);
 
 /**
  * Utility function to look up a number in a token table
@@ -1226,14 +1273,14 @@ int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, int base 
  * @param tokens Pointer to the token table
  * @param defvalue Value to return if lookup fails
  */
-const char* lookup(int value, const TokenDict* tokens, const char* defvalue = 0);
+YATE_API const char* lookup(int value, const TokenDict* tokens, const char* defvalue = 0);
 
 
 /**
  * A regular expression matching class.
  * @short A regexp matching class
  */
-class Regexp : public String
+class YATE_API Regexp : public String
 {
     friend class String;
 public:
@@ -1324,7 +1371,7 @@ private:
  * A string class with a hashed string name
  * @short A named string class.
  */
-class NamedString : public String
+class YATE_API NamedString : public String
 {
 public:
     /**
@@ -1362,7 +1409,7 @@ private:
  * The Time class holds a time moment with microsecond accuracy
  * @short A time holding class
  */
-class Time
+class YATE_API Time
 {
 public:
     /**
@@ -1376,7 +1423,7 @@ public:
      * Constructs a Time object from a given time
      * @param usec Time in microseconds
      */
-    inline Time(unsigned long long usec)
+    inline Time(u_int64_t usec)
 	: m_time(usec)
 	{ }
 
@@ -1399,45 +1446,45 @@ public:
      * Get time in seconds
      * @return Time in seconds since the Epoch
      */
-    inline unsigned long sec() const
-	{ return (m_time+500000) / 1000000; }
+    inline u_int32_t sec() const
+	{ return (u_int32_t)((m_time+500000) / 1000000); }
 
     /**
      * Get time in milliseconds
      * @return Time in milliseconds since the Epoch
      */
-    inline unsigned long long msec() const
+    inline u_int64_t msec() const
 	{ return (m_time+500) / 1000; }
 
     /**
      * Get time in microseconds
      * @return Time in microseconds since the Epoch
      */
-    inline unsigned long long usec() const
+    inline u_int64_t usec() const
 	{ return m_time; }
 
     /**
      * Conversion to microseconds operator
      */
-    inline operator unsigned long long() const
+    inline operator u_int64_t() const
 	{ return m_time; }
 
     /**
      * Assignment operator.
      */
-    inline Time& operator=(unsigned long long usec)
+    inline Time& operator=(u_int64_t usec)
 	{ m_time = usec; return *this; }
 
     /**
      * Offsetting operator.
      */
-    inline Time& operator+=(long long delta)
+    inline Time& operator+=(int64_t delta)
 	{ m_time += delta; return *this; }
 
     /**
      * Offsetting operator.
      */
-    inline Time& operator-=(long long delta)
+    inline Time& operator-=(int64_t delta)
 	{ m_time -= delta; return *this; }
 
     /**
@@ -1452,30 +1499,30 @@ public:
      * @param tv Pointer to the timeval structure
      * @param usec Time to convert to timeval
      */
-    static void toTimeval(struct timeval* tv, unsigned long long usec);
+    static void toTimeval(struct timeval* tv, u_int64_t usec);
 
     /**
      * Convert time in a timeval struct to microseconds
      * @param tv Pointer to the timeval structure
      * @return Corresponding time in microseconds or zero if tv is NULL
      */
-    static unsigned long long fromTimeval(struct timeval* tv);
+    static u_int64_t fromTimeval(struct timeval* tv);
 
     /**
      * Get the current system time in microseconds
      * @return Time in microseconds since the Epoch
      */
-    static unsigned long long now();
+    static u_int64_t now();
 
 private:
-    unsigned long long m_time;
+    u_int64_t m_time;
 };
 
 /**
  * A class to compute and check MD5 digests
  * @short A standard MD5 digest calculator
  */
-class MD5
+class YATE_API MD5
 {
 public:
     /**
@@ -1564,7 +1611,7 @@ private:
  * This class holds a named list of named strings
  * @short A named string container class
  */
-class NamedList : public String
+class YATE_API NamedList : public String
 {
 public:
     /**
@@ -1652,7 +1699,7 @@ private:
  * A class for parsing and quickly accessing INI style configuration files
  * @short Configuration file handling
  */
-class Configuration : public String
+class YATE_API Configuration : public String
 {
 public:
     /**
@@ -1809,7 +1856,7 @@ class MessageDispatcher;
  * This class holds the messages that are moved around in the engine.
  * @short A message container class
  */
-class Message : public NamedList
+class YATE_API Message : public NamedList
 {
     friend class MessageDispatcher;
 public:
@@ -1920,7 +1967,7 @@ private:
  *  and priority among other handlers.
  * @short A message handler
  */
-class MessageHandler : public String
+class YATE_API MessageHandler : public String
 {
     friend class MessageDispatcher;
 public:
@@ -1959,7 +2006,7 @@ private:
  * A multiple message receiver to be invoked by a message relay
  * @short A multiple message receiver
  */
-class MessageReceiver : public GenObject
+class YATE_API MessageReceiver : public GenObject
 {
 public:
     /**
@@ -1975,7 +2022,7 @@ public:
  * A message handler that allows to relay several messages to a single receiver
  * @short A message handler relay
  */
-class MessageRelay : public MessageHandler
+class YATE_API MessageRelay : public MessageHandler
 {
 public:
     /**
@@ -2008,7 +2055,7 @@ class ThreadPrivate;
  * A simple mutual exclusion for locking access between threads
  * @short Mutex support
  */
-class Mutex
+class YATE_API Mutex
 {
     friend class MutexPrivate;
 public:
@@ -2046,7 +2093,7 @@ public:
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked, false on failure
      */
-    bool lock(long long int maxwait = -1);
+    bool lock(int64_t maxwait = -1);
 
     /**
      * Unlock the mutex, does never wait
@@ -2065,7 +2112,7 @@ public:
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked and unlocked, false on failure
      */
-    bool check(long long int maxwait = -1);
+    bool check(int64_t maxwait = -1);
 
     /**
      * Check if this mutex is recursive or not
@@ -2095,7 +2142,7 @@ private:
  *  creation and unlocks it on destruction - typically when exiting a block
  * @short Ephemeral mutex locking object
  */
-class Lock
+class YATE_API Lock
 {
 public:
     /**
@@ -2103,7 +2150,7 @@ public:
      * @param mutex Reference to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex& mutex, long long int maxwait = -1)
+    inline Lock(Mutex& mutex, int64_t maxwait = -1)
 	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
 
     /**
@@ -2111,7 +2158,7 @@ public:
      * @param mutex Pointer to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex* mutex, long long int maxwait = -1)
+    inline Lock(Mutex* mutex, int64_t maxwait = -1)
 	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
 
     /**
@@ -2151,7 +2198,7 @@ private:
  *  different execution thread.
  * @short Encapsulates a runnable task
  */
-class Runnable
+class YATE_API Runnable
 {
 public:
     /**
@@ -2167,7 +2214,7 @@ public:
  *  blocking one execution thread while allowing other to run.
  * @short Thread support class
  */
-class Thread : public Runnable
+class YATE_API Thread : public Runnable
 {
     friend class ThreadPrivate;
 public:
@@ -2198,6 +2245,24 @@ public:
      * Give up the currently running timeslice
      */
     static void yield();
+
+    /**
+     * Sleep for a number of seconds
+     * @param sec Number of seconds to sleep
+     */
+    static void sleep(unsigned int sec);
+
+    /**
+     * Sleep for a number of milliseconds
+     * @param sec Number of milliseconds to sleep
+     */
+    static void msleep(unsigned long msec);
+
+    /**
+     * Sleep for a number of microseconds
+     * @param sec Number of microseconds to sleep
+     */
+    static void usleep(unsigned long usec);
 
     /**
      * Get a pointer to the currently running thread
@@ -2255,7 +2320,7 @@ private:
  *  messages that are typically dispatched by a separate thread.
  * @short A message dispatching hub
  */
-class MessageDispatcher : public GenObject
+class YATE_API MessageDispatcher : public GenObject
 {
 public:
     /**
@@ -2344,7 +2409,7 @@ private:
  *</pre>
  * @short Plugin support
  */
-class Plugin : public GenObject
+class YATE_API Plugin : public GenObject
 {
 public:
     /**
@@ -2390,7 +2455,7 @@ public:
  *
  * @short Engine globals
  */
-class Engine
+class YATE_API Engine
 {
     friend class EnginePrivate;
 public:
@@ -2426,8 +2491,7 @@ public:
     /**
      * The configuration directory path
      */
-    inline static String configFile(const char* name)
-	{ return s_cfgpath+"/"+name+s_cfgsuffix; }
+    static String configFile(const char* name);
 
     /**
      * The configuration directory path

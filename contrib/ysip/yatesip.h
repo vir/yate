@@ -680,22 +680,22 @@ protected:
      * @return True is there is a pending event
      */
     inline bool isPendingEvent() const
-	{ return m_pending; }
+	{ return (m_pending != 0); }
 
     /**
      * Set a repetitive timeout
      * @param delay How often (in microseconds) to fire the timeout
      * @param count How many times to keep firing the timeout
      */
-    void setTimeout(unsigned long long delay = 0, unsigned int count = 1);
+    void setTimeout(u_int64_t delay = 0, unsigned int count = 1);
 
     bool m_outgoing;
     bool m_invite;
     bool m_transmit;
     int m_state;
     unsigned int m_timeouts;
-    unsigned long long m_delay;
-    unsigned long long m_timeout;
+    u_int64_t m_delay;
+    u_int64_t m_timeout;
     SIPMessage* m_firstMessage;
     SIPMessage* m_lastMessage;
     SIPEvent* m_pending;
@@ -839,7 +839,7 @@ public:
      * @param reliable Whether we request the timer value for a reliable protocol
      * @return Duration of the selected timer or 0 if invalid
      */
-    unsigned long long getTimer(char which, bool reliable = false) const;
+    u_int64_t getTimer(char which, bool reliable = false) const;
 
     /**
      * Get the default value of the Max-Forwards header for this engine
@@ -888,8 +888,8 @@ public:
 
 protected:
     Mutex m_mutex;
-    unsigned long long m_t1;
-    unsigned long long m_t4;
+    u_int64_t m_t1;
+    u_int64_t m_t4;
     unsigned int m_maxForwards;
     int m_cseq;
     String m_userAgent;

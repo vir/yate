@@ -60,16 +60,16 @@ class CdrBuilder : public String
 public:
     CdrBuilder(const char *name, const char *caller, const char *called);
     virtual ~CdrBuilder();
-    void update(int type, unsigned long long val);
+    void update(int type, u_int64_t val);
     inline void setStatus(const char *status)
 	{ m_status = status; }
     String getStatus() const;
     static CdrBuilder *find(String &id);
 private:
     void emit(const char *operation = 0);
-    inline static int sec(unsigned long long usec)
-	{ return (usec + 500000) / 1000000; }
-    unsigned long long
+    inline static int sec(u_int64_t usec)
+	{ return (int)((usec + 500000) / 1000000); }
+    u_int64_t
 	m_start,
 	m_call,
 	m_ringing,
@@ -96,10 +96,10 @@ CdrBuilder::~CdrBuilder()
 
 void CdrBuilder::emit(const char *operation)
 {
-    unsigned long long t_hangup = m_hangup ? m_hangup : Time::now();
+    u_int64_t t_hangup = m_hangup ? m_hangup : Time::now();
     const char *dir = m_call ? "outgoing" : "incoming";
 
-    unsigned long long
+    u_int64_t
 	t_start = m_start, t_call = m_call,
 	t_ringing = m_ringing, t_answer = m_answer;
     if (!t_start)
@@ -136,7 +136,7 @@ String CdrBuilder::getStatus() const
     return s;
 }
 
-void CdrBuilder::update(int type, unsigned long long val)
+void CdrBuilder::update(int type, u_int64_t val)
 {
     switch (type) {
 	case CdrStart:

@@ -21,21 +21,42 @@
  */
 
 #include "yatengine.h"
-#include "yatepaths.h"
 #include "yateversn.h"
-
+#ifdef _WINDOWS
+#include <windows.h>
+#include <io.h>
+#include <process.h>
+#define O_RDONLY _O_RDONLY
+#define O_WRONLY _O_WRONLY
+#define O_APPEND _O_APPEND
+#define O_CREAT _O_CREAT
+#define open _open
+#define dup2 _dup2
+#define read _read
+#define write _write
+#define close _close
+#define getpid _getpid
+#define RTLD_NOW 0
+#define dlopen(name,flags) LoadLibrary(name)
+#define dlclose !FreeLibrary
+#define dlerror() "LoadLibrary error"
+#else
+#include "yatepaths.h"
 #include <dirent.h>
+#include <dlfcn.h>
+#include <sys/wait.h>
+typedef void* HMODULE;
+#endif
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include <dlfcn.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <fcntl.h>
 
 #include <assert.h>
@@ -69,8 +90,8 @@ using namespace TelEngine;
 
 #define MAX_SANITY 5
 
-static unsigned long long s_nextinit = 0;
-static unsigned long long s_restarts = 0;
+static u_int64_t s_nextinit = 0;
+static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
 static int s_super_handle = -1;
@@ -78,12 +99,14 @@ static int s_super_handle = -1;
 static void sighandler(int signal)
 {
     switch (signal) {
+#ifndef _WINDOWS
 	case SIGHUP:
 	case SIGQUIT:
 	    if (s_nextinit <= Time::now())
 		Engine::init();
 	    s_nextinit = Time::now() + 2000000;
 	    break;
+#endif
 	case SIGINT:
 	case SIGTERM:
 	    Engine::halt(0);
@@ -113,12 +136,12 @@ public:
     virtual ~SLib();
     static SLib* load(const char* file);
 private:
-    SLib(void* handle, const char* file);
+    SLib(HMODULE handle, const char* file);
     const char* m_file;
-    void* m_handle;
+    HMODULE m_handle;
 };
 
-SLib::SLib(void* handle, const char* file)
+SLib::SLib(HMODULE handle, const char* file)
     : m_handle(handle)
 {
     DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
@@ -144,11 +167,15 @@ SLib::~SLib()
 
 SLib* SLib::load(const char* file)
 {
-    DDebug("SLib::load('%s')",file);
-    void *handle = ::dlopen(file,RTLD_NOW);
+    DDebug(DebugAll,"SLib::load('%s')",file);
+    HMODULE handle = ::dlopen(file,RTLD_NOW);
     if (handle)
 	return new SLib(handle,file);
+#ifdef _WINDOWS
+    Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
+#else
     Debug(DebugWarn,dlerror());
+#endif    
     return 0;
 }
 
@@ -196,7 +223,7 @@ void EnginePrivate::run()
 
 Engine::Engine()
 {
-    DDebug("Engine::Engine()"," [%p]",this);
+    DDebug(DebugAll,"Engine::Engine()"," [%p]",this);
 }
 
 Engine::~Engine()
@@ -232,9 +259,11 @@ int Engine::run()
     Debug(DebugInfo,"Engine dispatching start message");
     dispatch("engine.start");
     unsigned long corr = 0;
+#ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
     ::signal(SIGPIPE,SIG_IGN);
+#endif
     Output("Yate engine is initialized and starting up");
     while (s_haltcode == -1) {
 	if (s_cmds) {
@@ -280,12 +309,12 @@ int Engine::run()
 	}
 
 	// Attempt to sleep until the next full second
-	unsigned long t = (Time::now() + corr) % 1000000;
-	::usleep(1000000 - t);
+	unsigned long t = (unsigned long)((Time::now() + corr) % 1000000);
+	Thread::usleep(1000000 - t);
 	Message *m = new Message("engine.timer");
 	m->addParam("time",String((int)m->msgTime().sec()));
 	// Try to fine tune the ticker
-	t = m->msgTime().usec() % 1000000;
+	t = (unsigned long)(m->msgTime().usec() % 1000000);
 	if (t > 500000)
 	    corr -= (1000000-t)/10;
 	else
@@ -301,8 +330,10 @@ int Engine::run()
     m_dispatcher.dequeue();
     ::signal(SIGINT,SIG_DFL);
     ::signal(SIGTERM,SIG_DFL);
+#ifndef _WINDOWS
     ::signal(SIGHUP,SIG_DFL);
     ::signal(SIGQUIT,SIG_DFL);
+#endif
     delete this;
     Debug(DebugInfo,"Exiting with %d locked mutexes",Mutex::locks());
     return s_haltcode;
@@ -313,6 +344,11 @@ Engine* Engine::self()
     if (!s_self)
 	s_self = new Engine;
     return s_self;
+}
+
+String Engine::configFile(const char* name)
+{
+    return s_cfgpath+"/"+name+s_cfgsuffix;
 }
 
 bool Engine::Register(const Plugin* plugin, bool reg)
@@ -363,14 +399,31 @@ void Engine::loadPlugins()
                 loadPlugin(n->name());
 	}
     }
+#ifdef _WINDOWS
+    WIN32_FIND_DATA entry;
+    HANDLE hf = ::FindFirstFile(s_modpath+"\\*",&entry);
+    if (hf == INVALID_HANDLE_VALUE) {
+	Debug(DebugFail,"Engine::loadPlugins() failed directory '%s'",s_modpath.safe());
+	return;
+    }
+    do {
+	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
+	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
+	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
+	    if (cfg.getBoolValue("modules",entry.cFileName,defload))
+		loadPlugin(s_modpath+"\\"+entry.cFileName);
+	}
+    } while (::FindNextFile(hf,&entry));
+    ::FindClose(hf);
+#else
     DIR *dir = ::opendir(s_modpath);
     if (!dir) {
-	Debug(DebugFail,"Engine::loadPlugins() failed opendir()");
+	Debug(DebugFail,"Engine::loadPlugins() failed directory '%s'",s_modpath.safe());
 	return;
     }
     struct dirent *entry;
     while ((entry = ::readdir(dir)) != 0) {
-	DDebug(DebugInfo,"Found dir entry %s",entry->d_name);
+	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
 	    if (cfg.getBoolValue("modules",entry->d_name,defload))
@@ -378,6 +431,7 @@ void Engine::loadPlugins()
 	}
     }
     ::closedir(dir);
+#endif
     l = cfg.getSection("postload");
     if (l) {
         unsigned int len = l->length();
@@ -461,9 +515,11 @@ bool Engine::dispatch(const char* name)
 }
 
 
-static pid_t s_childpid = -1;
-static bool s_runagain = true;
 static bool s_sigabrt = false;
+
+#ifndef _WINDOWS
+static bool s_runagain = true;
+static pid_t s_childpid = -1;
 
 static void superhandler(int signal)
 {
@@ -566,6 +622,7 @@ static int supervise(void)
     ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
     return retcode;
 }
+#endif /* _WINDOWS */
 
 static void usage(FILE* f)
 {
@@ -574,10 +631,12 @@ static void usage(FILE* f)
 "   -h             Help message (this one)\n"
 "   -v             Verbose debugging (you can use more than once)\n"
 "   -q             Quieter debugging (you can use more than once)\n"
+#ifndef _WINDOWS
 "   -d             Daemonify, suppress output unless logged\n"
 "   -s             Supervised, restart if crashes or locks up\n"
-"   -l filename    Log to file\n"
+#endif
 "   -p filename    Write PID to file\n"
+"   -l filename    Log to file\n"
 "   -n configname  Use specified configuration name (%s)\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
@@ -609,11 +668,13 @@ static void noarg(const char* opt)
 
 int Engine::main(int argc, const char** argv, const char** environ)
 {
+#ifndef _WINDOWS
     bool daemonic = false;
     bool supervised = false;
-    int debug_level = debugLevel();
-    const char *logfile = 0;
+#endif
     const char *pidfile = 0;
+    const char *logfile = 0;
+    int debug_level = debugLevel();
 
     s_cfgfile = ::strrchr(argv[0],'/');
     if (s_cfgfile)
@@ -650,11 +711,21 @@ int Engine::main(int argc, const char** argv, const char** environ)
 		    case 'q':
 			debug_level--;
 			break;
+#ifndef _WINDOWS
 		    case 'd':
 			daemonic = true;
 			break;
 		    case 's':
 			supervised = true;
+			break;
+#endif
+		    case 'p':
+			if (i+1 >= argc) {
+			    noarg(argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			pidfile=argv[++i];
 			break;
 		    case 'l':
 			if (i+1 >= argc) {
@@ -663,14 +734,6 @@ int Engine::main(int argc, const char** argv, const char** environ)
 			}
 			pc = 0;
 			logfile=argv[++i];
-			break;
-		    case 'p':
-			if (i+1 >= argc) {
-			    noarg(argv[i]);
-			    return ENOENT;
-			}
-			pc = 0;
-			pidfile=argv[++i];
 			break;
 		    case 'n':
 			if (i+1 >= argc) {
@@ -736,6 +799,7 @@ int Engine::main(int argc, const char** argv, const char** environ)
 	}
     }
 
+#ifndef _WINDOWS
     if (daemonic) {
 	Debugger::enableOutput(false);
 	// Make sure X client modules fail initialization in daemon mode
@@ -746,6 +810,7 @@ int Engine::main(int argc, const char** argv, const char** environ)
 	    return err;
 	}
     }
+#endif
 
     if (pidfile) {
 	int fd = ::open(pidfile,O_WRONLY|O_CREAT,0644);
@@ -773,9 +838,13 @@ int Engine::main(int argc, const char** argv, const char** environ)
     debugLevel(debug_level);
     abortOnBug(s_sigabrt);
 
-    int retcode = supervised ? supervise() : -1;
+    int retcode = -1;
+#ifndef _WINDOWS
+    if (supervised)
+	retcode = supervise()
     if (retcode >= 0)
 	return retcode;
+#endif
 
     time_t t = ::time(0);
     Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));

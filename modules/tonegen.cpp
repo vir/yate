@@ -52,7 +52,7 @@ private:
     DataBlock m_data;
     unsigned m_brate;
     unsigned m_total;
-    unsigned long long m_time;
+    u_int64_t m_time;
 };
 
 class ToneChan : public Channel
@@ -137,7 +137,7 @@ ToneSource::~ToneSource()
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
-	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
 	    Debug(DebugInfo,"ToneSource rate=%llu b/s",m_time);
 	}
     }
@@ -179,7 +179,7 @@ ToneSource *ToneSource::getTone(const String &tone)
 void ToneSource::run()
 {
     Debug(DebugAll,"ToneSource::run() [%p]",this);
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     m_time = tpos;
     int samp = 0; // sample number
     int dpos = 1; // position in data
@@ -206,17 +206,17 @@ void ToneSource::run()
 	    else
 		*d++ = 0;
 	}
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("ToneSource",DebugAll,"Sleeping for %lld usec",dly);
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()/2);
 	m_total += m_data.length();
-	tpos += (m_data.length()*1000000ULL/m_brate);
+	tpos += (m_data.length()*(u_int64_t)1000000/m_brate);
     };
     m_time = Time::now() - m_time;
-    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
     Debug(DebugAll,"ToneSource [%p] end, total=%u (%llu b/s)",this,m_total,m_time);
     m_time = 0;
 }

@@ -5,6 +5,7 @@ Release
 *.opt
 *.ncb
 *.clw
+*.suo
 *.orig
 *~
 *.bak

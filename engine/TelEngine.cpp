@@ -26,7 +26,11 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#ifdef _WINDOWS
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 
 namespace TelEngine {
 
@@ -293,15 +297,29 @@ void Debugger::enableOutput(bool enable)
     s_debugging = enable;
 }
 
-unsigned long long Time::now()
+u_int64_t Time::now()
 {
+#ifdef _WINDOWS
+
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    // Convert from FILETIME (100 nsec units since January 1, 1601)
+    //  to extended time_t (1 usec units since January 1, 1970)
+    u_int64_t rval = ((ULARGE_INTEGER*)&ft)->QuadPart / 10;
+    rval -= 11644473600000000;
+    return rval;
+
+#else
+
     struct timeval tv;
     return ::gettimeofday(&tv,0) ? 0 : fromTimeval(&tv);
+
+#endif
 }
 
-unsigned long long Time::fromTimeval(struct timeval* tv)
+u_int64_t Time::fromTimeval(struct timeval* tv)
 {
-    unsigned long long rval = 0;
+    u_int64_t rval = 0;
     if (tv) {
 	// Please keep it this way or the compiler may b0rk
 	rval = tv->tv_sec;
@@ -311,11 +329,11 @@ unsigned long long Time::fromTimeval(struct timeval* tv)
     return rval;
 }
 
-void Time::toTimeval(struct timeval* tv, unsigned long long usec)
+void Time::toTimeval(struct timeval* tv, u_int64_t usec)
 {
     if (tv) {
-	tv->tv_usec = usec % 1000000;
-	tv->tv_sec = usec / 1000000;
+	tv->tv_usec = (long)(usec % 1000000);
+	tv->tv_sec = (long)(usec / 1000000);
     }
 }
 

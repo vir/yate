@@ -28,7 +28,7 @@ using namespace TelEngine;
 Message::Message(const char* name, const char* retval)
     : NamedList(name), m_return(retval), m_data(0)
 {
-    DDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
+    XDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
 
 Message::~Message()
@@ -87,7 +87,11 @@ int Message::decode(const char* str, String& id)
     t >> tm;
     if (!t.null())
 	return sep-str;
+#ifdef _WINDOWS
+    m_time=((u_int32_t)1000000)*tm;
+#else
     m_time=1000000ULL*tm;
+#endif
     return commonDecode(str,sep2-str+1);
 }
 
@@ -242,7 +246,7 @@ bool MessageDispatcher::uninstall(MessageHandler* handler)
 
 bool MessageDispatcher::dispatch(Message& msg)
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
 #endif
     bool retv = false;

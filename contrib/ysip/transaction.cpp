@@ -150,7 +150,7 @@ void SIPTransaction::setPendingEvent(SIPEvent* event, bool replace)
 	m_pending = event;
 }
 
-void SIPTransaction::setTimeout(unsigned long long delay, unsigned int count)
+void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
 {
     m_timeouts = count;
     m_delay = delay;

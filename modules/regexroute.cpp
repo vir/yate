@@ -187,7 +187,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	
 bool RouteHandler::received(Message &msg)
 {
-    unsigned long long tmr = Time::now();
+    u_int64_t tmr = Time::now();
     String called(msg.getValue("called"));
     if (called.null())
 	return false;
@@ -215,7 +215,7 @@ public:
 
 bool PrerouteHandler::received(Message &msg)
 {
-    unsigned long long tmr = Time::now();
+    u_int64_t tmr = Time::now();
     // return immediately if there is already a context
     if (msg.getValue("context"))
 	return false;

@@ -1,0 +1,368 @@
+Microsoft Developer Studio Workspace File, Format Version 6.00
+# WARNING: DO NOT EDIT OR DELETE THIS WORKSPACE FILE!
+
+###############################################################################
+
+Project: "Client"=.\Client.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "Contrib"=.\Contrib.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libysip
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libiax
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "Libyate"=.\Libyate.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libregex
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "Modules"=.\Modules.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name _callgen
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _tonegen
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _wavefile
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _cdrbuild
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _cdrfile
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _h323chan
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _iaxchan
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _regexroute
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _regfile
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _rmanager
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _ysipchan
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "Service"=.\Service.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "YATE"=.\YATE.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Client
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Modules
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Service
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_callgen"=.\_callgen.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_cdrbuild"=.\_cdrbuild.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_cdrfile"=.\_cdrfile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_h323chan"=.\_h323chan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_iaxchan"=.\_iaxchan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libiax
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_regexroute"=.\_regexroute.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_regfile"=.\_regfile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_rmanager"=.\_rmanager.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_tonegen"=.\_tonegen.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_wavefile"=.\_wavefile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_ysipchan"=.\_ysipchan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libysip
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libiax"=.\libiax.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "libortp"=.\libortp.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "libregex"=.\libregex.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "libysip"=.\libysip.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Global:
+
+Package=<5>
+{{{
+}}}
+
+Package=<3>
+{{{
+}}}
+
+###############################################################################
+

@@ -101,7 +101,7 @@ static bool isWordBreak(char c, bool nullOk = false)
 
 StringMatchPrivate::StringMatchPrivate()
 {
-    DDebug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
+    XDebug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
     clear();
 }
 
@@ -149,20 +149,20 @@ const String& String::empty()
 String::String()
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String() [%p]",this);
+    XDebug(DebugAll,"String::String() [%p]",this);
 }
 
 String::String(const char* value, int len)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
+    XDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
     assign(value,len);
 }
 
 String::String(const String& value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
+    XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
 	m_string = ::strdup(value.c_str());
 	if (!m_string)
@@ -174,7 +174,7 @@ String::String(const String& value)
 String::String(char value, unsigned int repeat)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
+    XDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
     if (value && repeat) {
 	m_string = (char *) ::malloc(repeat+1);
 	if (m_string) {
@@ -190,7 +190,7 @@ String::String(char value, unsigned int repeat)
 String::String(int value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(%d) [%p]",value,this);
+    XDebug(DebugAll,"String::String(%d) [%p]",value,this);
     char buf[64];
     ::sprintf(buf,"%d",value);
     m_string = ::strdup(buf);
@@ -202,7 +202,7 @@ String::String(int value)
 String::String(unsigned int value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(%u) [%p]",value,this);
+    XDebug(DebugAll,"String::String(%u) [%p]",value,this);
     char buf[64];
     ::sprintf(buf,"%u",value);
     m_string = ::strdup(buf);
@@ -214,7 +214,7 @@ String::String(unsigned int value)
 String::String(bool value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(%u) [%p]",value,this);
+    XDebug(DebugAll,"String::String(%u) [%p]",value,this);
     m_string = ::strdup(boolText(value));
     if (!m_string)
 	Debug("String",DebugFail,"strdup() returned NULL!");
@@ -224,7 +224,7 @@ String::String(bool value)
 String::String(const String* value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
-    DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
+    XDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (value && !value->null()) {
 	m_string = ::strdup(value->c_str());
 	if (!m_string)
@@ -235,7 +235,7 @@ String::String(const String* value)
 
 String::~String()
 {
-    DDebug(DebugAll,"String::~String() [%p] (\"%s\")",this,m_string);
+    XDebug(DebugAll,"String::~String() [%p] (\"%s\")",this,m_string);
     if (m_matches) {
 	StringMatchPrivate *odata = m_matches;
 	m_matches = 0;
@@ -354,7 +354,8 @@ bool String::toBoolean(bool defvalue) const
 String& String::toUpper()
 {
     if (m_string) {
-	for (char *s = m_string; char c = *s; s++) {
+	char c;
+	for (char *s = m_string; c = *s; s++) {
 	    if (('a' <= c) && (c <= 'z'))
 		*s = c + 'A' - 'a';
 	}
@@ -365,7 +366,8 @@ String& String::toUpper()
 String& String::toLower()
 {
     if (m_string) {
-	for (char *s = m_string; char c = *s; s++) {
+	char c;
+	for (char *s = m_string; c = *s; s++) {
 	    if (('A' <= c) && (c <= 'Z'))
 		*s = c + 'a' - 'A';
 	}
@@ -813,13 +815,13 @@ unsigned int String::hash(const char* value)
 Regexp::Regexp()
     : m_regexp(0), m_flags(0)
 {
-    DDebug(DebugAll,"Regexp::Regexp() [%p]",this);
+    XDebug(DebugAll,"Regexp::Regexp() [%p]",this);
 }
 
 Regexp::Regexp(const char* value, bool extended, bool insensitive)
     : String(value), m_regexp(0), m_flags(0)
 {
-    DDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
+    XDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
 	value,extended,insensitive,this);
     setFlags(extended,insensitive);
 }
@@ -827,7 +829,7 @@ Regexp::Regexp(const char* value, bool extended, bool insensitive)
 Regexp::Regexp(const Regexp& value)
     : String(value.c_str()), m_regexp(0), m_flags(value.m_flags)
 {
-    DDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
+    XDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
 }
 
 Regexp::~Regexp()
@@ -911,7 +913,7 @@ bool Regexp::isCaseInsensitive() const
 NamedString::NamedString(const char* name, const char* value)
     : String(value), m_name(name)
 {
-    DDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
+    XDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
 }
 
 const String& GenObject::toString() const

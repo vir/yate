@@ -64,7 +64,7 @@ public:
 	{ m_target = target; }
     inline const String& getTarget() const
 	{ return m_target; }
-    inline unsigned long long age() const
+    inline u_int64_t age() const
 	{ return Time::now() - m_start; }
     static GenConnection* find(const String& id);
     static bool oneCall(String* target = 0);
@@ -73,7 +73,7 @@ private:
     String m_status;
     String m_callto;
     String m_target;
-    unsigned long long m_start;
+    u_int64_t m_start;
 };
 
 class GenThread : public Thread
@@ -164,7 +164,7 @@ bool GenConnection::oneCall(String* target)
 	    int n_max = s_cfg.getIntValue("parameters","maxnum",n_min);
 	    if (n_max < n_min)
 		return false;
-	    called = (unsigned)(n_min + (((n_max - n_min) * (long long)::random()) / RAND_MAX));
+	    called = (unsigned)(n_min + (((n_max - n_min) * (int64_t)::random()) / RAND_MAX));
 	}
 	if (target)
 	    *target = called;
@@ -279,7 +279,7 @@ bool ConnHandler::received(Message &msg, int id)
 void GenThread::run()
 {
     for (;;) {
-	::usleep(1000000);
+	Thread::sleep(1);
 	Lock lock(s_mutex);
 	int maxcalls = s_cfg.getIntValue("parameters","maxcalls",5);
 	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))

@@ -23,6 +23,14 @@
 #include "yatengine.h"
 
 #include <unistd.h>
+
+#ifdef _WINDOWS
+#include <windows.h>
+
+typedef HANDLE HMUTEX;
+
+#else
+
 #include <pthread.h>
 
 #ifdef MUTEX_HACK
@@ -30,6 +38,10 @@ extern "C" {
 extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind)  __THROW;
 }
 #endif
+
+typedef pthread_mutex_t HMUTEX;
+
+#endif /* ! _WINDOWS */
 
 namespace TelEngine {
 
@@ -45,12 +57,12 @@ public:
 	{ return m_recursive; }
     bool locked() const
     	{ return (m_locked > 0); }
-    bool lock(long long int maxwait);
+    bool lock(int64_t maxwait);
     void unlock();
     static volatile int s_count;
     static volatile int s_locks;
 private:
-    pthread_mutex_t m_mutex;
+    HMUTEX m_mutex;
     int m_refcount;
     volatile unsigned int m_locked;
     bool m_recursive;
@@ -64,7 +76,7 @@ public:
     static void unlock();
 private:
     static bool s_init;
-    static pthread_mutex_t s_mutex;
+    static HMUTEX s_mutex;
 };
 
 };
@@ -76,7 +88,7 @@ GlobalMutex s_global;
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;
 bool GlobalMutex::s_init = true;
-pthread_mutex_t GlobalMutex::s_mutex;
+HMUTEX GlobalMutex::s_mutex;
 
 // WARNING!!!
 // No debug messages are allowed in mutexes since the debug output itself
@@ -86,11 +98,15 @@ void GlobalMutex::init()
 {
     if (s_init) {
 	s_init = false;
+#ifdef _WINDOWS
+	s_mutex = ::CreateMutex(NULL,FALSE,NULL);
+#else
 	pthread_mutexattr_t attr;
 	::pthread_mutexattr_init(&attr);
 	::pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE_NP);
 	::pthread_mutex_init(&s_mutex,&attr);
 	::pthread_mutexattr_destroy(&attr);
+#endif
     }
 }
 
@@ -102,13 +118,21 @@ GlobalMutex::GlobalMutex()
 void GlobalMutex::lock()
 {
     init();
+#ifdef _WINDOWS
+    ::WaitForSingleObject(s_mutex,INFINITE);
+#else
     ::pthread_mutex_lock(&s_mutex);
+#endif
 }
 
 void GlobalMutex::unlock()
 {
     init();
+#ifdef _WINDOWS
+    ::ReleaseMutex(s_mutex);
+#else
     ::pthread_mutex_unlock(&s_mutex);
+#endif
 }
 
 MutexPrivate::MutexPrivate(bool recursive)
@@ -116,6 +140,10 @@ MutexPrivate::MutexPrivate(bool recursive)
 {
     GlobalMutex::lock();
     s_count++;
+#ifdef _WINDOWS
+    // All mutexes are recursive in Windows
+    m_mutex = ::CreateMutex(NULL,FALSE,NULL);
+#else
     if (recursive) {
 	pthread_mutexattr_t attr;
 	::pthread_mutexattr_init(&attr);
@@ -125,6 +153,7 @@ MutexPrivate::MutexPrivate(bool recursive)
     }
     else
 	::pthread_mutex_init(&m_mutex,0);
+#endif
     GlobalMutex::unlock();
 }
 
@@ -134,32 +163,51 @@ MutexPrivate::~MutexPrivate()
     if (m_locked) {
 	m_locked--;
 	s_locks--;
+#ifdef _WINDOWS
+	::ReleaseMutex(m_mutex);
+#else
 	::pthread_mutex_unlock(&m_mutex);
+#endif
     }
     s_count--;
+#ifdef _WINDOWS
+    ::CloseHandle(m_mutex);
+    m_mutex = 0;
+#else
     ::pthread_mutex_destroy(&m_mutex);
+#endif
     GlobalMutex::unlock();
 }
 
-bool MutexPrivate::lock(long long int maxwait)
+bool MutexPrivate::lock(int64_t maxwait)
 {
     bool rval = false;
     GlobalMutex::lock();
     ref();
     GlobalMutex::unlock();
+#ifdef _WINDOWS
+    DWORD ms = 0;
+    if (maxwait < 0)
+	ms = INFINITE;
+    else if (maxwait > 0) {
+	ms = (DWORD)(maxwait / 1000);
+    }
+    rval = (::WaitForSingleObject(m_mutex,ms) == WAIT_OBJECT_0);
+#else
     if (maxwait < 0)
 	rval = !::pthread_mutex_lock(&m_mutex);
     else if (!maxwait)
 	rval = !::pthread_mutex_trylock(&m_mutex);
     else {
-	unsigned long long t = Time::now() + maxwait;
+	u_int64_t t = Time::now() + maxwait;
 	do {
 	    rval = !::pthread_mutex_trylock(&m_mutex);
 	    if (rval)
 		break;
-	    ::usleep(1);
+	    Thread::yield();
 	} while (t > Time::now());
     }
+#endif
     GlobalMutex::lock();
     if (rval) {
 	s_locks++;
@@ -179,7 +227,11 @@ void MutexPrivate::unlock()
 	m_locked--;
 	if (--s_locks < 0)
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
+#ifdef _WINDOWS
+	::ReleaseMutex(m_mutex);
+#else
 	::pthread_mutex_unlock(&m_mutex);
+#endif
 	deref();
     }
     else
@@ -228,7 +280,7 @@ MutexPrivate *Mutex::privDataCopy() const
     return m_private;
 }
 
-bool Mutex::lock(long long int maxwait)
+bool Mutex::lock(int64_t maxwait)
 {
     return m_private ? m_private->lock(maxwait) : false;
 }
@@ -239,7 +291,7 @@ void Mutex::unlock()
 	m_private->unlock();
 }
 
-bool Mutex::check(long long int maxwait)
+bool Mutex::check(int64_t maxwait)
 {
     bool ret = lock(maxwait);
     if (ret)

@@ -23,8 +23,16 @@
 #include "yatengine.h"
 
 #include <unistd.h>
-#include <pthread.h>
 #include <errno.h>
+
+#ifdef _WINDOWS
+#include <windows.h>
+#include <process.h>
+typedef unsigned long HTHREAD;
+#else
+#include <pthread.h>
+typedef pthread_t HTHREAD;
+#endif
 
 #ifndef PTHREAD_STACK_MIN
 #define PTHREAD_STACK_MIN 16384
@@ -46,13 +54,17 @@ public:
     static void killall();
     static Thread* current();
     Thread* m_thread;
-    pthread_t thread;
+    HTHREAD thread;
     bool m_running;
     bool m_started;
     bool m_updest;
     const char* m_name;
 private:
+#ifdef _WINDOWS
+    static void startFunc(void* arg);
+#else
     static void* startFunc(void* arg);
+#endif
     static void cleanupFunc(void* arg);
     static void destroyFunc(void* arg);
     static void keyAllocFunc();
@@ -62,8 +74,13 @@ private:
 
 using namespace TelEngine;
 
+#ifdef _WINDOWS
+DWORD tls_index = ::TlsAlloc();
+#else
 static pthread_key_t current_key;
 static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
+#endif
+
 ObjList threads;
 Mutex tmutex;
 
@@ -71,18 +88,29 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
 {
     ThreadPrivate *p = new ThreadPrivate(t,name);
     int e = 0;
+#ifndef _WINDOWS
     // Set a decent (256K) stack size that won't eat all virtual memory
     pthread_attr_t attr;
     ::pthread_attr_init(&attr);
     ::pthread_attr_setstacksize(&attr, 16*PTHREAD_STACK_MIN);
+#endif
 
     for (int i=0; i<5; i++) {
+#ifdef _WINDOWS
+	HTHREAD t = ::_beginthread(startFunc,16*PTHREAD_STACK_MIN,p);
+	e = (t == (HTHREAD)-1) ? errno : 0;
+	if (!e)
+		p->thread = t;
+#else
 	e = ::pthread_create(&p->thread,&attr,startFunc,p);
+#endif
 	if (e != EAGAIN)
 	    break;
-	::usleep(20);
+	Thread::usleep(20);
     }
+#ifndef _WINDOWS
     ::pthread_attr_destroy(&attr);
+#endif
     if (e) {
 	Debug(DebugFail,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;
@@ -141,16 +169,23 @@ void ThreadPrivate::pubdestroy()
 void ThreadPrivate::run()
 {
     DDebug(DebugAll,"ThreadPrivate::run() '%s' [%p]",m_name,this);
+#ifdef _WINDOWS
+    ::TlsSetValue(tls_index,this);
+#else
     ::pthread_once(&current_key_once,keyAllocFunc);
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
     ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,0);
     ::pthread_detach(::pthread_self());
-    
+#endif
+
     while (!m_started)
-	::usleep(10);
+	Thread::usleep(10);
     m_thread->run();
+
+#ifndef _WINDOWS
     pthread_cleanup_pop(1);
+#endif
 }
 
 bool ThreadPrivate::cancel()
@@ -158,10 +193,14 @@ bool ThreadPrivate::cancel()
     DDebug(DebugAll,"ThreadPrivate::cancel() '%s' [%p]",m_name,this);
     bool ret = true;
     if (m_running) {
+#ifdef _WINDOWS
+	ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
+#else
 	ret = !::pthread_cancel(thread);
+#endif
 	if (ret) {
 	    m_running = false;
-	    ::usleep(10);
+	    Thread::msleep(1);
 	}
     }
     return ret;
@@ -184,7 +223,11 @@ void ThreadPrivate::cleanup()
 
 Thread* ThreadPrivate::current()
 {
+#ifdef _WINDOWS
+    ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(::TlsGetValue(tls_index));
+#else
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(::pthread_getspecific(current_key));
+#endif
     return t ? t->m_thread : 0;
 }
 
@@ -203,13 +246,13 @@ void ThreadPrivate::killall()
 	bool ok = t->cancel();
 	if (ok) {
 	    // delay a little so threads have a chance to clean up
-	    for (int i=0; i<1000; i++) {
+	    for (int i=0; i<100; i++) {
 		tmutex.lock();
 		bool done = (t != l->get());
 		tmutex.unlock();
 		if (done)
 		    break;
-		::usleep(10);
+		Thread::msleep(1);
 	    }
 	}
 	tmutex.lock();
@@ -217,13 +260,13 @@ void ThreadPrivate::killall()
 	    c = 1;
 	else {
 	    if (ok) {
-		Debug(DebugGoOn,"Could not kill %p but seems OK to delete it (pthread bug?)",t);
+		Debug(DebugGoOn,"Could not kill %p but seems OK to delete it (library bug?)",t);
 		tmutex.unlock();
 		t->destroy();
 		tmutex.lock();
 		continue;
 	    }
-	    ::usleep(10);
+	    Thread::msleep(1);
 	    if (++c >= 10) {
 		Debug(DebugGoOn,"Could not kill %p, will use sledgehammer later.",t);
 		sledgehammer = true;
@@ -266,17 +309,25 @@ void ThreadPrivate::cleanupFunc(void* arg)
 
 void ThreadPrivate::keyAllocFunc()
 {
+#ifndef _WINDOWS
     DDebug(DebugAll,"ThreadPrivate::keyAllocFunc()");
     if (::pthread_key_create(&current_key,destroyFunc))
 	Debug(DebugGoOn,"Failed to create current thread key!");
+#endif
 }
 
+#ifdef _WINDOWS
+void ThreadPrivate::startFunc(void* arg)
+#else
 void* ThreadPrivate::startFunc(void* arg)
+#endif
 {
     DDebug(DebugAll,"ThreadPrivate::startFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
     t->run();
+#ifndef _WINDOWS
     return 0;
+#endif
 }
 
 Thread::Thread(const char* name)
@@ -338,7 +389,11 @@ void Thread::killall()
 void Thread::exit()
 {
     DDebug(DebugAll,"Thread::exit()");
+#ifdef _WINDOWS
+    ::_endthread();
+#else
     ::pthread_exit(0);
+#endif
 }
 
 void Thread::cancel()
@@ -350,7 +405,38 @@ void Thread::cancel()
 
 void Thread::yield()
 {
-    ::usleep(1);
+#ifdef _WINDOWS
+    ::Sleep(0);
+#else
+    ::usleep(0);
+#endif
+}
+
+void Thread::sleep(unsigned int sec)
+{
+#ifdef _WINDOWS
+    ::Sleep(sec*1000);
+#else
+    ::sleep(sec);
+#endif
+}
+
+void Thread::msleep(unsigned long msec)
+{
+#ifdef _WINDOWS
+    ::Sleep(msec);
+#else
+    ::usleep(msec*1000L);
+#endif
+}
+
+void Thread::usleep(unsigned long usec)
+{
+#ifdef _WINDOWS
+    ::Sleep(usec/1000);
+#else
+    ::usleep(usec);
+#endif
 }
 
 void Thread::preExec()

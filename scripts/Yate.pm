@@ -1,10 +1,10 @@
 #######################################################
 #
-# YateMessage.pm gateway interface module for Yate
+# Yate.pm gateway interface module for Yate
 # Copyright Anthony Minessale II <anthmct@yahoo.com> 
 # This Module is released under the GNU Public License
 # If you find this software useful, donations are welcome
-# at paypal:jillkm3@yahoo.com
+# at paypal:anthmct@yahoo.com
 #
 package Yate;
 use Data::Dumper;

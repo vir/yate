@@ -1,15 +1,15 @@
 #!/usr/bin/perl
 #######################################################
 #
-# noroute.pl is an demo script module for Yate using YateMessage.pm
+# noroute.pl is an demo script module for Yate using Yate.pm
 # Copyright Anthony Minessale II <anthmct@yahoo.com> 
 # This Module is released under the GNU Public License
 # If you find this software useful, donations are welcome
-# at paypal:jillkm3@yahoo.com
+# at paypal:anthmct@yahoo.com
 #
 $|=1;
 use lib 'scripts/';
-use YateMessage;
+use Yate;
 use Data::Dumper;
 
 sub demo($) {

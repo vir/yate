@@ -385,9 +385,11 @@ fi
 fi
 
 MODULE_CFLAGS="-fno-exceptions -fno-check-new $RTTI_OPT -fPIC $HAVE_GCC_FORMAT_CHECK"
-MODULE_LDFLAGS="-export-dynamic -shared -Wl,--retain-symbols-file,/dev/null"
+MODULE_LDFLAGS="-export-dynamic -shared"
+MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_LDFLAGS)
+AC_SUBST(MODULE_SYMBOLS)
 
 AC_CONFIG_FILES([yate.spec
                  yate.pc

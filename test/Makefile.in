@@ -8,6 +8,7 @@ INCLUDES := -I@top_srcdir@
 CFLAGS := -O0 @MODULE_CFLAGS@
 LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
+MODSTRIP:= @MODULE_SYMBOLS@
 
 PROGS = msgsniff.yate randcall.yate
 LIBS =
@@ -17,8 +18,8 @@ LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CFLAGS)
 LINK = $(CC) $(LDFLAGS)
-MODLINK = $(CC) $(MODFLAGS) $(LDFLAGS)
-MODCOMP = $(COMPILE) $(MODFLAGS) $(LDFLAGS)
+MODLINK = $(CC) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
+MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

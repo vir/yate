@@ -9,5 +9,5 @@ yate-config=yate-config
 Name: Yate
 Description: Yet Another Telephony Engine
 Version: @PACKAGE_VERSION@
-Libs: -L${libdir} -lyate @MODULE_LDFLAGS@
+Libs: -L${libdir} -lyate @MODULE_LDFLAGS@ @MODULE_SYMBOLS@
 Cflags: -I${includedir}/yate @MODULE_CFLAGS@

@@ -163,7 +163,9 @@ Debugger::Debugger(const char *name, const char *format, ...)
 	va_start(va,format);
 	dbg_output(buf,format,va);
 	va_end(va);
+	out_mux.lock();
 	s_indent++;
+	out_mux.unlock();
     }
     else
 	m_name = 0;
@@ -179,7 +181,9 @@ Debugger::Debugger(int level, const char *name, const char *format, ...)
 	va_start(va,format);
 	dbg_output(buf,format,va);
 	va_end(va);
+	out_mux.lock();
 	s_indent++;
+	out_mux.unlock();
     }
     else
 	m_name = 0;
@@ -188,7 +192,9 @@ Debugger::Debugger(int level, const char *name, const char *format, ...)
 Debugger::~Debugger()
 {
     if (m_name) {
+	out_mux.lock();
 	s_indent--;
+	out_mux.unlock();
 	if (s_debugging) {
 	    char buf[64];
 	    ::snprintf(buf,sizeof(buf),"<<< %s",m_name);
@@ -201,12 +207,16 @@ Debugger::~Debugger()
 
 void Debugger::setOutput(void (*outFunc)(const char *))
 {
+    out_mux.lock();
     s_output = outFunc ? outFunc : dbg_stderr_func;
+    out_mux.unlock();
 }
 
 void Debugger::setIntOut(void (*outFunc)(const char *))
 {
+    out_mux.lock();
     s_intout = outFunc;
+    out_mux.unlock();
 }
 
 void Debugger::enableOutput(bool enable)

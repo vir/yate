@@ -13,7 +13,7 @@ moddir="@libdir@/yate"
 confdir="@sysconfdir@/yate"
 s1="@MODULE_CFLAGS@"
 s2="-I@includedir@/yate"
-s3="@MODULE_LDFLAGS@"
+s3="@MODULE_LDFLAGS@ @MODULE_SYMBOLS@"
 s4="-lyate"
 
 while [ "$#" != 0 ]; do

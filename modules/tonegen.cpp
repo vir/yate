@@ -34,6 +34,7 @@ private:
     static const Tone *getBlock(const String &tone);
     String m_name;
     const Tone *m_tone;
+    DataBlock m_data;
     unsigned m_brate;
     unsigned m_total;
     unsigned long long m_time;
@@ -94,7 +95,7 @@ static const Tone t_specdial[] = { { 7600, tone421hz }, { 400, 0 }, { 0, 0 } };
 static const Tone t_ring[] = { { 8000, tone421hz }, { 32000, 0 }, { 0, 0 } };
 
 ToneSource::ToneSource(const String &tone)
-    : m_name(tone), m_tone(0), m_brate(16000), m_total(0), m_time(0)
+    : m_name(tone), m_tone(0), m_data(0,480), m_brate(16000), m_total(0), m_time(0)
 {
     Debug(DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
     m_tone = getBlock(tone);
@@ -148,14 +149,13 @@ void ToneSource::run()
     Debug(DebugAll,"ToneSource::run() [%p]",this);
     unsigned long long tpos = Time::now();
     m_time = tpos;
-    DataBlock data(0,480);
     int samp = 0; // sample number
     int dpos = 1; // position in data
     const Tone *tone = m_tone;
     int nsam = tone->nsamples;
     while (m_tone) {
-	short *d = (short *) data.data();
-	for (unsigned int i = data.length()/2; i--; samp++,dpos++) {
+	short *d = (short *) m_data.data();
+	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
 	    if (samp >= nsam) {
 		samp = 0;
 		const Tone *otone = tone;
@@ -181,9 +181,9 @@ void ToneSource::run()
 #endif
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data,data.length()/2);
-	m_total += data.length();
-	tpos += (data.length()*1000000ULL/m_brate);
+	Forward(m_data,m_data.length()/2);
+	m_total += m_data.length();
+	tpos += (m_data.length()*1000000ULL/m_brate);
     };
     m_time = Time::now() - m_time;
     m_time = (m_total*1000000ULL + m_time/2) / m_time;

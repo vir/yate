@@ -198,7 +198,7 @@ int Engine::run()
 {
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
-    if (s_super_handle)
+    if (s_super_handle >= 0)
 	install(new EngineSuperHandler);
     loadPlugins();
     Debug(DebugInfo,"plugins.count() = %d",plugins.count());

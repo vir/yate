@@ -27,6 +27,8 @@
 #error C++ is required
 #endif
 
+#include <stddef.h>
+
 struct timeval;
 	
 /**
@@ -54,6 +56,8 @@ bool abortOnBug(bool doAbort);
 
 /**
  * Standard debugging levels.
+ * The DebugFail level is special - it is always displayed and may abort
+ *  the program if @ref abortOnBug() is set.
  */
 enum DebugLevel {
     DebugFail = 0,
@@ -926,14 +930,14 @@ String operator+(const char *s1, const String &s2);
  * Prevent careless programmers from overwriting the string
  * @see TelEngine::String::operator=
  */
-inline char *strcpy(String dest, const char *src)
+inline char *strcpy(String &dest, const char *src)
     { dest = src; return (char *)dest.c_str(); }
 
 /**
  * Prevent careless programmers from overwriting the string
  * @see TelEngine::String::operator+=
  */
-inline char *strcat(String dest, const char *src)
+inline char *strcat(String &dest, const char *src)
     { dest += src; return (char *)dest.c_str(); }
 
 /**
@@ -1072,22 +1076,32 @@ public:
     /**
      * Constructs a Time object from the current time
      */
-    Time()
-	: m_time(now()) { }
+    inline Time()
+	: m_time(now())
+	{ }
 
     /**
      * Constructs a Time object from a given time
      * @param usec Time in microseconds
      */
-    Time(unsigned long long usec)
-	: m_time(usec) { }
+    inline Time(unsigned long long usec)
+	: m_time(usec)
+	{ }
 
     /**
      * Constructs a Time object from a timeval structure
      * @param tv Pointer to the timeval structure
      */
-    Time(struct timeval *tv)
-	: m_time(fromTimeval(tv)) { }
+    inline Time(struct timeval *tv)
+	: m_time(fromTimeval(tv))
+	{ }
+
+    /**
+     * Do-nothing destructor that keeps the compiler from complaining
+     *  about inlining derivates or members of Time type
+     */
+    inline ~Time()
+	{ }
 
     /**
      * Get time in seconds
@@ -1508,7 +1522,10 @@ private:
 };
 
 /**
- * A message handler
+ * The purpose of this class is to hold a message received method that is
+ *  called for matching messages. It holds as well the matching criteria
+ *  and priority among other handlers.
+ * @short A message handler
  */
 class MessageHandler : public String
 {
@@ -1546,7 +1563,8 @@ private:
 };
 
 /**
- * A message receiver to be invoked by a message relay;
+ * A multiple message receiver to be invoked by a message relay
+ * @short A multiple message receiver
  */
 class MessageReceiver : public GenObject
 {
@@ -1562,6 +1580,7 @@ public:
 
 /**
  * A message handler that allows to relay several messages to a single receiver
+ * @short A message handler relay
  */
 class MessageRelay : public MessageHandler
 {
@@ -1593,7 +1612,8 @@ class MutexPrivate;
 class ThreadPrivate;
 
 /**
- * Mutex support
+ * A simple mutual exclusion for locking access between threads
+ * @short Mutex support
  */
 class Mutex
 {
@@ -1659,8 +1679,8 @@ private:
 
 /**
  * A lock is a stack allocated (automatic) object that locks a mutex on
- * creation and unlocks it on destruction - typically when exiting a block
- * @short Mutex locking object
+ *  creation and unlocks it on destruction - typically when exiting a block
+ * @short Ephemeral mutex locking object
  */
 class Lock
 {
@@ -1672,6 +1692,14 @@ public:
      */
     inline Lock(Mutex &mutex, long long int maxwait = -1)
 	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
+
+    /**
+     * Create the lock, try to lock the mutex
+     * @param mutex Pointer to the mutex to lock
+     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     */
+    inline Lock(Mutex *mutex, long long int maxwait = -1)
+	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
 
     /**
      * Destroy the lock, unlock the mutex if it was locked
@@ -1694,21 +1722,42 @@ public:
 
 private:
     Mutex *m_mutex;
+
+    /** Make sure no Lock is ever created on heap */
+    inline void* operator new(size_t);
+
+    /** Never allocate an array of this class */
+    inline void* operator new[](size_t);
+
+    /** No copy constructor */
+    inline Lock(const Lock&);
 };
 
 /**
- * Thread support class
+ * This class holds the action to execute a certain task, usually in a
+ *  different execution thread.
+ * @short Encapsulates a runnable task
  */
-class Thread
+class Runnable
+{
+public:
+    /**
+     * This method is called in another thread to do the actual job.
+     * When it returns the job or thread terminates.
+     */
+    virtual void run() = 0;
+};
+
+/**
+ * A thread is a separate execution context that exists in the same address
+ *  space. Threads make better use of multiple processor machines and allow
+ *  blocking one execution thread while allowing other to run.
+ * @short Thread support class
+ */
+class Thread : public Runnable
 {
     friend class ThreadPrivate;
 public:
-    /**
-     * This method is called in the newly created thread.
-     * When it returns the thread terminates.
-     */
-    virtual void run() = 0;
-
     /**
      * This method is called when the current thread terminates.
      */
@@ -1788,7 +1837,10 @@ private:
 };
 
 /**
- * A message dispatcher
+ * The dispatcher class is a hub that holds a list of handlers to be called
+ *  for the messages that pass trough the hub. It can also handle a queue of
+ *  messages that are typically dispatched by a separate thread.
+ * @short A message dispatching hub
  */
 class MessageDispatcher : public GenObject
 {
@@ -2016,7 +2068,7 @@ public:
 
     /**
      * Enqueue a message in the message queue
-     * @param msg Pointer to the message to enqueue
+     * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if enqueued, false on error (already queued)
      */
     static bool enqueue(Message *msg);
@@ -2024,7 +2076,7 @@ public:
     /**
      * Convenience function.
      * Enqueue a new parameterless message in the message queue
-     * @param name Name of the empty message to put in queue
+     * @param name Name of the parameterless message to put in queue
      * @return True if enqueued, false on error (already queued)
      */
     inline static bool enqueue(const char *name)

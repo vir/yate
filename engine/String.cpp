@@ -78,6 +78,7 @@ const char *lookup(int value, const TokenDict *tokens, const char *defvalue)
 }
 
 #define MAX_MATCH 9
+#define INIT_HASH ((unsigned)-1)
 
 class StringMatchPrivate
 {
@@ -144,20 +145,20 @@ const String& String::empty()
 }
 
 String::String()
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String() [%p]",this);
 }
 
 String::String(const char *value, int len)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
     assign(value,len);
 }
 
 String::String(const String &value)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
@@ -167,7 +168,7 @@ String::String(const String &value)
 }
 
 String::String(char value, unsigned int repeat)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
     if (value && repeat) {
@@ -179,7 +180,7 @@ String::String(char value, unsigned int repeat)
 }
 
 String::String(int value)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%d) [%p]",value,this);
     char buf[64];
@@ -189,7 +190,7 @@ String::String(int value)
 }
 
 String::String(unsigned int value)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%u) [%p]",value,this);
     char buf[64];
@@ -199,7 +200,7 @@ String::String(unsigned int value)
 }
 
 String::String(bool value)
-    : m_string(0), m_length(0), m_hash(0), m_matches(0)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%u) [%p]",value,this);
     m_string = ::strdup(value ? "true" : "false");
@@ -246,7 +247,7 @@ String& String::assign(const char *value, int len)
 void String::changed()
 {
     clearMatches();
-    m_hash = 0;
+    m_hash = INIT_HASH;
     m_length = m_string ? ::strlen(m_string) : 0;
 }
 
@@ -702,7 +703,7 @@ String String::msgUnescape(const char *str, int *errptr, char extraEsc)
 
 unsigned int String::hash() const
 {
-    if (!m_hash)
+    if (m_hash == INIT_HASH)
 	m_hash = hash(m_string);
     return m_hash;
 }

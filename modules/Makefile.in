@@ -40,7 +40,7 @@ PROGS := $(PROGS) sipchan.yate
 endif
 
 ifneq (@HAVE_ORTP@,no)
-PROGS := $(PROGS) rtpchan.yate
+PROGS := $(PROGS) ortpchan.yate
 endif
 
 ifneq (@HAVE_IAX2@,no)
@@ -126,7 +126,7 @@ pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORTP_LIB@ @GLIB2_LIB@
 
-rtpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB2_INC@ @ORTP_LIB@ @GLIB2_LIB@
+ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @ORTP_LIB@
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

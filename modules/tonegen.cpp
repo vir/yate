@@ -32,7 +32,7 @@ using namespace TelEngine;
 
 static ObjList tones;
 static ObjList chans;
-static Mutex mutex;
+static Mutex mutex(true);
 
 typedef struct {
     int nsamples;

@@ -351,6 +351,25 @@ AC_SUBST(IAX2_INC)
 AC_SUBST(IAX2_LIB)
 AC_SUBST(IAX2_DEP)
 
+HAVE_SPANDSP=no
+SPANDSP_INC=""
+SPANDSP_LIB=""
+AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp=DIR],[use spandsp from DIR (default /usr)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=/usr])
+if [[ "x$ac_cv_use_spandsp" != "xno" ]]; then
+AC_MSG_CHECKING([for spandsp in $ac_cv_use_spandsp])
+incdsp="$ac_cv_use_spandsp/include"
+libdsp="$ac_cv_use_spandsp/lib/libspandsp.so"
+if [[ -f "$incdsp/spandsp/t30.h" -a -f "$libdsp" ]]; then
+    HAVE_SPANDSP=yes
+    SPANDSP_INC="-I$incdsp/spandsp -I$incdsp"
+    SPANDSP_LIB="-L$ac_cv_use_spandsp/lib -lspandsp -ltiff"
+fi
+AC_MSG_RESULT([$HAVE_SPANDSP])
+fi
+AC_SUBST(HAVE_SPANDSP)
+AC_SUBST(SPANDSP_INC)
+AC_SUBST(SPANDSP_LIB)
+
 HAVE_GTK=no
 GTK_INC=""
 GTK_LIB=""

@@ -48,6 +48,10 @@ ifneq (@HAVE_IAX2@,no)
 PROGS := $(PROGS) iaxchan.yate
 endif
 
+ifneq (@HAVE_SPANDSP@,no)
+PROGS := $(PROGS) faxchan.yate
+endif
+
 ifneq (@HAVE_GSM@,no)
 PROGS := $(PROGS) gsmcodec.yate
 endif
@@ -132,6 +136,9 @@ ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB_INC@ @ORTP_LIB@
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
+
+faxchan.yate: LOCALLIBS = @SPANDSP_LIB@
+faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
 

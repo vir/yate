@@ -47,6 +47,10 @@ ifneq (@HAVE_GSM@,no)
 PROGS := $(PROGS) gsmcodec.yate
 endif
 
+ifneq (@HAVE_GTK@,no)
+PROGS := $(PROGS) gtkclient.yate
+endif
+
 LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
@@ -121,3 +125,5 @@ sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORT
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
+
+gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@

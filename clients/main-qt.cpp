@@ -52,9 +52,11 @@ bool QtClientHandler::received(Message &msg)
 	if (called.null())
 		return false;
 	String mesg;
+	if (!caller)
+		caller = msg.getValue("callername");
 	mesg << "You have a call from " << caller << " for " << called ;
 	Debug(DebugAll,"%s",mesg.c_str());
-	m_frm->setDialer (caller.c_str());
+	m_frm->setDialer (caller.safe());
 	if (!m_frm->setStatus(YCS_RINGIN)) {
 		Debug (DebugAll, "Unable to proceed with call: busy");
 		return false;

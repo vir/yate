@@ -98,6 +98,7 @@ public:
     int soundcard_setinput(bool force);
     int soundcard_setoutput(bool force);
     int time_has_passed(void);
+    void answer();
     inline void setTarget(const char* target = 0)
 	{ m_target = target; }
     inline const String& getTarget() const
@@ -395,6 +396,18 @@ void OssChan::disconnected(bool final, const char *reason)
     setTarget();
 }
 
+void OssChan::answer()
+{
+    Message* m = new Message("call.answered");
+    m->addParam("driver","oss");
+    String tmp("oss/");
+    tmp += m_dev;
+    m->addParam("id",tmp);
+    if (m_target)
+	m->addParam("targetid",m_target);
+    Engine::enqueue(m);
+}
+
 bool OssHandler::received(Message &msg)
 {
     String dest(msg.getValue("callto"));
@@ -416,6 +429,7 @@ bool OssHandler::received(Message &msg)
     if (dd && chan->connect(dd)) {
 	chan->setTarget(msg.getValue("id"));
 	msg.addParam("targetid",dest);
+	chan->answer();
 	chan->deref();
     }
     else {

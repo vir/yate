@@ -112,6 +112,19 @@ SIPBody* SDPBody::clone() const
     return new SDPBody(*this);
 }
 
+const NamedString* SDPBody::getLine(const char *name) const
+{
+    if (!(name && *name))
+	return 0;
+    const ObjList* l = &m_lines;
+    for (; l; l = l->next()) {
+    	const NamedString* t = static_cast<NamedString*>(l->get());
+        if (t && (t->name() &= name))
+	    return t;
+    }
+    return 0;
+}
+
 BinaryBody::BinaryBody(const String& type, const char *buf, int len)
     : SIPBody(type)
 {

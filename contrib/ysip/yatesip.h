@@ -55,6 +55,8 @@ public:
 	{ return m_type; }
     static SIPBody* build(const char *buf, int len, const String& type);
     const DataBlock& getBody() const;
+    virtual bool isSDP() const
+	{ return false; }
     virtual SIPBody* clone() const = 0;
 protected:
     virtual void buildBody() const = 0;
@@ -68,7 +70,14 @@ public:
     SDPBody();
     SDPBody(const String& type, const char *buf, int len);
     virtual ~SDPBody();
+    virtual bool isSDP() const
+	{ return true; }
     virtual SIPBody* clone() const;
+    inline const ObjList& lines() const
+	{ return m_lines; }
+    inline void addLine(const char *name, const char *value = 0)
+	{ m_lines.append(new NamedString(name,value)); }
+    const NamedString* getLine(const char *name) const;
 protected:
     SDPBody(const SDPBody& original);
     virtual void buildBody() const;
@@ -148,6 +157,11 @@ public:
     static SIPMessage* fromParsing(SIPParty* ep, const char *buf, int len = -1);
 
     /**
+     * Complete missing fields with defaults taken from a SIP engine
+     */
+    void complete(SIPEngine* engine);
+
+    /**
      * Copy an entire header line (including all parameters) from another message
      * @param message Pointer to the message to copy the header from
      * @param name Name of the header to copy
@@ -212,6 +226,12 @@ public:
     const NamedString* getParam(const char* name, const char* param) const;
 
     /**
+     * Append a new header line constructed from name and content
+     */
+    inline void addHeader(const char* name, const char* value = 0)
+	{ header.append(new HeaderLine(name,value)); }
+
+    /**
      * Creates a binary buffer from a SIPMessage.
      */
     const DataBlock& getBuffer() const;
@@ -220,6 +240,11 @@ public:
      * Creates a text buffer from the headers.
      */
     const String& getHeaders() const;
+
+    /**
+     * Set a new body for this message
+     */
+    void setBody(SIPBody* newbody = 0);
 
     /**
      * Sip Version
@@ -439,9 +464,14 @@ public:
     virtual SIPEvent* getEvent(int state, int timeout);
 
     /**
-     * Creates a final response message
+     * Creates and transmits a final response message
      */
     void setResponse(int code, const char* reason);
+
+    /**
+     * Transmits a final response message
+     */
+    void setResponse(SIPMessage* message);
 
     /**
      * Set an arbitrary pointer as user specific data

@@ -161,6 +161,18 @@ SIPMessage::~SIPMessage()
     body = 0;
 }
 
+void SIPMessage::complete(SIPEngine* engine)
+{
+    if (!engine)
+	return;
+    if (!getHeader("Max-Forwards")) {
+	String m(engine->getMaxForwards());
+	addHeader("Max-Forwards",m);
+    }
+    if (!getHeader("User-Agent"))
+	addHeader("User-Agent",engine->getUserAgent());
+}
+
 bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
 {
     const HeaderLine* hl = message ? message->getHeader(name) : 0;
@@ -346,6 +358,15 @@ const DataBlock& SIPMessage::getBuffer() const
 	    m_data += body->getBody();
     }
     return m_data;
+}
+
+void SIPMessage::setBody(SIPBody* newbody)
+{
+    if (newbody == body)
+	return;
+    if (body)
+	delete body;
+    body = newbody;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

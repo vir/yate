@@ -81,8 +81,10 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
     if (m_lastMessage)
 	m_lastMessage->deref();
     m_lastMessage = message;
-    if (m_lastMessage)
+    if (m_lastMessage) {
 	m_lastMessage->ref();
+	m_lastMessage->complete(m_engine);
+    }
 }
 
 void SIPTransaction::setTimeout(unsigned long long delay, unsigned int count)
@@ -159,13 +161,18 @@ SIPEvent* SIPTransaction::getEvent()
     return e;
 }
 
-void SIPTransaction::setResponse(int code, const char* reason)
+void SIPTransaction::setResponse(SIPMessage* message)
 {
-    setLatestMessage(new SIPMessage(m_firstMessage, code, reason));
+    setLatestMessage(message);
     m_lastMessage->deref();
     changeState(Finish);
 }
-    
+
+void SIPTransaction::setResponse(int code, const char* reason)
+{
+    setResponse(new SIPMessage(m_firstMessage, code, reason));
+}
+
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
     Debug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",

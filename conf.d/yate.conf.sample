@@ -11,6 +11,16 @@
 ; Note that you MUST NOT add a path separator at the end
 ;modpath=
 
+; maxworkers: int: Maximum number of worker threads the engine can create
+;maxworkers=10
+
+; restarts: int: Time in seconds after startup the engine will try to restart
+;  to clean up any accumulating problems. Restarts are performed only when
+;  started in supervised mode
+; If at restart time at least one of the modules is busy it will try again to
+;  restart every 10 seconds
+;restarts=0
+
 
 [modules]
 ; This section should hold one line for each module whose loading behaviour

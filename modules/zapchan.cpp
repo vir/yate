@@ -590,7 +590,7 @@ PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, in
       m_restart(0), m_chans(0), m_ok(false)
 {
     Debug(DebugAll,"PriSpan::PriSpan(%p,%d,%d,%d) [%p]",_pri,span,chans,fd,this);
-    ZapChan **ch = new (ZapChan *)[chans];
+    ZapChan **ch = new ZapChan* [chans];
     for (int i = 1; i <= chans; i++)
 	ch[i-1] = (i == dchan) ? 0 : new ZapChan(this,i,s_buflen);
     m_chans = ch;

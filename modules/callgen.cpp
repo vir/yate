@@ -36,10 +36,12 @@ static Configuration s_cfg;
 static bool s_runs = false;
 static int s_total = 0;
 static int s_current = 0;
+static int s_ringing = 0;
 static int s_answers = 0;
 
-static int s_maxcalls = 0;
 static int s_numcalls = 0;
+
+static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|load|save|set paramname[=value]}";
 
 class GenConnection : public DataEndpoint
 {
@@ -52,6 +54,7 @@ public:
     void ringing();
     void answered();
     void hangup();
+    void makeSource();
     inline const String& id() const
 	{ return m_id; }
     inline const String& status() const
@@ -63,7 +66,7 @@ public:
     inline unsigned long long age() const
 	{ return Time::now() - m_start; }
     static GenConnection* find(const String& id);
-    static bool oneCall(String* number = 0);
+    static bool oneCall(String* target = 0);
 private:
     String m_id;
     String m_status;
@@ -139,26 +142,40 @@ GenConnection* GenConnection::find(const String& id)
     return l ? static_cast<GenConnection*>(l->get()) : 0;
 }
 
-bool GenConnection::oneCall(String* number)
+bool GenConnection::oneCall(String* target)
 {
-    int n_min = s_cfg.getIntValue("general","minnum");
-    if (n_min <= 0)
-	return false;
-    int n_max = s_cfg.getIntValue("general","maxnum",n_min);
-    if (n_max < n_min)
-	return false;
-    String num((unsigned)(n_min + ((n_max - n_min) * ::random() / RAND_MAX)));
     Message m("call.route");
     m.addParam("driver","callgen");
     m.addParam("caller",s_cfg.getValue("general","caller","yate"));
-    m.addParam("called",num);
-    if (!Engine::dispatch(m) || m.retValue().null()) {
-	Debug("CallGen",DebugInfo,"No route to call '%s'",num.c_str());
-	return false;
+    String callto(s_cfg.getValue("general","callto"));
+    if (callto.null()) {
+	String called(s_cfg.getValue("general","called"));
+	if (called.null()) {
+	    int n_min = s_cfg.getIntValue("general","minnum");
+	    if (n_min <= 0)
+		return false;
+	    int n_max = s_cfg.getIntValue("general","maxnum",n_min);
+	    if (n_max < n_min)
+		return false;
+	    called = (unsigned)(n_min + (((n_max - n_min) * (long long)::random()) / RAND_MAX));
+	}
+	if (target)
+	    *target = called;
+	m.addParam("called",called);
+	if (!Engine::dispatch(m) || m.retValue().null()) {
+	    Debug("CallGen",DebugInfo,"No route to call '%s'",called.c_str());
+	    return false;
+	}
+	callto = m.retValue();
+	m.retValue().clear();
+    }
+    if (target) {
+	if (*target)
+	    *target << " ";
+	*target << callto;
     }
     m = "call.execute";
-    m.addParam("callto",m.retValue());
-    m.retValue().clear();
+    m.addParam("callto",callto);
     GenConnection* conn = new GenConnection;
     m.addParam("id",conn->id());
     m.userData(conn);
@@ -170,12 +187,10 @@ bool GenConnection::oneCall(String* number)
 	    conn->answered();
 	}
 	conn->deref();
-	if (number)
-	    *number = num;
 	return true;
     }
     Debug("CallGen",DebugInfo,"Rejecting '%s' unconnected to '%s'",
-	conn->id().c_str(),m.getValue("callto"));
+	conn->id().c_str(),callto.c_str());
     conn->destruct();
     return false;
 }
@@ -188,6 +203,12 @@ void GenConnection::disconnected(bool final, const char *reason)
 void GenConnection::ringing()
 {
     Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
+    s_mutex.lock();
+    ++s_ringing;
+    bool media =s_cfg.getBoolValue("general","earlymedia",true);
+    s_mutex.unlock();
+    if (media)
+	makeSource();
 }
 
 void GenConnection::answered()
@@ -196,10 +217,27 @@ void GenConnection::answered()
     s_mutex.lock();
     ++s_answers;
     s_mutex.unlock();
+    makeSource();
 }
 
 void GenConnection::hangup()
 {
+}
+
+void GenConnection::makeSource()
+{
+    if (getSource())
+	return;
+    s_mutex.lock();
+    String src(s_cfg.getValue("general","source"));
+    s_mutex.unlock();
+    if (src) {
+	Message m("chan.attach");
+	m.addParam("id",m_id);
+	m.addParam("source",src);
+	m.userData(this);
+	Engine::dispatch(m);
+    }
 }
 
 bool ConnHandler::received(Message &msg, int id)
@@ -232,9 +270,12 @@ void GenThread::run()
 {
     for (;;) {
 	::usleep(1000000);
-	if (!s_runs || (s_current >= s_maxcalls) || (s_numcalls <= 0))
+	Lock lock(s_mutex);
+	int maxcalls = s_cfg.getIntValue("general","maxcalls",5);
+	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))
 	    continue;
 	--s_numcalls;
+	lock.drop();
 	GenConnection::oneCall();
     }
 }
@@ -243,6 +284,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 {
     if (line.startSkip("set")) {
 	int q = line.find('=');
+	s_mutex.lock();
 	if (q >= 0) {
 	    String val = line.substr(q+1).trimBlanks();
 	    line = line.substr(0,q).trimBlanks().toLower();
@@ -251,42 +293,82 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	}
 	else {
 	    line.toLower();
-	    rval << "Value of '" << line << "' is '" << s_cfg.getValue("general","line") << "'";
+	    rval << "Value of '" << line << "' is '" << s_cfg.getValue("general",line) << "'";
 	}
+	s_mutex.unlock();
     }
     else if (line == "info") {
+	s_mutex.lock();
 	rval << "Made " << s_total << " calls, "
+	    << s_ringing << " ring, "
 	    << s_answers << " answered, "
 	    << s_current << " running";
 	if (s_runs)
 	    rval << ", " << s_numcalls << " to go";
+	s_mutex.unlock();
     }
     else if (line == "start") {
+	s_mutex.lock();
 	s_numcalls = s_cfg.getIntValue("general","numcalls",100);
 	rval << "Generating " << s_numcalls << " new calls";
 	s_runs = true;
+	s_mutex.unlock();
     }
     else if (line == "stop") {
+	s_mutex.lock();
 	s_runs = false;
 	s_numcalls = 0;
+	s_mutex.unlock();
 	s_calls.clear();
 	rval << "Stopping generator and clearing calls";
+    }
+    else if (line == "drop") {
+	s_mutex.lock();
+	bool tmp = s_runs;
+	s_runs = false;
+	s_mutex.unlock();
+	s_calls.clear();
+	s_runs = tmp;
+	rval << "Clearing calls and continuing";
     }
     else if (line == "pause") {
 	s_runs = false;
 	rval << "No longer generating new calls";
     }
     else if (line == "resume") {
+	s_mutex.lock();
 	rval << "Resumed generating new calls, " << s_numcalls << " to go";
 	s_runs = true;
+	s_mutex.unlock();
     }
     else if (line == "single") {
-	String num;
-	if (GenConnection::oneCall(&num))
-	    rval << "Calling " << num;
-	else
+	String dest;
+	if (GenConnection::oneCall(&dest))
+	    rval << "Calling " << dest;
+	else {
 	    rval << "Failed to start call";
+	    if (dest)
+		rval << " to " << dest;
+	}
     }
+    else if (line == "load") {
+	s_mutex.lock();
+	s_cfg.load();
+	rval << "Loaded config from " << s_cfg;
+	s_mutex.unlock();
+    }
+    else if (line == "save") {
+	s_mutex.lock();
+	if (s_cfg.getBoolValue("general","cansave",true)) {
+	    s_cfg.save();
+	    rval << "Saved config to " << s_cfg;
+	}
+	else
+	    rval << "Saving is disabled - to enable: callgen set cansave=true";
+	s_mutex.unlock();
+    }
+    else if (line.null() || (line == "help") || (line == "?"))
+	rval << "Usage: " << s_help;
     else
 	return false;
     rval << "\n";
@@ -301,7 +383,9 @@ bool CmdHandler::received(Message &msg, int id)
 	    tmp = msg.getValue("module");
 	    if (tmp.null() || (tmp == "callgen")) {
 		msg.retValue() << "name=callgen,type=misc;total=" << s_total
-		    << ",current=" << s_current << "\n";
+		    << ",current=" << s_current
+		    << ",ring=" << s_ringing
+		    << ",answered=" << s_answers << "\n";
 		if (tmp)
 		    return true;
 	    }
@@ -314,7 +398,7 @@ bool CmdHandler::received(Message &msg, int id)
 	case Help:
 	    tmp = msg.getValue("line");
 	    if (tmp.null() || (tmp == "callgen")) {
-		msg.retValue() << "  callgen {start|stop|pause|resume|single|info|set paramname=value}\n";
+		msg.retValue() << "  " << s_help << "\n";
 		if (tmp)
 		    return true;
 	    }
@@ -340,7 +424,6 @@ void CallGenPlugin::initialize()
     Output("Initializing module Call Generator");
     s_cfg = Engine::configFile("callgen");
     s_cfg.load();
-    s_maxcalls = s_cfg.getIntValue("general","maxcalls",5);
     if (m_first) {
 	m_first = false;
 

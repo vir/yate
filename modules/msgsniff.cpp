@@ -27,8 +27,8 @@ public:
 
 bool SniffHandler::received(Message &msg)
 {
-    Output("Sniffed message '%s' time=%llu thread=%p",
-	msg.c_str(),msg.msgTime().usec(),Thread::current());
+    Output("Sniffed '%s' time=%llu thread=%p retval='%s'",
+	msg.c_str(),msg.msgTime().usec(),Thread::current(),msg.retValue().c_str());
     unsigned n = msg.length();
     for (unsigned i = 0; i < n; i++) {
 	NamedString *s = msg.getParam(i);

@@ -174,6 +174,7 @@ Engine::~Engine()
     assert(this == s_self);
     m_dispatcher.clear();
     plugins.clear();
+    m_libs.clear();
     s_self = 0;
 }
 

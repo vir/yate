@@ -16,6 +16,12 @@ typedef gsm_signal gsm_block[160];
 
 using namespace TelEngine;
 
+static TranslatorCaps caps[] = {
+    { { "slin", 16000, 320 }, { "gsm", 1650, 33 } },
+    { { "gsm", 1650, 33 }, { "slin", 16000, 320 } },
+    { { 0, 0, 0 }, { 0, 0, 0 } }
+};
+
 int count = 0;
 
 class GsmPlugin : public Plugin, public TranslatorFactory
@@ -25,6 +31,7 @@ public:
     ~GsmPlugin();
     virtual void initialize() { }
     virtual DataTranslator *create(const String &sFormat, const String &dFormat);
+    virtual const TranslatorCaps *getCapabilities() const;
 };
 
 class GsmCodec : public DataTranslator
@@ -117,6 +124,11 @@ DataTranslator *GsmPlugin::create(const String &sFormat, const String &dFormat)
     else if (sFormat == "gsm" && dFormat == "slin")
 	return new GsmCodec(sFormat,dFormat,false);
     else return 0;
+}
+
+const TranslatorCaps *GsmPlugin::getCapabilities() const
+{
+    return caps;
 }
 
 INIT_PLUGIN(GsmPlugin);

@@ -17,6 +17,31 @@
 namespace TelEngine {
 
 /**
+ * A structure to hold information about a data format.
+ */
+typedef struct {
+    /** Standard no-blanks lowcase format name */
+    const char *name;
+    /** Data rate in octets/second, 0 for variable */
+    int rate;
+    /** Frame size in octets, 0 for non-framed formats */
+    int size;
+} FormatInfo;
+
+/**
+ * A structure to build (mainly static) translator capability tables.
+ * A table of such structures must end with an entry with null format names.
+ */
+typedef struct {
+    /** Description of source (input) data format */
+    FormatInfo src;
+    /** Description of destination (output) data format */
+    FormatInfo dest;
+    /** Computing cost in KIPS of converting a stream from src to dest */
+    int cost;
+} TranslatorCaps;
+
+/**
  * The DataBlock holds a data buffer with no specific formatting.
  * @short A class that holds just a block of raw data
  */
@@ -515,6 +540,12 @@ public:
      * @return A pointer to a DataTranslator object or NULL
      */
     virtual DataTranslator *create(const String &sFormat, const String &dFormat) = 0;
+
+    /**
+     * Get the capabilities table of this translator
+     * @return A pointer to the first element of the capabilities table
+     */
+    virtual const TranslatorCaps *getCapabilities() const = 0;
 };
 
 }; // namespace TelEngine

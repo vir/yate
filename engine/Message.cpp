@@ -45,18 +45,18 @@ int Message::decode(const char *str, String &id)
     const char *sep2 = ::strchr(sep+1,':');
     if (!sep2)
 	return sep-str;
-    id.assign(str+s.length(),(sep-str)-s.length()-1);
+    id.assign(str+s.length(),(sep-str)-s.length());
     int err = -1;
     id = id.msgUnescape(&err,':');
     if (err >= 0)
 	return err+s.length();
     String t(sep+1,sep2-sep-1);
-    unsigned int tm;
+    unsigned int tm = 0;
     t >> tm;
     if (!t.null())
 	return sep-str;
     m_time=1000000ULL*tm;
-    return commonDecode(str,sep2-str);
+    return commonDecode(str,sep2-str+1);
 }
 
 int Message::decode(const char *str, bool &received, const char *id)
@@ -69,11 +69,11 @@ int Message::decode(const char *str, bool &received, const char *id)
     const char *sep = ::strchr(str+s.length(),':');
     if (!sep)
 	return s.length();
-    String rcvd(str+s.length(),(sep-str)-s.length()-1);
+    String rcvd(str+s.length(),(sep-str)-s.length());
     rcvd >> received;
     if (!rcvd.null())
 	return s.length();
-    return commonDecode(str,sep-str);
+    return sep[1] ? commonDecode(str,sep-str+1) : -2;
 }
 
 void Message::commonEncode(String &str) const

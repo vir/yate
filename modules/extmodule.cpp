@@ -26,6 +26,7 @@
 using namespace TelEngine;
 
 static Configuration s_cfg;
+static ObjList s_objects;
 
 class ExtModReceiver;
 
@@ -87,6 +88,7 @@ public:
     virtual bool received(Message &msg, int id);
     void processLine(const char *line);
     void outputLine(const char *line);
+    void reportError(const char *line);
     bool create(const char *script, const char *args);
     void run();
 private:
@@ -95,6 +97,7 @@ private:
     ExtModChan *m_chan;
     String m_script, m_args;
     ObjList m_waiting;
+    ObjList m_relays;
 };
 
 class ExtThread : public Thread
@@ -124,6 +127,7 @@ public:
 private:
     ExtModHandler *m_handler;
 };
+
 
 ExtModSource::ExtModSource(int fd)
     : m_fd(fd), m_brate(16000), m_total(0)
@@ -215,18 +219,19 @@ ExtModChan::ExtModChan(const char *file, int type)
 	    setSource(new ExtModSource(rfifo[0]));
 	    getSource()->deref();
     }
+    s_objects.append(this);
     m_recv = new ExtModReceiver(file,"",wfifo[0],rfifo[1],this);
 }
 
 ExtModChan::~ExtModChan()
 {
     Debug(DebugAll,"ExtModChan::~ExtModChan() [%p]",this);
+    s_objects.remove(this,false);
 }
 
 void ExtModChan::disconnected()
 {
     Debugger debug("ExtModChan::disconnected()"," [%p]",this);
-//    destruct();
 }
 
 MsgHolder::MsgHolder(Message &msg)
@@ -245,12 +250,27 @@ ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, in
       m_chan(chan), m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
+    s_objects.append(this);
     new ExtThread(this);
 }
 
 ExtModReceiver::~ExtModReceiver()
 {   
-    Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
+    Debug(DebugAll,"ExtModReceiver::~ExtModReceiver()"," [%p] pid=%d",this,m_pid);
+    s_objects.remove(this,false);
+    /* Make sure we release all pending messages and not accept new ones */
+    if (!Engine::exiting())
+	m_relays.clear();
+    else {
+	ObjList *p = &m_relays;
+	for (; p; p=p->next())
+	    p->setDelete(false);
+    }
+    if (m_waiting.get()) {
+	while (m_waiting.get())
+	    m_waiting.remove(false);
+	Thread::yield();
+    }
     /* Give the external script a chance to die gracefully */
     ::kill(m_pid,SIGTERM);
     ::close(m_in);
@@ -268,11 +288,15 @@ bool ExtModReceiver::received(Message &msg, int id)
 {
     MsgHolder h(msg);
     m_waiting.append(&h);
+#ifdef DEBUG
     Debug(DebugAll,"ExtMod [%p] queued message '%s' [%p]",this,msg.c_str(),&msg);
+#endif
     outputLine(msg.encode(h.m_id));
     while (m_waiting.find(&h))
 	Thread::yield();
+#ifdef DEBUG
     Debug(DebugAll,"ExtMod [%p] message '%s' [%p] returning %s",this,msg.c_str(),&msg, h.m_ret ? "true" : "false");
+#endif
     return h.m_ret;
 }
 
@@ -376,33 +400,99 @@ void ExtModReceiver::run()
 
 void ExtModReceiver::outputLine(const char *line)
 {
-    Debug("ExtModReceiver",DebugInfo,"outputLine '%s'", line);
+#ifdef DEBUG
+    Debug("ExtModReceiver",DebugAll,"outputLine '%s'", line);
+#endif
     ::write(m_out,line,::strlen(line));
     char nl = '\n';
     ::write(m_out,&nl,sizeof(nl));
 }
 
+void ExtModReceiver::reportError(const char *line)
+{
+    Debug("ExtModReceiver",DebugWarn,"Error: '%s'", line);
+    outputLine("Error in: " + String(line));
+}
+
+static bool startSkip(String &s, const char *keyword)
+{
+    if (s.startsWith(keyword,false)) {
+        s >> keyword;
+        return true;
+    }
+    return false;
+}
+
 void ExtModReceiver::processLine(const char *line)
 {
-    Debug("ExtModReceiver",DebugInfo,"processLine '%s'", line);
+#ifdef DEBUG
+    Debug("ExtModReceiver",DebugAll,"processLine '%s'", line);
+#endif
     ObjList *p = &m_waiting;
     for (; p; p=p->next()) {
 	MsgHolder *msg = static_cast<MsgHolder *>(p->get());
 	if (msg && msg->decode(line)) {
+#ifdef DEBUG
 	    Debug("ExtModReceiver",DebugInfo,"Matched message");
+#endif
 	    p->remove(false);
 	    return;
 	}
     }
-    Message m("");
-    String id;
-    if (m.decode(line,id) == -2) {
-	Debug("ExtModReceiver",DebugInfo,"Created message [%p]",this);
-	outputLine(m.encode(Engine::dispatch(m),id));
-	Debug("ExtModReceiver",DebugInfo,"Dispatched message [%p]",this);
+    String id(line);
+    if (startSkip(id,"%%>install:")) {
+	int prio = 100;
+	id >> prio >> ":";
+	bool ok = true;
+	ObjList *p = &m_relays;
+	for (; p; p=p->next()) {
+	    MessageRelay *r = static_cast<MessageRelay *>(p->get());
+	    if (r && (*r == id)) {
+		ok = false;
+		break;
+	    }
+	}
+	if (ok) {
+	    MessageRelay *r = new MessageRelay(id,this,0,prio);
+	    m_relays.append(r);
+	    Engine::install(r);
+	}
+	Debug("ExtModReceiver",DebugAll,"Install '%s', prio %d %s", id.c_str(),prio,ok ? "ok" : "failed");
+	String out("%%<install:");
+	out << prio << ":" << id << ":" << ok;
+	outputLine(out);
 	return;
     }
-    Debug("ExtModReceiver",DebugWarn,"Error: '%s'", line);
+    else if (startSkip(id,"%%>uninstall:")) {
+	int prio = 0;
+	bool ok = false;
+	ObjList *p = &m_relays;
+	for (; p; p=p->next()) {
+	    MessageRelay *r = static_cast<MessageRelay *>(p->get());
+	    if (r && (*r == id)) {
+		prio = r->priority();
+		p->remove();
+		ok = true;
+		break;
+	    }
+	}
+	Debug("ExtModReceiver",DebugAll,"Uninstall '%s' %s", id.c_str(),ok ? "ok" : "failed");
+	String out("%%<uninstall:");
+	out << prio << ":" << id << ":" << ok;
+	outputLine(out);
+	return;
+    }
+    else {
+	Message m("");
+	if (m.decode(line,id) == -2) {
+#ifdef DEBUG
+	    Debug("ExtModReceiver",DebugAll,"Created message [%p]",this);
+#endif
+	    outputLine(m.encode(Engine::dispatch(m),id));
+	    return;
+	}
+    }
+    reportError(line);
 }
 
 bool ExtModHandler::received(Message &msg)
@@ -452,6 +542,7 @@ ExtModulePlugin::ExtModulePlugin()
 ExtModulePlugin::~ExtModulePlugin()
 {
     Output("Unloading module ExtModule");
+    s_objects.clear();
 }
 
 void ExtModulePlugin::initialize()

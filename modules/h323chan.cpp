@@ -80,21 +80,35 @@ const char* h323_formats[] = {
     "G.711-ALaw-64k", "alaw",
     "G.711-uLaw-64k", "mulaw",
     "GSM-06.10", "gsm",
+    "MS-GSM", "msgsm",
     "SpeexNarrow", "speex",
     "LPC-10", "lpc10",
-    "MS-GSM", "msgsm",
-    "PCM-16", "slin",
-    "G.728", "g728",
-    "G.729", "g729",
+    "iLBC", "ilbc",
     "G.723", "g723",
     "G.726", "g726",
+    "G.728", "g728",
+    "G.729", "g729",
+    "PCM-16", "slin",
 #if 0
     "G.729A", "g729a",
     "G.729B", "g729b",
     "G.729A/B", "g729ab",
+    "G.723.1", "g723.1",
     "G.723.1(5.3k)", "g723.1-5k3",
     "G.723.1A(5.3k)", "g723.1a-5k3",
     "G.723.1A(6.3k)", "g723.1a-6k3",
+    "G.723.1A(6.3k)-Cisco", "g723.1a-6k3-cisco",
+    "G.726-16k", "g726-16k",
+    "G.726-24k", "g726-24k",
+    "G.726-32k", "g726-32k",
+    "G.726-40k", "g726-40k",
+    "iLBC-15k2", "ilbc-15k2",
+    "iLBC-13k3", "ilbc-13k3",
+    "SpeexNarrow-18.2k", "speex-18k2",
+    "SpeexNarrow-15k", "speex-15k",
+    "SpeexNarrow-11k", "speex-11k",
+    "SpeexNarrow-8k", "speex-8k",
+    "SpeexNarrow-5.95k", "speex-5k95",
 #endif
     0
 };
@@ -543,15 +557,73 @@ H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
     return new YateH323Connection(*this,callReference,userData);
 }
 
+// This class is used just to find out if a capability is registered
+class FakeH323CapabilityRegistration : public H323CapabilityRegistration
+{
+    PCLASSINFO(FakeH323CapabilityRegistration,H323CapabilityRegistration);
+public:
+    FakeH323CapabilityRegistration()
+	: H323CapabilityRegistration("[fake]")
+	{ }
+    static void ListRegistered(int level);
+    static bool IsRegistered(const PString& name);
+    virtual H323Capability* Create(H323EndPoint& ep) const
+	{ return 0; }
+};
+
+void FakeH323CapabilityRegistration::ListRegistered(int level)
+{
+    PWaitAndSignal mutex(H323CapabilityRegistration::GetMutex());
+    H323CapabilityRegistration* find = registeredCapabilitiesListHead;
+    for (; find; find = static_cast<FakeH323CapabilityRegistration*>(find)->link)
+	Debug(level,"Registed capability: '%s'",(const char*)*find);
+}
+
+bool FakeH323CapabilityRegistration::IsRegistered(const PString& name)
+{
+    PWaitAndSignal mutex(H323CapabilityRegistration::GetMutex());
+    H323CapabilityRegistration* find = registeredCapabilitiesListHead;
+    for (; find; find = static_cast<FakeH323CapabilityRegistration*>(find)->link)
+	if (*find == name)
+	    return true;
+    return false;
+}
+
 bool YateH323EndPoint::Init(void)
 {
+    int dump = s_cfg.getIntValue("general","dumpcodecs");
+    if (dump > 0)
+	FakeH323CapabilityRegistration::ListRegistered(dump);
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
     const char** f = h323_formats;
     for (; *f; f += 2) {
-	if (s_cfg.getBoolValue("codecs",f[1],defcodecs)) {
-	    String tmp(f[0]);
+	bool ok = false;
+	bool fake = false;
+	String tmp(s_cfg.getValue("codecs",f[1]));
+	if ((tmp == "fake") || (tmp == "pretend")) {
+	    ok = true;
+	    fake = true;
+	}
+	else
+	    ok = tmp.toBoolean(defcodecs);
+	if (ok) {
+	    tmp = f[0];
 	    tmp += "*{sw}";
+	    PINDEX init = GetCapabilities().GetSize();
 	    AddAllCapabilities(0, 0, tmp.c_str());
+	    PINDEX num = GetCapabilities().GetSize() - init;
+	    if (fake && !num) {
+		// failed to add so pretend we support it in hardware
+		tmp = f[0];
+		tmp += "*{hw}";
+		AddAllCapabilities(0, 0, tmp.c_str());
+		num = GetCapabilities().GetSize() - init;
+	    }
+	    if (num)
+		Debug(DebugAll,"H.323 added %d capabilities '%s'",num,tmp.c_str());
+	    else
+		// warn if codecs were disabled by default
+		Debug(defcodecs ? DebugInfo : DebugWarn,"H323 failed to add capability '%s'",tmp.c_str());
 	}
     }
 
@@ -966,6 +1038,8 @@ BOOL YateH323Connection::decodeCapability(const H323Capability & capability, con
     String fname((const char *)capability.GetFormatName());
     // turn capability name into format name
     if (fname.endsWith("{sw}",false))
+	fname = fname.substr(0,fname.length()-4);
+    if (fname.endsWith("{hw}",false))
 	fname = fname.substr(0,fname.length()-4);
     OpalMediaFormat oformat(fname, FALSE);
     int pload = oformat.GetPayloadType();

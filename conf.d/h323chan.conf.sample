@@ -4,6 +4,9 @@
 ; debug: int: OpenH323 debug level
 ;debug=0
 
+; dumpcodecs: int: Debug level to dump registered OpenH323 codecs, 0 disables
+;dumpcodecs=0
+
 ; vendor: string: Vendor name
 ;vendor=Null Team
 
@@ -32,23 +35,50 @@
 ; passtrough_rtp: bool: default: no
 ;passtrough_rtp=no
 
+
 [codecs]
 ; This section allows to individually enable or disable the codecs
+; For all but the default setting you can specify the value "fake" so that
+; it will try to declare the capability even if it's no codec available
 
-; mulaw: bool: Companded-only G711 mu-law
-;mulaw=enable
+; default: bool: Enable all unlisted codecs by default
+;default=enable
 
-; alaw: bool: Companded-only G711 a-law
-;alaw=enable
+; mulaw: bool: Companded-only G711 mu-law (G.711-uLaw-64k)
+;mulaw=default
 
-; gsm: bool: European GSM 06.10
-;gsm=enable
+; alaw: bool: Companded-only G711 a-law (G.711-ALaw-64k)
+;alaw=default
 
-; speex: bool: Speex narrow
-;speex=enable
+; gsm: bool: European GSM 06.10 (GSM-06.10)
+;gsm=default
 
-; lpc10: bool: LPC 10
-;lpc10=enable
+; msgsm: bool: Microsoft's proprietary verion of GSM (MS-GSM)
+;msgsm=default
+
+; speex: bool: Speex narrow (SpeexNarrow)
+;speex=default
+
+; lpc10: bool: Linear Prediction Codec (LPC-10)
+;lpc10=default
+
+; ilbc: bool: Internet Low Bandwidth Codec (iLBC)
+;ilbc=default
+
+; slin: bool: Signed Linear 16-bit uncompressed (PCM-16)
+;slin=default
+
+; g723: bool: ITU G.723 all variations (G.723)
+;g723=default
+
+; g726: bool: ITU G.726 all variations (G.726)
+;g726=default
+
+; g728: bool: ITU G.728 all variations (G.728)
+;g728=default
+
+; g729: bool: ITU G.729 all variations (G.729)
+;g729=default
 
 
 [ep]
@@ -65,6 +95,12 @@ ident = yate
 
 ; maxconns: int: Maximum number of simultaneous connections (0 = no limit). 
 ;maxconns = 0
+
+; faststart: bool: Enable Fast Start mode (offer media channels early)
+;faststart=false
+
+; h245tunneling: bool: Enable H.245 tunneling mode
+;h245tunneling=false
 
 ; dtmfinband: bool: Wheter to decode inband DTMF (CPU intensive)
 ;dtmfinband = false
@@ -89,6 +125,7 @@ gkclient = false
 ; using gkip; then, if gkip is unset or is not corect, will try gkname and
 ; then will try to brodcast in the network.
 
+
 [gk]
 ; If server is true the gatekeeper of yate will start. You must understand that
 ; the H323EndPoint and H323GateKeeper share the calls. So you can make a call
@@ -107,6 +144,7 @@ server=false
 ; have any problem.
 
 interface1=10.0.0.1
+
 
 [incoming]
 ; This section sets defaults for the incoming H.323 calls

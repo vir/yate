@@ -143,7 +143,7 @@ SIPEngine::SIPEngine(const char* userAgent)
     Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
-    m_allowed = "INVITE,ACK,CANCEL,BYE";
+    m_allowed = "INVITE, ACK, CANCEL, BYE";
 }
 
 SIPEngine::~SIPEngine()
@@ -288,7 +288,7 @@ bool SIPEngine::isAllowed(const char* method) const
     int pos = m_allowed.find(method);
     if (pos < 0)
 	return false;
-    if ((pos > 0) && (m_allowed[pos-1] != ','))
+    if ((pos > 0) && (m_allowed[pos-1] != ' '))
 	return false;
     return true;
 }
@@ -296,7 +296,7 @@ bool SIPEngine::isAllowed(const char* method) const
 void SIPEngine::addAllowed(const char* method)
 {
     if (method && *method && !isAllowed(method))
-	m_allowed << "," << method;
+	m_allowed << ", " << method;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

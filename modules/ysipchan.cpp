@@ -153,13 +153,18 @@ public:
 	{ return m_tr; }
     static YateSIPConnection* find(const String& id);
 private:
+    SDPBody* createSDP(const char* addr, const char* port, const char* formats);
     SDPBody* createPasstroughSDP(Message &msg);
     SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
+    SDPBody* createRtpSDP();
     SIPTransaction* m_tr;
     String m_id;
     String m_target;
     String m_status;
     String m_rtpid;
+    String m_rtpAddr;
+    String m_rtpPort;
+    String m_formats;
 };
 
 class SipMsgThread : public Thread
@@ -506,7 +511,7 @@ YateSIPConnection* YateSIPConnection::find(const String& id)
     return l ? static_cast<YateSIPConnection*>(l->get()) : 0;
 }
 
-// Incoming call constructor
+// Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     : m_tr(tr)
 {
@@ -517,11 +522,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     m_tr->setUserData(this);
     s_calls.append(this);
     s_mutex.unlock();
-    if (msg.getValue("rtp.forward")) {
-    }
+    m_rtpAddr = msg.getValue("rtp.addr");
+    m_rtpPort = msg.getValue("rtp.port");
+    m_formats = msg.getValue("formats");
 }
 
-// Outgoing call constructor
+// Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     : m_tr(0)
 {
@@ -557,6 +563,7 @@ YateSIPConnection::~YateSIPConnection()
     }
 }
 
+// Creates a SDP from RTP address data present in message
 SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 {
     String tmp = msg.getValue("rtp.forward");
@@ -564,39 +571,13 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 	return 0;
     tmp = msg.getValue("rtp.port");
     int port = tmp.toInteger();
-    tmp = msg.getValue("rtp.addr");
-    if (port && tmp) {
-	tmp = "IN IP4 " + tmp;
-	String frm = msg.getValue("formats");
-	if (frm.null())
-	    frm = "alaw,mulaw";
-	ObjList* l = tmp.split(',',false);
-	frm = "audio ";
-	frm << port << " RTP/AVP";
-	ObjList* f = l;
-	for (; f; f = f->next()) {
-	    String* s = static_cast<String*>(f->get());
-	    if (s) {
-		int payload = s->toInteger(dict_payloads,-1);
-		if (payload >= 0)
-		    frm << " " << payload;
-	    }
-	}
-	delete l;
-	String owner;
-	owner << "- " << port << " 1" << tmp;
-	SDPBody* sdp = new SDPBody;
-	sdp->addLine("v","0");
-	sdp->addLine("o",owner);
-	sdp->addLine("s","Call");
-	sdp->addLine("t","0 0");
-	sdp->addLine("c",tmp);
-	sdp->addLine("m",frm);
-	return sdp;
-    }
+    String addr(msg.getValue("rtp.addr"));
+    if (port && addr)
+	return createSDP(addr,tmp,msg.getValue("formats"));
     return 0;
 }
 
+// Creates an unstarted external RTP channel from remote addr and builds SDP from it
 SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 {
     Message m("chan.rtp");
@@ -605,37 +586,61 @@ SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
     m.userData(static_cast<DataEndpoint *>(this));
     if (Engine::dispatch(m)) {
 	m_rtpid = m.getValue("rtpid");
-	String port(m.getValue("localport"));
-	String tmp(m.getValue("localip"));
-	tmp = "IN IP4 " + tmp;
-	String owner;
-	owner << "- " << port << " 1" << tmp;
-	String frm(formats);
-	if (frm.null())
-	    frm = "alaw,mulaw";
-	ObjList* l = tmp.split(',',false);
-	frm = "audio ";
-	frm << port << " RTP/AVP";
-	ObjList* f = l;
-	for (; f; f = f->next()) {
-	    String* s = static_cast<String*>(f->get());
-	    if (s) {
-		int payload = s->toInteger(dict_payloads,-1);
-		if (payload >= 0)
-		    frm << " " << payload;
-	    }
-	}
-	delete l;
-	SDPBody* sdp = new SDPBody;
-	sdp->addLine("v","0");
-	sdp->addLine("o",owner);
-	sdp->addLine("s","Call");
-	sdp->addLine("t","0 0");
-	sdp->addLine("c",tmp);
-	sdp->addLine("m",frm);
-	return sdp;
+	return createSDP(m.getValue("localip"),m.getValue("localport"),formats);
     }
     return 0;
+}
+
+// Creates a started external RTP channel from remote addr and builds SDP from it
+SDPBody* YateSIPConnection::createRtpSDP()
+{
+    Message m("chan.rtp");
+    m.addParam("direction","bidir");
+    m.addParam("remoteip",m_rtpAddr);
+    m.addParam("remoteport",m_rtpPort);
+    m.addParam("format","alaw");
+    m.userData(static_cast<DataEndpoint *>(this));
+    if (Engine::dispatch(m)) {
+	m_rtpid = m.getValue("rtpid");
+	return createSDP(m.getValue("localip"),m.getValue("localport"),m_formats);
+    }
+    return 0;
+}
+
+SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const char* formats)
+{
+    Debug(DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
+	addr,port,formats,this);
+    int t = Time::now() / 1000000UL;
+    String tmp;
+    tmp << "IN IP4 " << addr;
+    String owner;
+    owner << "1001 " << t << " " << t << " " << tmp;
+    String frm(formats);
+    if (frm.null())
+	frm = "alaw,mulaw";
+    ObjList* l = frm.split(',',false);
+    frm = "audio ";
+    frm << port << " RTP/AVP";
+    ObjList* f = l;
+    for (; f; f = f->next()) {
+	String* s = static_cast<String*>(f->get());
+	if (s) {
+	    int payload = s->toInteger(dict_payloads,-1);
+	    if (payload >= 0)
+		frm << " " << payload;
+	}
+    }
+    delete l;
+    SDPBody* sdp = new SDPBody;
+    sdp->addLine("v","0");
+    sdp->addLine("o",owner);
+    sdp->addLine("s","Call");
+    sdp->addLine("t","0 0");
+    sdp->addLine("c",tmp);
+    sdp->addLine("m",frm);
+//    sdp->addLine("a","rtpmap:8 PCMA/8000/1");
+    return sdp;
 }
 
 void YateSIPConnection::disconnected(bool final, const char *reason)
@@ -654,33 +659,25 @@ bool YateSIPConnection::process(SIPEvent* ev)
 
 void YateSIPConnection::ringing(Message* msg)
 {
-    if (m_tr && (m_tr->getState() == SIPTransaction::Process))
+    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	m_tr->setResponse(180, "Ringing");
+//	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180, "Ringing");
+//	SDPBody* sdp = startRTP(msg,false);
+//	m->setBody(sdp);
+//	m_tr->setResponse(m);
+//	m->deref();
+    }
     setStatus("ringing");
 }
 
 void YateSIPConnection::answered(Message* msg)
 {
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
-#if 0
-	SDPBody* sdp = new SDPBody;
-	sdp->addLine("v","0");
-	sdp->addLine("o","- 99 1 IN IP4 192.168.168.2");
-	sdp->addLine("s","Call");
-	sdp->addLine("t","0 0");
-	sdp->addLine("c","IN IP4 192.168.168.2");
-	sdp->addLine("m","audio 9090 RTP/AVP 0 8");
-#endif
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200, "OK");
-	SDPBody* sdp = 0;
-	if (m_rtpid) {
-	}
-	else if (msg)
-	    sdp = createPasstroughSDP(*msg);
+	SDPBody* sdp = createRtpSDP();
 	m->setBody(sdp);
 	m_tr->setResponse(m);
 	m->deref();
-//	m_tr->setResponse(200, "OK");
 	m_tr->deref();
 	m_tr = 0;
     }
@@ -716,6 +713,7 @@ bool SipMsgThread::route()
 	    }
 	    else
 		m_tr->setResponse(183, "Session Progress");
+	    conn->deref();
 	}
 	else {
 	    Debug(DebugInfo,"Rejecting unconnected SIP call %s (%p) [%p]",

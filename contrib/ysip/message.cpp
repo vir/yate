@@ -141,8 +141,8 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     uri = message->uri;
     method = message->method;
     copyAllHeaders(message,"Via");
-    copyHeader(message,"To");
     copyHeader(message,"From");
+    copyHeader(message,"To");
     copyHeader(message,"Call-ID");
     copyHeader(message,"CSeq");
 #if 0
@@ -165,8 +165,8 @@ SIPMessage::SIPMessage(const SIPMessage* message)
     version = message->version;
     uri = message->uri;
     copyAllHeaders(message,"Via");
-    copyHeader(message,"To");
     copyHeader(message,"From");
+    copyHeader(message,"To");
     copyHeader(message,"Call-ID");
     String tmp;
     tmp << message->getCSeq() << " " << method;
@@ -218,6 +218,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	tmp << (int)::random();
 	hl->addParam("branch",tmp);
     }
+
     if (isAnswer()) {
 	if (!hl->getParam("received"))
 	    hl->addParam("received",getParty()->getPartyAddr());
@@ -265,7 +266,10 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     if (!getHeader("Contact")) {
 	String tmp;
-	tmp << "<sip:" << user << "@" << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort() << ">";
+	tmp << "<sip:" << user << "@" << getParty()->getLocalAddr();
+	if (getParty()->getLocalPort() != 5060)
+	    tmp << ":" << getParty()->getLocalPort();
+	tmp << ">";
 	addHeader("Contact",tmp);
     }
 

@@ -71,7 +71,6 @@ static int s_maxqueue = 5;
 static int s_maxconns = 0;
 
 static Configuration s_cfg;
-static ObjList translate;
 
 static TokenDict dict_str2code[] = {
     { "alpha" , PProcess::AlphaCode },
@@ -446,8 +445,6 @@ int H323MsgThread::s_routed = 0;
 bool H323MsgThread::route()
 {
     Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
-    Engine::dispatch(m_msg);
-    *m_msg = "call.route";
     bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
     YateH323Connection *conn = hplugin.findConnectionLock(m_id);
     if (!conn) {
@@ -726,6 +723,11 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     s_calls.lock();
     hplugin.calls().append(this)->setDelete(false);
     s_calls.unlock();
+    Message* m = new Message("chan.startup");
+    m->addParam("id",m_id);
+    m->addParam("direction",userdata ? "outgoing" : "incoming");
+    m->addParam("status","new");
+    Engine::enqueue(m);
     DataEndpoint *dd = static_cast<DataEndpoint *>(userdata);
     if (dd && connect(dd))
 	deref();
@@ -762,7 +764,7 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	return H323Connection::AnswerCallDenied;
     }
 
-    Message *m = new Message("call.preroute");
+    Message *m = new Message("call.route");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
     const char *s = s_cfg.getValue("incoming","context");
@@ -884,7 +886,7 @@ void YateH323Connection::OnCleared()
     Debug(DebugInfo,"YateH323Connection::OnCleared() reason: %s (%d) [%p]",
 	rtext,reason,this);
     setStatus("cleared");
-    Message *m = new Message("call.hangup");
+    Message *m = new Message("chan.hangup");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
     if (m_targetid)

@@ -413,6 +413,8 @@ public:
 	{ return m_id; }
     inline void setTarget(const char *target = 0)
 	{ m_targetid = target; }
+    inline const String& getTarget() const
+	{ return m_targetid; }
 private:
     PriSpan *m_span;
     int m_chan;
@@ -482,18 +484,22 @@ public:
     virtual bool received(Message &msg);
 };
 
-class ZapDTMF : public MessageHandler
-{
-public:
-    ZapDTMF() : MessageHandler("chan.dtmf") { }
-    virtual bool received(Message &msg);
-};
-
 class StatusHandler : public MessageHandler
 {
 public:
     StatusHandler() : MessageHandler("engine.status") { }
     virtual bool received(Message &msg);
+};
+
+class ZapChanHandler : public MessageReceiver
+{
+public:
+    enum {
+        Ringing,
+        Answered,
+        DTMF,
+    };
+    virtual bool received(Message &msg, int id);
 };
 
 class ZaptelPlugin : public Plugin
@@ -783,24 +789,23 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	return;
     }
     Debug(DebugInfo,"Ring on channel %d on span %d",chan,m_span);
-    getChan(chan)->ring(ev.call);
+    ZapChan* c = getChan(chan);
+    c->ring(ev.call);
     Debug(DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
 	ev.callingname,ev.callingnum,ev.callingplan);
     Debug(DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
 	ev.callednum,ev.redirectingnum,ev.calledplan);
     Debug(DebugInfo,"type=%d complete=%d format='%s'",
 	ev.ctype,ev.complete,lookup(ev.layer1,dict_str2law,"unknown"));
-    Message *m = new Message("call.preroute");
+    Message *m = new Message("call.route");
     m->addParam("driver","zap");
-    m->addParam("id",getChan(chan)->id());
+    m->addParam("id",c->id());
     m->addParam("span",String(m_span));
     m->addParam("channel",String(chan));
     if (ev.callingnum[0])
 	m->addParam("caller",ev.callingnum);
     if (ev.callednum[0])
 	m->addParam("called",ev.callednum);
-    Engine::dispatch(m);
-    *m = "call.route";
     if (Engine::dispatch(m)) {
 	*m = "call.execute";
 	m->addParam("callto",m->retValue());
@@ -814,11 +819,17 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 		dataLaw = ZT_LAW_MULAW;
 		break;
 	}
-	getChan(chan)->open(dataLaw);
+	c->open(dataLaw);
 	m->userData(getChan(chan));
 	if (Engine::dispatch(m)) {
-	    getChan(chan)->setTarget(m->getValue("targetid"));
-	    getChan(chan)->answer();
+	    c->setTarget(m->getValue("targetid"));
+	    if (c->getTarget().null()) {
+		Debug(DebugInfo,"Answering now chan %s [%p] because we have no targetid",
+		    c->id().c_str(),c);
+		c->answer();
+	    }
+	    else
+		getChan(chan)->setTimeout(60000000);
 	}
 	else
 	    getChan(chan)->hangup(PRI_CAUSE_REQUESTED_CHAN_UNAVAIL);
@@ -1118,7 +1129,7 @@ void ZapChan::hangup(int cause)
 	::pri_hangup(m_span->pri(),m_call,cause);
 	::pri_destroycall(m_span->pri(),m_call);
 	m_call = 0;
-	Message *m = new Message("call.hangup");
+	Message *m = new Message("chan.hangup");
 	m->addParam("driver","zap");
 	m->addParam("id",id());
 	m->addParam("span",String(m_span->span()));
@@ -1227,6 +1238,13 @@ bool ZapChan::call(Message &msg, const char *called)
     );
 #endif
     setTimeout(10000000);
+    Message *m = new Message("chan.startup");
+    m->addParam("driver","zap");
+    m->addParam("id",id());
+    m->addParam("span",String(m_span->span()));
+    m->addParam("channel",String(m_chan));
+    m->addParam("direction","outgoing");
+    Engine::enqueue(m);
     return true;
 }
 
@@ -1237,6 +1255,13 @@ void ZapChan::ring(q931_call *call)
 	m_call = call;
 	m_ring = true;
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
+	Message *m = new Message("chan.startup");
+	m->addParam("driver","zap");
+	m->addParam("id",id());
+	m->addParam("span",String(m_span->span()));
+	m->addParam("channel",String(m_chan));
+	m->addParam("direction","incoming");
+	Engine::enqueue(m);
     }
     else
 	hangup(PRI_CAUSE_WRONG_CALL_STATE);
@@ -1315,25 +1340,29 @@ bool ZapDropper::received(Message &msg)
     return false;
 }
 
-bool ZapDTMF::received(Message &msg)
+bool ZapChanHandler::received(Message &msg, int id)
 {
-    String id(msg.getValue("targetid"));
-    if (!id.startsWith("zap/"))
+    String tid(msg.getValue("targetid"));
+    if (!tid.startSkip("zap/",false))
         return false;
-    String text(msg.getValue("text"));
-    ZapChan *c = 0;
-    id >> "zap/";
-    int n = id.toInteger();
+    int n = tid.toInteger();
+    ZapChan* c = 0;
     if ((n > 0) && (c = zplugin.findChan(n))) {
-        Debug("ZapDTMF",DebugInfo,"Sending to zap/%d (%d/%d)",
-	    n,c->span()->span(),c->chan());
-	zplugin.mutex.lock();
-	for (unsigned int i = 0; i < text.length(); i++)
-	    c->sendDigit(text[i]);
-	zplugin.mutex.unlock();
-	return true;
+	Lock lock(zplugin.mutex);
+	switch (id) {
+	    case Answered:
+		c->answer();
+		break;
+	    case Ringing:
+		Debug("Zap",DebugInfo,"Not implemented ringing!");
+		break;
+	    case DTMF:
+		for (const char* t = msg.getValue("text"); t && *t; ++t)
+		    c->sendDigit(*t);
+		break;
+	}
     }
-    Debug("ZapDTMF",DebugInfo,"Could not find zap/%s",id.c_str());
+    Debug("ZapChanHandler",DebugInfo,"Could not find zap/%s",tid.c_str());
     return false;
 }
 
@@ -1493,8 +1522,11 @@ void ZaptelPlugin::initialize()
 	    Output("Created %d spans",m_spans.count());
 	    Engine::install(new ZapHandler);
 	    Engine::install(new ZapDropper);
-	    Engine::install(new ZapDTMF);
 	    Engine::install(new StatusHandler);
+	    ZapChanHandler* ch = new ZapChanHandler;
+	    Engine::install(new MessageRelay("call.ringing",ch,ZapChanHandler::Ringing));
+	    Engine::install(new MessageRelay("call.answered",ch,ZapChanHandler::Answered));
+	    Engine::install(new MessageRelay("chan.dtmf",ch,ZapChanHandler::DTMF));
 	}
 	else
 	    Output("No spans created, module not activated");

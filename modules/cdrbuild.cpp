@@ -30,7 +30,7 @@
 using namespace TelEngine;
 
 enum {
-    CdrRing,
+    CdrStart,
     CdrCall,
     CdrRinging,
     CdrAnswer,
@@ -71,7 +71,7 @@ private:
     inline static int sec(unsigned long long usec)
 	{ return (usec + 500000) / 1000000; }
     unsigned long long
-	m_ring,
+	m_start,
 	m_call,
 	m_ringing,
 	m_answer,
@@ -87,7 +87,7 @@ static ObjList cdrs;
 CdrBuilder::CdrBuilder(const char *name, const char *caller, const char *called)
     : String(name), m_caller(caller), m_called(called), m_status("unknown"), m_first(true)
 {
-    m_ring = m_call = m_ringing = m_answer = m_hangup = 0;
+    m_start = m_call = m_ringing = m_answer = m_hangup = 0;
 }
 
 CdrBuilder::~CdrBuilder()
@@ -98,17 +98,15 @@ CdrBuilder::~CdrBuilder()
 void CdrBuilder::emit(const char *operation)
 {
     unsigned long long t_hangup = m_hangup ? m_hangup : Time::now();
-    const char *dir = m_ring ?
-	(m_call ? "bidir" : "incoming") :
-	(m_call ? "outgoing" : "unknown");
+    const char *dir = m_call ? "outgoing" : "incoming";
 
     unsigned long long
-	t_ring = m_ring, t_call = m_call,
+	t_start = m_start, t_call = m_call,
 	t_ringing = m_ringing, t_answer = m_answer;
-    if (!t_ring)
-	t_ring = t_call;
+    if (!t_start)
+	t_start = t_call;
     if (!t_call)
-	t_call = t_ring;
+	t_call = t_start;
     if (!t_ringing)
 	t_ringing = t_call;
     if (!t_answer)
@@ -120,12 +118,12 @@ void CdrBuilder::emit(const char *operation)
 
     Message *m = new Message("call.cdr");
     m->addParam("operation",operation);
-    m->addParam("time",String(sec(t_ring)));
+    m->addParam("time",String(sec(t_start)));
     m->addParam("chan",c_str());
     m->addParam("direction",dir);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
-    m->addParam("duration",String(sec(t_hangup - t_ring)));
+    m->addParam("duration",String(sec(t_hangup - t_start)));
     m->addParam("billtime",String(sec(t_hangup - t_answer)));
     m->addParam("ringtime",String(sec(t_answer - t_ringing)));
     m->addParam("status",m_status);
@@ -142,8 +140,8 @@ String CdrBuilder::getStatus() const
 void CdrBuilder::update(int type, unsigned long long val)
 {
     switch (type) {
-	case CdrRing:
-	    m_ring = val;
+	case CdrStart:
+	    m_start = val;
 	    break;
 	case CdrCall:
 	    m_call = val;
@@ -193,7 +191,7 @@ bool CdrHandler::received(Message &msg)
 	    return false;
     }
     CdrBuilder *b = CdrBuilder::find(id);
-    if (!b && ((m_type == CdrRing) || (m_type == CdrCall))) {
+    if (!b && ((m_type == CdrStart) || (m_type == CdrCall))) {
 	b = new CdrBuilder(id,msg.getValue("caller"),msg.getValue("called"));
 	cdrs.append(b);
     }
@@ -253,11 +251,11 @@ void CdrBuildPlugin::initialize()
     Output("Initializing module CdrBuild");
     if (m_first) {
 	m_first = false;
-	Engine::install(new CdrHandler("call.preroute",CdrRing));
+	Engine::install(new CdrHandler("chan.startup",CdrStart));
 	Engine::install(new CdrHandler("call.execute",CdrCall));
 	Engine::install(new CdrHandler("call.ringing",CdrRinging));
 	Engine::install(new CdrHandler("call.answered",CdrAnswer));
-	Engine::install(new CdrHandler("call.hangup",CdrHangup));
+	Engine::install(new CdrHandler("chan.hangup",CdrHangup));
 	Engine::install(new CdrHandler("call.dropcdr",CdrDrop));
 	Engine::install(new CdrHandler("engine.halt",EngHalt));
 	Engine::install(new StatusHandler);

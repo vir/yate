@@ -457,12 +457,10 @@ bool OssHandler::received(Message &msg)
 	    chan->destruct();
 	    return false;
 	}
-	Message m("call.preroute");
+	Message m("call.route");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);
-	Engine::dispatch(m);
-	m = "call.route";
 	if (Engine::dispatch(m)) {
 	    m = "call.execute";
 	    m.addParam("callto",m.retValue());

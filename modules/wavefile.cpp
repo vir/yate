@@ -403,12 +403,10 @@ bool WaveHandler::received(Message &msg)
 	Debug(DebugWarn,"Wave outgoing call with no target!");
 	return false;
     }
-    Message m("call.preroute");
+    Message m("call.route");
     m.addParam("id",dest);
     m.addParam("caller",dest);
     m.addParam("called",targ);
-    Engine::dispatch(m);
-    m = "call.route";
     if (Engine::dispatch(m)) {
 	m = "call.execute";
 	m.addParam("callto",m.retValue());

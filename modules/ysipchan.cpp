@@ -578,7 +578,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     URI uri(t->getURI());
     const HeaderLine* hl = e->getMessage()->getHeader("From");
     URI from(hl ? *hl : String::empty());
-    Message *m = new Message("call.preroute");
+    Message *m = new Message("call.route");
     m->addParam("driver","sip");
     m->addParam("id","sip/" + callid);
     m->addParam("caller",from.getUser());
@@ -656,6 +656,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     m_rtpFormat = m_formats.substr(0,q);
     Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+    Message *ms = new Message("chan.startup");
+    ms->addParam("driver","sip");
+    ms->addParam("direction","incoming");
+    ms->addParam("id",m_id);
+    Engine::enqueue(ms);
 }
 
 // Outgoing call constructor - in call.execute handler
@@ -685,6 +690,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     s_mutex.lock();
     s_calls.append(this);
     s_mutex.unlock();
+    Message *ms = new Message("chan.startup");
+    ms->addParam("driver","sip");
+    ms->addParam("direction","outgoing");
+    ms->addParam("id",m_id);
+    Engine::enqueue(ms);
 }
 
 YateSIPConnection::~YateSIPConnection()
@@ -716,7 +726,7 @@ void YateSIPConnection::hangup()
     m_hungup = true;
     Debug(DebugAll,"YateSIPConnection::hangup() state=%d trans=%p code=%d reason='%s' [%p]",
 	m_state,m_tr,m_reasonCode,m_reason.c_str(),this);
-    Message *msg = new Message("call.hangup");
+    Message *msg = new Message("chan.hangup");
     msg->addParam("driver","sip");
     msg->addParam("id",id());
     if (m_target)
@@ -1046,8 +1056,6 @@ void YateSIPConnection::answered(Message* msg)
 bool SipMsgThread::route()
 {
     Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
-    Engine::dispatch(m_msg);
-    *m_msg = "call.route";
     m_msg->retValue().clear();
     bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
     if (m_tr->getState() != SIPTransaction::Process) {

@@ -171,6 +171,7 @@ bool Configuration::load()
 	::fclose(f);
 	return true;
     }
+    Debug(DebugInfo,"Failed to open config file '%s'",c_str());
     return false;
 }
 

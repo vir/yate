@@ -568,10 +568,11 @@ public:
     virtual void initialize();
 private:
     MessageHandler *m_route;
+    bool m_init;
 };
 
 GtkClientPlugin::GtkClientPlugin()
-    : m_route(0)
+    : m_route(0), m_init(false)
 {
     Output("Loaded module GtkClient");
 }
@@ -585,8 +586,10 @@ GtkClientPlugin::~GtkClientPlugin()
 void GtkClientPlugin::initialize()
 {
     Output("Initializing module GtkClient");
-    if (m_route)
+    if (m_init)
 	return;
+    // gtk can only be initialized once so take care of it
+    m_init = true;
     s_cfg = Engine::configFile("gtkclient");
     s_cfg.load();
     int priority = s_cfg.getIntValue("priorities","route",20);

@@ -531,6 +531,13 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	e->getTransaction()->setResponse(500, "Server Shutting Down");
         return;
     }
+
+    if (e->getMessage()->getParam("To","tag")) {
+        Debug(DebugWarn,"Dropping re-INVITE, we don't support it yet");
+	e->getTransaction()->setResponse(501, "Re-INVITE not supported yet");
+        return;
+    }
+
     int cnt = SipMsgThread::count();
     if (cnt > s_maxqueue) {
         Debug(DebugWarn,"Dropping call, there are already %d waiting",cnt);
@@ -547,7 +554,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     m->addParam("id","sip/" + callid);
     m->addParam("caller",from.getUser());
     m->addParam("called",uri.getUser());
-    m->addParam("sip.callid",callid);
+    m->addParam("sip_callid",callid);
     if (e->getMessage()->body && e->getMessage()->body->isSDP()) {
 	String addr,port,formats;
 	parseSDP(static_cast<SDPBody*>(e->getMessage()->body),addr,port,formats);

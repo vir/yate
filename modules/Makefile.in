@@ -147,7 +147,7 @@ gsmcodec.yate: LOCALLIBS = -lgsm
 gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@
 
 qtclient.yate: ../contrib/qt/libqtclientform.a
-qtclient.yate: LOCALFLAGS = -I@QT_DIR@/include
+qtclient.yate: LOCALFLAGS = -I@QT_INC@
 qtclient.yate: LOCALLIBS = ../contrib/qt/libqtclientform.a -L@QT_DIR@/lib -lqt-mt
 
 ysipchan.yate: ../contrib/ysip/libysip.a

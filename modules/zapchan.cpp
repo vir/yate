@@ -185,12 +185,12 @@ static const char *sig_names(int sig)
 
 static void pri_err_cb(char *s)
 {
-    Debug("PRI",DebugWarn,s);
+    Debug("PRI",DebugWarn,"%s",s);
 }
 
 static void pri_msg_cb(char *s)
 {
-    Debug("PRI",DebugInfo,s);
+    Debug("PRI",DebugInfo,"%s",s);
 }
 
 static TokenDict dict_str2switch[] = {

@@ -232,8 +232,7 @@ RegistPlugin::~RegistPlugin()
 
 void RegistPlugin::initialize()
 {
-    char	*pgoptions=NULL,
-    		*pgtty=NULL;
+    char *pgoptions=NULL, *pgtty=NULL;
     Output("Initializing module Register for PostgreSQL");
     Configuration cfg(Engine::configFile("register"));
     const char *pghost = c_safe(cfg.getValue("general","host","localhost"));
@@ -255,23 +254,23 @@ void RegistPlugin::initialize()
     }
     if (!m_registhandler) {
     	Output("Installing Registering handler");
-	Engine::install(new RegistHandler("regist"));
+	Engine::install(m_registhandler = new RegistHandler("regist"));
     }
     if (!m_unregisthandler) {
     	Output("Installing UnRegistering handler");
-	Engine::install(new UnRegistHandler("unregist"));
+	Engine::install(m_unregisthandler = new UnRegistHandler("unregist"));
     }
     if (!m_authhandler) {
     	Output("Installing Authentification handler");
-	Engine::install(new AuthHandler("auth"));
+	Engine::install(m_authhandler = new AuthHandler("auth"));
     }
     if (!m_routehandler) {
     	Output("Installing Route handler");
-	Engine::install(new RouteHandler("route"));
+	Engine::install(m_routehandler = new RouteHandler("route"));
     }
     if (!m_statushandler) {
     	Output("Installing Status handler");
-	Engine::install(new StatusHandler("status"));
+	Engine::install(m_statushandler = new StatusHandler("status"));
     }
 }
 

@@ -21,6 +21,7 @@
 
 extern "C" {
 #include <iax-client.h>
+#include <iax2-parser.h>
 #include <md5.h>
 };
 
@@ -44,6 +45,7 @@ static TokenDict dict_tos[] = {
     { 0, 0 }
 };
 
+static bool s_debugging = true;
 static int s_ast_formats = 0;
 static Configuration s_cfg;
 static Mutex s_mutex;
@@ -62,6 +64,7 @@ private:
     unsigned m_total;
     unsigned long long m_time;
 };
+
 class YateIAXAudioConsumer : public DataConsumer
 {
 public:
@@ -81,13 +84,13 @@ private:
     unsigned long long m_time;
 };
 
-
 class YateIAXEndPoint : public Thread
 {
 public:
     YateIAXEndPoint();
     ~YateIAXEndPoint();
     static bool Init(void);
+    static void Setup(void);
     bool accepting(iax_event *e);
     void answer(iax_event *e);
     void reg(iax_event *e);
@@ -178,6 +181,18 @@ public:
 
 static IAXPlugin iplugin;
 
+static void iax_err_cb(const char *s)
+{
+    Debug("IAX",DebugWarn,"%s",s);
+}
+
+static void iax_out_cb(const char *s)
+{
+    if (s_debugging)
+	Debug("IAX",DebugInfo,"%s",s);
+}
+
+
 YateIAXEndPoint::YateIAXEndPoint()
     : Thread("IAX EndPoint")
 {
@@ -202,11 +217,17 @@ bool YateIAXEndPoint::Init(void)
 	Debug(DebugFail,"I can't initialize the IAX library");
 	return false;
     }
-    int fd = iax_get_fd();
+    iax_set_error(iax_err_cb);
+    iax_set_output(iax_out_cb);
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
     if (tos)
-	    ::setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
-    if (s_cfg.getBoolValue("general","debug",false))
+	    ::setsockopt(iax_get_fd(),IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
+    return true;
+}
+
+void YateIAXEndPoint::Setup(void)
+{
+    if (s_debugging = s_cfg.getBoolValue("general","debug",false))
 	::iax_enable_debug();
     else
 	::iax_disable_debug();
@@ -233,9 +254,7 @@ bool YateIAXEndPoint::Init(void)
     }
     s_ast_formats = frm;
     ::iax_set_formats(s_ast_formats);
-    return true;
 }
-
 
 void YateIAXEndPoint::terminateall(void)
 {
@@ -368,9 +387,9 @@ bool YateIAXEndPoint::accepting(iax_event *e)
     {
 	int methods = IAX_AUTH_MD5;
 	String s(::rand());
-	strncpy(e->session->username,e->ies.username,sizeof(e->session->username));
-	strncpy(e->session->dnid,e->ies.called_number,sizeof(e->session->dnid));
-	strncpy(e->session->callerid,e->ies.calling_name,sizeof(e->session->callerid));
+	strncpy(e->session->username,c_safe(e->ies.username),sizeof(e->session->username));
+	strncpy(e->session->dnid,c_safe(e->ies.called_number),sizeof(e->session->dnid));
+	strncpy(e->session->callerid,c_safe(e->ies.calling_name),sizeof(e->session->callerid));
 	e->session->voiceformat = e->ies.format;
 	e->session->peerformats = e->ies.capability;
 	strncpy(e->session->challenge,s.safe(),sizeof(e->session->challenge));
@@ -524,7 +543,7 @@ void YateIAXEndPoint::reg(iax_event *e)
 	if (!strcmp(e->ies.md5_result,realreply))
 	{
 	    e->session->refresh = 100;
-	    strncpy(e->session->username,e->ies.username,sizeof(e->session->username));
+	    strncpy(e->session->username,c_safe(e->ies.username),sizeof(e->session->username));
 	    s_mutex.lock();
 	    iax_send_regack(e->session);
 	    s_mutex.unlock();
@@ -944,6 +963,7 @@ void IAXPlugin::initialize()
 	    return;
 	m_endpoint = new YateIAXEndPoint;
     }
+    YateIAXEndPoint::Setup();
     if (m_first) {
 	m_first = false;
 	Engine::install(new IAXHandler("call"));

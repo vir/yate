@@ -68,8 +68,6 @@ private:
     StatusHandler *m_statushandler;*/
 };
 
-static RegfilePlugin rfplugin;
-
 bool AuthHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
@@ -201,7 +199,7 @@ void RegfilePlugin::initialize()
     s_cfg.load();
     if (!m_authhandler) {
     	Output("Installing Authentification handler");
-	Engine::install(new AuthHandler("auth"));
+	Engine::install(m_authhandler = new AuthHandler("auth"));
     }
     /*
     if (!m_registhandler) {

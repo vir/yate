@@ -7,6 +7,7 @@
 
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 
 namespace TelEngine {
 
@@ -47,7 +48,13 @@ Mutex tmutex;
 ThreadPrivate *ThreadPrivate::create(Thread *t,const char *name)
 {
     ThreadPrivate *p = new ThreadPrivate(t,name);
-    int e = ::pthread_create(&p->thread,0,startFunc,p);
+    int e = 0;
+    for (int i=0; i<5; i++) {
+	e = ::pthread_create(&p->thread,0,startFunc,p);
+	if (e != EAGAIN)
+	    break;
+	::usleep(20);
+    }
     if (e) {
 	Debug(DebugFail,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;

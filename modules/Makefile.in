@@ -20,7 +20,7 @@ INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h ../yateversn.h
 SUBDIRS :=
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
-	regexroute.yate \
+	regexroute.yate callgen.yate \
 	tonegen.yate wavefile.yate \
 	rmanager.yate extmodule.yate osschan.yate regfile.yate ysipchan.yate
 LIBS :=

@@ -1,8 +1,10 @@
 #ifndef _MAC
 
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,8,8,0
- PRODUCTVERSION 0,8,8,0
+#include "yateversn.h"
+
+1 VERSIONINFO
+ FILEVERSION YATE_WINVER_F
+ PRODUCTVERSION YATE_WINVER_F
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -19,12 +21,13 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Null Team Impex SRL\0"
             VALUE "FileDescription", "Yet Another Telephony Engine\0"
-            VALUE "FileVersion", "0, 8, 8\0"
+            VALUE "FileVersion", YATE_WINVER_S
             VALUE "InternalName", "YATE\0"
-            VALUE "LegalCopyright", "Copyright © 2005 Null Team\0"
-            VALUE "OriginalFilename", "Yate.exe\0"
+            VALUE "LegalCopyright", "Copyright © 2004, 2005 Null Team\0"
+            VALUE "License", "GPL\0"
             VALUE "ProductName", "YATE\0"
-            VALUE "ProductVersion", "0, 8, 8\0"
+            VALUE "ProductVersion", YATE_WINVER_S
+            VALUE "URL", "http://yate.null.ro/\0"
         END
     END
     BLOCK "VarFileInfo"

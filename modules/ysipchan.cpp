@@ -752,7 +752,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     setReason();
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",uri);
-    plugin.ep()->buildParty(m);
+    m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
     m_host = m->getParty()->getPartyAddr();
     m_port = m->getParty()->getPartyPort();
     SDPBody* sdp = createPasstroughSDP(msg);

@@ -442,7 +442,7 @@ if [[ "x$ac_cv_use_libqt" != "xno" ]]; then
     if [[ "x$ac_cv_use_libqt" = "xyes" ]]; then
 	qtdir="$QTDIR"
 	if [[ "x$qtdir" = "x" ]]; then
-	    qtdir=`ls -d -1 /opt/qt-3* /usr/lib/qt-3* 2>/dev/null | tail -1`
+	    qtdir=`ls -d -1 /opt/qt-3* /usr/lib/qt-3* /usr/lib/qt3* 2>/dev/null | tail -1`
 	fi
     fi
     if [[ "x$qtdir" != "x" ]]; then

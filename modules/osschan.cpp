@@ -402,7 +402,7 @@ bool OssHandler::received(Message &msg)
     OssChan *chan = new OssChan(dest.matchString(1).c_str());
     if (!chan->init())
     {
-	delete chan;
+	chan->destruct();
 	return false;
     }
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
@@ -418,8 +418,10 @@ bool OssHandler::received(Message &msg)
 	    m.addParam("caller",dest);
 	    m.addParam("callto",direct);
 	    m.userData(chan);
-	    if (Engine::dispatch(m))
+	    if (Engine::dispatch(m)) {
+		chan->deref();
 		return true;
+	    }
 	    Debug(DebugFail,"OSS outgoing call not accepted!");
 	    return false;
 	}	
@@ -435,17 +437,19 @@ bool OssHandler::received(Message &msg)
 	Engine::dispatch(m);
 	m = "call.route";
 	if (Engine::dispatch(m)) {
-	    m = "call";
+	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
 	    m.retValue() = 0;
 	    m.userData(chan);
-	    if (Engine::dispatch(m))
+	    if (Engine::dispatch(m)) {
+		chan->deref();
 		return true;
+	    }
 	    Debug(DebugFail,"OSS outgoing call not accepted!");
 	}
 	else
 	    Debug(DebugWarn,"OSS outgoing call but no route!");
-	delete chan;
+	chan->destruct();
 	return false;
     }
 

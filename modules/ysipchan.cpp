@@ -102,6 +102,7 @@ public:
 	Ringing,
 	Answered,
 	Drop,
+	Masquerade,
     };
     virtual bool received(Message &msg, int id);
 };
@@ -876,6 +877,7 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 {
     Message m("chan.rtp");
+    m.addParam("id",id());
     m.addParam("direction","bidir");
     m.addParam("remoteip",msg->getParty()->getPartyAddr());
     m.userData(static_cast<DataEndpoint *>(this));
@@ -890,6 +892,7 @@ SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 SDPBody* YateSIPConnection::createRtpSDP(bool start)
 {
     Message m("chan.rtp");
+    m.addParam("id",id());
     m.addParam("direction","bidir");
     m.addParam("remoteip",m_rtpAddr);
     if (start) {
@@ -913,6 +916,7 @@ bool YateSIPConnection::startRtp()
 	return false;
     Debug(DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
+    m.addParam("id",id());
     m.addParam("rtpid",m_rtpid);
     m.addParam("direction","bidir");
     m.addParam("remoteip",m_rtpAddr);
@@ -1224,6 +1228,7 @@ bool SIPConnHandler::received(Message &msg, int id)
 	    callid = msg.getValue("targetid");
 	    break;
 	case Drop:
+	case Masquerade:
 	    callid = msg.getValue("id");
 	    break;
 	default:
@@ -1247,6 +1252,12 @@ bool SIPConnHandler::received(Message &msg, int id)
 	    lock.drop();
 	    conn->disconnect();
 	    break;
+	case Masquerade:
+	    msg.setParam("targetid",conn->getTarget());
+	    msg = msg.getValue("message");
+	    msg.clearParam("message");
+	    msg.userData(conn);
+	    return false;
 	case Ringing:
 	    conn->ringing(&msg);
 	    break;
@@ -1322,6 +1333,7 @@ void SIPPlugin::initialize()
 	Engine::install(new MessageRelay("call.ringing",m_handler,SIPConnHandler::Ringing));
 	Engine::install(new MessageRelay("call.answered",m_handler,SIPConnHandler::Answered));
 	Engine::install(new MessageRelay("call.drop",m_handler,SIPConnHandler::Drop));
+	Engine::install(new MessageRelay("chan.masquerade",m_handler,SIPConnHandler::Masquerade,10));
 	Engine::install(new SIPHandler("call.execute"));
 	Engine::install(new HaltHandler("engine.halt"));
 	Engine::install(new StatusHandler("engine.status"));

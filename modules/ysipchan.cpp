@@ -803,7 +803,7 @@ bool YateSIPConnection::startRtp()
 {
     if (m_rtpid.null())
 	return false;
-    Debug(DebugAll,"YateSIPConnection::startSDP() [%p]",this);
+    Debug(DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
     m.addParam("rtpid",m_rtpid);
     m.addParam("direction","bidir");
@@ -915,7 +915,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	if (m_target)
 	    m->addParam("targetid",m_target);
 	m->addParam("status","answered");
-	if (m_rtpPort) {
+	if (m_rtpPort && !startRtp()) {
 	    m->addParam("rtp_forward","yes");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    m->addParam("rtp_port",m_rtpPort);

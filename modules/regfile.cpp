@@ -142,8 +142,8 @@ bool RouteHandler::received(Message &msg)
 bool StatusHandler::received(Message &msg)
 {
     msg.retValue() << "Regfile,users=";
-    for (int i=0;i<s_cfg.count(),i++)
-	msg.retValue() << s_cfg.getSection();
+    for (int i=0;i<s_cfg.sections();i++)
+	msg.retValue() << s_cfg.getSection(i);
     msg.retValue() <<"\n";
     return false;
 }

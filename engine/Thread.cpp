@@ -26,6 +26,10 @@
 #include <pthread.h>
 #include <errno.h>
 
+#ifndef PTHREAD_STACK_MIN
+#define PTHREAD_STACK_MIN 16384
+#endif
+
 namespace TelEngine {
 
 class ThreadPrivate : public GenObject {
@@ -67,12 +71,18 @@ ThreadPrivate *ThreadPrivate::create(Thread *t,const char *name)
 {
     ThreadPrivate *p = new ThreadPrivate(t,name);
     int e = 0;
+    // Set a decent (256K) stack size that won't eat all virtual memory
+    pthread_attr_t attr;
+    ::pthread_attr_init(&attr);
+    ::pthread_attr_setstacksize(&attr, 16*PTHREAD_STACK_MIN);
+
     for (int i=0; i<5; i++) {
-	e = ::pthread_create(&p->thread,0,startFunc,p);
+	e = ::pthread_create(&p->thread,&attr,startFunc,p);
 	if (e != EAGAIN)
 	    break;
 	::usleep(20);
     }
+    ::pthread_attr_destroy(&attr);
     if (e) {
 	Debug(DebugFail,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;
@@ -349,3 +359,4 @@ void Thread::preExec()
     ::pthread_kill_other_threads_np();
 #endif
 }
+/* vi: set ts=8 sw=4 sts=4 noet: */

@@ -32,7 +32,7 @@ using namespace TelEngine;
 
 SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing)
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_timeout(0),
-      m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine)
+      m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
 {
     Debug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p) [%p]",message,engine,this);
     if (m_firstMessage) {
@@ -42,6 +42,9 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	    m_branch = *ns;
 	if (!m_branch.startsWith("z9hG4bK"))
 	    m_branch.clear();
+	ns = message->getParam("To","tag");
+	if (ns)
+	    m_tag = *ns;
 	const HeaderLine* hl = message->getHeader("Call-ID");
 	if (hl)
 	    m_callid = *hl;
@@ -117,7 +120,9 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
     m_lastMessage = message;
     if (m_lastMessage) {
 	m_lastMessage->ref();
-	m_lastMessage->complete(m_engine);
+	if (message->isAnswer() && (message->code > 100) && m_tag.null())
+	    m_tag = (int)::random();
+	message->complete(m_engine,0,0,m_tag);
     }
 }
 
@@ -219,6 +224,15 @@ void SIPTransaction::setResponse(int code, const char* reason)
 	Debug(DebugWarn,"setResponse(%d,'%s') in client transaction [%p]",code,reason,this);
 	return;
     }
+    switch (m_state) {
+	case Invalid:
+	case Retrans:
+	case Finish:
+	case Cleared:
+	    Debug("SIPTransaction",DebugInfo,"Ignoring setResponse(%d) in state %s [%p]",
+		code,stateName(m_state),this);
+	    return;
+    }
     SIPMessage* msg = new SIPMessage(m_firstMessage, code, reason);
     setResponse(msg);
     msg->deref();
@@ -226,7 +240,7 @@ void SIPTransaction::setResponse(int code, const char* reason)
 
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
-    Debug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
+    DDebug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
     if (branch) {
 	if (branch != m_branch)
@@ -240,6 +254,19 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	Debug("SIPTransaction",DebugWarn,"Non-branch matching not implemented!");
 	return false;
     }
+    Debug("SIPTransaction",DebugAll,"Processing %s %p '%s' in [%p]",
+	message->isAnswer() ? "answer" : "request",
+	message,message->method.c_str(),this);
+
+    if (m_tag.null() && message->isAnswer()) {
+	const NamedString* ns = message->getParam("To","tag");
+	if (ns) {
+	    m_tag = *ns;
+	    Debug("SIPTransaction",DebugInfo,"Found dialog tag '%s' [%p]",
+		m_tag.c_str(),this);
+	}
+    }
+
     if (isOutgoing())
 	processClientMessage(message,m_state);
     else

@@ -234,6 +234,8 @@ public:
 	{ m_status = status; }
     inline void setTarget(const char *target = 0)
 	{ m_targetid = target; }
+    inline const String& getTarget() const
+	{ return m_targetid; }
     inline static int total()
 	{ return s_total; }
 private:
@@ -283,18 +285,16 @@ public:
     virtual bool received(Message &msg);
 };
 
-class H323DTMF : public MessageHandler
+class H323ConnHandler : public MessageReceiver
 {
 public:
-    H323DTMF(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class H323Text : public MessageHandler
-{
-public:
-    H323Text(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
+    enum {
+        Ringing,
+        Answered,
+        DTMF,
+	Text,
+    };
+    virtual bool received(Message &msg, int id);
 };
 
 class H323Stopper : public MessageHandler
@@ -380,7 +380,10 @@ bool H323MsgThread::route()
 	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));
 	    conn->setStatus("routed");
 	    conn->setTarget(m_msg->getValue("targetid"));
-	    conn->AnsweringCall(H323Connection::AnswerCallNow);
+	    if (conn->getTarget().null()) {
+		Debug(DebugInfo,"Answering now H.323 call %s [%p] because we have no targetid",m_id.c_str(),conn);
+		conn->AnsweringCall(H323Connection::AnswerCallNow);
+	    }
 	    conn->deref();
 	}
 	else {
@@ -1260,38 +1263,35 @@ bool H323Dropper::received(Message &msg)
     return false;
 };
 
-bool H323DTMF::received(Message &msg)
+bool H323ConnHandler::received(Message &msg, int id)
 {
-    String id(msg.getValue("targetid"));
-    if (!id.startsWith("h323"))
+    String callid(msg.getValue("targetid"));
+    if (!callid.startsWith("h323"))
+	return false;
+    YateH323Connection *conn = hplugin.findConnectionLock(id);
+    if (!conn)
 	return false;
     String text(msg.getValue("text"));
-    YateH323Connection *conn = hplugin.findConnectionLock(id);
-    if (conn) {
-	Debug("H323DTMF",DebugInfo,"Text '%s' for %s [%p]",text.c_str(),conn->id().c_str(),conn);
-	for (unsigned int i = 0; i < text.length(); i++)
-	    conn->SendUserInputTone(text[i]);
-	conn->Unlock();
-	return true;
+    switch (id) {
+        case Answered:
+	    conn->AnsweringCall(H323Connection::AnswerCallNow);
+	    break;
+        case Ringing:
+	    conn->AnsweringCall(H323Connection::AnswerCallAlertWithMedia);
+	    break;
+	case DTMF:
+	    Debug("H323",DebugInfo,"DTMF '%s' for %s [%p]",text.c_str(),conn->id().c_str(),conn);
+	    for (unsigned int i = 0; i < text.length(); i++)
+		conn->SendUserInputTone(text[i]);
+	    break;
+	case Text:
+	    Debug("H323",DebugInfo,"Text '%s' for %s [%p]",text.c_str(),conn->id().c_str(),conn);
+	    conn->SendUserInputIndicationString(text.safe());
+	    break;
     }
-    return false;
-};
-
-bool H323Text::received(Message &msg)
-{
-    String id(msg.getValue("targetid"));
-    if (!id.startsWith("h323"))
-	return false;
-    String text(msg.getValue("text"));
-    YateH323Connection *conn = hplugin.findConnectionLock(id);
-    if (conn) {
-	Debug("H323Text",DebugInfo,"Text '%s' for %s [%p]",text.c_str(),conn->id().c_str(),conn);
-	conn->SendUserInputIndicationString(text.safe());
-	conn->Unlock();
-	return true;
-    }
-    return false;
-};
+    conn->Unlock();
+    return true;
+}
 
 bool StatusHandler::received(Message &msg)
 {
@@ -1411,10 +1411,13 @@ void H323Plugin::initialize()
     s_externalRtp = s_cfg.getBoolValue("general","external_rtp",false);
     if (m_first) {
 	m_first = false;
+	H323ConnHandler* ch = new H323ConnHandler;
+	Engine::install(new MessageRelay("call.ringing",ch,H323ConnHandler::Ringing));
+	Engine::install(new MessageRelay("call.answered",ch,H323ConnHandler::Answered));
+	Engine::install(new MessageRelay("chan.dtmf",ch,H323ConnHandler::DTMF));
+	Engine::install(new MessageRelay("chan.text",ch,H323ConnHandler::Text));
 	Engine::install(new H323Handler("call.execute"));
 	Engine::install(new H323Dropper("call.drop"));
-	Engine::install(new H323DTMF("chan.dtmf"));
-	Engine::install(new H323Text("chan.text"));
 	Engine::install(new H323Stopper("engine.halt"));
 	Engine::install(new StatusHandler);
     }

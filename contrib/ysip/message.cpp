@@ -128,7 +128,7 @@ SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
 SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason)
     : code(_code), reason(_reason), body(0),
       m_ep(0), m_valid(false),
-      m_answer(true), m_outgoing(true), m_cseq(-1)
+      m_answer(true), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
@@ -182,8 +182,14 @@ SIPMessage::~SIPMessage()
     setBody();
 }
 
-void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain)
+void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain, const char* dlgTag)
 {
+    Debug("SIPMessage",DebugAll,"complete(%p,'%s','%s','%s')%s%s%s [%p]",
+	engine,user,domain,dlgTag,
+	isACK() ? " ACK" : "",
+	isOutgoing() ? " OUT" : "",
+	isAnswer() ? " ANS" : "",
+	this);
     if (!engine)
 	return;
 
@@ -212,6 +218,12 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	tmp << (int)::random();
 	hl->addParam("branch",tmp);
     }
+    if (isAnswer()) {
+	if (!hl->getParam("received"))
+	    hl->addParam("received",getParty()->getPartyAddr());
+	if (!hl->getParam("rport")) 
+	    hl->addParam("rport",String(getParty()->getPartyPort()));
+    }
 
     hl = const_cast<HeaderLine*>(getHeader("From"));
     if (!hl) {
@@ -223,11 +235,15 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!hl->getParam("tag"))
 	hl->addParam("tag",String((int)::random()));
 
-    if (!getHeader("To")) {
+    hl = const_cast<HeaderLine*>(getHeader("To"));
+    if (!hl) {
 	String tmp;
 	tmp << "<" << uri << ">";
-	addHeader("To",tmp);
+	hl = new HeaderLine("To",tmp);
+	header.append(hl);
     }
+    if (dlgTag && !hl->getParam("tag"))
+	hl->addParam("tag",dlgTag);
 
     if (!getHeader("Call-ID")) {
 	String tmp;
@@ -245,6 +261,12 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!(isAnswer() || getHeader("Max-Forwards"))) {
 	String tmp(engine->getMaxForwards());
 	addHeader("Max-Forwards",tmp);
+    }
+
+    if (!getHeader("Contact")) {
+	String tmp;
+	tmp << "<sip:" << user << "@" << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort() << ">";
+	addHeader("Contact",tmp);
     }
 
     if (!(getHeader("User-Agent") || engine->getUserAgent().null()))
@@ -365,6 +387,10 @@ bool SIPMessage::parse(const char* buf, int len)
 	if ((m_cseq < 0) && (name &= "CSeq")) {
 	    String seq = *line;
 	    seq >> m_cseq;
+	    if (m_answer) {
+		seq.trimBlanks().toUpper();
+		method = seq;
+	    }
 	}
 	line->destruct();
     }

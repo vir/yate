@@ -204,7 +204,7 @@ public:
     /**
      * Complete missing fields with defaults taken from a SIP engine
      */
-    void complete(SIPEngine* engine, const char* user = 0, const char* domain = 0);
+    void complete(SIPEngine* engine, const char* user = 0, const char* domain = 0, const char* dlgTag = 0);
 
     /**
      * Copy an entire header line (including all parameters) from another message
@@ -269,7 +269,7 @@ public:
 	{ return m_ep ? m_ep->isReliable() : false; }
 
     /**
-     *
+     * Get the Command Sequence number from this message
      */
     inline int getCSeq() const
 	{ return m_cseq; }

@@ -124,6 +124,9 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
 {
     if (m_lastMessage == message)
 	return;
+    Debug(DebugAll,"SIP Latest message changing from %p %d to %p %d [%p]",
+	m_lastMessage, m_lastMessage ? m_lastMessage->code : 0,
+	message, message ? message->code : 0, this);
     if (m_lastMessage)
 	m_lastMessage->deref();
     m_lastMessage = message;

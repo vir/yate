@@ -41,9 +41,8 @@
 /* Define a easily comparable version, 2 digits for each component */
 #define OPENH323_NUMVERSION ((OPENH323_MAJOR)*10000 + (OPENH323_MINOR)*100 + (OPENH323_BUILD))
 
-/* Guess if codecs are dynamically loaded or linked in */
-#if (OPENH323_NUMVERSION < 11300)
-#define OLD_STYLE_CODECS 1
+#if (OPENH323_NUMVERSION < 11202)
+#error Open H323 version too old
 #endif
 
 /* Guess if we have a QOS parameter to the RTP channel creation */
@@ -81,17 +80,22 @@ const char* h323_formats[] = {
     "G.711-ALaw-64k", "alaw",
     "G.711-uLaw-64k", "mulaw",
     "GSM-06.10", "gsm",
+    "SpeexNarrow", "speex",
+    "LPC-10", "lpc10",
     "MS-GSM", "msgsm",
     "PCM-16", "slin",
     "G.728", "g728",
     "G.729", "g729",
+    "G.723", "g723",
+    "G.726", "g726",
+#if 0
     "G.729A", "g729a",
-    "G.729A", "g729b",
+    "G.729B", "g729b",
     "G.729A/B", "g729ab",
-    "G.723.1", "g723.1",
     "G.723.1(5.3k)", "g723.1-5k3",
     "G.723.1A(5.3k)", "g723.1a-5k3",
     "G.723.1A(6.3k)", "g723.1a-6k3",
+#endif
     0
 };
 
@@ -505,46 +509,15 @@ H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
 
 bool YateH323EndPoint::Init(void)
 {
-    if (s_cfg.getBoolValue("codecs","mulaw",true))
-#ifdef OLD_STYLE_CODECS
-	SetCapability(0,0,new H323_G711Capability(H323_G711Capability::muLaw));
-#else
-	AddAllCapabilities(0, 0, "G.711-u*{sw}");
-#endif
-
-    if (s_cfg.getBoolValue("codecs","alaw",true))
-#ifdef OLD_STYLE_CODECS
-	SetCapability(0,0,new H323_G711Capability(H323_G711Capability::ALaw));
-#else
-	AddAllCapabilities(0, 0, "G.711-A*{sw}");
-#endif
-
-    if (s_cfg.getBoolValue("codecs","gsm",true)) {
-#ifdef OLD_STYLE_CODECS
-	H323_GSM0610Capability *gsmCap = new H323_GSM0610Capability;
-	SetCapability(0, 0, gsmCap);
-	gsmCap->SetTxFramesInPacket(4);
-#else
-	AddAllCapabilities(0, 0, "GSM*{sw}");
-#endif
+    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+    const char** f = h323_formats;
+    for (; *f; f += 2) {
+	if (s_cfg.getBoolValue("codecs",f[1],defcodecs)) {
+	    String tmp(f[0]);
+	    tmp += "*{sw}";
+	    AddAllCapabilities(0, 0, tmp.c_str());
+	}
     }
-
-    if (s_cfg.getBoolValue("codecs","speex",true)) {
-#ifdef OLD_STYLE_CODECS
-	SpeexNarrow3AudioCapability *speex3Cap = new SpeexNarrow3AudioCapability();
-	SetCapability(0, 0, speex3Cap);
-	speex3Cap->SetTxFramesInPacket(5);
-#else
-	AddAllCapabilities(0, 0, "Speex*{sw}");
-#endif
-    }
-
-    if (s_cfg.getBoolValue("codecs","lpc10",true))
-#ifdef OLD_STYLE_CODECS
-	SetCapability(0, 0, new H323_LPC10Capability(*this));
-#else
-	AddAllCapabilities(0, 0, "LPC*{sw}");
-#endif
 
     AddAllUserInputCapabilities(0,1);
     DisableDetectInBandDTMF(!s_cfg.getBoolValue("ep","dtmfinband",false));
@@ -897,7 +870,7 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	    return 0;
 
 	if (s_passtrough && (dir == H323Channel::IsReceiver)) {
-	    if (format && (m_remoteFormats.find(format) < 0) && s_cfg.getBoolValue("codecs",format)) {
+	    if (format && (m_remoteFormats.find(format) < 0) && s_cfg.getBoolValue("codecs",format,true)) {
 		if (m_remoteFormats)
 		    m_remoteFormats << ",";
 		m_remoteFormats << format;
@@ -961,7 +934,7 @@ BOOL YateH323Connection::decodeCapability(const H323Capability & capability, con
     const char *format = 0;
     const char** f = h323_formats;
     for (; *f; f += 2) {
-	if (fname == *f) {
+	if (fname.startsWith(*f,false)) {
 	    format = f[1];
 	    break;
 	}

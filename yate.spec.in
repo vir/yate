@@ -14,19 +14,26 @@ Group:		System Environment/Libraries
 
 %define prefix  /usr
 
+# to include deps run rpmbuild --define 'keepdeps 1'
+%{?keepdeps:%define keep_auto_deps 1}
+
 %description
 YATE is a telephony engine designed to implement PBX and IVR solutions
 for small to large scale projects.
 
 %files
 %defattr(-, root, root)
+%dir /usr/share/doc/yate-%{version}
 %doc /usr/share/doc/yate-%{version}/README
 %doc /usr/share/doc/yate-%{version}/COPYING
 %doc /usr/share/doc/yate-%{version}/ChangeLog
+%dir /etc/yate
 %config /etc/yate/*
 /usr/lib/lib*.so*
 /usr/bin/yate
 /usr/share/man/*
+/etc/rc.d/init.d/yate
+%dir /usr/lib/yate
 /usr/lib/yate/*
 
 %post
@@ -54,18 +61,46 @@ The yate-devel package includes the libraries and header files for YATE
 %prep
 %setup -q -n %{name}
 
+%if "%{keep_auto_deps}" != "1"
+%define local_find_requires %{_builddir}/%{name}/local-find-requires
+%define local_find_provides %{_builddir}/%{name}/local-find-provides
+#
+%{__cat} <<EOF >%{local_find_requires}
+#! /bin/sh
+grep -v '\.yate$' | %{__find_requires} | grep -v '^perl'
+exit 0
+EOF
+#
+%{__cat} <<EOF >%{local_find_provides}
+#! /bin/sh
+%{__find_provides} | grep -v '\.yate$'
+exit 0
+EOF
+#
+chmod +x %{local_find_requires} %{local_find_provides}
+%define _use_internal_dependency_generator 0
+%define __find_requires %{local_find_requires}
+%define __find_provides %{local_find_provides}
+%define __perl_requires /bin/true
+%endif
+
 %build
 ./configure --prefix=%{prefix} --sysconfdir=/etc --mandir=%{prefix}/share/man
 make strip
 
 %install
 make install DESTDIR=%{buildroot}
+mkdir -p %{buildroot}/etc/rc.d/init.d
+cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 
 %clean
 # make clean
 rm -rf %{buildroot}
 
 %changelog
+* Wed Dec 15 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added custom requires/provides filters to supress modules dependencies
+
 * Mon Nov 29 2004 Paul Chitescu <paulc-devel@null.ro>
 - Version 0.8.5
 - Removed non-packaging changes - see ChangeLog instead

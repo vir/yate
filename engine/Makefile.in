@@ -15,7 +15,7 @@ LDFLAGS:=
 LDCONFIG:=true
 
 MKDEPS := ../config.status
-YLIB:= ../libyate.so.@PACKAGE_VERSION@
+YLIB:= libyate.so.@PACKAGE_VERSION@
 EINC := @top_srcdir@/yatengine.h
 PINC := @top_srcdir@/yatephone.h
 LIBS :=
@@ -41,7 +41,7 @@ moddir = @libdir@/yate
 confdir = @sysconfdir@/yate
 
 .PHONY: all
-all: $(YLIB)
+all: ../$(YLIB)
 
 .PHONY: clean
 clean:
@@ -49,7 +49,7 @@ clean:
 
 .PHONY: strip
 strip: all
-	-strip --strip-debug --discard-locals $(YLIB)
+	-strip --strip-debug --discard-locals ../$(YLIB)
 
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
 	$(COMPILE) -c $<
@@ -72,5 +72,5 @@ Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(EINC)
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
-$(YLIB): $(LIBOBJS) $(LIBS)
-	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)
+../$(YLIB): $(LIBOBJS) $(LIBS)
+	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $(LIBTHR) $^ $(LIBAUX)

@@ -84,3 +84,6 @@
 ^99991002$=tone/busy
 ^99991003$=tone/ring
 ^99991004$=tone/specdial
+^99991005$=tone/congestion
+^99991006$=tone/outoforder
+^99991007$=tone/milliwatt

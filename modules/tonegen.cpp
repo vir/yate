@@ -92,6 +92,13 @@ static const short tone421hz[] = {
     -1645,-4759,-7357,-9157,-9965,-9694,-8371,-6142,-3246,
     0 };
 
+// 1000Hz (8 samples @ 8kHz) standard digital milliwatt
+static const short tone1000hz[] = {
+    8,
+    8828, 20860, 20860, 8828,
+    -8828, -20860, -20860, -8828
+    };
+
 static const Tone t_dial[] = { { 8000, tone421hz }, { 0, 0 } };
 
 static const Tone t_busy[] = { { 4000, tone421hz }, { 4000, 0 }, { 0, 0 } };
@@ -99,6 +106,17 @@ static const Tone t_busy[] = { { 4000, tone421hz }, { 4000, 0 }, { 0, 0 } };
 static const Tone t_specdial[] = { { 7600, tone421hz }, { 400, 0 }, { 0, 0 } };
 
 static const Tone t_ring[] = { { 8000, tone421hz }, { 32000, 0 }, { 0, 0 } };
+
+static const Tone t_congestion[] = { { 2000, tone421hz }, { 2000, 0 }, { 0, 0 } };
+
+static const Tone t_outoforder[] = {
+    { 800, tone421hz }, { 800, 0 },
+    { 800, tone421hz }, { 800, 0 },
+    { 800, tone421hz }, { 800, 0 },
+    { 1600, tone421hz }, { 1600, 0 },
+    { 0, 0 } };
+
+static const Tone t_mwatt[] = { { 8000, tone1000hz }, { 0, 0 } };
 
 ToneSource::ToneSource(const String &tone)
     : m_name(tone), m_tone(0), m_data(0,480), m_brate(16000), m_total(0), m_time(0)
@@ -134,6 +152,12 @@ const Tone *ToneSource::getBlock(const String &tone)
 	return t_ring;
     else if (tone == "specdial" || tone == "sd")
 	return t_specdial;
+    else if (tone == "congestion" || tone == "cg")
+	return t_congestion;
+    else if (tone == "outoforder" || tone == "oo")
+	return t_outoforder;
+    else if (tone == "milliwatt" || tone == "mw")
+	return t_mwatt;
     Debug(DebugWarn,"No waveform is defined for tone '%s'",tone.c_str());
     return 0;
 }

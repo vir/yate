@@ -92,7 +92,6 @@ bool AuthHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
     msg.retValue() = s_cfg.getValue(username,"password");
-    Debug(DebugInfo,"i'm in %i",!msg.retValue().null());
     return (!msg.retValue().null());
 };
 

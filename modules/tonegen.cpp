@@ -159,9 +159,13 @@ void ToneSource::run()
 		if (tone != otone)
 		    dpos = 1;
 	    }
-	    if (dpos > tone->data[0])
-		dpos = 1;
-	    *d++ = tone->data[dpos];
+	    if (tone->data) {
+		if (dpos > tone->data[0])
+		    dpos = 1;
+		*d++ = tone->data[dpos];
+	    }
+	    else
+		*d++ = 0;
 	}
 	long long dly = tpos - Time::now();
 	if (dly > 0) {

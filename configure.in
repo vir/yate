@@ -504,6 +504,7 @@ AC_CONFIG_FILES([yate.spec
                  scripts/Makefile
                  conf.d/Makefile
                  contrib/iax/Makefile
+                 contrib/ysip/Makefile
                  contrib/qt/Makefile
                  test/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])

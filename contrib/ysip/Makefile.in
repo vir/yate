@@ -1,0 +1,45 @@
+# Makefile
+# This file holds the make rules for the libsip
+
+DEBUG :=
+
+CXX  := @CXX@ -Wall
+AR  := ar
+DEFS :=
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
+CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+LDFLAGS:= -L.. -lyate
+INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h \
+	@srcdir@/ysip.h @srcdir@/util.h
+
+PROGS=
+LIBS = libysip.a
+OBJS = util.o engine.o body.o message.o transaction.o
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+.PHONY: all
+all: $(LIBS) $(PROGS)
+
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean:
+	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+
+%.o: @srcdir@/%.cpp $(INCFILES)
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status
+
+libysip.a: $(OBJS)
+	$(AR) rcs $@ $^

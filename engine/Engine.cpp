@@ -17,6 +17,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 
 #include <assert.h>
@@ -48,9 +49,12 @@ using namespace TelEngine;
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
 
+#define MAX_SANITY 8
+
 static unsigned long long s_nextinit = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
+static int s_super_handle = -1;
 
 static void sighandler(int signal)
 {
@@ -131,6 +135,15 @@ SLib *SLib::load(const char *file)
     return 0;
 }
 
+class EngineSuperHandler : public MessageHandler
+{
+public:
+    EngineSuperHandler() : MessageHandler("engine.timer",0), m_seq(0) { }
+    virtual bool received(Message &msg)
+	{ ::write(s_super_handle,&m_seq,1); m_seq++; return false; }
+    char m_seq;
+};
+
 class EngineStatusHandler : public MessageHandler
 {
 public:
@@ -185,6 +198,8 @@ int Engine::run()
 {
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
+    if (s_super_handle)
+	install(new EngineSuperHandler);
     loadPlugins();
     Debug(DebugInfo,"plugins.count() = %d",plugins.count());
     initPlugins();
@@ -221,6 +236,7 @@ int Engine::run()
 	else
 	    corr += t/10;
 	enqueue(m);
+	Thread::yield();
     }
     Debug(DebugInfo,"Engine exiting with code %d",s_haltcode);
     dispatch("engine.halt");
@@ -379,6 +395,100 @@ bool Engine::dispatch(const char *name)
 }
 
 
+static pid_t s_childpid = -1;
+static bool s_runagain = true;
+
+static void superhandler(int signal)
+{
+    switch (signal) {
+	case SIGINT:
+	case SIGTERM:
+	case SIGABRT:
+	    s_runagain = false;
+    }
+    if (s_childpid > 0)
+	::kill(s_childpid,signal);
+}
+
+static int supervise(void)
+{
+    ::fprintf(stderr,"Supervisor (%u) is starting\n",::getpid());
+    ::signal(SIGINT,superhandler);
+    ::signal(SIGTERM,superhandler);
+    ::signal(SIGHUP,superhandler);
+    ::signal(SIGQUIT,superhandler);
+    ::signal(SIGABRT,superhandler);
+    int retcode = 0;
+    while (s_runagain) {
+	int wdogfd[2];
+	if (::pipe(wdogfd)) {
+	    int err = errno;
+	    ::fprintf(stderr,"Supervisor: pipe failed: %s (%d)\n",::strerror(err),err);
+	    return err;
+	}
+	::fcntl(wdogfd[0],F_SETFL,O_NONBLOCK);
+	::fcntl(wdogfd[1],F_SETFL,O_NONBLOCK);
+	s_childpid = ::fork();
+	if (s_childpid < 0) {
+	    int err = errno;
+	    ::fprintf(stderr,"Supervisor: fork failed: %s (%d)\n",::strerror(err),err);
+	    return err;
+	}
+	if (s_childpid == 0) {
+	    s_super_handle = wdogfd[1];
+	    ::close(wdogfd[0]);
+	    ::signal(SIGINT,SIG_DFL);
+	    ::signal(SIGTERM,SIG_DFL);
+	    ::signal(SIGHUP,SIG_DFL);
+	    ::signal(SIGQUIT,SIG_DFL);
+	    ::signal(SIGABRT,SIG_DFL);
+	    return -1;
+	}
+	::close(wdogfd[1]);
+	// Wait for the child to die or block
+	for (int sanity = MAX_SANITY/2; sanity > 0; sanity--) {
+	    int status = -1;
+	    int tmp = ::waitpid(s_childpid,&status,WNOHANG);
+	    if (tmp > 0) {
+		// Child exited for some reason
+		if (WIFEXITED(status)) {
+		    s_runagain = false;
+		    retcode = WEXITSTATUS(status);
+		}
+		else if (WIFSIGNALED(status)) {
+		    retcode = WTERMSIG(status);
+		    ::fprintf(stderr,"Supervisor: child %d died on signal %d\n",s_childpid,retcode);
+		}
+		s_childpid = -1;
+		break;
+	    }
+
+	    char buf[8];
+	    tmp = ::read(wdogfd[0],buf,sizeof(buf));
+	    if (tmp >= 0) {
+		// Add one sanity point every second
+		sanity += tmp;
+		if (sanity > MAX_SANITY)
+		    sanity = MAX_SANITY;
+	    }
+	    else if ((errno != EINTR) && (errno != EAGAIN))
+		break;
+	    // Consume sanity points slighly slower
+	    ::usleep(1200000);
+	}
+	::close(wdogfd[0]);
+	if (s_childpid > 0) {
+	    // Child failed to proof sanity. Kill it - noo need to be gentle.
+	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
+	    ::kill(s_childpid,SIGKILL);
+	    s_childpid = -1;
+	    ::usleep(100000);
+	}
+    }
+    ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
+    return retcode;
+}
+
 static void usage(FILE *f)
 {
     ::fprintf(f,
@@ -387,6 +497,7 @@ static void usage(FILE *f)
 "   -v             Verbose debugging (you can use more than once)\n"
 "   -q             Quieter debugging (you can use more than once)\n"
 "   -d             Daemonify, suppress output unless logged\n"
+"   -s             Supervised, restart if crashes or locks up\n"
 "   -l filename    Log to file\n"
 "   -p filename    Write PID to file\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
@@ -420,6 +531,7 @@ static void noarg(const char *opt)
 int Engine::main(int argc, const char **argv, const char **environ)
 {
     bool daemonic = false;
+    bool supervised = false;
     int debug_level = debugLevel();
     const char *logfile = 0;
     const char *pidfile = 0;
@@ -454,6 +566,9 @@ int Engine::main(int argc, const char **argv, const char **environ)
 			break;
 		    case 'd':
 			daemonic = true;
+			break;
+		    case 's':
+			supervised = true;
 			break;
 		    case 'l':
 			if (i+1 >= argc) {
@@ -556,7 +671,15 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	}
     }
     debugLevel(debug_level);
+
+    int retcode = supervised ? supervise() : -1;
+    if (retcode >= 0)
+	return retcode;
+
     time_t t = ::time(0);
     Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
-    return self()->run();
+    retcode = self()->run();
+    t = ::time(0);
+    Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
+    return retcode;
 }

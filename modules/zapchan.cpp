@@ -381,6 +381,7 @@ public:
     void sendDigit(char digit);
     bool call(Message &msg, const char *called = 0);
     bool answer();
+    void answered();
     void idle();
     void restart(bool outgoing = false);
     bool open(int defLaw = -1);
@@ -478,6 +479,7 @@ public:
     ZapChan *findChan(const char *id);
     ZapChan *findChan(int first = -1, int last = -1);
     ObjList m_spans;
+    Mutex mutex;
 };
 
 ZaptelPlugin zplugin;
@@ -562,7 +564,7 @@ PriSpan::~PriSpan()
     Debug(DebugAll,"PriSpan::~PriSpan() [%p]",this);
     zplugin.m_spans.remove(this,false);
     m_ok = false;
-    for (int i = 0; i <m_nchans; i++) {
+    for (int i = 0; i < m_nchans; i++) {
 	ZapChan *c = m_chans[i];
 	m_chans[i] = 0;
 	if (c) {
@@ -590,6 +592,7 @@ void PriSpan::run()
 	tv.tv_usec = 100;
 	int sel = ::select(m_fd+1, &rdfds, NULL, &errfds, &tv);
 	pri_event *ev = 0;
+	Lock lock(zplugin.mutex);
 	if (!sel) {
 	    ev = ::pri_schedule_run(m_pri);
 	    idle();
@@ -614,14 +617,15 @@ void PriSpan::run()
 
 void PriSpan::idle()
 {
+    if (!m_chans)
+	return;
     if (restartPeriod && (Time::now() > m_restart)) {
 	m_restart = Time::now() + restartPeriod;
 	Debug("PriSpan",DebugInfo,"Restarting idle channels on span %d",m_span);
-	for (int i=1; i<m_nchans; i++)
-	    restartChan(i,true);
+	for (int i=0; i<m_nchans; i++)
+	    if (m_chans[i])
+		restartChan(i+1,true);
     }
-    if (!m_chans)
-	return;
     for (int i=0; i<m_nchans; i++)
 	if (m_chans[i])
 	    m_chans[i]->idle();
@@ -633,11 +637,12 @@ void PriSpan::handleEvent(pri_event &ev)
 	case PRI_EVENT_DCHAN_UP:
 	    Debug(DebugInfo,"D-channel up on span %d",m_span);
 	    m_ok = true;
+	    m_restart = Time::now() + 1000000;
 	    break;
 	case PRI_EVENT_DCHAN_DOWN:
 	    Debug(DebugWarn,"D-channel down on span %d",m_span);
 	    m_ok = false;
-	    for (int i=1; i<m_nchans; i++)
+	    for (int i=0; i<m_nchans; i++)
 		if (m_chans[i])
 		    m_chans[i]->hangup(PRI_CAUSE_NETWORK_OUT_OF_ORDER);
 	    break;
@@ -730,7 +735,7 @@ void PriSpan::restartChan(int chan, bool outgoing, bool force)
 	return;
     }
     if (force || !getChan(chan)->inUse()) {
-	Debug(DebugInfo,"Restarting B-channel %d on span %d",chan,m_span);
+	Debug(DebugAll,"Restarting B-channel %d on span %d",chan,m_span);
 	getChan(chan)->restart(outgoing);
     }
 }
@@ -830,7 +835,7 @@ void PriSpan::answerChan(int chan)
 	return;
     }
     Debug(DebugInfo,"ANSWERing channel %d on span %d",chan,m_span);
-    getChan(chan)->setTimeout(0);
+    getChan(chan)->answered();
 }
 
 void PriSpan::proceedingChan(int chan)
@@ -945,7 +950,11 @@ ZapChan::~ZapChan()
 void ZapChan::disconnected()
 {
     Debugger debug("ZapChan::disconnected()");
+    // FIXME: we can't know from which thread we got disconnected
+    bool gotLock = zplugin.mutex.lock(1000);
     hangup(PRI_CAUSE_NORMAL_CLEARING);
+    if (gotLock)
+	zplugin.mutex.unlock();
 }
 
 bool ZapChan::nativeConnect(DataEndpoint *peer)
@@ -1058,9 +1067,12 @@ bool ZapChan::answer()
 void ZapChan::hangup(int cause)
 {
     if (inUse())
-	Debug(DebugInfo,"Hanging up zap/%d in state %s",m_abschan,status());
-    m_ring = false;
+	Debug(DebugInfo,"Hanging up zap/%d in state %s: %s (%d)",
+	    m_abschan,status(),pri_cause2str(cause),cause);
     m_timeout = 0;
+    disconnect();
+    close();
+    m_ring = false;
     if (m_call) {
 	::pri_hangup(m_span->pri(),m_call,cause);
 	::pri_destroycall(m_span->pri(),m_call);
@@ -1069,10 +1081,20 @@ void ZapChan::hangup(int cause)
 	m->addParam("driver","zap");
 	m->addParam("span",String(m_span->span()));
 	m->addParam("channel",String(m_chan));
+	m->addParam("reason",pri_cause2str(cause));
 	Engine::enqueue(m);
     }
-    disconnect();
-    close();
+}
+
+void ZapChan::answered()
+{
+    if (!m_call) {
+	Debug("ZapChan",DebugWarn,"Answer detected on %s channel %d on span %d",
+	    status(),m_chan,m_span->span());
+	return;
+    }
+    m_timeout = 0;
+    Output("Remote answered on zap/%d (%d/%d)",m_abschan,m_span->span(),m_chan);
 }
 
 void ZapChan::sendDigit(char digit)
@@ -1145,9 +1167,9 @@ bool ZapChan::call(Message &msg, const char *called)
 
 void ZapChan::ring(q931_call *call)
 {
-    m_call = call;
     if (call) {
 	setTimeout(10000000);
+	m_call = call;
 	m_ring = true;
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
     }
@@ -1176,6 +1198,7 @@ bool ZapHandler::received(Message &msg)
     ZapChan *c = 0;
 
     r = "^\\([0-9]\\+\\)-\\([0-9]*\\)$";
+    Lock lock(zplugin.mutex);
     if (chan.matches(r))
 	c = zplugin.findChan(chan.matchString(1).toInteger(),
 	    chan.matchString(2).toInteger(65535));
@@ -1188,7 +1211,7 @@ bool ZapHandler::received(Message &msg)
 	return c->call(msg,num);
     }
     else
-	Debug(DebugWarn,"Invalid Zaptel channel '%s'",chan.c_str());
+	Debug(DebugWarn,"No free Zaptel channel '%s'",chan.c_str());
     return false;
 }
 
@@ -1197,6 +1220,7 @@ bool ZapDropper::received(Message &msg)
     String id(msg.getValue("id"));
     if (id.null()) {
         Debug("ZapDropper",DebugInfo,"Dropping all calls");
+	zplugin.mutex.lock();
 	const ObjList *l = &zplugin.m_spans;
 	for (; l; l=l->next()) {
 	    PriSpan *s = static_cast<PriSpan *>(l->get());
@@ -1208,6 +1232,7 @@ bool ZapDropper::received(Message &msg)
 		}
 	    }
 	}
+	zplugin.mutex.unlock();
         return false;
     }
     if (!id.startsWith("zap/"))
@@ -1218,7 +1243,9 @@ bool ZapDropper::received(Message &msg)
     if ((n > 0) && (c = zplugin.findChan(n))) {
         Debug("ZapDropper",DebugInfo,"Dropping zap/%d (%d/%d)",
 	    n,c->span()->span(),c->chan());
+	zplugin.mutex.lock();
 	c->hangup(PRI_CAUSE_INTERWORKING);
+	zplugin.mutex.unlock();
 	return true;
     }
     Debug("ZapDropper",DebugInfo,"Could not find zap/%s",id.c_str());
@@ -1231,6 +1258,7 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"zapchan") && ::strcmp(sel,"fixchans"))
 	return false;
     String st("zapchan,type=fixchans,spans=");
+    zplugin.mutex.lock();
     st << zplugin.m_spans.count() << ",[LIST]";
     const ObjList *l = &zplugin.m_spans;
     for (; l; l=l->next()) {
@@ -1245,6 +1273,7 @@ bool StatusHandler::received(Message &msg)
 	    }
 	}
     }
+    zplugin.mutex.unlock();
     msg.retValue() << st << "\n";
     return false;
 }

@@ -103,13 +103,13 @@ const NamedString* HeaderLine::getParam(const char *name) const
 
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
     : version(_version), method(_method), uri(_uri),
-      body(0), m_ep(0), m_valid(true), m_answer(false), m_outgoing(true)
+      body(0), m_ep(0), m_valid(true), m_answer(false), m_outgoing(true), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage() [%p]",this);
 }
 
 SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
-    : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false)
+    : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_cseq(-1)
 {
     Debugger debug(DebugAll,"SIPMessage::SIPMessage","(%p,%d) [%p]\n%s",
 	buf,len,this,buf);
@@ -126,7 +126,7 @@ SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
 
 SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason)
     : code(_code), reason(_reason), body(0),
-      m_ep(0), m_valid(false), m_answer(true), m_outgoing(true)
+      m_ep(0), m_valid(false), m_answer(true), m_outgoing(true), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
@@ -138,14 +138,36 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     version = message->version;
     uri = message->uri;
     method = message->method;
-    copyAllHeaders(message,"via");
-    copyHeader(message,"to");
-    copyHeader(message,"from");
-    copyHeader(message,"cseq");
-    copyHeader(message,"call-id");
+    copyAllHeaders(message,"Via");
+    copyHeader(message,"To");
+    copyHeader(message,"From");
+    copyHeader(message,"Call-ID");
+    copyHeader(message,"CSeq");
 #if 0
     body = message->body ? message->body->clone() : 0;
 #endif
+    m_valid = true;
+}
+
+SIPMessage::SIPMessage(const SIPMessage* message)
+    : method("ACK"),
+      body(), m_ep(0), m_valid(false), m_answer(false), m_outgoing(true), m_cseq(-1)
+{
+    Debug(DebugAll,"SIPMessage::SIPMessage(%p) [%p]",message,this);
+    if (!(message && message->isValid()))
+	return;
+    m_ep = message->getParty();
+    if (m_ep)
+	m_ep->ref();
+    version = message->version;
+    uri = message->uri;
+    copyAllHeaders(message,"Via");
+    copyHeader(message,"To");
+    copyHeader(message,"From");
+    copyHeader(message,"Call-ID");
+    String tmp;
+    tmp << message->getCSeq() << " " << method;
+    addHeader("CSeq",tmp);
     m_valid = true;
 }
 
@@ -165,10 +187,19 @@ void SIPMessage::complete(SIPEngine* engine)
 {
     if (!engine)
 	return;
-    if (!getHeader("Max-Forwards")) {
-	String m(engine->getMaxForwards());
-	addHeader("Max-Forwards",m);
+
+    if (!getHeader("CSeq")) {
+	String tmp;
+	m_cseq = engine->getNextCSeq();
+	tmp << m_cseq << " " << method;
+	addHeader("CSeq",tmp);
     }
+
+    if (!getHeader("Max-Forwards")) {
+	String tmp(engine->getMaxForwards());
+	addHeader("Max-Forwards",tmp);
+    }
+
     if (!getHeader("User-Agent"))
 	addHeader("User-Agent",engine->getUserAgent());
 }
@@ -275,9 +306,13 @@ bool SIPMessage::parse(const char* buf, int len)
 	line->trimBlanks();
 	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
 	header.append(new HeaderLine(name.c_str(),*line));
-	if (content.null() && (name &= "content-type")) {
+	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
 	    content.toLower();
+	}
+	if ((m_cseq < 0) && (name &= "CSeq")) {
+	    String seq = *line;
+	    seq >> m_cseq;
 	}
 	line->destruct();
     }

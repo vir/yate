@@ -167,13 +167,14 @@ SIPEvent* SIPTransaction::getEvent()
 void SIPTransaction::setResponse(SIPMessage* message)
 {
     setLatestMessage(message);
-    m_lastMessage->deref();
     changeState(Finish);
 }
 
 void SIPTransaction::setResponse(int code, const char* reason)
 {
-    setResponse(new SIPMessage(m_firstMessage, code, reason));
+    SIPMessage* msg = new SIPMessage(m_firstMessage, code, reason);
+    setResponse(msg);
+    msg->deref();
 }
 
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
@@ -197,6 +198,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	    setTimeout(m_engine->getTimer('I'));
 	return true;
     }
+    // fire up a retransmission of the latest outgoing message
     setTransmit();
     return true;
 }

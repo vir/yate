@@ -146,6 +146,11 @@ public:
     SIPMessage(const SIPMessage* message, int _code, const char* _reason);
 
     /**
+     * Creates an ACK message from the initial message.
+     */
+    SIPMessage(const SIPMessage* message);
+
+    /**
      * Destroy the message and all
      */
     virtual ~SIPMessage();
@@ -209,6 +214,12 @@ public:
      */
     inline bool isReliable() const
 	{ return m_ep ? m_ep->isReliable() : false; }
+
+    /**
+     *
+     */
+    inline int getCSeq() const
+	{ return m_cseq; }
 
     /**
      * Find a header line by name
@@ -289,6 +300,7 @@ protected:
     bool m_valid;
     bool m_answer;
     bool m_outgoing;
+    int m_cseq;
     String m_branch;
     mutable String m_string;
     mutable DataBlock m_data;
@@ -673,6 +685,12 @@ public:
 	{ return m_userAgent; }
 
     /**
+     * Get a CSeq value suitable for use in a new request
+     */
+    inline int getNextCSeq()
+	{ return ++m_cseq; }
+
+    /**
      * TransList is the key. 
      * Is the list that holds all the transactions.
      */
@@ -683,6 +701,7 @@ protected:
     unsigned long long m_t1;
     unsigned long long m_t4;
     unsigned int m_maxForwards;
+    int m_cseq;
     String m_userAgent;
 };
 

@@ -6,9 +6,21 @@
 
 #include <stdio.h>
 
+class NAPTR : public GenObject
+{
+private:
+    int m_order;
+    int m_pref;
+    String m_flags;
+    String m_service;
+    Regexp m_regexp;
+    String m_replace;
+}
+
 unsigned char buf[2048];
 
-int dn_string(const unsigned char* end, const unsigned char* src, char *dest, int maxlen)
+// copy one string (not domain) from response
+static int dn_string(const unsigned char* end, const unsigned char* src, char *dest, int maxlen)
 {
     int n = src[0];
     maxlen--;

@@ -48,8 +48,8 @@ bool CdrFileHandler::received(Message &msg)
     Lock lock(m_lock);
     if (m_file) {
 	const char *format = m_tabs
-	    ? "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
-	    : "%s,\"%s\",\"%s\",\"%s\",%s,%s,%s,\"%s\"\n";
+	    ? "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+	    : "%s,\"%s\",\"%s\",\"%s\",%s,%s,%s,\"%s\",\"%s\"\n";
 	::fprintf(m_file,format,
 	    c_safe(msg.getValue("time")),
 	    c_safe(msg.getValue("chan")),
@@ -58,7 +58,8 @@ bool CdrFileHandler::received(Message &msg)
 	    c_safe(msg.getValue("billtime")),
 	    c_safe(msg.getValue("ringtime")),
 	    c_safe(msg.getValue("duration")),
-	    c_safe(msg.getValue("status"))
+	    c_safe(msg.getValue("status")),
+	    c_safe(msg.getValue("direction"))
 	    );
 	::fflush(m_file);
     }

@@ -47,6 +47,11 @@ public:
     ToneChan(const String &tone);
     ~ToneChan();
     virtual void disconnected(const char *reason);
+    inline const String &id() const
+	{ return m_id; }
+private:
+    String m_id;
+    static int s_nextid;
 };
 
 class ToneHandler : public MessageHandler
@@ -194,11 +199,14 @@ void ToneSource::run()
     m_time = 0;
 }
 
+int ToneChan::s_nextid = 1;
+
 ToneChan::ToneChan(const String &tone)
     : DataEndpoint("tone")
 {
     Debug(DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
     mutex.lock();
+    m_id << "tone/" << s_nextid++;
     chans.append(this);
     mutex.unlock();
     ToneSource *t = ToneSource::getTone(tone);
@@ -212,7 +220,7 @@ ToneChan::ToneChan(const String &tone)
 
 ToneChan::~ToneChan()
 {
-    Debug(DebugAll,"ToneChan::~ToneChan() [%p]",this);
+    Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",m_id.c_str(),this);
     mutex.lock();
     chans.remove(this,false);
     mutex.unlock();
@@ -259,6 +267,7 @@ bool ToneHandler::received(Message &msg)
 	    m.addParam("callto",m.retValue());
 	    m.retValue() = 0;
 	    ToneChan *tc = new ToneChan(dest.matchString(1).c_str());
+	    m.setParam("id",tc->id());
 	    m.userData(tc);
 	    if (Engine::dispatch(m)) {
 		tc->deref();

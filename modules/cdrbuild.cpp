@@ -73,6 +73,10 @@ CdrBuilder::CdrBuilder(const char *name, const char *caller, const char *called)
 
 CdrBuilder::~CdrBuilder()
 {
+    const char *dir = m_ring ?
+	(m_call ? "bidir" : "incoming") :
+	(m_call ? "outgoing" : "unknown");
+
     if (!m_hangup)
 	m_hangup = Time::now();
     if (!m_ring)
@@ -87,6 +91,7 @@ CdrBuilder::~CdrBuilder()
     Message *m = new Message("cdr");
     m->addParam("time",String(sec(m_ring)));
     m->addParam("chan",c_str());
+    m->addParam("direction",dir);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
     m->addParam("duration",String(sec(m_hangup - m_ring)));
@@ -99,7 +104,7 @@ CdrBuilder::~CdrBuilder()
 String CdrBuilder::getStatus() const
 {
     String s(m_status);
-    s << "/" << m_caller << "/" << m_called;
+    s << "|" << m_caller << "|" << m_called;
     return s;
 }
 
@@ -151,6 +156,8 @@ bool CdrHandler::received(Message &msg)
 	id += msg.getValue("span");
 	id += "/";
 	id += msg.getValue("channel");
+	if (id == "//")
+	    return false;
     }
     CdrBuilder *b = CdrBuilder::find(id);
     if (!b && ((m_type == CdrRing) || (m_type == CdrCall))) {

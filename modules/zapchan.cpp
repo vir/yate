@@ -1063,6 +1063,7 @@ bool ZapChan::answer()
     m->addParam("driver","zap");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
+    m->addParam("status","answered");
     Engine::enqueue(m);
     return true;
 }
@@ -1099,6 +1100,12 @@ void ZapChan::answered()
     }
     m_timeout = 0;
     Output("Remote answered on zap/%d (%d/%d)",m_abschan,m_span->span(),m_chan);
+    Message *m = new Message("answer");
+    m->addParam("driver","zap");
+    m->addParam("span",String(m_span->span()));
+    m->addParam("channel",String(m_chan));
+    m->addParam("status","answered");
+    Engine::enqueue(m);
 }
 
 void ZapChan::sendDigit(char digit)

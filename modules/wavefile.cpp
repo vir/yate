@@ -60,6 +60,11 @@ public:
     WaveChan(const String& file, bool record, unsigned maxlen = 0);
     ~WaveChan();
     virtual void disconnected(const char *reason);
+    inline const String &id() const
+	{ return m_id; }
+private:
+    String m_id;
+    static int s_nextid;
 };
 
 class WaveHandler : public MessageHandler
@@ -234,10 +239,16 @@ void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
     }
 }
 
+Mutex mutex;
+int WaveChan::s_nextid = 1;
+
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
     : DataEndpoint("wavefile")
 {
     Debug(DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
+    mutex.lock();
+    m_id << "wave/" << s_nextid++;
+    mutex.unlock();
     if (record) {
 	setConsumer(new WaveConsumer(file,this,maxlen));
 	getConsumer()->deref();
@@ -250,7 +261,7 @@ WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
 
 WaveChan::~WaveChan()
 {
-    Debug(DebugAll,"WaveChan::~WaveChan() [%p]",this);
+    Debug(DebugAll,"WaveChan::~WaveChan() %s [%p]",m_id.c_str(),this);
 }
 
 void WaveChan::disconnected(const char *reason)
@@ -309,6 +320,7 @@ bool WaveHandler::received(Message &msg)
 	m.addParam("callto",m.retValue());
 	m.retValue() = 0;
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+	m.setParam("id",c->id());
 	m.userData(c);
 	if (Engine::dispatch(m)) {
 	    c->deref();

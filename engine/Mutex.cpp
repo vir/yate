@@ -20,34 +20,40 @@ public:
 	{ if (!--m_refcount) delete this; }
     bool lock(long long int maxwait);
     void unlock();
-    static int m_count;
-    static int m_locks;
+    static int s_count;
+    static int s_locks;
 private:
     pthread_mutex_t m_mutex;
     int m_refcount;
+    bool m_locked;
 };
 
 };
 
 using namespace TelEngine;
 
-int MutexPrivate::m_count = 0;
-int MutexPrivate::m_locks = 0;
+int MutexPrivate::s_count = 0;
+int MutexPrivate::s_locks = 0;
 
 // WARNING!!!
 // No debug messages are allowed in mutexes since the debug output itself
 // is serialized using a mutex!
 
 MutexPrivate::MutexPrivate()
-    : m_refcount(1)
+    : m_refcount(1), m_locked(false)
 {
-    m_count++;
+    s_count++;
     ::pthread_mutex_init(&m_mutex,0);
 }
 
 MutexPrivate::~MutexPrivate()
 {
-    m_count--;
+    if (m_locked) {
+	m_locked = false;
+	::pthread_mutex_unlock(&m_mutex);
+	s_locks--;
+    }
+    s_count--;
     ::pthread_mutex_destroy(&m_mutex);
 }
 
@@ -68,8 +74,10 @@ bool MutexPrivate::lock(long long int maxwait)
 	    ::usleep(1);
 	} while (t > Time::now());
     }
-    if (rval)
-	m_locks++;
+    if (rval) {
+	m_locked = true;
+	s_locks++;
+    }
     else
 	deref();
     return rval;
@@ -77,9 +85,15 @@ bool MutexPrivate::lock(long long int maxwait)
 
 void MutexPrivate::unlock()
 {
-    ::pthread_mutex_unlock(&m_mutex);
-    m_locks--;
-    deref();
+    if (m_locked) {
+	m_locked = false;
+	::pthread_mutex_unlock(&m_mutex);
+	s_locks--;
+	deref();
+    }
+    else
+	// Hope we don't hit a bug related to the debug mutex!
+	Debug(DebugGoOn,"MutexPrivate::unlock called on unlocked mutex");
 }
 
 Mutex::Mutex()
@@ -130,10 +144,10 @@ void Mutex::unlock()
 
 int Mutex::count()
 {
-    return MutexPrivate::m_count;
+    return MutexPrivate::s_count;
 }
 
 int Mutex::locks()
 {
-    return MutexPrivate::m_locks;
+    return MutexPrivate::s_locks;
 }

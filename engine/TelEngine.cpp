@@ -213,6 +213,14 @@ Debugger::Debugger(int level, const char *name, const char *format, ...)
 	m_name = 0;
 }
 
+static void dbg_dist_helper(const char* buf, const char* fmt, ...)
+{
+    va_list va;
+    va_start(va,fmt);
+    dbg_output(buf,fmt,va);
+    va_end(va);
+}
+
 Debugger::~Debugger()
 {
     if (m_name) {
@@ -221,9 +229,7 @@ Debugger::~Debugger()
 	if (s_debugging) {
 	    char buf[64];
 	    ::snprintf(buf,sizeof(buf),"<<< %s",m_name);
-	    char *format = 0;
-	    va_list va;
-	    dbg_output(buf,format,va);
+	    dbg_dist_helper(buf,0);
 	}
 	ind_mux.unlock();
     }

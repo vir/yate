@@ -147,6 +147,8 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",plugins=" << plugins.count();
     msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
+    msg.retValue() << ",mutexes=" << Mutex::count();
+    msg.retValue() << ",locks=" << Mutex::locks();
     msg.retValue() << "\n";
     return false;
 }

@@ -577,7 +577,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     String callid(t->getCallID());
     URI uri(t->getURI());
     const HeaderLine* hl = e->getMessage()->getHeader("From");
-    URI from(hl ? *hl : "");
+    URI from(hl ? *hl : String::empty());
     Message *m = new Message("call.preroute");
     m->addParam("driver","sip");
     m->addParam("id","sip/" + callid);

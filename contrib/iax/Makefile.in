@@ -6,7 +6,7 @@ AR  := ar
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
-CFLAGS := -O2 -DDEBUG_SUPPORT -DLIBIAX -fsigned-char
+CFLAGS := -O2 -DDEBUG_SUPPORT -DLIBIAX -fsigned-char @MODULE_CFLAGS@
 LDFLAGS:=
 
 PROGS=

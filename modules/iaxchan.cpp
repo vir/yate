@@ -901,6 +901,10 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
     format &= s_ast_formats;
     if (m_muted || !format)
 	return;
+    if (!buffer || (len < 0) || (len > 1024)) {
+	Debug("IAXAudio",DebugFail,"Invalid buffer=%p or len=%d [%p]",buffer,len,this);
+	return;
+    }
     if (!getSource()) {
 	// Exact match required - incoming data must be a single format
 	const char *frm = lookup(format,dict_iaxformats);

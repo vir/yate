@@ -77,7 +77,7 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
-.PHONY: engine contrib modules test apidocs-build check-topdir
+.PHONY: engine contrib modules test apidocs-build check-topdir windows
 engine: tables library libyate.so $(PROGS)
 
 apidocs-build: check-topdir
@@ -121,6 +121,9 @@ tables: @srcdir@/tables/all.h
 yatepaths.h: $(MKDEPS)
 	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' > $@
 	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' >> $@
+
+windows: check-topdir
+	@cmp -s yateversn.h $@/yateversn.h || cp -p yateversn.h $@/yateversn.h
 
 .PHONY: install install-root install-noapi install-api uninstall uninstall-root
 install install-root: all apidocs install-noapi install-api
@@ -187,7 +190,7 @@ uninstall uninstall-root:
 install-root uninstall-root: LDCONFIG:=ldconfig
 
 .PHONY: snapshot tarball
-snapshot tarball: check-topdir clean tables apidocs
+snapshot tarball: check-topdir clean tables windows apidocs
 	@if [ $@ = snapshot ]; then ver="`date '+CVS-%Y%m%d'`"; else ver="@PACKAGE_VERSION@"; fi ; \
 	wd=`pwd|sed 's,^.*/,,'`; \
 	mkdir -p tarballs; cd ..; \

@@ -1268,9 +1268,16 @@ public:
 
     /**
      * Get the next unique numeric id from a sequence
-     * @return A dierv unique number that increments by 1 at each call
+     * @return A driver unique number that increments by 1 at each call
      */
     unsigned int nextid();
+
+    /**
+     * Get the current (last used) unique numeric id from a sequence
+     * @return The driver unique number
+     */
+    inline unsigned int lastid() const
+	{ return m_nextid; }
 
 protected:
     /**

@@ -29,8 +29,6 @@
 
 using namespace TelEngine;
 
-static Mutex s_mutex(true);
-static ObjList s_calls;
 static Configuration s_cfg;
 static bool s_runs = false;
 static int s_total = 0;
@@ -85,18 +83,6 @@ public:
     virtual void run();
 };
 
-class ConnHandler : public MessageReceiver
-{
-public:
-    enum {
-	Ringing,
-	Answered,
-	Execute,
-	Drop,
-    };
-    virtual bool received(Message &msg, int id);
-};
-
 class CmdHandler : public MessageReceiver
 {
 public:
@@ -126,21 +112,17 @@ GenConnection::GenConnection(const String& callto)
     : Channel(__plugin), m_callto(callto)
 {
     m_start = Time::now();
-    m_status = "calling";
-    s_mutex.lock();
-    s_calls.append(this);
-    m_id << "callgen/" << ++s_total;
+    status("calling");
+    driver()->lock();
     ++s_current;
-    s_mutex.unlock();
+    driver()->unlock();
 }
 
 GenConnection::~GenConnection()
 {
-    m_status = "destroyed";
-    s_mutex.lock();
-    s_calls.remove(this,false);
+    driver()->lock();
     --s_current;
-    s_mutex.unlock();
+    driver()->unlock();
 }
 
 GenConnection* GenConnection::find(const String& id)
@@ -243,37 +225,11 @@ void GenConnection::makeSource()
     s_mutex.unlock();
     if (src) {
 	Message m("chan.attach");
-	m.addParam("id",m_id);
+	complete(m,false);
 	m.addParam("source",src);
 	m.userData(this);
 	Engine::dispatch(m);
     }
-}
-
-bool ConnHandler::received(Message &msg, int id)
-{
-    String callid(msg.getValue("targetid"));
-    if (!callid.startsWith("callgen/",false))
-	return false;
-    GenConnection *conn = GenConnection::find(callid);
-    if (!conn) {
-	Debug(DebugInfo,"Target '%s' was not found in list",callid.c_str());
-	return false;
-    }
-    String text(msg.getValue("text"));
-    switch (id) {
-	case Answered:
-	    conn->answered();
-	    break;
-	case Ringing:
-	    conn->ringing();
-	    break;
-	case Execute:
-	    break;
-	case Drop:
-	    break;
-    }
-    return true;
 }
 
 void GenThread::run()
@@ -442,7 +398,6 @@ CallGenPlugin::CallGenPlugin()
 CallGenPlugin::~CallGenPlugin()
 {
     Output("Unloading module Call Generator");
-    s_calls.clear();
 }
 
 void CallGenPlugin::initialize()
@@ -452,12 +407,6 @@ void CallGenPlugin::initialize()
     s_cfg.load();
     if (m_first) {
 	m_first = false;
-
-	ConnHandler* coh = new ConnHandler;
-	Engine::install(new MessageRelay("call.ringing",coh,ConnHandler::Ringing));
-	Engine::install(new MessageRelay("call.answered",coh,ConnHandler::Answered));
-	Engine::install(new MessageRelay("call.execute",coh,ConnHandler::Execute));
-	Engine::install(new MessageRelay("call.drop",coh,ConnHandler::Drop));
 
 	CmdHandler* cmh = new CmdHandler;
 	Engine::install(new MessageRelay("engine.status",cmh,CmdHandler::Status));

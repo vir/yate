@@ -5,8 +5,8 @@
 ;From outside (e.g. routing modules) mohs are addressed 
 ;as moh/default, moh/noise etc.
 
-; use mpg123 to play a mp3 file and sox to resample
-default=while true; do mpg123 -q -m -s x.mp3 | sox -t raw -r 44100 -s -w -c 2 - -t raw -r 8000 -s -w -c 1 -; done
+; use mpg123 to play a bunch of mp3 files (shuffled)
+default=while true; do mpg123 -q -m -r 8000 -s -Z sounds/*.mp3; done
 
 ; just (loud) random noise from our favorite source
 noise=cat /dev/urandom

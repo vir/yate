@@ -1,5 +1,5 @@
 /**
- * MD5.cpp
+ * YMD5.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Authors: Colin Plumb, Constantin Bergemann

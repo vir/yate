@@ -20,7 +20,7 @@ EINC := @top_srcdir@/yatengine.h
 PINC := @top_srcdir@/yatephone.h
 LIBS :=
 ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
-	Message.o Mutex.o Thread.o Plugin.o Engine.o MD5.o
+	Message.o Mutex.o Thread.o Plugin.o Engine.o YMD5.o
 TELOBJS :=DataBlock.o DataFormat.o Channel.o
 
 LIBOBJS := $(ENGOBJS) $(TELOBJS)

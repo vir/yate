@@ -1057,7 +1057,8 @@ bool ZapChan::answer()
 
 void ZapChan::hangup(int cause)
 {
-    Debug("ZapChan",DebugAll,"Hanging up channel %d in state %s",m_abschan,status());
+    if (inUse())
+	Debug(DebugInfo,"Hanging up zap/%d in state %s",m_abschan,status());
     m_ring = false;
     m_timeout = 0;
     if (m_call) {

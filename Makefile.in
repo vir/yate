@@ -58,9 +58,14 @@ clean:
 .PHONY: engine
 engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
 
-.PHONY: apidocs
-apidocs: check-topdir
+.PHONY: apidocs-build
+apidocs-build: check-topdir
 	kdoc -d docs/api/ $(INCS)
+
+apidocs: @srcdir@/docs/api/index.html
+
+@srcdir@/docs/api/index.html: @srcdir@/telengine.h @srcdir@/telephony.h
+	$(MAKE) apidocs-build
 
 .PHONY: strip
 strip: all
@@ -70,9 +75,14 @@ strip: all
 sex: strip
 	@echo 'Stripped for you!'
 
+# Let's have a little fun
 .PHONY: love
 love:
 	@echo 'Not war?'
+
+.PHONY: war
+war:
+	@echo 'Please make love instead!'
 
 .PHONY: run
 run: all
@@ -103,23 +113,25 @@ yatepaths.h:
 	@echo -en '#define MOD_PATH "$(DESTDIR)$(moddir)"\n#define CFG_PATH "$(DESTDIR)$(confdir)"\n' > $@
 
 .PHONY: everything
-everything: all test
+everything: all apidocs test
 
 .PHONY: install
-install: all
+install: all apidocs
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
 	install $(SLIBS) "$(DESTDIR)$(libdir)/" && ldconfig
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
 	install $(PROGS) yate-config "$(DESTDIR)$(bindir)/"
+	$(MAKE) -C ./modules $@
+	$(MAKE) -C ./conf.d $@
+	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
+	for i in $(MAN8) ; do \
+	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(mandir)/man8/" ; \
+	done
 	@mkdir -p "$(DESTDIR)$(libdir)/pkgconfig/" && \
 	install yate.pc "$(DESTDIR)$(libdir)/pkgconfig/"
 	@mkdir -p "$(DESTDIR)$(incdir)/" && \
 	for i in $(INCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(incdir)/" ; \
-	done
-	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
-	for i in $(MAN8) ; do \
-	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(mandir)/man8/" ; \
 	done
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	for i in $(DOCS) ; do \
@@ -127,8 +139,6 @@ install: all
 	done ;
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
 	install -m 0644 @srcdir@/docs/api/*.html "$(DESTDIR)$(docdir)/api/"
-	$(MAKE) -C ./modules $@
-	$(MAKE) -C ./conf.d $@
 
 .PHONY: uninstall
 uninstall:
@@ -206,6 +216,6 @@ libyate.so: $(ENGOBJS) $(LIBS)
 .PHONY: help
 help:
 	@echo -e 'Usual make targets:\n\
-	    all engine modules test everything apidocs\n\
+	    all engine modules apidocs test everything\n\
 	    install uninstall\n\
 	    snapshot tarball'

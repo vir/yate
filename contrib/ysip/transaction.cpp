@@ -156,6 +156,9 @@ void SIPTransaction::setTimeout(unsigned long long delay, unsigned int count)
     m_timeouts = count;
     m_delay = delay;
     m_timeout = (count && delay) ? Time::now() + delay : 0;
+    if (m_timeout)
+	Debug("SIPTransaction",DebugAll,"New %d timeouts initially %llu usec apart [%p]",
+	    m_timeouts,m_delay,this);
 }
 
 SIPEvent* SIPTransaction::getEvent()
@@ -229,6 +232,9 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	    changeState(Cleared);
 	}
     }
+    // extend timeout for provisional messages
+    else if (message && (message->code > 100))
+	setTimeout(m_engine->getTimer('B'));
 }
 
 void SIPTransaction::setResponse(int code, const char* reason)

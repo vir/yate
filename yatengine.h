@@ -1198,6 +1198,13 @@ public:
 	{ return m_params.length(); }
 
     /**
+     * Get the number of non-null parameters
+     * @return Count of existing named strings
+     */
+    inline unsigned int count() const
+	{ return m_params.count(); }
+
+    /**
      * Add a named string to the parameter list.
      * @param param Parameter to add
      */

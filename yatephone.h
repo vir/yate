@@ -411,7 +411,8 @@ public:
      * Disconnect from the connected endpoint
      * @param reason Text that describes disconnect reason
      */
-    void disconnect(const char *reason = 0);
+    inline void disconnect(const char *reason = 0)
+	{ disconnect(false,reason); }
 
     /**
      * Set the data source of this object
@@ -461,9 +462,10 @@ protected:
 
     /**
      * Disconnect notification method
+     * @param final True if this disconnect was called from the destructor
      * @param reason Text that describes disconnect reason
      */
-    virtual void disconnected(const char *reason) { }
+    virtual void disconnected(bool final, const char *reason) { }
 
     /**
      * Attempt to connect the endpoint to a peer of the same type
@@ -481,6 +483,7 @@ protected:
     void setPeer(DataEndpoint *peer, const char *reason = 0);
 
 private:
+    void disconnect(bool final, const char *reason);
     String m_name;
     DataSource *m_source;
     DataConsumer *m_consumer;

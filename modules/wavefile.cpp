@@ -27,6 +27,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -45,6 +46,8 @@ public:
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
+    void detectAuFormat();
+    void detectWavFormat();
     DataEndpoint *m_chan;
     DataBlock m_data;
     int m_fd;
@@ -77,7 +80,7 @@ class WaveChan : public DataEndpoint
 public:
     WaveChan(const String& file, bool record, unsigned maxlen = 0);
     ~WaveChan();
-    virtual void disconnected(const char *reason);
+    virtual void disconnected(bool final, const char *reason);
     inline const String &id() const
 	{ return m_id; }
 private:
@@ -99,14 +102,14 @@ private:
 class WaveHandler : public MessageHandler
 {
 public:
-    WaveHandler(const char *name) : MessageHandler(name) { }
+    WaveHandler() : MessageHandler("call.execute") { }
     virtual bool received(Message &msg);
 };
 
 class AttachHandler : public MessageHandler
 {
 public:
-    AttachHandler() : MessageHandler("attach") { }
+    AttachHandler() : MessageHandler("chan.attach") { }
     virtual bool received(Message &msg);
 };
 
@@ -123,24 +126,32 @@ WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0), m_autoclose(autoclose)
 {
     Debug(DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
+    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
+    if (m_fd < 0) {
+	Debug(DebugGoOn,"Opening '%s': error %d: %s",
+	    file.c_str(), errno, ::strerror(errno));
+	m_format = "";
+	return;
+    }
     if (file.endsWith(".gsm")) {
 	m_format = "gsm";
 	m_brate = 1650;
     }
-    else if (file.endsWith(".alaw")) {
+    else if (file.endsWith(".alaw") || file.endsWith(".A")) {
 	m_format = "alaw";
 	m_brate = 8000;
     }
-    else if (file.endsWith(".mulaw")) {
+    else if (file.endsWith(".mulaw") || file.endsWith(".u")) {
 	m_format = "mulaw";
 	m_brate = 8000;
     }
-    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
-    if (m_fd >= 0)
-	start("WaveSource");
-    else
-	Debug(DebugGoOn,"Opening '%s': error %d: %s",
-	    file.c_str(), errno, ::strerror(errno));
+    else if (file.endsWith(".au"))
+	detectAuFormat();
+    else if (file.endsWith(".wav"))
+	detectWavFormat();
+    else if (!file.endsWith(".slin"))
+	Debug(DebugMild,"Unknown format for file '%s', assuming signed linear",file.c_str());
+    start("WaveSource");
 }
 
 WaveSource::~WaveSource()
@@ -157,6 +168,50 @@ WaveSource::~WaveSource()
 	::close(m_fd);
 	m_fd = -1;
     }
+}
+
+void WaveSource::detectAuFormat()
+{
+    struct {
+	uint32_t sign;
+	uint32_t offs;
+	uint32_t len;
+	uint32_t form;
+	uint32_t freq;
+	uint32_t chan;
+    } header;
+    if ((::read(m_fd,&header,sizeof(header)) != sizeof(header)) ||
+	(ntohl(header.sign) != 0x2E736E64)) {
+	Debug(DebugMild,"Invalid .au file header, assuming raw signed linear");
+	::lseek(m_fd,0,SEEK_SET);
+	return;
+    }
+    ::lseek(m_fd,ntohl(header.offs),SEEK_SET);
+    int samp = ntohl(header.freq);
+    int chan = ntohl(header.chan);
+    m_brate = samp;
+    switch (ntohl(header.form)) {
+	case 1:
+	    m_format = "mulaw";
+	    break;
+	case 27:
+	    m_format = "alaw";
+	    break;
+	case 3:
+	    m_brate *= 2;
+	    break;
+	default:
+	    Debug(DebugMild,"Unknown .au format 0x%0X, assuming signed linear",ntohl(header.form));
+    }
+    if (samp != 8000)
+	m_format = String(samp) + "/" + m_format;
+    if (chan != 1)
+	m_format = String(chan) + "*" + m_format;
+}
+
+void WaveSource::detectWavFormat()
+{
+    Debug(DebugMild,".wav not supported yet, assuming raw signed linear");
 }
 
 void WaveSource::run()
@@ -187,7 +242,7 @@ void WaveSource::run()
     } while (r > 0);
     Debug(DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
     if (m_chan && !m_id.null()) {
-	Message *m = new Message("notify");
+	Message *m = new Message("chan.notify");
 	m->addParam("id",m_id);
 	m->userData(m_chan);
 	Engine::enqueue(m);
@@ -209,9 +264,9 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 	file.c_str(),chan,maxlen,this);
     if (file.endsWith(".gsm"))
 	m_format = "gsm";
-    else if (file.endsWith(".alaw"))
+    else if (file.endsWith(".alaw") || file.endsWith(".A"))
 	m_format = "alaw";
-    else if (file.endsWith(".mulaw"))
+    else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	m_format = "mulaw";
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
@@ -252,7 +307,7 @@ void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	    }
 	    if (m_chan && !m_id.null()) {
 		m_chan->setConsumer();
-		Message *m = new Message("notify");
+		Message *m = new Message("chan.notify");
 		m->addParam("id",m_id);
 		m->userData(m_chan);
 		Engine::enqueue(m);
@@ -295,7 +350,7 @@ WaveChan::~WaveChan()
     Debug(DebugAll,"WaveChan::~WaveChan() %s [%p]",m_id.c_str(),this);
 }
 
-void WaveChan::disconnected(const char *reason)
+void WaveChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("WaveChan::disconnected()"," '%s' [%p]",reason,this);
 }
@@ -340,14 +395,14 @@ bool WaveHandler::received(Message &msg)
 	Debug(DebugWarn,"Wave outgoing call with no target!");
 	return false;
     }
-    Message m("preroute");
+    Message m("call.preroute");
     m.addParam("id",dest);
     m.addParam("caller",dest);
     m.addParam("called",targ);
     Engine::dispatch(m);
-    m = "route";
+    m = "call.route";
     if (Engine::dispatch(m)) {
-	m = "call";
+	m = "call.execute";
 	m.addParam("callto",m.retValue());
 	m.retValue() = 0;
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
@@ -449,7 +504,7 @@ void WaveFilePlugin::initialize()
 {
     Output("Initializing module WaveFile");
     if (!m_handler) {
-	m_handler = new WaveHandler("call");
+	m_handler = new WaveHandler;
 	Engine::install(m_handler);
 	Engine::install(new AttachHandler);
     }

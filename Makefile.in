@@ -12,7 +12,7 @@ SED := sed
 DEFS :=
 LIBAUX:= -ldl
 LIBTHR:= -lpthread
-INCLUDES := -I@srcdir@
+INCLUDES := -I. -I@srcdir@
 CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
@@ -20,7 +20,8 @@ LDCONFIG:=true
 MKDEPS := ./config.status
 PROGS:= yate
 SLIBS:= libyate.so
-INCS := telengine.h telephony.h yateversn.h
+INCS := telengine.h telephony.h
+GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8
 DOCS := README COPYING ChangeLog
@@ -126,6 +127,9 @@ install install-root: all apidocs
 	for i in $(INCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(incdir)/" ; \
 	done
+	for i in $(GENS) ; do \
+	    install -m 0644 $$i "$(DESTDIR)$(incdir)/" ; \
+	done
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	for i in $(DOCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
@@ -144,7 +148,7 @@ uninstall uninstall-root:
 	done
 	@-rm "$(DESTDIR)$(libdir)/pkgconfig/yate.pc" && \
 	    rmdir $(DESTDIR)$(libdir)/pkgconfig
-	@-for i in $(INCS) ; do \
+	@-for i in $(INCS) $(GENS) ; do \
 	    rm "$(DESTDIR)$(incdir)/$$i" ; \
 	done; \
 	rmdir "$(DESTDIR)$(incdir)"
@@ -183,6 +187,7 @@ snapshot tarball: check-topdir clean tables apidocs
 	--exclude $$wd/yate-config \
 	--exclude $$wd/yate.pc \
 	--exclude $$wd/yatepaths.h \
+	--exclude $$wd/yateversn.h \
 	-X $$wd/tar-exclude \
 	$$wd; \
 	rm $$wd/tar-exclude
@@ -191,7 +196,7 @@ snapshot tarball: check-topdir clean tables apidocs
 check-topdir:
 	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
 
-Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/yateversn.h yatepaths.h
+Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yateversn.h yatepaths.h
 	$(COMPILE) -c $<
 
 DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
@@ -213,7 +218,7 @@ yate: $(OBJS) libyate.so $(LIBS)
 	$(LINK) -o $@ $(LIBTHR) $^
 
 libyate.so: $(ENGOBJS) $(LIBS)
-	$(LINK) -shared -o $@ $(LIBTHR) $^ $(LIBAUX)
+	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)
 
 .PHONY: help
 help:

@@ -16,7 +16,7 @@ sub OnNotify($) {
 }
 
 my $message = new YateMessage();
-$message->install("dtmf",\&OnDTMF,10);
-$message->install("notify",\&OnNotify);
+$message->install("chan.dtmf",\&OnDTMF,10);
+$message->install("chan.notify",\&OnNotify);
 
 $message->listen();

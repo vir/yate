@@ -10,12 +10,12 @@ DEBUG :=
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
-INCLUDES := -I@top_srcdir@
+INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
-INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h @top_srcdir@/yateversn.h
+INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h ../yateversn.h
 
 SUBDIRS :=
 MKDEPS  := ../config.status

@@ -94,7 +94,7 @@ public:
     bool init();
     ~OssChan();
     int setformat();
-    virtual void disconnected(const char *reason);
+    virtual void disconnected(bool final, const char *reason);
     int soundcard_setinput(bool force);
     int soundcard_setoutput(bool force);
     int time_has_passed(void);
@@ -116,7 +116,7 @@ public:
 class StatusHandler : public MessageHandler
 {
 public:
-    StatusHandler() : MessageHandler("status") { }
+    StatusHandler() : MessageHandler("engine.status") { }
     virtual bool received(Message &msg);
 };
 
@@ -358,7 +358,6 @@ int OssChan::soundcard_setinput(bool force)
 	return 1;
 }
 
-
 int OssChan::soundcard_setoutput(bool force)
 {
 	/* Make sure the soundcard is in output mode.  */
@@ -384,10 +383,10 @@ int OssChan::soundcard_setoutput(bool force)
 	return 1;
 }
 
-void OssChan::disconnected(const char *reason)
+void OssChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("OssChan::disconnected()"," '%s' [%p]",reason,this);
-    destruct();
+//    destruct();
 }
 
 bool OssHandler::received(Message &msg)
@@ -414,7 +413,7 @@ bool OssHandler::received(Message &msg)
         const char *direct = msg.getValue("direct");
 	if (direct)
 	{
-	    Message m("call");
+	    Message m("call.execute");
 	    m.addParam("id",dest);
 	    m.addParam("caller",dest);
 	    m.addParam("callto",direct);
@@ -429,12 +428,12 @@ bool OssHandler::received(Message &msg)
 	    Debug(DebugWarn,"OSS outgoing call with no target!");
 	    return false;
 	}
-	Message m("preroute");
+	Message m("call.preroute");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);
 	Engine::dispatch(m);
-	m = "route";
+	m = "call.route";
 	if (Engine::dispatch(m)) {
 	    m = "call";
 	    m.addParam("callto",m.retValue());
@@ -486,8 +485,8 @@ void OssPlugin::initialize()
 {
     Output("Initializing module OssChan");
     if (!m_handler) {
-	m_handler = new OssHandler("call");
-	Engine::install(new DropHandler("drop"));
+	m_handler = new OssHandler("call.execute");
+	Engine::install(new DropHandler("call.drop"));
 	Engine::install(m_handler);
 	Engine::install(new StatusHandler);
     }

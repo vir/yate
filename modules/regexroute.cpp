@@ -35,7 +35,7 @@ class RouteHandler : public MessageHandler
 {
 public:
     RouteHandler(int prio)
-	: MessageHandler("route",prio) { }
+	: MessageHandler("call.route",prio) { }
     virtual bool received(Message &msg);
 };
 
@@ -191,7 +191,7 @@ class PrerouteHandler : public MessageHandler
 {
 public:
     PrerouteHandler(int prio)
-	: MessageHandler("preroute",prio) { }
+	: MessageHandler("call.preroute",prio) { }
     virtual bool received(Message &msg);
 };
 	

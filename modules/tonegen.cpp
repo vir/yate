@@ -63,7 +63,7 @@ class ToneChan : public DataEndpoint
 public:
     ToneChan(const String &tone);
     ~ToneChan();
-    virtual void disconnected(const char *reason);
+    virtual void disconnected(bool final, const char *reason);
     inline const String &id() const
 	{ return m_id; }
 private:
@@ -74,21 +74,21 @@ private:
 class ToneHandler : public MessageHandler
 {
 public:
-    ToneHandler(const char *name) : MessageHandler(name) { }
+    ToneHandler() : MessageHandler("call.execute") { }
     virtual bool received(Message &msg);
 };
 
 class AttachHandler : public MessageHandler
 {
 public:
-    AttachHandler() : MessageHandler("attach") { }
+    AttachHandler() : MessageHandler("chan.attach") { }
     virtual bool received(Message &msg);
 };
 
 class StatusHandler : public MessageHandler
 {
 public:
-    StatusHandler() : MessageHandler("status") { }
+    StatusHandler() : MessageHandler("engine.status") { }
     virtual bool received(Message &msg);
 };
 
@@ -263,7 +263,7 @@ ToneChan::~ToneChan()
     mutex.unlock();
 }
 
-void ToneChan::disconnected(const char *reason)
+void ToneChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("ToneChan::disconnected()"," '%s' [%p]",reason,this);
 }
@@ -293,14 +293,14 @@ bool ToneHandler::received(Message &msg)
 	    Debug(DebugWarn,"Tone outgoing call with no target!");
 	    return false;
 	}
-	Message m("preroute");
+	Message m("call.preroute");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);
 	Engine::dispatch(m);
-	m = "route";
+	m = "call.route";
 	if (Engine::dispatch(m)) {
-	    m = "call";
+	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
 	    m.retValue() = 0;
 	    ToneChan *tc = new ToneChan(dest.matchString(1).c_str());
@@ -382,7 +382,7 @@ void ToneGenPlugin::initialize()
 {
     Output("Initializing module ToneGen");
     if (!m_handler) {
-	m_handler = new ToneHandler("call");
+	m_handler = new ToneHandler;
 	Engine::install(m_handler);
 	Engine::install(new AttachHandler);
 	Engine::install(new StatusHandler);

@@ -445,7 +445,7 @@ void GtkClient::gtk_call (GtkWidget *button, gpointer data)
     {
 	case STATUS_IDLE:
 	    {
-	    Message m("call");
+	    Message m("call.execute");
 	    gchar *address = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(s_client->m_address)->entry));
 	    if (::strchr(address,'/'))
 		m.addParam("direct",address);
@@ -475,7 +475,7 @@ void GtkClient::gtk_hangup (GtkWidget *button, gpointer data)
 	    break;
 	case STATUS_RINGOUT:
 	case STATUS_INCALL:
-	    Message m("drop");
+	    Message m("call.drop");
 	    m.addParam("id","oss/");
 	    Engine::dispatch(m);
 	    break;
@@ -538,7 +538,7 @@ class GtkClientHandler : public MessageHandler
 {
 public:
     GtkClientHandler(int prio)
-	: MessageHandler("route",prio) { }
+	: MessageHandler("call.route",prio) { }
     virtual bool received(Message &msg);
 };
 	

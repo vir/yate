@@ -43,6 +43,10 @@ private:
 
 bool CdrPgsqlHandler::received(Message &msg)
 {
+    String op(msg.getValue("operation"));
+    if (op != "finalize")
+	return false;
+
 //    const char *calltime = c_safe(msg.getValue("time"));
     const char *channel  = c_safe(msg.getValue("channel"));
     const char *called   = c_safe(msg.getValue("called"));
@@ -134,9 +138,9 @@ void CdrPgsqlPlugin::initialize()
     }
     if (!m_handler) {
     	Output("Installing Cdr for PostgreSQL handler");
-	m_handler = new CdrPgsqlHandler("cdr");
+	m_handler = new CdrPgsqlHandler("call.cdr");
 	Engine::install(m_handler);
-	Engine::install(new StatusHandler("status"));
+	Engine::install(new StatusHandler("engine.status"));
     }
 }
 

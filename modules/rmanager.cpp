@@ -234,7 +234,7 @@ void Connection::processLine(const char *line)
 
     if (str.startSkip("status"))
     {
-	Message m("status");
+	Message m("engine.status");
 	if (!str.null()) {
 	    m.addParam("module",str); 
 	    str = ":" + str;
@@ -250,7 +250,7 @@ void Connection::processLine(const char *line)
 	    write(m_machine ? "%%=drop:fail=noarg\n" : "You must specify what connection to drop!\n");
 	    return;
 	}
-	Message m("drop");
+	Message m("call.drop");
 	bool all = false;
 	if (str == "*" || str == "all") {
 	    all = true;
@@ -273,7 +273,7 @@ void Connection::processLine(const char *line)
 	    write(m_machine ? "%%=call:fail=noarg\n" : "You must specify source and target!\n");
 	    return;
 	}
-	Message m("call");
+	Message m("call.execute");
 	m.addParam("callto",str.substr(0,pos));
 	m.addParam("target",str.substr(pos+1));
 
@@ -328,7 +328,7 @@ void Connection::processLine(const char *line)
     }
     else if (str.startSkip("help") || str.startSkip("?"))
     {
-	Message m("help");
+	Message m("engine.help");
 	if (!str.null())
 	{
 	    m.addParam("line",str);
@@ -346,7 +346,7 @@ void Connection::processLine(const char *line)
     }
     else
     {
-	Message m("command");
+	Message m("engine.command");
 	m.addParam("line",str);
 	if (Engine::dispatch(m))
 	    write(m.retValue());

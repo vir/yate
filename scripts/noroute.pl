@@ -29,5 +29,5 @@ sub demo2($) {
 
 my $message = new YateMessage();
 $message->install("engine.timer",\&demo);
-$message->install("route",\&demo2);
+$message->install("call.route",\&demo2);
 $message->listen();

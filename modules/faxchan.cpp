@@ -58,7 +58,7 @@ class FaxChan : public DataEndpoint
 public:
     FaxChan(const char *file, bool receive, bool iscaller, const char *ident = 0);
     ~FaxChan();
-    virtual void disconnected(const char *reason);
+    virtual void disconnected(bool final, const char *reason);
     void rxData(const DataBlock &data);
     void rxBlock(void *buff, int len);
     int txBlock();
@@ -303,7 +303,7 @@ void FaxChan::phaseE(int result)
     m_eof = true;
 }
 
-void FaxChan::disconnected(const char *reason)
+void FaxChan::disconnected(bool final, const char *reason)
 {
     Debug(DebugInfo,"FaxChan::disconnected() '%s' [%p]",reason,this);
 }
@@ -350,15 +350,15 @@ bool FaxHandler::received(Message &msg)
 	    fc->destruct();
 	    return false;
 	}
-	Message m("preroute");
+	Message m("call.preroute");
 	m.addParam("id",dest);
 	m.addParam("caller",dest);
 	m.addParam("called",targ);
 	m.userData(fc);
 	Engine::dispatch(m);
-	m = "route";
+	m = "call.route";
 	if (Engine::dispatch(m)) {
-	    m = "call";
+	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
 	    m.retValue() = 0;
 	    if (Engine::dispatch(m)) {
@@ -384,7 +384,7 @@ void FaxPlugin::initialize()
 {
     Output("Initializing module Fax");
     if (!m_handler) {
-	m_handler = new FaxHandler("call");
+	m_handler = new FaxHandler("call.execute");
 	Engine::install(m_handler);
     }
 }

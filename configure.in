@@ -1,7 +1,15 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(YATE, 0.8.5)
+AC_INIT(YATE, 0.8.6)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
+
+PACKAGE_VERSION_MAJOR="${PACKAGE_VERSION%%.*}"
+PACKAGE_VERSION_MINOR="${PACKAGE_VERSION#*.}"
+PACKAGE_VERSION_MINOR="${PACKAGE_VERSION_MINOR%.*}"
+PACKAGE_VERSION_BUILD="${PACKAGE_VERSION##*.}"
+AC_SUBST(PACKAGE_VERSION_MAJOR)
+AC_SUBST(PACKAGE_VERSION_MINOR)
+AC_SUBST(PACKAGE_VERSION_BUILD)
 
 # Checks for programs.
 AC_PROG_CXX
@@ -466,6 +474,7 @@ AC_SUBST(MODULE_SYMBOLS)
 
 AC_CONFIG_FILES([yate.spec
                  yate.pc
+		 yateversn.h
                  Makefile
                  modules/Makefile
                  scripts/Makefile

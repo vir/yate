@@ -141,9 +141,21 @@ bool RouteHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
-    msg.retValue() << "Regfile,users=";
-    for (int i=0;i<s_cfg.sections();i++)
-	msg.retValue() << s_cfg.getSection(i);
+    unsigned int n = s_cfg.sections();
+    if (!s_cfg.getSection(0))
+	--n;
+    msg.retValue() << "name=regfile,type=misc;users=" << n << ";";
+    bool first = true;
+    for (unsigned int i=0;i<s_cfg.sections();i++) {
+	NamedList *user = s_cfg.getSection(i);
+	if (!user)
+	    continue;
+	if (first)
+	    first = false;
+	else
+	    msg.retValue() << ",";
+	msg.retValue() << *user << "=" << s_cfg.getBoolValue(*user,"register");
+    }
     msg.retValue() <<"\n";
     return false;
 }
@@ -160,23 +172,23 @@ void RegfilePlugin::initialize()
     if (!m_authhandler) {
 	s_cfg.load();
     	Output("Installing Authentification handler");
-	Engine::install(m_authhandler = new AuthHandler("auth",s_cfg.getIntValue("general","auth",10)));
+	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",10)));
     }
     if (!m_registhandler) {
     	Output("Installing Registering handler");
-	Engine::install(new RegistHandler("regist"));
+	Engine::install(new RegistHandler("user.register"));
     }
     if (!m_unregisthandler) {
     	Output("Installing UnRegistering handler");
-	Engine::install(new UnRegistHandler("unregist"));
+	Engine::install(new UnRegistHandler("user.unregister"));
     }
     if (!m_routehandler) {
     	Output("Installing Route handler");
-	Engine::install(new RouteHandler("route",s_cfg.getIntValue("general","route",100)));
+	Engine::install(new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
     }
     if (!m_statushandler) {
     	Output("Installing Status handler");
-	Engine::install(new StatusHandler("status"));
+	Engine::install(new StatusHandler("engine.status"));
     }
 }
 

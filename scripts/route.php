@@ -13,8 +13,8 @@ Yate::Init();
 
 /* Install a handler for the engine generated timer message */
 //Yate::Install("engine.timer",10);
-Yate::Install("dtmf",10);
-Yate::Install("sms",10);
+Yate::Install("chan.dtmf",10);
+Yate::Install("chan.text",10);
 
 /* Create and dispatch an initial test message */
 /*$m=new Yate("test");
@@ -49,7 +49,7 @@ for (;;) {
 	    $ev->handled = true;
 	    /* This is extremely important.
 	       We MUST let messages return, handled or not */
-	    $m=new Yate("sms");
+	    $m=new Yate("chan.text");
 	    $m->params["ourcallid"]= $ev->params["partycallid"];
 	    $m->params["partycallid"]= $ev->params["ourcallid"];
 	    $m->params["text"] = $ev->params["text"];

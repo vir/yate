@@ -223,9 +223,9 @@ void PGSQLRoutePlugin::initialize()
     if (m_first && conn) {
 	m_first = false;
 	unsigned prio = cfg.getIntValue("general","priority",100);
-	Engine::install(new PrerouteHandler("preroute",prio));
-	Engine::install(new RouteHandler("route",prio));
-	Engine::install(new StatusHandler("status"));
+	Engine::install(new PrerouteHandler("call.preroute",prio));
+	Engine::install(new RouteHandler("call.route",prio));
+	Engine::install(new StatusHandler("engine.status"));
     }
 }
 

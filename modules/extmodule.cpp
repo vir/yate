@@ -85,7 +85,7 @@ public:
     };
     static ExtModChan* build(const char *file, const char *args, int type);
     ~ExtModChan();
-    virtual void disconnected(const char *reason);
+    virtual void disconnected(bool final, const char *reason);
     inline ExtModReceiver* receiver() const
 	{ return m_recv; }
     inline void setRecv(ExtModReceiver* recv)
@@ -303,7 +303,7 @@ ExtModChan::~ExtModChan()
 	m_recv->die(false);
 }
 
-void ExtModChan::disconnected(const char *reason)
+void ExtModChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("ExtModChan::disconnected()"," '%s' [%p]",reason,this);
 }
@@ -837,9 +837,9 @@ void ExtModulePlugin::initialize()
     s_cfg = Engine::configFile("extmodule");
     s_cfg.load();
     if (!m_handler) {
-	m_handler = new ExtModHandler("call");
+	m_handler = new ExtModHandler("call.execute");
 	Engine::install(m_handler);
-	Engine::install(new ExtModCommand("command"));
+	Engine::install(new ExtModCommand("engine.command"));
 	NamedList *list = s_cfg.getSection("scripts");
 	if (list)
 	{

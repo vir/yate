@@ -1,0 +1,15 @@
+/**
+ * yateversn.h
+ * This file is part of the YATE Project http://YATE.null.ro
+ *
+ * This is a generated file. You should never need to modify it.
+ */
+
+#ifndef __YATEVERSN_H
+#define __YATEVERSN_H
+
+#define YATE_MAJOR @PACKAGE_VERSION_MAJOR@
+#define YATE_MINOR @PACKAGE_VERSION_MINOR@
+#define YATE_BUILD @PACKAGE_VERSION_BUILD@
+
+#endif /* __YATEVERSN_H */

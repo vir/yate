@@ -164,7 +164,7 @@ public:
 class EngineStatusHandler : public MessageHandler
 {
 public:
-    EngineStatusHandler() : MessageHandler("status",0) { }
+    EngineStatusHandler() : MessageHandler("engine.status",0) { }
     virtual bool received(Message &msg);
 };
 

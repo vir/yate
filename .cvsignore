@@ -3,6 +3,7 @@ Makefile
 configure
 config.*
 yatepaths.h
+yateversn.h
 run
 yate.spec
 yate

@@ -62,6 +62,10 @@ void CdrFileHandler::init(const char *fname, bool tabsep)
 
 bool CdrFileHandler::received(Message &msg)
 {
+    String op(msg.getValue("operation"));
+    if (op != "finalize")
+	return false;
+
     Lock lock(m_lock);
     if (m_file) {
 	const char *format = m_tabs
@@ -104,7 +108,7 @@ void CdrFilePlugin::initialize()
     Configuration cfg(Engine::configFile("cdrfile"));
     const char *file = cfg.getValue("general","file");
     if (file && !m_handler) {
-	m_handler = new CdrFileHandler("cdr");
+	m_handler = new CdrFileHandler("call.cdr");
 	Engine::install(m_handler);
     }
     if (m_handler)

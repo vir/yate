@@ -25,6 +25,12 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#ifdef MUTEX_HACK
+extern "C" {
+extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind)  __THROW;
+}
+#endif
+
 namespace TelEngine {
 
 class MutexPrivate {

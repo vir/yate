@@ -202,6 +202,9 @@ Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yateversn.h yatepat
 DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
 	$(COMPILE) -c $<
 
+Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) @srcdir@/telengine.h
+	$(COMPILE) @MUTEX_HACK@ -c $<
+
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/telengine.h
 	$(COMPILE) -c $<
 

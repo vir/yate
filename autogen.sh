@@ -11,4 +11,4 @@ else
     fi
 fi
 
-autoconf
+autoconf && echo "Finished! Now run configure. If in doubt run ./configure --help"

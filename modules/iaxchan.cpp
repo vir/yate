@@ -407,14 +407,19 @@ void YateIAXConnection::startAudio(int format)
 {
     if (getConsumer())
 	return;
-    format &= s_ast_formats;
-    const char *frm = lookup(format,dict_iaxformats);
-    if (!frm) {
-	Debug(DebugGoOn,"IAX format 0x%X not available in [%p]",format,this);
+    int masked = format & s_ast_formats;
+    const TokenDict *frm = dict_iaxformats;
+    for (; frm->token; frm++) {
+	if (frm->value & masked)
+	    break;
+    }
+    if (!frm->token) {
+	Debug(DebugGoOn,"IAX format 0x%X (local: 0x%X, common: 0x%X) not available in [%p]",
+	    format,s_ast_formats,masked,this);
 	return;
     }
-    Debug(DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm,format,this);
-    setConsumer(new YateIAXAudioConsumer(this,m_session,format,frm));
+    Debug(DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm->token,frm->value,this);
+    setConsumer(new YateIAXAudioConsumer(this,m_session,frm->value,frm->token));
     getConsumer()->deref();
 }
 
@@ -424,6 +429,7 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
     if (!format)
 	return;
     if (!getSource()) {
+	// Exact match required - incoming data must be a single format
 	const char *frm = lookup(format,dict_iaxformats);
 	if (!frm)
 	    return;

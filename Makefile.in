@@ -97,8 +97,9 @@ tables: @srcdir@/tables/all.h
 @srcdir@/tables/all.h:
 	$(MAKE) -C @srcdir@/tables -f Makefile.tables all
 
-yatepaths.h:
-	@echo -en '#define MOD_PATH "$(DESTDIR)$(moddir)"\n#define CFG_PATH "$(DESTDIR)$(confdir)"\n' > $@
+yatepaths.h: Makefile
+	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' > $@
+	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' >> $@
 
 .PHONY: everything
 everything: all apidocs test
@@ -182,6 +183,12 @@ snapshot tarball: check-topdir clean tables apidocs
 .PHONY: check-topdir
 check-topdir:
 	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
+
+Engine.o: @srcdir@/Engine.cpp @srcdir@/telengine.h yatepaths.h
+	$(COMPILE) -c $<
+
+DataBlock.o: @srcdir@/DataBlock.cpp @srcdir@/telengine.h @srcdir@/telephony.h
+	$(COMPILE) -c $<
 
 %.o: @srcdir@/%.cpp @srcdir@/telengine.h
 	$(COMPILE) -c $<

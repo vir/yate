@@ -61,6 +61,7 @@ public:
     ~YateUDPParty();
     virtual void transmit(SIPEvent* event);
     virtual const char* getProtoName() const;
+    virtual bool setParty(const URI& uri);
 protected:
     int m_netfd;
     struct sockaddr_in m_sin;
@@ -89,6 +90,7 @@ public:
   //  void terminateall(void);
     void run(void);
     void incoming(SIPEvent* e);
+    void invite(SIPEvent* e);
     bool buildParty(SIPMessage* message);
     inline ObjList &calls()
 	{ return m_calls; }
@@ -159,6 +161,31 @@ const char* YateUDPParty::getProtoName() const
     return "UDP";
 }
 
+bool YateUDPParty::setParty(const URI& uri)
+{
+    int port = uri.getPort();
+    if (port <= 0)
+	port = 5060;
+    struct hostent he, *res = 0;
+    int err = 0;
+    char buf[1024];
+    if (::gethostbyname_r(uri.getHost().safe(),&he,buf,sizeof(buf),&res,&err)) {
+	Debug("YateUDPParty",DebugWarn,"Error %d resolving name '%s' [%p]",
+	    err,uri.getHost().safe(),this);
+	return false;
+    }
+    m_sin.sin_family = he.h_addrtype;
+    m_sin.sin_addr.s_addr = *((u_int32_t*)he.h_addr_list[0]);
+    m_sin.sin_port = htons((short)port);
+    m_party = uri.getHost();
+    m_partyPort = port;
+    Debug("YateUDPParty",DebugInfo,"New party is %s:%d (%s:%d) [%p]",
+	m_party.c_str(),m_partyPort,
+	inet_ntoa(m_sin.sin_addr),ntohs(m_sin.sin_port),
+	this);
+    return true;
+}
+
 bool YateSIPEngine::buildParty(SIPMessage* message)
 {
     return m_ep->buildParty(message);
@@ -196,7 +223,8 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message)
     sin.sin_family = he.h_addrtype;
     sin.sin_addr.s_addr = *((u_int32_t*)he.h_addr_list[0]);
     sin.sin_port = htons((short)port);
-    Debug(DebugAll,"got addr: %d %08X %04X",sin.sin_family,sin.sin_addr.s_addr,sin.sin_port);
+    Debug(DebugAll,"built addr: %d %s:%d",
+	sin.sin_family,inet_ntoa(sin.sin_addr),ntohs(sin.sin_port));
     message->setParty(new YateUDPParty(m_netfd,sin,m_port));
     return true;
 }
@@ -300,13 +328,30 @@ void YateSIPEndPoint::run ()
 
 void YateSIPEndPoint::incoming(SIPEvent* e)
 {
+    if (e->getTransaction() && e->getTransaction()->isInvite()) {
+	invite(e);
+	return;
+    }
+}
+
+void YateSIPEndPoint::invite(SIPEvent* e)
+{
+    String callid(e->getTransaction()->getCallID());
+    URI uri(e->getTransaction()->getURI());
+    const HeaderLine* hl = e->getMessage()->getHeader("From");
+    URI from(hl ? *hl : "");
     Message *m = new Message("call.preroute");
     m->addParam("driver","sip");
+    m->addParam("id","sip2/" + callid);
+    m->addParam("caller",from.getUser());
+    m->addParam("called",uri.getUser());
+    m->addParam("SIP-CallID",callid);
     Engine::dispatch(m);
     *m = "call.route";
     m->retValue().clear();
     if (Engine::dispatch(m) && m->retValue()) {
-	e->getTransaction()->setResponse(500, "Server Internal Error");
+	e->getTransaction()->setResponse(183, "Call Progress");
+//	e->getTransaction()->setResponse(500, "Server Internal Error");
     }
     else
 	e->getTransaction()->setResponse(404, "Not Found");

@@ -66,6 +66,7 @@ public:
     virtual ~SIPParty();
     virtual void transmit(SIPEvent* event) = 0;
     virtual const char* getProtoName() const = 0;
+    virtual bool setParty(const URI& uri) = 0;
     inline const String& getLocalAddr() const
 	{ return m_local; }
     inline const String& getPartyAddr() const
@@ -254,6 +255,13 @@ public:
 	{ return m_outgoing; }
 
     /**
+     * Check if this message is an ACK message
+     * @return True if this message has an ACK method
+     */
+    inline bool isACK() const
+	{ return m_ack; }
+
+    /**
      * Check if this message is handled by a reliable protocol
      * @return True if a reliable protocol (TCP, SCTP) is used
      */
@@ -359,6 +367,7 @@ protected:
     bool m_valid;
     bool m_answer;
     bool m_outgoing;
+    bool m_ack;
     int m_cseq;
     mutable String m_string;
     mutable DataBlock m_data;
@@ -397,11 +406,6 @@ public:
 	Retrans,
 
 	/**
-	 * Timeout state - generates a timeout messages and cleans up
-	 */
-	Timeout,
-
-	/**
 	 * Finish state - transmits the last message and goes to Retrans
 	 */
 	Finish,
@@ -424,6 +428,11 @@ public:
      * Destructor - clears all held objects
      */
     virtual ~SIPTransaction();
+
+    /**
+     * Get the name of a transaction state
+     */
+    static const char* stateName(int state);
 
     /**
      * The current state of the transaction
@@ -521,47 +530,13 @@ public:
     virtual bool processMessage(SIPMessage* message, const String& branch);
 
     /**
-     * Process only the messages for client transactions
-     * @param message A pointer to the message to process, should not be used
-     *  afterwards if this method returned True
-     * @param state The current state of the transaction
-     */
-    virtual void processClientMessage(SIPMessage* message, int state);
-
-    /**
-     * Process only the messages for server transactions
-     * @param message A pointer to the message to process, should not be used
-     *  afterwards if this method returned True
-     * @param state The current state of the transaction
-     */
-    virtual void processServerMessage(SIPMessage* message, int state);
-
-    /**
      * Get an event for this transaction if any is available.
      * It provides default handling for invalid states, otherwise calls
-     *  the more specific version below.
+     *  the more specific protected version.
      * You may override this method if you need processing of invalid states.
      * @return A newly allocated event or NULL if none is needed
      */
     virtual SIPEvent* getEvent();
-
-    /**
-     * Get an event only for client transactions
-     * @param state The current state of the transaction
-     * @param timeout If timeout occured, number of remaining timeouts,
-     *  otherwise -1
-     * @return A newly allocated event or NULL if none is needed
-     */
-    virtual SIPEvent* getClientEvent(int state, int timeout);
-
-    /**
-     * Get an event only for server transactions.
-     * @param state The current state of the transaction
-     * @param timeout If timeout occured, number of remaining timeouts,
-     *  otherwise -1
-     * @return A newly allocated event or NULL if none is needed
-     */
-    virtual SIPEvent* getServerEvent(int state, int timeout);
 
     /**
      * Creates and transmits a final response message
@@ -587,17 +562,65 @@ public:
 
 protected:
     /**
+     * Get an event only for client transactions
+     * @param state The current state of the transaction
+     * @param timeout If timeout occured, number of remaining timeouts,
+     *  otherwise -1
+     * @return A newly allocated event or NULL if none is needed
+     */
+    virtual SIPEvent* getClientEvent(int state, int timeout);
+
+    /**
+     * Get an event only for server transactions.
+     * @param state The current state of the transaction
+     * @param timeout If timeout occured, number of remaining timeouts,
+     *  otherwise -1
+     * @return A newly allocated event or NULL if none is needed
+     */
+    virtual SIPEvent* getServerEvent(int state, int timeout);
+
+    /**
+     * Process only the messages for client transactions
+     * @param message A pointer to the message to process, should not be used
+     *  afterwards if this method returned True
+     * @param state The current state of the transaction
+     */
+    virtual void processClientMessage(SIPMessage* message, int state);
+
+    /**
+     * Process only the messages for server transactions
+     * @param message A pointer to the message to process, should not be used
+     *  afterwards if this method returned True
+     * @param state The current state of the transaction
+     */
+    virtual void processServerMessage(SIPMessage* message, int state);
+
+    /**
      * Change the transaction state
      * @param newstate The desired new state
      * @return True if state change occured
      */
-    virtual bool changeState(int newstate);
+    bool changeState(int newstate);
 
     /**
      * Set the latest message sent by this transaction
      * @param message Pointer to the latest message
      */
     void setLatestMessage(SIPMessage* message = 0);
+
+    /**
+     * Store a pending event to be picked up at the next @ref getEvent() call
+     * @param event Event to store
+     * @param replace True to replace any existing pending event
+     */
+    void setPendingEvent(SIPEvent* event = 0, bool replace = false);
+
+    /**
+     * Check if there is a pending event waiting
+     * @return True is there is a pending event
+     */
+    inline bool isPendingEvent() const
+	{ return m_pending; }
 
     /**
      * Set a repetitive timeout
@@ -615,6 +638,7 @@ protected:
     unsigned long long m_timeout;
     SIPMessage* m_firstMessage;
     SIPMessage* m_lastMessage;
+    SIPEvent* m_pending;
     SIPEngine* m_engine;
     String m_branch;
     String m_callid;
@@ -777,6 +801,26 @@ public:
 	{ return ++m_cseq; }
 
     /**
+     * Check if a method is in the allowed methods list
+     * @param method Uppercase name of the method to check
+     * @return True if the method should be allowed processing
+     */
+    bool isAllowed(const char* method) const;
+
+    /**
+     * Add a method to the allowed methods list
+     * @param method Uppercase name of the method to add
+     */
+    void addAllowed(const char* method);
+
+    /**
+     * Get all the allowed methods
+     * @return Comma separated list of allowed methods
+     */
+    inline const String& getAllowed() const
+	{ return m_allowed; }
+
+    /**
      * TransList is the key. 
      * Is the list that holds all the transactions.
      */
@@ -789,6 +833,7 @@ protected:
     unsigned int m_maxForwards;
     int m_cseq;
     String m_userAgent;
+    String m_allowed;
 };
 
 }

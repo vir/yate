@@ -70,16 +70,23 @@ void URI::parse() const
     if (m_parsed)
 	return;
     m_port = 0;
+
+    Regexp r("<\\([^>]\\+\\)>");
+    if (const_cast<URI*>(this)->matches(r)) {
+	*const_cast<URI*>(this) = matchString(1);
+	DDebug("URI",DebugAll,"new value='%s'",c_str());
+    }
+
     // proto:[user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
     // proto:user@hostname[:port][/path][?params][&params]
-    Regexp r("^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+\\)@\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?");
+    r = "^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+\\)@\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
     if (const_cast<URI*>(this)->matches(r)) {
 	m_proto = matchString(1).toLower();
 	m_user = matchString(2);
 	m_host = matchString(3);
 	String tmp = matchString(4);
 	tmp >> ":" >> m_port;
-	Debug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d",
+	DDebug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d",
 	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port);
     }
     else {
@@ -136,6 +143,7 @@ SIPEngine::SIPEngine(const char* userAgent)
     Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
+    m_allowed = "INVITE,ACK,CANCEL,BYE";
 }
 
 SIPEngine::~SIPEngine()
@@ -205,8 +213,8 @@ SIPEvent* SIPEngine::getEvent()
 	if (t) {
 	    SIPEvent* e = t->getEvent();
 	    if (e) {
-		Debug("SIPEngine",DebugInfo,"Got event %p (%d) from transaction %p [%p]",
-		    e,e->getState(),t,this);
+		Debug("SIPEngine",DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
+		    e,SIPTransaction::stateName(e->getState()),t,this);
 		return e;
 	    }
 	}
@@ -273,6 +281,22 @@ unsigned long long SIPEngine::getTimer(char which, bool reliable) const
     }
     Debug("SIPEngine",DebugInfo,"Requested invalid timer '%c' [%p]",which,this);
     return 0;
+}
+
+bool SIPEngine::isAllowed(const char* method) const
+{
+    int pos = m_allowed.find(method);
+    if (pos < 0)
+	return false;
+    if ((pos > 0) && (m_allowed[pos-1] != ','))
+	return false;
+    return true;
+}
+
+void SIPEngine::addAllowed(const char* method)
+{
+    if (method && *method && !isAllowed(method))
+	m_allowed << "," << method;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

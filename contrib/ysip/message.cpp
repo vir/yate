@@ -34,7 +34,7 @@ using namespace TelEngine;
 HeaderLine::HeaderLine(const char *name, const String& value)
     : NamedString(name)
 {
-    Debug(DebugAll,"HeaderLine::HeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    DDebug(DebugAll,"HeaderLine::HeaderLine('%s','%s') [%p]",name,value.c_str(),this);
     if (value.null())
 	return;
     int sp = value.find(';');
@@ -55,7 +55,7 @@ HeaderLine::HeaderLine(const char *name, const String& value)
 	    pname.trimBlanks();
 	    pvalue.trimBlanks();
 	    if (!pname.null()) {
-		Debug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		DDebug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
 		m_params.append(new NamedString(pname,pvalue));
 	    }
 	}
@@ -63,7 +63,7 @@ HeaderLine::HeaderLine(const char *name, const String& value)
 	    String pname(value.substr(sp+1,ep-sp-1));
 	    pname.trimBlanks();
 	    if (!pname.null()) {
-		Debug(DebugAll,"param name='%s' (no value)",pname.c_str());
+		DDebug(DebugAll,"param name='%s' (no value)",pname.c_str());
 		m_params.append(new NamedString(pname));
 	    }
 	}
@@ -74,7 +74,7 @@ HeaderLine::HeaderLine(const char *name, const String& value)
 HeaderLine::HeaderLine(const HeaderLine& original)
     : NamedString(original.name(),original)
 {
-    Debug(DebugAll,"HeaderLine::HeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
+    DDebug(DebugAll,"HeaderLine::HeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
     const ObjList* l = &original.params();
     for (; l; l = l->next()) {
 	const NamedString* t = static_cast<const NamedString*>(l->get());
@@ -85,7 +85,7 @@ HeaderLine::HeaderLine(const HeaderLine& original)
 
 HeaderLine::~HeaderLine()
 {
-    Debug(DebugAll,"HeaderLine::~HeaderLine() [%p]",this);
+    DDebug(DebugAll,"HeaderLine::~HeaderLine() [%p]",this);
 }
 
 const NamedString* HeaderLine::getParam(const char *name) const
@@ -103,13 +103,14 @@ const NamedString* HeaderLine::getParam(const char *name) const
 
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
     : version(_version), method(_method), uri(_uri),
-      body(0), m_ep(0), m_valid(true), m_answer(false), m_outgoing(true), m_cseq(-1)
+      body(0), m_ep(0), m_valid(true),
+      m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage() [%p]",this);
 }
 
 SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
-    : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_cseq(-1)
+    : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
     Debugger debug(DebugAll,"SIPMessage::SIPMessage","(%p,%d) [%p]\n%s",
 	buf,len,this,buf);
@@ -126,7 +127,8 @@ SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
 
 SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason)
     : code(_code), reason(_reason), body(0),
-      m_ep(0), m_valid(false), m_answer(true), m_outgoing(true), m_cseq(-1)
+      m_ep(0), m_valid(false),
+      m_answer(true), m_outgoing(true), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
@@ -151,7 +153,8 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
 
 SIPMessage::SIPMessage(const SIPMessage* message)
     : method("ACK"),
-      body(), m_ep(0), m_valid(false), m_answer(false), m_outgoing(true), m_cseq(-1)
+      body(), m_ep(0), m_valid(false),
+      m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p) [%p]",message,this);
     if (!(message && message->isValid()))
@@ -184,8 +187,12 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!engine)
 	return;
 
-    if (m_outgoing && !m_ep)
+    if (isOutgoing() && !getParty())
 	engine->buildParty(this);
+
+    // don't complete ACK or incoming messages
+    if (isACK() || !isOutgoing())
+	return;
 
     if (!user)
 	user = "anonymous";
@@ -235,13 +242,16 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("CSeq",tmp);
     }
 
-    if (!(m_answer || getHeader("Max-Forwards") || (method == "ACK"))) {
+    if (!(isAnswer() || getHeader("Max-Forwards"))) {
 	String tmp(engine->getMaxForwards());
 	addHeader("Max-Forwards",tmp);
     }
 
     if (!(getHeader("User-Agent") || engine->getUserAgent().null()))
 	addHeader("User-Agent",engine->getUserAgent());
+
+    if (!getHeader("Allow"))
+	addHeader("Allow",engine->getAllowed());
 }
 
 bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
@@ -295,6 +305,8 @@ bool SIPMessage::parseFirst(String& line)
 	    version = line.matchString(3).toUpper();
 	    Debug(DebugAll,"got request method='%s' uri='%s' version='%s'",
 		method.c_str(),uri.c_str(),version.c_str());
+	    if (method == "ACK")
+		m_ack = true;
 	}
 	else {
 	    Debug(DebugAll,"Invalid SIP line '%s'",line.c_str());
@@ -459,6 +471,10 @@ const DataBlock& SIPMessage::getBuffer() const
 	    m_data += "Content-Length: 0\r\n\r\n";
 	if (body)
 	    m_data += body->getBody();
+
+	String buf((char*)m_data.data(),m_data.length());
+	Debug(DebugAll,"SIPMessage::getBuffer() [%p]\n%s",
+	    this,buf.c_str());
     }
     return m_data;
 }

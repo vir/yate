@@ -34,7 +34,8 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
 {
-    Debug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p) [%p]",message,engine,this);
+    Debug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
+	message,engine,outgoing,this);
     if (m_firstMessage) {
 	m_firstMessage->ref();
 	const NamedString* ns = message->getParam("Via","branch");
@@ -48,7 +49,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	const HeaderLine* hl = message->getHeader("Call-ID");
 	if (hl)
 	    m_callid = *hl;
-	if (m_firstMessage->getParty()) {
+	if (!m_outgoing && m_firstMessage->getParty()) {
 	    hl = message->getHeader("Contact");
 	    if (hl) {
 		URI uri(*hl);
@@ -241,6 +242,10 @@ void SIPTransaction::setResponse(int code, const char* reason)
 
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
+    if (!message)
+	return false;
+    if (isOutgoing() != message->isAnswer())
+	return false;
     DDebug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
     if (branch) {
@@ -297,9 +302,8 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		setTimeout();
 		changeState(isInvite() ? Finish : Cleared);
 	    }
-	    else {
+	    else
 		changeState(Process);
-	    }
 	    break;
 	case Process:
 	    if (message->code > 100)
@@ -379,8 +383,14 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 		setResponse(100, "Trying");
 		changeState(Trying);
 	    }
-	    else
+	    else {
 		setResponse(405, "Method Not Allowed");
+		e = new SIPEvent(m_lastMessage,this);
+		m_transmit = false;
+		changeState(Invalid);
+		// remove from list and dereference
+		m_engine->TransList.remove(this);
+	    }
 	    break;
 	case Trying:
 	    e = new SIPEvent(m_firstMessage,this);

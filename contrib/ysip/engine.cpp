@@ -197,7 +197,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	return 0;
     }
     message->complete(this);
-    return new SIPTransaction(message,this,false);
+    return new SIPTransaction(message,this,message->isOutgoing());
 }
 
 bool SIPEngine::process()
@@ -232,6 +232,13 @@ void SIPEngine::processEvent(SIPEvent *event)
 {
     Lock lock(m_mutex);
     if (event) {
+	const char* type = "unknown";
+	if (event->isOutgoing())
+	    type = "outgoing";
+	if (event->isIncoming())
+	    type = "incoming";
+	Debug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
+	    type,event,event->getMessage(),this);
 	if (event->isOutgoing() && event->getParty())
 	    event->getParty()->transmit(event);
 	if (event->isIncoming() && (event->getState() == SIPTransaction::Trying) &&

@@ -128,7 +128,8 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
       body(0), m_ep(0), m_valid(true),
       m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage() [%p]",this);
+    Debug(DebugAll,"SIPMessage::SIPMessage('%s','%s','%s') [%p]",
+	_method,_uri,_version,this);
 }
 
 SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
@@ -222,7 +223,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!user)
 	user = "anonymous";
     if (!domain)
-	domain = "localhost";
+	domain = getParty()->getLocalAddr();
 
     HeaderLine* hl = const_cast<HeaderLine*>(getLastHeader("Via"));
     if (!hl) {
@@ -232,7 +233,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	hl = new HeaderLine("Via",tmp);
 	header.append(hl);
     }
-    if (!hl->getParam("branch")) {
+    if (!(isAnswer() || hl->getParam("branch"))) {
 	String tmp("z9hG4bK");
 	tmp << (int)::random();
 	hl->setParam("branch",tmp);
@@ -249,7 +250,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	hl = new HeaderLine("From",tmp);
 	header.append(hl);
     }
-    if (!hl->getParam("tag"))
+    if (!(isAnswer() || hl->getParam("tag")))
 	hl->setParam("tag",String((int)::random()));
 
     hl = const_cast<HeaderLine*>(getHeader("To"));

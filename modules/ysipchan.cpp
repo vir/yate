@@ -538,8 +538,9 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     if (e->getMessage()->body && e->getMessage()->body->isSDP()) {
 	String addr,port,formats;
 	parseSDP(static_cast<SDPBody*>(e->getMessage()->body),addr,port,formats);
-	m->addParam("rtp.addr",addr);
-	m->addParam("rtp.port",port);
+	m->addParam("rtp_forward","possible");
+	m->addParam("rtp_addr",addr);
+	m->addParam("rtp_port",port);
 	m->addParam("formats",formats);
     }
     SipMsgThread *thr = new SipMsgThread(t,m);
@@ -571,8 +572,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     m_tr->setUserData(this);
     s_calls.append(this);
     s_mutex.unlock();
-    m_rtpAddr = msg.getValue("rtp.addr");
-    m_rtpPort = msg.getValue("rtp.port");
+    m_rtpAddr = msg.getValue("rtp_addr");
+    m_rtpPort = msg.getValue("rtp_port");
     m_formats = msg.getValue("formats");
     int q = m_formats.find(',');
     m_rtpFormat = m_formats.substr(0,q);
@@ -632,14 +633,19 @@ void YateSIPConnection::hangup()
 // Creates a SDP from RTP address data present in message
 SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 {
-    String tmp = msg.getValue("rtp.forward");
+    String tmp = msg.getValue("rtp_forward");
+    msg.clearParam("rtp_forward");
     if (!tmp.toBoolean())
 	return 0;
-    tmp = msg.getValue("rtp.port");
+    tmp = msg.getValue("rtp_port");
     int port = tmp.toInteger();
-    String addr(msg.getValue("rtp.addr"));
-    if (port && addr)
-	return createSDP(addr,tmp,msg.getValue("formats"));
+    String addr(msg.getValue("rtp_addr"));
+    if (port && addr) {
+	SDPBody* sdp = createSDP(addr,tmp,msg.getValue("formats"));
+	if (sdp)
+	    msg.setParam("rtp_forward","accepted");
+	return sdp;
+    }
     return 0;
 }
 

@@ -31,6 +31,7 @@ static void (*s_output)(const char *) = dbg_stderr_func;
 static void (*s_intout)(const char *) = 0;
 
 static Mutex out_mux;
+static Mutex ind_mux;
 
 static void common_output(char *buf)
 {
@@ -92,7 +93,9 @@ bool Debug(int level, const char *format, ...)
 	::sprintf(buf,"<%d> ",level);
 	va_list va;
 	va_start(va,format);
+	ind_mux.lock();
 	dbg_output(buf,format,va);
+	ind_mux.unlock();
 	va_end(va);
 	if (s_abort && (level == DebugFail))
 	    abort();
@@ -112,7 +115,9 @@ bool Debug(const char *facility, int level, const char *format, ...)
 	::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
 	va_list va;
 	va_start(va,format);
+	ind_mux.lock();
 	dbg_output(buf,format,va);
+	ind_mux.unlock();
 	va_end(va);
 	if (s_abort && (level == DebugFail))
 	    abort();
@@ -161,11 +166,11 @@ Debugger::Debugger(const char *name, const char *format, ...)
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
 	va_start(va,format);
+	ind_mux.lock();
 	dbg_output(buf,format,va);
 	va_end(va);
-	out_mux.lock();
 	s_indent++;
-	out_mux.unlock();
+	ind_mux.unlock();
     }
     else
 	m_name = 0;
@@ -179,11 +184,11 @@ Debugger::Debugger(int level, const char *name, const char *format, ...)
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
 	va_start(va,format);
+	ind_mux.lock();
 	dbg_output(buf,format,va);
 	va_end(va);
-	out_mux.lock();
 	s_indent++;
-	out_mux.unlock();
+	ind_mux.unlock();
     }
     else
 	m_name = 0;
@@ -192,9 +197,8 @@ Debugger::Debugger(int level, const char *name, const char *format, ...)
 Debugger::~Debugger()
 {
     if (m_name) {
-	out_mux.lock();
+	ind_mux.lock();
 	s_indent--;
-	out_mux.unlock();
 	if (s_debugging) {
 	    char buf[64];
 	    ::snprintf(buf,sizeof(buf),"<<< %s",m_name);
@@ -202,6 +206,7 @@ Debugger::~Debugger()
 	    va_list va = 0;
 	    dbg_output(buf,format,va);
 	}
+	ind_mux.unlock();
     }
 }
 

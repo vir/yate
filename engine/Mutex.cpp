@@ -130,7 +130,7 @@ void MutexPrivate::unlock()
 	m_locked = false;
 	if (--s_locks < 0) {
 	    GlobalMutex::unlock();
-	    Debug(DebugFail,"MutexPrivate::locks() is %d",s_locks);
+	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
 	    GlobalMutex::lock();
 	}
 	::pthread_mutex_unlock(&m_mutex);
@@ -139,7 +139,7 @@ void MutexPrivate::unlock()
     }
     else {
 	GlobalMutex::unlock();
-	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex");
+	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex [%p]",this);
     }
 }
 
@@ -187,6 +187,14 @@ void Mutex::unlock()
 {
     if (m_private)
 	m_private->unlock();
+}
+
+bool Mutex::check(long long int maxwait)
+{
+    bool ret = lock(maxwait);
+    if (ret)
+	unlock();
+    return ret;
 }
 
 int Mutex::count()

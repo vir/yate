@@ -325,7 +325,7 @@ void Connection::processLine(const char *line)
 	Message m("help");
 	if (!str.null())
 	{
-	    m.addParam("command",str);
+	    m.addParam("line",str);
 	    if (Engine::dispatch(m))
 		write(m.retValue());
 	    else

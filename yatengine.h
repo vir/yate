@@ -1510,6 +1510,13 @@ public:
     void unlock();
 
     /**
+     * Check if the mutex is unlocked (try to lock and unlock the mutex)
+     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     * @return True if successfully locked and unlocked, false on failure
+     */
+    bool check(long long int maxwait = -1);
+
+    /**
      * Get the number of mutexes counting the shared ones only once
      * @return Count of individual mutexes
      */
@@ -1554,6 +1561,12 @@ public:
      */
     inline Mutex *mutex() const
 	{ return m_mutex; }
+
+    /**
+     * Unlock the mutex if it was locked and drop the reference to it
+     */
+    inline void drop()
+	{ if (m_mutex) m_mutex->unlock(); m_mutex = 0; }
 
 private:
     Mutex *m_mutex;

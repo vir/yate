@@ -73,6 +73,13 @@ static TokenDict dict_h323_dir[] = {
     { 0 , 0 },
 };
 
+static TokenDict dict_silence[] = {
+    { "none", H323AudioCodec::NoSilenceDetection },
+    { "fixed", H323AudioCodec::FixedSilenceDetection },
+    { "adaptive", H323AudioCodec::AdaptiveSilenceDetection },
+    { 0 , 0 },
+};
+
 class H323Process : public PProcess
 {
     PCLASSINFO(H323Process, PProcess)
@@ -166,6 +173,7 @@ public:
     virtual BOOL Read(void *buf, PINDEX len);
     virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 private:
+    PAdaptiveDelay readDelay;
     DataBlock m_buffer;
     bool m_exit;
     Mutex m_mutex;
@@ -487,6 +495,8 @@ bool YateH323EndPoint::Init(void)
 
     AddAllUserInputCapabilities(0,1);
     DisableDetectInBandDTMF(!s_cfg.getBoolValue("ep","dtmfinband",false));
+    SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
+	(s_cfg.getIntValue("ep","silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)));
 
     PIPSocket::Address addr = INADDR_ANY;
     int port = s_cfg.getIntValue("ep","port",1720);
@@ -915,12 +925,12 @@ YateH323AudioConsumer::~YateH323AudioConsumer()
     Debug(DebugAll,"h.323 consumer [%p] deleted",this);
     m_exit = true;
     // Delay actual destruction until the mutex is released
-    m_mutex.lock();
-    m_mutex.unlock();
+    m_mutex.check();
 }
 
 BOOL YateH323AudioConsumer::Close()
 {
+    Debug(DebugAll,"h.323 consumer [%p] closed",this);
     m_exit = true;
     return true;
 }
@@ -948,7 +958,13 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 {
     while (!m_exit) {
 	Lock lock(m_mutex);
+	if (!getConnSource()) {
+	    ::memset(buf,0,len);
+	    readDelay.Delay(len/16);
+	    break;
+	}
 	if (len >= (int)m_buffer.length()) {
+	    lock.drop();
 	    Thread::yield();
 	    if (m_exit || Engine::exiting())
 		return false;
@@ -971,6 +987,7 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 
 BOOL YateH323AudioSource::Close()
 {
+    Debug(DebugAll,"h.323 source [%p] closed",this);
     m_exit = true;
     return true;
 }

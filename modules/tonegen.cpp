@@ -15,6 +15,7 @@ using namespace TelEngine;
 
 static ObjList tones;
 static ObjList chans;
+static Mutex mutex;
 
 typedef struct {
     int nsamples;
@@ -106,6 +107,7 @@ ToneSource::ToneSource(const String &tone)
 
 ToneSource::~ToneSource()
 {
+    Lock lock(mutex);
     Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
 	m_time = Time::now() - m_time;
@@ -133,6 +135,7 @@ const Tone *ToneSource::getBlock(const String &tone)
 
 ToneSource *ToneSource::getTone(const String &tone)
 {
+    Lock lock(mutex);
     ObjList *l = &tones;
     for (; l; l = l->next()) {
 	ToneSource *t = static_cast<ToneSource *>(l->get());
@@ -195,7 +198,9 @@ ToneChan::ToneChan(const String &tone)
     : DataEndpoint("tone")
 {
     Debug(DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
+    mutex.lock();
     chans.append(this);
+    mutex.unlock();
     ToneSource *t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
@@ -208,13 +213,14 @@ ToneChan::ToneChan(const String &tone)
 ToneChan::~ToneChan()
 {
     Debug(DebugAll,"ToneChan::~ToneChan() [%p]",this);
+    mutex.lock();
     chans.remove(this,false);
+    mutex.unlock();
 }
 
 void ToneChan::disconnected()
 {
     Debugger debug("ToneChan::disconnected()"," [%p]",this);
-    destruct();
 }
 
 bool ToneHandler::received(Message &msg)
@@ -227,8 +233,15 @@ bool ToneHandler::received(Message &msg)
 	return false;
     String tone = dest.matchString(1);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd)
-	dd->connect(new ToneChan(tone));
+    if (dd) {
+	ToneChan *tc = new ToneChan(tone);
+	if (dd->connect(tc))
+	    tc->deref();
+	else {
+	    tc->destruct();
+	    return false;
+	}
+    }
     else {
 	const char *targ = msg.getValue("target");
 	if (!targ) {
@@ -247,10 +260,12 @@ bool ToneHandler::received(Message &msg)
 	    m.retValue() = 0;
 	    ToneChan *tc = new ToneChan(dest.matchString(1).c_str());
 	    m.userData(tc);
-	    if (Engine::dispatch(m))
+	    if (Engine::dispatch(m)) {
+		tc->deref();
 		return true;
+	    }
 	    Debug(DebugWarn,"Tone outgoing call not accepted!");
-	    delete tc;
+	    tc->destruct();
 	}
 	else
 	    Debug(DebugWarn,"Tone outgoing call but no route!");

@@ -57,6 +57,12 @@ ident = yate
 ; maxconns: int: Maximum number of simultaneous connections (0 = no limit)
 ;maxconns = 0
 
+; dtmfinband: bool: Wheter to decode inband DTMF (CPU intensive)
+;dtmfinband = false
+
+; silencedetect: keyword: Silence detection algorithm: none, fixed, adaptive
+;silencedetect = none
+
 ; gkclient: bool: If h323 module endpoint should register to a gatekeeper
 gkclient = false
 

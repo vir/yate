@@ -256,7 +256,6 @@ WaveChan::~WaveChan()
 void WaveChan::disconnected()
 {
     Debugger debug("WaveChan::disconnected()"," [%p]",this);
-    destruct();
 }
 
 bool WaveHandler::received(Message &msg)
@@ -283,8 +282,15 @@ bool WaveHandler::received(Message &msg)
     if (dd) {
 	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
-	dd->connect(new WaveChan(dest.matchString(2),meth,maxlen));
-	return true;
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+	if (dd->connect(c)) {
+	    c->deref();
+	    return true;
+	}
+	else {
+	    c->destruct();
+	    return false;
+	}
     }
 
     const char *targ = msg.getValue("target");
@@ -304,10 +310,12 @@ bool WaveHandler::received(Message &msg)
 	m.retValue() = 0;
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
 	m.userData(c);
-	if (Engine::dispatch(m))
+	if (Engine::dispatch(m)) {
+	    c->deref();
 	    return true;
+	}
 	Debug(DebugWarn,"Wave outgoing call not accepted!");
-	delete c;
+	c->destruct();
     }
     else
 	Debug(DebugWarn,"Wave outgoing call but no route!");

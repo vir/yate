@@ -49,7 +49,7 @@ using namespace TelEngine;
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
 
-#define MAX_SANITY 8
+#define MAX_SANITY 5
 
 static unsigned long long s_nextinit = 0;
 static bool s_makeworker = true;
@@ -446,7 +446,7 @@ static int supervise(void)
 	}
 	::close(wdogfd[1]);
 	// Wait for the child to die or block
-	for (int sanity = MAX_SANITY/2; sanity > 0; sanity--) {
+	for (int sanity = MAX_SANITY; sanity > 0; sanity--) {
 	    int status = -1;
 	    int tmp = ::waitpid(s_childpid,&status,WNOHANG);
 	    if (tmp > 0) {
@@ -463,17 +463,17 @@ static int supervise(void)
 		break;
 	    }
 
-	    char buf[8];
+	    char buf[MAX_SANITY];
 	    tmp = ::read(wdogfd[0],buf,sizeof(buf));
 	    if (tmp >= 0) {
-		// Add one sanity point every second
+		// Timer messages add one sanity point every second
 		sanity += tmp;
 		if (sanity > MAX_SANITY)
 		    sanity = MAX_SANITY;
 	    }
 	    else if ((errno != EINTR) && (errno != EAGAIN))
 		break;
-	    // Consume sanity points slighly slower
+	    // Consume sanity points slighly slower than added
 	    ::usleep(1200000);
 	}
 	::close(wdogfd[0]);
@@ -481,9 +481,12 @@ static int supervise(void)
 	    // Child failed to proof sanity. Kill it - noo need to be gentle.
 	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
 	    ::kill(s_childpid,SIGKILL);
+	    ::usleep(10000);
+	    ::waitpid(s_childpid,0,WNOHANG);
 	    s_childpid = -1;
-	    ::usleep(100000);
 	}
+	if (s_runagain)
+	    ::usleep(1000000);
     }
     ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
     return retcode;

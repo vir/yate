@@ -223,6 +223,7 @@ private:
     String m_rtpAddr;
     String m_rtpPort;
     String m_rtpFormat;
+    String m_rtpLocal;
     int m_rtpSession;
     int m_rtpVersion;
     String m_formats;
@@ -271,6 +272,9 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 	String tmp(*c);
 	if (tmp.startSkip("IN IP4")) {
 	    tmp.trimBlanks();
+	    // Handle the case media is muted
+	    if (tmp == "0.0.0.0")
+		tmp.clear();
 	    addr = tmp;
 	}
     }
@@ -632,10 +636,12 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     if (e->getMessage()->body && e->getMessage()->body->isSDP()) {
 	String addr,port,formats;
 	parseSDP(static_cast<SDPBody*>(e->getMessage()->body),addr,port,formats);
-	m->addParam("rtp_forward","possible");
-	m->addParam("rtp_addr",addr);
-	m->addParam("rtp_port",port);
-	m->addParam("formats",formats);
+	if (addr) {
+	    m->addParam("rtp_forward","possible");
+	    m->addParam("rtp_addr",addr);
+	    m->addParam("rtp_port",port);
+	    m->addParam("formats",formats);
+	}
     }
     SipMsgThread *thr = new SipMsgThread(t,m);
     if (!thr->startup()) {
@@ -883,7 +889,8 @@ SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
     m.userData(static_cast<DataEndpoint *>(this));
     if (Engine::dispatch(m)) {
 	m_rtpid = m.getValue("rtpid");
-	return createSDP(m.getValue("localip"),m.getValue("localport"),formats);
+	m_rtpLocal = m.getValue("localip",m_rtpLocal);
+	return createSDP(m_rtpLocal,m.getValue("localport"),formats);
     }
     return 0;
 }
@@ -891,6 +898,10 @@ SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 // Creates a started external RTP channel from remote addr and builds SDP from it
 SDPBody* YateSIPConnection::createRtpSDP(bool start)
 {
+    if (m_rtpAddr.null()) {
+	m_rtpid = "-";
+	return createSDP(m_rtpLocal,0,m_formats);
+    }
     Message m("chan.rtp");
     m.addParam("id",id());
     m.addParam("direction","bidir");
@@ -902,9 +913,10 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
     m.userData(static_cast<DataEndpoint *>(this));
     if (Engine::dispatch(m)) {
 	m_rtpid = m.getValue("rtpid");
+	m_rtpLocal = m.getValue("localip",m_rtpLocal);
 	if (start)
 	    m_rtpFormat = m.getValue("format");
-	return createSDP(m.getValue("localip"),m.getValue("localport"),m_formats,m_rtpFormat);
+	return createSDP(m_rtpLocal,m.getValue("localport"),m_formats,m_rtpFormat);
     }
     return 0;
 }
@@ -912,7 +924,7 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
 // Starts an already created external RTP channel
 bool YateSIPConnection::startRtp()
 {
-    if (m_rtpid.null())
+    if (m_rtpid.null() || m_rtpid == "-")
 	return false;
     Debug(DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
@@ -930,14 +942,20 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 {
     Debug(DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
 	addr,port,formats,this);
+    if (!addr)
+	return 0;
     if (m_rtpSession)
 	++m_rtpVersion;
     else
 	m_rtpVersion = m_rtpSession = Time::now() / 10000000000ULL;
+    String owner;
+    owner << "yate " << m_rtpSession << " " << m_rtpVersion << " IN IP4 " << addr;
+    if (!port) {
+	port = "1";
+	addr = "0.0.0.0";
+    }
     String tmp;
     tmp << "IN IP4 " << addr;
-    String owner;
-    owner << "1 " << m_rtpSession << " " << m_rtpVersion << " " << tmp;
     String frm(format ? format : formats);
     if (frm.null())
 	frm = "alaw,mulaw";
@@ -1030,7 +1048,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	if (m_target)
 	    m->addParam("targetid",m_target);
 	m->addParam("status","answered");
-	if (m_rtpPort && !startRtp()) {
+	if (m_rtpPort && m_rtpAddr && !startRtp()) {
 	    m->addParam("rtp_forward","yes");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    m->addParam("rtp_port",m_rtpPort);
@@ -1056,7 +1074,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr,port,formats);
 	int q = formats.find(',');
 	String frm = formats.substr(0,q);
-	if (addr.null() || port.null() || frm.null())
+	if (port.null() || frm.null())
 	    break;
 	m_rtpAddr = addr;
 	m_rtpPort = port;

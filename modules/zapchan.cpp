@@ -224,6 +224,18 @@ static TokenDict dict_str2switch[] = {
     { 0, -1 }
 };
 
+static TokenDict dict_str2type[] = {
+    { "pri_net", PRI_NETWORK },
+    { "pri_cpe", PRI_CPE },
+#ifdef BRI_NETWORK_PTMP
+    { "bri_net_ptmp", BRI_NETWORK_PTMP },
+    { "bri_cpe_ptmp", BRI_CPE_PTMP },
+    { "bri_net", BRI_NETWORK },
+    { "bri_cpe", BRI_CPE },
+#endif
+    { 0, -1 }
+};
+
 #if 0
 /* Numbering plan identifier */
 static TokenDict dict_str2nplan[] = {
@@ -325,9 +337,9 @@ class ZapChan;
 class PriSpan : public GenObject, public Thread
 {
 public:
-    static PriSpan *create(int span, int chan1, int nChans, int dChan, bool isNet,
+    static PriSpan *create(int span, int chan1, int nChans, int dChan, int netType,
 			   int switchType, int dialPlan, int presentation,
-			   bool overlapDial, int nsf = YATE_NSF_DEFAULT);
+			   int overlapDial, int nsf = YATE_NSF_DEFAULT);
     virtual ~PriSpan();
     virtual void run();
     inline struct pri *pri()
@@ -344,6 +356,8 @@ public:
 	{ return m_dplan; }
     inline int pres() const
 	{ return m_pres; }
+    inline unsigned int overlapped() const
+	{ return m_overlapped; }
     inline bool outOfOrder() const
 	{ return !m_ok; }
     int findEmptyChan(int first = 0, int last = 65535) const;
@@ -353,8 +367,8 @@ public:
     static bool dumpEvents;
 
 private:
-    PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, bool overlapDial, int nsf);
+    PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres, int overlapDial);
+    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int overlapDial, int nsf);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
     void restartChan(int chan, bool outgoing, bool force = false);
@@ -370,6 +384,7 @@ private:
     int m_fd;
     int m_dplan;
     int m_pres;
+    unsigned int m_overlapped;
     struct pri *m_pri;
     unsigned long long m_restart;
     ZapChan **m_chans;
@@ -411,6 +426,8 @@ public:
 	{ return m_law; }
     const String& id() const
 	{ return m_id; }
+    bool isISDN() const
+	{ return m_isdn; }
     inline void setTarget(const char *target = 0)
 	{ m_targetid = target; }
     inline const String& getTarget() const
@@ -495,9 +512,9 @@ class ZapChanHandler : public MessageReceiver
 {
 public:
     enum {
-        Ringing,
-        Answered,
-        DTMF,
+	Ringing,
+	Answered,
+	DTMF,
     };
     virtual bool received(Message &msg, int id);
 };
@@ -522,28 +539,28 @@ ZaptelPlugin zplugin;
 unsigned long long PriSpan::restartPeriod = 0;
 bool PriSpan::dumpEvents = false;
 
-PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
+PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, int netType,
 			 int switchType, int dialPlan, int presentation,
-			 bool overlapDial, int nsf)
+			 int overlapDial, int nsf)
 {
     int fd = ::open("/dev/zap/channel", O_RDWR, 0600);
     if (fd < 0)
 	return 0;
     struct pri *p = makePri(fd,
 	(dChan >= 0) ? dChan+chan1-1 : -1,
-	(isNet ? PRI_NETWORK : PRI_CPE),
+	netType,
 	switchType, overlapDial, nsf);
     if (!p) {
 	::close(fd);
 	return 0;
     }
-    PriSpan *ps = new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation);
+    PriSpan *ps = new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation,overlapDial);
     ps->startup();
     return ps;
 }
 
 struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype,
-			     bool overlapDial, int nsf)
+			     int overlapDial, int nsf)
 {
     if (dchan >= 0) {
 	// Set up the D channel if we have one
@@ -579,17 +596,19 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype,
 #endif
 #ifdef PRI_SET_OVERLAPDIAL
     if (ret)
-	::pri_set_overlapdial(ret, overlapDial);
+	::pri_set_overlapdial(ret, (overlapDial > 0));
 #endif
     return ret;
 }
 
-PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres)
+PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres, int overlapDial)
     : Thread("PriSpan"), m_span(span), m_offs(first), m_nchans(chans),
-      m_fd(fd), m_dplan(dplan), m_pres(pres), m_pri(_pri),
+      m_fd(fd), m_dplan(dplan), m_pres(pres), m_overlapped(0), m_pri(_pri),
       m_restart(0), m_chans(0), m_ok(false)
 {
     Debug(DebugAll,"PriSpan::PriSpan(%p,%d,%d,%d) [%p]",_pri,span,chans,fd,this);
+    if (overlapDial > 0)
+	m_overlapped = overlapDial;
     ZapChan **ch = new ZapChan* [chans];
     for (int i = 1; i <= chans; i++)
 	ch[i-1] = (i == dchan) ? 0 : new ZapChan(this,i,s_buflen);
@@ -789,14 +808,20 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	return;
     }
     Debug(DebugInfo,"Ring on channel %d on span %d",chan,m_span);
-    ZapChan* c = getChan(chan);
-    c->ring(ev.call);
     Debug(DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
 	ev.callingname,ev.callingnum,ev.callingplan);
     Debug(DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
 	ev.callednum,ev.redirectingnum,ev.calledplan);
     Debug(DebugInfo,"type=%d complete=%d format='%s'",
 	ev.ctype,ev.complete,lookup(ev.layer1,dict_str2law,"unknown"));
+    ZapChan* c = getChan(chan);
+    c->ring(ev.call);
+    if (m_overlapped && !ev.complete) {
+	if (::strlen(ev.callednum) < m_overlapped) {
+	    ::pri_need_more_info(pri(),ev.call,chan,!c->isISDN());
+	    return;
+	}
+    }
     Message *m = new Message("call.route");
     m->addParam("driver","zap");
     m->addParam("id",c->id());
@@ -806,6 +831,8 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	m->addParam("caller",ev.callingnum);
     if (ev.callednum[0])
 	m->addParam("called",ev.callednum);
+    if (m_overlapped && !ev.complete)
+	m->addParam("overlapped","yes");
     if (Engine::dispatch(m)) {
 	*m = "call.execute";
 	m->addParam("callto",m->retValue());
@@ -1023,7 +1050,7 @@ bool ZapChan::nativeConnect(DataEndpoint *peer)
 	return false;
     conf.confno = zap->absChan();
     if (ioctl(m_fd, ZT_SETCONF, &conf))
-        return false;
+	return false;
 #endif
     return false;
 }
@@ -1152,7 +1179,7 @@ void ZapChan::answered()
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     if (m_targetid)
-        m->addParam("targetid",m_targetid);
+	m->addParam("targetid",m_targetid);
     m->addParam("status","answered");
     Engine::enqueue(m);
 }
@@ -1165,7 +1192,7 @@ void ZapChan::gotDigits(const char *digits)
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     if (m_targetid)
-        m->addParam("targetid",m_targetid);
+	m->addParam("targetid",m_targetid);
     m->addParam("text",digits);
     Engine::enqueue(m);
 }
@@ -1209,7 +1236,7 @@ bool ZapChan::call(Message &msg, const char *called)
 		break;
 	}
 	connect(dd);
-        msg.addParam("targetid",id());
+	msg.addParam("targetid",id());
     }
     else
 	msg.userData(this);
@@ -1305,7 +1332,7 @@ bool ZapDropper::received(Message &msg)
 {
     String id(msg.getValue("id"));
     if (id.null()) {
-        Debug("ZapDropper",DebugInfo,"Dropping all calls");
+	Debug("ZapDropper",DebugInfo,"Dropping all calls");
 	zplugin.mutex.lock();
 	const ObjList *l = &zplugin.m_spans;
 	for (; l; l=l->next()) {
@@ -1319,15 +1346,15 @@ bool ZapDropper::received(Message &msg)
 	    }
 	}
 	zplugin.mutex.unlock();
-        return false;
+	return false;
     }
     if (!id.startsWith("zap/"))
-        return false;
+	return false;
     ZapChan *c = 0;
     id >> "zap/";
     int n = id.toInteger();
     if ((n > 0) && (c = zplugin.findChan(n))) {
-        Debug("ZapDropper",DebugInfo,"Dropping zap/%d (%d/%d)",
+	Debug("ZapDropper",DebugInfo,"Dropping zap/%d (%d/%d)",
 	    n,c->span()->span(),c->chan());
 	zplugin.mutex.lock();
 	c->hangup(PRI_CAUSE_INTERWORKING);
@@ -1342,7 +1369,7 @@ bool ZapChanHandler::received(Message &msg, int id)
 {
     String tid(msg.getValue("targetid"));
     if (!tid.startSkip("zap/",false))
-        return false;
+	return false;
     int n = tid.toInteger();
     ZapChan* c = 0;
     if ((n > 0) && (c = zplugin.findChan(n))) {
@@ -1436,7 +1463,7 @@ ZapChan *ZaptelPlugin::findChan(const char *id)
 {
     String s(id);
     if (!s.startsWith("zap/"))
-        return 0;
+	return 0;
     s >> "zap/";
     int n = s.toInteger();
     return (n > 0) ? findChan(n) : 0;
@@ -1500,17 +1527,33 @@ void ZaptelPlugin::initialize()
 	    if (num < 0)
 		break;
 	    if (num) {
+		int dchan = -1;
+		// guess where we may have a D channel
+		switch (num) {
+		    case 3:
+			// BRI ISDN
+			dchan = 3;
+			break;
+		    case 24:
+			// T1 with CCS
+			dchan = 24;
+			break;
+		    case 31:
+			// EuroISDN
+			dchan = 16;
+			break;
+		}
 		chan1 = cfg.getIntValue(sect,"first",chan1);
 		PriSpan::create(span,chan1,num,
-		    cfg.getIntValue(sect,"dchan", num > 24 ? 16 : -1),
-		    cfg.getBoolValue(sect,"isnet",true),
+		    cfg.getIntValue(sect,"dchan", dchan),
+		    cfg.getIntValue(sect,"type",dict_str2type,PRI_NETWORK),
 		    cfg.getIntValue(sect,"swtype",dict_str2switch,
 			PRI_SWITCH_UNKNOWN),
 		    cfg.getIntValue(sect,"dialplan",dict_str2dplan,
 			PRI_UNKNOWN),
 		    cfg.getIntValue(sect,"presentation",dict_str2pres,
 			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED),
-		    cfg.getBoolValue(sect,"overlapdial",false),
+		    cfg.getIntValue(sect,"overlapdial"),
 		    cfg.getIntValue(sect,"facilities",dict_str2nsf,
 			YATE_NSF_DEFAULT)
 		);

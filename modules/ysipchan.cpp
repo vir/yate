@@ -184,6 +184,7 @@ private:
     bool startRtp();
     SIPTransaction* m_tr;
     bool m_hungup;
+    bool m_byebye;
     int m_state;
     SIPDialog m_id;
     String m_uri;
@@ -574,7 +575,7 @@ YateSIPConnection* YateSIPConnection::find(const String& id)
 
 // Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
-    : m_tr(tr), m_hungup(false), m_state(Incoming)
+    : m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
     s_mutex.lock();
@@ -595,7 +596,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
-    : m_tr(0), m_hungup(false), m_state(Outgoing), m_uri(uri)
+    : m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -678,21 +679,24 @@ void YateSIPConnection::hangup()
     clearTransaction();
     m_state = Cleared;
 
-    SIPMessage* m = new SIPMessage("BYE",m_uri);
-    m->addHeader("Call-ID",m_id);
-    String tmp;
-    tmp << "<" << m_id.localURI << ">";
-    HeaderLine* hl = new HeaderLine("From",tmp);
-    hl->setParam("tag",m_id.localTag);
-    m->addHeader(hl);
-    tmp.clear();
-    tmp << "<" << m_id.remoteURI << ">";
-    hl = new HeaderLine("To",tmp);
-    hl->setParam("tag",m_id.remoteTag);
-    m->addHeader(hl);
-    plugin.ep()->buildParty(m);
-    plugin.ep()->engine()->addMessage(m);
-    m->deref();
+    if (m_byebye) {
+	m_byebye = false;
+	SIPMessage* m = new SIPMessage("BYE",m_uri);
+	m->addHeader("Call-ID",m_id);
+	String tmp;
+	tmp << "<" << m_id.localURI << ">";
+	HeaderLine* hl = new HeaderLine("From",tmp);
+	hl->setParam("tag",m_id.localTag);
+	m->addHeader(hl);
+	tmp.clear();
+	tmp << "<" << m_id.remoteURI << ">";
+	hl = new HeaderLine("To",tmp);
+	hl->setParam("tag",m_id.remoteTag);
+	m->addHeader(hl);
+	plugin.ep()->buildParty(m);
+	plugin.ep()->engine()->addMessage(m);
+	m->deref();
+    }
     disconnect();
 }
 
@@ -882,6 +886,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 {
     Debug(DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
     t->setResponse(200,"OK");
+    m_byebye = false;
     hangup();
 }
 
@@ -890,7 +895,8 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
     Debug(DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
     if (m_tr) {
 	t->setResponse(200,"OK");
-	m_tr->setResponse(487,"Request Terminated");
+	m_byebye = false;
+	clearTransaction();
 	disconnect("Cancelled");
     }
     else

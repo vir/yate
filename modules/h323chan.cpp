@@ -63,6 +63,7 @@ static Mutex s_calls;
 static Mutex s_route;
 
 static bool s_externalRtp;
+static bool s_passtrough;
 static int s_maxqueue = 5;
 static int s_maxconns = 0;
 
@@ -77,9 +78,20 @@ static TokenDict dict_str2code[] = {
 };
 
 const char* h323_formats[] = {
-    "G.711-ALaw-64k{sw}", "alaw",
-    "G.711-uLaw-64k{sw}", "mulaw",
-    "GSM-06.10{sw}", "gsm",
+    "G.711-ALaw-64k", "alaw",
+    "G.711-uLaw-64k", "mulaw",
+    "GSM-06.10", "gsm",
+    "MS-GSM", "msgsm",
+    "PCM-16", "slin",
+    "G.728", "g728",
+    "G.729", "g729",
+    "G.729A", "g729a",
+    "G.729A", "g729b",
+    "G.729A/B", "g729ab",
+    "G.723.1", "g723.1",
+    "G.723.1(5.3k)", "g723.1-5k3",
+    "G.723.1A(5.3k)", "g723.1a-5k3",
+    "G.723.1A(6.3k)", "g723.1a-6k3",
     0
 };
 
@@ -225,7 +237,11 @@ public:
     BOOL OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) ;
     BOOL StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void OnStoppedExternal(H323Channel::Directions dir);
+    void SetRemoteAddress(const char* remoteIP, WORD remotePort);
     virtual void disconnected(bool final, const char *reason);
+    void rtpExecuted(Message& msg);
+    void rtpForward(Message& msg, bool init = false);
+    static BOOL decodeCapability(const H323Capability & capability, const char** dataFormat, int *payload = 0, String* capabName = 0);
     inline const String &id() const
 	{ return m_id; }
     inline const String &status() const
@@ -238,11 +254,20 @@ public:
 	{ return m_targetid; }
     inline static int total()
 	{ return s_total; }
+    inline bool HasRemoteAddress() const
+	{ return s_passtrough && (m_remotePort > 0); }
 private:
     bool m_nativeRtp;
+    bool m_passtrough;
     String m_id;
     String m_status;
     String m_targetid;
+    String m_formats;
+    String m_rtpAddr;
+    int m_rtpPort;
+    String m_remoteFormats;
+    String m_remoteAddr;
+    int m_remotePort;
     static int s_total;
 };
 
@@ -378,6 +403,7 @@ bool H323MsgThread::route()
 	m_msg->userData(static_cast<DataEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
 	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));
+	    conn->rtpExecuted(*m_msg);
 	    conn->setStatus("routed");
 	    conn->setTarget(m_msg->getValue("targetid"));
 	    if (conn->getTarget().null()) {
@@ -479,21 +505,21 @@ H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
 
 bool YateH323EndPoint::Init(void)
 {
-    if (s_cfg.getBoolValue("codecs","g711u",true))
+    if (s_cfg.getBoolValue("codecs","mulaw",true))
 #ifdef OLD_STYLE_CODECS
 	SetCapability(0,0,new H323_G711Capability(H323_G711Capability::muLaw));
 #else
 	AddAllCapabilities(0, 0, "G.711-u*{sw}");
 #endif
 
-    if (s_cfg.getBoolValue("codecs","g711a",true))
+    if (s_cfg.getBoolValue("codecs","alaw",true))
 #ifdef OLD_STYLE_CODECS
 	SetCapability(0,0,new H323_G711Capability(H323_G711Capability::ALaw));
 #else
 	AddAllCapabilities(0, 0, "G.711-A*{sw}");
 #endif
 
-    if (s_cfg.getBoolValue("codecs","gsm0610",true)) {
+    if (s_cfg.getBoolValue("codecs","gsm",true)) {
 #ifdef OLD_STYLE_CODECS
 	H323_GSM0610Capability *gsmCap = new H323_GSM0610Capability;
 	SetCapability(0, 0, gsmCap);
@@ -503,7 +529,7 @@ bool YateH323EndPoint::Init(void)
 #endif
     }
 
-    if (s_cfg.getBoolValue("codecs","speexnarrow",true)) {
+    if (s_cfg.getBoolValue("codecs","speex",true)) {
 #ifdef OLD_STYLE_CODECS
 	SpeexNarrow3AudioCapability *speex3Cap = new SpeexNarrow3AudioCapability();
 	SetCapability(0, 0, speex3Cap);
@@ -590,7 +616,8 @@ bool YateH323EndPoint::Init(void)
 
 YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     unsigned callReference, void *userdata)
-    : H323Connection(endpoint,callReference), DataEndpoint("h323"), m_nativeRtp(false)
+    : H323Connection(endpoint,callReference), DataEndpoint("h323"),
+      m_nativeRtp(false), m_passtrough(false), m_rtpPort(0), m_remotePort(0)
 {
     Debug(DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
 	&endpoint,callReference,userdata,this);
@@ -669,6 +696,13 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     if (s)
 	m->addParam("calledname",s);
 #endif
+    if (s_passtrough && m_remotePort) {
+	m_passtrough = true;
+	m->addParam("rtp_forward","possible");
+	m->addParam("rtp_addr",m_remoteAddr);
+	m->addParam("rtp_port",String(m_remotePort));
+	m->addParam("formats",m_remoteFormats);
+    }
     H323MsgThread *t = new H323MsgThread(m,id());
     if (!t->startup()) {
 	Debug(DebugWarn,"Error starting routing thread! [%p]",this);
@@ -677,6 +711,43 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	return H323Connection::AnswerCallDenied;
     }
     return H323Connection::AnswerCallDeferred;
+}
+
+void YateH323Connection::rtpExecuted(Message& msg)
+{
+    Debug(DebugAll,"YateH323Connection::rtpExecuted(%p) [%p]",
+	&msg,this);
+    if (!m_passtrough)
+	return;
+    String tmp = msg.getValue("rtp_forward");
+    m_passtrough = (tmp == "accepted");
+    if (m_passtrough)
+	Debug(DebugInfo,"H323 Peer accepted RTP forward");
+}
+
+void YateH323Connection::rtpForward(Message& msg, bool init)
+{
+    Debug(DebugAll,"YateH323Connection::rtpForward(%p,%d) [%p]",
+	&msg,init,this);
+    String tmp = msg.getValue("rtp_forward");
+    if (!(init || m_passtrough && tmp))
+	return;
+    m_passtrough = tmp.toBoolean();
+    if (!m_passtrough)
+	return;
+    tmp = msg.getValue("rtp_port");
+    int port = tmp.toInteger();
+    String addr(msg.getValue("rtp_addr"));
+    if (port && addr) {
+	m_rtpAddr = addr;
+	m_rtpPort = port;
+	m_formats = msg.getValue("formats");
+	msg.setParam("rtp_forward","accepted");
+	Debug(DebugInfo,"H323 Accepted RTP forward %s:%d formats '%s'",
+	    addr.c_str(),port,m_formats.safe());
+    }
+    else
+	m_passtrough = false;
 }
 
 void YateH323Connection::OnEstablished()
@@ -694,6 +765,12 @@ void YateH323Connection::OnEstablished()
     if (m_targetid)
 	m->addParam("targetid",m_targetid);
     m->addParam("status","answered");
+    if (m_passtrough && m_remotePort) {
+	m->addParam("rtp_forward","yes");
+	m->addParam("rtp_addr",m_remoteAddr);
+	m->addParam("rtp_port",String(m_remotePort));
+	m->addParam("formats",m_remoteFormats);
+    }
     Engine::enqueue(m);
 }
 
@@ -808,26 +885,47 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 #endif
 {
     Debug(DebugAll,"H323Connection::CreateRealTimeLogicalChannel [%p]",this);
-    if (s_externalRtp) {
+    if (s_externalRtp || s_passtrough) {
 	const char* sdir = lookup(dir,dict_h323_dir);
-	Debug(DebugInfo,"capability '%s' session %u %s",(const char *)capability.GetFormatName(),sessionID,sdir);
+	const char *format = 0;
+	decodeCapability(capability,&format);
+	Debug(DebugInfo,"capability '%s' format '%s' session %u %s",
+	    (const char *)capability.GetFormatName(),format,sessionID,sdir);
+
+	// disallow codecs not supported by remote receiver
+	if (!(s_externalRtp || m_formats.null() || (m_formats.find(format) >= 0)))
+	    return 0;
+
+	if (s_passtrough && (dir == H323Channel::IsReceiver)) {
+	    if (format && (m_remoteFormats.find(format) < 0) && s_cfg.getBoolValue("codecs",format)) {
+		if (m_remoteFormats)
+		    m_remoteFormats << ",";
+		m_remoteFormats << format;
+	    }
+	}
 	PIPSocket::Address externalIpAddress;
-//	GetControlChannel().GetLocalAddress().GetIpAndPort(externalIpAddress, port);
 	GetControlChannel().GetLocalAddress().GetIpAddress(externalIpAddress);
 	Debug(DebugInfo,"address '%s'",(const char *)externalIpAddress.AsString());
-	Message m("chan.rtp");
-	m.addParam("localip",externalIpAddress.AsString());
-	m.userData(static_cast<DataEndpoint *>(this));
-Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
-	if (sdir)
-	    m.addParam("direction",sdir);
-	if (Engine::dispatch(m)) {
-	    String p(m.getValue("localport"));
-	    WORD externalPort = p.toInteger();
-	    if (externalPort) {
-		m_nativeRtp = false;
-		return new YateH323_ExternalRTPChannel(*this, capability, dir, sessionID, externalIpAddress, externalPort);
+	WORD externalPort = 0;
+	if (s_externalRtp) {
+	    Message m("chan.rtp");
+	    m.addParam("localip",externalIpAddress.AsString());
+	    m.userData(static_cast<DataEndpoint *>(this));
+	    // the cast above is required because of the multiple inheritance
+	    if (sdir)
+		m.addParam("direction",sdir);
+	    if (Engine::dispatch(m)) {
+		String p(m.getValue("localport"));
+		externalPort = p.toInteger();
 	    }
+	}
+	if (externalPort || s_passtrough) {
+	    m_nativeRtp = false;
+	    if (!externalPort) {
+		externalPort = m_rtpPort;
+		externalIpAddress = PString(m_rtpAddr.safe());
+	    }
+	    return new YateH323_ExternalRTPChannel(*this, capability, dir, sessionID, externalIpAddress, externalPort);
 	}
 	Debug(DebugWarn,"YateH323Connection failed to create external RTP, using native");
     }
@@ -852,31 +950,72 @@ BOOL YateH323Connection::OnCreateLogicalChannel(const H323Capability & capabilit
     return H323Connection::OnCreateLogicalChannel(capability,dir,errorCode);
 }
 
+BOOL YateH323Connection::decodeCapability(const H323Capability & capability, const char** dataFormat, int *payload, String* capabName)
+{
+    String fname((const char *)capability.GetFormatName());
+    // turn capability name into format name
+    if (fname.endsWith("{sw}",false))
+	fname = fname.substr(0,fname.length()-4);
+    OpalMediaFormat oformat(fname, FALSE);
+    int pload = oformat.GetPayloadType();
+    const char *format = 0;
+    const char** f = h323_formats;
+    for (; *f; f += 2) {
+	if (fname == *f) {
+	    format = f[1];
+	    break;
+	}
+    }
+    Debug(DebugInfo,"capability '%s' format '%s' payload %d",fname.c_str(),format,pload);
+    if (format) {
+	if (capabName)
+	    *capabName = fname;
+	if (dataFormat)
+	    *dataFormat = format;
+	if (payload)
+	    *payload = pload;
+	return TRUE;
+    }
+    return FALSE;
+}
+
+void YateH323Connection::SetRemoteAddress(const char* remoteIP, WORD remotePort)
+{
+    if (!m_remotePort) {
+	Debug(DebugInfo,"Copying remote RTP address [%p]",this);
+	m_remotePort = remotePort;
+	m_remoteAddr = remoteIP;
+    }
+}
+
 BOOL YateH323Connection::StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan)
 {
     const char* sdir = lookup(dir,dict_h323_dir);
     Debug(DebugAll,"YateH323Connection::StartExternalRTP(\"%s\",%u,%s,%p) [%p]",
 	remoteIP,remotePort,sdir,chan,this);
+    if (m_passtrough && m_rtpPort) {
+	SetRemoteAddress(remoteIP,remotePort);
+
+	Debug(DebugInfo,"Passing RTP to %s:%d",m_rtpAddr.c_str(),m_rtpPort);
+	const PIPSocket::Address ip(m_rtpAddr.safe());
+	WORD dataPort = m_rtpPort;
+	chan->SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
+	OnStoppedExternal(dir);
+	return TRUE;
+    }
+    if (!s_externalRtp)
+	return FALSE;
     Message m("chan.rtp");
     m.userData(static_cast<DataEndpoint *>(this));
-Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
+    // the cast above is required because of the multiple inheritance
+//    Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
     if (sdir)
 	m.addParam("direction",sdir);
     m.addParam("remoteip",remoteIP);
     m.addParam("remoteport",String(remotePort));
-    String capability((const char *)chan->GetCapability().GetFormatName());
-//    int payload = chan->GetCapability().GetPayloadType();
-    OpalMediaFormat oformat(capability, FALSE);
-    int payload = oformat.GetPayloadType();
+    int payload = 128;
     const char *format = 0;
-    const char** f = h323_formats;
-    for (; *f; f += 2) {
-	if (capability == *f) {
-	    format = f[1];
-	    break;
-	}
-    }
-    Debug(DebugInfo,"capability '%s' format '%s' payload %d",capability.c_str(),format,payload);
+    decodeCapability(chan->GetCapability(),&format,&payload);
     if (format)
 	m.addParam("format",format);
     if ((payload >= 0) && (payload < 127))
@@ -948,7 +1087,16 @@ BOOL YateH323_ExternalRTPChannel::OnReceivedPDU(
 				unsigned & errorCode)
 {
     Debug(DebugInfo,"OnReceivedPDU [%p]",this);
-    return H323_ExternalRTPChannel::OnReceivedPDU(param,errorCode);
+    if (!H323_ExternalRTPChannel::OnReceivedPDU(param,errorCode))
+	return FALSE;
+    if (!m_conn || m_conn->HasRemoteAddress())
+	return TRUE;
+    PIPSocket::Address remoteIpAddress;
+    WORD remotePort;
+    GetRemoteAddress(remoteIpAddress,remotePort);
+    Debug(DebugInfo,"external rtp ip address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
+    m_conn->SetRemoteAddress((const char *)remoteIpAddress.AsString(), remotePort);
+    return TRUE;
 }
 
 BOOL YateH323_ExternalRTPChannel::OnSendingPDU( H245_H2250LogicalChannelParameters & param )
@@ -1230,6 +1378,7 @@ bool H323Handler::received(Message &msg)
 	    Debug(DebugInfo,"Setting H.323 caller name to '%s'",caller.c_str());
 	    conn->SetLocalPartyName(caller.c_str());
 	}
+	conn->rtpForward(msg,s_passtrough);
 	conn->setTarget(msg.getValue("id"));
 	msg.addParam("targetid",conn->id());
 	conn->Unlock();
@@ -1268,17 +1417,21 @@ bool H323Dropper::received(Message &msg)
 bool H323ConnHandler::received(Message &msg, int id)
 {
     String callid(msg.getValue("targetid"));
-    if (!callid.startsWith("h323"))
+    if (!callid.startsWith("h323/",false))
 	return false;
-    YateH323Connection *conn = hplugin.findConnectionLock(id);
-    if (!conn)
+    YateH323Connection *conn = hplugin.findConnectionLock(callid);
+    if (!conn) {
+	Debug(DebugInfo,"Target '%s' was not found in list",callid.c_str());
 	return false;
+    }
     String text(msg.getValue("text"));
     switch (id) {
         case Answered:
+	    conn->rtpForward(msg);
 	    conn->AnsweringCall(H323Connection::AnswerCallNow);
 	    break;
         case Ringing:
+	    conn->rtpForward(msg);
 	    conn->AnsweringCall(H323Connection::AnswerCallAlertWithMedia);
 	    break;
 	case DTMF:
@@ -1411,6 +1564,7 @@ void H323Plugin::initialize()
 	m_endpoint->Init();
     }
     s_externalRtp = s_cfg.getBoolValue("general","external_rtp",false);
+    s_passtrough = s_cfg.getBoolValue("general","passtrough_rtp",false);
     if (m_first) {
 	m_first = false;
 	H323ConnHandler* ch = new H323ConnHandler;

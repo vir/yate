@@ -25,7 +25,12 @@
 ; Use an external rtp module instead of the native OpenH323 RTP stack, which is
 ; very cpu intensive. The no external rtp can be found it will fallback to the
 ; native stack. The only external rtp now is oRTP (see ortpchan module).
-external_rtp=no
+; external_rtp: bool: default: no
+;external_rtp=no
+
+; Perform pass-trough RTP forwarding if allowed from routing
+; passtrough_rtp: bool: default: no
+;passtrough_rtp=no
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

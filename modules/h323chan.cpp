@@ -116,14 +116,6 @@ class YateGatekeeperCall : public H323GatekeeperCall
     );
 };
 
-class TranslateObj : public GenObject
-{
-public:
-   H225_TransportAddress_ipAddress ip;
-   PString alias;
-   String e164;
-};
-
 class YateGatekeeperServer : public H323GatekeeperServer
 {
     PCLASSINFO(YateGatekeeperServer, H323GatekeeperServer);
@@ -136,7 +128,6 @@ class YateGatekeeperServer : public H323GatekeeperServer
 		          H323GatekeeperURQ & request );
     H323GatekeeperCall * CreateCall(const OpalGloballyUniqueID & id,H323GatekeeperCall::Direction dir);
     BOOL TranslateAliasAddressToSignalAddress(const H225_AliasAddress & alias,H323TransportAddress & address);
-    TranslateObj * findAlias(const PString & alias);
     virtual BOOL GetUsersPassword(const PString & alias,PString & password) const;
 
   private:
@@ -550,12 +541,11 @@ bool YateH323EndPoint::Init(void)
 	    }
 	}
     }
-/*    	    if (s_cfg.getBoolValue("gk","server",true))
+    	    if (s_cfg.getBoolValue("gk","server",true))
 	    {
 		gkServer = new YateGatekeeperServer(*this);
 	   	gkServer->Init();
 	    }
-*/	
 
 //    bool useGk = s_cfg.getBoolean("general","use_gatekeeper");
     return true;
@@ -1010,17 +1000,6 @@ BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
     return true;
 }
 
-TranslateObj * YateGatekeeperServer::findAlias(const PString &alias)
-{ 
-    ObjList *p = &translate; 
-    for (; p; p=p->next()) { 
-	    TranslateObj *t =
-            static_cast<TranslateObj *>(p->get()); 
-	    if (t && t->alias == alias)
-		    return t; 
-    } 
-    return 0; 
-}
 
 BOOL YateGatekeeperServer::GetUsersPassword(const PString & alias,PString & password) const
 {
@@ -1045,100 +1024,75 @@ H323GatekeeperCall * YateGatekeeperServer::CreateCall(const OpalGloballyUniqueID
 
 H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323GatekeeperRRQ & request)
 {
-//    PString request_s = request.GetGatekeeperIdentifier();
-//    request.rrq.HasOptionalField(H225_RegistrationRequest::e_endpointIdentifier);
-    PString alias;
-    PString ips;
-    PString r ;
-    for (int j = 0; j < request.rrq.m_terminalAlias.GetSize(); j++) {
-		alias = H323GetAliasAddressString(request.rrq.m_terminalAlias[j]);
-		r = H323GetAliasAddressE164(request.rrq.m_terminalAlias[j]);
-//		PString c = request.GetEndpointIdentifier();
-		Debug(DebugInfo,"marimea matrici este %d : ",request.rrq.m_callSignalAddress.GetSize());
-//		H225_TransportAddress_ipAddress ip=request.rrq.m_callSignalAddress[0];
-		for (int k=0; k<request.rrq.m_callSignalAddress.GetSize();k++)
-		{
-        	        H225_TransportAddress_ipAddress ip=request.rrq.m_callSignalAddress[k];
-        		ips = String(ip.m_ip[0]) + "." + String(ip.m_ip[1]) + "." + String(ip.m_ip[2]) + "."  + String(ip.m_ip[3]) + ":" + String((int)ip.m_port) ;
-    			Debug(DebugInfo,"Stringul initial este %s",(const char *)ips);
-		}	
-//		Debug(DebugInfo,"ip %d.%d.%d.%d:%u",ip.m_ip[0], ip.m_ip[1], ip.m_ip[2], ip.m_ip[3],ip.m_port.GetValue());
-
-//        	Debug(DebugInfo,"end point user id %s  and e164 %s",(const char *)s,(const char *)r); //(const char *)request.m_endpointIdentifier); //request_s.GetLength());
-        	H225_TransportAddress_ipAddress ip=request.rrq.m_callSignalAddress[0];
-		Message *m = new Message("regist");
-		m->addParam("username",alias);
-		m->addParam("techno","h323");
-		m->addParam("data",ips);
-		Engine::dispatch(m);
-		Debug(DebugInfo,"prefix boo registering %s",m->retValue().c_str());
-		
-		TranslateObj *t = new TranslateObj;
-		t->ip = ip;
-		t->alias = alias;
-		t->e164 = m->retValue();
-		translate.append(t);
-    }
-/*    for (int i = 0; i < request.rrq.m_callSignalAddress.GetSize(); i++) {
-        Debug(DebugInfo,"end point identifier %d",request.rrq.m_callSignalAddress[i]); //(const char *)request.m_endpointIdentifier); //request_s.GetLength());
-    }*/
-    
-    return H323GatekeeperServer::OnRegistration(request);
+    int i = H323GatekeeperServer::OnRegistration(request);
+    if (i == H323GatekeeperRequest::Confirm)
+    {	
+	PString alias,r;
+	String ips;
+        for (int j = 0; j < request.rrq.m_terminalAlias.GetSize(); j++) {
+	    alias = H323GetAliasAddressString(request.rrq.m_terminalAlias[j]);
+	    r = H323GetAliasAddressE164(request.rrq.m_terminalAlias[j]);
+	    H225_TransportAddress_ipAddress ip;
+	    if (request.rrq.m_callSignalAddress.GetSize() >0)
+		ip=request.rrq.m_callSignalAddress[0];
+	    ips = "h323/" + String(ip.m_ip[0]) + "." + String(ip.m_ip[1]) + "." + String(ip.m_ip[2]) + "."  + String(ip.m_ip[3]) + ":" + String((int)ip.m_port);
+	    /** 
+	    * we deal just with the first callSignalAddress, since openh323 
+	    * don't give a shit for multi hosted boxes.
+	    */
+	    Message *m = new Message("regist");
+	    m->addParam("username",alias);
+	    m->addParam("techno","h323gk");
+	    m->addParam("data",ips);
+	    if (!Engine::dispatch(m) && !m->retValue().null())
+		return H323GatekeeperRequest::Reject;
+	}
+    } else 
+	return (H323Transaction::Response)i;
+    return H323GatekeeperRequest::Confirm;
 }
 H323GatekeeperRequest::Response YateGatekeeperServer::OnUnregistration(H323GatekeeperURQ & request )
 {
-/*   for (int j = 0; j < request.urq.m_terminalAlias.GetSize(); j++) {
-       PString s = H323GetAliasAddressString(request.urq.m_terminalAlias[j]);
-   }*/
-//   PString s = H323GetAliasAddressString(request.urq.m_callSignalAddress[0]);
-    PString s = H323GetAliasAddressString(request.urq.m_endpointAlias[0]);
-    TranslateObj * c = findAlias(s);
-    
-    Message *m = new Message("unregist");
-    m->addParam("prefix",c->e164);
-    Debug(DebugInfo,"prefixh323 %s",c->e164.c_str());
-    Engine::dispatch(m);
-
-   //Debug(DebugInfo,"aliasul descarcat este %s",(const char *)c->alias);
-    translate.remove(c);
-   
-   return H323GatekeeperServer::OnUnregistration(request);
+    /* We use just the first alias since is the one we need */
+    int i = H323GatekeeperServer::OnUnregistration(request);
+    if (i == H323GatekeeperRequest::Confirm)
+    {
+	for (int j = 0; j < request.urq.m_endpointAlias.GetSize(); j++) {
+	    PString alias = H323GetAliasAddressString(request.urq.m_endpointAlias[j]);
+	    if (alias.IsEmpty())
+		return H323GatekeeperRequest::Reject;
+	    Message *m = new Message("unregist");
+	    m->addParam("username",alias);
+	    Engine::dispatch(m);
+	}
+    } else 
+	return (H323Transaction::Response)i;
+    return H323GatekeeperRequest::Confirm;
 }
 
 BOOL YateGatekeeperServer::TranslateAliasAddressToSignalAddress(const H225_AliasAddress & alias,H323TransportAddress & address)
 {
     PString aliasString = H323GetAliasAddressString(alias);
-   // TranslateObj *f = new TranslateObj;
-    //f->alias = aliasString;
-    //translate.find()
-    TranslateObj * c = findAlias(aliasString);
-//    c->alias = aliasString;
-    //Debug(DebugInfo,"ip-ul corespondent este %d.%d.%d.%d:%u",c->ip.m_ip[0],c->ip.m_ip[1],c->ip.m_ip[2],c->ip.m_ip[3],c->ip.m_port.GetValue());
-    if (c)
-    {
-    	Debug(DebugInfo,"alias-ul este %s si cel gasit este %s",(const char *)aliasString,(const char *)c->alias);
-//       Debug(DebugInfo,"ip-ul corespondent este %d.%d.%d.%d:%u",c->ip.m_ip[0],c->ip.m_ip[1],c->ip.m_ip[2],c->ip.m_ip[3],c->ip.m_port.GetValue());
-        String s = "ip$" + String(c->ip.m_ip[0]) + "." + String(c->ip.m_ip[1]) + "." + String(c->ip.m_ip[2]) + "."  + String(c->ip.m_ip[3]) + ":" + String((int)c->ip.m_port) ;
-    	Debug(DebugInfo,"Stringul este %s",(const char *)s);
-/*	H323TransportAddress aliasAsTransport = c->aliasaddres;
-	PIPSocket::Address ip;
-	WORD port = H323EndPoint::DefaultTcpPort;
-	if (!aliasAsTransport.GetIpAndPort(ip, port)) {
-    		Debug(DebugInfo,"RAS\tCould not translate %s as host name.",(const char *)aliasString);
-		return FALSE;
-	}*/
-//	H225_TransportAddress ceva = c->aliasaddres;
-//	address = H323TransportAddress(ceva);
-    	//Debug(DebugInfo,"RAS\tTranslating alias %s to %s, host name",(const char *)aliasString,(const char *)address);
-//	return TRUE;
-	address = s.c_str();
-	return TRUE;
-	
-	//if (H323GatekeeperServer::TranslateAliasAddressToSignalAddress(alias, address))
-   }
-//    if (H323GatekeeperServer::TranslateAliasAddressToSignalAddress(alias, address))
-//	    return TRUE;
-
+    Message m("route");
+    m.addParam("called",aliasString);
+    Engine::dispatch(m);
+    String s = m.retValue();
+    if (!s.null()){
+	/** 
+	 * Here we have 2 cases, first is handle when the call have to be send
+	 * to endpoint (if the call is to another yate channel, or is h323 
+	 * proxied), or if has to be send to another gatekeeper we find out 
+	 * from the techno parameter
+	 */
+	    if ((m.getParam("techno")) && (*(m.getParam("techno")) == "h323gk"))
+		address = s.c_str();
+	    else {
+		s.clear();
+		s << "ip$" << s_cfg.getValue("gk","interface1") << ":" << s_cfg.getIntValue("ep","port",1720);
+		address = s.c_str();
+	    }
+        return TRUE;
+    }
     return FALSE;
 }
 

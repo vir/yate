@@ -31,8 +31,10 @@ class RegistHandler : public MessageHandler
 {
 public:
     RegistHandler(const char *name)
-	: MessageHandler(name) { }
+	: MessageHandler(name),m_init(false) { }
     virtual bool received(Message &msg);
+    bool init();
+    bool m_init;
 };
 
 class UnRegistHandler : public MessageHandler
@@ -58,7 +60,8 @@ public:
 	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
-
+/**
+ * I can't remeber why i have made this class :) 
 class RegistThread :  public Thread
 {
 public:
@@ -66,7 +69,7 @@ public:
     ~RegistThread();
     void run(void);
 };
-
+*/
 class RegistPlugin : public Plugin
 {
 public:
@@ -84,15 +87,14 @@ private:
 bool AuthHandler::received(Message &msg)
 {
 //    const char *calltime = c_safe(msg.getValue("time"));
-    const char *username  = c_safe(msg.getValue("username"));
+    String username  = c_safe(msg.getValue("username"));
     
     Lock lock(dbmutex);
     if (!conn)
     	return false;
 
-    char buffer[2048];
-    snprintf(buffer,sizeof(buffer),"SELECT password FROM register WHERE username='%s'",username);
-    PGresult *respgsql = PQexec(conn,buffer);
+    String s = "SELECT password FROM register WHERE username='" + username + "'";
+    PGresult *respgsql = PQexec(conn,(const char *)s);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
         Debug(DebugFail,"Failed to query from database: %s",
@@ -107,20 +109,40 @@ bool AuthHandler::received(Message &msg)
     return true;
 };
 
+bool RegistHandler::init()
+{
+    /**
+     * We must clear the routing table when loading the new table, to not 
+     * leave any garbage there
+     */
+    String s = "DELETE FROM routepaid";
+    PGresult *respgsql = PQexec(conn,(const char *)s);
+    if (PQresultStatus(respgsql) != PGRES_COMMAND_OK)
+    {
+        Debug(DebugFail,"Failed to clear the routepaid table: %s",
+	    PQerrorMessage(conn));
+	return false;
+    }
+    return true;
+}
+
 bool RegistHandler::received(Message &msg)
 {
-//    const char *calltime = c_safe(msg.getValue("time"));
-    const char *username  = c_safe(msg.getValue("username"));
-    const char *techno  = c_safe(msg.getValue("techno"));
-    const char *data  = c_safe(msg.getValue("data"));
+    if (!m_init)
+    {
+	init();
+	m_init= true;
+    }
+    String username  = c_safe(msg.getValue("username"));
+    String techno  = c_safe(msg.getValue("techno"));
+    String data  = c_safe(msg.getValue("data"));
     
     Lock lock(dbmutex);
     if (!conn)
     	return false;
 
-    char buffer[2048];
-    snprintf(buffer,sizeof(buffer),"SELECT credit,price,e164,context FROM register WHERE username='%s'",username);
-    PGresult *respgsql = PQexec(conn,buffer);
+    String c = "SELECT credit,price,e164,context FROM register WHERE username='" + username + "'";
+    PGresult *respgsql = PQexec(conn,(const char *)c);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
         Debug(DebugFail,"Failed to query from database: %s",
@@ -132,52 +154,45 @@ bool RegistHandler::received(Message &msg)
     	return false;
     }
     
-    const char *credit  = PQgetvalue(respgsql,0,0);
-    const char *price  = PQgetvalue(respgsql,0,1);
-    const char *prefix = PQgetvalue(respgsql,0,2);
-    const char *context = PQgetvalue(respgsql,0,3);
+    String price  = PQgetvalue(respgsql,0,1);
+    String prefix = PQgetvalue(respgsql,0,2);
+    String context = PQgetvalue(respgsql,0,3);
+    if (price.null())
+	price = 0;
+    if (context.null())
+	context = "default";
 
-    snprintf(buffer,sizeof(buffer),"INSERT INTO routepaid (context,prefix,tehno,data,price) VALUES ('%s','%s','%s','%s',%s);",context,prefix,techno,data,price);
+    c = "INSERT INTO routepaid (context,prefix,tehno,data,price,username) VALUES ('" + context + "','" + prefix + "','" + techno + "','" + data + "'," + price +",'" + username + "')";
 
-    PGresult *respgsql1 = PQexec(conn,buffer);
+    PGresult *respgsql1 = PQexec(conn,(const char *)c);
     if (!respgsql1 || PQresultStatus(respgsql1) != PGRES_COMMAND_OK)
         Debug(DebugFail,"Failed to insert in database: %s",
 	    PQerrorMessage(conn));
     msg.retValue() = prefix;
-    Debug(DebugInfo,"prefix in register este %s",prefix);
     return true;
-    
 };
 
 bool UnRegistHandler::received(Message &msg)
 {
-    const char *prefix  = c_safe(msg.getValue("prefix"));
-    Debug(DebugInfo,"prefix=%s",prefix);
+    String username  = c_safe(msg.getValue("username"));
     
     Lock lock(dbmutex);
     if (!conn)
     	return false;
 
-    char buffer[2048];
-    snprintf(buffer,sizeof(buffer),"DELETE from routepaid WHERE prefix='%s'",prefix);
-    PGresult *respgsql = PQexec(conn,buffer);
-    if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
+    String s = "DELETE from routepaid WHERE username='" + username + "'";
+    PGresult *respgsql = PQexec(conn,(const char *)s);
+    if (PQresultStatus(respgsql) != PGRES_COMMAND_OK)
     {
         Debug(DebugFail,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
     	return false;
     }
-    if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No user.");
-    	return false;
-    }
     return true;
-    
 };
 
 bool RouteHandler::received(Message &msg)
 {
-    char buffer[2048];
     unsigned long long tmr = Time::now();
     String called(msg.getValue("called"));
     if (called.null())
@@ -186,11 +201,12 @@ bool RouteHandler::received(Message &msg)
     if (!conn)
     	return false;
     s_route_rq++;
-    const char *context = c_safe(msg.getValue("context","default"));
-    snprintf(buffer,sizeof(buffer),"SELECT tehno,data,length (prefix) as lll,price"
-	" from routepaid where prefix= substring('%s',1,length(prefix))"
-	" and context='%s' order by lll desc LIMIT 1",called.c_str(),context);
-    PGresult *respgsql = PQexec(conn,buffer);
+    String context = c_safe(msg.getValue("context","default"));
+    String s = "SELECT tehno,data,length (prefix) as lll,price"
+	" from routepaid where prefix= substring('" +  called + "',1,length(prefix))"
+	" and context='" + context + "' order by lll desc LIMIT 1";
+    Debug(DebugInfo,"%s",s.c_str());
+    PGresult *respgsql = PQexec(conn,(const char *)s);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
         Debug(DebugFail,"Failed to query from database: %s",
@@ -203,9 +219,9 @@ bool RouteHandler::received(Message &msg)
 	s_route_no++;
     	return false;
     }
-    msg.retValue() = String(PQgetvalue(respgsql,0,0))+"/" + String(PQgetvalue(respgsql,0,1));
+    msg.retValue() = String(PQgetvalue(respgsql,0,1));
     Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in %llu usec",
-		called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
+		called.c_str(),context.c_str(),msg.retValue().c_str(),Time::now()-tmr);
     s_route_yes++;
     return true;
 };

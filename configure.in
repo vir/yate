@@ -83,6 +83,7 @@ fi
 AC_SUBST(HAVE_GSM)
 
 HAVE_PWLIB=no
+PWLIB_RTTI=no
 PWLIB_INC=""
 PWLIB_LIB=""
 PWLIB_RUN=""
@@ -91,6 +92,7 @@ AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default
 if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
 verpw=`ptlib-config --version 2>/dev/null`
+prtti=`ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[^ ]*rtti\).*$/\1/p'`
 # try first installed directory
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/lib/libpt.so"
@@ -101,16 +103,23 @@ fi
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
     PWLIB_LIB="-L$ac_cv_use_pwlib/lib -lpt"
+    if [[ "x$prtti" = "x-frtti" ]]; then
+	PWLIB_RTTI=yes
+    fi
 else
 # try source directory style
     libpw=`echo "$ac_cv_use_pwlib/lib/"libpt*r.so`
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
+	prtti=`"$ac_cv_use_pwlib/make/ptlib-config" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[^ ]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
         PWLIB_LIB="-L$ac_cv_use_pwlib/lib -l`echo "$libpw"|sed 's,^.*/lib,,; s,\.so$,,'`"
         PWLIB_RUN=":$ac_cv_use_pwlib/lib"
+	if [[ "x$prtti" = "x-frtti" ]]; then
+	    PWLIB_RTTI=yes
+	fi
     fi
 fi
-AC_MSG_RESULT([$HAVE_PWLIB $verpw])
+AC_MSG_RESULT([$HAVE_PWLIB $verpw RTTI: $PWLIB_RTTI])
 fi
 
 HAVE_H323=no
@@ -343,7 +352,39 @@ AC_SUBST(HAVE_GTK)
 AC_SUBST(GTK_INC)
 AC_SUBST(GTK_LIB)
 
-MODULE_CFLAGS="-fno-exceptions -fno-check-new -frtti -fPIC $HAVE_GCC_FORMAT_CHECK"
+RTTI_OPT=""
+AC_ARG_ENABLE(rtti,AC_HELP_STRING([--enable-rtti],[Enable RTTI support (default: like pwlib)]),want_rtti=$enableval,want_rtti=auto)
+AC_MSG_CHECKING([whether to enable RTTI support])
+USE_RTTI="$want_rtti"
+case "x$want_rtti" in
+    xyes|xno|xnone)
+	;;
+    xauto)
+	USE_RTTI="$PWLIB_RTTI"
+	;;
+    *)
+	AC_ERROR([Invalid argument passed to --enable-rtti])
+	;;
+esac
+case "$USE_RTTI" in
+    yes)
+	RTTI_OPT="-frtti"
+	;;
+    no)
+	RTTI_OPT="-fno-rtti"
+	;;
+esac
+AC_MSG_RESULT([$USE_RTTI])
+AC_SUBST(USE_RTTI)
+AC_SUBST(RTTI_OPT)
+
+if [[ "x$HAVE_H323" != "xno" ]]; then
+if [[ "x$USE_RTTI" != "x$PWLIB_RTTI" ]]; then
+AC_ERROR([Miscmatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_RTTI)])
+fi
+fi
+
+MODULE_CFLAGS="-fno-exceptions -fno-check-new $RTTI_OPT -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_LDFLAGS="-export-dynamic -shared -Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_LDFLAGS)

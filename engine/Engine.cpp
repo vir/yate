@@ -233,6 +233,7 @@ int Engine::run()
     unsigned long corr = 0;
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
+    ::signal(SIGPIPE,SIG_IGN);
     Output("Yate engine is initialized and starting up");
     while (s_haltcode == -1) {
 	if (s_init) {

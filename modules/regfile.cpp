@@ -176,19 +176,19 @@ void RegfilePlugin::initialize()
     }
     if (!m_registhandler) {
     	Output("Installing Registering handler");
-	Engine::install(new RegistHandler("user.register"));
+	Engine::install(m_registhandler = new RegistHandler("user.register"));
     }
     if (!m_unregisthandler) {
     	Output("Installing UnRegistering handler");
-	Engine::install(new UnRegistHandler("user.unregister"));
+	Engine::install(m_unregisthandler = new UnRegistHandler("user.unregister"));
     }
     if (!m_routehandler) {
     	Output("Installing Route handler");
-	Engine::install(new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
+	Engine::install(m_routehandler = new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
     }
     if (!m_statushandler) {
     	Output("Installing Status handler");
-	Engine::install(new StatusHandler("engine.status"));
+	Engine::install(m_statushandler = new StatusHandler("engine.status"));
     }
 }
 

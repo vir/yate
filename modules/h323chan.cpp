@@ -903,6 +903,13 @@ BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PStr
     m->addParam("id",m_id);
     if (m_targetid)
 	m->addParam("targetid",m_targetid);
+    m->addParam("status","ringing");
+    if (m_passtrough && m_remotePort) {
+	m->addParam("rtp_forward","yes");
+	m->addParam("rtp_addr",m_remoteAddr);
+	m->addParam("rtp_port",String(m_remotePort));
+	m->addParam("formats",m_remoteFormats);
+    }
     Engine::enqueue(m);
     return true;
 }

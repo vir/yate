@@ -881,8 +881,9 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     }
     delete l;
 
-//    frm << " 101";
-//    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+    // always claim to support telephone events
+    frm << " 101";
+    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
 
     SDPBody* sdp = new SDPBody;
     sdp->addLine("v","0");
@@ -1019,12 +1020,11 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 void YateSIPConnection::ringing(Message* msg)
 {
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
-	m_tr->setResponse(180, "Ringing");
-//	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180, "Ringing");
-//	SDPBody* sdp = startRTP(msg,false);
-//	m->setBody(sdp);
-//	m_tr->setResponse(m);
-//	m->deref();
+	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180, "Ringing");
+	SDPBody* sdp = msg ? createPasstroughSDP(*msg) : 0;
+	m->setBody(sdp);
+	m_tr->setResponse(m);
+	m->deref();
     }
     setStatus("ringing");
 }

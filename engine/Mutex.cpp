@@ -20,8 +20,8 @@ public:
 	{ if (!--m_refcount) delete this; }
     bool lock(long long int maxwait);
     void unlock();
-    static int s_count;
-    static int s_locks;
+    static volatile int s_count;
+    static volatile int s_locks;
 private:
     pthread_mutex_t m_mutex;
     int m_refcount;
@@ -32,8 +32,8 @@ private:
 
 using namespace TelEngine;
 
-int MutexPrivate::s_count = 0;
-int MutexPrivate::s_locks = 0;
+volatile int MutexPrivate::s_count = 0;
+volatile int MutexPrivate::s_locks = 0;
 
 // WARNING!!!
 // No debug messages are allowed in mutexes since the debug output itself
@@ -93,7 +93,7 @@ void MutexPrivate::unlock()
     }
     else
 	// Hope we don't hit a bug related to the debug mutex!
-	Debug(DebugGoOn,"MutexPrivate::unlock called on unlocked mutex");
+	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex");
 }
 
 Mutex::Mutex()

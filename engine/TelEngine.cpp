@@ -19,6 +19,7 @@ namespace TelEngine {
 static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
+static bool s_abort = false;
 
 static void dbg_stderr_func(const char *buf)
 {
@@ -93,6 +94,8 @@ bool Debug(int level, const char *format, ...)
 	va_start(va,format);
 	dbg_output(buf,format,va);
 	va_end(va);
+	if (s_abort && (level == DebugFail))
+	    abort();
 	return true;
     }
     return false;
@@ -111,10 +114,25 @@ bool Debug(const char *facility, int level, const char *format, ...)
 	va_start(va,format);
 	dbg_output(buf,format,va);
 	va_end(va);
+	if (s_abort && (level == DebugFail))
+	    abort();
 	return true;
     }
     return false;
 }
+
+void abortOnBug()
+{
+    if (s_abort)
+	abort();
+}
+
+bool abortOnBug(bool doAbort)
+{
+    bool tmp = s_abort;
+    s_abort = doAbort;
+    return tmp;
+}  
 
 int debugLevel()
 {

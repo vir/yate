@@ -393,6 +393,7 @@ static void usage(FILE *f)
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 #ifndef NDEBUG
 "   -D[options]    Special debugging options\n"
+"     a            Abort if bugs are encountered\n"
 "     c            Call dlclose() until it gets an error\n"
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
@@ -490,6 +491,9 @@ int Engine::main(int argc, const char **argv, const char **environ)
 		    case 'D':
 			while (*++pc) {
 			    switch (*pc) {
+				case 'a':
+				    abortOnBug(true);
+				    break;
 				case 'c':
 				    s_keepclosing = true;
 				    break;

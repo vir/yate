@@ -23,6 +23,18 @@ namespace TelEngine {
 #endif
 
 /**
+ * Abort execution (and coredump if allowed) if the abort flag is set.
+ * This function may not return.
+ */
+void abortOnBug();
+
+/**
+ * Set the abort on bug flag. The default flag state is false.
+ * @return The old state of the flag.
+ */
+bool abortOnBug(bool doAbort);
+
+/**
  * Standard debugging levels.
  */
 enum DebugLevel {

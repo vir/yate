@@ -100,6 +100,9 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 rm -rf %{buildroot}
 
 %changelog
+* Tue Jan 18 2005 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.7
+
 * Mon Jan 10 2005 Paul Chitescu <paulc-devel@null.ro>
 - Version 0.8.6
 - Versioned the shared library and packaged manpage for yate-config

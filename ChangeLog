@@ -1,3 +1,9 @@
+Tue Jan 18 2005 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.7
+- Fixed session destruction in libiax
+- Fixed miscellaneous bugs in iaxchan
+- Fixed a bug related to ObjList cleanup
+
 Mon Jan 10 2005 Paul Chitescu <paulc-devel@null.ro>
 - Improved detection of Qt-3 headers
 - SIP channel supports reinvite and config file

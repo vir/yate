@@ -51,7 +51,7 @@ confdir = @sysconfdir@/yate
 .PHONY: all everything
 all: engine modules
 
-everything: all apidocs test
+everything: engine contrib modules test apidocs
 
 .PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:

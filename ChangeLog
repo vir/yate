@@ -1,3 +1,12 @@
+Mon Sep 06 2004 Paul Chitescu <paulc-devel@null.ro>
+- Created a contrib directory to hold libiax2 fork
+- Build system uses the included static libiax2 by default
+- Yate can write its main thread PID to a file
+
+Mon Sep 06 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added a fork of libiax2 modified for server usage
+- Many features added in the IAX channel
+
 Sat Jun 26 2004 Paul Chitescu <paulc-devel@null.ro>
 - Version 0.8.3
 - Minor fixes in tone generator and external module

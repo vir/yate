@@ -438,8 +438,10 @@ bool DropHandler::received(Message &msg)
 {
     String id(msg.getValue("id"));
     if (id.null() || id.startsWith("oss/")) {
-        Debug("OssDropper",DebugInfo,"Dropping all calls");
-	s_chan->disconnect();
+	if (s_chan) {
+	    Debug("OssDropper",DebugInfo,"Dropping call");
+	    s_chan->disconnect();
+	}
 	return !id.null();
     }
     return false;

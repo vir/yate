@@ -1303,7 +1303,7 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"ysipchan") && ::strcmp(sel,"varchans"))
 	return false;
     Lock lock(s_mutex);
-    String st("name=ysipchan,type=varchans,format=Status|Caller");
+    String st("name=ysip,type=varchans,format=Status|Caller");
     st << ";chans=" << s_calls.count() << ";";
     ObjList *l = &s_calls;
     bool first = true;

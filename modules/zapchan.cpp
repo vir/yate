@@ -1399,7 +1399,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"zapchan") && ::strcmp(sel,"fixchans"))
 	return false;
-    String st("name=zapchan,type=fixchans,format=Status|Span/Chan");
+    String st("name=zap,type=fixchans,format=Status|Span/Chan");
     zplugin.mutex.lock();
     const ObjList *l = &zplugin.m_spans;
     st << ",spans=" << l->count() << ",spanlen=";

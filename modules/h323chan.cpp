@@ -1601,7 +1601,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"h323chan") && ::strcmp(sel,"varchans"))
 	return false;
-    String st("name=h323chan,type=varchans,format=Status|Address");
+    String st("name=h323,type=varchans,format=Status|Address");
     Lock lock(s_calls);
     st << ";routed=" << H323MsgThread::routed() << ",routers=" << H323MsgThread::count();
     st << ",total=" << YateH323Connection::total() << ",chans=" << hplugin.calls().count() << ";";

@@ -1137,7 +1137,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"iaxchan") && ::strcmp(sel,"varchans"))
 	return false;
-    String st("name=iaxchan,type=varchans,format=Status|Caller");
+    String st("name=iax,type=varchans,format=Status|Caller");
     st << ";chans=" << iplugin.m_endpoint->calls().count() << ";";
     ObjList *l = &iplugin.m_endpoint->calls();
     bool first = true;

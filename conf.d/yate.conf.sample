@@ -1,0 +1,39 @@
+[general]
+; General settings for the operation of Yate
+
+; modload: boolean: Should a module be loaded by default if there is no
+;  reference to it in the [modules] section
+;modload=enable
+
+; modpath: string: Overrides the runtime module directory path which is
+;  compiled in or specified with the -m command line option. Note that this
+;  setting takes priority over anything else
+; Note that you MUST NOT add a path separator at the end
+;modpath=
+
+
+[modules]
+; This section should hold one line for each module whose loading behaviour
+;  is to be changed from the default specified by modload= in section [general]
+; Each line has to be of the form:
+;   modulename.yate=boolean
+; Note that modules can be located only in the module directory so no path
+;  information should be specified
+
+
+[preload]
+; Put a line in this section for each shared library that you want to load
+;  before any Yate module
+; Each line has to be of the form:
+;   /path/to/the/library.so=boolean
+; You should specify the full path to the library. Extension is operating
+;  system specific - usually .so for *NIX systems and .dll for Windows
+
+
+[postload]
+; Put a line in this section for each shared library that you want to load
+;  after all Yate modules
+; Each line has to be of the form:
+;   /path/to/the/library.so=boolean
+; You should specify the full path to the library. Extension is operating
+;  system specific - usually .so for *NIX systems and .dll for Windows

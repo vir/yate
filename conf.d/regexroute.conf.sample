@@ -1,28 +1,86 @@
+; Minimalistic basic regular expressions information
+;  ^ matches start of string
+;  $ matches end of string
+;  . matches any character
+;  [list] matches one character in the list
+;  [^list] matches one character not in list
+;    Lists can be individual characters or ranges char-char. You can insert ]
+;    by making it the first character in list and ^ by making it not the first
+;    character
+;  * matches preceeding expression any number of times (including zero)
+;  \+ matches preceeding expression at least one time
+;  \? matches preceeding expression zero or one time
+;  \( \) captures the contained subexpression
+; Remember matches are greedy, they will match as much as possible
+; You must escape ^ $ . * [ and \ with \ whenever you want them to be normal
+;  characters except in lists
+; Please see the manual pages for grep and sed for more information
+
 [priorities]
-preroute=80
-route=80
+; Set the priorities for the insertion of the regular expression module in the
+;  handler chain; a priority of 0 disables the handler entirely
+
+; preroute: int: Priority of the prerouting message handler
+;preroute=100
+
+; route: int: Priority of the routing message handler
+;route=100
+
 
 [contexts]
-sip:.*=sip
-iax:.*=iax
-^1=from-us
-.*=default
+; This section is used by the prerouting handler to classify calls by the
+;  caller name; each call is assigned an input context (only if none exists
+;  already) that is used later in the routing stage
+; Expressions are scanned from top to bottom; the first match returns the value
+; Each line must be of the form:
+;   regexp=context_name
+; Strings captured with the regular expression construct \(...\) can be
+;  inserted in the context name using \1, \2, \3, ... while \0 holds the entire
+;  matched regexp even if no capture was used
+;
+; Example:
+;^$=empty
+;^00=international
+;^0=longdistance
+;.*=default
+
 
 [default]
-^1\(.*\)$=us-number-1-\1
-^40=romania
-^800=green
-^\(.\)\(..\)\(...\)$=6digit/\1-\2-\3
-^.....$=5digit
-^....$=4digit
-.*=defaultroute/\0
-
-[sip]
-.*:\(.*\)@.*=\1
-
-[iax]
-.*:\(.*\)@.*=\1
-
-[from-us]
-^1=local
-.*=defaultroute
+; Sections like this one are used by the routing handler to find the target
+;  of calls by the called name
+; The [default] context is special, it is used when no context has been set
+;  otherwise you have to place the entries in a section with the same name
+;  as the context
+; Expressions are scanned from top to bottom; the first match returns the value
+; Each line must be of the form:
+;   regexp=target
+; Strings captured with the regular expression construct \(...\) can be
+;  inserted in the target using \1, \2, \3, ...
+;
+; Example:
+;   route the emergency 112 and 911 numbers to POTS, any channel on an E1
+;^112$=zap/1-31
+;^911$=zap/1-31
+;   route international calls over SIP
+;^00\(.*\)$=sip/sip:\1@international.gateway
+;   route value added services over IAX, trailing part is sent as IAX extension
+;^09\(.*\)$=iax/vap@gateway.for.vap/\1
+;   route green calls over IAX with 2 digits used to form an user name,
+;   remaining digits are sent as extension
+;^08\(..\)\(.*\)$=iax/green-\1@gateway.for.green/\2
+;   everything else starting with 0 is routed over H.323
+;^0\(.*\)$=h323/\1@long.distance.gateway
+;   route short 3digit numbers to SIP using a DNS scheme 123 -> 3.2.1.domain
+;^\(.\)\(.\)\(.\)$=sip/sip:\0@\3.\2.\1.domain
+;   is there anything else left? they go on E1 but only 15 channels can be used
+;   wa also make sure the number is at least 4 characters long
+;.....*=zap/1-15
+;   leftovers... should not happen but let's handle them. we may not route the
+;   call at all and let the caller receive a "no route" error
+;.*=wave/play/sounds/invalid_number.gsm
+;
+; The following are for testing purposes
+^99991001$=tone/dial
+^99991002$=tone/busy
+^99991003$=tone/ring
+^99991004$=tone/specdial

@@ -1,0 +1,18 @@
+[general]
+; General settings for the external module
+
+; scripts_dir: string: The absolute or relative path used by default to load
+;  scripts if no full path is specified
+; Note that a trailing path separator MUST be added
+;scripts_dir=scripts/
+
+
+[scripts]
+; Add one entry in this section for each global external module that is to be
+;  loaded on Yate startup
+; Each line has to be on the form:
+;   scriptname=parameter
+; The script name should hold either the absolute path and name or the path
+;  and name relative to the sripts_dir in section [general]
+; The parameter is optional and if present is passed to the script as the first
+;  (and single) parameter

@@ -18,14 +18,17 @@
 Building YATE Software
 ----------------------
 
-YATE have been tested only on Linux and is in alpha stage yet, so is very
-possibile to find bugs (even if we have tried by design to minimize the
-chance of introducing bugs). Please report them at bugs@voip.null.ro
+YATE have been tested on Linux. Please report bugs at bugs@voip.null.ro
+
+To build Yate the quick way is:
+'./configure'
+'make'
+'make install'
+
 
 1. Building the engine
 
-You have just to run 'make' in the main directory, this will not build any
-modules or test cases.
+You have just to run 'make engine' in the main directory.
 
 2. Building the modules.
 

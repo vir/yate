@@ -950,7 +950,7 @@ private:
  * The Time class holds a time moment with microsecond accuracy
  * @short A time holding class
  */
-class Time : public GenObject
+class Time
 {
 public:
     /**

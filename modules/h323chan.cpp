@@ -257,12 +257,13 @@ public:
 class H323MsgThread : public Thread
 {
 public:
-    H323MsgThread(Message *msg, YateH323Connection *conn)
-	: Thread("H323MsgThread"), m_msg(msg), m_conn(conn) { }
+    H323MsgThread(Message *msg, const char *id)
+	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { }
     virtual void run();
+    virtual void cleanup();
 private:
     Message *m_msg;
-    YateH323Connection *m_conn;
+    String m_id;
 };
 
 class StatusHandler : public MessageHandler
@@ -296,29 +297,41 @@ static H323Plugin hplugin;
 
 void H323MsgThread::run()
 {
+    ::usleep(1000);
     Engine::dispatch(m_msg);
     *m_msg = "preroute";
     Engine::dispatch(m_msg);
     *m_msg = "route";
-    if (Engine::dispatch(m_msg) && !m_msg->retValue().null()) {
+    bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
+    YateH323Connection *conn = hplugin.findConnectionLock(m_id);
+    if (!conn) {
+	Debug(DebugMild,"YateH323Connection '%s' wanished while routing!",m_id.c_str());
+	return;
+    }
+    if (ok) {
+	conn->AnsweringCall(H323Connection::AnswerCallPending);
 	*m_msg = "call";
 	m_msg->addParam("callto",m_msg->retValue());
 	m_msg->retValue() = 0;
-	m_msg->userData(static_cast<DataEndpoint *>(m_conn));
+	m_msg->userData(static_cast<DataEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
-	    Debug(DebugInfo,"Routing H.323 [%p] call to '%s'",m_conn,m_msg->getValue("callto"));
-	    m_conn->deref();
-	    m_conn->AnsweringCall(H323Connection::AnswerCallNow);
+	    Debug(DebugInfo,"Routing H.323 [%p] call to '%s'",conn,m_msg->getValue("callto"));
+	    conn->AnsweringCall(H323Connection::AnswerCallNow);
+	    conn->deref();
 	}
 	else {
-	    Debug(DebugInfo,"Rejecting unconnected H.323 [%p] call",m_conn);
-	    m_conn->AnsweringCall(H323Connection::AnswerCallDenied);
+	    conn->AnsweringCall(H323Connection::AnswerCallDenied);
 	}
     }
     else {
-	Debug(DebugInfo,"Rejecting unrouted H.323 [%p] call",m_conn);
-	m_conn->AnsweringCall(H323Connection::AnswerCallDenied);
+	Debug(DebugInfo,"Rejecting unrouted H.323 [%p] call",conn);
+	conn->AnsweringCall(H323Connection::AnswerCallDenied);
     }
+    conn->Unlock();
+}
+
+void H323MsgThread::cleanup()
+{
     delete m_msg;
 }
 
@@ -338,7 +351,7 @@ BOOL YateGatekeeperServer::Init ()
   int i;
   for (i = 1; (addr = s_cfg.getValue("gk",("interface"+String(i)).c_str())); i++){
 	if (!AddListener(new H323GatekeeperListener(endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
-	  Debug(DebugFail,"I can't start the listener for address: %s",addr);
+	  Debug(DebugGoOn,"I can't start the listener for address: %s",addr);
      }  
   Debug(DebugInfo,"i = %d",i);
   return TRUE;	
@@ -416,7 +429,7 @@ bool YateH323EndPoint::Init(void)
     if (s_cfg.getBoolValue("ep","ep",true)) {
 	H323ListenerTCP *listener = new H323ListenerTCP(*this,addr,port);
 	if (!(listener && StartListener(listener))) {
-	    Debug(DebugFail,"Unable to start H323 Listener at port %d",port);
+	    Debug(DebugGoOn,"Unable to start H323 Listener at port %d",port);
 	    if (listener)
 		delete listener;
 	    return false;
@@ -437,7 +450,7 @@ bool YateH323EndPoint::Init(void)
 		if (SetGatekeeper(gkName, rasChannel)) 
 		    Debug(DebugInfo,"Connect to gatekeeper ip = %s",d);
 		else {
-		    Debug(DebugFail,"Unable to connect to gatekeeper ip = %s",d);
+		    Debug(DebugGoOn,"Unable to connect to gatekeeper ip = %s",d);
 		    if (listener)
 			listener->Close();
 		}
@@ -446,7 +459,7 @@ bool YateH323EndPoint::Init(void)
 		if (LocateGatekeeper(gkIdentifier)) 
 		    Debug(DebugInfo,"Connect to gatekeeper name = %s",a);
 		else {
-		    Debug(DebugFail,"Unable to connect to gatekeeper name = %s",a);
+		    Debug(DebugGoOn,"Unable to connect to gatekeeper name = %s",a);
 		    if (listener)
 			listener->Close();
 		}
@@ -454,7 +467,7 @@ bool YateH323EndPoint::Init(void)
 	        if (DiscoverGatekeeper(new H323TransportUDP(*this))) 
 		    Debug(DebugInfo,"Find a gatekeeper");
 		else {
-		    Debug(DebugFail,"Unable to connect to any gatekeeper");
+		    Debug(DebugGoOn,"Unable to connect to any gatekeeper");
 		    if (listener)
 			listener->Close();
 		    return false;
@@ -540,8 +553,8 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     if (s)
 	m->addParam("calledname",s);
 #endif
-    new H323MsgThread(m,this);
-    return H323Connection::AnswerCallPending;
+    H323MsgThread *t = new H323MsgThread(m,id());
+    return t->error() ? H323Connection::AnswerCallDenied : H323Connection::AnswerCallDeferred;
 }
 
 void YateH323Connection::OnEstablished()
@@ -809,6 +822,8 @@ BOOL YateH323AudioConsumer::IsOpen() const
 
 void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
+    if (m_exit)
+	return;
     Lock lock(m_mutex);
     if ((m_buffer.length() + data.length()) <= (480*5))
 	m_buffer += data;
@@ -821,7 +836,7 @@ void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long timeDel
 
 BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 {
-    for (;;) {
+    while (!m_exit) {
 	Lock lock(m_mutex);
 	if (len >= (int)m_buffer.length()) {
 	    ref();
@@ -1052,7 +1067,7 @@ bool H323Handler::received(Message &msg)
     if (!dest.matches(r))
 	return false;
     if (!msg.userData()) {
-	Debug(DebugFail,"H.323 call found but no data channel!");
+	Debug(DebugWarn,"H.323 call found but no data channel!");
 	return false;
     }
     Debug(DebugInfo,"Found call to H.323 target='%s'",

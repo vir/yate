@@ -72,19 +72,19 @@ static int zt_open(int channo, bool subchan,unsigned int blksize)
     Debug("ZapChan",DebugInfo,"Open zap channel=%d with block size=%d",channo,blksize);
     int fd = ::open(subchan ? "/dev/zap/pseudo" : "/dev/zap/channel",O_RDWR|O_NONBLOCK);
     if (fd < 0) {
-	Debug("ZapChan",DebugFail,"Failed to open zap device: error %d: %s",errno,::strerror(errno));
+	Debug("ZapChan",DebugGoOn,"Failed to open zap device: error %d: %s",errno,::strerror(errno));
 	return -1;
     }
     if (channo) {
 	if (::ioctl(fd, subchan ? ZT_CHANNO : ZT_SPECIFY, &channo)) {
-	    Debug("ZapChan",DebugFail,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
+	    Debug("ZapChan",DebugGoOn,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
 	    ::close(fd);
 	    return -1;
 	}
     }
     if (blksize) {
 	if (::ioctl(fd, ZT_SET_BLOCKSIZE, &blksize) == -1) {
-	    Debug("ZapChan",DebugFail,"Failed to set block size %d: error %d: %s",blksize,errno,::strerror(errno));
+	    Debug("ZapChan",DebugGoOn,"Failed to set block size %d: error %d: %s",blksize,errno,::strerror(errno));
 	    ::close(fd);
 	    return -1;
 	}
@@ -102,7 +102,9 @@ static bool zt_set_law(int fd, int law)
     if (::ioctl(fd, ZT_SETLAW, &law) != -1)
 	return true;
 
+#ifdef DEBUG
     Debug("ZapChan",DebugInfo,"Failed to set law %d: error %d: %s",law,errno,::strerror(errno));
+#endif
     return false;
 }
 
@@ -380,6 +382,7 @@ public:
     void idle();
     void restart();
     bool open(int defLaw = -1);
+    void close();
     inline void setTimeout(unsigned long long tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
     const char *status() const;
@@ -404,7 +407,7 @@ class ZapSource : public ThreadedSource
 {
 public:
     ZapSource(ZapChan *owner,unsigned int bufsize)
-	: m_owner(owner), m_bufsize(bufsize)
+	: m_owner(owner), m_bufsize(bufsize), m_buf(0,bufsize)
 	{
 	    Debug(DebugAll,"ZapSource::ZapSource(%p) [%p]",owner,this);
 	    start("ZapSource");
@@ -418,6 +421,8 @@ public:
 private:
     ZapChan *m_owner;
     unsigned int m_bufsize;
+    DataBlock m_buf;
+    DataBlock m_data;
 };
 
 class ZapConsumer : public DataConsumer
@@ -499,18 +504,18 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf
     if (dchan >= 0) {
 	// Set up the D channel if we have one
 	if (::ioctl(fd,ZT_SPECIFY,&dchan) == -1) {
-	    Debug("PriSpan",DebugFail,"Failed to open D-channel %d: error %d: %s",
+	    Debug("PriSpan",DebugGoOn,"Failed to open D-channel %d: error %d: %s",
 		dchan,errno,::strerror(errno));
 	    return 0;
 	}
 	ZT_PARAMS par;
 	if (::ioctl(fd, ZT_GET_PARAMS, &par) == -1) {
-	    Debug("PriSpan",DebugFail,"Failed to get parameters of D-channel %d: error %d: %s",
+	    Debug("PriSpan",DebugWarn,"Failed to get parameters of D-channel %d: error %d: %s",
 		dchan,errno,::strerror(errno));
 	    return 0;
 	}
 	if (par.sigtype != ZT_SIG_HDLCFCS) {
-	    Debug("PriSpan",DebugFail,"D-channel %d is not in HDLC/FCS mode",dchan);
+	    Debug("PriSpan",DebugWarn,"D-channel %d is not in HDLC/FCS mode",dchan);
 	    return 0;
 	}
 	ZT_BUFFERINFO bi;
@@ -519,7 +524,7 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf
 	bi.numbufs = 16;
 	bi.bufsize = 1024;
 	if (::ioctl(fd, ZT_SET_BUFINFO, &bi) == -1) {
-	    Debug("PriSpan",DebugFail,"Could not set buffering on D-channel %d",dchan);
+	    Debug("PriSpan",DebugWarn,"Could not set buffering on D-channel %d",dchan);
 	    return 0;
 	}
     }
@@ -557,7 +562,7 @@ PriSpan::~PriSpan()
 	    c->destruct();
 	}
     }
-    delete m_chans;
+    delete[] m_chans;
     ::close(m_fd);
 }
 
@@ -584,7 +589,7 @@ void PriSpan::run()
 	else if (sel > 0)
 	    ev = ::pri_check_event(m_pri);
 	else if (errno != EINTR)
-	    Debug("PriSpan",DebugFail,"select() error %d: %s",
+	    Debug("PriSpan",DebugGoOn,"select() error %d: %s",
 		errno,::strerror(errno));
 	if (ev) {
 	    if (dumpEvents && debugAt(DebugAll))
@@ -826,29 +831,28 @@ void PriSpan::proceedingChan(int chan)
 
 void ZapSource::run()
 {
-    DataBlock buf(0,m_bufsize);
-    DataBlock data;
+    int rd = 0;
     for (;;) {
 	Thread::yield();
 	int fd = m_owner->fd();
 	if (fd != -1) {
-	    int rd = ::read(fd,buf.data(),buf.length());
+	    rd = ::read(fd,m_buf.data(),m_buf.length());
 #ifdef DEBUG
 	    Debug(DebugAll,"ZapSource read %d bytes",rd);
 #endif
 	    if (rd > 0) {
 		switch (m_owner->law()) {
 		    case -1:
-			data.assign(buf.data(),rd);
-			Forward(data,rd/2);
+			m_data.assign(m_buf.data(),rd);
+			Forward(m_data,rd/2);
 			break;
 		    case ZT_LAW_MULAW:
-			data.convert(buf,"mulaw","slin",rd);
-			Forward(data,rd);
+			m_data.convert(m_buf,"mulaw","slin",rd);
+			Forward(m_data,rd);
 			break;
 		    case ZT_LAW_ALAW:
-			data.convert(buf,"alaw","slin",rd);
-			Forward(data,rd);
+			m_data.convert(m_buf,"alaw","slin",rd);
+			Forward(m_data,rd);
 			break;
 		}
 	    }
@@ -860,6 +864,7 @@ void ZapSource::run()
 		break;
 	}
     }
+    Debug(DebugAll,"ZapSource at EOF (read %d)",rd);
 }
 
 void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
@@ -885,15 +890,17 @@ void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	}
 	if (m_buffer.length()+blk.length() <= m_bufsize*4)
 	    m_buffer += blk;
+#ifdef DEBUG
 	else
 	    Debug("ZapConsumer",DebugAll,"Skipped %u bytes, buffer is full",blk.length());
+#endif
 	if (m_buffer.null())
 	    return;
 	if (m_buffer.length() >= m_bufsize) {
 	    int wr = ::write(fd,m_buffer.data(),m_bufsize);
 	    if (wr < 0) {
 		if ((errno != EAGAIN) && (errno != EINTR))
-		Debug(DebugFail,"ZapConsumer write error %d: %s",
+		Debug(DebugGoOn,"ZapConsumer write error %d: %s",
 		    errno,::strerror(errno));
 	    }
 	    else {
@@ -967,9 +974,16 @@ void ZapChan::idle()
 void ZapChan::restart()
 {
     disconnect();
+    close();
+    ::pri_reset(m_span->pri(),m_chan);
+}
+
+void ZapChan::close()
+{
     setSource();
     setConsumer();
-    ::pri_reset(m_span->pri(),m_chan);
+    zt_close(m_fd);
+    m_fd = -1;
 }
 
 bool ZapChan::open(int defLaw)
@@ -1002,11 +1016,8 @@ bool ZapChan::open(int defLaw)
 	    Debug(DebugInfo,"Opened Zap channel %d, law is: %s (fallback)",m_abschan,lookup(m_law,dict_str2ztlaw,"unknown"));
 	    return true;
 	}
-    setSource();
-    setConsumer();
-    zt_close(m_fd);
-    m_fd = -1;
-    Debug(DebugFail,"Unable to set zap to any known format");
+    close();
+    Debug(DebugWarn,"Unable to set zap to any known format");
     return false;
 }
 
@@ -1044,10 +1055,7 @@ void ZapChan::hangup(int cause)
 	Engine::enqueue(m);
     }
     disconnect();
-    setSource();
-    setConsumer();
-    zt_close(m_fd);
-    m_fd = -1;
+    close();
 }
 
 void ZapChan::sendDigit(char digit)
@@ -1066,7 +1074,7 @@ bool ZapChan::call(Message &msg, const char *called)
 	called = msg.getValue("called");
     Debug("ZapChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
-    int layer1 = lookup(msg.getValue("dataformat"),dict_str2law,0);
+    int layer1 = lookup(msg.getValue("format"),dict_str2law,-1);
     hangup(PRI_CAUSE_PRE_EMPTED);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
@@ -1080,6 +1088,14 @@ bool ZapChan::call(Message &msg, const char *called)
 		break;
 	}
 	open(dataLaw);
+	switch (m_law) {
+	    case ZT_LAW_ALAW:
+		layer1 = PRI_LAYER_1_ALAW;
+		break;
+	    case ZT_LAW_MULAW:
+		layer1 = PRI_LAYER_1_ULAW;
+		break;
+	}
 	connect(dd);
     }
     else
@@ -1119,7 +1135,7 @@ bool ZapHandler::received(Message &msg)
     if (!dest.matches(r))
 	return false;
     if (!msg.userData()) {
-	Debug(DebugFail,"Zaptel call found but no data channel!");
+	Debug(DebugWarn,"Zaptel call found but no data channel!");
 	return false;
     }
     String chan = dest.matchString(1);

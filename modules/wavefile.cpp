@@ -105,7 +105,7 @@ WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
     if (m_fd >= 0)
 	start("WaveSource");
     else
-	Debug(DebugFail,"Opening '%s': error %d: %s",
+	Debug(DebugGoOn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
 }
 
@@ -183,7 +183,7 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 	m_format = "mulaw";
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
-	Debug(DebugFail,"Creating '%s': error %d: %s",
+	Debug(DebugGoOn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
 }
 
@@ -272,7 +272,7 @@ bool WaveHandler::received(Message &msg)
     if (dest.matchString(1) == "record")
 	meth = true;
     else if (dest.matchString(1) != "play") {
-	Debug(DebugFail,"Invalid wavefile method '%s', use 'record' or 'play'",
+	Debug(DebugWarn,"Invalid wavefile method '%s', use 'record' or 'play'",
 	    dest.matchString(1).c_str());
 	return false;
     }
@@ -306,7 +306,7 @@ bool WaveHandler::received(Message &msg)
 	m.userData(c);
 	if (Engine::dispatch(m))
 	    return true;
-	Debug(DebugFail,"Wave outgoing call not accepted!");
+	Debug(DebugWarn,"Wave outgoing call not accepted!");
 	delete c;
     }
     else
@@ -328,7 +328,7 @@ bool AttachHandler::received(Message &msg)
 		more--;
 	    }
 	    else {
-		Debug(DebugFail,"Could not attach source with method '%s', use 'play'",
+		Debug(DebugWarn,"Could not attach source with method '%s', use 'play'",
 		    src.matchString(1).c_str());
 		src = "";
 	    }
@@ -348,7 +348,7 @@ bool AttachHandler::received(Message &msg)
 		more--;
 	    }
 	    else {
-		Debug(DebugFail,"Could not attach consumer with method '%s', use 'record'",
+		Debug(DebugWarn,"Could not attach consumer with method '%s', use 'record'",
 		    cons.matchString(1).c_str());
 		cons = "";
 	    }
@@ -364,9 +364,9 @@ bool AttachHandler::received(Message &msg)
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (!dd) {
 	if (!src.null())
-	    Debug(DebugFail,"Wave source '%s' attach request with no data channel!",src.c_str());
+	    Debug(DebugWarn,"Wave source '%s' attach request with no data channel!",src.c_str());
 	if (!cons.null())
-	    Debug(DebugFail,"Wave consumer '%s' attach request with no data channel!",cons.c_str());
+	    Debug(DebugWarn,"Wave consumer '%s' attach request with no data channel!",cons.c_str());
 	return false;
     }
 

@@ -249,7 +249,7 @@ bool ToneHandler::received(Message &msg)
 	    m.userData(tc);
 	    if (Engine::dispatch(m))
 		return true;
-	    Debug(DebugFail,"Tone outgoing call not accepted!");
+	    Debug(DebugWarn,"Tone outgoing call not accepted!");
 	    delete tc;
 	}
 	else
@@ -280,7 +280,7 @@ bool AttachHandler::received(Message &msg)
 	Debug(DebugWarn,"No source tone '%s' could be attached to [%p]",src.c_str(),dd);
     }
     else
-	Debug(DebugFail,"Tone '%s' attach request with no data channel!",src.c_str());
+	Debug(DebugWarn,"Tone '%s' attach request with no data channel!",src.c_str());
     return false;
 }
 

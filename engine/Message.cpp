@@ -242,11 +242,10 @@ bool MessageDispatcher::dispatch(Message &msg)
 
 bool MessageDispatcher::enqueue(Message *msg)
 {
+    Lock lock(m_mutex);
     if (!msg || m_messages.find(msg))
 	return false;
-    m_mutex.lock();
     m_messages.append(msg);
-    m_mutex.unlock();
     return true;
 }
 

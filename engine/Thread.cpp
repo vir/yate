@@ -204,7 +204,7 @@ void ThreadPrivate::killall()
 	    }
 	    ::usleep(10);
 	    if (++c >= 10) {
-		Debug(DebugFail,"Could not kill %p, will use sledgehammer later.",t);
+		Debug(DebugGoOn,"Could not kill %p, will use sledgehammer later.",t);
 		sledgehammer = true;
 		t->m_thread = 0;
 		l = l->next();
@@ -217,10 +217,10 @@ void ThreadPrivate::killall()
     // usually too big since many libraries have threads of their own...
     if (sledgehammer) {
 #ifdef __linux__
-	Debug(DebugFail,"Brutally killing remaining threads!");
+	Debug(DebugGoOn,"Brutally killing remaining threads!");
 	::pthread_kill_other_threads_np();
 #else
-	Debug(DebugFail,"Aargh! I cannot kill remaining threads on this platform!");
+	Debug(DebugGoOn,"Aargh! I cannot kill remaining threads on this platform!");
 #endif
     }
 }

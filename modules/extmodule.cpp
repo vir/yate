@@ -740,7 +740,7 @@ bool ExtModHandler::received(Message &msg)
     else if (t == "playrec")
 	typ = ExtModChan::DataBoth;
     else {
-	Debug(DebugFail,"Invalid ExtModule method '%s', use 'nochan', 'nodata', 'play', 'record' or 'playrec'",
+	Debug(DebugGoOn,"Invalid ExtModule method '%s', use 'nochan', 'nodata', 'play', 'record' or 'playrec'",
 	    t.c_str());
 	return false;
     }

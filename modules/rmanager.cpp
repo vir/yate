@@ -139,7 +139,7 @@ Connection::~Connection()
 void Connection::run()
 {
     if (::fcntl(m_socket,F_SETFL,O_NONBLOCK)) {
-	Debug("RManager",DebugFail, "Failed to set tcp socket to nonblocking mode: %s\n", strerror(errno));
+	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s\n", strerror(errno));
 	return;
     }
     // For the sake of responsiveness try to turn off the tcp assembly timer
@@ -426,19 +426,19 @@ void RManager::initialize()
     bindaddr.sin_addr.s_addr = inet_addr(host);
     bindaddr.sin_port = htons(port);
     if (sock < 0) {
-	Debug("RManager",DebugFail,"Unable to create the listening socket: %s",strerror(errno));
+	Debug("RManager",DebugGoOn,"Unable to create the listening socket: %s",strerror(errno));
 	return;
     }
     const int reuseFlag = 1;
     ::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,(const char*)&reuseFlag,sizeof reuseFlag);
     if (::bind(sock, (struct sockaddr *)&bindaddr, sizeof(bindaddr)) < 0) {
-	Debug("RManager",DebugFail,"Failed to bind to %s:%u : %s",inet_ntoa(bindaddr.sin_addr),ntohs(bindaddr.sin_port),strerror(errno));
+	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",inet_ntoa(bindaddr.sin_addr),ntohs(bindaddr.sin_port),strerror(errno));
 	::close(sock);
         sock = -1;
 	return;
     }
     if (listen(sock, 2)) {
-	    Debug("RManager",DebugFail,"Unable to listen on socket: %s\n", strerror(errno));
+	    Debug("RManager",DebugGoOn,"Unable to listen on socket: %s\n", strerror(errno));
 	    ::close(sock);
 	    sock = -1;
 	    return;

@@ -379,6 +379,12 @@ bool ExtModReceiver::create(const char *script, const char *args)
     if (!pid) {
 	/* In child - terminate all other threads if needed */
 	Thread::preExec();
+	/* Try to immunize child from ^C and ^\ */
+	::signal(SIGINT,SIG_IGN);
+	::signal(SIGQUIT,SIG_IGN);
+	/* And restore default handlers for other signals */
+	::signal(SIGTERM,SIG_DFL);
+	::signal(SIGHUP,SIG_DFL);
 	/* Redirect stdin and out */
 	::dup2(yate2ext[0], STDIN_FILENO);
 	::dup2(ext2yate[1], STDOUT_FILENO);

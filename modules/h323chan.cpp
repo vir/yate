@@ -50,6 +50,10 @@
 #define NEED_RTP_QOS_PARAM 1
 #endif
 
+#if (OPENH323_NUMVERSION >= 11500)
+#define USE_CAPABILITY_FACTORY
+#endif
+
 #include <telengine.h>
 #include <telephony.h>
 #include <yateversn.h>
@@ -557,6 +561,14 @@ H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
     return new YateH323Connection(*this,callReference,userData);
 }
 
+#ifdef USE_CAPABILITY_FACTORY
+static void ListRegisteredCaps(int level)
+{
+    PFactory<H323Capability>::KeyList_T list = PFactory<H323Capability>::GetKeyList();
+    for (std::vector<PString>::const_iterator find = list.begin(); find != list.end(); ++find)
+	Debug(level,"Registed capability: '%s'",(const char*)*find);
+}
+#else
 // This class is used just to find out if a capability is registered
 class FakeH323CapabilityRegistration : public H323CapabilityRegistration
 {
@@ -588,12 +600,17 @@ bool FakeH323CapabilityRegistration::IsRegistered(const PString& name)
 	    return true;
     return false;
 }
+#endif
 
 bool YateH323EndPoint::Init(void)
 {
     int dump = s_cfg.getIntValue("general","dumpcodecs");
     if (dump > 0)
+#ifdef USE_CAPABILITY_FACTORY
+	ListRegisteredCaps(dump);
+#else
 	FakeH323CapabilityRegistration::ListRegistered(dump);
+#endif
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
     const char** f = h323_formats;
     for (; *f; f += 2) {

@@ -229,9 +229,17 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (isOutgoing() && !getParty())
 	engine->buildParty(this);
 
-    // don't complete ACK or incoming messages
-    if (isACK() || !isOutgoing())
+    // don't complete incoming messages
+    if (!isOutgoing())
 	return;
+
+    // only set the dialog tag on ACK
+    if (isACK()) {
+	HeaderLine* hl = const_cast<HeaderLine*>(getHeader("To"));
+	if (dlgTag && hl && !hl->getParam("tag"))
+	    hl->setParam("tag",dlgTag);
+	return;
+    }
 
     if (!user)
 	user = "anonymous";

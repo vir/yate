@@ -1,6 +1,7 @@
 Debug
 Release
 *.plg
+*.aps
 *.opt
 *.ncb
 *.orig

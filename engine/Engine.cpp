@@ -183,7 +183,7 @@ Engine::~Engine()
 
 int Engine::run()
 {
-    Debug(DebugInfo,"Engine::run()");
+    Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();
     Debug(DebugInfo,"plugins.count() = %d",plugins.count());
@@ -556,5 +556,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	}
     }
     debugLevel(debug_level);
+    time_t t = ::time(0);
+    Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
     return self()->run();
 }

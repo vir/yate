@@ -113,6 +113,42 @@ static TokenDict dict_silence[] = {
     { 0 , 0 },
 };
 
+static const char* CallEndReasonText(int reason)
+{
+#define MAKE_END_REASON(r) case H323Connection::r: return #r
+    switch (reason) {
+	MAKE_END_REASON(EndedByLocalUser);
+	MAKE_END_REASON(EndedByNoAccept);
+	MAKE_END_REASON(EndedByAnswerDenied);
+	MAKE_END_REASON(EndedByRemoteUser);
+	MAKE_END_REASON(EndedByRefusal);
+	MAKE_END_REASON(EndedByNoAnswer);
+	MAKE_END_REASON(EndedByCallerAbort);
+	MAKE_END_REASON(EndedByTransportFail);
+	MAKE_END_REASON(EndedByConnectFail);
+	MAKE_END_REASON(EndedByGatekeeper);
+	MAKE_END_REASON(EndedByNoUser);
+	MAKE_END_REASON(EndedByNoBandwidth);
+	MAKE_END_REASON(EndedByCapabilityExchange);
+	MAKE_END_REASON(EndedByCallForwarded);
+	MAKE_END_REASON(EndedBySecurityDenial);
+	MAKE_END_REASON(EndedByLocalBusy);
+	MAKE_END_REASON(EndedByLocalCongestion);
+	MAKE_END_REASON(EndedByRemoteBusy);
+	MAKE_END_REASON(EndedByRemoteCongestion);
+	MAKE_END_REASON(EndedByUnreachable);
+	MAKE_END_REASON(EndedByNoEndPoint);
+	MAKE_END_REASON(EndedByHostOffline);
+	MAKE_END_REASON(EndedByTemporaryFailure);
+	MAKE_END_REASON(EndedByQ931Cause);
+	MAKE_END_REASON(EndedByDurationLimit);
+	MAKE_END_REASON(EndedByInvalidConferenceID);
+	case H323Connection::NumCallEndReasons: return "CallStillActive";
+	default: return "UnlistedCallEndReason";
+    }
+#undef MAKE_END_REASON
+}
+
 class H323Process : public PProcess
 {
     PCLASSINFO(H323Process, PProcess)
@@ -750,16 +786,18 @@ void YateH323Connection::OnEstablished()
 void YateH323Connection::OnCleared()
 {
     int reason = GetCallEndReason();
-    Debug(DebugInfo,"YateH323Connection::OnCleared() reason: %d [%p]",
-	reason,this);
+    const char* rtext = CallEndReasonText(reason);
+    Debug(DebugInfo,"YateH323Connection::OnCleared() reason: %s (%d) [%p]",
+	rtext,reason,this);
     setStatus("cleared");
     Message *m = new Message("call.hangup");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
     if (m_targetid)
 	m->addParam("targetid",m_targetid);
+    m->addParam("reason",rtext);
     Engine::enqueue(m);
-    disconnect();
+    disconnect(rtext);
 }
 
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)

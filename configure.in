@@ -7,6 +7,17 @@ AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_AWK
 
+# Check if gcc style printf argument check is supported
+HAVE_GCC_FORMAT_CHECK=""
+AC_MSG_CHECKING([for gcc printf format typechecks])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_COMPILE([],[void f(void*x,const char*f,...) __attribute__((format(printf,2,3))); ],[ac_cv_format_checks=yes],[ac_cv_format_checks=no])
+if [[ "x$ac_cv_format_checks" = "xyes" ]]; then
+    HAVE_GCC_FORMAT_CHECK="-DHAVE_GCC_FORMAT_CHECK"
+fi
+AC_MSG_RESULT([$ac_cv_format_checks])
+
 # Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
@@ -281,7 +292,7 @@ AC_SUBST(HAVE_GTK)
 AC_SUBST(GTK_INC)
 AC_SUBST(GTK_LIB)
 
-MODULE_CFLAGS="-fno-exceptions -fno-check-new -frtti -fPIC"
+MODULE_CFLAGS="-fno-exceptions -fno-check-new -frtti -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_LDFLAGS="-export-dynamic -shared -Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_LDFLAGS)

@@ -54,7 +54,11 @@ bool debugAt(int level);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(int level, const char *format, ...);
+bool Debug(int level, const char *format, ...)
+#ifdef HAVE_GCC_FORMAT_CHECK
+__attribute__((format(printf,2,3)))
+#endif
+;
 
 /**
  * Outputs a debug string for a specific facility.
@@ -63,14 +67,22 @@ bool Debug(int level, const char *format, ...);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(const char *facility, int level, const char *format, ...);
+bool Debug(const char *facility, int level, const char *format, ...)
+#ifdef HAVE_GCC_FORMAT_CHECK
+__attribute__((format(printf,3,4)))
+#endif
+;
 
 /**
  * Outputs a string to the debug console with formatting
  * @param facility Facility that outputs the message
  * @param format A printf() style format string
  */
-void Output(const char *format, ...);
+void Output(const char *format, ...)
+#ifdef HAVE_GCC_FORMAT_CHECK
+__attribute__((format(printf,1,2)))
+#endif
+;
 
 /**
  * An object that logs messages on creation and destruction

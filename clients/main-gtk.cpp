@@ -43,7 +43,7 @@ void g_atexit(GVoidFunc func)
     it->func = func;
     it->next = _g_atexit_func_head;
     _g_atexit_func_head = it;
-    Debug(DebugInfo, "g_atexit: registered function 0x%08x\n", func);
+    Debug(DebugInfo, "g_atexit: registered function %p\n", func);
 }
 
 void g_atexit_unwind()
@@ -51,7 +51,7 @@ void g_atexit_unwind()
     g_atexit_func_t* it;
     while(_g_atexit_func_head) {
         _g_atexit_func_head->func();
-	Debug(DebugInfo, "g_atexit_unwind: called function 0x%08x\n", _g_atexit_func_head->func);
+	Debug(DebugInfo, "g_atexit_unwind: called function %p\n", _g_atexit_func_head->func);
 	it = _g_atexit_func_head;
 	_g_atexit_func_head = _g_atexit_func_head->next;
 	free(it);

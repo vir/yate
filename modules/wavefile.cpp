@@ -32,6 +32,7 @@ private:
     int m_fd;
     unsigned m_brate;
     unsigned m_total;
+    unsigned long long m_time;
 };
 
 class WaveConsumer : public DataConsumer
@@ -43,6 +44,7 @@ public:
 private:
     int m_fd;
     unsigned m_total;
+    unsigned long long m_time;
 };
 
 class WaveChan : public DataEndpoint
@@ -70,7 +72,7 @@ private:
 };
 
 WaveSource::WaveSource(const char *file, WaveChan *chan)
-    : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0)
+    : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0)
 {
     Debug(DebugAll,"WaveSource::WaveSource(\"%s\") [%p]",file,this);
     Regexp r("\\.gsm$");
@@ -89,6 +91,13 @@ WaveSource::WaveSource(const char *file, WaveChan *chan)
 WaveSource::~WaveSource()
 {
     Debug(DebugAll,"WaveSource::~WaveSource() [%p] total=%u",this,m_total);
+    if (m_time) {
+        m_time = Time::now() - m_time;
+	if (m_time) {
+	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    Debug(DebugInfo,"WaveSource rate=%llu b/s",m_time);
+	}
+    }
     if (m_fd >= 0) {
 	::close(m_fd);
 	m_fd = -1;
@@ -100,6 +109,7 @@ void WaveSource::run()
     DataBlock data(0,480);
     int r = 0;
     unsigned long long tpos = Time::now();
+    m_time = tpos;
     do {
 	r = ::read(m_fd,data.data(),data.length());
 	if (r < 0) {
@@ -132,7 +142,7 @@ void WaveSource::cleanup()
 }
 
 WaveConsumer::WaveConsumer(const char *file)
-    : m_fd(-1), m_total(0)
+    : m_fd(-1), m_total(0), m_time(0)
 {
     Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\") [%p]",file,this);
     Regexp r("\\.gsm$");
@@ -147,6 +157,13 @@ WaveConsumer::WaveConsumer(const char *file)
 WaveConsumer::~WaveConsumer()
 {
     Debug(DebugAll,"WaveConsumer::~WaveConsumer() [%p] total=%u",this,m_total);
+    if (m_time) {
+        m_time = Time::now() - m_time;
+	if (m_time) {
+	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    Debug(DebugInfo,"WaveConsumer rate=%llu b/s",m_time);
+	}
+    }
     if (m_fd >= 0) {
 	::close(m_fd);
 	m_fd = -1;
@@ -156,6 +173,8 @@ WaveConsumer::~WaveConsumer()
 void WaveConsumer::Consume(const DataBlock &data)
 {
     if ((m_fd >= 0) && !data.null()) {
+	if (!m_time)
+	    m_time = Time::now();
 	::write(m_fd,data.data(),data.length());
 	m_total += data.length();
     }
@@ -194,23 +213,48 @@ bool WaveHandler::received(Message &msg)
     Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
-    if (!msg.userData()) {
-	Debug(DebugFail,"Wave call found but no data channel!");
+
+    bool meth = false;
+    if (dest.matchString(1) == "record")
+	meth = true;
+    else if (dest.matchString(1) != "play") {
+	Debug(DebugFail,"Invalid wavefile method '%s', use 'record' or 'play'",
+	    dest.matchString(1).c_str());
 	return false;
     }
+
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dest.matchString(1) == "record") {
-	Debug(DebugInfo,"Record to wave file '%s'",dest.matchString(2).c_str());
-	dd->connect(new WaveChan(dest.matchString(2).c_str(),true));
+    if (dd) {
+	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
+	    dest.matchString(2).c_str());
+	dd->connect(new WaveChan(dest.matchString(2).c_str(),meth));
 	return true;
     }
-    else if (dest.matchString(1) == "play") {
-	Debug(DebugInfo,"Play from wave file '%s'",dest.matchString(2).c_str());
-	dd->connect(new WaveChan(dest.matchString(2).c_str(),false));
-	return true;
+
+    const char *targ = msg.getValue("target");
+    if (!targ) {
+	Debug(DebugWarn,"Wave outgoing call with no target!");
+	return false;
     }
-    Debug(DebugFail,"Invalid wavefile method '%s', use 'record' or 'play'",
-	dest.matchString(1).c_str());
+    Message m("preroute");
+    m.addParam("id",dest);
+    m.addParam("caller",dest);
+    m.addParam("called",targ);
+    Engine::dispatch(m);
+    m = "route";
+    if (Engine::dispatch(m)) {
+	m = "call";
+	m.addParam("callto",m.retValue());
+	m.retValue() = 0;
+	WaveChan *c = new WaveChan(dest.matchString(2).c_str(),meth);
+	m.userData(c);
+	if (Engine::dispatch(m))
+	    return true;
+	Debug(DebugFail,"Wave outgoing call not accepted!");
+	delete c;
+    }
+    else
+	Debug(DebugWarn,"Wave outgoing call but no route!");
     return false;
 }
 

@@ -101,8 +101,10 @@ ToneSource::~ToneSource()
     Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u",this,m_total);
     if (m_time) {
 	m_time = Time::now() - m_time;
-	m_time = (m_total*1000000ULL + m_time/2) / m_time;
-	Debug(DebugAll,"ToneSource rate=%llu b/s",m_time);
+	if (m_time) {
+	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    Debug(DebugInfo,"ToneSource rate=%llu b/s",m_time);
+	}
     }
     tones.remove(this,false);
 }

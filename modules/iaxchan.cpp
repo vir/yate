@@ -117,7 +117,7 @@ public:
     void run(void);
     void terminateAll(void);
     YateIAXConnection *findconn(iax_session *session);
-    YateIAXConnection *findconn(const String& ourcallid);
+    YateIAXConnection *findconn(const String& id);
     void handleEvent(iax_event *event);
 
     inline ObjList &calls()
@@ -151,7 +151,7 @@ public:
 	{ return m_status; }
     inline bool muted() const
 	{ return m_muted; }
-    String ourcallid;
+    String id;
     String targetid;
     String address;
 private: 
@@ -204,6 +204,7 @@ public:
     enum {
 	Ringing,
 	Answered,
+	Masquerade,
 	Transfer,
 	DTMF,
 	Text,
@@ -566,12 +567,12 @@ YateIAXConnection * YateIAXEndPoint::findconn(iax_session *session)
     return 0; 
 }
 
-YateIAXConnection * YateIAXEndPoint::findconn(const String& ourcallid)
+YateIAXConnection * YateIAXEndPoint::findconn(const String& id)
 { 
     ObjList *p = &m_calls; 
     for (; p; p=p->next()) { 
 	YateIAXConnection *t = static_cast<YateIAXConnection *>(p->get()); 
-	if (t && (t->ourcallid == ourcallid))
+	if (t && (t->id == id))
 	{
 	    return t; 
 	}
@@ -651,14 +652,14 @@ YateIAXConnection::YateIAXConnection(iax_session *session)
     }
     char buf[64];
     snprintf(buf,sizeof(buf),"iax/%p",m_session);
-    ourcallid=buf;
+    id=buf;
     s_conns.lock();
     iplugin.m_endpoint->calls().append(this);
     s_conns.unlock();
     ::iax_set_private(m_session,this);
     s_mutex.unlock();
     Message* m = new Message("chan.startup");
-    m->addParam("id",ourcallid);
+    m->addParam("id",id);
     m->addParam("direction",m_status);
     m->addParam("status","new");
     Engine::enqueue(m);
@@ -689,7 +690,7 @@ bool YateIAXConnection::startRouting(iax_event *e)
 {
     Message *m = new Message("call.route");
     m->addParam("driver","iax");
-    m->addParam("id",ourcallid);
+    m->addParam("id",id);
     if (e->ies.calling_name)
 	m->addParam("callername",e->ies.calling_name);
     else
@@ -718,7 +719,7 @@ bool YateIAXConnection::startRouting(iax_event *e)
     else 
 	capability = e->session->peerformats;
 
-    IAXMsgThread *t = new IAXMsgThread(m,ourcallid,format,capability);
+    IAXMsgThread *t = new IAXMsgThread(m,id,format,capability);
     if (!t->startup()) {
         Debug(DebugWarn,"Error starting routing thread! [%p]",this);
         delete t;
@@ -750,7 +751,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"TEXT inside a call: '%s' [%p]",(char *)event->data,this);
 	    {
 		Message* m = new Message("chan.text");
-		m->addParam("id",ourcallid);
+		m->addParam("id",id);
 		m->addParam("text",(char *)event->data);
 		m->addParam("targetid",targetid.c_str());
 		m->addParam("callerid",event->session->callerid);
@@ -766,7 +767,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 		char buf[2];
 		buf[0] = event->subclass;
 		buf[1] = 0;
-		m->addParam("id",ourcallid);
+		m->addParam("id",id);
 		m->addParam("text",buf);
 		m->addParam("targetid",targetid.c_str());
 		m->addParam("callerid",event->session->callerid);
@@ -784,7 +785,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"RING inside a call [%p]",this);
 	    {
 		Message* m = new Message("call.ringing");
-		m->addParam("id",ourcallid);
+		m->addParam("id",id);
 		m->addParam("targetid",targetid.c_str());
 		Engine::enqueue(m);
 	    }
@@ -793,7 +794,7 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    Debug("IAX",DebugInfo,"ANSWER inside a call [%p]",this);
 	    {
 		Message* m = new Message("call.answered");
-		m->addParam("id",ourcallid);
+		m->addParam("id",id);
 		m->addParam("targetid",targetid.c_str());
 		Engine::enqueue(m);
 	    }
@@ -840,7 +841,7 @@ void YateIAXConnection::hangup(const char *reason)
 	s_mutex.unlock();
     }
     Message* m = new Message("chan.hangup");
-    m->addParam("id",ourcallid);
+    m->addParam("id",id);
     m->addParam("status","hangup");
     m->addParam("reason",reason);
     Engine::enqueue(m);
@@ -943,7 +944,7 @@ void YateIAXConnection::disconnected(bool final, const char *reason)
     // If we still have a connection this is the last chance to get transferred
     if (!(final || m_final)) {
 	Message m("chan.disconnected");
-	m.addParam("id",ourcallid.c_str());
+	m.addParam("id",id.c_str());
 	if (reason)
 	    m.addParam("reason",reason);
 	if (targetid) {
@@ -1021,7 +1022,15 @@ void YateIAXAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelt
 
 bool IAXConnHandler::received(Message &msg, int id)
 {
-    String callid(msg.getValue("targetid"));
+    String callid;
+    switch (id) {
+	case Transfer:
+	case Masquerade:
+	    callid = msg.getValue("id");
+	    break;
+	default:
+	    callid = msg.getValue("targetid");
+	}	
     if (!callid.startsWith("iax/",false))
 	return false;
     Lock clock(s_conns);
@@ -1035,6 +1044,12 @@ bool IAXConnHandler::received(Message &msg, int id)
 	case Answered:
 	    conn->answered();
 	    break;
+	case Masquerade:
+	    msg.setParam("targetid",conn->targetid);
+	    msg = msg.getValue("message");
+	    msg.clearParam("message");
+	    msg.userData(conn);
+	    return false;
 	case Ringing:
 	    conn->ringing();
 	    break;
@@ -1047,7 +1062,7 @@ bool IAXConnHandler::received(Message &msg, int id)
 		    callid.c_str(),conn,callto.c_str());
 		Message m("call.execute");
 		m.addParam("callto",callto.c_str());
-		m.addParam("id",conn->ourcallid);
+		m.addParam("id",conn->id);
 		m.userData(conn);
 		if (Engine::dispatch(m)) {
 		    String targetid(m.getValue("targetid"));
@@ -1087,7 +1102,7 @@ bool IAXHandler::received(Message &msg)
     }
     String ip = dest.matchString(1);
     YateIAXConnection *conn = new YateIAXConnection();
-    /* i do this to setup the peercallid by getting ourcallid 
+    /* i do this to setup the peercallid by getting id 
      * from the other party */
     conn->targetid = msg.getValue("id");
     int i = conn->makeCall((char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.matchString(1).safe());
@@ -1099,7 +1114,7 @@ bool IAXHandler::received(Message &msg)
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd && conn->connect(dd))
     {
-	msg.addParam("targetid",conn->ourcallid);
+	msg.addParam("targetid",conn->id);
 	conn->deref();
     }
     return true;	
@@ -1121,7 +1136,7 @@ bool StatusHandler::received(Message &msg)
 		first = false;
 	    else
 		st << ",";
-	    st << c->ourcallid << "=" << c->status() << "|" << c->address;
+	    st << c->id << "=" << c->status() << "|" << c->address;
 	}
     }
     msg.retValue() << st << "\n";
@@ -1130,21 +1145,21 @@ bool StatusHandler::received(Message &msg)
 
 bool DropHandler::received(Message &msg)
 {
-    String ourcallid(msg.getValue("id"));
-    if (ourcallid.null()) {
+    String id(msg.getValue("id"));
+    if (id.null()) {
 	Debug("IAXDroper",DebugInfo,"Dropping all calls");
 	iplugin.m_endpoint->terminateAll();
     }
-    if (!ourcallid.startsWith("iax/"))
+    if (!id.startsWith("iax/"))
 	return false;
     Lock lock(s_conns);
-    YateIAXConnection *conn = iplugin.m_endpoint->findconn(ourcallid);
+    YateIAXConnection *conn = iplugin.m_endpoint->findconn(id);
     if (conn) {
-	Debug("IAXDropper",DebugInfo,"Dropping call '%s' [%p]",conn->ourcallid.c_str(),conn);
+	Debug("IAXDropper",DebugInfo,"Dropping call '%s' [%p]",conn->id.c_str(),conn);
 	delete conn;
 	return true;
     }
-    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",ourcallid.c_str());
+    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",id.c_str());
     return false;
 }
 
@@ -1191,6 +1206,7 @@ void IAXPlugin::initialize()
 	Engine::install(new MessageRelay("call.ringing",ch,IAXConnHandler::Ringing));
 	Engine::install(new MessageRelay("call.answered",ch,IAXConnHandler::Answered));
 	Engine::install(new MessageRelay("call.transfer",ch,IAXConnHandler::Transfer));
+	Engine::install(new MessageRelay("chan.masquerade",ch,IAXConnHandler::Masquerade,12));
 	Engine::install(new MessageRelay("chan.dtmf",ch,IAXConnHandler::DTMF));
 	Engine::install(new MessageRelay("chan.text",ch,IAXConnHandler::Text));
 

@@ -30,17 +30,17 @@ external_rtp=no
 [codecs]
 ; This section allows to individually enable or disable the codecs
 
-; g711u: bool: Companded-only G711 mu-law
-;g711u=enable
+; mulaw: bool: Companded-only G711 mu-law
+;mulaw=enable
 
-; g711a: bool: Companded-only G711 a-law
-;g711a=enable
+; alaw: bool: Companded-only G711 a-law
+;alaw=enable
 
-; gsm0610: bool: European GSM 06.10
-;gsm0610=enable
+; gsm: bool: European GSM 06.10
+;gsm=enable
 
-; speexnarrow: bool: Speex narrow
-;speexnarrow=enable
+; speex: bool: Speex narrow
+;speex=enable
 
 ; lpc10: bool: LPC 10
 ;lpc10=enable

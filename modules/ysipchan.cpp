@@ -141,6 +141,7 @@ public:
     void run(void);
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
+    void regreq(SIPEvent* e, SIPTransaction* t);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0);
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
@@ -385,6 +386,8 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("INVITE");
     addAllowed("BYE");
     addAllowed("CANCEL");
+    if (s_cfg.getBoolValue("general","registrar"))
+	addAllowed("REGISTER");
 }
 
 bool YateSIPEngine::buildParty(SIPMessage* message)
@@ -570,6 +573,8 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	else
 	    t->setResponse(481,"Call/Transaction Does Not Exist");
     }
+    else if (t->getMethod() == "REGISTER")
+	regreq(e,t);
     else
 	return false;
     return true;
@@ -637,6 +642,40 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	delete thr;
 	t->setResponse(500, "Server Internal Error");
     }
+}
+
+void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
+{
+    if (Engine::exiting()) {
+	Debug(DebugWarn,"Dropping request, engine is exiting");
+	e->getTransaction()->setResponse(500, "Server Shutting Down");
+	return;
+    }
+    const HeaderLine* hl = e->getMessage()->getHeader("To");
+    if (!hl) {
+	e->getTransaction()->setResponse(400, "Bad Request");
+	return;
+    }
+    URI addr(*hl);
+    Message *m = new Message("user.register");
+    m->addParam("username",addr.getUser());
+    m->addParam("techno","sip");
+    m->addParam("data","sip/" + addr);
+    bool dereg = false;
+    hl = e->getMessage()->getHeader("Expires");
+    if (hl) {
+	m->addParam("expires",*hl);
+	if (*hl == "0") {
+	    *m = "user.unregister";
+	    dereg = true;
+	}
+    }
+    // Always OK deregistration attempts
+    if (Engine::dispatch(m) || dereg)
+	e->getTransaction()->setResponse(200, "OK");
+    else
+	e->getTransaction()->setResponse(404, "Not Found");
+    m->destruct();
 }
 
 static Mutex s_route;

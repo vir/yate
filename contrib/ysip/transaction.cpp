@@ -165,6 +165,7 @@ SIPEvent* SIPTransaction::getEvent()
     if (m_timeout && (Time::now() >= m_timeout)) {
 	timeout = --m_timeouts;
 	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
+	m_delay *= 2; // exponential back-off
 	Debug("SIPTransaction",DebugAll,"Fired timer #%d [%p]",timeout,this);
     }
 
@@ -243,10 +244,22 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
     DDebug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
     if (branch) {
-	if (branch != m_branch)
-	    return false;
-	if (getMethod() != message->method) {
-	    if (isOutgoing() || !isInvite() || !message->isACK())
+	if (branch != m_branch) {
+	    // different branch is allowed only for ACK in incoming INVITE...
+	    if (!(isInvite() && isIncoming() && message->isACK()))
+		return false;
+	    // ...and only if we sent a 200 response...
+	    if (!m_lastMessage || ((m_lastMessage->code / 100) != 2))
+		return false;
+	    // ...and if also matches the CSeq, Call-ID and To: tag
+	    if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
+		(getCallID() != message->getHeaderValue("Call-ID")) ||
+		(getLocalTag() != message->getParamValue("To","tag")))
+		return false;
+	    Debug("SIPTransaction",DebugWarn,"Found non-branch ACK response to our 2xx");
+	}
+	else if (getMethod() != message->method) {
+	    if (!(isIncoming() && isInvite() && message->isACK()))
 		return false;
 	}
     }
@@ -310,7 +323,7 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 	case Initial:
 	    e = new SIPEvent(m_firstMessage,this);
 	    if (changeState(Trying))
-		setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),8);
+		setTimeout(m_engine->getTimer(isInvite() ? 'A' : 'E'),5);
 	    break;
 	case Trying:
 	    if (timeout < 0)
@@ -348,6 +361,7 @@ void SIPTransaction::processServerMessage(SIPMessage* message, int state)
 	case Retrans:
 	    if (message->isACK()) {
 		setTimeout();
+		setPendingEvent(new SIPEvent(message,this));
 		changeState(Cleared);
 	    }
 	    else
@@ -384,7 +398,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    break;
 	case Finish:
 	    e = new SIPEvent(m_lastMessage,this);
-	    setTimeout(m_engine->getTimer('G'),8);
+	    setTimeout(m_engine->getTimer('G'),5);
 	    changeState(Retrans);
 	    break;
     }

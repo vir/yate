@@ -126,6 +126,8 @@ void StringMatchPrivate::fixup()
 	    rmatch[i].rm_eo -= rmatch[i].rm_so;
 	    c = i;
 	}
+	else
+	    rmatch[i].rm_eo = 0;
     }
     // Cope with the regexp stupidity.
     if (c > 1) {
@@ -226,8 +228,9 @@ String::~String()
 String& String::assign(const char *value, int len)
 {
     if (len && value && *value) {
-	if (len < 0)
-	    len = ::strlen(value);
+	int vlen = ::strlen(value);
+	if ((len < 0) || (len > vlen))
+	    len = vlen;
 	if (value != m_string || len != (int)m_length) {
 	    char *data = (char *) ::malloc(len+1);
 	    ::memcpy(data,value,len);

@@ -37,6 +37,12 @@ public:
     URI(const String& uri);
     URI(const URI& uri);
     URI(const char* proto, const char* user, const char* host, int port = 0);
+    inline URI& operator=(const URI& value)
+	{ String::operator=(value); return *this; }
+    inline URI& operator=(const String& value)
+	{ String::operator=(value); return *this; }
+    inline URI& operator=(const char value)
+	{ String::operator=(value); return *this; }
     inline const String& getProtocol() const
 	{ parse(); return m_proto; }
     inline const String& getUser() const
@@ -155,8 +161,8 @@ public:
     virtual ~HeaderLine();
     inline const ObjList& params() const
 	{ return m_params; }
-    inline void addParam(const char *name, const char *value = 0)
-	{ m_params.append(new NamedString(name,value)); }
+    void setParam(const char *name, const char *value = 0);
+    void delParam(const char *name);
     const NamedString* getParam(const char *name) const;
 protected:
     ObjList m_params;
@@ -302,6 +308,21 @@ public:
      * @return A pointer to the first matching header line or 0 if not found
      */
     const NamedString* getParam(const char* name, const char* param) const;
+
+    /**
+     * Get a string value (without parameters) from a header line
+     * @param name Name of the header to locate
+     * @return The value hold in the header or an empty String
+     */
+    const String& getHeaderValue(const char* name) const;
+
+    /**
+     * Get a string value from a parameter in a header line
+     * @param name Name of the header to locate
+     * @param param Name of the parameter to locate in the tag
+     * @return The value hold in the parameter or an empty String
+     */
+    const String& getParamValue(const char* name, const char* param) const;
 
     /**
      * Append a new header line constructed from name and content
@@ -464,6 +485,13 @@ public:
      */
     inline bool isOutgoing() const
 	{ return m_outgoing; }
+
+    /**
+     * Check if this transaction was initiated locally or by the remote peer
+     * @return True if the transaction was created by an incoming message
+     */
+    inline bool isIncoming() const
+	{ return !m_outgoing; }
 
     /**
      * Check if this transaction is an INVITE transaction or not

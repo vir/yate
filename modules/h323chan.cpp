@@ -699,7 +699,9 @@ void YateH323Connection::OnEstablished()
 
 void YateH323Connection::OnCleared()
 {
-    Debug(DebugInfo,"YateH323Connection::OnCleared() [%p]",this);
+    int reason = GetCallEndReason();
+    Debug(DebugInfo,"YateH323Connection::OnCleared() reason: %d [%p]",
+	reason,this);
     setStatus("cleared");
     Message *m = new Message("call.hangup");
     m->addParam("driver","h323");

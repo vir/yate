@@ -38,6 +38,12 @@ HeaderLine::HeaderLine(const char *name, const String& value)
     if (value.null())
 	return;
     int sp = value.find(';');
+    // skip past URIs with parameters
+    int lim = value.find('<');
+    if ((sp >= 0) && (lim >= 0) && (lim < sp)) {
+	lim = value.find('>');
+	sp = value.find(';',lim);
+    }
     if (sp < 0) {
 	assign(value);
 	return;
@@ -67,7 +73,7 @@ HeaderLine::HeaderLine(const char *name, const String& value)
 		m_params.append(new NamedString(pname));
 	    }
 	}
-	sp = ep+1;
+	sp = ep;
     }
 }
 
@@ -99,6 +105,22 @@ const NamedString* HeaderLine::getParam(const char *name) const
 	    return t;
     }
     return 0;
+}
+
+void HeaderLine::setParam(const char *name, const char *value)
+{
+    ObjList* p = m_params.find(name);
+    if (p)
+	*static_cast<NamedString*>(p->get()) = value;
+    else
+	m_params.append(new NamedString(name,value));
+}
+
+void HeaderLine::delParam(const char *name)
+{
+    ObjList* p = m_params.find(name);
+    if (p)
+	p->remove();
 }
 
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
@@ -145,9 +167,6 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     copyHeader(message,"To");
     copyHeader(message,"Call-ID");
     copyHeader(message,"CSeq");
-#if 0
-    body = message->body ? message->body->clone() : 0;
-#endif
     m_valid = true;
 }
 
@@ -216,14 +235,11 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!hl->getParam("branch")) {
 	String tmp("z9hG4bK");
 	tmp << (int)::random();
-	hl->addParam("branch",tmp);
+	hl->setParam("branch",tmp);
     }
-
     if (isAnswer()) {
-	if (!hl->getParam("received"))
-	    hl->addParam("received",getParty()->getPartyAddr());
-	if (!hl->getParam("rport")) 
-	    hl->addParam("rport",String(getParty()->getPartyPort()));
+	hl->setParam("received",getParty()->getPartyAddr());
+	hl->setParam("rport",String(getParty()->getPartyPort()));
     }
 
     hl = const_cast<HeaderLine*>(getHeader("From"));
@@ -234,7 +250,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	header.append(hl);
     }
     if (!hl->getParam("tag"))
-	hl->addParam("tag",String((int)::random()));
+	hl->setParam("tag",String((int)::random()));
 
     hl = const_cast<HeaderLine*>(getHeader("To"));
     if (!hl) {
@@ -244,7 +260,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	header.append(hl);
     }
     if (dlgTag && !hl->getParam("tag"))
-	hl->addParam("tag",dlgTag);
+	hl->setParam("tag",dlgTag);
 
     if (!getHeader("Call-ID")) {
 	String tmp;
@@ -266,10 +282,14 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     if (!getHeader("Contact")) {
 	String tmp;
-	tmp << "<sip:" << user << "@" << getParty()->getLocalAddr();
-	if (getParty()->getLocalPort() != 5060)
-	    tmp << ":" << getParty()->getLocalPort();
-	tmp << ">";
+	if (isAnswer())
+	    tmp = *getHeader("To");
+	if (tmp.null()) {
+	    tmp << "<sip:" << user << "@" << getParty()->getLocalAddr();
+	    if (getParty()->getLocalPort() != 5060)
+		tmp << ":" << getParty()->getLocalPort();
+	    tmp << ">";
+	}
 	addHeader("Contact",tmp);
     }
 
@@ -461,6 +481,18 @@ const NamedString* SIPMessage::getParam(const char* name, const char* param) con
     return hl ? hl->getParam(param) : 0;
 }
 
+const String& SIPMessage::getHeaderValue(const char* name) const
+{
+    const HeaderLine* hl = getHeader(name);
+    return hl ? *hl : String::empty();
+}
+
+const String& SIPMessage::getParamValue(const char* name, const char* param) const
+{
+    const NamedString* ns = getParam(name,param);
+    return ns ? *ns : String::empty();
+}
+
 const String& SIPMessage::getHeaders() const
 {
     if (isValid() && m_string.null()) {
@@ -477,8 +509,11 @@ const String& SIPMessage::getHeaders() const
 		const ObjList* p = &(t->params());
 		for (; p; p = p->next()) {
 		    NamedString* s = static_cast<NamedString*>(p->get());
-		    if (s)
-			m_string << ";" << s->name() << "=" << *s;
+		    if (s) {
+			m_string << ";" << s->name();
+			if (!s->null())
+			    m_string << "=" << *s;
+		    }
 		}
 		m_string << "\r\n";
 	    }

@@ -69,25 +69,27 @@ void URI::parse() const
 {
     if (m_parsed)
 	return;
+    DDebug("URI",DebugAll,"parsing '%s' [%p]",c_str(),this);
     m_port = 0;
 
     Regexp r("<\\([^>]\\+\\)>");
     if (const_cast<URI*>(this)->matches(r)) {
 	*const_cast<URI*>(this) = matchString(1);
-	DDebug("URI",DebugAll,"new value='%s'",c_str());
+	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
     }
 
     // proto:[user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
-    // proto:user@hostname[:port][/path][?params][&params]
-    r = "^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+\\)@\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
+    // proto:[user@]hostname[:port][/path][;params][?params][&params]
+    r = "^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
     if (const_cast<URI*>(this)->matches(r)) {
 	m_proto = matchString(1).toLower();
 	m_user = matchString(2);
-	m_host = matchString(3);
+	m_user = m_user.substr(0,m_user.length()-1);
+	m_host = matchString(3).toLower();
 	String tmp = matchString(4);
 	tmp >> ":" >> m_port;
-	DDebug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d",
-	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port);
+	DDebug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d [%p]",
+	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
     }
     else {
 	m_proto.clear();
@@ -143,7 +145,7 @@ SIPEngine::SIPEngine(const char* userAgent)
     Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
-    m_allowed = "INVITE, ACK, CANCEL, BYE";
+    m_allowed = "ACK";
 }
 
 SIPEngine::~SIPEngine()
@@ -190,6 +192,10 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	Debug("SIPEngine",DebugInfo,"Message %p was an unhandled answer [%p]",message,this);
 	return 0;
     }
+    if (message->isACK()) {
+	Debug("SIPEngine",DebugAll,"Message %p was an unhandled ACK [%p]",message,this);
+	return 0;
+    }
     message->complete(this);
     return new SIPTransaction(message,this,false);
 }
@@ -228,6 +234,12 @@ void SIPEngine::processEvent(SIPEvent *event)
     if (event) {
 	if (event->isOutgoing() && event->getParty())
 	    event->getParty()->transmit(event);
+	if (event->isIncoming() && (event->getState() == SIPTransaction::Trying) &&
+	    event->getMessage() && !event->getMessage()->isAnswer()) {
+	    Debug("SIPEngine",DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
+		event->getMessage()->method.c_str(),event,this);
+	    event->getTransaction()->setResponse(501,"Not Implemented");
+	}
 	delete event;
     }
 }

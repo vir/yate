@@ -55,13 +55,12 @@ AC_LANG_SAVE
 AC_LANG_C
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
-AC_TRY_COMPILE([],[
+AC_TRY_COMPILE([
 #include <unistd.h>
 #include <pthread.h>
-void f(void){
+],[
 pthread_mutexattr_t attr;
 pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE_NP);
-}
 ],
 have_mutex_settype="yes",
 have_mutex_settype="no"

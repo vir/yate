@@ -1350,7 +1350,6 @@ static int calc_rxstamp(struct iax_session *session)
 	int ms;
 
 	if (!session->rxcore.tv_sec && !session->rxcore.tv_usec) {
-		fprintf(stderr,"initial timestamp in session %p\n",session);
 		gettimeofday(&session->rxcore, NULL);
 	}	
 	gettimeofday(&tv, NULL);

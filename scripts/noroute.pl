@@ -16,10 +16,8 @@ sub demo($) {
   my $message = shift;
   printf STDERR "hello time is %s and binded is %s i'll return undef so the next module gets a chance....\n",
      $message->param("time"),$message->header("binded");
-     return ("true");
-#    print STDERR $message->reply(false);
-#    print $message->reply(false);
-#  return undef;
+#     return ("true"); 
+  return undef;
 }
 
 sub demo2($) {
@@ -33,6 +31,3 @@ my $message = new YateMessage();
 $message->install("engine.timer",\&demo);
 $message->install("route",\&demo2);
 $message->listen();
-
-
-

@@ -10,7 +10,8 @@ DEBUG :=
 CC  := g++ -Wall
 SED := sed
 DEFS :=
-LIBAUX:= -ldl -lpthread
+LIBAUX:= -ldl
+LIBTHR:= -lpthread
 INCLUDES := -I@srcdir@
 CFLAGS := -O2 @MODULE_CFLAGS@ -finline -Winline
 LDFLAGS:=
@@ -196,10 +197,10 @@ Makefile: @srcdir@/Makefile.in config.status
 	./config.status
 
 yate: $(OBJS) libyate.so $(LIBS)
-	$(LINK) -o $@ $^
+	$(LINK) -o $@ $(LIBTHR) $^
 
 libyate.so: $(ENGOBJS) $(LIBS)
-	$(LINK) -shared -o $@ $^ $(LIBAUX)
+	$(LINK) -shared -o $@ $(LIBTHR) $^ $(LIBAUX)
 
 .PHONY: help
 help:

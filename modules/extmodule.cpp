@@ -370,7 +370,7 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	m_pid = 0;
 	return false;
     }
-    pid = Thread::fork();
+    pid = ::fork();
     if (pid < 0) {
 	Debug(DebugWarn, "Failed to fork(): %s", strerror(errno));
 	m_pid = 0;

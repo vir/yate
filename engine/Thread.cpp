@@ -316,12 +316,6 @@ void Thread::yield()
     ::usleep(1);
 }
 
-int Thread::fork()
-{
-// pid_t __fork(void);
-    return ::fork();
-}
-
 void Thread::preExec()
 {
 #ifdef __linux__

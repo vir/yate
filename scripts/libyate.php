@@ -27,23 +27,6 @@ class Yate
     var $params;
 
     /**
-     * This static function initializes globals in the PHP Yate External Module.
-     * It should be called before any other method.
-     */
-    function Init()
-    {
-	global $yate_stdin, $yate_stdout, $yate_stderr;
-	$yate_stdin = fopen("php://stdin","r");
-	$yate_stdout = fopen("php://stdout","w");
-	$yate_stderr = fopen("php://stderr","w");
-	flush();
-	set_error_handler("Yate::ErrorHandler");
-	ob_implicit_flush(1);
-	if (function_exists("stream_set_blocking"))
-	    stream_set_blocking($yate_stdin,false);
-    }
-
-    /**
      * Static function to output a string to Yate's stderr or logfile
      * @param $str String to output
      */
@@ -290,6 +273,24 @@ class Yate
 		Yate::Output("PHP parse error: " . $line);
 	}
 	return $ev;
+    }
+
+    /**
+     * This static function initializes globals in the PHP Yate External Module.
+     * It should be called before any other method.
+     * @param $async (optional) True if asynchronous, polled mode is desired
+     */
+    function Init($async = false)
+    {
+	global $yate_stdin, $yate_stdout, $yate_stderr;
+	$yate_stdin = fopen("php://stdin","r");
+	$yate_stdout = fopen("php://stdout","w");
+	$yate_stderr = fopen("php://stderr","w");
+	flush();
+	set_error_handler("Yate::ErrorHandler");
+	ob_implicit_flush(1);
+	if ($async && function_exists("stream_set_blocking"))
+	    stream_set_blocking($yate_stdin,false);
     }
 
 }

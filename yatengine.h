@@ -1599,15 +1599,8 @@ public:
     static void killall();
 
     /**
-     * Create a child process - reexport the pthread altered version.
-     * You must not call ::fork() as this is not portable in pthread.
-     * See the manual page for fork (2) for details.
-     */
-    static int fork();
-
-    /**
      * On some platforms this method kills all other running threads.
-     * Must be called after Thread::fork() but before any exec*() call.
+     * Must be called after fork() but before any exec*() call.
      */
     static void preExec();
 

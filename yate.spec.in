@@ -29,7 +29,7 @@ for small to large scale projects.
 %doc /usr/share/doc/yate-%{version}/ChangeLog
 %dir /etc/yate
 %config /etc/yate/*
-/usr/lib/lib*.so*
+/usr/lib/lib*.so.*
 /usr/bin/yate
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
@@ -55,6 +55,7 @@ The yate-devel package includes the libraries and header files for YATE
 %doc /usr/share/doc/yate-%{version}/*.html
 %doc /usr/share/doc/yate-%{version}/api/*
 /usr/include/*
+/usr/lib/lib*.so
 /usr/bin/yate-config
 /usr/share/man/*/yate-config.*
 /usr/lib/pkgconfig/yate.pc

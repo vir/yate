@@ -54,6 +54,9 @@ alias = yate
 ; ident: string: Sets the hostname part of the outgoing e.164 (numeric) aliases
 ident = yate
 
+; maxconns: int: Maximum number of simultaneous connections (0 = no limit)
+;maxconns = 0
+
 ; gkclient: bool: If h323 module endpoint should register to a gatekeeper
 gkclient = false
 
@@ -77,6 +80,9 @@ gkclient = false
 
 ; context: string: Input context
 context=default
+
+; maxqueue: int: Maximum length of the routing queue
+;maxqueue=5
 
 ; called: string: Default number to call
 called=8989989

@@ -46,6 +46,8 @@ static Mutex s_calls;
 static Mutex s_route;
 
 static bool s_externalRtp;
+static int s_maxqueue = 5;
+static int s_maxconns = 0;
 
 static Configuration s_cfg;
 static ObjList translate;
@@ -212,6 +214,8 @@ public:
 	{ return m_id; }
     inline const String &status() const
 	{ return m_status; }
+    inline void setStatus(const char *status)
+	{ m_status = status; }
     inline static int total()
 	{ return s_total; }
 private:
@@ -271,10 +275,12 @@ class H323MsgThread : public Thread
 {
 public:
     H323MsgThread(Message *msg, const char *id)
-	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { }
+	: Thread("H323MsgThread"), m_msg(msg), m_id(id) { m_mutex.lock(); }
     virtual void run();
     virtual void cleanup();
     bool route();
+    inline void resume()
+	{ m_mutex.unlock(); }
     inline static int count()
 	{ return s_count; }
     inline static int routed()
@@ -282,6 +288,7 @@ public:
 private:
     Message *m_msg;
     String m_id;
+    Mutex m_mutex;
     static int s_count;
     static int s_routed;
 };
@@ -341,16 +348,19 @@ bool H323MsgThread::route()
 	m_msg->userData(static_cast<DataEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
 	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));
+	    conn->setStatus("routed");
 	    conn->AnsweringCall(H323Connection::AnswerCallNow);
 	    conn->deref();
 	}
 	else {
 	    Debug(DebugInfo,"Rejecting unconnected H.323 call %s [%p]",m_id.c_str(),conn);
+	    conn->setStatus("rejected");
 	    conn->AnsweringCall(H323Connection::AnswerCallDenied);
 	}
     }
     else {
 	Debug(DebugInfo,"Rejecting unrouted H.323 call %s [%p]",m_id.c_str(),conn);
+	conn->setStatus("rejected");
 	conn->AnsweringCall(H323Connection::AnswerCallDenied);
     }
     conn->Unlock();
@@ -359,10 +369,12 @@ bool H323MsgThread::route()
 
 void H323MsgThread::run()
 {
-    Debug(DebugAll,"Started routing thread for %s [%p]",m_id.c_str(),this);
     s_route.lock();
     s_count++;
     s_route.unlock();
+    Debug(DebugAll,"Started routing thread for %s [%p]",m_id.c_str(),this);
+    m_mutex.lock();
+    m_mutex.unlock();
     bool ok = route();
     s_route.lock();
     s_count--;
@@ -418,6 +430,15 @@ YateH323EndPoint::~YateH323EndPoint()
 H323Connection *YateH323EndPoint::CreateConnection(unsigned callReference,
     void *userData, H323Transport *transport, H323SignalPDU *setupPDU)
 {
+    if (s_maxconns > 0) {
+	s_calls.lock();
+	int cnt = hplugin.calls().count();
+	s_calls.unlock();
+	if (cnt >= s_maxconns) {
+	    Debug(DebugWarn,"Dropping connection, there are already %d",cnt);
+	    return 0;
+	}
+    }
     return new YateH323Connection(*this,callReference,userData);
 }
 
@@ -465,6 +486,7 @@ bool YateH323EndPoint::Init(void)
 #endif
 
     AddAllUserInputCapabilities(0,1);
+    DisableDetectInBandDTMF(!s_cfg.getBoolValue("ep","dtmfinband",false));
 
     PIPSocket::Address addr = INADDR_ANY;
     int port = s_cfg.getIntValue("ep","port",1720);
@@ -536,7 +558,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
 	&endpoint,callReference,userdata,this);
     m_id = "h323/";
     m_id << callReference;
-    m_status = "new";
+    setStatus("new");
     s_calls.lock();
     hplugin.calls().append(this)->setDelete(false);
     s_calls.unlock();
@@ -548,7 +570,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
 YateH323Connection::~YateH323Connection()
 {
     Debug(DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
-    m_status = "destroyed";
+    setStatus("destroyed");
     s_calls.lock();
     hplugin.calls().remove(this,false);
     s_calls.unlock();
@@ -560,11 +582,18 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     const H323SignalPDU &setupPDU, H323SignalPDU &connectPDU)
 {
     Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s' [%p]",(const char *)caller,this);
-    m_status = "incoming";
+    setStatus("incoming");
 
-    if (int cnt = H323MsgThread::count() > s_cfg.getIntValue("incoming","maxqueue",5)) {
+    if (Engine::exiting()) {
+	Debug(DebugWarn,"Dropping call, engine is exiting");
+	setStatus("dropped");
+	return H323Connection::AnswerCallDenied;
+    }
+    int cnt = H323MsgThread::count();
+    if (cnt > s_maxqueue) {
 	Debug(DebugWarn,"Dropping call, there are already %d waiting",cnt);
-	return H323Connection::AnswerCallDeferred;
+	setStatus("dropped");
+	return H323Connection::AnswerCallDenied;
     }
 
     Message *m = new Message("ring");
@@ -600,15 +629,15 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     if (s)
 	m->addParam("calledname",s);
 #endif
-    s_route.lock();
     H323MsgThread *t = new H323MsgThread(m,id());
     if (t->error()) {
 	Debug(DebugWarn,"Error starting routing thread! [%p]",this);
-	s_route.unlock();
+	t->resume();
 	delete t;
+	setStatus("dropped");
 	return H323Connection::AnswerCallDenied;
     }
-    s_route.unlock();
+    t->resume();
     return H323Connection::AnswerCallDeferred;
 }
 
@@ -617,7 +646,7 @@ void YateH323Connection::OnEstablished()
     Debug(DebugInfo,"YateH323Connection::OnEstablished() [%p]",this);
     s_calls.lock();
     s_total++;
-    m_status = "connected";
+    setStatus("connected");
     s_calls.unlock();
     if (!HadAnsweredCall())
 	return;
@@ -631,7 +660,7 @@ void YateH323Connection::OnEstablished()
 void YateH323Connection::OnCleared()
 {
     Debug(DebugInfo,"YateH323Connection::OnCleared() [%p]",this);
-    m_status = "cleared";
+    setStatus("cleared");
     bool ans = HadAnsweredCall();
     disconnect();
     if (!ans)
@@ -645,7 +674,7 @@ void YateH323Connection::OnCleared()
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)
 {
     Debug(DebugInfo,"YateH323Connection::OnAlerting '%s' [%p]",(const char *)user,this);
-    m_status = "ringing";
+    setStatus("ringing");
     Message *m = new Message("ringing");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
@@ -698,7 +727,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 void YateH323Connection::disconnected()
 {
     Debugger debug("YateH323Connection::disconnected()"," [%p]",this);
-    m_status = "disconnected";
+    setStatus("disconnected");
     // we must bypass the normal Yate refcounted destruction as OpenH323 will destroy the object
     ref();
     if (getSource() && m_nativeRtp)
@@ -1286,6 +1315,8 @@ void H323Plugin::initialize()
     s_cfg.load();
     if (!m_process)
 	m_process = new H323Process;
+    s_maxqueue = s_cfg.getIntValue("incoming","maxqueue",5);
+    s_maxconns = s_cfg.getIntValue("ep","maxconns",0);
     int dbg=s_cfg.getIntValue("general","debug");
     if (dbg)
 	PTrace::Initialise(dbg,0,PTrace::Blocks | PTrace::Timestamp

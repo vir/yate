@@ -42,7 +42,7 @@ static int s_numcalls = 0;
 
 static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|load|save|set paramname[=value]}";
 
-class GenConnection : public DataEndpoint
+class GenConnection : public Channel
 {
 public:
     GenConnection(const String& callto);
@@ -110,7 +110,7 @@ public:
     bool doCommand(String& line, String& rval);
 };
 
-class CallGenPlugin : public Plugin
+class CallGenPlugin : public Driver
 {
 public:
     CallGenPlugin();
@@ -120,8 +120,10 @@ private:
     bool m_first;
 };
 
+INIT_PLUGIN(CallGenPlugin);
+
 GenConnection::GenConnection(const String& callto)
-    : m_callto(callto)
+    : Channel(__plugin), m_callto(callto)
 {
     m_start = Time::now();
     m_status = "calling";
@@ -432,7 +434,7 @@ bool CmdHandler::received(Message &msg, int id)
 }
 
 CallGenPlugin::CallGenPlugin()
-    : m_first(true)
+    : Driver("callgen","varchan"), m_first(true)
 {
     Output("Loaded module Call Generator");
 }
@@ -469,7 +471,5 @@ void CallGenPlugin::initialize()
 	}
     }
 }
-
-INIT_PLUGIN(CallGenPlugin);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -887,6 +887,11 @@ protected:
     Module(const char* name, const char* type = 0);
 
     /**
+     * This method is called to initialize the loaded module
+     */
+    virtual void initialize();
+
+    /**
      * Install standard message relays
      */
     void setup();
@@ -1178,7 +1183,12 @@ protected:
     /**
      * Constructor
      */
-    Channel(Driver* driver, const char* id, bool outgoing = false);
+    Channel(Driver* driver, const char* id = 0, bool outgoing = false);
+
+    /**
+     * Alternate constructor provided for convenience
+     */
+    Channel(Driver& driver, const char* id = 0, bool outgoing = false);
 
     /**
      * Set the current status of the channel
@@ -1207,6 +1217,7 @@ protected:
     void setPeer(Channel* peer, const char* reason = 0);
 
 private:
+    void init();
     void disconnect(bool final, const char* reason);
     Channel(); // no default constructor please
 };
@@ -1225,6 +1236,7 @@ private:
     ObjList m_chans;
     int m_routing;
     int m_routed;
+    unsigned int m_nextid;
 
 public:
     /**
@@ -1253,6 +1265,12 @@ public:
      * @return True if the driver is in use, false if should be ok to restart
      */
     virtual bool isBusy() const;
+
+    /**
+     * Get the next unique numeric id from a sequence
+     * @return A dierv unique number that increments by 1 at each call
+     */
+    unsigned int nextid();
 
 protected:
     /**

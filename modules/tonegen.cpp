@@ -30,8 +30,6 @@
 using namespace TelEngine;
 
 static ObjList tones;
-static ObjList chans;
-static Mutex mutex(true);
 
 typedef struct {
     int nsamples;
@@ -57,24 +55,12 @@ private:
     unsigned long long m_time;
 };
 
-class ToneChan : public DataEndpoint
+class ToneChan : public Channel
 {
 public:
     ToneChan(const String &tone);
     ~ToneChan();
     virtual void disconnected(bool final, const char *reason);
-    inline const String &id() const
-	{ return m_id; }
-private:
-    String m_id;
-    static int s_nextid;
-};
-
-class ToneHandler : public MessageHandler
-{
-public:
-    ToneHandler() : MessageHandler("call.execute") { }
-    virtual bool received(Message &msg);
 };
 
 class AttachHandler : public MessageHandler
@@ -84,22 +70,21 @@ public:
     virtual bool received(Message &msg);
 };
 
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-
-class ToneGenPlugin : public Plugin
+class ToneGenPlugin : public Driver
 {
 public:
     ToneGenPlugin();
     ~ToneGenPlugin();
     virtual void initialize();
+    virtual bool msgExecute(Message& msg, String& dest);
+protected:
+    void statusModule(String& str);
+    void statusParams(String& str);
 private:
-    ToneHandler *m_handler;
+    AttachHandler* m_handler;
 };
+
+INIT_PLUGIN(ToneGenPlugin);
 
 // 421.052Hz (19 samples @ 8kHz) sine wave, pretty close to standard 425Hz
 static const short tone421hz[] = {
@@ -146,7 +131,7 @@ ToneSource::ToneSource(const String &tone)
 
 ToneSource::~ToneSource()
 {
-    Lock lock(mutex);
+    Lock lock(__plugin);
     Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     tones.remove(this,false);
     if (m_time) {
@@ -236,15 +221,10 @@ void ToneSource::run()
     m_time = 0;
 }
 
-int ToneChan::s_nextid = 1;
-
 ToneChan::ToneChan(const String &tone)
-    : DataEndpoint("tone")
+    : Channel(__plugin)
 {
     Debug(DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
-    Lock lock(mutex);
-    m_id << "tone/" << s_nextid++;
-    chans.append(this);
     ToneSource *t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
@@ -256,10 +236,7 @@ ToneChan::ToneChan(const String &tone)
 
 ToneChan::~ToneChan()
 {
-    Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",m_id.c_str(),this);
-    mutex.lock();
-    chans.remove(this,false);
-    mutex.unlock();
+    Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
 void ToneChan::disconnected(bool final, const char *reason)
@@ -267,16 +244,13 @@ void ToneChan::disconnected(bool final, const char *reason)
     Debugger debug("ToneChan::disconnected()"," '%s' [%p]",reason,this);
 }
 
-bool ToneHandler::received(Message &msg)
+bool ToneGenPlugin::msgExecute(Message& msg, String& dest)
 {
-    String dest(msg.getValue("callto"));
-    if (dest.null())
-	return false;
     Regexp r("^tone/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     String tone = dest.matchString(1);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
+    Channel *dd = static_cast<Channel*>(msg.userData());
     if (dd) {
 	ToneChan *tc = new ToneChan(tone);
 	if (dd->connect(tc))
@@ -293,16 +267,15 @@ bool ToneHandler::received(Message &msg)
 	    return false;
 	}
 	Message m("call.route");
-	m.addParam("driver","tone");
-	m.addParam("id",dest);
+	m.addParam("module","tone");
 	m.addParam("caller",dest);
 	m.addParam("called",targ);
 	if (Engine::dispatch(m)) {
 	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
-	    m.retValue() = 0;
+	    m.retValue().clear();
 	    ToneChan *tc = new ToneChan(dest.matchString(1).c_str());
-	    m.setParam("id",tc->id());
+	    m.setParam("targetid",tc->id());
 	    m.userData(tc);
 	    if (Engine::dispatch(m)) {
 		tc->deref();
@@ -329,7 +302,7 @@ bool AttachHandler::received(Message &msg)
     src = src.matchString(1);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
-	Lock lock(mutex);
+	Lock lock(__plugin);
 	ToneSource *t = ToneSource::getTone(src);
 	if (t) {
 	    dd->setSource(t);
@@ -344,19 +317,18 @@ bool AttachHandler::received(Message &msg)
     return false;
 }
 
-bool StatusHandler::received(Message &msg)
+void ToneGenPlugin::statusModule(String& str)
 {
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"tonegen"))
-	return false;
-    msg.retValue() << "name=tonegen,type=misc"
-		   << ";tones=" << tones.count()
-		   << ",chans=" << chans.count() << "\n";
-    return false;
+    Module::statusModule(str);
+}
+
+void ToneGenPlugin::statusParams(String& str)
+{
+    str << "tones=" << tones.count() << ",chans=" << channels().count();
 }
 
 ToneGenPlugin::ToneGenPlugin()
-    : m_handler(0)
+    : Driver("tone","misc"), m_handler(0)
 {
     Output("Loaded module ToneGen");
 }
@@ -364,7 +336,7 @@ ToneGenPlugin::ToneGenPlugin()
 ToneGenPlugin::~ToneGenPlugin()
 {
     Output("Unloading module ToneGen");
-    ObjList *l = &chans;
+    ObjList *l = &channels();
     while (l) {
 	ToneChan *t = static_cast<ToneChan *>(l->get());
 	if (t)
@@ -372,21 +344,18 @@ ToneGenPlugin::~ToneGenPlugin()
 	if (l->get() == t)
 	    l = l->next();
     }
-    chans.clear();
+    channels().clear();
     tones.clear();
 }
 
 void ToneGenPlugin::initialize()
 {
     Output("Initializing module ToneGen");
+    Driver::initialize();
     if (!m_handler) {
-	m_handler = new ToneHandler;
+	m_handler = new AttachHandler;
 	Engine::install(m_handler);
-	Engine::install(new AttachHandler);
-	Engine::install(new StatusHandler);
     }
 }
-
-INIT_PLUGIN(ToneGenPlugin);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

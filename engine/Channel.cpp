@@ -30,14 +30,13 @@ using namespace TelEngine;
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : m_peer(0), m_driver(driver), m_outgoing(outgoing), m_id(id)
 {
-    status(direction());
-    if (m_driver) {
-	debugChain(m_driver);
-	m_driver->lock();
-	m_driver->channels().append(this);
-	m_driver->changed();
-	m_driver->unlock();
-    }
+    init();
+}
+
+Channel::Channel(Driver& driver, const char* id, bool outgoing)
+    : m_peer(0), m_driver(&driver), m_outgoing(outgoing), m_id(id)
+{
+    init();
 }
 
 Channel::~Channel()
@@ -52,6 +51,20 @@ Channel::~Channel()
     }
     disconnect(true,0);
     m_data.clear();
+}
+
+void Channel::init()
+{
+    status(direction());
+    if (m_driver) {
+	debugChain(m_driver);
+	m_driver->lock();
+	if (m_id.null())
+	    m_id << m_driver->prefix() << m_driver->nextid();
+	m_driver->channels().append(this);
+	m_driver->changed();
+	m_driver->unlock();
+    }
 }
 
 const char* Channel::direction() const
@@ -242,6 +255,11 @@ Module::Module(const char* name, const char* type)
 {
 }
 
+void Module::initialize()
+{
+    setup();
+}
+
 void Module::setup()
 {
     if (m_init)
@@ -354,7 +372,7 @@ bool Module::setDebug(Message& msg, const String& target)
 
 
 Driver::Driver(const char* name, const char* type)
-    : Module(name,type), m_init(false), m_routing(0), m_routed(0)
+    : Module(name,type), m_init(false), m_routing(0), m_routed(0), m_nextid(0)
 {
 }
 
@@ -515,6 +533,12 @@ bool Driver::setDebug(Message& msg, const String& target)
 	return chan->setDebug(msg);
 
     return false;
+}
+
+unsigned int Driver::nextid()
+{
+    Lock lock(this);
+    return ++m_nextid;
 }
 
 

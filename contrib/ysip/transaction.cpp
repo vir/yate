@@ -255,8 +255,6 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
     if (!message)
 	return false;
-    if (isOutgoing() != message->isAnswer())
-	return false;
     DDebug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
     if (branch) {
@@ -281,6 +279,12 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
     }
     else {
 	Debug("SIPTransaction",DebugWarn,"Non-branch matching not implemented!");
+	return false;
+    }
+    if (isOutgoing() != message->isAnswer()) {
+	Debug("SIPTransaction",DebugAll,"Ignoring retransmitted %s %p '%s' in [%p]",
+	    message->isAnswer() ? "answer" : "request",
+	    message,message->method.c_str(),this);
 	return false;
     }
     Debug("SIPTransaction",DebugAll,"Processing %s %p '%s' in [%p]",

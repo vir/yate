@@ -51,6 +51,7 @@ private:
     DataEndpoint *m_chan;
     DataBlock m_data;
     int m_fd;
+    bool m_swap;
     unsigned m_brate;
     unsigned m_total;
     unsigned long long m_time;
@@ -123,9 +124,14 @@ private:
 };
 
 WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
-    : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0), m_autoclose(autoclose)
+    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(16000),
+      m_total(0), m_time(0), m_autoclose(autoclose)
 {
     Debug(DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
+    if (file == "-") {
+	start("WaveSource");
+	return;
+    }
     m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
     if (m_fd < 0) {
 	Debug(DebugGoOn,"Opening '%s': error %d: %s",
@@ -199,6 +205,7 @@ void WaveSource::detectAuFormat()
 	    break;
 	case 3:
 	    m_brate *= 2;
+	    m_swap = true;
 	    break;
 	default:
 	    Debug(DebugMild,"Unknown .au format 0x%0X, assuming signed linear",ntohl(header.form));
@@ -221,7 +228,7 @@ void WaveSource::run()
     unsigned long long tpos = Time::now();
     m_time = tpos;
     do {
-	r = ::read(m_fd,m_data.data(),m_data.length());
+	r = (m_fd >= 0) ? ::read(m_fd,m_data.data(),m_data.length()) : m_data.length();
 	if (r < 0) {
 	    if (errno == EINTR) {
 		r = 1;
@@ -231,6 +238,13 @@ void WaveSource::run()
 	}
 	if (r < (int)m_data.length())
 	    m_data.assign(m_data.data(),r);
+	if (m_swap) {
+	    uint16_t* p = (uint16_t*)m_data.data();
+	    for (int i = 0; i < r; i+= 2) {
+		*p = ntohs(*p);
+		++p;
+	    }
+	}
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
 	    DDebug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
@@ -262,7 +276,9 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 {
     Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
 	file.c_str(),chan,maxlen,this);
-    if (file.endsWith(".gsm"))
+    if (file == "-")
+	return;
+    else if (file.endsWith(".gsm"))
 	m_format = "gsm";
     else if (file.endsWith(".alaw") || file.endsWith(".A"))
 	m_format = "alaw";

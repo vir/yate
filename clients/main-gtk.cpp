@@ -435,7 +435,14 @@ void GtkClient::gtk_buttons (GtkWidget *button, gpointer data)
     gchar *button_label;
     gtk_label_get(GTK_LABEL(GTK_BIN(button)->child), &button_label);
     //Debug(DebugInfo,"string is %s",(const char *)button_label);
-    String buttonl(button_label);
+    //String buttonl(button_label);
+    if (s_client->status != STATUS_IDLE) {
+	Message* m = new Message("chan.masquerade");
+	m->addParam ("id", "oss/");
+	m->addParam ("text", (const char *)button_label);
+	m->addParam ("message", "chan.dtmf");
+	Engine::enqueue(m);
+    }
     gtk_entry_append_text(GTK_ENTRY(GTK_COMBO(s_client->m_address)->entry), button_label);
 }
 void GtkClient::gtk_call (GtkWidget *button, gpointer data)

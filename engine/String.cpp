@@ -390,10 +390,12 @@ String& String::trimBlanks()
 
 String& String::operator=(const char *value)
 {
+    if (value && !*value)
+	value = 0;
     if (value != c_str()) {
 	char *tmp = m_string;
 	m_string = value ? ::strdup(value) : 0;
-	if (value && *value && !m_string)
+	if (value && !m_string)
 	    Debug("String",DebugFail,"strdup() returned NULL!");
 	changed();
 	if (tmp)
@@ -404,7 +406,9 @@ String& String::operator=(const char *value)
 
 String& String::operator+=(const char *value)
 {
-    if (value && *value) {
+    if (value && !*value)
+	value = 0;
+    if (value) {
 	if (m_string) {
 	    int len = ::strlen(value)+length();
 	    char *tmp1 = m_string;

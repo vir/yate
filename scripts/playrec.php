@@ -19,12 +19,14 @@ Yate::Install("chan.notify");
 $ourcallid = "external/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
+$dir = "/tmp";
 
 function setState($newstate)
 {
     global $ourcallid;
     global $partycallid;
     global $state;
+    global $dir;
 
     // are we exiting?
     if ($state == "")
@@ -36,9 +38,11 @@ function setState($newstate)
     if ($newstate == "prompt") {
 	$state = $newstate;
 	$m = new Yate("chan.attach");
-	$m->params["source"] = "wave/play//tmp/prompt.slin";
-	$m->params["consumer"] = "wave/record//dev/null";
-	$m->params["maxlen"] = "160000";
+	$m->params["source"] = "wave/play/scripts/playrec_menu.au";
+	$m->Dispatch();
+	$m = new Yate("chan.attach");
+	$m->params["consumer"] = "wave/record/-";
+	$m->params["maxlen"] = 320000;
 	$m->params["notify"] = $ourcallid;
 	$m->Dispatch();
 	return;
@@ -50,17 +54,25 @@ function setState($newstate)
     switch ($newstate) {
 	case "record":
 	    $m = new Yate("chan.attach");
-	    $m->params["source"] = "wave/play//dev/null";
-	    $m->params["consumer"] = "wave/record//tmp/playrec.slin";
-	    $m->params["maxlen"] = 50000;
+	    $m->params["source"] = "wave/play/-";
+	    $m->params["consumer"] = "wave/record/" . $dir . "/playrec.slin";
+	    $m->params["maxlen"] = 80000;
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
 	case "play":
 	    $m = new Yate("chan.attach");
-	    $m->params["source"] = "wave/play//tmp/playrec.slin";
-	    $m->params["consumer"] = "wave/record//dev/null";
-	    $m->params["maxlen"] = "10";
+	    $m->params["source"] = "wave/play/" . $dir . "/playrec.slin";
+	    $m->params["consumer"] = "wave/record/-";
+	    $m->params["maxlen"] = 4800000;
+	    $m->params["notify"] = $ourcallid;
+	    $m->Dispatch();
+	    break;
+	case "goodbye":
+	    $m = new Yate("chan.attach");
+	    $m->params["source"] = "tone/congestion";
+	    $m->params["consumer"] = "wave/record/-";
+	    $m->params["maxlen"] = 32000;
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
@@ -77,8 +89,11 @@ function gotNotify()
     Yate::Output("gotNotify() state: " . $state);
 
     switch ($state) {
-	case "prompt":
+	case "goodbye":
 	    setState("");
+	    break;
+	case "prompt":
+	    setState("goodbye");
 	    break;
 	case "record":
 	case "play":

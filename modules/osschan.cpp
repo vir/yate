@@ -133,6 +133,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class MasqHandler : public MessageHandler
+{
+public:
+    MasqHandler(const char *name, int prio) : MessageHandler(name,prio) { }
+    virtual bool received(Message &msg);
+};
+
 class OssPlugin : public Plugin
 {
 public:
@@ -506,6 +513,20 @@ bool DropHandler::received(Message &msg)
     return false;
 }
 
+bool MasqHandler::received(Message &msg)
+{
+    String id(msg.getValue("id"));
+    if (msg.getParam("message") && id.startsWith("oss/")) {
+	msg = msg.getValue("message");
+	msg.clearParam("message");
+	if (s_chan) {
+	    msg.addParam("targetid",s_chan->getTarget());
+	    msg.userData(s_chan);
+	}
+    }
+    return false;
+}
+
 OssPlugin::OssPlugin()
     : m_handler(0)
 {
@@ -518,6 +539,7 @@ void OssPlugin::initialize()
     if (!m_handler) {
 	m_handler = new OssHandler("call.execute");
 	Engine::install(new DropHandler("call.drop"));
+	Engine::install(new MasqHandler("chan.masquerade",10));
 	Engine::install(m_handler);
 	Engine::install(new StatusHandler);
     }

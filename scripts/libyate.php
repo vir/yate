@@ -270,6 +270,9 @@ class Yate
 		$ev->type="uninstalled";
 		$ev->handled=Yate::Str2bool($part[3]);
 		break;
+	    case "Error in":
+		/* We are already in error so better stay quiet */
+		break;
 	    default:
 		Yate::Output("PHP parse error: " . $line);
 	}

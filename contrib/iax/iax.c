@@ -1110,7 +1110,7 @@ int iax_send_url(struct iax_session *session, char *url, int link)
 
 int iax_send_text(struct iax_session *session, char *text)
 {
-	return send_command(session, AST_FRAME_TEXT, 0, 0, text, strlen(text), -1);
+	return send_command(session, AST_FRAME_TEXT, 0, 0, text, strlen(text) + 1, -1);
 }
 
 int iax_send_unlink(struct iax_session *session)

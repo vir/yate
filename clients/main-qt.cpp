@@ -26,6 +26,8 @@
 #include <telengine.h>
 #include <telephony.h>
 
+#include <stdlib.h>
+
 #include "../contrib/qt/qtclientform.hpp"
 #include <qapplication.h>
 
@@ -90,7 +92,7 @@ QtYateClientPlugin::~QtYateClientPlugin ()
 
 void QtYateClientPlugin::initialize (void)
 {
-    if (!thread) {
+    if (!thread && ::getenv("DISPLAY")) {
 	Output ("Initializing Qt Client");
 	thread = new QtClientThread;
 	thread->startup();

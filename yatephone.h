@@ -380,8 +380,9 @@ public:
 
     /**
      * Disconnect from the connected endpoint
+     * @param reason Text that describes disconnect reason
      */
-    void disconnect();
+    void disconnect(const char *reason = 0);
 
     /**
      * Set the data source of this object
@@ -431,8 +432,9 @@ protected:
 
     /**
      * Disconnect notification method
+     * @param reason Text that describes disconnect reason
      */
-    virtual void disconnected() { }
+    virtual void disconnected(const char *reason) { }
 
     /**
      * Attempt to connect the endpoint to a peer of the same type
@@ -445,8 +447,9 @@ protected:
     /*
      * Set the peer endpoint pointer
      * @param peer A pointer to the new peer or NULL
+     * @param reason Text describing the reason in case of disconnect
      */
-    void setPeer(DataEndpoint *peer);
+    void setPeer(DataEndpoint *peer, const char *reason = 0);
 
 private:
     String m_name;

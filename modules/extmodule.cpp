@@ -68,7 +68,7 @@ public:
     };
     static ExtModChan* build(const char *file, const char *args, int type);
     ~ExtModChan();
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
     inline ExtModReceiver* receiver() const
 	{ return m_recv; }
     inline void setRecv(ExtModReceiver* recv)
@@ -288,9 +288,9 @@ ExtModChan::~ExtModChan()
 	m_recv->die(false);
 }
 
-void ExtModChan::disconnected()
+void ExtModChan::disconnected(const char *reason)
 {
-    Debugger debug("ExtModChan::disconnected()"," [%p]",this);
+    Debugger debug("ExtModChan::disconnected()"," '%s' [%p]",reason,this);
 }
 
 MsgHolder::MsgHolder(Message &msg)

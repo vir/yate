@@ -77,7 +77,7 @@ public:
     bool init();
     ~OssChan();
     int setformat();
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
     int soundcard_setinput(bool force);
     int soundcard_setoutput(bool force);
     int time_has_passed(void);
@@ -369,9 +369,9 @@ int OssChan::soundcard_setoutput(bool force)
 	return 1;
 }
 
-void OssChan::disconnected()
+void OssChan::disconnected(const char *reason)
 {
-    Debugger debug("OssChan::disconnected()"," [%p]",this);
+    Debugger debug("OssChan::disconnected()"," '%s' [%p]",reason,this);
     destruct();
 }
 

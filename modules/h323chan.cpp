@@ -217,7 +217,7 @@ public:
     BOOL OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) ;
     BOOL StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void OnStoppedExternal(H323Channel::Directions dir);
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
     inline const String &id() const
 	{ return m_id; }
     inline const String &status() const
@@ -735,9 +735,9 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
     return false;
 }
 
-void YateH323Connection::disconnected()
+void YateH323Connection::disconnected(const char *reason)
 {
-    Debugger debug("YateH323Connection::disconnected()"," [%p]",this);
+    Debugger debug("YateH323Connection::disconnected()"," '%s' [%p]",reason,this);
     setStatus("disconnected");
     // we must bypass the normal Yate refcounted destruction as OpenH323 will destroy the object
     ref();

@@ -59,7 +59,7 @@ class WaveChan : public DataEndpoint
 public:
     WaveChan(const String& file, bool record, unsigned maxlen = 0);
     ~WaveChan();
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
 };
 
 class WaveHandler : public MessageHandler
@@ -167,7 +167,7 @@ void WaveSource::cleanup()
 {
     Debug(DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
     if (m_chan && m_autoclose)
-	m_chan->disconnect();
+	m_chan->disconnect("eof");
 }
 
 WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxlen)
@@ -253,9 +253,9 @@ WaveChan::~WaveChan()
     Debug(DebugAll,"WaveChan::~WaveChan() [%p]",this);
 }
 
-void WaveChan::disconnected()
+void WaveChan::disconnected(const char *reason)
 {
-    Debugger debug("WaveChan::disconnected()"," [%p]",this);
+    Debugger debug("WaveChan::disconnected()"," '%s' [%p]",reason,this);
 }
 
 bool WaveHandler::received(Message &msg)

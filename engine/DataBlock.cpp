@@ -343,7 +343,7 @@ bool DataEndpoint::connect(DataEndpoint *peer)
     return true;
 }
 
-void DataEndpoint::disconnect()
+void DataEndpoint::disconnect(const char *reason)
 {
     if (!m_peer)
 	return;
@@ -360,19 +360,19 @@ void DataEndpoint::disconnect()
 
     DataEndpoint *temp = m_peer;
     m_peer = 0;
-    temp->setPeer(0);
+    temp->setPeer(0,reason);
     temp->deref();
-    disconnected();
+    disconnected(reason);
     deref();
 }
 
-void DataEndpoint::setPeer(DataEndpoint *peer)
+void DataEndpoint::setPeer(DataEndpoint *peer, const char *reason)
 {
     m_peer = peer;
     if (m_peer)
 	connected();
     else
-	disconnected();
+	disconnected(reason);
 }
 
 void DataEndpoint::setSource(DataSource *source)

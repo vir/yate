@@ -46,7 +46,7 @@ class ToneChan : public DataEndpoint
 public:
     ToneChan(const String &tone);
     ~ToneChan();
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
 };
 
 class ToneHandler : public MessageHandler
@@ -218,9 +218,9 @@ ToneChan::~ToneChan()
     mutex.unlock();
 }
 
-void ToneChan::disconnected()
+void ToneChan::disconnected(const char *reason)
 {
-    Debugger debug("ToneChan::disconnected()"," [%p]",this);
+    Debugger debug("ToneChan::disconnected()"," '%s' [%p]",reason,this);
 }
 
 bool ToneHandler::received(Message &msg)
@@ -322,7 +322,7 @@ ToneGenPlugin::~ToneGenPlugin()
     while (l) {
 	ToneChan *t = static_cast<ToneChan *>(l->get());
 	if (t)
-	    t->disconnect();
+	    t->disconnect("shutdown");
 	if (l->get() == t)
 	    l = l->next();
     }

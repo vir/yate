@@ -366,7 +366,7 @@ class ZapChan : public DataEndpoint
 public:
     ZapChan(PriSpan *parent, int chan, unsigned int bufsize);
     virtual ~ZapChan();
-    virtual void disconnected();
+    virtual void disconnected(const char *reason);
     virtual bool nativeConnect(DataEndpoint *peer);
     inline PriSpan *span() const
 	{ return m_span; }
@@ -950,9 +950,9 @@ ZapChan::~ZapChan()
     hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
 }
 
-void ZapChan::disconnected()
+void ZapChan::disconnected(const char *reason)
 {
-    Debugger debug("ZapChan::disconnected()");
+    Debugger debug("ZapChan::disconnected() '%s' [%p]",reason,this);
     // FIXME: we can't know from which thread we got disconnected
     bool gotLock = zplugin.mutex.lock(1000);
     hangup(PRI_CAUSE_NORMAL_CLEARING);
@@ -999,7 +999,7 @@ void ZapChan::idle()
 
 void ZapChan::restart(bool outgoing)
 {
-    disconnect();
+    disconnect("restart");
     close();
     if (outgoing)
 	::pri_reset(m_span->pri(),m_chan);
@@ -1069,11 +1069,12 @@ bool ZapChan::answer()
 
 void ZapChan::hangup(int cause)
 {
+    const char *reason = pri_cause2str(cause);
     if (inUse())
 	Debug(DebugInfo,"Hanging up zap/%d in state %s: %s (%d)",
-	    m_abschan,status(),pri_cause2str(cause),cause);
+	    m_abschan,status(),reason,cause);
     m_timeout = 0;
-    disconnect();
+    disconnect(reason);
     close();
     m_ring = false;
     if (m_call) {

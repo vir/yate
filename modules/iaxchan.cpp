@@ -111,7 +111,7 @@ class YateIAXConnection :  public DataEndpoint
 public:
     YateIAXConnection(iax_session *session = 0);
     ~YateIAXConnection();
-    void disconnected(void);
+    virtual void disconnected(const char *reason);
     void abort();
     int makeCall(char *cidnum, char *cidname, char *target = 0, char *lang = 0);
     void hangup(char *reason = "Unexpected problem");
@@ -772,13 +772,15 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
     }
 }
 
-void YateIAXConnection::disconnected()
+void YateIAXConnection::disconnected(const char *reason)
 {
-    Debug(DebugAll,"YateIAXConnection::disconnected()");
+    Debug(DebugAll,"YateIAXConnection::disconnected() '%s'",reason);
     // If we still have a connection this is the last chance to get transferred
     if (!m_final) {
 	Message m("disconnected");
 	m.addParam("ourcallid",ourcallid.c_str());
+	if (reason)
+	    m.addParam("reason",reason);
 	if (partycallid) {
 	    // Announce our old party but at this point it may be destroyed
 	    m.addParam("partycallid",partycallid.c_str());

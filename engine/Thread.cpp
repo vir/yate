@@ -167,9 +167,18 @@ void ThreadPrivate::killall()
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
 	tmutex.unlock();
 	bool ok = t->cancel();
+	if (ok) {
+	    // delay a little so threads have a chance to clean up
+	    for (int i=0; i<5; i++) {
+		tmutex.lock();
+		bool done = (t != l->get());
+		tmutex.unlock();
+		if (done)
+		    break;
+		::usleep(10);
+	    }
+	}
 	tmutex.lock();
-	if (ok)
-	    ::usleep(10);
 	if (t != l->get())
 	    c = 1;
 	else {

@@ -92,6 +92,7 @@ class Yate
      */
     function Escape($str, $extra = "")
     {
+	$str = $str . "";
 	$s = "";
 	$n = strlen($str);
 	for ($i=0; $i<$n; $i++) {

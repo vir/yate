@@ -1,3 +1,26 @@
+Mon Jan 10 2005 Paul Chitescu <paulc-devel@null.ro>
+- Improved detection of Qt-3 headers
+- SIP channel supports reinvite and config file
+- Versioned libyate.so (full version, also mathes soname)
+- Improved detection of Qt-3 and PostgesSQL headers
+
+Sun Jan 09 2005 Dorin Lazar <lazar@deuromedia.ro>
+- Improved the Qt-3 client, added call history support
+
+Thu Jan 06 2005 Paul Chitescu <paulc-devel@null.ro>
+- Support for RTP pass-trough in SIP and H.323 modules
+- Textual call end reasons in the H.323 module
+- Added the possibility of declaring fake codecs
+- More assignment operators for String class
+
+Fri Dec 24 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added Yet Another SIP Engine and a SIP channel based
+
+Tue Dec 21 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added final parameter to disconnect.
+- Renamed most messages.
+- Added soname in library.
+
 Mon Dec 20 2004 Paul Chitescu <paulc-devel@null.ro>
 - Bumped version to 0.8.6
 - Added soname to libyate.so
@@ -5,6 +28,9 @@ Mon Dec 20 2004 Paul Chitescu <paulc-devel@null.ro>
 - Renamed all non-engine messages to a consistent scheme
 - Implemented default DTMF forwarding in H323, IAX, Zaptel
 - Many more thread and locking related bugfixes
+
+Tue Dec 14 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added a Qt-3 client by Dorin Lazar
 
 Sat Dec 04 2004 Paul Chitescu <paulc-devel@null.ro>
 - Added toString method to all generic objects

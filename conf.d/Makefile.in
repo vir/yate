@@ -4,6 +4,7 @@
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
+prefix = @prefix@
 confdir = @sysconfdir@/yate
 
 .PHONY: all

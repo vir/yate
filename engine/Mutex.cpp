@@ -35,12 +35,14 @@ namespace TelEngine {
 
 class MutexPrivate {
 public:
-    MutexPrivate();
+    MutexPrivate(bool recursive);
     ~MutexPrivate();
     inline void ref()
 	{ ++m_refcount; }
     inline void deref()
 	{ if (!--m_refcount) delete this; }
+    inline bool recursive() const
+	{ return m_recursive; }
     bool lock(long long int maxwait);
     void unlock();
     static volatile int s_count;
@@ -48,7 +50,8 @@ public:
 private:
     pthread_mutex_t m_mutex;
     int m_refcount;
-    volatile bool m_locked;
+    volatile unsigned int m_locked;
+    bool m_recursive;
 };
 
 class GlobalMutex {
@@ -106,12 +109,20 @@ void GlobalMutex::unlock()
     ::pthread_mutex_unlock(&s_mutex);
 }
 
-MutexPrivate::MutexPrivate()
-    : m_refcount(1), m_locked(false)
+MutexPrivate::MutexPrivate(bool recursive)
+    : m_refcount(1), m_locked(0), m_recursive(recursive)
 {
     GlobalMutex::lock();
     s_count++;
-    ::pthread_mutex_init(&m_mutex,0);
+    if (recursive) {
+	pthread_mutexattr_t attr;
+	::pthread_mutexattr_init(&attr);
+	::pthread_mutexattr_settype(&attr,PTHREAD_MUTEX_RECURSIVE_NP);
+	::pthread_mutex_init(&m_mutex,&attr);
+	::pthread_mutexattr_destroy(&attr);
+    }
+    else
+	::pthread_mutex_init(&m_mutex,0);
     GlobalMutex::unlock();
 }
 
@@ -119,7 +130,7 @@ MutexPrivate::~MutexPrivate()
 {
     GlobalMutex::lock();
     if (m_locked) {
-	m_locked = false;
+	m_locked--;
 	s_locks--;
 	::pthread_mutex_unlock(&m_mutex);
     }
@@ -150,7 +161,7 @@ bool MutexPrivate::lock(long long int maxwait)
     GlobalMutex::lock();
     if (rval) {
 	s_locks++;
-	m_locked = true;
+	m_locked++;
     }
     else
 	deref();
@@ -163,7 +174,7 @@ void MutexPrivate::unlock()
     // Hope we don't hit a bug related to the debug mutex!
     GlobalMutex::lock();
     if (m_locked) {
-	m_locked = false;
+	m_locked--;
 	if (--s_locks < 0)
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
 	::pthread_mutex_unlock(&m_mutex);
@@ -177,7 +188,13 @@ void MutexPrivate::unlock()
 Mutex::Mutex()
     : m_private(0)
 {
-    m_private = new MutexPrivate;
+    m_private = new MutexPrivate(false);
+}
+
+Mutex::Mutex(bool recursive)
+    : m_private(0)
+{
+    m_private = new MutexPrivate(recursive);
 }
 
 Mutex::Mutex(const Mutex &original)
@@ -226,6 +243,11 @@ bool Mutex::check(long long int maxwait)
     if (ret)
 	unlock();
     return ret;
+}
+
+bool Mutex::recursive() const
+{
+    return m_private && m_private->recursive();
 }
 
 int Mutex::count()

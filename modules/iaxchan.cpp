@@ -65,8 +65,12 @@ static TokenDict dict_tos[] = {
 static bool s_debugging = true;
 static int s_ast_formats = 0;
 static Configuration s_cfg;
-static Mutex s_mutex;
+// mutex for routing counters
 static Mutex s_route;
+// recursive mutex for connection list
+static Mutex s_conns(true);
+// mutex for iax library calls
+static Mutex s_mutex;
 
 static ObjList m_calls;
 class YateIAXConnection;
@@ -578,7 +582,7 @@ bool IAXMsgThread::route()
 {
     Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
     const char* err = (Engine::dispatch(m_msg) && !m_msg->retValue().null()) ? 0 : "No route";
-    Lock lock(s_mutex);
+    Lock lock(s_conns);
     YateIAXConnection *conn = iplugin.m_endpoint->findconn(m_id);
     if (!conn) {
         Debug(DebugMild,"YateIAXConnection '%s' vanished while routing!",m_id.c_str());
@@ -644,7 +648,9 @@ YateIAXConnection::YateIAXConnection(iax_session *session)
     char buf[64];
     snprintf(buf,sizeof(buf),"iax/%p",m_session);
     ourcallid=buf;
+    s_conns.lock();
     iplugin.m_endpoint->calls().append(this);
+    s_conns.unlock();
     ::iax_set_private(m_session,this);
     s_mutex.unlock();
     Message* m = new Message("chan.startup");
@@ -659,9 +665,9 @@ YateIAXConnection::~YateIAXConnection()
 {
     Debugger debug(DebugAll,"YateIAXConnection::~YateIAXConnection()"," [%p]",this);
     setStatus("destroyed");
-    s_mutex.lock();
+    s_conns.lock();
     iplugin.m_endpoint->calls().remove(this,false);
-    s_mutex.unlock();
+    s_conns.unlock();
     setConsumer();
     setSource();
     m_ast_format = 0;
@@ -991,12 +997,13 @@ bool IAXConnHandler::received(Message &msg, int id)
     String callid(msg.getValue("targetid"));
     if (!callid.startsWith("iax/",false))
 	return false;
-    Lock lock(s_mutex);
+    Lock clock(s_conns);
     YateIAXConnection *conn= iplugin.m_endpoint->findconn(callid);
     if (!(conn && conn->session())) {
 	Debug("IAX",DebugInfo,"Could not find valid connection '%s'",callid.c_str());
 	return false;
     }
+    Lock lock(s_mutex);
     switch (id) {
 	case Answered:
 	    conn->answered();

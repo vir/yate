@@ -1660,9 +1660,16 @@ class Mutex
     friend class MutexPrivate;
 public:
     /**
-     * Construct a new unlocked mutex
+     * Construct a new unlocked fast mutex
      */
     Mutex();
+
+    /**
+     * Construct a new unlocked mutex
+     * @param recursive True if the mutex has to be recursive (reentrant),
+     *  false for a normal fast mutex
+     */
+    Mutex(bool recursive);
 
     /**
      * Copt constructor creates a shared mutex
@@ -1699,6 +1706,12 @@ public:
      * @return True if successfully locked and unlocked, false on failure
      */
     bool check(long long int maxwait = -1);
+
+    /**
+     * Check if this mutex is recursive or not
+     * @return True if this is a recursive mutex
+     */
+    bool recursive() const;
 
     /**
      * Get the number of mutexes counting the shared ones only once

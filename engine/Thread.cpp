@@ -78,7 +78,7 @@ ThreadPrivate::ThreadPrivate(Thread *t,const char *name)
 ThreadPrivate::~ThreadPrivate()
 {
 #ifdef DEBUG
-    Debugger debug("ThreadPrivate::~ThreadPrivate()"," '%s' [%p]",m_name,this);
+    Debugger debug("ThreadPrivate::~ThreadPrivate()"," %p '%s' [%p]",m_thread,m_name,this);
 #endif
     m_running = false;
     tmutex.lock();
@@ -103,13 +103,13 @@ void ThreadPrivate::destroy()
 void ThreadPrivate::pubdestroy()
 {
 #ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::pubdestroy() '%s' [%p]",m_name,this);
+    Debugger debug(DebugAll,"ThreadPrivate::pubdestroy()"," %p '%s' [%p]",m_thread,m_name,this);
 #endif
     m_updest = false;
-    if (!cancel()) {
-	cleanup();
-	m_thread = 0;
-    }
+    cleanup();
+    m_thread = 0;
+    if (!cancel())
+	Debug(DebugWarn,"ThreadPrivate::pubdestroy() %p '%s' failed cancel [%p]",m_thread,m_name,this);
 }
 
 void ThreadPrivate::run()
@@ -147,11 +147,17 @@ bool ThreadPrivate::cancel()
 void ThreadPrivate::cleanup()
 {
 #ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::cleanup() '%s' [%p]",m_name,this);
+    Debug(DebugAll,"ThreadPrivate::cleanup() %p '%s' [%p]",m_thread,m_name,this);
 #endif
     if (m_thread && m_thread->m_private) {
-	m_thread->m_private = 0;
-	m_thread->cleanup();
+	if (m_thread->m_private == this) {
+	    m_thread->m_private = 0;
+	    m_thread->cleanup();
+	}
+	else {
+	    Debug(DebugWarn,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
+	    m_thread = 0;
+	}
     }
 }
 

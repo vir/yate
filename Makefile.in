@@ -81,7 +81,7 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
-.PHONY: engine modules test apidocs-build check-topdir
+.PHONY: engine contrib modules test apidocs-build check-topdir
 engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
 
 apidocs-build: check-topdir
@@ -111,6 +111,11 @@ test: engine
 
 modules: engine
 	$(MAKE) -C ./modules all
+
+contrib: engine
+	for i in contrib/*; do \
+	    test "$${i##*/}" != "CVS" && $(MAKE) -C "$$i" all ; \
+	done
 
 tables: @srcdir@/tables/all.h
 
@@ -245,7 +250,7 @@ libyate.so.@PACKAGE_VERSION@: $(ENGOBJS) $(LIBS)
 .PHONY: help
 help:
 	@echo -e 'Usual make targets:\n\
-	    all engine modules apidocs test everything\n\
-	    install uninstall\n\
-	    clean distclean cvsclean\n\
+	    all engine contrib modules apidocs test everything\n\
+	    install uninstall install-root uninstall-root\n\
+	    clean distclean cvsclean (avoid this one!)\n\
 	    snapshot tarball'

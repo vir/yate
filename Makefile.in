@@ -78,7 +78,7 @@ cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
 .PHONY: engine contrib modules test apidocs-build check-topdir
-engine: tables yatepaths.h libyate.so $(PROGS)
+engine: tables library libyate.so $(PROGS)
 
 apidocs-build: check-topdir
 	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS)
@@ -234,8 +234,8 @@ yate: libyate.so $(OBJS) $(LIBS)
 libyate.so: $(YLIB)
 	ln -sf $^ $@
 
-.PHONY: $(YLIB)
-$(YLIB):
+.PHONY: library
+library $(YLIB): yatepaths.h
 	$(MAKE) -C ./engine all
 
 .PHONY: help

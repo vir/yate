@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <fcntl.h>
 
 /**
@@ -56,16 +57,26 @@ public:
 class YateUDPParty : public SIPParty
 {
 public:
-    YateUDPParty(int fd,struct sockaddr_in sin);
+    YateUDPParty(int fd,struct sockaddr_in sin,int local);
     ~YateUDPParty();
     virtual void transmit(SIPEvent* event);
+    virtual const char* getProtoName() const;
 protected:
     int m_netfd;
     struct sockaddr_in m_sin;
 };
 
+class YateSIPEndPoint;
+
 class YateSIPEngine : public SIPEngine
 {
+public:
+    inline YateSIPEngine(YateSIPEndPoint* ep)
+	: m_ep(ep)
+	{ }
+    virtual bool buildParty(SIPMessage* message);
+private:
+    YateSIPEndPoint* m_ep;
 };
 
 class YateSIPEndPoint : public Thread
@@ -78,8 +89,11 @@ public:
   //  void terminateall(void);
     void run(void);
     void incoming(SIPEvent* e);
+    bool buildParty(SIPMessage* message);
     inline ObjList &calls()
 	{ return m_calls; }
+    inline YateSIPEngine* engine() const
+	{ return m_engine; }
 private:
     ObjList m_calls;
     int m_localport;
@@ -95,15 +109,32 @@ public:
     SIPPlugin();
     ~SIPPlugin();
     virtual void initialize();
+    inline YateSIPEndPoint* ep() const
+	{ return m_endpoint; }
 private:
     SIPHandler *m_handler;
     YateSIPEndPoint *m_endpoint;
 };
 
+static SIPPlugin plugin;
 
-YateUDPParty::YateUDPParty(int fd,struct sockaddr_in sin)
+YateUDPParty::YateUDPParty(int fd,struct sockaddr_in sin, int local)
     : m_netfd(fd), m_sin(sin)
 {
+    m_local = "localhost";
+    m_localPort = local;
+    m_party = inet_ntoa(m_sin.sin_addr);
+    m_partyPort = ntohs(m_sin.sin_port);
+    int s = ::socket(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
+    if (s != -1) {
+	if (!::connect(s, (const sockaddr *)&m_sin, sizeof(m_sin))) {
+	    struct sockaddr_in raddr;
+	    socklen_t len = sizeof(raddr);
+	    if (!::getsockname(s, (sockaddr *)&raddr, &len))
+		m_local = ::inet_ntoa(raddr.sin_addr);
+	}
+	::close(s);
+    }
 }
 
 YateUDPParty::~YateUDPParty()
@@ -123,7 +154,18 @@ void YateUDPParty::transmit(SIPEvent* event)
     );
 }
 
+const char* YateUDPParty::getProtoName() const
+{
+    return "UDP";
+}
+
+bool YateSIPEngine::buildParty(SIPMessage* message)
+{
+    return m_ep->buildParty(message);
+}
+
 YateSIPEndPoint::YateSIPEndPoint()
+    : Thread("YSIP EndPoint"), m_netfd(-1), m_engine(0)
 {
     m_netfd = -1;
     Debug(DebugAll,"YateSIPEndPoint::YateSIPEndPoint() [%p]",this);
@@ -132,6 +174,31 @@ YateSIPEndPoint::YateSIPEndPoint()
 YateSIPEndPoint::~YateSIPEndPoint()
 {
     Debug(DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
+    delete m_engine;
+}
+
+bool YateSIPEndPoint::buildParty(SIPMessage* message)
+{
+    if (message->isAnswer())
+	return false;
+    URI uri(message->uri);
+    int port = uri.getPort();
+    if (port <= 0)
+	port = 5060;
+    struct hostent he, *res = 0;
+    int err = 0;
+    char buf[1024];
+    if (::gethostbyname_r(uri.getHost().safe(),&he,buf,sizeof(buf),&res,&err)) {
+	Debug(DebugWarn,"Error %d resolving name '%s'",err,uri.getHost().safe());
+	return false;
+    }
+    struct sockaddr_in sin;
+    sin.sin_family = he.h_addrtype;
+    sin.sin_addr.s_addr = *((u_int32_t*)he.h_addr_list[0]);
+    sin.sin_port = htons((short)port);
+    Debug(DebugAll,"got addr: %d %08X %04X",sin.sin_family,sin.sin_addr.s_addr,sin.sin_port);
+    message->setParty(new YateUDPParty(m_netfd,sin,m_port));
+    return true;
 }
 
 bool YateSIPEndPoint::Init ()
@@ -180,7 +247,7 @@ bool YateSIPEndPoint::Init ()
     port = ntohs(sin.sin_port);
     Debug(DebugInfo,"Started on port %d\n", port);
     m_port = port;
-    m_engine = new YateSIPEngine();
+    m_engine = new YateSIPEngine(this);
     return true;
 }
 
@@ -214,7 +281,7 @@ void YateSIPEndPoint::run ()
 	    } else {
 		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
-		m_engine->addMessage(new YateUDPParty(m_netfd,sin),buf,res);
+		m_engine->addMessage(new YateUDPParty(m_netfd,sin,m_port),buf,res);
 	    //	Output("res %d buf %s",res,buf);
 	    }
 	}
@@ -248,7 +315,18 @@ void YateSIPEndPoint::incoming(SIPEvent* e)
 
 bool SIPHandler::received(Message &msg)
 {
-    Debug(DebugInfo,msg.getValue("called"));
+    String dest(msg.getValue("callto"));
+    if (!dest.startSkip("sip2/",false))
+	return false;
+    SIPMessage* m = new SIPMessage("INVITE",dest);
+//    m->complete(plugin.ep()->engine());
+    SDPBody* sdp = new SDPBody;
+    sdp->addLine("v","0");
+    sdp->addLine("s","Call");
+    sdp->addLine("t","0 0");
+    m->setBody(sdp);
+    plugin.ep()->engine()->addMessage(m);
+    m->deref();
     return false;
 }
 
@@ -285,6 +363,5 @@ void SIPPlugin::initialize()
     }
 }
 
-INIT_PLUGIN(SIPPlugin);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

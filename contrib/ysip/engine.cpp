@@ -31,6 +31,65 @@
 
 using namespace TelEngine;
 
+URI::URI()
+    : m_parsed(false)
+{
+}
+
+URI::URI(const String& uri)
+    : String(uri), m_parsed(false)
+{
+}
+
+URI::URI(const URI& uri)
+    : String(uri), m_parsed(false)
+{
+    m_proto = uri.getProtocol();
+    m_user = uri.getUser();
+    m_host = uri.getHost();
+    m_port = uri.getPort();
+    m_parsed = true;
+}
+
+URI::URI(const char* proto, const char* user, const char* host, int port)
+    : m_proto(proto), m_user(user), m_host(host), m_port(port)
+{
+    *this << m_proto << ":" << m_user << "@" << m_host;
+    if (m_port > 0)
+	*this << ":" << m_port;
+    m_parsed = true;
+}
+
+void URI::changed()
+{
+    m_parsed = false;
+}
+
+void URI::parse() const
+{
+    if (m_parsed)
+	return;
+    m_port = 0;
+    // proto:[user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
+    // proto:user@hostname[:port][/path][?params][&params]
+    Regexp r("^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+\\)@\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?");
+    if (const_cast<URI*>(this)->matches(r)) {
+	m_proto = matchString(1).toLower();
+	m_user = matchString(2);
+	m_host = matchString(3);
+	String tmp = matchString(4);
+	tmp >> ":" >> m_port;
+	Debug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d",
+	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port);
+    }
+    else {
+	m_proto.clear();
+	m_user.clear();
+	m_host.clear();
+    }
+    m_parsed = true;
+}
+
 SIPParty::SIPParty()
     : m_reliable(false)
 {
@@ -103,7 +162,12 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     Debug("SIPEngine",DebugInfo,"addMessage(%p) [%p]",message,this);
     if (!message)
 	return 0;
-    const NamedString* br = message->getParam("Via","branch");
+    // make sure outgoing messages are well formed
+    if (message->isOutgoing())
+	message->complete(this);
+    // locate the branch parameter of last Via header - added by the UA
+    const HeaderLine* hl = message->getLastHeader("Via");
+    const NamedString* br = hl ? hl->getParam("branch") : 0;
     String branch(br ? *br : 0);
     if (!branch.startsWith("z9hG4bK"))
 	branch.clear();
@@ -118,6 +182,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	Debug("SIPEngine",DebugInfo,"Message %p was an unhandled answer [%p]",message,this);
 	return 0;
     }
+    message->complete(this);
     return new SIPTransaction(message,this,false);
 }
 

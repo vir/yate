@@ -30,6 +30,31 @@
 */
 namespace TelEngine {
 
+class URI : public String
+{
+public:
+    URI();
+    URI(const String& uri);
+    URI(const URI& uri);
+    URI(const char* proto, const char* user, const char* host, int port = 0);
+    inline const String& getProtocol() const
+	{ parse(); return m_proto; }
+    inline const String& getUser() const
+	{ parse(); return m_user; }
+    inline const String& getHost() const
+	{ parse(); return m_host; }
+    inline int getPort() const
+	{ parse(); return m_port; }
+protected:
+    virtual void changed();
+    void parse() const;
+    mutable bool m_parsed;
+    mutable String m_proto;
+    mutable String m_user;
+    mutable String m_host;
+    mutable int m_port;
+};
+
 class SIPEngine;
 class SIPEvent;
 
@@ -40,10 +65,24 @@ public:
     SIPParty(bool reliable);
     virtual ~SIPParty();
     virtual void transmit(SIPEvent* event) = 0;
+    virtual const char* getProtoName() const = 0;
+    inline const String& getLocalAddr() const
+	{ return m_local; }
+    inline const String& getPartyAddr() const
+	{ return m_party; }
+    inline int getLocalPort() const
+	{ return m_localPort; }
+    inline int getPartyPort() const
+	{ return m_partyPort; }
     inline bool isReliable() const
 	{ return m_reliable; }
 protected:
     bool m_reliable;
+    bool m_init;
+    String m_local;
+    String m_party;
+    int m_localPort;
+    int m_partyPort;
 };
 
 class SIPBody
@@ -164,7 +203,7 @@ public:
     /**
      * Complete missing fields with defaults taken from a SIP engine
      */
-    void complete(SIPEngine* engine);
+    void complete(SIPEngine* engine, const char* user = 0, const char* domain = 0);
 
     /**
      * Copy an entire header line (including all parameters) from another message
@@ -188,6 +227,12 @@ public:
      */
     inline SIPParty* getParty() const
 	{ return m_ep; }
+
+    /**
+     * Set the endpoint this message uses
+     * @param ep Pointer to the endpoint of this message
+     */
+    void setParty(SIPParty* ep = 0);
 
     /**
      * Check if this message is valid as result of the parsing
@@ -227,6 +272,20 @@ public:
      * @return A pointer to the first matching header line or 0 if not found
      */
     const HeaderLine* getHeader(const char* name) const;
+
+    /**
+     * Find the last header line that matches a given name name
+     * @param name Name of the header to locate
+     * @return A pointer to the last matching header line or 0 if not found
+     */
+    const HeaderLine* getLastHeader(const char* name) const;
+
+    /**
+     * Count the header lines matching a specific name
+     * @param name Name of the header to locate
+     * @return Number of matching header lines
+     */
+    int countHeaders(const char* name) const;
 
     /**
      * Find a header parameter by name
@@ -301,7 +360,6 @@ protected:
     bool m_answer;
     bool m_outgoing;
     int m_cseq;
-    String m_branch;
     mutable String m_string;
     mutable DataBlock m_data;
 };
@@ -463,6 +521,22 @@ public:
     virtual bool processMessage(SIPMessage* message, const String& branch);
 
     /**
+     * Process only the messages for client transactions
+     * @param message A pointer to the message to process, should not be used
+     *  afterwards if this method returned True
+     * @param state The current state of the transaction
+     */
+    virtual void processClientMessage(SIPMessage* message, int state);
+
+    /**
+     * Process only the messages for server transactions
+     * @param message A pointer to the message to process, should not be used
+     *  afterwards if this method returned True
+     * @param state The current state of the transaction
+     */
+    virtual void processServerMessage(SIPMessage* message, int state);
+
+    /**
      * Get an event for this transaction if any is available.
      * It provides default handling for invalid states, otherwise calls
      *  the more specific version below.
@@ -472,15 +546,22 @@ public:
     virtual SIPEvent* getEvent();
 
     /**
-     * Get an event for this transaction if any is available.
-     * This method looks at the transaction's variables and builds an event
-     *  for incoming messages, timers, outgoing messages
+     * Get an event only for client transactions
      * @param state The current state of the transaction
      * @param timeout If timeout occured, number of remaining timeouts,
      *  otherwise -1
      * @return A newly allocated event or NULL if none is needed
      */
-    virtual SIPEvent* getEvent(int state, int timeout);
+    virtual SIPEvent* getClientEvent(int state, int timeout);
+
+    /**
+     * Get an event only for server transactions.
+     * @param state The current state of the transaction
+     * @param timeout If timeout occured, number of remaining timeouts,
+     *  otherwise -1
+     * @return A newly allocated event or NULL if none is needed
+     */
+    virtual SIPEvent* getServerEvent(int state, int timeout);
 
     /**
      * Creates and transmits a final response message
@@ -622,6 +703,11 @@ public:
      * Destroy the SIP Engine
      */
     virtual ~SIPEngine();
+
+    /**
+     * Build a new SIPParty for a message
+     */
+    virtual bool buildParty(SIPMessage* message) = 0;
 
     /**
      * Add a message into the transaction list

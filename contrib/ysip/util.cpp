@@ -23,6 +23,8 @@
 
 #include <telengine.h>
 
+#include <string.h>
+
 namespace TelEngine {
 
 // Utility function, checks if a character is a folded line continuation
@@ -84,6 +86,44 @@ String* getUnfoldedLine(const char** buf, int* len)
     *len = l;
     res->trimBlanks();
     return res;
+}
+
+static const char* compactForms[] = {
+    "i", "Call-ID",
+    "m", "Contact",
+    "e", "Content-Encoding",
+    "l", "Content-Length",
+    "c", "Content-Type",
+    "f", "From",
+    "s", "Subject",
+    "k", "Supported",
+    "t", "To",
+    "v", "Via",
+    0 };
+
+// Utility function, returns an uncompacted header name
+const char* uncompactForm(const char* header)
+{
+    if (header && header[0] && !header[1]) {
+	char c = header[0];
+	const char **p = compactForms;
+	for (; *p; p += 2)
+	    if (**p == c)
+		return *++p;
+    }
+    return header;
+}
+
+// Utility function, returns a compacted header name
+const char* compactForm(const char* header)
+{
+    if (header && *header) {
+	const char **p = compactForms;
+	for (; *p; p += 2)
+	    if (!::strcasecmp(p[1],header))
+		return p[0];
+    }
+    return header;
 }
 
 }

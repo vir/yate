@@ -31,6 +31,12 @@ bool isContinuationBlank(char c);
 // Utility function, returns an unfolded line and advances the pointer
 String* getUnfoldedLine(const char** buf, int* len);
 
+// Utility function, returns an uncompacted header name
+const char* uncompactForm(const char* header);
+
+// Utility function, returns a compacted header name
+const char* compactForm(const char* header);
+
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

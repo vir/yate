@@ -175,18 +175,58 @@ SIPMessage::~SIPMessage()
 {
     Debug(DebugAll,"SIPMessage::~SIPMessage() [%p]",this);
     m_valid = false;
-    if (m_ep)
-	m_ep->deref();
-    m_ep = 0;
-    if (body)
-	delete body;
-    body = 0;
+    setParty();
+    setBody();
 }
 
-void SIPMessage::complete(SIPEngine* engine)
+void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain)
 {
     if (!engine)
 	return;
+
+    if (m_outgoing && !m_ep)
+	engine->buildParty(this);
+
+    if (!user)
+	user = "anonymous";
+    if (!domain)
+	domain = "localhost";
+
+    HeaderLine* hl = const_cast<HeaderLine*>(getLastHeader("Via"));
+    if (!hl) {
+	String tmp;
+	tmp << version << "/" << getParty()->getProtoName();
+	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
+	hl = new HeaderLine("Via",tmp);
+	header.append(hl);
+    }
+    if (!hl->getParam("branch")) {
+	String tmp("z9hG4bK");
+	tmp << (int)::random();
+	hl->addParam("branch",tmp);
+    }
+
+    hl = const_cast<HeaderLine*>(getHeader("From"));
+    if (!hl) {
+	String tmp;
+	tmp << "<" << user << "@" << domain << ">";
+	hl = new HeaderLine("From",tmp);
+	header.append(hl);
+    }
+    if (!hl->getParam("tag"))
+	hl->addParam("tag",String((int)::random()));
+
+    if (!getHeader("To")) {
+	String tmp;
+	tmp << "<" << uri << ">";
+	addHeader("To",tmp);
+    }
+
+    if (!getHeader("Call-ID")) {
+	String tmp;
+	tmp << (int)::random() << "@" << domain;
+	addHeader("Call-ID",tmp);
+    }
 
     if (!getHeader("CSeq")) {
 	String tmp;
@@ -195,12 +235,12 @@ void SIPMessage::complete(SIPEngine* engine)
 	addHeader("CSeq",tmp);
     }
 
-    if (!getHeader("Max-Forwards")) {
+    if (!(m_answer || getHeader("Max-Forwards") || (method == "ACK"))) {
 	String tmp(engine->getMaxForwards());
 	addHeader("Max-Forwards",tmp);
     }
 
-    if (!getHeader("User-Agent"))
+    if (!(getHeader("User-Agent") || engine->getUserAgent().null()))
 	addHeader("User-Agent",engine->getUserAgent());
 }
 
@@ -305,7 +345,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	*line >> ":";
 	line->trimBlanks();
 	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
-	header.append(new HeaderLine(name.c_str(),*line));
+	header.append(new HeaderLine(uncompactForm(name.c_str()),*line));
 	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
 	    content.toLower();
@@ -343,6 +383,34 @@ const HeaderLine* SIPMessage::getHeader(const char* name) const
 	    return t;
     }
     return 0;
+}
+
+const HeaderLine* SIPMessage::getLastHeader(const char* name) const
+{
+    if (!(name && *name))
+	return 0;
+    const HeaderLine* res = 0;
+    const ObjList* l = &header;
+    for (; l; l = l->next()) {
+	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	if (t && (t->name() &= name))
+	    res = t;
+    }
+    return res;
+}
+
+int SIPMessage::countHeaders(const char* name) const
+{
+    if (!(name && *name))
+	return 0;
+    int res = 0;
+    const ObjList* l = &header;
+    for (; l; l = l->next()) {
+	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	if (t && (t->name() &= name))
+	    ++res;
+    }
+    return res;
 }
 
 const NamedString* SIPMessage::getParam(const char* name, const char* param) const
@@ -402,6 +470,17 @@ void SIPMessage::setBody(SIPBody* newbody)
     if (body)
 	delete body;
     body = newbody;
+}
+
+void SIPMessage::setParty(SIPParty* ep)
+{
+    if (ep == m_ep)
+	return;
+    if (m_ep)
+	m_ep->deref();
+    m_ep = ep;
+    if (m_ep)
+	m_ep->ref();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -101,18 +101,22 @@ SIPEvent* SIPTransaction::getEvent()
 {
     if (m_transmit) {
 	m_transmit = false;
-	if (m_lastMessage)
-	    return new SIPEvent(m_lastMessage,this);
+	return new SIPEvent(m_lastMessage ? m_lastMessage : m_firstMessage,this);
     }
+
     int timeout = -1;
     if (m_timeout && Time::now() >= m_timeout) {
 	timeout = --m_timeouts;
 	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
 	Debug("SIPTransaction",DebugAll,"Fired timer #%d [%p]",timeout,this);
     }
-    SIPEvent *e = getEvent(m_state,timeout);
+
+    SIPEvent *e = isOutgoing() ?
+	getClientEvent(m_state,timeout) :
+	getServerEvent(m_state,timeout);
     if (e)
 	return e;
+
     switch (m_state) {
 	case Initial:
 	    setLatestMessage(new SIPMessage(m_firstMessage, 501, "Not implemented"));
@@ -193,6 +197,10 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	Debug("SIPTransaction",DebugWarn,"Non-branch matching not implemented!");
 	return false;
     }
+    if (isOutgoing())
+	processClientMessage(message,m_state);
+    else
+	processServerMessage(message,m_state);
     if (message->method == "ACK") {
 	if (changeState(Retrans))
 	    setTimeout(m_engine->getTimer('I'));
@@ -203,7 +211,33 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
     return true;
 }
 
-SIPEvent* SIPTransaction::getEvent(int state, int timeout)
+void SIPTransaction::processClientMessage(SIPMessage* message, int state)
+{
+}
+
+void SIPTransaction::processServerMessage(SIPMessage* message, int state)
+{
+}
+
+SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
+{
+    SIPEvent *e = 0;
+    switch (state) {
+	case Initial:
+	    if (getMethod() == "INVITE") {
+		e = new SIPEvent(m_firstMessage,this);
+		changeState(Trying);
+	    }
+	    else if (getMethod() == "CANCEL") {
+		e = new SIPEvent(m_lastMessage,this);
+		changeState(Trying);
+	    }
+	    break;
+    }
+    return e;
+}
+
+SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 {
     SIPEvent *e = 0;
     switch (state) {

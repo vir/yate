@@ -30,6 +30,8 @@
 using namespace TelEngine;
 
 static Configuration s_cfg;
+static bool s_extended;
+static bool s_insensitive;
 static Mutex s_mutex;
 static ObjList s_extra;
 
@@ -41,26 +43,31 @@ public:
     virtual bool received(Message &msg);
 };
 
+// handle ${paramname} replacements
+static void replaceParams(const Message &msg, String &str)
+{
+    int p1;
+    while ((p1 = str.find("${")) >= 0) {
+	int p2 = str.find('}',p1+2);
+	if (p2 > 0) {
+	    String v = str.substr(p1+2,p2-p1-2);
+	    v.trimBlanks();
+	    DDebug("RegexRoute",DebugAll,"Replacing parameter '%s'",
+		v.c_str());
+	    str = str.substr(0,p1) + msg.getValue(v) + str.substr(p2+1);
+	}
+    }
+}
+
+// handle ;paramname[=value] assignments
 static void setMessage(Message &msg, String &line)
 {
     ObjList *strs = line.split(';');
     bool first = true;
     for (ObjList *p = strs; p; p=p->next()) {
 	String *s = static_cast<String*>(p->get());
-	if (s) {
-	    int p1;
-	    while ((p1 = s->find("${")) >= 0) {
-		// handle ${paramname} replacements
-		int p2 = s->find('}',p1+2);
-		if (p2 > 0) {
-		    String v = s->substr(p1+2,p2-p1-2);
-		    v.trimBlanks();
-		    DDebug("RegexRoute",DebugAll,"Replacing parameter '%s'",
-			v.c_str());
-		    *s = s->substr(0,p1) + msg.getValue(v) + s->substr(p2+1);
-		}
-	    }
-	}
+	if (s)
+	    replaceParams(msg,*s);
 	if (first) {
 	    first = false;
 	    line = s ? *s : String::empty();
@@ -76,13 +83,16 @@ static void setMessage(Message &msg, String &line)
 		DDebug("RegexRoute",DebugAll,"Setting '%s' to '%s'",n.c_str(),v.c_str());
 		msg.setParam(n,v);
 	    }
-	    else
-		Debug("RegexRoute",DebugWarn,"Invalid setting '%s'",s->c_str());
+	    else {
+		DDebug("RegexRoute",DebugAll,"Clearing parameter '%s'",s->c_str());
+		msg.clearParam(s);
+	    }
 	}
     }
     strs->destruct();
 }
 
+// process one context, can call itself recursively
 static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
 {
     if (context.null())
@@ -97,10 +107,10 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 	for (unsigned int i=0; i<len; i++) {
 	    NamedString *n = l->getParam(i);
 	    if (n) {
-		Regexp r(n->name());
+		Regexp r(n->name(),s_extended,s_insensitive);
 		String val;
 		if (r.startsWith("${")) {
-		    // handle special case ${paramname}regexp=value
+		    // handle special matching by param ${paramname}regexp
 		    int p = r.find('}');
 		    if (p < 3) {
 			Debug("RegexRoute",DebugWarn,"Invalid parameter match '%s' in rule #%u in context '%s'",
@@ -116,7 +126,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    i+1,context.c_str());
 			continue;
 		    }
-		    NDebug("RegexRoute",DebugAll,"Using message parameter '%s'",
+		    DDebug("RegexRoute",DebugAll,"Using message parameter '%s'",
 			val.c_str());
 		    val = msg.getValue(val);
 		}
@@ -126,6 +136,12 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 
 		if (val.matches(r)) {
 		    val = val.replaceMatches(*n);
+		    if (val.startSkip("echo") || val.startSkip("output")) {
+			// special case: display the line but don't set params
+			replaceParams(msg,val);
+			Output("%s",val.safe());
+			continue;
+		    }
 		    setMessage(msg,val);
 		    val.trimBlanks();
 		    if (val.null()) {
@@ -270,6 +286,8 @@ void RegexRoutePlugin::initialize()
     Lock lock(s_mutex);
     s_cfg = Engine::configFile("regexroute");
     s_cfg.load();
+    s_extended = s_cfg.getBoolValue("priorities","extended",false);
+    s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
     if (m_preroute) {
 	delete m_preroute;
 	m_preroute = 0;

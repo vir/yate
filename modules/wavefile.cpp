@@ -88,15 +88,15 @@ private:
     static int s_nextid;
 };
 
-class ChanDisconnector : public Thread
+class ConsDisconnector : public Thread
 {
 public:
-    ChanDisconnector(DataEndpoint *chan)
-	: m_chan(chan) { }
-    virtual void run()
-	{ m_chan->disconnect(); }
+    ConsDisconnector(DataEndpoint *chan, const String& id)
+	: m_chan(chan), m_id(id) { }
+    virtual void run();
 private:
     DataEndpoint *m_chan;
+    String m_id;
 };
 
 class WaveHandler : public MessageHandler
@@ -243,7 +243,7 @@ void WaveSource::run()
     Debug(DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
     if (m_chan && !m_id.null()) {
 	Message *m = new Message("chan.notify");
-	m->addParam("id",m_id);
+	m->addParam("targetid",m_id);
 	m->userData(m_chan);
 	Engine::enqueue(m);
 	m_chan->setSource();
@@ -305,15 +305,9 @@ void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 		::close(m_fd);
 		m_fd = -1;
 	    }
-	    if (m_chan && !m_id.null()) {
-		m_chan->setConsumer();
-		Message *m = new Message("chan.notify");
-		m->addParam("id",m_id);
-		m->userData(m_chan);
-		Engine::enqueue(m);
-	    }
 	    if (m_chan) {
-		ChanDisconnector *disc = new ChanDisconnector(m_chan);
+		ConsDisconnector *disc = new ConsDisconnector(m_chan,m_id);
+		m_chan = 0;
 		if (disc->error()) {
 		    Debug(DebugFail,"Error creating disconnector thread %p",disc);
 		    delete disc;
@@ -323,6 +317,20 @@ void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	    }
 	}
     }
+}
+
+void ConsDisconnector::run()
+{
+    DDebug(DebugAll,"ConsDisconnector chan=%p id='%s'",m_chan,m_id.c_str());
+    if (m_id) {
+	m_chan->setConsumer();
+	Message *m = new Message("chan.notify");
+	m->addParam("targetid",m_id);
+	m->userData(m_chan);
+	Engine::enqueue(m);
+    }
+    else
+	m_chan->disconnect();
 }
 
 Mutex mutex;

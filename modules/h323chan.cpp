@@ -286,13 +286,14 @@ public:
     virtual void OnUserInputString(const PString &value);
     virtual BOOL OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 	H323AudioCodec &codec);
+    virtual void OnSetLocalCapabilities();
 #ifdef NEED_RTP_QOS_PARAM
-    H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param,RTP_QOS * rtpqos = NULL);
+    virtual H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param,RTP_QOS * rtpqos = NULL);
 #else
-    H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param);
+    virtual H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param);
 #endif
-    BOOL OnStartLogicalChannel(H323Channel & channel);
-    BOOL OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) ;
+    virtual BOOL OnStartLogicalChannel(H323Channel & channel);
+    virtual BOOL OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) ;
     BOOL StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void OnStoppedExternal(H323Channel::Directions dir);
     void SetRemoteAddress(const char* remoteIP, WORD remotePort);
@@ -994,7 +995,7 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 
 	// disallow codecs not supported by remote receiver
 	if (s_passtrough && !(m_formats.null() || (m_formats.find(format) >= 0))) {
-	    Debug(DebugInfo,"Refusing '%s' not in remote '%s'",format,m_formats.c_str());
+	    Debug(DebugWarn,"Refusing '%s' not in remote '%s'",format,m_formats.c_str());
 	    return 0;
 	}
 
@@ -1040,6 +1041,33 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 #endif
 }
 
+void YateH323Connection::OnSetLocalCapabilities()
+{
+    Debug(DebugAll,"YateH323Connection::OnSetLocalCapabilities() [%p]",this);
+    H323Connection::OnSetLocalCapabilities();
+    if (m_formats.null())
+	return;
+    // remote has a list of supported codecs - remove unsupported capabilities
+    bool nocodecs = true;
+    for (int i = 0; i < localCapabilities.GetSize(); i++) {
+	const char* format = 0;
+	String fname;
+	decodeCapability(localCapabilities[i],&format,0,&fname);
+	if (format) {
+	    if (m_formats.find(format) < 0) {
+		Debug(DebugAll,"Removing capability '%s' (%s) not in remote '%s'",
+		    fname.c_str(),format,m_formats.c_str());
+		localCapabilities.Remove(fname.c_str());
+		i--;
+	    }
+	    else
+		nocodecs = false;
+	}
+    }
+    if (nocodecs)
+	Debug(DebugWarn,"No codecs remaining for H323 connection [%p]",this);
+}
+
 BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 
 {
     Debug(DebugInfo,"YateH323Connection::OnStartLogicalChannel(%p) [%p]",&channel,this);
@@ -1070,7 +1098,7 @@ BOOL YateH323Connection::decodeCapability(const H323Capability & capability, con
 	    break;
 	}
     }
-    Debug(DebugInfo,"capability '%s' format '%s' payload %d",fname.c_str(),format,pload);
+    DDebug(DebugAll,"capability '%s' format '%s' payload %d",fname.c_str(),format,pload);
     if (format) {
 	if (capabName)
 	    *capabName = fname;

@@ -101,15 +101,15 @@ bool DDebug(const char *facility, int level, const char *format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if NDEBUG is not #defined (compiling for release)
- *  else it does not get compiled at all.
+ * Does the same as @ref Debug if NDEBUG is not #defined
+ *  else it does not get compiled at all (compiling for mature release).
  */
 bool NDebug(int level, const char *format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if NDEBUG is not #defined (compiling for release)
- *  else it does not get compiled at all.
+ * Does the same as @ref Debug if NDEBUG is not #defined
+ *  else it does not get compiled at all (compiling for mature release).
  */
 bool NDebug(const char *facility, int level, const char *format, ...);
 #endif
@@ -201,10 +201,10 @@ private:
  * A structure to build (mainly static) Token-to-ID translation tables.
  * A table of such structures must end with an entry with a null token
  */
-typedef struct {
+struct TokenDict {
     const char *token;
     int value;
-} TokenDict;
+};
 
 /**
  * An object with just a public virtual destructor

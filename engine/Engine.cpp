@@ -223,7 +223,7 @@ void EnginePrivate::run()
 
 Engine::Engine()
 {
-    DDebug(DebugAll,"Engine::Engine()"," [%p]",this);
+    DDebug(DebugAll,"Engine::Engine() [%p]",this);
 }
 
 Engine::~Engine()
@@ -841,7 +841,7 @@ int Engine::main(int argc, const char** argv, const char** environ)
     int retcode = -1;
 #ifndef _WINDOWS
     if (supervised)
-	retcode = supervise()
+	retcode = supervise();
     if (retcode >= 0)
 	return retcode;
 #endif

@@ -445,7 +445,7 @@ bool Driver::received(Message &msg, int id)
     Lock lock(this);
     Channel* chan = find(dest);
     if (!chan) {
-	DDebug(DebugMild,"Could not find channel '%s'",dest);
+	DDebug(DebugMild,"Could not find channel '%s'",dest.c_str());
 	return false;
     }
 

@@ -28,6 +28,7 @@
 #endif
 
 #include <stddef.h>
+#include <sys/types.h>
 
 #ifndef _WINDOWS
 #ifdef WIN32
@@ -36,6 +37,7 @@
 #endif
 
 #ifdef _WINDOWS
+
 typedef signed __int32 int32_t;
 typedef unsigned __int32 u_int32_t;
 typedef signed __int64 int64_t;
@@ -53,11 +55,11 @@ typedef unsigned __int64 u_int64_t;
 #define YATE_API __declspec(dllimport)
 #endif
 
-#else
+#else /* _WINDOWS */
 
 #define YATE_API
 
-#endif
+#endif /* ! _WINDOWS */
 
 struct timeval;
 	

@@ -355,7 +355,7 @@ String& String::toUpper()
 {
     if (m_string) {
 	char c;
-	for (char *s = m_string; c = *s; s++) {
+	for (char *s = m_string; (c = *s); s++) {
 	    if (('a' <= c) && (c <= 'z'))
 		*s = c + 'A' - 'a';
 	}
@@ -367,7 +367,7 @@ String& String::toLower()
 {
     if (m_string) {
 	char c;
-	for (char *s = m_string; c = *s; s++) {
+	for (char *s = m_string; (c = *s); s++) {
 	    if (('A' <= c) && (c <= 'Z'))
 		*s = c + 'a' - 'A';
 	}

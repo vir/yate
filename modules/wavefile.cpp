@@ -21,16 +21,20 @@ using namespace TelEngine;
 class WaveSource : public ThreadedSource
 {
 public:
-    WaveSource(const String& file, DataEndpoint *chan);
+    WaveSource(const String& file, DataEndpoint *chan, bool autoclose = true);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
+    inline void setNotify(const String& id)
+	{ m_id = id; }
 private:
     DataEndpoint *m_chan;
     int m_fd;
     unsigned m_brate;
     unsigned m_total;
     unsigned long long m_time;
+    String m_id;
+    bool m_autoclose;
 };
 
 class WaveConsumer : public DataConsumer
@@ -39,12 +43,15 @@ public:
     WaveConsumer(const String& file, DataEndpoint *chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
     virtual void Consume(const DataBlock &data);
+    inline void setNotify(const String& id)
+	{ m_id = id; }
 private:
     DataEndpoint *m_chan;
     int m_fd;
     unsigned m_total;
     unsigned m_maxlen;
     unsigned long long m_time;
+    String m_id;
 };
 
 class WaveChan : public DataEndpoint
@@ -78,8 +85,8 @@ private:
     WaveHandler *m_handler;
 };
 
-WaveSource::WaveSource(const String& file, DataEndpoint *chan)
-    : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0)
+WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
+    : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0), m_autoclose(autoclose)
 {
     Debug(DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
     if (file.endsWith(".gsm")) {
@@ -146,13 +153,20 @@ void WaveSource::run()
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
-    Debug(DebugAll,"WaveSource [%p] end of data",this);
+    Debug(DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
+    if (m_chan && !m_id.null()) {
+	Message *m = new Message("notify");
+	m->addParam("id",m_id);
+	m->userData(m_chan);
+	Engine::enqueue(m);
+	m_chan->setSource();
+    }
 }
 
 void WaveSource::cleanup()
 {
     Debug(DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
-    if (m_chan)
+    if (m_chan && m_autoclose)
 	m_chan->disconnect();
 }
 
@@ -202,6 +216,13 @@ void WaveConsumer::Consume(const DataBlock &data)
 	    if (m_fd >= 0) {
 		::close(m_fd);
 		m_fd = -1;
+	    }
+	    if (m_chan && !m_id.null()) {
+		m_chan->setConsumer();
+		Message *m = new Message("notify");
+		m->addParam("id",m_id);
+		m->userData(m_chan);
+		Engine::enqueue(m);
 	    }
 #if 0
 	    // This is no good - this should be done in another thread
@@ -349,13 +370,15 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!src.null()) {
-	WaveSource* s = new WaveSource(src,dd);
+	WaveSource* s = new WaveSource(src,dd,false);
+	s->setNotify(msg.getValue("notify"));
 	dd->setSource(s);
 	s->deref();
     }
 
     if (!cons.null()) {
 	WaveConsumer* c = new WaveConsumer(cons,dd,maxlen);
+	c->setNotify(msg.getValue("notify"));
 	dd->setConsumer(c);
 	c->deref();
     }

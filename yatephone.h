@@ -255,6 +255,9 @@ public:
     DataSource(const char *format = "slin")
 	: DataNode(format), m_translator(0) { }
 
+    /** porma */
+    ~DataSource();
+    
     /**
      * Forwards the data to its consumers
      * @param data The raw data block to forward; an empty block ends data

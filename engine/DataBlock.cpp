@@ -288,6 +288,11 @@ bool DataSource::detach(DataConsumer *consumer)
     return false;
 }
 
+DataSource::~DataSource()
+{
+    while (detach(static_cast<DataConsumer *>(m_consumers.get()))) ;
+}
+
 DataEndpoint::~DataEndpoint()
 {
     disconnect();
@@ -368,17 +373,25 @@ void DataEndpoint::setSource(DataSource *source)
 	return;
     DataConsumer *consumer = m_peer ? m_peer->getConsumer() : 0;
     DataSource *temp = m_source;
+    if (consumer)
+	consumer->ref();
+    m_source = 0;
+    if (temp) {
+	if (consumer) {
+	    DataTranslator::detachChain(temp,consumer);
+	    if (consumer->getConnSource())
+		Debug(DebugWarn,"consumer source not cleared in %p",consumer);
+	}
+	temp->deref();
+    }
     if (source) {
 	source->ref();
 	if (consumer)
 	    DataTranslator::attachChain(source,consumer);
     }
     m_source = source;
-    if (temp) {
-	if (consumer)
-	    DataTranslator::detachChain(temp,consumer);
-	temp->deref();
-    }
+    if (consumer)
+	consumer->deref();
 }
 
 void DataEndpoint::setConsumer(DataConsumer *consumer)

@@ -64,7 +64,6 @@ private:
     unsigned m_total;
     unsigned long long m_time;
 };
-
 class YateIAXAudioConsumer : public DataConsumer
 {
 public:
@@ -84,6 +83,7 @@ private:
     unsigned long long m_time;
 };
 
+
 class YateIAXEndPoint : public Thread
 {
 public:
@@ -97,7 +97,7 @@ public:
     void run(void);
     void terminateall(void);
     YateIAXConnection *findconn(iax_session *session);
-    YateIAXConnection *findconn(String ourcallid);
+    YateIAXConnection *findconn(const String& ourcallid);
     void handleEvent(iax_event *event);
     
     inline ObjList &calls()
@@ -179,6 +179,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class TransferHandler : public MessageHandler
+{
+public:
+    TransferHandler(const char *name) : MessageHandler(name,100) { }
+    virtual bool received(Message &msg);
+};
+
 static IAXPlugin iplugin;
 
 static void iax_err_cb(const char *s)
@@ -191,7 +198,6 @@ static void iax_out_cb(const char *s)
     if (s_debugging)
 	Debug("IAX",DebugInfo,"%s",s);
 }
-
 
 YateIAXEndPoint::YateIAXEndPoint()
     : Thread("IAX EndPoint")
@@ -221,7 +227,7 @@ bool YateIAXEndPoint::Init(void)
     iax_set_output(iax_out_cb);
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
     if (tos)
-	    ::setsockopt(iax_get_fd(),IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
+	::setsockopt(iax_get_fd(),IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
     return true;
 }
 
@@ -258,7 +264,6 @@ void YateIAXEndPoint::Setup(void)
 
 void YateIAXEndPoint::terminateall(void)
 {
-    
     Debug(DebugInfo,"YateIAXEndPoint::terminateall()");
     m_calls.clear();
 }
@@ -461,8 +466,8 @@ void YateIAXEndPoint::answer(iax_event *e)
 	*m = "call";
 	m->userData(conn);
 	m->addParam("callto",m->retValue());
-	m->addParam("partycallid",conn->ourcallid);
-	m->retValue() = 0;
+	m->addParam("ourcallid",conn->ourcallid);
+	m->retValue().clear();
 	if (!Engine::dispatch(m))
 	{
 	    conn->reject("I haven't been able to connect you with the other module");
@@ -470,12 +475,11 @@ void YateIAXEndPoint::answer(iax_event *e)
 	    delete m;
 	    return;
 	}
-	/* i do this to setup the peercallid by getting ourcallid 
-	* from the other party */
-	String ourcallid(m->getValue("ourcallid"));
-	Debug(DebugInfo,"partycallid %s",ourcallid.c_str());
-	if (ourcallid)
-	    conn->partycallid = ourcallid;
+	/* i do this to setup the peercallid by getting 
+	 * partycallid (that mean ourcallid from the other party) */
+	String partycallid(m->getValue("partycallid"));
+	Debug(DebugInfo,"partycallid %s",partycallid.c_str());
+	conn->partycallid = partycallid;
 	conn->deref();
 	s_mutex.lock();
 	::iax_answer(e->session);
@@ -574,7 +578,7 @@ YateIAXConnection * YateIAXEndPoint::findconn(iax_session *session)
     return 0; 
 }
 
-YateIAXConnection * YateIAXEndPoint::findconn(String ourcallid)
+YateIAXConnection * YateIAXEndPoint::findconn(const String& ourcallid)
 { 
     ObjList *p = &m_calls; 
     for (; p; p=p->next()) { 
@@ -599,7 +603,7 @@ YateIAXConnection::YateIAXConnection(iax_session *session)
     iplugin.m_endpoint->calls().append(this);
     ::iax_set_private(m_session,this);
     char buf[64];
-    snprintf(buf,sizeof(buf),"%p",m_session);
+    snprintf(buf,sizeof(buf),"iax/%p",m_session);
     ourcallid=buf;
 }
 
@@ -770,6 +774,18 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
 void YateIAXConnection::disconnected()
 {
     Debug(DebugAll,"YateIAXConnection::disconnected()");
+    // If we still have a connection this is the last chance to get transferred
+    if (!m_final) {
+	Message m("disconnected");
+	m.addParam("ourcallid",ourcallid.c_str());
+	if (partycallid) {
+	    // Announce our old party but at this point it may be destroyed
+	    m.addParam("partycallid",partycallid.c_str());
+	    partycallid.clear();
+	}
+	m.userData(this);
+	Engine::dispatch(m);
+    }
 }
 
 IAXSource::~IAXSource()
@@ -819,19 +835,18 @@ void YateIAXAudioConsumer::Consume(const DataBlock &data)
 
 bool SMSHandler::received(Message &msg)
 {
-    String partycallid(msg.getValue("partycallid"));
-    if (!partycallid)
+    String ourcallid(msg.getValue("partycallid"));
+    if (!ourcallid)
 	return false;
     String text(msg.getValue("text"));
     if (!text)
 	return false;
-    Debug(DebugInfo,"text %s partycallid %s",text.c_str(),partycallid.c_str());
-    YateIAXConnection *conn= iplugin.m_endpoint->findconn(partycallid);  
-    if (!conn)
-	Debug(DebugInfo,"conn is null");
-    else {
-	text << "\0";
+    Debug(DebugInfo,"text %s ourcallid %s",text.c_str(),ourcallid.c_str());
+    YateIAXConnection *conn= iplugin.m_endpoint->findconn(ourcallid);  
+    if (conn){
+	s_mutex.lock();
 	::iax_send_text(conn->session(),(char *)(text.c_str()));
+	s_mutex.unlock();
 	return true;
     }
     return false;
@@ -839,19 +854,19 @@ bool SMSHandler::received(Message &msg)
 
 bool DTMFHandler::received(Message &msg)
 {
-    String partycallid(msg.getValue("partycallid"));
-    if (!partycallid)
+    String ourcallid(msg.getValue("partycallid"));
+    if (!ourcallid)
 	return false;
     String text(msg.getValue("text"));
     if (!text)
 	return false;
-    Debug(DebugInfo,"text %s partycallid %s",text.c_str(),partycallid.c_str());
-    YateIAXConnection *conn= iplugin.m_endpoint->findconn(partycallid);  
-    if (!conn)
-	Debug(DebugInfo,"conn is null");
-    else {
+    Debug(DebugInfo,"text %s ourcallid %s",text.c_str(), ourcallid.c_str());
+    YateIAXConnection *conn= iplugin.m_endpoint->findconn(ourcallid);  
+    if (conn){
+	s_mutex.lock();
 	for (unsigned int i=0;i<text.length();i++)
 	    ::iax_send_dtmf(conn->session(),(text[i]));
+	s_mutex.unlock();
 	return true;
     }
     return false;
@@ -873,9 +888,8 @@ bool IAXHandler::received(Message &msg)
     YateIAXConnection *conn = new YateIAXConnection();
     /* i do this to setup the peercallid by getting ourcallid 
      * from the other party */
-    String ourcallid(msg.getValue("ourcallid"));
-    if (ourcallid)
-	conn->partycallid = ourcallid;
+    String partycallid(msg.getValue("ourcallid"));
+    conn->partycallid = partycallid;
     conn->calledaddress = dest;
     int i = conn->makeCall((char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.matchString(1).safe());
     if (i < 0) {
@@ -885,7 +899,10 @@ bool IAXHandler::received(Message &msg)
     }
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd && conn->connect(dd))
+    {
+	msg.addParam("partycallid",conn->ourcallid);
 	conn->deref();
+    }
     return true;	
 };
 
@@ -900,7 +917,7 @@ bool StatusHandler::received(Message &msg)
     for (; l; l=l->next()) {
 	YateIAXConnection *c = static_cast<YateIAXConnection *>(l->get());
 	if (c) {
-	    st << ",iax/" << c->ourcallid << "=" << c->calledaddress << "/" << c->partycallid;
+	    st << "," << c->ourcallid << "=" << c->calledaddress << "/" << c->partycallid;
 	}
     }
     msg.retValue() << st << "\n";
@@ -909,8 +926,8 @@ bool StatusHandler::received(Message &msg)
 
 bool DropHandler::received(Message &msg)
 {
-    String id(msg.getValue("id"));
-    if (id.null()) {
+    String ourcallid(msg.getValue("ourcallid"));
+    if (ourcallid.null()) {
 	Debug("IAXDroper",DebugInfo,"Dropping all calls");
 	ObjList *l = &iplugin.m_endpoint->calls();
 	for (; l; l=l->next()) {
@@ -919,16 +936,42 @@ bool DropHandler::received(Message &msg)
 		delete c;
 	}
     }
-    if (!id.startsWith("iax"))
+    if (!ourcallid.startsWith("iax/"))
 	return false;
-    id >> "/";
-    YateIAXConnection *conn = iplugin.m_endpoint->findconn(id);
+    YateIAXConnection *conn = iplugin.m_endpoint->findconn(ourcallid);
     if (conn) {
 	Debug("IAXDropper",DebugInfo,"Dropping call '%s' [%p]",conn->ourcallid.c_str(),conn);
 	delete conn;
 	return true;
     }
-    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",id.c_str());
+    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",ourcallid.c_str());
+    return false;
+}
+
+bool TransferHandler::received(Message &msg)
+{
+    String ourcallid(msg.getValue("partycallid"));
+    if (!ourcallid)
+	return false;
+    String callto(msg.getValue("callto"));
+    if (!callto)
+	return false;
+    YateIAXConnection *conn= iplugin.m_endpoint->findconn(ourcallid);
+    if (conn) {
+	Debug(DebugInfo,"Transferring connection '%s' [%p] to '%s'",
+	    ourcallid.c_str(),conn,callto.c_str());
+	Message m("call");
+	m.addParam("callto",callto.c_str());
+	m.addParam("ourcallid",conn->ourcallid);
+	m.userData(conn);
+	if (Engine::dispatch(m)) {
+	    String partycallid(m.getValue("partycallid"));
+	    Debug(DebugInfo,"IAX [%p] transferred, new partyid '%s'",
+		conn,partycallid.c_str());
+	    conn->partycallid = partycallid;
+	    return true;
+	}
+    }
     return false;
 }
 
@@ -971,6 +1014,7 @@ void IAXPlugin::initialize()
 	Engine::install(new DTMFHandler("dtmf"));
 	Engine::install(new StatusHandler("status"));
 	Engine::install(new DropHandler("drop"));
+	Engine::install(new TransferHandler("transfer"));
     }
 }
 

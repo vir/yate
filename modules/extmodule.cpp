@@ -108,11 +108,15 @@ public:
     void run();
     void cleanup();
     void die(bool clearChan = true);
+    inline void use()
+	{ m_use++; }
+    bool unuse();
 private:
     ExtModReceiver(const char *script, const char *args,
 	int ain = -1, int aout = -1, ExtModChan *chan = 0);
     bool create(const char *script, const char *args);
     bool m_dead;
+    int m_use;
     pid_t m_pid;
     int m_in, m_out, m_ain, m_aout;
     ExtModChan *m_chan;
@@ -263,8 +267,10 @@ ExtModChan::ExtModChan(const char *file, const char *args, int type)
 
 ExtModChan::~ExtModChan()
 {
-    Debug(DebugAll,"ExtModChan::~ExtModChan() [%p]",this);
+    Debugger debug(DebugAll,"ExtModChan::~ExtModChan()"," [%p]",this);
     s_chans.remove(this,false);
+    setSource();
+    setConsumer();
     if (m_recv)
 	m_recv->die(false);
 }
@@ -298,8 +304,16 @@ ExtModReceiver* ExtModReceiver::build(const char *script, const char *args,
     return recv;
 }
 
+bool ExtModReceiver::unuse()
+{
+    int u = --m_use;
+    if (!u)
+	destruct();
+    return (u <= 0);
+}
+
 ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, int aout, ExtModChan *chan)
-    : m_dead(false), m_pid(-1), m_in(-1), m_out(-1), m_ain(ain), m_aout(aout),
+    : m_dead(false), m_use(0), m_pid(-1), m_in(-1), m_out(-1), m_ain(ain), m_aout(aout),
       m_chan(chan), m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
@@ -335,6 +349,24 @@ void ExtModReceiver::die(bool clearChan)
 	return;
     Debug(DebugAll,"ExtModReceiver::die() pid=%d",m_pid);
     m_dead = true;
+    use();
+    /* Make sure we release all pending messages and not accept new ones */
+    if (!Engine::exiting())
+	m_relays.clear();
+    else {
+	ObjList *p = &m_relays;
+	for (; p; p=p->next())
+	    p->setDelete(false);
+    }
+    if (m_waiting.get()) {
+	m_waiting.clear();
+	Thread::yield();
+    }
+    
+    ExtModChan *chan = m_chan;
+    m_chan = 0;
+    chan->setRecv(0);
+    
     /* Give the external script a chance to die gracefully */
     if (m_out != -1) {
 	::close(m_out);
@@ -350,31 +382,17 @@ void ExtModReceiver::die(bool clearChan)
     }
     if (m_pid > 0)
 	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit?",m_pid);
-    /* Make sure we release all pending messages and not accept new ones */
-    if (!Engine::exiting())
-	m_relays.clear();
-    else {
-	ObjList *p = &m_relays;
-	for (; p; p=p->next())
-	    p->setDelete(false);
-    }
-    if (m_waiting.get()) {
-	m_waiting.clear();
-	Thread::yield();
-    }
+    
     /* Now terminate the process and close its stdout pipe */
-    if (m_pid > 0)
-	::kill(m_pid,SIGTERM);
     if (m_in != -1) {
 	::close(m_in);
 	m_in = -1;
     }
-    if (m_chan) {
-	m_chan->setRecv(0);
-	if (clearChan)
-	    m_chan->disconnect();
-	m_chan = 0;
-    }
+    if (m_pid > 0)
+	::kill(m_pid,SIGTERM);
+    if (chan && clearChan)
+	    chan->disconnect();
+    unuse();
 }
 
 bool ExtModReceiver::received(Message &msg, int id)
@@ -385,6 +403,7 @@ bool ExtModReceiver::received(Message &msg, int id)
     if (m_reenter.find(&msg))
 	return false;
 
+    use();
     MsgHolder h(msg);
     m_waiting.append(&h)->setDelete(false);
 #ifdef DEBUG
@@ -396,6 +415,7 @@ bool ExtModReceiver::received(Message &msg, int id)
 #ifdef DEBUG
     Debug(DebugAll,"ExtMod [%p] message '%s' [%p] returning %s",this,msg.c_str(),&msg, h.m_ret ? "true" : "false");
 #endif
+    unuse();
     return h.m_ret;
 }
 
@@ -498,7 +518,7 @@ void ExtModReceiver::cleanup()
 	    Debug(DebugMild, "Failed waitpid on %d: %s",m_pid,strerror(errno));
 	m_pid = 0;
     }
-    destruct();
+    unuse();
 }
 
 void ExtModReceiver::run()
@@ -507,16 +527,20 @@ void ExtModReceiver::run()
 	m_pid = 0;
 	return;
     }
+    use();
     char buffer[1024];
     int posinbuf = 0;
 #ifdef DEBUG
     Debug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
 #endif
     for (;;) {
+	use();
 	int readsize = (m_in >= 0) ? ::read(m_in,buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
 #ifdef DEBUG
 	Debug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 #endif
+	if (unuse())
+	    return;
 	if (!readsize) {
 	    Debug("ExtModule",DebugInfo,"Read EOF on %d [%p]",m_in,this);
 	    if (m_chan && m_chan->running())
@@ -536,8 +560,11 @@ void ExtModReceiver::run()
 	    if (!eoline)
 		break;
 	    *eoline=0;
+	    use();
 	    if (buffer[0])
 		processLine(buffer);
+	    if (unuse())
+		return;
 	    totalsize -= eoline-buffer+1;
 	    ::memmove(buffer,eoline+1,totalsize+1);
 	}

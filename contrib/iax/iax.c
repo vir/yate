@@ -2,9 +2,13 @@
  * libiax: An implementation of Inter-Asterisk eXchange
  *
  * Copyright (C) 2001, Linux Support Services, Inc.
- *
+ * 
  * Mark Spencer <markster@linux-support.net>
- *
+ * 
+ * Paul Chitescu <paulc-devel@null.ro>
+ * 
+ * Diana Cionoiu <diana@voip.null.ro>
+ * 
  * This program is free software, distributed under the terms of
  * the GNU Lesser (Library) General Public License
  */

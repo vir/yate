@@ -7,6 +7,10 @@
  *
  * Mark Spencer <markster@linux-support.net>
  *
+ * Paul Chitescu <paulc-devel@null.ro>
+ * 
+ * Diana Cionoiu <diana@voip.null.ro>
+ * 
  * This program is free software, distributed under the terms of
  * the GNU Lesser General Public License (LGPL)
  */

@@ -3,7 +3,6 @@
 
 CC  := @CC@ -Wall
 AR  := ar
-RANLIB:= ranlib
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
@@ -41,4 +40,3 @@ Makefile: @srcdir@/Makefile.in ../../config.status
 
 libiax.a: $(OBJS)
 	$(AR) rcs $@ $^
-	$(RANLIB) $@

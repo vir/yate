@@ -1,7 +1,7 @@
 # Makefile
 # This file holds the make rules for the Telephony Engine test cases
 
-CC  := @CXX@ -Wall
+CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
@@ -17,9 +17,9 @@ OBJS =
 
 LOCALFLAGS =
 LOCALLIBS =
-COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CFLAGS)
-LINK = $(CC) $(LDFLAGS)
-MODLINK = $(CC) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
+COMPILE = $(CXX) $(DEFS) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
+MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 
 prefix = @prefix@
@@ -37,9 +37,6 @@ clean:
 	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @top_srcdir@/telengine.h
-	$(COMPILE) -c $<
-
-%.o: @srcdir@/%.c $(MKDEPS)
 	$(COMPILE) -c $<
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)

@@ -7,7 +7,7 @@ DESTDIR :=
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
-CC  := @CXX@ -Wall
+CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
@@ -61,11 +61,15 @@ ifneq (@HAVE_GTK@,no)
 PROGS := $(PROGS) gtkclient.yate
 endif
 
+ifneq (@HAVE_QT@,no)
+PROGS := $(PROGS) qtclient.yate
+endif
+
 LOCALFLAGS =
 LOCALLIBS =
-COMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
-LINK = $(CC) $(LDFLAGS)
-MODLINK = $(CC) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
+MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 
 prefix = @prefix@
@@ -97,9 +101,6 @@ uninstall: do-uninstall
 	rmdir "$(DESTDIR)$(moddir)"
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
-	$(COMPILE) -c $<
-
-%.o: @srcdir@/%.c $(MKDEPS)
 	$(COMPILE) -c $<
 
 do-all do-strip do-clean do-install do-uninstall:
@@ -145,5 +146,12 @@ gsmcodec.yate: LOCALLIBS = -lgsm
 
 gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@
 
+qtclient.yate: ../contrib/qt/libqtclientform.a
+qtclient.yate: LOCALFLAGS = -I@QT_DIR@/include
+qtclient.yate: LOCALLIBS = ../contrib/qt/libqtclientform.a -L@QT_DIR@/lib -lqt-mt
+
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
+
+../contrib/qt/libqtclientform.a:
+	$(MAKE) -C ../contrib/qt

@@ -7,7 +7,7 @@ DESTDIR :=
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
-CC  := @CXX@ -Wall
+CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 LIBAUX:= -ldl
@@ -32,8 +32,8 @@ OBJS := main.o
 
 LIBOBJS := $(ENGOBJS) $(TELOBJS)
 CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) $(LIBOBJS) core
-COMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
-LINK = $(CC) $(LDFLAGS)
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -56,6 +56,7 @@ clean:
 	$(MAKE) -C ./modules $@
 	$(MAKE) -C ./test $@
 	$(MAKE) -C ./contrib/iax $@
+	$(MAKE) -C ./contrib/qt $@
 
 .PHONY: engine
 engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)

@@ -383,7 +383,7 @@ AC_SUBST(SPANDSP_LIB)
 HAVE_GTK=no
 GTK_INC=""
 GTK_LIB=""
-AC_ARG_WITH(libgtk,AC_HELP_STRING([--with-libgtk],[use Gtk for graphical clients)]),[ac_cv_use_libgtk=$withval],[ac_cv_use_libgtk=yes])
+AC_ARG_WITH(libgtk,AC_HELP_STRING([--with-libgtk],[use Gtk for graphical clients (default)]),[ac_cv_use_libgtk=$withval],[ac_cv_use_libgtk=yes])
 if [[ "x$ac_cv_use_libgtk" = "xyes" ]]; then
     AC_MSG_CHECKING([for Gtk using gtk-config])
     vergt=`gtk-config --version gtk 2>/dev/null`
@@ -400,6 +400,29 @@ fi
 AC_SUBST(HAVE_GTK)
 AC_SUBST(GTK_INC)
 AC_SUBST(GTK_LIB)
+
+HAVE_QT=no
+QT_DIR=""
+AC_ARG_WITH(libqt,AC_HELP_STRING([--with-libqt],[use Qt for graphical clients (default)]),[ac_cv_use_libqt=$withval],[ac_cv_use_libqt=yes])
+if [[ "x$ac_cv_use_libqt" != "xno" ]]; then
+    qtdir="$ac_cv_use_libqt"
+    if [[ "x$ac_cv_use_libqt" = "xyes" ]]; then
+	qtdir="$QTDIR"
+	if [[ "x$qtdir" = "x" ]]; then
+	    qtdir=`ls -d -1 /opt/qt-3* /usr/lib/qt-3* 2>/dev/null | tail -1`
+	fi
+    fi
+    if [[ "x$qtdir" != "x" ]]; then
+	AC_MSG_CHECKING([for multithreaded Qt in $qtdir])
+	if [[ -x "$qtdir/bin/moc" -a -f "$qtdir/lib/libqt-mt.so" -a -f "$qtdir/include/qobject.h" ]]; then
+	    HAVE_QT=yes
+	    QT_DIR="$qtdir"
+	fi
+	AC_MSG_RESULT([$HAVE_QT])
+    fi
+fi
+AC_SUBST(HAVE_QT)
+AC_SUBST(QT_DIR)
 
 RTTI_OPT=""
 AC_ARG_ENABLE(rtti,AC_HELP_STRING([--enable-rtti],[Enable RTTI support (default: like pwlib)]),want_rtti=$enableval,want_rtti=auto)
@@ -447,6 +470,7 @@ AC_CONFIG_FILES([yate.spec
                  scripts/Makefile
                  conf.d/Makefile
                  contrib/iax/Makefile
+                 contrib/qt/Makefile
                  test/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
 AC_CONFIG_FILES([run],[chmod +x run])

@@ -98,8 +98,13 @@ public:
     int soundcard_setinput(bool force);
     int soundcard_setoutput(bool force);
     int time_has_passed(void);
+    inline void setTarget(const char* target = 0)
+	{ m_target = target; }
+    inline const String& getTarget() const
+	{ return m_target; }
     
     String m_dev;
+    String m_target;
     int full_duplex;
     int m_fd;
     int readmode;
@@ -256,6 +261,7 @@ OssChan::OssChan(String dev)
 OssChan::~OssChan()
 {
     Debug(DebugAll,"OssChan::~OssChan() [%p]",this);
+    setTarget();
     s_chan = 0;
 }
 
@@ -386,7 +392,7 @@ int OssChan::soundcard_setoutput(bool force)
 void OssChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("OssChan::disconnected()"," '%s' [%p]",reason,this);
-//    destruct();
+    setTarget();
 }
 
 bool OssHandler::received(Message &msg)
@@ -407,8 +413,11 @@ bool OssHandler::received(Message &msg)
     }
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     Debug(DebugInfo,"We are routing to device '%s'",dest.matchString(1).c_str());
-    if (dd && chan->connect(dd))
+    if (dd && chan->connect(dd)) {
+	chan->setTarget(msg.getValue("id"));
+	msg.addParam("targetid",dest);
 	chan->deref();
+    }
     else {
         const char *direct = msg.getValue("direct");
 	if (direct)
@@ -419,6 +428,8 @@ bool OssHandler::received(Message &msg)
 	    m.addParam("callto",direct);
 	    m.userData(chan);
 	    if (Engine::dispatch(m)) {
+		chan->setTarget(m.getValue("targetid"));
+		msg.addParam("targetid",chan->getTarget());
 		chan->deref();
 		return true;
 	    }
@@ -444,6 +455,8 @@ bool OssHandler::received(Message &msg)
 	    m.retValue() = 0;
 	    m.userData(chan);
 	    if (Engine::dispatch(m)) {
+		chan->setTarget(m.getValue("targetid"));
+		msg.addParam("targetid",chan->getTarget());
 		chan->deref();
 		return true;
 	    }

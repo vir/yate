@@ -235,6 +235,8 @@ void Connection::processLine(const char *line)
     if (str.startSkip("status"))
     {
 	Message m("engine.status");
+	if (str.null() || (str == "rmanager"))
+	    m.retValue() << "name=rmanager,type=misc;conn=" << connectionlist.count() << "\n";
 	if (!str.null()) {
 	    m.addParam("module",str); 
 	    str = ":" + str;

@@ -16,6 +16,12 @@ struct timeval;
  */
 namespace TelEngine {
 
+#ifdef HAVE_GCC_FORMAT_CHECK
+#define FORMAT_CHECK(f) __attribute__((format(printf,(f),(f)+1)))
+#else
+#define FORMAT_CHECK(f)
+#endif
+
 /**
  * Standard debugging levels.
  */
@@ -54,11 +60,7 @@ bool debugAt(int level);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(int level, const char *format, ...)
-#ifdef HAVE_GCC_FORMAT_CHECK
-__attribute__((format(printf,2,3)))
-#endif
-;
+bool Debug(int level, const char *format, ...) FORMAT_CHECK(2);
 
 /**
  * Outputs a debug string for a specific facility.
@@ -67,22 +69,14 @@ __attribute__((format(printf,2,3)))
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(const char *facility, int level, const char *format, ...)
-#ifdef HAVE_GCC_FORMAT_CHECK
-__attribute__((format(printf,3,4)))
-#endif
-;
+bool Debug(const char *facility, int level, const char *format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a string to the debug console with formatting
  * @param facility Facility that outputs the message
  * @param format A printf() style format string
  */
-void Output(const char *format, ...)
-#ifdef HAVE_GCC_FORMAT_CHECK
-__attribute__((format(printf,1,2)))
-#endif
-;
+void Output(const char *format, ...) FORMAT_CHECK(1);
 
 /**
  * An object that logs messages on creation and destruction

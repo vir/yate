@@ -60,7 +60,7 @@ engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
 
 .PHONY: apidocs-build
 apidocs-build: check-topdir
-	kdoc -d docs/api/ $(INCS)
+	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS)
 
 apidocs: @srcdir@/docs/api/index.html
 

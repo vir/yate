@@ -319,13 +319,14 @@ IAX2_LIB=""
 IAX2_DEP=""
 AC_ARG_WITH(libIAX2,AC_HELP_STRING([--with-libiax2=DIR],[use IAX 2 from DIR (default: included)]),[ac_cv_use_libiax2=$withval],[ac_cv_use_libiax2=included])
 if [[ "x$ac_cv_use_libiax2" = "xincluded" ]]; then
+    ac_cv_use_libiax2="no"
+    basedir=`cd "$srcdir" && pwd`
     AC_MSG_CHECKING([for IAX 2 in contrib])
     inci2="contrib/iax"
-    if [[ -f "$srcdir/$inci2/iax2.h" ]]; then
+    if [[ -f "$basedir/$inci2/iax2.h" ]]; then
 	HAVE_IAX2=yes
-	IAX2_INC="-I$srcdir/../$inci2"
+	IAX2_INC="-I$basedir/$inci2"
 	IAX2_DEP="../$inci2/libiax.a"
-	ac_cv_use_libiax2="no"
     fi
     AC_MSG_RESULT([$HAVE_IAX2])
 fi
@@ -413,8 +414,8 @@ if [[ "x$ac_cv_use_libqt" != "xno" ]]; then
 	fi
     fi
     if [[ "x$qtdir" != "x" ]]; then
-	AC_MSG_CHECKING([for multithreaded Qt in $qtdir])
-	if [[ -x "$qtdir/bin/moc" -a -f "$qtdir/lib/libqt-mt.so" -a -f "$qtdir/include/qobject.h" ]]; then
+	AC_MSG_CHECKING([for multithreaded Qt3 in $qtdir])
+	if [[ -x "$qtdir/bin/moc" -a -f "$qtdir/lib/libqt-mt.so" -a -f "$qtdir/include/qkeysequence.h" ]]; then
 	    HAVE_QT=yes
 	    QT_DIR="$qtdir"
 	fi

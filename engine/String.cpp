@@ -136,6 +136,13 @@ void StringMatchPrivate::fixup()
     count = c;
 }
 
+static String s_empty;
+
+const String& String::empty()
+{
+    return s_empty;
+}
+
 String::String()
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
@@ -788,4 +795,19 @@ NamedString::NamedString(const char *name, const char *value)
     : String(value), m_name(name)
 {
     DDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
+}
+
+const String& GenObject::toString() const
+{
+    return String::empty();
+}
+
+const String& String::toString() const
+{
+    return *this;
+}
+
+const String& NamedString::toString() const
+{
+    return m_name;
 }

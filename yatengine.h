@@ -151,7 +151,9 @@ bool Debug(const char *facility, int level, const char *format, ...) FORMAT_CHEC
 void Output(const char *format, ...) FORMAT_CHECK(1);
 
 /**
- * An object that logs messages on creation and destruction
+ * This class is used as an automatic variable that logs messages on creation
+ *  and destruction (when the instruction block is left or function returns)
+ * @short An object that logs messages on creation and destruction
  */
 class Debugger
 {
@@ -206,6 +208,8 @@ struct TokenDict {
     int value;
 };
 
+class String;
+
 /**
  * An object with just a public virtual destructor
  */
@@ -222,6 +226,14 @@ public:
      */
     virtual void destruct()
 	{ delete this; }
+
+    /**
+     * Get a string representation of this object
+     * @return A reference to a String representing this object
+     *  which is either null, the object itself (for objects derived from
+     *  String) or some form of identification
+     */
+    virtual const String& toString() const;
 };
 
 /**
@@ -351,6 +363,13 @@ public:
     ObjList *find(const GenObject *obj) const;
 
     /**
+     * Get the item in the list that holds an object by String value
+     * @param str String value (toString) of the object to search for
+     * @return Pointer to the found item or NULL
+     */
+    ObjList *find(const String &str) const;
+
+    /**
      * Insert an object at this point
      * @param obj Pointer to the object to insert
      * @return A pointer to the inserted list item
@@ -466,6 +485,11 @@ public:
     virtual ~String();
 
     /**
+     * A static null String
+     */
+    static const String &empty();
+
+    /**
      * Get the value of the stored string.
      * @return The stored C string which may be NULL.
      */
@@ -529,6 +553,12 @@ public:
      * Strip off leading and trailing blank characters
      */
     String& trimBlanks();
+
+    /**
+     * Override GenObject's method to return this String
+     * @return A reference to this String
+     */
+    virtual const String& toString() const;
 
     /**
      * Convert the string to an integer value.
@@ -767,11 +797,11 @@ public:
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    virtual bool matches(const String &value)
+    virtual bool matches(const String &value) const
 	{ return operator==(value); }
 
     /**
-     * Checks if matches a regular expression
+     * Checks if matches a regular expression and fill the match substrings
      * @param rexp Regular expression to check for match
      * @return True if matches, false otherwise
      */
@@ -979,7 +1009,7 @@ public:
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    virtual bool matches(const String &value)
+    virtual bool matches(const String &value) const
 	{ return matches(value.safe()); }
 
 protected:
@@ -1014,6 +1044,12 @@ public:
      */
     inline const String& name() const
 	{ return m_name; }
+
+    /**
+     * Get a string representation of this object
+     * @return A reference to the name of this object
+     */
+    virtual const String& toString() const;
 
     /**
      * Value assignment operator

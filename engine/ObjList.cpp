@@ -90,12 +90,23 @@ ObjList *ObjList::operator[](int index) const
 
 ObjList *ObjList::find(const GenObject *obj) const
 {
-#ifdef DEBUG
-    Debugger debug("ObjList::find","(%p) [%p]",obj,this);
-#endif
+    DDebug("ObjList::find(%p) [%p]",obj,this);
     const ObjList *n = this;
     while (n && (n->get() != obj))
 	n = n->next();
+    DDebug(DebugInfo,"ObjList::find returning %p",n);
+    return const_cast<ObjList *>(n);
+}
+
+ObjList *ObjList::find(const String &str) const
+{
+    DDebug("ObjList::find(\"%s\") [%p]",str.c_str(),this);
+    const ObjList *n = this;
+    while (n) {
+	if (n->get() && str.matches(n->get()->toString()))
+	    break;
+	n = n->next();
+    }
     DDebug(DebugInfo,"ObjList::find returning %p",n);
     return const_cast<ObjList *>(n);
 }

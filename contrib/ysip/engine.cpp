@@ -184,7 +184,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     // locate the branch parameter of last Via header - added by the UA
     const HeaderLine* hl = message->getLastHeader("Via");
     const NamedString* br = hl ? hl->getParam("branch") : 0;
-    String branch(br ? *br : 0);
+    String branch(br ? *br : String::empty());
     if (!branch.startsWith("z9hG4bK"))
 	branch.clear();
     Lock lock(m_mutex);

@@ -63,7 +63,7 @@ static void setMessage(Message &msg, String &line)
 	}
 	if (first) {
 	    first = false;
-	    line = s ? *s : "";
+	    line = s ? *s : String::empty();
 	    continue;
 	}
 	if (s && !s->trimBlanks().null()) {

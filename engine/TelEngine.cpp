@@ -33,6 +33,8 @@ namespace TelEngine {
 #define DebugMin DebugFail
 #define DebugMax DebugAll
 
+#define OUT_BUFFER_SIZE 2048
+
 static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
@@ -70,7 +72,7 @@ static void dbg_output(const char *prefix, const char *format, va_list ap)
 {
     if (!(s_output || s_intout))
 	return;
-    char buf[1024];
+    char buf[OUT_BUFFER_SIZE];
     unsigned int n = s_indent*2;
     if (n >= sizeof(buf))
 	n = sizeof(buf)-1;
@@ -89,7 +91,7 @@ static void dbg_output(const char *prefix, const char *format, va_list ap)
 
 void Output(const char *format, ...)
 {
-    char buf[1024];
+    char buf[OUT_BUFFER_SIZE];
     if (!((s_output || s_intout) && format && *format))
 	return;
     va_list va;
@@ -220,7 +222,7 @@ Debugger::~Debugger()
 	    char buf[64];
 	    ::snprintf(buf,sizeof(buf),"<<< %s",m_name);
 	    char *format = 0;
-	    va_list va = 0;
+	    va_list va;
 	    dbg_output(buf,format,va);
 	}
 	ind_mux.unlock();

@@ -203,20 +203,21 @@ int Engine::run()
 	    Debug(DebugInfo,"Creating new message dispatching thread");
 	    new EnginePrivate;
 	}
-	s_makeworker = true;
+	else
+	    s_makeworker = true;
 
 	// Attempt to sleep until the next full second
 	unsigned long t = (Time::now() + corr) % 1000000;
 	::usleep(1000000 - t);
-	Message m("engine.timer");
-	m.addParam("time",String((int)m.msgTime().sec()));
+	Message *m = new Message("engine.timer");
+	m->addParam("time",String((int)m->msgTime().sec()));
 	// Try to fine tune the ticker
-	t = m.msgTime().usec() % 1000000;
+	t = m->msgTime().usec() % 1000000;
 	if (t > 500000)
 	    corr -= (1000000-t)/10;
 	else
 	    corr += t/10;
-	dispatch(&m);
+	enqueue(m);
     }
     Debug(DebugInfo,"Engine exiting with code %d",s_haltcode);
     dispatch("engine.halt");

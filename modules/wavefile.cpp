@@ -73,6 +73,11 @@ WaveSource::WaveSource(const char *file, WaveChan *chan)
     : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0)
 {
     Debug(DebugAll,"WaveSource::WaveSource(\"%s\") [%p]",file,this);
+    Regexp r("\\.gsm$");
+    if (r.matches(file)) {
+	m_format = "gsm";
+	m_brate = 1650;
+    }
     m_fd = ::open(file,O_RDONLY|O_NOCTTY);
     if (m_fd >= 0)
 	start("WaveSource");
@@ -130,6 +135,9 @@ WaveConsumer::WaveConsumer(const char *file)
     : m_fd(-1), m_total(0)
 {
     Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\") [%p]",file,this);
+    Regexp r("\\.gsm$");
+    if (r.matches(file))
+	m_format = "gsm";
     m_fd = ::creat(file,S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugFail,"Creating '%s': error %d: %s",

@@ -456,6 +456,71 @@ void DataTranslator::uninstall(TranslatorFactory *factory)
     s_mutex.unlock();
 }
 
+String DataTranslator::srcFormats(const String &dFormat)
+{
+    String s;
+    s_mutex.lock();
+    ObjList *l = &s_factories;
+    for (; l; l=l->next()) {
+	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
+	if (f) {
+	    const TranslatorCaps *caps = f->getCapabilities();
+	    for (; caps && caps->src.name; caps++) {
+		if (dFormat == caps->dest.name) {
+		    if (!s.null())
+			s << " ";
+		    s << caps->src.name << "/" << caps->cost;
+		}
+	    }
+	}
+    }
+    s_mutex.unlock();
+    return s;
+}
+
+String DataTranslator::destFormats(const String &sFormat)
+{
+    String s;
+    s_mutex.lock();
+    ObjList *l = &s_factories;
+    for (; l; l=l->next()) {
+	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
+	if (f) {
+	    const TranslatorCaps *caps = f->getCapabilities();
+	    for (; caps && caps->src.name; caps++) {
+		if (sFormat == caps->src.name) {
+		    if (!s.null())
+			s << " ";
+		    s << caps->dest.name << "/" << caps->cost;
+		}
+	    }
+	}
+    }
+    s_mutex.unlock();
+    return s;
+}
+
+int DataTranslator::cost(const String &sFormat, const String &dFormat)
+{
+    int c = -1;
+    s_mutex.lock();
+    ObjList *l = &s_factories;
+    for (; l; l=l->next()) {
+	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
+	if (f) {
+	    const TranslatorCaps *caps = f->getCapabilities();
+	    for (; caps && caps->src.name; caps++) {
+		if ((c == -1) || (c > caps->cost)) {
+		    if ((sFormat == caps->src.name) && (dFormat == caps->dest.name))
+			c = caps->cost;
+		}
+	    }
+	}
+    }
+    s_mutex.unlock();
+    return c;
+}
+
 DataTranslator *DataTranslator::create(const String &sFormat, const String &dFormat)
 {
     if (sFormat == dFormat) {

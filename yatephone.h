@@ -476,6 +476,28 @@ public:
 	{ return m_tsource; }
 
     /**
+     * Get a textual list of formats supported for a given output format
+     * @param dFormat Name of destination format
+     * @return Space separated list of source formats
+     */
+    static String srcFormats(const String &dFormat = "slin");
+
+    /**
+     * Get a textual list of formats supported for a given inpput format
+     * @param sFormat Name of source format
+     * @return Space separated list of destination formats
+     */
+    static String destFormats(const String &sFormat = "slin");
+
+    /**
+     * Finds the cost of a translator given the source and destination format names
+     * @param sFormat Name of the source format (data received from the consumer)
+     * @param dFormat Name of the destination format (data supplied to the source)
+     * @return Cost of best (cheapest) codec or -1 if no known codec exists
+     */
+    static int cost(const String &sFormat, const String &dFormat);
+
+    /**
      * Creates a translator given the source and destination format names
      * @param sFormat Name of the source format (data received from the consumer)
      * @param dFormat Name of the destination format (data supplied to the source)

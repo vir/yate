@@ -37,6 +37,7 @@ public:
     URI(const String& uri);
     URI(const URI& uri);
     URI(const char* proto, const char* user, const char* host, int port = 0);
+    void parse() const;
     inline URI& operator=(const URI& value)
 	{ String::operator=(value); return *this; }
     inline URI& operator=(const String& value)
@@ -53,7 +54,6 @@ public:
 	{ parse(); return m_port; }
 protected:
     virtual void changed();
-    void parse() const;
     mutable bool m_parsed;
     mutable String m_proto;
     mutable String m_user;

@@ -127,9 +127,13 @@ public:
     void run(void);
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
-    bool buildParty(SIPMessage* message);
+    bool buildParty(SIPMessage* message, const char* host = 0, int port = 0);
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
+    inline int port() const
+	{ return m_port; }
+    inline int fd() const
+	{ return m_netfd; }
 private:
     int m_localport;
     int m_port;
@@ -188,7 +192,7 @@ private:
     bool m_byebye;
     int m_state;
     SIPDialog m_id;
-    String m_uri;
+    URI m_uri;
     String m_target;
     String m_status;
     String m_rtpid;
@@ -198,6 +202,8 @@ private:
     int m_rtpSession;
     int m_rtpVersion;
     String m_formats;
+    String m_host;
+    int m_port;
 };
 
 class SipMsgThread : public Thread
@@ -373,19 +379,23 @@ YateSIPEndPoint::~YateSIPEndPoint()
     m_engine = 0;
 }
 
-bool YateSIPEndPoint::buildParty(SIPMessage* message)
+bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port)
 {
     if (message->isAnswer())
 	return false;
     URI uri(message->uri);
-    int port = uri.getPort();
+    if (!host) {
+	host = uri.getHost().safe();
+	if (port <= 0)
+	    port = uri.getPort();
+    }
     if (port <= 0)
 	port = 5060;
     struct hostent he, *res = 0;
     int err = 0;
     char buf[1024];
-    if (::gethostbyname_r(uri.getHost().safe(),&he,buf,sizeof(buf),&res,&err)) {
-	Debug(DebugWarn,"Error %d resolving name '%s'",err,uri.getHost().safe());
+    if (::gethostbyname_r(host,&he,buf,sizeof(buf),&res,&err)) {
+	Debug(DebugWarn,"Error %d resolving name '%s'",err,host);
 	return false;
     }
     struct sockaddr_in sin;
@@ -619,13 +629,16 @@ YateSIPConnection* YateSIPConnection::find(const SIPDialog& id)
 // Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
     : m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming),
-      m_rtpSession(0), m_rtpVersion(0)
+      m_rtpSession(0), m_rtpVersion(0), m_port(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
     s_mutex.lock();
     m_tr->ref();
     m_id = *m_tr->initialMessage();
+    m_host = m_tr->initialMessage()->getParty()->getPartyAddr();
+    m_port = m_tr->initialMessage()->getParty()->getPartyPort();
     m_uri = m_tr->initialMessage()->getHeader("From");
+    m_uri.parse();
     m_tr->setUserData(this);
     s_calls.append(this);
     s_mutex.unlock();
@@ -641,12 +654,15 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     : m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri),
-      m_rtpSession(0), m_rtpVersion(0)
+      m_rtpSession(0), m_rtpVersion(0), m_port(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
+    m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",uri);
     plugin.ep()->buildParty(m);
+    m_host = m->getParty()->getPartyAddr();
+    m_port = m->getParty()->getPartyPort();
     SDPBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m,msg.getValue("formats"));
@@ -707,6 +723,7 @@ void YateSIPConnection::hangup()
 	case Outgoing:
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
+		plugin.ep()->buildParty(m,m_host,m_port);
 		const SIPMessage* i = m_tr->initialMessage();
 		m->copyHeader(i,"Via");
 		m->copyHeader(i,"From");
@@ -715,7 +732,6 @@ void YateSIPConnection::hangup()
 		String tmp;
 		tmp << i->getCSeq() << " CANCEL";
 		m->addHeader("CSeq",tmp);
-		plugin.ep()->buildParty(m);
 		plugin.ep()->engine()->addMessage(m);
 		m->deref();
 	    }
@@ -727,6 +743,7 @@ void YateSIPConnection::hangup()
     if (m_byebye) {
 	m_byebye = false;
 	SIPMessage* m = new SIPMessage("BYE",m_uri);
+	plugin.ep()->buildParty(m,m_host,m_port);
 	m->addHeader("Call-ID",m_id);
 	String tmp;
 	tmp << "<" << m_id.localURI << ">";
@@ -738,7 +755,6 @@ void YateSIPConnection::hangup()
 	hl = new HeaderLine("To",tmp);
 	hl->setParam("tag",m_id.remoteTag);
 	m->addHeader(hl);
-	plugin.ep()->buildParty(m);
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }

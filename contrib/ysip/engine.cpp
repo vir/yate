@@ -54,7 +54,10 @@ URI::URI(const URI& uri)
 URI::URI(const char* proto, const char* user, const char* host, int port)
     : m_proto(proto), m_user(user), m_host(host), m_port(port)
 {
-    *this << m_proto << ":" << m_user << "@" << m_host;
+    *this << m_proto << ":";
+    if (user)
+	*this << m_user << "@";
+    *this << m_host;
     if (m_port > 0)
 	*this << ":" << m_port;
     m_parsed = true;

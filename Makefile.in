@@ -25,10 +25,9 @@ GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
 DOCS := README COPYING ChangeLog
-ENGOBJS := TelEngine.o String.o DataBlock.o ObjList.o \
-	NamedList.o Configuration.o \
-	Message.o Mutex.o Thread.o \
-	Plugin.o Engine.o
+ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
+	Message.o Mutex.o Thread.o Plugin.o Engine.o
+TELOBJS :=DataBlock.o DataFormat.o
 OBJS := main.o
 
 LIBOBJS := $(ENGOBJS) $(TELOBJS)
@@ -223,6 +222,9 @@ Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yateversn.h yatepat
 DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
 	$(COMPILE) -c $<
 
+DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
+	$(COMPILE) -c $<
+
 Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) @srcdir@/telengine.h
 	$(COMPILE) @MUTEX_HACK@ -c $<
 
@@ -247,7 +249,7 @@ yate: $(OBJS) libyate.so $(LIBS)
 libyate.so: libyate.so.@PACKAGE_VERSION@
 	ln -sf $^ $@
 
-libyate.so.@PACKAGE_VERSION@: $(ENGOBJS) $(LIBS)
+libyate.so.@PACKAGE_VERSION@: $(LIBOBJS) $(LIBS)
 	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)
 
 .PHONY: help

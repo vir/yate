@@ -38,12 +38,60 @@ namespace TelEngine {
  * A structure to hold information about a data format.
  */
 struct FormatInfo {
-    /** Standard no-blanks lowcase format name */
-    const char *name;
-    /** Data rate in octets/second, 0 for variable */
-    int rate;
-    /** Frame size in octets, 0 for non-framed formats */
-    int size;
+    /**
+     * Standard no-blanks lowercase format name
+     */
+    const char* name;
+
+    /**
+     * Format type: "audio", "video", "text"
+     */
+    const char* type;
+
+    /**
+     * Data rate in octets/second, 0 for variable
+     */
+    int dataRate;
+
+    /**
+     * Frame size in octets/frame, 0 for non-framed formats
+     */
+    int frameSize;
+
+    /**
+     * Rate in samples/second (audio) or 1e-6 frames/second (video), 0 for unknown
+     */
+    int sampleRate;
+
+    /**
+     * Number of channels, typically 1
+     */
+    int numChannels;
+
+    /**
+     * Guess the number of samples in an encoded data block
+     * @param len Length of the data block in octets
+     * @return Number of samples or 0 if unknown
+     */
+    int guessSamples(int len) const;
+
+    /**
+     * Default constructor - used to initialize arrays
+     */
+    inline FormatInfo()
+	: name(0), type("audio"),
+	  dataRate(0), frameSize(0),
+	  sampleRate(8000), numChannels(1)
+	{ }
+
+    /**
+     * Normal constructor
+     */
+    inline FormatInfo(const char* _name, int drate, int fsize = 0, const char* _type = "audio", int srate = 8000, int nchan = 1)
+	: name(_name), type(_type),
+	  dataRate(drate), frameSize(fsize),
+	  sampleRate(srate), numChannels(nchan)
+	{ }
 };
 
 /**
@@ -52,11 +100,43 @@ struct FormatInfo {
  */
 struct TranslatorCaps {
     /** Description of source (input) data format */
-    FormatInfo src;
+    const FormatInfo* src;
     /** Description of destination (output) data format */
-    FormatInfo dest;
+    const FormatInfo* dest;
     /** Computing cost in KIPS of converting a stream from src to dest */
     int cost;
+};
+
+/**
+ * This is just a holder for the list of media formats supported by Yate
+ * @short A repository for media formats
+ */
+class FormatRepository
+{
+private:
+    FormatRepository();
+    FormatRepository& operator=(const FormatRepository&);
+    virtual void dummy() const = 0;
+public:
+    /**
+     * Retrieve a format by name and type
+     * @param name Standard name of the format to find
+     * @return Pointer to the format info or NULL if not found
+     */
+    static const FormatInfo* getFormat(const String& name);
+
+    /**
+     * Add a new format to the repository
+     * @param name Standard no-blanks lowercase format name
+     * @param drate Data rate in octets/second, 0 for variable
+     * @param fsize Frame size in octets/frame, 0 for non-framed formats
+     * @param type Format type: "audio", "video", "text"
+     * @param srate Rate in samples/second (audio) or 1e-6 frames/second (video), 0 for unknown
+     * @param nchan Number of channels, typically 1
+     * @return Pointer to the format info or NULL if another incompatible
+     *  format with the same name was already registered
+    */
+    static const FormatInfo* addFormat(const String& name, int drate, int fsize, const String& type = "audio", int srate = 8000, int nchan = 1);
 };
 
 /**
@@ -551,7 +631,7 @@ public:
     static String srcFormats(const String &dFormat = "slin");
 
     /**
-     * Get a textual list of formats supported for a given inpput format
+     * Get a textual list of formats supported for a given input format
      * @param sFormat Name of source format
      * @return Space separated list of destination formats
      */

@@ -34,9 +34,9 @@ typedef gsm_signal gsm_block[160];
 using namespace TelEngine;
 
 static TranslatorCaps caps[] = {
-    { { "slin", 16000, 320 }, { "gsm", 1650, 33 } },
-    { { "gsm", 1650, 33 }, { "slin", 16000, 320 } },
-    { { 0, 0, 0 }, { 0, 0, 0 } }
+    { 0, 0 },
+    { 0, 0 },
+    { 0, 0 }
 };
 
 int count = 0;
@@ -128,6 +128,10 @@ void GsmCodec::Consume(const DataBlock &data, unsigned long timeDelta)
 GsmPlugin::GsmPlugin()
 {
     Output("Loaded module GSM - based on libgsm-%d.%d.%d",GSM_MAJOR,GSM_MINOR,GSM_PATCHLEVEL);
+    const FormatInfo* f = FormatRepository::addFormat("gsm",1650,33);
+    caps[0].src = caps[1].dest = f;
+//    caps[0].src = caps[1].dest = FormatRepository::getFormat("gsm");
+    caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
 }
 
 GsmPlugin::~GsmPlugin()

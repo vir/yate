@@ -20,7 +20,7 @@ SUBDIRS :=
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate \
 	tonegen.yate wavefile.yate \
-	rmanager.yate extmodule.yate
+	rmanager.yate extmodule.yate osschan.yate
 LIBS :=
 
 ifneq (@HAVE_PGSQL@,no)

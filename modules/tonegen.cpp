@@ -31,9 +31,9 @@ public:
     static ToneSource *getTone(const String &tone);
 private:
     ToneSource(const String &tone);
-    static Tone *getBlock(const String &tone);
+    static const Tone *getBlock(const String &tone);
     String m_name;
-    Tone *m_tone;
+    const Tone *m_tone;
     unsigned m_brate;
     unsigned m_total;
     unsigned long long m_time;
@@ -72,44 +72,19 @@ private:
 };
 
 // 421.052Hz (19 samples @ 8kHz) sine wave, pretty close to standard 425Hz
-static short tone421hz[] = {
+static const short tone421hz[] = {
     19,
     3246,6142,8371,9694,9965,9157,7357,4759,1645,
     -1645,-4759,-7357,-9157,-9965,-9694,-8371,-6142,-3246,
     0 };
 
-static short get_sample(const short *data, int index)
-{
-    return data ? data[1+(index % data[0])] : 0;
-}
+static const Tone t_dial[] = { { 8000, tone421hz }, { 0, 0 } };
 
-static short get_sample(const Tone *data, int index)
-{
-    const Tone *d = data;
-    while (index >= d->nsamples) {
-	index -= d->nsamples;
-	d++;
-	if (!d->nsamples)
-	    d = data;
-    }
-    return get_sample(d->data,index);
-}
+static const Tone t_busy[] = { { 4000, tone421hz }, { 4000, 0 }, { 0, 0 } };
 
-static int get_length(const Tone *data)
-{
-    int len = 0;
-    for (; data->nsamples; data++)
-	len += data->nsamples;
-    return len;
-}
+static const Tone t_specdial[] = { { 7600, tone421hz }, { 400, 0 }, { 0, 0 } };
 
-static Tone t_dial[] = { { 8000, tone421hz }, { 0, 0 } };
-
-static Tone t_busy[] = { { 4000, tone421hz }, { 4000, 0 }, { 0, 0 } };
-
-static Tone t_specdial[] = { { 7600, tone421hz }, { 400, 0 }, { 0, 0 } };
-
-static Tone t_ring[] = { { 8000, tone421hz }, { 32000, 0 }, { 0, 0 } };
+static const Tone t_ring[] = { { 8000, tone421hz }, { 32000, 0 }, { 0, 0 } };
 
 ToneSource::ToneSource(const String &tone)
     : m_name(tone), m_tone(0), m_brate(16000), m_total(0), m_time(0)
@@ -132,7 +107,7 @@ ToneSource::~ToneSource()
     tones.remove(this,false);
 }
 
-Tone *ToneSource::getBlock(const String &tone)
+const Tone *ToneSource::getBlock(const String &tone)
 {
     if (tone == "dial" || tone == "dt")
 	return t_dial;
@@ -165,12 +140,27 @@ void ToneSource::run()
     unsigned long long tpos = Time::now();
     m_time = tpos;
     DataBlock data(0,480);
-    int pos = 0;
+    int samp = 0; // sample number
+    int dpos = 1; // position in data
+    const Tone *tone = m_tone;
+    int nsam = tone->nsamples;
     while (m_tone) {
 	short *d = (short *) data.data();
-	for (unsigned int i = data.length()/2; i--; pos++)
-	    *d++ = get_sample(m_tone,pos);
-	pos = pos % get_length(m_tone);
+	for (unsigned int i = data.length()/2; i--; samp++,dpos++) {
+	    if (samp >= nsam) {
+		samp = 0;
+		const Tone *otone = tone;
+		tone++;
+		if (!tone->nsamples)
+		    tone = m_tone;
+		nsam = tone->nsamples;
+		if (tone != otone)
+		    dpos = 1;
+	    }
+	    if (dpos > tone->data[0])
+		dpos = 1;
+	    *d++ = tone->data[dpos];
+	}
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
 #ifdef DEBUG
@@ -259,7 +249,8 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"tonegen"))
 	return false;
-    msg.retValue() << "tonegen,tones=" << tones.count() << "\n";
+    msg.retValue() << "tonegen,tones=" << tones.count()
+		   << ",chans=" << chans.count() << "\n";
     return false;
 }
 

@@ -26,7 +26,8 @@
 using namespace TelEngine;
 
 static Configuration s_cfg;
-static ObjList s_objects;
+static ObjList s_chans;
+static ObjList s_modules;
 
 class ExtModReceiver;
 
@@ -71,6 +72,7 @@ public:
     virtual void disconnected();
 private:
     ExtModReceiver *m_recv;
+    int m_type;
 };
 
 class MsgHolder : public GenObject
@@ -213,33 +215,33 @@ void ExtModConsumer::Consume(const DataBlock &data)
 }
 
 ExtModChan::ExtModChan(const char *file, const char *args, int type)
-    : DataEndpoint("ExtModule"), m_recv(0)
+    : DataEndpoint("ExtModule"), m_recv(0), m_type(type)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
     int wfifo[2] = { -1, -1 };
     int rfifo[2] = { -1, -1 };
-    switch (type) {
+    switch (m_type) {
 	case DataWrite:
 	case DataBoth:
 	    ::pipe(wfifo);
 	    setConsumer(new ExtModConsumer(wfifo[1]));
 	    getConsumer()->deref();
     }
-    switch (type) {
+    switch (m_type) {
 	case DataRead:
 	case DataBoth:
 	    ::pipe(rfifo);
 	    setSource(new ExtModSource(rfifo[0]));
 	    getSource()->deref();
     }
-    s_objects.append(this);
+    s_chans.append(this);
     m_recv = new ExtModReceiver(file,args,wfifo[0],rfifo[1],this);
 }
 
 ExtModChan::~ExtModChan()
 {
     Debug(DebugAll,"ExtModChan::~ExtModChan() [%p]",this);
-    s_objects.remove(this,false);
+    s_chans.remove(this,false);
 }
 
 void ExtModChan::disconnected()
@@ -250,6 +252,7 @@ void ExtModChan::disconnected()
 MsgHolder::MsgHolder(Message &msg)
     : m_msg(msg), m_ret(false)
 {
+    // the address of this object should be unique
     m_id = (int)this;
 }
 
@@ -263,14 +266,14 @@ ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, in
       m_chan(chan), m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
-    s_objects.append(this);
+    s_modules.append(this);
     new ExtThread(this);
 }
 
 ExtModReceiver::~ExtModReceiver()
 {   
     Debug(DebugAll,"ExtModReceiver::~ExtModReceiver()"," [%p] pid=%d",this,m_pid);
-    s_objects.remove(this,false);
+    s_modules.remove(this,false);
     die();
 }
 
@@ -560,7 +563,7 @@ bool ExtModHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\) \\(.*\\)$");
+    Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\)\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
@@ -583,7 +586,7 @@ bool ExtModHandler::received(Message &msg)
     }
     if (typ == ExtModChan::NoChannel) {
 	ExtModReceiver *recv = new ExtModReceiver(dest.matchString(2).c_str(),
-						  dest.matchString(3).c_str());
+						  dest.matchString(3).trimBlanks().c_str());
 	while (recv->busy())
 	    Thread::yield();
 	bool retv = recv->received(msg,1);
@@ -615,7 +618,9 @@ ExtModulePlugin::ExtModulePlugin()
 ExtModulePlugin::~ExtModulePlugin()
 {
     Output("Unloading module ExtModule");
-    s_objects.clear();
+    s_modules.clear();
+    // the receivers destroyed above should also clear chans but better be sure
+    s_chans.clear();
 }
 
 void ExtModulePlugin::initialize()

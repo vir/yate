@@ -226,6 +226,9 @@ DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/tele
 Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) @srcdir@/telengine.h
 	$(COMPILE) @MUTEX_HACK@ -c $<
 
+Thread.o: @srcdir@/Thread.cpp $(MKDEPS) @srcdir@/telengine.h
+	$(COMPILE) @THREAD_KILL@ -c $<
+
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/telengine.h
 	$(COMPILE) -c $<
 

@@ -195,6 +195,8 @@ private:
     String m_rtpAddr;
     String m_rtpPort;
     String m_rtpFormat;
+    int m_rtpSession;
+    int m_rtpVersion;
     String m_formats;
 };
 
@@ -616,7 +618,8 @@ YateSIPConnection* YateSIPConnection::find(const SIPDialog& id)
 
 // Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
-    : m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming)
+    : m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming),
+      m_rtpSession(0), m_rtpVersion(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
     s_mutex.lock();
@@ -637,7 +640,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
-    : m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri)
+    : m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri),
+      m_rtpSession(0), m_rtpVersion(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -814,11 +818,14 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 {
     Debug(DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
 	addr,port,formats,this);
-    int t = Time::now() / 10000000000ULL;
+    if (m_rtpSession)
+	++m_rtpVersion;
+    else
+	m_rtpVersion = m_rtpSession = Time::now() / 10000000000ULL;
     String tmp;
     tmp << "IN IP4 " << addr;
     String owner;
-    owner << "1001 " << t << " " << t << " " << tmp;
+    owner << "1 " << m_rtpSession << " " << m_rtpVersion << " " << tmp;
     String frm(format ? format : formats);
     if (frm.null())
 	frm = "alaw,mulaw";

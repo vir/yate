@@ -237,7 +237,7 @@ void ThreadPrivate::killall()
     // last solution - a REALLY BIG tool!
     // usually too big since many libraries have threads of their own...
     if (sledgehammer) {
-#ifdef __linux__
+#ifdef THREAD_KILL
 	Debug(DebugGoOn,"Brutally killing remaining threads!");
 	::pthread_kill_other_threads_np();
 #else
@@ -355,7 +355,7 @@ void Thread::yield()
 
 void Thread::preExec()
 {
-#ifdef __linux__
+#ifdef THREAD_KILL
     ::pthread_kill_other_threads_np();
 #endif
 }

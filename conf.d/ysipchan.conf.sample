@@ -1,0 +1,40 @@
+[general]
+; This section sets global variables of the implementation
+
+; port: int: SIP UDP port
+;port=5060
+
+
+[codecs]
+; This section allows to individually enable or disable the codecs
+
+; default: bool: Enable all unlisted codecs by default
+;default=enable
+
+; mulaw: bool: Companded-only G711 mu-law (PCMU/8000)
+;mulaw=default
+
+; alaw: bool: Companded-only G711 a-law (PCMU/8000)
+;alaw=default
+
+; gsm: bool: European GSM 06.10 (GSM/8000)
+;gsm=default
+
+; lpc10: bool: Linear Prediction Codec (LPC/8000)
+;lpc10=default
+
+; slin: bool: Signed Linear 16-bit uncompressed (L16/8000)
+;slin=default
+
+; g723: bool: ITU G.723 all variations (G723/8000)
+;g723=default
+
+; g726: bool: ITU G.726 32-bit (G726-32/8000)
+;g726=default
+
+; g728: bool: ITU G.728 all variations (G728/8000)
+;g728=default
+
+; g729: bool: ITU G.729 all variations (G729/8000)
+;g729=default
+

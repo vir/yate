@@ -73,6 +73,29 @@ fi
 AC_MSG_RESULT([$have_mutex_settype])
 AC_SUBST(MUTEX_HACK)
 
+THREAD_KILL=""
+AC_MSG_CHECKING([for pthread_kill_other_threads_np declaration])
+AC_LANG_SAVE
+AC_LANG_C
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_COMPILE([
+#include <unistd.h>
+#include <pthread.h>
+],[
+pthread_kill_other_threads_np();
+],
+have_pthread_kill="yes",
+have_pthread_kill="no"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
+if [[ "$have_pthread_kill" = "yes" ]]; then
+THREAD_KILL="-DTHREAD_KILL"
+fi
+AC_MSG_RESULT([$have_pthread_kill])
+AC_SUBST(THREAD_KILL)
+
 # Check for compile options
 INLINE_FLAGS=""
 AC_ARG_ENABLE(inline,AC_HELP_STRING([--enable-inline],[Enable inlining of functions]),want_inline=$enableval,want_inline=auto)

@@ -69,6 +69,7 @@
 ;   context did not return successfully
 ; jump - jumps another context, does not return to this context
 ; match - modify the matched string instead of specifying a target
+; echo - displays that line after making substitutions
 ;
 ; It is possible to set message parameters by appending them as name=value
 ;  while separating them with semicolons (;)

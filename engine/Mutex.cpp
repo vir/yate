@@ -25,7 +25,7 @@ public:
 private:
     pthread_mutex_t m_mutex;
     int m_refcount;
-    bool m_locked;
+    volatile bool m_locked;
 };
 
 };
@@ -50,8 +50,8 @@ MutexPrivate::~MutexPrivate()
 {
     if (m_locked) {
 	m_locked = false;
-	::pthread_mutex_unlock(&m_mutex);
 	s_locks--;
+	::pthread_mutex_unlock(&m_mutex);
     }
     s_count--;
     ::pthread_mutex_destroy(&m_mutex);
@@ -75,8 +75,8 @@ bool MutexPrivate::lock(long long int maxwait)
 	} while (t > Time::now());
     }
     if (rval) {
-	m_locked = true;
 	s_locks++;
+	m_locked = true;
     }
     else
 	deref();
@@ -85,14 +85,15 @@ bool MutexPrivate::lock(long long int maxwait)
 
 void MutexPrivate::unlock()
 {
+    // Hope we don't hit a bug related to the debug mutex!
     if (m_locked) {
 	m_locked = false;
+	if (--s_locks < 0)
+	    Debug(DebugFail,"MutexPrivate::locks() is %d",s_locks);
 	::pthread_mutex_unlock(&m_mutex);
-	s_locks--;
 	deref();
     }
     else
-	// Hope we don't hit a bug related to the debug mutex!
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex");
 }
 

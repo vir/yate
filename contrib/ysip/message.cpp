@@ -185,7 +185,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
     version = message->version;
     uri = message->uri;
     copyAllHeaders(message,"Via");
-    HeaderLine* hl = const_cast<HeaderLine*>(getLastHeader("Via"));
+    HeaderLine* hl = const_cast<HeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
@@ -238,7 +238,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!domain)
 	domain = getParty()->getLocalAddr();
 
-    HeaderLine* hl = const_cast<HeaderLine*>(getLastHeader("Via"));
+    HeaderLine* hl = const_cast<HeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();

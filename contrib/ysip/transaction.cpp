@@ -38,6 +38,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	message,engine,outgoing,this);
     if (m_firstMessage) {
 	m_firstMessage->ref();
+
 	const NamedString* ns = message->getParam("Via","branch");
 	if (ns)
 	    m_branch = *ns;
@@ -46,13 +47,20 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	ns = message->getParam("To","tag");
 	if (ns)
 	    m_tag = *ns;
+
 	const HeaderLine* hl = message->getHeader("Call-ID");
 	if (hl)
 	    m_callid = *hl;
+
 	if (!m_outgoing && m_firstMessage->getParty()) {
-	    hl = message->getHeader("Contact");
+	    // adjust the address where we send the answers
+	    hl = message->getHeader("Via");
 	    if (hl) {
 		URI uri(*hl);
+		// skip over protocol/version/transport
+		uri >> "/" >> "/" >> " ";
+		uri.trimBlanks();
+		uri = "sip:" + uri;
 		m_firstMessage->getParty()->setParty(uri);
 	    }
 	}

@@ -190,6 +190,45 @@ AC_SUBST(HAVE_EXOSIP)
 AC_SUBST(EXOSIP_INC)
 AC_SUBST(EXOSIP_LIB)
 
+HAVE_GLIB1=no
+GLIB1_INC=""
+GLIB1_LIB=""
+AC_ARG_WITH(libglib,AC_HELP_STRING([--with-libglib=DIR],[use Glib 1.2 from DIR (default /usr)]),[ac_cv_use_libglib=$withval],[ac_cv_use_libglib=yes])
+if [[ "x$ac_cv_use_libglib" = "xyes" ]]; then
+    AC_MSG_CHECKING([for Glib 1.2 using pkg-config])
+    verg=`pkg-config --modversion glib 2>/dev/null`
+    incg=`pkg-config --cflags-only-I glib 2>/dev/null`
+    libg=`pkg-config --libs glib 2>/dev/null`
+    if [[ "x$incg" != "x" -a "x$libg" != "x" ]]; then
+	HAVE_GLIB1=yes
+	GLIB1_INC="$incg"
+	GLIB1_LIB="$libg"
+	ac_cv_use_libglib="no"
+    else
+	ac_cv_use_libglib="/usr"
+	verg="no"
+    fi
+    AC_MSG_RESULT([$verg])
+fi
+if [[ "x$ac_cv_use_libglib" != "xno" ]]; then
+AC_MSG_CHECKING([for Glib 1.2 in $ac_cv_use_libglib])
+incg="$ac_cv_use_libglib"
+libg="$ac_cv_use_libglib/lib"
+if [[ -f "$incg/include/glib-1.2/glib.h" -a -f "$libg2/libglib-1.2.so" ]]; then
+    HAVE_GLIB1=yes
+    GLIB1_INC="-I$incg/include/glib-1.2 -I$libg/glib-1.2/include"
+    GLIB1_LIB="-L$libg -lglib-1.2"
+fi
+AC_MSG_RESULT([$HAVE_GLIB1])
+fi
+AC_SUBST(HAVE_GLIB1)
+AC_SUBST(GLIB1_INC)
+AC_SUBST(GLIB1_LIB)
+
+HAVE_GLIB="$HAVE_GLIB1"
+GLIB_INC="$GLIB1_INC"
+GLIB_LIB="$GLIB1_LIB"
+
 HAVE_GLIB2=no
 GLIB2_INC=""
 GLIB2_LIB=""
@@ -204,6 +243,9 @@ if [[ "x$ac_cv_use_libglib2" = "xyes" ]]; then
 	GLIB2_INC="$incg2"
 	GLIB2_LIB="$libg2"
 	ac_cv_use_libglib2="no"
+	HAVE_GLIB=yes
+	GLIB_INC="$GLIB2_INC"
+	GLIB_LIB="$GLIB2_LIB"
     else
 	ac_cv_use_libglib2="/usr"
 	verg2="no"
@@ -218,12 +260,19 @@ if [[ -f "$incg2/include/glib-2.0/glib.h" -a -f "$libg2/libglib-2.0.so" ]]; then
     HAVE_GLIB2=yes
     GLIB2_INC="-I$incg2/include/glib-2.0 -I$libg2/glib-2.0/include"
     GLIB2_LIB="-L$libg2 -lglib-2.0"
+    HAVE_GLIB=yes
+    GLIB_INC="$GLIB2_INC"
+    GLIB_LIB="$GLIB2_LIB"
 fi
 AC_MSG_RESULT([$HAVE_GLIB2])
 fi
 AC_SUBST(HAVE_GLIB2)
 AC_SUBST(GLIB2_INC)
 AC_SUBST(GLIB2_LIB)
+
+AC_SUBST(HAVE_GLIB)
+AC_SUBST(GLIB_INC)
+AC_SUBST(GLIB_LIB)
 
 HAVE_IAX2=no
 IAX2_INC=""

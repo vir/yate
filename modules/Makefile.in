@@ -39,7 +39,7 @@ ifeq (@HAVE_EXOSIP@_@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes_yes)
 PROGS := $(PROGS) sipchan.yate
 endif
 
-ifneq (@HAVE_ORTP@,no)
+ifeq (@HAVE_ORTP@_@HAVE_GLIB@,yes_yes)
 PROGS := $(PROGS) ortpchan.yate
 endif
 
@@ -126,7 +126,7 @@ pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORTP_LIB@ @GLIB2_LIB@
 
-ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @ORTP_LIB@
+ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB_INC@ @ORTP_LIB@
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

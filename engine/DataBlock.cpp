@@ -263,3 +263,5 @@ bool DataBlock::convert(const DataBlock& src, const String& sFormat,
     }
     return true;
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

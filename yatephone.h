@@ -813,6 +813,7 @@ private:
     String m_targetid;
     String m_billid;
     String m_status;
+    String m_address;
     ObjList m_data;
 
 public:
@@ -879,6 +880,13 @@ public:
 	{ return m_status; }
 
     /**
+     * Get the current link address of the channel
+     * @return The protocol dependent link address as String
+     */
+    inline const String& address() const
+	{ return m_address; }
+
+    /**
      * Get the direction of the channel
      * @return True if the channel is an outgoing call (generated locally)
      */
@@ -908,12 +916,26 @@ public:
 	{ return m_targetid; }
 
     /**
+     * Set the connected channel identifier
+     * @param target The new target channel id
+     */
+    inline void targetid(const char* target)
+	{ m_targetid = target; }
+
+    /**
      * Get the billing identifier.
      * @return An identifier of the call or account that will be billed for
      *  calls made by this channel.
      */
     inline const String& billid() const
 	{ return m_billid; }
+
+    /**
+     * Set a new billing identifier
+     * @param target The new billing call or account identifier
+     */
+    inline void billid(const char* newbillid)
+	{ m_billid = newbillid; }
 
     /**
      * Get the connected peer channel
@@ -950,6 +972,13 @@ protected:
 	{ m_status = newstat; }
 
     /**
+     * Set the current link address of the channel
+     * @param newstat The new address as String
+     */
+    inline void address(const char* newaddr)
+	{ m_address = newaddr; }
+
+    /**
      * Connect notification method.
      */
     virtual void connected() { }
@@ -979,9 +1008,12 @@ private:
  */
 class Driver : public Plugin, public Mutex, public MessageReceiver
 {
+    friend class ChannelRouter;
+
 private:
     bool m_init;
     String m_name;
+    String m_type;
     String m_prefix;
     ObjList m_chans;
 
@@ -1007,6 +1039,12 @@ public:
     inline ObjList& channels()
 	{ return m_chans; }
 
+    /**
+     * Check if the driver is actively used.
+     * @return True if the driver is in use, false if should be ok to restart
+     */
+    virtual bool isBusy() const;
+
 protected:
     /**
      * IDs of the installed relays
@@ -1020,14 +1058,16 @@ protected:
 	Masquerade,
 	// Driver messages
 	Execute,
-	Drop
+	Drop,
+	Status
     } RelayID;
 
     /**
      * Constructor
      * @param name Plugin name of this driver
+     * @param type Type of the driver: "fixchan", "varchan", etc.
      */
-    Driver(const char* name);
+    Driver(const char* name, const char* type = 0);
 
     /**
      * Install standard message relays and set up the prefix
@@ -1055,6 +1095,30 @@ protected:
      * @return True if outgoing call was created
      */
     virtual bool msgExecute(Message& msg, String& dest) = 0;
+
+    /**
+     * Status message handler that is invoked only for matching messages.
+     * @param msg Status message
+     */
+    virtual void msgStatus(Message& msg);
+
+    /**
+     * Build the module identification part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusModule(String& str);
+
+    /**
+     * Build the parameter reporting part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusParams(String& str);
+
+    /**
+     * Build the clannel list part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusChannels(String& str);
 
 private:
     Driver(); // no default constructor please

@@ -41,3 +41,5 @@ Plugin::~Plugin()
     Debugger debug("Plugin::~Plugin()"," [%p]",this);
     Engine::Register(this,false);
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

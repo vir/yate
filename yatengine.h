@@ -386,6 +386,113 @@ private:
 };
 
 /**
+ * Internal helper class providing a non-inline method to RefPointer.
+ * Please don't use this class directly, use @ref RefPointer instead.
+ * @short Internal helper class
+ */
+class RefPointerBase
+{
+protected:
+    /**
+     * Default constructor, initialize to null pointer
+     */
+    inline RefPointerBase()
+	: m_pointer(0) { }
+
+    /**
+     * Set a new stored pointer
+     * @param oldptr Pointer to the RefObject of the old stored object
+     * @param newptr Pointer to the RefObject of the new stored object
+     * @param pointer A void pointer to the derived class
+     */
+    void assign(RefObject* oldptr, RefObject* newptr, void* pointer);
+
+    /**
+     * The untyped stored pointer that should be casted to a @ref RefObject derived class
+     */
+    void* m_pointer;
+};
+
+/**
+ * @short Templated smart pointer class
+ */
+template <class Obj = RefObject> class RefPointer : public RefPointerBase
+{
+protected:
+    /**
+     * Retrive the stored pointer
+     * @return A typed pointer
+     */
+    inline Obj* pointer() const
+	{ return static_cast<Obj*>(m_pointer); }
+
+    /**
+     * Set a new stored pointer
+     * @param object Pointer to the new stored object
+     */
+    void assign(Obj* object = 0)
+	{ assign(pointer(),object,object); }
+
+public:
+    /**
+     * Default constructor - creates a null smart pointer
+     */
+    inline RefPointer()
+	{ }
+
+    /**
+     * Copy constructor, references the object
+     * @param value Original RefPointer
+     */
+    inline RefPointer(const RefPointer<Obj>& value)
+	{ assign(value); }
+
+    /**
+     * Constructs an initialized smart pointer, references the object
+     * @param object Pointer to object
+     */
+    inline RefPointer(Obj* object)
+	{ assign(object); }
+
+    /**
+     * Destructs the pointer and dereferences the object
+     */
+    inline ~RefPointer()
+	{ assign(); }
+
+    /**
+     * Assignment from smart pointer
+     */
+    inline RefPointer<Obj>& operator=(const RefPointer<Obj>& value)
+	{ assign(const_cast<const Obj*>(value)); return *this; }
+
+    /**
+     * Assignment from regular pointer
+     */
+    inline RefPointer<Obj>& operator=(Obj* object)
+	{ assign(object); return *this; }
+
+    /**
+     * Conversion to regular pointer operator
+     * @return The stored pointer
+     */
+    inline operator Obj*() const
+	{ return pointer(); }
+
+    /**
+     * Member access operator
+     */
+    inline Obj* operator->()
+	{ return pointer(); }
+
+    /**
+     * Dereferencing operator
+     */
+    inline Obj& operator*()
+	{ return *pointer(); }
+};
+
+/**
  * A simple single-linked object list handling class
  * @short An object list class
  */
@@ -884,6 +991,14 @@ public:
      * Stream style extraction operator for booleans
      */
     String& operator>>(bool& store);
+
+    /**
+     * Conditional appending with a separator
+     * @param value String to append
+     * @param separator Separator to insert before the value
+     * @param force True to allow appending empty strings
+     */
+    String& append(const char* value, const char* separator = 0, bool force = false);
 
     /**
      * Locate the first instance of a character in the string

@@ -339,4 +339,18 @@ bool RefObject::deref()
     return (i <= 0);
 }
 
+void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
+{
+    if (oldptr == newptr)
+	return;
+    // Always reference the new object before dereferencing the old one
+    if (newptr)
+	newptr->ref();
+    m_pointer = pointer;
+    if (oldptr)
+	oldptr->deref();
+}
+
 };
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

@@ -544,6 +544,16 @@ String& String::operator>>(bool& store)
     return *this;
 }
 
+String& String::append(const char* value, const char* separator, bool force)
+{
+    if (value || force) {
+	if (!null())
+	    operator+=(separator);
+	operator+=(value);
+    }
+    return *this;
+}
+
 bool String::operator==(const char* value) const
 {
     if (!m_string)
@@ -918,3 +928,5 @@ const String& NamedString::toString() const
 {
     return m_name;
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

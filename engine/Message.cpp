@@ -269,3 +269,5 @@ void MessageDispatcher::dequeue()
     while (dequeueOne())
 	;
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

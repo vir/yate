@@ -784,3 +784,5 @@ int Engine::main(int argc, const char** argv, const char** environ)
     Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
     return retcode;
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

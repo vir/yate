@@ -359,4 +359,5 @@ void Thread::preExec()
     ::pthread_kill_other_threads_np();
 #endif
 }
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

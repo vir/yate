@@ -135,8 +135,8 @@ bool Channel::msgDrop(Message& msg)
     return false;
 }
 
-Driver::Driver(const char* name)
-    : Plugin(name), Mutex(true), m_init(false), m_name(name)
+Driver::Driver(const char* name, const char* type)
+    : Plugin(name), Mutex(true), m_init(false), m_name(name), m_type(type)
 {
     m_prefix = m_name;
     if (m_prefix && !m_prefix.endsWith("/"))
@@ -157,6 +157,12 @@ void Driver::setup(const char* prefix)
     Engine::install(new MessageRelay("chan.masquerade",this,Masquerade,10));
     Engine::install(new MessageRelay("call.execute",this,Execute));
     Engine::install(new MessageRelay("call.drop",this,Drop));
+    Engine::install(new MessageRelay("engine.status",this,Status));
+}
+
+bool Driver::isBusy() const
+{
+    return (m_chans.count() != 0);
 }
 
 bool Driver::received(Message &msg, int id)
@@ -173,11 +179,25 @@ bool Driver::received(Message &msg, int id)
 	case Masquerade:
 	    dest = msg.getValue("id");
 	    break;
+	case Status:
+	    dest = msg.getValue("module");
+	    break;
 	default:
 	    dest = msg.getValue("targetid");
 	    break;
     }
-    if ((id == Drop) && (dest.null() || (dest == m_prefix))) {
+    // status is special - handle it here
+    if (id == Status) {
+	if (dest == m_name) {
+	    msgStatus(msg);
+	    return true;
+	}
+	if (dest.null() || (dest == m_type))
+	    msgStatus(msg);
+	return false;
+    }
+
+    if ((id == Drop) && (dest.null() || (dest == m_name) || (dest == m_type))) {
 	dropAll();
 	return false;
     }
@@ -224,3 +244,39 @@ void Driver::dropAll()
     m_chans.clear();
     unlock();
 }
+
+void Driver::msgStatus(Message& msg)
+{
+    String mod, par, c;
+    lock();
+    statusModule(mod);
+    statusParams(par);
+    statusChannels(c);
+    unlock();
+    msg.retValue() << mod << ";" << par << ";" << c << "\n";
+}
+
+void Driver::statusModule(String& str)
+{
+    str.append("name=",",") << m_name;
+    if (m_type)
+	str << ",type=" << m_type;
+    str << ",format=Status|Address";
+}
+
+void Driver::statusParams(String& str)
+{
+    str << ",chans=" << m_chans.count();
+}
+
+void Driver::statusChannels(String& str)
+{
+    ObjList* l = &m_chans;
+    for (; l; l=l->next()) {
+	Channel* c = static_cast<Channel*>(l->get());
+	if (c)
+	    str.append(c->id(),",") << "=" << c->status() << "|" << c->address();
+    }
+}
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

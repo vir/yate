@@ -107,3 +107,5 @@ const char* NamedList::getValue(const String& name, const char* defvalue) const
     const NamedString *s = getParam(name);
     return s ? s->c_str() : defvalue;
 }
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

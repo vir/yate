@@ -172,6 +172,8 @@ public:
         { return m_status; }
     inline void setStatus(const char *status, int state = -1)
         { m_status = status; if (state >= 0) m_state = state; }
+    inline void setReason(const char* str = "Request Terminated", int code = 487)
+	{ m_reason = str; m_reasonCode = code; }
     inline void setTarget(const char *target = 0)
         { m_target = target; }
     inline const String& getTarget() const
@@ -192,6 +194,7 @@ private:
     bool m_byebye;
     int m_state;
     String m_reason;
+    int m_reasonCode;
     SIPDialog m_id;
     URI m_uri;
     String m_target;
@@ -633,6 +636,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
       m_rtpSession(0), m_rtpVersion(0), m_port(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
+    setReason();
     s_mutex.lock();
     m_tr->ref();
     m_id = *m_tr->initialMessage();
@@ -659,6 +663,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
+    setReason();
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",uri);
     plugin.ep()->buildParty(m);
@@ -675,8 +680,9 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
 	m_id = *m_tr->initialMessage();
 	m_tr->setUserData(this);
     }
-    Lock lock(s_mutex);
+    s_mutex.lock();
     s_calls.append(this);
+    s_mutex.unlock();
 }
 
 YateSIPConnection::~YateSIPConnection()
@@ -692,8 +698,10 @@ void YateSIPConnection::clearTransaction()
 {
     if (m_tr) {
 	m_tr->setUserData(0);
-	if (m_tr->isIncoming())
-	    m_tr->setResponse(487,m_reason.null() ? "Request Terminated" : m_reason.c_str());
+	if (m_tr->isIncoming()) {
+	    m_byebye = false;
+	    m_tr->setResponse(m_reasonCode,m_reason.null() ? "Request Terminated" : m_reason.c_str());
+	}
 	m_tr->deref();
 	m_tr = 0;
     }
@@ -892,7 +900,7 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
 {
     Debug(DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
     if (reason)
-	m_reason = reason;
+	setReason(reason);
     setStatus("disconnected");
     setTarget();
 }

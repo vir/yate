@@ -380,7 +380,7 @@ AC_SUBST(RTTI_OPT)
 
 if [[ "x$HAVE_H323" != "xno" ]]; then
 if [[ "x$USE_RTTI" != "x$PWLIB_RTTI" ]]; then
-AC_ERROR([Miscmatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_RTTI)])
+AC_MSG_WARN([Mismatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_RTTI)])
 fi
 fi
 

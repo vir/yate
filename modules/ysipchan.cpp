@@ -158,9 +158,12 @@ public:
     void answered(Message* msg = 0);
     void doBye(SIPTransaction* t);
     void doCancel(SIPTransaction* t);
+    void reInvite(SIPTransaction* t);
     void hangup();
     inline String id() const
         { return "sip/" + m_id; }
+    inline const SIPDialog& dialog() const
+	{ return m_id; }
     inline const String& status() const
         { return m_status; }
     inline void setStatus(const char *status, int state = -1)
@@ -172,6 +175,7 @@ public:
     inline SIPTransaction* getTransaction() const
 	{ return m_tr; }
     static YateSIPConnection* find(const String& id);
+    static YateSIPConnection* find(const SIPDialog& id);
 private:
     void clearTransaction();
     SDPBody* createSDP(const char* addr, const char* port, const char* formats, const char* format = 0);
@@ -247,11 +251,12 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 	    if (var > 0)
 		port = var;
 	    String fmt;
+	    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
 	    while (tmp[0] == ' ') {
 		var = -1;
 		tmp >> " " >> var;
 		const char* payload = lookup(var,dict_payloads);
-		if (payload) {
+		if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs)) {
 		    if (fmt)
 			fmt << ",";
 		    fmt << payload;
@@ -533,8 +538,14 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     }
 
     if (e->getMessage()->getParam("To","tag")) {
-        Debug(DebugWarn,"Dropping re-INVITE, we don't support it yet");
-	e->getTransaction()->setResponse(501, "Re-INVITE not supported yet");
+	SIPDialog dlg(*e->getMessage());
+	YateSIPConnection* conn = YateSIPConnection::find(dlg);
+	if (conn)
+	    conn->reInvite(t);
+	else {
+	    Debug(DebugWarn,"Got re-INVITE for missing dialog");
+	    e->getTransaction()->setResponse(481, "Call/Transaction Does Not Exist");
+	}
         return;
     }
 
@@ -554,7 +565,16 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     m->addParam("id","sip/" + callid);
     m->addParam("caller",from.getUser());
     m->addParam("called",uri.getUser());
+    m->addParam("sip_uri",uri);
+    m->addParam("sip_from",from);
     m->addParam("sip_callid",callid);
+    m->addParam("sip_contact",e->getMessage()->getHeaderValue("Contact"));
+    m->addParam("sip_user-agent",e->getMessage()->getHeaderValue("User-Agent"));
+    SIPParty* party = e->getParty();
+    if (party) {
+	m->addParam("xsip_received",party->getPartyAddr());
+	m->addParam("xsip_rport",String(party->getPartyPort()));
+    }
     if (e->getMessage()->body && e->getMessage()->body->isSDP()) {
 	String addr,port,formats;
 	parseSDP(static_cast<SDPBody*>(e->getMessage()->body),addr,port,formats);
@@ -580,6 +600,18 @@ YateSIPConnection* YateSIPConnection::find(const String& id)
     Debug("YateSIPConnection",DebugAll,"finding '%s'",id.c_str());
     ObjList* l = s_calls.find(id);
     return l ? static_cast<YateSIPConnection*>(l->get()) : 0;
+}
+
+YateSIPConnection* YateSIPConnection::find(const SIPDialog& id)
+{
+    Debug("YateSIPConnection",DebugAll,"finding dialog '%s'",id.c_str());
+    ObjList* l = &s_calls;
+    for (; l; l = l->next()) {
+	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
+	if (c && (c->dialog() == id))
+	    return c;
+    }
+    return 0;
 }
 
 // Incoming call constructor - after call.route but before call.execute
@@ -782,7 +814,6 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 {
     Debug(DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
 	addr,port,formats,this);
-//    return 0;
     int t = Time::now() / 10000000000ULL;
     String tmp;
     tmp << "IN IP4 " << addr;
@@ -796,14 +827,15 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     frm << port << " RTP/AVP";
     ObjList rtpmap;
     ObjList* f = l;
+    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
     for (; f; f = f->next()) {
 	String* s = static_cast<String*>(f->get());
 	if (s) {
 	    int payload = s->toInteger(dict_payloads,-1);
 	    if (payload >= 0) {
-		frm << " " << payload;
 		const char* map = lookup(payload,dict_rtpmap);
-		if (map) {
+		if (map && s_cfg.getBoolValue("codecs",*s,defcodecs)) {
+		    frm << " " << payload;
 		    String* tmp = new String("rtpmap:");
 		    *tmp << payload << " " << map;
 		    rtpmap.append(tmp);
@@ -889,6 +921,40 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	startRtp();
     }
     return false;
+}
+
+void YateSIPConnection::reInvite(SIPTransaction* t)
+{
+    Debug(DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
+    while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
+	// accept re-INVITE only for local RTP, not for pass-trough
+	if (m_rtpid.null())
+	    break;
+	String addr,port,formats;
+	parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr,port,formats);
+	int q = formats.find(',');
+	String frm = formats.substr(0,q);
+	if (addr.null() || port.null() || frm.null())
+	    break;
+	m_rtpAddr = addr;
+	m_rtpPort = port;
+	m_rtpFormat = frm;
+	m_formats = formats;
+	Debug(DebugAll,"New RTP addr '%s' port %s formats '%s' format '%s'",
+	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+
+	m_rtpid.clear();
+	setSource();
+	setConsumer();
+
+	SIPMessage* m = new SIPMessage(t->initialMessage(), 200, "OK");
+	SDPBody* sdp = createRtpSDP(true);
+	m->setBody(sdp);
+	t->setResponse(m);
+	m->deref();
+	return;
+    }
+    t->setResponse(488, "Not Acceptable Here");
 }
 
 void YateSIPConnection::doBye(SIPTransaction* t)
@@ -1092,7 +1158,7 @@ SIPPlugin::~SIPPlugin()
 void SIPPlugin::initialize()
 {
     Output("Initializing module SIP Channel");
-    s_cfg = Engine::configFile("sipchan");
+    s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();

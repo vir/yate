@@ -265,6 +265,8 @@ bool DataSource::attach(DataConsumer *consumer)
 #ifdef DEBUG
     Debug(DebugInfo,"DataSource [%p] attaching consumer [%p]",this,consumer);
 #endif
+    if (!consumer)
+	return false;
     Lock lock(m_mutex);
     consumer->ref();
     if (consumer->getConnSource())
@@ -279,6 +281,8 @@ bool DataSource::detach(DataConsumer *consumer)
 #ifdef DEBUG
     Debug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
 #endif
+    if (!consumer)
+	return false;
     Lock lock(m_mutex);
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
     if (temp) {
@@ -286,6 +290,9 @@ bool DataSource::detach(DataConsumer *consumer)
 	temp->deref();
 	return true;
     }
+#ifdef DEBUG
+    Debug(DebugWarn,"DataSource [%p] has no consumer [%p]",this,consumer);
+#endif
     return false;
 }
 

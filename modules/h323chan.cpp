@@ -137,21 +137,28 @@ class YateH323AudioSource : public DataSource, public PIndirectChannel
 {
     PCLASSINFO(YateH323AudioSource, PIndirectChannel)
 public:
-    YateH323AudioSource() { }
-//    ~YateH323AudioSource() { Debug(DebugAll,"h.323 source [%p] deleted",this); }
+    YateH323AudioSource()
+	: m_exit(false)
+	{ Debug(DebugAll,"h.323 source [%p] created",this); }
+    ~YateH323AudioSource()
+	{ Debug(DebugAll,"h.323 source [%p] deleted",this); }
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Write(const void *buf, PINDEX len);
 private:
     PAdaptiveDelay writeDelay;
+    bool m_exit;
 };
 
 class YateH323AudioConsumer : public DataConsumer, public PIndirectChannel
 {
     PCLASSINFO(YateH323AudioConsumer, PIndirectChannel)
 public:
-    YateH323AudioConsumer() : m_exit(false) { }
-//    ~YateH323AudioConsumer() { Debug(DebugAll,"h.323 consumer [%p] deleted",this); }
+    YateH323AudioConsumer()
+	: m_exit(false)
+	{ Debug(DebugAll,"h.323 consumer [%p] created",this); }
+    ~YateH323AudioConsumer()
+	{ Debug(DebugAll,"h.323 consumer [%p] deleted",this); }
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Read(void *buf, PINDEX len);
@@ -518,7 +525,7 @@ YateH323Connection::~YateH323Connection()
 H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PString &caller,
     const H323SignalPDU &setupPDU, H323SignalPDU &connectPDU)
 {
-    Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s'",(const char *)caller);
+    Debug(DebugInfo,"YateH323Connection::OnAnswerCall caller='%s' [%p]",(const char *)caller,this);
 
     Message *m = new Message("ring");
     m->addParam("driver","h323");
@@ -559,7 +566,7 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 
 void YateH323Connection::OnEstablished()
 {
-    Debug(DebugInfo,"YateH323Connection::OnEstablished");
+    Debug(DebugInfo,"YateH323Connection::OnEstablished() [%p]",this);
     if (!HadAnsweredCall())
 	return;
     Message *m = new Message("answer");
@@ -571,7 +578,7 @@ void YateH323Connection::OnEstablished()
 
 void YateH323Connection::OnCleared()
 {
-    Debug(DebugInfo,"YateH323Connection::OnCleared");
+    Debug(DebugInfo,"YateH323Connection::OnCleared() [%p]",this);
     bool ans = HadAnsweredCall();
     disconnect();
     if (!ans)
@@ -584,7 +591,7 @@ void YateH323Connection::OnCleared()
 
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)
 {
-    Debug(DebugInfo,"YateH323Connection::OnAlerting '%s'",(const char *)user);
+    Debug(DebugInfo,"YateH323Connection::OnAlerting '%s' [%p]",(const char *)user,this);
     Message *m = new Message("ringing");
     m->addParam("driver","h323");
     m->addParam("id",m_id);
@@ -594,12 +601,12 @@ BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PStr
 
 void YateH323Connection::OnUserInputTone(char tone, unsigned duration, unsigned logicalChannel, unsigned rtpTimestamp)
 {
-    Debug(DebugInfo,"YateH323Connection::OnUserInputTone '%c' duration=%u",tone,duration);
+    Debug(DebugInfo,"YateH323Connection::OnUserInputTone '%c' duration=%u [%p]",tone,duration,this);
 }
 
 void YateH323Connection::OnUserInputString(const PString &value)
 {
-    Debug(DebugInfo,"YateH323Connection::OnUserInputString '%s'",(const char *)value);
+    Debug(DebugInfo,"YateH323Connection::OnUserInputString '%s' [%p]",(const char *)value,this);
 }
 
 BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
@@ -636,7 +643,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 
 void YateH323Connection::disconnected()
 {
-    Debugger debug("YateH323Connection::disconnected()");
+    Debugger debug("YateH323Connection::disconnected()"," [%p]",this);
     // we must bypass the normal Yate refcounted destruction as OpenH323 will destroy the object
     ref();
     if (getSource() && m_nativeRtp)
@@ -652,7 +659,7 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param)
 #endif
 {
-    Debug(DebugAll,"H323Connection::CreateRealTimeLogicalChannel");
+    Debug(DebugAll,"H323Connection::CreateRealTimeLogicalChannel [%p]",this);
     if (s_externalRtp) {
 	const char* sdir = lookup(dir,dict_h323_dir);
 	Debug(DebugInfo,"capability '%s' session %u %s",(const char *)capability.GetFormatName(),sessionID,sdir);
@@ -759,8 +766,8 @@ YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
 	WORD dataPort)
 	: H323_ExternalRTPChannel(connection, capability, direction, sessionID, ip, dataPort),m_conn(&connection)
 { 
-    Debug(DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u",
-	lookup(GetDirection(),dict_h323_dir), (const char *)ip.AsString(), dataPort);
+    Debug(DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u [%p]",
+	lookup(GetDirection(),dict_h323_dir), (const char *)ip.AsString(), dataPort,this);
     SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
 }
 
@@ -792,20 +799,20 @@ BOOL YateH323_ExternalRTPChannel::OnReceivedPDU(
 				const H245_H2250LogicalChannelParameters & param,
 				unsigned & errorCode)
 {
-    Debug(DebugInfo,"OnReceivedPDU");
+    Debug(DebugInfo,"OnReceivedPDU [%p]",this);
     return H323_ExternalRTPChannel::OnReceivedPDU(param,errorCode);
 }
 
 BOOL YateH323_ExternalRTPChannel::OnSendingPDU( H245_H2250LogicalChannelParameters & param )
 {
-    Debug(DebugInfo,"OnSendingPDU");
+    Debug(DebugInfo,"OnSendingPDU [%p]",this);
     return H323_ExternalRTPChannel::OnSendingPDU(param);
 }
 
 BOOL YateH323_ExternalRTPChannel::OnReceivedAckPDU(const H245_H2250LogicalChannelAckParameters & param)
 {
 
-    Debug(DebugInfo,"OnReceivedAckPDU");
+    Debug(DebugInfo,"OnReceivedAckPDU [%p]",this);
     return H323_ExternalRTPChannel::OnReceivedAckPDU(param);
 }
 
@@ -829,7 +836,7 @@ void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long timeDel
 	m_buffer += data;
 #ifdef DEBUG
     else
-	Debug("YateH323AudioConsumer",DebugAll,"Skipped %u bytes, buffer is full",data.length());
+	Debug("YateH323AudioConsumer",DebugAll,"Skipped %u bytes, buffer is full [%p]",data.length(),this);
 #endif
     m_timestamp += timeDelta;
 }
@@ -849,7 +856,7 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 	    ::memcpy(buf,m_buffer.data(),len);
 	    m_buffer.assign(len+(char *)m_buffer.data(),m_buffer.length()-len);
 #ifdef DEBUG
-	    Debug("YateH323AudioConsumer",DebugAll,"Pulled %d bytes from buffer",len);
+	    Debug("YateH323AudioConsumer",DebugAll,"Pulled %d bytes from buffer [%p]",len,this);
 #endif
 	    break;
 	}
@@ -862,20 +869,22 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 
 BOOL YateH323AudioSource::Close()
 {
-    DataSource::clear();
+    m_exit = true;
     return true;
 }
 
 BOOL YateH323AudioSource::IsOpen() const
 {
-    return true;
+    return !m_exit;
 }
 
 BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
 {
-    DataBlock data((void *)buf,len,false);
-    Forward(data,len/2);
-    data.clear(false);
+    if (!m_exit) {
+	DataBlock data((void *)buf,len,false);
+	Forward(data,len/2);
+	data.clear(false);
+    }
     lastWriteCount = len;
     writeDelay.Delay(len/16);
     return true;

@@ -420,7 +420,6 @@ BOOL YateGatekeeperServer::Init ()
 	if (!AddListener(new H323GatekeeperListener(endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
 	  Debug(DebugGoOn,"I can't start the listener for address: %s",addr);
      }  
-  Debug(DebugInfo,"i = %d",i);
   return TRUE;	
 }
 

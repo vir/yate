@@ -385,6 +385,7 @@ static void usage(FILE *f)
 "   -q             Quieter debugging (you can use more than once)\n"
 "   -d             Daemonify, suppress output unless logged\n"
 "   -l filename    Log to file\n"
+"   -p filename    Write PID to file\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 #ifndef NDEBUG
@@ -417,6 +418,7 @@ int Engine::main(int argc, const char **argv, const char **environ)
     bool daemonic = false;
     int debug_level = debugLevel();
     const char *logfile = 0;
+    const char *pidfile = 0;
     int i;
     bool inopt = true;
     for (i=1;i<argc;i++) {
@@ -456,6 +458,14 @@ int Engine::main(int argc, const char **argv, const char **environ)
 			}
 			pc = 0;
 			logfile=argv[++i];
+			break;
+		    case 'p':
+			if (i+1 >= argc) {
+			    noarg(argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			pidfile=argv[++i];
 			break;
 		    case 'c':
 			if (i+1 >= argc) {
@@ -515,6 +525,15 @@ int Engine::main(int argc, const char **argv, const char **environ)
 	    int err = errno;
 	    ::fprintf(stderr,"Daemonification failed: %s (%d)\n",::strerror(err),err);
 	    return err;
+	}
+    }
+    if (pidfile) {
+	int fd = ::open(pidfile,O_WRONLY|O_CREAT,0644);
+	if (fd >= 0) {
+	    char pid[32];
+	    ::snprintf(pid,sizeof(pid),"%u\n",::getpid());
+	    ::write(fd,pid,::strlen(pid));
+	    ::close(fd);
 	}
     }
     if (logfile) {

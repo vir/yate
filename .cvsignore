@@ -14,6 +14,7 @@ yate.core*
 *.o
 *.a
 *.so
+*.so.*
 *.yate
 *.orig
 *~

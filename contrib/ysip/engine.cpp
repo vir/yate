@@ -75,21 +75,24 @@ void URI::parse() const
     DDebug("URI",DebugAll,"parsing '%s' [%p]",c_str(),this);
     m_port = 0;
 
+    // the compiler generates wrong code so use the temporary
+    String tmp(*this);
     Regexp r("<\\([^>]\\+\\)>");
-    if (const_cast<URI*>(this)->matches(r)) {
-	*const_cast<URI*>(this) = matchString(1);
+    if (tmp.matches(r)) {
+	tmp = tmp.matchString(1);
+	*const_cast<URI*>(this) = tmp;
 	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
     }
 
     // proto:[user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
     // proto:[user@]hostname[:port][/path][;params][?params][&params]
     r = "^\\([[:alpha:]]\\+\\):\\([[:alnum:]._-]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
-    if (const_cast<URI*>(this)->matches(r)) {
-	m_proto = matchString(1).toLower();
-	m_user = matchString(2);
+    if (tmp.matches(r)) {
+	m_proto = tmp.matchString(1).toLower();
+	m_user = tmp.matchString(2);
 	m_user = m_user.substr(0,m_user.length()-1);
-	m_host = matchString(3).toLower();
-	String tmp = matchString(4);
+	m_host = tmp.matchString(3).toLower();
+	tmp = tmp.matchString(4);
 	tmp >> ":" >> m_port;
 	DDebug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d [%p]",
 	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);

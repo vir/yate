@@ -407,8 +407,8 @@ bool OssHandler::received(Message &msg)
     }
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     Debug(DebugInfo,"We are routing to device '%s'",dest.matchString(1).c_str());
-    if (dd)
-	dd->connect(chan);
+    if (dd && chan->connect(dd))
+	chan->deref();
     else {
         const char *direct = msg.getValue("direct");
 	if (direct)

@@ -1005,11 +1005,9 @@ void ZapChan::disconnected(bool final, const char *reason)
 	m.addParam("reason",reason);
 	Engine::enqueue(m);
     }
-    // FIXME: we can't know from which thread we got disconnected
-    bool gotLock = zplugin.mutex.lock(1000);
+    zplugin.mutex.lock();
     hangup(PRI_CAUSE_NORMAL_CLEARING);
-    if (gotLock)
-	zplugin.mutex.unlock();
+    zplugin.mutex.unlock();
 }
 
 bool ZapChan::nativeConnect(DataEndpoint *peer)
@@ -1411,6 +1409,7 @@ bool StatusHandler::received(Message &msg)
 }
 
 ZaptelPlugin::ZaptelPlugin()
+    : mutex(true)
 {
     Output("Loaded module Zaptel");
     ::pri_set_error(pri_err_cb);

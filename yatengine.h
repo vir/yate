@@ -1260,6 +1260,95 @@ private:
 };
 
 /**
+ * A class to compute and check MD5 digests
+ * @short A standard MD5 digest calculator
+ */
+class MD5
+{
+public:
+    /**
+     * Construct a fresh initialized instance
+     */
+    MD5();
+
+    /**
+     * Copy constructor
+     * @param original MD5 instance to copy
+     */
+    MD5(const MD5& original);
+
+    /**
+     * Construct a digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     */
+    MD5(const void* buf, unsigned int len);
+
+    /**
+     * Construct a digest from a String
+     * @param str String to be included in digest
+     */
+    MD5(const String& str);
+
+    /**
+     * Destroy the instance, free allocated memory
+     */
+    ~MD5();
+
+    /**
+     * Assignment operator.
+     */
+    MD5& operator=(const MD5 &original);
+
+    /**
+     * Clear the digest and prepare for reuse
+     */
+    void clear();
+
+    /**
+     * Finalize the digest computation, make result ready.
+     * Subsequent calls to @ref update() will fail
+     */
+    void finalize();
+
+    /**
+     * Update the digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     * @return True if success, false if @ref finalize() was already called
+     */
+    bool update(const void* buf, unsigned int len);
+
+    /**
+     * Update the digest from the content of a String
+     * @param str String to be included in digest
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const String& str)
+	{ return update(str.c_str(), str.length()); }
+
+    /**
+     * Returns a pointer to the raw 16-byte binary value of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return Pointer to the raw digest data or NULL if some error occured
+     */
+    const unsigned char* rawDigest();
+
+    /**
+     * Returns the standard hexadecimal representation of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return A String which holds the hex digest or a null one if some error occured
+     */
+    const String& hexDigest();
+
+private:
+    void init();
+    void* m_private;
+    String m_hex;
+    unsigned char m_bin[16];
+};
+
+/**
  * This class holds a named list of named strings
  * @short A named string container class
  */

@@ -26,7 +26,7 @@ LIBS :=
 MAN8 := yate.8 yate-config.8
 DOCS := README COPYING ChangeLog
 ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
-	Message.o Mutex.o Thread.o Plugin.o Engine.o
+	Message.o Mutex.o Thread.o Plugin.o Engine.o MD5.o
 TELOBJS :=DataBlock.o DataFormat.o
 OBJS := main.o
 

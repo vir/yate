@@ -423,11 +423,13 @@ bool OssHandler::received(Message &msg)
 		return true;
 	    }
 	    Debug(DebugFail,"OSS outgoing call not accepted!");
+	    chan->destruct();
 	    return false;
 	}	
 	const char *targ = msg.getValue("target");
 	if (!targ) {
 	    Debug(DebugWarn,"OSS outgoing call with no target!");
+	    chan->destruct();
 	    return false;
 	}
 	Message m("call.preroute");

@@ -94,6 +94,8 @@ public:
     bool outputLine(const char *line);
     void reportError(const char *line);
     bool create(const char *script, const char *args);
+    inline bool created() const
+	{ return (m_pid != -1); }
     void run();
 private:
     pid_t m_pid;
@@ -363,7 +365,8 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	    ::fprintf(stderr, "Execing '%s' '%s'\n", script, args);
         ::execl(script, script, args, (char *)NULL);
 	::fprintf(stderr, "Failed to execute '%s': %s\n", script, strerror(errno));
-	::exit(1);
+	/* Shit happened. Die as quick and brutal as possible */
+	::_exit(1);
     }
     Debug(DebugInfo,"Launched External Script %s", script);
     m_in = ext2yate[0];
@@ -549,6 +552,8 @@ bool ExtModHandler::received(Message &msg)
     }
     if (typ == ExtModChan::NoChannel) {
 	ExtModReceiver *recv = new ExtModReceiver(dest.matchString(2).c_str(),"");
+	while (!recv->created())
+	    Thread::yield();
 	return recv->received(msg,1);
     }
     if (typ != ExtModChan::DataNone && !dd) {

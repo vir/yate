@@ -801,19 +801,21 @@ unsigned int String::hash(const char *value)
 }
 
 Regexp::Regexp()
-    : m_regexp(0)
+    : m_regexp(0), m_flags(0)
 {
     DDebug(DebugAll,"Regexp::Regexp() [%p]",this);
 }
 
-Regexp::Regexp(const char *value)
-    : String(value), m_regexp(0)
+Regexp::Regexp(const char *value, bool extended, bool insensitive)
+    : String(value), m_regexp(0), m_flags(0)
 {
-    DDebug(DebugAll,"Regexp::Regexp(\"%s\") [%p]",value,this);
+    DDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
+	value,extended,insensitive,this);
+    setFlags(extended,insensitive);
 }
 
 Regexp::Regexp(const Regexp &value)
-    : String(value.c_str()), m_regexp(0)
+    : String(value.c_str()), m_regexp(0), m_flags(value.m_flags)
 {
     DDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
 }
@@ -855,7 +857,7 @@ bool Regexp::compile()
 	    Debug("Regexp",DebugFail,"malloc(%d) returned NULL!",sizeof(regex_t));
 	    return false;
 	}
-	if (::regcomp(data,c_str(),0)) {
+	if (::regcomp(data,c_str(),m_flags)) {
 	    Debug(DebugWarn,"Regexp::compile() \"%s\" failed",c_str());
 	    ::regfree(data);
 	    ::free(data);
@@ -875,6 +877,25 @@ void Regexp::cleanup()
 	::regfree(data);
 	::free(data);
     }
+}
+
+void Regexp::setFlags(bool extended, bool insensitive)
+{
+    int f = (extended ? REG_EXTENDED : 0) | (insensitive ? REG_ICASE : 0);
+    if (m_flags != f) {
+	cleanup();
+	m_flags = f;
+    }
+}
+
+bool Regexp::isExtended() const
+{
+    return (m_flags & REG_EXTENDED) != 0;
+}
+
+bool Regexp::isCaseInsensitive() const
+{
+    return (m_flags & REG_ICASE) != 0;
 }
 
 NamedString::NamedString(const char *name, const char *value)

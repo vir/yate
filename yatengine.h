@@ -1033,8 +1033,10 @@ public:
     /**
      * Creates a new initialized regexp.
      * @param value Initial value of the regexp.
+     * @param extended True to use POSIX Extended Regular Expression syntax
+     * @param insensitive True to not differentiate case
      */
-    Regexp(const char *value);
+    Regexp(const char *value, bool extended = false, bool insensitive = false);
 
     /**
      * Copy constructor.
@@ -1074,6 +1076,25 @@ public:
     virtual bool matches(const String &value) const
 	{ return matches(value.safe()); }
 
+    /**
+     * Change the expression matching flags
+     * @param extended True to use POSIX Extended Regular Expression syntax
+     * @param insensitive True to not differentiate case
+     */
+    void setFlags(bool extended, bool insensitive);
+
+    /**
+     * Return the POSIX Extended syntax flag
+     * @return True if using POSIX Extended Regular Expression syntax
+     */
+    bool isExtended() const;
+
+    /**
+     * Return the Case Insensitive flag
+     * @return True if not differentiating case
+     */
+    bool isCaseInsensitive() const;
+
 protected:
     /**
      * Called whenever the value changed (except in constructors) to recompile.
@@ -1084,6 +1105,7 @@ private:
     void cleanup();
     bool matches(const char *value, StringMatchPrivate *matches);
     void *m_regexp;
+    int m_flags;
 };
 
 /**

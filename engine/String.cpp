@@ -527,6 +527,20 @@ bool String::operator!=(const String &value) const
     return operator!=(value.c_str());
 }
 
+bool String::operator&=(const char *value) const
+{
+    if (!m_string)
+	return !(value && *value);
+    return value && !::strcasecmp(m_string,value);
+}
+
+bool String::operator|=(const char *value) const
+{
+    if (!m_string)
+	return value && *value;
+    return (!value) || ::strcasecmp(m_string,value);
+}
+
 int String::find(char what, unsigned int offs) const
 {
     if (!m_string || (offs > m_length))

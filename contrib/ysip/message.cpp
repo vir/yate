@@ -69,9 +69,9 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     method = message->method;
     const ObjList* l = &message->header;
     for (; l; l = l->next()) {
-	String* t = static_cast<String*>(l->get());
+	NamedString* t = static_cast<NamedString*>(l->get());
 	if (t)
-	    header.append(new String(*t));
+	    header.append(new NamedString(t->name(),*t));
     }
     body = message->body ? message->body->clone() : 0;
     m_valid = true;
@@ -146,20 +146,30 @@ bool SIPMessage::parse(const char *buf, int len)
     while (len > 0) {
 	line = getUnfoldedLine(&buf,&len);
 	if (line->null()) {
-	    // Found end of header
+	    // Found end of headers
 	    line->destruct();
 	    break;
 	}
-	DDebug("SIPMessage::parse",DebugAll,"header= '%s'",line->c_str());
-	header.append(line);
-	if (content.null()) {
+	int col = line->find(':');
+	if (col <= 0) {
+	    line->destruct();
+	    return false;
+	}
+	String name = line->substr(0,col);
+	name.trimBlanks();
+	if (name.null()) {
+	    line->destruct();
+	    return false;
+	}
+	*line >> ":";
+	line->trimBlanks();
+	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
+	header.append(new NamedString(name.c_str(),*line));
+	if (content.null() && (name &= "content-type")) {
 	    content = *line;
 	    content.toLower();
-	    if (content.startSkip("content-type:",false))
-		content.trimBlanks();
-	    else
-		content.clear();
 	}
+	line->destruct();
     }
     body = SIPBody::build(buf,len,content);
     Debug("SIPMessage::parse",DebugAll,"%d header lines, body %p",
@@ -187,9 +197,9 @@ const String& SIPMessage::getHeaders() const
 
 	const ObjList* l = &header;
 	for (; l; l = l->next()) {
-	    String* t = static_cast<String*>(l->get());
+	    NamedString* t = static_cast<NamedString*>(l->get());
 	    if (t)
-		m_string << *t << "\r\n";
+		m_string << t->name() << ": " << t->c_str() << "\r\n";
 	}
 
 	m_string << "\r\n";

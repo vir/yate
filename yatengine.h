@@ -700,6 +700,16 @@ public:
     bool operator!=(const String &value) const;
 
     /**
+     * Case-insensitive equality operator.
+     */
+    bool operator&=(const char *value) const;
+
+    /**
+     * Case-insensitive inequality operator.
+     */
+    bool operator|=(const char *value) const;
+
+    /**
      * Stream style appending operator for C strings
      */
     inline String& operator<<(const char *value)

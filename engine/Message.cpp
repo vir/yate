@@ -31,6 +31,23 @@ Message::Message(const char* name, const char* retval)
     DDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
 
+Message::~Message()
+{
+    userData(0);
+}
+
+void Message::userData(RefObject* data)
+{
+    if (data == m_data)
+	return;
+    RefObject* tmp = m_data;
+    if (data)
+	data->ref();
+    m_data = data;
+    if (tmp)
+	tmp->deref();
+}
+
 String Message::encode(const char* id) const
 {
     String s("%%>message:");

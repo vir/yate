@@ -98,10 +98,10 @@ class DebugEnabler
 public:
     /**
      * Constructor
-     * @param level The initial
+     * @param level The initial local debug level
      */
-    inline DebugEnabler(int level = DebugWarn, bool enabled = true)
-	: m_level(DebugFail), m_enabled(enabled)
+    inline DebugEnabler(int level = TelEngine::debugLevel(), bool enabled = true)
+	: m_level(DebugFail), m_enabled(enabled), m_chain(0)
 	{ debugLevel(level); }
 
     /**
@@ -109,7 +109,7 @@ public:
      * @return The current local debug level
      */
     inline int debugLevel() const
-	{ return m_level; }
+	{ return m_chain ? m_chain->debugLevel() : m_level; }
 
     /**
      * Set the current local debug level.
@@ -123,26 +123,33 @@ public:
      * @return True if local debugging is enabled
      */
     inline bool debugEnabled() const
-	{ return m_enabled; }
+	{ return m_chain ? m_chain->debugEnabled() : m_enabled; }
 
     /**
      * Set the current debug activation status
      * @param enable The new debug activation status, true to enable
      */
     inline void debugEnabled(bool enable)
-	{ m_enabled = enable; }
+	{ m_enabled = enable; m_chain = 0; }
 
     /**
      * Check if debugging output should be generated
      * @param level The debug level we are testing
      * @return True if messages should be output, false otherwise
      */
-    inline bool debugAt(int level) const
-	{ return (m_enabled && (level <= m_level)); }
+    bool debugAt(int level) const;
+
+    /**
+     * Chain this debug holder to a parent or detach from existing one
+     * @param chain Pointer to parent debug level, NULL to detach
+     */
+    inline void debugChain(DebugEnabler* chain = 0)
+	{ m_chain = (chain != this) ? chain : 0; }
 
 private:
     int m_level;
     bool m_enabled;
+    DebugEnabler* m_chain;
 };
 
 #if 0
@@ -431,7 +438,7 @@ protected:
      * @param object Pointer to the new stored object
      */
     void assign(Obj* object = 0)
-	{ assign(pointer(),object,object); }
+	{ RefPointerBase::assign(pointer(),object,object); }
 
 public:
     /**
@@ -1167,6 +1174,14 @@ inline const char *c_safe(const char* str)
     { return str ? str : ""; }
 
 /**
+ * Utility function to check if a C string is null or empty
+ * @param str Pointer to a C string
+ * @return True if str is NULL or starts with a NUL character
+ */
+inline bool null(const char* str)
+    { return !(str && *str); }
+
+/**
  * Concatenation operator for strings.
  */
 String operator+(const String& s1, const String& s2);
@@ -1807,6 +1822,11 @@ public:
     Message(const char* name, const char* retval = 0);
 
     /**
+     * Destruct the message and dereferences any user data
+     */
+    ~Message();
+
+    /**
      * Retrive a reference to the value returned by the message.
      * @return A reference to the value the message will return
      */
@@ -1814,18 +1834,18 @@ public:
 	{ return m_return; }
 
     /**
-     * Retrive the obscure data associated with the message
-     * @return Pointer to arbitrary user data
+     * Retrive the object associated with the message
+     * @return Pointer to arbitrary user RefObject
      */
-    inline void* userData() const
+    inline RefObject* userData() const
 	{ return m_data; }
 
     /**
-     * Set obscure data associated with the message
-     * @param _data Pointer to arbitrary user data
+     * Set obscure data associated with the message.
+     * The user data is reference counted to avoid stray pointers.
+     * @param data Pointer to arbitrary user data
      */
-    inline void userData(void* _data)
-	{ m_data = _data; }
+    void userData(RefObject* data);
 
     /**
      * Retrive a reference to the creation time of the message.
@@ -1889,7 +1909,7 @@ private:
     Message& operator=(const Message& value); // no assignment please
     String m_return;
     Time m_time;
-    void* m_data;
+    RefObject* m_data;
     void commonEncode(String& str) const;
     int commonDecode(const char* str, int offs);
 };

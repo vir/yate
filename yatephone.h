@@ -114,6 +114,9 @@ struct FormatInfo {
 	{ }
 };
 
+class Channel;
+class Driver;
+
 /**
  * A structure to build (mainly static) translator capability tables.
  * A table of such structures must end with an entry with null format names.
@@ -697,15 +700,20 @@ class DataEndpoint : public RefObject
 public:
 
     /**
-     * Creates am empty data ednpoint
+     * Creates an empty data endpoint
      */
-    inline DataEndpoint(const char* name = 0)
-	: m_name(name), m_source(0), m_consumer(0), m_peer(0) { }
+    DataEndpoint(Channel* chan = 0, const char* name = "audio");
 
     /**
      * Destroys the endpoint, source and consumer
      */
     ~DataEndpoint();
+
+    /**
+     * Get a string identification of the endpoint
+     * @return A reference to this endpoint's name
+     */
+    virtual const String& toString() const;
 
     /**
      * Connect the source and consumer of the endpoint to a peer
@@ -716,10 +724,9 @@ public:
 
     /**
      * Disconnect from the connected endpoint
-     * @param reason Text that describes disconnect reason
      */
-    inline void disconnect(const char* reason = 0)
-	{ disconnect(false,reason); }
+    inline void disconnect()
+	{ disconnect(false); }
 
     /**
      * Set the data source of this object
@@ -731,7 +738,7 @@ public:
      * Get the data source of this object
      * @return A pointer to the DataSource object or NULL
      */
-    DataSource* getSource() const
+    inline DataSource* getSource() const
 	{ return m_source; }
 
     /**
@@ -744,7 +751,7 @@ public:
      * Get the data consumer of this object
      * @return A pointer to the DataConsumer object or NULL
      */
-    DataConsumer* getConsumer() const
+    inline DataConsumer* getConsumer() const
 	{ return m_consumer; }
 
     /*
@@ -753,6 +760,13 @@ public:
      */
     inline DataEndpoint* getPeer() const
 	{ return m_peer; }
+
+    /*
+     * Get a pointer to the owner channel
+     * @return A pointer to the owner channel or NULL
+     */
+    inline Channel* getChannel() const
+	{ return m_channel; }
 
     /**
      * Get the name set in constructor
@@ -770,9 +784,8 @@ protected:
     /**
      * Disconnect notification method
      * @param final True if this disconnect was called from the destructor
-     * @param reason Text that describes disconnect reason
      */
-    virtual void disconnected(bool final, const char* reason) { }
+    virtual void disconnected(bool final) { }
 
     /**
      * Attempt to connect the endpoint to a peer of the same type
@@ -785,35 +798,169 @@ protected:
     /*
      * Set the peer endpoint pointer
      * @param peer A pointer to the new peer or NULL
-     * @param reason Text describing the reason in case of disconnect
      */
-    void setPeer(DataEndpoint* peer, const char* reason = 0);
+    void setPeer(DataEndpoint* peer);
 
 private:
-    void disconnect(bool final, const char* reason);
+    void disconnect(bool final);
     String m_name;
     DataSource* m_source;
     DataConsumer* m_consumer;
     DataEndpoint* m_peer;
+    Channel* m_channel;
 };
 
-class Driver;
+/**
+ * Module is a descendent of Plugin specialized in implementing modules
+ * @short A Plugin that implements a module
+ */
+class Module : public Plugin, public Mutex, public MessageReceiver, public DebugEnabler
+{
+private:
+    bool m_init;
+    String m_name;
+    String m_type;
+    unsigned long long m_changed;
+    static unsigned int s_delay;
+
+public:
+    /**
+     * Retrive the name of the module
+     * @return The module's name as String
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
+     * Retrive the type of the module
+     * @return The module's type as String
+     */
+    inline const String& type() const
+	{ return m_type; }
+
+    /**
+     * Mark the driver statistics "dirty" therefore triggring a delayed
+     *  status update.
+     */
+    void changed();
+
+    /**
+     * Retrive the global update notification delay
+     * @return Update delay value in usec
+     */
+    inline static unsigned int updateDelay()
+	{ return s_delay; }
+
+    /**
+     * Set the global update notification delay
+     * @param delay New update delay value in usec, 0 to disable
+     */
+    inline static void updateDelay(unsigned int delay)
+	{ s_delay = delay; }
+
+protected:
+    /**
+     * IDs of the installed relays
+     */
+    enum {
+	// Module messages
+	Status,
+	Timer,
+	Level,
+	// Driver messages
+	Execute,
+	Drop,
+	// Channel messages
+	Ringing,
+	Answered,
+	Tone,
+	Text,
+	Masquerade,
+	Locate,
+    } RelayID;
+
+    /**
+     * Constructor
+     * @param name Plugin name of this driver
+     * @param type Type of the driver: "misc", "route", etc.
+     */
+    Module(const char* name, const char* type = 0);
+
+    /**
+     * Install standard message relays
+     */
+    void setup();
+
+    /**
+     * Message receiver handler
+     * @param msg The received message
+     * @param id The identifier with which the relay was created
+     * @return True to stop processing, false to try other handlers
+     */
+    virtual bool received(Message &msg, int id);
+
+    /**
+     * Opportunity to modify the update message
+     * @param msg Status update message
+     */
+    virtual void genUpdate(Message& msg);
+
+    /**
+     * Timer message handler.
+     * @param msg Time message
+     */
+    virtual void msgTimer(Message& msg);
+
+    /**
+     * Status message handler that is invoked only for matching messages.
+     * @param msg Status message
+     */
+    virtual void msgStatus(Message& msg);
+
+    /**
+     * Build the module identification part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusModule(String& str);
+
+    /**
+     * Build the parameter reporting part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusParams(String& str);
+
+    /**
+     * Set the local debugging level
+     * @param msg Debug setting message
+     * @param target String to match for local settings
+     */
+    virtual bool setDebug(Message& msg, const String& target);
+
+private:
+    Module(); // no default constructor please
+};
 
 /**
  * A class that holds common channel related features (a.k.a. call leg)
  * @short An abstract communication channel
  */
-class Channel : public RefObject
+class Channel : public RefObject, public DebugEnabler
 {
+    friend class Driver;
+    friend class Router;
+    friend class DataEndpoint;
+
 private:
     Channel* m_peer;
     Driver* m_driver;
     bool m_outgoing;
     String m_id;
-    String m_targetid;
-    String m_billid;
+
+protected:
     String m_status;
     String m_address;
+    String m_targetid;
+    String m_billid;
     ObjList m_data;
 
 public:
@@ -832,8 +979,17 @@ public:
     /**
      * Put channel variables into a message
      * @param msg Message to fill in
+     * @param minimal True to fill in only a minimum of parameters
      */
-    virtual void complete(Message& msg) const;
+    virtual void complete(Message& msg, bool minimal = false) const;
+
+    /**
+     * Create a filled notification message
+     * @param name Name of the message to create
+     * @param minimal Set to true to fill in only a minimum of parameters
+     * @return A new allocated and parameter filled message
+     */
+    Message* message(const char* name, bool minimal = false) const;
 
     /**
      * Notification on remote ringing
@@ -873,6 +1029,25 @@ public:
     virtual bool msgDrop(Message& msg);
 
     /**
+     * Notification on success of incoming call
+     * @param msg Notification call.execute message
+     */
+    virtual void callAccept(Message& msg);
+
+    /**
+     * Notification on failure of incoming call
+     * @param error Standard error keyword
+     * @param reason Textual failure reason
+     */
+    virtual void callReject(const char* error, const char* reason = 0);
+
+    /**
+     * Set the local debugging level
+     * @param msg Debug setting message
+     */
+    virtual bool setDebug(Message& msg);
+
+    /**
      * Get the current status of the channel
      * @return The current status as String
      */
@@ -881,7 +1056,7 @@ public:
 
     /**
      * Get the current link address of the channel
-     * @return The protocol dependent link address as String
+     * @return The protocol dependent address as String
      */
     inline const String& address() const
 	{ return m_address; }
@@ -901,6 +1076,12 @@ public:
 	{ return !m_outgoing; }
 
     /**
+     * Get the direction of the channel as string
+     * @return "incoming" or "outgoing" according to the direction
+     */
+    const char* direction() const;
+
+    /**
      * Get the unique channel identifier
      * @return A String holding the unique channel id
      */
@@ -916,26 +1097,12 @@ public:
 	{ return m_targetid; }
 
     /**
-     * Set the connected channel identifier
-     * @param target The new target channel id
-     */
-    inline void targetid(const char* target)
-	{ m_targetid = target; }
-
-    /**
      * Get the billing identifier.
      * @return An identifier of the call or account that will be billed for
      *  calls made by this channel.
      */
     inline const String& billid() const
 	{ return m_billid; }
-
-    /**
-     * Set a new billing identifier
-     * @param target The new billing call or account identifier
-     */
-    inline void billid(const char* newbillid)
-	{ m_billid = newbillid; }
 
     /**
      * Get the connected peer channel
@@ -958,6 +1125,55 @@ public:
     inline void disconnect(const char* reason = 0)
 	{ disconnect(false,reason); }
 
+    /**
+     * Get the driver of this channel
+     * @return Pointer to this channel's driver
+     */
+    inline Driver* driver() const
+	{ return m_driver; }
+
+    /**
+     * Get a data endpoint of this object
+     * @param type Type of data endpoint: "audio", "video", "text"
+     * @return A pointer to the DataEndpoint object or NULL if not found
+     */
+    DataEndpoint* getEndpoint(const char* type = "audio") const;
+
+    /**
+     * Get a data endpoint of this object, create if required
+     * @param type Type of data endpoint: "audio", "video", "text"
+     * @return A pointer to the DataEndpoint object or NULL if an error occured
+     */
+    DataEndpoint* addEndpoint(const char* type = "audio");
+
+    /**
+     * Set a data source of this object
+     * @param source A pointer to the new source or NULL
+     * @param type Type of data node: "audio", "video", "text"
+     */
+    void setSource(DataSource* source = 0, const char* type = "audio");
+
+    /**
+     * Get a data source of this object
+     * @param type Type of data node: "audio", "video", "text"
+     * @return A pointer to the DataSource object or NULL
+     */
+    DataSource* getSource(const char* type = "audio") const;
+
+    /**
+     * Set the data consumer of this object
+     * @param consumer A pointer to the new consumer or NULL
+     * @param type Type of data node: "audio", "video", "text"
+     */
+    void setConsumer(DataConsumer* consumer = 0, const char* type = "audio");
+
+    /**
+     * Get the data consumer of this object
+     * @param type Type of data node: "audio", "video", "text"
+     * @return A pointer to the DataConsumer object or NULL
+     */
+    DataConsumer* getConsumer(const char* type = "audio") const;
+
 protected:
     /**
      * Constructor
@@ -970,13 +1186,6 @@ protected:
      */
     inline void status(const char* newstat)
 	{ m_status = newstat; }
-
-    /**
-     * Set the current link address of the channel
-     * @param newstat The new address as String
-     */
-    inline void address(const char* newaddr)
-	{ m_address = newaddr; }
 
     /**
      * Connect notification method.
@@ -1003,28 +1212,21 @@ private:
 };
 
 /**
- * Driver is a descendent of Plugin specialized in implementing channel drivers
- * @short A Plugin that implements a channel driver
+ * Driver is a module specialized for implementing channel drivers
+ * @short A Channel driver module
  */
-class Driver : public Plugin, public Mutex, public MessageReceiver
+class Driver : public Module
 {
-    friend class ChannelRouter;
+    friend class Router;
 
 private:
     bool m_init;
-    String m_name;
-    String m_type;
     String m_prefix;
     ObjList m_chans;
+    int m_routing;
+    int m_routed;
 
 public:
-    /**
-     * Retrive the name of the driver
-     * @return The driver's name as String
-     */
-    inline const String& name() const
-	{ return m_name; }
-
     /**
      * Retrive the prefix that is used as base for all channels
      * @return The driver's prefix
@@ -1040,28 +1242,19 @@ public:
 	{ return m_chans; }
 
     /**
+     * Find a channel by id
+     * @param id Unique identifier of the channel to find
+     * @return Pointer to the channel or NULL if not found
+     */
+    virtual Channel* find(const String& id) const;
+
+    /**
      * Check if the driver is actively used.
      * @return True if the driver is in use, false if should be ok to restart
      */
     virtual bool isBusy() const;
 
 protected:
-    /**
-     * IDs of the installed relays
-     */
-    enum {
-	// Channel messages
-	Ringing,
-	Answered,
-	Tone,
-	Text,
-	Masquerade,
-	// Driver messages
-	Execute,
-	Drop,
-	Status
-    } RelayID;
-
     /**
      * Constructor
      * @param name Plugin name of this driver
@@ -1087,6 +1280,12 @@ protected:
      * Drop all current channels
      */
     virtual void dropAll();
+
+    /**
+     * Opportunity to modify the update message
+     * @param msg Status update message
+     */
+    virtual void genUpdate(Message& msg);
 
     /**
      * Create an outgoing calling channel
@@ -1120,8 +1319,60 @@ protected:
      */
     virtual void statusChannels(String& str);
 
+    /**
+     * Set the local debugging level
+     * @param msg Debug setting message
+     * @param target String to match for local settings
+     */
+    virtual bool setDebug(Message& msg, const String& target);
+
 private:
     Driver(); // no default constructor please
+};
+
+/**
+ * Asynchronous call routing thread
+ * @short Call routing thread
+ */
+class Router : public Thread
+{
+private:
+    Driver* m_driver;
+    String m_id;
+    Message* m_msg;
+
+public:
+    /**
+     * Constructor - creates a new routing thread
+     * @param driver Pointer to the driver that asked for routing
+     * @param id Unique identifier of the channel being routed
+     * @param msg Pointer to an already filled message
+     */
+    Router(Driver* driver, const char* id, Message* msg);
+
+    /**
+     * Main thread running method
+     */
+    virtual void run();
+
+    /**
+     * Actual routing method
+     * @return True if call was successfully routed
+     */
+    virtual bool route();
+
+    /**
+     * Thread cleanup handler
+     */
+    virtual void cleanup();
+
+protected:
+    /**
+     * Get the routed channel identifier
+     * @return Unique id of the channel being routed
+     */
+    const String& id() const
+	{ return m_id; }
 };
 
 }; // namespace TelEngine

@@ -205,7 +205,15 @@ int DebugEnabler::debugLevel(int level)
 	level = DebugMin;
     if (level > DebugMax)
 	level = DebugMax;
+    m_chain = 0;
     return (m_level = level);
+}
+
+bool DebugEnabler::debugAt(int level) const
+{
+    if (m_chain)
+	return m_chain->debugAt(level);
+    return (m_enabled && (level <= m_level));
 }
 
 Debugger::Debugger(const char* name, const char* format, ...)
@@ -315,10 +323,8 @@ Mutex s_refmutex;
 
 RefObject::~RefObject()
 {
-#ifndef NDEBUG
     if (m_refcount > 0)
-	Debug(DebugMild,"RefObject [%p] destroyed with count=%d",this,m_refcount);
-#endif
+	Debug(DebugFail,"RefObject [%p] destroyed with count=%d",this,m_refcount);
 }
 
 int RefObject::ref()

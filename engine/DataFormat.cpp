@@ -205,11 +205,25 @@ DataSource::~DataSource()
     while (detach(static_cast<DataConsumer*>(m_consumers.get()))) ;
 }
 
+DataEndpoint::DataEndpoint(Channel* chan, const char* name)
+    : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_channel(chan)
+{
+    if (m_channel)
+	m_channel->m_data.append(this);
+}
+
 DataEndpoint::~DataEndpoint()
 {
-    disconnect(true,0);
+    disconnect(true);
     setSource();
     setConsumer();
+    if (m_channel)
+	m_channel->m_data.remove(this,false);
+}
+
+const String& DataEndpoint::toString() const
+{
+    return m_name;
 }
 
 bool DataEndpoint::connect(DataEndpoint* peer)
@@ -247,7 +261,7 @@ bool DataEndpoint::connect(DataEndpoint* peer)
     return true;
 }
 
-void DataEndpoint::disconnect(bool final, const char* reason)
+void DataEndpoint::disconnect(bool final)
 {
     if (!m_peer)
 	return;
@@ -264,19 +278,19 @@ void DataEndpoint::disconnect(bool final, const char* reason)
 
     DataEndpoint *temp = m_peer;
     m_peer = 0;
-    temp->setPeer(0,reason);
+    temp->setPeer(0);
     temp->deref();
-    disconnected(final,reason);
+    disconnected(final);
     deref();
 }
 
-void DataEndpoint::setPeer(DataEndpoint* peer, const char* reason)
+void DataEndpoint::setPeer(DataEndpoint* peer)
 {
     m_peer = peer;
     if (m_peer)
 	connected();
     else
-	disconnected(false,reason);
+	disconnected(false);
 }
 
 void DataEndpoint::setSource(DataSource* source)

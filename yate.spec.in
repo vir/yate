@@ -1,0 +1,82 @@
+Summary:	Yet Another Telephony Engine
+Name:     	yate
+Version: 	@PACKAGE_VERSION@
+Release:	1
+Copyright:	GPL
+Packager:	Paul Chitescu <paulc-devel@null.ro>
+Source:		http://yate.null.ro/%{name}-%{version}.tar.gz
+Group:		Applications/Communications
+BuildRoot:	%{_tmppath}/%{name}-%{version}-root
+URL:		http://yate.null.ro/
+
+BuildRequires:	gcc-c++
+Group:		System Environment/Libraries
+
+%define prefix  /usr
+
+%description
+YATE is a telephony engine designed to implement PBX and IVR solutions
+for small to large scale projects.
+
+%files
+%defattr(-, root, root)
+%doc /usr/share/doc/yate-%{version}/README
+%doc /usr/share/doc/yate-%{version}/COPYING
+%doc /usr/share/doc/yate-%{version}/ChangeLog
+%config /etc/yate/*
+/usr/lib/lib*.so*
+/usr/bin/yate
+/usr/share/man/*
+/usr/lib/yate/*
+
+%post
+ldconfig
+
+%postun
+ldconfig
+
+%package devel
+Summary:	Development package for yate
+Group:		Development/Libraries
+Requires:	%{name} = %{version}
+
+%description devel
+The yate-devel package includes the libraries and header files for YATE
+
+%files devel
+%defattr(-, root, root)
+%doc /usr/share/doc/yate-%{version}/*.html
+%doc /usr/share/doc/yate-%{version}/api/*
+/usr/include/*
+/usr/bin/yate-config
+/usr/lib/pkgconfig/yate.pc
+
+%prep
+%setup -q -n %{name}
+
+%build
+./configure --prefix=%{prefix} --sysconfdir=/etc --mandir=%{prefix}/share/man
+make strip
+
+%install
+make install DESTDIR=%{buildroot}
+
+%clean
+# make clean
+rm -rf %{buildroot}
+
+%changelog
+* Sat May 15 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added pkgconfig support
+- Improved detection of Postgress' include file path
+- Support for detecting libraries required for SIP
+- Better detection of OpenH323 versions
+
+* Sat May 15 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added SIP channel and registration module
+
+* Sun Apr 04 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added yate-config to the devel package
+
+* Mon Mar 29 2004 Paul Chitescu <paulc-devel@null.ro>
+- Created specfile

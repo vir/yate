@@ -1,0 +1,55 @@
+#! /bin/sh
+
+ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
+                   [--ldflags] [--libs] [--ld-all]
+		   [--config] [--modules] [--version]'
+if [ "$#" = 0 ]; then
+    echo "$ustr"
+    exit 0
+fi
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+moddir="@libdir@/yate"
+confdir="@sysconfdir@/yate"
+s1="@MODULE_CFLAGS@"
+s2="-I@includedir@/yate"
+s3="@MODULE_LDFLAGS@"
+s4="-lyate"
+
+while [ "$#" != 0 ]; do
+    case "$1" in
+	--version)
+	    echo "@PACKAGE_VERSION@"
+	    ;;
+	--cflags)
+	    echo "$s1"
+	    ;;
+	--includes)
+	    echo "$s2"
+	    ;;
+	--c-all)
+	    echo "$s1 $s2"
+	    ;;
+	--ldflags)
+	    echo "$s3"
+	    ;;
+	--libss)
+	    echo "$s4"
+	    ;;
+	--ld-all)
+	    echo "$s3 $s4"
+	    ;;
+	--config)
+	    echo "$confdir"
+	    ;;
+	--modules)
+	    echo "$moddir"
+	    ;;
+	*)
+	    echo "I didn't understand: $1" >&2
+	    echo "$ustr" >&2
+	    exit 1
+	    ;;
+    esac
+    shift
+done

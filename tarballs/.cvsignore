@@ -1,0 +1,5 @@
+core*
+*.tar.gz
+*.orig
+*~
+.*.swp

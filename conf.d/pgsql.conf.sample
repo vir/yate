@@ -1,0 +1,9 @@
+[general]
+tcp = yes
+host = localhost
+port = 5432
+database = yate
+user = yate
+password =
+socket = 
+priority = 50

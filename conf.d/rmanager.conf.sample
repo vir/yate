@@ -1,0 +1,11 @@
+[general]
+; This section controls the behaviour of the Remote Manager
+
+; port: int: TCP Port to listen on, 0 to disable module
+;port=5038
+
+; addr: ipaddress: IP address to bind to
+;addr=127.0.0.1
+
+; header: string: Header string to display on connect
+;header=YATE (http://YATE.null.ro) ready.

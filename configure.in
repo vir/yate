@@ -1,0 +1,263 @@
+# Process this file with autoconf to produce a configure script.
+AC_INIT(YATE, 0.8.1)
+AC_CONFIG_SRCDIR([README])
+
+# Checks for programs.
+AC_PROG_CXX
+AC_PROG_CC
+AC_PROG_AWK
+
+# Checks for header files.
+AC_HEADER_DIRENT
+AC_HEADER_STDC
+AC_CHECK_HEADERS([fcntl.h arpa/inet.h netdb.h netinet/in.h sys/ioctl.h sys/socket.h sys/time.h], , [AC_MSG_ERROR([This header file is required.])])
+
+# Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_C_INLINE
+AC_HEADER_TIME
+
+# Checks for library functions.
+AC_FUNC_MALLOC
+AC_TYPE_SIGNAL
+AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove regcomp strerror], , [AC_MSG_ERROR([This function is required.])])
+
+AC_CACHE_SAVE
+
+# Checks for required libraries.
+AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This library is required.])])
+AC_CHECK_LIB([pthread], [pthread_create], , [AC_MSG_ERROR([This library is required.])])
+
+# Checks for optional libraries.
+
+HAVE_PGSQL=no
+PGSQL_INC=""
+AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
+if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
+AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
+incpq="$ac_cv_use_libpq/include"
+libpq="$ac_cv_use_libpq/lib/libpq.so"
+if [[ ! -f "$incpq/libpq-fe.h" ]]; then
+    incpq="$incpq/pgsql"
+fi
+if [[ -f "$incpq/libpq-fe.h" -a -f "$libpq" ]]; then
+    HAVE_PGSQL=yes
+    PGSQL_INC="-I$incpq"
+fi
+AC_MSG_RESULT([$HAVE_PGSQL])
+fi
+AC_SUBST(HAVE_PGSQL)
+AC_SUBST(PGSQL_INC)
+
+HAVE_PRI=no
+AC_ARG_WITH(libpri,AC_HELP_STRING([--with-libpri],[use ISDN PRI if available (default)]),[ac_cv_use_libpri=$withval],[ac_cv_use_libpri=yes])
+if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
+AC_CHECK_HEADER(libpri.h, , [ac_cv_use_libpri=no])
+fi
+if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
+AC_CHECK_LIB([pri], [pri_new], [HAVE_PRI=yes])
+fi
+AC_SUBST(HAVE_PRI)
+
+HAVE_GSM=no
+AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])
+if [[ "x$ac_cv_use_libgsm" != "xno" ]]; then
+AC_CHECK_HEADER(gsm.h, , [ac_cv_use_libgsm=no])
+fi
+if [[ "x$ac_cv_use_libgsm" != "xno" ]]; then
+AC_CHECK_LIB([gsm], [gsm_create], [HAVE_GSM=yes])
+fi
+AC_SUBST(HAVE_GSM)
+
+HAVE_PWLIB=no
+PWLIB_INC=""
+PWLIB_LIB=""
+PWLIB_RUN=""
+AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default /usr)]),[ac_cv_use_pwlib=$withval],[ac_cv_use_pwlib=/usr])
+
+if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
+AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
+verpw=`ptlib-config --version 2>/dev/null`
+# try first installed directory
+incpw="$ac_cv_use_pwlib/include/ptlib.h"
+libpw="$ac_cv_use_pwlib/lib/libpt.so"
+PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
+if [[ "$verpw" '<' "1.6.0" ]]; then
+    PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib/unix/ptlib -I$ac_cv_use_pwlib/include/ptlib/unix $PWLIB_INC"
+fi
+if [[ -f "$incpw" -a -f "$libpw" ]]; then
+    HAVE_PWLIB=installed
+    PWLIB_LIB="-L$ac_cv_use_pwlib/lib -lpt"
+else
+# try source directory style
+    libpw=`echo "$ac_cv_use_pwlib/lib/"libpt*r.so`
+    if [[ -f "$incpw" -a -f "$libpw" ]]; then
+        HAVE_PWLIB=sources
+        PWLIB_LIB="-L$ac_cv_use_pwlib/lib -l`echo "$libpw"|sed 's,^.*/lib,,; s,\.so$,,'`"
+        PWLIB_RUN=":$ac_cv_use_pwlib/lib"
+    fi
+fi
+AC_MSG_RESULT([$HAVE_PWLIB $verpw])
+fi
+
+HAVE_H323=no
+H323_INC=""
+H323_LIB=""
+H323_RUN=""
+AC_ARG_WITH(openh323,AC_HELP_STRING([--with-openh323=DIR],[use OpenH323 from DIR (default /usr)]),[ac_cv_use_openh323=$withval],[ac_cv_use_openh323=/usr])
+
+if [[ "x$HAVE_PWLIB" != "xno" -a "x$ac_cv_use_openh323" != "xno" ]]; then
+AC_MSG_CHECKING([for OpenH323 in $ac_cv_use_openh323])
+# try first installed directory
+inc323="$ac_cv_use_openh323/include/openh323/h323.h"
+lib323="$ac_cv_use_openh323/lib/libopenh323.so"
+if [[ -f "$inc323" -a -f "$lib323" ]]; then
+    HAVE_H323=installed
+    H323_INC="-I$ac_cv_use_openh323/include/openh323"
+    H323_LIB="-L$ac_cv_use_openh323/lib -lopenh323"
+else
+# try source directory style
+    inc323="$ac_cv_use_openh323/include/h323.h"
+    lib323=`echo "$ac_cv_use_openh323/lib/"libh323*r.so`
+    if [[ -f "$inc323" -a -f "$lib323" ]]; then
+        HAVE_H323=sources
+        H323_INC="-I$ac_cv_use_openh323/include"
+        H323_LIB="-L$ac_cv_use_openh323/lib -l`echo "$lib323"|sed 's,^.*/lib,,; s,\.so$,,'`"
+        H323_RUN=":$ac_cv_use_openh323/lib"
+    fi
+fi
+AC_MSG_RESULT([$HAVE_H323])
+fi
+
+if [[ "x$HAVE_H323" != "xno" ]]; then
+    H323_INC="$PWLIB_INC $H323_INC"
+    H323_LIB="$PWLIB_LIB $H323_LIB"
+    H323_RUN="$PWLIB_RUN$H323_RUN"
+fi
+AC_SUBST(HAVE_H323)
+AC_SUBST(H323_INC)
+AC_SUBST(H323_LIB)
+AC_SUBST(H323_RUN)
+
+HAVE_ORTP=no
+ORTP_INC=""
+ORTP_LIB=""
+AC_ARG_WITH(libortp,AC_HELP_STRING([--with-libortp=DIR],[use oRTP from DIR (default /usr)]),[ac_cv_use_libortp=$withval],[ac_cv_use_libortp=/usr])
+if [[ "x$ac_cv_use_libortp" != "xno" ]]; then
+AC_MSG_CHECKING([for oRTP in $ac_cv_use_libortp])
+incor="$ac_cv_use_libortp/include/ortp"
+libor="$ac_cv_use_libortp/lib/libortp.so"
+if [[ -f "$incor/ortp.h" -a -f "$libor" ]]; then
+    HAVE_ORTP=yes
+    ORTP_INC="-I$incor"
+    ORTP_LIB="-L$ac_cv_use_libortp/lib -lortp"
+fi
+AC_MSG_RESULT([$HAVE_ORTP])
+fi
+AC_SUBST(HAVE_ORTP)
+AC_SUBST(ORTP_INC)
+AC_SUBST(ORTP_LIB)
+
+HAVE_EXOSIP=no
+EXOSIP_INC=""
+EXOSIP_LIB=""
+AC_ARG_WITH(libexosip,AC_HELP_STRING([--with-libexosip=DIR],[use eXosip from DIR (default /usr)]),[ac_cv_use_libexosip=$withval],[ac_cv_use_libexosip=/usr])
+if [[ "x$ac_cv_use_libexosip" != "xno" ]]; then
+AC_MSG_CHECKING([for eXosip in $ac_cv_use_libexosip])
+incexo="$ac_cv_use_libexosip/include/eXosip"
+libexo="$ac_cv_use_libexosip/lib/libeXosip.so"
+if [[ -f "$incexo/eXosip.h" -a -f "$libexo" ]]; then
+    HAVE_EXOSIP=yes
+    EXOSIP_INC="-I$incexo"
+    EXOSIP_LIB="-L$ac_cv_use_libexosip/lib -leXosip"
+fi
+AC_MSG_RESULT([$HAVE_EXOSIP])
+fi
+AC_SUBST(HAVE_EXOSIP)
+AC_SUBST(EXOSIP_INC)
+AC_SUBST(EXOSIP_LIB)
+
+HAVE_GLIB2=no
+GLIB2_INC=""
+GLIB2_LIB=""
+AC_ARG_WITH(libglib2,AC_HELP_STRING([--with-libglib2=DIR],[use Glib 2.0 from DIR (default /usr)]),[ac_cv_use_libglib2=$withval],[ac_cv_use_libglib2=yes])
+if [[ "x$ac_cv_use_libglib2" = "xyes" ]]; then
+    AC_MSG_CHECKING([for Glib 2.0 using pkg-config])
+    verg2=`pkg-config --modversion glib-2.0 2>/dev/null`
+    incg2=`pkg-config --cflags-only-I glib-2.0 2>/dev/null`
+    libg2=`pkg-config --libs glib-2.0 2>/dev/null`
+    if [[ "x$incg2" != "x" -a "x$libg2" != "x" ]]; then
+	HAVE_GLIB2=yes
+	GLIB2_INC="$incg2"
+	GLIB2_LIB="$libg2"
+	ac_cv_use_libglib2="no"
+    else
+	ac_cv_use_libglib2="/usr"
+	verg2="no"
+    fi
+    AC_MSG_RESULT([$verg2])
+fi
+if [[ "x$ac_cv_use_libglib2" != "xno" ]]; then
+AC_MSG_CHECKING([for Glib 2.0 in $ac_cv_use_libglib2])
+incg2="$ac_cv_use_libglib2"
+libg2="$ac_cv_use_libglib2/lib"
+if [[ -f "$incg2/include/glib-2.0/glib.h" -a -f "$libg2/libglib-2.0.so" ]]; then
+    HAVE_GLIB2=yes
+    GLIB2_INC="-I$incg2/include/glib-2.0 -I$libg2/glib-2.0/include"
+    GLIB2_LIB="-L$libg2 -lglib-2.0"
+fi
+AC_MSG_RESULT([$HAVE_GLIB2])
+fi
+AC_SUBST(HAVE_GLIB2)
+AC_SUBST(GLIB2_INC)
+AC_SUBST(GLIB2_LIB)
+
+HAVE_IAX2=no
+IAX2_INC=""
+IAX2_LIB=""
+AC_ARG_WITH(libIAX2,AC_HELP_STRING([--with-libiax2=DIR],[use IAX 2 from DIR (default /usr)]),[ac_cv_use_libiax2=$withval],[ac_cv_use_libiax2=yes])
+if [[ "x$ac_cv_use_libiax2" = "xyes" ]]; then
+    AC_MSG_CHECKING([for IAX 2 using iax-config])
+    veri2=`iax-config --version 2>/dev/null`
+    inci2=`iax-config --cflags 2>/dev/null`
+    libi2=`iax-config --libs 2>/dev/null`
+    if [[ "x$inci2" != "x" -a "x$libi2" != "x" ]]; then
+	HAVE_IAX2=yes
+	IAX2_INC="$inci2"
+	IAX2_LIB="$libi2"
+	ac_cv_use_libiax2="no"
+    else
+	ac_cv_use_libiax2="/usr"
+	verg2="no"
+    fi
+    AC_MSG_RESULT([$veri2])
+fi
+if [[ "x$ac_cv_use_libiax2" != "xno" ]]; then
+AC_MSG_CHECKING([for IAX 2 in $ac_cv_use_libiax2])
+inci2="$ac_cv_use_libiax2"
+libi2="$ac_cv_use_libiax2/lib"
+if [[ -f "$inci2/include/iax/iax2.h" -a -f "$libi2/libiax.so" ]]; then
+    HAVE_IAX2=yes
+    IAX2_INC="-I$inci2/include/iax"
+    IAX2_LIB="-L$libi2 -liax"
+fi
+AC_MSG_RESULT([$HAVE_IAX2])
+fi
+AC_SUBST(HAVE_IAX2)
+AC_SUBST(IAX2_INC)
+AC_SUBST(IAX2_LIB)
+
+MODULE_CFLAGS="-fno-exceptions -fno-check-new -frtti -fPIC"
+MODULE_LDFLAGS="-export-dynamic -shared -Wl,--retain-symbols-file,/dev/null"
+AC_SUBST(MODULE_CFLAGS)
+AC_SUBST(MODULE_LDFLAGS)
+
+AC_CONFIG_FILES([yate.spec
+                 yate.pc
+                 Makefile
+                 modules/Makefile
+                 conf.d/Makefile
+                 test/Makefile])
+AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
+AC_CONFIG_FILES([run],[chmod +x run])
+AC_OUTPUT

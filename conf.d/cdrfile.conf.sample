@@ -1,0 +1,3 @@
+[general]
+file=/tmp/cdr.tsv
+tabs=true

@@ -1,0 +1,81 @@
+.\"
+.\" YATE - Yet Another Telephony Engine
+.\"
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\"
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program; if not, write to the Free Software
+.\" Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+.\"
+.\"
+.TH YATE 8 "March 2004" "YATE" "Telephony Engine"
+.SH NAME
+\fByate\fP \- launch the YATE telephony engine
+.SH SYNOPSIS
+.B yate
+.RI [options]
+.SH DESCRIPTION
+.B yate
+is a telephony engine that supports PBX and IVR functions trough plugins.
+.SH OPTIONS
+.SS General
+.TP
+.B \-h, \-\-help
+Display a short help message
+.TP
+.B \-v
+Verbose debugging (you can use more than once)
+.TP
+.B \-q
+Quieter debugging (you can use more than once)
+.TP
+.B \-d
+Daemonify, suppress output unless logged
+.TP
+.B \-l filename
+Log to file
+.SS Debugging (may not be compiled in)
+.TP
+.B \-D[options]
+Special debugging options
+.TP
+.B \-Dc
+Call dlclose() until it gets an error
+.TP
+.B \-Di
+Reinitialize after first initialization
+.TP
+.B \-Dx
+Exit immediately after initialization
+.TP
+.B \-Dw
+Delay for one secod the creation of the first worker thread
+.SH SIGNALS
+.TP
+\- SIGTERM and SIGINT (Ctrl\-C) will cleanly stop the engine
+.TP
+\- SIGHUP and SIGQUIT (Ctrl\-\\) will reinitialize the modules
+.SH BUGS
+Under various
+.B *BSD
+implementations the
+.I dlclose()
+function is broken and may generate a segfault on exit.
+.PP
+Some
+.B libpthread
+implementations are broken and may fail to start the threads or fail to cleanup
+when the thread terminates.
+.SH AUTHOR
+Paul Chitescu <paulc-devel@null.ro>
+.SH SEE ALSO
+.\" .BR libyate (3),
+.BR bayonne (8)

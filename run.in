@@ -1,0 +1,33 @@
+#! /bin/sh
+
+yate="./yate"
+set_conf="-c ./conf.d"
+set_mods="-m ./modules"
+if [ "$1" = "--gdb" ]; then
+    shift
+    yate="gdb --args $yate"
+fi
+if [ "$1" = "--core" ]; then
+    shift
+    yate="gdb $yate core*"
+    set_conf=""
+    set_mods=""
+fi
+if [ "$1" = "--valgrind" ]; then
+    shift
+    yate="valgrind $1 $yate"
+    shift
+fi
+
+for opt in $@; do
+    case "$opt" in
+	-c)
+	    set_conf=
+	    ;;
+	-m)
+	    set_mods=
+	    ;;
+    esac
+done
+						
+LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH exec $yate $set_conf $set_mods "$@"

@@ -1,0 +1,72 @@
+		YATE - Yet Another Telephony Engine
+		-----------------------------------
+
+  The YATE project aims to be a fully featured software PBX.
+  
+  It was created to alow developers and users to have more functionality and
+  scalability. To reach this goal YATE is built from two kinds of components: 
+    1. The main engine - telengine.
+    2. Modules - routing modules
+               - drivers
+               - script language bindings
+	       - billing modules
+  
+  Its license is GPL with exceptions (in case of linking with proprietary
+  software). We have chosen this license to help the growth of this project.
+
+
+Building YATE Software
+----------------------
+
+YATE have been tested only on Linux and is in alpha stage yet, so is very
+possibile to find bugs (even if we have tried by design to minimize the
+chance of introducing bugs). Please report them at bugs@voip.null.ro
+
+1. Building the engine
+
+You have just to run 'make' in the main directory, this will not build any
+modules or test cases.
+
+2. Building the modules.
+
+Run 'make modules' in the main directory or 'make' in the modules directory.
+
+3. Building the test modules.
+
+Run 'make test' in the main directory or 'make' in the test directory.
+
+After you have create the test modules use 'mktestlinks' in the modules
+directory to make links from test modules into modules directory.
+
+4. Building the classes API documentation
+
+Run 'make apidocs' in the main directory. You will need to have kdoc installed.
+
+
+Alternatively you can just 'make everything' in the main directory which will
+build them all.
+
+
+Running YATE
+------------
+
+You can run YATE directly from the build directory - just use 'run' script
+from the main directory.
+
+You can also install YATE - then you can run it from anywhere.
+
+On the command line you can use '-v' to increase the verbosity level. If in
+doubt run "run --help" (or "yate --help" if installed) to get a list of
+possible options. There is also a manual page - "man yate" and read.
+
+While running the following signals and keys are trapped and used:
+  - SIGTERM and SIGINT (Ctrl-C) will cleanly stop the engine
+  - SIGHUP and SIGQUIT (Ctrl-\) will reinitialize the modules
+
+
+Configuring YATE
+----------------
+
+Some samples for the configuraton files can be found in the conf.d directory.
+Note that you must rename them without the .sample extension or create symlinks
+to them.

@@ -1,0 +1,209 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine
+
+# override DESTDIR at install time to prefix the install directory
+DESTDIR :=
+
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
+CC  := g++ -Wall
+SED := sed
+DEFS :=
+LIBAUX:= -ldl -lpthread
+INCLUDES := -I@srcdir@
+CFLAGS := -O2 @MODULE_CFLAGS@ -finline -Winline
+LDFLAGS:=
+
+PROGS:= yate
+SLIBS:= libyate.so
+INCS := telengine.h telephony.h yateversn.h
+LIBS :=
+MAN8 := yate.8
+DOCS := README COPYING ChangeLog
+ENGOBJS := TelEngine.o String.o DataBlock.o ObjList.o \
+	NamedList.o Configuration.o \
+	Message.o Mutex.o Thread.o \
+	Plugin.o Engine.o
+OBJS := main.o
+
+LIBOBJS := $(ENGOBJS) $(TELOBJS)
+CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) $(LIBOBJS) core
+COMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+bindir = @bindir@
+libdir = @libdir@
+incdir = @includedir@/yate
+mandir = @mandir@
+docdir = $(prefix)/share/doc/yate-@PACKAGE_VERSION@
+vardir = @localstatedir@/lib/yate
+moddir = @libdir@/yate
+confdir = @sysconfdir@/yate
+
+.PHONY: all
+all: engine modules
+
+.PHONY: clean
+clean:
+	-rm $(CLEANS) 2>/dev/null
+	$(MAKE) -C ./modules $@
+	$(MAKE) -C ./test $@
+
+.PHONY: engine
+engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
+
+.PHONY: apidocs
+apidocs: check-topdir
+	kdoc -d docs/api/ $(INCS)
+
+.PHONY: strip
+strip: all
+	-strip --strip-debug --discard-locals $(PROGS) $(SLIBS)
+
+.PHONY: sex
+sex: strip
+	@echo 'Stripped for you!'
+
+.PHONY: love
+love:
+	@echo 'Not war?'
+
+.PHONY: run
+run: all
+	-./run
+
+.PHONY: gdb-run
+gdb-run: all
+	-./run --gdb
+
+.PHONY: gdb-core
+gdb-core: all
+	-./run --core
+
+.PHONY: test
+test: engine
+	$(MAKE) -C ./test all
+
+.PHONY: modules
+modules: engine
+	$(MAKE) -C ./modules all
+
+tables: @srcdir@/tables/all.h
+
+@srcdir@/tables/all.h:
+	$(MAKE) -C @srcdir@/tables -f Makefile.tables all
+
+yatepaths.h:
+	@echo -en '#define MOD_PATH "$(DESTDIR)$(moddir)"\n#define CFG_PATH "$(DESTDIR)$(confdir)"\n' > $@
+
+.PHONY: everything
+everything: all test
+
+.PHONY: install
+install: all
+	@mkdir -p "$(DESTDIR)$(libdir)/" && \
+	install $(SLIBS) "$(DESTDIR)$(libdir)/" && ldconfig
+	@mkdir -p "$(DESTDIR)$(bindir)/" && \
+	install $(PROGS) yate-config "$(DESTDIR)$(bindir)/"
+	@mkdir -p "$(DESTDIR)$(libdir)/pkgconfig/" && \
+	install yate.pc "$(DESTDIR)$(libdir)/pkgconfig/"
+	@mkdir -p "$(DESTDIR)$(incdir)/" && \
+	for i in $(INCS) ; do \
+	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(incdir)/" ; \
+	done
+	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
+	for i in $(MAN8) ; do \
+	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(mandir)/man8/" ; \
+	done
+	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
+	for i in $(DOCS) ; do \
+	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
+	done ;
+	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
+	install -m 0644 @srcdir@/docs/api/*.html "$(DESTDIR)$(docdir)/api/"
+	$(MAKE) -C ./modules $@
+	$(MAKE) -C ./conf.d $@
+
+.PHONY: uninstall
+uninstall:
+	@-for i in $(SLIBS) ; do \
+	    rm "$(DESTDIR)$(libdir)/$$i" ; \
+	done; \
+	ldconfig
+	@-for i in $(PROGS) yate-config ; do \
+	    rm "$(DESTDIR)$(bindir)/$$i" ; \
+	done
+	@-rm "$(DESTDIR)$(libdir)/pkgconfig/yate.pc" && \
+	    rmdir $(DESTDIR)$(libdir)/pkgconfig
+	@-for i in $(INCS) ; do \
+	    rm "$(DESTDIR)$(incdir)/$$i" ; \
+	done; \
+	rmdir "$(DESTDIR)$(incdir)"
+	@-for i in $(MAN8) ; do \
+	    rm "$(DESTDIR)$(mandir)/man8/$$i" ; \
+	done
+	@rm -rf "$(DESTDIR)$(docdir)/"
+	$(MAKE) -C ./modules $@
+	$(MAKE) -C ./conf.d $@
+
+.PHONY: snapshot tarball
+snapshot tarball: check-topdir clean tables apidocs
+	@if [ $@ = snapshot ]; then ver="`date '+CVS-%Y%m%d'`"; else ver="@PACKAGE_VERSION@"; fi ; \
+	wd=`pwd|sed 's,^.*/,,'`; \
+	mkdir -p tarballs; cd ..; \
+	echo $$wd/tar-exclude >$$wd/tar-exclude; \
+	find $$wd -name Makefile >>$$wd/tar-exclude; \
+	find $$wd/conf.d -name '*.conf' >>$$wd/tar-exclude; \
+	find $$wd -name '*.cache' >>$$wd/tar-exclude; \
+	find $$wd -name '*~' >>$$wd/tar-exclude; \
+	find $$wd -name '.*.swp' >>$$wd/tar-exclude; \
+	if [ $@ = tarball ]; then \
+	    find $$wd -name CVS >>$$wd/tar-exclude; \
+	    find $$wd -name .cvsignore >>$$wd/tar-exclude; \
+	else \
+	    echo "$$wd/yate.spec" >>$$wd/tar-exclude; \
+	fi ; \
+	tar czf $$wd/tarballs/$$wd-$$ver.tar.gz \
+	--exclude $$wd/tarballs \
+	--exclude $$wd/config.status \
+	--exclude $$wd/config.log \
+	--exclude $$wd/run \
+	--exclude $$wd/yate-config \
+	--exclude $$wd/yate.pc \
+	--exclude $$wd/yatepaths.h \
+	-X $$wd/tar-exclude \
+	$$wd; \
+	rm $$wd/tar-exclude
+
+.PHONY: check-topdir
+check-topdir:
+	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
+
+%.o: @srcdir@/%.cpp @srcdir@/telengine.h
+	$(COMPILE) -c $<
+
+@srcdir@/configure: @srcdir@/configure.in
+	cd @srcdir@ && autoconf
+
+config.status: @srcdir@/configure
+	./config.status --recheck
+
+Makefile: @srcdir@/Makefile.in config.status
+	./config.status
+
+yate: $(OBJS) libyate.so $(LIBS)
+	$(LINK) -o $@ $^
+
+libyate.so: $(ENGOBJS) $(LIBS)
+	$(LINK) -shared -o $@ $^ $(LIBAUX)
+
+.PHONY: help
+help:
+	@echo -e 'Usual make targets:\n\
+	    all engine modules test everything apidocs\n\
+	    install uninstall\n\
+	    snapshot tarball'

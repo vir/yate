@@ -1,0 +1,13 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+yate=yate
+yate-config=yate-config
+
+Name: Yate
+Description: Yet Another Telephony Engine
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lyate @MODULE_LDFLAGS@
+Cflags: -I${includedir}/yate @MODULE_CFLAGS@

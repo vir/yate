@@ -1,0 +1,82 @@
+[general]
+; This section sets global variables of the implementation
+
+; debug: int: OpenH323 debug level
+;debug=0
+
+; vendor: string: Vendor name
+;vendor=Null Team
+
+; product: string: Product name
+;product=YATE
+
+; major: int: Major version number
+;major=0
+
+; minor: int: Minor version number
+;minor=1
+
+; build: int: Build number
+;build=1
+
+; status: keyword: Code status: alpha, beta or release
+;status=alpha
+
+
+[codecs]
+; This section allows to individually enable or disable the codecs
+
+; g711u: bool: Companded-only G711 mu-law
+;g711u=enable
+
+; g711a: bool: Companded-only G711 a-law
+;g711a=enable
+
+; gsm0610: bool: European GSM 06.10
+;gsm0610=enable
+
+; speexnarrow: bool: Speex narrow
+;speexnarrow=enable
+
+; lpc10: bool: LPC 10
+;lpc10=enable
+
+
+[ep]
+; Control the endpoint operation of the module
+
+; ep: bool: True if you want to activate the h323 endpoint
+ep = true
+
+; alias: string: The alias used by h323 module to connect to gatekeeper
+alias = yate
+
+; ident: string: Sets the hostname part of the outgoing e.164 (numeric) aliases
+ident = yate
+
+; gkclient: bool: If h323 module endpoint should register to a gatekeeper
+gkclient = false
+
+; password: string: Password for h.235 authentification
+;password = 1234
+
+; gkip: ipaddress: Set the reported ip aaddress of the gatekeeper
+;gkip = 10.10.10.10
+
+; gkname: string: Set the name of the gatekeeper
+;gkname = gigi
+
+; How the gatekeeper is located
+; If gkclient is true the endpoint will try first to find the gatekeeper by
+; using gkip; then, if gkip is unset or is not corect, will try gkname and
+; then will try to brodcast in the network.
+
+
+[incoming]
+; This section sets defaults for the incoming H.323 calls
+
+; context: string: Input context
+context=default
+
+; called: string: Default number to call
+called=8989989

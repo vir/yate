@@ -1,0 +1,39 @@
+Sat May 15 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added pkgconfig support
+- Improved detection of Postgress' include file path
+- Support for detecting libraries required for SIP
+- Better detection of OpenH323 versions
+
+Sat May 15 2004 Diana Cionoiu <diana@diana.null.ro>
+- Added SIP channel and registration module
+
+Wed Apr 28 2004 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.1
+- Fixed data law selection on Zaptel
+- Preventing vi swap and backup files from polluting the tarballs
+
+Mon Apr 26 2004 Paul Chitescu <paulc-devel@null.ro>
+- Fixed a fatal 16->8 bit conversion bug in DataBlock::convert()
+- Added valgrind support to the run script
+
+Sat Apr 11 2004 Paul Chitescu <paulc-devel@null.ro>
+- Moved hash capabilities to the String class so HString was removed
+- String encoding and decoding methods for messages
+- Slightly more useful RManager
+
+Sun Apr 04 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added an yate-config script
+
+Sat Apr 03 2004 Paul Chitescu <paulc-devel@null.ro>
+- Turned some redundant strings from makefiles into variables
+- Applied some patches submitted by Cristian Andrei Calin <kman@tfm.ro> :
+    - Patches to allow compiling under NetBSD and FreeBSD
+    - Patch to add -fPIC which supposedly fixes the dlclose() bug in *BSD
+
+Fri Apr 02 2004 Paul Chitescu <paulc-devel@null.ro>
+- Imported into new CVS
+
+Mon Mar 29 2004 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.8.0
+- Redesigned the build system so it works trough autoconf
+- Added a RPM specfile - tested on RedHat 7.1

@@ -1,0 +1,50 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine test cases
+
+CC  := g++ -Wall
+SED := sed
+DEFS :=
+INCLUDES := -I@top_srcdir@
+CFLAGS := -O0 @MODULE_CFLAGS@
+LDFLAGS:= -L.. -lyate
+MODFLAGS:= @MODULE_LDFLAGS@
+
+PROGS = msgsniff.yate randcall.yate
+LIBS =
+OBJS =
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+MODLINK = $(CC) $(MODFLAGS) $(LDFLAGS)
+MODCOMP = $(COMPILE) $(MODFLAGS) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+.PHONY: all
+all: $(LIBS) $(PROGS)
+
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean:
+	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+
+%.o: @srcdir@/%.cpp @top_srcdir@/telengine.h
+	$(COMPILE) -c $<
+
+%.o: @srcdir@/%.c
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in ../config.status
+	cd .. && ./config.status
+
+lib%.so: %.o
+	$(LINK) -shared -o $@ $^
+
+%.yate: @srcdir@/%.cpp $(INCFILES)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)

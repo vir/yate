@@ -1,0 +1,123 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine modules
+
+# override DESTDIR at install time to prefix the install directory
+DESTDIR :=
+
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
+CC  := g++ -Wall
+SED := sed
+DEFS :=
+INCLUDES := -I@top_srcdir@
+CFLAGS := -O2 @MODULE_CFLAGS@
+LDFLAGS:= -L.. -lyate
+MODFLAGS:= @MODULE_LDFLAGS@
+INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h @top_srcdir@/yateversn.h
+
+SUBDIRS :=
+PROGS := cdrbuild.yate cdrfile.yate \
+	regexroute.yate \
+	tonegen.yate wavefile.yate \
+	rmanager.yate extmodule.yate
+LIBS :=
+
+ifneq (@HAVE_PGSQL@,no)
+PROGS := $(PROGS) pgsqlroute.yate cdrpgsql.yate register.yate
+endif
+
+ifneq (@HAVE_PRI@,no)
+PROGS := $(PROGS) zapchan.yate
+endif
+
+ifneq (@HAVE_H323@,no)
+PROGS := $(PROGS) h323chan.yate
+endif
+
+ifeq (@HAVE_EXOSIP@_@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes_yes)
+PROGS := $(PROGS) sipchan.yate
+endif
+
+ifneq (@HAVE_IAX2@,no)
+PROGS := $(PROGS) iaxchan.yate
+endif
+
+ifneq (@HAVE_GSM@,no)
+PROGS := $(PROGS) gsmcodec.yate
+endif
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+MODLINK = $(CC) $(MODFLAGS) $(LDFLAGS)
+MODCOMP = $(COMPILE) $(MODFLAGS) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+moddir = @libdir@/yate
+
+.PHONY: all
+all: do-all $(LIBS) $(PROGS)
+
+.PHONY: strip
+strip: all do-strip
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean: do-clean
+	@echo rm $(PROGS) $(LIBS) *.o core
+	@rm $(PROGS) $(LIBS) *.o core 2>/dev/null; true
+
+.PHONY: install
+install: all do-install
+	@mkdir -p "$(DESTDIR)$(moddir)/" && \
+	install $(PROGS) "$(DESTDIR)$(moddir)/"
+
+.PHONY: uninstall
+uninstall: do-uninstall
+	@-for i in $(PROGS) ; do \
+	    rm "$(DESTDIR)$(moddir)/$$i" ; \
+	done; \
+	rmdir "$(DESTDIR)$(moddir)"
+
+%.o: @srcdir@/%.cpp $(INCFILES)
+	$(COMPILE) -c $<
+
+%.o: @srcdir@/%.c
+	$(COMPILE) -c $<
+
+do-all do-strip do-clean do-install do-uninstall:
+	$(if $(SUBDIRS),\
+	@target=`echo $@ | $(SED) -e 's/^do-//'`; \
+	for i in $(SUBDIRS) ; do \
+	    if test -f ./$$i/Makefile ; then \
+		$(MAKE) -C ./$$i $${target} || exit 1;\
+	    fi; \
+	done \
+	)
+
+Makefile: @srcdir@/Makefile.in ../config.status
+	cd .. && ./config.status
+
+lib%.so: %.o
+	$(LINK) -shared -o $@ $^
+
+%.yate: @srcdir@/%.cpp $(INCFILES)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+
+
+# Take special care of the modules that depend on optional libs
+
+zapchan.yate: LOCALFLAGS = -lpri
+
+h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
+
+pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
+
+sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORTP_LIB@ @GLIB2_LIB@
+
+iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
+
+gsmcodec.yate: LOCALLIBS = -lgsm

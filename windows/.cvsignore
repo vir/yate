@@ -1,0 +1,9 @@
+Debug
+Release
+*.plg
+*.opt
+*.ncb
+*.orig
+*~
+*.bak
+.*.swp

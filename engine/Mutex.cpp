@@ -43,6 +43,8 @@ public:
 	{ if (!--m_refcount) delete this; }
     inline bool recursive() const
 	{ return m_recursive; }
+    bool locked() const
+    	{ return (m_locked > 0); }
     bool lock(long long int maxwait);
     void unlock();
     static volatile int s_count;
@@ -248,6 +250,11 @@ bool Mutex::check(long long int maxwait)
 bool Mutex::recursive() const
 {
     return m_private && m_private->recursive();
+}
+
+bool Mutex::locked() const
+{
+    return m_private && m_private->locked();
 }
 
 int Mutex::count()

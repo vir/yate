@@ -1748,6 +1748,13 @@ public:
     void unlock();
 
     /**
+     * Check if the mutex is currently locked - as it's asynchronous it
+     *  guarantees nothing if other thread changes the mutex's status
+     * @return True if the mutex was locked when the function was called
+     */
+    bool locked() const;
+
+    /**
      * Check if the mutex is unlocked (try to lock and unlock the mutex)
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked and unlocked, false on failure

@@ -286,6 +286,8 @@ public:
 	{ return m_dplan; }
     inline int pres() const
 	{ return m_pres; }
+    inline bool outOfOrder() const
+	{ return !m_ok; }
     int findEmptyChan(int first = 0, int last = 65535) const;
     ZapChan *getChan(int chan) const;
     void idle();
@@ -312,6 +314,7 @@ private:
     struct pri *m_pri;
     unsigned long long m_restart;
     ZapChan **m_chans;
+    bool m_ok;
 };
 
 class ZapChan : public DataEndpoint
@@ -332,7 +335,7 @@ public:
     void ring(q931_call *call = 0);
     void hangup(int cause = PRI_CAUSE_NORMAL_CLEARING);
     void sendDigit(char digit);
-    void call(Message &msg, const char *called = 0);
+    bool call(Message &msg, const char *called = 0);
     bool answer();
     void idle();
     void restart();
@@ -483,7 +486,7 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype)
 PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres)
     : Thread("PriSpan"), m_span(span), m_offs(first), m_nchans(chans),
       m_fd(fd), m_dplan(dplan), m_pres(pres), m_pri(_pri),
-      m_restart(0), m_chans(0)
+      m_restart(0), m_chans(0), m_ok(false)
 {
     Debug(DebugAll,"PriSpan::PriSpan(%p,%d,%d,%d) [%p]",_pri,span,chans,fd,this);
     ZapChan **ch = new (ZapChan *)[chans];
@@ -497,6 +500,7 @@ PriSpan::~PriSpan()
 {
     Debug(DebugAll,"PriSpan::~PriSpan() [%p]",this);
     zplugin.m_spans.remove(this,false);
+    m_ok = false;
     for (int i = 0; i <m_nchans; i++) {
 	ZapChan *c = m_chans[i];
 	m_chans[i] = 0;
@@ -567,9 +571,14 @@ void PriSpan::handleEvent(pri_event &ev)
     switch (ev.e) {
 	case PRI_EVENT_DCHAN_UP:
 	    Debug(DebugInfo,"D-channel up on span %d",m_span);
+	    m_ok = true;
 	    break;
 	case PRI_EVENT_DCHAN_DOWN:
 	    Debug(DebugWarn,"D-channel down on span %d",m_span);
+	    m_ok = false;
+	    for (int i=1; i<m_nchans; i++)
+		if (m_chans[i])
+		    m_chans[i]->hangup(PRI_CAUSE_NETWORK_OUT_OF_ORDER);
 	    break;
 	case PRI_EVENT_RESTART:
 	    restartChan(ev.restart.channel,true);
@@ -662,6 +671,8 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	chan = findEmptyChan();
     if (!validChan(chan)) {
 	Debug(DebugInfo,"Ring on invalid channel %d on span %d",chan,m_span);
+	::pri_hangup(pri(),ev.call,PRI_CAUSE_CHANNEL_UNACCEPTABLE);
+	::pri_destroycall(pri(),ev.call);
 	return;
     }
     Debug(DebugInfo,"Ring on channel %d on span %d",chan,m_span);
@@ -981,8 +992,12 @@ void ZapChan::sendDigit(char digit)
 	::pri_information(m_span->pri(),m_call,digit);
 }
 
-void ZapChan::call(Message &msg, const char *called)
+bool ZapChan::call(Message &msg, const char *called)
 {
+    if (m_span->outOfOrder()) {
+	Debug("ZapChan",DebugInfo,"Span %d is out of order, failing call",m_span->span());
+	return false;
+    }
     if (!called)
 	called = msg.getValue("called");
     Debug("ZapChan",DebugInfo,"Calling '%s' on channel %d span %d",
@@ -1016,6 +1031,7 @@ void ZapChan::call(Message &msg, const char *called)
 	lookup(msg.getValue("calledplan"),dict_str2dplan,m_span->dplan()),
 	layer1);
     setTimeout(10000000);
+    return true;
 }
 
 void ZapChan::ring(q931_call *call)
@@ -1060,8 +1076,7 @@ bool ZapHandler::received(Message &msg)
     if (c) {
 	Debug(DebugInfo,"Will call '%s' on chan zap/%d (%d/%d)",
 	    num.c_str(),c->absChan(),c->span()->span(),c->chan());
-	c->call(msg,num);
-	return true;
+	return c->call(msg,num);
     }
     else
 	Debug(DebugWarn,"Invalid Zaptel channel '%s'",chan.c_str());

@@ -952,7 +952,7 @@ ZapChan::~ZapChan()
 
 void ZapChan::disconnected(const char *reason)
 {
-    Debugger debug("ZapChan::disconnected() '%s' [%p]",reason,this);
+    Debugger debug("ZapChan::disconnected()", " '%s' [%p]",reason,this);
     // FIXME: we can't know from which thread we got disconnected
     bool gotLock = zplugin.mutex.lock(1000);
     hangup(PRI_CAUSE_NORMAL_CLEARING);

@@ -70,35 +70,41 @@ unsigned int ObjList::count() const
     return c;
 }
 
-ObjList *ObjList::last() const
+ObjList* ObjList::last() const
 {
     const ObjList *n = this;
     while (n->next())
 	n = n->next();
-    return const_cast<ObjList *>(n);
+    return const_cast<ObjList*>(n);
 }
 
-ObjList *ObjList::operator[](int index) const
+ObjList* ObjList::operator+(int index) const
 {
     if (index < 0)
 	return 0;
-    ObjList *obj = const_cast<ObjList *>(this);
+    ObjList *obj = const_cast<ObjList*>(this);
     for (;obj;obj=obj->next(),index--)
 	if (!index) break;
     return obj;
 }
 
-ObjList *ObjList::find(const GenObject *obj) const
+GenObject* ObjList::operator[](int index) const
+{
+    ObjList *obj = operator+(index);
+    return obj ? obj->get() : 0;
+}
+
+ObjList* ObjList::find(const GenObject* obj) const
 {
     DDebug(DebugAll,"ObjList::find(%p) [%p]",obj,this);
     const ObjList *n = this;
     while (n && (n->get() != obj))
 	n = n->next();
     DDebug(DebugInfo,"ObjList::find returning %p",n);
-    return const_cast<ObjList *>(n);
+    return const_cast<ObjList*>(n);
 }
 
-ObjList *ObjList::find(const String &str) const
+ObjList* ObjList::find(const String& str) const
 {
     DDebug(DebugAll,"ObjList::find(\"%s\") [%p]",str.c_str(),this);
     const ObjList *n = this;
@@ -108,15 +114,15 @@ ObjList *ObjList::find(const String &str) const
 	n = n->next();
     }
     DDebug(DebugInfo,"ObjList::find returning %p",n);
-    return const_cast<ObjList *>(n);
+    return const_cast<ObjList*>(n);
 }
 
-GenObject *ObjList::set(const GenObject *obj, bool delold)
+GenObject* ObjList::set(const GenObject* obj, bool delold)
 {
     if (m_obj == obj)
 	return 0;
     GenObject *tmp = m_obj;
-    m_obj = const_cast<GenObject *>(obj);
+    m_obj = const_cast<GenObject*>(obj);
     if (delold && tmp) {
 	tmp->destruct();
 	return 0;
@@ -124,7 +130,7 @@ GenObject *ObjList::set(const GenObject *obj, bool delold)
     return tmp;
 }
 
-ObjList *ObjList::insert(const GenObject *obj)
+ObjList* ObjList::insert(const GenObject* obj)
 {
 #ifdef DEBUG
     Debugger debug("ObjList::insert","(%p) [%p]",obj,this);
@@ -137,11 +143,11 @@ ObjList *ObjList::insert(const GenObject *obj)
 	m_next = n;
     }
     else
-	m_obj = const_cast<GenObject *>(obj);
+	m_obj = const_cast<GenObject*>(obj);
     return this;
 }
 
-ObjList *ObjList::append(const GenObject *obj)
+ObjList* ObjList::append(const GenObject* obj)
 {
 #ifdef DEBUG
     Debugger debug("ObjList::append","(%p) [%p]",obj,this);
@@ -155,7 +161,7 @@ ObjList *ObjList::append(const GenObject *obj)
     return n;
 }
 
-GenObject *ObjList::remove(bool delobj)
+GenObject* ObjList::remove(bool delobj)
 {
     GenObject *tmp = m_obj;
 
@@ -179,7 +185,7 @@ GenObject *ObjList::remove(bool delobj)
     return tmp;
 }
 
-GenObject *ObjList::remove(GenObject *obj, bool delobj)
+GenObject* ObjList::remove(GenObject* obj, bool delobj)
 {
     ObjList *n = find(obj);
     return n ? n->remove(delobj) : 0;

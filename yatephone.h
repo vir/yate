@@ -155,7 +155,7 @@ public:
     /**
      * Copy constructor
      */
-    DataBlock(const DataBlock &value);
+    DataBlock(const DataBlock& value);
 
     /**
      * Constructs an initialized data block
@@ -163,7 +163,7 @@ public:
      * @param len Length of data, may be zero (then @ref value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
      */
-    DataBlock(void *value, unsigned int len, bool copyData = true);
+    DataBlock(void* value, unsigned int len, bool copyData = true);
 
     /**
      * Destroys the data, disposes the memory.
@@ -179,7 +179,7 @@ public:
      * Get a pointer to the stored data.
      * @return A pointer to the data or NULL.
      */
-    inline void *data() const
+    inline void* data() const
 	{ return m_data; }
 
     /**
@@ -208,25 +208,25 @@ public:
      * @param len Length of data, may be zero (then @ref value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
      */
-    DataBlock& assign(void *value, unsigned int len, bool copyData = true);
+    DataBlock& assign(void* value, unsigned int len, bool copyData = true);
 
     /**
      * Append data to the current block
      * @param value Data to append
      */
-    void append(const DataBlock &value);
+    void append(const DataBlock& value);
 
     /**
      * Append a String to the current block
      * @param value String to append
      */
-    void append(const String &value);
+    void append(const String& value);
 
     /**
      * Insert data before the current block
      * @param value Data to insert
      */
-    void insert(const DataBlock &value);
+    void insert(const DataBlock& value);
 
     /**
      * Truncate the data block
@@ -243,18 +243,18 @@ public:
     /**
      * Assignment operator.
      */
-    DataBlock& operator=(const DataBlock &value);
+    DataBlock& operator=(const DataBlock& value);
 
     /**
      * Appending operator.
      */
-    inline DataBlock& operator+=(const DataBlock &value)
+    inline DataBlock& operator+=(const DataBlock& value)
 	{ append(value); return *this; }
 
     /**
      * Appending operator for Strings.
      */
-    inline DataBlock& operator+=(const String &value)
+    inline DataBlock& operator+=(const String& value)
 	{ append(value); return *this; }
 
     /**
@@ -265,11 +265,11 @@ public:
      * @param maxlen Maximum amount to convert, 0 to use source
      * @return True if converted successfully, false on failure
      */
-    bool convert(const DataBlock &src, const String &sFormat,
-	const String &dFormat, unsigned maxlen = 0);
+    bool convert(const DataBlock& src, const String& sFormat,
+	const String& dFormat, unsigned maxlen = 0);
 
 private:
-    void *m_data;
+    void* m_data;
     unsigned int m_length;
 };
 
@@ -283,7 +283,7 @@ public:
      * Construct a DataNode
      * @param format Name of the data format, default none
      */
-    DataNode(const char *format = 0)
+    DataNode(const char* format = 0)
 	: m_format(format), m_timestamp(0) { }
 
     /**
@@ -291,7 +291,7 @@ public:
      * @param format Name of the format to check for
      * @return -1 if unsupported, 0 for native format else cost in KIPS
      */
-    virtual int costFormat(const String &format)
+    virtual int costFormat(const String& format)
 	{ return -1; }
 
     /**
@@ -299,14 +299,14 @@ public:
      * @param format Name of the format to set for data
      * @return True if the format changed successfully, false if not changed
      */
-    virtual bool setFormat(const String &format)
+    virtual bool setFormat(const String& format)
 	{ return false; }
 
     /**
      * Get the name of the format currently in use
      * @return Name of the data format
      */
-    inline const String &getFormat() const
+    inline const String& getFormat() const
 	{ return m_format; }
 
     /**
@@ -340,26 +340,26 @@ public:
      * @param data The raw data block to process; an empty block ends data
      * @param timeDelta Timestamp increment of data - typically samples
      */
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta) = 0;
+    virtual void Consume(const DataBlock& data, unsigned long timeDelta) = 0;
 
     /**
      * Get the data source of this object if it's connected
      * @return A pointer to the DataSource object or NULL
      */
-    DataSource *getConnSource() const
+    DataSource* getConnSource() const
 	{ return m_source; }
 
     /**
      * Get the data source of a translator object
      * @return A pointer to the DataSource object or NULL
      */
-    virtual DataSource *getTransSource() const
+    virtual DataSource* getTransSource() const
 	{ return 0; }
 
 private:
-    inline void setSource(DataSource *source)
+    inline void setSource(DataSource* source)
 	{ m_source = source; }
-    DataSource *m_source;
+    DataSource* m_source;
 };
 
 /**
@@ -373,7 +373,7 @@ public:
      * Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    DataSource(const char *format = "slin")
+    DataSource(const char* format = "slin")
 	: DataNode(format), m_translator(0) { }
 
     /**
@@ -386,21 +386,21 @@ public:
      * @param data The raw data block to forward; an empty block ends data
      * @param timeDelta Timestamp increment of data - typically samples
      */
-    void Forward(const DataBlock &data, unsigned long timeDelta = 0);
+    void Forward(const DataBlock& data, unsigned long timeDelta = 0);
 
     /**
      * Attach a data consumer
      * @param consumer Data consumer to attach
      * @return True on success, false on failure
      */
-    bool attach(DataConsumer *consumer);
+    bool attach(DataConsumer* consumer);
 
     /**
      * Detach a data consumer
      * @param consumer Data consumer to detach
      * @return True on success, false on failure
      */
-    bool detach(DataConsumer *consumer);
+    bool detach(DataConsumer* consumer);
 
     /**
      * Detach all data consumers
@@ -412,16 +412,16 @@ public:
      * Get the master translator object if this source is part of a translator
      * @return A pointer to the DataTranslator object or NULL
      */
-    DataTranslator *getTranslator() const
+    DataTranslator* getTranslator() const
 	{ return m_translator; }
 
 protected:
     /**
      * The current position in the data - format dependent, usually samples
      */
-    inline void setTranslator(DataTranslator *translator)
+    inline void setTranslator(DataTranslator* translator)
 	{ m_translator = translator; }
-    DataTranslator *m_translator;
+    DataTranslator* m_translator;
     ObjList m_consumers;
     Mutex m_mutex;
 };
@@ -442,7 +442,7 @@ public:
      * Starts the worker thread
      * @return True if started, false if an error occured
      */
-    bool start(const char *name = "ThreadedSource");
+    bool start(const char* name = "ThreadedSource");
 
     /**
      * Stops and destroys the worker thread if running
@@ -453,14 +453,14 @@ public:
      * Return a pointer to the worker thread
      * @return Pointer to running worker thread or NULL
      */
-    Thread *thread() const;
+    Thread* thread() const;
 
 protected:
     /**
      * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    ThreadedSource(const char *format = "slin")
+    ThreadedSource(const char* format = "slin")
 	: DataSource(format), m_thread(0) { }
 
     /**
@@ -474,122 +474,12 @@ protected:
     virtual void cleanup();
 
 private:
-    ThreadedSourcePrivate *m_thread;
-};
-
-/**
- * The DataEndpoint holds an endpoint capable of performing unidirectional
- * or bidirectional data transfers
- * @short A data transfer endpoint capable of sending and/or receiving data
- */
-class DataEndpoint : public RefObject
-{
-public:
-
-    /**
-     * Creates am empty data ednpoint
-     */
-    inline DataEndpoint(const char *name = 0)
-	: m_name(name), m_source(0), m_consumer(0), m_peer(0) { }
-
-    /**
-     * Destroys the endpoint, source and consumer
-     */
-    ~DataEndpoint();
-
-    /**
-     * Connect the source and consumer of the endpoint to a peer
-     * @param peer Pointer to the peer data endpoint
-     * @return True if connected, false if incompatible source/consumer
-     */
-    bool connect(DataEndpoint *peer);
-
-    /**
-     * Disconnect from the connected endpoint
-     * @param reason Text that describes disconnect reason
-     */
-    inline void disconnect(const char *reason = 0)
-	{ disconnect(false,reason); }
-
-    /**
-     * Set the data source of this object
-     * @param source A pointer to the new source or NULL
-     */
-    void setSource(DataSource *source = 0);
-
-    /**
-     * Get the data source of this object
-     * @return A pointer to the DataSource object or NULL
-     */
-    DataSource *getSource() const
-	{ return m_source; }
-
-    /**
-     * Set the data consumer of this object
-     * @param consumer A pointer to the new consumer or NULL
-     */
-    void setConsumer(DataConsumer *consumer = 0);
-
-    /**
-     * Get the data consumer of this object
-     * @return A pointer to the DataConsumer object or NULL
-     */
-    DataConsumer *getConsumer() const
-	{ return m_consumer; }
-
-    /*
-     * Get a pointer to the peer endpoint
-     * @return A pointer to the peer endpoint or NULL
-     */
-    inline DataEndpoint *getPeer() const
-	{ return m_peer; }
-
-    /**
-     * Get the name set in constructor
-     * @return A reference to the name as hashed string
-     */
-    inline const String &name() const
-	{ return m_name; }
-
-protected:
-    /**
-     * Connect notification method
-     */
-    virtual void connected() { }
-
-    /**
-     * Disconnect notification method
-     * @param final True if this disconnect was called from the destructor
-     * @param reason Text that describes disconnect reason
-     */
-    virtual void disconnected(bool final, const char *reason) { }
-
-    /**
-     * Attempt to connect the endpoint to a peer of the same type
-     * @param peer Pointer to the endpoint data driver
-     * @return True if connected, false if failed native connection
-     */
-    virtual bool nativeConnect(DataEndpoint *peer)
-	{ return false; }
-
-    /*
-     * Set the peer endpoint pointer
-     * @param peer A pointer to the new peer or NULL
-     * @param reason Text describing the reason in case of disconnect
-     */
-    void setPeer(DataEndpoint *peer, const char *reason = 0);
-
-private:
-    void disconnect(bool final, const char *reason);
-    String m_name;
-    DataSource *m_source;
-    DataConsumer *m_consumer;
-    DataEndpoint *m_peer;
+    ThreadedSourcePrivate* m_thread;
 };
 
 /**
  * The DataTranslator holds a translator (codec) capable of unidirectional
- * conversion of data from one type to another
+ * conversion of data from one type to another.
  * @short An unidirectional data translator (codec)
  */
 class DataTranslator : public DataConsumer
@@ -597,19 +487,19 @@ class DataTranslator : public DataConsumer
     friend class TranslatorFactory;
 public:
     /**
-     * Construct a data translator
+     * Construct a data translator.
      * @param sFormat Name of the source format (data received from the consumer)
      * @param dFormat Name of the destination format (data supplied to the source)
      */
-    DataTranslator(const char *sFormat, const char *dFormat);
+    DataTranslator(const char* sFormat, const char* dFormat);
 
     /**
-     * Creates a data translator from an existing source
-     * does not increment the source's reference counter
+     * Creates a data translator from an existing source,
+     *  does not increment the source's reference counter.
      * @param sFormat Name of the source format (data received from the consumer)
      * @param source Optional pointer to a DataSource object
      */
-    DataTranslator(const char *sFormat, DataSource *source = 0);
+    DataTranslator(const char* sFormat, DataSource* source = 0);
 
     /**
      * Destroys the translator and its source
@@ -620,22 +510,22 @@ public:
      * Get the data source of a translator object
      * @return A pointer to the DataSource object or NULL
      */
-    virtual DataSource *getTransSource() const
+    virtual DataSource* getTransSource() const
 	{ return m_tsource; }
 
     /**
-     * Get a textual list of formats supported for a given output format
+     * Get a textual list of formats supported for a given output format.
      * @param dFormat Name of destination format
      * @return Space separated list of source formats
      */
-    static String srcFormats(const String &dFormat = "slin");
+    static String srcFormats(const String& dFormat = "slin");
 
     /**
      * Get a textual list of formats supported for a given input format
      * @param sFormat Name of source format
      * @return Space separated list of destination formats
      */
-    static String destFormats(const String &sFormat = "slin");
+    static String destFormats(const String& sFormat = "slin");
 
     /**
      * Finds the cost of a translator given the source and destination format names
@@ -643,7 +533,7 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return Cost of best (cheapest) codec or -1 if no known codec exists
      */
-    static int cost(const String &sFormat, const String &dFormat);
+    static int cost(const String& sFormat, const String& dFormat);
 
     /**
      * Creates a translator given the source and destination format names
@@ -651,7 +541,7 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return A pointer to a DataTranslator object or NULL if no known codec exists
      */
-    static DataTranslator *create(const String &sFormat, const String &dFormat);
+    static DataTranslator* create(const String& sFormat, const String& dFormat);
 
     /**
      * Attach a consumer to a source, possibly trough a chain of translators
@@ -659,7 +549,7 @@ public:
      * @param consumer Consumer where the chain ends
      * @return True if successfull, false if no translator chain could be built
      */
-    static bool attachChain(DataSource *source, DataConsumer *consumer);
+    static bool attachChain(DataSource* source, DataConsumer* consumer);
 
     /**
      * Detach a consumer from a source, possibly trough a chain of translators
@@ -667,24 +557,24 @@ public:
      * @param consumer Consumer where the chain ends
      * @return True if successfull, false if source and consumers were not attached
      */
-    static bool detachChain(DataSource *source, DataConsumer *consumer);
+    static bool detachChain(DataSource* source, DataConsumer* consumer);
 
 protected:
     /**
      * Install a Translator Factory in the list of known codecs
      * @param factory A pointer to a TranslatorFactory instance
      */
-    static void install(TranslatorFactory *factory);
+    static void install(TranslatorFactory* factory);
 
     /**
      * Remove a Translator Factory from the list of known codecs
      * @param factory A pointer to a TranslatorFactory instance
      */
-    static void uninstall(TranslatorFactory *factory);
+    static void uninstall(TranslatorFactory* factory);
 
 private:
     DataTranslator(); // No default constructor please
-    DataSource *m_tsource;
+    DataSource* m_tsource;
     static Mutex s_mutex;
     static ObjList s_factories;
 };
@@ -709,13 +599,378 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return A pointer to a DataTranslator object or NULL
      */
-    virtual DataTranslator *create(const String &sFormat, const String &dFormat) = 0;
+    virtual DataTranslator* create(const String& sFormat, const String& dFormat) = 0;
 
     /**
      * Get the capabilities table of this translator
      * @return A pointer to the first element of the capabilities table
      */
-    virtual const TranslatorCaps *getCapabilities() const = 0;
+    virtual const TranslatorCaps* getCapabilities() const = 0;
+};
+
+/**
+ * The DataEndpoint holds an endpoint capable of performing unidirectional
+ * or bidirectional data transfers
+ * @short A data transfer endpoint capable of sending and/or receiving data
+ */
+class DataEndpoint : public RefObject
+{
+public:
+
+    /**
+     * Creates am empty data ednpoint
+     */
+    inline DataEndpoint(const char* name = 0)
+	: m_name(name), m_source(0), m_consumer(0), m_peer(0) { }
+
+    /**
+     * Destroys the endpoint, source and consumer
+     */
+    ~DataEndpoint();
+
+    /**
+     * Connect the source and consumer of the endpoint to a peer
+     * @param peer Pointer to the peer data endpoint
+     * @return True if connected, false if incompatible source/consumer
+     */
+    bool connect(DataEndpoint* peer);
+
+    /**
+     * Disconnect from the connected endpoint
+     * @param reason Text that describes disconnect reason
+     */
+    inline void disconnect(const char* reason = 0)
+	{ disconnect(false,reason); }
+
+    /**
+     * Set the data source of this object
+     * @param source A pointer to the new source or NULL
+     */
+    void setSource(DataSource* source = 0);
+
+    /**
+     * Get the data source of this object
+     * @return A pointer to the DataSource object or NULL
+     */
+    DataSource* getSource() const
+	{ return m_source; }
+
+    /**
+     * Set the data consumer of this object
+     * @param consumer A pointer to the new consumer or NULL
+     */
+    void setConsumer(DataConsumer* consumer = 0);
+
+    /**
+     * Get the data consumer of this object
+     * @return A pointer to the DataConsumer object or NULL
+     */
+    DataConsumer* getConsumer() const
+	{ return m_consumer; }
+
+    /*
+     * Get a pointer to the peer endpoint
+     * @return A pointer to the peer endpoint or NULL
+     */
+    inline DataEndpoint* getPeer() const
+	{ return m_peer; }
+
+    /**
+     * Get the name set in constructor
+     * @return A reference to the name as hashed string
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+protected:
+    /**
+     * Connect notification method
+     */
+    virtual void connected() { }
+
+    /**
+     * Disconnect notification method
+     * @param final True if this disconnect was called from the destructor
+     * @param reason Text that describes disconnect reason
+     */
+    virtual void disconnected(bool final, const char* reason) { }
+
+    /**
+     * Attempt to connect the endpoint to a peer of the same type
+     * @param peer Pointer to the endpoint data driver
+     * @return True if connected, false if failed native connection
+     */
+    virtual bool nativeConnect(DataEndpoint* peer)
+	{ return false; }
+
+    /*
+     * Set the peer endpoint pointer
+     * @param peer A pointer to the new peer or NULL
+     * @param reason Text describing the reason in case of disconnect
+     */
+    void setPeer(DataEndpoint* peer, const char* reason = 0);
+
+private:
+    void disconnect(bool final, const char* reason);
+    String m_name;
+    DataSource* m_source;
+    DataConsumer* m_consumer;
+    DataEndpoint* m_peer;
+};
+
+class Driver;
+
+/**
+ * A class that holds common channel related features (a.k.a. call leg)
+ * @short An abstract communication channel
+ */
+class Channel : public RefObject
+{
+private:
+    Channel* m_peer;
+    Driver* m_driver;
+    bool m_outgoing;
+    String m_id;
+    String m_targetid;
+    String m_billid;
+    String m_status;
+    ObjList m_data;
+
+public:
+    /**
+     * Destructor
+     */
+    virtual ~Channel();
+
+    /**
+     * Get a string representation of this channel
+     * @return A reference to the name of this object
+     */
+    virtual const String& toString() const
+	{ return m_id; }
+
+    /**
+     * Put channel variables into a message
+     * @param msg Message to fill in
+     */
+    virtual void complete(Message& msg) const;
+
+    /**
+     * Notification on remote ringing
+     * @param msg Notification message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgRinging(Message& msg);
+
+    /**
+     * Notification on remote answered
+     * @param msg Notification message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgAnswered(Message& msg);
+
+    /**
+     * Notification on remote tone(s)
+     * @param msg Notification message
+     * @param tones Pointer to the received tone(s)
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgTone(Message& msg, const char* tone);
+
+    /**
+     * Notification on remote text messaging (sms)
+     * @param msg Notification message
+     * @param text Pointer to the received text
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgText(Message& msg, const char* text);
+
+    /**
+     * Notification on current call drop request
+     * @param msg Notification message
+     * @return True if initiated call drop, false if failed
+     */
+    virtual bool msgDrop(Message& msg);
+
+    /**
+     * Get the current status of the channel
+     * @return The current status as String
+     */
+    inline const String& status() const
+	{ return m_status; }
+
+    /**
+     * Get the direction of the channel
+     * @return True if the channel is an outgoing call (generated locally)
+     */
+    bool isOutgoing() const
+	{ return m_outgoing; }
+
+    /**
+     * Get the direction of the channel
+     * @return True if the channel is an incoming call (generated remotely)
+     */
+    bool isIncoming() const
+	{ return !m_outgoing; }
+
+    /**
+     * Get the unique channel identifier
+     * @return A String holding the unique channel id
+     */
+    inline const String& id() const
+	{ return m_id; }
+
+    /**
+     * Get the connected channel identifier.
+     * @return A String holding the unique channel id of the target or an empty
+     *  string if this channel is not connected to a target.
+     */
+    inline const String& targetid() const
+	{ return m_targetid; }
+
+    /**
+     * Get the billing identifier.
+     * @return An identifier of the call or account that will be billed for
+     *  calls made by this channel.
+     */
+    inline const String& billid() const
+	{ return m_billid; }
+
+    /**
+     * Get the connected peer channel
+     * @return Pointer to connected peer channel or NULL
+     */
+    inline Channel* getPeer() const
+	{ return m_peer; }
+
+    /**
+     * Connect the channel to a peer.
+     * @param peer Pointer to the peer channel.
+     * @return True if connected, false if an error occured.
+     */
+    bool connect(Channel* peer);
+
+    /**
+     * Disconnect from the connected peer channel.
+     * @param reason Text that describes disconnect reason.
+     */
+    inline void disconnect(const char* reason = 0)
+	{ disconnect(false,reason); }
+
+protected:
+    /**
+     * Constructor
+     */
+    Channel(Driver* driver, const char* id, bool outgoing = false);
+
+    /**
+     * Set the current status of the channel
+     * @param newstat The new status as String
+     */
+    inline void status(const char* newstat)
+	{ m_status = newstat; }
+
+    /**
+     * Connect notification method.
+     */
+    virtual void connected() { }
+
+    /**
+     * Disconnect notification method.
+     * @param final True if this disconnect was called from the destructor.
+     * @param reason Text that describes disconnect reason.
+     */
+    virtual void disconnected(bool final, const char* reason) { }
+
+    /*
+     * Set the peer channel pointer.
+     * @param peer A pointer to the new peer or NULL.
+     * @param reason Text describing the reason in case of disconnect.
+     */
+    void setPeer(Channel* peer, const char* reason = 0);
+
+private:
+    void disconnect(bool final, const char* reason);
+    Channel(); // no default constructor please
+};
+
+/**
+ * Driver is a descendent of Plugin specialized in implementing channel drivers
+ * @short A Plugin that implements a channel driver
+ */
+class Driver : public Plugin, public Mutex, public MessageReceiver
+{
+private:
+    bool m_init;
+    String m_prefix;
+    ObjList m_chans;
+
+public:
+    /**
+     * Retrive the prefix that is used as base for all channels
+     * @return The driver's prefix
+     */
+    inline const String& prefix() const
+	{ return m_prefix; }
+
+    /**
+     * Get the list of channels of this driver
+     * @return A reference to the channel list
+     */
+    inline ObjList& channels()
+	{ return m_chans; }
+
+protected:
+    /**
+     * IDs of the installed relays
+     */
+    enum {
+	// Channel messages
+	Ringing,
+	Answered,
+	Tone,
+	Text,
+	Masquerade,
+	// Driver messages
+	Execute,
+	Drop
+    } RelayID;
+
+    /**
+     * Constructor
+     * @param name Plugin name of this driver
+     */
+    Driver(const char* name);
+
+    /**
+     * Install standard message relays and set up the prefix
+     * @param prefix Prefix to use with channels of this driver
+     */
+    void setup(const char* prefix);
+
+    /**
+     * Message receiver handler
+     * @param msg The received message
+     * @param id The identifier with which the relay was created
+     * @return True to stop processing, false to try other handlers
+     */
+    virtual bool received(Message &msg, int id);
+
+    /**
+     * Drop all current channels
+     */
+    virtual void dropAll();
+
+    /**
+     * Create an outgoing calling channel
+     * @param msg Call execute message
+     * @param dest Destination of the new call
+     * @return True if outgoing call was created
+     */
+    virtual bool msgExecute(Message& msg, String& dest) = 0;
+
+private:
+    Driver(); // no default constructor please
 };
 
 }; // namespace TelEngine

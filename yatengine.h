@@ -69,24 +69,81 @@ enum DebugLevel {
 };
 
 /**
- * Retrive the current debug level
- * @return The current debug level
+ * Retrive the current global debug level
+ * @return The current global debug level
  */
 int debugLevel();
 
 /**
- * Set the current debug level.
+ * Set the current global debug level.
  * @param level The desired debug level
- * @return The new debug level (may be different)
+ * @return The new global debug level (may be different)
  */
 int debugLevel(int level);
 
 /**
  * Check if debugging output should be generated
- * @param level The desired debug level
+ * @param level The global debug level we are testing
  * @return True if messages should be output, false otherwise
  */
 bool debugAt(int level);
+
+/**
+ * Holds a local debugging level that can be modified separately from the
+ *  global debugging
+ * @short A holder for a debug level
+ */
+class DebugEnabler
+{
+public:
+    /**
+     * Constructor
+     * @param level The initial
+     */
+    inline DebugEnabler(int level = DebugWarn, bool enabled = true)
+	: m_level(DebugFail), m_enabled(enabled)
+	{ debugLevel(level); }
+
+    /**
+     * Retrive the current local debug level
+     * @return The current local debug level
+     */
+    inline int debugLevel() const
+	{ return m_level; }
+
+    /**
+     * Set the current local debug level.
+     * @param level The desired debug level
+     * @return The new debug level (may be different)
+     */
+    int debugLevel(int level);
+
+    /**
+     * Retrive the current debug activation status
+     * @return True if local debugging is enabled
+     */
+    inline bool debugEnabled() const
+	{ return m_enabled; }
+
+    /**
+     * Set the current debug activation status
+     * @param enable The new debug activation status, true to enable
+     */
+    inline void debugEnabled(bool enable)
+	{ m_enabled = enable; }
+
+    /**
+     * Check if debugging output should be generated
+     * @param level The debug level we are testing
+     * @return True if messages should be output, false otherwise
+     */
+    inline bool debugAt(int level) const
+	{ return (m_enabled && (level <= m_level)); }
+
+private:
+    int m_level;
+    bool m_enabled;
+};
 
 #if 0
 /**
@@ -94,42 +151,42 @@ bool debugAt(int level);
  * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
-bool DDebug(int level, const char *format, ...);
+bool DDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
-bool DDebug(const char *facility, int level, const char *format, ...);
+bool DDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
-bool XDebug(int level, const char *format, ...);
+bool XDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
-bool XDebug(const char *facility, int level, const char *format, ...);
+bool XDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
-bool NDebug(int level, const char *format, ...);
+bool NDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
-bool NDebug(const char *facility, int level, const char *format, ...);
+bool NDebug(const char* facility, int level, const char* format, ...);
 #endif
 
 #ifdef XDEBUG
@@ -161,7 +218,7 @@ bool NDebug(const char *facility, int level, const char *format, ...);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(int level, const char *format, ...) FORMAT_CHECK(2);
+bool Debug(int level, const char* format, ...) FORMAT_CHECK(2);
 
 /**
  * Outputs a debug string for a specific facility.
@@ -170,18 +227,28 @@ bool Debug(int level, const char *format, ...) FORMAT_CHECK(2);
  * @param format A printf() style format string
  * @return True if message was output, false otherwise
  */
-bool Debug(const char *facility, int level, const char *format, ...) FORMAT_CHECK(3);
+bool Debug(const char* facility, int level, const char* format, ...) FORMAT_CHECK(3);
+
+/**
+ * Outputs a debug string for a specific facility.
+ * @param local Pointer to a DebugEnabler holding current debugging settings
+ * @param level The level of the message
+ * @param format A printf() style format string
+ * @return True if message was output, false otherwise
+ */
+bool Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a string to the debug console with formatting
  * @param facility Facility that outputs the message
  * @param format A printf() style format string
  */
-void Output(const char *format, ...) FORMAT_CHECK(1);
+void Output(const char* format, ...) FORMAT_CHECK(1);
 
 /**
  * This class is used as an automatic variable that logs messages on creation
- *  and destruction (when the instruction block is left or function returns)
+ *  and destruction (when the instruction block is left or function returns).
+ * IMPORTANT: the name is not copied so it should best be static.
  * @short An object that logs messages on creation and destruction
  */
 class Debugger
@@ -192,7 +259,7 @@ public:
      * @param name Name of the function or block entered, must be static
      * @param format printf() style format string
      */
-    Debugger(const char *name, const char *format = 0, ...);
+    Debugger(const char* name, const char* format = 0, ...);
 
     /**
      * The constructor prints the method entry message and indents.
@@ -200,7 +267,7 @@ public:
      * @param name Name of the function or block entered, must be static
      * @param format printf() style format string
      */
-    Debugger(int level, const char *name, const char *format = 0, ...);
+    Debugger(int level, const char* name, const char* format = 0, ...);
 
     /**
      * The destructor prints the method leave message and deindents.
@@ -211,13 +278,13 @@ public:
      * Set the output callback
      * @param outFunc Pointer to the output function, NULL to use stderr
      */
-    static void setOutput(void (*outFunc)(const char *) = 0);
+    static void setOutput(void (*outFunc)(const char*) = 0);
 
     /**
      * Set the interactive output callback
      * @param outFunc Pointer to the output function, NULL to disable
      */
-    static void setIntOut(void (*outFunc)(const char *) = 0);
+    static void setIntOut(void (*outFunc)(const char*) = 0);
 
     /**
      * Enable or disable the debug output
@@ -225,7 +292,7 @@ public:
     static void enableOutput(bool enable = true);
 
 private:
-    const char *m_name;
+    const char* m_name;
 };
 
 /**
@@ -233,7 +300,7 @@ private:
  * A table of such structures must end with an entry with a null token
  */
 struct TokenDict {
-    const char *token;
+    const char* token;
     int value;
 };
 
@@ -351,7 +418,7 @@ public:
      * Get the object associated to this list item
      * @return Pointer to the object or NULL
      */
-    inline GenObject *get() const
+    inline GenObject* get() const
 	{ return m_obj; }
 
     /**
@@ -360,62 +427,69 @@ public:
      * @param delold True to delete the old object (default)
      * @return Pointer to the old object if not destroyed
      */
-    GenObject *set(const GenObject *obj, bool delold = true);
+    GenObject* set(const GenObject* obj, bool delold = true);
 
     /**
      * Get the next item in the list
      * @return Pointer to the next item in list or NULL
      */
-    inline ObjList *next() const
+    inline ObjList* next() const
 	{ return m_next; }
 
     /**
      * Get the last item in the list
      * @return Pointer to the last item in list
      */
-    ObjList *last() const;
+    ObjList* last() const;
 
     /**
-     * Indexing operator
-     * @param index Index of the item to retrive
-     * @return Pointer to the item or NULL
+     * Pointer-like indexing operator
+     * @param index Index of the list item to retrive
+     * @return Pointer to the list item or NULL
      */
-    ObjList *operator[](int index) const;
+    ObjList* operator+(int index) const;
+
+    /**
+     * Array-like indexing operator
+     * @param index Index of the object to retrive
+     * @return Pointer to the object or NULL
+     */
+    GenObject* operator[](int index) const;
 
     /**
      * Get the item in the list that holds an object
      * @param obj Pointer to the object to search for
      * @return Pointer to the found item or NULL
      */
-    ObjList *find(const GenObject *obj) const;
+    ObjList* find(const GenObject* obj) const;
 
     /**
      * Get the item in the list that holds an object by String value
      * @param str String value (toString) of the object to search for
      * @return Pointer to the found item or NULL
      */
-    ObjList *find(const String &str) const;
+    ObjList* find(const String& str) const;
 
     /**
      * Insert an object at this point
      * @param obj Pointer to the object to insert
      * @return A pointer to the inserted list item
      */
-    ObjList *insert(const GenObject *obj);
+    ObjList* insert(const GenObject* obj);
 
     /**
      * Append an object to the end of the list
      * @param obj Pointer to the object to append
      * @return A pointer to the inserted list item
      */
-    ObjList *append(const GenObject *obj);
+    ObjList* append(const GenObject* obj);
 
     /**
      * Delete this list item
      * @param delold True to delete the object (default)
      * @return Pointer to the object if not destroyed
      */
-    GenObject *remove(bool delobj = true);
+    GenObject* remove(bool delobj = true);
 
     /**
      * Delete the list item that holds a given object
@@ -423,7 +497,7 @@ public:
      * @param delobj True to delete the object (default)
      * @return Pointer to the object if not destroyed
      */
-    GenObject *remove(GenObject *obj, bool delobj = true);
+    GenObject* remove(GenObject* obj, bool delobj = true);
 
     /**
      * Clear the list and optionally delete all contained objects
@@ -445,8 +519,8 @@ public:
 	{ m_delete = autodelete; }
 
 private:
-    ObjList *m_next;
-    GenObject *m_obj;
+    ObjList* m_next;
+    GenObject* m_obj;
     bool m_delete;
 };
 
@@ -473,7 +547,7 @@ public:
      * @param value Initial value of the string
      * @param len Length of the data to copy, -1 for full string
      */
-    String(const char *value, int len = -1);
+    String(const char* value, int len = -1);
 
     /**
      * Creates a new initialized string.
@@ -504,13 +578,13 @@ public:
      * Copy constructor.
      * @param value Initial value of the string
      */
-    String(const String &value);
+    String(const String& value);
 
     /**
      * Constructor from String pointer.
      * @param value Initial value of the string
      */
-    String(const String *value);
+    String(const String* value);
 
     /**
      * Destroys the string, disposes the memory.
@@ -520,20 +594,28 @@ public:
     /**
      * A static null String
      */
-    static const String &empty();
+    static const String& empty();
+
+    /**
+     * A standard text representation of boolean values
+     * @param value Boolean value to convert
+     * @return Pointer to a text representation of the value
+     */
+    inline static const char* boolText(bool value)
+	{ return value ? "true" : "false"; }
 
     /**
      * Get the value of the stored string.
      * @return The stored C string which may be NULL.
      */
-    inline const char *c_str() const
+    inline const char* c_str() const
 	{ return m_string; }
 
     /**
      * Get a valid non-NULL C string.
-     * @return The stored C string or "".
+     * @return The stored C string or a static "".
      */
-    inline const char *safe() const
+    inline const char* safe() const
 	{ return m_string ? m_string : ""; }
 
     /**
@@ -560,7 +642,7 @@ public:
      * Get the hash of an arbitrary string.
      * @return The hash of the string.
      */
-    static unsigned int hash(const char *value);
+    static unsigned int hash(const char* value);
 
     /**
      * Clear the string and free the memory
@@ -608,7 +690,7 @@ public:
      * @param base Numeration base, 0 to autodetect
      * @return The integer interpretation or defvalue.
      */
-    int toInteger(const TokenDict *tokens, int defvalue = 0, int base = 0) const;
+    int toInteger(const TokenDict* tokens, int defvalue = 0, int base = 0) const;
 
     /**
      * Convert the string to a boolean value.
@@ -648,26 +730,26 @@ public:
      * @param value New value of the string
      * @param len Length of the data to copy, -1 for full string
      */
-    String& assign(const char *value, int len = -1);
+    String& assign(const char* value, int len = -1);
 
     /**
      * Assignment operator.
      */
-    inline String& operator=(const String &value)
+    inline String& operator=(const String& value)
 	{ return operator=(value.c_str()); }
 
     /**
      * Assignment from String* operator.
      * @see TelEngine::strcpy
      */
-    inline String& operator=(const String *value)
+    inline String& operator=(const String* value)
 	{ return operator=(value ? value->c_str() : ""); }
 
     /**
      * Assignment from char* operator.
      * @see TelEngine::strcpy
      */
-    String& operator=(const char *value);
+    String& operator=(const char* value);
 
     /**
      * Assignment operator for single characters.
@@ -688,13 +770,13 @@ public:
      * Assignment operator for booleans.
      */
     inline String& operator=(bool value)
-	{ return operator=(value ? "true" : "false"); }
+	{ return operator=(boolText(value)); }
 
     /**
      * Appending operator for strings.
      * @see TelEngine::strcat
      */
-    String& operator+=(const char *value);
+    String& operator+=(const char* value);
 
     /**
      * Appending operator for single characters.
@@ -715,42 +797,42 @@ public:
      * Appending operator for booleans.
      */
     inline String& operator+=(bool value)
-	{ return operator+=(value ? "true" : "false"); }
+	{ return operator+=(boolText(value)); }
 
     /**
      * Equality operator.
      */
-    bool operator==(const char *value) const;
+    bool operator==(const char* value) const;
 
     /**
      * Inequality operator.
      */
-    bool operator!=(const char *value) const;
+    bool operator!=(const char* value) const;
 
     /**
      * Fast equality operator.
      */
-    bool operator==(const String &value) const;
+    bool operator==(const String& value) const;
 
     /**
      * Fast inequality operator.
      */
-    bool operator!=(const String &value) const;
+    bool operator!=(const String& value) const;
 
     /**
      * Case-insensitive equality operator.
      */
-    bool operator&=(const char *value) const;
+    bool operator&=(const char* value) const;
 
     /**
      * Case-insensitive inequality operator.
      */
-    bool operator|=(const char *value) const;
+    bool operator|=(const char* value) const;
 
     /**
      * Stream style appending operator for C strings
      */
-    inline String& operator<<(const char *value)
+    inline String& operator<<(const char* value)
 	{ return operator+=(value); }
 
     /**
@@ -781,27 +863,27 @@ public:
      * Stream style substring skipping operator.
      * It eats all characters up to and including the skip string
      */
-    String& operator>>(const char *skip);
+    String& operator>>(const char* skip);
 
     /**
      * Stream style extraction operator for single characters
      */
-    String& operator>>(char &store);
+    String& operator>>(char& store);
 
     /**
      * Stream style extraction operator for integers
      */
-    String& operator>>(int &store);
+    String& operator>>(int& store);
 
     /**
      * Stream style extraction operator for unsigned integers
      */
-    String& operator>>(unsigned int &store);
+    String& operator>>(unsigned int& store);
 
     /**
      * Stream style extraction operator for booleans
      */
-    String& operator>>(bool &store);
+    String& operator>>(bool& store);
 
     /**
      * Locate the first instance of a character in the string
@@ -817,7 +899,7 @@ public:
      * @param offs Offset in string to start searching from
      * @return Offset of substring or -1 if not found
      */
-    int find(const char *what, unsigned int offs = 0) const;
+    int find(const char* what, unsigned int offs = 0) const;
 
     /**
      * Locate the last instance of a character in the string
@@ -832,7 +914,7 @@ public:
      * @param wordBreak Check if a word boundary follows the substring
      * @return True if the substring occurs at the beginning of the string
      */
-    bool startsWith(const char *what, bool wordBreak = false) const;
+    bool startsWith(const char* what, bool wordBreak = false) const;
 
     /**
      * Checks if the string ends with a substring
@@ -840,7 +922,7 @@ public:
      * @param wordBreak Check if a word boundary precedes the substring
      * @return True if the substring occurs at the end of the string
      */
-    bool endsWith(const char *what, bool wordBreak = false) const;
+    bool endsWith(const char* what, bool wordBreak = false) const;
 
     /**
      * Checks if the string starts with a substring and removes it
@@ -852,14 +934,14 @@ public:
      *  and also removes the substring; if wordBreak is True any word
      *  breaking characters are also removed
      */
-    bool startSkip(const char *what, bool wordBreak = true);
+    bool startSkip(const char* what, bool wordBreak = true);
 
     /**
      * Checks if matches another string
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    virtual bool matches(const String &value) const
+    virtual bool matches(const String& value) const
 	{ return operator==(value); }
 
     /**
@@ -867,7 +949,7 @@ public:
      * @param rexp Regular expression to check for match
      * @return True if matches, false otherwise
      */
-    bool matches(Regexp &rexp);
+    bool matches(Regexp& rexp);
 
     /**
      * Get the offset of the last match
@@ -896,7 +978,7 @@ public:
      * @param templ Template of the string to generate
      * @return Copy of template with "\0" - "\9" replaced with submatches
      */
-    String replaceMatches(const String &templ) const;
+    String replaceMatches(const String& templ) const;
 
     /**
      * Get the total number of submatches from the last match, 0 if no match
@@ -918,7 +1000,7 @@ public:
      * @param extraEsc Character to escape other than the default ones
      * @return The string with special characters escaped
      */
-    static String msgEscape(const char *str, char extraEsc = 0);
+    static String msgEscape(const char* str, char extraEsc = 0);
 
     /**
      * Create an escaped string suitable for use in messages
@@ -935,7 +1017,7 @@ public:
      * @param extraEsc Character to unescape other than the default ones
      * @return The string with special characters unescaped
      */
-    static String msgUnescape(const char *str, int *errptr = 0, char extraEsc = 0);
+    static String msgUnescape(const char* str, int* errptr = 0, char extraEsc = 0);
 
     /**
      * Decode an escaped string back to its raw form
@@ -943,7 +1025,7 @@ public:
      * @param extraEsc Character to unescape other than the default ones
      * @return The string with special characters unescaped
      */
-    inline String msgUnescape(int *errptr = 0, char extraEsc = 0) const
+    inline String msgUnescape(int* errptr = 0, char extraEsc = 0) const
 	{ return msgUnescape(c_str(),errptr,extraEsc); }
 
 protected:
@@ -954,11 +1036,11 @@ protected:
 
 private:
     void clearMatches();
-    char *m_string;
+    char* m_string;
     unsigned int m_length;
-    // i hope every C++ compiler now knows about mutable...
+    // I hope every C++ compiler now knows about mutable...
     mutable unsigned int m_hash;
-    StringMatchPrivate *m_matches;
+    StringMatchPrivate* m_matches;
 };
 
 /**
@@ -966,37 +1048,37 @@ private:
  * @param str Pointer to a C string that may be NULL
  * @return Original pointer or pointer to an empty string
  */
-inline const char *c_safe(const char *str)
+inline const char *c_safe(const char* str)
     { return str ? str : ""; }
 
 /**
  * Concatenation operator for strings.
  */
-String operator+(const String &s1, const String &s2);
+String operator+(const String& s1, const String& s2);
 
 /**
  * Concatenation operator for strings.
  */
-String operator+(const String &s1, const char *s2);
+String operator+(const String& s1, const char* s2);
 
 /**
  * Concatenation operator for strings.
  */
-String operator+(const char *s1, const String &s2);
+String operator+(const char* s1, const String& s2);
 
 /**
  * Prevent careless programmers from overwriting the string
  * @see TelEngine::String::operator=
  */
-inline char *strcpy(String &dest, const char *src)
-    { dest = src; return (char *)dest.c_str(); }
+inline const char *strcpy(String& dest, const char* src)
+    { dest = src; return dest.c_str(); }
 
 /**
  * Prevent careless programmers from overwriting the string
  * @see TelEngine::String::operator+=
  */
-inline char *strcat(String &dest, const char *src)
-    { dest += src; return (char *)dest.c_str(); }
+inline const char *strcat(String& dest, const char* src)
+    { dest += src; return dest.c_str(); }
 
 /**
  * Utility function to look up a string in a token table,
@@ -1006,7 +1088,7 @@ inline char *strcat(String &dest, const char *src)
  * @param defvalue Value to return if lookup and conversion fail
  * @param base Default base to use to convert to number
  */
-int lookup(const char *str, const TokenDict *tokens, int defvalue = 0, int base = 0);
+int lookup(const char* str, const TokenDict* tokens, int defvalue = 0, int base = 0);
 
 /**
  * Utility function to look up a number in a token table
@@ -1014,7 +1096,7 @@ int lookup(const char *str, const TokenDict *tokens, int defvalue = 0, int base 
  * @param tokens Pointer to the token table
  * @param defvalue Value to return if lookup fails
  */
-const char *lookup(int value, const TokenDict *tokens, const char *defvalue = 0);
+const char* lookup(int value, const TokenDict* tokens, const char* defvalue = 0);
 
 
 /**
@@ -1036,13 +1118,13 @@ public:
      * @param extended True to use POSIX Extended Regular Expression syntax
      * @param insensitive True to not differentiate case
      */
-    Regexp(const char *value, bool extended = false, bool insensitive = false);
+    Regexp(const char* value, bool extended = false, bool insensitive = false);
 
     /**
      * Copy constructor.
      * @param value Initial value of the regexp.
      */
-    Regexp(const Regexp &value);
+    Regexp(const Regexp& value);
 
     /**
      * Destroys the regexp, disposes the memory.
@@ -1052,7 +1134,7 @@ public:
     /**
      * Assignment from char* operator.
      */
-    inline Regexp& operator=(const char *value)
+    inline Regexp& operator=(const char* value)
 	{ String::operator=(value); return *this; }
 
     /**
@@ -1066,14 +1148,14 @@ public:
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    bool matches(const char *value);
+    bool matches(const char* value);
 
     /**
      * Checks if the pattern matches a string
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    virtual bool matches(const String &value) const
+    virtual bool matches(const String& value) const
 	{ return matches(value.safe()); }
 
     /**
@@ -1104,7 +1186,7 @@ protected:
 private:
     void cleanup();
     bool matches(const char *value, StringMatchPrivate *matches);
-    void *m_regexp;
+    void* m_regexp;
     int m_flags;
 };
 
@@ -1120,7 +1202,7 @@ public:
      * @param name Name of this string
      * @param value Initial value of the string.
      */
-    NamedString(const char *name, const char *value = 0);
+    NamedString(const char* name, const char* value = 0);
 
     /**
      * Retrive the name of this string.
@@ -1138,7 +1220,7 @@ public:
     /**
      * Value assignment operator
      */
-    inline NamedString& operator=(const char *value)
+    inline NamedString& operator=(const char* value)
 	{ String::operator=(value); return *this; }
 
 private:
@@ -1172,7 +1254,7 @@ public:
      * Constructs a Time object from a timeval structure
      * @param tv Pointer to the timeval structure
      */
-    inline Time(struct timeval *tv)
+    inline Time(struct timeval* tv)
 	: m_time(fromTimeval(tv))
 	{ }
 
@@ -1232,7 +1314,7 @@ public:
      * Fill in a timeval struct from a value in microseconds
      * @param tv Pointer to the timeval structure
      */
-    inline void toTimeval(struct timeval *tv) const
+    inline void toTimeval(struct timeval* tv) const
 	{ toTimeval(tv, m_time); }
 
     /**
@@ -1240,14 +1322,14 @@ public:
      * @param tv Pointer to the timeval structure
      * @param usec Time to convert to timeval
      */
-    static void toTimeval(struct timeval *tv, unsigned long long usec);
+    static void toTimeval(struct timeval* tv, unsigned long long usec);
 
     /**
      * Convert time in a timeval struct to microseconds
      * @param tv Pointer to the timeval structure
      * @return Corresponding time in microseconds or zero if tv is NULL
      */
-    static unsigned long long fromTimeval(struct timeval *tv);
+    static unsigned long long fromTimeval(struct timeval* tv);
 
     /**
      * Get the current system time in microseconds
@@ -1298,7 +1380,7 @@ public:
     /**
      * Assignment operator.
      */
-    MD5& operator=(const MD5 &original);
+    MD5& operator=(const MD5& original);
 
     /**
      * Clear the digest and prepare for reuse
@@ -1359,7 +1441,7 @@ public:
      * Creates a new named list.
      * @param name Name of the list - must not be NULL or empty
      */
-    NamedList(const char *name);
+    NamedList(const char* name);
 
     /**
      * Get the number of parameters
@@ -1379,47 +1461,47 @@ public:
      * Add a named string to the parameter list.
      * @param param Parameter to add
      */
-    NamedList &addParam(NamedString *param);
+    NamedList& addParam(NamedString* param);
 
     /**
      * Add a named string to the parameter list.
      * @param name Name of the new string
      * @param value Value of the new string
      */
-    NamedList &addParam(const char *name, const char *value);
+    NamedList& addParam(const char* name, const char* value);
 
     /**
      * Set a named string in the parameter list.
      * @param param Parameter to set or add
      */
-    NamedList &setParam(NamedString *param);
+    NamedList& setParam(NamedString* param);
 
     /**
      * Set a named string in the parameter list.
      * @param name Name of the string
      * @param value Value of the string
      */
-    NamedList &setParam(const char *name, const char *value);
+    NamedList& setParam(const char* name, const char* value);
 
     /**
      * Clars all instances of a named string in the parameter list.
      * @param name Name of the string to remove
      */
-    NamedList &clearParam(const String &name);
+    NamedList& clearParam(const String& name);
 
     /**
      * Locate a named string in the parameter list.
      * @param name Name of parameter to locate
      * @return A pointer to the named string or NULL.
      */
-    NamedString *getParam(const String &name) const;
+    NamedString* getParam(const String& name) const;
 
     /**
      * Locate a named string in the parameter list.
      * @param index Index of the parameter to locate
      * @return A pointer to the named string or NULL.
      */
-    NamedString *getParam(unsigned int index) const;
+    NamedString* getParam(unsigned int index) const;
 
     /**
      * Retrive the value of a named parameter.
@@ -1427,12 +1509,12 @@ public:
      * @param defvalue Default value to return if not found
      * @return The string contained in the named parameter or the default
      */
-    const char *getValue(const String &name, const char *defvalue = 0) const;
+    const char* getValue(const String& name, const char* defvalue = 0) const;
 
 private:
     NamedList(); // no default constructor please
-    NamedList(const NamedList &value); // no copy constructor
-    NamedList& operator=(const NamedList &value); // no assignment please
+    NamedList(const NamedList& value); // no copy constructor
+    NamedList& operator=(const NamedList& value); // no assignment please
     ObjList m_params;
 };
 
@@ -1452,12 +1534,12 @@ public:
      * Create a configuration from a file
      * @param filename Name of file to initialize from
      */
-    Configuration(const char *filename);
+    Configuration(const char* filename);
 
     /**
      * Assignment from string operator
      */
-    inline Configuration& operator=(const String &value)
+    inline Configuration& operator=(const String& value)
 	{ String::operator=(value); return *this; }
 
     /**
@@ -1472,14 +1554,14 @@ public:
      * @param index Index of the section
      * @return The section's content or NULL if no such section
      */
-    NamedList *getSection(unsigned int index) const;
+    NamedList* getSection(unsigned int index) const;
 
     /**
      * Retrive an entire section
      * @param sect Name of the section
      * @return The section's content or NULL if no such section
      */
-    NamedList *getSection(const String &sect) const;
+    NamedList* getSection(const String& sect) const;
 
     /**
      * Locate a key/value pair in the section.
@@ -1487,7 +1569,7 @@ public:
      * @param key Name of the key in section
      * @return A pointer to the key/value pair or NULL.
      */
-    NamedString *getKey(const String &sect, const String &key) const;
+    NamedString* getKey(const String& sect, const String& key) const;
 
     /**
      * Retrive the value of a key in a section.
@@ -1496,7 +1578,7 @@ public:
      * @param defvalue Default value to return if not found
      * @return The string contained in the key or the default
      */
-    const char *getValue(const String &sect, const String &key, const char *defvalue = 0) const;
+    const char* getValue(const String& sect, const String& key, const char* defvalue = 0) const;
 
     /**
      * Retrive the numeric value of a key in a section.
@@ -1505,7 +1587,7 @@ public:
      * @param defvalue Default value to return if not found
      * @return The number contained in the key or the default
      */
-    int getIntValue(const String &sect, const String &key, int defvalue = 0) const;
+    int getIntValue(const String& sect, const String& key, int defvalue = 0) const;
 
     /**
      * Retrive the numeric value of a key in a section trying first a table lookup.
@@ -1515,7 +1597,7 @@ public:
      * @param defvalue Default value to return if not found
      * @return The number contained in the key or the default
      */
-    int getIntValue(const String &sect, const String &key, const TokenDict *tokens, int defvalue = 0) const;
+    int getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
      * Retrive the boolean value of a key in a section.
@@ -1524,20 +1606,20 @@ public:
      * @param defvalue Default value to return if not found
      * @return The boolean value contained in the key or the default
      */
-    bool getBoolValue(const String &sect, const String &key, bool defvalue = false) const;
+    bool getBoolValue(const String& sect, const String& key, bool defvalue = false) const;
 
     /**
      * Deletes an entire section
      * @param sect Name of section to delete, NULL to delete all
      */
-    void clearSection(const char *sect = 0);
+    void clearSection(const char* sect = 0);
 
     /**
      * Deletes a key/value pair
      * @param sect Name of section
      * @param key Name of the key to delete
      */
-    void clearKey(const String &sect, const String &key);
+    void clearKey(const String& sect, const String& key);
 
     /**
      * Add the value of a key in a section.
@@ -1545,7 +1627,7 @@ public:
      * @param key Name of the key to add in the section
      * @param value Value to set in the key
      */
-    void addValue(const String &sect, const char *key, const char *value = 0);
+    void addValue(const String& sect, const char* key, const char* value = 0);
 
     /**
      * Set the value of a key in a section.
@@ -1553,7 +1635,7 @@ public:
      * @param key Name of the key in section, will be created if missing
      * @param value Value to set in the key
      */
-    void setValue(const String &sect, const char *key, const char *value = 0);
+    void setValue(const String& sect, const char* key, const char* value = 0);
 
     /**
      * Set the numeric value of a key in a section.
@@ -1561,7 +1643,7 @@ public:
      * @param key Name of the key in section, will be created if missing
      * @param value Value to set in the key
      */
-    void setValue(const String &sect, const char *key, int value);
+    void setValue(const String& sect, const char* key, int value);
 
     /**
      * Set the boolean value of a key in a section.
@@ -1569,7 +1651,7 @@ public:
      * @param key Name of the key in section, will be created if missing
      * @param value Value to set in the key
      */
-    void setValue(const String &sect, const char *key, bool value);
+    void setValue(const String& sect, const char* key, bool value);
 
     /**
      * Load the configuration from file
@@ -1584,10 +1666,10 @@ public:
     bool save() const;
 
 private:
-    Configuration(const Configuration &value); // no copy constructor
-    Configuration& operator=(const Configuration &value); // no assignment please
-    ObjList *getSectHolder(const String &sect) const;
-    ObjList *makeSectHolder(const String &sect);
+    Configuration(const Configuration& value); // no copy constructor
+    Configuration& operator=(const Configuration& value); // no assignment please
+    ObjList *getSectHolder(const String& sect) const;
+    ObjList *makeSectHolder(const String& sect);
     ObjList m_sections;
 };
 
@@ -1607,40 +1689,40 @@ public:
      * @param name Name of the message - must not be NULL or empty
      * @param retval Default return value
      */
-    Message(const char *name, const char *retval = 0);
+    Message(const char* name, const char* retval = 0);
 
     /**
      * Retrive a reference to the value returned by the message.
      * @return A reference to the value the message will return
      */
-    inline String &retValue()
+    inline String& retValue()
 	{ return m_return; }
 
     /**
      * Retrive the obscure data associated with the message
      * @return Pointer to arbitrary user data
      */
-    inline void *userData() const
+    inline void* userData() const
 	{ return m_data; }
 
     /**
      * Set obscure data associated with the message
      * @param _data Pointer to arbitrary user data
      */
-    inline void userData(void *_data)
+    inline void userData(void* _data)
 	{ m_data = _data; }
 
     /**
      * Retrive a reference to the creation time of the message.
      * @return A reference to the Time when the message was created
      */
-    inline Time &msgTime()
+    inline Time& msgTime()
 	{ return m_time; }
 
     /**
      * Name assignment operator
      */
-    inline Message& operator=(const char *value)
+    inline Message& operator=(const char* value)
 	{ String::operator=(value); return *this; }
 
     /**
@@ -1648,7 +1730,7 @@ public:
      * to an external communication interface
      * @param id Unique identifier to add to the string
      */
-    String encode(const char *id) const;
+    String encode(const char* id) const;
 
     /**
      * Encode the message into a string adequate for sending as answer
@@ -1656,7 +1738,7 @@ public:
      * @param received True if message was processed locally
      * @param id Unique identifier to add to the string
      */
-    String encode(bool received, const char *id) const;
+    String encode(bool received, const char* id) const;
 
     /**
      * Decode a string from an external communication interface for processing
@@ -1666,7 +1748,7 @@ public:
      * @return -2 for success, -1 if the string was not a text form of a
      * message, index of first erroneous character if failed
      */
-    int decode(const char *str, String &id);
+    int decode(const char* str, String& id);
 
     /**
      * Decode a string from an external communication interface that is an
@@ -1677,7 +1759,7 @@ public:
      * @return -2 for success, -1 if the string was not the expected answer,
      * index of first erroneous character if failed
      */
-    int decode(const char *str, bool &received, const char *id);
+    int decode(const char* str, bool& received, const char* id);
 
 protected:
     /**
@@ -1688,13 +1770,13 @@ protected:
 
 private:
     Message(); // no default constructor please
-    Message(const Message &value); // no copy constructor
-    Message& operator=(const Message &value); // no assignment please
+    Message(const Message& value); // no copy constructor
+    Message& operator=(const Message& value); // no assignment please
     String m_return;
     Time m_time;
-    void *m_data;
-    void commonEncode(String &str) const;
-    int commonDecode(const char *str, int offs);
+    void* m_data;
+    void commonEncode(String& str) const;
+    int commonDecode(const char* str, int offs);
 };
 
 /**
@@ -1712,7 +1794,7 @@ public:
      * @param name Name of the handled message - may be NULL
      * @param priority Priority of the handler, 0 = top
      */
-    MessageHandler(const char *name, unsigned priority = 100);
+    MessageHandler(const char* name, unsigned priority = 100);
 
     /**
      * Handler destructor.
@@ -1724,7 +1806,7 @@ public:
      * @param msg The received message
      * @return True to stop processing, false to try other handlers
      */
-    virtual bool received(Message &msg) = 0;
+    virtual bool received(Message& msg) = 0;
 
     /**
      * Find out the priority of the handler
@@ -1735,7 +1817,7 @@ public:
 
 private:
     unsigned m_priority;
-    MessageDispatcher *m_dispatcher;
+    MessageDispatcher* m_dispatcher;
 };
 
 /**
@@ -1751,7 +1833,7 @@ public:
      * @param id The identifier with which the relay was created
      * @return True to stop processing, false to try other handlers
      */
-    virtual bool received(Message &msg, int id) = 0;
+    virtual bool received(Message& msg, int id) = 0;
 };
 
 /**
@@ -1768,7 +1850,7 @@ public:
      * @param id Numeric identifier to pass to receiver
      * @param priority Priority of the handler, 0 = top
      */
-    MessageRelay(const char *name, MessageReceiver *receiver, int id, int priority = 100)
+    MessageRelay(const char* name, MessageReceiver* receiver, int id, int priority = 100)
 	: MessageHandler(name,priority), m_receiver(receiver), m_id(id) { }
 
     /**
@@ -1776,11 +1858,11 @@ public:
      * @param msg The received message
      * @return True to stop processing, false to try other handlers
      */
-    virtual bool received(Message &msg)
+    virtual bool received(Message& msg)
 	{ return m_receiver ? m_receiver->received(msg,m_id) : false; }
 
 private:
-    MessageReceiver *m_receiver;
+    MessageReceiver* m_receiver;
     int m_id;
 };
 
@@ -1808,10 +1890,10 @@ public:
     Mutex(bool recursive);
 
     /**
-     * Copt constructor creates a shared mutex
+     * Copy constructor creates a shared mutex
      * @param original Reference of the mutex to share
      */
-    Mutex(const Mutex &orginal);
+    Mutex(const Mutex& orginal);
 
     /**
      * Destroy the mutex
@@ -1822,7 +1904,7 @@ public:
      * Assignment operator makes the mutex shared with the original
      * @param original Reference of the mutex to share
      */
-    Mutex& operator=(const Mutex &original);
+    Mutex& operator=(const Mutex& original);
 
     /**
      * Attempt to lock the mutex and eventually wait for it
@@ -1852,7 +1934,7 @@ public:
 
     /**
      * Check if this mutex is recursive or not
-     * @return True if this is a recursive mutex
+     * @return True if this is a recursive mutex, false for a fast mutex
      */
     bool recursive() const;
 
@@ -1869,8 +1951,8 @@ public:
     static int locks();
 
 private:
-    MutexPrivate *privDataCopy() const;
-    MutexPrivate *m_private;
+    MutexPrivate* privDataCopy() const;
+    MutexPrivate* m_private;
 };
 
 /**
@@ -1886,7 +1968,7 @@ public:
      * @param mutex Reference to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex &mutex, long long int maxwait = -1)
+    inline Lock(Mutex& mutex, long long int maxwait = -1)
 	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
 
     /**
@@ -1894,7 +1976,7 @@ public:
      * @param mutex Pointer to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex *mutex, long long int maxwait = -1)
+    inline Lock(Mutex* mutex, long long int maxwait = -1)
 	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
 
     /**
@@ -1907,7 +1989,7 @@ public:
      * Return a pointer to the mutex this lock holds
      * @return A mutex pointer or NULL if locking failed
      */
-    inline Mutex *mutex() const
+    inline Mutex* mutex() const
 	{ return m_mutex; }
 
     /**
@@ -1917,7 +1999,7 @@ public:
 	{ if (m_mutex) m_mutex->unlock(); m_mutex = 0; }
 
 private:
-    Mutex *m_mutex;
+    Mutex* m_mutex;
 
     /** Make sure no Lock is ever created on heap */
     inline void* operator new(size_t);
@@ -1986,7 +2068,7 @@ public:
      * Get a pointer to the currently running thread
      * @return A pointer to the current thread or NULL for main thread
      */
-    static Thread *current();
+    static Thread* current();
 
     /**
      * Get the number of threads
@@ -2029,7 +2111,7 @@ protected:
     virtual ~Thread();
 
 private:
-    ThreadPrivate *m_private;
+    ThreadPrivate* m_private;
 };
 
 /**
@@ -2056,21 +2138,21 @@ public:
      * @param handler A pointer to the handler to install
      * @return True on success, false on failure
      */
-    bool install(MessageHandler *handler);
+    bool install(MessageHandler* handler);
 
     /**
      * Uninstalls a handler from the dispatcher.
      * @param handler A pointer to the handler to uninstall
      * @return True on success, false on failure
      */
-    bool uninstall(MessageHandler *handler);
+    bool uninstall(MessageHandler* handler);
 
     /**
      * Dispatch a message to the installed handlers
      * @param msg The message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */
-    bool dispatch(Message &msg);
+    bool dispatch(Message& msg);
 
     /**
      * Get the number of messages waiting in the queue
@@ -2084,7 +2166,7 @@ public:
      * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if successfully queued, false otherwise
      */
-    bool enqueue(Message *msg);
+    bool enqueue(Message* msg);
 
     /**
      * Dispatch all messages from the waiting queue
@@ -2134,7 +2216,7 @@ public:
      * Creates a new Plugin container.
      * @param name the undecorated name of the library that contains the plugin
      */
-    Plugin(const char *name);
+    Plugin(const char* name);
 
     /**
      * Creates a new Plugin container.
@@ -2184,7 +2266,7 @@ public:
      * @param environ Environment variables
      * @return Program exit code
      */
-    static int main(int argc, const char **argv, const char **environ);
+    static int main(int argc, const char** argv, const char** environ);
 
     /**
      * Run the engine.
@@ -2196,7 +2278,7 @@ public:
      * Get a pointer to the unique instance.
      * @return A pointer to the singleton instance of the engine
      */
-    static Engine *self();
+    static Engine* self();
 
     /**
      * Register or unregister a plugin to the engine.
@@ -2204,30 +2286,30 @@ public:
      * @param reg True to register (default), false to unregister
      * @return True on success, false on failure
      */
-    static bool Register(const Plugin *plugin, bool reg = true);
+    static bool Register(const Plugin* plugin, bool reg = true);
 
     /**
      * The configuration directory path
      */
-    inline static String configFile(const char *name)
+    inline static String configFile(const char* name)
 	{ return s_cfgpath+"/"+name+s_cfgsuffix; }
 
     /**
      * The configuration directory path
      */
-    inline static String &configPath()
+    inline static String& configPath()
 	{ return s_cfgpath; }
 
     /**
      * The module loading path
      */
-    inline static String &modulePath()
+    inline static String& modulePath()
 	{ return s_modpath; }
 
     /**
      * The module suffix
      */
-    inline static String &moduleSuffix()
+    inline static String& moduleSuffix()
 	{ return s_modsuffix; }
 
     /**
@@ -2253,21 +2335,21 @@ public:
      * @param handler A pointer to the handler to install
      * @return True on success, false on failure
      */
-    static bool install(MessageHandler *handler);
+    static bool install(MessageHandler* handler);
 
     /**
      * Uninstalls a handler drom the dispatcher.
      * @param handler A pointer to the handler to uninstall
      * @return True on success, false on failure
      */
-    static bool uninstall(MessageHandler *handler);
+    static bool uninstall(MessageHandler* handler);
 
     /**
      * Enqueue a message in the message queue
      * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if enqueued, false on error (already queued)
      */
-    static bool enqueue(Message *msg);
+    static bool enqueue(Message* msg);
 
     /**
      * Convenience function.
@@ -2275,7 +2357,7 @@ public:
      * @param name Name of the parameterless message to put in queue
      * @return True if enqueued, false on error (already queued)
      */
-    inline static bool enqueue(const char *name)
+    inline static bool enqueue(const char* name)
 	{ return (name && *name) ? enqueue(new Message(name)) : false; }
 
     /**
@@ -2283,14 +2365,14 @@ public:
      * @param msg Pointer to the message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */
-    static bool dispatch(Message *msg);
+    static bool dispatch(Message* msg);
 
     /**
      * Dispatch a message to the registered handlers
      * @param msg The message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */
-    static bool dispatch(Message &msg);
+    static bool dispatch(Message& msg);
 
     /**
      * Convenience function.
@@ -2298,7 +2380,7 @@ public:
      * @param name The name of the message to create and dispatch
      * @return True if one handler accepted it, false if all ignored
      */
-    static bool dispatch(const char *name);
+    static bool dispatch(const char* name);
 
     /**
      * Install or remove a hook to catch messages after being dispatched
@@ -2324,7 +2406,7 @@ protected:
      * Loads one plugin from a shared object file
      * @return True if success, false on failure
      */
-    bool loadPlugin(const char *file);
+    bool loadPlugin(const char* file);
 
     /**
      * Loads the plugins from the plugins directory
@@ -2340,7 +2422,7 @@ private:
     Engine();
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
-    static Engine *s_self;
+    static Engine* s_self;
     static String s_cfgpath;
     static String s_cfgsuffix;
     static String s_modpath;

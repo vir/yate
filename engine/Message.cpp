@@ -25,13 +25,13 @@
 
 using namespace TelEngine;
 
-Message::Message(const char *name, const char *retval)
+Message::Message(const char* name, const char* retval)
     : NamedList(name), m_return(retval), m_data(0)
 {
     DDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
 
-String Message::encode(const char *id) const
+String Message::encode(const char* id) const
 {
     String s("%%>message:");
     s << String::msgEscape(id,':') << ":" << (unsigned int)m_time.sec() << ":";
@@ -39,7 +39,7 @@ String Message::encode(const char *id) const
     return s;
 }
 
-String Message::encode(bool received, const char *id) const
+String Message::encode(bool received, const char* id) const
 {
     String s("%%<message:");
     s << String::msgEscape(id,':') << ":" << received << ":";
@@ -47,7 +47,7 @@ String Message::encode(bool received, const char *id) const
     return s;
 }
 
-int Message::decode(const char *str, String &id)
+int Message::decode(const char* str, String& id)
 {
     String s("%%>message:");
     if (!str || ::strncmp(str,s.c_str(),s.length()))
@@ -74,7 +74,7 @@ int Message::decode(const char *str, String &id)
     return commonDecode(str,sep2-str+1);
 }
 
-int Message::decode(const char *str, bool &received, const char *id)
+int Message::decode(const char* str, bool& received, const char* id)
 {
     String s("%%<message:");
     s << id << ":";
@@ -91,7 +91,7 @@ int Message::decode(const char *str, bool &received, const char *id)
     return sep[1] ? commonDecode(str,sep-str+1) : -2;
 }
 
-void Message::commonEncode(String &str) const
+void Message::commonEncode(String& str) const
 {
     str << msgEscape(':') << ":" << m_return.msgEscape(':');
     unsigned n = length();
@@ -102,7 +102,7 @@ void Message::commonEncode(String &str) const
     }
 }
 
-int Message::commonDecode(const char *str, int offs)
+int Message::commonDecode(const char* str, int offs)
 {
     str += offs;
     // locate SEP after name
@@ -156,7 +156,7 @@ int Message::commonDecode(const char *str, int offs)
     return -2;
 }
 
-MessageHandler::MessageHandler(const char *name, unsigned priority)
+MessageHandler::MessageHandler(const char* name, unsigned priority)
     : String(name), m_priority(priority), m_dispatcher(0)
 {
     DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
@@ -183,7 +183,7 @@ MessageDispatcher::~MessageDispatcher()
     m_mutex.unlock();
 }
 
-bool MessageDispatcher::install(MessageHandler *handler)
+bool MessageDispatcher::install(MessageHandler* handler)
 {
     DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
@@ -213,7 +213,7 @@ bool MessageDispatcher::install(MessageHandler *handler)
     return true;
 }
 
-bool MessageDispatcher::uninstall(MessageHandler *handler)
+bool MessageDispatcher::uninstall(MessageHandler* handler)
 {
     DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
     Lock lock(m_mutex);
@@ -223,7 +223,7 @@ bool MessageDispatcher::uninstall(MessageHandler *handler)
     return (handler != 0);
 }
 
-bool MessageDispatcher::dispatch(Message &msg)
+bool MessageDispatcher::dispatch(Message& msg)
 {
 #ifdef DEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
@@ -243,7 +243,7 @@ bool MessageDispatcher::dispatch(Message &msg)
     return retv;
 }
 
-bool MessageDispatcher::enqueue(Message *msg)
+bool MessageDispatcher::enqueue(Message* msg)
 {
     Lock lock(m_mutex);
     if (!msg || m_messages.find(msg))

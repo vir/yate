@@ -212,7 +212,7 @@ Mutex::~Mutex()
 	priv->deref();
 }
 
-Mutex& Mutex::operator=(const Mutex &original)
+Mutex& Mutex::operator=(const Mutex& original)
 {
     MutexPrivate *priv = m_private;
     m_private = original.privDataCopy();

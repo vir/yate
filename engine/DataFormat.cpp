@@ -41,15 +41,15 @@ protected:
 	{ m_source->m_thread = 0; m_source->cleanup(); }
 
 private:
-    ThreadedSource *m_source;
+    ThreadedSource* m_source;
 };
 
 class SimpleTranslator : public DataTranslator
 {
 public:
-    SimpleTranslator(const String &sFormat, const String &dFormat)
+    SimpleTranslator(const String& sFormat, const String& dFormat)
 	: DataTranslator(sFormat,dFormat) { }
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta)
+    virtual void Consume(const DataBlock& data, unsigned long timeDelta)
 	{
 	    ref();
 	    if (getTransSource()) {
@@ -147,7 +147,7 @@ const FormatInfo* FormatRepository::addFormat(const String& name, int drate, int
     return f;
 }
 
-void DataSource::Forward(const DataBlock &data, unsigned long timeDelta)
+void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
 {
     // no number of samples provided - try to guess
     if (!timeDelta) {
@@ -167,7 +167,7 @@ void DataSource::Forward(const DataBlock &data, unsigned long timeDelta)
     deref();
 }
 
-bool DataSource::attach(DataConsumer *consumer)
+bool DataSource::attach(DataConsumer* consumer)
 {
     DDebug(DebugInfo,"DataSource [%p] attaching consumer [%p]",this,consumer);
     if (!consumer)
@@ -181,7 +181,7 @@ bool DataSource::attach(DataConsumer *consumer)
     return true;
 }
 
-bool DataSource::detach(DataConsumer *consumer)
+bool DataSource::detach(DataConsumer* consumer)
 {
     DDebug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
     if (!consumer)
@@ -200,7 +200,7 @@ bool DataSource::detach(DataConsumer *consumer)
 
 DataSource::~DataSource()
 {
-    while (detach(static_cast<DataConsumer *>(m_consumers.get()))) ;
+    while (detach(static_cast<DataConsumer*>(m_consumers.get()))) ;
 }
 
 DataEndpoint::~DataEndpoint()
@@ -210,7 +210,7 @@ DataEndpoint::~DataEndpoint()
     setConsumer();
 }
 
-bool DataEndpoint::connect(DataEndpoint *peer)
+bool DataEndpoint::connect(DataEndpoint* peer)
 {
     Debug(DebugInfo,"DataEndpoint peer address is [%p]",peer);
     if (!peer) {
@@ -245,7 +245,7 @@ bool DataEndpoint::connect(DataEndpoint *peer)
     return true;
 }
 
-void DataEndpoint::disconnect(bool final, const char *reason)
+void DataEndpoint::disconnect(bool final, const char* reason)
 {
     if (!m_peer)
 	return;
@@ -268,7 +268,7 @@ void DataEndpoint::disconnect(bool final, const char *reason)
     deref();
 }
 
-void DataEndpoint::setPeer(DataEndpoint *peer, const char *reason)
+void DataEndpoint::setPeer(DataEndpoint* peer, const char* reason)
 {
     m_peer = peer;
     if (m_peer)
@@ -277,7 +277,7 @@ void DataEndpoint::setPeer(DataEndpoint *peer, const char *reason)
 	disconnected(false,reason);
 }
 
-void DataEndpoint::setSource(DataSource *source)
+void DataEndpoint::setSource(DataSource* source)
 {
     if (source == m_source)
 	return;
@@ -304,7 +304,7 @@ void DataEndpoint::setSource(DataSource *source)
 	consumer->deref();
 }
 
-void DataEndpoint::setConsumer(DataConsumer *consumer)
+void DataEndpoint::setConsumer(DataConsumer* consumer)
 {
     if (consumer == m_consumer)
 	return;
@@ -328,7 +328,7 @@ ThreadedSource::~ThreadedSource()
     stop();
 }
 
-bool ThreadedSource::start(const char *name)
+bool ThreadedSource::start(const char* name)
 {
     if (!m_thread) {
 	m_thread = new ThreadedSourcePrivate(this,name);
@@ -349,19 +349,19 @@ void ThreadedSource::cleanup()
 {
 }
 
-Thread *ThreadedSource::thread() const
+Thread* ThreadedSource::thread() const
 {
     return m_thread;
 }
 
-DataTranslator::DataTranslator(const char *sFormat, const char *dFormat)
+DataTranslator::DataTranslator(const char* sFormat, const char* dFormat)
     : DataConsumer(sFormat)
 {
     m_tsource = new DataSource(dFormat);
     m_tsource->setTranslator(this);
 }
 
-DataTranslator::DataTranslator(const char *sFormat, DataSource *source)
+DataTranslator::DataTranslator(const char* sFormat, DataSource* source)
     : DataConsumer(sFormat), m_tsource(source)
 {
     m_tsource->setTranslator(this);
@@ -380,21 +380,21 @@ DataTranslator::~DataTranslator()
 Mutex DataTranslator::s_mutex;
 ObjList DataTranslator::s_factories;
 
-void DataTranslator::install(TranslatorFactory *factory)
+void DataTranslator::install(TranslatorFactory* factory)
 {
     s_mutex.lock();
     s_factories.append(factory);
     s_mutex.unlock();
 }
 
-void DataTranslator::uninstall(TranslatorFactory *factory)
+void DataTranslator::uninstall(TranslatorFactory* factory)
 {
     s_mutex.lock();
     s_factories.remove(factory,false);
     s_mutex.unlock();
 }
 
-String DataTranslator::srcFormats(const String &dFormat)
+String DataTranslator::srcFormats(const String& dFormat)
 {
     String s;
     s_mutex.lock();
@@ -416,7 +416,7 @@ String DataTranslator::srcFormats(const String &dFormat)
     return s;
 }
 
-String DataTranslator::destFormats(const String &sFormat)
+String DataTranslator::destFormats(const String& sFormat)
 {
     String s;
     s_mutex.lock();
@@ -438,7 +438,7 @@ String DataTranslator::destFormats(const String &sFormat)
     return s;
 }
 
-int DataTranslator::cost(const String &sFormat, const String &dFormat)
+int DataTranslator::cost(const String& sFormat, const String& dFormat)
 {
     int c = -1;
     s_mutex.lock();
@@ -459,7 +459,7 @@ int DataTranslator::cost(const String &sFormat, const String &dFormat)
     return c;
 }
 
-DataTranslator *DataTranslator::create(const String &sFormat, const String &dFormat)
+DataTranslator* DataTranslator::create(const String& sFormat, const String& dFormat)
 {
     if (sFormat == dFormat) {
 	Debug(DebugInfo,"Not creating identity DataTranslator for \"%s\"",sFormat.c_str());
@@ -496,7 +496,7 @@ DataTranslator *DataTranslator::create(const String &sFormat, const String &dFor
     return trans;
 }
 
-bool DataTranslator::attachChain(DataSource *source, DataConsumer *consumer)
+bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 {
     if (!source || !consumer || source->getFormat().null() || consumer->getFormat().null())
 	return false;
@@ -539,7 +539,7 @@ bool DataTranslator::attachChain(DataSource *source, DataConsumer *consumer)
     return retv;
 }
 
-bool DataTranslator::detachChain(DataSource *source, DataConsumer *consumer)
+bool DataTranslator::detachChain(DataSource* source, DataConsumer* consumer)
 {
     Debugger debug(DebugAll,"DataTranslator::detachChain","(%p,%p)",source,consumer);
     if (!source || !consumer)

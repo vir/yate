@@ -40,19 +40,19 @@ static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
 
-static void dbg_stderr_func(const char *buf)
+static void dbg_stderr_func(const char* buf)
 {
     ::fwrite(buf,1,::strlen(buf),stderr);
     ::fflush(stderr);
 }
 
-static void (*s_output)(const char *) = dbg_stderr_func;
-static void (*s_intout)(const char *) = 0;
+static void (*s_output)(const char*) = dbg_stderr_func;
+static void (*s_intout)(const char*) = 0;
 
 static Mutex out_mux;
 static Mutex ind_mux;
 
-static void common_output(char *buf)
+static void common_output(char* buf)
 {
     int n = ::strlen(buf);
     if (n && (buf[n-1] == '\n'))
@@ -68,7 +68,7 @@ static void common_output(char *buf)
     out_mux.unlock();
 }
 
-static void dbg_output(const char *prefix, const char *format, va_list ap)
+static void dbg_output(const char* prefix, const char* format, va_list ap)
 {
     if (!(s_output || s_intout))
 	return;
@@ -89,7 +89,7 @@ static void dbg_output(const char *prefix, const char *format, va_list ap)
     common_output(buf);
 }
 
-void Output(const char *format, ...)
+void Output(const char* format, ...)
 {
     char buf[OUT_BUFFER_SIZE];
     if (!((s_output || s_intout) && format && *format))
@@ -101,7 +101,7 @@ void Output(const char *format, ...)
     common_output(buf);
 }
 
-bool Debug(int level, const char *format, ...)
+bool Debug(int level, const char* format, ...)
 {
     if (level <= s_debug) {
 	if (!s_debugging)
@@ -123,7 +123,7 @@ bool Debug(int level, const char *format, ...)
     return false;
 }
 
-bool Debug(const char *facility, int level, const char *format, ...)
+bool Debug(const char* facility, int level, const char* format, ...)
 {
     if (level <= s_debug) {
 	if (!s_debugging)
@@ -132,6 +132,28 @@ bool Debug(const char *facility, int level, const char *format, ...)
 	    format = "";
 	char buf[64];
 	::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
+	va_list va;
+	va_start(va,format);
+	ind_mux.lock();
+	dbg_output(buf,format,va);
+	ind_mux.unlock();
+	va_end(va);
+	if (s_abort && (level == DebugFail))
+	    abort();
+	return true;
+    }
+    return false;
+}
+
+bool Debug(const DebugEnabler* local, int level, const char* format, ...)
+{
+    if (local && local->debugAt(level)) {
+	if (!s_debugging)
+	    return true;
+	if (!format)
+	    format = "";
+	char buf[32];
+	::sprintf(buf,"<%d> ",level);
 	va_list va;
 	va_start(va,format);
 	ind_mux.lock();
@@ -177,7 +199,16 @@ bool debugAt(int level)
     return (s_debugging && (level <= s_debug));
 }
 
-Debugger::Debugger(const char *name, const char *format, ...)
+int DebugEnabler::debugLevel(int level)
+{
+    if (level < DebugMin)
+	level = DebugMin;
+    if (level > DebugMax)
+	level = DebugMax;
+    return (m_level = level);
+}
+
+Debugger::Debugger(const char* name, const char* format, ...)
     : m_name(name)
 {
     if (s_debugging && m_name && (s_debug >= DebugAll)) {
@@ -195,7 +226,7 @@ Debugger::Debugger(const char *name, const char *format, ...)
 	m_name = 0;
 }
 
-Debugger::Debugger(int level, const char *name, const char *format, ...)
+Debugger::Debugger(int level, const char* name, const char* format, ...)
     : m_name(name)
 {
     if (s_debugging && m_name && (s_debug >= level)) {
@@ -235,14 +266,14 @@ Debugger::~Debugger()
     }
 }
 
-void Debugger::setOutput(void (*outFunc)(const char *))
+void Debugger::setOutput(void (*outFunc)(const char*))
 {
     out_mux.lock();
     s_output = outFunc ? outFunc : dbg_stderr_func;
     out_mux.unlock();
 }
 
-void Debugger::setIntOut(void (*outFunc)(const char *))
+void Debugger::setIntOut(void (*outFunc)(const char*))
 {
     out_mux.lock();
     s_intout = outFunc;
@@ -260,7 +291,7 @@ unsigned long long Time::now()
     return ::gettimeofday(&tv,0) ? 0 : fromTimeval(&tv);
 }
 
-unsigned long long Time::fromTimeval(struct timeval *tv)
+unsigned long long Time::fromTimeval(struct timeval* tv)
 {
     unsigned long long rval = 0;
     if (tv) {
@@ -272,7 +303,7 @@ unsigned long long Time::fromTimeval(struct timeval *tv)
     return rval;
 }
 
-void Time::toTimeval(struct timeval *tv, unsigned long long usec)
+void Time::toTimeval(struct timeval* tv, unsigned long long usec)
 {
     if (tv) {
 	tv->tv_usec = usec % 1000000;

@@ -35,26 +35,26 @@ namespace TelEngine {
 class ThreadPrivate : public GenObject {
     friend class Thread;
 public:
-    ThreadPrivate(Thread *t,const char *name);
+    ThreadPrivate(Thread* t,const char* name);
     ~ThreadPrivate();
     void run();
     bool cancel();
     void cleanup();
     void destroy();
     void pubdestroy();
-    static ThreadPrivate *create(Thread *t,const char *name);
+    static ThreadPrivate* create(Thread* t,const char* name);
     static void killall();
-    static Thread *current();
-    Thread *m_thread;
+    static Thread* current();
+    Thread* m_thread;
     pthread_t thread;
     bool m_running;
     bool m_started;
     bool m_updest;
-    const char *m_name;
+    const char* m_name;
 private:
-    static void *startFunc(void *arg);
-    static void cleanupFunc(void *arg);
-    static void destroyFunc(void *arg);
+    static void* startFunc(void* arg);
+    static void cleanupFunc(void* arg);
+    static void destroyFunc(void* arg);
     static void keyAllocFunc();
 };
 
@@ -67,7 +67,7 @@ static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
 ObjList threads;
 Mutex tmutex;
 
-ThreadPrivate *ThreadPrivate::create(Thread *t,const char *name)
+ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
 {
     ThreadPrivate *p = new ThreadPrivate(t,name);
     int e = 0;
@@ -93,7 +93,7 @@ ThreadPrivate *ThreadPrivate::create(Thread *t,const char *name)
     return p;
 }
 
-ThreadPrivate::ThreadPrivate(Thread *t,const char *name)
+ThreadPrivate::ThreadPrivate(Thread* t,const char* name)
     : m_thread(t), m_running(false), m_started(false), m_updest(true), m_name(name)
 {
 #ifdef DEBUG
@@ -182,7 +182,7 @@ void ThreadPrivate::cleanup()
     }
 }
 
-Thread *ThreadPrivate::current()
+Thread* ThreadPrivate::current()
 {
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(::pthread_getspecific(current_key));
     return t ? t->m_thread : 0;
@@ -246,7 +246,7 @@ void ThreadPrivate::killall()
     }
 }
 
-void ThreadPrivate::destroyFunc(void *arg)
+void ThreadPrivate::destroyFunc(void* arg)
 {
 #ifdef DEBUG
     Debugger debug("ThreadPrivate::destroyFunc","(%p)",arg);
@@ -256,7 +256,7 @@ void ThreadPrivate::destroyFunc(void *arg)
 	t->destroy();
 }
 
-void ThreadPrivate::cleanupFunc(void *arg)
+void ThreadPrivate::cleanupFunc(void* arg)
 {
     DDebug(DebugAll,"ThreadPrivate::cleanupFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
@@ -271,7 +271,7 @@ void ThreadPrivate::keyAllocFunc()
 	Debug(DebugGoOn,"Failed to create current thread key!");
 }
 
-void *ThreadPrivate::startFunc(void *arg)
+void* ThreadPrivate::startFunc(void* arg)
 {
     DDebug(DebugAll,"ThreadPrivate::startFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
@@ -279,7 +279,7 @@ void *ThreadPrivate::startFunc(void *arg)
     return 0;
 }
 
-Thread::Thread(const char *name)
+Thread::Thread(const char* name)
     : m_private(0)
 {
 #ifdef DEBUG

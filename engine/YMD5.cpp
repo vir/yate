@@ -301,7 +301,7 @@ MD5::~MD5()
     clear();
 }
 
-MD5& MD5::operator=(const MD5 &original)
+MD5& MD5::operator=(const MD5& original)
 {
     clear();
     m_hex = original.m_hex;

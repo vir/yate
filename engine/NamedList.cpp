@@ -24,12 +24,12 @@
 
 using namespace TelEngine;
 
-NamedList::NamedList(const char *name)
+NamedList::NamedList(const char* name)
     : String(name)
 {
 }
 
-NamedList &NamedList::addParam(NamedString *param)
+NamedList& NamedList::addParam(NamedString* param)
 {
     DDebug(DebugInfo,"NamedList::addParam(%p) [\"%s\",\"%s\"]",
         param,param->name().c_str(),param->c_str());
@@ -37,14 +37,14 @@ NamedList &NamedList::addParam(NamedString *param)
     return *this;
 }
 
-NamedList &NamedList::addParam(const char *name, const char *value)
+NamedList& NamedList::addParam(const char* name, const char* value)
 {
     DDebug(DebugInfo,"NamedList::addParam(\"%s\",\"%s\")",name,value);
     m_params.append(new NamedString(name, value));
     return *this;
 }
 
-NamedList &NamedList::setParam(NamedString *param)
+NamedList& NamedList::setParam(NamedString* param)
 {
     DDebug(DebugInfo,"NamedList::setParam(%p) [\"%s\",\"%s\"]",
         param,param->name().c_str(),param->c_str());
@@ -58,7 +58,7 @@ NamedList &NamedList::setParam(NamedString *param)
     return *this;
 }
 
-NamedList &NamedList::setParam(const char *name, const char *value)
+NamedList& NamedList::setParam(const char* name, const char* value)
 {
     DDebug(DebugInfo,"NamedList::setParam(\"%s\",\"%s\")",name,value);
     NamedString *s = getParam(name);
@@ -69,7 +69,7 @@ NamedList &NamedList::setParam(const char *name, const char *value)
     return *this;
 }
 
-NamedList &NamedList::clearParam(const String &name)
+NamedList& NamedList::clearParam(const String& name)
 {
     DDebug(DebugInfo,"NamedList::clearParam(\"%s\")",name.c_str());
     ObjList *p = &m_params;
@@ -83,7 +83,7 @@ NamedList &NamedList::clearParam(const String &name)
     return *this;
 }
 
-NamedString *NamedList::getParam(const String &name) const
+NamedString* NamedList::getParam(const String& name) const
 {
     DDebug(DebugInfo,"NamedList::getParam(\"%s\")",name.c_str());
     const ObjList *p = &m_params;
@@ -95,14 +95,13 @@ NamedString *NamedList::getParam(const String &name) const
     return 0;
 }
 
-NamedString *NamedList::getParam(unsigned int index) const
+NamedString* NamedList::getParam(unsigned int index) const
 {
     DDebug(DebugInfo,"NamedList::getParam(%u)",index);
-    const ObjList *p = m_params[index];
-    return p ? static_cast<NamedString *>(p->get()) : 0;
+    return static_cast<NamedString *>(m_params[index]);
 }
 
-const char *NamedList::getValue(const String &name, const char *defvalue) const
+const char* NamedList::getValue(const String& name, const char* defvalue) const
 {
     DDebug(DebugInfo,"NamedList::getValue(\"%s\",\"%s\")",name.c_str(),defvalue);
     const NamedString *s = getParam(name);

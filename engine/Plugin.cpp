@@ -30,7 +30,7 @@ Plugin::Plugin()
     Engine::Register(this);
 }
 
-Plugin::Plugin(const char *name)
+Plugin::Plugin(const char* name)
 {
     Debug(DebugAll,"Plugin::Plugin(\"%s\") [%p]",name,this);
     Engine::Register(this);

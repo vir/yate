@@ -96,7 +96,7 @@ String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
 String Engine::s_modsuffix(DLL_SUFFIX);
 
-Engine *Engine::s_self = 0;
+Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 bool Engine::s_init = false;
 bool Engine::s_dynplugin = false;
@@ -105,20 +105,20 @@ int EnginePrivate::count = 0;
 
 const char* s_cfgfile = 0;
 ObjList plugins;
-ObjList *s_cmds = 0;
+ObjList* s_cmds = 0;
 
 class SLib : public GenObject
 {
 public:
     virtual ~SLib();
-    static SLib *load(const char *file);
+    static SLib* load(const char* file);
 private:
-    SLib(void *handle, const char *file);
-    const char *m_file;
-    void *m_handle;
+    SLib(void* handle, const char* file);
+    const char* m_file;
+    void* m_handle;
 };
 
-SLib::SLib(void *handle, const char *file)
+SLib::SLib(void* handle, const char* file)
     : m_handle(handle)
 {
     DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
@@ -142,7 +142,7 @@ SLib::~SLib()
     }
 }
 
-SLib *SLib::load(const char *file)
+SLib* SLib::load(const char* file)
 {
     DDebug("SLib::load('%s')",file);
     void *handle = ::dlopen(file,RTLD_NOW);
@@ -308,14 +308,14 @@ int Engine::run()
     return s_haltcode;
 }
 
-Engine *Engine::self()
+Engine* Engine::self()
 {
     if (!s_self)
 	s_self = new Engine;
     return s_self;
 }
 
-bool Engine::Register(const Plugin *plugin, bool reg)
+bool Engine::Register(const Plugin* plugin, bool reg)
 {
     DDebug(DebugInfo,"Engine::Register(%p,%d)",plugin,reg);
     ObjList *p = plugins.find(plugin);
@@ -330,7 +330,7 @@ bool Engine::Register(const Plugin *plugin, bool reg)
     return true;
 }
 
-bool Engine::loadPlugin(const char *file)
+bool Engine::loadPlugin(const char* file)
 {
     s_dynplugin = false;
     SLib *lib = SLib::load(file);
@@ -427,32 +427,32 @@ void Engine::init()
     s_init = true;
 }
 
-bool Engine::install(MessageHandler *handler)
+bool Engine::install(MessageHandler* handler)
 {
     return s_self ? s_self->m_dispatcher.install(handler) : false;
 }
 
-bool Engine::uninstall(MessageHandler *handler)
+bool Engine::uninstall(MessageHandler* handler)
 {
     return s_self ? s_self->m_dispatcher.uninstall(handler) : false;
 }
 
-bool Engine::enqueue(Message *msg)
+bool Engine::enqueue(Message* msg)
 {
     return (msg && s_self) ? s_self->m_dispatcher.enqueue(msg) : false;
 }
 
-bool Engine::dispatch(Message *msg)
+bool Engine::dispatch(Message* msg)
 {
     return (msg && s_self) ? s_self->m_dispatcher.dispatch(*msg) : false;
 }
 
-bool Engine::dispatch(Message &msg)
+bool Engine::dispatch(Message& msg)
 {
     return s_self ? s_self->m_dispatcher.dispatch(msg) : false;
 }
 
-bool Engine::dispatch(const char *name)
+bool Engine::dispatch(const char* name)
 {
     if (!(s_self && name && *name))
 	return false;
@@ -567,7 +567,7 @@ static int supervise(void)
     return retcode;
 }
 
-static void usage(FILE *f)
+static void usage(FILE* f)
 {
     ::fprintf(f,
 "Usage: yate [options] [commands ...]\n"
@@ -592,7 +592,7 @@ static void usage(FILE *f)
     ,s_cfgfile);
 }
 
-static void badopt(char chr, const char *opt)
+static void badopt(char chr, const char* opt)
 {
     if (chr)
 	::fprintf(stderr,"Invalid character '%c' in option '%s'\n",chr,opt);
@@ -601,13 +601,13 @@ static void badopt(char chr, const char *opt)
     usage(stderr);
 }
 
-static void noarg(const char *opt)
+static void noarg(const char* opt)
 {
     ::fprintf(stderr,"Missing parameter to option '%s'\n",opt);
     usage(stderr);
 }
 
-int Engine::main(int argc, const char **argv, const char **environ)
+int Engine::main(int argc, const char** argv, const char** environ)
 {
     bool daemonic = false;
     bool supervised = false;

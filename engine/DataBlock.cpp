@@ -44,13 +44,13 @@ DataBlock::DataBlock()
 {
 }
 
-DataBlock::DataBlock(const DataBlock &value)
+DataBlock::DataBlock(const DataBlock& value)
     : m_data(0), m_length(0)
 {
     assign(value.data(),value.length());
 }
 
-DataBlock::DataBlock(void *value, unsigned int len, bool copyData)
+DataBlock::DataBlock(void* value, unsigned int len, bool copyData)
     : m_data(0), m_length(0)
 {
     assign(value,len,copyData);
@@ -72,7 +72,7 @@ void DataBlock::clear(bool deleteData)
     }
 }
 
-DataBlock& DataBlock::assign(void *value, unsigned int len, bool copyData)
+DataBlock& DataBlock::assign(void* value, unsigned int len, bool copyData)
 {
     if ((value != m_data) || (len != m_length)) {
 	void *odata = m_data;
@@ -127,13 +127,13 @@ void DataBlock::cut(int len)
     assign(ofs+(char *)m_data,m_length - len);
 }
 
-DataBlock& DataBlock::operator=(const DataBlock &value)
+DataBlock& DataBlock::operator=(const DataBlock& value)
 {
     assign(value.data(),value.length());
     return *this;
 }
 
-void DataBlock::append(const DataBlock &value)
+void DataBlock::append(const DataBlock& value)
 {
     if (m_length) {
 	if (value.length()) {
@@ -152,7 +152,7 @@ void DataBlock::append(const DataBlock &value)
 	assign(value.data(),value.length());
 }
 
-void DataBlock::append(const String &value)
+void DataBlock::append(const String& value)
 {
     if (m_length) {
 	if (value.length()) {
@@ -171,7 +171,7 @@ void DataBlock::append(const String &value)
 	assign((void*)value.c_str(),value.length());
 }
 
-void DataBlock::insert(const DataBlock &value)
+void DataBlock::insert(const DataBlock& value)
 {
     unsigned int vl = value.length();
     if (m_length) {
@@ -191,8 +191,8 @@ void DataBlock::insert(const DataBlock &value)
 	assign(value.data(),vl);
 }
 
-bool DataBlock::convert(const DataBlock &src, const String &sFormat,
-    const String &dFormat, unsigned maxlen)
+bool DataBlock::convert(const DataBlock& src, const String& sFormat,
+    const String& dFormat, unsigned maxlen)
 {
     if (sFormat == dFormat) {
 	operator=(src);

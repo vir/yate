@@ -30,28 +30,28 @@
 
 namespace TelEngine {
 
-String operator+(const String &s1, const String &s2)
+String operator+(const String& s1, const String& s2)
 {
     String s(s1.c_str());
     s += s2.c_str();
     return s;
 }
 
-String operator+(const String &s1, const char *s2)
+String operator+(const String& s1, const char* s2)
 {
     String s(s1.c_str());
     s += s2;
     return s;
 }
 
-String operator+(const char *s1, const String &s2)
+String operator+(const char* s1, const String& s2)
 {
     String s(s1);
     s += s2;
     return s;
 }
 
-int lookup(const char *str, const TokenDict *tokens, int defvalue, int base)
+int lookup(const char* str, const TokenDict* tokens, int defvalue, int base)
 {
     if (!str)
 	return defvalue;
@@ -67,7 +67,7 @@ int lookup(const char *str, const TokenDict *tokens, int defvalue, int base)
     return val;
 }
 
-const char *lookup(int value, const TokenDict *tokens, const char *defvalue)
+const char* lookup(int value, const TokenDict* tokens, const char* defvalue)
 {
     if (tokens) {
 	for (; tokens->token; tokens++)
@@ -152,14 +152,14 @@ String::String()
     DDebug(DebugAll,"String::String() [%p]",this);
 }
 
-String::String(const char *value, int len)
+String::String(const char* value, int len)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
     assign(value,len);
 }
 
-String::String(const String &value)
+String::String(const String& value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
@@ -215,13 +215,13 @@ String::String(bool value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%u) [%p]",value,this);
-    m_string = ::strdup(value ? "true" : "false");
+    m_string = ::strdup(boolText(value));
     if (!m_string)
 	Debug("String",DebugFail,"strdup() returned NULL!");
     changed();
 }
 
-String::String(const String *value)
+String::String(const String* value)
     : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
 {
     DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
@@ -249,7 +249,7 @@ String::~String()
     }
 }
 
-String& String::assign(const char *value, int len)
+String& String::assign(const char* value, int len)
 {
     if (len && value && *value) {
 	int vlen = ::strlen(value);
@@ -322,7 +322,7 @@ int String::toInteger(int defvalue, int base) const
     return val;
 }
 
-int String::toInteger(const TokenDict *tokens, int defvalue, int base) const
+int String::toInteger(const TokenDict* tokens, int defvalue, int base) const
 {
     if (!m_string)
 	return defvalue;
@@ -334,8 +334,8 @@ int String::toInteger(const TokenDict *tokens, int defvalue, int base) const
     return toInteger(defvalue,base);
 }
 
-static const char *str_false[] = { "false", "no", "off", "disable", 0 };
-static const char *str_true[] = { "true", "yes", "on", "enable", 0 };
+static const char* str_false[] = { "false", "no", "off", "disable", 0 };
+static const char* str_true[] = { "true", "yes", "on", "enable", 0 };
 
 bool String::toBoolean(bool defvalue) const
 {
@@ -388,7 +388,7 @@ String& String::trimBlanks()
     return *this;
 }
 
-String& String::operator=(const char *value)
+String& String::operator=(const char* value)
 {
     if (value && !*value)
 	value = 0;
@@ -404,7 +404,7 @@ String& String::operator=(const char *value)
     return *this;
 }
 
-String& String::operator+=(const char *value)
+String& String::operator+=(const char* value)
 {
     if (value && !*value)
 	value = 0;
@@ -472,7 +472,7 @@ String& String::operator+=(unsigned int value)
     return operator+=(buf);
 }
 
-String& String::operator>>(const char *skip)
+String& String::operator>>(const char* skip)
 {
     if (m_string && skip && *skip) {
 	const char *loc = ::strstr(m_string,skip);
@@ -482,7 +482,7 @@ String& String::operator>>(const char *skip)
     return *this;
 }
 
-String& String::operator>>(char &store)
+String& String::operator>>(char& store)
 {
     if (m_string) {
 	store = m_string[0];
@@ -491,7 +491,7 @@ String& String::operator>>(char &store)
     return *this;
 }
 
-String& String::operator>>(int &store)
+String& String::operator>>(int& store)
 {
     if (m_string) {
 	char *end = 0;
@@ -504,7 +504,7 @@ String& String::operator>>(int &store)
     return *this;
 }
 
-String& String::operator>>(unsigned int &store)
+String& String::operator>>(unsigned int& store)
 {
     if (m_string) {
 	char *end = 0;
@@ -517,7 +517,7 @@ String& String::operator>>(unsigned int &store)
     return *this;
 }
 
-String& String::operator>>(bool &store)
+String& String::operator>>(bool& store)
 {
     if (m_string) {
 	const char *s = m_string;
@@ -544,42 +544,42 @@ String& String::operator>>(bool &store)
     return *this;
 }
 
-bool String::operator==(const char *value) const
+bool String::operator==(const char* value) const
 {
     if (!m_string)
 	return !(value && *value);
     return value && !::strcmp(m_string,value);
 }
 
-bool String::operator!=(const char *value) const
+bool String::operator!=(const char* value) const
 {
     if (!m_string)
 	return value && *value;
     return (!value) || ::strcmp(m_string,value);
 }
 
-bool String::operator==(const String &value) const
+bool String::operator==(const String& value) const
 {
     if (hash() != value.hash())
 	return false;
     return operator==(value.c_str());
 }
 
-bool String::operator!=(const String &value) const
+bool String::operator!=(const String& value) const
 {
     if (hash() != value.hash())
 	return true;
     return operator!=(value.c_str());
 }
 
-bool String::operator&=(const char *value) const
+bool String::operator&=(const char* value) const
 {
     if (!m_string)
 	return !(value && *value);
     return value && !::strcasecmp(m_string,value);
 }
 
-bool String::operator|=(const char *value) const
+bool String::operator|=(const char* value) const
 {
     if (!m_string)
 	return value && *value;
@@ -594,7 +594,7 @@ int String::find(char what, unsigned int offs) const
     return s ? s-m_string : -1;
 }
 
-int String::find(const char *what, unsigned int offs) const
+int String::find(const char* what, unsigned int offs) const
 {
     if (!(m_string && what && *what) || (offs > m_length))
 	return -1;
@@ -610,7 +610,7 @@ int String::rfind(char what) const
     return s ? s-m_string : -1;
 }
 
-bool String::startsWith(const char *what, bool wordBreak) const
+bool String::startsWith(const char* what, bool wordBreak) const
 {
     if (!(m_string && what && *what))
 	return false;
@@ -622,7 +622,7 @@ bool String::startsWith(const char *what, bool wordBreak) const
     return (::strncmp(m_string,what,l) == 0);
 }
 
-bool String::startSkip(const char *what, bool wordBreak)
+bool String::startSkip(const char* what, bool wordBreak)
 {
     if (startsWith(what,wordBreak)) {
 	const char *p = m_string + ::strlen(what);
@@ -635,7 +635,7 @@ bool String::startSkip(const char *what, bool wordBreak)
     return false;
 }
 
-bool String::endsWith(const char *what, bool wordBreak) const
+bool String::endsWith(const char* what, bool wordBreak) const
 {
     if (!(m_string && what && *what))
 	return false;
@@ -647,7 +647,7 @@ bool String::endsWith(const char *what, bool wordBreak) const
     return (::strncmp(m_string+m_length-l,what,l) == 0);
 }
 
-bool String::matches(Regexp &rexp)
+bool String::matches(Regexp& rexp)
 {
     if (m_matches)
 	clearMatches();
@@ -681,7 +681,7 @@ int String::matchCount() const
     return m_matches->count;
 }
 
-String String::replaceMatches(const String &templ) const
+String String::replaceMatches(const String& templ) const
 {
     String s;
     int pos, ofs = 0;
@@ -732,7 +732,7 @@ ObjList* String::split(char separator, bool emptyOK) const
     return list;
 }
 
-String String::msgEscape(const char *str, char extraEsc)
+String String::msgEscape(const char* str, char extraEsc)
 {
     if (!str)
 	str = "";
@@ -750,7 +750,7 @@ String String::msgEscape(const char *str, char extraEsc)
     return s;
 }
 
-String String::msgUnescape(const char *str, int *errptr, char extraEsc)
+String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 {
     if (!str)
 	str = "";
@@ -789,7 +789,7 @@ unsigned int String::hash() const
     return m_hash;
 }
 
-unsigned int String::hash(const char *value)
+unsigned int String::hash(const char* value)
 {
     if (!value)
 	return 0;
@@ -806,7 +806,7 @@ Regexp::Regexp()
     DDebug(DebugAll,"Regexp::Regexp() [%p]",this);
 }
 
-Regexp::Regexp(const char *value, bool extended, bool insensitive)
+Regexp::Regexp(const char* value, bool extended, bool insensitive)
     : String(value), m_regexp(0), m_flags(0)
 {
     DDebug(DebugAll,"Regexp::Regexp(\"%s\",%d,%d) [%p]",
@@ -814,7 +814,7 @@ Regexp::Regexp(const char *value, bool extended, bool insensitive)
     setFlags(extended,insensitive);
 }
 
-Regexp::Regexp(const Regexp &value)
+Regexp::Regexp(const Regexp& value)
     : String(value.c_str()), m_regexp(0), m_flags(value.m_flags)
 {
     DDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
@@ -825,7 +825,7 @@ Regexp::~Regexp()
     cleanup();
 }
 
-bool Regexp::matches(const char *value, StringMatchPrivate *matches)
+bool Regexp::matches(const char* value, StringMatchPrivate* matches)
 {
     DDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
     if (!value)
@@ -837,7 +837,7 @@ bool Regexp::matches(const char *value, StringMatchPrivate *matches)
     return !::regexec((regex_t *)m_regexp,value,mm,mt,0);
 }
 
-bool Regexp::matches(const char *value)
+bool Regexp::matches(const char* value)
 {
     return matches(value,0);
 }
@@ -898,7 +898,7 @@ bool Regexp::isCaseInsensitive() const
     return (m_flags & REG_ICASE) != 0;
 }
 
-NamedString::NamedString(const char *name, const char *value)
+NamedString::NamedString(const char* name, const char* value)
     : String(value), m_name(name)
 {
     DDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);

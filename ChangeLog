@@ -1,3 +1,7 @@
+Sat Dec 04 2004 Paul Chitescu <paulc-devel@null.ro>
+- Added toString method to all generic objects
+- Implemented list searching by string value
+
 Mon Nov 29 2004 Paul Chitescu <paulc-devel@null.ro>
 - Bumped version to 0.8.5
 - Added copyright statement in each source file

@@ -682,10 +682,12 @@ void PriSpan::handleEvent(pri_event &ev)
 	    Debug(DebugInfo,"Call proceeding on channel %d on span %d",ev.proceeding.channel,m_span);
 	    proceedingChan(ev.proceeding.channel);
 	    break;
+#ifdef PRI_EVENT_PROGRESS
 	case PRI_EVENT_PROGRESS:
 	    Debug(DebugInfo,"Call progressing on channel %d on span %d",ev.proceeding.channel,m_span);
 	    proceedingChan(ev.proceeding.channel);
 	    break;
+#endif
 	default:
 	    Debug(DebugInfo,"Received PRI event %d",ev.e);
     }
@@ -1124,17 +1126,18 @@ bool ZapChan::call(Message &msg, const char *called)
 	caller,callername,lookup(callerplan,dict_str2dplan),
 	lookup(callerpres,dict_str2pres),lookup(calledplan,dict_str2dplan));
     m_call =::pri_new_call(span()->pri());
-#if 0
-    ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
-	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
-    );
-#endif
+#ifdef PRI_DUMP_INFO
     struct pri_sr *req = ::pri_sr_new();
     ::pri_sr_set_bearer(req,0/*transmode*/,layer1);
     ::pri_sr_set_channel(req,m_chan,1/*exclusive*/,!m_isdn);
     ::pri_sr_set_caller(req,caller,callername,callerplan,callerpres);
     ::pri_sr_set_called(req,(char *)called,calledplan,1/*complete*/);
     ::q931_setup(span()->pri(),m_call,req);
+#else
+    ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
+	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
+    );
+#endif
     setTimeout(10000000);
     return true;
 }

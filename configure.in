@@ -247,6 +247,27 @@ AC_SUBST(HAVE_IAX2)
 AC_SUBST(IAX2_INC)
 AC_SUBST(IAX2_LIB)
 
+HAVE_GTK=no
+GTK_INC=""
+GTK_LIB=""
+AC_ARG_WITH(libgtk,AC_HELP_STRING([--with-libgtk],[use Gtk for graphical clients)]),[ac_cv_use_libgtk=$withval],[ac_cv_use_libgtk=yes])
+if [[ "x$ac_cv_use_libgtk" = "xyes" ]]; then
+    AC_MSG_CHECKING([for Gtk using gtk-config])
+    vergt=`gtk-config --version gtk 2>/dev/null`
+    incgt=`gtk-config --cflags gthread 2>/dev/null`
+    libgt=`gtk-config --libs gthread 2>/dev/null`
+    if [[ "x$incgt" != "x" -a "x$libgt" != "x" ]]; then
+	HAVE_GTK=yes
+	GTK_INC="$incgt"
+	GTK_LIB="$libgt"
+	ac_cv_use_libgtk="no"
+    fi
+    AC_MSG_RESULT([$vergt])
+fi
+AC_SUBST(HAVE_GTK)
+AC_SUBST(GTK_INC)
+AC_SUBST(GTK_LIB)
+
 MODULE_CFLAGS="-fno-exceptions -fno-check-new -frtti -fPIC"
 MODULE_LDFLAGS="-export-dynamic -shared -Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)

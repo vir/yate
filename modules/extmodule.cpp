@@ -66,7 +66,7 @@ public:
 	DataWrite,
 	DataBoth
     };
-    ExtModChan(const char *file, int type);
+    ExtModChan(const char *file, const char *args, int type);
     ~ExtModChan();
     virtual void disconnected();
 private:
@@ -212,7 +212,7 @@ void ExtModConsumer::Consume(const DataBlock &data)
     }
 }
 
-ExtModChan::ExtModChan(const char *file, int type)
+ExtModChan::ExtModChan(const char *file, const char *args, int type)
     : DataEndpoint("ExtModule"), m_recv(0)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
@@ -233,7 +233,7 @@ ExtModChan::ExtModChan(const char *file, int type)
 	    getSource()->deref();
     }
     s_objects.append(this);
-    m_recv = new ExtModReceiver(file,"",wfifo[0],rfifo[1],this);
+    m_recv = new ExtModReceiver(file,args,wfifo[0],rfifo[1],this);
 }
 
 ExtModChan::~ExtModChan()
@@ -560,7 +560,7 @@ bool ExtModHandler::received(Message &msg)
     String dest(msg.getValue("callto"));
     if (dest.null())
 	return false;
-    Regexp r("^external/\\([^/]*\\)/\\(.*\\)$");
+    Regexp r("^external/\\([^/]*\\)/\\([^ ]*\\) \\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
@@ -582,7 +582,8 @@ bool ExtModHandler::received(Message &msg)
 	return false;
     }
     if (typ == ExtModChan::NoChannel) {
-	ExtModReceiver *recv = new ExtModReceiver(dest.matchString(2).c_str(),"");
+	ExtModReceiver *recv = new ExtModReceiver(dest.matchString(2).c_str(),
+						  dest.matchString(3).c_str());
 	while (recv->busy())
 	    Thread::yield();
 	bool retv = recv->received(msg,1);
@@ -594,7 +595,8 @@ bool ExtModHandler::received(Message &msg)
 	Debug(DebugFail,"ExtMod '%s' call found but no data channel!",t.c_str());
 	return false;
     }
-    ExtModChan *em = new ExtModChan(dest.matchString(2).c_str(),typ);
+    ExtModChan *em = new ExtModChan(dest.matchString(2).c_str(),
+				    dest.matchString(3).c_str(),typ);
     if (!em) {
 	Debug(DebugFail,"Failed to create ExtMod for '%s'",dest.matchString(2).c_str());
 	return false;

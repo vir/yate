@@ -4,6 +4,7 @@ Release
 *.aps
 *.opt
 *.ncb
+*.clw
 *.orig
 *~
 *.bak

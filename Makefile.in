@@ -23,7 +23,7 @@ SLIBS:= libyate.so.@PACKAGE_VERSION@ libyate.so
 INCS := telengine.h telephony.h
 GENS := yateversn.h
 LIBS :=
-MAN8 := yate.8
+MAN8 := yate.8 yate-config.8
 DOCS := README COPYING ChangeLog
 ENGOBJS := TelEngine.o String.o DataBlock.o ObjList.o \
 	NamedList.o Configuration.o \

@@ -119,11 +119,15 @@ DataBlock& DataBlock::assign(void *value, unsigned int len, bool copyData)
 	if (len) {
 	    if (copyData) {
 		void *data = ::malloc(len);
-		if (value)
-		    ::memcpy(data,value,len);
+		if (data) {
+		    if (value)
+			::memcpy(data,value,len);
+		    else
+			::memset(data,0,len);
+		    m_data = data;
+		}
 		else
-		    ::memset(data,0,len);
-		m_data = data;
+		    Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
 	    }
 	    else
 		m_data = value;
@@ -173,9 +177,13 @@ void DataBlock::append(const DataBlock &value)
 	if (value.length()) {
 	    unsigned int len = m_length+value.length();
 	    void *data = ::malloc(len);
-	    ::memcpy(data,m_data,m_length);
-	    ::memcpy(m_length+(char*)data,value.data(),value.length());
-	    assign(data,len,false);
+	    if (data) {
+		::memcpy(data,m_data,m_length);
+		::memcpy(m_length+(char*)data,value.data(),value.length());
+		assign(data,len,false);
+	    }
+	    else
+		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
 	}
     }
     else
@@ -188,9 +196,13 @@ void DataBlock::append(const String &value)
 	if (value.length()) {
 	    unsigned int len = m_length+value.length();
 	    void *data = ::malloc(len);
-	    ::memcpy(data,m_data,m_length);
-	    ::memcpy(m_length+(char*)data,value.safe(),value.length());
-	    assign(data,len,false);
+	    if (data) {
+		::memcpy(data,m_data,m_length);
+		::memcpy(m_length+(char*)data,value.safe(),value.length());
+		assign(data,len,false);
+	    }
+	    else
+		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
 	}
     }
     else
@@ -204,9 +216,13 @@ void DataBlock::insert(const DataBlock &value)
 	if (vl) {
 	    unsigned int len = m_length+vl;
 	    void *data = ::malloc(len);
-	    ::memcpy(data,value.data(),vl);
-	    ::memcpy(vl+(char*)data,m_data,m_length);
-	    assign(data,len,false);
+	    if (data) {
+		::memcpy(data,value.data(),vl);
+		::memcpy(vl+(char*)data,m_data,m_length);
+		assign(data,len,false);
+	    }
+	    else
+		Debug("DataBlock",DebugFail,"malloc(%d) returned NULL!",len);
 	}
     }
     else

@@ -165,6 +165,8 @@ String::String(const String &value)
     DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
 	m_string = ::strdup(value.c_str());
+	if (!m_string)
+	    Debug("String",DebugFail,"strdup() returned NULL!");
 	changed();
     }
 }
@@ -175,8 +177,12 @@ String::String(char value, unsigned int repeat)
     DDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
     if (value && repeat) {
 	m_string = (char *) ::malloc(repeat+1);
-	::memset(m_string,value,repeat);
-	m_string[repeat] = 0;
+	if (m_string) {
+	    ::memset(m_string,value,repeat);
+	    m_string[repeat] = 0;
+	}
+	else
+	    Debug("String",DebugFail,"malloc(%d) returned NULL!",repeat+1);
 	changed();
     }
 }
@@ -188,6 +194,8 @@ String::String(int value)
     char buf[64];
     ::sprintf(buf,"%d",value);
     m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
     changed();
 }
 
@@ -198,6 +206,8 @@ String::String(unsigned int value)
     char buf[64];
     ::sprintf(buf,"%u",value);
     m_string = ::strdup(buf);
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
     changed();
 }
 
@@ -206,6 +216,8 @@ String::String(bool value)
 {
     DDebug(DebugAll,"String::String(%u) [%p]",value,this);
     m_string = ::strdup(value ? "true" : "false");
+    if (!m_string)
+	Debug("String",DebugFail,"strdup() returned NULL!");
     changed();
 }
 
@@ -215,6 +227,8 @@ String::String(const String *value)
     DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (value && !value->null()) {
 	m_string = ::strdup(value->c_str());
+	if (!m_string)
+	    Debug("String",DebugFail,"strdup() returned NULL!");
 	changed();
     }
 }
@@ -243,13 +257,17 @@ String& String::assign(const char *value, int len)
 	    len = vlen;
 	if (value != m_string || len != (int)m_length) {
 	    char *data = (char *) ::malloc(len+1);
-	    ::memcpy(data,value,len);
-	    data[len] = 0;
-	    char *odata = m_string;
-	    m_string = data;
-	    changed();
-	    if (odata)
-		::free(odata);
+	    if (data) {
+		::memcpy(data,value,len);
+		data[len] = 0;
+		char *odata = m_string;
+		m_string = data;
+		changed();
+		if (odata)
+		    ::free(odata);
+	    }
+	    else
+		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
 	}
     }
     else
@@ -375,6 +393,8 @@ String& String::operator=(const char *value)
     if (value != c_str()) {
 	char *tmp = m_string;
 	m_string = value ? ::strdup(value) : 0;
+	if (value && *value && !m_string)
+	    Debug("String",DebugFail,"strdup() returned NULL!");
 	changed();
 	if (tmp)
 	    ::free(tmp);
@@ -386,15 +406,23 @@ String& String::operator+=(const char *value)
 {
     if (value && *value) {
 	if (m_string) {
+	    int len = ::strlen(value)+length();
 	    char *tmp1 = m_string;
-	    char *tmp2 = (char *) ::malloc(::strlen(value)+length()+1);
-	    ::strcpy(tmp2,m_string);
-	    ::strcat(tmp2,value);
-	    m_string = tmp2;
-	    ::free(tmp1);
+	    char *tmp2 = (char *) ::malloc(len+1);
+	    if (tmp2) {
+		::strcpy(tmp2,m_string);
+		::strcat(tmp2,value);
+		m_string = tmp2;
+		::free(tmp1);
+	    }
+	    else
+		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
 	}
-	else
+	else {
 	    m_string = ::strdup(value);
+	    if (!m_string)
+		Debug("String",DebugFail,"strdup() returned NULL!");
+	}
 	changed();
     }
     return *this;
@@ -819,6 +847,10 @@ bool Regexp::compile()
     DDebug(DebugInfo,"Regexp::compile()");
     if (c_str() && !m_regexp) {
 	regex_t *data = (regex_t *) ::malloc(sizeof(regex_t));
+	if (!data) {
+	    Debug("Regexp",DebugFail,"malloc(%d) returned NULL!",sizeof(regex_t));
+	    return false;
+	}
 	if (::regcomp(data,c_str(),0)) {
 	    Debug(DebugWarn,"Regexp::compile() \"%s\" failed",c_str());
 	    ::regfree(data);

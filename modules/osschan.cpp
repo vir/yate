@@ -414,10 +414,10 @@ bool OssHandler::received(Message &msg)
 	    if (Engine::dispatch(m))
 		return true;
 	    Debug(DebugFail,"OSS outgoing call not accepted!");
-	    delete chan;
 	}
 	else
 	    Debug(DebugWarn,"OSS outgoing call but no route!");
+	delete chan;
 	return false;
     }
 

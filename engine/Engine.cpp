@@ -103,6 +103,7 @@ bool Engine::s_dynplugin = false;
 int Engine::s_maxworkers = 10;
 int EnginePrivate::count = 0;
 
+const char* s_cfgfile = "yate";
 ObjList plugins;
 
 class SLib : public GenObject
@@ -328,7 +329,7 @@ void Engine::loadPlugins()
 #ifdef DEBUG
     Debugger debug("Engine::loadPlugins()");
 #endif
-    Configuration cfg(configFile("yate"));
+    Configuration cfg(configFile(s_cfgfile));
     bool defload = cfg.getBoolValue("general","modload",true);
     const char *name = cfg.getValue("general","modpath");
     if (name)
@@ -559,6 +560,7 @@ static void usage(FILE *f)
 "   -s             Supervised, restart if crashes or locks up\n"
 "   -l filename    Log to file\n"
 "   -p filename    Write PID to file\n"
+"   -n configname  Use specified configuration name (yate)\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 #ifndef NDEBUG
@@ -644,6 +646,14 @@ int Engine::main(int argc, const char **argv, const char **environ)
 			}
 			pc = 0;
 			pidfile=argv[++i];
+			break;
+		    case 'n':
+			if (i+1 >= argc) {
+			    noarg(argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			s_cfgfile=argv[++i];
 			break;
 		    case 'c':
 			if (i+1 >= argc) {

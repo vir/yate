@@ -19,7 +19,7 @@ LDCONFIG:=true
 
 MKDEPS := ./config.status
 PROGS:= yate
-SLIBS:= libyate.so
+SLIBS:= libyate.so.@PACKAGE_VERSION@ libyate.so
 INCS := telengine.h telephony.h
 GENS := yateversn.h
 LIBS :=
@@ -32,7 +32,7 @@ ENGOBJS := TelEngine.o String.o DataBlock.o ObjList.o \
 OBJS := main.o
 
 LIBOBJS := $(ENGOBJS) $(TELOBJS)
-CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) $(LIBOBJS) core
+CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) $(LIBOBJS) yatepaths.h core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
@@ -48,21 +48,42 @@ vardir = @localstatedir@/lib/yate
 moddir = @libdir@/yate
 confdir = @sysconfdir@/yate
 
-.PHONY: all
+.PHONY: all everything
 all: engine modules
 
-.PHONY: clean
+everything: all apidocs test
+
+.PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:
 	-rm $(CLEANS) 2>/dev/null
 	$(MAKE) -C ./modules $@
 	$(MAKE) -C ./test $@
 	$(MAKE) -C ./contrib/iax $@
 	$(MAKE) -C ./contrib/qt $@
+	$(MAKE) -C ./contrib/ysip $@
 
-.PHONY: engine
+check-topdir:
+	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
+
+clean-config-files: check-topdir
+	-rm -rf auto*.cache
+	-rm -f @CONFIGURE_FILES@
+
+clean-tables: check-topdir
+	-rm -f yate.spec
+	$(MAKE) -C ./tables -f Makefile.tables mrproper
+
+clean-apidocs: check-topdir
+	-rm docs/api/*.html
+
+distclean: check-topdir clean clean-config-files
+
+cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
+	-rm -f configure
+
+.PHONY: engine modules test apidocs-build check-topdir
 engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
 
-.PHONY: apidocs-build
 apidocs-build: check-topdir
 	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS)
 
@@ -71,28 +92,23 @@ apidocs: @srcdir@/docs/api/index.html
 @srcdir@/docs/api/index.html: @srcdir@/telengine.h @srcdir@/telephony.h
 	$(MAKE) apidocs-build
 
-.PHONY: strip
+.PHONY: strip sex love war
 strip: all
 	-strip --strip-debug --discard-locals $(PROGS) $(SLIBS)
 
-.PHONY: sex
 sex: strip
 	@echo 'Stripped for you!'
 
 # Let's have a little fun
-.PHONY: love
 love:
 	@echo 'Not war?'
 
-.PHONY: war
 war:
 	@echo 'Please make love instead!'
 
-.PHONY: test
 test: engine
 	$(MAKE) -C ./test all
 
-.PHONY: modules
 modules: engine
 	$(MAKE) -C ./modules all
 
@@ -105,13 +121,17 @@ yatepaths.h: $(MKDEPS)
 	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' > $@
 	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' >> $@
 
-.PHONY: everything
-everything: all apidocs test
-
 .PHONY: install install-root
 install install-root: all apidocs
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
-	install $(SLIBS) "$(DESTDIR)$(libdir)/" && $(LDCONFIG)
+	for i in $(SLIBS) ; do \
+	    if [ -h "$$i" ]; then \
+		f=`readlink "$$i"` ; \
+		ln -sf "$$f" "$(DESTDIR)$(libdir)/$$i" ; \
+	    else \
+		install $$i "$(DESTDIR)$(libdir)/" ; \
+	    fi \
+	done && $(LDCONFIG)
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
 	install $(PROGS) yate-config "$(DESTDIR)$(bindir)/"
 	$(MAKE) -C ./modules install
@@ -192,10 +212,6 @@ snapshot tarball: check-topdir clean tables apidocs
 	$$wd; \
 	rm $$wd/tar-exclude
 
-.PHONY: check-topdir
-check-topdir:
-	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
-
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yateversn.h yatepaths.h
 	$(COMPILE) -c $<
 
@@ -220,7 +236,10 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 yate: $(OBJS) libyate.so $(LIBS)
 	$(LINK) -o $@ $(LIBTHR) $^
 
-libyate.so: $(ENGOBJS) $(LIBS)
+libyate.so: libyate.so.@PACKAGE_VERSION@
+	ln -sf $^ $@
+
+libyate.so.@PACKAGE_VERSION@: $(ENGOBJS) $(LIBS)
 	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)
 
 .PHONY: help
@@ -228,4 +247,5 @@ help:
 	@echo -e 'Usual make targets:\n\
 	    all engine modules apidocs test everything\n\
 	    install uninstall\n\
+	    clean distclean cvsclean\n\
 	    snapshot tarball'

@@ -100,8 +100,11 @@ PGSQL_INC=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
 if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
 AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
-incpq="$ac_cv_use_libpq/include"
 libpq="$ac_cv_use_libpq/lib/libpq.so"
+for i in include include/pgsql pgsql/include include/postgresql; do
+    incpq="$ac_cv_use_libpq/$i"
+    test -f "$incpq/libpq-fe.h" && break
+done
 if [[ ! -f "$incpq/libpq-fe.h" ]]; then
     incpq="$incpq/pgsql"
 fi
@@ -509,4 +512,6 @@ AC_CONFIG_FILES([yate.spec
                  test/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
 AC_CONFIG_FILES([run],[chmod +x run])
+CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's/yate\.spec *//'`
+AC_SUBST(CONFIGURE_FILES)
 AC_OUTPUT

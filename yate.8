@@ -24,7 +24,7 @@
 .RI [options]
 .SH DESCRIPTION
 .B yate
-is a telephony engine that supports PBX and IVR functions trough plugins.
+is a telephony engine that supports client, PBX and IVR functions trough plugins.
 .SH OPTIONS
 .SS General
 .TP
@@ -44,7 +44,19 @@ Daemonify, suppress output unless logged
 Supervised, restart if crashes or locks up
 .TP
 .B \-l filename
-Log to file
+Log to file \- should be used whenever running in daemon mode
+.TP
+.B \-p filename
+Write PID of the supervisor or primary thread to file
+.TP
+.B \-n configname
+Use specified configuration name, overrides default "yate"
+.TP
+.B \-c pathname
+Path to conf files directory, overrides compiled-in value
+.TP
+.B \-m pathname
+Path to modules directory, overrides compiled-in value
 .SS Debugging (may not be compiled in)
 .TP
 .B \-D[options]
@@ -85,5 +97,4 @@ Paul Chitescu <paulc-devel@null.ro>
 .br
 Diana Cionoiu <diana@diana.null.ro>
 .SH SEE ALSO
-.\" .BR libyate (3),
-.BR bayonne (8)
+.BR yate-config (8)

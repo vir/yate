@@ -31,7 +31,7 @@ for small to large scale projects.
 %config /etc/yate/*
 /usr/lib/lib*.so*
 /usr/bin/yate
-/usr/share/man/*
+/usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
 %dir /usr/lib/yate
 /usr/lib/yate/*
@@ -56,6 +56,7 @@ The yate-devel package includes the libraries and header files for YATE
 %doc /usr/share/doc/yate-%{version}/api/*
 /usr/include/*
 /usr/bin/yate-config
+/usr/share/man/*/yate-config.*
 /usr/lib/pkgconfig/yate.pc
 
 %prep
@@ -98,6 +99,9 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 rm -rf %{buildroot}
 
 %changelog
+* Sun Jan 09 2005 Paul Chitescu <paulc-devel@null.ro>
+- Cleaned up the build and packaging system
+
 * Wed Dec 15 2004 Paul Chitescu <paulc-devel@null.ro>
 - Added custom requires/provides filters to supress modules dependencies
 

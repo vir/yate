@@ -1,0 +1,72 @@
+.\"
+.\" YATE - Yet Another Telephony Engine
+.\"
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\"
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program; if not, write to the Free Software
+.\" Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+.\"
+.\"
+.TH YATE-CONFIG 8 "March 2004" "YATE" "Telephony Engine"
+.SH NAME
+\fByate-config\fP \- retrieve metainformation about the YATE telephony engine
+.SH SYNOPSIS
+.B yate-config
+.RI [options]
+.SH DESCRIPTION
+The
+.B yate-config
+program is used to retrieve information about the installed YATE engine.
+It is typically used to compile and link modules against the engine's library.
+
+Here is a typical usage scenario in a Makefile:
+
+module.yate: module.cpp
+    g++ `yate-config --c-all --ldflags` module.cpp `yate-config --libs`
+
+.SH OPTIONS
+.SS Version and paths
+.TP
+.B \-\-version
+Reports the installed YATE version (in x.y.z format)
+.TP
+.B \-\-config
+Returns the configuration files directory
+.TP
+.B \-\-modules
+Returns the modules directory
+.SS Compiler flags
+.TP
+.B \-\-cflags
+Various C++ compiler flags
+.TP
+.B \-\-includes
+Include option and path to the header files
+.TP
+.B \-\-c\-all
+All compiler options \- the above two concatenated
+.SS Linker flags
+.TP
+.B \-\-ldflags
+Various linker flags
+.TP
+.B \-\-libs
+Library option and libraries names
+.TP
+.B \-\-ld\-all
+All linker options \- the above two concatenated
+.SH AUTHORS
+Paul Chitescu <paulc-devel@null.ro>
+.br
+Diana Cionoiu <diana@diana.null.ro>
+.SH SEE ALSO
+.BR yate (8)

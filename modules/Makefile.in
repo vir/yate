@@ -122,8 +122,13 @@ pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 sipchan.yate: LOCALFLAGS = @EXOSIP_INC@ @ORTP_INC@ @GLIB2_INC@ @EXOSIP_LIB@ @ORTP_LIB@ @GLIB2_LIB@
 
+iaxchan.yate: @IAX2_DEP@
+iaxchan.yate: LOCALLIBS = @IAX2_DEP@
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
 
 gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@
+
+../contrib/iax/libiax.a:
+	$(MAKE) -C ../contrib/iax

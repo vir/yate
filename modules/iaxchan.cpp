@@ -10,13 +10,18 @@
 #include <telephony.h>
 #include <yateversn.h>
 
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <stdlib.h>
 
 extern "C" {
-#include <iax/iax-client.h>
+#include <iax-client.h>
+#include <md5.h>
 };
 
 
@@ -31,6 +36,14 @@ static TokenDict dict_iaxformats[] = {
     { 0, 0 }
 };
 
+static TokenDict dict_tos[] = {
+    { "lowdelay", IPTOS_LOWDELAY },
+    { "throughput", IPTOS_THROUGHPUT },
+    { "reliability", IPTOS_RELIABILITY },
+    { "mincost", IPTOS_MINCOST },
+    { 0, 0 }
+};
+
 static int s_ast_formats = 0;
 static Configuration s_cfg;
 static Mutex s_mutex;
@@ -38,14 +51,24 @@ static Mutex s_mutex;
 static ObjList m_calls;
 class YateIAXConnection;
 
+class IAXSource : public DataSource
+{
+public:
+    IAXSource(const char *frm) : DataSource(frm),m_total(0),m_time(Time::now())
+    { Debug(DebugInfo,"IAXSource::IAXSource [%p] frm %s",this,frm);};
+    ~IAXSource();
+    void Forward(const DataBlock &data);
+private:
+    unsigned m_total;
+    unsigned long long m_time;
+};
 class YateIAXAudioConsumer : public DataConsumer
 {
 public:
     YateIAXAudioConsumer(YateIAXConnection *conn, iax_session *session,
 	int ast_format = AST_FORMAT_SLINEAR, const char *format = "slin");
 
-    ~YateIAXAudioConsumer()
-	{ Debug(DebugAll,"YateIAXAudioConsumer::~YateIAXAudioConsumer() [%p]",this); }
+    ~YateIAXAudioConsumer();
 
     virtual void Consume(const DataBlock &data);
 
@@ -54,6 +77,8 @@ private:
     iax_session *m_session;
     DataBlock m_buffer;
     int m_ast_format;
+    unsigned m_total;
+    unsigned long long m_time;
 };
 
 
@@ -63,7 +88,9 @@ public:
     YateIAXEndPoint();
     ~YateIAXEndPoint();
     static bool Init(void);
+    bool accepting(iax_event *e);
     void answer(iax_event *e);
+    void reg(iax_event *e);
     void run(void);
     void terminateall(void);
     YateIAXConnection *findconn(iax_session *session);
@@ -85,7 +112,7 @@ public:
     int makeCall(char *cidnum, char *cidname, char *target = 0, char *lang = 0);
     void hangup(char *reason = "Unexpected problem");
     void reject(char *reason = "Unexpected problem");
-    void startAudio(int format);
+    void startAudio(int format,int capability);
     void sourceAudio(void *buffer, int len, int format);
     void handleEvent(iax_event *event);
     inline iax_session *session() const
@@ -142,6 +169,10 @@ bool YateIAXEndPoint::Init(void)
 	Debug(DebugFail,"I can't initialize the IAX library");
 	return false;
     }
+    int fd = iax_get_fd();
+    int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
+    if (tos)
+	    ::setsockopt(fd,IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
     if (s_cfg.getBoolValue("general","debug",false))
 	::iax_enable_debug();
     else
@@ -195,6 +226,11 @@ void YateIAXEndPoint::handleEvent(iax_event *event)
 	case IAX_EVENT_REGREJ:
 	    break;
 #endif
+	case IAX_EVENT_TEXT:
+	    {
+		Debug(DebugInfo,"this text is inside a call: %s",(char *)event->data);
+	    }
+	    break;
 	default:
 	    Debug(DebugInfo,"Unhandled connectionless IAX event %d/%d",event->etype,event->subclass);
     }
@@ -234,6 +270,13 @@ void YateIAXEndPoint::run(void)
 			conn->destruct();
 		    }
 		    break;
+		case IAX_EVENT_REGREQ:
+		    reg(e);
+		    Debug(DebugInfo,"am primit un registration request");
+		    break;
+		case IAX_EVENT_AUTHRP:
+		    answer(e);
+		    break;
 		default:
 		    conn = (YateIAXConnection *)::iax_get_private(e->session);
 		    if (conn)
@@ -248,19 +291,99 @@ void YateIAXEndPoint::run(void)
     }
 }
 
+bool YateIAXEndPoint::accepting(iax_event *e)
+{
+    if (s_cfg.getBoolValue("users","unauth",false))
+    {
+	s_mutex.lock();
+	iax_accept(e->session,2);
+	s_mutex.unlock();
+	return 1;
+    }	
+    Message m("auth");
+    if (e->ies.username)
+        m.addParam("username",e->ies.username);
+    else
+	m.addParam("username",e->session->username);
+    if (Engine::dispatch(m) && m.retValue().null())
+    {
+	s_mutex.lock();
+	iax_accept(e->session,2);
+	s_mutex.unlock();
+	return 1;
+    }
+    if (e->etype != IAX_EVENT_AUTHRP)
+    {
+	int methods = IAX_AUTH_MD5;
+	String s(::rand());
+	strncpy(e->session->username,e->ies.username,sizeof(e->session->username));
+	strncpy(e->session->dnid,e->ies.called_number,sizeof(e->session->dnid));
+	strncpy(e->session->callerid,e->ies.calling_name,sizeof(e->session->callerid));
+	e->session->voiceformat = e->ies.format;
+	e->session->peerformats = e->ies.capability;
+	strncpy(e->session->challenge,s.safe(),sizeof(e->session->challenge));
+	s_mutex.lock();
+	iax_send_authreq(e->session, methods);
+	s_mutex.unlock();
+	return 0;
+    }
+    if (e->ies.md5_result)
+    {	
+	const char *ret = m.retValue();
+	if (!ret)
+	{
+	    s_mutex.lock();
+	    iax_send_regrej(e->session);
+	    s_mutex.unlock();
+	    return 0;
+	}
+	struct MD5Context md5;
+	MD5Init(&md5);
+	MD5Update(&md5, (const unsigned char *) e->session->challenge, strlen(e->session->challenge));
+	MD5Update(&md5, (const unsigned char *) ret, strlen(ret));
+	unsigned char reply[16];
+	char realreply[256];
+	MD5Final(reply, &md5);
+	char *ptr = realreply; 
+	for (int x=0;x<16;x++)
+	    ptr+=sprintf(ptr,"%02x", (unsigned int)reply[x]);
+	if (!strcmp(e->ies.md5_result,realreply))
+	{
+	    e->session->refresh = 100;
+	    s_mutex.lock();
+	    iax_accept(e->session,2);
+	    s_mutex.unlock();
+	    return 1;
+	} else
+	{
+	    s_mutex.lock();
+	    iax_send_regrej(e->session);
+	    s_mutex.unlock();
+	    return 0;
+	}
+    }	
+    return 0;
+}
+    
 void YateIAXEndPoint::answer(iax_event *e)
 {
+    if (!accepting(e))
+	return;
+    Debug(DebugInfo,"answer 1");
     Message *m = new Message("route");
     m->addParam("driver","iax");
-//    m->addParam("id",String(e->did));
-    m->addParam("callername",e->ies.calling_number);
-    m->addParam("called",e->ies.called_number);
+//  m->addParam("id",String(e->did));
+    if (e->ies.calling_name)
+        m->addParam("callername",e->ies.calling_name);
+    else
+        m->addParam("callername",e->session->callerid);
+    if (e->ies.called_number)
+        m->addParam("called",e->ies.called_number);
+    else
+        m->addParam("called",e->session->dnid);
     Debug(DebugInfo,"callername %s and called %s",e->ies.calling_number,e->ies.called_number);
     Engine::dispatch(m);
     if (m->retValue() != NULL) {
-	s_mutex.lock();
-	::iax_accept(e->session);
-	s_mutex.unlock();
 	YateIAXConnection *conn = new YateIAXConnection(e->session);
 	
 	*m = "call";
@@ -278,7 +401,17 @@ void YateIAXEndPoint::answer(iax_event *e)
 	s_mutex.lock();
 	::iax_answer(e->session);
 	s_mutex.unlock();
-	conn->startAudio(e->ies.format);
+	int format,capability;
+	if (e->ies.format != 0) 
+	    format = e->ies.format;
+	else 
+	    format = e->session->voiceformat;
+	if (e->ies.capability != 0) 
+	    capability = e->ies.capability;
+	else 
+	    capability = e->session->peerformats;
+	
+	conn->startAudio(format,capability);
 	Debug(DebugInfo,"The return value of the message is %s %p",m->retValue().c_str(),m->userData());
 
     } else {
@@ -292,6 +425,63 @@ void YateIAXEndPoint::answer(iax_event *e)
 //    str << m->retValue();
 //    Debug(DebugInfo,str);
     delete m;
+}
+
+void YateIAXEndPoint::reg(iax_event *e)
+{
+    Message m("auth");
+    if (e->ies.username)
+        m.addParam("username",e->ies.username);
+    else
+	m.addParam("username",e->session->username);
+    if (Engine::dispatch(m) && m.retValue().null())
+    {
+	s_mutex.lock();
+	iax_send_regack(e->session);
+	s_mutex.unlock();
+	return;
+    }
+    if (e->ies.md5_result)
+    {	
+	const char *ret = m.retValue();
+	if (!ret)
+	{
+	    s_mutex.lock();
+	    iax_send_regrej(e->session);
+	    s_mutex.unlock();
+	    return;
+	}
+	struct MD5Context md5;
+	MD5Init(&md5);
+	MD5Update(&md5, (const unsigned char *) e->session->challenge, strlen(e->session->challenge));
+	MD5Update(&md5, (const unsigned char *) ret, strlen(ret));
+	unsigned char reply[16];
+	char realreply[256];
+	MD5Final(reply, &md5);
+	char *ptr = realreply; 
+	for (int x=0;x<16;x++)
+	    ptr+=sprintf(ptr,"%02x", (unsigned int)reply[x]);
+	if (!strcmp(e->ies.md5_result,realreply))
+	{
+	    e->session->refresh = 100;
+	    strncpy(e->session->username,e->ies.username,sizeof(e->session->username));
+	    s_mutex.lock();
+	    iax_send_regack(e->session);
+	    s_mutex.unlock();
+	} else
+	{
+	    s_mutex.lock();
+	    iax_send_regrej(e->session);
+	    s_mutex.unlock();
+	}
+	return;
+    }	
+    int methods = IAX_AUTH_MD5;
+    String s(::rand());
+    strncpy(e->session->challenge,s.safe(),sizeof(e->session->challenge));
+    s_mutex.lock();
+    iax_send_regauth(e->session, methods);
+    s_mutex.unlock();
 }
 
 YateIAXConnection * YateIAXEndPoint::findconn(iax_session *session)
@@ -344,10 +534,16 @@ void YateIAXConnection::handleEvent(iax_event *event)
 #endif
     switch(event->etype) {
 	case IAX_EVENT_ACCEPT:
-	    startAudio(event->ies.format);
+	    startAudio(event->ies.format,event->ies.capability);
 	    break;
 	case IAX_EVENT_VOICE:
+//	    Debug(DebugInfo,"session->jitter %d session->jitterbuffer %d",event->session->jitter,event->session->jitterbuffer);
 	    sourceAudio(event->data,event->datalen,event->subclass);
+	    break;
+	case IAX_EVENT_TEXT:
+	    {
+		Debug(DebugInfo,"this text is outside a call: %s",(char *)event->data);
+	    }
 	    break;
 #if 0
 	case IAX_EVENT_DTMF:
@@ -403,19 +599,27 @@ int YateIAXConnection::makeCall(char *cidnum, char *cidname, char *target, char 
     return ::iax_call(m_session,cidnum,cidname,target,lang,0);
 }
 
-void YateIAXConnection::startAudio(int format)
+void YateIAXConnection::startAudio(int format,int capability)
 {
     if (getConsumer())
 	return;
     int masked = format & s_ast_formats;
     const TokenDict *frm = dict_iaxformats;
     for (; frm->token; frm++) {
-	if (frm->value & masked)
+	if (frm->value == masked)
 	    break;
     }
     if (!frm->token) {
-	Debug(DebugGoOn,"IAX format 0x%X (local: 0x%X, common: 0x%X) not available in [%p]",
-	    format,s_ast_formats,masked,this);
+	masked = capability & s_ast_formats;
+        frm = dict_iaxformats;
+	for (; frm->token; frm++) {
+	    if (frm->value & masked)
+		break;
+	}
+    }
+    if (!frm->token) {
+	Debug(DebugGoOn,"IAX format 0x%X (local: 0x%X, remote: 0x%X, common: 0x%X) not available in [%p]",
+	    format,s_ast_formats,capability,masked,this);
 	return;
     }
     Debug(DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm->token,frm->value,this);
@@ -433,14 +637,14 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
 	const char *frm = lookup(format,dict_iaxformats);
 	if (!frm)
 	    return;
-	Debug(DebugAll,"Creating IAX DataSource format \"%s\" (0x%X) in [%p]",frm,format,this);
+	Debug(DebugAll,"Creating IAXSource format \"%s\" (0x%X) in [%p]",frm,format,this);
 	m_ast_format = format;
-	setSource(new DataSource(frm));
+	setSource(new IAXSource(frm));
 	getSource()->deref();
     }
     if ((format == m_ast_format) && getSource()) {
 	DataBlock data(buffer,len,false);
-	getSource()->Forward(data);
+	((IAXSource *)(getSource()))->Forward(data);
 	data.clear(false);
     }
 }
@@ -450,14 +654,48 @@ void YateIAXConnection::disconnected()
     Debug(DebugAll,"YateIAXConnection::disconnected()");
 }
 
+IAXSource::~IAXSource()
+{
+    Debug(DebugAll,"IAXSource::~IAXSource() [%p] total=%u",this,m_total);
+    if (m_time) {
+        m_time = Time::now() - m_time;
+	if (m_time) {
+	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    Debug(DebugInfo,"IAXSource rate=%llu b/s",m_time);
+	}
+    }
+    
+}
+
+void IAXSource::Forward(const DataBlock &data)
+{
+    m_total += data.length();
+    DataSource::Forward(data);
+}
+
 YateIAXAudioConsumer::YateIAXAudioConsumer(YateIAXConnection *conn, iax_session *session, int ast_format, const char *format)
-    : DataConsumer(format), m_conn(conn), m_session(session), m_ast_format(ast_format)
+    : DataConsumer(format), m_conn(conn), m_session(session),
+      m_ast_format(ast_format), m_total(0), m_time(Time::now())
 {
     Debug(DebugAll,"YateIAXAudioConsumer::YateIAXAudioConsumer(%p) [%p]",conn,this);
 }
 
+YateIAXAudioConsumer::~YateIAXAudioConsumer()
+{
+    Debug(DebugAll,"YateIAXAudioConsumer::~YateIAXAudioConsumer() [%p] total=%u",this,m_total);
+    if (m_time) {
+        m_time = Time::now() - m_time;
+	if (m_time) {
+	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    Debug(DebugInfo,"YateIAXAudioConsumer rate=%llu b/s",m_time);
+	}
+    }
+    
+}
+
 void YateIAXAudioConsumer::Consume(const DataBlock &data)
 {
+    m_total += data.length();
     ::iax_send_voice(m_session,m_ast_format,(char *)data.data(),data.length());
 }
 

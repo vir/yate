@@ -1,0 +1,44 @@
+# Makefile
+# This file holds the make rules for the libiax2 - Yate version
+
+CC  := gcc -Wall
+AR  := ar
+RANLIB:= ranlib
+SED := sed
+DEFS :=
+INCLUDES := -I@top_srcdir@
+CFLAGS := -O2 -DDEBUG_SUPPORT -DLIBIAX -fsigned-char
+LDFLAGS:=
+
+PROGS=
+LIBS = libiax.a
+OBJS = iax2-parser.o iax.o md5.o
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+.PHONY: all
+all: $(LIBS) $(PROGS)
+
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean:
+	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+
+%.o: @srcdir@/%.c
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status
+
+libiax.a: $(OBJS)
+	$(AR) rcs $@ $^
+	$(RANLIB) $@

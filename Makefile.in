@@ -53,6 +53,7 @@ clean:
 	-rm $(CLEANS) 2>/dev/null
 	$(MAKE) -C ./modules $@
 	$(MAKE) -C ./test $@
+	$(MAKE) -C ./contrib/iax $@
 
 .PHONY: engine
 engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)

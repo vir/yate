@@ -447,6 +447,7 @@ void YateIAXEndPoint::answer(iax_event *e)
 	    format = e->ies.format;
 	else 
 	    format = e->session->voiceformat;
+	Debug(DebugInfo,"e->ies.format  %d e->session->voiceformat %d e->session->peerformats %s",e->ies.format, e->session->voiceformat, e->session->peerformats);
 	if (e->ies.capability != 0) 
 	    capability = e->ies.capability;
 	else 
@@ -594,7 +595,6 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    startAudio(event->ies.format,event->ies.capability);
 	    break;
 	case IAX_EVENT_VOICE:
-//	    Debug(DebugInfo,"session->jitter %d session->jitterbuffer %d",event->session->jitter,event->session->jitterbuffer);
 	    sourceAudio(event->data,event->datalen,event->subclass);
 	    break;
 	case IAX_EVENT_TEXT:
@@ -632,9 +632,10 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	    break;
 	case IAX_EVENT_BUSY:
 	    break;
-	case IAX_EVENT_ANSWER:
-	    break; 
 #endif
+	case IAX_EVENT_ANSWER:
+	    startAudio(event->ies.format,event->ies.capability);
+	    break; 
 	default:
 	    Debug(DebugInfo,"Unhandled connection IAX event %d/%d in [%p]",event->etype,event->subclass,this);
     }
@@ -719,6 +720,7 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
 	m_ast_format = format;
 	setSource(new IAXSource(frm));
 	getSource()->deref();
+	startAudio(format,0);	
     }
     if ((format == m_ast_format) && getSource()) {
 	DataBlock data(buffer,len,false);

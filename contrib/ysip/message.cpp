@@ -578,4 +578,99 @@ void SIPMessage::setParty(SIPParty* ep)
 	m_ep->ref();
 }
 
+SIPDialog::SIPDialog()
+{
+}
+
+SIPDialog::SIPDialog(const SIPDialog& original)
+    : String(original),
+      localURI(original.localURI), localTag(original.localTag),
+      remoteURI(original.remoteURI), remoteTag(original.remoteTag)
+{
+    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
+}
+
+SIPDialog& SIPDialog::operator=(const SIPDialog& original)
+{
+    String::operator=(original);
+    localURI = original.localURI;
+    localTag = original.localTag;
+    remoteURI = original.remoteURI;
+    remoteTag = original.remoteTag;
+    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
+    return *this;
+}
+
+SIPDialog& SIPDialog::operator=(const String& callid)
+{
+    String::operator=(callid);
+    localURI.clear();
+    localTag.clear();
+    remoteURI.clear();
+    remoteTag.clear();
+    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
+    return *this;
+}
+
+SIPDialog::SIPDialog(const SIPMessage& message)
+    : String(message.getHeaderValue("Call-ID"))
+{
+    Regexp r("<\\([^>]\\+\\)>");
+    bool local = message.isOutgoing() ^ message.isAnswer();
+    const HeaderLine* hl = message.getHeader(local ? "From" : "To");
+    localURI = hl;
+    if (localURI.matches(r))
+        localURI = localURI.matchString(1);
+    if (hl)
+	localTag = hl->getParam("tag");
+    hl = message.getHeader(local ? "To" : "From");
+    remoteURI = hl;
+    if (remoteURI.matches(r))
+        remoteURI = remoteURI.matchString(1);
+    if (hl)
+	remoteTag = hl->getParam("tag");
+    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
+}
+
+SIPDialog& SIPDialog::operator=(const SIPMessage& message)
+{
+    String::operator=(message.getHeaderValue("Call-ID"));
+    Regexp r("<\\([^>]\\+\\)>");
+    bool local = message.isOutgoing() ^ message.isAnswer();
+    const HeaderLine* hl = message.getHeader(local ? "From" : "To");
+    localURI = hl;
+    if (localURI.matches(r))
+        localURI = localURI.matchString(1);
+    if (hl)
+	localTag = hl->getParam("tag");
+    hl = message.getHeader(local ? "To" : "From");
+    remoteURI = hl;
+    if (remoteURI.matches(r))
+        remoteURI = remoteURI.matchString(1);
+    if (hl)
+	remoteTag = hl->getParam("tag");
+    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
+    return *this;
+}
+
+bool SIPDialog::operator==(const SIPDialog& other) const
+{
+    return
+	String::operator==(other) &&
+	localURI == other.localURI &&
+	localTag == other.localTag &&
+	remoteURI == other.remoteURI &&
+	remoteTag == other.remoteTag;
+}
+
+bool SIPDialog::operator!=(const SIPDialog& other) const
+{
+    return !operator==(other);
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

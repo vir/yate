@@ -144,6 +144,12 @@ private:
 class YateSIPConnection : public DataEndpoint
 {
 public:
+    enum {
+	Incoming,
+	Outgoing,
+	Established,
+	Cleared,
+    };
     YateSIPConnection(Message& msg, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri);
     ~YateSIPConnection();
@@ -160,8 +166,8 @@ public:
         { return "sip/" + m_id; }
     inline const String& status() const
         { return m_status; }
-    inline void setStatus(const char *status)
-        { m_status = status; }
+    inline void setStatus(const char *status, int state = -1)
+        { m_status = status; if (state >= 0) m_state = state; }
     inline void setTarget(const char *target = 0)
         { m_target = target; }
     inline const String& getTarget() const
@@ -170,13 +176,17 @@ public:
 	{ return m_tr; }
     static YateSIPConnection* find(const String& id);
 private:
+    void clearTransaction();
     SDPBody* createSDP(const char* addr, const char* port, const char* formats, const char* format = 0);
     SDPBody* createPasstroughSDP(Message &msg);
     SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
     SIPTransaction* m_tr;
-    String m_id;
+    bool m_hungup;
+    int m_state;
+    SIPDialog m_id;
+    String m_uri;
     String m_target;
     String m_status;
     String m_rtpid;
@@ -557,18 +567,20 @@ int SipMsgThread::s_routed = 0;
 
 YateSIPConnection* YateSIPConnection::find(const String& id)
 {
+    Debug("YateSIPConnection",DebugAll,"finding '%s'",id.c_str());
     ObjList* l = s_calls.find(id);
     return l ? static_cast<YateSIPConnection*>(l->get()) : 0;
 }
 
 // Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
-    : m_tr(tr)
+    : m_tr(tr), m_hungup(false), m_state(Incoming)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
     s_mutex.lock();
     m_tr->ref();
-    m_id = m_tr->getCallID();
+    m_id = *m_tr->initialMessage();
+    m_uri = m_tr->initialMessage()->getHeader("From");
     m_tr->setUserData(this);
     s_calls.append(this);
     s_mutex.unlock();
@@ -583,13 +595,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
-    : m_tr(0)
+    : m_tr(0), m_hungup(false), m_state(Outgoing), m_uri(uri)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     SIPMessage* m = new SIPMessage("INVITE",uri);
     plugin.ep()->buildParty(m);
-//    m->complete(plugin.ep()->engine());
     SDPBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m,msg.getValue("formats"));
@@ -598,7 +609,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri)
     m->deref();
     if (m_tr) {
 	m_tr->ref();
-	m_id = m_tr->getCallID();
+	m_id = *m_tr->initialMessage();
 	m_tr->setUserData(this);
     }
     Lock lock(s_mutex);
@@ -611,23 +622,78 @@ YateSIPConnection::~YateSIPConnection()
     Lock lock(s_mutex);
     s_calls.remove(this,false);
     hangup();
+    clearTransaction();
+}
+
+void YateSIPConnection::clearTransaction()
+{
+    if (m_tr) {
+	m_tr->setUserData(0);
+	if (m_tr->isIncoming())
+	    m_tr->setResponse(487,"Request Terminated");
+	m_tr->deref();
+	m_tr = 0;
+    }
 }
 
 void YateSIPConnection::hangup()
 {
-    Message *m = new Message("call.hangup");
-    m->addParam("driver","sip");
-    m->addParam("id",id());
+    if (m_hungup)
+	return;
+    m_hungup = true;
+    Message *msg = new Message("call.hangup");
+    msg->addParam("driver","sip");
+    msg->addParam("id",id());
     if (m_target)
-        m->addParam("targetid",m_target);
-    Engine::enqueue(m);
-    if (m_tr) {
-	m_tr->setUserData(0);
-	m_tr->setResponse(487,"Request Terminated");
-	m_tr->deref();
+        msg->addParam("targetid",m_target);
+    Engine::enqueue(msg);
+    msg = 0;
+    switch (m_state) {
+	case Cleared:
+	    clearTransaction();
+	    return;
+	case Incoming:
+	    if (m_tr) {
+		clearTransaction();
+		return;
+	    }
+	    break;
+	case Outgoing:
+	    if (m_tr) {
+		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
+		const SIPMessage* i = m_tr->initialMessage();
+		m->copyHeader(i,"Via");
+		m->copyHeader(i,"From");
+		m->copyHeader(i,"To");
+		m->copyHeader(i,"Call-ID");
+		String tmp;
+		tmp << i->getCSeq() << " CANCEL";
+		m->addHeader("CSeq",tmp);
+		plugin.ep()->buildParty(m);
+		plugin.ep()->engine()->addMessage(m);
+		m->deref();
+	    }
+	    break;
     }
-    else
-	disconnect();
+    clearTransaction();
+    m_state = Cleared;
+
+    SIPMessage* m = new SIPMessage("BYE",m_uri);
+    m->addHeader("Call-ID",m_id);
+    String tmp;
+    tmp << "<" << m_id.localURI << ">";
+    HeaderLine* hl = new HeaderLine("From",tmp);
+    hl->setParam("tag",m_id.localTag);
+    m->addHeader(hl);
+    tmp.clear();
+    tmp << "<" << m_id.remoteURI << ">";
+    hl = new HeaderLine("To",tmp);
+    hl->setParam("tag",m_id.remoteTag);
+    m->addHeader(hl);
+    plugin.ep()->buildParty(m);
+    plugin.ep()->engine()->addMessage(m);
+    m->deref();
+    disconnect();
 }
 
 // Creates a SDP from RTP address data present in message
@@ -764,18 +830,21 @@ bool YateSIPConnection::process(SIPEvent* ev)
 {
     Debug(DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
 	ev,SIPTransaction::stateName(ev->getState()),this);
+    m_id = *ev->getTransaction()->recentMessage();
     if (ev->getState() == SIPTransaction::Cleared) {
-	Lock lock(s_mutex);
 	if (m_tr) {
+	    Lock lock(s_mutex);
 	    Debug(DebugInfo,"YateSIPConnection clearing transaction %p [%p]",
 		m_tr,this);
 	    m_tr->setUserData(0);
 	    m_tr->deref();
 	    m_tr = 0;
 	}
+	if (m_state != Established)
+	    hangup();
 	return false;
     }
-    if (!ev->getMessage())
+    if (!ev->getMessage() || ev->getMessage()->isOutgoing())
 	return false;
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	Debug(DebugInfo,"YateSIPConnection got SDP [%p]",this);
@@ -785,6 +854,22 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	m_rtpFormat = m_formats.substr(0,q);
 	Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+    }
+    if (ev->getMessage()->isAnswer() && ((ev->getMessage()->code / 100) == 2)) {
+	setStatus("answered",Established);
+	Message *m = new Message("call.answered");
+	m->addParam("driver","sip");
+	m->addParam("id",id());
+	if (m_target)
+	    m->addParam("targetid",m_target);
+	m->addParam("status","answered");
+	if (m_rtpPort) {
+	    m->addParam("rtp_forward","yes");
+	    m->addParam("rtp_addr",m_rtpAddr);
+	    m->addParam("rtp_port",m_rtpPort);
+	    m->addParam("formats",m_formats);
+	}
+	Engine::enqueue(m);
     }
     if (ev->getMessage()->isACK()) {
 	Debug(DebugInfo,"YateSIPConnection got ACK [%p]",this);
@@ -829,12 +914,14 @@ void YateSIPConnection::answered(Message* msg)
 {
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200, "OK");
-	SDPBody* sdp = createRtpSDP();
+	SDPBody* sdp = msg ? createPasstroughSDP(*msg) : 0;
+	if (!sdp)
+	    sdp = createRtpSDP();
 	m->setBody(sdp);
 	m_tr->setResponse(m);
 	m->deref();
     }
-    setStatus("answered");
+    setStatus("answered",Established);
 }
 
 bool SipMsgThread::route()

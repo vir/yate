@@ -331,6 +331,12 @@ public:
 	{ header.append(new HeaderLine(name,value)); }
 
     /**
+     * Append an already constructed header line
+     */
+    inline void addHeader(HeaderLine* line)
+	{ header.append(line); }
+
+    /**
      * Creates a binary buffer from a SIPMessage.
      */
     const DataBlock& getBuffer() const;
@@ -392,6 +398,26 @@ protected:
     int m_cseq;
     mutable String m_string;
     mutable DataBlock m_data;
+};
+
+/**
+ * A class to store information required to identify a dialog
+ */
+class SIPDialog : public String
+{
+public:
+    SIPDialog();
+    SIPDialog(const SIPDialog& original);
+    SIPDialog(const SIPMessage& message);
+    SIPDialog& operator=(const SIPDialog& original);
+    SIPDialog& operator=(const SIPMessage& message);
+    SIPDialog& operator=(const String& callid);
+    bool operator==(const SIPDialog& other) const;
+    bool operator!=(const SIPDialog& other) const;
+    String localURI;
+    String localTag;
+    String remoteURI;
+    String remoteTag;
 };
 
 /**
@@ -474,6 +500,12 @@ public:
 	{ return m_lastMessage; }
 
     /**
+     * The most recent message handled by this transaction
+     */
+    inline const SIPMessage* recentMessage() const
+	{ return m_lastMessage ? m_lastMessage : m_firstMessage; }
+
+    /**
      * The SIPEngine this transaction belongs to
      */
     inline SIPEngine* getEngine() const
@@ -534,10 +566,10 @@ public:
 	{ return m_callid; }
 
     /**
-     * The local tag that may identify this transaction
-     * @return The local tag parameter
+     * The dialog tag that may identify this transaction
+     * @return The dialog tag parameter
      */
-    inline const String& getLocalTag() const
+    inline const String& getDialogTag() const
 	{ return m_tag; }
 
     /**

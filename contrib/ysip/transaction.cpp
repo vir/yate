@@ -259,7 +259,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	    // ...and if also matches the CSeq, Call-ID and To: tag
 	    if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
 		(getCallID() != message->getHeaderValue("Call-ID")) ||
-		(getLocalTag() != message->getParamValue("To","tag")))
+		(getDialogTag() != message->getParamValue("To","tag")))
 		return false;
 	    Debug("SIPTransaction",DebugWarn,"Found non-branch ACK response to our 2xx");
 	}

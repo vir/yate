@@ -482,6 +482,12 @@ public:
     String(const String &value);
 
     /**
+     * Constructor from String pointer.
+     * @param value Initial value of the string
+     */
+    String(const String *value);
+
+    /**
      * Destroys the string, disposes the memory.
      */
     virtual ~String();
@@ -624,6 +630,13 @@ public:
      */
     inline String& operator=(const String &value)
 	{ return operator=(value.c_str()); }
+
+    /**
+     * Assignment from String* operator.
+     * @see TelEngine::strcpy
+     */
+    inline String& operator=(const String *value)
+	{ return operator=(value ? value->c_str() : 0); }
 
     /**
      * Assignment from char* operator.

@@ -209,6 +209,16 @@ String::String(bool value)
     changed();
 }
 
+String::String(const String *value)
+    : m_string(0), m_length(0), m_hash(INIT_HASH), m_matches(0)
+{
+    DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
+    if (value && !value->null()) {
+	m_string = ::strdup(value->c_str());
+	changed();
+    }
+}
+
 String::~String()
 {
     DDebug(DebugAll,"String::~String() [%p] (\"%s\")",this,m_string);

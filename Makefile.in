@@ -15,6 +15,7 @@ LIBTHR:= -lpthread
 INCLUDES := -I@srcdir@
 CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
+LDCONFIG:=true
 
 MKDEPS := ./config.status
 PROGS:= yate
@@ -105,15 +106,15 @@ yatepaths.h: $(MKDEPS)
 .PHONY: everything
 everything: all apidocs test
 
-.PHONY: install
-install: all apidocs
+.PHONY: install install-root
+install install-root: all apidocs
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
-	install $(SLIBS) "$(DESTDIR)$(libdir)/" && ldconfig
+	install $(SLIBS) "$(DESTDIR)$(libdir)/" && $(LDCONFIG)
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
 	install $(PROGS) yate-config "$(DESTDIR)$(bindir)/"
-	$(MAKE) -C ./modules $@
-	$(MAKE) -C ./scripts $@
-	$(MAKE) -C ./conf.d $@
+	$(MAKE) -C ./modules install
+	$(MAKE) -C ./scripts install
+	$(MAKE) -C ./conf.d install
 	@mkdir -p "$(DESTDIR)$(mandir)/man8/" && \
 	for i in $(MAN8) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(mandir)/man8/" ; \
@@ -131,12 +132,12 @@ install: all apidocs
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
 	install -m 0644 @srcdir@/docs/api/*.html "$(DESTDIR)$(docdir)/api/"
 
-.PHONY: uninstall
-uninstall:
+.PHONY: uninstall uninstall-root
+uninstall uninstall-root:
 	@-for i in $(SLIBS) ; do \
 	    rm "$(DESTDIR)$(libdir)/$$i" ; \
 	done; \
-	ldconfig
+	$(LDCONFIG)
 	@-for i in $(PROGS) yate-config ; do \
 	    rm "$(DESTDIR)$(bindir)/$$i" ; \
 	done
@@ -150,9 +151,11 @@ uninstall:
 	    rm "$(DESTDIR)$(mandir)/man8/$$i" ; \
 	done
 	@rm -rf "$(DESTDIR)$(docdir)/"
-	$(MAKE) -C ./modules $@
-	$(MAKE) -C ./scripts $@
-	$(MAKE) -C ./conf.d $@
+	$(MAKE) -C ./modules uninstall
+	$(MAKE) -C ./scripts uninstall
+	$(MAKE) -C ./conf.d uninstall
+
+install-root uninstall-root: LDCONFIG:=ldconfig
 
 .PHONY: snapshot tarball
 snapshot tarball: check-topdir clean tables apidocs

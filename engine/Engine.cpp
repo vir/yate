@@ -145,6 +145,7 @@ bool EngineStatusHandler::received(Message &msg)
 	return false;
     msg.retValue() << "engine";
     msg.retValue() << ",plugins=" << plugins.count();
+    msg.retValue() << ",threads=" << Thread::count();
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << "\n";
     return false;

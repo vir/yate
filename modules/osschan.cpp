@@ -64,7 +64,7 @@ public:
     }
     bool init();
     ~OssConsumer();
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 private:
     OssChan *m_chan;
     unsigned m_total;
@@ -175,7 +175,7 @@ void OssSource::run()
 #endif
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data);
+	Forward(data,data.length()/2);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
@@ -222,7 +222,7 @@ OssConsumer::~OssConsumer()
     }
 }
 
-void OssConsumer::Consume(const DataBlock &data)
+void OssConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if ((m_chan->m_fd >= 0) && !data.null()) {
 	::write(m_chan->m_fd,data.data(),data.length());

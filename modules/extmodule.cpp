@@ -50,7 +50,7 @@ class ExtModConsumer : public DataConsumer
 public:
     ExtModConsumer(int fd);
     ~ExtModConsumer();
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timestamp);
 private:
     int m_fd;
     unsigned m_total;
@@ -200,7 +200,7 @@ void ExtModSource::run()
 #endif
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data);
+	Forward(data,m_total);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
@@ -223,7 +223,7 @@ ExtModConsumer::~ExtModConsumer()
     }
 }
 
-void ExtModConsumer::Consume(const DataBlock &data)
+void ExtModConsumer::Consume(const DataBlock &data, unsigned long timestamp)
 {
     if ((m_fd >= 0) && !data.null()) {
 	::write(m_fd,data.data(),data.length());

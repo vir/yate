@@ -169,7 +169,7 @@ public:
      * @param format Name of the data format, default none
      */
     DataNode(const char *format = 0)
-	: m_format(format) { }
+	: m_format(format), m_timestamp(0) { }
 
     /**
      * Get the computing cost of converting the data to the format asked
@@ -194,11 +194,16 @@ public:
     inline const String &getFormat() const
 	{ return m_format; }
 
-protected:
     /**
-     * The name of the data format the node is currently using
+     * Get the current position in the data stream
+     * @return Timestamp of current data position
      */
+    inline unsigned long timeStamp() const
+	{ return m_timestamp; }
+
+protected:
     String m_format;
+    unsigned long m_timestamp;
 };
 
 /**
@@ -218,8 +223,9 @@ public:
     /**
      * Consumes the data sent to it from a source
      * @param data The raw data block to process; an empty block ends data
+     * @param timeDelta Timestamp increment of data - typically samples
      */
-    virtual void Consume(const DataBlock &data) = 0;
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta) = 0;
 
     /**
      * Get the data source of this object if it's connected
@@ -255,14 +261,17 @@ public:
     DataSource(const char *format = "slin")
 	: DataNode(format), m_translator(0) { }
 
-    /** porma */
+    /**
+     * Source's destructor - detaches all consumers
+     */
     ~DataSource();
     
     /**
      * Forwards the data to its consumers
      * @param data The raw data block to forward; an empty block ends data
+     * @param timeDelta Timestamp increment of data - typically samples
      */
-    void Forward(const DataBlock &data);
+    void Forward(const DataBlock &data, unsigned long timeDelta = 0);
 
     /**
      * Attach a data consumer
@@ -292,6 +301,9 @@ public:
 	{ return m_translator; }
 
 protected:
+    /**
+     * The current position in the data - format dependent, usually samples
+     */
     inline void setTranslator(DataTranslator *translator)
 	{ m_translator = translator; }
     DataTranslator *m_translator;

@@ -39,7 +39,7 @@ class GsmCodec : public DataTranslator
 public:
     GsmCodec(const char *sFormat, const char *dFormat, bool encoding);
     ~GsmCodec();
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 private:
     bool m_encoding;
     gsm m_gsm;
@@ -66,7 +66,7 @@ GsmCodec::~GsmCodec()
     }
 }
 
-void GsmCodec::Consume(const DataBlock &data)
+void GsmCodec::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if (!(m_gsm && getTransSource()))
 	return;
@@ -84,6 +84,7 @@ void GsmCodec::Consume(const DataBlock &data)
 		    (gsm_signal*)(((gsm_block *)m_data.data())+i),
 		    (gsm_byte*)(((gsm_frame *)outdata.data())+i));
 	}
+	timeDelta = consumed / 2;
     }
     else {
 	frames = m_data.length() / sizeof(gsm_frame);
@@ -95,6 +96,7 @@ void GsmCodec::Consume(const DataBlock &data)
 		    (gsm_byte*)(((gsm_frame *)m_data.data())+i),
 		    (gsm_signal*)(((gsm_block *)outdata.data())+i));
 	}
+	timeDelta = frames*sizeof(gsm_block) / 2;
     }
 #ifdef DEBUG
     Debug("GsmCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
@@ -102,7 +104,7 @@ void GsmCodec::Consume(const DataBlock &data)
 #endif
     if (frames) {
 	m_data.cut(-consumed);
-	getTransSource()->Forward(outdata);
+	getTransSource()->Forward(outdata,timeDelta);
     }
     deref();
 }

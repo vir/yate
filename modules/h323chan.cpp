@@ -17,12 +17,17 @@
 #include <ptclib/delaychan.h>
 #include <gkserver.h>
 
+/* Define a easily comparable version, 2 digits for each component */
+#define OPENH323_NUMVERSION ((OPENH323_MAJOR)*10000 + (OPENH323_MINOR)*100 + (OPENH323_BUILD))
 
 /* Guess if codecs are dynamically loaded or linked in */
-#if (OPENH323_MAJOR <= 1)
-#if (OPENH323_MINOR < 13)
+#if (OPENH323_NUMVERSION < 11300)
 #define OLD_STYLE_CODECS 1
 #endif
+
+/* Guess if we have a QOS parameter to the RTP channel creation */
+#if (OPENH323_NUMVERSION >= 11304)
+#define NEED_RTP_QOS_PARAM 1
 #endif
 
 #include <telengine.h>
@@ -33,6 +38,10 @@
 
 using namespace TelEngine;
 
+static Mutex s_calls;
+
+static bool s_externalRtp;
+
 static Configuration s_cfg;
 static ObjList translate;
 
@@ -40,6 +49,20 @@ static TokenDict dict_str2code[] = {
     { "alpha" , PProcess::AlphaCode },
     { "beta" , PProcess::BetaCode },
     { "release" , PProcess::ReleaseCode },
+    { 0 , 0 },
+};
+
+const char* h323_formats[] = {
+    "G.711-ALaw-64k{sw}", "alaw",
+    "G.711-uLaw-64k{sw}", "mulaw",
+    "GSM-06.10{sw}", "gsm",
+    0
+};
+
+static TokenDict dict_h323_dir[] = {
+    { "receive", H323Channel::IsReceiver },
+    { "send", H323Channel::IsTransmitter },
+    { "bidir", H323Channel::IsBidirectional },
     { 0 , 0 },
 };
 
@@ -128,12 +151,14 @@ public:
     virtual BOOL Close(); 
     virtual BOOL IsOpen() const;
     virtual BOOL Read(void *buf, PINDEX len);
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 private:
     DataBlock m_buffer;
     bool m_exit;
     Mutex m_mutex;
 };
+
+class YateH323_ExternalRTPChannel;
 
 class YateH323EndPoint : public H323EndPoint
 {
@@ -162,12 +187,47 @@ public:
     virtual void OnUserInputString(const PString &value);
     virtual BOOL OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 	H323AudioCodec &codec);
+#ifdef NEED_RTP_QOS_PARAM
+    H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param,RTP_QOS * rtpqos = NULL);
+#else
+    H323Channel *CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param);
+#endif
+    BOOL OnStartLogicalChannel(H323Channel & channel);
+    BOOL OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) ;
+    BOOL StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
+    void OnStoppedExternal(H323Channel::Directions dir);
     virtual void disconnected();
     inline const String &id() const
 	{ return m_id; }
 private:
+    bool m_nativeRtp;
     String m_id;
 };
+
+// this part have been inspired (more or less) from chan_h323 of project asterisk, credits to Jeremy McNamara for chan_h323 and to Mark Spencer for asterisk.
+class YateH323_ExternalRTPChannel : public H323_ExternalRTPChannel
+{
+	PCLASSINFO(YateH323_ExternalRTPChannel, H323_ExternalRTPChannel);
+public:
+	/* Create a new channel. */
+	YateH323_ExternalRTPChannel(
+      		YateH323Connection & connection,        
+      		const H323Capability & capability,  
+      		Directions direction,               
+      		unsigned sessionID,                 
+      		const PIPSocket::Address & ip,      
+      		WORD dataPort);
+	/* Destructor */
+	~YateH323_ExternalRTPChannel();
+	BOOL Start();
+	
+     	BOOL OnReceivedAckPDU(const H245_H2250LogicalChannelAckParameters & param);
+	BOOL OnSendingPDU( H245_H2250LogicalChannelParameters & param );
+	BOOL OnReceivedPDU(const H245_H2250LogicalChannelParameters & param,unsigned & errorCode);
+private:
+	YateH323Connection *m_conn;
+};
+
 
 class H323Handler : public MessageHandler
 {
@@ -411,16 +471,17 @@ bool YateH323EndPoint::Init(void)
 
 YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     unsigned callReference, void *userdata)
-    : H323Connection(endpoint,callReference), DataEndpoint("h323")
+    : H323Connection(endpoint,callReference), DataEndpoint("h323"), m_nativeRtp(false)
 {
     Debug(DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
 	&endpoint,callReference,userdata,this);
     m_id = "h323/";
     m_id << callReference;
+/*    
     setSource(new YateH323AudioSource);
     getSource()->deref();
     setConsumer(new YateH323AudioConsumer);
-    getConsumer()->deref();
+    getConsumer()->deref();*/
     DataEndpoint *dd = static_cast<DataEndpoint *>(userdata);
     if (dd && connect(dd))
 	deref();
@@ -430,7 +491,9 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
 YateH323Connection::~YateH323Connection()
 {
     Debug(DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
+    s_calls.lock();
     hplugin.calls().remove(this,false);
+    s_calls.unlock();
     CloseAllLogicalChannels(true);
     CloseAllLogicalChannels(false);
 }
@@ -454,11 +517,19 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 
     const H225_Setup_UUIE &setup = setupPDU.m_h323_uu_pdu.m_h323_message_body;
     const H225_ArrayOf_AliasAddress &adr = setup.m_destinationAddress;
-    s = adr.GetSize() ? (const char *)H323GetAliasAddressString(adr[0]) : 0;
-    if (!(s && *s))
-	s = s_cfg.getValue("incoming","called");
-    if (s)
-	m->addParam("called",s);
+    for (int i = 0; i<adr.GetSize(); i++)
+	Debug(DebugAll,"adr[%d]='%s'",i,(const char *)H323GetAliasAddressString(adr[i]));
+    String called;
+    if (adr.GetSize() > 0)
+	called = (const char *)H323GetAliasAddressString(adr[0]);
+    if (called.null())
+	called = s_cfg.getValue("incoming","called");
+    if (!called.null()) {
+	Debug(DebugInfo,"Called number is '%s'",called.c_str());
+	m->addParam("called",called);
+    }
+    else
+	Debug(DebugWarn,"No called number present!");
 #if 0
     s = GetRemotePartyAddress();
     Debug(DebugInfo,"GetRemotePartyAddress()='%s'",s);
@@ -517,12 +588,28 @@ void YateH323Connection::OnUserInputString(const PString &value)
 BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
     H323AudioCodec &codec)
 {
+    Debug(DebugInfo,"YateH323Connection::OpenAudioChannel [%p]",this);
+    if (!m_nativeRtp) {
+	Debug(DebugGoOn,"YateH323Connection::OpenAudioChannel for external RTP in [%p]",this);
+	return false;
+    }
+
     if (isEncoding) {
+	if (!getConsumer())
+	{
+	    setConsumer(new YateH323AudioConsumer);
+	    getConsumer()->deref();
+	}
 	// data going TO h.323
 	if (getConsumer())
 	    return codec.AttachChannel(static_cast<YateH323AudioConsumer *>(getConsumer()),false);
     }
     else {
+	if(!getSource())
+	{
+            setSource(new YateH323AudioSource);
+	    getSource()->deref();
+	}
 	// data coming FROM h.323
 	if (getSource())
 	    return codec.AttachChannel(static_cast<YateH323AudioSource *>(getSource()),false);
@@ -535,11 +622,174 @@ void YateH323Connection::disconnected()
     Debugger debug("YateH323Connection::disconnected()");
     // we must bypass the normal Yate refcounted destruction as OpenH323 will destroy the object
     ref();
-    if (getSource())
+    if (getSource() && m_nativeRtp)
 	static_cast<YateH323AudioSource *>(getSource())->Close();
-    if (getConsumer())
+    if (getConsumer() && m_nativeRtp)
 	static_cast<YateH323AudioConsumer *>(getConsumer())->Close();
     ClearCall();
+}
+
+#ifdef NEED_RTP_QOS_PARAM
+H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param,RTP_QOS * rtpqos)
+#else
+H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capability & capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters *param)
+#endif
+{
+    Debug(DebugAll,"H323Connection::CreateRealTimeLogicalChannel");
+    if (s_externalRtp) {
+	const char* sdir = lookup(dir,dict_h323_dir);
+	Debug(DebugInfo,"capability '%s' session %u %s",(const char *)capability.GetFormatName(),sessionID,sdir);
+	PIPSocket::Address externalIpAddress;
+//	GetControlChannel().GetLocalAddress().GetIpAndPort(externalIpAddress, port);
+	GetControlChannel().GetLocalAddress().GetIpAddress(externalIpAddress);
+	Debug(DebugInfo,"address '%s'",(const char *)externalIpAddress.AsString());
+	Message m("rtp");
+	m.addParam("localip",externalIpAddress.AsString());
+	m.userData(static_cast<DataEndpoint *>(this));
+Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
+	if (sdir)
+	    m.addParam("direction",sdir);
+	if (Engine::dispatch(m)) {
+	    String p(m.getValue("localport"));
+	    WORD externalPort = p.toInteger();
+	    if (externalPort) {
+		m_nativeRtp = false;
+		return new YateH323_ExternalRTPChannel(*this, capability, dir, sessionID, externalIpAddress, externalPort);
+	    }
+	}
+	Debug(DebugWarn,"YateH323Connection failed to create external RTP, using native");
+    }
+
+    m_nativeRtp = true;
+#ifdef NEED_RTP_QOS_PARAM
+    return H323Connection::CreateRealTimeLogicalChannel(capability,dir,sessionID,param,rtpqos);
+#else
+    return H323Connection::CreateRealTimeLogicalChannel(capability,dir,sessionID,param);
+#endif
+}
+
+BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 
+{
+    Debug(DebugInfo,"YateH323Connection::OnStartLogicalChannel(%p) [%p]",&channel,this);
+    return m_nativeRtp ? H323Connection::OnStartLogicalChannel(channel) : TRUE;
+}
+
+BOOL YateH323Connection::OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) 
+{
+    Debug(DebugInfo,"YateH323Connection::OnCreateLogicalChannel('%s',%d) [%p]",(const char *)capability.GetFormatName(),dir,this);
+    return H323Connection::OnCreateLogicalChannel(capability,dir,errorCode);
+}
+
+BOOL YateH323Connection::StartExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan)
+{
+    const char* sdir = lookup(dir,dict_h323_dir);
+    Debug(DebugAll,"YateH323Connection::StartExternalRTP(\"%s\",%u,%s,%p) [%p]",
+	remoteIP,remotePort,sdir,chan,this);
+    Message m("rtp");
+    m.userData(static_cast<DataEndpoint *>(this));
+Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
+    if (sdir)
+	m.addParam("direction",sdir);
+    m.addParam("remoteip",remoteIP);
+    m.addParam("remoteport",String(remotePort));
+    String capability((const char *)chan->GetCapability().GetFormatName());
+//    int payload = chan->GetCapability().GetPayloadType();
+    OpalMediaFormat oformat(capability, FALSE);
+    int payload = oformat.GetPayloadType();
+    const char *format = 0;
+    const char** f = h323_formats;
+    for (; *f; f += 2) {
+	if (capability == *f) {
+	    format = f[1];
+	    break;
+	}
+    }
+    Debug(DebugInfo,"capability '%s' format '%s' payload %d",capability.c_str(),format,payload);
+    if (format)
+	m.addParam("format",format);
+    if ((payload >= 0) && (payload < 127))
+	m.addParam("payload",String(payload));
+    if (Engine::dispatch(m)) {
+	return TRUE;
+    }
+    return FALSE;
+}
+
+void YateH323Connection::OnStoppedExternal(H323Channel::Directions dir)
+{
+    Debug(DebugInfo,"YateH323Connection::OnStoppedExternal(%s) [%p]",lookup(dir,dict_h323_dir),this);
+    switch (dir) {
+	case H323Channel::IsReceiver:
+	    setSource();
+	    break;
+	case H323Channel::IsTransmitter:
+	    setConsumer();
+	    break;
+	case H323Channel::IsBidirectional:
+	    setSource();
+	    setConsumer();
+	default:
+	    break;
+    }
+}
+
+YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel( 
+	YateH323Connection & connection,
+	const H323Capability & capability,
+	Directions direction, 
+	unsigned sessionID, 
+	const PIPSocket::Address & ip, 
+	WORD dataPort)
+	: H323_ExternalRTPChannel(connection, capability, direction, sessionID, ip, dataPort),m_conn(&connection)
+{ 
+    Debug(DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel dir=%d addr=%s:%u",
+	GetDirection(), (const char *)ip.AsString(), dataPort);
+    SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
+}
+
+YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel()
+{
+    Debug(DebugInfo,"YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel [%p]",this);
+    if (isRunning) {
+	isRunning = FALSE;
+	if (m_conn)
+	    m_conn->OnStoppedExternal(GetDirection());
+    }
+}
+
+BOOL YateH323_ExternalRTPChannel::Start()
+{
+    Debug(DebugAll,"YateH323_ExternalRTPChannel::Start() [%p]",this);
+    if (!m_conn)
+	return FALSE;
+
+    PIPSocket::Address remoteIpAddress;
+    WORD remotePort;
+    GetRemoteAddress(remoteIpAddress,remotePort);
+    Debug(DebugInfo,"external rtp ip address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
+
+    return isRunning = m_conn->StartExternalRTP((const char *)remoteIpAddress.AsString(), remotePort, GetDirection(), this);
+}
+
+BOOL YateH323_ExternalRTPChannel::OnReceivedPDU(
+				const H245_H2250LogicalChannelParameters & param,
+				unsigned & errorCode)
+{
+    Debug(DebugInfo,"OnReceivedPDU");
+    return H323_ExternalRTPChannel::OnReceivedPDU(param,errorCode);
+}
+
+BOOL YateH323_ExternalRTPChannel::OnSendingPDU( H245_H2250LogicalChannelParameters & param )
+{
+    Debug(DebugInfo,"OnSendingPDU");
+    return H323_ExternalRTPChannel::OnSendingPDU(param);
+}
+
+BOOL YateH323_ExternalRTPChannel::OnReceivedAckPDU(const H245_H2250LogicalChannelAckParameters & param)
+{
+
+    Debug(DebugInfo,"OnReceivedAckPDU");
+    return H323_ExternalRTPChannel::OnReceivedAckPDU(param);
 }
 
 BOOL YateH323AudioConsumer::Close()
@@ -553,7 +803,7 @@ BOOL YateH323AudioConsumer::IsOpen() const
     return !m_exit;
 }
 
-void YateH323AudioConsumer::Consume(const DataBlock &data)
+void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     Lock lock(m_mutex);
     if ((m_buffer.length() + data.length()) <= (480*5))
@@ -562,6 +812,7 @@ void YateH323AudioConsumer::Consume(const DataBlock &data)
     else
 	Debug("YateH323AudioConsumer",DebugAll,"Skipped %u bytes, buffer is full",data.length());
 #endif
+    m_timestamp += timeDelta;
 }
 
 BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
@@ -604,7 +855,7 @@ BOOL YateH323AudioSource::IsOpen() const
 BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
 {
     DataBlock data((void *)buf,len,false);
-    Forward(data);
+    Forward(data,len/2);
     data.clear(false);
     lastWriteCount = len;
     writeDelay.Delay(len/16);
@@ -825,6 +1076,7 @@ bool H323Dropper::received(Message &msg)
     String id(msg.getValue("id"));
     if (id.null()) {
 	Debug("H323Dropper",DebugInfo,"Dropping all calls");
+	Lock lock(s_calls);
 	ObjList *l = &hplugin.calls();
 	for (; l; l=l->next()) {
 	    YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
@@ -854,6 +1106,7 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"h323chan") && ::strcmp(sel,"varchans"))
 	return false;
     String st("h323chan,type=varchans");
+    Lock lock(s_calls);
     st << ",chans=" << hplugin.calls().count() << ",[LIST]";
     ObjList *l = &hplugin.calls();
     for (; l; l=l->next()) {
@@ -905,6 +1158,7 @@ H323Plugin::~H323Plugin()
 
 YateH323Connection *H323Plugin::findConnectionLock(const char *id)
 {
+    Lock lock(s_calls);
     ObjList *l = &m_calls;
     for (; l; l=l->next()) {
 	YateH323Connection *c = static_cast<YateH323Connection *>(l->get());
@@ -919,7 +1173,7 @@ YateH323Connection *H323Plugin::findConnectionLock(const char *id)
 
 void H323Plugin::initialize()
 {
-    Output("Initializing module H.323");
+    Output("Initializing module H.323 - based on OpenH323-" OPENH323_VERSION);
     s_cfg = Engine::configFile("h323chan");
     s_cfg.load();
     if (!m_process)
@@ -932,6 +1186,7 @@ void H323Plugin::initialize()
 	m_endpoint = new YateH323EndPoint;
 	m_endpoint->Init();
     }
+    s_externalRtp = s_cfg.getBoolValue("general","external_rtp",false);
     if (m_first) {
 	m_first = false;
 	Engine::install(new H323Handler("call"));

@@ -36,13 +36,13 @@ class SimpleTranslator : public DataTranslator
 public:
     SimpleTranslator(const String &sFormat, const String &dFormat)
 	: DataTranslator(sFormat,dFormat) { }
-    virtual void Consume(const DataBlock &data)
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta)
 	{
 	    ref();
 	    if (getTransSource()) {
 		DataBlock oblock;
 		if (oblock.convert(data, m_format, getTransSource()->getFormat()))
-		    getTransSource()->Forward(oblock);
+		    getTransSource()->Forward(oblock, timeDelta);
 	    }
 	    deref();
 	}
@@ -246,7 +246,7 @@ bool DataBlock::convert(const DataBlock &src, const String &sFormat,
     return true;
 }
 
-void DataSource::Forward(const DataBlock &data)
+void DataSource::Forward(const DataBlock &data, unsigned long timeDelta)
 {
     Lock lock(m_mutex);
     ref();
@@ -254,8 +254,9 @@ void DataSource::Forward(const DataBlock &data)
     for (; l; l=l->next()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
 	if (c)
-	    c->Consume(data);
+	    c->Consume(data,timeDelta);
     }
+    m_timestamp += timeDelta;
     deref();
 }
 
@@ -565,9 +566,13 @@ DataTranslator *DataTranslator::create(const String &sFormat, const String &dFor
     if (trans)
 	Debug(DebugAll,"Created DataTranslator [%p] for \"%s\" -> \"%s\"",
 	    trans,sFormat.c_str(),dFormat.c_str());
-    else
-	Debug(DebugWarn,"No DataTranslator created for \"%s\" -> \"%s\"",
+    else {
+	int level = DebugWarn;
+	if (sFormat.null() || dFormat.null())
+	    level = DebugInfo;
+	Debug(level,"No DataTranslator created for \"%s\" -> \"%s\"",
 	    sFormat.c_str(),dFormat.c_str());
+    }
     return trans;
 }
 
@@ -604,18 +609,16 @@ bool DataTranslator::detachChain(DataSource *source, DataConsumer *consumer)
     if (!source || !consumer)
 	return false;
 
-    if (source->detach(consumer))
-	return true;
-
     DataSource *tsource = consumer->getConnSource();
     if (tsource) {
+	if (source->detach(consumer))
+	    return true;
 	DataTranslator *trans = tsource->getTranslator();
 	if (trans && detachChain(source,trans)) {
 	    trans->deref();
 	    return true;
 	}
+	Debug(DebugWarn,"DataTranslator failed to detach chain [%p] -> [%p]",source,consumer);
     }
-    
-    Debug(DebugWarn,"DataTranslator failed to detach chain [%p] -> [%p]",source,consumer);
     return false;
 }

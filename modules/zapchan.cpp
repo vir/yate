@@ -386,7 +386,7 @@ public:
     ~ZapConsumer()
 	{ Debug(DebugAll,"ZapConsumer::~ZapConsumer() [%p]",this); }
 
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 
 private:
     ZapChan *m_owner;
@@ -768,15 +768,15 @@ void ZapSource::run()
 		switch (m_owner->law()) {
 		    case -1:
 			data.assign(buf.data(),rd);
-			Forward(data);
+			Forward(data,rd/2);
 			break;
 		    case ZT_LAW_MULAW:
 			data.convert(buf,"mulaw","slin",rd);
-			Forward(data);
+			Forward(data,rd);
 			break;
 		    case ZT_LAW_ALAW:
 			data.convert(buf,"alaw","slin",rd);
-			Forward(data);
+			Forward(data,rd);
 			break;
 		}
 	    }
@@ -790,7 +790,7 @@ void ZapSource::run()
     }
 }
 
-void ZapConsumer::Consume(const DataBlock &data)
+void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     int fd = m_owner->fd();
 #ifdef DEBUG

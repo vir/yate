@@ -59,7 +59,7 @@ public:
     IAXSource(const char *frm) : DataSource(frm),m_total(0),m_time(Time::now())
     { Debug(DebugInfo,"IAXSource::IAXSource [%p] frm %s",this,frm);};
     ~IAXSource();
-    void Forward(const DataBlock &data);
+    void Forward(const DataBlock &data, unsigned long timeDelta = 0);
 private:
     unsigned m_total;
     unsigned long long m_time;
@@ -72,7 +72,7 @@ public:
 
     ~YateIAXAudioConsumer();
 
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 
 private:
     YateIAXConnection *m_conn;
@@ -801,10 +801,10 @@ IAXSource::~IAXSource()
     
 }
 
-void IAXSource::Forward(const DataBlock &data)
+void IAXSource::Forward(const DataBlock &data, unsigned long timeDelta)
 {
     m_total += data.length();
-    DataSource::Forward(data);
+    DataSource::Forward(data, timeDelta);
 }
 
 YateIAXAudioConsumer::YateIAXAudioConsumer(YateIAXConnection *conn, iax_session *session, int ast_format, const char *format)
@@ -827,7 +827,7 @@ YateIAXAudioConsumer::~YateIAXAudioConsumer()
     
 }
 
-void YateIAXAudioConsumer::Consume(const DataBlock &data)
+void YateIAXAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     m_total += data.length();
     ::iax_send_voice(m_session,m_ast_format,(char *)data.data(),data.length());

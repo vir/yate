@@ -42,7 +42,7 @@ class WaveConsumer : public DataConsumer
 public:
     WaveConsumer(const String& file, DataEndpoint *chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
-    virtual void Consume(const DataBlock &data);
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
@@ -111,7 +111,7 @@ WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
 
 WaveSource::~WaveSource()
 {
-    Debug(DebugAll,"WaveSource::~WaveSource() [%p] total=%u",this,m_total);
+    Debug(DebugAll,"WaveSource::~WaveSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
@@ -149,7 +149,7 @@ void WaveSource::run()
 #endif
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data);
+	Forward(data,data.length()*8000/m_brate);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
@@ -189,7 +189,7 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 
 WaveConsumer::~WaveConsumer()
 {
-    Debug(DebugAll,"WaveConsumer::~WaveConsumer() [%p] total=%u",this,m_total);
+    Debug(DebugAll,"WaveConsumer::~WaveConsumer() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
@@ -203,7 +203,7 @@ WaveConsumer::~WaveConsumer()
     }
 }
 
-void WaveConsumer::Consume(const DataBlock &data)
+void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if (!data.null()) {
 	if (!m_time)
@@ -211,6 +211,7 @@ void WaveConsumer::Consume(const DataBlock &data)
 	if (m_fd >= 0)
 	    ::write(m_fd,data.data(),data.length());
 	m_total += data.length();
+	m_timestamp += timeDelta;
 	if (m_maxlen && (m_total >= m_maxlen)) {
 	    m_maxlen = 0;
 	    if (m_fd >= 0) {

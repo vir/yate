@@ -105,7 +105,7 @@ ToneSource::ToneSource(const String &tone)
 
 ToneSource::~ToneSource()
 {
-    Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u",this,m_total);
+    Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
@@ -181,7 +181,7 @@ void ToneSource::run()
 #endif
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(data);
+	Forward(data,data.length()/2);
 	m_total += data.length();
 	tpos += (data.length()*1000000ULL/m_brate);
     };

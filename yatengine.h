@@ -1632,7 +1632,7 @@ public:
      * @param id Numeric identifier to pass to receiver
      * @param priority Priority of the handler, 0 = top
      */
-    MessageRelay(const char *name, MessageReceiver *receiver, int id, int priority = 1)
+    MessageRelay(const char *name, MessageReceiver *receiver, int id, int priority = 100)
 	: MessageHandler(name,priority), m_receiver(receiver), m_id(id) { }
 
     /**

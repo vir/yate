@@ -30,6 +30,8 @@
 using namespace TelEngine;
 
 static Configuration s_cfg;
+static Mutex s_mutex;
+static ObjList s_extra;
 
 class RouteHandler : public MessageHandler
 {
@@ -83,7 +85,7 @@ static void setMessage(Message &msg, String &line)
 
 static bool oneContext(Message &msg, String &str, const String &context, String &ret, int depth = 0)
 {
-    if (!(context && *context))
+    if (context.null())
 	return false;
     if (depth > 5) {
 	Debug("RegexRoute",DebugWarn,"Possible loop detected, current context '%s'",context.c_str());
@@ -176,6 +178,7 @@ bool RouteHandler::received(Message &msg)
 	return false;
     const char *context = msg.getValue("context","default");
     String ret;
+    Lock lock(s_mutex);
     if (oneContext(msg,called,context,ret)) {
 	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in %llu usec",
 	    called.c_str(),context,ret.c_str(),Time::now()-tmr);
@@ -194,7 +197,7 @@ public:
 	: MessageHandler("call.preroute",prio) { }
     virtual bool received(Message &msg);
 };
-	
+
 bool PrerouteHandler::received(Message &msg)
 {
     unsigned long long tmr = Time::now();
@@ -212,6 +215,7 @@ bool PrerouteHandler::received(Message &msg)
 	return false;
 
     String ret;
+    Lock lock(s_mutex);
     if (oneContext(msg,caller,"contexts",ret)) {
 	Debug(DebugInfo,"Classifying caller '%s' in context '%s' in %llu usec",
 	    caller.c_str(),ret.c_str(),Time::now()-tmr);
@@ -223,6 +227,27 @@ bool PrerouteHandler::received(Message &msg)
     return false;
 };
 		    
+class GenericHandler : public MessageHandler
+{
+public:
+    GenericHandler(const char* name, int prio)
+	: MessageHandler(name,prio)
+	{
+	    Debug(DebugAll,"Installing generic handler for '%s' prio %d [%p]",c_str(),prio,this);
+	    s_extra.append(this);
+	}
+    ~GenericHandler()
+	{ s_extra.remove(this,false); }
+    virtual bool received(Message &msg);
+};
+
+bool GenericHandler::received(Message &msg)
+{
+    DDebug(DebugAll,"Handling message '%s' [%p]",c_str(),this);
+    String ret,what(*this);
+    Lock lock(s_mutex);
+    return oneContext(msg,what,*this,ret);
+}
 
 class RegexRoutePlugin : public Plugin
 {
@@ -242,6 +267,7 @@ RegexRoutePlugin::RegexRoutePlugin()
 void RegexRoutePlugin::initialize()
 {
     Output("Initializing module RegexRoute");
+    Lock lock(s_mutex);
     s_cfg = Engine::configFile("regexroute");
     s_cfg.load();
     if (m_preroute) {
@@ -252,6 +278,7 @@ void RegexRoutePlugin::initialize()
 	delete m_route;
 	m_route = 0;
     }
+    s_extra.clear();
     unsigned priority = s_cfg.getIntValue("priorities","preroute",100);
     if (priority) {
 	m_preroute = new PrerouteHandler(priority);
@@ -261,6 +288,15 @@ void RegexRoutePlugin::initialize()
     if (priority) {
 	m_route = new RouteHandler(priority);
 	Engine::install(m_route);
+    }
+    NamedList *l = s_cfg.getSection("extra");
+    if (l) {
+	unsigned int len = l->length();
+	for (unsigned int i=0; i<len; i++) {
+	    NamedString *n = l->getParam(i);
+	    if (n)
+		Engine::install(new GenericHandler(n->name(),n->toInteger()));
+	}
     }
 }
 

@@ -187,7 +187,7 @@ snapshot tarball: check-topdir clean tables apidocs
 check-topdir:
 	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
 
-Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yatepaths.h
+Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/yateversn.h yatepaths.h
 	$(COMPILE) -c $<
 
 DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h

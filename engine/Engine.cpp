@@ -22,6 +22,7 @@
 
 #include "telengine.h"
 #include "yatepaths.h"
+#include "yateversn.h"
 
 #include <dirent.h>
 #include <unistd.h>
@@ -173,6 +174,7 @@ bool EngineStatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"engine"))
 	return false;
     msg.retValue() << "name=engine,type=system";
+    msg.retValue() << ",version=" << YATE_MAJOR << "." << YATE_MINOR << "." << YATE_BUILD;
     msg.retValue() << ";plugins=" << plugins.count();
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",threads=" << Thread::count();

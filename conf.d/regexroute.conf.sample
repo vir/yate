@@ -57,12 +57,23 @@
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the target using \1, \2, \3, ...
 ;
+; First character of a matched target can have a special meaning
+; - returns immediately from the context without routing
+; < calls another context, returns at the next entry if the other context
+    did not return successfully
+; > jumps another context, does not return to this context
+; ! modify the called string instead of specifying a target
+;
+; It is possible to set message parameters by appending them as name=value
+;  while separating them with semicolons (;)
+;
 ; Example:
-;   route the emergency 112 and 911 numbers to POTS, any channel on an E1
-;^112$=zap/1-31
-;^911$=zap/1-31
-;   route international calls over SIP
-;^00\(.*\)$=sip/sip:\1@international.gateway
+;   route the emergency 112 and 911 numbers to POTS, any channel on an E1,
+;   force specific data format too
+;^112$=zap/1-31; format=alaw
+;^911$=zap/1-31; format=mulaw
+;   route international calls over SIP, replace caller name
+;^00\(.*\)$=sip/sip:\1@international.gateway ; callername = International call
 ;   route value added services over IAX, trailing part is sent as IAX extension
 ;^09\(.*\)$=iax/vap@gateway.for.vap/\1
 ;   route green calls over IAX with 2 digits used to form an user name,
@@ -73,8 +84,9 @@
 ;   route short 3digit numbers to SIP using a DNS scheme 123 -> 3.2.1.domain
 ;^\(.\)\(.\)\(.\)$=sip/sip:\0@\3.\2.\1.domain
 ;   is there anything else left? they go on E1 but only 15 channels can be used
-;   wa also make sure the number is at least 4 characters long
-;.....*=zap/1-15
+;   we also make sure the number is at least 4 characters long
+;   and we set a national caller dialplan
+;.....*=zap/1-15 ; callerplan = national
 ;   leftovers... should not happen but let's handle them. we may not route the
 ;   call at all and let the caller receive a "no route" error
 ;.*=wave/play/sounds/invalid_number.gsm

@@ -118,9 +118,7 @@ private:
 SLib::SLib(void *handle, const char *file)
     : m_handle(handle)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"SLib::SLib(%p,\"%s\") [%p]",handle,file,this);
-#endif
+    DDebug(DebugAll,"SLib::SLib(%p,\"%s\") [%p]",handle,file,this);
 }
 
 SLib::~SLib()
@@ -297,9 +295,7 @@ Engine *Engine::self()
 
 bool Engine::Register(const Plugin *plugin, bool reg)
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"Engine::Register(%p,%d)",plugin,reg);
-#endif
+    DDebug(DebugInfo,"Engine::Register(%p,%d)",plugin,reg);
     ObjList *p = plugins.find(plugin);
     if (reg) {
 	if (p)
@@ -352,9 +348,7 @@ void Engine::loadPlugins()
     }
     struct dirent *entry;
     while ((entry = ::readdir(dir)) != 0) {
-#ifdef DEBUG
-	Debug(DebugInfo,"Found dir entry %s",entry->d_name);
-#endif
+	DDebug(DebugInfo,"Found dir entry %s",entry->d_name);
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
 	    if (cfg.getBoolValue("modules",entry->d_name,defload))

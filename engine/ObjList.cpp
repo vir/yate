@@ -27,9 +27,7 @@ using namespace TelEngine;
 ObjList::ObjList()
     : m_next(0), m_obj(0), m_delete(true)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ObjList::ObjList() [%p]",this);
-#endif
+    DDebug(DebugAll,"ObjList::ObjList() [%p]",this);
 }
 
 ObjList::~ObjList()
@@ -41,9 +39,7 @@ ObjList::~ObjList()
 	GenObject *tmp = m_obj;
 	m_obj = 0;
 	if (m_delete) {
-#ifdef DEBUG
-	    Debug(DebugInfo,"ObjList::~ObjList() deleting %p",tmp);
-#endif
+	    DDebug(DebugInfo,"ObjList::~ObjList() deleting %p",tmp);
 	    tmp->destruct();
 	}
     }
@@ -100,9 +96,7 @@ ObjList *ObjList::find(const GenObject *obj) const
     const ObjList *n = this;
     while (n && (n->get() != obj))
 	n = n->next();
-#ifdef DEBUG
-    Debug(DebugInfo,"ObjList::find returning %p",n);
-#endif
+    DDebug(DebugInfo,"ObjList::find returning %p",n);
     return const_cast<ObjList *>(n);
 }
 
@@ -166,9 +160,7 @@ GenObject *ObjList::remove(bool delobj)
 	m_obj = 0;
 
     if (delobj && tmp) {
-#ifdef DEBUG
-	Debug(DebugInfo,"ObjList::remove() deleting %p",tmp);
-#endif
+	DDebug(DebugInfo,"ObjList::remove() deleting %p",tmp);
 	tmp->destruct();
 	tmp = 0;
     }

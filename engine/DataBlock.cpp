@@ -279,9 +279,7 @@ void DataSource::Forward(const DataBlock &data, unsigned long timeDelta)
 
 bool DataSource::attach(DataConsumer *consumer)
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"DataSource [%p] attaching consumer [%p]",this,consumer);
-#endif
+    DDebug(DebugInfo,"DataSource [%p] attaching consumer [%p]",this,consumer);
     if (!consumer)
 	return false;
     Lock lock(m_mutex);
@@ -295,9 +293,7 @@ bool DataSource::attach(DataConsumer *consumer)
 
 bool DataSource::detach(DataConsumer *consumer)
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
-#endif
+    DDebug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
     if (!consumer)
 	return false;
     Lock lock(m_mutex);
@@ -307,9 +303,7 @@ bool DataSource::detach(DataConsumer *consumer)
 	temp->deref();
 	return true;
     }
-#ifdef DEBUG
-    Debug(DebugWarn,"DataSource [%p] has no consumer [%p]",this,consumer);
-#endif
+    DDebug(DebugWarn,"DataSource [%p] has no consumer [%p]",this,consumer);
     return false;
 }
 
@@ -622,11 +616,9 @@ bool DataTranslator::attachChain(DataSource *source, DataConsumer *consumer)
 	    retv = true;
 	}
     }
-#ifndef NDEBUG
-    Debug(DebugAll,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
+    NDebug(DebugAll,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
 	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str(),
 	retv ? "succeeded" : "failed");
-#endif
     return retv;
 }
 

@@ -111,9 +111,7 @@ ThreadPrivate::~ThreadPrivate()
 
 void ThreadPrivate::destroy()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::destroy() '%s' [%p]",m_name,this);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::destroy() '%s' [%p]",m_name,this);
     cleanup();
     delete this;
 }
@@ -132,9 +130,7 @@ void ThreadPrivate::pubdestroy()
 
 void ThreadPrivate::run()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::run() '%s' [%p]",m_name,this);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::run() '%s' [%p]",m_name,this);
     ::pthread_once(&current_key_once,keyAllocFunc);
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
@@ -149,9 +145,7 @@ void ThreadPrivate::run()
 
 bool ThreadPrivate::cancel()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::cancel() '%s' [%p]",m_name,this);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::cancel() '%s' [%p]",m_name,this);
     bool ret = true;
     if (m_running) {
 	ret = !::pthread_cancel(thread);
@@ -165,9 +159,7 @@ bool ThreadPrivate::cancel()
 
 void ThreadPrivate::cleanup()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::cleanup() %p '%s' [%p]",m_thread,m_name,this);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::cleanup() %p '%s' [%p]",m_thread,m_name,this);
     if (m_thread && m_thread->m_private) {
 	if (m_thread->m_private == this) {
 	    m_thread->m_private = 0;
@@ -256,9 +248,7 @@ void ThreadPrivate::destroyFunc(void *arg)
 
 void ThreadPrivate::cleanupFunc(void *arg)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::cleanupFunc(%p)",arg);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::cleanupFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
     if (t)
 	t->cleanup();
@@ -266,18 +256,14 @@ void ThreadPrivate::cleanupFunc(void *arg)
 
 void ThreadPrivate::keyAllocFunc()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::keyAllocFunc()");
-#endif
+    DDebug(DebugAll,"ThreadPrivate::keyAllocFunc()");
     if (::pthread_key_create(&current_key,destroyFunc))
 	Debug(DebugGoOn,"Failed to create current thread key!");
 }
 
 void *ThreadPrivate::startFunc(void *arg)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ThreadPrivate::startFunc(%p)",arg);
-#endif
+    DDebug(DebugAll,"ThreadPrivate::startFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
     t->run();
     return 0;
@@ -294,9 +280,7 @@ Thread::Thread(const char *name)
 
 Thread::~Thread()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Thread::~Thread() [%p]",this);
-#endif
+    DDebug(DebugAll,"Thread::~Thread() [%p]",this);
     if (m_private)
 	m_private->pubdestroy();
 }
@@ -332,9 +316,7 @@ int Thread::count()
 
 void Thread::cleanup()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Thread::cleanup() [%p]",this);
-#endif
+    DDebug(DebugAll,"Thread::cleanup() [%p]",this);
 }
 
 void Thread::killall()
@@ -345,17 +327,13 @@ void Thread::killall()
 
 void Thread::exit()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Thread::exit()");
-#endif
+    DDebug(DebugAll,"Thread::exit()");
     ::pthread_exit(0);
 }
 
 void Thread::cancel()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Thread::cancel() [%p]",this);
-#endif
+    DDebug(DebugAll,"Thread::cancel() [%p]",this);
     if (m_private)
 	m_private->cancel();
 }

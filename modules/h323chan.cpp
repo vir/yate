@@ -981,9 +981,7 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 	if (len > 0) {
 	    ::memcpy(buf,m_buffer.data(),len);
 	    m_buffer.assign(len+(char *)m_buffer.data(),m_buffer.length()-len);
-#ifdef DEBUG
-	    Debug("YateH323AudioConsumer",DebugAll,"Pulled %d bytes from buffer [%p]",len,this);
-#endif
+	    DDebug("YateH323AudioConsumer",DebugAll,"Pulled %d bytes from buffer [%p]",len,this);
 	    break;
 	}
 	else

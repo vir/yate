@@ -289,9 +289,7 @@ void YateIAXEndPoint::terminateall(void)
 // Handle regular conectionless events with a valid session
 void YateIAXEndPoint::handleEvent(iax_event *event)
 {
-#ifdef DEBUG
-    Debug("IAX Event",DebugAll,"Connectionless event %d/%d",event->etype,event->subclass);
-#endif
+    DDebug("IAX Event",DebugAll,"Connectionless event %d/%d",event->etype,event->subclass);
     switch(event->etype) {
 #if 0
 	case IAX_EVENT_REGREQ:
@@ -329,9 +327,7 @@ void YateIAXEndPoint::run(void)
 	    s_mutex.unlock();
 	    if (!e)
 		break;
-#ifdef DEBUG
-	    Debug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
-#endif
+	    DDebug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
 	    YateIAXConnection *conn = 0;
 	    // We first take care of the special events
 	    switch(e->etype) {
@@ -646,9 +642,7 @@ YateIAXConnection::~YateIAXConnection()
 // Handle regular connection events with a valid session
 void YateIAXConnection::handleEvent(iax_event *event)
 {
-#ifdef DEBUG
-    Debug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
-#endif
+    DDebug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
     switch(event->etype) {
 	case IAX_EVENT_ACCEPT:
 	    startAudio(event->ies.format,event->ies.capability);

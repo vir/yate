@@ -132,9 +132,7 @@ void FaxSource::run()
 	    break;
 	if (!r) {
 	    r = 80;
-#ifdef DEBUG
-	    Debug(DebugAll,"FaxSource inserting %d bytes silence [%p]",r,this);
-#endif
+	    DDebug(DebugAll,"FaxSource inserting %d bytes silence [%p]",r,this);
 	    DataBlock data(0,r);
 	    Forward(data);
 	}

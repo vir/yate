@@ -120,9 +120,7 @@ static bool zt_set_law(int fd, int law)
     if (::ioctl(fd, ZT_SETLAW, &law) != -1)
 	return true;
 
-#ifdef DEBUG
-    Debug("ZapChan",DebugInfo,"Failed to set law %d: error %d: %s",law,errno,::strerror(errno));
-#endif
+    DDebug("ZapChan",DebugInfo,"Failed to set law %d: error %d: %s",law,errno,::strerror(errno));
     return false;
 }
 
@@ -876,9 +874,7 @@ void ZapSource::run()
 	int fd = m_owner->fd();
 	if (fd != -1) {
 	    rd = ::read(fd,m_buf.data(),m_buf.length());
-#ifdef DEBUG
-	    Debug(DebugAll,"ZapSource read %d bytes",rd);
-#endif
+	    DDebug(DebugAll,"ZapSource read %d bytes",rd);
 	    if (rd > 0) {
 		switch (m_owner->law()) {
 		    case -1:
@@ -909,9 +905,7 @@ void ZapSource::run()
 void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     int fd = m_owner->fd();
-#ifdef DEBUG
-    Debug(DebugAll,"ZapConsumer fd=%d datalen=%u",fd,data.length());
-#endif
+    DDebug(DebugAll,"ZapConsumer fd=%d datalen=%u",fd,data.length());
     if ((fd != -1) && !data.null()) {
 	DataBlock blk;
 	switch (m_owner->law()) {
@@ -1219,10 +1213,8 @@ bool ZapHandler::received(Message &msg)
     }
     String chan = dest.matchString(1);
     String num = dest.matchString(2);
-#ifdef DEBUG
-    Debug(DebugInfo,"Found call to Zaptel chan='%s' name='%s'",
+    DDebug(DebugInfo,"Found call to Zaptel chan='%s' name='%s'",
 	chan.c_str(),num.c_str());
-#endif
     ZapChan *c = 0;
 
     r = "^\\([0-9]\\+\\)-\\([0-9]*\\)$";
@@ -1341,9 +1333,7 @@ ZapChan *ZaptelPlugin::findChan(const char *id)
 
 ZapChan *ZaptelPlugin::findChan(int first, int last)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"ZaptelPlugin::findChan(%d,%d)",first,last);
-#endif
+    DDebug(DebugAll,"ZaptelPlugin::findChan(%d,%d)",first,last);
     // see first if we have an exact request
     if (first > 0 && last < 0) {
 	PriSpan *s = findSpan(first);

@@ -166,9 +166,7 @@ void WaveSource::run()
 	    data.assign(data.data(),r);
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
-#ifdef DEBUG
-	    Debug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
-#endif
+	    DDebug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(data,data.length()*8000/m_brate);

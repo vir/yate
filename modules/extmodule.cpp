@@ -225,9 +225,7 @@ void ExtModSource::run()
 	    data.assign(data.data(),r);
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
-#ifdef DEBUG
-	    Debug("ExtModSource",DebugAll,"Sleeping for %lld usec",dly);
-#endif
+	    DDebug("ExtModSource",DebugAll,"Sleeping for %lld usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(data,m_total);
@@ -456,15 +454,11 @@ bool ExtModReceiver::received(Message &msg, int id)
     use();
     MsgHolder h(msg);
     m_waiting.append(&h)->setDelete(false);
-#ifdef DEBUG
-    Debug(DebugAll,"ExtMod [%p] queued message '%s' [%p]",this,msg.c_str(),&msg);
-#endif
+    DDebug(DebugAll,"ExtMod [%p] queued message '%s' [%p]",this,msg.c_str(),&msg);
     outputLine(msg.encode(h.m_id));
     while (m_waiting.find(&h))
 	Thread::yield();
-#ifdef DEBUG
-    Debug(DebugAll,"ExtMod [%p] message '%s' [%p] returning %s",this,msg.c_str(),&msg, h.m_ret ? "true" : "false");
-#endif
+    DDebug(DebugAll,"ExtMod [%p] message '%s' [%p] returning %s",this,msg.c_str(),&msg, h.m_ret ? "true" : "false");
     unuse();
     return h.m_ret;
 }
@@ -580,15 +574,11 @@ void ExtModReceiver::run()
     use();
     char buffer[1024];
     int posinbuf = 0;
-#ifdef DEBUG
-    Debug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
-#endif
+    DDebug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
     for (;;) {
 	use();
 	int readsize = (m_in >= 0) ? ::read(m_in,buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
-#ifdef DEBUG
-	Debug(DebugAll,"ExtModReceiver::run() read %d",readsize);
-#endif
+	DDebug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 	if (unuse())
 	    return;
 	if (!readsize) {
@@ -624,9 +614,7 @@ void ExtModReceiver::run()
 
 bool ExtModReceiver::outputLine(const char *line)
 {
-#ifdef DEBUG
-    Debug("ExtModReceiver",DebugAll,"outputLine '%s'", line);
-#endif
+    DDebug("ExtModReceiver",DebugAll,"outputLine '%s'", line);
     if (m_out < 0)
 	return false;
     ::write(m_out,line,::strlen(line));
@@ -652,16 +640,12 @@ static bool startSkip(String &s, const char *keyword)
 
 void ExtModReceiver::processLine(const char *line)
 {
-#ifdef DEBUG
-    Debug("ExtModReceiver",DebugAll,"processLine '%s'", line);
-#endif
+    DDebug("ExtModReceiver",DebugAll,"processLine '%s'", line);
     ObjList *p = &m_waiting;
     for (; p; p=p->next()) {
 	MsgHolder *msg = static_cast<MsgHolder *>(p->get());
 	if (msg && msg->decode(line)) {
-#ifdef DEBUG
-	    Debug("ExtModReceiver",DebugInfo,"Matched message");
-#endif
+	    DDebug("ExtModReceiver",DebugInfo,"Matched message");
 	    p->remove(false);
 	    return;
 	}
@@ -712,9 +696,7 @@ void ExtModReceiver::processLine(const char *line)
     else {
 	Message m("");
 	if (m.decode(line,id) == -2) {
-#ifdef DEBUG
-	    Debug("ExtModReceiver",DebugAll,"Created message [%p]",this);
-#endif
+	    DDebug("ExtModReceiver",DebugAll,"Created message [%p]",this);
 	    m.userData(m_chan);
 	    /* Copy the user data pointer from waiting message with same id */
 	    ObjList *p = &m_waiting;

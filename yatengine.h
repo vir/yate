@@ -84,6 +84,48 @@ int debugLevel(int level);
  */
 bool debugAt(int level);
 
+#if 0
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ *  else it does not get compiled at all.
+ */
+bool DDebug(int level, const char *format, ...);
+
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ *  else it does not get compiled at all.
+ */
+bool DDebug(const char *facility, int level, const char *format, ...);
+
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if NDEBUG is not #defined (compiling for release)
+ *  else it does not get compiled at all.
+ */
+bool NDebug(int level, const char *format, ...);
+
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if NDEBUG is not #defined (compiling for release)
+ *  else it does not get compiled at all.
+ */
+bool NDebug(const char *facility, int level, const char *format, ...);
+#endif
+
+#ifdef DEBUG
+#define DDebug(arg...) Debug(arg)
+#else
+#define DDebug(arg...)
+#endif
+
+#ifndef NDEBUG
+#define NDebug(arg...) Debug(arg)
+#else
+#define NDebug(arg...)
+#endif
+
 /**
  * Outputs a debug string.
  * @param level The level of the message
@@ -757,6 +799,14 @@ public:
      * @return Number of matching subexpressions
      */
     int matchCount() const;
+
+    /**
+     * Splits the string at a delimiter character
+     * @param separator Character where to split the string
+     * @param emptyOK True if empty strings should be inserted in list
+     * @return A newly allocated list of strings, must be deleted after use
+     */
+    ObjList* split(char separator, bool emptyOK = true) const;
 
     /**
      * Create an escaped string suitable for use in messages

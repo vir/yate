@@ -194,9 +194,7 @@ void Connection::run()
 	    else if (readsize > 0) {
 		int totalsize = readsize + posinbuf;
 		buffer[totalsize]=0;
-#ifdef DEBUG
-		Debug("RManager",DebugInfo,"read=%d pos=%d buffer='%s'",readsize,posinbuf,buffer);
-#endif
+		DDebug("RManager",DebugInfo,"read=%d pos=%d buffer='%s'",readsize,posinbuf,buffer);
 		for (;;) {
 		    // Try to accomodate various telnet modes
 		    char *eoline = ::strchr(buffer,'\r');
@@ -238,9 +236,7 @@ static bool startSkip(String &s, const char *keyword)
 
 void Connection::processLine(const char *line)
 {
-#ifdef DEBUG
-    Debug("RManager",DebugInfo,"processLine = %s",line);
-#endif
+    DDebug("RManager",DebugInfo,"processLine = %s",line);
     String str(line);
     str.trimBlanks();
     if (str.null())

@@ -122,9 +122,7 @@ void Configuration::clearKey(const String &sect, const String &key)
 
 void Configuration::setValue(const String &sect, const char *key, const char *value)
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"Configuration::setValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
-#endif
+    DDebug(DebugInfo,"Configuration::setValue(\"%s\",\"%s\",\"%s\")",sect.c_str(),key,value);
     ObjList *l = makeSectHolder(sect);
     if (!l)
 	return;

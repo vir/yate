@@ -28,9 +28,7 @@ using namespace TelEngine;
 Message::Message(const char *name, const char *retval)
     : NamedList(name), m_return(retval), m_data(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
-#endif
+    DDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
 
 String Message::encode(const char *id) const
@@ -161,16 +159,12 @@ int Message::commonDecode(const char *str, int offs)
 MessageHandler::MessageHandler(const char *name, unsigned priority)
     : String(name), m_priority(priority), m_dispatcher(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
-#endif
+    DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
 }
 
 MessageHandler::~MessageHandler()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
-#endif
+    DDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
     if (m_dispatcher)
 	m_dispatcher->uninstall(this);
 }
@@ -178,24 +172,18 @@ MessageHandler::~MessageHandler()
 MessageDispatcher::MessageDispatcher()
     : m_hook(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
-#endif
+    DDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }
 
 MessageDispatcher::~MessageDispatcher()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
-#endif
+    DDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
     m_handlers.clear();
 }
 
 bool MessageDispatcher::install(MessageHandler *handler)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageDispatcher::install(%p)",handler);
-#endif
+    DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
 	return false;
     ObjList *l = m_handlers.find(handler);
@@ -209,15 +197,11 @@ bool MessageDispatcher::install(MessageHandler *handler)
 	    break;
     }
     if (l) {
-#ifdef DEBUG
-    Debug(DebugAll,"Inserting handler [%p] on place #%d",handler,pos);
-#endif
+	DDebug(DebugAll,"Inserting handler [%p] on place #%d",handler,pos);
 	l->insert(handler);
     }
     else {
-#ifdef DEBUG
-    Debug(DebugAll,"Appending handler [%p] on place #%d",handler,pos);
-#endif
+	DDebug(DebugAll,"Appending handler [%p] on place #%d",handler,pos);
 	m_handlers.append(handler);
     }
     handler->m_dispatcher = this;
@@ -228,9 +212,7 @@ bool MessageDispatcher::install(MessageHandler *handler)
 
 bool MessageDispatcher::uninstall(MessageHandler *handler)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
-#endif
+    DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
     if (handler)
 	handler->m_dispatcher = 0;

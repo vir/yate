@@ -38,14 +38,43 @@ public:
 	: MessageHandler("route",prio) { }
     virtual bool received(Message &msg);
 };
-	
-bool RouteHandler::received(Message &msg)
+
+static void setMessage(Message &msg, String &line)
 {
-    unsigned long long tmr = Time::now();
-    String s(msg.getValue("called"));
-    if (s.null())
+    ObjList *strs = line.split(';');
+    bool first = true;
+    for (ObjList *p = strs; p; p=p->next()) {
+	String *s = static_cast<String*>(p->get());
+	if (first) {
+	    first = false;
+	    line = s ? *s : "";
+	    continue;
+	}
+	if (s && !s->trimBlanks().null()) {
+	    int q = s->find('=');
+	    if (q > 0) {
+		String n = s->substr(0,q);
+		String v = s->substr(q+1);
+		n.trimBlanks();
+		v.trimBlanks();
+		DDebug("RegexRoute",DebugAll,"Setting '%s' to '%s'",n.c_str(),v.c_str());
+		msg.setParam(n,v);
+	    }
+	    else
+		Debug("RegexRoute",DebugWarn,"Invalid setting '%s'",s->c_str());
+	}
+    }
+    strs->destruct();
+}
+
+static bool oneContext(Message &msg, String &called, const String &context, int depth = 0)
+{
+    if (!(context && *context))
 	return false;
-    const char *context = msg.getValue("context","default");
+    if (depth > 5) {
+	Debug("RegexRoute",DebugWarn,"Loop detected, current context '%s'",context.c_str());
+	return false;
+    }
     NamedList *l = s_cfg.getSection(context);
     if (l) {
 	unsigned int len = l->length();
@@ -53,17 +82,68 @@ bool RouteHandler::received(Message &msg)
 	    NamedString *n = l->getParam(i);
 	    if (n) {
 		Regexp r(n->name());
-		if (s.matches(r)) {
-		    msg.retValue() = s.replaceMatches(*n);
-		    Debug(DebugInfo,"Routing call to '%s' in context '%s' via `%s' by rule #%u '%s' in %llu usec",
-			s.c_str(),context,msg.retValue().c_str(),i+1,r.c_str(),Time::now()-tmr);
-		    return true;
+		if (called.matches(r)) {
+		    String val = called.replaceMatches(*n);
+		    setMessage(msg,val);
+		    val.trimBlanks();
+		    switch (val[0]) {
+			case 0:
+			    break;
+			case '-':
+			    return false;
+			case '>':
+			    val >> ">";
+			    val.trimBlanks();
+			    NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
+				val.c_str(),i+1,r.c_str());
+			    return oneContext(msg,called,val,depth+1);
+			case '<':
+			    val >> "<";
+			    val.trimBlanks();
+			    NDebug("RegexRoute",DebugAll,"Calling context '%s' by rule #%u '%s'",
+				val.c_str(),i+1,r.c_str());
+			    if (oneContext(msg,called,val,depth+1)) {
+				DDebug("RegexRoute",DebugAll,"Returning true from context '%s'", context.c_str());
+				return true;
+			    }
+			    break;
+			case '!':
+			    val >> "!";
+			    val.trimBlanks();
+			    if (!val.null()) {
+				NDebug("RegexRoute",DebugAll,"Setting called '%s' by rule #%u '%s'",
+				    val.c_str(),i+1,r.c_str());
+				called = val;
+			    }
+			    break;
+			default:
+			    DDebug("RegexRoute",DebugAll,"Routing call to '%s' in context '%s' via `%s' by rule #%u '%s'",
+				called.c_str(),context.c_str(),val.c_str(),i+1,r.c_str());
+			    msg.retValue() = val;
+			    return true;
+		    }
 		}
 	    }
 	}
     }
+    DDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
+    return false;
+}
+	
+bool RouteHandler::received(Message &msg)
+{
+    unsigned long long tmr = Time::now();
+    String called(msg.getValue("called"));
+    if (called.null())
+	return false;
+    const char *context = msg.getValue("context","default");
+    if (oneContext(msg,called,context)) {
+	Debug(DebugInfo,"Routing call to '%s' in context '%s' via `%s' in %llu usec",
+	    called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
+	return true;
+    }
     Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted %llu usec",
-	s.c_str(),context,Time::now()-tmr);
+	called.c_str(),context,Time::now()-tmr);
     return false;
 };
 		    

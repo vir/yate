@@ -100,9 +100,7 @@ static bool isWordBreak(char c, bool nullOk = false)
 
 StringMatchPrivate::StringMatchPrivate()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
-#endif
+    DDebug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
     clear();
 }
 
@@ -141,26 +139,20 @@ void StringMatchPrivate::fixup()
 String::String()
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String() [%p]",this);
-#endif
+    DDebug(DebugAll,"String::String() [%p]",this);
 }
 
 String::String(const char *value, int len)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
-#endif
+    DDebug(DebugAll,"String::String(\"%s\",%d) [%p]",value,len,this);
     assign(value,len);
 }
 
 String::String(const String &value)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String(%p) [%p]",&value,this);
-#endif
+    DDebug(DebugAll,"String::String(%p) [%p]",&value,this);
     if (!value.null()) {
 	m_string = ::strdup(value.c_str());
 	changed();
@@ -170,9 +162,7 @@ String::String(const String &value)
 String::String(char value, unsigned int repeat)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
-#endif
+    DDebug(DebugAll,"String::String('%c',%d) [%p]",value,repeat,this);
     if (value && repeat) {
 	m_string = (char *) ::malloc(repeat+1);
 	::memset(m_string,value,repeat);
@@ -184,9 +174,7 @@ String::String(char value, unsigned int repeat)
 String::String(int value)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String(%d) [%p]",value,this);
-#endif
+    DDebug(DebugAll,"String::String(%d) [%p]",value,this);
     char buf[64];
     ::sprintf(buf,"%d",value);
     m_string = ::strdup(buf);
@@ -196,9 +184,7 @@ String::String(int value)
 String::String(unsigned int value)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String(%u) [%p]",value,this);
-#endif
+    DDebug(DebugAll,"String::String(%u) [%p]",value,this);
     char buf[64];
     ::sprintf(buf,"%u",value);
     m_string = ::strdup(buf);
@@ -208,18 +194,14 @@ String::String(unsigned int value)
 String::String(bool value)
     : m_string(0), m_length(0), m_hash(0), m_matches(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::String(%u) [%p]",value,this);
-#endif
+    DDebug(DebugAll,"String::String(%u) [%p]",value,this);
     m_string = ::strdup(value ? "true" : "false");
     changed();
 }
 
 String::~String()
 {
-#ifdef DEBUG
-    Debug(DebugAll,"String::~String() [%p] (\"%s\")",this,m_string);
-#endif
+    DDebug(DebugAll,"String::~String() [%p] (\"%s\")",this,m_string);
     if (m_matches) {
 	StringMatchPrivate *odata = m_matches;
 	m_matches = 0;
@@ -629,6 +611,21 @@ void String::clearMatches()
 	m_matches->clear();
 }
 
+ObjList* String::split(char separator, bool emptyOK) const
+{
+    ObjList *list = new ObjList;
+    int p = 0;
+    int s;
+    while ((s = find(separator,p)) >= 0) {
+	if (emptyOK || (s > p))
+	    list->append(new String(m_string+p,s-p));
+	p = s + 1;
+    }
+    if (emptyOK || (m_string && m_string[p]))
+	list->append(new String(m_string+p));
+    return list;
+}
+
 String String::msgEscape(const char *str, char extraEsc)
 {
     if (!str)
@@ -700,25 +697,19 @@ unsigned int String::hash(const char *value)
 Regexp::Regexp()
     : m_regexp(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Regexp::Regexp() [%p]",this);
-#endif
+    DDebug(DebugAll,"Regexp::Regexp() [%p]",this);
 }
 
 Regexp::Regexp(const char *value)
     : String(value), m_regexp(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Regexp::Regexp(\"%s\") [%p]",value,this);
-#endif
+    DDebug(DebugAll,"Regexp::Regexp(\"%s\") [%p]",value,this);
 }
 
 Regexp::Regexp(const Regexp &value)
     : String(value.c_str()), m_regexp(0)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
-#endif
+    DDebug(DebugAll,"Regexp::Regexp(%p) [%p]",&value,this);
 }
 
 Regexp::~Regexp()
@@ -728,9 +719,7 @@ Regexp::~Regexp()
 
 bool Regexp::matches(const char *value, StringMatchPrivate *matches)
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
-#endif
+    DDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
     if (!value)
 	return false;
     if (!compile())
@@ -753,9 +742,7 @@ void Regexp::changed()
 
 bool Regexp::compile()
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"Regexp::compile()");
-#endif
+    DDebug(DebugInfo,"Regexp::compile()");
     if (c_str() && !m_regexp) {
 	regex_t *data = (regex_t *) ::malloc(sizeof(regex_t));
 	if (::regcomp(data,c_str(),0)) {
@@ -771,9 +758,7 @@ bool Regexp::compile()
 
 void Regexp::cleanup()
 {
-#ifdef DEBUG
-    Debug(DebugInfo,"Regexp::cleanup()");
-#endif
+    DDebug(DebugInfo,"Regexp::cleanup()");
     if (m_regexp) {
 	regex_t *data = (regex_t *)m_regexp;
 	m_regexp = 0;
@@ -785,7 +770,5 @@ void Regexp::cleanup()
 NamedString::NamedString(const char *name, const char *value)
     : String(value), m_name(name)
 {
-#ifdef DEBUG
-    Debug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
-#endif
+    DDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
 }

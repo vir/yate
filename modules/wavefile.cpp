@@ -18,17 +18,15 @@
 
 using namespace TelEngine;
 
-class WaveChan;
-
 class WaveSource : public ThreadedSource
 {
 public:
-    WaveSource(const char *file, WaveChan *chan);
+    WaveSource(const String& file, DataEndpoint *chan);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
 private:
-    WaveChan *m_chan;
+    DataEndpoint *m_chan;
     int m_fd;
     unsigned m_brate;
     unsigned m_total;
@@ -38,19 +36,21 @@ private:
 class WaveConsumer : public DataConsumer
 {
 public:
-    WaveConsumer(const char *file);
+    WaveConsumer(const String& file, DataEndpoint *chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
     virtual void Consume(const DataBlock &data);
 private:
+    DataEndpoint *m_chan;
     int m_fd;
     unsigned m_total;
+    unsigned m_maxlen;
     unsigned long long m_time;
 };
 
 class WaveChan : public DataEndpoint
 {
 public:
-    WaveChan(const char *file, bool record);
+    WaveChan(const String& file, bool record, unsigned maxlen = 0);
     ~WaveChan();
     virtual void disconnected();
 };
@@ -59,6 +59,13 @@ class WaveHandler : public MessageHandler
 {
 public:
     WaveHandler(const char *name) : MessageHandler(name) { }
+    virtual bool received(Message &msg);
+};
+
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler() : MessageHandler("attach") { }
     virtual bool received(Message &msg);
 };
 
@@ -71,21 +78,28 @@ private:
     WaveHandler *m_handler;
 };
 
-WaveSource::WaveSource(const char *file, WaveChan *chan)
+WaveSource::WaveSource(const String& file, DataEndpoint *chan)
     : m_chan(chan), m_fd(-1), m_brate(16000), m_total(0), m_time(0)
 {
-    Debug(DebugAll,"WaveSource::WaveSource(\"%s\") [%p]",file,this);
-    Regexp r("\\.gsm$");
-    if (r.matches(file)) {
+    Debug(DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
+    if (file.endsWith(".gsm")) {
 	m_format = "gsm";
 	m_brate = 1650;
     }
-    m_fd = ::open(file,O_RDONLY|O_NOCTTY);
+    else if (file.endsWith(".alaw")) {
+	m_format = "alaw";
+	m_brate = 8000;
+    }
+    else if (file.endsWith(".mulaw")) {
+	m_format = "mulaw";
+	m_brate = 8000;
+    }
+    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
     if (m_fd >= 0)
 	start("WaveSource");
     else
 	Debug(DebugFail,"Opening '%s': error %d: %s",
-	    file, errno, ::strerror(errno));
+	    file.c_str(), errno, ::strerror(errno));
 }
 
 WaveSource::~WaveSource()
@@ -138,20 +152,25 @@ void WaveSource::run()
 void WaveSource::cleanup()
 {
     Debug(DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
-    m_chan->disconnect();
+    if (m_chan)
+	m_chan->disconnect();
 }
 
-WaveConsumer::WaveConsumer(const char *file)
-    : m_fd(-1), m_total(0), m_time(0)
+WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxlen)
+    : m_chan(chan), m_fd(-1), m_total(0), m_maxlen(maxlen), m_time(0)
 {
-    Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\") [%p]",file,this);
-    Regexp r("\\.gsm$");
-    if (r.matches(file))
+    Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
+	file.c_str(),chan,maxlen,this);
+    if (file.endsWith(".gsm"))
 	m_format = "gsm";
-    m_fd = ::creat(file,S_IRUSR|S_IWUSR);
+    else if (file.endsWith(".alaw"))
+	m_format = "alaw";
+    else if (file.endsWith(".mulaw"))
+	m_format = "mulaw";
+    m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugFail,"Creating '%s': error %d: %s",
-	    file, errno, ::strerror(errno));
+	    file.c_str(), errno, ::strerror(errno));
 }
 
 WaveConsumer::~WaveConsumer()
@@ -172,20 +191,33 @@ WaveConsumer::~WaveConsumer()
 
 void WaveConsumer::Consume(const DataBlock &data)
 {
-    if ((m_fd >= 0) && !data.null()) {
+    if (!data.null()) {
 	if (!m_time)
 	    m_time = Time::now();
-	::write(m_fd,data.data(),data.length());
+	if (m_fd >= 0)
+	    ::write(m_fd,data.data(),data.length());
 	m_total += data.length();
+	if (m_maxlen && (m_total >= m_maxlen)) {
+	    m_maxlen = 0;
+	    if (m_fd >= 0) {
+		::close(m_fd);
+		m_fd = -1;
+	    }
+#if 0
+	    // This is no good - this should be done in another thread
+	    if (m_chan)
+		m_chan->disconnect();
+#endif
+	}
     }
 }
 
-WaveChan::WaveChan(const char *file, bool record)
+WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
     : DataEndpoint("wavefile")
 {
     Debug(DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
     if (record) {
-	setConsumer(new WaveConsumer(file));
+	setConsumer(new WaveConsumer(file,this,maxlen));
 	getConsumer()->deref();
     }
     else {
@@ -223,11 +255,13 @@ bool WaveHandler::received(Message &msg)
 	return false;
     }
 
+    String ml(msg.getValue("maxlen"));
+    unsigned maxlen = ml.toInteger(0);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
 	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
-	dd->connect(new WaveChan(dest.matchString(2).c_str(),meth));
+	dd->connect(new WaveChan(dest.matchString(2),meth,maxlen));
 	return true;
     }
 
@@ -246,7 +280,7 @@ bool WaveHandler::received(Message &msg)
 	m = "call";
 	m.addParam("callto",m.retValue());
 	m.retValue() = 0;
-	WaveChan *c = new WaveChan(dest.matchString(2).c_str(),meth);
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
 	m.userData(c);
 	if (Engine::dispatch(m))
 	    return true;
@@ -256,6 +290,78 @@ bool WaveHandler::received(Message &msg)
     else
 	Debug(DebugWarn,"Wave outgoing call but no route!");
     return false;
+}
+
+bool AttachHandler::received(Message &msg)
+{
+    int more = 2;
+    String src(msg.getValue("source"));
+    if (src.null())
+	more--;
+    else {
+	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	if (src.matches(r)) {
+	    if (src.matchString(1) == "play") {
+		src = src.matchString(2);
+		more--;
+	    }
+	    else {
+		Debug(DebugFail,"Could not attach source with method '%s', use 'play'",
+		    src.matchString(1).c_str());
+		src = "";
+	    }
+	}
+	else
+	    src = "";
+    }
+
+    String cons(msg.getValue("consumer"));
+    if (cons.null())
+	more--;
+    else {
+	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	if (cons.matches(r)) {
+	    if (cons.matchString(1) == "record") {
+		cons = cons.matchString(2);
+		more--;
+	    }
+	    else {
+		Debug(DebugFail,"Could not attach consumer with method '%s', use 'record'",
+		    cons.matchString(1).c_str());
+		cons = "";
+	    }
+	}
+	else
+	    cons = "";
+    }
+    if (src.null() && cons.null())
+	return false;
+
+    String ml(msg.getValue("maxlen"));
+    unsigned maxlen = ml.toInteger(0);
+    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
+    if (!dd) {
+	if (!src.null())
+	    Debug(DebugFail,"Wave source '%s' attach request with no data channel!",src.c_str());
+	if (!cons.null())
+	    Debug(DebugFail,"Wave consumer '%s' attach request with no data channel!",cons.c_str());
+	return false;
+    }
+
+    if (!src.null()) {
+	WaveSource* s = new WaveSource(src,dd);
+	dd->setSource(s);
+	s->deref();
+    }
+
+    if (!cons.null()) {
+	WaveConsumer* c = new WaveConsumer(cons,dd,maxlen);
+	dd->setConsumer(c);
+	c->deref();
+    }
+
+    // Stop dispatching if we handled all requested
+    return !more;
 }
 
 WaveFilePlugin::WaveFilePlugin()
@@ -270,6 +376,7 @@ void WaveFilePlugin::initialize()
     if (!m_handler) {
 	m_handler = new WaveHandler("call");
 	Engine::install(m_handler);
+	Engine::install(new AttachHandler);
     }
 }
 

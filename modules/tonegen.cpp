@@ -54,6 +54,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler() : MessageHandler("attach") { }
+    virtual bool received(Message &msg);
+};
+
 class StatusHandler : public MessageHandler
 {
 public:
@@ -194,6 +201,8 @@ ToneChan::ToneChan(const String &tone)
 	setSource(t);
 	t->deref();
     }
+    else
+	Debug(DebugWarn,"No source tone '%s' in ToneChan [%p]",tone.c_str(),this);
 }
 
 ToneChan::~ToneChan()
@@ -250,6 +259,31 @@ bool ToneHandler::received(Message &msg)
     return true;
 }
 
+bool AttachHandler::received(Message &msg)
+{
+    String src(msg.getValue("source"));
+    if (src.null())
+	return false;
+    Regexp r("^tone/\\(.*\\)$");
+    if (!src.matches(r))
+	return false;
+    src = src.matchString(1);
+    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
+    if (dd) {
+	ToneSource *t = ToneSource::getTone(src);
+	if (t) {
+	    dd->setSource(t);
+	    t->deref();
+	    // Let the message flow if it wants to attach a consumer too
+	    return !msg.getValue("consumer");
+	}
+	Debug(DebugWarn,"No source tone '%s' could be attached to [%p]",src.c_str(),dd);
+    }
+    else
+	Debug(DebugFail,"Tone '%s' attach request with no data channel!",src.c_str());
+    return false;
+}
+
 bool StatusHandler::received(Message &msg)
 {
     const char *sel = msg.getValue("module");
@@ -287,6 +321,7 @@ void ToneGenPlugin::initialize()
     if (!m_handler) {
 	m_handler = new ToneHandler("call");
 	Engine::install(m_handler);
+	Engine::install(new AttachHandler);
 	Engine::install(new StatusHandler);
     }
 }

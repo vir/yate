@@ -32,13 +32,13 @@ Every command is sent on its own newline (\n, ^J, decimal 10) delimited line.<br
 
 Any value that contains special characters (ASCII code lower than 32) MUST have
 them converted to %&lt;upcode&gt; where &lt;upcode&gt; is the character with a
-numeric value equal with 32 + original ASCII code. The % character itself MUST
+numeric value equal with 64 + original ASCII code. The % character itself MUST
 be converted to a special %% representation. Characters with codes higher than 32
 (except %) SHOULD not be escaped but may be so. A %-escaped code may be received
 instead of an unescaped character anywhere except in the initial keyword or the
 delimiting colon (:) characters. Anywhere in the line except the initial keyword
-a % character not followed by a character with a numeric value higher than 32
-(20H, 0x20, ' ') is an error.<br />
+a % character not followed by a character with a numeric value higher than 64
+(40H, 0x40, '@') or another % is an error.<br />
 </p>
 
 <p><b>Special Keyword: Error in</b><br />

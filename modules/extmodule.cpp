@@ -324,6 +324,8 @@ ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, in
 ExtModReceiver::~ExtModReceiver()
 {   
     Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
+    /* One destruction is plenty enough */
+    m_use = -100;
     s_modules.remove(this,false);
     die();
     if (m_pid > 0)
@@ -343,11 +345,14 @@ bool ExtModReceiver::start()
 void ExtModReceiver::die(bool clearChan)
 {
 #ifdef DEBUG
-    Debugger debug(DebugAll,"ExtModReceiver::die()"," [%p]",this);
+    Debugger debug(DebugAll,"ExtModReceiver::die()"," pid=%d dead=%s [%p]",
+	m_pid,m_dead ? "yes" : "no",this);
+#else
+    Debug(DebugAll,"ExtModReceiver::die() pid=%d dead=%s [%p]",
+	m_pid,m_dead ? "yes" : "no",this);
 #endif
     if (m_dead)
 	return;
-    Debug(DebugAll,"ExtModReceiver::die() pid=%d",m_pid);
     m_dead = true;
     use();
     /* Make sure we release all pending messages and not accept new ones */
@@ -365,7 +370,8 @@ void ExtModReceiver::die(bool clearChan)
     
     ExtModChan *chan = m_chan;
     m_chan = 0;
-    chan->setRecv(0);
+    if (chan)
+	chan->setRecv(0);
     
     /* Give the external script a chance to die gracefully */
     if (m_out != -1) {

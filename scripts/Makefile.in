@@ -1,0 +1,32 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine script files
+
+# override DESTDIR at install time to prefix the install directory
+DESTDIR :=
+
+SCRIPTS :=
+SCRLIBS := libyate.php Yate.pm
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+moddir = @libdir@/yate
+
+.PHONY: all
+all:
+
+.PHONY: install
+install:
+	@mkdir -p "$(DESTDIR)$(moddir)/" && \
+	install -m 0644 $(SCRLIBS) "$(DESTDIR)$(moddir)/" && \
+	test -z "$(SCRIPTS)" || \
+	install $(SCRIPTS) "$(DESTDIR)$(moddir)/"
+
+.PHONY: uninstall
+uninstall:
+	@-for i in $(SCRIPTS) $(SCRLIBS) ; do \
+	    rm "$(DESTDIR)$(moddir)/$$i" ; \
+	done; \
+	rmdir "$(DESTDIR)$(moddir)"
+
+Makefile: @srcdir@/Makefile.in ../config.status
+	cd .. && ./config.status

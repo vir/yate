@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(YATE, 0.8.4)
+AC_INIT(YATE, 0.8.5)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -103,7 +103,7 @@ fi
 AC_SUBST(HAVE_GSM)
 
 HAVE_PWLIB=no
-PWLIB_RTTI=no
+PWLIB_RTTI=none
 PWLIB_INC=""
 PWLIB_LIB=""
 PWLIB_RUN=""
@@ -112,7 +112,7 @@ AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default
 if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
 verpw=`ptlib-config --version 2>/dev/null`
-prtti=`ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[^ ]*rtti\).*$/\1/p'`
+prtti=`ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
 # try first installed directory
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/lib/libpt.so"
@@ -123,20 +123,30 @@ fi
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
     PWLIB_LIB="-L$ac_cv_use_pwlib/lib -lpt"
-    if [[ "x$prtti" = "x-frtti" ]]; then
-	PWLIB_RTTI=yes
-    fi
+    case "x$prtti" in
+	x-frtti)
+	    PWLIB_RTTI=yes
+	    ;;
+	x-fno-rtti)
+	    PWLIB_RTTI=no
+	    ;;
+    esac
 else
 # try source directory style
     libpw=`echo "$ac_cv_use_pwlib/lib/"libpt*r.so`
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
-	prtti=`"$ac_cv_use_pwlib/make/ptlib-config" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[^ ]*rtti\).*$/\1/p'`
+	prtti=`"$ac_cv_use_pwlib/make/ptlib-config" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
         PWLIB_LIB="-L$ac_cv_use_pwlib/lib -l`echo "$libpw"|sed 's,^.*/lib,,; s,\.so$,,'`"
         PWLIB_RUN=":$ac_cv_use_pwlib/lib"
-	if [[ "x$prtti" = "x-frtti" ]]; then
-	    PWLIB_RTTI=yes
-	fi
+	case "x$prtti" in
+	    x-frtti)
+		PWLIB_RTTI=yes
+		;;
+	    x-fno-rtti)
+		PWLIB_RTTI=no
+		;;
+	esac
     fi
 fi
 AC_MSG_RESULT([$HAVE_PWLIB $verpw RTTI: $PWLIB_RTTI])
@@ -423,7 +433,7 @@ AC_MSG_WARN([Mismatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_
 fi
 fi
 
-MODULE_CFLAGS="-fno-exceptions -fno-check-new $RTTI_OPT -fPIC $HAVE_GCC_FORMAT_CHECK"
+MODULE_CFLAGS="-fno-exceptions -fno-check-new -fPIC $RTTI_OPT $HAVE_GCC_FORMAT_CHECK"
 MODULE_LDFLAGS="-export-dynamic -shared"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
@@ -434,6 +444,7 @@ AC_CONFIG_FILES([yate.spec
                  yate.pc
                  Makefile
                  modules/Makefile
+                 scripts/Makefile
                  conf.d/Makefile
                  contrib/iax/Makefile
                  test/Makefile])

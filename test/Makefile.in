@@ -10,6 +10,7 @@ LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
+MKDEPS  := ../config.status
 PROGS = msgsniff.yate randcall.yate
 LIBS =
 OBJS =
@@ -35,17 +36,17 @@ strip: all
 clean:
 	@-rm $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
-%.o: @srcdir@/%.cpp @top_srcdir@/telengine.h
+%.o: @srcdir@/%.cpp $(MKDEPS) @top_srcdir@/telengine.h
 	$(COMPILE) -c $<
 
-%.o: @srcdir@/%.c
+%.o: @srcdir@/%.c $(MKDEPS)
 	$(COMPILE) -c $<
 
-Makefile: @srcdir@/Makefile.in ../config.status
+Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 lib%.so: %.o
 	$(LINK) -shared -o $@ $^
 
-%.yate: @srcdir@/%.cpp $(INCFILES)
+%.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)

@@ -18,6 +18,7 @@ MODSTRIP:= @MODULE_SYMBOLS@
 INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h @top_srcdir@/yateversn.h
 
 SUBDIRS :=
+MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate \
 	tonegen.yate wavefile.yate \
@@ -95,10 +96,10 @@ uninstall: do-uninstall
 	done; \
 	rmdir "$(DESTDIR)$(moddir)"
 
-%.o: @srcdir@/%.cpp $(INCFILES)
+%.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
 
-%.o: @srcdir@/%.c
+%.o: @srcdir@/%.c $(MKDEPS)
 	$(COMPILE) -c $<
 
 do-all do-strip do-clean do-install do-uninstall:
@@ -111,13 +112,13 @@ do-all do-strip do-clean do-install do-uninstall:
 	done \
 	)
 
-Makefile: @srcdir@/Makefile.in ../config.status
+Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 lib%.so: %.o
 	$(LINK) -shared -o $@ $^
 
-%.yate: @srcdir@/%.cpp $(INCFILES)
+%.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
 
 

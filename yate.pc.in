@@ -4,7 +4,7 @@ libdir=@libdir@
 includedir=@includedir@
 
 yate=yate
-yate-config=yate-config
+yate_config=yate-config
 
 Name: Yate
 Description: Yet Another Telephony Engine

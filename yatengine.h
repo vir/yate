@@ -917,6 +917,12 @@ public:
     inline const String& name() const
 	{ return m_name; }
 
+    /**
+     * Value assignment operator
+     */
+    inline NamedString& operator=(const char *value)
+	{ String::operator=(value); return *this; }
+
 private:
     NamedString(); // no default constructor please
     String m_name;

@@ -33,10 +33,54 @@
 
 using namespace TelEngine;
 
+class QtClientHandler : public MessageHandler
+{
+	QtClientForm *m_frm;
+public:
+	QtClientHandler(int prio, QtClientForm *form)
+		: MessageHandler("call.route",prio),m_frm(form) { }
+	virtual bool received(Message &msg);
+};
+	
+bool QtClientHandler::received(Message &msg)
+{
+	String caller(msg.getValue("caller"));
+	Debug(DebugInfo,"caller %s",caller.c_str());
+	if (caller == "oss///dev/dsp")
+		return false;
+	String called(msg.getValue("called"));
+	if (called.null())
+		return false;
+	String mesg;
+	mesg << "You have a call from " << caller << " for " << called ;
+	Debug(DebugAll,"%s",mesg.c_str());
+	m_frm->setDialer (caller.c_str());
+	if (!m_frm->setStatus(YCS_RINGIN)) {
+		Debug (DebugAll, "Unable to proceed with call: busy");
+		return false;
+	}
+
+	unsigned long long t = Time::now() + 10000000;
+	while (Time::now() < t) { 
+		if(m_frm->getStatus() == YCS_INCALL) {
+			msg.retValue() = String("oss///dev/dsp");	    
+			Debug (DebugAll, "Call accepted<<<<<<<< ");
+			return true;
+		} else if (m_frm->getStatus() == YCS_IDLE) {
+			Debug (DebugAll, "Call rejected<<<<<<<< ");
+			return false;
+		}
+		usleep(50000);
+	}
+	m_frm->setStatus(YCS_IDLE);
+	Debug (DebugAll, "Call rejected (timeout)<<<<<<<< ");
+	return false;
+};
+
 class QtClientThread : public Thread
 {
  public:
-	QtClientThread () : Thread("QtClient"),m_app(0),m_frm(0) {}
+	QtClientThread () : Thread("QtClient"),m_app(0),m_frm(0), m_msgHandler(0) {}
 	~QtClientThread() {}
  public:
 	void run(void);
@@ -44,6 +88,7 @@ class QtClientThread : public Thread
  private:
 	QApplication *m_app;
 	QtClientForm *m_frm;
+	QtClientHandler *m_msgHandler;
 };
 
 void QtClientThread::run (void)
@@ -54,6 +99,8 @@ void QtClientThread::run (void)
 	m_frm = new QtClientForm();
 	m_app->setMainWidget (m_frm);
 	m_frm->show();
+	m_msgHandler = new QtClientHandler(1, m_frm);
+	Engine::install (m_msgHandler);
 	m_app->exec();
 	Engine::halt(0);
 	Output ("QtClientThread finished");
@@ -100,3 +147,4 @@ void QtYateClientPlugin::initialize (void)
 }
 
 INIT_PLUGIN(QtYateClientPlugin);
+

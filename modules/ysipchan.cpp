@@ -81,6 +81,20 @@ public:
     virtual bool received(Message &msg);
 };
 
+class HaltHandler : public MessageHandler
+{
+public:
+    HaltHandler(const char *name) : MessageHandler(name) { }
+    virtual bool received(Message &msg);
+};
+
+class StatusHandler : public MessageHandler
+{
+public:
+    StatusHandler(const char *name) : MessageHandler(name) { }
+    virtual bool received(Message &msg);
+};
+										
 class SIPConnHandler : public MessageReceiver
 {
 public:
@@ -165,21 +179,25 @@ public:
     void reInvite(SIPTransaction* t);
     void hangup();
     inline String id() const
-        { return "sip/" + m_id; }
+	{ return "sip/" + m_id; }
     inline const SIPDialog& dialog() const
 	{ return m_id; }
     inline const String& status() const
-        { return m_status; }
+	{ return m_status; }
     inline void setStatus(const char *status, int state = -1)
-        { m_status = status; if (state >= 0) m_state = state; }
+	{ m_status = status; if (state >= 0) m_state = state; }
     inline void setReason(const char* str = "Request Terminated", int code = 487)
 	{ m_reason = str; m_reasonCode = code; }
     inline void setTarget(const char *target = 0)
-        { m_target = target; }
+	{ m_target = target; }
     inline const String& getTarget() const
-        { return m_target; }
+	{ return m_target; }
     inline SIPTransaction* getTransaction() const
 	{ return m_tr; }
+    inline const String& getHost() const
+	{ return m_host; }
+    inline int getPort() const
+	{ return m_port; }
     static YateSIPConnection* find(const String& id);
     static YateSIPConnection* find(const SIPDialog& id);
 private:
@@ -220,9 +238,9 @@ public:
     virtual void cleanup();
     bool route();
     inline static int count()
-        { return s_count; }
+	{ return s_count; }
     inline static int routed()
-        { return s_routed; }
+	{ return s_routed; }
 private:
     SIPTransaction* m_tr;
     Message* m_msg;
@@ -489,7 +507,7 @@ void YateSIPEndPoint::run ()
 	FD_ZERO(&fds);
 	FD_SET(m_netfd, &fds);
 	/* Wait up to 20000 microseconds. */
-        tv.tv_sec = 0;
+	tv.tv_sec = 0;
 	tv.tv_usec = 20000;
 
 	retval = select(m_netfd+1, &fds, NULL, NULL, &tv);
@@ -562,9 +580,9 @@ static int s_maxqueue = 5;
 void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 {
     if (Engine::exiting()) {
-        Debug(DebugWarn,"Dropping call, engine is exiting");
+	Debug(DebugWarn,"Dropping call, engine is exiting");
 	e->getTransaction()->setResponse(500, "Server Shutting Down");
-        return;
+	return;
     }
 
     if (e->getMessage()->getParam("To","tag")) {
@@ -576,14 +594,14 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	    Debug(DebugWarn,"Got re-INVITE for missing dialog");
 	    e->getTransaction()->setResponse(481, "Call/Transaction Does Not Exist");
 	}
-        return;
+	return;
     }
 
     int cnt = SipMsgThread::count();
     if (cnt > s_maxqueue) {
-        Debug(DebugWarn,"Dropping call, there are already %d waiting",cnt);
+	Debug(DebugWarn,"Dropping call, there are already %d waiting",cnt);
 	e->getTransaction()->setResponse(503, "Service Unavailable");
-        return;
+	return;
     }
 
     String callid(t->getCallID());
@@ -615,8 +633,8 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
     }
     SipMsgThread *thr = new SipMsgThread(t,m);
     if (!thr->startup()) {
-        Debug(DebugWarn,"Error starting routing thread %p ! [%p]",thr,this);
-        delete thr;
+	Debug(DebugWarn,"Error starting routing thread %p ! [%p]",thr,this);
+	delete thr;
 	t->setResponse(500, "Server Internal Error");
     }
 }
@@ -742,7 +760,7 @@ void YateSIPConnection::hangup()
     msg->addParam("driver","sip");
     msg->addParam("id",id());
     if (m_target)
-        msg->addParam("targetid",m_target);
+	msg->addParam("targetid",m_target);
     Engine::enqueue(msg);
     msg = 0;
     switch (m_state) {
@@ -1075,13 +1093,13 @@ bool SipMsgThread::route()
 	return false;
     }
     if (ok) {
-        *m_msg = "call.execute";
-        m_msg->addParam("callto",m_msg->retValue());
-        m_msg->retValue().clear();
+	*m_msg = "call.execute";
+	m_msg->addParam("callto",m_msg->retValue());
+	m_msg->retValue().clear();
 	YateSIPConnection* conn = new YateSIPConnection(*m_msg,m_tr);
 	m_msg->userData(conn);
 	if (Engine::dispatch(m_msg)) {
-            Debug(DebugInfo,"Routing SIP call %s (%p) to '%s' [%p]",
+	    Debug(DebugInfo,"Routing SIP call %s (%p) to '%s' [%p]",
 		m_id.c_str(),m_tr,m_msg->getValue("callto"),this);
 	    conn->setStatus("routed");
 	    conn->setTarget(m_msg->getValue("targetid"));
@@ -1123,7 +1141,7 @@ void SipMsgThread::run()
     s_route.lock();
     s_count--;
     if (ok)
-        s_routed++;
+	s_routed++;
     s_route.unlock();
 }
 
@@ -1141,8 +1159,8 @@ bool SIPHandler::received(Message &msg)
     if (!dest.startSkip("sip/",false))
 	return false;
     if (!msg.userData()) {
-        Debug(DebugWarn,"SIP call found but no data channel!");
-        return false;
+	Debug(DebugWarn,"SIP call found but no data channel!");
+	return false;
     }
     YateSIPConnection* conn = new YateSIPConnection(msg,dest);
     if (conn->getTransaction()) {
@@ -1202,6 +1220,38 @@ bool SIPConnHandler::received(Message &msg, int id)
     return true;
 }
 
+bool StatusHandler::received(Message &msg)
+{
+    const char *sel = msg.getValue("module");
+    if (sel && ::strcmp(sel,"ysipchan") && ::strcmp(sel,"varchans"))
+	return false;
+    Lock lock(s_mutex);
+    String st("name=ysipchan,type=varchans,format=Status|Caller");
+    st << ";chans=" << s_calls.count() << ";";
+    ObjList *l = &s_calls;
+    bool first = true;
+    for (; l; l=l->next()) {
+	YateSIPConnection *c = static_cast<YateSIPConnection *>(l->get());
+	if (c) {
+	    if (first)
+		first = false;
+	    else
+		st << ",";
+	    st << c->id() << "=" << c->status() << "|" << c->getHost() << ":" << c->getPort();
+	}
+    }
+    msg.retValue() << st << "\n";
+    return false;
+}
+
+bool HaltHandler::received(Message &msg)
+{
+    // Clear calls early - give the endpoint a chance to do only minimal
+    //  processing later in the destructor
+    s_calls.clear();
+    return false;
+}
+
 SIPPlugin::SIPPlugin()
     : m_handler(0), m_endpoint(0)
 {
@@ -1220,12 +1270,11 @@ void SIPPlugin::initialize()
     s_cfg.load();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
-	if(!(m_endpoint->Init()))
-		{
-		    delete m_endpoint;
-		    m_endpoint = 0;
-		    return;
-		}
+	if (!(m_endpoint->Init())) {
+	    delete m_endpoint;
+	    m_endpoint = 0;
+	    return;
+	}
 	else 
 	    m_endpoint->startup();
     }
@@ -1235,7 +1284,8 @@ void SIPPlugin::initialize()
 	Engine::install(new MessageRelay("call.answered",m_handler,SIPConnHandler::Answered));
 	Engine::install(new MessageRelay("call.drop",m_handler,SIPConnHandler::Drop));
 	Engine::install(new SIPHandler("call.execute"));
-//	Engine::install(new StatusHandler("engine.status"));
+	Engine::install(new HaltHandler("engine.halt"));
+	Engine::install(new StatusHandler("engine.status"));
     }
 }
 

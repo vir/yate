@@ -203,7 +203,7 @@ void ThreadPrivate::killall()
 	bool ok = t->cancel();
 	if (ok) {
 	    // delay a little so threads have a chance to clean up
-	    for (int i=0; i<5; i++) {
+	    for (int i=0; i<1000; i++) {
 		tmutex.lock();
 		bool done = (t != l->get());
 		tmutex.unlock();

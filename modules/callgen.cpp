@@ -46,10 +46,10 @@ static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|
 class GenConnection : public DataEndpoint
 {
 public:
-    GenConnection();
+    GenConnection(const String& callto);
     ~GenConnection();
     virtual const String& toString() const
-        { return m_id; }
+	{ return m_id; }
     virtual void disconnected(bool final, const char *reason);
     void ringing();
     void answered();
@@ -59,10 +59,12 @@ public:
 	{ return m_id; }
     inline const String& status() const
 	{ return m_status; }
+    inline const String& party() const
+	{ return m_callto; }
     inline void setTarget(const char *target = 0)
-        { m_target = target; }
+	{ m_target = target; }
     inline const String& getTarget() const
-        { return m_target; }
+	{ return m_target; }
     inline unsigned long long age() const
 	{ return Time::now() - m_start; }
     static GenConnection* find(const String& id);
@@ -70,6 +72,7 @@ public:
 private:
     String m_id;
     String m_status;
+    String m_callto;
     String m_target;
     unsigned long long m_start;
 };
@@ -87,9 +90,9 @@ class ConnHandler : public MessageReceiver
 {
 public:
     enum {
-        Ringing,
-        Answered,
-        Execute,
+	Ringing,
+	Answered,
+	Execute,
 	Drop,
     };
     virtual bool received(Message &msg, int id);
@@ -118,9 +121,11 @@ private:
     bool m_first;
 };
 
-GenConnection::GenConnection()
+GenConnection::GenConnection(const String& callto)
+    : m_callto(callto)
 {
     m_start = Time::now();
+    m_status = "calling";
     s_mutex.lock();
     s_calls.append(this);
     m_id << "callgen/" << ++s_total;
@@ -130,6 +135,7 @@ GenConnection::GenConnection()
 
 GenConnection::~GenConnection()
 {
+    m_status = "destroyed";
     s_mutex.lock();
     s_calls.remove(this,false);
     --s_current;
@@ -176,7 +182,7 @@ bool GenConnection::oneCall(String* target)
     }
     m = "call.execute";
     m.addParam("callto",callto);
-    GenConnection* conn = new GenConnection;
+    GenConnection* conn = new GenConnection(callto);
     m.addParam("id",conn->id());
     m.userData(conn);
     if (Engine::dispatch(m)) {
@@ -198,11 +204,13 @@ bool GenConnection::oneCall(String* target)
 void GenConnection::disconnected(bool final, const char *reason)
 {
     Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",m_id.c_str(),reason,this);
+    m_status = "disconnected";
 }
 
 void GenConnection::ringing()
 {
     Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
+    m_status = "ringing";
     s_mutex.lock();
     ++s_ringing;
     bool media =s_cfg.getBoolValue("parameters","earlymedia",true);
@@ -214,6 +222,7 @@ void GenConnection::ringing()
 void GenConnection::answered()
 {
     Debug("CallGen",DebugInfo,"Answered '%s' [%p]",m_id.c_str(),this);
+    m_status = "answered";
     s_mutex.lock();
     ++s_answers;
     s_mutex.unlock();
@@ -252,10 +261,10 @@ bool ConnHandler::received(Message &msg, int id)
     }
     String text(msg.getValue("text"));
     switch (id) {
-        case Answered:
+	case Answered:
 	    conn->answered();
 	    break;
-        case Ringing:
+	case Ringing:
 	    conn->ringing();
 	    break;
 	case Execute:
@@ -379,18 +388,34 @@ bool CmdHandler::received(Message &msg, int id)
 {
     String tmp;
     switch (id) {
-        case Status:
+	case Status:
 	    tmp = msg.getValue("module");
 	    if (tmp.null() || (tmp == "callgen")) {
-		msg.retValue() << "name=callgen,type=misc;total=" << s_total
-		    << ",current=" << s_current
+		s_mutex.lock();
+		msg.retValue() << "name=callgen,type=varchans,format=Status|Callto"
+		    << ";total=" << s_total
 		    << ",ring=" << s_ringing
-		    << ",answered=" << s_answers << "\n";
+		    << ",answered=" << s_answers
+		    << ",chans=" << s_current << ";";
+		ObjList *l = &s_calls;
+		bool first = true;
+		for (; l; l=l->next()) {
+		    GenConnection *c = static_cast<GenConnection *>(l->get());
+		    if (c) {
+			if (first)
+			    first = false;
+			else
+			    msg.retValue() << ",";
+			msg.retValue() << c->id() << "=" << c->status() << "|" << c->party();
+		    }
+		}
+		msg.retValue() << "\n";
+		s_mutex.unlock();
 		if (tmp)
 		    return true;
 	    }
 	    break;
-        case Command:
+	case Command:
 	    tmp = msg.getValue("line");
 	    if (tmp.startSkip("callgen"))
 		return doCommand(tmp,msg.retValue());

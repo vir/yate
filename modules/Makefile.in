@@ -160,5 +160,5 @@ ysipchan.yate: LOCALLIBS = ../contrib/ysip/libysip.a
 ../contrib/qt/libqtclientform.a:
 	$(MAKE) -C ../contrib/qt
 
-../contrib/sip/libysip.a:
+../contrib/ysip/libysip.a:
 	$(MAKE) -C ../contrib/ysip

@@ -1,3 +1,7 @@
+Fri Mar 18 2005 Paul Chitescu <paulc-devel@null.ro>
+- Bumped version to 0.8.8
+- Rearranged directories and file names
+
 Tue Jan 18 2005 Paul Chitescu <paulc-devel@null.ro>
 - Version 0.8.7
 - Fixed session destruction in libiax

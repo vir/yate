@@ -23,8 +23,7 @@
  */
 
 
-#include <telengine.h>
-#include <telephony.h>
+#include <yatephone.h>
 #include <yateversn.h>
 
 #include <stdio.h>

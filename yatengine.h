@@ -1,5 +1,5 @@
 /**
- * telengine.h
+ * yatengine.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
@@ -20,8 +20,8 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __TELENGINE_H
-#define __TELENGINE_H
+#ifndef __YATENGINE_H
+#define __YATENGINE_H
 
 #ifndef __cplusplus
 #error C++ is required
@@ -2353,4 +2353,4 @@ private:
 
 }; // namespace TelEngine
 
-#endif /* __TELENGINE_H */
+#endif /* __YATENGINE_H */

@@ -1,5 +1,5 @@
 /**
- * telephony.h
+ * yatephone.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
@@ -20,14 +20,14 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __TELEPHONY_H
-#define __TELEPHONY_H
+#ifndef __YATEPHONE_H
+#define __YATEPHONE_H
 
 #ifndef __cplusplus
 #error C++ is required
 #endif
 
-#include <telengine.h>
+#include <yatengine.h>
 	
 /**
  * Holds all Telephony Engine related classes.
@@ -720,4 +720,4 @@ public:
 
 }; // namespace TelEngine
 
-#endif /* __TELEPHONY_H */
+#endif /* __YATEPHONE_H */

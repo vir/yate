@@ -3,7 +3,7 @@
     This file holds the entry point of the Telephony Engine
 */
 
-#include <telengine.h>
+#include <yatengine.h>
 
 #include <unistd.h>
 

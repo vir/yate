@@ -21,8 +21,8 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <telengine.h>
-#include <telephony.h>
+#include <yatengine.h>
+#include <yatephone.h>
 
 /** 
  * We use Telephony Engine namespace, which in fact holds just the 

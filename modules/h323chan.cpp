@@ -54,8 +54,7 @@
 #define USE_CAPABILITY_FACTORY
 #endif
 
-#include <telengine.h>
-#include <telephony.h>
+#include <yatephone.h>
 #include <yateversn.h>
 
 #include <string.h>

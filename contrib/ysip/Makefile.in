@@ -9,7 +9,7 @@ DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
-INCFILES := @top_srcdir@/telengine.h @top_srcdir@/telephony.h \
+INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h \
 	@srcdir@/ysip.h @srcdir@/util.h
 
 PROGS=

@@ -1,0 +1,76 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine
+
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
+CXX := @CXX@ -Wall
+SED := sed
+DEFS :=
+LIBAUX:= -ldl
+LIBTHR:= -lpthread
+INCLUDES := -I.. -I@top_srcdir@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+LDFLAGS:=
+LDCONFIG:=true
+
+MKDEPS := ../config.status
+YLIB:= ../libyate.so.@PACKAGE_VERSION@
+EINC := @top_srcdir@/yatengine.h
+PINC := @top_srcdir@/yatephone.h
+LIBS :=
+ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
+	Message.o Mutex.o Thread.o Plugin.o Engine.o MD5.o
+TELOBJS :=DataBlock.o DataFormat.o
+
+LIBOBJS := $(ENGOBJS) $(TELOBJS)
+CLEANS = $(LIBOBJS) core
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CXX) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+bindir = @bindir@
+libdir = @libdir@
+incdir = @includedir@/yate
+mandir = @mandir@
+docdir = $(prefix)/share/doc/yate-@PACKAGE_VERSION@
+vardir = @localstatedir@/lib/yate
+moddir = @libdir@/yate
+confdir = @sysconfdir@/yate
+
+.PHONY: all
+all: $(YLIB)
+
+.PHONY: clean
+clean:
+	@-$(RM) $(CLEANS) 2>/dev/null
+
+.PHONY: strip
+strip: all
+	-strip --strip-debug --discard-locals $(YLIB)
+
+Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
+	$(COMPILE) -c $<
+
+DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) $(EINC) $(PINC)
+	$(COMPILE) -c $<
+
+DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(EINC) $(PINC)
+	$(COMPILE) -c $<
+
+Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(EINC)
+	$(COMPILE) @MUTEX_HACK@ -c $<
+
+Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(EINC)
+	$(COMPILE) @THREAD_KILL@ -c $<
+
+%.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in $(MKDEPS)
+	cd .. && ./config.status
+
+$(YLIB): $(LIBOBJS) $(LIBS)
+	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)

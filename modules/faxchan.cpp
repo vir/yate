@@ -42,8 +42,7 @@ extern "C" {
 #include "spandsp.h"
 };
 
-#include <telengine.h>
-#include <telephony.h>
+#include <yatephone.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

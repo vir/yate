@@ -20,7 +20,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "telengine.h"
+#include "yatengine.h"
 
 extern "C" int main(int argc, const char **argv, const char **environ)
 {

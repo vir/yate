@@ -36,7 +36,7 @@ strip: all
 clean:
 	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
 
-%.o: @srcdir@/%.cpp $(MKDEPS) @top_srcdir@/telengine.h
+%.o: @srcdir@/%.cpp $(MKDEPS) @top_srcdir@/yatengine.h
 	$(COMPILE) -c $<
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)

@@ -35,8 +35,7 @@ extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 #include <sys/ioctl.h>
 #include <fcntl.h>
 		     
-#include <telengine.h>
-#include <telephony.h>
+#include <yatephone.h>
 #include <stdio.h>
 
 

@@ -10,7 +10,6 @@ DEBUG :=
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
-LIBAUX:= -ldl
 LIBTHR:= -lpthread
 INCLUDES := -I. -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
@@ -19,19 +18,16 @@ LDCONFIG:=true
 
 MKDEPS := ./config.status
 PROGS:= yate
-SLIBS:= libyate.so.@PACKAGE_VERSION@ libyate.so
-INCS := telengine.h telephony.h
+YLIB := libyate.so.@PACKAGE_VERSION@
+SLIBS:= $(YLIB) libyate.so
+INCS := yatengine.h yatephone.h
 GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
 DOCS := README COPYING ChangeLog
-ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
-	Message.o Mutex.o Thread.o Plugin.o Engine.o MD5.o
-TELOBJS :=DataBlock.o DataFormat.o
 OBJS := main.o
 
-LIBOBJS := $(ENGOBJS) $(TELOBJS)
-CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) $(LIBOBJS) yatepaths.h core
+CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) yatepaths.h core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
@@ -55,6 +51,7 @@ everything: engine contrib modules test apidocs
 .PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:
 	@-$(RM) $(CLEANS) 2>/dev/null
+	$(MAKE) -C ./engine $@
 	$(MAKE) -C ./modules $@
 	$(MAKE) -C ./test $@
 	@for i in contrib/*; do \
@@ -81,14 +78,14 @@ cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
 .PHONY: engine contrib modules test apidocs-build check-topdir
-engine: tables yatepaths.h $(LIBS) $(SLIBS) $(PROGS)
+engine: tables yatepaths.h libyate.so $(PROGS)
 
 apidocs-build: check-topdir
 	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS)
 
 apidocs: @srcdir@/docs/api/index.html
 
-@srcdir@/docs/api/index.html: @srcdir@/telengine.h @srcdir@/telephony.h
+@srcdir@/docs/api/index.html: @srcdir@/yatengine.h @srcdir@/yatephone.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war
@@ -125,8 +122,10 @@ yatepaths.h: $(MKDEPS)
 	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' > $@
 	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' >> $@
 
-.PHONY: install install-root
-install install-root: all apidocs
+.PHONY: install install-root install-noapi install-api uninstall uninstall-root
+install install-root: all apidocs install-noapi install-api
+
+install-noapi: all
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
 	for i in $(SLIBS) ; do \
 	    if [ -h "$$i" ]; then \
@@ -158,10 +157,11 @@ install install-root: all apidocs
 	for i in $(DOCS) ; do \
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
 	done ;
+
+install-api: apidocs
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
 	install -m 0644 @srcdir@/docs/api/*.html "$(DESTDIR)$(docdir)/api/"
 
-.PHONY: uninstall uninstall-root
 uninstall uninstall-root:
 	@-for i in $(SLIBS) ; do \
 	    rm "$(DESTDIR)$(libdir)/$$i" ; \
@@ -216,22 +216,7 @@ snapshot tarball: check-topdir clean tables apidocs
 	$$wd; \
 	rm $$wd/tar-exclude
 
-Engine.o: @srcdir@/Engine.cpp $(MKDEPS) @srcdir@/telengine.h yateversn.h yatepaths.h
-	$(COMPILE) -c $<
-
-DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
-	$(COMPILE) -c $<
-
-DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) @srcdir@/telengine.h @srcdir@/telephony.h
-	$(COMPILE) -c $<
-
-Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) @srcdir@/telengine.h
-	$(COMPILE) @MUTEX_HACK@ -c $<
-
-Thread.o: @srcdir@/Thread.cpp $(MKDEPS) @srcdir@/telengine.h
-	$(COMPILE) @THREAD_KILL@ -c $<
-
-%.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/telengine.h
+%.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<
 
 @srcdir@/configure: @srcdir@/configure.in
@@ -243,19 +228,20 @@ config.status: @srcdir@/configure
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	./config.status
 
-yate: $(OBJS) libyate.so $(LIBS)
+yate: libyate.so $(OBJS) $(LIBS)
 	$(LINK) -o $@ $(LIBTHR) $^
 
-libyate.so: libyate.so.@PACKAGE_VERSION@
+libyate.so: $(YLIB)
 	ln -sf $^ $@
 
-libyate.so.@PACKAGE_VERSION@: $(LIBOBJS) $(LIBS)
-	$(LINK) -shared -o $@ -Wl,--soname=$@ $(LIBTHR) $^ $(LIBAUX)
+.PHONY: $(YLIB)
+$(YLIB):
+	$(MAKE) -C ./engine all
 
 .PHONY: help
 help:
 	@echo -e 'Usual make targets:\n\
 	    all engine contrib modules apidocs test everything\n\
-	    install uninstall install-root uninstall-root\n\
+	    install uninstall install-noapi install-root uninstall-root\n\
 	    clean distclean cvsclean (avoid this one!)\n\
 	    snapshot tarball'

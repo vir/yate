@@ -32,8 +32,7 @@
  * by Maciek Kaminski (maciejka_at_tiger.com.pl)
  */
 
-#include <telengine.h>
-#include <telephony.h>
+#include <yatephone.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

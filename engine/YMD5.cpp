@@ -23,7 +23,8 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <telengine.h>
+#include "yatengine.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -359,6 +360,7 @@ bool MD5::update(const void* buf, unsigned int len)
 	return false;
     init();
     MD5_Update((MD5_CTX*)m_private, (unsigned char const*)buf, len);
+    return true;
 }
 
 const unsigned char* MD5::rawDigest()

@@ -39,7 +39,7 @@ ifeq (@HAVE_EXOSIP@_@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes_yes)
 PROGS := $(PROGS) sipchan.yate
 endif
 
-ifeq (@HAVE_ORTP@_@HAVE_GLIB2@,yes_yes)
+ifneq (@HAVE_ORTP@,no)
 PROGS := $(PROGS) rtpchan.yate
 endif
 

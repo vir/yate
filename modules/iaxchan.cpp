@@ -306,7 +306,6 @@ void YateIAXEndPoint::run(void)
 		    break;
 		case IAX_EVENT_REGREQ:
 		    reg(e);
-		    Debug(DebugInfo,"am primit un registration request");
 		    break;
 		case IAX_EVENT_AUTHRP:
 		    answer(e);
@@ -327,10 +326,29 @@ void YateIAXEndPoint::run(void)
 
 bool YateIAXEndPoint::accepting(iax_event *e)
 {
+    int masked = e->ies.format & s_ast_formats;
+    const TokenDict *frm = dict_iaxformats;
+    for (; frm->token; frm++) {
+	if (frm->value == masked)
+	    break;
+    }
+    if (!frm->token) {
+	masked = e->ies.capability & s_ast_formats;
+        frm = dict_iaxformats;
+	for (; frm->token; frm++) {
+	    if (frm->value & masked)
+		break;
+	}
+    }
+    if (!frm->token) {
+	Debug(DebugGoOn,"IAX format 0x%X (local: 0x%X, remote: 0x%X, common: 0x%X) not available in [%p]",
+	    e->ies.format,s_ast_formats,e->ies.capability,masked,this);
+    }
+
     if (s_cfg.getBoolValue("users","unauth",false))
     {
 	s_mutex.lock();
-	iax_accept(e->session,2);
+	iax_accept(e->session,frm->value);
 	s_mutex.unlock();
 	return 1;
     }	
@@ -342,7 +360,7 @@ bool YateIAXEndPoint::accepting(iax_event *e)
     if (Engine::dispatch(m) && m.retValue().null())
     {
 	s_mutex.lock();
-	iax_accept(e->session,2);
+	iax_accept(e->session,frm->value);
 	s_mutex.unlock();
 	return 1;
     }
@@ -448,7 +466,6 @@ void YateIAXEndPoint::answer(iax_event *e)
 	    format = e->ies.format;
 	else 
 	    format = e->session->voiceformat;
-	Debug(DebugInfo,"e->ies.format  %d e->session->voiceformat %d e->session->peerformats %s",e->ies.format, e->session->voiceformat, e->session->peerformats);
 	if (e->ies.capability != 0) 
 	    capability = e->ies.capability;
 	else 

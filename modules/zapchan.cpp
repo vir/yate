@@ -8,6 +8,7 @@
 extern "C" {
 #include <libpri.h>
 #include <linux/zaptel.h>
+extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 };
 #include <unistd.h>
 #include <string.h>
@@ -310,7 +311,8 @@ class PriSpan : public GenObject, public Thread
 {
 public:
     static PriSpan *create(int span, int chan1, int nChans, int dChan, bool isNet,
-			   int switchType, int dialPlan, int presentation, int nsf = YATE_NSF_DEFAULT);
+			   int switchType, int dialPlan, int presentation,
+			   bool overlapDial, int nsf = YATE_NSF_DEFAULT);
     virtual ~PriSpan();
     virtual void run();
     inline struct pri *pri()
@@ -337,7 +339,7 @@ public:
 
 private:
     PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int nsf);
+    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, bool overlapDial, int nsf);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
     void restartChan(int chan, bool outgoing, bool force = false);
@@ -483,7 +485,8 @@ unsigned long long PriSpan::restartPeriod = 0;
 bool PriSpan::dumpEvents = false;
 
 PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
-			 int switchType, int dialPlan, int presentation, int nsf)
+			 int switchType, int dialPlan, int presentation,
+			 bool overlapDial, int nsf)
 {
     int fd = ::open("/dev/zap/channel", O_RDWR, 0600);
     if (fd < 0)
@@ -491,7 +494,7 @@ PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
     struct pri *p = makePri(fd,
 	(dChan >= 0) ? dChan+chan1-1 : -1,
 	(isNet ? PRI_NETWORK : PRI_CPE),
-	switchType, nsf);
+	switchType, overlapDial, nsf);
     if (!p) {
 	::close(fd);
 	return 0;
@@ -499,7 +502,8 @@ PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, bool isNet,
     return new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation);
 }
 
-struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf)
+struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype,
+			     bool overlapDial, int nsf)
 {
     if (dchan >= 0) {
 	// Set up the D channel if we have one
@@ -532,6 +536,10 @@ struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype, int nsf
 #ifdef PRI_NSF_NONE
     if (ret)
 	::pri_set_nsf(ret, nsf);
+#endif
+#ifdef PRI_SET_OVERLAPDIAL
+    if (ret)
+	::pri_set_overlapdial(ret, overlapDial);
 #endif
     return ret;
 }
@@ -672,6 +680,10 @@ void PriSpan::handleEvent(pri_event &ev)
 	    break;
 	case PRI_EVENT_PROCEEDING:
 	    Debug(DebugInfo,"Call proceeding on channel %d on span %d",ev.proceeding.channel,m_span);
+	    proceedingChan(ev.proceeding.channel);
+	    break;
+	case PRI_EVENT_PROGRESS:
+	    Debug(DebugInfo,"Call progressing on channel %d on span %d",ev.proceeding.channel,m_span);
 	    proceedingChan(ev.proceeding.channel);
 	    break;
 	default:
@@ -1103,15 +1115,26 @@ bool ZapChan::call(Message &msg, const char *called)
     else
 	msg.userData(this);
     Output("Calling '%s' on zap/%d (%d/%d)",called,m_abschan,m_span->span(),m_chan);
+    char *caller = (char *)msg.getValue("caller");
+    int callerplan = lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan());
+    char *callername = (char *)msg.getValue("callername");
+    int callerpres = lookup(msg.getValue("callerpres"),dict_str2pres,m_span->pres());
+    int calledplan = lookup(msg.getValue("calledplan"),dict_str2dplan,m_span->dplan());
+    Debug(DebugAll,"Caller='%s' name='%s' plan=%s pres=%s, Called plan=%s",
+	caller,callername,lookup(callerplan,dict_str2dplan),
+	lookup(callerpres,dict_str2pres),lookup(calledplan,dict_str2dplan));
     m_call =::pri_new_call(span()->pri());
+#if 0
     ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
-	(char *)msg.getValue("caller"),
-	lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan()),
-	(char *)msg.getValue("callername"),
-	lookup(msg.getValue("callerpres"),dict_str2pres,m_span->pres()),
-	(char *)called,
-	lookup(msg.getValue("calledplan"),dict_str2dplan,m_span->dplan()),
-	layer1);
+	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
+    );
+#endif
+    struct pri_sr *req = ::pri_sr_new();
+    ::pri_sr_set_bearer(req,0/*transmode*/,layer1);
+    ::pri_sr_set_channel(req,m_chan,1/*exclusive*/,!m_isdn);
+    ::pri_sr_set_caller(req,caller,callername,callerplan,callerpres);
+    ::pri_sr_set_called(req,(char *)called,calledplan,1/*complete*/);
+    ::q931_setup(span()->pri(),m_call,req);
     setTimeout(10000000);
     return true;
 }
@@ -1309,6 +1332,7 @@ void ZaptelPlugin::initialize()
 			PRI_UNKNOWN),
 		    cfg.getIntValue(sect,"presentation",dict_str2pres,
 			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED),
+		    cfg.getBoolValue(sect,"overlapdial",false),
 		    cfg.getIntValue(sect,"facilities",dict_str2nsf,
 			YATE_NSF_DEFAULT)
 		);

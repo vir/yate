@@ -128,12 +128,9 @@ public:
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
     bool buildParty(SIPMessage* message);
-    inline ObjList &calls()
-	{ return m_calls; }
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
 private:
-    ObjList m_calls;
     int m_localport;
     int m_port;
     int m_netfd;
@@ -361,7 +358,12 @@ YateSIPEndPoint::YateSIPEndPoint()
 YateSIPEndPoint::~YateSIPEndPoint()
 {
     Debug(DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
+    s_calls.clear();
+    // send any pending events
+    while (m_engine->process())
+	;
     delete m_engine;
+    m_engine = 0;
 }
 
 bool YateSIPEndPoint::buildParty(SIPMessage* message)

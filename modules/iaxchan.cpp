@@ -358,7 +358,7 @@ void YateIAXEndPoint::run(void)
 	    s_mutex.unlock();
 	    if (!e)
 		break;
-	    DDebug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
+	    XDebug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
 	    YateIAXConnection *conn = 0;
 	    // We first take care of the special events
 	    switch(e->etype) {
@@ -731,7 +731,7 @@ bool YateIAXConnection::startRouting(iax_event *e)
 // Handle regular connection events with a valid session
 void YateIAXConnection::handleEvent(iax_event *event)
 {
-    DDebug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
+    XDebug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
     switch(event->etype) {
 	case IAX_EVENT_ACCEPT:
 	    Debug("IAX",DebugInfo,"ACCEPT inside a call [%p]",this);

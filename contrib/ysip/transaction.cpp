@@ -259,7 +259,7 @@ void SIPTransaction::setResponse(int code, const char* reason)
 
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
-    if (!message)
+    if (!(message && m_firstMessage))
 	return false;
     DDebug("SIPTransaction",DebugAll,"processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
@@ -276,7 +276,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 		(getCallID() != message->getHeaderValue("Call-ID")) ||
 		(getDialogTag() != message->getParamValue("To","tag")))
 		return false;
-	    Debug("SIPTransaction",DebugInfo,"Found non-branch ACK response to our 2xx");
+	    Debug("SIPTransaction",DebugAll,"Found non-branch ACK response to our 2xx");
 	}
 	else if (getMethod() != message->method) {
 	    if (!(isIncoming() && isInvite() && message->isACK()))
@@ -284,8 +284,19 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	}
     }
     else {
-	Debug("SIPTransaction",DebugWarn,"Non-branch matching not implemented!");
-	return false;
+	if (getMethod() != message->method) {
+	    if (!(isIncoming() && isInvite() && message->isACK()))
+		return false;
+	}
+	if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
+	    (getURI() != message->uri) ||
+	    (getCallID() != message->getHeaderValue("Call-ID")) ||
+	    (m_firstMessage->getHeaderValue("From") != message->getHeaderValue("From")) ||
+	    (m_firstMessage->getHeaderValue("To") != message->getHeaderValue("To")) ||
+	    (m_firstMessage->getHeaderValue("Via") != message->getHeaderValue("Via")))
+	    return false;
+	if (message->isACK() && (getDialogTag() != message->getParamValue("To","tag")))
+	    return false;
     }
     if (isOutgoing() != message->isAnswer()) {
 	Debug("SIPTransaction",DebugAll,"Ignoring retransmitted %s %p '%s' in [%p]",

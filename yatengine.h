@@ -105,6 +105,20 @@ bool DDebug(const char *facility, int level, const char *format, ...);
 
 /**
  * Convenience macro.
+ * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * debugging) else it does not get compiled at all.
+ */
+bool XDebug(int level, const char *format, ...);
+
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * debugging) else it does not get compiled at all.
+ */
+bool XDebug(const char *facility, int level, const char *format, ...);
+
+/**
+ * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
@@ -118,10 +132,21 @@ bool NDebug(int level, const char *format, ...);
 bool NDebug(const char *facility, int level, const char *format, ...);
 #endif
 
+#ifdef XDEBUG
+#undef DEBUG
+#define DEBUG
+#endif
+
 #ifdef DEBUG
 #define DDebug(arg...) Debug(arg)
 #else
 #define DDebug(arg...)
+#endif
+
+#ifdef XDEBUG
+#define XDebug(arg...) Debug(arg)
+#else
+#define XDebug(arg...)
 #endif
 
 #ifndef NDEBUG

@@ -225,7 +225,7 @@ void ExtModSource::run()
 	    data.assign(data.data(),r);
 	long long dly = tpos - Time::now();
 	if (dly > 0) {
-	    DDebug("ExtModSource",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("ExtModSource",DebugAll,"Sleeping for %lld usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(data,m_total);

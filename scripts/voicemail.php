@@ -13,7 +13,7 @@ require_once("libyate.php");
 Yate::Init();
 
 /* Install handlers for the wave end and dtmf notify messages */
-Yate::Install("chan.dtmf",10);
+Yate::Install("chan.dtmf");
 Yate::Install("chan.notify");
 
 $ourcallid = "voicemail/" . uniqid(rand(),1);
@@ -328,10 +328,10 @@ while ($state != "") {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
     if ($ev == "EOF")
-        break;
+	break;
     /* No need to handle empty events in this application */
     if ($ev == "")
-        continue;
+	continue;
     /* If we reached here we should have a valid object */
     switch ($ev->type) {
 	case "incoming":
@@ -368,7 +368,9 @@ while ($state != "") {
 
 		case "chan.dtmf":
 		    if ($ev->params["targetid"] == $ourcallid ) {
-			gotDTMF($ev->params["text"]);
+			$text = $ev->params["text"];
+			for ($i = 0; $i < strlen($text); $i++)
+			    gotDTMF($text[$i]);
 			$ev->handled = true;
 		    }   
 		    break;

@@ -901,7 +901,7 @@ void ZapSource::run()
 	int fd = m_owner->fd();
 	if (fd != -1) {
 	    rd = ::read(fd,m_buf.data(),m_buf.length());
-	    DDebug(DebugAll,"ZapSource read %d bytes",rd);
+	    XDebug(DebugAll,"ZapSource read %d bytes",rd);
 	    if (rd > 0) {
 		switch (m_owner->law()) {
 		    case -1:
@@ -932,7 +932,7 @@ void ZapSource::run()
 void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     int fd = m_owner->fd();
-    DDebug(DebugAll,"ZapConsumer fd=%d datalen=%u",fd,data.length());
+    XDebug(DebugAll,"ZapConsumer fd=%d datalen=%u",fd,data.length());
     if ((fd != -1) && !data.null()) {
 	DataBlock blk;
 	switch (m_owner->law()) {

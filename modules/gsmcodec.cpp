@@ -116,7 +116,7 @@ void GsmCodec::Consume(const DataBlock &data, unsigned long timeDelta)
 	}
 	timeDelta = frames*sizeof(gsm_block) / 2;
     }
-    DDebug("GsmCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
+    XDebug("GsmCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
 	m_encoding ? "en" : "de",frames,m_data.length(),consumed,outdata.length());
     if (frames) {
 	m_data.cut(-consumed);

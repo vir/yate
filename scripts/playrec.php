@@ -12,11 +12,11 @@ require_once("libyate.php");
 /* Always the first action to do */
 Yate::Init();
 
-/* Install a handler for the engine generated timer message */
-Yate::Install("chan.dtmf",10);
+/* Install handlers for the DTMF and wave EOF messages */
+Yate::Install("chan.dtmf");
 Yate::Install("chan.notify");
 
-$ourcallid = "external/" . uniqid(rand(),1);
+$ourcallid = "playrec/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
 $dir = "/tmp";
@@ -131,16 +131,14 @@ while ($state != "") {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
     if ($ev == "EOF")
-        break;
+	break;
     /* Empty events are normal in non-blocking operation.
        This is an opportunity to do idle tasks and check timers */
     if ($ev == "")
-        continue;
+	continue;
     /* If we reached here we should have a valid object */
     switch ($ev->type) {
 	case "incoming":
-//	    Yate::Output("PHP Message: " . $ev->name . " our id: " . $ev->params["id"] . " target id: " . $ev->params["targetid"]);
-//	    Yate::Output("current state: " . $state);
 	    switch ($ev->name) {
 		case "call.execute":
 		    $partycallid = $ev->params["id"];
@@ -168,7 +166,9 @@ while ($state != "") {
 
 		case "chan.dtmf":
 		    if ($ev->params["targetid"] == $ourcallid ) {
-			gotDTMF($ev->params["text"]);
+			$text = $ev->params["text"];
+			for ($i = 0; $i < strlen($text); $i++)
+			    gotDTMF($text[$i]);
 			$ev->handled = true;
 		    }   
 		    break;

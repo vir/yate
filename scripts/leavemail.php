@@ -123,10 +123,10 @@ while ($state != "") {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
     if ($ev == "EOF")
-        break;
+	break;
     /* No need to handle empty events in this application */
     if ($ev == "")
-        continue;
+	continue;
     /* If we reached here we should have a valid object */
     switch ($ev->type) {
 	case "incoming":

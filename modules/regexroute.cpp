@@ -134,12 +134,12 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			NDebug("RegexRoute",DebugAll,"Returning false from context '%s'", context.c_str());
 			return false;
 		    }
-		    else if (val.startSkip("jump")) {
+		    else if (val.startSkip("goto") || val.startSkip("jump")) {
 			NDebug("RegexRoute",DebugAll,"Jumping to context '%s' by rule #%u '%s'",
 			    val.c_str(),i+1,n->name().c_str());
 			return oneContext(msg,str,val,ret,depth+1);
 		    }
-		    else if (val.startSkip("include")) {
+		    else if (val.startSkip("include") || val.startSkip("call")) {
 			NDebug("RegexRoute",DebugAll,"Including context '%s' by rule #%u '%s'",
 			    val.c_str(),i+1,n->name().c_str());
 			if (oneContext(msg,str,val,ret,depth+1)) {
@@ -147,7 +147,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    return true;
 			}
 		    }
-		    else if (val.startSkip("match")) {
+		    else if (val.startSkip("match") || val.startSkip("newmatch")) {
 			if (!val.null()) {
 			    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
 				val.c_str(),i+1,n->name().c_str(),context.c_str());

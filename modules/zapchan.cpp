@@ -1236,6 +1236,7 @@ bool ZapChan::call(Message &msg, const char *called)
 		break;
 	}
 	connect(dd);
+	setTarget(msg.getValue("id"));
 	msg.addParam("targetid",id());
     }
     else

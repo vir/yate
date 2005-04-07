@@ -45,32 +45,18 @@ class GenConnection : public Channel
 public:
     GenConnection(const String& callto);
     ~GenConnection();
-    virtual const String& toString() const
-	{ return m_id; }
     virtual void disconnected(bool final, const char *reason);
     void ringing();
     void answered();
     void hangup();
     void makeSource();
-    inline const String& id() const
-	{ return m_id; }
-    inline const String& status() const
-	{ return m_status; }
     inline const String& party() const
 	{ return m_callto; }
-    inline void setTarget(const char *target = 0)
-	{ m_target = target; }
-    inline const String& getTarget() const
-	{ return m_target; }
     inline u_int64_t age() const
 	{ return Time::now() - m_start; }
-    static GenConnection* find(const String& id);
     static bool oneCall(String* target = 0);
 private:
-    String m_id;
-    String m_status;
     String m_callto;
-    String m_target;
     u_int64_t m_start;
 };
 
@@ -125,12 +111,6 @@ GenConnection::~GenConnection()
     driver()->unlock();
 }
 
-GenConnection* GenConnection::find(const String& id)
-{
-    ObjList* l = s_calls.find(id);
-    return l ? static_cast<GenConnection*>(l->get()) : 0;
-}
-
 bool GenConnection::oneCall(String* target)
 {
     Message m("call.route");
@@ -170,7 +150,7 @@ bool GenConnection::oneCall(String* target)
     m.userData(conn);
     if (Engine::dispatch(m)) {
 	conn->setTarget(m.getValue("targetid"));
-	if (conn->getTarget().null()) {
+	if (conn->targetid().null()) {
 	    Debug(DebugInfo,"Answering now generated call %s [%p] because we have no targetid",
 		conn->id().c_str(),conn);
 	    conn->answered();
@@ -186,13 +166,13 @@ bool GenConnection::oneCall(String* target)
 
 void GenConnection::disconnected(bool final, const char *reason)
 {
-    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",m_id.c_str(),reason,this);
+    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",id().c_str(),reason,this);
     m_status = "disconnected";
 }
 
 void GenConnection::ringing()
 {
-    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
+    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",id().c_str(),this);
     m_status = "ringing";
     s_mutex.lock();
     ++s_ringing;
@@ -204,7 +184,7 @@ void GenConnection::ringing()
 
 void GenConnection::answered()
 {
-    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",m_id.c_str(),this);
+    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",id().c_str(),this);
     m_status = "answered";
     s_mutex.lock();
     ++s_answers;
@@ -285,7 +265,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	s_runs = false;
 	s_numcalls = 0;
 	s_mutex.unlock();
-	s_calls.clear();
+	dropAll();
 	rval << "Stopping generator and clearing calls";
     }
     else if (line == "drop") {
@@ -293,7 +273,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	bool tmp = s_runs;
 	s_runs = false;
 	s_mutex.unlock();
-	s_calls.clear();
+	dropAll();
 	s_runs = tmp;
 	rval << "Clearing calls and continuing";
     }

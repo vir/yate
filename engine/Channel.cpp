@@ -247,12 +247,60 @@ DataConsumer* Channel::getConsumer(const char* type) const
 }
 
 
+TokenDict Module::s_messages[] = {
+    { "engine.status",   Module::Status },
+    { "engine.timer",    Module::Timer },
+    { "module.debug",    Module::Level },
+    { "engine.command",  Module::Command },
+    { "engine.help",     Module::Help },
+    { "call.execute",    Module::Execute },
+    { "call.drop",       Module::Drop },
+    { "call.ringing",    Module::Ringing },
+    { "call.answered",   Module::Answered },
+    { "chan.dtmf",       Module::Tone },
+    { "chan.text",       Module::Text },
+    { "chan.masquerade", Module::Masquerade },
+    { "chan.locate",     Module::Locate },
+    { 0, 0 }
+};
+
 unsigned int Module::s_delay = 5;
+
+const char* Module::messageName(int id)
+{
+    if ((id <= 0) || (id >PubLast))
+	return 0;
+    return lookup(id,s_messages);
+}
 
 Module::Module(const char* name, const char* type)
     : Plugin(name), Mutex(true),
-      m_init(false), m_name(name), m_type(type), m_changed(0)
+      m_init(false), m_relays(0), m_name(name), m_type(type), m_changed(0)
 {
+}
+
+bool Module::installRelay(const char* name, int id, unsigned priority)
+{
+    if (!(id && name))
+	return false;
+
+    Lock lock(this);
+    if (m_relays & id)
+	return true;
+    m_relays |= id;
+
+    Engine::install(new MessageRelay(name,this,id,priority));
+    return true;
+}
+
+bool Module::installRelay(int id, unsigned priority)
+{
+    return installRelay(messageName(id),id,priority);
+}
+
+bool Module::installRelay(const char* name, unsigned priority)
+{
+    return installRelay(name,lookup(name,s_messages),priority);
 }
 
 void Module::initialize()
@@ -265,9 +313,9 @@ void Module::setup()
     if (m_init)
 	return;
     m_init = true;
-    Engine::install(new MessageRelay("engine.status",this,Status));
-    Engine::install(new MessageRelay("engine.timer",this,Timer));
-    Engine::install(new MessageRelay("module.debug",this,Level));
+    installRelay(Status);
+    installRelay(Timer);
+    installRelay(Level);
 }
 
 void Module::changed()
@@ -385,14 +433,14 @@ void Driver::setup(const char* prefix)
     m_prefix = prefix ? prefix : name().c_str();
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
-    Engine::install(new MessageRelay("call.ringing",this,Ringing));
-    Engine::install(new MessageRelay("call.answered",this,Answered));
-    Engine::install(new MessageRelay("chan.dtmf",this,Tone));
-    Engine::install(new MessageRelay("chan.text",this,Text));
-    Engine::install(new MessageRelay("chan.masquerade",this,Masquerade,10));
-    Engine::install(new MessageRelay("chan.locate",this,Locate));
-    Engine::install(new MessageRelay("call.execute",this,Execute));
-    Engine::install(new MessageRelay("call.drop",this,Drop));
+    installRelay(Ringing);
+    installRelay(Answered);
+    installRelay(Tone);
+    installRelay(Text);
+    installRelay(Masquerade,10);
+    installRelay(Locate);
+    installRelay(Execute);
+    installRelay(Drop);
 }
 
 bool Driver::isBusy() const

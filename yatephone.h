@@ -818,6 +818,7 @@ class YATE_API Module : public Plugin, public Mutex, public MessageReceiver, pub
 {
 private:
     bool m_init;
+    int m_relays;
     String m_name;
     String m_type;
     u_int64_t m_changed;
@@ -864,20 +865,33 @@ protected:
      */
     enum {
 	// Module messages
-	Status,
-	Timer,
-	Level,
+	Status     = 0x0001,
+	Timer      = 0x0002,
+	Level      = 0x0004,
+	Command    = 0x0008,
+	Help       = 0x0010,
 	// Driver messages
-	Execute,
-	Drop,
+	Execute    = 0x0020,
+	Drop       = 0x0040,
 	// Channel messages
-	Ringing,
-	Answered,
-	Tone,
-	Text,
-	Masquerade,
-	Locate,
+	Ringing    = 0x0100,
+	Answered   = 0x0200,
+	Tone       = 0x0400,
+	Text       = 0x0800,
+	Masquerade = 0x1000,
+	Locate     = 0x2000,
+	// Last possible public ID
+	PubLast    = 0xffff,
+	// Private messages base ID
+	Private    = 0x10000
     } RelayID;
+
+    /**
+     * Find the name of a specific Relay ID
+     * @param id RelayID of the message
+     * @return Pointer to name of the message or NULL if not found
+     */
+    static const char* messageName(int id);
 
     /**
      * Constructor
@@ -890,6 +904,22 @@ protected:
      * This method is called to initialize the loaded module
      */
     virtual void initialize();
+
+    /**
+     * Install a standard message relay
+     * @param id RelayID of the new relay to create
+     * @param priority Priority of the handler, 0 = top
+     * @return True if installed or already was one installed
+     */
+    bool installRelay(int id, unsigned priority = 100);
+
+    /**
+     * Install a standard message relay
+     * @param name Name of the relay to create, must match a RelayID
+     * @param priority Priority of the handler, 0 = top
+     * @return True if installed or already was one installed
+     */
+    bool installRelay(const char* name, unsigned priority = 100);
 
     /**
      * Install standard message relays
@@ -943,6 +973,8 @@ protected:
 
 private:
     Module(); // no default constructor please
+    static TokenDict s_messages[];
+    bool installRelay(const char* name, int id, unsigned priority);
 };
 
 /**

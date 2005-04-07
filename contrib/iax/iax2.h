@@ -14,6 +14,12 @@
 #ifndef _IAX2_H
 #define _IAX2_H
 
+#if defined(_MSC_VER)
+/* disable zero-sized array in struct/union warning */
+#pragma warning(disable:4200)
+#endif
+
+
 /* Max version of IAX protocol we support */
 #define IAX_PROTO_VERSION 2
 

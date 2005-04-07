@@ -29,12 +29,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/types.h>
+#ifdef _WINDOWS
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <stdlib.h>
+#endif
 
 extern "C" {
 #include <iax-client.h>
@@ -54,6 +58,7 @@ static TokenDict dict_iaxformats[] = {
     { 0, 0 }
 };
 
+#ifndef _WINDOWS
 static TokenDict dict_tos[] = {
     { "lowdelay", IPTOS_LOWDELAY },
     { "throughput", IPTOS_THROUGHPUT },
@@ -61,6 +66,7 @@ static TokenDict dict_tos[] = {
     { "mincost", IPTOS_MINCOST },
     { 0, 0 }
 };
+#endif
 
 static bool s_debugging = true;
 static int s_ast_formats = 0;
@@ -84,7 +90,7 @@ public:
     void Forward(const DataBlock &data, unsigned long timeDelta = 0);
 private:
     unsigned m_total;
-    unsigned long long m_time;
+    u_int64_t m_time;
 };
 class YateIAXAudioConsumer : public DataConsumer
 {
@@ -100,7 +106,7 @@ private:
     YateIAXConnection *m_conn;
     int m_ast_format;
     unsigned m_total;
-    unsigned long long m_time;
+    u_int64_t m_time;
 };
 
 
@@ -273,9 +279,11 @@ bool YateIAXEndPoint::Init(void)
     }
     iax_set_error(iax_err_cb);
     iax_set_output(iax_out_cb);
+#ifndef _WINDOWS
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
     if (tos)
 	::setsockopt(iax_get_fd(),IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
+#endif
     return true;
 }
 
@@ -352,7 +360,7 @@ void YateIAXEndPoint::run(void)
 	// Sleep at most 10ms
 	if ((t < 0) || (t > 10))
 	    t = 10;
-	::usleep(t*1000);
+	Thread::msleep(t);
 	for (;;) {
 	    s_mutex.lock();
 	    e = ::iax_get_event(0);
@@ -990,7 +998,7 @@ IAXSource::~IAXSource()
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
-	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
 	    Debug(DebugInfo,"IAXSource rate=%llu b/s",m_time);
 	}
     }
@@ -1016,7 +1024,7 @@ YateIAXAudioConsumer::~YateIAXAudioConsumer()
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
-	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
 	    Debug(DebugInfo,"YateIAXAudioConsumer rate=%llu b/s",m_time);
 	}
     }
@@ -1085,8 +1093,10 @@ bool IAXConnHandler::received(Message &msg, int id)
 	    }
 	    break;
 	case DTMF:
-	    for (const char* t = msg.getValue("text"); t && *t; ++t)
-		::iax_send_dtmf(conn->session(),*t);
+	    {
+		for (const char* t = msg.getValue("text"); t && *t; ++t)
+		    ::iax_send_dtmf(conn->session(),*t);
+	    }
 	    break;
 	case Text:
 	    {

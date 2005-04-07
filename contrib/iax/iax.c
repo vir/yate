@@ -85,11 +85,6 @@
 #define IAX_EVENT_TXACCEPT  1002
 #define IAX_EVENT_TXREADY	1003
 
-/* Define Voice Smoothing to try to make some judgements and adjust timestamps
-   on incoming packets to what they "ought to be" */
-
-#define VOICE_SMOOTHING
-#undef VOICE_SMOOTHING
 
 /* Define Drop Whole Frames to make IAX shrink its jitter buffer by dropping entire
    frames rather than simply delivering them faster.  Dropping encoded frames, 
@@ -121,94 +116,32 @@ static int maxretries = 10;
 /* Dropcount (in per-MEMORY_SIZE) usually percent */
 static int iax_dropcount = 3;
 
-#if 0
-struct iax_session {
-	/* Private data */
-	void *pvt;
-	/* Sendto function */
-	sendto_t sendto;
-	/* Is voice quelched (e.g. hold) */
-	int quelch;
-	/* Last received voice format */
-	int voiceformat;
-	/* Last transmitted voice format */
-	int svoiceformat;
-	/* Last received timestamp */
-	unsigned int last_ts;
-	/* Last transmitted timestamp */
-	unsigned int lastsent;
-	/* Last transmitted voice timestamp */
-	unsigned int lastvoicets;
-	/* Our last measured ping time */
-	unsigned int pingtime;
-	/* Address of peer */
-	struct sockaddr_in peeraddr;
-	/* Our call number */
-	int callno;
-	/* Peer's call number */
-	int peercallno;
-	/* Our next outgoing sequence number */
-	unsigned char oseqno;
-	/* Next sequence number they have not yet acknowledged */
-	unsigned char rseqno;
-	/* Our last received incoming sequence number */
-	unsigned char iseqno;
-	/* Last acknowledged sequence number */
-	unsigned char aseqno;
-	/* Peer supported formats */
-	int peerformats;
-	/* Time value that we base our transmission on */
-	struct timeval offset;
-	/* Time value we base our delivery on */
-	struct timeval rxcore;
-	/* History of lags */
-	int history[MEMORY_SIZE];
-	/* Current base jitterbuffer */
-	int jitterbuffer;
-	/* Informational jitter */
-	int jitter;
-	/* Measured lag */
-	int lag;
-	/* Current link state */
-	int state;
-	/* Peer name */
-	char peer[MAXSTRLEN];
-	/* Default Context */
-	char context[MAXSTRLEN];
-	/* Caller ID if available */
-	char callerid[MAXSTRLEN];
-	/* DNID */
-	char dnid[MAXSTRLEN];
-	/* Requested Extension */
-	char exten[MAXSTRLEN];
-	/* Expected Username */
-	char username[MAXSTRLEN];
-	/* Expected Secret */
-	char secret[MAXSTRLEN];
-	/* permitted authentication methods */
-	char methods[MAXSTRLEN];
-	/* MD5 challenge */
-	char challenge[12];
-#ifdef VOICE_SMOOTHING
-	unsigned int lastts;
-#endif
-	/* Refresh if applicable */
-	int refresh;
-	
-	/* Transfer stuff */
-	struct sockaddr_in transfer;
-	int transferring;
-	int transfercallno;
-	int transferid;
-	
-	/* For linking if there are multiple connections */
-	struct iax_session *next;
-};
-extern struct iax_session;
-#endif
 #ifdef	WIN32
 
 void gettimeofday(struct timeval *tv, struct timezone *tz);
+
+static time_t _startuptime = 0;
+
+static time_t startuptime()
+{
+	if (!_startuptime)
+	{
+		time_t t;
+		time(&t);
+		_startuptime = ((t % 86400) * 1000) - GetTickCount();
+	}
+	return _startuptime;
+}
+
+
+void gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+        long l = startuptime() + GetTickCount();
+
+        tv->tv_sec = l / 1000;
+        tv->tv_usec = (l % 1000) * 1000;
+        return;
+}
 
 #define	snprintf _snprintf
 
@@ -236,21 +169,6 @@ void iax_enable_debug(void)
 void iax_disable_debug(void)
 {
 	debug = 0;
-}
-
-void iax_set_private(struct iax_session *s, void *ptr)
-{
-	s->pvt = ptr;
-}
-
-void *iax_get_private(struct iax_session *s)
-{
-	return s->pvt;
-}
-
-void iax_set_sendto(struct iax_session *s, sendto_t ptr)
-{
-	s->sendto = ptr;
 }
 
 /* This is a little strange, but to debug you call DEBU(G "Hello World!\n"); */ 
@@ -294,7 +212,31 @@ static int __debug(char *file, int lineno, char *func, char *fmt, ...)
 #define DEBU(...)
 #endif
 #define G
+
+void iax_enable_debug(void)
+{
+}
+
+void iax_disable_debug(void)
+{
+}
+
 #endif
+
+void iax_set_private(struct iax_session *s, void *ptr)
+{
+	s->pvt = ptr;
+}
+
+void *iax_get_private(struct iax_session *s)
+{
+	return s->pvt;
+}
+
+void iax_set_sendto(struct iax_session *s, sendto_t ptr)
+{
+	s->sendto = ptr;
+}
 
 struct iax_sched {
 	/* These are scheduled things to be delivered */
@@ -623,26 +565,23 @@ int iax_send(struct iax_session *pvt, struct ast_frame *f, unsigned int ts, int 
 	   or delayed, with retransmission */
 	struct ast_iax2_full_hdr *fh;
 	struct ast_iax2_mini_hdr *mh;
-	struct {
-		struct iax_frame fr2;
-		unsigned char buffer[4096];		/* Buffer -- must preceed fr2 */
-	} buf;
+	unsigned char buf[5120];
 	struct iax_frame *fr;
 	int res;
 	int sendmini=0;
 	unsigned int lastsent;
 	unsigned int fts;
 	
-	/* Shut up GCC */
-	buf.buffer[0] = 0;
-	
 	if (!pvt) {
 		IAXERROR "No private structure for packet?\n");
 		return -1;
 	}
 	
-	/* Calculate actual timestamp */
+	/* this must come before the next call to calc_timestamp() since
+	 calc_timestamp() will change lastsent to the returned value */
 	lastsent = pvt->lastsent;
+
+	/* Calculate actual timestamp */
 	fts = calc_timestamp(pvt, ts);
 
 	if (((fts & 0xFFFF0000L) == (lastsent & 0xFFFF0000L))
@@ -658,7 +597,7 @@ int iax_send(struct iax_session *pvt, struct ast_frame *f, unsigned int ts, int 
 	}
 	/* Allocate an iax_frame */
 	if (now) {
-		fr = &buf.fr2;
+		fr = (struct iax_frame *) buf;
 	} else
 		fr = iax_frame_new(DIRECTION_OUTGRESS, f->datalen);
 	if (!fr) {
@@ -675,6 +614,7 @@ int iax_send(struct iax_session *pvt, struct ast_frame *f, unsigned int ts, int 
 			iax_frame_free(fr);
 		return -1;
 	}
+
 	fr->callno = pvt->callno;
 	fr->transfer = transfer;
 	fr->final = final;

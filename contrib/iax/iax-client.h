@@ -31,6 +31,12 @@
 #define IAX_AUTHMETHOD_PLAINTEXT 	IAX_AUTH_PLAINTEXT
 #define IAX_AUTHMETHOD_MD5 			IAX_AUTH_MD5
 
+/* Define Voice Smoothing to try to make some judgements and adjust timestamps
+   on incoming packets to what they "ought to be" */
+
+#define VOICE_SMOOTHING
+#undef VOICE_SMOOTHING
+
 extern char iax_errstr[];
 
 #define IAX_EVENT_CONNECT 0			/* Connect a new call */
@@ -179,6 +185,11 @@ struct iax_event {
 	unsigned char data[0];			/* Raw data if applicable */
 };
 
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
+
 /* All functions return 0 on success and -1 on failure unless otherwise
    specified */
 
@@ -244,13 +255,14 @@ extern void iax_destroy(struct iax_session  * session);
 extern void iax_enable_debug(void);
 extern void iax_disable_debug(void);
 
-void iax_set_private(struct iax_session *s, void *pvt);
-void *iax_get_private(struct iax_session *s);
-void iax_set_sendto(struct iax_session *s, sendto_t sendto);
+extern void iax_set_private(struct iax_session *s, void *pvt);
+extern void *iax_get_private(struct iax_session *s);
+extern void iax_set_sendto(struct iax_session *s, sendto_t sendto);
 
 /* Handle externally received frames */
 struct iax_event *iax_net_process(unsigned char *buf, int len, struct sockaddr_in *sin);
-/* this function allows you to use libiax for a server */
+
+/* these functione allows you to use libiax for a server */
 int iax_send_regauth(struct iax_session *session, int authmethod);
 int iax_send_authreq(struct iax_session *session, int authmethod);
 int iax_send_regack(struct iax_session *session);
@@ -258,5 +270,9 @@ int iax_send_regrej(struct iax_session *session);
 
 /* we need this low level function */
 int iax_send(struct iax_session *pvt, struct ast_frame *f, unsigned int ts, int seqno, int now, int transfer, int final);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* _ASTERISK_IAX_CLIENT_H */

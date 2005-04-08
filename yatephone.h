@@ -2,6 +2,8 @@
  * yatephone.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
+ * Drivers, channels and telephony related classes
+ *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004 Null Team
  *
@@ -160,140 +162,6 @@ public:
      *  format with the same name was already registered
     */
     static const FormatInfo* addFormat(const String& name, int drate, int fsize, const String& type = "audio", int srate = 8000, int nchan = 1);
-};
-
-/**
- * The DataBlock holds a data buffer with no specific formatting.
- * @short A class that holds just a block of raw data
- */
-class YATE_API DataBlock : public GenObject
-{
-public:
-
-    /**
-     * Constructs an empty data block
-     */
-    DataBlock();
-
-    /**
-     * Copy constructor
-     */
-    DataBlock(const DataBlock& value);
-
-    /**
-     * Constructs an initialized data block
-     * @param value Data to assign, may be NULL to fill with zeros
-     * @param len Length of data, may be zero (then @ref value is ignored)
-     * @param copyData True to make a copy of the data, false to just insert the pointer
-     */
-    DataBlock(void* value, unsigned int len, bool copyData = true);
-
-    /**
-     * Destroys the data, disposes the memory.
-     */
-    virtual ~DataBlock();
-
-    /**
-     * A static empty data block
-     */
-    static const DataBlock& empty();
-
-    /**
-     * Get a pointer to the stored data.
-     * @return A pointer to the data or NULL.
-     */
-    inline void* data() const
-	{ return m_data; }
-
-    /**
-     * Checks if the block holds a NULL pointer.
-     * @return True if the block holds NULL, false otherwise.
-     */
-    inline bool null() const
-	{ return !m_data; }
-
-    /**
-     * Get the length of the stored data.
-     * @return The length of the stored data, zero for NULL.
-     */
-    inline unsigned int length() const
-	{ return m_length; }
-
-    /**
-     * Clear the data and optionally free the memory
-     * @param deleteData True to free the deta block, false to just forget it
-     */
-    void clear(bool deleteData = true);
-
-    /**
-     * Assign data to the object
-     * @param value Data to assign, may be NULL to fill with zeros
-     * @param len Length of data, may be zero (then @ref value is ignored)
-     * @param copyData True to make a copy of the data, false to just insert the pointer
-     */
-    DataBlock& assign(void* value, unsigned int len, bool copyData = true);
-
-    /**
-     * Append data to the current block
-     * @param value Data to append
-     */
-    void append(const DataBlock& value);
-
-    /**
-     * Append a String to the current block
-     * @param value String to append
-     */
-    void append(const String& value);
-
-    /**
-     * Insert data before the current block
-     * @param value Data to insert
-     */
-    void insert(const DataBlock& value);
-
-    /**
-     * Truncate the data block
-     * @param len The maximum length to keep
-     */
-    void truncate(unsigned int len);
-
-    /**
-     * Cut off a number of bytes from the data block
-     * @param len Amount to cut, positive to cut from end, negative to cut from start of block
-     */
-    void cut(int len);
-
-    /**
-     * Assignment operator.
-     */
-    DataBlock& operator=(const DataBlock& value);
-
-    /**
-     * Appending operator.
-     */
-    inline DataBlock& operator+=(const DataBlock& value)
-	{ append(value); return *this; }
-
-    /**
-     * Appending operator for Strings.
-     */
-    inline DataBlock& operator+=(const String& value)
-	{ append(value); return *this; }
-
-    /**
-     * Convert data from a different format
-     * @param src Source data block
-     * @param sFormat Name of the source format
-     * @param dFormat Name of the destination format
-     * @param maxlen Maximum amount to convert, 0 to use source
-     * @return True if converted successfully, false on failure
-     */
-    bool convert(const DataBlock& src, const String& sFormat,
-	const String& dFormat, unsigned maxlen = 0);
-
-private:
-    void* m_data;
-    unsigned int m_length;
 };
 
 /**

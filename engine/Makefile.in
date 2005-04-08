@@ -16,14 +16,15 @@ LDCONFIG:=true
 
 MKDEPS := ../config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
-EINC := @top_srcdir@/yatengine.h
-PINC := @top_srcdir@/yatephone.h
+CINC := @top_srcdir@/yateclass.h
+EINC := $(CINC) @top_srcdir@/yatengine.h
+PINC := $(PINC) @top_srcdir@/yatephone.h
 LIBS :=
-ENGOBJS := TelEngine.o String.o ObjList.o NamedList.o Configuration.o \
-	Message.o Mutex.o Thread.o Plugin.o Engine.o YMD5.o
-TELOBJS :=DataBlock.o DataFormat.o Channel.o
+CLSOBJS := TelEngine.o ObjList.o String.o DataBlock.o NamedList.o YMD5.o Mutex.o Thread.o
+ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
+TELOBJS := DataFormat.o Channel.o
 
-LIBOBJS := $(ENGOBJS) $(TELOBJS)
+LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS)
 CLEANS = $(LIBOBJS) core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
@@ -54,16 +55,16 @@ strip: all
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
 	$(COMPILE) -c $<
 
-DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) $(EINC) $(PINC)
+Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
-DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(EINC) $(PINC)
+DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
-Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(EINC)
+Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @MUTEX_HACK@ -c $<
 
-Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(EINC)
+Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ -c $<
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)

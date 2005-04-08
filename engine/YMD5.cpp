@@ -23,7 +23,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "yatengine.h"
+#include "yateclass.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -277,6 +277,12 @@ MD5::MD5(const void* buf, unsigned int len)
     : m_private(0)
 {
     update(buf,len);
+}
+
+MD5::MD5(const DataBlock& data)
+    : m_private(0)
+{
+    update(data);
 }
 
 MD5::MD5(const String& str)

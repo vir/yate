@@ -268,18 +268,16 @@ int Engine::run()
     while (s_haltcode == -1) {
 	if (s_cmds) {
 	    Output("Executing initial commands");
-	    for (ObjList* c = s_cmds; c; c=c->next()) {
+	    for (ObjList* c = s_cmds->skipNull(); c; c=c->skipNext()) {
 		String* s = static_cast<String*>(c->get());
-		if (s) {
-		    Message m("engine.command");
-		    m.addParam("line",*s);
-		    if (dispatch(m)) {
-			if (m.retValue())
-			    Output("%s",m.retValue().c_str());
-		    }
-		    else
-			Debug(DebugWarn,"Unrecognized command '%s'",s->c_str());
+		Message m("engine.command");
+		m.addParam("line",*s);
+		if (dispatch(m)) {
+		    if (m.retValue())
+			Output("%s",m.retValue().c_str());
 		}
+		else
+		    Debug(DebugWarn,"Unrecognized command '%s'",s->c_str());
 	    }
 	    s_cmds->destruct();
 	    s_cmds = 0;
@@ -451,21 +449,20 @@ void Engine::initPlugins()
     Debug(DebugInfo,"Engine::initPlugins()");
 #endif
     dispatch("engine.init");
-    ObjList *l = &plugins;
-    for (; l; l = l->next()) {
+    ObjList *l = plugins.skipNull();
+    for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
-	if (p)
-	    p->initialize();
+	p->initialize();
     }
 }
 
 int Engine::usedPlugins()
 {
     int used = 0;
-    ObjList *l = &plugins;
-    for (; l; l = l->next()) {
+    ObjList *l = plugins.skipNull();
+    for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
-	if (p && p->isBusy())
+	if (p->isBusy())
 	    used++;
     }
     return used;

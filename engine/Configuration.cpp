@@ -200,11 +200,9 @@ bool Configuration::save() const
 	return false;
     FILE *f = ::fopen(c_str(),"w");
     if (f) {
-	ObjList *ol = const_cast<ObjList *>(&m_sections);
-	for (;ol;ol=ol->next()) {
+	ObjList *ol = m_sections.skipNull();
+	for (;ol;ol=ol->skipNext()) {
 	    NamedList *nl = static_cast<NamedList *>(ol->get());
-	    if (!nl)
-		continue;
 	    ::fprintf(f,"[%s]\n",nl->c_str());
 	    unsigned int n = nl->length();
 	    for (unsigned int i = 0; i < n; i++) {

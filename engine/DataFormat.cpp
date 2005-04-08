@@ -159,11 +159,10 @@ void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
     }
     Lock lock(m_mutex);
     ref();
-    ObjList *l = &m_consumers;
-    for (; l; l=l->next()) {
+    ObjList *l = m_consumers.skipNull();
+    for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
-	if (c)
-	    c->Consume(data,timeDelta);
+	c->Consume(data,timeDelta);
     }
     m_timestamp += timeDelta;
     deref();
@@ -414,17 +413,15 @@ String DataTranslator::srcFormats(const String& dFormat)
 {
     String s;
     s_mutex.lock();
-    ObjList *l = &s_factories;
-    for (; l; l=l->next()) {
+    ObjList *l = s_factories.skipNull();
+    for (; l; l=l->skipNext()) {
 	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
-	if (f) {
-	    const TranslatorCaps *caps = f->getCapabilities();
-	    for (; caps && caps->src && caps->dest; caps++) {
-		if (dFormat == caps->dest->name) {
-		    if (!s.null())
-			s << " ";
-		    s << caps->src->name << "@" << caps->cost;
-		}
+	const TranslatorCaps *caps = f->getCapabilities();
+	for (; caps && caps->src && caps->dest; caps++) {
+	    if (dFormat == caps->dest->name) {
+		if (!s.null())
+		    s << " ";
+		s << caps->src->name << "@" << caps->cost;
 	    }
 	}
     }
@@ -436,17 +433,15 @@ String DataTranslator::destFormats(const String& sFormat)
 {
     String s;
     s_mutex.lock();
-    ObjList *l = &s_factories;
-    for (; l; l=l->next()) {
+    ObjList *l = s_factories.skipNull();
+    for (; l; l=l->skipNext()) {
 	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
-	if (f) {
-	    const TranslatorCaps *caps = f->getCapabilities();
-	    for (; caps && caps->src && caps->dest; caps++) {
-		if (sFormat == caps->src->name) {
-		    if (!s.null())
-			s << " ";
-		    s << caps->dest->name << "@" << caps->cost;
-		}
+	const TranslatorCaps *caps = f->getCapabilities();
+	for (; caps && caps->src && caps->dest; caps++) {
+	    if (sFormat == caps->src->name) {
+		if (!s.null())
+		    s << " ";
+		s << caps->dest->name << "@" << caps->cost;
 	    }
 	}
     }
@@ -458,16 +453,14 @@ int DataTranslator::cost(const String& sFormat, const String& dFormat)
 {
     int c = -1;
     s_mutex.lock();
-    ObjList *l = &s_factories;
-    for (; l; l=l->next()) {
+    ObjList *l = s_factories.skipNull();
+    for (; l; l=l->skipNext()) {
 	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
-	if (f) {
-	    const TranslatorCaps *caps = f->getCapabilities();
-	    for (; caps && caps->src && caps->dest; caps++) {
-		if ((c == -1) || (c > caps->cost)) {
-		    if ((sFormat == caps->src->name) && (dFormat == caps->dest->name))
-			c = caps->cost;
-		}
+	const TranslatorCaps *caps = f->getCapabilities();
+	for (; caps && caps->src && caps->dest; caps++) {
+	    if ((c == -1) || (c > caps->cost)) {
+		if ((sFormat == caps->src->name) && (dFormat == caps->dest->name))
+		    c = caps->cost;
 	    }
 	}
     }
@@ -485,14 +478,12 @@ DataTranslator* DataTranslator::create(const String& sFormat, const String& dFor
     DataTranslator *trans = 0;
 
     s_mutex.lock();
-    ObjList *l = &s_factories;
-    for (; l; l=l->next()) {
+    ObjList *l = s_factories.skipNull();
+    for (; l; l=l->skipNext()) {
 	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
-	if (f) {
-	    trans = f->create(sFormat,dFormat);
-	    if (trans)
-		break;
-	}
+	trans = f->create(sFormat,dFormat);
+	if (trans)
+	    break;
     }
     s_mutex.unlock();
 

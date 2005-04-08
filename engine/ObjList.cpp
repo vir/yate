@@ -78,6 +78,25 @@ ObjList* ObjList::last() const
     return const_cast<ObjList*>(n);
 }
 
+ObjList* ObjList::skipNull() const
+{
+    const ObjList *n = this;
+    while (n && !n->get())
+	n = n->next();
+    return const_cast<ObjList*>(n);
+}
+
+ObjList* ObjList::skipNext() const
+{
+    const ObjList *n = this;
+    while (n) {
+	n = n->next();
+	if (n && n->get())
+	    break;
+    }
+    return const_cast<ObjList*>(n);
+}
+
 ObjList* ObjList::operator+(int index) const
 {
     if (index < 0)
@@ -107,11 +126,11 @@ ObjList* ObjList::find(const GenObject* obj) const
 ObjList* ObjList::find(const String& str) const
 {
     XDebug(DebugAll,"ObjList::find(\"%s\") [%p]",str.c_str(),this);
-    const ObjList *n = this;
+    const ObjList *n = skipNull();
     while (n) {
-	if (n->get() && str.matches(n->get()->toString()))
+	if (str.matches(n->get()->toString()))
 	    break;
-	n = n->next();
+	n = n->skipNext();
     }
     XDebug(DebugInfo,"ObjList::find returning %p",n);
     return const_cast<ObjList*>(n);

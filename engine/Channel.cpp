@@ -562,11 +562,10 @@ void Driver::statusParams(String& str)
 
 void Driver::statusChannels(String& str)
 {
-    ObjList* l = &m_chans;
-    for (; l; l=l->next()) {
+    ObjList* l = m_chans.skipNull();
+    for (; l; l=l->skipNext()) {
 	Channel* c = static_cast<Channel*>(l->get());
-	if (c)
-	    str.append(c->id(),",") << "=" << c->status() << "|" << c->address();
+	str.append(c->id(),",") << "=" << c->status() << "|" << c->address();
     }
 }
 

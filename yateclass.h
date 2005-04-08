@@ -608,6 +608,18 @@ public:
     ObjList* last() const;
 
     /**
+     * Skip over NULL holding items in the list
+     * @return Pointer to the first non NULL holding item in list or NULL
+     */
+    ObjList* skipNull() const;
+
+    /**
+     * Advance in the list skipping over NULL holding items
+     * @return Pointer to the next non NULL holding item in list or NULL
+     */
+    ObjList* skipNext() const;
+
+    /**
      * Pointer-like indexing operator
      * @param index Index of the list item to retrive
      * @return Pointer to the list item or NULL

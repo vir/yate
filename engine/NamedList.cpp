@@ -86,10 +86,10 @@ NamedList& NamedList::clearParam(const String& name)
 NamedString* NamedList::getParam(const String& name) const
 {
     XDebug(DebugInfo,"NamedList::getParam(\"%s\")",name.c_str());
-    const ObjList *p = &m_params;
-    for (;p;p=p->next()) {
+    const ObjList *p = m_params.skipNull();
+    for (;p;p=p->skipNext()) {
         NamedString *s = static_cast<NamedString *>(p->get());
-        if (s && (s->name() == name))
+        if (s->name() == name)
             return s;
     }
     return 0;

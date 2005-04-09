@@ -26,12 +26,17 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-
+#ifdef _WINDOWS
+#include <windows.h>
+#include <io.h>
+#define O_NOCTTY 0
+#else
+#include <netinet/in.h>
+#endif
 
 using namespace TelEngine;
 
@@ -53,7 +58,7 @@ private:
     bool m_swap;
     unsigned m_brate;
     unsigned m_total;
-    unsigned long long m_time;
+    u_int64_t m_time;
     String m_id;
     bool m_autoclose;
 };
@@ -71,7 +76,7 @@ private:
     int m_fd;
     unsigned m_total;
     unsigned m_maxlen;
-    unsigned long long m_time;
+    u_int64_t m_time;
     String m_id;
 };
 
@@ -165,7 +170,7 @@ WaveSource::~WaveSource()
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
-	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
 	    Debug(DebugInfo,"WaveSource rate=%llu b/s",m_time);
 	}
     }
@@ -226,7 +231,7 @@ void WaveSource::run()
 {
     m_data.assign(0,(m_brate*20)/1000);
     int r = 0;
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     m_time = tpos;
     do {
 	r = (m_fd >= 0) ? ::read(m_fd,m_data.data(),m_data.length()) : m_data.length();
@@ -246,14 +251,14 @@ void WaveSource::run()
 		++p;
 	    }
 	}
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()*8000/m_brate);
 	m_total += r;
-	tpos += (r*1000000ULL/m_brate);
+	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
     if (m_chan && !m_id.null()) {
@@ -285,7 +290,11 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 	setFormatInternal("alaw");
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	setFormatInternal("mulaw");
+#if _WINDOWS
+    m_fd = ::creat(file.safe(),_S_IREAD|_S_IWRITE);
+#else
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
+#endif
     if (m_fd < 0)
 	Debug(DebugGoOn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
@@ -297,7 +306,7 @@ WaveConsumer::~WaveConsumer()
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
-	    m_time = (m_total*1000000ULL + m_time/2) / m_time;
+	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
 	    Debug(DebugInfo,"WaveConsumer rate=%llu b/s",m_time);
 	}
     }

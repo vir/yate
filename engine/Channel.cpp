@@ -144,6 +144,21 @@ Message* Channel::message(const char* name, bool minimal) const
     return msg;
 }
 
+bool Channel::startRouter(Message* msg) const
+{
+    if (!msg)
+	return false;
+    if (m_driver) {
+	Router* r = new Router(m_driver,m_id,msg);
+	if (r->startup())
+	    return true;
+	delete r;
+    }
+    else
+	delete msg;
+    return false;
+}
+
 bool Channel::msgRinging(Message& msg)
 {
     status("ringing");
@@ -166,7 +181,12 @@ bool Channel::msgText(Message& msg, const char* text)
     return false;
 }
 
-bool Channel::msgDrop(Message& msg)
+bool Channel::msgDrop(Message& msg, const char* reason)
+{
+    return false;
+}
+
+bool Channel::msgTransfer(Message& msg)
 {
     return false;
 }
@@ -174,6 +194,11 @@ bool Channel::msgDrop(Message& msg)
 void Channel::callAccept(Message& msg)
 {
     status("accepted");
+    m_targetid = msg.getValue("targetid");
+    if (m_targetid.null()) {
+	Debug(DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);
+	msgAnswered(msg);
+    }
 }
 
 void Channel::callReject(const char* error, const char* reason)
@@ -261,6 +286,7 @@ TokenDict Module::s_messages[] = {
     { "chan.text",       Module::Text },
     { "chan.masquerade", Module::Masquerade },
     { "chan.locate",     Module::Locate },
+    { "chan.transfer",   Module::Transfer },
     { 0, 0 }
 };
 
@@ -424,7 +450,12 @@ Driver::Driver(const char* name, const char* type)
 {
 }
 
-void Driver::setup(const char* prefix)
+void Driver::initialize()
+{
+    setup();
+}
+
+void Driver::setup(const char* prefix, bool minimal)
 {
     Module::setup();
     if (m_init)
@@ -433,14 +464,16 @@ void Driver::setup(const char* prefix)
     m_prefix = prefix ? prefix : name().c_str();
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
-    installRelay(Ringing);
-    installRelay(Answered);
-    installRelay(Tone);
-    installRelay(Text);
     installRelay(Masquerade,10);
     installRelay(Locate);
     installRelay(Execute);
     installRelay(Drop);
+    if (minimal)
+	return;
+    installRelay(Tone);
+    installRelay(Text);
+    installRelay(Ringing);
+    installRelay(Answered);
 }
 
 bool Driver::isBusy() const
@@ -487,8 +520,10 @@ bool Driver::received(Message &msg, int id)
 	return false;
 
     // handle call.execute which should start a new channel
-    if (id == Execute)
+    if (id == Execute) {
+	dest.startSkip(m_prefix,false);
 	return msgExecute(msg,dest);
+    }
 
     Lock lock(this);
     Channel* chan = find(dest);
@@ -507,7 +542,9 @@ bool Driver::received(Message &msg, int id)
 	case Text:
 	    return chan->msgText(msg,msg.getValue("text"));
 	case Drop:
-	    return chan->msgDrop(msg);
+	    return chan->msgDrop(msg,msg.getValue("reason"));
+	case Transfer:
+	    return chan->msgTransfer(msg);
 	case Masquerade:
 	    msg.setParam("targetid",chan->targetid());
 	    msg = msg.getValue("message");
@@ -640,10 +677,10 @@ bool Router::route()
 	    chan->deref();
 	}
 	else
-	    chan->callReject("noconn");
+	    chan->callReject("noconn","Could not connected to target");
     }
     else
-	chan->callReject("noroute");
+	chan->callReject("noroute","No route to call target");
 
     return ok;
 }

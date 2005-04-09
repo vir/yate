@@ -41,8 +41,8 @@ enum {
 class CdrHandler : public MessageHandler
 {
 public:
-    CdrHandler(const char *name, int type)
-	: MessageHandler(name), m_type(type) { }
+    CdrHandler(const char *name, int type, int prio = 100)
+	: MessageHandler(name,prio), m_type(type) { }
     virtual bool received(Message &msg);
 private:
     int m_type;
@@ -250,12 +250,12 @@ void CdrBuildPlugin::initialize()
     Output("Initializing module CdrBuild");
     if (m_first) {
 	m_first = false;
-	Engine::install(new CdrHandler("chan.startup",CdrStart));
-	Engine::install(new CdrHandler("call.execute",CdrCall));
-	Engine::install(new CdrHandler("call.ringing",CdrRinging));
-	Engine::install(new CdrHandler("call.answered",CdrAnswer));
-	Engine::install(new CdrHandler("chan.hangup",CdrHangup));
-	Engine::install(new CdrHandler("call.dropcdr",CdrDrop));
+	Engine::install(new CdrHandler("chan.startup",CdrStart,50));
+	Engine::install(new CdrHandler("call.execute",CdrCall,50));
+	Engine::install(new CdrHandler("call.ringing",CdrRinging,50));
+	Engine::install(new CdrHandler("call.answered",CdrAnswer,50));
+	Engine::install(new CdrHandler("chan.hangup",CdrHangup,50));
+	Engine::install(new CdrHandler("call.dropcdr",CdrDrop,50));
 	Engine::install(new CdrHandler("engine.halt",EngHalt));
 	Engine::install(new StatusHandler);
     }

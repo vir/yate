@@ -748,6 +748,7 @@ protected:
 	Text       = 0x0800,
 	Masquerade = 0x1000,
 	Locate     = 0x2000,
+	Transfer   = 0x4000,
 	// Last possible public ID
 	PubLast    = 0xffff,
 	// Private messages base ID
@@ -774,6 +775,11 @@ protected:
     virtual void initialize();
 
     /**
+     * Install standard message relays
+     */
+    void setup();
+
+    /**
      * Install a standard message relay
      * @param id RelayID of the new relay to create
      * @param priority Priority of the handler, 0 = top
@@ -788,11 +794,6 @@ protected:
      * @return True if installed or already was one installed
      */
     bool installRelay(const char* name, unsigned priority = 100);
-
-    /**
-     * Install standard message relays
-     */
-    void setup();
 
     /**
      * Message receiver handler
@@ -929,9 +930,17 @@ public:
     /**
      * Notification on current call drop request
      * @param msg Notification message
+     * @param reason Pointer to drop reason text or NULL if none provided
      * @return True if initiated call drop, false if failed
      */
-    virtual bool msgDrop(Message& msg);
+    virtual bool msgDrop(Message& msg, const char* reason);
+
+    /**
+     * Notification on native transfer request
+     * @param msg Notification message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgTransfer(Message& msg);
 
     /**
      * Notification on success of incoming call
@@ -987,6 +996,13 @@ public:
     const char* direction() const;
 
     /**
+     * Get the driver of this channel
+     * @return Pointer to this channel's driver
+     */
+    inline Driver* driver() const
+	{ return m_driver; }
+
+    /**
      * Get the unique channel identifier
      * @return A String holding the unique channel id
      */
@@ -1031,11 +1047,12 @@ public:
 	{ disconnect(false,reason); }
 
     /**
-     * Get the driver of this channel
-     * @return Pointer to this channel's driver
+     * Start a routing thread for this channel
+     * @param msg Pointer to message to route, typically a "call.route", will be
+     *  destroyed after routing fails or completes
+     * @return True if routing thread started successfully, false if failed
      */
-    inline Driver* driver() const
-	{ return m_driver; }
+    bool startRouter(Message* msg) const;
 
     /**
      * Get a data endpoint of this object
@@ -1167,6 +1184,11 @@ public:
     virtual bool isBusy() const;
 
     /**
+     * Drop all current channels
+     */
+    virtual void dropAll();
+
+    /**
      * Get the next unique numeric id from a sequence
      * @return A driver unique number that increments by 1 at each call
      */
@@ -1188,10 +1210,16 @@ protected:
     Driver(const char* name, const char* type = 0);
 
     /**
+     * This method is called to initialize the loaded module
+     */
+    virtual void initialize();
+
+    /**
      * Install standard message relays and set up the prefix
      * @param prefix Prefix to use with channels of this driver
+     * @param minimal Install just a minimal set of message relays
      */
-    void setup(const char* prefix = 0);
+    void setup(const char* prefix = 0, bool minimal = false);
 
     /**
      * Message receiver handler
@@ -1200,11 +1228,6 @@ protected:
      * @return True to stop processing, false to try other handlers
      */
     virtual bool received(Message &msg, int id);
-
-    /**
-     * Drop all current channels
-     */
-    virtual void dropAll();
 
     /**
      * Opportunity to modify the update message

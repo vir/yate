@@ -105,11 +105,11 @@ void Output(const char* format, ...)
     common_output(buf);
 }
 
-bool Debug(int level, const char* format, ...)
+void Debug(int level, const char* format, ...)
 {
     if (level <= s_debug) {
 	if (!s_debugging)
-	    return true;
+	    return;
 	if (!format)
 	    format = "";
 	char buf[32];
@@ -122,16 +122,15 @@ bool Debug(int level, const char* format, ...)
 	va_end(va);
 	if (s_abort && (level == DebugFail))
 	    abort();
-	return true;
+	return;
     }
-    return false;
 }
 
-bool Debug(const char* facility, int level, const char* format, ...)
+void Debug(const char* facility, int level, const char* format, ...)
 {
     if (level <= s_debug) {
 	if (!s_debugging)
-	    return true;
+	    return;
 	if (!format)
 	    format = "";
 	char buf[64];
@@ -144,16 +143,15 @@ bool Debug(const char* facility, int level, const char* format, ...)
 	va_end(va);
 	if (s_abort && (level == DebugFail))
 	    abort();
-	return true;
+	return;
     }
-    return false;
 }
 
-bool Debug(const DebugEnabler* local, int level, const char* format, ...)
+void Debug(const DebugEnabler* local, int level, const char* format, ...)
 {
     if (local && local->debugAt(level)) {
 	if (!s_debugging)
-	    return true;
+	    return;
 	if (!format)
 	    format = "";
 	char buf[32];
@@ -166,9 +164,8 @@ bool Debug(const DebugEnabler* local, int level, const char* format, ...)
 	va_end(va);
 	if (s_abort && (level == DebugFail))
 	    abort();
-	return true;
+	return;
     }
-    return false;
 }
 
 void abortOnBug()

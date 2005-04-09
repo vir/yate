@@ -197,7 +197,7 @@ GenObject* ObjList::remove(bool delobj)
 	m_obj = 0;
 
     if (delobj && tmp) {
-	DDebug(DebugInfo,"ObjList::remove() deleting %p",tmp);
+	XDebug(DebugInfo,"ObjList::remove() deleting %p",tmp);
 	tmp->destruct();
 	tmp = 0;
     }

@@ -60,7 +60,6 @@ class ToneChan : public Channel
 public:
     ToneChan(const String &tone);
     ~ToneChan();
-    virtual void disconnected(bool final, const char *reason);
 };
 
 class AttachHandler : public MessageHandler
@@ -239,20 +238,11 @@ ToneChan::~ToneChan()
     Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
-void ToneChan::disconnected(bool final, const char *reason)
-{
-    Debugger debug("ToneChan::disconnected()"," '%s' [%p]",reason,this);
-}
-
 bool ToneGenPlugin::msgExecute(Message& msg, String& dest)
 {
-    Regexp r("^tone/\\(.*\\)$");
-    if (!dest.matches(r))
-	return false;
-    String tone = dest.matchString(1);
     Channel *dd = static_cast<Channel*>(msg.userData());
     if (dd) {
-	ToneChan *tc = new ToneChan(tone);
+	ToneChan *tc = new ToneChan(dest);
 	if (dd->connect(tc))
 	    tc->deref();
 	else {
@@ -274,7 +264,7 @@ bool ToneGenPlugin::msgExecute(Message& msg, String& dest)
 	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
 	    m.retValue().clear();
-	    ToneChan *tc = new ToneChan(dest.matchString(1).c_str());
+	    ToneChan *tc = new ToneChan(dest);
 	    m.setParam("targetid",tc->id());
 	    m.userData(tc);
 	    if (Engine::dispatch(m)) {
@@ -344,13 +334,14 @@ ToneGenPlugin::~ToneGenPlugin()
 	if (l->get() == t)
 	    l = l->next();
     }
-    channels().clear();
+    dropAll();
     tones.clear();
 }
 
 void ToneGenPlugin::initialize()
 {
     Output("Initializing module ToneGen");
+    setup(0,true); // no need to install notifications
     Driver::initialize();
     if (!m_handler) {
 	m_handler = new AttachHandler;

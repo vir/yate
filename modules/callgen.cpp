@@ -88,6 +88,7 @@ public:
     CallGenPlugin();
     virtual ~CallGenPlugin();
     virtual void initialize();
+    virtual bool msgExecute(Message& msg, String& dest);
 private:
     bool m_first;
 };
@@ -366,6 +367,11 @@ bool CmdHandler::received(Message &msg, int id)
 	    }
 	    break;
     }
+    return false;
+}
+
+bool CallGenPlugin::msgExecute(Message& msg, String& dest)
+{
     return false;
 }
 

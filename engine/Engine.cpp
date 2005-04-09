@@ -217,7 +217,7 @@ void EnginePrivate::run()
     for (;;) {
 	s_makeworker = false;
 	Engine::self()->m_dispatcher.dequeue();
-	yield();
+	msleep(5);
     }
 }
 
@@ -240,6 +240,16 @@ Engine::~Engine()
 
 int Engine::run()
 {
+#ifdef _WINDOWS
+    // In Windows we must initialize the socket library very early because even trivial
+    //  functions like endianess swapping - ntohl and family - need it to be initialized
+    WSADATA wsaData;
+    int errc = ::WSAStartup(MAKEWORD(2,2), &wsaData);
+    if (errc) {
+	Debug(DebugFail,"Failed to initialize the WIndows SOckets library, error code %d",errc);
+	return errc & 127;
+    }
+#endif
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();
@@ -334,6 +344,9 @@ int Engine::run()
 #endif
     delete this;
     Debug(DebugInfo,"Exiting with %d locked mutexes",Mutex::locks());
+#ifdef _WINDOWS
+    ::WSACleanup();
+#endif
     return s_haltcode;
 }
 
@@ -674,10 +687,13 @@ int Engine::main(int argc, const char** argv, const char** environ)
     int debug_level = debugLevel();
 
     s_cfgfile = ::strrchr(argv[0],'/');
+    if (!s_cfgfile)
+	s_cfgfile = ::strrchr(argv[0],'\\');
     if (s_cfgfile)
 	s_cfgfile++;
-    else
-	s_cfgfile = "yate";
+
+    if (!s_cfgfile)
+	s_cfgfile = argv[0][0] ? argv[0] : "yate";
 
     int i;
     bool inopt = true;

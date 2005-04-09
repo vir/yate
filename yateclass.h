@@ -40,10 +40,15 @@
 
 #ifdef _WINDOWS
 
+typedef signed __int16 int16_t;
+typedef unsigned __int16 u_int16_t;
+typedef unsigned __int16 uint16_t;
 typedef signed __int32 int32_t;
 typedef unsigned __int32 u_int32_t;
+typedef unsigned __int32 uint32_t;
 typedef signed __int64 int64_t;
 typedef unsigned __int64 u_int64_t;
+typedef unsigned __int64 uint64_t;
 
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
@@ -192,42 +197,42 @@ private:
  * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
-bool DDebug(int level, const char* format, ...);
+void DDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
-bool DDebug(const char* facility, int level, const char* format, ...);
+void DDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
-bool XDebug(int level, const char* format, ...);
+void XDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
-bool XDebug(const char* facility, int level, const char* format, ...);
+void XDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
-bool NDebug(int level, const char* format, ...);
+void NDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
-bool NDebug(const char* facility, int level, const char* format, ...);
+void NDebug(const char* facility, int level, const char* format, ...);
 #endif
 
 #ifdef _DEBUG
@@ -274,27 +279,24 @@ bool NDebug(const char* facility, int level, const char* format, ...);
  * Outputs a debug string.
  * @param level The level of the message
  * @param format A printf() style format string
- * @return True if message was output, false otherwise
  */
-YATE_API bool Debug(int level, const char* format, ...) FORMAT_CHECK(2);
+YATE_API void Debug(int level, const char* format, ...) FORMAT_CHECK(2);
 
 /**
  * Outputs a debug string for a specific facility.
  * @param facility Facility that outputs the message
  * @param level The level of the message
  * @param format A printf() style format string
- * @return True if message was output, false otherwise
  */
-YATE_API bool Debug(const char* facility, int level, const char* format, ...) FORMAT_CHECK(3);
+YATE_API void Debug(const char* facility, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a debug string for a specific facility.
  * @param local Pointer to a DebugEnabler holding current debugging settings
  * @param level The level of the message
  * @param format A printf() style format string
- * @return True if message was output, false otherwise
  */
-YATE_API bool Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
+YATE_API void Debug(const DebugEnabler* local, int level, const char* format, ...) FORMAT_CHECK(3);
 
 /**
  * Outputs a string to the debug console with formatting

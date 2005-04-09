@@ -71,15 +71,11 @@ static TokenDict dict_tos[] = {
 static bool s_debugging = true;
 static int s_ast_formats = 0;
 static Configuration s_cfg;
-// mutex for routing counters
-static Mutex s_route;
-// recursive mutex for connection list
-static Mutex s_conns(true);
+
 // mutex for iax library calls
 static Mutex s_mutex;
 
-static ObjList m_calls;
-class YateIAXConnection;
+class IAXConnection;
 
 class IAXSource : public DataSource
 {
@@ -92,38 +88,37 @@ private:
     unsigned m_total;
     u_int64_t m_time;
 };
-class YateIAXAudioConsumer : public DataConsumer
+
+class IAXAudioConsumer : public DataConsumer
 {
 public:
-    YateIAXAudioConsumer(YateIAXConnection *conn,
+    IAXAudioConsumer(IAXConnection *conn,
 	int ast_format = AST_FORMAT_SLINEAR, const char *format = "slin");
 
-    ~YateIAXAudioConsumer();
+    ~IAXAudioConsumer();
 
     virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 
 private:
-    YateIAXConnection *m_conn;
+    IAXConnection *m_conn;
     int m_ast_format;
     unsigned m_total;
     u_int64_t m_time;
 };
 
 
-class YateIAXEndPoint : public Thread
+class IAXEndPoint : public Thread
 {
 public:
-    YateIAXEndPoint();
-    ~YateIAXEndPoint();
+    IAXEndPoint();
+    ~IAXEndPoint();
     static bool Init(void);
     static void Setup(void);
     bool accepting(iax_event *e);
     void answer(iax_event *e);
     void reg(iax_event *e);
     void run(void);
-    void terminateAll(void);
-    YateIAXConnection *findconn(iax_session *session);
-    YateIAXConnection *findconn(const String& id);
+    IAXConnection *find(iax_session *session);
     void handleEvent(iax_event *event);
 
     inline ObjList &calls()
@@ -132,112 +127,50 @@ private:
     ObjList m_calls;
 };
 
-class YateIAXConnection :  public DataEndpoint
+class IAXConnection :  public Channel
 {
 public:
-    YateIAXConnection(const char* addr, iax_session *session = 0);
-    ~YateIAXConnection();
+    IAXConnection(Driver* driver, const char* addr, iax_session *session = 0);
+    ~IAXConnection();
     virtual void disconnected(bool final, const char *reason);
     void abort(int type = 0);
-    int makeCall(char *cidnum, char *cidname, char *target = 0, char *lang = 0);
+    int makeCall(const char* targid, char* cidnum, char* cidname, char* target = 0, char* lang = 0);
     bool startRouting(iax_event *e);
     void hangup(const char *reason = 0);
-    void reject(const char *reason = 0);
-    void answered();
-    void ringing();
+    virtual void callAccept(Message& msg);
+    virtual void callReject(const char* error, const char* reason = 0);
+    virtual bool msgRinging(Message& msg);
+    virtual bool msgAnswered(Message& msg);
+    virtual bool msgTone(Message& msg, const char* tone);
+    virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgDrop(Message& msg, const char* reason);
     void startAudio(int format,int capability);
     void sourceAudio(void *buffer, int len, int format);
     void sendVoice(char* buffer, int len, int format);
     void handleEvent(iax_event *event);
     inline iax_session *session() const
 	{ return m_session; }
-    inline void setStatus(const char* newstatus)
-	{ m_status = newstatus; }
-    inline const String& status() const
-	{ return m_status; }
     inline bool muted() const
 	{ return m_muted; }
-    String id;
-    String targetid;
-    String address;
 private: 
     iax_session *m_session;
     bool m_final;
     bool m_muted;
     int m_ast_format;
-    String m_status;
+    int m_format;
+    int m_capab;
     const char* m_reason;
 };
 
 
-class IAXPlugin : public Plugin
+class IAXPlugin : public Driver
 {
 public:
     IAXPlugin();
     virtual ~IAXPlugin();
     virtual void initialize();
-    virtual bool isBusy() const;
-    void cleanup();
-    YateIAXEndPoint *m_endpoint;
-private:
-    bool m_first;
-};
-
-class IAXHandler : public MessageHandler
-{
-public:
-    IAXHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler(const char *name) : MessageHandler(name,100) { }
-    virtual bool received(Message &msg);
-};
-
-class DropHandler : public MessageHandler
-{
-public:
-    DropHandler(const char *name) : MessageHandler(name,100) { }
-    virtual bool received(Message &msg);
-};
-
-class IAXConnHandler : public MessageReceiver
-{
-public:
-    enum {
-	Ringing,
-	Answered,
-	Masquerade,
-	Transfer,
-	DTMF,
-	Text,
-    };
-    virtual bool received(Message &msg, int id);
-};
-										
-class IAXMsgThread : public Thread
-{
-public:
-    IAXMsgThread(Message *msg, const char *id, int format, int capab)
-        : Thread("IAXMsgThread"), m_msg(msg), m_id(id), m_format(format), m_capab(capab)
-	{ }
-    virtual void run();
-    virtual void cleanup();
-    bool route();
-    inline static int count()
-        { return s_count; }
-    inline static int routed()
-        { return s_routed; }
-private:
-    Message *m_msg;
-    String m_id;
-    int m_format;
-    int m_capab;
-    static int s_count;
-    static int s_routed;
+    virtual bool msgExecute(Message& msg, String& dest);
+    IAXEndPoint *m_endpoint;
 };
 
 static IAXPlugin iplugin;
@@ -253,28 +186,29 @@ static void iax_out_cb(const char *s)
 	Debug("IAX",DebugInfo,"%s",s);
 }
 
-YateIAXEndPoint::YateIAXEndPoint()
+IAXEndPoint::IAXEndPoint()
     : Thread("IAX EndPoint")
 {
-    Debug(DebugAll,"YateIAXEndPoint::YateIAXEndPoint() [%p]",this);
+    Debug(DebugAll,"IAXEndPoint::IAXEndPoint() [%p]",this);
 }
 
-YateIAXEndPoint::~YateIAXEndPoint()
+IAXEndPoint::~IAXEndPoint()
 {
-    Debug(DebugAll,"YateIAXEndPoint::~YateIAXEndPoint() [%p]",this);
-    terminateAll();
+    Debug(DebugAll,"IAXEndPoint::~IAXEndPoint() [%p]",this);
+    iplugin.dropAll();
     iplugin.m_endpoint = 0;
 }
 
-bool YateIAXEndPoint::Init(void)
+bool IAXEndPoint::Init(void)
 {
     int port = s_cfg.getIntValue("general","port",4569);
     if (!port) {
 	Debug(DebugInfo,"IAX is disabled by configuration");
 	return false;
     }
-    if (!(::iax_init(port))) {
-	Debug(DebugFail,"I can't initialize the IAX library");
+    port = ::iax_init(port);
+    if (port < 0) {
+	Debug(DebugGoOn,"I can't initialize the IAX library");
 	return false;
     }
     iax_set_error(iax_err_cb);
@@ -287,7 +221,7 @@ bool YateIAXEndPoint::Init(void)
     return true;
 }
 
-void YateIAXEndPoint::Setup(void)
+void IAXEndPoint::Setup(void)
 {
     if (s_debugging = s_cfg.getBoolValue("general","debug",false))
 	::iax_enable_debug();
@@ -318,16 +252,8 @@ void YateIAXEndPoint::Setup(void)
     ::iax_set_formats(s_ast_formats);
 }
 
-void YateIAXEndPoint::terminateAll(void)
-{
-    Debug(DebugInfo,"YateIAXEndPoint::terminateAll()");
-    s_conns.lock();
-    m_calls.clear();
-    s_conns.unlock();
-}
-
 // Handle regular conectionless events with a valid session
-void YateIAXEndPoint::handleEvent(iax_event *event)
+void IAXEndPoint::handleEvent(iax_event *event)
 {
     DDebug("IAX Event",DebugAll,"Connectionless event %d/%d",event->etype,event->subclass);
     switch (event->etype) {
@@ -349,7 +275,7 @@ void YateIAXEndPoint::handleEvent(iax_event *event)
     }
 }
 
-void YateIAXEndPoint::run(void)
+void IAXEndPoint::run(void)
 {
     iax_event *e;
     for (;;)
@@ -367,8 +293,8 @@ void YateIAXEndPoint::run(void)
 	    s_mutex.unlock();
 	    if (!e)
 		break;
-	    XDebug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
-	    YateIAXConnection *conn = 0;
+	    Debug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
+	    IAXConnection *conn = 0;
 	    // We first take care of the special events
 	    switch(e->etype) {
 		case IAX_EVENT_CONNECT:
@@ -377,7 +303,7 @@ void YateIAXEndPoint::run(void)
 		case IAX_EVENT_TIMEOUT:
 		case IAX_EVENT_REJECT:
 		case IAX_EVENT_HANGUP:
-		    if ((conn = findconn(e->session)) != 0) {
+		    if ((conn = find(e->session)) != 0) {
 			conn->abort(e->etype);
 			conn->destruct();
 		    }
@@ -392,7 +318,7 @@ void YateIAXEndPoint::run(void)
 		    answer(e);
 		    break;
 		default:
-		    conn = (YateIAXConnection *)::iax_get_private(e->session);
+		    conn = (IAXConnection *)::iax_get_private(e->session);
 		    if (conn)
 			conn->handleEvent(e);
 		    else
@@ -405,7 +331,7 @@ void YateIAXEndPoint::run(void)
     }
 }
 
-bool YateIAXEndPoint::accepting(iax_event *e)
+bool IAXEndPoint::accepting(iax_event *e)
 {
     int masked = e->ies.format & s_ast_formats;
     const TokenDict *frm = dict_iaxformats;
@@ -422,7 +348,7 @@ bool YateIAXEndPoint::accepting(iax_event *e)
 	}
     }
     if (!frm->token) {
-	Debug(DebugGoOn,"IAX format 0x%X (local: 0x%X, remote: 0x%X, common: 0x%X) not available in [%p]",
+	Debug(DebugWarn,"IAX format 0x%X (local: 0x%X, remote: 0x%X, common: 0x%X) not available in [%p]",
 	    e->ies.format,s_ast_formats,e->ies.capability,masked,this);
     }
 
@@ -498,18 +424,18 @@ bool YateIAXEndPoint::accepting(iax_event *e)
     return false;
 }
     
-void YateIAXEndPoint::answer(iax_event *e)
+void IAXEndPoint::answer(iax_event *e)
 {
     if (!accepting(e))
 	return;
     String addr(::inet_ntoa(e->session->peeraddr.sin_addr));
     addr << ":" << ntohs(e->session->peeraddr.sin_port);
-    YateIAXConnection *conn = new YateIAXConnection(addr,e->session);
+    IAXConnection *conn = new IAXConnection(&iplugin,addr,e->session);
     if (!conn->startRouting(e))
-	conn->reject("Server error");
+	conn->callReject("failure","Internal server error");
 }
 
-void YateIAXEndPoint::reg(iax_event *e)
+void IAXEndPoint::reg(iax_event *e)
 {
     Message m("user.auth");
     if (e->ies.username)
@@ -566,126 +492,39 @@ void YateIAXEndPoint::reg(iax_event *e)
     s_mutex.unlock();
 }
 
-YateIAXConnection * YateIAXEndPoint::findconn(iax_session *session)
+IAXConnection* IAXEndPoint::find(iax_session *session)
 { 
-    ObjList *p = &m_calls; 
-    for (; p; p=p->next()) { 
-	YateIAXConnection *t = static_cast<YateIAXConnection *>(p->get()); 
-	if (t && (t->session() == session))
+    ObjList *p = m_calls.skipNull();
+    for (; p; p=p->skipNext()) { 
+	IAXConnection *t = static_cast<IAXConnection *>(p->get()); 
+	if (t->session() == session)
 	    return t; 
     }
     return 0; 
 }
 
-YateIAXConnection * YateIAXEndPoint::findconn(const String& id)
-{ 
-    ObjList *p = &m_calls; 
-    for (; p; p=p->next()) { 
-	YateIAXConnection *t = static_cast<YateIAXConnection *>(p->get()); 
-	if (t && (t->id == id))
-	{
-	    return t; 
-	}
-    }
-    return 0; 
-}
-
-int IAXMsgThread::s_count = 0;
-int IAXMsgThread::s_routed = 0;
-
-bool IAXMsgThread::route()
+IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session *session)
+    : Channel(driver,0,(session == 0)),
+      m_session(session), m_final(false), m_muted(false),
+      m_ast_format(0), m_format(0), m_capab(0), m_reason(0)
 {
-    Debug(DebugAll,"Routing thread for %s [%p]",m_id.c_str(),this);
-    const char* err = (Engine::dispatch(m_msg) && !m_msg->retValue().null()) ? 0 : "No route";
-    Lock lock(s_conns);
-    YateIAXConnection *conn = iplugin.m_endpoint->findconn(m_id);
-    if (!conn) {
-        Debug(DebugMild,"YateIAXConnection '%s' vanished while routing!",m_id.c_str());
-	return false;
-    }
-    if (!err) {
-        *m_msg = "call.execute";
-        m_msg->addParam("callto",m_msg->retValue());
-        m_msg->retValue().clear();
-        m_msg->userData(static_cast<DataEndpoint *>(conn));
-        if (Engine::dispatch(m_msg)) {
-            Debug(DebugInfo,"Routing IAX call %s [%p] to '%s'",
-		m_id.c_str(),conn,m_msg->getValue("callto"));
-            conn->setStatus("routed");
-            conn->targetid = m_msg->getValue("targetid");
-	    conn->startAudio(m_format,m_capab);
-	    if (conn->targetid.null()) {
-                Debug(DebugInfo,"Answering now IAX call %s [%p] because we have no targetid",m_id.c_str(),conn);
-                conn->answered();
-            }
-            conn->deref();
-	    return true;
-	}
-        else
-            err = "Not connected";
-    }
-    conn->setStatus("rejected");
-    conn->reject(err);
-    return false;
-}
-
-void IAXMsgThread::run()
-{
-    s_route.lock();
-    s_count++;
-    s_route.unlock();
-    Debug(DebugAll,"Started routing thread for %s [%p]",m_id.c_str(),this);
-    bool ok = route();
-    s_route.lock();
-    s_count--;
-    if (ok)
-        s_routed++;
-    s_route.unlock();
-}
-
-void IAXMsgThread::cleanup()
-{
-    Debug(DebugAll,"Cleaning up routing thread for %s [%p]",m_id.c_str(),this);
-    delete m_msg;
-}
-
-YateIAXConnection::YateIAXConnection(const char* addr, iax_session *session)
-    : address(addr), m_session(session), m_final(false), m_muted(false),
-      m_ast_format(0), m_reason(0)
-{
-    Debug(DebugAll,"YateIAXConnection::YateIAXConnection() [%p]",this);
+    Debug(DebugAll,"IAXConnection::IAXConnection() [%p]",this);
+    m_address = addr;
     s_mutex.lock();
-    if (m_session)
-	m_status = "incoming";
-    else {
-	m_status = "outgoing";
+    if (!m_session)
 	m_session = ::iax_session_new();
-    }
-    char buf[64];
-    snprintf(buf,sizeof(buf),"iax/%p",m_session);
-    id=buf;
-    s_conns.lock();
-    iplugin.m_endpoint->calls().append(this);
-    s_conns.unlock();
     ::iax_set_private(m_session,this);
     s_mutex.unlock();
-    Message* m = new Message("chan.startup");
-    m->addParam("id",id);
-    m->addParam("driver","iax");
-    m->addParam("direction",m_status);
-    m->addParam("address",address);
-    m->addParam("status","new");
+    Message* m = message("chan.startup");
+    m->addParam("direction",status());
     Engine::enqueue(m);
 }
 
 
-YateIAXConnection::~YateIAXConnection()
+IAXConnection::~IAXConnection()
 {
-    Debugger debug(DebugAll,"YateIAXConnection::~YateIAXConnection()"," [%p]",this);
-    setStatus("destroyed");
-    s_conns.lock();
-    iplugin.m_endpoint->calls().remove(this,false);
-    s_conns.unlock();
+    Debugger debug(DebugAll,"IAXConnection::~IAXConnection()"," [%p]",this);
+    status("destroyed");
     setConsumer();
     setSource();
     m_ast_format = 0;
@@ -699,11 +538,9 @@ YateIAXConnection::~YateIAXConnection()
     }
 }
 
-bool YateIAXConnection::startRouting(iax_event *e)
+bool IAXConnection::startRouting(iax_event *e)
 {
-    Message *m = new Message("call.route");
-    m->addParam("driver","iax");
-    m->addParam("id",id);
+    Message *m = message("call.route");
     if (e->ies.calling_name)
 	m->addParam("callername",e->ies.calling_name);
     else
@@ -714,36 +551,28 @@ bool YateIAXConnection::startRouting(iax_event *e)
 	m->addParam("called",e->session->dnid);
 
     if (e->ies.calling_number)
-	address = e->ies.calling_number;
+	m_address = e->ies.calling_number;
     else if (e->ies.username)
-	address = e->ies.username;
+	m_address = e->ies.username;
     else if (e->ies.calling_ani)
-	address = e->ies.calling_name;
+	m_address = e->ies.calling_name;
     else if (e->ies.calling_name)
-	address = e->ies.calling_ani;
+	m_address = e->ies.calling_ani;
 
-    int format,capability;
     if (e->ies.format != 0) 
-	format = e->ies.format;
+	m_format = e->ies.format;
     else 
-	format = e->session->voiceformat;
+	m_format = e->session->voiceformat;
     if (e->ies.capability != 0) 
-	capability = e->ies.capability;
+	m_capab = e->ies.capability;
     else 
-	capability = e->session->peerformats;
+	m_capab = e->session->peerformats;
 
-    IAXMsgThread *t = new IAXMsgThread(m,id,format,capability);
-    if (!t->startup()) {
-        Debug(DebugWarn,"Error starting routing thread! [%p]",this);
-        delete t;
-        setStatus("dropped");
-        return false;
-    }
-    return true;
+    return startRouter(m);
 }
 
 // Handle regular connection events with a valid session
-void YateIAXConnection::handleEvent(iax_event *event)
+void IAXConnection::handleEvent(iax_event *event)
 {
     XDebug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
     switch(event->etype) {
@@ -763,11 +592,8 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	case IAX_EVENT_TEXT:
 	    Debug("IAX",DebugInfo,"TEXT inside a call: '%s' [%p]",(char *)event->data,this);
 	    {
-		Message* m = new Message("chan.text");
-		m->addParam("driver","iax");
-		m->addParam("id",id);
+		Message* m = message("chan.text");
 		m->addParam("text",(char *)event->data);
-		m->addParam("targetid",targetid.c_str());
 		m->addParam("callerid",event->session->callerid);
 		m->addParam("calledid",event->session->dnid);
 		Engine::enqueue(m);
@@ -776,15 +602,13 @@ void YateIAXConnection::handleEvent(iax_event *event)
 	case IAX_EVENT_DTMF:
 	    Debug("IAX",DebugInfo,"DTFM inside a call: %d [%p]",event->subclass,this);
 	    {
-		Message* m = new Message("chan.dtmf");
+		Message* m = message("chan.dtmf");
 		/* this is because Paul wants this to be usable on non i386 */
 		char buf[2];
 		buf[0] = event->subclass;
 		buf[1] = 0;
 		m->addParam("driver","iax");
-		m->addParam("id",id);
 		m->addParam("text",buf);
-		m->addParam("targetid",targetid.c_str());
 		m->addParam("callerid",event->session->callerid);
 		m->addParam("calledid",event->session->dnid);
 		Engine::enqueue(m);
@@ -798,23 +622,11 @@ void YateIAXConnection::handleEvent(iax_event *event)
 #endif
 	case IAX_EVENT_RINGA:
 	    Debug("IAX",DebugInfo,"RING inside a call [%p]",this);
-	    {
-		Message* m = new Message("call.ringing");
-		m->addParam("driver","iax");
-		m->addParam("id",id);
-		m->addParam("targetid",targetid.c_str());
-		Engine::enqueue(m);
-	    }
+	    Engine::enqueue(message("call.ringing"));
 	    break; 
 	case IAX_EVENT_ANSWER:
 	    Debug("IAX",DebugInfo,"ANSWER inside a call [%p]",this);
-	    {
-		Message* m = new Message("call.answered");
-		m->addParam("driver","iax");
-		m->addParam("id",id);
-		m->addParam("targetid",targetid.c_str());
-		Engine::enqueue(m);
-	    }
+	    Engine::enqueue(message("call.answered"));
 	    startAudio(event->ies.format,event->ies.capability);
 	    break; 
 	default:
@@ -823,9 +635,9 @@ void YateIAXConnection::handleEvent(iax_event *event)
 }
 
 // We must call this method when the IAX library already destroyed the session
-void YateIAXConnection::abort(int type)
+void IAXConnection::abort(int type)
 {
-    Debug(DebugAll,"YateIAXConnection::abort(%d) [%p]",type,this);
+    Debug(DebugAll,"IAXConnection::abort(%d) [%p]",type,this);
     // Session is / will be gone... get rid of all these really fast!
     m_session = 0;
     m_final = true;
@@ -844,9 +656,9 @@ void YateIAXConnection::abort(int type)
     }
 }
 
-void YateIAXConnection::hangup(const char *reason)
+void IAXConnection::hangup(const char *reason)
 {
-    Debug(DebugAll,"YateIAXConnection::hangup('%s') [%p]",reason,this);
+    Debug(DebugAll,"IAXConnection::hangup('%s') [%p]",reason,this);
     if (!reason)
 	reason = m_reason;
     if (!reason)
@@ -857,21 +669,27 @@ void YateIAXConnection::hangup(const char *reason)
 	::iax_hangup(m_session,(char*)reason);
 	s_mutex.unlock();
     }
-    Message* m = new Message("chan.hangup");
-    m->addParam("driver","iax");
-    m->addParam("id",id);
-    m->addParam("status","hangup");
-    m->addParam("reason",reason);
+    Message* m = message("chan.hangup",true);
+    m->setParam("status","hangup");
+    m->setParam("reason",reason);
     Engine::enqueue(m);
 }
 
-void YateIAXConnection::reject(const char *reason)
+void IAXConnection::callAccept(Message& msg)
 {
-    Debug(DebugAll,"YateIAXConnection::reject('%s') [%p]",reason,this);
+    Debug(DebugAll,"IAXConnection::callAccept() [%p]",this);
+    startAudio(m_format,m_capab);
+    Channel::callAccept(msg);
+}
+
+void IAXConnection::callReject(const char* error, const char* reason)
+{
+    Debug(DebugAll,"IAXConnection::callReject('%s','%s') [%p]",error,reason,this);
+    Channel::callReject(error,reason);
     if (!reason)
 	reason = m_reason;
     if (!reason)
-	reason = "Unexpected problem";
+	reason = error;
     if (!m_final) {
 	m_final = true;
 	if (m_session) {
@@ -882,15 +700,16 @@ void YateIAXConnection::reject(const char *reason)
     }
 }
 
-int YateIAXConnection::makeCall(char *cidnum, char *cidname, char *target, char *lang)
+int IAXConnection::makeCall(const char* targid, char* cidnum, char* cidname, char* target, char* lang)
 {
     Lock lock(s_mutex);
-    address = target;
+    m_address = target;
+    m_targetid = targid;
     ::iax_set_formats(s_ast_formats);
     return ::iax_call(m_session,cidnum,cidname,target,lang,0);
 }
 
-void YateIAXConnection::startAudio(int format,int capability)
+void IAXConnection::startAudio(int format,int capability)
 {
     if (getConsumer())
 	return;
@@ -914,17 +733,17 @@ void YateIAXConnection::startAudio(int format,int capability)
 	return;
     }
     Debug(DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm->token,frm->value,this);
-    setConsumer(new YateIAXAudioConsumer(this,frm->value,frm->token));
+    setConsumer(new IAXAudioConsumer(this,frm->value,frm->token));
     getConsumer()->deref();
 }
 
-void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
+void IAXConnection::sourceAudio(void *buffer, int len, int format)
 {
     format &= s_ast_formats;
     if (m_muted || !format)
 	return;
     if (!buffer || (len < 0) || (len > 1024)) {
-	Debug("IAXAudio",DebugFail,"Invalid buffer=%p or len=%d [%p]",buffer,len,this);
+	Debug("IAXAudio",DebugGoOn,"Invalid buffer=%p or len=%d [%p]",buffer,len,this);
 	return;
     }
     if (!getSource()) {
@@ -946,7 +765,7 @@ void YateIAXConnection::sourceAudio(void *buffer, int len, int format)
     }
 }
 
-void YateIAXConnection::sendVoice(char* buffer, int len, int format)
+void IAXConnection::sendVoice(char* buffer, int len, int format)
 {
     if (m_muted || !m_session)
 	return;
@@ -955,41 +774,24 @@ void YateIAXConnection::sendVoice(char* buffer, int len, int format)
     s_mutex.unlock();
 }
 
-void YateIAXConnection::disconnected(bool final, const char *reason)
+void IAXConnection::disconnected(bool final, const char *reason)
 {
-    Debug(DebugAll,"YateIAXConnection::disconnected() '%s'",reason);
-    setStatus("disconnected");
+    Debug(DebugAll,"IAXConnection::disconnected() '%s'",reason);
+    status("disconnected");
     // If we still have a connection this is the last chance to get transferred
     if (!(final || m_final)) {
 	Message m("chan.disconnected");
-	m.addParam("id",id.c_str());
+	m.addParam("id",id());
 	if (reason)
 	    m.addParam("reason",reason);
-	if (targetid) {
+	if (targetid()) {
 	    // Announce our old party but at this point it may be destroyed
-	    m.addParam("targetid",targetid.c_str());
-	    targetid.clear();
+	    m.addParam("targetid",targetid());
+	    m_targetid.clear();
 	}
 	m.userData(this);
 	Engine::dispatch(m);
     }
-}
-
-
-void YateIAXConnection::answered()
-{
-    if (!m_session)
-	return;
-    setStatus("answered");
-    ::iax_answer(m_session);
-}
-
-void YateIAXConnection::ringing()
-{
-    if (!m_session)
-	return;
-    setStatus("ringing");
-    ::iax_ring_announce(m_session);
 }
 
 IAXSource::~IAXSource()
@@ -1011,230 +813,126 @@ void IAXSource::Forward(const DataBlock &data, unsigned long timeDelta)
     DataSource::Forward(data, timeDelta);
 }
 
-YateIAXAudioConsumer::YateIAXAudioConsumer(YateIAXConnection *conn, int ast_format, const char *format)
+IAXAudioConsumer::IAXAudioConsumer(IAXConnection *conn, int ast_format, const char *format)
     : DataConsumer(format), m_conn(conn),
       m_ast_format(ast_format), m_total(0), m_time(Time::now())
 {
-    Debug(DebugAll,"YateIAXAudioConsumer::YateIAXAudioConsumer(%p) [%p]",conn,this);
+    Debug(DebugAll,"IAXAudioConsumer::IAXAudioConsumer(%p) [%p]",conn,this);
 }
 
-YateIAXAudioConsumer::~YateIAXAudioConsumer()
+IAXAudioConsumer::~IAXAudioConsumer()
 {
-    Debug(DebugAll,"YateIAXAudioConsumer::~YateIAXAudioConsumer() [%p] total=%u",this,m_total);
+    Debug(DebugAll,"IAXAudioConsumer::~IAXAudioConsumer() [%p] total=%u",this,m_total);
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"YateIAXAudioConsumer rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"IAXAudioConsumer rate=%llu b/s",m_time);
 	}
     }
     
 }
 
-void YateIAXAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void IAXAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     m_total += data.length();
     if (m_conn)
 	m_conn->sendVoice((char *)data.data(),data.length(),m_ast_format);
 }
 
-bool IAXConnHandler::received(Message &msg, int id)
+bool IAXConnection::msgRinging(Message& msg)
 {
-    String callid;
-    switch (id) {
-	case Transfer:
-	case Masquerade:
-	    callid = msg.getValue("id");
-	    break;
-	default:
-	    callid = msg.getValue("targetid");
-	}	
-    if (!callid.startsWith("iax/",false))
+    if (!m_session)
 	return false;
-    Lock clock(s_conns);
-    YateIAXConnection *conn= iplugin.m_endpoint->findconn(callid);
-    if (!(conn && conn->session())) {
-	Debug("IAX",DebugInfo,"Could not find valid connection '%s'",callid.c_str());
-	return false;
-    }
-    Lock lock(s_mutex);
-    switch (id) {
-	case Answered:
-	    conn->answered();
-	    break;
-	case Masquerade:
-	    msg.setParam("targetid",conn->targetid);
-	    msg = msg.getValue("message");
-	    msg.clearParam("message");
-	    msg.userData(conn);
-	    return false;
-	case Ringing:
-	    conn->ringing();
-	    break;
-	case Transfer:
-	    {
-		String callto(msg.getValue("callto"));
-		if (!callto)
-		    return false;
-		Debug(DebugInfo,"Transferring connection '%s' [%p] to '%s'",
-		    callid.c_str(),conn,callto.c_str());
-		Message m("call.execute");
-		m.addParam("driver","iax");
-		m.addParam("callto",callto.c_str());
-		m.addParam("id",conn->id);
-		m.userData(conn);
-		if (Engine::dispatch(m)) {
-		    String targetid(m.getValue("targetid"));
-		    Debug(DebugInfo,"IAX [%p] transferred, new targetid '%s'",
-			conn,targetid.c_str());
-		    conn->targetid = targetid;
-		    return true;
-		}
-	    }
-	    break;
-	case DTMF:
-	    {
-		for (const char* t = msg.getValue("text"); t && *t; ++t)
-		    ::iax_send_dtmf(conn->session(),*t);
-	    }
-	    break;
-	case Text:
-	    {
-		const char* t = msg.getValue("text");
-		if (t)
-		    ::iax_send_text(conn->session(),(char *)t);
-	    }
-	    break;
-    }
+    status("ringing");
+    ::iax_ring_announce(m_session);
     return true;
 }
 
-bool IAXHandler::received(Message &msg)
+bool IAXConnection::msgAnswered(Message& msg)
 {
-    String dest(msg.getValue("callto"));
-    if (dest.null())
+    if (!m_session)
 	return false;
-    Regexp r("^iax/\\(.*\\)$");
-    if (!dest.matches(r))
-	return false;
+    status("answered");
+    ::iax_answer(m_session);
+    return true;
+}
+
+bool IAXConnection::msgTone(Message& msg, const char* tone)
+{
+    for (; tone && *tone; ++tone)
+    ::iax_send_dtmf(session(),*tone);
+    return true;
+}
+
+bool IAXConnection::msgText(Message& msg, const char* text)
+{
+    if (text)
+	::iax_send_text(session(),(char *)text);
+    return true;
+}
+
+bool IAXConnection::msgDrop(Message& msg, const char* reason)
+{
+    Debug(DebugInfo,"Dropping IAX call '%s' [%p]",id().c_str(),this);
+    disconnect(reason);
+    return true;
+}
+
+bool IAXPlugin::msgExecute(Message& msg, String& dest)
+{
     if (!msg.userData()) {
-	Debug(DebugFail,"IAX call found but no data channel!");
+	Debug(DebugWarn,"IAX call found but no data channel!");
 	return false;
     }
-    String ip = dest.matchString(1);
-    YateIAXConnection *conn = new YateIAXConnection(ip);
+    IAXConnection *conn = new IAXConnection(this,dest);
     /* i do this to setup the peercallid by getting id 
      * from the other party */
-    conn->targetid = msg.getValue("id");
-    int i = conn->makeCall((char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.matchString(1).safe());
+    int i = conn->makeCall(msg.getValue("id"),(char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.safe());
     if (i < 0) {
 	Debug(DebugInfo,"call failed in iax_call with code %d",i);
 	conn->destruct();
 	return false;
     }
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd && conn->connect(dd))
+    Channel *ch = static_cast<Channel*>(msg.userData());
+    if (ch && conn->connect(ch))
     {
-	msg.addParam("targetid",conn->id);
+	msg.addParam("targetid",conn->id());
 	conn->deref();
     }
     return true;	
 };
 
-bool StatusHandler::received(Message &msg)
-{
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"iaxchan") && ::strcmp(sel,"varchans"))
-	return false;
-    String st("name=iax,type=varchans,format=Status|Caller");
-    st << ";chans=" << iplugin.m_endpoint->calls().count() << ";";
-    ObjList *l = &iplugin.m_endpoint->calls();
-    bool first = true;
-    for (; l; l=l->next()) {
-	YateIAXConnection *c = static_cast<YateIAXConnection *>(l->get());
-	if (c) {
-	    if (first)
-		first = false;
-	    else
-		st << ",";
-	    st << c->id << "=" << c->status() << "|" << c->address;
-	}
-    }
-    msg.retValue() << st << "\n";
-    return false;
-}
-
-bool DropHandler::received(Message &msg)
-{
-    String id(msg.getValue("id"));
-    if (id.null()) {
-	Debug("IAXDroper",DebugInfo,"Dropping all calls");
-	iplugin.m_endpoint->terminateAll();
-    }
-    if (!id.startsWith("iax/"))
-	return false;
-    Lock lock(s_conns);
-    YateIAXConnection *conn = iplugin.m_endpoint->findconn(id);
-    if (conn) {
-	Debug("IAXDropper",DebugInfo,"Dropping call '%s' [%p]",conn->id.c_str(),conn);
-	delete conn;
-	return true;
-    }
-    Debug("IAXDropper",DebugInfo,"Could not find call '%s'",id.c_str());
-    return false;
-}
-
 IAXPlugin::IAXPlugin()
-    : m_endpoint(0), m_first(true)
+    : Driver("iax","varchans"), m_endpoint(0)
 {
     Output("Loaded module IAX");
 }
 
-void IAXPlugin::cleanup()
+IAXPlugin::~IAXPlugin()
 {
+    Output("Unloading module IAX");
     if (m_endpoint) {
 	delete m_endpoint;
 	m_endpoint = 0;
     }
 }
 
-IAXPlugin::~IAXPlugin()
-{
-    Output("Unloading module IAX");
-    cleanup();
-}
-
-bool IAXPlugin::isBusy() const
-{
-    return m_endpoint && (m_endpoint->calls().count() != 0);
-}
-
 void IAXPlugin::initialize()
 {
     Output("Initializing module IAX");
+    lock();
     s_cfg = Engine::configFile("iaxchan");
     s_cfg.load();
+    unlock();
     if (!m_endpoint) {
-	if (!YateIAXEndPoint::Init())
+	if (!IAXEndPoint::Init())
 	    return;
-	m_endpoint = new YateIAXEndPoint;
+	m_endpoint = new IAXEndPoint;
 	m_endpoint->startup();
     }
-    YateIAXEndPoint::Setup();
-    if (m_first) {
-	m_first = false;
-	IAXConnHandler* ch = new IAXConnHandler;
-	Engine::install(new MessageRelay("call.ringing",ch,IAXConnHandler::Ringing));
-	Engine::install(new MessageRelay("call.answered",ch,IAXConnHandler::Answered));
-	Engine::install(new MessageRelay("call.transfer",ch,IAXConnHandler::Transfer));
-	Engine::install(new MessageRelay("chan.masquerade",ch,IAXConnHandler::Masquerade,12));
-	Engine::install(new MessageRelay("chan.dtmf",ch,IAXConnHandler::DTMF));
-	Engine::install(new MessageRelay("chan.text",ch,IAXConnHandler::Text));
-
-	Engine::install(new IAXHandler("call.execute"));
-	Engine::install(new StatusHandler("engine.status"));
-	Engine::install(new DropHandler("call.drop"));
-    }
+    IAXEndPoint::Setup();
+    setup();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

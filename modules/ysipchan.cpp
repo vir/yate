@@ -27,18 +27,21 @@
 #include <unistd.h>
 #include <string.h>
 
-
 #include <errno.h>
+#include <fcntl.h>
+
+#ifdef _WINDOWS
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <fcntl.h>
+#endif
 
 /**
  * we include also the sip stack headers
  */
-
 #include <ysip.h>
 
 using namespace TelEngine;
@@ -462,12 +465,12 @@ bool YateSIPEndPoint::Init ()
     int flags;
     if (m_netfd > -1) {
 	Debug(DebugInfo,"Already initialized.");
-	return 0;
+	return true;
     }
     m_netfd = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (m_netfd < 0) {
 	Debug(DebugFail,"Unable to allocate UDP socket\n");
-	return -1;
+	return false;
     }
     
     int sinlen = sizeof(sin);
@@ -955,7 +958,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     if (m_rtpSession)
 	++m_rtpVersion;
     else
-	m_rtpVersion = m_rtpSession = Time::now() / 10000000000ULL;
+	m_rtpVersion = m_rtpSession = Time::now() / (u_int64_t)10000000000;
     String owner;
     owner << "yate " << m_rtpSession << " " << m_rtpVersion << " IN IP4 " << addr;
     if (!port) {

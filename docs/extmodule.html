@@ -165,13 +165,13 @@ A: %%&gt;install::engine.timer
 E: %%&lt;install:100:engine.timer:true
 
     Application emits a private "app.job" message; notice how the '%' and ':' characters were escaped
-A: %%&gt;message:myapp55251:1095112794::job=cleanup:done=75%%:path=/bin%Z/usr/bin
+A: %%&gt;message:myapp55251:1095112794:app.job::job=cleanup:done=75%%:path=/bin%Z/usr/bin
 
     Engine just dispatched an "engine.timer" message
 E: %%&gt;message:234479208:1095112795:engine.timer::time=1095112795
 
-    Engine gets back the answer to the "app.job" message
-E: %%&lt;message:myapp55251:true:Restart required:path=/bin%Z/usr/bin%Z/usr/local/bin
+    Engine gets back the answer to the "app.job" message with a "Restart required" returned text value
+E: %%&lt;message:myapp55251:true:app.job:Restart required:path=/bin%Z/usr/bin%Z/usr/local/bin
 
     Application ignores the timer message
 A: %%&lt;message:234479208:false:engine.timer::time=1095112795

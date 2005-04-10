@@ -30,13 +30,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#ifdef _WINDOWS
-#include <windows.h>
-#include <io.h>
-#define O_NOCTTY 0
-#else
-#include <netinet/in.h>
-#endif
 
 using namespace TelEngine;
 
@@ -171,7 +164,7 @@ WaveSource::~WaveSource()
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveSource rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"WaveSource rate=" FMT64 " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {
@@ -290,11 +283,7 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
 	setFormatInternal("alaw");
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	setFormatInternal("mulaw");
-#if _WINDOWS
-    m_fd = ::creat(file.safe(),_S_IREAD|_S_IWRITE);
-#else
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
-#endif
     if (m_fd < 0)
 	Debug(DebugGoOn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
@@ -307,7 +296,7 @@ WaveConsumer::~WaveConsumer()
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveConsumer rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"WaveConsumer rate=" FMT64 " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {

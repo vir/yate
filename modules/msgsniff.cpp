@@ -48,16 +48,17 @@ bool SniffHandler::received(Message &msg)
 {
     if (msg == "engine.timer")
 	return false;
-    Output("Sniffed '%s' time=%llu thread=%p data=%p retval='%s'",
-	msg.c_str(),msg.msgTime().usec(),
-	Thread::current(),
-	msg.userData(),msg.retValue().c_str());
+    String par;
     unsigned n = msg.length();
     for (unsigned i = 0; i < n; i++) {
 	NamedString *s = msg.getParam(i);
 	if (s)
-	    Output("  param['%s']='%s'",s->name().c_str(),s->c_str());
+	    par << "\n  param['" << s->name() << "'] = '" << *s << "'";
     }
+    Output("Sniffed '%s' time=" FMT64 " thread=%p data=%p retval='%s'%s",
+	msg.c_str(),msg.msgTime().usec(),
+	Thread::current(),
+	msg.userData(),msg.retValue().c_str(),par.safe());
     return false;
 };
 

@@ -30,16 +30,6 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
-#ifdef _WINDOWS
-#include <windows.h>
-#include <io.h>
-#else
-#include <sys/socket.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#endif
 
 using namespace TelEngine;
 

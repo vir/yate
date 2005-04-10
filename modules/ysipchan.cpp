@@ -30,15 +30,6 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#ifdef _WINDOWS
-#include <windows.h>
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#endif
-
 /**
  * we include also the sip stack headers
  */

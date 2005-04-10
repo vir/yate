@@ -195,12 +195,12 @@ bool RouteHandler::received(Message &msg)
     String ret;
     Lock lock(s_mutex);
     if (oneContext(msg,called,context,ret)) {
-	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in %llu usec",
+	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in " FMT64 " usec",
 	    called.c_str(),context,ret.c_str(),Time::now()-tmr);
 	msg.retValue() = ret;
 	return true;
     }
-    Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted %llu usec",
+    Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted " FMT64 " usec",
 	called.c_str(),context,Time::now()-tmr);
     return false;
 };
@@ -232,12 +232,12 @@ bool PrerouteHandler::received(Message &msg)
     String ret;
     Lock lock(s_mutex);
     if (oneContext(msg,caller,"contexts",ret)) {
-	Debug(DebugInfo,"Classifying caller '%s' in context '%s' in %llu usec",
+	Debug(DebugInfo,"Classifying caller '%s' in context '%s' in " FMT64 " usec",
 	    caller.c_str(),ret.c_str(),Time::now()-tmr);
 	msg.addParam("context",ret);
 	return true;
     }
-    Debug(DebugInfo,"Could not classify call from '%s', wasted %llu usec",
+    Debug(DebugInfo,"Could not classify call from '%s', wasted " FMT64 " usec",
 	caller.c_str(),Time::now()-tmr);
     return false;
 };

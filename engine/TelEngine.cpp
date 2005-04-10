@@ -26,9 +26,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
-#ifdef _WINDOWS
-#include <windows.h>
-#else
+#ifndef _WINDOWS
 #include <sys/time.h>
 #endif
 

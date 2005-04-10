@@ -135,6 +135,10 @@ SOURCE=..\engine\Plugin.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\engine\Socket.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\engine\String.cpp
 # End Source File
 # Begin Source File

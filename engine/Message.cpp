@@ -87,11 +87,7 @@ int Message::decode(const char* str, String& id)
     t >> tm;
     if (!t.null())
 	return sep-str;
-#ifdef _WINDOWS
     m_time=((u_int32_t)1000000)*tm;
-#else
-    m_time=1000000ULL*tm;
-#endif
     return commonDecode(str,sep2-str+1);
 }
 

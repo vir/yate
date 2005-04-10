@@ -183,7 +183,9 @@ void ThreadPrivate::run()
 	Thread::usleep(10);
     m_thread->run();
 
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+    destroy();
+#else
     pthread_cleanup_pop(1);
 #endif
 }
@@ -325,7 +327,9 @@ void* ThreadPrivate::startFunc(void* arg)
     DDebug(DebugAll,"ThreadPrivate::startFunc(%p)",arg);
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
     t->run();
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+    t->cleanup();
+#else
     return 0;
 #endif
 }

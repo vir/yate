@@ -156,7 +156,7 @@ void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
     m_delay = delay;
     m_timeout = (count && delay) ? Time::now() + delay : 0;
     if (m_timeout)
-	Debug("SIPTransaction",DebugAll,"New %d timeouts initially %llu usec apart [%p]",
+	Debug("SIPTransaction",DebugAll,"New %d timeouts initially " FMT64 " usec apart [%p]",
 	    m_timeouts,m_delay,this);
 }
 

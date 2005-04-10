@@ -91,7 +91,7 @@ void RouteThread::run()
 	Engine::dispatch(m);
 	*m = "route";
 	bool routed = Engine::dispatch(m);
-	Debug(DebugMild,"Routed %ssuccessfully in %llu usec",(routed ? "" : "un"),
+	Debug(DebugMild,"Routed %ssuccessfully in " FMT64 " usec",(routed ? "" : "un"),
 	    Time::now()-m->msgTime().usec());
 	if (routed) {
 	    ::usleep(::random() % 1000000);

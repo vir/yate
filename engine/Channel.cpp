@@ -627,7 +627,7 @@ unsigned int Driver::nextid()
 
 
 Router::Router(Driver* driver, const char* id, Message* msg)
-    : m_driver(driver), m_id(id), m_msg(msg)
+    : Thread("Call Router"), m_driver(driver), m_id(id), m_msg(msg)
 {
 }
 

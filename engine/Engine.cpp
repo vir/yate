@@ -23,19 +23,7 @@
 #include "yatengine.h"
 #include "yateversn.h"
 #ifdef _WINDOWS
-#include <windows.h>
-#include <io.h>
 #include <process.h>
-#define O_RDONLY _O_RDONLY
-#define O_WRONLY _O_WRONLY
-#define O_APPEND _O_APPEND
-#define O_CREAT _O_CREAT
-#define open _open
-#define dup2 _dup2
-#define read _read
-#define write _write
-#define close _close
-#define getpid _getpid
 #define RTLD_NOW 0
 #define dlopen(name,flags) LoadLibrary(name)
 #define dlclose !FreeLibrary

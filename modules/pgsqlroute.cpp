@@ -74,7 +74,7 @@ bool RouteHandler::received(Message &msg)
     	return false;
     }
     msg.retValue() = String(PQgetvalue(respgsql,0,0))+"/" + String(PQgetvalue(respgsql,0,1));
-    Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in %llu usec",
+    Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in " FMT64 " usec",
 		called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
     s_route_yes++;
     return true;
@@ -119,7 +119,7 @@ bool PrerouteHandler::received(Message &msg)
     	return false;
     }
     msg.addParam("context",PQgetvalue(respgsql,0,0));
-    Debug(DebugInfo,"Classifying caller '%s' in context '%s' in %llu usec",
+    Debug(DebugInfo,"Classifying caller '%s' in context '%s' in " FMT64 " usec",
 	caller.c_str(),msg.getValue("context"),Time::now()-tmr);
     return true;
     
@@ -133,14 +133,14 @@ bool PrerouteHandler::received(Message &msg)
 		Regexp r(n->name());
 		if (s.matches(r)) {
 		    msg.addParam("context",s.replaceMatches(*n));
-		    Debug(DebugInfo,"Classifying caller '%s' in context '%s' by rule #%u '%s' in %llu usec",
+		    Debug(DebugInfo,"Classifying caller '%s' in context '%s' by rule #%u '%s' in " FMT64 " usec",
 			s.c_str(),msg.getValue("context"),i+1,r.c_str(),Time::now()-tmr);
 		    return true;
 		}
 	    }
 	}
     }
-    Debug(DebugInfo,"Could not classify call from '%s', wasted %llu usec",
+    Debug(DebugInfo,"Could not classify call from '%s', wasted " FMT64 " usec",
 	s.c_str(),Time::now()-tmr);
     return false;
 #endif

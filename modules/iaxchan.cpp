@@ -31,14 +31,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#ifdef _WINDOWS
-#include <windows.h>
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <arpa/inet.h>
-#endif
 
 extern "C" {
 #include <iax-client.h>
@@ -58,15 +50,13 @@ static TokenDict dict_iaxformats[] = {
     { 0, 0 }
 };
 
-#ifndef _WINDOWS
 static TokenDict dict_tos[] = {
-    { "lowdelay", IPTOS_LOWDELAY },
-    { "throughput", IPTOS_THROUGHPUT },
-    { "reliability", IPTOS_RELIABILITY },
-    { "mincost", IPTOS_MINCOST },
+    { "lowdelay", Socket::LowDelay },
+    { "throughput", Socket::MaxThroughput },
+    { "reliability", Socket::MaxReliability },
+    { "mincost", Socket::MinCost },
     { 0, 0 }
 };
-#endif
 
 static bool s_debugging = true;
 static int s_ast_formats = 0;
@@ -213,11 +203,12 @@ bool IAXEndPoint::Init(void)
     }
     iax_set_error(iax_err_cb);
     iax_set_output(iax_out_cb);
-#ifndef _WINDOWS
     int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
-    if (tos)
-	::setsockopt(iax_get_fd(),IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
-#endif
+    if (tos) {
+	Socket s(iax_get_fd());
+	s.setTOS(static_cast<Socket::TOS>(tos));
+	s.detach();
+    }
     return true;
 }
 
@@ -801,7 +792,7 @@ IAXSource::~IAXSource()
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"IAXSource rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"IAXSource rate=" FMT64 " b/s",m_time);
 	}
     }
     
@@ -827,7 +818,7 @@ IAXAudioConsumer::~IAXAudioConsumer()
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"IAXAudioConsumer rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"IAXAudioConsumer rate=" FMT64 " b/s",m_time);
 	}
     }
     

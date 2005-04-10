@@ -137,7 +137,7 @@ ToneSource::~ToneSource()
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"ToneSource rate=%llu b/s",m_time);
+	    Debug(DebugInfo,"ToneSource rate=" FMT64 " b/s",m_time);
 	}
     }
 }
@@ -216,7 +216,7 @@ void ToneSource::run()
     };
     m_time = Time::now() - m_time;
     m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-    Debug(DebugAll,"ToneSource [%p] end, total=%u (%llu b/s)",this,m_total,m_time);
+    Debug(DebugAll,"ToneSource [%p] end, total=%u (" FMT64 " b/s)",this,m_total,m_time);
     m_time = 0;
 }
 

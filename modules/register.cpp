@@ -238,7 +238,7 @@ bool RouteHandler::received(Message &msg)
     	return false;
     }
     msg.retValue() = String(PQgetvalue(respgsql,0,1));
-    Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in %llu usec",
+    Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in " FMT64 " usec",
 		called.c_str(),context.c_str(),msg.retValue().c_str(),Time::now()-tmr);
     s_route_yes++;
     return true;

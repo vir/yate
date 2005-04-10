@@ -26,9 +26,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
-#ifndef _WINDOWS
-#include <sys/time.h>
-#endif
 
 namespace TelEngine {
 

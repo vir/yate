@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <errno.h>
 
 #ifndef _WINDOWS
 #ifdef WIN32
@@ -90,6 +91,7 @@ typedef unsigned __int64 uint64_t;
 
 #else /* _WINDOWS */
 
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>

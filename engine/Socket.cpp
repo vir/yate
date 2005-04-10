@@ -149,7 +149,17 @@ bool Socket::setOption(int level, int name, const void* value, int length)
 
 bool Socket::getOption(int level, int name, void* buffer, int* length)
 {
+#ifdef _WINDOWS
     return checkError(::getsockopt(m_handle,level,name,(char*)buffer,length));
+#else
+    socklen_t len = 0;
+    if (length)
+	len = *length;
+    bool ok = checkError(::getsockopt(m_handle,level,name,(char*)buffer,&len));
+    if (length)
+	*length = len;
+    return ok;
+#endif
 }
 
 bool Socket::setTOS(TOS tos)

@@ -22,10 +22,7 @@
 
 #include "yateclass.h"
 
-#include <unistd.h>
-
 #ifdef _WINDOWS
-#include <windows.h>
 
 typedef HANDLE HMUTEX;
 

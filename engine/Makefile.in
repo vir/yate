@@ -20,7 +20,8 @@ CINC := @top_srcdir@/yateclass.h
 EINC := $(CINC) @top_srcdir@/yatengine.h
 PINC := $(PINC) @top_srcdir@/yatephone.h
 LIBS :=
-CLSOBJS := TelEngine.o ObjList.o String.o DataBlock.o NamedList.o YMD5.o Mutex.o Thread.o
+CLSOBJS := TelEngine.o ObjList.o String.o DataBlock.o NamedList.o YMD5.o \
+	Mutex.o Thread.o Socket.o
 ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
 TELOBJS := DataFormat.o Channel.o
 

@@ -22,11 +22,7 @@
 
 #include "yateclass.h"
 
-#include <unistd.h>
-#include <errno.h>
-
 #ifdef _WINDOWS
-#include <windows.h>
 #include <process.h>
 typedef unsigned long HTHREAD;
 #else

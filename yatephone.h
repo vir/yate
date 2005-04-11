@@ -165,6 +165,73 @@ public:
 };
 
 /**
+ * An extension of a String that can parse data formats
+ * @short A Data format
+ */
+class YATE_API DataFormat : public String
+{
+public:
+    /**
+     * Creates a new, empty string.
+     */
+    inline DataFormat()
+	: m_parsed(0)
+	{ }
+
+    /**
+     * Creates a new initialized format.
+     * @param value Initial value of the format
+     */
+    inline DataFormat(const char* value)
+	: String(value), m_parsed(0)
+	{ }
+
+    /**
+     * Copy constructor.
+     * @param value Initial value of the format
+     */
+    DataFormat(const DataFormat& value)
+	: String(value), m_parsed(0)
+	{ }
+
+    /**
+     * Constructor from String reference
+     * @param value Initial value of the format
+     */
+    DataFormat(const String& value)
+	: String(value), m_parsed(0)
+	{ }
+
+    /**
+     * Constructor from String pointer.
+     * @param value Initial value of the format
+     */
+    DataFormat(const String* value)
+	: String(value), m_parsed(0)
+	{ }
+
+    /**
+     * Assignment operator.
+     */
+    inline DataFormat& operator=(const DataFormat& value)
+	{ String::operator=(value); return *this; }
+
+    /**
+     * Retrive a pointer to the format information
+     * @return Pointer to the associated format info or NULL if error
+     */
+    const FormatInfo* getInfo() const;
+
+protected:
+    /**
+     * Called whenever the value changed (except in constructors).
+     */
+    virtual void changed();
+
+    mutable const FormatInfo* m_parsed;
+};
+
+/**
  * A generic data handling object
  */
 class YATE_API DataNode : public RefObject
@@ -174,53 +241,32 @@ public:
      * Construct a DataNode
      * @param format Description of the data format, default none
      */
-    inline DataNode(const FormatInfo* format = 0)
-	: m_format(format), m_timestamp(0) { }
-
-    /**
-     * Construct a DataNode from a format name
-     * @param format Name of the data format, default none
-     */
-    inline DataNode(const String& format)
-	: m_format(FormatRepository::getFormat(format)), m_timestamp(0) { }
+    inline DataNode(const char* format = 0)
+	: m_format(format), m_timestamp(0)
+	{ }
 
     /**
      * Get the computing cost of converting the data to the format asked
      * @param format Name of the format to check for
      * @return -1 if unsupported, 0 for native format else cost in KIPS
      */
-    virtual int costFormat(const FormatInfo* format)
+    virtual int costFormat(const DataFormat& format)
 	{ return -1; }
-
-    /**
-     * Change the format used to transfer data
-     * @param format Description of the format to set for data
-     * @return True if the format changed successfully, false if not changed
-     */
-    virtual bool setFormat(const FormatInfo* format = 0)
-	{ return false; }
 
     /**
      * Change the format used to transfer data
      * @param format Name of the format to set for data
      * @return True if the format changed successfully, false if not changed
      */
-    inline bool setFormat(const String& format)
-	{ return setFormat(FormatRepository::getFormat(format)); }
+    virtual bool setFormat(const DataFormat& format)
+	{ return false; }
 
     /**
      * Get the description of the format currently in use
      * @return Pointer to the data format
      */
-    inline const FormatInfo* getFormat() const
+    inline const DataFormat& getFormat() const
 	{ return m_format; }
-
-    /**
-     * Get the name of the format currently in use
-     * @return Name of the data format
-     */
-    inline const char* getFormatName() const
-	{ return m_format ? m_format->name : 0; }
 
     /**
      * Get the current position in the data stream
@@ -230,23 +276,7 @@ public:
 	{ return m_timestamp; }
 
 protected:
-    /**
-     * Change the format used to transfer data
-     * @param format Description of the format to set for data
-     * @return True if the format changed successfully, false if not changed
-     */
-    inline void setFormatInternal(const FormatInfo* format = 0)
-	{ m_format = format; }
-
-    /**
-     * Change the format used to transfer data
-     * @param format Name of the format to set for data
-     * @return True if the format changed successfully, false if not changed
-     */
-    inline void setFormatInternal(const String& format)
-	{ setFormatInternal(FormatRepository::getFormat(format)); }
-
-    const FormatInfo* m_format;
+    DataFormat m_format;
     unsigned long m_timestamp;
 };
 
@@ -256,19 +286,13 @@ protected:
 class YATE_API DataConsumer : public DataNode
 {
     friend class DataSource;
-public:
-    /**
-     * Consumer constructor
-     * @param format Description of the data format
-     */
-    inline DataConsumer(const FormatInfo *format)
-	: DataNode(format), m_source(0) { }
 
+public:
     /**
      * Consumer constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline DataConsumer(const String& format = "slin")
+    inline DataConsumer(const char* format = "slin")
 	: DataNode(format), m_source(0) { }
 
     /**
@@ -304,19 +328,13 @@ private:
 class YATE_API DataSource : public DataNode
 {
     friend class DataTranslator;
-public:
-    /**
-     * Source constructor
-     * @param format Description of the data format
-     */
-    inline DataSource(const FormatInfo* format)
-	: DataNode(format), m_translator(0) { }
 
+public:
     /**
      * Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline DataSource(const String& format = "slin")
+    inline DataSource(const char* format = "slin")
 	: DataNode(format), m_translator(0) { }
 
     /**
@@ -401,16 +419,9 @@ public:
 protected:
     /**
      * Threaded Source constructor
-     * @param format Description of the data format
-     */
-    inline ThreadedSource(const FormatInfo* format)
-	: DataSource(format), m_thread(0) { }
-
-    /**
-     * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
-    inline ThreadedSource(const String& format = "slin")
+    inline ThreadedSource(const char* format = "slin")
 	: DataSource(format), m_thread(0) { }
 
     /**
@@ -468,14 +479,14 @@ public:
      * @param dFormat Name of destination format
      * @return Space separated list of source formats
      */
-    static String srcFormats(const String& dFormat = "slin");
+    static String srcFormats(const DataFormat& dFormat = "slin");
 
     /**
      * Get a textual list of formats supported for a given input format
      * @param sFormat Name of source format
      * @return Space separated list of destination formats
      */
-    static String destFormats(const String& sFormat = "slin");
+    static String destFormats(const DataFormat& sFormat = "slin");
 
     /**
      * Finds the cost of a translator given the source and destination format names
@@ -483,7 +494,7 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return Cost of best (cheapest) codec or -1 if no known codec exists
      */
-    static int cost(const String& sFormat, const String& dFormat);
+    static int cost(const DataFormat& sFormat, const DataFormat& dFormat);
 
     /**
      * Creates a translator given the source and destination format names
@@ -491,7 +502,7 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return A pointer to a DataTranslator object or NULL if no known codec exists
      */
-    static DataTranslator* create(const String& sFormat, const String& dFormat);
+    static DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
 
     /**
      * Attach a consumer to a source, possibly trough a chain of translators
@@ -549,7 +560,7 @@ public:
      * @param dFormat Name of the destination format (data supplied to the source)
      * @return A pointer to a DataTranslator object or NULL
      */
-    virtual DataTranslator* create(const String& sFormat, const String& dFormat) = 0;
+    virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat) = 0;
 
     /**
      * Get the capabilities table of this translator

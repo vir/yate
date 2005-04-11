@@ -150,10 +150,12 @@ Connection::~Connection()
 
 void Connection::run()
 {
+#ifdef O_NONBLOCK
     if (::fcntl(m_socket,F_SETFL,O_NONBLOCK)) {
 	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s\n", strerror(errno));
 	return;
     }
+#endif
     // For the sake of responsiveness try to turn off the tcp assembly timer
     int arg = 1;
     if (::setsockopt(m_socket, SOL_SOCKET, TCP_NODELAY, (char *)&arg, sizeof(arg) ) < 0)
@@ -178,6 +180,8 @@ void Connection::run()
 		Debug("RManager",DebugInfo,"Socket exception condition on %d",m_socket);
 		return;
 	    }
+	    if (!FD_ISSET(m_socket,&readfd))
+		continue;
 	    int readsize = ::read(m_socket,buffer+posinbuf,sizeof(buffer)-posinbuf-1);
 	    if (!readsize) {
 		Debug("RManager",DebugInfo,"Socket condition EOF on %d",m_socket);

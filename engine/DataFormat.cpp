@@ -47,7 +47,7 @@ private:
 class SimpleTranslator : public DataTranslator
 {
 public:
-    SimpleTranslator(const String& sFormat, const String& dFormat)
+    SimpleTranslator(const DataFormat& sFormat, const DataFormat& dFormat)
 	: DataTranslator(sFormat,dFormat) { }
     virtual void Consume(const DataBlock& data, unsigned long timeDelta)
 	{
@@ -102,7 +102,8 @@ static const FormatInfo s_formats[] = {
 };
 
 static flist* s_flist = 0;
-static const FormatInfo* s_slin = &s_formats[0];
+static const FormatInfo* f_slin = &s_formats[0];
+static const char s_slin[] = "slin";
 
 const FormatInfo* FormatRepository::getFormat(const String& name)
 {
@@ -149,11 +150,24 @@ const FormatInfo* FormatRepository::addFormat(const String& name, int drate, int
     return f;
 }
 
+void DataFormat::changed()
+{
+    m_parsed = 0;
+    String::changed();
+}
+
+const FormatInfo* DataFormat::getInfo() const
+{
+    if (!(m_parsed || null()))
+	m_parsed = FormatRepository::getFormat(*this);
+    return m_parsed;
+}
+
 void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
 {
     // no number of samples provided - try to guess
     if (!timeDelta) {
-	const FormatInfo* f = FormatRepository::getFormat(m_format);
+	const FormatInfo* f = m_format.getInfo();
 	if (f)
 	    timeDelta = f->guessSamples(data.length());
     }
@@ -409,7 +423,7 @@ void DataTranslator::uninstall(TranslatorFactory* factory)
     s_mutex.unlock();
 }
 
-String DataTranslator::srcFormats(const String& dFormat)
+String DataTranslator::srcFormats(const DataFormat& dFormat)
 {
     String s;
     s_mutex.lock();
@@ -429,7 +443,7 @@ String DataTranslator::srcFormats(const String& dFormat)
     return s;
 }
 
-String DataTranslator::destFormats(const String& sFormat)
+String DataTranslator::destFormats(const DataFormat& sFormat)
 {
     String s;
     s_mutex.lock();
@@ -449,7 +463,7 @@ String DataTranslator::destFormats(const String& sFormat)
     return s;
 }
 
-int DataTranslator::cost(const String& sFormat, const String& dFormat)
+int DataTranslator::cost(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     int c = -1;
     s_mutex.lock();
@@ -468,7 +482,7 @@ int DataTranslator::cost(const String& sFormat, const String& dFormat)
     return c;
 }
 
-DataTranslator* DataTranslator::create(const String& sFormat, const String& dFormat)
+DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     if (sFormat == dFormat) {
 	Debug(DebugInfo,"Not creating identity DataTranslator for \"%s\"",sFormat.c_str());
@@ -541,7 +555,7 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 	}
     }
     NDebug(retv ? DebugAll : DebugWarn,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
-	source,source->getFormatName(),consumer,consumer->getFormatName(),
+	source,source->getFormat(),consumer,consumer->getFormat(),
 	retv ? "succeeded" : "failed");
     return retv;
 }

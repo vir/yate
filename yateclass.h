@@ -55,6 +55,8 @@ typedef signed __int64 int64_t;
 typedef unsigned __int64 u_int64_t;
 typedef unsigned __int64 uint64_t;
 
+typedef int socklen_t;
+
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
 #define strcasecmp _stricmp
@@ -99,13 +101,22 @@ typedef unsigned __int64 uint64_t;
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#ifndef SOCKET
 typedef int SOCKET;
+#endif
 
 #define YATE_API
 
 #define FMT64 "%llu"
 
 #endif /* ! _WINDOWS */
+
+#ifndef IPTOS_LOWDELAY
+#define IPTOS_LOWDELAY      0x10
+#define IPTOS_THROUGHPUT    0x08
+#define IPTOS_RELIABILITY   0x04
+#define IPTOS_MINCOST       0x02
+#endif
 
 struct timeval;
 	
@@ -2177,10 +2188,10 @@ public:
      * Types of service
      */
     enum TOS {
-	LowDelay = 0x1000,
-	MaxThroughput,
-	MaxReliability,
-	MinCost,
+	LowDelay       = IPTOS_LOWDELAY,
+	MaxThroughput  = IPTOS_THROUGHPUT,
+	MaxReliability = IPTOS_RELIABILITY,
+	MinCost        = IPTOS_MINCOST,
     };
 
     /**
@@ -2262,7 +2273,7 @@ public:
      * @param length Size of the supplied buffer
      * @return True if operation was successfull, false if an error occured
      */
-    bool setOption(int level, int name, const void* value = 0, int length = 0);
+    bool setOption(int level, int name, const void* value = 0, socklen_t length = 0);
 
     /**
      * Get socket options
@@ -2271,14 +2282,14 @@ public:
      * @param length Pointer to size of the supplied buffer, will be filled on return
      * @return True if operation was successfull, false if an error occured
      */
-    bool getOption(int level, int name, void* buffer, int* length);
+    bool getOption(int level, int name, void* buffer, socklen_t* length);
 
     /**
      * Set the Type of Service on the IP level of this socket
-     * @param tos New TOS enum to set or byte value
+     * @param tos New TOS bits to set
      * @return True if operation was successfull, false if an error occured
      */
-    bool setTOS(TOS tos);
+    bool setTOS(int tos);
 
     /**
      * Start listening for incoming connections on the socket

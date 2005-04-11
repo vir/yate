@@ -22,19 +22,6 @@
 
 #include "yateclass.h"
 
-#ifndef _WINDOWS
-#ifndef SOCKET
-typedef int SOCKET;
-#endif
-#endif
-
-#ifndef IPTOS_LOWDELAY
-#define IPTOS_LOWDELAY      0x10
-#define IPTOS_THROUGHPUT    0x08
-#define IPTOS_RELIABILITY   0x04
-#define IPTOS_MINCOST       0x02
-#endif
-
 using namespace TelEngine;
 
 Socket::Socket()
@@ -140,47 +127,24 @@ bool Socket::listen(unsigned int backlog)
     return checkError(::listen(m_handle,backlog));
 }
 
-bool Socket::setOption(int level, int name, const void* value, int length)
+bool Socket::setOption(int level, int name, const void* value, socklen_t length)
 {
     if (!value)
 	length = 0;
     return checkError(::setsockopt(m_handle,level,name,(const char*)value,length));
 }
 
-bool Socket::getOption(int level, int name, void* buffer, int* length)
+bool Socket::getOption(int level, int name, void* buffer, socklen_t* length)
 {
-#ifdef _WINDOWS
+    if (length && !buffer)
+	*length = 0;
     return checkError(::getsockopt(m_handle,level,name,(char*)buffer,length));
-#else
-    socklen_t len = 0;
-    if (length)
-	len = *length;
-    bool ok = checkError(::getsockopt(m_handle,level,name,(char*)buffer,&len));
-    if (length)
-	*length = len;
-    return ok;
-#endif
 }
 
-bool Socket::setTOS(TOS tos)
+bool Socket::setTOS(int tos)
 {
 #ifdef IP_TOS
-    int val = tos;
-    switch (tos) {
-	case LowDelay:
-	    val = IPTOS_LOWDELAY;
-	    break;
-	case MaxThroughput:
-	    val = IPTOS_THROUGHPUT;
-	    break;
-	case MaxReliability:
-	    val = IPTOS_RELIABILITY;
-	    break;
-	case MinCost:
-	    val = IPTOS_MINCOST;
-	    break;
-    }
-    return setOption(IPPROTO_IP,IP_TOS,&val,sizeof(val));
+    return setOption(IPPROTO_IP,IP_TOS,&tos,sizeof(tos));
 #else
     m_error = ENOTIMPL;
     return false;

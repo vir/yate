@@ -108,13 +108,7 @@ public:
     void answer(iax_event *e);
     void reg(iax_event *e);
     void run(void);
-    IAXConnection *find(iax_session *session);
     void handleEvent(iax_event *event);
-
-    inline ObjList &calls()
-	{ return m_calls; }
-private:
-    ObjList m_calls;
 };
 
 class IAXConnection :  public Channel
@@ -160,6 +154,7 @@ public:
     virtual ~IAXPlugin();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    IAXConnection *find(iax_session *session);
     IAXEndPoint *m_endpoint;
 };
 
@@ -294,7 +289,7 @@ void IAXEndPoint::run(void)
 		case IAX_EVENT_TIMEOUT:
 		case IAX_EVENT_REJECT:
 		case IAX_EVENT_HANGUP:
-		    if ((conn = find(e->session)) != 0) {
+		    if ((conn = iplugin.find(e->session)) != 0) {
 			conn->abort(e->etype);
 			conn->destruct();
 		    }
@@ -483,17 +478,6 @@ void IAXEndPoint::reg(iax_event *e)
     s_mutex.unlock();
 }
 
-IAXConnection* IAXEndPoint::find(iax_session *session)
-{ 
-    ObjList *p = m_calls.skipNull();
-    for (; p; p=p->skipNext()) { 
-	IAXConnection *t = static_cast<IAXConnection *>(p->get()); 
-	if (t->session() == session)
-	    return t; 
-    }
-    return 0; 
-}
-
 IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session *session)
     : Channel(driver,0,(session == 0)),
       m_session(session), m_final(false), m_muted(false),
@@ -653,7 +637,7 @@ void IAXConnection::hangup(const char *reason)
     if (!reason)
 	reason = m_reason;
     if (!reason)
-	reason = "Unexpected problem";
+	reason = Engine::exiting() ? "Server shutdown" : "Unexpected problem";
     if (!m_final) {
 	s_mutex.lock();
 	m_final = true;
@@ -893,6 +877,17 @@ bool IAXPlugin::msgExecute(Message& msg, String& dest)
     }
     return true;	
 };
+
+IAXConnection* IAXPlugin::find(iax_session *session)
+{ 
+    ObjList *p = channels().skipNull();
+    for (; p; p=p->skipNext()) { 
+	IAXConnection *t = static_cast<IAXConnection *>(p->get()); 
+	if (t->session() == session)
+	    return t; 
+    }
+    return 0; 
+}
 
 IAXPlugin::IAXPlugin()
     : Driver("iax","varchans"), m_endpoint(0)

@@ -555,7 +555,7 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 	}
     }
     NDebug(retv ? DebugAll : DebugWarn,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
-	source,source->getFormat(),consumer,consumer->getFormat(),
+	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str(),
 	retv ? "succeeded" : "failed");
     return retv;
 }

@@ -2106,26 +2106,30 @@ public:
 
     /**
      * Give up the currently running timeslice
+     * @param exitCheck Terminate the thread if asked so
      */
-    static void yield();
+    static void yield(bool exitCheck = false);
 
     /**
      * Sleep for a number of seconds
      * @param sec Number of seconds to sleep
+     * @param exitCheck Terminate the thread if asked so
      */
-    static void sleep(unsigned int sec);
+    static void sleep(unsigned int sec, bool exitCheck = false);
 
     /**
      * Sleep for a number of milliseconds
      * @param sec Number of milliseconds to sleep
+     * @param exitCheck Terminate the thread if asked so
      */
-    static void msleep(unsigned long msec);
+    static void msleep(unsigned long msec, bool exitCheck = false);
 
     /**
      * Sleep for a number of microseconds
      * @param sec Number of microseconds to sleep
+     * @param exitCheck Terminate the thread if asked so
      */
-    static void usleep(unsigned long usec);
+    static void usleep(unsigned long usec, bool exitCheck = false);
 
     /**
      * Get a pointer to the currently running thread
@@ -2140,14 +2144,22 @@ public:
     static int count();
 
     /**
+     * Check if the current thread was asked to terminate.
+     * @param justCheck If true and should terminate then terminate thread immediately
+     * @return False if thread should continue running, true if it should stop
+     */
+    static bool check(bool exitNow = true);
+
+    /**
      * Terminates the current thread.
      */
     static void exit();
 
     /**
      * Terminates the specified thread.
+     * @param hard Kill the thread the hard way rather than just setting an exit check marker
      */
-    void cancel();
+    void cancel(bool hard = false);
 
     /**
      * Kills all other running threads. Ouch!

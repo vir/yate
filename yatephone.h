@@ -604,8 +604,7 @@ public:
     /**
      * Disconnect from the connected endpoint
      */
-    inline void disconnect()
-	{ disconnect(false); }
+    void disconnect();
 
     /**
      * Set the data source of this object
@@ -656,17 +655,6 @@ public:
 
 protected:
     /**
-     * Connect notification method
-     */
-    virtual void connected() { }
-
-    /**
-     * Disconnect notification method
-     * @param final True if this disconnect was called from the destructor
-     */
-    virtual void disconnected(bool final) { }
-
-    /**
      * Attempt to connect the endpoint to a peer of the same type
      * @param peer Pointer to the endpoint data driver
      * @return True if connected, false if failed native connection
@@ -674,14 +662,7 @@ protected:
     virtual bool nativeConnect(DataEndpoint* peer)
 	{ return false; }
 
-    /*
-     * Set the peer endpoint pointer
-     * @param peer A pointer to the new peer or NULL
-     */
-    void setPeer(DataEndpoint* peer);
-
 private:
-    void disconnect(bool final);
     String m_name;
     DataSource* m_source;
     DataConsumer* m_consumer;
@@ -726,14 +707,14 @@ public:
 
     /**
      * Retrive the global update notification delay
-     * @return Update delay value in usec
+     * @return Update delay value in seconds
      */
     inline static unsigned int updateDelay()
 	{ return s_delay; }
 
     /**
      * Set the global update notification delay
-     * @param delay New update delay value in usec, 0 to disable
+     * @param delay New update delay value in seconds, 0 to disable
      */
     inline static void updateDelay(unsigned int delay)
 	{ s_delay = delay; }
@@ -1077,7 +1058,7 @@ public:
      * @param type Type of data endpoint: "audio", "video", "text"
      * @return A pointer to the DataEndpoint object or NULL if an error occured
      */
-    DataEndpoint* addEndpoint(const char* type = "audio");
+    DataEndpoint* setEndpoint(const char* type = "audio");
 
     /**
      * Set a data source of this object

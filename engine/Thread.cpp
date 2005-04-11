@@ -42,18 +42,19 @@ public:
     ThreadPrivate(Thread* t,const char* name);
     ~ThreadPrivate();
     void run();
-    bool cancel();
+    bool cancel(bool hard);
     void cleanup();
     void destroy();
     void pubdestroy();
     static ThreadPrivate* create(Thread* t,const char* name);
     static void killall();
-    static Thread* current();
+    static ThreadPrivate* current();
     Thread* m_thread;
     HTHREAD thread;
     bool m_running;
     bool m_started;
     bool m_updest;
+    bool m_cancel;
     const char* m_name;
 private:
 #ifdef _WINDOWS
@@ -118,7 +119,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
 }
 
 ThreadPrivate::ThreadPrivate(Thread* t,const char* name)
-    : m_thread(t), m_running(false), m_started(false), m_updest(true), m_name(name)
+    : m_thread(t), m_running(false), m_started(false), m_updest(true), m_cancel(false), m_name(name)
 {
 #ifdef DEBUG
     Debugger debug("ThreadPrivate::ThreadPrivate","(%p,\"%s\") [%p]",t,name,this);
@@ -158,8 +159,27 @@ void ThreadPrivate::pubdestroy()
     m_updest = false;
     cleanup();
     m_thread = 0;
-    if (!cancel())
-	Debug(DebugWarn,"ThreadPrivate::pubdestroy() %p '%s' failed cancel [%p]",m_thread,m_name,this);
+
+    if (current() == this) {
+	cancel(true);
+	// should never reach here...
+	Debug(DebugFail,"ThreadPrivate::pubdestroy() past cancel??? [%p]",this);
+    }
+    else {
+	cancel(false);
+	bool done = false;
+	// delay a little so thread has a chance to clean up
+	for (int i=0; i<20; i++) {
+	    tmutex.lock();
+	    bool done = !threads.find(this);
+	    tmutex.unlock();
+	    if (done)
+		return;
+	    Thread::msleep(5,false);
+	}
+	if (!cancel(true))
+	    Debug(DebugWarn,"ThreadPrivate::pubdestroy() %p '%s' failed cancel [%p]",m_thread,m_name,this);
+    }
 }
 
 void ThreadPrivate::run()
@@ -176,7 +196,7 @@ void ThreadPrivate::run()
 #endif
 
     while (!m_started)
-	Thread::usleep(10);
+	Thread::usleep(10,true);
     m_thread->run();
 
 #ifndef _WINDOWS
@@ -184,20 +204,26 @@ void ThreadPrivate::run()
 #endif
 }
 
-bool ThreadPrivate::cancel()
+bool ThreadPrivate::cancel(bool hard)
 {
-    DDebug(DebugAll,"ThreadPrivate::cancel() '%s' [%p]",m_name,this);
+    DDebug(DebugAll,"ThreadPrivate::cancel(%d) '%s' [%p]",hard,m_name,this);
     bool ret = true;
     if (m_running) {
+	ret = false;
+	if (hard) {
 #ifdef _WINDOWS
-	ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
+	    Debug(DebugFail,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
+	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
-	ret = !::pthread_cancel(thread);
+	    ret = !::pthread_cancel(thread);
 #endif
-	if (ret) {
-	    m_running = false;
-	    Thread::msleep(1);
+	    if (ret) {
+		m_running = false;
+		Thread::msleep(1);
+		return true;
+	    }
 	}
+	m_cancel = true;
     }
     return ret;
 }
@@ -217,14 +243,13 @@ void ThreadPrivate::cleanup()
     }
 }
 
-Thread* ThreadPrivate::current()
+ThreadPrivate* ThreadPrivate::current()
 {
 #ifdef _WINDOWS
-    ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(::TlsGetValue(tls_index));
+    return reinterpret_cast<ThreadPrivate *>(::TlsGetValue(tls_index));
 #else
-    ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(::pthread_getspecific(current_key));
+    return reinterpret_cast<ThreadPrivate *>(::pthread_getspecific(current_key));
 #endif
-    return t ? t->m_thread : 0;
 }
 
 void ThreadPrivate::killall()
@@ -239,16 +264,16 @@ void ThreadPrivate::killall()
     {
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
 	tmutex.unlock();
-	bool ok = t->cancel();
+	bool ok = t->cancel(c > 1);
 	if (ok) {
 	    // delay a little so threads have a chance to clean up
-	    for (int i=0; i<100; i++) {
+	    for (int i=0; i<20; i++) {
 		tmutex.lock();
 		bool done = (t != l->get());
 		tmutex.unlock();
 		if (done)
 		    break;
-		Thread::msleep(1);
+		Thread::msleep(5);
 	    }
 	}
 	tmutex.lock();
@@ -322,7 +347,9 @@ void* ThreadPrivate::startFunc(void* arg)
     ThreadPrivate *t = reinterpret_cast<ThreadPrivate *>(arg);
     t->run();
 #ifdef _WINDOWS
-    t->destroy();
+    t->m_running = false;
+    if (t->m_updest)
+	t->destroy();
 #else
     return 0;
 #endif
@@ -364,7 +391,8 @@ bool Thread::startup()
 
 Thread *Thread::current()
 {
-    return ThreadPrivate::current();
+    ThreadPrivate* t = ThreadPrivate::current();
+    return t ? t->m_thread : 0;
 }
 
 int Thread::count()
@@ -388,53 +416,76 @@ void Thread::exit()
 {
     DDebug(DebugAll,"Thread::exit()");
 #ifdef _WINDOWS
+    ThreadPrivate* t = ThreadPrivate::current();
+    if (t) {
+	t->m_running = false;
+	t->destroy();
+    }
     ::_endthread();
 #else
     ::pthread_exit(0);
 #endif
 }
 
-void Thread::cancel()
+bool Thread::check(bool exitNow)
+{
+    ThreadPrivate* t = ThreadPrivate::current();
+    if (!(t && t->m_cancel))
+	return false;
+    if (exitNow)
+	exit();
+    return true;
+}
+
+void Thread::cancel(bool hard)
 {
     DDebug(DebugAll,"Thread::cancel() [%p]",this);
     if (m_private)
-	m_private->cancel();
+	m_private->cancel(hard);
 }
 
-void Thread::yield()
+void Thread::yield(bool exitCheck)
 {
 #ifdef _WINDOWS
     ::Sleep(0);
 #else
     ::usleep(0);
 #endif
+    if (exitCheck)
+	check();
 }
 
-void Thread::sleep(unsigned int sec)
+void Thread::sleep(unsigned int sec, bool exitCheck)
 {
 #ifdef _WINDOWS
     ::Sleep(sec*1000);
 #else
     ::sleep(sec);
 #endif
+    if (exitCheck)
+	check();
 }
 
-void Thread::msleep(unsigned long msec)
+void Thread::msleep(unsigned long msec, bool exitCheck)
 {
 #ifdef _WINDOWS
     ::Sleep(msec);
 #else
     ::usleep(msec*1000L);
 #endif
+    if (exitCheck)
+	check();
 }
 
-void Thread::usleep(unsigned long usec)
+void Thread::usleep(unsigned long usec, bool exitCheck)
 {
 #ifdef _WINDOWS
     ::Sleep(usec/1000);
 #else
     ::usleep(usec);
 #endif
+    if (exitCheck)
+	check();
 }
 
 void Thread::preExec()

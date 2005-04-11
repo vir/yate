@@ -274,12 +274,13 @@ void IAXEndPoint::run(void)
 	    t = 10;
 	Thread::msleep(t);
 	for (;;) {
+	    Thread::check();
 	    s_mutex.lock();
 	    e = ::iax_get_event(0);
 	    s_mutex.unlock();
 	    if (!e)
 		break;
-	    Debug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
+	    XDebug("IAX Event",DebugAll,"event %d/%d",e->etype,e->subclass);
 	    IAXConnection *conn = 0;
 	    // We first take care of the special events
 	    switch(e->etype) {

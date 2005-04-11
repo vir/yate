@@ -198,9 +198,9 @@ bool DataSource::attach(DataConsumer* consumer)
 
 bool DataSource::detach(DataConsumer* consumer)
 {
-    DDebug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
     if (!consumer)
 	return false;
+    DDebug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
     // keep the source locked to prevent races with the Forward method
     Lock lock(m_mutex);
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
@@ -209,7 +209,7 @@ bool DataSource::detach(DataConsumer* consumer)
 	temp->deref();
 	return true;
     }
-    DDebug(DebugWarn,"DataSource [%p] has no consumer [%p]",this,consumer);
+    DDebug(DebugInfo,"DataSource [%p] has no consumer [%p]",this,consumer);
     return false;
 }
 
@@ -221,17 +221,19 @@ DataSource::~DataSource()
 DataEndpoint::DataEndpoint(Channel* chan, const char* name)
     : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_channel(chan)
 {
+    Debug(DebugInfo,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",chan,name,this);
     if (m_channel)
 	m_channel->m_data.append(this);
 }
 
 DataEndpoint::~DataEndpoint()
 {
-    disconnect(true);
-    setSource();
-    setConsumer();
+    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() chan=%p [%p]",m_channel,name,this);
     if (m_channel)
 	m_channel->m_data.remove(this,false);
+    disconnect();
+    setSource();
+    setConsumer();
 }
 
 const String& DataEndpoint::toString() const
@@ -241,13 +243,13 @@ const String& DataEndpoint::toString() const
 
 bool DataEndpoint::connect(DataEndpoint* peer)
 {
-    Debug(DebugInfo,"DataEndpoint peer address is [%p]",peer);
     if (!peer) {
 	disconnect();
 	return false;
     }
     if (peer == m_peer)
 	return true;
+    DDebug(DebugInfo,"DataEndpoint '%s' connecting peer %p to [%p]",m_name.c_str(),peer,this);
 
     ref();
     disconnect();
@@ -268,16 +270,16 @@ bool DataEndpoint::connect(DataEndpoint* peer)
     }
 
     m_peer = peer;
-    peer->setPeer(this);
-    connected();
+    peer->m_peer = this;
 
     return true;
 }
 
-void DataEndpoint::disconnect(bool final)
+void DataEndpoint::disconnect()
 {
     if (!m_peer)
 	return;
+    DDebug(DebugInfo,"DataEndpoint '%s' disconnecting peer %p from [%p]",m_name.c_str(),m_peer,this);
 
     DataSource *s = getSource();
     DataConsumer *c = m_peer->getConsumer();
@@ -291,19 +293,9 @@ void DataEndpoint::disconnect(bool final)
 
     DataEndpoint *temp = m_peer;
     m_peer = 0;
-    temp->setPeer(0);
+    temp->m_peer = 0;
     temp->deref();
-    disconnected(final);
     deref();
-}
-
-void DataEndpoint::setPeer(DataEndpoint* peer)
-{
-    m_peer = peer;
-    if (m_peer)
-	connected();
-    else
-	disconnected(false);
 }
 
 void DataEndpoint::setSource(DataSource* source)

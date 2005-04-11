@@ -41,6 +41,9 @@ Channel::Channel(Driver& driver, const char* id, bool outgoing)
 
 Channel::~Channel()
 {
+#ifdef DEBUG
+    Debugger debug(DebugAll,"Channel::~Channel()"," '%s' [%p]",m_id.c_str(),this);
+#endif
     status("deleted");
     if (m_driver) {
 	m_driver->lock();
@@ -49,6 +52,13 @@ Channel::~Channel()
 	m_driver->unlock();
 	m_driver = 0;
     }
+#ifdef DEBUG
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	Debug(DebugAll,"Endpoint at %p type '%s' refcount=%d",e,e->name().c_str(),e->refcount());
+    }
+#endif
     disconnect(true,0);
     m_data.clear();
 }
@@ -65,6 +75,7 @@ void Channel::init()
 	m_driver->changed();
 	m_driver->unlock();
     }
+    DDebug(DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
 }
 
 const char* Channel::direction() const
@@ -74,18 +85,24 @@ const char* Channel::direction() const
 
 bool Channel::connect(Channel* peer)
 {
-    Debug(DebugInfo,"Channel peer address is [%p]",peer);
     if (!peer) {
 	disconnect();
 	return false;
     }
     if (peer == m_peer)
 	return true;
+    DDebug(DebugInfo,"Channel '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
 
     ref();
     disconnect();
     peer->ref();
     peer->disconnect();
+
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	e->connect(peer->getEndpoint(e->name()));
+    }
 
     m_peer = peer;
     peer->setPeer(this);
@@ -98,11 +115,21 @@ void Channel::disconnect(bool final, const char* reason)
 {
     if (!m_peer)
 	return;
+    DDebug(DebugInfo,"Channel '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
 
     Channel *temp = m_peer;
     m_peer = 0;
+
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	DDebug(DebugAll,"Endpoint at %p type '%s' peer %p",e,e->name().c_str(),e->getPeer());
+	e->disconnect();
+    }
+
     temp->setPeer(0,reason);
     temp->deref();
+
     disconnected(final,reason);
     deref();
 }
@@ -235,19 +262,23 @@ DataEndpoint* Channel::getEndpoint(const char* type) const
     return pos ? static_cast<DataEndpoint*>(pos->get()) : 0;
 }
 
-DataEndpoint* Channel::addEndpoint(const char* type)
+DataEndpoint* Channel::setEndpoint(const char* type)
 {
     if (null(type))
 	return 0;
     DataEndpoint* dat = getEndpoint(type);
-    if (!dat)
+    if (!dat) {
 	dat = new DataEndpoint(this,type);
+	if (m_peer)
+	    dat->connect(m_peer->getEndpoint(type));
+//	dat->ref();
+    }
     return dat;
 }
 
 void Channel::setSource(DataSource* source, const char* type)
 {
-    DataEndpoint* dat = addEndpoint(type);
+    DataEndpoint* dat = setEndpoint(type);
     if (dat)
 	dat->setSource(source);
 }
@@ -260,7 +291,7 @@ DataSource* Channel::getSource(const char* type) const
 
 void Channel::setConsumer(DataConsumer* consumer, const char* type)
 {
-    DataEndpoint* dat = addEndpoint(type);
+    DataEndpoint* dat = setEndpoint(type);
     if (dat)
 	dat->setConsumer(consumer);
 }
@@ -290,7 +321,7 @@ TokenDict Module::s_messages[] = {
     { 0, 0 }
 };
 
-unsigned int Module::s_delay = 5;
+unsigned int Module::s_delay = 2;
 
 const char* Module::messageName(int id)
 {
@@ -347,7 +378,7 @@ void Module::setup()
 void Module::changed()
 {
     if (s_delay && !m_changed)
-	m_changed = Time::now() + s_delay;
+	m_changed = Time::now() + s_delay*(u_int64_t)1000000;
 }
 
 void Module::msgTimer(Message& msg)

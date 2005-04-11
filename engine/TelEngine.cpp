@@ -329,7 +329,7 @@ void Time::toTimeval(struct timeval* tv, u_int64_t usec)
     }
 }
 
-Mutex s_refmutex;
+static Mutex s_refmutex;
 
 RefObject::~RefObject()
 {
@@ -339,8 +339,10 @@ RefObject::~RefObject()
 
 int RefObject::ref()
 {
-    Lock lock(s_refmutex);
-    return ++m_refcount;
+    s_refmutex.lock();
+    int i = ++m_refcount;
+    s_refmutex.unlock();
+    return i;
 }
 
 bool RefObject::deref()

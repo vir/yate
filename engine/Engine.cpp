@@ -205,7 +205,7 @@ void EnginePrivate::run()
     for (;;) {
 	s_makeworker = false;
 	Engine::self()->m_dispatcher.dequeue();
-	msleep(5);
+	msleep(5,true);
     }
 }
 

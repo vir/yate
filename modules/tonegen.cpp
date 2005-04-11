@@ -185,6 +185,7 @@ void ToneSource::run()
     const Tone *tone = m_tone;
     int nsam = tone->nsamples;
     while (m_tone) {
+	Thread::check();
 	short *d = (short *) m_data.data();
 	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
 	    if (samp >= nsam) {

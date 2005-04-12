@@ -22,6 +22,10 @@
 
 #include "yateclass.h"
 
+#ifndef _WINDOWS
+#include <fcntl.h>
+#endif
+
 using namespace TelEngine;
 
 Socket::Socket()
@@ -177,7 +181,7 @@ bool Socket::setBlocking(bool block)
 	flags &= !O_NONBLOCK;
     else
 	flags |= O_NONBLOCK;
-    return checkError(fcntl(m_handle,F_SETFL,flags);
+    return checkError(::fcntl(m_handle,F_SETFL,flags));
 #endif
 }
 

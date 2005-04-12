@@ -228,7 +228,8 @@ DataEndpoint::DataEndpoint(Channel* chan, const char* name)
 
 DataEndpoint::~DataEndpoint()
 {
-    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() chan=%p [%p]",m_channel,name,this);
+    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() '%s' chan=%p [%p]",
+	m_name.c_str(),m_channel,this);
     if (m_channel)
 	m_channel->m_data.remove(this,false);
     disconnect();

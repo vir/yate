@@ -23,27 +23,24 @@
  */
 
 extern "C" {
+
 #include <libpri.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
+
 #define __LINUX__
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
 #include <linux/wanpipe.h>
 #include <linux/sdla_bitstrm.h>
 
-extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 };
-#include <unistd.h>
+
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 		     
-#include <telengine.h>
 #include <telephony.h>
 #include <stdio.h>
 

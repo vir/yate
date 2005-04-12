@@ -120,6 +120,15 @@ bool Socket::checkError(int retcode)
     }
 }
 
+bool Socket::canRetry() const
+{
+#ifdef _WINDOWS
+    return (m_error == WSAEWOULDBLOCK);
+#else
+    return (m_error == EAGAIN) || (m_error == EINTR);
+#endif
+}
+
 bool Socket::listen(unsigned int backlog)
 {
     if ((backlog == 0) || (backlog > SOMAXCONN))
@@ -148,6 +157,27 @@ bool Socket::setTOS(int tos)
 #else
     m_error = ENOTIMPL;
     return false;
+#endif
+}
+
+bool Socket::setBlocking(bool block)
+{
+    unsigned long flags = 1;
+#ifdef _WINDOWS
+    if (block)
+	flags = 0;
+    return checkError(::ioctlsocket(m_handle,FIONBIO,(unsigned long *) &flags));
+#else
+    flags = ::fcntl(m_handle,F_GETFL);
+    if (flags < 0) {
+	copyError();
+	return false;
+    }
+    if (block)
+	flags &= !O_NONBLOCK;
+    else
+	flags |= O_NONBLOCK;
+    return checkError(fcntl(m_handle,F_SETFL,flags);
 #endif
 }
 

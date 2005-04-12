@@ -583,7 +583,6 @@ void IAXConnection::handleEvent(iax_event *event)
 		char buf[2];
 		buf[0] = event->subclass;
 		buf[1] = 0;
-		m->addParam("driver","iax");
 		m->addParam("text",buf);
 		m->addParam("callerid",event->session->callerid);
 		m->addParam("calledid",event->session->dnid);

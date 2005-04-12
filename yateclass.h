@@ -2266,6 +2266,12 @@ public:
 	{ return m_error; }
 
     /**
+     * Check if the last error code indicates a retryable condition
+     * @return True if error was temporary and operation should be retried
+     */
+    bool canRetry() const;
+
+    /**
      * Check if this socket is valid
      * @return True if the handle is valid, false if it's invalid
      */
@@ -2302,6 +2308,13 @@ public:
      * @return True if operation was successfull, false if an error occured
      */
     bool setTOS(int tos);
+    
+    /**
+     * Set the blocking or non-blocking operation mode of the socket
+     * @param block True if I/O operations should block, false for non-blocking
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool setBlocking(bool block = true);
 
     /**
      * Start listening for incoming connections on the socket

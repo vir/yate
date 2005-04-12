@@ -110,6 +110,9 @@ static int iax_use_jitterbuffer = 0;
 /* UDP Socket (file descriptor) */
 static int netfd = -1;
 
+/* Last error code */
+static int lasterr = 0;
+
 /* Max timeouts */
 static int maxretries = 10;
 
@@ -1952,6 +1955,7 @@ void iax_destroy(struct iax_session *session)
 	destroy_session(session);
 }
 
+
 static struct iax_event *iax_net_read(void)
 {
 	char buf[65536];
@@ -1962,14 +1966,21 @@ static struct iax_event *iax_net_read(void)
 	res = recvfrom(netfd, buf, sizeof(buf), 0, (struct sockaddr *) &sin, &sinlen);
 	if (res < 0) {
 #ifdef	WIN32
-		if (WSAGetLastError() != WSAEWOULDBLOCK) {
-			DEBU(G "Error on read: %d\n", WSAGetLastError());
-			IAXERROR "Read error on network socket: %s", strerror(errno));
+		int err = WSAGetLastError();
+		if (err != WSAEWOULDBLOCK) {
+			if (err != lasterr) {
+				lasterr = err;
+				DEBU(G "Error on read: %d\n", err);
+				IAXERROR "Read error on network socket: %s", strerror(errno));
+			}
 		}
 #else
 		if (errno != EAGAIN) {
-			DEBU(G "Error on read: %s\n", strerror(errno));
-			IAXERROR "Read error on network socket: %s", strerror(errno));
+			if (errno != lasterr) {
+				lasterr = errno;
+				DEBU(G "Error on read: %s\n", strerror(errno));
+				IAXERROR "Read error on network socket: %s", strerror(errno));
+			}
 		}
 #endif
 		return NULL;

@@ -22,6 +22,8 @@
 
 #include "yateclass.h"
 
+#include <string.h>
+
 #ifndef _WINDOWS
 #include <fcntl.h>
 #endif
@@ -29,18 +31,21 @@
 using namespace TelEngine;
 
 Socket::Socket()
-    : m_error(), m_handle(invalidHandle())
+    : m_error(0), m_handle(invalidHandle())
 {
+    DDebug(DebugAll,"Socket::Socket() [%p]",this);
 }
 
 Socket::Socket(SOCKET handle)
-    : m_error(), m_handle(handle)
+    : m_error(0), m_handle(handle)
 {
+    DDebug(DebugAll,"Socket::Socket(%d) [%p]",handle,this);
 }
 
 Socket::Socket(int domain, int type, int protocol)
-    : m_error(), m_handle(invalidHandle())
+    : m_error(0), m_handle(invalidHandle())
 {
+    DDebug(DebugAll,"Socket::Socket(%d,%d,%d) [%p]",domain,type,protocol,this);
     m_handle = ::socket(domain,type,protocol);
     if (!valid())
 	copyError();
@@ -48,12 +53,14 @@ Socket::Socket(int domain, int type, int protocol)
 
 Socket::~Socket()
 {
-    close();
+    DDebug(DebugAll,"Socket::~Socket() handle=%d [%p]",m_handle,this);
+    terminate();
 }
 
 bool Socket::create(int domain, int type, int protocol)
 {
-    close();
+    DDebug(DebugAll,"Socket::create(%d,%d,%d) [%p]",domain,type,protocol,this);
+    terminate();
     m_handle = ::socket(domain,type,protocol);
     if (valid()) {
 	clearError();
@@ -65,11 +72,12 @@ bool Socket::create(int domain, int type, int protocol)
     }
 }
 
-bool Socket::close()
+bool Socket::terminate()
 {
     bool ret = true;
     SOCKET tmp = m_handle;
     if (tmp != invalidHandle()) {
+	DDebug(DebugAll,"Socket::terminate() handle=%d [%p]",m_handle,this);
 	m_handle = invalidHandle();
 #ifdef _WINDOWS
 	ret = !::closesocket(tmp);
@@ -87,10 +95,22 @@ bool Socket::close()
     return ret;
 }
 
+void Socket::attach(SOCKET handle)
+{
+    DDebug(DebugAll,"Socket::attach(%d) [%p]",handle,this);
+    if (handle == m_handle)
+	return;
+    terminate();
+    m_handle = handle;
+    clearError();
+}
+
 SOCKET Socket::detach()
 {
+    DDebug(DebugAll,"Socket::detach() handle=%d [%p]",m_handle,this);
     SOCKET tmp = m_handle;
     m_handle = invalidHandle();
+    clearError();
     return tmp;
 }
 
@@ -98,6 +118,15 @@ SOCKET Socket::invalidHandle()
 {
 #ifdef _WINDOWS
     return INVALID_SOCKET;
+#else
+    return -1;
+#endif
+}
+
+int Socket::socketError()
+{
+#ifdef _WINDOWS
+    return SOCKET_ERROR;
 #else
     return -1;
 #endif
@@ -112,8 +141,10 @@ void Socket::copyError()
 #endif
 }
 
-bool Socket::checkError(int retcode)
+bool Socket::checkError(int retcode, bool strict)
 {
+    if (strict && (retcode != socketError()))
+	retcode = 0;
     if (retcode) {
 	copyError();
 	return false;
@@ -126,11 +157,18 @@ bool Socket::checkError(int retcode)
 
 bool Socket::canRetry() const
 {
+    if (!m_error)
+	return true;
 #ifdef _WINDOWS
     return (m_error == WSAEWOULDBLOCK);
 #else
-    return (m_error == EAGAIN) || (m_error == EINTR);
+    return (m_error == EAGAIN) || (m_error == EINTR) || (m_error == EWOULDBLOCK);
 #endif
+}
+
+bool Socket::bind(struct sockaddr* addr, socklen_t addrlen)
+{
+    return checkError(::bind(m_handle,addr,addrlen));
 }
 
 bool Socket::listen(unsigned int backlog)
@@ -138,6 +176,129 @@ bool Socket::listen(unsigned int backlog)
     if ((backlog == 0) || (backlog > SOMAXCONN))
 	backlog = SOMAXCONN;
     return checkError(::listen(m_handle,backlog));
+}
+
+Socket* Socket::accept(struct sockaddr* addr, socklen_t* addrlen)
+{
+    SOCKET sock = acceptHandle(addr,addrlen);
+    return (sock == invalidHandle()) ? 0 : new Socket(sock);
+}
+
+SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
+{
+    if (addrlen && !addr)
+	*addrlen = 0;
+    SOCKET res = ::accept(m_handle,addr,addrlen);
+    if (res == invalidHandle())
+	copyError();
+    else
+	clearError();
+    return res;
+}
+
+int Socket::sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags)
+{
+    if (!buffer)
+	length = 0;
+    int res = ::sendto(m_handle,(const char*)buffer,length,flags,addr,adrlen);
+    checkError(res,true);
+    return res;
+}
+
+int Socket::send(const void* buffer, int length, int flags)
+{
+    if (!buffer)
+	length = 0;
+    int res = ::send(m_handle,(const char*)buffer,length,flags);
+    checkError(res,true);
+    return res;
+}
+
+int Socket::writeData(const void* buffer, int length)
+{
+#ifdef _WINDOWS
+    return send(buffer,length);
+#else
+    if (!buffer)
+	length = 0;
+    int res = ::write(m_handle,buffer,length);
+    checkError(res,true);
+    return res;
+#endif
+}
+
+int Socket::writeData(const char* str)
+{
+    if (null(str))
+	return 0;
+    int len = ::strlen(str);
+    return writeData(str,len);
+}
+
+int Socket::recvFrom(void* buffer, int length, struct sockaddr* addr, socklen_t* adrlen, int flags)
+{
+    if (!buffer)
+	length = 0;
+    if (adrlen && !addr)
+	*adrlen = 0;
+    int res = ::recvfrom(m_handle,(char*)buffer,length,flags,addr,adrlen);
+    checkError(res,true);
+    return res;
+}
+
+int Socket::recv(void* buffer, int length, int flags)
+{
+    if (!buffer)
+	length = 0;
+    int res = ::recv(m_handle,(char*)buffer,length,flags);
+    checkError(res,true);
+    return res;
+}
+
+int Socket::readData(void* buffer, int length)
+{
+#ifdef _WINDOWS
+    return recv(buffer,length);
+#else
+    if (!buffer)
+	length = 0;
+    int res = ::read(m_handle,buffer,length);
+    checkError(res,true);
+    return res;
+#endif
+}
+
+bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* timeout)
+{
+    fd_set readfd,writefd,exceptfd;
+    fd_set *rfds = 0;
+    fd_set *wfds = 0;
+    fd_set *efds = 0;
+    if (readok) {
+	rfds = &readfd;
+	FD_ZERO(rfds);
+	FD_SET(m_handle,rfds);
+    }
+    if (writeok) {
+	wfds = &writefd;
+	FD_ZERO(wfds);
+	FD_SET(m_handle,wfds);
+    }
+    if (except) {
+	efds = &exceptfd;
+	FD_ZERO(efds);
+	FD_SET(m_handle,efds);
+    }
+    if (checkError(::select(m_handle+1,rfds,wfds,efds,timeout),true)) {
+	if (readok)
+	    *readok = (FD_ISSET(m_handle,rfds) != 0);
+	if (writeok)
+	    *writeok = (FD_ISSET(m_handle,wfds) != 0);
+	if (except)
+	    *except = (FD_ISSET(m_handle,efds) != 0);
+	return true;
+    }
+    return false;
 }
 
 bool Socket::setOption(int level, int name, const void* value, socklen_t length)

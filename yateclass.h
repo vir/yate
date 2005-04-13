@@ -2240,10 +2240,16 @@ public:
     bool create(int domain, int type, int protocol = 0);
 
     /**
-     * Closes the socket handle
+     * Closes the socket handle, terminates the connection
      * @return True if socket was (already) closed, false if an error occured
      */
-    bool close();
+    bool terminate();
+
+    /**
+     * Attach an existing handle to the socket, closes any existing first
+     * @param handle Operating system handle to an existing socket
+     */
+    void attach(SOCKET handle);
 
     /**
      * Detaches the object from the socket handle
@@ -2285,6 +2291,12 @@ public:
     static SOCKET invalidHandle();
 
     /**
+     * Get the operating system specific return value of a failed operation
+     * @return Return value of a failed socket operation
+     */
+    static int socketError();
+
+    /**
      * Set socket options
      * @param name Socket option for which the value is to be set
      * @param value Pointer to a buffer holding the value for the requested option
@@ -2317,13 +2329,116 @@ public:
     bool setBlocking(bool block = true);
 
     /**
+     * Associates the socket with a local address
+     * @param addr Address to assign to this socket
+     * @param addrlen Length of the address structure
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool bind(struct sockaddr* addr, socklen_t addrlen);
+
+    /**
      * Start listening for incoming connections on the socket
      * @param backlog Maximum length of the queue of pending connections, 0 for system maximum
      * @return True if operation was successfull, false if an error occured
      */
     bool listen(unsigned int backlog = 0);
 
+    /**
+     * Create a new socket for an incoming connection attempt on a listening socket
+     * @param addr Address to fill in with the address of the incoming connection
+     * @param addrlen Length of the address structure on input, length of address data on return
+     * @return Open socket to the new connection or NULL on failure
+     */
+    Socket* accept(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
+
+    /**
+     * Create a new socket for an incoming connection attempt on a listening socket
+     * @param addr Address to fill in with the address of the incoming connection
+     * @param addrlen Length of the address structure on input, length of address data on return
+     * @return Operating system handle to the new connection or @ref invalidHandle() on failure
+     */
+    SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
+
+    /**
+     * Send a message over a connected or unconnected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param addr Address to send the message to
+     * @param addrlen Length of the address structure
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags = 0);
+
+    /**
+     * Send a message over a connected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int send(const void* buffer, int length, int flags = 0);
+
+    /**
+     * Write data to a connected stream socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int writeData(const void* buffer, int length);
+
+    /**
+     * Write a C string to a connected stream socket
+     * @param str String to send over the socket
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int writeData(const char* str);
+
+    /**
+     * Receive a message from a connected or unconnected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param addr Address to fill in with the address of the incoming data
+     * @param addrlen Length of the address structure on input, length of address data on return
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int recvFrom(void* buffer, int length, struct sockaddr* addr = 0, socklen_t* adrlen = 0, int flags = 0);
+
+    /**
+     * Receive a message from a connected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int recv(void* buffer, int length, int flags = 0);
+
+    /**
+     * Receive data from a connected stream socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int readData(void* buffer, int length);
+
+    /**
+     * Determines the availability to perform synchronous I/O of the socket
+     * @param readok Address of a boolean variable to fill with readability status
+     * @param writeok Address of a boolean variable to fill with writeability status
+     * @param except Address of a boolean variable to fill with exceptions status
+     * @param timeout Maximum time until the method returns, NULL for blocking
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool select(bool* readok, bool* writeok, bool* except, struct timeval* timeout = 0);
+
 protected:
+    /**
+     * Clear the last error code
+     */
+    inline void clearError()
+	{ m_error = 0; }
+
     /**
      * Copy the last error code from the operating system
      */
@@ -2332,15 +2447,10 @@ protected:
     /**
      * Copy the last error code from the operating system if an error occured, clear if not
      * @param retcode Operation return code to check, 0 for success
+     * @param strict True to consider errors only return codes of @ref socketError()
      * @return True if operation succeeded (retcode == 0), false otherwise
      */
-    bool checkError(int retcode);
-
-    /**
-     * Clear the last error code
-     */
-    inline void clearError()
-	{ m_error = 0; }
+    bool checkError(int retcode, bool strict = false);
 
     int m_error;
     SOCKET m_handle;

@@ -47,7 +47,7 @@ static const char s_helpmsg[] =
 static Configuration s_cfg;
 
 /* I need this here because i'm gonna use it in both classes */
-int sock = -1;
+Socket s_sock;
 
 //we gonna create here the list with all the new connections.
 static ObjList connectionlist;
@@ -63,21 +63,24 @@ private:
 class Connection : public GenObject, public Thread
 {
 public:
-    Connection(int sock);
+    Connection(Socket* sock, const char* addr);
     ~Connection();
 
     virtual void run();
-    void processLine(const char *line);
-    void write(const char *str, int len = -1);
+    bool processLine(const char *line);
+    void writeStr(const char *str, int len = -1);
     void writeDebug(const char *str);
-    void write(Message &msg,bool received);
-    inline void write(const String &s)
-	{ write(s.safe(),s.length()); }
-    static Connection *checkCreate(int sock);
+    void writeStr(Message &msg,bool received);
+    inline void writeStr(const String &s)
+	{ writeStr(s.safe(),s.length()); }
+    inline const String& address() const
+	{ return m_address; }
+    static Connection *checkCreate(Socket* sock, const char* addr = 0);
 private:
-    int m_socket;
     bool m_debug;
     bool m_machine;
+    Socket* m_socket;
+    String m_address;
 };
 
 class RManager : public Plugin
@@ -105,39 +108,45 @@ void RManagerThread::run()
 {
     for (;;)
     {
+	Thread::msleep(10,true);
         struct sockaddr_in sin;
 	int sinlen = sizeof(sin);
-	int as = ::accept(sock, (struct sockaddr *)&sin, (socklen_t *)&sinlen);
-	if (as < 0) {
-	    Debug("RManager",DebugWarn, "Accept error: %s\n", strerror(errno));
+	Socket* as = s_sock.accept((struct sockaddr *)&sin, (socklen_t *)&sinlen);
+	if (!as) {
+	    if (!s_sock.canRetry())
+		Debug("RManager",DebugWarn, "Accept error: %s\n", strerror(s_sock.error()));
 	    continue;
 	} else {
-	    if (Connection::checkCreate(as))
-		Debug("RManager",DebugInfo,"Connection established from %s:%u",inet_ntoa(sin.sin_addr),ntohs(sin.sin_port));
-	    else {
-		Debug("RManager",DebugWarn,"Connection rejected for %s:%u",inet_ntoa(sin.sin_addr),ntohs(sin.sin_port));
-		::close(as);
-	    }
+	    String addr(inet_ntoa(sin.sin_addr));
+	    addr << ":" << ntohs(sin.sin_port);
+	    if (!Connection::checkCreate(as,addr))
+		Debug("RManager",DebugWarn,"Connection rejected for %s",addr.c_str());
 	}
     }
 }
 
-Connection *Connection::checkCreate(int sock)
+Connection *Connection::checkCreate(Socket* sock, const char* addr)
 {
+    if (!sock)
+	return 0;
+    if (!sock->valid()) {
+	delete sock;
+	return 0;
+    }
     // should check IP address here
-    Connection *conn = new Connection(sock);
+    Connection *conn = new Connection(sock,addr);
+    if (conn->error()) {
+	delete conn;
+	return 0;
+    }
     conn->startup();
     return conn;
 }
 
-Connection::Connection(int sock)
-    : Thread("RManager Connection"), m_socket(sock), m_debug(false), m_machine(false)
+Connection::Connection(Socket* sock, const char* addr)
+    : Thread("RManager Connection"),
+      m_debug(false), m_machine(false), m_socket(sock), m_address(addr)
 {
-    const char *hdr = s_cfg.getValue("general","header","YATE (http://YATE.null.ro) ready.");
-    if (hdr) {
-	write(hdr);
-	write("\n");
-    }
     connectionlist.append(this);
 }
 
@@ -145,52 +154,57 @@ Connection::~Connection()
 {
     m_debug = false;
     connectionlist.remove(this,false);
-    ::close(m_socket);
+    Output("Closing connection to %s",m_address.c_str());
+    delete m_socket;
+    m_socket = 0;
 }
 
 void Connection::run()
 {
-#ifdef O_NONBLOCK
-    if (::fcntl(m_socket,F_SETFL,O_NONBLOCK)) {
-	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s\n", strerror(errno));
+    if (!m_socket)
+	return;
+    if (!m_socket->setBlocking(false)) {
+	Debug("RManager",DebugGoOn, "Failed to set tcp socket to nonblocking mode: %s\n",strerror(m_socket->error()));
 	return;
     }
-#endif
+
     // For the sake of responsiveness try to turn off the tcp assembly timer
     int arg = 1;
-    if (::setsockopt(m_socket, SOL_SOCKET, TCP_NODELAY, (char *)&arg, sizeof(arg) ) < 0)
-	Debug("RManager",DebugWarn, "Failed to set tcp socket to TCP_NODELAY mode: %s\n", strerror(errno));
+    if (!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
+	Debug("RManager",DebugWarn, "Failed to set tcp socket to TCP_NODELAY mode: %s\n", strerror(m_socket->error()));
 
+    Output("Remote connection from %s",m_address.c_str());
+    const char *hdr = s_cfg.getValue("general","header","YATE (http://YATE.null.ro) ready.");
+    if (hdr) {
+	writeStr(hdr);
+	writeStr("\n");
+	hdr = 0;
+    }
     struct timeval timer;
     char buffer[300];
     int posinbuf = 0;
     while (posinbuf < (int)sizeof(buffer)-1) {
+	Thread::check();
 	timer.tv_sec = 0;
-	timer.tv_usec = 30000;
-	fd_set readfd;
-	FD_ZERO(&readfd);
-	FD_SET(m_socket, &readfd);
-	fd_set errorfd;
-	FD_ZERO(&errorfd);
-	FD_SET(m_socket, &errorfd);
-	int c = ::select(m_socket+1,&readfd,0,&errorfd,&timer);
-	//	Debug(DebugInfo,"trec pasul 1");
-	if (c > 0) {
-	    if (FD_ISSET(m_socket,&errorfd)) {
-		Debug("RManager",DebugInfo,"Socket exception condition on %d",m_socket);
+	timer.tv_usec = 10000;
+	bool readok = true/*false*/;
+	bool error = false;
+	if (true/*m_socket->select(&readok,0,&error,&timer)*/) {
+	    if (error) {
+		Debug("RManager",DebugInfo,"Socket exception condition on %d",m_socket->handle());
 		return;
 	    }
-	    if (!FD_ISSET(m_socket,&readfd))
+	    if (!readok)
 		continue;
-	    int readsize = ::read(m_socket,buffer+posinbuf,sizeof(buffer)-posinbuf-1);
+	    int readsize = m_socket->readData(buffer+posinbuf,sizeof(buffer)-posinbuf-1);
 	    if (!readsize) {
-		Debug("RManager",DebugInfo,"Socket condition EOF on %d",m_socket);
+		Debug("RManager",DebugInfo,"Socket condition EOF on %d",m_socket->handle());
 		return;
 	    }
 	    else if (readsize > 0) {
 		int totalsize = readsize + posinbuf;
 		buffer[totalsize]=0;
-		DDebug("RManager",DebugInfo,"read=%d pos=%d buffer='%s'",readsize,posinbuf,buffer);
+		XDebug("RManager",DebugInfo,"read=%d pos=%d buffer='%s'",readsize,posinbuf,buffer);
 		for (;;) {
 		    // Try to accomodate various telnet modes
 		    char *eoline = ::strchr(buffer,'\r');
@@ -201,32 +215,32 @@ void Connection::run()
 		    if (!eoline)
 			break;
 		    *eoline=0;
-		    if (buffer[0])
-			processLine(buffer);
+		    if (buffer[0] && processLine(buffer))
+			return;
 		    totalsize -= eoline-buffer+1;
 		    ::memmove(buffer,eoline+1,totalsize+1);
 		}
 		posinbuf = totalsize;
 	    }
-	    else if ((readsize < 0) && (errno != EINTR) && (errno != EAGAIN)) {
-		Debug("RManager",DebugWarn,"Socket read error %d on %d",errno,m_socket);
+	    else if (!m_socket->canRetry()) {
+		Debug("RManager",DebugWarn,"Socket read error %d on %d",errno,m_socket->handle());
 		return;
 	    }
 	}
-	else if ((c < 0) && (errno != EINTR)) {
-	    Debug("RManager",DebugWarn,"socket select error %d on %d",errno,m_socket);
+	else if (!m_socket->canRetry()) {
+	    Debug("RManager",DebugWarn,"socket select error %d on %d",errno,m_socket->handle());
 	    return;
 	}
     }	
 }
 
-void Connection::processLine(const char *line)
+bool Connection::processLine(const char *line)
 {
     DDebug("RManager",DebugInfo,"processLine = %s",line);
     String str(line);
     str.trimBlanks();
     if (str.null())
-	return;
+	return false;
 
     if (str.startSkip("status"))
     {
@@ -240,13 +254,18 @@ void Connection::processLine(const char *line)
 	Engine::dispatch(m);
 	str = "%%+status" + str + "\n";
 	str << m.retValue() << "%%-status\n";
-	write(str);
+	writeStr(str);
+    }
+    else if (str.startSkip("quit"))
+    {
+	writeStr(m_machine ? "%%=quit\n" : "Goodbye!\n");
+	return true;
     }
     else if (str.startSkip("drop"))
     {
 	if (str.null()) {
-	    write(m_machine ? "%%=drop:fail=noarg\n" : "You must specify what connection to drop!\n");
-	    return;
+	    writeStr(m_machine ? "%%=drop:fail=noarg\n" : "You must specify what connection to drop!\n");
+	    return false;
 	}
 	Message m("call.drop");
 	bool all = false;
@@ -262,14 +281,14 @@ void Connection::processLine(const char *line)
 	    str = (m_machine ? "%%=drop:unknown:" : "Tried to drop ") + str + "\n";
 	else
 	    str = (m_machine ? "%%=drop:fail:" : "Could not drop ") + str + "\n";
-	write(str);
+	writeStr(str);
     }
     else if (str.startSkip("call"))
     {
 	int pos = str.find(' ');
 	if (pos <= 0) {
-	    write(m_machine ? "%%=call:fail=noarg\n" : "You must specify source and target!\n");
-	    return;
+	    writeStr(m_machine ? "%%=call:fail=noarg\n" : "You must specify source and target!\n");
+	    return false;
 	}
 	Message m("call.execute");
 	m.addParam("callto",str.substr(0,pos));
@@ -279,7 +298,7 @@ void Connection::processLine(const char *line)
 	    str = (m_machine ? "%%=call:success:" : "Called ") + str + "\n";
 	else
 	    str = (m_machine ? "%%=call:fail:" : "Could not call ") + str + "\n";
-	write(str);
+	writeStr(str);
     }
     else if (str.startSkip("debug"))
     {
@@ -298,30 +317,25 @@ void Connection::processLine(const char *line)
 	    str = "Debug level: ";
 	    str << debugLevel() << " local: " << (m_debug ? "on\n" : "off\n");
 	}
-	write(str);
+	writeStr(str);
     }
     else if (str.startSkip("machine"))
     {
 	str >> m_machine;
 	str = "Machine mode: ";
 	str += (m_machine ? "on\n" : "off\n");
-	write(str);
+	writeStr(str);
     }
     else if (str.startSkip("reload"))
     {
-	write(m_machine ? "%%=reload\n" : "Reinitializing...\n");
+	writeStr(m_machine ? "%%=reload\n" : "Reinitializing...\n");
 	Engine::init();
-    }
-    else if (str.startSkip("quit"))
-    {
-	write(m_machine ? "%%=quit\n" : "Goodbye!\n");
-	cancel();
     }
     else if (str.startSkip("stop"))
     {
 	unsigned code = 0;
 	str >> code;
-	write(m_machine ? "%%=shutdown\n" : "Engine shutting down - bye!\n");
+	writeStr(m_machine ? "%%=shutdown\n" : "Engine shutting down - bye!\n");
 	Engine::halt(code);
     }
     else if (str.startSkip("help") || str.startSkip("?"))
@@ -331,15 +345,15 @@ void Connection::processLine(const char *line)
 	{
 	    m.addParam("line",str);
 	    if (Engine::dispatch(m))
-		write(m.retValue());
+		writeStr(m.retValue());
 	    else
-		write("No help for '"+str+"'\n");
+		writeStr("No help for '"+str+"'\n");
 	}
 	else
 	{
 	    m.retValue() = s_helpmsg;
 	    Engine::dispatch(m);
-	    write(m.retValue());
+	    writeStr(m.retValue());
 	}
     }
     else
@@ -347,33 +361,34 @@ void Connection::processLine(const char *line)
 	Message m("engine.command");
 	m.addParam("line",str);
 	if (Engine::dispatch(m))
-	    write(m.retValue());
+	    writeStr(m.retValue());
 	else
-	    write((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\n");
+	    writeStr((m_machine ? "%%=syntax:" : "Cannot understand: ") + str + "\n");
     }
+    return false;
 }
 
-void Connection::write(Message &msg,bool received)
+void Connection::writeStr(Message &msg,bool received)
 {
     if (!m_machine)
 	return;
     String s = msg.encode(received,"");
     s << "\n";
-    write(s.c_str());
+    writeStr(s.c_str());
 }
 
 void Connection::writeDebug(const char *str)
 {
-    if (m_debug && str && *str)
-	write(str,::strlen(str));
+    if (m_debug && !null(str))
+	writeStr(str,::strlen(str));
 }
 
-void Connection::write(const char *str, int len)
+void Connection::writeStr(const char *str, int len)
 {
     if (len < 0)
 	len = ::strlen(str);
-    if (int written = ::write(m_socket,str,len) != len) {
-	Debug("RManager",DebugInfo,"Socket %d wrote only %d out of %d bytes",m_socket,written,len);
+    if (int written = m_socket->writeData(str,len) != len) {
+	Debug("RManager",DebugInfo,"Socket %d wrote only %d out of %d bytes",m_socket->handle(),written,len);
 	// Destroy the thread, will kill the connection
 	cancel();
     }
@@ -385,7 +400,7 @@ static void postHook(Message &msg, bool received)
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
-	    con->write(msg,received);
+	    con->writeStr(msg,received);
     }
 };
 
@@ -400,10 +415,7 @@ RManager::RManager()
 RManager::~RManager()
 {
     Output("Unloading module RManager");
-    if (sock != -1) {
-    	::close(sock);
-	sock = -1;
-    }
+    s_sock.terminate();
     Engine::self()->setHook();
     Debugger::setIntOut(0);
 }
@@ -419,38 +431,43 @@ void RManager::initialize()
     s_cfg = Engine::configFile("rmanager");
     s_cfg.load();
 
-    if (sock >= 0)
+    if (s_sock.valid())
 	return;
 
-/* configuration */
+    // check configuration
     int port = s_cfg.getIntValue("general","port",5038);
     const char *host = c_safe(s_cfg.getValue("general","addr","127.0.0.1"));
     if (!(port && *host))
 	return;
 
-/* starting the socket */ 
+    s_sock.create(AF_INET, SOCK_STREAM);
+    if (!s_sock.valid()) {
+	Debug("RManager",DebugGoOn,"Unable to create the listening socket: %s",strerror(s_sock.error()));
+	return;
+    }
+
+    if (!s_sock.setBlocking(false)) {
+	Debug("RManager",DebugGoOn, "Failed to set listener to nonblocking mode: %s\n",strerror(s_sock.error()));
+	return;
+    }
+
+    const int reuseFlag = 1;
+    s_sock.setOption(SOL_SOCKET,SO_REUSEADDR,&reuseFlag,sizeof(reuseFlag));
+
     struct sockaddr_in bindaddr;
-    sock = socket(AF_INET, SOCK_STREAM, 0);
     bindaddr.sin_family = AF_INET;
     bindaddr.sin_addr.s_addr = inet_addr(host);
     bindaddr.sin_port = htons(port);
-    if (sock < 0) {
-	Debug("RManager",DebugGoOn,"Unable to create the listening socket: %s",strerror(errno));
+
+    if (!s_sock.bind((struct sockaddr *)&bindaddr, sizeof(bindaddr))) {
+	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",inet_ntoa(bindaddr.sin_addr),ntohs(bindaddr.sin_port),strerror(s_sock.error()));
+	s_sock.terminate();
 	return;
     }
-    const int reuseFlag = 1;
-    ::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,(const char*)&reuseFlag,sizeof reuseFlag);
-    if (::bind(sock, (struct sockaddr *)&bindaddr, sizeof(bindaddr)) < 0) {
-	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",inet_ntoa(bindaddr.sin_addr),ntohs(bindaddr.sin_port),strerror(errno));
-	::close(sock);
-        sock = -1;
+    if (!s_sock.listen(2)) {
+	Debug("RManager",DebugGoOn,"Unable to listen on socket: %s\n", strerror(s_sock.error()));
+	s_sock.terminate();
 	return;
-    }
-    if (listen(sock, 2)) {
-	    Debug("RManager",DebugGoOn,"Unable to listen on socket: %s\n", strerror(errno));
-	    ::close(sock);
-	    sock = -1;
-	    return;
     }
     
     // don't bother to install handlers until we are listening

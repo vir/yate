@@ -27,6 +27,7 @@
 extern "C" {
 
 #include <libpri.h>
+extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 
 #ifndef _WINDOWS
 #define __LINUX__
@@ -53,6 +54,16 @@ using namespace TelEngine;
 
 static int s_buflen = 480;
 
+static void pri_err_cb(char *s)
+{
+    Debug("PRI",DebugWarn,"%s",s);
+}
+
+static void pri_msg_cb(char *s)
+{
+    Debug("PRI",DebugInfo,"%s",s);
+}
+
 #define bitswap(v) bitswap_table[v]
 
 static unsigned char bitswap_table[256];
@@ -68,6 +79,109 @@ static void bitswap_init()
     }
 }
 
+/* Switch types */
+static TokenDict dict_str2switch[] = {
+    { "unknown", PRI_SWITCH_UNKNOWN },
+    { "ni2", PRI_SWITCH_NI2 },
+    { "dms100", PRI_SWITCH_DMS100 },
+    { "lucent5e", PRI_SWITCH_LUCENT5E },
+    { "at&t4ess", PRI_SWITCH_ATT4ESS },
+    { "euroisdn_e1", PRI_SWITCH_EUROISDN_E1 },
+    { "euroisdn_t1", PRI_SWITCH_EUROISDN_T1 },
+    { "ni1", PRI_SWITCH_NI1 },
+    { 0, -1 }
+};
+
+static TokenDict dict_str2type[] = {
+    { "pri_net", PRI_NETWORK },
+    { "pri_cpe", PRI_CPE },
+#ifdef BRI_NETWORK_PTMP
+    { "bri_net_ptmp", BRI_NETWORK_PTMP },
+    { "bri_cpe_ptmp", BRI_CPE_PTMP },
+    { "bri_net", BRI_NETWORK },
+    { "bri_cpe", BRI_CPE },
+#endif
+    { 0, -1 }
+};
+
+#if 0
+/* Numbering plan identifier */
+static TokenDict dict_str2nplan[] = {
+    { "unknown", PRI_NPI_UNKNOWN },
+    { "e164", PRI_NPI_E163_E164 },
+    { "x121", PRI_NPI_X121 },
+    { "f69", PRI_NPI_F69 },
+    { "national", PRI_NPI_NATIONAL },
+    { "private", PRI_NPI_PRIVATE },
+    { "reserved", PRI_NPI_RESERVED },
+    { 0, -1 }
+};
+
+/* Type of number */
+static TokenDict dict_str2ntype[] = {
+    { "unknown", PRI_TON_UNKNOWN },
+    { "international", PRI_TON_INTERNATIONAL },
+    { "national", PRI_TON_NATIONAL },
+    { "net_specific", PRI_TON_NET_SPECIFIC },
+    { "subscriber", PRI_TON_SUBSCRIBER },
+    { "abbreviated", PRI_TON_ABBREVIATED },
+    { "reserved", PRI_TON_RESERVED },
+    { 0, -1 }
+};
+#endif
+
+/* Dialing plan */
+static TokenDict dict_str2dplan[] = {
+    { "unknown", PRI_UNKNOWN },
+    { "international", PRI_INTERNATIONAL_ISDN },
+    { "national", PRI_NATIONAL_ISDN },
+    { "local", PRI_LOCAL_ISDN },
+    { "private", PRI_PRIVATE },
+    { 0, -1 }
+};
+
+/* Presentation */
+static TokenDict dict_str2pres[] = {
+    { "allow_user_not_screened", PRES_ALLOWED_USER_NUMBER_NOT_SCREENED },
+    { "allow_user_passed", PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN },
+    { "allow_user_failed", PRES_ALLOWED_USER_NUMBER_FAILED_SCREEN },
+    { "allow_network", PRES_ALLOWED_NETWORK_NUMBER },
+    { "prohibit_user_not_screened", PRES_PROHIB_USER_NUMBER_NOT_SCREENED },
+    { "prohibit_user_passed", PRES_PROHIB_USER_NUMBER_PASSED_SCREEN },
+    { "prohibit_user_failed", PRES_PROHIB_USER_NUMBER_FAILED_SCREEN },
+    { "prohibit_network", PRES_PROHIB_NETWORK_NUMBER },
+    { "not_available", PRES_NUMBER_NOT_AVAILABLE },
+    { 0, -1 }
+};
+
+#ifdef PRI_NSF_NONE
+#define YATE_NSF_DEFAULT PRI_NSF_NONE
+#else
+#define YATE_NSF_DEFAULT -1
+#endif
+/* Network Specific Facilities (AT&T) */
+static TokenDict dict_str2nsf[] = {
+#ifdef PRI_NSF_NONE
+    { "none", PRI_NSF_NONE },
+    { "sid_preferred", PRI_NSF_SID_PREFERRED },
+    { "ani_preferred", PRI_NSF_ANI_PREFERRED },
+    { "sid_only", PRI_NSF_SID_ONLY },
+    { "ani_only", PRI_NSF_ANI_ONLY },
+    { "call_assoc_tsc", PRI_NSF_CALL_ASSOC_TSC },
+    { "notif_catsc_clearing", PRI_NSF_NOTIF_CATSC_CLEARING },
+    { "operator", PRI_NSF_OPERATOR },
+    { "pcco", PRI_NSF_PCCO },
+    { "sdn", PRI_NSF_SDN },
+    { "toll_free_megacom", PRI_NSF_TOLL_FREE_MEGACOM },
+    { "megacom", PRI_NSF_MEGACOM },
+    { "accunet", PRI_NSF_ACCUNET },
+    { "long_distance", PRI_NSF_LONG_DISTANCE_SERVICE },
+    { "international_toll_free", PRI_NSF_INTERNATIONAL_TOLL_FREE },
+    { "at&t_multiquest", PRI_NSF_ATT_MULTIQUEST },
+    { "call_redirection", PRI_NSF_CALL_REDIRECTION_SERVICE },
+#endif
+    { 0, -1 }
+};
 
 /* Layer 1 formats */
 static TokenDict dict_str2law[] = {
@@ -77,211 +191,50 @@ static TokenDict dict_str2law[] = {
     { 0, -1 }
 };
 
-class WpChan;
-
-class PriSpan : public GenObject, public Thread
+Fifo::Fifo(int buflen)
+    : m_buflen(buflen), m_head(0), m_tail(1)
 {
-    friend class WpData;
-public:
-    static PriSpan *create(int span, int chan1, int nChans, int dChan, int netType,
-			   int switchType, int dialPlan, int presentation,
-			   int overlapDial, int nsf = YATE_NSF_DEFAULT);
-    virtual ~PriSpan();
-    virtual void run();
-    inline struct pri *pri()
-	{ return m_pri; }
-    inline int span() const
-	{ return m_span; }
-    inline bool belongs(int chan) const
-	{ return (chan >= m_offs) && (chan < m_offs+m_nchans); }
-    inline int chan1() const
-	{ return m_offs; }
-    inline int chans() const
-	{ return m_nchans; }
-    inline int bchans() const
-	{ return m_bchans; }
-    inline int dplan() const
-	{ return m_dplan; }
-    inline int pres() const
-	{ return m_pres; }
-    inline unsigned int overlapped() const
-	{ return m_overlapped; }
-    inline bool outOfOrder() const
-	{ return !m_ok; }
-    int findEmptyChan(int first = 0, int last = 65535) const;
-    WpChan *getChan(int chan) const;
-    void idle();
-    static u_int64_t restartPeriod;
-    static bool dumpEvents;
+    if (!m_buflen)
+	m_buflen = s_buflen;
+    m_buffer = (unsigned char*)::malloc(m_buflen);
+}
 
-private:
-    PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres, int overlapDial);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int overlapDial, int nsf);
-    void handleEvent(pri_event &ev);
-    bool validChan(int chan) const;
-    void restartChan(int chan, bool outgoing, bool force = false);
-    void ringChan(int chan, pri_event_ring &ev);
-    void infoChan(int chan, pri_event_ring &ev);
-    void hangupChan(int chan,pri_event_hangup &ev);
-    void ackChan(int chan);
-    void answerChan(int chan);
-    void proceedingChan(int chan);
-    int m_span;
-    int m_offs;
-    int m_nchans;
-    int m_bchans;
-    int m_fd;
-    int m_dplan;
-    int m_pres;
-    unsigned int m_overlapped;
-    struct pri *m_pri;
-    u_int64_t m_restart;
-    WpChan **m_chans;
-    WpData *m_data;
-    bool m_ok;
-};
-
-class WpSource : public DataSource
+Fifo::~Fifo()
 {
-public:
-    WpSource(WpChan *owner,unsigned int bufsize,const char* format);
-    ~WpSource();
-    void put(unsigned char val);
+    if (m_buffer)
+	::free(m_buffer);
+}
 
-private:
-    WpChan *m_owner;
-    unsigned int m_bufpos;
-    DataBlock m_buf;
-};
-
-class WpConsumer : public DataConsumer, public Fifo
+// make the fifo empty
+void Fifo::clear()
 {
-public:
-    WpConsumer(WpChan *owner,unsigned int bufsize,const char* format);
-    ~WpConsumer();
+    m_head = 0;
+    m_tail = 1;
+}
 
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
-
-private:
-    WpChan *m_owner;
-    DataBlock m_buffer;
-};
-
-class WpChan : public DataEndpoint
+// put a byte in fifo, overwrite last byte if full
+void Fifo::put(unsigned char value)
 {
-    friend class WpSource;
-    friend class WpConsumer;
-    friend class WpData;
-public:
-    WpChan(PriSpan *parent, int chan, unsigned int bufsize);
-    virtual ~WpChan();
-    virtual void disconnected(bool final, const char *reason);
-    virtual bool nativeConnect(DataEndpoint *peer);
-    inline PriSpan *span() const
-	{ return m_span; }
-    inline int chan() const
-	{ return m_chan; }
-    inline int absChan() const
-	{ return m_abschan; }
-    inline bool inUse() const
-	{ return (m_ring || m_call); }
-    void ring(q931_call *call = 0);
-    void hangup(int cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED);
-    void sendDigit(char digit);
-    void gotDigits(const char *digits);
-    bool call(Message &msg, const char *called = 0);
-    bool answer();
-    void answered();
-    void idle();
-    void restart(bool outgoing = false);
-    bool open(const char* format);
-    void close();
-    inline void setTimeout(u_int64_t tout)
-	{ m_timeout = tout ? Time::now()+tout : 0; }
-    const char *status() const;
-    const String& id() const
-	{ return m_id; }
-    bool isISDN() const
-	{ return m_isdn; }
-    inline void setTarget(const char *target = 0)
-	{ m_targetid = target; }
-    inline const String& getTarget() const
-	{ return m_targetid; }
-private:
-    PriSpan *m_span;
-    int m_chan;
-    bool m_ring;
-    u_int64_t m_timeout;
-    q931_call *m_call;
-    unsigned int m_bufsize;
-    int m_abschan;
-    bool m_isdn;
-    String m_id;
-    String m_targetid;
-    WpSource* m_wp_s;
-    WpConsumer* m_wp_c;
-};
+    m_buffer[m_tail] = value;
+    bool full = (m_head == m_tail);
+    m_tail++;
+    if (m_tail >= m_buflen)
+	m_tail = 0;
+    if (full)
+	m_head = m_tail;
+}
 
-class WpData : public Thread
+// get a byte from fifo, return last read if empty
+unsigned char Fifo::get()
 {
-public:
-    WpData(PriSpan* span);
-    ~WpData();
-    virtual void run();
-private:
-    PriSpan* m_span;
-    int m_fd;
-    unsigned char* m_buffer;
-    WpChan **m_chans;
-};
-
-class WpHandler : public MessageHandler
-{
-public:
-    WpHandler() : MessageHandler("call.execute") { }
-    virtual bool received(Message &msg);
-};
-
-class WpDropper : public MessageHandler
-{
-public:
-    WpDropper() : MessageHandler("call.drop") { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-
-class WpChanHandler : public MessageReceiver
-{
-public:
-    enum {
-	Ringing,
-	Answered,
-	DTMF,
-    };
-    virtual bool received(Message &msg, int id);
-};
-
-class WanpipePlugin : public Plugin
-{
-    friend class PriSpan;
-    friend class WpHandler;
-public:
-    WanpipePlugin();
-    virtual ~WanpipePlugin();
-    virtual void initialize();
-    virtual bool isBusy() const;
-    PriSpan *findSpan(int chan);
-    WpChan *findChan(const char *id);
-    WpChan *findChan(int first = -1, int last = -1);
-    ObjList m_spans;
-    Mutex mutex;
-};
+    unsigned char tmp = m_buffer[m_head];
+    int nh = m_head+1;
+    if (nh >= m_buflen)
+	nh = 0;
+    if (nh != m_tail)
+	m_head = nh;
+    return tmp;
+}
 
 WanpipePlugin wplugin;
 u_int64_t PriSpan::restartPeriod = 0;
@@ -895,13 +848,13 @@ bool WpChan::nativeConnect(DataEndpoint *peer)
     return false;
 }
 
-const char *WpChan::status() const
+const char *PriChan::status() const
 {
     if (m_ring)
 	return "ringing";
     if (m_call)
 	return m_timeout ? "calling" : "connected";
-    return "idle";
+    return m_span->outOfOrder() ? "down" : "idle";
 }
 
 void WpChan::idle()
@@ -914,15 +867,15 @@ void WpChan::idle()
     }
 }
 
-void WpChan::restart(bool outgoing)
+void PriChan::restart(bool outgoing)
 {
     disconnect("restart");
-    close();
+    closeData();
     if (outgoing)
 	::pri_reset(m_span->pri(),m_chan);
 }
 
-void WpChan::close()
+void PriChan::closeData()
 {
     wplugin.mutex.lock();
     setSource();
@@ -930,7 +883,7 @@ void WpChan::close()
     wplugin.mutex.unlock();
 }
 
-bool WpChan::open(const char* format)
+bool WpChan::openData(const char* format)
 {
     setSource(new WpSource(this,m_bufsize,format));
     getSource()->deref();
@@ -939,30 +892,30 @@ bool WpChan::open(const char* format)
     return true;
 }
 
-bool WpChan::answer()
+bool PriChan::answer()
 {
     if (!m_ring) {
-	Debug("WpChan",DebugWarn,"Answer request on %s channel %d on span %d",
+	Debug("PriChan",DebugWarn,"Answer request on %s channel %d on span %d",
 	    status(),m_chan,m_span->span());
 	return false;
     }
     m_ring = false;
     m_timeout = 0;
-    Output("Answering on wp/%d (%d/%d)",m_abschan,m_span->span(),m_chan);
+    Output("Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     ::pri_answer(m_span->pri(),m_call,m_chan,!m_isdn);
     return true;
 }
 
-void WpChan::hangup(int cause)
+void PriChan::hangup(int cause)
 {
     const char *reason = pri_cause2str(cause);
     if (inUse())
-	Debug(DebugInfo,"Hanging up wp/%d in state %s: %s (%d)",
-	    m_abschan,status(),reason,cause);
+	Debug(DebugInfo,"Hanging up %s in state %s: %s (%d)",
+	    id().c_str(),status(),reason,cause);
     m_timeout = 0;
     setTarget();
     disconnect(reason);
-    close();
+    closeData();
     m_ring = false;
     if (m_call) {
 	::pri_hangup(m_span->pri(),m_call,cause);
@@ -978,15 +931,15 @@ void WpChan::hangup(int cause)
     }
 }
 
-void WpChan::answered()
+void PriChan::answered()
 {
     if (!m_call) {
-	Debug("WpChan",DebugWarn,"Answer detected on %s channel %d on span %d",
-	    status(),m_chan,m_span->span());
+	Debug("PriChan",DebugWarn,"Answer detected on %s %s channel %d on span %d",
+	    status(),id().c_str(),m_chan,m_span->span());
 	return;
     }
     m_timeout = 0;
-    Output("Remote answered on wp/%d (%d/%d)",m_abschan,m_span->span(),m_chan);
+    Output("Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     Message *m = new Message("call.answered");
     m->addParam("driver","wp");
     m->addParam("id",id());
@@ -998,7 +951,7 @@ void WpChan::answered()
     Engine::enqueue(m);
 }
 
-void WpChan::gotDigits(const char *digits)
+void PriChan::gotDigits(const char *digits)
 {
     Message *m = new Message("chan.dtmf");
     m->addParam("driver","wp");
@@ -1011,34 +964,34 @@ void WpChan::gotDigits(const char *digits)
     Engine::enqueue(m);
 }
 
-void WpChan::sendDigit(char digit)
+void PriChan::sendDigit(char digit)
 {
     if (m_call)
 	::pri_information(m_span->pri(),m_call,digit);
 }
 
-bool WpChan::call(Message &msg, const char *called)
+bool PriChan::call(Message &msg, const char *called)
 {
     if (m_span->outOfOrder()) {
-	Debug("WpChan",DebugInfo,"Span %d is out of order, failing call",m_span->span());
+	Debug("PriChan",DebugInfo,"Span %d is out of order, failing call",m_span->span());
 	return false;
     }
     if (!called)
 	called = msg.getValue("called");
-    Debug("WpChan",DebugInfo,"Calling '%s' on channel %d span %d",
+    Debug("PriChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
     int layer1 = lookup(msg.getValue("format"),dict_str2law,-1);
     hangup(PRI_CAUSE_PRE_EMPTED);
     DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
     if (dd) {
-	open(lookup(layer1,dict_str2law));
+	openData(lookup(layer1,dict_str2law));
 	connect(dd);
 	setTarget(msg.getValue("id"));
 	msg.addParam("targetid",id());
     }
     else
 	msg.userData(this);
-    Output("Calling '%s' on wp/%d (%d/%d)",called,m_abschan,m_span->span(),m_chan);
+    Output("Calling '%s' on %s (%d/%d)",called,id().c_str(),m_span->span(),m_chan);
     char *caller = (char *)msg.getValue("caller");
     int callerplan = lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
@@ -1071,7 +1024,7 @@ bool WpChan::call(Message &msg, const char *called)
     return true;
 }
 
-void WpChan::ring(q931_call *call)
+void PriChan::ring(q931_call *call)
 {
     if (call) {
 	setTimeout(10000000);

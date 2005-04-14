@@ -187,9 +187,9 @@ void Connection::run()
 	Thread::check();
 	timer.tv_sec = 0;
 	timer.tv_usec = 10000;
-	bool readok = true/*false*/;
+	bool readok = false;
 	bool error = false;
-	if (true/*m_socket->select(&readok,0,&error,&timer)*/) {
+	if (m_socket->select(&readok,0,&error,&timer)) {
 	    if (error) {
 		Debug("RManager",DebugInfo,"Socket exception condition on %d",m_socket->handle());
 		return;

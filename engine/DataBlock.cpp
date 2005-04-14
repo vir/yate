@@ -61,6 +61,13 @@ DataBlock::~DataBlock()
     clear();
 }
 
+void* DataBlock::getObject(const String& name) const
+{
+    if (name == "DataBlock")
+	return const_cast<DataBlock*>(this);
+    return GenObject::getObject(name);
+}
+
 void DataBlock::clear(bool deleteData)
 {
     m_length = 0;

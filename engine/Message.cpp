@@ -36,6 +36,13 @@ Message::~Message()
     userData(0);
 }
 
+void* Message::getObject(const String& name) const
+{
+    if (name == "Message")
+	return const_cast<Message*>(this);
+    return NamedList::getObject(name);
+}
+
 void Message::userData(RefObject* data)
 {
     if (data == m_data)

@@ -440,6 +440,13 @@ public:
      *  String) or some form of identification
      */
     virtual const String& toString() const;
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
 };
 
 /**
@@ -618,6 +625,13 @@ public:
      * Destroys the list and everything in it.
      */
     virtual ~ObjList();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * Get the number of elements in the list
@@ -819,6 +833,13 @@ public:
      * Destroys the string, disposes the memory.
      */
     virtual ~String();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * A static null String
@@ -1616,6 +1637,13 @@ public:
      * Destroys the data, disposes the memory.
      */
     virtual ~DataBlock();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * A static empty data block

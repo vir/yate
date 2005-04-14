@@ -296,6 +296,13 @@ public:
 	: DataNode(format), m_source(0) { }
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Consumes the data sent to it from a source
      * @param data The raw data block to process; an empty block ends data
      * @param timeDelta Timestamp increment of data - typically samples
@@ -341,6 +348,13 @@ public:
      * Source's destructor - detaches all consumers
      */
     virtual ~DataSource();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
     
     /**
      * Forwards the data to its consumers
@@ -468,6 +482,13 @@ public:
     ~DataTranslator();
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Get the data source of a translator object
      * @return A pointer to the DataSource object or NULL
      */
@@ -589,6 +610,13 @@ public:
     ~DataEndpoint();
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Get a string identification of the endpoint
      * @return A reference to this endpoint's name
      */
@@ -685,6 +713,13 @@ private:
     static unsigned int s_delay;
 
 public:
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
     /**
      * Retrive the name of the module
      * @return The module's name as String
@@ -866,6 +901,13 @@ public:
      * Destructor
      */
     virtual ~Channel();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * Get a string representation of this channel
@@ -1148,6 +1190,13 @@ private:
     unsigned int m_nextid;
 
 public:
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
     /**
      * Retrive the prefix that is used as base for all channels
      * @return The driver's prefix

@@ -63,6 +63,13 @@ Channel::~Channel()
     m_data.clear();
 }
 
+void* Channel::getObject(const String& name) const
+{
+    if (name == "Channel")
+	return const_cast<Channel*>(this);
+    return RefObject::getObject(name);
+}
+
 void Channel::init()
 {
     status(direction());
@@ -336,6 +343,13 @@ Module::Module(const char* name, const char* type)
 {
 }
 
+void* Module::getObject(const String& name) const
+{
+    if (name == "Module")
+	return const_cast<Module*>(this);
+    return Plugin::getObject(name);
+}
+
 bool Module::installRelay(const char* name, int id, unsigned priority)
 {
     if (!(id && name))
@@ -479,6 +493,13 @@ bool Module::setDebug(Message& msg, const String& target)
 Driver::Driver(const char* name, const char* type)
     : Module(name,type), m_init(false), m_routing(0), m_routed(0), m_nextid(0)
 {
+}
+
+void* Driver::getObject(const String& name) const
+{
+    if (name == "Driver")
+	return const_cast<Driver*>(this);
+    return Module::getObject(name);
 }
 
 void Driver::initialize()

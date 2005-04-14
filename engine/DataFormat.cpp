@@ -163,6 +163,13 @@ const FormatInfo* DataFormat::getInfo() const
     return m_parsed;
 }
 
+void* DataConsumer::getObject(const String& name) const
+{
+    if (name == "DataConsumer")
+	return const_cast<DataConsumer*>(this);
+    return DataNode::getObject(name);
+}
+
 void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
 {
     // no number of samples provided - try to guess
@@ -218,6 +225,13 @@ DataSource::~DataSource()
     while (detach(static_cast<DataConsumer*>(m_consumers.get()))) ;
 }
 
+void* DataSource::getObject(const String& name) const
+{
+    if (name == "DataSource")
+	return const_cast<DataSource*>(this);
+    return DataNode::getObject(name);
+}
+
 DataEndpoint::DataEndpoint(Channel* chan, const char* name)
     : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_channel(chan)
 {
@@ -235,6 +249,13 @@ DataEndpoint::~DataEndpoint()
     disconnect();
     setSource();
     setConsumer();
+}
+
+void* DataEndpoint::getObject(const String& name) const
+{
+    if (name == "DataEndpoint")
+	return const_cast<DataEndpoint*>(this);
+    return RefObject::getObject(name);
 }
 
 const String& DataEndpoint::toString() const
@@ -397,6 +418,13 @@ DataTranslator::~DataTranslator()
 	temp->setTranslator(0);
 	temp->deref();
     }
+}
+
+void* DataTranslator::getObject(const String& name) const
+{
+    if (name == "DataTranslator")
+	return const_cast<DataTranslator*>(this);
+    return DataConsumer::getObject(name);
 }
 
 Mutex DataTranslator::s_mutex;

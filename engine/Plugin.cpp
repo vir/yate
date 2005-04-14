@@ -42,4 +42,11 @@ Plugin::~Plugin()
     Engine::Register(this,false);
 }
 
+void* Plugin::getObject(const String& name) const
+{
+    if (name == "Plugin")
+	return const_cast<Plugin*>(this);
+    return GenObject::getObject(name);
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

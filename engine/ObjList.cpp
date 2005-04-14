@@ -47,6 +47,13 @@ ObjList::~ObjList()
 	m_next->destruct();
 }
 
+void* ObjList::getObject(const String& name) const
+{
+    if (name == "ObjList")
+	return const_cast<ObjList*>(this);
+    return GenObject::getObject(name);
+}
+
 unsigned int ObjList::length() const
 {
     unsigned int c = 0;

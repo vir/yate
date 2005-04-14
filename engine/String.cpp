@@ -915,9 +915,21 @@ NamedString::NamedString(const char* name, const char* value)
     XDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
 }
 
+void* GenObject::getObject(const String& name) const
+{
+    return 0;
+}
+
 const String& GenObject::toString() const
 {
     return String::empty();
+}
+
+void* String::getObject(const String& name) const
+{
+    if (name == "String")
+	return const_cast<String*>(this);
+    return GenObject::getObject(name);
 }
 
 const String& String::toString() const

@@ -215,6 +215,13 @@ public:
     ~Message();
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Retrive a reference to the value returned by the message.
      * @return A reference to the value the message will return
      */
@@ -506,6 +513,13 @@ public:
     virtual ~Plugin();
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Initialize the plugin after it was loaded and registered.
      */
     virtual void initialize() = 0;
@@ -538,10 +552,10 @@ public:
      * Main entry point to be called directly from a wrapper program
      * @param argc Argument count
      * @param argv Argument array
-     * @param environ Environment variables
+     * @param env Environment variables
      * @return Program exit code
      */
-    static int main(int argc, const char** argv, const char** environ);
+    static int main(int argc, const char** argv, const char** env);
 
     /**
      * Run the engine.

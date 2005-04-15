@@ -1,8 +1,8 @@
 /**
- * wpchan.cpp
+ * libypri.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * Wanpipe PRI cards telephony driver
+ * Common C++ base classes for PRI cards telephony drivers
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004 Null Team
@@ -26,7 +26,6 @@
 
 extern "C" {
 
-#include <libpri.h>
 extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 
 #ifndef _WINDOWS
@@ -62,21 +61,6 @@ static void pri_err_cb(char *s)
 static void pri_msg_cb(char *s)
 {
     Debug("PRI",DebugInfo,"%s",s);
-}
-
-#define bitswap(v) bitswap_table[v]
-
-static unsigned char bitswap_table[256];
-
-static void bitswap_init()
-{
-    for (unsigned int c = 0; c <= 255; c++) {
-	unsigned char v = 0;
-	for (int b = 0; b <= 7; b++)
-	    if (c & (1 << b))
-		v |= (0x80 >> b);
-	bitswap_table[c] = v;
-    }
 }
 
 /* Switch types */
@@ -183,6 +167,12 @@ static TokenDict dict_str2nsf[] = {
     { 0, -1 }
 };
 
+static TokenDict dict_str2cause[] = {
+    { "noroute", PRI_CAUSE_NO_ROUTE_DESTINATION },
+    { "noconn", PRI_CAUSE_REQUESTED_CHAN_UNAVAIL },
+    { 0, -1 }
+};
+
 /* Layer 1 formats */
 static TokenDict dict_str2law[] = {
     { "mulaw", PRI_LAYER_1_ULAW },
@@ -236,128 +226,62 @@ unsigned char Fifo::get()
     return tmp;
 }
 
-WanpipePlugin wplugin;
-u_int64_t PriSpan::restartPeriod = 0;
-bool PriSpan::dumpEvents = false;
-
-#define WP_HEADER 16
-
-static int wp_read(struct pri *pri, void *buf, int buflen)
+PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect)
+    : m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
+      m_pri(_pri), m_restart(0), m_chans(0), m_ok(false)
 {
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    XDebug("wp_read",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int r = ::recv(::pri_fd(pri),tmp,sz,MSG_NOSIGNAL);
-    XDebug("wp_read",DebugAll,"post r=%d",r);
-    if (r > 0) {
-	r -= WP_HEADER;
-	if ((r > 0) && (r <= buflen)) {
-	    ::memcpy(buf,tmp+WP_HEADER,r);
-	    r += 2;
-	}
+    int dchan = -1;
+    // guess where we may have a D channel
+    switch (chans) {
+	case 3:  // BRI ISDN
+	    dchan = 3;
+	    break;
+	case 24: // T1 with CCS
+	    dchan = 24;
+	    break;
+	case 31: // EuroISDN
+	    dchan = 16;
+	    break;
     }
-    ::free(tmp);
-    return r;
-}
+    dchan = cfg->getIntValue(sect,"dchan", dchan),
 
-static int wp_write(struct pri *pri, void *buf, int buflen)
-{
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    ::memcpy(tmp+WP_HEADER,buf,buflen);
-    XDebug("wp_write",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int w = ::send(::pri_fd(pri),tmp,sz,0);
-    XDebug("wp_write",DebugAll,"post w=%d",w);
-    if (w > 0) {
-	w -= WP_HEADER;
-	w += 2;
-    }
-    ::free(tmp);
-    return w;
-}
-
-PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, int netType,
-			 int switchType, int dialPlan, int presentation,
-			 int overlapDial, int nsf)
-{
-    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd < 0)
-	return 0;
-    struct pri *p = makePri(fd,
-	(dChan >= 0) ? dChan+chan1-1 : -1,
-	netType,
-	switchType, overlapDial, nsf);
-    if (!p) {
-	::close(fd);
-	return 0;
-    }
-    PriSpan *ps = new PriSpan(p,span,chan1,nChans,dChan,fd,dialPlan,presentation,overlapDial);
-    ps->startup();
-    return ps;
-}
-
-struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype,
-			     int overlapDial, int nsf)
-{
-    if (dchan >= 0) {
-	// Set up the D channel if we have one
-	struct wan_sockaddr_ll sa;
-	memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-	::strcpy( (char*)sa.sll_device, "w1g2");
-	::strcpy( (char*)sa.sll_card, "wanpipe1");
-	sa.sll_protocol = htons(PVC_PROT);
-	sa.sll_family=AF_WANPIPE;
-	if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	    Debug("PriSpan",DebugGoOn,"Failed to bind %d: error %d: %s",
-		fd,errno,::strerror(errno));
-	    return 0;
-	}
-    }
-    struct pri *ret = ::pri_new_cb(fd, nettype, swtype, wp_read, wp_write, 0);
-#ifdef PRI_NSF_NONE
-    if (ret)
-	::pri_set_nsf(ret, nsf);
-#endif
+    m_dplan = cfg->getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
+    m_pres = cfg->getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
+    m_restartPeriod = cfg->getIntValue(sect,"restart") * (u_int64_t)1000000;
+    m_dumpEvents = cfg->getBoolValue(sect,"dumpevents");
+    m_overlapped = cfg->getIntValue(sect,"overlapdial");
+    if (m_overlapped < 0)
+	m_overlapped = 0;
 #ifdef PRI_SET_OVERLAPDIAL
-    if (ret)
-	::pri_set_overlapdial(ret, (overlapDial > 0));
+    ::pri_set_overlapdial(m_pri, (m_overlapped > 0));
 #endif
-    return ret;
-}
+#ifdef PRI_NSF_NONE
+    ::pri_set_nsf(m_pri,cfg->getIntValue(sect,"facilities",dict_str2nsf,YATE_NSF_DEFAULT));
+#endif
+    ::pri_set_userdata(m_pri, this);
 
-PriSpan::PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres, int overlapDial)
-    : Thread("PriSpan"), m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
-      m_fd(fd), m_dplan(dplan), m_pres(pres), m_overlapped(0), m_pri(_pri),
-      m_restart(0), m_chans(0), m_data(0), m_ok(false)
-{
-    Debug(DebugAll,"PriSpan::PriSpan(%p,%d,%d,%d) [%p]",_pri,span,chans,fd,this);
-    if (overlapDial > 0)
-	m_overlapped = overlapDial;
-    WpChan **ch = new WpChan* [chans];
+    PriChan **ch = new PriChan* [chans];
     for (int i = 1; i <= chans; i++) {
 	if (i != dchan) {
-	    ch[i-1] = new WpChan(this,i,s_buflen);
+	    ch[i-1] = create(i);
 	    m_bchans++;
 	}
 	else
 	    ch[i-1] = 0;
     }
+
     m_chans = ch;
-    wplugin.m_spans.append(this);
-    WpData* dat = new WpData(this);
-    dat->startup();
+    m_restart = Time::now() + m_restartPeriod;
+    m_driver->m_spans.append(this);
 }
 
 PriSpan::~PriSpan()
 {
     Debug(DebugAll,"PriSpan::~PriSpan() [%p]",this);
-    wplugin.m_spans.remove(this,false);
+    m_driver->m_spans.remove(this,false);
     m_ok = false;
-    delete m_data;
     for (int i = 0; i < m_nchans; i++) {
-	WpChan *c = m_chans[i];
+	PriChan *c = m_chans[i];
 	m_chans[i] = 0;
 	if (c) {
 	    c->hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
@@ -365,41 +289,22 @@ PriSpan::~PriSpan()
 	}
     }
     delete[] m_chans;
-    ::close(m_fd);
 }
 
-void PriSpan::run()
+void PriSpan::runEvent(bool idleRun)
 {
-    Debug(DebugAll,"PriSpan::run() [%p]",this);
-    m_restart = Time::now() + restartPeriod;
-    ::pri_set_userdata(m_pri, this);
-    fd_set rdfds;
-    fd_set errfds;
-    for (;;) {
-	FD_ZERO(&rdfds);
-	FD_SET(m_fd, &rdfds);
-	FD_ZERO(&errfds);
-	FD_SET(m_fd, &errfds);
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 100;
-	int sel = ::select(m_fd+1, &rdfds, NULL, &errfds, &tv);
-	pri_event *ev = 0;
-	Lock lock(wplugin.mutex);
-	if (!sel) {
-	    ev = ::pri_schedule_run(m_pri);
-	    idle();
-	}
-	else if (sel > 0)
-	    ev = ::pri_check_event(m_pri);
-	else if (errno != EINTR)
-	    Debug("PriSpan",DebugGoOn,"select() error %d: %s",
-		errno,::strerror(errno));
-	if (ev) {
-	    if (dumpEvents && debugAt(DebugAll))
-		::pri_dump_event(m_pri, ev);
-	    handleEvent(*ev);
-	}
+    Lock lock(m_driver);
+    pri_event *ev = 0;
+    if (idleRun) {
+	ev = ::pri_schedule_run(m_pri);
+	idle();
+    }
+    else
+	ev = ::pri_check_event(m_pri);
+    if (ev) {
+	if (m_dumpEvents && debugAt(DebugAll))
+	    ::pri_dump_event(m_pri, ev);
+	handleEvent(*ev);
     }
 }
 
@@ -407,8 +312,8 @@ void PriSpan::idle()
 {
     if (!m_chans)
 	return;
-    if (restartPeriod && (Time::now() > m_restart)) {
-	m_restart = Time::now() + restartPeriod;
+    if (m_restartPeriod && (Time::now() > m_restart)) {
+	m_restart = Time::now() + m_restartPeriod;
 	Debug("PriSpan",DebugInfo,"Restarting idle channels on span %d",m_span);
 	for (int i=0; i<m_nchans; i++)
 	    if (m_chans[i])
@@ -509,7 +414,7 @@ int PriSpan::findEmptyChan(int first, int last) const
     return -1;
 }
 
-WpChan *PriSpan::getChan(int chan) const
+PriChan *PriSpan::getChan(int chan) const
 {
     return validChan(chan) ? m_chans[chan-1] : 0;
 }
@@ -547,57 +452,9 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	ev.callednum,ev.redirectingnum,ev.calledplan);
     Debug(DebugInfo,"type=%d complete=%d format='%s'",
 	ev.ctype,ev.complete,lookup(ev.layer1,dict_str2law,"unknown"));
-    WpChan* c = getChan(chan);
-    c->ring(ev.call);
-    if (m_overlapped && !ev.complete) {
-	if (::strlen(ev.callednum) < m_overlapped) {
-	    ::pri_need_more_info(pri(),ev.call,chan,!c->isISDN());
-	    return;
-	}
-    }
-    Message *m = new Message("call.route");
-    m->addParam("driver","wp");
-    m->addParam("id",c->id());
-    m->addParam("span",String(m_span));
-    m->addParam("channel",String(chan));
-    if (ev.callingnum[0])
-	m->addParam("caller",ev.callingnum);
-    if (ev.callednum[0])
-	m->addParam("called",ev.callednum);
-    if (m_overlapped && !ev.complete)
-	m->addParam("overlapped","yes");
-    const char* dataLaw = "slin";
-    switch (ev.layer1) {
-	case PRI_LAYER_1_ALAW:
-	    dataLaw = "alaw";
-	    break;
-	case PRI_LAYER_1_ULAW:
-	    dataLaw = "mulaw";
-	    break;
-    }
-    m->addParam("format",dataLaw);
-    if (Engine::dispatch(m)) {
-	*m = "call.execute";
-	m->addParam("callto",m->retValue());
-	m->retValue().clear();
-	c->open(dataLaw);
-	m->userData(getChan(chan));
-	if (Engine::dispatch(m)) {
-	    c->setTarget(m->getValue("targetid"));
-	    if (c->getTarget().null()) {
-		Debug(DebugInfo,"Answering now chan %s [%p] because we have no targetid",
-		    c->id().c_str(),c);
-		c->answer();
-	    }
-	    else
-		getChan(chan)->setTimeout(60000000);
-	}
-	else
-	    getChan(chan)->hangup(PRI_CAUSE_REQUESTED_CHAN_UNAVAIL);
-    }
-    else
-	getChan(chan)->hangup(PRI_CAUSE_NO_ROUTE_DESTINATION);
-    delete m;
+    PriChan* c = getChan(chan);
+    if (c)
+	c->ring(ev);
 }
 
 void PriSpan::infoChan(int chan, pri_event_ring &ev)
@@ -654,177 +511,49 @@ void PriSpan::proceedingChan(int chan)
     getChan(chan)->setTimeout(60000000);
 }
 
-WpSource::WpSource(WpChan *owner,unsigned int bufsize,const char* format)
-    : DataSource(format),
-      m_owner(owner), m_bufpos(0), m_buf(0,bufsize)
+PriSource::PriSource(PriChan *owner, unsigned int bufsize)
+    : DataSource(0),
+      m_owner(owner), m_buffer(0,bufsize)
 {
-    Debug(DebugAll,"WpSource::WpSource(%p) [%p]",owner,this);
-    m_owner->m_wp_s = this;
+    Debug(DebugAll,"PriSource::PriSource(%p) [%p]",owner,this);
 }
 
-WpSource::~WpSource()
+PriSource::~PriSource()
 {
-    Debug(DebugAll,"WpSource::~WpSource() [%p]",this);
-    m_owner->m_wp_s = 0;
+    Debug(DebugAll,"PriSource::~PriSource() [%p]",this);
 }
 
-void WpSource::put(unsigned char val)
+PriConsumer::PriConsumer(PriChan *owner, unsigned int bufsize)
+    : DataConsumer(0),
+      m_owner(owner), m_buffer(0,bufsize)
 {
-    ((char*)m_buf.data())[m_bufpos] = val;
-    if (++m_bufpos >= m_buf.length()) {
-	m_bufpos = 0;
-	Forward(m_buf);
-    }
+    Debug(DebugAll,"PriConsumer::PriConsumer(%p) [%p]",owner,this);
 }
 
-WpConsumer::WpConsumer(WpChan *owner,unsigned int bufsize,const char* format)
-    : DataConsumer(format), Fifo(2*bufsize),
-      m_owner(owner)
+PriConsumer::~PriConsumer()
 {
-    Debug(DebugAll,"WpConsumer::WpConsumer(%p) [%p]",owner,this);
-    m_owner->m_wp_c = this;
+    Debug(DebugAll,"PriConsumer::~PriConsumer() [%p]",this);
 }
 
-WpConsumer::~WpConsumer()
+PriChan::PriChan(PriSpan *parent, int chan, unsigned int bufsize)
+    : Channel(parent->driver()), m_span(parent), m_chan(chan), m_ring(false),
+      m_timeout(0), m_call(0), m_bufsize(bufsize)
 {
-    Debug(DebugAll,"WpConsumer::~WpConsumer() [%p]",this);
-    m_owner->m_wp_c = 0;
-}
-
-void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
-{
-    const unsigned char* buf = (const unsigned char*)data.data();
-    for (unsigned int i = 0; i < data.length(); i++)
-	put(buf[i]);
-}
-
-WpData::WpData(PriSpan* span)
-    : Thread("WpData"), m_span(span), m_fd(-1), m_buffer(0), m_chans(0)
-{
-    Debug(DebugAll,"WpData::WpData(%p) [%p]",span,this);
-    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd >= 0) {
-	// Set up the B channel group
-	struct wan_sockaddr_ll sa;
-	memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-	::strcpy( (char*)sa.sll_device, "w1g1");
-	::strcpy( (char*)sa.sll_card, "wanpipe1");
-	sa.sll_protocol = htons(PVC_PROT);
-	sa.sll_family=AF_WANPIPE;
-	if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	    Debug("PriSpan",DebugGoOn,"Failed to bind %d: error %d: %s",
-		fd,errno,::strerror(errno));
-	    ::close(fd);
-	}
-	else {
-	    m_fd = fd;
-	    m_span->m_data = this;
-	}
-    }
-}
-
-WpData::~WpData()
-{
-    Debug(DebugAll,"WpData::~WpData() [%p]",this);
-    m_span->m_data = 0;
-    if (m_fd >= 0)
-	::close(m_fd);
-    if (m_buffer)
-	::free(m_buffer);
-    if (m_chans)
-	delete[] m_chans;
-}
-
-void WpData::run()
-{
-    Debug(DebugAll,"WpData::run() [%p]",this);
-    int samp = 50;
-    int bchans = m_span->bchans();
-    int buflen = samp*bchans;
-    int sz = buflen+WP_HEADER;
-    m_buffer = (unsigned char*)::malloc(sz);
-    // Build a compacted list of allocated B channels
-    m_chans = new WpChan* [bchans];
-    int b = 0;
-    for (int n = 0; n < bchans; n++) {
-	while (!m_span->m_chans[b])
-	    b++;
-	m_chans[n] = m_span->m_chans[b++];
-	DDebug("wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
-    }
-    fd_set rdfds,oobfds;
-    while (m_span && (m_fd >= 0)) {
-	FD_ZERO(&rdfds);
-	FD_ZERO(&oobfds);
-	FD_SET(m_fd, &rdfds);
-	FD_SET(m_fd, &oobfds);
-	if (::select(m_fd+1, &rdfds, NULL, &oobfds, NULL) <= 0)
-	    continue;
-
-	if (FD_ISSET(m_fd, &oobfds)) {
-	    DDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = ::recv(m_fd,m_buffer,sz,MSG_OOB);
-	    DDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
-	}
-
-	if (FD_ISSET(m_fd, &rdfds)) {
-	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = ::recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
-	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
-	    r -= WP_HEADER;
-	    // We should have read N bytes for each B channel
-	    if ((r > 0) && ((r % bchans) == 0)) {
-		r /= bchans;
-		const unsigned char* dat = m_buffer + WP_HEADER;
-		wplugin.mutex.lock();
-		for (int n = r; n > 0; n--)
-		    for (b = 0; b < bchans; b++) {
-			WpSource *s = m_chans[b]->m_wp_s;
-			if (s)
-			    s->put(bitswap(*dat));
-			dat++;
-		    }
-		wplugin.mutex.unlock();
-	    }
-	    int w = samp;
-	    ::memset(m_buffer,0,WP_HEADER);
-	    unsigned char* dat = m_buffer + WP_HEADER;
-	    wplugin.mutex.lock();
-	    for (int n = w; n > 0; n--) {
-		for (b = 0; b < bchans; b++) {
-		    WpConsumer *c = m_chans[b]->m_wp_c;
-		    *dat++ = bitswap(c ? c->get() : 0xff);
-		}
-	    }
-	    wplugin.mutex.unlock();
-	    w = (w * bchans) + WP_HEADER;
-	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,w,sz);
-	    w = ::send(m_fd,m_buffer,w,MSG_DONTWAIT);
-	    XDebug("wpdata_send",DebugAll,"post w=%d",w);
-	}
-    }
-}
-
-WpChan::WpChan(PriSpan *parent, int chan, unsigned int bufsize)
-    : DataEndpoint("wanpipe"), m_span(parent), m_chan(chan), m_ring(false),
-      m_timeout(0), m_call(0), m_bufsize(bufsize), m_wp_s(0), m_wp_c(0)
-{
-    Debug(DebugAll,"WpChan::WpChan(%p,%d) [%p]",parent,chan,this);
+    Debug(DebugAll,"PriChan::PriChan(%p,%d) [%p]",parent,chan,this);
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
     m_isdn = true;
-    m_id << "wp/" << m_abschan;
 }
 
-WpChan::~WpChan()
+PriChan::~PriChan()
 {
-    Debug(DebugAll,"WpChan::~WpChan() [%p] %d",this,m_chan);
+    Debug(DebugAll,"PriChan::~PriChan() [%p] %d",this,m_chan);
     hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
 }
 
-void WpChan::disconnected(bool final, const char *reason)
+void PriChan::disconnected(bool final, const char *reason)
 {
-    Debugger debug("WpChan::disconnected()", " '%s' [%p]",reason,this);
+    Debugger debug("PriChan::disconnected()", " '%s' [%p]",reason,this);
     if (!final) {
 	Message m("chan.disconnected");
 	m.addParam("driver","wp");
@@ -833,35 +562,35 @@ void WpChan::disconnected(bool final, const char *reason)
 	m.addParam("channel",String(m_chan));
 	if (m_targetid) {
 	    m.addParam("targetid",m_targetid);
-	    setTarget();
+	    m_targetid.clear();
 	}
 	m.addParam("reason",reason);
 	Engine::enqueue(m);
     }
-    wplugin.mutex.lock();
+    driver()->lock();
     hangup(PRI_CAUSE_NORMAL_CLEARING);
-    wplugin.mutex.unlock();
+    driver()->unlock();
 }
 
-bool WpChan::nativeConnect(DataEndpoint *peer)
+bool PriChan::nativeConnect(DataEndpoint *peer)
 {
     return false;
 }
 
-const char *PriChan::status() const
+const char *PriChan::chanStatus() const
 {
     if (m_ring)
 	return "ringing";
     if (m_call)
 	return m_timeout ? "calling" : "connected";
-    return m_span->outOfOrder() ? "down" : "idle";
+    return m_span->outOfOrder() ? "alarm" : "idle";
 }
 
-void WpChan::idle()
+void PriChan::idle()
 {
     if (m_timeout && (Time::now() > m_timeout)) {
-	Debug("WpChan",DebugWarn,"Timeout %s channel %d on span %d",
-	    status(),m_chan,m_span->span());
+	Debug("PriChan",DebugWarn,"Timeout %s channel %s (%d/%d)",
+	    chanStatus(),id().c_str(),m_chan,m_span->span());
 	m_timeout = 0;
 	hangup(PRI_CAUSE_RECOVERY_ON_TIMER_EXPIRE);
     }
@@ -877,49 +606,42 @@ void PriChan::restart(bool outgoing)
 
 void PriChan::closeData()
 {
-    wplugin.mutex.lock();
+    driver()->lock();
     setSource();
     setConsumer();
-    wplugin.mutex.unlock();
-}
-
-bool WpChan::openData(const char* format)
-{
-    setSource(new WpSource(this,m_bufsize,format));
-    getSource()->deref();
-    setConsumer(new WpConsumer(this,m_bufsize,format));
-    getConsumer()->deref();
-    return true;
+    driver()->unlock();
 }
 
 bool PriChan::answer()
 {
     if (!m_ring) {
 	Debug("PriChan",DebugWarn,"Answer request on %s channel %d on span %d",
-	    status(),m_chan,m_span->span());
+	    chanStatus(),m_chan,m_span->span());
 	return false;
     }
     m_ring = false;
     m_timeout = 0;
     Output("Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
-    ::pri_answer(m_span->pri(),m_call,m_chan,!m_isdn);
+    ::pri_answer(m_span->pri(),(q931_call*)m_call,m_chan,!m_isdn);
     return true;
 }
 
 void PriChan::hangup(int cause)
 {
+    if (!cause)
+	cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED;
     const char *reason = pri_cause2str(cause);
     if (inUse())
 	Debug(DebugInfo,"Hanging up %s in state %s: %s (%d)",
-	    id().c_str(),status(),reason,cause);
+	    id().c_str(),chanStatus(),reason,cause);
     m_timeout = 0;
-    setTarget();
+    m_targetid.clear();
     disconnect(reason);
     closeData();
     m_ring = false;
     if (m_call) {
-	::pri_hangup(m_span->pri(),m_call,cause);
-	::pri_destroycall(m_span->pri(),m_call);
+	::pri_hangup(m_span->pri(),(q931_call*)m_call,cause);
+	::pri_destroycall(m_span->pri(),(q931_call*)m_call);
 	m_call = 0;
 	Message *m = new Message("chan.hangup");
 	m->addParam("driver","wp");
@@ -935,7 +657,7 @@ void PriChan::answered()
 {
     if (!m_call) {
 	Debug("PriChan",DebugWarn,"Answer detected on %s %s channel %d on span %d",
-	    status(),id().c_str(),m_chan,m_span->span());
+	    chanStatus(),id().c_str(),m_chan,m_span->span());
 	return;
     }
     m_timeout = 0;
@@ -967,7 +689,7 @@ void PriChan::gotDigits(const char *digits)
 void PriChan::sendDigit(char digit)
 {
     if (m_call)
-	::pri_information(m_span->pri(),m_call,digit);
+	::pri_information(m_span->pri(),(q931_call*)m_call,digit);
 }
 
 bool PriChan::call(Message &msg, const char *called)
@@ -982,11 +704,12 @@ bool PriChan::call(Message &msg, const char *called)
 	called, m_chan,m_span->span());
     int layer1 = lookup(msg.getValue("format"),dict_str2law,-1);
     hangup(PRI_CAUSE_PRE_EMPTED);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd) {
+    setOutgoing(true);
+    Channel *ch = static_cast<Channel *>(msg.userData());
+    if (ch) {
 	openData(lookup(layer1,dict_str2law));
-	connect(dd);
-	setTarget(msg.getValue("id"));
+	connect(ch);
+	m_targetid = msg.getValue("id");
 	msg.addParam("targetid",id());
     }
     else
@@ -1009,7 +732,7 @@ bool PriChan::call(Message &msg, const char *called)
     ::pri_sr_set_called(req,(char *)called,calledplan,1/*complete*/);
     ::q931_setup(span()->pri(),m_call,req);
 #else
-    ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
+    ::pri_call(m_span->pri(),(q931_call*)m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
 	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
     );
 #endif
@@ -1024,14 +747,16 @@ bool PriChan::call(Message &msg, const char *called)
     return true;
 }
 
-void PriChan::ring(q931_call *call)
+void PriChan::ring(pri_event_ring &ev)
 {
+    q931_call *call = ev.call;
     if (call) {
 	setTimeout(10000000);
+	setOutgoing(false);
 	m_call = call;
 	m_ring = true;
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
-	Message *m = new Message("chan.startup");
+	Message *m = message("chan.startup");
 	m->addParam("driver","wp");
 	m->addParam("id",id());
 	m->addParam("span",String(m_span->span()));
@@ -1041,166 +766,131 @@ void PriChan::ring(q931_call *call)
     }
     else
 	hangup(PRI_CAUSE_WRONG_CALL_STATE);
+
+    Message *m = message("call.route");
+    if (m_span->overlapped() && !ev.complete && (::strlen(ev.callednum) < m_span->overlapped())) {
+	::pri_need_more_info(m_span->pri(),m_call,m_chan,!isISDN());
+	m->addParam("overlapped","yes");
+    }
+    if (ev.callingnum[0])
+	m->addParam("caller",ev.callingnum);
+    if (ev.callednum[0])
+	m->addParam("called",ev.callednum);
+    const char* dataLaw = "slin";
+    switch (ev.layer1) {
+	case PRI_LAYER_1_ALAW:
+	    dataLaw = "alaw";
+	    break;
+	case PRI_LAYER_1_ULAW:
+	    dataLaw = "mulaw";
+	    break;
+    }
+    m->addParam("format",dataLaw);
+    if (!startRouter(m))
+	hangup(PRI_CAUSE_SWITCH_CONGESTION);
 }
 
-bool WpHandler::received(Message &msg)
+void PriChan::callAccept(Message& msg)
 {
-    String dest(msg.getValue("callto"));
-    if (dest.null())
-	return false;
-    Regexp r("^wp/\\([^/]*\\)/\\?\\(.*\\)$");
+    Debug(DebugAll,"PriChan::callAccept() [%p]",this);
+    setTimeout(60000000);
+    Channel::callAccept(msg);
+}
+
+void PriChan::callReject(const char* error, const char* reason)
+{
+    int cause = lookup(error,dict_str2cause,PRI_CAUSE_NETWORK_OUT_OF_ORDER);
+    hangup(cause);
+}
+
+bool PriChan::msgDrop(Message& msg, const char* reason)
+{
+    if (inUse()) {
+	hangup(PRI_CAUSE_INTERWORKING);
+	return true;
+    }
+    return false;
+}
+
+
+bool PriDriver::msgExecute(Message& msg, String& dest)
+{
+    Regexp r("^\\([^/]*\\)/\\?\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
     if (!msg.userData()) {
-	Debug(DebugWarn,"Wanpipe call found but no data channel!");
+	Debug(DebugWarn,"Pri call found but no data channel!");
 	return false;
     }
     String chan = dest.matchString(1);
     String num = dest.matchString(2);
-    DDebug(DebugInfo,"Found call to Wanpipe chan='%s' name='%s'",
+    DDebug(DebugInfo,"Found call to pri chan='%s' name='%s'",
 	chan.c_str(),num.c_str());
-    WpChan *c = 0;
+    PriChan *c = 0;
 
     r = "^\\([0-9]\\+\\)-\\([0-9]*\\)$";
-    Lock lock(wplugin.mutex);
+    Lock lock(this);
     if (chan.matches(r))
-	c = wplugin.findChan(chan.matchString(1).toInteger(),
+	c = find(chan.matchString(1).toInteger(),
 	    chan.matchString(2).toInteger(65535));
     else
-	c = wplugin.findChan(chan.toInteger(-1));
+	c = find(chan.toInteger(-1));
 
     if (c) {
-	Debug(DebugInfo,"Will call '%s' on chan wp/%d (%d/%d)",
-	    num.c_str(),c->absChan(),c->span()->span(),c->chan());
+	Debug(DebugInfo,"Will call '%s' on chan %s (%d/%d)",
+	    num.c_str(),c->id().c_str(),c->span()->span(),c->chan());
 	return c->call(msg,num);
     }
     else
-	Debug(DebugWarn,"No free Wanpipe channel '%s'",chan.c_str());
+	Debug(DebugWarn,"No free Pri channel '%s'",chan.c_str());
     return false;
 }
 
-bool WpDropper::received(Message &msg)
+void PriDriver::dropAll()
 {
-    String id(msg.getValue("id"));
-    if (id.null()) {
-	Debug("WpDropper",DebugInfo,"Dropping all calls");
-	wplugin.mutex.lock();
-	const ObjList *l = &wplugin.m_spans;
-	for (; l; l=l->next()) {
-	    PriSpan *s = static_cast<PriSpan *>(l->get());
-	    if (s) {
-		for (int n=1; n<=s->chans(); n++) {
-		    WpChan *c = s->getChan(n);
-		    if (c)
-			c->hangup(PRI_CAUSE_INTERWORKING);
-		}
-	    }
-	}
-	wplugin.mutex.unlock();
-	return false;
-    }
-    if (!id.startsWith("wp/"))
-	return false;
-    WpChan *c = 0;
-    id >> "wp/";
-    int n = id.toInteger();
-    if ((n > 0) && (c = wplugin.findChan(n))) {
-	Debug("WpDropper",DebugInfo,"Dropping wp/%d (%d/%d)",
-	    n,c->span()->span(),c->chan());
-	wplugin.mutex.lock();
-	c->hangup(PRI_CAUSE_INTERWORKING);
-	wplugin.mutex.unlock();
-	return true;
-    }
-    Debug("WpDropper",DebugInfo,"Could not find wp/%s",id.c_str());
-    return false;
-}
-
-bool WpChanHandler::received(Message &msg, int id)
-{
-    String tid(msg.getValue("targetid"));
-    if (!tid.startSkip("wp/",false))
-	return false;
-    int n = tid.toInteger();
-    WpChan* c = 0;
-    if ((n > 0) && (c = wplugin.findChan(n))) {
-	Lock lock(wplugin.mutex);
-	switch (id) {
-	    case Answered:
-		c->answer();
-		break;
-	    case Ringing:
-		Debug("Wp",DebugInfo,"Not implemented ringing!");
-		break;
-	    case DTMF:
-		for (const char* t = msg.getValue("text"); t && *t; ++t)
-		    c->sendDigit(*t);
-		break;
-	}
-    }
-    Debug("WpChanHandler",DebugInfo,"Could not find wp/%s",tid.c_str());
-    return false;
-}
-
-bool StatusHandler::received(Message &msg)
-{
-    const char *sel = msg.getValue("module");
-    if (sel && ::strcmp(sel,"wp") && ::strcmp(sel,"fixchans"))
-	return false;
-    String st("name=wp,type=fixchans,format=Status|Span/Chan");
-    wplugin.mutex.lock();
-    const ObjList *l = &wplugin.m_spans;
-    st << ",spans=" << l->count() << ",spanlen=";
-    bool first = true;
-    for (; l; l=l->next()) {
-	PriSpan *s = static_cast<PriSpan *>(l->get());
-	if (s) {
-	    if (first)
-		first = false;
-	    else
-		st << "|";
-	    st << s->chans();
-	}
-    }
-    st << ";buflen=" << s_buflen << ";";
-    l = &wplugin.m_spans;
-    first = true;
+    Debug(DebugInfo,"Dropping all %s calls",name().c_str());
+    lock();
+    const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
 	PriSpan *s = static_cast<PriSpan *>(l->get());
 	if (s) {
 	    for (int n=1; n<=s->chans(); n++) {
-		WpChan *c = s->getChan(n);
-		if (c) {
-		    if (first)
-			first = false;
-		    else
-			st << ",";
-		    st << c->id() << "=";
-		    st << c->status() << "|" << s->span() << "/" << n;
-		}
+		PriChan *c = s->getChan(n);
+		if (c)
+		    c->hangup(PRI_CAUSE_INTERWORKING);
 	    }
 	}
     }
-    wplugin.mutex.unlock();
-    msg.retValue() << st << "\n";
-    return false;
+    unlock();
 }
 
-WanpipePlugin::WanpipePlugin()
-    : mutex(true)
+u_int8_t PriDriver::s_bitswap[256];
+
+bool PriDriver::s_init = true;
+
+
+PriDriver::PriDriver(const char* name)
+    : Driver(name,"fixchans")
 {
-    Output("Loaded module Wanpipe");
-    bitswap_init();
-    ::pri_set_error(pri_err_cb);
-    ::pri_set_message(pri_msg_cb);
+    if (s_init) {
+	s_init = false;
+	for (unsigned int c = 0; c <= 255; c++) {
+	    u_int8_t v = 0;
+	    for (int b = 0; b <= 7; b++)
+		if (c & (1 << b))
+		    v |= (0x80 >> b);
+	    s_bitswap[c] = v;
+	}
+	::pri_set_error(pri_err_cb);
+	::pri_set_message(pri_msg_cb);
+    }
 }
 
-WanpipePlugin::~WanpipePlugin()
+PriDriver::~PriDriver()
 {
-    Output("Unloading module Wanpipe");
 }
 
-PriSpan *WanpipePlugin::findSpan(int chan)
+PriSpan *PriDriver::findSpan(int chan)
 {
     const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
@@ -1211,19 +901,9 @@ PriSpan *WanpipePlugin::findSpan(int chan)
     return 0;
 }
 
-WpChan *WanpipePlugin::findChan(const char *id)
+PriChan *PriDriver::find(int first, int last)
 {
-    String s(id);
-    if (!s.startsWith("wp/"))
-	return 0;
-    s >> "wp/";
-    int n = s.toInteger();
-    return (n > 0) ? findChan(n) : 0;
-}
-
-WpChan *WanpipePlugin::findChan(int first, int last)
-{
-    DDebug(DebugAll,"WanpipePlugin::findChan(%d,%d)",first,last);
+    DDebug(DebugAll,"PriDriver::find(%d,%d)",first,last);
     // see first if we have an exact request
     if (first > 0 && last < 0) {
 	PriSpan *s = findSpan(first);
@@ -1247,14 +927,14 @@ WpChan *WanpipePlugin::findChan(int first, int last)
     return 0;
 }
 
-bool WanpipePlugin::isBusy() const
+bool PriDriver::isBusy() const
 {
     const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
 	PriSpan *s = static_cast<PriSpan *>(l->get());
 	if (s) {
 	    for (int n=1; n<=s->chans(); n++) {
-		WpChan *c = s->getChan(n);
+		PriChan *c = s->getChan(n);
 		if (c && c->inUse())
 		    return true;
 	    }
@@ -1263,64 +943,28 @@ bool WanpipePlugin::isBusy() const
     return false;
 }
 
-void WanpipePlugin::initialize()
+void PriDriver::init(const char* configName)
 {
     Output("Initializing module Wanpipe");
-    Configuration cfg(Engine::configFile("chan_wanpipe"));
-    PriSpan::restartPeriod = cfg.getIntValue("general","restart") * (u_int64_t)1000000;
-    PriSpan::dumpEvents = cfg.getBoolValue("general","dumpevents");
+    Configuration cfg(Engine::configFile("configName"));
+    s_buflen = cfg.getIntValue("general","buflen",480);
     if (!m_spans.count()) {
-	s_buflen = cfg.getIntValue("general","buflen",480);
 	int chan1 = 1;
 	for (int span = 1;;span++) {
 	    String sect("span ");
-	    sect += String(span);
+	    sect << span;
 	    int num = cfg.getIntValue(sect,"chans",-1);
 	    if (num < 0)
 		break;
 	    if (num) {
-		int dchan = -1;
-		// guess where we may have a D channel
-		switch (num) {
-		    case 3:
-			// BRI ISDN
-			dchan = 3;
-			break;
-		    case 24:
-			// T1 with CCS
-			dchan = 24;
-			break;
-		    case 31:
-			// EuroISDN
-			dchan = 16;
-			break;
-		}
 		chan1 = cfg.getIntValue(sect,"first",chan1);
-		PriSpan::create(span,chan1,num,
-		    cfg.getIntValue(sect,"dchan", dchan),
-		    cfg.getIntValue(sect,"type",dict_str2type,PRI_NETWORK),
-		    cfg.getIntValue(sect,"swtype",dict_str2switch,
-			PRI_SWITCH_UNKNOWN),
-		    cfg.getIntValue(sect,"dialplan",dict_str2dplan,
-			PRI_UNKNOWN),
-		    cfg.getIntValue(sect,"presentation",dict_str2pres,
-			PRES_ALLOWED_USER_NUMBER_NOT_SCREENED),
-		    cfg.getIntValue(sect,"overlapdial"),
-		    cfg.getIntValue(sect,"facilities",dict_str2nsf,
-			YATE_NSF_DEFAULT)
-		);
+		create(this,span,chan1,num,&cfg,sect);
 		chan1 += num;
 	    }
 	}
 	if (m_spans.count()) {
 	    Output("Created %d spans",m_spans.count());
-	    Engine::install(new WpHandler);
-	    Engine::install(new WpDropper);
-	    Engine::install(new StatusHandler);
-	    WpChanHandler* ch = new WpChanHandler;
-	    Engine::install(new MessageRelay("call.ringing",ch,WpChanHandler::Ringing));
-	    Engine::install(new MessageRelay("call.answered",ch,WpChanHandler::Answered));
-	    Engine::install(new MessageRelay("chan.dtmf",ch,WpChanHandler::DTMF));
+	    setup();
 	}
 	else
 	    Output("No spans created, module not activated");

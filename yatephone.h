@@ -1149,6 +1149,13 @@ protected:
 	{ m_status = newstat; }
 
     /**
+     * Set the current direction of the channel
+     * @param outgoing True if this is an outgoing call channel
+     */
+    inline void setOutgoing(bool outgoing = true)
+	{ m_outgoing = outgoing; }
+
+    /**
      * Connect notification method.
      */
     virtual void connected() { }
@@ -1246,7 +1253,7 @@ protected:
     /**
      * Constructor
      * @param name Plugin name of this driver
-     * @param type Type of the driver: "fixchan", "varchan", etc.
+     * @param type Type of the driver: "fixchans", "varchans", etc.
      */
     Driver(const char* name, const char* type = 0);
 

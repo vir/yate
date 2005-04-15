@@ -24,23 +24,11 @@
 
 #include <yatephone.h>
 
-namespace TelEngine {
-
-#define bitswap(v) bitswap_table[v]
-
-static unsigned char bitswap_table[256];
-
-static void bitswap_init()
-{
-    for (unsigned int c = 0; c <= 255; c++) {
-	unsigned char v = 0;
-	for (int b = 0; b <= 7; b++)
-	    if (c & (1 << b))
-		v |= (0x80 >> b);
-	bitswap_table[c] = v;
-    }
+extern "C" {
+#include <libpri.h>
 }
 
+namespace TelEngine {
 
 class Fifo
 {
@@ -58,18 +46,16 @@ private:
 };
 
 class PriChan;
+class PriDriver;
 
-class PriSpan : public GenObject, public Thread
+class PriSpan : public GenObject
 {
-    friend class WpData;
 public:
-    static PriSpan *create(int span, int chan1, int nChans, int dChan, int netType,
-			   int switchType, int dialPlan, int presentation,
-			   int overlapDial, int nsf = YATE_NSF_DEFAULT);
     virtual ~PriSpan();
-    virtual void run();
     inline struct pri *pri()
 	{ return m_pri; }
+    inline PriDriver* driver() const
+	{ return m_driver; }
     inline int span() const
 	{ return m_span; }
     inline bool belongs(int chan) const
@@ -88,15 +74,16 @@ public:
 	{ return m_overlapped; }
     inline bool outOfOrder() const
 	{ return !m_ok; }
+    inline int buflen() const
+	{ return m_buflen; }
     int findEmptyChan(int first = 0, int last = 65535) const;
-    WpChan *getChan(int chan) const;
+    PriChan *getChan(int chan) const;
     void idle();
-    static u_int64_t restartPeriod;
-    static bool dumpEvents;
 
-private:
-    PriSpan(struct pri *_pri, int span, int first, int chans, int dchan, int fd, int dplan, int pres, int overlapDial);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int overlapDial, int nsf);
+protected:
+    PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect);
+    virtual PriChan* create(int chan) = 0;
+    void runEvent(bool idleRun);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
     void restartChan(int chan, bool outgoing, bool force = false);
@@ -106,57 +93,57 @@ private:
     void ackChan(int chan);
     void answerChan(int chan);
     void proceedingChan(int chan);
+    PriDriver* m_driver;
     int m_span;
     int m_offs;
     int m_nchans;
     int m_bchans;
-    int m_fd;
     int m_dplan;
     int m_pres;
+    int m_buflen;
     unsigned int m_overlapped;
+    String m_callednumber;
     struct pri *m_pri;
     u_int64_t m_restart;
-    WpChan **m_chans;
-    WpData *m_data;
+    u_int64_t m_restartPeriod;
+    bool m_dumpEvents;
+    PriChan **m_chans;
     bool m_ok;
 };
 
-class WpSource : public DataSource
+class PriSource : public DataSource
 {
 public:
-    WpSource(WpChan *owner,unsigned int bufsize,const char* format);
-    ~WpSource();
-    void put(unsigned char val);
+    PriSource(PriChan *owner, unsigned int bufsize);
+    virtual ~PriSource();
 
-private:
-    WpChan *m_owner;
-    unsigned int m_bufpos;
-    DataBlock m_buf;
-};
-
-class WpConsumer : public DataConsumer, public Fifo
-{
-public:
-    WpConsumer(WpChan *owner,unsigned int bufsize,const char* format);
-    ~WpConsumer();
-
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
-
-private:
-    WpChan *m_owner;
+protected:
+    PriChan *m_owner;
     DataBlock m_buffer;
 };
 
-class PriChan : public DataEndpoint
+class PriConsumer : public DataConsumer
 {
-    friend class WpSource;
-    friend class WpConsumer;
-    friend class WpData;
 public:
-    WpChan(PriSpan *parent, int chan, unsigned int bufsize);
-    virtual ~WpChan();
+    PriConsumer(PriChan *owner, unsigned int bufsize);
+    virtual ~PriConsumer();
+
+protected:
+    PriChan *m_owner;
+    DataBlock m_buffer;
+};
+
+class PriChan : public Channel
+{
+    friend class PriSource;
+    friend class PriConsumer;
+public:
+    virtual ~PriChan();
     virtual void disconnected(bool final, const char *reason);
     virtual bool nativeConnect(DataEndpoint *peer);
+    virtual bool msgDrop(Message& msg, const char* reason);
+    virtual void callAccept(Message& msg);
+    virtual void callReject(const char* error, const char* reason = 0);
     inline PriSpan *span() const
 	{ return m_span; }
     inline int chan() const
@@ -165,8 +152,8 @@ public:
 	{ return m_abschan; }
     inline bool inUse() const
 	{ return (m_ring || m_call); }
-    void ring(q931_call *call = 0);
-    void hangup(int cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED);
+    void ring(pri_event_ring &ev);
+    void hangup(int cause = 0);
     void sendDigit(char digit);
     void gotDigits(const char *digits);
     bool call(Message &msg, const char *called = 0);
@@ -174,93 +161,45 @@ public:
     void answered();
     void idle();
     void restart(bool outgoing = false);
-    bool openData(const char* format);
+    virtual bool openData(const char* format) = 0;
     void closeData();
     inline void setTimeout(u_int64_t tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
-    const char *status() const;
-    const String& id() const
-	{ return m_id; }
+    const char *chanStatus() const;
     bool isISDN() const
 	{ return m_isdn; }
-    inline void setTarget(const char *target = 0)
-	{ m_targetid = target; }
-    inline const String& getTarget() const
-	{ return m_targetid; }
-private:
+protected:
+    PriChan(PriSpan *parent, int chan, unsigned int bufsize);
     PriSpan *m_span;
     int m_chan;
     bool m_ring;
     u_int64_t m_timeout;
-    q931_call *m_call;
+    q931_call* m_call;
     unsigned int m_bufsize;
     int m_abschan;
     bool m_isdn;
-    String m_id;
-    String m_targetid;
-    WpSource* m_wp_s;
-    WpConsumer* m_wp_c;
 };
 
-class WpData : public Thread
-{
-public:
-    WpData(PriSpan* span);
-    ~WpData();
-    virtual void run();
-private:
-    PriSpan* m_span;
-    int m_fd;
-    unsigned char* m_buffer;
-    WpChan **m_chans;
-};
-
-class WpHandler : public MessageHandler
-{
-public:
-    WpHandler() : MessageHandler("call.execute") { }
-    virtual bool received(Message &msg);
-};
-
-class WpDropper : public MessageHandler
-{
-public:
-    WpDropper() : MessageHandler("call.drop") { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler() : MessageHandler("engine.status") { }
-    virtual bool received(Message &msg);
-};
-
-class WpChanHandler : public MessageReceiver
-{
-public:
-    enum {
-	Ringing,
-	Answered,
-	DTMF,
-    };
-    virtual bool received(Message &msg, int id);
-};
-
-class WanpipePlugin : public Plugin
+class PriDriver : public Driver
 {
     friend class PriSpan;
-    friend class WpHandler;
 public:
-    WanpipePlugin();
-    virtual ~WanpipePlugin();
-    virtual void initialize();
+    virtual ~PriDriver();
     virtual bool isBusy() const;
+    virtual void dropAll();
+    virtual bool msgExecute(Message& msg, String& dest);
+    virtual void init(const char* configName);
+    virtual bool create(PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect) = 0;
     PriSpan *findSpan(int chan);
-    WpChan *findChan(const char *id);
-    WpChan *findChan(int first = -1, int last = -1);
+    PriChan *find(int first = -1, int last = -1);
+    static inline u_int8_t bitswap(u_int8_t v)
+	{ return s_bitswap[v]; }
+protected:
+    PriDriver(const char* name);
+private:
     ObjList m_spans;
-    Mutex mutex;
+    static u_int8_t s_bitswap[256];
+    static bool s_init;
 };
 
 }

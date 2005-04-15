@@ -45,6 +45,9 @@
 #include <windows.h>
 #include <io.h>
 
+typedef signed __int8 int8_t;
+typedef unsigned __int8 u_int8_t;
+typedef unsigned __int8 uint8_t;
 typedef signed __int16 int16_t;
 typedef unsigned __int16 u_int16_t;
 typedef unsigned __int16 uint16_t;

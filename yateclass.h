@@ -1935,6 +1935,31 @@ public:
      */
     const char* getValue(const String& name, const char* defvalue = 0) const;
 
+    /**
+     * Retrive the numeric value of a parameter.
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @return The number contained in the named parameter or the default
+     */
+    int getIntValue(const String& name, int defvalue = 0) const;
+
+    /**
+     * Retrive the numeric value of a parameter trying first a table lookup.
+     * @param name Name of parameter to locate
+     * @param tokens A pointer to an array of tokens to try to lookup
+     * @param defvalue Default value to return if not found
+     * @return The number contained in the named parameter or the default
+     */
+    int getIntValue(const String& name, const TokenDict* tokens, int defvalue = 0) const;
+
+    /**
+     * Retrive the boolean value of a parameter.
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @return The boolean value contained in the named parameter or the default
+     */
+    bool getBoolValue(const String& name, bool defvalue = false) const;
+
 private:
     NamedList(); // no default constructor please
     NamedList(const NamedList& value); // no copy constructor

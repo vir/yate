@@ -29,8 +29,12 @@ ifneq (@HAVE_PGSQL@,no)
 PROGS := $(PROGS) pgsqlroute.yate cdrpgsql.yate register.yate
 endif
 
-ifneq (@HAVE_PRI@,no)
+ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
 PROGS := $(PROGS) zapchan.yate
+endif
+
+ifeq (@HAVE_PRI_CB@_@HAVE_WANPIPE@,yes_yes)
+PROGS := $(PROGS) wpchan.yate
 endif
 
 ifneq (@HAVE_H323@,no)
@@ -120,7 +124,11 @@ lib%.so: %.o
 
 # Take special care of the modules that depend on optional libs
 
-zapchan.yate: LOCALFLAGS = -lpri
+zapchan.yate: libypri.o
+zapchan.yate: LOCALFLAGS = libypri.o -lpri
+
+wpchan.yate: libypri.o
+wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
 

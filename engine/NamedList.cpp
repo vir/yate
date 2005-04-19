@@ -108,4 +108,23 @@ const char* NamedList::getValue(const String& name, const char* defvalue) const
     return s ? s->c_str() : defvalue;
 }
 
+int NamedList::getIntValue(const String& name, int defvalue) const
+{
+    const NamedString *s = getParam(name);
+    return s ? s->toInteger(defvalue) : defvalue;
+}
+
+int NamedList::getIntValue(const String& name, const TokenDict* tokens, int defvalue) const
+{
+    const NamedString *s = getParam(name);
+    return s ? s->toInteger(tokens,defvalue) : defvalue;
+}
+
+bool NamedList::getBoolValue(const String& name, bool defvalue) const
+{
+    const NamedString *s = getParam(name);
+    return s ? s->toBoolean(defvalue) : defvalue;
+}
+			
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

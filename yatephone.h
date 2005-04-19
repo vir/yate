@@ -765,9 +765,10 @@ protected:
 	Level      = 0x0004,
 	Command    = 0x0008,
 	Help       = 0x0010,
+	Halt       = 0x0020,
 	// Driver messages
-	Execute    = 0x0020,
-	Drop       = 0x0040,
+	Execute    = 0x0040,
+	Drop       = 0x0080,
 	// Channel messages
 	Ringing    = 0x0100,
 	Answered   = 0x0200,

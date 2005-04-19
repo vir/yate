@@ -226,44 +226,32 @@ unsigned char Fifo::get()
     return tmp;
 }
 
-PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect)
-    : m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
+PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect)
+    : m_driver(driver), m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
       m_pri(_pri), m_restart(0), m_chans(0), m_ok(false)
 {
-    int dchan = -1;
-    // guess where we may have a D channel
-    switch (chans) {
-	case 3:  // BRI ISDN
-	    dchan = 3;
-	    break;
-	case 24: // T1 with CCS
-	    dchan = 24;
-	    break;
-	case 31: // EuroISDN
-	    dchan = 16;
-	    break;
-    }
-    dchan = cfg->getIntValue(sect,"dchan", dchan),
+    Debug(DebugAll,"PriSpan::PriSpan() [%p]",this);
+    int buflength = cfg.getIntValue(sect,"buflen", s_buflen);
 
-    m_dplan = cfg->getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
-    m_pres = cfg->getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
-    m_restartPeriod = cfg->getIntValue(sect,"restart") * (u_int64_t)1000000;
-    m_dumpEvents = cfg->getBoolValue(sect,"dumpevents");
-    m_overlapped = cfg->getIntValue(sect,"overlapdial");
+    m_dplan = cfg.getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
+    m_pres = cfg.getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
+    m_restartPeriod = cfg.getIntValue(sect,"restart") * (u_int64_t)1000000;
+    m_dumpEvents = cfg.getBoolValue(sect,"dumpevents");
+    m_overlapped = cfg.getIntValue(sect,"overlapdial");
     if (m_overlapped < 0)
 	m_overlapped = 0;
 #ifdef PRI_SET_OVERLAPDIAL
     ::pri_set_overlapdial(m_pri, (m_overlapped > 0));
 #endif
 #ifdef PRI_NSF_NONE
-    ::pri_set_nsf(m_pri,cfg->getIntValue(sect,"facilities",dict_str2nsf,YATE_NSF_DEFAULT));
+    ::pri_set_nsf(m_pri,cfg.getIntValue(sect,"facilities",dict_str2nsf,YATE_NSF_DEFAULT));
 #endif
     ::pri_set_userdata(m_pri, this);
 
     PriChan **ch = new PriChan* [chans];
     for (int i = 1; i <= chans; i++) {
 	if (i != dchan) {
-	    ch[i-1] = create(i);
+	    ch[i-1] = m_driver->createChan(this,i,buflength);
 	    m_bchans++;
 	}
 	else
@@ -535,11 +523,12 @@ PriConsumer::~PriConsumer()
     Debug(DebugAll,"PriConsumer::~PriConsumer() [%p]",this);
 }
 
-PriChan::PriChan(PriSpan *parent, int chan, unsigned int bufsize)
-    : Channel(parent->driver()), m_span(parent), m_chan(chan), m_ring(false),
+PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
+    : Channel(parent->driver()),
+      m_span(const_cast<PriSpan*>(parent)), m_chan(chan), m_ring(false),
       m_timeout(0), m_call(0), m_bufsize(bufsize)
 {
-    Debug(DebugAll,"PriChan::PriChan(%p,%d) [%p]",parent,chan,this);
+    Debug(DebugAll,"PriChan::PriChan(%p,%d,%u) [%p]",parent,chan,bufsize,this);
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
     m_isdn = true;
@@ -702,12 +691,12 @@ bool PriChan::call(Message &msg, const char *called)
 	called = msg.getValue("called");
     Debug("PriChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
-    int layer1 = lookup(msg.getValue("format"),dict_str2law,-1);
+    int layer1 = msg.getIntValue("format",dict_str2law,-1);
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
     Channel *ch = static_cast<Channel *>(msg.userData());
     if (ch) {
-	openData(lookup(layer1,dict_str2law));
+	openData(lookup(layer1,dict_str2law),msg.getBoolValue("cancelecho"));
 	connect(ch);
 	m_targetid = msg.getValue("id");
 	msg.addParam("targetid",id());
@@ -716,10 +705,10 @@ bool PriChan::call(Message &msg, const char *called)
 	msg.userData(this);
     Output("Calling '%s' on %s (%d/%d)",called,id().c_str(),m_span->span(),m_chan);
     char *caller = (char *)msg.getValue("caller");
-    int callerplan = lookup(msg.getValue("callerplan"),dict_str2dplan,m_span->dplan());
+    int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
-    int callerpres = lookup(msg.getValue("callerpres"),dict_str2pres,m_span->pres());
-    int calledplan = lookup(msg.getValue("calledplan"),dict_str2dplan,m_span->dplan());
+    int callerpres = msg.getIntValue("callerpres",dict_str2pres,m_span->pres());
+    int calledplan = msg.getIntValue("calledplan",dict_str2dplan,m_span->dplan());
     Debug(DebugAll,"Caller='%s' name='%s' plan=%s pres=%s, Called plan=%s",
 	caller,callername,lookup(callerplan,dict_str2dplan),
 	lookup(callerpres,dict_str2pres),lookup(calledplan,dict_str2dplan));
@@ -943,10 +932,33 @@ bool PriDriver::isBusy() const
     return false;
 }
 
+void PriDriver::netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan)
+{
+    if (netType)
+	*netType = cfg.getIntValue(sect,"type",dict_str2type,PRI_NETWORK);
+    if (swType)
+	*swType = cfg.getIntValue(sect,"swtype",dict_str2switch,PRI_SWITCH_UNKNOWN);
+    if (dChan) {
+	int dchan = -1;
+	// guess where we may have a D channel
+	switch (chans) {
+	    case 3:  // BRI ISDN
+		dchan = 3;
+		break;
+	    case 24: // T1 with CCS
+		dchan = 24;
+		break;
+	    case 31: // EuroISDN
+		dchan = 16;
+		break;
+	}
+	*dChan = cfg.getIntValue(sect,"dchan", dchan);
+    }
+}
+
 void PriDriver::init(const char* configName)
 {
-    Output("Initializing module Wanpipe");
-    Configuration cfg(Engine::configFile("configName"));
+    Configuration cfg(Engine::configFile(configName));
     s_buflen = cfg.getIntValue("general","buflen",480);
     if (!m_spans.count()) {
 	int chan1 = 1;
@@ -958,7 +970,7 @@ void PriDriver::init(const char* configName)
 		break;
 	    if (num) {
 		chan1 = cfg.getIntValue(sect,"first",chan1);
-		create(this,span,chan1,num,&cfg,sect);
+		createSpan(this,span,chan1,num,cfg,sect);
 		chan1 += num;
 	    }
 	}

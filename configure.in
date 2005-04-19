@@ -141,14 +141,47 @@ AC_SUBST(HAVE_PGSQL)
 AC_SUBST(PGSQL_INC)
 
 HAVE_PRI=no
+HAVE_PRI_CB=no
 AC_ARG_WITH(libpri,AC_HELP_STRING([--with-libpri],[use ISDN PRI if available (default)]),[ac_cv_use_libpri=$withval],[ac_cv_use_libpri=yes])
 if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
 AC_CHECK_HEADER(libpri.h, , [ac_cv_use_libpri=no])
 fi
 if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
 AC_CHECK_LIB([pri], [pri_new], [HAVE_PRI=yes])
+if [[ "x$HAVE_PRI" = "xyes" ]]; then
+AC_CHECK_LIB([pri], [pri_new_cb], [HAVE_PRI_CB=yes])
+fi
 fi
 AC_SUBST(HAVE_PRI)
+AC_SUBST(HAVE_PRI_CB)
+
+HAVE_ZAP=no
+AC_MSG_CHECKING([for Zaptel linux headers])
+AC_TRY_COMPILE([
+#include <linux/zaptel.h>
+],[],
+HAVE_ZAP="yes"
+)
+AC_MSG_RESULT([$HAVE_ZAP])
+AC_SUBST(HAVE_ZAP)
+
+HAVE_WANPIPE=no
+AC_MSG_CHECKING([for Wanpipe linux headers])
+AC_TRY_COMPILE([
+#define __LINUX__
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <linux/if_wanpipe.h>
+#include <linux/if.h>
+#include <linux/wanpipe.h>
+#include <linux/sdla_bitstrm.h>
+],[],
+HAVE_WANPIPE="yes"
+)
+AC_MSG_RESULT([$HAVE_WANPIPE])
+AC_SUBST(HAVE_WANPIPE)
 
 HAVE_GSM=no
 GSM_INC=""

@@ -81,8 +81,7 @@ public:
     void idle();
 
 protected:
-    PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect);
-    virtual PriChan* create(int chan) = 0;
+    PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect);
     void runEvent(bool idleRun);
     void handleEvent(pri_event &ev);
     bool validChan(int chan) const;
@@ -161,7 +160,7 @@ public:
     void answered();
     void idle();
     void restart(bool outgoing = false);
-    virtual bool openData(const char* format) = 0;
+    virtual bool openData(const char* format, bool cancelEcho = false) = 0;
     void closeData();
     inline void setTimeout(u_int64_t tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
@@ -169,7 +168,7 @@ public:
     bool isISDN() const
 	{ return m_isdn; }
 protected:
-    PriChan(PriSpan *parent, int chan, unsigned int bufsize);
+    PriChan(const PriSpan *parent, int chan, unsigned int bufsize);
     PriSpan *m_span;
     int m_chan;
     bool m_ring;
@@ -189,7 +188,9 @@ public:
     virtual void dropAll();
     virtual bool msgExecute(Message& msg, String& dest);
     virtual void init(const char* configName);
-    virtual bool create(PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect) = 0;
+    virtual PriSpan* createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect) = 0;
+    virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize) = 0;
+    static void netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan);
     PriSpan *findSpan(int chan);
     PriChan *find(int first = -1, int last = -1);
     static inline u_int8_t bitswap(u_int8_t v)

@@ -285,7 +285,7 @@ DataEndpoint* Channel::setEndpoint(const char* type)
 
 void Channel::setSource(DataSource* source, const char* type)
 {
-    DataEndpoint* dat = setEndpoint(type);
+    DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);
     if (dat)
 	dat->setSource(source);
 }
@@ -298,7 +298,7 @@ DataSource* Channel::getSource(const char* type) const
 
 void Channel::setConsumer(DataConsumer* consumer, const char* type)
 {
-    DataEndpoint* dat = setEndpoint(type);
+    DataEndpoint* dat = consumer ? setEndpoint(type) : getEndpoint(type);
     if (dat)
 	dat->setConsumer(consumer);
 }
@@ -316,6 +316,7 @@ TokenDict Module::s_messages[] = {
     { "module.debug",    Module::Level },
     { "engine.command",  Module::Command },
     { "engine.help",     Module::Help },
+    { "engine.halt",     Module::Halt },
     { "call.execute",    Module::Execute },
     { "call.drop",       Module::Drop },
     { "call.ringing",    Module::Ringing },

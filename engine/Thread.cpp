@@ -79,7 +79,7 @@ static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
 #endif
 
 ObjList threads;
-Mutex tmutex;
+Mutex tmutex(true);
 
 ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
 {
@@ -167,7 +167,6 @@ void ThreadPrivate::pubdestroy()
     }
     else {
 	cancel(false);
-	bool done = false;
 	// delay a little so thread has a chance to clean up
 	for (int i=0; i<20; i++) {
 	    tmutex.lock();

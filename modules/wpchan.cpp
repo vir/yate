@@ -51,26 +51,18 @@ extern "C" {
 
 using namespace TelEngine;
 
-/* Layer 1 formats */
-static TokenDict dict_str2law[] = {
-    { "mulaw", PRI_LAYER_1_ULAW },
-    { "alaw", PRI_LAYER_1_ALAW },
-    { "g721", PRI_LAYER_1_G721 },
-    { 0, -1 }
-};
-
 class WpChan;
 
 class WpSpan : public PriSpan, public Thread
 {
     friend class WpData;
+    friend class WpDriver;
 public:
     virtual ~WpSpan();
     virtual void run();
 
 private:
-    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect, int fd);
-    static struct pri *makePri(int fd, int dchan, int nettype, int swtype, int overlapDial, int nsf);
+    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd);
     int m_fd;
     WpData *m_data;
 };
@@ -101,11 +93,9 @@ class WpChan : public PriChan
     friend class WpConsumer;
     friend class WpData;
 public:
-    WpChan(PriSpan *parent, int chan, unsigned int bufsize);
+    WpChan(const PriSpan *parent, int chan, unsigned int bufsize);
     virtual ~WpChan();
-    virtual void disconnected(bool final, const char *reason);
-    virtual bool nativeConnect(DataEndpoint *peer);
-    bool openData(const char* format);
+    bool openData(const char* format, bool cancelEcho);
 
 private:
     WpSource* m_wp_s;
@@ -115,7 +105,7 @@ private:
 class WpData : public Thread
 {
 public:
-    WpData(WpSpan* span);
+    WpData(WpSpan* span, const char* card, const char* device);
     ~WpData();
     virtual void run();
 private:
@@ -133,10 +123,9 @@ public:
     WpDriver();
     virtual ~WpDriver();
     virtual void initialize();
-    virtual bool create(PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect);
+    virtual PriSpan* createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect);
+    virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize);
 };
-
-WpDriver wdriver;
 
 #define WP_HEADER 16
 
@@ -176,62 +165,41 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
     return w;
 }
 
-bool WpDriver::create(PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect)
+static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
 {
-}
-
-
-virtual PriChan* WpSpan::create(int chan)
-{
-    return new WpChan(this,chan,m_bufsize)
-}
-
-PriSpan *PriSpan::create(int span, int chan1, int nChans, int dChan, int netType,
-			 int switchType, int dialPlan, int presentation,
-			 int overlapDial, int nsf)
-{
-    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd < 0)
+    DDebug(DebugAll,"wp_create('%s','%s',%d,%d)",card,device,nettype,swtype);
+    if (null(card) || null(device))
 	return 0;
-    struct pri *p = makePri(fd,
-	(dChan >= 0) ? dChan+chan1-1 : -1,
-	netType,
-	switchType, overlapDial, nsf);
-    if (!p) {
+    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
+    if (fd < 0) {
+	Debug(DebugGoOn,"Wanpipe failed to create socket: error %d: %s",
+	    errno,::strerror(errno));
+	return 0;
+    }
+    // Set up the D channel
+    struct wan_sockaddr_ll sa;
+    memset(&sa,0,sizeof(struct wan_sockaddr_ll));
+    ::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
+    ::strncpy((char*)sa.sll_card,card,sizeof(sa.sll_card));
+    sa.sll_protocol = htons(PVC_PROT);
+    sa.sll_family=AF_WANPIPE;
+    if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+	Debug(DebugGoOn,"Wanpipe failed to bind %d: error %d: %s",
+	    fd,errno,::strerror(errno));
 	::close(fd);
 	return 0;
     }
-    WpSpan *ps = new WpSpan(p,span,chan1,nChans,dChan,fd);
-    ps->startup();
-    return ps;
+    struct pri* p = ::pri_new_cb(fd, nettype, swtype, wp_read, wp_write, 0);
+    if (!p)
+	::close(fd);
+    return p;
 }
 
-struct pri *PriSpan::makePri(int fd, int dchan, int nettype, int swtype)
-{
-    if (dchan >= 0) {
-	// Set up the D channel if we have one
-	struct wan_sockaddr_ll sa;
-	memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-	::strcpy( (char*)sa.sll_device, "w1g2");
-	::strcpy( (char*)sa.sll_card, "wanpipe1");
-	sa.sll_protocol = htons(PVC_PROT);
-	sa.sll_family=AF_WANPIPE;
-	if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	    Debug("PriSpan",DebugGoOn,"Failed to bind %d: error %d: %s",
-		fd,errno,::strerror(errno));
-	    return 0;
-	}
-    }
-    return ::pri_new_cb(fd, nettype, swtype, wp_read, wp_write, 0);
-}
-
-WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, Configuration* cfg, const String& sect, int fd)
-    : PriSpan(_pri,driver,span,first,chans,cfg,sect), Thread("WpSpan"),
+WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd)
+    : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
       m_fd(fd), m_data(0)
 {
-    Debug(DebugAll,"PriSpan::PriSpan() [%p]",this);
-    WpData* dat = new WpData(this);
-    dat->startup();
+    Debug(DebugAll,"WpSpan::WpSpan() [%p]",this);
 }
 
 WpSpan::~WpSpan()
@@ -245,7 +213,7 @@ WpSpan::~WpSpan()
 
 void WpSpan::run()
 {
-    Debug(DebugAll,"PriSpan::run() [%p]",this);
+    Debug(DebugAll,"WpSpan::run() [%p]",this);
     fd_set rdfds;
     fd_set errfds;
     for (;;) {
@@ -257,7 +225,7 @@ void WpSpan::run()
 	tv.tv_sec = 0;
 	tv.tv_usec = 100;
 	int sel = ::select(m_fd+1, &rdfds, NULL, &errfds, &tv);
-	pri_event *ev = 0;
+	Thread::check();
 	if (!sel)
 	    runEvent(true);
 	else if (sel > 0)
@@ -311,7 +279,7 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	put(buf[i]);
 }
 
-WpData::WpData(WpSpan* span)
+WpData::WpData(WpSpan* span, const char* card, const char* device)
     : Thread("WpData"), m_span(span), m_fd(-1), m_buffer(0), m_chans(0)
 {
     Debug(DebugAll,"WpData::WpData(%p) [%p]",span,this);
@@ -320,12 +288,12 @@ WpData::WpData(WpSpan* span)
 	// Set up the B channel group
 	struct wan_sockaddr_ll sa;
 	memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-	::strcpy( (char*)sa.sll_device, "w1g1");
-	::strcpy( (char*)sa.sll_card, "wanpipe1");
+	::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
+	::strncpy((char*)sa.sll_card,card,sizeof(sa.sll_card));
 	sa.sll_protocol = htons(PVC_PROT);
 	sa.sll_family=AF_WANPIPE;
 	if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	    Debug("PriSpan",DebugGoOn,"Failed to bind %d: error %d: %s",
+	    Debug("WpData",DebugGoOn,"Failed to bind %d: error %d: %s",
 		fd,errno,::strerror(errno));
 	    ::close(fd);
 	}
@@ -362,16 +330,20 @@ void WpData::run()
     for (int n = 0; n < bchans; n++) {
 	while (!m_span->m_chans[b])
 	    b++;
-	m_chans[n] = m_span->m_chans[b++];
+	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
 	DDebug("wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
     fd_set rdfds,oobfds;
     while (m_span && (m_fd >= 0)) {
+	Thread::check();
 	FD_ZERO(&rdfds);
 	FD_ZERO(&oobfds);
 	FD_SET(m_fd, &rdfds);
 	FD_SET(m_fd, &oobfds);
-	if (::select(m_fd+1, &rdfds, NULL, &oobfds, NULL) <= 0)
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = 100;
+	if (::select(m_fd+1, &rdfds, NULL, &oobfds, &tv) <= 0)
 	    continue;
 
 	if (FD_ISSET(m_fd, &oobfds)) {
@@ -389,7 +361,7 @@ void WpData::run()
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;
 		const unsigned char* dat = m_buffer + WP_HEADER;
-		wplugin.mutex.lock();
+		m_span->driver()->lock();
 		for (int n = r; n > 0; n--)
 		    for (b = 0; b < bchans; b++) {
 			WpSource *s = m_chans[b]->m_wp_s;
@@ -397,19 +369,19 @@ void WpData::run()
 			    s->put(PriDriver::bitswap(*dat));
 			dat++;
 		    }
-		wplugin.mutex.unlock();
+		m_span->driver()->unlock();
 	    }
 	    int w = samp;
 	    ::memset(m_buffer,0,WP_HEADER);
 	    unsigned char* dat = m_buffer + WP_HEADER;
-	    wplugin.mutex.lock();
+	    m_span->driver()->lock();
 	    for (int n = w; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
-	    wplugin.mutex.unlock();
+	    m_span->driver()->unlock();
 	    w = (w * bchans) + WP_HEADER;
 	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,w,sz);
 	    w = ::send(m_fd,m_buffer,w,MSG_DONTWAIT);
@@ -418,13 +390,60 @@ void WpData::run()
     }
 }
 
-bool WpChan::openData(const char* format)
+WpChan::WpChan(const PriSpan *parent, int chan, unsigned int bufsize)
+    : PriChan(parent,chan,bufsize), m_wp_s(0), m_wp_c(0)
 {
+}
+
+WpChan::~WpChan()
+{
+    closeData();
+}
+
+bool WpChan::openData(const char* format, bool cancelEcho)
+{
+    if (cancelEcho)
+	Debug(DebugWarn,"Echo cancellation requested but not available in wanpipe");
     setSource(new WpSource(this,m_bufsize,format));
     getSource()->deref();
     setConsumer(new WpConsumer(this,m_bufsize,format));
     getConsumer()->deref();
     return true;
+}
+
+PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
+{
+    Debug(DebugAll,"WpDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
+    int netType = -1;
+    int swType = -1;
+    int dchan = -1;
+    netParams(cfg,sect,chans,&netType,&swType,&dchan);
+    String card;
+    card << "wanpipe" << span;
+    card = cfg.getValue(sect,"card",card);
+    String dev;
+    dev << "w" << span << "g2";
+    pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
+    if (!p)
+	return 0;
+    Debug(DebugAll,"WpDriver::createSpan #1");
+    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,::pri_fd(p));
+    Debug(DebugAll,"WpDriver::createSpan #2");
+    ps->startup();
+    dev.clear();
+    dev << "w" << span << "g1";
+    Debug(DebugAll,"WpDriver::createSpan #3");
+    WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
+    Debug(DebugAll,"WpDriver::createSpan #4");
+    dat->startup();
+    Debug(DebugAll,"WpDriver::createSpan #5");
+    return ps;
+}
+
+PriChan* WpDriver::createChan(const PriSpan* span, int chan, unsigned int bufsize)
+{
+    Debug(DebugAll,"WpDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
+    return new WpChan(span,chan,bufsize);
 }
 
 WpDriver::WpDriver()
@@ -443,5 +462,7 @@ void WpDriver::initialize()
     Output("Initializing module Wanpipe");
     init("wpchan");
 }
+
+INIT_PLUGIN(WpDriver);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

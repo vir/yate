@@ -166,6 +166,15 @@ static TokenDict dict_str2law[] = {
     { 0, -1 }
 };
 
+/* Echo canceller taps */
+static TokenDict dict_numtaps[] = {
+    { "on", 1 },
+    { "yes", 1 },
+    { "true", 1 },
+    { "enable", 1 },
+    { 0, 0 }
+};
+
 Fifo::Fifo(int buflen)
     : m_buflen(buflen), m_head(0), m_tail(1)
 {
@@ -484,11 +493,11 @@ void PriSpan::proceedingChan(int chan)
     getChan(chan)->setTimeout(60000000);
 }
 
-PriSource::PriSource(PriChan *owner, unsigned int bufsize)
-    : DataSource(0),
+PriSource::PriSource(PriChan *owner, const char* format, unsigned int bufsize)
+    : DataSource(format),
       m_owner(owner), m_buffer(0,bufsize)
 {
-    Debug(DebugAll,"PriSource::PriSource(%p) [%p]",owner,this);
+    Debug(DebugAll,"PriSource::PriSource(%p,'%s',%u) [%p]",owner,format,bufsize,this);
 }
 
 PriSource::~PriSource()
@@ -496,11 +505,11 @@ PriSource::~PriSource()
     Debug(DebugAll,"PriSource::~PriSource() [%p]",this);
 }
 
-PriConsumer::PriConsumer(PriChan *owner, unsigned int bufsize)
-    : DataConsumer(0),
+PriConsumer::PriConsumer(PriChan *owner, const char* format, unsigned int bufsize)
+    : DataConsumer(format),
       m_owner(owner), m_buffer(0,bufsize)
 {
-    Debug(DebugAll,"PriConsumer::PriConsumer(%p) [%p]",owner,this);
+    Debug(DebugAll,"PriConsumer::PriConsumer(%p,'%s',%u) [%p]",owner,format,bufsize,this);
 }
 
 PriConsumer::~PriConsumer()
@@ -681,7 +690,7 @@ bool PriChan::call(Message &msg, const char *called)
     setOutgoing(true);
     Channel *ch = static_cast<Channel *>(msg.userData());
     if (ch) {
-	openData(lookup(layer1,dict_str2law),msg.getBoolValue("cancelecho"));
+	openData(lookup(layer1,dict_str2law),msg.getIntValue("cancelecho",dict_numtaps));
 	connect(ch);
 	m_targetid = msg.getValue("id");
 	msg.addParam("targetid",id());

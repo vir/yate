@@ -113,7 +113,7 @@ protected:
 class PriSource : public DataSource
 {
 public:
-    PriSource(PriChan *owner, unsigned int bufsize);
+    PriSource(PriChan *owner, const char* format, unsigned int bufsize);
     virtual ~PriSource();
 
 protected:
@@ -124,7 +124,7 @@ protected:
 class PriConsumer : public DataConsumer
 {
 public:
-    PriConsumer(PriChan *owner, unsigned int bufsize);
+    PriConsumer(PriChan *owner, const char* format, unsigned int bufsize);
     virtual ~PriConsumer();
 
 protected:
@@ -160,8 +160,8 @@ public:
     void answered();
     void idle();
     void restart(bool outgoing = false);
-    virtual bool openData(const char* format, bool cancelEcho = false) = 0;
-    void closeData();
+    virtual bool openData(const char* format, int echoTaps = 0) = 0;
+    virtual void closeData();
     inline void setTimeout(u_int64_t tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
     const char *chanStatus() const;

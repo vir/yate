@@ -26,8 +26,6 @@
 
 extern "C" {
 
-#include <libpri.h>
-
 #ifndef _WINDOWS
 #define __LINUX__
 #include <linux/if_wanpipe.h>
@@ -70,7 +68,7 @@ private:
 class WpSource : public PriSource
 {
 public:
-    WpSource(WpChan *owner,unsigned int bufsize,const char* format);
+    WpSource(WpChan *owner, const char* format, unsigned int bufsize);
     ~WpSource();
     void put(unsigned char val);
 
@@ -81,7 +79,7 @@ private:
 class WpConsumer : public PriConsumer, public Fifo
 {
 public:
-    WpConsumer(WpChan *owner,unsigned int bufsize,const char* format);
+    WpConsumer(WpChan *owner, const char* format, unsigned int bufsize);
     ~WpConsumer();
 
     virtual void Consume(const DataBlock &data, unsigned long timeDelta);
@@ -95,7 +93,7 @@ class WpChan : public PriChan
 public:
     WpChan(const PriSpan *parent, int chan, unsigned int bufsize);
     virtual ~WpChan();
-    bool openData(const char* format, bool cancelEcho);
+    bool openData(const char* format, int echoTaps);
 
 private:
     WpSource* m_wp_s;
@@ -236,8 +234,8 @@ void WpSpan::run()
     }
 }
 
-WpSource::WpSource(WpChan *owner,unsigned int bufsize,const char* format)
-    : PriSource(owner,bufsize),
+WpSource::WpSource(WpChan *owner, const char* format, unsigned int bufsize)
+    : PriSource(owner,format,bufsize),
       m_bufpos(0)
 {
     Debug(DebugAll,"WpSource::WpSource(%p) [%p]",owner,this);
@@ -259,8 +257,8 @@ void WpSource::put(unsigned char val)
     }
 }
 
-WpConsumer::WpConsumer(WpChan *owner,unsigned int bufsize,const char* format)
-    : PriConsumer(owner,bufsize), Fifo(2*bufsize)
+WpConsumer::WpConsumer(WpChan *owner, const char* format, unsigned int bufsize)
+    : PriConsumer(owner,format,bufsize), Fifo(2*bufsize)
 {
     Debug(DebugAll,"WpConsumer::WpConsumer(%p) [%p]",owner,this);
     static_cast<WpChan*>(m_owner)->m_wp_c = this;
@@ -400,13 +398,13 @@ WpChan::~WpChan()
     closeData();
 }
 
-bool WpChan::openData(const char* format, bool cancelEcho)
+bool WpChan::openData(const char* format, int echoTaps)
 {
-    if (cancelEcho)
+    if (echoTaps)
 	Debug(DebugWarn,"Echo cancellation requested but not available in wanpipe");
-    setSource(new WpSource(this,m_bufsize,format));
+    setSource(new WpSource(this,format,m_bufsize));
     getSource()->deref();
-    setConsumer(new WpConsumer(this,m_bufsize,format));
+    setConsumer(new WpConsumer(this,format,m_bufsize));
     getConsumer()->deref();
     return true;
 }
@@ -426,17 +424,12 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
     if (!p)
 	return 0;
-    Debug(DebugAll,"WpDriver::createSpan #1");
     WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,::pri_fd(p));
-    Debug(DebugAll,"WpDriver::createSpan #2");
     ps->startup();
     dev.clear();
     dev << "w" << span << "g1";
-    Debug(DebugAll,"WpDriver::createSpan #3");
     WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
-    Debug(DebugAll,"WpDriver::createSpan #4");
     dat->startup();
-    Debug(DebugAll,"WpDriver::createSpan #5");
     return ps;
 }
 

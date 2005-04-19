@@ -25,28 +25,13 @@
 #include <modules/libypri.h>
 
 extern "C" {
-
 extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
-
-#ifndef _WINDOWS
-#define __LINUX__
-#include <linux/if_wanpipe.h>
-#include <linux/if.h>
-#include <linux/wanpipe.h>
-#include <linux/sdla_bitstrm.h>
-#endif
-
 };
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-
-#ifndef _WINDOWS
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#endif
 
 
 using namespace TelEngine;

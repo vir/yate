@@ -76,6 +76,8 @@ public:
 	{ return !m_ok; }
     inline int buflen() const
 	{ return m_buflen; }
+    inline int layer1() const
+	{ return m_layer1; }
     int findEmptyChan(int first = 0, int last = 65535) const;
     PriChan *getChan(int chan) const;
     void idle();
@@ -100,6 +102,7 @@ protected:
     int m_dplan;
     int m_pres;
     int m_buflen;
+    int m_layer1;
     unsigned int m_overlapped;
     String m_callednumber;
     struct pri *m_pri;

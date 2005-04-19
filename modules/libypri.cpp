@@ -227,6 +227,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     Debug(DebugAll,"PriSpan::PriSpan() [%p]",this);
     int buflength = cfg.getIntValue(sect,"buflen", s_buflen);
 
+    m_layer1 = cfg.getIntValue(sect,"format",dict_str2law,(chans == 24) ? PRI_LAYER_1_ULAW : PRI_LAYER_1_ALAW);
     m_dplan = cfg.getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
     m_pres = cfg.getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
     m_restartPeriod = cfg.getIntValue(sect,"restart") * (u_int64_t)1000000;
@@ -685,7 +686,7 @@ bool PriChan::call(Message &msg, const char *called)
 	called = msg.getValue("called");
     Debug("PriChan",DebugInfo,"Calling '%s' on channel %d span %d",
 	called, m_chan,m_span->span());
-    int layer1 = msg.getIntValue("format",dict_str2law,-1);
+    int layer1 = msg.getIntValue("format",dict_str2law,m_span->layer1());
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
     Channel *ch = static_cast<Channel *>(msg.userData());

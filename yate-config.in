@@ -33,7 +33,7 @@ while [ "$#" != 0 ]; do
 	--ldflags)
 	    echo "$s3"
 	    ;;
-	--libss)
+	--libs)
 	    echo "$s4"
 	    ;;
 	--ld-all)

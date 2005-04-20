@@ -235,7 +235,7 @@ int Engine::run()
     WSADATA wsaData;
     int errc = ::WSAStartup(MAKEWORD(2,2), &wsaData);
     if (errc) {
-	Debug(DebugFail,"Failed to initialize the WIndows SOckets library, error code %d",errc);
+	Debug(DebugFail,"Failed to initialize the WIndows Sockets library, error code %d",errc);
 	return errc & 127;
     }
 #endif

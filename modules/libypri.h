@@ -165,6 +165,7 @@ public:
     void restart(bool outgoing = false);
     virtual bool openData(const char* format, int echoTaps = 0) = 0;
     virtual void closeData();
+    virtual void goneUp();
     inline void setTimeout(u_int64_t tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
     const char *chanStatus() const;

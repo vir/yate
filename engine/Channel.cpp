@@ -494,6 +494,7 @@ bool Module::setDebug(Message& msg, const String& target)
 Driver::Driver(const char* name, const char* type)
     : Module(name,type), m_init(false), m_routing(0), m_routed(0), m_nextid(0)
 {
+    m_prefix << name << "/";
 }
 
 void* Driver::getObject(const String& name) const

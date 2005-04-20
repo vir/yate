@@ -314,6 +314,11 @@ void PriSpan::handleEvent(pri_event &ev)
 	    Debug(DebugInfo,"D-channel up on span %d",m_span);
 	    m_ok = true;
 	    m_restart = Time::now() + 1000000;
+	    {
+		for (int i=0; i<m_nchans; i++)
+		    if (m_chans[i])
+			m_chans[i]->goneUp();
+	    }
 	    break;
 	case PRI_EVENT_DCHAN_DOWN:
 	    Debug(DebugWarn,"D-channel down on span %d",m_span);
@@ -527,6 +532,8 @@ PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
     m_isdn = true;
+    m_address << m_span->span() << "/" << m_chan;
+    status(chanStatus());
 }
 
 PriChan::~PriChan()
@@ -605,9 +612,15 @@ bool PriChan::answer()
     }
     m_ring = false;
     m_timeout = 0;
+    status(chanStatus());
     Output("Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     ::pri_answer(m_span->pri(),(q931_call*)m_call,m_chan,!m_isdn);
     return true;
+}
+
+void PriChan::goneUp()
+{
+    status(chanStatus());
 }
 
 void PriChan::hangup(int cause)
@@ -635,6 +648,7 @@ void PriChan::hangup(int cause)
 	m->addParam("reason",pri_cause2str(cause));
 	Engine::enqueue(m);
     }
+    status(chanStatus());
 }
 
 void PriChan::answered()
@@ -645,6 +659,7 @@ void PriChan::answered()
 	return;
     }
     m_timeout = 0;
+    status(chanStatus());
     Output("Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     Message *m = new Message("call.answered");
     m->addParam("driver","wp");
@@ -721,6 +736,7 @@ bool PriChan::call(Message &msg, const char *called)
     );
 #endif
     setTimeout(10000000);
+    status(chanStatus());
     Message *m = new Message("chan.startup");
     m->addParam("driver","wp");
     m->addParam("id",id());
@@ -739,6 +755,7 @@ void PriChan::ring(pri_event_ring &ev)
 	setOutgoing(false);
 	m_call = call;
 	m_ring = true;
+	status(chanStatus());
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
 	Message *m = message("chan.startup");
 	m->addParam("driver","wp");

@@ -518,6 +518,7 @@ void Driver::setup(const char* prefix, bool minimal)
     m_prefix = prefix ? prefix : name().c_str();
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
+    Debug(DebugAll,"setup name='%s' prefix='%s'",name().c_str(),m_prefix.c_str());
     installRelay(Masquerade,10);
     installRelay(Locate);
     installRelay(Execute);
@@ -564,6 +565,7 @@ bool Driver::received(Message &msg, int id)
 	    dest = msg.getValue("targetid");
 	    break;
     }
+    Debug(DebugAll,"id=%d prefix='%s' dest='%s'",id,m_prefix.c_str(),dest.c_str());
 
     if ((id == Drop) && (dest.null() || (dest == name()) || (dest == type()))) {
 	dropAll();

@@ -143,6 +143,10 @@ public:
     virtual ~PriChan();
     virtual void disconnected(bool final, const char *reason);
     virtual bool nativeConnect(DataEndpoint *peer);
+    virtual bool msgRinging(Message& msg);
+    virtual bool msgAnswered(Message& msg);
+    virtual bool msgTone(Message& msg, const char* tone);
+    virtual bool msgText(Message& msg, const char* text);
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual void callAccept(Message& msg);
     virtual void callReject(const char* error, const char* reason = 0);

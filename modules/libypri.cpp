@@ -546,16 +546,11 @@ void PriChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("PriChan::disconnected()", " '%s' [%p]",reason,this);
     if (!final) {
-	Message m("chan.disconnected");
-	m.addParam("driver","wp");
-	m.addParam("id",id());
-	m.addParam("span",String(m_span->span()));
-	m.addParam("channel",String(m_chan));
-	if (m_targetid) {
-	    m.addParam("targetid",m_targetid);
-	    m_targetid.clear();
-	}
-	m.addParam("reason",reason);
+	Message* m = message("chan.disconnected");
+	m_targetid.clear();
+	m->addParam("span",String(m_span->span()));
+	m->addParam("channel",String(m_chan));
+	m->addParam("reason",reason);
 	Engine::enqueue(m);
     }
     driver()->lock();
@@ -640,9 +635,7 @@ void PriChan::hangup(int cause)
 	::pri_hangup(m_span->pri(),(q931_call*)m_call,cause);
 	::pri_destroycall(m_span->pri(),(q931_call*)m_call);
 	m_call = 0;
-	Message *m = new Message("chan.hangup");
-	m->addParam("driver","wp");
-	m->addParam("id",id());
+	Message *m = message("chan.hangup");
 	m->addParam("span",String(m_span->span()));
 	m->addParam("channel",String(m_chan));
 	m->addParam("reason",pri_cause2str(cause));
@@ -661,26 +654,17 @@ void PriChan::answered()
     m_timeout = 0;
     status(chanStatus());
     Output("Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
-    Message *m = new Message("call.answered");
-    m->addParam("driver","wp");
-    m->addParam("id",id());
+    Message *m = message("call.answered");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
-    if (m_targetid)
-	m->addParam("targetid",m_targetid);
-    m->addParam("status","answered");
     Engine::enqueue(m);
 }
 
 void PriChan::gotDigits(const char *digits)
 {
-    Message *m = new Message("chan.dtmf");
-    m->addParam("driver","wp");
-    m->addParam("id",id());
+    Message *m = message("chan.dtmf");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
-    if (m_targetid)
-	m->addParam("targetid",m_targetid);
     m->addParam("text",digits);
     Engine::enqueue(m);
 }
@@ -737,9 +721,7 @@ bool PriChan::call(Message &msg, const char *called)
 #endif
     setTimeout(10000000);
     status(chanStatus());
-    Message *m = new Message("chan.startup");
-    m->addParam("driver","wp");
-    m->addParam("id",id());
+    Message *m = message("chan.startup");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     m->addParam("direction","outgoing");
@@ -758,8 +740,6 @@ void PriChan::ring(pri_event_ring &ev)
 	status(chanStatus());
 	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
 	Message *m = message("chan.startup");
-	m->addParam("driver","wp");
-	m->addParam("id",id());
 	m->addParam("span",String(m_span->span()));
 	m->addParam("channel",String(m_chan));
 	m->addParam("direction","incoming");
@@ -802,6 +782,30 @@ void PriChan::callReject(const char* error, const char* reason)
 {
     int cause = lookup(error,dict_str2cause,PRI_CAUSE_NETWORK_OUT_OF_ORDER);
     hangup(cause);
+}
+
+bool PriChan::msgRinging(Message& msg)
+{
+    status("ringing");
+    return true;
+}
+
+bool PriChan::msgAnswered(Message& msg)
+{
+    answer();
+    return true;
+}
+
+bool PriChan::msgTone(Message& msg, const char* tone)
+{
+    for (; !null(tone); tone++)
+	sendDigit(*tone);
+    return true;
+}
+
+bool PriChan::msgText(Message& msg, const char* text)
+{
+    return false;
 }
 
 bool PriChan::msgDrop(Message& msg, const char* reason)

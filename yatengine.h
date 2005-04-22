@@ -478,6 +478,7 @@ private:
     ObjList m_handlers;
     ObjList m_messages;
     Mutex m_mutex;
+    unsigned int m_changes;
     void (*m_hook)(Message &, bool);
 };
 

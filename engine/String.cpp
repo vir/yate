@@ -251,9 +251,15 @@ String::~String()
 String& String::assign(const char* value, int len)
 {
     if (len && value && *value) {
-	int vlen = ::strlen(value);
-	if ((len < 0) || (len > vlen))
-	    len = vlen;
+	if (len < 0)
+	    len = ::strlen(value);
+	else {
+	    int l = 0;
+	    for (const char* p = value; l < len; l++)
+		if (!*p++)
+		    break;
+	    len = l;
+	}
 	if (value != m_string || len != (int)m_length) {
 	    char *data = (char *) ::malloc(len+1);
 	    if (data) {

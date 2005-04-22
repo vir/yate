@@ -33,6 +33,7 @@ Message::Message(const char* name, const char* retval)
 
 Message::~Message()
 {
+    XDebug(DebugAll,"Message::~Message() '%s' [%p]",c_str(),this);
     userData(0);
 }
 
@@ -183,25 +184,25 @@ int Message::commonDecode(const char* str, int offs)
 MessageHandler::MessageHandler(const char* name, unsigned priority)
     : String(name), m_priority(priority), m_dispatcher(0)
 {
-    DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
+    XDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
 }
 
 MessageHandler::~MessageHandler()
 {
-    DDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
+    XDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
     if (m_dispatcher)
 	m_dispatcher->uninstall(this);
 }
 
 MessageDispatcher::MessageDispatcher()
-    : m_hook(0)
+    : m_changes(0), m_hook(0)
 {
-    DDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
+    XDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }
 
 MessageDispatcher::~MessageDispatcher()
 {
-    DDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
+    XDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
     m_mutex.lock();
     m_handlers.clear();
     m_mutex.unlock();
@@ -223,6 +224,7 @@ bool MessageDispatcher::install(MessageHandler* handler)
 	if (h && (h->priority() > p))
 	    break;
     }
+    m_changes++;
     if (l) {
 	DDebug(DebugAll,"Inserting handler [%p] on place #%d",handler,pos);
 	l->insert(handler);
@@ -242,26 +244,87 @@ bool MessageDispatcher::uninstall(MessageHandler* handler)
     DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
     Lock lock(m_mutex);
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
-    if (handler)
+    if (handler) {
+	m_changes++;
 	handler->m_dispatcher = 0;
+    }
     return (handler != 0);
 }
 
 bool MessageDispatcher::dispatch(Message& msg)
 {
-#ifdef XDEBUG
+#ifdef DEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
+#endif
+#ifndef NDEBUG
+    unsigned long long t = Time::now();
 #endif
     bool retv = false;
     ObjList *l = &m_handlers;
+    m_mutex.lock();
     for (; l; l=l->next()) {
-	MessageHandler *h = static_cast<MessageHandler *>(l->get());
-	if (h && (h->null() || *h == msg) && h->received(msg)) {
-	    retv = true;
-	    break;
+	MessageHandler *h = static_cast<MessageHandler*>(l->get());
+	if (h && (h->null() || *h == msg)) {
+	    unsigned int c = m_changes;
+	    unsigned int p = h->priority();
+	    m_mutex.unlock();
+#ifdef DEBUG
+	    unsigned long long tm = Time::now();
+#endif
+	    retv = h->received(msg);
+#ifdef DEBUG
+	    tm = Time::now() - tm;
+	    if (tm > 100000)
+		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in %llu usec",
+		    msg.c_str(),&msg,h,tm);
+#endif
+	    if (retv)
+		break;
+	    m_mutex.lock();
+	    if (c == m_changes)
+		continue;
+	    // the handler list has changed - find again
+	    NDebug(DebugAll,"Rescanning handler list for '%s' [%p] at priority %u",
+		msg.c_str(),&msg,p);
+	    for (ObjList* l2 = l = &m_handlers; l2; l2=l2->next()) {
+		MessageHandler *mh = static_cast<MessageHandler*>(l2->get());
+		if (!mh)
+		    continue;
+		if (mh == h) {
+		    // exact match - continue where we left
+		    l = l2;
+		    break;
+		}
+		// gone past last handler priority - exit with last handler
+		if (mh->priority() > p) {
+		    unsigned int p2 = l->get() ? static_cast<MessageHandler*>(l->get())->priority() : 0;
+		    Debug(DebugAll,"Handler list for '%s' [%p] changed, skipping back from %u to %u",
+			msg.c_str(),&msg,p,p2);
+		    break;
+		}
+		// update pointer past already used handlers
+		if (mh->priority() < p)
+		    l = l2;
+	    }
 	}
     }
+    if (!l)
+	m_mutex.unlock();
     msg.dispatched(retv);
+#ifndef NDEBUG
+    t = Time::now() - t;
+    if (t > 100000) {
+	unsigned n = msg.length();
+	String p;
+	for (unsigned i = 0; i < n; i++) {
+	    NamedString *s = msg.getParam(i);
+	    if (s)
+		p << "\n  ['" << s->name() << "']='" << *s << "'";
+	}
+	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in %llu usec%s",
+	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
+    }
+#endif
     if (m_hook)
 	(*m_hook)(msg,retv);
     return retv;

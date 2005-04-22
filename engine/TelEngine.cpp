@@ -38,6 +38,7 @@ static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
+static unsigned long long s_timestamp = 0;
 
 static void dbg_stderr_func(const char* buf)
 {
@@ -72,12 +73,21 @@ static void dbg_output(const char* prefix, const char* format, va_list ap)
     if (!(s_output || s_intout))
 	return;
     char buf[OUT_BUFFER_SIZE];
-    unsigned int n = s_indent*2;
-    if (n >= sizeof(buf))
-	n = sizeof(buf)-1;
-    ::memset(buf,' ',n);
+    unsigned int n = 0;
+    if (s_timestamp) {
+	unsigned long long t = Time::now() - s_timestamp;
+	unsigned int s = t / 1000000;
+	unsigned int u = t % 1000000;
+	::sprintf(buf,"%07u.%06u ",s,u);
+	n = ::strlen(buf);
+    }
+    unsigned int l = s_indent*2;
+    if (l >= sizeof(buf)-n)
+	l = sizeof(buf)-n-1;
+    ::memset(buf+n,' ',l);
+    n += l;
     buf[n] = 0;
-    unsigned int l = sizeof(buf)-n-2;
+    l = sizeof(buf)-n-2;
     if (prefix)
 	::strncpy(buf+n,prefix,l);
     n = ::strlen(buf);
@@ -193,6 +203,11 @@ int debugLevel(int level)
 bool debugAt(int level)
 {
     return (s_debugging && (level <= s_debug));
+}
+
+void setDebugTimestamp()
+{
+    s_timestamp = Time::now();
 }
 
 int DebugEnabler::debugLevel(int level)

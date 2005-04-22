@@ -289,7 +289,7 @@ int Engine::run()
 
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
-	    Debug(DebugInfo,"Creating new message dispatching thread");
+	    Debug(DebugInfo,"Creating new message dispatching thread (%d running)",EnginePrivate::count);
 	    EnginePrivate *prv = new EnginePrivate;
 	    prv->startup();
 	}
@@ -646,6 +646,7 @@ static void usage(FILE* f)
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
 "     w            Delay creation of 1st worker thread\n"
+"     t            Timestamp debugging messages\n"
 #endif
     ,s_cfgfile);
 }
@@ -671,6 +672,7 @@ int Engine::main(int argc, const char** argv, const char** env)
     bool daemonic = false;
     bool supervised = false;
 #endif
+    bool tstamp = false;
     const char *pidfile = 0;
     const char *logfile = 0;
     int debug_level = debugLevel();
@@ -780,6 +782,9 @@ int Engine::main(int argc, const char** argv, const char** env)
 				case 'w':
 				    s_makeworker = false;
 				    break;
+				case 't':
+				    tstamp = true;
+				    break;
 				default:
 				    badopt(*pc,argv[i]);
 				    return EINVAL;
@@ -848,6 +853,8 @@ int Engine::main(int argc, const char** argv, const char** env)
 	return retcode;
 #endif
 
+    if (tstamp)
+	setDebugTimestamp();
     time_t t = ::time(0);
     Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
     retcode = self()->run();

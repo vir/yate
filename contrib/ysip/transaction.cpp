@@ -83,6 +83,11 @@ SIPTransaction::~SIPTransaction()
     m_firstMessage = 0;
 }
 
+Mutex* SIPTransaction::mutex()
+{
+    return m_engine ? m_engine->mutex() : 0;
+}
+
 const char* SIPTransaction::stateName(int state)
 {
     switch (state) {
@@ -219,6 +224,7 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	Debug(DebugWarn,"setResponse(%p) in client transaction [%p]",message,this);
 	return;
     }
+    Lock lock(mutex());
     setLatestMessage(message);
     setTransmit();
     if (message && (message->code >= 200)) {

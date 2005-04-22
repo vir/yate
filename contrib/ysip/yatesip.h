@@ -511,6 +511,12 @@ public:
 	{ return m_engine; }
 
     /**
+     * Get the mutex that protects the engine's objects
+     * @return Pointer to the engine's mutex object or NULL if none exists
+     */
+    Mutex* mutex();
+
+    /**
      * Check if this transaction was initiated by the remote peer or locally
      * @return True if the transaction was created by an outgoing message
      */
@@ -878,6 +884,13 @@ public:
      */
     inline const String& getAllowed() const
 	{ return m_allowed; }
+
+    /**
+     * Get the mutex that protects objects in this engine
+     * @return Pointer to the engine's mutex object
+     */
+    inline Mutex* mutex()
+	{ return &m_mutex; }
 
     /**
      * TransList is the key. 

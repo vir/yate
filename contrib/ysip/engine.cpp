@@ -145,7 +145,8 @@ SIPEvent::~SIPEvent()
 }
 
 SIPEngine::SIPEngine(const char* userAgent)
-    : m_t1(500000), m_t4(5000000), m_maxForwards(70),
+    : m_mutex(true),
+      m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_userAgent(userAgent)
 {
     Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
@@ -334,6 +335,7 @@ bool SIPEngine::isAllowed(const char* method) const
 
 void SIPEngine::addAllowed(const char* method)
 {
+    Lock lock(m_mutex);
     if (method && *method && !isAllowed(method))
 	m_allowed << ", " << method;
 }

@@ -147,6 +147,11 @@ YATE_API void abortOnBug();
 YATE_API bool abortOnBug(bool doAbort);
 
 /**
+ * Enable timestamping of output messages and set the time start reference
+ */
+void setDebugTimestamp();
+
+/**
  * Standard debugging levels.
  * The DebugFail level is special - it is always displayed and may abort
  *  the program if @ref abortOnBug() is set.

@@ -76,7 +76,7 @@ using namespace TelEngine;
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
 
-#define MAX_SANITY 5
+#define MAX_SANITY 8
 
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;

@@ -655,6 +655,7 @@ void IAXConnection::callAccept(Message& msg)
     Debug(DebugAll,"IAXConnection::callAccept() [%p]",this);
     startAudio(m_format,m_capab);
     Channel::callAccept(msg);
+    deref();
 }
 
 void IAXConnection::callReject(const char* error, const char* reason)

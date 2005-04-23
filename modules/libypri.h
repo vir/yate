@@ -205,6 +205,7 @@ public:
 	{ return s_bitswap[v]; }
 protected:
     PriDriver(const char* name);
+    void statusParams(String& str);
 private:
     ObjList m_spans;
     static u_int8_t s_bitswap[256];

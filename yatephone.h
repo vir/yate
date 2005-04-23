@@ -1082,12 +1082,12 @@ public:
 	{ disconnect(false,reason); }
 
     /**
-     * Start a routing thread for this channel
+     * Start a routing thread for this channel, dereference dynamic channels
      * @param msg Pointer to message to route, typically a "call.route", will be
      *  destroyed after routing fails or completes
      * @return True if routing thread started successfully, false if failed
      */
-    bool startRouter(Message* msg) const;
+    bool startRouter(Message* msg);
 
     /**
      * Get a data endpoint of this object
@@ -1191,6 +1191,7 @@ class YATE_API Driver : public Module
 
 private:
     bool m_init;
+    bool m_varchan;
     String m_prefix;
     ObjList m_chans;
     int m_routing;
@@ -1211,6 +1212,13 @@ public:
      */
     inline const String& prefix() const
 	{ return m_prefix; }
+
+    /**
+     * Check if this driver is for dynamic (variable number) channels
+     * @return True if the channels are dynamic, false for fixed
+     */
+    inline bool varchan() const
+	{ return m_varchan; }
 
     /**
      * Get the list of channels of this driver
@@ -1322,6 +1330,13 @@ protected:
      * @param target String to match for local settings
      */
     virtual bool setDebug(Message& msg, const String& target);
+
+    /**
+     * Set if this driver is for dynamic (variable number) channels
+     * @param variable True if the channels are dynamic, false for fixed
+     */
+    inline void varchan(bool variable)
+	{ m_varchan = variable; }
 
 private:
     Driver(); // no default constructor please

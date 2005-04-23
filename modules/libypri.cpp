@@ -877,6 +877,7 @@ bool PriDriver::s_init = true;
 PriDriver::PriDriver(const char* name)
     : Driver(name,"fixchans")
 {
+    varchan(false);
     if (s_init) {
 	s_init = false;
 	for (unsigned int c = 0; c <= 255; c++) {
@@ -946,6 +947,20 @@ bool PriDriver::isBusy() const
 	}
     }
     return false;
+}
+
+void PriDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    String sp;
+    const ObjList *l = &m_spans;
+    for (; l; l=l->next()) {
+	PriSpan *s = static_cast<PriSpan *>(l->get());
+	if (s)
+	    sp.append(String(s->chans()),"|");
+    }
+    if (sp)
+	str.append("spanlen=",",") << sp;
 }
 
 void PriDriver::netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan)

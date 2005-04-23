@@ -178,7 +178,7 @@ Message* Channel::message(const char* name, bool minimal) const
     return msg;
 }
 
-bool Channel::startRouter(Message* msg) const
+bool Channel::startRouter(Message* msg)
 {
     if (!msg)
 	return false;
@@ -190,6 +190,10 @@ bool Channel::startRouter(Message* msg) const
     }
     else
 	delete msg;
+    callReject("failure","Internal server error");
+    // dereference and die if the channel is dynamic
+    if (m_driver && m_driver->varchan())
+	deref();
     return false;
 }
 
@@ -278,7 +282,6 @@ DataEndpoint* Channel::setEndpoint(const char* type)
 	dat = new DataEndpoint(this,type);
 	if (m_peer)
 	    dat->connect(m_peer->getEndpoint(type));
-//	dat->ref();
     }
     return dat;
 }
@@ -329,7 +332,7 @@ TokenDict Module::s_messages[] = {
     { 0, 0 }
 };
 
-unsigned int Module::s_delay = 2;
+unsigned int Module::s_delay = 5;
 
 const char* Module::messageName(int id)
 {
@@ -382,6 +385,7 @@ void Module::initialize()
 
 void Module::setup()
 {
+    Debug(DebugAll,"Module::setup()");
     if (m_init)
 	return;
     m_init = true;
@@ -492,7 +496,9 @@ bool Module::setDebug(Message& msg, const String& target)
 
 
 Driver::Driver(const char* name, const char* type)
-    : Module(name,type), m_init(false), m_routing(0), m_routed(0), m_nextid(0)
+    : Module(name,type),
+      m_init(false), m_varchan(true),
+      m_routing(0), m_routed(0), m_nextid(0)
 {
     m_prefix << name << "/";
 }
@@ -511,6 +517,7 @@ void Driver::initialize()
 
 void Driver::setup(const char* prefix, bool minimal)
 {
+    Debug(DebugAll,"Driver::setup('%s',%d)",prefix,minimal);
     Module::setup();
     if (m_init)
 	return;
@@ -712,7 +719,8 @@ bool Router::route()
     m_driver->lock();
     Channel* chan = m_driver->find(m_id);
     if (chan) {
-	// this will keep it referenced
+	// this will keep it referenced even if message user data is changed
+	chan->ref();
 	m_msg->userData(chan);
 	chan->status("routed");
     }
@@ -728,16 +736,18 @@ bool Router::route()
 	m_msg->setParam("callto",m_msg->retValue());
 	m_msg->retValue().clear();
 	ok = Engine::dispatch(m_msg);
-	if (ok) {
+	if (ok)
 	    chan->callAccept(*m_msg);
-	    chan->deref();
-	}
 	else
 	    chan->callReject("noconn","Could not connected to target");
     }
     else
 	chan->callReject("noroute","No route to call target");
 
+    chan->deref();
+    // dereference again if the channel is dynamic
+    if (m_driver->varchan())
+	chan->deref();
     return ok;
 }
 

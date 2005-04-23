@@ -345,9 +345,36 @@ public:
     inline unsigned priority() const
 	{ return m_priority; }
 
+    /**
+     * Retrive the filter (if installed) associated to this handler
+     */
+    inline const NamedString* filter() const
+	{ return m_filter; }
+
+    /**
+     * Set a filter for this handler
+     * @param filter Pointer to the filter to install, will be owned and
+     *  destroyed by the handler
+     */
+    void setFilter(NamedString* filter);
+
+    /**
+     * Set a filter for this handler
+     * @param name Name of the parameter to filter
+     * @param value Value of the parameter to filter
+     */
+    inline void setFilter(const char* name, const char* value)
+	{ setFilter(new NamedString(name,value)); }
+
+    /**
+     * Remove and destroy any filter associated to this handler
+     */
+    void clearFilter();
+
 private:
     unsigned m_priority;
     MessageDispatcher* m_dispatcher;
+    NamedString* m_filter;
 };
 
 /**

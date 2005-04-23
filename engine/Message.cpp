@@ -182,7 +182,7 @@ int Message::commonDecode(const char* str, int offs)
 }
 
 MessageHandler::MessageHandler(const char* name, unsigned priority)
-    : String(name), m_priority(priority), m_dispatcher(0)
+    : String(name), m_priority(priority), m_dispatcher(0), m_filter(0)
 {
     XDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
 }
@@ -192,6 +192,22 @@ MessageHandler::~MessageHandler()
     XDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
     if (m_dispatcher)
 	m_dispatcher->uninstall(this);
+    clearFilter();
+}
+
+void MessageHandler::setFilter(NamedString* filter)
+{
+    clearFilter();
+    m_filter = filter;
+}
+
+void MessageHandler::clearFilter()
+{
+    if (m_filter) {
+	NamedString* tmp = m_filter;
+	m_filter = 0;
+	delete tmp;
+    }
 }
 
 MessageDispatcher::MessageDispatcher()
@@ -265,6 +281,8 @@ bool MessageDispatcher::dispatch(Message& msg)
     for (; l; l=l->next()) {
 	MessageHandler *h = static_cast<MessageHandler*>(l->get());
 	if (h && (h->null() || *h == msg)) {
+	    if (h->filter() && (*(h->filter()) != msg.getValue(h->filter()->name())))
+		continue;
 	    unsigned int c = m_changes;
 	    unsigned int p = h->priority();
 	    m_mutex.unlock();

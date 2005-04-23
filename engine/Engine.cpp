@@ -76,7 +76,8 @@ using namespace TelEngine;
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
 
-#define MAX_SANITY 8
+#define MAX_SANITY 5
+#define INIT_SANITY 10
 
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
@@ -322,6 +323,7 @@ int Engine::run()
     s_haltcode &= 0xff;
     Output("Yate engine is shutting down with code %d",s_haltcode);
     dispatch("engine.halt");
+    Thread::msleep(200);
     m_dispatcher.dequeue();
     Thread::killall();
     m_dispatcher.dequeue();
@@ -568,7 +570,7 @@ static int supervise(void)
 	}
 	::close(wdogfd[1]);
 	// Wait for the child to die or block
-	for (int sanity = MAX_SANITY; sanity > 0; sanity--) {
+	for (int sanity = INIT_SANITY; sanity > 0; sanity--) {
 	    int status = -1;
 	    int tmp = ::waitpid(s_childpid,&status,WNOHANG);
 	    if (tmp > 0) {

@@ -26,7 +26,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -36,7 +35,7 @@ using namespace TelEngine;
 class WaveSource : public ThreadedSource
 {
 public:
-    WaveSource(const String& file, DataEndpoint *chan, bool autoclose = true);
+    WaveSource(const String& file, Channel* chan, bool autoclose = true);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
@@ -45,7 +44,7 @@ public:
 private:
     void detectAuFormat();
     void detectWavFormat();
-    DataEndpoint *m_chan;
+    Channel* m_chan;
     DataBlock m_data;
     int m_fd;
     bool m_swap;
@@ -59,13 +58,13 @@ private:
 class WaveConsumer : public DataConsumer
 {
 public:
-    WaveConsumer(const String& file, DataEndpoint *chan = 0, unsigned maxlen = 0);
+    WaveConsumer(const String& file, Channel* chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
-    DataEndpoint *m_chan;
+    Channel* m_chan;
     int m_fd;
     unsigned m_total;
     unsigned m_maxlen;
@@ -73,35 +72,22 @@ private:
     String m_id;
 };
 
-class WaveChan : public DataEndpoint
+class WaveChan : public Channel
 {
 public:
     WaveChan(const String& file, bool record, unsigned maxlen = 0);
     ~WaveChan();
-    virtual void disconnected(bool final, const char *reason);
-    inline const String &id() const
-	{ return m_id; }
-private:
-    String m_id;
-    static int s_nextid;
 };
 
 class ConsDisconnector : public Thread
 {
 public:
-    ConsDisconnector(DataEndpoint *chan, const String& id)
+    ConsDisconnector(Channel* chan, const String& id)
 	: m_chan(chan), m_id(id) { }
     virtual void run();
 private:
-    DataEndpoint *m_chan;
+    Channel* m_chan;
     String m_id;
-};
-
-class WaveHandler : public MessageHandler
-{
-public:
-    WaveHandler() : MessageHandler("call.execute") { }
-    virtual bool received(Message &msg);
 };
 
 class AttachHandler : public MessageHandler
@@ -111,16 +97,19 @@ public:
     virtual bool received(Message &msg);
 };
 
-class WaveFilePlugin : public Plugin
+class WaveFileDriver : public Driver
 {
 public:
-    WaveFilePlugin();
+    WaveFileDriver();
     virtual void initialize();
+    virtual bool msgExecute(Message& msg, String& dest);
 private:
-    WaveHandler *m_handler;
+    AttachHandler* m_handler;
 };
 
-WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
+INIT_PLUGIN(WaveFileDriver);
+
+WaveSource::WaveSource(const String& file, Channel* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(16000),
       m_total(0), m_time(0), m_autoclose(autoclose)
 {
@@ -133,19 +122,19 @@ WaveSource::WaveSource(const String& file, DataEndpoint *chan, bool autoclose)
     if (m_fd < 0) {
 	Debug(DebugGoOn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
-	m_format = 0;
+	m_format.clear();
 	return;
     }
     if (file.endsWith(".gsm")) {
-	setFormatInternal("gsm");
+	m_format = "gsm";
 	m_brate = 1650;
     }
     else if (file.endsWith(".alaw") || file.endsWith(".A")) {
-	setFormatInternal("alaw");
+	m_format = "alaw";
 	m_brate = 8000;
     }
     else if (file.endsWith(".mulaw") || file.endsWith(".u")) {
-	setFormatInternal("mulaw");
+	m_format = "mulaw";
 	m_brate = 8000;
     }
     else if (file.endsWith(".au"))
@@ -195,10 +184,10 @@ void WaveSource::detectAuFormat()
     m_brate = samp;
     switch (ntohl(header.form)) {
 	case 1:
-	    setFormatInternal("mulaw");
+	    m_format = "mulaw";
 	    break;
 	case 27:
-	    setFormatInternal("alaw");
+	    m_format = "alaw";
 	    break;
 	case 3:
 	    m_brate *= 2;
@@ -246,7 +235,7 @@ void WaveSource::run()
 	}
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("WaveSource",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("WaveSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()*8000/m_brate);
@@ -270,7 +259,7 @@ void WaveSource::cleanup()
 	m_chan->disconnect("eof");
 }
 
-WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxlen)
+WaveConsumer::WaveConsumer(const String& file, Channel* chan, unsigned maxlen)
     : m_chan(chan), m_fd(-1), m_total(0), m_maxlen(maxlen), m_time(0)
 {
     Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
@@ -278,11 +267,11 @@ WaveConsumer::WaveConsumer(const String& file, DataEndpoint *chan, unsigned maxl
     if (file == "-")
 	return;
     else if (file.endsWith(".gsm"))
-	setFormatInternal("gsm");
+	m_format = "gsm";
     else if (file.endsWith(".alaw") || file.endsWith(".A"))
-	setFormatInternal("alaw");
+	m_format = "alaw";
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
-	setFormatInternal("mulaw");
+	m_format = "mulaw";
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugGoOn,"Creating '%s': error %d: %s",
@@ -305,7 +294,7 @@ WaveConsumer::~WaveConsumer()
     }
 }
 
-void WaveConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void WaveConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 {
     if (!data.null()) {
 	if (!m_time)
@@ -349,15 +338,11 @@ void ConsDisconnector::run()
 }
 
 Mutex mutex;
-int WaveChan::s_nextid = 1;
 
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
-    : DataEndpoint("wavefile")
+    : Channel(__plugin)
 {
     Debug(DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
-    mutex.lock();
-    m_id << "wave/" << s_nextid++;
-    mutex.unlock();
     if (record) {
 	setConsumer(new WaveConsumer(file,this,maxlen));
 	getConsumer()->deref();
@@ -370,76 +355,7 @@ WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
 
 WaveChan::~WaveChan()
 {
-    Debug(DebugAll,"WaveChan::~WaveChan() %s [%p]",m_id.c_str(),this);
-}
-
-void WaveChan::disconnected(bool final, const char *reason)
-{
-    Debugger debug("WaveChan::disconnected()"," '%s' [%p]",reason,this);
-}
-
-bool WaveHandler::received(Message &msg)
-{
-    String dest(msg.getValue("callto"));
-    if (dest.null())
-	return false;
-    Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
-    if (!dest.matches(r))
-	return false;
-
-    bool meth = false;
-    if (dest.matchString(1) == "record")
-	meth = true;
-    else if (dest.matchString(1) != "play") {
-	Debug(DebugWarn,"Invalid wavefile method '%s', use 'record' or 'play'",
-	    dest.matchString(1).c_str());
-	return false;
-    }
-
-    String ml(msg.getValue("maxlen"));
-    unsigned maxlen = ml.toInteger(0);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd) {
-	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
-	    dest.matchString(2).c_str());
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
-	if (dd->connect(c)) {
-	    c->deref();
-	    return true;
-	}
-	else {
-	    c->destruct();
-	    return false;
-	}
-    }
-
-    const char *targ = msg.getValue("target");
-    if (!targ) {
-	Debug(DebugWarn,"Wave outgoing call with no target!");
-	return false;
-    }
-    Message m("call.route");
-    m.addParam("driver","wave");
-    m.addParam("id",dest);
-    m.addParam("caller",dest);
-    m.addParam("called",targ);
-    if (Engine::dispatch(m)) {
-	m = "call.execute";
-	m.addParam("callto",m.retValue());
-	m.retValue() = 0;
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
-	m.setParam("id",c->id());
-	m.userData(c);
-	if (Engine::dispatch(m)) {
-	    c->deref();
-	    return true;
-	}
-	Debug(DebugWarn,"Wave outgoing call not accepted!");
-	c->destruct();
-    }
-    else
-	Debug(DebugWarn,"Wave outgoing call but no route!");
-    return false;
+    Debug(DebugAll,"WaveChan::~WaveChan() %s [%p]",id().c_str(),this);
 }
 
 bool AttachHandler::received(Message &msg)
@@ -489,8 +405,8 @@ bool AttachHandler::received(Message &msg)
 
     String ml(msg.getValue("maxlen"));
     unsigned maxlen = ml.toInteger(0);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (!dd) {
+    Channel *ch = static_cast<Channel*>(msg.userData());
+    if (!ch) {
 	if (!src.null())
 	    Debug(DebugWarn,"Wave source '%s' attach request with no data channel!",src.c_str());
 	if (!cons.null())
@@ -499,16 +415,16 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!src.null()) {
-	WaveSource* s = new WaveSource(src,dd,false);
+	WaveSource* s = new WaveSource(src,ch,false);
 	s->setNotify(msg.getValue("notify"));
-	dd->setSource(s);
+	ch->setSource(s);
 	s->deref();
     }
 
     if (!cons.null()) {
-	WaveConsumer* c = new WaveConsumer(cons,dd,maxlen);
+	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen);
 	c->setNotify(msg.getValue("notify"));
-	dd->setConsumer(c);
+	ch->setConsumer(c);
 	c->deref();
     }
 
@@ -516,22 +432,81 @@ bool AttachHandler::received(Message &msg)
     return !more;
 }
 
-WaveFilePlugin::WaveFilePlugin()
-    : m_handler(0)
+bool WaveFileDriver::msgExecute(Message& msg, String& dest)
+{
+    Regexp r("^\\([^/]*\\)/\\(.*\\)$");
+    if (!dest.matches(r))
+	return false;
+
+    bool meth = false;
+    if (dest.matchString(1) == "record")
+	meth = true;
+    else if (dest.matchString(1) != "play") {
+	Debug(DebugWarn,"Invalid wavefile method '%s', use 'record' or 'play'",
+	    dest.matchString(1).c_str());
+	return false;
+    }
+
+    String ml(msg.getValue("maxlen"));
+    unsigned maxlen = ml.toInteger(0);
+    Channel* ch = static_cast<Channel*>(msg.userData());
+    if (ch) {
+	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
+	    dest.matchString(2).c_str());
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+	if (ch->connect(c)) {
+	    c->deref();
+	    return true;
+	}
+	else {
+	    c->destruct();
+	    return false;
+	}
+    }
+
+    const char *targ = msg.getValue("target");
+    if (!targ) {
+	Debug(DebugWarn,"Wave outgoing call with no target!");
+	return false;
+    }
+    Message m("call.route");
+    m.addParam("driver","wave");
+    m.addParam("id",dest);
+    m.addParam("caller",dest);
+    m.addParam("called",targ);
+    if (Engine::dispatch(m)) {
+	m = "call.execute";
+	m.addParam("callto",m.retValue());
+	m.retValue() = 0;
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+	m.setParam("id",c->id());
+	m.userData(c);
+	if (Engine::dispatch(m)) {
+	    c->deref();
+	    return true;
+	}
+	Debug(DebugWarn,"Wave outgoing call not accepted!");
+	c->destruct();
+    }
+    else
+	Debug(DebugWarn,"Wave outgoing call but no route!");
+    return false;
+}
+
+WaveFileDriver::WaveFileDriver()
+    : Driver("wave","misc"), m_handler(0)
 {
     Output("Loaded module WaveFile");
 }
 
-void WaveFilePlugin::initialize()
+void WaveFileDriver::initialize()
 {
     Output("Initializing module WaveFile");
+    setup();
     if (!m_handler) {
-	m_handler = new WaveHandler;
+	m_handler = new AttachHandler;
 	Engine::install(m_handler);
-	Engine::install(new AttachHandler);
     }
 }
-
-INIT_PLUGIN(WaveFilePlugin);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

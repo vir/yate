@@ -949,9 +949,9 @@ bool PriDriver::isBusy() const
     return false;
 }
 
-void PriDriver::statusParams(String& str)
+void PriDriver::statusModule(String& str)
 {
-    Driver::statusParams(str);
+    Driver::statusModule(str);
     String sp;
     const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
@@ -959,6 +959,7 @@ void PriDriver::statusParams(String& str)
 	if (s)
 	    sp.append(String(s->chans()),"|");
     }
+    str.append("spans=",",") << m_spans.count();
     if (sp)
 	str.append("spanlen=",",") << sp;
 }

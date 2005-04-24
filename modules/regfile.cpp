@@ -24,15 +24,11 @@
 
 #include <yatengine.h>
 
-#include <stdio.h>
-
 using namespace TelEngine;
 
 Mutex lmutex;
 
 static Configuration s_cfg(Engine::configFile("regfile"));
-
-ObjList registered;
 
 class AuthHandler : public MessageHandler
 {
@@ -41,6 +37,7 @@ public:
 	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
+
 class RegistHandler : public MessageHandler
 {
 public:
@@ -48,7 +45,6 @@ public:
 	: MessageHandler(name) { }
     virtual bool received(Message &msg);
 };
-
 
 class UnRegistHandler : public MessageHandler
 {
@@ -69,7 +65,7 @@ public:
 class StatusHandler : public MessageHandler
 {
 public:
-    StatusHandler(const char *name, unsigned prio = 1)
+    StatusHandler(const char *name, unsigned prio = 100)
 	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
@@ -82,10 +78,6 @@ public:
     virtual void initialize();
 private:
     AuthHandler *m_authhandler;
-    RegistHandler *m_registhandler;
-    UnRegistHandler *m_unregisthandler;
-    RouteHandler *m_routehandler;
-    StatusHandler *m_statushandler;
 };
 
 bool AuthHandler::received(Message &msg)
@@ -98,48 +90,56 @@ bool AuthHandler::received(Message &msg)
 
 bool RegistHandler::received(Message &msg)
 {
-    const char *username  = c_safe(msg.getValue("username"));
-    const char *techno  = c_safe(msg.getValue("techno"));
-    const char *data  = c_safe(msg.getValue("data"));
-    
-    
-    Lock lock(lmutex);
-    if (s_cfg.getSection(username)){
-        s_cfg.setValue(username,"register",true);
-        s_cfg.setValue(username,"techno",techno);
-        s_cfg.setValue(username,"data",data);
-    } else
+    const char *username = msg.getValue("username");
+    const char *driver   = msg.getValue("driver");
+    const char *data     = msg.getValue("data");
+    if (!(username && data))
 	return false;
-    return true;
-    
+
+    Lock lock(lmutex);
+    if (s_cfg.getSection(username)) {
+	Debug("RegFile",DebugInfo,"Registered '%s' via '%s'",username,data);
+        s_cfg.setValue(username,"driver",driver);
+        s_cfg.setValue(username,"data",data);
+	return true;
+    }
+    return false;
 };
 
 bool UnRegistHandler::received(Message &msg)
 {
-    const char *username  = c_safe(msg.getValue("username"));
+    const char *username = msg.getValue("username");
+    if (!username)
+	return false;
     
     Lock lock(lmutex);
-    if (s_cfg.getSection(username))
-	s_cfg.setValue(username,"register",false);
-    else
-	return false;
-    return true;
+    if (s_cfg.getSection(username)) {
+	Debug("RegFile",DebugInfo,"Unregistered '%s'",username);
+	s_cfg.clearKey(username,"data");
+	return true;
+    }
+    return false;
 };
 
 bool RouteHandler::received(Message &msg)
 {
-    const char *username  = c_safe(msg.getValue("username"));
+    const char* username = msg.getValue("called");
+    if (!username)
+	return false;
     
     Lock lock(lmutex);
-    if (s_cfg.getSection(username))
-	msg.retValue() = s_cfg.getValue(username,"data");
-    else
-	return false;
-    return true;
+    const char* data = s_cfg.getValue(username,"data");
+    if (data) {
+	Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username,data);
+	msg.retValue() = data;
+	return true;
+    }
+    return false;
 };
 
 bool StatusHandler::received(Message &msg)
 {
+    Lock lock(lmutex);
     unsigned int n = s_cfg.sections();
     if (!s_cfg.getSection(0))
 	--n;
@@ -149,18 +149,19 @@ bool StatusHandler::received(Message &msg)
 	NamedList *user = s_cfg.getSection(i);
 	if (!user)
 	    continue;
+	const char* data = s_cfg.getValue(*user,"data");
 	if (first)
 	    first = false;
 	else
 	    msg.retValue() << ",";
-	msg.retValue() << *user << "=" << s_cfg.getBoolValue(*user,"register");
+	msg.retValue() << *user << "=" << (data != 0);
     }
     msg.retValue() <<"\n";
     return false;
 }
 
 RegfilePlugin::RegfilePlugin()
-    : m_authhandler(0),m_registhandler(0),m_routehandler(0),m_statushandler(0)
+    : m_authhandler(0)
 {
     Output("Loaded module Registration from file");
 }
@@ -170,24 +171,12 @@ void RegfilePlugin::initialize()
     Output("Initializing module Register for file");
     if (!m_authhandler) {
 	s_cfg.load();
-    	Output("Installing Authentification handler");
-	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",10)));
-    }
-    if (!m_registhandler) {
-    	Output("Installing Registering handler");
-	Engine::install(m_registhandler = new RegistHandler("user.register"));
-    }
-    if (!m_unregisthandler) {
-    	Output("Installing UnRegistering handler");
-	Engine::install(m_unregisthandler = new UnRegistHandler("user.unregister"));
-    }
-    if (!m_routehandler) {
-    	Output("Installing Route handler");
-	Engine::install(m_routehandler = new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
-    }
-    if (!m_statushandler) {
-    	Output("Installing Status handler");
-	Engine::install(m_statushandler = new StatusHandler("engine.status"));
+    	Output("Installing handlers");
+	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",100)));
+	Engine::install(new RegistHandler("user.register"));
+	Engine::install(new UnRegistHandler("user.unregister"));
+	Engine::install(new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
+	Engine::install(new StatusHandler("engine.status"));
     }
 }
 

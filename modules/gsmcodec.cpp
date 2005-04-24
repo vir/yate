@@ -47,23 +47,23 @@ public:
     ~GsmPlugin();
     virtual void initialize() { }
     virtual bool isBusy() const;
-    virtual DataTranslator *create(const String &sFormat, const String &dFormat);
-    virtual const TranslatorCaps *getCapabilities() const;
+    virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
+    virtual const TranslatorCaps* getCapabilities() const;
 };
 
 class GsmCodec : public DataTranslator
 {
 public:
-    GsmCodec(const char *sFormat, const char *dFormat, bool encoding);
+    GsmCodec(const char* sFormat, const char* dFormat, bool encoding);
     ~GsmCodec();
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
 private:
     bool m_encoding;
     gsm m_gsm;
     DataBlock m_data;
 };
 
-GsmCodec::GsmCodec(const char *sFormat, const char *dFormat, bool encoding)
+GsmCodec::GsmCodec(const char* sFormat, const char* dFormat, bool encoding)
     : DataTranslator(sFormat,dFormat), m_encoding(encoding), m_gsm(0)
 {
     Debug(DebugAll,"GsmCodec::GsmCodec(\"%s\",\"%s\",%scoding) [%p]",
@@ -83,7 +83,7 @@ GsmCodec::~GsmCodec()
     }
 }
 
-void GsmCodec::Consume(const DataBlock &data, unsigned long timeDelta)
+void GsmCodec::Consume(const DataBlock& data, unsigned long timeDelta)
 {
     if (!(m_gsm && getTransSource()))
 	return;
@@ -129,7 +129,6 @@ GsmPlugin::GsmPlugin()
     Output("Loaded module GSM - based on libgsm-%d.%d.%d",GSM_MAJOR,GSM_MINOR,GSM_PATCHLEVEL);
     const FormatInfo* f = FormatRepository::addFormat("gsm",1650,33);
     caps[0].src = caps[1].dest = f;
-//    caps[0].src = caps[1].dest = FormatRepository::getFormat("gsm");
     caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
 }
 
@@ -143,7 +142,7 @@ bool GsmPlugin::isBusy() const
     return (count != 0);
 }
 
-DataTranslator *GsmPlugin::create(const String &sFormat, const String &dFormat)
+DataTranslator* GsmPlugin::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     if (sFormat == "slin" && dFormat == "gsm")
 	return new GsmCodec(sFormat,dFormat,true);
@@ -152,7 +151,7 @@ DataTranslator *GsmPlugin::create(const String &sFormat, const String &dFormat)
     else return 0;
 }
 
-const TranslatorCaps *GsmPlugin::getCapabilities() const
+const TranslatorCaps* GsmPlugin::getCapabilities() const
 {
     return caps;
 }

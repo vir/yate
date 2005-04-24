@@ -147,18 +147,18 @@ private:
 };
 
 
-class IAXPlugin : public Driver
+class IAXDriver : public Driver
 {
 public:
-    IAXPlugin();
-    virtual ~IAXPlugin();
+    IAXDriver();
+    virtual ~IAXDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
     IAXConnection *find(iax_session *session);
     IAXEndPoint *m_endpoint;
 };
 
-static IAXPlugin iplugin;
+static IAXDriver iplugin;
 
 static void iax_err_cb(const char *s)
 {
@@ -418,8 +418,7 @@ void IAXEndPoint::answer(iax_event *e)
     String addr(::inet_ntoa(e->session->peeraddr.sin_addr));
     addr << ":" << ntohs(e->session->peeraddr.sin_port);
     IAXConnection *conn = new IAXConnection(&iplugin,addr,e->session);
-    if (!conn->startRouting(e))
-	conn->callReject("failure","Internal server error");
+    conn->startRouting(e);
 }
 
 void IAXEndPoint::reg(iax_event *e)
@@ -655,7 +654,6 @@ void IAXConnection::callAccept(Message& msg)
     Debug(DebugAll,"IAXConnection::callAccept() [%p]",this);
     startAudio(m_format,m_capab);
     Channel::callAccept(msg);
-    deref();
 }
 
 void IAXConnection::callReject(const char* error, const char* reason)
@@ -855,7 +853,7 @@ bool IAXConnection::msgDrop(Message& msg, const char* reason)
     return true;
 }
 
-bool IAXPlugin::msgExecute(Message& msg, String& dest)
+bool IAXDriver::msgExecute(Message& msg, String& dest)
 {
     if (!msg.userData()) {
 	Debug(DebugWarn,"IAX call found but no data channel!");
@@ -879,7 +877,7 @@ bool IAXPlugin::msgExecute(Message& msg, String& dest)
     return true;	
 };
 
-IAXConnection* IAXPlugin::find(iax_session *session)
+IAXConnection* IAXDriver::find(iax_session *session)
 { 
     ObjList *p = channels().skipNull();
     for (; p; p=p->skipNext()) { 
@@ -890,13 +888,13 @@ IAXConnection* IAXPlugin::find(iax_session *session)
     return 0; 
 }
 
-IAXPlugin::IAXPlugin()
+IAXDriver::IAXDriver()
     : Driver("iax","varchans"), m_endpoint(0)
 {
     Output("Loaded module IAX");
 }
 
-IAXPlugin::~IAXPlugin()
+IAXDriver::~IAXDriver()
 {
     Output("Unloading module IAX");
     if (m_endpoint) {
@@ -905,7 +903,7 @@ IAXPlugin::~IAXPlugin()
     }
 }
 
-void IAXPlugin::initialize()
+void IAXDriver::initialize()
 {
     Output("Initializing module IAX");
     lock();

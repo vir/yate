@@ -273,7 +273,7 @@ bool MessageDispatcher::dispatch(Message& msg)
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
 #endif
 #ifndef NDEBUG
-    unsigned long long t = Time::now();
+    u_int64_t t = Time::now();
 #endif
     bool retv = false;
     ObjList *l = &m_handlers;
@@ -287,13 +287,13 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    unsigned int p = h->priority();
 	    m_mutex.unlock();
 #ifdef DEBUG
-	    unsigned long long tm = Time::now();
+	    u_int64_t tm = Time::now();
 #endif
 	    retv = h->received(msg);
 #ifdef DEBUG
 	    tm = Time::now() - tm;
 	    if (tm > 100000)
-		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in %llu usec",
+		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in " FMT64 " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
 	    if (retv)
@@ -339,7 +339,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    if (s)
 		p << "\n  ['" << s->name() << "']='" << *s << "'";
 	}
-	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in %llu usec%s",
+	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in " FMT64 " usec%s",
 	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
     }
 #endif

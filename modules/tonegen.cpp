@@ -24,7 +24,6 @@
 
 #include <yatephone.h>
 
-#include <unistd.h>
 #include <string.h>
 
 using namespace TelEngine;
@@ -69,11 +68,11 @@ public:
     virtual bool received(Message &msg);
 };
 
-class ToneGenPlugin : public Driver
+class ToneGenDriver : public Driver
 {
 public:
-    ToneGenPlugin();
-    ~ToneGenPlugin();
+    ToneGenDriver();
+    ~ToneGenDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
 protected:
@@ -83,7 +82,7 @@ private:
     AttachHandler* m_handler;
 };
 
-INIT_PLUGIN(ToneGenPlugin);
+INIT_PLUGIN(ToneGenDriver);
 
 // 421.052Hz (19 samples @ 8kHz) sine wave, pretty close to standard 425Hz
 static const short tone421hz[] = {
@@ -239,7 +238,7 @@ ToneChan::~ToneChan()
     Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
-bool ToneGenPlugin::msgExecute(Message& msg, String& dest)
+bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 {
     Channel *dd = static_cast<Channel*>(msg.userData());
     if (dd) {
@@ -308,23 +307,23 @@ bool AttachHandler::received(Message &msg)
     return false;
 }
 
-void ToneGenPlugin::statusModule(String& str)
+void ToneGenDriver::statusModule(String& str)
 {
     Module::statusModule(str);
 }
 
-void ToneGenPlugin::statusParams(String& str)
+void ToneGenDriver::statusParams(String& str)
 {
     str << "tones=" << tones.count() << ",chans=" << channels().count();
 }
 
-ToneGenPlugin::ToneGenPlugin()
+ToneGenDriver::ToneGenDriver()
     : Driver("tone","misc"), m_handler(0)
 {
     Output("Loaded module ToneGen");
 }
 
-ToneGenPlugin::~ToneGenPlugin()
+ToneGenDriver::~ToneGenDriver()
 {
     Output("Unloading module ToneGen");
     ObjList *l = &channels();
@@ -339,7 +338,7 @@ ToneGenPlugin::~ToneGenPlugin()
     tones.clear();
 }
 
-void ToneGenPlugin::initialize()
+void ToneGenDriver::initialize()
 {
     Output("Initializing module ToneGen");
     setup(0,true); // no need to install notifications

@@ -38,7 +38,7 @@ static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
-static unsigned long long s_timestamp = 0;
+static u_int64_t s_timestamp = 0;
 
 static void dbg_stderr_func(const char* buf)
 {
@@ -75,7 +75,7 @@ static void dbg_output(const char* prefix, const char* format, va_list ap)
     char buf[OUT_BUFFER_SIZE];
     unsigned int n = 0;
     if (s_timestamp) {
-	unsigned long long t = Time::now() - s_timestamp;
+	u_int64_t t = Time::now() - s_timestamp;
 	unsigned int s = t / 1000000;
 	unsigned int u = t % 1000000;
 	::sprintf(buf,"%07u.%06u ",s,u);

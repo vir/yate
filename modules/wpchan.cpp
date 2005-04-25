@@ -27,6 +27,8 @@
 extern "C" {
 
 #ifndef _WINDOWS
+typedef int HANDLE;
+#define INVALID_HANDLE_VALUE (-1)
 #define __LINUX__
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
@@ -60,8 +62,8 @@ public:
     virtual void run();
 
 private:
-    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd);
-    int m_fd;
+    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd);
+    HANDLE m_fd;
     WpData *m_data;
 };
 
@@ -108,7 +110,7 @@ public:
     virtual void run();
 private:
     WpSpan* m_span;
-    int m_fd;
+    HANDLE m_fd;
     unsigned char* m_buffer;
     WpChan **m_chans;
 };
@@ -193,7 +195,7 @@ static struct pri* wp_create(const char* card, const char* device, int nettype, 
     return p;
 }
 
-WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd)
+WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd)
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
       m_fd(fd), m_data(0)
 {
@@ -205,8 +207,12 @@ WpSpan::~WpSpan()
     Debug(DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
     delete m_data;
+#ifdef _WINDOWS
+    ::CloseHandle(m_fd);
+#else
     ::close(m_fd);
-    m_fd = -1;
+#endif
+    m_fd = INVALID_HANDLE_VALUE;
 }
 
 void WpSpan::run()
@@ -306,7 +312,7 @@ WpData::~WpData()
 {
     Debug(DebugAll,"WpData::~WpData() [%p]",this);
     m_span->m_data = 0;
-    if (m_fd >= 0)
+    if (m_fd != INVALID_HANDLE_VALUE)
 	::close(m_fd);
     if (m_buffer)
 	::free(m_buffer);

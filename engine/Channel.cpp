@@ -27,14 +27,148 @@
 
 using namespace TelEngine;
 
+CallEndpoint::CallEndpoint(const char* id)
+    : m_peer(0), m_id(id)
+{
+}
+
+CallEndpoint::~CallEndpoint()
+{
+#ifdef DEBUG
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	Debug(DebugAll,"Endpoint at %p type '%s' refcount=%d",e,e->name().c_str(),e->refcount());
+    }
+#endif
+    disconnect(true,0);
+    m_data.clear();
+}
+
+void* CallEndpoint::getObject(const String& name) const
+{
+    if (name == "CallEndpoint")
+	return const_cast<CallEndpoint*>(this);
+    return RefObject::getObject(name);
+}
+
+bool CallEndpoint::connect(CallEndpoint* peer)
+{
+    if (!peer) {
+	disconnect();
+	return false;
+    }
+    if (peer == m_peer)
+	return true;
+    DDebug(DebugInfo,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
+
+    ref();
+    disconnect();
+    peer->ref();
+    peer->disconnect();
+
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	e->connect(peer->getEndpoint(e->name()));
+    }
+
+    m_peer = peer;
+    peer->setPeer(this);
+    connected();
+
+    return true;
+}
+
+void CallEndpoint::disconnect(bool final, const char* reason)
+{
+    if (!m_peer)
+	return;
+    DDebug(DebugInfo,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
+
+    CallEndpoint *temp = m_peer;
+    m_peer = 0;
+
+    ObjList* l = m_data.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	DDebug(DebugAll,"Endpoint at %p type '%s' peer %p",e,e->name().c_str(),e->getPeer());
+	e->disconnect();
+    }
+
+    temp->setPeer(0,reason);
+    temp->deref();
+
+    disconnected(final,reason);
+    deref();
+}
+
+void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason)
+{
+    m_peer = peer;
+    if (m_peer)
+	connected();
+    else
+	disconnected(false,reason);
+}
+
+DataEndpoint* CallEndpoint::getEndpoint(const char* type) const
+{
+    if (null(type))
+	return 0;
+    const ObjList* pos = m_data.find(type);
+    return pos ? static_cast<DataEndpoint*>(pos->get()) : 0;
+}
+
+DataEndpoint* CallEndpoint::setEndpoint(const char* type)
+{
+    if (null(type))
+	return 0;
+    DataEndpoint* dat = getEndpoint(type);
+    if (!dat) {
+	dat = new DataEndpoint(this,type);
+	if (m_peer)
+	    dat->connect(m_peer->getEndpoint(type));
+    }
+    return dat;
+}
+
+void CallEndpoint::setSource(DataSource* source, const char* type)
+{
+    DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);
+    if (dat)
+	dat->setSource(source);
+}
+
+DataSource* CallEndpoint::getSource(const char* type) const
+{
+    DataEndpoint* dat = getEndpoint(type);
+    return dat ? dat->getSource() : 0;
+}
+
+void CallEndpoint::setConsumer(DataConsumer* consumer, const char* type)
+{
+    DataEndpoint* dat = consumer ? setEndpoint(type) : getEndpoint(type);
+    if (dat)
+	dat->setConsumer(consumer);
+}
+
+DataConsumer* CallEndpoint::getConsumer(const char* type) const
+{
+    DataEndpoint* dat = getEndpoint(type);
+    return dat ? dat->getConsumer() : 0;
+}
+
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
-    : m_peer(0), m_driver(driver), m_outgoing(outgoing), m_id(id)
+    : CallEndpoint(id),
+      m_driver(driver), m_outgoing(outgoing)
 {
     init();
 }
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
-    : m_peer(0), m_driver(&driver), m_outgoing(outgoing), m_id(id)
+    : CallEndpoint(id),
+      m_driver(&driver), m_outgoing(outgoing)
 {
     init();
 }
@@ -52,22 +186,13 @@ Channel::~Channel()
 	m_driver->unlock();
 	m_driver = 0;
     }
-#ifdef DEBUG
-    ObjList* l = m_data.skipNull();
-    for (; l; l=l->skipNext()) {
-	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
-	Debug(DebugAll,"Endpoint at %p type '%s' refcount=%d",e,e->name().c_str(),e->refcount());
-    }
-#endif
-    disconnect(true,0);
-    m_data.clear();
 }
 
 void* Channel::getObject(const String& name) const
 {
     if (name == "Channel")
 	return const_cast<Channel*>(this);
-    return RefObject::getObject(name);
+    return CallEndpoint::getObject(name);
 }
 
 void Channel::init()
@@ -90,66 +215,6 @@ const char* Channel::direction() const
     return m_outgoing ? "outgoing" : "incoming";
 }
 
-bool Channel::connect(Channel* peer)
-{
-    if (!peer) {
-	disconnect();
-	return false;
-    }
-    if (peer == m_peer)
-	return true;
-    DDebug(DebugInfo,"Channel '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
-
-    ref();
-    disconnect();
-    peer->ref();
-    peer->disconnect();
-
-    ObjList* l = m_data.skipNull();
-    for (; l; l=l->skipNext()) {
-	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
-	e->connect(peer->getEndpoint(e->name()));
-    }
-
-    m_peer = peer;
-    peer->setPeer(this);
-    connected();
-
-    return true;
-}
-
-void Channel::disconnect(bool final, const char* reason)
-{
-    if (!m_peer)
-	return;
-    DDebug(DebugInfo,"Channel '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
-
-    Channel *temp = m_peer;
-    m_peer = 0;
-
-    ObjList* l = m_data.skipNull();
-    for (; l; l=l->skipNext()) {
-	DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
-	DDebug(DebugAll,"Endpoint at %p type '%s' peer %p",e,e->name().c_str(),e->getPeer());
-	e->disconnect();
-    }
-
-    temp->setPeer(0,reason);
-    temp->deref();
-
-    disconnected(final,reason);
-    deref();
-}
-
-void Channel::setPeer(Channel* peer, const char* reason)
-{
-    m_peer = peer;
-    if (m_peer)
-	connected();
-    else
-	disconnected(false,reason);
-}
-
 void Channel::complete(Message& msg, bool minimal) const
 {
     msg.setParam("id",m_id);
@@ -167,8 +232,8 @@ void Channel::complete(Message& msg, bool minimal) const
 	msg.setParam("targetid",m_targetid);
     if (m_billid)
 	msg.setParam("billid",m_billid);
-    if (m_peer)
-	msg.setParam("peerid",m_peer->id());
+    if (getPeer())
+	msg.setParam("peerid",getPeer()->id());
 }
 
 Message* Channel::message(const char* name, bool minimal) const
@@ -263,53 +328,6 @@ bool Channel::setDebug(Message& msg)
 	<< " debug " << (debugEnabled() ? "on" : "off")
 	<< " level " << debugLevel() << "\n";
     return true;
-}
-
-DataEndpoint* Channel::getEndpoint(const char* type) const
-{
-    if (null(type))
-	return 0;
-    const ObjList* pos = m_data.find(type);
-    return pos ? static_cast<DataEndpoint*>(pos->get()) : 0;
-}
-
-DataEndpoint* Channel::setEndpoint(const char* type)
-{
-    if (null(type))
-	return 0;
-    DataEndpoint* dat = getEndpoint(type);
-    if (!dat) {
-	dat = new DataEndpoint(this,type);
-	if (m_peer)
-	    dat->connect(m_peer->getEndpoint(type));
-    }
-    return dat;
-}
-
-void Channel::setSource(DataSource* source, const char* type)
-{
-    DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);
-    if (dat)
-	dat->setSource(source);
-}
-
-DataSource* Channel::getSource(const char* type) const
-{
-    DataEndpoint* dat = getEndpoint(type);
-    return dat ? dat->getSource() : 0;
-}
-
-void Channel::setConsumer(DataConsumer* consumer, const char* type)
-{
-    DataEndpoint* dat = consumer ? setEndpoint(type) : getEndpoint(type);
-    if (dat)
-	dat->setConsumer(consumer);
-}
-
-DataConsumer* Channel::getConsumer(const char* type) const
-{
-    DataEndpoint* dat = getEndpoint(type);
-    return dat ? dat->getConsumer() : 0;
 }
 
 

@@ -232,20 +232,20 @@ void* DataSource::getObject(const String& name) const
     return DataNode::getObject(name);
 }
 
-DataEndpoint::DataEndpoint(Channel* chan, const char* name)
-    : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_channel(chan)
+DataEndpoint::DataEndpoint(CallEndpoint* call, const char* name)
+    : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_call(call)
 {
-    Debug(DebugInfo,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",chan,name,this);
-    if (m_channel)
-	m_channel->m_data.append(this);
+    Debug(DebugInfo,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",call,name,this);
+    if (m_call)
+	m_call->m_data.append(this);
 }
 
 DataEndpoint::~DataEndpoint()
 {
-    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() '%s' chan=%p [%p]",
-	m_name.c_str(),m_channel,this);
-    if (m_channel)
-	m_channel->m_data.remove(this,false);
+    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() '%s' call=%p [%p]",
+	m_name.c_str(),m_call,this);
+    if (m_call)
+	m_call->m_data.remove(this,false);
     disconnect();
     setSource();
     setConsumer();

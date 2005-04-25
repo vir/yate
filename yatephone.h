@@ -116,7 +116,7 @@ struct FormatInfo {
 	{ }
 };
 
-class Channel;
+class CallEndpoint;
 class Driver;
 
 /**
@@ -602,7 +602,7 @@ public:
     /**
      * Creates an empty data endpoint
      */
-    DataEndpoint(Channel* chan = 0, const char* name = "audio");
+    DataEndpoint(CallEndpoint* call = 0, const char* name = "audio");
 
     /**
      * Destroys the endpoint, source and consumer
@@ -668,11 +668,11 @@ public:
 	{ return m_peer; }
 
     /*
-     * Get a pointer to the owner channel
-     * @return A pointer to the owner channel or NULL
+     * Get a pointer to the owner call
+     * @return A pointer to the owner call or NULL
      */
-    inline Channel* getChannel() const
-	{ return m_channel; }
+    inline CallEndpoint* getCall() const
+	{ return m_call; }
 
     /**
      * Get the name set in constructor
@@ -695,7 +695,141 @@ private:
     DataSource* m_source;
     DataConsumer* m_consumer;
     DataEndpoint* m_peer;
-    Channel* m_channel;
+    CallEndpoint* m_call;
+};
+
+/**
+ * A class that holds common call control and data related features
+ * @short An abstract call endpoint
+ */
+class YATE_API CallEndpoint : public RefObject
+{
+    friend class DataEndpoint;
+
+private:
+    CallEndpoint* m_peer;
+
+protected:
+    ObjList m_data;
+    String m_id;
+
+public:
+    /**
+     * Destructor
+     */
+    virtual ~CallEndpoint();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Get a string representation of this channel
+     * @return A reference to the name of this object
+     */
+    virtual const String& toString() const
+	{ return m_id; }
+
+    /**
+     * Get the unique channel identifier
+     * @return A String holding the unique channel id
+     */
+    inline const String& id() const
+	{ return m_id; }
+
+    /**
+     * Get the connected peer call
+     * @return Pointer to connected peer call or NULL
+     */
+    inline CallEndpoint* getPeer() const
+	{ return m_peer; }
+
+    /**
+     * Connect the call endpoint to a peer.
+     * @param peer Pointer to the peer call endpoint.
+     * @return True if connected, false if an error occured.
+     */
+    bool connect(CallEndpoint* peer);
+
+    /**
+     * Disconnect from the connected peer call endpoint.
+     * @param reason Text that describes disconnect reason.
+     */
+    inline void disconnect(const char* reason = 0)
+	{ disconnect(false,reason); }
+
+    /**
+     * Get a data endpoint of this object
+     * @param type Type of data endpoint: "audio", "video", "text"
+     * @return A pointer to the DataEndpoint object or NULL if not found
+     */
+    DataEndpoint* getEndpoint(const char* type = "audio") const;
+
+    /**
+     * Get a data endpoint of this object, create if required
+     * @param type Type of data endpoint: "audio", "video", "text"
+     * @return A pointer to the DataEndpoint object or NULL if an error occured
+     */
+    DataEndpoint* setEndpoint(const char* type = "audio");
+
+    /**
+     * Set a data source of this object
+     * @param source A pointer to the new source or NULL
+     * @param type Type of data node: "audio", "video", "text"
+     */
+    void setSource(DataSource* source = 0, const char* type = "audio");
+
+    /**
+     * Get a data source of this object
+     * @param type Type of data node: "audio", "video", "text"
+     * @return A pointer to the DataSource object or NULL
+     */
+    DataSource* getSource(const char* type = "audio") const;
+
+    /**
+     * Set the data consumer of this object
+     * @param consumer A pointer to the new consumer or NULL
+     * @param type Type of data node: "audio", "video", "text"
+     */
+    void setConsumer(DataConsumer* consumer = 0, const char* type = "audio");
+
+    /**
+     * Get the data consumer of this object
+     * @param type Type of data node: "audio", "video", "text"
+     * @return A pointer to the DataConsumer object or NULL
+     */
+    DataConsumer* getConsumer(const char* type = "audio") const;
+
+protected:
+    /**
+     * Constructor
+     */
+    CallEndpoint(const char* id = 0);
+
+    /**
+     * Connect notification method.
+     */
+    virtual void connected() { }
+
+    /**
+     * Disconnect notification method.
+     * @param final True if this disconnect was called from the destructor.
+     * @param reason Text that describes disconnect reason.
+     */
+    virtual void disconnected(bool final, const char* reason) { }
+
+    /*
+     * Set the peer call endpoint pointer.
+     * @param peer A pointer to the new peer or NULL.
+     * @param reason Text describing the reason in case of disconnect.
+     */
+    void setPeer(CallEndpoint* peer, const char* reason = 0);
+
+private:
+    void disconnect(bool final, const char* reason);
 };
 
 /**
@@ -878,24 +1012,20 @@ private:
  * A class that holds common channel related features (a.k.a. call leg)
  * @short An abstract communication channel
  */
-class YATE_API Channel : public RefObject, public DebugEnabler
+class YATE_API Channel : public CallEndpoint, public DebugEnabler
 {
     friend class Driver;
     friend class Router;
-    friend class DataEndpoint;
 
 private:
-    Channel* m_peer;
     Driver* m_driver;
     bool m_outgoing;
-    String m_id;
 
 protected:
     String m_status;
     String m_address;
     String m_targetid;
     String m_billid;
-    ObjList m_data;
 
 public:
     /**
@@ -909,13 +1039,6 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
-
-    /**
-     * Get a string representation of this channel
-     * @return A reference to the name of this object
-     */
-    virtual const String& toString() const
-	{ return m_id; }
 
     /**
      * Put channel variables into a message
@@ -1038,13 +1161,6 @@ public:
 	{ return m_driver; }
 
     /**
-     * Get the unique channel identifier
-     * @return A String holding the unique channel id
-     */
-    inline const String& id() const
-	{ return m_id; }
-
-    /**
      * Get the connected channel identifier.
      * @return A String holding the unique channel id of the target or an empty
      *  string if this channel is not connected to a target.
@@ -1061,75 +1177,12 @@ public:
 	{ return m_billid; }
 
     /**
-     * Get the connected peer channel
-     * @return Pointer to connected peer channel or NULL
-     */
-    inline Channel* getPeer() const
-	{ return m_peer; }
-
-    /**
-     * Connect the channel to a peer.
-     * @param peer Pointer to the peer channel.
-     * @return True if connected, false if an error occured.
-     */
-    bool connect(Channel* peer);
-
-    /**
-     * Disconnect from the connected peer channel.
-     * @param reason Text that describes disconnect reason.
-     */
-    inline void disconnect(const char* reason = 0)
-	{ disconnect(false,reason); }
-
-    /**
      * Start a routing thread for this channel, dereference dynamic channels
      * @param msg Pointer to message to route, typically a "call.route", will be
      *  destroyed after routing fails or completes
      * @return True if routing thread started successfully, false if failed
      */
     bool startRouter(Message* msg);
-
-    /**
-     * Get a data endpoint of this object
-     * @param type Type of data endpoint: "audio", "video", "text"
-     * @return A pointer to the DataEndpoint object or NULL if not found
-     */
-    DataEndpoint* getEndpoint(const char* type = "audio") const;
-
-    /**
-     * Get a data endpoint of this object, create if required
-     * @param type Type of data endpoint: "audio", "video", "text"
-     * @return A pointer to the DataEndpoint object or NULL if an error occured
-     */
-    DataEndpoint* setEndpoint(const char* type = "audio");
-
-    /**
-     * Set a data source of this object
-     * @param source A pointer to the new source or NULL
-     * @param type Type of data node: "audio", "video", "text"
-     */
-    void setSource(DataSource* source = 0, const char* type = "audio");
-
-    /**
-     * Get a data source of this object
-     * @param type Type of data node: "audio", "video", "text"
-     * @return A pointer to the DataSource object or NULL
-     */
-    DataSource* getSource(const char* type = "audio") const;
-
-    /**
-     * Set the data consumer of this object
-     * @param consumer A pointer to the new consumer or NULL
-     * @param type Type of data node: "audio", "video", "text"
-     */
-    void setConsumer(DataConsumer* consumer = 0, const char* type = "audio");
-
-    /**
-     * Get the data consumer of this object
-     * @param type Type of data node: "audio", "video", "text"
-     * @return A pointer to the DataConsumer object or NULL
-     */
-    DataConsumer* getConsumer(const char* type = "audio") const;
 
 protected:
     /**
@@ -1156,28 +1209,8 @@ protected:
     inline void setOutgoing(bool outgoing = true)
 	{ m_outgoing = outgoing; }
 
-    /**
-     * Connect notification method.
-     */
-    virtual void connected() { }
-
-    /**
-     * Disconnect notification method.
-     * @param final True if this disconnect was called from the destructor.
-     * @param reason Text that describes disconnect reason.
-     */
-    virtual void disconnected(bool final, const char* reason) { }
-
-    /*
-     * Set the peer channel pointer.
-     * @param peer A pointer to the new peer or NULL.
-     * @param reason Text describing the reason in case of disconnect.
-     */
-    void setPeer(Channel* peer, const char* reason = 0);
-
 private:
     void init();
-    void disconnect(bool final, const char* reason);
     Channel(); // no default constructor please
 };
 

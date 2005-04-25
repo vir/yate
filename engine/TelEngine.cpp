@@ -76,8 +76,8 @@ static void dbg_output(const char* prefix, const char* format, va_list ap)
     unsigned int n = 0;
     if (s_timestamp) {
 	u_int64_t t = Time::now() - s_timestamp;
-	unsigned int s = t / 1000000;
-	unsigned int u = t % 1000000;
+	unsigned int s = (unsigned int)(t / 1000000);
+	unsigned int u = (unsigned int)(t % 1000000);
 	::sprintf(buf,"%07u.%06u ",s,u);
 	n = ::strlen(buf);
     }

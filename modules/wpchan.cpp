@@ -165,18 +165,32 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
     return w;
 }
 
-static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
+static int wp_select(HANDLE fd)
 {
-    DDebug(DebugAll,"wp_create('%s','%s',%d,%d)",card,device,nettype,swtype);
+    fd_set rdfds;
+    fd_set errfds;
+    FD_ZERO(&rdfds);
+    FD_SET(fd, &rdfds);
+    FD_ZERO(&errfds);
+    FD_SET(fd, &errfds);
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100;
+    return ::select(fd+1, &rdfds, NULL, &errfds, &tv);
+}
+
+static HANDLE wp_open(const char* card, const char* device)
+{
+    DDebug(DebugAll,"wp_open('%s','%s')",card,device);
     if (null(card) || null(device))
-	return 0;
-    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd < 0) {
+	return INVALID_HANDLE_VALUE;
+    HANDLE fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
+    if (fd == INVALID_HANDLE_VALUE) {
 	Debug(DebugGoOn,"Wanpipe failed to create socket: error %d: %s",
 	    errno,::strerror(errno));
-	return 0;
+	return fd;
     }
-    // Set up the D channel
+    // Bind to the card/interface
     struct wan_sockaddr_ll sa;
     memset(&sa,0,sizeof(struct wan_sockaddr_ll));
     ::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
@@ -187,11 +201,31 @@ static struct pri* wp_create(const char* card, const char* device, int nettype, 
 	Debug(DebugGoOn,"Wanpipe failed to bind %d: error %d: %s",
 	    fd,errno,::strerror(errno));
 	::close(fd);
-	return 0;
+	fd = INVALID_HANDLE_VALUE;
     }
+    return fd;
+}
+
+void wp_close(HANDLE fd)
+{
+    if (fd == INVALID_HANDLE_VALUE)
+	return;
+#ifdef _WINDOWS
+    ::CloseHandle(fd);
+#else
+    ::close(fd);
+#endif
+}
+
+static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
+{
+    DDebug(DebugAll,"wp_create('%s','%s',%d,%d)",card,device,nettype,swtype);
+    HANDLE fd = wp_open(card,device);
+    if (fd == INVALID_HANDLE_VALUE)
+	return 0;
     struct pri* p = ::pri_new_cb(fd, nettype, swtype, wp_read, wp_write, 0);
     if (!p)
-	::close(fd);
+	wp_close(fd);
     return p;
 }
 
@@ -207,28 +241,15 @@ WpSpan::~WpSpan()
     Debug(DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
     delete m_data;
-#ifdef _WINDOWS
-    ::CloseHandle(m_fd);
-#else
-    ::close(m_fd);
-#endif
+    wp_close(m_fd);
     m_fd = INVALID_HANDLE_VALUE;
 }
 
 void WpSpan::run()
 {
     Debug(DebugAll,"WpSpan::run() [%p]",this);
-    fd_set rdfds;
-    fd_set errfds;
     for (;;) {
-	FD_ZERO(&rdfds);
-	FD_SET(m_fd, &rdfds);
-	FD_ZERO(&errfds);
-	FD_SET(m_fd, &errfds);
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 100;
-	int sel = ::select(m_fd+1, &rdfds, NULL, &errfds, &tv);
+	int sel = wp_select(m_fd);
 	Thread::check();
 	if (!sel)
 	    runEvent(true);
@@ -284,27 +305,13 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 }
 
 WpData::WpData(WpSpan* span, const char* card, const char* device)
-    : Thread("WpData"), m_span(span), m_fd(-1), m_buffer(0), m_chans(0)
+    : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_buffer(0), m_chans(0)
 {
     Debug(DebugAll,"WpData::WpData(%p) [%p]",span,this);
-    int fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd >= 0) {
-	// Set up the B channel group
-	struct wan_sockaddr_ll sa;
-	memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-	::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
-	::strncpy((char*)sa.sll_card,card,sizeof(sa.sll_card));
-	sa.sll_protocol = htons(PVC_PROT);
-	sa.sll_family=AF_WANPIPE;
-	if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	    Debug("WpData",DebugGoOn,"Failed to bind %d: error %d: %s",
-		fd,errno,::strerror(errno));
-	    ::close(fd);
-	}
-	else {
-	    m_fd = fd;
-	    m_span->m_data = this;
-	}
+    HANDLE fd = wp_open(card,device);
+    if (fd != INVALID_HANDLE_VALUE) {
+	m_fd = fd;
+	m_span->m_data = this;
     }
 }
 
@@ -312,8 +319,8 @@ WpData::~WpData()
 {
     Debug(DebugAll,"WpData::~WpData() [%p]",this);
     m_span->m_data = 0;
-    if (m_fd != INVALID_HANDLE_VALUE)
-	::close(m_fd);
+    wp_close(m_fd);
+    m_fd = INVALID_HANDLE_VALUE;
     if (m_buffer)
 	::free(m_buffer);
     if (m_chans)
@@ -346,7 +353,7 @@ void WpData::run()
 	FD_SET(m_fd, &oobfds);
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = 100;
+	tv.tv_usec = samp*125;
 	if (::select(m_fd+1, &rdfds, NULL, &oobfds, &tv) <= 0)
 	    continue;
 

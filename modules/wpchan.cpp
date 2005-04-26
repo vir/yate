@@ -26,7 +26,18 @@
 
 extern "C" {
 
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+#define MSG_NOSIGNAL 0
+#define MSG_DONTWAIT 0
+#include <winioctl.h>
+#define IOCTL_WRITE 1
+#define IOCTL_READ 2
+#define IOCTL_MGMT 3
+#define IoctlWriteCommand \
+	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_WRITE, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
+#define IoctlReadCommand \
+	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_READ, METHOD_IN_DIRECT, FILE_ANY_ACCESS)
+#else
 typedef int HANDLE;
 #define INVALID_HANDLE_VALUE (-1)
 #define __LINUX__
@@ -129,13 +140,37 @@ public:
 
 #define WP_HEADER 16
 
+static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
+{
+#ifdef _WINDOWS
+    int r = 0;
+    if (DeviceIoControl(fd,IoctlReadCommand,0,0,buf,buflen,(LPDWORD)&r,0))
+	r = 0;
+#else
+    int r = ::recv(fd,buf,buflen,flags);
+#endif
+    return r;
+}
+
+static int wp_send(HANDLE fd, void *buf, int buflen, int flags = 0)
+{
+#ifdef _WINDOWS
+    int w = 0;
+    if (DeviceIoControl(fd,IoctlWriteCommand,buf,buflen,buf,buflen,(LPDWORD)&w,0))
+	w = 0;
+#else
+    int w = ::send(fd,buf,buflen,flags);
+#endif
+    return w;
+}
+
 static int wp_read(struct pri *pri, void *buf, int buflen)
 {
     buflen -= 2;
     int sz = buflen+WP_HEADER;
     char *tmp = (char*)::calloc(sz,1);
     XDebug("wp_read",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int r = ::recv(::pri_fd(pri),tmp,sz,MSG_NOSIGNAL);
+    int r = wp_recv((HANDLE)::pri_fd(pri),tmp,sz,MSG_NOSIGNAL);
     XDebug("wp_read",DebugAll,"post r=%d",r);
     if (r > 0) {
 	r -= WP_HEADER;
@@ -155,7 +190,7 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
     char *tmp = (char*)::calloc(sz,1);
     ::memcpy(tmp+WP_HEADER,buf,buflen);
     XDebug("wp_write",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int w = ::send(::pri_fd(pri),tmp,sz,0);
+    int w = wp_send((HANDLE)::pri_fd(pri),tmp,sz,0);
     XDebug("wp_write",DebugAll,"post w=%d",w);
     if (w > 0) {
 	w -= WP_HEADER;
@@ -165,18 +200,39 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
     return w;
 }
 
-static int wp_select(HANDLE fd)
+static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
 {
+#ifdef _WINDOWS
+    return true;
+#else
     fd_set rdfds;
     fd_set errfds;
     FD_ZERO(&rdfds);
-    FD_SET(fd, &rdfds);
+    FD_SET(fd,&rdfds);
     FD_ZERO(&errfds);
-    FD_SET(fd, &errfds);
+    FD_SET(fd,&errfds);
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = 100;
-    return ::select(fd+1, &rdfds, NULL, &errfds, &tv);
+    tv.tv_usec = samp*125;
+    int sel = ::select(fd+1, &rdfds, NULL, errp ? &errfds : NULL, &tv);
+    if (sel < 0)
+	Debug(DebugWarn,"Wanpipe select failed on %d: error %d: %s",
+	    fd,errno,::strerror(errno));
+    if (errp)
+	*errp = FD_ISSET(fd,&errfds);
+    return FD_ISSET(fd,&rdfds);
+#endif
+}
+
+void wp_close(HANDLE fd)
+{
+    if (fd == INVALID_HANDLE_VALUE)
+	return;
+#ifdef _WINDOWS
+    ::CloseHandle(fd);
+#else
+    ::close(fd);
+#endif
 }
 
 static HANDLE wp_open(const char* card, const char* device)
@@ -184,6 +240,23 @@ static HANDLE wp_open(const char* card, const char* device)
     DDebug(DebugAll,"wp_open('%s','%s')",card,device);
     if (null(card) || null(device))
 	return INVALID_HANDLE_VALUE;
+#ifdef _WINDOWS
+    String devname("\\\\.\\");
+    devname << card << "_" << device;
+    HANDLE fd = ::CreateFile(
+	devname,
+	GENERIC_READ|GENERIC_WRITE,
+	FILE_SHARE_READ|FILE_SHARE_WRITE,
+	0,
+	OPEN_EXISTING,
+	FILE_FLAG_NO_BUFFERING|FILE_FLAG_WRITE_THROUGH,
+	0);
+    if (fd == INVALID_HANDLE_VALUE) {
+	Debug(DebugGoOn,"Wanpipe failed to open device '%s': error %d: %s",
+	    devname.c_str(),errno,::strerror(errno));
+	return fd;
+    }
+#else
     HANDLE fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
     if (fd == INVALID_HANDLE_VALUE) {
 	Debug(DebugGoOn,"Wanpipe failed to create socket: error %d: %s",
@@ -200,21 +273,11 @@ static HANDLE wp_open(const char* card, const char* device)
     if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
 	Debug(DebugGoOn,"Wanpipe failed to bind %d: error %d: %s",
 	    fd,errno,::strerror(errno));
-	::close(fd);
+	wp_close(fd);
 	fd = INVALID_HANDLE_VALUE;
     }
-    return fd;
-}
-
-void wp_close(HANDLE fd)
-{
-    if (fd == INVALID_HANDLE_VALUE)
-	return;
-#ifdef _WINDOWS
-    ::CloseHandle(fd);
-#else
-    ::close(fd);
 #endif
+    return fd;
 }
 
 static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
@@ -223,7 +286,7 @@ static struct pri* wp_create(const char* card, const char* device, int nettype, 
     HANDLE fd = wp_open(card,device);
     if (fd == INVALID_HANDLE_VALUE)
 	return 0;
-    struct pri* p = ::pri_new_cb(fd, nettype, swtype, wp_read, wp_write, 0);
+    struct pri* p = ::pri_new_cb((int)fd, nettype, swtype, wp_read, wp_write, 0);
     if (!p)
 	wp_close(fd);
     return p;
@@ -249,15 +312,9 @@ void WpSpan::run()
 {
     Debug(DebugAll,"WpSpan::run() [%p]",this);
     for (;;) {
-	int sel = wp_select(m_fd);
+	bool rd = wp_select(m_fd,5); // 5 bytes per smallest q921 frame
 	Thread::check();
-	if (!sel)
-	    runEvent(true);
-	else if (sel > 0)
-	    runEvent(false);
-	else if (errno != EINTR)
-	    Debug("WpSpan",DebugGoOn,"select() error %d: %s",
-		errno,::strerror(errno));
+	runEvent(!rd);
     }
 }
 
@@ -344,28 +401,19 @@ void WpData::run()
 	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
 	DDebug("wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
-    fd_set rdfds,oobfds;
     while (m_span && (m_fd >= 0)) {
 	Thread::check();
-	FD_ZERO(&rdfds);
-	FD_ZERO(&oobfds);
-	FD_SET(m_fd, &rdfds);
-	FD_SET(m_fd, &oobfds);
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = samp*125;
-	if (::select(m_fd+1, &rdfds, NULL, &oobfds, &tv) <= 0)
-	    continue;
-
-	if (FD_ISSET(m_fd, &oobfds)) {
+	bool oob = false;
+	bool rd = wp_select(m_fd,samp,&oob);
+	if (oob) {
 	    DDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = ::recv(m_fd,m_buffer,sz,MSG_OOB);
+	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
 	    DDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
 	}
 
-	if (FD_ISSET(m_fd, &rdfds)) {
+	if (rd) {
 	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = ::recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
+	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
 	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
 	    r -= WP_HEADER;
 	    // We should have read N bytes for each B channel
@@ -395,7 +443,7 @@ void WpData::run()
 	    m_span->driver()->unlock();
 	    w = (w * bchans) + WP_HEADER;
 	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,w,sz);
-	    w = ::send(m_fd,m_buffer,w,MSG_DONTWAIT);
+	    w = wp_send(m_fd,m_buffer,w,MSG_DONTWAIT);
 	    XDebug("wpdata_send",DebugAll,"post w=%d",w);
 	}
     }
@@ -433,14 +481,22 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     card << "wanpipe" << span;
     card = cfg.getValue(sect,"card",card);
     String dev;
+#ifdef _WINDOWS
+    dev = "if1";
+#else
     dev << "w" << span << "g2";
+#endif
     pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
     if (!p)
 	return 0;
-    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,::pri_fd(p));
+    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,(HANDLE)::pri_fd(p));
     ps->startup();
+#ifdef _WINDOWS
+    dev = "if0";
+#else
     dev.clear();
     dev << "w" << span << "g1";
+#endif
     WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
     dat->startup();
     return ps;

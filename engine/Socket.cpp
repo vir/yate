@@ -50,9 +50,11 @@ SocketAddr::SocketAddr(int family)
 	case AF_INET:
 	    m_length = sizeof(struct sockaddr_in);
 	    break;
+#ifdef AF_INET6
 	case AF_INET6:
 	    m_length = sizeof(struct sockaddr_in6);
 	    break;
+#endif
     }
     if (m_length)
 	m_address = (struct sockaddr*) ::calloc(m_length,1);
@@ -86,9 +88,11 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 	    case AF_INET:
 		len = sizeof(struct sockaddr_in);
 		break;
+#ifdef AF_INET6
 	    case AF_INET6:
 		len = sizeof(struct sockaddr_in6);
 		break;
+#endif
 	}
     }
     if (addr && len) {
@@ -124,7 +128,9 @@ bool SocketAddr::host(const String& name)
 		}
 	    }
 	    break;
+#ifdef AF_INET6
 	// TODO: implement AF_INET6
+#endif
     }
     return false;
 }
@@ -137,7 +143,9 @@ void SocketAddr::stringify()
 	    m_host = inet_ntoa(((struct sockaddr_in*)m_address)->sin_addr);
 	    s_mutex.unlock();
 	    break;
+#ifdef AF_INET6
 	// TODO: implement AF_INET6
+#endif
     }
 }
 
@@ -146,8 +154,10 @@ int SocketAddr::port() const
     switch (family()) {
 	case AF_INET:
 	    return ntohs(((struct sockaddr_in*)m_address)->sin_port);
+#ifdef AF_INET6
 	case AF_INET6:
 	    return ntohs(((struct sockaddr_in6*)m_address)->sin6_port);
+#endif
     }
     return 0;
 }
@@ -158,9 +168,11 @@ bool SocketAddr::port(int newport)
 	case AF_INET:
 	    ((struct sockaddr_in*)m_address)->sin_port = ntohs(newport);
 	    break;
+#ifdef AF_INET6
 	case AF_INET6:
 	    ((struct sockaddr_in6*)m_address)->sin6_port = ntohs(newport);
 	    break;
+#endif
 	default:
 	    return false;
     }

@@ -24,9 +24,7 @@
 
 #include <string.h>
 
-#ifdef _WINDOWS
-#include <ws2tcpip.h>
-#else
+#ifndef _WINDOWS
 #include <fcntl.h>
 #include <stdlib.h>
 #endif

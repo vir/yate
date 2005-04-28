@@ -24,11 +24,159 @@
 
 #include <string.h>
 
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+#include <ws2tcpip.h>
+#else
 #include <fcntl.h>
+#include <stdlib.h>
 #endif
 
+#define MAX_SOCKLEN 1024
+
 using namespace TelEngine;
+
+static Mutex s_mutex;
+
+SocketAddr::SocketAddr(const struct sockaddr* addr, socklen_t len)
+    : m_address(0), m_length(0)
+{
+    assign(addr,len);
+}
+
+SocketAddr::SocketAddr(int family)
+    : m_address(0), m_length(0)
+{
+    switch (family) {
+	case AF_INET:
+	    m_length = sizeof(struct sockaddr_in);
+	    break;
+	case AF_INET6:
+	    m_length = sizeof(struct sockaddr_in6);
+	    break;
+    }
+    if (m_length)
+	m_address = (struct sockaddr*) ::calloc(m_length,1);
+    if (m_address)
+	m_address->sa_family = family;
+}
+
+SocketAddr::~SocketAddr()
+{
+    clear();
+}
+
+void SocketAddr::clear()
+{
+    m_host.clear();
+    m_length = 0;
+    if (m_address) {
+	void* tmp = m_address;
+	m_address = 0;
+	::free(tmp);
+    }
+}
+
+void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
+{
+    if (addr == m_address)
+	return;
+    clear();
+    if (addr && !len) {
+	switch (addr->sa_family) {
+	    case AF_INET:
+		len = sizeof(struct sockaddr_in);
+		break;
+	    case AF_INET6:
+		len = sizeof(struct sockaddr_in6);
+		break;
+	}
+    }
+    if (addr && len) {
+	void* tmp = ::malloc(len);
+	::memcpy(tmp,addr,len);
+	m_address = (struct sockaddr*)tmp;
+	m_length = len;
+	stringify();
+    }
+}
+
+bool SocketAddr::host(const String& name)
+{
+    if (name.null())
+	return false;
+    if (name == m_host)
+	return true;
+    switch (family()) {
+	case AF_INET:
+	    {
+		in_addr_t a = inet_addr(name);
+		if (a == INADDR_NONE) {
+		    s_mutex.lock();
+		    struct hostent* he = gethostbyname(name);
+		    if (he && (he->h_addrtype == AF_INET))
+			a = *((in_addr_t*)(he->h_addr_list[0]));
+		    s_mutex.unlock();
+		}
+		if (a != INADDR_NONE) {
+		    ((struct sockaddr_in*)m_address)->sin_addr.s_addr = a;
+		    stringify();
+		    return true;
+		}
+	    }
+	    break;
+	// TODO: implement AF_INET6
+    }
+    return false;
+}
+
+void SocketAddr::stringify()
+{
+    switch (family()) {
+	case AF_INET:
+	    s_mutex.lock();
+	    m_host = inet_ntoa(((struct sockaddr_in*)m_address)->sin_addr);
+	    s_mutex.unlock();
+	    break;
+	// TODO: implement AF_INET6
+    }
+}
+
+int SocketAddr::port() const
+{
+    switch (family()) {
+	case AF_INET:
+	    return ntohs(((struct sockaddr_in*)m_address)->sin_port);
+	case AF_INET6:
+	    return ntohs(((struct sockaddr_in6*)m_address)->sin6_port);
+    }
+    return 0;
+}
+
+bool SocketAddr::port(int newport)
+{
+    switch (family()) {
+	case AF_INET:
+	    ((struct sockaddr_in*)m_address)->sin_port = ntohs(newport);
+	    break;
+	case AF_INET6:
+	    ((struct sockaddr_in6*)m_address)->sin6_port = ntohs(newport);
+	    break;
+	default:
+	    return false;
+    }
+    return true;
+}
+
+bool SocketAddr::operator==(const SocketAddr& other) const
+{
+    if (m_length != other.length())
+	return false;
+    if (m_address == other.address())
+	return true;
+    if (m_address && other.address())
+	return !::memcmp(m_address,other.address(),m_length);
+    return false;
+}
 
 Socket::Socket()
     : m_error(0), m_handle(invalidHandle())
@@ -184,6 +332,16 @@ Socket* Socket::accept(struct sockaddr* addr, socklen_t* addrlen)
     return (sock == invalidHandle()) ? 0 : new Socket(sock);
 }
 
+Socket* Socket::accept(SocketAddr& addr)
+{
+    char buf[MAX_SOCKLEN];
+    socklen_t len = sizeof(buf);
+    Socket* sock = accept((struct sockaddr*)buf,&len);
+    if (sock)
+	addr.assign((struct sockaddr*)buf,len);
+    return sock;
+}
+
 SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
 {
     if (addrlen && !addr)
@@ -194,6 +352,47 @@ SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
     else
 	clearError();
     return res;
+}
+
+bool Socket::connect(struct sockaddr* addr, socklen_t addrlen)
+{
+    if (addrlen && !addr)
+	addrlen = 0;
+    return checkError(::connect(m_handle,addr,addrlen));
+}
+
+bool Socket::getSockName(struct sockaddr* addr, socklen_t* addrlen)
+{
+    if (addrlen && !addr)
+	*addrlen = 0;
+    return checkError(::getsockname(m_handle,addr,addrlen));
+}
+
+bool Socket::getSockName(SocketAddr& addr)
+{
+    char buf[MAX_SOCKLEN];
+    socklen_t len = sizeof(buf);
+    bool ok = getSockName((struct sockaddr*)buf,&len);
+    if (ok)
+	addr.assign((struct sockaddr*)buf,len);
+    return ok;
+}
+
+bool Socket::getPeerName(struct sockaddr* addr, socklen_t* addrlen)
+{
+    if (addrlen && !addr)
+	*addrlen = 0;
+    return checkError(::getpeername(m_handle,addr,addrlen));
+}
+
+bool Socket::getPeerName(SocketAddr& addr)
+{
+    char buf[MAX_SOCKLEN];
+    socklen_t len = sizeof(buf);
+    bool ok = getPeerName((struct sockaddr*)buf,&len);
+    if (ok)
+	addr.assign((struct sockaddr*)buf,len);
+    return ok;
 }
 
 int Socket::sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags)
@@ -243,6 +442,16 @@ int Socket::recvFrom(void* buffer, int length, struct sockaddr* addr, socklen_t*
 	*adrlen = 0;
     int res = ::recvfrom(m_handle,(char*)buffer,length,flags,addr,adrlen);
     checkError(res,true);
+    return res;
+}
+
+int Socket::recvFrom(void* buffer, int length, SocketAddr& addr, int flags)
+{
+    char buf[MAX_SOCKLEN];
+    socklen_t len = sizeof(buf);
+    int res = recvFrom(buffer,length,(struct sockaddr*)buf,&len,flags);
+    if (res != socketError())
+	addr.assign((struct sockaddr*)buf,len);
     return res;
 }
 

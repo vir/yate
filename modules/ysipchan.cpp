@@ -67,39 +67,6 @@ static TokenDict dict_rtpmap[] = {
 
 static Configuration s_cfg;
 
-class SIPHandler : public MessageHandler
-{
-public:
-    SIPHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class HaltHandler : public MessageHandler
-{
-public:
-    HaltHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-
-class StatusHandler : public MessageHandler
-{
-public:
-    StatusHandler(const char *name) : MessageHandler(name) { }
-    virtual bool received(Message &msg);
-};
-										
-class SIPConnHandler : public MessageReceiver
-{
-public:
-    enum {
-	Ringing,
-	Answered,
-	Drop,
-	Masquerade,
-    };
-    virtual bool received(Message &msg, int id);
-};
-
 class YateUDPParty : public SIPParty
 {
 public:

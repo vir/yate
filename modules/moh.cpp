@@ -34,17 +34,13 @@
 
 #include <yatephone.h>
 
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <errno.h>
 
 
 using namespace TelEngine;
@@ -78,7 +74,7 @@ private:
 
 };
 
-class MOHChan : public DataEndpoint
+class MOHChan : public CallEndpoint
 {
 public:
     MOHChan(const String &name);
@@ -262,7 +258,7 @@ void MOHSource::run()
 int MOHChan::s_nextid = 1;
 
 MOHChan::MOHChan(const String &name)
-    : DataEndpoint("moh")
+    : CallEndpoint("moh")
 {
     Debug(DebugAll,"MOHChan::MOHChan(\"%s\") [%p]",name.c_str(),this);
     Lock lock(mutex);
@@ -299,13 +295,13 @@ bool MOHHandler::received(Message &msg)
     if (!dest.matches(r))
 	return false;
     String name = dest.matchString(1);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd) {
-	MOHChan *tc = new MOHChan(name);
-	if (dd->connect(tc))
-	    tc->deref();
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    if (ch) {
+	MOHChan *mc = new MOHChan(name);
+	if (ch->connect(mc))
+	    mc->deref();
 	else {
-	    tc->destruct();
+	    mc->destruct();
 	    return false;
 	}
     }
@@ -323,15 +319,15 @@ bool MOHHandler::received(Message &msg)
 	    m = "call.execute";
 	    m.addParam("callto",m.retValue());
 	    m.retValue() = 0;
-	    MOHChan *tc = new MOHChan(dest.matchString(1).c_str());
-	    m.setParam("id",tc->id());
-	    m.userData(tc);
+	    MOHChan *mc = new MOHChan(dest.matchString(1).c_str());
+	    m.setParam("id",mc->id());
+	    m.userData(mc);
 	    if (Engine::dispatch(m)) {
-		tc->deref();
+		mc->deref();
 		return true;
 	    }
 	    Debug(DebugWarn,"MOH outgoing call not accepted!");
-	    tc->destruct();
+	    mc->destruct();
 	}
 	else
 	    Debug(DebugWarn,"MOH outgoing call but no route!");

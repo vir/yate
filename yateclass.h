@@ -59,6 +59,7 @@ typedef unsigned __int64 u_int64_t;
 typedef unsigned __int64 uint64_t;
 
 typedef int socklen_t;
+typedef unsigned long in_addr_t;
 
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
@@ -2251,6 +2252,138 @@ private:
 };
 
 /**
+ * Wrapper class to keep a socket address
+ * @short A socket address holder
+ */
+class YATE_API SocketAddr : public GenObject
+{
+public:
+    /**
+     * Default constructor of an empty address
+     */
+    inline SocketAddr()
+	: m_address(0), m_length(0)
+	{ }
+
+    /**
+     * Copy constructor
+     * @param value Address to copy
+     */
+    inline SocketAddr(const SocketAddr& value)
+	: m_address(0), m_length(0)
+	{ assign(value.address(),value.length()); }
+
+    /**
+     * Constructor of a null address
+     * @param family Family of the address to create
+     */
+    SocketAddr(int family);
+
+    /**
+     * Constructor that stores a copy of an address
+     * @param addr Pointer to the address to store
+     * @param len Length of the stored address, zero to use default
+     */
+    SocketAddr(const struct sockaddr* addr, socklen_t len = 0);
+
+    /**
+     * Destructor that frees and zeroes out everything
+     */
+    virtual ~SocketAddr();
+
+    /**
+     * Assignment operator
+     * @param value Address to copy
+     */
+    inline SocketAddr& operator=(const SocketAddr& value)
+	{ assign(value.address(),value.length()); return *this; }
+
+    /**
+     * Equality comparation operator
+     * @param other Address to compare to
+     * @return True if the addresses are equal
+     */
+    bool operator==(const SocketAddr& other) const;
+
+    /**
+     * Inequality comparation operator
+     * @param other Address to compare to
+     * @return True if the addresses are different
+     */
+    inline bool operator!=(const SocketAddr& other) const
+	{ return !operator==(other); }
+
+    /**
+     * Clears up the address, frees the memory
+     */
+    void clear();
+
+    /**
+     * Assigns a new address
+     * @param addr Pointer to the address to store
+     * @param len Length of the stored address, zero to use default
+     */
+    void assign(const struct sockaddr* addr, socklen_t len = 0);
+
+    /**
+     * Get the family of the stored address
+     * @return Address family of the stored address or zero (AF_UNSPEC)
+     */
+    inline int family() const
+	{ return m_address ? m_address->sa_family : 0; }
+
+    /**
+     * Get the host of this address
+     * @return Host name as String
+     */
+    inline const String& host() const
+	{ return m_host; }
+
+    /**
+     * Set the hostname of this address
+     * @return True if new host set, false if name could not be parsed
+     */
+    virtual bool host(const String& name);
+
+    /**
+     * Get the port of the stored address (if supported)
+     * @return Port number of the socket address or zero
+     */
+    int port() const;
+
+    /**
+     * Set the port of the stored address (if supported)
+     * @param newport Port number to set in the socket address
+     * @return True if new port set, false if not supported
+     */
+    bool port(int newport);
+
+    /**
+     * Get the contained socket address
+     * @return A pointer to the socket address
+     */
+    inline struct sockaddr* address() const
+	{ return m_address; }
+
+    /**
+     * Get the length of the address
+     * @return Length of the stored address
+     */
+    inline socklen_t length() const
+	{ return m_length; }
+
+protected:
+    /**
+     * Convert the host address to a String stored in m_host
+     */
+    virtual void stringify();
+
+    struct sockaddr* m_address;
+    socklen_t m_length;
+    String m_host;
+};
+
+/**
  * This class encapsulates a system dependent socket in a system independent abstraction
  * @short A generic socket class
  */
@@ -2398,6 +2531,14 @@ public:
     bool bind(struct sockaddr* addr, socklen_t addrlen);
 
     /**
+     * Associates the socket with a local address
+     * @param addr Address to assign to this socket
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool bind(const SocketAddr& addr)
+	{ return bind(addr.address(), addr.length()); }
+
+    /**
      * Start listening for incoming connections on the socket
      * @param backlog Maximum length of the queue of pending connections, 0 for system maximum
      * @return True if operation was successfull, false if an error occured
@@ -2415,10 +2556,63 @@ public:
     /**
      * Create a new socket for an incoming connection attempt on a listening socket
      * @param addr Address to fill in with the address of the incoming connection
+     * @return Open socket to the new connection or NULL on failure
+     */
+    Socket* accept(SocketAddr& addr);
+
+    /**
+     * Create a new socket for an incoming connection attempt on a listening socket
+     * @param addr Address to fill in with the address of the incoming connection
      * @param addrlen Length of the address structure on input, length of address data on return
      * @return Operating system handle to the new connection or @ref invalidHandle() on failure
      */
     SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
+
+    /**
+     * Connects the socket to a remote address
+     * @param addr Address to connect to
+     * @param addrlen Length of the address structure
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool connect(struct sockaddr* addr, socklen_t addrlen);
+
+    /**
+     * Connects the socket to a remote address
+     * @param addr Socket address to connect to
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool connect(const SocketAddr& addr)
+	{ return connect(addr.address(), addr.length()); }
+
+    /**
+     * Retrive the address of the local socket of a connection
+     * @param addr Address to fill in with the address of the local socket
+     * @param addrlen Length of the address structure on input, length of address data on return
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool getSockName(struct sockaddr* addr, socklen_t* addrlen);
+
+    /**
+     * Retrive the address of the local socket of a connection
+     * @param addr Address to fill in with the address of the local socket
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool getSockName(SocketAddr& addr);
+
+    /**
+     * Retrive the address of the remote socket of a connection
+     * @param addr Address to fill in with the address of the remote socket
+     * @param addrlen Length of the address structure on input, length of address data on return
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool getPeerName(struct sockaddr* addr, socklen_t* addrlen);
+
+    /**
+     * Retrive the address of the remote socket of a connection
+     * @param addr Address to fill in with the address of the remote socket
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool getPeerName(SocketAddr& addr);
 
     /**
      * Send a message over a connected or unconnected socket
@@ -2430,6 +2624,17 @@ public:
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
     int sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags = 0);
+
+    /**
+     * Send a message over a connected or unconnected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param addr Address to send the message to
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    inline int sendTo(const void* buffer, int length, const SocketAddr& addr, int flags = 0)
+	{ return sendTo(buffer, length, addr.address(), addr.length(), flags); }
 
     /**
      * Send a message over a connected socket
@@ -2465,6 +2670,16 @@ public:
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
     int recvFrom(void* buffer, int length, struct sockaddr* addr = 0, socklen_t* adrlen = 0, int flags = 0);
+
+    /**
+     * Receive a message from a connected or unconnected socket
+     * @param buffer Buffer for data transfer
+     * @param length Length of the buffer
+     * @param addr Address to fill in with the address of the incoming data
+     * @param flags Operating system specific bit flags that change the behaviour
+     * @return Number of bytes transferred, @ref socketError() if an error occurred
+     */
+    int recvFrom(void* buffer, int length, SocketAddr& addr, int flags = 0);
 
     /**
      * Receive a message from a connected socket

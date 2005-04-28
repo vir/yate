@@ -25,10 +25,11 @@
 #include <yatephone.h>
 
 #include <stdlib.h>
-#include <unistd.h>
 
 using namespace TelEngine;
 
+static Mutex s_mutex(true);
+static ObjList s_calls;
 static Configuration s_cfg;
 static bool s_runs = false;
 static int s_total = 0;
@@ -40,24 +41,33 @@ static int s_numcalls = 0;
 
 static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|load|save|set paramname[=value]}";
 
-class GenConnection : public Channel
+class GenConnection : public CallEndpoint
 {
 public:
-    GenConnection(const String& callto);
+    GenConnection(unsigned int lifetime, const String& callto);
     ~GenConnection();
     virtual void disconnected(bool final, const char *reason);
     void ringing();
     void answered();
     void hangup();
     void makeSource();
+    inline const String& status() const
+	{ return m_status; }
     inline const String& party() const
 	{ return m_callto; }
-    inline u_int64_t age() const
-	{ return Time::now() - m_start; }
+    inline void setTarget(const char *target = 0)
+	{ m_target = target; }
+    inline const String& getTarget() const
+	{ return m_target; }
+    inline bool oldAge(unsigned long long now) const
+	{ return now > m_finish; }
+    static GenConnection* find(const String& id);
     static bool oneCall(String* target = 0);
 private:
+    String m_status;
     String m_callto;
-    u_int64_t m_start;
+    String m_target;
+    unsigned long long m_finish;
 };
 
 class GenThread : public Thread
@@ -67,6 +77,27 @@ public:
 	: Thread("CallGen")
 	{ }
     virtual void run();
+};
+
+class CleanThread : public Thread
+{
+public:
+    CleanThread()
+	: Thread("GenCleaner")
+	{ }
+    virtual void run();
+};
+
+class ConnHandler : public MessageReceiver
+{
+public:
+    enum {
+	Ringing,
+	Answered,
+	Execute,
+	Drop,
+    };
+    virtual bool received(Message &msg, int id);
 };
 
 class CmdHandler : public MessageReceiver
@@ -82,34 +113,49 @@ public:
     bool doCommand(String& line, String& rval);
 };
 
-class CallGenPlugin : public Driver
+class CallGenPlugin : public Plugin
 {
 public:
     CallGenPlugin();
     virtual ~CallGenPlugin();
     virtual void initialize();
-    virtual bool msgExecute(Message& msg, String& dest);
 private:
     bool m_first;
 };
 
-INIT_PLUGIN(CallGenPlugin);
-
-GenConnection::GenConnection(const String& callto)
-    : Channel(__plugin), m_callto(callto)
+GenConnection::GenConnection(unsigned int lifetime, const String& callto)
+    : m_callto(callto)
 {
-    m_start = Time::now();
-    status("calling");
-    driver()->lock();
+    if (!lifetime)
+	lifetime = 60000;
+    if (lifetime < 100)
+	lifetime = 100;
+    m_finish = Time::now() + ((unsigned long long)lifetime * 1000);
+    m_status = "calling";
+    s_mutex.lock();
+    s_calls.append(this);
+    m_id << "callgen/" << ++s_total;
     ++s_current;
-    driver()->unlock();
+    s_mutex.unlock();
+    Output("Generating %u ms call %s to: %s",lifetime,m_id.c_str(),m_callto.c_str());
 }
 
 GenConnection::~GenConnection()
 {
-    driver()->lock();
+    if (!Engine::exiting())
+	Output("Ending %s generated call %s to: %s",
+	    m_status.c_str(),m_id.c_str(),m_callto.c_str());
+    m_status = "destroyed";
+    s_mutex.lock();
+    s_calls.remove(this,false);
     --s_current;
-    driver()->unlock();
+    s_mutex.unlock();
+}
+
+GenConnection* GenConnection::find(const String& id)
+{
+    ObjList* l = s_calls.find(id);
+    return l ? static_cast<GenConnection*>(l->get()) : 0;
 }
 
 bool GenConnection::oneCall(String* target)
@@ -120,15 +166,8 @@ bool GenConnection::oneCall(String* target)
     String callto(s_cfg.getValue("parameters","callto"));
     if (callto.null()) {
 	String called(s_cfg.getValue("parameters","called"));
-	if (called.null()) {
-	    int n_min = s_cfg.getIntValue("parameters","minnum");
-	    if (n_min <= 0)
-		return false;
-	    int n_max = s_cfg.getIntValue("parameters","maxnum",n_min);
-	    if (n_max < n_min)
-		return false;
-	    called = (unsigned)(n_min + (((n_max - n_min) * (int64_t)::random()) / RAND_MAX));
-	}
+	if (called.null())
+	    return false;
 	if (target)
 	    *target = called;
 	m.addParam("called",called);
@@ -146,12 +185,18 @@ bool GenConnection::oneCall(String* target)
     }
     m = "call.execute";
     m.addParam("callto",callto);
-    GenConnection* conn = new GenConnection(callto);
+    unsigned int lifetime = s_cfg.getIntValue("parameters","maxlife");
+    if (lifetime) {
+	int minlife = s_cfg.getIntValue("parameters","minlife");
+	if (minlife)
+	    lifetime -= ((lifetime - minlife) * (long long)::random()) / RAND_MAX;
+    }
+    GenConnection* conn = new GenConnection(lifetime,callto);
     m.addParam("id",conn->id());
     m.userData(conn);
     if (Engine::dispatch(m)) {
 	conn->setTarget(m.getValue("targetid"));
-	if (conn->targetid().null()) {
+	if (conn->getTarget().null()) {
 	    Debug(DebugInfo,"Answering now generated call %s [%p] because we have no targetid",
 		conn->id().c_str(),conn);
 	    conn->answered();
@@ -167,13 +212,13 @@ bool GenConnection::oneCall(String* target)
 
 void GenConnection::disconnected(bool final, const char *reason)
 {
-    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",id().c_str(),reason,this);
+    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",m_id.c_str(),reason,this);
     m_status = "disconnected";
 }
 
 void GenConnection::ringing()
 {
-    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",id().c_str(),this);
+    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
     m_status = "ringing";
     s_mutex.lock();
     ++s_ringing;
@@ -185,7 +230,7 @@ void GenConnection::ringing()
 
 void GenConnection::answered()
 {
-    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",id().c_str(),this);
+    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",m_id.c_str(),this);
     m_status = "answered";
     s_mutex.lock();
     ++s_answers;
@@ -206,24 +251,75 @@ void GenConnection::makeSource()
     s_mutex.unlock();
     if (src) {
 	Message m("chan.attach");
-	complete(m,false);
+	m.addParam("id",m_id);
 	m.addParam("source",src);
 	m.userData(this);
 	Engine::dispatch(m);
     }
 }
 
+bool ConnHandler::received(Message &msg, int id)
+{
+    String callid(msg.getValue("targetid"));
+    if (!callid.startsWith("callgen/",false))
+	return false;
+    GenConnection *conn = GenConnection::find(callid);
+    if (!conn) {
+	Debug(DebugInfo,"Target '%s' was not found in list",callid.c_str());
+	return false;
+    }
+    String text(msg.getValue("text"));
+    switch (id) {
+	case Answered:
+	    conn->answered();
+	    break;
+	case Ringing:
+	    conn->ringing();
+	    break;
+	case Execute:
+	    break;
+	case Drop:
+	    break;
+    }
+    return true;
+}
+
 void GenThread::run()
 {
-    for (;;) {
-	Thread::sleep(1);
+    Debug("CallGen",DebugInfo,"GenThread::run() [%p]",this);
+    int tonext = 10000;
+    while (!Engine::exiting()) {
+	::usleep(tonext);
+	tonext = 10000;
 	Lock lock(s_mutex);
 	int maxcalls = s_cfg.getIntValue("parameters","maxcalls",5);
 	if (!s_runs || (s_current >= maxcalls) || (s_numcalls <= 0))
 	    continue;
 	--s_numcalls;
+	tonext = s_cfg.getIntValue("parameters","avgdelay",1000);
 	lock.drop();
 	GenConnection::oneCall();
+	tonext = ((long long)::random() * tonext * 2000) / RAND_MAX;
+    }
+}
+
+void CleanThread::run()
+{
+    Debug("CallGen",DebugInfo,"CleanThread::run() [%p]",this);
+    while (!Engine::exiting()) {
+	::usleep(100000);
+	Lock lock(s_mutex);
+	Time t;
+	ObjList* l = &s_calls;
+	while (l) {
+	    GenConnection* c = static_cast<GenConnection*>(l->get());
+	    if (c && c->oldAge(t)) {
+		c->destruct();
+		if (c != l->get())
+		    continue;
+	    }
+	    l = l->next();
+	}
     }
 }
 
@@ -266,7 +362,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	s_runs = false;
 	s_numcalls = 0;
 	s_mutex.unlock();
-	dropAll();
+	s_calls.clear();
 	rval << "Stopping generator and clearing calls";
     }
     else if (line == "drop") {
@@ -274,7 +370,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	bool tmp = s_runs;
 	s_runs = false;
 	s_mutex.unlock();
-	dropAll();
+	s_calls.clear();
 	s_runs = tmp;
 	rval << "Clearing calls and continuing";
     }
@@ -370,35 +466,48 @@ bool CmdHandler::received(Message &msg, int id)
     return false;
 }
 
-bool CallGenPlugin::msgExecute(Message& msg, String& dest)
-{
-    return false;
-}
-
 CallGenPlugin::CallGenPlugin()
-    : Driver("callgen","varchan"), m_first(true)
+    : m_first(true)
 {
     Output("Loaded module Call Generator");
 }
 
 CallGenPlugin::~CallGenPlugin()
 {
-    Output("Unloading module Call Generator");
+    Output("Unloading module Call Generator, clearing %u calls",s_calls.count());
+    s_mutex.lock();
+    s_runs = false;
+    s_calls.clear();
+    s_mutex.unlock();
 }
 
 void CallGenPlugin::initialize()
 {
     Output("Initializing module Call Generator");
+    s_mutex.lock();
     s_cfg = Engine::configFile("callgen");
     s_cfg.load();
+    s_mutex.unlock();
     if (m_first) {
 	m_first = false;
+
+	ConnHandler* coh = new ConnHandler;
+	Engine::install(new MessageRelay("call.ringing",coh,ConnHandler::Ringing));
+	Engine::install(new MessageRelay("call.answered",coh,ConnHandler::Answered));
+	Engine::install(new MessageRelay("call.execute",coh,ConnHandler::Execute));
+	Engine::install(new MessageRelay("call.drop",coh,ConnHandler::Drop));
 
 	CmdHandler* cmh = new CmdHandler;
 	Engine::install(new MessageRelay("engine.status",cmh,CmdHandler::Status));
 	Engine::install(new MessageRelay("engine.command",cmh,CmdHandler::Command));
 	Engine::install(new MessageRelay("engine.help",cmh,CmdHandler::Help));
 
+	CleanThread* cln = new CleanThread;
+	if (!cln->startup()) {
+	    Debug(DebugGoOn,"Failed to start call generator cleaner thread");
+	    delete cln;
+	    return;
+	}
 	GenThread* gen = new GenThread;
 	if (!gen->startup()) {
 	    Debug(DebugGoOn,"Failed to start call generator thread");
@@ -406,5 +515,7 @@ void CallGenPlugin::initialize()
 	}
     }
 }
+
+INIT_PLUGIN(CallGenPlugin);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

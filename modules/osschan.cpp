@@ -26,15 +26,10 @@
 
 #include <yatephone.h>
 
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <sys/ioctl.h>
 #include <string.h>
 #include <fcntl.h>
-#include <errno.h>
-
-#include <sys/ioctl.h>
-#include <sys/time.h>
 
 #if defined(__linux__)
 #include <linux/soundcard.h>
@@ -86,7 +81,7 @@ private:
     unsigned m_total;
 };
 
-class OssChan : public DataEndpoint
+class OssChan : public CallEndpoint
 {
 public:
     OssChan(String dev);
@@ -259,7 +254,8 @@ void OssConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 }
 
 OssChan::OssChan(String dev)
-    : DataEndpoint("oss"),m_dev(dev),full_duplex(0), m_fd(-1), readmode(1) 
+    : CallEndpoint("oss"),
+      m_dev(dev),full_duplex(0), m_fd(-1), readmode(1) 
 {
     Debug(DebugAll,"OssChan::OssChan dev [%s] [%p]",dev.c_str(),this);
     s_chan = this;
@@ -430,9 +426,9 @@ bool OssHandler::received(Message &msg)
 	chan->destruct();
 	return false;
     }
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     Debug(DebugInfo,"We are routing to device '%s'",dest.matchString(1).c_str());
-    if (dd && chan->connect(dd)) {
+    if (ch && chan->connect(ch)) {
 	chan->setTarget(msg.getValue("id"));
 	msg.addParam("targetid",dest);
 	chan->answer();

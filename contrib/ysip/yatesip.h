@@ -1,5 +1,5 @@
 /**
- * ysip.h
+ * yatesip.h
  * Yet Another SIP Stack
  * This file is part of the YATE Project http://YATE.null.ro
  *
@@ -20,6 +20,9 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
+#ifndef __YATESIP_H
+#define __YATESIP_H
 
 #include <yateclass.h>
 
@@ -909,5 +912,7 @@ protected:
 };
 
 }
+
+#endif /* __YATESIP_H */
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

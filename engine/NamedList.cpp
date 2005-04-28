@@ -126,5 +126,4 @@ bool NamedList::getBoolValue(const String& name, bool defvalue) const
     return s ? s->toBoolean(defvalue) : defvalue;
 }
 			
-
 /* vi: set ts=8 sw=4 sts=4 noet: */

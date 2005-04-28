@@ -2144,6 +2144,17 @@ class YATE_API Thread : public Runnable
     friend class ThreadPrivate;
 public:
     /**
+     * Running priorities
+     */
+    enum Priority {
+	Lowest,
+	Low,
+	Normal,
+	High,
+	Highest
+    };
+
+    /**
      * This method is called when the current thread terminates.
      */
     virtual void cleanup();
@@ -2239,8 +2250,9 @@ protected:
     /**
      * Creates and starts a new thread
      * @param name Static name of the thread (for debugging purpose only)
+     * @param prio Thread priority
      */
-    Thread(const char *name = 0);
+    Thread(const char *name = 0, Priority prio = Normal);
 
     /**
      * The destructor is called when the thread terminates
@@ -2735,3 +2747,5 @@ protected:
 }; // namespace TelEngine
 
 #endif /* __YATECLASS_H */
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

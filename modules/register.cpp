@@ -309,4 +309,5 @@ void RegistPlugin::initialize()
 }
 
 INIT_PLUGIN(RegistPlugin);
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

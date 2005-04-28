@@ -161,14 +161,14 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
 
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(driver), m_outgoing(outgoing)
+      m_driver(driver), m_outgoing(outgoing), m_timeout(0)
 {
     init();
 }
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(&driver), m_outgoing(outgoing)
+      m_driver(&driver), m_outgoing(outgoing), m_timeout(0)
 {
     init();
 }
@@ -178,6 +178,7 @@ Channel::~Channel()
 #ifdef DEBUG
     Debugger debug(DebugAll,"Channel::~Channel()"," '%s' [%p]",m_id.c_str(),this);
 #endif
+    m_timeout = 0;
     status("deleted");
     if (m_driver) {
 	m_driver->lock();
@@ -208,6 +209,20 @@ void Channel::init()
 	m_driver->unlock();
     }
     DDebug(DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
+}
+
+void Channel::disconnected(bool final, const char* reason)
+{
+    if (final)
+	return;
+    // last chance to get reconnected to something
+    Message* m = message("chan.disconnected");
+    m_targetid.clear();
+    // we will remain referenced until the message is destroyed
+    m->userData(this);
+    if (reason)
+	m->setParam("reason",reason);
+    Engine::enqueue(m);
 }
 
 const char* Channel::direction() const
@@ -297,6 +312,9 @@ bool Channel::msgTransfer(Message& msg)
 void Channel::callAccept(Message& msg)
 {
     status("accepted");
+    int tout = msg.getIntValue("timeout", m_driver ? m_driver->timeout() : 0);
+    if (tout > 0)
+	timeout(Time::now() + tout*(u_int64_t)1000);
     m_targetid = msg.getValue("targetid");
     if (m_targetid.null()) {
 	Debug(DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);
@@ -516,7 +534,7 @@ bool Module::setDebug(Message& msg, const String& target)
 Driver::Driver(const char* name, const char* type)
     : Module(name,type),
       m_init(false), m_varchan(true),
-      m_routing(0), m_routed(0), m_nextid(0)
+      m_routing(0), m_routed(0), m_nextid(0), m_timeout(0)
 {
     m_prefix << name << "/";
 }
@@ -544,10 +562,11 @@ void Driver::setup(const char* prefix, bool minimal)
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
     Debug(DebugAll,"setup name='%s' prefix='%s'",name().c_str(),m_prefix.c_str());
+    timeout(Engine::config().getIntValue("telephony","timeout"));
     installRelay(Masquerade,10);
-    installRelay(Locate);
-    installRelay(Execute);
-    installRelay(Drop);
+    installRelay(Locate,40);
+    installRelay(Drop,60);
+    installRelay(Execute,90);
     if (minimal)
 	return;
     installRelay(Tone);
@@ -574,9 +593,28 @@ bool Driver::received(Message &msg, int id)
     // pick destination depending on message type
     String dest;
     switch (id) {
-	case Status:
 	case Timer:
+	    {
+		// check each channel for timeouts
+		lock();
+		Time t;
+		ObjList* l = &m_chans;
+		while (l) {
+		    Channel* c = static_cast<Channel*>(l->get());
+		    if (c && c->timeout() && (c->timeout() < t)) {
+			c->msgDrop(msg,"timeout");
+			if (l->get() != c)
+			    break;
+		    }
+		    l = l->next();
+		}
+		unlock();
+	    }
+	case Status:
 	case Level:
+	    return Module::received(msg,id);
+	case Halt:
+	    dropAll(msg,"shutdown");
 	    return Module::received(msg,id);
 	case Execute:
 	    dest = msg.getValue("callto");
@@ -593,7 +631,7 @@ bool Driver::received(Message &msg, int id)
     Debug(DebugAll,"id=%d prefix='%s' dest='%s'",id,m_prefix.c_str(),dest.c_str());
 
     if ((id == Drop) && (dest.null() || (dest == name()) || (dest == type()))) {
-	dropAll();
+	dropAll(msg);
 	return false;
     }
     // check if the message was for this driver
@@ -639,10 +677,24 @@ bool Driver::received(Message &msg, int id)
     return false;
 }
 
-void Driver::dropAll()
+void Driver::dropAll(Message &msg)
 {
     lock();
-    m_chans.clear();
+    const char* reason = msg.getValue("reason");
+    ObjList* l = &m_chans;
+    while (l) {
+	Channel* c = static_cast<Channel*>(l->get());
+	if (c) {
+	    c->msgDrop(msg,reason);
+	    if (l->get() != c)
+		break;
+	}
+	l = l->next();
+    }
+    // channels should have dropped by now - but if we are a varchan driver
+    //  destroy them off the list, just to be absolutely sure
+    if (m_varchan)
+	m_chans.clear();
     unlock();
 }
 

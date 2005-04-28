@@ -47,3 +47,8 @@
 ;   /path/to/the/library.so=boolean
 ; You should specify the full path to the library. Extension is operating
 ;  system specific - usually .so for *NIX systems and .dll for Windows
+
+
+[telephony]
+; timeout: int: Default channel timeout in milliseconds
+;timeout=0

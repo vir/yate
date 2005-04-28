@@ -415,9 +415,11 @@ public:
 
     /**
      * Starts the worker thread
+     * @param name Static name of this thread
+     * @param prio Thread's priority
      * @return True if started, false if an error occured
      */
-    bool start(const char* name = "ThreadedSource");
+    bool start(const char* name = "ThreadedSource", Thread::Priority prio = Thread::Normal);
 
     /**
      * Stops and destroys the worker thread if running
@@ -1020,6 +1022,7 @@ class YATE_API Channel : public CallEndpoint, public DebugEnabler
 private:
     Driver* m_driver;
     bool m_outgoing;
+    u_int64_t m_timeout;
 
 protected:
     String m_status;
@@ -1161,6 +1164,20 @@ public:
 	{ return m_driver; }
 
     /**
+     * Get the time this channel will time out
+     * @return Timeout time or zero if no timeout
+     */
+    inline u_int64_t timeout() const
+	{ return m_timeout; }
+
+    /**
+     * Set the time this channel will time out
+     * @param tout New timeout time or zero to disable
+     */
+    inline void timeout(u_int64_t tout)
+	{ m_timeout = tout; }
+
+    /**
      * Get the connected channel identifier.
      * @return A String holding the unique channel id of the target or an empty
      *  string if this channel is not connected to a target.
@@ -1194,6 +1211,13 @@ protected:
      * Alternate constructor provided for convenience
      */
     Channel(Driver& driver, const char* id = 0, bool outgoing = false);
+
+    /**
+     * Disconnect notification method.
+     * @param final True if this disconnect was called from the destructor.
+     * @param reason Text that describes disconnect reason.
+     */
+    virtual void disconnected(bool final, const char* reason);
 
     /**
      * Set the current status of the channel
@@ -1230,6 +1254,7 @@ private:
     int m_routing;
     int m_routed;
     unsigned int m_nextid;
+    int m_timeout;
 
 public:
     /**
@@ -1275,8 +1300,9 @@ public:
 
     /**
      * Drop all current channels
+     * @param msg Notification message
      */
-    virtual void dropAll();
+    virtual void dropAll(Message &msg);
 
     /**
      * Get the next unique numeric id from a sequence
@@ -1290,6 +1316,13 @@ public:
      */
     inline unsigned int lastid() const
 	{ return m_nextid; }
+
+    /**
+     * Get the default driver timeout
+     * @return Timeout value in milliseconds
+     */
+    inline int timeout() const
+	{ return m_timeout; }
 
 protected:
     /**
@@ -1371,6 +1404,13 @@ protected:
     inline void varchan(bool variable)
 	{ m_varchan = variable; }
 
+    /**
+     * Set the default driver timeout
+     * @param tout New timeout in milliseconds or zero to disable
+     */
+    inline void timeout(int tout)
+	{ m_timeout = tout; }
+
 private:
     Driver(); // no default constructor please
 };
@@ -1423,3 +1463,5 @@ protected:
 }; // namespace TelEngine
 
 #endif /* __YATEPHONE_H */
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

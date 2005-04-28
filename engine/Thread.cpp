@@ -46,7 +46,7 @@ public:
     void cleanup();
     void destroy();
     void pubdestroy();
-    static ThreadPrivate* create(Thread* t,const char* name);
+    static ThreadPrivate* create(Thread* t,const char* name,Thread::Priority prio);
     static void killall();
     static ThreadPrivate* current();
     Thread* m_thread;
@@ -81,7 +81,7 @@ static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
 ObjList threads;
 Mutex tmutex(true);
 
-ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
+ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority prio)
 {
     ThreadPrivate *p = new ThreadPrivate(t,name);
     int e = 0;
@@ -90,14 +90,58 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name)
     pthread_attr_t attr;
     ::pthread_attr_init(&attr);
     ::pthread_attr_setstacksize(&attr, 16*PTHREAD_STACK_MIN);
+    if (prio > Thread::Normal) {
+	struct sched_param param;
+	param.sched_priority = 0;
+	int policy = SCHED_OTHER;
+	switch (prio) {
+	    case Thread::High:
+		policy = SCHED_RR;
+		param.sched_priority = 1;
+		break;
+	    case Thread::Highest:
+		policy = SCHED_FIFO;
+		param.sched_priority = 99;
+		break;
+	    default:
+		break;
+	}
+	int err = ::pthread_attr_setschedpolicy(&attr,policy);
+	if (!err)
+	    err = ::pthread_attr_setschedparam(&attr,&param);
+	if (err) {
+	    DDebug("Could not set thread scheduling parameters: %s (%d)",
+		strerror(err),err);
+	}
+    }
 #endif
 
     for (int i=0; i<5; i++) {
 #ifdef _WINDOWS
 	HTHREAD t = ::_beginthread(startFunc,16*PTHREAD_STACK_MIN,p);
 	e = (t == (HTHREAD)-1) ? errno : 0;
-	if (!e)
-		p->thread = t;
+	if (!e) {
+	    p->thread = t;
+	    int pr = THREAD_PRIORITY_NORMAL;
+	    switch (prio) {
+		case Thread::Lowest:
+		    pr = THREAD_PRIORITY_LOWEST;
+		    break;
+		case Thread::Low:
+		    pr = THREAD_PRIORITY_BELOW_NORMAL;
+		    break;
+		case Thread::High:
+		    pr = THREAD_PRIORITY_ABOVE_NORMAL;
+		    break;
+		case Thread::Highest:
+		    pr = THREAD_PRIORITY_HIGHEST;
+		    break;
+		default:
+		    break;
+	    }
+	    if (pr != THREAD_PRIORITY_NORMAL)
+		::SetThreadPriority(reinterpret_cast<HANDLE>(t),pr);
+	}
 #else
 	e = ::pthread_create(&p->thread,&attr,startFunc,p);
 #endif
@@ -354,13 +398,13 @@ void* ThreadPrivate::startFunc(void* arg)
 #endif
 }
 
-Thread::Thread(const char* name)
+Thread::Thread(const char* name, Priority prio)
     : m_private(0)
 {
 #ifdef DEBUG
     Debugger debug("Thread::Thread","(\"%s\") [%p]",name,this);
 #endif
-    m_private = ThreadPrivate::create(this,name);
+    m_private = ThreadPrivate::create(this,name,prio);
 }
 
 Thread::~Thread()

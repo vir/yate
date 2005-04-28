@@ -180,7 +180,6 @@ IAXEndPoint::IAXEndPoint()
 IAXEndPoint::~IAXEndPoint()
 {
     Debug(DebugAll,"IAXEndPoint::~IAXEndPoint() [%p]",this);
-    iplugin.dropAll();
     iplugin.m_endpoint = 0;
 }
 
@@ -897,6 +896,9 @@ IAXDriver::IAXDriver()
 IAXDriver::~IAXDriver()
 {
     Output("Unloading module IAX");
+    lock();
+    channels().clear();
+    unlock();
     if (m_endpoint) {
 	delete m_endpoint;
 	m_endpoint = 0;

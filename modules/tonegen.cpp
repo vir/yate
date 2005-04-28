@@ -334,8 +334,10 @@ ToneGenDriver::~ToneGenDriver()
 	if (l->get() == t)
 	    l = l->next();
     }
-    dropAll();
+    lock();
+    channels().clear();
     tones.clear();
+    unlock();
 }
 
 void ToneGenDriver::initialize()

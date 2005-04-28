@@ -154,9 +154,9 @@ qtclient.yate: ../contrib/qt/libqtclientform.a
 qtclient.yate: LOCALFLAGS = -I@QT_INC@
 qtclient.yate: LOCALLIBS = ../contrib/qt/libqtclientform.a -L@QT_DIR@/lib -lqt-mt
 
-ysipchan.yate: ../contrib/ysip/libysip.a
+ysipchan.yate: ../contrib/ysip/libyatesip.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ysip
-ysipchan.yate: LOCALLIBS = ../contrib/ysip/libysip.a
+ysipchan.yate: LOCALLIBS = ../contrib/ysip/libyatesip.a
 
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
@@ -167,5 +167,5 @@ ysipchan.yate: LOCALLIBS = ../contrib/ysip/libysip.a
 ../contrib/qt/libqtclientform.a:
 	$(MAKE) -C ../contrib/qt
 
-../contrib/ysip/libysip.a:
+../contrib/ysip/libyatesip.a:
 	$(MAKE) -C ../contrib/ysip

@@ -1,5 +1,5 @@
 # Makefile
-# This file holds the make rules for the libyatesip
+# This file holds the make rules for the libyatertp
 
 DEBUG :=
 
@@ -9,11 +9,11 @@ DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
-INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatesip.h @srcdir@/util.h
+INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatertp.h
 
 PROGS=
-LIBS = libyatesip.a
-OBJS = util.o engine.o body.o message.o transaction.o
+LIBS = libyatertp.a
+OBJS = 
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -40,5 +40,5 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
-libyatesip.a: $(OBJS)
+libyatertp.a: $(OBJS)
 	$(AR) rcs $@ $^

@@ -4,6 +4,9 @@
 ; port: int: SIP UDP port
 ;port=5060
 
+; addr: ipaddress: IP address to bind to
+;addr=0.0.0.0
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

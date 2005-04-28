@@ -1,7 +1,7 @@
 /**
- * util.h
- * Yet Another SIP Stack
- * This file is part of the YATE Project http://YATE.null.ro 
+ * yatertp.h
+ * Yet Another RTP Stack
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004 Null Team
@@ -21,22 +21,16 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifndef __YATERTP_H
+#define __YATERTP_H
+
 #include <yateclass.h>
 
 namespace TelEngine {
 
-// Utility function, checks if a character is a line continuation blank
-bool isContinuationBlank(char c);
-
-// Utility function, returns an unfolded line and advances the pointer
-String* getUnfoldedLine(const char** buf, int* len);
-
-// Utility function, returns an uncompacted header name
-const char* uncompactForm(const char* header);
-
-// Utility function, returns a compacted header name
-const char* compactForm(const char* header);
 
 }
+
+#endif /* __YATERTP_H */
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

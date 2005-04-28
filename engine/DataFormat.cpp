@@ -30,8 +30,8 @@ namespace TelEngine {
 class ThreadedSourcePrivate : public Thread
 {
 public:
-    ThreadedSourcePrivate(ThreadedSource *source, const char *name)
-	: Thread(name), m_source(source) { }
+    ThreadedSourcePrivate(ThreadedSource *source, const char *name, Thread::Priority prio)
+	: Thread(name,prio), m_source(source) { }
 
 protected:
     virtual void run()
@@ -102,7 +102,6 @@ static const FormatInfo s_formats[] = {
 };
 
 static flist* s_flist = 0;
-static const FormatInfo* f_slin = &s_formats[0];
 static const char s_slin[] = "slin";
 
 const FormatInfo* FormatRepository::getFormat(const String& name)
@@ -371,10 +370,10 @@ ThreadedSource::~ThreadedSource()
     stop();
 }
 
-bool ThreadedSource::start(const char* name)
+bool ThreadedSource::start(const char* name, Thread::Priority prio)
 {
     if (!m_thread) {
-	m_thread = new ThreadedSourcePrivate(this,name);
+	m_thread = new ThreadedSourcePrivate(this,name,prio);
 	m_thread->startup();
     }
     return m_thread->running();

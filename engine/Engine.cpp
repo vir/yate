@@ -110,12 +110,13 @@ String Engine::s_modsuffix(DLL_SUFFIX);
 
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
-bool Engine::s_init = false;
-bool Engine::s_dynplugin = false;
-int Engine::s_maxworkers = 10;
 int EnginePrivate::count = 0;
+bool s_init = false;
+bool s_dynplugin = false;
+int s_maxworkers = 10;
 
 const char* s_cfgfile = 0;
+Configuration s_cfg;
 ObjList plugins;
 ObjList* s_cmds = 0;
 
@@ -240,6 +241,8 @@ int Engine::run()
 	return errc & 127;
     }
 #endif
+    s_cfg = configFile(s_cfgfile);
+    s_cfg.load();
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();
@@ -353,6 +356,11 @@ String Engine::configFile(const char* name)
     return s_cfgpath+"/"+name+s_cfgsuffix;
 }
 
+const Configuration& Engine::config()
+{
+    return s_cfg;
+}
+
 bool Engine::Register(const Plugin* plugin, bool reg)
 {
     DDebug(DebugInfo,"Engine::Register(%p,%d)",plugin,reg);
@@ -385,14 +393,13 @@ void Engine::loadPlugins()
 #ifdef DEBUG
     Debugger debug("Engine::loadPlugins()");
 #endif
-    Configuration cfg(configFile(s_cfgfile));
-    bool defload = cfg.getBoolValue("general","modload",true);
-    const char *name = cfg.getValue("general","modpath");
+    bool defload = s_cfg.getBoolValue("general","modload",true);
+    const char *name = s_cfg.getValue("general","modpath");
     if (name)
 	s_modpath = name;
-    s_maxworkers = cfg.getIntValue("general","maxworkers",s_maxworkers);
-    s_restarts = cfg.getIntValue("general","restarts");
-    NamedList *l = cfg.getSection("preload");
+    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_restarts = s_cfg.getIntValue("general","restarts");
+    NamedList *l = s_cfg.getSection("preload");
     if (l) {
         unsigned int len = l->length();
         for (unsigned int i=0; i<len; i++) {
@@ -412,7 +419,7 @@ void Engine::loadPlugins()
 	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
 	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
-	    if (cfg.getBoolValue("modules",entry.cFileName,defload))
+	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
 		loadPlugin(s_modpath+"\\"+entry.cFileName);
 	}
     } while (::FindNextFile(hf,&entry));
@@ -428,13 +435,13 @@ void Engine::loadPlugins()
 	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
-	    if (cfg.getBoolValue("modules",entry->d_name,defload))
+	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
 		loadPlugin(s_modpath+"/"+entry->d_name);
 	}
     }
     ::closedir(dir);
 #endif
-    l = cfg.getSection("postload");
+    l = s_cfg.getSection("postload");
     if (l) {
         unsigned int len = l->length();
         for (unsigned int i=0; i<len; i++) {

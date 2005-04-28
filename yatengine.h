@@ -617,6 +617,12 @@ public:
 	{ return s_cfgpath; }
 
     /**
+     * The configuration file suffix
+     */
+    inline static String& configSuffix()
+	{ return s_cfgsuffix; }
+
+    /**
      * The module loading path
      */
     inline static String& modulePath()
@@ -627,6 +633,15 @@ public:
      */
     inline static String& moduleSuffix()
 	{ return s_modsuffix; }
+
+    /**
+     * The global configuration of the engine.
+     * You must use this resource with caution.
+     * Note that sections [general] [modules] [preload] and [postload] are
+     *  reserved by the engine. Also [telephony] is reserved by the drivers.
+     * @return A reference to the read-only engine configuration
+     */
+    static const Configuration& config();
 
     /**
      * Reinitialize the plugins
@@ -744,11 +759,10 @@ private:
     static String s_modpath;
     static String s_modsuffix;
     static int s_haltcode;
-    static int s_maxworkers;
-    static bool s_init;
-    static bool s_dynplugin;
 };
 
 }; // namespace TelEngine
 
 #endif /* __YATENGINE_H */
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

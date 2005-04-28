@@ -23,17 +23,10 @@
  */
 
 #include <yatephone.h>
+#include <yatesip.h>
 
-#include <unistd.h>
 #include <string.h>
 
-#include <errno.h>
-#include <fcntl.h>
-
-/**
- * we include also the sip stack headers
- */
-#include <ysip.h>
 
 using namespace TelEngine;
 
@@ -70,14 +63,14 @@ static Configuration s_cfg;
 class YateUDPParty : public SIPParty
 {
 public:
-    YateUDPParty(int fd,struct sockaddr_in sin,int local);
+    YateUDPParty(Socket* sock, const SocketAddr& addr, int local);
     ~YateUDPParty();
     virtual void transmit(SIPEvent* event);
     virtual const char* getProtoName() const;
     virtual bool setParty(const URI& uri);
 protected:
-    int m_netfd;
-    struct sockaddr_in m_sin;
+    Socket* m_sock;
+    SocketAddr m_addr;
 };
 
 class YateSIPEndPoint;
@@ -108,11 +101,11 @@ public:
 	{ return m_engine; }
     inline int port() const
 	{ return m_port; }
-    inline int fd() const
-	{ return m_netfd; }
+    inline Socket* socket() const
+	{ return m_sock; }
 private:
     int m_port;
-    int m_netfd;
+    Socket* m_sock;
     YateSIPEngine *m_engine;
 
 };
@@ -209,7 +202,6 @@ public:
     inline YateSIPEndPoint* ep() const
 	{ return m_endpoint; }
 private:
-    SIPConnHandler *m_handler;
     YateSIPEndPoint *m_endpoint;
 };
 
@@ -255,22 +247,20 @@ static SIPDriver plugin;
 static ObjList s_calls;
 static Mutex s_mutex;
 
-YateUDPParty::YateUDPParty(int fd,struct sockaddr_in sin, int local)
-    : m_netfd(fd), m_sin(sin)
+YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
+    : m_sock(sock), m_addr(addr)
 {
     m_local = "localhost";
     m_localPort = local;
-    m_party = inet_ntoa(m_sin.sin_addr);
-    m_partyPort = ntohs(m_sin.sin_port);
-    int s = ::socket(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
-    if (s != -1) {
-	if (!::connect(s, (const sockaddr *)&m_sin, sizeof(m_sin))) {
-	    struct sockaddr_in raddr;
-	    socklen_t len = sizeof(raddr);
-	    if (!::getsockname(s, (sockaddr *)&raddr, &len))
-		m_local = ::inet_ntoa(raddr.sin_addr);
+    m_party = m_addr.host();
+    m_partyPort = m_addr.port();
+    Socket s(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
+    if (s.valid()) {
+	if (s.connect(m_addr)) {
+	    SocketAddr laddr;
+	    if (s.getSockName(laddr))
+		m_local = laddr.host();
 	}
-	::close(s);
     }
     Debug(DebugAll,"YateUDPParty local %s:%d party %s:%d",
 	m_local.c_str(),m_localPort,
@@ -279,18 +269,16 @@ YateUDPParty::YateUDPParty(int fd,struct sockaddr_in sin, int local)
 
 YateUDPParty::~YateUDPParty()
 {
-    m_netfd = -1;
+    m_sock = 0;
 }
 
 void YateUDPParty::transmit(SIPEvent* event)
 {
-    Debug(DebugAll,"Sending to %s:%d",inet_ntoa(m_sin.sin_addr),ntohs(m_sin.sin_port));
-    ::sendto(m_netfd,
+    Debug(DebugAll,"Sending to %s:%d",m_addr.host().c_str(),m_addr.port());
+    m_sock->sendTo(
 	event->getMessage()->getBuffer().data(),
 	event->getMessage()->getBuffer().length(),
-	0,
-	(struct sockaddr *) &m_sin,
-	sizeof(m_sin)
+	m_addr
     );
 }
 
@@ -308,27 +296,17 @@ bool YateUDPParty::setParty(const URI& uri)
     int port = uri.getPort();
     if (port <= 0)
 	port = 5060;
-    struct hostent he, *res = 0;
-    int err = 0;
-    char buf[1024];
-    if (::gethostbyname_r(uri.getHost().safe(),&he,buf,sizeof(buf),&res,&err)) {
-	Debug("YateUDPParty",DebugWarn,"Error %d resolving name '%s' [%p]",
-	    err,uri.getHost().safe(),this);
+    if (!m_addr.host(uri.getHost())) {
+	Debug("YateUDPParty",DebugWarn,"Could not resolve name '%s' [%p]",
+	    uri.getHost().safe(),this);
 	return false;
     }
-    if (he.h_addrtype != AF_INET) {
-	Debug("YateUDPParty",DebugWarn,"Address family %d not supported yet [%p]",
-	    he.h_addrtype,this);
-	return false;
-    }
-    m_sin.sin_family = he.h_addrtype;
-    m_sin.sin_addr.s_addr = *((u_int32_t*)he.h_addr_list[0]);
-    m_sin.sin_port = htons((short)port);
+    m_addr.port(port);
     m_party = uri.getHost();
     m_partyPort = port;
     Debug("YateUDPParty",DebugInfo,"New party is %s:%d (%s:%d) [%p]",
 	m_party.c_str(),m_partyPort,
-	inet_ntoa(m_sin.sin_addr),ntohs(m_sin.sin_port),
+	m_addr.host().c_str(),m_addr.port(),
 	this);
     return true;
 }
@@ -349,23 +327,26 @@ bool YateSIPEngine::buildParty(SIPMessage* message)
 }
 
 YateSIPEndPoint::YateSIPEndPoint()
-    : Thread("YSIP EndPoint"), m_netfd(-1), m_engine(0)
+    : Thread("YSIP EndPoint"), m_sock(0), m_engine(0)
 {
-    m_netfd = -1;
     Debug(DebugAll,"YateSIPEndPoint::YateSIPEndPoint() [%p]",this);
 }
 
 YateSIPEndPoint::~YateSIPEndPoint()
 {
     Debug(DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
-    s_calls.clear();
+    plugin.channels().clear();
     if (m_engine) {
 	// send any pending events
 	while (m_engine->process())
 	    ;
 	delete m_engine;
+	m_engine = 0;
     }
-    m_engine = 0;
+    if (m_sock) {
+	delete m_sock;
+	m_sock = 0;
+    }
 }
 
 bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port)
@@ -380,122 +361,86 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     }
     if (port <= 0)
 	port = 5060;
-    struct hostent he, *res = 0;
-    int err = 0;
-    char buf[1024];
-    if (::gethostbyname_r(host,&he,buf,sizeof(buf),&res,&err)) {
-	Debug(DebugWarn,"Error %d resolving name '%s'",err,host);
+    SocketAddr addr(AF_INET);
+    if (!addr.host(host)) {
+	Debug(DebugWarn,"Error resolving name '%s'",host);
 	return false;
     }
-    if (he.h_addrtype != AF_INET) {
-	Debug("YateUDPParty",DebugWarn,"Address family %d not supported yet [%p]",
-	    he.h_addrtype,this);
-	return false;
-    }
-    struct sockaddr_in sin;
-    sin.sin_family = he.h_addrtype;
-    sin.sin_addr.s_addr = *((u_int32_t*)he.h_addr_list[0]);
-    sin.sin_port = htons((short)port);
-    Debug(DebugAll,"built addr: %d %s:%d",
-	sin.sin_family,inet_ntoa(sin.sin_addr),ntohs(sin.sin_port));
-    message->setParty(new YateUDPParty(m_netfd,sin,m_port));
+    addr.port(port);
+    Debug(DebugAll,"built addr: %s:%d",
+	addr.host().c_str(),addr.port());
+    message->setParty(new YateUDPParty(m_sock,addr,m_port));
     return true;
 }
 
 bool YateSIPEndPoint::Init()
 {
     /*
-     * This part have been taking from libiax after i have lost my sip driver for bayonne
+     * This part have been taken from libiax after i have lost my sip driver for bayonne
      */
-    if (m_netfd > -1) {
+    if (m_sock) {
 	Debug(DebugInfo,"Already initialized.");
 	return true;
     }
-    m_netfd = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (m_netfd < 0) {
+
+    m_sock = new Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (!m_sock->valid()) {
 	Debug(DebugGoOn,"Unable to allocate UDP socket\n");
 	return false;
     }
     
-    struct sockaddr_in sin;
-    int flags;
-    int port = s_cfg.getIntValue("general","port",5060);
-    String host = s_cfg.getValue("general","addr");
+    SocketAddr addr(AF_INET);
+    addr.port(s_cfg.getIntValue("general","port",5060));
+    addr.host(s_cfg.getValue("general","addr","0.0.0.0"));
 
-    int sinlen = sizeof(sin);
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = 0;
-    if (host)
-	sin.sin_addr.s_addr = inet_addr(host);
-    sin.sin_port = htons((short)port);
-    if (::bind(m_netfd, (struct sockaddr *) &sin, sinlen) < 0) {
+    if (!m_sock->bind(addr)) {
 	Debug(DebugWarn,"Unable to bind to preferred port - using random one instead");
-	sin.sin_port = 0;
-	if (::bind(m_netfd, (struct sockaddr *) &sin, sinlen) < 0) {
+	addr.port(0);
+	if (!m_sock->bind(addr)) {
 	    Debug(DebugGoOn,"Unable to bind to any port");
-	    ::close(m_netfd);
-	    m_netfd = -1;
 	    return false;
 	}
     }
     
-    if (::getsockname(m_netfd, (struct sockaddr *) &sin, (socklen_t *)&sinlen) < 0) {
+    if (!m_sock->getSockName(addr)) {
 	Debug(DebugGoOn,"Unable to figure out what I'm bound to");
-	::close(m_netfd);
-	m_netfd = -1;
 	return false;
     }
-    if ((flags = ::fcntl(m_netfd, F_GETFL)) < 0) {
-	Debug(DebugGoOn,"Unable to retrieve socket flags");
-	::close(m_netfd);
-	m_netfd = -1;
-	return false;
-    }
-    if (::fcntl(m_netfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+    if (!m_sock->setBlocking(false)) {
 	Debug(DebugGoOn,"Unable to set non-blocking mode");
-	::close(m_netfd);
-	m_netfd = -1;
 	return false;
     }
-    host = inet_ntoa(sin.sin_addr);
-    port = ntohs(sin.sin_port);
-    Debug(DebugInfo,"SIP Started on %s:%d\n", host.safe(), port);
-    m_port = port;
+    Debug(DebugInfo,"SIP Started on %s:%d\n", addr.host().safe(), addr.port());
+    m_port = addr.port();
     m_engine = new YateSIPEngine(this);
     return true;
 }
 
-void YateSIPEndPoint::run ()
+void YateSIPEndPoint::run()
 {
-    fd_set fds;
     struct timeval tv;
-    int retval;
     char buf[1500];
-    struct sockaddr_in sin;
+    SocketAddr addr;
     /* Watch stdin (fd 0) to see when it has input. */
     for (;;)
     {
-	FD_ZERO(&fds);
-	FD_SET(m_netfd, &fds);
 	/* Wait up to 20000 microseconds. */
 	tv.tv_sec = 0;
 	tv.tv_usec = 20000;
-
-	retval = select(m_netfd+1, &fds, NULL, NULL, &tv);
-	if (retval)
+	bool ok = false;
+	m_sock->select(&ok,0,0,&tv);
+	if (ok)
 	{
-	    // we got the dates
-	    int sinlen = sizeof(sin);
-	    
-	    int res = ::recvfrom(m_netfd, buf, sizeof(buf)-1, 0, (struct sockaddr *) &sin,(socklen_t *) &sinlen);
-	    if (res < 0) {
-		if (errno != EAGAIN) {
-		    Debug(DebugGoOn,"Error on read: %s\n", strerror(errno));
+	    // we can read the data
+	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,addr);
+	    if (res <= 0) {
+		if (!m_sock->canRetry()) {
+		    Debug(DebugGoOn,"SIP error on read: %d\n", m_sock->error());
 		}
 	    } else {
 		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
-		m_engine->addMessage(new YateUDPParty(m_netfd,sin,m_port),buf,res);
+		m_engine->addMessage(new YateUDPParty(m_sock,addr,m_port),buf,res);
 	    //	Output("res %d buf %s",res,buf);
 	    }
 	}
@@ -673,7 +618,8 @@ YateSIPConnection* YateSIPConnection::find(const SIPDialog& dialog)
 
 // Incoming call constructor - after call.route but before call.execute
 YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
-    : m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming),
+    : Channel(plugin,0,false),
+      m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming),
       m_rtpSession(0), m_rtpVersion(0), m_port(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p) [%p]",tr,this);
@@ -707,11 +653,13 @@ YateSIPConnection::YateSIPConnection(Message& msg, SIPTransaction* tr)
 
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
-    : m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri),
-      m_target(target), m_rtpSession(0), m_rtpVersion(0), m_port(0)
+    : Channel(plugin,0,true),
+      m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri),
+      m_rtpSession(0), m_rtpVersion(0), m_port(0)
 {
     Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
+    targetid(target);
     setReason();
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",uri);
@@ -981,8 +929,7 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
     Debug(DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
     if (reason)
 	setReason(reason);
-    setStatus("disconnected");
-    setTarget();
+    Channel::disconnected(final,reason);
 }
 
 bool YateSIPConnection::process(SIPEvent* ev)
@@ -1278,16 +1225,8 @@ bool SIPConnHandler::received(Message &msg, int id)
     return true;
 }
 
-bool HaltHandler::received(Message &msg)
-{
-    // Clear calls early - give the endpoint a chance to do only minimal
-    //  processing later in the destructor
-    s_calls.clear();
-    return false;
-}
-
 SIPDriver::SIPDriver()
-    : Driver("sip","varchans"), m_handler(0), m_endpoint(0)
+    : Driver("sip","varchans"), m_endpoint(0)
 {
     Output("Loaded module SIP Channel");
 }
@@ -1310,19 +1249,9 @@ void SIPDriver::initialize()
 	    return;
 	}
 	m_endpoint->startup();
-    }
-    setup();
-    if (!m_handler) {
-	m_handler = new SIPConnHandler;
-	Engine::install(new MessageRelay("call.ringing",m_handler,SIPConnHandler::Ringing));
-	Engine::install(new MessageRelay("call.answered",m_handler,SIPConnHandler::Answered));
-	Engine::install(new MessageRelay("call.drop",m_handler,SIPConnHandler::Drop));
-	Engine::install(new MessageRelay("chan.masquerade",m_handler,SIPConnHandler::Masquerade,10));
-	Engine::install(new SIPHandler("call.execute"));
-	Engine::install(new HaltHandler("engine.halt"));
-	Engine::install(new StatusHandler("engine.status"));
+	setup();
+	installRelay(Halt);
     }
 }
-
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -54,7 +54,7 @@ void TestThread::cleanup()
 bool TestHandler::received(Message &msg)
 {
     if (noisy)
-	Output("Received message '%s' time=%llu thread=%p",
+	Output("Received message '%s' time=" FMT64U " thread=%p",
 	    msg.c_str(),msg.msgTime().usec(),Thread::current());
     return false;
 };

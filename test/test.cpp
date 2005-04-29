@@ -45,7 +45,7 @@ INIT_PLUGIN(TestPlugin);
  * vim:ts=4:et:sw=4:ht=8
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

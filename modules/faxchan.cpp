@@ -11,7 +11,7 @@
  * Fax driver (transmission+receiving)
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -124,7 +124,7 @@ FaxSource::~FaxSource()
 
 void FaxSource::run()
 {
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     for (;;) {
 	int r = m_chan->txBlock();
 	if (r < 0)
@@ -139,11 +139,11 @@ void FaxSource::run()
 	m_total += r;
 	tpos += (r*1000000ULL/16000);
 
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 10000)
 	    dly = 10000;
 	if (dly > 0)
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep((unsigned long)dly);
     }
     Debug(DebugAll,"FaxSource [%p] end of data total=%u",this,m_total);
 }

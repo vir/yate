@@ -5,7 +5,7 @@
  * A Gtk based universal telephony client
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -564,7 +564,7 @@ bool GtkClientHandler::received(Message &msg)
     s_client->set_state(STATUS_RINGIN);
     gdk_threads_leave();
 
-    unsigned long long t = Time::now() + 10000000;
+    u_int64_t t = Time::now() + 10000000;
     while (Time::now() < t) 
     { 
 	if(s_client->status == STATUS_INCALL)

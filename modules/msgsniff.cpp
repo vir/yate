@@ -5,7 +5,7 @@
  * A sample message sniffer that inserts a wildcard message handler
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ bool SniffHandler::received(Message &msg)
 	if (s)
 	    par << "\n  param['" << s->name() << "'] = '" << *s << "'";
     }
-    Output("Sniffed '%s' time=" FMT64 " thread=%p data=%p retval='%s'%s",
+    Output("Sniffed '%s' time=" FMT64U " thread=%p data=%p retval='%s'%s",
 	msg.c_str(),msg.msgTime().usec(),
 	Thread::current(),
 	msg.userData(),msg.retValue().c_str(),par.safe());

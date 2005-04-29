@@ -3,7 +3,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -293,7 +293,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 #ifdef DEBUG
 	    tm = Time::now() - tm;
 	    if (tm > 100000)
-		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in " FMT64 " usec",
+		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in " FMT64U " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
 	    if (retv)
@@ -339,7 +339,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    if (s)
 		p << "\n  ['" << s->name() << "']='" << *s << "'";
 	}
-	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in " FMT64 " usec%s",
+	Debug("Performance",DebugMild,"Message %p '%s' retval '%s' returned %s in " FMT64U " usec%s",
 	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
     }
 #endif

@@ -5,7 +5,7 @@
  * Tones generator
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -136,7 +136,7 @@ ToneSource::~ToneSource()
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"ToneSource rate=" FMT64 " b/s",m_time);
+	    Debug(DebugInfo,"ToneSource rate=" FMT64U " b/s",m_time);
 	}
     }
 }
@@ -207,7 +207,7 @@ void ToneSource::run()
 	}
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("ToneSource",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("ToneSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()/2);
@@ -216,7 +216,7 @@ void ToneSource::run()
     };
     m_time = Time::now() - m_time;
     m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-    Debug(DebugAll,"ToneSource [%p] end, total=%u (" FMT64 " b/s)",this,m_total,m_time);
+    Debug(DebugAll,"ToneSource [%p] end, total=%u (" FMT64U " b/s)",this,m_total,m_time);
     m_time = 0;
 }
 

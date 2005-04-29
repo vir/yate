@@ -10,7 +10,7 @@
 #
 
 # Extra Yate command line options
-OPTS="-vvvvv -l /var/log/yate"
+OPTS="-s -vvvvv -l /var/log/yate"
 
 # Source function library.
 . /etc/rc.d/init.d/functions

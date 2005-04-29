@@ -5,7 +5,7 @@
  * Wave file driver (record+playback)
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -153,7 +153,7 @@ WaveSource::~WaveSource()
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveSource rate=" FMT64 " b/s",m_time);
+	    Debug(DebugInfo,"WaveSource rate=" FMT64U " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {
@@ -285,7 +285,7 @@ WaveConsumer::~WaveConsumer()
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveConsumer rate=" FMT64 " b/s",m_time);
+	    Debug(DebugInfo,"WaveConsumer rate=" FMT64U " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {

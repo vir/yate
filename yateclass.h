@@ -5,7 +5,7 @@
  * Base classes and types, not related to the engine or telephony
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,7 +93,8 @@ typedef unsigned long in_addr_t;
 #define YATE_API __declspec(dllimport)
 #endif
 
-#define FMT64 "%I64u"
+#define FMT64 "%I64d"
+#define FMT64U "%I64u"
 
 #else /* _WINDOWS */
 
@@ -111,7 +112,8 @@ typedef int SOCKET;
 
 #define YATE_API
 
-#define FMT64 "%llu"
+#define FMT64 "%lld"
+#define FMT64U "%llu"
 
 #endif /* ! _WINDOWS */
 

@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro 
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -161,7 +161,7 @@ void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
     m_delay = delay;
     m_timeout = (count && delay) ? Time::now() + delay : 0;
     if (m_timeout)
-	Debug("SIPTransaction",DebugAll,"New %d timeouts initially " FMT64 " usec apart [%p]",
+	Debug("SIPTransaction",DebugAll,"New %d timeouts initially " FMT64U " usec apart [%p]",
 	    m_timeouts,m_delay,this);
 }
 

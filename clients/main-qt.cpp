@@ -6,7 +6,7 @@
  * Author: Dorin Lazar <lazar@deuromedia.ro>
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ bool QtClientHandler::received(Message &msg)
 		return false;
 	}
 
-	unsigned long long t = Time::now() + 10000000;
+	u_int64_t t = Time::now() + 10000000;
 	while (Time::now() < t) { 
 		if(m_frm->getStatus() == YCS_INCALL) {
 			msg.retValue() = String("oss///dev/dsp");	    

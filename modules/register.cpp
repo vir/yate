@@ -5,7 +5,7 @@
  * Ask for a registration from this module.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -211,7 +211,7 @@ bool UnRegistHandler::received(Message &msg)
 
 bool RouteHandler::received(Message &msg)
 {
-    unsigned long long tmr = Time::now();
+    u_int64_t tmr = Time::now();
     String called(msg.getValue("called"));
     if (called.null())
 	return false;

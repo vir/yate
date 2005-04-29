@@ -5,7 +5,7 @@
  * Call Generator
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +59,7 @@ public:
 	{ m_target = target; }
     inline const String& getTarget() const
 	{ return m_target; }
-    inline bool oldAge(unsigned long long now) const
+    inline bool oldAge(u_int64_t now) const
 	{ return now > m_finish; }
     static GenConnection* find(const String& id);
     static bool oneCall(String* target = 0);
@@ -67,7 +67,7 @@ private:
     String m_status;
     String m_callto;
     String m_target;
-    unsigned long long m_finish;
+    u_int64_t m_finish;
 };
 
 class GenThread : public Thread
@@ -130,7 +130,7 @@ GenConnection::GenConnection(unsigned int lifetime, const String& callto)
 	lifetime = 60000;
     if (lifetime < 100)
 	lifetime = 100;
-    m_finish = Time::now() + ((unsigned long long)lifetime * 1000);
+    m_finish = Time::now() + ((u_int64_t)lifetime * 1000);
     m_status = "calling";
     s_mutex.lock();
     s_calls.append(this);
@@ -189,7 +189,7 @@ bool GenConnection::oneCall(String* target)
     if (lifetime) {
 	int minlife = s_cfg.getIntValue("parameters","minlife");
 	if (minlife)
-	    lifetime -= ((lifetime - minlife) * (long long)::random()) / RAND_MAX;
+	    lifetime -= ((lifetime - minlife) * (int64_t)::random()) / RAND_MAX;
     }
     GenConnection* conn = new GenConnection(lifetime,callto);
     m.addParam("id",conn->id());
@@ -299,7 +299,7 @@ void GenThread::run()
 	tonext = s_cfg.getIntValue("parameters","avgdelay",1000);
 	lock.drop();
 	GenConnection::oneCall();
-	tonext = ((long long)::random() * tonext * 2000) / RAND_MAX;
+	tonext = ((int64_t)::random() * tonext * 2000) / RAND_MAX;
     }
 }
 

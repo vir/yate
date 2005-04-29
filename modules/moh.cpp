@@ -5,7 +5,7 @@
  * Music (on hold) generator
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ private:
     int m_in;
     bool m_swap;
     unsigned m_brate;
-    unsigned long long m_time;
+    u_int64_t m_time;
     String m_id;
 
 };
@@ -223,7 +223,7 @@ void MOHSource::run()
 
     m_data.assign(0,(m_brate*20)/1000);
     int r = 0;
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     m_time = tpos;
 
     do {
@@ -245,9 +245,9 @@ void MOHSource::run()
 		++p;
 	    }
 	}
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("MOH",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("MOH",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()*8000/m_brate);

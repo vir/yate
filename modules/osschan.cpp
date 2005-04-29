@@ -7,7 +7,7 @@
  * been taken from chan_oss.c from asterisk.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -168,7 +168,7 @@ OssSource::~OssSource()
 void OssSource::run()
 {
     int r = 0;
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     do {
 	if (m_chan->m_fd < 0) {
 	    Thread::yield();
@@ -193,9 +193,9 @@ void OssSource::run()
 	}
 	if (r < (int)data.length())
 	    data.assign(data.data(),r);
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("OssSource",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("OssSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(data,data.length()/2);

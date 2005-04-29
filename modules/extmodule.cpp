@@ -8,7 +8,7 @@
  * External module handler
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004 Null Team
+ * Copyright (C) 2004, 2005 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -209,7 +209,7 @@ void ExtModSource::run()
 {
     DataBlock data(0,480);
     int r = 0;
-    unsigned long long tpos = Time::now();
+    u_int64_t tpos = Time::now();
     do {
 	r = ::read(m_fd,data.data(),data.length());
 	if (r < 0) {
@@ -221,9 +221,9 @@ void ExtModSource::run()
 	}
 	if (r < (int)data.length())
 	    data.assign(data.data(),r);
-	long long dly = tpos - Time::now();
+	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("ExtModSource",DebugAll,"Sleeping for %lld usec",dly);
+	    XDebug("ExtModSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
 	Forward(data,m_total);

@@ -1104,8 +1104,14 @@ public:
     virtual bool msgTransfer(Message& msg);
 
     /**
+     * Notification on progress of incoming call
+     * @param msg Notification call.route message just after being dispatched
+     */
+    virtual void callRouted(Message& msg);
+
+    /**
      * Notification on success of incoming call
-     * @param msg Notification call.execute message
+     * @param msg Notification call.execute message just after being dispatched
      */
     virtual void callAccept(Message& msg);
 
@@ -1255,6 +1261,8 @@ private:
     int m_routed;
     unsigned int m_nextid;
     int m_timeout;
+    int m_maxroute;
+    int m_maxchans;
 
 public:
     /**
@@ -1305,6 +1313,12 @@ public:
     virtual void dropAll(Message &msg);
 
     /**
+     * Check if new connections can be accepted
+     * @return True if at least one new connection can be accepted, false if not
+     */
+    virtual bool canAccept();
+
+    /**
      * Get the next unique numeric id from a sequence
      * @return A driver unique number that increments by 1 at each call
      */
@@ -1323,6 +1337,20 @@ public:
      */
     inline int timeout() const
 	{ return m_timeout; }
+
+    /**
+     * Get the number of calls currently in the routing stage
+     * @return Number of router threads currently running
+     */
+    inline int routing() const
+	{ return m_routing; }
+
+    /**
+     * Get the number of calls successfully routed
+     * @return Number of calls that have gone past the routing stage
+     */
+    inline int routed() const
+	{ return m_routed; }
 
 protected:
     /**
@@ -1410,6 +1438,20 @@ protected:
      */
     inline void timeout(int tout)
 	{ m_timeout = tout; }
+
+    /**
+     * Set the maximum number of routing messages for this driver
+     * @param ncalls Number of calls to route simultaneously, zero to accept all
+     */
+    inline void maxRoute(int ncalls)
+	{ m_maxroute = ncalls; }
+
+    /**
+     * Set the maximum number of running channels for this driver
+     * @param ncalls Number of calls to run simultaneously, zero to accept all
+     */
+    inline void maxChans(int ncalls)
+	{ m_maxchans = ncalls; }
 
 private:
     Driver(); // no default constructor please

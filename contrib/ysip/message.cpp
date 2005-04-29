@@ -148,12 +148,15 @@ SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
 }
 
 SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason)
-    : code(_code), reason(_reason), body(0),
+    : code(_code), body(0),
       m_ep(0), m_valid(false),
       m_answer(true), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
+    if (!_reason)
+	_reason = lookup(code,SIPResponses,"Unknown Reason Code");
+    reason = _reason;
     if (!(message && message->isValid()))
 	return;
     m_ep = message->getParty();

@@ -280,13 +280,13 @@ bool Channel::startRouter(Message* msg)
 bool Channel::msgRinging(Message& msg)
 {
     status("ringing");
-    return false;
+    return true;
 }
 
 bool Channel::msgAnswered(Message& msg)
 {
     status("answered");
-    return false;
+    return true;
 }
 
 bool Channel::msgTone(Message& msg, const char* tone)
@@ -301,12 +301,19 @@ bool Channel::msgText(Message& msg, const char* text)
 
 bool Channel::msgDrop(Message& msg, const char* reason)
 {
-    return false;
+    status("dropped");
+    disconnect(reason);
+    return true;
 }
 
 bool Channel::msgTransfer(Message& msg)
 {
     return false;
+}
+
+void Channel::callRouted(Message& msg)
+{
+    status("routed");
 }
 
 void Channel::callAccept(Message& msg)
@@ -534,7 +541,9 @@ bool Module::setDebug(Message& msg, const String& target)
 Driver::Driver(const char* name, const char* type)
     : Module(name,type),
       m_init(false), m_varchan(true),
-      m_routing(0), m_routed(0), m_nextid(0), m_timeout(0)
+      m_routing(0), m_routed(0),
+      m_nextid(0), m_timeout(0),
+      m_maxroute(0), m_maxchans(0)
 {
     m_prefix << name << "/";
 }
@@ -563,6 +572,8 @@ void Driver::setup(const char* prefix, bool minimal)
 	m_prefix += "/";
     Debug(DebugAll,"setup name='%s' prefix='%s'",name().c_str(),m_prefix.c_str());
     timeout(Engine::config().getIntValue("telephony","timeout"));
+    maxRoute(Engine::config().getIntValue("telephony","maxroute"));
+    maxChans(Engine::config().getIntValue("telephony","maxchans"));
     installRelay(Masquerade,10);
     installRelay(Locate,40);
     installRelay(Drop,60);
@@ -614,8 +625,8 @@ bool Driver::received(Message &msg, int id)
 	case Level:
 	    return Module::received(msg,id);
 	case Halt:
-	    dropAll(msg,"shutdown");
-	    return Module::received(msg,id);
+	    dropAll(msg);
+	    return false;
 	case Execute:
 	    dest = msg.getValue("callto");
 	    break;
@@ -640,6 +651,8 @@ bool Driver::received(Message &msg, int id)
 
     // handle call.execute which should start a new channel
     if (id == Execute) {
+	if (!canAccept())
+	    return false;
 	dest.startSkip(m_prefix,false);
 	return msgExecute(msg,dest);
     }
@@ -696,6 +709,19 @@ void Driver::dropAll(Message &msg)
     if (m_varchan)
 	m_chans.clear();
     unlock();
+}
+
+bool Driver::canAccept()
+{
+    if (Engine::exiting())
+	return false;
+    if (m_maxroute && (m_routing >= m_maxroute))
+	return false;
+    if (m_maxchans) {
+	Lock mylock(this);
+	return ((signed)m_chans.count() < m_maxchans);
+    }
+    return true;
 }
 
 void Driver::genUpdate(Message& msg)
@@ -792,7 +818,6 @@ bool Router::route()
 	// this will keep it referenced even if message user data is changed
 	chan->ref();
 	m_msg->userData(chan);
-	chan->status("routed");
     }
     m_driver->unlock();
 
@@ -802,17 +827,22 @@ bool Router::route()
     }
 
     if (ok) {
+	chan->callRouted(*m_msg);
 	*m_msg = "call.execute";
 	m_msg->setParam("callto",m_msg->retValue());
+	m_msg->clearParam("error");
+	m_msg->clearParam("reason");
 	m_msg->retValue().clear();
 	ok = Engine::dispatch(m_msg);
 	if (ok)
 	    chan->callAccept(*m_msg);
 	else
-	    chan->callReject("noconn","Could not connected to target");
+	chan->callReject(m_msg->getValue("error","noconn"),
+	    m_msg->getValue("reason","Could not connected to target"));
     }
     else
-	chan->callReject("noroute","No route to call target");
+	chan->callReject(m_msg->getValue("error","noroute"),
+	    m_msg->getValue("reason","No route to call target"));
 
     chan->deref();
     // dereference again if the channel is dynamic

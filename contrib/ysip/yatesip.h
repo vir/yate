@@ -26,13 +26,28 @@
 
 #include <yateclass.h>
 
+#ifdef _WINDOWS
+#ifdef LIBYSIP_EXPORTS
+#define YSIP_API __declspec(dllexport)
+#else
+#define YSIP_API __declspec(dllimport)
+#endif
+#else
+#define YSIP_API
+#endif /* _WINDOWS */
+
 /** 
  * We use Telephony Engine namespace, which in fact holds just the 
  * generic classes 
 */
 namespace TelEngine {
 
-class URI : public String
+/**
+ * Token table containing default human readable responses for answer codes
+ */
+extern YSIP_API TokenDict* SIPResponses;
+
+class YSIP_API URI : public String
 {
 public:
     URI();
@@ -66,7 +81,7 @@ protected:
 class SIPEngine;
 class SIPEvent;
 
-class SIPParty : public RefObject
+class YSIP_API SIPParty : public RefObject
 {
 public:
     SIPParty();
@@ -94,7 +109,7 @@ protected:
     int m_partyPort;
 };
 
-class SIPBody
+class YSIP_API SIPBody
 {
 public:
     SIPBody(const String& type);
@@ -112,7 +127,7 @@ protected:
     mutable DataBlock m_body;
 };
 
-class SDPBody : public SIPBody
+class YSIP_API SDPBody : public SIPBody
 {
 public:
     SDPBody();
@@ -132,7 +147,7 @@ protected:
     ObjList m_lines;
 };
 
-class BinaryBody : public SIPBody
+class YSIP_API BinaryBody : public SIPBody
 {
 public:
     BinaryBody(const String& type, const char *buf, int len);
@@ -143,7 +158,7 @@ protected:
     virtual void buildBody() const;
 };
 
-class StringBody : public SIPBody
+class YSIP_API StringBody : public SIPBody
 {
 public:
     StringBody(const String& type, const char *buf, int len);
@@ -155,7 +170,7 @@ protected:
     String m_text;
 };
 
-class HeaderLine : public NamedString
+class YSIP_API HeaderLine : public NamedString
 {
 public:
     HeaderLine(const char *name, const String& value);
@@ -175,7 +190,7 @@ protected:
  * This class can be used to parse a sip message from a text buffer, or it
  * can be used to create a text buffer from a sip message.
  */
-class SIPMessage : public RefObject
+class YSIP_API SIPMessage : public RefObject
 {
 public:
     /**
@@ -191,7 +206,7 @@ public:
     /**
      * Creates a new SIPMessage as answer to another message.
      */
-    SIPMessage(const SIPMessage* message, int _code, const char* _reason);
+    SIPMessage(const SIPMessage* message, int _code, const char* _reason = 0);
 
     /**
      * Creates an ACK message from a response message.
@@ -405,7 +420,7 @@ protected:
 /**
  * A class to store information required to identify a dialog
  */
-class SIPDialog : public String
+class YSIP_API SIPDialog : public String
 {
 public:
     SIPDialog();
@@ -425,7 +440,7 @@ public:
 /**
  * All informaton related to a SIP transaction, starting with 1st message
  */
-class SIPTransaction : public RefObject
+class YSIP_API SIPTransaction : public RefObject
 {
 public:
     enum State {
@@ -608,8 +623,10 @@ public:
 
     /**
      * Creates and transmits a final response message
+     * @param code Response code to send
+     * @param reason Human readable reason text (optional)
      */
-    void setResponse(int code, const char* reason);
+    void setResponse(int code, const char* reason = 0);
 
     /**
      * Transmits a final response message
@@ -717,7 +734,7 @@ protected:
 /**
  * This object is an event that will be taken from SIPEngine
  */ 
-class SIPEvent
+class YSIP_API SIPEvent
 {
     friend class SIPTransaction;
 public:
@@ -731,14 +748,20 @@ public:
     ~SIPEvent();
 
     /**
-     * The SIPEngine this event belongs to
+     * The SIP engine this event belongs to, if any
      */
     inline SIPEngine* getEngine() const
 	{ return m_transaction ? m_transaction->getEngine() : 0; }
 
+    /**
+     * The SIP message this event is supposed to handle
+     */
     inline const SIPMessage* getMessage() const
 	{ return m_message; }
 
+    /**
+     * The SIP transaction that gererated the event, if any
+     */
     inline SIPTransaction* getTransaction() const
 	{ return m_transaction; }
 

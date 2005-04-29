@@ -26,6 +26,16 @@
 
 #include <yateclass.h>
 
+#ifdef _WINDOWS
+#ifdef LIBYRTP_EXPORTS
+#define YRTP_API __declspec(dllexport)
+#else
+#define YRTP_API __declspec(dllimport)
+#endif
+#else
+#define YRTP_API
+#endif /* _WINDOWS */
+
 namespace TelEngine {
 
 

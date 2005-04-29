@@ -50,5 +50,13 @@
 
 
 [telephony]
+; Default settings for telephony drivers
+
 ; timeout: int: Default channel timeout in milliseconds
 ;timeout=0
+
+; maxroute: int: Maximum number of calls routed at once by each driver
+;maxroute=0
+
+; maxchans: int: Maximum number of channels running at once in each driver
+;maxchans=0

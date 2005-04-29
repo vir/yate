@@ -257,6 +257,8 @@ void SIPTransaction::setResponse(int code, const char* reason)
 		code,stateName(m_state),this);
 	    return;
     }
+    if (!reason)
+	reason = lookup(code,SIPResponses,"Unknown Reason Code");
     SIPMessage* msg = new SIPMessage(m_firstMessage, code, reason);
     setResponse(msg);
     msg->deref();
@@ -416,11 +418,11 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
     switch (state) {
 	case Initial:
 	    if (m_engine->isAllowed(m_firstMessage->method)) {
-		setResponse(100, "Trying");
+		setResponse(100);
 		changeState(Trying);
 	    }
 	    else {
-		setResponse(405, "Method Not Allowed");
+		setResponse(405);
 		e = new SIPEvent(m_lastMessage,this);
 		m_transmit = false;
 		changeState(Invalid);
@@ -440,7 +442,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 		e = new SIPEvent(m_lastMessage,this);
 	    if (timeout)
 		break;
-	    setResponse(408, "Request Timeout");
+	    setResponse(408);
 	    break;
 	case Finish:
 	    e = new SIPEvent(m_lastMessage,this);

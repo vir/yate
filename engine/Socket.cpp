@@ -93,13 +93,28 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 #endif
 	}
     }
-    if (addr && len) {
+    if (addr && (len >= sizeof(struct sockaddr))) {
 	void* tmp = ::malloc(len);
 	::memcpy(tmp,addr,len);
 	m_address = (struct sockaddr*)tmp;
 	m_length = len;
 	stringify();
     }
+}
+
+bool SocketAddr::local(const SocketAddr& remote)
+{
+    if (!remote.valid())
+	return false;
+    SocketAddr tmp(remote);
+    if (!tmp.port())
+	tmp.port(16384);
+    Socket sock(tmp.family(),SOCK_DGRAM);
+    if (sock.valid() && sock.connect(tmp) && sock.getSockName(*this)) {
+	port(0);
+	return true;
+    }
+    return false;
 }
 
 bool SocketAddr::host(const String& name)

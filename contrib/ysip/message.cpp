@@ -30,10 +30,10 @@
 
 using namespace TelEngine;
 
-HeaderLine::HeaderLine(const char *name, const String& value)
+SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
     : NamedString(name)
 {
-    DDebug(DebugAll,"HeaderLine::HeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    DDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
     if (value.null())
 	return;
     int sp = value.find(';');
@@ -76,10 +76,10 @@ HeaderLine::HeaderLine(const char *name, const String& value)
     }
 }
 
-HeaderLine::HeaderLine(const HeaderLine& original)
+SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
     : NamedString(original.name(),original)
 {
-    DDebug(DebugAll,"HeaderLine::HeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
+    DDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
     const ObjList* l = &original.params();
     for (; l; l = l->next()) {
 	const NamedString* t = static_cast<const NamedString*>(l->get());
@@ -88,12 +88,12 @@ HeaderLine::HeaderLine(const HeaderLine& original)
     }
 }
 
-HeaderLine::~HeaderLine()
+SIPHeaderLine::~SIPHeaderLine()
 {
-    DDebug(DebugAll,"HeaderLine::~HeaderLine() [%p]",this);
+    DDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
 }
 
-const NamedString* HeaderLine::getParam(const char *name) const
+const NamedString* SIPHeaderLine::getParam(const char *name) const
 {
     if (!(name && *name))
 	return 0;
@@ -106,7 +106,7 @@ const NamedString* HeaderLine::getParam(const char *name) const
     return 0;
 }
 
-void HeaderLine::setParam(const char *name, const char *value)
+void SIPHeaderLine::setParam(const char *name, const char *value)
 {
     ObjList* p = m_params.find(name);
     if (p)
@@ -115,7 +115,7 @@ void HeaderLine::setParam(const char *name, const char *value)
 	m_params.append(new NamedString(name,value));
 }
 
-void HeaderLine::delParam(const char *name)
+void SIPHeaderLine::delParam(const char *name)
 {
     ObjList* p = m_params.find(name);
     if (p)
@@ -187,12 +187,12 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
     version = message->version;
     uri = message->uri;
     copyAllHeaders(message,"Via");
-    HeaderLine* hl = const_cast<HeaderLine*>(getHeader("Via"));
+    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
-	hl = new HeaderLine("Via",tmp);
+	hl = new SIPHeaderLine("Via",tmp);
 	header.append(hl);
     }
     if (newtran) {
@@ -237,7 +237,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     // only set the dialog tag on ACK
     if (isACK()) {
-	HeaderLine* hl = const_cast<HeaderLine*>(getHeader("To"));
+	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("To"));
 	if (dlgTag && hl && !hl->getParam("tag"))
 	    hl->setParam("tag",dlgTag);
 	return;
@@ -248,12 +248,12 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!domain)
 	domain = getParty()->getLocalAddr();
 
-    HeaderLine* hl = const_cast<HeaderLine*>(getHeader("Via"));
+    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
-	hl = new HeaderLine("Via",tmp);
+	hl = new SIPHeaderLine("Via",tmp);
 	header.append(hl);
     }
     if (!(isAnswer() || hl->getParam("branch"))) {
@@ -266,21 +266,21 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	hl->setParam("rport",String(getParty()->getPartyPort()));
     }
 
-    hl = const_cast<HeaderLine*>(getHeader("From"));
+    hl = const_cast<SIPHeaderLine*>(getHeader("From"));
     if (!hl) {
 	String tmp;
 	tmp << "<sip:" << user << "@" << domain << ">";
-	hl = new HeaderLine("From",tmp);
+	hl = new SIPHeaderLine("From",tmp);
 	header.append(hl);
     }
     if (!(isAnswer() || hl->getParam("tag")))
 	hl->setParam("tag",String((int)::random()));
 
-    hl = const_cast<HeaderLine*>(getHeader("To"));
+    hl = const_cast<SIPHeaderLine*>(getHeader("To"));
     if (!hl) {
 	String tmp;
 	tmp << "<" << uri << ">";
-	hl = new HeaderLine("To",tmp);
+	hl = new SIPHeaderLine("To",tmp);
 	header.append(hl);
     }
     if (dlgTag && !hl->getParam("tag"))
@@ -326,9 +326,9 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
 bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
 {
-    const HeaderLine* hl = message ? message->getHeader(name) : 0;
+    const SIPHeaderLine* hl = message ? message->getHeader(name) : 0;
     if (hl) {
-	header.append(new HeaderLine(*hl));
+	header.append(new SIPHeaderLine(*hl));
 	return true;
     }
     return false;
@@ -341,10 +341,10 @@ int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
     int c = 0;
     const ObjList* l = &message->header;
     for (; l; l = l->next()) {
-	const HeaderLine* hl = static_cast<const HeaderLine*>(l->get());
+	const SIPHeaderLine* hl = static_cast<const SIPHeaderLine*>(l->get());
 	if (hl && (hl->name() &= name)) {
 	    ++c;
-	    header.append(new HeaderLine(*hl));
+	    header.append(new SIPHeaderLine(*hl));
 	}
     }
     return c;
@@ -427,7 +427,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	*line >> ":";
 	line->trimBlanks();
 	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
-	header.append(new HeaderLine(uncompactForm(name.c_str()),*line));
+	header.append(new SIPHeaderLine(uncompactForm(name.c_str()),*line));
 	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
 	    content.toLower();
@@ -458,27 +458,27 @@ SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char *buf, int len)
     return 0;
 }
 
-const HeaderLine* SIPMessage::getHeader(const char* name) const
+const SIPHeaderLine* SIPMessage::getHeader(const char* name) const
 {
     if (!(name && *name))
 	return 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    return t;
     }
     return 0;
 }
 
-const HeaderLine* SIPMessage::getLastHeader(const char* name) const
+const SIPHeaderLine* SIPMessage::getLastHeader(const char* name) const
 {
     if (!(name && *name))
 	return 0;
-    const HeaderLine* res = 0;
+    const SIPHeaderLine* res = 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    res = t;
     }
@@ -492,7 +492,7 @@ int SIPMessage::countHeaders(const char* name) const
     int res = 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const HeaderLine* t = static_cast<const HeaderLine*>(l->get());
+	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    ++res;
     }
@@ -501,13 +501,13 @@ int SIPMessage::countHeaders(const char* name) const
 
 const NamedString* SIPMessage::getParam(const char* name, const char* param) const
 {
-    const HeaderLine* hl = getHeader(name);
+    const SIPHeaderLine* hl = getHeader(name);
     return hl ? hl->getParam(param) : 0;
 }
 
 const String& SIPMessage::getHeaderValue(const char* name) const
 {
-    const HeaderLine* hl = getHeader(name);
+    const SIPHeaderLine* hl = getHeader(name);
     return hl ? *hl : String::empty();
 }
 
@@ -527,7 +527,7 @@ const String& SIPMessage::getHeaders() const
 
 	const ObjList* l = &header;
 	for (; l; l = l->next()) {
-	    HeaderLine* t = static_cast<HeaderLine*>(l->get());
+	    SIPHeaderLine* t = static_cast<SIPHeaderLine*>(l->get());
 	    if (t) {
 		m_string << t->name() << ": " << t->c_str();
 		const ObjList* p = &(t->params());
@@ -630,7 +630,7 @@ SIPDialog::SIPDialog(const SIPMessage& message)
 {
     Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
-    const HeaderLine* hl = message.getHeader(local ? "From" : "To");
+    const SIPHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
     if (localURI.matches(r))
         localURI = localURI.matchString(1);
@@ -651,7 +651,7 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
     String::operator=(message.getHeaderValue("Call-ID"));
     Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
-    const HeaderLine* hl = message.getHeader(local ? "From" : "To");
+    const SIPHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
     if (localURI.matches(r))
         localURI = localURI.matchString(1);

@@ -239,7 +239,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     if (message->isOutgoing())
 	message->complete(this);
     // locate the branch parameter of last Via header - added by the UA
-    const HeaderLine* hl = message->getLastHeader("Via");
+    const SIPHeaderLine* hl = message->getLastHeader("Via");
     const NamedString* br = hl ? hl->getParam("branch") : 0;
     String branch(br ? *br : String::empty());
     if (!branch.startsWith("z9hG4bK"))

@@ -90,7 +90,9 @@ typedef unsigned long in_addr_t;
 #ifdef LIBYATE_EXPORTS
 #define YATE_API __declspec(dllexport)
 #else
+#ifndef LIBYATE_STATIC
 #define YATE_API __declspec(dllimport)
+#endif
 #endif
 
 #define FMT64 "%I64d"
@@ -110,12 +112,14 @@ typedef unsigned long in_addr_t;
 typedef int SOCKET;
 #endif
 
-#define YATE_API
-
 #define FMT64 "%lld"
 #define FMT64U "%llu"
 
 #endif /* ! _WINDOWS */
+
+#ifndef YATE_API
+#define YATE_API
+#endif
 
 #ifndef IPTOS_LOWDELAY
 #define IPTOS_LOWDELAY      0x10
@@ -2338,6 +2342,27 @@ public:
      * @param len Length of the stored address, zero to use default
      */
     void assign(const struct sockaddr* addr, socklen_t len = 0);
+
+    /**
+     * Attempt to guess a local address that will be used to reach a remote one
+     * @param remote Remote address to reach
+     * @return True if guessed an address, false if failed
+     */
+    bool local(const SocketAddr& remote);
+
+    /**
+     * Check if a non-null address is held
+     * @return True if a valid address is held, false if null
+     */
+    inline bool valid() const
+	{ return m_length && m_address; }
+
+    /**
+     * Check if a null address is held
+     * @return True if a null address is held
+     */
+    inline bool null() const
+	{ return !(m_length && m_address); }
 
     /**
      * Get the family of the stored address

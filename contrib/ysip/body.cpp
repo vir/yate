@@ -55,8 +55,8 @@ SIPBody* SIPBody::build(const char *buf, int len, const String& type)
     if (type == "application/sdp")
 	return new SDPBody(type,buf,len);
     if (type.startsWith("text/"))
-	return new StringBody(type,buf,len);
-    return new BinaryBody(type,buf,len);
+	return new SIPStringBody(type,buf,len);
+    return new SIPBinaryBody(type,buf,len);
 }
 
 SDPBody::SDPBody()
@@ -123,56 +123,56 @@ const NamedString* SDPBody::getLine(const char *name) const
     return 0;
 }
 
-BinaryBody::BinaryBody(const String& type, const char *buf, int len)
+SIPBinaryBody::SIPBinaryBody(const String& type, const char *buf, int len)
     : SIPBody(type)
 {
     m_body.assign((void*)buf,len);
 }
 
-BinaryBody::BinaryBody(const BinaryBody& original)
+SIPBinaryBody::SIPBinaryBody(const SIPBinaryBody& original)
     : SIPBody(original.getType())
 {
     m_body = original.m_body;
 }
 
-BinaryBody::~BinaryBody()
+SIPBinaryBody::~SIPBinaryBody()
 {
 }
 
-void BinaryBody::buildBody() const
+void SIPBinaryBody::buildBody() const
 {
-    Debug(DebugAll,"BinaryBody::buildBody() [%p]",this);
+    Debug(DebugAll,"SIPBinaryBody::buildBody() [%p]",this);
     // nothing to do
 }
 
-SIPBody* BinaryBody::clone() const
+SIPBody* SIPBinaryBody::clone() const
 {
-    return new BinaryBody(*this);
+    return new SIPBinaryBody(*this);
 }
 
-StringBody::StringBody(const String& type, const char *buf, int len)
+SIPStringBody::SIPStringBody(const String& type, const char *buf, int len)
     : SIPBody(type), m_text(buf,len)
 {
 }
 
-StringBody::StringBody(const StringBody& original)
+SIPStringBody::SIPStringBody(const SIPStringBody& original)
     : SIPBody(original.getType()), m_text(original.m_text)
 {
 }
 
-StringBody::~StringBody()
+SIPStringBody::~SIPStringBody()
 {
 }
 
-void StringBody::buildBody() const
+void SIPStringBody::buildBody() const
 {
-    Debug(DebugAll,"StringBody::buildBody() [%p]",this);
+    Debug(DebugAll,"SIPStringBody::buildBody() [%p]",this);
     m_body.assign((void*)m_text.c_str(),m_text.length());
 }
 
-SIPBody* StringBody::clone() const
+SIPBody* SIPStringBody::clone() const
 {
-    return new StringBody(*this);
+    return new SIPStringBody(*this);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

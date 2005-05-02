@@ -27,14 +27,20 @@
 #include <yateclass.h>
 
 #ifdef _WINDOWS
+
 #ifdef LIBYSIP_EXPORTS
 #define YSIP_API __declspec(dllexport)
 #else
+#ifndef LIBYSIP_STATIC
 #define YSIP_API __declspec(dllimport)
 #endif
-#else
-#define YSIP_API
+#endif
+
 #endif /* _WINDOWS */
+
+#ifndef YSIP_API
+#define YSIP_API
+#endif
 
 /** 
  * We use Telephony Engine namespace, which in fact holds just the 
@@ -147,35 +153,35 @@ protected:
     ObjList m_lines;
 };
 
-class YSIP_API BinaryBody : public SIPBody
+class YSIP_API SIPBinaryBody : public SIPBody
 {
 public:
-    BinaryBody(const String& type, const char *buf, int len);
-    virtual ~BinaryBody();
+    SIPBinaryBody(const String& type, const char *buf, int len);
+    virtual ~SIPBinaryBody();
     virtual SIPBody* clone() const;
 protected:
-    BinaryBody(const BinaryBody& original);
+    SIPBinaryBody(const SIPBinaryBody& original);
     virtual void buildBody() const;
 };
 
-class YSIP_API StringBody : public SIPBody
+class YSIP_API SIPStringBody : public SIPBody
 {
 public:
-    StringBody(const String& type, const char *buf, int len);
-    virtual ~StringBody();
+    SIPStringBody(const String& type, const char *buf, int len);
+    virtual ~SIPStringBody();
     virtual SIPBody* clone() const;
 protected:
-    StringBody(const StringBody& original);
+    SIPStringBody(const SIPStringBody& original);
     virtual void buildBody() const;
     String m_text;
 };
 
-class YSIP_API HeaderLine : public NamedString
+class YSIP_API SIPHeaderLine : public NamedString
 {
 public:
-    HeaderLine(const char *name, const String& value);
-    HeaderLine(const HeaderLine& original);
-    virtual ~HeaderLine();
+    SIPHeaderLine(const char *name, const String& value);
+    SIPHeaderLine(const SIPHeaderLine& original);
+    virtual ~SIPHeaderLine();
     inline const ObjList& params() const
 	{ return m_params; }
     void setParam(const char *name, const char *value = 0);
@@ -302,14 +308,14 @@ public:
      * @param name Name of the header to locate
      * @return A pointer to the first matching header line or 0 if not found
      */
-    const HeaderLine* getHeader(const char* name) const;
+    const SIPHeaderLine* getHeader(const char* name) const;
 
     /**
      * Find the last header line that matches a given name name
      * @param name Name of the header to locate
      * @return A pointer to the last matching header line or 0 if not found
      */
-    const HeaderLine* getLastHeader(const char* name) const;
+    const SIPHeaderLine* getLastHeader(const char* name) const;
 
     /**
      * Count the header lines matching a specific name
@@ -345,12 +351,12 @@ public:
      * Append a new header line constructed from name and content
      */
     inline void addHeader(const char* name, const char* value = 0)
-	{ header.append(new HeaderLine(name,value)); }
+	{ header.append(new SIPHeaderLine(name,value)); }
 
     /**
      * Append an already constructed header line
      */
-    inline void addHeader(HeaderLine* line)
+    inline void addHeader(SIPHeaderLine* line)
 	{ header.append(line); }
 
     /**
@@ -806,7 +812,7 @@ protected:
 /**
  * This object can be one for each SIPListener.
  */
-class SIPEngine
+class YSIP_API SIPEngine
 {
 public:
     /**

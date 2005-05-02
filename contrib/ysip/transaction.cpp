@@ -47,7 +47,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	if (ns)
 	    m_tag = *ns;
 
-	const HeaderLine* hl = message->getHeader("Call-ID");
+	const SIPHeaderLine* hl = message->getHeader("Call-ID");
 	if (hl)
 	    m_callid = *hl;
 

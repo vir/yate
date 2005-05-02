@@ -525,7 +525,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	e->getTransaction()->setResponse(500, "Server Shutting Down");
 	return;
     }
-    const HeaderLine* hl = e->getMessage()->getHeader("Contact");
+    const SIPHeaderLine* hl = e->getMessage()->getHeader("Contact");
     if (!hl) {
 	e->getTransaction()->setResponse(400);
 	return;
@@ -705,12 +705,12 @@ void YateSIPConnection::hangup()
 	m->addHeader("Call-ID",m_callid);
 	String tmp;
 	tmp << "<" << m_dialog.localURI << ">";
-	HeaderLine* hl = new HeaderLine("From",tmp);
+	SIPHeaderLine* hl = new SIPHeaderLine("From",tmp);
 	hl->setParam("tag",m_dialog.localTag);
 	m->addHeader(hl);
 	tmp.clear();
 	tmp << "<" << m_dialog.remoteURI << ">";
-	hl = new HeaderLine("To",tmp);
+	hl = new SIPHeaderLine("To",tmp);
 	hl->setParam("tag",m_dialog.remoteTag);
 	m->addHeader(hl);
 	plugin.ep()->engine()->addMessage(m);

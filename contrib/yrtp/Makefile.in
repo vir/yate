@@ -13,7 +13,7 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatertp.h
 
 PROGS=
 LIBS = libyatertp.a
-OBJS = 
+OBJS = transport.o session.o
 
 LOCALFLAGS =
 LOCALLIBS =

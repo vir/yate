@@ -81,11 +81,11 @@ cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 engine: tables library libyate.so $(PROGS)
 
 apidocs-build: check-topdir
-	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS)
+	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS) contrib/ysip/yatesip.h contrib/yrtp/yatertp.h
 
 apidocs: @srcdir@/docs/api/index.html
 
-@srcdir@/docs/api/index.html: @srcdir@/yatengine.h @srcdir@/yatephone.h
+@srcdir@/docs/api/index.html: @srcdir@/yateclass.h @srcdir@/yatengine.h @srcdir@/yatephone.h @srcdir@/contrib/ysip/yatesip.h @srcdir@/contrib/yrtp/yatertp.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war

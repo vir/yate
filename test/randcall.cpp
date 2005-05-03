@@ -24,7 +24,6 @@
 
 #include <yatengine.h>
 
-#include <unistd.h>
 #include <stdlib.h>
 
 using namespace TelEngine;
@@ -61,7 +60,7 @@ public:
 void RandThread::run()
 {
     for (int i = 0; i < 10; i++) {
-	::usleep(::random() % 10000);
+	Thread::usleep(::random() % 10000);
 	RouteThread *thread = new RouteThread;
 	if (thread->error()) {
 	    Debug(DebugFail,"New thread error!");
@@ -74,7 +73,7 @@ void RandThread::run()
 
 void RouteThread::run()
 {
-    ::usleep(::random() % 1000000);
+    Thread::usleep(::random() % 1000000);
     Message *m = new Message("call");
     m->addParam("callto","wave/play//dev/zero");
     m->addParam("target",String((int)(::random() % 1000000)));
@@ -94,19 +93,19 @@ void RouteThread::run()
 	Debug(DebugMild,"Routed %ssuccessfully in " FMT64 " usec",(routed ? "" : "un"),
 	    Time::now()-m->msgTime().usec());
 	if (routed) {
-	    ::usleep(::random() % 1000000);
+	    Thread::usleep(::random() % 1000000);
 	    m->addParam("callto",m->retValue());
 	    m->retValue() = "";
 	    *m = "call";
 	    m->msgTime() = Time::now();
 	    if (Engine::dispatch(m)) {
-		::usleep(::random() % 5000000);
+		Thread::usleep(::random() % 5000000);
 		if ((::random() % 100) < 33) {
 		    *m = "answered";
 		    m->msgTime() = Time::now();
 		    m->addParam("status","answered");
 		    Engine::dispatch(m);
-		    ::usleep(::random() % 10000000);
+		    Thread::usleep(::random() % 10000000);
 		}
 		else if ((::random() % 100) < 50)
 		    *m = "busy";

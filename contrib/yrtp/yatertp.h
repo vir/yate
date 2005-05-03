@@ -250,6 +250,10 @@ private:
     SocketAddr m_remoteRTCP;
 };
 
+/**
+ * An unidirectional or bidirectional RTP session
+ * @short Full RTP session
+ */
 class YRTP_API RTPSession : public RTPProcessor
 {
 public:

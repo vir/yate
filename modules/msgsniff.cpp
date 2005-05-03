@@ -24,8 +24,6 @@
 
 #include <yatengine.h>
 
-#include <unistd.h>
-
 using namespace TelEngine;
 
 class MsgSniff : public Plugin

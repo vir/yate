@@ -43,9 +43,8 @@
 #endif
 
 /** 
- * We use Telephony Engine namespace, which in fact holds just the 
- * generic classes 
-*/
+ * Holds all Telephony Engine related classes.
+ */
 namespace TelEngine {
 
 /**

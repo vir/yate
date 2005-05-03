@@ -45,6 +45,9 @@
 #include <windows.h>
 #include <io.h>
 
+/**
+ * Windows definitions for commonly used types
+ */
 typedef signed __int8 int8_t;
 typedef unsigned __int8 u_int8_t;
 typedef unsigned __int8 uint8_t;
@@ -108,6 +111,9 @@ typedef unsigned long in_addr_t;
 #include <arpa/inet.h>
 #include <netdb.h>
 
+/**
+ * Non-Windows definitions for commonly used types
+ */
 #ifndef SOCKET
 typedef int SOCKET;
 #endif
@@ -128,8 +134,6 @@ typedef int SOCKET;
 #define IPTOS_MINCOST       0x02
 #endif
 
-struct timeval;
-	
 /**
  * Holds all Telephony Engine related classes.
  */

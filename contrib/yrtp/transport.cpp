@@ -27,9 +27,93 @@
 
 using namespace TelEngine;
 
-RTPTransport::RTPTransport()
-    : m_processor(0)
+RTPGroup::RTPGroup(Priority prio)
+    : Mutex(true), Thread("RTP Group",prio)
 {
+}
+
+RTPGroup::~RTPGroup()
+{
+}
+
+void RTPGroup::cleanup()
+{
+    lock();
+    ObjList* l = &m_processors;
+    for (;l;l = l->next()) {
+	RTPProcessor* p = static_cast<RTPProcessor*>(l->get());
+	if (p)
+	    p->group(0);
+    }
+    m_processors.clear();
+    unlock();
+}
+
+void RTPGroup::run()
+{
+    bool ok = true;
+    while (ok) {
+	lock();
+	Time t;
+	ObjList* l = &m_processors;
+	for (ok = false;l;l = l->next()) {
+	    RTPProcessor* p = static_cast<RTPProcessor*>(l->get());
+	    if (p) {
+		ok = true;
+		p->timerTick(t);
+	    }
+	}
+	unlock();
+	yield(true);
+    }
+}
+
+void RTPGroup::join(RTPProcessor* proc)
+{
+    lock();
+    m_processors.append(proc)->setDelete(false);
+    startup();
+    unlock();
+}
+
+void RTPGroup::part(RTPProcessor* proc)
+{
+    lock();
+    m_processors.remove(proc,false);
+    unlock();
+}
+
+RTPProcessor::RTPProcessor(RTPGroup* grp)
+    : m_group(0)
+{
+    group(grp);
+}
+
+RTPProcessor::~RTPProcessor()
+{
+    group(0);
+}
+
+void RTPProcessor::group(RTPGroup* newgrp)
+{
+    if (newgrp == m_group)
+	return;
+    if (m_group)
+	m_group->part(this);
+    m_group = newgrp;
+    if (m_group)
+	m_group->join(this);
+}
+
+RTPTransport::RTPTransport(RTPGroup* grp)
+    : RTPProcessor(grp),
+      m_processor(0), m_monitor(0)
+{
+}
+
+RTPTransport::~RTPTransport()
+{
+    setProcessor();
 }
 
 void RTPTransport::timerTick(const Time& when)
@@ -43,8 +127,12 @@ void RTPTransport::timerTick(const Time& when)
 	    char buf[BUF_SIZE];
 	    SocketAddr addr;
 	    int len = m_rtpSock.recvFrom(buf,sizeof(buf),addr);
-	    if (m_processor && (len >= 12) && (addr == m_remoteAddr))
-		m_processor->rtpData(buf,len);
+	    if ((len >= 12) && (addr == m_remoteAddr)) {
+		if (m_processor)
+		    m_processor->rtpData(buf,len);
+		if (m_monitor)
+		    m_monitor->rtpData(buf,len);
+	    }
 	}
     }
     if (m_rtcpSock.valid()) {
@@ -56,27 +144,47 @@ void RTPTransport::timerTick(const Time& when)
 	    char buf[BUF_SIZE];
 	    SocketAddr addr;
 	    int len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr);
-	    if (m_processor && (len >= 8) && (addr == m_remoteRTCP))
-		m_processor->rtcpData(buf,len);
+	    if ((len >= 8) && (addr == m_remoteRTCP)) {
+		if (m_processor)
+		    m_processor->rtcpData(buf,len);
+		if (m_monitor)
+		    m_monitor->rtcpData(buf,len);
+	    }
 	}
     }
 }
 
 void RTPTransport::rtpData(const void* data, int len)
 {
+    if ((len < 12) || !data)
+	return;
     if (m_rtpSock.valid() && m_remoteAddr.valid())
 	m_rtpSock.sendTo(data,len,m_remoteAddr);
 }
 
 void RTPTransport::rtcpData(const void* data, int len)
 {
+    if ((len < 8) || !data)
+	return;
     if (m_rtcpSock.valid() && m_remoteRTCP.valid())
 	m_rtcpSock.sendTo(data,len,m_remoteRTCP);
 }
 
 void RTPTransport::setProcessor(RTPProcessor* processor)
 {
+    if (processor) {
+	// both should run in the same RTP group
+	if (group())
+	    processor->group(group());
+	else
+	    group(processor->group());
+    }
     m_processor = processor;
+}
+
+void RTPTransport::setMonitor(RTPProcessor* monitor)
+{
+    m_monitor = monitor;
 }
 
 bool RTPTransport::localAddr(SocketAddr& addr)

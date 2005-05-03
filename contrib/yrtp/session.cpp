@@ -26,30 +26,70 @@
 using namespace TelEngine;
 
 RTPSession::RTPSession()
-    : m_transport(0)
+    : m_transport(0), m_direction(FullStop)
 {
 }
 
 RTPSession::~RTPSession()
 {
+    direction(FullStop);
     if (m_transport) {
-	m_transport->setProcessor(0);
+	RTPTransport* tmp = m_transport;
 	m_transport = 0;
+	tmp->setProcessor(0);
+	delete tmp;
     }
 }
 
 void RTPSession::timerTick(const Time& when)
 {
-    if (m_transport)
-	m_transport->timerTick(when);
 }
 
 void RTPSession::rtpData(const void* data, int len)
 {
+    switch (m_direction) {
+	case FullStop:
+	case SendOnly:
+	    return;
+	default:
+	    break;
+    }
+    if ((len < 12) || !data)
+	return;
 }
 
 void RTPSession::rtcpData(const void* data, int len)
 {
+    switch (m_direction) {
+	case FullStop:
+	case SendOnly:
+	    return;
+	default:
+	    break;
+    }
+    if ((len < 8) || !data)
+	return;
+}
+
+void RTPSession::transport(RTPTransport* trans)
+{
+    if (trans == m_transport)
+	return;
+    if (m_transport)
+	m_transport->setProcessor(0);
+    m_transport = trans;
+    if (m_transport)
+	m_transport->setProcessor(this);
+    else
+	m_direction = FullStop;
+}
+
+bool RTPSession::direction(Direction dir)
+{
+    if ((dir != FullStop) && !m_transport)
+	return false;
+    m_direction = dir;
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

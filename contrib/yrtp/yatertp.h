@@ -281,9 +281,28 @@ public:
      * @param timestamp Sampling instant of the packet data
      * @param data Pointer to data block to process
      * @param len Length of the data block
+     * @return True if data was handled
      */
-    virtual void rtpPayload(bool marker, int payload, unsigned timestamp,
+    virtual bool rtpRecv(bool marker, int payload, unsigned int timestamp,
 	const void* data, int len);
+
+    /**
+     * Send one RTP payload packet
+     * @param marker Set to true if the marker bit must be set
+     * @param payload Payload number
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to send
+     * @param len Length of the data block
+     * @return True if data sending was attempted
+     */
+    bool rtpSend(bool marker, int payload, unsigned int timestamp,
+	const void* data, int len);
+
+    /**
+     * Request a resync on the first packet arrived
+     */
+    inline void resync()
+	{ m_sync = true; }
 
     /**
      * Get the RTP/RTCP transport of data handled by this session
@@ -353,6 +372,13 @@ protected:
 private:
     RTPTransport* m_transport;
     Direction m_direction;
+    bool m_sync;
+    u_int32_t m_rxSsrc;
+    u_int32_t m_rxTs;
+    u_int16_t m_rxSeq;
+    u_int32_t m_txSsrc;
+    u_int32_t m_txTs;
+    u_int16_t m_txSeq;
 };
 
 }

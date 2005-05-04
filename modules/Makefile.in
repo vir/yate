@@ -158,6 +158,10 @@ ysipchan.yate: ../contrib/ysip/libyatesip.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ysip
 ysipchan.yate: LOCALLIBS = ../contrib/ysip/libyatesip.a
 
+yrtpchan.yate: ../contrib/yrtp/libyatertp.a
+yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yrtp
+yrtpchan.yate: LOCALLIBS = ../contrib/yrtp/libyatertp.a
+
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
 
@@ -169,3 +173,6 @@ ysipchan.yate: LOCALLIBS = ../contrib/ysip/libyatesip.a
 
 ../contrib/ysip/libyatesip.a:
 	$(MAKE) -C ../contrib/ysip
+
+../contrib/yrtp/libyatertp.a:
+	$(MAKE) -C ../contrib/yrtp

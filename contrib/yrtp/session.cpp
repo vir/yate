@@ -29,7 +29,9 @@
 using namespace TelEngine;
 
 RTPSession::RTPSession()
-    : m_transport(0), m_direction(FullStop), m_sync(true),
+    : m_transport(0), m_direction(FullStop),
+      m_dataType(-1), m_eventType(-1), m_ciscoType(-1),
+      m_sync(true),
       m_rxSsrc(0), m_rxTs(0), m_rxSeq(0),
       m_txSsrc(0), m_txTs(0), m_txSeq(0)
 {
@@ -148,7 +150,57 @@ bool RTPSession::direction(Direction dir)
 
 bool RTPSession::rtpRecv(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
+    if ((payload != m_dataType) && (payload != m_eventType))
+	rtpNewPayload(payload,timestamp);
+    if (payload == m_eventType)
+	return decodeEvent(marker,timestamp,data,len);
+    if (payload == m_ciscoType)
+	return decodeCisco(marker,timestamp,data,len);
+    finishEvent(timestamp);
+    if (payload == m_dataType)
+	return rtpRecvData(marker,timestamp,data,len);
     return false;
+}
+
+bool RTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
+{
+    return false;
+}
+
+bool RTPSession::rtpRecvEvent(int event, char key, int duration, int volume, unsigned int timestamp)
+{
+    return false;
+}
+
+void RTPSession::rtpNewPayload(int payload, unsigned int timestamp)
+{
+}
+
+bool RTPSession::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
+{
+    // we support only basic RFC2833, no RFC2198 redundancy
+    if (len != 4)
+	return false;
+    const unsigned char* pc = (const unsigned char*)data;
+    int event = pc[0];
+    int vol = pc[1] & 0x3f;
+    bool end = (pc[1] & 0x80) != 0;
+    int duration = ((int)pc[2] << 8) | pc[3];
+}
+
+bool RTPSession::decodeCisco(bool marker, unsigned int timestamp, const void* data, int len)
+{
+}
+
+void RTPSession::finishEvent(unsigned int timestamp)
+{
+}
+
+bool RTPSession::pushEvent(int event, int duration, int volume, unsigned int timestamp)
+{
+    static const char dtmf[] = "0123456789*#ABCDF";
+    char key = (event <= 16) ? dtmf[event] : 0;
+    return rtpRecvEvent(event,key,duration,volume,timestamp);
 }
 
 bool RTPSession::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
@@ -191,6 +243,71 @@ bool RTPSession::rtpSend(bool marker, int payload, unsigned int timestamp, const
 	::memcpy(pc,data,len);
     static_cast<RTPProcessor*>(m_transport)->rtpData(buf.data(),buf.length());
     return true;
+}
+
+bool RTPSession::rtpSendData(bool marker, unsigned int timestamp, const void* data, int len)
+{
+    if (m_dataType < 0)
+	return false;
+    return rtpSend(marker,m_dataType,timestamp,data,len);
+}
+
+bool RTPSession::rtpSendEvent(int event, unsigned int timestamp)
+{
+    // send as RFC2833 if we have the payload type set
+    if (m_eventType >= 0) {
+    }
+    // else try Cisco's way if it's set up
+    else if ((m_ciscoType >= 0) && (event <= 16)) {
+    }
+    return false;
+}
+
+bool RTPSession::rtpSendKey(char key, unsigned int timestamp)
+{
+    int event = 0;
+    if ((key >= '0') && (key <= '9'))
+	event = key - '0';
+    else if (key == '*')
+	event = 10;
+    else if (key == '#')
+	event = 11;
+    else if ((key >= 'A') && (key <= 'D'))
+	event = key + 12 - 'A';
+    else if ((key >= 'a') && (key <= 'd'))
+	event = key + 12 - 'a';
+    else if ((key == 'F') || (key == 'f'))
+	event = 16;
+    else
+	return false;
+    return rtpSendEvent(event,timestamp);
+}
+
+bool RTPSession::dataPayload(int type)
+{
+    if ((type >= -1) && (type <= 127)) {
+	m_dataType = type;
+	return true;
+    }
+    return false;
+}
+
+bool RTPSession::eventPayload(int type)
+{
+    if ((type >= -1) && (type <= 127)) {
+	m_eventType = type;
+	return true;
+    }
+    return false;
+}
+
+bool RTPSession::ciscoPayload(int type)
+{
+    if ((type >= -1) && (type <= 127)) {
+	m_ciscoType = type;
+	return true;
+    }
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

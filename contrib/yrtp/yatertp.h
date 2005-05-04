@@ -275,16 +275,49 @@ public:
     virtual ~RTPSession();
 
     /**
-     * Process one RTP payload packet
+     * Process one RTP payload packet.
+     * Default behaviour is to call rtpRecvData() or rtpRecvEvent().
      * @param marker Set to true if the marker bit is set
      * @param payload Payload number
      * @param timestamp Sampling instant of the packet data
      * @param data Pointer to data block to process
-     * @param len Length of the data block
+     * @param len Length of the data block in bytes
      * @return True if data was handled
      */
     virtual bool rtpRecv(bool marker, int payload, unsigned int timestamp,
 	const void* data, int len);
+
+    /**
+     * Process one RTP data packet
+     * @param marker Set to true if the marker bit is set
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to process
+     * @param len Length of the data block in bytes
+     * @return True if data was handled
+     */
+    virtual bool rtpRecvData(bool marker, unsigned int timestamp,
+	const void* data, int len);
+
+    /**
+     * Process one RTP event
+     * @param event Received event code
+     * @param key Received key (for events 0-16) or zero
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the initial packet data
+     * @return True if data was handled
+     */
+    virtual bool rtpRecvEvent(int event, char key, int duration,
+	int volume, unsigned int timestamp);
+
+    /**
+     * Method called for unknown payload types just before attempting
+     *  to call rtpRecvData(). This is a good opportunity to change the
+     *  payload type and continue.
+     * @param payload Payload number
+     * @param timestamp Sampling instant of the unexpected packet data
+     */
+    virtual void rtpNewPayload(int payload, unsigned int timestamp);
 
     /**
      * Send one RTP payload packet
@@ -299,10 +332,80 @@ public:
 	const void* data, int len);
 
     /**
+     * Send one RTP data packet
+     * @param marker Set to true if the marker bit must be set
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to send
+     * @param len Length of the data block
+     * @return True if data sending was attempted
+     */
+    bool rtpSendData(bool marker, unsigned int timestamp,
+	const void* data, int len);
+
+    /**
+     * Send one RTP event
+     * @param event Event code to send
+     * @param timestamp Sampling instant of the packet data
+     * @return True if data sending was attempted
+     */
+    bool rtpSendEvent(int event, unsigned int timestamp);
+
+    /**
+     * Send one RTP key event
+     * @param key Key to send
+     * @param timestamp Sampling instant of the packet data
+     * @return True if data sending was attempted
+     */
+    bool rtpSendKey(char key, unsigned int timestamp);
+
+    /**
      * Request a resync on the first packet arrived
      */
     inline void resync()
 	{ m_sync = true; }
+
+    /**
+     * Get the payload type for data packets
+     * @return Payload type, -1 if not set
+     */
+    inline int dataPayload() const
+	{ return m_dataType; }
+
+    /**
+     * Set the payload type for data packets
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool dataPayload(int type);
+
+    /**
+     * Get the payload type for event packets
+     * @return Payload type, -1 if not set
+     */
+    inline int eventPayload() const
+	{ return m_eventType; }
+
+    /**
+     * Set the payload type for event packets
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool eventPayload(int type);
+
+    /**
+     * Get the payload type for Cisco event packets
+     * @return Payload type, -1 if not set
+     */
+    inline int ciscoPayload() const
+	{ return m_ciscoType; }
+
+    /**
+     * Set the payload type for Cisco event packets.
+     * Thanks, Cisco, for a new and incompatible way of sending events.
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool ciscoPayload(int type);
 
     /**
      * Get the RTP/RTCP transport of data handled by this session
@@ -370,8 +473,16 @@ protected:
     virtual void rtcpData(const void* data, int len);
 
 private:
+    bool decodeEvent(bool marker, unsigned int timestamp, const void* data, int len);
+    bool decodeCisco(bool marker, unsigned int timestamp, const void* data, int len);
+    void finishEvent(unsigned int timestamp);
+    bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
+
     RTPTransport* m_transport;
     Direction m_direction;
+    int m_dataType;
+    int m_eventType;
+    int m_ciscoType;
     bool m_sync;
     u_int32_t m_rxSsrc;
     u_int32_t m_rxTs;

@@ -1,5 +1,5 @@
 /**
- * qtclient.cpp
+ * yate-qt.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * A Qt based universal telephony client
@@ -26,6 +26,7 @@
 #include <yatephone.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "../contrib/qt/qtclientform.hpp"
 #include <qapplication.h>
@@ -129,13 +130,11 @@ class QtYateClientPlugin : public Plugin
 QtYateClientPlugin::QtYateClientPlugin ()
     : thread(0)
 {
-	Output ("Loading QtYateClientPlugin");
 }
 
 QtYateClientPlugin::~QtYateClientPlugin ()
 {
 //	the thread should be already dead at this point
-	Output ("Unloaded QtYateClientPlugin");
 }
 
 void QtYateClientPlugin::initialize (void)
@@ -149,3 +148,10 @@ void QtYateClientPlugin::initialize (void)
 
 INIT_PLUGIN(QtYateClientPlugin);
 
+extern "C" int main(int argc, const char** argv, const char** environ)
+{
+    bool fail = !::getenv("DISPLAY");
+    if (fail)
+        fputs("Warning: DISPLAY variable is not set\n",stderr);
+    return TelEngine::Engine::main(argc,argv,environ,true,fail);
+}

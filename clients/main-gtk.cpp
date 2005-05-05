@@ -1,5 +1,5 @@
 /**
- * gtkclient.cpp
+ * yate-gtk.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * A Gtk based universal telephony client
@@ -26,7 +26,6 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #include <malloc.h>
 #include <gtk/gtk.h>
@@ -78,8 +77,6 @@ void g_atexit_unwind()
 class GtkClient;
 
 GtkClient *s_client = 0;
-
-static Configuration s_cfg;
 
 class GtkClient : public Thread
 {
@@ -602,12 +599,10 @@ private:
 GtkClientPlugin::GtkClientPlugin()
     : m_route(0), m_init(false)
 {
-    Output("Loaded module GtkClient");
 }
 
 GtkClientPlugin::~GtkClientPlugin()
 {
-    Output("Unloading module GtkClient");
     g_atexit_unwind();
 }
 
@@ -618,24 +613,22 @@ void GtkClientPlugin::initialize()
 	return;
     // gtk can only be initialized once so take care of it
     m_init = true;
-    s_cfg = Engine::configFile("gtkclient");
-    s_cfg.load();
-    int priority = s_cfg.getIntValue("priorities","route",20);
-    if (priority) {
-	g_thread_init(NULL);
-	if (gtk_init_check(0,0))
-	{
-	    m_route = new GtkClientHandler(priority);
-	    Engine::install(m_route);
-	    GtkClient *gtk = new GtkClient;
-	    gtk->startup();
-	}
-    }
-//    int argc = 0;
-//    char *argv[] = {"yate",0};
-//    gtk_init (&argc,(char ***)&argv);
+    int priority = Engine::config().getIntValue("priorities","route",20);
+    g_thread_init(NULL);
+    m_route = new GtkClientHandler(priority);
+    Engine::install(m_route);
+    GtkClient *gtk = new GtkClient;
+    gtk->startup();
 }
 
 INIT_PLUGIN(GtkClientPlugin);
+
+extern "C" int main(int argc, const char** argv, const char** environ)
+{
+    bool fail = !gtk_init_check(&argc,(char ***)&argv);
+    if (fail)
+	g_warning("Cannot open display: '%s'",gdk_get_display());
+    return TelEngine::Engine::main(argc,argv,environ,true,fail);
+}
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

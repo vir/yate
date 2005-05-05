@@ -100,7 +100,7 @@ void QtClientThread::run (void)
 	int argc = 1;
 	char *argv[] = {"QYate", NULL};
 	m_app = new QApplication(argc, argv);
-	m_frm = new QtClientForm();
+	m_frm = new QtClientForm(s_device.safe());
 	m_app->setMainWidget (m_frm);
 	m_frm->show();
 	m_msgHandler = new QtClientHandler(1, m_frm);
@@ -141,9 +141,9 @@ QtYateClientPlugin::~QtYateClientPlugin ()
 
 void QtYateClientPlugin::initialize (void)
 {
-    s_device = Engine::config().getValue("client","device","oss//dev/dsp");
     if (!thread && ::getenv("DISPLAY")) {
 	Output ("Initializing Qt Client");
+	s_device = Engine::config().getValue("client","device","oss//dev/dsp");
 	thread = new QtClientThread;
 	thread->startup();
     }

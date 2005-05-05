@@ -641,9 +641,12 @@ bool Driver::received(Message &msg, int id)
     }
     XDebug(DebugAll,"id=%d prefix='%s' dest='%s'",id,m_prefix.c_str(),dest.c_str());
 
-    if ((id == Drop) && (dest.null() || (dest == name()) || (dest == type()))) {
-	dropAll(msg);
-	return false;
+    if (id == Drop) {
+	bool exact = (dest == name());
+	if (exact || dest.null() || (dest == type())) {
+	    dropAll(msg);
+	    return exact;
+	}
     }
     // check if the message was for this driver
     if (!dest.startsWith(m_prefix))
@@ -698,16 +701,13 @@ void Driver::dropAll(Message &msg)
     while (l) {
 	Channel* c = static_cast<Channel*>(l->get());
 	if (c) {
+	    DDebug(DebugAll,"Dropping %s channel %p [%p]",name().c_str(),c,this);
 	    c->msgDrop(msg,reason);
 	    if (l->get() != c)
 		break;
 	}
 	l = l->next();
     }
-    // channels should have dropped by now - but if we are a varchan driver
-    //  destroy them off the list, just to be absolutely sure
-    if (m_varchan)
-	m_chans.clear();
     unlock();
 }
 

@@ -449,7 +449,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 
     String ml(msg.getValue("maxlen"));
     unsigned maxlen = ml.toInteger(0);
-    Channel* ch = static_cast<Channel*>(msg.userData());
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
@@ -463,33 +463,38 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	    return false;
 	}
     }
-
-    const char *targ = msg.getValue("target");
-    if (!targ) {
-	Debug(DebugWarn,"Wave outgoing call with no target!");
-	return false;
-    }
     Message m("call.route");
-    m.addParam("driver","wave");
-    m.addParam("id",dest);
-    m.addParam("caller",dest);
-    m.addParam("called",targ);
-    if (Engine::dispatch(m)) {
-	m = "call.execute";
-	m.addParam("callto",m.retValue());
-	m.retValue() = 0;
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
-	m.setParam("id",c->id());
-	m.userData(c);
-	if (Engine::dispatch(m)) {
-	    c->deref();
-	    return true;
+    m.addParam("module",name());
+    String callto(msg.getValue("direct"));
+    if (callto.null()) {
+	const char *targ = msg.getValue("target");
+	if (!targ) {
+	    Debug(DebugWarn,"Wave outgoing call with no target!");
+	    return false;
 	}
-	Debug(DebugWarn,"Wave outgoing call not accepted!");
-	c->destruct();
+	callto = msg.getValue("caller");
+	if (callto.null())
+	    callto << prefix() << dest;
+	m.addParam("called",targ);
+	m.addParam("caller",callto);
+	if (!Engine::dispatch(m)) {
+	    Debug(DebugWarn,"Wave outgoing call but no route!");
+	    return false;
+	}
+	callto = m.retValue();
+	m.retValue().clear();
     }
-    else
-	Debug(DebugWarn,"Wave outgoing call but no route!");
+    m = "call.execute";
+    m.addParam("callto",callto);
+    WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+    m.setParam("targetid",c->id());
+    m.userData(c);
+    if (Engine::dispatch(m)) {
+	c->deref();
+	return true;
+    }
+    Debug(DebugWarn,"Wave outgoing call not accepted!");
+    c->destruct();
     return false;
 }
 

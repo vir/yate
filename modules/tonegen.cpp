@@ -240,10 +240,10 @@ ToneChan::~ToneChan()
 
 bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 {
-    Channel *dd = static_cast<Channel*>(msg.userData());
-    if (dd) {
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    if (ch) {
 	ToneChan *tc = new ToneChan(dest);
-	if (dd->connect(tc))
+	if (ch->connect(tc))
 	    tc->deref();
 	else {
 	    tc->destruct();
@@ -251,31 +251,38 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	}
     }
     else {
-	const char *targ = msg.getValue("target");
-	if (!targ) {
-	    Debug(DebugWarn,"Tone outgoing call with no target!");
-	    return false;
-	}
 	Message m("call.route");
-	m.addParam("module","tone");
-	m.addParam("caller",dest);
-	m.addParam("called",targ);
-	if (Engine::dispatch(m)) {
-	    m = "call.execute";
-	    m.addParam("callto",m.retValue());
-	    m.retValue().clear();
-	    ToneChan *tc = new ToneChan(dest);
-	    m.setParam("targetid",tc->id());
-	    m.userData(tc);
-	    if (Engine::dispatch(m)) {
-		tc->deref();
-		return true;
+	m.addParam("module",name());
+	String callto(msg.getValue("direct"));
+	if (callto.null()) {
+	    const char *targ = msg.getValue("target");
+	    if (!targ) {
+		Debug(DebugWarn,"Tone outgoing call with no target!");
+		return false;
 	    }
-	    Debug(DebugWarn,"Tone outgoing call not accepted!");
-	    tc->destruct();
+	    callto = msg.getValue("caller");
+	    if (callto.null())
+		callto << prefix() << dest;
+	    m.addParam("called",targ);
+	    m.addParam("caller",callto);
+	    if (!Engine::dispatch(m)) {
+		Debug(DebugWarn,"Tone outgoing call but no route!");
+		return false;
+	    }
+	    callto = m.retValue();
+	    m.retValue().clear();
 	}
-	else
-	    Debug(DebugWarn,"Tone outgoing call but no route!");
+	m = "call.execute";
+	m.addParam("callto",callto);
+	ToneChan *tc = new ToneChan(dest);
+	m.setParam("targetid",tc->id());
+	m.userData(tc);
+	if (Engine::dispatch(m)) {
+	    tc->deref();
+	    return true;
+	}
+	Debug(DebugWarn,"Tone outgoing call not accepted!");
+	tc->destruct();
 	return false;
     }
     return true;

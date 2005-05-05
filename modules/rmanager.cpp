@@ -290,9 +290,10 @@ bool Connection::processLine(const char *line)
 	    writeStr(m_machine ? "%%=call:fail=noarg\n" : "You must specify source and target!\n");
 	    return false;
 	}
+	String target = str.substr(pos+1);
 	Message m("call.execute");
 	m.addParam("callto",str.substr(0,pos));
-	m.addParam("target",str.substr(pos+1));
+	m.addParam((target.find('/') > 0) ? "direct" : "target",target);
 
 	if (Engine::dispatch(m))
 	    str = (m_machine ? "%%=call:success:" : "Called ") + str + "\n";

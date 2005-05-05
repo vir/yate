@@ -102,11 +102,12 @@ private:
 CdrPgsqlPlugin::CdrPgsqlPlugin()
     : m_handler(0)
 {
-    Output("Loaded module CdrFile");
+    Output("Loaded module CdrPgsql");
 }
 
 CdrPgsqlPlugin::~CdrPgsqlPlugin()
 {
+    Output("Unloading module CdrPgsql");
     if (conn) {
 	PQfinish(conn);
 	conn = 0;

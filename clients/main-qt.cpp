@@ -33,6 +33,8 @@
 
 using namespace TelEngine;
 
+static String s_device;
+
 class QtClientHandler : public MessageHandler
 {
 	QtClientForm *m_frm;
@@ -46,7 +48,7 @@ bool QtClientHandler::received(Message &msg)
 {
 	String caller(msg.getValue("caller"));
 	Debug(DebugInfo,"caller %s",caller.c_str());
-	if (caller == "oss///dev/dsp")
+	if (caller == s_device)
 		return false;
 	String called(msg.getValue("called"));
 	if (called.null())
@@ -65,7 +67,7 @@ bool QtClientHandler::received(Message &msg)
 	u_int64_t t = Time::now() + 10000000;
 	while (Time::now() < t) { 
 		if(m_frm->getStatus() == YCS_INCALL) {
-			msg.retValue() = String("oss///dev/dsp");	    
+			msg.retValue() = s_device;	    
 			Debug (DebugAll, "Call accepted<<<<<<<< ");
 			return true;
 		} else if (m_frm->getStatus() == YCS_IDLE) {
@@ -139,6 +141,7 @@ QtYateClientPlugin::~QtYateClientPlugin ()
 
 void QtYateClientPlugin::initialize (void)
 {
+    s_device = Engine::config().getValue("client","device","oss//dev/dsp");
     if (!thread && ::getenv("DISPLAY")) {
 	Output ("Initializing Qt Client");
 	thread = new QtClientThread;

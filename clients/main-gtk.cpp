@@ -77,6 +77,7 @@ void g_atexit_unwind()
 class GtkClient;
 
 GtkClient *s_client = 0;
+static String s_device;
 
 class GtkClient : public Thread
 {
@@ -434,7 +435,7 @@ void GtkClient::gtk_buttons (GtkWidget *button, gpointer data)
     //String buttonl(button_label);
     if (s_client->status != STATUS_IDLE) {
 	Message* m = new Message("chan.masquerade");
-	m->addParam ("id", "oss/");
+	m->addParam ("id", s_device);
 	m->addParam ("text", (const char *)button_label);
 	m->addParam ("message", "chan.dtmf");
 	Engine::enqueue(m);
@@ -454,9 +455,9 @@ void GtkClient::gtk_call (GtkWidget *button, gpointer data)
 		m.addParam("direct",address);
 	    else
 		m.addParam("target",address);
-	    m.addParam("callto","oss///dev/dsp");
-	    m.addParam("caller","oss///dev/dsp");
-	    m.addParam("id","oss///dev/dsp");
+	    m.addParam("callto",s_device);
+	    m.addParam("caller",s_device);
+	    m.addParam("id",s_device);
 	    if (Engine::dispatch(m))
 		s_client->set_state(STATUS_RINGOUT);
 	    else 
@@ -479,7 +480,7 @@ void GtkClient::gtk_hangup (GtkWidget *button, gpointer data)
 	case STATUS_RINGOUT:
 	case STATUS_INCALL:
 	    Message m("call.drop");
-	    m.addParam("id","oss/");
+	    m.addParam("id",s_device);
 	    Engine::dispatch(m);
 	    break;
     }
@@ -549,7 +550,7 @@ bool GtkClientHandler::received(Message &msg)
 {
     String caller(msg.getValue("caller"));
     Debug(DebugInfo,"caller %s",caller.c_str());
-    if (caller == "oss///dev/dsp")
+    if (caller == s_device)
 	return false;
     String called(msg.getValue("called"));
     if (called.null())
@@ -566,7 +567,7 @@ bool GtkClientHandler::received(Message &msg)
     { 
 	if(s_client->status == STATUS_INCALL)
 	{
-	    msg.retValue() = String("oss///dev/dsp");	    
+	    msg.retValue() = s_device;	    
 //	    Debug(DebugInfo,"yesssss");
 	    
 	    
@@ -609,6 +610,7 @@ GtkClientPlugin::~GtkClientPlugin()
 void GtkClientPlugin::initialize()
 {
     Output("Initializing module GtkClient");
+    s_device = Engine::config().getValue("client","device","oss//dev/dsp");
     if (m_init)
 	return;
     // gtk can only be initialized once so take care of it

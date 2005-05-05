@@ -3,6 +3,11 @@
 yate="./yate"
 set_conf="-c ./conf.d"
 set_mods="-m ./modules"
+if [ "$1" = "--executable" ]; then
+    shift
+    yate="$1"
+    shift
+fi
 if [ "$1" = "--gdb" ]; then
     shift
     yate="gdb --args $yate"

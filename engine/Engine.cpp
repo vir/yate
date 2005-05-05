@@ -632,17 +632,17 @@ static int supervise(void)
 }
 #endif /* _WINDOWS */
 
-static void usage(FILE* f)
+static void usage(bool client, FILE* f)
 {
+#ifdef _WINDOWS
+    client = true;
+#endif
     ::fprintf(f,
 "Usage: yate [options] [commands ...]\n"
 "   -h             Help message (this one)\n"
 "   -v             Verbose debugging (you can use more than once)\n"
 "   -q             Quieter debugging (you can use more than once)\n"
-#ifndef _WINDOWS
-"   -d             Daemonify, suppress output unless logged\n"
-"   -s             Supervised, restart if crashes or locks up\n"
-#endif
+"%s"
 "   -p filename    Write PID to file\n"
 "   -l filename    Log to file\n"
 "   -n configname  Use specified configuration name (%s)\n"
@@ -657,25 +657,28 @@ static void usage(FILE* f)
 "     w            Delay creation of 1st worker thread\n"
 "     t            Timestamp debugging messages\n"
 #endif
+    ,client ? "" :
+"   -d             Daemonify, suppress output unless logged\n"
+"   -s             Supervised, restart if crashes or locks up\n"
     ,s_cfgfile);
 }
 
-static void badopt(char chr, const char* opt)
+static void badopt(bool client, char chr, const char* opt)
 {
     if (chr)
 	::fprintf(stderr,"Invalid character '%c' in option '%s'\n",chr,opt);
     else
 	::fprintf(stderr,"Invalid option '%s'\n",opt);
-    usage(stderr);
+    usage(client,stderr);
 }
 
-static void noarg(const char* opt)
+static void noarg(bool client, const char* opt)
 {
     ::fprintf(stderr,"Missing parameter to option '%s'\n",opt);
-    usage(stderr);
+    usage(client,stderr);
 }
 
-int Engine::main(int argc, const char** argv, const char** env)
+int Engine::main(int argc, const char** argv, const char** env, bool client, bool fail)
 {
 #ifndef _WINDOWS
     bool daemonic = false;
@@ -709,14 +712,14 @@ int Engine::main(int argc, const char** argv, const char** env)
 			    continue;
 			}
 			if (!::strcmp(pc,"help")) {
-			    usage(stdout);
+			    usage(client,stdout);
 			    return 0;
 			}
-			badopt(0,argv[i]);
+			badopt(client,0,argv[i]);
 			return EINVAL;
 			break;
 		    case 'h':
-			usage(stdout);
+			usage(client,stdout);
 			return 0;
 		    case 'v':
 			debug_level++;
@@ -734,7 +737,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 #endif
 		    case 'p':
 			if (i+1 >= argc) {
-			    noarg(argv[i]);
+			    noarg(client,argv[i]);
 			    return ENOENT;
 			}
 			pc = 0;
@@ -742,7 +745,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 			break;
 		    case 'l':
 			if (i+1 >= argc) {
-			    noarg(argv[i]);
+			    noarg(client,argv[i]);
 			    return ENOENT;
 			}
 			pc = 0;
@@ -750,7 +753,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 			break;
 		    case 'n':
 			if (i+1 >= argc) {
-			    noarg(argv[i]);
+			    noarg(client,argv[i]);
 			    return ENOENT;
 			}
 			pc = 0;
@@ -758,7 +761,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 			break;
 		    case 'c':
 			if (i+1 >= argc) {
-			    noarg(argv[i]);
+			    noarg(client,argv[i]);
 			    return ENOENT;
 			}
 			pc = 0;
@@ -766,7 +769,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 			break;
 		    case 'm':
 			if (i+1 >= argc) {
-			    noarg(argv[i]);
+			    noarg(client,argv[i]);
 			    return ENOENT;
 			}
 			pc = 0;
@@ -795,7 +798,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 				    tstamp = true;
 				    break;
 				default:
-				    badopt(*pc,argv[i]);
+				    badopt(client,*pc,argv[i]);
 				    return EINVAL;
 			    }
 			}
@@ -803,7 +806,7 @@ int Engine::main(int argc, const char** argv, const char** env)
 			break;
 #endif
 		    default:
-			badopt(*pc,argv[i]);
+			badopt(client,*pc,argv[i]);
 			return EINVAL;
 		}
 	    }
@@ -815,7 +818,14 @@ int Engine::main(int argc, const char** argv, const char** env)
 	}
     }
 
+    if (fail)
+	return EINVAL;
+
 #ifndef _WINDOWS
+    if (client && (daemonic || supervised)) {
+	::fprintf(stderr,"Options -d and -s not supported in client mode\n");
+	return EINVAL;
+    }
     if (daemonic) {
 	Debugger::enableOutput(false);
 	// Make sure X client modules fail initialization in daemon mode
@@ -870,6 +880,11 @@ int Engine::main(int argc, const char** argv, const char** env)
     t = ::time(0);
     Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
     return retcode;
+}
+
+void Engine::help(bool client, bool errout)
+{
+    usage(client, errout ? stderr : stdout);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

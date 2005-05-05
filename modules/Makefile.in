@@ -57,14 +57,6 @@ ifneq (@HAVE_GSM@,no)
 PROGS := $(PROGS) gsmcodec.yate
 endif
 
-ifneq (@HAVE_GTK@,no)
-PROGS := $(PROGS) gtkclient.yate
-endif
-
-ifneq (@HAVE_QT@,no)
-PROGS := $(PROGS) qtclient.yate
-endif
-
 LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
@@ -148,12 +140,6 @@ faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 gsmcodec.yate: LOCALLIBS = -lgsm
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 
-gtkclient.yate: LOCALFLAGS = @GTK_INC@ @GTK_LIB@
-
-qtclient.yate: ../contrib/qt/libqtclientform.a
-qtclient.yate: LOCALFLAGS = -I@QT_INC@
-qtclient.yate: LOCALLIBS = ../contrib/qt/libqtclientform.a -L@QT_DIR@/lib -lqt-mt
-
 ysipchan.yate: ../contrib/ysip/libyatesip.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ysip
 ysipchan.yate: LOCALLIBS = ../contrib/ysip/libyatesip.a
@@ -167,9 +153,6 @@ yrtpchan.yate: LOCALLIBS = ../contrib/yrtp/libyatertp.a
 
 ../contrib/ortp/libortp.a:
 	$(MAKE) -C ../contrib/ortp
-
-../contrib/qt/libqtclientform.a:
-	$(MAKE) -C ../contrib/qt
 
 ../contrib/ysip/libyatesip.a:
 	$(MAKE) -C ../contrib/ysip

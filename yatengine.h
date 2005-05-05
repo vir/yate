@@ -581,9 +581,18 @@ public:
      * @param argc Argument count
      * @param argv Argument array
      * @param env Environment variables
+     * @param client True to parse arguments and run as a client
+     * @param fail Fail and return after parsing command line arguments
      * @return Program exit code
      */
-    static int main(int argc, const char** argv, const char** env);
+    static int main(int argc, const char** argv, const char** env,
+	bool client = false, bool fail = false);
+
+    /**
+     * Display the help information on console
+     * @param errout Display on stderr intead of stdout
+     */
+    static void help(bool client, bool errout = false);
 
     /**
      * Run the engine.

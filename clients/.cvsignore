@@ -1,0 +1,9 @@
+Makefile
+core*
+yate-*
+*.o
+*.a
+*.so
+*.orig
+*~
+.*.swp

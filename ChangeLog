@@ -1,3 +1,12 @@
+Thu May 05 2005 Paul Chitescu <paulc-devel@null.ro>
+- Separate client directory and executables
+- Support for passing arguments to client programs
+- Put some usefull tools in their own directory
+
+Mon Apr 02 2005 Paul Chitescu <paulc-devel@null.ro>
+- Windows directory and Visual Studio 6 project files
+- Started changes to make the engine cross-platform
+
 Fri Mar 18 2005 Paul Chitescu <paulc-devel@null.ro>
 - Bumped version to 0.8.8
 - Rearranged directories and file names

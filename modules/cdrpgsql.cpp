@@ -68,7 +68,7 @@ bool CdrPgsqlHandler::received(Message &msg)
 
     PGresult *respgsql = PQexec(conn,buffer);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_COMMAND_OK)
-        Debug(DebugFail,"Failed to insert in database: %s",
+        Debug(DebugGoOn,"Failed to insert in database: %s",
 	    PQerrorMessage(conn));
     return false;
 };
@@ -130,8 +130,8 @@ void CdrPgsqlPlugin::initialize()
 	PQfinish(conn);
     conn = PQsetdbLogin(pghost,pgport,pgoptions,pgtty,dbName,dbUser,dbPass);
     if (PQstatus(conn) == CONNECTION_BAD) {
-	Debug(DebugFail, "Connection to database '%s' failed.", dbName);
-	Debug(DebugFail, "%s", PQerrorMessage(conn));
+	Debug(DebugGoOn, "Connection to database '%s' failed.", dbName);
+	Debug(DebugGoOn, "%s", PQerrorMessage(conn));
 	PQfinish(conn);
 	conn = 0;
 	return;

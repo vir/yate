@@ -115,12 +115,12 @@ bool AuthHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,(const char *)s);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
     	return false;
     }
     if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No user.");
+        Debug(DebugAll,"No user.");
     	return false;
     }
     msg.retValue() << PQgetvalue(respgsql,0,0);
@@ -137,7 +137,7 @@ bool RegistHandler::init()
     PGresult *respgsql = PQexec(conn,(const char *)s);
     if (PQresultStatus(respgsql) != PGRES_COMMAND_OK)
     {
-        Debug(DebugFail,"Failed to clear the routepaid table: %s",
+        Debug(DebugWarn,"Failed to clear the routepaid table: %s",
 	    PQerrorMessage(conn));
 	return false;
     }
@@ -163,12 +163,12 @@ bool RegistHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,(const char *)c);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
     	return false;
     }
     if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No credit.");
+        Debug(DebugAll,"No credit.");
     	return false;
     }
     
@@ -184,7 +184,7 @@ bool RegistHandler::received(Message &msg)
 
     PGresult *respgsql1 = PQexec(conn,(const char *)c);
     if (!respgsql1 || PQresultStatus(respgsql1) != PGRES_COMMAND_OK)
-        Debug(DebugFail,"Failed to insert in database: %s",
+        Debug(DebugWarn,"Failed to insert in database: %s",
 	    PQerrorMessage(conn));
     msg.retValue() = prefix;
     return true;
@@ -202,7 +202,7 @@ bool UnRegistHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,(const char *)s);
     if (PQresultStatus(respgsql) != PGRES_COMMAND_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
     	return false;
     }
@@ -227,13 +227,13 @@ bool RouteHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,(const char *)s);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
 	s_route_err++;
     	return false;
     }
     if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No route.");
+        Debug(DebugAll,"No route.");
 	s_route_no++;
     	return false;
     }
@@ -280,8 +280,8 @@ void RegistPlugin::initialize()
 	PQfinish(conn);
     conn = PQsetdbLogin(pghost,pgport,pgoptions,pgtty,dbName,dbUser,dbPass);
     if (PQstatus(conn) == CONNECTION_BAD) {
-	Debug(DebugFail, "Connection to database '%s' failed.", dbName);
-	Debug(DebugFail, "%s", PQerrorMessage(conn));
+	Debug(DebugWarn, "Connection to database '%s' failed.", dbName);
+	Debug(DebugWarn, "%s", PQerrorMessage(conn));
 	PQfinish(conn);
 	conn = 0;
 	return;

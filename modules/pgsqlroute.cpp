@@ -63,13 +63,13 @@ bool RouteHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,buffer);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
 	s_route_err++;
     	return false;
     }
     if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No route.");
+        Debug(DebugAll,"No route.");
 	s_route_no++;
     	return false;
     }
@@ -110,12 +110,12 @@ bool PrerouteHandler::received(Message &msg)
     PGresult *respgsql = PQexec(conn,buffer);
     if (!respgsql || PQresultStatus(respgsql) != PGRES_TUPLES_OK)
     {
-        Debug(DebugFail,"Failed to query from database: %s",
+        Debug(DebugWarn,"Failed to query from database: %s",
 	    PQerrorMessage(conn));
     	return false;
     }
     if (PQntuples(respgsql) == 0) {
-        Debug(DebugFail,"No preroute.");
+        Debug(DebugAll,"No preroute.");
     	return false;
     }
     msg.addParam("context",PQgetvalue(respgsql,0,0));
@@ -212,8 +212,8 @@ void PGSQLRoutePlugin::initialize()
 	PQfinish(conn);
     conn = PQsetdbLogin(pghost,pgport,pgoptions,pgtty,dbName,dbUser,dbPass);
     if (PQstatus(conn) == CONNECTION_BAD) {
-	Debug(DebugFail, "Connection to database '%s' failed.", dbName);
-	Debug(DebugFail, "%s", PQerrorMessage(conn));
+	Debug(DebugWarn, "Connection to database '%s' failed.", dbName);
+	Debug(DebugWarn, "%s", PQerrorMessage(conn));
 	PQfinish(conn);
 	conn = 0;
 	return;

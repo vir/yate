@@ -450,7 +450,7 @@ bool OssHandler::received(Message &msg)
 		chan->deref();
 		return true;
 	    }
-	    Debug(DebugFail,"OSS outgoing call not accepted!");
+	    Debug(DebugInfo,"OSS outgoing call not accepted!");
 	    chan->destruct();
 	    return false;
 	}	
@@ -476,7 +476,7 @@ bool OssHandler::received(Message &msg)
 		chan->deref();
 		return true;
 	    }
-	    Debug(DebugFail,"OSS outgoing call not accepted!");
+	    Debug(DebugInfo,"OSS outgoing call not accepted!");
 	}
 	else
 	    Debug(DebugWarn,"OSS outgoing call but no route!");

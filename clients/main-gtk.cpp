@@ -78,6 +78,7 @@ class GtkClient;
 
 GtkClient *s_client = 0;
 static String s_device;
+static String s_id;
 
 class GtkClient : public Thread
 {
@@ -433,9 +434,9 @@ void GtkClient::gtk_buttons (GtkWidget *button, gpointer data)
     gtk_label_get(GTK_LABEL(GTK_BIN(button)->child), &button_label);
     //Debug(DebugInfo,"string is %s",(const char *)button_label);
     //String buttonl(button_label);
-    if (s_client->status != STATUS_IDLE) {
+    if (s_id && (s_client->status != STATUS_IDLE)) {
 	Message* m = new Message("chan.masquerade");
-	m->addParam ("id", s_device);
+	m->addParam ("id", s_id);
 	m->addParam ("text", (const char *)button_label);
 	m->addParam ("message", "chan.dtmf");
 	Engine::enqueue(m);
@@ -457,9 +458,11 @@ void GtkClient::gtk_call (GtkWidget *button, gpointer data)
 		m.addParam("target",address);
 	    m.addParam("callto",s_device);
 	    m.addParam("caller",s_device);
-	    m.addParam("id",s_device);
-	    if (Engine::dispatch(m))
+	    if (Engine::dispatch(m)) {
+		CallEndpoint* ch = static_cast<CallEndpoint*>(m.userData());
+		s_id = ch ? ch->id() : "";
 		s_client->set_state(STATUS_RINGOUT);
+	    }
 	    else 
 		gtk_statusbar_push((GtkStatusbar *)s_client->m_statusbar,1,"call failed");
 	    }
@@ -480,8 +483,9 @@ void GtkClient::gtk_hangup (GtkWidget *button, gpointer data)
 	case STATUS_RINGOUT:
 	case STATUS_INCALL:
 	    Message m("call.drop");
-	    m.addParam("id",s_device);
+	    m.addParam("id",s_id);
 	    Engine::dispatch(m);
+	    s_id.clear();
 	    break;
     }
     s_client->set_state(STATUS_IDLE);

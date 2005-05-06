@@ -207,6 +207,8 @@ private:
     YateSIPEndPoint *m_endpoint;
 };
 
+static SIPDriver plugin;
+
 static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 {
     const NamedString* c = sdp->getLine("c");
@@ -245,8 +247,6 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
     }
 }
 
-static SIPDriver plugin;
-
 YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
     : m_sock(sock), m_addr(addr)
 {
@@ -262,7 +262,7 @@ YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
 		m_local = laddr.host();
 	}
     }
-    Debug(DebugAll,"YateUDPParty local %s:%d party %s:%d",
+    DDebug(&plugin,DebugAll,"YateUDPParty local %s:%d party %s:%d",
 	m_local.c_str(),m_localPort,
 	m_party.c_str(),m_partyPort);
 }
@@ -274,7 +274,7 @@ YateUDPParty::~YateUDPParty()
 
 void YateUDPParty::transmit(SIPEvent* event)
 {
-    Debug(DebugAll,"Sending to %s:%d",m_addr.host().c_str(),m_addr.port());
+    Debug(&plugin,DebugAll,"Sending to %s:%d",m_addr.host().c_str(),m_addr.port());
     m_sock->sendTo(
 	event->getMessage()->getBuffer().data(),
 	event->getMessage()->getBuffer().length(),
@@ -297,14 +297,14 @@ bool YateUDPParty::setParty(const URI& uri)
     if (port <= 0)
 	port = 5060;
     if (!m_addr.host(uri.getHost())) {
-	Debug("YateUDPParty",DebugWarn,"Could not resolve name '%s' [%p]",
+	Debug(DebugWarn,"Could not resolve UDP party name '%s' [%p]",
 	    uri.getHost().safe(),this);
 	return false;
     }
     m_addr.port(port);
     m_party = uri.getHost();
     m_partyPort = port;
-    Debug("YateUDPParty",DebugInfo,"New party is %s:%d (%s:%d) [%p]",
+    DDebug(&plugin,DebugInfo,"New UDP party is %s:%d (%s:%d) [%p]",
 	m_party.c_str(),m_partyPort,
 	m_addr.host().c_str(),m_addr.port(),
 	this);
@@ -329,12 +329,12 @@ bool YateSIPEngine::buildParty(SIPMessage* message)
 YateSIPEndPoint::YateSIPEndPoint()
     : Thread("YSIP EndPoint"), m_sock(0), m_engine(0)
 {
-    Debug(DebugAll,"YateSIPEndPoint::YateSIPEndPoint() [%p]",this);
+    Debug(&plugin,DebugAll,"YateSIPEndPoint::YateSIPEndPoint() [%p]",this);
 }
 
 YateSIPEndPoint::~YateSIPEndPoint()
 {
-    Debug(DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
+    Debug(&plugin,DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
     plugin.channels().clear();
     if (m_engine) {
 	// send any pending events
@@ -367,7 +367,7 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
 	return false;
     }
     addr.port(port);
-    Debug(DebugAll,"built addr: %s:%d",
+    Debug(&plugin,DebugAll,"built addr: %s:%d",
 	addr.host().c_str(),addr.port());
     message->setParty(new YateUDPParty(m_sock,addr,m_port));
     return true;
@@ -379,7 +379,7 @@ bool YateSIPEndPoint::Init()
      * This part have been taken from libiax after i have lost my sip driver for bayonne
      */
     if (m_sock) {
-	Debug(DebugInfo,"Already initialized.");
+	Debug(&plugin,DebugInfo,"Already initialized.");
 	return true;
     }
 
@@ -437,12 +437,16 @@ void YateSIPEndPoint::run()
 		if (!m_sock->canRetry()) {
 		    Debug(DebugGoOn,"SIP error on read: %d\n", m_sock->error());
 		}
-	    } else {
+	    } else if (res >= 72) {
 		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
 		m_engine->addMessage(new YateUDPParty(m_sock,addr,m_port),buf,res);
 	    //	Output("res %d buf %s",res,buf);
 	    }
+#ifdef DEBUG
+	    else
+		Debug(DebugInfo,"Received short SIP message of %d bytes",len);
+#endif
 	}
 //	m_engine->process();
 	SIPEvent* e = m_engine->getEvent();
@@ -521,7 +525,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 {
     if (Engine::exiting()) {
-	Debug(DebugWarn,"Dropping request, engine is exiting");
+	Debug(&plugin,DebugWarn,"Dropping request, engine is exiting");
 	e->getTransaction()->setResponse(500, "Server Shutting Down");
 	return;
     }
@@ -558,7 +562,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_tr(tr), m_hungup(false), m_byebye(true), m_state(Incoming),
       m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0)
 {
-    Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
+    Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
     m_tr->ref();
     m_callid = m_tr->getCallID();
@@ -592,7 +596,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	int q = m_formats.find(',');
 	m_rtpFormat = m_formats.substr(0,q);
     }
-    Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
+    Debug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
     m_route = m;
     Engine::enqueue(message("chan.startup"));
@@ -604,7 +608,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_tr(0), m_hungup(false), m_byebye(true), m_state(Outgoing), m_uri(uri),
       m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0)
 {
-    Debug(DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
+    Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
@@ -631,7 +635,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 
 YateSIPConnection::~YateSIPConnection()
 {
-    Debug(DebugAll,"YateSIPConnection::~YateSIPConnection() [%p]",this);
+    Debug(this,DebugAll,"YateSIPConnection::~YateSIPConnection() [%p]",this);
     hangup();
     clearTransaction();
     if (m_route) {
@@ -665,7 +669,7 @@ void YateSIPConnection::hangup()
     if (m_hungup)
 	return;
     m_hungup = true;
-    Debug(DebugAll,"YateSIPConnection::hangup() state=%d trans=%p code=%d reason='%s' [%p]",
+    Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p code=%d reason='%s' [%p]",
 	m_state,m_tr,m_reasonCode,m_reason.c_str(),this);
     Engine::enqueue(message("chan.hangup"));
     switch (m_state) {
@@ -787,7 +791,7 @@ bool YateSIPConnection::startRtp()
 {
     if (m_rtpid.null() || m_rtpid == "-")
 	return false;
-    Debug(DebugAll,"YateSIPConnection::startRtp() [%p]",this);
+    Debug(this,DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
     m.addParam("driver","sip");
     m.addParam("id",id());
@@ -802,7 +806,7 @@ bool YateSIPConnection::startRtp()
 
 SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const char* formats, const char* format)
 {
-    Debug(DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
+    Debug(this,DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
 	addr,port,formats,this);
     if (!addr)
 	return 0;
@@ -866,12 +870,12 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 
 bool YateSIPConnection::process(SIPEvent* ev)
 {
-    Debug(DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
+    Debug(this,DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
 	ev,SIPTransaction::stateName(ev->getState()),this);
     m_dialog = *ev->getTransaction()->recentMessage();
     if (ev->getState() == SIPTransaction::Cleared) {
 	if (m_tr) {
-	    Debug(DebugInfo,"YateSIPConnection clearing transaction %p [%p]",
+	    Debug(this,DebugInfo,"YateSIPConnection clearing transaction %p [%p]",
 		m_tr,this);
 	    m_tr->setUserData(0);
 	    m_tr->deref();
@@ -884,12 +888,12 @@ bool YateSIPConnection::process(SIPEvent* ev)
     if (!ev->getMessage() || ev->getMessage()->isOutgoing())
 	return false;
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
-	Debug(DebugInfo,"YateSIPConnection got SDP [%p]",this);
+	Debug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
 	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),
 	    m_rtpAddr,m_rtpPort,m_formats);
 	int q = m_formats.find(',');
 	m_rtpFormat = m_formats.substr(0,q);
-	Debug(DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
+	Debug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
     }
     if (ev->getMessage()->isAnswer() && ((ev->getMessage()->code / 100) == 2)) {
@@ -915,7 +919,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Engine::enqueue(m);
     }
     if (ev->getMessage()->isACK()) {
-	Debug(DebugInfo,"YateSIPConnection got ACK [%p]",this);
+	Debug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);
 	startRtp();
     }
     return false;
@@ -923,7 +927,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 
 void YateSIPConnection::reInvite(SIPTransaction* t)
 {
-    Debug(DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
+    Debug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
     // hack: use a while instead of if so we can return or break out of it
     while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
 	// accept re-INVITE only for local RTP, not for pass-trough
@@ -939,7 +943,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	m_rtpPort = port;
 	m_rtpFormat = frm;
 	m_formats = formats;
-	Debug(DebugAll,"New RTP addr '%s' port %s formats '%s' format '%s'",
+	Debug(this,DebugAll,"New RTP addr '%s' port %s formats '%s' format '%s'",
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
 
 	m_rtpid.clear();
@@ -958,7 +962,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 
 void YateSIPConnection::doBye(SIPTransaction* t)
 {
-    Debug(DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
+    Debug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
     t->setResponse(200);
     m_byebye = false;
     hangup();
@@ -966,7 +970,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 
 void YateSIPConnection::doCancel(SIPTransaction* t)
 {
-    Debug(DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
+    Debug(this,DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
     if (m_tr) {
 	t->setResponse(200);
 	m_byebye = false;
@@ -979,7 +983,7 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 
 void YateSIPConnection::disconnected(bool final, const char *reason)
 {
-    Debug(DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
+    Debug(this,DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
     if (reason)
 	setReason(reason);
     Channel::disconnected(final,reason);
@@ -1045,7 +1049,7 @@ void YateSIPConnection::callReject(const char* error, const char* reason)
 
 YateSIPConnection* SIPDriver::findCall(const String& callid)
 {
-    DDebug("SIPDriver",DebugAll,"finding call '%s'",callid.c_str());
+    DDebug(this,"SIPDriver",DebugAll,"finding call '%s'",callid.c_str());
     Lock mylock(this);
     ObjList* l = &channels();
     for (; l; l = l->next()) {
@@ -1058,7 +1062,7 @@ YateSIPConnection* SIPDriver::findCall(const String& callid)
 
 YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
 {
-    DDebug("SIPDriver",DebugAll,"finding dialog '%s'",dialog.c_str());
+    DDebug(this,"SIPDriver",DebugAll,"finding dialog '%s'",dialog.c_str());
     Lock mylock(this);
     ObjList* l = &channels();
     for (; l; l = l->next()) {

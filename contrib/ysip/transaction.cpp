@@ -33,7 +33,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
 {
-    Debug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
+    DDebug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
 	message,engine,outgoing,this);
     if (m_firstMessage) {
 	m_firstMessage->ref();
@@ -71,7 +71,9 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 
 SIPTransaction::~SIPTransaction()
 {
+#ifdef DEBUG
     Debugger debug(DebugAll,"SIPTransaction::~SIPTransaction()"," [%p]",this);
+#endif
     m_state = Invalid;
     m_engine->TransList.remove(this,false);
     setPendingEvent();
@@ -115,10 +117,10 @@ bool SIPTransaction::changeState(int newstate)
     if ((newstate < 0) || (newstate == m_state))
 	return false;
     if (m_state == Invalid) {
-	Debug("SIPTransaction",DebugGoOn,"Transaction is already invalid [%p]",this);
+	Debug(DebugGoOn,"SIPTransaction is already invalid [%p]",this);
 	return false;
     }
-    Debug("SIPTransaction",DebugAll,"State changed from %s to %s [%p]",
+    DDebug(DebugAll,"SIPTransaction state changed from %s to %s [%p]",
 	stateName(m_state),stateName(newstate),this);
     m_state = newstate;
     return true;
@@ -128,7 +130,7 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
 {
     if (m_lastMessage == message)
 	return;
-    Debug(DebugAll,"SIP Latest message changing from %p %d to %p %d [%p]",
+    DDebug(DebugAll,"SIPTransaction latest message changing from %p %d to %p %d [%p]",
 	m_lastMessage, m_lastMessage ? m_lastMessage->code : 0,
 	message, message ? message->code : 0, this);
     if (m_lastMessage)
@@ -160,9 +162,11 @@ void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
     m_timeouts = count;
     m_delay = delay;
     m_timeout = (count && delay) ? Time::now() + delay : 0;
+#ifdef DEBUG
     if (m_timeout)
-	Debug("SIPTransaction",DebugAll,"New %d timeouts initially " FMT64U " usec apart [%p]",
+	Debug(DebugAll,"SIPTransaction new %d timeouts initially " FMT64U " usec apart [%p]",
 	    m_timeouts,m_delay,this);
+#endif
 }
 
 SIPEvent* SIPTransaction::getEvent()
@@ -185,7 +189,7 @@ SIPEvent* SIPTransaction::getEvent()
 	timeout = --m_timeouts;
 	m_timeout = (m_timeouts) ? Time::now() + m_delay : 0;
 	m_delay *= 2; // exponential back-off
-	Debug("SIPTransaction",DebugAll,"Fired timer #%d [%p]",timeout,this);
+	DDebug(DebugAll,"SIPTransaction fired timer #%d [%p]",timeout,this);
     }
 
     e = isOutgoing() ? getClientEvent(m_state,timeout) : getServerEvent(m_state,timeout);
@@ -212,7 +216,7 @@ SIPEvent* SIPTransaction::getEvent()
 	    m_engine->TransList.remove(this);
 	    return e;
 	case Invalid:
-	    Debug("SIPTransaction",DebugFail,"getEvent in invalid state [%p]",this);
+	    Debug(DebugFail,"SIPTransaction::getEvent in invalid state [%p]",this);
 	    break;
     }
     return e;
@@ -221,7 +225,7 @@ SIPEvent* SIPTransaction::getEvent()
 void SIPTransaction::setResponse(SIPMessage* message)
 {
     if (m_outgoing) {
-	Debug(DebugWarn,"setResponse(%p) in client transaction [%p]",message,this);
+	Debug(DebugWarn,"SIPTransaction::setResponse(%p) in client mode [%p]",message,this);
 	return;
     }
     Lock lock(mutex());
@@ -245,7 +249,7 @@ void SIPTransaction::setResponse(SIPMessage* message)
 void SIPTransaction::setResponse(int code, const char* reason)
 {
     if (m_outgoing) {
-	Debug(DebugWarn,"setResponse(%d,'%s') in client transaction [%p]",code,reason,this);
+	Debug(DebugWarn,"SIPTransaction::setResponse(%d,'%s') in client mode [%p]",code,reason,this);
 	return;
     }
     switch (m_state) {
@@ -253,7 +257,7 @@ void SIPTransaction::setResponse(int code, const char* reason)
 	case Retrans:
 	case Finish:
 	case Cleared:
-	    Debug("SIPTransaction",DebugInfo,"Ignoring setResponse(%d) in state %s [%p]",
+	    DDebug(DebugInfo,"SIPTransaction ignoring setResponse(%d) in state %s [%p]",
 		code,stateName(m_state),this);
 	    return;
     }
@@ -283,7 +287,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 		(getCallID() != message->getHeaderValue("Call-ID")) ||
 		(getDialogTag() != message->getParamValue("To","tag")))
 		return false;
-	    Debug("SIPTransaction",DebugAll,"Found non-branch ACK response to our 2xx");
+	    DDebug(DebugAll,"SIPTransaction found non-branch ACK response to our 2xx");
 	}
 	else if (getMethod() != message->method) {
 	    if (!(isIncoming() && isInvite() && message->isACK()))
@@ -306,12 +310,12 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	    return false;
     }
     if (isOutgoing() != message->isAnswer()) {
-	Debug("SIPTransaction",DebugAll,"Ignoring retransmitted %s %p '%s' in [%p]",
+	DDebug(DebugAll,"SIPTransaction ignoring retransmitted %s %p '%s' in [%p]",
 	    message->isAnswer() ? "answer" : "request",
 	    message,message->method.c_str(),this);
 	return false;
     }
-    Debug("SIPTransaction",DebugAll,"Processing %s %p '%s' in [%p]",
+    DDebug(DebugAll,"SIPTransaction processing %s %p '%s' in [%p]",
 	message->isAnswer() ? "answer" : "request",
 	message,message->method.c_str(),this);
 
@@ -319,7 +323,7 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	const NamedString* ns = message->getParam("To","tag");
 	if (ns) {
 	    m_tag = *ns;
-	    Debug("SIPTransaction",DebugInfo,"Found dialog tag '%s' [%p]",
+	    DDebug(DebugInfo,"SIPTransaction found dialog tag '%s' [%p]",
 		m_tag.c_str(),this);
 	}
     }

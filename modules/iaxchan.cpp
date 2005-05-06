@@ -174,12 +174,12 @@ static void iax_out_cb(const char *s)
 IAXEndPoint::IAXEndPoint()
     : Thread("IAX EndPoint")
 {
-    Debug(DebugAll,"IAXEndPoint::IAXEndPoint() [%p]",this);
+    Debug(&iplugin,DebugAll,"IAXEndPoint::IAXEndPoint() [%p]",this);
 }
 
 IAXEndPoint::~IAXEndPoint()
 {
-    Debug(DebugAll,"IAXEndPoint::~IAXEndPoint() [%p]",this);
+    Debug(&iplugin,DebugAll,"IAXEndPoint::~IAXEndPoint() [%p]",this);
     iplugin.m_endpoint = 0;
 }
 
@@ -231,7 +231,7 @@ void IAXEndPoint::Setup(void)
 		    s << " " << f;
 	    }
 	}
-	Debug(DebugInfo,"Available IAX formats:%s",s.safe());
+	Debug(&iplugin,DebugInfo,"Available IAX formats:%s",s.safe());
     }
     s_ast_formats = frm;
     ::iax_set_formats(s_ast_formats);
@@ -240,7 +240,7 @@ void IAXEndPoint::Setup(void)
 // Handle regular conectionless events with a valid session
 void IAXEndPoint::handleEvent(iax_event *event)
 {
-    DDebug("IAX Event",DebugAll,"Connectionless event %d/%d",event->etype,event->subclass);
+    DDebug(&iplugin,DebugAll,"Connectionless IAX event %d/%d",event->etype,event->subclass);
     switch (event->etype) {
 #if 0
 	case IAX_EVENT_REGREQ:
@@ -252,11 +252,11 @@ void IAXEndPoint::handleEvent(iax_event *event)
 #endif
 	case IAX_EVENT_TEXT:
 	    {
-		Debug(DebugInfo,"this text is outside a call: %s , a handle for this dosen't yet exist",(char *)event->data);
+		Debug(&iplugin,DebugInfo,"this text is outside a call: %s , a handle for this dosen't yet exist",(char *)event->data);
 	    }
 	    break;
 	default:
-	    Debug(DebugInfo,"Unhandled connectionless IAX event %d/%d",event->etype,event->subclass);
+	    Debug(&iplugin,DebugInfo,"Unhandled connectionless IAX event %d/%d",event->etype,event->subclass);
     }
 }
 
@@ -294,7 +294,7 @@ void IAXEndPoint::run(void)
 			conn->destruct();
 		    }
 		    else
-			Debug("IAX",DebugInfo,"Could not find connection to handle %d in session %p",
+			Debug(&iplugin,DebugInfo,"Could not find IAX connection to handle %d in session %p",
 			    e->etype,e->session);
 		    break;
 		case IAX_EVENT_REGREQ:
@@ -482,7 +482,7 @@ IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session *sess
       m_session(session), m_final(false), m_muted(false),
       m_ast_format(0), m_format(0), m_capab(0), m_reason(0)
 {
-    Debug(DebugAll,"IAXConnection::IAXConnection() [%p]",this);
+    Debug(this,DebugAll,"IAXConnection::IAXConnection() [%p]",this);
     m_address = addr;
     s_mutex.lock();
     if (!m_session)
@@ -548,10 +548,10 @@ bool IAXConnection::startRouting(iax_event *e)
 // Handle regular connection events with a valid session
 void IAXConnection::handleEvent(iax_event *event)
 {
-    XDebug("IAX Event",DebugAll,"Connection event %d/%d in [%p]",event->etype,event->subclass,this);
+    XDebug(this,DebugAll,"Connection IAX event %d/%d in [%p]",event->etype,event->subclass,this);
     switch(event->etype) {
 	case IAX_EVENT_ACCEPT:
-	    Debug("IAX",DebugInfo,"ACCEPT inside a call [%p]",this);
+	    Debug(this,DebugInfo,"IAX ACCEPT inside a call [%p]",this);
 	    startAudio(event->ies.format,event->ies.capability);
 	    break;
 	case IAX_EVENT_VOICE:
@@ -564,7 +564,7 @@ void IAXConnection::handleEvent(iax_event *event)
 	    m_muted = false;
 	    break;
 	case IAX_EVENT_TEXT:
-	    Debug("IAX",DebugInfo,"TEXT inside a call: '%s' [%p]",(char *)event->data,this);
+	    Debug(this,DebugInfo,"IAX TEXT inside a call: '%s' [%p]",(char *)event->data,this);
 	    {
 		Message* m = message("chan.text");
 		m->addParam("text",(char *)event->data);
@@ -574,7 +574,7 @@ void IAXConnection::handleEvent(iax_event *event)
 	    }
 	    break;
 	case IAX_EVENT_DTMF:
-	    Debug("IAX",DebugInfo,"DTFM inside a call: %d [%p]",event->subclass,this);
+	    Debug(this,DebugInfo,"IAX DTFM inside a call: %d [%p]",event->subclass,this);
 	    {
 		Message* m = message("chan.dtmf");
 		/* this is because Paul wants this to be usable on non i386 */
@@ -594,23 +594,23 @@ void IAXConnection::handleEvent(iax_event *event)
 	    break;
 #endif
 	case IAX_EVENT_RINGA:
-	    Debug("IAX",DebugInfo,"RING inside a call [%p]",this);
+	    Debug(this,DebugInfo,"IAX RING inside a call [%p]",this);
 	    Engine::enqueue(message("call.ringing"));
 	    break; 
 	case IAX_EVENT_ANSWER:
-	    Debug("IAX",DebugInfo,"ANSWER inside a call [%p]",this);
+	    Debug(this,DebugInfo,"IAX ANSWER inside a call [%p]",this);
 	    Engine::enqueue(message("call.answered"));
 	    startAudio(event->ies.format,event->ies.capability);
 	    break; 
 	default:
-	    Debug(DebugInfo,"Unhandled connection IAX event %d/%d in [%p]",event->etype,event->subclass,this);
+	    Debug(this,DebugInfo,"Unhandled connection IAX event %d/%d in [%p]",event->etype,event->subclass,this);
     }
 }
 
 // We must call this method when the IAX library already destroyed the session
 void IAXConnection::abort(int type)
 {
-    Debug(DebugAll,"IAXConnection::abort(%d) [%p]",type,this);
+    Debug(this,DebugAll,"IAXConnection::abort(%d) [%p]",type,this);
     // Session is / will be gone... get rid of all these really fast!
     m_session = 0;
     m_final = true;
@@ -631,7 +631,7 @@ void IAXConnection::abort(int type)
 
 void IAXConnection::hangup(const char *reason)
 {
-    Debug(DebugAll,"IAXConnection::hangup('%s') [%p]",reason,this);
+    Debug(this,DebugAll,"IAXConnection::hangup('%s') [%p]",reason,this);
     if (!reason)
 	reason = m_reason;
     if (!reason)
@@ -650,14 +650,14 @@ void IAXConnection::hangup(const char *reason)
 
 void IAXConnection::callAccept(Message& msg)
 {
-    Debug(DebugAll,"IAXConnection::callAccept() [%p]",this);
+    Debug(this,DebugAll,"IAXConnection::callAccept() [%p]",this);
     startAudio(m_format,m_capab);
     Channel::callAccept(msg);
 }
 
 void IAXConnection::callReject(const char* error, const char* reason)
 {
-    Debug(DebugAll,"IAXConnection::callReject('%s','%s') [%p]",error,reason,this);
+    Debug(this,DebugAll,"IAXConnection::callReject('%s','%s') [%p]",error,reason,this);
     Channel::callReject(error,reason);
     if (!reason)
 	reason = m_reason;
@@ -705,7 +705,7 @@ void IAXConnection::startAudio(int format,int capability)
 	    format,s_ast_formats,capability,masked,this);
 	return;
     }
-    Debug(DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm->token,frm->value,this);
+    Debug(this,DebugAll,"Creating IAX DataConsumer format \"%s\" (0x%X) in [%p]",frm->token,frm->value,this);
     setConsumer(new IAXAudioConsumer(this,frm->value,frm->token));
     getConsumer()->deref();
 }
@@ -724,7 +724,7 @@ void IAXConnection::sourceAudio(void *buffer, int len, int format)
 	const char *frm = lookup(format,dict_iaxformats);
 	if (!frm)
 	    return;
-	Debug(DebugAll,"Creating IAXSource format \"%s\" (0x%X) in [%p]",frm,format,this);
+	Debug(this,DebugAll,"Creating IAXSource format \"%s\" (0x%X) in [%p]",frm,format,this);
 	m_ast_format = format;
 	setSource(new IAXSource(frm));
 	getSource()->deref();
@@ -749,7 +749,7 @@ void IAXConnection::sendVoice(char* buffer, int len, int format)
 
 void IAXConnection::disconnected(bool final, const char *reason)
 {
-    Debug(DebugAll,"IAXConnection::disconnected() '%s'",reason);
+    Debug(this,DebugAll,"IAXConnection::disconnected() '%s'",reason);
     status("disconnected");
     // If we still have a connection this is the last chance to get transferred
     if (!(final || m_final)) {
@@ -769,7 +769,7 @@ void IAXConnection::disconnected(bool final, const char *reason)
 
 IAXSource::~IAXSource()
 {
-    Debug(DebugAll,"IAXSource::~IAXSource() [%p] total=%u",this,m_total);
+    Debug(&iplugin,DebugAll,"IAXSource::~IAXSource() [%p] total=%u",this,m_total);
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
@@ -790,12 +790,12 @@ IAXAudioConsumer::IAXAudioConsumer(IAXConnection *conn, int ast_format, const ch
     : DataConsumer(format), m_conn(conn),
       m_ast_format(ast_format), m_total(0), m_time(Time::now())
 {
-    Debug(DebugAll,"IAXAudioConsumer::IAXAudioConsumer(%p) [%p]",conn,this);
+    Debug(&iplugin,DebugAll,"IAXAudioConsumer::IAXAudioConsumer(%p) [%p]",conn,this);
 }
 
 IAXAudioConsumer::~IAXAudioConsumer()
 {
-    Debug(DebugAll,"IAXAudioConsumer::~IAXAudioConsumer() [%p] total=%u",this,m_total);
+    Debug(&iplugin,DebugAll,"IAXAudioConsumer::~IAXAudioConsumer() [%p] total=%u",this,m_total);
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
@@ -847,7 +847,7 @@ bool IAXConnection::msgText(Message& msg, const char* text)
 
 bool IAXConnection::msgDrop(Message& msg, const char* reason)
 {
-    Debug(DebugInfo,"Dropping IAX call '%s' [%p]",id().c_str(),this);
+    Debug(this,DebugInfo,"Dropping IAX call '%s' [%p]",id().c_str(),this);
     disconnect(reason);
     return true;
 }

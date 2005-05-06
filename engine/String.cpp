@@ -356,6 +356,20 @@ bool String::toBoolean(bool defvalue) const
     return defvalue;
 }
 
+bool String::isBoolean() const
+{
+    if (!m_string)
+	return false;
+    const char **test;
+    for (test=str_false; *test; test++)
+	if (!::strcmp(m_string,*test))
+	    return true;
+    for (test=str_true; *test; test++)
+	if (!::strcmp(m_string,*test))
+	    return true;
+    return false;
+}
+
 String& String::toUpper()
 {
     if (m_string) {

@@ -120,7 +120,7 @@ static const Tone t_mwatt[] = { { 8000, tone1000hz }, { 0, 0 } };
 ToneSource::ToneSource(const String &tone)
     : m_name(tone), m_tone(0), m_data(0,480), m_brate(16000), m_total(0), m_time(0)
 {
-    Debug(DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
+    Debug(&__plugin,DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
     m_tone = getBlock(tone);
     tones.append(this);
     if (m_tone)
@@ -130,13 +130,13 @@ ToneSource::ToneSource(const String &tone)
 ToneSource::~ToneSource()
 {
     Lock lock(__plugin);
-    Debug(DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
+    Debug(&__plugin,DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     tones.remove(this,false);
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"ToneSource rate=" FMT64U " b/s",m_time);
+	    Debug(&__plugin,DebugInfo,"ToneSource rate=" FMT64U " b/s",m_time);
 	}
     }
 }
@@ -176,7 +176,7 @@ ToneSource *ToneSource::getTone(const String &tone)
 
 void ToneSource::run()
 {
-    Debug(DebugAll,"ToneSource::run() [%p]",this);
+    Debug(&__plugin,DebugAll,"ToneSource::run() [%p]",this);
     u_int64_t tpos = Time::now();
     m_time = tpos;
     int samp = 0; // sample number
@@ -207,7 +207,7 @@ void ToneSource::run()
 	}
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("ToneSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
+	    XDebug(&__plugin,DebugAll,"ToneSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()/2);
@@ -216,14 +216,14 @@ void ToneSource::run()
     };
     m_time = Time::now() - m_time;
     m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-    Debug(DebugAll,"ToneSource [%p] end, total=%u (" FMT64U " b/s)",this,m_total,m_time);
+    Debug(&__plugin,DebugAll,"ToneSource [%p] end, total=%u (" FMT64U " b/s)",this,m_total,m_time);
     m_time = 0;
 }
 
 ToneChan::ToneChan(const String &tone)
     : Channel(__plugin)
 {
-    Debug(DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
+    Debug(this,DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
     ToneSource *t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
@@ -235,7 +235,7 @@ ToneChan::ToneChan(const String &tone)
 
 ToneChan::~ToneChan()
 {
-    Debug(DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
+    Debug(this,DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
 bool ToneGenDriver::msgExecute(Message& msg, String& dest)

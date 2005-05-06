@@ -308,8 +308,30 @@ bool Connection::processLine(const char *line)
 	    str >> dbg;
 	    dbg = debugLevel(dbg);
 	}
-	else
+	else if (str.isBoolean())
 	    str >> m_debug;
+	else if (str) {
+	    String l;
+	    int pos = str.find(' ');
+	    if (pos > 0) {
+		l = str.substr(pos+1);
+		str = str.substr(0,pos);
+		str.trimBlanks();
+	    }
+	    if (str.null()) {
+		writeStr(m_machine ? "%%=debug:fail=noarg\n" : "You must specify debug module name!\n");
+		return false;
+	    }
+	    Message m("engine.debug");
+	    m.addParam("module",str);
+	    if (l)
+		m.addParam("line",l);
+	    if (Engine::dispatch(m))
+		writeStr(m.retValue());
+	    else
+		writeStr((m_machine ? "%%=debug:fail:" : "Cannot set debug: ") + str + " " + l + "\n");
+	    return false;
+	}
 	if (m_machine) {
 	    str = "%%=debug:level=";
 	    str << debugLevel() << ":local=" << m_debug << "\n";

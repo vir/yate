@@ -112,65 +112,68 @@ void Output(const char* format, ...)
 
 void Debug(int level, const char* format, ...)
 {
-    if (level <= s_debug) {
-	if (!s_debugging)
-	    return;
-	if (!format)
-	    format = "";
-	char buf[32];
-	::sprintf(buf,"<%d> ",level);
-	va_list va;
-	va_start(va,format);
-	ind_mux.lock();
-	dbg_output(buf,format,va);
-	ind_mux.unlock();
-	va_end(va);
-	if (s_abort && (level == DebugFail))
-	    abort();
+    if (!s_debugging)
 	return;
-    }
+    if (level > s_debug)
+	return;
+    if (!format)
+	format = "";
+    char buf[32];
+    ::sprintf(buf,"<%d> ",level);
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(buf,format,va);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
 }
 
 void Debug(const char* facility, int level, const char* format, ...)
 {
-    if (level <= s_debug) {
-	if (!s_debugging)
-	    return;
-	if (!format)
-	    format = "";
-	char buf[64];
-	::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
-	va_list va;
-	va_start(va,format);
-	ind_mux.lock();
-	dbg_output(buf,format,va);
-	ind_mux.unlock();
-	va_end(va);
-	if (s_abort && (level == DebugFail))
-	    abort();
+    if (!s_debugging)
 	return;
-    }
+    if (level > s_debug)
+	return;
+    if (!format)
+	format = "";
+    char buf[64];
+    ::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(buf,format,va);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
 }
 
 void Debug(const DebugEnabler* local, int level, const char* format, ...)
 {
-    if (local && local->debugAt(level)) {
-	if (!s_debugging)
-	    return;
-	if (!format)
-	    format = "";
-	char buf[32];
-	::sprintf(buf,"<%d> ",level);
-	va_list va;
-	va_start(va,format);
-	ind_mux.lock();
-	dbg_output(buf,format,va);
-	ind_mux.unlock();
-	va_end(va);
-	if (s_abort && (level == DebugFail))
-	    abort();
+    if (!s_debugging)
 	return;
+    if (!local) {
+	if (level > s_debug)
+	    return;
     }
+    else {
+	if (!local->debugAt(level))
+	    return;
+    }
+    if (!format)
+	format = "";
+    char buf[32];
+    ::sprintf(buf,"<%d> ",level);
+    va_list va;
+    va_start(va,format);
+    ind_mux.lock();
+    dbg_output(buf,format,va);
+    ind_mux.unlock();
+    va_end(va);
+    if (s_abort && (level == DebugFail))
+	abort();
 }
 
 void abortOnBug()
@@ -225,6 +228,19 @@ bool DebugEnabler::debugAt(int level) const
     if (m_chain)
 	return m_chain->debugAt(level);
     return (m_enabled && (level <= m_level));
+}
+
+void DebugEnabler::debugCopy(const DebugEnabler* original)
+{
+    if (original) {
+	m_level = original->debugLevel();
+	m_enabled = original->debugEnabled();
+    }
+    else {
+	m_level = TelEngine::debugLevel();
+	m_enabled = debugEnabled();
+    }
+    m_chain = 0;
 }
 
 Debugger::Debugger(const char* name, const char* format, ...)

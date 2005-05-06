@@ -127,14 +127,14 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
       body(0), m_ep(0), m_valid(true),
       m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage('%s','%s','%s') [%p]",
+    DDebug(DebugAll,"SIPMessage::SIPMessage('%s','%s','%s') [%p]",
 	_method,_uri,_version,this);
 }
 
 SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
     : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
-    Debugger debug(DebugAll,"SIPMessage::SIPMessage","(%p,%d) [%p]\n%s",
+    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]\n%s",
 	buf,len,this,buf);
     if (m_ep)
 	m_ep->ref();
@@ -152,7 +152,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
       m_ep(0), m_valid(false),
       m_answer(true), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
+    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d,'%s') [%p]",
 	message,_code,_reason,this);
     if (!_reason)
 	_reason = lookup(code,SIPResponses,"Unknown Reason Code");
@@ -178,7 +178,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
       body(), m_ep(0), m_valid(false),
       m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]",message,newtran,this);
+    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]",message,newtran,this);
     if (!(message && message->isValid()))
 	return;
     m_ep = message->getParty();
@@ -211,7 +211,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
 
 SIPMessage::~SIPMessage()
 {
-    Debug(DebugAll,"SIPMessage::~SIPMessage() [%p]",this);
+    DDebug(DebugAll,"SIPMessage::~SIPMessage() [%p]",this);
     m_valid = false;
     setParty();
     setBody();
@@ -219,7 +219,7 @@ SIPMessage::~SIPMessage()
 
 void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain, const char* dlgTag)
 {
-    Debug("SIPMessage",DebugAll,"complete(%p,'%s','%s','%s')%s%s%s [%p]",
+    DDebug("SIPMessage",DebugAll,"complete(%p,'%s','%s','%s')%s%s%s [%p]",
 	engine,user,domain,dlgTag,
 	isACK() ? " ACK" : "",
 	isOutgoing() ? " OUT" : "",
@@ -362,7 +362,7 @@ bool SIPMessage::parseFirst(String& line)
 	version = line.matchString(1).toUpper();
 	code = line.matchString(2).toInteger();
 	reason = line.matchString(3);
-	Debug(DebugAll,"got answer version='%s' code=%d reason='%s'",
+	DDebug(DebugAll,"got answer version='%s' code=%d reason='%s'",
 	    version.c_str(),code,reason.c_str());
     }
     else {
@@ -373,7 +373,7 @@ bool SIPMessage::parseFirst(String& line)
 	    method = line.matchString(1).toUpper();
 	    uri = line.matchString(2);
 	    version = line.matchString(3).toUpper();
-	    Debug(DebugAll,"got request method='%s' uri='%s' version='%s'",
+	    DDebug(DebugAll,"got request method='%s' uri='%s' version='%s'",
 		method.c_str(),uri.c_str(),version.c_str());
 	    if (method == "ACK")
 		m_ack = true;
@@ -388,7 +388,7 @@ bool SIPMessage::parseFirst(String& line)
 
 bool SIPMessage::parse(const char* buf, int len)
 {
-    Debug(DebugAll,"SIPMessage::parse(%p,%d) [%p]",buf,len,this);
+    DDebug(DebugAll,"SIPMessage::parse(%p,%d) [%p]",buf,len,this);
     String* line = 0;
     while (len > 0) {
 	line = getUnfoldedLine(&buf,&len);
@@ -443,7 +443,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	line->destruct();
     }
     body = SIPBody::build(buf,len,content);
-    Debug("SIPMessage::parse",DebugAll,"%d header lines, body %p",
+    DDebug("SIPMessage::parse",DebugAll,"%d header lines, body %p",
 	header.count(),body);
     return true;
 }
@@ -453,7 +453,7 @@ SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char *buf, int len)
     SIPMessage* msg = new SIPMessage(ep,buf,len);
     if (msg->isValid())
 	return msg;
-    Debug("SIPMessage",DebugWarn,"Invalid message");
+    DDebug("SIPMessage",DebugInfo,"Invalid message");
     msg->destruct();
     return 0;
 }
@@ -597,7 +597,7 @@ SIPDialog::SIPDialog(const SIPDialog& original)
       localURI(original.localURI), localTag(original.localTag),
       remoteURI(original.remoteURI), remoteTag(original.remoteTag)
 {
-    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+    DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
 }
 
@@ -608,7 +608,7 @@ SIPDialog& SIPDialog::operator=(const SIPDialog& original)
     localTag = original.localTag;
     remoteURI = original.remoteURI;
     remoteTag = original.remoteTag;
-    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+    DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
     return *this;
 }
@@ -620,7 +620,7 @@ SIPDialog& SIPDialog::operator=(const String& callid)
     localTag.clear();
     remoteURI.clear();
     remoteTag.clear();
-    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+    DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
     return *this;
 }
@@ -642,7 +642,7 @@ SIPDialog::SIPDialog(const SIPMessage& message)
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");
-    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+    DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
 }
 
@@ -663,7 +663,7 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
         remoteURI = remoteURI.matchString(1);
     if (hl)
 	remoteTag = hl->getParam("tag");
-    Debug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
+    DDebug("SIPDialog",DebugAll,"callid '%s' local '%s;tag=%s' remote '%s;tag=%s' [%p]",
 	c_str(),localURI.c_str(),localTag.c_str(),remoteURI.c_str(),remoteTag.c_str(),this);
     return *this;
 }

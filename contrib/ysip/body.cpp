@@ -32,12 +32,12 @@ using namespace TelEngine;
 SIPBody::SIPBody(const String& type)
     : m_type(type)
 {
-    Debug(DebugAll,"SIPBody::SIPBody('%s') [%p]",m_type.c_str(),this);
+    DDebug(DebugAll,"SIPBody::SIPBody('%s') [%p]",m_type.c_str(),this);
 }
 
 SIPBody::~SIPBody()
 {
-    Debug(DebugAll,"SIPBody::~SIPBody() '%s' [%p]",m_type.c_str(),this);
+    DDebug(DebugAll,"SIPBody::~SIPBody() '%s' [%p]",m_type.c_str(),this);
 }
 
 const DataBlock& SIPBody::getBody() const
@@ -49,7 +49,7 @@ const DataBlock& SIPBody::getBody() const
 
 SIPBody* SIPBody::build(const char *buf, int len, const String& type)
 {
-    Debug(DebugAll,"SIPBody::build(%p,%d,'%s')",buf,len,type.c_str());
+    DDebug(DebugAll,"SIPBody::build(%p,%d,'%s')",buf,len,type.c_str());
     if ((len <= 0) || !buf)
 	return 0;
     if (type == "application/sdp")
@@ -93,7 +93,7 @@ SDPBody::~SDPBody()
 
 void SDPBody::buildBody() const
 {
-    Debug(DebugAll,"SDPBody::buildBody() [%p]",this);
+    DDebug(DebugAll,"SDPBody::buildBody() [%p]",this);
     const ObjList* l = &m_lines;
     for (; l; l = l->next()) {
     	const NamedString* t = static_cast<NamedString*>(l->get());
@@ -141,7 +141,7 @@ SIPBinaryBody::~SIPBinaryBody()
 
 void SIPBinaryBody::buildBody() const
 {
-    Debug(DebugAll,"SIPBinaryBody::buildBody() [%p]",this);
+    DDebug(DebugAll,"SIPBinaryBody::buildBody() [%p]",this);
     // nothing to do
 }
 
@@ -166,7 +166,7 @@ SIPStringBody::~SIPStringBody()
 
 void SIPStringBody::buildBody() const
 {
-    Debug(DebugAll,"SIPStringBody::buildBody() [%p]",this);
+    DDebug(DebugAll,"SIPStringBody::buildBody() [%p]",this);
     m_body.assign((void*)m_text.c_str(),m_text.length());
 }
 

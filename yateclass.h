@@ -251,13 +251,19 @@ public:
      * Chain this debug holder to a parent or detach from existing one
      * @param chain Pointer to parent debug level, NULL to detach
      */
-    inline void debugChain(DebugEnabler* chain = 0)
+    inline void debugChain(const DebugEnabler* chain = 0)
 	{ m_chain = (chain != this) ? chain : 0; }
+
+    /**
+     * Copy debug settings from another object or from engine globals
+     * @param original Pointer to a DebugEnabler to copy settings from
+     */
+    void debugCopy(const DebugEnabler* original = 0);
 
 private:
     int m_level;
     bool m_enabled;
-    DebugEnabler* m_chain;
+    const DebugEnabler* m_chain;
 };
 
 #if 0
@@ -277,6 +283,13 @@ void DDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
+ * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ *  else it does not get compiled at all.
+ */
+void DDebug(const DebugEnabler* local, int level, const char* format, ...);
+
+/**
+ * Convenience macro.
  * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
@@ -291,6 +304,13 @@ void XDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
+ * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * debugging) else it does not get compiled at all.
+ */
+void XDebug(const DebugEnabler* local, int level, const char* format, ...);
+
+/**
+ * Convenience macro.
  * Does the same as @ref Debug if NDEBUG is not #defined
  *  else it does not get compiled at all (compiling for mature release).
  */
@@ -302,6 +322,13 @@ void NDebug(int level, const char* format, ...);
  *  else it does not get compiled at all (compiling for mature release).
  */
 void NDebug(const char* facility, int level, const char* format, ...);
+
+/**
+ * Convenience macro.
+ * Does the same as @ref Debug if NDEBUG is not #defined
+ *  else it does not get compiled at all (compiling for mature release).
+ */
+void NDebug(const DebugEnabler* local, int level, const char* format, ...);
 #endif
 
 #ifdef _DEBUG
@@ -967,6 +994,12 @@ public:
      * @return The boolean interpretation or defvalue.
      */
     bool toBoolean(bool defvalue = false) const;
+
+    /**
+     * Check if the string can be converted to a boolean value.
+     * @return True if the string is a valid boolean.
+     */
+    bool isBoolean() const;
 
     /**
      * Turn the string to an all-uppercase string

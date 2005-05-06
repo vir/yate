@@ -114,6 +114,8 @@ public:
     virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize);
 };
 
+INIT_PLUGIN(ZapDriver);
+
 static int zt_get_event(int fd)
 {
     /* Avoid the silly zt_getevent which ignores a bunch of events */
@@ -125,7 +127,7 @@ static int zt_get_event(int fd)
 
 static int zt_open_dchan(int channo, int bsize = 1024, int nbufs = 16)
 {
-    DDebug(DebugInfo,"Opening zap d-channel %d with %d x %d buffers",channo,nbufs,bsize);
+    DDebug(&__plugin,DebugInfo,"Opening zap d-channel %d with %d x %d buffers",channo,nbufs,bsize);
     int fd = ::open("/dev/zap/channel", O_RDWR, 0600);
     if (fd < 0) {
 	Debug("Zaptel",DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
@@ -159,7 +161,7 @@ static int zt_open_dchan(int channo, int bsize = 1024, int nbufs = 16)
 
 static int zt_open_bchan(int channo, bool subchan, unsigned int blksize)
 {
-    DDebug(DebugInfo,"Opening zap b-channel %d with block size=%d",channo,blksize);
+    DDebug(&__plugin,DebugInfo,"Opening zap b-channel %d with block size=%d",channo,blksize);
     int fd = ::open(subchan ? "/dev/zap/pseudo" : "/dev/zap/channel",O_RDWR|O_NONBLOCK);
     if (fd < 0) {
 	Debug("Zaptel",DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
@@ -208,12 +210,12 @@ ZapSpan::ZapSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("ZapSpan"),
       m_fd(fd)
 {
-    Debug(DebugAll,"ZapSpan::ZapSpan() [%p]",this);
+    Debug(m_driver,DebugAll,"ZapSpan::ZapSpan() [%p]",this);
 }
 
 ZapSpan::~ZapSpan()
 {
-    Debug(DebugAll,"ZapSpan::~ZapSpan() [%p]",this);
+    Debug(m_driver,DebugAll,"ZapSpan::~ZapSpan() [%p]",this);
     m_ok = false;
     ::close(m_fd);
     m_fd = -1;
@@ -221,7 +223,7 @@ ZapSpan::~ZapSpan()
 
 void ZapSpan::run()
 {
-    Debug(DebugAll,"ZapSpan::run() [%p]",this);
+    Debug(m_driver,DebugAll,"ZapSpan::run() [%p]",this);
     fd_set rdfds;
     fd_set errfds;
     for (;;) {
@@ -254,12 +256,12 @@ void ZapSpan::run()
 ZapSource::ZapSource(ZapChan *owner, const char* format, unsigned int bufsize)
     : PriSource(owner,format,bufsize), Thread("ZapSource")
 {
-    Debug(DebugAll,"ZapSource::ZapSource(%p) [%p]",owner,this);
+    Debug(m_owner,DebugAll,"ZapSource::ZapSource(%p) [%p]",owner,this);
 }
 
 ZapSource::~ZapSource()
 {
-    Debug(DebugAll,"ZapSource::~ZapSource() [%p]",this);
+    Debug(m_owner,DebugAll,"ZapSource::~ZapSource() [%p]",this);
 }
 
 void ZapSource::run()
@@ -288,18 +290,18 @@ void ZapSource::run()
 	else
 	    break;
     }
-    Debug(DebugAll,"ZapSource at EOF (read %d)",rd);
+    Debug(m_owner,DebugAll,"ZapSource at EOF (read %d)",rd);
 }
 
 ZapConsumer::ZapConsumer(ZapChan *owner, const char* format, unsigned int bufsize)
     : PriConsumer(owner,format,bufsize), m_bufsize(bufsize)
 {
-    Debug(DebugAll,"ZapConsumer::ZapConsumer(%p) [%p]",owner,this);
+    Debug(m_owner,DebugAll,"ZapConsumer::ZapConsumer(%p) [%p]",owner,this);
 }
 
 ZapConsumer::~ZapConsumer()
 {
-    Debug(DebugAll,"ZapConsumer::~ZapConsumer() [%p]",this);
+    Debug(m_owner,DebugAll,"ZapConsumer::~ZapConsumer() [%p]",this);
 }
 
 void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
@@ -311,7 +313,7 @@ void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	    m_buffer += data;
 #ifdef DEBUG
 	else
-	    Debug("ZapConsumer",DebugAll,"Skipped %u bytes, buffer is full",data.length());
+	    Debug(m_owner,DebugAll,"ZapConsumer skipped %u bytes, buffer is full",data.length());
 #endif
 	if (m_buffer.null())
 	    return;
@@ -324,7 +326,7 @@ void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	    }
 	    else {
 		if ((unsigned)wr != m_bufsize)
-		    Debug("ZapConsumer",DebugInfo,"Short write, %d of %u bytes",wr,m_bufsize);
+		    Debug(m_owner,DebugInfo,"ZapConsumer short write, %d of %u bytes",wr,m_bufsize);
 		    m_buffer.cut(-wr);
 	    }
 	}
@@ -353,7 +355,7 @@ bool ZapChan::openData(const char* format, int echoTaps)
     if (zt_set_law(m_fd,defLaw)) {
 	m_law = defLaw;
 	format = lookup(m_law,dict_str2ztlaw,"unknown");
-	Debug(DebugInfo,"Opened Zap channel %d, law is: %s",m_abschan,format);
+	Debug(this,DebugInfo,"Opened Zap channel %d, law is: %s",m_abschan,format);
     }
     zt_echo_cancel(m_fd,echoTaps);
     setSource(new ZapSource(this,format,m_bufsize));
@@ -374,7 +376,7 @@ void ZapChan::closeData()
 
 PriSpan* ZapDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
 {
-    Debug(DebugAll,"ZapDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
+    Debug(this,DebugAll,"ZapDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
     int netType = -1;
     int swType = -1;
     int dchan = -1;
@@ -387,17 +389,14 @@ PriSpan* ZapDriver::createSpan(PriDriver* driver, int span, int first, int chans
     pri* p = ::pri_new(fd,netType,swType);
     if (!p)
 	return 0;
-    Debug(DebugAll,"ZapDriver::createSpan #1");
     ZapSpan *zs = new ZapSpan(p,driver,span,first,chans,dchan,cfg,sect,fd);
-    Debug(DebugAll,"ZapDriver::createSpan #2");
     zs->startup();
-    Debug(DebugAll,"ZapDriver::createSpan #3");
     return zs;
 }
 
 PriChan* ZapDriver::createChan(const PriSpan* span, int chan, unsigned int bufsize)
 {
-    Debug(DebugAll,"ZapDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
+    Debug(this,DebugAll,"ZapDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
     return new ZapChan(span,chan,bufsize);
 }
 
@@ -417,7 +416,5 @@ void ZapDriver::initialize()
     Output("Initializing module Zapchan");
     init("zapchan");
 }
-
-INIT_PLUGIN(ZapDriver);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

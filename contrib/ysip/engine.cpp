@@ -164,25 +164,25 @@ void URI::parse() const
 SIPParty::SIPParty()
     : m_reliable(false)
 {
-    Debug(DebugAll,"SIPParty::SIPParty() [%p]",this);
+    DDebug(DebugAll,"SIPParty::SIPParty() [%p]",this);
 }
 
 SIPParty::SIPParty(bool reliable)
     : m_reliable(reliable)
 {
-    Debug(DebugAll,"SIPParty::SIPParty(%d) [%p]",reliable,this);
+    DDebug(DebugAll,"SIPParty::SIPParty(%d) [%p]",reliable,this);
 }
 
 SIPParty::~SIPParty()
 {
-    Debug(DebugAll,"SIPParty::~SIPParty() [%p]",this);
+    DDebug(DebugAll,"SIPParty::~SIPParty() [%p]",this);
 }
 
 SIPEvent::SIPEvent(SIPMessage* message, SIPTransaction* transaction)
     : m_message(message), m_transaction(transaction),
       m_state(SIPTransaction::Invalid)
 {
-    Debug(DebugAll,"SIPEvent::SIPEvent(%p,%p) [%p]",message,transaction,this);
+    DDebug(DebugAll,"SIPEvent::SIPEvent(%p,%p) [%p]",message,transaction,this);
     if (m_message)
 	m_message->ref();
     if (m_transaction) {
@@ -193,7 +193,7 @@ SIPEvent::SIPEvent(SIPMessage* message, SIPTransaction* transaction)
 
 SIPEvent::~SIPEvent()
 {
-    Debugger debug(DebugAll,"SIPEvent::~SIPEvent"," [%p]",this);
+    DDebug(DebugAll,"SIPEvent::~SIPEvent() [%p]",this);
     if (m_transaction)
 	m_transaction->deref();
     if (m_message)
@@ -205,7 +205,7 @@ SIPEngine::SIPEngine(const char* userAgent)
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_userAgent(userAgent)
 {
-    Debug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
+    DDebug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
     m_allowed = "ACK";
@@ -213,12 +213,12 @@ SIPEngine::SIPEngine(const char* userAgent)
 
 SIPEngine::~SIPEngine()
 {
-    Debug(DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
+    DDebug(DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
 }
 
 SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char *buf, int len)
 {
-    Debug("SIPEngine",DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
+    DDebug("SIPEngine",DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
     SIPMessage* msg = SIPMessage::fromParsing(ep,buf,len);
     if (ep)
 	ep->deref();
@@ -232,7 +232,7 @@ SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char *buf, int len)
 
 SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 {
-    Debug("SIPEngine",DebugInfo,"addMessage(%p) [%p]",message,this);
+    DDebug("SIPEngine",DebugInfo,"addMessage(%p) [%p]",message,this);
     if (!message)
 	return 0;
     // make sure outgoing messages are well formed
@@ -268,7 +268,7 @@ bool SIPEngine::process()
     SIPEvent* e = getEvent();
     if (!e)
 	return false;
-    Debug("SIPEngine",DebugInfo,"process() got event %p",e);
+    DDebug("SIPEngine",DebugInfo,"process() got event %p",e);
     processEvent(e);
     return true;
 }
@@ -282,7 +282,7 @@ SIPEvent* SIPEngine::getEvent()
 	if (t) {
 	    SIPEvent* e = t->getEvent();
 	    if (e) {
-		Debug("SIPEngine",DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
+		DDebug("SIPEngine",DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
 		    e,SIPTransaction::stateName(e->getState()),t,this);
 		return e;
 	    }
@@ -301,7 +301,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 	type = "outgoing";
     if (event->isIncoming())
 	type = "incoming";
-    Debug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
+    DDebug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
 	type,event,event->getMessage(),this);
     if (event->getMessage()) {
 	if (event->isOutgoing()) {
@@ -375,7 +375,7 @@ u_int64_t SIPEngine::getTimer(char which, bool reliable) const
 	    // K: Wait time for response retransmits
 	    return reliable ? 0 : m_t4;
     }
-    Debug("SIPEngine",DebugInfo,"Requested invalid timer '%c' [%p]",which,this);
+    Debug("SIPEngine",DebugMild,"Requested invalid timer '%c' [%p]",which,this);
     return 0;
 }
 

@@ -359,7 +359,7 @@ bool Channel::setDebug(Message& msg)
 TokenDict Module::s_messages[] = {
     { "engine.status",   Module::Status },
     { "engine.timer",    Module::Timer },
-    { "module.debug",    Module::Level },
+    { "engine.debug",    Module::Level },
     { "engine.command",  Module::Command },
     { "engine.help",     Module::Help },
     { "engine.halt",     Module::Halt },
@@ -432,9 +432,9 @@ void Module::setup()
     if (m_init)
 	return;
     m_init = true;
-    installRelay(Status);
-    installRelay(Timer);
-    installRelay(Level);
+    installRelay(Timer,90);
+    installRelay(Status,110);
+    installRelay(Level,120);
 }
 
 void Module::changed()

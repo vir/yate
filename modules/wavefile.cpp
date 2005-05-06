@@ -113,7 +113,7 @@ WaveSource::WaveSource(const String& file, Channel* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(16000),
       m_total(0), m_time(0), m_autoclose(autoclose)
 {
-    Debug(DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
+    Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
     if (file == "-") {
 	start("WaveSource");
 	return;
@@ -148,12 +148,12 @@ WaveSource::WaveSource(const String& file, Channel* chan, bool autoclose)
 
 WaveSource::~WaveSource()
 {
-    Debug(DebugAll,"WaveSource::~WaveSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
+    Debug(&__plugin,DebugAll,"WaveSource::~WaveSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveSource rate=" FMT64U " b/s",m_time);
+	    Debug(&__plugin,DebugInfo,"WaveSource rate=" FMT64U " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {
@@ -235,14 +235,14 @@ void WaveSource::run()
 	}
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
-	    XDebug("WaveSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
+	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data,m_data.length()*8000/m_brate);
 	m_total += r;
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
-    Debug(DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
+    Debug(&__plugin,DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
     if (m_chan && !m_id.null()) {
 	Message *m = new Message("chan.notify");
 	m->addParam("targetid",m_id);
@@ -254,7 +254,7 @@ void WaveSource::run()
 
 void WaveSource::cleanup()
 {
-    Debug(DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
+    Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
     if (m_chan && m_autoclose)
 	m_chan->disconnect("eof");
 }
@@ -262,7 +262,7 @@ void WaveSource::cleanup()
 WaveConsumer::WaveConsumer(const String& file, Channel* chan, unsigned maxlen)
     : m_chan(chan), m_fd(-1), m_total(0), m_maxlen(maxlen), m_time(0)
 {
-    Debug(DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
+    Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
 	file.c_str(),chan,maxlen,this);
     if (file == "-")
 	return;
@@ -280,12 +280,12 @@ WaveConsumer::WaveConsumer(const String& file, Channel* chan, unsigned maxlen)
 
 WaveConsumer::~WaveConsumer()
 {
-    Debug(DebugAll,"WaveConsumer::~WaveConsumer() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
+    Debug(&__plugin,DebugAll,"WaveConsumer::~WaveConsumer() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {
 	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(DebugInfo,"WaveConsumer rate=" FMT64U " b/s",m_time);
+	    Debug(&__plugin,DebugInfo,"WaveConsumer rate=" FMT64U " b/s",m_time);
 	}
     }
     if (m_fd >= 0) {
@@ -325,7 +325,7 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 
 void ConsDisconnector::run()
 {
-    DDebug(DebugAll,"ConsDisconnector chan=%p id='%s'",m_chan,m_id.c_str());
+    DDebug(&__plugin,DebugAll,"ConsDisconnector chan=%p id='%s'",m_chan,m_id.c_str());
     if (m_id) {
 	m_chan->setConsumer();
 	Message *m = new Message("chan.notify");
@@ -342,7 +342,7 @@ Mutex mutex;
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
     : Channel(__plugin)
 {
-    Debug(DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
+    Debug(this,DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
     if (record) {
 	setConsumer(new WaveConsumer(file,this,maxlen));
 	getConsumer()->deref();
@@ -355,7 +355,7 @@ WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
 
 WaveChan::~WaveChan()
 {
-    Debug(DebugAll,"WaveChan::~WaveChan() %s [%p]",id().c_str(),this);
+    Debug(this,DebugAll,"WaveChan::~WaveChan() %s [%p]",id().c_str(),this);
 }
 
 bool AttachHandler::received(Message &msg)
@@ -451,7 +451,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     unsigned maxlen = ml.toInteger(0);
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	Debug(DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
+	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
 	if (ch->connect(c)) {

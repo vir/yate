@@ -76,19 +76,6 @@ public:
     inline RTPGroup* group() const
 	{ return m_group; }
 
-protected:
-    /**
-     * Set a new RTP group for this processor
-     * @param newgrp New group to join this processor, the old one will be left
-     */
-    void group(RTPGroup* newgrp);
-
-    /**
-     * Method called periodically to keep the data flowing
-     * @param when Time to use as base in all computing
-     */
-    virtual void timerTick(const Time& when) = 0;
-
     /**
      * This method is called to send or process a RTP packet
      * @param data Pointer to raw RTP data
@@ -102,6 +89,19 @@ protected:
      * @param len Length of the data packet
      */
     virtual void rtcpData(const void* data, int len) = 0;
+
+protected:
+    /**
+     * Set a new RTP group for this processor
+     * @param newgrp New group to join this processor, the old one will be left
+     */
+    void group(RTPGroup* newgrp);
+
+    /**
+     * Method called periodically to keep the data flowing
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when) = 0;
 
 private:
     RTPGroup* m_group;
@@ -251,29 +251,81 @@ private:
 };
 
 /**
- * An unidirectional or bidirectional RTP session
- * @short Full RTP session
+ * Base class that holds common sender and receiver methods
+ * @short Common send/recv variables holder
  */
-class YRTP_API RTPSession : public RTPProcessor
+class YRTP_API RTPBaseIO
 {
 public:
-    enum Direction {
-	FullStop,
-	RecvOnly,
-	SendOnly,
-	SendRecv
-    };
+    /**
+     *
+     */
+    inline RTPBaseIO()
+	: m_ssrc(0), m_ts(0), m_seq(0),
+	  m_dataType(-1), m_eventType(-1), m_ciscoType(-1)
+	{ }
 
     /**
-     * Default constructor, creates a detached session
+     * Get the payload type for data packets
+     * @return Payload type, -1 if not set
      */
-    RTPSession();
+    inline int dataPayload() const
+	{ return m_dataType; }
 
     /**
-     * Destructor - shuts down the session and destroys the transport
+     * Set the payload type for data packets
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
      */
-    virtual ~RTPSession();
+    bool dataPayload(int type);
 
+    /**
+     * Get the payload type for event packets
+     * @return Payload type, -1 if not set
+     */
+    inline int eventPayload() const
+	{ return m_eventType; }
+
+    /**
+     * Set the payload type for event packets
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool eventPayload(int type);
+
+    /**
+     * Get the payload type for Cisco event packets
+     * @return Payload type, -1 if not set
+     */
+    inline int ciscoPayload() const
+	{ return m_ciscoType; }
+
+    /**
+     * Set the payload type for Cisco event packets.
+     * Thanks, Cisco, for a new and incompatible way of sending events.
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool ciscoPayload(int type);
+
+protected:
+    u_int32_t m_ssrc;
+    u_int32_t m_ts;
+    u_int16_t m_seq;
+
+private:
+    int m_dataType;
+    int m_eventType;
+    int m_ciscoType;
+};
+
+/**
+ * Class that handles incoming RTP and RTCP packets
+ * @short RTP/RTCP packet receiver
+ */
+class YRTP_API RTPReceiver : public RTPBaseIO
+{
+public:
     /**
      * Process one RTP payload packet.
      * Default behaviour is to call rtpRecvData() or rtpRecvEvent().
@@ -319,6 +371,19 @@ public:
      */
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
 
+private:
+    bool decodeEvent(bool marker, unsigned int timestamp, const void* data, int len);
+    bool decodeCisco(bool marker, unsigned int timestamp, const void* data, int len);
+    void finishEvent(unsigned int timestamp);
+    bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
+};
+
+/**
+ * Class that builds and sends RTP and RTCP packets
+ * @short RTP/RTCP packet sender
+ */
+class YRTP_API RTPSender : public RTPBaseIO
+{
     /**
      * Send one RTP payload packet
      * @param marker Set to true if the marker bit must be set
@@ -345,67 +410,62 @@ public:
     /**
      * Send one RTP event
      * @param event Event code to send
-     * @param timestamp Sampling instant of the packet data
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the packet data, zero to use current
      * @return True if data sending was attempted
      */
-    bool rtpSendEvent(int event, unsigned int timestamp);
+    bool rtpSendEvent(int event, int duration, int volume = 0, unsigned int timestamp = 0);
 
     /**
      * Send one RTP key event
      * @param key Key to send
-     * @param timestamp Sampling instant of the packet data
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the packet data, zero to use current
      * @return True if data sending was attempted
      */
-    bool rtpSendKey(char key, unsigned int timestamp);
+    bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0);
+
+};
+
+/**
+ * An unidirectional or bidirectional RTP session
+ * @short Full RTP session
+ */
+class YRTP_API RTPSession : public RTPProcessor
+{
+public:
+    enum Direction {
+	FullStop,
+	RecvOnly,
+	SendOnly,
+	SendRecv
+    };
 
     /**
-     * Request a resync on the first packet arrived
+     * Default constructor, creates a detached session
      */
-    inline void resync()
-	{ m_sync = true; }
+    RTPSession();
 
     /**
-     * Get the payload type for data packets
-     * @return Payload type, -1 if not set
+     * Destructor - shuts down the session and destroys the transport
      */
-    inline int dataPayload() const
-	{ return m_dataType; }
+    virtual ~RTPSession();
 
     /**
-     * Set the payload type for data packets
-     * @param type Payload type, -1 to disable
-     * @return True if changed, false if invalid payload type
+     * This method is called to process a RTP packet
+     * @param data Pointer to raw RTP data
+     * @param len Length of the data packet
      */
-    bool dataPayload(int type);
+    virtual void rtpData(const void* data, int len);
 
     /**
-     * Get the payload type for event packets
-     * @return Payload type, -1 if not set
+     * This method is called to process a RTCP packet
+     * @param data Pointer to raw RTCP data
+     * @param len Length of the data packet
      */
-    inline int eventPayload() const
-	{ return m_eventType; }
-
-    /**
-     * Set the payload type for event packets
-     * @param type Payload type, -1 to disable
-     * @return True if changed, false if invalid payload type
-     */
-    bool eventPayload(int type);
-
-    /**
-     * Get the payload type for Cisco event packets
-     * @return Payload type, -1 if not set
-     */
-    inline int ciscoPayload() const
-	{ return m_ciscoType; }
-
-    /**
-     * Set the payload type for Cisco event packets.
-     * Thanks, Cisco, for a new and incompatible way of sending events.
-     * @param type Payload type, -1 to disable
-     * @return True if changed, false if invalid payload type
-     */
-    bool ciscoPayload(int type);
+    virtual void rtcpData(const void* data, int len);
 
     /**
      * Get the RTP/RTCP transport of data handled by this session
@@ -451,6 +511,12 @@ public:
     inline bool remoteAddr(SocketAddr& addr)
 	{ return m_transport ? m_transport->remoteAddr(addr) : false; }
 
+    /**
+     * Request a resync on the first packet arrived
+     */
+    inline void resync()
+	{ m_sync = true; }
+
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -458,31 +524,9 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
-    /**
-     * This method is called to process a RTP packet
-     * @param data Pointer to raw RTP data
-     * @param len Length of the data packet
-     */
-    virtual void rtpData(const void* data, int len);
-
-    /**
-     * This method is called to process a RTCP packet
-     * @param data Pointer to raw RTCP data
-     * @param len Length of the data packet
-     */
-    virtual void rtcpData(const void* data, int len);
-
 private:
-    bool decodeEvent(bool marker, unsigned int timestamp, const void* data, int len);
-    bool decodeCisco(bool marker, unsigned int timestamp, const void* data, int len);
-    void finishEvent(unsigned int timestamp);
-    bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
-
     RTPTransport* m_transport;
     Direction m_direction;
-    int m_dataType;
-    int m_eventType;
-    int m_ciscoType;
     bool m_sync;
     u_int32_t m_rxSsrc;
     u_int32_t m_rxTs;
@@ -490,6 +534,10 @@ private:
     u_int32_t m_txSsrc;
     u_int32_t m_txTs;
     u_int16_t m_txSeq;
+    u_int32_t m_txNow;
+    unsigned int m_evTs;
+    int m_evNum;
+    int m_evVol;
 };
 
 }

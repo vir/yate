@@ -224,7 +224,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     : m_driver(driver), m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
       m_pri(_pri), m_restart(0), m_chans(0), m_ok(false)
 {
-    Debug(DebugAll,"PriSpan::PriSpan() [%p]",this);
+    Debug(m_driver,DebugAll,"PriSpan::PriSpan() [%p]",this);
     int buflength = cfg.getIntValue(sect,"buflen", s_buflen);
 
     m_layer1 = cfg.getIntValue(sect,"format",dict_str2law,(chans == 24) ? PRI_LAYER_1_ULAW : PRI_LAYER_1_ALAW);
@@ -260,7 +260,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
 
 PriSpan::~PriSpan()
 {
-    Debug(DebugAll,"PriSpan::~PriSpan() [%p]",this);
+    Debug(m_driver,DebugAll,"PriSpan::~PriSpan() [%p]",this);
     m_driver->m_spans.remove(this,false);
     m_ok = false;
     for (int i = 0; i < m_nchans; i++) {
@@ -297,7 +297,7 @@ void PriSpan::idle()
 	return;
     if (m_restartPeriod && (Time::now() > m_restart)) {
 	m_restart = Time::now() + m_restartPeriod;
-	Debug("PriSpan",DebugInfo,"Restarting idle channels on span %d",m_span);
+	Debug(m_driver,DebugInfo,"Restarting idle channels on span %d",m_span);
 	for (int i=0; i<m_nchans; i++)
 	    if (m_chans[i])
 		restartChan(i+1,true);
@@ -342,42 +342,42 @@ void PriSpan::handleEvent(pri_event &ev)
 	    infoChan(ev.ring.channel,ev.ring);
 	    break;
 	case PRI_EVENT_RINGING:
-	    Debug(DebugInfo,"Ringing our call on channel %d on span %d",ev.ringing.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Ringing our call on channel %d on span %d",ev.ringing.channel,m_span);
 	    break;
 	case PRI_EVENT_HANGUP:
-	    Debug(DebugInfo,"Hangup detected on channel %d on span %d",ev.hangup.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Hangup detected on channel %d on span %d",ev.hangup.channel,m_span);
 	    hangupChan(ev.hangup.channel,ev.hangup);
 	    break;
 	case PRI_EVENT_ANSWER:
-	    Debug(DebugInfo,"Answered channel %d on span %d",ev.answer.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Answered channel %d on span %d",ev.answer.channel,m_span);
 	    answerChan(ev.setup_ack.channel);
 	    break;
 	case PRI_EVENT_HANGUP_ACK:
-	    Debug(DebugInfo,"Hangup ACK on channel %d on span %d",ev.hangup.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Hangup ACK on channel %d on span %d",ev.hangup.channel,m_span);
 	    break;
 	case PRI_EVENT_RESTART_ACK:
-	    Debug(DebugInfo,"Restart ACK on channel %d on span %d",ev.restartack.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Restart ACK on channel %d on span %d",ev.restartack.channel,m_span);
 	    break;
 	case PRI_EVENT_SETUP_ACK:
-	    Debug(DebugInfo,"Setup ACK on channel %d on span %d",ev.setup_ack.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Setup ACK on channel %d on span %d",ev.setup_ack.channel,m_span);
 	    ackChan(ev.setup_ack.channel);
 	    break;
 	case PRI_EVENT_HANGUP_REQ:
-	    Debug(DebugInfo,"Hangup REQ on channel %d on span %d",ev.hangup.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Hangup REQ on channel %d on span %d",ev.hangup.channel,m_span);
 	    hangupChan(ev.hangup.channel,ev.hangup);
 	    break;
 	case PRI_EVENT_PROCEEDING:
-	    Debug(DebugInfo,"Call proceeding on channel %d on span %d",ev.proceeding.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Call proceeding on channel %d on span %d",ev.proceeding.channel,m_span);
 	    proceedingChan(ev.proceeding.channel);
 	    break;
 #ifdef PRI_EVENT_PROGRESS
 	case PRI_EVENT_PROGRESS:
-	    Debug(DebugInfo,"Call progressing on channel %d on span %d",ev.proceeding.channel,m_span);
+	    Debug(m_driver,DebugInfo,"Call progressing on channel %d on span %d",ev.proceeding.channel,m_span);
 	    proceedingChan(ev.proceeding.channel);
 	    break;
 #endif
 	default:
-	    Debug(DebugInfo,"Received PRI event %d",ev.e);
+	    Debug(m_driver,DebugInfo,"Unhandled PRI event %d",ev.e);
     }
 }
 
@@ -418,7 +418,7 @@ void PriSpan::restartChan(int chan, bool outgoing, bool force)
 	return;
     }
     if (force || !getChan(chan)->inUse()) {
-	Debug(DebugAll,"Restarting B-channel %d on span %d",chan,m_span);
+	Debug(m_driver,DebugAll,"Restarting B-channel %d on span %d",chan,m_span);
 	getChan(chan)->restart(outgoing);
     }
 }
@@ -433,12 +433,12 @@ void PriSpan::ringChan(int chan, pri_event_ring &ev)
 	::pri_destroycall(pri(),ev.call);
 	return;
     }
-    Debug(DebugInfo,"Ring on channel %d on span %d",chan,m_span);
-    Debug(DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
+    Debug(m_driver,DebugInfo,"Ring on channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
 	ev.callingname,ev.callingnum,ev.callingplan);
-    Debug(DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
+    Debug(m_driver,DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
 	ev.callednum,ev.redirectingnum,ev.calledplan);
-    Debug(DebugInfo,"type=%d complete=%d format='%s'",
+    Debug(m_driver,DebugInfo,"type=%d complete=%d format='%s'",
 	ev.ctype,ev.complete,lookup(ev.layer1,dict_str2law,"unknown"));
     PriChan* c = getChan(chan);
     if (c)
@@ -451,10 +451,10 @@ void PriSpan::infoChan(int chan, pri_event_ring &ev)
 	Debug(DebugInfo,"Info on invalid channel %d on span %d",chan,m_span);
 	return;
     }
-    Debug(DebugInfo,"info on channel %d on span %d",chan,m_span);
-    Debug(DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
+    Debug(m_driver,DebugInfo,"info on channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"caller='%s' callerno='%s' callingplan=%d",
 	ev.callingname,ev.callingnum,ev.callingplan);
-    Debug(DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
+    Debug(m_driver,DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
 	ev.callednum,ev.redirectingnum,ev.calledplan);
     getChan(chan)->gotDigits(ev.callednum);
 }
@@ -465,7 +465,7 @@ void PriSpan::hangupChan(int chan,pri_event_hangup &ev)
 	Debug(DebugInfo,"Hangup on invalid channel %d on span %d",chan,m_span);
 	return;
     }
-    Debug(DebugInfo,"Hanging up channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"Hanging up channel %d on span %d",chan,m_span);
     getChan(chan)->hangup(ev.cause);
 }
 
@@ -475,7 +475,7 @@ void PriSpan::ackChan(int chan)
 	Debug(DebugInfo,"ACK on invalid channel %d on span %d",chan,m_span);
 	return;
     }
-    Debug(DebugInfo,"ACKnowledging channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"ACKnowledging channel %d on span %d",chan,m_span);
     getChan(chan)->setTimeout(0);
 }
 
@@ -485,7 +485,7 @@ void PriSpan::answerChan(int chan)
 	Debug(DebugInfo,"ANSWER on invalid channel %d on span %d",chan,m_span);
 	return;
     }
-    Debug(DebugInfo,"ANSWERing channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"ANSWERing channel %d on span %d",chan,m_span);
     getChan(chan)->answered();
 }
 
@@ -495,7 +495,7 @@ void PriSpan::proceedingChan(int chan)
 	Debug(DebugInfo,"Proceeding on invalid channel %d on span %d",chan,m_span);
 	return;
     }
-    Debug(DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
+    Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
     getChan(chan)->setTimeout(60000000);
 }
 
@@ -503,24 +503,24 @@ PriSource::PriSource(PriChan *owner, const char* format, unsigned int bufsize)
     : DataSource(format),
       m_owner(owner), m_buffer(0,bufsize)
 {
-    Debug(DebugAll,"PriSource::PriSource(%p,'%s',%u) [%p]",owner,format,bufsize,this);
+    Debug(m_owner,DebugAll,"PriSource::PriSource(%p,'%s',%u) [%p]",owner,format,bufsize,this);
 }
 
 PriSource::~PriSource()
 {
-    Debug(DebugAll,"PriSource::~PriSource() [%p]",this);
+    Debug(m_owner,DebugAll,"PriSource::~PriSource() [%p]",this);
 }
 
 PriConsumer::PriConsumer(PriChan *owner, const char* format, unsigned int bufsize)
     : DataConsumer(format),
       m_owner(owner), m_buffer(0,bufsize)
 {
-    Debug(DebugAll,"PriConsumer::PriConsumer(%p,'%s',%u) [%p]",owner,format,bufsize,this);
+    Debug(m_owner,DebugAll,"PriConsumer::PriConsumer(%p,'%s',%u) [%p]",owner,format,bufsize,this);
 }
 
 PriConsumer::~PriConsumer()
 {
-    Debug(DebugAll,"PriConsumer::~PriConsumer() [%p]",this);
+    Debug(m_owner,DebugAll,"PriConsumer::~PriConsumer() [%p]",this);
 }
 
 PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
@@ -528,7 +528,7 @@ PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
       m_span(const_cast<PriSpan*>(parent)), m_chan(chan), m_ring(false),
       m_timeout(0), m_call(0), m_bufsize(bufsize)
 {
-    Debug(DebugAll,"PriChan::PriChan(%p,%d,%u) [%p]",parent,chan,bufsize,this);
+    Debug(this,DebugAll,"PriChan::PriChan(%p,%d,%u) [%p]",parent,chan,bufsize,this);
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
     m_isdn = true;
@@ -538,7 +538,7 @@ PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
 
 PriChan::~PriChan()
 {
-    Debug(DebugAll,"PriChan::~PriChan() [%p] %d",this,m_chan);
+    Debug(this,DebugAll,"PriChan::~PriChan() [%p] %d",this,m_chan);
     hangup(PRI_CAUSE_NORMAL_UNSPECIFIED);
 }
 
@@ -608,7 +608,7 @@ bool PriChan::answer()
     m_ring = false;
     m_timeout = 0;
     status(chanStatus());
-    Output("Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
+    Debug(this,DebugInfo,"Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     ::pri_answer(m_span->pri(),(q931_call*)m_call,m_chan,!m_isdn);
     return true;
 }
@@ -624,7 +624,7 @@ void PriChan::hangup(int cause)
 	cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED;
     const char *reason = pri_cause2str(cause);
     if (inUse())
-	Debug(DebugInfo,"Hanging up %s in state %s: %s (%d)",
+	Debug(this,DebugInfo,"Hanging up %s in state %s: %s (%d)",
 	    id().c_str(),chanStatus(),reason,cause);
     m_timeout = 0;
     m_targetid.clear();
@@ -653,7 +653,7 @@ void PriChan::answered()
     }
     m_timeout = 0;
     status(chanStatus());
-    Output("Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
+    Debug(this,DebugInfo,"Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
     Message *m = message("call.answered");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
@@ -683,8 +683,8 @@ bool PriChan::call(Message &msg, const char *called)
     }
     if (!called)
 	called = msg.getValue("called");
-    Debug("PriChan",DebugInfo,"Calling '%s' on channel %d span %d",
-	called, m_chan,m_span->span());
+    Debug(this,DebugInfo,"Calling '%s' on channel %d span %d",
+	called,m_chan,m_span->span());
     int layer1 = msg.getIntValue("format",dict_str2law,m_span->layer1());
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
@@ -703,7 +703,7 @@ bool PriChan::call(Message &msg, const char *called)
     char *callername = (char *)msg.getValue("callername");
     int callerpres = msg.getIntValue("callerpres",dict_str2pres,m_span->pres());
     int calledplan = msg.getIntValue("calledplan",dict_str2dplan,m_span->dplan());
-    Debug(DebugAll,"Caller='%s' name='%s' plan=%s pres=%s, Called plan=%s",
+    Debug(this,DebugAll,"Caller='%s' name='%s' plan=%s pres=%s, Called plan=%s",
 	caller,callername,lookup(callerplan,dict_str2dplan),
 	lookup(callerpres,dict_str2pres),lookup(calledplan,dict_str2dplan));
     m_call =::pri_new_call(span()->pri());
@@ -773,7 +773,7 @@ void PriChan::ring(pri_event_ring &ev)
 
 void PriChan::callAccept(Message& msg)
 {
-    Debug(DebugAll,"PriChan::callAccept() [%p]",this);
+    Debug(this,DebugAll,"PriChan::callAccept() [%p]",this);
     setTimeout(60000000);
     Channel::callAccept(msg);
 }
@@ -829,7 +829,7 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
     }
     String chan = dest.matchString(1);
     String num = dest.matchString(2);
-    DDebug(DebugInfo,"Found call to pri chan='%s' name='%s'",
+    DDebug(this,DebugInfo,"Found call to pri chan='%s' name='%s'",
 	chan.c_str(),num.c_str());
     PriChan *c = 0;
 
@@ -842,7 +842,7 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
 	c = find(chan.toInteger(-1));
 
     if (c) {
-	Debug(DebugInfo,"Will call '%s' on chan %s (%d/%d)",
+	Debug(this,DebugInfo,"Will call '%s' on chan %s (%d/%d)",
 	    num.c_str(),c->id().c_str(),c->span()->span(),c->chan());
 	return c->call(msg,num);
     }
@@ -853,7 +853,7 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
 
 void PriDriver::dropAll()
 {
-    Debug(DebugInfo,"Dropping all %s calls",name().c_str());
+    Debug(this,DebugInfo,"Dropping all %s calls",name().c_str());
     lock();
     const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
@@ -909,7 +909,7 @@ PriSpan *PriDriver::findSpan(int chan)
 
 PriChan *PriDriver::find(int first, int last)
 {
-    DDebug(DebugAll,"PriDriver::find(%d,%d)",first,last);
+    DDebug(this,DebugAll,"PriDriver::find(%d,%d)",first,last);
     // see first if we have an exact request
     if (first > 0 && last < 0) {
 	PriSpan *s = findSpan(first);
@@ -921,7 +921,7 @@ PriChan *PriDriver::find(int first, int last)
     for (; l; l=l->next()) {
 	PriSpan *s = static_cast<PriSpan *>(l->get());
 	if (s) {
-	    Debug(DebugAll,"Searching for free chan in span %d [%p]",
+	    Debug(this,DebugAll,"Searching for free chan in span %d [%p]",
 		s->span(),s);
 	    int c = s->findEmptyChan(first,last);
 	    if (c > 0)

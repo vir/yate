@@ -138,6 +138,8 @@ public:
     virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize);
 };
 
+INIT_PLUGIN(WpDriver);
+
 #define WP_HEADER 16
 
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
@@ -296,12 +298,12 @@ WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int cha
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
       m_fd(fd), m_data(0)
 {
-    Debug(DebugAll,"WpSpan::WpSpan() [%p]",this);
+    Debug(&__plugin,DebugAll,"WpSpan::WpSpan() [%p]",this);
 }
 
 WpSpan::~WpSpan()
 {
-    Debug(DebugAll,"WpSpan::~WpSpan() [%p]",this);
+    Debug(&__plugin,DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
     delete m_data;
     wp_close(m_fd);
@@ -310,7 +312,7 @@ WpSpan::~WpSpan()
 
 void WpSpan::run()
 {
-    Debug(DebugAll,"WpSpan::run() [%p]",this);
+    Debug(&__plugin,DebugAll,"WpSpan::run() [%p]",this);
     for (;;) {
 	bool rd = wp_select(m_fd,5); // 5 bytes per smallest q921 frame
 	Thread::check();
@@ -322,13 +324,13 @@ WpSource::WpSource(WpChan *owner, const char* format, unsigned int bufsize)
     : PriSource(owner,format,bufsize),
       m_bufpos(0)
 {
-    Debug(DebugAll,"WpSource::WpSource(%p) [%p]",owner,this);
+    Debug(m_owner,DebugAll,"WpSource::WpSource(%p) [%p]",owner,this);
     static_cast<WpChan*>(m_owner)->m_wp_s = this;
 }
 
 WpSource::~WpSource()
 {
-    Debug(DebugAll,"WpSource::~WpSource() [%p]",this);
+    Debug(m_owner,DebugAll,"WpSource::~WpSource() [%p]",this);
     static_cast<WpChan*>(m_owner)->m_wp_s = 0;
 }
 
@@ -344,13 +346,13 @@ void WpSource::put(unsigned char val)
 WpConsumer::WpConsumer(WpChan *owner, const char* format, unsigned int bufsize)
     : PriConsumer(owner,format,bufsize), Fifo(2*bufsize)
 {
-    Debug(DebugAll,"WpConsumer::WpConsumer(%p) [%p]",owner,this);
+    Debug(m_owner,DebugAll,"WpConsumer::WpConsumer(%p) [%p]",owner,this);
     static_cast<WpChan*>(m_owner)->m_wp_c = this;
 }
 
 WpConsumer::~WpConsumer()
 {
-    Debug(DebugAll,"WpConsumer::~WpConsumer() [%p]",this);
+    Debug(m_owner,DebugAll,"WpConsumer::~WpConsumer() [%p]",this);
     static_cast<WpChan*>(m_owner)->m_wp_c = 0;
 }
 
@@ -364,7 +366,7 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 WpData::WpData(WpSpan* span, const char* card, const char* device)
     : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_buffer(0), m_chans(0)
 {
-    Debug(DebugAll,"WpData::WpData(%p) [%p]",span,this);
+    Debug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
     HANDLE fd = wp_open(card,device);
     if (fd != INVALID_HANDLE_VALUE) {
 	m_fd = fd;
@@ -374,7 +376,7 @@ WpData::WpData(WpSpan* span, const char* card, const char* device)
 
 WpData::~WpData()
 {
-    Debug(DebugAll,"WpData::~WpData() [%p]",this);
+    Debug(&__plugin,DebugAll,"WpData::~WpData() [%p]",this);
     m_span->m_data = 0;
     wp_close(m_fd);
     m_fd = INVALID_HANDLE_VALUE;
@@ -386,7 +388,7 @@ WpData::~WpData()
 
 void WpData::run()
 {
-    Debug(DebugAll,"WpData::run() [%p]",this);
+    Debug(&__plugin,DebugAll,"WpData::run() [%p]",this);
     int samp = 50;
     int bchans = m_span->bchans();
     int buflen = samp*bchans;
@@ -399,7 +401,7 @@ void WpData::run()
 	while (!m_span->m_chans[b])
 	    b++;
 	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
-	DDebug("wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
+	DDebug(&__plugin,"wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
     while (m_span && (m_fd >= 0)) {
 	Thread::check();
@@ -472,7 +474,7 @@ bool WpChan::openData(const char* format, int echoTaps)
 
 PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
 {
-    Debug(DebugAll,"WpDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
+    Debug(this,DebugAll,"WpDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
     int netType = -1;
     int swType = -1;
     int dchan = -1;
@@ -504,7 +506,7 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
 
 PriChan* WpDriver::createChan(const PriSpan* span, int chan, unsigned int bufsize)
 {
-    Debug(DebugAll,"WpDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
+    Debug(this,DebugAll,"WpDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
     return new WpChan(span,chan,bufsize);
 }
 
@@ -524,7 +526,5 @@ void WpDriver::initialize()
     Output("Initializing module Wanpipe");
     init("wpchan");
 }
-
-INIT_PLUGIN(WpDriver);
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

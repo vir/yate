@@ -134,7 +134,7 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
 SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
     : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
-    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]\n%s",
+    Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]\n%s",
 	buf,len,this,buf);
     if (m_ep)
 	m_ep->ref();

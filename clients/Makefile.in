@@ -54,6 +54,7 @@ clean: do-clean
 .PHONY: install
 install: all do-install
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
+	test -z "$(PROGS)" || \
 	install $(PROGS) "$(DESTDIR)$(bindir)/"
 
 .PHONY: uninstall

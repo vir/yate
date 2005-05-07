@@ -669,9 +669,9 @@ bool Driver::received(Message &msg, int id)
 
     switch (id) {
 	case Ringing:
-	    return chan->isOutgoing() && chan->msgRinging(msg);
+	    return chan->isIncoming() && chan->msgRinging(msg);
 	case Answered:
-	    return chan->isOutgoing() && chan->msgAnswered(msg);
+	    return chan->isIncoming() && chan->msgAnswered(msg);
 	case Tone:
 	    return chan->msgTone(msg,msg.getValue("text"));
 	case Text:

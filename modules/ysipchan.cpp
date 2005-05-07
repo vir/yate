@@ -445,7 +445,7 @@ void YateSIPEndPoint::run()
 	    }
 #ifdef DEBUG
 	    else
-		Debug(DebugInfo,"Received short SIP message of %d bytes",len);
+		Debug(DebugInfo,"Received short SIP message of %d bytes",res);
 #endif
 	}
 //	m_engine->process();
@@ -625,6 +625,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	sdp = createRtpSDP(m,msg.getValue("formats"));
     m->setBody(sdp);
     m_tr = plugin.ep()->engine()->addMessage(m);
+    m_callid = m_tr->getCallID();
     m->deref();
     if (m_tr) {
 	m_tr->ref();
@@ -1049,11 +1050,14 @@ void YateSIPConnection::callReject(const char* error, const char* reason)
 
 YateSIPConnection* SIPDriver::findCall(const String& callid)
 {
-    DDebug(this,"SIPDriver",DebugAll,"finding call '%s'",callid.c_str());
+    DDebug(this,DebugAll,"SIPDriver finding call '%s'",callid.c_str());
     Lock mylock(this);
     ObjList* l = &channels();
     for (; l; l = l->next()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
+	// XXX
+	if (c)
+	    Debug(DebugAll,"Found '%s' at %p",c->callid().c_str(),c);
 	if (c && (c->callid() == callid))
 	    return c;
     }
@@ -1062,7 +1066,7 @@ YateSIPConnection* SIPDriver::findCall(const String& callid)
 
 YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
 {
-    DDebug(this,"SIPDriver",DebugAll,"finding dialog '%s'",dialog.c_str());
+    DDebug(this,DebugAll,"SIPDriver finding dialog '%s'",dialog.c_str());
     Lock mylock(this);
     ObjList* l = &channels();
     for (; l; l = l->next()) {

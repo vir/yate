@@ -81,15 +81,14 @@ void RTPReceiver::rtpData(const void* data, int len)
 	((u_int32_t)pc[10] << 8) | pc[11];
 
     // grab some data at the first packet received or resync
-    if (m_sync) {
-	m_sync = false;
-	m_rxSsrc = ss;
-	m_rxTs = ts;
-	m_rxSeq = seq;
+    if (!m_ssrc) {
+	m_ssrc = ss;
+	m_ts = ts;
+	m_seq = seq;
     }
 
     // check if the SSRC is unchanged
-    if (ss != m_rxSsrc)
+    if (ss != m_ssrc)
 	return;
 
     // skip over header and any CSRC
@@ -107,126 +106,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 	return;
     if (!len)
 	pc = 0;
-    rtpRecv(marker,typ,ts-m_rxTs,pc,len);
-}
-
-RTPSession::RTPSession()
-    : m_transport(0), m_direction(FullStop),
-      m_sync(true),
-      m_rxSsrc(0), m_rxTs(0), m_rxSeq(0),
-      m_txSsrc(0), m_txTs(0), m_txSeq(0)
-{
-}
-
-RTPSession::~RTPSession()
-{
-    direction(FullStop);
-    if (m_transport) {
-	RTPTransport* tmp = m_transport;
-	m_transport = 0;
-	tmp->setProcessor(0);
-	delete tmp;
-    }
-}
-
-void RTPSession::timerTick(const Time& when)
-{
-}
-
-void RTPSession::rtpData(const void* data, int len)
-{
-    switch (m_direction) {
-	case FullStop:
-	case SendOnly:
-	    return;
-	default:
-	    break;
-    }
-    // trivial check for basic fields validity
-    if ((len < 12) || !data)
-	return;
-    const unsigned char* pc = (const unsigned char*)data;
-    // check protocol version number
-    if ((pc[0] & 0xc0) != 0x80)
-	return;
-    // check if padding is present and remove it
-    if (pc[0] & 0x20) {
-	len -= pc[len-1];
-	if (len < 12)
-	    return;
-    }
-    bool ext = (pc[0] & 0x10) != 0;
-    int cc = pc[0] & 0x0f;
-    bool marker = (pc[1] & 0x80) != 0;
-    int typ = pc[1] & 0x7f;
-    u_int16_t seq = ((u_int16_t)pc[2] << 8) | pc[3];
-    u_int32_t ts = ((u_int32_t)pc[4] << 24) | ((u_int32_t)pc[5] << 16) |
-	((u_int32_t)pc[6] << 8) | pc[7];
-    u_int32_t ss = ((u_int32_t)pc[8] << 24) | ((u_int32_t)pc[9] << 16) |
-	((u_int32_t)pc[10] << 8) | pc[11];
-
-    // grab some data at the first packet received or resync
-    if (m_sync) {
-	m_sync = false;
-	m_rxSsrc = ss;
-	m_rxTs = ts;
-	m_rxSeq = seq;
-    }
-
-    // check if the SSRC is unchanged
-    if (ss != m_rxSsrc)
-	return;
-
-    // skip over header and any CSRC
-    pc += 12+(4*cc);
-    len -= 12+(4*cc);
-    // check if extension is present and skip it
-    if (ext) {
-	if (len < 4)
-	    return;
-	int xl = ((int)pc[2] << 8) | pc[3];
-	pc += xl+4;
-	len -= xl+4;
-    }
-    if (len < 0)
-	return;
-    if (!len)
-	pc = 0;
-    rtpRecv(marker,typ,ts-m_rxTs,pc,len);
-}
-
-void RTPSession::rtcpData(const void* data, int len)
-{
-    switch (m_direction) {
-	case FullStop:
-	case SendOnly:
-	    return;
-	default:
-	    break;
-    }
-    if ((len < 8) || !data)
-	return;
-}
-
-void RTPSession::transport(RTPTransport* trans)
-{
-    if (trans == m_transport)
-	return;
-    if (m_transport)
-	m_transport->setProcessor(0);
-    m_transport = trans;
-    if (m_transport)
-	m_transport->setProcessor(this);
-    else
-	m_direction = FullStop;
-}
-
-bool RTPSession::direction(Direction dir)
-{
-    if ((dir != FullStop) && !m_transport)
-	return false;
-    m_direction = dir;
-    return true;
+    rtpRecv(marker,typ,ts-m_ts,pc,len);
 }
 
 bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, const void* data, int len)
@@ -299,16 +179,13 @@ bool RTPReceiver::pushEvent(int event, int duration, int volume, unsigned int ti
     return rtpRecvEvent(event,key,duration,volume,timestamp);
 }
 
+void RTPReceiver::timerTick(const Time& when)
+{
+}
+
 bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
-    switch (m_direction) {
-	case FullStop:
-	case RecvOnly:
-	    return false;
-	default:
-	    break;
-    }
-    if (!m_transport)
+    if (!(m_session && m_session->transport()))
 	return false;
 
     if (!data)
@@ -316,36 +193,36 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     payload &= 0x7f;
     if (marker)
 	payload |= 0x80;
-    timestamp += m_txTs;
-    if (!m_txSsrc)
-	m_txSsrc = ::random();
-    m_txSeq++;
+    timestamp += m_ts;
+    if (!m_ssrc)
+	m_ssrc = ::random();
+    m_seq++;
 
     DataBlock buf(0,len+12);
     unsigned char* pc = (unsigned char*)buf.data();
     *pc++ = 0x80;
     *pc++ = payload;
-    *pc++ = m_txSeq >> 8;
-    *pc++ = m_txSeq & 0xff;
+    *pc++ = m_seq >> 8;
+    *pc++ = m_seq & 0xff;
     *pc++ = timestamp >> 24;
     *pc++ = timestamp >> 16;
     *pc++ = timestamp >> 8;
     *pc++ = timestamp & 0xff;
-    *pc++ = m_txSsrc >> 24;
-    *pc++ = m_txSsrc >> 16;
-    *pc++ = m_txSsrc >> 8;
-    *pc++ = m_txSsrc & 0xff;
+    *pc++ = m_ssrc >> 24;
+    *pc++ = m_ssrc >> 16;
+    *pc++ = m_ssrc >> 8;
+    *pc++ = m_ssrc & 0xff;
     if (data && len)
 	::memcpy(pc,data,len);
-    static_cast<RTPProcessor*>(m_transport)->rtpData(buf.data(),buf.length());
+    static_cast<RTPProcessor*>(m_session->transport())->rtpData(buf.data(),buf.length());
     return true;
 }
 
 bool RTPSender::rtpSendData(bool marker, unsigned int timestamp, const void* data, int len)
 {
-    if (m_dataType < 0)
+    if (dataPayload() < 0)
 	return false;
-    return rtpSend(marker,m_dataType,timestamp,data,len);
+    return rtpSend(marker,dataPayload(),timestamp,data,len);
 }
 
 bool RTPSender::rtpSendEvent(int event, int duration, int volume, unsigned int timestamp)
@@ -377,6 +254,108 @@ bool RTPSender::rtpSendKey(char key, int duration, int volume, unsigned int time
     else
 	return false;
     return rtpSendEvent(event,duration,volume,timestamp);
+}
+
+void RTPSender::timerTick(const Time& when)
+{
+}
+
+RTPSession::RTPSession()
+    : m_transport(0), m_direction(FullStop), m_send(0), m_recv(0)
+{
+}
+
+RTPSession::~RTPSession()
+{
+    direction(FullStop);
+    sender(0);
+    receiver(0);
+    if (m_transport) {
+	RTPTransport* tmp = m_transport;
+	m_transport = 0;
+	tmp->setProcessor(0);
+	delete tmp;
+    }
+}
+
+void RTPSession::timerTick(const Time& when)
+{
+    if (m_send)
+	static_cast<RTPBaseIO*>(m_send)->timerTick(when);
+    if (m_recv)
+	static_cast<RTPBaseIO*>(m_recv)->timerTick(when);
+}
+
+void RTPSession::rtpData(const void* data, int len)
+{
+    if ((m_direction & RecvOnly) == 0)
+	return;
+    if (m_recv)
+	m_recv->rtpData(data,len);
+}
+
+void RTPSession::rtcpData(const void* data, int len)
+{
+    if ((m_direction & RecvOnly) == 0)
+	return;
+    if (m_recv)
+	m_recv->rtcpData(data,len);
+}
+
+RTPSender* RTPSession::createSender()
+{
+    return new RTPSender(this);
+}
+
+RTPReceiver* RTPSession::createReceiver()
+{
+    return new RTPReceiver(this);
+}
+
+void RTPSession::transport(RTPTransport* trans)
+{
+    if (trans == m_transport)
+	return;
+    if (m_transport)
+	m_transport->setProcessor(0);
+    m_transport = trans;
+    if (m_transport)
+	m_transport->setProcessor(this);
+    else
+	m_direction = FullStop;
+}
+
+void RTPSession::sender(RTPSender* send)
+{
+    if (send == m_send)
+	return;
+    RTPSender* tmp = m_send;
+    m_send = send;
+    if (tmp)
+	delete tmp;
+}
+
+void RTPSession::receiver(RTPReceiver* recv)
+{
+    if (recv == m_recv)
+	return;
+    RTPReceiver* tmp = m_recv;
+    m_recv = recv;
+    if (tmp)
+	delete tmp;
+}
+
+bool RTPSession::direction(Direction dir)
+{
+    if ((dir != FullStop) && !m_transport)
+	return false;
+    // make sure we have sender and/or receiver for our direction
+    if ((dir & RecvOnly) && !m_recv)
+	receiver(createReceiver());
+    if ((dir & SendOnly) && !m_send)
+	sender(createSender());
+    m_direction = dir;
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

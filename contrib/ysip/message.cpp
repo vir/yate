@@ -33,7 +33,7 @@ using namespace TelEngine;
 SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
     : NamedString(name)
 {
-    DDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
     if (value.null())
 	return;
     int sp = value.find(';');
@@ -60,7 +60,7 @@ SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
 	    pname.trimBlanks();
 	    pvalue.trimBlanks();
 	    if (!pname.null()) {
-		DDebug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		XDebug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
 		m_params.append(new NamedString(pname,pvalue));
 	    }
 	}
@@ -68,7 +68,7 @@ SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
 	    String pname(value.substr(sp+1,ep-sp-1));
 	    pname.trimBlanks();
 	    if (!pname.null()) {
-		DDebug(DebugAll,"param name='%s' (no value)",pname.c_str());
+		XDebug(DebugAll,"param name='%s' (no value)",pname.c_str());
 		m_params.append(new NamedString(pname));
 	    }
 	}
@@ -79,7 +79,7 @@ SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
 SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
     : NamedString(original.name(),original)
 {
-    DDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
+    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
     const ObjList* l = &original.params();
     for (; l; l = l->next()) {
 	const NamedString* t = static_cast<const NamedString*>(l->get());
@@ -90,7 +90,7 @@ SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
 
 SIPHeaderLine::~SIPHeaderLine()
 {
-    DDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
+    XDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
 }
 
 const NamedString* SIPHeaderLine::getParam(const char *name) const
@@ -352,7 +352,7 @@ int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
 
 bool SIPMessage::parseFirst(String& line)
 {
-    DDebug("SIPMessage::parse",DebugAll,"firstline= '%s'",line.c_str());
+    XDebug(DebugAll,"SIPMessage::parse firstline= '%s'",line.c_str());
     if (line.null())
 	return false;
     Regexp r("^\\([Ss][Ii][Pp]/[0-9]\\.[0-9]\\+\\)[[:space:]]\\+\\([0-9][0-9][0-9]\\)[[:space:]]\\+\\(.*\\)$");
@@ -426,7 +426,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	}
 	*line >> ":";
 	line->trimBlanks();
-	DDebug("SIPMessage::parse",DebugAll,"header='%s' value='%s'",name.c_str(),line->c_str());
+	XDebug(DebugAll,"SIPMessage::parse header='%s' value='%s'",name.c_str(),line->c_str());
 	header.append(new SIPHeaderLine(uncompactForm(name.c_str()),*line));
 	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
@@ -443,7 +443,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	line->destruct();
     }
     body = SIPBody::build(buf,len,content);
-    DDebug("SIPMessage::parse",DebugAll,"%d header lines, body %p",
+    DDebug(DebugAll,"SIPMessage::parse %d header lines, body %p",
 	header.count(),body);
     return true;
 }

@@ -56,6 +56,7 @@ class YRTP_API RTPProcessor : public GenObject
     friend class RTPGroup;
     friend class RTPTransport;
     friend class RTPSession;
+    friend class RTPSender;
 
 public:
     /**
@@ -256,12 +257,13 @@ private:
  */
 class YRTP_API RTPBaseIO
 {
+    friend class RTPSession;
 public:
     /**
-     *
+     * Default constructor.
      */
-    inline RTPBaseIO()
-	: m_ssrc(0), m_ts(0), m_seq(0),
+    inline RTPBaseIO(RTPSession* session = 0)
+	: m_session(session), m_ssrc(0), m_ts(0), m_seq(0),
 	  m_dataType(-1), m_eventType(-1), m_ciscoType(-1)
 	{ }
 
@@ -308,10 +310,26 @@ public:
      */
     bool ciscoPayload(int type);
 
+    /**
+     * Reset the SSRC requesting generation/grabbing of a new one
+     */
+    inline void reset()
+	{ m_ssrc = 0; }
+
 protected:
+    /**
+     * Method called periodically to keep the data flowing
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when) = 0;
+
+    RTPSession* m_session;
     u_int32_t m_ssrc;
     u_int32_t m_ts;
     u_int16_t m_seq;
+    u_int32_t m_evTs;
+    int m_evNum;
+    int m_evVol;
 
 private:
     int m_dataType;
@@ -325,7 +343,15 @@ private:
  */
 class YRTP_API RTPReceiver : public RTPBaseIO
 {
+    friend class RTPSession;
 public:
+    /**
+     * Constructor
+     */
+    inline RTPReceiver(RTPSession* session = 0)
+	: RTPBaseIO(session)
+	{ }
+
     /**
      * Process one RTP payload packet.
      * Default behaviour is to call rtpRecvData() or rtpRecvEvent().
@@ -371,7 +397,16 @@ public:
      */
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
 
+protected:
+    /**
+     * Method called periodically to finish lingering events
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when);
+
 private:
+    void rtpData(const void* data, int len);
+    void rtcpData(const void* data, int len);
     bool decodeEvent(bool marker, unsigned int timestamp, const void* data, int len);
     bool decodeCisco(bool marker, unsigned int timestamp, const void* data, int len);
     void finishEvent(unsigned int timestamp);
@@ -384,6 +419,14 @@ private:
  */
 class YRTP_API RTPSender : public RTPBaseIO
 {
+public:
+    /**
+     * Constructor
+     */
+    inline RTPSender(RTPSession* session = 0)
+	: RTPBaseIO(session)
+	{ }
+
     /**
      * Send one RTP payload packet
      * @param marker Set to true if the marker bit must be set
@@ -427,6 +470,13 @@ class YRTP_API RTPSender : public RTPBaseIO
      */
     bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0);
 
+protected:
+    /**
+     * Method called periodically to send events and buffered data
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when);
+
 };
 
 /**
@@ -437,10 +487,10 @@ class YRTP_API RTPSession : public RTPProcessor
 {
 public:
     enum Direction {
-	FullStop,
-	RecvOnly,
-	SendOnly,
-	SendRecv
+	FullStop = 0,
+	RecvOnly = 1,
+	SendOnly = 2,
+	SendRecv = 3
     };
 
     /**
@@ -454,21 +504,82 @@ public:
     virtual ~RTPSession();
 
     /**
-     * This method is called to process a RTP packet
+     * This method is called to process a RTP packet.
      * @param data Pointer to raw RTP data
      * @param len Length of the data packet
      */
     virtual void rtpData(const void* data, int len);
 
     /**
-     * This method is called to process a RTCP packet
+     * This method is called to process a RTCP packet.
      * @param data Pointer to raw RTCP data
      * @param len Length of the data packet
      */
     virtual void rtcpData(const void* data, int len);
 
     /**
-     * Get the RTP/RTCP transport of data handled by this session
+     * Create a new RTP sender for this session.
+     * Override this method to create objects derived from RTPSender.
+     * @return Pointer to the new sender or NULL on failure
+     */
+    virtual RTPSender* createSender();
+
+    /**
+     * Create a new RTP receiver for this session.
+     * Override this method to create objects derived from RTPReceiver.
+     * @return Pointer to the new receiver or NULL on failure
+     */
+    virtual RTPReceiver* createReceiver();
+
+    /**
+     * Send one RTP payload packet
+     * @param marker Set to true if the marker bit must be set
+     * @param payload Payload number
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to send
+     * @param len Length of the data block
+     * @return True if data sending was attempted
+     */
+    inline bool rtpSend(bool marker, int payload, unsigned int timestamp,
+	const void* data, int len)
+	{ return m_send && m_send->rtpSend(marker,payload,timestamp,data,len); }
+
+    /**
+     * Send one RTP data packet
+     * @param marker Set to true if the marker bit must be set
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to send
+     * @param len Length of the data block
+     * @return True if data sending was attempted
+     */
+    inline bool rtpSendData(bool marker, unsigned int timestamp,
+	const void* data, int len)
+	{ return m_send && m_send->rtpSendData(marker,timestamp,data,len); }
+
+    /**
+     * Send one RTP event
+     * @param event Event code to send
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the packet data, zero to use current
+     * @return True if data sending was attempted
+     */
+    inline bool rtpSendEvent(int event, int duration, int volume = 0, unsigned int timestamp = 0)
+	{ return m_send && m_send->rtpSendEvent(event,duration,volume,timestamp); }
+
+    /**
+     * Send one RTP key event
+     * @param key Key to send
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the packet data, zero to use current
+     * @return True if data sending was attempted
+     */
+    inline bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0)
+	{ return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
+
+    /**
+     * Get the RTP/RTCP transport of data handled by this session.
      * @return A pointer to the RTPTransport of this session
      */
     inline RTPTransport* transport() const
@@ -479,6 +590,32 @@ public:
      * @param trans A pointer to the new RTPTransport for this session
      */
     void transport(RTPTransport* trans);
+
+    /**
+     * Get the RTP/RTCP sender of this session
+     * @return A pointer to the RTPSender of this session
+     */
+    inline RTPSender* sender() const
+	{ return m_send; }
+
+    /**
+     * Set the RTP/RTCP sender of this session
+     * @param send A pointer to the new RTPSender of this session or NULL
+     */
+    void sender(RTPSender* send);
+
+    /**
+     * Get the RTP/RTCP receiver of this session
+     * @return A pointer to the RTPReceiver of this session
+     */
+    inline RTPReceiver* receiver() const
+	{ return m_recv; }
+
+    /**
+     * Set the RTP/RTCP receiver of this session
+     * @param recv A pointer to the new RTPReceiver of this session or NULL
+     */
+    void receiver(RTPReceiver* recv);
 
     /**
      * Get the direction of this session
@@ -501,7 +638,7 @@ public:
      * @return True if address set, false if a failure occured
      */
     inline bool localAddr(SocketAddr& addr)
-	{ return m_transport ? m_transport->localAddr(addr) : false; }
+	{ return m_transport && m_transport->localAddr(addr); }
 
     /**
      * Set the remote network address of the RTP transport of this session
@@ -509,13 +646,7 @@ public:
      * @return True if address set, false if a failure occured
      */
     inline bool remoteAddr(SocketAddr& addr)
-	{ return m_transport ? m_transport->remoteAddr(addr) : false; }
-
-    /**
-     * Request a resync on the first packet arrived
-     */
-    inline void resync()
-	{ m_sync = true; }
+	{ return m_transport && m_transport->remoteAddr(addr); }
 
 protected:
     /**
@@ -527,17 +658,8 @@ protected:
 private:
     RTPTransport* m_transport;
     Direction m_direction;
-    bool m_sync;
-    u_int32_t m_rxSsrc;
-    u_int32_t m_rxTs;
-    u_int16_t m_rxSeq;
-    u_int32_t m_txSsrc;
-    u_int32_t m_txTs;
-    u_int16_t m_txSeq;
-    u_int32_t m_txNow;
-    unsigned int m_evTs;
-    int m_evNum;
-    int m_evVol;
+    RTPSender* m_send;
+    RTPReceiver* m_recv;
 };
 
 }

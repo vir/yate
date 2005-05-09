@@ -30,14 +30,17 @@ using namespace TelEngine;
 RTPGroup::RTPGroup(Priority prio)
     : Mutex(true), Thread("RTP Group",prio)
 {
+    XDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
 }
 
 RTPGroup::~RTPGroup()
 {
+    XDebug(DebugInfo,"RTPGroup::~RTPGroup() [%p]",this);
 }
 
 void RTPGroup::cleanup()
 {
+    XDebug(DebugInfo,"RTPGroup::cleanup() [%p]",this);
     lock();
     ObjList* l = &m_processors;
     for (;l;l = l->next()) {
@@ -70,6 +73,7 @@ void RTPGroup::run()
 
 void RTPGroup::join(RTPProcessor* proc)
 {
+    XDebug(DebugAll,"RTPGroup::join(%p) [%p]",proc,this);
     lock();
     m_processors.append(proc)->setDelete(false);
     startup();
@@ -78,6 +82,7 @@ void RTPGroup::join(RTPProcessor* proc)
 
 void RTPGroup::part(RTPProcessor* proc)
 {
+    XDebug(DebugAll,"RTPGroup::part(%p) [%p]",proc,this);
     lock();
     m_processors.remove(proc,false);
     unlock();
@@ -86,16 +91,19 @@ void RTPGroup::part(RTPProcessor* proc)
 RTPProcessor::RTPProcessor(RTPGroup* grp)
     : m_group(0)
 {
+    XDebug(DebugAll,"RTPProcessor::RTPProcessor(%p) [%p]",grp,this);
     group(grp);
 }
 
 RTPProcessor::~RTPProcessor()
 {
+    XDebug(DebugAll,"RTPProcessor::~RTPProcessor() [%p]",this);
     group(0);
 }
 
 void RTPProcessor::group(RTPGroup* newgrp)
 {
+    XDebug(DebugAll,"RTPProcessor::group(%p) old=%p [%p]",newgrp,m_group,this);
     if (newgrp == m_group)
 	return;
     if (m_group)
@@ -189,12 +197,39 @@ void RTPTransport::setMonitor(RTPProcessor* monitor)
 
 bool RTPTransport::localAddr(SocketAddr& addr)
 {
+    // check if sockets are already created and bound
+    if (m_rtpSock.valid())
+	return false;
     int p = addr.port();
     // make sure we don't have a port or it's an even one
-    if ((p & 1) == 0) {
-	m_localAddr = addr;
-	return true;
+    if ((p & 1))
+	return false;
+    if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
+	if (!p) {
+	    m_rtpSock.getSockName(addr);
+	    p = addr.port();
+	    if (p & 1) {
+		// allocated odd port - have to swap sockets
+		m_rtcpSock.attach(m_rtpSock.detach());
+		addr.port(p-1);
+		if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
+		    m_localAddr = addr;
+		    return true;
+		}
+		m_rtpSock.terminate();
+		m_rtcpSock.terminate();
+		return false;
+	    }
+	}
+	addr.port(p+1);
+	if (m_rtcpSock.create(addr.family(),SOCK_DGRAM) && m_rtcpSock.bind(addr)) {
+	    addr.port(p);
+	    m_localAddr = addr;
+	    return true;
+	}
     }
+    m_rtpSock.terminate();
+    m_rtcpSock.terminate();
     return false;
 }
 

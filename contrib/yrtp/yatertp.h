@@ -532,6 +532,25 @@ public:
     virtual RTPReceiver* createReceiver();
 
     /**
+     * Create a new RTP transport for this session.
+     * Override this method to create objects derived from RTPTransport.
+     * @return Pointer to the new transport or NULL on failure
+     */
+    virtual RTPTransport* createTransport();
+
+    /**
+     * Initialize the RTP session, attach a transport if there is none
+     * @return True if initialized, false on some failure
+     */
+    bool initTransport();
+
+    /**
+     * Initialize the RTP session, attach a group if none is present
+     * @return True if initialized, false on some failure
+     */
+    bool initGroup();
+
+    /**
      * Send one RTP payload packet
      * @param marker Set to true if the marker bit must be set
      * @param payload Payload number

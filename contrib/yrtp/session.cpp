@@ -109,6 +109,10 @@ void RTPReceiver::rtpData(const void* data, int len)
     rtpRecv(marker,typ,ts-m_ts,pc,len);
 }
 
+void RTPReceiver::rtcpData(const void* data, int len)
+{
+}
+
 bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
     if ((payload != dataPayload()) && (payload != eventPayload()))
@@ -263,10 +267,12 @@ void RTPSender::timerTick(const Time& when)
 RTPSession::RTPSession()
     : m_transport(0), m_direction(FullStop), m_send(0), m_recv(0)
 {
+    XDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
 
 RTPSession::~RTPSession()
 {
+    XDebug(DebugInfo,"RTPSession::~RTPSession() [%p]",this);
     direction(FullStop);
     sender(0);
     receiver(0);
@@ -312,8 +318,38 @@ RTPReceiver* RTPSession::createReceiver()
     return new RTPReceiver(this);
 }
 
+RTPTransport* RTPSession::createTransport()
+{
+    return new RTPTransport(group());
+}
+
+bool RTPSession::initGroup()
+{
+    if (m_group)
+	return true;
+    // try to pick the grop from the transport if it has one
+    if (m_transport)
+	group(m_transport->group());
+    if (!m_group)
+	group(new RTPGroup());
+    if (!m_group)
+	return false;
+    if (m_transport)
+	m_transport->group(m_group);
+    return true;
+}
+
+bool RTPSession::initTransport()
+{
+    if (m_transport)
+	return true;
+    transport(createTransport());
+    return (m_transport != 0);
+}
+
 void RTPSession::transport(RTPTransport* trans)
 {
+    XDebug(DebugInfo,"RTPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
     if (trans == m_transport)
 	return;
     if (m_transport)
@@ -327,6 +363,7 @@ void RTPSession::transport(RTPTransport* trans)
 
 void RTPSession::sender(RTPSender* send)
 {
+    XDebug(DebugInfo,"RTPSession::sender(%p) old=%p [%p]",send,m_send,this);
     if (send == m_send)
 	return;
     RTPSender* tmp = m_send;
@@ -337,6 +374,7 @@ void RTPSession::sender(RTPSender* send)
 
 void RTPSession::receiver(RTPReceiver* recv)
 {
+    XDebug(DebugInfo,"RTPSession::receiver(%p) old=%p [%p]",recv,m_recv,this);
     if (recv == m_recv)
 	return;
     RTPReceiver* tmp = m_recv;
@@ -347,6 +385,7 @@ void RTPSession::receiver(RTPReceiver* recv)
 
 bool RTPSession::direction(Direction dir)
 {
+    XDebug(DebugInfo,"RTPSession::direction(%d) old=%d [%p]",dir,m_direction,this);
     if ((dir != FullStop) && !m_transport)
 	return false;
     // make sure we have sender and/or receiver for our direction

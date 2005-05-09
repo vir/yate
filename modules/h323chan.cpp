@@ -269,7 +269,7 @@ public:
     YateGatekeeperServer *gkServer;
 };
 
-class YateH323Connection :  public H323Connection, public DataEndpoint
+class YateH323Connection :  public H323Connection, public CallEndpoint
 {
     PCLASSINFO(YateH323Connection, H323Connection)
 public:
@@ -455,7 +455,7 @@ bool H323MsgThread::route()
 	*m_msg = "call.execute";
 	m_msg->addParam("callto",m_msg->retValue());
 	m_msg->retValue().clear();
-	m_msg->userData(static_cast<DataEndpoint *>(conn));
+	m_msg->userData(static_cast<CallEndpoint *>(conn));
 	if (Engine::dispatch(m_msg)) {
 	    Debug(DebugInfo,"Routing H.323 call %s [%p] to '%s'",m_id.c_str(),conn,m_msg->getValue("callto"));
 	    conn->rtpExecuted(*m_msg);
@@ -711,7 +711,7 @@ bool YateH323EndPoint::Init(void)
 
 YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     H323Transport *transport, unsigned callReference, void *userdata)
-    : H323Connection(endpoint,callReference), DataEndpoint("h323"),
+    : H323Connection(endpoint,callReference), CallEndpoint("h323"),
       m_nativeRtp(false), m_passtrough(false), m_rtpPort(0), m_remotePort(0)
 {
     Debug(DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
@@ -730,8 +730,8 @@ YateH323Connection::YateH323Connection(YateH323EndPoint &endpoint,
     if (transport)
 	m->addParam("address",transport->GetRemoteAddress());
     Engine::enqueue(m);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(userdata);
-    if (dd && connect(dd))
+    CallEndpoint *ch = static_cast<CallEndpoint *>(userdata);
+    if (ch && connect(ch))
 	deref();
 }
 
@@ -1028,8 +1028,8 @@ H323Channel *YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	if (s_externalRtp) {
 	    Message m("chan.rtp");
 	    m.addParam("localip",externalIpAddress.AsString());
-	    m.userData(static_cast<DataEndpoint *>(this));
-	    // the cast above is required because of the multiple inheritance
+	    // the cast below is required because of the multiple inheritance
+	    m.userData(static_cast<CallEndpoint *>(this));
 	    if (sdir)
 		m.addParam("direction",sdir);
 	    if (Engine::dispatch(m)) {
@@ -1153,8 +1153,8 @@ BOOL YateH323Connection::StartExternalRTP(const char* remoteIP, WORD remotePort,
     if (!s_externalRtp)
 	return FALSE;
     Message m("chan.rtp");
-    m.userData(static_cast<DataEndpoint *>(this));
-    // the cast above is required because of the multiple inheritance
+    // the cast below is required because of the multiple inheritance
+    m.userData(static_cast<CallEndpoint *>(this));
 //    Debug(DebugAll,"userData=%p this=%p",m.userData(),this);
     if (sdir)
 	m.addParam("direction",sdir);

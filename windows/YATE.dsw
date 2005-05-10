@@ -75,9 +75,6 @@ Package=<4>
     Project_Dep_Name _cdrfile
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name _h323chan
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name _iaxchan
     End Project Dependency
     Begin Project Dependency
@@ -94,6 +91,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name _msgsniff
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _h323chan
     End Project Dependency
 }}}
 
@@ -324,6 +324,24 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_yrtpchan"=.\_yrtpchan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyrtp
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "_ysipchan"=.\_ysipchan.dsp - Package Owner=<4>
 
 Package=<5>
@@ -379,6 +397,21 @@ Package=<4>
 ###############################################################################
 
 Project: "libypri"=.\libypri.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libyrtp"=.\libyrtp.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

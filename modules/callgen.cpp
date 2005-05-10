@@ -189,7 +189,7 @@ bool GenConnection::oneCall(String* target)
     if (lifetime) {
 	int minlife = s_cfg.getIntValue("parameters","minlife");
 	if (minlife)
-	    lifetime -= ((lifetime - minlife) * (int64_t)::random()) / RAND_MAX;
+	    lifetime -= (int)(((lifetime - minlife) * (int64_t)::random()) / RAND_MAX);
     }
     GenConnection* conn = new GenConnection(lifetime,callto);
     m.addParam("id",conn->id());
@@ -289,7 +289,7 @@ void GenThread::run()
     Debug("CallGen",DebugInfo,"GenThread::run() [%p]",this);
     int tonext = 10000;
     while (!Engine::exiting()) {
-	::usleep(tonext);
+	Thread::usleep(tonext);
 	tonext = 10000;
 	Lock lock(s_mutex);
 	int maxcalls = s_cfg.getIntValue("parameters","maxcalls",5);
@@ -299,7 +299,7 @@ void GenThread::run()
 	tonext = s_cfg.getIntValue("parameters","avgdelay",1000);
 	lock.drop();
 	GenConnection::oneCall();
-	tonext = ((int64_t)::random() * tonext * 2000) / RAND_MAX;
+	tonext = (int)(((int64_t)::random() * tonext * 2000) / RAND_MAX);
     }
 }
 
@@ -307,7 +307,7 @@ void CleanThread::run()
 {
     Debug("CallGen",DebugInfo,"CleanThread::run() [%p]",this);
     while (!Engine::exiting()) {
-	::usleep(100000);
+	Thread::usleep(100000);
 	Lock lock(s_mutex);
 	Time t;
 	ObjList* l = &s_calls;

@@ -401,7 +401,7 @@ void WpData::run()
 	while (!m_span->m_chans[b])
 	    b++;
 	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
-	DDebug(&__plugin,"wpdata_chans",DebugInfo,"ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
+	DDebug(&__plugin,DebugInfo,"wpdata ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
     while (m_span && (m_fd >= 0)) {
 	Thread::check();

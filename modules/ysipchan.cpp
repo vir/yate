@@ -814,7 +814,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     if (m_rtpSession)
 	++m_rtpVersion;
     else
-	m_rtpVersion = m_rtpSession = Time::now() / 10000000000ULL;
+	m_rtpVersion = m_rtpSession = (int)(Time::now() / (u_int32_t)10000000000);
     String owner;
     owner << "yate " << m_rtpSession << " " << m_rtpVersion << " IN IP4 " << addr;
     if (!port) {

@@ -652,7 +652,7 @@ bool DTMFHandler::received(Message &msg)
     if (wrap && wrap->rtp()) {
 	Debug(DebugInfo,"RTP DTMF '%s' targetid '%s'",text.c_str(),targetid.c_str());
 	for (unsigned int i=0;i<text.length();i++)
-	    wrap->sendDTMF(text[i]);
+	    wrap->sendDTMF(text.at(i));
 	return true;
     }
     return false;

@@ -162,6 +162,7 @@ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* d
 
 bool RTPReceiver::decodeCisco(bool marker, unsigned int timestamp, const void* data, int len)
 {
+    return false;
 }
 
 void RTPReceiver::finishEvent(unsigned int timestamp)

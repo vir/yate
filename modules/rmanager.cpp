@@ -35,13 +35,16 @@ using namespace TelEngine;
 
 static const char s_helpmsg[] =
 "Available commands:\n"
-"  debug [level|on|off]\n"
-"  machine [on|off]\n"
+"  quit\n"
+"  help [command]\n"
 "  status [module]\n"
+"  machine [on|off]\n"
+"  auth password\n"
+"Authenticated commands:\n"
+"  debug [level|on|off]\n"
 "  drop {chan|*|all}\n"
 "  call chan target\n"
 "  reload\n"
-"  quit\n"
 "  stop [exitcode]\n";
 
 static Configuration s_cfg;
@@ -77,6 +80,7 @@ public:
 	{ return m_address; }
     static Connection *checkCreate(Socket* sock, const char* addr = 0);
 private:
+    bool m_auth;
     bool m_debug;
     bool m_machine;
     Socket* m_socket;
@@ -145,7 +149,7 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
-      m_debug(false), m_machine(false), m_socket(sock), m_address(addr)
+      m_auth(false), m_debug(false), m_machine(false), m_socket(sock), m_address(addr)
 {
     connectionlist.append(this);
 }
@@ -174,6 +178,7 @@ void Connection::run()
 	Debug("RManager",DebugWarn, "Failed to set tcp socket to TCP_NODELAY mode: %s\n", strerror(m_socket->error()));
 
     Output("Remote connection from %s",m_address.c_str());
+    m_auth = !s_cfg.getValue("general","password");
     const char *hdr = s_cfg.getValue("general","header","YATE (http://YATE.null.ro) ready.");
     if (hdr) {
 	writeStr(hdr);
@@ -255,13 +260,60 @@ bool Connection::processLine(const char *line)
 	str = "%%+status" + str + "\n";
 	str << m.retValue() << "%%-status\n";
 	writeStr(str);
+	return false;
+    }
+    else if (str.startSkip("machine"))
+    {
+	str >> m_machine;
+	str = "Machine mode: ";
+	str += (m_machine ? "on\n" : "off\n");
+	writeStr(str);
+	return false;
     }
     else if (str.startSkip("quit"))
     {
 	writeStr(m_machine ? "%%=quit\n" : "Goodbye!\n");
 	return true;
     }
-    else if (str.startSkip("drop"))
+    else if (str.startSkip("help") || str.startSkip("?"))
+    {
+	Message m("engine.help");
+	if (!str.null())
+	{
+	    m.addParam("line",str);
+	    if (Engine::dispatch(m))
+		writeStr(m.retValue());
+	    else
+		writeStr("No help for '"+str+"'\n");
+	}
+	else
+	{
+	    m.retValue() = s_helpmsg;
+	    Engine::dispatch(m);
+	    writeStr(m.retValue());
+	}
+	return false;
+    }
+    else if (str.startSkip("auth"))
+    {
+	if (m_auth) {
+	    writeStr(m_machine ? "%%=auth:success\n" : "You are already authenticated!\n");
+	    return false;
+	}
+	if (str == s_cfg.getValue("general","password")) {
+	    Output("Authenticated connection %s",m_address.c_str());
+	    m_auth = true;
+	    writeStr(m_machine ? "%%=auth:success\n" : "Authenticated successfully!\n");
+	}
+	else
+	    writeStr(m_machine ? "%%=auth:fail=badpass\n" : "Bad authentication password!\n");
+	return false;
+    }
+    if (!m_auth) {
+	writeStr(m_machine ? "%%=*:fail=noauth\n" : "Not authenticated!\n");
+	return false;
+    }
+    if (str.startSkip("drop"))
     {
 	if (str.null()) {
 	    writeStr(m_machine ? "%%=drop:fail=noarg\n" : "You must specify what connection to drop!\n");
@@ -342,13 +394,6 @@ bool Connection::processLine(const char *line)
 	}
 	writeStr(str);
     }
-    else if (str.startSkip("machine"))
-    {
-	str >> m_machine;
-	str = "Machine mode: ";
-	str += (m_machine ? "on\n" : "off\n");
-	writeStr(str);
-    }
     else if (str.startSkip("reload"))
     {
 	writeStr(m_machine ? "%%=reload\n" : "Reinitializing...\n");
@@ -360,24 +405,6 @@ bool Connection::processLine(const char *line)
 	str >> code;
 	writeStr(m_machine ? "%%=shutdown\n" : "Engine shutting down - bye!\n");
 	Engine::halt(code);
-    }
-    else if (str.startSkip("help") || str.startSkip("?"))
-    {
-	Message m("engine.help");
-	if (!str.null())
-	{
-	    m.addParam("line",str);
-	    if (Engine::dispatch(m))
-		writeStr(m.retValue());
-	    else
-		writeStr("No help for '"+str+"'\n");
-	}
-	else
-	{
-	    m.retValue() = s_helpmsg;
-	    Engine::dispatch(m);
-	    writeStr(m.retValue());
-	}
     }
     else
     {

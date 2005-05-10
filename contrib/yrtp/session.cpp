@@ -46,10 +46,10 @@ bool RTPBaseIO::eventPayload(int type)
     return false;
 }
 
-bool RTPBaseIO::ciscoPayload(int type)
+bool RTPBaseIO::silencePayload(int type)
 {
     if ((type >= -1) && (type <= 127)) {
-	m_ciscoType = type;
+	m_silenceType = type;
 	return true;
     }
     return false;
@@ -115,12 +115,12 @@ void RTPReceiver::rtcpData(const void* data, int len)
 
 bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
-    if ((payload != dataPayload()) && (payload != eventPayload()))
+    if ((payload != dataPayload()) && (payload != eventPayload()) && (payload != silencePayload()))
 	rtpNewPayload(payload,timestamp);
     if (payload == eventPayload())
 	return decodeEvent(marker,timestamp,data,len);
-    if (payload == ciscoPayload())
-	return decodeCisco(marker,timestamp,data,len);
+    if (payload == silencePayload())
+	return decodeSilence(marker,timestamp,data,len);
     finishEvent(timestamp);
     if (payload == dataPayload())
 	return rtpRecvData(marker,timestamp,data,len);
@@ -129,16 +129,18 @@ bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, cons
 
 bool RTPReceiver::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
 {
-    return false;
+    return m_session && m_session->rtpRecvData(marker,timestamp,data,len);
 }
 
 bool RTPReceiver::rtpRecvEvent(int event, char key, int duration, int volume, unsigned int timestamp)
 {
-    return false;
+    return m_session && m_session->rtpRecvEvent(event,key,duration,volume,timestamp);
 }
 
 void RTPReceiver::rtpNewPayload(int payload, unsigned int timestamp)
 {
+    if (m_session)
+	m_session->rtpNewPayload(payload,timestamp);
 }
 
 bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
@@ -160,7 +162,7 @@ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* d
     m_evVol = vol;
 }
 
-bool RTPReceiver::decodeCisco(bool marker, unsigned int timestamp, const void* data, int len)
+bool RTPReceiver::decodeSilence(bool marker, unsigned int timestamp, const void* data, int len)
 {
     return false;
 }
@@ -227,18 +229,23 @@ bool RTPSender::rtpSendData(bool marker, unsigned int timestamp, const void* dat
 {
     if (dataPayload() < 0)
 	return false;
+    if (sendEventData(timestamp))
+	return true;
     return rtpSend(marker,dataPayload(),timestamp,data,len);
 }
 
 bool RTPSender::rtpSendEvent(int event, int duration, int volume, unsigned int timestamp)
 {
     // send as RFC2833 if we have the payload type set
-    if (eventPayload() >= 0) {
-    }
-    // else try FRF.11 Annex A (Cisco's way) if it's set up
-    else if ((ciscoPayload() >= 0) && (event <= 16)) {
-    }
-    return false;
+    if (eventPayload() < 0)
+	return false;
+    if ((duration <= 50) || (duration > 10000))
+	duration = 4000;
+    m_evTs = timestamp;
+    m_evNum = event;
+    m_evVol = volume;
+    m_evTime = duration;
+    return sendEventData(timestamp);
 }
 
 bool RTPSender::rtpSendKey(char key, int duration, int volume, unsigned int timestamp)
@@ -259,6 +266,29 @@ bool RTPSender::rtpSendKey(char key, int duration, int volume, unsigned int time
     else
 	return false;
     return rtpSendEvent(event,duration,volume,timestamp);
+}
+
+bool RTPSender::sendEventData(unsigned int timestamp)
+{
+    if (m_evTs) {
+	if (eventPayload() < 0) {
+	    m_evTs = 0;
+	    return false;
+	}
+	int duration = timestamp - m_evTs;
+	char buf[4];
+	buf[0] = m_evNum;
+	buf[1] = m_evVol & 0x7f;
+	buf[2] = duration >> 8;
+	buf[3] = duration & 0xff;
+	timestamp = m_evTs;
+	if (duration >= m_evTime) {
+	    buf[1] |= 0x80;
+	    m_evTs = 0;
+	}
+	return rtpSend(!duration,eventPayload(),timestamp,buf,sizeof(buf));
+    }
+    return false;
 }
 
 void RTPSender::timerTick(const Time& when)
@@ -310,6 +340,26 @@ void RTPSession::rtcpData(const void* data, int len)
 	m_recv->rtcpData(data,len);
 }
 
+bool RTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
+{
+    XDebug(DebugAll,"RTPSession::rtpRecv(%s,%u,%p,%d) [%p]",
+	String::boolText(marker),timestamp,data,len,this);
+    return false;
+}
+
+bool RTPSession::rtpRecvEvent(int event, char key, int duration, int volume, unsigned int timestamp)
+{
+    XDebug(DebugAll,"RTPSession::rtpRecvEvent(%d,%02x,%d,%d,%u) [%p]",
+	event,key,duration,volume,timestamp,this);
+    return false;
+}
+
+void RTPSession::rtpNewPayload(int payload, unsigned int timestamp)
+{
+    XDebug(DebugAll,"RTPSession::rtpNewPayload(%d,%u) [%p]",
+	payload,timestamp,this);
+}
+
 RTPSender* RTPSession::createSender()
 {
     return new RTPSender(this);
@@ -351,7 +401,7 @@ bool RTPSession::initTransport()
 
 void RTPSession::transport(RTPTransport* trans)
 {
-    XDebug(DebugInfo,"RTPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
+    DDebug(DebugInfo,"RTPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
     if (trans == m_transport)
 	return;
     if (m_transport)
@@ -365,7 +415,7 @@ void RTPSession::transport(RTPTransport* trans)
 
 void RTPSession::sender(RTPSender* send)
 {
-    XDebug(DebugInfo,"RTPSession::sender(%p) old=%p [%p]",send,m_send,this);
+    DDebug(DebugInfo,"RTPSession::sender(%p) old=%p [%p]",send,m_send,this);
     if (send == m_send)
 	return;
     RTPSender* tmp = m_send;
@@ -376,7 +426,7 @@ void RTPSession::sender(RTPSender* send)
 
 void RTPSession::receiver(RTPReceiver* recv)
 {
-    XDebug(DebugInfo,"RTPSession::receiver(%p) old=%p [%p]",recv,m_recv,this);
+    DDebug(DebugInfo,"RTPSession::receiver(%p) old=%p [%p]",recv,m_recv,this);
     if (recv == m_recv)
 	return;
     RTPReceiver* tmp = m_recv;
@@ -397,6 +447,36 @@ bool RTPSession::direction(Direction dir)
 	sender(createSender());
     m_direction = dir;
     return true;
+}
+
+bool RTPSession::dataPayload(int type)
+{
+    if (m_recv || m_send) {
+	DDebug(DebugInfo,"RTPSession::dataPayload(%d) [%p]",type,this);
+	bool ok = (!m_recv) || m_recv->dataPayload(type);
+	return ((!m_send) || m_send->dataPayload(type)) && ok;
+    }
+    return false;
+}
+
+bool RTPSession::eventPayload(int type)
+{
+    if (m_recv || m_send) {
+	DDebug(DebugInfo,"RTPSession::eventPayload(%d) [%p]",type,this);
+	bool ok = (!m_recv) || m_recv->eventPayload(type);
+	return ((!m_send) || m_send->eventPayload(type)) && ok;
+    }
+    return false;
+}
+
+bool RTPSession::silencePayload(int type)
+{
+    if (m_recv || m_send) {
+	DDebug(DebugInfo,"RTPSession::silencePayload(%d) [%p]",type,this);
+	bool ok = (!m_recv) || m_recv->silencePayload(type);
+	return ((!m_send) || m_send->silencePayload(type)) && ok;
+    }
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

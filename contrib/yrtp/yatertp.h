@@ -264,7 +264,7 @@ public:
      */
     inline RTPBaseIO(RTPSession* session = 0)
 	: m_session(session), m_ssrc(0), m_ts(0), m_seq(0),
-	  m_dataType(-1), m_eventType(-1), m_ciscoType(-1)
+	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
 
     /**
@@ -296,19 +296,19 @@ public:
     bool eventPayload(int type);
 
     /**
-     * Get the payload type for Cisco event packets
+     * Get the payload type for Silence event packets
      * @return Payload type, -1 if not set
      */
-    inline int ciscoPayload() const
-	{ return m_ciscoType; }
+    inline int silencePayload() const
+	{ return m_silenceType; }
 
     /**
-     * Set the payload type for Cisco event packets.
-     * Thanks, Cisco, for a new and incompatible way of sending events.
+     * Set the payload type for Silence event packets.
+     * Thanks, Silence, for a new and incompatible way of sending events.
      * @param type Payload type, -1 to disable
      * @return True if changed, false if invalid payload type
      */
-    bool ciscoPayload(int type);
+    bool silencePayload(int type);
 
     /**
      * Reset the SSRC requesting generation/grabbing of a new one
@@ -334,7 +334,7 @@ protected:
 private:
     int m_dataType;
     int m_eventType;
-    int m_ciscoType;
+    int m_silenceType;
 };
 
 /**
@@ -408,7 +408,7 @@ private:
     void rtpData(const void* data, int len);
     void rtcpData(const void* data, int len);
     bool decodeEvent(bool marker, unsigned int timestamp, const void* data, int len);
-    bool decodeCisco(bool marker, unsigned int timestamp, const void* data, int len);
+    bool decodeSilence(bool marker, unsigned int timestamp, const void* data, int len);
     void finishEvent(unsigned int timestamp);
     bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
 };
@@ -424,7 +424,7 @@ public:
      * Constructor
      */
     inline RTPSender(RTPSession* session = 0)
-	: RTPBaseIO(session)
+	: RTPBaseIO(session), m_evTime(0)
 	{ }
 
     /**
@@ -477,6 +477,9 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
+private:
+    int m_evTime;
+    bool sendEventData(unsigned int timestamp);
 };
 
 /**
@@ -516,6 +519,38 @@ public:
      * @param len Length of the data packet
      */
     virtual void rtcpData(const void* data, int len);
+
+    /**
+     * Process one RTP data packet
+     * @param marker Set to true if the marker bit is set
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to process
+     * @param len Length of the data block in bytes
+     * @return True if data was handled
+     */
+    virtual bool rtpRecvData(bool marker, unsigned int timestamp,
+	const void* data, int len);
+
+    /**
+     * Process one RTP event
+     * @param event Received event code
+     * @param key Received key (for events 0-16) or zero
+     * @param duration Duration of the event as number of samples
+     * @param volume Attenuation of the tone, zero for don't care
+     * @param timestamp Sampling instant of the initial packet data
+     * @return True if data was handled
+     */
+    virtual bool rtpRecvEvent(int event, char key, int duration,
+	int volume, unsigned int timestamp);
+
+    /**
+     * Method called for unknown payload types just before attempting
+     *  to call rtpRecvData(). This is a good opportunity to change the
+     *  payload type and continue.
+     * @param payload Payload number
+     * @param timestamp Sampling instant of the unexpected packet data
+     */
+    virtual void rtpNewPayload(int payload, unsigned int timestamp);
 
     /**
      * Create a new RTP sender for this session.
@@ -650,6 +685,27 @@ public:
      * @return True if direction was set, false if a failure occured
      */
     bool direction(Direction dir);
+
+    /**
+     * Set the data payload type for both receiver and sender.
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool dataPayload(int type);
+
+    /**
+     * Set the event payload type for both receiver and sender.
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool eventPayload(int type);
+
+    /**
+     * Set the silence payload type for both receiver and sender.
+     * @param type Payload type, -1 to disable
+     * @return True if changed, false if invalid payload type
+     */
+    bool silencePayload(int type);
 
     /**
      * Set the local network address of the RTP transport of this session

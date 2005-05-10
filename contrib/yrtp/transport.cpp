@@ -67,7 +67,7 @@ void RTPGroup::run()
 	    }
 	}
 	unlock();
-	yield(true);
+	Thread::msleep(1,true);
     }
     XDebug(DebugInfo,"RTPGroup::run() ran out of processors [%p]",this);
 }

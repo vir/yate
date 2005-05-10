@@ -69,6 +69,7 @@ void RTPGroup::run()
 	unlock();
 	yield(true);
     }
+    XDebug(DebugInfo,"RTPGroup::run() ran out of processors [%p]",this);
 }
 
 void RTPGroup::join(RTPProcessor* proc)
@@ -122,6 +123,7 @@ RTPTransport::RTPTransport(RTPGroup* grp)
 RTPTransport::~RTPTransport()
 {
     setProcessor();
+    group(0);
 }
 
 void RTPTransport::timerTick(const Time& when)

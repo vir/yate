@@ -275,6 +275,7 @@ RTPSession::~RTPSession()
 {
     XDebug(DebugInfo,"RTPSession::~RTPSession() [%p]",this);
     direction(FullStop);
+    group(0);
     sender(0);
     receiver(0);
     if (m_transport) {

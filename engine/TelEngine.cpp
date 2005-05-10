@@ -323,7 +323,6 @@ void Debugger::enableOutput(bool enable)
 u_int64_t Time::now()
 {
 #ifdef _WINDOWS
-
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
     // Convert from FILETIME (100 nsec units since January 1, 1601)
@@ -331,12 +330,24 @@ u_int64_t Time::now()
     u_int64_t rval = ((ULARGE_INTEGER*)&ft)->QuadPart / 10;
     rval -= 11644473600000000;
     return rval;
-
 #else
-
     struct timeval tv;
     return ::gettimeofday(&tv,0) ? 0 : fromTimeval(&tv);
+#endif
+}
 
+u_int64_t Time::msecNow()
+{
+    return (u_int64_t)(now() / 1000);
+}
+
+u_int32_t Time::secNow()
+{
+#ifdef _WINDOWS
+    return (u_int32_t)(now() / 1000000);
+#else
+    struct timeval tv;
+    return ::gettimeofday(&tv,0) ? 0 : tv.tv_sec;
 #endif
 }
 

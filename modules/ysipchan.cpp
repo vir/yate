@@ -64,7 +64,9 @@ static TokenDict dict_errors[] = {
     { "incomplete", 484 },
     { "noroute", 404 },
     { "noconn", 503 },
+    { "nomedia", 415 },
     { "busy", 486 },
+    { "rejected", 406 },
     { "congestion", 480 },
     { "failure", 500 },
     {  0,   0 },
@@ -814,7 +816,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     if (m_rtpSession)
 	++m_rtpVersion;
     else
-	m_rtpVersion = m_rtpSession = (int)(Time::now() / (u_int32_t)10000000000);
+	m_rtpVersion = m_rtpSession = Time::secNow();
     String owner;
     owner << "yate " << m_rtpSession << " " << m_rtpVersion << " IN IP4 " << addr;
     if (!port) {

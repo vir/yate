@@ -280,12 +280,16 @@ bool Channel::startRouter(Message* msg)
 bool Channel::msgRinging(Message& msg)
 {
     status("ringing");
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
     return true;
 }
 
 bool Channel::msgAnswered(Message& msg)
 {
     status("answered");
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
     return true;
 }
 
@@ -314,6 +318,8 @@ bool Channel::msgTransfer(Message& msg)
 void Channel::callRouted(Message& msg)
 {
     status("routed");
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
 }
 
 void Channel::callAccept(Message& msg)
@@ -322,6 +328,8 @@ void Channel::callAccept(Message& msg)
     int tout = msg.getIntValue("timeout", m_driver ? m_driver->timeout() : 0);
     if (tout > 0)
 	timeout(Time::now() + tout*(u_int64_t)1000);
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
     m_targetid = msg.getValue("targetid");
     if (m_targetid.null()) {
 	Debug(DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);

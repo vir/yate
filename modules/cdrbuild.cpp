@@ -58,11 +58,9 @@ public:
 class CdrBuilder : public String
 {
 public:
-    CdrBuilder(const char *name, const char *caller, const char *called);
+    CdrBuilder(const char *name);
     virtual ~CdrBuilder();
-    void update(int type, u_int64_t val);
-    inline void setStatus(const char *status)
-	{ m_status = status; }
+    void update(const Message& msg, int type, u_int64_t val);
     String getStatus() const;
     static CdrBuilder *find(String &id);
 private:
@@ -75,6 +73,7 @@ private:
 	m_ringing,
 	m_answer,
 	m_hangup;
+    String m_billid;
     String m_caller;
     String m_called;
     String m_status;
@@ -83,8 +82,8 @@ private:
 
 static ObjList cdrs;
 
-CdrBuilder::CdrBuilder(const char *name, const char *caller, const char *called)
-    : String(name), m_caller(caller), m_called(called), m_status("unknown"), m_first(true)
+CdrBuilder::CdrBuilder(const char *name)
+    : String(name), m_status("unknown"), m_first(true)
 {
     m_start = m_call = m_ringing = m_answer = m_hangup = 0;
 }
@@ -120,6 +119,7 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("time",String(sec(t_start)));
     m->addParam("chan",c_str());
     m->addParam("direction",dir);
+    m->addParam("billid",m_billid);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
     m->addParam("duration",String(sec(t_hangup - t_start)));
@@ -136,8 +136,21 @@ String CdrBuilder::getStatus() const
     return s;
 }
 
-void CdrBuilder::update(int type, u_int64_t val)
+void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 {
+    const char* p = msg.getValue("billid");
+    if (p)
+	m_billid = p;
+    p = msg.getValue("caller");
+    if (p)
+	m_caller = p;
+    p = msg.getValue("called");
+    if (p)
+	m_called = p;
+    p = msg.getValue("status");
+    if (p)
+	m_status = p;
+
     switch (type) {
 	case CdrStart:
 	    m_start = val;
@@ -181,7 +194,7 @@ bool CdrHandler::received(Message &msg)
     }
     String id(msg.getValue("id"));
     if (id.null()) {
-	id = msg.getValue("driver");
+	id = msg.getValue("module");
 	id += "/";
 	id += msg.getValue("span");
 	id += "/";
@@ -191,15 +204,11 @@ bool CdrHandler::received(Message &msg)
     }
     CdrBuilder *b = CdrBuilder::find(id);
     if (!b && ((m_type == CdrStart) || (m_type == CdrCall))) {
-	b = new CdrBuilder(id,msg.getValue("caller"),msg.getValue("called"));
+	b = new CdrBuilder(id);
 	cdrs.append(b);
     }
-    if (b) {
-	const char *s = msg.getValue("status");
-	if (s)
-	    b->setStatus(s);
-	b->update(m_type,msg.msgTime().usec());
-    }
+    if (b)
+	b->update(msg,m_type,msg.msgTime().usec());
     else
 	Debug("CdrBuilder",DebugGoOn,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());

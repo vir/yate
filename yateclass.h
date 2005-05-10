@@ -1655,6 +1655,18 @@ public:
      */
     static u_int64_t now();
 
+    /**
+     * Get the current system time in milliseconds
+     * @return Time in milliseconds since the Epoch
+     */
+    static u_int64_t msecNow();
+
+    /**
+     * Get the current system time in seconds
+     * @return Time in seconds since the Epoch
+     */
+    static u_int32_t secNow();
+
 private:
     u_int64_t m_time;
 };

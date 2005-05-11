@@ -264,6 +264,7 @@ public:
      */
     inline RTPBaseIO(RTPSession* session = 0)
 	: m_session(session), m_ssrc(0), m_ts(0), m_seq(0),
+	  m_evTs(0), m_evNum(-1), m_evVol(-1),
 	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
 

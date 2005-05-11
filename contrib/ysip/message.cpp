@@ -508,13 +508,13 @@ const NamedString* SIPMessage::getParam(const char* name, const char* param) con
 const String& SIPMessage::getHeaderValue(const char* name) const
 {
     const SIPHeaderLine* hl = getHeader(name);
-    return hl ? *hl : String::empty();
+    return hl ? *static_cast<const String*>(hl) : String::empty();
 }
 
 const String& SIPMessage::getParamValue(const char* name, const char* param) const
 {
     const NamedString* ns = getParam(name,param);
-    return ns ? *ns : String::empty();
+    return ns ? *static_cast<const String*>(ns) : String::empty();
 }
 
 const String& SIPMessage::getHeaders() const
@@ -648,7 +648,9 @@ SIPDialog::SIPDialog(const SIPMessage& message)
 
 SIPDialog& SIPDialog::operator=(const SIPMessage& message)
 {
-    String::operator=(message.getHeaderValue("Call-ID"));
+    const char* cid = message.getHeaderValue("Call-ID");
+    if (cid)
+	String::operator=(cid);
     Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
     const SIPHeaderLine* hl = message.getHeader(local ? "From" : "To");

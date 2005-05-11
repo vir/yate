@@ -32,6 +32,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name libiax
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyrtp
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -93,7 +96,10 @@ Package=<4>
     Project_Dep_Name _msgsniff
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name _h323chan
+    Project_Dep_Name _wpchan
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _yrtpchan
     End Project Dependency
 }}}
 
@@ -361,18 +367,6 @@ Package=<4>
 ###############################################################################
 
 Project: "libiax"=.\libiax.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-}}}
-
-###############################################################################
-
-Project: "libortp"=.\libortp.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

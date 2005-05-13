@@ -337,8 +337,6 @@ void ConsDisconnector::run()
 	m_chan->disconnect();
 }
 
-Mutex mutex;
-
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
     : Channel(__plugin)
 {

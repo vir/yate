@@ -205,7 +205,7 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
 static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
 {
 #ifdef _WINDOWS
-    return true;
+    return (::WaitForSingleObject(fd,samp/8) == WAIT_OBJECT_0);
 #else
     fd_set rdfds;
     fd_set errfds;

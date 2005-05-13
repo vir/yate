@@ -101,6 +101,12 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _yrtpchan
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _conference
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _dsoundchan
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -175,6 +181,36 @@ Package=<4>
 ###############################################################################
 
 Project: "_cdrfile"=.\_cdrfile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_conference"=.\_conference.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_dsoundchan"=.\_dsoundchan.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

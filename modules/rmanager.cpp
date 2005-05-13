@@ -113,16 +113,15 @@ void RManagerThread::run()
     for (;;)
     {
 	Thread::msleep(10,true);
-        struct sockaddr_in sin;
-	int sinlen = sizeof(sin);
-	Socket* as = s_sock.accept((struct sockaddr *)&sin, (socklen_t *)&sinlen);
+	SocketAddr sa;
+	Socket* as = s_sock.accept(sa);
 	if (!as) {
 	    if (!s_sock.canRetry())
 		Debug("RManager",DebugWarn, "Accept error: %s\n", strerror(s_sock.error()));
 	    continue;
 	} else {
-	    String addr(inet_ntoa(sin.sin_addr));
-	    addr << ":" << ntohs(sin.sin_port);
+	    String addr(sa.host());
+	    addr << ":" << sa.port();
 	    if (!Connection::checkCreate(as,addr))
 		Debug("RManager",DebugWarn,"Connection rejected for %s",addr.c_str());
 	}
@@ -504,13 +503,11 @@ void RManager::initialize()
     const int reuseFlag = 1;
     s_sock.setOption(SOL_SOCKET,SO_REUSEADDR,&reuseFlag,sizeof(reuseFlag));
 
-    struct sockaddr_in bindaddr;
-    bindaddr.sin_family = AF_INET;
-    bindaddr.sin_addr.s_addr = inet_addr(host);
-    bindaddr.sin_port = htons(port);
-
-    if (!s_sock.bind((struct sockaddr *)&bindaddr, sizeof(bindaddr))) {
-	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",inet_ntoa(bindaddr.sin_addr),ntohs(bindaddr.sin_port),strerror(s_sock.error()));
+    SocketAddr sa(AF_INET);
+    sa.host(host);
+    sa.port(port);
+    if (!s_sock.bind(sa)) {
+	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",sa.host().c_str(),sa.port(),strerror(s_sock.error()));
 	s_sock.terminate();
 	return;
     }

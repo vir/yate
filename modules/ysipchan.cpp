@@ -128,11 +128,11 @@ class YateSIPConnection : public Channel
 {
 public:
     enum {
-	Incoming,
-	Outgoing,
-	Ringing,
-	Established,
-	Cleared,
+	Incoming = 0,
+	Outgoing = 1,
+	Ringing = 2,
+	Established = 3,
+	Cleared = 4,
     };
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
@@ -688,6 +688,7 @@ void YateSIPConnection::hangup()
 	    }
 	    break;
 	case Outgoing:
+	case Ringing:
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
 		plugin.ep()->buildParty(m,m_host,m_port);

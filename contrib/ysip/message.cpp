@@ -485,6 +485,20 @@ const SIPHeaderLine* SIPMessage::getLastHeader(const char* name) const
     return res;
 }
 
+void SIPMessage::clearHeaders(const char* name)
+{
+    if (!(name && *name))
+	return;
+    ObjList* l = &header;
+    while (l) {
+	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	if (t && (t->name() &= name))
+	    l->remove();
+	else
+	    l = l->next();
+    }
+}
+
 int SIPMessage::countHeaders(const char* name) const
 {
     if (!(name && *name))

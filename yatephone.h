@@ -1106,8 +1106,9 @@ public:
     /**
      * Notification on progress of incoming call
      * @param msg Notification call.route message just after being dispatched
+     * @return True to continue with the call, false to abort the route
      */
-    virtual void callRouted(Message& msg);
+    virtual bool callRouted(Message& msg);
 
     /**
      * Notification on success of incoming call

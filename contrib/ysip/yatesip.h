@@ -348,15 +348,30 @@ public:
 
     /**
      * Append a new header line constructed from name and content
+     * @param name Name of the header to add
+     * @param value Content of the new header line
      */
     inline void addHeader(const char* name, const char* value = 0)
 	{ header.append(new SIPHeaderLine(name,value)); }
 
     /**
      * Append an already constructed header line
+     * @param line Header line to add
      */
     inline void addHeader(SIPHeaderLine* line)
 	{ header.append(line); }
+
+    /**
+     * Clear all header lines that match a name
+     * @param name Name of the header to clear
+     */
+    void clearHeaders(const char* name);
+
+    /**
+     * Set a header line constructed from name and content
+     */
+    inline void setHeader(const char* name, const char* value = 0)
+	{ clearHeaders(name); addHeader(name,value); }
 
     /**
      * Creates a binary buffer from a SIPMessage.

@@ -142,7 +142,7 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
-    virtual void callRouted(Message& msg);
+    virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callReject(const char* error, const char* reason);
     void startRouter();
@@ -1034,11 +1034,23 @@ bool YateSIPConnection::msgText(Message& msg, const char* text)
     return false;
 }
 
-void YateSIPConnection::callRouted(Message& msg)
+bool YateSIPConnection::callRouted(Message& msg)
 {
     Channel::callRouted(msg);
-    if (m_tr && (m_tr->getState() == SIPTransaction::Process))
+    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+	String s(msg.retValue());
+	if (s.startSkip("redirect/",false) && s) {
+	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
+	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 302);
+	    m->addHeader("Contact",s);
+	    m_tr->setResponse(m);
+	    m->deref();
+	    m_byebye = false;
+	    return false;
+	}
 	m_tr->setResponse(183);
+    }
+    return true;
 }
 
 void YateSIPConnection::callAccept(Message& msg)

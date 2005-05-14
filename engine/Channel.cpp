@@ -315,11 +315,12 @@ bool Channel::msgTransfer(Message& msg)
     return false;
 }
 
-void Channel::callRouted(Message& msg)
+bool Channel::callRouted(Message& msg)
 {
     status("routed");
     if (m_billid.null())
 	m_billid = msg.getValue("billid");
+    return true;
 }
 
 void Channel::callAccept(Message& msg)
@@ -835,18 +836,19 @@ bool Router::route()
     }
 
     if (ok) {
-	chan->callRouted(*m_msg);
-	*m_msg = "call.execute";
-	m_msg->setParam("callto",m_msg->retValue());
-	m_msg->clearParam("error");
-	m_msg->clearParam("reason");
-	m_msg->retValue().clear();
-	ok = Engine::dispatch(m_msg);
-	if (ok)
-	    chan->callAccept(*m_msg);
-	else
-	chan->callReject(m_msg->getValue("error","noconn"),
-	    m_msg->getValue("reason","Could not connected to target"));
+	if (chan->callRouted(*m_msg)) {
+	    *m_msg = "call.execute";
+	    m_msg->setParam("callto",m_msg->retValue());
+	    m_msg->clearParam("error");
+	    m_msg->clearParam("reason");
+	    m_msg->retValue().clear();
+	    ok = Engine::dispatch(m_msg);
+	    if (ok)
+		chan->callAccept(*m_msg);
+	    else
+		chan->callReject(m_msg->getValue("error","noconn"),
+		    m_msg->getValue("reason","Could not connected to target"));
+	}
     }
     else
 	chan->callReject(m_msg->getValue("error","noroute"),

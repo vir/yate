@@ -426,9 +426,9 @@ void YateSIPEndPoint::run()
     /* Watch stdin (fd 0) to see when it has input. */
     for (;;)
     {
-	/* Wait up to 20000 microseconds. */
+	/* Wait up to 5000 microseconds. */
 	tv.tv_sec = 0;
-	tv.tv_usec = 20000;
+	tv.tv_usec = 5000;
 	bool ok = false;
 	m_sock->select(&ok,0,0,&tv);
 	if (ok)
@@ -450,6 +450,8 @@ void YateSIPEndPoint::run()
 		Debug(DebugInfo,"Received short SIP message of %d bytes",res);
 #endif
 	}
+	else
+	    Thread::check();
 //	m_engine->process();
 	SIPEvent* e = m_engine->getEvent();
 	// hack: use a loop so we can use break and continue

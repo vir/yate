@@ -35,108 +35,124 @@
 
 using namespace TelEngine;
 
-// all COM objects are created in this thread's apartment
-class DSound : public Thread
+// 20ms chunk, 100ms buffer
+#define CHUNK_SIZE 320
+#define MAX_SIZE (5*CHUNK_SIZE)
+#define BUF_SIZE (4*CHUNK_SIZE)
+
+class DSoundSource : public DataSource
+{
+    friend class DSoundRec;
+public:
+    DSoundSource();
+    ~DSoundSource();
+private:
+    DSoundRec* m_dsound;
+};
+
+class DSoundConsumer : public DataConsumer
+{
+    friend class DSoundPlay;
+public:
+    DSoundConsumer();
+    ~DSoundConsumer();
+    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+private:
+    DSoundPlay* m_dsound;
+};
+
+// all DirectSound play related objects are created in this thread's apartment
+class DSoundPlay : public Thread, public Mutex
 {
 public:
-    DSound();
-    virtual ~DSound();
+    DSoundPlay(DSoundConsumer* owner, LPGUID device = 0);
+    virtual ~DSoundPlay();
     virtual void run();
     virtual void cleanup();
     bool init();
-    inline LPDIRECTSOUND dsound()
+    inline void terminate()
+	{ m_owner = 0; }
+    inline LPDIRECTSOUND dsound() const
 	{ return m_ds; }
-    inline LPDIRECTSOUNDCAPTURE dcapture()
-	{ return m_dsc; }
+    inline LPDIRECTSOUNDBUFFER buffer() const
+	{ return m_dsb; }
+    void put(const DataBlock& data);
 private:
+    DSoundConsumer* m_owner;
+    LPGUID m_device;
     LPDIRECTSOUND m_ds;
-    LPDIRECTSOUNDCAPTURE m_dsc;
-};
-
-class SoundSource : public ThreadedSource
-{
-public:
-    ~SoundSource();
-    virtual void run();
-    inline const String &name()
-	{ return m_name; }
-private:
-    /*SoundSource(const String &tone);
-    static const Tone *getBlock(const String &tone);
-    String m_name;
-    const Tone *m_tone;
-    DataBlock m_data;
-    unsigned m_brate;
-    unsigned m_total;
-    u_int64_t m_time;*/
-    String m_name;
-};
-
-class SoundChan;
-
-class SoundConsumer : public DataConsumer
-{
-public:
-    SoundConsumer(SoundChan *chan,String device = "/dev/dsp"){}
-
-    ~SoundConsumer();
-
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta){}
-
-private:
-    SoundChan *m_chan;
-    unsigned m_total;
-    u_int64_t m_time;
-};
-
-class SoundChan : public Channel
-{
-public:
-    SoundChan(const String &tone);
-    ~SoundChan();
     LPDIRECTSOUNDBUFFER m_dsb;
+    DataBlock m_buf;
+};
+
+// all DirectSound record related objects are created in this thread's apartment
+class DSoundRec : public Thread
+{
+public:
+    DSoundRec(DSoundSource* owner, LPGUID device = 0);
+    virtual ~DSoundRec();
+    virtual void run();
+    virtual void cleanup();
+    bool init();
+    inline void terminate()
+	{ m_owner = 0; Thread::msleep(10); }
+    inline LPDIRECTSOUNDCAPTURE dsound() const
+	{ return m_ds; }
+    inline LPDIRECTSOUNDCAPTUREBUFFER buffer() const
+	{ return m_dsb; }
+private:
+    DSoundSource* m_owner;
+    LPGUID m_device;
+    LPDIRECTSOUNDCAPTURE m_ds;
+    LPDIRECTSOUNDCAPTUREBUFFER m_dsb;
+};
+
+class DSoundChan : public Channel
+{
+public:
+    DSoundChan();
+    virtual ~DSoundChan();
 };
 
 class AttachHandler : public MessageHandler
 {
 public:
-    AttachHandler() : MessageHandler("chan.attach") { }
+    AttachHandler() : MessageHandler("chan.attach")
+	{ }
     virtual bool received(Message &msg);
 };
 
 class SoundDriver : public Driver
 {
-    friend class DSound;
+    friend class DSoundPlay;
+    friend class DSoundRec;
 public:
     SoundDriver();
     ~SoundDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
-    inline LPDIRECTSOUND dsound()
-	{ return m_dsound ? m_dsound->dsound() : 0; }
-    inline LPDIRECTSOUNDCAPTURE dcapture()
-	{ return m_dsound ? m_dsound->dcapture() : 0; }
 protected:
     void statusModule(String& str);
     void statusParams(String& str);
 private:
-    DSound* m_dsound;
     AttachHandler* m_handler;
 };
 
 INIT_PLUGIN(SoundDriver);
 
-DSound::DSound()
-    : Thread("DirectSound"), m_ds(0), m_dsc(0)
+DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
+    : Thread("DirectSound Play",High),
+      m_owner(owner), m_device(device), m_ds(0), m_dsb(0)
 {
 }
 
-DSound::~DSound()
+DSoundPlay::~DSoundPlay()
 {
-    __plugin.m_dsound = 0;
+    if (m_owner)
+	m_owner->m_dsound = 0;
 }
 
-bool DSound::init()
+bool DSoundPlay::init()
 {
     HRESULT hr;
     if (FAILED(hr = ::CoInitializeEx(NULL,COINIT_MULTITHREADED))) {
@@ -148,37 +164,107 @@ bool DSound::init()
 	Debug(DebugGoOn,"Could not create the DirectSound object, code 0x%X",hr);
 	return false;
     }
-    if (FAILED(hr = IDirectSound_Initialize(m_ds, 0))) {
+    if (FAILED(hr = m_ds->Initialize(m_device))) {
 	Debug(DebugGoOn,"Could not initialize the DirectSound object, code 0x%X",hr);
 	return false;
     }
-    if (FAILED(hr = ::CoCreateInstance(CLSID_DirectSoundCapture, NULL, CLSCTX_INPROC_SERVER,
-	IID_IDirectSoundCapture, (void**)&m_dsc)) || !m_dsc) {
-	Debug(DebugGoOn,"Could not create the DirectSoundCapture object, code 0x%X",hr);
+    HWND wnd = GetForegroundWindow();
+    if (!wnd)
+	wnd = GetDesktopWindow();
+    if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,DSSCL_WRITEPRIMARY))) {
+	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
 	return false;
     }
-    if (FAILED(hr = IDirectSoundCapture_Initialize(m_dsc, 0))) {
-	Debug(DebugGoOn,"Could not initialize the DirectSoundCapture object, code 0x%X",hr);
+    DSBUFFERDESC bdesc;
+    ZeroMemory(&bdesc, sizeof(bdesc));
+    bdesc.dwSize = sizeof(bdesc);
+    bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
+    // | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLFREQUENCY | DSBCAPS_CTRLVOLUME
+    if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
+	Debug(DebugGoOn,"Could not create the DirectSound buffer, code 0x%X",hr);
+	return false;
+    }
+    WAVEFORMATEX fmt;
+    fmt.wFormatTag = WAVE_FORMAT_PCM;
+    fmt.nChannels = 1;
+    fmt.nSamplesPerSec = 8000;
+    fmt.nAvgBytesPerSec = 16000;
+    fmt.nBlockAlign = 2;
+    fmt.wBitsPerSample = 16;
+    fmt.cbSize = 0;
+    if (FAILED(hr = m_dsb->SetFormat(&fmt))) {
+	Debug(DebugGoOn,"Could not set the DirectSound buffer format, code 0x%X",hr);
+	return false;
+    }
+    if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
+	Debug(DebugGoOn,"Could not get the DirectSound buffer format, code 0x%X",hr);
+	return false;
+    }
+    if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
+	(fmt.nChannels != 1) ||
+	(fmt.nSamplesPerSec != 8000) ||
+	(fmt.wBitsPerSample != 16)) {
+	Debug(DebugGoOn,"DirectSound does not support 8000Hz 16bit mono PCM format, "
+	    "got fmt=%u, chans=%d samp=%d size=%u",
+	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
+	return false;
+    }
+    DSBCAPS caps;
+    caps.dwSize = sizeof(caps);
+#ifdef DEBUG
+    if (SUCCEEDED(m_dsb->GetCaps(&caps)))
+	Debug(DebugInfo,"DirectSound buffer size %u",caps.dwBufferBytes);
+#endif
+    if (FAILED(hr = m_dsb->Play(0,0,DSBPLAY_LOOPING))) {
+	Debug(DebugGoOn,"Could not play the DirectSound buffer, code 0x%X",hr);
 	return false;
     }
     return true;
 }
 
-void DSound::run()
+void DSoundPlay::run()
 {
     if (!init())
 	return;
-    Debug(DebugInfo,"DirectSound is initialized and running");
-    for (;;) {
+    if (m_owner)
+	m_owner->m_dsound = this;
+    Debug(DebugInfo,"DSoundPlay is initialized and running");
+    while (m_owner) {
 	msleep(1,true);
+	if (m_dsb && (m_buf.length() >= CHUNK_SIZE)) {
+	    void* buf = 0;
+	    void* buf2 = 0;
+	    DWORD len = 0;
+	    DWORD len2 = 0;
+	    HRESULT hr = m_dsb->Lock(0,CHUNK_SIZE,&buf,&len,&buf2,&len2,DSBLOCK_FROMWRITECURSOR);
+	    if (FAILED(hr)) {
+		if ((hr == DSERR_BUFFERLOST) && SUCCEEDED(m_dsb->Restore())) {
+		    Debug(DebugAll,"DirectSound buffer lost and restored");
+		    m_dsb->Play(0,0,DSBPLAY_LOOPING);
+		}
+		lock();
+		m_buf.clear();
+		unlock();
+		continue;
+	    }
+	    lock();
+	    ::memcpy(buf,m_buf.data(),len);
+	    if (buf2)
+		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
+	    m_dsb->Unlock(buf,len,0,0);
+	    m_buf.cut(-CHUNK_SIZE);
+	    unlock();
+	}
     }
 }
 
-void DSound::cleanup()
+void DSoundPlay::cleanup()
 {
-    if (m_dsc) {
-	m_dsc->Release();
-	m_dsc = 0;
+    Debug(DebugInfo,"DSoundPlay cleaning up");
+    if (m_dsb) {
+	m_dsb->Stop();
+	m_dsb->Release();
+	m_dsb = 0;
     }
     if (m_ds) {
 	m_ds->Release();
@@ -187,78 +273,224 @@ void DSound::cleanup()
     ::CoUninitialize();
 }
 
-SoundChan::SoundChan(const String &tone)
-    : Channel(__plugin)
+void DSoundPlay::put(const DataBlock& data)
 {
-    Debug(DebugAll,"ToneChan::ToneChan(\"\") [%p]",this);
-
-    DSBUFFERDESC dsbdesc;
-    ZeroMemory(&dsbdesc, sizeof(DSBUFFERDESC));
-    dsbdesc.dwSize = sizeof(DSBUFFERDESC);
-    dsbdesc.dwFlags = DSBCAPS_PRIMARYBUFFER;
-    if FAILED(__plugin.dsound()->CreateSoundBuffer(&dsbdesc, &m_dsb, NULL))
-        return;
-   /* ToneSource *t = ToneSource::getTone(tone);
-    if (t) {
-	setSource(t);
-	t->deref();
-    }
+    if (!m_dsb)
+	return;
+    lock();
+    if (m_buf.length() + data.length() <= MAX_SIZE)
+	m_buf += data;
+#ifdef XDEBUG
     else
-	Debug(DebugWarn,"No source tone '%s' in ToneChan [%p]",tone.c_str(),this);
-	*/
+	Debug(DebugAll,"DSoundPlay skipped %u bytes, buffer is full",data.length());
+#endif
+    unlock();
 }
 
-SoundChan::~SoundChan()
+DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
+    : Thread("DirectSound Rec"),
+      m_owner(owner), m_device(device), m_ds(0), m_dsb(0)
 {
-    Debug(DebugAll,"SoundChan::~SoundChan()  [%p]",this);
+}
+
+DSoundRec::~DSoundRec()
+{
+    if (m_owner)
+	m_owner->m_dsound = 0;
+}
+
+bool DSoundRec::init()
+{
+    HRESULT hr;
+    if (FAILED(hr = ::CoInitializeEx(NULL,COINIT_MULTITHREADED))) {
+	Debug(DebugGoOn,"Could not initialize the COM library, code 0x%X",hr);
+	return false;
+    }
+    if (FAILED(hr = ::CoCreateInstance(CLSID_DirectSoundCapture, NULL, CLSCTX_INPROC_SERVER,
+	IID_IDirectSoundCapture, (void**)&m_ds)) || !m_ds) {
+	Debug(DebugGoOn,"Could not create the DirectSoundCapture object, code 0x%X",hr);
+	return false;
+    }
+    if (FAILED(hr = m_ds->Initialize(m_device))) {
+	Debug(DebugGoOn,"Could not initialize the DirectSoundCapture object, code 0x%X",hr);
+	return false;
+    }
+    WAVEFORMATEX fmt;
+    fmt.wFormatTag = WAVE_FORMAT_PCM;
+    fmt.nChannels = 1;
+    fmt.nSamplesPerSec = 8000;
+    fmt.nAvgBytesPerSec = 16000;
+    fmt.nBlockAlign = 2;
+    fmt.wBitsPerSample = 16;
+    fmt.cbSize = 0;
+    DSCBUFFERDESC bdesc;
+    ZeroMemory(&bdesc, sizeof(bdesc));
+    bdesc.dwSize = sizeof(bdesc);
+    bdesc.dwFlags = DSCBCAPS_WAVEMAPPED;
+    bdesc.dwBufferBytes = BUF_SIZE;
+    bdesc.lpwfxFormat = &fmt;
+    if (FAILED(hr = m_ds->CreateCaptureBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
+	Debug(DebugGoOn,"Could not create the DirectSoundCapture buffer, code 0x%X",hr);
+	return false;
+    }
+    if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
+	Debug(DebugGoOn,"Could not get the DirectSoundCapture buffer format, code 0x%X",hr);
+	return false;
+    }
+    if ((fmt.wFormatTag != WAVE_FORMAT_PCM) ||
+	(fmt.nChannels != 1) ||
+	(fmt.nSamplesPerSec != 8000) ||
+	(fmt.wBitsPerSample != 16)) {
+	Debug(DebugGoOn,"DirectSoundCapture does not support 8000Hz 16bit mono PCM format, "
+	    "got fmt=%u, chans=%d samp=%d size=%u",
+	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
+	return false;
+    }
+    if (FAILED(hr = m_dsb->Start(DSCBSTART_LOOPING))) {
+	Debug(DebugGoOn,"Could not record to the DirectSoundCapture buffer, code 0x%X",hr);
+	return false;
+    }
+    return true;
+}
+
+void DSoundRec::run()
+{
+    if (!init())
+	return;
+    if (m_owner)
+	m_owner->m_dsound = this;
+    Debug(DebugInfo,"DSoundRec is initialized and running");
+    while (m_owner) {
+	msleep(1,true);
+	if (m_dsb) {
+	    void* buf = 0;
+	    DWORD len = 0;
+	    if (FAILED(m_dsb->Lock(0,CHUNK_SIZE,&buf,&len,0,0,0)))
+		continue;
+	    DataBlock data(buf,len);
+	    m_dsb->Unlock(buf,len,0,0);
+	    if (m_owner)
+		m_owner->Forward(data);
+	}
+    }
+}
+
+void DSoundRec::cleanup()
+{
+    Debug(DebugInfo,"DSoundRec cleaning up");
+    if (m_dsb) {
+	m_dsb->Stop();
+	m_dsb->Release();
+	m_dsb = 0;
+    }
+    if (m_ds) {
+	m_ds->Release();
+	m_ds = 0;
+    }
+    ::CoUninitialize();
+}
+
+DSoundSource::DSoundSource()
+    : m_dsound(0)
+{
+    DSoundRec* ds = new DSoundRec(this);
+    ds->startup();
+}
+
+DSoundSource::~DSoundSource()
+{
+    if (m_dsound)
+	m_dsound->terminate();
+}
+
+DSoundConsumer::DSoundConsumer()
+    : m_dsound(0)
+{
+    DSoundPlay* ds = new DSoundPlay(this);
+    ds->startup();
+}
+
+DSoundConsumer::~DSoundConsumer()
+{
+    if (m_dsound)
+	m_dsound->terminate();
+}
+
+void DSoundConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+{
+    if (m_dsound)
+	m_dsound->put(data);
+}
+
+DSoundChan::DSoundChan()
+    : Channel(__plugin)
+{
+    Debug(DebugAll,"DSoundChan::DSoundChan() [%p]",this);
+
+    setSource(new DSoundSource);
+    getSource()->deref();
+    setConsumer(new DSoundConsumer);
+    getConsumer()->deref();
+    Thread::msleep(50);
+}
+
+DSoundChan::~DSoundChan()
+{
+    Debug(DebugAll,"DSoundChan::~DSoundChan()  [%p]",this);
 }
 
 bool AttachHandler::received(Message &msg)
 {
-    return TRUE;
+    return false;
 }
 
 bool SoundDriver::msgExecute(Message& msg, String& dest)
 {
-    /*
-    Channel *dd = static_cast<Channel*>(msg.userData());
-    if (dd) {
-	ToneChan *tc = new ToneChan(dest);
-	if (dd->connect(tc))
-	    tc->deref();
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    if (ch) {
+	DSoundChan *ds = new DSoundChan;
+	if (ch->connect(ds))
+	    ds->deref();
 	else {
-	    tc->destruct();
+	    ds->destruct();
 	    return false;
 	}
     }
     else {
-	const char *targ = msg.getValue("target");
-	if (!targ) {
-	    Debug(DebugWarn,"Tone outgoing call with no target!");
-	    return false;
-	}
 	Message m("call.route");
-	m.addParam("module","tone");
-	m.addParam("caller",dest);
-	m.addParam("called",targ);
-	if (Engine::dispatch(m)) {
-	    m = "call.execute";
-	    m.addParam("callto",m.retValue());
-	    m.retValue().clear();
-	    ToneChan *tc = new ToneChan(dest);
-	    m.setParam("targetid",tc->id());
-	    m.userData(tc);
-	    if (Engine::dispatch(m)) {
-		tc->deref();
-		return true;
+	m.addParam("module",name());
+	String callto(msg.getValue("direct"));
+	if (callto.null()) {
+	    const char *targ = msg.getValue("target");
+	    if (!targ) {
+		Debug(DebugWarn,"DSound outgoing call with no target!");
+		return false;
 	    }
-	    Debug(DebugWarn,"Tone outgoing call not accepted!");
-	    tc->destruct();
+	    callto = msg.getValue("caller");
+	    if (callto.null())
+		callto << prefix() << dest;
+	    m.addParam("called",targ);
+	    m.addParam("caller",callto);
+	    if (!Engine::dispatch(m)) {
+		Debug(DebugWarn,"DSound outgoing call but no route!");
+		return false;
+	    }
+	    callto = m.retValue();
+	    m.retValue().clear();
 	}
-	else
-	    Debug(DebugWarn,"Tone outgoing call but no route!");
+	m = "call.execute";
+	m.addParam("callto",callto);
+	DSoundChan *ds = new DSoundChan;
+	m.setParam("targetid",ds->id());
+	m.userData(ds);
+	if (Engine::dispatch(m)) {
+	    ds->deref();
+	    return true;
+	}
+	Debug(DebugWarn,"DSound outgoing call not accepted!");
+	ds->destruct();
 	return false;
-    }*/
+    }
     return true;
 }
 
@@ -273,7 +505,8 @@ void SoundDriver::statusParams(String& str)
 }
 
 SoundDriver::SoundDriver()
-    : Driver("dsound","misc"), m_dsound(0), m_handler(0)
+    : Driver("dsound","misc"),
+      m_handler(0)
 {
     Output("Loaded module DirectSound");
 }
@@ -287,10 +520,6 @@ SoundDriver::~SoundDriver()
 void SoundDriver::initialize()
 {
     Output("Initializing module DirectSound");
-    if (!m_dsound) {
-	m_dsound = new DSound;
-	m_dsound->startup();
-    }
     setup(0,true); // no need to install notifications
     Driver::initialize();
     if (!m_handler) {

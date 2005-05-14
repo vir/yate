@@ -2,7 +2,7 @@
  * moh.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * Music (on hold) generator
+ * On hold (music) generator
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004, 2005 Null Team
@@ -345,12 +345,12 @@ bool AttachHandler::received(Message &msg)
     if (!src.matches(r))
 	return false;
     src = src.matchString(1);
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd) {
+    CallEndpoint *ch = static_cast<CallEndpoint *>(msg.userData());
+    if (ch) {
 	Lock lock(mutex);
 	MOHSource *t = MOHSource::getSource(src);
 	if (t) {
-	    dd->setSource(t);
+	    ch->setSource(t);
 	    t->deref();
 	    // Let the message flow if it wants to attach a consumer too
 	    return !msg.getValue("consumer");

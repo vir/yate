@@ -71,6 +71,10 @@ private:
 
 using namespace TelEngine;
 
+#define SOFT_KILLS 5
+#define HARD_KILLS 5
+#define KILL_WAIT 32
+
 #ifdef _WINDOWS
 DWORD tls_index = ::TlsAlloc();
 #else
@@ -307,16 +311,18 @@ void ThreadPrivate::killall()
     {
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
 	tmutex.unlock();
-	bool ok = t->cancel(c > 1);
+	bool ok = t->cancel(c > SOFT_KILLS);
 	if (ok) {
-	    // delay a little so threads have a chance to clean up
-	    for (int i=0; i<20; i++) {
+	    int d = 0;
+	    // delay a little (exponentially) so threads have a chance to clean up
+	    for (int i=1; i<=KILL_WAIT; i<<=1) {
+		Thread::msleep(i-d);
+		d = i;
 		tmutex.lock();
 		bool done = (t != l->get());
 		tmutex.unlock();
 		if (done)
 		    break;
-		Thread::msleep(5);
 	    }
 	}
 	tmutex.lock();
@@ -328,10 +334,12 @@ void ThreadPrivate::killall()
 		tmutex.unlock();
 		t->destroy();
 		tmutex.lock();
+		if (t != l->get())
+		    c = 1;
 		continue;
 	    }
 	    Thread::msleep(1);
-	    if (++c >= 10) {
+	    if (++c >= (SOFT_KILLS+HARD_KILLS)) {
 		Debug(DebugGoOn,"Could not kill %p, will use sledgehammer later.",t);
 		sledgehammer = true;
 		t->m_thread = 0;

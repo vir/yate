@@ -35,7 +35,7 @@ using namespace TelEngine;
 class WaveSource : public ThreadedSource
 {
 public:
-    WaveSource(const String& file, Channel* chan, bool autoclose = true);
+    WaveSource(const String& file, CallEndpoint* chan, bool autoclose = true);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
@@ -44,7 +44,7 @@ public:
 private:
     void detectAuFormat();
     void detectWavFormat();
-    Channel* m_chan;
+    CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
     bool m_swap;
@@ -58,13 +58,13 @@ private:
 class WaveConsumer : public DataConsumer
 {
 public:
-    WaveConsumer(const String& file, Channel* chan = 0, unsigned maxlen = 0);
+    WaveConsumer(const String& file, CallEndpoint* chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
     virtual void Consume(const DataBlock& data, unsigned long timeDelta);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
-    Channel* m_chan;
+    CallEndpoint* m_chan;
     int m_fd;
     unsigned m_total;
     unsigned m_maxlen;
@@ -82,11 +82,11 @@ public:
 class ConsDisconnector : public Thread
 {
 public:
-    ConsDisconnector(Channel* chan, const String& id)
+    ConsDisconnector(CallEndpoint* chan, const String& id)
 	: m_chan(chan), m_id(id) { }
     virtual void run();
 private:
-    Channel* m_chan;
+    CallEndpoint* m_chan;
     String m_id;
 };
 
@@ -109,7 +109,7 @@ private:
 
 INIT_PLUGIN(WaveFileDriver);
 
-WaveSource::WaveSource(const String& file, Channel* chan, bool autoclose)
+WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(16000),
       m_total(0), m_time(0), m_autoclose(autoclose)
 {
@@ -259,7 +259,7 @@ void WaveSource::cleanup()
 	m_chan->disconnect("eof");
 }
 
-WaveConsumer::WaveConsumer(const String& file, Channel* chan, unsigned maxlen)
+WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen)
     : m_chan(chan), m_fd(-1), m_total(0), m_maxlen(maxlen), m_time(0)
 {
     Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u) [%p]",
@@ -403,7 +403,7 @@ bool AttachHandler::received(Message &msg)
 
     String ml(msg.getValue("maxlen"));
     unsigned maxlen = ml.toInteger(0);
-    Channel *ch = static_cast<Channel*>(msg.userData());
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (!src.null())
 	    Debug(DebugWarn,"Wave source '%s' attach request with no data channel!",src.c_str());

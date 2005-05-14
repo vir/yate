@@ -24,21 +24,30 @@
 
 #include <yatephone.h>
 
+#include <stdlib.h>
+
 using namespace TelEngine;
+
+#define DATA_CHUNK 320
+#define MIN_BUFFER 960
+#define MAX_BUFFER 1600
 
 static ObjList s_rooms;
 
-class ConfRoom : public String
+class ConfRoom : public DataSource
 {
 public:
     ConfRoom(const String& name);
     ~ConfRoom();
+    static ConfRoom* create(const String& name);
+    virtual const String& toString() const
+	{ return m_name; }
     inline ObjList& channels()
 	{ return m_chans; }
     void mix();
 private:
+    String m_name;
     ObjList m_chans;
-    bool mixOne(int index);
 };
 
 class ConfChan : public Channel
@@ -46,24 +55,6 @@ class ConfChan : public Channel
 public:
     ConfChan(const String& name);
     ~ConfChan();
-    inline ConfRoom* room() const
-	{ return m_room; }
-private:
-    ConfRoom* m_room;
-};
-
-class ConfSource : public DataSource
-{
-public:
-    ConfSource(unsigned int bufsize = 320)
-	: m_bufpos(0), m_buffer(0,bufsize & ~1)
-	{ }
-    ~ConfSource()
-	{ }
-    void put(short val);
-private:
-    unsigned m_bufpos;
-    DataBlock m_buffer;
 };
 
 class ConfConsumer : public DataConsumer
@@ -85,61 +76,87 @@ class ConferenceDriver : public Driver
 {
 public:
     ConferenceDriver();
+    virtual ~ConferenceDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
 };
 
 INIT_PLUGIN(ConferenceDriver);
 
-ConfRoom::ConfRoom(const String& name)
-    : String(name)
+ConfRoom* ConfRoom::create(const String& name)
 {
-    Debug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s') [%p]",c_str(),this);
+    if (name.null())
+	return 0;
+    ObjList* l = s_rooms.find(name);
+    ConfRoom* room = l ? static_cast<ConfRoom*>(l->get()) : 0;
+    if (room)
+	room->ref();
+    else
+	room = new ConfRoom(name);
+    return room;
+}
+
+ConfRoom::ConfRoom(const String& name)
+    : m_name(name)
+{
+    Debug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s') [%p]",name.c_str(),this);
     s_rooms.append(this);
 }
 
 ConfRoom::~ConfRoom()
 {
-    Debug(&__plugin,DebugAll,"ConfRoom::~ConfRoom() '%s' [%p]",c_str(),this);
+    Debug(&__plugin,DebugAll,"ConfRoom::~ConfRoom() '%s' [%p]",m_name.c_str(),this);
     s_rooms.remove(this,false);
     m_chans.clear();
 }
 
 void ConfRoom::mix()
 {
-    int i = 0;
-    while (mixOne(i))
-	i++;
+    unsigned int len = MAX_BUFFER;
+    unsigned int mlen = 0;
     ObjList* l = m_chans.skipNull();
     for (;l;l = l->skipNext()) {
 	ConfChan* ch = static_cast<ConfChan*>(l->get());
 	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
-	if (co)
-	    co->m_buffer.cut(-i);
-    }
-}
-
-bool ConfRoom::mixOne(int index)
-{
-    int v = 0;
-    ObjList* l = m_chans.skipNull();
-    for (;l;l = l->skipNext()) {
-	ConfChan* ch = static_cast<ConfChan*>(l->get());
-	ConfConsumer* c = static_cast<ConfConsumer*>(ch->getConsumer());
-	if (c) {
+	if (co) {
+	    if (co->m_buffer.length() < len)
+		len = co->m_buffer.length();
+	    if (co->m_buffer.length() > mlen)
+		mlen = co->m_buffer.length();
 	}
     }
-    return false;
-}
-
-void ConfSource::put(short val)
-{
-    ((short*)m_buffer.data())[m_bufpos >> 1] = val;
-    m_bufpos += 2;
-    if (m_bufpos >= m_buffer.length()) {
-	m_bufpos = 0;
-	Forward(m_buffer);
+    XDebug(DebugAll,"ConfRoom::mix() buffer %u - %u [%p]",len,mlen,this);
+    mlen = mlen + MIN_BUFFER - MAX_BUFFER;
+    if (len < mlen)
+	len = mlen;
+    len /= DATA_CHUNK;
+    if (!len)
+	return;
+    len *= DATA_CHUNK / sizeof(int16_t);
+    int* buf = (int*)::calloc(len,sizeof(int));
+    l = m_chans.skipNull();
+    for (;l;l = l->skipNext()) {
+	ConfChan* ch = static_cast<ConfChan*>(l->get());
+	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
+	if (co && co->m_buffer.length()) {
+	    unsigned int n = co->m_buffer.length() / 2;
+	    if (n > len)
+		n = len;
+	    const int16_t* p = (const int16_t*)co->m_buffer.data();
+	    for (unsigned int i=0; i < n; i++)
+		buf[i] += *p++;
+	    n *= sizeof(int16_t);
+	    co->m_buffer.cut(-(int)n);
+	}
     }
+    DataBlock data(0,len*sizeof(int16_t));
+    int16_t* p = (int16_t*)data.data();
+    for (unsigned int i=0; i < len; i++) {
+	int val = buf[i];
+	*p++ = (val < -32768) ? -32768 : ((val > 32767) ? 32767 : val);
+    }
+    ::free(buf);
+    Forward(data);
 }
 
 void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
@@ -147,41 +164,42 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
     if (data.null() || !m_room)
 	return;
     Lock lock(&__plugin);
-    if (m_buffer.data())
+    if (m_buffer.length()+data.length() < MAX_BUFFER)
+	m_buffer += data;
+    if (m_buffer.length() >= MIN_BUFFER)
 	m_room->mix();
-    m_buffer += data;
 }
 
 ConfChan::ConfChan(const String& name)
-    : Channel(__plugin), m_room(0)
+    : Channel(__plugin)
 {
     Debug(this,DebugAll,"ConfChan::ConfChan(%s) %s [%p]",name.c_str(),id().c_str(),this);
     Lock lock(&__plugin);
-    ObjList* r = s_rooms.find(name);
-    if (r)
-	m_room = static_cast<ConfRoom*>(r->get());
-    else
-	m_room = new ConfRoom(name);
-    setConsumer(new ConfConsumer(m_room));
-    getConsumer()->deref();
-    setSource(new ConfSource);
-    getSource()->deref();
-    m_room->channels().append(this);
+    ConfRoom* room = ConfRoom::create(name);
+    if (room) {
+	setSource(room);
+	room->deref();
+	room->channels().append(this);
+	setConsumer(new ConfConsumer(room));
+	getConsumer()->deref();
+    }
 }
 
 ConfChan::~ConfChan()
 {
     Debug(this,DebugAll,"ConfChan::~ConfChan() %s [%p]",id().c_str(),this);
     Lock lock(&__plugin);
-    m_room->channels().remove(this,false);
-    if (!m_room->channels().count())
-	delete m_room;
+    setConsumer();
+    if (getSource()) {
+	static_cast<ConfRoom*>(getSource())->channels().remove(this,false);
+	setSource();
+    }
 }
 
 bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 {
     if (dest.null())
-	dest << "x-" << ::random();
+	dest << "x-" << (unsigned int)::random();
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	ConfChan *c = new ConfChan(dest);
@@ -203,6 +221,12 @@ ConferenceDriver::ConferenceDriver()
     : Driver("conf","misc")
 {
     Output("Loaded module Conference");
+}
+
+ConferenceDriver::~ConferenceDriver()
+{
+    Output("Unloading module Conference");
+    s_rooms.clear();
 }
 
 void ConferenceDriver::initialize()

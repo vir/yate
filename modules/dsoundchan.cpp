@@ -27,6 +27,10 @@
 
 #include <yatephone.h>
 
+#ifndef _WINDOWS
+#error This module is only for Windows
+#else
+
 #include <string.h>
 
 // initialize the GUIDs so we don't need to link against dsound.lib
@@ -527,5 +531,7 @@ void SoundDriver::initialize()
 	Engine::install(m_handler);
     }
 }
+
+#endif /* _WINDOWS */
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

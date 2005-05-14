@@ -836,7 +836,10 @@ bool Router::route()
     }
 
     if (ok) {
-	if (chan->callRouted(*m_msg)) {
+	if (m_msg->getIntValue("antiloop",1) <= 0)
+	    chan->callReject(m_msg->getValue("error","looping"),
+		m_msg->getValue("reason","Call is looping"));
+	else if (chan->callRouted(*m_msg)) {
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
 	    m_msg->clearParam("error");

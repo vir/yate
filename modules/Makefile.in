@@ -43,10 +43,6 @@ ifneq (@HAVE_H323@,no)
 PROGS := $(PROGS) h323chan.yate
 endif
 
-ifneq (@HAVE_ORTP@,no)
-PROGS := $(PROGS) ortpchan.yate
-endif
-
 ifneq (@HAVE_IAX2@,no)
 PROGS := $(PROGS) iaxchan.yate
 endif
@@ -128,10 +124,6 @@ h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H3
 
 pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
-ortpchan.yate: @ORTP_DEP@
-ortpchan.yate: LOCALLIBS = @ORTP_LIB@
-ortpchan.yate: LOCALFLAGS = @ORTP_INC@ @GLIB_INC@
-
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
@@ -152,9 +144,6 @@ yrtpchan.yate: LOCALLIBS = ../contrib/yrtp/libyatertp.a
 
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
-
-../contrib/ortp/libortp.a:
-	$(MAKE) -C ../contrib/ortp
 
 ../contrib/ysip/libyatesip.a:
 	$(MAKE) -C ../contrib/ysip

@@ -292,40 +292,6 @@ AC_SUBST(H323_INC)
 AC_SUBST(H323_LIB)
 AC_SUBST(H323_RUN)
 
-HAVE_ORTP=no
-ORTP_INC=""
-ORTP_LIB=""
-ORTP_DEP=""
-AC_ARG_WITH(libortp,AC_HELP_STRING([--with-libortp=DIR],[use oRTP from DIR (default: included)]),[ac_cv_use_libortp=$withval],[ac_cv_use_libortp=included])
-if [[ "x$ac_cv_use_libortp" = "xincluded" ]]; then
-    ac_cv_use_libortp="no"
-    basedir=`cd "$srcdir" && pwd`
-    AC_MSG_CHECKING([for oRTP in contrib])
-    incor="contrib/ortp"
-    if [[ -f "$basedir/$incor/ortp.h" ]]; then
-	HAVE_ORTP=yes
-	ORTP_INC="-I$basedir/$incor"
-	ORTP_DEP="../$incor/libortp.a"
-	ORTP_LIB="-L../$incor -lortp"
-    fi
-    AC_MSG_RESULT([$HAVE_ORTP])
-fi
-if [[ "x$ac_cv_use_libortp" != "xno" ]]; then
-AC_MSG_CHECKING([for oRTP in $ac_cv_use_libortp])
-incor="$ac_cv_use_libortp/include/ortp"
-libor="$ac_cv_use_libortp/lib/libortp.so"
-if [[ -f "$incor/ortp.h" -a -f "$libor" ]]; then
-    HAVE_ORTP=yes
-    ORTP_INC="-I$incor"
-    ORTP_LIB="-L$ac_cv_use_libortp/lib -lortp"
-fi
-AC_MSG_RESULT([$HAVE_ORTP])
-fi
-AC_SUBST(HAVE_ORTP)
-AC_SUBST(ORTP_INC)
-AC_SUBST(ORTP_LIB)
-AC_SUBST(ORTP_DEP)
-
 HAVE_GLIB1=no
 GLIB1_INC=""
 GLIB1_LIB=""
@@ -583,7 +549,6 @@ AC_CONFIG_FILES([yate.spec
                  scripts/Makefile
                  conf.d/Makefile
                  contrib/iax/Makefile
-                 contrib/ortp/Makefile
                  contrib/ysip/Makefile
                  contrib/yrtp/Makefile
                  contrib/qt/Makefile

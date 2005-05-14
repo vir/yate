@@ -355,7 +355,7 @@ bool AttachHandler::received(Message &msg)
 	    // Let the message flow if it wants to attach a consumer too
 	    return !msg.getValue("consumer");
 	}
-	Debug(DebugWarn,"No on-hold source '%s' could be attached to [%p]",src.c_str(),dd);
+	Debug(DebugWarn,"No on-hold source '%s' could be attached to [%p]",src.c_str(),ch);
     }
     else
 	Debug(DebugWarn,"On-hold '%s' attach request with no data channel!",src.c_str());

@@ -21,7 +21,7 @@ SUBDIRS :=
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate \
-	tonegen.yate wavefile.yate moh.yate \
+	tonegen.yate wavefile.yate conference.yate moh.yate \
 	callgen.yate rmanager.yate \
 	extmodule.yate osschan.yate \
 	ysipchan.yate yrtpchan.yate

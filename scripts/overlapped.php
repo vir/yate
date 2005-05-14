@@ -121,7 +121,7 @@ function gotDTMF($dtmf)
     global $state;
     global $collect;
 
-    Yate::Output("Overlapped gotDTMF('$dtmf') in state: $state collected: '$collect'");
+//    Yate::Output("Overlapped gotDTMF('$dtmf') in state: $state collected: '$collect'");
     switch ($dtmf) {
 	case "*":
 	    setState("");

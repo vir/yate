@@ -1079,6 +1079,7 @@ void YateSIPConnection::callReject(const char* error, const char* reason)
     Channel::callReject(error,reason);
     int code = lookup(error,dict_errors,500);
     m_tr->setResponse(code,reason);
+    setReason(reason,code);
 }
 
 YateSIPConnection* SIPDriver::findCall(const String& callid)

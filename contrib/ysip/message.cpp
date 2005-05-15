@@ -317,8 +317,9 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Contact",tmp);
     }
 
-    if (!(getHeader("User-Agent") || engine->getUserAgent().null()))
-	addHeader("User-Agent",engine->getUserAgent());
+    const char* info = isAnswer() ? "Server" : "User-Agent";
+    if (!(getHeader(info) || engine->getUserAgent().null()))
+	addHeader(info,engine->getUserAgent());
 
     if (!getHeader("Allow"))
 	addHeader("Allow",engine->getAllowed());

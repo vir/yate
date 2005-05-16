@@ -39,7 +39,7 @@ class ConfRoom : public DataSource
 public:
     ConfRoom(const String& name);
     ~ConfRoom();
-    static ConfRoom* create(const String& name);
+    static ConfRoom* get(const String& name, bool create = false);
     virtual const String& toString() const
 	{ return m_name; }
     inline ObjList& channels()
@@ -83,7 +83,7 @@ public:
 
 INIT_PLUGIN(ConferenceDriver);
 
-ConfRoom* ConfRoom::create(const String& name)
+ConfRoom* ConfRoom::get(const String& name, bool create)
 {
     if (name.null())
 	return 0;
@@ -91,7 +91,7 @@ ConfRoom* ConfRoom::create(const String& name)
     ConfRoom* room = l ? static_cast<ConfRoom*>(l->get()) : 0;
     if (room)
 	room->ref();
-    else
+    else if (create)
 	room = new ConfRoom(name);
     return room;
 }
@@ -163,7 +163,7 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 {
     if (data.null() || !m_room)
 	return;
-    Lock lock(&__plugin);
+    Lock lock(m_room->mutex());
     if (m_buffer.length()+data.length() < MAX_BUFFER)
 	m_buffer += data;
     if (m_buffer.length() >= MIN_BUFFER)
@@ -175,7 +175,7 @@ ConfChan::ConfChan(const String& name)
 {
     Debug(this,DebugAll,"ConfChan::ConfChan(%s) %s [%p]",name.c_str(),id().c_str(),this);
     Lock lock(&__plugin);
-    ConfRoom* room = ConfRoom::create(name);
+    ConfRoom* room = ConfRoom::get(name,true);
     if (room) {
 	setSource(room);
 	room->deref();
@@ -198,6 +198,8 @@ ConfChan::~ConfChan()
 
 bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 {
+    if (msg.getBoolValue("existing") && !ConfRoom::get(dest))
+	return false;
     if (dest.null())
 	dest << "x-" << (unsigned int)::random();
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());

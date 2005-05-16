@@ -48,7 +48,7 @@ private:
 class PriChan;
 class PriDriver;
 
-class PriSpan : public GenObject
+class PriSpan : public GenObject, public Mutex
 {
 public:
     virtual ~PriSpan();

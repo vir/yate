@@ -106,7 +106,7 @@ class WpChan : public PriChan
 public:
     WpChan(const PriSpan *parent, int chan, unsigned int bufsize);
     virtual ~WpChan();
-    bool openData(const char* format, int echoTaps);
+    virtual bool openData(const char* format, int echoTaps);
 
 private:
     WpSource* m_wp_s;
@@ -422,7 +422,7 @@ void WpData::run()
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;
 		const unsigned char* dat = m_buffer + WP_HEADER;
-		m_span->driver()->lock();
+		m_span->lock();
 		for (int n = r; n > 0; n--)
 		    for (b = 0; b < bchans; b++) {
 			WpSource *s = m_chans[b]->m_wp_s;
@@ -430,19 +430,19 @@ void WpData::run()
 			    s->put(PriDriver::bitswap(*dat));
 			dat++;
 		    }
-		m_span->driver()->unlock();
+		m_span->unlock();
 	    }
 	    int w = samp;
 	    ::memset(m_buffer,0,WP_HEADER);
 	    unsigned char* dat = m_buffer + WP_HEADER;
-	    m_span->driver()->lock();
+	    m_span->lock();
 	    for (int n = w; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
-	    m_span->driver()->unlock();
+	    m_span->unlock();
 	    w = (w * bchans) + WP_HEADER;
 	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,w,sz);
 	    w = wp_send(m_fd,m_buffer,w,MSG_DONTWAIT);
@@ -465,10 +465,12 @@ bool WpChan::openData(const char* format, int echoTaps)
 {
     if (echoTaps)
 	Debug(DebugWarn,"Echo cancellation requested but not available in wanpipe");
+    m_span->lock();
     setSource(new WpSource(this,format,m_bufsize));
     getSource()->deref();
     setConsumer(new WpConsumer(this,format,m_bufsize));
     getConsumer()->deref();
+    m_span->unlock();
     return true;
 }
 

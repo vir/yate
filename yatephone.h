@@ -384,6 +384,13 @@ public:
 	{ m_consumers.clear(); }
 
     /**
+     * Get the mutex that serializes access to this data source
+     * @return Reference to DataSource's mutex object
+     */
+    inline Mutex& mutex()
+	{ return m_mutex; }
+
+    /**
      * Get the master translator object if this source is part of a translator
      * @return A pointer to the DataTranslator object or NULL
      */

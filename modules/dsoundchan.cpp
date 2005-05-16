@@ -213,9 +213,9 @@ bool DSoundPlay::init()
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
+#ifdef DEBUG
     DSBCAPS caps;
     caps.dwSize = sizeof(caps);
-#ifdef DEBUG
     if (SUCCEEDED(m_dsb->GetCaps(&caps)))
 	Debug(DebugInfo,"DirectSound buffer size %u",caps.dwBufferBytes);
 #endif

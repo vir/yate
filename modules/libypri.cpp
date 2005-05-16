@@ -221,7 +221,8 @@ unsigned char Fifo::get()
 }
 
 PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect)
-    : m_driver(driver), m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
+    : Mutex(true),
+      m_driver(driver), m_span(span), m_offs(first), m_nchans(chans), m_bchans(0),
       m_pri(_pri), m_restart(0), m_chans(0), m_ok(false)
 {
     Debug(m_driver,DebugAll,"PriSpan::PriSpan() [%p]",this);
@@ -276,8 +277,8 @@ PriSpan::~PriSpan()
 
 void PriSpan::runEvent(bool idleRun)
 {
-    Lock lock(m_driver);
     pri_event *ev = 0;
+    lock();
     if (idleRun) {
 	ev = ::pri_schedule_run(m_pri);
 	idle();
@@ -289,6 +290,7 @@ void PriSpan::runEvent(bool idleRun)
 	    ::pri_dump_event(m_pri, ev);
 	handleEvent(*ev);
     }
+    unlock();
 }
 
 void PriSpan::idle()
@@ -553,9 +555,9 @@ void PriChan::disconnected(bool final, const char *reason)
 	m->addParam("reason",reason);
 	Engine::enqueue(m);
     }
-    driver()->lock();
+    m_span->lock();
     hangup(PRI_CAUSE_NORMAL_CLEARING);
-    driver()->unlock();
+    m_span->unlock();
 }
 
 bool PriChan::nativeConnect(DataEndpoint *peer)
@@ -592,10 +594,10 @@ void PriChan::restart(bool outgoing)
 
 void PriChan::closeData()
 {
-    driver()->lock();
+    m_span->lock();
     setSource();
     setConsumer();
-    driver()->unlock();
+    m_span->unlock();
 }
 
 bool PriChan::answer()

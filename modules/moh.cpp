@@ -49,7 +49,7 @@ static Configuration s_cfg;
 
 static ObjList sources;
 static ObjList chans;
-static Mutex mutex(true);
+static Mutex s_mutex(true);
 
 class MOHSource : public ThreadedSource
 {
@@ -126,7 +126,7 @@ MOHSource::MOHSource(const String &name, const String &command_line)
 
 MOHSource::~MOHSource()
 {
-    Lock lock(mutex);
+    Lock lock(s_mutex);
     Debug(DebugAll,"MOHSource::~MOHSource() [%p]",this);
     sources.remove(this,false);
     if (m_pid > 0)
@@ -261,7 +261,7 @@ MOHChan::MOHChan(const String &name)
     : CallEndpoint("moh")
 {
     Debug(DebugAll,"MOHChan::MOHChan(\"%s\") [%p]",name.c_str(),this);
-    Lock lock(mutex);
+    Lock lock(s_mutex);
     m_id << "moh/" << s_nextid++;
     chans.append(this);
     MOHSource *s = MOHSource::getSource(name);
@@ -276,9 +276,9 @@ MOHChan::MOHChan(const String &name)
 MOHChan::~MOHChan()
 {
     Debug(DebugAll,"MOHChan::~MOHChan() %s [%p]",m_id.c_str(),this);
-    mutex.lock();
+    s_mutex.lock();
     chans.remove(this,false);
-    mutex.unlock();
+    s_mutex.unlock();
 }
 
 void MOHChan::disconnected(bool final, const char *reason)
@@ -347,7 +347,7 @@ bool AttachHandler::received(Message &msg)
     src = src.matchString(1);
     CallEndpoint *ch = static_cast<CallEndpoint *>(msg.userData());
     if (ch) {
-	Lock lock(mutex);
+	Lock lock(s_mutex);
 	MOHSource *t = MOHSource::getSource(src);
 	if (t) {
 	    ch->setSource(t);

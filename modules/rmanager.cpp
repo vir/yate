@@ -51,6 +51,7 @@ static Configuration s_cfg;
 
 /* I need this here because i'm gonna use it in both classes */
 Socket s_sock;
+Mutex s_mutex(true);
 
 //we gonna create here the list with all the new connections.
 static ObjList connectionlist;
@@ -100,12 +101,14 @@ private:
 
 static void dbg_remote_func(const char *buf)
 {
+    s_mutex.lock();
     ObjList *p = &connectionlist;
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
 	    con->writeDebug(buf);
     }
+    s_mutex.unlock();
 }
 
 void RManagerThread::run()
@@ -150,13 +153,17 @@ Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
       m_auth(false), m_debug(false), m_machine(false), m_socket(sock), m_address(addr)
 {
+    s_mutex.lock();
     connectionlist.append(this);
+    s_mutex.unlock();
 }
 
 Connection::~Connection()
 {
     m_debug = false;
+    s_mutex.lock();
     connectionlist.remove(this,false);
+    s_mutex.unlock();
     Output("Closing connection to %s",m_address.c_str());
     delete m_socket;
     m_socket = 0;
@@ -445,12 +452,14 @@ void Connection::writeStr(const char *str, int len)
 
 static void postHook(Message &msg, bool received)
 {
+    s_mutex.lock();
     ObjList *p = &connectionlist;
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
 	    con->writeStr(msg,received);
     }
+    s_mutex.unlock();
 };
 
 

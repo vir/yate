@@ -114,6 +114,7 @@ void ConfRoom::mix()
 {
     unsigned int len = MAX_BUFFER;
     unsigned int mlen = 0;
+    Lock mylock(mutex());
     ObjList* l = m_chans.skipNull();
     for (;l;l = l->skipNext()) {
 	ConfChan* ch = static_cast<ConfChan*>(l->get());
@@ -156,6 +157,7 @@ void ConfRoom::mix()
 	*p++ = (val < -32768) ? -32768 : ((val > 32767) ? 32767 : val);
     }
     ::free(buf);
+    mylock.drop();
     Forward(data);
 }
 
@@ -163,9 +165,10 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 {
     if (data.null() || !m_room)
 	return;
-    Lock lock(m_room->mutex());
+    m_room->mutex().lock();
     if (m_buffer.length()+data.length() < MAX_BUFFER)
 	m_buffer += data;
+    m_room->mutex().unlock();
     if (m_buffer.length() >= MIN_BUFFER)
 	m_room->mix();
 }

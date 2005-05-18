@@ -24,19 +24,22 @@
 
 #include <modules/libypri.h>
 
-#ifdef _WINDOWS
-#error This module is not for Windows
+#ifndef _WINDOWS
+#error This module is only for Windows
 #else
 
 extern "C" {
 
-typedef int HANDLE;
-#define INVALID_HANDLE_VALUE (-1)
-#define __LINUX__
-#include <linux/if_wanpipe.h>
-#include <linux/if.h>
-#include <linux/wanpipe.h>
-#include <linux/sdla_bitstrm.h>
+#define MSG_NOSIGNAL 0
+#define MSG_DONTWAIT 0
+#include <winioctl.h>
+#define IOCTL_WRITE 1
+#define IOCTL_READ 2
+#define IOCTL_MGMT 3
+#define IoctlWriteCommand \
+	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_WRITE, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
+#define IoctlReadCommand \
+	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_READ, METHOD_IN_DIRECT, FILE_ANY_ACCESS)
 
 };
 
@@ -44,9 +47,6 @@ typedef int HANDLE;
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-
-#include <sys/ioctl.h>
-#include <fcntl.h>
 
 
 using namespace TelEngine;
@@ -133,13 +133,17 @@ INIT_PLUGIN(WpDriver);
 
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
 {
-    int r = ::recv(fd,buf,buflen,flags);
+    int r = 0;
+    if (DeviceIoControl(fd,IoctlReadCommand,0,0,buf,buflen,(LPDWORD)&r,0))
+	r = 0;
     return r;
 }
 
 static int wp_send(HANDLE fd, void *buf, int buflen, int flags = 0)
 {
-    int w = ::send(fd,buf,buflen,flags);
+    int w = 0;
+    if (DeviceIoControl(fd,IoctlWriteCommand,buf,buflen,buf,buflen,(LPDWORD)&w,0))
+	w = 0;
     return w;
 }
 
@@ -181,29 +185,14 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
 
 static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
 {
-    fd_set rdfds;
-    fd_set errfds;
-    FD_ZERO(&rdfds);
-    FD_SET(fd,&rdfds);
-    FD_ZERO(&errfds);
-    FD_SET(fd,&errfds);
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = samp*125;
-    int sel = ::select(fd+1, &rdfds, NULL, errp ? &errfds : NULL, &tv);
-    if (sel < 0)
-	Debug(DebugWarn,"Wanpipe select failed on %d: error %d: %s",
-	    fd,errno,::strerror(errno));
-    if (errp)
-	*errp = FD_ISSET(fd,&errfds);
-    return FD_ISSET(fd,&rdfds);
+    return (::WaitForSingleObject(fd,samp/8) == WAIT_OBJECT_0);
 }
 
 void wp_close(HANDLE fd)
 {
     if (fd == INVALID_HANDLE_VALUE)
 	return;
-    ::close(fd);
+    ::CloseHandle(fd);
 }
 
 static HANDLE wp_open(const char* card, const char* device)
@@ -211,24 +200,20 @@ static HANDLE wp_open(const char* card, const char* device)
     DDebug(DebugAll,"wp_open('%s','%s')",card,device);
     if (null(card) || null(device))
 	return INVALID_HANDLE_VALUE;
-    HANDLE fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
+    String devname("\\\\.\\");
+    devname << card << "_" << device;
+    HANDLE fd = ::CreateFile(
+	devname,
+	GENERIC_READ|GENERIC_WRITE,
+	FILE_SHARE_READ|FILE_SHARE_WRITE,
+	0,
+	OPEN_EXISTING,
+	FILE_FLAG_NO_BUFFERING|FILE_FLAG_WRITE_THROUGH,
+	0);
     if (fd == INVALID_HANDLE_VALUE) {
-	Debug(DebugGoOn,"Wanpipe failed to create socket: error %d: %s",
-	    errno,::strerror(errno));
+	Debug(DebugGoOn,"Wanpipe failed to open device '%s': error %d: %s",
+	    devname.c_str(),errno,::strerror(errno));
 	return fd;
-    }
-    // Bind to the card/interface
-    struct wan_sockaddr_ll sa;
-    memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-    ::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
-    ::strncpy((char*)sa.sll_card,card,sizeof(sa.sll_card));
-    sa.sll_protocol = htons(PVC_PROT);
-    sa.sll_family=AF_WANPIPE;
-    if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	Debug(DebugGoOn,"Wanpipe failed to bind %d: error %d: %s",
-	    fd,errno,::strerror(errno));
-	wp_close(fd);
-	fd = INVALID_HANDLE_VALUE;
     }
     return fd;
 }
@@ -436,14 +421,13 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     card << "wanpipe" << span;
     card = cfg.getValue(sect,"card",card);
     String dev;
-    dev << "w" << span << "g2";
+    dev = "if1";
     pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
     if (!p)
 	return 0;
     WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,(HANDLE)::pri_fd(p));
     ps->startup();
-    dev.clear();
-    dev << "w" << span << "g1";
+    dev = "if0";
     WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
     dat->startup();
     return ps;

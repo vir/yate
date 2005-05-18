@@ -242,6 +242,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
 #ifdef PRI_NSF_NONE
     ::pri_set_nsf(m_pri,cfg.getIntValue(sect,"facilities",dict_str2nsf,YATE_NSF_DEFAULT));
 #endif
+    ::pri_set_debug(m_pri,cfg.getIntValue(sect,"debug"));
     ::pri_set_userdata(m_pri, this);
 
     PriChan **ch = new PriChan* [chans];

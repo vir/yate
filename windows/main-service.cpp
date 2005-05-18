@@ -22,7 +22,24 @@
 
 #include "yatengine.h"
 
+static void WINAPI ServiceHandler(DWORD code)
+{
+    TelEngine::Output("ServiceHandler(%u)",code);
+}
+
+extern "C" void ServiceMain(DWORD argc, LPTSTR* argv)
+{
+    RegisterServiceCtrlHandler("yate",ServiceHandler);
+    TelEngine::Engine::main(argc,(const char**)argv,0);
+}
+
 extern "C" int main(int argc, const char** argv, const char** envp)
 {
-    return TelEngine::Engine::main(argc,argv,envp);
+    static SERVICE_TABLE_ENTRY dispatchTable[] =
+    {
+	{ TEXT("yate"), (LPSERVICE_MAIN_FUNCTION)ServiceMain },
+	{ NULL, NULL }
+    };
+
+    return StartServiceCtrlDispatcher(dispatchTable) ? 0 : EINVAL;
 }

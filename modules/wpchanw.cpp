@@ -56,15 +56,22 @@ class WpChan;
 class WpSpan : public PriSpan, public Thread
 {
     friend class WpData;
+    friend class WpReader;
+    friend class WpWriter;
     friend class WpDriver;
 public:
     virtual ~WpSpan();
     virtual void run();
+    int dataRead(void *buf, int buflen);
+    int dataWrite(void *buf, int buflen);
 
 private:
-    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd);
-    HANDLE m_fd;
-    WpData *m_data;
+    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect);
+    WpData* m_data;
+    WpReader* m_reader;
+    WpWriter* m_writer;
+    DataBlock m_rdata;
+    DataBlock m_wdata;
 };
 
 class WpSource : public PriSource
@@ -115,6 +122,28 @@ private:
     WpChan **m_chans;
 };
 
+class WpReader : public Thread
+{
+public:
+    WpReader(WpSpan* span, const char* card, const char* device);
+    ~WpReader();
+    virtual void run();
+private:
+    WpSpan* m_span;
+    HANDLE m_fd;
+};
+
+class WpWriter : public Thread
+{
+public:
+    WpWriter(WpSpan* span, const char* card, const char* device);
+    ~WpWriter();
+    virtual void run();
+private:
+    WpSpan* m_span;
+    HANDLE m_fd;
+};
+
 class WpDriver : public PriDriver
 {
     friend class PriSpan;
@@ -134,7 +163,7 @@ INIT_PLUGIN(WpDriver);
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
 {
     int r = 0;
-    if (DeviceIoControl(fd,IoctlReadCommand,0,0,buf,buflen,(LPDWORD)&r,0))
+    if (!DeviceIoControl(fd,IoctlReadCommand,0,0,buf,buflen,(LPDWORD)&r,0))
 	r = 0;
     return r;
 }
@@ -142,45 +171,52 @@ static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
 static int wp_send(HANDLE fd, void *buf, int buflen, int flags = 0)
 {
     int w = 0;
-    if (DeviceIoControl(fd,IoctlWriteCommand,buf,buflen,buf,buflen,(LPDWORD)&w,0))
+    if (!DeviceIoControl(fd,IoctlWriteCommand,buf,buflen,buf,buflen,(LPDWORD)&w,0))
 	w = 0;
     return w;
 }
 
 static int wp_read(struct pri *pri, void *buf, int buflen)
 {
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    XDebug("wp_read",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int r = wp_recv((HANDLE)::pri_fd(pri),tmp,sz,MSG_NOSIGNAL);
-    XDebug("wp_read",DebugAll,"post r=%d",r);
-    if (r > 0) {
-	r -= WP_HEADER;
-	if ((r > 0) && (r <= buflen)) {
-	    ::memcpy(buf,tmp+WP_HEADER,r);
-	    r += 2;
-	}
+    WpSpan* span = (WpSpan*)::pri_get_userdata(pri);
+    return span ? span->dataRead(buf,buflen) : 0;
+}
+
+int WpSpan::dataRead(void *buf, int buflen)
+{
+    Lock mylock(this);
+    if (m_rdata.data() && buf && (int)m_rdata.length() <= buflen) {
+	buflen = m_rdata.length();
+	::memcpy(buf,m_rdata.data(),buflen);
+	m_rdata.clear();
+	Debug(&__plugin,DebugAll,"WpSpan dequeued %d bytes block [%p]",buflen,this);
+	return buflen+2;
     }
-    ::free(tmp);
-    return r;
+    return 0;
 }
 
 static int wp_write(struct pri *pri, void *buf, int buflen)
 {
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    ::memcpy(tmp+WP_HEADER,buf,buflen);
-    XDebug("wp_write",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int w = wp_send((HANDLE)::pri_fd(pri),tmp,sz,0);
-    XDebug("wp_write",DebugAll,"post w=%d",w);
-    if (w > 0) {
-	w -= WP_HEADER;
-	w += 2;
+    WpSpan* span = (WpSpan*)::pri_get_userdata(pri);
+    return span ? span->dataWrite(buf,buflen) : 0;
+}
+
+int WpSpan::dataWrite(void *buf, int buflen)
+{
+    Lock mylock(this);
+    if (m_wdata.null() && buf && (buflen > 2)) {
+	buflen -= 2;
+	m_wdata.assign(0,buflen+WP_HEADER);
+	unsigned char *d = (unsigned char*)m_wdata.data();
+	const unsigned char* s = (const unsigned char*)buf;
+	d += WP_HEADER;
+	for (int i=0; i < buflen; i++)
+	    *d++ = PriDriver::bitswap(*s++);
+
+	Debug(&__plugin,DebugAll,"WpSpan queued %d bytes block [%p]",m_wdata.length(),this);
+	return buflen+2;
     }
-    ::free(tmp);
-    return w;
+    return 0;
 }
 
 static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
@@ -218,21 +254,83 @@ static HANDLE wp_open(const char* card, const char* device)
     return fd;
 }
 
-static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
+WpReader::WpReader(WpSpan* span, const char* card, const char* device)
+    : Thread("WpReader"), m_span(span), m_fd(INVALID_HANDLE_VALUE)
 {
-    DDebug(DebugAll,"wp_create('%s','%s',%d,%d)",card,device,nettype,swtype);
-    HANDLE fd = wp_open(card,device);
-    if (fd == INVALID_HANDLE_VALUE)
-	return 0;
-    struct pri* p = ::pri_new_cb((int)fd, nettype, swtype, wp_read, wp_write, 0);
-    if (!p)
-	wp_close(fd);
-    return p;
+    Debug(&__plugin,DebugAll,"WpReader::WpReader(%p) [%p]",span,this);
+    m_fd = wp_open(card,device);
+    m_span->m_reader = this;
 }
 
-WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd)
+WpReader::~WpReader()
+{
+    Debug(&__plugin,DebugAll,"WpReader::~WpReader() [%p]",this);
+    m_span->m_reader = 0;
+    HANDLE tmp = m_fd;
+    m_fd = INVALID_HANDLE_VALUE;
+    wp_close(tmp);
+}
+
+void WpReader::run()
+{
+    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
+	Thread::msleep(1,true);
+	Lock mylock(m_span);
+	if (m_span->m_rdata.data())
+	    continue;
+	mylock.drop();
+	unsigned char buf[1500+WP_HEADER];
+	int r = wp_recv(m_fd,buf,sizeof(buf)) - WP_HEADER;
+	Debug(&__plugin,DebugAll,"WpReader read returned %d [%p]",r,this);
+	if (r <= 0)
+	    continue;
+	m_span->lock();
+	m_span->m_rdata.assign(0,r);
+	unsigned char *d = (unsigned char*)m_span->m_rdata.data();
+	const unsigned char* s = buf;
+	s += WP_HEADER;
+	for (int i=0; i < r; i++)
+	    *d++ = PriDriver::bitswap(*s++);
+	Debug(&__plugin,DebugAll,"WpReader queued %d bytes block [%p]",r,this);
+	m_span->unlock();
+    }
+}
+
+WpWriter::WpWriter(WpSpan* span, const char* card, const char* device)
+    : Thread("WpWriter"), m_span(span), m_fd(INVALID_HANDLE_VALUE)
+{
+    Debug(&__plugin,DebugAll,"WpWriter::WpWriter(%p) [%p]",span,this);
+    m_fd = wp_open(card,device);
+    m_span->m_writer = this;
+}
+
+WpWriter::~WpWriter()
+{
+    Debug(&__plugin,DebugAll,"WpWriter::~WpWriter() [%p]",this);
+    m_span->m_writer = 0;
+    HANDLE tmp = m_fd;
+    m_fd = INVALID_HANDLE_VALUE;
+    wp_close(tmp);
+}
+
+void WpWriter::run()
+{
+    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
+	Thread::msleep(1,true);
+	Lock mylock(m_span);
+	if (m_span->m_wdata.null())
+	    continue;
+	DataBlock block(m_span->m_wdata);
+	m_span->m_wdata.clear();
+	mylock.drop();
+	Debug(&__plugin,DebugAll,"WpWriter writing %d bytes block [%p]",block.length(),this);
+	wp_send(m_fd,block.data(),block.length());
+    }
+}
+
+WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect)
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
-      m_fd(fd), m_data(0)
+      m_data(0), m_reader(0), m_writer(0)
 {
     Debug(&__plugin,DebugAll,"WpSpan::WpSpan() [%p]",this);
 }
@@ -242,17 +340,18 @@ WpSpan::~WpSpan()
     Debug(&__plugin,DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
     delete m_data;
-    wp_close(m_fd);
-    m_fd = INVALID_HANDLE_VALUE;
+    delete m_reader;
+    delete m_writer;
 }
 
 void WpSpan::run()
 {
     Debug(&__plugin,DebugAll,"WpSpan::run() [%p]",this);
     for (;;) {
-	bool rd = wp_select(m_fd,5); // 5 bytes per smallest q921 frame
-	Thread::check();
-	runEvent(!rd);
+	Thread::msleep(1,true);
+	lock();
+	runEvent(m_rdata.null());
+	unlock();
     }
 }
 
@@ -339,7 +438,7 @@ void WpData::run()
 	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
 	DDebug(&__plugin,DebugInfo,"wpdata ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
-    while (m_span && (m_fd >= 0)) {
+    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::check();
 	bool oob = false;
 	bool rd = wp_select(m_fd,samp,&oob);
@@ -421,14 +520,18 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     card << "wanpipe" << span;
     card = cfg.getValue(sect,"card",card);
     String dev;
-    dev = "if1";
-    pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
+    dev = cfg.getValue(sect,"dgroup","if1");
+    pri* p = ::pri_new_cb((int)INVALID_HANDLE_VALUE, netType, swType, wp_read, wp_write, 0);
     if (!p)
 	return 0;
-    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,(HANDLE)::pri_fd(p));
+    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect);
     ps->startup();
-    dev = "if0";
-    WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
+    WpWriter* wr = new WpWriter(ps,card,dev);
+    wr->startup();
+    WpReader* rd = new WpReader(ps,card,dev);
+    rd->startup();
+    dev = cfg.getValue(sect,"bgroup","if0");
+    WpData* dat = new WpData(ps,card,dev);
     dat->startup();
     return ps;
 }

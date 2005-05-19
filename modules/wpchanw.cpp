@@ -71,7 +71,7 @@ private:
     WpReader* m_reader;
     WpWriter* m_writer;
     DataBlock m_rdata;
-    DataBlock m_wdata;
+    ObjList m_wdata;
 };
 
 class WpSource : public PriSource
@@ -222,10 +222,11 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
 int WpSpan::dataWrite(void *buf, int buflen)
 {
     Lock mylock(this);
-    if (m_wdata.null() && buf && (buflen > 2)) {
+    if (buf && (buflen > 2) && (m_wdata.length() < 5)) {
 	buflen -= 2;
-	m_wdata.assign(buf,buflen);
-	Debug(&__plugin,DebugAll,"WpSpan queued %d bytes block [%p]",m_wdata.length(),this);
+	DataBlock* block = new DataBlock(buf,buflen);
+	m_wdata.append(block);
+	Debug(&__plugin,DebugAll,"WpSpan queued %d bytes block, total blocks %d [%p]",block->length(),m_wdata.count(),this);
 	return buflen+2;
     }
     return 0;
@@ -319,16 +320,17 @@ void WpWriter::run()
 {
     while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::msleep(1,true);
-	Lock mylock(m_span);
-	if (m_span->m_wdata.null())
+	m_span->lock();
+	DataBlock *block = static_cast<DataBlock*>(m_span->m_wdata.remove(false));
+	m_span->unlock();
+	if (!block)
 	    continue;
 	// this is really stupid - have to send a huge buffer, or else
 	// Error : Tx system buffer length not equal sizeof(TX_DATA_STRUCT)!
 	unsigned char buf[WP_HEADER+WP_BUFFER];
-	int len = m_span->m_wdata.length();
-	::memcpy(buf+WP_HEADER,m_span->m_wdata.data(),len);
-	m_span->m_wdata.clear();
-	mylock.drop();
+	int len = block->length();
+	::memcpy(buf+WP_HEADER,block->data(),len);
+	block->destruct();
 	buf[0] = 11;
 	buf[1] = len & 0xff;
 	buf[2] = len >> 8;
@@ -444,6 +446,8 @@ void WpData::run()
 	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
 	DDebug(&__plugin,DebugInfo,"wpdata ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
     }
+    int rok = 0, rerr = 0;
+    int wok = 0, werr = 0;
     while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::check();
 	if (1) {
@@ -457,13 +461,18 @@ void WpData::run()
 		m_span->lock();
 		for (int n = r; n > 0; n--)
 		    for (b = 0; b < bchans; b++) {
+			if (*dat != 0xff)
+			    Debug(DebugAll,"got %02x on %d",*dat,b);
 			WpSource *s = m_chans[b]->m_wp_s;
 			if (s)
 			    s->put(PriDriver::bitswap(*dat));
 			dat++;
 		    }
 		m_span->unlock();
+		++rok;
 	    }
+	    else
+		Debug(DebugWarn,"WpData read %d of %d (ok/bad %d/%d)",r,sz,rok,++rerr);
 	    int w = samp;
 	    ::memset(buffer,0,WP_HEADER);
 	    unsigned char* dat = buffer + WP_HEADER;
@@ -480,8 +489,11 @@ void WpData::run()
 	    buffer[0] = 11;
 	    buffer[1] = w & 0xff;
 	    buffer[2] = w >> 8;
-	    w += WP_HEADER;
 	    w = wp_send(m_fd,buffer,sizeof(buffer),MSG_DONTWAIT);
+	    if (w != sizeof(buffer))
+		Debug(DebugWarn,"WpData wrote %d of %d (ok/bad %d/%d)",w,sizeof(buffer),wok,++werr);
+	    else
+		++wok;
 //	    DDebug("wpdata_send",DebugAll,"post w=%d",w);
 	}
     }

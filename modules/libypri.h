@@ -206,8 +206,8 @@ public:
 protected:
     PriDriver(const char* name);
     void statusModule(String& str);
-private:
     ObjList m_spans;
+private:
     static u_int8_t s_bitswap[256];
     static bool s_init;
 };

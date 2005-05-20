@@ -151,6 +151,7 @@ public:
     WpDriver();
     virtual ~WpDriver();
     virtual void initialize();
+    virtual bool received(Message &msg, int id);
     virtual PriSpan* createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect);
     virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize);
 };
@@ -158,7 +159,7 @@ public:
 INIT_PLUGIN(WpDriver);
 
 #define WP_HEADER 21
-#define WP_BUFFER 8188 //maximum length of data
+#define WP_BUFFER 8188 // maximum length of data = 8K - 4
 
 
 static void dump_buffer(const void* buf, int len)
@@ -207,7 +208,7 @@ int WpSpan::dataRead(void *buf, int buflen)
 	buflen = m_rdata.length();
 	::memcpy(buf,m_rdata.data(),buflen);
 	m_rdata.clear();
-	Debug(&__plugin,DebugAll,"WpSpan dequeued %d bytes block [%p]",buflen,this);
+	DDebug(&__plugin,DebugAll,"WpSpan dequeued %d bytes block [%p]",buflen,this);
 	return buflen+2;
     }
     return 0;
@@ -226,7 +227,7 @@ int WpSpan::dataWrite(void *buf, int buflen)
 	buflen -= 2;
 	DataBlock* block = new DataBlock(buf,buflen);
 	m_wdata.append(block);
-	Debug(&__plugin,DebugAll,"WpSpan queued %d bytes block, total blocks %d [%p]",block->length(),m_wdata.count(),this);
+	DDebug(&__plugin,DebugAll,"WpSpan queued %d bytes block, total blocks %d [%p]",block->length(),m_wdata.count(),this);
 	return buflen+2;
     }
     return 0;
@@ -265,14 +266,14 @@ static HANDLE wp_open(const char* card, const char* device)
 WpReader::WpReader(WpSpan* span, const char* card, const char* device)
     : Thread("WpReader"), m_span(span), m_fd(INVALID_HANDLE_VALUE)
 {
-    Debug(&__plugin,DebugAll,"WpReader::WpReader(%p) [%p]",span,this);
+    DDebug(&__plugin,DebugAll,"WpReader::WpReader(%p) [%p]",span,this);
     m_fd = wp_open(card,device);
     m_span->m_reader = this;
 }
 
 WpReader::~WpReader()
 {
-    Debug(&__plugin,DebugAll,"WpReader::~WpReader() [%p]",this);
+    DDebug(&__plugin,DebugAll,"WpReader::~WpReader() [%p]",this);
     m_span->m_reader = 0;
     HANDLE tmp = m_fd;
     m_fd = INVALID_HANDLE_VALUE;
@@ -281,7 +282,7 @@ WpReader::~WpReader()
 
 void WpReader::run()
 {
-    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
+    while (m_span && m_span->m_reader && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::msleep(1,true);
 	Lock mylock(m_span);
 	if (m_span->m_rdata.data())
@@ -289,12 +290,12 @@ void WpReader::run()
 	mylock.drop();
 	unsigned char buf[WP_HEADER+WP_BUFFER];
 	int r = wp_recv(m_fd,buf,sizeof(buf)) - WP_HEADER;
-	Debug(&__plugin,DebugAll,"WpReader read returned %d [%p]",r,this);
+	XDebug(&__plugin,DebugAll,"WpReader read returned %d [%p]",r,this);
 	if (r <= 0)
 	    continue;
 	m_span->lock();
 	m_span->m_rdata.assign(buf+WP_HEADER,r);
-	Debug(&__plugin,DebugAll,"WpReader queued %d bytes block [%p]",r,this);
+	DDebug(&__plugin,DebugAll,"WpReader queued %d bytes block [%p]",r,this);
 	m_span->unlock();
     }
 }
@@ -302,14 +303,14 @@ void WpReader::run()
 WpWriter::WpWriter(WpSpan* span, const char* card, const char* device)
     : Thread("WpWriter"), m_span(span), m_fd(INVALID_HANDLE_VALUE)
 {
-    Debug(&__plugin,DebugAll,"WpWriter::WpWriter(%p) [%p]",span,this);
+    DDebug(&__plugin,DebugAll,"WpWriter::WpWriter(%p) [%p]",span,this);
     m_fd = wp_open(card,device);
     m_span->m_writer = this;
 }
 
 WpWriter::~WpWriter()
 {
-    Debug(&__plugin,DebugAll,"WpWriter::~WpWriter() [%p]",this);
+    DDebug(&__plugin,DebugAll,"WpWriter::~WpWriter() [%p]",this);
     m_span->m_writer = 0;
     HANDLE tmp = m_fd;
     m_fd = INVALID_HANDLE_VALUE;
@@ -318,13 +319,14 @@ WpWriter::~WpWriter()
 
 void WpWriter::run()
 {
-    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
+    while (m_span && m_span->m_writer && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::msleep(1,true);
 	m_span->lock();
 	DataBlock *block = static_cast<DataBlock*>(m_span->m_wdata.remove(false));
 	m_span->unlock();
 	if (!block)
 	    continue;
+	DDebug(&__plugin,DebugAll,"WpWriter dequeued %d bytes block [%p]",block->length(),this);
 	// this is really stupid - have to send a huge buffer, or else
 	// Error : Tx system buffer length not equal sizeof(TX_DATA_STRUCT)!
 	unsigned char buf[WP_HEADER+WP_BUFFER];
@@ -349,15 +351,22 @@ WpSpan::~WpSpan()
 {
     Debug(&__plugin,DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
-    delete m_data;
-    delete m_reader;
-    delete m_writer;
+    if (m_data)
+	m_data->cancel();
+    if (m_reader)
+	m_reader->cancel();
+    if (m_writer)
+	m_writer->cancel();
+    Debug(&__plugin,DebugAll,"WpSpan waiting for cleanups [%p]",this);
+    Thread::msleep(20);
+    while (m_data || m_reader || m_writer)
+	Thread::msleep(1,true);
 }
 
 void WpSpan::run()
 {
     Debug(&__plugin,DebugAll,"WpSpan::run() [%p]",this);
-    for (;;) {
+    while (m_data && m_reader && m_writer) {
 	Thread::msleep(1,true);
 	lock();
 	runEvent(m_rdata.null());
@@ -411,7 +420,7 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 WpData::WpData(WpSpan* span, const char* card, const char* device)
     : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_chans(0)
 {
-    Debug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
+    DDebug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
     HANDLE fd = wp_open(card,device);
     if (fd != INVALID_HANDLE_VALUE) {
 	m_fd = fd;
@@ -421,7 +430,7 @@ WpData::WpData(WpSpan* span, const char* card, const char* device)
 
 WpData::~WpData()
 {
-    Debug(&__plugin,DebugAll,"WpData::~WpData() [%p]",this);
+    DDebug(&__plugin,DebugAll,"WpData::~WpData() [%p]",this);
     m_span->m_data = 0;
     wp_close(m_fd);
     m_fd = INVALID_HANDLE_VALUE;
@@ -431,12 +440,9 @@ WpData::~WpData()
 
 void WpData::run()
 {
-    Debug(&__plugin,DebugAll,"WpData::run() [%p]",this);
+    DDebug(&__plugin,DebugAll,"WpData::run() [%p]",this);
     unsigned char buffer[WP_HEADER+WP_BUFFER];
-    int samp = 50;
     int bchans = m_span->bchans();
-    int buflen = samp*bchans;
-    int sz = buflen+WP_HEADER;
     // Build a compacted list of allocated B channels
     m_chans = new WpChan* [bchans];
     int b = 0;
@@ -448,21 +454,22 @@ void WpData::run()
     }
     int rok = 0, rerr = 0;
     int wok = 0, werr = 0;
-    while (m_span && (m_fd != INVALID_HANDLE_VALUE)) {
+    while (m_span && m_span->m_data && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::check();
-	if (1) {
-	    int r = wp_recv(m_fd,buffer,sz,0/*MSG_NOSIGNAL*/);
-//	    DDebug("wpdata_recv",DebugAll,"post r=%d sz=%d",r,sz);
-	    r -= WP_HEADER;
-	    // We should have read N bytes for each B channel
-	    if ((r > 0) && ((r % bchans) == 0)) {
-		r /= bchans;
+	int samp = 0;
+	int r = wp_recv(m_fd,buffer,sizeof(buffer),0/*MSG_NOSIGNAL*/);
+	XDebug(&__plugin,DebugAll,"WpData recv r=%d",r);
+	r -= WP_HEADER;
+	// We should have read N bytes for each B channel
+	if (r > 0) {
+	    samp = r / bchans;
+	    if ((r % bchans) == 0) {
 		const unsigned char* dat = buffer + WP_HEADER;
 		m_span->lock();
-		for (int n = r; n > 0; n--)
+		for (int n = samp; n > 0; n--)
 		    for (b = 0; b < bchans; b++) {
 			if (*dat != 0xff)
-			    Debug(DebugAll,"got %02x on %d",*dat,b);
+			    Debug(&__plugin,DebugAll,"got %02x on %d",*dat,b);
 			WpSource *s = m_chans[b]->m_wp_s;
 			if (s)
 			    s->put(PriDriver::bitswap(*dat));
@@ -472,29 +479,30 @@ void WpData::run()
 		++rok;
 	    }
 	    else
-		Debug(DebugWarn,"WpData read %d of %d (ok/bad %d/%d)",r,sz,rok,++rerr);
-	    int w = samp;
+		Debug(DebugWarn,"WpData read %d (ok/bad %d/%d)",r,rok,++rerr);
+	}
+	if (samp) {
 	    ::memset(buffer,0,WP_HEADER);
 	    unsigned char* dat = buffer + WP_HEADER;
 	    m_span->lock();
-	    for (int n = w; n > 0; n--) {
+	    for (int n = samp; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
 	    m_span->unlock();
-	    w *= bchans;
+	    int w = samp * bchans;
 	    dat = buffer;
 	    buffer[0] = 11;
 	    buffer[1] = w & 0xff;
 	    buffer[2] = w >> 8;
 	    w = wp_send(m_fd,buffer,sizeof(buffer),MSG_DONTWAIT);
 	    if (w != sizeof(buffer))
-		Debug(DebugWarn,"WpData wrote %d of %d (ok/bad %d/%d)",w,sizeof(buffer),wok,++werr);
+		Debug(DebugWarn,"WpData wrote %d (ok/bad %d/%d)",w,wok,++werr);
 	    else
 		++wok;
-//	    DDebug("wpdata_send",DebugAll,"post w=%d",w);
+	    XDebug(&__plugin,DebugAll,"WpData send w=%d",w);
 	}
     }
 }
@@ -538,14 +546,14 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     if (!p)
 	return 0;
     WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect);
-    ps->startup();
     WpWriter* wr = new WpWriter(ps,card,dev);
-    wr->startup();
     WpReader* rd = new WpReader(ps,card,dev);
-    rd->startup();
     dev = cfg.getValue(sect,"bgroup","IF0");
     WpData* dat = new WpData(ps,card,dev);
+    wr->startup();
+    rd->startup();
     dat->startup();
+    ps->startup();
     return ps;
 }
 
@@ -570,7 +578,24 @@ void WpDriver::initialize()
 {
     Output("Initializing module Wanpipe");
     init("wpchan");
+    installRelay(Halt,110);
 }
+
+bool WpDriver::received(Message &msg, int id)
+{
+    if (id == Halt) {
+	Debug(this,DebugAll,"WpDriver clearing all spans [%p]",this);
+	const ObjList *l = &m_spans;
+	for (; l; l=l->next()) {
+	    WpSpan *s = static_cast<WpSpan*>(l->get());
+	    if (s)
+		s->cancel();
+	}
+	Thread::msleep(10);
+    }
+    return PriDriver::received(msg,id);
+}
+
 
 #endif /* _WINDOWS */
 

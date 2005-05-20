@@ -454,6 +454,7 @@ void WpData::run()
     }
     int rok = 0, rerr = 0;
     int wok = 0, werr = 0;
+    int offs = 0;
     while (m_span && m_span->m_data && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::check();
 	int samp = 0;
@@ -466,16 +467,40 @@ void WpData::run()
 	    if ((r % bchans) == 0) {
 		const unsigned char* dat = buffer + WP_HEADER;
 		m_span->lock();
-		for (int n = samp; n > 0; n--)
+		int p1 = -1;
+		int p2 = -1;
+		for (int n = samp; n > 0; n--) {
 		    for (b = 0; b < bchans; b++) {
-			if (*dat != 0xff)
-			    Debug(&__plugin,DebugAll,"got %02x on %d",*dat,b);
-			WpSource *s = m_chans[b]->m_wp_s;
-			if (s)
+			if (*dat != 0xff) {
+			    //Debug(&__plugin,DebugAll,"got %02x on %d",*dat,b);
+			    if (p1 >= -1) {
+				if (p1 < 0)
+				    p1 = b;
+				else if (p1 != b)
+				    p1 = -2;
+			    }
+			}
+			int b2 = (b + offs) % bchans;
+			WpSource *s = m_chans[b2]->m_wp_s;
+			if (s) {
 			    s->put(PriDriver::bitswap(*dat));
+			    if (p2 >= -1) {
+				if (p2 < 0)
+				    p2 = b;
+				else if (p2 != b)
+				    p2 = -2;
+			    }
+			}
 			dat++;
 		    }
+		}
 		m_span->unlock();
+		if ((p1 >= 0) && (p2 >= 0) && (p1 != p2)) {
+		    offs = p2 - p1;
+		    if (offs < 0)
+			offs += bchans;
+		    Debug(&__plugin,DebugAll,"got data on %d and source on %d, new offset %d",p1,p2,offs);
+		}
 		++rok;
 	    }
 	    else
@@ -487,7 +512,8 @@ void WpData::run()
 	    m_span->lock();
 	    for (int n = samp; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
-		    WpConsumer *c = m_chans[b]->m_wp_c;
+		    int b2 = (b + bchans - offs) % bchans;
+		    WpConsumer *c = m_chans[b2]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
@@ -519,6 +545,7 @@ WpChan::~WpChan()
 
 bool WpChan::openData(const char* format, int echoTaps)
 {
+    Debug(this,DebugAll,"WpChan::openData(%s,%d) [%p]",format,echoTaps,this);
     if (echoTaps)
 	Debug(DebugWarn,"Echo cancellation requested but not available in wanpipe");
     m_span->lock();

@@ -175,7 +175,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
 
 SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
     : method("ACK"),
-      body(), m_ep(0), m_valid(false),
+      body(0), m_ep(0), m_valid(false),
       m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {
     DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]",message,newtran,this);

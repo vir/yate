@@ -691,7 +691,7 @@ bool PriChan::call(Message &msg, const char *called)
     int layer1 = msg.getIntValue("format",dict_str2law,m_span->layer1());
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
-    Channel *ch = static_cast<Channel *>(msg.userData());
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	openData(lookup(layer1,dict_str2law),msg.getIntValue("cancelecho",dict_numtaps));
 	connect(ch);
@@ -735,23 +735,26 @@ bool PriChan::call(Message &msg, const char *called)
 void PriChan::ring(pri_event_ring &ev)
 {
     q931_call *call = ev.call;
-    if (call) {
-	setTimeout(10000000);
-	setOutgoing(false);
-	m_call = call;
-	m_ring = true;
-	status(chanStatus());
-	::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
-	Message *m = message("chan.startup");
-	m->addParam("span",String(m_span->span()));
-	m->addParam("channel",String(m_chan));
-	m->addParam("direction","incoming");
-	Engine::enqueue(m);
-    }
-    else
+    if (!call) {
 	hangup(PRI_CAUSE_WRONG_CALL_STATE);
+	return;
+    }
 
-    Message *m = message("call.route");
+    setTimeout(10000000);
+    setOutgoing(false);
+    m_call = call;
+    m_ring = true;
+    status(chanStatus());
+    ::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
+    Message *m = message("chan.startup");
+    m->addParam("span",String(m_span->span()));
+    m->addParam("channel",String(m_chan));
+    m->addParam("direction","incoming");
+    Engine::enqueue(m);
+
+    openData(lookup(ev.layer1,dict_str2law),0);
+
+    m = message("call.route");
     if (m_span->overlapped() && !ev.complete && (::strlen(ev.callednum) < m_span->overlapped())) {
 	::pri_need_more_info(m_span->pri(),m_call,m_chan,!isISDN());
 	m->addParam("overlapped","yes");

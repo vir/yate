@@ -1,6 +1,5 @@
 ; -- yate.iss --
 ; Yate script for Inno Setup Compiler.
-
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING .ISS SCRIPT FILES!
 
 [Setup]
@@ -17,16 +16,18 @@ Name: "full"; Description: "Full installation"
 Name: "client"; Description: "VoIP client installation"
 Name: "server"; Description: "Server installation"
 Name: "custom"; Description: "Custom installation"; Flags: iscustom
+Name: "engine"; Description: "Engine only (unlikely)"
 
 [Components]
-Name: "engine"; Description: "Engine library"; Types: full client server custom; Flags: fixed
+Name: "engine"; Description: "Engine library"; Types: full client server engine custom; Flags: fixed
 Name: "client"; Description: "Client files"; Types: full client
 Name: "server"; Description: "Server files"; Types: full server
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
+Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
-Name: "debug"; Description: "Extra debugging support"; Types: full
+Name: "debug"; Description: "Extra debugging support"; Types: full engine
 
 [Tasks]
 Name: "qlaunch"; Description: "Create a &Quick Launch icon"; GroupDescription: "Additional icons:"; Components: client; Flags: unchecked
@@ -40,15 +41,15 @@ Source: "Release\yate-console.exe"; DestDir: "{app}"; Components: debug
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Components: debug
 Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\conference.yate"; DestDir: "{app}\modules"; Components: client server
+Source: "Release\conference.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\dsoundchan.yate"; DestDir: "{app}\modules"; Components: client
 Source: "Release\iaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Components: debug
-Source: "Release\regexroute.yate"; DestDir: "{app}\modules"
+Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Components: client server debug
 Source: "Release\regfile.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: debug
-Source: "Release\tonegen.yate"; DestDir: "{app}\modules"
-Source: "Release\wavefile.yate"; DestDir: "{app}\modules"
+Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Components: driver\base
+Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
@@ -62,5 +63,5 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; File
 Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-client.exe"; Components: client; Tasks: desktop
 
 [Run]
-Filename: "{app}\yate-client.exe"; Description: "Launch client"; Flags: postinstall nowait skipifsilent unchecked
+Filename: "{app}\yate-client.exe"; Description: "Launch client"; Components: client; Flags: postinstall nowait skipifsilent unchecked
 

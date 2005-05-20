@@ -454,7 +454,6 @@ void WpData::run()
     }
     int rok = 0, rerr = 0;
     int wok = 0, werr = 0;
-    int offs = 0;
     while (m_span && m_span->m_data && (m_fd != INVALID_HANDLE_VALUE)) {
 	Thread::check();
 	int samp = 0;
@@ -471,36 +470,13 @@ void WpData::run()
 		int p2 = -1;
 		for (int n = samp; n > 0; n--) {
 		    for (b = 0; b < bchans; b++) {
-			if (*dat != 0xff) {
-			    //Debug(&__plugin,DebugAll,"got %02x on %d",*dat,b);
-			    if (p1 >= -1) {
-				if (p1 < 0)
-				    p1 = b;
-				else if (p1 != b)
-				    p1 = -2;
-			    }
-			}
-			int b2 = (b + offs) % bchans;
-			WpSource *s = m_chans[b2]->m_wp_s;
-			if (s) {
+			WpSource *s = m_chans[b]->m_wp_s;
+			if (s)
 			    s->put(PriDriver::bitswap(*dat));
-			    if (p2 >= -1) {
-				if (p2 < 0)
-				    p2 = b;
-				else if (p2 != b)
-				    p2 = -2;
-			    }
-			}
 			dat++;
 		    }
 		}
 		m_span->unlock();
-		if ((p1 >= 0) && (p2 >= 0) && (p1 != p2)) {
-		    offs = p2 - p1;
-		    if (offs < 0)
-			offs += bchans;
-		    Debug(&__plugin,DebugAll,"got data on %d and source on %d, new offset %d",p1,p2,offs);
-		}
 		++rok;
 	    }
 	    else
@@ -512,8 +488,7 @@ void WpData::run()
 	    m_span->lock();
 	    for (int n = samp; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
-		    int b2 = (b + bchans - offs) % bchans;
-		    WpConsumer *c = m_chans[b2]->m_wp_c;
+		    WpConsumer *c = m_chans[b]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
@@ -568,14 +543,14 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     card << "WANPIPE" << span;
     card = cfg.getValue(sect,"card",card);
     String dev;
-    dev = cfg.getValue(sect,"dgroup","IF1");
+    dev = cfg.getValue(sect,"dgroup","IF0");
     pri* p = ::pri_new_cb((int)INVALID_HANDLE_VALUE, netType, swType, wp_read, wp_write, 0);
     if (!p)
 	return 0;
     WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect);
     WpWriter* wr = new WpWriter(ps,card,dev);
     WpReader* rd = new WpReader(ps,card,dev);
-    dev = cfg.getValue(sect,"bgroup","IF0");
+    dev = cfg.getValue(sect,"bgroup","IF1");
     WpData* dat = new WpData(ps,card,dev);
     wr->startup();
     rd->startup();

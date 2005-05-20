@@ -577,6 +577,15 @@ class YATE_API Engine
     friend class EnginePrivate;
 public:
     /**
+     * Running modes - run the engine as Console, Client or Server.
+     */
+    enum RunMode {
+	Console = 0,
+	Client = 1,
+	Server = 2
+    };
+
+    /**
      * Main entry point to be called directly from a wrapper program
      * @param argc Argument count
      * @param argv Argument array
@@ -586,7 +595,7 @@ public:
      * @return Program exit code
      */
     static int main(int argc, const char** argv, const char** env,
-	bool client = false, bool fail = false);
+	RunMode mode = Console, bool fail = false);
 
     /**
      * Display the help information on console

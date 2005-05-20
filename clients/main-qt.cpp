@@ -156,5 +156,5 @@ extern "C" int main(int argc, const char** argv, const char** environ)
     bool fail = !::getenv("DISPLAY");
     if (fail)
         fputs("Warning: DISPLAY variable is not set\n",stderr);
-    return TelEngine::Engine::main(argc,argv,environ,true,fail);
+    return TelEngine::Engine::main(argc,argv,environ,TelEngine::Engine::Client,fail);
 }

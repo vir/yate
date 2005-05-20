@@ -634,7 +634,7 @@ extern "C" int main(int argc, const char** argv, const char** environ)
     bool fail = !gtk_init_check(&argc,(char ***)&argv);
     if (fail)
 	g_warning("Cannot open display: '%s'",gdk_get_display());
-    return TelEngine::Engine::main(argc,argv,environ,true,fail);
+    return TelEngine::Engine::main(argc,argv,environ,TelEngine::Engine::Client,fail);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

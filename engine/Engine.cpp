@@ -28,6 +28,9 @@
 #define dlopen(name,flags) LoadLibrary(name)
 #define dlclose !FreeLibrary
 #define dlerror() "LoadLibrary error"
+#define YSERV_RUN 1
+#define YSERV_INS 2
+#define YSERV_DEL 4
 #else
 #include "yatepaths.h"
 #include <dirent.h>
@@ -212,6 +215,177 @@ void EnginePrivate::run()
     }
 }
 
+static int engineRun()
+{
+    time_t t = ::time(0);
+    Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
+    int retcode = Engine::self()->run();
+    t = ::time(0);
+    Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
+    return retcode;
+}
+
+#ifdef _WINDOWS
+
+static SERVICE_STATUS_HANDLE s_handler = 0;
+static SERVICE_STATUS s_status;
+
+static void setStatus(DWORD state)
+{
+    if (!s_handler)
+	return;
+    s_status.dwCurrentState = state;
+    SetServiceStatus(s_handler,&s_status);
+}
+
+static void WINAPI serviceHandler(DWORD code)
+{
+    switch (code) {
+	case SERVICE_CONTROL_STOP:
+	    Engine::halt(0);
+	    break;
+	case SERVICE_CONTROL_PARAMCHANGE:
+	    Engine::init();
+	    break;
+	default:
+	    Debug(DebugWarn,"Got unexpected service control code %u",code);
+    }
+}
+
+static void serviceMain(DWORD argc, LPTSTR* argv)
+{
+    s_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+    s_status.dwCurrentState = SERVICE_START_PENDING;
+    s_status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PARAMCHANGE;
+    s_status.dwWin32ExitCode = NO_ERROR;
+    s_status.dwServiceSpecificExitCode = 0;
+    s_status.dwCheckPoint = 0;
+    s_status.dwWaitHint = 0;
+    s_handler = RegisterServiceCtrlHandler("yate",serviceHandler);
+    if (!s_handler) {
+	Debug(DebugFail,"Could not register service control handler \"yate\", code %u\n",GetLastError());
+	return;
+    }
+    setStatus(SERVICE_START_PENDING);
+    engineRun();
+}
+
+static SERVICE_TABLE_ENTRY dispatchTable[] =
+{
+    { TEXT("yate"), (LPSERVICE_MAIN_FUNCTION)serviceMain },
+    { NULL, NULL }
+};
+
+#else /* _WINDOWS */
+
+#define setStatus(s)
+
+static bool s_runagain = true;
+static pid_t s_childpid = -1;
+
+static void superhandler(int signal)
+{
+    switch (signal) {
+	case SIGINT:
+	case SIGTERM:
+	case SIGABRT:
+	    s_runagain = false;
+    }
+    if (s_childpid > 0)
+	::kill(s_childpid,signal);
+}
+
+static int supervise(void)
+{
+    ::fprintf(stderr,"Supervisor (%u) is starting\n",::getpid());
+    ::signal(SIGINT,superhandler);
+    ::signal(SIGTERM,superhandler);
+    ::signal(SIGHUP,superhandler);
+    ::signal(SIGQUIT,superhandler);
+    ::signal(SIGABRT,superhandler);
+    int retcode = 0;
+    while (s_runagain) {
+	int wdogfd[2];
+	if (::pipe(wdogfd)) {
+	    int err = errno;
+	    ::fprintf(stderr,"Supervisor: pipe failed: %s (%d)\n",::strerror(err),err);
+	    return err;
+	}
+	::fcntl(wdogfd[0],F_SETFL,O_NONBLOCK);
+	::fcntl(wdogfd[1],F_SETFL,O_NONBLOCK);
+	s_childpid = ::fork();
+	if (s_childpid < 0) {
+	    int err = errno;
+	    ::fprintf(stderr,"Supervisor: fork failed: %s (%d)\n",::strerror(err),err);
+	    return err;
+	}
+	if (s_childpid == 0) {
+	    s_super_handle = wdogfd[1];
+	    ::close(wdogfd[0]);
+	    ::signal(SIGINT,SIG_DFL);
+	    ::signal(SIGTERM,SIG_DFL);
+	    ::signal(SIGHUP,SIG_DFL);
+	    ::signal(SIGQUIT,SIG_DFL);
+	    ::signal(SIGABRT,SIG_DFL);
+	    return -1;
+	}
+	::close(wdogfd[1]);
+	// Wait for the child to die or block
+	for (int sanity = INIT_SANITY; sanity > 0; sanity--) {
+	    int status = -1;
+	    int tmp = ::waitpid(s_childpid,&status,WNOHANG);
+	    if (tmp > 0) {
+		// Child exited for some reason
+		if (WIFEXITED(status)) {
+		    retcode = WEXITSTATUS(status);
+		    if (retcode <= 127)
+			s_runagain = false;
+		    else
+			retcode &= 127;
+		}
+		else if (WIFSIGNALED(status)) {
+		    retcode = WTERMSIG(status);
+		    ::fprintf(stderr,"Supervisor: child %d died on signal %d\n",s_childpid,retcode);
+		}
+		s_childpid = -1;
+		break;
+	    }
+
+	    char buf[MAX_SANITY];
+	    tmp = ::read(wdogfd[0],buf,sizeof(buf));
+	    if (tmp >= 0) {
+		// Timer messages add one sanity point every second
+		sanity += tmp;
+		if (sanity > MAX_SANITY)
+		    sanity = MAX_SANITY;
+	    }
+	    else if ((errno != EINTR) && (errno != EAGAIN))
+		break;
+	    // Consume sanity points slightly slower than added
+	    ::usleep(1200000);
+	}
+	::close(wdogfd[0]);
+	if (s_childpid > 0) {
+	    // Child failed to proof sanity. Kill it - no need to be gentle.
+	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
+	    // If -Da was specified try to get a corefile
+	    if (s_sigabrt) {
+		::kill(s_childpid,SIGABRT);
+		::usleep(250000);
+	    }
+	    ::kill(s_childpid,SIGKILL);
+	    ::usleep(10000);
+	    ::waitpid(s_childpid,0,WNOHANG);
+	    s_childpid = -1;
+	}
+	if (s_runagain)
+	    ::usleep(1000000);
+    }
+    ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
+    return retcode;
+}
+#endif /* _WINDOWS */
+
 Engine::Engine()
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
@@ -261,6 +435,7 @@ int Engine::run()
     ::signal(SIGTERM,sighandler);
     Debug(DebugInfo,"Engine dispatching start message");
     dispatch("engine.start");
+    setStatus(SERVICE_RUNNING);
     unsigned long corr = 0;
 #ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);
@@ -325,6 +500,7 @@ int Engine::run()
     }
     s_haltcode &= 0xff;
     Output("Yate engine is shutting down with code %d",s_haltcode);
+    setStatus(SERVICE_STOP_PENDING);
     dispatch("engine.halt");
     Thread::msleep(200);
     m_dispatcher.dequeue();
@@ -341,6 +517,7 @@ int Engine::run()
 #ifdef _WINDOWS
     ::WSACleanup();
 #endif
+    setStatus(SERVICE_STOPPED);
     return s_haltcode;
 }
 
@@ -522,121 +699,10 @@ bool Engine::dispatch(const char* name)
     return s_self->m_dispatcher.dispatch(msg);
 }
 
-
 static bool s_sigabrt = false;
-
-#ifndef _WINDOWS
-static bool s_runagain = true;
-static pid_t s_childpid = -1;
-
-static void superhandler(int signal)
-{
-    switch (signal) {
-	case SIGINT:
-	case SIGTERM:
-	case SIGABRT:
-	    s_runagain = false;
-    }
-    if (s_childpid > 0)
-	::kill(s_childpid,signal);
-}
-
-static int supervise(void)
-{
-    ::fprintf(stderr,"Supervisor (%u) is starting\n",::getpid());
-    ::signal(SIGINT,superhandler);
-    ::signal(SIGTERM,superhandler);
-    ::signal(SIGHUP,superhandler);
-    ::signal(SIGQUIT,superhandler);
-    ::signal(SIGABRT,superhandler);
-    int retcode = 0;
-    while (s_runagain) {
-	int wdogfd[2];
-	if (::pipe(wdogfd)) {
-	    int err = errno;
-	    ::fprintf(stderr,"Supervisor: pipe failed: %s (%d)\n",::strerror(err),err);
-	    return err;
-	}
-	::fcntl(wdogfd[0],F_SETFL,O_NONBLOCK);
-	::fcntl(wdogfd[1],F_SETFL,O_NONBLOCK);
-	s_childpid = ::fork();
-	if (s_childpid < 0) {
-	    int err = errno;
-	    ::fprintf(stderr,"Supervisor: fork failed: %s (%d)\n",::strerror(err),err);
-	    return err;
-	}
-	if (s_childpid == 0) {
-	    s_super_handle = wdogfd[1];
-	    ::close(wdogfd[0]);
-	    ::signal(SIGINT,SIG_DFL);
-	    ::signal(SIGTERM,SIG_DFL);
-	    ::signal(SIGHUP,SIG_DFL);
-	    ::signal(SIGQUIT,SIG_DFL);
-	    ::signal(SIGABRT,SIG_DFL);
-	    return -1;
-	}
-	::close(wdogfd[1]);
-	// Wait for the child to die or block
-	for (int sanity = INIT_SANITY; sanity > 0; sanity--) {
-	    int status = -1;
-	    int tmp = ::waitpid(s_childpid,&status,WNOHANG);
-	    if (tmp > 0) {
-		// Child exited for some reason
-		if (WIFEXITED(status)) {
-		    retcode = WEXITSTATUS(status);
-		    if (retcode <= 127)
-			s_runagain = false;
-		    else
-			retcode &= 127;
-		}
-		else if (WIFSIGNALED(status)) {
-		    retcode = WTERMSIG(status);
-		    ::fprintf(stderr,"Supervisor: child %d died on signal %d\n",s_childpid,retcode);
-		}
-		s_childpid = -1;
-		break;
-	    }
-
-	    char buf[MAX_SANITY];
-	    tmp = ::read(wdogfd[0],buf,sizeof(buf));
-	    if (tmp >= 0) {
-		// Timer messages add one sanity point every second
-		sanity += tmp;
-		if (sanity > MAX_SANITY)
-		    sanity = MAX_SANITY;
-	    }
-	    else if ((errno != EINTR) && (errno != EAGAIN))
-		break;
-	    // Consume sanity points slightly slower than added
-	    ::usleep(1200000);
-	}
-	::close(wdogfd[0]);
-	if (s_childpid > 0) {
-	    // Child failed to proof sanity. Kill it - no need to be gentle.
-	    ::fprintf(stderr,"Supervisor: killing unresponsive child %d\n",s_childpid);
-	    // If -Da was specified try to get a corefile
-	    if (s_sigabrt) {
-		::kill(s_childpid,SIGABRT);
-		::usleep(250000);
-	    }
-	    ::kill(s_childpid,SIGKILL);
-	    ::usleep(10000);
-	    ::waitpid(s_childpid,0,WNOHANG);
-	    s_childpid = -1;
-	}
-	if (s_runagain)
-	    ::usleep(1000000);
-    }
-    ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
-    return retcode;
-}
-#endif /* _WINDOWS */
 
 static void usage(bool client, FILE* f)
 {
-#ifdef _WINDOWS
-    client = true;
-#endif
     ::fprintf(f,
 "Usage: yate [options] [commands ...]\n"
 "   -h             Help message (this one)\n"
@@ -658,8 +724,14 @@ static void usage(bool client, FILE* f)
 "     t            Timestamp debugging messages\n"
 #endif
     ,client ? "" :
+#ifdef _WINDOWS
+"   --service      Run as Windows service\n"
+"   --install      Install the Windows service\n"
+"   --remove       Remove the Windows service\n"
+#else
 "   -d             Daemonify, suppress output unless logged\n"
 "   -s             Supervised, restart if crashes or locks up\n"
+#endif
     ,s_cfgfile);
 }
 
@@ -678,12 +750,15 @@ static void noarg(bool client, const char* opt)
     usage(client,stderr);
 }
 
-int Engine::main(int argc, const char** argv, const char** env, bool client, bool fail)
+int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bool fail)
 {
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+    int service = 0;
+#else
     bool daemonic = false;
     bool supervised = false;
 #endif
+    bool client = (mode == Client);
     bool tstamp = false;
     const char *pidfile = 0;
     const char *logfile = 0;
@@ -715,6 +790,23 @@ int Engine::main(int argc, const char** argv, const char** env, bool client, boo
 			    usage(client,stdout);
 			    return 0;
 			}
+#ifdef _WINDOWS
+			else if (!(client ||::strcmp(pc,"service"))) {
+			    service |= YSERV_RUN;
+			    pc = 0;
+			    continue;
+			}
+			else if (!(client || ::strcmp(pc,"install"))) {
+			    service |= YSERV_INS;
+			    pc = 0;
+			    continue;
+			}
+			else if (!(client || ::strcmp(pc,"remove"))) {
+			    service |= YSERV_DEL;
+			    pc = 0;
+			    continue;
+			}
+#endif
 			badopt(client,0,argv[i]);
 			return EINVAL;
 			break;
@@ -821,7 +913,63 @@ int Engine::main(int argc, const char** argv, const char** env, bool client, boo
     if (fail)
 	return EINVAL;
 
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+    if ((mode == Server) && !service)
+	service = YSERV_RUN;
+
+    if (service & YSERV_DEL) {
+	if (service & (YSERV_RUN|YSERV_INS)) {
+	    ::fprintf(stderr,"Option --remove prohibits --install and --service\n");
+	    return EINVAL;
+	}
+	SC_HANDLE sc = OpenSCManager(0,0,SC_MANAGER_ALL_ACCESS);
+	if (!sc) {
+	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",GetLastError());
+	    return EPERM;
+	}
+	SC_HANDLE sv = OpenService(sc,"yate",DELETE|SERVICE_STOP);
+	if (sv) {
+	    ControlService(sv,SERVICE_CONTROL_STOP,0);
+	    if (!DeleteService(sv)) {
+		DWORD err = GetLastError();
+		if (err != ERROR_SERVICE_MARKED_FOR_DELETE)
+		    ::fprintf(stderr,"Could not delete Service, code %u\n",err);
+	    }
+	    CloseServiceHandle(sv);
+	}
+	else {
+	    DWORD err = GetLastError();
+	    if (err != ERROR_SERVICE_DOES_NOT_EXIST)
+		::fprintf(stderr,"Could not open Service, code %u\n",err);
+	}
+	CloseServiceHandle(sc);
+	return 0;
+    }
+    if (service & YSERV_INS) {
+	char buf[1024];
+	if (!GetModuleFileName(0,buf,sizeof(buf))) {
+	    ::fprintf(stderr,"Could not find my own executable file, code %u\n",GetLastError());
+	    return EINVAL;
+	}
+	if (mode != Server)
+	    ::strncat(buf," --service",sizeof(buf));
+	SC_HANDLE sc = OpenSCManager(0,0,SC_MANAGER_ALL_ACCESS);
+	if (!sc) {
+	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",GetLastError());
+	    return EPERM;
+	}
+	SC_HANDLE sv = CreateService(sc,"yate","Yet Another Telephony Engine",GENERIC_EXECUTE,
+	    SERVICE_WIN32_OWN_PROCESS,SERVICE_DEMAND_START,SERVICE_ERROR_NORMAL,
+	    buf,0,0,0,0,0);
+	if (sv)
+	    CloseServiceHandle(sv);
+	else
+	    ::fprintf(stderr,"Could not create Service, code %u\n",GetLastError());
+	CloseServiceHandle(sc);
+	if (!(service & YSERV_RUN))
+	    return 0;
+    }
+#else
     if (client && (daemonic || supervised)) {
 	::fprintf(stderr,"Options -d and -s not supported in client mode\n");
 	return EINVAL;
@@ -874,11 +1022,14 @@ int Engine::main(int argc, const char** argv, const char** env, bool client, boo
 
     if (tstamp)
 	setDebugTimestamp();
-    time_t t = ::time(0);
-    Output("Yate (%u) is starting %s",::getpid(),::ctime(&t));
-    retcode = self()->run();
-    t = ::time(0);
-    Output("Yate (%u) is stopping %s",::getpid(),::ctime(&t));
+
+#ifdef _WINDOWS
+    if (service)
+	retcode = StartServiceCtrlDispatcher(dispatchTable) ? 0 : GetLastError();
+    else
+#endif
+	retcode = engineRun();
+
     return retcode;
 }
 

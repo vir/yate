@@ -118,6 +118,7 @@ bool s_init = false;
 bool s_dynplugin = false;
 int s_maxworkers = 10;
 
+static bool s_sigabrt = false;
 const char* s_cfgfile = 0;
 Configuration s_cfg;
 ObjList plugins;
@@ -280,7 +281,6 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 
 #define setStatus(s)
 
-static bool s_sigabrt = false;
 static bool s_runagain = true;
 static pid_t s_childpid = -1;
 

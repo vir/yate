@@ -41,5 +41,5 @@ extern "C" int main(int argc, const char** argv, const char** envp)
 	{ NULL, NULL }
     };
 
-    return StartServiceCtrlDispatcher(dispatchTable) ? 0 : EINVAL;
+    return StartServiceCtrlDispatcher(dispatchTable) ? 0 : TelEngine::Engine::main(argc,argv,envp,true);
 }

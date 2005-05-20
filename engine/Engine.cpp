@@ -280,6 +280,7 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 
 #define setStatus(s)
 
+static bool s_sigabrt = false;
 static bool s_runagain = true;
 static pid_t s_childpid = -1;
 
@@ -698,8 +699,6 @@ bool Engine::dispatch(const char* name)
     Message msg(name);
     return s_self->m_dispatcher.dispatch(msg);
 }
-
-static bool s_sigabrt = false;
 
 static void usage(bool client, FILE* f)
 {

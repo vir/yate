@@ -42,8 +42,7 @@ static u_int64_t s_timestamp = 0;
 
 static void dbg_stderr_func(const char* buf)
 {
-    ::fwrite(buf,1,::strlen(buf),stderr);
-    ::fflush(stderr);
+    ::write(2,buf,::strlen(buf));
 }
 
 static void (*s_output)(const char*) = dbg_stderr_func;

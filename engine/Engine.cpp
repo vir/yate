@@ -31,12 +31,14 @@
 #define YSERV_RUN 1
 #define YSERV_INS 2
 #define YSERV_DEL 4
+#define PATH_SEP "\\"
 #else
 #include "yatepaths.h"
 #include <dirent.h>
 #include <dlfcn.h>
 #include <sys/wait.h>
 typedef void* HMODULE;
+#define PATH_SEP "/"
 #endif
 
 #include <unistd.h>
@@ -71,10 +73,10 @@ public:
 using namespace TelEngine;
 
 #ifndef MOD_PATH
-#define MOD_PATH "./modules"
+#define MOD_PATH "." PATH_SEP "modules"
 #endif
 #ifndef CFG_PATH
-#define CFG_PATH "./conf.d"
+#define CFG_PATH "." PATH_SEP "conf.d"
 #endif
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
@@ -120,6 +122,7 @@ int s_maxworkers = 10;
 
 static bool s_sigabrt = false;
 const char* s_cfgfile = 0;
+const char* s_logfile = 0;
 Configuration s_cfg;
 ObjList plugins;
 ObjList* s_cmds = 0;
@@ -216,6 +219,24 @@ void EnginePrivate::run()
     }
 }
 
+static bool logFileOpen()
+{
+    if (s_logfile) {
+	int fd = ::open(s_logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
+	if (fd >= 0) {
+	    // Redirect stdout and stderr to the new file
+	    ::fflush(stdout);
+	    ::dup2(fd,1);
+	    ::fflush(stderr);
+	    ::dup2(fd,2);
+	    ::close(fd);
+	    Debugger::enableOutput(true);
+	    return true;
+	}
+    }
+    return false;
+}
+
 static int engineRun()
 {
     time_t t = ::time(0);
@@ -255,6 +276,7 @@ static void WINAPI serviceHandler(DWORD code)
 
 static void serviceMain(DWORD argc, LPTSTR* argv)
 {
+    logFileOpen();
     s_status.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     s_status.dwCurrentState = SERVICE_START_PENDING;
     s_status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PARAMCHANGE;
@@ -531,7 +553,7 @@ Engine* Engine::self()
 
 String Engine::configFile(const char* name)
 {
-    return s_cfgpath+"/"+name+s_cfgsuffix;
+    return s_cfgpath + PATH_SEP + name + s_cfgsuffix;
 }
 
 const Configuration& Engine::config()
@@ -588,7 +610,7 @@ void Engine::loadPlugins()
     }
 #ifdef _WINDOWS
     WIN32_FIND_DATA entry;
-    HANDLE hf = ::FindFirstFile(s_modpath+"\\*",&entry);
+    HANDLE hf = ::FindFirstFile(s_modpath + PATH_SEP "*",&entry);
     if (hf == INVALID_HANDLE_VALUE) {
 	Debug(DebugFail,"Engine::loadPlugins() failed directory '%s'",s_modpath.safe());
 	return;
@@ -598,7 +620,7 @@ void Engine::loadPlugins()
 	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
 	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
-		loadPlugin(s_modpath+"\\"+entry.cFileName);
+		loadPlugin(s_modpath + PATH_SEP + entry.cFileName);
 	}
     } while (::FindNextFile(hf,&entry));
     ::FindClose(hf);
@@ -614,7 +636,7 @@ void Engine::loadPlugins()
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
 	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
-		loadPlugin(s_modpath+"/"+entry->d_name);
+		loadPlugin(s_modpath + PATH_SEP + entry->d_name);
 	}
     }
     ::closedir(dir);
@@ -713,6 +735,7 @@ static void usage(bool client, FILE* f)
 "   -n configname  Use specified configuration name (%s)\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
+"   -w directory   Change working directory\n"
 #ifndef NDEBUG
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
@@ -759,8 +782,8 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 #endif
     bool client = (mode == Client);
     bool tstamp = false;
-    const char *pidfile = 0;
-    const char *logfile = 0;
+    const char* pidfile = 0;
+    const char* workdir = 0;
     int debug_level = debugLevel();
 
     s_cfgfile = ::strrchr(argv[0],'/');
@@ -840,7 +863,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    return ENOENT;
 			}
 			pc = 0;
-			logfile=argv[++i];
+			s_logfile=argv[++i];
 			break;
 		    case 'n':
 			if (i+1 >= argc) {
@@ -865,6 +888,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			s_modpath=argv[++i];
+			break;
+		    case 'w':
+			if (i+1 >= argc) {
+			    noarg(client,argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			workdir = argv[++i];
 			break;
 #ifndef NDEBUG
 		    case 'D':
@@ -912,6 +943,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     if (fail)
 	return EINVAL;
 
+    if (workdir)
+	::chdir(workdir);
+
 #ifdef _WINDOWS
     if ((mode == Server) && !service)
 	service = YSERV_RUN;
@@ -950,8 +984,12 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	    ::fprintf(stderr,"Could not find my own executable file, code %u\n",GetLastError());
 	    return EINVAL;
 	}
+	String s(buf);
 	if (mode != Server)
-	    ::strncat(buf," --service",sizeof(buf));
+	    s << " --service";
+	if (workdir)
+	    s << " -w \"" << workdir << "\"";
+
 	SC_HANDLE sc = OpenSCManager(0,0,SC_MANAGER_ALL_ACCESS);
 	if (!sc) {
 	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",GetLastError());
@@ -959,7 +997,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	}
 	SC_HANDLE sv = CreateService(sc,"yate","Yet Another Telephony Engine",GENERIC_EXECUTE,
 	    SERVICE_WIN32_OWN_PROCESS,SERVICE_DEMAND_START,SERVICE_ERROR_NORMAL,
-	    buf,0,0,0,0,0);
+	    s.c_str(),0,0,0,0,0);
 	if (sv)
 	    CloseServiceHandle(sv);
 	else
@@ -995,8 +1033,8 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	}
     }
 
-    if (logfile) {
-	int fd = ::open(logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
+    if (s_logfile) {
+	int fd = ::open(s_logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
 	if (fd >= 0) {
 	    // Redirect stdout and stderr to the new file
 	    ::fflush(stdout);
@@ -1007,6 +1045,11 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	    Debugger::enableOutput(true);
 	}
     }
+
+#ifdef _WINDOWS
+    if (!service)
+#endif
+	logFileOpen();
 
     debugLevel(debug_level);
     abortOnBug(s_sigabrt);

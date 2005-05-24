@@ -436,14 +436,14 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     card << "wanpipe" << span;
     card = cfg.getValue(sect,"card",card);
     String dev;
-    dev << "w" << span << "g2";
+    dev << "w" << span << "g1";
     pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
     if (!p)
 	return 0;
     WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,(HANDLE)::pri_fd(p));
     ps->startup();
     dev.clear();
-    dev << "w" << span << "g1";
+    dev << "w" << span << "g2";
     WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
     dat->startup();
     return ps;

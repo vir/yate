@@ -18,8 +18,8 @@
 ;dumpevents=no
 
 [span 1]
-;bgroup=w1g1
-;dgroup=w1g2
+;dgroup=w1g1
+;bgroup=w1g2
 ;card=wanpipe1
 chans=31
 ;first=1

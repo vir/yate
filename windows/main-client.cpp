@@ -22,7 +22,68 @@
 
 #include "yatengine.h"
 
+#include "resource.h"
+#include <commctrl.h>
+
+using namespace TelEngine;
+
+class WinClientThread : public Thread
+{
+public:
+	void run();
+};
+
+class WinClientPlugin : public Plugin
+{
+public:
+	WinClientPlugin()
+		: m_thread(0)
+		{ }
+	virtual void initialize(void);
+	virtual bool isBusy() const
+		{ return true; }
+private:
+	WinClientThread* m_thread;
+};
+
+
+int CALLBACK mainDialog(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+	switch (msg) {
+		case WM_CLOSE:
+			EndDialog(wnd,1);
+			break;
+		default:
+			return 0;
+	}
+	return 1;
+}
+
+void WinClientThread::run()
+{
+	InitCommonControls();
+	int ret = DialogBox(0,MAKEINTRESOURCE(IDD_TCLIENT),0,mainDialog);
+	if (ret < 0)
+		ret = 127;
+	Engine::halt(ret);
+}
+
+void WinClientPlugin::initialize()
+{
+	if (!m_thread) {
+		m_thread = new WinClientThread;
+		if (m_thread->error())
+			Engine::halt(1);
+		else
+			m_thread->startup();
+	}
+}
+
+INIT_PLUGIN(WinClientPlugin);
+
+// We force mainCRTStartup as entry point (from linker settings) so we get
+//  the parser called even for a GUI application
 extern "C" int main(int argc, const char** argv, const char** envp)
 {
-    return TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::Client);
+    return Engine::main(argc,argv,envp,TelEngine::Engine::Client);
 }

@@ -53,15 +53,20 @@ Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\ba
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
-Source: "..\conf.d\ysipchan.conf"; DestDir: "{app}\conf.d"
+Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 
 [Icons]
 Name: "{group}\Yate Client"; Filename: "{app}\yate-client.exe"; Components: client
 Name: "{group}\Yate Console"; Filename: "{app}\yate-console.exe"; Components: debug
+Name: "{group}\Register Service"; Filename: "{app}\yate-service.exe"; Parameters: "--install"; Components: server
+Name: "{group}\Unregister Service"; Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 Name: "{group}\Uninstall"; Filename: "{uninstallexe}"
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; Filename: "{app}\yate-client.exe"; Components: client; Tasks: qlaunch
 Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-client.exe"; Components: client; Tasks: desktop
 
 [Run]
 Filename: "{app}\yate-client.exe"; Description: "Launch client"; Components: client; Flags: postinstall nowait skipifsilent unchecked
+
+[UninstallRun]
+Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 

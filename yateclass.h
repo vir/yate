@@ -44,6 +44,7 @@
 
 #include <windows.h>
 #include <io.h>
+#include <direct.h>
 
 /**
  * Windows definitions for commonly used types
@@ -75,6 +76,7 @@ typedef unsigned long in_addr_t;
 #define write _write
 #define close _close
 #define getpid _getpid
+#define chdir _chdir
 
 #define O_RDWR   _O_RDWR
 #define O_RDONLY _O_RDONLY

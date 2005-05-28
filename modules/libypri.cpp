@@ -38,12 +38,18 @@ using namespace TelEngine;
 
 static int s_buflen = 480;
 
-static void pri_err_cb(char *s)
+#ifdef PRI_NEW_SET_API
+#define PRI_CB_STR struct pri *pri,
+#else
+#define PRI_CB_STR
+#endif
+
+static void pri_err_cb(PRI_CB_STR char *s)
 {
     Debug("PRI",DebugWarn,"%s",s);
 }
 
-static void pri_msg_cb(char *s)
+static void pri_msg_cb(PRI_CB_STR char *s)
 {
     Debug("PRI",DebugInfo,"%s",s);
 }

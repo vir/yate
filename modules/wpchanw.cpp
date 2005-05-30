@@ -62,6 +62,7 @@ class WpSpan : public PriSpan, public Thread
 public:
     virtual ~WpSpan();
     virtual void run();
+    virtual void cleanup();
     int dataRead(void *buf, int buflen);
     int dataWrite(void *buf, int buflen);
 
@@ -274,7 +275,8 @@ WpReader::WpReader(WpSpan* span, const char* card, const char* device)
 WpReader::~WpReader()
 {
     DDebug(&__plugin,DebugAll,"WpReader::~WpReader() [%p]",this);
-    m_span->m_reader = 0;
+    if (m_span)
+	m_span->m_reader = 0;
     HANDLE tmp = m_fd;
     m_fd = INVALID_HANDLE_VALUE;
     wp_close(tmp);
@@ -293,6 +295,7 @@ void WpReader::run()
 	XDebug(&__plugin,DebugAll,"WpReader read returned %d [%p]",r,this);
 	if (r <= 0)
 	    continue;
+	Thread::check();
 	m_span->lock();
 	m_span->m_rdata.assign(buf+WP_HEADER,r);
 	DDebug(&__plugin,DebugAll,"WpReader queued %d bytes block [%p]",r,this);
@@ -311,7 +314,8 @@ WpWriter::WpWriter(WpSpan* span, const char* card, const char* device)
 WpWriter::~WpWriter()
 {
     DDebug(&__plugin,DebugAll,"WpWriter::~WpWriter() [%p]",this);
-    m_span->m_writer = 0;
+    if (m_span)
+	m_span->m_writer = 0;
     HANDLE tmp = m_fd;
     m_fd = INVALID_HANDLE_VALUE;
     wp_close(tmp);
@@ -351,6 +355,12 @@ WpSpan::~WpSpan()
 {
     Debug(&__plugin,DebugAll,"WpSpan::~WpSpan() [%p]",this);
     m_ok = false;
+}
+
+void WpSpan::cleanup()
+{
+    Debug(&__plugin,DebugAll,"WpSpan::cleanup() [%p]",this);
+    m_ok = false;
     if (m_data)
 	m_data->cancel();
     if (m_reader)
@@ -360,7 +370,8 @@ WpSpan::~WpSpan()
     Debug(&__plugin,DebugAll,"WpSpan waiting for cleanups [%p]",this);
     Thread::msleep(20);
     while (m_data || m_reader || m_writer)
-	Thread::msleep(1,true);
+	Thread::msleep(1);
+    Debug(&__plugin,DebugAll,"WpSpan cleanups complete [%p]",this);
 }
 
 void WpSpan::run()
@@ -431,7 +442,8 @@ WpData::WpData(WpSpan* span, const char* card, const char* device)
 WpData::~WpData()
 {
     DDebug(&__plugin,DebugAll,"WpData::~WpData() [%p]",this);
-    m_span->m_data = 0;
+    if (m_span)
+	m_span->m_data = 0;
     wp_close(m_fd);
     m_fd = INVALID_HANDLE_VALUE;
     if (m_chans)
@@ -585,17 +597,22 @@ void WpDriver::initialize()
 
 bool WpDriver::received(Message &msg, int id)
 {
+    bool ok = PriDriver::received(msg,id);
     if (id == Halt) {
 	Debug(this,DebugAll,"WpDriver clearing all spans [%p]",this);
+	lock();
 	const ObjList *l = &m_spans;
 	for (; l; l=l->next()) {
 	    WpSpan *s = static_cast<WpSpan*>(l->get());
 	    if (s)
 		s->cancel();
 	}
-	Thread::msleep(10);
+	unlock();
+	Debug(this,DebugAll,"WpDriver waiting for spans to exit [%p]",this);
+	while (m_spans.get())
+	    Thread::msleep(10);
     }
-    return PriDriver::received(msg,id);
+    return ok;
 }
 
 

@@ -366,8 +366,11 @@ bool Connection::processLine(const char *line)
 	    str >> dbg;
 	    dbg = debugLevel(dbg);
 	}
-	else if (str.isBoolean())
+	else if (str.isBoolean()) {
 	    str >> m_debug;
+	    if (m_debug)
+		Debugger::enableOutput(true);
+	}
 	else if (str) {
 	    String l;
 	    int pos = str.find(' ');

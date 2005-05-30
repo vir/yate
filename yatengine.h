@@ -236,6 +236,14 @@ public:
 	{ return m_data; }
 
     /**
+     * Get a pointer to a derived class of user data given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if user object id NULL or doesn't implement it
+     */
+    inline void* userData(const String& name) const
+	{ return m_data ? m_data->getObject(name) : 0; }
+
+    /**
      * Set obscure data associated with the message.
      * The user data is reference counted to avoid stray pointers.
      * @param data Pointer to arbitrary user data

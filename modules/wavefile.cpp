@@ -97,6 +97,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class RecordHandler : public MessageHandler
+{
+public:
+    RecordHandler() : MessageHandler("chan.record") { }
+    virtual bool received(Message &msg);
+};
+
 class WaveFileDriver : public Driver
 {
 public:
@@ -430,6 +437,87 @@ bool AttachHandler::received(Message &msg)
     return !more;
 }
 
+bool RecordHandler::received(Message &msg)
+{
+    int more = 2;
+
+    String c1(msg.getValue("call"));
+    if (c1.null())
+	more--;
+    else {
+	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	if (c1.matches(r)) {
+	    if (c1.matchString(1) == "record") {
+		c1 = c1.matchString(2);
+		more--;
+	    }
+	    else {
+		Debug(DebugWarn,"Could not attach call recorder with method '%s', use 'record'",
+		    c1.matchString(1).c_str());
+		c1 = "";
+	    }
+	}
+	else
+	    c1 = "";
+    }
+
+    String c2(msg.getValue("peer"));
+    if (c2.null())
+	more--;
+    else {
+	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	if (c2.matches(r)) {
+	    if (c2.matchString(1) == "record") {
+		c2 = c2.matchString(2);
+		more--;
+	    }
+	    else {
+		Debug(DebugWarn,"Could not attach peer recorder with method '%s', use 'record'",
+		    c2.matchString(1).c_str());
+		c2 = "";
+	    }
+	}
+	else
+	    c2 = "";
+    }
+
+    if (c1.null() && c2.null())
+	return false;
+
+    String ml(msg.getValue("maxlen"));
+    unsigned maxlen = ml.toInteger(0);
+
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData("CallEndpoint"));
+    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userData("DataEndpoint"));
+    if (ch && !de)
+	de = ch->setEndpoint();
+
+    if (!de) {
+	if (!c1.null())
+	    Debug(DebugWarn,"Wave source '%s' call record with no data channel!",c1.c_str());
+	if (!c2.null())
+	    Debug(DebugWarn,"Wave source '%s' peer record with no data channel!",c2.c_str());
+	return false;
+    }
+
+    if (!c1.null()) {
+	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen);
+	c->setNotify(msg.getValue("notify"));
+	de->setCallRecord(c);
+	c->deref();
+    }
+
+    if (!c2.null()) {
+	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen);
+	c->setNotify(msg.getValue("notify"));
+	de->setPeerRecord(c);
+	c->deref();
+    }
+
+    // Stop dispatching if we handled all requested
+    return !more;
+}
+
 bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 {
     Regexp r("^\\([^/]*\\)/\\(.*\\)$");
@@ -509,6 +597,7 @@ void WaveFileDriver::initialize()
     if (!m_handler) {
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);
+	Engine::install(new RecordHandler);
     }
 }
 

@@ -232,7 +232,9 @@ void* DataSource::getObject(const String& name) const
 }
 
 DataEndpoint::DataEndpoint(CallEndpoint* call, const char* name)
-    : m_name(name), m_source(0), m_consumer(0), m_peer(0), m_call(call)
+    : m_name(name), m_source(0), m_consumer(0),
+      m_peer(0), m_call(call),
+      m_peerRecord(0), m_callRecord(0)
 {
     Debug(DebugInfo,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",call,name,this);
     if (m_call)
@@ -246,6 +248,8 @@ DataEndpoint::~DataEndpoint()
     if (m_call)
 	m_call->m_data.remove(this,false);
     disconnect();
+    setPeerRecord();
+    setCallRecord();
     setSource();
     setConsumer();
 }
@@ -283,9 +287,15 @@ bool DataEndpoint::connect(DataEndpoint* peer)
 	DataConsumer *c = peer->getConsumer();
 	if (s && c)
 	    DataTranslator::attachChain(s,c);
+	c = peer->getPeerRecord();
+	if (s && c)
+	    DataTranslator::attachChain(s,c);
 
 	s = peer->getSource();
 	c = getConsumer();
+	if (s && c)
+	    DataTranslator::attachChain(s,c);
+	c = getPeerRecord();
 	if (s && c)
 	    DataTranslator::attachChain(s,c);
     }
@@ -306,9 +316,15 @@ void DataEndpoint::disconnect()
     DataConsumer *c = m_peer->getConsumer();
     if (s && c)
 	DataTranslator::detachChain(s,c);
+    c = m_peer->getPeerRecord();
+    if (s && c)
+	DataTranslator::detachChain(s,c);
 
     s = m_peer->getSource();
     c = getConsumer();
+    if (s && c)
+	DataTranslator::detachChain(s,c);
+    c = getPeerRecord();
     if (s && c)
 	DataTranslator::detachChain(s,c);
 
@@ -323,27 +339,50 @@ void DataEndpoint::setSource(DataSource* source)
 {
     if (source == m_source)
 	return;
-    DataConsumer *consumer = m_peer ? m_peer->getConsumer() : 0;
+    DataConsumer *c1 = m_peer ? m_peer->getConsumer() : 0;
+    DataConsumer *c2 = m_peer ? m_peer->getPeerRecord() : 0;
     DataSource *temp = m_source;
-    if (consumer)
-	consumer->ref();
+    if (c1)
+	c1->ref();
+    if (c2)
+	c2->ref();
+    if (m_callRecord)
+	m_callRecord->ref();
     m_source = 0;
     if (temp) {
-	if (consumer) {
-	    DataTranslator::detachChain(temp,consumer);
-	    if (consumer->getConnSource())
-		Debug(DebugWarn,"consumer source not cleared in %p",consumer);
+	if (c1) {
+	    DataTranslator::detachChain(temp,c1);
+	    if (c1->getConnSource())
+		Debug(DebugWarn,"consumer source not cleared in %p",c1);
+	}
+	if (c2) {
+	    DataTranslator::detachChain(temp,c2);
+	    if (c2->getConnSource())
+		Debug(DebugWarn,"consumer source not cleared in %p",c2);
+	}
+	if (m_callRecord) {
+	    DataTranslator::detachChain(temp,m_callRecord);
+	    if (m_callRecord->getConnSource())
+		Debug(DebugWarn,"consumer source not cleared in %p",m_callRecord);
 	}
 	temp->deref();
     }
     if (source) {
 	source->ref();
-	if (consumer)
-	    DataTranslator::attachChain(source,consumer);
+	if (c1)
+	    DataTranslator::attachChain(source,c1);
+	if (c2)
+	    DataTranslator::attachChain(source,c2);
+	if (m_callRecord)
+	    DataTranslator::attachChain(source,m_callRecord);
     }
     m_source = source;
-    if (consumer)
-	consumer->deref();
+    if (c1)
+	c1->deref();
+    if (c2)
+	c2->deref();
+    if (m_callRecord)
+	m_callRecord->deref();
 }
 
 void DataEndpoint::setConsumer(DataConsumer* consumer)
@@ -361,6 +400,43 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
     if (temp) {
 	if (source)
 	    DataTranslator::detachChain(source,temp);
+	temp->deref();
+    }
+}
+
+void DataEndpoint::setPeerRecord(DataConsumer* consumer)
+{
+    if (consumer == m_peerRecord)
+	return;
+    DataSource *source = m_peer ? m_peer->getSource() : 0;
+    DataConsumer *temp = m_peerRecord;
+    if (consumer) {
+	consumer->ref();
+	if (source)
+	    DataTranslator::attachChain(source,consumer);
+    }
+    m_peerRecord = consumer;
+    if (temp) {
+	if (source)
+	    DataTranslator::detachChain(source,temp);
+	temp->deref();
+    }
+}
+
+void DataEndpoint::setCallRecord(DataConsumer* consumer)
+{
+    if (consumer == m_callRecord)
+	return;
+    DataConsumer *temp = m_callRecord;
+    if (consumer) {
+	consumer->ref();
+	if (m_source)
+	    DataTranslator::attachChain(m_source,consumer);
+    }
+    m_callRecord = consumer;
+    if (temp) {
+	if (m_source)
+	    DataTranslator::detachChain(m_source,temp);
 	temp->deref();
     }
 }

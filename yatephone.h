@@ -669,6 +669,34 @@ public:
     inline DataConsumer* getConsumer() const
 	{ return m_consumer; }
 
+    /**
+     * Set the data consumer for recording peer generated data.
+     * This will be connected to the peer data source.
+     * @param consumer A pointer to the new consumer or NULL
+     */
+    void setPeerRecord(DataConsumer* consumer = 0);
+
+    /**
+     * Get the data consumer used for recording peer generated data.
+     * @return A pointer to the DataConsumer object or NULL
+     */
+    inline DataConsumer* getPeerRecord() const
+	{ return m_peerRecord; }
+
+    /**
+     * Set the data consumer for recording local call generated data
+     * This will be connected to the local data source.
+     * @param consumer A pointer to the new consumer or NULL
+     */
+    void setCallRecord(DataConsumer* consumer = 0);
+
+    /**
+     * Get the data consumer used for recording local call generated data.
+     * @return A pointer to the DataConsumer object or NULL
+     */
+    inline DataConsumer* getCallRecord() const
+	{ return m_callRecord; }
+
     /*
      * Get a pointer to the peer endpoint
      * @return A pointer to the peer endpoint or NULL
@@ -705,6 +733,8 @@ private:
     DataConsumer* m_consumer;
     DataEndpoint* m_peer;
     CallEndpoint* m_call;
+    DataConsumer* m_peerRecord;
+    DataConsumer* m_callRecord;
 };
 
 /**

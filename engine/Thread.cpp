@@ -310,22 +310,19 @@ void ThreadPrivate::killall()
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
-	tmutex.unlock();
 	bool ok = t->cancel(c > SOFT_KILLS);
 	if (ok) {
 	    int d = 0;
 	    // delay a little (exponentially) so threads have a chance to clean up
 	    for (int i=1; i<=KILL_WAIT; i<<=1) {
+		tmutex.unlock();
 		Thread::msleep(i-d);
 		d = i;
 		tmutex.lock();
-		bool done = (t != l->get());
-		tmutex.unlock();
-		if (done)
+		if (t != l->get())
 		    break;
 	    }
 	}
-	tmutex.lock();
 	if (t != l->get())
 	    c = 1;
 	else {

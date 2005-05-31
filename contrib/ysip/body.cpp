@@ -47,7 +47,7 @@ const DataBlock& SIPBody::getBody() const
     return m_body;
 }
 
-SIPBody* SIPBody::build(const char *buf, int len, const String& type)
+SIPBody* SIPBody::build(const char* buf, int len, const String& type)
 {
     DDebug(DebugAll,"SIPBody::build(%p,%d,'%s')",buf,len,type.c_str());
     if ((len <= 0) || !buf)
@@ -64,7 +64,7 @@ SDPBody::SDPBody()
 {
 }
 
-SDPBody::SDPBody(const String& type, const char *buf, int len)
+SDPBody::SDPBody(const String& type, const char* buf, int len)
     : SIPBody(type)
 {
     while (len > 0) {
@@ -110,7 +110,7 @@ SIPBody* SDPBody::clone() const
     return new SDPBody(*this);
 }
 
-const NamedString* SDPBody::getLine(const char *name) const
+const NamedString* SDPBody::getLine(const char* name) const
 {
     if (!(name && *name))
 	return 0;
@@ -123,7 +123,23 @@ const NamedString* SDPBody::getLine(const char *name) const
     return 0;
 }
 
-SIPBinaryBody::SIPBinaryBody(const String& type, const char *buf, int len)
+const NamedString* SDPBody::getNextLine(const NamedString* line) const
+{
+    if (!line)
+	return 0;
+    const ObjList* l = m_lines.find(line);
+    if (!l)
+	return 0;
+    l = l->next();
+    for (; l; l = l->next()) {
+    	const NamedString* t = static_cast<NamedString*>(l->get());
+        if (t && (t->name() &= line->name()))
+	    return t;
+    }
+    return 0;
+}
+
+SIPBinaryBody::SIPBinaryBody(const String& type, const char* buf, int len)
     : SIPBody(type)
 {
     m_body.assign((void*)buf,len);
@@ -150,7 +166,7 @@ SIPBody* SIPBinaryBody::clone() const
     return new SIPBinaryBody(*this);
 }
 
-SIPStringBody::SIPStringBody(const String& type, const char *buf, int len)
+SIPStringBody::SIPStringBody(const String& type, const char* buf, int len)
     : SIPBody(type), m_text(buf,len)
 {
 }

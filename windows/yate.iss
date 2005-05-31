@@ -1,10 +1,15 @@
 ; -- yate.iss --
 ; Yate script for Inno Setup Compiler.
+; http://www.innosetup.com/
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING .ISS SCRIPT FILES!
 
 [Setup]
 AppName=Yet Another Telephony Engine
 AppVerName=Yate version 0.9.0
+AppPublisher=Null Team Impex SRL
+AppPublisherURL=http://yate.null.ro/
+AppVersion=0.9.0
+VersionInfoVersion=0.9.0
 DefaultDirName={pf}\Yate
 DefaultGroupName=Yate
 UninstallDisplayIcon={app}\yate-client.exe

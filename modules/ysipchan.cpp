@@ -212,7 +212,7 @@ private:
 
 static SIPDriver plugin;
 
-static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
+static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats, const char* media = "audio")
 {
     const NamedString* c = sdp->getLine("c");
     if (c) {
@@ -226,9 +226,9 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 	}
     }
     c = sdp->getLine("m");
-    if (c) {
+    while (c) {
 	String tmp(*c);
-	if (tmp.startSkip("audio")) {
+	if (tmp.startSkip(media)) {
 	    int var = 0;
 	    tmp >> var >> " RTP/AVP";
 	    if (var > 0)
@@ -246,8 +246,22 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 		}
 	    }
 	    formats = fmt;
+	    return;
 	}
+	c = sdp->getNextLine(c);
     }
+}
+
+static bool isPrivateAddr(const String& host)
+{
+    if (host.startsWith("192.168.") || host.startsWith("169.254.") || host.startsWith("10."))
+	return true;
+    String s(host);
+    if (!s.startSkip("172.",false))
+	return false;
+    int i = 0;
+    s >> i;
+    return (i >= 16) && (i <= 31) && s.startsWith(".");
 }
 
 YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
@@ -597,6 +611,13 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpPort,m_formats);
 	if (m_rtpAddr) {
+	    // guess if the call comes from behind a NAT
+	    if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
+		    m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
+		m->addParam("rtp_nat_addr",m_rtpAddr);
+		m_rtpAddr = m_host;
+	    }
 	    m->addParam("rtp_forward","possible");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    m->addParam("rtp_port",m_rtpPort);
@@ -853,7 +874,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 	    int payload = s->toInteger(dict_payloads,-1);
 	    if (payload >= 0) {
 		const char* map = lookup(payload,dict_rtpmap);
-		if (map && s_cfg.getBoolValue("codecs",*s,defcodecs)) {
+		if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
 		    frm << " " << payload;
 		    String* tmp = new String("rtpmap:");
 		    *tmp << payload << " " << map;

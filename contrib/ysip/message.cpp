@@ -30,7 +30,7 @@
 
 using namespace TelEngine;
 
-SIPHeaderLine::SIPHeaderLine(const char *name, const String& value)
+SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
     : NamedString(name)
 {
     XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
@@ -93,7 +93,7 @@ SIPHeaderLine::~SIPHeaderLine()
     XDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
 }
 
-const NamedString* SIPHeaderLine::getParam(const char *name) const
+const NamedString* SIPHeaderLine::getParam(const char* name) const
 {
     if (!(name && *name))
 	return 0;
@@ -106,7 +106,7 @@ const NamedString* SIPHeaderLine::getParam(const char *name) const
     return 0;
 }
 
-void SIPHeaderLine::setParam(const char *name, const char *value)
+void SIPHeaderLine::setParam(const char* name, const char* value)
 {
     ObjList* p = m_params.find(name);
     if (p)
@@ -115,7 +115,7 @@ void SIPHeaderLine::setParam(const char *name, const char *value)
 	m_params.append(new NamedString(name,value));
 }
 
-void SIPHeaderLine::delParam(const char *name)
+void SIPHeaderLine::delParam(const char* name)
 {
     ObjList* p = m_params.find(name);
     if (p)
@@ -131,7 +131,7 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
 	_method,_uri,_version,this);
 }
 
-SIPMessage::SIPMessage(SIPParty* ep, const char *buf, int len)
+SIPMessage::SIPMessage(SIPParty* ep, const char* buf, int len)
     : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
     Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]\n%s",
@@ -449,7 +449,7 @@ bool SIPMessage::parse(const char* buf, int len)
     return true;
 }
 
-SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char *buf, int len)
+SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char* buf, int len)
 {
     SIPMessage* msg = new SIPMessage(ep,buf,len);
     if (msg->isValid())

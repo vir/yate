@@ -121,7 +121,7 @@ public:
     virtual ~SIPBody();
     inline const String& getType() const
 	{ return m_type; }
-    static SIPBody* build(const char *buf, int len, const String& type);
+    static SIPBody* build(const char* buf, int len, const String& type);
     const DataBlock& getBody() const;
     virtual bool isSDP() const
 	{ return false; }
@@ -136,16 +136,17 @@ class YSIP_API SDPBody : public SIPBody
 {
 public:
     SDPBody();
-    SDPBody(const String& type, const char *buf, int len);
+    SDPBody(const String& type, const char* buf, int len);
     virtual ~SDPBody();
     virtual bool isSDP() const
 	{ return true; }
     virtual SIPBody* clone() const;
     inline const ObjList& lines() const
 	{ return m_lines; }
-    inline void addLine(const char *name, const char *value = 0)
+    inline void addLine(const char* name, const char* value = 0)
 	{ m_lines.append(new NamedString(name,value)); }
-    const NamedString* getLine(const char *name) const;
+    const NamedString* getLine(const char* name) const;
+    const NamedString* getNextLine(const NamedString* line) const;
 protected:
     SDPBody(const SDPBody& original);
     virtual void buildBody() const;
@@ -155,7 +156,7 @@ protected:
 class YSIP_API SIPBinaryBody : public SIPBody
 {
 public:
-    SIPBinaryBody(const String& type, const char *buf, int len);
+    SIPBinaryBody(const String& type, const char* buf, int len);
     virtual ~SIPBinaryBody();
     virtual SIPBody* clone() const;
 protected:
@@ -166,7 +167,7 @@ protected:
 class YSIP_API SIPStringBody : public SIPBody
 {
 public:
-    SIPStringBody(const String& type, const char *buf, int len);
+    SIPStringBody(const String& type, const char* buf, int len);
     virtual ~SIPStringBody();
     virtual SIPBody* clone() const;
 protected:
@@ -178,14 +179,14 @@ protected:
 class YSIP_API SIPHeaderLine : public NamedString
 {
 public:
-    SIPHeaderLine(const char *name, const String& value);
+    SIPHeaderLine(const char* name, const String& value);
     SIPHeaderLine(const SIPHeaderLine& original);
     virtual ~SIPHeaderLine();
     inline const ObjList& params() const
 	{ return m_params; }
-    void setParam(const char *name, const char *value = 0);
-    void delParam(const char *name);
-    const NamedString* getParam(const char *name) const;
+    void setParam(const char* name, const char* value = 0);
+    void delParam(const char* name);
+    const NamedString* getParam(const char* name) const;
 protected:
     ObjList m_params;
 };
@@ -206,7 +207,7 @@ public:
     /**
      * Creates a new SIPMessage from parsing a text buffer.
      */
-    SIPMessage(SIPParty* ep, const char *buf, int len = -1);
+    SIPMessage(SIPParty* ep, const char* buf, int len = -1);
 
     /**
      * Creates a new SIPMessage as answer to another message.
@@ -227,7 +228,7 @@ public:
      * Construct a new SIP message by parsing a text buffer
      * @return A pointer to a valid new message or NULL
      */
-    static SIPMessage* fromParsing(SIPParty* ep, const char *buf, int len = -1);
+    static SIPMessage* fromParsing(SIPParty* ep, const char* buf, int len = -1);
 
     /**
      * Complete missing fields with defaults taken from a SIP engine
@@ -850,7 +851,7 @@ public:
      * @param len The length of the message or -1 to interpret as C string
      * @return Pointer to the transaction or NULL if message was invalid
      */
-    SIPTransaction* addMessage(SIPParty* ep, const char *buf, int len = -1);
+    SIPTransaction* addMessage(SIPParty* ep, const char* buf, int len = -1);
 
     /**
      * Add a message into the transaction list

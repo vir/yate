@@ -216,7 +216,7 @@ SIPEngine::~SIPEngine()
     DDebug(DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
 }
 
-SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char *buf, int len)
+SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char* buf, int len)
 {
     DDebug("SIPEngine",DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
     SIPMessage* msg = SIPMessage::fromParsing(ep,buf,len);

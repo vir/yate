@@ -519,6 +519,14 @@ public:
     static String destFormats(const DataFormat& sFormat = "slin");
 
     /**
+     * Check if bidirectional conversion can be performed by installed translators
+     * @param fmt1 Name of the first data format
+     * @param fmt2 Name of the second data format
+     * @return True if translators can be created for both directions
+     */
+    static bool canConvert(const DataFormat& fmt1, const DataFormat& fmt2 = "slin");
+
+    /**
      * Finds the cost of a translator given the source and destination format names
      * @param sFormat Name of the source format (data received from the consumer)
      * @param dFormat Name of the destination format (data supplied to the source)

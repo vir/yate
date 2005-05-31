@@ -215,7 +215,7 @@ void IAXEndPoint::Setup(void)
     int frm = 0;
     bool def = s_cfg.getBoolValue("formats","default",true);
     for (int i = 0; dict_iaxformats[i].token; i++) {
-	if (s_cfg.getBoolValue("formats",dict_iaxformats[i].token,def)) {
+	if (s_cfg.getBoolValue("formats",dict_iaxformats[i].token,def && DataTranslator::canConvert(dict_iaxformats[i].token))) {
 	    // TODO: check if we have a translator for this format
 	    frm |= dict_iaxformats[i].value;
 	}

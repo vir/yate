@@ -239,7 +239,7 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats)
 		var = -1;
 		tmp >> " " >> var;
 		const char* payload = lookup(var,dict_payloads);
-		if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs)) {
+		if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
 		    if (fmt)
 			fmt << ",";
 		    fmt << payload;

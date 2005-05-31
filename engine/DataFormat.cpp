@@ -559,6 +559,32 @@ String DataTranslator::destFormats(const DataFormat& sFormat)
     return s;
 }
 
+bool DataTranslator::canConvert(const DataFormat& fmt1, const DataFormat& fmt2)
+{
+    if (fmt1 == fmt2)
+	return true;
+    // check conversions provided by SimpleTranslator
+    if (((fmt1 == "slin") || (fmt1 == "alaw") || (fmt1 == "mulaw")) &&
+	((fmt2 == "slin") || (fmt2 == "alaw") || (fmt2 == "mulaw")))
+	return true;
+    bool ok1 = false, ok2 = false;
+    Lock lock(s_mutex);
+    ObjList *l = s_factories.skipNull();
+    for (; l; l=l->skipNext()) {
+	TranslatorFactory *f = static_cast<TranslatorFactory *>(l->get());
+	const TranslatorCaps *caps = f->getCapabilities();
+	for (; caps && caps->src && caps->dest; caps++) {
+	    if ((!ok1) && (fmt1 == caps->src->name) && (fmt2 == caps->dest->name))
+		ok1 = true;
+	    if ((!ok2) && (fmt2 == caps->src->name) && (fmt1 == caps->dest->name))
+		ok2 = true;
+	    if (ok1 && ok2)
+		return true;
+	}
+    }
+    return false;
+}
+
 int DataTranslator::cost(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     int c = -1;

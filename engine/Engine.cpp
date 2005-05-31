@@ -459,7 +459,7 @@ int Engine::run()
     Debug(DebugInfo,"Engine dispatching start message");
     dispatch("engine.start");
     setStatus(SERVICE_RUNNING);
-    unsigned long corr = 0;
+    long corr = 0;
 #ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
@@ -508,16 +508,20 @@ int Engine::run()
 	}
 
 	// Attempt to sleep until the next full second
-	unsigned long t = (unsigned long)((Time::now() + corr) % 1000000);
-	Thread::usleep(1000000 - t);
+	long t = 1000000 - (long)(Time::now() % 1000000) - corr;
+	if (t < 250000)
+	    t += 1000000;
+	XDebug(DebugAll,"Sleeping for %ld",t);
+	Thread::usleep(t);
 	Message *m = new Message("engine.timer");
 	m->addParam("time",String((int)m->msgTime().sec()));
 	// Try to fine tune the ticker
-	t = (unsigned long)(m->msgTime().usec() % 1000000);
+	t = (long)(m->msgTime().usec() % 1000000);
 	if (t > 500000)
 	    corr -= (1000000-t)/10;
 	else
 	    corr += t/10;
+	XDebug(DebugAll,"Adjustment at %ld, corr %ld",t,corr);
 	enqueue(m);
 	Thread::yield();
     }

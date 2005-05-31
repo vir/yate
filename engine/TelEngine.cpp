@@ -209,7 +209,7 @@ bool debugAt(int level)
 
 void setDebugTimestamp()
 {
-    s_timestamp = Time::now();
+    s_timestamp = (Time::now() / 1000000) * 1000000;
 }
 
 int DebugEnabler::debugLevel(int level)

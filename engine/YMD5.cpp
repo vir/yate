@@ -345,7 +345,7 @@ void MD5::finalize()
 	return;
     init();
     MD5_Final(m_bin, (MD5_CTX*)m_private);
-    char buf[sizeof(m_bin)+1];
+    char buf[2*sizeof(m_bin)+1];
     char *p = buf;
     for (unsigned int i = 0; i < sizeof(m_bin); i++) {
 	*p++ = hexa[m_bin[i] >> 4];

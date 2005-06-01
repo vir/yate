@@ -929,10 +929,18 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
     if (!msg || msg->isOutgoing())
 	return false;
+    String natAddr;
     if (msg->body && msg->body->isSDP()) {
 	Debug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
 	parseSDP(static_cast<SDPBody*>(msg->body),
 	    m_rtpAddr,m_rtpPort,m_formats);
+	// guess if the call comes from behind a NAT
+	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
+		m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
+	    natAddr = m_rtpAddr;
+	    m_rtpAddr = m_host;
+	}
 	int q = m_formats.find(',');
 	m_rtpFormat = m_formats.substr(0,q);
 	Debug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
@@ -942,6 +950,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	setStatus("answered",Established);
 	Message *m = message("call.answered");
 	if (m_rtpPort && m_rtpAddr && !startRtp()) {
+	    if (natAddr)
+		m->addParam("rtp_nat_addr",natAddr);
 	    m->addParam("rtp_forward","yes");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    m->addParam("rtp_port",m_rtpPort);
@@ -985,6 +995,12 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	m_rtpPort = port;
 	m_rtpFormat = frm;
 	m_formats = formats;
+	// guess if the call comes from behind a NAT
+	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
+		m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
+	    m_rtpAddr = m_host;
+	}
 	Debug(this,DebugAll,"New RTP addr '%s' port %s formats '%s' format '%s'",
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
 

@@ -15,6 +15,7 @@ DefaultGroupName=Yate
 UninstallDisplayIcon={app}\yate-client.exe
 Compression=lzma
 SolidCompression=yes
+OutputBaseFilename=yate-setup
 
 [Types]
 Name: "full"; Description: "Full installation"
@@ -70,9 +71,11 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; File
 Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-client.exe"; Components: client; Tasks: desktop
 
 [Run]
-Filename: "{app}\yate-client.exe"; Description: "Launch client"; Components: client; Flags: postinstall nowait skipifsilent unchecked
 Filename: "{app}\yate-service.exe"; Description: "Register service"; Parameters: "--install -w ""{app}"""; Components: server
+Filename: "net.exe"; Description: "Start service"; Components: server; Parameters: "start yate"; Flags: postinstall skipifsilent unchecked
+Filename: "{app}\yate-client.exe"; Description: "Launch client"; Components: client; Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallRun]
+Filename: "net.exe"; Parameters: "stop yate"; Components: server
 Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 

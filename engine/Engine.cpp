@@ -138,44 +138,6 @@ private:
     HMODULE m_handle;
 };
 
-SLib::SLib(HMODULE handle, const char* file)
-    : m_handle(handle)
-{
-    DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
-}
-
-SLib::~SLib()
-{
-#ifdef DEBUG
-    Debugger debug("SLib::~SLib()"," [%p]",this);
-#endif
-    int err = dlclose(m_handle);
-    if (err)
-	Debug(DebugGoOn,"Error %d on dlclose(%p)",err,m_handle);
-    else if (s_keepclosing) {
-	int tries;
-	for (tries=0; tries<10; tries++)
-	    if (dlclose(m_handle))
-		break;
-	if (tries)
-	    Debug(DebugGoOn,"Made %d attempts to dlclose(%p)",tries,m_handle);
-    }
-}
-
-SLib* SLib::load(const char* file)
-{
-    DDebug(DebugAll,"SLib::load('%s')",file);
-    HMODULE handle = ::dlopen(file,RTLD_NOW);
-    if (handle)
-	return new SLib(handle,file);
-#ifdef _WINDOWS
-    Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
-#else
-    Debug(DebugWarn,dlerror());
-#endif    
-    return 0;
-}
-
 class EngineSuperHandler : public MessageHandler
 {
 public:
@@ -256,22 +218,43 @@ static void setStatus(DWORD state)
 {
     if (!s_handler)
 	return;
+    switch (state) {
+	case SERVICE_START_PENDING:
+	case SERVICE_STOP_PENDING:
+	    break;
+	default:
+	    s_status.dwCheckPoint = 0;
+    }
     s_status.dwCurrentState = state;
-    SetServiceStatus(s_handler,&s_status);
+    ::SetServiceStatus(s_handler,&s_status);
+}
+
+static void checkPoint()
+{
+    if (!s_handler)
+	return;
+    s_status.dwCheckPoint++;
+    ::SetServiceStatus(s_handler,&s_status);
 }
 
 static void WINAPI serviceHandler(DWORD code)
 {
     switch (code) {
 	case SERVICE_CONTROL_STOP:
+	case SERVICE_CONTROL_SHUTDOWN:
 	    Engine::halt(0);
+	    setStatus(SERVICE_STOP_PENDING);
 	    break;
 	case SERVICE_CONTROL_PARAMCHANGE:
 	    Engine::init();
 	    break;
+	case SERVICE_CONTROL_INTERROGATE:
+	    break;
 	default:
 	    Debug(DebugWarn,"Got unexpected service control code %u",code);
     }
+    if (s_handler)
+	::SetServiceStatus(s_handler,&s_status);
 }
 
 static void serviceMain(DWORD argc, LPTSTR* argv)
@@ -284,9 +267,9 @@ static void serviceMain(DWORD argc, LPTSTR* argv)
     s_status.dwServiceSpecificExitCode = 0;
     s_status.dwCheckPoint = 0;
     s_status.dwWaitHint = 0;
-    s_handler = RegisterServiceCtrlHandler("yate",serviceHandler);
+    s_handler = ::RegisterServiceCtrlHandler("yate",serviceHandler);
     if (!s_handler) {
-	Debug(DebugFail,"Could not register service control handler \"yate\", code %u\n",GetLastError());
+	Debug(DebugFail,"Could not register service control handler \"yate\", code %u\n",::GetLastError());
 	return;
     }
     setStatus(SERVICE_START_PENDING);
@@ -302,6 +285,7 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 #else /* _WINDOWS */
 
 #define setStatus(s)
+#define checkPoint()
 
 static bool s_runagain = true;
 static pid_t s_childpid = -1;
@@ -409,6 +393,46 @@ static int supervise(void)
 }
 #endif /* _WINDOWS */
 
+SLib::SLib(HMODULE handle, const char* file)
+    : m_handle(handle)
+{
+    DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
+    checkPoint();
+}
+
+SLib::~SLib()
+{
+#ifdef DEBUG
+    Debugger debug("SLib::~SLib()"," [%p]",this);
+#endif
+    int err = dlclose(m_handle);
+    if (err)
+	Debug(DebugGoOn,"Error %d on dlclose(%p)",err,m_handle);
+    else if (s_keepclosing) {
+	int tries;
+	for (tries=0; tries<10; tries++)
+	    if (dlclose(m_handle))
+		break;
+	if (tries)
+	    Debug(DebugGoOn,"Made %d attempts to dlclose(%p)",tries,m_handle);
+    }
+    checkPoint();
+}
+
+SLib* SLib::load(const char* file)
+{
+    DDebug(DebugAll,"SLib::load('%s')",file);
+    HMODULE handle = ::dlopen(file,RTLD_NOW);
+    if (handle)
+	return new SLib(handle,file);
+#ifdef _WINDOWS
+    Debug(DebugWarn,"LoadLibrary error %u in '%s'",::GetLastError(),file);
+#else
+    Debug(DebugWarn,dlerror());
+#endif    
+    return 0;
+}
+
 Engine::Engine()
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
@@ -454,6 +478,7 @@ int Engine::run()
 	s_restarts = 0;
     }
     initPlugins();
+    checkPoint();
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
     Debug(DebugInfo,"Engine dispatching start message");
@@ -529,9 +554,12 @@ int Engine::run()
     Output("Yate engine is shutting down with code %d",s_haltcode);
     setStatus(SERVICE_STOP_PENDING);
     dispatch("engine.halt");
+    checkPoint();
     Thread::msleep(200);
     m_dispatcher.dequeue();
+    checkPoint();
     Thread::killall();
+    checkPoint();
     m_dispatcher.dequeue();
     ::signal(SIGINT,SIG_DFL);
     ::signal(SIGTERM,SIG_DFL);
@@ -961,21 +989,21 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	}
 	SC_HANDLE sc = OpenSCManager(0,0,SC_MANAGER_ALL_ACCESS);
 	if (!sc) {
-	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",GetLastError());
+	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",::GetLastError());
 	    return EPERM;
 	}
 	SC_HANDLE sv = OpenService(sc,"yate",DELETE|SERVICE_STOP);
 	if (sv) {
 	    ControlService(sv,SERVICE_CONTROL_STOP,0);
 	    if (!DeleteService(sv)) {
-		DWORD err = GetLastError();
+		DWORD err = ::GetLastError();
 		if (err != ERROR_SERVICE_MARKED_FOR_DELETE)
 		    ::fprintf(stderr,"Could not delete Service, code %u\n",err);
 	    }
 	    CloseServiceHandle(sv);
 	}
 	else {
-	    DWORD err = GetLastError();
+	    DWORD err = ::GetLastError();
 	    if (err != ERROR_SERVICE_DOES_NOT_EXIST)
 		::fprintf(stderr,"Could not open Service, code %u\n",err);
 	}
@@ -985,7 +1013,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     if (service & YSERV_INS) {
 	char buf[1024];
 	if (!GetModuleFileName(0,buf,sizeof(buf))) {
-	    ::fprintf(stderr,"Could not find my own executable file, code %u\n",GetLastError());
+	    ::fprintf(stderr,"Could not find my own executable file, code %u\n",::GetLastError());
 	    return EINVAL;
 	}
 	String s(buf);
@@ -996,7 +1024,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
 	SC_HANDLE sc = OpenSCManager(0,0,SC_MANAGER_ALL_ACCESS);
 	if (!sc) {
-	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",GetLastError());
+	    ::fprintf(stderr,"Could not open Service Manager, code %u\n",::GetLastError());
 	    return EPERM;
 	}
 	SC_HANDLE sv = CreateService(sc,"yate","Yet Another Telephony Engine",GENERIC_EXECUTE,
@@ -1005,7 +1033,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	if (sv)
 	    CloseServiceHandle(sv);
 	else
-	    ::fprintf(stderr,"Could not create Service, code %u\n",GetLastError());
+	    ::fprintf(stderr,"Could not create Service, code %u\n",::GetLastError());
 	CloseServiceHandle(sc);
 	if (!(service & YSERV_RUN))
 	    return 0;
@@ -1071,7 +1099,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
 #ifdef _WINDOWS
     if (service)
-	retcode = StartServiceCtrlDispatcher(dispatchTable) ? 0 : GetLastError();
+	retcode = ::StartServiceCtrlDispatcher(dispatchTable) ? 0 : ::GetLastError();
     else
 #endif
 	retcode = engineRun();

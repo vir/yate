@@ -64,9 +64,11 @@ static TokenDict dict_errors[] = {
     { "incomplete", 484 },
     { "noroute", 404 },
     { "noconn", 503 },
+    { "noauth", 401 },
     { "nomedia", 415 },
     { "busy", 486 },
     { "rejected", 406 },
+    { "forbidden", 403 },
     { "congestion", 480 },
     { "failure", 500 },
     { "looping", 483 },
@@ -95,6 +97,8 @@ class YateSIPEngine : public SIPEngine
 public:
     YateSIPEngine(YateSIPEndPoint* ep);
     virtual bool buildParty(SIPMessage* message);
+    virtual bool checkUser(const String& username, const String& realm, const String& nonce,
+	const String& method, const String& uri, const String& response, const SIPMessage* message);
 private:
     YateSIPEndPoint* m_ep;
 };
@@ -105,8 +109,6 @@ public:
     YateSIPEndPoint();
     ~YateSIPEndPoint();
     bool Init(void);
-   // YateSIPConnection *findconn(int did);
-  //  void terminateall(void);
     void run(void);
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
@@ -148,6 +150,7 @@ public:
     virtual void callReject(const char* error, const char* reason);
     void startRouter();
     bool process(SIPEvent* ev);
+    bool checkUser(SIPTransaction* t, bool refuse = true);
     void doBye(SIPTransaction* t);
     void doCancel(SIPTransaction* t);
     void reInvite(SIPTransaction* t);
@@ -162,6 +165,8 @@ public:
 	{ return m_tr; }
     inline const String& callid() const
 	{ return m_callid; }
+    inline const String& user() const
+	{ return m_user; }
     inline const String& getHost() const
 	{ return m_host; }
     inline int getPort() const
@@ -191,8 +196,23 @@ private:
     int m_rtpVersion;
     String m_formats;
     String m_host;
+    String m_user;
     int m_port;
     Message* m_route;
+};
+
+class YateSIPLine : public String
+{
+public:
+    YateSIPLine();
+    virtual ~YateSIPLine();
+private:
+    String m_registrar;
+    String m_account;
+    String m_password;
+    Time m_resend;
+    int m_expire;
+    SIPTransaction* m_tr;
 };
 
 class SIPDriver : public Driver
@@ -343,6 +363,31 @@ bool YateSIPEngine::buildParty(SIPMessage* message)
     return m_ep->buildParty(message);
 }
 
+bool YateSIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
+    const String& method, const String& uri, const String& response, const SIPMessage* message)
+{
+    Message m("user.auth");
+    m.addParam("username",username);
+    m.addParam("realm",realm);
+    m.addParam("nonce",nonce);
+    m.addParam("method",method);
+    m.addParam("uri",uri);
+    m.addParam("response",response);
+    if (message) {
+	m.addParam("xsip_received",message->getParty()->getPartyAddr());
+	m.addParam("xsip_rport",String(message->getParty()->getPartyPort()));
+    }
+    
+    if (!Engine::dispatch(m))
+	return false;
+    // FIXME: deal with empty passwords or just disallow them
+    if (m.retValue().null())
+	return true;
+    String res;
+    buildAuth(username,realm,m.retValue(),nonce,method,uri,res);
+    return (res == response);
+}
+
 YateSIPEndPoint::YateSIPEndPoint()
     : Thread("YSIP EndPoint"), m_sock(0), m_engine(0)
 {
@@ -467,20 +512,28 @@ void YateSIPEndPoint::run()
 	}
 	else
 	    Thread::check();
-//	m_engine->process();
 	SIPEvent* e = m_engine->getEvent();
 	// hack: use a loop so we can use break and continue
 	for (; e; m_engine->processEvent(e),e = 0) {
 	    if (!e->getTransaction())
 		continue;
+	    plugin.lock();
 	    YateSIPConnection* conn = static_cast<YateSIPConnection*>(e->getTransaction()->getUserData());
+	    if (conn && (conn->refcount() > 0))
+		conn->ref();
+	    else
+		conn = 0;
+	    plugin.unlock();
 	    if (conn) {
 		if (conn->process(e)) {
 		    delete e;
+		    conn->deref();
 		    break;
 		}
-		else
+		else {
+		    conn->deref();
 		    continue;
+		}
 	    }
 	    if ((e->getState() == SIPTransaction::Trying) &&
 		!e->isOutgoing() && incoming(e,e->getTransaction())) {
@@ -493,7 +546,7 @@ void YateSIPEndPoint::run()
 
 bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 {
-    if (e->getTransaction()->isInvite())
+    if (t->isInvite())
 	invite(e,t);
     else if (t->getMethod() == "BYE") {
 	YateSIPConnection* conn = plugin.findCall(t->getCallID());
@@ -520,7 +573,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 {
     if (!plugin.canAccept()) {
 	Debug(DebugWarn,"Dropping call, full or exiting");
-	e->getTransaction()->setResponse(480);
+	t->setResponse(480);
 	return;
     }
 
@@ -531,7 +584,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	    conn->reInvite(t);
 	else {
 	    Debug(DebugWarn,"Got re-INVITE for missing dialog");
-	    e->getTransaction()->setResponse(481);
+	    t->setResponse(481);
 	}
 	return;
     }
@@ -545,14 +598,23 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 {
     if (Engine::exiting()) {
 	Debug(&plugin,DebugWarn,"Dropping request, engine is exiting");
-	e->getTransaction()->setResponse(500, "Server Shutting Down");
+	t->setResponse(500, "Server Shutting Down");
 	return;
     }
     const SIPHeaderLine* hl = e->getMessage()->getHeader("Contact");
     if (!hl) {
-	e->getTransaction()->setResponse(400);
+	t->setResponse(400);
 	return;
     }
+
+    String user;
+    int age = t->authUser(user);
+    Debug(DebugAll,"User '%s' age %d",user.c_str(),age);
+    if ((age < 0) || (age > 10)) {
+	t->requestAuth("realm","domain",age > 0);
+	return;
+    }
+
     URI addr(*hl);
     Message *m = new Message("user.register");
     m->addParam("username",addr.getUser());
@@ -569,9 +631,9 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     }
     // Always OK deregistration attempts
     if (Engine::dispatch(m) || dereg)
-	e->getTransaction()->setResponse(200);
+	t->setResponse(200);
     else
-	e->getTransaction()->setResponse(404);
+	t->setResponse(404);
     m->destruct();
 }
 
@@ -595,6 +657,20 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 
     URI uri(m_tr->getURI());
     Message *m = message("call.route");
+
+    String user;
+    int age = tr->authUser(user);
+    Debug(DebugAll,"User '%s' age %d",user.c_str(),age);
+    if (age >= 0) {
+	if (age < 10) {
+	    m_user = user;
+	    m->addParam("user",m_user);
+	}
+	else
+	    m->addParam("xsip_user",user);
+	m->addParam("xsip_nonce_age",String(age));
+    }
+
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
@@ -687,6 +763,8 @@ void YateSIPConnection::startRouter()
 void YateSIPConnection::clearTransaction()
 {
     if (m_tr) {
+	if (driver())
+	    driver()->lock();
 	m_tr->setUserData(0);
 	if (m_tr->isIncoming()) {
 	    m_byebye = false;
@@ -694,6 +772,8 @@ void YateSIPConnection::clearTransaction()
 	}
 	m_tr->deref();
 	m_tr = 0;
+	if (driver())
+	    driver()->unlock();
     }
 }
 
@@ -963,6 +1043,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	setStatus("ringing",Ringing);
 	Message *m = message("call.ringing");
 	if (m_rtpPort && m_rtpAddr && !startRtp()) {
+	    if (natAddr)
+		m->addParam("rtp_nat_addr",natAddr);
 	    m->addParam("rtp_forward","yes");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    m->addParam("rtp_port",m_rtpPort);
@@ -979,6 +1061,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 
 void YateSIPConnection::reInvite(SIPTransaction* t)
 {
+    if (!checkUser(t))
+	return;
     Debug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
     // hack: use a while instead of if so we can return or break out of it
     while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
@@ -1018,8 +1102,23 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     t->setResponse(488);
 }
 
+bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
+{
+    if (m_user.null())
+	return true;
+    int age = t->authUser(m_user);
+    if ((age > 0) && (age <= 10))
+	return true;
+    Debug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed [%p]",t,this);
+    if (refuse)
+	t->requestAuth("realm","domain",false);
+    return false;
+}
+
 void YateSIPConnection::doBye(SIPTransaction* t)
 {
+    if (!checkUser(t))
+	return;
     Debug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
     t->setResponse(200);
     m_byebye = false;
@@ -1028,6 +1127,9 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 
 void YateSIPConnection::doCancel(SIPTransaction* t)
 {
+    if (!checkUser(t,false))
+	Debug(DebugWarn,"User authentication failed for user '%s' but CANCELing anyway [%p]",
+	    m_user.c_str(),this);
     Debug(this,DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
     if (m_tr) {
 	t->setResponse(200);
@@ -1109,13 +1211,17 @@ bool YateSIPConnection::callRouted(Message& msg)
 void YateSIPConnection::callAccept(Message& msg)
 {
     Channel::callAccept(msg);
+    m_user = msg.getValue("user");
 }
 
 void YateSIPConnection::callReject(const char* error, const char* reason)
 {
     Channel::callReject(error,reason);
     int code = lookup(error,dict_errors,500);
-    m_tr->setResponse(code,reason);
+    if (code == 401)
+	m_tr->requestAuth("realm","domain",false);
+    else
+	m_tr->setResponse(code,reason);
     setReason(reason,code);
 }
 

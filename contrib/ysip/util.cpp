@@ -126,6 +126,26 @@ const char* compactForm(const char* header)
     return header;
 }
 
+// Utility function, puts quotes around a string
+void addQuotes(String& str)
+{
+    str.trimBlanks();
+    int l = str.length();
+    if ((l < 2) || (str[0] != '"') || (str[l-1] != '"'))
+	str = "\"" + str + "\"";
+}
+
+// Utility function, removes quotes around a string
+void delQuotes(String& str)
+{
+    str.trimBlanks();
+    int l = str.length();
+    if ((l >= 2) && (str[0] == '"') && (str[l-1] == '"')) {
+	str = str.substr(1,l-2);
+	str.trimBlanks();
+    }
+}
+
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

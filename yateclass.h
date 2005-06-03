@@ -1897,6 +1897,23 @@ public:
 	{ return update(str.c_str(), str.length()); }
 
     /**
+     * MD5 updating operator for Strings
+     */
+    inline MD5& operator<<(const String& value)
+	{ update(value); return *this; }
+
+    /**
+     * MD5 updating operator for DataBlocks
+     */
+    inline MD5& operator<<(const DataBlock& data)
+	{ update(data); return *this; }
+
+    /**
+     * MD5 updating operator for C strings
+     */
+    MD5& operator<<(const char* value);
+
+    /**
      * Returns a pointer to the raw 16-byte binary value of the message digest.
      * The digest is finalized if if wasn't already
      * @return Pointer to the raw digest data or NULL if some error occured

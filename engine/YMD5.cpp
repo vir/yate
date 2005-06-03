@@ -369,6 +369,13 @@ bool MD5::update(const void* buf, unsigned int len)
     return true;
 }
 
+MD5& MD5::operator<<(const char* value)
+{
+    if (!null(value))
+	update(value,::strlen(value));
+    return *this;
+}
+
 const unsigned char* MD5::rawDigest()
 {
     finalize();

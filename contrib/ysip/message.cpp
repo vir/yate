@@ -30,18 +30,18 @@
 
 using namespace TelEngine;
 
-SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
-    : NamedString(name)
+SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
+    : NamedString(name), m_separator(sep)
 {
-    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
     if (value.null())
 	return;
-    int sp = value.find(';');
+    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    int sp = value.find(m_separator);
     // skip past URIs with parameters
     int lim = value.find('<');
     if ((sp >= 0) && (lim >= 0) && (lim < sp)) {
 	lim = value.find('>');
-	sp = value.find(';',lim);
+	sp = value.find(m_separator,lim);
     }
     if (sp < 0) {
 	assign(value);
@@ -50,7 +50,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
     assign(value,sp);
     trimBlanks();
     while (sp < (int)value.length()) {
-	int ep = value.find(';',sp+1);
+	int ep = value.find(m_separator,sp+1);
 	if (ep <= sp)
 	    ep = value.length();
 	int eq = value.find('=',sp+1);
@@ -60,7 +60,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
 	    pname.trimBlanks();
 	    pvalue.trimBlanks();
 	    if (!pname.null()) {
-		XDebug(DebugAll,"param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		XDebug(DebugAll,"hdr param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
 		m_params.append(new NamedString(pname,pvalue));
 	    }
 	}
@@ -68,7 +68,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
 	    String pname(value.substr(sp+1,ep-sp-1));
 	    pname.trimBlanks();
 	    if (!pname.null()) {
-		XDebug(DebugAll,"param name='%s' (no value)",pname.c_str());
+		XDebug(DebugAll,"hdr param name='%s' (no value)",pname.c_str());
 		m_params.append(new NamedString(pname));
 	    }
 	}
@@ -77,7 +77,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value)
 }
 
 SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
-    : NamedString(original.name(),original)
+    : NamedString(original.name(),original), m_separator(original.separator())
 {
     XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
     const ObjList* l = &original.params();
@@ -91,6 +91,32 @@ SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
 SIPHeaderLine::~SIPHeaderLine()
 {
     XDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
+}
+
+void* SIPHeaderLine::getObject(const String& name) const
+{
+    if (name == "SIPHeaderLine")
+	return const_cast<SIPHeaderLine*>(this);
+    return NamedString::getObject(name);
+}
+
+SIPHeaderLine* SIPHeaderLine::clone() const
+{
+    return new SIPHeaderLine(*this);
+}
+
+void SIPHeaderLine::buildLine(String& line) const
+{
+    line << name() << ": " << *this;
+    const ObjList* p = &m_params;
+    for (; p; p = p->next()) {
+	NamedString* s = static_cast<NamedString*>(p->get());
+	if (s) {
+	    line << separator() << s->name();
+	    if (!s->null())
+		line << "=" << *s;
+	}
+    }
 }
 
 const NamedString* SIPHeaderLine::getParam(const char* name) const
@@ -120,6 +146,87 @@ void SIPHeaderLine::delParam(const char* name)
     ObjList* p = m_params.find(name);
     if (p)
 	p->remove();
+}
+
+SIPAuthLine::SIPAuthLine(const char* name, const String& value)
+    : SIPHeaderLine(name,String::empty(),',')
+{
+    XDebug(DebugAll,"SIPAuthLine::SIPAuthLine('%s','%s') [%p]",name,value.c_str(),this);
+    if (value.null())
+	return;
+    int sp = value.find(' ');
+    if (sp < 0) {
+	assign(value);
+	return;
+    }
+    assign(value,sp);
+    trimBlanks();
+    while (sp < (int)value.length()) {
+	int ep = value.find(m_separator,sp+1);
+	int quot = value.find('"',sp+1);
+	if ((quot > sp) && (quot < ep)) {
+	    quot = value.find('"',quot+1);
+	    if (quot > sp)
+		ep = value.find(m_separator,quot+1);
+	}
+	if (ep <= sp)
+	    ep = value.length();
+	int eq = value.find('=',sp+1);
+	if ((eq > 0) && (eq < ep)) {
+	    String pname(value.substr(sp+1,eq-sp-1));
+	    String pvalue(value.substr(eq+1,ep-eq-1));
+	    pname.trimBlanks();
+	    pvalue.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"auth param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		m_params.append(new NamedString(pname,pvalue));
+	    }
+	}
+	else {
+	    String pname(value.substr(sp+1,ep-sp-1));
+	    pname.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"auth param name='%s' (no value)",pname.c_str());
+		m_params.append(new NamedString(pname));
+	    }
+	}
+	sp = ep;
+    }
+}
+
+SIPAuthLine::SIPAuthLine(const SIPAuthLine& original)
+    : SIPHeaderLine(original)
+{
+}
+
+void* SIPAuthLine::getObject(const String& name) const
+{
+    if (name == "SIPAuthLine")
+	return const_cast<SIPAuthLine*>(this);
+    return SIPHeaderLine::getObject(name);
+}
+
+SIPHeaderLine* SIPAuthLine::clone() const
+{
+    return new SIPAuthLine(*this);
+}
+
+void SIPAuthLine::buildLine(String& line) const
+{
+    line << name() << ": " << *this;
+    const ObjList* p = &m_params;
+    for (bool first = true; p; p = p->next()) {
+	NamedString* s = static_cast<NamedString*>(p->get());
+	if (s) {
+	    if (first)
+		first = false;
+	    else
+		line << separator();
+	    line << " " << s->name();
+	    if (!s->null())
+		line << "=" << *s;
+	}
+    }
 }
 
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
@@ -329,7 +436,7 @@ bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
 {
     const SIPHeaderLine* hl = message ? message->getHeader(name) : 0;
     if (hl) {
-	header.append(new SIPHeaderLine(*hl));
+	header.append(hl->clone());
 	return true;
     }
     return false;
@@ -345,7 +452,7 @@ int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
 	const SIPHeaderLine* hl = static_cast<const SIPHeaderLine*>(l->get());
 	if (hl && (hl->name() &= name)) {
 	    ++c;
-	    header.append(new SIPHeaderLine(*hl));
+	    header.append(hl->clone());
 	}
     }
     return c;
@@ -425,10 +532,19 @@ bool SIPMessage::parse(const char* buf, int len)
 	    line->destruct();
 	    return false;
 	}
+	name = uncompactForm(name);
 	*line >> ":";
 	line->trimBlanks();
 	XDebug(DebugAll,"SIPMessage::parse header='%s' value='%s'",name.c_str(),line->c_str());
-	header.append(new SIPHeaderLine(uncompactForm(name.c_str()),*line));
+
+	if ((name &= "WWW-Authenticate") ||
+	    (name &= "Proxy-Authenticate") ||
+	    (name &= "Authorization") ||
+	    (name &= "Proxy-Authorization"))
+	    header.append(new SIPAuthLine(name,*line));
+	else
+	    header.append(new SIPHeaderLine(name,*line));
+
 	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
 	    content.toLower();
@@ -544,16 +660,7 @@ const String& SIPMessage::getHeaders() const
 	for (; l; l = l->next()) {
 	    SIPHeaderLine* t = static_cast<SIPHeaderLine*>(l->get());
 	    if (t) {
-		m_string << t->name() << ": " << t->c_str();
-		const ObjList* p = &(t->params());
-		for (; p; p = p->next()) {
-		    NamedString* s = static_cast<NamedString*>(p->get());
-		    if (s) {
-			m_string << ";" << s->name();
-			if (!s->null())
-			    m_string << "=" << *s;
-		    }
-		}
+		t->buildLine(m_string);
 		m_string << "\r\n";
 	    }
 	}

@@ -37,6 +37,12 @@ const char* uncompactForm(const char* header);
 // Utility function, returns a compacted header name
 const char* compactForm(const char* header);
 
+// Utility function, puts quotes around a string
+void addQuotes(String& str);
+
+// Utility function, removes quotes around a string
+void delQuotes(String& str);
+
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

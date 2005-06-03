@@ -268,6 +268,47 @@ void SIPTransaction::setResponse(int code, const char* reason)
     msg->deref();
 }
 
+void SIPTransaction::requestAuth(const String& realm, const String& domain, bool stale, bool proxy)
+{
+    if (m_outgoing) {
+	Debug(DebugWarn,"SIPTransaction::requestAuth() in client mode [%p]",this);
+	return;
+    }
+    switch (m_state) {
+	case Invalid:
+	case Retrans:
+	case Finish:
+	case Cleared:
+	    DDebug(DebugInfo,"SIPTransaction ignoring requestAuth() in state %s [%p]",
+		stateName(m_state),this);
+	    return;
+    }
+    int code = proxy ? 407 : 401;
+    const char* hdr = proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
+    SIPMessage* msg = new SIPMessage(m_firstMessage, code, lookup(code,SIPResponses));
+    if (realm) {
+	String tmp;
+	tmp << "Digest realm=\"" << realm << "\"";
+	SIPHeaderLine* line = new SIPHeaderLine(hdr,tmp,',');
+	if (domain)
+	    line->setParam(" domain","\"" + domain + "\"");
+	m_engine->nonceGet(tmp);
+	line->setParam(" nonce","\"" + tmp + "\"");
+	line->setParam(" stale",stale ? "TRUE" : "FALSE");
+	line->setParam(" algorithm","MD5");
+	msg->addHeader(line);
+    }
+    setResponse(msg);
+    msg->deref();
+}
+
+int SIPTransaction::authUser(String& user, bool proxy)
+{
+    if (!(m_engine && m_firstMessage))
+	return -1;
+    return m_engine->authUser(m_firstMessage, user, proxy);
+}
+
 bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 {
     if (!(message && m_firstMessage))

@@ -83,8 +83,12 @@ private:
 bool AuthHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
-    msg.retValue() = s_cfg.getValue(username,"password");
-    return (!msg.retValue().null());
+    const NamedList* sect = s_cfg.getSection(username);
+    if (sect) {
+	msg.retValue() = sect->getValue("password");
+	return true;
+    }
+    return false;
 };
 
 

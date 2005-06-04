@@ -374,8 +374,8 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     m.addParam("uri",uri);
     m.addParam("response",response);
     if (message) {
-	m.addParam("xsip_received",message->getParty()->getPartyAddr());
-	m.addParam("xsip_rport",String(message->getParty()->getPartyPort()));
+	m.addParam("ip_addr",message->getParty()->getPartyAddr());
+	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
     }
     
     if (!Engine::dispatch(m))
@@ -664,11 +664,11 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     if (age >= 0) {
 	if (age < 10) {
 	    m_user = user;
-	    m->addParam("user",m_user);
+	    m->addParam("username",m_user);
 	}
 	else
-	    m->addParam("xsip_user",user);
-	m->addParam("xsip_nonce_age",String(age));
+	    m->addParam("expired_user",user);
+	m->addParam("nonce_age",String(age));
     }
 
     m->addParam("caller",m_uri.getUser());
@@ -677,13 +677,13 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     int maxf = tmp.toInteger(70);
     tmp = (maxf/10)-1;
     m->addParam("antiloop",tmp);
+    m->addParam("ip_addr",m_host);
+    m->addParam("ip_port",String(m_port));
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
     m->addParam("sip_callid",m_callid);
     m->addParam("sip_contact",ev->getMessage()->getHeaderValue("Contact"));
     m->addParam("sip_user-agent",ev->getMessage()->getHeaderValue("User-Agent"));
-    m->addParam("xsip_received",m_host);
-    m->addParam("xsip_rport",String(m_port));
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpPort,m_formats);
 	if (m_rtpAddr) {
@@ -1211,7 +1211,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 void YateSIPConnection::callAccept(Message& msg)
 {
     Channel::callAccept(msg);
-    m_user = msg.getValue("user");
+    m_user = msg.getValue("username");
 }
 
 void YateSIPConnection::callReject(const char* error, const char* reason)

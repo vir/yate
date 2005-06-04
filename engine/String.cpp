@@ -860,7 +860,7 @@ bool Regexp::matches(const char* value, StringMatchPrivate* matches)
 {
     DDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
     if (!value)
-	return false;
+	value = "";
     if (!compile())
 	return false;
     int mm = matches ? MAX_MATCH : 0;

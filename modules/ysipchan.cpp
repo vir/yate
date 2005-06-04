@@ -1109,7 +1109,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     int age = t->authUser(m_user);
     if ((age > 0) && (age <= 10))
 	return true;
-    Debug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed [%p]",t,this);
+    Debug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
 	t->requestAuth("realm","domain",false);
     return false;

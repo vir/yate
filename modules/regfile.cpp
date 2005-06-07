@@ -143,6 +143,9 @@ bool RouteHandler::received(Message &msg)
 
 bool StatusHandler::received(Message &msg)
 {
+    String dest(msg.getValue("module"));
+    if (dest && (dest != "regfile") && (dest != "misc"))
+        return false;
     Lock lock(lmutex);
     unsigned int n = s_cfg.sections();
     if (!s_cfg.getSection(0))

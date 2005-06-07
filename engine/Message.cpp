@@ -375,4 +375,16 @@ void MessageDispatcher::dequeue()
 	;
 }
 
+unsigned int MessageDispatcher::messageCount()
+{
+    Lock lock(m_mutex);
+    return m_messages.count();
+}
+
+unsigned int MessageDispatcher::handlerCount()
+{
+    Lock lock(m_mutex);
+    return m_handlers.count();
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -472,13 +472,6 @@ public:
     bool dispatch(Message& msg);
 
     /**
-     * Get the number of messages waiting in the queue
-     * @return Count of messages in the queue
-     */
-    inline unsigned int queueLength() const
-	{ return m_messages.count(); }
-
-    /**
      * Put a message in the waiting queue
      * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if successfully queued, false otherwise
@@ -501,6 +494,18 @@ public:
      */
     inline void clear()
 	{ m_handlers.clear(); }
+
+    /**
+     * Get the number of messages waiting in the queue
+     * @return Count of messages in the queue
+     */
+    unsigned int messageCount();
+
+    /**
+     * Get the number of handlers in this dispatcher
+     * @return Count of handlers
+     */
+    unsigned int handlerCount();
 
     /**
      * Install or remove a hook to catch messages after being dispatched
@@ -751,6 +756,20 @@ public:
      * @return Count of plugins in use
      */
     int usedPlugins();
+
+    /**
+     * Get the number of messages waiting in the queue
+     * @return Count of messages in the queue
+     */
+    inline unsigned int messageCount()
+	{ return m_dispatcher.messageCount(); }
+
+    /**
+     * Get the number of handlers in the dispatcher
+     * @return Count of handlers
+     */
+    inline unsigned int handlerCount()
+	{ return m_dispatcher.handlerCount(); }
 
 protected:
     /**

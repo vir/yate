@@ -200,6 +200,7 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     payload &= 0x7f;
     if (marker)
 	payload |= 0x80;
+    m_tsLast = timestamp;
     timestamp += m_ts;
     if (!m_ssrc)
 	m_ssrc = ::random();
@@ -241,6 +242,8 @@ bool RTPSender::rtpSendEvent(int event, int duration, int volume, unsigned int t
 	return false;
     if ((duration <= 50) || (duration > 10000))
 	duration = 4000;
+    if (!timestamp)
+	timestamp = m_tsLast;
     m_evTs = timestamp;
     m_evNum = event;
     m_evVol = volume;

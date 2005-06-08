@@ -1180,6 +1180,8 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
+    if (m_rtpid)
+	msg.setParam("targetid",m_rtpid);
     return false;
 }
 
@@ -1201,6 +1203,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    m->deref();
 	    m_byebye = false;
 	    setReason("Redirected",302);
+	    setStatus("redirected");
 	    return false;
 	}
 	m_tr->setResponse(183);

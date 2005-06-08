@@ -152,7 +152,7 @@ public:
 class DTMFHandler : public MessageHandler
 {
 public:
-    DTMFHandler() : MessageHandler("chan.dtmf",100) { }
+    DTMFHandler() : MessageHandler("chan.dtmf",150) { }
     virtual bool received(Message &msg);
 };
 

@@ -425,7 +425,7 @@ public:
      * Constructor
      */
     inline RTPSender(RTPSession* session = 0)
-	: RTPBaseIO(session), m_evTime(0)
+	: RTPBaseIO(session), m_evTime(0), m_tsLast(0)
 	{ }
 
     /**
@@ -480,6 +480,7 @@ protected:
 
 private:
     int m_evTime;
+    unsigned int m_tsLast;
     bool sendEventData(unsigned int timestamp);
 };
 

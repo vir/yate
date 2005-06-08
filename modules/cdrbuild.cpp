@@ -74,18 +74,20 @@ private:
 	m_ringing,
 	m_answer,
 	m_hangup;
+    String m_dir;
     String m_billid;
     String m_address;
     String m_caller;
     String m_called;
     String m_status;
+    String m_reason;
     bool m_first;
 };
 
 static ObjList cdrs;
 
 CdrBuilder::CdrBuilder(const char *name)
-    : String(name), m_status("unknown"), m_first(true)
+    : String(name), m_dir("unknown"), m_status("unknown"), m_first(true)
 {
     m_start = m_call = m_ringing = m_answer = m_hangup = 0;
 }
@@ -98,7 +100,6 @@ CdrBuilder::~CdrBuilder()
 void CdrBuilder::emit(const char *operation)
 {
     u_int64_t t_hangup = m_hangup ? m_hangup : Time::now();
-    const char *dir = m_call ? "outgoing" : "incoming";
 
     u_int64_t
 	t_start = m_start, t_call = m_call,
@@ -121,7 +122,7 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("time",String(sec(t_start)));
     m->addParam("chan",c_str());
     m->addParam("address",m_address);
-    m->addParam("direction",dir);
+    m->addParam("direction",m_dir);
     m->addParam("billid",m_billid);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
@@ -129,6 +130,7 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("billtime",String(sec(t_hangup - t_answer)));
     m->addParam("ringtime",String(sec(t_answer - t_ringing)));
     m->addParam("status",m_status);
+    m->addParam("reason",m_reason);
     Engine::enqueue(m);
 }
 
@@ -154,8 +156,14 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
     if (p)
 	m_called = p;
     p = msg.getValue("status");
-    if (p)
+    if (p) {
 	m_status = p;
+	if ((m_status == "incoming") || (m_status == "outgoing"))
+	    m_dir = m_status;
+    }
+    p = msg.getValue("reason");
+    if (p)
+	m_reason = p;
 
     switch (type) {
 	case CdrStart:

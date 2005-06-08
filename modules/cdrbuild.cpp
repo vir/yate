@@ -74,6 +74,7 @@ private:
 	m_answer,
 	m_hangup;
     String m_billid;
+    String m_address;
     String m_caller;
     String m_called;
     String m_status;
@@ -118,6 +119,7 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("operation",operation);
     m->addParam("time",String(sec(t_start)));
     m->addParam("chan",c_str());
+    m->addParam("address",m_address);
     m->addParam("direction",dir);
     m->addParam("billid",m_billid);
     m->addParam("caller",m_caller);
@@ -141,6 +143,9 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
     const char* p = msg.getValue("billid");
     if (p)
 	m_billid = p;
+    p = msg.getValue("address");
+    if (p)
+	m_address = p;
     p = msg.getValue("caller");
     if (p)
 	m_caller = p;
@@ -210,7 +215,7 @@ bool CdrHandler::received(Message &msg)
     if (b)
 	b->update(msg,m_type,msg.msgTime().usec());
     else
-	Debug("CdrBuilder",DebugGoOn,"Got message '%s' for untracked id '%s'",
+	Debug("CdrBuilder",DebugInfo,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
     return false;
 };

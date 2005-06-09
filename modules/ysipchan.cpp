@@ -75,8 +75,6 @@ static TokenDict dict_errors[] = {
     {  0,   0 },
 };
 
-static Configuration s_cfg;
-
 class YateUDPParty : public SIPParty
 {
 public:
@@ -204,15 +202,32 @@ private:
 class YateSIPLine : public String
 {
 public:
-    YateSIPLine();
+    YateSIPLine(const String& name);
     virtual ~YateSIPLine();
+    void logout();
+    bool update(const Message& msg);
+    inline bool marked() const
+	{ return m_marked; }
+    inline void marked(bool mark)
+	{ m_marked = mark; }
 private:
+    bool change(String& dest, const String& src);
     String m_registrar;
-    String m_account;
+    String m_username;
     String m_password;
     Time m_resend;
-    int m_expire;
+    int m_interval;
     SIPTransaction* m_tr;
+    bool m_marked;
+};
+
+class UserHandler : public MessageHandler
+{
+public:
+    UserHandler()
+	: MessageHandler("user.login",150)
+	{ }
+    virtual bool received(Message &msg);
 };
 
 class SIPDriver : public Driver
@@ -231,6 +246,8 @@ private:
 };
 
 static SIPDriver plugin;
+static ObjList s_lines;
+static Configuration s_cfg;
 
 static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats, const char* media = "audio")
 {
@@ -398,6 +415,7 @@ YateSIPEndPoint::~YateSIPEndPoint()
 {
     Debug(&plugin,DebugAll,"YateSIPEndPoint::~YateSIPEndPoint() [%p]",this);
     plugin.channels().clear();
+    s_lines.clear();
     if (m_engine) {
 	// send any pending events
 	while (m_engine->process())
@@ -1228,6 +1246,58 @@ void YateSIPConnection::callReject(const char* error, const char* reason)
     setReason(reason,code);
 }
 
+YateSIPLine::YateSIPLine(const String& name)
+    : String(name)
+{
+    Debug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
+    s_lines.append(this);
+}
+
+YateSIPLine::~YateSIPLine()
+{
+    Debug(&plugin,DebugInfo,"YateSIPLine::~YateSIPLine() '%s' [%p]",c_str(),this);
+    s_lines.remove(this,false);
+    logout();
+}
+
+void YateSIPLine::logout()
+{
+}
+
+bool YateSIPLine::change(String& dest, const String& src)
+{
+    if (dest == src)
+	return false;
+    logout();
+    dest = src;
+    return true;
+}
+
+bool YateSIPLine::update(const Message& msg)
+{
+    Debug(&plugin,DebugInfo,"YateSIPLine::update() '%s' [%p]",c_str(),this);
+    bool chg = false;
+    chg = change(m_registrar,msg.getValue("registrar")) | chg;
+    chg = change(m_username,msg.getValue("username")) | chg;
+    chg = change(m_password,msg.getValue("password")) | chg;
+    m_interval = msg.getIntValue("interval",600);
+    return chg;
+}
+
+bool UserHandler::received(Message &msg)
+{
+    String tmp(msg.getValue("protocol"));
+    if (tmp != "sip")
+	return false;
+    tmp = msg.getValue("account");
+    if (tmp.null())
+	return false;
+    ObjList* l = s_lines.find(tmp);
+    YateSIPLine* line = l ? static_cast<YateSIPLine*>(l->get()) : new YateSIPLine(tmp);
+    line->update(msg);
+    return true;
+}
+
 YateSIPConnection* SIPDriver::findCall(const String& callid)
 {
     DDebug(this,DebugAll,"SIPDriver finding call '%s'",callid.c_str());
@@ -1299,6 +1369,7 @@ void SIPDriver::initialize()
 	m_endpoint->startup();
 	setup();
 	installRelay(Halt);
+	Engine::install(new UserHandler);
     }
 }
 

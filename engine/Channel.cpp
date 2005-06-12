@@ -836,6 +836,9 @@ bool Router::route()
     }
 
     if (ok) {
+	if (m_msg->retValue() == "-")
+	    chan->callReject(m_msg->getValue("error","unknown"),
+		m_msg->getValue("reason"));
 	if (m_msg->getIntValue("antiloop",1) <= 0)
 	    chan->callReject(m_msg->getValue("error","looping"),
 		m_msg->getValue("reason","Call is looping"));
@@ -850,7 +853,7 @@ bool Router::route()
 		chan->callAccept(*m_msg);
 	    else
 		chan->callReject(m_msg->getValue("error","noconn"),
-		    m_msg->getValue("reason","Could not connected to target"));
+		    m_msg->getValue("reason","Could not connect to target"));
 	}
     }
     else

@@ -839,7 +839,7 @@ bool Router::route()
 	if (m_msg->retValue() == "-")
 	    chan->callReject(m_msg->getValue("error","unknown"),
 		m_msg->getValue("reason"));
-	if (m_msg->getIntValue("antiloop",1) <= 0)
+	else if (m_msg->getIntValue("antiloop",1) <= 0)
 	    chan->callReject(m_msg->getValue("error","looping"),
 		m_msg->getValue("reason","Call is looping"));
 	else if (chan->callRouted(*m_msg)) {

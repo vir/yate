@@ -229,6 +229,40 @@ void SIPAuthLine::buildLine(String& line) const
     }
 }
 
+SIPMessage::SIPMessage(const SIPMessage& original)
+    : version(original.version), method(original.method), uri(original.uri),
+      code(original.code), reason(original.reason),
+      body(0), m_ep(0),
+      m_valid(original.isValid()), m_answer(original.isAnswer()),
+      m_outgoing(original.isOutgoing()), m_ack(original.isACK()),
+      m_cseq(-1)
+{
+    DDebug(DebugAll,"SIPMessage::SIPMessage(&%p) [%p]",
+	&original,this);
+    if (original.body)
+	setBody(original.body->clone());
+    setParty(original.getParty());
+    bool via1 = true;
+    const ObjList* l = &original.header;
+    for (; l; l = l->next()) {
+	const SIPHeaderLine* hl = static_cast<SIPHeaderLine*>(l->get());
+	if (!hl)
+	    continue;
+	// CSeq must not be copied, a new one will be built by complete()
+	if (hl->name() &= "CSeq")
+	    continue;
+	SIPHeaderLine* nl = hl->clone();
+	// this is a new transaction/dialog so let complete() add randomness
+	if ((nl->name() &= "From") || (nl->name() &= "To"))
+	    nl->delParam("tag");
+	if (via1 && (nl->name() &= "Via")) {
+	    via1 = false;
+	    nl->delParam("branch");
+	}
+	addHeader(nl);
+    }
+}
+
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
     : version(_version), method(_method), uri(_uri),
       body(0), m_ep(0), m_valid(true),
@@ -708,6 +742,37 @@ void SIPMessage::setParty(SIPParty* ep)
     m_ep = ep;
     if (m_ep)
 	m_ep->ref();
+}
+
+SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& password,
+    const String& meth, const String& uri, bool proxy) const
+{
+    const char* hdr = proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
+    const ObjList* l = &header;
+    for (; l; l = l->next()) {
+	const SIPAuthLine* t = YOBJECT(SIPAuthLine,l->get());
+	if (t && (t->name() &= hdr) && (*t &= "Digest")) {
+	    String nonce(t->getParam("nonce"));
+	    delQuotes(nonce);
+	    if (nonce.null())
+		continue;
+	    String realm(t->getParam("realm"));
+	    delQuotes(realm);
+	    int par = uri.find(';');
+	    String msguri = uri.substr(0,par);
+	    String response;
+	    SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
+	    SIPAuthLine* auth = new SIPAuthLine(proxy ? "Proxy-Authorization" : "Authorization","Digest");
+	    auth->setParam("username",quote(username));
+	    auth->setParam("realm",quote(realm));
+	    auth->setParam("nonce",quote(nonce));
+	    auth->setParam("uri",quote(msguri));
+	    auth->setParam("response",quote(response));
+	    auth->setParam("algorithm","MD5");
+	    return auth;
+	}
+    }
+    return 0;
 }
 
 SIPDialog::SIPDialog()

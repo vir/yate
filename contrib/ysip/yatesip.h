@@ -216,6 +216,11 @@ class YSIP_API SIPMessage : public RefObject
 {
 public:
     /**
+     * Copy constructor
+     */
+    SIPMessage(const SIPMessage& original);
+
+    /**
      * Creates a new, empty, outgoing SIPMessage.
      */
     SIPMessage(const char* _method, const char* _uri, const char* _version = "SIP/2.0");
@@ -391,6 +396,18 @@ public:
 	{ clearHeaders(name); addHeader(name,value); }
 
     /**
+     * Construct a new authorization line based on credentials and challenge
+     * @param username User account name
+     * @param password Clear text password for the account
+     * @param meth Method to include in the authorization digest
+     * @param uri URI to include in the authorization digest
+     * @param proxy Set to true to authenticate to a proxy, false to a server
+     * @return A new authorization line to be used in a new transaction
+     */
+    SIPAuthLine* buildAuth(const String& username, const String& password,
+	const String& meth, const String& uri, bool proxy = false) const;
+
+    /**
      * Creates a binary buffer from a SIPMessage.
      */
     const DataBlock& getBuffer() const;
@@ -452,6 +469,8 @@ protected:
     int m_cseq;
     mutable String m_string;
     mutable DataBlock m_data;
+private:
+    SIPMessage(); // no, thanks
 };
 
 /**

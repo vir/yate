@@ -146,6 +146,14 @@ void delQuotes(String& str)
     }
 }
 
+// Utility function, puts quotes around a string
+String quote(const String& str)
+{
+    String tmp(str);
+    addQuotes(tmp);
+    return tmp;
+}
+
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

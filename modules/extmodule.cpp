@@ -732,11 +732,17 @@ void ExtModReceiver::processLine(const char *line)
 	return;
     }
     else {
-	Message m("");
-	if (m.decode(line,id) == -2) {
-	    DDebug("ExtModReceiver",DebugAll,"Created message [%p]",this);
+	Message* m = new Message("");
+	if (m->decode(line,id) == -2) {
+	    DDebug("ExtModReceiver",DebugAll,"Created message %p '%s' [%p]",m,m->c_str(),this);
 	    lock();
-	    m.userData(m_chan);
+	    m->userData(m_chan);
+	    if (id.null()) {
+		/* Empty id means no answer is desired - enqueue and forget */
+		Engine::enqueue(m);
+		unlock();
+		return;
+	    }
 	    /* Copy the user data pointer from waiting message with same id */
 	    ObjList *p = &m_waiting;
 	    for (; p; p=p->next()) {
@@ -744,20 +750,22 @@ void ExtModReceiver::processLine(const char *line)
 		if (h && (h->m_id == id)) {
 		    RefObject* ud = h->m_msg.userData();
 		    Debug("ExtModReceiver",DebugAll,"Copying data pointer %p from %p",ud,&(h->m_msg));
-		    m.userData(ud);
+		    m->userData(ud);
 		    break;
 		}
 	    }
 	    /* Temporary add to the reenter list to avoid reentrance */
-	    m_reenter.append(&m)->setDelete(false);
+	    m_reenter.append(m)->setDelete(false);
 	    unlock();
-	    String ret(m.encode(Engine::dispatch(m),id));
+	    String ret(m->encode(Engine::dispatch(m),id));
 	    lock();
 	    outputLine(ret);
-	    m_reenter.remove(&m,false);
+	    m_reenter.remove(m,false);
 	    unlock();
+	    m->destruct();
 	    return;
 	}
+	m->destruct();
     }
     reportError(line);
 }

@@ -76,8 +76,9 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
     }
 }
 
-SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original)
-    : NamedString(original.name(),original), m_separator(original.separator())
+SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original, const char* name)
+    : NamedString(name ? name : original.name().c_str(),original),
+      m_separator(original.separator())
 {
     XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
     const ObjList* l = &original.params();
@@ -307,6 +308,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     uri = message->uri;
     method = message->method;
     copyAllHeaders(message,"Via");
+    copyAllHeaders(message,"Record-Route");
     copyHeader(message,"From");
     copyHeader(message,"To");
     copyHeader(message,"Call-ID");
@@ -773,6 +775,30 @@ SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& passwor
 	}
     }
     return 0;
+}
+
+ObjList* SIPMessage::getRoutes() const
+{
+    ObjList* list = 0;
+    const ObjList* l = &header;
+    for (; l; l = l->next()) {
+	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,l->get());
+	if (h && (h->name() &= "Record-Route")) {
+	    if (!list)
+		list = new ObjList;
+	    list->append(new SIPHeaderLine(*h,"Route"));
+	}
+    }
+    return list;
+}
+
+void SIPMessage::addRoutes(const ObjList* routes)
+{
+    for (; routes; routes = routes->next()) {
+	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,routes->get());
+	if (h)
+	    addHeader(h->clone());
+    }
 }
 
 SIPDialog::SIPDialog()

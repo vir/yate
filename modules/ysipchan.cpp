@@ -238,6 +238,7 @@ private:
     String m_line;
     int m_port;
     Message* m_route;
+    ObjList* m_routes;
 };
 
 class UserHandler : public MessageHandler
@@ -702,7 +703,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
       m_tr(tr), m_hungup(false), m_byebye(true), m_retry(false),
       m_state(Incoming),
-      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0)
+      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0), m_routes(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -776,7 +777,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     : Channel(plugin,0,true),
       m_tr(0), m_hungup(false), m_byebye(true), m_retry(true),
       m_state(Outgoing),
-      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0)
+      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0), m_routes(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -827,6 +828,10 @@ YateSIPConnection::~YateSIPConnection()
     if (m_route) {
 	delete m_route;
 	m_route = 0;
+    }
+    if (m_routes) {
+	delete m_routes;
+	m_routes = 0;
     }
 }
 
@@ -879,6 +884,7 @@ void YateSIPConnection::hangup()
 	case Ringing:
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
+		m->addRoutes(m_routes);
 		plugin.ep()->buildParty(m,m_host,m_port);
 		const SIPMessage* i = m_tr->initialMessage();
 		m->copyHeader(i,"Via");
@@ -899,6 +905,7 @@ void YateSIPConnection::hangup()
     if (m_byebye) {
 	m_byebye = false;
 	SIPMessage* m = new SIPMessage("BYE",m_uri);
+	m->addRoutes(m_routes);
 	plugin.ep()->buildParty(m,m_host,m_port);
 	m->addHeader("Call-ID",m_callid);
 	String tmp;
@@ -1069,6 +1076,9 @@ bool YateSIPConnection::process(SIPEvent* ev)
     m_dialog = *ev->getTransaction()->recentMessage();
     const SIPMessage* msg = ev->getMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (msg->code >= 300)) {
+	// HERE
+	if (!m_routes)
+	    m_routes = msg->getRoutes();
 	if (m_retry && m_line
 	    && ((msg->code == 401) || (msg->code == 407))
 	    && plugin.validLine(m_line)) {

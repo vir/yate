@@ -180,7 +180,7 @@ class YSIP_API SIPHeaderLine : public NamedString
 {
 public:
     SIPHeaderLine(const char* name, const String& value, char sep = 0);
-    SIPHeaderLine(const SIPHeaderLine& original);
+    SIPHeaderLine(const SIPHeaderLine& original, const char* name = 0);
     virtual ~SIPHeaderLine();
     virtual void* getObject(const String& name) const;
     virtual SIPHeaderLine* clone() const;
@@ -406,6 +406,18 @@ public:
      */
     SIPAuthLine* buildAuth(const String& username, const String& password,
 	const String& meth, const String& uri, bool proxy = false) const;
+
+    /**
+     * Extract routes from Record-Route: headers
+     * @return A list of SIPHeaderLine representing SIP routes
+     */
+    ObjList* getRoutes() const;
+
+    /**
+     * Add Route: headers to an outgoing message
+     * @param routes List of SIPHeaderLine representing SIP routes
+     */
+    void addRoutes(const ObjList* routes);
 
     /**
      * Creates a binary buffer from a SIPMessage.

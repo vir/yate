@@ -708,6 +708,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
     m_tr->ref();
+    m_routes = m_tr->initialMessage()->getRoutes();
     m_callid = m_tr->getCallID();
     m_dialog = *m_tr->initialMessage();
     m_host = m_tr->initialMessage()->getParty()->getPartyAddr();
@@ -1076,8 +1077,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
     m_dialog = *ev->getTransaction()->recentMessage();
     const SIPMessage* msg = ev->getMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (msg->code >= 300)) {
-	// HERE
-	if (!m_routes)
 	    m_routes = msg->getRoutes();
 	if (m_retry && m_line
 	    && ((msg->code == 401) || (msg->code == 407))

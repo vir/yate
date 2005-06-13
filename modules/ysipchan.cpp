@@ -735,8 +735,10 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
-    int maxf = tmp.toInteger(70);
-    tmp = (maxf/10)-1;
+    int maxf = tmp.toInteger(70)-1;
+    if (maxf >= 10)
+	maxf /= 10;
+    tmp = maxf;
     m->addParam("antiloop",tmp);
     m->addParam("ip_addr",m_host);
     m->addParam("ip_port",String(m_port));
@@ -796,8 +798,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",m_uri);
     plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"));
-    int maxf = msg.getIntValue("antiloop",7);
-    m->addHeader("Max-Forwards",String(10*maxf));
+    int maxf = msg.getIntValue("antiloop",9);
+    m->addHeader("Max-Forwards",String(maxf));
     m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
     m_host = m->getParty()->getPartyAddr();
     m_port = m->getParty()->getPartyPort();

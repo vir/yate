@@ -160,7 +160,7 @@ bool EngineStatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"engine"))
 	return false;
     msg.retValue() << "name=engine,type=system";
-    msg.retValue() << ",version=" << YATE_MAJOR << "." << YATE_MINOR << "." << YATE_BUILD;
+    msg.retValue() << ",version=" << YATE_VERSION;
     msg.retValue() << ";plugins=" << plugins.count();
     msg.retValue() << ",inuse=" << Engine::self()->usedPlugins();
     msg.retValue() << ",handlers=" << Engine::self()->handlerCount();
@@ -760,7 +760,8 @@ static void usage(bool client, FILE* f)
 {
     ::fprintf(f,
 "Usage: yate [options] [commands ...]\n"
-"   -h             Help message (this one)\n"
+"   -h, --help     Display help message (this one) and exit\n"
+"   -V, --version  Display program version and exit\n"
 "   -v             Verbose debugging (you can use more than once)\n"
 "   -q             Quieter debugging (you can use more than once)\n"
 "%s"
@@ -806,6 +807,11 @@ static void noarg(bool client, const char* opt)
     usage(client,stderr);
 }
 
+static void version()
+{
+    ::fprintf(stdout,"Yate " YATE_VERSION "\n");
+}
+
 int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bool fail)
 {
 #ifdef _WINDOWS
@@ -844,6 +850,10 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			if (!::strcmp(pc,"help")) {
 			    usage(client,stdout);
+			    return 0;
+			}
+			else if (!::strcmp(pc,"version")) {
+			    version();
 			    return 0;
 			}
 #ifdef _WINDOWS
@@ -961,6 +971,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			pc = 0;
 			break;
 #endif
+		    case 'V':
+			version();
+			return 0;
 		    default:
 			badopt(client,*pc,argv[i]);
 			return EINVAL;

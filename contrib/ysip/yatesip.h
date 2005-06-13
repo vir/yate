@@ -179,7 +179,7 @@ protected:
 class YSIP_API SIPHeaderLine : public NamedString
 {
 public:
-    SIPHeaderLine(const char* name, const String& value, char sep = ';');
+    SIPHeaderLine(const char* name, const String& value, char sep = 0);
     SIPHeaderLine(const SIPHeaderLine& original);
     virtual ~SIPHeaderLine();
     virtual void* getObject(const String& name) const;

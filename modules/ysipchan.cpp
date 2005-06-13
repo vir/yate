@@ -350,10 +350,19 @@ YateUDPParty::~YateUDPParty()
 
 void YateUDPParty::transmit(SIPEvent* event)
 {
-    Debug(&plugin,DebugAll,"Sending to %s:%d",m_addr.host().c_str(),m_addr.port());
+    const SIPMessage* msg = event->getMessage();
+    if (!msg)
+	return;
+    String tmp;
+    if (msg->isAnswer())
+	tmp << "code " << msg->code;
+    else
+	tmp << "'" << msg->method << " " << msg->uri << "'";
+    Debug(&plugin,DebugAll,"Sending %s %p to %s:%d",
+	tmp.c_str(),msg,m_addr.host().c_str(),m_addr.port());
     m_sock->sendTo(
-	event->getMessage()->getBuffer().data(),
-	event->getMessage()->getBuffer().length(),
+	msg->getBuffer().data(),
+	msg->getBuffer().length(),
 	m_addr
     );
 }
@@ -540,10 +549,11 @@ void YateSIPEndPoint::run()
 		    Debug(DebugGoOn,"SIP error on read: %d\n", m_sock->error());
 		}
 	    } else if (res >= 72) {
+		Debug(&plugin,DebugAll,"Received %d bytes SIP message from %s:%d",
+		    res,addr.host().c_str(),addr.port());
 		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
 		m_engine->addMessage(new YateUDPParty(m_sock,addr,m_port),buf,res);
-	    //	Output("res %d buf %s",res,buf);
 	    }
 #ifdef DEBUG
 	    else

@@ -31,7 +31,7 @@
 using namespace TelEngine;
 
 SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
-    : NamedString(name), m_separator(sep)
+    : NamedString(name), m_separator(sep ? sep : ';')
 {
     if (value.null())
 	return;

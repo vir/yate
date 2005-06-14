@@ -127,7 +127,7 @@ void GsmCodec::Consume(const DataBlock& data, unsigned long timeDelta)
 GsmPlugin::GsmPlugin()
 {
     Output("Loaded module GSM - based on libgsm-%d.%d.%d",GSM_MAJOR,GSM_MINOR,GSM_PATCHLEVEL);
-    const FormatInfo* f = FormatRepository::addFormat("gsm",1650,33);
+    const FormatInfo* f = FormatRepository::addFormat("gsm",33,20000);
     caps[0].src = caps[1].dest = f;
     caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
 }

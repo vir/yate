@@ -71,14 +71,14 @@ struct FormatInfo {
     const char* type;
 
     /**
-     * Data rate in octets/second, 0 for variable
-     */
-    int dataRate;
-
-    /**
      * Frame size in octets/frame, 0 for non-framed formats
      */
     int frameSize;
+
+    /**
+     * Frame time in microseconds, 0 for variable
+     */
+    int frameTime;
 
     /**
      * Rate in samples/second (audio) or 1e-6 frames/second (video), 0 for unknown
@@ -98,20 +98,27 @@ struct FormatInfo {
     int guessSamples(int len) const;
 
     /**
+     * Get the data rate in bytes/s
+     * @return Data rate or 0 if variable/undefined
+     */
+    int dataRate() const;
+
+    /**
      * Default constructor - used to initialize arrays
      */
     inline FormatInfo()
 	: name(0), type("audio"),
-	  dataRate(0), frameSize(0),
+	  frameSize(0), frameTime(0),
 	  sampleRate(8000), numChannels(1)
 	{ }
 
     /**
      * Normal constructor
      */
-    inline FormatInfo(const char* _name, int drate, int fsize = 0, const char* _type = "audio", int srate = 8000, int nchan = 1)
+    inline FormatInfo(const char* _name, int fsize = 0, int ftime = 10000,
+	const char* _type = "audio", int srate = 8000, int nchan = 1)
 	: name(_name), type(_type),
-	  dataRate(drate), frameSize(fsize),
+	  frameSize(fsize), frameTime(ftime),
 	  sampleRate(srate), numChannels(nchan)
 	{ }
 };
@@ -153,15 +160,15 @@ public:
     /**
      * Add a new format to the repository
      * @param name Standard no-blanks lowercase format name
-     * @param drate Data rate in octets/second, 0 for variable
-     * @param fsize Frame size in octets/frame, 0 for non-framed formats
+     * @param fsize Data frame size in octets/frame, 0 for non-framed formats
+     * @param ftime Data frame duration in microseconds, 0 for variable
      * @param type Format type: "audio", "video", "text"
      * @param srate Rate in samples/second (audio) or 1e-6 frames/second (video), 0 for unknown
      * @param nchan Number of channels, typically 1
      * @return Pointer to the format info or NULL if another incompatible
      *  format with the same name was already registered
     */
-    static const FormatInfo* addFormat(const String& name, int drate, int fsize, const String& type = "audio", int srate = 8000, int nchan = 1);
+    static const FormatInfo* addFormat(const String& name, int fsize, int ftime, const String& type = "audio", int srate = 8000, int nchan = 1);
 };
 
 /**
@@ -1099,9 +1106,10 @@ public:
      * Create a filled notification message
      * @param name Name of the message to create
      * @param minimal Set to true to fill in only a minimum of parameters
+     * @param data Set the channel as message data
      * @return A new allocated and parameter filled message
      */
-    Message* message(const char* name, bool minimal = false) const;
+    Message* message(const char* name, bool minimal = false, bool data = false);
 
     /**
      * Notification on remote ringing
@@ -1265,6 +1273,11 @@ protected:
     Channel(Driver& driver, const char* id = 0, bool outgoing = false);
 
     /**
+     * Remove the channel from the parent driver list
+     */
+    void drop();
+
+    /**
      * Disconnect notification method.
      * @param final True if this disconnect was called from the destructor.
      * @param reason Text that describes disconnect reason.
@@ -1297,6 +1310,7 @@ private:
 class YATE_API Driver : public Module
 {
     friend class Router;
+    friend class Channel;
 
 private:
     bool m_init;
@@ -1305,6 +1319,7 @@ private:
     ObjList m_chans;
     int m_routing;
     int m_routed;
+    int m_total;
     unsigned int m_nextid;
     int m_timeout;
     int m_maxroute;
@@ -1397,6 +1412,13 @@ public:
      */
     inline int routed() const
 	{ return m_routed; }
+
+    /**
+     * Get the total number of calls ever created
+     * @return Number of channels ever created for this driver
+     */
+    inline int total() const
+	{ return m_total; }
 
 protected:
     /**

@@ -180,13 +180,7 @@ Channel::~Channel()
 #endif
     m_timeout = 0;
     status("deleted");
-    if (m_driver) {
-	m_driver->lock();
-	m_driver->channels().remove(this,false);
-	m_driver->changed();
-	m_driver->unlock();
-	m_driver = 0;
-    }
+    drop();
 }
 
 void* Channel::getObject(const String& name) const
@@ -204,11 +198,23 @@ void Channel::init()
 	m_driver->lock();
 	if (m_id.null())
 	    m_id << m_driver->prefix() << m_driver->nextid();
+	m_driver->m_total++;
 	m_driver->channels().append(this);
 	m_driver->changed();
 	m_driver->unlock();
     }
     DDebug(DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
+}
+
+void Channel::drop()
+{
+    if (!m_driver)
+	return;
+    m_driver->lock();
+    m_driver->channels().remove(this,false);
+    m_driver->changed();
+    m_driver->unlock();
+    m_driver = 0;
 }
 
 void Channel::disconnected(bool final, const char* reason)
@@ -251,9 +257,11 @@ void Channel::complete(Message& msg, bool minimal) const
 	msg.setParam("peerid",getPeer()->id());
 }
 
-Message* Channel::message(const char* name, bool minimal) const
+Message* Channel::message(const char* name, bool minimal, bool data)
 {
     Message* msg = new Message(name);
+    if (data)
+	msg->userData(this);
     complete(*msg,minimal);
     return msg;
 }
@@ -550,7 +558,7 @@ bool Module::setDebug(Message& msg, const String& target)
 Driver::Driver(const char* name, const char* type)
     : Module(name,type),
       m_init(false), m_varchan(true),
-      m_routing(0), m_routed(0),
+      m_routing(0), m_routed(0), m_total(0),
       m_nextid(0), m_timeout(0),
       m_maxroute(0), m_maxchans(0)
 {
@@ -737,6 +745,7 @@ void Driver::genUpdate(Message& msg)
 {
     msg.addParam("routed",String(m_routed));
     msg.addParam("routing",String(m_routing));
+    msg.addParam("total",String(m_total));
     msg.addParam("chans",String(m_chans.count()));
 }
 
@@ -762,6 +771,7 @@ void Driver::statusParams(String& str)
     Module::statusParams(str);
     str.append("routed=",",") << m_routed;
     str << ",routing=" << m_routing;
+    str << ",total=" << m_total;
     str << ",chans=" << m_chans.count();
 }
 

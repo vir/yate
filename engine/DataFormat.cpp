@@ -74,11 +74,16 @@ using namespace TelEngine;
 
 int FormatInfo::guessSamples(int len) const
 {
-    if (!dataRate)
+    if (!(frameTime && frameSize))
 	return 0;
-    if (frameSize)
-	len = frameSize * (len / frameSize);
-    return len * sampleRate / dataRate;
+    return (len / frameSize) * sampleRate * (long)frameTime / 1000000;
+}
+
+int FormatInfo::dataRate() const
+{
+    if (!frameTime)
+	return 0;
+    return frameSize * 1000000 / frameTime;
 }
 
 typedef struct _flist {
@@ -87,16 +92,17 @@ typedef struct _flist {
 } flist;
 
 static const FormatInfo s_formats[] = {
-    FormatInfo("slin", 16000),
-    FormatInfo("alaw", 8000),
-    FormatInfo("mulaw", 8000),
-    FormatInfo("gsm", 1650, 33),
-    FormatInfo("ilbc", 1667, 50),
-    FormatInfo("speex", 0),
-    FormatInfo("adpcm", 4000),
-    FormatInfo("g723", 0),
-    FormatInfo("g726", 4000),
-    FormatInfo("g729", 1000, 20),
+    FormatInfo("slin", 160),
+    FormatInfo("alaw", 80),
+    FormatInfo("mulaw", 80),
+    FormatInfo("gsm", 33, 20000),
+    FormatInfo("ilbc20", 38, 20000),
+    FormatInfo("ilbc30", 50, 30000),
+//    FormatInfo("speex", 0),
+//    FormatInfo("adpcm", 4000),
+//    FormatInfo("g723", 0),
+//    FormatInfo("g726", 4000),
+//    FormatInfo("g729", 1000, 20),
     FormatInfo("plain", 0, 0, "text", 0),
     FormatInfo("raw", 0, 0, "data", 0),
 };
@@ -119,7 +125,7 @@ const FormatInfo* FormatRepository::getFormat(const String& name)
     return 0;
 }
 
-const FormatInfo* FormatRepository::addFormat(const String& name, int drate, int fsize, const String& type, int srate, int nchan)
+const FormatInfo* FormatRepository::addFormat(const String& name, int fsize, int ftime, const String& type, int srate, int nchan)
 {
     if (name.null() || type.null())
 	return 0;
@@ -127,21 +133,21 @@ const FormatInfo* FormatRepository::addFormat(const String& name, int drate, int
     const FormatInfo* f = getFormat(name);
     if (f) {
 	// found by name - check if it exactly matches what we have already
-	if ((drate != f->dataRate) ||
-	    (fsize != f->frameSize) ||
+	if ((fsize != f->frameSize) ||
+	    (ftime != f->frameTime) ||
 	    (srate != f->sampleRate) ||
 	    (nchan != f->numChannels) ||
 	    (type != f->type)) {
-		Debug(DebugWarn,"Tried to register '%s' format '%s' drate=%d fsize=%d srate=%d nchan=%d",
-		    type.c_str(),name.c_str(),drate,fsize,srate,nchan);
+		Debug(DebugWarn,"Tried to register '%s' format '%s' fsize=%d ftime=%d srate=%d nchan=%d",
+		    type.c_str(),name.c_str(),fsize,ftime,srate,nchan);
 		return 0;
 	}
 	return f;
     }
     // not in list - add a new one to the installed formats
-    Debug(DebugInfo,"Registering '%s' format '%s' drate=%d fsize=%d srate=%d nchan=%d",
-	type.c_str(),name.c_str(),drate,fsize,srate,nchan);
-    f = new FormatInfo(::strdup(name),drate,fsize,::strdup(type),srate,nchan);
+    Debug(DebugInfo,"Registering '%s' format '%s' fsize=%d ftime=%d srate=%d nchan=%d",
+	type.c_str(),name.c_str(),fsize,ftime,srate,nchan);
+    f = new FormatInfo(::strdup(name),fsize,ftime,::strdup(type),srate,nchan);
     flist* l = new flist;
     l->info = f;
     l->next = s_flist;

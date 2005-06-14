@@ -487,8 +487,8 @@ bool RecordHandler::received(Message &msg)
     String ml(msg.getValue("maxlen"));
     unsigned maxlen = ml.toInteger(0);
 
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData("CallEndpoint"));
-    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userData("DataEndpoint"));
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
     if (ch && !de)
 	de = ch->setEndpoint();
 

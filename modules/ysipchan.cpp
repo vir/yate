@@ -633,7 +633,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 {
     if (!plugin.canAccept()) {
-	Debug(DebugWarn,"Dropping call, full or exiting");
+	Debug(DebugWarn,"Refusing new SIP call, full or exiting");
 	t->setResponse(480);
 	return;
     }

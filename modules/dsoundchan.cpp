@@ -453,8 +453,10 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	DSoundChan *ds = new DSoundChan;
-	if (ch->connect(ds))
+	if (ch->connect(ds)) {
+	    msg.setParam("peerid",ds->id());
 	    ds->deref();
+	}
 	else {
 	    ds->destruct();
 	    return false;

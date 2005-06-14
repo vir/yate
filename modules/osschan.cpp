@@ -430,7 +430,8 @@ bool OssHandler::received(Message &msg)
     Debug(DebugInfo,"We are routing to device '%s'",dest.matchString(1).c_str());
     if (ch && chan->connect(ch)) {
 	chan->setTarget(msg.getValue("id"));
-	msg.addParam("targetid",dest);
+	msg.setParam("peerid",dest);
+	msg.setParam("targetid",dest);
 	chan->answer();
 	chan->deref();
     }

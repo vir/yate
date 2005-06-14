@@ -700,9 +700,10 @@ bool PriChan::call(Message &msg, const char *called)
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	openData(lookup(layer1,dict_str2law),msg.getIntValue("cancelecho",dict_numtaps));
-	connect(ch);
+	if (connect(ch))
+	    msg.setParam("peerid",id());
 	m_targetid = msg.getValue("id");
-	msg.addParam("targetid",id());
+	msg.setParam("targetid",id());
     }
     else
 	msg.userData(this);

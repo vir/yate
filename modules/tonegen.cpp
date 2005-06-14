@@ -243,8 +243,10 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	ToneChan *tc = new ToneChan(dest);
-	if (ch->connect(tc))
+	if (ch->connect(tc)) {
+	    msg.setParam("peerid",tc->id());
 	    tc->deref();
+	}
 	else {
 	    tc->destruct();
 	    return false;

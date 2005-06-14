@@ -870,7 +870,8 @@ bool IAXDriver::msgExecute(Message& msg, String& dest)
     Channel *ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch))
     {
-	msg.addParam("targetid",conn->id());
+	msg.setParam("peerid",conn->id());
+	msg.setParam("targetid",conn->id());
 	conn->deref();
     }
     return true;	

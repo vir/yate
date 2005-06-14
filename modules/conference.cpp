@@ -209,6 +209,7 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	ConfChan *c = new ConfChan(dest);
 	if (ch->connect(c)) {
+	    msg.setParam("peerid",c->id());
 	    c->deref();
 	    msg.setParam("room",prefix()+dest);
 	    return true;

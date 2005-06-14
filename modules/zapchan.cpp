@@ -24,6 +24,10 @@
 
 #include <modules/libypri.h>
 
+#ifdef _WINDOWS
+#error This module is not for Windows
+#else
+
 extern "C" {
 #include <linux/zaptel.h>
 };
@@ -416,5 +420,7 @@ void ZapDriver::initialize()
     Output("Initializing module Zapchan");
     init("zapchan");
 }
+
+#endif /* _WINDOWS */
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

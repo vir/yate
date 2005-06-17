@@ -22,6 +22,8 @@
 
 #include "yateclass.h"
 
+#include <string.h>
+
 #ifdef _WINDOWS
 #include <process.h>
 typedef unsigned long HTHREAD;
@@ -114,7 +116,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 	if (!err)
 	    err = ::pthread_attr_setschedparam(&attr,&param);
 	if (err) {
-	    DDebug("Could not set thread scheduling parameters: %s (%d)",
+	    DDebug(DebugWarn,"Could not set thread scheduling parameters: %s (%d)",
 		strerror(err),err);
 	}
     }

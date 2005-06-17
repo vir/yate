@@ -648,8 +648,8 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 	&endpoint,callReference,userdata,this);
 
     Message* msg = static_cast<Message*>(userdata);
-    m_chan = new YateH323Chan(this,userdata,(transport ? (const char*)transport->GetRemoteAddress() : 0));
-    Engine::enqueue(m_chan->message("chan.startup"));
+    m_chan = new YateH323Chan(this,userdata,
+	((transport && !userdata) ? (const char*)transport->GetRemoteAddress() : 0));
     if (!msg)
 	return;
 
@@ -758,13 +758,12 @@ void YateH323Connection::rtpForward(Message& msg, bool init)
     Debug(DebugAll,"YateH323Connection::rtpForward(%p,%d) [%p]",
 	&msg,init,this);
     String tmp = msg.getValue("rtp_forward");
-    if (!(init || m_passtrough && tmp))
+    if (!((init || m_passtrough) && tmp))
 	return;
     m_passtrough = tmp.toBoolean();
     if (!m_passtrough)
 	return;
-    tmp = msg.getValue("rtp_port");
-    int port = tmp.toInteger();
+    int port = msg.getIntValue("rtp_port");
     String addr(msg.getValue("rtp_addr"));
     if (port && addr) {
 	m_rtpAddr = addr;
@@ -806,18 +805,10 @@ void YateH323Connection::OnCleared()
 {
     int reason = GetCallEndReason();
     const char* rtext = CallEndReasonText(reason);
-    const char* err = lookup(reason,dict_errors);
     Debug(DebugInfo,"YateH323Connection::OnCleared() reason: %s (%d) [%p]",
 	rtext,reason,this);
-    if (!m_chan)
-	return;
-    m_chan->status("cleared");
-    Message *m = m_chan->message("chan.hangup");
-    if (err)
-	m->setParam("error",err);
-    m->setParam("reason",rtext);
-    Engine::enqueue(m);
-    m_chan->disconnect(rtext);
+    if (m_chan)
+	m_chan->disconnect(rtext);
 }
 
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)
@@ -913,8 +904,7 @@ H323Channel* YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 		m.addParam("direction",sdir);
 	    if (Engine::dispatch(m)) {
 		m_rtpid = m.getValue("rtpid");
-		String p(m.getValue("localport"));
-		externalPort = p.toInteger();
+		externalPort = m.getIntValue("localport");
 	    }
 	}
 	if (externalPort || s_passtrough) {
@@ -1104,7 +1094,8 @@ YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
 
 YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel()
 {
-    Debug(DebugInfo,"YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel [%p]",this);
+    Debug(DebugInfo,"YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel %s%s [%p]",
+	lookup(GetDirection(),dict_h323_dir),(isRunning ? " running" : ""),this);
     if (isRunning) {
 	isRunning = FALSE;
 	if (m_conn)
@@ -1431,20 +1422,37 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,bool outgoing,const char* ad
     Debug(DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     m_address = addr;
+    Engine::enqueue(message("chan.startup"));
 }
 
 YateH323Chan::~YateH323Chan()
 {
     Debug(DebugAll,"YateH323Chan::~YateH323Chan() %s %s [%p]",
 	m_status.c_str(),m_id.c_str(),this);
+    Message *m = message("chan.hangup");
     drop();
     YateH323Connection* tmp = m_conn;
     m_conn = 0;
     if (tmp) {
+	const char* err = 0;
+	const char* txt = "Normal cleanup";
+	int reason = tmp->GetCallEndReason();
+	if (reason != H323Connection::NumCallEndReasons) {
+	    err = lookup(reason,dict_errors);
+	    txt = CallEndReasonText(reason);
+	}
+	if (err)
+	    m->setParam("error",err);
+	if (txt)
+	    m->setParam("reason",txt);
+	Engine::enqueue(m);
+
 	PSyncPoint sync;
 	tmp->cleanups();
 	tmp->ClearCallSynchronous(&sync);
     }
+    else
+	Engine::enqueue(m);
 }
 
 void YateH323Chan::disconnected(bool final, const char *reason)
@@ -1521,7 +1529,9 @@ bool YateH323Chan::msgRinging(Message& msg)
     Channel::msgRinging(msg);
     if (!m_conn)
 	return false;
-    m_conn->rtpForward(msg);
+    if (msg.getParam("rtp_forward"))
+	m_conn->rtpForward(msg);
+    // FIXME: with or without media?
     m_conn->AnsweringCall(H323Connection::AnswerCallAlertWithMedia);
     return true;
 }

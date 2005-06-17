@@ -81,7 +81,8 @@ public:
 	{ return m_port; }
     inline void setMaster(const char* master)
 	{ if (master) m_master = master; }
-    static YRTPWrapper* find(const CallEndpoint* conn, RTPSession::Direction direction = RTPSession::SendRecv);
+    void addDirection(RTPSession::Direction direction);
+    static YRTPWrapper* find(const CallEndpoint* conn);
     static YRTPWrapper* find(const String& id);
     static void guessLocal(const char* remoteip, String& localip);
 private:
@@ -209,13 +210,13 @@ YRTPWrapper::~YRTPWrapper()
     s_mutex.unlock();
 }
 
-YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, RTPSession::Direction direction)
+YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn)
 {
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
 	const YRTPWrapper *p = static_cast<const YRTPWrapper *>(l->get());
-	if (p && (p->conn() == conn) && (p->dir() == direction))
+	if (p && (p->conn() == conn))
 	    return const_cast<YRTPWrapper *>(p);
     }
     return 0;
@@ -334,7 +335,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, i
 	return false;
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
-    m_bufsize = s_cfg.getIntValue("rtp","buffer",160);
+    m_bufsize = s_cfg.getIntValue("rtp","buffer",240);
     return true;
 }
 
@@ -373,6 +374,13 @@ void YRTPWrapper::guessLocal(const char* remoteip, String& localip)
     }
     localip = l.host();
     Debug(DebugInfo,"Guessed local IP '%s' for remote '%s'",localip.c_str(),remoteip);
+}
+
+void YRTPWrapper::addDirection(RTPSession::Direction direction)
+{
+    m_dir = (RTPSession::Direction)(m_dir | direction);
+    if (m_rtp && m_bufsize)
+	m_rtp->direction(m_dir);
 }
 
 bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
@@ -429,43 +437,6 @@ YRTPAudioSource::~YRTPAudioSource()
     m_mutex.unlock();
 }
 
-#if 0
-void YRTPAudioSource::run(void)
-{
-    // wait until the rtp is fully initialized
-    while (!m_wrap->bufSize())
-	::usleep(20000);
-    int bufsize = m_wrap->bufSize();
-    int timestamp = 0;
-    int have_more;
-    m_buffer = (char*)::malloc(bufsize);
-    ::memset(m_buffer, 0, bufsize);
-    Debug(DebugAll,"YRTPAudioSource::run() entering loop [%p]",this);
-    for (;;) {
-	Lock lock(m_mutex);
-	if (!(m_wrap && m_wrap->rtp()))
-	    break;
-	int rd = ::rtp_session_recv_with_ts(m_wrap->rtp(),
-	    m_buffer, bufsize, timestamp, &have_more);
-	if (rd > 0) {
-	    XDebug(DebugAll,"YRTPAudioSource read %d bytes, ts=%d, more=%d [%p]",
-		rd,timestamp,have_more,this);
-	    m_data.assign(m_buffer, rd, false);
-	    lock.drop();
-	    // FIXME: find number of samples from format - if known...
-	    Forward(m_data);
-	    if (!m_wrap)
-		break;
-	    m_data.clear(false);
-	    timestamp += bufsize;
-	}
-	lock.drop();
-	Thread::yield();
-    }
-    Debug(DebugAll,"YRTPAudioSource::run() exiting loop [%p]",this);
-}
-#endif
-
 YRTPAudioConsumer::YRTPAudioConsumer(YRTPWrapper *wrap)
     : m_wrap(wrap), m_timestamp(0)
 {
@@ -492,11 +463,24 @@ void YRTPAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
 	return;
-    XDebug(DebugAll,"YRTPAudioConsumer writing %d bytes, ts=%d [%p]",
-	data.length(),m_timestamp,this);
-    m_wrap->rtp()->rtpSendData(false,m_timestamp,data.data(),data.length());
-    // if timestamp increment is not provided we have to guess...
-    m_timestamp += timeDelta ? timeDelta : data.length();
+    XDebug(DebugAll,"YRTPAudioConsumer writing %d bytes, delta=%lu ts=%d [%p]",
+	data.length(),timeDelta,m_timestamp,this);
+    unsigned int buf = m_wrap->bufSize();
+    const char* ptr = (const char*)data.data();
+    unsigned int len = data.length();
+    // make it safe to break a long octet buffer
+    if (len == timeDelta)
+	timeDelta = 0;
+    while (len && m_wrap && m_wrap->rtp()) {
+	unsigned int sz = len;
+	if ((sz > buf) && !timeDelta)
+	    sz = buf;
+	m_wrap->rtp()->rtpSendData(false,m_timestamp,ptr,sz);
+	// if timestamp increment is not provided we have to guess...
+	m_timestamp += timeDelta ? timeDelta : sz;
+	len -= sz;
+	ptr += sz;
+    }
 }
 
 bool AttachHandler::received(Message &msg)
@@ -613,7 +597,7 @@ bool RtpHandler::received(Message &msg)
     String rip(msg.getValue("remoteip"));
     String rport(msg.getValue("remoteport"));
 
-    YRTPWrapper *w = YRTPWrapper::find(ch,direction);
+    YRTPWrapper *w = YRTPWrapper::find(ch);
     if (w)
 	Debug(DebugAll,"YRTPWrapper %p found by CallEndpoint",w);
     if (!w) {
@@ -633,22 +617,26 @@ bool RtpHandler::received(Message &msg)
 
 	w = new YRTPWrapper(lip,ch,direction);
 	w->setMaster(msg.getValue("id"));
-
-	if (d_recv) {
-	    YRTPAudioSource* s = new YRTPAudioSource(w);
-	    ch->setSource(s);
-	    s->deref();
-	}
-
-	if (d_send) {
-	    YRTPAudioConsumer* c = new YRTPAudioConsumer(w);
-	    ch->setConsumer(c);
-	    c->deref();
-	}
-
-	if (w->deref())
-	    return false;
     }
+    else {
+	w->ref();
+	w->addDirection(direction);
+    }
+
+    if (d_recv && !ch->getSource()) {
+	YRTPAudioSource* s = new YRTPAudioSource(w);
+	ch->setSource(s);
+	s->deref();
+    }
+
+    if (d_send && !ch->getConsumer()) {
+	YRTPAudioConsumer* c = new YRTPAudioConsumer(w);
+	ch->setConsumer(c);
+	c->deref();
+    }
+
+    if (w->deref())
+	return false;
 
     if (rip && rport) {
 	String p(msg.getValue("payload"));

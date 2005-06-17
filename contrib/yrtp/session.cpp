@@ -88,8 +88,14 @@ void RTPReceiver::rtpData(const void* data, int len)
     }
 
     // check if the SSRC is unchanged
-    if (ss != m_ssrc)
+    if (ss != m_ssrc) {
+	if (m_warn) {
+	    m_warn = false;
+	    Debug(DebugWarn,"RTP Received SSRC %08X but expecting %08X [%p]",
+		ss,m_ssrc,this);
+	}
 	return;
+    }
 
     // skip over header and any CSRC
     pc += 12+(4*cc);
@@ -301,16 +307,14 @@ void RTPSender::timerTick(const Time& when)
 RTPSession::RTPSession()
     : m_transport(0), m_direction(FullStop), m_send(0), m_recv(0)
 {
-    XDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
+    DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
 
 RTPSession::~RTPSession()
 {
-    XDebug(DebugInfo,"RTPSession::~RTPSession() [%p]",this);
+    DDebug(DebugInfo,"RTPSession::~RTPSession() [%p]",this);
     direction(FullStop);
     group(0);
-    sender(0);
-    receiver(0);
     if (m_transport) {
 	RTPTransport* tmp = m_transport;
 	m_transport = 0;
@@ -440,14 +444,24 @@ void RTPSession::receiver(RTPReceiver* recv)
 
 bool RTPSession::direction(Direction dir)
 {
-    XDebug(DebugInfo,"RTPSession::direction(%d) old=%d [%p]",dir,m_direction,this);
+    DDebug(DebugInfo,"RTPSession::direction(%d) old=%d [%p]",dir,m_direction,this);
     if ((dir != FullStop) && !m_transport)
 	return false;
-    // make sure we have sender and/or receiver for our direction
-    if ((dir & RecvOnly) && !m_recv)
-	receiver(createReceiver());
-    if ((dir & SendOnly) && !m_send)
-	sender(createSender());
+
+    if (dir & RecvOnly) {
+	if (!m_recv)
+	    receiver(createReceiver());
+    }
+    else
+	receiver(0);
+
+    if (dir & SendOnly) {
+	if (!m_send)
+	    sender(createSender());
+    }
+    else
+	sender(0);
+
     m_direction = dir;
     return true;
 }

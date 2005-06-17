@@ -317,6 +317,18 @@ public:
     inline void reset()
 	{ m_ssrc = 0; }
 
+    /**
+     * Get the value of the current SSRC, zero if not initialized yet
+     */
+    inline unsigned int ssrc() const
+	{ return m_ssrc; }
+
+    /**
+     * Force a new known SSRC for all further packets
+     */
+    inline void ssrc(unsigned int src)
+	{ m_ssrc = src; }
+
 protected:
     /**
      * Method called periodically to keep the data flowing
@@ -350,7 +362,7 @@ public:
      * Constructor
      */
     inline RTPReceiver(RTPSession* session = 0)
-	: RTPBaseIO(session)
+	: RTPBaseIO(session), m_warn(true)
 	{ }
 
     /**
@@ -412,6 +424,7 @@ private:
     bool decodeSilence(bool marker, unsigned int timestamp, const void* data, int len);
     void finishEvent(unsigned int timestamp);
     bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
+    bool m_warn;
 };
 
 /**
@@ -687,6 +700,24 @@ public:
      * @return True if direction was set, false if a failure occured
      */
     bool direction(Direction dir);
+
+    /**
+     * Add a direction of this session. A transport must exist for this
+     *  method to succeed.
+     * @param dir New Direction to add for this session
+     * @return True if direction was set, false if a failure occured
+     */
+    inline bool addDirection(Direction dir)
+	{ return direction((Direction)(m_direction | dir)); }
+
+    /**
+     * Delete a direction of this session. A transport must exist for this
+     *  method to succeed.
+     * @param dir Direction to remove for this session
+     * @return True if direction was set, false if a failure occured
+     */
+    inline bool delDirection(Direction dir)
+	{ return direction((Direction)(m_direction & ~dir)); }
 
     /**
      * Set the data payload type for both receiver and sender.

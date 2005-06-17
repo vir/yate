@@ -763,7 +763,7 @@ void Driver::msgStatus(Message& msg)
 void Driver::statusModule(String& str)
 {
     Module::statusModule(str);
-    str.append("format=Status|Address",",");
+    str.append("format=Status|Address|Peer",",");
 }
 
 void Driver::statusParams(String& str)
@@ -780,7 +780,7 @@ void Driver::statusChannels(String& str)
     ObjList* l = m_chans.skipNull();
     for (; l; l=l->skipNext()) {
 	Channel* c = static_cast<Channel*>(l->get());
-	str.append(c->id(),",") << "=" << c->status() << "|" << c->address();
+	str.append(c->id(),",") << "=" << c->status() << "|" << c->address() << "|" << c->getPeerId();
     }
 }
 

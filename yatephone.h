@@ -802,6 +802,13 @@ public:
 	{ return m_peer; }
 
     /**
+     * Get the connected peer call id
+     * @return Connected peer call id or empty string
+     */
+    inline const String& getPeerId() const
+	{ return m_peer ? m_peer->id() : String::empty(); }
+
+    /**
      * Connect the call endpoint to a peer.
      * @param peer Pointer to the peer call endpoint.
      * @return True if connected, false if an error occured.

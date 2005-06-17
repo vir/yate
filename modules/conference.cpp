@@ -180,6 +180,7 @@ ConfChan::ConfChan(const String& name)
     Lock lock(&__plugin);
     ConfRoom* room = ConfRoom::get(name,true);
     if (room) {
+	m_address = name;
 	setSource(room);
 	room->deref();
 	room->channels().append(this);

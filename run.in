@@ -1,5 +1,7 @@
 #! /bin/sh
 
+# Script to run Yate from the build directory, optionally under gdb or valgrind
+
 yate="./yate"
 set_conf="-c ./conf.d"
 set_mods="-m ./modules"

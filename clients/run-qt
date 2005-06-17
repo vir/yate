@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Run this to generate a new configure script
+# Script to run the Qt client from the build directory
 
 if [ -x yate-qt -a -x ../run ]; then
     cd ..; exec ./run --executable clients/yate-qt "$@"

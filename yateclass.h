@@ -211,8 +211,11 @@ public:
      * @param level The initial local debug level
      */
     inline DebugEnabler(int level = TelEngine::debugLevel(), bool enabled = true)
-	: m_level(DebugFail), m_enabled(enabled), m_chain(0)
+	: m_level(DebugFail), m_enabled(enabled), m_chain(0), m_name(0)
 	{ debugLevel(level); }
+
+    inline ~DebugEnabler()
+	{ m_name = 0; m_chain = 0; }
 
     /**
      * Retrive the current local debug level
@@ -243,11 +246,25 @@ public:
 	{ m_enabled = enable; m_chain = 0; }
 
     /**
+     * Get the current debug name
+     * @return Name of the debug activation if set or NULL
+     */
+    inline const char* debugName() const
+	{ return m_name; }
+
+    /**
      * Check if debugging output should be generated
      * @param level The debug level we are testing
      * @return True if messages should be output, false otherwise
      */
     bool debugAt(int level) const;
+
+    /**
+     * Check if this enabler is chained to another one
+     * @return True if local debugging is chained to other enabler
+     */
+    inline bool debugChained() const
+	{ return m_chain != 0; }
 
     /**
      * Chain this debug holder to a parent or detach from existing one
@@ -262,10 +279,19 @@ public:
      */
     void debugCopy(const DebugEnabler* original = 0);
 
+protected:
+    /**
+     * Set the current debug name
+     * @param name Static debug name or NULL
+     */
+    inline void debugName(const char* name)
+	{ m_name = name; }
+
 private:
     int m_level;
     bool m_enabled;
     const DebugEnabler* m_chain;
+    const char* m_name;
 };
 
 #if 0
@@ -436,13 +462,13 @@ public:
      * Set the output callback
      * @param outFunc Pointer to the output function, NULL to use stderr
      */
-    static void setOutput(void (*outFunc)(const char*) = 0);
+    static void setOutput(void (*outFunc)(const char*,int) = 0);
 
     /**
      * Set the interactive output callback
      * @param outFunc Pointer to the output function, NULL to disable
      */
-    static void setIntOut(void (*outFunc)(const char*) = 0);
+    static void setIntOut(void (*outFunc)(const char*,int) = 0);
 
     /**
      * Enable or disable the debug output

@@ -157,12 +157,13 @@ public:
     virtual bool received(Message &msg);
 };
 
-class YRTPPlugin : public Plugin
+class YRTPPlugin : public Module
 {
 public:
     YRTPPlugin();
     virtual ~YRTPPlugin();
     virtual void initialize();
+    virtual void statusParams(String& str);
 private:
     bool m_first;
 };
@@ -175,7 +176,7 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, RTPSession::Di
     : m_rtp(0), m_dir(direction), m_conn(conn),
       m_source(0), m_consumer(0), m_bufsize(0), m_port(0)
 {
-    Debug(DebugAll,"YRTPWrapper::YRTPWrapper(\"%s\",%p,%s) [%p]",
+    Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper(\"%s\",%p,%s) [%p]",
 	localip,conn,lookup(direction,dict_yrtp_dir),this);
     m_id = "yrtp/";
     m_id << (unsigned int)::random();
@@ -187,7 +188,7 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, RTPSession::Di
 
 YRTPWrapper::~YRTPWrapper()
 {
-    Debug(DebugAll,"YRTPWrapper::~YRTPWrapper() %s [%p]",
+    Debug(&splugin,DebugAll,"YRTPWrapper::~YRTPWrapper() %s [%p]",
 	lookup(m_dir,dict_yrtp_dir),this);
     s_mutex.lock();
     s_calls.remove(this,false);
@@ -198,12 +199,12 @@ YRTPWrapper::~YRTPWrapper()
 	delete tmp;
     }
     if (m_source) {
-	Debug(DebugGoOn,"There is still a RTP source %p [%p]",m_source,this);
+	Debug(&splugin,DebugGoOn,"There is still a RTP source %p [%p]",m_source,this);
 	m_source->destruct();
 	m_source = 0;
     }
     if (m_consumer) {
-	Debug(DebugGoOn,"There is still a RTP consumer %p [%p]",m_consumer,this);
+	Debug(&splugin,DebugGoOn,"There is still a RTP consumer %p [%p]",m_consumer,this);
 	m_consumer->destruct();
 	m_consumer = 0;
     }
@@ -236,7 +237,7 @@ YRTPWrapper* YRTPWrapper::find(const String& id)
 
 void YRTPWrapper::setupRTP(const char* localip)
 {
-    Debug(DebugAll,"YRTPWrapper::setupRTP(\"%s\") [%p]",localip,this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\") [%p]",localip,this);
     m_rtp = new YRTPSession(this);
     m_rtp->initTransport();
     int minport = s_cfg.getIntValue("rtp","minport",16384);
@@ -253,7 +254,7 @@ void YRTPWrapper::setupRTP(const char* localip)
     }
     SocketAddr addr(AF_INET);
     if (!addr.host(localip)) {
-	Debug(DebugWarn,"YRTPWrapper [%p] could not parse address '%s'",this,localip);
+	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] could not parse address '%s'",this,localip);
 	return;
     }
     for (; attempt; attempt--) {
@@ -261,50 +262,50 @@ void YRTPWrapper::setupRTP(const char* localip)
 	addr.port(lport);
 	if (m_rtp->localAddr(addr)) {
 	    m_port = lport;
-	    Debug(DebugAll,"YRTPWrapper [%p] RTP %p bound to %s:%u",this,m_rtp,localip,m_port);
+	    Debug(&splugin,DebugAll,"YRTPWrapper [%p] RTP %p bound to %s:%u",this,m_rtp,localip,m_port);
 	    return;
 	}
     }
-    Debug(DebugWarn,"YRTPWrapper [%p] RTP bind failed in range %d-%d",this,minport,maxport);
+    Debug(&splugin,DebugWarn,"YRTPWrapper [%p] RTP bind failed in range %d-%d",this,minport,maxport);
 }
 
 bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, int evpayload, const char* format)
 {
-    Debug(DebugAll,"YRTPWrapper::startRTP(\"%s\",%u,%d) [%p]",raddr,rport,payload,this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u,%d) [%p]",raddr,rport,payload,this);
     if (!m_rtp) {
-	Debug(DebugWarn,"YRTPWrapper [%p] attempted to start RTP before setup!",this);
+	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] attempted to start RTP before setup!",this);
 	return false;
     }
 
     if (m_bufsize) {
-	Debug(DebugMild,"YRTPWrapper [%p] attempted to restart RTP!",this);
+	Debug(&splugin,DebugMild,"YRTPWrapper [%p] attempted to restart RTP!",this);
 	return true;
     }
 
     if (!format)
 	format = lookup(payload, dict_payloads);
     if (!format) {
-	Debug(DebugWarn,"YRTPWrapper [%p] can't find name for payload %d",this,payload);
+	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] can't find name for payload %d",this,payload);
 	return false;
     }
 
     if (payload == -1)
 	payload = lookup(format, dict_payloads, -1);
     if (payload == -1) {
-	Debug(DebugWarn,"YRTPWrapper [%p] can't find payload for format %s",this,format);
+	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] can't find payload for format %s",this,format);
 	return false;
     }
 
     if ((payload < 0) || (payload >= 127)) {
-	Debug(DebugWarn,"YRTPWrapper [%p] received invalid payload %d",this,payload);
+	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] received invalid payload %d",this,payload);
 	return false;
     }
 
-    Debug(DebugAll,"RTP format '%s' payload %d",format,payload);
+    Debug(&splugin,DebugAll,"RTP format '%s' payload %d",format,payload);
 
     SocketAddr addr(AF_INET);
     if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr))) {
-	Debug(DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
+	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
 	return false;
     }
     // Change format of source and/or consumer,
@@ -346,7 +347,7 @@ bool YRTPWrapper::sendDTMF(char dtmf, int duration)
 
 void YRTPWrapper::gotDTMF(char tone)
 {
-    Debug(DebugInfo,"YRTPWrapper::gotDTMF('%c') [%p]",tone,this);
+    Debug(&splugin,DebugInfo,"YRTPWrapper::gotDTMF('%c') [%p]",tone,this);
     if (m_master.null())
 	return;
     char buf[2];
@@ -364,16 +365,16 @@ void YRTPWrapper::guessLocal(const char* remoteip, String& localip)
     localip.clear();
     SocketAddr r(AF_INET);
     if (!r.host(remoteip)) {
-	Debug(DebugInfo,"Guess - Could not parse remote '%s'",remoteip);
+	Debug(&splugin,DebugInfo,"Guess - Could not parse remote '%s'",remoteip);
 	return;
     }
     SocketAddr l;
     if (!l.local(r)) {
-	Debug(DebugInfo,"Guess - Could not guess local for remote '%s'",remoteip);
+	Debug(&splugin,DebugInfo,"Guess - Could not guess local for remote '%s'",remoteip);
 	return;
     }
     localip = l.host();
-    Debug(DebugInfo,"Guessed local IP '%s' for remote '%s'",localip.c_str(),remoteip);
+    Debug(&splugin,DebugInfo,"Guessed local IP '%s' for remote '%s'",localip.c_str(),remoteip);
 }
 
 void YRTPWrapper::addDirection(RTPSession::Direction direction)
@@ -407,7 +408,7 @@ bool YRTPSession::rtpRecvEvent(int event, char key, int duration,
 void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 {
     if (payload == 13) {
-	Debug(DebugInfo,"Activating RTP silence payload %d in wrapper %p",payload,m_wrap);
+	Debug(&splugin,DebugInfo,"Activating RTP silence payload %d in wrapper %p",payload,m_wrap);
 	m_wrap->rtp()->silencePayload(payload);
     }
 }
@@ -415,7 +416,7 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 YRTPAudioSource::YRTPAudioSource(YRTPWrapper* wrap)
     : m_wrap(wrap)
 {
-    Debug(DebugAll,"YRTPAudioSource::YRTPAudioSource(%p) [%p]",wrap,this);
+    Debug(&splugin,DebugAll,"YRTPAudioSource::YRTPAudioSource(%p) [%p]",wrap,this);
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
@@ -425,7 +426,7 @@ YRTPAudioSource::YRTPAudioSource(YRTPWrapper* wrap)
 
 YRTPAudioSource::~YRTPAudioSource()
 {
-    Debug(DebugAll,"YRTPAudioSource::~YRTPAudioSource() [%p] wrapper=%p",this,m_wrap);
+    Debug(&splugin,DebugAll,"YRTPAudioSource::~YRTPAudioSource() [%p] wrapper=%p",this,m_wrap);
     m_mutex.lock();
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
@@ -440,7 +441,7 @@ YRTPAudioSource::~YRTPAudioSource()
 YRTPAudioConsumer::YRTPAudioConsumer(YRTPWrapper *wrap)
     : m_wrap(wrap), m_timestamp(0)
 {
-    Debug(DebugAll,"YRTPAudioConsumer::YRTPAudioConsumer(%p) [%p]",wrap,this);
+    Debug(&splugin,DebugAll,"YRTPAudioConsumer::YRTPAudioConsumer(%p) [%p]",wrap,this);
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
@@ -450,7 +451,7 @@ YRTPAudioConsumer::YRTPAudioConsumer(YRTPWrapper *wrap)
 
 YRTPAudioConsumer::~YRTPAudioConsumer()
 {
-    Debug(DebugAll,"YRTPAudioConsumer::~YRTPAudioConsumer() [%p] wrapper=%p ts=%d",this,m_wrap,m_timestamp);
+    Debug(&splugin,DebugAll,"YRTPAudioConsumer::~YRTPAudioConsumer() [%p] wrapper=%p ts=%d",this,m_wrap,m_timestamp);
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
 	m_wrap = 0;
@@ -463,7 +464,7 @@ void YRTPAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
 	return;
-    XDebug(DebugAll,"YRTPAudioConsumer writing %d bytes, delta=%lu ts=%d [%p]",
+    XDebug(&splugin,DebugAll,"YRTPAudioConsumer writing %d bytes, delta=%lu ts=%d [%p]",
 	data.length(),timeDelta,m_timestamp,this);
     unsigned int buf = m_wrap->bufSize();
     const char* ptr = (const char*)data.data();
@@ -522,9 +523,9 @@ bool AttachHandler::received(Message &msg)
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (!src.null())
-	    Debug(DebugWarn,"RTP source '%s' attach request with no call channel!",src.c_str());
+	    Debug(&splugin,DebugWarn,"RTP source '%s' attach request with no call channel!",src.c_str());
 	if (!cons.null())
-	    Debug(DebugWarn,"RTP consumer '%s' attach request with no call channel!",cons.c_str());
+	    Debug(&splugin,DebugWarn,"RTP consumer '%s' attach request with no call channel!",cons.c_str());
 	return false;
     }
 
@@ -564,7 +565,7 @@ bool AttachHandler::received(Message &msg)
 
 bool RtpHandler::received(Message &msg)
 {
-    Debug(DebugAll,"RTP message received");
+    Debug(&splugin,DebugAll,"RTP message received");
     String dir(msg.getValue("direction"));
     RTPSession::Direction direction = RTPSession::SendRecv;
     bool d_recv = false;
@@ -588,9 +589,9 @@ bool RtpHandler::received(Message &msg)
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (d_recv)
-	    Debug(DebugWarn,"RTP recv request with no call channel!");
+	    Debug(&splugin,DebugWarn,"RTP recv request with no call channel!");
 	if (d_send)
-	    Debug(DebugWarn,"RTP send request with no call channel!");
+	    Debug(&splugin,DebugWarn,"RTP send request with no call channel!");
 	return false;
     }
 
@@ -599,18 +600,18 @@ bool RtpHandler::received(Message &msg)
 
     YRTPWrapper *w = YRTPWrapper::find(ch);
     if (w)
-	Debug(DebugAll,"YRTPWrapper %p found by CallEndpoint",w);
+	Debug(&splugin,DebugAll,"YRTPWrapper %p found by CallEndpoint",w);
     if (!w) {
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
 	if (w)
-	    Debug(DebugAll,"YRTPWrapper %p found by ID",w);
+	    Debug(&splugin,DebugAll,"YRTPWrapper %p found by ID",w);
     }
     if (!w) {
 	String lip(msg.getValue("localip"));
 	if (lip.null())
 	    YRTPWrapper::guessLocal(rip,lip);
 	if (lip.null()) {
-	    Debug(DebugWarn,"RTP request with no local address!");
+	    Debug(&splugin,DebugWarn,"RTP request with no local address!");
 	    return false;
 	}
 	msg.setParam("localip",lip);
@@ -660,7 +661,7 @@ bool DTMFHandler::received(Message &msg)
 	return false;
     YRTPWrapper* wrap = YRTPWrapper::find(targetid);
     if (wrap && wrap->rtp()) {
-	Debug(DebugInfo,"RTP DTMF '%s' targetid '%s'",text.c_str(),targetid.c_str());
+	Debug(&splugin,DebugInfo,"RTP DTMF '%s' targetid '%s'",text.c_str(),targetid.c_str());
 	int duration = msg.getIntValue("duration");
 	for (unsigned int i=0;i<text.length();i++)
 	    wrap->sendDTMF(text.at(i),duration);
@@ -670,7 +671,7 @@ bool DTMFHandler::received(Message &msg)
 }
 
 YRTPPlugin::YRTPPlugin()
-    : m_first(true)
+    : Module("yrtp","misc"), m_first(true)
 {
     Output("Loaded module YRTP");
 }
@@ -681,11 +682,17 @@ YRTPPlugin::~YRTPPlugin()
     s_calls.clear();
 }
 
+void YRTPPlugin::statusParams(String& str)
+{
+    str.append("chans=",",") << s_calls.count();
+}
+
 void YRTPPlugin::initialize()
 {
     Output("Initializing module YRTP");
     s_cfg = Engine::configFile("yrtpchan");
     s_cfg.load();
+    setup();
     if (m_first) {
 	m_first = false;
 	Engine::install(new AttachHandler);

@@ -688,17 +688,14 @@ void Engine::loadPlugins()
 
 void Engine::initPlugins()
 {
-#ifdef DEBUG
-    Debugger debug("Engine::initPlugins()");
-#else
-    Debug(DebugInfo,"Engine::initPlugins()");
-#endif
+    Output("Initializing plugins");
     dispatch("engine.init");
     ObjList *l = plugins.skipNull();
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());
 	p->initialize();
     }
+    Output("Initialization complete");
 }
 
 int Engine::usedPlugins()

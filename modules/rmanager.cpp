@@ -73,7 +73,7 @@ public:
     virtual void run();
     bool processLine(const char *line);
     void writeStr(const char *str, int len = -1);
-    void writeDebug(const char *str);
+    void writeDebug(const char *str, int level);
     void writeStr(Message &msg,bool received);
     inline void writeStr(const String &s)
 	{ writeStr(s.safe(),s.length()); }
@@ -99,14 +99,14 @@ private:
     bool m_first;
 };
 
-static void dbg_remote_func(const char *buf)
+static void dbg_remote_func(const char *buf, int level)
 {
     s_mutex.lock();
     ObjList *p = &connectionlist;
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
-	    con->writeDebug(buf);
+	    con->writeDebug(buf,level);
     }
     s_mutex.unlock();
 }
@@ -436,7 +436,7 @@ void Connection::writeStr(Message &msg,bool received)
     writeStr(s.c_str());
 }
 
-void Connection::writeDebug(const char *str)
+void Connection::writeDebug(const char *str, int level)
 {
     if (m_debug && !null(str))
 	writeStr(str,::strlen(str));

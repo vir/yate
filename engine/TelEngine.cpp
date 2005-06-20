@@ -40,19 +40,23 @@ static bool s_debugging = true;
 static bool s_abort = false;
 static u_int64_t s_timestamp = 0;
 
-static void dbg_stderr_func(const char* buf)
+static void dbg_stderr_func(const char* buf, int level)
 {
     ::write(2,buf,::strlen(buf));
 }
 
-static void (*s_output)(const char*) = dbg_stderr_func;
-static void (*s_intout)(const char*) = 0;
+static void (*s_output)(const char*,int) = dbg_stderr_func;
+static void (*s_intout)(const char*,int) = 0;
 
 static Mutex out_mux;
 static Mutex ind_mux;
 
-static void common_output(char* buf)
+static void common_output(int level,char* buf)
 {
+    if (level < -1)
+	level = -1;
+    if (level > DebugMax)
+	level = DebugMax;
     int n = ::strlen(buf);
     if (n && (buf[n-1] == '\n'))
 	    n--;
@@ -61,13 +65,13 @@ static void common_output(char* buf)
     // serialize the output strings
     out_mux.lock();
     if (s_output)
-	s_output(buf);
+	s_output(buf,level);
     if (s_intout)
-	s_intout(buf);
+	s_intout(buf,level);
     out_mux.unlock();
 }
 
-static void dbg_output(const char* prefix, const char* format, va_list ap)
+static void dbg_output(int level,const char* prefix, const char* format, va_list ap)
 {
     if (!(s_output || s_intout))
 	return;
@@ -94,7 +98,7 @@ static void dbg_output(const char* prefix, const char* format, va_list ap)
     if (format) {
 	::vsnprintf(buf+n,l,format,ap);
     }
-    common_output(buf);
+    common_output(level,buf);
 }
 
 void Output(const char* format, ...)
@@ -106,7 +110,7 @@ void Output(const char* format, ...)
     va_start(va,format);
     ::vsnprintf(buf,sizeof(buf)-2,format,va);
     va_end(va);
-    common_output(buf);
+    common_output(-1,buf);
 }
 
 void Debug(int level, const char* format, ...)
@@ -122,7 +126,7 @@ void Debug(int level, const char* format, ...)
     va_list va;
     va_start(va,format);
     ind_mux.lock();
-    dbg_output(buf,format,va);
+    dbg_output(level,buf,format,va);
     ind_mux.unlock();
     va_end(va);
     if (s_abort && (level == DebugFail))
@@ -142,7 +146,7 @@ void Debug(const char* facility, int level, const char* format, ...)
     va_list va;
     va_start(va,format);
     ind_mux.lock();
-    dbg_output(buf,format,va);
+    dbg_output(level,buf,format,va);
     ind_mux.unlock();
     va_end(va);
     if (s_abort && (level == DebugFail))
@@ -153,6 +157,7 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
 {
     if (!s_debugging)
 	return;
+    const char* facility = 0;
     if (!local) {
 	if (level > s_debug)
 	    return;
@@ -160,15 +165,19 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
     else {
 	if (!local->debugAt(level))
 	    return;
+	facility = local->debugName();
     }
     if (!format)
 	format = "";
-    char buf[32];
-    ::sprintf(buf,"<%d> ",level);
+    char buf[64];
+    if (facility)
+	::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
+    else
+	::sprintf(buf,"<%d> ",level);
     va_list va;
     va_start(va,format);
     ind_mux.lock();
-    dbg_output(buf,format,va);
+    dbg_output(level,buf,format,va);
     ind_mux.unlock();
     va_end(va);
     if (s_abort && (level == DebugFail))
@@ -251,7 +260,7 @@ Debugger::Debugger(const char* name, const char* format, ...)
 	va_list va;
 	va_start(va,format);
 	ind_mux.lock();
-	dbg_output(buf,format,va);
+	dbg_output(DebugAll,buf,format,va);
 	va_end(va);
 	s_indent++;
 	ind_mux.unlock();
@@ -269,7 +278,7 @@ Debugger::Debugger(int level, const char* name, const char* format, ...)
 	va_list va;
 	va_start(va,format);
 	ind_mux.lock();
-	dbg_output(buf,format,va);
+	dbg_output(DebugAll,buf,format,va);
 	va_end(va);
 	s_indent++;
 	ind_mux.unlock();
@@ -282,7 +291,7 @@ static void dbg_dist_helper(const char* buf, const char* fmt, ...)
 {
     va_list va;
     va_start(va,fmt);
-    dbg_output(buf,fmt,va);
+    dbg_output(DebugAll,buf,fmt,va);
     va_end(va);
 }
 
@@ -300,14 +309,14 @@ Debugger::~Debugger()
     }
 }
 
-void Debugger::setOutput(void (*outFunc)(const char*))
+void Debugger::setOutput(void (*outFunc)(const char*,int))
 {
     out_mux.lock();
     s_output = outFunc ? outFunc : dbg_stderr_func;
     out_mux.unlock();
 }
 
-void Debugger::setIntOut(void (*outFunc)(const char*))
+void Debugger::setIntOut(void (*outFunc)(const char*,int))
 {
     out_mux.lock();
     s_intout = outFunc;

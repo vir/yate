@@ -227,6 +227,7 @@ ToneChan::ToneChan(const String &tone)
     ToneSource *t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
+	m_address = t->name();
 	t->deref();
     }
     else

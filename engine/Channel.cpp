@@ -194,6 +194,7 @@ void Channel::init()
 {
     status(direction());
     if (m_driver) {
+	debugName(m_driver->debugName());
 	debugChain(m_driver);
 	m_driver->lock();
 	if (m_id.null())
@@ -203,7 +204,7 @@ void Channel::init()
 	m_driver->changed();
 	m_driver->unlock();
     }
-    DDebug(DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
+    DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
 }
 
 void Channel::drop()
@@ -341,7 +342,7 @@ void Channel::callAccept(Message& msg)
 	m_billid = msg.getValue("billid");
     m_targetid = msg.getValue("targetid");
     if (m_targetid.null()) {
-	Debug(DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);
+	Debug(this,DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);
 	msgAnswered(msg);
     }
 }
@@ -361,14 +362,13 @@ bool Channel::setDebug(Message& msg)
     }
     else if (str == "reset")
 	debugChain(m_driver);
-    else {
-	bool dbg = debugEnabled();
-	str >> dbg;
-	debugEnabled(dbg);
-    }
+    else if (str == "engine")
+	debugCopy();
+    else if (str.isBoolean())
+	debugEnabled(str.toBoolean(debugEnabled()));
     msg.retValue() << "Channel " << m_id
 	<< " debug " << (debugEnabled() ? "on" : "off")
-	<< " level " << debugLevel() << "\n";
+	<< " level " << debugLevel() << (debugChained() ? " chained" : "") << "\n";
     return true;
 }
 
@@ -405,6 +405,12 @@ Module::Module(const char* name, const char* type)
     : Plugin(name), Mutex(true),
       m_init(false), m_relays(0), m_name(name), m_type(type), m_changed(0)
 {
+    debugName(m_name);
+}
+
+Module::~Module()
+{
+    debugName(0);
 }
 
 void* Module::getObject(const String& name) const
@@ -445,7 +451,7 @@ void Module::initialize()
 
 void Module::setup()
 {
-    Debug(DebugAll,"Module::setup()");
+    Debug(this,DebugAll,"Module::setup()");
     if (m_init)
 	return;
     m_init = true;
@@ -522,7 +528,7 @@ bool Module::received(Message &msg, int id)
     else if (id == Level)
 	return setDebug(msg,dest);
     else
-	Debug(DebugGoOn,"Invalid relay id %d in module '%s', message '%s'",
+	Debug(this,DebugGoOn,"Invalid relay id %d in module '%s', message '%s'",
 	    id,m_name.c_str(),msg.c_str());
 
     return false;
@@ -579,7 +585,7 @@ void Driver::initialize()
 
 void Driver::setup(const char* prefix, bool minimal)
 {
-    DDebug(DebugAll,"Driver::setup('%s',%d)",prefix,minimal);
+    DDebug(this,DebugAll,"Driver::setup('%s',%d)",prefix,minimal);
     Module::setup();
     if (m_init)
 	return;
@@ -680,7 +686,7 @@ bool Driver::received(Message &msg, int id)
     Lock lock(this);
     Channel* chan = find(dest);
     if (!chan) {
-	DDebug(DebugMild,"Could not find channel '%s'",dest.c_str());
+	DDebug(this,DebugMild,"Could not find channel '%s'",dest.c_str());
 	return false;
     }
 
@@ -718,7 +724,7 @@ void Driver::dropAll(Message &msg)
     while (l) {
 	Channel* c = static_cast<Channel*>(l->get());
 	if (c) {
-	    DDebug(DebugAll,"Dropping %s channel %p [%p]",name().c_str(),c,this);
+	    DDebug(this,DebugAll,"Dropping %s channel %p [%p]",name().c_str(),c,this);
 	    c->msgDrop(msg,reason);
 	    if (l->get() != c)
 		break;
@@ -828,7 +834,7 @@ void Router::run()
 
 bool Router::route()
 {
-    Debug(DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
+    Debug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
     bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
 
     m_driver->lock();
@@ -841,7 +847,7 @@ bool Router::route()
     m_driver->unlock();
 
     if (!chan) {
-	Debug(DebugMild,"Connection '%s' vanished while routing!",m_id.c_str());
+	Debug(m_driver,DebugMild,"Connection '%s' vanished while routing!",m_id.c_str());
 	return false;
     }
 

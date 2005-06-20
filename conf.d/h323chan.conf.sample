@@ -102,6 +102,10 @@ ident = yate
 ; h245tunneling: bool: Enable H.245 tunneling mode
 ;h245tunneling=false
 
+; h245insetup: bool: Enable H.245 establishment early in call setup message
+; Note that this setting may conflict with faststart so don't enable both
+;h245insetup=false
+
 ; dtmfinband: bool: Wheter to decode inband DTMF (CPU intensive)
 ;dtmfinband = false
 

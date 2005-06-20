@@ -9,3 +9,6 @@
 
 ; header: string: Header string to display on connect
 ;header=YATE (http://YATE.null.ro) ready.
+
+; password: string: Password required to authenticate, default empty!
+;password=

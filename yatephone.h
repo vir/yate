@@ -993,6 +993,11 @@ protected:
     Module(const char* name, const char* type = 0);
 
     /**
+     * Destructor
+     */
+    virtual ~Module();
+
+    /**
      * This method is called to initialize the loaded module
      */
     virtual void initialize();

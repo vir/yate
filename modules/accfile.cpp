@@ -155,7 +155,6 @@ void AccFilePlugin::initialize()
 	Lock lock(s_mutex);
 	m_first = false;
 	s_cfg.load();
-    	Output("Installing handlers");
 	Engine::install(new StatusHandler);
 	Engine::install(new StartHandler);
     }

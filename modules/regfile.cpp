@@ -178,7 +178,6 @@ void RegfilePlugin::initialize()
     Output("Initializing module Register for file");
     if (!m_authhandler) {
 	s_cfg.load();
-    	Output("Installing handlers");
 	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",100)));
 	Engine::install(new RegistHandler("user.register"));
 	Engine::install(new UnRegistHandler("user.unregister"));

@@ -474,8 +474,10 @@ void YRTPAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 	timeDelta = 0;
     while (len && m_wrap && m_wrap->rtp()) {
 	unsigned int sz = len;
-	if ((sz > buf) && !timeDelta)
+	if ((sz > buf) && !timeDelta) {
+	    DDebug(&splugin,DebugAll,"Creating %u bytes fragment of %u bytes buffer",buf,len);
 	    sz = buf;
+	}
 	m_wrap->rtp()->rtpSendData(false,m_timestamp,ptr,sz);
 	// if timestamp increment is not provided we have to guess...
 	m_timestamp += timeDelta ? timeDelta : sz;

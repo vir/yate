@@ -31,6 +31,7 @@
 #include <ptlib.h>
 #include <h323.h>
 #include <h323pdu.h>
+#include <h323caps.h>
 #include <ptclib/delaychan.h>
 #include <gkserver.h>
 
@@ -95,10 +96,10 @@ const char* h323_formats[] = {
     "G.723.1A(5.3k)", "g723.1a-5k3",
     "G.723.1A(6.3k)", "g723.1a-6k3",
     "G.723.1A(6.3k)-Cisco", "g723.1a-6k3-cisco",
-    "G.726-16k", "g726-16k",
-    "G.726-24k", "g726-24k",
-    "G.726-32k", "g726-32k",
-    "G.726-40k", "g726-40k",
+    "G.726-16k", "g726-16",
+    "G.726-24k", "g726-24",
+    "G.726-32k", "g726-32",
+    "G.726-40k", "g726-40",
     "iLBC-15k2", "ilbc-15k2",
     "iLBC-13k3", "ilbc-13k3",
     "SpeexNarrow-18.2k", "speex-18k2",
@@ -425,6 +426,100 @@ public:
 private:
     YateH323Connection* m_conn;
 };
+
+
+// start of fake capabilities code
+
+class BaseG7231Capab : public H323AudioCapability
+{
+    PCLASSINFO(BaseG7231Capab, H323AudioCapability);
+public:
+    BaseG7231Capab(const char* fname, bool annexA = true)
+	: H323AudioCapability(7,4), m_name(fname), m_aa(annexA)
+	{ }
+    virtual PObject* Clone() const
+	// default copy constructor - take care!
+	{ return new BaseG7231Capab(*this); }
+    virtual unsigned GetSubType() const
+	{ return H245_AudioCapability::e_g7231; }
+    virtual PString GetFormatName() const
+	{ return m_name; }
+    virtual H323Codec* CreateCodec(H323Codec::Direction direction) const
+	{ return 0; }
+    virtual Comparison Compare(const PObject& obj) const
+	{
+	    Comparison res = H323AudioCapability::Compare(obj);
+	    if (res != EqualTo)
+		return res;
+	    bool aa = static_cast<const BaseG7231Capab&>(obj).m_aa;
+	    if (aa && !m_aa)
+		return LessThan;
+	    if (m_aa && !aa)
+		return GreaterThan;
+	    return EqualTo;
+	}
+    virtual BOOL OnSendingPDU(H245_AudioCapability& pdu, unsigned packetSize) const
+	{
+	    pdu.SetTag(GetSubType());
+	    H245_AudioCapability_g7231& g7231 = pdu;
+	    g7231.m_maxAl_sduAudioFrames = packetSize;
+	    g7231.m_silenceSuppression = m_aa;
+	    return TRUE;
+	}
+    virtual BOOL OnReceivedPDU(const H245_AudioCapability& pdu, unsigned& packetSize)
+	{
+	    if (pdu.GetTag() != H245_AudioCapability::e_g7231)
+		return FALSE;
+	    const H245_AudioCapability_g7231& g7231 = pdu;
+	    packetSize = g7231.m_maxAl_sduAudioFrames;
+	    m_aa = g7231.m_silenceSuppression;
+	    return TRUE;
+	}
+protected:
+    const char* m_name;
+    bool m_aa;
+};
+
+class BaseG729Capab : public H323AudioCapability
+{
+    PCLASSINFO(BaseG729Capab, H323AudioCapability);
+public:
+    BaseG729Capab(const char* fname, unsigned type = H245_AudioCapability::e_g729)
+	: H323AudioCapability(24,6), m_name(fname), m_type(type)
+	{ }
+    virtual PObject* Clone() const
+	// default copy constructor - take care!
+	{ return new BaseG729Capab(*this); }
+    virtual unsigned GetSubType() const
+	{ return m_type; }
+    virtual PString GetFormatName() const
+	{ return m_name; }
+    virtual H323Codec* CreateCodec(H323Codec::Direction direction) const
+	{ return 0; }
+protected:
+    const char* m_name;
+    unsigned m_type;
+};
+
+// shameless adaptation from the G711 capability declaration
+#define DEFINE_YATE_CAPAB(cls,base,param,name) \
+class cls : public base { \
+  public: \
+    cls() : base(name,param) { } \
+}; \
+H323_REGISTER_CAPABILITY(cls,name) \
+
+DEFINE_YATE_CAPAB(YateG7231_5,BaseG7231Capab,false,OPAL_G7231_5k3"{sw}")
+DEFINE_YATE_CAPAB(YateG7231_6,BaseG7231Capab,false,OPAL_G7231_6k3"{sw}")
+DEFINE_YATE_CAPAB(YateG7231A5,BaseG7231Capab,true,OPAL_G7231A_5k3"{sw}")
+DEFINE_YATE_CAPAB(YateG7231A6,BaseG7231Capab,true,OPAL_G7231A_6k3"{sw}")
+DEFINE_YATE_CAPAB(YateG729,BaseG729Capab,H245_AudioCapability::e_g729,OPAL_G729"{sw}")
+DEFINE_YATE_CAPAB(YateG729A,BaseG729Capab,H245_AudioCapability::e_g729AnnexA,OPAL_G729A"{sw}")
+DEFINE_YATE_CAPAB(YateG729B,BaseG729Capab,H245_AudioCapability::e_g729wAnnexB,OPAL_G729B"{sw}")
+DEFINE_YATE_CAPAB(YateG729AB,BaseG729Capab,H245_AudioCapability::e_g729AnnexAwAnnexB,OPAL_G729AB"{sw}")
+
+// end of fake capabilities code
+
 
 YateGatekeeperServer::YateGatekeeperServer(YateH323EndPoint& ep)
   : H323GatekeeperServer(ep),

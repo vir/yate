@@ -712,7 +712,8 @@ int Engine::usedPlugins()
 
 void Engine::halt(unsigned int code)
 {
-    s_haltcode = code;
+    if (s_haltcode == -1)
+	s_haltcode = code;
 }
 
 void Engine::init()

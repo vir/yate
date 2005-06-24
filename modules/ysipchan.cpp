@@ -398,7 +398,7 @@ bool YateUDPParty::setParty(const URI& uri)
 }
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
-    : m_ep(ep)
+    : SIPEngine(s_cfg.getValue("general","useragent")), m_ep(ep)
 {
     addAllowed("INVITE");
     addAllowed("BYE");

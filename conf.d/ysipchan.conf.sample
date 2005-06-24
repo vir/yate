@@ -7,6 +7,8 @@
 ; addr: ipaddress: IP address to bind to
 ;addr=0.0.0.0
 
+; useragent: string: String to set in User-Agent or Server headers
+;useragent=YATE/0.9.0
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

@@ -1203,7 +1203,7 @@ int iax_call(struct iax_session *session, char *cidnum, char *cidname, char *ich
 	struct hostent *hp;
 	/* We start by parsing up the temporary variable which is of the form of:
 	   [user@]peer[:portno][/exten[@context]] */
-	if (!ich) {
+	if (!(ich && *ich)) {
 		IAXERROR "Invalid IAX Call Handle\n");
 		DEBU(G "Invalid IAX Call Handle\n");
 		return -1;
@@ -1236,6 +1236,12 @@ int iax_call(struct iax_session *session, char *cidnum, char *cidname, char *ich
 		hostname = part1;
 	}
 	
+	if (!hostname || *hostname == ':') {
+		IAXERROR "Missing IAX Call Hostname\n");
+		DEBU(G "Missing IAX Call Hostname\n");
+		return -1;
+	}
+
 	if (username && strchr(username, ':')) {
 		username = strtok(username, ":");
 		secret = strtok(NULL, ":");
@@ -1265,11 +1271,11 @@ int iax_call(struct iax_session *session, char *cidnum, char *cidname, char *ich
 	}
 	if (username)
 		iax_ie_append_str(&ied, IAX_IE_USERNAME, username);
-	if (exten && strlen(exten))
+	if (exten && *exten)
 		iax_ie_append_str(&ied, IAX_IE_CALLED_NUMBER, exten);
-	if (dnid && strlen(dnid))
+	if (dnid && *dnid)
 		iax_ie_append_str(&ied, IAX_IE_DNID, dnid);
-	if (context && strlen(context))
+	if (context && *context)
 		iax_ie_append_str(&ied, IAX_IE_CALLED_CONTEXT, context);
 
 	/* Setup host connection */

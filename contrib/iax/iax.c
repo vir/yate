@@ -1254,11 +1254,13 @@ int iax_call(struct iax_session *session, char *cidnum, char *cidname, char *ich
 	if(secret)
 	  strncpy(session->secret, secret, sizeof(session->secret) - 1);
 	
+	portno = IAX_DEFAULT_PORTNO;
 	if (strchr(hostname, ':')) {
+		char *tmp;
 		strtok(hostname, ":");
-		portno = atoi(strtok(NULL, ":"));
-	} else {
-		portno = IAX_DEFAULT_PORTNO;
+		tmp = strtok(NULL, ":");
+		if (tmp && *tmp)
+		    portno = atoi(tmp);
 	}
 	if (part2) {
 		exten = strtok(part2, "@");

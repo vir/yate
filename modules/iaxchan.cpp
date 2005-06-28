@@ -861,7 +861,7 @@ bool IAXDriver::msgExecute(Message& msg, String& dest)
     IAXConnection *conn = new IAXConnection(this,dest);
     /* i do this to setup the peercallid by getting id 
      * from the other party */
-    int i = conn->makeCall(msg.getValue("id"),(char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.safe());
+    int i = conn->makeCall(msg.getValue("id"),(char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.c_str());
     if (i < 0) {
 	Debug(DebugInfo,"call failed in iax_call with code %d",i);
 	conn->destruct();

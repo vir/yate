@@ -76,8 +76,8 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
     }
 }
 
-SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original, const char* name)
-    : NamedString(name ? name : original.name().c_str(),original),
+SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original, const char* newName)
+    : NamedString(newName ? newName : original.name().c_str(),original),
       m_separator(original.separator())
 {
     XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
@@ -101,9 +101,9 @@ void* SIPHeaderLine::getObject(const String& name) const
     return NamedString::getObject(name);
 }
 
-SIPHeaderLine* SIPHeaderLine::clone() const
+SIPHeaderLine* SIPHeaderLine::clone(const char* newName) const
 {
-    return new SIPHeaderLine(*this);
+    return new SIPHeaderLine(*this,newName);
 }
 
 void SIPHeaderLine::buildLine(String& line) const
@@ -195,8 +195,8 @@ SIPAuthLine::SIPAuthLine(const char* name, const String& value)
     }
 }
 
-SIPAuthLine::SIPAuthLine(const SIPAuthLine& original)
-    : SIPHeaderLine(original)
+SIPAuthLine::SIPAuthLine(const SIPAuthLine& original, const char* newName)
+    : SIPHeaderLine(original,newName)
 {
 }
 
@@ -207,9 +207,9 @@ void* SIPAuthLine::getObject(const String& name) const
     return SIPHeaderLine::getObject(name);
 }
 
-SIPHeaderLine* SIPAuthLine::clone() const
+SIPHeaderLine* SIPAuthLine::clone(const char* newName) const
 {
-    return new SIPAuthLine(*this);
+    return new SIPAuthLine(*this,newName);
 }
 
 void SIPAuthLine::buildLine(String& line) const
@@ -343,12 +343,18 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
 	tmp << (int)::random();
 	hl->setParam("branch",tmp);
     }
+    copyAllHeaders(message,"Route");
     copyHeader(message,"From");
     copyHeader(message,"To");
     copyHeader(message,"Call-ID");
     String tmp;
     tmp << message->getCSeq() << " " << method;
     addHeader("CSeq",tmp);
+    copyHeader(message,"Max-Forwards");
+    copyAllHeaders(message,"Contact");
+    copyAllHeaders(message,"Authorization");
+    copyAllHeaders(message,"Proxy-Authorization");
+    copyHeader(message,"User-Agent");
     m_valid = true;
 }
 
@@ -468,17 +474,17 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Allow",engine->getAllowed());
 }
 
-bool SIPMessage::copyHeader(const SIPMessage* message, const char* name)
+bool SIPMessage::copyHeader(const SIPMessage* message, const char* name, const char* newName)
 {
     const SIPHeaderLine* hl = message ? message->getHeader(name) : 0;
     if (hl) {
-	header.append(hl->clone());
+	header.append(hl->clone(newName));
 	return true;
     }
     return false;
 }
 
-int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
+int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name, const char* newName)
 {
     if (!(message && name && *name))
 	return 0;
@@ -488,7 +494,7 @@ int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name)
 	const SIPHeaderLine* hl = static_cast<const SIPHeaderLine*>(l->get());
 	if (hl && (hl->name() &= name)) {
 	    ++c;
-	    header.append(hl->clone());
+	    header.append(hl->clone(newName));
 	}
     }
     return c;

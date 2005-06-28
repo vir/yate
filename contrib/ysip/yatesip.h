@@ -180,10 +180,10 @@ class YSIP_API SIPHeaderLine : public NamedString
 {
 public:
     SIPHeaderLine(const char* name, const String& value, char sep = 0);
-    SIPHeaderLine(const SIPHeaderLine& original, const char* name = 0);
+    SIPHeaderLine(const SIPHeaderLine& original, const char* newName = 0);
     virtual ~SIPHeaderLine();
     virtual void* getObject(const String& name) const;
-    virtual SIPHeaderLine* clone() const;
+    virtual SIPHeaderLine* clone(const char* newName = 0) const;
     virtual void buildLine(String& line) const;
     inline const ObjList& params() const
 	{ return m_params; }
@@ -201,9 +201,9 @@ class YSIP_API SIPAuthLine : public SIPHeaderLine
 {
 public:
     SIPAuthLine(const char* name, const String& value);
-    SIPAuthLine(const SIPAuthLine& original);
+    SIPAuthLine(const SIPAuthLine& original, const char* newName = 0);
     virtual void* getObject(const String& name) const;
-    virtual SIPHeaderLine* clone() const;
+    virtual SIPHeaderLine* clone(const char* newName = 0) const;
     virtual void buildLine(String& line) const;
 };
 
@@ -260,17 +260,19 @@ public:
      * Copy an entire header line (including all parameters) from another message
      * @param message Pointer to the message to copy the header from
      * @param name Name of the header to copy
+     * @param newName New name to force in headers, NULL to just copy
      * @return True if the header was found and copied
      */
-    bool copyHeader(const SIPMessage* message, const char* name);
+    bool copyHeader(const SIPMessage* message, const char* name, const char* newName = 0);
 
     /**
      * Copy multiple header lines (including all parameters) from another message
      * @param message Pointer to the message to copy the header from
      * @param name Name of the headers to copy
+     * @param newName New name to force in headers, NULL to just copy
      * @return Number of headers found and copied
      */
-    int copyAllHeaders(const SIPMessage* message, const char* name);
+    int copyAllHeaders(const SIPMessage* message, const char* name, const char* newName = 0);
 
     /**
      * Get the endpoint this message uses

@@ -391,7 +391,8 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	    if (message->code >= 200) {
 		setTimeout();
 		if (isInvite()) {
-		    setLatestMessage(new SIPMessage(m_firstMessage,(message->code == 200)));
+		    // build the ACK
+		    setLatestMessage(new SIPMessage(m_firstMessage,message));
 		    m_lastMessage->deref();
 		    setTransmit();
 		    if (changeState(Retrans))

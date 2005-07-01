@@ -236,9 +236,9 @@ public:
     SIPMessage(const SIPMessage* message, int _code, const char* _reason = 0);
 
     /**
-     * Creates an ACK message from a response message.
+     * Creates an ACK message from an original message and a response.
      */
-    SIPMessage(const SIPMessage* message, bool newtran);
+    SIPMessage(const SIPMessage* original, const SIPMessage* answer);
 
     /**
      * Destroy the message and all

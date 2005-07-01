@@ -738,8 +738,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("called",uri.getUser());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(70)-1;
-    if (maxf >= 10)
-	maxf /= 10;
+//    if (maxf >= 10)
+//	maxf /= 10;
     tmp = maxf;
     m->addParam("antiloop",tmp);
     m->addParam("ip_addr",m_host);
@@ -800,7 +800,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",m_uri);
     plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"));
-    int maxf = msg.getIntValue("antiloop",9);
+    int maxf = msg.getIntValue("antiloop",70);
     m->addHeader("Max-Forwards",String(maxf));
     m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
     m_host = m->getParty()->getPartyAddr();
@@ -1077,7 +1077,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
     m_dialog = *ev->getTransaction()->recentMessage();
     const SIPMessage* msg = ev->getMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (msg->code >= 300)) {
-	    m_routes = msg->getRoutes();
 	if (m_retry && m_line
 	    && ((msg->code == 401) || (msg->code == 407))
 	    && plugin.validLine(m_line)) {
@@ -1140,6 +1139,12 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
     }
     if (msg->isAnswer() && ((msg->code / 100) == 2)) {
+	m_routes = msg->getRoutes();
+	const SIPMessage* ack = m_tr->latestMessage();
+	if (ack && ack->isACK()) {
+	    m_uri = ack->uri;
+	    m_uri.parse();
+	}
 	setStatus("answered",Established);
 	Message *m = message("call.answered");
 	if (m_rtpPort && m_rtpAddr && !startRtp()) {

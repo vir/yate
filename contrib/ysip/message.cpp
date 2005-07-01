@@ -316,20 +316,20 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
     m_valid = true;
 }
 
-SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
+SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
     : method("ACK"),
       body(0), m_ep(0), m_valid(false),
       m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {
-    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]",message,newtran,this);
-    if (!(message && message->isValid()))
+    DDebug(DebugAll,"SIPMessage::SIPMessage(%p,%p) [%p]",original,answer,this);
+    if (!(original && original->isValid()))
 	return;
-    m_ep = message->getParty();
+    m_ep = original->getParty();
     if (m_ep)
 	m_ep->ref();
-    version = message->version;
-    uri = message->uri;
-    copyAllHeaders(message,"Via");
+    version = original->version;
+    uri = original->uri;
+    copyAllHeaders(original,"Via");
     SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
@@ -338,23 +338,32 @@ SIPMessage::SIPMessage(const SIPMessage* message, bool newtran)
 	hl = new SIPHeaderLine("Via",tmp);
 	header.append(hl);
     }
-    if (newtran) {
+    if (answer && (answer->code == 200) && (original->method &= "INVITE")) {
 	String tmp("z9hG4bK");
 	tmp << (int)::random();
 	hl->setParam("branch",tmp);
+	const SIPHeaderLine* co = answer->getHeader("Contact");
+	if (co) {
+	    uri = *co;
+	    Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	    if (uri.matches(r))
+		uri = uri.matchString(1);
+	}
+	if (!original->getHeader("Route"))
+	    copyAllHeaders(answer,"Record-Route","Route");
     }
-    copyAllHeaders(message,"Route");
-    copyHeader(message,"From");
-    copyHeader(message,"To");
-    copyHeader(message,"Call-ID");
+    copyAllHeaders(original,"Route");
+    copyHeader(original,"From");
+    copyHeader(original,"To");
+    copyHeader(original,"Call-ID");
     String tmp;
-    tmp << message->getCSeq() << " " << method;
+    tmp << original->getCSeq() << " " << method;
     addHeader("CSeq",tmp);
-    copyHeader(message,"Max-Forwards");
-    copyAllHeaders(message,"Contact");
-    copyAllHeaders(message,"Authorization");
-    copyAllHeaders(message,"Proxy-Authorization");
-    copyHeader(message,"User-Agent");
+    copyHeader(original,"Max-Forwards");
+    copyAllHeaders(original,"Contact");
+    copyAllHeaders(original,"Authorization");
+    copyAllHeaders(original,"Proxy-Authorization");
+    copyHeader(original,"User-Agent");
     m_valid = true;
 }
 
@@ -392,8 +401,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	return;
     }
 
-    if (!user)
-	user = "anonymous";
+    const char* luser = user ? user : "anonymous";
     if (!domain)
 	domain = getParty()->getLocalAddr();
 
@@ -418,7 +426,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     hl = const_cast<SIPHeaderLine*>(getHeader("From"));
     if (!hl) {
 	String tmp;
-	tmp << "<sip:" << user << "@" << domain << ">";
+	tmp << "<sip:" << luser << "@" << domain << ">";
 	hl = new SIPHeaderLine("From",tmp);
 	header.append(hl);
     }
@@ -454,16 +462,19 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     }
 
     if (!getHeader("Contact")) {
-	String tmp;
-	if (isAnswer())
-	    tmp = *getHeader("To");
-	if (tmp.null()) {
-	    tmp << "<sip:" << user << "@" << getParty()->getLocalAddr();
-	    if (getParty()->getLocalPort() != 5060)
-		tmp << ":" << getParty()->getLocalPort();
-	    tmp << ">";
+	String tmp(user);
+	if (!tmp) {
+	    tmp = uri;
+	    Regexp r(":\\([^:@]*\\)@");
+	    tmp.matches(r);
+	    tmp = tmp.matchString(1);
 	}
-	addHeader("Contact",tmp);
+	if (tmp) {
+	    tmp = "<sip:" + tmp; 
+	    tmp << "@" << getParty()->getLocalAddr() ;
+	    tmp << ":" << getParty()->getLocalPort() << ">";
+	    addHeader("Contact",tmp);
+	}
     }
 
     const char* info = isAnswer() ? "Server" : "User-Agent";

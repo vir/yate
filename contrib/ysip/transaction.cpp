@@ -341,11 +341,12 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 		return false;
 	}
 	if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
-	    (getURI() != message->uri) ||
 	    (getCallID() != message->getHeaderValue("Call-ID")) ||
 	    (m_firstMessage->getHeaderValue("From") != message->getHeaderValue("From")) ||
 	    (m_firstMessage->getHeaderValue("To") != message->getHeaderValue("To")) ||
 	    (m_firstMessage->getHeaderValue("Via") != message->getHeaderValue("Via")))
+	    return false;
+	if (!message->isACK() && (getURI() != message->uri))
 	    return false;
 	if (message->isACK() && (getDialogTag() != message->getParamValue("To","tag")))
 	    return false;

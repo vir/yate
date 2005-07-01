@@ -461,7 +461,7 @@ int Engine::run()
     WSADATA wsaData;
     int errc = ::WSAStartup(MAKEWORD(2,2), &wsaData);
     if (errc) {
-	Debug(DebugFail,"Failed to initialize the Windows Sockets library, error code %d",errc);
+	Debug(DebugGoOn,"Failed to initialize the Windows Sockets library, error code %d",errc);
 	return errc & 127;
     }
 #endif
@@ -470,7 +470,7 @@ int Engine::run()
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();
-    Debug(DebugInfo,"plugins.count() = %d",plugins.count());
+    Debug(DebugAll,"Loaded %d plugins",plugins.count());
     if (s_super_handle >= 0) {
 	install(new EngineSuperHandler);
 	if (s_restarts)
@@ -484,7 +484,7 @@ int Engine::run()
     checkPoint();
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
-    Debug(DebugInfo,"Engine dispatching start message");
+    Debug(DebugAll,"Engine dispatching start message");
     dispatch("engine.start");
     setStatus(SERVICE_RUNNING);
     long corr = 0;
@@ -519,7 +519,7 @@ int Engine::run()
 
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
-	    Debug(DebugInfo,"Creating new message dispatching thread (%d running)",EnginePrivate::count);
+	    Debug(DebugMild,"Creating new message dispatching thread (%d running)",EnginePrivate::count);
 	    EnginePrivate *prv = new EnginePrivate;
 	    prv->startup();
 	}
@@ -571,7 +571,7 @@ int Engine::run()
     ::signal(SIGQUIT,SIG_DFL);
 #endif
     delete this;
-    Debug(DebugInfo,"Exiting with %d locked mutexes",Mutex::locks());
+    Debug(DebugAll,"Exiting with %d locked mutexes",Mutex::locks());
 #ifdef _WINDOWS
     ::WSACleanup();
 #endif

@@ -276,7 +276,7 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
 SIPMessage::SIPMessage(SIPParty* ep, const char* buf, int len)
     : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
-    Debug(DebugAll,"SIPMessage::SIPMessage(%p,%d) [%p]\n%s",
+    Debug(DebugInfo,"SIPMessage::SIPMessage(%p,%d) [%p]\n------\n%s------",
 	buf,len,this,buf);
     if (m_ep)
 	m_ep->ref();
@@ -742,7 +742,7 @@ const DataBlock& SIPMessage::getBuffer() const
 	    m_data += body->getBody();
 
 	String buf((char*)m_data.data(),m_data.length());
-	Debug(DebugAll,"SIPMessage::getBuffer() [%p]\n%s",
+	Debug(DebugInfo,"SIPMessage::getBuffer() [%p]\n------\n%s------",
 	    this,buf.c_str());
     }
     return m_data;

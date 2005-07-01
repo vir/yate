@@ -145,7 +145,7 @@ const FormatInfo* FormatRepository::addFormat(const String& name, int fsize, int
 	return f;
     }
     // not in list - add a new one to the installed formats
-    Debug(DebugInfo,"Registering '%s' format '%s' fsize=%d ftime=%d srate=%d nchan=%d",
+    DDebug(DebugInfo,"Registering '%s' format '%s' fsize=%d ftime=%d srate=%d nchan=%d",
 	type.c_str(),name.c_str(),fsize,ftime,srate,nchan);
     f = new FormatInfo(::strdup(name),fsize,ftime,::strdup(type),srate,nchan);
     flist* l = new flist;
@@ -196,7 +196,7 @@ void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
 
 bool DataSource::attach(DataConsumer* consumer)
 {
-    DDebug(DebugInfo,"DataSource [%p] attaching consumer [%p]",this,consumer);
+    DDebug(DebugAll,"DataSource [%p] attaching consumer [%p]",this,consumer);
     if (!consumer)
 	return false;
     Lock lock(m_mutex);
@@ -212,7 +212,7 @@ bool DataSource::detach(DataConsumer* consumer)
 {
     if (!consumer)
 	return false;
-    DDebug(DebugInfo,"DataSource [%p] detaching consumer [%p]",this,consumer);
+    DDebug(DebugAll,"DataSource [%p] detaching consumer [%p]",this,consumer);
     // keep the source locked to prevent races with the Forward method
     Lock lock(m_mutex);
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
@@ -242,14 +242,14 @@ DataEndpoint::DataEndpoint(CallEndpoint* call, const char* name)
       m_peer(0), m_call(call),
       m_peerRecord(0), m_callRecord(0)
 {
-    Debug(DebugInfo,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",call,name,this);
+    DDebug(DebugAll,"DataEndpoint::DataEndpoint(%p,'%s') [%p]",call,name,this);
     if (m_call)
 	m_call->m_data.append(this);
 }
 
 DataEndpoint::~DataEndpoint()
 {
-    Debug(DebugInfo,"DataEndpoint::~DataEndpoint() '%s' call=%p [%p]",
+    DDebug(DebugAll,"DataEndpoint::~DataEndpoint() '%s' call=%p [%p]",
 	m_name.c_str(),m_call,this);
     if (m_call)
 	m_call->m_data.remove(this,false);
@@ -613,7 +613,7 @@ int DataTranslator::cost(const DataFormat& sFormat, const DataFormat& dFormat)
 DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     if (sFormat == dFormat) {
-	Debug(DebugInfo,"Not creating identity DataTranslator for \"%s\"",sFormat.c_str());
+	DDebug(DebugAll,"Not creating identity DataTranslator for \"%s\"",sFormat.c_str());
 	return 0;
     }
 

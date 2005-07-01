@@ -60,7 +60,7 @@ bool CallEndpoint::connect(CallEndpoint* peer)
     }
     if (peer == m_peer)
 	return true;
-    DDebug(DebugInfo,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
+    DDebug(DebugAll,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
 
     ref();
     disconnect();
@@ -84,7 +84,7 @@ void CallEndpoint::disconnect(bool final, const char* reason)
 {
     if (!m_peer)
 	return;
-    DDebug(DebugInfo,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
+    DDebug(DebugAll,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
 
     CallEndpoint *temp = m_peer;
     m_peer = 0;
@@ -451,7 +451,7 @@ void Module::initialize()
 
 void Module::setup()
 {
-    Debug(this,DebugAll,"Module::setup()");
+    DDebug(this,DebugAll,"Module::setup()");
     if (m_init)
 	return;
     m_init = true;
@@ -834,7 +834,7 @@ void Router::run()
 
 bool Router::route()
 {
-    Debug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
+    DDebug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
 
     String tmp(m_msg->getValue("callto"));
     bool ok = tmp;
@@ -853,7 +853,7 @@ bool Router::route()
     m_driver->unlock();
 
     if (!chan) {
-	Debug(m_driver,DebugMild,"Connection '%s' vanished while routing!",m_id.c_str());
+	Debug(m_driver,DebugInfo,"Connection '%s' vanished while routing!",m_id.c_str());
 	return false;
     }
 

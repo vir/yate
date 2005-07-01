@@ -494,7 +494,7 @@ class String;
 public: virtual void* getObject(const String& name) const \
 { return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
 
-#define YOBJECT(type,pntr) ((pntr) ? static_cast<type*>((pntr)->getObject(#type)) : 0)
+#define YOBJECT(type,pntr) (static_cast<type*>((pntr) ? (pntr)->getObject(#type) : 0))
 
 /**
  * An object with just a public virtual destructor

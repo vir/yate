@@ -111,6 +111,7 @@ static void sighandler(int signal)
 String Engine::s_cfgpath(CFG_PATH);
 String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
+String Engine::s_extramod;
 String Engine::s_modsuffix(DLL_SUFFIX);
 
 Engine* Engine::s_self = 0;
@@ -622,15 +623,64 @@ bool Engine::loadPlugin(const char* file)
     return false;
 }
 
-void Engine::loadPlugins()
+bool Engine::loadPluginDir(const String& relPath)
 {
 #ifdef DEBUG
-    Debugger debug("Engine::loadPlugins()");
+    Debugger debug("Engine::loadPluginDir('%s')",path.c_str());
 #endif
     bool defload = s_cfg.getBoolValue("general","modload",true);
+    String path = s_modpath;
+    if (relPath) {
+	if (!path.endsWith(PATH_SEP))
+	    path += PATH_SEP;
+	path += relPath;
+    }
+    if (path.endsWith(PATH_SEP))
+	path = path.substr(0,path.length()-1);
+#ifdef _WINDOWS
+    WIN32_FIND_DATA entry;
+    HANDLE hf = ::FindFirstFile(path + PATH_SEP "*",&entry);
+    if (hf == INVALID_HANDLE_VALUE) {
+	Debug(DebugWarn,"Engine::loadPlugins() failed directory '%s'",path.safe());
+	return false;
+    }
+    do {
+	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
+	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
+	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
+	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
+		loadPlugin(path + PATH_SEP + entry.cFileName);
+	}
+    } while (::FindNextFile(hf,&entry));
+    ::FindClose(hf);
+#else
+    DIR *dir = ::opendir(path);
+    if (!dir) {
+	Debug(DebugWarn,"Engine::loadPlugins() failed directory '%s'",path.safe());
+	return false;
+    }
+    struct dirent *entry;
+    while ((entry = ::readdir(dir)) != 0) {
+	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
+	int n = ::strlen(entry->d_name) - s_modsuffix.length();
+	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
+	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
+		loadPlugin(path + PATH_SEP + entry->d_name);
+	}
+    }
+    ::closedir(dir);
+#endif
+    return true;
+}
+
+void Engine::loadPlugins()
+{
     const char *name = s_cfg.getValue("general","modpath");
     if (name)
 	s_modpath = name;
+    name = s_cfg.getValue("general","extrapath");
+    if (name)
+	s_extramod = name;
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
     s_restarts = s_cfg.getIntValue("general","restarts");
     NamedList *l = s_cfg.getSection("preload");
@@ -642,39 +692,9 @@ void Engine::loadPlugins()
                 loadPlugin(n->name());
 	}
     }
-#ifdef _WINDOWS
-    WIN32_FIND_DATA entry;
-    HANDLE hf = ::FindFirstFile(s_modpath + PATH_SEP "*",&entry);
-    if (hf == INVALID_HANDLE_VALUE) {
-	Debug(DebugFail,"Engine::loadPlugins() failed directory '%s'",s_modpath.safe());
-	return;
-    }
-    do {
-	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
-	int n = ::strlen(entry.cFileName) - s_modsuffix.length();
-	if ((n > 0) && !::strcmp(entry.cFileName+n,s_modsuffix)) {
-	    if (s_cfg.getBoolValue("modules",entry.cFileName,defload))
-		loadPlugin(s_modpath + PATH_SEP + entry.cFileName);
-	}
-    } while (::FindNextFile(hf,&entry));
-    ::FindClose(hf);
-#else
-    DIR *dir = ::opendir(s_modpath);
-    if (!dir) {
-	Debug(DebugFail,"Engine::loadPlugins() failed directory '%s'",s_modpath.safe());
-	return;
-    }
-    struct dirent *entry;
-    while ((entry = ::readdir(dir)) != 0) {
-	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
-	int n = ::strlen(entry->d_name) - s_modsuffix.length();
-	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
-	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
-		loadPlugin(s_modpath + PATH_SEP + entry->d_name);
-	}
-    }
-    ::closedir(dir);
-#endif
+    loadPluginDir(String::empty());
+    if (s_extramod)
+	loadPluginDir(s_extramod);
     l = s_cfg.getSection("postload");
     if (l) {
         unsigned int len = l->length();

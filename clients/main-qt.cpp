@@ -1,5 +1,5 @@
 /**
- * yate-qt.cpp
+ * main-qt.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * A Qt based universal telephony client

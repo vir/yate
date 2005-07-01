@@ -1,5 +1,5 @@
 /**
- * yate-gtk.cpp
+ * main-gtk.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * A Gtk based universal telephony client

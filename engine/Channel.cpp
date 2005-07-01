@@ -835,7 +835,13 @@ void Router::run()
 bool Router::route()
 {
     Debug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
-    bool ok = Engine::dispatch(m_msg) && !m_msg->retValue().null();
+
+    String tmp(m_msg->getValue("callto"));
+    bool ok = tmp;
+    if (ok)
+	m_msg->retValue() = tmp;
+    else
+	ok = Engine::dispatch(m_msg);
 
     m_driver->lock();
     Channel* chan = m_driver->find(m_id);

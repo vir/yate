@@ -660,6 +660,13 @@ public:
 	{ return s_modpath; }
 
     /**
+     * The relative extra module loading path. This is empty by default but
+     *  can be set by a main program to a value before calling @ref main()
+     */
+    inline static String& extraPath()
+	{ return s_extramod; }
+
+    /**
      * The module suffix
      */
     inline static String& moduleSuffix()
@@ -771,6 +778,13 @@ public:
     inline unsigned int handlerCount()
 	{ return m_dispatcher.handlerCount(); }
 
+    /**
+     * Loads the plugins from an extra plugins directory
+     * @param relPath Path to the extra directory, relative to the main modules
+     * @return True if the directory could at least be opened
+     */
+    bool loadPluginDir(const String& relPath);
+
 protected:
     /**
      * Destroys the engine and everything. You must not call it directly,
@@ -802,6 +816,7 @@ private:
     static String s_cfgpath;
     static String s_cfgsuffix;
     static String s_modpath;
+    static String s_extramod;
     static String s_modsuffix;
     static int s_haltcode;
 };

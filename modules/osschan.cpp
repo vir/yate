@@ -39,28 +39,23 @@
 #include <soundcard.h>
 #endif
 
-#define MIN_SWITCH_TIME 600
+// How long (in usec) before we force I/O direction change
+#define MIN_SWITCH_TIME 600000
 
 using namespace TelEngine;
 
-class OssChan;
-
-OssChan *s_chan = 0;
+class OssDevice;
 
 class OssSource : public ThreadedSource
 {
 public:
-    OssSource(OssChan *chan)
-	: m_chan(chan)
-    {
-	Debug(DebugAll,"OssSource::OssSource(%p) [%p]",chan,this);
-    }
-    bool init();
+    OssSource(OssDevice* dev);
     ~OssSource();
+    bool init();
     virtual void run();
     virtual void cleanup();
 private:
-    OssChan *m_chan;
+    OssDevice* m_device;
     unsigned m_brate;
     unsigned m_total;
 };
@@ -68,42 +63,55 @@ private:
 class OssConsumer : public DataConsumer
 {
 public:
-    OssConsumer(OssChan *chan)
-	: m_chan(chan)
-    {
-	Debug(DebugAll,"OssConsumer::OssConsumer(%p) [%p]",chan,this);
-    }
-    bool init();
+    OssConsumer(OssDevice* dev);
     ~OssConsumer();
+    bool init();
     virtual void Consume(const DataBlock &data, unsigned long timeDelta);
 private:
-    OssChan *m_chan;
+    OssDevice* m_device;
     unsigned m_total;
+};
+
+class OssDevice : public RefObject
+{
+public:
+    OssDevice(const String& dev);
+    ~OssDevice();
+    bool reOpen(int iomode);
+    bool setPcmFormat();
+    int setInputMode(bool force);
+    int setOutputMode(bool force);
+    bool timePassed(void);
+    inline int fd() const
+	{ return m_fd; }
+    inline bool closed() const
+	{ return m_fd < 0; }
+    inline bool fullDuplex() const
+	{ return m_fullDuplex; }
+private:    
+    String m_dev;
+    bool m_fullDuplex;
+    bool m_readMode;
+    int m_fd;
+    u_int64_t m_lastTime;
 };
 
 class OssChan : public CallEndpoint
 {
 public:
-    OssChan(String dev);
-    bool init();
+    OssChan(const String& dev);
     ~OssChan();
-    int setformat();
+    bool init();
     virtual void disconnected(bool final, const char *reason);
-    int soundcard_setinput(bool force);
-    int soundcard_setoutput(bool force);
-    int time_has_passed(void);
     void answer();
     inline void setTarget(const char* target = 0)
 	{ m_target = target; }
     inline const String& getTarget() const
 	{ return m_target; }
-    
+
+private:    
     String m_dev;
     String m_target;
-    int full_duplex;
-    int m_fd;
-    int readmode;
-    struct timeval lasttime;
 };
 
 class OssHandler : public MessageHandler
@@ -134,6 +142,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+class AttachHandler : public MessageHandler
+{
+public:
+    AttachHandler() : MessageHandler("chan.attach") { }
+    virtual bool received(Message &msg);
+};
+
 class OssPlugin : public Plugin
 {
 public:
@@ -144,11 +159,13 @@ private:
     OssHandler *m_handler;
 };
 
+OssChan *s_chan = 0;
+
 bool OssSource::init()
 {
     m_brate = 16000;
     m_total = 0;
-    if (m_chan->soundcard_setinput(false) < 0) {
+    if (m_device->setInputMode(false) < 0) {
 	Debug(DebugWarn, "Unable to set input mode\n");
 	return false;
     }
@@ -156,13 +173,18 @@ bool OssSource::init()
     return true;
 }
 
+OssSource::OssSource(OssDevice* dev)
+    : m_device(0)
+{
+    Debug(DebugAll,"OssSource::OssSource(%p) [%p]",dev,this);
+    dev->ref();
+    m_device = dev;
+}
+
 OssSource::~OssSource()
 {
     Debug(DebugAll,"OssSource::~OssSource() [%p] total=%u",this,m_total);
-    if (m_chan->m_fd >= 0) {
-	::close(m_chan->m_fd);
-	m_chan->m_fd = -1;
-    }
+    m_device->deref();
 }
 
 void OssSource::run()
@@ -170,13 +192,13 @@ void OssSource::run()
     int r = 0;
     u_int64_t tpos = Time::now();
     do {
-	if (m_chan->m_fd < 0) {
+	if (m_device->closed()) {
 	    Thread::yield();
 	    r = 1;
 	    continue;
 	}
 	DataBlock data(0,480);
-	r = ::read(m_chan->m_fd, data.data(), data.length());
+	r = ::read(m_device->fd(), data.data(), data.length());
 	if (r < 0) {
 	    if (errno == EINTR || errno == EAGAIN) {
 		Thread::yield();
@@ -185,10 +207,9 @@ void OssSource::run()
 	    }
 	    break;
 	}
-	else if (r == 0) 
-	{
+	else if (r == 0) {
 	    Thread::yield();
-	    r =1;
+	    r = 1;
 	    continue;
 	}
 	if (r < (int)data.length())
@@ -196,7 +217,7 @@ void OssSource::run()
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("OssSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(data,data.length()/2);
 	m_total += r;
@@ -208,54 +229,57 @@ void OssSource::run()
 void OssSource::cleanup()
 {
     Debug(DebugAll,"OssSource [%p] cleanup, total=%u",this,m_total);
-    m_chan->disconnect();
 }
 
 bool OssConsumer::init()
 {
     m_total = 0;
-    if (!m_chan->full_duplex) {
-		/* If we're half duplex, we have to switch to read mode
-		   to honor immediate needs if necessary */
-	if (m_chan->soundcard_setinput(true) < 0) {
-	    Debug(DebugWarn, "Unable to set device to input mode\n");
+    if (!m_device->fullDuplex()) {
+	/* If we're half duplex, we have to switch to read mode
+	   to honor immediate needs if necessary */
+	if (m_device->setInputMode(true) < 0) {
+	    Debug(DebugWarn, "Unable to set device to input mode");
 	    return false;
 	}
-    return true;
-    }
-    int res = m_chan->soundcard_setoutput(false);
-    if (res < 0) {
-	    Debug(DebugWarn, "Unable to set output device\n");
-	    return false;
-    } else if (res > 0) {
-		/* The device is still in read mode, and it's too soon to change it,
-		   so just pretend we wrote it */
 	return true;
     }
-    
+    int res = m_device->setOutputMode(false);
+    if (res < 0) {
+	Debug(DebugWarn, "Unable to set output device");
+	return false;
+    } else if (res > 0) {
+	/* The device is still in read mode, and it's too soon to change it,
+	   so just pretend we wrote it */
+	return true;
+    }
     return true;
+}
+
+OssConsumer::OssConsumer(OssDevice* dev)
+    : m_device(0)
+{
+    Debug(DebugAll,"OssConsumer::OssConsumer(%p) [%p]",dev,this);
+    dev->ref();
+    m_device = dev;
 }
 
 OssConsumer::~OssConsumer()
 {
     Debug(DebugAll,"OssConsumer::~OssConsumer() [%p] total=%u",this,m_total);
-    if (m_chan->m_fd >= 0) {
-	::close(m_chan->m_fd);
-	m_chan->m_fd = -1;
-    }
+    m_device->deref();
 }
 
 void OssConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
-    if ((m_chan->m_fd >= 0) && !data.null()) {
-	::write(m_chan->m_fd,data.data(),data.length());
-	m_total += data.length();
-    }
+    if (m_device->closed() || data.null())
+	return;
+    ::write(m_device->fd(),data.data(),data.length());
+    m_total += data.length();
 }
 
-OssChan::OssChan(String dev)
+OssChan::OssChan(const String& dev)
     : CallEndpoint("oss"),
-      m_dev(dev),full_duplex(0), m_fd(-1), readmode(1) 
+      m_dev(dev)
 {
     Debug(DebugAll,"OssChan::OssChan dev [%s] [%p]",dev.c_str(),this);
     s_chan = this;
@@ -265,131 +289,144 @@ OssChan::~OssChan()
 {
     Debug(DebugAll,"OssChan::~OssChan() [%p]",this);
     setTarget();
+    setSource();
+    setConsumer();
     s_chan = 0;
 }
 
 bool OssChan::init()
 {
-    m_fd = ::open(m_dev,  O_RDWR | O_NONBLOCK);
-    if (m_fd < 0) {
-	Debug(DebugWarn, "Unable to open %s: %s\n", m_dev.c_str(), strerror(errno));
+    OssDevice* dev = new OssDevice(m_dev);
+    if (dev->closed()) {
+	dev->deref();
 	return false;
     }
-    gettimeofday(&lasttime, NULL);
-    setformat();
-    if (!full_duplex)
-	soundcard_setinput(true);
-	    
-    OssSource *source = new OssSource(this);
-    if (!source->init())
-    {
-	delete source;
+    OssSource* source = new OssSource(dev);
+    dev->deref();
+    if (!source->init()) {
+	source->deref();
 	return false;		
     }
     setSource(source);
     source->deref();
-    OssConsumer *cons = new OssConsumer(this);
-    if (!cons->init())
-    {
-	delete cons;
+    OssConsumer* cons = new OssConsumer(dev);
+    if (!cons->init()) {
+	cons->deref();
+	setSource();
 	return false;		
     }	
     setConsumer(cons);
     cons->deref();
     return true;
 }
-int OssChan::time_has_passed(void)
+
+OssDevice::OssDevice(const String& dev)
+    : m_dev(dev), m_fullDuplex(false), m_readMode(true), m_fd(-1)
 {
-    struct timeval tv;
-    int ms;
-    gettimeofday(&tv, NULL);
-    ms = (tv.tv_sec - lasttime.tv_sec) * 1000 +
-	(tv.tv_usec - lasttime.tv_usec) / 1000;
-    if (ms > MIN_SWITCH_TIME)
-	return -1;
-    return 0;
+    Debug(DebugAll,"OssDevice::OssDevice('%s') [%p]",dev.c_str(),this);
+    m_fd = ::open(m_dev, O_RDWR|O_NONBLOCK);
+    if (m_fd < 0) {
+	Debug(DebugWarn, "Unable to open %s: %s\n", m_dev.c_str(), ::strerror(errno));
+	return;
+    }
+    m_lastTime = Time::now() + MIN_SWITCH_TIME;
+    setPcmFormat();
+    if (!m_fullDuplex)
+	setInputMode(true);
 }
 
-int OssChan::setformat()
+OssDevice::~OssDevice()
+{
+    Debug(DebugAll,"OssDevice::~OssDevice [%p]",this);
+    if (m_fd >= 0) {
+	::close(m_fd);
+	m_fd = -1;
+    }
+}
+
+// Check if we should force a mode change
+bool OssDevice::timePassed(void)
+{
+    return Time::now() > m_lastTime;
+}
+
+bool OssDevice::setPcmFormat()
 {
     int fmt = AFMT_S16_LE;
     int res = ::ioctl(m_fd, SNDCTL_DSP_SETFMT, &fmt);
     if (res < 0) {
-	Debug(DebugWarn, "Unable to set format to 16-bit signed\n");
-	return -1;
+	Debug(DebugWarn, "Unable to set format to 16-bit signed");
+	return false;
     }
     res = ::ioctl(m_fd, SNDCTL_DSP_SETDUPLEX, 0);
     if (res >= 0) {
-	Debug(DebugInfo,"OSS audio device is full duplex\n");
-	full_duplex = -1;
+	Debug(DebugInfo,"OSS audio device is full duplex");
+	m_fullDuplex = true;
     }
     fmt = 0;
     res = ::ioctl(m_fd, SNDCTL_DSP_STEREO, &fmt);
     if (res < 0) {
-	Debug(DebugWarn, "Failed to set audio device to mono\n");
-	return -1;
+	Debug(DebugWarn, "Failed to set audio device to mono");
+	return false;
     }
     int desired = 8000;
     fmt = desired;
     res = ::ioctl(m_fd, SNDCTL_DSP_SPEED, &fmt);
     if (res < 0) {
-	Debug(DebugWarn, "Failed to set audio device speed\n");
-	return -1;
+	Debug(DebugWarn, "Failed to set audio device speed");
+	return false;
     }
     if (fmt != desired)
-	Debug(DebugWarn, "Requested %d Hz, got %d Hz -- sound may be choppy\n", desired, fmt);
+	Debug(DebugWarn, "Requested %d Hz, got %d Hz - sound may be choppy", desired, fmt);
     fmt = (2 << 16) | 8;
     res = ::ioctl(m_fd, SNDCTL_DSP_SETFRAGMENT, &fmt);
     if (res < 0)
-	Debug(DebugWarn, "Unable to set fragment size -- sound may be choppy\n");
-    return 0;
+	Debug(DebugWarn, "Unable to set fragment size - sound may be choppy");
+    return true;
 }
 
-int OssChan::soundcard_setinput(bool force)
+// Close and reopen the DSP device in a new mode
+bool OssDevice::reOpen(int iomode)
 {
-    if (full_duplex || (readmode && !force))
-		return 0;
-	readmode = -1;
-	if (force || time_has_passed()) {
-		ioctl(m_fd, SNDCTL_DSP_RESET);
-		close(m_fd);
-		/* dup2(0, sound); */
-		m_fd = open(m_dev.c_str(), O_RDONLY | O_NONBLOCK);
-		if (m_fd < 0) {
-			Debug(DebugWarn, "Unable to re-open DSP device: %s\n", ::strerror(errno));
-			return -1;
-		}
-		if (setformat()) {
-			return -1;
-		}
-		return 0;
-	}
-	return 1;
+    int fdesc = m_fd;
+    m_fd = -1;
+    ::ioctl(fdesc, SNDCTL_DSP_RESET);
+    ::close(fdesc);
+    fdesc = ::open(m_dev.c_str(), iomode | O_NONBLOCK);
+    if (fdesc < 0) {
+	Debug(DebugWarn, "Unable to re-open DSP device: %s\n", ::strerror(errno));
+	return false;
+    }
+    m_fd = fdesc;
+    return true;
 }
 
-int OssChan::soundcard_setoutput(bool force)
+// Make sure at least input mode is available
+int OssDevice::setInputMode(bool force)
 {
-	/* Make sure the soundcard is in output mode.  */
-	if (full_duplex || (!readmode && !force))
-		return 0;
-	readmode = 0;
-	if (force || time_has_passed()) {
-		::ioctl(m_fd, SNDCTL_DSP_RESET);
-		/* Keep the same fd reserved by closing the sound device and copying stdin at the same
-		   time. */
-		/* dup2(0, sound); */ 
-		::close(m_fd);
-		m_fd = open(m_dev.c_str(), O_WRONLY |O_NONBLOCK);
-		if (m_fd < 0) {
-			Debug(DebugWarn, "Unable to re-open DSP device: %s\n", strerror(errno));
-			return -1;
-		}
-		if (setformat()) {
-			return -1;
-		}
-		return 0;
-	}
-	return 1;
+    if (m_fullDuplex || (m_readMode && !force))
+	return 0;
+    m_readMode = true;
+    if (force || timePassed()) {
+	if (reOpen(O_RDONLY) && setPcmFormat())
+	    return 0;
+	return -1;
+    }
+    return 1;
+}
+
+// Make sure at least output mode is available
+int OssDevice::setOutputMode(bool force)
+{
+    if (m_fullDuplex || (!m_readMode && !force))
+	return 0;
+    m_readMode = false;
+    if (force || timePassed()) {
+	if (reOpen(O_WRONLY) && setPcmFormat())
+	    return 0;
+	return -1;
+    }
+    return 1;
 }
 
 void OssChan::disconnected(bool final, const char *reason)
@@ -401,7 +438,7 @@ void OssChan::disconnected(bool final, const char *reason)
 void OssChan::answer()
 {
     Message* m = new Message("call.answered");
-    m->addParam("driver","oss");
+    m->addParam("module","oss");
     String tmp("oss/");
     tmp += m_dev;
     m->addParam("id",tmp);
@@ -418,8 +455,10 @@ bool OssHandler::received(Message &msg)
     Regexp r("^oss/\\(.*\\)$");
     if (!dest.matches(r))
 	return false;
-    if (s_chan)
+    if (s_chan) {
+	msg.setParam("error","busy");
 	return false;
+    }
     OssChan *chan = new OssChan(dest.matchString(1).c_str());
     if (!chan->init())
     {
@@ -497,7 +536,6 @@ bool StatusHandler::received(Message &msg)
     return false;
 }
 
-
 bool DropHandler::received(Message &msg)
 {
     String id(msg.getValue("id"));
@@ -525,6 +563,70 @@ bool MasqHandler::received(Message &msg)
     return false;
 }
 
+bool AttachHandler::received(Message &msg)
+{
+    int more = 2;
+    String src(msg.getValue("source"));
+    if (src.null())
+	more--;
+    else {
+	if (!src.startSkip("oss/",false))
+	    src = "";
+    }
+
+    String cons(msg.getValue("consumer"));
+    if (cons.null())
+	more--;
+    else {
+	if (!cons.startSkip("oss/",false))
+	    cons = "";
+    }
+
+    if (src.null() && cons.null())
+	return false;
+
+    if (src && cons && (src != cons)) {
+	Debug(DebugWarn,"OSS asked to attach source '%s' and consumer '%s'",src.c_str(),cons.c_str());
+	return false;
+    }
+
+    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    if (!dd) {
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	if (ch)
+	    dd = ch->setEndpoint();
+    }
+    if (!dd) {
+	Debug(DebugWarn,"OSS attach request with no control or data channel!");
+	return false;
+    }
+
+    OssDevice* dev = new OssDevice(src ? src : cons);
+    if (dev->closed()) {
+	dev->deref();
+	return false;
+    }
+
+    if (src) {
+	OssSource* s = new OssSource(dev);
+	if (s->init())
+	    dd->setSource(s);
+	s->deref();
+    }
+
+    if (cons) {
+	OssConsumer* c = new OssConsumer(dev);
+	if (c->init())
+	    dd->setConsumer(c);
+	c->deref();
+    }
+
+    dev->deref();
+
+    // Stop dispatching if we handled all requested
+    return !more;
+}
+
 OssPlugin::OssPlugin()
     : m_handler(0)
 {
@@ -540,6 +642,7 @@ void OssPlugin::initialize()
 	Engine::install(new MasqHandler("chan.masquerade",10));
 	Engine::install(m_handler);
 	Engine::install(new StatusHandler);
+	Engine::install(new AttachHandler);
     }
 }
 

@@ -300,20 +300,27 @@ bool AttachHandler::received(Message &msg)
     if (!src.matches(r))
 	return false;
     src = src.matchString(1);
-    CallEndpoint *ch = static_cast<CallEndpoint *>(msg.userData());
-    if (ch) {
+
+    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    if (!de) {
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	if (ch)
+	    de = ch->setEndpoint();
+    }
+
+    if (de) {
 	Lock lock(__plugin);
 	ToneSource *t = ToneSource::getTone(src);
 	if (t) {
-	    ch->setSource(t);
+	    de->setSource(t);
 	    t->deref();
 	    // Let the message flow if it wants to attach a consumer too
 	    return !msg.getValue("consumer");
 	}
-	Debug(DebugWarn,"No source tone '%s' could be attached to [%p]",src.c_str(),ch);
+	Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),de);
     }
     else
-	Debug(DebugWarn,"Tone '%s' attach request with no data channel!",src.c_str());
+	Debug(DebugWarn,"Tone '%s' attach request with no control or data channel!",src.c_str());
     return false;
 }
 

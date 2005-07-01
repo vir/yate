@@ -271,6 +271,7 @@ private:
 static SIPDriver plugin;
 static ObjList s_lines;
 static Configuration s_cfg;
+static int s_maxForwards = 20;
 
 static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats, const char* media = "audio")
 {
@@ -737,10 +738,10 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
-    int maxf = tmp.toInteger(70)-1;
-//    if (maxf >= 10)
-//	maxf /= 10;
-    tmp = maxf;
+    int maxf = tmp.toInteger(s_maxForwards);
+    if (maxf > s_maxForwards)
+	maxf = s_maxForwards;
+    tmp = maxf-1;
     m->addParam("antiloop",tmp);
     m->addParam("ip_addr",m_host);
     m->addParam("ip_port",String(m_port));
@@ -800,7 +801,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",m_uri);
     plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"));
-    int maxf = msg.getIntValue("antiloop",70);
+    if (!m->getParty()) {
+	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",m_uri.c_str(),this);
+	m->destruct();
+	return;
+    }
+    int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
     m_host = m->getParty()->getPartyAddr();
@@ -1614,6 +1620,7 @@ void SIPDriver::initialize()
     Output("Initializing module SIP Channel");
     s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
+    s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

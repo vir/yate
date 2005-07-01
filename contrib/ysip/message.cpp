@@ -386,12 +386,17 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!engine)
 	return;
 
-    if (isOutgoing() && !getParty())
-	engine->buildParty(this);
-
     // don't complete incoming messages
     if (!isOutgoing())
 	return;
+
+    if (!getParty()) {
+	engine->buildParty(this);
+	if (!getParty()) {
+	    Debug(DebugGoOn,"Could not complete party-less SIP message [%p]",this);
+	    return;
+	}
+    }
 
     // only set the dialog tag on ACK
     if (isACK()) {

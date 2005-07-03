@@ -837,7 +837,7 @@ bool Router::route()
     DDebug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
 
     String tmp(m_msg->getValue("callto"));
-    bool ok = tmp;
+    bool ok = !tmp.null();
     if (ok)
 	m_msg->retValue() = tmp;
     else

@@ -626,7 +626,7 @@ bool Engine::loadPlugin(const char* file)
 bool Engine::loadPluginDir(const String& relPath)
 {
 #ifdef DEBUG
-    Debugger debug("Engine::loadPluginDir('%s')",path.c_str());
+    Debugger debug("Engine::loadPluginDir('%s')",relPath.c_str());
 #endif
     bool defload = s_cfg.getBoolValue("general","modload",true);
     String path = s_modpath;

@@ -500,7 +500,7 @@ bool YateSIPEndPoint::Init()
 
     m_sock = new Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (!m_sock->valid()) {
-	Debug(DebugGoOn,"Unable to allocate UDP socket\n");
+	Debug(DebugGoOn,"Unable to allocate UDP socket");
 	return false;
     }
     
@@ -525,7 +525,7 @@ bool YateSIPEndPoint::Init()
 	Debug(DebugGoOn,"Unable to set non-blocking mode");
 	return false;
     }
-    Debug(DebugInfo,"SIP Started on %s:%d\n", addr.host().safe(), addr.port());
+    Debug(DebugInfo,"SIP Started on %s:%d", addr.host().safe(), addr.port());
     m_port = addr.port();
     m_engine = new YateSIPEngine(this);
     return true;
@@ -550,7 +550,7 @@ void YateSIPEndPoint::run()
 	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,addr);
 	    if (res <= 0) {
 		if (!m_sock->canRetry()) {
-		    Debug(DebugGoOn,"SIP error on read: %d\n", m_sock->error());
+		    Debug(DebugGoOn,"SIP error on read: %d", m_sock->error());
 		}
 	    } else if (res >= 72) {
 		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d",
@@ -929,6 +929,11 @@ void YateSIPConnection::hangup()
 	hl = new SIPHeaderLine("To",tmp);
 	hl->setParam("tag",m_dialog.remoteTag);
 	m->addHeader(hl);
+	if (m_reason) {
+	    hl = new SIPHeaderLine("Reason","SIP");
+	    tmp = "\"" + m_reason + "\"";
+	    hl->setParam("text",tmp);
+	}
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }
@@ -1248,6 +1253,13 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
+    const SIPHeaderLine* hl = t->initialMessage()->getHeader("Reason");
+    if (hl) {
+	const NamedString* text = hl->getParam("text");
+	if (text)
+	    m_reason = *text;
+	// FIXME: add SIP and Q.850 cause codes
+    }
     t->setResponse(200);
     m_byebye = false;
     hangup();

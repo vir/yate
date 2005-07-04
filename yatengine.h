@@ -673,9 +673,14 @@ public:
 	{ return s_modsuffix; }
 
     /**
+     * The operating system specific path element separator
+     */
+    static const char* pathSeparator();
+
+    /**
      * The global configuration of the engine.
      * You must use this resource with caution.
-     * Note that sections [general] [modules] [preload] and [postload] are
+     * Note that sections [general], [modules], [preload] and [postload] are
      *  reserved by the engine. Also [telephony] is reserved by the drivers.
      * @return A reference to the read-only engine configuration
      */

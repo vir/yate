@@ -586,6 +586,11 @@ Engine* Engine::self()
     return s_self;
 }
 
+const char* Engine::pathSeparator()
+{
+    return PATH_SEP;
+}
+
 String Engine::configFile(const char* name)
 {
     return s_cfgpath + PATH_SEP + name + s_cfgsuffix;

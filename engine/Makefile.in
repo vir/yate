@@ -18,14 +18,16 @@ MKDEPS := ../config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
 CINC := @top_srcdir@/yateclass.h
 EINC := $(CINC) @top_srcdir@/yatengine.h
-PINC := $(PINC) @top_srcdir@/yatephone.h
+PINC := $(EINC) @top_srcdir@/yatephone.h
+CLINC:= $(PINC) @top_srcdir@/yatecbase.h
 LIBS :=
 CLSOBJS := TelEngine.o ObjList.o String.o DataBlock.o NamedList.o YMD5.o \
 	Mutex.o Thread.o Socket.o
 ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
 TELOBJS := DataFormat.o Channel.o
+CLIOBJS := Client.o
 
-LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS)
+LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS) $(CLIOBJS)
 CLEANS = $(LIBOBJS) core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
@@ -67,6 +69,9 @@ Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 
 Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ -c $<
+
+Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
+	$(COMPILE) -c $<
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)
 	$(COMPILE) -c $<

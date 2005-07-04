@@ -1,0 +1,37 @@
+pixmap_path "/usr/src/yate09-gtk2/clients"
+
+style "tux" {
+    bg_pixmap[NORMAL] = "tux.xpm"
+}
+
+style "brown" {
+    bg[NORMAL] = { 0.80, 0.75, 0.25 }
+}
+
+style "red" {
+    bg[NORMAL] = { 1.0, 0.5, 0.5 }
+}
+
+style "green" {
+    bg[NORMAL] = { 0.5, 1.0, 0.5 }
+}
+
+style "blue" {
+    bg[NORMAL] = { 0.5, 0.5, 1.0 }
+    GtkButton::default_border = { 5, 0, 5, 0 }
+}
+
+style "sky" {
+    bg[NORMAL] = { 0.85, 0.85, 1.0 }
+}
+
+widget_class "default" style "tux"
+#class "GtkWindow" style "brown"
+#widget "default" style "brown"
+widget "browser" style "sky"
+widget "*.call" style "green"
+widget "*.accept" style "green"
+widget "*.reject" style "red"
+widget "*.hangup" style "red"
+widget "*.caption" style "sky"
+widget "*.decoration" style "blue"

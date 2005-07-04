@@ -1,0 +1,1000 @@
+/**
+ * gtk2client.cpp
+ * This file is part of the YATE Project http://YATE.null.ro
+ *
+ * A Gtk based universal telephony client
+ *
+ * Yet Another Telephony Engine - a fully featured software PBX and IVR
+ * Copyright (C) 2004, 2005 Null Team
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+
+#include "gtk2client.h"
+
+using namespace TelEngine;
+
+static int s_shown = 0;
+static GtkWidget* s_moving = 0;
+static Configuration s_cfg;
+static Configuration s_save;
+static ObjList s_factories;
+
+#define INVALID_POS (-1000000)
+#define MAX_CONTAINER_DEPTH 20
+
+// Internal class used to recursively find a widget
+class WidgetFinder {
+public:
+    inline WidgetFinder(const String& name)
+	: m_name(name), m_widget(0)
+	{ }
+    GtkWidget* find(GtkContainer* container);
+private:
+    static void findCb(GtkWidget* wid, gpointer dat);
+    const String& m_name;
+    GtkWidget* m_widget;
+};
+
+void WidgetFinder::findCb(GtkWidget* wid, gpointer dat)
+{
+    WidgetFinder* f = static_cast<WidgetFinder*>(dat);
+    if ((!f) || f->m_widget)
+	return;
+    const gchar* name = gtk_widget_get_name(wid);
+    if (f->m_name == name) {
+	f->m_widget = wid;
+	return;
+    }
+    if GTK_IS_CONTAINER(wid)
+	gtk_container_foreach(GTK_CONTAINER(wid),findCb,dat);
+}
+
+GtkWidget* WidgetFinder::find(GtkContainer* container)
+{
+    gtk_container_foreach(container,findCb,this);
+    return m_widget;
+}
+
+bool Widget::setText(const String& text)
+    { return GTKWindow::setText(m_widget,text); }
+bool Widget::setCheck(bool checked)
+    { return GTKWindow::setCheck(m_widget,checked); }
+bool Widget::setSelect(const String& item)
+    { return GTKWindow::setSelect(m_widget,item); }
+bool Widget::addOption(const String& item, bool atStart)
+    { return GTKWindow::addOption(m_widget,item,atStart); }
+bool Widget::delOption(const String& item)
+    { return GTKWindow::delOption(m_widget,item); }
+bool Widget::getText(String& text)
+    { return GTKWindow::getText(m_widget,text); }
+bool Widget::getCheck(bool& checked)
+    { return GTKWindow::getCheck(m_widget,checked); }
+
+typedef GtkWidget* (*GBuilder) (const gchar *label);
+
+// Internal class used to build widgets
+class WidgetMaker
+{
+public:
+    const char* name;
+    GBuilder builder;
+    const gchar* sig;
+    GCallback cb;
+};
+
+static Widget* getWidget(GtkWidget* wid)
+{
+    if (!wid)
+	return 0;
+    return static_cast<Widget*>(g_object_get_data((GObject*)wid,"Yate::Widget"));
+}
+
+static GTKWindow* getWidgetWindow(GtkWidget* wid)
+{
+    if (!wid)
+	return 0;
+    GtkWidget* top = gtk_widget_get_toplevel(wid);
+    if (!top)
+	return 0;
+    return static_cast<GTKWindow*>(g_object_get_data((GObject*)top,"Yate::Window"));
+}
+
+static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbAction data %p",dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow(wid);
+    return wnd && wnd->action(wid);
+}
+
+static gboolean widgetCbToggle(GtkToggleButton* btn, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbToggle data %p",dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow((GtkWidget*)btn);
+    return wnd && wnd->toggle(btn,gtk_toggle_button_get_active(btn));
+}
+
+static gboolean widgetCbSelected(GtkOptionMenu* opt, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbChanged data %p",dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow((GtkWidget*)opt);
+    return wnd && wnd->select(opt,gtk_option_menu_get_history(opt));
+}
+
+static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbMinimize data %p",dat);
+    GtkWidget* top = gtk_widget_get_toplevel(wid);
+    if (!top)
+	return FALSE;
+    gtk_window_iconify((GtkWindow*)top);
+    return TRUE;
+}
+
+static gboolean widgetCbMaximize(GtkWidget* wid, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbMaximize data %p",dat);
+    GtkWidget* top = gtk_widget_get_toplevel(wid);
+    if (!top)
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow(wid);
+    if (wnd && (wnd->state() & GDK_WINDOW_STATE_MAXIMIZED))
+	gtk_window_unmaximize((GtkWindow*)top);
+    else
+	gtk_window_maximize((GtkWindow*)top);
+    return TRUE;
+}
+
+static gboolean widgetCbHide(GtkWidget* wid, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbHide data %p",dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow(wid);
+    if (wnd) {
+	wnd->hide();
+	return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean widgetCbShow(GtkWidget* wid, gpointer dat)
+{
+    const gchar* name = gtk_widget_get_name(wid);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbShow '%s'",name);
+    return GTKClient::setVisible(name);
+}
+
+static GtkWidget* gtkLeftLabelNew(const gchar* text)
+{
+    GtkWidget* lbl = gtk_label_new(text);
+    if (lbl)
+	gtk_misc_set_alignment((GtkMisc*)lbl,0,0);
+    return lbl;
+}
+
+static GtkWidget* gtkEntryNewWithText(const gchar* text)
+{
+    GtkWidget* ent = gtk_entry_new();
+    if (text)
+	gtk_entry_set_text((GtkEntry*)ent,text);
+    return ent;
+}
+
+static GtkWidget* gtkComboNewWithText(const gchar* text)
+{
+    GtkWidget* combo = gtk_combo_new();
+    if (combo) {
+	GtkWidget* ent = GTK_COMBO(combo)->entry;
+	if (ent)
+	    gtk_entry_set_text((GtkEntry*)ent,text);
+    }
+    return combo;
+}
+
+static GtkWidget* gtkOptionMenuNew(const gchar* text)
+{
+    GtkWidget* opt = gtk_option_menu_new();
+    if (opt) {
+	GtkWidget* mnu = gtk_menu_new();
+	if (mnu) {
+	    String tmp(text);
+	    ObjList* l = tmp.split(',');
+	    for (ObjList* i = l; i; i = i->next()) {
+		String* s = static_cast<String*>(i->get());
+		if (s && *s) {
+		    GtkWidget* item = gtk_menu_item_new_with_label(s->c_str());
+		    gtk_menu_shell_append(GTK_MENU_SHELL(mnu),item);
+		}
+	    }
+	    if (l)
+		l->destruct();
+	    gtk_option_menu_set_menu(GTK_OPTION_MENU(opt),mnu);
+	}
+    }
+    return opt;
+}
+
+static WidgetMaker s_widgetMakers[] = {
+    { "label", gtkLeftLabelNew, 0, 0 },
+    { "editor", gtkEntryNewWithText, "activate", G_CALLBACK(widgetCbAction) },
+    { "button", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbAction) },
+    { "toggle", gtk_toggle_button_new_with_label, "toggled", G_CALLBACK(widgetCbToggle) },
+    { "check", gtk_check_button_new_with_label, "toggled", G_CALLBACK(widgetCbToggle) },
+    { "combo", gtkComboNewWithText, 0, 0 },
+    { "option", gtkOptionMenuNew, "changed", G_CALLBACK(widgetCbSelected) },
+    { "frame", gtk_frame_new, 0, 0 },
+    { "image", gtk_image_new_from_file, 0, 0 },
+    { "hseparator", (GBuilder)gtk_hseparator_new, 0, 0 },
+    { "vseparator", (GBuilder)gtk_vseparator_new, 0, 0 },
+    { "button_show", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbShow) },
+    { "button_icon", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbMinimize) },
+    { "button_hide", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbHide) },
+    { "button_max", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbMaximize) },
+    { 0, 0, 0, 0 },
+};
+//    { "", gtk__new, "", },
+
+static gboolean windowCbState(GtkWidget* wid, GdkEventWindowState* evt, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"windowCbState data %p",dat);
+    GTKWindow* wnd = static_cast<GTKWindow*>(dat);
+    if (wnd && evt)
+	wnd->state(evt->new_window_state);
+    return FALSE;
+}
+
+static gboolean windowCbConfig(GtkWidget* wid, GdkEventConfigure* evt, gpointer dat)
+{
+    XDebug(GTKDriver::self(),DebugAll,"windowCbConfig data %p",dat);
+    if (wid != s_moving)
+	return FALSE;
+    GTKWindow* wnd = static_cast<GTKWindow*>(dat);
+    if (wnd)
+	wnd->geometry(evt->x,evt->y,evt->width,evt->height);
+    return FALSE;
+}
+
+static gboolean windowCbClose(GtkWidget* wid, GdkEvent* evt, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"windowCbClose event %d data %p",evt->type,dat);
+    GTKWindow* wnd = static_cast<GTKWindow*>(dat);
+    if (wnd) {
+	wnd->hide();
+	return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean windowCbInfo(GtkWidget* wid)
+{
+    gchar* wp = NULL;
+    gchar* wcp = NULL;
+    gtk_widget_path(wid,NULL,&wp,NULL);
+    gtk_widget_class_path(wid,NULL,&wcp,NULL);
+    Debug(GTKDriver::self(),DebugAll,"windowCbInfo widget %p path '%s' class path '%s'",
+	wid,wp,wcp);
+    delete wp;
+    delete wcp;
+    return FALSE;
+}
+
+static gboolean windowCbClick(GtkWidget* wid, GdkEventButton* evt, gpointer dat)
+{
+    DDebug(GTKDriver::self(),DebugAll,"windowCbClick event %d data %p",evt->type,dat);
+    GTKWindow* wnd = static_cast<GTKWindow*>(dat);
+    if (evt->type != GDK_BUTTON_PRESS)
+	return FALSE;
+    if (wnd && (evt->button == 3)) {
+	wnd->menu((int)evt->x_root,(int)evt->y_root);
+	return TRUE;
+    }
+    if (evt->button != 1)
+	return FALSE;
+    GtkWidget* top = gtk_widget_get_toplevel(wid);
+    if (top) {
+	s_moving = top;
+	if (wnd)
+	    wnd->prepare();
+	gtk_window_begin_move_drag((GtkWindow*)top,evt->button,(int)evt->x_root,(int)evt->y_root,evt->time);
+	return TRUE;
+    }
+    return FALSE;
+}
+
+#ifdef XDEBUG
+static gboolean windowCbEvent(GtkWidget* wid, GdkEvent* evt, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"windowCbEvent widget %p event %d data %p",wid,evt->type,dat);
+    return FALSE;
+}
+#endif
+
+static TokenDict s_layoutNames[] = {
+    { "fixed", GTKWindow::Fixed },
+    { "table", GTKWindow::Table },
+    { "infinite", GTKWindow::Infinite },
+    { "hbox", GTKWindow::HBox },
+    { "vbox", GTKWindow::VBox },
+    { "boxed", GTKWindow::Boxed },
+    { "tabbed", GTKWindow::Tabbed },
+    { "framed", GTKWindow::Framed },
+    { 0, 0 },
+};
+
+Widget::Widget()
+    : m_widget(0)
+{
+    Debug(GTKDriver::self(),DebugAll,"Widget::Widget() [%p]",this);
+}
+
+Widget::~Widget()
+{
+    Debug(GTKDriver::self(),DebugAll,"Widget::~Widget() [%p]",this);
+    widget(0);
+}
+
+void Widget::widget(GtkWidget* wid)
+{
+    if (wid == m_widget)
+	return;
+    if (m_widget) {
+	g_object_set_data((GObject*)m_widget,"Yate::Widget",0);
+	m_widget = 0;
+    }
+    if (wid) {
+	g_object_set_data((GObject*)wid,"Yate::Widget",this);
+	g_signal_connect(G_OBJECT(wid),"destroy",G_CALLBACK(destroyCb),this);
+	m_widget = wid;
+    }
+}
+
+void Widget::destroyed()
+{
+    m_widget = 0;
+    delete this;
+}
+
+void Widget::destroyCb(GtkObject* obj, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbDestroy object %p data %p",obj,dat);
+    Widget* w = static_cast<Widget*>(dat);
+    if (w)
+	w->destroyed();
+}
+
+
+GTKWindow::GTKWindow(const char* id, Layout layout)
+    : Window(id), m_widget(0), m_filler(0), m_layout(layout), m_state(0),
+      m_posX(INVALID_POS), m_posY(INVALID_POS), m_sizeW(0), m_sizeH(0)
+{
+    m_widget = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    g_object_set_data((GObject*)m_widget,"Yate::Window",this);
+    gtk_window_set_role((GtkWindow*)m_widget,id);
+//    gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_DIALOG);
+    gtk_window_set_decorated((GtkWindow*)m_widget,FALSE);
+//    gtk_window_set_resizable((GtkWindow*)m_widget,FALSE);
+    gtk_widget_add_events(m_widget,GDK_BUTTON_PRESS_MASK);
+    gtk_widget_add_events(m_widget,GDK_BUTTON_RELEASE_MASK);
+    g_signal_connect(G_OBJECT(m_widget),"button_press_event",G_CALLBACK(windowCbClick),this);
+    g_signal_connect(G_OBJECT(m_widget),"delete_event",G_CALLBACK(windowCbClose),this);
+    g_signal_connect(G_OBJECT(m_widget),"configure_event",G_CALLBACK(windowCbConfig),this);
+    g_signal_connect(G_OBJECT(m_widget),"window_state_event",G_CALLBACK(windowCbState),this);
+#ifdef XDEBUG
+    g_signal_connect(G_OBJECT(m_widget),"event",G_CALLBACK(windowCbEvent),this);
+#endif
+}
+
+GTKWindow::~GTKWindow()
+{
+    prepare();
+    m_widget = 0;
+    if ((m_posX != INVALID_POS) && (m_posY != INVALID_POS)) {
+	Debug(GTKDriver::self(),DebugAll,"saving '%s' %d,%d",m_id.c_str(),m_posX,m_posY);
+	s_save.setValue(m_id,"x",m_posX);
+	s_save.setValue(m_id,"y",m_posY);
+	s_save.setValue(m_id,"w",m_sizeW);
+	s_save.setValue(m_id,"h",m_sizeH);
+    }
+}
+
+GtkWidget* GTKWindow::find(const String& name) const
+{
+    if (!(m_filler && name))
+	return 0;
+    WidgetFinder wf(name);
+    return wf.find(GTK_CONTAINER(m_filler));
+}
+
+GtkWidget* GTKWindow::container(Layout layout) const
+{
+    DDebug(GTKDriver::self(),DebugAll,"Creating container type %s (%d)",
+	lookup(layout,s_layoutNames,"unknown"),layout);
+    switch (layout) {
+	case Fixed:
+	    return gtk_fixed_new();
+	case Table:
+	    return gtk_table_new(100,100,FALSE);
+	case Infinite:
+	    return gtk_layout_new(NULL,NULL);
+	case HBox:
+	    return gtk_hbox_new(FALSE,0);
+	case VBox:
+	    return gtk_vbox_new(FALSE,0);
+	case Boxed:
+	    return gtk_event_box_new();
+	case Tabbed:
+	    return gtk_notebook_new();
+	case Framed:
+	    return gtk_frame_new(NULL);
+	default:
+	    break;
+    }
+    return 0;
+}
+
+GtkWidget* GTKWindow::container(const String& layout) const
+{
+    return container((Layout)layout.toInteger(s_layoutNames,Unknown));
+}
+
+GtkWidget* GTKWindow::filler()
+{
+    if (!m_filler) {
+	m_filler = container(m_layout);
+	if (!m_filler)
+	    m_filler = container(HBox);
+	if (m_filler)
+	    gtk_container_add(GTK_CONTAINER(m_widget),m_filler);
+    }
+    return m_filler;
+}
+
+void GTKWindow::insert(GtkWidget* wid, int x, int y, int w, int h)
+{
+    Debug(GTKDriver::self(),DebugAll,"Inserting %dx%d widget at %d,%d (%p in %p)",
+	w,h,x,y,wid,filler());
+    gtk_widget_set_size_request(wid,w,h);
+    if (GTK_IS_FIXED(filler()))
+	gtk_fixed_put(GTK_FIXED(filler()),wid,x,y);
+    else if (GTK_IS_LAYOUT(filler()))
+	gtk_layout_put(GTK_LAYOUT(filler()),wid,x,y);
+    else if (GTK_IS_BOX(filler()))
+	gtk_box_pack_start(GTK_BOX(filler()),wid,(x > 0),true,y);
+    else
+	gtk_container_add(GTK_CONTAINER(filler()),wid);
+}
+
+GtkWidget* GTKWindow::build(const String& type, const String& text)
+{
+    WidgetMaker* def = s_widgetMakers;
+    for (; def->name; def++) {
+	if (type == def->name) {
+	    GtkWidget* wid = def->builder(text.safe());
+	    if (def->sig && def->cb)
+		g_signal_connect(G_OBJECT(wid),def->sig,def->cb,0);
+	    return wid;
+	}
+    }
+    GenObject* o = s_factories[type];
+    WidgetFactory* f = YOBJECT(WidgetFactory,o);
+    Widget* w = f ? f->build(text) : 0;
+    return w ? w->widget() : 0;
+}
+
+void GTKWindow::populate()
+{
+    gtk_widget_set_name(m_widget,m_id);
+    NamedList* sect = s_cfg.getSection(m_id);
+    if (!sect)
+	return;
+    GtkWidget* containerStack[MAX_CONTAINER_DEPTH];
+    int depth = 0;
+    if (m_layout == Unknown)
+	m_layout = (Layout)sect->getIntValue("layout",s_layoutNames,GTKWindow::Unknown);
+    gtk_widget_set_size_request(filler(),sect->getIntValue("width",-1),sect->getIntValue("height",-1));
+    int n = sect->length();
+    for (int i = 0; i < n; i++) {
+	NamedString* p = sect->getParam(i);
+	if (!p)
+	    continue;
+	int x = 0;
+	int y = 0;
+	int w = -1;
+	int h = -1;
+	String s(*p);
+	s >> x >> "," >> y >> "," >> w >> "," >> h >> ",";
+	String act;
+	int pos = s.find(',');
+	if (pos >= 0) {
+	    act = s.substr(0,pos);
+	    s = s.substr(pos+1);
+	}
+	GtkWidget* wid = build(p->name(),s.safe());
+	if (wid) {
+#ifdef DEBUG
+	    g_signal_connect(G_OBJECT(wid),"button_press_event",G_CALLBACK(windowCbInfo),0);
+#endif
+	    if (act)
+		gtk_widget_set_name(wid,act);
+	    insert(wid,x,y,w,h);
+	    continue;
+	}
+	if (p->name() == "leave") {
+	    if (depth > 0) {
+		Debug(GTKDriver::self(),DebugAll,"Popping container off stack of depth %d",depth);
+		depth--;
+		m_filler = containerStack[depth];
+	    }
+	    continue;
+	}
+	if (depth >= MAX_CONTAINER_DEPTH)
+	    continue;
+	wid = container(p->name());
+	if (wid) {
+#ifdef DEBUG
+	    g_signal_connect(G_OBJECT(wid),"button_press_event",G_CALLBACK(windowCbInfo),0);
+#endif
+	    if (act)
+		gtk_widget_set_name(wid,act);
+	    insert(wid,x,y,w,h);
+	    containerStack[depth] = m_filler;
+	    depth++;
+	    m_filler = wid;
+	    Debug(GTKDriver::self(),DebugAll,"Pushed container %p on stack of depth %d",wid,depth);
+	}
+    }
+}
+
+void GTKWindow::init()
+{
+    gtk_window_set_title((GtkWindow*)m_widget,s_cfg.getValue(m_id,"title",m_id));
+    m_master = s_cfg.getBoolValue(m_id,"master");
+    if (!m_master)
+	gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_TOOLBAR);
+    m_posX = s_save.getIntValue(m_id,"x",m_posX);
+    m_posY = s_save.getIntValue(m_id,"y",m_posY);
+    m_sizeW = s_save.getIntValue(m_id,"w",m_sizeW);
+    m_sizeH = s_save.getIntValue(m_id,"h",m_sizeH);
+    restore();
+    gtk_widget_show_all(m_widget);
+    m_visible = true;
+    ++s_shown;
+    if (GTKClient::self())
+	GTKClient::self()->setCheck(m_id,true);
+}
+
+void GTKWindow::show()
+{
+    Debug(GTKDriver::self(),DebugAll,"Window::show() '%s'",m_id.c_str());
+    if (m_visible)
+	return;
+    ++s_shown;
+    gtk_widget_show(m_widget);
+    m_visible = true;
+    restore();
+    if (GTKClient::self())
+	GTKClient::self()->setCheck(m_id,true);
+}
+
+void GTKWindow::hide()
+{
+    Debug(GTKDriver::self(),DebugAll,"Window::hide() '%s'",m_id.c_str());
+    if (!m_visible)
+	return;
+    prepare();
+    gtk_widget_hide(m_widget);
+    m_visible = false;
+    --s_shown;
+    if (GTKClient::self()) {
+	GTKClient::self()->setCheck(m_id,false);
+	if (!s_shown)
+	    GTKClient::self()->allHidden();
+    }
+}
+
+void GTKWindow::size(int width, int height)
+{
+    if (!(width && height))
+	return;
+    m_sizeW = width;
+    m_sizeH = height;
+    if (m_widget)
+	gtk_window_resize((GtkWindow*)m_widget,m_sizeW,m_sizeH);
+}
+
+void GTKWindow::move(int x, int y)
+{
+    m_posX = x;
+    m_posY = y;
+    if (m_widget)
+	gtk_window_move((GtkWindow*)m_widget,m_posX,m_posY);
+}
+
+void GTKWindow::moveRel(int dx, int dy)
+{
+    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+	return;
+    move(m_posX+dx,m_posY+dy);
+}
+
+void GTKWindow::geometry(int x, int y, int w, int h)
+{
+    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+	return;
+    int dx = x - m_posX;
+    int dy = y - m_posY;
+    m_posX = x;
+    m_posY = y;
+    m_sizeW = w;
+    m_sizeH = h;
+    if (!m_visible)
+	return;
+    XDebug(GTKDriver::self(),DebugAll,"geometry '%s' %d,%d %dx%d moved %d,%d",
+	m_id.c_str(),x,y,w,h,dx,dy);
+    if (GTKClient::self() && (dx || dy) && m_master)
+	GTKClient::self()->moveRelated(this,dx,dy);
+}
+
+bool GTKWindow::prepare()
+{
+    if (!(m_widget && m_visible))
+	return false;
+    gtk_window_get_position((GtkWindow*)m_widget,&m_posX,&m_posY);
+    gtk_window_get_size((GtkWindow*)m_widget,&m_sizeW,&m_sizeH);
+    return true;
+}
+
+bool GTKWindow::restore()
+{
+    if (!m_widget)
+	return false;
+    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+	return false;
+    move(m_posX,m_posY);
+    size(m_sizeW,m_sizeH);
+    return true;
+}
+
+bool GTKWindow::action(GtkWidget* wid)
+{
+    const gchar* name = gtk_widget_get_name(wid);
+    Debug(GTKDriver::self(),DebugAll,"action '%s' wid=%p [%p]",
+	name,wid,this);
+    return GTKClient::self() && GTKClient::self()->action(this,name);
+}
+
+bool GTKWindow::toggle(GtkToggleButton* btn, gboolean active)
+{
+    const gchar* name = gtk_widget_get_name((GtkWidget*)btn);
+    Debug(GTKDriver::self(),DebugAll,"toggle '%s' btn=%p active=%s [%p]",
+	name,btn,String::boolText(active),this);
+    return GTKClient::self() && GTKClient::self()->toggle(this,name,active);
+}
+
+bool GTKWindow::select(GtkOptionMenu* opt, gint selected)
+{
+    const gchar* name = gtk_widget_get_name((GtkWidget*)opt);
+    Debug(GTKDriver::self(),DebugAll,"select '%s' opt=%p item=%d [%p]",
+	name,opt,selected,this);
+    // FIXME
+    String item(selected);
+    return GTKClient::self() && GTKClient::self()->select(this,name,item);
+}
+
+bool GTKWindow::setShow(const String& name, bool visible)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    if (visible)
+	gtk_widget_show(wid);
+    else
+	gtk_widget_hide(wid);
+    return true;
+}
+
+bool GTKWindow::setActive(const String& name, bool active)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    gtk_widget_set_sensitive(wid,active);
+    return true;
+}
+
+bool GTKWindow::setText(const String& name, const String& text)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->setText(text) : setText(wid,text);
+}
+
+bool GTKWindow::setText(GtkWidget* wid, const String& text)
+{
+    if (GTK_IS_LABEL(wid)) {
+	gtk_label_set_text(GTK_LABEL(wid),text.safe());
+	return true;
+    }
+    if (GTK_IS_BUTTON(wid)) {
+	gtk_button_set_label(GTK_BUTTON(wid),text.safe());
+	return true;
+    }
+    if (GTK_IS_ENTRY(wid)) {
+	gtk_entry_set_text(GTK_ENTRY(wid),text.safe());
+	return true;
+    }
+    if (GTK_IS_COMBO(wid)) {
+	gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(wid)->entry),text.safe());
+	return true;
+    }
+    return false;
+}
+
+bool GTKWindow::setCheck(const String& name, bool checked)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->setCheck(checked) : setCheck(wid,checked);
+}
+
+bool GTKWindow::setCheck(GtkWidget* wid, bool checked)
+{
+    if (GTK_IS_TOGGLE_BUTTON(wid)) {
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(wid),checked);
+	return true;
+    }
+    if (GTK_IS_CHECK_MENU_ITEM(wid)) {
+	gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(wid),checked);
+	return true;
+    }
+    return false;
+}
+
+bool GTKWindow::setSelect(const String& name, const String& item)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->setSelect(item) : setSelect(wid,item);
+}
+
+bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
+{
+    // FIXME
+    Debug(DebugMild,"Need to implement GTKWindow::setSelect()");
+    return false;
+}
+
+bool GTKWindow::addOption(const String& name, const String& item, bool atStart)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->addOption(item,atStart) : addOption(wid,item,atStart);
+}
+
+bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
+{
+    // FIXME
+    Debug(DebugMild,"Need to implement GTKWindow::addOption()");
+    return false;
+}
+
+bool GTKWindow::delOption(const String& name, const String& item)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->delOption(item) : delOption(wid,item);
+}
+
+bool GTKWindow::delOption(GtkWidget* wid, const String& item)
+{
+    // FIXME
+    Debug(DebugMild,"Need to implement GTKWindow::delOption()");
+    return false;
+}
+
+bool GTKWindow::getText(const String& name, String& text)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->getText(text) : getText(wid,text);
+}
+
+bool GTKWindow::getText(GtkWidget* wid, String& text)
+{
+    if (GTK_IS_LABEL(wid)) {
+	text = gtk_label_get_text(GTK_LABEL(wid));
+	return true;
+    }
+    if (GTK_IS_ENTRY(wid)) {
+	text = gtk_entry_get_text(GTK_ENTRY(wid));
+	return true;
+    }
+    if (GTK_IS_COMBO(wid)) {
+	text = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(wid)->entry));
+	return true;
+    }
+    return false;
+}
+
+bool GTKWindow::getCheck(const String& name, bool& checked)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->getCheck(checked) : getCheck(wid,checked);
+}
+
+bool GTKWindow::getCheck(GtkWidget* wid, bool& checked)
+{
+    if (GTK_IS_TOGGLE_BUTTON(wid)) {
+	checked = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wid));
+	return true;
+    }
+    if (GTK_IS_CHECK_MENU_ITEM(wid)) {
+	checked = gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(wid));
+	return true;
+    }
+    return false;
+}
+
+void GTKWindow::menu(int x, int y)
+{
+    GtkWidget* mnu = gtk_menu_new();
+    GtkWidget* item = gtk_check_menu_item_new_with_label("123");
+    gtk_menu_shell_append((GtkMenuShell*)mnu,item);
+    gtk_menu_popup((GtkMenu*)mnu,NULL,NULL,NULL,NULL,3,gtk_get_current_event_time());
+}
+
+
+GTKClient::GTKClient()
+    : Client("GTKClient")
+{
+    s_cfg = Engine::configPath() + Engine::pathSeparator() + "gtk2client.ui";
+    s_cfg.load();
+    s_save = Engine::configFile("gtk2client");
+    s_save.load();
+}
+
+GTKClient::~GTKClient()
+{
+    m_windows.clear();
+    s_save.save();
+}
+
+void GTKClient::lock()
+{
+    XDebug(GTKDriver::self(),DebugAll,"GTKClient::lock()");
+    gdk_threads_enter();
+}
+
+void GTKClient::unlock()
+{
+    XDebug(GTKDriver::self(),DebugAll,"GTKClient::unlock()");
+    gdk_flush();
+    gdk_threads_leave();
+}
+
+void GTKClient::main()
+{
+    lock();
+    gtk_main();
+    unlock();
+}
+
+void GTKClient::allHidden()
+{
+    Debug(GTKDriver::self(),DebugInfo,"All %u windows hidden",m_windows.count());
+    gtk_main_quit();
+}
+
+bool GTKClient::createWindow(const String& name)
+{
+    Window* w = 0;
+    GenObject* o = s_factories[name];
+    const WindowFactory* f = YOBJECT(WindowFactory,o);
+    if (f)
+	w = f->build();
+    else
+	w = new GTKWindow(name);
+    if (!w) {
+	Debug(GTKDriver::self(),DebugGoOn,"Could not create window '%s'",name.c_str());
+	return false;
+    }
+    w->populate();
+    m_windows.append(w);
+    return true;
+}
+
+void GTKClient::loadWindows()
+{
+    gtk_rc_parse(Engine::configPath() + Engine::pathSeparator() + "gtk2client.rc");
+    unsigned int n = s_cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* l = s_cfg.getSection(i);
+	if (l && l->getBoolValue("enabled",true))
+	    createWindow(*l);
+    }
+}
+
+
+GTKDriver::GTKDriver()
+{
+}
+
+GTKDriver::~GTKDriver()
+{
+}
+
+void GTKDriver::initialize()
+{
+    Output("Initializing module GTK2 client");
+    s_device = Engine::config().getValue("client","device","oss//dev/dsp");
+    if (!GTKClient::self())
+    {
+	debugCopy();
+	new GTKClient;
+	GTKClient::self()->startup();
+    }
+    setup();
+    installRelay(Halt);
+}
+
+bool GTKDriver::factory(UIFactory* factory, const char* type)
+{
+    if (!type) {
+	s_factories.remove(factory,false);
+	return true;
+    }
+    String tmp(type);
+    if (tmp == "gtk2") {
+	s_factories.append(factory)->setDelete(false);
+	return true;
+    }
+    return false;
+}
+
+WindowFactory::WindowFactory(const char* type, const char* name)
+    : UIFactory(type,name)
+{
+}
+    
+
+WidgetFactory::WidgetFactory(const char* type, const char* name)
+    : UIFactory(type,name)
+{
+}
+
+/* vi: set ts=8 sw=4 sts=4 noet: */

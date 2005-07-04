@@ -120,6 +120,12 @@ GenObject* ObjList::operator[](int index) const
     return obj ? obj->get() : 0;
 }
 
+GenObject* ObjList::operator[](const String& str) const
+{
+    ObjList *obj = find(str);
+    return obj ? obj->get() : 0;
+}
+
 ObjList* ObjList::find(const GenObject* obj) const
 {
     XDebug(DebugAll,"ObjList::find(%p) [%p]",obj,this);

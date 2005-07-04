@@ -20,7 +20,7 @@ MKDEPS := ./config.status
 PROGS:= yate
 YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so
-INCS := yateclass.h yatengine.h yatephone.h
+INCS := yateclass.h yatengine.h yatephone.h yatecbase.h
 GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
@@ -86,7 +86,9 @@ apidocs-build: check-topdir
 
 apidocs: @srcdir@/docs/api/index.html
 
-@srcdir@/docs/api/index.html: @srcdir@/yateclass.h @srcdir@/yatengine.h @srcdir@/yatephone.h @srcdir@/contrib/ysip/yatesip.h @srcdir@/contrib/yrtp/yatertp.h
+@srcdir@/docs/api/index.html: @srcdir@/yateclass.h @srcdir@/yatengine.h \
+    @srcdir@/yatephone.h @srcdir@/yatecbase.h \
+    @srcdir@/contrib/ysip/yatesip.h @srcdir@/contrib/yrtp/yatertp.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war

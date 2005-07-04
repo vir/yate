@@ -780,6 +780,13 @@ public:
     GenObject* operator[](int index) const;
 
     /**
+     * Array-like indexing operator
+     * @param str String value of the object to locate
+     * @return Pointer to the object or NULL
+     */
+    GenObject* operator[](const String& str) const;
+
+    /**
      * Get the item in the list that holds an object
      * @param obj Pointer to the object to search for
      * @return Pointer to the found item or NULL

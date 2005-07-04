@@ -29,6 +29,10 @@ ifneq (@HAVE_QT@,no)
 PROGS := $(PROGS) yate-qt
 endif
 
+ifneq (@HAVE_GTK2@,no)
+PROGS := $(PROGS) yate-gtk2
+endif
+
 LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
@@ -86,9 +90,16 @@ yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
 yate-gtk: LOCALFLAGS = @GTK_INC@
 yate-gtk: LOCALLIBS = @GTK_LIB@
 
+yate-gtk2: ../contrib/gtk2/libgtk2client.a
+yate-gtk2: LOCALFLAGS = @GTK2_INC@
+yate-gtk2: LOCALLIBS = ../contrib/gtk2/libgtk2client.a @GTK2_LIB@
+
 yate-qt: ../contrib/qt/libqtclientform.a
 yate-qt: LOCALFLAGS = -I@QT_INC@
 yate-qt: LOCALLIBS = ../contrib/qt/libqtclientform.a -L@QT_DIR@/lib -lqt-mt
 
 ../contrib/qt/libqtclientform.a:
 	$(MAKE) -C ../contrib/qt
+
+../contrib/gtk2/libgtk2client.a:
+	$(MAKE) -C ../contrib/gtk2

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Script to run the Gtk2 client from the build directory
+
+if [ -x yate-gtk2 -a -x ../run ]; then
+    # Need to put the path to Mozilla libraries here
+    export LD_LIBRARY_PATH=/usr/lib/mozilla-1.6
+    cd ..; exec ./run --executable clients/yate-gtk2 "$@"
+else
+    echo "Could not find client executable or run script" >&2
+fi

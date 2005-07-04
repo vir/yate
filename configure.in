@@ -473,6 +473,8 @@ if [[ "x$ac_cv_use_libgtk" = "xyes" ]]; then
 	GTK_INC="$incgt"
 	GTK_LIB="$libgt"
 	ac_cv_use_libgtk="no"
+    else
+	vergt="no"
     fi
     AC_MSG_RESULT([$vergt])
 fi
@@ -494,6 +496,8 @@ if [[ "x$ac_cv_use_libgtk2" = "xyes" ]]; then
 	GTK2_INC="$incgt"
 	GTK2_LIB="$libgt"
 	ac_cv_use_libgtk2="no"
+    else
+	vergt="no"
     fi
     AC_MSG_RESULT([$vergt])
 fi
@@ -515,6 +519,8 @@ if [[ "x$ac_cv_use_gtkmozilla" = "xyes" ]]; then
 	GMOZ_INC="$incgmoz"
 	GMOZ_LIB="$libgmoz"
 	ac_cv_use_gtkmozilla="no"
+    else
+	vergmoz="no"
     fi
     AC_MSG_RESULT([$vergmoz])
 fi

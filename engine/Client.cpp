@@ -313,11 +313,19 @@ bool Client::action(Window* wnd, const String& name)
     if (name == "call" || name == "callto") {
 	String target;
 	getText("callto",target,wnd);
+	target.trimBlanks();
+	if (target.null())
+	    return false;
 	String line;
 	getText("line",line,wnd);
+	line.trimBlanks();
 	String proto;
-	getText("proto",proto,wnd);
-	return callStart(target,line,proto);
+	getText("protocol",proto,wnd);
+	proto.trimBlanks();
+	String account;
+	getText("account",account,wnd);
+	account.trimBlanks();
+	return callStart(target,line,proto,account);
     }
     else if (name.startsWith("callto:"))
 	return callStart(name.substr(7));
@@ -430,10 +438,11 @@ void Client::callHangup(const char* callId)
     Engine::enqueue(m);
 }
 
-bool Client::callStart(const String& target, const String& line, const String& proto)
+bool Client::callStart(const String& target, const String& line,
+    const String& proto, const String& account)
 {
-    Debug(ClientDriver::self(),DebugInfo,"callStart('%s','%s','%s')",
-	target.c_str(),line.c_str(),proto.c_str());
+    Debug(ClientDriver::self(),DebugInfo,"callStart('%s','%s','%s','%s')",
+	target.c_str(),line.c_str(),proto.c_str(),account.c_str());
     if (target.null())
 	return false;
     ClientChannel* cc = new ClientChannel();
@@ -447,6 +456,8 @@ bool Client::callStart(const String& target, const String& line, const String& p
 	m->setParam("line",line);
     if (proto)
 	m->setParam("protocol",proto);
+    if (account)
+	m->setParam("account",account);
     return cc->startRouter(m);
 }
 

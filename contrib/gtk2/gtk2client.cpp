@@ -32,6 +32,7 @@ static GtkWidget* s_moving = 0;
 static Configuration s_cfg;
 static Configuration s_save;
 static ObjList s_factories;
+static bool s_clickInfo = false;
 
 #define INVALID_POS (-1000000)
 #define MAX_CONTAINER_DEPTH 20
@@ -96,6 +97,25 @@ public:
     GCallback cb;
 };
 
+static gboolean debugCbInfo(GtkWidget* wid)
+{
+    gchar* wp = NULL;
+    gchar* wcp = NULL;
+    gtk_widget_path(wid,NULL,&wp,NULL);
+    gtk_widget_class_path(wid,NULL,&wcp,NULL);
+    Debug(GTKDriver::self(),DebugAll,"debugCbInfo widget %p path '%s' class path '%s'",
+	wid,wp,wcp);
+    delete wp;
+    delete wcp;
+    return FALSE;
+}
+
+static void attachDebug(GtkWidget* wid)
+{
+    if (wid && s_clickInfo)
+	g_signal_connect(G_OBJECT(wid),"button_press_event",G_CALLBACK(debugCbInfo),0);
+}
+
 static Widget* getWidget(GtkWidget* wid)
 {
     if (!wid)
@@ -111,6 +131,84 @@ static GTKWindow* getWidgetWindow(GtkWidget* wid)
     if (!top)
 	return 0;
     return static_cast<GTKWindow*>(g_object_get_data((GObject*)top,"Yate::Window"));
+}
+
+static bool getOptionText(GtkOptionMenu* opt, gint index, String& text)
+{
+    GtkWidget* menu = gtk_option_menu_get_menu(opt);
+    if (!menu)
+	return false;
+    GList* menuItems = gtk_container_get_children(GTK_CONTAINER(menu));
+    GList* l = menuItems;
+    while (index && l) {
+	index--;
+	l = g_list_next(l);
+    }
+    bool ok = false;
+    if (l && GTK_IS_MENU_ITEM(l->data)) {
+	GtkWidget* mnu = (GtkWidget*)(l->data);
+	GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(mnu));
+	if (!lbl)
+	    lbl = (GtkWidget*)g_object_get_data((GObject*)mnu,"Yate::Label");
+	if (GTK_IS_LABEL(lbl)) {
+	    text = gtk_label_get_text(GTK_LABEL(lbl));
+	    ok = true;
+	}
+    }
+    g_list_free(menuItems);
+    return ok;
+}
+
+static int getOptionIndex(GtkOptionMenu* opt, const String& item)
+{
+    GtkWidget* menu = gtk_option_menu_get_menu(opt);
+    if (!menu)
+	return -1;
+    GList* menuItems = gtk_container_get_children(GTK_CONTAINER(menu));
+    GList* l = menuItems;
+    int index = 0;
+    int pos = -1;
+    while (l) {
+	if (GTK_IS_MENU_ITEM(l->data)) {
+	    GtkWidget* mnu = (GtkWidget*)(l->data);
+	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(mnu));
+	    if (!lbl)
+		lbl = (GtkWidget*)g_object_get_data((GObject*)mnu,"Yate::Label");
+	    if (GTK_IS_LABEL(lbl) && (item == gtk_label_get_text(GTK_LABEL(lbl)))) {
+		pos = index;
+		break;
+	    }
+	}
+	index++;
+	l = g_list_next(l);
+    }
+    g_list_free(menuItems);
+    return pos;
+}
+
+static GtkWidget* getOptionItem(GtkOptionMenu* opt, const String& item)
+{
+    GtkWidget* menu = gtk_option_menu_get_menu(opt);
+    if (!menu)
+	return 0;
+    GList* menuItems = gtk_container_get_children(GTK_CONTAINER(menu));
+    GList* l = menuItems;
+    GtkWidget* ret = 0;
+    while (l) {
+	if (GTK_IS_MENU_ITEM(l->data)) {
+	    GtkWidget* mnu = (GtkWidget*)(l->data);
+	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(mnu));
+	    if (!lbl)
+		lbl = (GtkWidget*)g_object_get_data((GObject*)mnu,"Yate::Label");
+	    if (GTK_IS_LABEL(lbl) && (item == gtk_label_get_text(GTK_LABEL(lbl)))) {
+		ret = mnu;
+		break;
+	    }
+	}
+	l = g_list_next(l);
+    }
+    g_list_free(menuItems);
+    return ret;
 }
 
 static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
@@ -205,10 +303,26 @@ static GtkWidget* gtkComboNewWithText(const gchar* text)
     GtkWidget* combo = gtk_combo_new();
     if (combo) {
 	GtkWidget* ent = GTK_COMBO(combo)->entry;
-	if (ent)
+	if (ent) {
 	    gtk_entry_set_text((GtkEntry*)ent,text);
+	    attachDebug(ent);
+	}
+	attachDebug(GTK_COMBO(combo)->list);
     }
     return combo;
+}
+
+static GtkWidget* gtkMenuItemNew(const gchar* text)
+{
+    // We don't use gtk_menu_item_new_with_label as we need to
+    //  work around not getting the GtkLabel out of GtkMenuItem
+    GtkWidget* item = gtk_menu_item_new();
+    GtkWidget* label = gtk_label_new(text);
+    g_object_set_data((GObject*)item,"Yate::Label",label);
+    gtk_container_add(GTK_CONTAINER(item),label);
+    attachDebug(item);
+    attachDebug(label);
+    return item;
 }
 
 static GtkWidget* gtkOptionMenuNew(const gchar* text)
@@ -221,10 +335,8 @@ static GtkWidget* gtkOptionMenuNew(const gchar* text)
 	    ObjList* l = tmp.split(',');
 	    for (ObjList* i = l; i; i = i->next()) {
 		String* s = static_cast<String*>(i->get());
-		if (s && *s) {
-		    GtkWidget* item = gtk_menu_item_new_with_label(s->c_str());
-		    gtk_menu_shell_append(GTK_MENU_SHELL(mnu),item);
-		}
+		if (s && *s)
+		    gtk_menu_shell_append(GTK_MENU_SHELL(mnu),gtkMenuItemNew(s->c_str()));
 	    }
 	    if (l)
 		l->destruct();
@@ -285,22 +397,11 @@ static gboolean windowCbClose(GtkWidget* wid, GdkEvent* evt, gpointer dat)
     return FALSE;
 }
 
-static gboolean windowCbInfo(GtkWidget* wid)
-{
-    gchar* wp = NULL;
-    gchar* wcp = NULL;
-    gtk_widget_path(wid,NULL,&wp,NULL);
-    gtk_widget_class_path(wid,NULL,&wcp,NULL);
-    Debug(GTKDriver::self(),DebugAll,"windowCbInfo widget %p path '%s' class path '%s'",
-	wid,wp,wcp);
-    delete wp;
-    delete wcp;
-    return FALSE;
-}
-
 static gboolean windowCbClick(GtkWidget* wid, GdkEventButton* evt, gpointer dat)
 {
     DDebug(GTKDriver::self(),DebugAll,"windowCbClick event %d data %p",evt->type,dat);
+    if (wid && s_clickInfo)
+	debugCbInfo(wid);
     GTKWindow* wnd = static_cast<GTKWindow*>(dat);
     if (evt->type != GDK_BUTTON_PRESS)
 	return FALSE;
@@ -531,9 +632,7 @@ void GTKWindow::populate()
 	}
 	GtkWidget* wid = build(p->name(),s.safe());
 	if (wid) {
-#ifdef DEBUG
-	    g_signal_connect(G_OBJECT(wid),"button_press_event",G_CALLBACK(windowCbInfo),0);
-#endif
+	    attachDebug(wid);
 	    if (act)
 		gtk_widget_set_name(wid,act);
 	    insert(wid,x,y,w,h);
@@ -551,9 +650,7 @@ void GTKWindow::populate()
 	    continue;
 	wid = container(p->name());
 	if (wid) {
-#ifdef DEBUG
-	    g_signal_connect(G_OBJECT(wid),"button_press_event",G_CALLBACK(windowCbInfo),0);
-#endif
+	    attachDebug(wid);
 	    if (act)
 		gtk_widget_set_name(wid,act);
 	    insert(wid,x,y,w,h);
@@ -578,7 +675,8 @@ void GTKWindow::init()
     restore();
     gtk_widget_show_all(m_widget);
     m_visible = true;
-    ++s_shown;
+    if (m_master)
+	++s_shown;
     if (GTKClient::self())
 	GTKClient::self()->setCheck(m_id,true);
 }
@@ -588,7 +686,8 @@ void GTKWindow::show()
     Debug(GTKDriver::self(),DebugAll,"Window::show() '%s'",m_id.c_str());
     if (m_visible)
 	return;
-    ++s_shown;
+    if (m_master)
+	++s_shown;
     gtk_widget_show(m_widget);
     m_visible = true;
     restore();
@@ -604,7 +703,8 @@ void GTKWindow::hide()
     prepare();
     gtk_widget_hide(m_widget);
     m_visible = false;
-    --s_shown;
+    if (m_master)
+	--s_shown;
     if (GTKClient::self()) {
 	GTKClient::self()->setCheck(m_id,false);
 	if (!s_shown)
@@ -696,8 +796,9 @@ bool GTKWindow::select(GtkOptionMenu* opt, gint selected)
     const gchar* name = gtk_widget_get_name((GtkWidget*)opt);
     Debug(GTKDriver::self(),DebugAll,"select '%s' opt=%p item=%d [%p]",
 	name,opt,selected,this);
-    // FIXME
-    String item(selected);
+    String item(name);
+    item += selected;
+    getOptionText(opt,selected,item);
     return GTKClient::self() && GTKClient::self()->select(this,name,item);
 }
 
@@ -785,8 +886,15 @@ bool GTKWindow::setSelect(const String& name, const String& item)
 
 bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
 {
-    // FIXME
-    Debug(DebugMild,"Need to implement GTKWindow::setSelect()");
+    if (GTK_IS_OPTION_MENU(wid)) {
+	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
+	int i = getOptionIndex(opt,item);
+	if (i >= 0) {
+	    gtk_option_menu_set_history(opt,i);
+	    return true;
+	}
+	return false;
+    }
     return false;
 }
 
@@ -801,8 +909,23 @@ bool GTKWindow::addOption(const String& name, const String& item, bool atStart)
 
 bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
 {
-    // FIXME
-    Debug(DebugMild,"Need to implement GTKWindow::addOption()");
+    if (GTK_IS_OPTION_MENU(wid)) {
+	if (getOptionItem(GTK_OPTION_MENU(wid),item))
+	    return true;
+	GtkWidget* mnu = gtk_option_menu_get_menu(GTK_OPTION_MENU(wid));
+	if (!GTK_IS_MENU(mnu))
+	    return false;
+	GtkWidget* child = gtkMenuItemNew(item);
+	if (child) {
+	    if (atStart)
+		gtk_menu_shell_prepend(GTK_MENU_SHELL(mnu),child);
+	    else
+		gtk_menu_shell_append(GTK_MENU_SHELL(mnu),child);
+	    gtk_widget_show_all(child);
+	    return true;
+	}
+	return false;
+    }
     return false;
 }
 
@@ -817,8 +940,15 @@ bool GTKWindow::delOption(const String& name, const String& item)
 
 bool GTKWindow::delOption(GtkWidget* wid, const String& item)
 {
-    // FIXME
-    Debug(DebugMild,"Need to implement GTKWindow::delOption()");
+    if (GTK_IS_OPTION_MENU(wid)) {
+	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
+	GtkWidget* it = getOptionItem(opt,item);
+	if (it) {
+	    gtk_widget_destroy(it);
+	    return true;
+	}
+	return false;
+    }
     return false;
 }
 
@@ -844,6 +974,10 @@ bool GTKWindow::getText(GtkWidget* wid, String& text)
     if (GTK_IS_COMBO(wid)) {
 	text = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(wid)->entry));
 	return true;
+    }
+    if (GTK_IS_OPTION_MENU(wid)) {
+	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
+	return getOptionText(opt,gtk_option_menu_get_history(opt),text);
     }
     return false;
 }
@@ -964,6 +1098,7 @@ void GTKDriver::initialize()
     s_device = Engine::config().getValue("client","device","oss//dev/dsp");
     if (!GTKClient::self())
     {
+	s_clickInfo = Engine::config().getBoolValue("client","clickinfo");
 	debugCopy();
 	new GTKClient;
 	GTKClient::self()->startup();

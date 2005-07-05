@@ -117,7 +117,8 @@ public:
     void callAccept(const char* callId = 0);
     void callReject(const char* callId = 0);
     void callHangup(const char* callId = 0);
-    bool callStart(const String& target, const String& line = String::empty(), const String& proto = String::empty());
+    bool callStart(const String& target, const String& line = String::empty(),
+	const String& proto = String::empty(), const String& account = String::empty());
     bool emitDigit(char digit);
     inline int line() const
 	{ return m_line; }

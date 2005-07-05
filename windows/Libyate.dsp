@@ -100,6 +100,10 @@ SOURCE=..\engine\Channel.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\engine\Client.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\engine\Configuration.cpp
 # End Source File
 # Begin Source File
@@ -158,6 +162,10 @@ SOURCE=..\engine\YMD5.cpp
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=..\yatecbase.h
+# End Source File
 # Begin Source File
 
 SOURCE=..\yateclass.h

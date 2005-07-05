@@ -548,7 +548,7 @@ bool UIHandler::received(Message &msg)
 // IMPORTANT: having a target means "from inside Yate to the user"
 //  An user initiated call must be incoming (no target)
 ClientChannel::ClientChannel(const char* target)
-    : Channel(ClientDriver::self(),0,target), m_line(0)
+    : Channel(ClientDriver::self(),0,(target != 0)), m_line(0)
 {
     m_targetid = target;
     Engine::enqueue(message("chan.startup"));

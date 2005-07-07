@@ -224,6 +224,7 @@ public:
 	{ }
 };
 
+class YateGkRegThread;
 class YateH323EndPoint;
 class YateGatekeeperServer;
 
@@ -322,12 +323,22 @@ class YateH323EndPoint : public String, public H323EndPoint
 {
     PCLASSINFO(YateH323EndPoint, H323EndPoint)
 public:
-    YateH323EndPoint(const char* name = 0);
+    enum GkMode {
+	ByAddr,
+	ByName,
+	Discover,
+	Unregister
+    };
+    YateH323EndPoint(const NamedList* params = 0, const char* name = 0);
     ~YateH323EndPoint();
     virtual H323Connection* CreateConnection(unsigned callReference, void* userData,
 	H323Transport* transport, H323SignalPDU* setupPDU);
-    bool Init(void);
-    YateGatekeeperServer* gkServer;
+    bool Init(const NamedList* params = 0);
+    bool startGkClient(int mode, const char* name = "");
+    void asyncGkClient(int mode, const PString& name);
+protected:
+    YateGatekeeperServer* m_gkServer;
+    YateGkRegThread* m_thread;
 };
 
 class YateH323Connection :  public H323Connection
@@ -427,6 +438,29 @@ private:
     YateH323Connection* m_conn;
 };
 
+class YateGkRegThread : public PThread
+{
+    PCLASSINFO(YateGkRegThread, PThread);
+public:
+    YateGkRegThread(YateH323EndPoint* endpoint, int mode, const char* name = "")
+	: PThread(10000), m_ep(endpoint), m_mode(mode), m_name(name)
+	{ }
+    void Main()
+	{ m_ep->asyncGkClient(m_mode,m_name); }
+protected:
+    YateH323EndPoint* m_ep;
+    int m_mode;
+    PString m_name;
+};
+
+class UserHandler : public MessageHandler
+{
+public:
+    UserHandler()
+	: MessageHandler("user.login",140)
+	{ }
+    virtual bool received(Message &msg);
+};
 
 // start of fake capabilities code
 
@@ -520,59 +554,6 @@ DEFINE_YATE_CAPAB(YateG729AB,BaseG729Capab,H245_AudioCapability::e_g729AnnexAwAn
 
 // end of fake capabilities code
 
-
-YateGatekeeperServer::YateGatekeeperServer(YateH323EndPoint& ep)
-  : H323GatekeeperServer(ep),
-    endpoint(ep)
-{
-    Debug(&hplugin,DebugAll,"YateGatekeeperServer::YateGatekeeperServer() [%p]",this);
-}
-
-BOOL YateGatekeeperServer::Init()
-{
-    SetGatekeeperIdentifier("YATE gatekeeper");
-    H323TransportAddressArray interfaces;
-    const char* addr = 0;
-    int i;
-    for (i=1; (addr=s_cfg.getValue("gk",("interface"+String(i)).c_str())); i++){
-	if (!AddListener(new H323GatekeeperListener(endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
-	    Debug(DebugGoOn,"Can't start the Gk listener for address: %s",addr);
-    }  
-    return TRUE;	
-}
-
-YateH323EndPoint::YateH323EndPoint(const char* name)
-    : String(name), gkServer(0)
-{
-    Debug(&hplugin,DebugAll,"YateH323EndPoint::YateH323EndPoint(\"%s\") [%p]",name,this);
-    String sect("ep");
-    if (name)
-	sect << " " << name;
-    if (s_cfg.getBoolValue(sect,"gw",false))
-	terminalType = e_GatewayOnly;
-    hplugin.m_endpoints.append(this);
-}
-
-YateH323EndPoint::~YateH323EndPoint()
-{
-    Debug(&hplugin,DebugAll,"YateH323EndPoint::~YateH323EndPoint() [%p]",this);
-    hplugin.m_endpoints.remove(this,false);
-    RemoveListener(0);
-    ClearAllCalls(H323Connection::EndedByTemporaryFailure, true);
-    if (gkServer)
-	delete gkServer;
-}
-
-H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
-    void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
-{
-    if (!hplugin.canAccept()) {
-	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
-	return 0;
-    }
-    return new YateH323Connection(*this,transport,callReference,userData);
-}
-
 #ifdef USE_CAPABILITY_FACTORY
 static void ListRegisteredCaps(int level)
 {
@@ -614,7 +595,60 @@ bool FakeH323CapabilityRegistration::IsRegistered(const PString& name)
 }
 #endif
 
-bool YateH323EndPoint::Init(void)
+
+YateGatekeeperServer::YateGatekeeperServer(YateH323EndPoint& ep)
+    : H323GatekeeperServer(ep), endpoint(ep)
+{
+    Debug(&hplugin,DebugAll,"YateGatekeeperServer::YateGatekeeperServer() [%p]",this);
+}
+
+BOOL YateGatekeeperServer::Init()
+{
+    SetGatekeeperIdentifier("YATE gatekeeper");
+    H323TransportAddressArray interfaces;
+    const char* addr = 0;
+    int i;
+    for (i=1; (addr=s_cfg.getValue("gk",("interface"+String(i)).c_str())); i++){
+	if (!AddListener(new H323GatekeeperListener(endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
+	    Debug(DebugGoOn,"Can't start the Gk listener for address: %s",addr);
+    }  
+    return TRUE;	
+}
+
+YateH323EndPoint::YateH323EndPoint(const NamedList* params, const char* name)
+    : String(name), m_gkServer(0), m_thread(0)
+{
+    Debug(&hplugin,DebugAll,"YateH323EndPoint::YateH323EndPoint(%p,\"%s\") [%p]",
+	params,name,this);
+    if (params && params->getBoolValue("gw",false))
+	terminalType = e_GatewayOnly;
+    hplugin.m_endpoints.append(this);
+}
+
+YateH323EndPoint::~YateH323EndPoint()
+{
+    Debug(&hplugin,DebugAll,"YateH323EndPoint::~YateH323EndPoint() [%p]",this);
+    hplugin.m_endpoints.remove(this,false);
+    RemoveListener(0);
+    ClearAllCalls(H323Connection::EndedByTemporaryFailure, true);
+    if (m_gkServer)
+	delete m_gkServer;
+    if (m_thread)
+	Debug(DebugFail,"Destroying YateH323EndPoint '%s' still having a YateGkRegThread %p [%p]",
+	    safe(),m_thread,this);
+}
+
+H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
+    void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
+{
+    if (!hplugin.canAccept()) {
+	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
+	return 0;
+    }
+    return new YateH323Connection(*this,transport,callReference,userData);
+}
+
+bool YateH323EndPoint::Init(const NamedList* params)
 {
     if (null()) {
 	int dump = s_cfg.getIntValue("general","dumpcodecs");
@@ -626,10 +660,8 @@ bool YateH323EndPoint::Init(void)
 #endif
     }
 
-    String sect("ep");
     String csect("codecs");
     if (!null()) {
-	sect << " " << c_str();
 	csect << " " << c_str();
 	// fall back to global codec definitions if [codec NAME] does not exist
 	if (!s_cfg.getSection(csect))
@@ -669,16 +701,19 @@ bool YateH323EndPoint::Init(void)
     }
 
     AddAllUserInputCapabilities(0,1);
-    DisableDetectInBandDTMF(!s_cfg.getBoolValue(sect,"dtmfinband",false));
-    DisableFastStart(!s_cfg.getBoolValue(sect,"faststart",false));
-    DisableH245Tunneling(!s_cfg.getBoolValue(sect,"h245tunneling",false));
-    DisableH245inSetup(!s_cfg.getBoolValue(sect,"h245insetup",false));
+    DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband")));
+    DisableFastStart(!(params && params->getBoolValue("faststart")));
+    DisableH245Tunneling(!(params && params->getBoolValue("h245tunneling")));
+    DisableH245inSetup(!(params && params->getBoolValue("h245insetup")));
     SetSilenceDetectionMode(static_cast<H323AudioCodec::SilenceDetectionMode>
-	(s_cfg.getIntValue(sect,"silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)));
+	(params ? params->getIntValue("silencedetect",dict_silence,H323AudioCodec::NoSilenceDetection)
+	 : H323AudioCodec::NoSilenceDetection));
 
     PIPSocket::Address addr = INADDR_ANY;
-    int port = s_cfg.getIntValue(sect,"port",1720);
-    if (s_cfg.getBoolValue(sect,"ep",true)) {
+    int port = 1720;
+    if (params)
+	port = params-> getIntValue("port",port);
+    if ((!params) || params->getBoolValue("ep",true)) {
 	H323ListenerTCP *listener = new H323ListenerTCP(*this,addr,port);
 	if (!(listener && StartListener(listener))) {
 	    Debug(DebugGoOn,"Unable to start H323 Listener at port %d",port);
@@ -686,56 +721,97 @@ bool YateH323EndPoint::Init(void)
 		delete listener;
 	    return false;
 	}
-	const char *ali = s_cfg.getValue(sect,"alias","yate");
+	const char *ali = "yate";
+	if (params) {
+	    ali = params->getValue("username",ali);
+	    ali = params->getValue("alias",ali);
+	}
 	SetLocalUserName(ali);
-	if (s_cfg.getBoolValue(sect,"gkclient",false)){
-	    const char *p = s_cfg.getValue(sect,"password");
+	if (params && params->getBoolValue("gkclient")){
+	    const char *p = params->getValue("password");
 	    if (p) {
 		SetGatekeeperPassword(p);
 		Debug(&hplugin,DebugInfo,"Enabling H.235 security access to gatekeeper %s",p);
 	    }
-	    const char* d = s_cfg.getValue(sect,"gkip");
-	    const char* a = s_cfg.getValue(sect,"gkname");
-	    if (d) {
-		PString gkName = d;
-		H323TransportUDP* rasChannel  = new H323TransportUDP(*this);
-		if (SetGatekeeper(gkName, rasChannel)) 
-		    Debug(&hplugin,DebugInfo,"Connect to gatekeeper ip = %s",d);
-		else {
-		    Debug(DebugGoOn,"Unable to connect to gatekeeper ip = %s",d);
-		    if (listener)
-			listener->Close();
-		}
-	    }
-	    else if (a) {
-		PString gkIdentifier = a;
-		if (LocateGatekeeper(gkIdentifier)) 
-		    Debug(&hplugin,DebugInfo,"Connect to gatekeeper name = %s",a);
-		else {
-		    Debug(DebugGoOn,"Unable to connect to gatekeeper name = %s",a);
-		    if (listener)
-			listener->Close();
-		}
-	    }
-	    else {
-	        if (DiscoverGatekeeper(new H323TransportUDP(*this))) 
-		    Debug(&hplugin,DebugInfo,"Find a gatekeeper");
-		else {
-		    Debug(DebugGoOn,"Unable to connect to any gatekeeper");
-		    if (listener)
-			listener->Close();
-		    return false;
-		}
-	    }
+	    const char* d = params->getValue("gkip");
+	    const char* a = params->getValue("gkname");
+	    if (d)
+		startGkClient(ByAddr,d);
+	    else if (a)
+		startGkClient(ByName,a);
+	    else
+		startGkClient(Discover);
 	}
     }
+
     // only the first, nameless endpoint can be a gatekeeper
-    if (null() && s_cfg.getBoolValue("gk","server",false)) {
-	gkServer = new YateGatekeeperServer(*this);
-	gkServer->Init();
+    if ((!m_gkServer) && null() && s_cfg.getBoolValue("gk","server",false)) {
+	m_gkServer = new YateGatekeeperServer(*this);
+	m_gkServer->Init();
     }
 
     return true;
+}
+
+// Start a new PThread that performs GK discovery
+bool YateH323EndPoint::startGkClient(int mode, const char* name)
+{
+    int retries = 10;
+    hplugin.lock();
+    while (m_thread) {
+	hplugin.unlock();
+	if (!--retries) {
+	    Debug(&hplugin,DebugGoOn,"Old Gk client thread in '%s' not finished",safe());
+	    return false;
+	}
+	Thread::msleep(25);
+	hplugin.lock();
+    }
+    m_thread = new YateGkRegThread(this,mode,name);
+    hplugin.unlock();
+    m_thread->SetAutoDelete();
+    m_thread->Resume();
+    return true;
+}
+
+void YateH323EndPoint::asyncGkClient(int mode, const PString& name)
+{
+    switch (mode) {
+	case ByAddr:
+	    if (SetGatekeeper(name,new H323TransportUDP(*this))) {
+		Debug(&hplugin,DebugInfo,"Connected '%s' to GK addr '%s'",
+		    safe(),(const char*)name);
+		m_thread = 0;
+		return;
+	    }
+	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK addr '%s'",
+		safe(),(const char*)name);
+	    break;
+	case ByName:
+	    if (LocateGatekeeper(name)) {
+		Debug(&hplugin,DebugInfo,"Connected '%s' to GK name '%s'",
+		    safe(),(const char*)name);
+		m_thread = 0;
+		return;
+	    }
+	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK name '%s'",
+		safe(),(const char*)name);
+	    break;
+	case Discover:
+	    if (DiscoverGatekeeper(new H323TransportUDP(*this))) {
+		Debug(&hplugin,DebugInfo,"Connected '%s' to discovered GK",safe());
+		m_thread = 0;
+		return;
+	    }
+	    Debug(&hplugin,DebugWarn,"Failed to discover a GK in '%s'",safe());
+	    break;
+	case Unregister:
+	    RemoveGatekeeper();
+	    m_thread = 0;
+	    return;
+    }
+    RemoveListener(0);
+    m_thread = 0;
 }
 
 YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
@@ -1694,6 +1770,22 @@ bool YateH323Chan::msgText(Message& msg, const char* text)
     return false;
 }
 
+bool UserHandler::received(Message &msg)
+{
+    String tmp(msg.getValue("protocol"));
+    if (tmp != "h323")
+	return false;
+    tmp = msg.getValue("account");
+    tmp.trimBlanks();
+    if (tmp.null())
+	return false;
+    if (!hplugin.findEndpoint(tmp)) {
+	YateH323EndPoint* ep = new YateH323EndPoint(&msg,tmp);
+	ep->Init(&msg);
+    }
+    return true;
+}
+
 H323Driver::H323Driver()
     : Driver("h323","varchans")
 {
@@ -1770,6 +1862,7 @@ void H323Driver::initialize()
     if (!s_process) {
 	installRelay(Halt);
 	s_process = new H323Process;
+	Engine::install(new UserHandler);
     }
     int dbg = s_cfg.getIntValue("general","debug");
     if (dbg < 0)
@@ -1779,14 +1872,18 @@ void H323Driver::initialize()
     PTrace::Initialise(dbg,0,PTrace::Blocks | PTrace::Timestamp
 	| PTrace::Thread | PTrace::FileAndLine);
     if (!m_endpoints.count()) {
-	YateH323EndPoint* ep = new YateH323EndPoint;
-	ep->Init();
+	NamedList* sect = s_cfg.getSection("ep");
+	YateH323EndPoint* ep = new YateH323EndPoint(sect);
+	ep->Init(sect);
 	int n = s_cfg.sections();
 	for (int i = 0; i < n; i++) {
-	    String s(s_cfg.getSection(i));
+	    sect = s_cfg.getSection(i);
+	    if (!sect)
+		continue;
+	    String s(*sect);
 	    if (s.startSkip("ep ",false) && s) {
-		ep = new YateH323EndPoint(s);
-		ep->Init();
+		ep = new YateH323EndPoint(sect,s);
+		ep->Init(sect);
 	    }
 	}
     }

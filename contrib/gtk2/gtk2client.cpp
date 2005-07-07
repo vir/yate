@@ -1043,6 +1043,10 @@ void GTKClient::unlock()
 
 void GTKClient::main()
 {
+    if (!m_windows.count()) {
+	Debug(DebugGoOn,"Gtk Client refusing to start with no windows loaded!");
+	Engine::halt(1);
+    }
     lock();
     gtk_main();
     unlock();

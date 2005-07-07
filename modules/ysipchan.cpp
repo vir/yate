@@ -97,8 +97,11 @@ public:
     virtual bool buildParty(SIPMessage* message);
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response, const SIPMessage* message);
+    inline bool prack() const
+	{ return m_prack; }
 private:
     YateSIPEndPoint* m_ep;
+    bool m_prack;
 };
 
 class YateSIPEndPoint : public Thread
@@ -211,6 +214,8 @@ public:
 	{ return m_port; }
 private:
     void clearTransaction();
+    SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
+    bool emitPRACK(const SIPMessage* msg);
     SDPBody* createSDP(const char* addr, const char* port, const char* formats, const char* format = 0);
     SDPBody* createPasstroughSDP(Message &msg);
     SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
@@ -401,13 +406,17 @@ bool YateUDPParty::setParty(const URI& uri)
 }
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
-    : SIPEngine(s_cfg.getValue("general","useragent")), m_ep(ep)
+    : SIPEngine(s_cfg.getValue("general","useragent")),
+      m_ep(ep), m_prack(false)
 {
     addAllowed("INVITE");
     addAllowed("BYE");
     addAllowed("CANCEL");
     if (s_cfg.getBoolValue("general","registrar"))
 	addAllowed("REGISTER");
+    m_prack = s_cfg.getBoolValue("general","prack");
+    if (m_prack)
+	addAllowed("PRACK");
 }
 
 bool YateSIPEngine::buildParty(SIPMessage* message)
@@ -813,6 +822,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
+    if (plugin.ep()->engine()->prack())
+	m->addHeader("Supported","100rel");
     m_host = m->getParty()->getPartyAddr();
     m_port = m->getParty()->getPartyPort();
     m_address << m_host << ":" << m_port;
@@ -895,7 +906,6 @@ void YateSIPConnection::hangup()
 	case Ringing:
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
-		m->addRoutes(m_routes);
 		plugin.ep()->buildParty(m,m_host,m_port);
 		const SIPMessage* i = m_tr->initialMessage();
 		m->copyHeader(i,"Via");
@@ -915,29 +925,75 @@ void YateSIPConnection::hangup()
 
     if (m_byebye) {
 	m_byebye = false;
-	SIPMessage* m = new SIPMessage("BYE",m_uri);
-	m->addRoutes(m_routes);
-	plugin.ep()->buildParty(m,m_host,m_port);
-	m->addHeader("Call-ID",m_callid);
-	String tmp;
-	tmp << "<" << m_dialog.localURI << ">";
-	SIPHeaderLine* hl = new SIPHeaderLine("From",tmp);
-	hl->setParam("tag",m_dialog.localTag);
-	m->addHeader(hl);
-	tmp.clear();
-	tmp << "<" << m_dialog.remoteURI << ">";
-	hl = new SIPHeaderLine("To",tmp);
-	hl->setParam("tag",m_dialog.remoteTag);
-	m->addHeader(hl);
+	SIPMessage* m = createDlgMsg("BYE");
 	if (m_reason) {
-	    hl = new SIPHeaderLine("Reason","SIP");
-	    tmp = "\"" + m_reason + "\"";
-	    hl->setParam("text",tmp);
+	    SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
+	    hl->setParam("text","\"" + m_reason + "\"");
 	}
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }
     disconnect(m_reason);
+}
+
+// Creates a new message in an existing dialog
+SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
+{
+    if (!uri)
+	uri = m_uri;
+    SIPMessage* m = new SIPMessage(method,uri);
+    m->addRoutes(m_routes);
+    plugin.ep()->buildParty(m,m_host,m_port);
+    m->addHeader("Call-ID",m_callid);
+    String tmp;
+    tmp << "<" << m_dialog.localURI << ">";
+    SIPHeaderLine* hl = new SIPHeaderLine("From",tmp);
+    tmp = m_dialog.localTag;
+    if (tmp.null() && m_tr)
+	tmp = m_tr->getDialogTag();
+    if (tmp)
+	hl->setParam("tag",tmp);
+    m->addHeader(hl);
+    tmp.clear();
+    tmp << "<" << m_dialog.remoteURI << ">";
+    hl = new SIPHeaderLine("To",tmp);
+    tmp = m_dialog.remoteTag;
+    if (tmp.null() && m_tr)
+	tmp = m_tr->getDialogTag();
+    if (tmp)
+	hl->setParam("tag",tmp);
+    m->addHeader(hl);
+    if (m_tr && m_tr->initialMessage())
+	m->copyHeader(m_tr->initialMessage(),"Contact");
+    return m;
+}
+
+// Emit a PRovisional ACK if enabled in the engine
+bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
+{
+    if (!plugin.ep()->engine()->prack())
+	return false;
+    if (!(msg && msg->isAnswer() && (msg->code > 100) && (msg->code < 200)))
+	return false;
+    const SIPHeaderLine* rs = msg->getHeader("RSeq");
+    const SIPHeaderLine* cs = msg->getHeader("CSeq");
+    if (!(rs && cs))
+	return false;
+    String tmp;
+    const SIPHeaderLine* co = msg->getHeader("Contact");
+    if (co) {
+	tmp = *co;
+	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	if (tmp.matches(r))
+	    tmp = tmp.matchString(1);
+    }
+    SIPMessage* m = createDlgMsg("PRACK",tmp);
+    tmp = *rs;
+    tmp << " " << *cs;
+    m->addHeader("RAck",tmp);
+    plugin.ep()->engine()->addMessage(m);
+    m->deref();
+    return true;
 }
 
 // Creates a SDP from RTP address data present in message
@@ -1021,6 +1077,7 @@ bool YateSIPConnection::startRtp()
     return Engine::dispatch(m);
 }
 
+// Creates a SDP body from transport address and list of formats
 SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const char* formats, const char* format)
 {
     DDebug(this,DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
@@ -1085,6 +1142,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     return sdp;
 }
 
+// Process SIP events belonging to this connection
 bool YateSIPConnection::process(SIPEvent* ev)
 {
     DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
@@ -1153,8 +1211,9 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	DDebug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
 	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
     }
-    if (msg->isAnswer() && ((msg->code / 100) == 2)) {
+    if ((!m_routes) && msg->isAnswer() && (msg->code > 100) && (msg->code < 300))
 	m_routes = msg->getRoutes();
+    if (msg->isAnswer() && ((msg->code / 100) == 2)) {
 	const SIPMessage* ack = m_tr->latestMessage();
 	if (ack && ack->isACK()) {
 	    m_uri = ack->uri;
@@ -1172,18 +1231,22 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	}
 	Engine::enqueue(m);
     }
-    if ((m_state < Ringing) && msg->isAnswer() && (msg->code == 180)) {
-	setStatus("ringing",Ringing);
-	Message *m = message("call.ringing");
-	if (m_rtpPort && m_rtpAddr && !startRtp()) {
-	    if (natAddr)
-		m->addParam("rtp_nat_addr",natAddr);
-	    m->addParam("rtp_forward","yes");
-	    m->addParam("rtp_addr",m_rtpAddr);
-	    m->addParam("rtp_port",m_rtpPort);
-	    m->addParam("formats",m_formats);
+    if ((m_state < Ringing) && msg->isAnswer()) {
+	if (msg->code == 180) {
+	    setStatus("ringing",Ringing);
+	    Message *m = message("call.ringing");
+	    if (m_rtpPort && m_rtpAddr && !startRtp()) {
+		if (natAddr)
+		    m->addParam("rtp_nat_addr",natAddr);
+		m->addParam("rtp_forward","yes");
+		m->addParam("rtp_addr",m_rtpAddr);
+		m->addParam("rtp_port",m_rtpPort);
+		m->addParam("formats",m_formats);
+	    }
+	    Engine::enqueue(m);
 	}
-	Engine::enqueue(m);
+	if ((msg->code > 100) && (msg->code < 200))
+	    emitPRACK(msg);
     }
     if (msg->isACK()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);

@@ -447,7 +447,7 @@ bool Client::callStart(const String& target, const String& line,
 	return false;
     ClientChannel* cc = new ClientChannel();
     Message* m = cc->message("call.route");
-    Regexp r("^[a-z]\\+/");
+    Regexp r("^[a-z0-9]\\+/");
     if (r.matches(target.safe()))
 	m->setParam("callto",target);
     else

@@ -445,7 +445,50 @@ DSoundChan::~DSoundChan()
 
 bool AttachHandler::received(Message &msg)
 {
-    return false;
+    int more = 2;
+
+    String src(msg.getValue("source"));
+    if (src.null())
+	more--;
+    else if (!src.startSkip("dsound/",false))
+	 src = "";
+
+    String cons(msg.getValue("consumer"));
+    if (cons.null())
+	more--;
+    else if (!cons.startSkip("dsound/",false))
+	cons = "";
+
+    if (src.null() && cons.null())
+	return false;
+
+    DataEndpoint *dd = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    if (!dd) {
+	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	if (ch)
+	    dd = ch->setEndpoint();
+    }
+    if (!dd) {
+	Debug(DebugWarn,"DSound attach request with no control or data channel!");
+	return false;
+    }
+
+    if (src) {
+	DSoundSource* s = new DSoundSource;
+	dd->setSource(s);
+	s->deref();
+    }
+
+    if (cons) {
+	DSoundConsumer* c = new DSoundConsumer;
+	dd->setConsumer(c);
+	c->deref();
+    }
+
+    Thread::msleep(50);
+
+    // Stop dispatching if we handled all requested
+    return !more;
 }
 
 bool SoundDriver::msgExecute(Message& msg, String& dest)

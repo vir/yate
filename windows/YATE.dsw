@@ -54,6 +54,57 @@ Package=<4>
 
 ###############################################################################
 
+Project: "Extra"=.\Extra.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name _h323chan
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Gtk2Client
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "Gtk2Client"=.\Gtk2Client.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name LibGtk2
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "LibGtk2"=.\LibGtk2.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "Libyate"=.\Libyate.dsp - Package Owner=<4>
 
 Package=<5>

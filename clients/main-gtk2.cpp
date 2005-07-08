@@ -30,7 +30,7 @@ using namespace TelEngine;
 
 static GTKDriver gtkdriver;
 
-extern "C" int main(int argc, const char** argv, const char** environ)
+extern "C" int main(int argc, const char** argv, const char** envp)
 {
     g_thread_init(NULL);
     gdk_threads_init();
@@ -38,6 +38,6 @@ extern "C" int main(int argc, const char** argv, const char** environ)
     if (fail)
 	g_warning("Cannot open display: '%s'",gdk_get_display());
     TelEngine::Engine::extraPath() = "gtk2";
-    return TelEngine::Engine::main(argc,argv,environ,TelEngine::Engine::Client,fail);
+    return TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::Client,fail);
 }
 /* vi: set ts=8 sw=4 sts=4 noet: */

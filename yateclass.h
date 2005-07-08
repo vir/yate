@@ -65,9 +65,12 @@ typedef unsigned __int64 uint64_t;
 typedef int socklen_t;
 typedef unsigned long in_addr_t;
 
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
-#define strcasecmp _stricmp
 #define strdup _strdup
 #define random rand
 #define open _open

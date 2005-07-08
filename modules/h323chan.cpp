@@ -35,6 +35,28 @@
 #include <ptclib/delaychan.h>
 #include <gkserver.h>
 
+/* For some reason the Windows version of OpenH323 #undefs the version.
+ * You need to put a openh323version.h file somewhere in your include path,
+ *  preferably in the OpenH323 include directory.
+ * Make sure you keep that file in sync with your other OpenH323 components.
+ * You can find a template for that below:
+
+--- cut here ---
+#ifndef OPENH323_MAJOR
+
+#define OPENH323_MAJOR 1
+#define OPENH323_MINOR 0
+#define OPENH323_BUILD 0
+
+#endif
+--- cut here ---
+
+ */
+
+#ifdef _WINDOWS
+#include <openh323version.h>
+#endif
+
 #ifndef OPENH323_VERSION
 #define OPENH323_VERSION "SomethingOld"
 #endif
@@ -506,7 +528,7 @@ public:
 		return FALSE;
 	    const H245_AudioCapability_g7231& g7231 = pdu;
 	    packetSize = g7231.m_maxAl_sduAudioFrames;
-	    m_aa = g7231.m_silenceSuppression;
+	    m_aa = (g7231.m_silenceSuppression != 0);
 	    return TRUE;
 	}
 protected:
@@ -825,7 +847,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 
     // outgoing calls get the "call.execute" message as user data
     Message* msg = static_cast<Message*>(userdata);
-    m_chan = new YateH323Chan(this,userdata,
+    m_chan = new YateH323Chan(this,(userdata != 0),
 	((transport && !userdata) ? (const char*)transport->GetRemoteAddress() : 0));
     if (!msg) {
 	m_passtrough = s_passtrough;
@@ -1188,7 +1210,7 @@ BOOL YateH323Connection::decodeCapability(const H323Capability& capability, cons
 	    break;
 	}
     }
-    DDebug(m_chan,DebugAll,"capability '%s' format '%s' payload %d",fname.c_str(),format,pload);
+    DDebug(&hplugin,DebugAll,"capability '%s' format '%s' payload %d",fname.c_str(),format,pload);
     if (format) {
 	if (capabName)
 	    *capabName = fname;

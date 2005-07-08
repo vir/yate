@@ -673,6 +673,8 @@ void GTKWindow::init()
     m_sizeW = s_save.getIntValue(m_id,"w",m_sizeW);
     m_sizeH = s_save.getIntValue(m_id,"h",m_sizeH);
     restore();
+    // we realize the widget explicitely to avoid a gtk-win32 bug
+    gtk_widget_realize(m_widget);
     gtk_widget_show_all(m_widget);
     m_visible = true;
     if (m_master)

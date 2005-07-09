@@ -1425,11 +1425,11 @@ void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long timeDel
 
 BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 {
+    readDelay.Delay(len/16);
     while (!m_exit) {
 	Lock lock(m_mutex);
 	if (!getConnSource()) {
 	    ::memset(buf,0,len);
-	    readDelay.Delay(len/16);
 	    break;
 	}
 	if (len >= (int)m_buffer.length()) {
@@ -1441,12 +1441,14 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 	}
 	if (len > 0) {
 	    ::memcpy(buf,m_buffer.data(),len);
-	    m_buffer.assign(len+(char *)m_buffer.data(),m_buffer.length()-len);
+	    m_buffer.cut(-len);
 	    XDebug(&hplugin,DebugAll,"Consumer pulled %d bytes from buffer [%p]",len,this);
 	    break;
 	}
-	else
+	else {
 	    len = 0;
+	    Thread::yield();
+	}
     }
     lastReadCount = len;
     return (len != 0);

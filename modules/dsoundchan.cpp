@@ -39,10 +39,14 @@
 
 using namespace TelEngine;
 
+// we should use the primary sound buffer else we will lose sound while we have no input focus
+#define USE_PRIMARY_BUFFER
+
 // 20ms chunk, 100ms buffer
 #define CHUNK_SIZE 320
-#define MAX_SIZE (5*CHUNK_SIZE)
+#define MIN_SIZE (3*CHUNK_SIZE)
 #define BUF_SIZE (4*CHUNK_SIZE)
+#define MAX_SIZE (5*CHUNK_SIZE)
 
 class DSoundSource : public DataSource
 {
@@ -86,6 +90,8 @@ private:
     LPGUID m_device;
     LPDIRECTSOUND m_ds;
     LPDIRECTSOUNDBUFFER m_dsb;
+    DWORD m_buffSize;
+    DWORD m_writePos;
     DataBlock m_buf;
 };
 
@@ -109,6 +115,8 @@ private:
     LPGUID m_device;
     LPDIRECTSOUNDCAPTURE m_ds;
     LPDIRECTSOUNDCAPTUREBUFFER m_dsb;
+    DWORD m_buffSize;
+    DWORD m_readPos;
 };
 
 class DSoundChan : public Channel
@@ -135,9 +143,6 @@ public:
     ~SoundDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
-protected:
-    void statusModule(String& str);
-    void statusParams(String& str);
 private:
     AttachHandler* m_handler;
 };
@@ -146,7 +151,8 @@ INIT_PLUGIN(SoundDriver);
 
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
     : Thread("DirectSound Play",High),
-      m_owner(owner), m_device(device), m_ds(0), m_dsb(0)
+      m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
+      m_buffSize(0), m_writePos(0)
 {
 }
 
@@ -175,17 +181,12 @@ bool DSoundPlay::init()
     HWND wnd = GetForegroundWindow();
     if (!wnd)
 	wnd = GetDesktopWindow();
+#ifdef USE_PRIMARY_BUFFER
     if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,DSSCL_WRITEPRIMARY))) {
+#else
+    if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,DSSCL_EXCLUSIVE))) {
+#endif
 	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
-	return false;
-    }
-    DSBUFFERDESC bdesc;
-    ZeroMemory(&bdesc, sizeof(bdesc));
-    bdesc.dwSize = sizeof(bdesc);
-    bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
-    // | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLFREQUENCY | DSBCAPS_CTRLVOLUME
-    if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
-	Debug(DebugGoOn,"Could not create the DirectSound buffer, code 0x%X",hr);
 	return false;
     }
     WAVEFORMATEX fmt;
@@ -196,10 +197,26 @@ bool DSoundPlay::init()
     fmt.nBlockAlign = 2;
     fmt.wBitsPerSample = 16;
     fmt.cbSize = 0;
+    DSBUFFERDESC bdesc;
+    ZeroMemory(&bdesc, sizeof(bdesc));
+    bdesc.dwSize = sizeof(bdesc);
+#ifdef USE_PRIMARY_BUFFER
+    bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
+#else
+    bdesc.dwFlags = DSBCAPS_LOCSOFTWARE ;
+    bdesc.dwBufferBytes = BUF_SIZE;
+    bdesc.lpwfxFormat = &fmt;
+#endif
+    if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
+	Debug(DebugGoOn,"Could not create the DirectSound buffer, code 0x%X",hr);
+	return false;
+    }
+#ifdef USE_PRIMARY_BUFFER
     if (FAILED(hr = m_dsb->SetFormat(&fmt))) {
 	Debug(DebugGoOn,"Could not set the DirectSound buffer format, code 0x%X",hr);
 	return false;
     }
+#endif
     if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
 	Debug(DebugGoOn,"Could not get the DirectSound buffer format, code 0x%X",hr);
 	return false;
@@ -213,15 +230,20 @@ bool DSoundPlay::init()
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
-#ifdef DEBUG
     DSBCAPS caps;
     caps.dwSize = sizeof(caps);
-    if (SUCCEEDED(m_dsb->GetCaps(&caps)))
-	Debug(DebugInfo,"DirectSound buffer size %u",caps.dwBufferBytes);
-#endif
-    if (FAILED(hr = m_dsb->Play(0,0,DSBPLAY_LOOPING))) {
-	Debug(DebugGoOn,"Could not play the DirectSound buffer, code 0x%X",hr);
+    if (FAILED(hr = m_dsb->GetCaps(&caps))) {
+	Debug(DebugGoOn,"Could not get the DirectSound buffer capabilities, code 0x%X",hr);
 	return false;
+    }
+    m_buffSize = caps.dwBufferBytes;
+    Debug(&__plugin,DebugInfo,"DirectSound buffer size %u",m_buffSize);
+    if (FAILED(hr = m_dsb->Play(0,0,DSBPLAY_LOOPING))) {
+	if ((hr != DSERR_BUFFERLOST) || FAILED(hr = m_dsb->Restore())) {
+	    Debug(DebugGoOn,"Could not play the DirectSound buffer, code 0x%X",hr);
+	    return false;
+	}
+	m_dsb->Play(0,0,DSBPLAY_LOOPING);
     }
     return true;
 }
@@ -232,32 +254,50 @@ void DSoundPlay::run()
 	return;
     if (m_owner)
 	m_owner->m_dsound = this;
-    Debug(DebugInfo,"DSoundPlay is initialized and running");
+    bool first = true;
+    Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
     while (m_owner) {
 	msleep(1,true);
-	if (m_dsb && (m_buf.length() >= CHUNK_SIZE)) {
+	if (first) {
+	    if (m_buf.length() < MIN_SIZE)
+		continue;
+	    first = false;
+	    m_dsb->GetCurrentPosition(NULL,&m_writePos);
+	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
+		m_buf.length(),m_writePos);
+	}
+	while (m_dsb && (m_buf.length() >= CHUNK_SIZE)) {
 	    void* buf = 0;
 	    void* buf2 = 0;
 	    DWORD len = 0;
 	    DWORD len2 = 0;
-	    HRESULT hr = m_dsb->Lock(0,CHUNK_SIZE,&buf,&len,&buf2,&len2,DSBLOCK_FROMWRITECURSOR);
+	    HRESULT hr = m_dsb->Lock(m_writePos,CHUNK_SIZE,&buf,&len,&buf2,&len2,0);
 	    if (FAILED(hr)) {
+		m_writePos = 0;
 		if ((hr == DSERR_BUFFERLOST) && SUCCEEDED(m_dsb->Restore())) {
-		    Debug(DebugAll,"DirectSound buffer lost and restored");
 		    m_dsb->Play(0,0,DSBPLAY_LOOPING);
+		    m_dsb->GetCurrentPosition(NULL,&m_writePos);
+		    Debug(&__plugin,DebugAll,"DirectSound buffer lost and restored, playing at %u",
+			m_writePos);
 		}
-		lock();
-		m_buf.clear();
-		unlock();
+		else {
+		    lock();
+		    m_buf.clear();
+		    unlock();
+		}
 		continue;
 	    }
 	    lock();
 	    ::memcpy(buf,m_buf.data(),len);
 	    if (buf2)
 		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
-	    m_dsb->Unlock(buf,len,0,0);
+	    m_dsb->Unlock(buf,len,buf2,len2);
+	    m_writePos += CHUNK_SIZE;
+	    if (m_writePos >= m_buffSize)
+		m_writePos -= m_buffSize;
 	    m_buf.cut(-CHUNK_SIZE);
 	    unlock();
+	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
 	}
     }
 }
@@ -284,16 +324,17 @@ void DSoundPlay::put(const DataBlock& data)
     lock();
     if (m_buf.length() + data.length() <= MAX_SIZE)
 	m_buf += data;
-#ifdef XDEBUG
+#ifdef DDEBUG
     else
-	Debug(DebugAll,"DSoundPlay skipped %u bytes, buffer is full",data.length());
+	Debug(&__plugin,DebugMild,"DSoundPlay skipped %u bytes, buffer is full",data.length());
 #endif
     unlock();
 }
 
 DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
     : Thread("DirectSound Rec"),
-      m_owner(owner), m_device(device), m_ds(0), m_dsb(0)
+      m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
+      m_buffSize(0), m_readPos(0)
 {
 }
 
@@ -350,6 +391,14 @@ bool DSoundRec::init()
 	    fmt.wFormatTag,fmt.nChannels,fmt.nSamplesPerSec,fmt.wBitsPerSample);
 	return false;
     }
+    DSCBCAPS caps;
+    caps.dwSize = sizeof(caps);
+    if (FAILED(hr = m_dsb->GetCaps(&caps))) {
+	Debug(DebugGoOn,"Could not get the DirectSoundCapture buffer capabilities, code 0x%X",hr);
+	return false;
+    }
+    m_buffSize = caps.dwBufferBytes;
+    Debug(&__plugin,DebugInfo,"DirectSoundCapture buffer size %u",m_buffSize);
     if (FAILED(hr = m_dsb->Start(DSCBSTART_LOOPING))) {
 	Debug(DebugGoOn,"Could not record to the DirectSoundCapture buffer, code 0x%X",hr);
 	return false;
@@ -363,16 +412,32 @@ void DSoundRec::run()
 	return;
     if (m_owner)
 	m_owner->m_dsound = this;
-    Debug(DebugInfo,"DSoundRec is initialized and running");
+    Debug(&__plugin,DebugInfo,"DSoundRec is initialized and running");
     while (m_owner) {
 	msleep(1,true);
 	if (m_dsb) {
-	    void* buf = 0;
-	    DWORD len = 0;
-	    if (FAILED(m_dsb->Lock(0,CHUNK_SIZE,&buf,&len,0,0,0)))
+	    DWORD pos = 0;
+	    if (FAILED(m_dsb->GetCurrentPosition(0,&pos)))
 		continue;
-	    DataBlock data(buf,len);
-	    m_dsb->Unlock(buf,len,0,0);
+	    if (pos < m_readPos)
+		pos += m_buffSize;
+	    pos -= m_readPos;
+	    if (pos < CHUNK_SIZE)
+		continue;
+	    void* buf = 0;
+	    void* buf2 = 0;
+	    DWORD len = 0;
+	    DWORD len2 = 0;
+	    if (FAILED(m_dsb->Lock(m_readPos,CHUNK_SIZE,&buf,&len,&buf2,&len2,0)))
+		continue;
+	    DataBlock data(0,len+len2);
+	    ::memcpy(data.data(),buf,len);
+	    if (buf2)
+		::memcpy(((char*)data.data())+len,buf2,len2);
+	    m_dsb->Unlock(buf,len,buf2,len2);
+	    m_readPos += (len+len2);
+	    if (m_readPos >= m_buffSize)
+		m_readPos -= m_buffSize;
 	    if (m_owner)
 		m_owner->Forward(data);
 	}
@@ -381,7 +446,7 @@ void DSoundRec::run()
 
 void DSoundRec::cleanup()
 {
-    Debug(DebugInfo,"DSoundRec cleaning up");
+    Debug(&__plugin,DebugInfo,"DSoundRec cleaning up");
     if (m_dsb) {
 	m_dsb->Stop();
 	m_dsb->Release();
@@ -429,18 +494,19 @@ void DSoundConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 DSoundChan::DSoundChan()
     : Channel(__plugin)
 {
-    Debug(DebugAll,"DSoundChan::DSoundChan() [%p]",this);
+    Debug(this,DebugAll,"DSoundChan::DSoundChan() [%p]",this);
 
-    setSource(new DSoundSource);
-    getSource()->deref();
     setConsumer(new DSoundConsumer);
     getConsumer()->deref();
+    Thread::msleep(50);
+    setSource(new DSoundSource);
+    getSource()->deref();
     Thread::msleep(50);
 }
 
 DSoundChan::~DSoundChan()
 {
-    Debug(DebugAll,"DSoundChan::~DSoundChan()  [%p]",this);
+    Debug(this,DebugAll,"DSoundChan::~DSoundChan()  [%p]",this);
 }
 
 bool AttachHandler::received(Message &msg)
@@ -469,23 +535,24 @@ bool AttachHandler::received(Message &msg)
 	    dd = ch->setEndpoint();
     }
     if (!dd) {
-	Debug(DebugWarn,"DSound attach request with no control or data channel!");
+	Debug(&__plugin,DebugWarn,"DSound attach request with no control or data channel!");
 	return false;
-    }
-
-    if (src) {
-	DSoundSource* s = new DSoundSource;
-	dd->setSource(s);
-	s->deref();
     }
 
     if (cons) {
 	DSoundConsumer* c = new DSoundConsumer;
 	dd->setConsumer(c);
 	c->deref();
+	Thread::msleep(50);
     }
 
-    Thread::msleep(50);
+    if (src) {
+	DSoundSource* s = new DSoundSource;
+	dd->setSource(s);
+	s->deref();
+	Thread::msleep(50);
+    }
+
 
     // Stop dispatching if we handled all requested
     return !more;
@@ -512,7 +579,7 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
 	if (callto.null()) {
 	    const char *targ = msg.getValue("target");
 	    if (!targ) {
-		Debug(DebugWarn,"DSound outgoing call with no target!");
+		Debug(&__plugin,DebugWarn,"DSound outgoing call with no target!");
 		return false;
 	    }
 	    callto = msg.getValue("caller");
@@ -521,7 +588,7 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
 	    m.addParam("called",targ);
 	    m.addParam("caller",callto);
 	    if (!Engine::dispatch(m)) {
-		Debug(DebugWarn,"DSound outgoing call but no route!");
+		Debug(&__plugin,DebugWarn,"DSound outgoing call but no route!");
 		return false;
 	    }
 	    callto = m.retValue();
@@ -536,21 +603,11 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
 	    ds->deref();
 	    return true;
 	}
-	Debug(DebugWarn,"DSound outgoing call not accepted!");
+	Debug(&__plugin,DebugWarn,"DSound outgoing call not accepted!");
 	ds->destruct();
 	return false;
     }
     return true;
-}
-
-void SoundDriver::statusModule(String& str)
-{
-    Module::statusModule(str);
-}
-
-void SoundDriver::statusParams(String& str)
-{
-    //str << "sound=" << tones.count() << ",chans=" << channels().count();
 }
 
 SoundDriver::SoundDriver()

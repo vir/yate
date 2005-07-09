@@ -858,7 +858,7 @@ Regexp::~Regexp()
 
 bool Regexp::matches(const char* value, StringMatchPrivate* matches)
 {
-    DDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
+    XDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
     if (!value)
 	value = "";
     if (!compile())
@@ -881,7 +881,7 @@ void Regexp::changed()
 
 bool Regexp::compile()
 {
-    DDebug(DebugInfo,"Regexp::compile()");
+    XDebug(DebugInfo,"Regexp::compile()");
     if (c_str() && !m_regexp) {
 	regex_t *data = (regex_t *) ::malloc(sizeof(regex_t));
 	if (!data) {
@@ -901,7 +901,7 @@ bool Regexp::compile()
 
 void Regexp::cleanup()
 {
-    DDebug(DebugInfo,"Regexp::cleanup()");
+    XDebug(DebugInfo,"Regexp::cleanup()");
     if (m_regexp) {
 	regex_t *data = (regex_t *)m_regexp;
 	m_regexp = 0;

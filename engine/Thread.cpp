@@ -497,7 +497,9 @@ void Thread::cancel(bool hard)
 void Thread::yield(bool exitCheck)
 {
 #ifdef _WINDOWS
-    ::Sleep(0);
+    // zero sleep is bad if we have high priority threads, they
+    //  won't relinquish the timeslice for lower priority ones
+    ::Sleep(1);
 #else
     ::usleep(0);
 #endif

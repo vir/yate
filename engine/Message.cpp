@@ -226,7 +226,7 @@ MessageDispatcher::~MessageDispatcher()
 
 bool MessageDispatcher::install(MessageHandler* handler)
 {
-    DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
+    XDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
 	return false;
     Lock lock(m_mutex);
@@ -242,11 +242,11 @@ bool MessageDispatcher::install(MessageHandler* handler)
     }
     m_changes++;
     if (l) {
-	DDebug(DebugAll,"Inserting handler [%p] on place #%d",handler,pos);
+	XDebug(DebugAll,"Inserting handler [%p] on place #%d",handler,pos);
 	l->insert(handler);
     }
     else {
-	DDebug(DebugAll,"Appending handler [%p] on place #%d",handler,pos);
+	XDebug(DebugAll,"Appending handler [%p] on place #%d",handler,pos);
 	m_handlers.append(handler);
     }
     handler->m_dispatcher = this;
@@ -257,7 +257,7 @@ bool MessageDispatcher::install(MessageHandler* handler)
 
 bool MessageDispatcher::uninstall(MessageHandler* handler)
 {
-    DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
+    XDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
     Lock lock(m_mutex);
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
     if (handler) {
@@ -269,7 +269,7 @@ bool MessageDispatcher::uninstall(MessageHandler* handler)
 
 bool MessageDispatcher::dispatch(Message& msg)
 {
-#ifdef DEBUG
+#ifdef XDEBUG
     Debugger debug("MessageDispatcher::dispatch","(%p) (\"%s\")",&msg,msg.c_str());
 #endif
 #ifndef NDEBUG

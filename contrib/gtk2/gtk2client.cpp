@@ -37,6 +37,12 @@ static bool s_clickInfo = false;
 #define INVALID_POS (-1000000)
 #define MAX_CONTAINER_DEPTH 20
 
+#ifdef _WINDOWS
+#define DEFAULT_DEVICE "dsound/*"
+#else
+#define DEFAULT_DEVICE "oss//dev/dsp"
+#endif
+
 // Internal class used to recursively find a widget
 class WidgetFinder {
 public:
@@ -1101,7 +1107,7 @@ GTKDriver::~GTKDriver()
 void GTKDriver::initialize()
 {
     Output("Initializing module GTK2 client");
-    s_device = Engine::config().getValue("client","device","oss//dev/dsp");
+    s_device = Engine::config().getValue("client","device",DEFAULT_DEVICE);
     if (!GTKClient::self())
     {
 	s_clickInfo = Engine::config().getBoolValue("client","clickinfo");

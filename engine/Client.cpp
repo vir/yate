@@ -58,6 +58,11 @@ const String& Window::toString() const
     return m_id;
 }
 
+void Window::title(const String& text)
+{
+    m_title = text;
+}
+
 bool Window::related(const Window* wnd) const
 {
     if ((wnd == this) || !wnd || wnd->master())
@@ -118,6 +123,22 @@ Window* Client::getWindow(const String& name)
 	return 0;
     ObjList* l = s_client->m_windows.find(name);
     return static_cast<Window*>(l ? l->get() : 0);
+}
+
+ObjList* Client::listWindows()
+{
+    if (!s_client)
+	return 0;
+    ObjList* lst = 0;
+    for (ObjList* l = &s_client->m_windows; l; l = l->next()) {
+	Window* w = static_cast<Window*>(l->get());
+	if (w) {
+	    if (!lst)
+		lst = new ObjList;
+	    lst->append(new String(w->id()));
+	}
+    }
+    return lst;
 }
 
 bool Client::setVisible(const String& name, bool show)
@@ -375,6 +396,8 @@ bool Client::action(Window* wnd, const String& name)
 	}
     }
     Message* m = new Message("ui.event");
+    if (wnd)
+	m->addParam("window",wnd->id());
     m->addParam("event","action");
     m->addParam("name",name);
     Engine::enqueue(m);
@@ -389,6 +412,8 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 	return true;
     setCheck(name,active,0,wnd);
     Message* m = new Message("ui.event");
+    if (wnd)
+	m->addParam("window",wnd->id());
     m->addParam("event","toggle");
     m->addParam("name",name);
     m->addParam("active",String::boolText(active));
@@ -402,6 +427,8 @@ bool Client::select(Window* wnd, const String& name, const String& item)
 	name.c_str(),item.c_str(),wnd);
     setSelect(name,item,0,wnd);
     Message* m = new Message("ui.event");
+    if (wnd)
+	m->addParam("window",wnd->id());
     m->addParam("event","select");
     m->addParam("name",name);
     m->addParam("item",item);

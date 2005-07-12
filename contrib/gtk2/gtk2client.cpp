@@ -226,22 +226,42 @@ static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
     return wnd && wnd->action(wid);
 }
 
-static gboolean widgetCbToggle(GtkToggleButton* btn, gpointer dat)
+static gboolean widgetCbToggle(GtkWidget* wid, gpointer dat)
 {
     Debug(GTKDriver::self(),DebugAll,"widgetCbToggle data %p",dat);
     if (GTKClient::changing())
 	return FALSE;
-    GTKWindow* wnd = getWidgetWindow((GtkWidget*)btn);
-    return wnd && wnd->toggle(btn,gtk_toggle_button_get_active(btn));
+    GTKWindow* wnd = getWidgetWindow(wid);
+    if (!wnd)
+	wnd = static_cast<GTKWindow*>(dat);
+    if (!wnd)
+	return FALSE;
+    gboolean active = FALSE;
+    if (GTK_IS_TOGGLE_BUTTON(wid))
+	active = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wid));
+    else if (GTK_IS_CHECK_MENU_ITEM(wid))
+	active = gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(wid));
+    return wnd->toggle(wid,active);
 }
 
 static gboolean widgetCbSelected(GtkOptionMenu* opt, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbChanged data %p",dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSelected data %p",dat);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow((GtkWidget*)opt);
     return wnd && wnd->select(opt,gtk_option_menu_get_history(opt));
+}
+
+static gboolean widgetCbSelection(GtkList* lst, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSelection data %p",dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow((GtkWidget*)lst);
+    // FIXME
+    return false;
+//    return wnd && wnd->select(opt,gtk_option_menu_get_history(opt));
 }
 
 static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
@@ -352,6 +372,26 @@ static GtkWidget* gtkOptionMenuNew(const gchar* text)
     return opt;
 }
 
+static GtkWidget* gtkListNew(const gchar* text)
+{
+    GtkWidget* lst = gtk_list_new();
+    if (lst) {
+	GList* list = 0;
+	String tmp(text);
+	ObjList* l = tmp.split(',');
+	for (ObjList* i = l; i; i = i->next()) {
+	    String* s = static_cast<String*>(i->get());
+	    if (s && *s)
+		list = g_list_append(list,gtk_list_item_new_with_label(s->c_str()));
+	}
+	if (l)
+	    l->destruct();
+	if (list)
+	    gtk_list_append_items(GTK_LIST(lst),list);
+    }
+    return lst;
+}
+
 static WidgetMaker s_widgetMakers[] = {
     { "label", gtkLeftLabelNew, 0, 0 },
     { "editor", gtkEntryNewWithText, "activate", G_CALLBACK(widgetCbAction) },
@@ -360,6 +400,7 @@ static WidgetMaker s_widgetMakers[] = {
     { "check", gtk_check_button_new_with_label, "toggled", G_CALLBACK(widgetCbToggle) },
     { "combo", gtkComboNewWithText, 0, 0 },
     { "option", gtkOptionMenuNew, "changed", G_CALLBACK(widgetCbSelected) },
+    { "list", gtkListNew, "selection-changed", G_CALLBACK(widgetCbSelection) },
     { "frame", gtk_frame_new, 0, 0 },
     { "image", gtk_image_new_from_file, 0, 0 },
     { "hseparator", (GBuilder)gtk_hseparator_new, 0, 0 },
@@ -445,6 +486,30 @@ static TokenDict s_layoutNames[] = {
     { "boxed", GTKWindow::Boxed },
     { "tabbed", GTKWindow::Tabbed },
     { "framed", GTKWindow::Framed },
+    { 0, 0 },
+};
+
+static TokenDict s_directions[] = {
+    { "left", GTK_POS_LEFT },
+    { "right", GTK_POS_RIGHT },
+    { "top", GTK_POS_TOP },
+    { "bottom", GTK_POS_BOTTOM },
+    { 0, 0 },
+};
+
+static TokenDict s_shadows[] = {
+    { "none", GTK_SHADOW_NONE },
+    { "in", GTK_SHADOW_IN },
+    { "out", GTK_SHADOW_OUT },
+    { "etched_in", GTK_SHADOW_ETCHED_IN },
+    { "etched_out", GTK_SHADOW_ETCHED_OUT },
+    { 0, 0 },
+};
+
+static TokenDict s_reliefs[] = {
+    { "full", GTK_RELIEF_NORMAL },
+    { "half", GTK_RELIEF_HALF },
+    { "none", GTK_RELIEF_NONE },
     { 0, 0 },
 };
 
@@ -589,6 +654,9 @@ void GTKWindow::insert(GtkWidget* wid, int x, int y, int w, int h)
 	gtk_box_pack_start(GTK_BOX(filler()),wid,(x > 0),true,y);
     else
 	gtk_container_add(GTK_CONTAINER(filler()),wid);
+    if (GTK_IS_NOTEBOOK(filler()) && m_tabName)
+	gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(m_filler),wid,m_tabName.c_str());
+    m_tabName.clear();
 }
 
 GtkWidget* GTKWindow::build(const String& type, const String& text)
@@ -615,6 +683,7 @@ void GTKWindow::populate()
     if (!sect)
 	return;
     GtkWidget* containerStack[MAX_CONTAINER_DEPTH];
+    GtkWidget* lastWidget = 0;
     int depth = 0;
     if (m_layout == Unknown)
 	m_layout = (Layout)sect->getIntValue("layout",s_layoutNames,GTKWindow::Unknown);
@@ -638,6 +707,7 @@ void GTKWindow::populate()
 	}
 	GtkWidget* wid = build(p->name(),s.safe());
 	if (wid) {
+	    lastWidget = wid;
 	    attachDebug(wid);
 	    if (act)
 		gtk_widget_set_name(wid,act);
@@ -645,6 +715,7 @@ void GTKWindow::populate()
 	    continue;
 	}
 	if (p->name() == "leave") {
+	    lastWidget = 0;
 	    if (depth > 0) {
 		Debug(GTKDriver::self(),DebugAll,"Popping container off stack of depth %d",depth);
 		depth--;
@@ -652,10 +723,35 @@ void GTKWindow::populate()
 	    }
 	    continue;
 	}
+	else if (p->name() == "tabname") {
+	    m_tabName = *p;
+	    continue;
+	}
+	else if (p->name().startsWith("property:")) {
+	    if (!lastWidget)
+		continue;
+	    String tmp = p->name();
+	    tmp >> "property:";
+	    Debug(GTKDriver::self(),DebugAll,"Setting property '%s' to '%s' in %p",
+		tmp.c_str(),p->c_str(),lastWidget);
+	    if (tmp.startSkip("int:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(),NULL);
+	    else if (tmp.startSkip("bool:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toBoolean(),NULL);
+	    else if (tmp.startSkip("str:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->safe(),NULL);
+	    else if (tmp.startSkip("pos:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(s_directions),NULL);
+	    else if (tmp.startSkip("relief:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(s_reliefs),NULL);
+	    else if (tmp.startSkip("shadow:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(s_shadows),NULL);
+	}
 	if (depth >= MAX_CONTAINER_DEPTH)
 	    continue;
 	wid = container(p->name());
 	if (wid) {
+	    lastWidget = wid;
 	    attachDebug(wid);
 	    if (act)
 		gtk_widget_set_name(wid,act);
@@ -668,9 +764,15 @@ void GTKWindow::populate()
     }
 }
 
+void GTKWindow::title(const String& text)
+{
+    Window::title(text);
+    gtk_window_set_title((GtkWindow*)m_widget,m_title.safe());
+}
+
 void GTKWindow::init()
 {
-    gtk_window_set_title((GtkWindow*)m_widget,s_cfg.getValue(m_id,"title",m_id));
+    title(s_cfg.getValue(m_id,"title",m_id));
     m_master = s_cfg.getBoolValue(m_id,"master");
     if (!m_master)
 	gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_TOOLBAR);
@@ -791,11 +893,11 @@ bool GTKWindow::action(GtkWidget* wid)
     return GTKClient::self() && GTKClient::self()->action(this,name);
 }
 
-bool GTKWindow::toggle(GtkToggleButton* btn, gboolean active)
+bool GTKWindow::toggle(GtkWidget* wid, gboolean active)
 {
-    const gchar* name = gtk_widget_get_name((GtkWidget*)btn);
-    Debug(GTKDriver::self(),DebugAll,"toggle '%s' btn=%p active=%s [%p]",
-	name,btn,String::boolText(active),this);
+    const gchar* name = gtk_widget_get_name(wid);
+    Debug(GTKDriver::self(),DebugAll,"toggle '%s' wid=%p active=%s [%p]",
+	name,wid,String::boolText(active),this);
     return GTKClient::self() && GTKClient::self()->toggle(this,name,active);
 }
 
@@ -1015,8 +1117,22 @@ bool GTKWindow::getCheck(GtkWidget* wid, bool& checked)
 void GTKWindow::menu(int x, int y)
 {
     GtkWidget* mnu = gtk_menu_new();
-    GtkWidget* item = gtk_check_menu_item_new_with_label("123");
-    gtk_menu_shell_append((GtkMenuShell*)mnu,item);
+    ObjList* wnds = GTKClient::listWindows();
+    for (ObjList* l = wnds; l; l = l->next()) {
+	String* s = static_cast<String*>(l->get());
+	if (!s || s->null())
+	    continue;
+	Window* w = GTKClient::getWindow(*s);
+	if (!w || w->master())
+	    continue;
+	GtkWidget* item = gtk_check_menu_item_new_with_label(w->title().safe());
+	gtk_widget_set_name(item,s->c_str());
+	gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),w->visible());
+	g_signal_connect(G_OBJECT(item),"toggled",G_CALLBACK(widgetCbToggle),this);
+	gtk_menu_shell_append((GtkMenuShell*)mnu,item);
+    }
+    delete wnds;
+    gtk_widget_show_all(mnu);
     gtk_menu_popup((GtkMenu*)mnu,NULL,NULL,NULL,NULL,3,gtk_get_current_event_time());
 }
 

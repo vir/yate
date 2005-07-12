@@ -48,6 +48,7 @@ public:
     Window(const char* id = 0);
     virtual ~Window();
     virtual const String& toString() const;
+    virtual void title(const String& text);
     virtual bool setActive(const String& name, bool active) = 0;
     virtual bool setShow(const String& name, bool visible) = 0;
     virtual bool setText(const String& name, const String& text) = 0;
@@ -68,6 +69,8 @@ public:
     virtual void menu(int x, int y) = 0;
     inline const String& id() const
 	{ return m_id; }
+    inline const String& title() const
+	{ return m_title; }
     inline bool visible() const
 	{ return m_visible; }
     inline void visible(bool yes)
@@ -76,6 +79,7 @@ public:
 	{ return m_master; }
 protected:
     String m_id;
+    String m_title;
     bool m_visible;
     bool m_master;
 };
@@ -141,6 +145,7 @@ public:
     static Window* getWindow(const String& name);
     static bool setVisible(const String& name, bool show = true);
     static bool getVisible(const String& name);
+    static ObjList* listWindows();
 protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();

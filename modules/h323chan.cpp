@@ -1031,10 +1031,11 @@ void YateH323Connection::OnCleared()
 {
     int reason = GetCallEndReason();
     const char* rtext = CallEndReasonText(reason);
-    Debug(m_chan,DebugInfo,"YateH323Connection::OnCleared() reason: %s (%d) [%p]",
-	rtext,reason,this);
+    const char* error = lookup(reason,dict_errors);
+    Debug(m_chan,DebugInfo,"YateH323Connection::OnCleared() error: '%s' reason: %s (%d) [%p]",
+	error,rtext,reason,this);
     if (m_chan)
-	m_chan->disconnect(rtext);
+	m_chan->disconnect(error ? error : rtext);
 }
 
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)

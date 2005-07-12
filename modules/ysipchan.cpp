@@ -888,8 +888,9 @@ void YateSIPConnection::hangup()
     if (m_hungup)
 	return;
     m_hungup = true;
-    DDebug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p code=%d reason='%s' [%p]",
-	m_state,m_tr,m_reasonCode,m_reason.c_str(),this);
+    const char* error = lookup(m_reasonCode,dict_errors);
+    Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p error='%s' code=%d reason='%s' [%p]",
+	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
     Message* m = message("chan.hangup");
     if (m_reason)
 	m->addParam("reason",m_reason);
@@ -935,7 +936,9 @@ void YateSIPConnection::hangup()
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }
-    disconnect(m_reason);
+    if (!error)
+	error = m_reason.c_str();
+    disconnect(error);
 }
 
 // Creates a new message in an existing dialog
@@ -1357,8 +1360,13 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 void YateSIPConnection::disconnected(bool final, const char *reason)
 {
     Debug(this,DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
-    if (reason)
-	setReason(reason);
+    int code = lookup(reason,dict_errors);
+    if (reason) {
+	if (code)
+	    setReason(lookup(code,SIPResponses,reason),code);
+	else
+	    setReason(reason);
+    }
     Channel::disconnected(final,reason);
 }
 

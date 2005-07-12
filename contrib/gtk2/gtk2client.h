@@ -111,6 +111,7 @@ public:
     };
     GTKWindow(const char* id = 0, Layout layout = Unknown);
     virtual ~GTKWindow();
+    virtual void title(const String& text);
     virtual bool setActive(const String& name, bool active);
     virtual bool setShow(const String& name, bool visible);
     virtual bool setText(const String& name, const String& text);
@@ -135,7 +136,7 @@ public:
     GtkWidget* find(const String& name) const;
     virtual void insert(GtkWidget* wid, int x = 0, int y = 0, int w = -1, int h = -1);
     virtual bool action(GtkWidget* wid);
-    virtual bool toggle(GtkToggleButton* btn, gboolean active);
+    virtual bool toggle(GtkWidget* wid, gboolean active);
     virtual bool select(GtkOptionMenu* opt, gint selected);
     virtual void menu(int x, int y);
     inline GtkWidget* widget() const
@@ -156,6 +157,7 @@ public:
 protected:
     GtkWidget* m_widget;
     GtkWidget* m_filler;
+    String m_tabName;
     int m_layout;
     int m_state;
     gint m_posX;

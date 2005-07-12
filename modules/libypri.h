@@ -149,7 +149,7 @@ public:
     virtual bool msgText(Message& msg, const char* text);
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual void callAccept(Message& msg);
-    virtual void callReject(const char* error, const char* reason = 0);
+    virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
     inline PriSpan *span() const
 	{ return m_span; }
     inline int chan() const

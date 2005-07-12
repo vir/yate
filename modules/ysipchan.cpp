@@ -182,13 +182,14 @@ public:
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
     ~YateSIPConnection();
     virtual void disconnected(bool final, const char *reason);
+    virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
-    virtual void callReject(const char* error, const char* reason);
+    virtual void callRejected(const char* error, const char* reason, const Message* msg);
     void startRouter();
     bool process(SIPEvent* ev);
     bool checkUser(SIPTransaction* t, bool refuse = true);
@@ -221,6 +222,7 @@ private:
     SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
+    bool addRtpParams(Message& msg, const String& natAddr = String::empty());
     SIPTransaction* m_tr;
     bool m_hungup;
     bool m_byebye;
@@ -1142,6 +1144,20 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     return sdp;
 }
 
+bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr)
+{
+    if (m_rtpPort && m_rtpAddr && !startRtp()) {
+	if (natAddr)
+	    msg.addParam("rtp_nat_addr",natAddr);
+	msg.addParam("rtp_forward","yes");
+	msg.addParam("rtp_addr",m_rtpAddr);
+	msg.addParam("rtp_port",m_rtpPort);
+	msg.addParam("formats",m_formats);
+	return true;
+    }
+    return false;
+}
+
 // Process SIP events belonging to this connection
 bool YateSIPConnection::process(SIPEvent* ev)
 {
@@ -1221,28 +1237,20 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	}
 	setStatus("answered",Established);
 	Message *m = message("call.answered");
-	if (m_rtpPort && m_rtpAddr && !startRtp()) {
-	    if (natAddr)
-		m->addParam("rtp_nat_addr",natAddr);
-	    m->addParam("rtp_forward","yes");
-	    m->addParam("rtp_addr",m_rtpAddr);
-	    m->addParam("rtp_port",m_rtpPort);
-	    m->addParam("formats",m_formats);
-	}
+	addRtpParams(*m,natAddr);
 	Engine::enqueue(m);
     }
     if ((m_state < Ringing) && msg->isAnswer()) {
 	if (msg->code == 180) {
 	    setStatus("ringing",Ringing);
 	    Message *m = message("call.ringing");
-	    if (m_rtpPort && m_rtpAddr && !startRtp()) {
-		if (natAddr)
-		    m->addParam("rtp_nat_addr",natAddr);
-		m->addParam("rtp_forward","yes");
-		m->addParam("rtp_addr",m_rtpAddr);
-		m->addParam("rtp_port",m_rtpPort);
-		m->addParam("formats",m_formats);
-	    }
+	    addRtpParams(*m,natAddr);
+	    Engine::enqueue(m);
+	}
+	if (msg->code == 183) {
+	    setStatus("progressing");
+	    Message *m = message("call.progress");
+	    addRtpParams(*m,natAddr);
 	    Engine::enqueue(m);
 	}
 	if ((msg->code > 100) && (msg->code < 200))
@@ -1354,6 +1362,20 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
     Channel::disconnected(final,reason);
 }
 
+bool YateSIPConnection::msgProgress(Message& msg)
+{
+    Channel::msgProgress(msg);
+    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 183);
+	SDPBody* sdp = createPasstroughSDP(msg);
+	m->setBody(sdp);
+	m_tr->setResponse(m);
+	m->deref();
+    }
+    setStatus("progressing");
+    return true;
+}
+
 bool YateSIPConnection::msgRinging(Message& msg)
 {
     Channel::msgRinging(msg);
@@ -1425,9 +1447,9 @@ void YateSIPConnection::callAccept(Message& msg)
 	m_authBye = msg.getBoolValue("xsip_auth_bye",true);
 }
 
-void YateSIPConnection::callReject(const char* error, const char* reason)
+void YateSIPConnection::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Channel::callReject(error,reason);
+    Channel::callRejected(error,reason,msg);
     int code = lookup(error,dict_errors,500);
     if (code == 401)
 	m_tr->requestAuth("realm","domain",false);

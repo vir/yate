@@ -447,13 +447,14 @@ public:
     BOOL OpenAudioChannel(BOOL isEncoding, H323AudioCodec &codec);
 
     virtual void disconnected(bool final, const char *reason);
+    virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
-    virtual void callReject(const char* error, const char* reason);
+    virtual void callRejected(const char* error, const char* reason, const Message* msg);
     inline void setTarget(const char* targetid)
 	{ m_targetid = targetid; }
 private:
@@ -1750,13 +1751,24 @@ void YateH323Chan::callAccept(Message& msg)
     Channel::callAccept(msg);
     if (m_conn) {
 	m_conn->rtpExecuted(msg);
-	m_conn->answerCall(H323Connection::AnswerCallPending);
+	m_conn->answerCall(H323Connection::AnswerCallDeferred);
     }
 }
 
-void YateH323Chan::callReject(const char* error, const char* reason)
+void YateH323Chan::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Channel::callReject(error,reason);
+    Channel::callRejected(error,reason,msg);
+}
+
+bool YateH323Chan::msgProgress(Message& msg)
+{
+    Channel::msgProgress(msg);
+    if (!m_conn)
+	return false;
+    if (msg.getParam("rtp_forward"))
+	m_conn->rtpForward(msg);
+    m_conn->answerCall(H323Connection::AnswerCallDeferred);
+    return true;
 }
 
 bool YateH323Chan::msgRinging(Message& msg)
@@ -1886,6 +1898,7 @@ void H323Driver::initialize()
     if (!s_process) {
 	installRelay(Halt);
 	s_process = new H323Process;
+	installRelay(Progress);
 	Engine::install(new UserHandler);
     }
     int dbg = s_cfg.getIntValue("general","debug");

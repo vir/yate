@@ -279,11 +279,19 @@ bool Channel::startRouter(Message* msg)
     }
     else
 	delete msg;
-    callReject("failure","Internal server error");
+    callRejected("failure","Internal server error");
     // dereference and die if the channel is dynamic
     if (m_driver && m_driver->varchan())
 	deref();
     return false;
+}
+
+bool Channel::msgProgress(Message& msg)
+{
+    status("progressing");
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
+    return true;
 }
 
 bool Channel::msgRinging(Message& msg)
@@ -347,7 +355,7 @@ void Channel::callAccept(Message& msg)
     }
 }
 
-void Channel::callReject(const char* error, const char* reason)
+void Channel::callRejected(const char* error, const char* reason, const Message* msg)
 {
     status("rejected");
 }
@@ -382,6 +390,7 @@ TokenDict Module::s_messages[] = {
     { "engine.halt",     Module::Halt },
     { "call.execute",    Module::Execute },
     { "call.drop",       Module::Drop },
+    { "call.progress",   Module::Progress },
     { "call.ringing",    Module::Ringing },
     { "call.answered",   Module::Answered },
     { "chan.dtmf",       Module::Tone },
@@ -691,6 +700,8 @@ bool Driver::received(Message &msg, int id)
     }
 
     switch (id) {
+	case Progress:
+	    return chan->isIncoming() && chan->msgProgress(msg);
 	case Ringing:
 	    return chan->isIncoming() && chan->msgRinging(msg);
 	case Answered:
@@ -859,11 +870,11 @@ bool Router::route()
 
     if (ok) {
 	if (m_msg->retValue() == "-")
-	    chan->callReject(m_msg->getValue("error","unknown"),
-		m_msg->getValue("reason"));
+	    chan->callRejected(m_msg->getValue("error","unknown"),
+		m_msg->getValue("reason"),m_msg);
 	else if (m_msg->getIntValue("antiloop",1) <= 0)
-	    chan->callReject(m_msg->getValue("error","looping"),
-		m_msg->getValue("reason","Call is looping"));
+	    chan->callRejected(m_msg->getValue("error","looping"),
+		m_msg->getValue("reason","Call is looping"),m_msg);
 	else if (chan->callRouted(*m_msg)) {
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
@@ -874,13 +885,13 @@ bool Router::route()
 	    if (ok)
 		chan->callAccept(*m_msg);
 	    else
-		chan->callReject(m_msg->getValue("error","noconn"),
-		    m_msg->getValue("reason","Could not connect to target"));
+		chan->callRejected(m_msg->getValue("error","noconn"),
+		    m_msg->getValue("reason","Could not connect to target"),m_msg);
 	}
     }
     else
-	chan->callReject(m_msg->getValue("error","noroute"),
-	    m_msg->getValue("reason","No route to call target"));
+	chan->callRejected(m_msg->getValue("error","noroute"),
+	    m_msg->getValue("reason","No route to call target"),m_msg);
 
     chan->deref();
     // dereference again if the channel is dynamic

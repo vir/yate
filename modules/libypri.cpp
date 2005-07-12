@@ -791,9 +791,10 @@ void PriChan::callAccept(Message& msg)
     Channel::callAccept(msg);
 }
 
-void PriChan::callReject(const char* error, const char* reason)
+void PriChan::callRejected(const char* error, const char* reason, const Message* msg)
 {
     int cause = lookup(error,dict_str2cause,PRI_CAUSE_NETWORK_OUT_OF_ORDER);
+    Channel::callRejected(error,reason,msg);
     hangup(cause);
 }
 

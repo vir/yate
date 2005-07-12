@@ -122,7 +122,7 @@ public:
     bool startRouting(iax_event *e);
     void hangup(const char *reason = 0);
     virtual void callAccept(Message& msg);
-    virtual void callReject(const char* error, const char* reason = 0);
+    virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
@@ -655,10 +655,11 @@ void IAXConnection::callAccept(Message& msg)
     Channel::callAccept(msg);
 }
 
-void IAXConnection::callReject(const char* error, const char* reason)
+void IAXConnection::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Debug(this,DebugAll,"IAXConnection::callReject('%s','%s') [%p]",error,reason,this);
-    Channel::callReject(error,reason);
+    Debug(this,DebugAll,"IAXConnection::callRejected('%s','%s',%p) [%p]",
+	error,reason,msg,this);
+    Channel::callRejected(error,reason,msg);
     if (!reason)
 	reason = m_reason;
     if (!reason)

@@ -160,12 +160,13 @@ class YATE_API ClientChannel : public Channel
 public:
     ClientChannel(const char* target = 0);
     virtual ~ClientChannel();
+    virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
-    virtual void callReject(const char* error, const char* reason);
-    bool openMedia();
+    virtual void callRejected(const char* error, const char* reason, const Message* msg);
+    bool openMedia(bool replace = false);
     void closeMedia();
     inline int line() const
 	{ return m_line; }

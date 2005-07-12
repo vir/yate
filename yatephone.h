@@ -972,6 +972,7 @@ protected:
 	Masquerade = 0x1000,
 	Locate     = 0x2000,
 	Transfer   = 0x4000,
+	Progress   = 0x8000,
 	// Last possible public ID
 	PubLast    = 0xffff,
 	// Private messages base ID
@@ -1124,6 +1125,13 @@ public:
     Message* message(const char* name, bool minimal = false, bool data = false);
 
     /**
+     * Notification on remote call making some progress, not enabled by default
+     * @param msg Notification message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgProgress(Message& msg);
+
+    /**
      * Notification on remote ringing
      * @param msg Notification message
      * @return True to stop processing the message, false to let it flow
@@ -1169,7 +1177,7 @@ public:
     virtual bool msgTransfer(Message& msg);
 
     /**
-     * Notification on progress of incoming call
+     * Notification on progress of routing incoming call
      * @param msg Notification call.route message just after being dispatched
      * @return True to continue with the call, false to abort the route
      */
@@ -1185,8 +1193,9 @@ public:
      * Notification on failure of incoming call
      * @param error Standard error keyword
      * @param reason Textual failure reason
+     * @param msg Pointer to message causing the rejection, if any
      */
-    virtual void callReject(const char* error, const char* reason = 0);
+    virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
 
     /**
      * Set the local debugging level

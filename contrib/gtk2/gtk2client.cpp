@@ -1117,6 +1117,7 @@ void GTKDriver::initialize()
     }
     setup();
     installRelay(Halt);
+    installRelay(Progress);
 }
 
 bool GTKDriver::factory(UIFactory* factory, const char* type)

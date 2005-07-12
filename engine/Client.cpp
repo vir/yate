@@ -34,6 +34,13 @@ public:
     virtual bool received(Message &msg);
 };
 
+// utility function to check if a string begins and ends with -dashes-
+static bool checkDashes(String& str)
+{
+    if (str.startsWith("-") && str.endsWith("-"))
+	str.clear();
+    return str.null();
+}
 			
 Window::Window(const char* id)
     : m_id(id), m_visible(false), m_master(false)
@@ -319,12 +326,15 @@ bool Client::action(Window* wnd, const String& name)
 	String line;
 	getText("line",line,wnd);
 	line.trimBlanks();
+	checkDashes(line);
 	String proto;
 	getText("protocol",proto,wnd);
 	proto.trimBlanks();
+	checkDashes(proto);
 	String account;
 	getText("account",account,wnd);
 	account.trimBlanks();
+	checkDashes(account);
 	return callStart(target,line,proto,account);
     }
     else if (name.startsWith("callto:"))
@@ -448,8 +458,11 @@ bool Client::callStart(const String& target, const String& line,
     ClientChannel* cc = new ClientChannel();
     Message* m = cc->message("call.route");
     Regexp r("^[a-z0-9]\\+/");
-    if (r.matches(target.safe()))
+    bool hasProto = r.matches(target.safe());
+    if (hasProto)
 	m->setParam("callto",target);
+    else if (proto)
+	m->setParam("callto",proto + "/" + target);
     else
 	m->setParam("called",target);
     if (line)
@@ -577,11 +590,13 @@ ClientChannel::~ClientChannel()
     Engine::enqueue(message("chan.hangup"));
 }
 
-bool ClientChannel::openMedia()
+bool ClientChannel::openMedia(bool replace)
 {
     String dev = ClientDriver::device();
     if (dev.null())
 	return false;
+    if ((!replace) && getSource() && getConsumer())
+	return true;
     Message m("chan.attach");
     complete(m,true);
     m.setParam("source",dev);
@@ -619,10 +634,10 @@ void ClientChannel::callAccept(Message& msg)
     Channel::callAccept(msg);
 }
 
-void ClientChannel::callReject(const char* error, const char* reason)
+void ClientChannel::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callReject('%s','%s') [%p]",
-	error,reason,this);
+    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callReject('%s','%s',%p) [%p]",
+	error,reason,msg,this);
     if (!reason)
 	reason = error;
     if (!reason)
@@ -631,13 +646,26 @@ void ClientChannel::callReject(const char* error, const char* reason)
     tmp << " " << reason;
     if (Client::self())
 	Client::self()->setStatusLocked(tmp);
-    Channel::callReject(error,reason);
+    Channel::callRejected(error,reason,msg);
+}
+
+bool ClientChannel::msgProgress(Message& msg)
+{
+    Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgProgress() [%p]",this);
+    Client::self()->setStatusLocked("Call progressing");
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    if (ch && ch->getSource())
+	openMedia();
+    return Channel::msgAnswered(msg);
 }
 
 bool ClientChannel::msgRinging(Message& msg)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgRinging() [%p]",this);
     Client::self()->setStatusLocked("Call ringing");
+    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    if (ch && ch->getSource())
+	openMedia();
     return Channel::msgRinging(msg);
 }
 

@@ -411,6 +411,7 @@ private:
     String m_remoteFormats;
     String m_remoteAddr;
     int m_remotePort;
+    bool m_needMedia;
 };
 
 // this part has been inspired (more or less) from chan_h323 of project asterisk, credits to Jeremy McNamara for chan_h323 and to Mark Spencer for asterisk.
@@ -841,10 +842,11 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     H323Transport* transport, unsigned callReference, void* userdata)
     : H323Connection(endpoint,callReference), m_chan(0),
       m_externalRtp(s_externalRtp), m_nativeRtp(false), m_passtrough(false),
-      m_rtpPort(0), m_remotePort(0)
+      m_rtpPort(0), m_remotePort(0), m_needMedia(true)
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
 	&endpoint,callReference,userdata,this);
+    m_needMedia = s_cfg.getBoolValue("general","needmedia",m_needMedia);
 
     // outgoing calls get the "call.execute" message as user data
     Message* msg = static_cast<Message*>(userdata);
@@ -857,6 +859,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 
     setCallerID(msg->getValue("caller"),msg->getValue("callername"));
     rtpForward(*msg,s_passtrough);
+    m_needMedia = msg->getBoolValue("needmedia",m_needMedia);
 
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg->userData());
     if (ch && ch->connect(m_chan)) {
@@ -946,6 +949,7 @@ void YateH323Connection::rtpExecuted(Message& msg)
 {
     Debug(m_chan,DebugAll,"YateH323Connection::rtpExecuted(%p) [%p]",
 	&msg,this);
+    m_needMedia = msg.getBoolValue("needmedia",m_needMedia);
     if (!m_passtrough)
 	return;
     String tmp = msg.getValue("rtp_forward");
@@ -1021,8 +1025,11 @@ void YateH323Connection::OnEstablished()
 	    m->addParam("rtp_port",String(m_remotePort));
 	    m->addParam("formats",m_remoteFormats);
 	}
-	else
+	else {
 	    Debug(m_chan,DebugWarn,"H323 RTP passtrough with no remote address! [%p]",this);
+	    if (m_needMedia)
+		ClearCall(EndedByCapabilityExchange);
+	}
     }
     Engine::enqueue(m);
 }
@@ -1087,6 +1094,8 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
     Debug(m_chan,DebugInfo,"YateH323Connection::OpenAudioChannel [%p]",this);
     if (!m_nativeRtp) {
 	Debug(DebugGoOn,"YateH323Connection::OpenAudioChannel for non-native RTP in [%p]",this);
+	if (m_needMedia)
+	    ClearCall(EndedByCapabilityExchange);
 	return FALSE;
     }
     return m_chan && m_chan->OpenAudioChannel(isEncoding,codec);
@@ -1178,8 +1187,11 @@ void YateH323Connection::OnSetLocalCapabilities()
 		nocodecs = false;
 	}
     }
-    if (nocodecs)
+    if (nocodecs) {
 	Debug(DebugWarn,"No codecs remaining for H323 connection [%p]",this);
+	if (m_needMedia)
+	    ClearCall(EndedByCapabilityExchange);
+    }
 }
 
 BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 

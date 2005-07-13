@@ -218,11 +218,13 @@ private:
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
     SDPBody* createSDP(const char* addr, const char* port, const char* formats, const char* format = 0);
+    SDPBody* createProvisionalSDP(Message &msg);
     SDPBody* createPasstroughSDP(Message &msg);
     SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
     bool addRtpParams(Message& msg, const String& natAddr = String::empty());
+
     SIPTransaction* m_tr;
     bool m_hungup;
     bool m_byebye;
@@ -231,15 +233,27 @@ private:
     String m_reason;
     int m_reasonCode;
     String m_callid;
+    // SIP dialog of this call, used for re-INVITE or BYE
     SIPDialog m_dialog;
     URI m_uri;
+    // if we do RTP forwarding or not
+    bool m_rtpForward;
+    // id of the local RTP channel
     String m_rtpid;
+    // remote RTP address
     String m_rtpAddr;
+    // remote RTP port
     String m_rtpPort;
+    // format used for sending data
     String m_rtpFormat;
-    String m_rtpLocal;
-    int m_rtpSession;
-    int m_rtpVersion;
+    // local RTP address
+    String m_rtpLocalAddr;
+    // local RTP port
+    String m_rtpLocalPort;
+    // unique SDP session number
+    int m_sdpSession;
+    // SDP version number, incremented each time we generate a new SDP
+    int m_sdpVersion;
     String m_formats;
     String m_host;
     String m_user;
@@ -716,8 +730,8 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
       m_tr(tr), m_hungup(false), m_byebye(true), m_retry(false),
-      m_state(Incoming),
-      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0), m_routes(0),
+      m_state(Incoming), m_rtpForward(false),
+      m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
@@ -767,6 +781,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpPort,m_formats);
 	if (m_rtpAddr) {
+	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
 	    if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
 		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
@@ -792,14 +807,15 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
       m_tr(0), m_hungup(false), m_byebye(true), m_retry(true),
-      m_state(Outgoing),
-      m_rtpSession(0), m_rtpVersion(0), m_port(0), m_route(0), m_routes(0),
+      m_state(Outgoing), m_rtpForward(false),
+      m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
+    m_rtpForward = msg.getBoolValue("rtp_forward");
     m_line = msg.getValue("line");
     String tmp;
     if (m_line && (uri.find('@') < 0)) {
@@ -1001,23 +1017,38 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
     return true;
 }
 
+// Creates a SDP for provisional (1xx) messages
+SDPBody* YateSIPConnection::createProvisionalSDP(Message &msg)
+{
+    if (m_rtpForward)
+	return createPasstroughSDP(msg);
+    // check if our peer can source data
+    if (!(getPeer() && getPeer()->getSource()))
+	return 0;
+    if (m_rtpAddr.null())
+	return 0;
+    return createRtpSDP(true);
+}
+
 // Creates a SDP from RTP address data present in message
 SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 {
     String tmp = msg.getValue("rtp_forward");
     msg.clearParam("rtp_forward");
-    if (!tmp.toBoolean())
+    if (!(m_rtpForward && tmp.toBoolean()))
 	return 0;
+    SDPBody* sdp = 0;
     tmp = msg.getValue("rtp_port");
     int port = tmp.toInteger();
     String addr(msg.getValue("rtp_addr"));
     if (port && addr) {
-	SDPBody* sdp = createSDP(addr,tmp,msg.getValue("formats"));
-	if (sdp)
-	    msg.setParam("rtp_forward","accepted");
-	return sdp;
+	m_rtpLocalAddr = addr;
+	m_rtpLocalPort = tmp;
+	sdp = createSDP(addr,tmp,msg.getValue("formats"));
     }
-    return 0;
+    if (sdp)
+	msg.setParam("rtp_forward","accepted");
+    return sdp;
 }
 
 // Creates an unstarted external RTP channel from remote addr and builds SDP from it
@@ -1030,9 +1061,11 @@ SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
     m.addParam("remoteip",msg->getParty()->getPartyAddr());
     m.userData(static_cast<CallEndpoint *>(this));
     if (Engine::dispatch(m)) {
+	m_rtpForward = false;
 	m_rtpid = m.getValue("rtpid");
-	m_rtpLocal = m.getValue("localip",m_rtpLocal);
-	return createSDP(m_rtpLocal,m.getValue("localport"),formats);
+	m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
+	m_rtpLocalPort = m.getValue("localport",m_rtpLocalPort);
+	return createSDP(m_rtpLocalAddr,m_rtpLocalPort,formats);
     }
     return 0;
 }
@@ -1042,7 +1075,7 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
 {
     if (m_rtpAddr.null()) {
 	m_rtpid = "-";
-	return createSDP(m_rtpLocal,0,m_formats);
+	return createSDP(0,m_rtpLocalPort,m_formats);
     }
     Message m("chan.rtp");
     m.addParam("driver","sip");
@@ -1055,11 +1088,13 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
     }
     m.userData(static_cast<CallEndpoint *>(this));
     if (Engine::dispatch(m)) {
+	m_rtpForward = false;
 	m_rtpid = m.getValue("rtpid");
-	m_rtpLocal = m.getValue("localip",m_rtpLocal);
+	m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
+	m_rtpLocalPort = m.getValue("localport",m_rtpLocalPort);
 	if (start)
 	    m_rtpFormat = m.getValue("format");
-	return createSDP(m_rtpLocal,m.getValue("localport"),m_formats,m_rtpFormat);
+	return createSDP(m_rtpLocalAddr,m_rtpLocalPort,m_formats,m_rtpFormat);
     }
     return 0;
 }
@@ -1087,18 +1122,18 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 {
     DDebug(this,DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
 	addr,port,formats,this);
-    if (!addr)
+    // if we got no port we simply create no SDP
+    if (!port)
 	return 0;
-    if (m_rtpSession)
-	++m_rtpVersion;
+    if (m_sdpSession)
+	++m_sdpVersion;
     else
-	m_rtpVersion = m_rtpSession = Time::secNow();
+	m_sdpVersion = m_sdpSession = Time::secNow();
     String owner;
-    owner << "yate " << m_rtpSession << " " << m_rtpVersion << " IN IP4 " << addr;
-    if (!port) {
-	port = "1";
+    owner << "yate " << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << addr;
+    // no address means on hold or muted
+    if (!addr)
 	addr = "0.0.0.0";
-    }
     String tmp;
     tmp << "IN IP4 " << addr;
     String frm(format ? format : formats);
@@ -1118,9 +1153,9 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
 		const char* map = lookup(payload,dict_rtpmap);
 		if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
 		    frm << " " << payload;
-		    String* tmp = new String("rtpmap:");
-		    *tmp << payload << " " << map;
-		    rtpmap.append(tmp);
+		    String* temp = new String("rtpmap:");
+		    *temp << payload << " " << map;
+		    rtpmap.append(temp);
 		}
 	    }
 	}
@@ -1147,9 +1182,10 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const 
     return sdp;
 }
 
+// Add RTP forwarding parameters to a message
 bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr)
 {
-    if (m_rtpPort && m_rtpAddr && !startRtp()) {
+    if (m_rtpPort && m_rtpAddr && !startRtp() && m_rtpForward) {
 	if (natAddr)
 	    msg.addParam("rtp_nat_addr",natAddr);
 	msg.addParam("rtp_forward","yes");
@@ -1274,7 +1310,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     // hack: use a while instead of if so we can return or break out of it
     while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
 	// accept re-INVITE only for local RTP, not for pass-trough
-	if (m_rtpid.null())
+	if (m_rtpForward || m_rtpid.null())
 	    break;
 	String addr,port,formats;
 	parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr,port,formats);
@@ -1375,8 +1411,7 @@ bool YateSIPConnection::msgProgress(Message& msg)
     Channel::msgProgress(msg);
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 183);
-	SDPBody* sdp = createPasstroughSDP(msg);
-	m->setBody(sdp);
+	m->setBody(createProvisionalSDP(msg));
 	m_tr->setResponse(m);
 	m->deref();
     }
@@ -1389,8 +1424,7 @@ bool YateSIPConnection::msgRinging(Message& msg)
     Channel::msgRinging(msg);
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180);
-	SDPBody* sdp = createPasstroughSDP(msg);
-	m->setBody(sdp);
+	m->setBody(createProvisionalSDP(msg));
 	m_tr->setResponse(m);
 	m->deref();
     }
@@ -1403,8 +1437,10 @@ bool YateSIPConnection::msgAnswered(Message& msg)
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
 	SDPBody* sdp = createPasstroughSDP(msg);
-	if (!sdp)
+	if (!sdp) {
+	    m_rtpForward = false;
 	    sdp = createRtpSDP();
+	}
 	m->setBody(sdp);
 	m_tr->setResponse(m);
 	m->deref();
@@ -1415,8 +1451,11 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
-    if (m_rtpid)
+    if (m_rtpid && (m_rtpid != "-")) {
 	msg.setParam("targetid",m_rtpid);
+	return false;
+    }
+    // FIXME: when muted or doing RTP forwarding we should use INFO messages
     return false;
 }
 
@@ -1453,6 +1492,11 @@ void YateSIPConnection::callAccept(Message& msg)
     m_user = msg.getValue("username");
     if (m_authBye)
 	m_authBye = msg.getBoolValue("xsip_auth_bye",true);
+    if (m_rtpForward) {
+	String tmp(msg.getValue("rtp_forward"));
+	if (tmp != "accepted")
+	    m_rtpForward = false;
+    }
 }
 
 void YateSIPConnection::callRejected(const char* error, const char* reason, const Message* msg)
@@ -1763,6 +1807,7 @@ void SIPDriver::initialize()
 	m_endpoint->startup();
 	setup();
 	installRelay(Halt);
+	installRelay(Progress);
 	Engine::install(new UserHandler);
     }
 }

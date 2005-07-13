@@ -410,6 +410,14 @@ public:
      */
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
 
+    /**
+    * Method called when a packet with an unexpected SSRC is received
+    *  just before processing further. This is a good opportunity to
+    *  change the SSRC and continue
+    * @param newSsrc SSRC received in packet
+    */
+    virtual void rtpNewSSRC(u_int32_t newSsrc);
+
 protected:
     /**
      * Method called periodically to finish lingering events
@@ -566,6 +574,14 @@ public:
      * @param timestamp Sampling instant of the unexpected packet data
      */
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
+
+    /**
+    * Method called when a packet with an unexpected SSRC is received
+    *  just before processing further. This is a good opportunity to
+    *  change the SSRC and continue
+    * @param newSsrc SSRC received in packet
+    */
+    virtual void rtpNewSSRC(u_int32_t newSsrc);
 
     /**
      * Create a new RTP sender for this session.

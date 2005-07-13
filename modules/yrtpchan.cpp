@@ -101,15 +101,19 @@ class YRTPSession : public RTPSession
 {
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap)
+	: m_wrap(wrap), m_resync(false)
 	{ }
     virtual bool rtpRecvData(bool marker, unsigned int timestamp,
 	const void* data, int len);
     virtual bool rtpRecvEvent(int event, char key, int duration,
 	int volume, unsigned int timestamp);
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
+    virtual void rtpNewSSRC(u_int32_t newSsrc);
+    inline void resync()
+	{ m_resync = true; }
 private:
     YRTPWrapper* m_wrap;
+    bool m_resync;
 };
 
 class YRTPAudioSource : public DataSource
@@ -278,7 +282,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, i
     }
 
     if (m_bufsize) {
-	Debug(&splugin,DebugMild,"YRTPWrapper [%p] attempted to restart RTP!",this);
+	DDebug(&splugin,DebugAll,"YRTPWrapper [%p] attempted to restart RTP!",this);
+	m_rtp->resync();
 	return true;
     }
 
@@ -409,7 +414,17 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 {
     if (payload == 13) {
 	Debug(&splugin,DebugInfo,"Activating RTP silence payload %d in wrapper %p",payload,m_wrap);
-	m_wrap->rtp()->silencePayload(payload);
+	silencePayload(payload);
+    }
+}
+
+void YRTPSession::rtpNewSSRC(u_int32_t newSsrc)
+{
+    if (m_resync && receiver()) {
+	m_resync = false;
+	Debug(&splugin,DebugInfo,"Changing SSRC from %08X to %08X in wrapper %p",
+	    receiver()->ssrc(),newSsrc,m_wrap);
+	receiver()->ssrc(newSsrc);
     }
 }
 

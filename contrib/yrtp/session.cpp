@@ -85,9 +85,12 @@ void RTPReceiver::rtpData(const void* data, int len)
 	m_ssrc = ss;
 	m_ts = ts;
 	m_seq = seq;
+	m_warn = true;
     }
 
-    // check if the SSRC is unchanged
+    if (ss != m_ssrc)
+	rtpNewSSRC(ss);
+    // check if the SSRC is still unchanged
     if (ss != m_ssrc) {
 	if (m_warn) {
 	    m_warn = false;
@@ -147,6 +150,12 @@ void RTPReceiver::rtpNewPayload(int payload, unsigned int timestamp)
 {
     if (m_session)
 	m_session->rtpNewPayload(payload,timestamp);
+}
+
+void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc)
+{
+    if (m_session)
+	m_session->rtpNewSSRC(newSsrc);
 }
 
 bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
@@ -365,6 +374,12 @@ void RTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 {
     XDebug(DebugAll,"RTPSession::rtpNewPayload(%d,%u) [%p]",
 	payload,timestamp,this);
+}
+
+void RTPSession::rtpNewSSRC(u_int32_t newSsrc)
+{
+    XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X) [%p]",
+	newSsrc,this);
 }
 
 RTPSender* RTPSession::createSender()

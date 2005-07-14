@@ -77,11 +77,14 @@ public:
 	{ if (yes) show(); else hide(); }
     inline bool master() const
 	{ return m_master; }
+    inline bool popup() const
+	{ return m_popup; }
 protected:
     String m_id;
     String m_title;
     bool m_visible;
     bool m_master;
+    bool m_popup;
 };
 
 /**
@@ -102,6 +105,7 @@ public:
 class YATE_API Client : public Thread
 {
     friend class Window;
+    friend class ClientChannel;
 public:
     Client(const char *name = 0);
     virtual ~Client();
@@ -149,6 +153,8 @@ public:
 protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
+    void addChannel(ClientChannel* chan);
+    void delChannel(ClientChannel* chan);
     ObjList m_windows;
     String m_incoming;
     int m_line;

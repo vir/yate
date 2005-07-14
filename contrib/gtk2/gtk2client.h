@@ -138,6 +138,7 @@ public:
     virtual bool action(GtkWidget* wid);
     virtual bool toggle(GtkWidget* wid, gboolean active);
     virtual bool select(GtkOptionMenu* opt, gint selected);
+    virtual bool select(GtkList* lst, GtkListItem* item);
     virtual void menu(int x, int y);
     inline GtkWidget* widget() const
 	{ return m_widget; }

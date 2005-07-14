@@ -217,6 +217,28 @@ static GtkWidget* getOptionItem(GtkOptionMenu* opt, const String& item)
     return ret;
 }
 
+static GtkWidget* getListItem(GtkList* lst, const String& item)
+{
+    GList* listItems = gtk_container_get_children(GTK_CONTAINER(lst));
+    GList* l = listItems;
+    GtkWidget* ret = 0;
+    while (l) {
+	if (GTK_IS_LIST_ITEM(l->data)) {
+	    GtkWidget* it = (GtkWidget*)(l->data);
+	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(it));
+	    if (!lbl)
+		lbl = (GtkWidget*)g_object_get_data((GObject*)it,"Yate::Label");
+	    if (GTK_IS_LABEL(lbl) && (item == gtk_label_get_text(GTK_LABEL(lbl)))) {
+		ret = it;
+		break;
+	    }
+	}
+	l = g_list_next(l);
+    }
+    g_list_free(listItems);
+    return ret;
+}
+
 static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
 {
     Debug(GTKDriver::self(),DebugAll,"widgetCbAction data %p",dat);
@@ -253,15 +275,14 @@ static gboolean widgetCbSelected(GtkOptionMenu* opt, gpointer dat)
     return wnd && wnd->select(opt,gtk_option_menu_get_history(opt));
 }
 
-static gboolean widgetCbSelection(GtkList* lst, gpointer dat)
+static gboolean widgetCbSelection(GtkList* lst, GtkListItem* item, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbSelection data %p",dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSelection item %p data %p",item,dat);
+    g_object_set_data((GObject*)lst,"Yate::ListItem",item);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow((GtkWidget*)lst);
-    // FIXME
-    return false;
-//    return wnd && wnd->select(opt,gtk_option_menu_get_history(opt));
+    return wnd && wnd->select(lst,item);
 }
 
 static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
@@ -306,6 +327,71 @@ static gboolean widgetCbShow(GtkWidget* wid, gpointer dat)
     const gchar* name = gtk_widget_get_name(wid);
     Debug(GTKDriver::self(),DebugAll,"widgetCbShow '%s'",name);
     return GTKClient::setVisible(name);
+}
+
+// Hopefully we'll have no threading issues.
+static GtkRadioButton* s_radioGroup = 0;
+static String s_skinPath;
+
+static GtkWidget* gtkRadioButtonNew(const gchar* text)
+{
+    GtkWidget* btn = 0;
+    if (s_radioGroup) {
+	if (null(text))
+	    btn = gtk_radio_button_new_from_widget(s_radioGroup);
+	else
+	    btn = gtk_radio_button_new_with_label_from_widget(s_radioGroup,text);
+    }
+    else {
+	if (null(text))
+	    btn = gtk_radio_button_new(NULL);
+	else
+	    btn = gtk_radio_button_new_with_label(NULL,text);
+	s_radioGroup = GTK_RADIO_BUTTON(btn);
+    }
+    return btn;
+}
+
+static GtkWidget* gtkCheckButtonNew(const gchar* text)
+{
+    if (null(text))
+	return gtk_check_button_new();
+    else
+	return gtk_check_button_new_with_label(text);
+}
+
+static GtkWidget* populateButton(GtkWidget* btn, const gchar* str)
+{
+    if (null(str) || !btn)
+	return btn;
+    String text(str);
+    String icon;
+    Regexp r("^\"\\([^\"]*\\)\" *\\(.*\\)$");
+    if (text.matches(r)) {
+	icon = s_skinPath + text.matchString(1);
+	text = text.matchString(2);
+    }
+    if (icon && text) {
+	GtkWidget* box = gtk_vbox_new(FALSE,1);
+	gtk_container_add(GTK_CONTAINER(box),gtk_image_new_from_file(icon.c_str()));
+	gtk_container_add(GTK_CONTAINER(box),gtk_label_new(text.c_str()));
+	gtk_container_add(GTK_CONTAINER(btn),box);
+    }
+    else if (icon)
+	gtk_container_add(GTK_CONTAINER(btn),gtk_image_new_from_file(icon.c_str()));
+    else if (text)
+	gtk_container_add(GTK_CONTAINER(btn),gtk_label_new(text.c_str()));
+    return btn;
+}
+
+static GtkWidget* gtkButtonNew(const gchar* text)
+{
+    return populateButton(gtk_button_new(),text);
+}
+
+static GtkWidget* gtkToggleButtonNew(const gchar* text)
+{
+    return populateButton(gtk_toggle_button_new(),text);
 }
 
 static GtkWidget* gtkLeftLabelNew(const gchar* text)
@@ -395,20 +481,21 @@ static GtkWidget* gtkListNew(const gchar* text)
 static WidgetMaker s_widgetMakers[] = {
     { "label", gtkLeftLabelNew, 0, 0 },
     { "editor", gtkEntryNewWithText, "activate", G_CALLBACK(widgetCbAction) },
-    { "button", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbAction) },
-    { "toggle", gtk_toggle_button_new_with_label, "toggled", G_CALLBACK(widgetCbToggle) },
-    { "check", gtk_check_button_new_with_label, "toggled", G_CALLBACK(widgetCbToggle) },
+    { "button", gtkButtonNew, "clicked", G_CALLBACK(widgetCbAction) },
+    { "toggle", gtkToggleButtonNew, "toggled", G_CALLBACK(widgetCbToggle) },
+    { "check", gtkCheckButtonNew, "toggled", G_CALLBACK(widgetCbToggle) },
+    { "radio", gtkRadioButtonNew, "toggled", G_CALLBACK(widgetCbToggle) },
     { "combo", gtkComboNewWithText, 0, 0 },
     { "option", gtkOptionMenuNew, "changed", G_CALLBACK(widgetCbSelected) },
-    { "list", gtkListNew, "selection-changed", G_CALLBACK(widgetCbSelection) },
+    { "list", gtkListNew, "select-child", G_CALLBACK(widgetCbSelection) },
     { "frame", gtk_frame_new, 0, 0 },
     { "image", gtk_image_new_from_file, 0, 0 },
     { "hseparator", (GBuilder)gtk_hseparator_new, 0, 0 },
     { "vseparator", (GBuilder)gtk_vseparator_new, 0, 0 },
-    { "button_show", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbShow) },
-    { "button_icon", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbMinimize) },
-    { "button_hide", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbHide) },
-    { "button_max", gtk_button_new_with_label, "clicked", G_CALLBACK(widgetCbMaximize) },
+    { "button_show", gtkButtonNew, "clicked", G_CALLBACK(widgetCbShow) },
+    { "button_icon", gtkButtonNew, "clicked", G_CALLBACK(widgetCbMinimize) },
+    { "button_hide", gtkButtonNew, "clicked", G_CALLBACK(widgetCbHide) },
+    { "button_max", gtkButtonNew, "clicked", G_CALLBACK(widgetCbMaximize) },
     { 0, 0, 0, 0 },
 };
 //    { "", gtk__new, "", },
@@ -682,8 +769,10 @@ void GTKWindow::populate()
     NamedList* sect = s_cfg.getSection(m_id);
     if (!sect)
 	return;
+    s_radioGroup = 0;
     GtkWidget* containerStack[MAX_CONTAINER_DEPTH];
     GtkWidget* lastWidget = 0;
+    GtkTooltips* tips = 0;
     int depth = 0;
     if (m_layout == Unknown)
 	m_layout = (Layout)sect->getIntValue("layout",s_layoutNames,GTKWindow::Unknown);
@@ -727,6 +816,18 @@ void GTKWindow::populate()
 	    m_tabName = *p;
 	    continue;
 	}
+	else if (p->name() == "newradio") {
+	    s_radioGroup = 0;
+	    continue;
+	}
+	else if (p->name() == "tooltip") {
+	    if (*p && lastWidget && !GTK_WIDGET_NO_WINDOW(lastWidget)) {
+		if (!tips)
+		    tips = gtk_tooltips_new();
+		gtk_tooltips_set_tip(tips,lastWidget,p->c_str(),NULL);
+	    }
+	    continue;
+	}
 	else if (p->name().startsWith("property:")) {
 	    if (!lastWidget)
 		continue;
@@ -762,18 +863,21 @@ void GTKWindow::populate()
 	    Debug(GTKDriver::self(),DebugAll,"Pushed container %p on stack of depth %d",wid,depth);
 	}
     }
+    s_radioGroup = 0;
 }
 
 void GTKWindow::title(const String& text)
 {
     Window::title(text);
     gtk_window_set_title((GtkWindow*)m_widget,m_title.safe());
+    setText("title",text);
 }
 
 void GTKWindow::init()
 {
     title(s_cfg.getValue(m_id,"title",m_id));
     m_master = s_cfg.getBoolValue(m_id,"master");
+    m_popup = s_cfg.getBoolValue(m_id,"popup");
     if (!m_master)
 	gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_TOOLBAR);
     m_posX = s_save.getIntValue(m_id,"x",m_posX);
@@ -783,6 +887,11 @@ void GTKWindow::init()
     restore();
     // we realize the widget explicitely to avoid a gtk-win32 bug
     gtk_widget_realize(m_widget);
+    // popup windows are not displayed initially
+    if (m_popup) {
+	gtk_widget_show_all(filler());
+	return;
+    }
     gtk_widget_show_all(m_widget);
     m_visible = true;
     if (m_master)
@@ -912,6 +1021,21 @@ bool GTKWindow::select(GtkOptionMenu* opt, gint selected)
     return GTKClient::self() && GTKClient::self()->select(this,name,item);
 }
 
+bool GTKWindow::select(GtkList* lst, GtkListItem* item)
+{
+    const gchar* name = gtk_widget_get_name((GtkWidget*)lst);
+    Debug(GTKDriver::self(),DebugAll,"select '%s' lst=%p [%p]",
+	name,lst,this);
+    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(item));
+    if (!lbl)
+	lbl = (GtkWidget*)g_object_get_data((GObject*)item,"Yate::Label");
+    if (GTK_IS_LABEL(lbl)) {
+	String val(gtk_label_get_text(GTK_LABEL(lbl)));
+	return GTKClient::self() && GTKClient::self()->select(this,name,val);
+    }
+    return false;
+}
+
 bool GTKWindow::setShow(const String& name, bool visible)
 {
     GtkWidget* wid = find(name);
@@ -1036,6 +1160,21 @@ bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
 	}
 	return false;
     }
+    if (GTK_IS_LIST(wid)) {
+	GtkWidget* li = gtk_list_item_new_with_label(item.safe());
+	if (!li)
+	    return false;
+	GList* list = g_list_append(NULL,li);
+	if (list) {
+	    if (atStart)
+		gtk_list_prepend_items(GTK_LIST(wid),list);
+	    else
+		gtk_list_append_items(GTK_LIST(wid),list);
+	    gtk_widget_show(li);
+	    return true;
+	}
+	return false;
+    }
     return false;
 }
 
@@ -1055,6 +1194,16 @@ bool GTKWindow::delOption(GtkWidget* wid, const String& item)
 	GtkWidget* it = getOptionItem(opt,item);
 	if (it) {
 	    gtk_widget_destroy(it);
+	    return true;
+	}
+	return false;
+    }
+    if (GTK_IS_LIST(wid)) {
+	GtkList* lst = GTK_LIST(wid);
+	GtkWidget* it = getListItem(lst,item);
+	if (it) {
+	    GList* list = g_list_append(NULL,it);
+	    gtk_list_remove_items(lst,list);
 	    return true;
 	}
 	return false;
@@ -1088,6 +1237,19 @@ bool GTKWindow::getText(GtkWidget* wid, String& text)
     if (GTK_IS_OPTION_MENU(wid)) {
 	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
 	return getOptionText(opt,gtk_option_menu_get_history(opt),text);
+    }
+    if (GTK_IS_LIST(wid)) {
+	GtkWidget* it = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
+	if (it) {
+	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(it));
+	    if (!lbl)
+		lbl = (GtkWidget*)g_object_get_data((GObject*)it,"Yate::Label");
+	    if (GTK_IS_LABEL(lbl)) {
+		text = gtk_label_get_text(GTK_LABEL(lbl));
+		return true;
+	    }
+	}
+	return false;
     }
     return false;
 }
@@ -1140,7 +1302,8 @@ void GTKWindow::menu(int x, int y)
 GTKClient::GTKClient()
     : Client("GTKClient")
 {
-    s_cfg = Engine::configPath() + Engine::pathSeparator() + "gtk2client.ui";
+    s_skinPath = Engine::configPath() + Engine::pathSeparator();
+    s_cfg = s_skinPath + "gtk2client.ui";
     s_cfg.load();
     s_save = Engine::configFile("gtk2client");
     s_save.load();
@@ -1202,7 +1365,7 @@ bool GTKClient::createWindow(const String& name)
 
 void GTKClient::loadWindows()
 {
-    gtk_rc_parse(Engine::configPath() + Engine::pathSeparator() + "gtk2client.rc");
+    gtk_rc_parse(s_skinPath + "gtk2client.rc");
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* l = s_cfg.getSection(i);

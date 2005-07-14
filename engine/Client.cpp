@@ -43,7 +43,7 @@ static bool checkDashes(String& str)
 }
 			
 Window::Window(const char* id)
-    : m_id(id), m_visible(false), m_master(false)
+    : m_id(id), m_visible(false), m_master(false), m_popup(false)
 {
 }
 
@@ -512,21 +512,23 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
     Debug(ClientDriver::self(),DebugAll,"callIncoming [%p]",this);
     if (msg && msg->userData()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
+	lock();
 	ClientChannel* cc = new ClientChannel(ch->id());
+	unlock();
 	if (cc->connect(ch)) {
 	    m_incoming = cc->id();
 	    msg->setParam("peerid",m_incoming);
 	    msg->setParam("targetid",m_incoming);
 	    Engine::enqueue(cc->message("call.ringing",false,true));
-	    cc->deref();
+	    lock();
 	    // notify the UI about the call
 	    String tmp("Call from:");
 	    tmp << " " << caller;
-	    lock();
 	    setStatus(tmp);
 	    setText("incoming",tmp);
 	    setVisible("incoming");
 	    unlock();
+	    cc->deref();
 	    return true;
 	}
     }
@@ -537,6 +539,19 @@ void Client::clearIncoming(const String& id)
 {
     if (id == m_incoming)
 	m_incoming.clear();
+}
+
+void Client::addChannel(ClientChannel* chan)
+{
+    addOption("channels",chan->id(),false);
+}
+
+void Client::delChannel(ClientChannel* chan)
+{
+    lock();
+    clearIncoming(chan->id());
+    delOption("channels",chan->id());
+    unlock();
 }
 
 bool UIHandler::received(Message &msg)
@@ -602,6 +617,8 @@ ClientChannel::ClientChannel(const char* target)
     : Channel(ClientDriver::self(),0,(target != 0)), m_line(0)
 {
     m_targetid = target;
+    if (Client::self())
+	Client::self()->addChannel(this);
     Engine::enqueue(message("chan.startup"));
 }
 
@@ -611,7 +628,7 @@ ClientChannel::~ClientChannel()
     String tmp("Hung up:");
     tmp << " " << (address() ? address() : id());
     if (Client::self()) {
-	Client::self()->clearIncoming(id());
+	Client::self()->delChannel(this);
 	Client::self()->setStatusLocked(tmp);
     }
     Engine::enqueue(message("chan.hangup"));

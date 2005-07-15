@@ -86,7 +86,7 @@ ObjList* HashList::find(const String& str) const
 
 ObjList* HashList::append(const GenObject* obj)
 {
-    XDebug(DebugAll,"HashList::append","(%p) [%p]",obj,this);
+    XDebug(DebugAll,"HashList::append(%p) [%p]",obj,this);
     if (!obj)
 	return 0;
     unsigned int i = obj->toString().hash() % m_size;
@@ -103,12 +103,62 @@ GenObject* HashList::remove(GenObject* obj, bool delobj)
 
 void HashList::clear()
 {
-    XDebug(DebugAll,"HashList::clear()"," [%p]",this);
+    XDebug(DebugAll,"HashList::clear() [%p]",this);
     for (unsigned int i = 0; i < m_size; i++)
 	if (m_lists[i]) {
 	    m_lists[i]->destruct();
 	    m_lists[i] = 0;
 	}
+}
+
+bool HashList::resync(GenObject* obj)
+{
+    XDebug(DebugAll,"HashList::resync(%p) [%p]",this);
+    if (!obj)
+	return false;
+    unsigned int i = obj->toString().hash() % m_size;
+    if (m_lists[i] && m_lists[i]->find(obj))
+	return false;
+    for (unsigned int n = 0; n < m_size; n++) {
+	if ((n == i) || !m_lists[n])
+	    continue;
+	ObjList* l = m_lists[n]->find(obj);
+	if (!l)
+	    continue;
+	bool autoDel = l->autoDelete();
+	m_lists[n]->remove(obj,false);
+	if (!m_lists[i])
+	    m_lists[i] = new ObjList;
+	m_lists[i]->append(obj)->setDelete(autoDel);
+	return true;
+    }
+    return false;
+}
+
+bool HashList::resync()
+{
+    XDebug(DebugAll,"HashList::resync() [%p]",this);
+    bool moved = false;
+    for (unsigned int n = 0; n < m_size; n++) {
+	ObjList* l = m_lists[n];
+	while (l) {
+	    GenObject* obj = l->get();
+	    if (obj) {
+		unsigned int i = obj->toString().hash() % m_size;
+		if (i != n) {
+		    bool autoDel = l->autoDelete();
+		    m_lists[n]->remove(obj,false);
+		    if (!m_lists[i])
+			m_lists[i] = new ObjList;
+		    m_lists[i]->append(obj)->setDelete(autoDel);
+		    moved = true;
+		    continue;
+		}
+	    }
+	    l = l->next();
+	}
+    }
+    return moved;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

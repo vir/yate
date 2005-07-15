@@ -835,6 +835,10 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     if (!m->getParty()) {
 	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",m_uri.c_str(),this);
 	m->destruct();
+	tmp = "Invalid address: ";
+	tmp << m_uri;
+	msg.setParam("reason",tmp);
+	setReason(tmp);
 	return;
     }
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
@@ -926,15 +930,20 @@ void YateSIPConnection::hangup()
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
 		plugin.ep()->buildParty(m,m_host,m_port);
-		const SIPMessage* i = m_tr->initialMessage();
-		m->copyHeader(i,"Via");
-		m->copyHeader(i,"From");
-		m->copyHeader(i,"To");
-		m->copyHeader(i,"Call-ID");
-		String tmp;
-		tmp << i->getCSeq() << " CANCEL";
-		m->addHeader("CSeq",tmp);
-		plugin.ep()->engine()->addMessage(m);
+		if (!m->getParty())
+		    Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
+			m_host.c_str(),m_port,this);
+		else {
+		    const SIPMessage* i = m_tr->initialMessage();
+		    m->copyHeader(i,"Via");
+		    m->copyHeader(i,"From");
+		    m->copyHeader(i,"To");
+		    m->copyHeader(i,"Call-ID");
+		    String tmp;
+		    tmp << i->getCSeq() << " CANCEL";
+		    m->addHeader("CSeq",tmp);
+		    plugin.ep()->engine()->addMessage(m);
+		}
 		m->deref();
 	    }
 	    break;
@@ -945,12 +954,14 @@ void YateSIPConnection::hangup()
     if (m_byebye) {
 	m_byebye = false;
 	SIPMessage* m = createDlgMsg("BYE");
-	if (m_reason) {
-	    SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
-	    hl->setParam("text","\"" + m_reason + "\"");
+	if (m) {
+	    if (m_reason) {
+		SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
+		hl->setParam("text","\"" + m_reason + "\"");
+	    }
+	    plugin.ep()->engine()->addMessage(m);
+	    m->deref();
 	}
-	plugin.ep()->engine()->addMessage(m);
-	m->deref();
     }
     if (!error)
 	error = m_reason.c_str();
@@ -965,6 +976,12 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     SIPMessage* m = new SIPMessage(method,uri);
     m->addRoutes(m_routes);
     plugin.ep()->buildParty(m,m_host,m_port);
+    if (!m->getParty()) {
+	Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
+	    m_host.c_str(),m_port,this);
+	m->destruct();
+	return 0;
+    }
     m->addHeader("Call-ID",m_callid);
     String tmp;
     tmp << "<" << m_dialog.localURI << ">";
@@ -1009,6 +1026,8 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 	    tmp = tmp.matchString(1);
     }
     SIPMessage* m = createDlgMsg("PRACK",tmp);
+    if (!m)
+	return false;
     tmp = *rs;
     tmp << " " << *cs;
     m->addHeader("RAck",tmp);
@@ -1541,6 +1560,12 @@ SIPMessage* YateSIPLine::buildRegister(int expires, const SIPMessage* msg) const
 	m->setParty(msg->getParty());
     else
 	plugin.ep()->buildParty(m);
+    if (!m->getParty()) {
+	Debug(&plugin,DebugWarn,"Could not create party for '%s' [%p]",
+	    m_registrar.c_str(),this);
+	m->destruct();
+	return 0;
+    }
     tmp = "\"";
     tmp << (m_display.null() ? m_username : m_display);
     tmp << "\" <sip:";
@@ -1568,6 +1593,11 @@ void YateSIPLine::login(const SIPMessage* msg)
     m_retry = true;
 
     SIPMessage* m = buildRegister(m_interval,msg);
+    if (!m) {
+	m_retry = false;
+	m_valid = false;
+	return;
+    }
     if (msg) {
 	SIPAuthLine* auth = buildAuth(msg,m->method,m->uri,(msg->code == 407));
 	m->addHeader(auth);
@@ -1592,6 +1622,8 @@ void YateSIPLine::logout()
     m_valid = false;
     if (sendLogout) {
 	SIPMessage* m = buildRegister(0,0);
+	if (!m)
+	    return;
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
     }

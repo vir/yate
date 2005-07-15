@@ -307,90 +307,6 @@ AC_SUBST(H323_INC)
 AC_SUBST(H323_LIB)
 AC_SUBST(H323_RUN)
 
-HAVE_GLIB1=no
-GLIB1_INC=""
-GLIB1_LIB=""
-AC_ARG_WITH(libglib,AC_HELP_STRING([--with-libglib=DIR],[use Glib 1.2 from DIR (default /usr)]),[ac_cv_use_libglib=$withval],[ac_cv_use_libglib=yes])
-if [[ "x$ac_cv_use_libglib" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Glib 1.2 using pkg-config])
-    verg=`pkg-config --modversion glib 2>/dev/null`
-    incg=`pkg-config --cflags-only-I glib 2>/dev/null`
-    libg=`pkg-config --libs glib 2>/dev/null`
-    if [[ "x$incg" != "x" -a "x$libg" != "x" ]]; then
-	HAVE_GLIB1=yes
-	GLIB1_INC="$incg"
-	GLIB1_LIB="$libg"
-	ac_cv_use_libglib="no"
-    else
-	ac_cv_use_libglib="/usr"
-	verg="no"
-    fi
-    AC_MSG_RESULT([$verg])
-fi
-if [[ "x$ac_cv_use_libglib" != "xno" ]]; then
-AC_MSG_CHECKING([for Glib 1.2 in $ac_cv_use_libglib])
-incg="$ac_cv_use_libglib"
-libg="$ac_cv_use_libglib/lib"
-if [[ -f "$incg/include/glib-1.2/glib.h" -a -f "$libg2/libglib-1.2.so" ]]; then
-    HAVE_GLIB1=yes
-    GLIB1_INC="-I$incg/include/glib-1.2 -I$libg/glib-1.2/include"
-    GLIB1_LIB="-L$libg -lglib-1.2"
-fi
-AC_MSG_RESULT([$HAVE_GLIB1])
-fi
-AC_SUBST(HAVE_GLIB1)
-AC_SUBST(GLIB1_INC)
-AC_SUBST(GLIB1_LIB)
-
-HAVE_GLIB="$HAVE_GLIB1"
-GLIB_INC="$GLIB1_INC"
-GLIB_LIB="$GLIB1_LIB"
-
-HAVE_GLIB2=no
-GLIB2_INC=""
-GLIB2_LIB=""
-AC_ARG_WITH(libglib2,AC_HELP_STRING([--with-libglib2=DIR],[use Glib 2.0 from DIR (default /usr)]),[ac_cv_use_libglib2=$withval],[ac_cv_use_libglib2=yes])
-if [[ "x$ac_cv_use_libglib2" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Glib 2.0 using pkg-config])
-    verg2=`pkg-config --modversion glib-2.0 2>/dev/null`
-    incg2=`pkg-config --cflags-only-I glib-2.0 2>/dev/null`
-    libg2=`pkg-config --libs glib-2.0 2>/dev/null`
-    if [[ "x$incg2" != "x" -a "x$libg2" != "x" ]]; then
-	HAVE_GLIB2=yes
-	GLIB2_INC="$incg2"
-	GLIB2_LIB="$libg2"
-	ac_cv_use_libglib2="no"
-	HAVE_GLIB=yes
-	GLIB_INC="$GLIB2_INC"
-	GLIB_LIB="$GLIB2_LIB"
-    else
-	ac_cv_use_libglib2="/usr"
-	verg2="no"
-    fi
-    AC_MSG_RESULT([$verg2])
-fi
-if [[ "x$ac_cv_use_libglib2" != "xno" ]]; then
-AC_MSG_CHECKING([for Glib 2.0 in $ac_cv_use_libglib2])
-incg2="$ac_cv_use_libglib2"
-libg2="$ac_cv_use_libglib2/lib"
-if [[ -f "$incg2/include/glib-2.0/glib.h" -a -f "$libg2/libglib-2.0.so" ]]; then
-    HAVE_GLIB2=yes
-    GLIB2_INC="-I$incg2/include/glib-2.0 -I$libg2/glib-2.0/include"
-    GLIB2_LIB="-L$libg2 -lglib-2.0"
-    HAVE_GLIB=yes
-    GLIB_INC="$GLIB2_INC"
-    GLIB_LIB="$GLIB2_LIB"
-fi
-AC_MSG_RESULT([$HAVE_GLIB2])
-fi
-AC_SUBST(HAVE_GLIB2)
-AC_SUBST(GLIB2_INC)
-AC_SUBST(GLIB2_LIB)
-
-AC_SUBST(HAVE_GLIB)
-AC_SUBST(GLIB_INC)
-AC_SUBST(GLIB_LIB)
-
 HAVE_IAX2=no
 IAX2_INC=""
 IAX2_LIB=""
@@ -459,29 +375,6 @@ AC_SUBST(HAVE_SPANDSP)
 AC_SUBST(SPANDSP_INC)
 AC_SUBST(SPANDSP_LIB)
 
-HAVE_GTK=no
-GTK_INC=""
-GTK_LIB=""
-AC_ARG_WITH(libgtk,AC_HELP_STRING([--with-libgtk],[use Gtk for graphical clients (default)]),[ac_cv_use_libgtk=$withval],[ac_cv_use_libgtk=yes])
-if [[ "x$ac_cv_use_libgtk" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Gtk using gtk-config])
-    vergt=`gtk-config --version gtk 2>/dev/null`
-    incgt=`gtk-config --cflags gthread 2>/dev/null`
-    libgt=`gtk-config --libs gthread 2>/dev/null`
-    if [[ "x$incgt" != "x" -a "x$libgt" != "x" ]]; then
-	HAVE_GTK=yes
-	GTK_INC="$incgt"
-	GTK_LIB="$libgt"
-	ac_cv_use_libgtk="no"
-    else
-	vergt="no"
-    fi
-    AC_MSG_RESULT([$vergt])
-fi
-AC_SUBST(HAVE_GTK)
-AC_SUBST(GTK_INC)
-AC_SUBST(GTK_LIB)
-
 HAVE_GTK2=no
 GTK2_INC=""
 GTK2_LIB=""
@@ -527,40 +420,6 @@ fi
 AC_SUBST(HAVE_GMOZ)
 AC_SUBST(GMOZ_INC)
 AC_SUBST(GMOZ_LIB)
-
-
-HAVE_QT=no
-QT_DIR=""
-QT_INC=""
-AC_ARG_WITH(libqt,AC_HELP_STRING([--with-libqt],[use Qt for graphical clients (default)]),[ac_cv_use_libqt=$withval],[ac_cv_use_libqt=yes])
-if [[ "x$ac_cv_use_libqt" != "xno" ]]; then
-    qtdir="$ac_cv_use_libqt"
-    if [[ "x$ac_cv_use_libqt" = "xyes" ]]; then
-	qtdir="$QTDIR"
-	if [[ "x$qtdir" = "x" ]]; then
-	    qtdir=`ls -d -1 /opt/qt-3* /usr/share/qt3* /usr/lib/qt-3* /usr/lib/qt3* 2>/dev/null | tail -1`
-	fi
-    fi
-    if [[ "x$qtdir" != "x" ]]; then
-	AC_MSG_CHECKING([for multithreaded Qt3 in $qtdir])
-	if [[ -x "$qtdir/bin/moc" -a -f "$qtdir/lib/libqt-mt.so" ]]; then
-	    for i in "$qtdir/include" "$qtdir/include/qt3" "/usr/include/qt3"; do
-		if [[ -f "$i/qkeysequence.h" ]]; then
-		    QT_INC="$i"
-		    break;
-		fi
-	    done
-	    if [[ "x$QT_INC" != "x" ]]; then
-		HAVE_QT=yes
-		QT_DIR="$qtdir"
-	    fi
-	fi
-	AC_MSG_RESULT([$HAVE_QT])
-    fi
-fi
-AC_SUBST(HAVE_QT)
-AC_SUBST(QT_DIR)
-AC_SUBST(QT_INC)
 
 RTTI_OPT=""
 AC_ARG_ENABLE(rtti,AC_HELP_STRING([--enable-rtti],[Enable RTTI support (default: like pwlib)]),want_rtti=$enableval,want_rtti=auto)
@@ -615,7 +474,6 @@ AC_CONFIG_FILES([yate.spec
                  contrib/iax/Makefile
                  contrib/ysip/Makefile
                  contrib/yrtp/Makefile
-                 contrib/qt/Makefile
                  contrib/gtk2/Makefile
                  test/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])

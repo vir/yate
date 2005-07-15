@@ -1,9 +1,0 @@
-#!/bin/sh
-
-# Script to run the Gtk client from the build directory
-
-if [ -x yate-gtk -a -x ../run ]; then
-    cd ..; exec ./run --executable clients/yate-gtk "$@"
-else
-    echo "Could not find client executable or run script" >&2
-fi

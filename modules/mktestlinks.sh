@@ -1,6 +1,6 @@
 #!/bin/sh
 
-tests="randcall msgsniff"
+tests="msgsniff"
 if [ "$1" = "-d" ]; then
     for f in $tests; do rm $f.yate; done
 else

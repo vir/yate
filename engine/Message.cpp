@@ -211,7 +211,7 @@ void MessageHandler::clearFilter()
 }
 
 MessageDispatcher::MessageDispatcher()
-    : m_changes(0), m_hook(0)
+    : m_changes(0)
 {
     XDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }
@@ -221,6 +221,7 @@ MessageDispatcher::~MessageDispatcher()
     XDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
     m_mutex.lock();
     m_handlers.clear();
+    m_hooks.clear();
     m_mutex.unlock();
 }
 
@@ -343,8 +344,12 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    &msg,msg.c_str(),msg.retValue().c_str(),retv ? "true" : "false",t,p.safe());
     }
 #endif
-    if (m_hook)
-	(*m_hook)(msg,retv);
+    l = &m_hooks;
+    for (; l; l=l->next()) {
+	MessagePostHook *h = static_cast<MessagePostHook*>(l->get());
+	if (h)
+	    h->dispatched(msg,retv);
+    }
     return retv;
 }
 
@@ -385,6 +390,14 @@ unsigned int MessageDispatcher::handlerCount()
 {
     Lock lock(m_mutex);
     return m_handlers.count();
+}
+
+void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
+{
+    if (remove)
+	m_hooks.remove(hook,false);
+    else
+	m_hooks.append(hook);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

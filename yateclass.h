@@ -857,6 +857,103 @@ private:
     bool m_delete;
 };
 
+/**
+ * A hashed object list handling class. Objects placed in the list are
+ *  distributed according to their String hash resulting in faster searches.
+ * On the other hand an object placed in a hashed list must never change
+ *  its String value or it becomes unfindable.
+ * @short A hashed object list class
+ */
+class YATE_API HashList : public GenObject
+{
+public:
+    /**
+     * Creates a new, empty list.
+     * @param size Number of classes to divide the objects
+     */
+    HashList(unsigned int size = 17);
+
+    /**
+     * Destroys the list and everything in it.
+     */
+    virtual ~HashList();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Get the number of hash entries
+     * @return Count of hash entries
+     */
+    inline unsigned int length() const
+	{ return m_size; }
+
+    /**
+     * Get the number of non-null objects in the list
+     * @return Count of items
+     */
+    unsigned int count() const;
+
+    /**
+     * Array-like indexing operator for internal object lists. This method
+     *  should not be used except if you have a really bad need of iterating
+     *  all objects in the list.
+     * @param index Index of the internal list to retrive
+     * @return Pointer to the list or NULL
+     */
+    inline ObjList* operator[](int index) const
+	{ return ((index >= 0) && ((unsigned int)index < m_size)) ? m_lists[index] : 0; }
+
+    /**
+     * Array-like indexing operator
+     * @param str String value of the object to locate
+     * @return Pointer to the object or NULL
+     */
+    GenObject* operator[](const String& str) const;
+
+    /**
+     * Get the item in the list that holds an object
+     * @param obj Pointer to the object to search for
+     * @return Pointer to the found item or NULL
+     */
+    ObjList* find(const GenObject* obj) const;
+
+    /**
+     * Get the item in the list that holds an object by String value
+     * @param str String value (toString) of the object to search for
+     * @return Pointer to the found item or NULL
+     */
+    ObjList* find(const String& str) const;
+
+    /**
+     * Appends an object to the hashed list
+     * @param obj Pointer to the object to append
+     * @return A pointer to the inserted list item
+     */
+    ObjList* append(const GenObject* obj);
+
+    /**
+     * Delete the list item that holds a given object
+     * @param obj Object to search in the list
+     * @param delobj True to delete the object (default)
+     * @return Pointer to the object if not destroyed
+     */
+    GenObject* remove(GenObject* obj, bool delobj = true);
+
+    /**
+     * Clear the list and optionally delete all contained objects
+     */
+    void clear();
+
+private:
+    unsigned int m_size;
+    ObjList** m_lists;
+};
+
 class Regexp;
 class StringMatchPrivate;
 

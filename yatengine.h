@@ -432,6 +432,22 @@ private:
 };
 
 /**
+ * An abstract class to implement hook methods called after any message has
+ *  been dispatched.
+ * @short Post-dispatching message hook
+ */
+class YATE_API MessagePostHook : public GenObject
+{
+public:
+    /**
+     * This method is called after a message was dispatched.
+     * @param msg The already dispatched message message
+     * @param handled True if a handler claimed to have handled the message
+     */
+    virtual void dispatched(const Message& msg, bool handled) = 0;
+};
+
+/**
  * The dispatcher class is a hub that holds a list of handlers to be called
  *  for the messages that pass trough the hub. It can also handle a queue of
  *  messages that are typically dispatched by a separate thread.
@@ -490,10 +506,10 @@ public:
     bool dequeueOne();
 
     /**
-     * Clear all the message handlers
+     * Clear all the message handlers and post-dispatch hooks
      */
     inline void clear()
-	{ m_handlers.clear(); }
+	{ m_handlers.clear(); m_hooks.clear(); }
 
     /**
      * Get the number of messages waiting in the queue
@@ -509,17 +525,17 @@ public:
 
     /**
      * Install or remove a hook to catch messages after being dispatched
-     * @param hookFunc Pointer to a callback function
+     * @param hook Pointer to a post-dispatching message hook
+     * @param remove Set to True to remove the hook instead of adding
      */
-    inline void setHook(void (*hookFunc)(Message &, bool) = 0)
-	{ m_hook = hookFunc; }
+    void setHook(MessagePostHook* hook, bool remove = false);
 
 private:
     ObjList m_handlers;
     ObjList m_messages;
+    ObjList m_hooks;
     Mutex m_mutex;
     unsigned int m_changes;
-    void (*m_hook)(Message &, bool);
 };
 
 /**
@@ -758,10 +774,11 @@ public:
 
     /**
      * Install or remove a hook to catch messages after being dispatched
-     * @param hookFunc Pointer to a callback function
+     * @param hook Pointer to a post-dispatching message hook
+     * @param remove Set to True to remove the hook instead of adding
      */
-    inline void setHook(void (*hookFunc)(Message &, bool) = 0)
-	{ m_dispatcher.setHook(hookFunc); }
+    inline void setHook(MessagePostHook* hook, bool remove = false)
+	{ m_dispatcher.setHook(hook,remove); }
 
     /**
      * Get a count of plugins that are actively in use

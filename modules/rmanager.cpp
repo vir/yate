@@ -74,7 +74,7 @@ public:
     bool processLine(const char *line);
     void writeStr(const char *str, int len = -1);
     void writeDebug(const char *str, int level);
-    void writeStr(Message &msg,bool received);
+    void writeStr(const Message &msg, bool received);
     inline void writeStr(const String &s)
 	{ writeStr(s.safe(),s.length()); }
     inline const String& address() const
@@ -97,6 +97,12 @@ public:
     virtual bool isBusy() const;
 private:
     bool m_first;
+};
+
+class RHook : public MessagePostHook
+{
+public:
+    virtual void dispatched(const Message& msg, bool handled);
 };
 
 static void dbg_remote_func(const char *buf, int level)
@@ -427,7 +433,7 @@ bool Connection::processLine(const char *line)
     return false;
 }
 
-void Connection::writeStr(Message &msg,bool received)
+void Connection::writeStr(const Message &msg, bool received)
 {
     if (!m_machine)
 	return;
@@ -453,14 +459,14 @@ void Connection::writeStr(const char *str, int len)
     }
 }
 
-static void postHook(Message &msg, bool received)
+void RHook::dispatched(const Message& msg, bool handled)
 {
     s_mutex.lock();
     ObjList *p = &connectionlist;
     for (; p; p=p->next()) {
 	Connection *con = static_cast<Connection *>(p->get());
 	if (con)
-	    con->writeStr(msg,received);
+	    con->writeStr(msg,handled);
     }
     s_mutex.unlock();
 };
@@ -477,7 +483,6 @@ RManager::~RManager()
 {
     Output("Unloading module RManager");
     s_sock.terminate();
-    Engine::self()->setHook();
     Debugger::setIntOut(0);
 }
 
@@ -532,7 +537,7 @@ void RManager::initialize()
     // don't bother to install handlers until we are listening
     if (m_first) {
 	m_first = false;
-	Engine::self()->setHook(postHook);
+	Engine::self()->setHook(new RHook);
 	RManagerThread *mt = new RManagerThread;
 	mt->startup();
     }

@@ -246,11 +246,11 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	setTimeout(m_engine->getTimer('B'));
 }
 
-void SIPTransaction::setResponse(int code, const char* reason)
+bool SIPTransaction::setResponse(int code, const char* reason)
 {
     if (m_outgoing) {
 	Debug(DebugWarn,"SIPTransaction::setResponse(%d,'%s') in client mode [%p]",code,reason,this);
-	return;
+	return false;
     }
     switch (m_state) {
 	case Invalid:
@@ -259,13 +259,14 @@ void SIPTransaction::setResponse(int code, const char* reason)
 	case Cleared:
 	    DDebug(DebugInfo,"SIPTransaction ignoring setResponse(%d) in state %s [%p]",
 		code,stateName(m_state),this);
-	    return;
+	    return false;
     }
     if (!reason)
 	reason = lookup(code,SIPResponses,"Unknown Reason Code");
     SIPMessage* msg = new SIPMessage(m_firstMessage, code, reason);
     setResponse(msg);
     msg->deref();
+    return true;
 }
 
 void SIPTransaction::requestAuth(const String& realm, const String& domain, bool stale, bool proxy)

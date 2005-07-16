@@ -714,8 +714,9 @@ public:
      * Creates and transmits a final response message
      * @param code Response code to send
      * @param reason Human readable reason text (optional)
+     * @return True if the message was queued for transmission
      */
-    void setResponse(int code, const char* reason = 0);
+    bool setResponse(int code, const char* reason = 0);
 
     /**
      * Transmits a final response message

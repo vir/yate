@@ -893,8 +893,8 @@ void YateSIPConnection::clearTransaction()
 	    driver()->lock();
 	m_tr->setUserData(0);
 	if (m_tr->isIncoming()) {
-	    m_byebye = false;
-	    m_tr->setResponse(m_reasonCode,m_reason.null() ? "Request Terminated" : m_reason.c_str());
+	    if (m_tr->setResponse(m_reasonCode,m_reason.null() ? "Request Terminated" : m_reason.c_str()))
+		m_byebye = false;
 	}
 	m_tr->deref();
 	m_tr = 0;

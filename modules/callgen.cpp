@@ -161,7 +161,7 @@ GenConnection* GenConnection::find(const String& id)
 bool GenConnection::oneCall(String* target)
 {
     Message m("call.route");
-    m.addParam("driver","callgen");
+    m.addParam("module","callgen");
     m.addParam("caller",s_cfg.getValue("parameters","caller","yate"));
     String callto(s_cfg.getValue("parameters","callto"));
     if (callto.null()) {

@@ -1074,8 +1074,7 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
 SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
 {
     Message m("chan.rtp");
-    m.addParam("driver","sip");
-    m.addParam("id",id());
+    complete(m,true);
     m.addParam("direction","bidir");
     m.addParam("remoteip",msg->getParty()->getPartyAddr());
     m.userData(static_cast<CallEndpoint *>(this));
@@ -1097,8 +1096,7 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
 	return createSDP(0,m_rtpLocalPort,m_formats);
     }
     Message m("chan.rtp");
-    m.addParam("driver","sip");
-    m.addParam("id",id());
+    complete(m,true);
     m.addParam("direction","bidir");
     m.addParam("remoteip",m_rtpAddr);
     if (start) {
@@ -1125,8 +1123,7 @@ bool YateSIPConnection::startRtp()
 	return false;
     DDebug(this,DebugAll,"YateSIPConnection::startRtp() [%p]",this);
     Message m("chan.rtp");
-    m.addParam("driver","sip");
-    m.addParam("id",id());
+    complete(m,true);
     m.addParam("rtpid",m_rtpid);
     m.addParam("direction","bidir");
     m.addParam("remoteip",m_rtpAddr);

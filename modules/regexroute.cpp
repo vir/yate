@@ -221,12 +221,7 @@ bool PrerouteHandler::received(Message &msg)
 	return false;
 
     String caller(msg.getValue("caller"));
-    if (caller.null()) {
-	caller << msg.getValue("driver") << "/";
-	caller << msg.getValue("span") << "/";
-	caller << msg.getValue("channel");
-    }
-    if (caller == "//")
+    if (caller.null())
 	return false;
 
     String ret;

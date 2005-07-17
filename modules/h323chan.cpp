@@ -1537,17 +1537,16 @@ H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323Gatekee
 	    * we deal just with the first callSignalAddress, since openh323 
 	    * don't give a shit for multi hosted boxes.
 	    */
-	    Message *m = new Message("user.register");
-	    m->addParam("username",alias);
-	    m->addParam("driver","h323");
-	    m->addParam("data",ips);
-	    if (!Engine::dispatch(m) && !m->retValue().null())
-		return H323GatekeeperRequest::Reject;
+	    Message m("user.register");
+	    m.addParam("username",alias);
+	    m.addParam("driver","h323");
+	    m.addParam("data",ips);
+	    if (Engine::dispatch(m))
+		return H323GatekeeperRequest::Confirm;
 	}
+	return H323GatekeeperRequest::Reject;
     }
-    else 
-	return (H323Transaction::Response)i;
-    return H323GatekeeperRequest::Confirm;
+    return (H323Transaction::Response)i;
 }
 
 H323GatekeeperRequest::Response YateGatekeeperServer::OnUnregistration(H323GatekeeperURQ& request)
@@ -1559,14 +1558,13 @@ H323GatekeeperRequest::Response YateGatekeeperServer::OnUnregistration(H323Gatek
 	    PString alias = H323GetAliasAddressString(request.urq.m_endpointAlias[j]);
 	    if (alias.IsEmpty())
 		return H323GatekeeperRequest::Reject;
-	    Message *m = new Message("user.unregister");
-	    m->addParam("username",alias);
-	    Engine::dispatch(m);
+	    Message m("user.unregister");
+	    m.addParam("username",alias);
+	    if (Engine::dispatch(m))
+		return H323GatekeeperRequest::Confirm;
 	}
     }
-    else 
-	return (H323Transaction::Response)i;
-    return H323GatekeeperRequest::Confirm;
+    return (H323Transaction::Response)i;
 }
 
 BOOL YateGatekeeperServer::TranslateAliasAddressToSignalAddress(const H225_AliasAddress& alias,H323TransportAddress& address)

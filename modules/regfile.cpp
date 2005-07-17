@@ -136,6 +136,7 @@ bool RouteHandler::received(Message &msg)
     if (data) {
 	Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username,data);
 	msg.retValue() = data;
+	msg.setParam("driver",s_cfg.getValue(username,"driver"));
 	return true;
     }
     return false;

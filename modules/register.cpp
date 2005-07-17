@@ -152,7 +152,7 @@ bool RegistHandler::received(Message &msg)
 	m_init= true;
     }
     String username  = c_safe(msg.getValue("username"));
-    String techno  = c_safe(msg.getValue("techno"));
+    String techno  = c_safe(msg.getValue("driver"));
     String data  = c_safe(msg.getValue("data"));
     
     Lock lock(dbmutex);
@@ -237,7 +237,8 @@ bool RouteHandler::received(Message &msg)
 	s_route_no++;
     	return false;
     }
-    msg.retValue() = String(PQgetvalue(respgsql,0,1));
+    msg.setParam("driver",PQgetvalue(respgsql,0,0));
+    msg.retValue() = PQgetvalue(respgsql,0,1);
     Debug(DebugInfo,"Routing call to '%s' in context '%s' using '%s' tehnology and data in " FMT64 " usec",
 		called.c_str(),context.c_str(),msg.retValue().c_str(),Time::now()-tmr);
     s_route_yes++;

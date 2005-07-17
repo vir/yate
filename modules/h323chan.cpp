@@ -387,6 +387,7 @@ public:
 #endif
     virtual BOOL OnStartLogicalChannel(H323Channel& channel);
     virtual BOOL OnCreateLogicalChannel(const H323Capability& capability, H323Channel::Directions dir, unsigned& errorCode ) ;
+    virtual void CleanUpOnCallEnd();
     BOOL startExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void stoppedExternal(H323Channel::Directions dir);
     void setRemoteAddress(const char* remoteIP, WORD remotePort);
@@ -445,7 +446,8 @@ class YateH323Chan :  public Channel
 public:
     YateH323Chan(YateH323Connection* conn,bool outgoing,const char* addr);
     ~YateH323Chan();
-    BOOL OpenAudioChannel(BOOL isEncoding, H323AudioCodec &codec);
+    BOOL openAudioChannel(BOOL isEncoding, H323AudioCodec &codec);
+    void stopDataLinks();
 
     virtual void disconnected(bool final, const char *reason);
     virtual bool msgProgress(Message& msg);
@@ -882,6 +884,14 @@ YateH323Connection::~YateH323Connection()
     cleanups();
 }
 
+void YateH323Connection::CleanUpOnCallEnd()
+{
+    Debug(&hplugin,DebugAll,"YateH323Connection::CleanUpOnCallEnd() [%p]",this);
+    if (m_chan)
+	m_chan->stopDataLinks();
+    H323Connection::CleanUpOnCallEnd();
+}
+
 void YateH323Connection::cleanups()
 {
     m_chan = 0;
@@ -1098,7 +1108,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
 	    ClearCall(EndedByCapabilityExchange);
 	return FALSE;
     }
-    return m_chan && m_chan->OpenAudioChannel(isEncoding,codec);
+    return m_chan && m_chan->openAudioChannel(isEncoding,codec);
 }
 
 #ifdef NEED_RTP_QOS_PARAM
@@ -1711,17 +1721,22 @@ void YateH323Chan::disconnected(bool final, const char *reason)
 	Channel::disconnected(final,reason);
 	return;
     }
+    stopDataLinks();
+    if (m_conn)
+	m_conn->ClearCall((H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser));
+}
+
+void YateH323Chan::stopDataLinks()
+{
     YateH323AudioSource* s = YOBJECT(YateH323AudioSource,getSource());
     if (s)
 	s->Close();
     YateH323AudioConsumer* c = YOBJECT(YateH323AudioConsumer,getConsumer());
     if (c)
 	c->Close();
-    if (m_conn)
-	m_conn->ClearCall((H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser));
 }
 
-BOOL YateH323Chan::OpenAudioChannel(BOOL isEncoding, H323AudioCodec &codec)
+BOOL YateH323Chan::openAudioChannel(BOOL isEncoding, H323AudioCodec &codec)
 {
     if (isEncoding) {
 	if (!getConsumer()) {

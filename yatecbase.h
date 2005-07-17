@@ -36,6 +36,9 @@
  */
 namespace TelEngine {
 
+class Client;
+class ClientChannel;
+
 /**
  * A window is the basic user interface element.
  * Everything inside is implementation specific functionality.

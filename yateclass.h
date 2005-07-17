@@ -2374,6 +2374,11 @@ public:
      * When it returns the job or thread terminates.
      */
     virtual void run() = 0;
+
+    /**
+     * Do-nothing destructor, placed here just to shut up GCC 4+
+     */
+    virtual ~Runnable();
 };
 
 /**

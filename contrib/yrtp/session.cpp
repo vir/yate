@@ -175,6 +175,9 @@ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* d
     m_evTs = timestamp;
     m_evNum = event;
     m_evVol = vol;
+    if (!end)
+	return true;
+    // FIXME: add code to push the event and also filter dumb senders
 }
 
 bool RTPReceiver::decodeSilence(bool marker, unsigned int timestamp, const void* data, int len)

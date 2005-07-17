@@ -148,7 +148,6 @@ class YATE_API FormatRepository
 private:
     FormatRepository();
     FormatRepository& operator=(const FormatRepository&);
-    virtual void dummy() const = 0;
 public:
     /**
      * Retrieve a format by name and type
@@ -286,6 +285,12 @@ protected:
     DataFormat m_format;
     unsigned long m_timestamp;
 };
+
+class DataSource;
+class DataTranslator;
+class TranslatorFactory;
+class Driver;
+class ThreadedSourcePrivate;
 
 /**
  * A data consumer

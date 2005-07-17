@@ -405,6 +405,10 @@ void* ThreadPrivate::startFunc(void* arg)
 #endif
 }
 
+Runnable::~Runnable()
+{
+}
+
 Thread::Thread(const char* name, Priority prio)
     : m_private(0)
 {

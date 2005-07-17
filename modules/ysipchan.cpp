@@ -956,8 +956,10 @@ void YateSIPConnection::hangup()
 	SIPMessage* m = createDlgMsg("BYE");
 	if (m) {
 	    if (m_reason) {
+		// FIXME: add SIP and Q.850 cause codes, set the proper reason
 		SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
 		hl->setParam("text","\"" + m_reason + "\"");
+		m->addHeader(hl);
 	    }
 	    plugin.ep()->engine()->addMessage(m);
 	    m->deref();

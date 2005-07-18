@@ -1301,7 +1301,13 @@ protected:
     /**
      * Remove the channel from the parent driver list
      */
-    void drop();
+    void dropChan();
+
+    /**
+     * This method is overriden to safely remove the channel from the parent
+     *  driver list before actually destroying the channel.
+     */
+    virtual void zeroRefs();
 
     /**
      * Disconnect notification method.

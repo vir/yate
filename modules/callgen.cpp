@@ -49,7 +49,6 @@ public:
     virtual void disconnected(bool final, const char *reason);
     void ringing();
     void answered();
-    void hangup();
     void makeSource();
     inline const String& status() const
 	{ return m_status; }
@@ -138,6 +137,11 @@ GenConnection::GenConnection(unsigned int lifetime, const String& callto)
     ++s_current;
     s_mutex.unlock();
     Output("Generating %u ms call %s to: %s",lifetime,m_id.c_str(),m_callto.c_str());
+    Message* m = new Message("chan.startup");
+    m->addParam("module","callgen");
+    m->addParam("id",m_id);
+    m->addParam("called",m_callto);
+    Engine::enqueue(m);
 }
 
 GenConnection::~GenConnection()
@@ -145,6 +149,11 @@ GenConnection::~GenConnection()
     if (!Engine::exiting())
 	Output("Ending %s generated call %s to: %s",
 	    m_status.c_str(),m_id.c_str(),m_callto.c_str());
+    Message* m = new Message("chan.hangup");
+    m->addParam("module","callgen");
+    m->addParam("id",m_id);
+    m->addParam("status",m_status);
+    Engine::enqueue(m);
     m_status = "destroyed";
     s_mutex.lock();
     s_calls.remove(this,false);
@@ -236,10 +245,6 @@ void GenConnection::answered()
     ++s_answers;
     s_mutex.unlock();
     makeSource();
-}
-
-void GenConnection::hangup()
-{
 }
 
 void GenConnection::makeSource()

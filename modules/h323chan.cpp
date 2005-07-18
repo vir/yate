@@ -447,8 +447,11 @@ public:
     YateH323Chan(YateH323Connection* conn,bool outgoing,const char* addr);
     ~YateH323Chan();
     BOOL openAudioChannel(BOOL isEncoding, H323AudioCodec &codec);
-    void stopDataLinks();
+    bool stopDataLinks();
+    void hangup();
+    void finish();
 
+    virtual void zeroRefs();
     virtual void disconnected(bool final, const char *reason);
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -462,6 +465,7 @@ public:
 	{ m_targetid = targetid; }
 private:
     YateH323Connection* m_conn;
+    bool m_hungup;
 };
 
 class YateGkRegThread : public PThread
@@ -877,10 +881,8 @@ YateH323Connection::~YateH323Connection()
     Debug(&hplugin,DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
     YateH323Chan* tmp = m_chan;
     m_chan = 0;
-    if (tmp) {
-	tmp->m_conn = 0;
-	tmp->disconnect();
-    }
+    if (tmp)
+	tmp->finish();
     cleanups();
 }
 
@@ -1674,7 +1676,7 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 }
 
 YateH323Chan::YateH323Chan(YateH323Connection* conn,bool outgoing,const char* addr)
-    : Channel(hplugin,0,outgoing), m_conn(conn)
+    : Channel(hplugin,0,outgoing), m_conn(conn), m_hungup(false)
 {
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
@@ -1686,8 +1688,45 @@ YateH323Chan::~YateH323Chan()
 {
     Debug(this,DebugAll,"YateH323Chan::~YateH323Chan() %s %s [%p]",
 	m_status.c_str(),m_id.c_str(),this);
+    stopDataLinks();
+    if (m_conn)
+	m_conn->cleanups();
+    hangup();
+    if (m_conn)
+	Debug(this,DebugFail,"Still having a connection %p [%p]",m_conn,this);
+}
+
+void YateH323Chan::zeroRefs()
+{
+    XDebug(this,DebugAll,"YateH323Chan::zeroRefs() [%p]",this);
+    if (m_conn && stopDataLinks()) {
+	// let the OpenH323 cleaner thread to do the cleanups so we don't have
+	//  to block until the native data threads terminate
+	dropChan();
+	hangup();
+	return;
+    }
+    Channel::zeroRefs();
+}
+
+void YateH323Chan::finish()
+{
+    XDebug(this,DebugAll,"YateH323Chan::finish() [%p]",this);
+    m_conn = 0;
+    if (m_hungup)
+	delete this;
+    else {
+	hangup();
+	disconnect();
+    }
+}
+
+void YateH323Chan::hangup()
+{
+    if (m_hungup)
+	return;
+    m_hungup = true;
     Message *m = message("chan.hangup");
-    drop();
     YateH323Connection* tmp = m_conn;
     m_conn = 0;
     if (tmp) {
@@ -1702,14 +1741,9 @@ YateH323Chan::~YateH323Chan()
 	    m->setParam("error",err);
 	if (txt)
 	    m->setParam("reason",txt);
-	Engine::enqueue(m);
-
-	PSyncPoint sync;
-	tmp->cleanups();
-	tmp->ClearCallSynchronous(&sync);
+	tmp->ClearCall();
     }
-    else
-	Engine::enqueue(m);
+    Engine::enqueue(m);
 }
 
 void YateH323Chan::disconnected(bool final, const char *reason)
@@ -1724,14 +1758,21 @@ void YateH323Chan::disconnected(bool final, const char *reason)
 	m_conn->ClearCall((H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser));
 }
 
-void YateH323Chan::stopDataLinks()
+// Shut down the data transfers so OpenH323 can stop its related threads
+bool YateH323Chan::stopDataLinks()
 {
+    bool pending = false;
     YateH323AudioSource* s = YOBJECT(YateH323AudioSource,getSource());
-    if (s)
+    if (s) {
 	s->Close();
+	pending = true;
+    }
     YateH323AudioConsumer* c = YOBJECT(YateH323AudioConsumer,getConsumer());
-    if (c)
+    if (c) {
 	c->Close();
+	pending = true;
+    }
+    return pending;
 }
 
 BOOL YateH323Chan::openAudioChannel(BOOL isEncoding, H323AudioCodec &codec)

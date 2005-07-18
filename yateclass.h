@@ -581,6 +581,13 @@ public:
     virtual void destruct()
 	{ deref(); }
 
+protected:
+    /**
+     * This method is called when the reference count reaches zero.
+     * The default behaviour is to delete the object.
+     */
+    virtual void zeroRefs();
+
 private:
     int m_refcount;
 };

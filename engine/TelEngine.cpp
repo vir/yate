@@ -399,12 +399,18 @@ bool RefObject::deref()
 {
     s_refmutex.lock();
     int i = --m_refcount;
-    if (i == 0)
-	m_refcount = -1;
     s_refmutex.unlock();
     if (i == 0)
-	delete this;
+	zeroRefs();
     return (i <= 0);
+}
+
+void RefObject::zeroRefs()
+{
+    s_refmutex.lock();
+    m_refcount = -1;
+    s_refmutex.unlock();
+    delete this;
 }
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)

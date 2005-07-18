@@ -180,7 +180,7 @@ Channel::~Channel()
 #endif
     m_timeout = 0;
     status("deleted");
-    drop();
+    dropChan();
 }
 
 void* Channel::getObject(const String& name) const
@@ -207,15 +207,21 @@ void Channel::init()
     DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
 }
 
-void Channel::drop()
+void Channel::dropChan()
 {
     if (!m_driver)
 	return;
     m_driver->lock();
-    m_driver->channels().remove(this,false);
-    m_driver->changed();
+    if (m_driver->channels().remove(this,false))
+	m_driver->changed();
     m_driver->unlock();
-    m_driver = 0;
+}
+
+void Channel::zeroRefs()
+{
+    // remove us from driver's list before calling the destructor
+    dropChan();
+    CallEndpoint::zeroRefs();
 }
 
 void Channel::disconnected(bool final, const char* reason)

@@ -124,6 +124,7 @@ public:
 private:
     int m_port;
     Socket* m_sock;
+    SocketAddr m_addr;
     YateSIPEngine *m_engine;
 
 };
@@ -560,7 +561,6 @@ void YateSIPEndPoint::run()
 {
     struct timeval tv;
     char buf[1500];
-    SocketAddr addr;
     /* Watch stdin (fd 0) to see when it has input. */
     for (;;)
     {
@@ -572,17 +572,17 @@ void YateSIPEndPoint::run()
 	if (ok)
 	{
 	    // we can read the data
-	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,addr);
+	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,m_addr);
 	    if (res <= 0) {
 		if (!m_sock->canRetry()) {
 		    Debug(DebugGoOn,"SIP error on read: %d", m_sock->error());
 		}
 	    } else if (res >= 72) {
 		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d",
-		    res,addr.host().c_str(),addr.port());
+		    res,m_addr.host().c_str(),m_addr.port());
 		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
-		m_engine->addMessage(new YateUDPParty(m_sock,addr,m_port),buf,res);
+		m_engine->addMessage(new YateUDPParty(m_sock,m_addr,m_port),buf,res);
 	    }
 #ifdef DEBUG
 	    else

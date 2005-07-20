@@ -99,7 +99,6 @@ void CallEndpoint::disconnect(bool final, const char* reason)
     temp->setPeer(0,reason);
     temp->deref();
 
-    disconnected(final,reason);
     deref();
 }
 
@@ -226,7 +225,7 @@ void Channel::zeroRefs()
 
 void Channel::disconnected(bool final, const char* reason)
 {
-    if (final)
+    if (final || Engine::exiting())
 	return;
     // last chance to get reconnected to something
     Message* m = message("chan.disconnected");

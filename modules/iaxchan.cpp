@@ -752,20 +752,8 @@ void IAXConnection::disconnected(bool final, const char *reason)
 {
     Debug(this,DebugAll,"IAXConnection::disconnected() '%s'",reason);
     status("disconnected");
-    // If we still have a connection this is the last chance to get transferred
-    if (!(final || m_final)) {
-	Message m("chan.disconnected");
-	m.addParam("id",id());
-	if (reason)
-	    m.addParam("reason",reason);
-	if (targetid()) {
-	    // Announce our old party but at this point it may be destroyed
-	    m.addParam("targetid",targetid());
-	    m_targetid.clear();
-	}
-	m.userData(this);
-	Engine::dispatch(m);
-    }
+    if (final || !m_final)
+	Channel::disconnected(final,reason);
 }
 
 IAXSource::~IAXSource()

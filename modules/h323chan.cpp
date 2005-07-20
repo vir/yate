@@ -1359,7 +1359,7 @@ YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel()
 BOOL YateH323_ExternalRTPChannel::Start()
 {
     Debug(&hplugin,DebugAll,"YateH323_ExternalRTPChannel::Start() [%p]",this);
-    if (!m_conn)
+    if (!(m_conn && H323_ExternalRTPChannel::Start()))
 	return FALSE;
 
     PIPSocket::Address remoteIpAddress;
@@ -1914,8 +1914,11 @@ bool H323Driver::received(Message &msg, int id)
 
 void H323Driver::cleanup()
 {
-    channels().clear();
     m_endpoints.clear();
+    if (channels().count()) {
+	Debug(this,DebugFail,"Still having channels after clearing up all!");
+	channels().clear();
+    }
     if (s_process) {
 	PSyncPoint terminationSync;
 	terminationSync.Signal();

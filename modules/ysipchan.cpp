@@ -1414,8 +1414,8 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 void YateSIPConnection::disconnected(bool final, const char *reason)
 {
     Debug(this,DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
-    int code = lookup(reason,dict_errors);
     if (reason) {
+	int code = lookup(reason,dict_errors);
 	if (code)
 	    setReason(lookup(code,SIPResponses,reason),code);
 	else

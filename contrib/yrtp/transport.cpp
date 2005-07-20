@@ -30,23 +30,27 @@ using namespace TelEngine;
 RTPGroup::RTPGroup(Priority prio)
     : Mutex(true), Thread("RTP Group",prio)
 {
-    XDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
+    DDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
 }
 
 RTPGroup::~RTPGroup()
 {
-    XDebug(DebugInfo,"RTPGroup::~RTPGroup() [%p]",this);
+    DDebug(DebugInfo,"RTPGroup::~RTPGroup() [%p]",this);
 }
 
 void RTPGroup::cleanup()
 {
-    XDebug(DebugInfo,"RTPGroup::cleanup() [%p]",this);
+    DDebug(DebugInfo,"RTPGroup::cleanup() [%p]",this);
     lock();
     ObjList* l = &m_processors;
-    for (;l;l = l->next()) {
+    while (l) {
 	RTPProcessor* p = static_cast<RTPProcessor*>(l->get());
-	if (p)
+	if (p) {
 	    p->group(0);
+	    if (p != static_cast<RTPProcessor*>(l->get()))
+		continue;
+	}
+	l = l->next();
     }
     m_processors.clear();
     unlock();
@@ -54,6 +58,7 @@ void RTPGroup::cleanup()
 
 void RTPGroup::run()
 {
+    DDebug(DebugInfo,"RTPGroup::run() [%p]",this);
     bool ok = true;
     while (ok) {
 	lock();
@@ -69,12 +74,12 @@ void RTPGroup::run()
 	unlock();
 	Thread::msleep(1,true);
     }
-    XDebug(DebugInfo,"RTPGroup::run() ran out of processors [%p]",this);
+    DDebug(DebugInfo,"RTPGroup::run() ran out of processors [%p]",this);
 }
 
 void RTPGroup::join(RTPProcessor* proc)
 {
-    XDebug(DebugAll,"RTPGroup::join(%p) [%p]",proc,this);
+    DDebug(DebugAll,"RTPGroup::join(%p) [%p]",proc,this);
     lock();
     m_processors.append(proc)->setDelete(false);
     startup();
@@ -83,28 +88,27 @@ void RTPGroup::join(RTPProcessor* proc)
 
 void RTPGroup::part(RTPProcessor* proc)
 {
-    XDebug(DebugAll,"RTPGroup::part(%p) [%p]",proc,this);
+    DDebug(DebugAll,"RTPGroup::part(%p) [%p]",proc,this);
     lock();
     m_processors.remove(proc,false);
     unlock();
 }
 
-RTPProcessor::RTPProcessor(RTPGroup* grp)
+RTPProcessor::RTPProcessor()
     : m_group(0)
 {
-    XDebug(DebugAll,"RTPProcessor::RTPProcessor(%p) [%p]",grp,this);
-    group(grp);
+    DDebug(DebugAll,"RTPProcessor::RTPProcessor() [%p]",this);
 }
 
 RTPProcessor::~RTPProcessor()
 {
-    XDebug(DebugAll,"RTPProcessor::~RTPProcessor() [%p]",this);
+    DDebug(DebugAll,"RTPProcessor::~RTPProcessor() [%p]",this);
     group(0);
 }
 
 void RTPProcessor::group(RTPGroup* newgrp)
 {
-    XDebug(DebugAll,"RTPProcessor::group(%p) old=%p [%p]",newgrp,m_group,this);
+    DDebug(DebugAll,"RTPProcessor::group(%p) old=%p [%p]",newgrp,m_group,this);
     if (newgrp == m_group)
 	return;
     if (m_group)
@@ -114,20 +118,23 @@ void RTPProcessor::group(RTPGroup* newgrp)
 	m_group->join(this);
 }
 
-RTPTransport::RTPTransport(RTPGroup* grp)
-    : RTPProcessor(grp),
+RTPTransport::RTPTransport()
+    : RTPProcessor(),
       m_processor(0), m_monitor(0)
 {
+    DDebug(DebugAll,"RTPTransport::RTPTransport() [%p]",this);
 }
 
 RTPTransport::~RTPTransport()
 {
+    DDebug(DebugAll,"RTPTransport::~RTPTransport() [%p]",this);
     setProcessor();
     group(0);
 }
 
 void RTPTransport::timerTick(const Time& when)
 {
+    XDebug(DebugAll,"RTPTransport::timerTick() group=%p [%p]",group(),this);
     if (m_rtpSock.valid()) {
 	bool ok = false;
 	struct timeval tv;

@@ -362,6 +362,7 @@ void Channel::callAccept(Message& msg)
 
 void Channel::callRejected(const char* error, const char* reason, const Message* msg)
 {
+    Debug(this,DebugMild,"Call rejected error='%s' reason='%s' [%p]",error,reason,this);
     status("rejected");
 }
 

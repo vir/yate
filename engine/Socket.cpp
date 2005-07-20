@@ -20,6 +20,17 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifdef FDSIZE_HACK
+#include <features.h>
+#if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)
+#include <bits/types.h>
+#undef __FD_SETSIZE
+#define __FD_SETSIZE FDSIZE_HACK
+#else
+#error Cannot set FD_SETSIZE on this platform - please ./configure --without-fdsize and hope it works
+#endif
+#endif
+
 #include "yateclass.h"
 
 #include <string.h>
@@ -504,6 +515,19 @@ int Socket::readData(void* buffer, int length)
 
 bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* timeout)
 {
+#ifdef FD_SETSIZE
+#ifndef _WINDOWS
+    static bool localFail = true;
+    if (m_handle >= FD_SETSIZE) {
+	if (localFail) {
+	    localFail = false;
+	    Debug(DebugFail,"Socket::select: handle %d larger than compiled in maximum %d",
+		m_handle,FD_SETSIZE);
+	}
+	return false;
+    }
+#endif
+#endif
     fd_set readfd,writefd,exceptfd;
     fd_set *rfds = 0;
     fd_set *wfds = 0;

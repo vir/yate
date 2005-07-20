@@ -60,10 +60,9 @@ class YRTP_API RTPProcessor : public GenObject
 
 public:
     /**
-     * Constructor - inserts itself in a RTP group
-     * @param grp RTP group to join
+     * Constructor - processor should be later inserted in a RTP group
      */
-    RTPProcessor(RTPGroup* grp = 0);
+    RTPProcessor();
 
     /**
      * Destructor - removes itself from the RTP group
@@ -170,10 +169,10 @@ public:
     };
 
     /**
-     * Constructor, creates a transport optionally joined to a group
+     * Constructor, creates an unconnected transport
      * @param grp RTP group to join
      */
-    RTPTransport(RTPGroup* grp = 0);
+    RTPTransport();
 
     /**
      * Destructor

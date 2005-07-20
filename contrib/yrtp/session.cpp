@@ -178,6 +178,7 @@ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* d
     if (!end)
 	return true;
     // FIXME: add code to push the event and also filter dumb senders
+    return false;
 }
 
 bool RTPReceiver::decodeSilence(bool marker, unsigned int timestamp, const void* data, int len)
@@ -397,7 +398,9 @@ RTPReceiver* RTPSession::createReceiver()
 
 RTPTransport* RTPSession::createTransport()
 {
-    return new RTPTransport(group());
+    RTPTransport* trans = new RTPTransport();
+    trans->group(group());
+    return trans;
 }
 
 bool RTPSession::initGroup()

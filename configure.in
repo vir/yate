@@ -116,6 +116,13 @@ esac
 AC_MSG_RESULT([$want_inline])
 AC_SUBST(INLINE_FLAGS)
 
+FDSIZE_HACK=""
+AC_ARG_WITH(fdsize,AC_HELP_STRING([--with-fdsize=NNNN],[set FD_SIZE to NNNN (default 4096)]),[ac_cv_use_fdsize=$withval],[ac_cv_use_fdsize=4096])
+if [[ "x$ac_cv_use_fdsize" != "xno" ]]; then
+    FDSIZE_HACK="-DFDSIZE_HACK=$ac_cv_use_fdsize"
+fi
+AC_SUBST(FDSIZE_HACK)
+
 # Checks for optional libraries.
 
 HAVE_PGSQL=no

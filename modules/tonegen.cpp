@@ -132,6 +132,7 @@ ToneSource::~ToneSource()
     Lock lock(__plugin);
     Debug(&__plugin,DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     tones.remove(this,false);
+    stop();
     if (m_time) {
 	m_time = Time::now() - m_time;
 	if (m_time) {

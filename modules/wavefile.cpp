@@ -156,6 +156,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 WaveSource::~WaveSource()
 {
     Debug(&__plugin,DebugAll,"WaveSource::~WaveSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
+    stop();
     if (m_time) {
         m_time = Time::now() - m_time;
 	if (m_time) {

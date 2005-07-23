@@ -1699,7 +1699,8 @@ YateH323Chan::~YateH323Chan()
 void YateH323Chan::zeroRefs()
 {
     XDebug(this,DebugAll,"YateH323Chan::zeroRefs() [%p]",this);
-    if (m_conn && stopDataLinks()) {
+    stopDataLinks();
+    if (m_conn) {
 	// let the OpenH323 cleaner thread to do the cleanups so we don't have
 	//  to block until the native data threads terminate
 	dropChan();

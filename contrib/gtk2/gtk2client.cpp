@@ -73,6 +73,7 @@ void WidgetFinder::findCb(GtkWidget* wid, gpointer dat)
 GtkWidget* WidgetFinder::find(GtkContainer* container)
 {
     gtk_container_foreach(container,findCb,this);
+    XDebug(GTKDriver::self(),DebugAll,"WidgetFinder::find '%s' found %p",m_name.c_str(),m_widget);
     return m_widget;
 }
 
@@ -82,14 +83,16 @@ bool Widget::setCheck(bool checked)
     { return GTKWindow::setCheck(m_widget,checked); }
 bool Widget::setSelect(const String& item)
     { return GTKWindow::setSelect(m_widget,item); }
-bool Widget::addOption(const String& item, bool atStart)
-    { return GTKWindow::addOption(m_widget,item,atStart); }
+bool Widget::addOption(const String& item, bool atStart, const String& text)
+    { return GTKWindow::addOption(m_widget,item,atStart,text); }
 bool Widget::delOption(const String& item)
     { return GTKWindow::delOption(m_widget,item); }
 bool Widget::getText(String& text)
     { return GTKWindow::getText(m_widget,text); }
 bool Widget::getCheck(bool& checked)
     { return GTKWindow::getCheck(m_widget,checked); }
+bool Widget::getSelect(String& item)
+    { return GTKWindow::getSelect(m_widget,item); }
 
 typedef GtkWidget* (*GBuilder) (const gchar *label);
 
@@ -228,7 +231,7 @@ static GtkWidget* getListItem(GtkList* lst, const String& item)
 	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(it));
 	    if (!lbl)
 		lbl = (GtkWidget*)g_object_get_data((GObject*)it,"Yate::Label");
-	    if (GTK_IS_LABEL(lbl) && (item == gtk_label_get_text(GTK_LABEL(lbl)))) {
+	    if (GTK_IS_LABEL(lbl) && (item == gtk_widget_get_name(lbl))) {
 		ret = it;
 		break;
 	    }
@@ -424,13 +427,33 @@ static GtkWidget* gtkComboNewWithText(const gchar* text)
     return combo;
 }
 
-static GtkWidget* gtkMenuItemNew(const gchar* text)
+static GtkWidget* gtkMenuItemNew(const gchar* name, const gchar* text = 0)
 {
+    if (!text)
+	text = name;
     // We don't use gtk_menu_item_new_with_label as we need to
     //  work around not getting the GtkLabel out of GtkMenuItem
     GtkWidget* item = gtk_menu_item_new();
     GtkWidget* label = gtk_label_new(text);
     g_object_set_data((GObject*)item,"Yate::Label",label);
+    if (name)
+	gtk_widget_set_name(label,name);
+    gtk_container_add(GTK_CONTAINER(item),label);
+    attachDebug(item);
+    attachDebug(label);
+    return item;
+}
+
+static GtkWidget* gtkListItemNew(const gchar* name, const gchar* text = 0)
+{
+    if (!text)
+	text = name;
+    GtkWidget* item = gtk_list_item_new();
+    GtkWidget* label = gtk_label_new(text);
+    gtk_misc_set_alignment((GtkMisc*)label,0,0);
+    g_object_set_data((GObject*)item,"Yate::Label",label);
+    if (name)
+	gtk_widget_set_name(label,name);
     gtk_container_add(GTK_CONTAINER(item),label);
     attachDebug(item);
     attachDebug(label);
@@ -468,7 +491,7 @@ static GtkWidget* gtkListNew(const gchar* text)
 	for (ObjList* i = l; i; i = i->next()) {
 	    String* s = static_cast<String*>(i->get());
 	    if (s && *s)
-		list = g_list_append(list,gtk_list_item_new_with_label(s->c_str()));
+		list = g_list_append(list,gtkListItemNew(s->c_str()));
 	}
 	if (l)
 	    l->destruct();
@@ -573,6 +596,7 @@ static TokenDict s_layoutNames[] = {
     { "boxed", GTKWindow::Boxed },
     { "tabbed", GTKWindow::Tabbed },
     { "framed", GTKWindow::Framed },
+    { "scroll", GTKWindow::Scroll },
     { 0, 0 },
 };
 
@@ -705,6 +729,8 @@ GtkWidget* GTKWindow::container(Layout layout) const
 	    return gtk_notebook_new();
 	case Framed:
 	    return gtk_frame_new(NULL);
+	case Scroll:
+	    return gtk_scrolled_window_new(NULL,NULL);
 	default:
 	    break;
     }
@@ -738,7 +764,9 @@ void GTKWindow::insert(GtkWidget* wid, int x, int y, int w, int h)
     else if (GTK_IS_LAYOUT(filler()))
 	gtk_layout_put(GTK_LAYOUT(filler()),wid,x,y);
     else if (GTK_IS_BOX(filler()))
-	gtk_box_pack_start(GTK_BOX(filler()),wid,(x > 0),true,y);
+	gtk_box_pack_start(GTK_BOX(filler()),wid,(x > 0),(x > 1),y);
+    else if (GTK_IS_SCROLLED_WINDOW(filler()))
+	gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(filler()),wid);
     else
 	gtk_container_add(GTK_CONTAINER(filler()),wid);
     if (GTK_IS_NOTEBOOK(filler()) && m_tabName)
@@ -920,6 +948,8 @@ void GTKWindow::hide()
     if (!m_visible)
 	return;
     prepare();
+    gtk_window_set_modal(GTK_WINDOW(m_widget),FALSE);
+    gtk_window_set_transient_for(GTK_WINDOW(m_widget),NULL);
     gtk_widget_hide(m_widget);
     m_visible = false;
     if (m_master)
@@ -994,6 +1024,20 @@ bool GTKWindow::restore()
     return true;
 }
 
+bool GTKWindow::setParams(const NamedList& params)
+{
+    bool ok = Window::setParams(params);
+    if (params.getValue("parent")) {
+	Window* wnd = GTKClient::getWindow(params.getValue("parent"));
+	GTKWindow* gwnd = YOBJECT(GTKWindow,wnd);
+	if (gwnd)
+	    gtk_window_set_transient_for(GTK_WINDOW(m_widget),GTK_WINDOW(gwnd->widget()));
+    }
+    if (params.getBoolValue("modal"))
+	gtk_window_set_modal(GTK_WINDOW(m_widget),TRUE);
+    return ok;
+}
+
 bool GTKWindow::action(GtkWidget* wid)
 {
     const gchar* name = gtk_widget_get_name(wid);
@@ -1030,8 +1074,9 @@ bool GTKWindow::select(GtkList* lst, GtkListItem* item)
     if (!lbl)
 	lbl = (GtkWidget*)g_object_get_data((GObject*)item,"Yate::Label");
     if (GTK_IS_LABEL(lbl)) {
+	String item(gtk_widget_get_name(lbl));
 	String val(gtk_label_get_text(GTK_LABEL(lbl)));
-	return GTKClient::self() && GTKClient::self()->select(this,name,val);
+	return GTKClient::self() && GTKClient::self()->select(this,name,item,val);
     }
     return false;
 }
@@ -1068,6 +1113,7 @@ bool GTKWindow::setText(const String& name, const String& text)
 
 bool GTKWindow::setText(GtkWidget* wid, const String& text)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::setText(%p,'%s')",wid,text.safe());
     if (GTK_IS_LABEL(wid)) {
 	gtk_label_set_text(GTK_LABEL(wid),text.safe());
 	return true;
@@ -1098,6 +1144,7 @@ bool GTKWindow::setCheck(const String& name, bool checked)
 
 bool GTKWindow::setCheck(GtkWidget* wid, bool checked)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::setCheck(%p,%d)",wid,checked);
     if (GTK_IS_TOGGLE_BUTTON(wid)) {
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(wid),checked);
 	return true;
@@ -1120,6 +1167,7 @@ bool GTKWindow::setSelect(const String& name, const String& item)
 
 bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::setSelect(%p,'%s')",wid,item.safe());
     if (GTK_IS_OPTION_MENU(wid)) {
 	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
 	int i = getOptionIndex(opt,item);
@@ -1132,24 +1180,25 @@ bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
     return false;
 }
 
-bool GTKWindow::addOption(const String& name, const String& item, bool atStart)
+bool GTKWindow::addOption(const String& name, const String& item, bool atStart, const String& text)
 {
     GtkWidget* wid = find(name);
     if (!wid)
 	return false;
     Widget* yw = getWidget(wid);
-    return yw ? yw->addOption(item,atStart) : addOption(wid,item,atStart);
+    return yw ? yw->addOption(item,atStart,text) : addOption(wid,item,atStart,text);
 }
 
-bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
+bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart, const String& text)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::addOption(%p,'%s')",wid,item.safe());
     if (GTK_IS_OPTION_MENU(wid)) {
 	if (getOptionItem(GTK_OPTION_MENU(wid),item))
 	    return true;
 	GtkWidget* mnu = gtk_option_menu_get_menu(GTK_OPTION_MENU(wid));
 	if (!GTK_IS_MENU(mnu))
 	    return false;
-	GtkWidget* child = gtkMenuItemNew(item);
+	GtkWidget* child = gtkMenuItemNew(item,text);
 	if (child) {
 	    if (atStart)
 		gtk_menu_shell_prepend(GTK_MENU_SHELL(mnu),child);
@@ -1161,7 +1210,7 @@ bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
 	return false;
     }
     if (GTK_IS_LIST(wid)) {
-	GtkWidget* li = gtk_list_item_new_with_label(item.safe());
+	GtkWidget* li = gtkListItemNew(item,text);
 	if (!li)
 	    return false;
 	GList* list = g_list_append(NULL,li);
@@ -1170,7 +1219,7 @@ bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart)
 		gtk_list_prepend_items(GTK_LIST(wid),list);
 	    else
 		gtk_list_append_items(GTK_LIST(wid),list);
-	    gtk_widget_show(li);
+	    gtk_widget_show_all(li);
 	    return true;
 	}
 	return false;
@@ -1189,6 +1238,7 @@ bool GTKWindow::delOption(const String& name, const String& item)
 
 bool GTKWindow::delOption(GtkWidget* wid, const String& item)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::delOption(%p,'%s')",wid,item.safe());
     if (GTK_IS_OPTION_MENU(wid)) {
 	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
 	GtkWidget* it = getOptionItem(opt,item);
@@ -1200,8 +1250,11 @@ bool GTKWindow::delOption(GtkWidget* wid, const String& item)
     }
     if (GTK_IS_LIST(wid)) {
 	GtkList* lst = GTK_LIST(wid);
+	GtkWidget* sel = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
 	GtkWidget* it = getListItem(lst,item);
 	if (it) {
+	    if (it == sel)
+		g_object_set_data((GObject*)wid,"Yate::ListItem",NULL);
 	    GList* list = g_list_append(NULL,it);
 	    gtk_list_remove_items(lst,list);
 	    return true;
@@ -1222,6 +1275,7 @@ bool GTKWindow::getText(const String& name, String& text)
 
 bool GTKWindow::getText(GtkWidget* wid, String& text)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::getText(%p)",wid);
     if (GTK_IS_LABEL(wid)) {
 	text = gtk_label_get_text(GTK_LABEL(wid));
 	return true;
@@ -1265,6 +1319,7 @@ bool GTKWindow::getCheck(const String& name, bool& checked)
 
 bool GTKWindow::getCheck(GtkWidget* wid, bool& checked)
 {
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::getCheck(%p)",wid);
     if (GTK_IS_TOGGLE_BUTTON(wid)) {
 	checked = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(wid));
 	return true;
@@ -1272,6 +1327,34 @@ bool GTKWindow::getCheck(GtkWidget* wid, bool& checked)
     if (GTK_IS_CHECK_MENU_ITEM(wid)) {
 	checked = gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(wid));
 	return true;
+    }
+    return false;
+}
+
+bool GTKWindow::getSelect(const String& name, String& item)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->getSelect(item) : getSelect(wid,item);
+}
+
+bool GTKWindow::getSelect(GtkWidget* wid, String& item)
+{
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::getSelect(%p)",wid);
+    if (GTK_IS_LIST(wid)) {
+	GtkWidget* it = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
+	if (it) {
+	    GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(it));
+	    if (!lbl)
+		lbl = (GtkWidget*)g_object_get_data((GObject*)it,"Yate::Label");
+	    if (GTK_IS_LABEL(lbl)) {
+		item = gtk_widget_get_name(lbl);
+		return true;
+	    }
+	}
+	return false;
     }
     return false;
 }
@@ -1395,8 +1478,6 @@ void GTKDriver::initialize()
 	GTKClient::self()->startup();
     }
     setup();
-    installRelay(Halt);
-    installRelay(Progress);
 }
 
 bool GTKDriver::factory(UIFactory* factory, const char* type)

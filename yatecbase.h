@@ -52,15 +52,17 @@ public:
     virtual ~Window();
     virtual const String& toString() const;
     virtual void title(const String& text);
+    virtual bool setParams(const NamedList& params);
     virtual bool setActive(const String& name, bool active) = 0;
     virtual bool setShow(const String& name, bool visible) = 0;
     virtual bool setText(const String& name, const String& text) = 0;
     virtual bool setCheck(const String& name, bool checked) = 0;
     virtual bool setSelect(const String& name, const String& item) = 0;
-    virtual bool addOption(const String& name, const String& item, bool atStart = false) = 0;
+    virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty()) = 0;
     virtual bool delOption(const String& name, const String& item) = 0;
     virtual bool getText(const String& name, String& text) = 0;
     virtual bool getCheck(const String& name, bool& checked) = 0;
+    virtual bool getSelect(const String& name, String& item) = 0;
     virtual void populate() = 0;
     virtual void init() = 0;
     virtual void show() = 0;
@@ -122,7 +124,7 @@ public:
     bool setStatusLocked(const String& text, Window* wnd = 0);
     virtual bool action(Window* wnd, const String& name);
     virtual bool toggle(Window* wnd, const String& name, bool active);
-    virtual bool select(Window* wnd, const String& name, const String& item);
+    virtual bool select(Window* wnd, const String& name, const String& item, const String& text = String::empty());
     virtual bool callIncoming(const String& caller, const String& dest = String::empty(), Message* msg = 0);
     void clearIncoming(const String& id);
     void callAccept(const char* callId = 0);
@@ -139,7 +141,7 @@ public:
     bool setText(const String& name, const String& text, Window* wnd = 0, Window* skip = 0);
     bool setCheck(const String& name, bool checked, Window* wnd = 0, Window* skip = 0);
     bool setSelect(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
-    bool addOption(const String& name, const String& item, bool atStart, Window* wnd = 0, Window* skip = 0);
+    bool addOption(const String& name, const String& item, bool atStart, const String& text = String::empty(), Window* wnd = 0, Window* skip = 0);
     bool delOption(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool getText(const String& name, String& text, Window* wnd = 0, Window* skip = 0);
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
@@ -152,12 +154,17 @@ public:
     static Window* getWindow(const String& name);
     static bool setVisible(const String& name, bool show = true);
     static bool getVisible(const String& name);
+    static bool openPopup(const String& name, const NamedList* params = 0);
     static ObjList* listWindows();
 protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
     void addChannel(ClientChannel* chan);
     void delChannel(ClientChannel* chan);
+    void setChannel(ClientChannel* chan);
+    void setChannelInternal(ClientChannel* chan);
+    void updateFrom(const ClientChannel* chan);
+    void enableAction(const ClientChannel* chan, const String& action);
     ObjList m_windows;
     String m_incoming;
     int m_line;
@@ -180,13 +187,22 @@ public:
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
+    virtual bool enableAction(const String& action) const;
+    void callAnswer();
     bool openMedia(bool replace = false);
     void closeMedia();
+    inline const String& description() const
+	{ return m_desc; }
     inline int line() const
 	{ return m_line; }
     void line(int newLine);
 protected:
+    void update(bool client = true);
     int m_line;
+    String m_desc;
+    bool m_canAnswer;
+    bool m_canTransfer;
+    bool m_canConference;
 };
 
 /**
@@ -207,6 +223,7 @@ public:
     inline static const String& device()
 	{ return s_device; }
 protected:
+    void setup();
     static ClientDriver* s_driver;
     static String s_device;
 };

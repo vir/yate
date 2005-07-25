@@ -48,6 +48,8 @@
 
 namespace TelEngine {
 
+class GTKWindow;
+
 class YGTK2_API GTKClient : public Client
 {
     friend class GTKWindow;
@@ -82,10 +84,11 @@ public:
     virtual bool setText(const String& text);
     virtual bool setCheck(bool checked);
     virtual bool setSelect(const String& item);
-    virtual bool addOption(const String& item, bool atStart = false);
+    virtual bool addOption(const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& item);
     virtual bool getText(String& text);
     virtual bool getCheck(bool& checked);
+    virtual bool getSelect(String& item);
 protected:
     void widget(GtkWidget* wid);
 private:
@@ -97,6 +100,7 @@ private:
 class YGTK2_API GTKWindow : public Window
 {
     friend class GTKClient;
+    YCLASS(GTKWindow,Window)
 public:
     enum Layout {
 	Unknown = 0,
@@ -108,19 +112,22 @@ public:
 	Boxed,
 	Tabbed,
 	Framed,
+	Scroll,
     };
     GTKWindow(const char* id = 0, Layout layout = Unknown);
     virtual ~GTKWindow();
     virtual void title(const String& text);
+    virtual bool setParams(const NamedList& params);
     virtual bool setActive(const String& name, bool active);
     virtual bool setShow(const String& name, bool visible);
     virtual bool setText(const String& name, const String& text);
     virtual bool setCheck(const String& name, bool checked);
     virtual bool setSelect(const String& name, const String& item);
-    virtual bool addOption(const String& name, const String& item, bool atStart = false);
+    virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& name, const String& item);
     virtual bool getText(const String& name, String& text);
     virtual bool getCheck(const String& name, bool& checked);
+    virtual bool getSelect(const String& name, String& item);
     virtual void populate();
     virtual void init();
     virtual void show();
@@ -151,10 +158,11 @@ public:
     static bool setText(GtkWidget* wid, const String& text);
     static bool setCheck(GtkWidget* wid, bool checked);
     static bool setSelect(GtkWidget* wid, const String& item);
-    static bool addOption(GtkWidget* wid, const String& item, bool atStart = false);
+    static bool addOption(GtkWidget* wid, const String& item, bool atStart = false, const String& text = String::empty());
     static bool delOption(GtkWidget* wid, const String& item);
     static bool getText(GtkWidget* wid, String& text);
     static bool getCheck(GtkWidget* wid, bool& checked);
+    static bool getSelect(GtkWidget* wid, String& item);
 protected:
     GtkWidget* m_widget;
     GtkWidget* m_filler;

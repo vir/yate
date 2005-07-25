@@ -70,6 +70,33 @@ bool Window::related(const Window* wnd) const
     return true;
 }
 
+bool Window::setParams(const NamedList& params)
+{
+    bool ok = true;
+    unsigned int l = params.length();
+    for (unsigned int i = 0; i < l; i++) {
+	const NamedString* s = params.getParam(i);
+	if (s) {
+	    String n(s->name());
+	    if (n == "title")
+		title(*s);
+	    else if (n.startSkip("show:",false))
+		ok = setShow(n,s->toBoolean()) && ok;
+	    else if (n.startSkip("active:",false))
+		ok = setActive(n,s->toBoolean()) && ok;
+	    else if (n.startSkip("check:",false))
+		ok = setCheck(n,s->toBoolean()) && ok;
+	    else if (n.startSkip("select:",false))
+		ok = setSelect(n,*s) && ok;
+	    else if (n.find(':') < 0)
+		ok = setText(n,*s) && ok;
+	    else
+		ok = false;
+	}
+    }
+    return ok;
+}
+
 
 UIFactory::UIFactory(const char* type, const char* name)
     : String(name)
@@ -111,6 +138,7 @@ void Client::run()
     msg.setParam("event","load");
     Engine::dispatch(msg);
     initWindows();
+    updateFrom(0);
     setStatus("");
     msg.setParam("event","init");
     Engine::dispatch(msg);
@@ -176,6 +204,17 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
 	if (w && (w != wnd) && wnd->related(w))
 	    w->moveRel(dx,dy);
     }
+}
+
+bool Client::openPopup(const String& name, const NamedList* params)
+{
+    Window* wnd = getWindow(name);
+    if (!wnd)
+	return false;
+    if (params)
+	wnd->setParams(*params);
+    wnd->show();
+    return true;
 }
 
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
@@ -258,17 +297,17 @@ bool Client::setSelect(const String& name, const String& item, Window* wnd, Wind
     return ok;
 }
 
-bool Client::addOption(const String& name, const String& item, bool atStart, Window* wnd, Window* skip)
+bool Client::addOption(const String& name, const String& item, bool atStart, const String& text, Window* wnd, Window* skip)
 {
     if (wnd)
-	return wnd->addOption(name,item,atStart);
+	return wnd->addOption(name,item,atStart,text);
     ++s_changing;
     bool ok = false;
     ObjList* l = &m_windows;
     for (; l; l = l->next()) {
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip))
-	    ok = wnd->addOption(name,item,atStart) || ok;
+	    ok = wnd->addOption(name,item,atStart,text) || ok;
     }
     --s_changing;
     return ok;
@@ -318,7 +357,15 @@ bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* sk
 
 bool Client::getSelect(const String& name, String& item, Window* wnd, Window* skip)
 {
-    return getText(name,item,wnd,skip);
+    if (wnd)
+	return wnd->getSelect(name,item);
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip) && wnd->getSelect(name,item))
+	    return true;
+    }
+    return false;
 }
 
 bool Client::setStatus(const String& text, Window* wnd)
@@ -421,17 +468,26 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     return false;
 }
 
-bool Client::select(Window* wnd, const String& name, const String& item)
+bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
 {
     DDebug(ClientDriver::self(),DebugInfo,"Select '%s' '%s' in %p",
 	name.c_str(),item.c_str(),wnd);
     setSelect(name,item,0,wnd);
+    if (name == "channels") {
+	ClientChannel* chan = ClientDriver::self() ?
+	    static_cast<ClientChannel*>(ClientDriver::self()->find(item)) :
+	    0;
+	updateFrom(chan);
+	return true;
+    }
     Message* m = new Message("ui.event");
     if (wnd)
 	m->addParam("window",wnd->id());
     m->addParam("event","select");
     m->addParam("name",name);
     m->addParam("item",item);
+    if (text)
+	m->addParam("text",text);
     Engine::enqueue(m);
     return false;
 }
@@ -447,8 +503,10 @@ void Client::callAccept(const char* callId)
     Debug(ClientDriver::self(),DebugInfo,"callAccept('%s')",callId);
     ClientChannel* cc = static_cast<ClientChannel*>(ClientDriver::self()->find(callId));
     if (cc) {
-	cc->openMedia();
-	Engine::enqueue(cc->message("call.answered",false,true));
+	cc->ref();
+	cc->callAnswer();
+	setChannelInternal(cc);
+	cc->deref();
     }
 }
 
@@ -543,7 +601,23 @@ void Client::clearIncoming(const String& id)
 
 void Client::addChannel(ClientChannel* chan)
 {
-    addOption("channels",chan->id(),false);
+    addOption("channels",chan->id(),false,chan->description());
+}
+
+void Client::setChannel(ClientChannel* chan)
+{
+    Debug(ClientDriver::self(),DebugAll,"setChannel %p",chan);
+    lock();
+    setChannelInternal(chan);
+    unlock();
+}
+
+void Client::setChannelInternal(ClientChannel* chan)
+{
+    setText(chan->id(),chan->description());
+    String tmp;
+    if (getSelect("channels",tmp) && (tmp == chan->id()))
+	updateFrom(chan);
 }
 
 void Client::delChannel(ClientChannel* chan)
@@ -552,6 +626,21 @@ void Client::delChannel(ClientChannel* chan)
     clearIncoming(chan->id());
     delOption("channels",chan->id());
     unlock();
+}
+
+void Client::updateFrom(const ClientChannel* chan)
+{
+    enableAction(chan,"accept");
+    enableAction(chan,"reject");
+    enableAction(chan,"hangup");
+    enableAction(chan,"voicemail");
+    enableAction(chan,"transfer");
+    enableAction(chan,"conference");
+}
+
+void Client::enableAction(const ClientChannel* chan, const String& action)
+{
+    setActive(action,chan && chan->enableAction(action));
 }
 
 bool UIHandler::received(Message &msg)
@@ -582,7 +671,7 @@ bool UIHandler::received(Message &msg)
     else if (action == "set_visible")
 	ok = Client::self()->setShow(name,msg.getBoolValue("visible"),wnd);
     else if (action == "add_option")
-	ok = Client::self()->addOption(name,msg.getValue("item"),msg.getBoolValue("insert"),wnd);
+	ok = Client::self()->addOption(name,msg.getValue("item"),msg.getBoolValue("insert"),msg.getValue("text"),wnd);
     else if (action == "del_option")
 	ok = Client::self()->delOption(name,msg.getValue("item"),wnd);
     else if (action == "get_text") {
@@ -607,6 +696,8 @@ bool UIHandler::received(Message &msg)
 	ok = Client::setVisible(name,true);
     else if (action == "window_hide")
 	ok = Client::setVisible(name,false);
+    else if (action == "window_popup")
+	ok = Client::openPopup(name,&msg);
     Client::self()->unlock();
     return ok;
 }
@@ -614,9 +705,13 @@ bool UIHandler::received(Message &msg)
 // IMPORTANT: having a target means "from inside Yate to the user"
 //  An user initiated call must be incoming (no target)
 ClientChannel::ClientChannel(const char* target)
-    : Channel(ClientDriver::self(),0,(target != 0)), m_line(0)
+    : Channel(ClientDriver::self(),0,(target != 0)), m_line(0),
+      m_canAnswer(false), m_canTransfer(false), m_canConference(false)
 {
     m_targetid = target;
+    if (target)
+	m_canAnswer = true;
+    update(false);
     if (Client::self())
 	Client::self()->addChannel(this);
     Engine::enqueue(message("chan.startup"));
@@ -663,11 +758,51 @@ void ClientChannel::line(int newLine)
 	m_address << "line/" << m_line;
 }
 
+void ClientChannel::update(bool client)
+{
+    m_desc = "Channel ";
+    m_desc << id() << " " << status();
+    CallEndpoint* peer = getPeer();
+    if (peer) {
+	peer->ref();
+	String tmp;
+	if (peer->getConsumer())
+	    tmp = peer->getConsumer()->getFormat();
+	if (tmp.null())
+	    tmp = "-";
+	m_desc << " " << tmp;
+	tmp.clear();
+	if (peer->getSource())
+	    tmp = peer->getSource()->getFormat();
+	peer->deref();
+	if (tmp.null())
+	    tmp = "-";
+	m_desc << "/" << tmp;
+    }
+    Debug(ClientDriver::self(),DebugAll,"update %d '%s'",client,m_desc.c_str());
+    if (client && Client::self())
+	Client::self()->setChannel(this);
+}
+
+bool ClientChannel::enableAction(const String& action) const
+{
+    if (action == "hangup")
+	return true;
+    else if ((action == "accept") || (action == "reject") || (action == "voicemail"))
+	return m_canAnswer;
+    else if (action == "transfer")
+	return m_canTransfer;
+    else if (action == "conference")
+	return m_canConference;
+    return false;
+}
+
 bool ClientChannel::callRouted(Message& msg)
 {
     String tmp("Calling:");
     tmp << " " << msg.retValue();
     Client::self()->setStatusLocked(tmp);
+    update();
     return true;
 }
 
@@ -676,6 +811,7 @@ void ClientChannel::callAccept(Message& msg)
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAccept() [%p]",this);
     Client::self()->setStatusLocked("Call connected");
     Channel::callAccept(msg);
+    update();
 }
 
 void ClientChannel::callRejected(const char* error, const char* reason, const Message* msg)
@@ -691,6 +827,8 @@ void ClientChannel::callRejected(const char* error, const char* reason, const Me
     if (Client::self())
 	Client::self()->setStatusLocked(tmp);
     Channel::callRejected(error,reason,msg);
+    m_canConference = m_canTransfer = m_canAnswer = false;
+    update();
 }
 
 bool ClientChannel::msgProgress(Message& msg)
@@ -700,7 +838,9 @@ bool ClientChannel::msgProgress(Message& msg)
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch && ch->getSource())
 	openMedia();
-    return Channel::msgAnswered(msg);
+    bool ret = Channel::msgProgress(msg);
+    update();
+    return ret;
 }
 
 bool ClientChannel::msgRinging(Message& msg)
@@ -710,15 +850,35 @@ bool ClientChannel::msgRinging(Message& msg)
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch && ch->getSource())
 	openMedia();
-    return Channel::msgRinging(msg);
+    bool ret = Channel::msgRinging(msg);
+    update();
+    return ret;
 }
 
 bool ClientChannel::msgAnswered(Message& msg)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgAnswered() [%p]",this);
+    m_canAnswer = false;
+    m_canConference = true;
+    m_canTransfer = true;
     Client::self()->setStatusLocked("Call answered");
     openMedia();
-    return Channel::msgAnswered(msg);
+    bool ret = Channel::msgAnswered(msg);
+    update();
+    return ret;
+}
+
+void ClientChannel::callAnswer()
+{
+    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAnswer() [%p]",this);
+    m_canAnswer = false;
+    m_canConference = true;
+    m_canTransfer = true;
+    status("answered");
+    Client::self()->setStatus("Call answered");
+    openMedia();
+    update(false);
+    Engine::enqueue(message("call.answered",false,true));
 }
 
 
@@ -734,6 +894,13 @@ ClientDriver::ClientDriver()
 ClientDriver::~ClientDriver()
 {
     s_driver = 0;
+}
+
+void ClientDriver::setup()
+{
+    Driver::setup();
+    installRelay(Halt);
+    installRelay(Progress);
 }
 
 bool ClientDriver::factory(UIFactory* factory, const char* type)

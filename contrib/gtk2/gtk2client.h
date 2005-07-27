@@ -84,6 +84,7 @@ public:
     virtual bool setText(const String& text);
     virtual bool setCheck(bool checked);
     virtual bool setSelect(const String& item);
+    virtual bool setUrgent(bool urgent);
     virtual bool addOption(const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& item);
     virtual bool getText(String& text);
@@ -118,11 +119,14 @@ public:
     virtual ~GTKWindow();
     virtual void title(const String& text);
     virtual bool setParams(const NamedList& params);
+    virtual bool hasElement(const String& name);
+    virtual void setOver(const Window* parent);
     virtual bool setActive(const String& name, bool active);
     virtual bool setShow(const String& name, bool visible);
     virtual bool setText(const String& name, const String& text);
     virtual bool setCheck(const String& name, bool checked);
     virtual bool setSelect(const String& name, const String& item);
+    virtual bool setUrgent(const String& name, bool urgent);
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& name, const String& item);
     virtual bool getText(const String& name, String& text);
@@ -158,6 +162,7 @@ public:
     static bool setText(GtkWidget* wid, const String& text);
     static bool setCheck(GtkWidget* wid, bool checked);
     static bool setSelect(GtkWidget* wid, const String& item);
+    static bool setUrgent(GtkWidget* wid, bool urgent);
     static bool addOption(GtkWidget* wid, const String& item, bool atStart = false, const String& text = String::empty());
     static bool delOption(GtkWidget* wid, const String& item);
     static bool getText(GtkWidget* wid, String& text);

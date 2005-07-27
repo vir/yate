@@ -26,7 +26,9 @@ label=10,115,200,20,status,Initializing...
 ;toggle=155,5,20,20,tools,
 ;toggle=5,78,,,settings,"../clients/stock_preferences_24.png" Settings
 toggle=5,85,75,28,settings,Settings
+tooltip=Show/hide Settings window
 toggle=270,85,75,28,channels,Channels
+tooltip=Show/hide Channels window
 
 [tools]
 enabled=off
@@ -83,6 +85,7 @@ leave=<
 
 [settings]
 enabled=on
+visible=off
 title=Settings
 layout=framed
 vbox=>
@@ -97,6 +100,9 @@ vbox=>
 	tabname=General
 	vbox=>
 	    check=,,,,autoanswer,Auto Answer
+	    tooltip=Answer all incoming calls without prompting
+	    check=,,,,multilines,Multiple lines
+	    tooltip=Allow having more than one simultaneously open connections
 	    label=Username
 	    editor=,,,,def_username,
 	    tooltip=User identifier or alias
@@ -162,7 +168,6 @@ leave=<vbox
 
 [channels]
 enabled=on
-popup=on
 title=Channels
 layout=framed
 vbox=>

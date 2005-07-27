@@ -23,6 +23,8 @@
 
 #include "yatecbase.h"
 
+#include <stdio.h>
+
 using namespace TelEngine;
 
 class UIHandler : public MessageHandler
@@ -118,7 +120,8 @@ Client* Client::s_client = 0;
 int Client::s_changing = 0;
 
 Client::Client(const char *name)
-    : Thread(name), m_line(0)
+    : Thread(name), m_line(0),
+      m_multiLines(false), m_autoAnswer(false)
 {
     s_client = this;
     Engine::install(new UIHandler);
@@ -138,6 +141,7 @@ void Client::run()
     msg.setParam("event","load");
     Engine::dispatch(msg);
     initWindows();
+    initClient();
     updateFrom(0);
     setStatus("");
     msg.setParam("event","init");
@@ -194,6 +198,15 @@ void Client::initWindows()
     }
 }
 
+void Client::initClient()
+{
+    m_multiLines =
+	getWindow("channels") || hasElement("channels") ||
+	getWindow("lines") || hasElement("lines");
+    setCheck("multilines",m_multiLines);
+    getCheck("autoanswer",m_autoAnswer);
+}
+
 void Client::moveRelated(const Window* wnd, int dx, int dy)
 {
     if (!wnd)
@@ -206,15 +219,30 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
     }
 }
 
-bool Client::openPopup(const String& name, const NamedList* params)
+bool Client::openPopup(const String& name, const NamedList* params, const Window* parent)
 {
     Window* wnd = getWindow(name);
     if (!wnd)
 	return false;
     if (params)
 	wnd->setParams(*params);
+    if (parent)
+	wnd->setOver(parent);
     wnd->show();
     return true;
+}
+
+bool Client::hasElement(const String& name, Window* wnd, Window* skip)
+{
+    if (wnd)
+	return wnd->hasElement(name);
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip) && wnd->hasElement(name))
+	    return true;
+    }
+    return false;
 }
 
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
@@ -292,6 +320,22 @@ bool Client::setSelect(const String& name, const String& item, Window* wnd, Wind
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip))
 	    ok = wnd->setSelect(name,item) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* skip)
+{
+    if (wnd)
+	return wnd->setUrgent(name,urgent);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->setUrgent(name,urgent) || ok;
     }
     --s_changing;
     return ok;
@@ -408,7 +452,7 @@ bool Client::action(Window* wnd, const String& name)
     else if (name.startsWith("callto:"))
 	return callStart(name.substr(7));
     else if (name == "accept") {
-	callAccept(m_incoming);
+	callAccept(m_activeId);
 	return true;
     }
     else if (name.startsWith("accept:")) {
@@ -416,7 +460,7 @@ bool Client::action(Window* wnd, const String& name)
 	return true;
     }
     else if (name == "reject") {
-	callReject(m_incoming);
+	callReject(m_activeId);
 	return true;
     }
     else if (name.startsWith("reject:")) {
@@ -424,7 +468,7 @@ bool Client::action(Window* wnd, const String& name)
 	return true;
     }
     else if (name == "hangup") {
-	callHangup(m_incoming);
+	callHangup(m_activeId);
 	return true;
     }
     else if (name.startsWith("hangup:")) {
@@ -458,6 +502,14 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     if (setVisible(name,active))
 	return true;
     setCheck(name,active,0,wnd);
+    if (name == "autoanswer") {
+	m_autoAnswer = active;
+	return true;
+    }
+    if (name == "multilines") {
+	m_multiLines = active;
+	return true;
+    }
     Message* m = new Message("ui.event");
     if (wnd)
 	m->addParam("window",wnd->id());
@@ -474,10 +526,7 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 	name.c_str(),item.c_str(),wnd);
     setSelect(name,item,0,wnd);
     if (name == "channels") {
-	ClientChannel* chan = ClientDriver::self() ?
-	    static_cast<ClientChannel*>(ClientDriver::self()->find(item)) :
-	    0;
-	updateFrom(chan);
+	updateFrom(item);
 	return true;
     }
     Message* m = new Message("ui.event");
@@ -540,7 +589,7 @@ bool Client::callStart(const String& target, const String& line,
 	target.c_str(),line.c_str(),proto.c_str(),account.c_str());
     if (target.null())
 	return false;
-    ClientChannel* cc = new ClientChannel();
+    ClientChannel* cc = new ClientChannel(target);
     Message* m = cc->message("call.route");
     Regexp r("^[a-z0-9]\\+/");
     bool hasProto = r.matches(target.safe());
@@ -568,23 +617,37 @@ bool Client::emitDigit(char digit)
 bool Client::callIncoming(const String& caller, const String& dest, Message* msg)
 {
     Debug(ClientDriver::self(),DebugAll,"callIncoming [%p]",this);
+    if (m_activeId && !m_multiLines) {
+	if (msg) {
+	    msg->setParam("error","busy");
+	    msg->setParam("reason","User busy");
+	}
+	return false;
+    }
     if (msg && msg->userData()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
 	lock();
-	ClientChannel* cc = new ClientChannel(ch->id());
+	ClientChannel* cc = new ClientChannel(caller,ch->id());
 	unlock();
 	if (cc->connect(ch)) {
-	    m_incoming = cc->id();
-	    msg->setParam("peerid",m_incoming);
-	    msg->setParam("targetid",m_incoming);
+	    m_activeId = cc->id();
+	    msg->setParam("peerid",m_activeId);
+	    msg->setParam("targetid",m_activeId);
 	    Engine::enqueue(cc->message("call.ringing",false,true));
 	    lock();
 	    // notify the UI about the call
 	    String tmp("Call from:");
 	    tmp << " " << caller;
 	    setStatus(tmp);
-	    setText("incoming",tmp);
-	    setVisible("incoming");
+	    if (m_autoAnswer) {
+		cc->callAnswer();
+		setChannelInternal(cc);
+	    }
+	    else {
+		setText("incoming",tmp);
+		if (!(m_multiLines && setVisible("channels")))
+		    setVisible("incoming");
+	    }
 	    unlock();
 	    cc->deref();
 	    return true;
@@ -593,10 +656,10 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
     return false;
 }
 
-void Client::clearIncoming(const String& id)
+void Client::clearActive(const String& id)
 {
-    if (id == m_incoming)
-	m_incoming.clear();
+    if (id == m_activeId)
+	m_activeId.clear();
 }
 
 void Client::addChannel(ClientChannel* chan)
@@ -614,8 +677,10 @@ void Client::setChannel(ClientChannel* chan)
 
 void Client::setChannelInternal(ClientChannel* chan)
 {
-    setText(chan->id(),chan->description());
-    String tmp;
+    String tmp(chan->description());
+    if (!setUrgent(chan->id(),chan->flashing()) && chan->flashing())
+	tmp << " <<<";
+    setText(chan->id(),tmp);
     if (getSelect("channels",tmp) && (tmp == chan->id()))
 	updateFrom(chan);
 }
@@ -623,13 +688,24 @@ void Client::setChannelInternal(ClientChannel* chan)
 void Client::delChannel(ClientChannel* chan)
 {
     lock();
-    clearIncoming(chan->id());
+    clearActive(chan->id());
     delOption("channels",chan->id());
     unlock();
 }
 
+void Client::updateFrom(const String& id)
+{
+    ClientChannel* chan = 0;
+    if (ClientDriver::self())
+	chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
+    if (chan)
+	chan->noticed();
+    updateFrom(chan);
+}
+
 void Client::updateFrom(const ClientChannel* chan)
 {
+    m_activeId = chan ? chan->id() : "";
     enableAction(chan,"accept");
     enableAction(chan,"reject");
     enableAction(chan,"hangup");
@@ -697,20 +773,24 @@ bool UIHandler::received(Message &msg)
     else if (action == "window_hide")
 	ok = Client::setVisible(name,false);
     else if (action == "window_popup")
-	ok = Client::openPopup(name,&msg);
+	ok = Client::openPopup(name,&msg,Client::getWindow(msg.getValue("parent")));
     Client::self()->unlock();
     return ok;
 }
 
 // IMPORTANT: having a target means "from inside Yate to the user"
 //  An user initiated call must be incoming (no target)
-ClientChannel::ClientChannel(const char* target)
-    : Channel(ClientDriver::self(),0,(target != 0)), m_line(0),
+ClientChannel::ClientChannel(const String& party, const char* target)
+    : Channel(ClientDriver::self(),0,(target != 0)),
+      m_party(party), m_line(0), m_flashing(false),
       m_canAnswer(false), m_canTransfer(false), m_canConference(false)
 {
+    m_time = Time::now();
     m_targetid = target;
-    if (target)
+    if (target) {
+	m_flashing = true;
 	m_canAnswer = true;
+    }
     update(false);
     if (Client::self())
 	Client::self()->addChannel(this);
@@ -760,8 +840,18 @@ void ClientChannel::line(int newLine)
 
 void ClientChannel::update(bool client)
 {
-    m_desc = "Channel ";
-    m_desc << id() << " " << status();
+    String desc;
+    if (m_canAnswer)
+	desc = "Ringing";
+    // directions are from engine's perspective so reverse them for user
+    else if (isOutgoing())
+	desc = "Incoming";
+    else desc = "Outgoing";
+    desc << " " << m_party;
+    unsigned int sec = (unsigned int)((Time::now() - m_time + 500000) / 1000000);
+    char buf[32];
+    ::snprintf(buf,sizeof(buf)," [%02u:%02u:%02u]",sec/3600,(sec/60)%60,sec%60);
+    desc << buf;
     CallEndpoint* peer = getPeer();
     if (peer) {
 	peer->ref();
@@ -770,16 +860,18 @@ void ClientChannel::update(bool client)
 	    tmp = peer->getConsumer()->getFormat();
 	if (tmp.null())
 	    tmp = "-";
-	m_desc << " " << tmp;
+	desc << " [" << tmp;
 	tmp.clear();
 	if (peer->getSource())
 	    tmp = peer->getSource()->getFormat();
 	peer->deref();
 	if (tmp.null())
 	    tmp = "-";
-	m_desc << "/" << tmp;
+	desc << "/" << tmp << "]";
     }
-    Debug(ClientDriver::self(),DebugAll,"update %d '%s'",client,m_desc.c_str());
+    desc << " " << id();
+    m_desc = desc;
+    XDebug(ClientDriver::self(),DebugAll,"update %d '%s'",client,desc.c_str());
     if (client && Client::self())
 	Client::self()->setChannel(this);
 }
@@ -827,6 +919,7 @@ void ClientChannel::callRejected(const char* error, const char* reason, const Me
     if (Client::self())
 	Client::self()->setStatusLocked(tmp);
     Channel::callRejected(error,reason,msg);
+    m_flashing = true;
     m_canConference = m_canTransfer = m_canAnswer = false;
     update();
 }
@@ -858,6 +951,8 @@ bool ClientChannel::msgRinging(Message& msg)
 bool ClientChannel::msgAnswered(Message& msg)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgAnswered() [%p]",this);
+    m_time = Time::now();
+    m_flashing = true;
     m_canAnswer = false;
     m_canConference = true;
     m_canTransfer = true;
@@ -871,6 +966,8 @@ bool ClientChannel::msgAnswered(Message& msg)
 void ClientChannel::callAnswer()
 {
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAnswer() [%p]",this);
+    m_time = Time::now();
+    m_flashing = false;
     m_canAnswer = false;
     m_canConference = true;
     m_canTransfer = true;
@@ -912,6 +1009,23 @@ bool ClientDriver::msgExecute(Message& msg, String& dest)
 {
     Debug(this,DebugInfo,"msgExecute() '%s'",dest.c_str());
     return (Client::self()) && (Client::self()->callIncoming(msg.getValue("caller"),dest,&msg));
+}
+
+void ClientDriver::msgTimer(Message& msg)
+{
+    Driver::msgTimer(msg);
+    if (Client::self()) {
+	Client::self()->lock();
+	ObjList* l = &channels();
+	for (; l; l = l->next()) {
+	    ClientChannel* cc = static_cast<ClientChannel*>(l->get());
+	    if (cc) {
+		cc->update(false);
+		Client::self()->setChannelInternal(cc);
+	    }
+	}
+	Client::self()->unlock();
+    }
 }
 
 ClientChannel* ClientDriver::findLine(int line)

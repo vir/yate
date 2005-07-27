@@ -38,6 +38,7 @@ namespace TelEngine {
 
 class Client;
 class ClientChannel;
+class ClientDriver;
 
 /**
  * A window is the basic user interface element.
@@ -53,11 +54,14 @@ public:
     virtual const String& toString() const;
     virtual void title(const String& text);
     virtual bool setParams(const NamedList& params);
+    virtual void setOver(const Window* parent) = 0;
+    virtual bool hasElement(const String& name) = 0;
     virtual bool setActive(const String& name, bool active) = 0;
     virtual bool setShow(const String& name, bool visible) = 0;
     virtual bool setText(const String& name, const String& text) = 0;
     virtual bool setCheck(const String& name, bool checked) = 0;
     virtual bool setSelect(const String& name, const String& item) = 0;
+    virtual bool setUrgent(const String& name, bool urgent) = 0;
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty()) = 0;
     virtual bool delOption(const String& name, const String& item) = 0;
     virtual bool getText(const String& name, String& text) = 0;
@@ -111,6 +115,7 @@ class YATE_API Client : public Thread
 {
     friend class Window;
     friend class ClientChannel;
+    friend class ClientDriver;
 public:
     Client(const char *name = 0);
     virtual ~Client();
@@ -126,7 +131,7 @@ public:
     virtual bool toggle(Window* wnd, const String& name, bool active);
     virtual bool select(Window* wnd, const String& name, const String& item, const String& text = String::empty());
     virtual bool callIncoming(const String& caller, const String& dest = String::empty(), Message* msg = 0);
-    void clearIncoming(const String& id);
+    void clearActive(const String& id);
     void callAccept(const char* callId = 0);
     void callReject(const char* callId = 0);
     void callHangup(const char* callId = 0);
@@ -136,11 +141,13 @@ public:
     inline int line() const
 	{ return m_line; }
     void line(int newLine);
+    bool hasElement(const String& name, Window* wnd = 0, Window* skip = 0);
     bool setActive(const String& name, bool active, Window* wnd = 0, Window* skip = 0);
     bool setShow(const String& name, bool visible, Window* wnd = 0, Window* skip = 0);
     bool setText(const String& name, const String& text, Window* wnd = 0, Window* skip = 0);
     bool setCheck(const String& name, bool checked, Window* wnd = 0, Window* skip = 0);
     bool setSelect(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
+    bool setUrgent(const String& name, bool urgent, Window* wnd = 0, Window* skip = 0);
     bool addOption(const String& name, const String& item, bool atStart, const String& text = String::empty(), Window* wnd = 0, Window* skip = 0);
     bool delOption(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool getText(const String& name, String& text, Window* wnd = 0, Window* skip = 0);
@@ -151,23 +158,29 @@ public:
 	{ return s_client; }
     inline static bool changing()
 	{ return (s_changing > 0); }
+    inline const String& activeId() const
+	{ return m_activeId; }
     static Window* getWindow(const String& name);
     static bool setVisible(const String& name, bool show = true);
     static bool getVisible(const String& name);
-    static bool openPopup(const String& name, const NamedList* params = 0);
+    static bool openPopup(const String& name, const NamedList* params = 0, const Window* parent = 0);
     static ObjList* listWindows();
 protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
+    virtual void initClient();
     void addChannel(ClientChannel* chan);
     void delChannel(ClientChannel* chan);
     void setChannel(ClientChannel* chan);
     void setChannelInternal(ClientChannel* chan);
+    void updateFrom(const String& id);
     void updateFrom(const ClientChannel* chan);
     void enableAction(const ClientChannel* chan, const String& action);
     ObjList m_windows;
-    String m_incoming;
+    String m_activeId;
     int m_line;
+    bool m_multiLines;
+    bool m_autoAnswer;
     static Client* s_client;
     static int s_changing;
 };
@@ -178,8 +191,9 @@ protected:
  */
 class YATE_API ClientChannel : public Channel
 {
+    friend class ClientDriver;
 public:
-    ClientChannel(const char* target = 0);
+    ClientChannel(const String& party, const char* target = 0);
     virtual ~ClientChannel();
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -191,15 +205,24 @@ public:
     void callAnswer();
     bool openMedia(bool replace = false);
     void closeMedia();
+    inline const String& party() const
+	{ return m_party; }
     inline const String& description() const
 	{ return m_desc; }
+    inline bool flashing() const
+	{ return m_flashing; }
+    inline void noticed()
+	{ m_flashing = false; }
     inline int line() const
 	{ return m_line; }
     void line(int newLine);
 protected:
     void update(bool client = true);
-    int m_line;
+    String m_party;
     String m_desc;
+    u_int64_t m_time;
+    int m_line;
+    bool m_flashing;
     bool m_canAnswer;
     bool m_canTransfer;
     bool m_canConference;
@@ -217,6 +240,7 @@ public:
     virtual void initialize() = 0;
     virtual bool factory(UIFactory* factory, const char* type);
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual void msgTimer(Message& msg);
     ClientChannel* findLine(int line);
     inline static ClientDriver* self()
 	{ return s_driver; }

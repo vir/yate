@@ -83,6 +83,8 @@ bool Widget::setCheck(bool checked)
     { return GTKWindow::setCheck(m_widget,checked); }
 bool Widget::setSelect(const String& item)
     { return GTKWindow::setSelect(m_widget,item); }
+bool Widget::setUrgent(bool urgent)
+    { return GTKWindow::setUrgent(m_widget,urgent); }
 bool Widget::addOption(const String& item, bool atStart, const String& text)
     { return GTKWindow::addOption(m_widget,item,atStart,text); }
 bool Widget::delOption(const String& item)
@@ -697,6 +699,8 @@ GTKWindow::~GTKWindow()
 	s_save.setValue(m_id,"y",m_posY);
 	s_save.setValue(m_id,"w",m_sizeW);
 	s_save.setValue(m_id,"h",m_sizeH);
+	if (!m_master)
+	    s_save.setValue(m_id,"visible",m_visible);
     }
 }
 
@@ -849,11 +853,14 @@ void GTKWindow::populate()
 	    continue;
 	}
 	else if (p->name() == "tooltip") {
-	    if (*p && lastWidget && !GTK_WIDGET_NO_WINDOW(lastWidget)) {
+	    if (*p && lastWidget) {
 		if (!tips)
 		    tips = gtk_tooltips_new();
 		gtk_tooltips_set_tip(tips,lastWidget,p->c_str(),NULL);
 	    }
+	    else
+		Debug(GTKDriver::self(),DebugInfo,"Could not set tooltip '%s' on widget %p",
+		    p->c_str(),lastWidget);
 	    continue;
 	}
 	else if (p->name().startsWith("property:")) {
@@ -912,11 +919,13 @@ void GTKWindow::init()
     m_posY = s_save.getIntValue(m_id,"y",m_posY);
     m_sizeW = s_save.getIntValue(m_id,"w",m_sizeW);
     m_sizeH = s_save.getIntValue(m_id,"h",m_sizeH);
+    bool initial = m_master || s_cfg.getBoolValue(m_id,"visible",true);
+    initial = s_save.getBoolValue(m_id,"visible",initial);
     restore();
     // we realize the widget explicitely to avoid a gtk-win32 bug
     gtk_widget_realize(m_widget);
     // popup windows are not displayed initially
-    if (m_popup) {
+    if (m_popup || !initial) {
 	gtk_widget_show_all(filler());
 	return;
     }
@@ -1027,15 +1036,19 @@ bool GTKWindow::restore()
 bool GTKWindow::setParams(const NamedList& params)
 {
     bool ok = Window::setParams(params);
-    if (params.getValue("parent")) {
-	Window* wnd = GTKClient::getWindow(params.getValue("parent"));
-	GTKWindow* gwnd = YOBJECT(GTKWindow,wnd);
-	if (gwnd)
-	    gtk_window_set_transient_for(GTK_WINDOW(m_widget),GTK_WINDOW(gwnd->widget()));
-    }
     if (params.getBoolValue("modal"))
 	gtk_window_set_modal(GTK_WINDOW(m_widget),TRUE);
     return ok;
+}
+
+void GTKWindow::setOver(const Window* parent)
+{
+    GTKWindow* gwnd = YOBJECT(GTKWindow,parent);
+    if (gwnd) {
+	gtk_window_set_transient_for(GTK_WINDOW(m_widget),GTK_WINDOW(gwnd->widget()));
+	m_posX = gwnd->m_posX + (gwnd->m_sizeW - m_sizeW) / 2;
+	m_posY = gwnd->m_posY + (gwnd->m_sizeH - m_sizeH) / 2;
+    }
 }
 
 bool GTKWindow::action(GtkWidget* wid)
@@ -1091,6 +1104,11 @@ bool GTKWindow::setShow(const String& name, bool visible)
     else
 	gtk_widget_hide(wid);
     return true;
+}
+
+bool GTKWindow::hasElement(const String& name)
+{
+    return (find(name) != 0);
 }
 
 bool GTKWindow::setActive(const String& name, bool active)
@@ -1177,6 +1195,21 @@ bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
 	}
 	return false;
     }
+    return false;
+}
+
+bool GTKWindow::setUrgent(const String& name, bool urgent)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->setUrgent(urgent) : setUrgent(wid,urgent);
+}
+
+bool GTKWindow::setUrgent(GtkWidget* wid, bool urgent)
+{
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::setUrgent(%p,%d)",wid,urgent);
     return false;
 }
 
@@ -1368,8 +1401,12 @@ void GTKWindow::menu(int x, int y)
 	if (!s || s->null())
 	    continue;
 	Window* w = GTKClient::getWindow(*s);
-	if (!w || w->master())
+	if (!w)
 	    continue;
+	if (!Engine::config().getBoolValue("client","fullmenu")) {
+	    if (w->master() || w->popup())
+		continue;
+	}
 	GtkWidget* item = gtk_check_menu_item_new_with_label(w->title().safe());
 	gtk_widget_set_name(item,s->c_str());
 	gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),w->visible());

@@ -27,6 +27,14 @@ style "sky" {
     bg[NORMAL] = { 0.85, 0.85, 1.0 }
 }
 
+style "tips" {
+    bg[NORMAL] = { 1.0, 1.0, 0.9 }
+    fg[NORMAL] = { 0.0, 0.0, 0.3 }
+}
+
+widget "gtk-tooltips" style "tips"
+widget "gtk-tooltips*GtkLabel" style "tips"
+
 #class "GtkWindow" style "brown"
 #widget "default" style "brown"
 widget "browser" style "sky"

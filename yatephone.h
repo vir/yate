@@ -397,10 +397,10 @@ public:
 
     /**
      * Get the mutex that serializes access to this data source
-     * @return Reference to DataSource's mutex object
+     * @return Pointer to DataSource's mutex object
      */
-    inline Mutex& mutex()
-	{ return m_mutex; }
+    inline Mutex* mutex()
+	{ return &m_mutex; }
 
     /**
      * Get the master translator object if this source is part of a translator
@@ -771,6 +771,7 @@ private:
 protected:
     ObjList m_data;
     String m_id;
+    Mutex* m_mutex;
 
 public:
     /**
@@ -812,6 +813,13 @@ public:
      */
     inline const String& getPeerId() const
 	{ return m_peer ? m_peer->id() : String::empty(); }
+
+    /**
+     * Get the mutex that serializes access to this call endpoint, if any
+     * @return Pointer to the call's mutex object or NULL
+     */
+    inline Mutex* mutex()
+	{ return m_mutex; }
 
     /**
      * Connect the call endpoint to a peer.

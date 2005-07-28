@@ -28,7 +28,7 @@
 using namespace TelEngine;
 
 CallEndpoint::CallEndpoint(const char* id)
-    : m_peer(0), m_id(id)
+    : m_peer(0), m_id(id), m_mutex(0)
 {
 }
 
@@ -180,6 +180,8 @@ Channel::~Channel()
     m_timeout = 0;
     status("deleted");
     dropChan();
+    m_driver = 0;
+    m_mutex = 0;
 }
 
 void* Channel::getObject(const String& name) const
@@ -192,16 +194,17 @@ void* Channel::getObject(const String& name) const
 void Channel::init()
 {
     status(direction());
+    m_mutex = m_driver;
     if (m_driver) {
+	m_mutex->lock();
 	debugName(m_driver->debugName());
 	debugChain(m_driver);
-	m_driver->lock();
 	if (m_id.null())
 	    m_id << m_driver->prefix() << m_driver->nextid();
 	m_driver->m_total++;
 	m_driver->channels().append(this);
 	m_driver->changed();
-	m_driver->unlock();
+	m_mutex->unlock();
     }
     DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
 }
@@ -210,10 +213,10 @@ void Channel::dropChan()
 {
     if (!m_driver)
 	return;
-    m_driver->lock();
+    m_mutex->lock();
     if (m_driver->channels().remove(this,false))
 	m_driver->changed();
-    m_driver->unlock();
+    m_mutex->unlock();
 }
 
 void Channel::zeroRefs()
@@ -744,7 +747,7 @@ void Driver::dropAll(Message &msg)
 	    DDebug(this,DebugAll,"Dropping %s channel %p [%p]",name().c_str(),c,this);
 	    c->msgDrop(msg,reason);
 	    if (l->get() != c)
-		break;
+		continue;
 	}
 	l = l->next();
     }

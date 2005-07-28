@@ -165,10 +165,10 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 {
     if (data.null() || !m_room)
 	return;
-    m_room->mutex().lock();
+    m_room->mutex()->lock();
     if (m_buffer.length()+data.length() < MAX_BUFFER)
 	m_buffer += data;
-    m_room->mutex().unlock();
+    m_room->mutex()->unlock();
     if (m_buffer.length() >= MIN_BUFFER)
 	m_room->mix();
 }

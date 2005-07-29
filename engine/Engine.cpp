@@ -741,6 +741,14 @@ void Engine::halt(unsigned int code)
 	s_haltcode = code;
 }
 
+bool Engine::restart(unsigned int code)
+{
+    if ((s_super_handle < 0) || (s_haltcode != -1))
+	return false;
+    s_haltcode = code | 0x80;
+    return true;
+}
+
 void Engine::init()
 {
     s_init = true;

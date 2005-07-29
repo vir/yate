@@ -293,7 +293,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    retv = h->received(msg);
 #ifdef DEBUG
 	    tm = Time::now() - tm;
-	    if (tm > 100000)
+	    if (tm > 200000)
 		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in " FMT64U " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
@@ -332,7 +332,7 @@ bool MessageDispatcher::dispatch(Message& msg)
     msg.dispatched(retv);
 #ifndef NDEBUG
     t = Time::now() - t;
-    if (t > 100000) {
+    if (t > 200000) {
 	unsigned n = msg.length();
 	String p;
 	for (unsigned i = 0; i < n; i++) {

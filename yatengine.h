@@ -714,6 +714,13 @@ public:
     static void halt(unsigned int code);
 
     /**
+     * Stop and restart the engine and the entire program
+     * @param code Return code of the program
+     * @return True if restart was initiated, false if exiting or no supervisor
+     */
+    static bool restart(unsigned int code);
+
+    /**
      * Check if the engine is currently exiting
      * @return True if exiting, false in normal operation
      */

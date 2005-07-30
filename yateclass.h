@@ -2268,7 +2268,7 @@ public:
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked, false on failure
      */
-    bool lock(int64_t maxwait = -1);
+    bool lock(long maxwait = -1);
 
     /**
      * Unlock the mutex, does never wait
@@ -2287,7 +2287,7 @@ public:
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked and unlocked, false on failure
      */
-    bool check(int64_t maxwait = -1);
+    bool check(long maxwait = -1);
 
     /**
      * Check if this mutex is recursive or not
@@ -2325,7 +2325,7 @@ public:
      * @param mutex Reference to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex& mutex, int64_t maxwait = -1)
+    inline Lock(Mutex& mutex, long maxwait = -1)
 	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
 
     /**
@@ -2333,7 +2333,7 @@ public:
      * @param mutex Pointer to the mutex to lock
      * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
      */
-    inline Lock(Mutex* mutex, int64_t maxwait = -1)
+    inline Lock(Mutex* mutex, long maxwait = -1)
 	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
 
     /**

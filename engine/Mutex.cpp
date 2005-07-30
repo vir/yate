@@ -54,7 +54,7 @@ public:
 	{ return m_recursive; }
     bool locked() const
     	{ return (m_locked > 0); }
-    bool lock(int64_t maxwait);
+    bool lock(long maxwait);
     void unlock();
     static volatile int s_count;
     static volatile int s_locks;
@@ -176,7 +176,7 @@ MutexPrivate::~MutexPrivate()
     GlobalMutex::unlock();
 }
 
-bool MutexPrivate::lock(int64_t maxwait)
+bool MutexPrivate::lock(long maxwait)
 {
     bool rval = false;
     GlobalMutex::lock();
@@ -277,7 +277,7 @@ MutexPrivate *Mutex::privDataCopy() const
     return m_private;
 }
 
-bool Mutex::lock(int64_t maxwait)
+bool Mutex::lock(long maxwait)
 {
     return m_private ? m_private->lock(maxwait) : false;
 }
@@ -288,7 +288,7 @@ void Mutex::unlock()
 	m_private->unlock();
 }
 
-bool Mutex::check(int64_t maxwait)
+bool Mutex::check(long maxwait)
 {
     bool ret = lock(maxwait);
     if (ret)

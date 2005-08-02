@@ -391,7 +391,7 @@ public:
     BOOL startExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void stoppedExternal(H323Channel::Directions dir);
     void setRemoteAddress(const char* remoteIP, WORD remotePort);
-    void cleanups();
+    void cleanups(bool closeChans = true);
     bool sendTone(Message& msg, const char* tone);
     void setCallerID(const char* number, const char* name);
     void rtpExecuted(Message& msg);
@@ -894,11 +894,13 @@ void YateH323Connection::CleanUpOnCallEnd()
     H323Connection::CleanUpOnCallEnd();
 }
 
-void YateH323Connection::cleanups()
+void YateH323Connection::cleanups(bool closeChans)
 {
     m_chan = 0;
-    CloseAllLogicalChannels(true);
-    CloseAllLogicalChannels(false);
+    if (closeChans) {
+	CloseAllLogicalChannels(true);
+	CloseAllLogicalChannels(false);
+    }
 }
 
 H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PString &caller,
@@ -1705,6 +1707,7 @@ void YateH323Chan::zeroRefs()
 	//  to block until the native data threads terminate
 	dropChan();
 	hangup();
+	cleanup();
 	return;
     }
     Channel::zeroRefs();
@@ -1742,6 +1745,7 @@ void YateH323Chan::hangup()
 	    m->setParam("error",err);
 	if (txt)
 	    m->setParam("reason",txt);
+	tmp->cleanups(false);
 	tmp->ClearCall();
     }
     Engine::enqueue(m);
@@ -1940,9 +1944,11 @@ bool H323Driver::msgExecute(Message& msg, String& dest)
 	dest.c_str());
     PString p;
     YateH323EndPoint* ep = hplugin.findEndpoint(msg.getValue("line"));
+    lock();
     YateH323Connection* conn = ep ? static_cast<YateH323Connection*>(
 	ep->MakeCallLocked(dest.c_str(),p,&msg)
     ) : 0;
+    unlock();
     if (conn) {
 	conn->Unlock();
 	return true;

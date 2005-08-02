@@ -519,7 +519,8 @@ int Engine::run()
 
 	// Create worker thread if we didn't hear about any of them in a while
 	if (s_makeworker && (EnginePrivate::count < s_maxworkers)) {
-	    Debug(DebugMild,"Creating new message dispatching thread (%d running)",EnginePrivate::count);
+	    Debug(EnginePrivate::count ? DebugMild : DebugInfo,
+		"Creating new message dispatching thread (%d running)",EnginePrivate::count);
 	    EnginePrivate *prv = new EnginePrivate;
 	    prv->startup();
 	}
@@ -805,6 +806,7 @@ static void usage(bool client, FILE* f)
 #ifndef NDEBUG
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
+"     m            Attempt to debug mutex deadlocks\n"
 "     c            Call dlclose() until it gets an error\n"
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
@@ -978,6 +980,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    switch (*pc) {
 				case 'a':
 				    s_sigabrt = true;
+				    break;
+				case 'm':
+				    Mutex::wait(10000000);
 				    break;
 				case 'c':
 				    s_keepclosing = true;

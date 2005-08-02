@@ -27,6 +27,10 @@
 
 using namespace TelEngine;
 
+// this is to protect against two threads trying to (dis)connect a pair
+//  of call endpoints at the same time
+static Mutex s_mutex(true);
+
 CallEndpoint::CallEndpoint(const char* id)
     : m_peer(0), m_id(id), m_mutex(0)
 {
@@ -52,7 +56,7 @@ void* CallEndpoint::getObject(const String& name) const
     return RefObject::getObject(name);
 }
 
-bool CallEndpoint::connect(CallEndpoint* peer)
+bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
 {
     if (!peer) {
 	disconnect();
@@ -61,6 +65,14 @@ bool CallEndpoint::connect(CallEndpoint* peer)
     if (peer == m_peer)
 	return true;
     DDebug(DebugAll,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
+
+#if 0
+    if (!s_mutex.lock(5000000)) {
+	Debug(DebugFail,"Call connect failed - deadlock on call endpoint mutex!");
+	Engine::restart(0);
+	return false;
+    }
+#endif
 
     ref();
     disconnect();
@@ -74,20 +86,33 @@ bool CallEndpoint::connect(CallEndpoint* peer)
     }
 
     m_peer = peer;
-    peer->setPeer(this);
-    connected();
+    peer->setPeer(this,reason);
+    connected(reason);
+
+#if 0
+    s_mutex.unlock();
+#endif
 
     return true;
 }
 
-void CallEndpoint::disconnect(bool final, const char* reason)
+bool CallEndpoint::disconnect(bool final, const char* reason)
 {
     if (!m_peer)
-	return;
+	return false;
     DDebug(DebugAll,"CallEndpoint '%s' disconnecting peer %p from [%p]",m_id.c_str(),m_peer,this);
+
+    Lock lock(s_mutex,5000000);
+    if (!lock.mutex()) {
+	Debug(DebugFail,"Call disconnect failed - deadlock on call endpoint mutex!");
+	Engine::restart(0);
+	return false;
+    }
 
     CallEndpoint *temp = m_peer;
     m_peer = 0;
+    if (!temp)
+	return false;
 
     ObjList* l = m_data.skipNull();
     for (; l; l=l->skipNext()) {
@@ -97,16 +122,18 @@ void CallEndpoint::disconnect(bool final, const char* reason)
     }
 
     temp->setPeer(0,reason);
+    if (final)
+	disconnected(true,reason);
+    lock.drop();
     temp->deref();
-
-    deref();
+    return deref();
 }
 
 void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason)
 {
     m_peer = peer;
     if (m_peer)
-	connected();
+	connected(reason);
     else
 	disconnected(false,reason);
 }
@@ -177,11 +204,7 @@ Channel::~Channel()
 #ifdef DEBUG
     Debugger debug(DebugAll,"Channel::~Channel()"," '%s' [%p]",m_id.c_str(),this);
 #endif
-    m_timeout = 0;
-    status("deleted");
-    dropChan();
-    m_driver = 0;
-    m_mutex = 0;
+    cleanup();
 }
 
 void* Channel::getObject(const String& name) const
@@ -196,7 +219,7 @@ void Channel::init()
     status(direction());
     m_mutex = m_driver;
     if (m_driver) {
-	m_mutex->lock();
+	m_driver->lock();
 	debugName(m_driver->debugName());
 	debugChain(m_driver);
 	if (m_id.null())
@@ -204,19 +227,29 @@ void Channel::init()
 	m_driver->m_total++;
 	m_driver->channels().append(this);
 	m_driver->changed();
-	m_mutex->unlock();
+	m_driver->unlock();
     }
     DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
+}
+
+void Channel::cleanup()
+{
+    m_timeout = 0;
+    status("deleted");
+    m_targetid.clear();
+    dropChan();
+    m_driver = 0;
+    m_mutex = 0;
 }
 
 void Channel::dropChan()
 {
     if (!m_driver)
 	return;
-    m_mutex->lock();
+    m_driver->lock();
     if (m_driver->channels().remove(this,false))
 	m_driver->changed();
-    m_mutex->unlock();
+    m_driver->unlock();
 }
 
 void Channel::zeroRefs()

@@ -272,6 +272,11 @@ const String& DataEndpoint::toString() const
     return m_name;
 }
 
+Mutex* DataEndpoint::mutex() const
+{
+    return m_call ? m_call->mutex() : 0;
+}
+
 bool DataEndpoint::connect(DataEndpoint* peer)
 {
     if (!peer) {
@@ -312,10 +317,10 @@ bool DataEndpoint::connect(DataEndpoint* peer)
     return true;
 }
 
-void DataEndpoint::disconnect()
+bool DataEndpoint::disconnect()
 {
     if (!m_peer)
-	return;
+	return false;
     DDebug(DebugInfo,"DataEndpoint '%s' disconnecting peer %p from [%p]",m_name.c_str(),m_peer,this);
 
     DataSource *s = getSource();
@@ -338,7 +343,7 @@ void DataEndpoint::disconnect()
     m_peer = 0;
     temp->m_peer = 0;
     temp->deref();
-    deref();
+    return deref();
 }
 
 void DataEndpoint::setSource(DataSource* source)

@@ -81,6 +81,7 @@ private:
 using namespace TelEngine;
 
 GlobalMutex s_global;
+unsigned long s_maxwait = 0;
 
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;
@@ -179,6 +180,11 @@ MutexPrivate::~MutexPrivate()
 bool MutexPrivate::lock(long maxwait)
 {
     bool rval = false;
+    bool warn = false;
+    if (s_maxwait && (maxwait < 0)) {
+	maxwait = (long)s_maxwait;
+	warn = true;
+    }
     GlobalMutex::lock();
     ref();
     GlobalMutex::unlock();
@@ -213,6 +219,8 @@ bool MutexPrivate::lock(long maxwait)
     else
 	deref();
     GlobalMutex::unlock();
+    if (warn && !rval)
+	Debug(DebugFail,"Mutex lock failed for %lu usec!",maxwait);
     return rval;
 }
 
@@ -314,6 +322,11 @@ int Mutex::count()
 int Mutex::locks()
 {
     return MutexPrivate::s_locks;
+}
+
+void Mutex::wait(unsigned long maxwait)
+{
+    s_maxwait = maxwait;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -176,7 +176,9 @@ enum DebugLevel {
     DebugFail = 0,
     DebugGoOn = 2,
     DebugWarn = 5,
-    DebugMild = 7,
+    DebugMild = 6,
+    DebugCall = 7,
+    DebugNote = 8,
     DebugInfo = 9,
     DebugAll = 10
 };
@@ -2265,7 +2267,7 @@ public:
 
     /**
      * Attempt to lock the mutex and eventually wait for it
-     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked, false on failure
      */
     bool lock(long maxwait = -1);
@@ -2284,7 +2286,7 @@ public:
 
     /**
      * Check if the mutex is unlocked (try to lock and unlock the mutex)
-     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
      * @return True if successfully locked and unlocked, false on failure
      */
     bool check(long maxwait = -1);
@@ -2306,6 +2308,13 @@ public:
      * @return Count of locked mutexes, should be zero at program exit
      */
     static int locks();
+
+    /**
+     * Set a maximum mutex wait time for debugging purposes
+     * @param maxwait Maximum time in microseconds to wait for any mutex
+     *  when no time limit was requested, zero to disable limit
+     */
+    static void wait(unsigned long maxwait);
 
 private:
     MutexPrivate* privDataCopy() const;

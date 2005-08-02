@@ -652,6 +652,12 @@ public:
     virtual const String& toString() const;
 
     /**
+     * Get the mutex that serializes access to this data endpoint, if any
+     * @return Pointer to the call's mutex object or NULL
+     */
+    Mutex* mutex() const;
+
+    /**
      * Connect the source and consumer of the endpoint to a peer
      * @param peer Pointer to the peer data endpoint
      * @return True if connected, false if incompatible source/consumer
@@ -660,8 +666,9 @@ public:
 
     /**
      * Disconnect from the connected endpoint
+     * @return True if the object was deleted, false if it still exists
      */
-    void disconnect();
+    bool disconnect();
 
     /**
      * Set the data source of this object
@@ -818,22 +825,24 @@ public:
      * Get the mutex that serializes access to this call endpoint, if any
      * @return Pointer to the call's mutex object or NULL
      */
-    inline Mutex* mutex()
+    inline Mutex* mutex() const
 	{ return m_mutex; }
 
     /**
      * Connect the call endpoint to a peer.
      * @param peer Pointer to the peer call endpoint.
+     * @param reason Text that describes connect reason.
      * @return True if connected, false if an error occured.
      */
-    bool connect(CallEndpoint* peer);
+    bool connect(CallEndpoint* peer, const char* reason = 0);
 
     /**
      * Disconnect from the connected peer call endpoint.
      * @param reason Text that describes disconnect reason.
+     * @return True if the object was deleted, false if it still exists
      */
-    inline void disconnect(const char* reason = 0)
-	{ disconnect(false,reason); }
+    inline bool disconnect(const char* reason = 0)
+	{ return disconnect(false,reason); }
 
     /**
      * Get a data endpoint of this object
@@ -885,8 +894,9 @@ protected:
 
     /**
      * Connect notification method.
+     * @param reason Text that describes connect reason.
      */
-    virtual void connected() { }
+    virtual void connected(const char* reason) { }
 
     /**
      * Disconnect notification method.
@@ -903,7 +913,7 @@ protected:
     void setPeer(CallEndpoint* peer, const char* reason = 0);
 
 private:
-    void disconnect(bool final, const char* reason);
+    bool disconnect(bool final, const char* reason);
 };
 
 /**
@@ -1305,6 +1315,12 @@ protected:
      * Alternate constructor provided for convenience
      */
     Channel(Driver& driver, const char* id = 0, bool outgoing = false);
+
+    /**
+     * Perform destruction time cleanup. You can call this method earlier
+     *  if destruction is to be postponed.
+     */
+    void cleanup();
 
     /**
      * Remove the channel from the parent driver list

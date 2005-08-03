@@ -1431,9 +1431,16 @@ public:
 
     /**
      * Check if new connections can be accepted
+     * @param routers Set to true to check routing threads for incoming connections
      * @return True if at least one new connection can be accepted, false if not
      */
-    virtual bool canAccept();
+    virtual bool canAccept(bool routers = true);
+
+    /**
+     * Check if new incoming connections can be routed
+     * @return True if at least one new connection can be routed, false if not
+     */
+    virtual bool canRoute();
 
     /**
      * Get the next unique numeric id from a sequence

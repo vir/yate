@@ -728,7 +728,7 @@ bool Driver::received(Message &msg, int id)
 
     // handle call.execute which should start a new channel
     if (id == Execute) {
-	if (!canAccept())
+	if (!canAccept(false))
 	    return false;
 	dest.startSkip(m_prefix,false);
 	return msgExecute(msg,dest);
@@ -787,16 +787,25 @@ void Driver::dropAll(Message &msg)
     unlock();
 }
 
-bool Driver::canAccept()
+bool Driver::canAccept(bool routers)
 {
     if (Engine::exiting())
 	return false;
-    if (m_maxroute && (m_routing >= m_maxroute))
+    if (routers && !canRoute())
 	return false;
     if (m_maxchans) {
 	Lock mylock(this);
 	return ((signed)m_chans.count() < m_maxchans);
     }
+    return true;
+}
+
+bool Driver::canRoute()
+{
+    if (Engine::exiting())
+	return false;
+    if (m_maxroute && (m_routing >= m_maxroute))
+	return false;
     return true;
 }
 

@@ -671,7 +671,7 @@ YateH323EndPoint::~YateH323EndPoint()
 H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
     void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
 {
-    if (!hplugin.canAccept()) {
+    if (!hplugin.canAccept(false)) {
 	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
 	return 0;
     }
@@ -910,7 +910,7 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	(const char *)caller,m_chan,this);
     if (!m_chan)
 	return H323Connection::AnswerCallDenied;
-    if (!hplugin.canAccept()) {
+    if (!hplugin.canRoute()) {
 	Debug(DebugWarn,"Not answering H.323 call, full or exiting");
 	return H323Connection::AnswerCallDenied;
     }

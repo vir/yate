@@ -68,6 +68,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name Gtk2Client
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _wpchan
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -160,9 +163,6 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name _msgsniff
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name _wpchan
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name _yrtpchan

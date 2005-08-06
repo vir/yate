@@ -30,7 +30,6 @@
 
 extern "C" {
 
-typedef int HANDLE;
 #define INVALID_HANDLE_VALUE (-1)
 #define __LINUX__
 #include <linux/if_wanpipe.h>

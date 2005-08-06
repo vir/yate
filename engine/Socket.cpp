@@ -35,7 +35,16 @@
 
 #include <string.h>
 
+#undef HAS_AF_UNIX
+
 #ifndef _WINDOWS
+
+#include <sys/un.h>
+#define HAS_AF_UNIX
+#ifndef UNIX_PATH_MAX
+#define UNIX_PATH_MAX (sizeof(((struct sockaddr_un *)0)->sun_path))
+#endif
+
 #include <fcntl.h>
 #include <stdlib.h>
 #endif
@@ -62,6 +71,11 @@ SocketAddr::SocketAddr(int family)
 #ifdef AF_INET6
 	case AF_INET6:
 	    m_length = sizeof(struct sockaddr_in6);
+	    break;
+#endif
+#ifdef HAS_AF_UNIX
+	case AF_UNIX:
+	    m_length = sizeof(struct sockaddr_un);
 	    break;
 #endif
     }
@@ -100,6 +114,11 @@ void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
 #ifdef AF_INET6
 	    case AF_INET6:
 		len = sizeof(struct sockaddr_in6);
+		break;
+#endif
+#ifdef HAS_AF_UNIX
+	    case AF_UNIX:
+		len = sizeof(struct sockaddr_un);
 		break;
 #endif
 	}
@@ -155,6 +174,14 @@ bool SocketAddr::host(const String& name)
 #ifdef AF_INET6
 	// TODO: implement AF_INET6
 #endif
+#ifdef HAS_AF_UNIX
+	case AF_UNIX:
+	    if (name.length() >= (UNIX_PATH_MAX-1))
+		return false;
+	    ::strcpy(((struct sockaddr_un*)m_address)->sun_path,name.c_str());
+	    stringify();
+	    return true;
+#endif
     }
     return false;
 }
@@ -169,6 +196,11 @@ void SocketAddr::stringify()
 	    break;
 #ifdef AF_INET6
 	// TODO: implement AF_INET6
+#endif
+#ifdef HAS_AF_UNIX
+	case AF_UNIX:
+	    m_host = ((struct sockaddr_un*)m_address)->sun_path;
+	    break;
 #endif
     }
 }
@@ -197,6 +229,10 @@ bool SocketAddr::port(int newport)
 	    ((struct sockaddr_in6*)m_address)->sin6_port = ntohs(newport);
 	    break;
 #endif
+#ifdef HAS_AF_UNIX
+	case AF_UNIX:
+	    break;
+#endif
 	default:
 	    return false;
     }
@@ -214,20 +250,207 @@ bool SocketAddr::operator==(const SocketAddr& other) const
     return false;
 }
 
+bool SocketAddr::supports(int family)
+{
+    switch (family) {
+	case AF_INET:
+	    return true;
+#ifdef AF_INET6
+	case AF_INET6:
+	    return true;
+#endif
+#ifdef HAS_AF_UNIX
+	case AF_UNIX:
+	    return true;
+#endif
+	default:
+	    return false;
+    }
+}
+
+
+Stream::~Stream()
+{
+}
+
+int Stream::writeData(const char* str)
+{
+    if (null(str))
+	return 0;
+    int len = ::strlen(str);
+    return writeData(str,len);
+}
+
+File::File()
+    : m_handle(invalidHandle())
+{
+    DDebug(DebugAll,"File::File() [%p]",this);
+}
+
+File::File(HANDLE handle)
+    : m_handle(handle)
+{
+    DDebug(DebugAll,"File::File(%d) [%p]",(int)handle,this);
+}
+
+File::~File()
+{
+    DDebug(DebugAll,"File::~File() handle=%d [%p]",(int)m_handle,this);
+    terminate();
+}
+
+bool File::valid() const
+{
+    return (m_handle != invalidHandle());
+}
+
+bool File::terminate()
+{
+    bool ret = true;
+    HANDLE tmp = m_handle;
+    if (tmp != invalidHandle()) {
+	DDebug(DebugAll,"File::terminate() handle=%d [%p]",(int)m_handle,this);
+	m_handle = invalidHandle();
+#ifdef _WINDOWS
+	ret = CloseHandle(tmp);
+#else
+	ret = !::close(tmp);
+#endif
+    }
+    if (ret)
+	clearError();
+    else {
+	copyError();
+	// put back the handle, we may have another chance later
+	m_handle = tmp;
+    }
+    return ret;
+}
+
+void File::attach(HANDLE handle)
+{
+    DDebug(DebugAll,"File::attach(%d) [%p]",(int)handle,this);
+    if (handle == m_handle)
+	return;
+    terminate();
+    m_handle = handle;
+    clearError();
+}
+
+HANDLE File::detach()
+{
+    DDebug(DebugAll,"File::detach() handle=%d [%p]",(int)m_handle,this);
+    HANDLE tmp = m_handle;
+    m_handle = invalidHandle();
+    clearError();
+    return tmp;
+}
+
+HANDLE File::invalidHandle()
+{
+#ifdef _WINDOWS
+    return INVALID_HANDLE_VALUE;
+#else
+    return -1;
+#endif
+}
+
+void File::copyError()
+{
+#ifdef _WINDOWS
+    m_error = (int)GetLastError();
+#else
+    m_error = errno;
+#endif
+}
+
+int File::writeData(const void* buffer, int length)
+{
+    if (!buffer)
+	length = 0;
+#ifdef _WINDOWS
+    DWORD nbytes = 0;
+    if (WriteFile(m_handle,buffer,length,&nbytes,0)) {
+	clearError()
+	return nbytes;
+    }
+    copyError();
+    return -1;
+#else
+    int res = ::write(m_handle,buffer,length);
+    if (res >= 0)
+	clearError();
+    else
+	copyError();
+    return res;
+#endif
+}
+
+int File::readData(void* buffer, int length)
+{
+    if (!buffer)
+	length = 0;
+#ifdef _WINDOWS
+    DWORD nbytes = 0;
+    if (ReadFile(m_handle,buffer,length,&nbytes,0)) {
+	clearError()
+	return nbytes;
+    }
+    copyError();
+    return -1;
+#else
+    int res = ::read(m_handle,buffer,length);
+    if (res >= 0)
+	clearError();
+    else
+	copyError();
+    return res;
+#endif
+}
+
+bool File::createPipe(File& reader, File& writer)
+{
+#ifdef _WINDOWS
+#else
+    HANDLE fifo[2];
+    if (!::pipe(fifo)) {
+	reader.attach(fifo[0]);
+	writer.attach(fifo[1]);
+	return true;
+    }
+#endif
+    return false;
+}
+
+bool createPair(File& file1, File& file2)
+{
+#ifdef _WINDOWS
+#else
+    HANDLE pair[2];
+    if (!::socketpair(AF_UNIX,SOCK_STREAM,0,pair)) {
+	file1.attach(pair[0]);
+	file2.attach(pair[1]);
+	return true;
+    }
+#endif
+    return false;
+}
+
+
 Socket::Socket()
-    : m_error(0), m_handle(invalidHandle())
+    : m_handle(invalidHandle())
 {
     DDebug(DebugAll,"Socket::Socket() [%p]",this);
 }
 
 Socket::Socket(SOCKET handle)
-    : m_error(0), m_handle(handle)
+    : m_handle(handle)
 {
     DDebug(DebugAll,"Socket::Socket(%d) [%p]",handle,this);
 }
 
 Socket::Socket(int domain, int type, int protocol)
-    : m_error(0), m_handle(invalidHandle())
+    : m_handle(invalidHandle())
 {
     DDebug(DebugAll,"Socket::Socket(%d,%d,%d) [%p]",domain,type,protocol,this);
     m_handle = ::socket(domain,type,protocol);
@@ -239,6 +462,11 @@ Socket::~Socket()
 {
     DDebug(DebugAll,"Socket::~Socket() handle=%d [%p]",m_handle,this);
     terminate();
+}
+
+bool Socket::valid() const
+{
+    return (m_handle != invalidHandle());
 }
 
 bool Socket::create(int domain, int type, int protocol)
@@ -460,14 +688,6 @@ int Socket::writeData(const void* buffer, int length)
     checkError(res,true);
     return res;
 #endif
-}
-
-int Socket::writeData(const char* str)
-{
-    if (null(str))
-	return 0;
-    int len = ::strlen(str);
-    return writeData(str,len);
 }
 
 int Socket::recvFrom(void* buffer, int length, struct sockaddr* addr, socklen_t* adrlen, int flags)

@@ -133,6 +133,13 @@ public:
     void clearSection(const char* sect = 0);
 
     /**
+     * Makes sure a section with a given name exists, creates if required
+     * @param sect Name of section to check or create
+     */
+    inline void createSection(const String& sect)
+	{ if (sect) makeSectHolder(sect); }
+
+    /**
      * Deletes a key/value pair
      * @param sect Name of section
      * @param key Name of the key to delete

@@ -179,7 +179,7 @@ bool Configuration::load()
 		int r = s.find(']');
 		if (r > 0) {
 		    sect = s.substr(1,r-1);
-		    makeSectHolder(sect);
+		    createSection(sect);
 		}
 		continue;
 	    }

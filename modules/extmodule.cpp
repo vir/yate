@@ -49,11 +49,11 @@ class ExtModChan;
 class ExtModSource : public ThreadedSource
 {
 public:
-    ExtModSource(int fd, ExtModChan* chan);
+    ExtModSource(Stream* str, ExtModChan* chan);
     ~ExtModSource();
     virtual void run();
 private:
-    int m_fd;
+    Stream* m_str;
     unsigned m_brate;
     unsigned m_total;
     ExtModChan* m_chan;
@@ -62,11 +62,11 @@ private:
 class ExtModConsumer : public DataConsumer
 {
 public:
-    ExtModConsumer(int fd);
+    ExtModConsumer(Stream* str);
     ~ExtModConsumer();
     virtual void Consume(const DataBlock &data, unsigned long timestamp);
 private:
-    int m_fd;
+    Stream* m_str;
     unsigned m_total;
 };
 
@@ -112,7 +112,7 @@ class ExtModReceiver : public MessageReceiver, public Mutex
 {
 public:
     static ExtModReceiver* build(const char *script, const char *args,
-	int ain = -1, int aout = -1, ExtModChan *chan = 0);
+	File* ain = 0, File* aout = 0, ExtModChan *chan = 0);
     static ExtModReceiver* find(const String &script);
     ~ExtModReceiver();
     virtual bool received(Message &msg, int id);
@@ -133,12 +133,18 @@ public:
 	{ return m_args; }
 private:
     ExtModReceiver(const char *script, const char *args,
-	int ain = -1, int aout = -1, ExtModChan *chan = 0);
+	File* ain = 0, File* aout = 0, ExtModChan *chan = 0);
     bool create(const char *script, const char *args);
+    void closeIn();
+    void closeOut();
+    void closeAudio();
     bool m_dead;
     int m_use;
     pid_t m_pid;
-    int m_in, m_out, m_ain, m_aout;
+    Stream* m_in;
+    Stream* m_out;
+    File* m_ain;
+    File* m_aout;
     ExtModChan *m_chan;
     String m_script, m_args;
     ObjList m_waiting;
@@ -185,11 +191,11 @@ private:
 };
 
 
-ExtModSource::ExtModSource(int fd, ExtModChan* chan)
-    : m_fd(fd), m_brate(16000), m_total(0), m_chan(chan)
+ExtModSource::ExtModSource(Stream* str, ExtModChan* chan)
+    : m_str(str), m_brate(16000), m_total(0), m_chan(chan)
 {
-    Debug(DebugAll,"ExtModSource::ExtModSource(%d) [%p]",fd,this);
-    if (m_fd >= 0) {
+    Debug(DebugAll,"ExtModSource::ExtModSource(%p) [%p]",str,this);
+    if (m_str) {
 	chan->setRunning(true);
 	start("ExtModSource");
     }
@@ -199,19 +205,24 @@ ExtModSource::~ExtModSource()
 {
     Debug(DebugAll,"ExtModSource::~ExtModSource() [%p] total=%u",this,m_total);
     m_chan->setRunning(false);
-    if (m_fd >= 0) {
-	::close(m_fd);
-	m_fd = -1;
+    if (m_str) {
+	Stream* tmp = m_str;
+	m_str = 0;
+	delete tmp;
     }
 }
 
 void ExtModSource::run()
 {
-    DataBlock data(0,480);
+    char data[320];
     int r = 0;
     u_int64_t tpos = Time::now();
     do {
-	r = ::read(m_fd,data.data(),data.length());
+	if (!m_str) {
+	    Thread::yield();
+	    continue;
+	}
+	r = m_str->readData(data,sizeof(data));
 	if (r < 0) {
 	    if (errno == EINTR) {
 		r = 1;
@@ -219,14 +230,16 @@ void ExtModSource::run()
 	    }
 	    break;
 	}
-	if (r < (int)data.length())
-	    data.assign(data.data(),r);
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("ExtModSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep(dly);
 	}
-	Forward(data,m_total);
+	if (r <= 0)
+	    continue;
+	DataBlock buf(data,r,false);
+	Forward(buf,m_total);
+	buf.clear(false);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
@@ -234,25 +247,26 @@ void ExtModSource::run()
     m_chan->setRunning(false);
 }
 
-ExtModConsumer::ExtModConsumer(int fd)
-    : m_fd(fd), m_total(0)
+ExtModConsumer::ExtModConsumer(Stream* str)
+    : m_str(str), m_total(0)
 {
-    Debug(DebugAll,"ExtModConsumer::ExtModConsumer(%d) [%p]",fd,this);
+    Debug(DebugAll,"ExtModConsumer::ExtModConsumer(%p) [%p]",str,this);
 }
 
 ExtModConsumer::~ExtModConsumer()
 {
     Debug(DebugAll,"ExtModConsumer::~ExtModConsumer() [%p] total=%u",this,m_total);
-    if (m_fd >= 0) {
-	::close(m_fd);
-	m_fd = -1;
+    if (m_str) {
+	Stream* tmp = m_str;
+	m_str = 0;
+	delete tmp;
     }
 }
 
 void ExtModConsumer::Consume(const DataBlock &data, unsigned long timestamp)
 {
-    if ((m_fd >= 0) && !data.null()) {
-	::write(m_fd,data.data(),data.length());
+    if ((m_str) && !data.null()) {
+	m_str->writeData(data);
 	m_total += data.length();
     }
 }
@@ -271,26 +285,40 @@ ExtModChan::ExtModChan(const char *file, const char *args, int type)
     : CallEndpoint("ExtModule"), m_recv(0), m_type(type)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
-    int wfifo[2] = { -1, -1 };
-    int rfifo[2] = { -1, -1 };
+    File* reader = 0;
+    File* writer = 0;
     switch (m_type) {
 	case DataWrite:
 	case DataBoth:
-	    ::pipe(wfifo);
-	    setConsumer(new ExtModConsumer(wfifo[1]));
-	    getConsumer()->deref();
+	    {
+		reader = new File;
+		File* tmp = new File;
+		if (File::createPipe(*reader,*tmp)) {
+		    setConsumer(new ExtModConsumer(tmp));
+		    getConsumer()->deref();
+		}
+		else
+		    delete tmp;
+	    }
     }
     switch (m_type) {
 	case DataRead:
 	case DataBoth:
-	    ::pipe(rfifo);
-	    setSource(new ExtModSource(rfifo[0],this));
-	    getSource()->deref();
+	    {
+		writer = new File;
+		File* tmp = new File;
+		if (File::createPipe(*tmp,*writer)) {
+		    setSource(new ExtModSource(tmp,this));
+		    getSource()->deref();
+		}
+		else
+		    delete tmp;
+	    }
     }
     s_mutex.lock();
     s_chans.append(this);
     s_mutex.unlock();
-    m_recv = ExtModReceiver::build(file,args,wfifo[0],rfifo[1],this);
+    m_recv = ExtModReceiver::build(file,args,reader,writer,this);
 }
 
 ExtModChan::~ExtModChan()
@@ -323,7 +351,7 @@ bool MsgHolder::decode(const char *s)
 }
 
 ExtModReceiver* ExtModReceiver::build(const char *script, const char *args,
-				      int ain, int aout, ExtModChan *chan)
+				      File* ain, File* aout, ExtModChan *chan)
 {
     ExtModReceiver* recv = new ExtModReceiver(script,args,ain,aout,chan);
     if (!recv->start()) {
@@ -353,10 +381,10 @@ bool ExtModReceiver::unuse()
     return (u <= 0);
 }
 
-ExtModReceiver::ExtModReceiver(const char *script, const char *args, int ain, int aout, ExtModChan *chan)
+ExtModReceiver::ExtModReceiver(const char *script, const char *args, File* ain, File* aout, ExtModChan *chan)
     : Mutex(true),
       m_dead(false), m_use(0), m_pid(-1),
-      m_in(-1), m_out(-1), m_ain(ain), m_aout(aout),
+      m_in(0), m_out(0), m_ain(ain), m_aout(aout),
       m_chan(chan), m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
@@ -380,6 +408,43 @@ ExtModReceiver::~ExtModReceiver()
     die();
     if (m_pid > 0)
 	Debug(DebugWarn,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
+    closeAudio();
+}
+
+void ExtModReceiver::closeIn()
+{
+    if (!m_in)
+	return;
+    Stream* tmp = m_in;
+    m_in = 0;
+    if (m_out == tmp)
+	m_out = 0;
+    if (tmp)
+	delete tmp;
+}
+
+void ExtModReceiver::closeOut()
+{
+    if (!m_out)
+	return;
+    Stream* tmp = m_out;
+    m_out = 0;
+    if (m_in == tmp)
+	m_in = 0;
+    if (tmp)
+	delete tmp;
+}
+
+void ExtModReceiver::closeAudio()
+{
+    if (m_ain) {
+	delete m_ain;
+	m_ain = 0;
+    }
+    if (m_aout) {
+	delete m_aout;
+	m_aout = 0;
+    }
 }
 
 bool ExtModReceiver::start()
@@ -434,10 +499,7 @@ void ExtModReceiver::die(bool clearChan)
 	chan->setRecv(0);
 
     /* Give the external script a chance to die gracefully */
-    if (m_out != -1) {
-	::close(m_out);
-	m_out = -1;
-    }
+    closeOut();
     if (m_pid > 0) {
 	Debug(DebugAll,"ExtModReceiver::die() waiting for pid=%d to die",m_pid);
 	for (int i=0; i<100; i++) {
@@ -450,10 +512,7 @@ void ExtModReceiver::die(bool clearChan)
 	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit?",m_pid);
 
     /* Now terminate the process and close its stdout pipe */
-    if (m_in != -1) {
-	::close(m_in);
-	m_in = -1;
-    }
+    closeIn();
     if (m_pid > 0)
 	::kill(m_pid,SIGTERM);
     if (chan && clearChan)
@@ -466,7 +525,7 @@ bool ExtModReceiver::received(Message &msg, int id)
     lock();
     /* Check if we are no longer running or the message was generated
        by ourselves - avoid reentrance */
-    if ((m_pid <= 0) || (m_in == -1) || (m_out == -1) || m_reenter.find(&msg)) {
+    if ((m_pid <= 0) || (!m_in) || (!m_out) || m_reenter.find(&msg)) {
 	unlock();
 	return false;
     }
@@ -495,8 +554,8 @@ bool ExtModReceiver::create(const char *script, const char *args)
 {
     String tmp(script);
     int pid;
-    int ext2yate[2];
-    int yate2ext[2];
+    HANDLE ext2yate[2];
+    HANDLE yate2ext[2];
     int x;
     if (script[0] != '/') {
 	tmp = s_cfg.getValue("general","scripts_dir","scripts/") + tmp;
@@ -534,12 +593,12 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	::dup2(yate2ext[0], STDIN_FILENO);
 	::dup2(ext2yate[1], STDOUT_FILENO);
 	/* Set audio in/out handlers */
-	if (m_ain != -1)
-	    ::dup2(m_ain, STDERR_FILENO+1);
+	if (m_ain && m_ain->valid())
+	    ::dup2(m_ain->handle(), STDERR_FILENO+1);
 	else
 	    ::close(STDERR_FILENO+1);
-	if (m_aout != -1)
-	    ::dup2(m_aout, STDERR_FILENO+2);
+	if (m_aout && m_aout->valid())
+	    ::dup2(m_aout->handle(), STDERR_FILENO+2);
 	else
 	    ::close(STDERR_FILENO+2);
 	/* Close everything but stdin/out/err/audio */
@@ -554,12 +613,13 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	::_exit(1);
     }
     Debug(DebugInfo,"Launched External Script %s", script);
-    m_in = ext2yate[0];
-    m_out = yate2ext[1];
+    m_in = new File(ext2yate[0]);
+    m_out = new File(yate2ext[1]);
 
     /* close what we're not using in the parent */
     close(ext2yate[1]);
     close(yate2ext[0]);
+    closeAudio();
     m_pid = pid;
     return true;
 }
@@ -572,10 +632,7 @@ void ExtModReceiver::cleanup()
     /* We must call waitpid from here - same thread we started the child */
     if (m_pid > 0) {
 	/* No thread switching if possible */
-	if (m_out != -1) {
-	    ::close(m_out);
-	    m_out = -1;
-	}
+	closeOut();
 	Thread::yield();
 	int w = ::waitpid(m_pid, 0, WNOHANG);
 	if (w == 0) {
@@ -595,6 +652,7 @@ void ExtModReceiver::cleanup()
 
 void ExtModReceiver::run()
 {
+    /* We must do the forking from this thread */
     if (!create(m_script.safe(),m_args.safe())) {
 	m_pid = 0;
 	return;
@@ -605,25 +663,22 @@ void ExtModReceiver::run()
     DDebug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
     for (;;) {
 	use();
-	int readsize = (m_in >= 0) ? ::read(m_in,buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
+	int readsize = m_in ? m_in->readData(buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
 	DDebug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 	if (unuse())
 	    return;
 	if (!readsize) {
 	    lock();
-	    Debug("ExtModule",DebugInfo,"Read EOF on %d [%p]",m_in,this);
-	    if (m_in != -1) {
-		::close(m_in);
-		m_in = -1;
-	    }
+	    Debug("ExtModule",DebugInfo,"Read EOF on %p [%p]",m_in,this);
+	    closeIn();
 	    flush();
 	    unlock();
 	    if (m_chan && m_chan->running())
-		::usleep(1000000);
+		Thread::sleep(1);
 	    break;
 	}
 	else if (readsize < 0) {
-	    Debug("ExtModule",DebugWarn,"Read error %d on %d [%p]",errno,m_in,this);
+	    Debug("ExtModule",DebugWarn,"Read error %d on %p [%p]",errno,m_in,this);
 	    break;
 	}
 	int totalsize = readsize + posinbuf;
@@ -650,11 +705,11 @@ void ExtModReceiver::run()
 bool ExtModReceiver::outputLine(const char *line)
 {
     DDebug("ExtModReceiver",DebugAll,"outputLine '%s'", line);
-    if (m_out < 0)
+    if (!m_out)
 	return false;
-    ::write(m_out,line,::strlen(line));
+    m_out->writeData(line);
     char nl = '\n';
-    ::write(m_out,&nl,sizeof(nl));
+    m_out->writeData(&nl,sizeof(nl));
     return true;
 }
 

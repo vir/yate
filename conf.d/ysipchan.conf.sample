@@ -10,6 +10,10 @@
 ; useragent: string: String to set in User-Agent or Server headers
 ;useragent=YATE/0.9.0
 
+; registrar: bool: Allow the SIP module to receive registration requests
+;registrar=disable
+
+
 [codecs]
 ; This section allows to individually enable or disable the codecs
 

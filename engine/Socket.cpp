@@ -281,6 +281,7 @@ int Stream::writeData(const char* str)
     return writeData(str,len);
 }
 
+
 File::File()
     : m_handle(invalidHandle())
 {
@@ -312,7 +313,7 @@ bool File::terminate()
 	DDebug(DebugAll,"File::terminate() handle=%d [%p]",(int)m_handle,this);
 	m_handle = invalidHandle();
 #ifdef _WINDOWS
-	ret = CloseHandle(tmp);
+	ret = CloseHandle(tmp) != 0;
 #else
 	ret = !::close(tmp);
 #endif
@@ -371,7 +372,7 @@ int File::writeData(const void* buffer, int length)
 #ifdef _WINDOWS
     DWORD nbytes = 0;
     if (WriteFile(m_handle,buffer,length,&nbytes,0)) {
-	clearError()
+	clearError();
 	return nbytes;
     }
     copyError();
@@ -393,7 +394,7 @@ int File::readData(void* buffer, int length)
 #ifdef _WINDOWS
     DWORD nbytes = 0;
     if (ReadFile(m_handle,buffer,length,&nbytes,0)) {
-	clearError()
+	clearError();
 	return nbytes;
     }
     copyError();
@@ -411,6 +412,16 @@ int File::readData(void* buffer, int length)
 bool File::createPipe(File& reader, File& writer)
 {
 #ifdef _WINDOWS
+    HANDLE rd, wr;
+    SECURITY_ATTRIBUTES sa;
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = NULL;
+    sa.bInheritHandle = TRUE;
+    if (::CreatePipe(&rd,&wr,&sa,0)) {
+	reader.attach(rd);
+	writer.attach(wr);
+	return true;
+    }
 #else
     HANDLE fifo[2];
     if (!::pipe(fifo)) {
@@ -424,8 +435,7 @@ bool File::createPipe(File& reader, File& writer)
 
 bool createPair(File& file1, File& file2)
 {
-#ifdef _WINDOWS
-#else
+#ifndef _WINDOWS
     HANDLE pair[2];
     if (!::socketpair(AF_UNIX,SOCK_STREAM,0,pair)) {
 	file1.attach(pair[0]);

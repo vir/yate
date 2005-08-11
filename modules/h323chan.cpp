@@ -375,6 +375,7 @@ public:
     virtual void OnEstablished();
     virtual void OnCleared();
     virtual BOOL OnAlerting(const H323SignalPDU& alertingPDU, const PString& user);
+    virtual BOOL OnReceivedProgress(const H323SignalPDU& pdu);
     virtual void OnUserInputTone(char tone, unsigned duration, unsigned logicalChannel, unsigned rtpTimestamp);
     virtual void OnUserInputString(const PString& value);
     virtual BOOL OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
@@ -1066,6 +1067,25 @@ BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PStr
 	return FALSE;
     m_chan->status("ringing");
     Message *m = m_chan->message("call.ringing",false,true);
+    if (hasRemoteAddress()) {
+	m->addParam("rtp_forward","yes");
+	m->addParam("rtp_addr",m_remoteAddr);
+	m->addParam("rtp_port",String(m_remotePort));
+	m->addParam("formats",m_remoteFormats);
+    }
+    Engine::enqueue(m);
+    return TRUE;
+}
+
+BOOL YateH323Connection::OnReceivedProgress(const H323SignalPDU& pdu)
+{
+    Debug(m_chan,DebugInfo,"YateH323Connection::OnReceivedProgress [%p]",this);
+    if (!H323Connection::OnReceivedProgress(pdu))
+	return FALSE;
+    if (!m_chan)
+	return FALSE;
+    m_chan->status("progressing");
+    Message *m = m_chan->message("call.progress",false,true);
     if (hasRemoteAddress()) {
 	m->addParam("rtp_forward","yes");
 	m->addParam("rtp_addr",m_remoteAddr);

@@ -1703,6 +1703,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,bool outgoing,const char* ad
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     m_address = addr;
+    m_address.startSkip("ip$",false);
     Engine::enqueue(message("chan.startup"));
 }
 

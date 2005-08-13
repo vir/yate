@@ -108,6 +108,13 @@ public:
     GCallback cb;
 };
 
+static gboolean gtkIdleCb(gpointer dat)
+{
+    if (dat)
+	static_cast<GTKClient*>(dat)->idleActions();
+    return true;
+}
+
 static gboolean debugCbInfo(GtkWidget* wid)
 {
     gchar* wp = NULL;
@@ -1492,6 +1499,7 @@ void GTKClient::loadWindows()
 	if (l && l->getBoolValue("enabled",true))
 	    createWindow(*l);
     }
+    gtk_idle_add(gtkIdleCb,this);
 }
 
 

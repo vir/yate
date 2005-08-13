@@ -123,6 +123,10 @@ public:
     virtual void main() = 0;
     virtual void lock() = 0;
     virtual void unlock() = 0;
+    inline void lockOther()
+	{ if (!m_oneThread) lock(); }
+    inline void unlockOther()
+	{ if (!m_oneThread) unlock(); }
     virtual void allHidden() = 0;
     virtual bool createWindow(const String& name) = 0;
     virtual bool setStatus(const String& text, Window* wnd = 0);
@@ -138,6 +142,8 @@ public:
     bool callStart(const String& target, const String& line = String::empty(),
 	const String& proto = String::empty(), const String& account = String::empty());
     bool emitDigit(char digit);
+    inline bool oneThread() const
+	{ return m_oneThread; }
     inline int line() const
 	{ return m_line; }
     void line(int newLine);
@@ -165,6 +171,7 @@ public:
     static bool getVisible(const String& name);
     static bool openPopup(const String& name, const NamedList* params = 0, const Window* parent = 0);
     static ObjList* listWindows();
+    void idleActions();
 protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
@@ -176,9 +183,12 @@ protected:
     void updateFrom(const String& id);
     void updateFrom(const ClientChannel* chan);
     void enableAction(const ClientChannel* chan, const String& action);
+    inline bool needProxy() const
+	{ return m_oneThread && !isCurrent(); }
     ObjList m_windows;
     String m_activeId;
     int m_line;
+    bool m_oneThread;
     bool m_multiLines;
     bool m_autoAnswer;
     static Client* s_client;

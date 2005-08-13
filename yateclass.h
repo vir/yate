@@ -2502,6 +2502,13 @@ public:
     void cancel(bool hard = false);
 
     /**
+     * Check if this thread is the currently running thread
+     * @return True if this is the current thread
+     */
+    inline bool isCurrent() const
+	{ return current() == this; }
+
+    /**
      * Kills all other running threads. Ouch!
      * Must be called from the main thread or it does nothing.
      */

@@ -36,6 +36,46 @@ public:
     virtual bool received(Message &msg);
 };
 
+class ClientThreadProxy
+{
+public:
+    enum {
+	setVisible,
+	openPopup,
+	hasElement,
+	setShow,
+	setText,
+	setActive,
+	setCheck,
+	setSelect,
+	setUrgent,
+	addOption,
+	delOption,
+	getText,
+	getCheck,
+	getSelect,
+    };
+    ClientThreadProxy(int func, const String& name, bool show, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, const String& text, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent);
+    void process();
+    bool execute();
+private:
+    int m_func;
+    bool m_rval;
+    String m_name;
+    String m_text;
+    String m_item;
+    bool m_bool;
+    String* m_rtext;
+    bool* m_rbool;
+    Window* m_wnd;
+    Window* m_skip;
+    const NamedList* m_params;
+};
+
 // utility function to check if a string begins and ends with -dashes-
 static bool checkDashes(String& str)
 {
@@ -116,11 +156,118 @@ UIFactory::~UIFactory()
 }
 
 
+static Mutex s_proxyMutex;
+static ClientThreadProxy* s_proxy = 0;
+static bool s_busy = false;
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_bool(show), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_text(text), m_rtext(0), m_rbool(0), m_bool(false),
+      m_wnd(wnd), m_skip(skip), m_params(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_text(text), m_item(item), m_rtext(0), m_rbool(0), m_bool(show),
+      m_wnd(wnd), m_skip(skip), m_params(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_rtext(rtext), m_rbool(rbool), m_bool(false),
+      m_wnd(wnd), m_skip(skip), m_params(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent)
+    : m_func(func), m_rval(false),
+      m_name(name), m_rtext(0), m_rbool(0), m_bool(false),
+      m_wnd(const_cast<Window*>(parent)), m_skip(0), m_params(params)
+{
+}
+
+void ClientThreadProxy::process()
+{
+    Debugger debug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
+    Client* client = Client::self();
+    if (!client) {
+	s_busy = false;
+	return;
+    }
+    switch (m_func) {
+	case setVisible:
+	    m_rval = Client::setVisible(m_name,m_bool);
+	    break;
+	case openPopup:
+	    m_rval = Client::openPopup(m_name,m_params,m_wnd);
+	    break;
+	case hasElement:
+	    m_rval = client->hasElement(m_name,m_wnd,m_skip);
+	    break;
+	case setShow:
+	    m_rval = client->setShow(m_name,m_bool,m_wnd,m_skip);
+	    break;
+	case setText:
+	    m_rval = client->setText(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case setActive:
+	    m_rval = client->setActive(m_name,m_bool,m_wnd,m_skip);
+	    break;
+	case setCheck:
+	    m_rval = client->setCheck(m_name,m_bool,m_wnd,m_skip);
+	    break;
+	case setSelect:
+	    m_rval = client->setSelect(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case setUrgent:
+	    m_rval = client->setUrgent(m_name,m_bool,m_wnd,m_skip);
+	    break;
+	case addOption:
+	    m_rval = client->addOption(m_name,m_item,m_bool,m_text,m_wnd,m_skip);
+	    break;
+	case delOption:
+	    m_rval = client->delOption(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case getText:
+	    m_rval = client->getText(m_name,*m_rtext,m_wnd,m_skip);
+	    break;
+	case getCheck:
+	    m_rval = client->getCheck(m_name,*m_rbool,m_wnd,m_skip);
+	    break;
+	case getSelect:
+	    m_rval = client->getSelect(m_name,*m_rtext,m_wnd,m_skip);
+	    break;
+    }
+    s_busy = false;
+}
+
+bool ClientThreadProxy::execute()
+{
+    Debugger debug(DebugAll,"ClientThreadProxy::execute()"," %d [%p]",m_func,this);
+    s_proxyMutex.lock();
+    s_busy = true;
+    s_proxy = this;
+    while (s_busy)
+	Thread::yield();
+    s_proxyMutex.unlock();
+    return m_rval;
+}
+
+
 Client* Client::s_client = 0;
 int Client::s_changing = 0;
 
 Client::Client(const char *name)
-    : Thread(name), m_line(0),
+    : Thread(name), m_line(0), m_oneThread(true),
       m_multiLines(false), m_autoAnswer(false)
 {
     s_client = this;
@@ -175,6 +322,10 @@ ObjList* Client::listWindows()
 
 bool Client::setVisible(const String& name, bool show)
 {
+    if (s_client && s_client->needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setVisible,name,show);
+	return proxy.execute();
+    }
     Window* w = getWindow(name);
     if (!w)
 	return false;
@@ -221,6 +372,10 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
 
 bool Client::openPopup(const String& name, const NamedList* params, const Window* parent)
 {
+    if (s_client && s_client->needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::openPopup,name,params,parent);
+	return proxy.execute();
+    }
     Window* wnd = getWindow(name);
     if (!wnd)
 	return false;
@@ -234,6 +389,10 @@ bool Client::openPopup(const String& name, const NamedList* params, const Window
 
 bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::hasElement,name,false,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->hasElement(name);
     ObjList* l = &m_windows;
@@ -247,6 +406,10 @@ bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setShow,name,visible,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setShow(name,visible);
     ++s_changing;
@@ -263,6 +426,10 @@ bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip
 
 bool Client::setActive(const String& name, bool active, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setActive,name,active,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setActive(name,active);
     ++s_changing;
@@ -279,6 +446,10 @@ bool Client::setActive(const String& name, bool active, Window* wnd, Window* ski
 
 bool Client::setText(const String& name, const String& text, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setText,name,text,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setText(name,text);
     ++s_changing;
@@ -295,6 +466,10 @@ bool Client::setText(const String& name, const String& text, Window* wnd, Window
 
 bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setCheck,name,checked,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setCheck(name,checked);
     ++s_changing;
@@ -311,6 +486,10 @@ bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* ski
 
 bool Client::setSelect(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setSelect,name,item,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setSelect(name,item);
     ++s_changing;
@@ -327,6 +506,10 @@ bool Client::setSelect(const String& name, const String& item, Window* wnd, Wind
 
 bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setUrgent,name,urgent,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->setUrgent(name,urgent);
     ++s_changing;
@@ -343,6 +526,10 @@ bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* ski
 
 bool Client::addOption(const String& name, const String& item, bool atStart, const String& text, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::addOption,name,text,item,atStart,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->addOption(name,item,atStart,text);
     ++s_changing;
@@ -359,6 +546,10 @@ bool Client::addOption(const String& name, const String& item, bool atStart, con
 
 bool Client::delOption(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::delOption,name,item,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->delOption(name,item);
     ++s_changing;
@@ -375,6 +566,10 @@ bool Client::delOption(const String& name, const String& item, Window* wnd, Wind
 
 bool Client::getText(const String& name, String& text, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getText,name,&text,0,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->getText(name,text);
     ObjList* l = &m_windows;
@@ -388,6 +583,10 @@ bool Client::getText(const String& name, String& text, Window* wnd, Window* skip
 
 bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getCheck,name,0,&checked,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->getCheck(name,checked);
     ObjList* l = &m_windows;
@@ -401,6 +600,10 @@ bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* sk
 
 bool Client::getSelect(const String& name, String& item, Window* wnd, Window* skip)
 {
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getSelect,name,&item,0,wnd,skip);
+	return proxy.execute();
+    }
     if (wnd)
 	return wnd->getSelect(name,item);
     ObjList* l = &m_windows;
@@ -420,9 +623,9 @@ bool Client::setStatus(const String& text, Window* wnd)
 
 bool Client::setStatusLocked(const String& text, Window* wnd)
 {
-    lock();
+    lockOther();
     bool ok = setStatus(text,wnd);
-    unlock();
+    unlockOther();
     return ok;
 }
 
@@ -626,15 +829,15 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
     }
     if (msg && msg->userData()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
-	lock();
+	lockOther();
 	ClientChannel* cc = new ClientChannel(caller,ch->id());
-	unlock();
+	unlockOther();
 	if (cc->connect(ch)) {
 	    m_activeId = cc->id();
 	    msg->setParam("peerid",m_activeId);
 	    msg->setParam("targetid",m_activeId);
 	    Engine::enqueue(cc->message("call.ringing",false,true));
-	    lock();
+	    lockOther();
 	    // notify the UI about the call
 	    String tmp("Call from:");
 	    tmp << " " << caller;
@@ -648,7 +851,7 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 		if (!(m_multiLines && setVisible("channels")))
 		    setVisible("incoming");
 	    }
-	    unlock();
+	    unlockOther();
 	    cc->deref();
 	    return true;
 	}
@@ -670,9 +873,9 @@ void Client::addChannel(ClientChannel* chan)
 void Client::setChannel(ClientChannel* chan)
 {
     Debug(ClientDriver::self(),DebugAll,"setChannel %p",chan);
-    lock();
+    lockOther();
     setChannelInternal(chan);
-    unlock();
+    unlockOther();
 }
 
 void Client::setChannelInternal(ClientChannel* chan)
@@ -687,10 +890,10 @@ void Client::setChannelInternal(ClientChannel* chan)
 
 void Client::delChannel(ClientChannel* chan)
 {
-    lock();
+    lockOther();
     clearActive(chan->id());
     delOption("channels",chan->id());
-    unlock();
+    unlockOther();
 }
 
 void Client::updateFrom(const String& id)
@@ -719,6 +922,15 @@ void Client::enableAction(const ClientChannel* chan, const String& action)
     setActive(action,chan && chan->enableAction(action));
 }
 
+void Client::idleActions()
+{
+    ClientThreadProxy* tmp = s_proxy;
+    s_proxy = 0;
+    if (tmp)
+	tmp->process();
+}
+
+
 bool UIHandler::received(Message &msg)
 {
     if (!Client::self())
@@ -735,7 +947,7 @@ bool UIHandler::received(Message &msg)
     DDebug(ClientDriver::self(),DebugAll,"UI action '%s' on '%s' in %p",
 	action.c_str(),name.c_str(),wnd);
     bool ok = false;
-    Client::self()->lock();
+    Client::self()->lockOther();
     if (action == "set_text")
 	ok = Client::self()->setText(name,msg.getValue("text"),wnd);
     else if (action == "set_toggle")
@@ -774,7 +986,7 @@ bool UIHandler::received(Message &msg)
 	ok = Client::setVisible(name,false);
     else if (action == "window_popup")
 	ok = Client::openPopup(name,&msg,Client::getWindow(msg.getValue("parent")));
-    Client::self()->unlock();
+    Client::self()->unlockOther();
     return ok;
 }
 
@@ -1015,7 +1227,7 @@ void ClientDriver::msgTimer(Message& msg)
 {
     Driver::msgTimer(msg);
     if (Client::self()) {
-	Client::self()->lock();
+	Client::self()->lockOther();
 	ObjList* l = &channels();
 	for (; l; l = l->next()) {
 	    ClientChannel* cc = static_cast<ClientChannel*>(l->get());
@@ -1024,7 +1236,7 @@ void ClientDriver::msgTimer(Message& msg)
 		Client::self()->setChannelInternal(cc);
 	    }
 	}
-	Client::self()->unlock();
+	Client::self()->unlockOther();
     }
 }
 

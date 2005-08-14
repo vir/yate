@@ -114,6 +114,7 @@ public:
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
     void regreq(SIPEvent* e, SIPTransaction* t);
+    bool generic(SIPEvent* e, SIPTransaction* t);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0);
     inline YateSIPEngine* engine() const
 	{ return m_engine; }
@@ -434,6 +435,18 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_prack = s_cfg.getBoolValue("general","prack");
     if (m_prack)
 	addAllowed("PRACK");
+    NamedList *l = s_cfg.getSection("methods");
+    if (l) {
+	unsigned int len = l->length();
+	for (unsigned int i=0; i<len; i++) {
+	    NamedString *n = l->getParam(i);
+	    if (!n)
+		continue;
+	    String meth(n->name());
+	    meth.toUpper();
+	    addAllowed(meth);
+	}
+    }
 }
 
 bool YateSIPEngine::buildParty(SIPMessage* message)
@@ -654,7 +667,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
     else if (t->getMethod() == "REGISTER")
 	regreq(e,t);
     else
-	return false;
+	return generic(e,t);
     return true;
 }
 
@@ -724,6 +737,38 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     else
 	t->setResponse(404);
     m->destruct();
+}
+
+bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
+{
+    String meth(t->getMethod());
+    meth.toLower();
+    String user;
+    if (s_cfg.getBoolValue("methods",meth,true)) {
+	int age = t->authUser(user);
+	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
+	if ((age < 0) || (age > 10)) {
+	    t->requestAuth("realm","domain",age > 0);
+	    return true;
+	}
+    }
+
+    Message m("sip." + meth);
+    if (user)
+	m.addParam("username",user);
+    m.addParam("ip_host",e->getMessage()->getParty()->getPartyAddr());
+    m.addParam("ip_port",String(e->getMessage()->getParty()->getPartyPort()));
+    m.addParam("sip_uri",t->getURI());
+    m.addParam("sip_callid",t->getCallID());
+    m.addParam("sip_from",e->getMessage()->getHeaderValue("From"));
+    m.addParam("sip_to",e->getMessage()->getHeaderValue("To"));
+    m.addParam("sip_user-agent",e->getMessage()->getHeaderValue("User-Agent"));
+
+    if (Engine::dispatch(m)) {
+	t->setResponse(m.getIntValue("code",200));
+	return true;
+    }
+    return false;
 }
 
 // Incoming call constructor - just before starting the routing thread

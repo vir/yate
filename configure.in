@@ -475,6 +475,7 @@ AC_CONFIG_FILES([yate.spec
                  Makefile
                  engine/Makefile
                  modules/Makefile
+                 modules/skin/Makefile
                  clients/Makefile
                  scripts/Makefile
                  conf.d/Makefile

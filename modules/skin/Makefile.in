@@ -1,0 +1,39 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine modules
+
+# override DESTDIR at install time to prefix the install directory
+DESTDIR :=
+
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
+SUBDIRS := gtk2
+MKDEPS  := ../../config.status
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+skindir = @libdir@/yate/skin
+
+.PHONY: all clean install uninstall
+all clean:
+
+install:
+	@lst="`cd @srcdir@; ls -1 -d */* | sed '/CVS\|\.orig/d'`" ; \
+	mkdir -p "$(DESTDIR)$(skindir)/" && \
+	for i in $$lst ; do \
+	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(skindir)/$$i" ; \
+	done;
+
+uninstall:
+	@-lst="`cd @srcdir@; ls -1 -d */* | sed '/CVS\|\.orig/d'`" ; \
+	dir="`echo "$$lst" | sed 's,/.*,,' | uniq`" ; \
+	for i in $$lst ; do \
+	    rm "$(DESTDIR)$(skindir)/$$i" ; \
+	done; \
+	for i in $$dir ; do \
+	    rmdir "$(DESTDIR)$(skindir)/$$i" ; \
+	done;
+	@-rmdir "$(DESTDIR)$(skindir)"
+
+Makefile: @srcdir@/Makefile.in $(MKDEPS)
+	cd ../.. && ./config.status

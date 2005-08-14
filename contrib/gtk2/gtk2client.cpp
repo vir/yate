@@ -1429,7 +1429,11 @@ void GTKWindow::menu(int x, int y)
 GTKClient::GTKClient()
     : Client("GTKClient")
 {
-    s_skinPath = Engine::configPath() + Engine::pathSeparator();
+    s_skinPath = Engine::modulePath() + Engine::pathSeparator();
+    s_skinPath << "skin" << Engine::pathSeparator();
+    String skin(Engine::config().getValue("client","skin","default"));
+    if (skin)
+	s_skinPath << skin << Engine::pathSeparator();
     s_cfg = s_skinPath + "gtk2client.ui";
     s_cfg.load();
     s_save = Engine::configFile("gtk2client");

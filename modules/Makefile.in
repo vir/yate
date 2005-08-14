@@ -17,7 +17,7 @@ MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
-SUBDIRS := gtk2
+SUBDIRS := skin gtk2
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate accfile.yate \

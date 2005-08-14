@@ -1,5 +1,3 @@
-pixmap_path "/usr/src/yate09/clients"
-
 # fix a bug in the default style of check and radio buttons
 style "check_button" {
     bg_pixmap[PRELIGHT] = "<parent>"

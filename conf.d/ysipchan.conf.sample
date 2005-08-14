@@ -13,6 +13,9 @@
 ; registrar: bool: Allow the SIP module to receive registration requests
 ;registrar=disable
 
+; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
+;prack=disable
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -46,4 +49,13 @@
 
 ; g729: bool: ITU G.729 all variations (G729/8000)
 ;g729=default
+
+
+[methods]
+; Use this section to allow server processing of various SIP methods by
+;  handling Yate messages.
+; Each line has to be of the form:
+;  methodname=boolean
+; You must use lower case method names. The boolean value defaults to
+;  true and allows automatically challenging the requests for authentication
 

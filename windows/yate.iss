@@ -70,8 +70,8 @@ Source: "Release\iaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
 
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
-Source: "..\conf.d\gtk2client.ui"; DestDir: "{app}\conf.d"; Components: client
-Source: "..\conf.d\gtk2client.rc"; DestDir: "{app}\conf.d"; Components: client
+Source: "..\modules\skin\default\gtk2client.ui"; DestDir: "{app}\modules\skin\default"; Components: client
+Source: "..\modules\skin\default\gtk2client.rc"; DestDir: "{app}\modules\skin\default"; Components: client
 
 [Icons]
 Name: "{group}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client

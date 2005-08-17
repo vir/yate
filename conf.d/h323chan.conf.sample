@@ -17,7 +17,7 @@
 ;major=0
 
 ; minor: int: Minor version number
-;minor=1
+;minor=9
 
 ; build: int: Build number
 ;build=1
@@ -25,21 +25,24 @@
 ; status: keyword: Code status: alpha, beta or release
 ;status=alpha
 
-; Use an external rtp module instead of the native OpenH323 RTP stack, which is
-; very cpu intensive. The no external rtp can be found it will fallback to the
-; native stack. The only external rtp now is oRTP (see ortpchan module).
+; Use an external RTP module instead of the native OpenH323 RTP stack, which is
+;  very cpu intensive. The no external RTP can be found it will fallback to the
+;  native stack. The only external RTP now is yrtp (see the yrtpchan module).
 ; external_rtp: bool: default: no
 ;external_rtp=no
 
-; Perform pass-trough RTP forwarding if allowed from routing
-; passtrough_rtp: bool: default: no
-;passtrough_rtp=no
+; Perform direct RTP forwarding between client endpoints.
+; You should enable faststart=on in the [ep] section and make sure fast start
+;  is also supported and enabled on all clients.
+; forward_rtp: bool: default: no
+;forward_rtp=no
 
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
 ; For all but the default setting you can specify the value "fake" so that
-; it will try to declare the capability even if it's no codec available
+;  it will try to declare the capability even if it's no codec available
+; Using the OpenH323 internal RTP with a missing codec will lead to a crash!
 
 ; default: bool: Enable all unlisted codecs by default
 ;default=enable

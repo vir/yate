@@ -1990,7 +1990,9 @@ void H323Driver::initialize()
     s_cfg.load();
     setup();
     s_externalRtp = s_cfg.getBoolValue("general","external_rtp",false);
-    s_passtrough = s_cfg.getBoolValue("general","passtrough_rtp",false);
+    s_passtrough = s_cfg.getBoolValue("general","forward_rtp",false);
+    // mantain compatibility with old config files
+    s_passtrough = s_cfg.getBoolValue("general","passtrough_rtp",s_passtrough);
     maxRoute(s_cfg.getIntValue("incoming","maxqueue",5));
     maxChans(s_cfg.getIntValue("ep","maxconns",0));
     if (!s_process) {

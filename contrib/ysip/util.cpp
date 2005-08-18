@@ -95,6 +95,7 @@ static const char* compactForms[] = {
     "l", "Content-Length",
     "c", "Content-Type",
     "f", "From",
+    "r", "Refer-To",
     "s", "Subject",
     "k", "Supported",
     "t", "To",

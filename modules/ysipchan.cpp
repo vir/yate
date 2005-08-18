@@ -350,6 +350,34 @@ static bool isPrivateAddr(const String& host)
     return (i >= 16) && (i <= 31) && s.startsWith(".");
 }
 
+static void copySipHeaders(Message& msg, const SIPMessage& sip)
+{
+    static const char* rejectHeaders[] = {
+	"via",
+	"route",
+	"record-route",
+	"call-id",
+	"cseq",
+	"content-length",
+	0
+    };
+    const ObjList* l = &sip.header;
+    for (; l; l = l->next()) {
+	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	if (!t)
+	    continue;
+	String name(t->name());
+	name.toLower();
+	const char** hdr = rejectHeaders;
+	for (; *hdr; hdr++)
+	    if (name == *hdr)
+		break;
+	if (*hdr)
+	    continue;
+	msg.addParam("sip_"+name,*t);
+    }
+}
+
 YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
     : m_sock(sock), m_addr(addr)
 {
@@ -754,15 +782,19 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     }
 
     Message m("sip." + meth);
+    if (e->getMessage()->getParam("To","tag")) {
+	SIPDialog dlg(*e->getMessage());
+	YateSIPConnection* conn = plugin.findDialog(dlg);
+	if (conn)
+	    conn->complete(m);
+    }
     if (user)
 	m.addParam("username",user);
     m.addParam("ip_host",e->getMessage()->getParty()->getPartyAddr());
     m.addParam("ip_port",String(e->getMessage()->getParty()->getPartyPort()));
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
-    m.addParam("sip_from",e->getMessage()->getHeaderValue("From"));
-    m.addParam("sip_to",e->getMessage()->getHeaderValue("To"));
-    m.addParam("sip_user-agent",e->getMessage()->getHeaderValue("User-Agent"));
+    copySipHeaders(m,*e->getMessage());
 
     if (Engine::dispatch(m)) {
 	t->setResponse(m.getIntValue("code",200));

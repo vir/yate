@@ -1,5 +1,32 @@
-[default]
+[skinned]
 enabled=on
+title=Yate Client
+master=yes
+layout=fixed
+width=479
+height=187
+button_icon=420,5,23,22,btn_minimize,
+tooltip=Minimize this window
+button_hide=448,5,23,22,btn_close,
+tooltip=Close this window
+option=13,129,81,30,protocol,--,sip,h323,iax
+tooltip=Select protocol to use for this call
+combo=143,49,257,26,callto,
+tooltip=Enter phone number or VoIP address to call
+option=13,61,81,30,account,--
+tooltip=Select account to use for outgoing calls
+button=430,47,44,74,call,
+tooltip=Make new call
+button=276,131,82,25,hangup,
+tooltip=Hang up current call
+label=10,166,450,20,status,Initializing...
+toggle=243,84,56,30,settings,
+tooltip=Show/hide Settings window
+toggle=303,84,58,30,channels,
+tooltip=Show/hide Channels window
+
+[default]
+enabled=no
 title=Yate Client
 master=yes
 layout=fixed

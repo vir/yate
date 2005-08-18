@@ -1,4 +1,5 @@
 Makefile
+.xvpics
 core*
 *.orig
 *~

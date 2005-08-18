@@ -30,15 +30,62 @@ style "tips" {
     fg[NORMAL] = { 0.0, 0.0, 0.3 }
 }
 
+style "win_skinned" {
+    bg_pixmap[NORMAL] = "skin.png"
+}
+
+style "skin_skinned" {
+    xthickness = 0
+    ythickness = 0
+    GtkWidget::focus_padding = 100
+    GtkButton::child_displacement_x = 0
+    GtkButton::child_displacement_y = 0
+    GtkButton::default_border_outside = 0
+    bg_pixmap[NORMAL] = "skin_n.png"
+    bg_pixmap[PRELIGHT] = "skin_h.png"
+    bg_pixmap[ACTIVE] = "skin_p.png"
+    bg_pixmap[INSENSITIVE] = "skin_g.png"
+}
+
+style "btn_minimize" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
+style "btn_close" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
+style "btn_call" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
+style "btn_hangup" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
+style "btn_channels" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
+style "btn_settings" = "skin_skinned" {
+    engine "pixmap" { }
+}
+
 widget "gtk-tooltips" style "tips"
 widget "gtk-tooltips*GtkLabel" style "tips"
 
 #class "GtkWindow" style "brown"
-#widget "default" style "brown"
+widget "skinned" style "win_skinned"
 widget "browser" style "sky"
-widget "*.call" style "green"
-widget "*.accept" style "green"
-widget "*.reject" style "red"
-widget "*.hangup" style "red"
+#widget "*.call" style "green"
+widget "skinned.*.call" style "btn_call"
+widget "skinned.*.hangup" style "btn_hangup"
+widget "skinned.*.channels" style "btn_channels"
+widget "skinned.*.settings" style "btn_settings"
+widget "skinned.*.btn_minimize" style "btn_minimize"
+widget "skinned.*.btn_close" style "btn_close"
+#widget "*.accept" style "green"
+#widget "*.reject" style "red"
+#widget "*.hangup" style "red"
 widget "*.caption" style "sky"
 widget "*.decoration" style "blue"

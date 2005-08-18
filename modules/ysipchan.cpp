@@ -359,6 +359,10 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 	"call-id",
 	"cseq",
 	"content-length",
+	"www-authenticate",
+	"proxy-authenticate",
+	"authorization",
+	"proxy-authorization",
 	0
     };
     const ObjList* l = &sip.header;
@@ -785,8 +789,10 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     if (e->getMessage()->getParam("To","tag")) {
 	SIPDialog dlg(*e->getMessage());
 	YateSIPConnection* conn = plugin.findDialog(dlg);
-	if (conn)
+	if (conn) {
+	    m.userData(conn);
 	    conn->complete(m);
+	}
     }
     if (user)
 	m.addParam("username",user);

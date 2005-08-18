@@ -1582,7 +1582,8 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    setStatus("redirected");
 	    return false;
 	}
-	m_tr->setResponse(183);
+	if (msg.getBoolValue("progress",s_cfg.getBoolValue("general","progress",true)))
+	    m_tr->setResponse(183);
     }
     return true;
 }

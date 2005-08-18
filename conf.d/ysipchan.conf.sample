@@ -16,6 +16,9 @@
 ; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
 ;prack=disable
 
+; progress: bool: Send an "183 Session Progress" just after successfull routing
+;progress=enable
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

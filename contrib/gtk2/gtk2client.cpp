@@ -38,8 +38,10 @@ static bool s_clickInfo = false;
 #define MAX_CONTAINER_DEPTH 20
 
 #ifdef _WINDOWS
+#define ONE_THREAD true
 #define DEFAULT_DEVICE "dsound/*"
 #else
+#define ONE_THREAD false
 #define DEFAULT_DEVICE "oss//dev/dsp"
 #endif
 
@@ -1429,6 +1431,7 @@ void GTKWindow::menu(int x, int y)
 GTKClient::GTKClient()
     : Client("GTKClient")
 {
+    m_oneThread = Engine::config().getBoolValue("client","onethread",ONE_THREAD);
     s_skinPath = Engine::config().getValue("client","skinbase");
     if (s_skinPath.null())
 	s_skinPath << Engine::modulePath() << Engine::pathSeparator() << "skin";

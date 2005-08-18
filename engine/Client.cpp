@@ -169,28 +169,28 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show, Wi
 
 ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
-      m_name(name), m_text(text), m_rtext(0), m_rbool(0), m_bool(false),
+      m_name(name), m_text(text), m_bool(false), m_rtext(0), m_rbool(0),
       m_wnd(wnd), m_skip(skip), m_params(0)
 {
 }
 
 ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
-      m_name(name), m_text(text), m_item(item), m_rtext(0), m_rbool(0), m_bool(show),
+      m_name(name), m_text(text), m_item(item), m_bool(show), m_rtext(0), m_rbool(0),
       m_wnd(wnd), m_skip(skip), m_params(0)
 {
 }
 
 ClientThreadProxy::ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
-      m_name(name), m_rtext(rtext), m_rbool(rbool), m_bool(false),
+      m_name(name), m_bool(false), m_rtext(rtext), m_rbool(rbool),
       m_wnd(wnd), m_skip(skip), m_params(0)
 {
 }
 
 ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent)
     : m_func(func), m_rval(false),
-      m_name(name), m_rtext(0), m_rbool(0), m_bool(false),
+      m_name(name), m_bool(false), m_rtext(0), m_rbool(0),
       m_wnd(const_cast<Window*>(parent)), m_skip(0), m_params(params)
 {
 }
@@ -252,7 +252,8 @@ void ClientThreadProxy::process()
 
 bool ClientThreadProxy::execute()
 {
-    Debugger debug(DebugAll,"ClientThreadProxy::execute()"," %d [%p]",m_func,this);
+    Debugger debug(DebugAll,"ClientThreadProxy::execute()"," %d in %p [%p]",
+	m_func,Thread::current(),this);
     s_proxyMutex.lock();
     s_busy = true;
     s_proxy = this;

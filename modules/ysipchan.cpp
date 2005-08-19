@@ -555,7 +555,9 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     addr.port(port);
     DDebug(&plugin,DebugAll,"built addr: %s:%d",
 	addr.host().c_str(),addr.port());
-    message->setParty(new YateUDPParty(m_sock,addr,m_port));
+    YateUDPParty* party = new YateUDPParty(m_sock,addr,m_port);
+    message->setParty(party);
+    party->deref();
     return true;
 }
 

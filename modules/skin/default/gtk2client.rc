@@ -30,6 +30,7 @@ style "window" {
     bg[NORMAL] = { 0.75, 0.80, 0.71 }
     bg[ACTIVE] = { 0.58, 0.67, 0.57 }
     bg[PRELIGHT] = { 0.66, 0.74, 0.64 }
+    font_name = "Sans 10"
 }
 
 style "button" {
@@ -40,8 +41,8 @@ style "button" {
 
 style "border" {
     bg[NORMAL] = { 0.91, 0.47, 0.10 }
-    xthickness = 2
-    ythickness = 2
+    xthickness = 3
+    ythickness = 3
 }
 
 style "decoration" {

@@ -754,6 +754,8 @@ void Client::line(int newLine)
 void Client::callAccept(const char* callId)
 {
     Debug(ClientDriver::self(),DebugInfo,"callAccept('%s')",callId);
+    if (!driverLockLoop())
+	return;
     ClientChannel* cc = static_cast<ClientChannel*>(ClientDriver::self()->find(callId));
     if (cc) {
 	cc->ref();
@@ -761,6 +763,7 @@ void Client::callAccept(const char* callId)
 	setChannelInternal(cc);
 	cc->deref();
     }
+    driverUnlock();
 }
 
 void Client::callReject(const char* callId)
@@ -793,8 +796,11 @@ bool Client::callStart(const String& target, const String& line,
 	target.c_str(),line.c_str(),proto.c_str(),account.c_str());
     if (target.null())
 	return false;
+    if (!driverLockLoop())
+	return false;
     ClientChannel* cc = new ClientChannel(target);
     Message* m = cc->message("call.route");
+    driverUnlock();
     Regexp r("^[a-z0-9]\\+/");
     bool hasProto = r.matches(target.safe());
     if (hasProto)
@@ -929,6 +935,33 @@ void Client::idleActions()
     s_proxy = 0;
     if (tmp)
 	tmp->process();
+}
+
+bool Client::driverLock(long maxwait)
+{
+    if (maxwait < 0)
+	maxwait = 0;
+    return ClientDriver::self() && ClientDriver::self()->lock(maxwait);
+}
+
+bool Client::driverLockLoop()
+{
+    if (!(isCurrent() && ClientDriver::self()))
+	return false;
+
+    while (!driverLock()) {
+	if (Engine::exiting() || !ClientDriver::self())
+	    return false;
+	idleActions();
+	yield();
+    }
+    return true;
+}
+
+void Client::driverUnlock()
+{
+    if (ClientDriver::self())
+	ClientDriver::self()->unlock();
 }
 
 

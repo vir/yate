@@ -185,6 +185,9 @@ protected:
     void enableAction(const ClientChannel* chan, const String& action);
     inline bool needProxy() const
 	{ return m_oneThread && !isCurrent(); }
+    bool driverLockLoop();
+    static bool driverLock(long maxwait = 0);
+    static void driverUnlock();
     ObjList m_windows;
     String m_activeId;
     int m_line;

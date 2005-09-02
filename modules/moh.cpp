@@ -298,7 +298,7 @@ bool MOHHandler::received(Message &msg)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	MOHChan *mc = new MOHChan(name);
-	if (ch->connect(mc)) {
+	if (ch->connect(mc,msg.getValue("reason"))) {
 	    msg.setParam("peerid",mc->id());
 	    mc->deref();
 	}

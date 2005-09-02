@@ -44,6 +44,10 @@ static TokenDict dict_payloads[] = {
     { "g723",    4 },
     { "g728",   15 },
     { "g729",   18 },
+    { "h261",   31 },
+    { "h263",   34 },
+    { "mpv",    32 },
+    { 0 , 0 },
 };
 
 static TokenDict dict_yrtp_dir[] = {
@@ -57,11 +61,11 @@ static Configuration s_cfg;
 
 class YRTPWrapper : public RefObject
 {
-    friend class YRTPAudioSource;
-    friend class YRTPAudioConsumer;
+    friend class YRTPSource;
+    friend class YRTPConsumer;
     friend class YRTPSession;
 public:
-    YRTPWrapper(const char *localip, CallEndpoint* conn = 0, RTPSession::Direction direction = RTPSession::SendRecv);
+    YRTPWrapper(const char *localip, CallEndpoint* conn = 0, const char* media = "audio", RTPSession::Direction direction = RTPSession::SendRecv);
     ~YRTPWrapper();
     void setupRTP(const char* localip);
     bool startRTP(const char* raddr, unsigned int rport, int payload, int evpayload, const char* format);
@@ -75,6 +79,8 @@ public:
 	{ return m_conn; }
     inline const String& id() const
 	{ return m_id; }
+    inline const String& media() const
+	{ return m_media; }
     inline unsigned int bufSize() const
 	{ return m_bufsize; }
     inline unsigned int port() const
@@ -82,16 +88,17 @@ public:
     inline void setMaster(const char* master)
 	{ if (master) m_master = master; }
     void addDirection(RTPSession::Direction direction);
-    static YRTPWrapper* find(const CallEndpoint* conn);
+    static YRTPWrapper* find(const CallEndpoint* conn, const String& media);
     static YRTPWrapper* find(const String& id);
     static void guessLocal(const char* remoteip, String& localip);
 private:
     YRTPSession* m_rtp;
     RTPSession::Direction m_dir;
     CallEndpoint* m_conn;
-    YRTPAudioSource* m_source;
-    YRTPAudioConsumer* m_consumer;
+    YRTPSource* m_source;
+    YRTPConsumer* m_consumer;
     String m_id;
+    String m_media;
     String m_master;
     unsigned int m_bufsize;
     unsigned int m_port;
@@ -116,22 +123,22 @@ private:
     bool m_resync;
 };
 
-class YRTPAudioSource : public DataSource
+class YRTPSource : public DataSource
 {
     friend class YRTPWrapper;
 public:
-    YRTPAudioSource(YRTPWrapper* wrap);
-    ~YRTPAudioSource();
+    YRTPSource(YRTPWrapper* wrap);
+    ~YRTPSource();
 private:
     YRTPWrapper* m_wrap;
 };
 
-class YRTPAudioConsumer : public DataConsumer
+class YRTPConsumer : public DataConsumer
 {
     friend class YRTPWrapper;
 public:
-    YRTPAudioConsumer(YRTPWrapper* wrap);
-    ~YRTPAudioConsumer();
+    YRTPConsumer(YRTPWrapper* wrap);
+    ~YRTPConsumer();
     virtual void Consume(const DataBlock &data, unsigned long timeDelta);
     inline int timestamp() const
 	{ return m_timestamp; }
@@ -176,12 +183,13 @@ static YRTPPlugin splugin;
 static ObjList s_calls;
 static Mutex s_mutex;
 
-YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, RTPSession::Direction direction)
+YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction)
     : m_rtp(0), m_dir(direction), m_conn(conn),
-      m_source(0), m_consumer(0), m_bufsize(0), m_port(0)
+      m_source(0), m_consumer(0), m_media(media),
+      m_bufsize(0), m_port(0)
 {
-    Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper(\"%s\",%p,%s) [%p]",
-	localip,conn,lookup(direction,dict_yrtp_dir),this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::YRTPWrapper('%s',%p,'%s',%s) [%p]",
+	localip,conn,media,lookup(direction,dict_yrtp_dir),this);
     m_id = "yrtp/";
     m_id << (unsigned int)::random();
     s_mutex.lock();
@@ -215,13 +223,13 @@ YRTPWrapper::~YRTPWrapper()
     s_mutex.unlock();
 }
 
-YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn)
+YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, const String& media)
 {
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
 	const YRTPWrapper *p = static_cast<const YRTPWrapper *>(l->get());
-	if (p && (p->conn() == conn))
+	if (p && (p->conn() == conn) && (p->media() == media))
 	    return const_cast<YRTPWrapper *>(p);
     }
     return 0;
@@ -391,7 +399,7 @@ void YRTPWrapper::addDirection(RTPSession::Direction direction)
 
 bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
 {
-    YRTPAudioSource* source = m_wrap ? m_wrap->m_source : 0;
+    YRTPSource* source = m_wrap ? m_wrap->m_source : 0;
     if (!source)
 	return false;
     DataBlock block;
@@ -428,10 +436,10 @@ void YRTPSession::rtpNewSSRC(u_int32_t newSsrc)
     }
 }
 
-YRTPAudioSource::YRTPAudioSource(YRTPWrapper* wrap)
+YRTPSource::YRTPSource(YRTPWrapper* wrap)
     : m_wrap(wrap)
 {
-    Debug(&splugin,DebugAll,"YRTPAudioSource::YRTPAudioSource(%p) [%p]",wrap,this);
+    Debug(&splugin,DebugAll,"YRTPSource::YRTPSource(%p) [%p]",wrap,this);
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
@@ -439,9 +447,9 @@ YRTPAudioSource::YRTPAudioSource(YRTPWrapper* wrap)
     }
 }
 
-YRTPAudioSource::~YRTPAudioSource()
+YRTPSource::~YRTPSource()
 {
-    Debug(&splugin,DebugAll,"YRTPAudioSource::~YRTPAudioSource() [%p] wrapper=%p",this,m_wrap);
+    Debug(&splugin,DebugAll,"YRTPSource::~YRTPSource() [%p] wrapper=%p",this,m_wrap);
     m_mutex.lock();
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
@@ -453,10 +461,10 @@ YRTPAudioSource::~YRTPAudioSource()
     m_mutex.unlock();
 }
 
-YRTPAudioConsumer::YRTPAudioConsumer(YRTPWrapper *wrap)
+YRTPConsumer::YRTPConsumer(YRTPWrapper *wrap)
     : m_wrap(wrap), m_timestamp(0)
 {
-    Debug(&splugin,DebugAll,"YRTPAudioConsumer::YRTPAudioConsumer(%p) [%p]",wrap,this);
+    Debug(&splugin,DebugAll,"YRTPConsumer::YRTPConsumer(%p) [%p]",wrap,this);
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
@@ -464,9 +472,9 @@ YRTPAudioConsumer::YRTPAudioConsumer(YRTPWrapper *wrap)
     }
 }
 
-YRTPAudioConsumer::~YRTPAudioConsumer()
+YRTPConsumer::~YRTPConsumer()
 {
-    Debug(&splugin,DebugAll,"YRTPAudioConsumer::~YRTPAudioConsumer() [%p] wrapper=%p ts=%d",this,m_wrap,m_timestamp);
+    Debug(&splugin,DebugAll,"YRTPConsumer::~YRTPConsumer() [%p] wrapper=%p ts=%d",this,m_wrap,m_timestamp);
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
 	m_wrap = 0;
@@ -475,11 +483,11 @@ YRTPAudioConsumer::~YRTPAudioConsumer()
     }
 }
 
-void YRTPAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void YRTPConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
 {
     if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
 	return;
-    XDebug(&splugin,DebugAll,"YRTPAudioConsumer writing %d bytes, delta=%lu ts=%d [%p]",
+    XDebug(&splugin,DebugAll,"YRTPConsumer writing %d bytes, delta=%lu ts=%d [%p]",
 	data.length(),timeDelta,m_timestamp,this);
     unsigned int buf = m_wrap->bufSize();
     const char* ptr = (const char*)data.data();
@@ -532,6 +540,7 @@ bool AttachHandler::received(Message &msg)
     if (src.null() && cons.null())
 	return false;
 
+    const char* media = msg.getValue("media","audio");
     String lip(msg.getValue("localip"));
     String rip(msg.getValue("remoteip"));
     String rport(msg.getValue("remoteport"));
@@ -550,18 +559,18 @@ bool AttachHandler::received(Message &msg)
     if (!w)
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
     if (!w) {
-	w = new YRTPWrapper(lip,ch);
+	w = new YRTPWrapper(lip,ch,media);
 	w->setMaster(msg.getValue("id"));
 
 	if (!src.null()) {
-	    YRTPAudioSource* s = new YRTPAudioSource(w);
-	    ch->setSource(s);
+	    YRTPSource* s = new YRTPSource(w);
+	    ch->setSource(s,media);
 	    s->deref();
 	}
 
 	if (!cons.null()) {
-	    YRTPAudioConsumer* c = new YRTPAudioConsumer(w);
-	    ch->setConsumer(c);
+	    YRTPConsumer* c = new YRTPConsumer(w);
+	    ch->setConsumer(c,media);
 	    c->deref();
 	}
     }
@@ -603,6 +612,7 @@ bool RtpHandler::received(Message &msg)
     if (!(d_recv || d_send))
 	return false;
 
+    const char* media = msg.getValue("media","audio");
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (d_recv)
@@ -633,7 +643,7 @@ bool RtpHandler::received(Message &msg)
 	}
 	msg.setParam("localip",lip);
 
-	w = new YRTPWrapper(lip,ch,direction);
+	w = new YRTPWrapper(lip,ch,media,direction);
 	w->setMaster(msg.getValue("id"));
     }
     else {
@@ -642,14 +652,14 @@ bool RtpHandler::received(Message &msg)
     }
 
     if (d_recv && !ch->getSource()) {
-	YRTPAudioSource* s = new YRTPAudioSource(w);
-	ch->setSource(s);
+	YRTPSource* s = new YRTPSource(w);
+	ch->setSource(s,media);
 	s->deref();
     }
 
     if (d_send && !ch->getConsumer()) {
-	YRTPAudioConsumer* c = new YRTPAudioConsumer(w);
-	ch->setConsumer(c);
+	YRTPConsumer* c = new YRTPConsumer(w);
+	ch->setConsumer(c,media);
 	c->deref();
     }
 

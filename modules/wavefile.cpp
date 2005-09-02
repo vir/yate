@@ -219,8 +219,16 @@ void WaveSource::detectWavFormat()
 
 void WaveSource::run()
 {
-    m_data.assign(0,(m_brate*20)/1000);
     int r = 0;
+    // wait until at least one consumer is attached
+    while (!r) {
+	m_mutex.lock();
+	r = m_consumers.count();
+	m_mutex.unlock();
+	Thread::yield(true);
+    }
+    m_data.assign(0,(m_brate*20)/1000);
+    // start counting time from now
     u_int64_t tpos = Time::now();
     m_time = tpos;
     do {
@@ -541,7 +549,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
-	if (ch->connect(c)) {
+	if (ch->connect(c,msg.getValue("reason"))) {
 	    msg.setParam("peerid",c->id());
 	    c->deref();
 	    return true;

@@ -59,15 +59,17 @@ String* getUnfoldedLine(const char** buf, int* len)
 		}
 		// Skip over any continuation characters at start of next line
 		goOut = true;
-		while ((l > 1) && isContinuationBlank(b[1])) {
+		while ((l > 0) && isContinuationBlank(b[0])) {
 		    ++b;
 		    --l;
 		    goOut = false;
 		}
 		s = b;
-		if (isContinuationBlank(s[0]))
-		    ++s;
 		e = 0;
+		if (!goOut) {
+		    --b;
+		    ++l;
+		}
 		break;
 	    case '\0':
 		// Should not happen - but let's accept what we got

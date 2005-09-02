@@ -42,23 +42,57 @@ public:
     virtual bool received(Message &msg);
 };
 
+class HookHandler : public MessagePostHook
+{
+public:
+    virtual void dispatched(const Message& msg, bool handled);
+};
+
+
+static void dumpParams(const Message &msg, String& par)
+{
+    unsigned n = msg.length();
+    for (unsigned i = 0; i < n; i++) {
+	const NamedString *s = msg.getParam(i);
+	if (s)
+	    par << "\n  param['" << s->name() << "'] = '" << *s << "'";
+    }
+}
+
+
 bool SniffHandler::received(Message &msg)
 {
     if (msg == "engine.timer")
 	return false;
     String par;
-    unsigned n = msg.length();
-    for (unsigned i = 0; i < n; i++) {
-	NamedString *s = msg.getParam(i);
-	if (s)
-	    par << "\n  param['" << s->name() << "'] = '" << *s << "'";
-    }
-    Output("Sniffed '%s' time=" FMT64U " thread=%p data=%p retval='%s'%s",
-	msg.c_str(),msg.msgTime().usec(),
+    dumpParams(msg,par);
+    Output("Sniffed '%s' time=" FMT64U "\n  thread=%p\n  data=%p\n  retval='%s'%s",
+	msg.c_str(),
+	msg.msgTime().usec(),
 	Thread::current(),
-	msg.userData(),msg.retValue().c_str(),par.safe());
+	msg.userData(),
+	msg.retValue().c_str(),
+	par.safe());
     return false;
 };
+
+
+void HookHandler::dispatched(const Message& msg, bool handled)
+{
+    if (msg == "engine.timer")
+	return;
+    String par;
+    dumpParams(msg,par);
+    Output("Returned %s '%s' delay=" FMT64U "\n  thread=%p\n  data=%p\n  retval='%s'%s",
+	String::boolText(handled),
+	msg.c_str(),
+	Time::now() - msg.msgTime().usec(),
+	Thread::current(),
+	msg.userData(),
+	msg.retValue().c_str(),
+	par.safe());
+}
+
 
 MsgSniff::MsgSniff()
     : m_first(true)
@@ -72,6 +106,7 @@ void MsgSniff::initialize()
     if (m_first) {
 	m_first = false;
 	Engine::install(new SniffHandler);
+	Engine::self()->setHook(new HookHandler);
     }
 }
 

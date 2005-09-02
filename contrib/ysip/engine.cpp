@@ -329,7 +329,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 		!event->getMessage()->isAnswer()) {
 		Debug("SIPEngine",DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
 		    event->getMessage()->method.c_str(),event,this);
-		event->getTransaction()->setResponse(501);
+		event->getTransaction()->setResponse(405);
 	    }
 	}
     }

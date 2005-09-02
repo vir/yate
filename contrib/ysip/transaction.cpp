@@ -470,7 +470,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 		changeState(Trying);
 	    }
 	    else {
-		setResponse(405);
+		setResponse(501);
 		e = new SIPEvent(m_lastMessage,this);
 		m_transmit = false;
 		changeState(Invalid);

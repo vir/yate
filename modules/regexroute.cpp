@@ -192,12 +192,10 @@ bool RouteHandler::received(Message &msg)
     if (called.null())
 	return false;
     const char *context = msg.getValue("context","default");
-    String ret;
     Lock lock(s_mutex);
-    if (oneContext(msg,called,context,ret)) {
+    if (oneContext(msg,called,context,msg.retValue())) {
 	Debug(DebugInfo,"Routing call to '%s' in context '%s' via '%s' in " FMT64 " usec",
-	    called.c_str(),context,ret.c_str(),Time::now()-tmr);
-	msg.retValue() = ret;
+	    called.c_str(),context,msg.retValue().c_str(),Time::now()-tmr);
 	return true;
     }
     Debug(DebugInfo,"Could not route call to '%s' in context '%s', wasted " FMT64 " usec",
@@ -254,9 +252,9 @@ public:
 bool GenericHandler::received(Message &msg)
 {
     DDebug(DebugAll,"Handling message '%s' [%p]",c_str(),this);
-    String ret,what(*this);
+    String what(*this);
     Lock lock(s_mutex);
-    return oneContext(msg,what,*this,ret);
+    return oneContext(msg,what,*this,msg.retValue());
 }
 
 class RegexRoutePlugin : public Plugin

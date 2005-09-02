@@ -236,6 +236,13 @@ public:
 	{ return m_return; }
 
     /**
+     * Retrive a const reference to the value returned by the message.
+     * @return A reference to the value the message will return
+     */
+    inline const String& retValue() const
+	{ return m_return; }
+
+    /**
      * Retrive the object associated with the message
      * @return Pointer to arbitrary user RefObject
      */
@@ -262,6 +269,13 @@ public:
      * @return A reference to the Time when the message was created
      */
     inline Time& msgTime()
+	{ return m_time; }
+
+    /**
+     * Retrive a const reference to the creation time of the message.
+     * @return A reference to the Time when the message was created
+     */
+    inline const Time& msgTime() const
 	{ return m_time; }
 
     /**

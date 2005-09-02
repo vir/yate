@@ -33,7 +33,7 @@ static Configuration s_cfg(Engine::configFile("regfile"));
 class AuthHandler : public MessageHandler
 {
 public:
-    AuthHandler(const char *name,int prio)
+    AuthHandler(const char *name, unsigned prio = 100)
 	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
@@ -41,23 +41,23 @@ public:
 class RegistHandler : public MessageHandler
 {
 public:
-    RegistHandler(const char *name)
-	: MessageHandler(name) { }
+    RegistHandler(const char *name, unsigned prio = 100)
+	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
 
 class UnRegistHandler : public MessageHandler
 {
 public:
-    UnRegistHandler(const char *name)
-	: MessageHandler(name) { }
+    UnRegistHandler(const char *name, unsigned prio = 100)
+	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
 
 class RouteHandler : public MessageHandler
 {
 public:
-    RouteHandler(const char *name, int prio)
+    RouteHandler(const char *name, unsigned prio = 100)
 	: MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
@@ -83,6 +83,8 @@ private:
 bool AuthHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
+    if (username.null() || username == "general")
+	return false;
     const NamedList* sect = s_cfg.getSection(username);
     if (sect) {
 	msg.retValue() = sect->getValue("password");
@@ -94,17 +96,21 @@ bool AuthHandler::received(Message &msg)
 
 bool RegistHandler::received(Message &msg)
 {
-    const char *username = msg.getValue("username");
-    const char *driver   = msg.getValue("driver");
-    const char *data     = msg.getValue("data");
-    if (!(username && data))
+    String username(msg.getValue("username"));
+    if (username.null() || username == "general")
+	return false;
+
+    const char *driver = msg.getValue("driver");
+    const char *data   = msg.getValue("data");
+    if (!data)
 	return false;
 
     Lock lock(lmutex);
-    if (s_cfg.getSection(username)) {
-	Debug("RegFile",DebugInfo,"Registered '%s' via '%s'",username,data);
-        s_cfg.setValue(username,"driver",driver);
-        s_cfg.setValue(username,"data",data);
+    NamedList* sect = s_cfg.getSection(username);
+    if (sect) {
+	Debug("RegFile",DebugInfo,"Registered '%s' via '%s'",username.c_str(),data);
+        sect->setParam("driver",driver);
+        sect->setParam("data",data);
 	return true;
     }
     return false;
@@ -112,13 +118,13 @@ bool RegistHandler::received(Message &msg)
 
 bool UnRegistHandler::received(Message &msg)
 {
-    const char *username = msg.getValue("username");
-    if (!username)
+    String username(msg.getValue("username"));
+    if (username.null() || username == "general")
 	return false;
     
     Lock lock(lmutex);
     if (s_cfg.getSection(username)) {
-	Debug("RegFile",DebugInfo,"Unregistered '%s'",username);
+	Debug("RegFile",DebugInfo,"Unregistered '%s'",username.c_str());
 	s_cfg.clearKey(username,"data");
 	return true;
     }
@@ -127,17 +133,22 @@ bool UnRegistHandler::received(Message &msg)
 
 bool RouteHandler::received(Message &msg)
 {
-    const char* username = msg.getValue("called");
-    if (!username)
+    String username(msg.getValue("called"));
+    if (username.null() || username == "general")
 	return false;
     
     Lock lock(lmutex);
-    const char* data = s_cfg.getValue(username,"data");
-    if (data) {
-	Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username,data);
-	msg.retValue() = data;
-	msg.setParam("driver",s_cfg.getValue(username,"driver"));
-	return true;
+    const NamedList* sect = s_cfg.getSection(username);
+    if (sect) {
+	const char* data = sect->getValue("data");
+	if (data) {
+	    Debug("RegFile",DebugInfo,"Routed '%s' via '%s'",username.c_str(),data);
+	    msg.retValue() = data;
+	    msg.setParam("driver",sect->getValue("driver"));
+	    return true;
+	}
+	// signal to other modules we know about this user but it's offline
+	msg.setParam("error","offline");
     }
     return false;
 };
@@ -155,14 +166,14 @@ bool StatusHandler::received(Message &msg)
     bool first = true;
     for (unsigned int i=0;i<s_cfg.sections();i++) {
 	NamedList *user = s_cfg.getSection(i);
-	if (!user)
+	if (!user || (*user == "general"))
 	    continue;
 	const char* data = s_cfg.getValue(*user,"data");
 	if (first)
 	    first = false;
 	else
 	    msg.retValue() << ",";
-	msg.retValue() << *user << "=" << (data != 0);
+	msg.retValue() << *user << "=" << (data ? data : "offline");
     }
     msg.retValue() <<"\n";
     return false;
@@ -180,8 +191,8 @@ void RegfilePlugin::initialize()
     if (!m_authhandler) {
 	s_cfg.load();
 	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",100)));
-	Engine::install(new RegistHandler("user.register"));
-	Engine::install(new UnRegistHandler("user.unregister"));
+	Engine::install(new RegistHandler("user.register",s_cfg.getIntValue("general","register",100)));
+	Engine::install(new UnRegistHandler("user.unregister",s_cfg.getIntValue("general","register",100)));
 	Engine::install(new RouteHandler("call.route",s_cfg.getIntValue("general","route",100)));
 	Engine::install(new StatusHandler("engine.status"));
     }

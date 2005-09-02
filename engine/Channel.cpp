@@ -59,7 +59,7 @@ void* CallEndpoint::getObject(const String& name) const
 bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
 {
     if (!peer) {
-	disconnect();
+	disconnect(reason);
 	return false;
     }
     if (peer == m_peer)
@@ -75,9 +75,9 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
 #endif
 
     ref();
-    disconnect();
+    disconnect(reason);
     peer->ref();
-    peer->disconnect();
+    peer->disconnect(reason);
 
     ObjList* l = m_data.skipNull();
     for (; l; l=l->skipNext()) {
@@ -390,8 +390,14 @@ void Channel::callAccept(Message& msg)
     if (m_billid.null())
 	m_billid = msg.getValue("billid");
     m_targetid = msg.getValue("targetid");
-    if (m_targetid.null()) {
-	Debug(this,DebugInfo,"Answering now call %s because we have no targetid [%p]",m_id.c_str(),this);
+    if (msg.getBoolValue("autoanswer"))
+	msgAnswered(msg);
+    else if (msg.getBoolValue("autoring"))
+	msgRinging(msg);
+    else if (m_targetid.null() && msg.getBoolValue("autoanswer",true)) {
+	// no preference exists in the message so issue a notice
+	Debug(this,DebugNote,"Answering now call %s because we have no targetid [%p]",
+	    m_id.c_str(),this);
 	msgAnswered(msg);
     }
 }
@@ -757,10 +763,10 @@ bool Driver::received(Message &msg, int id)
 	case Transfer:
 	    return chan->msgTransfer(msg);
 	case Masquerade:
-	    msg.setParam("targetid",chan->targetid());
 	    msg = msg.getValue("message");
 	    msg.clearParam("message");
 	    msg.userData(chan);
+	    chan->complete(msg);
 	    return false;
 	case Locate:
 	    msg.userData(chan);
@@ -930,7 +936,6 @@ bool Router::route()
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
 	    m_msg->clearParam("error");
-	    m_msg->clearParam("reason");
 	    m_msg->retValue().clear();
 	    ok = Engine::dispatch(m_msg);
 	    if (ok)

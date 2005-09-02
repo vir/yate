@@ -467,7 +467,7 @@ bool OssHandler::received(Message &msg)
     }
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     Debug(DebugInfo,"We are routing to device '%s'",dest.matchString(1).c_str());
-    if (ch && chan->connect(ch)) {
+    if (ch && chan->connect(ch,msg.getValue("reason"))) {
 	chan->setTarget(msg.getValue("id"));
 	msg.setParam("peerid",dest);
 	msg.setParam("targetid",dest);

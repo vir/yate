@@ -839,7 +839,7 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 	lockOther();
 	ClientChannel* cc = new ClientChannel(caller,ch->id());
 	unlockOther();
-	if (cc->connect(ch)) {
+	if (cc->connect(ch,msg->getValue("reason"))) {
 	    m_activeId = cc->id();
 	    msg->setParam("peerid",m_activeId);
 	    msg->setParam("targetid",m_activeId);

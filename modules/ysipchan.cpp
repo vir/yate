@@ -69,6 +69,7 @@ static TokenDict dict_errors[] = {
     { "busy", 486 },
     { "rejected", 406 },
     { "forbidden", 403 },
+    { "offline", 404 },
     { "congestion", 480 },
     { "failure", 500 },
     { "looping", 483 },
@@ -747,7 +748,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     int age = t->authUser(user);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if ((age < 0) || (age > 10)) {
-	t->requestAuth("realm","domain",age > 0);
+	t->requestAuth("realm","",age > 0);
 	return;
     }
 
@@ -782,7 +783,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    t->requestAuth("realm","domain",age > 0);
+	    t->requestAuth("realm","",age > 0);
 	    return true;
 	}
     }
@@ -1457,7 +1458,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
-	t->requestAuth("realm","domain",false);
+	t->requestAuth("realm","",false);
     return false;
 }
 
@@ -1592,7 +1593,6 @@ bool YateSIPConnection::callRouted(Message& msg)
 
 void YateSIPConnection::callAccept(Message& msg)
 {
-    Channel::callAccept(msg);
     m_user = msg.getValue("username");
     if (m_authBye)
 	m_authBye = msg.getBoolValue("xsip_auth_bye",true);
@@ -1601,6 +1601,7 @@ void YateSIPConnection::callAccept(Message& msg)
 	if (tmp != "accepted")
 	    m_rtpForward = false;
     }
+    Channel::callAccept(msg);
 }
 
 void YateSIPConnection::callRejected(const char* error, const char* reason, const Message* msg)
@@ -1608,7 +1609,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     Channel::callRejected(error,reason,msg);
     int code = lookup(error,dict_errors,500);
     if (code == 401)
-	m_tr->requestAuth("realm","domain",false);
+	m_tr->requestAuth("realm","",false);
     else
 	m_tr->setResponse(code,reason);
     setReason(reason,code);
@@ -1886,7 +1887,7 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
     YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue("id"));
     if (conn->getTransaction()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
-	if (ch && conn->connect(ch)) {
+	if (ch && conn->connect(ch,msg.getValue("reason"))) {
 	    msg.setParam("peerid",conn->id());
 	    msg.setParam("targetid",conn->id());
 	    conn->deref();

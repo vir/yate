@@ -4,9 +4,9 @@ Version: 	@PACKAGE_VERSION@
 Release:	@PACKAGE_RELEASE@
 Copyright:	GPL
 Packager:	Paul Chitescu <paulc-devel@null.ro>
-Source:		http://yate.null.ro/%{name}-%{version}.tar.gz
+Source:		http://yate.null.ro/%{name}-%{version}%{release}.tar.gz
 Group:		Applications/Communications
-BuildRoot:	%{_tmppath}/%{name}-%{version}-root
+BuildRoot:	%{_tmppath}/%{name}-%{version}%{release}-root
 URL:		http://yate.null.ro/
 
 BuildRequires:	gcc-c++

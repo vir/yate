@@ -159,6 +159,27 @@ DataEndpoint* CallEndpoint::setEndpoint(const char* type)
     return dat;
 }
 
+void CallEndpoint::clearEndpoint(const char* type)
+{
+    if (null(type)) {
+	ObjList* l = m_data.skipNull();
+	for (; l; l=l->skipNext()) {
+	    DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
+	    DDebug(DebugAll,"Endpoint at %p type '%s' peer %p",e,e->name().c_str(),e->getPeer());
+	    e->disconnect();
+	}
+	m_data.clear();
+    }
+    else {
+	DataEndpoint* dat = getEndpoint(type);
+	if (dat) {
+	    m_data.remove(dat,false);
+	    dat->disconnect();
+	    dat->destruct();
+	}
+    }
+}
+
 void CallEndpoint::setSource(DataSource* source, const char* type)
 {
     DataEndpoint* dat = source ? setEndpoint(type) : getEndpoint(type);

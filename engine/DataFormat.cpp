@@ -49,18 +49,20 @@ class SimpleTranslator : public DataTranslator
 public:
     SimpleTranslator(const DataFormat& sFormat, const DataFormat& dFormat)
 	: DataTranslator(sFormat,dFormat) { }
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta)
+    virtual void Consume(const DataBlock& data, unsigned long tStamp)
 	{
 	    ref();
 	    if (getTransSource()) {
 		DataBlock oblock;
 		if (oblock.convert(data, m_format, getTransSource()->getFormat())) {
-		    if (!timeDelta) {
-			timeDelta = data.length();
-			if (timeDelta > oblock.length())
-			    timeDelta = oblock.length();
+		    if (!tStamp) {
+			unsigned int delta = data.length();
+			if (delta > oblock.length())
+			    delta = oblock.length();
+			tStamp = m_timestamp + delta;
 		    }
-		    getTransSource()->Forward(oblock, timeDelta);
+		    m_timestamp = tStamp;
+		    getTransSource()->Forward(oblock, tStamp);
 		}
 	    }
 	    deref();
@@ -175,22 +177,23 @@ void* DataConsumer::getObject(const String& name) const
     return DataNode::getObject(name);
 }
 
-void DataSource::Forward(const DataBlock& data, unsigned long timeDelta)
+void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
-    // no number of samples provided - try to guess
-    if (!timeDelta) {
+    Lock lock(m_mutex);
+    // no timestamp provided - try to guess
+    if (!tStamp) {
+	tStamp = m_timestamp;
 	const FormatInfo* f = m_format.getInfo();
 	if (f)
-	    timeDelta = f->guessSamples(data.length());
+	    tStamp += f->guessSamples(data.length());
     }
-    Lock lock(m_mutex);
+    m_timestamp = tStamp;
     ref();
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
-	c->Consume(data,timeDelta);
+	c->Consume(data,m_timestamp);
     }
-    m_timestamp += timeDelta;
     deref();
 }
 

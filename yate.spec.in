@@ -1,7 +1,7 @@
 Summary:	Yet Another Telephony Engine
 Name:     	yate
 Version: 	@PACKAGE_VERSION@
-Release:	1
+Release:	@PACKAGE_RELEASE@
 Copyright:	GPL
 Packager:	Paul Chitescu <paulc-devel@null.ro>
 Source:		http://yate.null.ro/%{name}-%{version}.tar.gz
@@ -34,13 +34,29 @@ for small to large scale projects.
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
 %dir /usr/lib/yate
-/usr/lib/yate/*
+/usr/lib/yate/*.*
 
 %post
 ldconfig
 
 %postun
 ldconfig
+
+%package client
+Summary:	Client package for yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+
+%description client
+The yate-client package includes the files needed to use YATE as a VoIP client
+
+%files client
+%defattr(-, root, root)
+/usr/bin/yate-gtk2
+%dir /usr/lib/yate/skin
+/usr/lib/yate/skin/*
+%dir /usr/lib/yate/gtk2
+/usr/lib/yate/gtk2/*
 
 %package devel
 Summary:	Development package for yate

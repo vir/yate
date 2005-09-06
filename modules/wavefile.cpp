@@ -60,7 +60,7 @@ class WaveConsumer : public DataConsumer
 public:
     WaveConsumer(const String& file, CallEndpoint* chan = 0, unsigned maxlen = 0);
     ~WaveConsumer();
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock& data, unsigned long tStamp);
     inline void setNotify(const String& id)
 	{ m_id = id; }
 private:
@@ -219,6 +219,7 @@ void WaveSource::detectWavFormat()
 
 void WaveSource::run()
 {
+    unsigned long ts = 0;
     int r = 0;
     // wait until at least one consumer is attached
     while (!r) {
@@ -254,7 +255,8 @@ void WaveSource::run()
 	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	Forward(m_data,m_data.length()*8000/m_brate);
+	Forward(m_data,ts);
+	ts += m_data.length()*8000/m_brate;
 	m_total += r;
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
@@ -310,7 +312,7 @@ WaveConsumer::~WaveConsumer()
     }
 }
 
-void WaveConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
+void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 {
     if (!data.null()) {
 	if (!m_time)
@@ -318,7 +320,7 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	if (m_fd >= 0)
 	    ::write(m_fd,data.data(),data.length());
 	m_total += data.length();
-	m_timestamp += timeDelta;
+	m_timestamp = tStamp;
 	if (m_maxlen && (m_total >= m_maxlen)) {
 	    m_maxlen = 0;
 	    if (m_fd >= 0) {

@@ -168,17 +168,23 @@ bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* d
     int vol = pc[1] & 0x3f;
     bool end = (pc[1] & 0x80) != 0;
     int duration = ((int)pc[2] << 8) | pc[3];
-    if (m_evTs) {
+    if (m_evTs && (m_evNum >= 0)) {
 	if ((m_evNum != event) && (m_evTs <= timestamp))
 	    pushEvent(m_evNum,timestamp - m_evTs,m_evVol,m_evTs);
     }
-    m_evTs = timestamp;
-    m_evNum = event;
     m_evVol = vol;
-    if (!end)
+    if (!end) {
+	m_evTs = timestamp;
+	m_evNum = event;
 	return true;
-    // FIXME: add code to push the event and also filter dumb senders
-    return false;
+    }
+    if (m_evTs > timestamp)
+	return false;
+    // make sure we don't see the same event again
+    m_evTs = timestamp+1;
+    m_evNum = -1;
+    pushEvent(event,duration,vol,timestamp);
+    return true;
 }
 
 bool RTPReceiver::decodeSilence(bool marker, unsigned int timestamp, const void* data, int len)
@@ -188,7 +194,7 @@ bool RTPReceiver::decodeSilence(bool marker, unsigned int timestamp, const void*
 
 void RTPReceiver::finishEvent(unsigned int timestamp)
 {
-    if (!m_evTs)
+    if ((m_evNum < 0) || !m_evTs)
 	return;
     int duration = timestamp - m_evTs;
     if (duration < 10000)

@@ -66,7 +66,7 @@ public:
     OssConsumer(OssDevice* dev);
     ~OssConsumer();
     bool init();
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock &data, unsigned long tStamp);
 private:
     OssDevice* m_device;
     unsigned m_total;
@@ -269,7 +269,7 @@ OssConsumer::~OssConsumer()
     m_device->deref();
 }
 
-void OssConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void OssConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     if (m_device->closed() || data.null())
 	return;

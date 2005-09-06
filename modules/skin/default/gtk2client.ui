@@ -154,16 +154,6 @@ vbox=>
 		button=1,,75,30,acc_edit,Modify
 	    leave=<hbox
 	leave=<vbox
-	tabname=Test
-	vbox=>
-	    radio=,,,,r1,Radio 1
-	    radio=,,,,r2,
-	    newradio=
-	    radio=,,,,r3,Radio 3
-	    radio=,,,,r4,Radio 4
-	    check=,,,,c1,Check 1
-	    check=,,,,c2,
-	leave=<vbox
     leave=<tabbed
 leave=<vbox
 

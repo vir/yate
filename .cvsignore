@@ -19,3 +19,7 @@ yate.core*
 *.orig
 *~
 .*.swp
+*.log
+*.out
+*.csv
+*.tsv

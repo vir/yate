@@ -3,6 +3,8 @@ AC_INIT(YATE, 0.9.0)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
+PACKAGE_RELEASE="pre1"
+
 PACKAGE_VERSION_MAJOR="${PACKAGE_VERSION%%.*}"
 PACKAGE_VERSION_MINOR="${PACKAGE_VERSION#*.}"
 PACKAGE_VERSION_MINOR="${PACKAGE_VERSION_MINOR%.*}"
@@ -10,6 +12,7 @@ PACKAGE_VERSION_BUILD="${PACKAGE_VERSION##*.}"
 AC_SUBST(PACKAGE_VERSION_MAJOR)
 AC_SUBST(PACKAGE_VERSION_MINOR)
 AC_SUBST(PACKAGE_VERSION_BUILD)
+AC_SUBST(PACKAGE_RELEASE)
 
 # Checks for programs.
 AC_PROG_CXX
@@ -124,28 +127,6 @@ fi
 AC_SUBST(FDSIZE_HACK)
 
 # Checks for optional libraries.
-
-HAVE_PGSQL=no
-PGSQL_INC=""
-AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
-if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
-AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
-libpq="$ac_cv_use_libpq/lib/libpq.so"
-for i in include include/pgsql pgsql/include include/postgresql; do
-    incpq="$ac_cv_use_libpq/$i"
-    test -f "$incpq/libpq-fe.h" && break
-done
-if [[ ! -f "$incpq/libpq-fe.h" ]]; then
-    incpq="$incpq/pgsql"
-fi
-if [[ -f "$incpq/libpq-fe.h" -a -f "$libpq" ]]; then
-    HAVE_PGSQL=yes
-    PGSQL_INC="-I$incpq"
-fi
-AC_MSG_RESULT([$HAVE_PGSQL])
-fi
-AC_SUBST(HAVE_PGSQL)
-AC_SUBST(PGSQL_INC)
 
 HAVE_PRI=no
 HAVE_PRI_CB=no

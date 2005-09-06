@@ -56,7 +56,7 @@ class GsmCodec : public DataTranslator
 public:
     GsmCodec(const char* sFormat, const char* dFormat, bool encoding);
     ~GsmCodec();
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock& data, unsigned long tStamp);
 private:
     bool m_encoding;
     gsm m_gsm;
@@ -83,7 +83,7 @@ GsmCodec::~GsmCodec()
     }
 }
 
-void GsmCodec::Consume(const DataBlock& data, unsigned long timeDelta)
+void GsmCodec::Consume(const DataBlock& data, unsigned long tStamp)
 {
     if (!(m_gsm && getTransSource()))
 	return;
@@ -101,7 +101,8 @@ void GsmCodec::Consume(const DataBlock& data, unsigned long timeDelta)
 		    (gsm_signal*)(((gsm_block *)m_data.data())+i),
 		    (gsm_byte*)(((gsm_frame *)outdata.data())+i));
 	}
-	timeDelta = consumed / 2;
+	if (!tStamp)
+	    tStamp = timeStamp() + (consumed / 2);
     }
     else {
 	frames = m_data.length() / sizeof(gsm_frame);
@@ -113,13 +114,14 @@ void GsmCodec::Consume(const DataBlock& data, unsigned long timeDelta)
 		    (gsm_byte*)(((gsm_frame *)m_data.data())+i),
 		    (gsm_signal*)(((gsm_block *)outdata.data())+i));
 	}
-	timeDelta = frames*sizeof(gsm_block) / 2;
+	if (!tStamp)
+	    tStamp = timeStamp() + (frames*sizeof(gsm_block) / 2);
     }
     XDebug("GsmCodec",DebugAll,"%scoding %d frames of %d input bytes (consumed %d) in %d output bytes",
 	m_encoding ? "en" : "de",frames,m_data.length(),consumed,outdata.length());
     if (frames) {
 	m_data.cut(-consumed);
-	getTransSource()->Forward(outdata,timeDelta);
+	getTransSource()->Forward(outdata,tStamp);
     }
     deref();
 }

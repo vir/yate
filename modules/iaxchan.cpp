@@ -73,7 +73,7 @@ public:
     IAXSource(const char *frm) : DataSource(frm),m_total(0),m_time(Time::now())
     { Debug(DebugInfo,"IAXSource::IAXSource [%p] frm %s",this,frm);};
     ~IAXSource();
-    void Forward(const DataBlock &data, unsigned long timeDelta = 0);
+    void Forward(const DataBlock &data, unsigned long tStamp = 0);
 private:
     unsigned m_total;
     u_int64_t m_time;
@@ -87,7 +87,7 @@ public:
 
     ~IAXAudioConsumer();
 
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock &data, unsigned long tStamp);
 
 private:
     IAXConnection *m_conn;
@@ -769,10 +769,10 @@ IAXSource::~IAXSource()
     
 }
 
-void IAXSource::Forward(const DataBlock &data, unsigned long timeDelta)
+void IAXSource::Forward(const DataBlock &data, unsigned long tStamp)
 {
     m_total += data.length();
-    DataSource::Forward(data, timeDelta);
+    DataSource::Forward(data, tStamp);
 }
 
 IAXAudioConsumer::IAXAudioConsumer(IAXConnection *conn, int ast_format, const char *format)
@@ -795,7 +795,7 @@ IAXAudioConsumer::~IAXAudioConsumer()
     
 }
 
-void IAXAudioConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void IAXAudioConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     m_total += data.length();
     if (m_conn)

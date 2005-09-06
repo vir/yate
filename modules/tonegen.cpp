@@ -211,7 +211,7 @@ void ToneSource::run()
 	    XDebug(&__plugin,DebugAll,"ToneSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	Forward(m_data,m_data.length()/2);
+	Forward(m_data,m_total/2);
 	m_total += m_data.length();
 	tpos += (m_data.length()*(u_int64_t)1000000/m_brate);
     };

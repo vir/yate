@@ -22,14 +22,10 @@ MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate accfile.yate \
 	tonegen.yate wavefile.yate conference.yate moh.yate \
-	callgen.yate rmanager.yate \
+	callgen.yate rmanager.yate pbx.yate \
 	extmodule.yate osschan.yate \
 	ysipchan.yate yrtpchan.yate
 LIBS :=
-
-ifneq (@HAVE_PGSQL@,no)
-PROGS := $(PROGS) pgsqlroute.yate cdrpgsql.yate register.yate
-endif
 
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
 PROGS := $(PROGS) zapchan.yate
@@ -132,8 +128,6 @@ wpchan.yate: libypri.o
 wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
-
-pgsqlroute.yate cdrpgsql.yate register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

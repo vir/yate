@@ -92,7 +92,7 @@ public:
     WpConsumer(WpChan *owner, const char* format, unsigned int bufsize);
     ~WpConsumer();
 
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock &data, unsigned long tStamp);
 };
 
 class WpChan : public PriChan
@@ -421,7 +421,7 @@ WpConsumer::~WpConsumer()
     static_cast<WpChan*>(m_owner)->m_wp_c = 0;
 }
 
-void WpConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     const unsigned char* buf = (const unsigned char*)data.data();
     for (unsigned int i = 0; i < data.length(); i++)

@@ -42,6 +42,9 @@ static TokenDict dict_payloads[] = {
     { "g723",    4 },
     { "g728",   15 },
     { "g729",   18 },
+    { "h261",   31 },
+    { "h263",   34 },
+    { "mpv",    32 },
     {      0,    0 },
 };
 
@@ -57,6 +60,9 @@ static TokenDict dict_rtpmap[] = {
     { "G723/8000",     4 },
     { "G728/8000",    15 },
     { "G729/8000",    18 },
+    { "H261/90000",   31 },
+    { "H263/90000",   34 },
+    { "MPV/90000",    32 },
     {           0,     0 },
 };
 
@@ -74,6 +80,44 @@ static TokenDict dict_errors[] = {
     { "failure", 500 },
     { "looping", 483 },
     {  0,   0 },
+};
+
+class RtpMedia : public String
+{
+public:
+    RtpMedia(const char* media, const char* formats, int rport = -1, int lport = -1);
+    virtual ~RtpMedia();
+    inline bool isAudio() const
+	{ return m_audio; }
+    inline const String& suffix() const
+	{ return m_suffix; }
+    inline const String& id() const
+	{ return m_id; }
+    inline const String& format() const
+	{ return m_format; }
+    inline const String& formats() const
+	{ return m_formats; }
+    inline const String& remotePort() const
+	{ return m_rPort; }
+    inline const String& localPort() const
+	{ return m_lPort; }
+    const char* fmtList() const;
+    bool update(const char* formats, int rport = -1, int lport = -1);
+    void update(const Message& msg, bool pickFormat);
+private:
+    bool m_audio;
+    // suffix used for this type
+    String m_suffix;
+    // list of supported format names
+    String m_formats;
+    // format used for sending data
+    String m_format;
+    // id of the local RTP channel
+    String m_id;
+    // remote RTP port
+    String m_rPort;
+    // local RTP port
+    String m_lPort;
 };
 
 class YateUDPParty : public SIPParty
@@ -181,6 +225,11 @@ public:
 	Established = 3,
 	Cleared = 4,
     };
+    enum {
+	MediaMissing,
+	MediaStarted,
+	MediaMuted
+    };
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
     ~YateSIPConnection();
@@ -217,13 +266,15 @@ public:
     inline int getPort() const
 	{ return m_port; }
 private:
+    void setMedia(ObjList* media);
     void clearTransaction();
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
-    SDPBody* createSDP(const char* addr, const char* port, const char* formats, const char* format = 0);
-    SDPBody* createProvisionalSDP(Message &msg);
-    SDPBody* createPasstroughSDP(Message &msg);
-    SDPBody* createRtpSDP(SIPMessage* msg, const char* formats);
+    bool dispatchRtp(RtpMedia* media, const char* addr, bool start, bool pick);
+    SDPBody* createSDP(const char* addr = 0, ObjList* mediaList = 0);
+    SDPBody* createProvisionalSDP(Message& msg);
+    SDPBody* createPasstroughSDP(Message& msg);
+    SDPBody* createRtpSDP(const char* addr, const Message& msg);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
     bool addRtpParams(Message& msg, const String& natAddr = String::empty());
@@ -241,23 +292,16 @@ private:
     URI m_uri;
     // if we do RTP forwarding or not
     bool m_rtpForward;
-    // id of the local RTP channel
-    String m_rtpid;
     // remote RTP address
     String m_rtpAddr;
-    // remote RTP port
-    String m_rtpPort;
-    // format used for sending data
-    String m_rtpFormat;
     // local RTP address
     String m_rtpLocalAddr;
-    // local RTP port
-    String m_rtpLocalPort;
+    // list of media descriptors
+    ObjList* m_rtpMedia;
     // unique SDP session number
     int m_sdpSession;
     // SDP version number, incremented each time we generate a new SDP
     int m_sdpVersion;
-    String m_formats;
     String m_host;
     String m_user;
     String m_line;
@@ -265,6 +309,7 @@ private:
     Message* m_route;
     ObjList* m_routes;
     bool m_authBye;
+    int m_mediaStatus;
 };
 
 class UserHandler : public MessageHandler
@@ -299,7 +344,8 @@ static ObjList s_lines;
 static Configuration s_cfg;
 static int s_maxForwards = 20;
 
-static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats, const char* media = "audio")
+// Parse a SDP and return a possibly filtered list of SDP media
+static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0, const char* media = 0)
 {
     const NamedString* c = sdp->getLine("c");
     if (c) {
@@ -312,31 +358,50 @@ static void parseSDP(SDPBody* sdp, String& addr, String& port, String& formats, 
 	    addr = tmp;
 	}
     }
+    ObjList* lst = 0;
     c = sdp->getLine("m");
-    while (c) {
+    for (; c; c = sdp->getNextLine(c)) {
 	String tmp(*c);
-	if (tmp.startSkip(media)) {
-	    int var = 0;
-	    tmp >> var >> " RTP/AVP";
-	    if (var > 0)
-		port = var;
-	    String fmt;
-	    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-	    while (tmp[0] == ' ') {
-		var = -1;
-		tmp >> " " >> var;
-		const char* payload = lookup(var,dict_payloads);
-		if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
-		    if (fmt)
-			fmt << ",";
-		    fmt << payload;
-		}
+	int sep = tmp.find(' ');
+	if (sep < 1)
+	    continue;
+	String type = tmp.substr(0,sep);
+	tmp >> " ";
+	if (media && (type != media))
+	    continue;
+        int port = 0;
+	tmp >> port >> " RTP/AVP";
+	String fmt;
+	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+	while (tmp[0] == ' ') {
+	    int var = -1;
+	    tmp >> " " >> var;
+	    const char* payload = lookup(var,dict_payloads);
+	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload);
+	    if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
+		if (fmt)
+		    fmt << ",";
+		fmt << payload;
 	    }
-	    formats = fmt;
-	    return;
 	}
-	c = sdp->getNextLine(c);
+	RtpMedia* rtp = 0;
+	// try to take the media descriptor from the old list
+	if (oldMedia) {
+	    ObjList* om = oldMedia->find(type);
+	    if (om)
+		rtp = static_cast<RtpMedia*>(om->remove(false));
+	}
+	if (rtp)
+	    rtp->update(fmt,port);
+	else
+	    rtp = new RtpMedia(type,fmt,port);
+	if (!lst)
+	    lst = new ObjList;
+	lst->append(rtp);
+	if (media)
+	    return lst;
     }
+    return lst;
 }
 
 static bool isPrivateAddr(const String& host)
@@ -366,11 +431,9 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 	"proxy-authorization",
 	0
     };
-    const ObjList* l = &sip.header;
-    for (; l; l = l->next()) {
+    const ObjList* l = sip.header.skipNull();
+    for (; l; l = l->skipNext()) {
 	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
-	if (!t)
-	    continue;
 	String name(t->name());
 	name.toLower();
 	const char** hdr = rejectHeaders;
@@ -381,6 +444,79 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 	    continue;
 	msg.addParam("sip_"+name,*t);
     }
+}
+
+RtpMedia::RtpMedia(const char* media, const char* formats, int rport, int lport)
+    : String(media), m_audio(true), m_formats(formats)
+{
+    DDebug(&plugin,DebugAll,"RtpMedia::RtpMedia('%s','%s',%d,%d) [%p]",
+	media,formats,rport,lport,this);
+    if (operator!=("audio")) {
+	m_audio = false;
+	m_suffix << "_" << media;
+    }
+    int q = m_formats.find(',');
+    m_format = m_formats.substr(0,q);
+    if (rport >= 0)
+	m_rPort = rport;
+    if (lport >= 0)
+	m_lPort = lport;
+}
+
+RtpMedia::~RtpMedia()
+{
+    DDebug(&plugin,DebugAll,"RtpMedia::~RtpMedia() '%s' [%p]",c_str(),this);
+}
+
+const char* RtpMedia::fmtList() const
+{
+    if (m_format)
+	return m_format.c_str();
+    if (m_formats)
+	return m_formats.c_str();
+    // unspecified audio assumed to support G711
+    if (m_audio)
+	return "alaw,mulaw";
+    return 0;
+}
+
+// Update members with data taken from a SDP, return true if something changed
+bool RtpMedia::update(const char* formats, int rport, int lport)
+{
+    DDebug(&plugin,DebugAll,"RtpMedia::update('%s',%d,%d) [%p]",
+	formats,rport,lport,this);
+    bool chg = false;
+    String tmp(formats);
+    if (m_formats != tmp) {
+	chg = true;
+	m_formats = tmp;
+	int q = m_formats.find(',');
+	m_format = m_formats.substr(0,q);
+    }
+    if (rport >= 0) {
+	tmp = rport;
+	if (m_rPort != tmp) {
+	    chg = true;
+	    m_rPort = tmp;
+	}
+    }
+    if (lport >= 0) {
+	tmp = lport;
+	if (m_lPort != tmp) {
+	    chg = true;
+	    m_lPort = tmp;
+	}
+    }
+    return chg;
+}
+
+// Update members from a dispatched "chan.rtp" message
+void RtpMedia::update(const Message& msg, bool pickFormat)
+{
+    m_id = msg.getValue("rtpid",m_id);
+    m_lPort = msg.getValue("localport",m_lPort);
+    if (pickFormat)
+	m_format = msg.getValue("format");
 }
 
 YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
@@ -418,8 +554,11 @@ void YateUDPParty::transmit(SIPEvent* event)
 	tmp << "code " << msg->code;
     else
 	tmp << "'" << msg->method << " " << msg->uri << "'";
-    Debug(&plugin,DebugInfo,"Sending %s %p to %s:%d",
-	tmp.c_str(),msg,m_addr.host().c_str(),m_addr.port());
+    if (plugin.debugAt(DebugInfo)) {
+	String buf((char*)msg->getBuffer().data(),msg->getBuffer().length());
+	Debug(&plugin,DebugInfo,"Sending %s %p to %s:%d\n------\n%s------",
+	    tmp.c_str(),msg,m_addr.host().c_str(),m_addr.port(),buf.c_str());
+    }
     m_sock->sendTo(
 	msg->getBuffer().data(),
 	msg->getBuffer().length(),
@@ -564,9 +703,6 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
 
 bool YateSIPEndPoint::Init()
 {
-    /*
-     * This part have been taken from libiax after i have lost my sip driver for bayonne
-     */
     if (m_sock) {
 	Debug(&plugin,DebugInfo,"Already initialized.");
 	return true;
@@ -626,10 +762,10 @@ void YateSIPEndPoint::run()
 		    Debug(DebugGoOn,"SIP error on read: %d", m_sock->error());
 		}
 	    } else if (res >= 72) {
-		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d",
-		    res,m_addr.host().c_str(),m_addr.port());
-		// we got already the buffer and here we start to do "good" stuff
 		buf[res]=0;
+		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d\n------\n%s------",
+		    res,m_addr.host().c_str(),m_addr.port(),buf);
+		// we got already the buffer and here we start to do "good" stuff
 		m_engine->addMessage(new YateUDPParty(m_sock,m_addr,m_port),buf,res);
 	    }
 #ifdef DEBUG
@@ -816,9 +952,9 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
       m_tr(tr), m_hungup(false), m_byebye(true), m_retry(false),
-      m_state(Incoming), m_rtpForward(false),
+      m_state(Incoming), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true)
+      m_authBye(true), m_mediaStatus(MediaMissing)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -865,26 +1001,27 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_contact",ev->getMessage()->getHeaderValue("Contact"));
     m->addParam("sip_user-agent",ev->getMessage()->getHeaderValue("User-Agent"));
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
-	parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpPort,m_formats);
-	if (m_rtpAddr) {
+	setMedia(parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpMedia));
+	if (m_rtpMedia) {
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
 	    if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
-		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
-		    m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
+		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+		    m_rtpAddr.c_str(),m_host.c_str());
 		m->addParam("rtp_nat_addr",m_rtpAddr);
 		m_rtpAddr = m_host;
 	    }
 	    m->addParam("rtp_forward","possible");
 	    m->addParam("rtp_addr",m_rtpAddr);
-	    m->addParam("rtp_port",m_rtpPort);
-	    m->addParam("formats",m_formats);
+	    ObjList* l = m_rtpMedia->skipNull();
+	    for (; l; l = l->skipNext()) {
+		RtpMedia* r = static_cast<RtpMedia*>(l->get());
+		m->addParam("rtp_port"+r->suffix(),r->remotePort());
+		m->addParam("formats"+r->suffix(),r->formats());
+	    }
 	}
-	int q = m_formats.find(',');
-	m_rtpFormat = m_formats.substr(0,q);
     }
-    DDebug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
-	m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+    DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     m_route = m;
     Engine::enqueue(message("chan.startup"));
 }
@@ -893,9 +1030,9 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
       m_tr(0), m_hungup(false), m_byebye(true), m_retry(true),
-      m_state(Outgoing), m_rtpForward(false),
+      m_state(Outgoing), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false)
+      m_authBye(false), m_mediaStatus(MediaMissing)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -938,7 +1075,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_dialog = *m;
     SDPBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
-	sdp = createRtpSDP(m,msg.getValue("formats"));
+	sdp = createRtpSDP(m_host,msg);
     m->setBody(sdp);
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
@@ -955,6 +1092,7 @@ YateSIPConnection::~YateSIPConnection()
     Debug(this,DebugAll,"YateSIPConnection::~YateSIPConnection() [%p]",this);
     hangup();
     clearTransaction();
+    setMedia(0);
     if (m_route) {
 	delete m_route;
 	m_route = 0;
@@ -962,6 +1100,22 @@ YateSIPConnection::~YateSIPConnection()
     if (m_routes) {
 	delete m_routes;
 	m_routes = 0;
+    }
+}
+
+void YateSIPConnection::setMedia(ObjList* media)
+{
+    if (media == m_rtpMedia)
+	return;
+    ObjList* tmp = m_rtpMedia;
+    m_rtpMedia = media;
+    if (tmp) {
+	ObjList* l = tmp->skipNull();
+	for (; l; l = l->skipNext()) {
+	    RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	    clearEndpoint(*m);
+	}
+	tmp->destruct();
     }
 }
 
@@ -1125,11 +1279,11 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 }
 
 // Creates a SDP for provisional (1xx) messages
-SDPBody* YateSIPConnection::createProvisionalSDP(Message &msg)
+SDPBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 {
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
-    // check if our peer can source data
+    // check if our peer can source at least audio data
     if (!(getPeer() && getPeer()->getSource()))
 	return 0;
     if (m_rtpAddr.null())
@@ -1138,164 +1292,288 @@ SDPBody* YateSIPConnection::createProvisionalSDP(Message &msg)
 }
 
 // Creates a SDP from RTP address data present in message
-SDPBody* YateSIPConnection::createPasstroughSDP(Message &msg)
+SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
 {
     String tmp = msg.getValue("rtp_forward");
     msg.clearParam("rtp_forward");
     if (!(m_rtpForward && tmp.toBoolean()))
 	return 0;
-    SDPBody* sdp = 0;
-    tmp = msg.getValue("rtp_port");
-    int port = tmp.toInteger();
     String addr(msg.getValue("rtp_addr"));
-    if (port && addr) {
-	m_rtpLocalAddr = addr;
-	m_rtpLocalPort = tmp;
-	sdp = createSDP(addr,tmp,msg.getValue("formats"));
+    if (addr.null())
+	return 0;
+
+    ObjList* lst = 0;
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = msg.getParam(i);
+	if (!p)
+	    continue;
+	// search for rtp_port or rtp_port_MEDIANAME parameters
+	tmp = p->name();
+	if (!tmp.startSkip("rtp_port",false))
+	    continue;
+	if (tmp && (tmp[0] != '_'))
+	    continue;
+	// now tmp holds the suffix for the media, null for audio
+	bool audio = tmp.null();
+	// check if media is supported, default only for audio
+	if (!msg.getBoolValue("media"+tmp,audio))
+	    continue;
+	int port = p->toInteger();
+	if (!port)
+	    continue;
+	const char* fmts = msg.getValue("formats"+tmp);
+	if (!fmts)
+	    continue;
+	if (audio)
+	    tmp = "audio";
+	else
+	    tmp >> "_";
+	RtpMedia* rtp = 0;
+	// try to take the media descriptor from the old list
+	if (m_rtpMedia) {
+	    ObjList* om = m_rtpMedia->find(tmp);
+	    if (om)
+		rtp = static_cast<RtpMedia*>(om->remove(false));
+	}
+	if (rtp)
+	    rtp->update(fmts,-1,port);
+	else
+	    rtp = new RtpMedia(tmp,fmts,-1,port);
+	if (!lst)
+	    lst = new ObjList;
+	lst->append(rtp);
     }
+    if (!lst)
+	return 0;
+
+    m_rtpLocalAddr = addr;
+    setMedia(lst);
+    SDPBody* sdp = createSDP(m_rtpLocalAddr);
     if (sdp)
 	msg.setParam("rtp_forward","accepted");
     return sdp;
 }
 
-// Creates an unstarted external RTP channel from remote addr and builds SDP from it
-SDPBody* YateSIPConnection::createRtpSDP(SIPMessage* msg, const char* formats)
+// Dispatches a RTP message for a media, optionally start RTP and pick parameters
+bool YateSIPConnection::dispatchRtp(RtpMedia* media, const char* addr, bool start, bool pick)
 {
+    if (!(media && addr))
+	return false;
     Message m("chan.rtp");
     complete(m,true);
-    m.addParam("direction","bidir");
-    m.addParam("remoteip",msg->getParty()->getPartyAddr());
     m.userData(static_cast<CallEndpoint *>(this));
-    if (Engine::dispatch(m)) {
-	m_rtpForward = false;
-	m_rtpid = m.getValue("rtpid");
-	m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
-	m_rtpLocalPort = m.getValue("localport",m_rtpLocalPort);
-	return createSDP(m_rtpLocalAddr,m_rtpLocalPort,formats);
+    m.addParam("media",*media);
+    m.addParam("direction","bidir");
+    if (m_rtpLocalAddr)
+	m.addParam("localip",m_rtpLocalAddr);
+    m.addParam("remoteip",addr);
+    if (start) {
+	m.addParam("remoteport",media->remotePort());
+	m.addParam("format",media->format());
     }
-    return 0;
+    if (!Engine::dispatch(m))
+	return false;
+    if (!pick)
+	return true;
+    m_rtpForward = false;
+    m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
+    m_mediaStatus = MediaStarted;
+    media->update(m,start);
+    return true;
 }
 
-// Creates a started external RTP channel from remote addr and builds SDP from it
+// Creates a set of unstarted external RTP channels from remote addr and builds SDP from them
+SDPBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
+{
+
+    bool defaults = true;
+    ObjList* lst = 0;
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = msg.getParam(i);
+	if (!p)
+	    continue;
+	// search for rtp_port or rtp_port_MEDIANAME parameters
+	String tmp(p->name());
+	if (!tmp.startSkip("media",false))
+	    continue;
+	if (tmp && (tmp[0] != '_'))
+	    continue;
+	// since we found at least one media declaration disable defaults
+	defaults = false;
+	// now tmp holds the suffix for the media, null for audio
+	bool audio = tmp.null();
+	// check if media is supported, default only for audio
+	if (!p->toBoolean(audio))
+	    continue;
+	const char* fmts = msg.getValue("formats"+tmp);
+	if (audio && !fmts)
+	    fmts = "alaw,mulaw";
+	if (!fmts)
+	    continue;
+	if (audio)
+	    tmp = "audio";
+	else
+	    tmp >> "_";
+	RtpMedia* rtp = 0;
+	// try to take the media descriptor from the old list
+	if (m_rtpMedia) {
+	    ObjList* om = m_rtpMedia->find(tmp);
+	    if (om)
+		rtp = static_cast<RtpMedia*>(om->remove(false));
+	}
+	if (rtp)
+	    rtp->update(fmts);
+	else
+	    rtp = new RtpMedia(tmp,fmts);
+	if (!lst)
+	    lst = new ObjList;
+	lst->append(rtp);
+    }
+
+    if (defaults && !lst) {
+	lst = new ObjList;
+	lst->append(new RtpMedia("audio","alaw,mulaw"));
+    }
+
+    setMedia(lst);
+
+    ObjList* l = m_rtpMedia->skipNull();
+    for (; l; l = l->skipNext()) {
+	RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	if (!dispatchRtp(m,addr,false,true))
+	    return 0;
+    }
+    return createSDP(m_rtpLocalAddr);
+}
+
+// Creates a set of started external RTP channels from remote addr and builds SDP from them
 SDPBody* YateSIPConnection::createRtpSDP(bool start)
 {
     if (m_rtpAddr.null()) {
-	m_rtpid = "-";
-	return createSDP(0,m_rtpLocalPort,m_formats);
+	m_mediaStatus = MediaMuted;
+	return createSDP(0);
     }
-    Message m("chan.rtp");
-    complete(m,true);
-    m.addParam("direction","bidir");
-    m.addParam("remoteip",m_rtpAddr);
-    if (start) {
-	m.addParam("remoteport",m_rtpPort);
-	m.addParam("format",m_rtpFormat);
+
+    ObjList* l = m_rtpMedia->skipNull();
+    for (; l; l = l->skipNext()) {
+	RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	if (!dispatchRtp(m,m_rtpAddr,start,true))
+	    return 0;
     }
-    m.userData(static_cast<CallEndpoint *>(this));
-    if (Engine::dispatch(m)) {
-	m_rtpForward = false;
-	m_rtpid = m.getValue("rtpid");
-	m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
-	m_rtpLocalPort = m.getValue("localport",m_rtpLocalPort);
-	if (start)
-	    m_rtpFormat = m.getValue("format");
-	return createSDP(m_rtpLocalAddr,m_rtpLocalPort,m_formats,m_rtpFormat);
-    }
-    return 0;
+    return createSDP(m_rtpLocalAddr);
 }
 
-// Starts an already created external RTP channel
+// Starts an already created set of external RTP channels
 bool YateSIPConnection::startRtp()
 {
-    if (m_rtpid.null() || m_rtpid == "-")
+    if (m_mediaStatus != MediaStarted)
 	return false;
     DDebug(this,DebugAll,"YateSIPConnection::startRtp() [%p]",this);
-    Message m("chan.rtp");
-    complete(m,true);
-    m.addParam("rtpid",m_rtpid);
-    m.addParam("direction","bidir");
-    m.addParam("remoteip",m_rtpAddr);
-    m.addParam("remoteport",m_rtpPort);
-    m.addParam("format",m_rtpFormat);
-    m.userData(static_cast<CallEndpoint *>(this));
-    return Engine::dispatch(m);
+
+    bool ok = true;
+    ObjList* l = m_rtpMedia->skipNull();
+    for (; l; l = l->skipNext()) {
+	RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	ok = dispatchRtp(m,m_rtpAddr,true,false) && ok;
+    }
+    return ok;
 }
 
-// Creates a SDP body from transport address and list of formats
-SDPBody* YateSIPConnection::createSDP(const char* addr, const char* port, const char* formats, const char* format)
+// Creates a SDP body from transport address and list of media descriptors
+SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 {
-    DDebug(this,DebugAll,"YateSIPConnection::createSDP('%s','%s','%s') [%p]",
-	addr,port,formats,this);
-    // if we got no port we simply create no SDP
-    if (!port)
+    DDebug(this,DebugAll,"YateSIPConnection::createSDP('%s',%p) [%p]",
+	addr,mediaList,this);
+    if (!mediaList)
+	mediaList = m_rtpMedia;
+    // if we got no media descriptors we simply create no SDP
+    if (!mediaList)
 	return 0;
     if (m_sdpSession)
 	++m_sdpVersion;
     else
 	m_sdpVersion = m_sdpSession = Time::secNow();
-    String owner;
-    owner << "yate " << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << addr;
-    // no address means on hold or muted
-    if (!addr)
-	addr = "0.0.0.0";
-    String tmp;
-    tmp << "IN IP4 " << addr;
-    String frm(format ? format : formats);
-    if (frm.null())
-	frm = "alaw,mulaw";
-    ObjList* l = frm.split(',',false);
-    frm = "audio ";
-    frm << port << " RTP/AVP";
-    ObjList rtpmap;
-    ObjList* f = l;
-    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-    for (; f; f = f->next()) {
-	String* s = static_cast<String*>(f->get());
-	if (s) {
-	    int payload = s->toInteger(dict_payloads,-1);
-	    if (payload >= 0) {
-		const char* map = lookup(payload,dict_rtpmap);
-		if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
-		    frm << " " << payload;
-		    String* temp = new String("rtpmap:");
-		    *temp << payload << " " << map;
-		    rtpmap.append(temp);
-		}
-	    }
-	}
-    }
-    delete l;
 
-    // always claim to support telephone events
-    frm << " 101";
-    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+    // no address means on hold or muted
+    String origin;
+    origin << "yate " << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << (addr ? addr : m_host.safe());
+    String conn;
+    conn << "IN IP4 " << (addr ? addr : "0.0.0.0");
 
     SDPBody* sdp = new SDPBody;
     sdp->addLine("v","0");
-    sdp->addLine("o",owner);
-    sdp->addLine("s","Session");
-    sdp->addLine("c",tmp);
+    sdp->addLine("o",origin);
+    sdp->addLine("s","SIP Call");
+    sdp->addLine("c",conn);
     sdp->addLine("t","0 0");
-    sdp->addLine("m",frm);
-    for (f = &rtpmap; f; f = f->next()) {
-	String* s = static_cast<String*>(f->get());
-	if (s)
-	    sdp->addLine("a",*s);
+
+    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+    for (ObjList* ml = mediaList->skipNull(); ml; ml = ml->skipNext()) {
+	RtpMedia* m = static_cast<RtpMedia*>(ml->get());
+
+	String frm(m->fmtList());
+	ObjList* l = frm.split(',',false);
+	frm = *m;
+	frm << " " << m->localPort() << " RTP/AVP";
+	ObjList rtpmap;
+	ObjList* f = l;
+	for (; f; f = f->next()) {
+	    String* s = static_cast<String*>(f->get());
+	    if (s) {
+		int payload = s->toInteger(dict_payloads,-1);
+		if (payload >= 0) {
+		    const char* map = lookup(payload,dict_rtpmap);
+		    if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
+			frm << " " << payload;
+			String* temp = new String("rtpmap:");
+			*temp << payload << " " << map;
+			rtpmap.append(temp);
+		    }
+		}
+	    }
+	}
+	delete l;
+
+	if (*m == "audio") {
+	    // always claim to support telephone events
+	    frm << " 101";
+	    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+	}
+
+	sdp->addLine("m",frm);
+	for (f = rtpmap.skipNull(); f; f = f->skipNext()) {
+	    String* s = static_cast<String*>(f->get());
+	    if (s)
+		sdp->addLine("a",*s);
+	}
     }
-    rtpmap.clear();
+
     return sdp;
 }
 
 // Add RTP forwarding parameters to a message
 bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr)
 {
-    if (m_rtpPort && m_rtpAddr && !startRtp() && m_rtpForward) {
+    if (!(m_rtpMedia && m_rtpAddr))
+	return false;
+    ObjList* l = m_rtpMedia->skipNull();
+    for (; l; l = l->skipNext()) {
+	RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	msg.addParam("formats"+m->suffix(),m->formats());
+	msg.addParam("media"+m->suffix(),"yes");
+    }
+    if (!startRtp() && m_rtpForward) {
 	if (natAddr)
 	    msg.addParam("rtp_nat_addr",natAddr);
 	msg.addParam("rtp_forward","yes");
 	msg.addParam("rtp_addr",m_rtpAddr);
-	msg.addParam("rtp_port",m_rtpPort);
-	msg.addParam("formats",m_formats);
+	l = m_rtpMedia->skipNull();
+	for (; l; l = l->skipNext()) {
+	    RtpMedia* m = static_cast<RtpMedia*>(l->get());
+	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
+	}
 	return true;
     }
     return false;
@@ -1356,19 +1634,15 @@ bool YateSIPConnection::process(SIPEvent* ev)
     String natAddr;
     if (msg->body && msg->body->isSDP()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
-	parseSDP(static_cast<SDPBody*>(msg->body),
-	    m_rtpAddr,m_rtpPort,m_formats);
+	setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
 	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
-	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
-		m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
+	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+		m_rtpAddr.c_str(),m_host.c_str());
 	    natAddr = m_rtpAddr;
 	    m_rtpAddr = m_host;
 	}
-	int q = m_formats.find(',');
-	m_rtpFormat = m_formats.substr(0,q);
-	DDebug(this,DebugAll,"RTP addr '%s' port %s formats '%s' format '%s'",
-	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+	DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     }
     if ((!m_routes) && msg->isAnswer() && (msg->code > 100) && (msg->code < 300))
 	m_routes = msg->getRoutes();
@@ -1414,30 +1688,27 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     // hack: use a while instead of if so we can return or break out of it
     while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
 	// accept re-INVITE only for local RTP, not for pass-trough
-	if (m_rtpForward || m_rtpid.null())
+	if (m_rtpForward || (m_mediaStatus == MediaMissing))
 	    break;
-	String addr,port,formats;
-	parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr,port,formats);
-	int q = formats.find(',');
-	String frm = formats.substr(0,q);
-	if (port.null() || frm.null())
+	String addr;
+	ObjList* lst = parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr);
+	if (!lst)
 	    break;
-	m_rtpAddr = addr;
-	m_rtpPort = port;
-	m_rtpFormat = frm;
-	m_formats = formats;
 	// guess if the call comes from behind a NAT
-	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
-	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s' port %s",
-		m_rtpAddr.c_str(),m_host.c_str(),m_rtpPort.c_str());
-	    m_rtpAddr = m_host;
+	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
+	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+		addr.c_str(),m_host.c_str());
+	    addr = m_host;
 	}
-	Debug(this,DebugAll,"New RTP addr '%s' port %s formats '%s' format '%s'",
-	    m_rtpAddr.c_str(),m_rtpPort.c_str(),m_formats.c_str(),m_rtpFormat.c_str());
+	m_rtpAddr = addr;
+	setMedia(lst);
+	Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 
-	m_rtpid.clear();
-	setSource();
-	setConsumer();
+	m_mediaStatus = MediaMissing;
+	// let RTP guess again the local interface
+	m_rtpLocalAddr.clear();
+	// clear all data endpoints - createRtpSDP will build new ones
+	clearEndpoint();
 
 	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
 	SDPBody* sdp = createRtpSDP(true);
@@ -1543,7 +1814,8 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	SDPBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
-	    sdp = createRtpSDP();
+	    // don't start RTP yet, only when we get the ACK
+	    sdp = createRtpSDP(false);
 	}
 	m->setBody(sdp);
 	m_tr->setResponse(m);
@@ -1555,9 +1827,13 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
-    if (m_rtpid && (m_rtpid != "-")) {
-	msg.setParam("targetid",m_rtpid);
-	return false;
+    if (m_rtpMedia && (m_mediaStatus == MediaStarted)) {
+	ObjList* l = m_rtpMedia->find("audio");
+	const RtpMedia* m = static_cast<const RtpMedia*>(l ? l->get() : 0);
+	if (m) {
+	    msg.setParam("targetid",m->id());
+	    return false;
+	}
     }
     // FIXME: when muted or doing RTP forwarding we should use INFO messages
     return false;
@@ -1823,10 +2099,10 @@ YateSIPConnection* SIPDriver::findCall(const String& callid)
 {
     XDebug(this,DebugAll,"SIPDriver finding call '%s'",callid.c_str());
     Lock mylock(this);
-    ObjList* l = &channels();
-    for (; l; l = l->next()) {
+    ObjList* l = channels().skipNull();
+    for (; l; l = l->skipNext()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
-	if (c && (c->callid() == callid))
+	if (c->callid() == callid)
 	    return c;
     }
     return 0;
@@ -1836,10 +2112,10 @@ YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
 {
     XDebug(this,DebugAll,"SIPDriver finding dialog '%s'",dialog.c_str());
     Lock mylock(this);
-    ObjList* l = &channels();
-    for (; l; l = l->next()) {
+    ObjList* l = channels().skipNull();
+    for (; l; l = l->skipNext()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
-	if (c && (c->dialog() == dialog))
+	if (c->dialog() == dialog)
 	    return c;
     }
     return 0;
@@ -1864,12 +2140,9 @@ bool SIPDriver::validLine(const String& line)
 bool SIPDriver::received(Message &msg, int id)
 {
     if (id == Timer) {
-	ObjList* l = &s_lines;
-	for (; l; l = l->next()) {
-	    YateSIPLine* line = static_cast<YateSIPLine*>(l->get());
-	    if (line)
-		line->timer(msg.msgTime());
-	}
+	ObjList* l = s_lines.skipNull();
+	for (; l; l = l->skipNext())
+	    static_cast<YateSIPLine*>(l->get())->timer(msg.msgTime());
     }
     else if (id == Halt)
 	s_lines.clear();

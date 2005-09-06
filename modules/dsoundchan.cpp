@@ -64,7 +64,7 @@ class DSoundConsumer : public DataConsumer
 public:
     DSoundConsumer();
     ~DSoundConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock &data, unsigned long tStamp);
 private:
     DSoundPlay* m_dsound;
 };
@@ -485,7 +485,7 @@ DSoundConsumer::~DSoundConsumer()
 	m_dsound->terminate();
 }
 
-void DSoundConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void DSoundConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     if (m_dsound)
 	m_dsound->put(data);
@@ -563,7 +563,7 @@ bool SoundDriver::msgExecute(Message& msg, String& dest)
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	DSoundChan *ds = new DSoundChan;
-	if (ch->connect(ds)) {
+	if (ch->connect(ds,msg.getValue("reason"))) {
 	    msg.setParam("peerid",ds->id());
 	    ds->deref();
 	}

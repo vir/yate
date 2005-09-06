@@ -83,7 +83,7 @@ class ZapConsumer : public PriConsumer
 public:
     ZapConsumer(ZapChan *owner, const char* format, unsigned int bufsize);
     ~ZapConsumer();
-    virtual void Consume(const DataBlock &data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock &data, unsigned long tStamp);
 private:
     unsigned int m_bufsize;
 };
@@ -308,7 +308,7 @@ ZapConsumer::~ZapConsumer()
     Debug(m_owner,DebugAll,"ZapConsumer::~ZapConsumer() [%p]",this);
 }
 
-void ZapConsumer::Consume(const DataBlock &data, unsigned long timeDelta)
+void ZapConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     int fd = static_cast<ZapChan*>(m_owner)->fd();
     XDebug(DebugAll,"ZapConsumer fd=%d datalen=%u",fd,data.length());

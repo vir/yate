@@ -317,9 +317,9 @@ public:
     /**
      * Consumes the data sent to it from a source
      * @param data The raw data block to process; an empty block ends data
-     * @param timeDelta Timestamp increment of data - typically samples
+     * @param tStamp Timestamp of data - typically samples
      */
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta) = 0;
+    virtual void Consume(const DataBlock& data, unsigned long tStamp) = 0;
 
     /**
      * Get the data source of this object if it's connected
@@ -371,9 +371,9 @@ public:
     /**
      * Forwards the data to its consumers
      * @param data The raw data block to forward; an empty block ends data
-     * @param timeDelta Timestamp increment of data - typically samples
+     * @param tStamp Timestamp of data - typically samples
      */
-    void Forward(const DataBlock& data, unsigned long timeDelta = 0);
+    void Forward(const DataBlock& data, unsigned long tStamp = 0);
 
     /**
      * Attach a data consumer
@@ -857,6 +857,12 @@ public:
      * @return A pointer to the DataEndpoint object or NULL if an error occured
      */
     DataEndpoint* setEndpoint(const char* type = "audio");
+
+    /**
+     * Clear one or all data endpoints of this object
+     * @param type Type of data endpoint: "audio", "video", "text", NULL to clear all
+     */
+    void clearEndpoint(const char* type = 0);
 
     /**
      * Set a data source of this object

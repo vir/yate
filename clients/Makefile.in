@@ -29,7 +29,6 @@ LOCALFLAGS =
 LOCALLIBS =
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
-EXECOMP = $(COMPILE) $(LIBTHR) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -77,7 +76,7 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd .. && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
-	$(EXECOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
 
 yate-gtk2: ../contrib/gtk2/libgtk2client.a
 yate-gtk2: LOCALFLAGS = @GTK2_INC@

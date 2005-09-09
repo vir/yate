@@ -395,11 +395,24 @@ bool AAAHandler::received(Message& msg)
 	    return queryDb(query,&msg) >= 0;
 	    break;
 	case Auth:
-	case Route:
 	    if (s_critical)
 		return failure(&msg);
 	    // ok if we got some result
 	    return queryDb(query,&msg) > 0;
+	    break;
+	case Route:
+	    if (s_critical)
+		return failure(&msg);
+	    {
+	    // ok if we got some result
+		int rows = queryDb(query,&msg);
+		if ((rows == 1) && (msg.retValue().null())) {
+		    // we know about the user but has no address of record
+		    msg.retValue() = "-";
+		    msg.setParam("error","offline");
+		}
+		return (rows > 0);
+	    }
 	    break;
 	case UnRegist:
 	    // no error check - we return false

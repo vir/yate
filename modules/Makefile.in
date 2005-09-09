@@ -27,6 +27,10 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	ysipchan.yate yrtpchan.yate
 LIBS :=
 
+ifneq (@HAVE_PGSQL@,no)
+PROGS := $(PROGS) register.yate
+endif
+
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
 PROGS := $(PROGS) zapchan.yate
 endif
@@ -124,6 +128,8 @@ wpchan.yate: libypri.o
 wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
+
+register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

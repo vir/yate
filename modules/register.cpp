@@ -173,13 +173,20 @@ bool AAAHandler::initDb(int retry)
     Lock lock(m_dbmutex);
     // allow specifying the raw connection string
     String conn(s_cfg.getValue(*this,"connection"));
+    if (conn.null())
+	conn = s_cfg.getValue("default","connection");
     if (conn.null()) {
 	// else build it from pieces
-	const char *host = s_cfg.getValue(*this,"host","localhost");
-	int port = s_cfg.getIntValue(*this,"port",5432);
-	const char *name = s_cfg.getValue(*this,"database","yate");
-	const char *user = s_cfg.getValue(*this,"user","postgres");
-	const char *pass = s_cfg.getValue(*this,"password");
+	const char* host = s_cfg.getValue("default","host","localhost");
+	host = s_cfg.getValue(*this,"host",host);
+	int port = s_cfg.getIntValue("default","port",5432);
+	port = s_cfg.getIntValue(*this,"port",port);
+	const char* name = s_cfg.getValue("default","database","yate");
+	name = s_cfg.getValue(*this,"database","yate");
+	const char* user = s_cfg.getValue("default","user","postgres");
+	user = s_cfg.getValue(*this,"user","postgres");
+	const char* pass = s_cfg.getValue("default","password");
+	pass = s_cfg.getValue(*this,"password");
 	if (TelEngine::null(host) || (port <= 0) || TelEngine::null(name))
 	    return false;
 	conn << "host='" << host << "' port=" << port << " dbname='" << name << "'";
@@ -193,8 +200,10 @@ bool AAAHandler::initDb(int retry)
     if (m_query.null())
 	return false;
     m_result = s_cfg.getValue(*this,"result");
-    m_retry = s_cfg.getIntValue(*this,"retry",5);
-    m_timeout = (u_int64_t)1000 * s_cfg.getIntValue(*this,"timeout",10000);
+    int t = s_cfg.getIntValue("default","retry",5);
+    m_retry = s_cfg.getIntValue(*this,"retry",t);
+    t = s_cfg.getIntValue("default","timeout",10000);
+    m_timeout = (u_int64_t)1000 * s_cfg.getIntValue(*this,"timeout",t);
     Debug(&module,DebugAll,"Initiating connection \"%s\" retry %d",conn.c_str(),retry);
     u_int64_t timeout = Time::now() + m_timeout;
     m_conn = PQconnectStart(conn.c_str());

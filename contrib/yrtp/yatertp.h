@@ -47,6 +47,11 @@
  */
 namespace TelEngine {
 
+class RTPGroup;
+class RTPTransport;
+class RTPSession;
+class RTPSender;
+
 /**
  * A base class that contains just placeholders to process raw RTP and RTCP packets.
  * @short Base class to ease creation of RTP forwarders

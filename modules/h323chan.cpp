@@ -249,6 +249,8 @@ public:
 class YateGkRegThread;
 class YateH323EndPoint;
 class YateGatekeeperServer;
+class YateH323EndPoint;
+class YateH323Chan;
 
 class H323Driver : public Driver
 {

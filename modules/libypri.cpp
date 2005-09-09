@@ -352,6 +352,7 @@ void PriSpan::handleEvent(pri_event &ev)
 	    break;
 	case PRI_EVENT_RINGING:
 	    Debug(m_driver,DebugInfo,"Ringing our call on channel %d on span %d",ev.ringing.channel,m_span);
+	    ringingChan(ev.proceeding.channel);
 	    break;
 	case PRI_EVENT_HANGUP:
 	    Debug(m_driver,DebugInfo,"Hangup detected on channel %d on span %d",ev.hangup.channel,m_span);
@@ -506,6 +507,18 @@ void PriSpan::proceedingChan(int chan)
     }
     Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
     getChan(chan)->setTimeout(60000000);
+    Engine::enqueue(getChan(chan)->message("call.progress"));
+}
+
+void PriSpan::ringingChan(int chan)
+{
+    if (!validChan(chan)) {
+	Debug(DebugInfo,"Ringing on invalid channel %d on span %d",chan,m_span);
+	return;
+    }
+    Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
+    getChan(chan)->setTimeout(60000000);
+    Engine::enqueue(getChan(chan)->message("call.ringing"));
 }
 
 PriSource::PriSource(PriChan *owner, const char* format, unsigned int bufsize)

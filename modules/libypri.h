@@ -94,6 +94,7 @@ protected:
     void ackChan(int chan);
     void answerChan(int chan);
     void proceedingChan(int chan);
+    void ringingChan(int chan);
     PriDriver* m_driver;
     int m_span;
     int m_offs;

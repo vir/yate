@@ -59,6 +59,10 @@ static TokenDict dict_yrtp_dir[] = {
 
 static Configuration s_cfg;
 
+class YRTPSource;
+class YRTPConsumer;
+class YRTPSession;
+
 class YRTPWrapper : public RefObject
 {
     friend class YRTPSource;

@@ -189,7 +189,7 @@ bool AAAHandler::initDb(int retry)
 	const char* user = s_cfg.getValue("default","user","postgres");
 	user = s_cfg.getValue(*this,"user","postgres");
 	const char* pass = s_cfg.getValue("default","password");
-	pass = s_cfg.getValue(*this,"password");
+	pass = s_cfg.getValue(*this,"password",pass);
 	if (TelEngine::null(host) || (port <= 0) || TelEngine::null(name))
 	    return false;
 	conn << "host='" << host << "' port=" << port << " dbname='" << name << "'";

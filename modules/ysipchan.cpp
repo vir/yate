@@ -1084,7 +1084,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m_tr->setUserData(this);
     }
     m->deref();
-    Engine::enqueue(message("chan.startup"));
+    Message* s = message("chan.startup");
+    s->setParam("caller",msg.getValue("caller"));
+    s->setParam("called",msg.getValue("called"));
+    s->setParam("billid",msg.getValue("billid"));
+    Engine::enqueue(s);
 }
 
 YateSIPConnection::~YateSIPConnection()

@@ -226,6 +226,11 @@ bool CdrHandler::received(Message &msg)
     else
 	Debug("CdrBuilder",DebugInfo,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
+    if ((m_type == CdrRinging) || (m_type == CdrAnswer)) {
+	id = msg.getValue("peerid");
+	if (id && (b = CdrBuilder::find(id)))
+	    b->update(msg,m_type,msg.msgTime().usec());
+    }
     return false;
 };
 		    

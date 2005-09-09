@@ -332,7 +332,7 @@ int AAAHandler::queryDbInternal(const char* query, Message* dest)
 			    Debug(&module,DebugFail,"Query for '%s' returning %d (%d) rows!",
 				c_str(),totalRows,rows);
 			else
-			    copyParams(*dest,res);
+			    copyParams(*dest,res,m_result);
 		    }
 		}
 		break;

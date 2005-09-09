@@ -398,6 +398,9 @@ bool AAAHandler::received(Message& msg)
 	    break;
 	case Cdr:
 	    {
+		String tmp(msg.getValue("operation"));
+		if (tmp != "finalize")
+		    return false;
 		// failure while accounting is critical
 		bool error = (queryDb(query) < 0);
 		if (s_critical != error) {

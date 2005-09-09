@@ -161,6 +161,14 @@ static TokenDict dict_str2nsf[] = {
 static TokenDict dict_str2cause[] = {
     { "noroute", PRI_CAUSE_NO_ROUTE_DESTINATION },
     { "noconn", PRI_CAUSE_REQUESTED_CHAN_UNAVAIL },
+    { "busy", PRI_CAUSE_USER_BUSY },
+    { "rejected", PRI_CAUSE_CALL_REJECTED },
+    { "forbidden", PRI_CAUSE_OUTGOING_CALL_BARRED },
+    { "forbidden", PRI_CAUSE_INCOMING_CALL_BARRED },
+    { "offline", PRI_CAUSE_DESTINATION_OUT_OF_ORDER },
+    { "congestion", PRI_CAUSE_NORMAL_CIRCUIT_CONGESTION },
+    { "congestion", PRI_CAUSE_SWITCH_CONGESTION },
+    { "failure", PRI_CAUSE_DESTINATION_OUT_OF_ORDER },
     { 0, -1 }
 };
 

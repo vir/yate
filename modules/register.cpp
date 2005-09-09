@@ -171,6 +171,9 @@ bool AAAHandler::initDb(int retry)
     if (null())
 	return false;
     Lock lock(m_dbmutex);
+    m_query = s_cfg.getValue(*this,"query");
+    if (m_query.null())
+	return false;
     // allow specifying the raw connection string
     String conn(s_cfg.getValue(*this,"connection"));
     if (conn.null())
@@ -196,9 +199,6 @@ bool AAAHandler::initDb(int retry)
 		conn << " password='" << pass << "'";
 	}
     }
-    m_query = s_cfg.getValue(*this,"query");
-    if (m_query.null())
-	return false;
     m_result = s_cfg.getValue(*this,"result");
     int t = s_cfg.getIntValue("default","retry",5);
     m_retry = s_cfg.getIntValue(*this,"retry",t);
@@ -643,7 +643,8 @@ void RegistModule::addHandler(const char *name, int type)
 {
     if (!s_cfg.getBoolValue("general",name))
 	return;
-    int prio = s_cfg.getIntValue(name,"priority",50);
+    int prio = s_cfg.getIntValue("default","priority",50);
+    prio = s_cfg.getIntValue(name,"priority",prio);
     Output("Installing priority %d handler for '%s'",prio,name);
     Engine::install(new AAAHandler(name,type,prio));
 }

@@ -312,11 +312,37 @@ private:
     int m_mediaStatus;
 };
 
+class YateSIPGenerate : public GenObject
+{
+    YCLASS(YateSIPGenerate,GenObject)
+public:
+    YateSIPGenerate(SIPMessage* m);
+    virtual ~YateSIPGenerate();
+    bool process(SIPEvent* ev);
+    bool busy() const
+	{ return m_tr != 0; }
+    int code() const
+	{ return m_code; }
+private:
+    void clearTransaction();
+    SIPTransaction* m_tr;
+    int m_code;
+};
+
 class UserHandler : public MessageHandler
 {
 public:
     UserHandler()
 	: MessageHandler("user.login",150)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class SipHandler : public MessageHandler
+{
+public:
+    SipHandler()
+	: MessageHandler("xsip.generate",110)
 	{ }
     virtual bool received(Message &msg);
 };
@@ -416,21 +442,22 @@ static bool isPrivateAddr(const String& host)
     return (i >= 16) && (i <= 31) && s.startsWith(".");
 }
 
+static const char* rejectHeaders[] = {
+    "via",
+    "route",
+    "record-route",
+    "call-id",
+    "cseq",
+    "content-length",
+    "www-authenticate",
+    "proxy-authenticate",
+    "authorization",
+    "proxy-authorization",
+    0
+};
+
 static void copySipHeaders(Message& msg, const SIPMessage& sip)
 {
-    static const char* rejectHeaders[] = {
-	"via",
-	"route",
-	"record-route",
-	"call-id",
-	"cseq",
-	"content-length",
-	"www-authenticate",
-	"proxy-authenticate",
-	"authorization",
-	"proxy-authorization",
-	0
-    };
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
 	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
@@ -443,6 +470,22 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 	if (*hdr)
 	    continue;
 	msg.addParam("sip_"+name,*t);
+    }
+}
+
+static void copySipHeaders(SIPMessage& sip, const Message& msg)
+{
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* str = msg.getParam(i);
+	if (!str)
+	    continue;
+	String name(str->name());
+	if (!name.startSkip("sip_",false))
+	    continue;
+	if (name.trimBlanks().null())
+	    continue;
+	sip.addHeader(name,*str);
     }
 }
 
@@ -637,7 +680,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     m.addParam("uri",uri);
     m.addParam("response",response);
     if (message) {
-	m.addParam("ip_addr",message->getParty()->getPartyAddr());
+	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
     }
     
@@ -784,6 +827,7 @@ void YateSIPEndPoint::run()
 	    GenObject* obj = static_cast<GenObject*>(e->getTransaction()->getUserData());
 	    YateSIPConnection* conn = YOBJECT(YateSIPConnection,obj);
 	    YateSIPLine* line = YOBJECT(YateSIPLine,obj);
+	    YateSIPGenerate* gen = YOBJECT(YateSIPGenerate,obj);
 	    if (conn && (conn->refcount() > 0))
 		conn->ref();
 	    else
@@ -802,6 +846,14 @@ void YateSIPEndPoint::run()
 	    }
 	    if (line) {
 		if (line->process(e)) {
+		    delete e;
+		    break;
+		}
+		else
+		    continue;
+	    }
+	    if (gen) {
+		if (gen->process(e)) {
 		    delete e;
 		    break;
 		}
@@ -993,7 +1045,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	maxf = s_maxForwards;
     tmp = maxf-1;
     m->addParam("antiloop",tmp);
-    m->addParam("ip_addr",m_host);
+    m->addParam("ip_host",m_host);
     m->addParam("ip_port",String(m_port));
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
@@ -2084,6 +2136,55 @@ bool YateSIPLine::update(const Message& msg)
     return chg;
 }
 
+YateSIPGenerate::YateSIPGenerate(SIPMessage* m)
+    : m_tr(0), m_code(0)
+{
+    m_tr = plugin.ep()->engine()->addMessage(m);
+    if (m_tr) {
+	m_tr->ref();
+	m_tr->setUserData(this);
+    }
+    m->deref();
+}
+
+YateSIPGenerate::~YateSIPGenerate()
+{
+    clearTransaction();
+}
+
+bool YateSIPGenerate::process(SIPEvent* ev)
+{
+    DDebug(&plugin,DebugInfo,"YateSIPGenerate::process(%p) %s [%p]",
+	ev,SIPTransaction::stateName(ev->getState()),this);
+    if (ev->getTransaction() != m_tr)
+	return false;
+    if (ev->getState() == SIPTransaction::Cleared) {
+	clearTransaction();
+	return false;
+    }
+    const SIPMessage* msg = ev->getMessage();
+    if (!(msg && msg->isAnswer()))
+	return false;
+    if (ev->getState() != SIPTransaction::Process)
+	return false;
+    clearTransaction();
+    Debug(&plugin,DebugAll,"YateSIPGenerate got answer %d [%p]",
+	msg->code,this);
+    m_code = msg->code;
+    return false;
+}
+
+void YateSIPGenerate::clearTransaction()
+{
+    if (m_tr) {
+	DDebug(&plugin,DebugInfo,"YateSIPGenerate clearing transaction %p [%p]",
+	    m_tr,this);
+	m_tr->setUserData(0);
+	m_tr->deref();
+	m_tr = 0;
+    }
+}
+
 bool UserHandler::received(Message &msg)
 {
     String tmp(msg.getValue("protocol"));
@@ -2096,6 +2197,36 @@ bool UserHandler::received(Message &msg)
     if (!line)
 	line = new YateSIPLine(tmp);
     line->update(msg);
+    return true;
+}
+
+bool SipHandler::received(Message &msg)
+{
+    Debug(&plugin,DebugInfo,"SipHandler::received() [%p]",this);
+    const char* method = msg.getValue("method");
+    const char* uri = msg.getValue("uri");
+    if (!(method && uri))
+	return false;
+    SIPMessage* sip = new SIPMessage(method,uri);
+    plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"));
+    copySipHeaders(*sip,msg);
+    const char* type = msg.getValue("xsip_type");
+    const char* body = msg.getValue("xsip_body");
+    if (type && body)
+	sip->setBody(new SIPStringBody(type,body,-1));
+    sip->complete(plugin.ep()->engine(),msg.getValue("user"),msg.getValue("domain"));
+    if (!msg.getBoolValue("wait")) {
+	// no answer requested - start transaction and forget
+	plugin.ep()->engine()->addMessage(sip);
+	return true;
+    }
+    YateSIPGenerate gen(sip);
+    while (gen.busy())
+	Thread::yield();
+    if (gen.code())
+	msg.setParam("code",String(gen.code()));
+    else
+	msg.clearParam("code");
     return true;
 }
 
@@ -2204,6 +2335,8 @@ void SIPDriver::initialize()
 	installRelay(Halt);
 	installRelay(Progress);
 	Engine::install(new UserHandler);
+	if (s_cfg.getBoolValue("general","generate"))
+	    Engine::install(new SipHandler);
     }
 }
 

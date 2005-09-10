@@ -19,6 +19,9 @@
 ; progress: bool: Send an "183 Session Progress" just after successfull routing
 ;progress=enable
 
+; generate: bool: Allow Yate messages to send arbitrary SIP client transactions
+;generate=disable
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

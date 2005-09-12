@@ -691,6 +691,13 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	return true;
     String res;
     buildAuth(username,realm,m.retValue(),nonce,method,uri,res);
+    if (res == response)
+	return true;
+    // if the URI included some parameters retry after stripping them off
+    int sc = uri.find(';');
+    if (sc < 0)
+	return false;
+    buildAuth(username,realm,m.retValue(),nonce,method,uri.substr(0,sc),res);
     return (res == response);
 }
 

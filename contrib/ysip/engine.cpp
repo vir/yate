@@ -446,8 +446,7 @@ void SIPEngine::buildAuth(const String& username, const String& realm, const Str
 	username.c_str(),realm.c_str(),passwd.c_str(),nonce.c_str(),method.c_str(),uri.c_str());
     MD5 m1,m2;
     m1 << username << ":" << realm << ":" << passwd;
-    int par = uri.find(';');
-    m2 << method << ":" << uri.substr(0,par);
+    m2 << method << ":" << uri;
     String tmp;
     tmp << m1.hexDigest() << ":" << nonce << ":" << m2.hexDigest();
     m1.clear();

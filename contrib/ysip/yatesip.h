@@ -666,6 +666,12 @@ public:
 	{ return m_tag; }
 
     /**
+     * Set a new dialog tag, optionally build a random one
+     * @param tag New dialog tag, a null string will build a random tag
+     */
+    void setDialogTag(const char* tag = 0);
+
+    /**
      * Set the (re)transmission flag that allows the latest outgoing message
      *  to be send over the wire
      */

@@ -126,6 +126,16 @@ bool SIPTransaction::changeState(int newstate)
     return true;
 }
 
+void SIPTransaction::setDialogTag(const char* tag)
+{
+    if (null(tag)) {
+	if (m_tag.null())
+	    m_tag = (int)::random();
+    }
+    else
+	m_tag = tag;
+}
+
 void SIPTransaction::setLatestMessage(SIPMessage* message)
 {
     if (m_lastMessage == message)
@@ -138,8 +148,8 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
     m_lastMessage = message;
     if (m_lastMessage) {
 	m_lastMessage->ref();
-	if (message->isAnswer() && (message->code > 100) && m_tag.null())
-	    m_tag = (int)::random();
+	if (message->isAnswer() && (message->code > 100))
+	    setDialogTag();
 	message->complete(m_engine,0,0,m_tag);
     }
 }
@@ -344,13 +354,19 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
 	    (getCallID() != message->getHeaderValue("Call-ID")) ||
 	    (m_firstMessage->getHeaderValue("From") != message->getHeaderValue("From")) ||
-	    (m_firstMessage->getHeaderValue("To") != message->getHeaderValue("To")) ||
+	    (m_firstMessage->getHeaderValue("To") != message->getHeaderValue("To")))
+	    return false;
+	// allow braindamaged UAs that send answers with no Via line
+	if (m_firstMessage->getHeader("Via") && message->getHeader("Via") &&
 	    (m_firstMessage->getHeaderValue("Via") != message->getHeaderValue("Via")))
 	    return false;
-	if (!message->isACK() && (getURI() != message->uri))
-	    return false;
-	if (message->isACK() && (getDialogTag() != message->getParamValue("To","tag")))
-	    return false;
+	// extra checks are to be made for ACK only
+	if (message->isACK()) {
+	    if (getURI() != message->uri)
+		return false;
+	    if (getDialogTag() != message->getParamValue("To","tag"))
+		return false;
+	}
     }
     if (isOutgoing() != message->isAnswer()) {
 	DDebug(DebugAll,"SIPTransaction ignoring retransmitted %s %p '%s' in [%p]",

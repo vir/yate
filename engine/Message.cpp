@@ -59,7 +59,7 @@ void Message::userData(RefObject* data)
 String Message::encode(const char* id) const
 {
     String s("%%>message:");
-    s << String::msgEscape(id,':') << ":" << (unsigned int)m_time.sec() << ":";
+    s << String::msgEscape(id) << ":" << (unsigned int)m_time.sec() << ":";
     commonEncode(s);
     return s;
 }
@@ -67,7 +67,7 @@ String Message::encode(const char* id) const
 String Message::encode(bool received, const char* id) const
 {
     String s("%%<message:");
-    s << String::msgEscape(id,':') << ":" << received << ":";
+    s << String::msgEscape(id) << ":" << received << ":";
     commonEncode(s);
     return s;
 }
@@ -118,12 +118,12 @@ int Message::decode(const char* str, bool& received, const char* id)
 
 void Message::commonEncode(String& str) const
 {
-    str << msgEscape(':') << ":" << m_return.msgEscape(':');
+    str << msgEscape() << ":" << m_return.msgEscape();
     unsigned n = length();
     for (unsigned i = 0; i < n; i++) {
 	NamedString *s = getParam(i);
 	if (s)
-	    str << ":" << s->name().msgEscape(':') << "=" << s->msgEscape(':');
+	    str << ":" << s->name().msgEscape('=') << "=" << s->msgEscape();
     }
 }
 

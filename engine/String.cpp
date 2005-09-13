@@ -770,7 +770,7 @@ String String::msgEscape(const char* str, char extraEsc)
     String s;
     char c;
     while ((c=*str++)) {
-	if (c < ' ' || c == extraEsc) {
+	if (c < ' ' || c == ':' || c == extraEsc) {
 	    c += '@';
 	    s += '%';
 	}

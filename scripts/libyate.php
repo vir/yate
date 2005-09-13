@@ -114,7 +114,7 @@ class Yate
 	$n = strlen($str);
 	for ($i=0; $i<$n; $i++) {
 	    $c = $str{$i};
-	    if ((ord($c) < 32) || ($c == $extra)) {
+	    if ((ord($c) < 32) || ($c == ':') || ($c == $extra)) {
 		$c = chr(ord($c) + 64);
 		$s .= '%';
 	    }
@@ -196,8 +196,12 @@ class Yate
     {
 	$n = count($parts);
 	for ($i=$offs; $i<$n; $i++) {
-	    $s=explode('=',$parts[$i]);
-	    $this->params[Yate::Unescape($s[0])]=Yate::Unescape($s[1]);
+	    $s=$parts[$i];
+	    $q=strpos($s,'=');
+	    if ($q === false)
+		$this->params[Yate::Unescape($s)]=NULL;
+	    else
+		$this->params[Yate::Unescape(substr($s,0,$q))]=Yate::Unescape(substr($s,$q+1));
 	}
     }
 
@@ -211,10 +215,10 @@ class Yate
 	    Yate::Output("PHP bug: attempt to dispatch message type: " . $this->type);
 	    return;
 	}
-	$i=Yate::Escape($this->id,':');
+	$i=Yate::Escape($this->id);
 	$t=0+$this->origin;
-	$n=Yate::Escape($this->name,':');
-	$r=Yate::Escape($this->retval,':');
+	$n=Yate::Escape($this->name);
+	$r=Yate::Escape($this->retval);
 	$p="";
 	array_walk(&$this->params, "_yate_message_walk", &$p);
 	print "%%>message:$i:$t:$n:$r$p\n";
@@ -231,10 +235,10 @@ class Yate
 	    Yate::Output("PHP bug: attempt to acknowledge message type: " . $this->type);
 	    return;
 	}
-	$i=Yate::Escape($this->id,':');
+	$i=Yate::Escape($this->id);
 	$k=Yate::Bool2str($this->handled);
-	$n=Yate::Escape($this->name,':');
-	$r=Yate::Escape($this->retval,':');
+	$n=Yate::Escape($this->name);
+	$r=Yate::Escape($this->retval);
 	$p="";
 	array_walk(&$this->params, "_yate_message_walk", &$p);
 	print "%%<message:$i:$k:$n:$r$p\n";
@@ -319,7 +323,7 @@ class Yate
 /* Internal function */
 function _yate_message_walk($item, $key, &$result)
 {
-    $result .= ':' . Yate::Escape($key,':') . '=' . Yate::Escape($item,':');
+    $result .= ':' . Yate::Escape($key,'=') . '=' . Yate::Escape($item);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -442,6 +442,7 @@ static bool isPrivateAddr(const String& host)
     return (i >= 16) && (i <= 31) && s.startsWith(".");
 }
 
+// List of critical headers we don't want to handle generically
 static const char* rejectHeaders[] = {
     "via",
     "route",
@@ -456,6 +457,7 @@ static const char* rejectHeaders[] = {
     0
 };
 
+// Copy headers from SIP message to Yate message
 static void copySipHeaders(Message& msg, const SIPMessage& sip)
 {
     const ObjList* l = sip.header.skipNull();
@@ -469,10 +471,19 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 		break;
 	if (*hdr)
 	    continue;
-	msg.addParam("sip_"+name,*t);
+	String tmp(*t);
+	const ObjList* p = t->params().skipNull();
+	for (; p; p = p->skipNext()) {
+	    NamedString* s = static_cast<NamedString*>(p->get());
+	    tmp << ";" << s->name();
+	    if (!s->null())
+		tmp << "=" << *s;
+	}
+	msg.addParam("sip_"+name,tmp);
     }
 }
 
+// Copy headers from Yate message to SIP message
 static void copySipHeaders(SIPMessage& sip, const Message& msg)
 {
     unsigned int n = msg.length();
@@ -998,6 +1009,9 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("ip_port",String(e->getMessage()->getParty()->getPartyPort()));
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
+    // establish the dialog here so user code will have the dialog tag handy
+    t->setDialogTag();
+    m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*e->getMessage());
 
     if (Engine::dispatch(m)) {
@@ -2211,7 +2225,10 @@ bool SipHandler::received(Message &msg)
 {
     Debug(&plugin,DebugInfo,"SipHandler::received() [%p]",this);
     const char* method = msg.getValue("method");
-    const char* uri = msg.getValue("uri");
+    String uri(msg.getValue("uri"));
+    Regexp r("<\\([^>]\\+\\)>");
+    if (uri.matches(r))
+	uri = uri.matchString(1);
     if (!(method && uri))
 	return false;
     SIPMessage* sip = new SIPMessage(method,uri);

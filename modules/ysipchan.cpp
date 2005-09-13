@@ -972,6 +972,9 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	    dereg = true;
 	}
     }
+    hl = e->getMessage()->getHeader("User-Agent");
+    if (hl)
+	m->addParam("device",*hl);
     // Always OK deregistration attempts
     if (Engine::dispatch(m) || dereg)
 	t->setResponse(200);

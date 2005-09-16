@@ -42,11 +42,18 @@ extern "C" {
 using namespace TelEngine;
 
 static TokenDict dict_iaxformats[] = {
-    { "slin", AST_FORMAT_SLINEAR },
+    // audio formats
     { "gsm", AST_FORMAT_GSM },
+    { "ilbc", AST_FORMAT_ILBC },
+    { "speex", AST_FORMAT_SPEEX },
     { "lpc10", AST_FORMAT_LPC10 },
     { "mulaw", AST_FORMAT_ULAW },
     { "alaw", AST_FORMAT_ALAW },
+    { "g723", AST_FORMAT_G723_1 },
+    { "g729", AST_FORMAT_G729A },
+    { "adpcm", AST_FORMAT_ADPCM },
+    { "mp3", AST_FORMAT_MP3 },
+    { "slin", AST_FORMAT_SLINEAR },
     { 0, 0 }
 };
 

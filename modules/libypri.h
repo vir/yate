@@ -90,6 +90,7 @@ protected:
     void restartChan(int chan, bool outgoing, bool force = false);
     void ringChan(int chan, pri_event_ring &ev);
     void infoChan(int chan, pri_event_ring &ev);
+    void digitsChan(int chan, const char* digits);
     void hangupChan(int chan,pri_event_hangup &ev);
     void ackChan(int chan);
     void answerChan(int chan);
@@ -162,7 +163,7 @@ public:
     void ring(pri_event_ring &ev);
     void hangup(int cause = 0);
     void sendDigit(char digit);
-    void gotDigits(const char *digits);
+    void gotDigits(const char *digits, bool overlapped = false);
     bool call(Message &msg, const char *called = 0);
     bool answer();
     void answered();

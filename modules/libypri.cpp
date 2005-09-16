@@ -397,6 +397,11 @@ void PriSpan::handleEvent(pri_event &ev)
 	    proceedingChan(ev.proceeding.channel);
 	    break;
 #endif
+#ifdef PRI_EVENT_KEYPAD_DIGIT
+	case PRI_EVENT_KEYPAD_DIGIT:
+	    digitsChan(ev.digit.channel,ev.digit.digits);
+	    break;
+#endif
 	default:
 	    Debug(m_driver,DebugInfo,"Unhandled PRI event %d",ev.e);
     }
@@ -477,7 +482,16 @@ void PriSpan::infoChan(int chan, pri_event_ring &ev)
 	ev.callingname,ev.callingnum,ev.callingplan);
     Debug(m_driver,DebugInfo,"callednum='%s' redirectnum='%s' calledplan=%d",
 	ev.callednum,ev.redirectingnum,ev.calledplan);
-    getChan(chan)->gotDigits(ev.callednum);
+    getChan(chan)->gotDigits(ev.callednum,true);
+}
+
+void PriSpan::digitsChan(int chan, const char* digits)
+{
+    if (!validChan(chan)) {
+	Debug(DebugInfo,"Digits on invalid channel %d on span %d",chan,m_span);
+	return;
+    }
+    getChan(chan)->gotDigits(digits,false);
 }
 
 void PriSpan::hangupChan(int chan,pri_event_hangup &ev)
@@ -693,12 +707,19 @@ void PriChan::answered()
     Engine::enqueue(m);
 }
 
-void PriChan::gotDigits(const char *digits)
+void PriChan::gotDigits(const char *digits, bool overlapped)
 {
+    if (null(digits)) {
+	Debug(this,DebugMild,"Received empty digits string in mode %s channel %s (%d/%d)",
+	    (overlapped ? "overlapped" : "keypad"),id().c_str(),m_span->span(),m_chan);
+	return;
+    }
     Message *m = message("chan.dtmf");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     m->addParam("text",digits);
+    if (overlapped)
+	m->addParam("overlapped","yes");
     Engine::enqueue(m);
 }
 

@@ -52,6 +52,9 @@ extern "C" {
 #define AST_FORMAT_SLINEAR	(1 << 6)	/* Raw 16-bit Signed Linear (8000 Hz) PCM */
 #define AST_FORMAT_LPC10	(1 << 7)	/* LPC10, 180 samples/frame */
 #define AST_FORMAT_G729A	(1 << 8)	/* G.729a Audio */
+#define AST_FORMAT_SPEEX	(1 << 9)	/*! SpeeX Free Compression */
+#define AST_FORMAT_ILBC		(1 << 10)	/*! iLBC Free Compression */
+
 
 #define AST_FORMAT_MAX_AUDIO (1 << 15)	/* Maximum audio format */
 #define AST_FORMAT_JPEG		(1 << 16)	/* JPEG Images */

@@ -91,6 +91,7 @@ String* getUnfoldedLine(const char** buf, int* len)
 }
 
 static const char* compactForms[] = {
+    "a", "Accept-Contact",
     "i", "Call-ID",
     "m", "Contact",
     "e", "Content-Encoding",
@@ -98,6 +99,10 @@ static const char* compactForms[] = {
     "c", "Content-Type",
     "f", "From",
     "r", "Refer-To",
+    "b", "Referred-By",
+    "j", "Reject-Contact",
+    "d", "Request-Disposition",
+    "x", "Session-Expires",
     "s", "Subject",
     "k", "Supported",
     "t", "To",

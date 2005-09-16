@@ -300,7 +300,7 @@ public:
     virtual BOOL GetUsersPassword(const PString& alias,PString& password) const;
 
 private:
-    YateH323EndPoint& endpoint;
+    YateH323EndPoint& m_endpoint;
 };
 
 class YateH323AudioSource : public DataSource, public PIndirectChannel
@@ -358,9 +358,11 @@ public:
     virtual H323Connection* CreateConnection(unsigned callReference, void* userData,
 	H323Transport* transport, H323SignalPDU* setupPDU);
     bool Init(const NamedList* params = 0);
-    bool startGkClient(int mode, const char* name = "");
-    void asyncGkClient(int mode, const PString& name);
+    bool startGkClient(int mode, int retry = 0, const char* name = "");
+    void stopGkClient();
+    void asyncGkClient(int mode, const PString& name, int retry);
 protected:
+    bool internalGkClient(int mode, const PString& name);
     YateGatekeeperServer* m_gkServer;
     YateGkRegThread* m_thread;
 };
@@ -475,14 +477,15 @@ class YateGkRegThread : public PThread
 {
     PCLASSINFO(YateGkRegThread, PThread);
 public:
-    YateGkRegThread(YateH323EndPoint* endpoint, int mode, const char* name = "")
-	: PThread(10000), m_ep(endpoint), m_mode(mode), m_name(name)
+    YateGkRegThread(YateH323EndPoint* endpoint, int mode, int retry = 0, const char* name = "")
+	: PThread(10000), m_ep(endpoint), m_mode(mode), m_retry(retry), m_name(name)
 	{ }
     void Main()
-	{ m_ep->asyncGkClient(m_mode,m_name); }
+	{ m_ep->asyncGkClient(m_mode,m_name,m_retry); }
 protected:
     YateH323EndPoint* m_ep;
     int m_mode;
+    int m_retry;
     PString m_name;
 };
 
@@ -630,7 +633,7 @@ bool FakeH323CapabilityRegistration::IsRegistered(const PString& name)
 
 
 YateGatekeeperServer::YateGatekeeperServer(YateH323EndPoint& ep)
-    : H323GatekeeperServer(ep), endpoint(ep)
+    : H323GatekeeperServer(ep), m_endpoint(ep)
 {
     Debug(&hplugin,DebugAll,"YateGatekeeperServer::YateGatekeeperServer() [%p]",this);
 }
@@ -642,9 +645,18 @@ BOOL YateGatekeeperServer::Init()
     const char* addr = 0;
     int i;
     for (i=1; (addr=s_cfg.getValue("gk",("interface"+String(i)).c_str())); i++){
-	if (!AddListener(new H323GatekeeperListener(endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
+	if (!AddListener(new H323GatekeeperListener(m_endpoint, *this,s_cfg.getValue("gk","name","YateGatekeeper"),new H323TransportUDP(m_endpoint,PIPSocket::Address(addr),s_cfg.getIntValue("gk","port",1719),0))))
 	    Debug(DebugGoOn,"Can't start the Gk listener for address: %s",addr);
     }  
+    i = s_cfg.getIntValue("gk","ttl",600);
+    if (i > 0) {
+	// adjust time to live between 1 minute and 1 day
+	if (i < 60)
+	    i = 60;
+	if (i > 86400)
+	    i = 86400;
+	SetTimeToLive(i);
+    }
     return TRUE;	
 }
 
@@ -666,6 +678,7 @@ YateH323EndPoint::~YateH323EndPoint()
     ClearAllCalls(H323Connection::EndedByTemporaryFailure, true);
     if (m_gkServer)
 	delete m_gkServer;
+    stopGkClient();
     if (m_thread)
 	Debug(DebugFail,"Destroying YateH323EndPoint '%s' still having a YateGkRegThread %p [%p]",
 	    safe(),m_thread,this);
@@ -760,7 +773,19 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    ali = params->getValue("alias",ali);
 	}
 	SetLocalUserName(ali);
-	if (params && params->getBoolValue("gkclient")){
+	if (params && params->getBoolValue("gkclient")) {
+	    int ttl = params->getIntValue("gkttl",300);
+	    if (ttl > 0) {
+		// adjust time to live between 1 minute and 1 day
+		if (ttl < 60)
+		    ttl = 60;
+		if (ttl > 86400)
+		    ttl = 86400;
+		registrationTimeToLive.SetInterval(0,ttl);
+	    }
+	    int retry = params->getIntValue("gkretry",60);
+	    if ((retry > 0) && (retry < 10))
+		retry = 10;
 	    const char *p = params->getValue("password");
 	    if (p) {
 		SetGatekeeperPassword(p);
@@ -769,11 +794,11 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    const char* d = params->getValue("gkip");
 	    const char* a = params->getValue("gkname");
 	    if (d)
-		startGkClient(ByAddr,d);
+		startGkClient(ByAddr,retry,d);
 	    else if (a)
-		startGkClient(ByName,a);
+		startGkClient(ByName,retry,a);
 	    else
-		startGkClient(Discover);
+		startGkClient(Discover,retry);
 	}
     }
 
@@ -787,7 +812,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
 }
 
 // Start a new PThread that performs GK discovery
-bool YateH323EndPoint::startGkClient(int mode, const char* name)
+bool YateH323EndPoint::startGkClient(int mode, int retry, const char* name)
 {
     int retries = 10;
     hplugin.lock();
@@ -800,22 +825,42 @@ bool YateH323EndPoint::startGkClient(int mode, const char* name)
 	Thread::msleep(25);
 	hplugin.lock();
     }
-    m_thread = new YateGkRegThread(this,mode,name);
+    m_thread = new YateGkRegThread(this,mode,retry,name);
     hplugin.unlock();
     m_thread->SetAutoDelete();
     m_thread->Resume();
     return true;
 }
 
-void YateH323EndPoint::asyncGkClient(int mode, const PString& name)
+void YateH323EndPoint::stopGkClient()
+{
+    Lock lock(hplugin);
+    if (m_thread) {
+	Debug(&hplugin,DebugWarn,"Forcibly terminating old Gk client thread in '%s'",safe());
+	m_thread->Terminate();
+	m_thread = 0;
+	lock.drop();
+	RemoveGatekeeper();
+    }
+}
+
+void YateH323EndPoint::asyncGkClient(int mode, const PString& name, int retry)
+{
+    while (!internalGkClient(mode,name) && (retry > 0))
+	Thread::sleep(retry);
+    hplugin.lock();
+    m_thread = 0;
+    hplugin.unlock();
+}
+
+bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 {
     switch (mode) {
 	case ByAddr:
 	    if (SetGatekeeper(name,new H323TransportUDP(*this))) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to GK addr '%s'",
 		    safe(),(const char*)name);
-		m_thread = 0;
-		return;
+		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK addr '%s'",
 		safe(),(const char*)name);
@@ -824,8 +869,7 @@ void YateH323EndPoint::asyncGkClient(int mode, const PString& name)
 	    if (LocateGatekeeper(name)) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to GK name '%s'",
 		    safe(),(const char*)name);
-		m_thread = 0;
-		return;
+		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK name '%s'",
 		safe(),(const char*)name);
@@ -833,18 +877,16 @@ void YateH323EndPoint::asyncGkClient(int mode, const PString& name)
 	case Discover:
 	    if (DiscoverGatekeeper(new H323TransportUDP(*this))) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to discovered GK",safe());
-		m_thread = 0;
-		return;
+		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to discover a GK in '%s'",safe());
 	    break;
 	case Unregister:
 	    RemoveGatekeeper();
-	    m_thread = 0;
-	    return;
+	    Debug(&hplugin,DebugInfo,"Removed the GK in '%s'",safe());
+	    return true;
     }
-    RemoveListener(0);
-    m_thread = 0;
+    return false;
 }
 
 YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
@@ -1607,8 +1649,10 @@ BOOL YateGatekeeperServer::TranslateAliasAddressToSignalAddress(const H225_Alias
 	 * proxied), or if has to be send to another gatekeeper we find out 
 	 * from the driver parameter
 	 */
-	    if ((m.getParam("driver")) && (*(m.getParam("driver")) == "h323"))
+	    if ((m.getParam("driver")) && (*(m.getParam("driver")) == "h323")) {
+		s >> "/";
 		address = s.c_str();
+	    }
 	    else {
 		s.clear();
 		s << "ip$" << s_cfg.getValue("gk","interface1") << ":" << s_cfg.getIntValue("ep","port",1720);

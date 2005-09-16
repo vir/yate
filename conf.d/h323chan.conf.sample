@@ -127,6 +127,13 @@ gkclient = false
 ; gkname: string: Set the name of the gatekeeper
 ;gkname = gigi
 
+; gkttl: int: Proposed gatekeeper registration time to live in seconds
+;gkttl = 300
+
+; gkretry: int: Gatekeeper discovery retry interval in seconds, 0 disables
+;gkretry = 60
+
+
 ; How the gatekeeper is located
 ; If gkclient is true the endpoint will try first to find the gatekeeper by
 ; using gkip; then, if gkip is unset or is not corect, will try gkname and
@@ -145,12 +152,24 @@ gkclient = false
 ; whatever you use) and then just dial the number.
 ; If you wanna call a registered endpoint you must use now as a module register 
 ; since is the only module who can record prefixes right now.
-server=false
 
-; You must define the binding interfaces. Right now the multi hosted boxes don't; work very well because OpenH323 mechanism, but we will fix that if someone
+; server: bool: Enable running a gatekeeper on the main endpoint
+;server = false
+
+; You must define the binding interfaces. Right now the multi hosted boxes don't
+; work very well because OpenH323 mechanism, but we will fix that if someone
 ; have any problem.
 
 interface1=10.0.0.1
+
+; port: int: Port on which the gatekeeper listens for connections
+;port = 1719
+
+; name: string: Identifier of the gatekeeper
+;name = YateGatekeeper
+
+; ttl: int: Registrations time to live in seconds, 0 to disable
+;ttl = 600
 
 
 [incoming]

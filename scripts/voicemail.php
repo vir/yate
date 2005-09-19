@@ -118,7 +118,7 @@ function setState($newstate)
 	case "record":
 	    $m = new Yate("chan.attach");
 	    $m->params["source"] = "wave/play/-";
-	    $m->params["consumer"] = "wave/record/$ir/greeting.slin";
+	    $m->params["consumer"] = "wave/record/$dir/greeting.slin";
 	    $m->params["maxlen"] = 80000;
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();

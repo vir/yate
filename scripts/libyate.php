@@ -192,7 +192,7 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk($this->params, "_yate_message_walk", $p);
+	array_walk($this->params, "_yate_message_walk", &$p);
 	print "%%>message:$i:$t:$n:$r$p\n";
 	$this->type="dispatched";
     }
@@ -212,7 +212,7 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk($this->params, "_yate_message_walk", $p);
+	array_walk($this->params, "_yate_message_walk", &$p);
 	print "%%<message:$i:$k:$n:$r$p\n";
 	$this->type="acknowledged";
     }

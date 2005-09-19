@@ -30,7 +30,7 @@
 using namespace TelEngine;
 
 SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing)
-    : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_timeout(0),
+    : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_response(0), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
 {
     DDebug(DebugAll,"SIPTransaction::SIPTransaction(%p,%p,%d) [%p]",
@@ -148,8 +148,11 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
     m_lastMessage = message;
     if (m_lastMessage) {
 	m_lastMessage->ref();
-	if (message->isAnswer() && (message->code > 100))
-	    setDialogTag();
+	if (message->isAnswer()) {
+	    m_response = message->code;
+	    if (m_response > 100)
+		setDialogTag();
+	}
 	message->complete(m_engine,0,0,m_tag);
     }
 }
@@ -251,9 +254,9 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	    changeState(Cleared);
 	}
     }
-    // extend timeout for provisional messages
+    // extend timeout for provisional messages, use proxy timeout (maximum)
     else if (message && (message->code > 100))
-	setTimeout(m_engine->getTimer('B'));
+	setTimeout(m_engine->getTimer('C'));
 }
 
 bool SIPTransaction::setResponse(int code, const char* reason)
@@ -400,13 +403,19 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	case Trying:
 	    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F'));
 	    changeState(Process);
-	    if (message->code == 100)
+	    m_response = message->code;
+	    if (m_response == 100)
 		break;
 	    // fall trough for non-100 answers
 	case Process:
-	    if (message->code > 100)
-		setPendingEvent(new SIPEvent(message,this));
-	    if (message->code >= 200) {
+	    if (message->code <= 100)
+		break;
+	    if (m_invite && (m_response <= 100))
+		// use the human interaction timeout in INVITEs
+		setTimeout(m_engine->getUserTimeout());
+	    m_response = message->code;
+	    setPendingEvent(new SIPEvent(message,this));
+	    if (m_response >= 200) {
 		setTimeout();
 		if (isInvite()) {
 		    // build the ACK
@@ -441,12 +450,16 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 		break;
 	    if (timeout)
 		setTransmit();
-	    else
+	    else {
+		m_response = 408;
 		changeState(Cleared);
+	    }
 	    break;
 	case Process:
-	    if (timeout == 0)
+	    if (timeout == 0) {
+		m_response = 408;
 		changeState(Cleared);
+	    }
 	    break;
 	case Finish:
 	    setTimeout();
@@ -497,7 +510,8 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	case Trying:
 	    e = new SIPEvent(m_firstMessage,this);
 	    changeState(Process);
-	    setTimeout(m_engine->getTimer('B'));
+	    // the absolute maximum timeout as we have to accomodate proxies
+	    setTimeout(m_engine->getTimer('C'));
 	    break;
 	case Process:
 	    if (timeout < 0)

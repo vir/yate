@@ -73,6 +73,7 @@ static TokenDict dict_errors[] = {
     { "noauth", 401 },
     { "nomedia", 415 },
     { "busy", 486 },
+    { "noanswer", 487 },
     { "rejected", 406 },
     { "forbidden", 403 },
     { "offline", 404 },
@@ -1730,16 +1731,17 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	ev,SIPTransaction::stateName(ev->getState()),this);
     m_dialog = *ev->getTransaction()->recentMessage();
     const SIPMessage* msg = ev->getMessage();
-    if (msg && !msg->isOutgoing() && msg->isAnswer() && (msg->code >= 300)) {
+    int code = ev->getTransaction()->getResponseCode();
+    if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	if (m_retry && m_line
-	    && ((msg->code == 401) || (msg->code == 407))
+	    && ((code == 401) || (code == 407))
 	    && plugin.validLine(m_line)) {
 	    // try only once to add credentials
 	    m_retry = false;
 	    YateSIPLine* line = plugin.findLine(m_line);
 	    if (line) {
 		SIPMessage* m = new SIPMessage(*m_tr->initialMessage());
-		SIPAuthLine* auth = line->buildAuth(msg,m->method,m->uri,(msg->code == 407));
+		SIPAuthLine* auth = line->buildAuth(msg,m->method,m->uri,(code == 407));
 		m->addHeader(auth);
 
 		m_tr->setUserData(0);
@@ -1758,7 +1760,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		return false;
 	    }
 	}
-	setReason(msg->reason,msg->code);
+	setReason(msg->reason,code);
 	hangup();
     }
     if (ev->getState() == SIPTransaction::Cleared) {
@@ -1985,6 +1987,15 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 
 bool YateSIPConnection::msgText(Message& msg, const char* text)
 {
+    if (null(text))
+	return false;
+    SIPMessage* m = createDlgMsg("MESSAGE");
+    if (m) {
+	m->setBody(new SIPStringBody("text/plain",text));
+	plugin.ep()->engine()->addMessage(m);
+	m->deref();
+	return true;
+    }
     return false;
 }
 

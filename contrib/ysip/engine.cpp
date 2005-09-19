@@ -338,6 +338,12 @@ void SIPEngine::processEvent(SIPEvent *event)
     delete event;
 }
 
+u_int64_t SIPEngine::getUserTimeout() const
+{
+    // by default allow 2 minutes for user interaction
+    return 120000000;
+}
+
 u_int64_t SIPEngine::getTimer(char which, bool reliable) const
 {
     switch (which) {

@@ -167,7 +167,7 @@ protected:
 class YSIP_API SIPStringBody : public SIPBody
 {
 public:
-    SIPStringBody(const String& type, const char* buf, int len);
+    SIPStringBody(const String& type, const char* buf, int len = -1);
     virtual ~SIPStringBody();
     virtual SIPBody* clone() const;
 protected:
@@ -730,6 +730,13 @@ public:
     void setResponse(SIPMessage* message);
 
     /**
+     * Retrive the latest response code
+     * @return Code of most recent response, zero if none is known
+     */
+    inline int getResponseCode() const
+	{ return m_response; }
+
+    /**
      * Set an arbitrary pointer as user specific data
      */
     inline void setUserData(void* data)
@@ -814,6 +821,7 @@ protected:
     bool m_invite;
     bool m_transmit;
     int m_state;
+    int m_response;
     unsigned int m_timeouts;
     u_int64_t m_delay;
     u_int64_t m_timeout;
@@ -985,6 +993,13 @@ public:
      * This method is thread safe
      */
     virtual void processEvent(SIPEvent *event);
+
+    /**
+     * Get the timeout to be used for transactions involving human interaction.
+     * The default implementation returns 120000000 (2 minutes)
+     * @return Duration of the timeout in microseconds
+     */
+    virtual u_int64_t getUserTimeout() const;
 
     /**
      * Get the length of a timer

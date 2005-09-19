@@ -54,34 +54,6 @@ class Yate
     }
 
     /**
-     * Static replacement error handler that outputs plain text to stderr
-     * @param $errno Error code
-     * @param $errstr Error text
-     * @param $errfile Name of file that triggered the error
-     * @param $errline Line number where the error occured
-     */
-    function ErrorHandler($errno, $errstr, $errfile, $errline)
-    {
-	$str = " [$errno] $errstr in $errfile line $errline\n";
-	switch ($errno) {
-	    case E_USER_ERROR:
-		Yate::Output("PHP fatal:" . $str);
-		exit(1);
-		break;
-	    case E_WARNING:
-	    case E_USER_WARNING:
-		Yate::Output("PHP error:" . $str);
-		break;
-	    case E_NOTICE:
-	    case E_USER_NOTICE:
-		Yate::Output("PHP warning:" . $str);
-		break;
-	    default:
-		Yate::Output("PHP unknown error:" . $str);
-	}
-    }
-
-    /**
      * Static function to convert a Yate string representation to a boolean
      * @param $str String value to convert
      * @return True if $str is "true", false otherwise
@@ -220,7 +192,7 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk(&$this->params, "_yate_message_walk", &$p);
+	array_walk($this->params, "_yate_message_walk", $p);
 	print "%%>message:$i:$t:$n:$r$p\n";
 	$this->type="dispatched";
     }
@@ -240,7 +212,7 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk(&$this->params, "_yate_message_walk", &$p);
+	array_walk($this->params, "_yate_message_walk", $p);
 	print "%%<message:$i:$k:$n:$r$p\n";
 	$this->type="acknowledged";
     }
@@ -270,14 +242,14 @@ class Yate
 		$ev=new Yate(Yate::Unescape($part[3]),Yate::Unescape($part[4]),Yate::Unescape($part[1]));
 		$ev->type="incoming";
 		$ev->origin=0+$part[2];
-		$ev->FillParams(&$part,5);
+		$ev->FillParams($part,5);
 		break;
 	    case "%%<message":
 		/* message answer str_id:bool_handled:str_name:str_retval[:key=value...] */
 		$ev=new Yate(Yate::Unescape($part[3]),Yate::Unescape($part[4]),Yate::Unescape($part[1]));
 		$ev->type="answer";
 		$ev->handled=Yate::Str2bool($part[2]);
-		$ev->FillParams(&$part,5);
+		$ev->FillParams($part,5);
 		break;
 	    case "%%<install":
 		/* install answer num_priority:str_name:bool_success */
@@ -312,12 +284,34 @@ class Yate
 	$yate_stdout = fopen("php://stdout","w");
 	$yate_stderr = fopen("php://stderr","w");
 	flush();
-	set_error_handler("Yate::ErrorHandler");
+	set_error_handler(_yate_error_handler);
 	ob_implicit_flush(1);
 	if ($async && function_exists("stream_set_blocking"))
 	    stream_set_blocking($yate_stdin,false);
     }
 
+}
+
+/* Internal error handler callback - output plain text to stderr */
+function _yate_error_handler($errno, $errstr, $errfile, $errline)
+{
+    $str = " [$errno] $errstr in $errfile line $errline\n";
+    switch ($errno) {
+	case E_USER_ERROR:
+	    Yate::Output("PHP fatal:" . $str);
+	    exit(1);
+	    break;
+	case E_WARNING:
+	case E_USER_WARNING:
+	    Yate::Output("PHP error:" . $str);
+	    break;
+	case E_NOTICE:
+	case E_USER_NOTICE:
+	    Yate::Output("PHP warning:" . $str);
+	    break;
+	default:
+	    Yate::Output("PHP unknown error:" . $str);
+    }
 }
 
 /* Internal function */

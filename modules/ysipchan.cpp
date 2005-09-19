@@ -369,6 +369,7 @@ static SIPDriver plugin;
 static ObjList s_lines;
 static Configuration s_cfg;
 static int s_maxForwards = 20;
+static bool s_privacy = false;
 
 // Parse a SDP and return a possibly filtered list of SDP media
 static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0, const char* media = 0)
@@ -497,6 +498,65 @@ static void copySipHeaders(SIPMessage& sip, const Message& msg)
 	if (name.trimBlanks().null())
 	    continue;
 	sip.addHeader(name,*str);
+    }
+}
+
+// Copy privacy related information from SIP message to Yate message
+static void copyPrivacy(Message& msg, const SIPMessage& sip)
+{
+    bool anonip = (sip.getHeaderValue("Anonymity") &= "ipaddr");
+    const SIPHeaderLine* hl = sip.getHeader("Remote-Party-ID");
+    if (!(anonip || hl))
+	return;
+    const NamedString* p = hl ? hl->getParam("screen") : 0;
+    if (p)
+	msg.setParam("screened",*p);
+    String priv;
+    if (anonip)
+	priv.append("addr",",");
+    p = hl ? hl->getParam("privacy") : 0;
+    if (p) {
+	if ((*p &= "full") || (*p &= "full-network"))
+	    priv.append("name,uri",",");
+	else if ((*p &= "name") || (*p &= "name-network"))
+	    priv.append("name",",");
+	else if ((*p &= "uri") || (*p &= "uri-network"))
+	    priv.append("uri",",");
+    }
+    if (priv)
+	msg.setParam("privacy",priv);
+}
+
+// Copy privacy related information from Yate message to SIP message
+static void copyPrivacy(SIPMessage& sip, const Message& msg)
+{
+    String screened(msg.getValue("screened"));
+    String privacy(msg.getValue("privacy"));
+    if (screened.null() && privacy.null())
+	return;
+    bool screen = screened.toBoolean();
+    bool anonip = (privacy.find("addr") >= 0);
+    bool privname = (privacy.find("name") >= 0);
+    bool privuri = (privacy.find("uri") >= 0);
+    if (anonip)
+	sip.setHeader("Anonymity","ipaddr");
+    if (screen || privname || privuri) {
+	const char* caller = msg.getValue("caller","anonymous");
+	String tmp;
+	tmp << "\"" << msg.getValue("callername",caller) << "\"";
+	tmp << " <" << caller << "@" << msg.getValue("domain","domain") << ">";
+	SIPHeaderLine* hl = new SIPHeaderLine("Remote-Party-ID",tmp);
+	if (screen)
+	    hl->setParam("screen","yes");
+	if (privname && privuri)
+	    hl->setParam("privacy","full");
+	else if (privname)
+	    hl->setParam("privacy","name");
+	else if (privuri)
+	    hl->setParam("privacy","uri");
+	else
+	    hl->setParam("privacy","none");
+	sip.addHeader(hl);
     }
 }
 
@@ -1060,6 +1120,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m->addParam("expired_user",user);
 	m->addParam("xsip_nonce_age",String(age));
     }
+    if (s_privacy)
+	copyPrivacy(*m,*ev->getMessage());
 
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
@@ -1149,6 +1211,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_port = m->getParty()->getPartyPort();
     m_address << m_host << ":" << m_port;
     m_dialog = *m;
+    if (s_privacy)
+	copyPrivacy(*m,msg);
     SDPBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
@@ -2350,6 +2414,7 @@ void SIPDriver::initialize()
     s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
+    s_privacy = s_cfg.getBoolValue("general","privacy");
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

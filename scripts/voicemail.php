@@ -8,6 +8,7 @@
    where NNN is the number you want to assign to handle voicemail
 */
 require_once("libyate.php");
+require_once("libvoicemail.php");
 
 /* Always the first action to do */
 Yate::Init();
@@ -19,7 +20,6 @@ Yate::Install("chan.notify");
 $ourcallid = "voicemail/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
-$base = "/var/spool/voicemail";
 $dir = "";
 $mailbox = "";
 $collect_user = "";
@@ -31,10 +31,10 @@ $current = 0;
 function promptUser()
 {
     global $collect_user;
-    global $base;
+    global $vm_base;
     $collect_user = "";
     $m = new Yate("chan.attach");
-    $m->params["source"] = "wave/play/$base/usernumber.slin";
+    $m->params["source"] = "wave/play/$vm_base/usernumber.slin";
     $m->Dispatch();
 }
 
@@ -42,10 +42,10 @@ function promptUser()
 function promptPass()
 {
     global $collect_pass;
-    global $base;
+    global $vm_base;
     $collect_pass = "";
     $m = new Yate("chan.attach");
-    $m->params["source"] = "wave/play/$base/password.slin";
+    $m->params["source"] = "wave/play/$vm_base/password.slin";
     $m->Dispatch();
 }
 
@@ -56,7 +56,7 @@ function setState($newstate)
     global $partycallid;
     global $state;
     global $mailbox;
-    global $base;
+    global $vm_base;
     global $dir;
     global $files;
     global $current;
@@ -72,7 +72,7 @@ function setState($newstate)
 	case "prompt":
 	    $state = $newstate;
 	    $m = new Yate("chan.attach");
-	    $m->params["source"] = "wave/play/$base/menu.slin";
+	    $m->params["source"] = "wave/play/$vm_base/menu.slin";
 	    $m->Dispatch();
 	    $m = new Yate("chan.attach");
 	    $m->params["consumer"] = "wave/record/-";
@@ -82,12 +82,18 @@ function setState($newstate)
 	    return;
 	case "listen":
 	    $state = $newstate;
-	    $m = new Yate("chan.attach");
+	    if (vmSetMessageRead($mailbox,$files[$current])) {
+		$m = new Yate("user.update");
+		$m->id = "";
+		$m->params["user"] = $mailbox;
+		$m->Dispatch();
+	    }
 	    $f = $dir . "/" . $files[$current];
+	    $m = new Yate("chan.attach");
 	    if (is_file("$f"))
 		$m->params["source"] = "wave/play/$f";
 	    else
-		$m->params["source"] = "wave/play/$base/deleted.slin";
+		$m->params["source"] = "wave/play/$vm_base/deleted.slin";
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 100000;
 	    $m->params["notify"] = $ourcallid;
@@ -128,7 +134,7 @@ function setState($newstate)
 	    if (is_file("$dir/greeting.slin"))
 		$m->params["source"] = "wave/play/$dir/greeting.slin";
 	    else
-		$m->params["source"] = "wave/play/$base/nogreeting.slin";
+		$m->params["source"] = "wave/play/$vm_base/nogreeting.slin";
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 100000;
 	    $m->params["notify"] = $ourcallid;
@@ -150,22 +156,13 @@ function setState($newstate)
 /* Check if the maibox exists, create if not, scan voicemail files */
 function initUser()
 {
-    global $base;
+    global $vm_base;
     global $dir;
     global $mailbox;
     global $files;
-    $dir = "$base/$mailbox";
-    if (!is_dir($dir))
-	mkdir($dir,0755);
-    if ($d = @opendir($dir)) {
-	while (($f = readdir($d)) !== false) {
-	    if (substr($f,0,3) == "vm-") {
-		Yate::Output("found file '$f'");
-		$files[] = $f;
-	    }
-	}
-	closedir($d);
-    }
+    vmInitMessageDir($mailbox);
+    vmGetMessageFiles($mailbox,$files);
+    $dir = "$vm_base/$mailbox";
     Yate::Output("found " . count($files) . " file entries");
     setState("prompt");
 }

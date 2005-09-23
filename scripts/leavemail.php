@@ -6,6 +6,7 @@
    external/nodata/leavemail.php
 */
 require_once("libyate.php");
+require_once("libvoicemail.php");
 
 /* Always the first action to do */
 Yate::Init();
@@ -16,22 +17,23 @@ Yate::Install("chan.notify");
 $ourcallid = "leavemail/" . uniqid(rand(),1);
 $partycallid = "";
 $state = "call";
-$base = "/var/spool/voicemail";
+$mailbox = "";
 $user = "";
 $file = "";
 
 /* Check if the user exists and prepare a filename if so */
 function checkUser($called,$caller)
 {
-    global $base;
+    global $vm_base;
+    global $mailbox;
     global $user;
     global $file;
 
-    $user = "$base/$called";
+    $user = "$vm_base/$called";
     if (!is_dir($user))
 	return false;
-    $t = strftime("%Y.%m.%d-%H.%M.%S");
-    $file = "vm-$t-$caller.slin";
+    $mailbox = $called;
+    $file = vmBuildNewFilename($caller);
     return true;
 }
 
@@ -40,7 +42,8 @@ function setState($newstate)
 {
     global $ourcallid;
     global $state;
-    global $base;
+    global $vm_base;
+    global $mailbox;
     global $user;
     global $file;
 
@@ -56,7 +59,7 @@ function setState($newstate)
     switch ($newstate) {
 	case "novmail":
 	    $m = new Yate("chan.attach");
-	    $m->params["source"] = "wave/play/$base/novmail.slin";
+	    $m->params["source"] = "wave/play/$vm_base/novmail.slin";
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
@@ -65,13 +68,13 @@ function setState($newstate)
 	    if (is_file("$user/greeting.slin"))
 		$m->params["source"] = "wave/play/$user/greeting.slin";
 	    else
-		$m->params["source"] = "wave/play/$base/greeting.slin";
+		$m->params["source"] = "wave/play/$vm_base/greeting.slin";
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
 	case "beep":
 	    $m = new Yate("chan.attach");
-	    $m->params["source"] = "wave/play/$base/beep.slin";
+	    $m->params["source"] = "wave/play/$vm_base/beep.slin";
 	    $m->params["notify"] = $ourcallid;
 	    $m->Dispatch();
 	    break;
@@ -81,6 +84,10 @@ function setState($newstate)
 	    $m->params["consumer"] = "wave/record/$user/$file";
 	    $m->params["maxlen"] = 160000;
 	    $m->params["notify"] = $ourcallid;
+	    $m->Dispatch();
+	    $m = new Yate("user.update");
+	    $m->id = "";
+	    $m->params["user"] = $mailbox;
 	    $m->Dispatch();
 	    break;
 	case "goodbye":

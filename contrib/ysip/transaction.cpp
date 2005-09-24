@@ -365,7 +365,12 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 	    return false;
 	// extra checks are to be made for ACK only
 	if (message->isACK()) {
-	    if (getURI() != message->uri)
+	    // Hack to match URIs with lost tags. Cisco sucks. Period.
+	    String tmp = getURI();
+	    int sc = tmp.find(';');
+	    if (sc > 0)
+		tmp.assign(tmp,sc);
+	    if ((getURI() != message->uri) && (tmp != message->uri))
 		return false;
 	    if (getDialogTag() != message->getParamValue("To","tag"))
 		return false;

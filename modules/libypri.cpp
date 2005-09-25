@@ -531,7 +531,7 @@ void PriSpan::proceedingChan(int chan)
 	return;
     }
     Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
-    getChan(chan)->setTimeout(60000000);
+    getChan(chan)->setTimeout(120000000);
     Engine::enqueue(getChan(chan)->message("call.progress"));
 }
 
@@ -542,7 +542,7 @@ void PriSpan::ringingChan(int chan)
 	return;
     }
     Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
-    getChan(chan)->setTimeout(60000000);
+    getChan(chan)->setTimeout(120000000);
     Engine::enqueue(getChan(chan)->message("call.ringing"));
 }
 
@@ -733,6 +733,7 @@ bool PriChan::call(Message &msg, const char *called)
 {
     if (m_span->outOfOrder()) {
 	Debug("PriChan",DebugInfo,"Span %d is out of order, failing call",m_span->span());
+	msg.setParam("error","offline");
 	return false;
     }
     if (!called)
@@ -774,7 +775,7 @@ bool PriChan::call(Message &msg, const char *called)
 	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
     );
 #endif
-    setTimeout(10000000);
+    setTimeout(30000000);
     status(chanStatus());
     Message *m = message("chan.startup");
     m->addParam("span",String(m_span->span()));
@@ -792,7 +793,7 @@ void PriChan::ring(pri_event_ring &ev)
 	return;
     }
 
-    setTimeout(10000000);
+    setTimeout(180000000);
     setOutgoing(false);
     m_call = call;
     m_ring = true;
@@ -832,7 +833,7 @@ void PriChan::ring(pri_event_ring &ev)
 void PriChan::callAccept(Message& msg)
 {
     Debug(this,DebugAll,"PriChan::callAccept() [%p]",this);
-    setTimeout(60000000);
+    setTimeout(180000000);
     Channel::callAccept(msg);
 }
 
@@ -905,8 +906,10 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
 	    num.c_str(),c->id().c_str(),c->span()->span(),c->chan());
 	return c->call(msg,num);
     }
-    else
-	Debug(DebugWarn,"No free Pri channel '%s'",chan.c_str());
+    else {
+	Debug(this,DebugMild,"Found no free channel '%s'",chan.c_str());
+	msg.setParam("error","congestion");
+    }
     return false;
 }
 
@@ -1061,7 +1064,8 @@ void PriDriver::init(const char* configName)
 		break;
 	    if (num) {
 		chan1 = cfg.getIntValue(sect,"first",chan1);
-		createSpan(this,span,chan1,num,cfg,sect);
+		if (cfg.getBoolValue(sect,"enabled",true))
+		    createSpan(this,span,chan1,num,cfg,sect);
 		chan1 += num;
 	    }
 	}

@@ -362,8 +362,10 @@ bool ZapChan::openData(const char* format, int echoTaps)
 	Debug(this,DebugInfo,"Opened Zap channel %d, law is: %s",m_abschan,format);
     }
     zt_echo_cancel(m_fd,echoTaps);
-    setSource(new ZapSource(this,format,m_bufsize));
-    getSource()->deref();
+    ZapSource* src = new ZapSource(this,format,m_bufsize);
+    setSource(src);
+    src->startup();
+    src->deref();
     setConsumer(new ZapConsumer(this,format,m_bufsize));
     getConsumer()->deref();
     return true;

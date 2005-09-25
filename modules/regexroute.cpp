@@ -24,6 +24,7 @@
 
 #include <yatengine.h>
 
+#include <stdlib.h>
 #include <string.h>
 
 using namespace TelEngine;
@@ -41,6 +42,58 @@ public:
 	: MessageHandler("call.route",prio) { }
     virtual bool received(Message &msg);
 };
+
+static void evalFunc(String &str)
+{
+    if (str.startSkip("++",false))
+	str = str.toInteger(0,10) + 1;
+    else if (str.startSkip("--",false))
+	str = str.toInteger(0,10) - 1;
+    else {
+	int sep = str.find(',');
+	String par;
+	if (sep > 0) {
+	    par = str.substr(sep+1);
+	    str = str.substr(0,sep);
+	}
+	if (str == "length")
+	    str = par.length();
+	else if (str == "upper")
+	    str = par.toUpper();
+	else if (str == "lower")
+	    str = par.toLower();
+	else if (str == "random") {
+	    str.clear();
+	    for (unsigned int i = 0; i < par.length(); i++) {
+		if (par[i] == '?')
+		    str << (int)(::random() % 10);
+		else
+		    str << par[i];
+	    }
+	}
+	else {
+	    Debug("RegexRoute",DebugWarn,"Invalid function '%s'",str.c_str());
+	    str.clear();
+	}
+    }
+}
+
+// handle $(function) replacements
+static void replaceFuncs(String &str)
+{
+    int p1;
+    while ((p1 = str.find("$(")) >= 0) {
+	int p2 = str.find(')',p1+2);
+	if (p2 > 0) {
+	    String v = str.substr(p1+2,p2-p1-2);
+	    v.trimBlanks();
+	    DDebug("RegexRoute",DebugAll,"Replacing function '%s'",
+		v.c_str());
+	    evalFunc(v);
+	    str = str.substr(0,p1) + v + str.substr(p2+1);
+	}
+    }
+}
 
 // handle ${paramname} replacements
 static void replaceParams(const Message &msg, String &str)
@@ -65,8 +118,10 @@ static void setMessage(Message &msg, String &line)
     bool first = true;
     for (ObjList *p = strs; p; p=p->next()) {
 	String *s = static_cast<String*>(p->get());
-	if (s)
+	if (s) {
 	    replaceParams(msg,*s);
+	    replaceFuncs(*s);
+	}
 	if (first) {
 	    first = false;
 	    line = s ? *s : String::empty();
@@ -138,6 +193,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    if (val.startSkip("echo") || val.startSkip("output")) {
 			// special case: display the line but don't set params
 			replaceParams(msg,val);
+			replaceFuncs(val);
 			Output("%s",val.safe());
 			continue;
 		    }

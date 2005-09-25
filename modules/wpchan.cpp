@@ -59,11 +59,14 @@ class WpSpan : public PriSpan, public Thread
 public:
     virtual ~WpSpan();
     virtual void run();
+    inline int overRead() const
+	{ return m_overRead; }
 
 private:
     WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd);
     HANDLE m_fd;
     WpData *m_data;
+    int m_overRead;
 };
 
 class WpSource : public PriSource
@@ -153,6 +156,10 @@ static int wp_read(struct pri *pri, void *buf, int buflen)
     if (r > 0) {
 	r -= WP_HEADER;
 	if ((r > 0) && (r <= buflen)) {
+	    WpSpan* span = (WpSpan*)::pri_get_userdata(pri);
+	    if (span)
+		r -= span->overRead();
+	    DDebug("wp_read",DebugAll,"Transferring %d for %p",r,pri);
 	    ::memcpy(buf,tmp+WP_HEADER,r);
 	    r += 2;
 	}
@@ -172,6 +179,7 @@ static int wp_write(struct pri *pri, void *buf, int buflen)
     XDebug("wp_write",DebugAll,"post w=%d",w);
     if (w > 0) {
 	w -= WP_HEADER;
+	DDebug("wp_write",DebugAll,"Transferred %d for %p",w,pri);
 	w += 2;
     }
     ::free(tmp);
@@ -246,9 +254,10 @@ static struct pri* wp_create(const char* card, const char* device, int nettype, 
 
 WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd)
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
-      m_fd(fd), m_data(0)
+      m_fd(fd), m_data(0), m_overRead(0)
 {
     Debug(&__plugin,DebugAll,"WpSpan::WpSpan() [%p]",this);
+    m_overRead = cfg.getIntValue(sect,"overread",0);
 }
 
 WpSpan::~WpSpan()
@@ -358,9 +367,11 @@ void WpData::run()
 	bool oob = false;
 	bool rd = wp_select(m_fd,samp,&oob);
 	if (oob) {
-	    DDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
+	    XDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
-	    DDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
+	    XDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
+	    if (r > 0)
+		Debug("wpdata_recv_oob",DebugInfo,"Read %d bytes of OOB data",r);
 	}
 
 	if (rd) {

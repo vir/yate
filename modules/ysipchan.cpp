@@ -1798,6 +1798,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    m_uri = ack->uri;
 	    m_uri.parse();
 	}
+	setReason("",0);
 	setStatus("answered",Established);
 	Message *m = message("call.answered");
 	addRtpParams(*m,natAddr);
@@ -1967,6 +1968,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	m_tr->setResponse(m);
 	m->deref();
     }
+    setReason("",0);
     setStatus("answered",Established);
     return true;
 }

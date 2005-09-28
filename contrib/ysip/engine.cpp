@@ -61,6 +61,7 @@ static TokenDict sip_responses[] = {
     { "Unsupported URI Scheme", 416 },
     { "Bad Extension", 420 },
     { "Extension Required", 421 },
+    { "Session Timer Too Small", 422 },
     { "Interval Too Brief", 423 },
     { "Temporarily Unavailable", 480 },
     { "Call/Transaction Does Not Exist", 481 },

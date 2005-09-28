@@ -320,7 +320,6 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	if (m_fd >= 0)
 	    ::write(m_fd,data.data(),data.length());
 	m_total += data.length();
-	m_timestamp = tStamp;
 	if (m_maxlen && (m_total >= m_maxlen)) {
 	    m_maxlen = 0;
 	    if (m_fd >= 0) {

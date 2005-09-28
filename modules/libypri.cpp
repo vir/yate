@@ -248,9 +248,9 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     m_layer1 = cfg.getIntValue(sect,"format",dict_str2law,(chans == 24) ? PRI_LAYER_1_ULAW : PRI_LAYER_1_ALAW);
     m_dplan = cfg.getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
     m_pres = cfg.getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
-    m_restartPeriod = cfg.getIntValue(sect,"restart") * (u_int64_t)1000000;
-    m_dumpEvents = cfg.getBoolValue(sect,"dumpevents");
-    m_overlapped = cfg.getIntValue(sect,"overlapdial");
+    m_restartPeriod = cfg.getIntValue(sect,"restart",cfg.getIntValue("general","restart")) * (u_int64_t)1000000;
+    m_dumpEvents = cfg.getBoolValue(sect,"dumpevents",cfg.getBoolValue("general","dumpevents"));
+    m_overlapped = cfg.getIntValue(sect,"overlapdial",cfg.getIntValue("general","overlapdial"));
     if (m_overlapped < 0)
 	m_overlapped = 0;
 #ifdef PRI_SET_OVERLAPDIAL
@@ -579,7 +579,7 @@ PriChan::PriChan(const PriSpan *parent, int chan, unsigned int bufsize)
     // I hate counting from one...
     m_abschan = m_chan+m_span->chan1()-1;
     m_isdn = true;
-    m_address << m_span->span() << "/" << m_chan;
+    m_address << m_span->span() << "/" << m_chan << "/" << m_abschan;
     status(chanStatus());
 }
 
@@ -902,8 +902,9 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
 	c = find(chan.toInteger(-1));
 
     if (c) {
-	Debug(this,DebugInfo,"Will call '%s' on chan %s (%d/%d)",
-	    num.c_str(),c->id().c_str(),c->span()->span(),c->chan());
+	Debug(this,DebugInfo,"Will call '%s' on chan %s (%d) (%d/%d)",
+	    num.c_str(),c->id().c_str(),c->absChan(),
+	    c->span()->span(),c->chan());
 	return c->call(msg,num);
     }
     else {

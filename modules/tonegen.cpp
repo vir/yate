@@ -25,39 +25,103 @@
 #include <yatephone.h>
 
 #include <string.h>
+#include <stdlib.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 using namespace TelEngine;
 
 static ObjList tones;
+static ObjList datas;
 
 typedef struct {
     int nsamples;
-    const short *data;
+    const short* data;
 } Tone;
+
+typedef struct {
+    const Tone* tone;
+    const char* name;
+    const char* alias;
+} ToneDesc;
+
+class ToneData : public GenObject
+{
+public:
+    ToneData(const char* desc);
+    inline ToneData(int f1, int f2 = 0, bool modulated = false)
+	: m_f1(f1), m_f2(f2), m_mod(modulated), m_data(0)
+	{ }
+    inline ToneData(const ToneData& original)
+	: m_f1(original.f1()), m_f2(original.f2()),
+	  m_mod(original.modulated()), m_data(0)
+	{ }
+    virtual ~ToneData();
+    inline int f1() const
+	{ return m_f1; }
+    inline int f2() const
+	{ return m_f2; }
+    inline bool modulated() const
+	{ return m_mod; }
+    inline bool valid() const
+	{ return m_f1 != 0; }
+    inline bool equals(int f1, int f2) const
+	{ return (m_f1 == f1) && (m_f2 == f2); }
+    inline bool equals(const ToneData& other) const
+	{ return (m_f1 == other.f1()) && (m_f2 == other.f2()); }
+    const short* data();
+    static ToneData* getData(const char* desc);
+private:
+    bool parse(const char* desc);
+    int m_f1;
+    int m_f2;
+    bool m_mod;
+    const short* m_data;
+};
 
 class ToneSource : public ThreadedSource
 {
 public:
-    ~ToneSource();
+    virtual ~ToneSource();
     virtual void run();
-    inline const String &name()
+    inline const String& name()
 	{ return m_name; }
-    static ToneSource *getTone(const String &tone);
-private:
-    ToneSource(const String &tone);
-    static const Tone *getBlock(const String &tone);
+    bool startup();
+    static ToneSource* getTone(String& tone);
+    static const Tone* getBlock(String& tone);
+    static Tone* buildCadence(const String& desc);
+    static Tone* buildDtmf(const String& dtmf);
+protected:
+    ToneSource();
+    ToneSource(String& tone);
     String m_name;
-    const Tone *m_tone;
+    const Tone* m_tone;
+    int m_repeat;
+private:
     DataBlock m_data;
     unsigned m_brate;
     unsigned m_total;
     u_int64_t m_time;
 };
 
+class TempSource : public ToneSource
+{
+public:
+    TempSource(String& desc);
+    virtual ~TempSource();
+protected:
+    virtual void cleanup();
+private:
+    Tone* m_single;
+};
+
 class ToneChan : public Channel
 {
 public:
-    ToneChan(const String &tone);
+    ToneChan(String& tone);
     ~ToneChan();
 };
 
@@ -65,7 +129,7 @@ class AttachHandler : public MessageHandler
 {
 public:
     AttachHandler() : MessageHandler("chan.attach") { }
-    virtual bool received(Message &msg);
+    virtual bool received(Message& msg);
 };
 
 class ToneGenDriver : public Driver
@@ -117,14 +181,210 @@ static const Tone t_outoforder[] = {
 
 static const Tone t_mwatt[] = { { 8000, tone1000hz }, { 0, 0 } };
 
-ToneSource::ToneSource(const String &tone)
-    : m_name(tone), m_tone(0), m_data(0,480), m_brate(16000), m_total(0), m_time(0)
+static const Tone t_silence[] = { { 8000, 0 }, { 0, 0 } };
+
+static const Tone t_noise[] = { { 2000, ToneData::getData("noise")->data() }, { 0, 0 } };
+
+// 20ms silence, 85ms tone, 20ms silence, total 125ms
+#define DTMF_GAP 160
+#define DTMF_LEN 680
+
+#define MAKE_DTMF(s) { \
+    { DTMF_GAP, 0 }, \
+    { DTMF_LEN, ToneData::getData(s)->data() }, \
+    { DTMF_GAP, 0 }, \
+    { 0, 0 } \
+}
+
+static const Tone t_dtmf[][4] = {
+    MAKE_DTMF("1336+941"),
+    MAKE_DTMF("1209+697"),
+    MAKE_DTMF("1336+697"),
+    MAKE_DTMF("1477+697"),
+    MAKE_DTMF("1209+770"),
+    MAKE_DTMF("1336+770"),
+    MAKE_DTMF("1477+770"),
+    MAKE_DTMF("1209+825"),
+    MAKE_DTMF("1336+825"),
+    MAKE_DTMF("1477+825"),
+    MAKE_DTMF("1209+941"),
+    MAKE_DTMF("1477+941"),
+    MAKE_DTMF("1633+697"),
+    MAKE_DTMF("1633+770"),
+    MAKE_DTMF("1633+825"),
+    MAKE_DTMF("1633+941")
+};
+#undef MAKE_DTMF
+
+static const ToneDesc s_desc[] = {
+    { t_dial, "dial", "dt" },
+    { t_busy, "busy", "bs" },
+    { t_ring, "ring", "rt" },
+    { t_specdial, "specdial", "sd" },
+    { t_congestion, "congestion", "cg" },
+    { t_outoforder, "outoforder", "oo" },
+    { t_mwatt, "milliwatt", "mw" },
+    { t_silence, "silence", 0 },
+    { t_noise, "noise", "cn" },
+    { t_dtmf[0], "dtmf/0", "0" },
+    { t_dtmf[1], "dtmf/1", "1" },
+    { t_dtmf[2], "dtmf/2", "2" },
+    { t_dtmf[3], "dtmf/3", "3" },
+    { t_dtmf[4], "dtmf/4", "4" },
+    { t_dtmf[5], "dtmf/5", "5" },
+    { t_dtmf[6], "dtmf/6", "6" },
+    { t_dtmf[7], "dtmf/7", "7" },
+    { t_dtmf[8], "dtmf/8", "8" },
+    { t_dtmf[9], "dtmf/9", "9" },
+    { t_dtmf[10], "dtmf/*", "*" },
+    { t_dtmf[11], "dtmf/#", "#" },
+    { t_dtmf[12], "dtmf/a", "a" },
+    { t_dtmf[13], "dtmf/b", "b" },
+    { t_dtmf[14], "dtmf/c", "c" },
+    { t_dtmf[15], "dtmf/d", "d" },
+    { 0, 0, 0 }
+};
+
+ToneData::ToneData(const char* desc)
+    : m_f1(0), m_f2(0), m_mod(false), m_data(0)
+{
+    if (!parse(desc)) {
+	Debug(&__plugin,DebugWarn,"Invalid tone description '%s'",desc);
+	m_f1 = m_f2 = 0;
+	m_mod = false;
+    }
+}
+
+ToneData::~ToneData()
+{
+    if (m_data) {
+	::free((void*)m_data);
+	m_data = 0;
+    }
+}
+
+// a tone data description is something like "425" or "350+440" or "15*2100"
+bool ToneData::parse(const char* desc)
+{
+    if (!desc)
+	return false;
+    String tmp(desc);
+    if (tmp == "noise") {
+	m_f1 = -10;
+	return true;
+    }
+    tmp >> m_f1;
+    if (!m_f1)
+	return false;
+    if (m_f1 < -15)
+	m_f1 = -15;
+    if (tmp) {
+	char sep;
+	tmp >> sep;
+	switch (sep) {
+	    case '+':
+		break;
+	    case '*':
+		m_mod = true;
+		break;
+	    default:
+		return false;
+	}
+	tmp >> m_f2;
+	if (!m_f2)
+	    return false;
+	// order components so we can compare correctly
+	if (m_f1 < m_f2) {
+	    int t = m_f1;
+	    m_f1 = m_f2;
+	    m_f2 = t;
+	}
+    }
+    return true;
+}
+
+const short* ToneData::data()
+{
+    if (m_f1 && !m_data) {
+	// generate the data on first call
+	short len = 8000;
+	if (m_f1 < 0) {
+	    Debug(&__plugin,DebugAll,"Building comfort noise at level %d",m_f1);
+	    // we don't need much memory for noise...
+	    len /= 8;
+	}
+	else if (m_f2)
+	    Debug(&__plugin,DebugAll,"Building tone of %d %s %d Hz",
+		m_f1,(m_mod ? "modulated by" : "+"),m_f2);
+	else {
+	    Debug(&__plugin,DebugAll,"Building tone of %d Hz",m_f1);
+	    // half the buffer for even frequencies
+	    if ((m_f1 & 1) == 0)
+		len /= 2;
+	}
+	short* dat = (short*)::malloc((len+1)*sizeof(short));
+	if (!dat) {
+	    Debug(&__plugin,DebugGoOn,"ToneData::data() cold not allocate memory for %d elements",len);
+	    return 0;
+	}
+	short* tmp = dat;
+	*tmp++ = len;
+	if (m_f1 < 0) {
+	    int ofs = 65535 >> (-m_f1);
+	    int max = 2 * ofs + 1;
+	    for (int x = 0; x < len; x++)
+		*tmp++ = (short)((::random() % max) - ofs);
+	}
+	else {
+	    double samp = 2*M_PI/8000;
+	    for (int x = 0; x < len; x++) {
+		double y = ::sin(x*samp*m_f1);
+		if (m_f2) {
+		    double z = ::sin(x*samp*m_f2);
+		    if (m_mod)
+			y *= (1+0.5*z);
+		    else
+			y += z;
+		}
+		*tmp++ = (short)(y*10000);
+	    }
+	}
+	m_data = dat;
+    }
+    return m_data;
+}
+
+ToneData* ToneData::getData(const char* desc)
+{
+    ToneData td(desc);
+    if (!td.valid())
+	return 0;
+    ObjList* l = &datas;
+    for (; l; l = l->next()) {
+	ToneData* d = static_cast<ToneData*>(l->get());
+	if (d && d->equals(td))
+	    return d;
+    }
+    ToneData* d = new ToneData(td);
+    datas.append(d);
+    return d;
+}
+
+ToneSource::ToneSource()
+    : m_tone(0), m_repeat(1),
+      m_data(0,480), m_brate(16000), m_total(0), m_time(0)
+{
+    Debug(&__plugin,DebugAll,"ToneSource::ToneSource() [%p]",this);
+}
+
+ToneSource::ToneSource(String& tone)
+    : m_name(tone), m_tone(0), m_repeat(0),
+      m_data(0,480), m_brate(16000), m_total(0), m_time(0)
 {
     Debug(&__plugin,DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
     m_tone = getBlock(tone);
-    tones.append(this);
-    if (m_tone)
-	start("ToneSource");
+    if (!m_tone)
+	Debug(DebugWarn,"No waveform is defined for tone '%s'",tone.c_str());
 }
 
 ToneSource::~ToneSource()
@@ -142,37 +402,85 @@ ToneSource::~ToneSource()
     }
 }
 
-const Tone *ToneSource::getBlock(const String &tone)
+bool ToneSource::startup()
 {
-    if (tone == "dial" || tone == "dt")
-	return t_dial;
-    else if (tone == "busy" || tone == "bs")
-	return t_busy;
-    else if (tone == "ring" || tone == "rt")
-	return t_ring;
-    else if (tone == "specdial" || tone == "sd")
-	return t_specdial;
-    else if (tone == "congestion" || tone == "cg")
-	return t_congestion;
-    else if (tone == "outoforder" || tone == "oo")
-	return t_outoforder;
-    else if (tone == "milliwatt" || tone == "mw")
-	return t_mwatt;
-    Debug(DebugWarn,"No waveform is defined for tone '%s'",tone.c_str());
+    return m_tone && start("ToneSource");
+}
+
+const Tone* ToneSource::getBlock(String& tone)
+{
+    if (tone.trimBlanks().toLower().null())
+	return 0;
+    const ToneDesc* d = s_desc;
+    for (; d->tone; d++) {
+	if (tone == d->name)
+	    return d->tone;
+	if (d->alias && (tone == d->alias)) {
+	    tone = d->name;
+	    return d->tone;
+	}
+    }
     return 0;
 }
 
-ToneSource *ToneSource::getTone(const String &tone)
+Tone* ToneSource::buildCadence(const String& desc)
 {
-    ObjList *l = &tones;
+    return 0;
+}
+
+Tone* ToneSource::buildDtmf(const String& dtmf)
+{
+    if (dtmf.null())
+	return 0;
+    Tone* tmp = (Tone*)::malloc(2*sizeof(Tone)*(dtmf.length()+1));
+    if (!tmp)
+	return 0;
+    Tone* t = tmp;
+
+    for (unsigned int i = 0; i < dtmf.length(); i++) {
+	t->nsamples = i ? DTMF_GAP : (2*DTMF_GAP);
+	t->data = 0;
+	t++;
+
+	int c = dtmf[i];
+	if ((c >= '0') && (c <= '9'))
+	    c -= '0';
+	else if (c == '*')
+	    c = 10;
+	else if (c == '#')
+	    c = 11;
+	else if ((c >= 'a') && (c <= 'd'))
+	    c -= ('a' - 12);
+	else c = -1;
+
+	t->nsamples = DTMF_LEN;
+	t->data = ((c > 0) && (c < 16)) ? t_dtmf[c][1].data : 0;
+	t++;
+    }
+
+    t->nsamples = DTMF_GAP;
+    t->data = 0;
+    t++;
+    t->nsamples = 0;
+    t->data = 0;
+
+    return tmp;
+}
+
+ToneSource* ToneSource::getTone(String& tone)
+{
+    ObjList* l = &tones;
     for (; l; l = l->next()) {
-	ToneSource *t = static_cast<ToneSource *>(l->get());
+	ToneSource* t = static_cast<ToneSource*>(l->get());
 	if (t && (t->name() == tone)) {
 	    t->ref();
 	    return t;
 	}
     }
-    return new ToneSource(tone);
+    ToneSource* t = new ToneSource(tone);
+    tones.append(t);
+    t->startup();
+    return t;
 }
 
 void ToneSource::run()
@@ -182,23 +490,34 @@ void ToneSource::run()
     m_time = tpos;
     int samp = 0; // sample number
     int dpos = 1; // position in data
-    const Tone *tone = m_tone;
+    const Tone* tone = m_tone;
     int nsam = tone->nsamples;
+    if (nsam < 0)
+	nsam = -nsam;
     while (m_tone) {
 	Thread::check();
 	short *d = (short *) m_data.data();
 	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
 	    if (samp >= nsam) {
+		// go to the start of the next tone
 		samp = 0;
 		const Tone *otone = tone;
 		tone++;
-		if (!tone->nsamples)
+		if (!tone->nsamples) {
+		    if ((m_repeat > 0) && !(--m_repeat))
+			m_tone = 0;
 		    tone = m_tone;
-		nsam = tone->nsamples;
+		}
+		nsam = tone ? tone->nsamples : 32000;
+		if (nsam < 0) {
+		    nsam = -nsam;
+		    // reset repeat point here
+		    m_tone = tone;
+		}
 		if (tone != otone)
 		    dpos = 1;
 	    }
-	    if (tone->data) {
+	    if (tone && tone->data) {
 		if (dpos > tone->data[0])
 		    dpos = 1;
 		*d++ = tone->data[dpos];
@@ -214,18 +533,59 @@ void ToneSource::run()
 	Forward(m_data,m_total/2);
 	m_total += m_data.length();
 	tpos += (m_data.length()*(u_int64_t)1000000/m_brate);
-    };
+    }
     m_time = Time::now() - m_time;
     m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
     Debug(&__plugin,DebugAll,"ToneSource [%p] end, total=%u (" FMT64U " b/s)",this,m_total,m_time);
     m_time = 0;
 }
 
-ToneChan::ToneChan(const String &tone)
+TempSource::TempSource(String& desc)
+    : m_single(0)
+{
+    Debug(&__plugin,DebugAll,"TempSource::TempSource(\"%s\") [%p]",desc.c_str(),this);
+    if (desc.null())
+	return;
+    if (desc.startSkip("*",false))
+	m_repeat = 0;
+    m_tone = getBlock(desc);
+    if (m_tone)
+	return;
+    if (desc.startSkip("dtmfstr/",false)) {
+	m_tone = m_single = buildDtmf(desc);
+	return;
+    }
+    ToneData* td = ToneData::getData(desc);
+    if (!td)
+	return;
+    m_single = (Tone*)::malloc(2*sizeof(Tone));
+    m_single[0].nsamples = 8000;
+    m_single[0].data = td->data();
+    m_single[1].nsamples = 0;
+    m_single[1].data = 0;
+    m_tone = m_single;
+}
+
+TempSource::~TempSource()
+{
+    Debug(&__plugin,DebugAll,"TempSource::~TempSource() [%p]",this);
+    if (m_single) {
+	::free(m_single);
+	m_single = 0;
+    }
+}
+
+void TempSource::cleanup()
+{
+    ToneSource::cleanup();
+    deref();
+}
+
+ToneChan::ToneChan(String& tone)
     : Channel(__plugin)
 {
     Debug(this,DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
-    ToneSource *t = ToneSource::getTone(tone);
+    ToneSource* t = ToneSource::getTone(tone);
     if (t) {
 	setSource(t);
 	m_address = t->name();
@@ -292,36 +652,52 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     return true;
 }
 
-bool AttachHandler::received(Message &msg)
+bool AttachHandler::received(Message& msg)
 {
     String src(msg.getValue("source"));
-    if (src.null())
+    if (!src.startSkip("tone/",false))
+	src.clear();
+    String ovr(msg.getValue("override"));
+    if (!ovr.startSkip("tone/",false))
+	ovr.clear();
+    if (src.null() && ovr.null())
 	return false;
-    Regexp r("^tone/\\(.*\\)$");
-    if (!src.matches(r))
-	return false;
-    src = src.matchString(1);
 
-    DataEndpoint *de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
+    DataEndpoint* de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
     if (!de) {
-	CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
 	if (ch)
 	    de = ch->setEndpoint();
     }
 
-    if (de) {
-	Lock lock(__plugin);
-	ToneSource *t = ToneSource::getTone(src);
+    if (!de) {
+	Debug(DebugWarn,"Tone attach request with no control or data channel!");
+	return false;
+    }
+
+    Lock lock(__plugin);
+    if (src) {
+	ToneSource* t = ToneSource::getTone(src);
 	if (t) {
 	    de->setSource(t);
 	    t->deref();
-	    // Let the message flow if it wants to attach a consumer too
-	    return !msg.getValue("consumer");
+	    msg.clearParam("source");
 	}
-	Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),de);
+	else
+	    Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),de);
     }
-    else
-	Debug(DebugWarn,"Tone '%s' attach request with no control or data channel!",src.c_str());
+    if (ovr) {
+	DataConsumer* c = de->getConsumer();
+	if (c) {
+	    TempSource* t = new TempSource(ovr);
+	    if (DataTranslator::attachChain(t,c,true) && t->startup())
+		msg.clearParam("override");
+	    else
+		Debug(DebugWarn,"Override source tone '%s' failed to start [%p]",ovr.c_str(),t);
+	}
+	else
+	    Debug(DebugWarn,"Requested override '%s' to missing consumer of %p",ovr.c_str(),de);
+    }
     return false;
 }
 
@@ -344,9 +720,9 @@ ToneGenDriver::ToneGenDriver()
 ToneGenDriver::~ToneGenDriver()
 {
     Output("Unloading module ToneGen");
-    ObjList *l = &channels();
+    ObjList* l = &channels();
     while (l) {
-	ToneChan *t = static_cast<ToneChan *>(l->get());
+	ToneChan* t = static_cast<ToneChan *>(l->get());
 	if (t)
 	    t->disconnect("shutdown");
 	if (l->get() == t)

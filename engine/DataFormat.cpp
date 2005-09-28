@@ -177,6 +177,16 @@ void* DataConsumer::getObject(const String& name) const
     return DataNode::getObject(name);
 }
 
+void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSource* source)
+{
+    if (source == m_override)
+	tStamp += m_overrideTsDelta;
+    else if (m_override || (source != m_source))
+	return;
+    Consume(data,tStamp);
+    m_timestamp = tStamp;
+}
+
 void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
     Lock lock(m_mutex);
@@ -187,27 +197,36 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	if (f)
 	    tStamp += f->guessSamples(data.length());
     }
-    m_timestamp = tStamp;
     ref();
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
-	c->Consume(data,m_timestamp);
+	c->Consume(data,tStamp,this);
     }
+    m_timestamp = tStamp;
     deref();
 }
 
-bool DataSource::attach(DataConsumer* consumer)
+bool DataSource::attach(DataConsumer* consumer, bool override)
 {
-    DDebug(DebugAll,"DataSource [%p] attaching consumer [%p]",this,consumer);
+    DDebug(DebugAll,"DataSource [%p] attaching consumer%s [%p]",
+	this,(override ? " as override" : ""),consumer);
     if (!consumer)
 	return false;
     Lock lock(m_mutex);
     consumer->ref();
-    if (consumer->getConnSource())
-	consumer->getConnSource()->detach(consumer);
+    if (override) {
+	if (consumer->m_override)
+	    consumer->m_override->detach(consumer);
+	consumer->m_override = this;
+	consumer->m_overrideTsDelta = consumer->m_timestamp - m_timestamp;
+    }
+    else {
+	if (consumer->m_source)
+	    consumer->m_source->detach(consumer);
+	consumer->m_source = this;
+    }
     m_consumers.append(consumer);
-    consumer->setSource(this);
     return true;
 }
 
@@ -220,7 +239,10 @@ bool DataSource::detach(DataConsumer* consumer)
     Lock lock(m_mutex);
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
     if (temp) {
-	temp->setSource(0);
+	if (temp->m_source == this)
+	    temp->m_source = 0;
+	if (temp->m_override == this)
+	    temp->m_override = 0;
 	temp->deref();
 	return true;
     }
@@ -489,6 +511,7 @@ Thread* ThreadedSource::thread() const
 DataTranslator::DataTranslator(const char* sFormat, const char* dFormat)
     : DataConsumer(sFormat)
 {
+    DDebug(DebugAll,"DataTranslator::DataTranslator('%s','%s') [%p]",sFormat,dFormat,this);
     m_tsource = new DataSource(dFormat);
     m_tsource->setTranslator(this);
 }
@@ -496,11 +519,13 @@ DataTranslator::DataTranslator(const char* sFormat, const char* dFormat)
 DataTranslator::DataTranslator(const char* sFormat, DataSource* source)
     : DataConsumer(sFormat), m_tsource(source)
 {
+    DDebug(DebugAll,"DataTranslator::DataTranslator('%s',%p) [%p]",sFormat,source,this);
     m_tsource->setTranslator(this);
 }
 
 DataTranslator::~DataTranslator()
 {
+    DDebug(DebugAll,"DataTranslator::~DataTranslator() [%p]",this);
     DataSource *temp = m_tsource;
     m_tsource = 0;
     if (temp) {
@@ -653,7 +678,7 @@ DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataForm
     return trans;
 }
 
-bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
+bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, bool override)
 {
     if (!source || !consumer || !source->getFormat() || !consumer->getFormat())
 	return false;
@@ -661,17 +686,19 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
     bool retv = false;
     // first attempt to connect directly, changing format if possible
     if ((source->getFormat() == consumer->getFormat()) ||
-	consumer->setFormat(source->getFormat()) ||
+	// don't attempt to change consumer format for overrides
+	(!override && consumer->setFormat(source->getFormat())) ||
 	source->setFormat(consumer->getFormat())) {
-	source->attach(consumer);
+	source->attach(consumer,override);
 	retv = true;
     }
     else {
 	// next, try to create a single translator
 	DataTranslator *trans = create(source->getFormat(),consumer->getFormat());
 	if (trans) {
-	    trans->getTransSource()->attach(consumer);
+	    trans->getTransSource()->attach(consumer,override);
 	    source->attach(trans);
+	    trans->deref();
 	    retv = true;
 	}
 	// finally, try to convert trough "slin" if possible
@@ -680,9 +707,11 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer)
 	    if (trans) {
 		DataTranslator *trans2 = create(s_slin,consumer->getFormat());
 		if (trans2) {
-		    trans2->getTransSource()->attach(consumer);
+		    trans2->getTransSource()->attach(consumer,override);
 		    trans->getTransSource()->attach(trans2);
 		    source->attach(trans);
+		    trans2->deref();
+		    trans->deref();
 		    retv = true;
 		}
 		else
@@ -707,10 +736,8 @@ bool DataTranslator::detachChain(DataSource* source, DataConsumer* consumer)
 	if (source->detach(consumer))
 	    return true;
 	DataTranslator *trans = tsource->getTranslator();
-	if (trans && detachChain(source,trans)) {
-	    trans->deref();
+	if (trans && detachChain(source,trans))
 	    return true;
-	}
 	Debug(DebugWarn,"DataTranslator failed to detach chain [%p] -> [%p]",source,consumer);
     }
     return false;

@@ -305,7 +305,7 @@ public:
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline DataConsumer(const char* format = "slin")
-	: DataNode(format), m_source(0) { }
+	: DataNode(format), m_source(0), m_override(0), m_overrideTsDelta(0) { }
 
     /**
      * Get a pointer to a derived class given that class name
@@ -329,6 +329,13 @@ public:
 	{ return m_source; }
 
     /**
+     * Get the override data source of this object if it's connected
+     * @return A pointer to the DataSource object or NULL
+     */
+    inline DataSource* getOverSource() const
+	{ return m_override; }
+
+    /**
      * Get the data source of a translator object
      * @return A pointer to the DataSource object or NULL
      */
@@ -336,9 +343,10 @@ public:
 	{ return 0; }
 
 private:
-    inline void setSource(DataSource* source)
-	{ m_source = source; }
+    void Consume(const DataBlock& data, unsigned long tStamp, DataSource* source);
     DataSource* m_source;
+    DataSource* m_override;
+    long m_overrideTsDelta;
 };
 
 /**
@@ -378,9 +386,10 @@ public:
     /**
      * Attach a data consumer
      * @param consumer Data consumer to attach
+     * @param override Attach as temporary source override
      * @return True on success, false on failure
      */
-    bool attach(DataConsumer* consumer);
+    bool attach(DataConsumer* consumer, bool override = false);
 
     /**
      * Detach a data consumer
@@ -558,9 +567,10 @@ public:
      * Attach a consumer to a source, possibly trough a chain of translators
      * @param source Source to attach the chain to
      * @param consumer Consumer where the chain ends
+     * @param override Attach chain for temporary source override
      * @return True if successfull, false if no translator chain could be built
      */
-    static bool attachChain(DataSource* source, DataConsumer* consumer);
+    static bool attachChain(DataSource* source, DataConsumer* consumer, bool override = false);
 
     /**
      * Detach a consumer from a source, possibly trough a chain of translators

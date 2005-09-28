@@ -257,7 +257,7 @@ WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int cha
       m_fd(fd), m_data(0), m_overRead(0)
 {
     Debug(&__plugin,DebugAll,"WpSpan::WpSpan() [%p]",this);
-    m_overRead = cfg.getIntValue(sect,"overread",0);
+    m_overRead = cfg.getIntValue(sect,"overread",cfg.getIntValue("general","overread",0));
 }
 
 WpSpan::~WpSpan()
@@ -375,10 +375,13 @@ void WpData::run()
 	}
 
 	if (rd) {
+	    m_buffer[0] = 0;
 	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
 	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
 	    r -= WP_HEADER;
+	    if (m_buffer[0])
+		Debug(&__plugin,DebugMild,"Read data error 0x%02X [%p]",m_buffer[0],this);
 	    // We should have read N bytes for each B channel
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;
@@ -393,21 +396,23 @@ void WpData::run()
 		    }
 		m_span->unlock();
 	    }
-	    int w = samp;
+	    int wr = samp;
 	    ::memset(m_buffer,0,WP_HEADER);
 	    unsigned char* dat = m_buffer + WP_HEADER;
 	    m_span->lock();
-	    for (int n = w; n > 0; n--) {
+	    for (int n = wr; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
 		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
 		}
 	    }
 	    m_span->unlock();
-	    w = (w * bchans) + WP_HEADER;
-	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,w,sz);
-	    w = wp_send(m_fd,m_buffer,w,MSG_DONTWAIT);
+	    wr = (wr * bchans) + WP_HEADER;
+	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,wr,sz);
+	    int w = wp_send(m_fd,m_buffer,wr,MSG_DONTWAIT);
 	    XDebug("wpdata_send",DebugAll,"post w=%d",w);
+	    if (w != wr)
+		Debug(&__plugin,DebugMild,"Wrote %d bytes instead of %d [%p]",w,wr,this);
 	}
     }
 }

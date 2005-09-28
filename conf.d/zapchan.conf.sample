@@ -13,9 +13,10 @@
 ; type= pri_net,pri_cpe,bri_net_ptmp,bri_cpe_ptmp,bri_net,bri_cpe
 
 [general]
-;buflen=480
+;buflen=160
 ;restart=0
 ;dumpevents=no
+;dtmfinband=no
 
 [span 1]
 chans=31

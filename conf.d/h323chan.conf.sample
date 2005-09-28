@@ -183,5 +183,5 @@ context=default
 ; do a DoS attack over your server.
 ;maxqueue=5
 
-; called: string: Default number to call
-called=8989989
+; called: string: Default number to call if not present in call setup
+;called=

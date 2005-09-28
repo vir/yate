@@ -36,7 +36,8 @@ extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 
 using namespace TelEngine;
 
-static int s_buflen = 480;
+// default buffer length: 20 ms
+static int s_buflen = 160;
 
 #ifdef PRI_NEW_SET_API
 #define PRI_CB_STR struct pri *pri,
@@ -245,6 +246,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     Debug(m_driver,DebugAll,"PriSpan::PriSpan() [%p]",this);
     int buflength = cfg.getIntValue(sect,"buflen", s_buflen);
 
+    m_inband = cfg.getBoolValue(sect,"dtmfinband",cfg.getBoolValue("general","dtmfinband"));
     m_layer1 = cfg.getIntValue(sect,"format",dict_str2law,(chans == 24) ? PRI_LAYER_1_ULAW : PRI_LAYER_1_ALAW);
     m_dplan = cfg.getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
     m_pres = cfg.getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
@@ -753,6 +755,7 @@ bool PriChan::call(Message &msg, const char *called)
     }
     else
 	msg.userData(this);
+    m_inband = msg.getBoolValue("dtmfinband",m_span->inband());
     Output("Calling '%s' on %s (%d/%d)",called,id().c_str(),m_span->span(),m_chan);
     char *caller = (char *)msg.getValue("caller");
     int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
@@ -805,6 +808,7 @@ void PriChan::ring(pri_event_ring &ev)
     m->addParam("direction","incoming");
     Engine::enqueue(m);
 
+    m_inband = m_span->inband();
     openData(lookup(ev.layer1,dict_str2law),0);
 
     m = message("call.route");
@@ -858,8 +862,22 @@ bool PriChan::msgAnswered(Message& msg)
 
 bool PriChan::msgTone(Message& msg, const char* tone)
 {
-    for (; !null(tone); tone++)
-	sendDigit(*tone);
+    if (null(tone))
+	return false;
+    if (m_inband) {
+	Message m("chan.attach");
+	complete(m,true);
+	m.userData(this);
+	String tmp("tone/dtmfstr/");
+	tmp += tone;
+	m.setParam("override",tmp);
+	m.setParam("single","yes");
+	if (Engine::dispatch(m))
+	    return true;
+	// if we failed try to send as signalling anyway
+    }
+    while (*tone)
+	sendDigit(*tone++);
     return true;
 }
 
@@ -1054,7 +1072,7 @@ void PriDriver::netParams(Configuration& cfg, const String& sect, int chans, int
 void PriDriver::init(const char* configName)
 {
     Configuration cfg(Engine::configFile(configName));
-    s_buflen = cfg.getIntValue("general","buflen",480);
+    s_buflen = cfg.getIntValue("general","buflen",160);
     if (!m_spans.count()) {
 	int chan1 = 1;
 	for (int span = 1;;span++) {

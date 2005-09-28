@@ -32,6 +32,10 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// 40ms silence, 120ms tone, 40ms silence, total 200ms - slow but safe
+#define DTMF_LEN 960
+#define DTMF_GAP 320
+
 using namespace TelEngine;
 
 static ObjList tones;
@@ -93,7 +97,7 @@ public:
     static ToneSource* getTone(String& tone);
     static const Tone* getBlock(String& tone);
     static Tone* buildCadence(const String& desc);
-    static Tone* buildDtmf(const String& dtmf);
+    static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource();
     ToneSource(String& tone);
@@ -185,10 +189,6 @@ static const Tone t_silence[] = { { 8000, 0 }, { 0, 0 } };
 
 static const Tone t_noise[] = { { 2000, ToneData::getData("noise")->data() }, { 0, 0 } };
 
-// 20ms silence, 85ms tone, 20ms silence, total 125ms
-#define DTMF_GAP 160
-#define DTMF_LEN 680
-
 #define MAKE_DTMF(s) { \
     { DTMF_GAP, 0 }, \
     { DTMF_LEN, ToneData::getData(s)->data() }, \
@@ -204,14 +204,14 @@ static const Tone t_dtmf[][4] = {
     MAKE_DTMF("1209+770"),
     MAKE_DTMF("1336+770"),
     MAKE_DTMF("1477+770"),
-    MAKE_DTMF("1209+825"),
-    MAKE_DTMF("1336+825"),
-    MAKE_DTMF("1477+825"),
+    MAKE_DTMF("1209+852"),
+    MAKE_DTMF("1336+852"),
+    MAKE_DTMF("1477+852"),
     MAKE_DTMF("1209+941"),
     MAKE_DTMF("1477+941"),
     MAKE_DTMF("1633+697"),
     MAKE_DTMF("1633+770"),
-    MAKE_DTMF("1633+825"),
+    MAKE_DTMF("1633+852"),
     MAKE_DTMF("1633+941")
 };
 #undef MAKE_DTMF
@@ -346,7 +346,7 @@ const short* ToneData::data()
 		    else
 			y += z;
 		}
-		*tmp++ = (short)(y*10000);
+		*tmp++ = (short)(y*5000);
 	    }
 	}
 	m_data = dat;
@@ -372,14 +372,14 @@ ToneData* ToneData::getData(const char* desc)
 
 ToneSource::ToneSource()
     : m_tone(0), m_repeat(1),
-      m_data(0,480), m_brate(16000), m_total(0), m_time(0)
+      m_data(0,320), m_brate(16000), m_total(0), m_time(0)
 {
     Debug(&__plugin,DebugAll,"ToneSource::ToneSource() [%p]",this);
 }
 
 ToneSource::ToneSource(String& tone)
     : m_name(tone), m_tone(0), m_repeat(0),
-      m_data(0,480), m_brate(16000), m_total(0), m_time(0)
+      m_data(0,320), m_brate(16000), m_total(0), m_time(0)
 {
     Debug(&__plugin,DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
     m_tone = getBlock(tone);
@@ -423,12 +423,15 @@ const Tone* ToneSource::getBlock(String& tone)
     return 0;
 }
 
+// Build an user defined cadence
 Tone* ToneSource::buildCadence(const String& desc)
 {
+    // TBD
     return 0;
 }
 
-Tone* ToneSource::buildDtmf(const String& dtmf)
+// Build a cadence out of DTMFs
+Tone* ToneSource::buildDtmf(const String& dtmf, int len, int gap)
 {
     if (dtmf.null())
 	return 0;
@@ -438,7 +441,7 @@ Tone* ToneSource::buildDtmf(const String& dtmf)
     Tone* t = tmp;
 
     for (unsigned int i = 0; i < dtmf.length(); i++) {
-	t->nsamples = i ? DTMF_GAP : (2*DTMF_GAP);
+	t->nsamples = gap;
 	t->data = 0;
 	t++;
 
@@ -453,12 +456,12 @@ Tone* ToneSource::buildDtmf(const String& dtmf)
 	    c -= ('a' - 12);
 	else c = -1;
 
-	t->nsamples = DTMF_LEN;
-	t->data = ((c > 0) && (c < 16)) ? t_dtmf[c][1].data : 0;
+	t->nsamples = len;
+	t->data = ((c >= 0) && (c < 16)) ? t_dtmf[c][1].data : 0;
 	t++;
     }
 
-    t->nsamples = DTMF_GAP;
+    t->nsamples = gap;
     t->data = 0;
     t++;
     t->nsamples = 0;
@@ -548,13 +551,21 @@ TempSource::TempSource(String& desc)
 	return;
     if (desc.startSkip("*",false))
 	m_repeat = 0;
+    // try first the named tones
     m_tone = getBlock(desc);
     if (m_tone)
 	return;
+    // for performance reason accept an entire string of DTMFs
     if (desc.startSkip("dtmfstr/",false)) {
 	m_tone = m_single = buildDtmf(desc);
 	return;
     }
+    // or an entire user defined cadence of tones
+    if (desc.startSkip("cadence/",false)) {
+	m_tone = m_single = buildCadence(desc);
+	return;
+    }
+    // now try to build a single tone
     ToneData* td = ToneData::getData(desc);
     if (!td)
 	return;
@@ -675,6 +686,9 @@ bool AttachHandler::received(Message& msg)
 	return false;
     }
 
+    // if single attach was requested we can return true if everything is ok
+    bool ret = msg.getBoolValue("single");
+
     Lock lock(__plugin);
     if (src) {
 	ToneSource* t = ToneSource::getTone(src);
@@ -683,8 +697,10 @@ bool AttachHandler::received(Message& msg)
 	    t->deref();
 	    msg.clearParam("source");
 	}
-	else
+	else {
 	    Debug(DebugWarn,"No source tone '%s' could be attached to %p",src.c_str(),de);
+	    ret = false;
+	}
     }
     if (ovr) {
 	DataConsumer* c = de->getConsumer();
@@ -692,13 +708,17 @@ bool AttachHandler::received(Message& msg)
 	    TempSource* t = new TempSource(ovr);
 	    if (DataTranslator::attachChain(t,c,true) && t->startup())
 		msg.clearParam("override");
-	    else
+	    else {
 		Debug(DebugWarn,"Override source tone '%s' failed to start [%p]",ovr.c_str(),t);
+		ret = false;
+	    }
 	}
-	else
+	else {
 	    Debug(DebugWarn,"Requested override '%s' to missing consumer of %p",ovr.c_str(),de);
+	    ret = false;
+	}
     }
-    return false;
+    return ret;
 }
 
 void ToneGenDriver::statusModule(String& str)

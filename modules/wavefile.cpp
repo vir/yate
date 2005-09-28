@@ -261,12 +261,13 @@ void WaveSource::run()
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
-    if (m_chan && !m_id.null()) {
+    if (m_id) {
 	Message *m = new Message("chan.notify");
 	m->addParam("targetid",m_id);
 	m->userData(m_chan);
 	Engine::enqueue(m);
-	m_chan->setSource();
+	if (m_chan && (m_chan->getSource() == this))
+	    m_chan->setSource();
     }
 }
 
@@ -275,6 +276,8 @@ void WaveSource::cleanup()
     Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
     if (m_chan && m_autoclose)
 	m_chan->disconnect("eof");
+    if (!m_chan)
+	deref();
 }
 
 WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen)
@@ -375,7 +378,7 @@ WaveChan::~WaveChan()
 
 bool AttachHandler::received(Message &msg)
 {
-    int more = 2;
+    int more = 3;
     String src(msg.getValue("source"));
     if (src.null())
 	more--;
@@ -415,8 +418,32 @@ bool AttachHandler::received(Message &msg)
 	else
 	    cons = "";
     }
-    if (src.null() && cons.null())
+
+    String ovr(msg.getValue("override"));
+    if (ovr.null())
+	more--;
+    else {
+	Regexp r("^wave/\\([^/]*\\)/\\(.*\\)$");
+	if (ovr.matches(r)) {
+	    if (ovr.matchString(1) == "play") {
+		ovr = ovr.matchString(2);
+		more--;
+	    }
+	    else {
+		Debug(DebugWarn,"Could not attach override with method '%s', use 'play'",
+		    ovr.matchString(1).c_str());
+		ovr = "";
+	    }
+	}
+	else
+	    ovr = "";
+    }
+
+    if (src.null() && cons.null() && ovr.null())
 	return false;
+
+    // if single attach was requested we can return true if everything is ok
+    bool ret = msg.getBoolValue("single");
 
     String ml(msg.getValue("maxlen"));
     unsigned maxlen = ml.toInteger(0);
@@ -426,6 +453,8 @@ bool AttachHandler::received(Message &msg)
 	    Debug(DebugWarn,"Wave source '%s' attach request with no data channel!",src.c_str());
 	if (!cons.null())
 	    Debug(DebugWarn,"Wave consumer '%s' attach request with no data channel!",cons.c_str());
+	if (!ovr.null())
+	    Debug(DebugWarn,"Wave override '%s' attach request with no data channel!",ovr.c_str());
 	return false;
     }
 
@@ -434,6 +463,7 @@ bool AttachHandler::received(Message &msg)
 	s->setNotify(msg.getValue("notify"));
 	ch->setSource(s);
 	s->deref();
+	msg.clearParam("source");
     }
 
     if (!cons.null()) {
@@ -441,10 +471,30 @@ bool AttachHandler::received(Message &msg)
 	c->setNotify(msg.getValue("notify"));
 	ch->setConsumer(c);
 	c->deref();
+	msg.clearParam("consumer");
+    }
+
+    while (!ovr.null()) {
+	DataConsumer* c = ch->getConsumer();
+	if (!c) {
+	    Debug(DebugWarn,"Wave override '%s' attach request with no consumer!",ovr.c_str());
+	    ret = false;
+	    break;
+	}
+	WaveSource* s = new WaveSource(ovr,0,false);
+	s->setNotify(msg.getValue("notify"));
+	if (DataTranslator::attachChain(s,c,true))
+	    msg.clearParam("override");
+	else {
+	    Debug(DebugWarn,"Failed to override attach wave '%s' to consumer %p",ovr.c_str(),c);
+	    s->deref();
+	    ret = false;
+	}
+	break;
     }
 
     // Stop dispatching if we handled all requested
-    return !more;
+    return ret && !more;
 }
 
 bool RecordHandler::received(Message &msg)

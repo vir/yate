@@ -11,6 +11,8 @@
 ;   allow_network,prohibit_user_not_screened,prohibit_user_passed,
 ;   prohibit_user_failed,prohibit_network,not_available
 ; type= pri_net,pri_cpe,bri_net_ptmp,bri_cpe_ptmp,bri_net,bri_cpe
+;
+; mode= first,rotate,random
 
 [general]
 ;buflen=160
@@ -26,3 +28,9 @@ chans=31
 ;swtype=unknown
 ;dialplan=unknown
 ;presentation=allow_user_not_screened
+
+;[group alpha]
+;enabled=yes
+;mode=rotate
+;first=1
+;last=31

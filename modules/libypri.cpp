@@ -193,6 +193,58 @@ static TokenDict dict_numtaps[] = {
     { 0, 0 }
 };
 
+class ChanGroup : public String
+{
+public:
+    enum {
+	FirstAvail = 0,
+	RoundRobin = 1,
+	RandomChan = 2
+    };
+    ChanGroup(const String& name, const NamedList* sect, int last);
+    virtual ~ChanGroup()
+	{ }
+    inline void getRange(int& first, int& last, int& used) const
+	{ first = m_first; last = m_last; used = m_used; }
+    void setUsed(int used);
+private:
+    int m_mode;
+    int m_first;
+    int m_last;
+    int m_used;
+};
+
+ChanGroup::ChanGroup(const String& name, const NamedList* sect, int last)
+    : String(name)
+{
+    static TokenDict dict_groupmode[] = {
+	{ "first", FirstAvail },
+	{ "firstavail", FirstAvail },
+	{ "rotate", RoundRobin },
+	{ "roundrobin", RoundRobin },
+	{ "random", RandomChan },
+	{ 0, 0 }
+    };
+    m_mode = sect->getIntValue("mode",dict_groupmode,RoundRobin);
+    m_first = sect->getIntValue("first",1);
+    m_last = sect->getIntValue("last",last);
+    setUsed(m_last);
+}
+
+void ChanGroup::setUsed(int used)
+{
+    switch (m_mode) {
+	case FirstAvail:
+	    m_used = m_last;
+	    break;
+	case RandomChan:
+	    m_used = m_first + (::random() % (m_last - m_first + 1));
+	    break;
+	default:
+	    m_used = used;
+    }
+}
+
 Fifo::Fifo(int buflen)
     : m_buflen(buflen), m_head(0), m_tail(1)
 {
@@ -914,10 +966,12 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
     r = "^\\([0-9]\\+\\)-\\([0-9]*\\)$";
     Lock lock(this);
     if (chan.matches(r))
-	c = find(chan.matchString(1).toInteger(),
+	c = findFree(chan.matchString(1).toInteger(),
 	    chan.matchString(2).toInteger(65535));
+    else if ((chan[0] < '0') || (chan[0] > '9'))
+	c = findFree(chan);
     else
-	c = find(chan.toInteger(-1));
+	c = findFree(chan.toInteger(-1));
 
     if (c) {
 	Debug(this,DebugInfo,"Will call '%s' on chan %s (%d) (%d/%d)",
@@ -977,7 +1031,7 @@ PriDriver::~PriDriver()
 {
 }
 
-PriSpan *PriDriver::findSpan(int chan)
+PriSpan* PriDriver::findSpan(int chan)
 {
     const ObjList *l = &m_spans;
     for (; l; l=l->next()) {
@@ -988,9 +1042,9 @@ PriSpan *PriDriver::findSpan(int chan)
     return 0;
 }
 
-PriChan *PriDriver::find(int first, int last)
+PriChan* PriDriver::findFree(int first, int last)
 {
-    DDebug(this,DebugAll,"PriDriver::find(%d,%d)",first,last);
+    DDebug(this,DebugAll,"PriDriver::findFree(%d,%d)",first,last);
     // see first if we have an exact request
     if (first > 0 && last < 0) {
 	PriSpan *s = findSpan(first);
@@ -1012,6 +1066,25 @@ PriChan *PriDriver::find(int first, int last)
 	}
     }
     return 0;
+}
+
+PriChan* PriDriver::findFree(const String& group)
+{
+    ObjList* lst = m_groups.find(group);
+    if (!lst)
+	return 0;
+    ChanGroup* grp = static_cast<ChanGroup*>(lst->get());
+    if (!grp)
+	return 0;
+    int first = 0, last = 0, used = 0;
+    grp->getRange(first,last,used);
+    PriChan* c = (used < last) ? findFree(used+1,last) : 0;
+    if (!c)
+	c = (first <= used) ? findFree(first,used) : 0;
+    if (!c)
+	return 0;
+    grp->setUsed(c->absChan());
+    return c;
 }
 
 bool PriDriver::isBusy() const
@@ -1043,6 +1116,7 @@ void PriDriver::statusModule(String& str)
     str.append("spans=",",") << m_spans.count();
     if (sp)
 	str.append("spanlen=",",") << sp;
+    str.append("groups=",",") << m_groups.count();
 }
 
 void PriDriver::netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan)
@@ -1090,6 +1164,17 @@ void PriDriver::init(const char* configName)
 	}
 	if (m_spans.count()) {
 	    Output("Created %d spans",m_spans.count());
+	    unsigned int n = cfg.sections();
+	    for (unsigned int i = 0; i < n; i++) {
+		const NamedList* sect = cfg.getSection(i);
+		if (!sect)
+		    continue;
+		String s(*sect);
+		if (s.startSkip("group") && sect->getBoolValue("enabled",true))
+		    m_groups.append(new ChanGroup(s,sect,chan1-1));
+	    }
+	    if (m_groups.count())
+		Output("Created %d groups",m_groups.count());
 	    setup();
 	}
 	else

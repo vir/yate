@@ -207,14 +207,16 @@ public:
     virtual PriSpan* createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect) = 0;
     virtual PriChan* createChan(const PriSpan* span, int chan, unsigned int bufsize) = 0;
     static void netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan);
-    PriSpan *findSpan(int chan);
-    PriChan *find(int first = -1, int last = -1);
+    PriSpan* findSpan(int chan);
+    PriChan* findFree(int first = -1, int last = -1);
+    PriChan* findFree(const String& group);
     static inline u_int8_t bitswap(u_int8_t v)
 	{ return s_bitswap[v]; }
 protected:
     PriDriver(const char* name);
     void statusModule(String& str);
     ObjList m_spans;
+    ObjList m_groups;
 private:
     static u_int8_t s_bitswap[256];
     static bool s_init;

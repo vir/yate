@@ -16,7 +16,7 @@
 .\" Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 .\"
 .\"
-.TH YATE 8 "March 2004" "YATE" "Telephony Engine"
+.TH YATE 8 "September 2005" "YATE" "Telephony Engine"
 .SH NAME
 \fByate\fP \- launch the YATE telephony engine
 .SH SYNOPSIS
@@ -96,6 +96,10 @@ the documentation for each module.
 \- SIGTERM and SIGINT (Ctrl\-C) will cleanly stop the engine
 .TP
 \- SIGHUP and SIGQUIT (Ctrl\-\\) will reinitialize the modules
+.TP
+\- SIGUSR1 will initiate a gracefull restart (when no plugin is busy)
+.TP
+\- SIGUSR2 will initiate an immediate restart
 .SH BUGS
 Under various
 .B *BSD

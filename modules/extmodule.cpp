@@ -636,15 +636,15 @@ void ExtModReceiver::cleanup()
 	Thread::yield();
 	int w = ::waitpid(m_pid, 0, WNOHANG);
 	if (w == 0) {
-	    Debug(DebugWarn, "Process %d has not exited on closing stdin - we'll kill it",m_pid);
+	    Debug(DebugWarn,"Process %d has not exited on closing stdin - we'll kill it",m_pid);
 	    ::kill(m_pid,SIGTERM);
 	    Thread::yield();
 	    w = ::waitpid(m_pid, 0, WNOHANG);
 	}
 	if (w == 0)
-	    Debug(DebugWarn, "Process %d has still not exited yet?",m_pid);
-	else if (w < 0)
-	    Debug(DebugMild, "Failed waitpid on %d: %s",m_pid,strerror(errno));
+	    Debug(DebugWarn,"Process %d has still not exited yet?",m_pid);
+	else if ((w < 0) && (errno != ECHILD))
+	    Debug(DebugMild,"Failed waitpid on %d: %s",m_pid,strerror(errno));
 	m_pid = 0;
     }
     unuse();

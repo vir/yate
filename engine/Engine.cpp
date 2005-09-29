@@ -94,6 +94,15 @@ static void sighandler(int signal)
 {
     switch (signal) {
 #ifndef _WINDOWS
+	case SIGCHLD:
+	    ::waitpid(-1,0,WNOHANG);
+	    break;
+	case SIGUSR1:
+	    Engine::restart(0,true);
+	    break;
+	case SIGUSR2:
+	    Engine::restart(0,false);
+	    break;
 	case SIGHUP:
 	case SIGQUIT:
 	    if (s_nextinit <= Time::now())
@@ -313,6 +322,8 @@ static int supervise(void)
     ::signal(SIGHUP,superhandler);
     ::signal(SIGQUIT,superhandler);
     ::signal(SIGABRT,superhandler);
+    ::signal(SIGUSR1,superhandler);
+    ::signal(SIGUSR2,superhandler);
     int retcode = 0;
     while (s_runagain) {
 	int wdogfd[2];
@@ -492,6 +503,9 @@ int Engine::run()
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
     ::signal(SIGPIPE,SIG_IGN);
+    ::signal(SIGCHLD,sighandler);
+    ::signal(SIGUSR1,sighandler);
+    ::signal(SIGUSR2,sighandler);
 #endif
     Output("Yate engine is initialized and starting up");
     while (s_haltcode == -1) {
@@ -532,6 +546,7 @@ int Engine::run()
 		s_haltcode = 128;
 		break;
 	    }
+	    DDebug(DebugAll,"Engine busy - will try to restart later");
 	    // If we cannot restart now try again in 10s
 	    s_restarts = Time::now() + 10000000;
 	}
@@ -742,11 +757,14 @@ void Engine::halt(unsigned int code)
 	s_haltcode = code;
 }
 
-bool Engine::restart(unsigned int code)
+bool Engine::restart(unsigned int code, bool gracefull)
 {
     if ((s_super_handle < 0) || (s_haltcode != -1))
 	return false;
-    s_haltcode = code | 0x80;
+    if (gracefull)
+	s_restarts = 1;
+    else
+	s_haltcode = (code & 0xff) | 0x80;
     return true;
 }
 

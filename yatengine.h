@@ -737,9 +737,10 @@ public:
     /**
      * Stop and restart the engine and the entire program
      * @param code Return code of the program
+     * @param gracefull Attempt to wait until no plugin is busy
      * @return True if restart was initiated, false if exiting or no supervisor
      */
-    static bool restart(unsigned int code);
+    static bool restart(unsigned int code, bool gracefull = false);
 
     /**
      * Check if the engine is currently exiting

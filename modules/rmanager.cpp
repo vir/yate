@@ -45,6 +45,7 @@ static const char s_helpmsg[] =
 "  drop {chan|*|all}\n"
 "  call chan target\n"
 "  reload\n"
+"  restart [now]\n"
 "  stop [exitcode]\n";
 
 static Configuration s_cfg;
@@ -414,10 +415,25 @@ bool Connection::processLine(const char *line)
 	writeStr(m_machine ? "%%=reload\n" : "Reinitializing...\n");
 	Engine::init();
     }
+    else if (str.startSkip("restart"))
+    {
+	bool gracefull = (str != "now");
+	bool ok = Engine::restart(0,gracefull);
+	if (ok) {
+	    if (m_machine) {
+		writeStr("%%=restart\n");
+		return gracefull;
+	    }
+	    writeStr(gracefull ? "Restart scheduled - please disconnect\n" : "Engine restarting - bye!\n");
+	}
+	else
+	    writeStr(m_machine ? "%%=restart:fail\n" : "Cannot restart - no supervisor or already shutting down\n");
+    }
     else if (str.startSkip("stop"))
     {
 	unsigned code = 0;
 	str >> code;
+	code &= 0xff;
 	writeStr(m_machine ? "%%=shutdown\n" : "Engine shutting down - bye!\n");
 	Engine::halt(code);
     }

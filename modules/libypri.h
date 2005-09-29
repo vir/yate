@@ -215,6 +215,7 @@ public:
 protected:
     PriDriver(const char* name);
     void statusModule(String& str);
+    void statusParams(String& str);
     ObjList m_spans;
     ObjList m_groups;
 private:

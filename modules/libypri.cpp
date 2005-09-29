@@ -1119,6 +1119,30 @@ void PriDriver::statusModule(String& str)
     str.append("groups=",",") << m_groups.count();
 }
 
+void PriDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    int i = 0;
+    int u = 0;
+    const ObjList *l = &m_spans;
+    for (; l; l=l->next()) {
+	PriSpan *s = static_cast<PriSpan *>(l->get());
+	if (s && !s->outOfOrder()) {
+	    for (int n=1; n<=s->chans(); n++) {
+		PriChan *c = s->getChan(n);
+		if (c) {
+		    if (c->inUse())
+			u++;
+		    else
+			i++;
+		}
+	    }
+	}
+    }
+    str.append("idle=",",") << i;
+    str.append("used=",",") << u;
+}
+
 void PriDriver::netParams(Configuration& cfg, const String& sect, int chans, int* netType, int* swType, int* dChan)
 {
     if (netType)

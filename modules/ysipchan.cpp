@@ -42,6 +42,9 @@ static TokenDict dict_payloads[] = {
     { "g723",    4 },
     { "g728",   15 },
     { "g729",   18 },
+    { "ilbc",   98 },
+    { "ilbc20", 98 },
+    { "ilbc30", 98 },
     { "h261",   31 },
     { "h263",   34 },
     { "mpv",    32 },
@@ -60,6 +63,7 @@ static TokenDict dict_rtpmap[] = {
     { "G723/8000",     4 },
     { "G728/8000",    15 },
     { "G729/8000",    18 },
+    { "iLBC/8000",    98 },
     { "H261/90000",   31 },
     { "H263/90000",   34 },
     { "MPV/90000",    32 },
@@ -1663,10 +1667,16 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	frm = *m;
 	frm << " " << m->localPort() << " RTP/AVP";
 	ObjList rtpmap;
+	int ptime = 0;
 	ObjList* f = l;
 	for (; f; f = f->next()) {
 	    String* s = static_cast<String*>(f->get());
 	    if (s) {
+		int mode = 0;
+		if (*s == "ilbc20")
+		    ptime = mode = 20;
+		else if (*s == "ilbc30")
+		    ptime = mode = 30;
 		int payload = s->toInteger(dict_payloads,-1);
 		if (payload >= 0) {
 		    const char* map = lookup(payload,dict_rtpmap);
@@ -1675,6 +1685,11 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 			String* temp = new String("rtpmap:");
 			*temp << payload << " " << map;
 			rtpmap.append(temp);
+			if (mode) {
+			    temp = new String("fmtp:");
+			    *temp << payload << " mode=" << mode;
+			    rtpmap.append(temp);
+			}
 		    }
 		}
 	    }
@@ -1685,6 +1700,12 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	    // always claim to support telephone events
 	    frm << " 101";
 	    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+	}
+
+	if (ptime) {
+	    String* temp = new String("ptime:");
+	    *temp << ptime;
+	    rtpmap.append(temp);
 	}
 
 	sdp->addLine("m",frm);

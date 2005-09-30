@@ -44,7 +44,7 @@ using namespace TelEngine;
 static TokenDict dict_iaxformats[] = {
     // audio formats
     { "gsm", AST_FORMAT_GSM },
-    { "ilbc", AST_FORMAT_ILBC },
+    { "ilbc30", AST_FORMAT_ILBC },
     { "speex", AST_FORMAT_SPEEX },
     { "lpc10", AST_FORMAT_LPC10 },
     { "mulaw", AST_FORMAT_ULAW },

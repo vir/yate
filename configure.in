@@ -216,19 +216,20 @@ AC_SUBST(HAVE_GSM)
 AC_SUBST(GSM_INC)
 
 HAVE_ILBC=no
+ILBC_INC=""
 AC_ARG_ENABLE(ilbc,AC_HELP_STRING([--enable-ilbc],[Enable iLBC codec]),want_ilbc=$enableval,want_ilbc=yes)
 if [[ "x$want_ilbc" = "xyes" ]]; then
-	HAVE_ILBC=yes
-fi
 AC_MSG_CHECKING([for iLBC in contrib])
 	inci10="contrib/ilbc"
         if [[ -f "$basedir/$inci10/iLBC_encode.h" ]]; then
 		HAVE_ILBC=yes
 		ILBC_INC="-I$basedir/$inci2"
-		ILBC_DEP="../$inci2/libiax.a"
+		ILBC_DEP="../$inci2/libilbc.a"
 	fi
 AC_MSG_RESULT([$HAVE_ILBC])
+fi
 AC_SUBST(HAVE_ILBC)
+AC_SUBST(ILBC_INC)
 
 HAVE_PWLIB=no
 PWLIB_RTTI=none

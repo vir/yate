@@ -44,6 +44,8 @@ public:
 private:
     void detectAuFormat();
     void detectWavFormat();
+    void detectIlbcFormat();
+    bool computeDataRate();
     CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
@@ -117,7 +119,7 @@ private:
 INIT_PLUGIN(WaveFileDriver);
 
 WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
-    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(16000),
+    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0),
       m_total(0), m_time(0), m_autoclose(autoclose)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
@@ -132,25 +134,28 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	m_format.clear();
 	return;
     }
-    if (file.endsWith(".gsm")) {
+    if (file.endsWith(".gsm"))
 	m_format = "gsm";
-	m_brate = 1650;
-    }
-    else if (file.endsWith(".alaw") || file.endsWith(".A")) {
+    else if (file.endsWith(".alaw") || file.endsWith(".A"))
 	m_format = "alaw";
-	m_brate = 8000;
-    }
-    else if (file.endsWith(".mulaw") || file.endsWith(".u")) {
+    else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	m_format = "mulaw";
-	m_brate = 8000;
-    }
+    else if (file.endsWith(".ilbc20"))
+	m_format = "ilbc20";
+    else if (file.endsWith(".ilbc30"))
+	m_format = "ilbc30";
     else if (file.endsWith(".au"))
 	detectAuFormat();
     else if (file.endsWith(".wav"))
 	detectWavFormat();
+    else if (file.endsWith(".lbc"))
+	detectIlbcFormat();
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for file '%s', assuming signed linear",file.c_str());
-    start("WaveSource");
+    if (computeDataRate())
+	start("WaveSource");
+    else
+	Debug(DebugWarn,"Unable to compute data rate for file '%s'",file.c_str());
 }
 
 WaveSource::~WaveSource()
@@ -215,6 +220,35 @@ void WaveSource::detectAuFormat()
 void WaveSource::detectWavFormat()
 {
     Debug(DebugMild,".wav not supported yet, assuming raw signed linear");
+}
+
+#define ILBC_HEADER_LEN 9
+void WaveSource::detectIlbcFormat()
+{
+    char header[ILBC_HEADER_LEN+1];
+    if (::read(m_fd,&header,ILBC_HEADER_LEN) == ILBC_HEADER_LEN) {
+	header[ILBC_HEADER_LEN] = '\0';
+	if (::strcmp(header,"#!iLBC20\n") == 0) {
+	    m_format = "ilbc20";
+	    return;
+	}
+	else if (::strcmp(header,"#!iLBC30\n") == 0) {
+	    m_format = "ilbc30";
+	    return;
+	}
+    }
+    Debug(DebugMild,"Invalid iLBC file, assuming raw signed linear");
+}
+
+bool WaveSource::computeDataRate()
+{
+    if (m_brate)
+	return true;
+    const FormatInfo* info = m_format.getInfo();
+    if (!info)
+	return false;
+    m_brate = info->dataRate();
+    return (m_brate != 0);
 }
 
 void WaveSource::run()
@@ -293,6 +327,10 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "alaw";
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	m_format = "mulaw";
+    else if (file.endsWith(".ilbc20"))
+	m_format = "ilbc20";
+    else if (file.endsWith(".ilbc30"))
+	m_format = "ilbc30";
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugGoOn,"Creating '%s': error %d: %s",

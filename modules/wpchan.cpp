@@ -107,7 +107,7 @@ private:
 class WpData : public Thread
 {
 public:
-    WpData(WpSpan* span, const char* card, const char* device);
+    WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect);
     ~WpData();
     virtual void run();
 private:
@@ -115,6 +115,9 @@ private:
     HANDLE m_fd;
     unsigned char* m_buffer;
     WpChan **m_chans;
+    int m_samples;
+    unsigned char m_rdError;
+    unsigned char m_wrError;
 };
 
 class WpDriver : public PriDriver
@@ -132,6 +135,7 @@ public:
 INIT_PLUGIN(WpDriver);
 
 #define WP_HEADER 16
+#define MAX_DATA_ERRORS 250
 
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
 {
@@ -322,15 +326,19 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	put(buf[i]);
 }
 
-WpData::WpData(WpSpan* span, const char* card, const char* device)
-    : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_buffer(0), m_chans(0)
+WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
+    : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE),
+      m_buffer(0), m_chans(0), m_samples(50), m_rdError(0), m_wrError(0)
 {
-    Debug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
+    Debug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",
+	span,card,device,this);
     HANDLE fd = wp_open(card,device);
     if (fd != INVALID_HANDLE_VALUE) {
 	m_fd = fd;
 	m_span->m_data = this;
     }
+    m_samples = cfg.getIntValue("general","samples",m_samples);
+    m_samples = cfg.getIntValue(sect,"samples",m_samples);
 }
 
 WpData::~WpData()
@@ -348,9 +356,8 @@ WpData::~WpData()
 void WpData::run()
 {
     Debug(&__plugin,DebugAll,"WpData::run() [%p]",this);
-    int samp = 50;
     int bchans = m_span->bchans();
-    int buflen = samp*bchans;
+    int buflen = m_samples*bchans;
     int sz = buflen+WP_HEADER;
     m_buffer = (unsigned char*)::malloc(sz);
     // Build a compacted list of allocated B channels
@@ -365,13 +372,14 @@ void WpData::run()
     while (m_span && (m_fd >= 0)) {
 	Thread::check();
 	bool oob = false;
-	bool rd = wp_select(m_fd,samp,&oob);
+	bool rd = wp_select(m_fd,m_samples,&oob);
 	if (oob) {
 	    XDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
 	    XDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
 	    if (r > 0)
-		Debug("wpdata_recv_oob",DebugInfo,"Read %d bytes of OOB data",r);
+		Debug(&__plugin,DebugInfo,"Read %d bytes of OOB data on span %d [%p]",
+		    r,m_span->span(),this);
 	}
 
 	if (rd) {
@@ -380,8 +388,15 @@ void WpData::run()
 	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
 	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
 	    r -= WP_HEADER;
-	    if (m_buffer[0])
-		Debug(&__plugin,DebugMild,"Read data error 0x%02X [%p]",m_buffer[0],this);
+	    if (m_buffer[0]) {
+		if (!m_rdError)
+		    Debug(&__plugin,DebugWarn,"Read data error 0x%02X on span %d [%p]",
+			m_buffer[0],m_span->span(),this);
+		if (m_rdError < MAX_DATA_ERRORS)
+		    m_rdError++;
+	    }
+	    else
+		m_rdError = 0;
 	    // We should have read N bytes for each B channel
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;
@@ -396,7 +411,7 @@ void WpData::run()
 		    }
 		m_span->unlock();
 	    }
-	    int wr = samp;
+	    int wr = m_samples;
 	    ::memset(m_buffer,0,WP_HEADER);
 	    unsigned char* dat = m_buffer + WP_HEADER;
 	    m_span->lock();
@@ -411,8 +426,15 @@ void WpData::run()
 	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,wr,sz);
 	    int w = wp_send(m_fd,m_buffer,wr,MSG_DONTWAIT);
 	    XDebug("wpdata_send",DebugAll,"post w=%d",w);
-	    if (w != wr)
-		Debug(&__plugin,DebugMild,"Wrote %d bytes instead of %d [%p]",w,wr,this);
+	    if (w != wr) {
+		if (!m_wrError)
+		    Debug(&__plugin,DebugWarn,"Wrote %d data bytes instead of %d on span %d [%p]",
+			w,wr,m_span->span(),this);
+		if (m_wrError < MAX_DATA_ERRORS)
+		    m_wrError++;
+	    }
+	    else
+		m_wrError = 0;
 	}
     }
 }
@@ -459,7 +481,7 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     ps->startup();
     dev.clear();
     dev << "w" << span << "g2";
-    WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev));
+    WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev),cfg,sect);
     dat->startup();
     return ps;
 }

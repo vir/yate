@@ -385,7 +385,7 @@ void PriSpan::handleEvent(pri_event &ev)
 {
     switch (ev.e) {
 	case PRI_EVENT_DCHAN_UP:
-	    Debug(DebugInfo,"D-channel up on span %d",m_span);
+	    Debug(DebugMild,"D-channel up on span %d",m_span);
 	    m_ok = true;
 	    m_restart = Time::now() + 1000000;
 	    {
@@ -676,8 +676,8 @@ const char *PriChan::chanStatus() const
 void PriChan::idle()
 {
     if (m_timeout && (Time::now() > m_timeout)) {
-	Debug("PriChan",DebugWarn,"Timeout %s channel %s (%d/%d)",
-	    chanStatus(),id().c_str(),m_chan,m_span->span());
+	Debug("PriChan",DebugWarn,"Timeout %s channel %s (%s)",
+	    chanStatus(),id().c_str(),address().c_str());
 	m_timeout = 0;
 	hangup(PRI_CAUSE_RECOVERY_ON_TIMER_EXPIRE);
     }
@@ -702,14 +702,14 @@ void PriChan::closeData()
 bool PriChan::answer()
 {
     if (!m_ring) {
-	Debug("PriChan",DebugWarn,"Answer request on %s channel %d on span %d",
-	    chanStatus(),m_chan,m_span->span());
+	Debug("PriChan",DebugWarn,"Answer request on %s channel %s (%s)",
+	    chanStatus(),id().c_str(),address().c_str());
 	return false;
     }
     m_ring = false;
     m_timeout = 0;
     status(chanStatus());
-    Debug(this,DebugInfo,"Answering on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
+    Debug(this,DebugInfo,"Answering on %s (%s)",id().c_str(),address().c_str());
     ::pri_answer(m_span->pri(),(q931_call*)m_call,m_chan,!m_isdn);
     return true;
 }
@@ -725,8 +725,8 @@ void PriChan::hangup(int cause)
 	cause = PRI_CAUSE_INVALID_MSG_UNSPECIFIED;
     const char *reason = pri_cause2str(cause);
     if (inUse())
-	Debug(this,DebugInfo,"Hanging up %s in state %s: %s (%d)",
-	    id().c_str(),chanStatus(),reason,cause);
+	Debug(this,DebugInfo,"Hanging up %s (%s) in state %s: %s (%d)",
+	    id().c_str(),address().c_str(),chanStatus(),reason,cause);
     m_timeout = 0;
     m_targetid.clear();
     disconnect(reason);
@@ -748,13 +748,13 @@ void PriChan::hangup(int cause)
 void PriChan::answered()
 {
     if (!m_call) {
-	Debug("PriChan",DebugWarn,"Answer detected on %s %s channel %d on span %d",
-	    chanStatus(),id().c_str(),m_chan,m_span->span());
+	Debug("PriChan",DebugWarn,"Answer detected on %s channel %s (%s)",
+	    chanStatus(),id().c_str(),address().c_str());
 	return;
     }
     m_timeout = 0;
     status(chanStatus());
-    Debug(this,DebugInfo,"Remote answered on %s (%d/%d)",id().c_str(),m_span->span(),m_chan);
+    Debug(this,DebugInfo,"Remote answered on %s (%s)",id().c_str(),address().c_str());
     Message *m = message("call.answered");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
@@ -764,8 +764,8 @@ void PriChan::answered()
 void PriChan::gotDigits(const char *digits, bool overlapped)
 {
     if (null(digits)) {
-	Debug(this,DebugMild,"Received empty digits string in mode %s channel %s (%d/%d)",
-	    (overlapped ? "overlapped" : "keypad"),id().c_str(),m_span->span(),m_chan);
+	Debug(this,DebugMild,"Received empty digits string in mode %s channel %s (%s)",
+	    (overlapped ? "overlapped" : "keypad"),id().c_str(),address().c_str());
 	return;
     }
     Message *m = message("chan.dtmf");
@@ -786,7 +786,7 @@ void PriChan::sendDigit(char digit)
 bool PriChan::call(Message &msg, const char *called)
 {
     if (m_span->outOfOrder()) {
-	Debug("PriChan",DebugInfo,"Span %d is out of order, failing call",m_span->span());
+	Debug("PriChan",DebugMild,"Span %d is out of order, failing call",m_span->span());
 	msg.setParam("error","offline");
 	return false;
     }
@@ -808,7 +808,8 @@ bool PriChan::call(Message &msg, const char *called)
     else
 	msg.userData(this);
     m_inband = msg.getBoolValue("dtmfinband",m_span->inband());
-    Output("Calling '%s' on %s (%d/%d)",called,id().c_str(),m_span->span(),m_chan);
+    Output("Calling '%s' on %s (%s)",
+	called,id().c_str(),address().c_str());
     char *caller = (char *)msg.getValue("caller");
     int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
@@ -974,9 +975,8 @@ bool PriDriver::msgExecute(Message& msg, String& dest)
 	c = findFree(chan.toInteger(-1));
 
     if (c) {
-	Debug(this,DebugInfo,"Will call '%s' on chan %s (%d) (%d/%d)",
-	    num.c_str(),c->id().c_str(),c->absChan(),
-	    c->span()->span(),c->chan());
+	Debug(this,DebugInfo,"Will call '%s' on chan %s (%s)",
+	    num.c_str(),c->id().c_str(),c->address().c_str());
 	return c->call(msg,num);
     }
     else {

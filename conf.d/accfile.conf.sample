@@ -3,6 +3,7 @@
 ; sections with an empty username or with enabled=no are ignored
 
 [test_sip]
+enabled=no
 protocol=sip
 ;username=me
 description=Test SIP account
@@ -15,6 +16,7 @@ description=Test SIP account
 ;outbound=10.0.0.1:5061
 
 [test_h323]
+enabled=no
 protocol=h323
 ;username=me
 description=Test H.323 account
@@ -26,6 +28,7 @@ description=Test H.323 account
 ;gateway=10.0.0.1:1720
 
 [test_iax]
+enabled=no
 protocol=iax
 ;username=me
 description=Test IAX2 account

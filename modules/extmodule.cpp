@@ -238,7 +238,7 @@ void ExtModSource::run()
 	if (r <= 0)
 	    continue;
 	DataBlock buf(data,r,false);
-	Forward(buf,m_total);
+	Forward(buf,m_total/2);
 	buf.clear(false);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);

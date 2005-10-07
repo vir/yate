@@ -326,8 +326,16 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	put(buf[i]);
 }
 
+static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
+{
+    String tmp(cfg.getValue(sect,"thread"));
+    if (tmp.null())
+	tmp = cfg.getValue("general","thread");
+    return Thread::priority(tmp);
+}
+
 WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
-    : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE),
+    : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE),
       m_buffer(0), m_chans(0), m_samples(50), m_rdError(0), m_wrError(0)
 {
     Debug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",

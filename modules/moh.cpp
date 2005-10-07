@@ -250,7 +250,7 @@ void MOHSource::run()
 	    XDebug("MOH",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    ::usleep((unsigned long)dly);
 	}
-	Forward(m_data,m_data.length()*8000/m_brate);
+	Forward(m_data);
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);
 }

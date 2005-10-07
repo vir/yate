@@ -1561,7 +1561,7 @@ BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
 {
     if (!m_exit) {
 	m_data.assign((void *)buf,len,false);
-	Forward(m_data,len/2);
+	Forward(m_data);
 	m_data.clear(false);
 	writeDelay.Delay(len/16);
     }

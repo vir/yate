@@ -113,7 +113,7 @@ private:
 class WpData : public Thread
 {
 public:
-    WpData(WpSpan* span, const char* card, const char* device);
+    WpData(WpSpan* span, const char* card, const char* device, Thread::Priority prio);
     ~WpData();
     virtual void run();
 private:
@@ -428,8 +428,10 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	put(buf[i]);
 }
 
-WpData::WpData(WpSpan* span, const char* card, const char* device)
-    : Thread("WpData"), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_chans(0)
+
+
+WpData::WpData(WpSpan* span, const char* card, const char* device, Thread::Priority prio)
+    : Thread("WpData",prio), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_chans(0)
 {
     DDebug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
     HANDLE fd = wp_open(card,device);
@@ -544,6 +546,15 @@ bool WpChan::openData(const char* format, int echoTaps)
     return true;
 }
 
+static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
+{
+    String tmp(cfg.getValue(sect,"thread"));
+    if (tmp.null())
+	tmp = cfg.getValue("general","thread");
+    return Thread::priority(tmp);
+}
+		    
+
 PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
 {
     Debug(this,DebugAll,"WpDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
@@ -563,7 +574,7 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     WpWriter* wr = new WpWriter(ps,card,dev);
     WpReader* rd = new WpReader(ps,card,dev);
     dev = cfg.getValue(sect,"bgroup","IF1");
-    WpData* dat = new WpData(ps,card,dev);
+    WpData* dat = new WpData(ps,card,dev,cfgPriority(cfg,sect));
     wr->startup();
     rd->startup();
     dat->startup();

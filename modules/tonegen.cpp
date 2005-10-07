@@ -445,7 +445,7 @@ Tone* ToneSource::buildDtmf(const String& dtmf, int len, int gap)
 	t->data = 0;
 	t++;
 
-	int c = dtmf[i];
+	int c = dtmf.at(i);
 	if ((c >= '0') && (c <= '9'))
 	    c -= '0';
 	else if (c == '*')

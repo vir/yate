@@ -59,7 +59,7 @@ struct ImageInfo {
 /**
  * A structure to hold information about a data format.
  */
-struct FormatInfo {
+struct YATE_API FormatInfo {
     /**
      * Standard no-blanks lowercase format name
      */

@@ -35,7 +35,7 @@
 #include <errno.h>
 
 #ifndef _WINDOWS
-#ifdef WIN32
+#if defined(WIN32) || defined(_WIN32)
 #define _WINDOWS
 #endif
 #endif
@@ -2508,6 +2508,22 @@ public:
     inline bool isCurrent() const
 	{ return current() == this; }
 
+
+    /**
+     * Convert a priority name to a thread priority level
+     * @param name Name of the requested level
+     * @param defvalue Priority to return in case of an invalid name
+     * @return A thread priority level
+     */
+    static Priority priority(const char* name, Priority defvalue = Normal);
+
+    /**
+     * Convert a priority level to a textual name
+     * @param prio Priority level to convert
+     * @return Name of the level or NULL if an invalid argument was provided
+     */
+    static const char* priority(Priority prio);
+
     /**
      * Kills all other running threads. Ouch!
      * Must be called from the main thread or it does nothing.
@@ -2527,6 +2543,13 @@ protected:
      * @param prio Thread priority
      */
     Thread(const char *name = 0, Priority prio = Normal);
+
+    /**
+     * Creates and starts a new thread
+     * @param name Static name of the thread (for debugging purpose only)
+     * @param prio Thread priority level name
+     */
+    Thread(const char *name, const char* prio);
 
     /**
      * The destructor is called when the thread terminates

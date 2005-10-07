@@ -84,6 +84,15 @@ static pthread_key_t current_key;
 static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
 #endif
 
+static TokenDict s_prio[] = {
+    { "lowest", Thread::Lowest },
+    { "low", Thread::Low },
+    { "normal", Thread::Normal },
+    { "high", Thread::High },
+    { "highest", Thread::Highest },
+    { 0, 0 }
+};
+
 ObjList threads;
 Mutex tmutex(true);
 
@@ -413,9 +422,18 @@ Thread::Thread(const char* name, Priority prio)
     : m_private(0)
 {
 #ifdef DEBUG
-    Debugger debug("Thread::Thread","(\"%s\") [%p]",name,this);
+    Debugger debug("Thread::Thread","(\"%s\",%d) [%p]",name,prio,this);
 #endif
     m_private = ThreadPrivate::create(this,name,prio);
+}
+
+Thread::Thread(const char *name, const char* prio)
+    : m_private(0)
+{
+#ifdef DEBUG
+    Debugger debug("Thread::Thread","(\"%s\",\"%s\") [%p]",name,prio,this);
+#endif
+    m_private = ThreadPrivate::create(this,name,priority(prio));
 }
 
 Thread::~Thread()
@@ -542,6 +560,16 @@ void Thread::usleep(unsigned long usec, bool exitCheck)
 #endif
     if (exitCheck)
 	check();
+}
+
+Thread::Priority Thread::priority(const char* name, Thread::Priority defvalue)
+{
+    return (Thread::Priority)lookup(name,s_prio,defvalue);
+}
+
+const char* Thread::priority(Thread::Priority prio)
+{
+    return lookup(prio,s_prio);
 }
 
 void Thread::preExec()

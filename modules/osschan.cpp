@@ -219,7 +219,7 @@ void OssSource::run()
 	    XDebug("OssSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	Forward(data,data.length()/2);
+	Forward(data);
 	m_total += r;
 	tpos += (r*1000000ULL/m_brate);
     } while (r > 0);

@@ -65,10 +65,10 @@ static void evalFunc(String &str)
 	else if (str == "random") {
 	    str.clear();
 	    for (unsigned int i = 0; i < par.length(); i++) {
-		if (par[i] == '?')
+		if (par.at(i) == '?')
 		    str << (int)(::random() % 10);
 		else
-		    str << par[i];
+		    str << par.at(i);
 	    }
 	}
 	else {

@@ -1,3 +1,6 @@
+Mon Oct 10 2005 Diana Cionoiu <diana@diana.null.ro>
+- Added iLBC codec support
+
 Thu May 05 2005 Paul Chitescu <paulc-devel@null.ro>
 - Separate client directory and executables
 - Support for passing arguments to client programs

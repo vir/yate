@@ -405,10 +405,54 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 	tmp >> port >> " RTP/AVP";
 	String fmt;
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+	int ptime = 0;
 	while (tmp[0] == ' ') {
 	    int var = -1;
 	    tmp >> " " >> var;
-	    const char* payload = lookup(var,dict_payloads);
+	    int mode = 0;
+	    String payload(lookup(var,dict_payloads));
+
+	    const ObjList* l = sdp->lines().find(c);
+	    while (l && (l = l->skipNext())) {
+		const NamedString* s = static_cast<NamedString*>(l->get());
+		if (s->name() == "m")
+		    break;
+		if (s->name() != "a")
+		    continue;
+		String line(*s);
+		if (line.startSkip("ptime:",false))
+		    line >> ptime;
+		else if (line.startSkip("rtpmap:",false)) {
+		    int num = -1;
+		    line >> num >> " ";
+		    if (num == var) {
+			for (const TokenDict* map = dict_rtpmap; map->token; map++) {
+			    if (line.startsWith(map->token)) {
+				const char* pload = lookup(map->value,dict_payloads);
+				if (pload)
+				    payload = pload;
+				break;
+			    }
+			}
+		    }
+		}
+		else if (line.startSkip("fmtp:",false)) {
+		    int num = -1;
+		    line >> num >> " ";
+		    if (num == var) {
+			if (line.startSkip("mode=",false))
+			    line >> mode;
+		    }
+		}
+	    }
+
+	    if (payload == "ilbc") {
+		if ((mode == 20) || (ptime == 20))
+		    payload = "ilbc20";
+		else if ((mode == 30) || (ptime == 30))
+		    payload = "ilbc30";
+	    }
+
 	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload);
 	    if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
 		if (fmt)

@@ -51,6 +51,10 @@ ifneq (@HAVE_GSM@,no)
 PROGS := $(PROGS) gsmcodec.yate
 endif
 
+ifneq (@HAVE_ILBC@,no)
+PROGS := $(PROGS) ilbccodec.yate
+endif
+
 ifeq (@HAVE_GTK2@_@HAVE_GMOZ@,yes_yes)
 PROGS := $(PROGS) gtk2/gtk2mozilla.yate
 endif
@@ -135,6 +139,11 @@ iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
 
+
+ilbccodec.yate: ../contrib/ilbc/libilbc.a
+ilbccodec.yate: LOCALLIBS = ../contrib/ilbc/libilbc.a
+ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
+
 gsmcodec.yate: LOCALLIBS = -lgsm
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 
@@ -153,6 +162,9 @@ gtk2/gtk2mozilla.yate: LOCALLIBS = @GMOZ_LIB@
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax
 
+../contrib/ilbc/libilbc.a:
+	$(MAKE) -C ../contrib/ilbc
+	
 ../contrib/ysip/libyatesip.a:
 	$(MAKE) -C ../contrib/ysip
 

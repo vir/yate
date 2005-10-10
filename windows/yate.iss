@@ -34,6 +34,8 @@ Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client serve
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
 Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
+Name: "codecs"; Description: "Format codecs"; Types: full client server
+Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
 
 [Tasks]
@@ -67,6 +69,7 @@ Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h3
 Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323
 Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323
 Source: "Release\iaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
+Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc
 
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"

@@ -977,14 +977,23 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     String called;
     if (adr.GetSize() > 0)
 	called = (const char *)H323GetAliasAddressString(adr[0]);
-    if (called.null())
-	called = s_cfg.getValue("incoming","called");
     if (!called.null()) {
 	Debug(m_chan,DebugInfo,"Called number is '%s'",called.c_str());
-	m->setParam("called",called);
+    } else {
+	const Q931 & q931= setupPDU.GetQ931();
+	PString cal;
+	if (q931.GetCalledPartyNumber(cal))
+	    called=(const char *)cal;
+	Debug(DebugInfo,"IE: Called-Party-Number = %s",(const char *)cal);
     }
-    else
+    if (called.null())
+	called = s_cfg.getValue("incoming","called");
+    
+    if(!called)
 	Debug(m_chan,DebugMild,"No called number present!");
+    else
+	m->setParam("called",called);
+
 #if 0
     s = GetRemotePartyAddress();
     Debug(m_chan,DebugInfo,"GetRemotePartyAddress()='%s'",s);

@@ -1203,6 +1203,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    ObjList* l = m_rtpMedia->skipNull();
 	    for (; l; l = l->skipNext()) {
 		RtpMedia* r = static_cast<RtpMedia*>(l->get());
+		m->addParam("media"+r->suffix(),"yes");
 		m->addParam("rtp_port"+r->suffix(),r->remotePort());
 		m->addParam("formats"+r->suffix(),r->formats());
 	    }
@@ -1627,7 +1628,7 @@ SDPBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
 
     if (defaults && !lst) {
 	lst = new ObjList;
-	lst->append(new RtpMedia("audio","alaw,mulaw"));
+	lst->append(new RtpMedia("audio",msg.getValue("formats","alaw,mulaw")));
     }
 
     setMedia(lst);

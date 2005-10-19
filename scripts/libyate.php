@@ -205,7 +205,8 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk($this->params, "_yate_message_walk", &$p);
+	$pa = array(&$p);
+	array_walk($this->params, "_yate_message_walk", $pa);
 	print "%%>message:$i:$t:$n:$r$p\n";
 	$this->type="dispatched";
     }
@@ -225,7 +226,8 @@ class Yate
 	$n=Yate::Escape($this->name);
 	$r=Yate::Escape($this->retval);
 	$p="";
-	array_walk($this->params, "_yate_message_walk", &$p);
+	$pa = array(&$p);
+	array_walk($this->params, "_yate_message_walk", $pa);
 	print "%%<message:$i:$k:$n:$r$p\n";
 	$this->type="acknowledged";
     }
@@ -330,7 +332,10 @@ function _yate_error_handler($errno, $errstr, $errfile, $errline)
 /* Internal function */
 function _yate_message_walk($item, $key, &$result)
 {
-    $result .= ':' . Yate::Escape($key,'=') . '=' . Yate::Escape($item);
+    // workaround to pass by reference the 3rd parameter to message_walk:
+    // the reference is placed in an array and the array is passed by value
+    // taken from: http://hellsgate.online.ee/~glen/array_walk2.php
+    $result[0] .= ':' . Yate::Escape($key,'=') . '=' . Yate::Escape($item);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

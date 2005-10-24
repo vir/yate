@@ -2,7 +2,7 @@ Summary:	Yet Another Telephony Engine
 Name:     	yate
 Version: 	@PACKAGE_VERSION@
 Release:	@PACKAGE_RELEASE@
-Copyright:	GPL
+License:	GPL
 Packager:	Paul Chitescu <paulc-devel@null.ro>
 Source:		http://yate.null.ro/%{name}-%{version}%{release}.tar.gz
 Group:		Applications/Communications
@@ -116,6 +116,10 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 rm -rf %{buildroot}
 
 %changelog
+* Mon Oct 24 2005 Paul Chitescu <paulc-devel@null.ro>
+- Version 0.9.0-pre3
+- Changed obsolete Copyright: tag to License: to keep newer RPMs happy
+
 * Mon Oct 10 2005 Diana Cionoiu <diana@diana.null.ro>
 - Version 0.9.0-pre2
 

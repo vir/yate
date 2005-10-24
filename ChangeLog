@@ -1,3 +1,13 @@
+Mon Oct 24 2005 Paul Chitescu <paulc-devel@null.ro>
+- Minor fixes related to gcc-4 warnings and RPM License: tag
+
+Wed Oct 19 2005 Diana Cionoiu <diana@diana.null.ro>
+- Called number is picked from the Q.931 part of H.323 calls
+
+Wed Oct 19 2005 Paul Chitescu <paulc-devel@null.ro>
+- Worked around array_walk limitations in libyate.php
+- Fixed bug in media parameters passing in SIP
+
 Mon Oct 10 2005 Diana Cionoiu <diana@diana.null.ro>
 - Added iLBC codec support
 

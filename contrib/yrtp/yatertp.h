@@ -273,6 +273,12 @@ public:
 	{ }
 
     /**
+     * Do-nothing destructor
+     */
+    virtual ~RTPBaseIO()
+	{ }
+
+    /**
      * Get the payload type for data packets
      * @return Payload type, -1 if not set
      */
@@ -370,6 +376,12 @@ public:
 	{ }
 
     /**
+     * Do-nothing destructor
+     */
+    virtual ~RTPReceiver()
+	{ }
+
+    /**
      * Process one RTP payload packet.
      * Default behaviour is to call rtpRecvData() or rtpRecvEvent().
      * @param marker Set to true if the marker bit is set
@@ -451,6 +463,12 @@ public:
      */
     inline RTPSender(RTPSession* session = 0)
 	: RTPBaseIO(session), m_evTime(0), m_tsLast(0)
+	{ }
+
+    /**
+     * Do-nothing destructor
+     */
+    virtual ~RTPSender()
 	{ }
 
     /**

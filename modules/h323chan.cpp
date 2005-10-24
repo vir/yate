@@ -970,28 +970,28 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     Debug(m_chan,DebugInfo,"GetRemotePartyNumber()='%s'",s);
     m->setParam("caller",s ? s : (const char *)("h323/"+caller));
 
-    const H225_Setup_UUIE &setup = setupPDU.m_h323_uu_pdu.m_h323_message_body;
-    const H225_ArrayOf_AliasAddress &adr = setup.m_destinationAddress;
+    const Q931& q931 = setupPDU.GetQ931();
+    const H225_Setup_UUIE& setup = setupPDU.m_h323_uu_pdu.m_h323_message_body;
+    const H225_ArrayOf_AliasAddress& adr = setup.m_destinationAddress;
     for (int i = 0; i<adr.GetSize(); i++)
 	Debug(m_chan,DebugAll,"adr[%d]='%s'",i,(const char *)H323GetAliasAddressString(adr[i]));
     String called;
     if (adr.GetSize() > 0)
 	called = (const char *)H323GetAliasAddressString(adr[0]);
-    if (!called.null()) {
-	Debug(m_chan,DebugInfo,"Called number is '%s'",called.c_str());
-    } else {
-	const Q931 & q931= setupPDU.GetQ931();
+    if (called)
+	Debug(m_chan,DebugInfo,"Called number (alias) is '%s'",called.c_str());
+    else {
 	PString cal;
-	if (q931.GetCalledPartyNumber(cal))
+	if (q931.GetCalledPartyNumber(cal)) {
 	    called=(const char *)cal;
-	Debug(DebugInfo,"IE: Called-Party-Number = %s",(const char *)cal);
+	    Debug(m_chan,DebugInfo,"Called-Party-Number (IE) is '%s'",called.c_str());
+	}
     }
-    if (called.null())
-	called = s_cfg.getValue("incoming","called");
-    
-    if(!called)
+    if (called.null()) {
 	Debug(m_chan,DebugMild,"No called number present!");
-    else
+	called = s_cfg.getValue("incoming","called");
+    }
+    if (called)
 	m->setParam("called",called);
 
 #if 0

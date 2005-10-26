@@ -131,7 +131,12 @@ bool CmdHandler::received(Message &msg)
     String line = msg.getValue("line");
     if (!line.startSkip("accounts"))
 	return false;
-    emitAccounts(line);
+    if (line == "reload") {
+	Lock lock(s_mutex);
+	s_cfg.load();
+    }
+    else
+	emitAccounts(line);
     return true;
 }
 

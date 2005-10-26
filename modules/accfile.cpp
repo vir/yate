@@ -38,6 +38,15 @@ public:
     virtual bool received(Message &msg);
 };
 
+class CmdHandler : public MessageHandler
+{
+public:
+    CmdHandler()
+	: MessageHandler("engine.command")
+	{ }
+    virtual bool received(Message &msg);
+};
+
 class StatusHandler : public MessageHandler
 {
 public:
@@ -75,6 +84,22 @@ static void copyParams(NamedList& dest, const NamedList& src)
     }
 }
 
+static void emitAccounts(const char* operation = 0)
+{
+    Lock lock(s_mutex);
+    for (unsigned int i=0;i<s_cfg.sections();i++) {
+	NamedList* acc = s_cfg.getSection(i);
+	if (!(acc && acc->getValue("username") && acc->getBoolValue("enabled",true)))
+	    continue;
+	Message* m = new Message("user.login");
+	copyParams(*m,*acc);
+	m->setParam("account",*acc);
+	if (operation)
+	    m->setParam("operation",operation);
+	Engine::enqueue(m);
+    }
+}
+
 bool AccHandler::received(Message &msg)
 {
     String action = msg.getValue("operation");
@@ -99,6 +124,15 @@ bool AccHandler::received(Message &msg)
 	return true;
     }
     return false;
+}
+
+bool CmdHandler::received(Message &msg)
+{
+    String line = msg.getValue("line");
+    if (!line.startSkip("accounts"))
+	return false;
+    emitAccounts(line);
+    return true;
 }
 
 bool StatusHandler::received(Message &msg)
@@ -129,16 +163,7 @@ bool StatusHandler::received(Message &msg)
 
 bool StartHandler::received(Message &msg)
 {
-    Lock lock(s_mutex);
-    for (unsigned int i=0;i<s_cfg.sections();i++) {
-	NamedList* acc = s_cfg.getSection(i);
-	if (!(acc && acc->getValue("username") && acc->getBoolValue("enabled",true)))
-	    continue;
-	Message* m = new Message("user.login");
-	copyParams(*m,*acc);
-	m->setParam("account",*acc);
-	Engine::enqueue(m);
-    }
+    emitAccounts("login");
     return false;
 };
 
@@ -157,6 +182,7 @@ void AccFilePlugin::initialize()
 	s_cfg.load();
 	Engine::install(new StatusHandler);
 	Engine::install(new StartHandler);
+	Engine::install(new CmdHandler);
     }
 }
 

@@ -65,8 +65,40 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	}
     }
     m_invite = (getMethod() == "INVITE");
-    m_engine->TransList.append(this);
     m_state = Initial;
+    m_engine->TransList.append(this);
+}
+
+SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
+    : m_outgoing(true), m_invite(original.m_invite), m_transmit(false),
+      m_state(Process), m_response(original.m_response), m_timeout(0),
+      m_firstMessage(original.m_firstMessage), m_lastMessage(original.m_lastMessage),
+      m_pending(0), m_engine(original.m_engine),
+      m_branch(original.m_branch), m_callid(original.m_callid), m_tag(original.m_tag),
+      m_private(0)
+{
+    DDebug(DebugAll,"SIPTransaction::SIPTransaction(&%p,%p) [%p]",
+	&original,answer,this);
+
+    SIPMessage* msg = new SIPMessage(*original.m_firstMessage);
+    SIPAuthLine* auth = answer->buildAuth(*original.m_firstMessage);
+    m_firstMessage->setAutoAuth();
+    msg->complete(m_engine);
+    msg->addHeader(auth);
+    const NamedString* ns = msg->getParam("Via","branch");
+    if (ns)
+	original.m_branch = *ns;
+    else
+	original.m_branch.clear();
+    ns = msg->getParam("To","tag");
+    if (ns)
+	original.m_tag = *ns;
+    else
+	original.m_tag.clear();
+    original.m_firstMessage = msg;
+    original.m_lastMessage = 0;
+
+    m_engine->TransList.append(this);
 }
 
 SIPTransaction::~SIPTransaction()
@@ -150,7 +182,7 @@ void SIPTransaction::setLatestMessage(SIPMessage* message)
 	m_lastMessage->ref();
 	if (message->isAnswer()) {
 	    m_response = message->code;
-	    if (m_response > 100)
+	    if ((m_response > 100) && (m_response < 300))
 		setDialogTag();
 	}
 	message->complete(m_engine,0,0,m_tag);
@@ -415,6 +447,8 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	case Process:
 	    if (message->code <= 100)
 		break;
+	    if (tryAutoAuth(message))
+		break;
 	    if (m_invite && (m_response <= 100))
 		// use the human interaction timeout in INVITEs
 		setTimeout(m_engine->getUserTimeout());
@@ -534,6 +568,19 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    break;
     }
     return e;
+}
+
+bool SIPTransaction::tryAutoAuth(SIPMessage* answer)
+{
+    if ((answer->code != 401) && (answer->code != 407))
+	return false;
+    if (m_firstMessage->getAuthUsername().null())
+	return false;
+    setTimeout();
+    SIPTransaction* tr = new SIPTransaction(*this,answer);
+    changeState(Initial);
+    tr->processClientMessage(answer,Process);
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -253,9 +253,7 @@ SIPMessage::SIPMessage(const SIPMessage& original)
 	if (hl->name() &= "CSeq")
 	    continue;
 	SIPHeaderLine* nl = hl->clone();
-	// this is a new transaction/dialog so let complete() add randomness
-	if ((nl->name() &= "From") || (nl->name() &= "To"))
-	    nl->delParam("tag");
+	// this is a new transaction so let complete() add randomness
 	if (via1 && (nl->name() &= "Via")) {
 	    via1 = false;
 	    nl->delParam("branch");
@@ -800,6 +798,14 @@ SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& passwor
 	}
     }
     return 0;
+}
+
+SIPAuthLine* SIPMessage::buildAuth(const SIPMessage& original) const
+{
+    if (original.getAuthUsername().null())
+	return 0;
+    return buildAuth(original.getAuthUsername(),original.getAuthPassword(),
+	original.method,original.uri,(code == 407));
 }
 
 ObjList* SIPMessage::getRoutes() const

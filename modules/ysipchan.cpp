@@ -128,7 +128,7 @@ private:
 class YateUDPParty : public SIPParty
 {
 public:
-    YateUDPParty(Socket* sock, const SocketAddr& addr, int local);
+    YateUDPParty(Socket* sock, const SocketAddr& addr, int localPort, const char* localAddr = 0);
     ~YateUDPParty();
     virtual void transmit(SIPEvent* event);
     virtual const char* getProtoName() const;
@@ -154,46 +154,31 @@ private:
     bool m_prack;
 };
 
-class YateSIPEndPoint : public Thread
-{
-public:
-    YateSIPEndPoint();
-    ~YateSIPEndPoint();
-    bool Init(void);
-    void run(void);
-    bool incoming(SIPEvent* e, SIPTransaction* t);
-    void invite(SIPEvent* e, SIPTransaction* t);
-    void regreq(SIPEvent* e, SIPTransaction* t);
-    bool generic(SIPEvent* e, SIPTransaction* t);
-    bool buildParty(SIPMessage* message, const char* host = 0, int port = 0);
-    inline YateSIPEngine* engine() const
-	{ return m_engine; }
-    inline int port() const
-	{ return m_port; }
-    inline Socket* socket() const
-	{ return m_sock; }
-private:
-    int m_port;
-    Socket* m_sock;
-    SocketAddr m_addr;
-    YateSIPEngine *m_engine;
-
-};
-
 class YateSIPLine : public String
 {
     YCLASS(YateSIPLine,String)
 public:
     YateSIPLine(const String& name);
     virtual ~YateSIPLine();
-    SIPAuthLine* buildAuth(const SIPMessage* answer, const String& method,
-	const String& uri, bool proxy = false) const;
-    SIPMessage* buildRegister(int expires, const SIPMessage* msg) const;
-    void login(const SIPMessage* msg = 0);
+    void setupAuth(SIPMessage* msg) const;
+    SIPMessage* buildRegister(int expires) const;
+    void login();
     void logout();
     bool process(SIPEvent* ev);
     void timer(const Time& when);
     bool update(const Message& msg);
+    inline const String& getLocalAddr() const
+	{ return m_localAddr; }
+    inline const String& getPartyAddr() const
+	{ return m_partyAddr; }
+    inline int getLocalPort() const
+	{ return m_localPort; }
+    inline int getPartyPort() const
+	{ return m_partyPort; }
+    inline const String& getUserName() const
+	{ return m_username; }
+    inline const String& getAuthName() const
+	{ return m_authname ? m_authname : m_username; }
     inline const String& domain() const
 	{ return m_domain ? m_domain : m_registrar; }
     inline bool valid() const
@@ -205,18 +190,50 @@ public:
 private:
     void clearTransaction();
     bool change(String& dest, const String& src);
+    bool change(int& dest, int src);
     String m_registrar;
     String m_username;
+    String m_authname;
     String m_password;
     String m_outbound;
     String m_domain;
     String m_display;
     Time m_resend;
     int m_interval;
-    bool m_retry;
     SIPTransaction* m_tr;
     bool m_marked;
     bool m_valid;
+    String m_localAddr;
+    String m_partyAddr;
+    int m_localPort;
+    int m_partyPort;
+    bool m_localDetect;
+};
+
+class YateSIPEndPoint : public Thread
+{
+public:
+    YateSIPEndPoint();
+    ~YateSIPEndPoint();
+    bool Init(void);
+    void run(void);
+    bool incoming(SIPEvent* e, SIPTransaction* t);
+    void invite(SIPEvent* e, SIPTransaction* t);
+    void regreq(SIPEvent* e, SIPTransaction* t);
+    bool generic(SIPEvent* e, SIPTransaction* t);
+    bool buildParty(SIPMessage* message, const char* host = 0, int port = 0, const YateSIPLine* line = 0);
+    inline YateSIPEngine* engine() const
+	{ return m_engine; }
+    inline int port() const
+	{ return m_port; }
+    inline Socket* socket() const
+	{ return m_sock; }
+private:
+    void addMessage(const char* buf, int len, const SocketAddr& addr, int port);
+    int m_port;
+    Socket* m_sock;
+    SocketAddr m_addr;
+    YateSIPEngine *m_engine;
 };
 
 class YateSIPConnection : public Channel
@@ -270,6 +287,8 @@ public:
 	{ return m_host; }
     inline int getPort() const
 	{ return m_port; }
+    inline const String& getRtpAddr() const
+	{ return m_externalAddr ? m_externalAddr : m_rtpLocalAddr; }
 private:
     void setMedia(ObjList* media);
     void clearTransaction();
@@ -287,7 +306,6 @@ private:
     SIPTransaction* m_tr;
     bool m_hungup;
     bool m_byebye;
-    bool m_retry;
     int m_state;
     String m_reason;
     int m_reasonCode;
@@ -295,6 +313,8 @@ private:
     // SIP dialog of this call, used for re-INVITE or BYE
     SIPDialog m_dialog;
     URI m_uri;
+    // our external IP address, possibly outside of a NAT
+    String m_externalAddr;
     // if we do RTP forwarding or not
     bool m_rtpForward;
     // remote RTP address
@@ -365,6 +385,7 @@ public:
     YateSIPConnection* findCall(const String& callid);
     YateSIPConnection* findDialog(const SIPDialog& dialog);
     YateSIPLine* findLine(const String& line);
+    YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
 private:
     YateSIPEndPoint *m_endpoint;
@@ -375,6 +396,7 @@ static ObjList s_lines;
 static Configuration s_cfg;
 static int s_maxForwards = 20;
 static bool s_privacy = false;
+static bool s_auto_nat = true;
 
 // Parse a SDP and return a possibly filtered list of SDP media
 static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0, const char* media = 0)
@@ -453,7 +475,7 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 		    payload = "ilbc30";
 	    }
 
-	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload);
+	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload.c_str());
 	    if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
 		if (fmt)
 		    fmt << ",";
@@ -682,16 +704,19 @@ void RtpMedia::update(const Message& msg, bool pickFormat)
 	m_format = msg.getValue("format");
 }
 
-YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
+YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int localPort, const char* localAddr)
     : m_sock(sock), m_addr(addr)
 {
-    m_local = "localhost";
-    m_localPort = local;
+    DDebug(&plugin,DebugAll,"YateUDPParty::YateUDPParty() %s:%d [%p]",localAddr,localPort,this);
+    m_localPort = localPort;
     m_party = m_addr.host();
     m_partyPort = m_addr.port();
-    Socket s(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
-    if (s.valid()) {
-	if (s.connect(m_addr)) {
+    if (localAddr)
+	m_local = localAddr;
+    else {
+	m_local = "localhost";
+	Socket s(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
+	if (s.valid() && s.connect(m_addr)) {
 	    SocketAddr laddr;
 	    if (s.getSockName(laddr))
 		m_local = laddr.host();
@@ -704,6 +729,7 @@ YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int local)
 
 YateUDPParty::~YateUDPParty()
 {
+    DDebug(&plugin,DebugAll,"YateUDPParty::~YateUDPParty() [%p]",this);
     m_sock = 0;
 }
 
@@ -736,7 +762,7 @@ const char* YateUDPParty::getProtoName() const
 
 bool YateUDPParty::setParty(const URI& uri)
 {
-    if (m_partyPort && m_party && s_cfg.getBoolValue("general","ignorevia"))
+    if (m_partyPort && m_party && s_cfg.getBoolValue("general","ignorevia",true))
 	return true;
     if (uri.getHost().null())
 	return false;
@@ -845,11 +871,20 @@ YateSIPEndPoint::~YateSIPEndPoint()
     }
 }
 
-bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port)
+bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port, const YateSIPLine* line)
 {
     if (message->isAnswer())
 	return false;
+    DDebug(&plugin,DebugAll,"YateSIPEndPoint::buildParty(%p,'%s',%d,%p)",
+	message,host,port,line);
     URI uri(message->uri);
+    if (line) {
+	if (!host)
+	    host = line->getPartyAddr();
+	if (port <= 0)
+	    port = line->getPartyPort();
+	line->setupAuth(message);
+    }
     if (!host) {
 	host = uri.getHost().safe();
 	if (port <= 0)
@@ -865,7 +900,12 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     addr.port(port);
     DDebug(&plugin,DebugAll,"built addr: %s:%d",
 	addr.host().c_str(),addr.port());
-    YateUDPParty* party = new YateUDPParty(m_sock,addr,m_port);
+    // reuse the variables now we finished with them
+    host = line ? line->getLocalAddr().c_str() : 0;
+    port = line ? line->getLocalPort() : 0;
+    if (port <= 0)
+	port = m_port;
+    YateUDPParty* party = new YateUDPParty(m_sock,addr,port,host);
     message->setParty(party);
     party->deref();
     return true;
@@ -911,6 +951,28 @@ bool YateSIPEndPoint::Init()
     return true;
 }
 
+void YateSIPEndPoint::addMessage(const char* buf, int len, const SocketAddr& addr, int port)
+{
+    SIPMessage* msg = SIPMessage::fromParsing(0,buf,len);
+    if (!msg)
+	return;
+
+    if (!msg->isAnswer()) {
+	URI uri(msg->uri);
+	YateSIPLine* line = plugin.findLine(addr.host(),addr.port(),uri.getUser());
+	const char* host = 0;
+	if (line && line->getLocalPort()) {
+	    host = line->getLocalAddr();
+	    port = line->getLocalPort();
+	}
+	YateUDPParty* party = new YateUDPParty(m_sock,addr,port,host);
+	msg->setParty(party);
+	party->deref();
+    }
+    m_engine->addMessage(msg);
+    msg->deref();
+}
+
 void YateSIPEndPoint::run()
 {
     struct timeval tv;
@@ -936,7 +998,8 @@ void YateSIPEndPoint::run()
 		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d\n------\n%s------",
 		    res,m_addr.host().c_str(),m_addr.port(),buf);
 		// we got already the buffer and here we start to do "good" stuff
-		m_engine->addMessage(new YateUDPParty(m_sock,m_addr,m_port),buf,res);
+		addMessage(buf,res,m_addr,m_port);
+		//m_engine->addMessage(new YateUDPParty(m_sock,m_addr,m_port),buf,res);
 	    }
 #ifdef DEBUG
 	    else
@@ -1063,7 +1126,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     int age = t->authUser(user);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if ((age < 0) || (age > 10)) {
-	t->requestAuth("realm","",age > 0);
+	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
 	return;
     }
 
@@ -1101,7 +1164,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    t->requestAuth("realm","",age > 0);
+	    t->requestAuth("realm","",age >= 0);
 	    return true;
 	}
     }
@@ -1136,7 +1199,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 // Incoming call constructor - just before starting the routing thread
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
-      m_tr(tr), m_hungup(false), m_byebye(true), m_retry(false),
+      m_tr(tr), m_hungup(false), m_byebye(true),
       m_state(Incoming), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing)
@@ -1155,19 +1218,30 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_tr->setUserData(this);
 
     URI uri(m_tr->getURI());
+    YateSIPLine* line = plugin.findLine(m_host,m_port,m_uri.getUser());
     Message *m = message("call.route");
 
-    String user;
-    int age = tr->authUser(user);
-    DDebug(this,DebugAll,"User '%s' age %d",user.c_str(),age);
-    if (age >= 0) {
-	if (age < 10) {
-	    m_user = user;
-	    m->addParam("username",m_user);
+    if (line) {
+	// call comes from line we have registered to - trust it...
+	m_user = line->getUserName();
+	m_externalAddr = line->getLocalAddr();
+	m_line = *line;
+	m->addParam("username",m_user);
+	m->addParam("in_line",m_line);
+    }
+    else {
+	String user;
+	int age = tr->authUser(user);
+	DDebug(this,DebugAll,"User '%s' age %d",user.c_str(),age);
+	if (age >= 0) {
+	    if (age < 10) {
+		m_user = user;
+		m->addParam("username",m_user);
+	    }
+	    else
+		m->addParam("expired_user",user);
+	    m->addParam("xsip_nonce_age",String(age));
 	}
-	else
-	    m->addParam("expired_user",user);
-	m->addParam("xsip_nonce_age",String(age));
     }
     if (s_privacy)
 	copyPrivacy(*m,*ev->getMessage());
@@ -1192,7 +1266,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	if (m_rtpMedia) {
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
-	    if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	    if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
 		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
 		    m_rtpAddr.c_str(),m_host.c_str());
 		m->addParam("rtp_nat_addr",m_rtpAddr);
@@ -1217,7 +1291,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
-      m_tr(0), m_hungup(false), m_byebye(true), m_retry(true),
+      m_tr(0), m_hungup(false), m_byebye(true),
       m_state(Outgoing), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing)
@@ -1229,20 +1303,23 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_line = msg.getValue("line");
     String tmp;
-    if (m_line && (uri.find('@') < 0)) {
-	YateSIPLine* line = plugin.findLine(m_line);
-	if (line) {
+    YateSIPLine* line = 0;
+    if (m_line) {
+	line = plugin.findLine(m_line);
+	if (line && (uri.find('@') < 0)) {
 	    if (!uri.startsWith("sip:"))
 		tmp = "sip:";
 	    tmp << uri << "@" << line->domain();
 	}
+	if (line)
+	    m_externalAddr = line->getLocalAddr();
     }
     if (tmp.null())
 	tmp = uri;
     m_uri = tmp;
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",m_uri);
-    plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"));
+    plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"),line);
     if (!m->getParty()) {
 	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",m_uri.c_str(),this);
 	m->destruct();
@@ -1254,7 +1331,9 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
-    m->complete(plugin.ep()->engine(),msg.getValue("caller"),msg.getValue("domain"));
+    m->complete(plugin.ep()->engine(),
+	msg.getValue("caller"),
+	msg.getValue("domain",(line ? line->domain().c_str() : 0)));
     if (plugin.ep()->engine()->prack())
 	m->addHeader("Supported","100rel");
     m_host = m->getParty()->getPartyAddr();
@@ -1363,7 +1442,7 @@ void YateSIPConnection::hangup()
 	case Ringing:
 	    if (m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
-		plugin.ep()->buildParty(m,m_host,m_port);
+		plugin.ep()->buildParty(m,m_host,m_port,plugin.findLine(m_line));
 		if (!m->getParty())
 		    Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
 			m_host.c_str(),m_port,this);
@@ -1411,7 +1490,7 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
 	uri = m_uri;
     SIPMessage* m = new SIPMessage(method,uri);
     m->addRoutes(m_routes);
-    plugin.ep()->buildParty(m,m_host,m_port);
+    plugin.ep()->buildParty(m,m_host,m_port,plugin.findLine(m_line));
     if (!m->getParty()) {
 	Debug(this,DebugWarn,"Could not create party for '%s:%d' [%p]",
 	    m_host.c_str(),m_port,this);
@@ -1639,7 +1718,7 @@ SDPBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
 	if (!dispatchRtp(m,addr,false,true))
 	    return 0;
     }
-    return createSDP(m_rtpLocalAddr);
+    return createSDP(getRtpAddr());
 }
 
 // Creates a set of started external RTP channels from remote addr and builds SDP from them
@@ -1656,7 +1735,7 @@ SDPBody* YateSIPConnection::createRtpSDP(bool start)
 	if (!dispatchRtp(m,m_rtpAddr,start,true))
 	    return 0;
     }
-    return createSDP(m_rtpLocalAddr);
+    return createSDP(getRtpAddr());
 }
 
 // Starts an already created set of external RTP channels
@@ -1799,33 +1878,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
     const SIPMessage* msg = ev->getMessage();
     int code = ev->getTransaction()->getResponseCode();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
-	if (m_retry && m_line
-	    && ((code == 401) || (code == 407))
-	    && plugin.validLine(m_line)) {
-	    // try only once to add credentials
-	    m_retry = false;
-	    YateSIPLine* line = plugin.findLine(m_line);
-	    if (line) {
-		SIPMessage* m = new SIPMessage(*m_tr->initialMessage());
-		SIPAuthLine* auth = line->buildAuth(msg,m->method,m->uri,(code == 407));
-		m->addHeader(auth);
-
-		m_tr->setUserData(0);
-		m_tr->deref();
-		m_tr = 0;
-
-		m_tr = plugin.ep()->engine()->addMessage(m);
-		m->deref();
-		if (m_tr) {
-		    m_tr->ref();
-		    m_callid = m_tr->getCallID();
-		    m_tr->setUserData(this);
-		}
-		else
-		    setReason("Internal server failure",500);
-		return false;
-	    }
-	}
 	setReason(msg->reason,code);
 	hangup();
     }
@@ -1848,7 +1900,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
 	setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
-	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
 	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
 		m_rtpAddr.c_str(),m_host.c_str());
 	    natAddr = m_rtpAddr;
@@ -1908,7 +1960,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (!lst)
 	    break;
 	// guess if the call comes from behind a NAT
-	if (s_cfg.getBoolValue("general","nat",true) && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
+	if (s_auto_nat && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
 	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
 		addr.c_str(),m_host.c_str());
 	    addr = m_host;
@@ -1938,7 +1990,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
     if (m_user.null())
 	return true;
     int age = t->authUser(m_user);
-    if ((age > 0) && (age <= 10))
+    if ((age >= 0) && (age <= 10))
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
@@ -2116,7 +2168,8 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 
 YateSIPLine::YateSIPLine(const String& name)
     : String(name), m_resend((u_int64_t)0), m_interval(0),
-      m_retry(false), m_tr(0), m_marked(false), m_valid(false)
+      m_tr(0), m_marked(false), m_valid(false),
+      m_localPort(0), m_partyPort(0), m_localDetect(false)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine::YateSIPLine('%s') [%p]",c_str(),this);
     s_lines.append(this);
@@ -2129,22 +2182,19 @@ YateSIPLine::~YateSIPLine()
     logout();
 }
 
-SIPAuthLine* YateSIPLine::buildAuth(const SIPMessage* answer, const String& method,
-    const String& uri, bool proxy) const
+void YateSIPLine::setupAuth(SIPMessage* msg) const
 {
-    return answer ? answer->buildAuth(m_username,m_password,method,uri,proxy) : 0;
+    if (msg)
+	msg->setAutoAuth(getAuthName(),m_password);
 }
 
-SIPMessage* YateSIPLine::buildRegister(int expires, const SIPMessage* msg) const
+SIPMessage* YateSIPLine::buildRegister(int expires) const
 {
     String exp(expires);
     String tmp;
     tmp << "sip:" << m_registrar;
     SIPMessage* m = new SIPMessage("REGISTER",tmp);
-    if (msg)
-	m->setParty(msg->getParty());
-    else
-	plugin.ep()->buildParty(m);
+    plugin.ep()->buildParty(m,0,0,this);
     if (!m->getParty()) {
 	Debug(&plugin,DebugWarn,"Could not create party for '%s' [%p]",
 	    m_registrar.c_str(),this);
@@ -2166,30 +2216,23 @@ SIPMessage* YateSIPLine::buildRegister(int expires, const SIPMessage* msg) const
     return m;
 }
 
-void YateSIPLine::login(const SIPMessage* msg)
+void YateSIPLine::login()
 {
     if (m_registrar.null() || m_username.null()) {
 	logout();
-	m_retry = false;
 	m_valid = true;
 	return;
     }
+    DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging in [%p]",c_str(),this);
     clearTransaction();
-    m_retry = true;
 
-    SIPMessage* m = buildRegister(m_interval,msg);
+    SIPMessage* m = buildRegister(m_interval);
     if (!m) {
-	m_retry = false;
 	m_valid = false;
 	return;
     }
-    if (msg) {
-	SIPAuthLine* auth = buildAuth(msg,m->method,m->uri,(msg->code == 407));
-	m->addHeader(auth);
-	m_retry = false;
-    }
-    DDebug(&plugin,DebugInfo,"YateSIPLine '%s' emiting %p for answer %p [%p]",
-	c_str(),m,msg,this);
+    DDebug(&plugin,DebugInfo,"YateSIPLine '%s' emiting %p [%p]",
+	c_str(),m,this);
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
 	m_tr->ref();
@@ -2203,10 +2246,12 @@ void YateSIPLine::logout()
     m_resend = 0;
     bool sendLogout = m_valid && m_registrar && m_username;
     clearTransaction();
-    m_retry = false;
     m_valid = false;
     if (sendLogout) {
-	SIPMessage* m = buildRegister(0,0);
+	DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging out [%p]",c_str(),this);
+	SIPMessage* m = buildRegister(0);
+	m_partyAddr.clear();
+	m_partyPort = 0;
 	if (!m)
 	    return;
 	plugin.ep()->engine()->addMessage(m);
@@ -2222,9 +2267,8 @@ bool YateSIPLine::process(SIPEvent* ev)
 	return false;
     if (ev->getState() == SIPTransaction::Cleared) {
 	clearTransaction();
-	m_retry = false;
 	m_valid = false;
-	m_resend = m_interval*1000000 + Time::now();
+	m_resend = m_interval*(int64_t)1000000 + Time::now();
 	return false;
     }
     const SIPMessage* msg = ev->getMessage();
@@ -2233,26 +2277,29 @@ bool YateSIPLine::process(SIPEvent* ev)
     if (ev->getState() != SIPTransaction::Process)
 	return false;
     clearTransaction();
-    DDebug(&plugin,DebugAll,"YateSIPLine '%s' got answer %d%s [%p]",
-	c_str(),msg->code,m_retry ? " (may retry)" : "",this);
+    DDebug(&plugin,DebugAll,"YateSIPLine '%s' got answer %d [%p]",
+	c_str(),msg->code,this);
     switch (msg->code) {
 	case 200:
-	    m_retry = false;
-	    m_valid = true;
-	    m_resend = m_interval*1000000 + Time::now();
-	    Debug(&plugin,DebugInfo,"SIP line '%s' logon success",c_str());
-	    break;
-	case 401:
-	case 407:
-	    if (m_retry) {
-		m_retry = false;
-		login(msg);
-		break;
+	    if (msg->getParty()) {
+		if (m_localDetect) {
+		    m_localAddr = msg->getParty()->getLocalAddr();
+		    m_localPort = msg->getParty()->getLocalPort();
+		    DDebug(&plugin,DebugInfo,"SIP line '%s' on local address %s:%d",
+			c_str(),m_localAddr.c_str(),m_localPort);
+		}
+		m_partyAddr = msg->getParty()->getPartyAddr();
+		m_partyPort = msg->getParty()->getPartyPort();
 	    }
+	    m_valid = true;
+	    // re-register at 3/4 of the expire interval
+	    m_resend = m_interval*(int64_t)750000 + Time::now();
+	    Debug(&plugin,DebugInfo,"SIP line '%s' logon success to %s:%d",
+		c_str(),m_partyAddr.c_str(),m_partyPort);
+	    break;
 	default:
-	    m_retry = false;
 	    m_valid = false;
-	    Debug(&plugin,DebugInfo,"SIP line '%s' logon failure %d",c_str(),msg->code);
+	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d",c_str(),msg->code);
     }
     return false;
 }
@@ -2261,7 +2308,7 @@ void YateSIPLine::timer(const Time& when)
 {
     if (!m_resend || (m_resend > when))
 	return;
-    m_resend = m_interval*1000000 + when;
+    m_resend = m_interval*(int64_t)1000000 + when;
     login();
 }
 
@@ -2286,17 +2333,50 @@ bool YateSIPLine::change(String& dest, const String& src)
     return true;
 }
 
+bool YateSIPLine::change(int& dest, int src)
+{
+    if (dest == src)
+	return false;
+    // we need to log out before any parameter changes
+    logout();
+    dest = src;
+    return true;
+}
+
 bool YateSIPLine::update(const Message& msg)
 {
     DDebug(&plugin,DebugInfo,"YateSIPLine::update() '%s' [%p]",c_str(),this);
+    String oper(msg.getValue("operation"));
+    if (oper == "logout") {
+	logout();
+	return true;
+    }
     bool chg = false;
     chg = change(m_registrar,msg.getValue("registrar")) || chg;
     chg = change(m_outbound,msg.getValue("outbound")) || chg;
     chg = change(m_username,msg.getValue("username")) || chg;
+    chg = change(m_authname,msg.getValue("authname")) || chg;
     chg = change(m_password,msg.getValue("password")) || chg;
     chg = change(m_domain,msg.getValue("domain")) || chg;
     m_display = msg.getValue("description");
     m_interval = msg.getIntValue("interval",600);
+    String tmp(msg.getValue("localaddress"));
+    m_localDetect = (tmp == "auto");
+    if (!m_localDetect) {
+	int port = 0;
+	if (tmp) {
+	    int sep = tmp.find(':');
+	    if (sep > 0) {
+		port = tmp.substr(sep+1).toInteger(5060);
+		tmp = tmp.substr(0,sep);
+	    }
+	    else if (sep < 0)
+		port = 5060;
+	}
+	chg = change(m_localAddr,tmp) || chg;
+	chg = change(m_localPort,port) || chg;
+    }
+    tmp = msg.getValue("operation");
     // if something changed we logged out so try to climb back
     if (chg)
 	login();
@@ -2377,8 +2457,13 @@ bool SipHandler::received(Message &msg)
 	uri = uri.matchString(1);
     if (!(method && uri))
 	return false;
+    YateSIPLine* line = plugin.findLine(msg.getValue("line"));
+    if (line && !line->valid()) {
+	msg.setParam("error","offline");
+	return false;
+    }
     SIPMessage* sip = new SIPMessage(method,uri);
-    plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"));
+    plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
     copySipHeaders(*sip,msg);
     const char* type = msg.getValue("xsip_type");
     const char* body = msg.getValue("xsip_body");
@@ -2426,6 +2511,7 @@ YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
     return 0;
 }
 
+// find line by name
 YateSIPLine* SIPDriver::findLine(const String& line)
 {
     if (line.null())
@@ -2434,6 +2520,25 @@ YateSIPLine* SIPDriver::findLine(const String& line)
     return l ? static_cast<YateSIPLine*>(l->get()) : 0;
 }
 
+// find line by party address and port
+YateSIPLine* SIPDriver::findLine(const String& addr, int port, const String& user)
+{
+    if (!(port && addr))
+	return 0;
+    Lock mylock(this);
+    ObjList* l = s_lines.skipNull();
+    for (; l; l = l->skipNext()) {
+	YateSIPLine* sl = static_cast<YateSIPLine*>(l->get());
+	if (sl->getPartyPort() && (sl->getPartyPort() == port) && (sl->getPartyAddr() == addr)) {
+	    if (user && (sl->getUserName() != user))
+		continue;
+	    return sl;
+	}
+    }
+    return 0;
+}
+
+// check if a line is either empty or valid (logged in or no registrar)
 bool SIPDriver::validLine(const String& line)
 {
     if (line.null())
@@ -2460,8 +2565,11 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugWarn,"SIP call found but no data channel!");
 	return false;
     }
-    if (!validLine(msg.getValue("line")))
+    if (!validLine(msg.getValue("line"))) {
+	// asked to use a line but it's not registered
+	msg.setParam("error","offline");
 	return false;
+    }
     YateSIPConnection* conn = new YateSIPConnection(msg,dest,msg.getValue("id"));
     if (conn->getTransaction()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
@@ -2494,6 +2602,7 @@ void SIPDriver::initialize()
     s_cfg.load();
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
+    s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

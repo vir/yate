@@ -269,7 +269,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	return 0;
     }
     if (message->isACK()) {
-	Debug("SIPEngine",DebugAll,"Message %p was an unhandled ACK [%p]",message,this);
+	DDebug("SIPEngine",DebugAll,"Message %p was an unhandled ACK [%p]",message,this);
 	return 0;
     }
     message->complete(this);
@@ -499,7 +499,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy)
 	    long age = nonceAge(nonce);
 	    if (age < 0)
 		continue;
-	    XDebug("SIPEngine",DebugAll,"authUser nonce age is %d",age);
+	    XDebug("SIPEngine",DebugAll,"authUser nonce age is %ld",age);
 	    String res(t->getParam("response"));
 	    delQuotes(res);
 	    if (res.null())

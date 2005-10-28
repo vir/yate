@@ -410,6 +410,35 @@ public:
 	const String& meth, const String& uri, bool proxy = false) const;
 
     /**
+     * Construct a new authorization line based on this answer and original message
+     * @param original Origianl outgoing message
+     * @return A new authorization line to be used in a new transaction
+     */
+    SIPAuthLine* buildAuth(const SIPMessage& original) const;
+
+    /**
+     * Prepare the message for automatic client transaction authentication.
+     * @param username Username for auto authentication
+     * @param password Password for auto authentication
+     */
+    inline void setAutoAuth(const char* username = 0, const char* password = 0)
+	{ m_authUser = username; m_authPass = password; }
+
+    /**
+     * Retrive the username to be used for auto authentication
+     * @return Username for auto authentication
+     */
+    inline const String& getAuthUsername() const
+	{ return m_authUser; }
+
+    /**
+     * Retrive the password to be used for auto authentication
+     * @return Password for auto authentication
+     */
+    inline const String& getAuthPassword() const
+	{ return m_authPass; }
+
+    /**
      * Extract routes from Record-Route: headers
      * @return A list of SIPHeaderLine representing SIP routes
      */
@@ -483,6 +512,8 @@ protected:
     int m_cseq;
     mutable String m_string;
     mutable DataBlock m_data;
+    String m_authUser;
+    String m_authPass;
 private:
     SIPMessage(); // no, thanks
 };
@@ -549,6 +580,7 @@ public:
 	 */
 	Cleared,
     };
+
     /**
      * Constructor from first message
      * @param message A pointer to the initial message, should not be used
@@ -749,6 +781,19 @@ public:
 	{ return m_private; }
 
 protected:
+    /**
+     * Constructor from previous auto authenticated transaction. This is used only internally
+     * @param original Original transaction that failed authentication
+     */
+    SIPTransaction(SIPTransaction& original, SIPMessage* answer);
+
+    /**
+     * Attempt to perform automatic client transaction authentication
+     * @param answer SIP answer that creates the new transaction
+     * @return True if current client processing must be abandoned
+     */
+    bool tryAutoAuth(SIPMessage* answer);
+
     /**
      * Get an event only for client transactions
      * @param state The current state of the transaction

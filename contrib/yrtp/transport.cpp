@@ -120,7 +120,7 @@ void RTPProcessor::group(RTPGroup* newgrp)
 
 RTPTransport::RTPTransport()
     : RTPProcessor(),
-      m_processor(0), m_monitor(0)
+      m_processor(0), m_monitor(0), m_autoRemote(false)
 {
     DDebug(DebugAll,"RTPTransport::RTPTransport() [%p]",this);
 }
@@ -144,11 +144,20 @@ void RTPTransport::timerTick(const Time& when)
 	    char buf[BUF_SIZE];
 	    SocketAddr addr;
 	    int len = m_rtpSock.recvFrom(buf,sizeof(buf),addr);
-	    if ((len >= 12) && (addr == m_remoteAddr)) {
-		if (m_processor)
-		    m_processor->rtpData(buf,len);
-		if (m_monitor)
-		    m_monitor->rtpData(buf,len);
+	    if (len >= 12) {
+		if (m_autoRemote && (addr != m_remoteAddr)) {
+		    Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
+			m_remoteAddr.host().c_str(),m_remoteAddr.port(),
+			addr.host().c_str(),addr.port());
+		    remoteAddr(addr);
+		}
+		m_autoRemote = false;
+		if (addr == m_remoteAddr) {
+		    if (m_processor)
+			m_processor->rtpData(buf,len);
+		    if (m_monitor)
+			m_monitor->rtpData(buf,len);
+		}
 	    }
 	}
     }
@@ -242,11 +251,12 @@ bool RTPTransport::localAddr(SocketAddr& addr)
     return false;
 }
 
-bool RTPTransport::remoteAddr(SocketAddr& addr)
+bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 {
+    m_autoRemote = sniff;
     int p = addr.port();
     // make sure we have a port and it's an even one
-    if (p && ((p & 1) == 0)) {
+    if (p && ((p & 1) == 0) && addr.valid()) {
 	m_remoteAddr = addr;
 	m_remoteRTCP = addr;
 	m_remoteRTCP.port(addr.port()+1);

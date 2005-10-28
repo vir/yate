@@ -325,7 +325,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, i
     Debug(&splugin,DebugAll,"RTP format '%s' payload %d",format,payload);
 
     SocketAddr addr(AF_INET);
-    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr))) {
+    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr,true))) {
 	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
 	return false;
     }

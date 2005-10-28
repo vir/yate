@@ -220,9 +220,10 @@ public:
     /**
      * Set the remote network address of the RTP transport
      * @param addr New remote RTP transport address
+     * @param sniff Automatically adjust the address from the first incoming packet
      * @return True if address set, false if a failure occured
      */
-    bool remoteAddr(SocketAddr& addr);
+    bool remoteAddr(SocketAddr& addr, bool sniff = false);
 
 protected:
     /**
@@ -253,6 +254,7 @@ private:
     SocketAddr m_localAddr;
     SocketAddr m_remoteAddr;
     SocketAddr m_remoteRTCP;
+    bool m_autoRemote;
 };
 
 /**
@@ -789,10 +791,11 @@ public:
     /**
      * Set the remote network address of the RTP transport of this session
      * @param addr New remote RTP transport address
+     * @param sniff Automatically adjust the address from the first incoming packet
      * @return True if address set, false if a failure occured
      */
-    inline bool remoteAddr(SocketAddr& addr)
-	{ return m_transport && m_transport->remoteAddr(addr); }
+    inline bool remoteAddr(SocketAddr& addr, bool sniff = false)
+	{ return m_transport && m_transport->remoteAddr(addr,sniff); }
 
 protected:
     /**

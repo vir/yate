@@ -408,6 +408,8 @@ bool SIPTransaction::processMessage(SIPMessage* message, const String& branch)
 		return false;
 	}
     }
+    if (!message->getParty())
+	message->setParty(m_firstMessage->getParty());
     if (isOutgoing() != message->isAnswer()) {
 	DDebug(DebugAll,"SIPTransaction ignoring retransmitted %s %p '%s' in [%p]",
 	    message->isAnswer() ? "answer" : "request",

@@ -1132,9 +1132,20 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 
     URI addr(*hl);
     Message *m = new Message("user.register");
-    m->addParam("username",addr.getUser());
+    m->addParam("username",user);
+    m->addParam("number",addr.getUser());
     m->addParam("driver","sip");
-    m->addParam("data","sip/" + addr);
+    String data("sip/" + addr);
+    if (s_auto_nat && isPrivateAddr(addr.getHost()) && !isPrivateAddr(e->getMessage()->getParty()->getPartyAddr())) {
+	Debug(DebugInfo,"Registration NAT detected: private '%s' public '%s'",
+		    addr.getHost().c_str(),e->getMessage()->getParty()->getPartyAddr().c_str());
+	m->addParam("reg_nat_addr",addr.getHost());
+	int pos = data.find(addr.getHost());
+	if (pos >= 0)
+	    data = data.substr(0,pos) + e->getMessage()->getParty()->getPartyAddr() + data.substr(pos + addr.getHost().length());
+    }
+    m->addParam("data",data);
+
     bool dereg = false;
     hl = e->getMessage()->getHeader("Expires");
     if (hl) {
@@ -1267,7 +1278,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
-		Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		    m_rtpAddr.c_str(),m_host.c_str());
 		m->addParam("rtp_nat_addr",m_rtpAddr);
 		m_rtpAddr = m_host;
@@ -1901,7 +1912,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
 	if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
-	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		m_rtpAddr.c_str(),m_host.c_str());
 	    natAddr = m_rtpAddr;
 	    m_rtpAddr = m_host;
@@ -1961,7 +1972,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    break;
 	// guess if the call comes from behind a NAT
 	if (s_auto_nat && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
-	    Debug(this,DebugInfo,"NAT detected: private '%s' public '%s'",
+	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		addr.c_str(),m_host.c_str());
 	    addr = m_host;
 	}
@@ -2283,8 +2294,22 @@ bool YateSIPLine::process(SIPEvent* ev)
 	case 200:
 	    if (msg->getParty()) {
 		if (m_localDetect) {
-		    m_localAddr = msg->getParty()->getLocalAddr();
-		    m_localPort = msg->getParty()->getLocalPort();
+		    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
+		    if (hl) {
+			const NamedString* par = hl->getParam("received");
+			if (par && *par)
+			    m_localAddr = *par;
+			par = hl->getParam("rport");
+			if (par) {
+			    int port = par->toInteger(0,10);
+			    if (port > 0)
+				m_localPort = port;
+			}
+		    }
+		    if (m_localAddr.null())
+			m_localAddr = msg->getParty()->getLocalAddr();
+		    if (!m_localPort)
+			m_localPort = msg->getParty()->getLocalPort();
 		    DDebug(&plugin,DebugInfo,"SIP line '%s' on local address %s:%d",
 			c_str(),m_localAddr.c_str(),m_localPort);
 		}
@@ -2554,8 +2579,10 @@ bool SIPDriver::received(Message &msg, int id)
 	for (; l; l = l->skipNext())
 	    static_cast<YateSIPLine*>(l->get())->timer(msg.msgTime());
     }
-    else if (id == Halt)
+    else if (id == Halt) {
+	channels().clear();
 	s_lines.clear();
+    }
     return Driver::received(msg,id);
 }
 

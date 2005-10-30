@@ -49,8 +49,19 @@ AC_CHECK_FUNCS([gettimeofday inet_ntoa memmove regcomp strerror], , [AC_MSG_ERRO
 AC_CACHE_SAVE
 
 # Checks for required libraries.
-AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This library is required.])])
 AC_CHECK_LIB([pthread], [pthread_mutexattr_settype], , [AC_MSG_ERROR([This library is required.])])
+
+AC_MSG_CHECKING([for dlopen in default libs])
+AC_LANG_SAVE
+AC_LANG_C
+AC_TRY_LINK([#include <dlfcn.h>],[dlopen("",0);],[have_dl=yes],[have_dl=no])
+AC_LANG_RESTORE
+AC_MSG_RESULT([$have_dl])
+if [[ "x$have_dl" != "xyes" ]]; then
+AC_CHECK_LIB([dl], [dlopen], , [AC_MSG_ERROR([This library is required.])])
+DLOPEN_LIB="-ldl"
+fi
+AC_SUBST(DLOPEN_LIB)
 
 MUTEX_HACK=""
 AC_MSG_CHECKING([for pthread_mutexattr_settype declaration])
@@ -199,7 +210,7 @@ HAVE_GSM=no
 GSM_INC=""
 AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])
 if [[ "x$ac_cv_use_libgsm" = "xyes" ]]; then
-for i in /usr/include /usr/include/gsm; do
+for i in /usr/include /usr/include/gsm /usr/local/include /usr/local/include/gsm; do
     ac_cv_use_libgsm="$i"
     test -f "$ac_cv_use_libgsm/gsm.h" && break
 done

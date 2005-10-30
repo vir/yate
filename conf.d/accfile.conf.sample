@@ -9,11 +9,13 @@ protocol=sip
 description=Test SIP account
 ;interval=600
 ;formats=alaw,mulaw,gsm
+;authname=metoo
 ;password=1234
 ;number=1234
 ;domain=somewhere.org
 ;registrar=10.0.0.1:5060
 ;outbound=10.0.0.1:5061
+;localaddress=192.168.0.1:5062
 
 [test_h323]
 enabled=no
@@ -28,6 +30,7 @@ description=Test H.323 account
 ;gateway=10.0.0.1:1720
 
 [test_iax]
+; IAX has no user.login support yet!
 enabled=no
 protocol=iax
 ;username=me

@@ -110,6 +110,11 @@ typedef unsigned long in_addr_t;
 
 #include <sys/time.h>
 #include <sys/socket.h>
+
+#if defined(__FreeBSD__)
+#include <netinet/in_systm.h>
+#endif
+
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>

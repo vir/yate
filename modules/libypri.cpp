@@ -834,6 +834,9 @@ bool PriChan::call(Message &msg, const char *called)
     setTimeout(30000000);
     status(chanStatus());
     Message *m = message("chan.startup");
+    m->setParam("caller",msg.getValue("caller"));
+    m->setParam("called",msg.getValue("called"));
+    m->setParam("billid",msg.getValue("billid"));
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     m->addParam("direction","outgoing");

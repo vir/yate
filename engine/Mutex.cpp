@@ -32,7 +32,12 @@ typedef HANDLE HMUTEX;
 
 #ifdef MUTEX_HACK
 extern "C" {
-extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind)  __THROW;
+#if defined(__FreeBSD__)
+extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind);
+#define PTHREAD_MUTEX_RECURSIVE_NP PTHREAD_MUTEX_RECURSIVE
+#else
+extern int pthread_mutexattr_settype(pthread_mutexattr_t *__attr, int __kind) __THROW;
+#endif
 }
 #endif
 

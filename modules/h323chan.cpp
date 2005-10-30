@@ -396,7 +396,7 @@ public:
     BOOL startExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void stoppedExternal(H323Channel::Directions dir);
     void setRemoteAddress(const char* remoteIP, WORD remotePort);
-    void cleanups(bool closeChans = true);
+    void cleanups(bool closeChans = true, bool dropChan = true);
     bool sendTone(Message& msg, const char* tone);
     void setCallerID(const char* number, const char* name);
     void rtpExecuted(Message& msg);
@@ -449,11 +449,11 @@ class YateH323Chan :  public Channel
 {
     friend class YateH323Connection;
 public:
-    YateH323Chan(YateH323Connection* conn,bool outgoing,const char* addr);
+    YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr);
     ~YateH323Chan();
     BOOL openAudioChannel(BOOL isEncoding, H323AudioCodec &codec);
     bool stopDataLinks();
-    void hangup();
+    void hangup(bool dropChan = true);
     void finish();
 
     virtual void zeroRefs();
@@ -901,7 +901,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 
     // outgoing calls get the "call.execute" message as user data
     Message* msg = static_cast<Message*>(userdata);
-    m_chan = new YateH323Chan(this,(userdata != 0),
+    m_chan = new YateH323Chan(this,msg,
 	((transport && !userdata) ? (const char*)transport->GetRemoteAddress() : 0));
     if (!msg) {
 	m_passtrough = s_passtrough;
@@ -939,9 +939,10 @@ void YateH323Connection::CleanUpOnCallEnd()
     H323Connection::CleanUpOnCallEnd();
 }
 
-void YateH323Connection::cleanups(bool closeChans)
+void YateH323Connection::cleanups(bool closeChans, bool dropChan)
 {
-    m_chan = 0;
+    if (dropChan)
+	m_chan = 0;
     if (closeChans) {
 	CloseAllLogicalChannels(true);
 	CloseAllLogicalChannels(false);
@@ -960,7 +961,10 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	return H323Connection::AnswerCallDenied;
     }
 
+    const YateH323EndPoint& ep = static_cast<const YateH323EndPoint&>(GetEndPoint());
     Message *m = m_chan->message("call.route",false,true);
+    if (ep.c_str())
+	m->setParam("in_line",ep.c_str());
     const char *s = s_cfg.getValue("incoming","context");
     if (s)
 	m->setParam("context",s);
@@ -1375,8 +1379,8 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
 
 void YateH323Connection::stoppedExternal(H323Channel::Directions dir)
 {
-    Debug(m_chan,DebugInfo,"YateH323Connection::stoppedExternal(%s) [%p]",
-	lookup(dir,dict_h323_dir),this);
+    Debug(m_chan,DebugInfo,"YateH323Connection::stoppedExternal(%s) chan=%p [%p]",
+	lookup(dir,dict_h323_dir),m_chan,this);
     if (!m_chan)
 	return;
     switch (dir) {
@@ -1751,14 +1755,20 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
     }
 }
 
-YateH323Chan::YateH323Chan(YateH323Connection* conn,bool outgoing,const char* addr)
-    : Channel(hplugin,0,outgoing), m_conn(conn), m_hungup(false)
+YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
+    : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false)
 {
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     m_address = addr;
     m_address.startSkip("ip$",false);
-    Engine::enqueue(message("chan.startup"));
+    Message* s = message("chan.startup");
+    if (msg) {
+	s->setParam("caller",msg->getValue("caller"));
+	s->setParam("called",msg->getValue("called"));
+	s->setParam("billid",msg->getValue("billid"));
+    }
+    Engine::enqueue(s);
 }
 
 YateH323Chan::~YateH323Chan()
@@ -1775,13 +1785,13 @@ YateH323Chan::~YateH323Chan()
 
 void YateH323Chan::zeroRefs()
 {
-    XDebug(this,DebugAll,"YateH323Chan::zeroRefs() [%p]",this);
+    DDebug(this,DebugAll,"YateH323Chan::zeroRefs() conn=%p [%p]",m_conn,this);
     stopDataLinks();
     if (m_conn) {
 	// let the OpenH323 cleaner thread to do the cleanups so we don't have
 	//  to block until the native data threads terminate
 	dropChan();
-	hangup();
+	hangup(false);
 	cleanup();
 	return;
     }
@@ -1790,7 +1800,7 @@ void YateH323Chan::zeroRefs()
 
 void YateH323Chan::finish()
 {
-    XDebug(this,DebugAll,"YateH323Chan::finish() [%p]",this);
+    DDebug(this,DebugAll,"YateH323Chan::finish() [%p]",this);
     m_conn = 0;
     if (m_hungup)
 	delete this;
@@ -1800,8 +1810,9 @@ void YateH323Chan::finish()
     }
 }
 
-void YateH323Chan::hangup()
+void YateH323Chan::hangup(bool dropChan)
 {
+    DDebug(this,DebugAll,"YateH323Chan::hangup() [%p]",this);
     if (m_hungup)
 	return;
     m_hungup = true;
@@ -1820,7 +1831,7 @@ void YateH323Chan::hangup()
 	    m->setParam("error",err);
 	if (txt)
 	    m->setParam("reason",txt);
-	tmp->cleanups(false);
+	tmp->cleanups(false,dropChan);
 	tmp->ClearCall();
     }
     Engine::enqueue(m);

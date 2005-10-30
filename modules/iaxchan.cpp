@@ -121,7 +121,7 @@ public:
 class IAXConnection :  public Channel
 {
 public:
-    IAXConnection(Driver* driver, const char* addr, iax_session *session = 0);
+    IAXConnection(Driver* driver, const char* addr, iax_session* session, Message* msg = 0);
     ~IAXConnection();
     virtual void disconnected(bool final, const char *reason);
     void abort(int type = 0);
@@ -484,7 +484,7 @@ void IAXEndPoint::reg(iax_event *e)
     s_mutex.unlock();
 }
 
-IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session *session)
+IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session* session, Message* msg)
     : Channel(driver,0,(session == 0)),
       m_session(session), m_final(false), m_muted(false),
       m_ast_format(0), m_format(0), m_capab(0), m_reason(0)
@@ -496,9 +496,14 @@ IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session *sess
 	m_session = ::iax_session_new();
     ::iax_set_private(m_session,this);
     s_mutex.unlock();
-    Message* m = message("chan.startup");
-    m->addParam("direction",status());
-    Engine::enqueue(m);
+    Message* s = message("chan.startup");
+    s->setParam("direction",status());
+    if (msg) {
+	s->setParam("caller",msg->getValue("caller"));
+	s->setParam("called",msg->getValue("called"));
+	s->setParam("billid",msg->getValue("billid"));
+    }
+    Engine::enqueue(s);
 }
 
 
@@ -854,7 +859,7 @@ bool IAXDriver::msgExecute(Message& msg, String& dest)
 	Debug(DebugWarn,"IAX call found but no data channel!");
 	return false;
     }
-    IAXConnection *conn = new IAXConnection(this,dest);
+    IAXConnection *conn = new IAXConnection(this,dest,0,&msg);
     /* i do this to setup the peercallid by getting id 
      * from the other party */
     int i = conn->makeCall(msg.getValue("id"),(char *)msg.getValue("caller"),(char *)msg.getValue("callername"),(char *)dest.c_str());

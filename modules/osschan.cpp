@@ -34,7 +34,7 @@
 #if defined(__linux__)
 #include <linux/soundcard.h>
 #elif defined (__FreeBSD__)
-#include <machine/soundcard.h>
+#include <sys/soundcard.h>
 #else
 #include <soundcard.h>
 #endif

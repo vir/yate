@@ -25,6 +25,7 @@
 #include <yatengine.h>
 
 #include <string.h>
+#include <stdio.h>
 
 using namespace TelEngine;
 
@@ -66,8 +67,6 @@ public:
     static CdrBuilder *find(String &id);
 private:
     void emit(const char *operation = 0);
-    inline static int sec(u_int64_t usec)
-	{ return (int)((usec + 500000) / 1000000); }
     u_int64_t
 	m_start,
 	m_call,
@@ -85,6 +84,27 @@ private:
 };
 
 static ObjList cdrs;
+static int s_res = 1;
+
+static const char* printTime(char* buf,u_int64_t usec)
+{
+    switch (s_res) {
+	case 2:
+	    // microsecond resolution
+	    sprintf(buf,"%u.%06u",(unsigned int)(usec / 1000000),(unsigned int)(usec % 1000000));
+	    break;
+	case 1:
+	    // millisecond resolution
+	    usec = (usec + 500) / 1000;
+	    sprintf(buf,"%u.%03u",(unsigned int)(usec / 1000),(unsigned int)(usec % 1000));
+	    break;
+	default:
+	    // 1-second resolution
+	    usec = (usec + 500000) / 1000000;
+	    sprintf(buf,"%u",(unsigned int)usec);
+    }
+    return buf;
+}
 
 CdrBuilder::CdrBuilder(const char *name)
     : String(name), m_dir("unknown"), m_status("unknown"), m_first(true)
@@ -117,18 +137,19 @@ void CdrBuilder::emit(const char *operation)
 	operation = m_first ? "initialize" : "update";
     m_first = false;
 
+    char buf[64];
     Message *m = new Message("call.cdr");
     m->addParam("operation",operation);
-    m->addParam("time",String(sec(t_start)));
+    m->addParam("time",printTime(buf,t_start));
     m->addParam("chan",c_str());
     m->addParam("address",m_address);
     m->addParam("direction",m_dir);
     m->addParam("billid",m_billid);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
-    m->addParam("duration",String(sec(t_hangup - t_start)));
-    m->addParam("billtime",String(sec(t_hangup - t_answer)));
-    m->addParam("ringtime",String(sec(t_answer - t_ringing)));
+    m->addParam("duration",printTime(buf,t_hangup - t_start));
+    m->addParam("billtime",printTime(buf,t_hangup - t_answer));
+    m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
     m->addParam("status",m_status);
     m->addParam("reason",m_reason);
     Engine::enqueue(m);
@@ -161,6 +182,9 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	if ((m_status == "incoming") || (m_status == "outgoing"))
 	    m_dir = m_status;
     }
+    p = msg.getValue("direction");
+    if (p)
+	m_dir = p;
     p = msg.getValue("reason");
     if (p)
 	m_reason = p;

@@ -1,3 +1,10 @@
+Sun Oct 30 2005 Paul Chitescu <paulc-devel@null.ro>
+- Fixed H.323, IAX and ISDN to include outgoing caller and called in CDR
+- The CDR builder emits time and intervals in milliseconds
+- Fixed yet another bug in H.323 connection cleanup
+- H.323 sends the in_line parameter for named endpoints
+- Applied some of the FreeBSD patches by Alex Rodin
+
 Fri Oct 28 2005 Paul Chitescu <paulc-devel@null.ro>
 - Automatic authentication support in SIP transactions
 - Some degree of NAT support in SIP and RTP

@@ -22,6 +22,12 @@
 ; generate: bool: Allow Yate messages to send arbitrary SIP client transactions
 ;generate=disable
 
+; nat: bool: Enable automatic NAT support
+;nat=enable
+
+; ignorevia: bool: Ignore Via headers and send answer back to the source
+;ignorevia=enable
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

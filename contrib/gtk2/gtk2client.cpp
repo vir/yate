@@ -112,8 +112,13 @@ public:
 
 static gboolean gtkIdleCb(gpointer dat)
 {
-    if (dat)
+    if (dat) {
+	// idle and timeout callbacks are called from glib directly
+	// so gtk/gdk thread safety is not assured by default
+	gdk_threads_enter();
 	static_cast<GTKClient*>(dat)->idleActions();
+	gdk_threads_leave();
+    }
     return true;
 }
 

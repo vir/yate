@@ -47,8 +47,12 @@ static Mutex s_mutex;
 
 static gboolean mozIntervalCb(gpointer dat)
 {
-    if (dat)
+    if (dat) {
+	// interval callback called from glib directly
+	gdk_threads_enter();
 	static_cast<MozWidget*>(dat)->setTextAsync();
+	gdk_threads_leave();
+    }
     return false;
 }
 

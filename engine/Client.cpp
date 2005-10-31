@@ -255,8 +255,8 @@ bool ClientThreadProxy::execute()
     Debugger debug(DebugAll,"ClientThreadProxy::execute()"," %d in %p [%p]",
 	m_func,Thread::current(),this);
     s_proxyMutex.lock();
-    s_busy = true;
     s_proxy = this;
+    s_busy = true;
     while (s_busy)
 	Thread::yield();
     s_proxyMutex.unlock();
@@ -931,6 +931,8 @@ void Client::enableAction(const ClientChannel* chan, const String& action)
 
 void Client::idleActions()
 {
+    if (!s_busy)
+	return;
     ClientThreadProxy* tmp = s_proxy;
     s_proxy = 0;
     if (tmp)

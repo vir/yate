@@ -54,7 +54,6 @@ style "decoration" {
     ythickness = 2
     font_name = "Sans Bold 8"
     GtkButton::default_border = { 5, 0, 5, 0 }
-    GtkWidget::focus_padding = 100
     GtkButton::child_displacement_x = 1
     GtkButton::child_displacement_y = 1
 }

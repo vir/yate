@@ -225,6 +225,14 @@ public:
      */
     bool remoteAddr(SocketAddr& addr, bool sniff = false);
 
+    /**
+     * Set the Type Of Service for the RTP socket
+     * @param tos Type Of Service bits to set
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool setTOS(int tos)
+	{ return m_rtpSock.setTOS(tos); }
+
 protected:
     /**
      * Method called periodically to read data out of sockets
@@ -796,6 +804,14 @@ public:
      */
     inline bool remoteAddr(SocketAddr& addr, bool sniff = false)
 	{ return m_transport && m_transport->remoteAddr(addr,sniff); }
+
+    /**
+     * Set the Type Of Service for the RTP transport socket
+     * @param tos Type Of Service bits to set
+     * @return True if operation was successfull, false if an error occured
+     */
+    inline bool setTOS(int tos)
+	{ return m_transport && m_transport->setTOS(tos); }
 
 protected:
     /**

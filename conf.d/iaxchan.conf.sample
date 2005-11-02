@@ -7,6 +7,10 @@
 ; port: int: UDP port for incoming connections
 ;port=4569
 
+; tos: keyword: Type Of Service to set in outgoing UDP packets
+; numeric TOS value or: lowdelay, throughput, reliability, mincost
+;tos=0
+
 
 [formats]
 ; This section allows to individually enable or disable the codecs

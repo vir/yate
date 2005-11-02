@@ -1,0 +1,16 @@
+[general]
+; This section sets global network level variables
+
+; minport: int: Minimum port range to allocate
+;minport=16384
+
+; maxport: int: Maximum port range to allocate
+;maxport=32768
+
+; tos: keyword: Type Of Service to set in outgoing UDP packets
+; numeric TOS value or: lowdelay, throughput, reliability, mincost
+;tos=0
+
+; buffer: int: Maximum buffer size - used to fragment octet (G.711) audio streams
+;buffer=240
+

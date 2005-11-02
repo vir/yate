@@ -29,6 +29,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define MIN_PORT 16384
+#define MAX_PORT 32768
+#define BUF_SIZE 240
 
 using namespace TelEngine;
 
@@ -60,7 +63,18 @@ static TokenDict dict_yrtp_dir[] = {
     { 0 , 0 },
 };
 
-static Configuration s_cfg;
+static TokenDict dict_tos[] = {
+    { "lowdelay", Socket::LowDelay },
+    { "throughput", Socket::MaxThroughput },
+    { "reliability", Socket::MaxReliability },
+    { "mincost", Socket::MinCost },
+    { 0, 0 }
+};
+
+static int s_minport = MIN_PORT;
+static int s_maxport = MAX_PORT;
+static int s_bufsize = BUF_SIZE;
+static String s_tos;
 
 class YRTPSource;
 class YRTPConsumer;
@@ -75,7 +89,7 @@ public:
     YRTPWrapper(const char *localip, CallEndpoint* conn = 0, const char* media = "audio", RTPSession::Direction direction = RTPSession::SendRecv);
     ~YRTPWrapper();
     void setupRTP(const char* localip);
-    bool startRTP(const char* raddr, unsigned int rport, int payload, int evpayload, const char* format);
+    bool startRTP(const char* raddr, unsigned int rport, const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
     inline YRTPSession* rtp() const
@@ -260,8 +274,8 @@ void YRTPWrapper::setupRTP(const char* localip)
     Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\") [%p]",localip,this);
     m_rtp = new YRTPSession(this);
     m_rtp->initTransport();
-    int minport = s_cfg.getIntValue("rtp","minport",16384);
-    int maxport = s_cfg.getIntValue("rtp","maxport",32768);
+    int minport = s_minport;
+    int maxport = s_maxport;
     int attempt = 10;
     if (minport > maxport) {
 	int tmp = maxport;
@@ -289,9 +303,9 @@ void YRTPWrapper::setupRTP(const char* localip)
     Debug(&splugin,DebugWarn,"YRTPWrapper [%p] RTP bind failed in range %d-%d",this,minport,maxport);
 }
 
-bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, int evpayload, const char* format)
+bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message& msg)
 {
-    Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u,%d) [%p]",raddr,rport,payload,this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
     if (!m_rtp) {
 	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] attempted to start RTP before setup!",this);
 	return false;
@@ -302,6 +316,15 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, i
 	m_rtp->resync();
 	return true;
     }
+
+    String p(msg.getValue("payload"));
+    if (p.null())
+	p = msg.getValue("format");
+    int payload = p.toInteger(dict_payloads,-1);
+    int evpayload = msg.getIntValue("evpayload",101);
+    const char* format = msg.getValue("format");
+    p = msg.getValue("tos",s_tos);
+    int tos = p.toInteger(dict_tos,0);
 
     if (!format)
 	format = lookup(payload, dict_payloads);
@@ -357,7 +380,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, int payload, i
 	return false;
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
-    m_bufsize = s_cfg.getIntValue("rtp","buffer",240);
+    m_rtp->setTOS(tos);
+    m_bufsize = s_bufsize;
     return true;
 }
 
@@ -584,12 +608,8 @@ bool AttachHandler::received(Message &msg)
 	}
     }
 
-    if (rip && rport) {
-	String p(msg.getValue("payload"));
-	if (p.null())
-	    p = msg.getValue("format");
-	w->startRTP(rip,rport.toInteger(),p.toInteger(dict_payloads,-1),msg.getIntValue("evpayload",101),msg.getValue("format"));
-    }
+    if (rip && rport)
+	w->startRTP(rip,rport.toInteger(),msg);
     msg.setParam("localip",lip);
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
@@ -675,12 +695,8 @@ bool RtpHandler::received(Message &msg)
     if (w->deref())
 	return false;
 
-    if (rip && rport) {
-	String p(msg.getValue("payload"));
-	if (p.null())
-	    p = msg.getValue("format");
-	w->startRTP(rip,rport.toInteger(),p.toInteger(dict_payloads,-1),msg.getIntValue("evpayload",101),msg.getValue("format"));
-    }
+    if (rip && rport)
+	w->startRTP(rip,rport.toInteger(),msg);
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
 
@@ -726,8 +742,12 @@ void YRTPPlugin::statusParams(String& str)
 void YRTPPlugin::initialize()
 {
     Output("Initializing module YRTP");
-    s_cfg = Engine::configFile("yrtpchan");
-    s_cfg.load();
+    Configuration cfg(Engine::configFile("yrtpchan"));
+    cfg.load();
+    s_minport = cfg.getIntValue("general","minport",MIN_PORT);
+    s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
+    s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);
+    s_tos = cfg.getValue("general","tos");
     setup();
     if (m_first) {
 	m_first = false;

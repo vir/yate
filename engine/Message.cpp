@@ -95,7 +95,7 @@ int Message::decode(const char* str, String& id)
     t >> tm;
     if (!t.null())
 	return sep-str;
-    m_time=((u_int32_t)1000000)*tm;
+    m_time=tm ? ((u_int64_t)1000000)*tm : Time::now();
     return commonDecode(str,sep2-str+1);
 }
 

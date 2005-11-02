@@ -133,6 +133,11 @@ void CdrBuilder::emit(const char *operation)
     if (!t_answer)
 	t_answer = t_hangup;
 
+    if (t_answer > t_hangup)
+	t_answer = t_hangup;
+    if (t_ringing > t_answer)
+	t_ringing = t_answer;
+
     if (!operation)
 	operation = m_first ? "initialize" : "update";
     m_first = false;

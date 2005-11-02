@@ -59,16 +59,16 @@ static void dumpParams(const Message &msg, String& par)
     }
 }
 
-
 bool SniffHandler::received(Message &msg)
 {
     if (msg == "engine.timer")
 	return false;
     String par;
     dumpParams(msg,par);
-    Output("Sniffed '%s' time=" FMT64U "\n  thread=%p\n  data=%p\n  retval='%s'%s",
+    Output("Sniffed '%s' time=%u.%06u\n  thread=%p\n  data=%p\n  retval='%s'%s",
 	msg.c_str(),
-	msg.msgTime().usec(),
+	(unsigned int)(msg.msgTime().usec() / 1000000),
+	(unsigned int)(msg.msgTime().usec() % 1000000),
 	Thread::current(),
 	msg.userData(),
 	msg.retValue().c_str(),
@@ -81,12 +81,14 @@ void HookHandler::dispatched(const Message& msg, bool handled)
 {
     if (msg == "engine.timer")
 	return;
+    u_int64_t dt = Time::now() - msg.msgTime().usec();
     String par;
     dumpParams(msg,par);
-    Output("Returned %s '%s' delay=" FMT64U "\n  thread=%p\n  data=%p\n  retval='%s'%s",
+    Output("Returned %s '%s' delay=%u.%06u\n  thread=%p\n  data=%p\n  retval='%s'%s",
 	String::boolText(handled),
 	msg.c_str(),
-	Time::now() - msg.msgTime().usec(),
+	(unsigned int)(dt / 1000000),
+	(unsigned int)(dt % 1000000),
 	Thread::current(),
 	msg.userData(),
 	msg.retValue().c_str(),

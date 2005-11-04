@@ -48,6 +48,7 @@ public:
     virtual void dispatched(const Message& msg, bool handled);
 };
 
+static bool s_active = true;
 
 static void dumpParams(const Message &msg, String& par)
 {
@@ -62,6 +63,16 @@ static void dumpParams(const Message &msg, String& par)
 bool SniffHandler::received(Message &msg)
 {
     if (msg == "engine.timer")
+	return false;
+    if (msg == "engine.command") {
+	String line(msg.getValue("line"));
+	if (line.startSkip("sniffer")) {
+	    line >> s_active;
+	    msg.retValue() << "Message sniffer is " << (s_active ? "on" : "off") << "\n";
+	    return true;
+	}
+    }
+    if (!s_active)
 	return false;
     String par;
     dumpParams(msg,par);
@@ -79,7 +90,7 @@ bool SniffHandler::received(Message &msg)
 
 void HookHandler::dispatched(const Message& msg, bool handled)
 {
-    if (msg == "engine.timer")
+    if ((!s_active) || (msg == "engine.timer"))
 	return;
     u_int64_t dt = Time::now() - msg.msgTime().usec();
     String par;

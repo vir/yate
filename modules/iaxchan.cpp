@@ -496,6 +496,7 @@ IAXConnection::IAXConnection(Driver* driver, const char* addr, iax_session* sess
 	m_session = ::iax_session_new();
     ::iax_set_private(m_session,this);
     s_mutex.unlock();
+    setMaxcall(msg);
     Message* s = message("chan.startup");
     s->setParam("direction",status());
     if (msg) {
@@ -611,6 +612,7 @@ void IAXConnection::handleEvent(iax_event *event)
 	    break; 
 	case IAX_EVENT_ANSWER:
 	    Debug(this,DebugInfo,"IAX ANSWER inside a call [%p]",this);
+	    maxcall(0);
 	    Engine::enqueue(message("call.answered"));
 	    startAudio(event->ies.format,event->ies.capability);
 	    break; 

@@ -143,6 +143,26 @@ properly or not.<br />
 &lt;success&gt; - boolean (&quot;true&quot; or &quot;false&quot;) success of operation<br />
 </p>
 
+<p><b>Keyword: %%&gt;setlocal</b><br />
+%%&gt;setlocal:&lt;name&gt;:&lt;value&gt;<br />
+<b>Direction: Application to engine</b><br />
+Always from the application to the engine, requests the change of a local
+parameter<br />
+The answer to the change request is delivered asynchronously (see below).<br />
+&lt;name&gt; - name of the parameter to modify, must not be empty<br />
+&lt;value&gt; - new value to set in the local module instance<br />
+</p>
+
+<p><b>Keyword: %%&lt;setlocal</b><br />
+%%&lt;setlocal:&lt;name&gt;:&lt;value&gt;:&lt;success&gt;<br />
+<b>Direction: Engine to application</b><br />
+Confirmation from engine to the application that the local parameter has been
+changed successfully or not.<br />
+&lt;name&gt; - name of the modified parameter<br />
+&lt;value&gt; - new value of the local parameter<br />
+&lt;success&gt; - boolean (&quot;true&quot; or &quot;false&quot;) success of operation<br />
+</p>
+
 <p><b>Keyword: %%&gt;connect</b><br />
 %%&gt;connect:&lt;role&gt;[:&lt;id&gt;][:&lt;type&gt;]<br />
 <b>Direction: Application to engine</b><br />

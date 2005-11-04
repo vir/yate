@@ -39,13 +39,13 @@ public:
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
-    inline void setNotify(const String& id)
-	{ m_id = id; }
+    void setNotify(const String& id);
 private:
     void detectAuFormat();
     void detectWavFormat();
     void detectIlbcFormat();
     bool computeDataRate();
+    void notify();
     CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
@@ -81,15 +81,18 @@ public:
     ~WaveChan();
 };
 
-class ConsDisconnector : public Thread
+class Disconnector : public Thread
 {
 public:
-    ConsDisconnector(CallEndpoint* chan, const String& id)
-	: m_chan(chan), m_id(id) { }
+    Disconnector(CallEndpoint* chan, const String& id, bool source, bool disc);
+    virtual ~Disconnector();
     virtual void run();
+    bool init();
 private:
     CallEndpoint* m_chan;
-    String m_id;
+    Message* m_msg;
+    bool m_source;
+    bool m_disc;
 };
 
 class AttachHandler : public MessageHandler
@@ -129,9 +132,10 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
     }
     m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
     if (m_fd < 0) {
-	Debug(DebugGoOn,"Opening '%s': error %d: %s",
+	Debug(DebugWarn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
 	m_format.clear();
+	notify();
 	return;
     }
     if (file.endsWith(".gsm"))
@@ -154,8 +158,10 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	Debug(DebugMild,"Unknown format for file '%s', assuming signed linear",file.c_str());
     if (computeDataRate())
 	start("WaveSource");
-    else
+    else {
 	Debug(DebugWarn,"Unable to compute data rate for file '%s'",file.c_str());
+	notify();
+    }
 }
 
 WaveSource::~WaveSource()
@@ -295,23 +301,27 @@ void WaveSource::run()
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
-    if (m_id) {
-	Message *m = new Message("chan.notify");
-	m->addParam("targetid",m_id);
-	m->userData(m_chan);
-	Engine::enqueue(m);
-	if (m_chan && (m_chan->getSource() == this))
-	    m_chan->setSource();
-    }
+    notify();
 }
 
 void WaveSource::cleanup()
 {
     Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
-    if (m_chan && m_autoclose)
-	m_chan->disconnect("eof");
-    if (!m_chan)
-	deref();
+}
+
+void WaveSource::setNotify(const String& id)
+{
+    m_id = id;
+    if (m_fd < 0)
+	notify();
+}
+
+void WaveSource::notify()
+{
+    if (m_id || m_autoclose) {
+	Disconnector *disc = new Disconnector(m_chan,m_id,true,m_autoclose);
+	disc->init();
+    }
 }
 
 WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen)
@@ -333,7 +343,7 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "ilbc30";
     m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
     if (m_fd < 0)
-	Debug(DebugGoOn,"Creating '%s': error %d: %s",
+	Debug(DebugWarn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
 }
 
@@ -368,31 +378,58 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 		m_fd = -1;
 	    }
 	    if (m_chan) {
-		ConsDisconnector *disc = new ConsDisconnector(m_chan,m_id);
+		Disconnector *disc = new Disconnector(m_chan,m_id,false,false);
 		m_chan = 0;
-		if (disc->error()) {
-		    Debug(DebugFail,"Error creating disconnector thread %p",disc);
-		    delete disc;
-		}
-		else
-		    disc->startup();
+		disc->init();
 	    }
 	}
     }
 }
 
-void ConsDisconnector::run()
+Disconnector::Disconnector(CallEndpoint* chan, const String& id, bool source, bool disc)
+    : m_chan(chan), m_msg(0), m_source(source), m_disc(disc)
 {
-    DDebug(&__plugin,DebugAll,"ConsDisconnector chan=%p id='%s'",m_chan,m_id.c_str());
-    if (m_id) {
-	m_chan->setConsumer();
+    if (id) {
 	Message *m = new Message("chan.notify");
-	m->addParam("targetid",m_id);
-	m->userData(m_chan);
-	Engine::enqueue(m);
+	m->addParam("targetid",id);
+	m->userData(chan);
+	m_msg = m;
     }
-    else
-	m_chan->disconnect();
+}
+
+Disconnector::~Disconnector()
+{
+    if (m_msg)
+	Engine::enqueue(m_msg);
+}
+
+bool Disconnector::init()
+{
+    if (error()) {
+	Debug(DebugFail,"Error creating disconnector thread %p",this);
+	delete this;
+	return false;
+    }
+    startup();
+    return true;
+}
+
+void Disconnector::run()
+{
+    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p",m_chan,m_msg);
+    if (!m_chan)
+	return;
+    if (m_source) {
+	m_chan->setSource();
+	if (m_disc)
+	    m_chan->disconnect("eof");
+    }
+    else {
+	if (m_msg)
+	    m_chan->setConsumer();
+	else
+	    m_chan->disconnect();
+    }
 }
 
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
@@ -498,8 +535,8 @@ bool AttachHandler::received(Message &msg)
 
     if (!src.null()) {
 	WaveSource* s = new WaveSource(src,ch,false);
-	s->setNotify(msg.getValue("notify"));
 	ch->setSource(s);
+	s->setNotify(msg.getValue("notify"));
 	s->deref();
 	msg.clearParam("source");
     }

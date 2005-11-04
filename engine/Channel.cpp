@@ -208,14 +208,14 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
 
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(driver), m_outgoing(outgoing), m_timeout(0)
+      m_driver(driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0)
 {
     init();
 }
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(&driver), m_outgoing(outgoing), m_timeout(0)
+      m_driver(&driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0)
 {
     init();
 }
@@ -256,6 +256,7 @@ void Channel::init()
 void Channel::cleanup()
 {
     m_timeout = 0;
+    m_maxcall = 0;
     status("deleted");
     m_targetid.clear();
     dropChan();
@@ -297,6 +298,15 @@ void Channel::disconnected(bool final, const char* reason)
 const char* Channel::direction() const
 {
     return m_outgoing ? "outgoing" : "incoming";
+}
+
+void Channel::setMaxcall(const Message* msg)
+{
+    int tout = msg ? msg->getIntValue("maxcall") : 0;
+    if (tout > 0)
+	maxcall(Time::now() + tout*(u_int64_t)1000);
+    else
+	maxcall(0);
 }
 
 void Channel::complete(Message& msg, bool minimal) const
@@ -366,6 +376,7 @@ bool Channel::msgRinging(Message& msg)
 
 bool Channel::msgAnswered(Message& msg)
 {
+    m_maxcall = 0;
     status("answered");
     if (m_billid.null())
 	m_billid = msg.getValue("billid");
@@ -384,7 +395,8 @@ bool Channel::msgText(Message& msg, const char* text)
 
 bool Channel::msgDrop(Message& msg, const char* reason)
 {
-    status("dropped");
+    m_timeout = m_maxcall = 0;
+    status(null(reason) ? "dropped" : reason);
     disconnect(reason);
     return true;
 }
@@ -713,12 +725,15 @@ bool Driver::received(Message &msg, int id)
 		ObjList* l = &m_chans;
 		while (l) {
 		    Channel* c = static_cast<Channel*>(l->get());
-		    if (c && c->timeout() && (c->timeout() < t)) {
-			c->msgDrop(msg,"timeout");
-			if (l->get() != c)
-			    break;
+		    if (c) {
+			if (c->timeout() && (c->timeout() < t))
+			    c->msgDrop(msg,"timeout");
+			else if (c->maxcall() && (c->maxcall() < t))
+			    c->msgDrop(msg,"noanswer");
 		    }
-		    l = l->next();
+		    // advance the pointer only if not dropped synchronously
+		    if (l->get() == c)
+			l = l->next();
 		}
 		unlock();
 	    }

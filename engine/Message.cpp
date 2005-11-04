@@ -238,7 +238,14 @@ bool MessageDispatcher::install(MessageHandler* handler)
     int pos = 0;
     for (l=&m_handlers; l; l=l->next(),pos++) {
 	MessageHandler *h = static_cast<MessageHandler *>(l->get());
-	if (h && (h->priority() > p))
+	if (!h)
+	    continue;
+	if (h->priority() < p)
+	    continue;
+	if (h->priority() > p)
+	    break;
+	// at the same priority we sort them in pointer address order
+	if (h > handler)
 	    break;
     }
     m_changes++;
@@ -305,25 +312,20 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    // the handler list has changed - find again
 	    NDebug(DebugAll,"Rescanning handler list for '%s' [%p] at priority %u",
 		msg.c_str(),&msg,p);
-	    for (ObjList* l2 = l = &m_handlers; l2; l2=l2->next()) {
-		MessageHandler *mh = static_cast<MessageHandler*>(l2->get());
+	    for (l = &m_handlers; l; l=l->next()) {
+		MessageHandler *mh = static_cast<MessageHandler*>(l->get());
 		if (!mh)
 		    continue;
-		if (mh == h) {
-		    // exact match - continue where we left
-		    l = l2;
+		if (mh == h)
+		    // exact match - silently continue where we left
 		    break;
-		}
+
 		// gone past last handler priority - exit with last handler
-		if (mh->priority() > p) {
-		    unsigned int p2 = l->get() ? static_cast<MessageHandler*>(l->get())->priority() : 0;
-		    Debug(DebugAll,"Handler list for '%s' [%p] changed, skipping back from %u to %u",
-			msg.c_str(),&msg,p,p2);
+		if ((mh->priority() > p) || ((mh->priority() == p) && (mh > h))) {
+		    Debug(DebugAll,"Handler list for '%s' [%p] changed, skipping from %p (%u) to %p (%u)",
+			msg.c_str(),&msg,h,p,mh,mh->priority());
 		    break;
 		}
-		// update pointer past already used handlers
-		if (mh->priority() < p)
-		    l = l2;
 	    }
 	}
     }

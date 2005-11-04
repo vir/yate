@@ -755,6 +755,7 @@ void PriChan::answered()
     m_timeout = 0;
     status(chanStatus());
     Debug(this,DebugInfo,"Remote answered on %s (%s)",id().c_str(),address().c_str());
+    maxcall(0);
     Message *m = message("call.answered");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
@@ -833,6 +834,7 @@ bool PriChan::call(Message &msg, const char *called)
 #endif
     setTimeout(30000000);
     status(chanStatus());
+    setMaxcall(msg);
     Message *m = message("chan.startup");
     m->setParam("caller",msg.getValue("caller"));
     m->setParam("called",msg.getValue("called"));

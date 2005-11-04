@@ -1089,6 +1089,7 @@ void YateH323Connection::OnEstablished()
 	return;
     }
     m_chan->status("answered");
+    m_chan->maxcall(0);
     Message *m = m_chan->message("call.answered",false,true);
     if (m_passtrough) {
 	if (m_remotePort) {
@@ -1762,6 +1763,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
 	conn,addr,direction(),this);
     m_address = addr;
     m_address.startSkip("ip$",false);
+    setMaxcall(msg);
     Message* s = message("chan.startup");
     if (msg) {
 	s->setParam("caller",msg->getValue("caller"));

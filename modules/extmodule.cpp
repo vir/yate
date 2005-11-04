@@ -91,11 +91,18 @@ public:
 	{ m_running = running; }
     inline bool running() const
 	{ return m_running; }
+    inline void setDisconn(bool disconn)
+	{ m_disconn = disconn; }
+    inline bool disconn() const
+	{ return m_disconn; }
+    inline void setId(const String& id)
+	{ m_id = id; }
 private:
     ExtModChan(const char *file, const char *args, int type);
     ExtModReceiver *m_recv;
     int m_type;
     bool m_running;
+    bool m_disconn;
 };
 
 class MsgHolder : public GenObject
@@ -127,9 +134,9 @@ public:
     inline void use()
 	{ m_use++; }
     bool unuse();
-    inline const String &scriptFile() const
+    inline const String& scriptFile() const
 	{ return m_script; }
-    inline const String &commandArg() const
+    inline const String& commandArg() const
 	{ return m_args; }
 private:
     ExtModReceiver(const char *script, const char *args,
@@ -282,7 +289,7 @@ ExtModChan* ExtModChan::build(const char *file, const char *args, int type)
 }
 
 ExtModChan::ExtModChan(const char *file, const char *args, int type)
-    : CallEndpoint("ExtModule"), m_recv(0), m_type(type)
+    : CallEndpoint("ExtModule"), m_recv(0), m_type(type), m_disconn(false)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
     File* reader = 0;
@@ -335,7 +342,22 @@ ExtModChan::~ExtModChan()
 
 void ExtModChan::disconnected(bool final, const char *reason)
 {
-    Debugger debug("ExtModChan::disconnected()"," '%s' [%p]",reason,this);
+    Debug(DebugAll,"ExtModChan::disconnected() '%s' [%p]",reason,this);
+    if (final || Engine::exiting())
+	return;
+    if (m_disconn) {
+	Message* m = new Message("chan.disconnected");
+	m->userData(this);
+	m->addParam("id",m_id);
+	m->addParam("module","external");
+	if (m_recv)
+	    m->addParam("address",m_recv->scriptFile());
+	if (reason)
+	    m->addParam("reason",reason);
+	if (getPeer())
+	    m->addParam("peerid",getPeer()->id());
+	Engine::enqueue(m);
+    }
 }
 
 MsgHolder::MsgHolder(Message &msg)
@@ -516,7 +538,7 @@ void ExtModReceiver::die(bool clearChan)
     if (m_pid > 0)
 	::kill(m_pid,SIGTERM);
     if (chan && clearChan)
-	    chan->disconnect();
+	chan->disconnect();
     unuse();
 }
 
@@ -786,6 +808,29 @@ void ExtModReceiver::processLine(const char *line)
 	outputLine(out);
 	return;
     }
+    else if (startSkip(id,"%%>setlocal:")) {
+	int col = id.find(':');
+	if (col > 0) {
+	    String val(id.substr(col+1));
+	    id = id.substr(0,col);
+	    bool ok = false;
+	    if (m_chan && (id == "id")) {
+		m_chan->setId(val);
+		ok = true;
+	    }
+	    else if (m_chan && (id == "disconnected")) {
+		m_chan->setDisconn(val.toBoolean(m_chan->disconn()));
+		val = m_chan->disconn();
+		ok = true;
+	    }
+	    Debug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",
+		id.c_str(),val.c_str(),ok ? "ok" : "failed");
+	    String out("%%<setlocal:");
+	    out << id << ":" << val << ":" << ok;
+	    outputLine(out);
+	    return;
+	}
+    }
     else {
 	Message* m = new Message("");
 	if (m->decode(line,id) == -2) {
@@ -856,10 +901,6 @@ bool ExtModHandler::received(Message &msg)
 						  dest.matchString(3).trimBlanks().c_str());
 	return r ? r->received(msg,1) : false;
     }
-    if (typ != ExtModChan::DataNone && !ch) {
-	Debug(DebugGoOn,"ExtMod '%s' call found but no data channel!",t.c_str());
-	return false;
-    }
     ExtModChan *em = ExtModChan::build(dest.matchString(2).c_str(),
 				       dest.matchString(3).c_str(),typ);
     if (!em) {
@@ -871,8 +912,9 @@ bool ExtModHandler::received(Message &msg)
 	em->deref();
 	return false;
     }
-    if (ch && ch->connect(em))
-	em->deref();
+    if (ch)
+	ch->connect(em);
+    em->deref();
     return true;
 }
 

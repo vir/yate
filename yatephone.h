@@ -1127,6 +1127,7 @@ private:
     Driver* m_driver;
     bool m_outgoing;
     u_int64_t m_timeout;
+    u_int64_t m_maxcall;
 
 protected:
     String m_status;
@@ -1296,6 +1297,33 @@ public:
      */
     inline void timeout(u_int64_t tout)
 	{ m_timeout = tout; }
+
+    /**
+     * Get the time this channel will time out on outgoing calls
+     * @return Timeout time or zero if no timeout
+     */
+    inline u_int64_t maxcall() const
+	{ return m_maxcall; }
+
+    /**
+     * Set the time this channel will time out on outgoing calls
+     * @param tout New timeout time or zero to disable
+     */
+    inline void maxcall(u_int64_t tout)
+	{ m_maxcall = tout; }
+
+    /**
+     * Set the time this channel will time out on outgoing calls
+     * @param msg Reference of message possibly holding "maxcall" parameter
+     */
+    inline void setMaxcall(const Message& msg)
+	{ setMaxcall(&msg); }
+
+    /**
+     * Set the time this channel will time out on outgoing calls
+     * @param msg Pointer to message possibly holding "maxcall" parameter
+     */
+    void setMaxcall(const Message* msg);
 
     /**
      * Get the connected channel identifier.

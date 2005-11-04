@@ -235,6 +235,8 @@ bool CdrHandler::received(Message &msg)
 	cdrs.clear();
 	return false;
     }
+    if (!msg.getBoolValue("cdrtrack",true))
+	return false;
     String id(msg.getValue("id"));
     if (id.null()) {
 	id = msg.getValue("module");

@@ -141,6 +141,18 @@ class Yate
     }
 
     /**
+     * Changes a local module parameter
+     * @param $name Name of the parameter to modify
+     * @param $value New value to set in the parameter
+     */
+    function SetLocal($name, $value)
+    {
+	$name=Yate::Escape($name);
+	$value=Yate::Escape($value);
+	print "%%>setlocal:$name:$value\n";
+    }
+
+    /**
      * Constructor. Creates a new outgoing message
      * @param $name Name of the new message
      * @param $retval (optional) Default return
@@ -276,6 +288,12 @@ class Yate
 		/* uninstall answer num_priority:str_name:bool_success */
 		$ev=new Yate(Yate::Unescape($part[2]),"",0+$part[1]);
 		$ev->type="uninstalled";
+		$ev->handled=Yate::Str2bool($part[3]);
+		break;
+	    case "%%<setlocal":
+		/* local parameter answer str_name:str_value:bool_success */
+		$ev=new Yate(Yate::Unescape($part[1]),Yate::Unescape($part[2]));
+		$ev->type="setlocal";
 		$ev->handled=Yate::Str2bool($part[3]);
 		break;
 	    case "Error in":

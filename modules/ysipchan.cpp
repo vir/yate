@@ -1296,7 +1296,10 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     }
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     m_route = m;
-    Engine::enqueue(message("chan.startup"));
+    Message* s = message("chan.startup");
+    s->addParam("caller",m_uri.getUser());
+    s->addParam("called",uri.getUser());
+    Engine::enqueue(s);
 }
 
 // Outgoing call constructor - in call.execute handler
@@ -1364,6 +1367,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m_tr->setUserData(this);
     }
     m->deref();
+    setMaxcall(msg);
     Message* s = message("chan.startup");
     s->setParam("caller",msg.getValue("caller"));
     s->setParam("called",msg.getValue("called"));
@@ -1929,6 +1933,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	}
 	setReason("",0);
 	setStatus("answered",Established);
+	maxcall(0);
 	Message *m = message("call.answered");
 	addRtpParams(*m,natAddr);
 	Engine::enqueue(m);

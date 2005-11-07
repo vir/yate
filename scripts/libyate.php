@@ -1,4 +1,4 @@
-<?
+<?php
 
 /* libyate.php
  * This file is part of the YATE Project http://YATE.null.ro
@@ -22,6 +22,13 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
+/*
+    WARNING: This file is for PHP 5
+    To modify it for PHP 4 use the following command (needs sed version 4)
+
+    sed -i.bak -e 's/static \(function\)/\1/' libyate.php
+*/
 
 /**
  * The Yate class encapsulates the object oriented interface of PHP to Yate
@@ -47,7 +54,7 @@ class Yate
      * Static function to output a string to Yate's stderr or logfile
      * @param $str String to output
      */
-    function Output($str)
+    static function Output($str)
     {
 	global $yate_stderr;
 	fputs($yate_stderr, $str . "\n");
@@ -58,7 +65,7 @@ class Yate
      * @param $str String value to convert
      * @return True if $str is "true", false otherwise
      */
-    function Str2bool($str)
+    static function Str2bool($str)
     {
 	return ($str == "true") ? true : false;
     }
@@ -68,7 +75,7 @@ class Yate
      * @param $bool Boolean value to convert
      * @return The string "true" if $bool was true, "false" otherwise
      */
-    function Bool2str($bool)
+    static function Bool2str($bool)
     {
 	return $bool ? "true" : "false";
     }
@@ -79,7 +86,7 @@ class Yate
      * @param $extra (optional) Character to escape in addition to required ones
      * @return Yate escaped string
      */
-    function Escape($str, $extra = "")
+    static function Escape($str, $extra = "")
     {
 	$str = $str . "";
 	$s = "";
@@ -102,7 +109,7 @@ class Yate
      * @param $str Yate escaped string to unescape
      * @return Unescaped string
      */
-    function Unescape($str)
+    static function Unescape($str)
     {
 	$s = "";
 	$n = strlen($str);
@@ -123,18 +130,22 @@ class Yate
      * Install a Yate message handler
      * @param $name Name of the messages to handle
      * @param $priority (optional) Priority to insert in chain, default 100
+     * @param $filtname (optional) Name of parameter to filter for
+     * @param $filtvalue (optional) Matching value of filtered parameter
      */
-    function Install($name, $priority = 100)
+    static function Install($name, $priority = 100, $filtname = "", $filtvalue = "")
     {
 	$name=Yate::Escape($name);
-	print "%%>install:$priority:$name\n";
+	if ($filtname)
+	    $filtname=":$filtname:$filtvalue";
+	print "%%>install:$priority:$name$filtname\n";
     }
 
     /**
      * Uninstall a Yate message handler
      * @param $name Name of the messages to stop handling
      */
-    function Uninstall($name)
+    static function Uninstall($name)
     {
 	$name=Yate::Escape($name);
 	print "%%>uninstall:$name\n";
@@ -145,7 +156,7 @@ class Yate
      * @param $name Name of the parameter to modify
      * @param $value New value to set in the parameter
      */
-    function SetLocal($name, $value)
+    static function SetLocal($name, $value)
     {
 	$name=Yate::Escape($name);
 	$value=Yate::Escape($value);
@@ -250,7 +261,7 @@ class Yate
      * @return "EOF" if we should exit, "" if we should keep running,
      *  or an Yate object instance
      */
-    function GetEvent()
+    static function GetEvent()
     {
 	global $yate_stdin;
 	if (feof($yate_stdin))
@@ -310,14 +321,14 @@ class Yate
      * It should be called before any other method.
      * @param $async (optional) True if asynchronous, polled mode is desired
      */
-    function Init($async = false)
+    static function Init($async = false)
     {
 	global $yate_stdin, $yate_stdout, $yate_stderr;
 	$yate_stdin = fopen("php://stdin","r");
 	$yate_stdout = fopen("php://stdout","w");
 	$yate_stderr = fopen("php://stderr","w");
 	flush();
-	set_error_handler(_yate_error_handler);
+	set_error_handler("_yate_error_handler");
 	ob_implicit_flush(1);
 	if ($async && function_exists("stream_set_blocking"))
 	    stream_set_blocking($yate_stdin,false);

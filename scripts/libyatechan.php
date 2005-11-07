@@ -23,6 +23,14 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/*
+    WARNING: This file is for PHP 5
+    To modify it for PHP 4 use the following command (needs sed version 4)
+
+    sed -i.bak -e 's/static \(function\)/\1/' libyatechan.php
+*/
+	    
+
 require_once("libyate.php");
 
 /**
@@ -53,7 +61,7 @@ class YateChan
      * It processes the events and returns if a notification is received,
      *  a specific tone comes in or a number of tones are collected.
      */
-    function RunEvents()
+    static function RunEvents()
     {
 	global $chan_instance;
 	if ($chan_instance->exiting)
@@ -109,7 +117,7 @@ class YateChan
      * @param $maxlen (optional)Maximum bumber of bytes to be written to file
      * @param $wait (optional) True to block until finishes, false to continue
      */
-    function RecordFile($file = "-", $maxlen = 0, $wait = true)
+    static function RecordFile($file = "-", $maxlen = 0, $wait = true)
     {
 	global $chan_instance;
 	if ($chan_instance->exiting)
@@ -129,7 +137,7 @@ class YateChan
      * @param $file (optional) Name of the file to play or "-" for no file
      * @param $wait (optional) True to block until finishes, false to continue
      */
-    function PlayFile($file = "-", $wait = true)
+    static function PlayFile($file = "-", $wait = true)
     {
 	global $chan_instance;
 	if ($chan_instance->exiting)
@@ -147,7 +155,7 @@ class YateChan
      * @param $file (optional) Name of the tone to play
      * @param $wait (optional) True to block until tones are received, false to continue
      */
-    function PlayTone($tone = "dial", $wait = true)
+    static function PlayTone($tone = "dial", $wait = true)
     {
 	global $chan_instance;
 	if ($chan_instance->exiting)
@@ -164,7 +172,7 @@ class YateChan
      * @param $btones (optional) A string containing all tones that stop collectiong
      * @param $ntones (optional) Maximum number of tones we attempt to collect
      */
-    function SetBreakTones($btones = "", $ntones = 0)
+    static function SetBreakTones($btones = "", $ntones = 0)
     {
 	global $chan_instance;
 	$chan_instance->breaktones = $btones;
@@ -174,7 +182,7 @@ class YateChan
     /**
      * Flush all collected tones from the buffer
      */
-    function FlushTones()
+    static function FlushTones()
     {
 	global $chan_instance;
 	$chan_instance->collect = "";
@@ -201,7 +209,7 @@ class YateChan
      * @param $prefix (optional) Prefix used for the unique channel identifier
      * @param $async (optional) True if asynchronous, polled mode is desired
      */
-    function Init($prefix = "extchan", $async = false)
+    static function Init($prefix = "extchan", $async = false)
     {
 	global $chan_instance;
 	Yate::Init($async);

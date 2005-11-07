@@ -1137,12 +1137,21 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     m->addParam("driver","sip");
     String data("sip/" + addr);
     if (s_auto_nat && isPrivateAddr(addr.getHost()) && !isPrivateAddr(e->getMessage()->getParty()->getPartyAddr())) {
-	Debug(DebugInfo,"Registration NAT detected: private '%s' public '%s'",
-		    addr.getHost().c_str(),e->getMessage()->getParty()->getPartyAddr().c_str());
-	m->addParam("reg_nat_addr",addr.getHost());
-	int pos = data.find(addr.getHost());
-	if (pos >= 0)
-	    data = data.substr(0,pos) + e->getMessage()->getParty()->getPartyAddr() + data.substr(pos + addr.getHost().length());
+	Debug(DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
+		    addr.getHost().c_str(),addr.getPort(),
+		    e->getMessage()->getParty()->getPartyAddr().c_str(),
+		    e->getMessage()->getParty()->getPartyPort());
+	String tmp(addr.getHost());
+	tmp << ":" << addr.getPort();
+	m->addParam("reg_nat_addr",tmp);
+	int pos = data.find(tmp);
+	if (pos >= 0) {
+	    int len = tmp.length();
+	    tmp.clear();
+	    tmp << data.substr(0,pos) << e->getMessage()->getParty()->getPartyAddr()
+		<< ":" << e->getMessage()->getParty()->getPartyPort() << data.substr(pos + len);
+	    data = tmp;
+	}
     }
     m->addParam("data",data);
 

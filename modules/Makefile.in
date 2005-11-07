@@ -66,9 +66,10 @@ LINK = $(CXX) $(LDFLAGS)
 MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 
+basedir = @libdir@/yate
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-moddir = @libdir@/yate
+moddir = $(basedir)/modules
 
 .PHONY: all
 all: do-all $(LIBS) $(PROGS)
@@ -99,6 +100,7 @@ uninstall: do-uninstall
 	done; \
 	)
 	@-rmdir "$(DESTDIR)$(moddir)"
+	@-rmdir "$(DESTDIR)$(basedir)"
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<

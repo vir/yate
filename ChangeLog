@@ -1,3 +1,9 @@
+Sat Nov 05 2005 Paul Chitescu <paulc-devel@null.ro>
+- Modified the PHP libraries to work with PHP 5, breaks PHP 4
+- Added pre-answer timeout in channels
+- Fixed bugs in disconnecting wave sources
+- Added option settings for external modules
+
 Wed Nov 02 2005 Paul Chitescu <paulc-devel@null.ro>
 - TOS setting support and configuration improvments in RTP
 - Fixed time parsing of messages from external modules

@@ -475,6 +475,8 @@ int Engine::run()
 	Debug(DebugGoOn,"Failed to initialize the Windows Sockets library, error code %d",errc);
 	return errc & 127;
     }
+#else
+    ::signal(SIGPIPE,SIG_IGN);
 #endif
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();
@@ -502,7 +504,6 @@ int Engine::run()
 #ifndef _WINDOWS
     ::signal(SIGHUP,sighandler);
     ::signal(SIGQUIT,sighandler);
-    ::signal(SIGPIPE,SIG_IGN);
     ::signal(SIGCHLD,sighandler);
     ::signal(SIGUSR1,sighandler);
     ::signal(SIGUSR2,sighandler);

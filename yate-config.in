@@ -2,7 +2,8 @@
 
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all]
-		   [--config] [--modules] [--version]'
+		   [--config] [--modules] [--scripts] [--skins]
+		   [--version]'
 if [ "$#" = 0 ]; then
     echo "$ustr"
     exit 0
@@ -42,8 +43,14 @@ while [ "$#" != 0 ]; do
 	--config)
 	    echo "$confdir"
 	    ;;
+	--skins)
+	    echo "$moddir/modules/skins"
+	    ;;
 	--modules)
-	    echo "$moddir"
+	    echo "$moddir/modules"
+	    ;;
+	--scripts)
+	    echo "$moddir/scripts"
 	    ;;
 	*)
 	    echo "I didn't understand: $1" >&2

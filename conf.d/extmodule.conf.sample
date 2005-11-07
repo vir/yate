@@ -3,7 +3,8 @@
 
 ; scripts_dir: string: The absolute or relative path used by default to load
 ;  scripts if no full path is specified
-; Note that a trailing path separator MUST be added
+; Note that a trailing path separator should be added
+; Uncomment the following line when running in the sources directory
 ;scripts_dir=scripts/
 
 

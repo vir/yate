@@ -7,26 +7,28 @@ DESTDIR :=
 SCRIPTS :=
 SCRLIBS := libyate.php libyatechan.php libyate.py Yate.pm
 
+basedir = @libdir@/yate
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-moddir = @libdir@/yate
+scrdir = $(basedir)/scripts
 
 .PHONY: all
 all:
 
 .PHONY: install
 install:
-	@mkdir -p "$(DESTDIR)$(moddir)/" && \
-	install -m 0644 $(SCRLIBS) "$(DESTDIR)$(moddir)/" && \
+	@mkdir -p "$(DESTDIR)$(scrdir)/" && \
+	install -m 0644 $(SCRLIBS) "$(DESTDIR)$(scrdir)/" && \
 	test -z "$(SCRIPTS)" || \
-	install $(SCRIPTS) "$(DESTDIR)$(moddir)/"
+	install $(SCRIPTS) "$(DESTDIR)$(scrdir)/"
 
 .PHONY: uninstall
 uninstall:
 	@-for i in $(SCRIPTS) $(SCRLIBS) ; do \
-	    rm "$(DESTDIR)$(moddir)/$$i" ; \
-	done; \
-	rmdir "$(DESTDIR)$(moddir)"
+	    rm "$(DESTDIR)$(scrdir)/$$i" ; \
+	done;
+	@-rmdir "$(DESTDIR)$(scrdir)"
+	@-rmdir "$(DESTDIR)$(basedir)"
 
 Makefile: @srcdir@/Makefile.in ../config.status
 	cd .. && ./config.status

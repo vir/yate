@@ -10,9 +10,11 @@ DEBUG :=
 SUBDIRS := gtk2
 MKDEPS  := ../../config.status
 
+basedir = @libdir@/yate
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-skindir = @libdir@/yate/skin
+moddir = $(basedir)/modules
+skindir = $(moddir)/skin
 
 .PHONY: all clean install uninstall
 all clean:
@@ -34,6 +36,8 @@ uninstall:
 	    rmdir "$(DESTDIR)$(skindir)/$$i" ; \
 	done;
 	@-rmdir "$(DESTDIR)$(skindir)"
+	@-rmdir "$(DESTDIR)$(moddir)"
+	@-rmdir "$(DESTDIR)$(basedir)"
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
 	cd ../.. && ./config.status

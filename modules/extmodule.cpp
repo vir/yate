@@ -26,6 +26,7 @@
  */
 
 #include <yatephone.h>
+#include <yatepaths.h>
 
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -580,7 +581,10 @@ bool ExtModReceiver::create(const char *script, const char *args)
     HANDLE yate2ext[2];
     int x;
     if (script[0] != '/') {
-	tmp = s_cfg.getValue("general","scripts_dir","scripts/") + tmp;
+	tmp = s_cfg.getValue("general","scripts_dir",SCR_PATH);
+	if (!tmp.endsWith(Engine::pathSeparator()))
+	    tmp += Engine::pathSeparator();
+	tmp += script;
     }
     script = tmp.c_str();
     if (::pipe(ext2yate)) {

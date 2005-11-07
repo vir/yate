@@ -206,7 +206,8 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 		m_ringing = val;
 	    break;
 	case CdrAnswer:
-	    m_answer = val;
+	    if (!m_answer)
+		m_answer = val;
 	    break;
 	case CdrHangup:
 	    m_hangup = val;

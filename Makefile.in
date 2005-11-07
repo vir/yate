@@ -34,14 +34,16 @@ LINK = $(CXX) $(LDFLAGS)
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 
+basedir = @libdir@/yate
+confdir = @sysconfdir@/yate
 bindir = @bindir@
 libdir = @libdir@
 incdir = @includedir@/yate
 mandir = @mandir@
 docdir = $(prefix)/share/doc/yate-@PACKAGE_VERSION@
 vardir = @localstatedir@/lib/yate
-moddir = @libdir@/yate
-confdir = @sysconfdir@/yate
+moddir = $(basedir)/modules
+scrdir = $(basedir)/scripts
 
 .PHONY: all everything
 all: engine modules clients
@@ -120,6 +122,7 @@ tables: @srcdir@/tables/all.h
 
 yatepaths.h: $(MKDEPS)
 	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' > $@
+	@echo '#define SCR_PATH "$(DESTDIR)$(scrdir)"' >> $@
 	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' >> $@
 
 windows: check-topdir
@@ -171,7 +174,7 @@ uninstall uninstall-root:
 	    rm "$(DESTDIR)$(libdir)/$$i" ; \
 	done; \
 	$(MAKE) -C ./clients uninstall
-	$(LDCONFIG)
+	@$(LDCONFIG)
 	@-for i in $(PROGS) yate-config ; do \
 	    rm "$(DESTDIR)$(bindir)/$$i" ; \
 	done
@@ -188,6 +191,7 @@ uninstall uninstall-root:
 	$(MAKE) -C ./modules uninstall
 	$(MAKE) -C ./scripts uninstall
 	$(MAKE) -C ./conf.d uninstall
+	@-rmdir "$(DESTDIR)$(basedir)"
 
 install-root uninstall-root: LDCONFIG:=ldconfig
 

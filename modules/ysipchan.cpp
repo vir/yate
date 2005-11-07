@@ -2417,7 +2417,7 @@ bool YateSIPLine::update(const Message& msg)
     }
     tmp = msg.getValue("operation");
     // if something changed we logged out so try to climb back
-    if (chg)
+    if (chg || (oper == "login"))
 	login();
     return chg;
 }

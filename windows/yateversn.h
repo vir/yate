@@ -19,7 +19,7 @@
 #define YATE_MINOR_S "9"
 #define YATE_BUILD_S "0"
 #define YATE_VERSION "0.9.0"
-#define YATE_RELEASE "pre3"
+#define YATE_RELEASE "pre4"
 
 /* Windows version resource - file and string style */
 #define YATE_WINVER_F 0,9,0,0

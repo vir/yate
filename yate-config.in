@@ -44,7 +44,7 @@ while [ "$#" != 0 ]; do
 	    echo "$confdir"
 	    ;;
 	--skins)
-	    echo "$moddir/modules/skins"
+	    echo "$moddir/modules/skin"
 	    ;;
 	--modules)
 	    echo "$moddir/modules"

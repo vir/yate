@@ -770,16 +770,21 @@ void ExtModReceiver::processLine(const char *line)
 	int prio = 100;
 	id >> prio >> ":";
 	bool ok = true;
-	ObjList *p = &m_relays;
-	for (; p; p=p->next()) {
-	    MessageRelay *r = static_cast<MessageRelay *>(p->get());
-	    if (r && (*r == id)) {
-		ok = false;
-		break;
-	    }
+	String fname;
+	String fvalue;
+	Regexp r("^\\([^:]*\\):\\([^:]*\\):\\?\\(.*\\)");
+	if (id.matches(r)) {
+	    // a filter is specified
+	    fname = id.matchString(2);
+	    fvalue = id.matchString(3);
+	    id = id.matchString(1);
 	}
+	// sanity checks
+	ok = ok && id && !m_relays.find(id);
 	if (ok) {
 	    MessageRelay *r = new MessageRelay(id,this,0,prio);
+	    if (fname)
+		r->setFilter(fname,fvalue);
 	    m_relays.append(r);
 	    Engine::install(r);
 	}

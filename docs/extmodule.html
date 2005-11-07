@@ -105,13 +105,15 @@ if the message has been declared processed by one of the handlers<br />
 </p>
 
 <p><b>Keyword: %%&gt;install</b><br />
-%%&gt;install:[&lt;priority&gt;]:&lt;name&gt;<br />
+%%&gt;install:[&lt;priority&gt;]:&lt;name&gt;[:&lt;filter-name&gt;[:&lt;filter-value&gt;]]<br />
 <b>Direction: Application to engine</b><br />
 Always from the application to the engine, requests the installing of a message
 handler for the application that requested it<br />
 The answer to the install request is delivered asynchronously (see below).<br />
 &lt;priority&gt; - priority in chain, use default (100) if missing<br />
 &lt;name&gt; - name of the messages for that a handler should be installed<br />
+&lt;filter-name&gt; - name of a variable the handler will filter<br />
+&lt;filter-value&gt; - matching value for the filtered variable<br />
 </p>
 
 <p><b>Keyword: %%&lt;install</b><br />

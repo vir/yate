@@ -1156,10 +1156,12 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     m->addParam("data",data);
 
     bool dereg = false;
-    hl = e->getMessage()->getHeader("Expires");
+    String expires(e->getMessage()->getHeader("Expires"));
+    if (expires.toInteger(-1) < 0)
+	expires = 600;
     if (hl) {
-	m->addParam("expires",*hl);
-	if (*hl == "0") {
+	m->addParam("expires",expires);
+	if (expires == "0") {
 	    *m = "user.unregister";
 	    dereg = true;
 	}

@@ -2326,8 +2326,8 @@ bool YateSIPLine::process(SIPEvent* ev)
 			m_localAddr = msg->getParty()->getLocalAddr();
 		    if (!m_localPort)
 			m_localPort = msg->getParty()->getLocalPort();
-		    DDebug(&plugin,DebugInfo,"SIP line '%s' on local address %s:%d",
-			c_str(),m_localAddr.c_str(),m_localPort);
+		    Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
+			m_localAddr.c_str(),m_localPort,c_str());
 		}
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();

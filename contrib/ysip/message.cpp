@@ -414,6 +414,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
 	hl = new SIPHeaderLine("Via",tmp);
+	hl->setParam("rport");
 	header.append(hl);
     }
     if (!(isAnswer() || hl->getParam("branch"))) {

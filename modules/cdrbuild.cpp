@@ -62,11 +62,12 @@ class CdrBuilder : public String
 public:
     CdrBuilder(const char *name);
     virtual ~CdrBuilder();
+    void update(int type, u_int64_t val);
     void update(const Message& msg, int type, u_int64_t val);
+    void emit(const char *operation = 0);
     String getStatus() const;
     static CdrBuilder *find(String &id);
 private:
-    void emit(const char *operation = 0);
     u_int64_t
 	m_start,
 	m_call,
@@ -167,33 +168,8 @@ String CdrBuilder::getStatus() const
     return s;
 }
 
-void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
+void CdrBuilder::update(int type, u_int64_t val)
 {
-    const char* p = msg.getValue("billid");
-    if (p)
-	m_billid = p;
-    p = msg.getValue("address");
-    if (p)
-	m_address = p;
-    p = msg.getValue("caller");
-    if (p)
-	m_caller = p;
-    p = msg.getValue("called");
-    if (p)
-	m_called = p;
-    p = msg.getValue("status");
-    if (p) {
-	m_status = p;
-	if ((m_status == "incoming") || (m_status == "outgoing"))
-	    m_dir = m_status;
-    }
-    p = msg.getValue("direction");
-    if (p)
-	m_dir = p;
-    p = msg.getValue("reason");
-    if (p)
-	m_reason = p;
-
     switch (type) {
 	case CdrStart:
 	    m_start = val;
@@ -213,6 +189,47 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	    m_hangup = val;
 	    cdrs.remove(this);
 	    return;
+    }
+}
+
+void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
+{
+    const char* p = msg.getValue("billid");
+    if (p)
+	m_billid = p;
+    if (m_address.null()) {
+	p = msg.getValue("address");
+	if (p)
+	    m_address = p;
+    }
+    if (m_caller.null()) {
+	p = msg.getValue("caller");
+	if (p)
+	    m_caller = p;
+    }
+    if (m_called.null()) {
+	p = msg.getValue("called");
+	if (p)
+	    m_called = p;
+    }
+    p = msg.getValue("status");
+    if (p) {
+	m_status = p;
+	if ((m_status == "incoming") || (m_status == "outgoing"))
+	    m_dir = m_status;
+    }
+    p = msg.getValue("direction");
+    if (p)
+	m_dir = p;
+    p = msg.getValue("reason");
+    if (p)
+	m_reason = p;
+
+    update(type,val);
+
+    if (type == CdrHangup) {
+	cdrs.remove(this);
+	return;
     }
     emit();
 }
@@ -260,8 +277,10 @@ bool CdrHandler::received(Message &msg)
 	    msg.c_str(),id.c_str());
     if ((m_type == CdrRinging) || (m_type == CdrAnswer)) {
 	id = msg.getValue("peerid");
-	if (id && (b = CdrBuilder::find(id)))
-	    b->update(msg,m_type,msg.msgTime().usec());
+	if (id && (b = CdrBuilder::find(id))) {
+	    b->update(m_type,msg.msgTime().usec());
+	    b->emit();
+	}
     }
     return false;
 };

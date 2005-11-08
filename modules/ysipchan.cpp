@@ -2362,13 +2362,13 @@ bool YateSIPLine::process(SIPEvent* ev)
 
 void YateSIPLine::keepalive()
 {
-    if (m_partyPort && m_partyAddr) {
+    Socket* sock = plugin.ep() ? plugin.ep()->socket() : 0;
+    if (sock && m_partyPort && m_partyAddr) {
 	SocketAddr addr(PF_INET);
 	if (addr.host(m_partyAddr) && addr.port(m_partyPort) && addr.valid()) {
-	    Socket sock(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
 	    Debug(&plugin,DebugAll,"Sending UDP keepalive to %s:%d for '%s'",
 		m_partyAddr.c_str(),m_partyPort,c_str());
-	    sock.sendTo("\r\n",2,addr);
+	    sock->sendTo("\r\n",2,addr);
 	}
     }
     m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;

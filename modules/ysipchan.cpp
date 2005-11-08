@@ -30,6 +30,10 @@
 
 using namespace TelEngine;
 
+#define EXPIRES_MIN 60
+#define EXPIRES_DEF 600
+#define EXPIRES_MAX 3600
+
 /* Yate Payloads for the AV profile */
 static TokenDict dict_payloads[] = {
     { "mulaw",   0 },
@@ -400,6 +404,10 @@ static Configuration s_cfg;
 static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
+
+static int s_expires_min = EXPIRES_MIN;
+static int s_expires_def = EXPIRES_DEF;
+static int s_expires_max = EXPIRES_MAX;
 
 // Parse a SDP and return a possibly filtered list of SDP media
 static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0, const char* media = 0)
@@ -1133,6 +1141,12 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	return;
     }
 
+    // TODO: track registrations, allow deregistering all
+    if (*hl == "*") {
+	t->setResponse(200);
+	return;
+    }
+
     URI addr(*hl);
     Message *m = new Message("user.register");
     m->addParam("username",user);
@@ -1159,22 +1173,43 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     m->addParam("data",data);
 
     bool dereg = false;
-    String expires(e->getMessage()->getHeader("Expires"));
-    if (expires.toInteger(-1) < 0)
-	expires = 600;
-    if (hl) {
-	m->addParam("expires",expires);
-	if (expires == "0") {
-	    *m = "user.unregister";
-	    dereg = true;
-	}
+    String tmp(e->getMessage()->getHeader("Expires"));
+    int expires = tmp.toInteger(-1);
+    if (expires < 0)
+	expires = s_expires_def;
+    if (expires > s_expires_max)
+	expires = s_expires_max;
+    if (expires && (expires < s_expires_min)) {
+	tmp = s_expires_min;
+	SIPMessage* r = new SIPMessage(t->initialMessage(),423);
+	r->addHeader("Min-Expires",tmp);
+	t->setResponse(r);
+	r->deref();
+	return;
+    }
+    tmp = expires;
+    m->addParam("expires",tmp);
+    if (!expires) {
+	*m = "user.unregister";
+	dereg = true;
     }
     hl = e->getMessage()->getHeader("User-Agent");
     if (hl)
 	m->addParam("device",*hl);
     // Always OK deregistration attempts
-    if (Engine::dispatch(m) || dereg)
-	t->setResponse(200);
+    if (Engine::dispatch(m) || dereg) {
+	if (dereg)
+	    t->setResponse(200);
+	else {
+	    tmp = m->getValue("expires",tmp);
+	    if (tmp.null())
+		tmp = expires;
+	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
+	    r->addHeader("Expires",tmp);
+	    t->setResponse(r);
+	    r->deref();
+	}
+    }
     else
 	t->setResponse(404);
     m->destruct();
@@ -2166,7 +2201,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    setStatus("redirected");
 	    return false;
 	}
-	if (msg.getBoolValue("progress",s_cfg.getBoolValue("general","progress",true)))
+	if (msg.getBoolValue("progress",s_cfg.getBoolValue("general","progress",false)))
 	    m_tr->setResponse(183);
     }
     return true;
@@ -2342,8 +2377,8 @@ bool YateSIPLine::process(SIPEvent* ev)
 			    laddr.c_str(),lport,c_str());
 			m_localAddr = laddr;
 			m_localPort = lport;
-			// since local address changed register again in 1 second
-			m_resend = 1000000 + Time::now();
+			// since local address changed register again in 5 seconds
+			m_resend = 5000000 + Time::now();
 		    }
 		}
 		m_partyAddr = msg->getParty()->getPartyAddr();
@@ -2679,6 +2714,9 @@ void SIPDriver::initialize()
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
+    s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
+    s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
+    s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

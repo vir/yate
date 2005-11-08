@@ -17,7 +17,7 @@
 ;prack=disable
 
 ; progress: bool: Send an "183 Session Progress" just after successfull routing
-;progress=enable
+;progress=disable
 
 ; generate: bool: Allow Yate messages to send arbitrary SIP client transactions
 ;generate=disable
@@ -27,6 +27,19 @@
 
 ; ignorevia: bool: Ignore Via headers and send answer back to the source
 ;ignorevia=enable
+
+
+[registrar]
+; Controls the behaviour when acting as registrar
+
+; expires_min: int: Minimum allowed expiration time in seconds
+;expires_min=60
+
+; expires_def: int: Default expiration time if not present in REGISTER request
+;expires_def=600
+
+; expires_max: int: Value used to limit the expiration time to something sane
+;expires_max=3600
 
 
 [codecs]

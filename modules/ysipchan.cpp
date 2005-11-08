@@ -191,6 +191,7 @@ private:
     void clearTransaction();
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
+    void keepalive();
     String m_registrar;
     String m_username;
     String m_authname;
@@ -198,8 +199,10 @@ private:
     String m_outbound;
     String m_domain;
     String m_display;
-    Time m_resend;
+    u_int64_t m_resend;
+    u_int64_t m_keepalive;
     int m_interval;
+    int m_alive;
     SIPTransaction* m_tr;
     bool m_marked;
     bool m_valid;
@@ -2194,7 +2197,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 }
 
 YateSIPLine::YateSIPLine(const String& name)
-    : String(name), m_resend((u_int64_t)0), m_interval(0),
+    : String(name), m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
       m_tr(0), m_marked(false), m_valid(false),
       m_localPort(0), m_partyPort(0), m_localDetect(false)
 {
@@ -2245,6 +2248,7 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
 
 void YateSIPLine::login()
 {
+    m_keepalive = 0;
     if (m_registrar.null() || m_username.null()) {
 	logout();
 	m_valid = true;
@@ -2271,6 +2275,7 @@ void YateSIPLine::login()
 void YateSIPLine::logout()
 {
     m_resend = 0;
+    m_keepalive = 0;
     bool sendLogout = m_valid && m_registrar && m_username;
     clearTransaction();
     m_valid = false;
@@ -2296,6 +2301,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 	clearTransaction();
 	m_valid = false;
 	m_resend = m_interval*(int64_t)1000000 + Time::now();
+	m_keepalive = 0;
 	return false;
     }
     const SIPMessage* msg = ev->getMessage();
@@ -2308,33 +2314,42 @@ bool YateSIPLine::process(SIPEvent* ev)
 	c_str(),msg->code,this);
     switch (msg->code) {
 	case 200:
+	    // re-register at 3/4 of the expire interval
+	    m_resend = m_interval*(int64_t)750000 + Time::now();
+	    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
 	    if (msg->getParty()) {
 		if (m_localDetect) {
+		    String laddr = m_localAddr;
+		    int lport = m_localPort;
 		    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
 		    if (hl) {
 			const NamedString* par = hl->getParam("received");
 			if (par && *par)
-			    m_localAddr = *par;
+			    laddr = *par;
 			par = hl->getParam("rport");
 			if (par) {
 			    int port = par->toInteger(0,10);
 			    if (port > 0)
-				m_localPort = port;
+				lport = port;
 			}
 		    }
-		    if (m_localAddr.null())
-			m_localAddr = msg->getParty()->getLocalAddr();
-		    if (!m_localPort)
-			m_localPort = msg->getParty()->getLocalPort();
-		    Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
-			m_localAddr.c_str(),m_localPort,c_str());
+		    if (laddr.null())
+			laddr = msg->getParty()->getLocalAddr();
+		    if (!lport)
+			lport = msg->getParty()->getLocalPort();
+		    if ((laddr != m_localAddr) || (lport != m_localPort)) {
+			Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
+			    laddr.c_str(),lport,c_str());
+			m_localAddr = laddr;
+			m_localPort = lport;
+			// since local address changed register again in 1 second
+			m_resend = 1000000 + Time::now();
+		    }
 		}
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
 	    m_valid = true;
-	    // re-register at 3/4 of the expire interval
-	    m_resend = m_interval*(int64_t)750000 + Time::now();
 	    Debug(&plugin,DebugInfo,"SIP line '%s' logon success to %s:%d",
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
@@ -2345,10 +2360,27 @@ bool YateSIPLine::process(SIPEvent* ev)
     return false;
 }
 
+void YateSIPLine::keepalive()
+{
+    if (m_partyPort && m_partyAddr) {
+	SocketAddr addr(PF_INET);
+	if (addr.host(m_partyAddr) && addr.port(m_partyPort) && addr.valid()) {
+	    Socket sock(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
+	    Debug(&plugin,DebugAll,"Sending UDP keepalive to %s:%d for '%s'",
+		m_partyAddr.c_str(),m_partyPort,c_str());
+	    sock.sendTo("\r\n",2,addr);
+	}
+    }
+    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
+}
+
 void YateSIPLine::timer(const Time& when)
 {
-    if (!m_resend || (m_resend > when))
+    if (!m_resend || (m_resend > when)) {
+	if (m_keepalive && (m_keepalive <= when))
+	    keepalive();
 	return;
+    }
     m_resend = m_interval*(int64_t)1000000 + when;
     login();
 }
@@ -2417,6 +2449,7 @@ bool YateSIPLine::update(const Message& msg)
 	chg = change(m_localAddr,tmp) || chg;
 	chg = change(m_localPort,port) || chg;
     }
+    m_alive = msg.getIntValue("keepalive",(m_localDetect ? 25 : 0));
     tmp = msg.getValue("operation");
     // if something changed we logged out so try to climb back
     if (chg || (oper == "login"))

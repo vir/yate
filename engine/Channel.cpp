@@ -441,6 +441,20 @@ void Channel::callRejected(const char* error, const char* reason, const Message*
     status("rejected");
 }
 
+bool Channel::dtmfInband(const char* tone)
+{
+    if (null(tone))
+	return false;
+    Message m("chan.attach");
+    complete(m,true);
+    m.userData(this);
+    String tmp("tone/dtmfstr/");
+    tmp += tone;
+    m.setParam("override",tmp);
+    m.setParam("single","yes");
+    return Engine::dispatch(m);
+}
+
 bool Channel::setDebug(Message& msg)
 {
     String str = msg.getValue("line");

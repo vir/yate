@@ -1398,6 +1398,14 @@ protected:
     inline void setOutgoing(bool outgoing = true)
 	{ m_outgoing = outgoing; }
 
+    /**
+     * Attempt to install an override data source to send DTMF inband.
+     * Needs a tone generator module capable to override with "tone/dtmfstr/xyz"
+     * @param tone Pointer to the tone sequence to send
+     * @return True on success
+     */
+    bool dtmfInband(const char* tone);
+
 private:
     void init();
     Channel(); // no default constructor please

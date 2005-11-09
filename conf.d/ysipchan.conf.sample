@@ -28,6 +28,9 @@
 ; ignorevia: bool: Ignore Via headers and send answer back to the source
 ;ignorevia=enable
 
+; dtmfinband: bool: Generate DTMF inband by default
+;dtmfinband=no
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

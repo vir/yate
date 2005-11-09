@@ -922,18 +922,9 @@ bool PriChan::msgTone(Message& msg, const char* tone)
 {
     if (null(tone))
 	return false;
-    if (m_inband) {
-	Message m("chan.attach");
-	complete(m,true);
-	m.userData(this);
-	String tmp("tone/dtmfstr/");
-	tmp += tone;
-	m.setParam("override",tmp);
-	m.setParam("single","yes");
-	if (Engine::dispatch(m))
-	    return true;
-	// if we failed try to send as signalling anyway
-    }
+    if (m_inband && dtmfInband(tone))
+	return true;
+    // if we failed try to send as signalling anyway
     while (*tone)
 	sendDigit(*tone++);
     return true;

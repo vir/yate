@@ -342,6 +342,7 @@ private:
     ObjList* m_routes;
     bool m_authBye;
     int m_mediaStatus;
+    bool m_inband;
 };
 
 class YateSIPGenerate : public GenObject
@@ -404,6 +405,7 @@ static Configuration s_cfg;
 static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
+static bool s_inband = false;
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -1262,7 +1264,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_tr(tr), m_hungup(false), m_byebye(true),
       m_state(Incoming), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_mediaStatus(MediaMissing)
+      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1357,12 +1359,13 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_tr(0), m_hungup(false), m_byebye(true),
       m_state(Outgoing), m_rtpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_mediaStatus(MediaMissing)
+      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
+    m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_line = msg.getValue("line");
     String tmp;
@@ -2162,6 +2165,8 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 	ObjList* l = m_rtpMedia->find("audio");
 	const RtpMedia* m = static_cast<const RtpMedia*>(l ? l->get() : 0);
 	if (m) {
+	    if (m_inband && dtmfInband(tone))
+		return true;
 	    msg.setParam("targetid",m->id());
 	    return false;
 	}
@@ -2714,6 +2719,7 @@ void SIPDriver::initialize()
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
+    s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);

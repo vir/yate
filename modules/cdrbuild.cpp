@@ -158,6 +158,10 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
     m->addParam("status",m_status);
     m->addParam("reason",m_reason);
+    if (m_dir == "incoming")
+	m->addParam("external",m_caller);
+    else if (m_dir == "outgoing")
+	m->addParam("external",m_called);
     Engine::enqueue(m);
 }
 

@@ -1516,7 +1516,8 @@ void GTKClient::loadWindows()
 	if (l && l->getBoolValue("enabled",true))
 	    createWindow(*l);
     }
-    gtk_idle_add(gtkIdleCb,this);
+    // don't use gtk_idle_add - it hogs the CPU on Windows
+    g_timeout_add(1,gtkIdleCb,this);
 }
 
 

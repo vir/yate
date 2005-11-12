@@ -130,8 +130,8 @@ static gboolean debugCbInfo(GtkWidget* wid)
     gtk_widget_class_path(wid,NULL,&wcp,NULL);
     Debug(GTKDriver::self(),DebugAll,"debugCbInfo widget %p path '%s' class path '%s'",
 	wid,wp,wcp);
-    delete wp;
-    delete wcp;
+    ::free(wp);
+    ::free(wcp);
     return FALSE;
 }
 
@@ -260,7 +260,7 @@ static GtkWidget* getListItem(GtkList* lst, const String& item)
 
 static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbAction data %p",dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbAction(%p,%p)",wid,dat);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow(wid);
@@ -269,7 +269,7 @@ static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
 
 static gboolean widgetCbToggle(GtkWidget* wid, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbToggle data %p",dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbToggle(%p,%p)",wid,dat);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow(wid);
@@ -287,7 +287,7 @@ static gboolean widgetCbToggle(GtkWidget* wid, gpointer dat)
 
 static gboolean widgetCbSelected(GtkOptionMenu* opt, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbSelected data %p",dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSelected(%p,%p)",opt,dat);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow((GtkWidget*)opt);
@@ -296,7 +296,7 @@ static gboolean widgetCbSelected(GtkOptionMenu* opt, gpointer dat)
 
 static gboolean widgetCbSelection(GtkList* lst, GtkListItem* item, gpointer dat)
 {
-    Debug(GTKDriver::self(),DebugAll,"widgetCbSelection item %p data %p",item,dat);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSelection(%p,%p,%p)",lst,item,dat);
     g_object_set_data((GObject*)lst,"Yate::ListItem",item);
     if (GTKClient::changing())
 	return FALSE;
@@ -306,7 +306,7 @@ static gboolean widgetCbSelection(GtkList* lst, GtkListItem* item, gpointer dat)
 
 static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
 {
-    DDebug(GTKDriver::self(),DebugAll,"widgetCbMinimize data %p",dat);
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbMinimize(%p,%p)",wid,dat);
     GtkWidget* top = gtk_widget_get_toplevel(wid);
     if (!top)
 	return FALSE;
@@ -316,7 +316,7 @@ static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
 
 static gboolean widgetCbMaximize(GtkWidget* wid, gpointer dat)
 {
-    DDebug(GTKDriver::self(),DebugAll,"widgetCbMaximize data %p",dat);
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbMaximize(%p,%p)",wid,dat);
     GtkWidget* top = gtk_widget_get_toplevel(wid);
     if (!top)
 	return FALSE;
@@ -330,7 +330,7 @@ static gboolean widgetCbMaximize(GtkWidget* wid, gpointer dat)
 
 static gboolean widgetCbHide(GtkWidget* wid, gpointer dat)
 {
-    DDebug(GTKDriver::self(),DebugAll,"widgetCbHide data %p",dat);
+    DDebug(GTKDriver::self(),DebugAll,"widgetCbHide(%p,%p)",wid,dat);
     if (GTKClient::changing())
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow(wid);
@@ -344,7 +344,7 @@ static gboolean widgetCbHide(GtkWidget* wid, gpointer dat)
 static gboolean widgetCbShow(GtkWidget* wid, gpointer dat)
 {
     const gchar* name = gtk_widget_get_name(wid);
-    Debug(GTKDriver::self(),DebugAll,"widgetCbShow '%s'",name);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbShow(%p,%p) '%s'",wid,dat,name);
     return GTKClient::setVisible(name);
 }
 

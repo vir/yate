@@ -38,9 +38,11 @@ static bool s_clickInfo = false;
 #define MAX_CONTAINER_DEPTH 20
 
 #ifdef _WINDOWS
+#define BUGGY_IDLE
 #define ONE_THREAD true
 #define DEFAULT_DEVICE "dsound/*"
 #else
+#undef BUGGY_IDLE
 #define ONE_THREAD false
 #define DEFAULT_DEVICE "oss//dev/dsp"
 #endif
@@ -1516,8 +1518,13 @@ void GTKClient::loadWindows()
 	if (l && l->getBoolValue("enabled",true))
 	    createWindow(*l);
     }
+#ifdef BUGGY_IDLE
     // don't use gtk_idle_add - it hogs the CPU on Windows
     g_timeout_add(1,gtkIdleCb,this);
+#else
+    // but on Linux the 1ms timeout makes the UI crawl...
+    gtk_idle_add(gtkIdleCb,this);
+#endif
 }
 
 

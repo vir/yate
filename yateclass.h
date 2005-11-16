@@ -823,16 +823,18 @@ public:
     /**
      * Insert an object at this point
      * @param obj Pointer to the object to insert
+     * @param compact True to replace NULL values in list if possible
      * @return A pointer to the inserted list item
      */
-    ObjList* insert(const GenObject* obj);
+    ObjList* insert(const GenObject* obj, bool compact = true);
 
     /**
      * Append an object to the end of the list
      * @param obj Pointer to the object to append
+     * @param compact True to replace NULL values in list if possible
      * @return A pointer to the inserted list item
      */
-    ObjList* append(const GenObject* obj);
+    ObjList* append(const GenObject* obj, bool compact = true);
 
     /**
      * Delete this list item
@@ -872,6 +874,101 @@ private:
     ObjList* m_next;
     GenObject* m_obj;
     bool m_delete;
+};
+
+/**
+ * A simple Array class derivated from RefObject
+ * It uses one ObjList to keep the pointers to other ObjList's.
+ * Data is organized in columns - the main ObjList holds pointers to one
+ *  ObjList for each column.
+ * This class has been written by Diana
+ */
+class YATE_API Array : public RefObject
+{
+public:
+    /**
+     * Creates a new empty array.
+     * @param columns Initial number of columns
+     * @param rows Initial number of rows
+     */
+    Array(int columns = 0, int rows = 0);
+
+    /**
+     * Destructor. Destructs all objects in the array
+     */
+    virtual ~Array();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Insert a row of objects
+     * @param row List of objects to insert or NULL
+     * @param index Number of the row to insert before, negative to append
+     * @return True for success, false if index was larger than the array
+     */
+    bool addRow(ObjList* row = 0, int index = -1);
+    
+    /**
+     * Insert a column of objects
+     * @param column List of objects to insert or NULL
+     * @param index Number of the column to insert before, negative to append
+     * @return True for success, false if index was larger than the array
+     */
+    bool addColumn(ObjList* column = 0, int index = -1);
+    
+    /**
+     * Delete an entire row of objects
+     * @param index Number of the row to delete
+     * @return True for success, false if index was out of bounds
+     */
+    bool delRow(int index);
+
+    /**
+     * Delete an entire column of objects
+     * @param index Number of the column to delete
+     * @return True for success, false if index was out of bounds
+     */
+    bool delColumn(int index);
+ 
+    /**
+     * Retrive an object from the array
+     * @param column Number of the column in the array
+     * @param row Number of the row in the array
+     * @return Pointer to the stored object, NULL for out of bound indexes
+     */
+    GenObject* get(int column, int row) const;
+    
+    /**
+     * Store an object in the array
+     * @param column Number of the column in the array
+     * @param row Number of the row in the array
+     * @return True for success, false if indexes were out of bounds
+     */
+    bool set(GenObject* obj, int column, int row);
+    
+    /**
+     * Get the number of rows in the array
+     * @return Total number of rows
+     */
+    inline int getRows() const
+	{ return m_rows; }
+
+    /**
+     * Get the number of columns in the array
+     * @return Total number of columns
+     */
+    inline int getColumns() const
+	{ return m_columns; }
+
+private:
+    int m_rows;
+    int m_columns;
+    ObjList m_obj;
 };
 
 class Regexp;
@@ -1398,6 +1495,22 @@ public:
      */
     inline String msgUnescape(int* errptr = 0, char extraEsc = 0) const
 	{ return msgUnescape(c_str(),errptr,extraEsc); }
+
+    /**
+     * Create an escaped string suitable for use in SQL queries
+     * @param str String to convert to escaped format
+     * @param extraEsc Character to escape other than the default ones
+     * @return The string with special characters escaped
+     */
+    static String sqlEscape(const char* str, char extraEsc = 0);
+
+    /**
+     * Create an escaped string suitable for use in SQL queries
+     * @param extraEsc Character to escape other than the default ones
+     * @return The string with special characters escaped
+     */
+    inline String sqlEscape(char extraEsc = 0) const
+	{ return sqlEscape(c_str(),extraEsc); }
 
 protected:
     /**

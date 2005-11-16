@@ -162,12 +162,12 @@ GenObject* ObjList::set(const GenObject* obj, bool delold)
     return tmp;
 }
 
-ObjList* ObjList::insert(const GenObject* obj)
+ObjList* ObjList::insert(const GenObject* obj, bool compact)
 {
 #ifdef XDEBUG
-    Debugger debug("ObjList::insert","(%p) [%p]",obj,this);
+    Debugger debug("ObjList::insert","(%p,%d) [%p]",obj,compact,this);
 #endif
-    if (m_obj) {
+    if (m_obj || !compact) {
 	ObjList *n = new ObjList();
 	n->set(m_obj);
 	set(obj,false);
@@ -179,13 +179,13 @@ ObjList* ObjList::insert(const GenObject* obj)
     return this;
 }
 
-ObjList* ObjList::append(const GenObject* obj)
+ObjList* ObjList::append(const GenObject* obj, bool compact)
 {
 #ifdef XDEBUG
-    Debugger debug("ObjList::append","(%p) [%p]",obj,this);
+    Debugger debug("ObjList::append","(%p,%d) [%p]",obj,compact,this);
 #endif
     ObjList *n = last();
-    if (n->get()) {
+    if (n->get() || !compact) {
 	n->m_next = new ObjList();
 	n = n->m_next;
     }

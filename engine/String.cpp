@@ -813,6 +813,20 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
     return s;
 }
 
+String String::sqlEscape(const char* str, char extraEsc)
+{
+    if (!str)
+	str = "";
+    String s;
+    char c;
+    while ((c=*str++)) {
+	if (c == '\\' || c == '\'' || c == extraEsc)
+	    s += '\\';
+	s += c;
+    }
+    return s;
+}
+
 unsigned int String::hash() const
 {
     if (m_hash == INIT_HASH)

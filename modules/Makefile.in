@@ -20,7 +20,7 @@ INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatep
 SUBDIRS := skin gtk2
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
-	regexroute.yate regfile.yate accfile.yate \
+	regexroute.yate regfile.yate accfile.yate register.yate \
 	tonegen.yate wavefile.yate conference.yate moh.yate \
 	callgen.yate rmanager.yate pbx.yate \
 	extmodule.yate osschan.yate \
@@ -28,7 +28,7 @@ PROGS := cdrbuild.yate cdrfile.yate \
 LIBS :=
 
 ifneq (@HAVE_PGSQL@,no)
-PROGS := $(PROGS) register.yate
+PROGS := $(PROGS) pgsqldb.yate
 endif
 
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
@@ -135,7 +135,8 @@ wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
 
-register.yate: LOCALFLAGS = @PGSQL_INC@ -lpq
+pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
+pgsqldb.yate: LOCALLIBS = -lpq
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

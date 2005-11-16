@@ -2,7 +2,7 @@
  * register.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * Ask for a registration from this module.
+ * Registration, authentication, authorization and accounting from a database.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004, 2005 Null Team
@@ -23,9 +23,6 @@
  */
 
 #include <yatephone.h>
-
-#include <stdio.h>
-#include <libpq-fe.h>
 
 using namespace TelEngine;
 
@@ -51,26 +48,14 @@ public:
     virtual ~AAAHandler();
     virtual const String& name() const;
     virtual bool received(Message& msg);
-    bool ok();
-    int queryDb(const char* query, Message* dest = 0);
-    bool initDb(int retry = 0);
+    virtual bool loadQuery();
+    virtual void initQuery();
 
 protected:
-    virtual bool loadQuery();
-    String m_query;
-
-private:
-    void dropDb();
-    bool testDb();
-    bool startDb();
-    int queryDbInternal(const char* query, Message* dest);
-    String m_result;
-    Mutex m_dbmutex;
     int m_type;
-    PGconn *m_conn;
-    int m_retry;
-    u_int64_t m_timeout;
-    bool m_first;
+    String m_query;
+    String m_result;
+    String m_account;
 };
 
 class CDRHandler : public AAAHandler
@@ -80,9 +65,9 @@ public:
     virtual ~CDRHandler();
     virtual const String& name() const;
     virtual bool received(Message& msg);
+    virtual bool loadQuery();
 
 protected:
-    virtual bool loadQuery();
     String m_name;
     String m_queryInitialize;
     String m_queryUpdate;
@@ -97,6 +82,7 @@ public:
 protected:
     virtual void initialize();
     virtual void statusParams(String& str);
+    virtual bool received(Message& msg, int id);
 private:
     static int getPriority(const char *name);
     static void addHandler(const char *name, int type);
@@ -105,34 +91,6 @@ private:
 };
 
 static RegistModule module;
-
-// perform escaping of special SQL characters
-static void sqlEscape(String& str)
-{
-    unsigned int i;
-    int e = 0;
-    for (i = 0; i < str.length(); i++) {
-	switch (str[i]) {
-	    case '\'':
-	    case '\\':
-		++e;
-	}
-    }
-    if (!e)
-	return;
-    String tmp(' ',str.length()+e);
-    char* d = const_cast<char*>(tmp.c_str());
-    const char* s = str.c_str();
-    while (char c = *s++) {
-	switch (c) {
-	    case '\'':
-	    case '\\':
-		*d++ = '\\';
-	}
-	*d++ = c;
-    }
-    str = tmp;
-}
 
 // handle ${paramname} replacements
 static void replaceParams(String& str, const Message &msg)
@@ -144,39 +102,45 @@ static void replaceParams(String& str, const Message &msg)
 	    String v = str.substr(p1+2,p2-p1-2);
 	    v.trimBlanks();
 	    DDebug(&module,DebugAll,"Replacing parameter '%s'",v.c_str());
-	    String tmp(msg.getValue(v));
-	    sqlEscape(tmp);
+	    String tmp = String::sqlEscape(msg.getValue(v));
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
 	}
     }
 }
 
 // copy parameters from SQL result to a Message												    
-static void copyParams(Message& msg, const PGresult* res, const char* resultName = 0, int row = 0)
+static void copyParams(Message& msg, Array *a, const char* resultName = 0, int row = 0)
 {
-    int n = PQnfields(res);
-    for (int i = 0; i < n; i++) {
-	String name(PQfname(res,i));
-	if (name.null() || PQgetisnull(res,row,i))
+    if (!a)
+	return;
+    for (int i = 0; i < a->getColumns(); i++) {
+	String* s = YOBJECT(String,a->get(i,0));
+	if (!(s && *s))
 	    continue;
-	const char* val = PQgetvalue(res,row,i);
-	if (name == resultName)
-	    msg.retValue() = val;
-	else
-	    msg.setParam(name,val);
+	String name = *s;
+	for (int j = 1; j < a->getRows(); j++) {
+	    s = YOBJECT(String,a->get(i,j));
+	    if (!s)
+		continue;
+	    if (name == resultName)
+		msg.retValue() = *s;
+	    else
+		msg.setParam(name,*s);
+	}
     }
 }
 
+
 AAAHandler::AAAHandler(const char* hname, int type, int prio)
-    : MessageHandler(hname,prio), m_dbmutex(true),
-      m_type(type), m_conn(0), m_retry(0), m_timeout(0), m_first(true)
+    : MessageHandler(hname,prio),m_type(type)
 {
+     m_result = s_cfg.getValue(name(),"result");
+     m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
 }
 
 AAAHandler::~AAAHandler()
 {
     s_handlers.remove(this,false);
-    dropDb();
 }
 
 const String& AAAHandler::name() const
@@ -190,191 +154,19 @@ bool AAAHandler::loadQuery()
     return m_query != 0;
 }
 
-// initialize the database connection and handler data
-bool AAAHandler::initDb(int retry)
+void AAAHandler::initQuery()
 {
-    if (null())
-	return false;
-    Lock lock(m_dbmutex);
-    if (!loadQuery())
-	return false;
-    // allow specifying the raw connection string
-    String conn(s_cfg.getValue(name(),"connection"));
-    if (conn.null())
-	conn = s_cfg.getValue("default","connection");
-    if (conn.null()) {
-	// else build it from pieces
-	const char* host = s_cfg.getValue("default","host","localhost");
-	host = s_cfg.getValue(name(),"host",host);
-	int port = s_cfg.getIntValue("default","port",5432);
-	port = s_cfg.getIntValue(name(),"port",port);
-	const char* dbname = s_cfg.getValue("default","database","yate");
-	dbname = s_cfg.getValue(name(),"database",dbname);
-	const char* user = s_cfg.getValue("default","user","postgres");
-	user = s_cfg.getValue(name(),"user",user);
-	const char* pass = s_cfg.getValue("default","password");
-	pass = s_cfg.getValue(name(),"password",pass);
-	if (TelEngine::null(host) || (port <= 0) || TelEngine::null(dbname))
-	    return false;
-	conn << "host='" << host << "' port=" << port << " dbname='" << dbname << "'";
-	if (user) {
-	    conn << " user='" << user << "'";
-	    if (pass)
-		conn << " password='" << pass << "'";
-	}
-    }
-    m_result = s_cfg.getValue(name(),"result");
-    int t = s_cfg.getIntValue("default","retry",5);
-    m_retry = s_cfg.getIntValue(name(),"retry",t);
-    t = s_cfg.getIntValue("default","timeout",10000);
-    m_timeout = (u_int64_t)1000 * s_cfg.getIntValue(name(),"timeout",t);
-    Debug(&module,DebugAll,"Initiating connection \"%s\" retry %d",conn.c_str(),retry);
-    u_int64_t timeout = Time::now() + m_timeout;
-    m_conn = PQconnectStart(conn.c_str());
-    if (!m_conn) {
-	Debug(&module,DebugGoOn,"Could not start connection for '%s'",name().c_str());
-	return false;
-    }
-    PQsetnonblocking(m_conn,1);
-    while (Time::now() < timeout) {
-	switch (PQstatus(m_conn)) {
-	    case CONNECTION_BAD:
-		Debug(&module,DebugWarn,"Connection for '%s' failed: %s",name().c_str(),PQerrorMessage(m_conn));
-		dropDb();
-		return false;
-	    case CONNECTION_OK:
-		Debug(&module,DebugAll,"Connection for '%s' succeeded",name().c_str());
-		if (m_first) {
-		    m_first = false;
-		    // first time we got connected - execute the initialization
-		    const char* query = s_cfg.getValue(name(),"initquery");
-		    if (query) {
-			queryDb(query);
-			return testDb();
-		    }
-		}
-		return true;
-	    default:
-		break;
-	}
-	PQconnectPoll(m_conn);
-	Thread::yield();
-    }
-    Debug(&module,DebugWarn,"Connection timed out for '%s'",name().c_str());
-    dropDb();
-    return false;
-}
-
-// drop the connection
-void AAAHandler::dropDb()
-{
-    Lock lock(m_dbmutex);
-    if (!m_conn)
+    if (m_account.null())
 	return;
-    PGconn* tmp = m_conn;
-    m_conn = 0;
-    lock.drop();
-    PQfinish(tmp);
-}
-
-// test it the connection is still OK
-bool AAAHandler::testDb()
-{
-    return m_conn && (CONNECTION_OK == PQstatus(m_conn));
-}
-
-// public, thread safe version
-bool AAAHandler::ok()
-{
-    Lock lock(m_dbmutex);
-    return testDb();
-}
-
-// try to get up the connection, retry if we have to
-bool AAAHandler::startDb()
-{
-    if (testDb())
-	return true;
-    for (int i = 0; i < m_retry; i++) {
-	if (initDb(i))
-	    return true;
-	Thread::yield();
-	if (testDb())
-	    return true;
-    }
-    return false;
-}
-
-// perform the query, fill the message with data
-//  return number of rows, -1 for non-retryable errors and -2 to retry
-int AAAHandler::queryDbInternal(const char* query, Message* dest)
-{
-    Lock lock(m_dbmutex);
-    if (!startDb())
-	// no retry - startDb already tried and failed...
-	return -1;
-
-    u_int64_t timeout = Time::now() + m_timeout;
-    if (!PQsendQuery(m_conn,query)) {
-	// a connection failure cannot be detected at this point so any
-	//  error must be caused by the query itself - bad syntax or so
-	Debug(&module,DebugWarn,"Query \"%s\" for '%s' failed: %s",
-	    query,name().c_str(),PQerrorMessage(m_conn));
-	// non-retryable, query should be fixed
-	return -1;
-    }
-
-    if (PQflush(m_conn)) {
-	Debug(&module,DebugWarn,"Flush for '%s' failed: %s",
-	    name().c_str(),PQerrorMessage(m_conn));
-	dropDb();
-	return -2;
-    }
-
-    int totalRows = 0;
-    while (Time::now() < timeout) {
-	PQconsumeInput(m_conn);
-	if (PQisBusy(m_conn)) {
-	    Thread::yield();
-	    continue;
-	}
-	PGresult* res = PQgetResult(m_conn);
-	if (!res) {
-	    // last result already received and processed - exit successfully
-	    Debug(&module,DebugAll,"Query for '%s' returned %d rows",name().c_str(),totalRows);
-	    return totalRows;
-	}
-	ExecStatusType stat = PQresultStatus(res);
-	switch (stat) {
-	    case PGRES_TUPLES_OK:
-		// we got some data - but maybe zero rows or binary...
-		if (dest) {
-		    int rows = PQntuples(res);
-		    if ((rows > 0) && !PQbinaryTuples(res)) {
-			totalRows += rows;
-			if (totalRows > 1)
-			    Debug(&module,DebugFail,"Query for '%s' returning %d (%d) rows!",
-				name().c_str(),totalRows,rows);
-			else
-			    copyParams(*dest,res,m_result);
-		    }
-		}
-		break;
-	    case PGRES_COMMAND_OK:
-		// no data returned
-		break;
-	    case PGRES_COPY_IN:
-	    case PGRES_COPY_OUT:
-		// data transfers - ignore them
-		break;
-	    default:
-		Debug(&module,DebugWarn,"Query error: %s",PQresultErrorMessage(res));
-	}
-	PQclear(res);
-    }
-    Debug(&module,DebugWarn,"Query timed out for '%s'",name().c_str());
-    dropDb();
-    return -2;
+    String query = s_cfg.getValue(name(),"initquery");
+    if (query.null())
+	return;
+    // no error check at all - we enqueue the query and we're out
+    Message* m = new Message("database");
+    m->addParam("account",m_account);
+    m->addParam("query",query);
+    m->addParam("results","false");
+    Engine::enqueue(m);
 }
 
 // little helper function to make code cleaner
@@ -385,64 +177,82 @@ static bool failure(Message* m)
     return false;
 }
 
-int AAAHandler::queryDb(const char* query, Message* dest)
-{
-    if (TelEngine::null(query))
-	return -1;
-    Debug(&module,DebugAll,"Performing query \"%s\" for '%s'",
-	query,name().c_str());
-    for (int i = 0; i < m_retry; i++) {
-	int res = queryDbInternal(query,dest);
-	if (res > -2) {
-	    if (res < 0)
-		failure(dest);
-	    // ok or non-retryable error, get out of here
-	    return res;
-	}
-    }
-    failure(dest);
-    return -2;
-}
-
 bool AAAHandler::received(Message& msg)
 {
-    if (m_query.null())
+    if (m_query.null() || m_account.null())
 	return false;
     String query(m_query);
     replaceParams(query,msg);
     switch (m_type)
     {
 	case Regist:
+	{
 	    if (s_critical)
 		return failure(&msg);
-	    // no error -> ok
-	    return queryDb(query,&msg) >= 0;
-	    break;
+	    Message m("database");
+	    m.addParam("account",m_account);
+	    m.addParam("query",query);
+	    m.addParam("results","false");
+	    if (Engine::dispatch(m))
+		if (m.getIntValue("affected") >= 1 || m.getIntValue("rows") >=1)
+		    return true;
+	    return false;
+	}
+	break;
 	case Auth:
+	{
 	    if (s_critical)
 		return failure(&msg);
-	    // ok if we got some result
-	    return queryDb(query,&msg) > 0;
-	    break;
-	case Route:
-	    if (s_critical)
-		return failure(&msg);
-	    {
-	    // ok if we got some result
-		int rows = queryDb(query,&msg);
-		if ((rows == 1) && (msg.retValue().null())) {
-		    // we know about the user but has no address of record
-		    msg.retValue() = "-";
-		    msg.setParam("error","offline");
+	    Message m("database");
+	    m.addParam("account",m_account);
+	    m.addParam("query",query);
+	    if (Engine::dispatch(m))
+		if (m.getIntValue("rows") >=1)
+		{
+		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    copyParams(msg,a,m_result);
+		    return true;
 		}
-		return (rows > 0);
-	    }
-	    break;
+	    return false;
+	}
+	break;
+	case Route:
+	{
+	    if (s_critical)
+		return failure(&msg);
+	    Message m("database");
+	    m.addParam("account",m_account);
+	    m.addParam("query",query);
+	    if (Engine::dispatch(m))
+		if (m.getIntValue("rows") >=1)
+		{
+		    Array *a = (Array *)m.userData();
+		    copyParams(msg,a,m_result);
+		    if (msg.retValue().null())
+		    {
+			// we know about the user but has no address of record
+			msg.retValue() = "-"; 
+			msg.setParam("error","offline");
+			msg.setParam("reason","Offline");
+			return false;
+		    }
+		    return true;
+		}
+	    return false;
+	}
+	break;
 	case UnRegist:
+	{
 	    // no error check - we return false
-	    queryDb(query,&msg);
-	    break;
+	    Message m("database");
+	    m.addParam("account",m_account);
+	    m.addParam("query",query);
+	    m.addParam("results","false");
+	    Engine::dispatch(m);
+	}
+	break;
 	case Timer:
+	{
 	    {
 		u_int32_t t = msg.msgTime().sec();
 		if (t >= s_nextTime)
@@ -451,12 +261,19 @@ bool AAAHandler::received(Message& msg)
 		else
 		    return false;
 	    }
-	    // no error check at all - we return false
-	    queryDb(query);
-	    break;
+	    // no error check at all - we enqueue the query and return false
+	    Message* m = new Message("database");
+	    m->addParam("account",m_account);
+	    m->addParam("query",query);
+	    m->addParam("results","false");
+	    Engine::enqueue(m);
+	}
+	break;
     }
     return false;
 }
+
+
 
 CDRHandler::CDRHandler(const char* hname, int prio)
     : AAAHandler("call.cdr",Cdr,prio), m_name(hname)
@@ -485,6 +302,8 @@ bool CDRHandler::loadQuery()
 
 bool CDRHandler::received(Message& msg)
 {
+    if (m_account.null())
+	return false;
     String query(msg.getValue("operation"));
     if (query == "initialize")
 	query = m_queryInitialize;
@@ -498,7 +317,10 @@ bool CDRHandler::received(Message& msg)
 	return false;
     replaceParams(query,msg);
     // failure while accounting is critical
-    bool error = (queryDb(query) < 0);
+    Message m("database");
+    m.addParam("account",m_account);
+    m.addParam("query",query);
+    bool error = !Engine::dispatch(m) || m.getParam("error");
     if (m_critical && (s_critical != error)) {
 	s_critical = error;
 	module.changed();
@@ -511,22 +333,27 @@ bool CDRHandler::received(Message& msg)
 RegistModule::RegistModule()
     : Module("register","database"), m_init(false)
 {
-    Output("Loaded module Register for PostgreSQL");
+    Output("Loaded module Register for database");
 }
 
 RegistModule::~RegistModule()
 {
-    Output("Unloading module Register for PostgreSQL");
+    Output("Unloading module Register for database");
 }
 
 void RegistModule::statusParams(String& str)
 {
     str.append("critical=",",") << s_critical;
-    ObjList* l = s_handlers.skipNull();
-    for (; l; l = l->skipNext()) {
-	AAAHandler* h = static_cast<AAAHandler*>(l->get());
-	str << "," << h->name() << "=" << h->ok();
+}
+
+bool RegistModule::received(Message& msg, int id)
+{
+    if (id == Private) {
+	ObjList* l = s_handlers.skipNull();
+	for (; l; l=l->skipNext())
+	    static_cast<AAAHandler*>(l->get())->initQuery();
     }
+    return Module::received(msg,id);
 }
 
 int RegistModule::getPriority(const char *name)
@@ -539,8 +366,8 @@ int RegistModule::getPriority(const char *name)
 
 void RegistModule::addHandler(AAAHandler* handler)
 {
-    handler->initDb();
     s_handlers.append(handler);
+    handler->loadQuery();
     Engine::install(handler);
 }
 
@@ -563,8 +390,9 @@ void RegistModule::initialize()
 	return;
     m_init = true;
     setup();
-    Output("Initializing module Register for PostgreSQL");
+    Output("Initializing module Register for database");
     s_expire = s_cfg.getIntValue("general","expires",s_expire);
+    Engine::install(new MessageRelay("engine.start",this,Private,150));
     addHandler("call.cdr",AAAHandler::Cdr);
     addHandler("linetracker",AAAHandler::Cdr);
     addHandler("user.auth",AAAHandler::Auth);

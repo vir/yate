@@ -352,6 +352,7 @@ bool RegistModule::received(Message& msg, int id)
 	ObjList* l = s_handlers.skipNull();
 	for (; l; l=l->skipNext())
 	    static_cast<AAAHandler*>(l->get())->initQuery();
+	return false;
     }
     return Module::received(msg,id);
 }

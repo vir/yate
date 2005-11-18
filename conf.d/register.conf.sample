@@ -85,6 +85,9 @@ priority=120
 [call.cdr]
 ; Queries for the CDR updating message
 
+; critical: boolean: Reject all registrations and routing if query fails
+;critical=yes
+
 initquery=UPDATE cdr SET ended=true WHERE ended IS NULL OR NOT ended
 cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}','${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
 cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
@@ -93,6 +96,9 @@ cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid
 
 [linetracker]
 ; Queries for the line usage tracker
+
+; critical: boolean: Reject all registrations and routing if query fails
+;critical=no
 
 initquery=UPDATE users SET inuse='0'
 cdr_initialize=UPDATE users SET inuse=inuse+1 WHERE username='${external}'

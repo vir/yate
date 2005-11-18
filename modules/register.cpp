@@ -201,8 +201,6 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case Auth:
 	{
-	    if (s_critical)
-		return failure(&msg);
 	    Message m("database");
 	    m.addParam("account",m_account);
 	    m.addParam("query",query);

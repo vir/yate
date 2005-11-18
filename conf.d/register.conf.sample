@@ -1,0 +1,99 @@
+[general]
+; Global module settings that are read only at first initialization
+
+; expires: int: Will execute the engine.timer query only every that many seconds
+;expires=30
+
+
+; The following parameters enable handling of individual messages
+; Each must be enabled manually in this config file
+
+; user.auth: bool: Activate handler on the "user.auth" message
+;user.auth=no
+
+; user.register: bool: Activate handler on the "user.register" message
+;user.register=no
+
+; user.unregister: bool: Activate handler on the "user.unregister" message
+;user.unregister=no
+
+; engine.timer: bool: Activate handler on the "engine.timer" message
+;engine.timer=no
+
+; call.route: bool: Activate handler on the "call.route" message
+;call.route=no
+
+; call.cdr: bool: Activate handler on the "call.cdr" message
+;call.cdr=no
+
+; linetracker: bool: Activate line status tracking on "call.cdr"
+;linetracker=no
+
+
+[default]
+; This section holds default settings for each of the following message handlers
+; All these settings can be overriden in individual handler sections
+
+; priority: int: Priority in Yate's handlers chain
+;priority=50
+
+; account: string: Name of the database connection to use
+;account=
+
+
+; In each of the following sections you have to specify the following:
+; - initial query to execute when module is initialized
+; - query to execute for each received message
+; - result field to copy in message's textual return value (only for some)
+; You can also override the settings from section [default]
+
+
+[user.auth]
+; Query and result name for the user.auth message
+
+;query=SELECT password FROM users WHERE username='${username}'
+;result=password
+
+
+[user.register]
+; Query for the user.register message
+
+query=UPDATE users SET location='${data},expires=CURRENT_TIMESTAMP + INTERVAL '${expires} s' WHERE username='${username}'
+
+
+[user.unregister]
+; Query for the user.unregister message
+
+query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND username='${username}'
+
+
+[engine.timer]
+; Query for the timer message that expires registrations
+; Also look at the expires setting in section [general]
+
+query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP
+
+
+[call.route]
+; Query and result name for the routing message
+
+query=SELECT data,(CASE WHEN data IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
+result=data
+priority=120
+
+
+[call.cdr]
+; Queries for the CDR updating message
+
+initquery=UPDATE cdr SET ended=true WHERE ended IS NULL OR NOT ended
+cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}','${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
+cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}',ended=true WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+
+
+[linetracker]
+; Queries for the line usage tracker
+
+initquery=UPDATE users SET inuse='0'
+cdr_initialize=UPDATE users SET inuse=inuse+1 WHERE username='${external}'
+cdr_finalize=UPDATE users SET inuse=(CASE WHEN inuse>0 THEN inuse-1 ELSE 0 END) WHERE username='${external}'

@@ -427,6 +427,8 @@ void Channel::callAccept(Message& msg)
 	msgAnswered(msg);
     else if (msg.getBoolValue("autoring"))
 	msgRinging(msg);
+    else if (msg.getBoolValue("autoprogress"))
+	msgProgress(msg);
     else if (m_targetid.null() && msg.getBoolValue("autoanswer",true)) {
 	// no preference exists in the message so issue a notice
 	Debug(this,DebugNote,"Answering now call %s because we have no targetid [%p]",

@@ -90,6 +90,9 @@
 ; ep: bool: True if you want to activate the h323 endpoint
 ep = true
 
+; gw: bool: Set to true if you want this endpoint to declare itself as gateway
+gw = false
+
 ; alias: string: The alias used by h323 module to connect to gatekeeper
 alias = yate
 

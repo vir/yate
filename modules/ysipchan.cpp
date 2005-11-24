@@ -2205,8 +2205,11 @@ bool YateSIPConnection::callRouted(Message& msg)
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue("redirect")) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
+	    String tmp(msg.getValue("calledname"));
+	    if (tmp)
+		tmp = "\"" + tmp + "\" ";
+	    s = tmp + "<" + s + ">";
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),302);
-	    s = "<" + s + ">";
 	    m->addHeader("Contact",s);
 	    m_tr->setResponse(m);
 	    m->deref();

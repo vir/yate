@@ -148,8 +148,15 @@ void URI::parse() const
 
     // the compiler generates wrong code so use the temporary
     String tmp(*this);
+    bool hasDesc = false;
     Regexp r("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
-    if (tmp.matches(r)) {
+    if (tmp.matches(r))
+	hasDesc = true;
+    else {
+	r = "^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)";
+	hasDesc = tmp.matches(r);
+    }
+    if (hasDesc) {
 	m_desc = tmp.matchString(1);
 	tmp = tmp.matchString(2);
 	*const_cast<URI*>(this) = tmp;

@@ -58,7 +58,7 @@ public:
     URI();
     URI(const String& uri);
     URI(const URI& uri);
-    URI(const char* proto, const char* user, const char* host, int port = 0);
+    URI(const char* proto, const char* user, const char* host, int port = 0, const char* desc = 0);
     void parse() const;
     inline URI& operator=(const URI& value)
 	{ String::operator=(value); return *this; }
@@ -66,6 +66,8 @@ public:
 	{ String::operator=(value); return *this; }
     inline URI& operator=(const char value)
 	{ String::operator=(value); return *this; }
+    inline const String& getDescription() const
+	{ parse(); return m_desc; }
     inline const String& getProtocol() const
 	{ parse(); return m_proto; }
     inline const String& getUser() const
@@ -77,6 +79,7 @@ public:
 protected:
     virtual void changed();
     mutable bool m_parsed;
+    mutable String m_desc;
     mutable String m_proto;
     mutable String m_user;
     mutable String m_host;
@@ -185,6 +188,8 @@ public:
     virtual void* getObject(const String& name) const;
     virtual SIPHeaderLine* clone(const char* newName = 0) const;
     virtual void buildLine(String& line) const;
+    inline SIPHeaderLine& operator=(const char* value)
+        { NamedString::operator=(value); return *this; }
     inline const ObjList& params() const
 	{ return m_params; }
     inline char separator() const

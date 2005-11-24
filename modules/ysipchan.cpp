@@ -1310,6 +1310,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 
     m->addParam("caller",m_uri.getUser());
     m->addParam("called",uri.getUser());
+    if (m_uri.getDescription())
+	m->addParam("callername",m_uri.getDescription());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(s_maxForwards);
     if (maxf > s_maxForwards)
@@ -1400,6 +1402,13 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m->complete(plugin.ep()->engine(),
 	msg.getValue("caller"),
 	msg.getValue("domain",(line ? line->domain().c_str() : 0)));
+    if (msg.getParam("callername")) {
+	String desc;
+	desc << "\"" << msg.getValue("callername") << "\" ";
+	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(m->getHeader("From"));
+	if (hl)
+	    *hl = desc + *hl;
+    }
     if (plugin.ep()->engine()->prack())
 	m->addHeader("Supported","100rel");
     m_host = m->getParty()->getPartyAddr();

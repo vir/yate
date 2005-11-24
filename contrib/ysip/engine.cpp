@@ -109,6 +109,7 @@ URI::URI(const String& uri)
 URI::URI(const URI& uri)
     : String(uri), m_parsed(false)
 {
+    m_desc = uri.getDescription();
     m_proto = uri.getProtocol();
     m_user = uri.getUser();
     m_host = uri.getHost();
@@ -116,15 +117,19 @@ URI::URI(const URI& uri)
     m_parsed = true;
 }
 
-URI::URI(const char* proto, const char* user, const char* host, int port)
-    : m_proto(proto), m_user(user), m_host(host), m_port(port)
+URI::URI(const char* proto, const char* user, const char* host, int port, const char* desc)
+    : m_desc(desc), m_proto(proto), m_user(user), m_host(host), m_port(port)
 {
+    if (desc)
+	*this << "\"" << m_desc << "\" <";
     *this << m_proto << ":";
     if (user)
 	*this << m_user << "@";
     *this << m_host;
     if (m_port > 0)
 	*this << ":" << m_port;
+    if (desc)
+	*this << ">";
     m_parsed = true;
 }
 
@@ -139,10 +144,19 @@ void URI::parse() const
 	return;
     DDebug("URI",DebugAll,"parsing '%s' [%p]",c_str(),this);
     m_port = 0;
+    m_desc.clear();
 
     // the compiler generates wrong code so use the temporary
     String tmp(*this);
-    Regexp r("<\\([^>]\\+\\)>");
+    Regexp r("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
+    if (tmp.matches(r)) {
+	m_desc = tmp.matchString(1);
+	tmp = tmp.matchString(2);
+	*const_cast<URI*>(this) = tmp;
+	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
+    }
+
+    r = "<\\([^>]\\+\\)>";
     if (tmp.matches(r)) {
 	tmp = tmp.matchString(1);
 	*const_cast<URI*>(this) = tmp;
@@ -160,10 +174,11 @@ void URI::parse() const
 	m_host = tmp.matchString(3).toLower();
 	tmp = tmp.matchString(4);
 	tmp >> ":" >> m_port;
-	DDebug("URI",DebugAll,"proto='%s' user='%s' host='%s' port=%d [%p]",
-	    m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
+	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",
+	    m_desc.c_str(), m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
     }
     else {
+	m_desc.clear();
 	m_proto.clear();
 	m_user.clear();
 	m_host.clear();

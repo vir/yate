@@ -724,6 +724,12 @@ public:
     static const Configuration& config();
 
     /**
+     * Get a - supposedly unique - instance ID
+     * @return Unique ID of the current running instance
+     */
+    static unsigned int runId();
+
+    /**
      * Reinitialize the plugins
      */
     static void init();

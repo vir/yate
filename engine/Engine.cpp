@@ -131,11 +131,12 @@ bool s_dynplugin = false;
 int s_maxworkers = 10;
 
 static bool s_sigabrt = false;
-const char* s_cfgfile = 0;
-const char* s_logfile = 0;
-Configuration s_cfg;
-ObjList plugins;
-ObjList* s_cmds = 0;
+static const char* s_cfgfile = 0;
+static const char* s_logfile = 0;
+static Configuration s_cfg;
+static ObjList plugins;
+static ObjList* s_cmds = 0;
+static unsigned int s_runid = 0;
 
 class SLib : public GenObject
 {
@@ -478,6 +479,7 @@ int Engine::run()
 #else
     ::signal(SIGPIPE,SIG_IGN);
 #endif
+    s_runid = Time::secNow();
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();
     Debug(DebugAll,"Engine::run()");
@@ -805,6 +807,11 @@ bool Engine::dispatch(const char* name)
 	return false;
     Message msg(name);
     return s_self->m_dispatcher.dispatch(msg);
+}
+
+unsigned int Engine::runId()
+{
+    return s_runid;
 }
 
 static void usage(bool client, FILE* f)

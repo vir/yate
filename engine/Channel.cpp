@@ -27,6 +27,9 @@
 
 using namespace TelEngine;
 
+static unsigned int s_callid = 0;
+static Mutex s_callidMutex;
+
 // this is to protect against two threads trying to (dis)connect a pair
 //  of call endpoints at the same time
 static Mutex s_mutex(true);
@@ -250,6 +253,9 @@ void Channel::init()
 	m_driver->changed();
 	m_driver->unlock();
     }
+    // assign a new billid only to incoming calls
+    if (m_billid.null() && !m_outgoing)
+	m_billid << Engine::runId() << "-" << allocId();
     DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
 }
 
@@ -279,6 +285,13 @@ void Channel::zeroRefs()
     // remove us from driver's list before calling the destructor
     dropChan();
     CallEndpoint::zeroRefs();
+}
+
+void Channel::connected(const char* reason)
+{
+    Channel* peer = YOBJECT(Channel,getPeer());
+    if (peer && peer->billid() && m_billid.null())
+	m_billid = peer->billid();
 }
 
 void Channel::disconnected(bool final, const char* reason)
@@ -477,6 +490,13 @@ bool Channel::setDebug(Message& msg)
     return true;
 }
 
+unsigned int Channel::allocId()
+{
+    s_callidMutex.lock();
+    unsigned int id = ++s_callid;
+    s_callidMutex.unlock();
+    return id;
+}
 
 TokenDict Module::s_messages[] = {
     { "engine.status",   Module::Status },

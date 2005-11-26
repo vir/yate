@@ -1409,6 +1409,13 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	if (hl)
 	    *hl = desc + *hl;
     }
+    if (msg.getParam("calledname")) {
+	String desc;
+	desc << "\"" << msg.getValue("calledname") << "\" ";
+	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(m->getHeader("To"));
+	if (hl)
+	    *hl = desc + *hl;
+    }
     if (plugin.ep()->engine()->prack())
 	m->addHeader("Supported","100rel");
     m_host = m->getParty()->getPartyAddr();

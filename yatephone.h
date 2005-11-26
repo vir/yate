@@ -1349,6 +1349,12 @@ public:
      */
     bool startRouter(Message* msg);
 
+    /**
+     * Allocate an unique (per engine run) call ID
+     * @return Unique call ID number
+     */
+    static unsigned int allocId();
+
 protected:
     /**
      * Constructor
@@ -1376,6 +1382,12 @@ protected:
      *  driver list before actually destroying the channel.
      */
     virtual void zeroRefs();
+
+    /**
+     * Connect notification method.
+     * @param reason Text that describes connect reason.
+     */
+    virtual void connected(const char* reason);
 
     /**
      * Disconnect notification method.

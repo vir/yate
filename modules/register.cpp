@@ -40,6 +40,7 @@ public:
 	Regist,
 	UnRegist,
 	Auth,
+	PreRoute,
 	Route,
 	Cdr,
 	Timer
@@ -109,7 +110,7 @@ static void replaceParams(String& str, const Message &msg)
 }
 
 // copy parameters from SQL result to a Message												    
-static void copyParams(Message& msg, Array *a, const char* resultName = 0, int row = 0)
+static void copyParams(Message& msg, Array* a, const char* resultName = 0, int row = 0)
 {
     if (!a)
 	return;
@@ -214,6 +215,22 @@ bool AAAHandler::received(Message& msg)
 	    return false;
 	}
 	break;
+	case PreRoute:
+	{
+	    if (s_critical)
+		return failure(&msg);
+	    Message m("database");
+	    m.addParam("account",m_account);
+	    m.addParam("query",query);
+	    if (Engine::dispatch(m))
+		if (m.getIntValue("rows") >=1)
+		{
+		    Array* a = static_cast<Array*>(m.userObject("Array"));
+		    copyParams(msg,a,m_result);
+		}
+	    return false;
+	}
+	break;
 	case Route:
 	{
 	    if (s_critical)
@@ -224,7 +241,7 @@ bool AAAHandler::received(Message& msg)
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
-		    Array *a = (Array *)m.userData();
+		    Array* a = static_cast<Array*>(m.userObject("Array"));
 		    copyParams(msg,a,m_result);
 		    if (msg.retValue().null())
 		    {
@@ -398,6 +415,7 @@ void RegistModule::initialize()
     addHandler("engine.timer",AAAHandler::Timer);
     addHandler("user.unregister",AAAHandler::UnRegist);
     addHandler("user.register",AAAHandler::Regist);
+    addHandler("call.preroute",AAAHandler::PreRoute);
     addHandler("call.route",AAAHandler::Route);
 }
 

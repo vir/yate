@@ -962,7 +962,7 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
     }
 
     const YateH323EndPoint& ep = static_cast<const YateH323EndPoint&>(GetEndPoint());
-    Message *m = m_chan->message("call.route",false,true);
+    Message *m = m_chan->message("call.preroute",false,true);
     if (ep.c_str())
 	m->setParam("in_line",ep.c_str());
     const char *s = s_cfg.getValue("incoming","context");

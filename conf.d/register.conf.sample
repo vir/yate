@@ -20,6 +20,9 @@
 ; engine.timer: bool: Activate handler on the "engine.timer" message
 ;engine.timer=no
 
+; call.preroute: bool: Activate handler on the "call.preroute" message
+;call.preroute=no
+
 ; call.route: bool: Activate handler on the "call.route" message
 ;call.route=no
 
@@ -72,6 +75,13 @@ query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND 
 ; Also look at the expires setting in section [general]
 
 query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP
+
+
+[call.preroute]
+; Query and result name for the prerouting message
+
+query=
+priority=120
 
 
 [call.route]

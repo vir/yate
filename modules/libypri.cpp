@@ -869,7 +869,7 @@ void PriChan::ring(pri_event_ring &ev)
     m_inband = m_span->inband();
     openData(lookup(ev.layer1,dict_str2law),0);
 
-    m = message("call.route");
+    m = message("call.preroute");
     if (m_span->overlapped() && !ev.complete && (::strlen(ev.callednum) < m_span->overlapped())) {
 	::pri_need_more_info(m_span->pri(),m_call,m_chan,!isISDN());
 	m->addParam("overlapped","yes");

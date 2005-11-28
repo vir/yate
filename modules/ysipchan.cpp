@@ -1281,7 +1281,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 
     URI uri(m_tr->getURI());
     YateSIPLine* line = plugin.findLine(m_host,m_port,m_uri.getUser());
-    Message *m = message("call.route");
+    Message *m = message("call.preroute");
 
     if (line) {
 	// call comes from line we have registered to - trust it...

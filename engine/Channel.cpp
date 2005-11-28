@@ -980,8 +980,13 @@ bool Router::route()
     bool ok = !tmp.null();
     if (ok)
 	m_msg->retValue() = tmp;
-    else
+    else {
+	if (*m_msg == "call.preroute") {
+	    Engine::dispatch(m_msg);
+	    *m_msg = "call.route";
+	}
 	ok = Engine::dispatch(m_msg);
+    }
 
     m_driver->lock();
     Channel* chan = m_driver->find(m_id);

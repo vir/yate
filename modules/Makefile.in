@@ -133,7 +133,8 @@ zapchan.yate: LOCALFLAGS = libypri.o -lpri
 wpchan.yate: libypri.o
 wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
-h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@ @H323_LIB@
+h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
+h323chan.yate: LOCALLIBS = @H323_LIB@
 
 pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
 pgsqldb.yate: LOCALLIBS = -lpq

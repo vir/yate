@@ -22,7 +22,7 @@ MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate accfile.yate register.yate \
 	tonegen.yate wavefile.yate conference.yate moh.yate \
-	callgen.yate rmanager.yate pbx.yate \
+	callgen.yate rmanager.yate pbx.yate dumbchan.yate \
 	extmodule.yate osschan.yate \
 	ysipchan.yate yrtpchan.yate
 LIBS :=

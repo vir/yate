@@ -21,6 +21,8 @@ MKDEPS  := ../config.status
 PROGS :=
 LIBS :=
 
+GTKCLIENT := ../contrib/gtk2/libgtk2client.a
+
 ifneq (@HAVE_GTK2@,no)
 PROGS := $(PROGS) yate-gtk2
 endif
@@ -78,9 +80,10 @@ Makefile: @srcdir@/Makefile.in $(MKDEPS)
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
 	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
 
-yate-gtk2: ../contrib/gtk2/libgtk2client.a
+yate-gtk2: $(GTKCLIENT)
+yate-gtk2: LDFLAGS := $(GTKCLIENT) $(LDFLAGS)
 yate-gtk2: LOCALFLAGS = @GTK2_INC@
-yate-gtk2: LOCALLIBS = ../contrib/gtk2/libgtk2client.a @GTK2_LIB@
+yate-gtk2: LOCALLIBS = @GTK2_LIB@
 
-../contrib/gtk2/libgtk2client.a:
+$(GTKCLIENT):
 	$(MAKE) -C ../contrib/gtk2

@@ -1008,8 +1008,9 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	m->addParam("rtp_forward","possible");
 	m->addParam("rtp_addr",m_remoteAddr);
 	m->addParam("rtp_port",String(m_remotePort));
-	m->addParam("formats",m_remoteFormats);
     }
+    if (m_remoteFormats)
+	m->addParam("formats",m_remoteFormats);
 
     if (m_chan->startRouter(m))
 	return H323Connection::AnswerCallDeferred;
@@ -1214,7 +1215,7 @@ H323Channel* YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	    return 0;
 	}
 
-	if (m_passtrough && (dir == H323Channel::IsReceiver)) {
+	if (dir == H323Channel::IsReceiver) {
 	    if (format && (m_remoteFormats.find(format) < 0) && s_cfg.getBoolValue("codecs",format,true)) {
 		if (m_remoteFormats)
 		    m_remoteFormats << ",";

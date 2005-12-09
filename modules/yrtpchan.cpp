@@ -100,6 +100,8 @@ public:
 	{ return m_conn; }
     inline const String& id() const
 	{ return m_id; }
+    inline const String& callId() const
+	{ return m_conn ? m_conn->id() : String::empty(); }
     inline const String& media() const
 	{ return m_media; }
     inline unsigned int bufSize() const
@@ -737,6 +739,13 @@ YRTPPlugin::~YRTPPlugin()
 void YRTPPlugin::statusParams(String& str)
 {
     str.append("chans=",",") << s_calls.count();
+    String tmp;
+    ObjList* l = s_calls.skipNull();
+    for (; l; l=l->skipNext()) {
+	YRTPWrapper* w = static_cast<YRTPWrapper*>(l->get());
+        tmp.append(w->id(),",") << "=" << w->callId();
+    }
+    str << ";" << tmp;
 }
 
 void YRTPPlugin::initialize()

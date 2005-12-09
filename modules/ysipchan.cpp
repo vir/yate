@@ -1275,6 +1275,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m_host = m_tr->initialMessage()->getParty()->getPartyAddr();
     m_port = m_tr->initialMessage()->getParty()->getPartyPort();
     m_address << m_host << ":" << m_port;
+    filterDebug(m_address);
     m_uri = m_tr->initialMessage()->getHeader("From");
     m_uri.parse();
     m_tr->setUserData(this);
@@ -1421,6 +1422,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_host = m->getParty()->getPartyAddr();
     m_port = m->getParty()->getPartyPort();
     m_address << m_host << ":" << m_port;
+    filterDebug(m_address);
     m_dialog = *m;
     if (s_privacy)
 	copyPrivacy(*m,msg);

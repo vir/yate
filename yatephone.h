@@ -289,7 +289,6 @@ protected:
 class DataSource;
 class DataTranslator;
 class TranslatorFactory;
-class Driver;
 class ThreadedSourcePrivate;
 
 /**
@@ -784,10 +783,10 @@ class YATE_API CallEndpoint : public RefObject
 
 private:
     CallEndpoint* m_peer;
+    String m_id;
 
 protected:
     ObjList m_data;
-    String m_id;
     Mutex* m_mutex;
 
 public:
@@ -921,12 +920,18 @@ protected:
      */
     virtual void disconnected(bool final, const char* reason) { }
 
-    /*
+    /**
      * Set the peer call endpoint pointer.
      * @param peer A pointer to the new peer or NULL.
      * @param reason Text describing the reason in case of disconnect.
      */
     void setPeer(CallEndpoint* peer, const char* reason = 0);
+
+    /**
+     * Set a new ID for this call endpoint
+     * @param newId New ID to set to this call
+     */
+    virtual void setId(const char* newId);
 
 private:
     bool disconnect(bool final, const char* reason);
@@ -943,6 +948,7 @@ private:
     int m_relays;
     String m_name;
     String m_type;
+    Regexp m_filter;
     u_int64_t m_changed;
     static unsigned int s_delay;
 
@@ -987,6 +993,20 @@ public:
      */
     inline static void updateDelay(unsigned int delay)
 	{ s_delay = delay; }
+
+    /**
+     * Check if a debug filter is installed
+     * @return True if debugging should be filtered
+     */
+    inline bool filterInstalled() const
+	{ return !m_filter.null(); }
+
+    /**
+     * Check by filter rule if debugging should be active
+     * @param item Value of the item to match
+     * @return True if debugging should be activated
+     */
+    bool filterDebug(const String& item) const;
 
 protected:
     /**
@@ -1355,6 +1375,12 @@ public:
      */
     static unsigned int allocId();
 
+    /**
+     * Enable or disable debugging according to driver's filter rules
+     * @param item Value of the item to match
+     */
+    void filterDebug(const String& item);
+
 protected:
     /**
      * Constructor
@@ -1395,6 +1421,12 @@ protected:
      * @param reason Text that describes disconnect reason.
      */
     virtual void disconnected(bool final, const char* reason);
+
+    /**
+     * Set a new ID for this channel
+     * @param newId New ID to set to this channel
+     */
+    virtual void setId(const char* newId);
 
     /**
      * Set the current status of the channel

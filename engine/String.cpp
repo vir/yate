@@ -870,21 +870,22 @@ Regexp::~Regexp()
     cleanup();
 }
 
-bool Regexp::matches(const char* value, StringMatchPrivate* matches)
+bool Regexp::matches(const char* value, StringMatchPrivate* matchlist)
 {
-    XDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matches);
+    XDebug(DebugInfo,"Regexp::matches(\"%s\",%p)",value,matchlist);
     if (!value)
 	value = "";
     if (!compile())
 	return false;
-    int mm = matches ? MAX_MATCH : 0;
-    regmatch_t *mt = matches ? (matches->rmatch)+1 : 0;
+    int mm = matchlist ? MAX_MATCH : 0;
+    regmatch_t *mt = matchlist ? (matchlist->rmatch)+1 : 0;
     return !::regexec((regex_t *)m_regexp,value,mm,mt,0);
 }
 
-bool Regexp::matches(const char* value)
+bool Regexp::matches(const char* value) const
 {
-    return matches(value,0);
+    // this cast is wrong but so handy...
+    return const_cast<Regexp*>(this)->matches(value,0);
 }
 
 void Regexp::changed()

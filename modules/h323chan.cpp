@@ -1759,10 +1759,11 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
     : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false)
 {
-    Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
-	conn,addr,direction(),this);
     m_address = addr;
     m_address.startSkip("ip$",false);
+    filterDebug(m_address);
+    Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
+	conn,addr,direction(),this);
     setMaxcall(msg);
     Message* s = message("chan.startup");
     if (msg) {
@@ -1776,7 +1777,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
 YateH323Chan::~YateH323Chan()
 {
     Debug(this,DebugAll,"YateH323Chan::~YateH323Chan() %s %s [%p]",
-	m_status.c_str(),m_id.c_str(),this);
+	m_status.c_str(),id().c_str(),this);
     stopDataLinks();
     if (m_conn)
 	m_conn->cleanups();

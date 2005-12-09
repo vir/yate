@@ -59,6 +59,11 @@ void* CallEndpoint::getObject(const String& name) const
     return RefObject::getObject(name);
 }
 
+void CallEndpoint::setId(const char* newId)
+{
+    m_id = newId;
+}
+
 bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
 {
     if (!peer) {
@@ -246,8 +251,11 @@ void Channel::init()
 	m_driver->lock();
 	debugName(m_driver->debugName());
 	debugChain(m_driver);
-	if (m_id.null())
-	    m_id << m_driver->prefix() << m_driver->nextid();
+	if (id().null()) {
+	    String tmp(m_driver->prefix());
+	    tmp << m_driver->nextid();
+	    setId(tmp);
+	}
 	m_driver->m_total++;
 	m_driver->channels().append(this);
 	m_driver->changed();
@@ -256,7 +264,7 @@ void Channel::init()
     // assign a new billid only to incoming calls
     if (m_billid.null() && !m_outgoing)
 	m_billid << Engine::runId() << "-" << allocId();
-    DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",m_id.c_str(),this);
+    DDebug(this,DebugInfo,"Channel::init() '%s' [%p]",id().c_str(),this);
 }
 
 void Channel::cleanup()
@@ -268,6 +276,16 @@ void Channel::cleanup()
     dropChan();
     m_driver = 0;
     m_mutex = 0;
+}
+
+void Channel::filterDebug(const String& item)
+{
+    if (m_driver) {
+	if (m_driver->filterInstalled())
+	    debugEnabled(m_driver->filterDebug(item));
+	else
+	    debugChain(m_driver);
+    }
 }
 
 void Channel::dropChan()
@@ -308,6 +326,13 @@ void Channel::disconnected(bool final, const char* reason)
     Engine::enqueue(m);
 }
 
+void Channel::setId(const char* newId)
+{
+    debugName(0);
+    CallEndpoint::setId(newId);
+    debugName(id());
+}
+
 const char* Channel::direction() const
 {
     return m_outgoing ? "outgoing" : "incoming";
@@ -324,7 +349,7 @@ void Channel::setMaxcall(const Message* msg)
 
 void Channel::complete(Message& msg, bool minimal) const
 {
-    msg.setParam("id",m_id);
+    msg.setParam("id",id());
     if (m_driver)
 	msg.setParam("module",m_driver->name());
 
@@ -357,7 +382,7 @@ bool Channel::startRouter(Message* msg)
     if (!msg)
 	return false;
     if (m_driver) {
-	Router* r = new Router(m_driver,m_id,msg);
+	Router* r = new Router(m_driver,id(),msg);
 	if (r->startup())
 	    return true;
 	delete r;
@@ -445,7 +470,7 @@ void Channel::callAccept(Message& msg)
     else if (m_targetid.null() && msg.getBoolValue("autoanswer",true)) {
 	// no preference exists in the message so issue a notice
 	Debug(this,DebugNote,"Answering now call %s because we have no targetid [%p]",
-	    m_id.c_str(),this);
+	    id().c_str(),this);
 	msgAnswered(msg);
     }
 }
@@ -484,7 +509,7 @@ bool Channel::setDebug(Message& msg)
 	debugCopy();
     else if (str.isBoolean())
 	debugEnabled(str.toBoolean(debugEnabled()));
-    msg.retValue() << "Channel " << m_id
+    msg.retValue() << "Channel " << id()
 	<< " debug " << (debugEnabled() ? "on" : "off")
 	<< " level " << debugLevel() << (debugChained() ? " chained" : "") << "\n";
     return true;
@@ -675,6 +700,8 @@ bool Module::setDebug(Message& msg, const String& target)
 	debugLevel(TelEngine::debugLevel());
 	debugEnabled(true);
     }
+    else if (str.startSkip("filter"))
+	m_filter = str;
     else {
 	bool dbg = debugEnabled();
 	str >> dbg;
@@ -682,8 +709,16 @@ bool Module::setDebug(Message& msg, const String& target)
     }
     msg.retValue() << "Module " << m_name
 	<< " debug " << (debugEnabled() ? "on" : "off")
-	<< " level " << debugLevel() << "\n";
+	<< " level " << debugLevel();
+    if (m_filter)
+	msg.retValue() << " filter: " << m_filter;
+    msg.retValue() << "\n";
     return true;
+}
+
+bool Module::filterDebug(const String& item) const
+{
+    return m_filter.null() ? debugEnabled() : m_filter.matches(item);
 }
 
 

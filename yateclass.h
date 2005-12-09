@@ -1640,7 +1640,7 @@ public:
      * @param value String to check for match
      * @return True if matches, false otherwise
      */
-    bool matches(const char* value);
+    bool matches(const char* value) const;
 
     /**
      * Checks if the pattern matches a string
@@ -1648,7 +1648,7 @@ public:
      * @return True if matches, false otherwise
      */
     virtual bool matches(const String& value) const
-	{ return matches(value.safe()); }
+	{ return Regexp::matches(value.safe()); }
 
     /**
      * Change the expression matching flags
@@ -1677,7 +1677,7 @@ protected:
 
 private:
     void cleanup();
-    bool matches(const char *value, StringMatchPrivate *matches);
+    bool matches(const char *value, StringMatchPrivate *matchlist);
     void* m_regexp;
     int m_flags;
 };

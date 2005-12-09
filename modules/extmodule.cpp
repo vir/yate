@@ -97,7 +97,7 @@ public:
     inline bool disconn() const
 	{ return m_disconn; }
     inline void setId(const String& id)
-	{ m_id = id; }
+	{ CallEndpoint::setId(id); }
 private:
     ExtModChan(const char *file, const char *args, int type);
     ExtModReceiver *m_recv;
@@ -349,7 +349,7 @@ void ExtModChan::disconnected(bool final, const char *reason)
     if (m_disconn) {
 	Message* m = new Message("chan.disconnected");
 	m->userData(this);
-	m->addParam("id",m_id);
+	m->addParam("id",id());
 	m->addParam("module","external");
 	if (m_recv)
 	    m->addParam("address",m_recv->scriptFile());

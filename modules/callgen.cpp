@@ -133,13 +133,15 @@ GenConnection::GenConnection(unsigned int lifetime, const String& callto)
     m_status = "calling";
     s_mutex.lock();
     s_calls.append(this);
-    m_id << "callgen/" << ++s_total;
+    String tmp("callgen/");
+    tmp << ++s_total;
+    setId(tmp);
     ++s_current;
     s_mutex.unlock();
-    Output("Generating %u ms call %s to: %s",lifetime,m_id.c_str(),m_callto.c_str());
+    Output("Generating %u ms call %s to: %s",lifetime,id().c_str(),m_callto.c_str());
     Message* m = new Message("chan.startup");
     m->addParam("module","callgen");
-    m->addParam("id",m_id);
+    m->addParam("id",id());
     m->addParam("called",m_callto);
     Engine::enqueue(m);
 }
@@ -148,10 +150,10 @@ GenConnection::~GenConnection()
 {
     if (!Engine::exiting())
 	Output("Ending %s generated call %s to: %s",
-	    m_status.c_str(),m_id.c_str(),m_callto.c_str());
+	    m_status.c_str(),id().c_str(),m_callto.c_str());
     Message* m = new Message("chan.hangup");
     m->addParam("module","callgen");
-    m->addParam("id",m_id);
+    m->addParam("id",id());
     m->addParam("status",m_status);
     Engine::enqueue(m);
     m_status = "destroyed";
@@ -221,13 +223,13 @@ bool GenConnection::oneCall(String* target)
 
 void GenConnection::disconnected(bool final, const char *reason)
 {
-    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",m_id.c_str(),reason,this);
+    Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",id().c_str(),reason,this);
     m_status = "disconnected";
 }
 
 void GenConnection::ringing()
 {
-    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",m_id.c_str(),this);
+    Debug("CallGen",DebugInfo,"Ringing '%s' [%p]",id().c_str(),this);
     m_status = "ringing";
     s_mutex.lock();
     ++s_ringing;
@@ -239,7 +241,7 @@ void GenConnection::ringing()
 
 void GenConnection::answered()
 {
-    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",m_id.c_str(),this);
+    Debug("CallGen",DebugInfo,"Answered '%s' [%p]",id().c_str(),this);
     m_status = "answered";
     s_mutex.lock();
     ++s_answers;
@@ -256,7 +258,7 @@ void GenConnection::makeSource()
     s_mutex.unlock();
     if (src) {
 	Message m("chan.attach");
-	m.addParam("id",m_id);
+	m.addParam("id",id());
 	m.addParam("source",src);
 	m.userData(this);
 	Engine::dispatch(m);

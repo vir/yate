@@ -31,6 +31,15 @@ ifneq (@HAVE_PGSQL@,no)
 PROGS := $(PROGS) pgsqldb.yate
 endif
 
+ifneq (@HAVE_MYSQL@,no)
+PROGS := $(PROGS) mysqldb.yate
+endif
+
+ifneq (@HAVE_RESOLV@,no)
+# coming soon
+# PROGS := $(PROGS) enumroute.yate
+endif
+
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
 PROGS := $(PROGS) zapchan.yate
 endif
@@ -138,6 +147,11 @@ h323chan.yate: LOCALLIBS = @H323_LIB@
 
 pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
 pgsqldb.yate: LOCALLIBS = -lpq
+
+mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
+mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
+
+enumroute.yate: LOCALLIBS = -lresolv
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

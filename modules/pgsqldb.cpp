@@ -29,7 +29,6 @@
 
 using namespace TelEngine;
 
-static Configuration s_cfg(Engine::configFile("pgsqldb"));
 static ObjList s_conns;
 Mutex s_conmutex;
 
@@ -48,8 +47,6 @@ public:
 	{ return m_dbmutex; }
 
 protected:
- //   virtual bool loadQuery();
-    String m_query;
     Mutex m_dbmutex;
 
 private:
@@ -66,8 +63,8 @@ private:
 class PgHandler : public MessageHandler
 {
 public:
-    PgHandler()
-	: MessageHandler("database")
+    PgHandler(unsigned int prio = 100)
+	: MessageHandler("database",prio)
 	{ }
     virtual bool received(Message& msg);
 };
@@ -247,10 +244,10 @@ int DbConn::queryDbInternal(const char* query, Message* dest)
 			dest->setParam("columns",String(columns));
 			if (dest->getBoolValue("results",true) && !PQbinaryTuples(res)) {
 			    Array *a = new Array(columns,rows+1);
-			    for (int k=0; k<columns; k++) {
+			    for (int k = 0; k < columns; k++) {
 				String *f= new String(PQfname(res,k));
 				a->set(f,k,0);
-				for (int j=0; j<rows; j++) {
+				for (int j = 0; j < rows; j++) {
 				    // skip over NULL values
 				    if (PQgetisnull(res,j,k))
 					continue;
@@ -316,7 +313,7 @@ static DbConn* findDb(String& account)
 {
     if (account.null())
 	return 0;
-    ObjList *l = s_conns.find(account);
+    ObjList* l = s_conns.find(account);
     return l ? static_cast<DbConn *>(l->get()): 0;
 }
 
@@ -326,13 +323,14 @@ bool PgHandler::received(Message& msg)
     if (tmp.null())
 	return false;
     Lock lock(s_conmutex);
-    DbConn *db= findDb(tmp);
+    DbConn* db= findDb(tmp);
     if (!db)
 	return false;
     Lock lo(db->mutex());
     lock.drop();
     String query(msg.getValue("query"));
     db->queryDb(query,&msg);
+    msg.setParam("dbtype","pgsqldb");
     return true;
 }
 
@@ -344,7 +342,8 @@ PgModule::PgModule()
 
 PgModule::~PgModule()
 {
-    Output("Unloaded module PostgreSQL");
+    Output("Unloading module PostgreSQL");
+    s_conns.clear();
 }
 
 void PgModule::initialize()
@@ -353,14 +352,14 @@ void PgModule::initialize()
 	return;
     m_init = true;
     Output("Initializing module PostgreSQL");
-    Engine::install(new PgHandler);
+    Configuration cfg(Engine::configFile("pgsqldb"));
+    Engine::install(new PgHandler(cfg.getIntValue("general","priority",100)));
     unsigned int i;
-    for (i=0;i<s_cfg.sections();i++)
-    {
-	NamedList *sec = s_cfg.getSection(i);
-	if (!sec)
+    for (i = 0; i < cfg.sections(); i++) {
+	NamedList* sec = cfg.getSection(i);
+	if (!sec || (*sec == "general"))
 	    continue;
-	DbConn *conn = new DbConn(sec);
+	DbConn* conn = new DbConn(sec);
 	conn->initDb();
 	s_conns.insert(conn);
     }

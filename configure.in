@@ -139,6 +139,17 @@ AC_SUBST(FDSIZE_HACK)
 
 # Checks for optional libraries.
 
+HAVE_RESOLV=no
+AC_MSG_CHECKING([for resolver library])
+AC_LANG_SAVE
+AC_LANG_C
+AC_TRY_LINK([#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>],[res_init();],[HAVE_RESOLV=yes],[HAVE_RESOLV=no])
+AC_LANG_RESTORE
+AC_MSG_RESULT([$HAVE_RESOLV])
+AC_SUBST(HAVE_RESOLV)
+
 HAVE_PRI=no
 HAVE_PRI_CB=no
 AC_ARG_WITH(libpri,AC_HELP_STRING([--with-libpri],[use ISDN PRI if available (default)]),[ac_cv_use_libpri=$withval],[ac_cv_use_libpri=yes])
@@ -176,7 +187,39 @@ fi
 AC_SUBST(HAVE_PGSQL)
 AC_SUBST(PGSQL_INC)
 
-
+HAVE_MYSQL=no
+MYSQL_INC=""
+MYSQL_LIB=""
+MYSQL_VER=""
+AC_ARG_WITH(mysql,AC_HELP_STRING([--with-mysql=DIR],[use MySQL client library from DIR]),[ac_cv_use_mysql=$withval],[ac_cv_use_mysql=yes])
+if [[ "x$ac_cv_use_mysql" != "xno" ]]; then
+if [[ "x$ac_cv_use_mysql" = "xyes" ]]; then
+AC_MSG_CHECKING([for MySQL using mysql_config])
+MYSQL_INC=`mysql_config --include 2>/dev/null`
+MYSQL_LIB=`mysql_config --libs_r 2>/dev/null`
+MYSQL_VER=`mysql_config --version 2>/dev/null`
+if [[ "x$MYSQL_INC" != "x" -a "x$MYSQL_LIB" != "x" -a "x$MYSQL_VER" != "x" ]]; then
+HAVE_MYSQL=yes
+else
+MYSQL_INC=""
+MYSQL_LIB=""
+MYSQL_VER=""
+fi
+else
+AC_MSG_CHECKING([for MySQL in $ac_cv_use_mysql])
+if [[ -f "$ac_cv_use_mysql/include/mysql/mysql.h" -a -d "$ac_cv_use_mysql/lib/mysql" ]]; then
+MYSQL_INC="-I$ac_cv_use_mysql/include/mysql"
+MYSQL_LIB="-L$ac_cv_use_mysql/lib/mysql -lmysqlclient_r -lpthread -lz -lcrypt -lnsl -lm"
+MYSQL_VER=`sed -n 's/^.*MYSQL_SERVER_VERSION[[^"]]*"\([[^"]]*\).*$/\1/p' "$ac_cv_use_mysql/include/mysql/mysql_version.h"`
+HAVE_MYSQL=yes
+fi
+fi
+AC_MSG_RESULT([$HAVE_MYSQL $MYSQL_VER])
+fi
+AC_SUBST(HAVE_MYSQL)
+AC_SUBST(MYSQL_INC)
+AC_SUBST(MYSQL_LIB)
+AC_SUBST(MYSQL_VER)
 
 HAVE_ZAP=no
 AC_MSG_CHECKING([for Zaptel linux headers])

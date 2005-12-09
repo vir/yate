@@ -50,6 +50,9 @@
 ; - result field to copy in message's textual return value (only for some)
 ; You can also override the settings from section [default]
 
+; Sample queries below are for PostgreSQL
+; Timestamps and intervals are unfortunately non-portable
+
 
 [user.auth]
 ; Query and result name for the user.auth message
@@ -87,8 +90,8 @@ priority=120
 [call.route]
 ; Query and result name for the routing message
 
-query=SELECT data,(CASE WHEN data IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
-result=data
+query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
+result=location
 priority=120
 
 

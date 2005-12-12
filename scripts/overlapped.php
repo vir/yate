@@ -172,9 +172,9 @@ while ($state != "") {
 	case "incoming":
 	    switch ($ev->name) {
 		case "call.execute":
-		    $partycallid = $ev->params["id"];
+		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
-		    $num = $ev->params["caller"];
+		    $num = $ev->GetValue("caller");
 		    $ev->handled = true;
 		    // we must ACK this message before dispatching a call.answered
 		    $ev->Acknowledge();
@@ -190,15 +190,15 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->params["targetid"] == $ourcallid) {
+		    if ($ev->GetValue("targetid") == $ourcallid) {
 			gotNotify();
 			$ev->handled = true;
 		    }
 		    break;
 
 		case "chan.dtmf":
-		    if ($ev->params["targetid"] == $ourcallid ) {
-			$dtmfs = $ev->params["text"];
+		    if ($ev->GetValue("targetid") == $ourcallid ) {
+			$dtmfs = $ev->GetValue("text");
 			for ($i = 0; $i < strlen($dtmfs); $i++)
 			    gotDTMF($dtmfs[$i]);
 			$ev->handled = true;
@@ -212,7 +212,7 @@ while ($state != "") {
 	    break;
 	case "answer":
 	    if ($ev->name == "call.route")
-		endRoute($ev->retval,$ev->handled,$ev->params["error"]);
+		endRoute($ev->retval,$ev->handled,$ev->GetValue("error"));
 	    break;
     }
 }

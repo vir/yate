@@ -32,9 +32,16 @@ Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
+Name: "driver\h323\run"; Description: "OpenH323 library"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
 Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
-Name: "codecs"; Description: "Format codecs"; Types: full client server
+Name: "database"; Description: "Database drivers"; Types: full server
+Name: "database\my"; Description: "MySQL database driver"; Types: full server
+Name: "database\my\run"; Description: "MySQL client libraries"; Types: full server
+Name: "database\pg"; Description: "PostgreSQL database driver"; Types: full server
+Name: "database\pg\run"; Description: "PostgreSQL client libraries"; Types: full server
+Name: "codecs"; Description: "Audio codecs"; Types: full client server
+Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
 
@@ -66,10 +73,23 @@ Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
 Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
-Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323
-Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323
+Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323\run
+Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323\run
 Source: "Release\iaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
+
+Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc
+
+Source: "Release\mysqldb.yate"; DestDir: "{app}\modules"; Components: database\my
+Source: "Runtimes\libmysql.dll"; DestDir: "{app}"; Components: database\my\run
+Source: "Release\pgsqldb.yate"; DestDir: "{app}\modules"; Components: database\pg
+Source: "Runtimes\libpq.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\comerr32.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\libeay32.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\ssleay32.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\krb5_32.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\libintl-2.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
 
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"

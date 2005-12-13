@@ -71,6 +71,15 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _wpchan
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _mysqldb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _pgsqldb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _gsmcodec
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -333,6 +342,21 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_gsmcodec"=.\_gsmcodec.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "_h323chan"=.\_h323chan.dsp - Package Owner=<4>
 
 Package=<5>
@@ -385,6 +409,36 @@ Package=<4>
 ###############################################################################
 
 Project: "_msgsniff"=.\_msgsniff.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_mysqldb"=.\_mysqldb.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_pgsqldb"=.\_pgsqldb.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

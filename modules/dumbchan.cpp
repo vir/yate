@@ -89,6 +89,8 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     if (Engine::dispatch(m)) {
 	m = "call.execute";
 	m.addParam("callto",m.retValue());
+	if (msg.getParam("maxcall"))
+	    m.setParam("maxcall", msg.getParam("maxcall")->c_str());
 	m.retValue().clear();
 	DumbChannel *c = new DumbChannel(dest);
 	m.setParam("id", c->id());

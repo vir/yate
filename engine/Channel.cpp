@@ -231,7 +231,7 @@ Channel::Channel(Driver& driver, const char* id, bool outgoing)
 Channel::~Channel()
 {
 #ifdef DEBUG
-    Debugger debug(DebugAll,"Channel::~Channel()"," '%s' [%p]",m_id.c_str(),this);
+    Debugger debug(DebugAll,"Channel::~Channel()"," '%s' [%p]",id().c_str(),this);
 #endif
     cleanup();
 }

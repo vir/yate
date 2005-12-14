@@ -4,11 +4,17 @@
 ; priority: int: Priority in Yate's handlers chain
 ;priority=90
 
-; prefix: string: Prefix for international numbers
+; prefix: string: Local dial prefix for international numbers
 ;prefix=00
 
+; minlen: int: Minimum length of a number (prefix removed) to try to resolve
+;minlen=8
+
 ; domain: string: Domain to use as suffix for ENUM
-;domain=e164.org
+;domain=e164.arpa
+
+; backup: string: Secondary domain to use as suffix for ENUM
+;backup=e164.org
 
 ; redirect: bool: Attempt to redirect the incoming call to found address
 ;redirect=false

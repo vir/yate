@@ -100,6 +100,8 @@ static int dn_string(const unsigned char* end, const unsigned char* src, char *d
 
 static String s_prefix;
 static String s_domain;
+static String s_backup;
+static unsigned int s_minlen;
 static bool s_redirect;
 static bool s_sipUsed;
 static bool s_iaxUsed;
@@ -119,6 +121,7 @@ static ObjList* naptrQuery(const char* dname)
     unsigned char buf[2048];
     int r,q,a;
     unsigned char *p, *e;
+    DDebug(&emodule,DebugInfo,"Querying %s",dname);
     r = res_query(dname,ns_c_in,ns_t_naptr,
 	buf,sizeof(buf));
     XDebug(&emodule,DebugAll,"res_query %d",r);
@@ -233,6 +236,8 @@ bool NAPTR::replace(String& str)
 
 bool EnumHandler::received(Message& msg)
 {
+    if (s_domain.null() && s_backup.null())
+	return false;
     String called(msg.getValue("called"));
     if (called.null() && msg.getBoolValue("enumroute",true))
 	return false;
@@ -240,16 +245,20 @@ bool EnumHandler::received(Message& msg)
     if (!(called.startSkip("+",false) ||
 	 (s_prefix && called.startSkip(s_prefix,false))))
 	return false;
+    if (called.length() < s_minlen)
+	return false;
     bool rval = false;
     // put the standard international prefix in front
     called = "+" + called;
     String tmp;
     for (int i = called.length()-1; i > 0; i--)
 	tmp << called.at(i) << ".";
-    tmp << s_domain;
-    DDebug(&emodule,DebugInfo,"Querying %s",tmp.c_str());
     u_int64_t dt = Time::now();
-    ObjList* res = naptrQuery(tmp);
+    ObjList* res = 0;
+    if (s_domain)
+	res = naptrQuery(tmp + s_domain);
+    if (s_backup && !res)
+	res = naptrQuery(tmp + s_backup);
     dt = Time::now() - dt;
     Debug(&emodule,DebugInfo,"Returned %d NAPTR records in %u.%06u s",
 	res ? res->count() : 0,
@@ -327,7 +336,9 @@ void EnumModule::initialize()
     Configuration cfg(Engine::configFile("enumroute"));
     // in most of the world this default international prefix should work
     s_prefix = cfg.getValue("general","prefix","00");
-    s_domain = cfg.getValue("general","domain","e164.org");
+    s_minlen = cfg.getIntValue("general","minlen",8);
+    s_domain = cfg.getValue("general","domain","e164.arpa");
+    s_backup = cfg.getValue("general","backup","e164.org");
     s_redirect = cfg.getBoolValue("general","redirect");
     s_sipUsed = cfg.getBoolValue("protocols","sip",true);
     s_iaxUsed = cfg.getBoolValue("protocols","iax",true);

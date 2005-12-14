@@ -112,6 +112,7 @@ public:
     ~MyModule();
 protected:
     virtual void initialize();
+    virtual void statusParams(String& str);
 private:
     bool m_init;
 };
@@ -318,7 +319,7 @@ bool MyHandler::received(Message& msg)
     if (tmp.null())
 	return false;
     Lock lock(s_conmutex);
-    DbConn* db= findDb(tmp);
+    DbConn* db = findDb(tmp);
     if (!db)
 	return false;
     Lock lo(db->mutex());
@@ -341,8 +342,14 @@ MyModule::~MyModule()
     Output("Unloaded module MySQL");
 }
 
+void MyModule::statusParams(String& str)
+{
+    str.append("conns=",",") << s_conns.count();
+}
+
 void MyModule::initialize()
 {
+    Module::initialize();
     if (m_init)
 	return;
     m_init = true;

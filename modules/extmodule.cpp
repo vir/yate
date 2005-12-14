@@ -238,6 +238,7 @@ void ExtModSource::run()
 	    }
 	    break;
 	}
+	// TODO: allow data to provide its own rate
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("ExtModSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
@@ -423,7 +424,7 @@ ExtModReceiver::~ExtModReceiver()
 {   
     Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
     Lock lock(this);
-    /* One destruction is plenty enough */
+    // One destruction is plenty enough
     m_use = -100;
     s_mutex.lock();
     s_modules.remove(this,false);
@@ -484,7 +485,7 @@ bool ExtModReceiver::start()
 
 bool ExtModReceiver::flush()
 {
-    /* Make sure we release all pending messages and not accept new ones */
+    // Make sure we release all pending messages and not accept new ones
     if (!Engine::exiting())
 	m_relays.clear();
     else {
@@ -521,7 +522,7 @@ void ExtModReceiver::die(bool clearChan)
     if (chan)
 	chan->setRecv(0);
 
-    /* Give the external script a chance to die gracefully */
+    // Give the external script a chance to die gracefully
     closeOut();
     if (m_pid > 0) {
 	Debug(DebugAll,"ExtModReceiver::die() waiting for pid=%d to die",m_pid);
@@ -534,7 +535,7 @@ void ExtModReceiver::die(bool clearChan)
     if (m_pid > 0)
 	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit?",m_pid);
 
-    /* Now terminate the process and close its stdout pipe */
+    // Now terminate the process and close its stdout pipe
     closeIn();
     if (m_pid > 0)
 	::kill(m_pid,SIGTERM);
@@ -546,8 +547,8 @@ void ExtModReceiver::die(bool clearChan)
 bool ExtModReceiver::received(Message &msg, int id)
 {
     lock();
-    /* Check if we are no longer running or the message was generated
-       by ourselves - avoid reentrance */
+    // Check if we are no longer running or the message was generated
+    //  by ourselves - avoid reentrance
     if ((m_pid <= 0) || (!m_in) || (!m_out) || m_reenter.find(&msg)) {
 	unlock();
 	return false;
@@ -607,18 +608,18 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	return false;
     }
     if (!pid) {
-	/* In child - terminate all other threads if needed */
+	// In child - terminate all other threads if needed
 	Thread::preExec();
-	/* Try to immunize child from ^C and ^\ */
+	// Try to immunize child from ^C and ^\ the console may receive
 	::signal(SIGINT,SIG_IGN);
 	::signal(SIGQUIT,SIG_IGN);
-	/* And restore default handlers for other signals */
+	// And restore default handlers for other signals
 	::signal(SIGTERM,SIG_DFL);
 	::signal(SIGHUP,SIG_DFL);
-	/* Redirect stdin and out */
+	// Redirect stdin and out
 	::dup2(yate2ext[0], STDIN_FILENO);
 	::dup2(ext2yate[1], STDOUT_FILENO);
-	/* Set audio in/out handlers */
+	// Set audio in/out handlers
 	if (m_ain && m_ain->valid())
 	    ::dup2(m_ain->handle(), STDERR_FILENO+1);
 	else
@@ -627,22 +628,22 @@ bool ExtModReceiver::create(const char *script, const char *args)
 	    ::dup2(m_aout->handle(), STDERR_FILENO+2);
 	else
 	    ::close(STDERR_FILENO+2);
-	/* Close everything but stdin/out/err/audio */
+	// Blindly close everything but stdin/out/err/audio
 	for (x=STDERR_FILENO+3;x<1024;x++) 
 	    ::close(x);
-	/* Execute script */
+	// Execute script
 	if (debugAt(DebugInfo))
 	    ::fprintf(stderr, "Execing '%s' '%s'\n", script, args);
         ::execl(script, script, args, (char *)NULL);
 	::fprintf(stderr, "Failed to execute '%s': %s\n", script, strerror(errno));
-	/* Shit happened. Die as quick and brutal as possible */
+	// Shit happened. Die as quick and brutal as possible
 	::_exit(1);
     }
     Debug(DebugInfo,"Launched External Script %s", script);
     m_in = new File(ext2yate[0]);
     m_out = new File(yate2ext[1]);
 
-    /* close what we're not using in the parent */
+    // close what we're not using in the parent
     close(ext2yate[1]);
     close(yate2ext[0]);
     closeAudio();
@@ -655,9 +656,9 @@ void ExtModReceiver::cleanup()
 #ifdef DEBUG
     Debugger debug(DebugAll,"ExtModReceiver::cleanup()"," [%p]",this);
 #endif
-    /* We must call waitpid from here - same thread we started the child */
+    // We must call waitpid from here - same thread we started the child
     if (m_pid > 0) {
-	/* No thread switching if possible */
+	// No thread switching if possible
 	closeOut();
 	Thread::yield();
 	int w = ::waitpid(m_pid, 0, WNOHANG);
@@ -678,7 +679,7 @@ void ExtModReceiver::cleanup()
 
 void ExtModReceiver::run()
 {
-    /* We must do the forking from this thread */
+    // We must do the forking from this thread
     if (!create(m_script.safe(),m_args.safe())) {
 	m_pid = 0;
 	return;
@@ -847,12 +848,12 @@ void ExtModReceiver::processLine(const char *line)
 	    lock();
 	    m->userData(m_chan);
 	    if (id.null()) {
-		/* Empty id means no answer is desired - enqueue and forget */
+		// Empty id means no answer is desired - enqueue and forget
 		Engine::enqueue(m);
 		unlock();
 		return;
 	    }
-	    /* Copy the user data pointer from waiting message with same id */
+	    // Copy the user data pointer from waiting message with same id
 	    ObjList *p = &m_waiting;
 	    for (; p; p=p->next()) {
 		MsgHolder *h = static_cast<MsgHolder *>(p->get());
@@ -863,7 +864,7 @@ void ExtModReceiver::processLine(const char *line)
 		    break;
 		}
 	    }
-	    /* Temporary add to the reenter list to avoid reentrance */
+	    // Temporary add to the reenter list to avoid reentrance
 	    m_reenter.append(m)->setDelete(false);
 	    unlock();
 	    String ret(m->encode(Engine::dispatch(m),id));

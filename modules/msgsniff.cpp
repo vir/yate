@@ -55,8 +55,13 @@ static void dumpParams(const Message &msg, String& par)
     unsigned n = msg.length();
     for (unsigned i = 0; i < n; i++) {
 	const NamedString *s = msg.getParam(i);
-	if (s)
-	    par << "\n  param['" << s->name() << "'] = '" << *s << "'";
+	if (s) {
+	    par << "\n  param['" << s->name() << "'] = ";
+	    if (s->name() == "password")
+		par << "(hidden)";
+	    else
+		par << "'" << *s << "'";
+	}
     }
 }
 
@@ -118,6 +123,7 @@ void MsgSniff::initialize()
     Output("Initializing module MsgSniffer");
     if (m_first) {
 	m_first = false;
+	s_active = Engine::config().getBoolValue("general","msgsniff",false);
 	Engine::install(new SniffHandler);
 	Engine::self()->setHook(new HookHandler);
     }

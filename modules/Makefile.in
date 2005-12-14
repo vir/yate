@@ -36,8 +36,7 @@ PROGS := $(PROGS) mysqldb.yate
 endif
 
 ifneq (@HAVE_RESOLV@,no)
-# coming soon
-# PROGS := $(PROGS) enumroute.yate
+PROGS := $(PROGS) enumroute.yate
 endif
 
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)

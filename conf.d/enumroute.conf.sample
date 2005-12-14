@@ -1,0 +1,30 @@
+[general]
+; This section sets global variables of the implementation
+
+; priority: int: Priority in Yate's handlers chain
+;priority=90
+
+; prefix: string: Prefix for international numbers
+;prefix=00
+
+; domain: string: Domain to use as suffix for ENUM
+;domain=e164.org
+
+; redirect: bool: Attempt to redirect the incoming call to found address
+;redirect=false
+
+
+[protocols]
+; Enable or disable individual protocols
+
+; sip: bool: Enable the SIP protocol (E2U+SIP)
+;sip=yes
+
+; iax: bool: Enable the IAX2 protocol (E2U+IAX2)
+;iax=yes
+
+; h323: bool: Enable the H.323 protocol (E2U+H323)
+;h323=yes
+
+; tel: bool: Enable the TEL rerouting (E2U+TEL)
+;tel=no

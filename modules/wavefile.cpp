@@ -55,6 +55,7 @@ private:
     u_int64_t m_time;
     String m_id;
     bool m_autoclose;
+    bool m_nodata;
 };
 
 class WaveConsumer : public DataConsumer
@@ -123,10 +124,12 @@ INIT_PLUGIN(WaveFileDriver);
 
 WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0),
-      m_total(0), m_time(0), m_autoclose(autoclose)
+      m_total(0), m_time(0), m_autoclose(autoclose), m_nodata(false)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
     if (file == "-") {
+	m_nodata = true;
+	m_brate = 8000;
 	start("WaveSource");
 	return;
     }
@@ -312,7 +315,7 @@ void WaveSource::cleanup()
 void WaveSource::setNotify(const String& id)
 {
     m_id = id;
-    if (m_fd < 0)
+    if ((m_fd < 0) && !m_nodata)
 	notify();
 }
 

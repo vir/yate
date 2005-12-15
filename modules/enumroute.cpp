@@ -332,8 +332,11 @@ void EnumModule::genUpdate(Message& msg)
 void EnumModule::initialize()
 {
     Module::initialize();
-    Output("Initializing ENUM routing");
     Configuration cfg(Engine::configFile("enumroute"));
+    int prio = cfg.getIntValue("general","priority",0);
+    if ((prio <= 0) && !m_init)
+	return;
+    Output("Initializing ENUM routing");
     // in most of the world this default international prefix should work
     s_prefix = cfg.getValue("general","prefix","00");
     s_minlen = cfg.getIntValue("general","minlen",8);
@@ -345,14 +348,14 @@ void EnumModule::initialize()
     s_h323Used = cfg.getBoolValue("protocols","h323",true);
     // by default don't support the number rerouting
     s_telUsed = cfg.getBoolValue("protocols","tel",false);
-    if (m_init)
+    if (m_init || (prio <= 0))
 	return;
     m_init = true;
     int res = res_init();
     if (res)
 	Debug(&emodule,DebugGoOn,"res_init returned error %d",res);
     else
-	Engine::install(new EnumHandler(cfg.getIntValue("general","priority",90)));
+	Engine::install(new EnumHandler(cfg.getIntValue("general","priority",prio)));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

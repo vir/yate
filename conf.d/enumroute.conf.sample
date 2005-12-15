@@ -2,7 +2,8 @@
 ; This section sets global variables of the implementation
 
 ; priority: int: Priority in Yate's handlers chain
-;priority=90
+; This MUST be set to a positive value to enable the module
+;priority=0
 
 ; prefix: string: Local dial prefix for international numbers
 ;prefix=00

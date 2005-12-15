@@ -1642,7 +1642,7 @@ SDPBody* YateSIPConnection::createProvisionalSDP(Message& msg)
     if (m_rtpForward)
 	return createPasstroughSDP(msg);
     // check if our peer can source at least audio data
-    if (!(getPeer() && getPeer()->getSource()))
+    if (!(getPeer() && getPeer()->getSource() && msg.getBoolValue("earlymedia",true)))
 	return 0;
     if (m_rtpAddr.null())
 	return 0;
@@ -2013,12 +2013,16 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    setStatus("ringing",Ringing);
 	    Message *m = message("call.ringing");
 	    addRtpParams(*m,natAddr);
+	    if (m_rtpAddr.null())
+		m->addParam("earlymedia","false");
 	    Engine::enqueue(m);
 	}
 	if (msg->code == 183) {
 	    setStatus("progressing");
 	    Message *m = message("call.progress");
 	    addRtpParams(*m,natAddr);
+	    if (m_rtpAddr.null())
+		m->addParam("earlymedia","false");
 	    Engine::enqueue(m);
 	}
 	if ((msg->code > 100) && (msg->code < 200))

@@ -549,41 +549,44 @@ public:
 class YSIP_API SIPTransaction : public RefObject
 {
 public:
+    /**
+     * Current state of the transaction
+     */
     enum State {
-	/**
-	 * Invalid state - before constructor or after destructor
-	 */
+	// Invalid state - before constructor or after destructor
 	Invalid,
 
-	/**
-	 * Initial state - after the initial message was inserted
-	 */
+	// Initial state - after the initial message was inserted
 	Initial,
 
-	/**
-	 * Trying state - got the message but no decision made yet
-	 */
+	// Trying state - got the message but no decision made yet
 	Trying,
 
-	/**
-	 * Process state - while locally processing the event
-	 */
+	// Process state - while locally processing the event
 	Process,
 
-	/**
-	 * Retrans state - waiting for cleanup, retransmits latest message
-	 */
+	// Retrans state - waiting for cleanup, retransmits latest message
 	Retrans,
 
-	/**
-	 * Finish state - transmits the last message and goes to Retrans
-	 */
+	// Finish state - transmits the last message and goes to Retrans
 	Finish,
 
-	/**
-	 * Cleared state - removed from engine, awaiting destruction
-	 */
-	Cleared,
+	// Cleared state - removed from engine, awaiting destruction
+	Cleared
+    };
+
+    /**
+     * Possible return values from @ref processMessage()
+     */
+    enum Processed {
+	// Not matched at all
+	NoMatch,
+
+	// Belongs to another dialog - probably result of a fork
+	NoDialog,
+
+	// Matched to transaction/dialog and processed
+	Matched
     };
 
     /**
@@ -594,6 +597,13 @@ public:
      * @param outgoing True if this transaction is for an outgoing request
      */
     SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing = true);
+
+    /**
+     * Copy constructor to be used with forked INVITEs
+     * @param original Original transaction that is to be copied
+     * @param tag Dialog tag for the new transaction
+     */
+    SIPTransaction(const SIPTransaction& original, const String& tag);
 
     /**
      * Destructor - clears all held objects
@@ -739,10 +749,10 @@ public:
      * @param message A pointer to the message to check, should not be used
      *  afterwards if this method returned True
      * @param branch The branch parameter extracted from first Via header
-     * @return True if the message was handled by this transaction, in
+     * @return Matched if the message was handled by this transaction, in
      *  which case it takes ownership over the message
      */
-    virtual bool processMessage(SIPMessage* message, const String& branch);
+    virtual Processed processMessage(SIPMessage* message, const String& branch);
 
     /**
      * Get an event for this transaction if any is available.
@@ -960,7 +970,7 @@ protected:
 /**
  * This object can be one for each SIPListener.
  */
-class YSIP_API SIPEngine
+class YSIP_API SIPEngine : public DebugEnabler
 {
 public:
     /**
@@ -1043,6 +1053,14 @@ public:
      * This method is thread safe
      */
     virtual void processEvent(SIPEvent *event);
+
+    /**
+     * Handle answers that create new dialogs for an outgoing INVITE
+     * @param answer The message that creates the INVITE fork
+     * @param trans One of the transactions part of the same INVITE
+     * @return Pointer to new transaction or NULL if message is ignored
+     */
+    virtual SIPTransaction* forkInvite(SIPMessage* answer, const SIPTransaction* trans);
 
     /**
      * Get the timeout to be used for transactions involving human interaction.

@@ -375,7 +375,7 @@ SIPMessage::~SIPMessage()
 
 void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domain, const char* dlgTag)
 {
-    DDebug("SIPMessage",DebugAll,"complete(%p,'%s','%s','%s')%s%s%s [%p]",
+    DDebug(engine,DebugAll,"SIPMessage::complete(%p,'%s','%s','%s')%s%s%s [%p]",
 	engine,user,domain,dlgTag,
 	isACK() ? " ACK" : "",
 	isOutgoing() ? " OUT" : "",
@@ -391,7 +391,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!getParty()) {
 	engine->buildParty(this);
 	if (!getParty()) {
-	    Debug(DebugGoOn,"Could not complete party-less SIP message [%p]",this);
+	    Debug(engine,DebugGoOn,"Could not complete party-less SIP message [%p]",this);
 	    return;
 	}
     }

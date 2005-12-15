@@ -237,7 +237,8 @@ SIPEngine::SIPEngine(const char* userAgent)
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_userAgent(userAgent), m_nonce_time(0)
 {
-    DDebug(DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
+    debugName("sipengine");
+    DDebug(this,DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
     if (m_userAgent.null())
 	m_userAgent << "YATE/" << YATE_VERSION;
     m_allowed = "ACK";
@@ -248,12 +249,12 @@ SIPEngine::SIPEngine(const char* userAgent)
 
 SIPEngine::~SIPEngine()
 {
-    DDebug(DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
+    DDebug(this,DebugInfo,"SIPEngine::~SIPEngine() [%p]",this);
 }
 
 SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char* buf, int len)
 {
-    DDebug("SIPEngine",DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
+    DDebug(this,DebugInfo,"addMessage(%p,%d) [%p]",buf,len,this);
     SIPMessage* msg = SIPMessage::fromParsing(ep,buf,len);
     if (ep)
 	ep->deref();
@@ -267,7 +268,7 @@ SIPTransaction* SIPEngine::addMessage(SIPParty* ep, const char* buf, int len)
 
 SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 {
-    DDebug("SIPEngine",DebugInfo,"addMessage(%p) [%p]",message,this);
+    DDebug(this,DebugInfo,"addMessage(%p) [%p]",message,this);
     if (!message)
 	return 0;
     // make sure outgoing messages are well formed
@@ -280,22 +281,43 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     if (!branch.startsWith("z9hG4bK"))
 	branch.clear();
     Lock lock(m_mutex);
+    SIPTransaction* forked = 0;
     ObjList* l = &TransList;
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
-	if (t && t->processMessage(message,branch))
-	    return t;
+	if (!t)
+	    continue;
+	switch (t->processMessage(message,branch)) {
+	    case SIPTransaction::Matched:
+		return t;
+	    case SIPTransaction::NoDialog:
+		forked = t;
+		break;
+	    case SIPTransaction::NoMatch:
+	    default:
+		break;
+	}
     }
+    if (forked)
+	return forkInvite(message,forked);
+
     if (message->isAnswer()) {
-	Debug("SIPEngine",DebugInfo,"Message %p was an unhandled answer [%p]",message,this);
+	Debug(this,DebugInfo,"Message %p was an unhandled answer [%p]",message,this);
 	return 0;
     }
     if (message->isACK()) {
-	DDebug("SIPEngine",DebugAll,"Message %p was an unhandled ACK [%p]",message,this);
+	DDebug(this,DebugAll,"Message %p was an unhandled ACK [%p]",message,this);
 	return 0;
     }
     message->complete(this);
     return new SIPTransaction(message,this,message->isOutgoing());
+}
+
+SIPTransaction* SIPEngine::forkInvite(SIPMessage* answer, const SIPTransaction* trans)
+{
+    // TODO: build new transaction or CANCEL
+    Debug(this,DebugInfo,"Message %p was a forked INVITE answer [%p]",answer,this);
+    return 0;
 }
 
 bool SIPEngine::process()
@@ -303,7 +325,7 @@ bool SIPEngine::process()
     SIPEvent* e = getEvent();
     if (!e)
 	return false;
-    DDebug("SIPEngine",DebugInfo,"process() got event %p",e);
+    DDebug(this,DebugInfo,"process() got event %p",e);
     processEvent(e);
     return true;
 }
@@ -317,7 +339,7 @@ SIPEvent* SIPEngine::getEvent()
 	if (t) {
 	    SIPEvent* e = t->getEvent();
 	    if (e) {
-		DDebug("SIPEngine",DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
+		DDebug(this,DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
 		    e,SIPTransaction::stateName(e->getState()),t,this);
 		return e;
 	    }
@@ -336,7 +358,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 	type = "outgoing";
     if (event->isIncoming())
 	type = "incoming";
-    DDebug("SIPEngine",DebugAll,"Processing %s event %p message %p [%p]",
+    DDebug(this,DebugAll,"Processing %s event %p message %p [%p]",
 	type,event,event->getMessage(),this);
     if (event->getMessage()) {
 	if (event->isOutgoing()) {
@@ -354,7 +376,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 	if (event->isIncoming()) {
 	    if ((event->getState() == SIPTransaction::Trying) &&
 		!event->getMessage()->isAnswer()) {
-		Debug("SIPEngine",DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
+		Debug(this,DebugInfo,"Rejecting unhandled request '%s' in event %p [%p]",
 		    event->getMessage()->method.c_str(),event,this);
 		event->getTransaction()->setResponse(405);
 	    }
@@ -416,7 +438,7 @@ u_int64_t SIPEngine::getTimer(char which, bool reliable) const
 	    // K: Wait time for response retransmits
 	    return reliable ? 0 : m_t4;
     }
-    Debug("SIPEngine",DebugMild,"Requested invalid timer '%c' [%p]",which,this);
+    Debug(this,DebugMild,"Requested invalid timer '%c' [%p]",which,this);
     return 0;
 }
 
@@ -431,7 +453,7 @@ void SIPEngine::nonceGet(String& nonce)
 	MD5 md5(tmp);
 	m_nonce = md5.hexDigest();
 	m_nonce << "." << t;
-	XDebug("SIPEngine",DebugAll,"Generated new nonce '%s' [%p]",
+	XDebug(this,DebugAll,"Generated new nonce '%s' [%p]",
 	    m_nonce.c_str(),this);
     }
     nonce = m_nonce;
@@ -473,7 +495,7 @@ bool SIPEngine::checkUser(const String& username, const String& realm, const Str
 void SIPEngine::buildAuth(const String& username, const String& realm, const String& passwd,
     const String& nonce, const String& method, const String& uri, String& response)
 {
-    XDebug("SIPEngine",DebugAll,"Building auth: '%s:%s:%s' '%s' '%s:%s'",
+    XDebug(this,DebugAll,"Building auth: '%s:%s:%s' '%s' '%s:%s'",
 	username.c_str(),realm.c_str(),passwd.c_str(),nonce.c_str(),method.c_str(),uri.c_str());
     MD5 m1,m2;
     m1 << username << ":" << realm << ":" << passwd;
@@ -508,7 +530,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy)
 	    delQuotes(usr);
 	    if (usr.null())
 		continue;
-	    XDebug("SIPEngine",DebugAll,"authUser found user '%s'",usr.c_str());
+	    XDebug(this,DebugAll,"authUser found user '%s'",usr.c_str());
 	    // if we know the username check if it matches
 	    if (user && (usr != user))
 		continue;
@@ -521,7 +543,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy)
 	    long age = nonceAge(nonce);
 	    if (age < 0)
 		continue;
-	    XDebug("SIPEngine",DebugAll,"authUser nonce age is %ld",age);
+	    XDebug(this,DebugAll,"authUser nonce age is %ld",age);
 	    String res(t->getParam("response"));
 	    delQuotes(res);
 	    if (res.null())

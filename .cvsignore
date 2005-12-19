@@ -1,5 +1,6 @@
 *.cache
 Makefile
+YateLocal.mak
 configure
 config.*
 yatepaths.h

@@ -44,6 +44,9 @@ vardir = @localstatedir@/lib/yate
 moddir = @libdir@/yate
 confdir = @sysconfdir@/yate
 
+# include optional local make rules
+-include YateLocal.mak
+
 .PHONY: all
 all: ../$(YLIB)
 

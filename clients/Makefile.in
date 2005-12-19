@@ -37,6 +37,9 @@ exec_prefix = @exec_prefix@
 bindir = @bindir@
 moddir = @libdir@/yate
 
+# include optional local make rules
+-include YateLocal.mak
+
 .PHONY: all
 all: do-all $(LIBS) $(PROGS)
 

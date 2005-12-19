@@ -45,6 +45,9 @@ vardir = @localstatedir@/lib/yate
 moddir = $(basedir)/modules
 scrdir = $(basedir)/scripts
 
+# include optional local make rules
+-include YateLocal.mak
+
 .PHONY: all everything
 all: engine modules clients
 
@@ -202,6 +205,7 @@ snapshot tarball: check-topdir clean tables windows apidocs
 	mkdir -p tarballs; cd ..; \
 	echo $$wd/tar-exclude >$$wd/tar-exclude; \
 	find $$wd -name Makefile >>$$wd/tar-exclude; \
+	find $$wd -name YateLocal.mak >>$$wd/tar-exclude; \
 	find $$wd/conf.d -name '*.conf' >>$$wd/tar-exclude; \
 	find $$wd -name '*.cache' >>$$wd/tar-exclude; \
 	find $$wd -name '*~' >>$$wd/tar-exclude; \

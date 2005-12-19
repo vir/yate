@@ -24,8 +24,10 @@ COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CXXFLAGS)
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 
-.PHONY: all clean
+# include optional local make rules
+-include YateLocal.mak
 
+.PHONY: all clean
 all: $(PROJECT)
 
 clean:

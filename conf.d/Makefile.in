@@ -7,6 +7,9 @@ DESTDIR :=
 prefix = @prefix@
 confdir = @sysconfdir@/yate
 
+# include optional local make rules
+-include YateLocal.mak
+
 .PHONY: all
 all:
 

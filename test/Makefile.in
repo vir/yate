@@ -25,6 +25,9 @@ MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 
+# include optional local make rules
+-include YateLocal.mak
+
 .PHONY: all
 all: $(LIBS) $(PROGS)
 

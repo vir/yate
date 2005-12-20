@@ -2553,10 +2553,10 @@ bool YateSIPGenerate::process(SIPEvent* ev)
 	return false;
     if (ev->getState() != SIPTransaction::Process)
 	return false;
+    m_code = msg->code;
     clearTransaction();
     Debug(&plugin,DebugAll,"YateSIPGenerate got answer %d [%p]",
-	msg->code,this);
-    m_code = msg->code;
+	m_code,this);
     return false;
 }
 

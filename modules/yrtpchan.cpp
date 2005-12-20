@@ -136,6 +136,7 @@ public:
     inline YRTPSession(YRTPWrapper* wrap)
 	: m_wrap(wrap), m_resync(false)
 	{ }
+    virtual ~YRTPSession();
     virtual bool rtpRecvData(bool marker, unsigned int timestamp,
 	const void* data, int len);
     virtual bool rtpRecvEvent(int event, char key, int duration,
@@ -232,7 +233,7 @@ YRTPWrapper::~YRTPWrapper()
 	Debug(DebugAll,"Cleaning up RTP %p",m_rtp);
 	YRTPSession* tmp = m_rtp;
 	m_rtp = 0;
-	delete tmp;
+	tmp->destruct();
     }
     if (m_source) {
 	Debug(&splugin,DebugGoOn,"There is still a RTP source %p [%p]",m_source,this);
@@ -429,6 +430,13 @@ void YRTPWrapper::addDirection(RTPSession::Direction direction)
     m_dir = (RTPSession::Direction)(m_dir | direction);
     if (m_rtp && m_bufsize)
 	m_rtp->direction(m_dir);
+}
+
+YRTPSession::~YRTPSession()
+{
+    // disconnect thread and transport before our virtual methods become invalid
+    group(0);
+    transport(0);
 }
 
 bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)

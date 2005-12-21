@@ -31,6 +31,10 @@
 
 using namespace TelEngine;
 
+#define ENUM_DEF_TIMEOUT 3
+#define ENUM_DEF_RETRIES 2
+#define ENUM_DEF_MINLEN  8
+
 class NAPTR : public GenObject
 {
 public:
@@ -102,11 +106,15 @@ static String s_prefix;
 static String s_domain;
 static String s_backup;
 static unsigned int s_minlen;
+static int s_timeout;
+static int s_retries;
+
 static bool s_redirect;
 static bool s_sipUsed;
 static bool s_iaxUsed;
 static bool s_h323Used;
 static bool s_telUsed;
+static bool s_voidUsed;
 
 static Mutex s_mutex;
 static int s_queries = 0;
@@ -114,6 +122,20 @@ static int s_routed = 0;
 static int s_reroute = 0;
 
 static EnumModule emodule;
+
+// Initializes the resolver library in the current thread
+static bool resolvInit()
+{
+    if ((_res.options & RES_INIT) == 0) {
+	// need to initialize in this thread
+	if (res_init())
+	    return false;
+    }
+    // always set the timeout variables
+    _res.retrans = s_timeout;
+    _res.retry = s_retries;
+    return true;
+}
 
 // Perform DNS query, return list of only NAPTR records
 static ObjList* naptrQuery(const char* dname)
@@ -247,6 +269,9 @@ bool EnumHandler::received(Message& msg)
 	return false;
     if (called.length() < s_minlen)
 	return false;
+    // perform per-thread initialization of resolver and timeout settings
+    if (!resolvInit())
+	return false;
     bool rval = false;
     // put the standard international prefix in front
     called = "+" + called;
@@ -265,6 +290,7 @@ bool EnumHandler::received(Message& msg)
 	(unsigned int)(dt / 1000000),
 	(unsigned int)(dt % 1000000));
     bool reroute = false;
+    bool unassigned = false;
     if (res) {
 	ObjList* cur = res;
 	for (; cur; cur = cur->next()) {
@@ -301,6 +327,10 @@ bool EnumHandler::received(Message& msg)
 		    break;
 		}
 	    }
+	    if (s_voidUsed && serv.startsWith("E2U+VOID") && ptr->replace(called)) {
+		// remember it's unassigned but still continue scanning
+		unassigned = true;
+	    }
 	}
 	res->destruct();
     }
@@ -314,6 +344,11 @@ bool EnumHandler::received(Message& msg)
 	s_reroute++;
     emodule.changed();
     s_mutex.unlock();
+    if (unassigned && !rval) {
+	rval = true;
+	msg.retValue() = "-";
+	msg.setParam("error","unallocated");
+    }
     return rval;
 }
 
@@ -339,13 +374,30 @@ void EnumModule::initialize()
     Output("Initializing ENUM routing");
     // in most of the world this default international prefix should work
     s_prefix = cfg.getValue("general","prefix","00");
-    s_minlen = cfg.getIntValue("general","minlen",8);
+    s_minlen = cfg.getIntValue("general","minlen",ENUM_DEF_MINLEN);
     s_domain = cfg.getValue("general","domain","e164.arpa");
     s_backup = cfg.getValue("general","backup","e164.org");
+    int tmp = cfg.getIntValue("general","timeout",ENUM_DEF_TIMEOUT);
+    // limit between 1 and 10 seconds
+    if (tmp < 1)
+	tmp = 1;
+    if (tmp > 10)
+	tmp = 10;
+    s_timeout = tmp;
+    tmp = cfg.getIntValue("general","retries",ENUM_DEF_RETRIES);
+    // limit between 1 and 5 retries
+    if (tmp < 1)
+	tmp = 1;
+    if (tmp > 5)
+	tmp = 5;
+    s_retries = tmp;
+    // overall a resolve attempt will take at most 50s per domain
+
     s_redirect = cfg.getBoolValue("general","redirect");
     s_sipUsed = cfg.getBoolValue("protocols","sip",true);
     s_iaxUsed = cfg.getBoolValue("protocols","iax",true);
     s_h323Used = cfg.getBoolValue("protocols","h323",true);
+    s_voidUsed = cfg.getBoolValue("protocols","void",true);
     // by default don't support the number rerouting
     s_telUsed = cfg.getBoolValue("protocols","tel",false);
     if (m_init || (prio <= 0))

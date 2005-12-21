@@ -17,6 +17,12 @@
 ; backup: string: Secondary domain to use as suffix for ENUM
 ;backup=e164.org
 
+; timeout: int: Timeout of each resolver attempt in seconds
+;timeout=3
+
+; retries: int: Number of retries before giving up
+;retries=2
+
 ; redirect: bool: Attempt to redirect the incoming call to found address
 ;redirect=false
 
@@ -32,6 +38,9 @@
 
 ; h323: bool: Enable the H.323 protocol (E2U+H323)
 ;h323=yes
+
+; void: bool: Enable declaring unallocated numbers (E2U+VOID)
+;void=yes
 
 ; tel: bool: Enable the TEL rerouting (E2U+TEL)
 ;tel=no

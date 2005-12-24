@@ -198,6 +198,9 @@ AC_MSG_CHECKING([for MySQL using mysql_config])
 MYSQL_INC=`mysql_config --include 2>/dev/null`
 MYSQL_LIB=`mysql_config --libs_r 2>/dev/null`
 MYSQL_VER=`mysql_config --version 2>/dev/null`
+if [[ x`echo "$MYSQL_INC $MYSQL_LIB $MYSQL_VER" | wc -l` != "x1" ]]; then
+MYSQL_INC=""
+fi
 if [[ "x$MYSQL_INC" != "x" -a "x$MYSQL_LIB" != "x" -a "x$MYSQL_VER" != "x" ]]; then
 HAVE_MYSQL=yes
 else

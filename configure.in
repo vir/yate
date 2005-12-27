@@ -456,9 +456,14 @@ GMOZ_LIB=""
 AC_ARG_WITH(gtkmozilla,AC_HELP_STRING([--with-gtkmozilla],[use Mozilla embedded in Gtk clients (default)]),[ac_cv_use_gtkmozilla=$withval],[ac_cv_use_gtkmozilla=yes])
 if [[ "x$ac_cv_use_gtkmozilla" = "xyes" ]]; then
     AC_MSG_CHECKING([for Gtk Mozilla embedding using pkg-config])
-    vergmoz=`pkg-config --modversion mozilla-gtkmozembed 2>/dev/null`
-    incgmoz=`pkg-config --cflags mozilla-gtkmozembed 2>/dev/null`
-    libgmoz=`pkg-config --libs mozilla-gtkmozembed 2>/dev/null`
+    mozpkg="mozilla-gtkmozembed"
+    vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
+    if [[ "x$vergmoz" = "x" ]]; then
+	mozpkg="mozilla-firefox-gtkmozembed"
+	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
+    fi
+    incgmoz=`pkg-config --cflags $mozpkg 2>/dev/null`
+    libgmoz=`pkg-config --libs $mozpkg 2>/dev/null`
     if [[ "x$incgmoz" != "x" -a "x$libgmoz" != "x" ]]; then
 	HAVE_GMOZ=yes
 	GMOZ_INC="$incgmoz"

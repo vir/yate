@@ -44,6 +44,7 @@ Name: "codecs"; Description: "Audio codecs"; Types: full client server
 Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
+Name: "devel"; Description: "Module development files"; Types: full engine
 
 [Tasks]
 Name: "qlaunch"; Description: "Create a &Quick Launch icon"; GroupDescription: "Additional icons:"; Components: client; Flags: unchecked
@@ -96,6 +97,11 @@ Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 Source: "..\modules\skin\default\gtk2client.ui"; DestDir: "{app}\modules\skin\default"; Components: client
 Source: "..\modules\skin\default\gtk2client.rc"; DestDir: "{app}\modules\skin\default"; Components: client
 Source: "..\modules\skin\default\*.png"; DestDir: "{app}\modules\skin\default"; Components: client
+
+Source: "Release\libyate.lib"; DestDir: "{app}\devel"; Components: devel
+Source: "..\*.h"; DestDir: "{app}\devel"; Components: devel
+Source: "yateversn.h"; DestDir: "{app}\devel"; Components: devel
+Source: "version.rc"; DestDir: "{app}\devel"; Components: devel
 
 [Icons]
 Name: "{group}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client

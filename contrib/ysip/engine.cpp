@@ -495,7 +495,7 @@ bool SIPEngine::checkUser(const String& username, const String& realm, const Str
 void SIPEngine::buildAuth(const String& username, const String& realm, const String& passwd,
     const String& nonce, const String& method, const String& uri, String& response)
 {
-    XDebug(this,DebugAll,"Building auth: '%s:%s:%s' '%s' '%s:%s'",
+    XDebug(DebugAll,"SIP Building auth: '%s:%s:%s' '%s' '%s:%s'",
 	username.c_str(),realm.c_str(),passwd.c_str(),nonce.c_str(),method.c_str(),uri.c_str());
     MD5 m1,m2;
     m1 << username << ":" << realm << ":" << passwd;

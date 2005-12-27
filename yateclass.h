@@ -2529,7 +2529,7 @@ class YATE_API Thread : public Runnable
     friend class ThreadPrivate;
 public:
     /**
-     * Running priorities
+     * Running priorities, their mapping is operating system dependent
      */
     enum Priority {
 	Lowest,
@@ -2563,7 +2563,8 @@ public:
     bool running() const;
 
     /**
-     * Give up the currently running timeslice
+     * Give up the currently running timeslice. Note that on some platforms
+     *  it also sleeps for the operating system's scheduler resolution
      * @param exitCheck Terminate the thread if asked so
      */
     static void yield(bool exitCheck = false);
@@ -2584,26 +2585,28 @@ public:
 
     /**
      * Sleep for a number of microseconds
-     * @param sec Number of microseconds to sleep
+     * @param sec Number of microseconds to sleep, may be rounded to
+     *  milliseconds on some platforms
      * @param exitCheck Terminate the thread if asked so
      */
     static void usleep(unsigned long usec, bool exitCheck = false);
 
     /**
      * Get a pointer to the currently running thread
-     * @return A pointer to the current thread or NULL for main thread
+     * @return A pointer to the current thread or NULL for the main thread
+     *  or threads created by other libraries
      */
     static Thread* current();
 
     /**
-     * Get the number of threads
-     * @return Count of threads except the main one
+     * Get the number of Yate created threads
+     * @return Count of current Thread objects
      */
     static int count();
 
     /**
      * Check if the current thread was asked to terminate.
-     * @param justCheck If true and should terminate then terminate thread immediately
+     * @param exitNow If thread is marked as cancelled then terminate immediately
      * @return False if thread should continue running, true if it should stop
      */
     static bool check(bool exitNow = true);

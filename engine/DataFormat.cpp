@@ -157,6 +157,7 @@ const FormatInfo* FormatRepository::addFormat(const String& name, int fsize, int
     return f;
 }
 
+
 void DataFormat::changed()
 {
     m_parsed = 0;
@@ -168,6 +169,20 @@ const FormatInfo* DataFormat::getInfo() const
     if (!(m_parsed || null()))
 	m_parsed = FormatRepository::getFormat(*this);
     return m_parsed;
+}
+
+
+DataConsumer::~DataConsumer()
+{
+    if (m_source || m_override) {
+	// this should not happen - but scream bloody murder if so
+	Debug(DebugFail,"DataConsumer destroyed with source=%p override=%p [%p]",
+	    m_source,m_override,this);
+    }
+    if (m_source)
+	m_source->detach(this);
+    if (m_override)
+	m_override->detach(this);
 }
 
 void* DataConsumer::getObject(const String& name) const
@@ -186,6 +201,7 @@ void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSour
     Consume(data,tStamp);
     m_timestamp = tStamp;
 }
+
 
 void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
@@ -235,8 +251,17 @@ bool DataSource::detach(DataConsumer* consumer)
     if (!consumer)
 	return false;
     DDebug(DebugAll,"DataSource [%p] detaching consumer [%p]",this,consumer);
-    // keep the source locked to prevent races with the Forward method
-    Lock lock(m_mutex);
+    // lock the source to prevent races with the Forward method
+    m_mutex.lock();
+    bool ok = detachInternal(consumer);
+    m_mutex.unlock();
+    return ok;
+}
+
+bool DataSource::detachInternal(DataConsumer* consumer)
+{
+    if (!consumer)
+	return false;
     DataConsumer *temp = static_cast<DataConsumer *>(m_consumers.remove(consumer,false));
     if (temp) {
 	if (temp->m_source == this)
@@ -252,7 +277,10 @@ bool DataSource::detach(DataConsumer* consumer)
 
 DataSource::~DataSource()
 {
-    while (detach(static_cast<DataConsumer*>(m_consumers.get()))) ;
+    // keep the source locked to prevent races with the Forward method
+    m_mutex.lock();
+    while (detachInternal(static_cast<DataConsumer*>(m_consumers.get()))) ;
+    m_mutex.unlock();
 }
 
 void* DataSource::getObject(const String& name) const
@@ -261,6 +289,7 @@ void* DataSource::getObject(const String& name) const
 	return const_cast<DataSource*>(this);
     return DataNode::getObject(name);
 }
+
 
 DataEndpoint::DataEndpoint(CallEndpoint* call, const char* name)
     : m_name(name), m_source(0), m_consumer(0),
@@ -477,6 +506,7 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
     }
 }
 
+
 ThreadedSource::~ThreadedSource()
 {
     stop();
@@ -507,6 +537,7 @@ Thread* ThreadedSource::thread() const
 {
     return m_thread;
 }
+
 
 DataTranslator::DataTranslator(const char* sFormat, const char* dFormat)
     : DataConsumer(sFormat)

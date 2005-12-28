@@ -307,6 +307,11 @@ public:
 	: DataNode(format), m_source(0), m_override(0), m_overrideTsDelta(0) { }
 
     /**
+     * Consumer's destructor - complains loudly if still attached to a source
+     */
+    virtual ~DataConsumer();
+
+    /**
      * Get a pointer to a derived class given that class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
@@ -418,11 +423,9 @@ public:
 	{ return m_translator; }
 
 protected:
-    /**
-     * The current position in the data - format dependent, usually samples
-     */
     inline void setTranslator(DataTranslator* translator)
 	{ m_translator = translator; }
+    bool detachInternal(DataConsumer* consumer);
     DataTranslator* m_translator;
     ObjList m_consumers;
     Mutex m_mutex;

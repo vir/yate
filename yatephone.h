@@ -405,8 +405,7 @@ public:
     /**
      * Detach all data consumers
      */
-    inline void clear()
-	{ m_consumers.clear(); }
+    void clear();
 
     /**
      * Get the mutex that serializes access to this data source
@@ -423,12 +422,13 @@ public:
 	{ return m_translator; }
 
 protected:
-    inline void setTranslator(DataTranslator* translator)
-	{ m_translator = translator; }
-    bool detachInternal(DataConsumer* consumer);
     DataTranslator* m_translator;
     ObjList m_consumers;
     Mutex m_mutex;
+private:
+    inline void setTranslator(DataTranslator* translator)
+	{ m_translator = translator; }
+    bool detachInternal(DataConsumer* consumer);
 };
 
 /**

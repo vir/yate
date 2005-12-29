@@ -101,10 +101,7 @@ static const FormatInfo s_formats[] = {
     FormatInfo("ilbc20", 38, 20000),
     FormatInfo("ilbc30", 50, 30000),
 //    FormatInfo("speex", 0),
-//    FormatInfo("adpcm", 4000),
-//    FormatInfo("g723", 0),
-//    FormatInfo("g726", 4000),
-//    FormatInfo("g729", 1000, 20),
+//    FormatInfo("g729", 10, 10000),
     FormatInfo("plain", 0, 0, "text", 0),
     FormatInfo("raw", 0, 0, "data", 0),
 };
@@ -277,9 +274,15 @@ bool DataSource::detachInternal(DataConsumer* consumer)
 
 DataSource::~DataSource()
 {
+    clear();
+}
+
+void DataSource::clear()
+{
     // keep the source locked to prevent races with the Forward method
     m_mutex.lock();
-    while (detachInternal(static_cast<DataConsumer*>(m_consumers.get()))) ;
+    while (detachInternal(static_cast<DataConsumer*>(m_consumers.get())))
+	;
     m_mutex.unlock();
 }
 

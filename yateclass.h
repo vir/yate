@@ -2911,6 +2911,34 @@ public:
      */
     virtual int readData(void* buffer, int length) = 0;
 
+    /**
+     * Allocate a new pair of unidirectionally pipe connected streams
+     * @param reader Reference of a pointer receiving the newly allocated reading side of the pipe
+     * @param writer Reference of a pointer receiving the newly allocated writing side of the pipe
+     * @return True is the stream pipe was created successfully
+     */
+    static bool allocPipe(Stream*& reader, Stream*& writer);
+
+    /**
+     * Allocate a new pair of bidirectionally connected streams
+     * @param str1 Reference of a pointer receiving the newly allocated 1st end of the pair
+     * @param str2 Reference of a pointer receiving the newly allocated 2nd end of the pair
+     * @return True is the stream pair was created successfully
+     */
+    static bool allocPair(Stream*& str1, Stream*& str2);
+
+    /**
+     * Check if operating system supports unidirectional stream pairs
+     * @return True if unidirectional pipes can be created
+     */
+    static bool supportsPipes();
+
+    /**
+     * Check if operating system supports bidirectional stream pairs
+     * @return True if bidirectional pairs can be created
+     */
+    static bool supportsPairs();
+
 protected:
     /**
      * Default constructor
@@ -3011,14 +3039,6 @@ public:
      * @return True is the pipe was created successfully
      */
     static bool createPipe(File& reader, File& writer);
-
-    /**
-     * Create a pair of bidirectionally connected streams
-     * @param file1 Reference to first File to be paired
-     * @param file2 Reference to second File to be paired
-     * @return True is the stream pair was created successfully
-     */
-    static bool createPair(File& file1, File& file2);
 
 protected:
 
@@ -3339,6 +3359,15 @@ public:
      * @return True if operation was successfull, false if an error occured
      */
     bool select(bool* readok, bool* writeok, bool* except, struct timeval* timeout = 0);
+
+    /**
+     * Create a pair of bidirectionally connected sockets
+     * @param sock1 Reference to first Socket to be paired
+     * @param sock2 Reference to second Socket to be paired
+     * @param domain Communication domain for the sockets (protocol family)
+     * @return True is the stream pair was created successfully
+     */
+    static bool createPair(Socket& sock1, Socket& sock2, int domain = AF_UNIX);
 
 protected:
 

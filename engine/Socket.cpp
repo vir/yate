@@ -281,6 +281,54 @@ int Stream::writeData(const char* str)
     return writeData(str,len);
 }
 
+bool Stream::allocPipe(Stream*& reader, Stream*& writer)
+{
+    if (supportsPipes()) {
+	File* r = new File;
+	File* w = new File;
+	if (File::createPipe(*r,*w)) {
+	    reader = r;
+	    writer = w;
+	    return true;
+	}
+	delete r;
+	delete w;
+    }
+    reader = writer = 0;
+    return false;
+}
+
+bool Stream::allocPair(Stream*& str1, Stream*& str2)
+{
+    if (supportsPairs()) {
+	Socket* s1 = new Socket;
+	Socket* s2 = new Socket;
+	if (Socket::createPair(*s1,*s2)) {
+	    str1 = s1;
+	    str2 = s2;
+	    return true;
+	}
+	delete s1;
+	delete s2;
+    }
+    str1 = str2 = 0;
+    return false;
+}
+
+bool Stream::supportsPipes()
+{
+    return true;
+}
+
+bool Stream::supportsPairs()
+{
+#ifdef _WINDOWS
+    return false;
+#else
+    return true;
+#endif
+}
+
 
 File::File()
     : m_handle(invalidHandle())
@@ -427,19 +475,6 @@ bool File::createPipe(File& reader, File& writer)
     if (!::pipe(fifo)) {
 	reader.attach(fifo[0]);
 	writer.attach(fifo[1]);
-	return true;
-    }
-#endif
-    return false;
-}
-
-bool createPair(File& file1, File& file2)
-{
-#ifndef _WINDOWS
-    HANDLE pair[2];
-    if (!::socketpair(AF_UNIX,SOCK_STREAM,0,pair)) {
-	file1.attach(pair[0]);
-	file2.attach(pair[1]);
 	return true;
     }
 #endif
@@ -832,6 +867,19 @@ bool Socket::setBlocking(bool block)
 	flags |= O_NONBLOCK;
     return checkError(::fcntl(m_handle,F_SETFL,flags));
 #endif
+}
+
+bool Socket::createPair(Socket& sock1, Socket& sock2, int domain)
+{
+#ifndef _WINDOWS
+    SOCKET pair[2];
+    if (!::socketpair(domain,SOCK_STREAM,0,pair)) {
+	sock1.attach(pair[0]);
+	sock2.attach(pair[1]);
+	return true;
+    }
+#endif
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

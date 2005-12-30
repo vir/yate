@@ -304,7 +304,9 @@ public:
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline DataConsumer(const char* format = "slin")
-	: DataNode(format), m_source(0), m_override(0), m_overrideTsDelta(0) { }
+	: DataNode(format),
+	  m_source(0), m_override(0), m_overrideTsDelta(0), m_lastTsTime(0)
+	{ }
 
     /**
      * Consumer's destructor - complains loudly if still attached to a source
@@ -351,6 +353,7 @@ private:
     DataSource* m_source;
     DataSource* m_override;
     long m_overrideTsDelta;
+    u_int64_t m_lastTsTime;
 };
 
 /**

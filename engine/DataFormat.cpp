@@ -195,8 +195,10 @@ void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSour
 	tStamp += m_overrideTsDelta;
     else if (m_override || (source != m_source))
 	return;
+    u_int64_t tsTime = Time::now();
     Consume(data,tStamp);
     m_timestamp = tStamp;
+    m_lastTsTime = tsTime;
 }
 
 
@@ -229,10 +231,17 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
     Lock lock(m_mutex);
     consumer->ref();
     if (override) {
+	// adjust timestamp for possible gaps in data
+	int64_t dt = Time::now() - consumer->m_lastTsTime;
+	const FormatInfo* info = consumer->getFormat().getInfo();
+	if (info)
+	    dt = (dt * info->sampleRate) / 1000000;
+	else
+	    dt = 0;
 	if (consumer->m_override)
 	    consumer->m_override->detach(consumer);
 	consumer->m_override = this;
-	consumer->m_overrideTsDelta = consumer->m_timestamp - m_timestamp;
+	consumer->m_overrideTsDelta = consumer->m_timestamp - m_timestamp + dt;
     }
     else {
 	if (consumer->m_source)

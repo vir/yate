@@ -900,7 +900,7 @@ bool Regexp::compile()
     if (c_str() && !m_regexp) {
 	regex_t *data = (regex_t *) ::malloc(sizeof(regex_t));
 	if (!data) {
-	    Debug("Regexp",DebugFail,"malloc(%d) returned NULL!",sizeof(regex_t));
+	    Debug("Regexp",DebugFail,"malloc(%d) returned NULL!",(int)sizeof(regex_t));
 	    return false;
 	}
 	if (::regcomp(data,c_str(),m_flags)) {

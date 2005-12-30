@@ -34,6 +34,16 @@
 #include <unistd.h>
 #include <errno.h>
 
+#ifndef _WORDSIZE
+#if defined(__arch64__) || defined(__x86_64__) \
+    || defined(__amd64__) || defined(__ia64__) \
+    || defined(__alpha__) || defined(__sparcv9)
+#define _WORDSIZE 64
+#else
+#define _WORDSIZE 32
+#endif
+#endif
+
 #ifndef _WINDOWS
 #if defined(WIN32) || defined(_WIN32)
 #define _WINDOWS
@@ -131,20 +141,25 @@ typedef int SOCKET;
 typedef int HANDLE;
 #endif
 
+#if _WORDSIZE == 64
+#define FMT64 "%ld"
+#define FMT64U "%lu"
+#else
 #define FMT64 "%lld"
 #define FMT64U "%llu"
+#endif
 
 #endif /* ! _WINDOWS */
-
-#ifndef YATE_API
-#define YATE_API
-#endif
 
 #ifndef IPTOS_LOWDELAY
 #define IPTOS_LOWDELAY      0x10
 #define IPTOS_THROUGHPUT    0x08
 #define IPTOS_RELIABILITY   0x04
 #define IPTOS_MINCOST       0x02
+#endif
+
+#ifndef YATE_API
+#define YATE_API
 #endif
 
 /**

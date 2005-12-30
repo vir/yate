@@ -334,12 +334,7 @@ RTPSession::~RTPSession()
     DDebug(DebugInfo,"RTPSession::~RTPSession() [%p]",this);
     direction(FullStop);
     group(0);
-    if (m_transport) {
-	RTPTransport* tmp = m_transport;
-	m_transport = 0;
-	tmp->setProcessor(0);
-	delete tmp;
-    }
+    transport(0);
 }
 
 void RTPSession::timerTick(const Time& when)
@@ -438,8 +433,12 @@ void RTPSession::transport(RTPTransport* trans)
     DDebug(DebugInfo,"RTPSession::transport(%p) old=%p [%p]",trans,m_transport,this);
     if (trans == m_transport)
 	return;
-    if (m_transport)
-	m_transport->setProcessor(0);
+    RTPTransport* tmp = m_transport;
+    m_transport = 0;
+    if (tmp) {
+	tmp->setProcessor(0);
+	tmp->destruct();
+    }
     m_transport = trans;
     if (m_transport)
 	m_transport->setProcessor(this);

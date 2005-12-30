@@ -396,10 +396,12 @@ unsigned int MessageDispatcher::handlerCount()
 
 void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
 {
+    m_mutex.lock();
     if (remove)
 	m_hooks.remove(hook,false);
     else
 	m_hooks.append(hook);
+    m_mutex.unlock();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

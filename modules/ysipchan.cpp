@@ -174,7 +174,7 @@ public:
     inline const String& getLocalAddr() const
 	{ return m_localAddr; }
     inline const String& getPartyAddr() const
-	{ return m_partyAddr; }
+	{ return m_outbound ? m_outbound : m_partyAddr; }
     inline int getLocalPort() const
 	{ return m_localPort; }
     inline int getPartyPort() const

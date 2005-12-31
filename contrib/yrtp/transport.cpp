@@ -138,8 +138,8 @@ void RTPTransport::timerTick(const Time& when)
     if (m_rtpSock.valid()) {
 	char buf[BUF_SIZE];
 	SocketAddr addr;
-	int len = m_rtpSock.recvFrom(buf,sizeof(buf),addr);
-	if (len >= 12) {
+	int len;
+	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),addr)) >= 12) {
 	    if (m_autoRemote && (addr != m_remoteAddr)) {
 		Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
 		    m_remoteAddr.host().c_str(),m_remoteAddr.port(),
@@ -158,8 +158,8 @@ void RTPTransport::timerTick(const Time& when)
     if (m_rtcpSock.valid()) {
 	char buf[BUF_SIZE];
 	SocketAddr addr;
-	int len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr);
-	if ((len >= 8) && (addr == m_remoteRTCP)) {
+	int len;
+	while (((len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr)) >= 8) && (addr == m_remoteRTCP)) {
 	    if (m_processor)
 		m_processor->rtcpData(buf,len);
 	    if (m_monitor)

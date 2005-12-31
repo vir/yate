@@ -136,46 +136,34 @@ void RTPTransport::timerTick(const Time& when)
 {
     XDebug(DebugAll,"RTPTransport::timerTick() group=%p [%p]",group(),this);
     if (m_rtpSock.valid()) {
-	bool ok = false;
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	if (m_rtpSock.select(&ok,0,0,&tv) && ok) {
-	    char buf[BUF_SIZE];
-	    SocketAddr addr;
-	    int len = m_rtpSock.recvFrom(buf,sizeof(buf),addr);
-	    if (len >= 12) {
-		if (m_autoRemote && (addr != m_remoteAddr)) {
-		    Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
-			m_remoteAddr.host().c_str(),m_remoteAddr.port(),
-			addr.host().c_str(),addr.port());
-		    remoteAddr(addr);
-		}
-		m_autoRemote = false;
-		if (addr == m_remoteAddr) {
-		    if (m_processor)
-			m_processor->rtpData(buf,len);
-		    if (m_monitor)
-			m_monitor->rtpData(buf,len);
-		}
+	char buf[BUF_SIZE];
+	SocketAddr addr;
+	int len = m_rtpSock.recvFrom(buf,sizeof(buf),addr);
+	if (len >= 12) {
+	    if (m_autoRemote && (addr != m_remoteAddr)) {
+		Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
+		    m_remoteAddr.host().c_str(),m_remoteAddr.port(),
+		    addr.host().c_str(),addr.port());
+		remoteAddr(addr);
+	    }
+	    m_autoRemote = false;
+	    if (addr == m_remoteAddr) {
+		if (m_processor)
+		    m_processor->rtpData(buf,len);
+		if (m_monitor)
+		    m_monitor->rtpData(buf,len);
 	    }
 	}
     }
     if (m_rtcpSock.valid()) {
-	bool ok = false;
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	if (m_rtcpSock.select(&ok,0,0,&tv) && ok) {
-	    char buf[BUF_SIZE];
-	    SocketAddr addr;
-	    int len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr);
-	    if ((len >= 8) && (addr == m_remoteRTCP)) {
-		if (m_processor)
-		    m_processor->rtcpData(buf,len);
-		if (m_monitor)
-		    m_monitor->rtcpData(buf,len);
-	    }
+	char buf[BUF_SIZE];
+	SocketAddr addr;
+	int len = m_rtcpSock.recvFrom(buf,sizeof(buf),addr);
+	if ((len >= 8) && (addr == m_remoteRTCP)) {
+	    if (m_processor)
+		m_processor->rtcpData(buf,len);
+	    if (m_monitor)
+		m_monitor->rtcpData(buf,len);
 	}
     }
 }
@@ -223,6 +211,7 @@ bool RTPTransport::localAddr(SocketAddr& addr)
     if ((p & 1))
 	return false;
     if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
+	m_rtpSock.setBlocking(false);
 	if (!p) {
 	    m_rtpSock.getSockName(addr);
 	    p = addr.port();
@@ -231,6 +220,7 @@ bool RTPTransport::localAddr(SocketAddr& addr)
 		m_rtcpSock.attach(m_rtpSock.detach());
 		addr.port(p-1);
 		if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
+		    m_rtpSock.setBlocking(false);
 		    m_localAddr = addr;
 		    return true;
 		}
@@ -241,6 +231,7 @@ bool RTPTransport::localAddr(SocketAddr& addr)
 	}
 	addr.port(p+1);
 	if (m_rtcpSock.create(addr.family(),SOCK_DGRAM) && m_rtcpSock.bind(addr)) {
+	    m_rtcpSock.setBlocking(false);
 	    addr.port(p);
 	    m_localAddr = addr;
 	    return true;

@@ -753,6 +753,7 @@ void PriChan::answered()
 	return;
     }
     m_timeout = 0;
+    m_answered = true;
     status(chanStatus());
     Debug(this,DebugInfo,"Remote answered on %s (%s)",id().c_str(),address().c_str());
     maxcall(0);

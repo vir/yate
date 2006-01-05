@@ -64,6 +64,28 @@ SocketAddr::SocketAddr(const struct sockaddr* addr, socklen_t len)
 SocketAddr::SocketAddr(int family)
     : m_address(0), m_length(0)
 {
+    assign(family);
+}
+
+SocketAddr::~SocketAddr()
+{
+    clear();
+}
+
+void SocketAddr::clear()
+{
+    m_host.clear();
+    m_length = 0;
+    if (m_address) {
+	void* tmp = m_address;
+	m_address = 0;
+	::free(tmp);
+    }
+}
+
+bool SocketAddr::assign(int family)
+{
+    clear();
     switch (family) {
 	case AF_INET:
 	    m_length = sizeof(struct sockaddr_in);
@@ -81,24 +103,11 @@ SocketAddr::SocketAddr(int family)
     }
     if (m_length)
 	m_address = (struct sockaddr*) ::calloc(m_length,1);
-    if (m_address)
-	m_address->sa_family = family;
-}
-
-SocketAddr::~SocketAddr()
-{
-    clear();
-}
-
-void SocketAddr::clear()
-{
-    m_host.clear();
-    m_length = 0;
     if (m_address) {
-	void* tmp = m_address;
-	m_address = 0;
-	::free(tmp);
+	m_address->sa_family = family;
+	return true;
     }
+    return false;
 }
 
 void SocketAddr::assign(const struct sockaddr* addr, socklen_t len)
@@ -479,6 +488,13 @@ bool File::createPipe(File& reader, File& writer)
     }
 #endif
     return false;
+}
+
+bool File::remove(const char* name)
+{
+    if (null(name))
+	return false;
+    return !::unlink(name);
 }
 
 

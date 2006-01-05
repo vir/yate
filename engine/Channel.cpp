@@ -216,14 +216,14 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
 
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0)
+      m_driver(driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0), m_answered(false)
 {
     init();
 }
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(&driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0)
+      m_driver(&driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0), m_answered(false)
 {
     init();
 }
@@ -333,6 +333,12 @@ void Channel::setId(const char* newId)
     debugName(id());
 }
 
+void Channel::status(const char* newstat)
+{
+    m_status = newstat;
+    m_answered = m_answered || (m_status == "answered");
+}
+
 const char* Channel::direction() const
 {
     return m_outgoing ? "outgoing" : "incoming";
@@ -366,6 +372,7 @@ void Channel::complete(Message& msg, bool minimal) const
 	msg.setParam("billid",m_billid);
     if (getPeer())
 	msg.setParam("peerid",getPeer()->id());
+    msg.setParam("answered",String::boolText(m_answered));
 }
 
 Message* Channel::message(const char* name, bool minimal, bool data)
@@ -415,6 +422,7 @@ bool Channel::msgRinging(Message& msg)
 bool Channel::msgAnswered(Message& msg)
 {
     m_maxcall = 0;
+    m_answered = true;
     status("answered");
     if (m_billid.null())
 	m_billid = msg.getValue("billid");

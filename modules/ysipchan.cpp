@@ -280,8 +280,8 @@ public:
     void hangup();
     inline const SIPDialog& dialog() const
 	{ return m_dialog; }
-    inline void setStatus(const char *status, int state = -1)
-	{ m_status = status; if (state >= 0) m_state = state; }
+    inline void setStatus(const char *stat, int state = -1)
+	{ status(stat); if (state >= 0) m_state = state; }
     inline void setReason(const char* str = "Request Terminated", int code = 487)
 	{ m_reason = str; m_reasonCode = code; }
     inline SIPTransaction* getTransaction() const

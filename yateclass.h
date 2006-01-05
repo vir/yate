@@ -90,6 +90,7 @@ typedef unsigned long in_addr_t;
 #define close _close
 #define getpid _getpid
 #define chdir _chdir
+#define unlink _unlink
 
 #define O_RDWR   _O_RDWR
 #define O_RDONLY _O_RDONLY
@@ -2764,6 +2765,13 @@ public:
     void clear();
 
     /**
+     * Assigns an empty address of a specific type
+     * @param family Family of the address to create
+     * @return True if the address family is supported
+     */
+    bool assign(int family);
+
+    /**
      * Assigns a new address
      * @param addr Pointer to the address to store
      * @param len Length of the stored address, zero to use default
@@ -3046,6 +3054,13 @@ public:
      * @return Number of bytes transferred, negative if an error occurred
      */
     virtual int readData(void* buffer, int length);
+
+    /**
+     * Deletes a file entry from the filesystem
+     * @param name Absolute path and name of the file to delete
+     * @return True if the file was successfully deleted
+     */
+    static bool remove(const char* name);
 
     /**
      * Create a pair of unidirectionally pipe connected streams

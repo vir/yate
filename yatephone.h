@@ -39,7 +39,7 @@ namespace TelEngine {
 /**
  * A structure to hold information about a static picture or video frame.
  */
-struct ImageInfo {
+struct YATE_API ImageInfo {
     /**
      * Width of the image in pixels
      */
@@ -130,7 +130,7 @@ class Driver;
  * A structure to build (mainly static) translator capability tables.
  * A table of such structures must end with an entry with null format names.
  */
-struct TranslatorCaps {
+struct YATE_API TranslatorCaps {
     /** Description of source (input) data format */
     const FormatInfo* src;
     /** Description of destination (output) data format */
@@ -1160,6 +1160,7 @@ protected:
     String m_address;
     String m_targetid;
     String m_billid;
+    bool m_answered;
 
 public:
     /**
@@ -1205,7 +1206,7 @@ public:
     virtual bool msgRinging(Message& msg);
 
     /**
-     * Notification on remote answered
+     * Notification on remote answered. Note that the answered flag will be set
      * @param msg Notification message
      * @return True to stop processing the message, false to let it flow
      */
@@ -1287,15 +1288,22 @@ public:
      * Get the direction of the channel
      * @return True if the channel is an outgoing call (generated locally)
      */
-    bool isOutgoing() const
+    inline bool isOutgoing() const
 	{ return m_outgoing; }
 
     /**
      * Get the direction of the channel
      * @return True if the channel is an incoming call (generated remotely)
      */
-    bool isIncoming() const
+    inline bool isIncoming() const
 	{ return !m_outgoing; }
+
+    /**
+     * Check if the call was answered or not
+     * @return True if the call was answered
+     */
+    inline bool isAnswered() const
+	{ return m_answered; }
 
     /**
      * Get the direction of the channel as string
@@ -1435,11 +1443,11 @@ protected:
     virtual void setId(const char* newId);
 
     /**
-     * Set the current status of the channel
+     * Set the current status of the channel.
+     * Note that a value of "answered" will set the answered flag
      * @param newstat The new status as String
      */
-    inline void status(const char* newstat)
-	{ m_status = newstat; }
+    void status(const char* newstat);
 
     /**
      * Set the current direction of the channel

@@ -1060,9 +1060,18 @@ bool Router::route()
 	    ok = Engine::dispatch(m_msg);
 	    if (ok)
 		chan->callAccept(*m_msg);
-	    else
-		chan->callRejected(m_msg->getValue("error","noconn"),
-		    m_msg->getValue("reason","Could not connect to target"),m_msg);
+	    else {
+		const char* error = m_msg->getValue("error","noconn");
+		const char* reason = m_msg->getValue("reason","Could not connect to target");
+		Message m("chan.disconnected");
+		chan->complete(m);
+		m.setParam("error",error);
+		m.setParam("reason",reason);
+		m.setParam("reroute",String::boolText(true));
+		m.userData(chan);
+		if (!Engine::dispatch(m))
+		    chan->callRejected(error,reason,m_msg);
+	    }
 	}
     }
     else

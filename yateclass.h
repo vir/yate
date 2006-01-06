@@ -649,7 +649,7 @@ protected:
 /**
  * @short Templated smart pointer class
  */
-template <class Obj = RefObject> class RefPointer : public RefPointerBase
+template <class Obj = RefObject> class YATE_API RefPointer : public RefPointerBase
 {
 protected:
     /**
@@ -663,7 +663,7 @@ protected:
      * Set a new stored pointer
      * @param object Pointer to the new stored object
      */
-    void assign(Obj* object = 0)
+    inline void assign(Obj* object = 0)
 	{ RefPointerBase::assign(pointer(),object,object); }
 
 public:

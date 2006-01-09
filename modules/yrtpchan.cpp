@@ -746,13 +746,15 @@ YRTPPlugin::~YRTPPlugin()
 
 void YRTPPlugin::statusParams(String& str)
 {
-    str.append("chans=",",") << s_calls.count();
     String tmp;
+    s_mutex.lock();
+    str.append("chans=",",") << s_calls.count();
     ObjList* l = s_calls.skipNull();
     for (; l; l=l->skipNext()) {
 	YRTPWrapper* w = static_cast<YRTPWrapper*>(l->get());
         tmp.append(w->id(),",") << "=" << w->callId();
     }
+    s_mutex.unlock();
     str << ";" << tmp;
 }
 

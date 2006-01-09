@@ -763,9 +763,7 @@ void Driver::setup(const char* prefix, bool minimal)
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
     XDebug(DebugAll,"setup name='%s' prefix='%s'",name().c_str(),m_prefix.c_str());
-    timeout(Engine::config().getIntValue("telephony","timeout"));
-    maxRoute(Engine::config().getIntValue("telephony","maxroute"));
-    maxChans(Engine::config().getIntValue("telephony","maxchans"));
+    loadLimits();
     installRelay(Masquerade,10);
     installRelay(Locate,40);
     installRelay(Drop,60);
@@ -984,6 +982,13 @@ bool Driver::setDebug(Message& msg, const String& target)
 	return chan->setDebug(msg);
 
     return false;
+}
+
+void Driver::loadLimits()
+{
+    timeout(Engine::config().getIntValue("telephony","timeout"));
+    maxRoute(Engine::config().getIntValue("telephony","maxroute"));
+    maxChans(Engine::config().getIntValue("telephony","maxchans"));
 }
 
 unsigned int Driver::nextid()

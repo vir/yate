@@ -1667,6 +1667,11 @@ protected:
     virtual bool setDebug(Message& msg, const String& target);
 
     /**
+     * Load the global limits from the main config file
+     */
+    virtual void loadLimits();
+
+    /**
      * Set if this driver is for dynamic (variable number) channels
      * @param variable True if the channels are dynamic, false for fixed
      */

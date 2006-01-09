@@ -298,8 +298,8 @@ AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default
 
 if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
-verpw=`ptlib-config --version 2>/dev/null`
-prtti=`ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
+verpw=`$ac_cv_use_pwlib/bin/ptlib-config --version 2>/dev/null`
+prtti=`$ac_cv_use_pwlib/bin/ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
 # try first installed directory
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/lib/libpt.so"

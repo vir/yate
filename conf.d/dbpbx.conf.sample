@@ -1,0 +1,46 @@
+[general]
+; Global module settings that are read only at first initialization
+
+; The following parameters enable handling of individual components
+; Each must be enabled manually in this config file
+
+; Enable multi router
+;router=no
+
+
+[priorities]
+; Base priorities for each component
+
+;router=20
+
+
+[default]
+; This section holds default settings for each of the following message handlers
+; All these settings can be overriden in individual handler sections
+
+; account: string: Name of the database connection to use
+account=my
+
+
+; In each of the following sections you have to specify the following:
+; - initial query to execute when module is initialized
+; - query to execute for each received message
+; - result field to copy in message's textual return value (only for some)
+; You can also override the settings from section [default]
+
+
+[router]
+; Multiple router
+
+; Query for the initial routing message
+queryroute=SELECT callto,mrid,priority FROM mroutes WHERE prefix='${called}' ORDER BY priority LIMIT 1
+
+; Query for subsequent retries
+queryretry=SELECT callto,priority FROM mroutes WHERE mrid=${mrid} AND priority>${priority} ORDER BY priority LIMIT 1
+
+; Parameter that must be present to perform routing retries
+retryneeds=mrid
+
+; Inital query to execute on startup
+;initquery=
+

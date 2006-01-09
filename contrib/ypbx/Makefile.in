@@ -1,0 +1,47 @@
+# Makefile
+# This file holds the make rules for the libyatepbx
+
+DEBUG :=
+
+CXX  := @CXX@ -Wall
+AR  := ar
+DEFS :=
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+LDFLAGS:= -L.. -lyate
+INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatepbx.h
+
+PROGS=
+LIBS = libyatepbx.a
+OBJS = multiroute.o
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+# include optional local make rules
+-include YateLocal.mak
+
+.PHONY: all
+all: $(LIBS) $(PROGS)
+
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean:
+	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+
+%.o: @srcdir@/%.cpp $(INCFILES)
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status
+
+libyatepbx.a: $(OBJS)
+	$(AR) rcs $@ $^

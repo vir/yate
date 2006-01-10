@@ -143,7 +143,6 @@ bool DbMultiRouter::msgRoute(Message& msg, CallInfo& info, bool first)
 {
     if (m_queryRoute.null() || m_account.null())
 	return false;
-    Debug(DebugWarn,"msgRoute info @ %p",&info);
     String query(m_queryRoute);
     replaceParams(query,msg);
     Message m("database");
@@ -167,7 +166,6 @@ Message* DbMultiRouter::buildExecute(CallInfo& info, bool reroute)
 	return 0;
     if (m_retryNeeds && !info.getParam(m_retryNeeds))
 	return 0;
-    Debug(DebugWarn,"buildExecute info @ %p",&info);
     String query(m_queryRetry);
     replaceParams(query,info);
     Message m("database");

@@ -86,6 +86,7 @@ using namespace TelEngine;
 
 static bool s_externalRtp;
 static bool s_passtrough;
+static Mutex s_mutex(true);
 
 static Configuration s_cfg;
 
@@ -924,18 +925,22 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 YateH323Connection::~YateH323Connection()
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
+    s_mutex.lock();
     YateH323Chan* tmp = m_chan;
     m_chan = 0;
     if (tmp)
 	tmp->finish();
+    s_mutex.unlock();
     cleanups();
 }
 
 void YateH323Connection::CleanUpOnCallEnd()
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::CleanUpOnCallEnd() [%p]",this);
+    s_mutex.lock();
     if (m_chan)
 	m_chan->stopDataLinks();
+    s_mutex.unlock();
     H323Connection::CleanUpOnCallEnd();
 }
 
@@ -1082,6 +1087,7 @@ void YateH323Connection::answerCall(AnswerCallResponse response)
 
 void YateH323Connection::OnEstablished()
 {
+    TelEngine::Lock lock(s_mutex);
     Debug(m_chan,DebugInfo,"YateH323Connection::OnEstablished() [%p]",this);
     if (!m_chan)
 	return;
@@ -1092,6 +1098,7 @@ void YateH323Connection::OnEstablished()
     m_chan->status("answered");
     m_chan->maxcall(0);
     Message *m = m_chan->message("call.answered",false,true);
+    lock.drop();
     if (m_passtrough) {
 	if (m_remotePort) {
 	    m->addParam("rtp_forward","yes");
@@ -1113,19 +1120,23 @@ void YateH323Connection::OnCleared()
     int reason = GetCallEndReason();
     const char* rtext = CallEndReasonText(reason);
     const char* error = lookup(reason,dict_errors);
+    s_mutex.lock();
     Debug(m_chan,DebugInfo,"YateH323Connection::OnCleared() error: '%s' reason: %s (%d) [%p]",
 	error,rtext,reason,this);
     if (m_chan)
 	m_chan->disconnect(error ? error : rtext);
+    s_mutex.unlock();
 }
 
 BOOL YateH323Connection::OnAlerting(const H323SignalPDU &alertingPDU, const PString &user)
 {
+    TelEngine::Lock lock(s_mutex);
     Debug(m_chan,DebugInfo,"YateH323Connection::OnAlerting '%s' [%p]",(const char *)user,this);
     if (!m_chan)
 	return FALSE;
     m_chan->status("ringing");
     Message *m = m_chan->message("call.ringing",false,true);
+    lock.drop();
     if (hasRemoteAddress()) {
 	m->addParam("rtp_forward","yes");
 	m->addParam("rtp_addr",m_remoteAddr);
@@ -1141,10 +1152,12 @@ BOOL YateH323Connection::OnReceivedProgress(const H323SignalPDU& pdu)
     Debug(m_chan,DebugInfo,"YateH323Connection::OnReceivedProgress [%p]",this);
     if (!H323Connection::OnReceivedProgress(pdu))
 	return FALSE;
+    TelEngine::Lock lock(s_mutex);
     if (!m_chan)
 	return FALSE;
     m_chan->status("progressing");
     Message *m = m_chan->message("call.progress",false,true);
+    lock.drop();
     if (hasRemoteAddress()) {
 	m->addParam("rtp_forward","yes");
 	m->addParam("rtp_addr",m_remoteAddr);
@@ -1381,6 +1394,7 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
 
 void YateH323Connection::stoppedExternal(H323Channel::Directions dir)
 {
+    TelEngine::Lock lock(s_mutex);
     Debug(m_chan,DebugInfo,"YateH323Connection::stoppedExternal(%s) chan=%p [%p]",
 	lookup(dir,dict_h323_dir),m_chan,this);
     if (!m_chan)
@@ -1777,6 +1791,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
 
 YateH323Chan::~YateH323Chan()
 {
+    s_mutex.lock();
     Debug(this,DebugAll,"YateH323Chan::~YateH323Chan() %s %s [%p]",
 	m_status.c_str(),id().c_str(),this);
     stopDataLinks();
@@ -1785,6 +1800,7 @@ YateH323Chan::~YateH323Chan()
     hangup();
     if (m_conn)
 	Debug(this,DebugFail,"Still having a connection %p [%p]",m_conn,this);
+    s_mutex.unlock();
 }
 
 void YateH323Chan::zeroRefs()

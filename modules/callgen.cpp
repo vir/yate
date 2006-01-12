@@ -270,7 +270,9 @@ bool ConnHandler::received(Message &msg, int id)
     String callid(msg.getValue("targetid"));
     if (!callid.startsWith("callgen/",false))
 	return false;
-    GenConnection *conn = GenConnection::find(callid);
+    s_mutex.lock();
+    RefPointer<GenConnection> conn = GenConnection::find(callid);
+    s_mutex.unlock();
     if (!conn) {
 	Debug(DebugInfo,"Target '%s' was not found in list",callid.c_str());
 	return false;
@@ -315,17 +317,18 @@ void CleanThread::run()
     Debug("CallGen",DebugInfo,"CleanThread::run() [%p]",this);
     while (!Engine::exiting()) {
 	Thread::usleep(100000);
-	Lock lock(s_mutex);
+	s_mutex.lock();
 	Time t;
-	ObjList* l = &s_calls;
-	while (l) {
-	    GenConnection* c = static_cast<GenConnection*>(l->get());
-	    if (c && c->oldAge(t)) {
+	ListIterator iter(s_calls);
+	for (;;) {
+	    RefPointer<GenConnection> c = static_cast<GenConnection*>(iter.get());
+	    s_mutex.unlock();
+	    if (!c)
+		break;
+	    if (c->oldAge(t))
 		c->destruct();
-		if (c != l->get())
-		    continue;
-	    }
-	    l = l->next();
+	    c = 0;
+	    s_mutex.lock();
 	}
     }
 }

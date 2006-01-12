@@ -193,14 +193,15 @@ ThreadPrivate::~ThreadPrivate()
     Debugger debug("ThreadPrivate::~ThreadPrivate()"," %p '%s' [%p]",m_thread,m_name,this);
 #endif
     m_running = false;
-    tmutex.lock();
+    Lock lock(tmutex);
     threads.remove(this,false);
     if (m_thread && m_updest) {
 	Thread *t = m_thread;
 	m_thread = 0;
+	// let other threads access the list while we delete our upper layer
+	lock.drop();
 	delete t;
     }
-    tmutex.unlock();
 }
 
 void ThreadPrivate::destroy()

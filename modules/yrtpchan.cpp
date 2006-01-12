@@ -101,7 +101,7 @@ public:
     inline const String& id() const
 	{ return m_id; }
     inline const String& callId() const
-	{ return m_conn ? m_conn->id() : String::empty(); }
+	{ return m_master; }
     inline const String& media() const
 	{ return m_media; }
     inline unsigned int bufSize() const
@@ -216,6 +216,8 @@ YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* me
 	localip,conn,media,lookup(direction,dict_yrtp_dir),this);
     m_id = "yrtp/";
     m_id << (unsigned int)::random();
+    if (conn)
+	m_master = conn->id();
     m_audio = (m_media == "audio");
     s_mutex.lock();
     s_calls.append(this);

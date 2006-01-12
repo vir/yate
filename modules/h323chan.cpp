@@ -2110,11 +2110,9 @@ bool H323Driver::msgExecute(Message& msg, String& dest)
 	dest.c_str());
     PString p;
     YateH323EndPoint* ep = hplugin.findEndpoint(msg.getValue("line"));
-    lock();
     YateH323Connection* conn = ep ? static_cast<YateH323Connection*>(
 	ep->MakeCallLocked(dest.c_str(),p,&msg)
     ) : 0;
-    unlock();
     if (conn) {
 	conn->Unlock();
 	return true;

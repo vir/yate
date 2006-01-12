@@ -904,8 +904,8 @@ void Driver::dropAll(Message &msg)
 	unlock();
 	if (!c)
 	    break;
-	DDebug(this,DebugAll,"Dropping %s channel %p [%p]",
-	    name().c_str(),static_cast<Channel*>(c),this);
+	DDebug(this,DebugAll,"Dropping %s channel '%s' @%p [%p]",
+	    name().c_str(),c->id().c_str(),static_cast<Channel*>(c),this);
 	c->msgDrop(msg,reason);
 	c = 0;
 	lock();

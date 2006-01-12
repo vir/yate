@@ -31,6 +31,12 @@
 ; external_rtp: bool: default: no
 ;external_rtp=no
 
+; Attempt to use native (OpenH323) RTP if external fails to start. This is
+;  usefull only if the failure is caused by the external RTP module not
+;  being loaded.
+; fallback_rtp: bool: default: yes
+;fallback_rtp=yes
+
 ; Perform direct RTP forwarding between client endpoints.
 ; You should enable faststart=on in the [ep] section and make sure fast start
 ;  is also supported and enabled on all clients.

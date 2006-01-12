@@ -844,6 +844,12 @@ public:
 	{ return m_mutex; }
 
     /**
+     * Get the big mutex that serializes access to all call endpoints
+     * @return A reference to the mutex
+     */
+    static Mutex& commonMutex();
+
+    /**
      * Connect the call endpoint to a peer.
      * @param peer Pointer to the peer call endpoint.
      * @param reason Text that describes connect reason.

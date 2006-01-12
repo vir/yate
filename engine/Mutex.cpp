@@ -68,6 +68,7 @@ private:
     int m_refcount;
     volatile unsigned int m_locked;
     bool m_recursive;
+    const char* m_owner;
 };
 
 class GlobalMutex {
@@ -138,8 +139,9 @@ void GlobalMutex::unlock()
 #endif
 }
 
+
 MutexPrivate::MutexPrivate(bool recursive)
-    : m_refcount(1), m_locked(0), m_recursive(recursive)
+    : m_refcount(1), m_locked(0), m_recursive(recursive), m_owner(0)
 {
     GlobalMutex::lock();
     s_count++;
@@ -220,12 +222,14 @@ bool MutexPrivate::lock(long maxwait)
     if (rval) {
 	s_locks++;
 	m_locked++;
+	m_owner = Thread::currentName();
     }
     else
 	deref();
     GlobalMutex::unlock();
     if (warn && !rval)
-	Debug(DebugFail,"Mutex lock failed for %lu usec!",maxwait);
+	Debug(DebugFail,"Thread '%s' could not take lock owned by '%s' for %lu usec!",
+	    Thread::currentName(),m_owner,maxwait);
     return rval;
 }
 
@@ -234,7 +238,8 @@ void MutexPrivate::unlock()
     // Hope we don't hit a bug related to the debug mutex!
     GlobalMutex::lock();
     if (m_locked) {
-	m_locked--;
+	if (!--m_locked)
+	    m_owner = 0;
 	if (--s_locks < 0)
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
 #ifdef _WINDOWS
@@ -248,6 +253,7 @@ void MutexPrivate::unlock()
 	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex [%p]",this);
     GlobalMutex::unlock();
 }
+
 
 Mutex::Mutex()
     : m_private(0)
@@ -332,6 +338,48 @@ int Mutex::locks()
 void Mutex::wait(unsigned long maxwait)
 {
     s_maxwait = maxwait;
+}
+
+
+bool Lock2::lock(Mutex* mx1, Mutex* mx2, long maxwait)
+{
+    // if we got only one mutex it must be mx1
+    if (!mx1) {
+	mx1 = mx2;
+	mx2 = 0;
+    }
+    // enforce a fixed locking order - lowest address first
+    else if (mx1 && mx2 && (mx1 > mx2)) {
+	Mutex* tmp = mx1;
+	mx1 = mx2;
+	mx2 = tmp;
+    }
+    drop();
+    if (!mx1)
+	return false;
+    if (!mx1->lock(maxwait))
+	return false;
+    if (mx2) {
+	if (!mx2->lock(maxwait)) {
+	    mx1->unlock();
+	    return false;
+	}
+    }
+    m_mx1 = mx1;
+    m_mx2 = mx2;
+    return true;
+}
+
+void Lock2::drop()
+{
+    Mutex* mx1 = m_mx1;
+    Mutex* mx2 = m_mx2;
+    m_mx1 = m_mx2 = 0;
+    // unlock in reverse order for performance reason
+    if (mx2)
+	mx2->unlock();
+    if (mx1)
+	mx1->unlock();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

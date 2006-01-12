@@ -134,7 +134,6 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
-    virtual bool msgDrop(Message& msg, const char* reason);
     void startAudio(int format,int capability);
     void sourceAudio(void *buffer, int len, int format);
     void sendVoice(char* buffer, int len, int format);
@@ -845,13 +844,6 @@ bool IAXConnection::msgText(Message& msg, const char* text)
 {
     if (text)
 	::iax_send_text(session(),(char *)text);
-    return true;
-}
-
-bool IAXConnection::msgDrop(Message& msg, const char* reason)
-{
-    Debug(this,DebugInfo,"Dropping IAX call '%s' [%p]",id().c_str(),this);
-    disconnect(reason);
     return true;
 }
 

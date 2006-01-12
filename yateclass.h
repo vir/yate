@@ -537,10 +537,17 @@ public:
     virtual ~GenObject() { }
 
     /**
+     * Check if the object is still valid and safe to access.
+     * Note that you should not trust this result unless the object is locked
+     *  by other means.
+     * @return True if the object is still useable
+     */
+    virtual bool alive() const;
+
+    /**
      * Destroys the object, disposes the memory.
      */
-    virtual void destruct()
-	{ delete this; }
+    virtual void destruct();
 
     /**
      * Get a string representation of this object
@@ -578,10 +585,18 @@ public:
     virtual ~RefObject();
 
     /**
-     * Increments the reference counter
-     * @return The new reference count
+     * Check if the object is still referenced and safe to access.
+     * Note that you should not trust this result unless the object is locked
+     *  by other means.
+     * @return True if the object is referenced and safe to access
      */
-    int ref();
+    virtual bool alive() const;
+
+    /**
+     * Increments the reference counter if not already zero
+     * @return True if the object was successfully referenced and is safe to access
+     */
+    bool ref();
 
     /**
      * Decrements the reference counter, destroys the object if it reaches zero
@@ -589,7 +604,7 @@ public:
      * // Deref this object, return quickly if the object was deleted
      * if (deref()) return;
      * </pre>
-     * @return True if the object was deleted, false if it still exists
+     * @return True if the object may have been deleted, false if it still exists and is safe to access
      */
     bool deref();
 
@@ -604,8 +619,7 @@ public:
      * Refcounted objects should just have the counter decremented.
      * That will destroy them only when the refcount reaches zero.
      */
-    virtual void destruct()
-	{ deref(); }
+    virtual void destruct();
 
 protected:
     /**
@@ -613,6 +627,13 @@ protected:
      * The default behaviour is to delete the object.
      */
     virtual void zeroRefs();
+
+    /**
+     * Bring the object back alive by setting the reference counter to one.
+     * Note that it works only if the counter was zero previously
+     * @return True if the object was resurrected - its name may be Lazarus ;-)
+     */
+    bool resurrect();
 
 private:
     int m_refcount;
@@ -898,6 +919,7 @@ private:
  * Data is organized in columns - the main ObjList holds pointers to one
  *  ObjList for each column.
  * This class has been written by Diana
+ * @short A list based Array
  */
 class YATE_API Array : public RefObject
 {
@@ -1864,6 +1886,84 @@ private:
 };
 
 /**
+ * An ObjList or HashList iterator that can be used even when list elements 
+ * are changed while iterating. Note that it will not detect that an item was
+ * removed and another with the same address was inserted back in list.
+ * @short Class used to iterate the items of a list
+ */
+class YATE_API ListIterator
+{
+public:
+    /**
+     * Constructor used to iterate trough an ObjList.
+     * The image of the list is frozen at the time the constructor executes
+     * @param list List to get the objects from
+     */
+    ListIterator(ObjList& list);
+
+    /**
+     * Constructor used to iterate trough a HashList.
+     * The image of the list is frozen at the time the constructor executes
+     * @param list List to get the objects from
+     */
+    ListIterator(HashList& list);
+
+    /**
+     * Destructor - frees the allocated memory
+     */
+    ~ListIterator();
+
+    /**
+     * Get the number of elements in the list
+     * @return Count of items in the internal list
+     */
+    inline unsigned int length() const
+	{ return m_length; }
+
+    /**
+     * Get an arbitrary element in the iterator's list image.
+     * Items that were removed from list or are not alive are not returned.
+     * @param index Position to get the item from
+     * @return Pointer to the list item or NULL if out of range or item removed
+     */
+    GenObject* get(unsigned int index) const;
+
+    /**
+     * Get the current element and advance the current index.
+     * Items that were removed from list or are not alive are skipped over.
+     * An example of typical usage:
+     * <pre>
+     * ListIterator iter(list);
+     * while (GenObject* obj = iter.get()) {
+     *     do_something_with(obj);
+     * }
+     * </pre>
+     * @return Pointer to a list item or NULL if advanced past end (eof)
+     */
+    GenObject* get();
+
+    /**
+     * Check if the current pointer is past the end of the list
+     * @return True if there are no more entries left
+     */
+    inline bool eof() const
+	{ return m_current >= m_length; }
+
+    /**
+     * Reset the iterator index to the first position in the list
+     */
+    inline void reset()
+	{ m_current = 0; }
+
+private:
+    ObjList* m_objList;
+    HashList* m_hashList;
+    GenObject** m_objects;
+    unsigned int m_length;
+    unsigned int m_current;
+};
+
+/**
  * The Time class holds a time moment with microsecond accuracy
  * @short A time holding class
  */
@@ -2469,7 +2569,7 @@ public:
     /**
      * Create the lock, try to lock the mutex
      * @param mutex Reference to the mutex to lock
-     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
      */
     inline Lock(Mutex& mutex, long maxwait = -1)
 	{ m_mutex = mutex.lock(maxwait) ? &mutex : 0; }
@@ -2477,7 +2577,7 @@ public:
     /**
      * Create the lock, try to lock the mutex
      * @param mutex Pointer to the mutex to lock
-     * @param maxait Time in microseconds to wait for the mutex, -1 wait forever
+     * @param maxwait Time in microseconds to wait for the mutex, -1 wait forever
      */
     inline Lock(Mutex* mutex, long maxwait = -1)
 	{ m_mutex = (mutex && mutex->lock(maxwait)) ? mutex : 0; }
@@ -2512,6 +2612,86 @@ private:
 
     /** No copy constructor */
     inline Lock(const Lock&);
+};
+
+/**
+ * A dual lock is a stack allocated (automatic) object that locks a pair
+ *  of mutexes on creation and unlocks them on destruction. The mutexes are
+ *  always locked in the same order to prevent trivial deadlocks
+ * @short Ephemeral double mutex locking object
+ */
+class YATE_API Lock2
+{
+public:
+    /**
+     * Create the dual lock, try to lock each mutex
+     * @param mx1 Pointer to the first mutex to lock
+     * @param mx2 Pointer to the second mutex to lock
+     * @param maxwait Time in microseconds to wait for each mutex, -1 wait forever
+     */
+    inline Lock2(Mutex* mx1, Mutex* mx2, long maxwait = -1)
+	: m_mx1(0), m_mx2(0)
+	{ lock(mx1,mx2,maxwait); }
+
+    /**
+     * Create the dual lock, try to lock each mutex
+     * @param mx1 Reference to the first mutex to lock
+     * @param mx2 Reference to the second mutex to lock
+     * @param maxwait Time in microseconds to wait for each mutex, -1 wait forever
+     */
+    inline Lock2(Mutex& mx1, Mutex& mx2, long maxwait = -1)
+	: m_mx1(0), m_mx2(0)
+	{ lock(&mx1,&mx2); }
+
+    /**
+     * Destroy the lock, unlock the mutex if it was locked
+     */
+    inline ~Lock2()
+	{ drop(); }
+
+    /**
+     * Check if the locking succeeded
+     * @return True if all mutexes were locked
+     */
+    inline bool locked() const
+	{ return m_mx1 != 0; }
+
+    /**
+     * Lock in a new pair of mutexes. Any existing locks are dropped
+     * @param mx1 Pointer to the first mutex to lock
+     * @param mx2 Pointer to the second mutex to lock
+     * @param maxwait Time in microseconds to wait for each mutex, -1 wait forever
+     * @return True on success - non-NULL mutexes locked
+     */
+    bool lock(Mutex* mx1, Mutex* mx2, long maxwait = -1);
+
+    /**
+     * Lock in a new pair of mutexes
+     * @param mx1 Reference to the first mutex to lock
+     * @param mx2 Reference to the second mutex to lock
+     * @param maxwait Time in microseconds to wait for each mutex, -1 wait forever
+     * @return True on success - both locked
+     */
+    inline bool lock(Mutex& mx1, Mutex& mx2, long maxwait = -1)
+	{ return lock(&mx1,&mx2); }
+
+    /**
+     * Unlock both mutexes if they were locked and drop the references
+     */
+    void drop();
+
+private:
+    Mutex* m_mx1;
+    Mutex* m_mx2;
+
+    /** Make sure no Lock2 is ever created on heap */
+    inline void* operator new(size_t);
+
+    /** Never allocate an array of this class */
+    inline void* operator new[](size_t);
+
+    /** No copy constructor */
+    inline Lock2(const Lock2&);
 };
 
 /**
@@ -2577,6 +2757,18 @@ public:
      * @return True if running, false if it has terminated or no startup called
      */
     bool running() const;
+
+    /**
+     * Get the name of this thread
+     * @return The pointer that was passed in the constructor
+     */
+    const char* name() const;
+
+    /**
+     * Get the name of the currently running thread
+     * @return The pointer that was passed in the thread's constructor
+     */
+    static const char* currentName();
 
     /**
      * Give up the currently running timeslice. Note that on some platforms

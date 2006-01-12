@@ -113,7 +113,7 @@ void HashList::clear()
 
 bool HashList::resync(GenObject* obj)
 {
-    XDebug(DebugAll,"HashList::resync(%p) [%p]",this);
+    XDebug(DebugAll,"HashList::resync(%p) [%p]",obj,this);
     if (!obj)
 	return false;
     unsigned int i = obj->toString().hash() % m_size;

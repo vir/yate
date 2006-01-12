@@ -79,7 +79,7 @@ static void replaceParams(String& str, const NamedList &lst)
 	if (p2 > 0) {
 	    String v = str.substr(p1+2,p2-p1-2);
 	    v.trimBlanks();
-	    DDebug(&module,DebugAll,"Replacing parameter '%s'",v.c_str());
+	    DDebug(DebugAll,"Replacing parameter '%s'",v.c_str());
 	    String tmp = String::sqlEscape(lst.getValue(v));
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
 	}

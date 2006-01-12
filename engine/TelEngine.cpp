@@ -379,6 +379,17 @@ void Time::toTimeval(struct timeval* tv, u_int64_t usec)
     }
 }
 
+
+bool GenObject::alive() const
+{
+    return true;
+}
+
+void GenObject::destruct()
+{
+    delete this;
+}
+
 static Mutex s_refmutex;
 
 RefObject::~RefObject()
@@ -387,40 +398,61 @@ RefObject::~RefObject()
 	Debug(DebugFail,"RefObject [%p] destroyed with count=%d",this,m_refcount);
 }
 
-int RefObject::ref()
+bool RefObject::alive() const
+{
+    return m_refcount > 0;
+}
+
+void RefObject::destruct()
+{
+    deref();
+}
+
+bool RefObject::ref()
 {
     s_refmutex.lock();
-    int i = ++m_refcount;
+    bool ret = (m_refcount > 0);
+    if (ret)
+	++m_refcount;
     s_refmutex.unlock();
-    return i;
+    return ret;
 }
 
 bool RefObject::deref()
 {
     s_refmutex.lock();
-    int i = --m_refcount;
+    int i = m_refcount;
+    if (i > 0)
+	--m_refcount;
     s_refmutex.unlock();
-    if (i == 0)
+    if (i == 1)
 	zeroRefs();
-    return (i <= 0);
+    return (i <= 1);
 }
 
 void RefObject::zeroRefs()
 {
-    s_refmutex.lock();
-    m_refcount = -1;
-    s_refmutex.unlock();
     delete this;
 }
+
+bool RefObject::resurrect()
+{
+    s_refmutex.lock();
+    bool ret = (0 == m_refcount);
+    if (ret)
+	m_refcount = 1;
+    s_refmutex.unlock();
+    return ret;
+}
+
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
 {
     if (oldptr == newptr)
 	return;
     // Always reference the new object before dereferencing the old one
-    if (newptr)
-	newptr->ref();
-    m_pointer = pointer;
+    //  and also don't keep pointers to objects that fail referencing
+    m_pointer = (newptr && newptr->ref()) ? pointer : 0;
     if (oldptr)
 	oldptr->deref();
 }

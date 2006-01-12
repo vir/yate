@@ -453,6 +453,11 @@ bool Thread::running() const
     return m_private ? m_private->m_started : false;
 }
 
+const char* Thread::name() const
+{
+    return m_private ? m_private->m_name : 0;
+}
+
 bool Thread::startup()
 {
     if (!m_private)
@@ -465,6 +470,12 @@ Thread *Thread::current()
 {
     ThreadPrivate* t = ThreadPrivate::current();
     return t ? t->m_thread : 0;
+}
+
+const char* Thread::currentName()
+{
+    ThreadPrivate* t = ThreadPrivate::current();
+    return t ? t->m_name : 0;
 }
 
 int Thread::count()

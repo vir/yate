@@ -52,6 +52,11 @@ CallEndpoint::~CallEndpoint()
     m_data.clear();
 }
 
+Mutex& CallEndpoint::commonMutex()
+{
+    return s_mutex;
+}
+
 void* CallEndpoint::getObject(const String& name) const
 {
     if (name == "CallEndpoint")
@@ -293,6 +298,8 @@ void Channel::dropChan()
     if (!m_driver)
 	return;
     m_driver->lock();
+    if (!m_driver)
+	Debug(DebugFail,"Driver lost in dropChan! [%p]",this);
     if (m_driver->channels().remove(this,false))
 	m_driver->changed();
     m_driver->unlock();
@@ -798,21 +805,19 @@ bool Driver::received(Message &msg, int id)
 	    {
 		// check each channel for timeouts
 		lock();
+		ListIterator iter(m_chans);
 		Time t;
-		ObjList* l = &m_chans;
-		while (l) {
-		    Channel* c = static_cast<Channel*>(l->get());
-		    if (c) {
-			if (c->timeout() && (c->timeout() < t))
-			    c->msgDrop(msg,"timeout");
-			else if (c->maxcall() && (c->maxcall() < t))
-			    c->msgDrop(msg,"noanswer");
-		    }
-		    // advance the pointer only if not dropped synchronously
-		    if (l->get() == c)
-			l = l->next();
+		for (;;) {
+		    RefPointer<Channel> c = static_cast<Channel*>(iter.get());
+		    unlock();
+		    if (!c)
+			break;
+		    if (c->timeout() && (c->timeout() < t))
+			c->msgDrop(msg,"timeout");
+		    else if (c->maxcall() && (c->maxcall() < t))
+			c->msgDrop(msg,"noanswer");
+		    lock();
 		}
-		unlock();
 	    }
 	case Status:
 	case Level:
@@ -853,8 +858,9 @@ bool Driver::received(Message &msg, int id)
 	return msgExecute(msg,dest);
     }
 
-    Lock lock(this);
-    Channel* chan = find(dest);
+    lock();
+    RefPointer<Channel> chan = find(dest);
+    unlock();
     if (!chan) {
 	DDebug(this,DebugMild,"Could not find channel '%s'",dest.c_str());
 	return false;
@@ -890,20 +896,19 @@ bool Driver::received(Message &msg, int id)
 
 void Driver::dropAll(Message &msg)
 {
-    lock();
     const char* reason = msg.getValue("reason");
-    ObjList* l = &m_chans;
-    while (l) {
-	Channel* c = static_cast<Channel*>(l->get());
-	if (c) {
-	    DDebug(this,DebugAll,"Dropping %s channel %p [%p]",name().c_str(),c,this);
-	    c->msgDrop(msg,reason);
-	    if (l->get() != c)
-		continue;
-	}
-	l = l->next();
+    lock();
+    ListIterator iter(m_chans);
+    for (;;) {
+	RefPointer<Channel> c = static_cast<Channel*>(iter.get());
+	unlock();
+	if (!c)
+	    break;
+	DDebug(this,DebugAll,"Dropping %s channel %p [%p]",
+	    name().c_str(),static_cast<Channel*>(c),this);
+	c->msgDrop(msg,reason);
+	lock();
     }
-    unlock();
 }
 
 bool Driver::canAccept(bool routers)

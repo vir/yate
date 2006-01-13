@@ -81,11 +81,12 @@ bool SniffHandler::received(Message &msg)
 	return false;
     String par;
     dumpParams(msg,par);
-    Output("Sniffed '%s' time=%u.%06u\n  thread=%p\n  data=%p\n  retval='%s'%s",
+    Output("Sniffed '%s' time=%u.%06u\n  thread=%p '%s'\n  data=%p\n  retval='%s'%s",
 	msg.c_str(),
 	(unsigned int)(msg.msgTime().usec() / 1000000),
 	(unsigned int)(msg.msgTime().usec() % 1000000),
 	Thread::current(),
+	Thread::currentName(),
 	msg.userData(),
 	msg.retValue().c_str(),
 	par.safe());
@@ -100,12 +101,13 @@ void HookHandler::dispatched(const Message& msg, bool handled)
     u_int64_t dt = Time::now() - msg.msgTime().usec();
     String par;
     dumpParams(msg,par);
-    Output("Returned %s '%s' delay=%u.%06u\n  thread=%p\n  data=%p\n  retval='%s'%s",
+    Output("Returned %s '%s' delay=%u.%06u\n  thread=%p '%s'\n  data=%p\n  retval='%s'%s",
 	String::boolText(handled),
 	msg.c_str(),
 	(unsigned int)(dt / 1000000),
 	(unsigned int)(dt % 1000000),
 	Thread::current(),
+	Thread::currentName(),
 	msg.userData(),
 	msg.retValue().c_str(),
 	par.safe());

@@ -392,7 +392,8 @@ public:
     virtual H323Channel* CreateRealTimeLogicalChannel(const H323Capability& capability,H323Channel::Directions dir,unsigned sessionID,const H245_H2250LogicalChannelParameters* param);
 #endif
     virtual BOOL OnStartLogicalChannel(H323Channel& channel);
-    virtual BOOL OnCreateLogicalChannel(const H323Capability& capability, H323Channel::Directions dir, unsigned& errorCode ) ;
+    virtual BOOL OnCreateLogicalChannel(const H323Capability& capability, H323Channel::Directions dir, unsigned& errorCode);
+    virtual BOOL OpenLogicalChannel(const H323Capability& capability, unsigned sessionID, H323Channel::Directions dir);
     virtual void CleanUpOnCallEnd();
     BOOL startExternalRTP(const char* remoteIP, WORD remotePort, H323Channel::Directions dir, YateH323_ExternalRTPChannel* chan);
     void stoppedExternal(H323Channel::Directions dir);
@@ -1222,7 +1223,7 @@ void YateH323Connection::OnUserInputString(const PString &value)
 BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
     H323AudioCodec &codec)
 {
-    Debug(this,DebugInfo,"YateH323Connection::OpenAudioChannel [%p]",this);
+    Debug(this,DebugInfo,"YateH323Connection::OpenAudioChannel chan=%p [%p]",m_chan,this);
     if (!m_nativeRtp) {
 	Debug(DebugGoOn,"YateH323Connection::OpenAudioChannel for non-native RTP in [%p]",this);
 	if (m_needMedia)
@@ -1234,7 +1235,7 @@ BOOL YateH323Connection::OpenAudioChannel(BOOL isEncoding, unsigned bufferSize,
     if (m_chan && m_chan->alive())
 	achan = m_chan->openAudioChannel(isEncoding);
     lock.drop();
-    return achan && codec.AttachChannel(achan);
+    return achan && codec.AttachChannel(achan,false);
 }
 
 #ifdef NEED_RTP_QOS_PARAM
@@ -1345,14 +1346,26 @@ void YateH323Connection::OnSetLocalCapabilities()
 
 BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 
 {
-    Debug(this,DebugInfo,"YateH323Connection::OnStartLogicalChannel(%p) [%p]",&channel,this);
+    DDebug(this,DebugInfo,"YateH323Connection::OnStartLogicalChannel(%p) [%p]",&channel,this);
+    if (!(m_chan && m_chan->alive()))
+	return FALSE;
     return m_nativeRtp ? H323Connection::OnStartLogicalChannel(channel) : TRUE;
 }
 
-BOOL YateH323Connection::OnCreateLogicalChannel(const H323Capability & capability, H323Channel::Directions dir, unsigned & errorCode ) 
+BOOL YateH323Connection::OnCreateLogicalChannel(const H323Capability& capability, H323Channel::Directions dir, unsigned& errorCode)
 {
-    Debug(this,DebugInfo,"YateH323Connection::OnCreateLogicalChannel('%s',%s) [%p]",(const char *)capability.GetFormatName(),lookup(dir,dict_h323_dir),this);
+    DDebug(this,DebugInfo,"YateH323Connection::OnCreateLogicalChannel('%s',%s) [%p]",
+	(const char *)capability.GetFormatName(),lookup(dir,dict_h323_dir),this);
     return H323Connection::OnCreateLogicalChannel(capability,dir,errorCode);
+}
+
+BOOL YateH323Connection::OpenLogicalChannel(const H323Capability& capability, unsigned sessionID, H323Channel::Directions dir)
+{
+    DDebug(this,DebugInfo,"YateH323Connection::OpenLogicalChannel('%s',%u,%s) [%p]",
+	(const char *)capability.GetFormatName(),sessionID,lookup(dir,dict_h323_dir),this);
+    if (!(m_chan && m_chan->alive()))
+	return FALSE;
+    return H323Connection::OpenLogicalChannel(capability,sessionID,dir);
 }
 
 BOOL YateH323Connection::decodeCapability(const H323Capability& capability, const char** dataFormat, int* payload, String* capabName)
@@ -1482,14 +1495,14 @@ YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel(
     : H323_ExternalRTPChannel(connection, capability, direction, sessionID, ip, dataPort),
       m_conn(&connection)
 { 
-    Debug(m_conn,DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u [%p]",
+    DDebug(m_conn,DebugAll,"YateH323_ExternalRTPChannel::YateH323_ExternalRTPChannel %s addr=%s:%u [%p]",
 	lookup(GetDirection(),dict_h323_dir), (const char *)ip.AsString(), dataPort,this);
     SetExternalAddress(H323TransportAddress(ip, dataPort), H323TransportAddress(ip, dataPort+1));
 }
 
 YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel()
 {
-    Debug(m_conn,DebugInfo,"YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel %s%s [%p]",
+    DDebug(m_conn,DebugInfo,"YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel %s%s [%p]",
 	lookup(GetDirection(),dict_h323_dir),(isRunning ? " running" : ""),this);
     if (isRunning) {
 	isRunning = FALSE;
@@ -1500,7 +1513,7 @@ YateH323_ExternalRTPChannel::~YateH323_ExternalRTPChannel()
 
 BOOL YateH323_ExternalRTPChannel::Start()
 {
-    Debug(m_conn,DebugAll,"YateH323_ExternalRTPChannel::Start() [%p]",this);
+    DDebug(m_conn,DebugAll,"YateH323_ExternalRTPChannel::Start() [%p]",this);
     if (!(m_conn && H323_ExternalRTPChannel::Start()))
 	return FALSE;
 
@@ -1549,7 +1562,7 @@ void YateH323_ExternalRTPChannel::OnSendOpenAck(H245_H2250LogicalChannelAckParam
 
 YateH323AudioSource::~YateH323AudioSource()
 {
-    Debug(&hplugin,DebugAll,"YateH323AudioSource::~YateH323AudioSource() [%p]",this);
+    DDebug(&hplugin,DebugAll,"YateH323AudioSource::~YateH323AudioSource() [%p]",this);
     m_exit = true;
     // Delay actual destruction until the mutex is released
     m_mutex.lock();
@@ -1559,7 +1572,7 @@ YateH323AudioSource::~YateH323AudioSource()
 
 YateH323AudioConsumer::~YateH323AudioConsumer()
 {
-    Debug(&hplugin,DebugAll,"YateH323AudioConsumer::~YateH323AudioConsumer() [%p]",this);
+    DDebug(&hplugin,DebugAll,"YateH323AudioConsumer::~YateH323AudioConsumer() [%p]",this);
     m_exit = true;
     // Delay actual destruction until the mutex is released
     m_mutex.check();
@@ -1567,7 +1580,7 @@ YateH323AudioConsumer::~YateH323AudioConsumer()
 
 BOOL YateH323AudioConsumer::Close()
 {
-    Debug(&hplugin,DebugAll,"YateH323AudioConsumer::Close() [%p]",this);
+    DDebug(&hplugin,DebugAll,"YateH323AudioConsumer::Close() [%p]",this);
     m_exit = true;
     return true;
 }
@@ -1623,7 +1636,7 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 
 BOOL YateH323AudioSource::Close()
 {
-    Debug(&hplugin,DebugAll,"YateH323AudioSource::Close() [%p]",this);
+    DDebug(&hplugin,DebugAll,"YateH323AudioSource::Close() [%p]",this);
     m_exit = true;
     return true;
 }
@@ -1852,11 +1865,11 @@ YateH323Chan::~YateH323Chan()
 void YateH323Chan::zeroRefs()
 {
     DDebug(this,DebugAll,"YateH323Chan::zeroRefs() conn=%p [%p]",m_conn,this);
-    if (m_conn && m_conn->nativeRtp()) {
+    if (m_conn && m_conn->nativeRtp() && stopDataLinks()) {
+	DDebug(this,DebugInfo,"YateH323Chan postpones destruction (native RTP) [%p]",this);
 	// let the OpenH323 cleaner thread to do the cleanups so we don't have
 	//  to block until the native data threads terminate
 	dropChan();
-	stopDataLinks();
 	hangup(false);
 	cleanup();
 	return;
@@ -1918,6 +1931,7 @@ void YateH323Chan::disconnected(bool final, const char *reason)
 // Shut down the data transfers so OpenH323 can stop its related threads
 bool YateH323Chan::stopDataLinks()
 {
+    DDebug(this,DebugAll,"YateH323Chan::stopDataLinks() [%p]",this);
     Lock lock(m_mutex);
     bool pending = false;
     YateH323AudioSource* s = YOBJECT(YateH323AudioSource,getSource());
@@ -1930,6 +1944,8 @@ bool YateH323Chan::stopDataLinks()
 	c->Close();
 	pending = true;
     }
+    DDebug(this,DebugAll,"YateH323Chan::stopDataLinks() returning %s [%p]",
+	String::boolText(pending),this);
     return pending;
 }
 

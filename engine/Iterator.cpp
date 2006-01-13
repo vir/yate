@@ -68,7 +68,7 @@ ListIterator::ListIterator(HashList& list)
 ListIterator::~ListIterator()
 {
     m_length = 0;
-    delete m_objects;
+    delete[] m_objects;
 }
 
 GenObject* ListIterator::get(unsigned int index) const

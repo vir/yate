@@ -128,6 +128,10 @@ SOURCE=..\engine\HashList.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\engine\Iterator.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\engine\Message.cpp
 # End Source File
 # Begin Source File

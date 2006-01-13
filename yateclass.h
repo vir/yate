@@ -82,7 +82,6 @@ typedef unsigned long in_addr_t;
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
 #define strdup _strdup
-#define random rand
 #define open _open
 #define dup2 _dup2
 #define read _read
@@ -163,6 +162,15 @@ typedef int HANDLE;
 #define YATE_API
 #endif
 
+#ifdef _WINDOWS
+#undef RAND_MAX
+#define RAND_MAX 2147483647
+extern "C" {
+YATE_API long int random();
+YATE_API void srandom(unsigned int seed);
+}
+#endif
+
 /**
  * Holds all Telephony Engine related classes.
  */
@@ -189,7 +197,7 @@ YATE_API bool abortOnBug(bool doAbort);
 /**
  * Enable timestamping of output messages and set the time start reference
  */
-void setDebugTimestamp();
+YATE_API void setDebugTimestamp();
 
 /**
  * Standard debugging levels.

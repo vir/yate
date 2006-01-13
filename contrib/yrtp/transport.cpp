@@ -224,6 +224,7 @@ bool RTPTransport::localAddr(SocketAddr& addr)
 		    m_localAddr = addr;
 		    return true;
 		}
+		DDebug(DebugMild,"RTP Socket failed with code %d",m_rtpSock.error());
 		m_rtpSock.terminate();
 		m_rtcpSock.terminate();
 		return false;
@@ -236,7 +237,11 @@ bool RTPTransport::localAddr(SocketAddr& addr)
 	    m_localAddr = addr;
 	    return true;
 	}
+	else
+	    DDebug(DebugMild,"RTCP Socket failed with code %d",m_rtcpSock.error());
     }
+    else
+	DDebug(DebugMild,"RTP Socket failed with code %d",m_rtpSock.error());
     m_rtpSock.terminate();
     m_rtcpSock.terminate();
     return false;

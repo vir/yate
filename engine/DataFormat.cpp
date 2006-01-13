@@ -219,6 +219,7 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	c->Consume(data,tStamp,this);
     }
     m_timestamp = tStamp;
+    lock.drop();
     deref();
 }
 
@@ -241,7 +242,7 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
 	if (consumer->m_override)
 	    consumer->m_override->detach(consumer);
 	consumer->m_override = this;
-	consumer->m_overrideTsDelta = consumer->m_timestamp - m_timestamp + dt;
+	consumer->m_overrideTsDelta = (long)(consumer->m_timestamp - m_timestamp + dt);
     }
     else {
 	if (consumer->m_source)

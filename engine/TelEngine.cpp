@@ -27,6 +27,22 @@
 #include <string.h>
 #include <stdio.h>
 
+
+#ifdef _WINDOWS
+extern "C" {
+
+static u_int32_t s_randSeed = (u_int32_t)(TelEngine::Time::now() & 0xffffffff);
+
+long int random()
+{ return (s_randSeed = (s_randSeed + 1) * 0x8088405) % RAND_MAX; }
+
+void srandom(unsigned int seed)
+{ s_randSeed = seed % RAND_MAX; }
+
+}
+#endif
+
+
 namespace TelEngine {
 
 #define DebugMin DebugFail
@@ -327,6 +343,7 @@ void Debugger::enableOutput(bool enable)
 {
     s_debugging = enable;
 }
+
 
 u_int64_t Time::now()
 {

@@ -206,6 +206,7 @@ private:
 static YRTPPlugin splugin;
 static ObjList s_calls;
 static Mutex s_mutex;
+static Mutex s_srcMutex;
 
 YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction)
     : m_rtp(0), m_dir(direction), m_conn(conn),
@@ -443,7 +444,9 @@ YRTPSession::~YRTPSession()
 
 bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
 {
-    YRTPSource* source = m_wrap ? m_wrap->m_source : 0;
+    s_srcMutex.lock();
+    RefPointer <YRTPSource> source = m_wrap ? m_wrap->m_source : 0;
+    s_srcMutex.unlock();
     if (!source)
 	return false;
     DataBlock block;
@@ -497,8 +500,10 @@ YRTPSource::~YRTPSource()
     m_mutex.lock();
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
+	s_srcMutex.lock();
 	m_wrap = 0;
 	tmp->m_source = 0;
+	s_srcMutex.unlock();
 	tmp->deref();
 	Thread::yield();
     }

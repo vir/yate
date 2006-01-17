@@ -267,7 +267,7 @@ void Fifo::clear()
 }
 
 // put a byte in fifo, overwrite last byte if full
-void Fifo::put(unsigned char value)
+bool Fifo::put(unsigned char value)
 {
     m_buffer[m_tail] = value;
     bool full = (m_head == m_tail);
@@ -276,6 +276,16 @@ void Fifo::put(unsigned char value)
 	m_tail = 0;
     if (full)
 	m_head = m_tail;
+    return full;
+}
+
+unsigned int Fifo::put(const unsigned char* buf, unsigned int length)
+{
+    unsigned int errors = 0;
+    while (length--)
+	if (put(*buf++))
+	    errors++;
+    return errors;
 }
 
 // get a byte from fifo, return last read if empty
@@ -742,6 +752,7 @@ void PriChan::hangup(int cause)
 	m->addParam("reason",pri_cause2str(cause));
 	Engine::enqueue(m);
     }
+    m_billid.clear();
     status(chanStatus());
 }
 
@@ -794,8 +805,8 @@ bool PriChan::call(Message &msg, const char *called)
     }
     if (!called)
 	called = msg.getValue("called");
-    Debug(this,DebugInfo,"Calling '%s' on channel %d span %d",
-	called,m_chan,m_span->span());
+    Debug(this,DebugInfo,"Calling '%s' on %s (%s)",
+	called,id().c_str(),address().c_str());
     int layer1 = msg.getIntValue("format",dict_str2law,m_span->layer1());
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
@@ -810,8 +821,6 @@ bool PriChan::call(Message &msg, const char *called)
     else
 	msg.userData(this);
     m_inband = msg.getBoolValue("dtmfinband",m_span->inband());
-    Output("Calling '%s' on %s (%s)",
-	called,id().c_str(),address().c_str());
     char *caller = (char *)msg.getValue("caller");
     int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
@@ -857,6 +866,8 @@ void PriChan::ring(pri_event_ring &ev)
 
     setTimeout(180000000);
     setOutgoing(false);
+    m_billid.clear();
+    m_billid << Engine::runId() << "-" << allocId();
     m_call = call;
     m_ring = true;
     status(chanStatus());

@@ -86,6 +86,7 @@ public:
     virtual void Consume(const DataBlock &data, unsigned long tStamp);
 private:
     unsigned int m_bufsize;
+    DataErrors m_overruns;
 };
 
 class ZapChan : public PriChan
@@ -306,6 +307,9 @@ ZapConsumer::ZapConsumer(ZapChan *owner, const char* format, unsigned int bufsiz
 ZapConsumer::~ZapConsumer()
 {
     Debug(m_owner,DebugAll,"ZapConsumer::~ZapConsumer() [%p]",this);
+    if (m_overruns.events())
+	Debug(m_owner,DebugMild,"Consumer had %u overruns (%lu bytes)",
+	    m_overruns.events(),m_overruns.bytes());
 }
 
 void ZapConsumer::Consume(const DataBlock &data, unsigned long tStamp)
@@ -315,10 +319,10 @@ void ZapConsumer::Consume(const DataBlock &data, unsigned long tStamp)
     if ((fd != -1) && !data.null()) {
 	if (m_buffer.length()+data.length() <= m_bufsize*4)
 	    m_buffer += data;
-#ifdef DEBUG
-	else
-	    Debug(m_owner,DebugAll,"ZapConsumer skipped %u bytes, buffer is full",data.length());
-#endif
+	else {
+	    m_overruns.update(data.length());
+	    DDebug(m_owner,DebugAll,"ZapConsumer skipped %u bytes, buffer is full",data.length());
+	}
 	if (m_buffer.null())
 	    return;
 	if (m_buffer.length() >= m_bufsize) {

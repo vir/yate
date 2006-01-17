@@ -87,6 +87,8 @@ public:
     ~WpConsumer();
 
     virtual void Consume(const DataBlock &data, unsigned long tStamp);
+private:
+    DataErrors m_overruns;
 };
 
 class WpChan : public PriChan
@@ -317,13 +319,16 @@ WpConsumer::~WpConsumer()
 {
     Debug(m_owner,DebugAll,"WpConsumer::~WpConsumer() [%p]",this);
     static_cast<WpChan*>(m_owner)->m_wp_c = 0;
+    if (m_overruns.events())
+	Debug(m_owner,DebugMild,"Consumer had %u overruns (%lu bytes)",
+	    m_overruns.events(),m_overruns.bytes());
 }
 
 void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
-    const unsigned char* buf = (const unsigned char*)data.data();
-    for (unsigned int i = 0; i < data.length(); i++)
-	put(buf[i]);
+    unsigned int err = put((const unsigned char*)data.data(),data.length());
+    if (err)
+	m_overruns.update(err);
 }
 
 static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)

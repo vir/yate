@@ -36,13 +36,33 @@ public:
     Fifo(int buflen = 0);
     ~Fifo();
     void clear();
-    void put(unsigned char value);
+    bool put(unsigned char value);
+    unsigned int put(const unsigned char* buf, unsigned int length);
     unsigned char get();
 private:
     int m_buflen;
     int m_head;
     int m_tail;
     unsigned char* m_buffer;
+};
+
+class DataErrors
+{
+public:
+    inline DataErrors()
+	: m_events(0), m_bytes(0)
+	{ }
+    inline void update(unsigned int nbytes)
+	{ m_events++; m_bytes += nbytes; }
+    inline void clear()
+	{ m_events = 0; m_bytes = 0; }
+    inline unsigned int events() const
+	{ return m_events; }
+    inline unsigned long bytes() const
+	{ return m_bytes; }
+private:
+    unsigned int m_events;
+    unsigned long m_bytes;
 };
 
 class PriChan;

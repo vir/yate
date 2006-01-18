@@ -580,6 +580,8 @@ int Engine::run()
     Thread::msleep(200);
     m_dispatcher.dequeue();
     checkPoint();
+    // We are occasionally doing things that can cause crashes so don't abort
+    abortOnBug(false);
     Thread::killall();
     checkPoint();
     m_dispatcher.dequeue();

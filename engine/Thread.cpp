@@ -254,9 +254,11 @@ void ThreadPrivate::run()
     ::pthread_detach(::pthread_self());
 #endif
 
+    // FIXME: possible race if public object is destroyed during thread startup
     while (!m_started)
 	Thread::usleep(10,true);
-    m_thread->run();
+    if (m_thread)
+	m_thread->run();
 
 #ifndef _WINDOWS
     pthread_cleanup_pop(1);

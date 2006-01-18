@@ -444,6 +444,8 @@ bool RefObject::deref()
     s_refmutex.unlock();
     if (i == 1)
 	zeroRefs();
+    else if (i <= 0)
+	Debug(DebugFail,"RefObject::deref() called with count=%d [%p]",i,this);
     return (i <= 1);
 }
 

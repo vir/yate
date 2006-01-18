@@ -2694,6 +2694,7 @@ bool SIPDriver::received(Message &msg, int id)
 	    static_cast<YateSIPLine*>(l->get())->timer(msg.msgTime());
     }
     else if (id == Halt) {
+	dropAll(msg);
 	channels().clear();
 	s_lines.clear();
     }

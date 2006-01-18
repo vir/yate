@@ -87,9 +87,15 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
     }
 #endif
 
-    ref();
+    // are we already dead?
+    if (!ref())
+	return false;
     disconnect(reason);
-    peer->ref();
+    // is our intended peer dead?
+    if (!peer->ref()) {
+	deref();
+	return false;
+    }
     peer->disconnect(reason);
 
     ObjList* l = m_data.skipNull();

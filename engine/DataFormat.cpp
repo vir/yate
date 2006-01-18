@@ -212,7 +212,8 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	if (f)
 	    tStamp += f->guessSamples(data.length());
     }
-    ref();
+    if (!ref())
+	return;
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());

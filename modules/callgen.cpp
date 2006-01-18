@@ -62,6 +62,7 @@ public:
 	{ return now > m_finish; }
     static GenConnection* find(const String& id);
     static bool oneCall(String* target = 0);
+    static int dropAll(bool resume = false);
 private:
     String m_status;
     String m_callto;
@@ -221,6 +222,26 @@ bool GenConnection::oneCall(String* target)
     return false;
 }
 
+int GenConnection::dropAll(bool resume)
+{
+    int dropped = 0;
+    s_mutex.lock();
+    s_runs = false;
+    ListIterator iter(s_calls);
+    for (;;) {
+	RefPointer<GenConnection> c = static_cast<GenConnection*>(iter.get());
+	s_mutex.unlock();
+	if (!c)
+	    break;
+	c->disconnect();
+	c = 0;
+	s_mutex.lock();
+	++dropped;
+    }
+    s_runs = resume;
+    return dropped;
+}
+
 void GenConnection::disconnected(bool final, const char *reason)
 {
     Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",id().c_str(),reason,this);
@@ -326,7 +347,7 @@ void CleanThread::run()
 	    if (!c)
 		break;
 	    if (c->oldAge(t))
-		c->destruct();
+		c->disconnect();
 	    c = 0;
 	    s_mutex.lock();
 	}
@@ -372,17 +393,12 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	s_runs = false;
 	s_numcalls = 0;
 	s_mutex.unlock();
-	s_calls.clear();
-	rval << "Stopping generator and clearing calls";
+	int dropped = GenConnection::dropAll();
+	rval << "Stopping generator and cleared " << dropped << " calls";
     }
     else if (line == "drop") {
-	s_mutex.lock();
-	bool tmp = s_runs;
-	s_runs = false;
-	s_mutex.unlock();
-	s_calls.clear();
-	s_runs = tmp;
-	rval << "Clearing calls and continuing";
+	int dropped = GenConnection::dropAll(s_runs);
+	rval << "Cleared " << dropped << " calls and continuing";
     }
     else if (line == "pause") {
 	s_runs = false;
@@ -484,11 +500,12 @@ CallGenPlugin::CallGenPlugin()
 
 CallGenPlugin::~CallGenPlugin()
 {
-    Output("Unloading module Call Generator, clearing %u calls",s_calls.count());
     s_mutex.lock();
+    Output("Unloading module Call Generator, clearing %u calls",s_calls.count());
     s_runs = false;
-    s_calls.clear();
     s_mutex.unlock();
+    GenConnection::dropAll();
+    s_calls.clear();
 }
 
 void CallGenPlugin::initialize()

@@ -33,13 +33,14 @@ static ObjList s_calls;
 static Configuration s_cfg;
 static bool s_runs = false;
 static int s_total = 0;
+static int s_totalst = 0;
 static int s_current = 0;
 static int s_ringing = 0;
 static int s_answers = 0;
 
 static int s_numcalls = 0;
 
-static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|load|save|set paramname[=value]}";
+static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}";
 
 class GenConnection : public CallEndpoint
 {
@@ -138,6 +139,7 @@ GenConnection::GenConnection(unsigned int lifetime, const String& callto)
     tmp << ++s_total;
     setId(tmp);
     ++s_current;
+    ++s_totalst;
     s_mutex.unlock();
     Output("Generating %u ms call %s to: %s",lifetime,id().c_str(),m_callto.c_str());
     Message* m = new Message("chan.startup");
@@ -373,7 +375,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
     }
     else if (line == "info") {
 	s_mutex.lock();
-	rval << "Made " << s_total << " calls, "
+	rval << "Made " << s_totalst << " calls, "
 	    << s_ringing << " ring, "
 	    << s_answers << " answered, "
 	    << s_current << " running";
@@ -419,6 +421,14 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	    if (dest)
 		rval << " to " << dest;
 	}
+    }
+    else if (line == "reset") {
+	s_mutex.lock();
+	s_totalst = 0;
+	s_ringing = 0;
+	s_answers = 0;
+	s_mutex.unlock();
+	rval << "Statistics reset";
     }
     else if (line == "load") {
 	s_mutex.lock();

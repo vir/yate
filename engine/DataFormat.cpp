@@ -51,7 +51,8 @@ public:
 	: DataTranslator(sFormat,dFormat) { }
     virtual void Consume(const DataBlock& data, unsigned long tStamp)
 	{
-	    ref();
+	    if (!ref())
+		return;
 	    if (getTransSource()) {
 		DataBlock oblock;
 		if (oblock.convert(data, m_format, getTransSource()->getFormat())) {
@@ -228,10 +229,9 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
 {
     DDebug(DebugAll,"DataSource [%p] attaching consumer%s [%p]",
 	this,(override ? " as override" : ""),consumer);
-    if (!consumer)
+    if (!(consumer && consumer->ref()))
 	return false;
     Lock lock(m_mutex);
-    consumer->ref();
     if (override) {
 	// adjust timestamp for possible gaps in data
 	int64_t dt = Time::now() - consumer->m_lastTsTime;
@@ -355,7 +355,8 @@ bool DataEndpoint::connect(DataEndpoint* peer)
 	return true;
     DDebug(DebugInfo,"DataEndpoint '%s' connecting peer %p to [%p]",m_name.c_str(),peer,this);
 
-    ref();
+    if (!ref())
+	return false;
     disconnect();
     peer->ref();
     peer->disconnect();
@@ -471,9 +472,12 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
     DataSource *source = m_peer ? m_peer->getSource() : 0;
     DataConsumer *temp = m_consumer;
     if (consumer) {
-	consumer->ref();
-	if (source)
-	    DataTranslator::attachChain(source,consumer);
+	if (consumer->ref()) {
+	    if (source)
+		DataTranslator::attachChain(source,consumer);
+	}
+	else
+	    consumer = 0;
     }
     m_consumer = consumer;
     if (temp) {
@@ -490,9 +494,12 @@ void DataEndpoint::setPeerRecord(DataConsumer* consumer)
     DataSource *source = m_peer ? m_peer->getSource() : 0;
     DataConsumer *temp = m_peerRecord;
     if (consumer) {
-	consumer->ref();
-	if (source)
-	    DataTranslator::attachChain(source,consumer);
+	if (consumer->ref()) {
+	    if (source)
+		DataTranslator::attachChain(source,consumer);
+	}
+	else
+	    consumer = 0;
     }
     m_peerRecord = consumer;
     if (temp) {
@@ -508,9 +515,12 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
 	return;
     DataConsumer *temp = m_callRecord;
     if (consumer) {
-	consumer->ref();
-	if (m_source)
-	    DataTranslator::attachChain(m_source,consumer);
+	if (consumer->ref()) {
+	    if (m_source)
+		DataTranslator::attachChain(m_source,consumer);
+	}
+	else
+	    consumer = 0;
     }
     m_callRecord = consumer;
     if (temp) {

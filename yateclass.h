@@ -2731,6 +2731,7 @@ public:
 class YATE_API Thread : public Runnable
 {
     friend class ThreadPrivate;
+    friend class MutexPrivate;
 public:
     /**
      * Running priorities, their mapping is operating system dependent
@@ -2765,6 +2766,13 @@ public:
      * @return True if running, false if it has terminated or no startup called
      */
     bool running() const;
+
+    /**
+     * Count how many Yate mutexes are kept locked by this thread
+     * @return Number of Mutex locks held by this thread
+     */
+    inline int locks() const
+	{ return m_locks; }
 
     /**
      * Get the name of this thread
@@ -2895,6 +2903,7 @@ protected:
 
 private:
     ThreadPrivate* m_private;
+    int m_locks;
 };
 
 /**

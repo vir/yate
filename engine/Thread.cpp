@@ -58,7 +58,6 @@ public:
     bool m_updest;
     bool m_cancel;
     const char* m_name;
-private:
 #ifdef _WINDOWS
     static void startFunc(void* arg);
 #else
@@ -66,7 +65,6 @@ private:
 #endif
     static void cleanupFunc(void* arg);
     static void destroyFunc(void* arg);
-    static void keyAllocFunc();
 };
 
 };
@@ -81,7 +79,18 @@ using namespace TelEngine;
 DWORD tls_index = ::TlsAlloc();
 #else
 static pthread_key_t current_key;
-static pthread_once_t current_key_once = PTHREAD_ONCE_INIT;
+
+class ThreadPrivateKeyAlloc
+{
+public:
+    ThreadPrivateKeyAlloc()
+    {
+	if (::pthread_key_create(&current_key,ThreadPrivate::destroyFunc))
+	    Debug(DebugFail,"Failed to create current thread key!");
+    }
+};
+
+static ThreadPrivateKeyAlloc keyAllocator;
 #endif
 
 static TokenDict s_prio[] = {
@@ -247,7 +256,6 @@ void ThreadPrivate::run()
 #ifdef _WINDOWS
     ::TlsSetValue(tls_index,this);
 #else
-    ::pthread_once(&current_key_once,keyAllocFunc);
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
     ::pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS,0);
@@ -273,9 +281,10 @@ bool ThreadPrivate::cancel(bool hard)
 	ret = false;
 	if (hard) {
 #ifdef _WINDOWS
-	    Debug(DebugFail,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
+	    Debug(DebugGoOn,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
+	    Debug(DebugMild,"ThreadPrivate terminating pthread %p [%p]",&thread,this);
 	    ret = !::pthread_cancel(thread);
 #endif
 	    if (ret) {
@@ -296,9 +305,11 @@ void ThreadPrivate::cleanup()
 	if (m_thread->m_private == this) {
 	    m_thread->m_private = 0;
 	    m_thread->cleanup();
+	    if (m_thread->locks())
+		Debug(DebugFail,"Thread '%s' destroyed with %d mutex locks [%p]",m_name,m_thread->locks(),m_thread);
 	}
 	else {
-	    Debug(DebugWarn,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
+	    Debug(DebugFail,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
 	    m_thread = 0;
 	}
     }
@@ -390,15 +401,6 @@ void ThreadPrivate::cleanupFunc(void* arg)
 	t->cleanup();
 }
 
-void ThreadPrivate::keyAllocFunc()
-{
-#ifndef _WINDOWS
-    DDebug(DebugAll,"ThreadPrivate::keyAllocFunc()");
-    if (::pthread_key_create(&current_key,destroyFunc))
-	Debug(DebugGoOn,"Failed to create current thread key!");
-#endif
-}
-
 #ifdef _WINDOWS
 void ThreadPrivate::startFunc(void* arg)
 #else
@@ -422,7 +424,7 @@ Runnable::~Runnable()
 }
 
 Thread::Thread(const char* name, Priority prio)
-    : m_private(0)
+    : m_private(0), m_locks(0)
 {
 #ifdef DEBUG
     Debugger debug("Thread::Thread","(\"%s\",%d) [%p]",name,prio,this);
@@ -431,7 +433,7 @@ Thread::Thread(const char* name, Priority prio)
 }
 
 Thread::Thread(const char *name, const char* prio)
-    : m_private(0)
+    : m_private(0), m_locks(0)
 {
 #ifdef DEBUG
     Debugger debug("Thread::Thread","(\"%s\",\"%s\") [%p]",name,prio,this);

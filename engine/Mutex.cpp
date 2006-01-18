@@ -222,7 +222,13 @@ bool MutexPrivate::lock(long maxwait)
     if (rval) {
 	s_locks++;
 	m_locked++;
-	m_owner = Thread::currentName();
+	Thread* thr = Thread::current();
+	if (thr) {
+	    thr->m_locks++;
+	    m_owner = thr->name();
+	}
+	else
+	    m_owner = 0;
     }
     else
 	deref();
@@ -238,6 +244,9 @@ void MutexPrivate::unlock()
     // Hope we don't hit a bug related to the debug mutex!
     GlobalMutex::lock();
     if (m_locked) {
+	Thread* thr = Thread::current();
+	if (thr)
+	    thr->m_locks--;
 	if (!--m_locked)
 	    m_owner = 0;
 	if (--s_locks < 0)

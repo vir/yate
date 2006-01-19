@@ -156,8 +156,11 @@ class YRTPSource : public DataSource
 public:
     YRTPSource(YRTPWrapper* wrap);
     ~YRTPSource();
+    inline void busy(bool isBusy)
+	{ m_busy = isBusy; }
 private:
     YRTPWrapper* m_wrap;
+    volatile bool m_busy;
 };
 
 class YRTPConsumer : public DataConsumer
@@ -449,15 +452,21 @@ bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* d
     YRTPSource* source = m_wrap ? m_wrap->m_source : 0;
     // we MUST NOT reference count here as RTPGroup will crash if we remove
     // any RTPProcessor from its own thread
-    if (source && !source->alive())
-	source = 0;
+    if (source) {
+	if (source->alive())
+	    source->busy(true);
+	else
+	    source = 0;
+    }
     s_srcMutex.unlock();
     if (!source)
 	return false;
+    // the source will not be destroyed until we reset the busy flag
     DataBlock block;
     block.assign((void*)data, len, false);
     source->Forward(block,timestamp);
     block.clear(false);
+    source->busy(false);
     return true;
 }
 
@@ -489,7 +498,7 @@ void YRTPSession::rtpNewSSRC(u_int32_t newSsrc)
 }
 
 YRTPSource::YRTPSource(YRTPWrapper* wrap)
-    : m_wrap(wrap)
+    : m_wrap(wrap), m_busy(false)
 {
     Debug(&splugin,DebugAll,"YRTPSource::YRTPSource(%p) [%p]",wrap,this);
     m_format.clear();
@@ -502,17 +511,17 @@ YRTPSource::YRTPSource(YRTPWrapper* wrap)
 YRTPSource::~YRTPSource()
 {
     Debug(&splugin,DebugAll,"YRTPSource::~YRTPSource() [%p] wrapper=%p",this,m_wrap);
-    m_mutex.lock();
     if (m_wrap) {
-	YRTPWrapper* tmp = m_wrap;
 	s_srcMutex.lock();
+	YRTPWrapper* tmp = m_wrap;
 	m_wrap = 0;
 	tmp->m_source = 0;
 	s_srcMutex.unlock();
+	// we have just to wait for any YRTPSession::rtpRecvData() to finish
+	while (m_busy)
+	    Thread::yield();
 	tmp->deref();
-	Thread::yield();
     }
-    m_mutex.unlock();
 }
 
 YRTPConsumer::YRTPConsumer(YRTPWrapper *wrap)

@@ -28,7 +28,7 @@
 using namespace TelEngine;
 
 RTPGroup::RTPGroup(Priority prio)
-    : Mutex(true), Thread("RTP Group",prio)
+    : Mutex(true), Thread("RTP Group",prio), m_listChanged(false)
 {
     DDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
 }
@@ -42,6 +42,7 @@ void RTPGroup::cleanup()
 {
     DDebug(DebugInfo,"RTPGroup::cleanup() [%p]",this);
     lock();
+    m_listChanged = true;
     ObjList* l = &m_processors;
     while (l) {
 	RTPProcessor* p = static_cast<RTPProcessor*>(l->get());
@@ -64,11 +65,17 @@ void RTPGroup::run()
 	lock();
 	Time t;
 	ObjList* l = &m_processors;
+	m_listChanged = false;
 	for (ok = false;l;l = l->next()) {
 	    RTPProcessor* p = static_cast<RTPProcessor*>(l->get());
 	    if (p) {
 		ok = true;
 		p->timerTick(t);
+		// the list is protected from other threads but can be changed
+		//  from this one so if it happened we just break out and try
+		//  again later rather than using an expensive ListIterator
+		if (m_listChanged)
+		    break;
 	    }
 	}
 	unlock();
@@ -81,6 +88,7 @@ void RTPGroup::join(RTPProcessor* proc)
 {
     DDebug(DebugAll,"RTPGroup::join(%p) [%p]",proc,this);
     lock();
+    m_listChanged = true;
     m_processors.append(proc)->setDelete(false);
     startup();
     unlock();
@@ -90,6 +98,7 @@ void RTPGroup::part(RTPProcessor* proc)
 {
     DDebug(DebugAll,"RTPGroup::part(%p) [%p]",proc,this);
     lock();
+    m_listChanged = true;
     m_processors.remove(proc,false);
     unlock();
 }

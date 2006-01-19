@@ -158,6 +158,7 @@ protected:
 
 private:
     ObjList m_processors;
+    bool m_listChanged;
 };
 
 /**

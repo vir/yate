@@ -438,6 +438,7 @@ void YRTPWrapper::addDirection(RTPSession::Direction direction)
 YRTPSession::~YRTPSession()
 {
     // disconnect thread and transport before our virtual methods become invalid
+    // this will also lock the group preventing rtpRecvData from being called
     group(0);
     transport(0);
 }
@@ -445,7 +446,11 @@ YRTPSession::~YRTPSession()
 bool YRTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
 {
     s_srcMutex.lock();
-    RefPointer <YRTPSource> source = m_wrap ? m_wrap->m_source : 0;
+    YRTPSource* source = m_wrap ? m_wrap->m_source : 0;
+    // we MUST NOT reference count here as RTPGroup will crash if we remove
+    // any RTPProcessor from its own thread
+    if (source && !source->alive())
+	source = 0;
     s_srcMutex.unlock();
     if (!source)
 	return false;

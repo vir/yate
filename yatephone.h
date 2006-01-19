@@ -673,6 +673,12 @@ public:
     Mutex* mutex() const;
 
     /**
+     * Get the big mutex that serializes access to all data endpoints
+     * @return A reference to the mutex
+     */
+    static Mutex& commonMutex();
+
+    /**
      * Connect the source and consumer of the endpoint to a peer
      * @param peer Pointer to the peer data endpoint
      * @return True if connected, false if incompatible source/consumer

@@ -27,6 +27,8 @@
 
 namespace TelEngine {
 
+static Mutex s_dataMutex(true);
+
 class ThreadedSourcePrivate : public Thread
 {
 public:
@@ -206,6 +208,11 @@ void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSour
 void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
     Lock lock(m_mutex);
+    // we DON'T refcount here, we rely on the mutex to keep us safe
+    if (!alive()) {
+	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
+	return;
+    }
     // no timestamp provided - try to guess
     if (!tStamp) {
 	tStamp = m_timestamp;
@@ -213,20 +220,20 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	if (f)
 	    tStamp += f->guessSamples(data.length());
     }
-    if (!ref())
-	return;
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());
 	c->Consume(data,tStamp,this);
     }
     m_timestamp = tStamp;
-    lock.drop();
-    deref();
 }
 
 bool DataSource::attach(DataConsumer* consumer, bool override)
 {
+    if (!alive()) {
+	DDebug(DebugFail,"Attaching a dead DataSource! [%p]",this);
+	return false;
+    }
     DDebug(DebugAll,"DataSource [%p] attaching consumer%s [%p]",
 	this,(override ? " as override" : ""),consumer);
     if (!(consumer && consumer->ref()))
@@ -258,11 +265,16 @@ bool DataSource::detach(DataConsumer* consumer)
 {
     if (!consumer)
 	return false;
+    if (!ref()) {
+	DDebug(DebugFail,"Detaching a dead DataSource! [%p]",this);
+	return false;
+    }
     DDebug(DebugAll,"DataSource [%p] detaching consumer [%p]",this,consumer);
     // lock the source to prevent races with the Forward method
     m_mutex.lock();
     bool ok = detachInternal(consumer);
     m_mutex.unlock();
+    deref();
     return ok;
 }
 
@@ -345,26 +357,31 @@ Mutex* DataEndpoint::mutex() const
     return m_call ? m_call->mutex() : 0;
 }
 
+Mutex& DataEndpoint::commonMutex()
+{
+    return s_dataMutex;
+}
+
 bool DataEndpoint::connect(DataEndpoint* peer)
 {
     if (!peer) {
 	disconnect();
 	return false;
     }
+    Lock lock(s_dataMutex);
     if (peer == m_peer)
 	return true;
     DDebug(DebugInfo,"DataEndpoint '%s' connecting peer %p to [%p]",m_name.c_str(),peer,this);
 
-    if (!ref())
-	return false;
-    disconnect();
+    ref();
     peer->ref();
+    disconnect();
     peer->disconnect();
     bool native = (name() == peer->name()) && nativeConnect(peer);
 
     if (!native) {
-	DataSource *s = getSource();
-	DataConsumer *c = peer->getConsumer();
+	DataSource* s = getSource();
+	DataConsumer* c = peer->getConsumer();
 	if (s && c)
 	    DataTranslator::attachChain(s,c);
 	c = peer->getPeerRecord();
@@ -388,12 +405,13 @@ bool DataEndpoint::connect(DataEndpoint* peer)
 
 bool DataEndpoint::disconnect()
 {
+    Lock lock(s_dataMutex);
     if (!m_peer)
 	return false;
     DDebug(DebugInfo,"DataEndpoint '%s' disconnecting peer %p from [%p]",m_name.c_str(),m_peer,this);
 
-    DataSource *s = getSource();
-    DataConsumer *c = m_peer->getConsumer();
+    DataSource* s = getSource();
+    DataConsumer* c = m_peer->getConsumer();
     if (s && c)
 	DataTranslator::detachChain(s,c);
     c = m_peer->getPeerRecord();
@@ -408,7 +426,7 @@ bool DataEndpoint::disconnect()
     if (s && c)
 	DataTranslator::detachChain(s,c);
 
-    DataEndpoint *temp = m_peer;
+    DataEndpoint* temp = m_peer;
     m_peer = 0;
     temp->m_peer = 0;
     temp->deref();
@@ -417,11 +435,12 @@ bool DataEndpoint::disconnect()
 
 void DataEndpoint::setSource(DataSource* source)
 {
+    Lock lock(s_dataMutex);
     if (source == m_source)
 	return;
-    DataConsumer *c1 = m_peer ? m_peer->getConsumer() : 0;
-    DataConsumer *c2 = m_peer ? m_peer->getPeerRecord() : 0;
-    DataSource *temp = m_source;
+    DataConsumer* c1 = m_peer ? m_peer->getConsumer() : 0;
+    DataConsumer* c2 = m_peer ? m_peer->getPeerRecord() : 0;
+    DataSource* temp = m_source;
     if (c1)
 	c1->ref();
     if (c2)
@@ -467,10 +486,11 @@ void DataEndpoint::setSource(DataSource* source)
 
 void DataEndpoint::setConsumer(DataConsumer* consumer)
 {
+    Lock lock(s_dataMutex);
     if (consumer == m_consumer)
 	return;
-    DataSource *source = m_peer ? m_peer->getSource() : 0;
-    DataConsumer *temp = m_consumer;
+    DataSource* source = m_peer ? m_peer->getSource() : 0;
+    DataConsumer* temp = m_consumer;
     if (consumer) {
 	if (consumer->ref()) {
 	    if (source)
@@ -489,10 +509,11 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
 
 void DataEndpoint::setPeerRecord(DataConsumer* consumer)
 {
+    Lock lock(s_dataMutex);
     if (consumer == m_peerRecord)
 	return;
-    DataSource *source = m_peer ? m_peer->getSource() : 0;
-    DataConsumer *temp = m_peerRecord;
+    DataSource* source = m_peer ? m_peer->getSource() : 0;
+    DataConsumer* temp = m_peerRecord;
     if (consumer) {
 	if (consumer->ref()) {
 	    if (source)
@@ -511,9 +532,10 @@ void DataEndpoint::setPeerRecord(DataConsumer* consumer)
 
 void DataEndpoint::setCallRecord(DataConsumer* consumer)
 {
+    Lock lock(s_dataMutex);
     if (consumer == m_callRecord)
 	return;
-    DataConsumer *temp = m_callRecord;
+    DataConsumer* temp = m_callRecord;
     if (consumer) {
 	if (consumer->ref()) {
 	    if (m_source)
@@ -538,18 +560,30 @@ ThreadedSource::~ThreadedSource()
 
 bool ThreadedSource::start(const char* name, Thread::Priority prio)
 {
+    Lock lock(mutex());
     if (!m_thread) {
-	m_thread = new ThreadedSourcePrivate(this,name,prio);
-	m_thread->startup();
+	ThreadedSourcePrivate* thread = new ThreadedSourcePrivate(this,name,prio);
+	if (thread->startup()) {
+	    m_thread = thread;
+	    return true;
+	}
+	delete thread;
+	return false;
     }
     return m_thread->running();
 }
 
 void ThreadedSource::stop()
 {
+    Lock lock(mutex());
     if (m_thread) {
-	delete m_thread;
+	ThreadedSourcePrivate* tmp = m_thread;
 	m_thread = 0;
+	// we HAVE to destroy the thread with the mutex locked as we cannot
+	// allow the thread to die inside Forward() but we first try to get
+	// it run until it stucks against the mutex
+	Thread::yield();
+	delete tmp;
     }
 }
 

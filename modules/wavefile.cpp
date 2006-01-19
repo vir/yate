@@ -270,6 +270,8 @@ void WaveSource::run()
 	r = m_consumers.count();
 	m_mutex.unlock();
 	Thread::yield(true);
+	if (!alive())
+	    return;
     }
     m_data.assign(0,(m_brate*20)/1000);
     // start counting time from now
@@ -298,6 +300,8 @@ void WaveSource::run()
 	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
+	if (!alive())
+	    break;
 	Forward(m_data,ts);
 	ts += m_data.length()*8000/m_brate;
 	m_total += r;

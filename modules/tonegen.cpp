@@ -497,7 +497,7 @@ void ToneSource::run()
     int nsam = tone->nsamples;
     if (nsam < 0)
 	nsam = -nsam;
-    while (m_tone) {
+    while (alive() && m_tone) {
 	Thread::check();
 	short *d = (short *) m_data.data();
 	for (unsigned int i = m_data.length()/2; i--; samp++,dpos++) {
@@ -596,7 +596,10 @@ ToneChan::ToneChan(String& tone)
     : Channel(__plugin)
 {
     Debug(this,DebugAll,"ToneChan::ToneChan(\"%s\") [%p]",tone.c_str(),this);
+    // protect the list while the new tone source is added to it
+    __plugin.lock();
     ToneSource* t = ToneSource::getTone(tone);
+    __plugin.unlock();
     if (t) {
 	setSource(t);
 	m_address = t->name();

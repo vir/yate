@@ -769,6 +769,7 @@ void Driver::setup(const char* prefix, bool minimal)
 {
     DDebug(this,DebugAll,"Driver::setup('%s',%d)",prefix,minimal);
     Module::setup();
+    loadLimits();
     if (m_init)
 	return;
     m_init = true;
@@ -776,7 +777,6 @@ void Driver::setup(const char* prefix, bool minimal)
     if (m_prefix && !m_prefix.endsWith("/"))
 	m_prefix += "/";
     XDebug(DebugAll,"setup name='%s' prefix='%s'",name().c_str(),m_prefix.c_str());
-    loadLimits();
     installRelay(Masquerade,10);
     installRelay(Locate,40);
     installRelay(Drop,60);

@@ -120,7 +120,7 @@ private:
 static MyModule module;
 
 DbConn::DbConn(const NamedList* sect)
-    : m_dbmutex(true), m_name(*sect), m_conn(0), m_msg(0)
+    : m_dbmutex(true), m_name(*sect), m_conn(0), m_msg(0), m_go(false)
 {
     int tout = sect->getIntValue("timeout",10000);
     // round to seconds

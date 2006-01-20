@@ -28,19 +28,34 @@
 namespace TelEngine {
 
 static Mutex s_dataMutex(true);
+static Mutex s_sourceMutex;
 
 class ThreadedSourcePrivate : public Thread
 {
+    friend class ThreadedSource;
 public:
-    ThreadedSourcePrivate(ThreadedSource *source, const char *name, Thread::Priority prio)
+    ThreadedSourcePrivate(ThreadedSource* source, const char* name, Thread::Priority prio)
 	: Thread(name,prio), m_source(source) { }
 
 protected:
     virtual void run()
-	{ m_source->run(); }
+	{
+	    m_source->run();
+	    s_sourceMutex.lock();
+	    ThreadedSource* source = m_source;
+	    m_source = 0;
+	    if (source) {
+		source->m_thread = 0;
+		source->cleanup();
+	    }
+	    s_sourceMutex.unlock();
+	}
 
     virtual void cleanup()
-	{ m_source->m_thread = 0; m_source->cleanup(); }
+	{
+	    if (m_source)
+		m_source->cleanup();
+	}
 
 private:
     ThreadedSource* m_source;
@@ -576,15 +591,14 @@ bool ThreadedSource::start(const char* name, Thread::Priority prio)
 void ThreadedSource::stop()
 {
     Lock lock(mutex());
-    if (m_thread) {
-	ThreadedSourcePrivate* tmp = m_thread;
-	m_thread = 0;
-	// we HAVE to destroy the thread with the mutex locked as we cannot
-	// allow the thread to die inside Forward() but we first try to get
-	// it run until it stucks against the mutex
-	Thread::yield();
+    s_sourceMutex.lock();
+    ThreadedSourcePrivate* tmp = m_thread;
+    m_thread = 0;
+    if (tmp) {
+	tmp->m_source = 0;
 	delete tmp;
     }
+    s_sourceMutex.unlock();
 }
 
 void ThreadedSource::cleanup()

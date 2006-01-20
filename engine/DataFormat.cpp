@@ -28,7 +28,7 @@
 namespace TelEngine {
 
 static Mutex s_dataMutex(true);
-static Mutex s_sourceMutex;
+static Mutex s_sourceMutex(true);
 
 class ThreadedSourcePrivate : public Thread
 {

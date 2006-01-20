@@ -87,8 +87,13 @@ using namespace TelEngine;
 static bool s_externalRtp;
 static bool s_fallbackRtp;
 static bool s_passtrough;
+static int s_maxCleaning = 0;
 
 static Configuration s_cfg;
+
+static Mutex s_mutex;
+static int s_connCount = 0;
+static int s_chanCount = 0;
 
 static TokenDict dict_str2code[] = {
     { "alpha" , PProcess::AlphaCode },
@@ -229,6 +234,12 @@ static bool isE164(const char* str)
     }
 }
 
+static int cleaningCount()
+{
+    Lock lock(s_mutex);
+    return s_connCount - s_chanCount;
+}
+
 class H323Process : public PProcess
 {
     PCLASSINFO(H323Process, PProcess)
@@ -262,6 +273,7 @@ public:
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
     virtual bool received(Message &msg, int id);
+    virtual void statusParams(String& str);
     void cleanup();
     YateH323EndPoint* findEndpoint(const String& ep) const;
 private:
@@ -694,6 +706,14 @@ YateH323EndPoint::~YateH323EndPoint()
 H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
     void* userData, H323Transport* transport, H323SignalPDU* setupPDU)
 {
+    if (s_maxCleaning > 0) {
+	// check if there aren't too many connections assigned to the cleaner thread
+	int cln = cleaningCount();
+	if (cln > s_maxCleaning) {
+	    Debug(DebugWarn,"Refusing new H.323 call, there are already %d cleaning up",cln);
+	    return 0;
+	}
+    }
     if (!hplugin.canAccept(false)) {
 	Debug(DebugWarn,"Refusing new H.323 call, full or exiting");
 	return 0;
@@ -904,6 +924,9 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 {
     Debug(&hplugin,DebugAll,"YateH323Connection::YateH323Connection(%p,%u,%p) [%p]",
 	&endpoint,callReference,userdata,this);
+    s_mutex.lock();
+    s_connCount++;
+    s_mutex.unlock();
     m_needMedia = s_cfg.getBoolValue("general","needmedia",m_needMedia);
 
     // outgoing calls get the "call.execute" message as user data
@@ -936,6 +959,9 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 YateH323Connection::~YateH323Connection()
 {
     Debug(this,DebugAll,"YateH323Connection::~YateH323Connection() [%p]",this);
+    s_mutex.lock();
+    s_connCount--;
+    s_mutex.unlock();
     YateH323Chan* tmp = m_chan;
     m_chan = 0;
     if (tmp)
@@ -1834,6 +1860,9 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
     : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false)
 {
+    s_mutex.lock();
+    s_chanCount++;
+    s_mutex.unlock();
     m_address = addr;
     m_address.startSkip("ip$",false);
     filterDebug(m_address);
@@ -1853,6 +1882,9 @@ YateH323Chan::~YateH323Chan()
 {
     Debug(this,DebugAll,"YateH323Chan::~YateH323Chan() %s %s [%p]",
 	m_status.c_str(),id().c_str(),this);
+    s_mutex.lock();
+    s_chanCount--;
+    s_mutex.unlock();
     dropChan();
     stopDataLinks();
     if (m_conn)
@@ -2114,6 +2146,13 @@ void H323Driver::cleanup()
     }
 }
 
+void H323Driver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    str.append("cleaning=",",") << cleaningCount();
+}
+    
+
 bool H323Driver::msgExecute(Message& msg, String& dest)
 {
     if (dest.null())
@@ -2126,13 +2165,19 @@ bool H323Driver::msgExecute(Message& msg, String& dest)
 	dest.c_str());
     PString p;
     YateH323EndPoint* ep = hplugin.findEndpoint(msg.getValue("line"));
-    YateH323Connection* conn = ep ? static_cast<YateH323Connection*>(
-	ep->MakeCallLocked(dest.c_str(),p,&msg)
-    ) : 0;
-    if (conn) {
-	conn->Unlock();
-	return true;
+    if (ep) {
+	YateH323Connection* conn = static_cast<YateH323Connection*>(
+	    ep->MakeCallLocked(dest.c_str(),p,&msg));
+	if (conn) {
+	    conn->Unlock();
+	    return true;
+	}
+	// the only reason a YateH323Connection is not created is congestion
+	msg.setParam("error","congestion");
+	return false;
     }
+    // endpoint unknown or not connected to gatekeeper
+    msg.setParam("error","offline");
     return false;
 };
 		    
@@ -2153,6 +2198,7 @@ void H323Driver::initialize()
     s_fallbackRtp = s_cfg.getBoolValue("general","fallback_rtp",true);
     // mantain compatibility with old config files
     s_passtrough = s_cfg.getBoolValue("general","passtrough_rtp",s_passtrough);
+    s_maxCleaning = s_cfg.getIntValue("general","maxcleaning",100);
     maxRoute(s_cfg.getIntValue("incoming","maxqueue",5));
     maxChans(s_cfg.getIntValue("ep","maxconns",0));
     if (!s_process) {

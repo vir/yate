@@ -43,6 +43,11 @@
 ; forward_rtp: bool: default: no
 ;forward_rtp=no
 
+; The OpenH323 cleaner thread is a scarce shared resource. A limit set here
+;  will force new connections to be dropped if too many are already being
+;  in the cleanup queue. Set the limit to zero to disable this check.
+; maxcleaning: int: default: 100
+;maxcleaning=100
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

@@ -49,8 +49,8 @@ void Message::userData(RefObject* data)
     if (data == m_data)
 	return;
     RefObject* tmp = m_data;
-    if (data)
-	data->ref();
+    if (data && !data->ref())
+	data = 0;
     m_data = data;
     if (tmp)
 	tmp->deref();

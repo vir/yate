@@ -465,6 +465,11 @@ bool Channel::msgTransfer(Message& msg)
     return false;
 }
 
+bool Channel::msgUpdate(Message& msg)
+{
+    return false;
+}
+
 bool Channel::callRouted(Message& msg)
 {
     status("routed");
@@ -551,11 +556,13 @@ TokenDict Module::s_messages[] = {
     { "engine.command",  Module::Command },
     { "engine.help",     Module::Help },
     { "engine.halt",     Module::Halt },
+    { "call.route",      Module::Route },
     { "call.execute",    Module::Execute },
     { "call.drop",       Module::Drop },
     { "call.progress",   Module::Progress },
     { "call.ringing",    Module::Ringing },
     { "call.answered",   Module::Answered },
+    { "call.update",     Module::Update },
     { "chan.dtmf",       Module::Tone },
     { "chan.text",       Module::Text },
     { "chan.masquerade", Module::Masquerade },
@@ -649,6 +656,11 @@ void Module::msgTimer(Message& msg)
     }
 }
 
+bool Module::msgRoute(Message& msg)
+{
+    return false;
+}
+
 void Module::msgStatus(Message& msg)
 {
     String mod, par;
@@ -679,11 +691,14 @@ bool Module::received(Message &msg, int id)
     if (!m_name)
 	return false;
 
-    if (id == Timer) {
-	lock();
-	msgTimer(msg);
-	unlock();
-	return false;
+    switch (id) {
+	case Timer:
+	    lock();
+	    msgTimer(msg);
+	    unlock();
+	    return false;
+	case Route:
+	    return msgRoute(msg);
     }
 
     String dest = msg.getValue("module");
@@ -827,6 +842,7 @@ bool Driver::received(Message &msg, int id)
 	    }
 	case Status:
 	case Level:
+	case Route:
 	    return Module::received(msg,id);
 	case Halt:
 	    dropAll(msg);
@@ -887,6 +903,8 @@ bool Driver::received(Message &msg, int id)
 	    return chan->msgDrop(msg,msg.getValue("reason"));
 	case Transfer:
 	    return chan->msgTransfer(msg);
+	case Update:
+	    return chan->msgUpdate(msg);
 	case Masquerade:
 	    msg = msg.getValue("message");
 	    msg.clearParam("message");

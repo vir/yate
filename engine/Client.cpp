@@ -866,6 +866,12 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
     return false;
 }
 
+bool Client::callRouting(const String& caller, const String& called, Message* msg)
+{
+    // route here all calls by default
+    return true;
+}
+
 void Client::clearActive(const String& id)
 {
     if (id == m_activeId)
@@ -1246,6 +1252,7 @@ void ClientDriver::setup()
     Driver::setup();
     installRelay(Halt);
     installRelay(Progress);
+    installRelay(Route,200);
 }
 
 bool ClientDriver::factory(UIFactory* factory, const char* type)
@@ -1274,6 +1281,18 @@ void ClientDriver::msgTimer(Message& msg)
 	}
 	Client::self()->unlockOther();
     }
+}
+
+bool ClientDriver::msgRoute(Message& msg)
+{
+    // don't route here our own calls
+    if (name() == msg.getValue("module"))
+	return false;
+    if (Client::self() && Client::self()->callRouting(msg.getValue("caller"),msg.getValue("called"),&msg)) {
+	msg.retValue() = name() + "/*";
+	return true;
+    }
+    return false;
 }
 
 ClientChannel* ClientDriver::findLine(int line)

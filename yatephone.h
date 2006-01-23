@@ -1032,28 +1032,30 @@ protected:
      */
     enum {
 	// Module messages
-	Status     = 0x0001,
-	Timer      = 0x0002,
-	Level      = 0x0004,
-	Command    = 0x0008,
-	Help       = 0x0010,
-	Halt       = 0x0020,
+	Status     = 0x00000001,
+	Timer      = 0x00000002,
+	Level      = 0x00000004,
+	Command    = 0x00000008,
+	Help       = 0x00000010,
+	Halt       = 0x00000020,
+	Route	   = 0x00000040,
 	// Driver messages
-	Execute    = 0x0040,
-	Drop       = 0x0080,
+	Execute    = 0x00000100,
+	Drop       = 0x00000200,
 	// Channel messages
-	Ringing    = 0x0100,
-	Answered   = 0x0200,
-	Tone       = 0x0400,
-	Text       = 0x0800,
-	Masquerade = 0x1000,
-	Locate     = 0x2000,
-	Transfer   = 0x4000,
-	Progress   = 0x8000,
+	Locate     = 0x00000400,
+	Masquerade = 0x00000800,
+	Ringing    = 0x00001000,
+	Answered   = 0x00002000,
+	Tone       = 0x00004000,
+	Text       = 0x00008000,
+	Progress   = 0x00010000,
+	Update     = 0x00020000,
+	Transfer   = 0x00040000,
 	// Last possible public ID
-	PubLast    = 0xffff,
+	PubLast    = 0x0fffffff,
 	// Private messages base ID
-	Private    = 0x10000
+	Private    = 0x10000000
     } RelayID;
 
     /**
@@ -1126,6 +1128,12 @@ protected:
      * @param msg Status message
      */
     virtual void msgStatus(Message& msg);
+
+    /**
+     * Routing message handler that is invoked for all call.route messages.
+     * @param msg Call routing message
+     */
+    virtual bool msgRoute(Message& msg);
 
     /**
      * Build the module identification part of the status answer
@@ -1254,6 +1262,13 @@ public:
      * @return True to stop processing the message, false to let it flow
      */
     virtual bool msgTransfer(Message& msg);
+
+    /**
+     * Notification on call parameters update request
+     * @param msg Notification message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgUpdate(Message& msg);
 
     /**
      * Notification on progress of routing incoming call

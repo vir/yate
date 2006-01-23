@@ -134,6 +134,7 @@ public:
     virtual bool action(Window* wnd, const String& name);
     virtual bool toggle(Window* wnd, const String& name, bool active);
     virtual bool select(Window* wnd, const String& name, const String& item, const String& text = String::empty());
+    virtual bool callRouting(const String& caller, const String& called, Message* msg = 0);
     virtual bool callIncoming(const String& caller, const String& dest = String::empty(), Message* msg = 0);
     void clearActive(const String& id);
     void callAccept(const char* callId = 0);
@@ -254,6 +255,7 @@ public:
     virtual bool factory(UIFactory* factory, const char* type);
     virtual bool msgExecute(Message& msg, String& dest);
     virtual void msgTimer(Message& msg);
+    virtual bool msgRoute(Message& msg);
     ClientChannel* findLine(int line);
     inline static ClientDriver* self()
 	{ return s_driver; }

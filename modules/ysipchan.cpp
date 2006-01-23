@@ -1129,7 +1129,8 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	t->setResponse(500, "Server Shutting Down");
 	return;
     }
-    const SIPHeaderLine* hl = e->getMessage()->getHeader("Contact");
+    const SIPMessage* message = e->getMessage();
+    const SIPHeaderLine* hl = message->getHeader("Contact");
     if (!hl) {
 	t->setResponse(400);
 	return;
@@ -1155,11 +1156,11 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     m->addParam("number",addr.getUser());
     m->addParam("driver","sip");
     String data("sip/" + addr);
-    if (s_auto_nat && isPrivateAddr(addr.getHost()) && !isPrivateAddr(e->getMessage()->getParty()->getPartyAddr())) {
+    if (s_auto_nat && isPrivateAddr(addr.getHost()) && !isPrivateAddr(message->getParty()->getPartyAddr())) {
 	Debug(DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
 		    addr.getHost().c_str(),addr.getPort(),
-		    e->getMessage()->getParty()->getPartyAddr().c_str(),
-		    e->getMessage()->getParty()->getPartyPort());
+		    message->getParty()->getPartyAddr().c_str(),
+		    message->getParty()->getPartyPort());
 	String tmp(addr.getHost());
 	tmp << ":" << addr.getPort();
 	m->addParam("reg_nat_addr",tmp);
@@ -1167,15 +1168,17 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	if (pos >= 0) {
 	    int len = tmp.length();
 	    tmp.clear();
-	    tmp << data.substr(0,pos) << e->getMessage()->getParty()->getPartyAddr()
-		<< ":" << e->getMessage()->getParty()->getPartyPort() << data.substr(pos + len);
+	    tmp << data.substr(0,pos) << message->getParty()->getPartyAddr()
+		<< ":" << message->getParty()->getPartyPort() << data.substr(pos + len);
 	    data = tmp;
 	}
     }
     m->addParam("data",data);
+    m->addParam("ip_host",message->getParty()->getPartyAddr());
+    m->addParam("ip_port",String(message->getParty()->getPartyPort()));
 
     bool dereg = false;
-    String tmp(e->getMessage()->getHeader("Expires"));
+    String tmp(message->getHeader("Expires"));
     int expires = tmp.toInteger(-1);
     if (expires < 0)
 	expires = s_expires_def;
@@ -1195,7 +1198,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	*m = "user.unregister";
 	dereg = true;
     }
-    hl = e->getMessage()->getHeader("User-Agent");
+    hl = message->getHeader("User-Agent");
     if (hl)
 	m->addParam("device",*hl);
     // Always OK deregistration attempts
@@ -1231,9 +1234,10 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	}
     }
 
+    const SIPMessage* message = e->getMessage();
     Message m("sip." + meth);
-    if (e->getMessage()->getParam("To","tag")) {
-	SIPDialog dlg(*e->getMessage());
+    if (message->getParam("To","tag")) {
+	SIPDialog dlg(*message);
 	YateSIPConnection* conn = plugin.findDialog(dlg);
 	if (conn) {
 	    m.userData(conn);
@@ -1242,14 +1246,14 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     }
     if (user)
 	m.addParam("username",user);
-    m.addParam("ip_host",e->getMessage()->getParty()->getPartyAddr());
-    m.addParam("ip_port",String(e->getMessage()->getParty()->getPartyPort()));
+    m.addParam("ip_host",message->getParty()->getPartyAddr());
+    m.addParam("ip_port",String(message->getParty()->getPartyPort()));
     m.addParam("sip_uri",t->getURI());
     m.addParam("sip_callid",t->getCallID());
     // establish the dialog here so user code will have the dialog tag handy
     t->setDialogTag();
     m.addParam("xsip_dlgtag",t->getDialogTag());
-    copySipHeaders(m,*e->getMessage());
+    copySipHeaders(m,*message);
 
     if (Engine::dispatch(m)) {
 	t->setResponse(m.getIntValue("code",200));

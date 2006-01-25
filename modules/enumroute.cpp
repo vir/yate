@@ -260,7 +260,10 @@ bool EnumHandler::received(Message& msg)
 {
     if (s_domain.null() && s_backup.null())
 	return false;
-    String called(msg.getValue("called"));
+    // give preference to full (e164) called number if exists
+    String called(msg.getValue("calledfull"));
+    if (called.null())
+	called = msg.getValue("called");
     if (called.null() && msg.getBoolValue("enumroute",true))
 	return false;
     // check if the called starts with international prefix, remove it
@@ -324,6 +327,7 @@ bool EnumHandler::received(Message& msg)
 		{
 		    reroute = true;
 		    msg.setParam("called",called);
+		    msg.clearParam("calledfull");
 		    break;
 		}
 	    }

@@ -684,7 +684,7 @@ void Widget::destroyCb(GtkObject* obj, gpointer dat)
 }
 
 
-GTKWindow::GTKWindow(const char* id, Layout layout)
+GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
     : Window(id), m_widget(0), m_filler(0), m_layout(layout), m_state(0),
       m_posX(INVALID_POS), m_posY(INVALID_POS), m_sizeW(0), m_sizeH(0)
 {
@@ -692,7 +692,7 @@ GTKWindow::GTKWindow(const char* id, Layout layout)
     g_object_set_data((GObject*)m_widget,"Yate::Window",this);
     gtk_window_set_role((GtkWindow*)m_widget,id);
 //    gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_DIALOG);
-    gtk_window_set_decorated((GtkWindow*)m_widget,FALSE);
+    gtk_window_set_decorated((GtkWindow*)m_widget,decorated);
 //    gtk_window_set_resizable((GtkWindow*)m_widget,FALSE);
     gtk_widget_add_events(m_widget,GDK_BUTTON_PRESS_MASK);
     gtk_widget_add_events(m_widget,GDK_BUTTON_RELEASE_MASK);
@@ -819,12 +819,12 @@ void GTKWindow::populate()
 	return;
     s_radioGroup = 0;
     GtkWidget* containerStack[MAX_CONTAINER_DEPTH];
-    GtkWidget* lastWidget = 0;
     GtkTooltips* tips = 0;
     int depth = 0;
     if (m_layout == Unknown)
 	m_layout = (Layout)sect->getIntValue("layout",s_layoutNames,GTKWindow::Unknown);
-    gtk_widget_set_size_request(filler(),sect->getIntValue("width",-1),sect->getIntValue("height",-1));
+    GtkWidget* lastWidget = filler();
+    gtk_widget_set_size_request(lastWidget,sect->getIntValue("width",-1),sect->getIntValue("height",-1));
     int n = sect->length();
     for (int i = 0; i < n; i++) {
 	NamedString* p = sect->getParam(i);
@@ -894,6 +894,8 @@ void GTKWindow::populate()
 		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->safe(),NULL);
 	    else if (tmp.startSkip("pos:",false) && tmp)
 		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(s_directions),NULL);
+	    else if (tmp.startSkip("align:",false) && tmp)
+		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),(gfloat)p->toInteger(50)*0.01,NULL);
 	    else if (tmp.startSkip("relief:",false) && tmp)
 		g_object_set(G_OBJECT(lastWidget),tmp.c_str(),p->toInteger(s_reliefs),NULL);
 	    else if (tmp.startSkip("shadow:",false) && tmp)
@@ -1499,7 +1501,7 @@ bool GTKClient::createWindow(const String& name)
     if (f)
 	w = f->build();
     else
-	w = new GTKWindow(name);
+	w = new GTKWindow(name,s_cfg.getBoolValue(name,"decorated"));
     if (!w) {
 	Debug(GTKDriver::self(),DebugGoOn,"Could not create window '%s'",name.c_str());
 	return false;

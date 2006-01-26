@@ -352,11 +352,15 @@ void Client::initWindows()
 
 void Client::initClient()
 {
-    m_multiLines =
+    bool tmp =
 	getWindow("channels") || hasElement("channels") ||
 	getWindow("lines") || hasElement("lines");
+    m_multiLines = Engine::config().getBoolValue("client","multilines",tmp);
+    tmp = false;
+    getCheck("autoanswer",tmp);
+    m_autoAnswer = Engine::config().getBoolValue("client","autoanswer",tmp);
     setCheck("multilines",m_multiLines);
-    getCheck("autoanswer",m_autoAnswer);
+    setCheck("autoanswer",m_autoAnswer);
 }
 
 void Client::moveRelated(const Window* wnd, int dx, int dy)
@@ -386,6 +390,20 @@ bool Client::openPopup(const String& name, const NamedList* params, const Window
 	wnd->setOver(parent);
     wnd->show();
     return true;
+}
+
+bool Client::openMessage(const char* text, const Window* parent)
+{
+    NamedList params("");
+    params.addParam("text",text);
+    return openPopup("message",&params,parent);
+}
+
+bool Client::openConfirm(const char* text, const Window* parent)
+{
+    NamedList params("");
+    params.addParam("text",text);
+    return openPopup("confirm",&params,parent);
 }
 
 bool Client::hasElement(const String& name, Window* wnd, Window* skip)
@@ -849,12 +867,12 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 	    String tmp("Call from:");
 	    tmp << " " << caller;
 	    setStatus(tmp);
+	    setText("incoming",tmp);
 	    if (m_autoAnswer) {
 		cc->callAnswer();
 		setChannelInternal(cc);
 	    }
 	    else {
-		setText("incoming",tmp);
 		if (!(m_multiLines && setVisible("channels")))
 		    setVisible("incoming");
 	    }
@@ -875,7 +893,7 @@ bool Client::callRouting(const String& caller, const String& called, Message* ms
 void Client::clearActive(const String& id)
 {
     if (id == m_activeId)
-	m_activeId.clear();
+	updateFrom(0);
 }
 
 void Client::addChannel(ClientChannel* chan)
@@ -897,7 +915,9 @@ void Client::setChannelInternal(ClientChannel* chan)
     if (!setUrgent(chan->id(),chan->flashing()) && chan->flashing())
 	tmp << " <<<";
     setText(chan->id(),tmp);
-    if (getSelect("channels",tmp) && (tmp == chan->id()))
+    bool upd = !m_multiLines;
+    upd = upd || (getSelect("channels",tmp) && (tmp == chan->id()));
+    if (upd)
 	updateFrom(chan);
 }
 
@@ -983,6 +1003,18 @@ bool UIHandler::received(Message &msg)
     Window* wnd = Client::getWindow(msg.getValue("window"));
     if (action == "set_status")
 	return Client::self()->setStatusLocked(msg.getValue("status"),wnd);
+    else if (action == "show_message") {
+	Client::self()->lockOther();
+	bool ok = Client::openMessage(msg.getValue("text"),Client::getWindow(msg.getValue("parent")));
+	Client::self()->unlockOther();
+	return ok;
+    }
+    else if (action == "show_confirm") {
+	Client::self()->lockOther();
+	bool ok = Client::openConfirm(msg.getValue("text"),Client::getWindow(msg.getValue("parent")));
+	Client::self()->unlockOther();
+	return ok;
+    }
     String name(msg.getValue("name"));
     if (name.null())
 	return false;

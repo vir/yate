@@ -115,7 +115,7 @@ public:
 	Framed,
 	Scroll,
     };
-    GTKWindow(const char* id = 0, Layout layout = Unknown);
+    GTKWindow(const char* id = 0, bool decorated = false, Layout layout = Unknown);
     virtual ~GTKWindow();
     virtual void title(const String& text);
     virtual bool setParams(const NamedList& params);

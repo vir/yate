@@ -171,6 +171,8 @@ public:
     static bool setVisible(const String& name, bool show = true);
     static bool getVisible(const String& name);
     static bool openPopup(const String& name, const NamedList* params = 0, const Window* parent = 0);
+    static bool openMessage(const char* text, const Window* parent = 0);
+    static bool openConfirm(const char* text, const Window* parent = 0);
     static ObjList* listWindows();
     void idleActions();
 protected:

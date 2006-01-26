@@ -24,6 +24,19 @@
 
 #include <modules/libypri.h>
 
+/* Individual bit groups in number presentation - Q931 octet 3a bits 7,6 */
+#define PRESENTATION_BIT_MASK        0x60
+#define PRESENTATION_ALLOWED         0x00
+#define PRESENTATION_RESTRICTED      0x20
+#define PRESENTATION_UNAVAILABLE     0x40
+
+/* Individual bit groups in number screening - Q931 octet 3a bits 2,1 */
+#define SCREENING_BIT_MASK           0x03
+#define SCREENING_USER_NOT_SCREENED  0x00
+#define SCREENING_USER_PASSED        0x01
+#define SCREENING_USER_FAILED        0x02
+#define SCREENING_NETWORK_PROVIDED   0x03
+
 extern "C" {
 extern int q931_setup(struct pri *pri, q931_call *c, struct pri_sr *req);
 };
@@ -116,7 +129,7 @@ static TokenDict dict_str2dplan[] = {
     { 0, -1 }
 };
 
-/* Presentation */
+/* Presentation and screening */
 static TokenDict dict_str2pres[] = {
     { "allow_user_not_screened", PRES_ALLOWED_USER_NUMBER_NOT_SCREENED },
     { "allow_user_passed", PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN },
@@ -129,6 +142,7 @@ static TokenDict dict_str2pres[] = {
     { "not_available", PRES_NUMBER_NOT_AVAILABLE },
     { 0, -1 }
 };
+
 
 #ifdef PRI_NSF_NONE
 #define YATE_NSF_DEFAULT PRI_NSF_NONE
@@ -824,7 +838,15 @@ bool PriChan::call(Message &msg, const char *called)
     char *caller = (char *)msg.getValue("caller");
     int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
-    int callerpres = msg.getIntValue("callerpres",dict_str2pres,m_span->pres());
+    int callerpres = m_span->pres();
+    String tmp = msg.getValue("screened");
+    if (tmp.isBoolean())
+	callerpres = (callerpres & ~SCREENING_BIT_MASK) |
+	    (tmp.toBoolean() ? SCREENING_USER_PASSED : SCREENING_USER_NOT_SCREENED);
+    tmp = msg.getValue("privacy");
+    if (tmp && tmp.toBoolean(true))
+	callerpres = (callerpres & ~PRESENTATION_BIT_MASK) | PRESENTATION_RESTRICTED;
+    callerpres = msg.getIntValue("presentation",dict_str2pres,callerpres);
     int calledplan = msg.getIntValue("calledplan",dict_str2dplan,m_span->dplan());
     Debug(this,DebugAll,"Caller='%s' name='%s' plan=%s pres=%s, Called plan=%s",
 	caller,callername,lookup(callerplan,dict_str2dplan),
@@ -882,6 +904,8 @@ void PriChan::ring(pri_event_ring &ev)
     openData(lookup(ev.layer1,dict_str2law),0);
 
     m = message("call.preroute");
+    m->addParam("span",String(m_span->span()));
+    m->addParam("channel",String(m_chan));
     if (m_span->overlapped() && !ev.complete && (::strlen(ev.callednum) < m_span->overlapped())) {
 	::pri_need_more_info(m_span->pri(),m_call,m_chan,!isISDN());
 	m->addParam("overlapped","yes");
@@ -890,6 +914,16 @@ void PriChan::ring(pri_event_ring &ev)
 	m->addParam("caller",ev.callingnum);
     if (ev.callednum[0])
 	m->addParam("called",ev.callednum);
+    if ((ev.callingpres & PRESENTATION_BIT_MASK) == PRESENTATION_RESTRICTED)
+	m->addParam("privacy","name");
+    switch (ev.callingpres & SCREENING_BIT_MASK) {
+	case SCREENING_USER_PASSED:
+	    m->addParam("screened","yes");
+	    break;
+	case SCREENING_USER_NOT_SCREENED:
+	    m->addParam("screened","no");
+	    break;
+    }
     const char* dataLaw = "slin";
     switch (ev.layer1) {
 	case PRI_LAYER_1_ALAW:

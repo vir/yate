@@ -40,13 +40,14 @@
 using namespace TelEngine;
 
 // we should use the primary sound buffer else we will lose sound while we have no input focus
-#define USE_PRIMARY_BUFFER
+static bool s_primary = true;
 
 // 20ms chunk, 100ms buffer
 #define CHUNK_SIZE 320
-#define MIN_SIZE (3*CHUNK_SIZE)
-#define BUF_SIZE (4*CHUNK_SIZE)
-#define MAX_SIZE (5*CHUNK_SIZE)
+static unsigned int s_chunk = CHUNK_SIZE;
+static unsigned int s_minsize = 2*CHUNK_SIZE;
+static unsigned int s_bufsize = 3*CHUNK_SIZE;
+static unsigned int s_maxsize = 4*CHUNK_SIZE;
 
 class DSoundSource : public DataSource
 {
@@ -181,11 +182,7 @@ bool DSoundPlay::init()
     HWND wnd = GetForegroundWindow();
     if (!wnd)
 	wnd = GetDesktopWindow();
-#ifdef USE_PRIMARY_BUFFER
-    if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,DSSCL_WRITEPRIMARY))) {
-#else
-    if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,DSSCL_EXCLUSIVE))) {
-#endif
+    if (FAILED(hr = m_ds->SetCooperativeLevel(wnd,s_primary ? DSSCL_WRITEPRIMARY : DSSCL_EXCLUSIVE))) {
 	Debug(DebugGoOn,"Could not set the DirectSound cooperative level, code 0x%X",hr);
 	return false;
     }
@@ -200,23 +197,23 @@ bool DSoundPlay::init()
     DSBUFFERDESC bdesc;
     ZeroMemory(&bdesc, sizeof(bdesc));
     bdesc.dwSize = sizeof(bdesc);
-#ifdef USE_PRIMARY_BUFFER
-    bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
-#else
-    bdesc.dwFlags = DSBCAPS_LOCSOFTWARE ;
-    bdesc.dwBufferBytes = BUF_SIZE;
-    bdesc.lpwfxFormat = &fmt;
-#endif
+    if (s_primary)
+	bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
+    else {
+	bdesc.dwFlags = DSBCAPS_GLOBALFOCUS;
+	// we have to set format when creating secondary buffers
+	bdesc.dwBufferBytes = s_bufsize;
+	bdesc.lpwfxFormat = &fmt;
+    }
     if (FAILED(hr = m_ds->CreateSoundBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
 	Debug(DebugGoOn,"Could not create the DirectSound buffer, code 0x%X",hr);
 	return false;
     }
-#ifdef USE_PRIMARY_BUFFER
-    if (FAILED(hr = m_dsb->SetFormat(&fmt))) {
+    // format can be changed only for primary buffers
+    if (s_primary && FAILED(hr = m_dsb->SetFormat(&fmt))) {
 	Debug(DebugGoOn,"Could not set the DirectSound buffer format, code 0x%X",hr);
 	return false;
     }
-#endif
     if (FAILED(hr = m_dsb->GetFormat(&fmt,sizeof(fmt),0))) {
 	Debug(DebugGoOn,"Could not get the DirectSound buffer format, code 0x%X",hr);
 	return false;
@@ -259,19 +256,19 @@ void DSoundPlay::run()
     while (m_owner) {
 	msleep(1,true);
 	if (first) {
-	    if (m_buf.length() < MIN_SIZE)
+	    if (m_buf.length() < s_minsize)
 		continue;
 	    first = false;
 	    m_dsb->GetCurrentPosition(NULL,&m_writePos);
 	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
 		m_buf.length(),m_writePos);
 	}
-	while (m_dsb && (m_buf.length() >= CHUNK_SIZE)) {
+	while (m_dsb && (m_buf.length() >= s_chunk)) {
 	    void* buf = 0;
 	    void* buf2 = 0;
 	    DWORD len = 0;
 	    DWORD len2 = 0;
-	    HRESULT hr = m_dsb->Lock(m_writePos,CHUNK_SIZE,&buf,&len,&buf2,&len2,0);
+	    HRESULT hr = m_dsb->Lock(m_writePos,s_chunk,&buf,&len,&buf2,&len2,0);
 	    if (FAILED(hr)) {
 		m_writePos = 0;
 		if ((hr == DSERR_BUFFERLOST) && SUCCEEDED(m_dsb->Restore())) {
@@ -292,10 +289,10 @@ void DSoundPlay::run()
 	    if (buf2)
 		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
 	    m_dsb->Unlock(buf,len,buf2,len2);
-	    m_writePos += CHUNK_SIZE;
+	    m_writePos += s_chunk;
 	    if (m_writePos >= m_buffSize)
 		m_writePos -= m_buffSize;
-	    m_buf.cut(-CHUNK_SIZE);
+	    m_buf.cut(-(int)s_chunk);
 	    unlock();
 	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
 	}
@@ -322,7 +319,7 @@ void DSoundPlay::put(const DataBlock& data)
     if (!m_dsb)
 	return;
     lock();
-    if (m_buf.length() + data.length() <= MAX_SIZE)
+    if (m_buf.length() + data.length() <= s_maxsize)
 	m_buf += data;
 #ifdef DDEBUG
     else
@@ -332,7 +329,7 @@ void DSoundPlay::put(const DataBlock& data)
 }
 
 DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
-    : Thread("DirectSound Rec"),
+    : Thread("DirectSound Rec",High),
       m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
       m_buffSize(0), m_readPos(0)
 {
@@ -372,7 +369,7 @@ bool DSoundRec::init()
     ZeroMemory(&bdesc, sizeof(bdesc));
     bdesc.dwSize = sizeof(bdesc);
     bdesc.dwFlags = DSCBCAPS_WAVEMAPPED;
-    bdesc.dwBufferBytes = BUF_SIZE;
+    bdesc.dwBufferBytes = s_bufsize;
     bdesc.lpwfxFormat = &fmt;
     if (FAILED(hr = m_ds->CreateCaptureBuffer(&bdesc, &m_dsb, NULL)) || !m_dsb) {
 	Debug(DebugGoOn,"Could not create the DirectSoundCapture buffer, code 0x%X",hr);
@@ -422,13 +419,13 @@ void DSoundRec::run()
 	    if (pos < m_readPos)
 		pos += m_buffSize;
 	    pos -= m_readPos;
-	    if (pos < CHUNK_SIZE)
+	    if (pos < s_chunk)
 		continue;
 	    void* buf = 0;
 	    void* buf2 = 0;
 	    DWORD len = 0;
 	    DWORD len2 = 0;
-	    if (FAILED(m_dsb->Lock(m_readPos,CHUNK_SIZE,&buf,&len,&buf2,&len2,0)))
+	    if (FAILED(m_dsb->Lock(m_readPos,s_chunk,&buf,&len,&buf2,&len2,0)))
 		continue;
 	    DataBlock data(0,len+len2);
 	    ::memcpy(data.data(),buf,len);
@@ -629,6 +626,19 @@ void SoundDriver::initialize()
     setup(0,true); // no need to install notifications
     Driver::initialize();
     if (!m_handler) {
+	Configuration cfg(Engine::configFile("dsoundchan"));
+	s_chunk = cfg.getIntValue("general","chunk",CHUNK_SIZE);
+	// make sure the chunk is even sized
+	s_chunk &= ~1;
+	// and set some decent limits for it (5-100 ms)
+	if (s_chunk < 80)
+	    s_chunk = 80;
+	if (s_chunk > 1600)
+	    s_chunk = 1600;
+	s_minsize = cfg.getIntValue("general","minsize",2*s_chunk);
+	s_bufsize = cfg.getIntValue("general","bufsize",3*s_chunk);
+	s_maxsize = cfg.getIntValue("general","maxsize",4*s_chunk);
+	s_primary = cfg.getBoolValue("general","primary",true);
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);
     }

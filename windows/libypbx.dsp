@@ -1,24 +1,24 @@
-# Microsoft Developer Studio Project File - Name="libypri" - Package Owner=<4>
+# Microsoft Developer Studio Project File - Name="libypbx" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
 # ** DO NOT EDIT **
 
 # TARGTYPE "Win32 (x86) Static Library" 0x0104
 
-CFG=libypri - Win32 Debug
+CFG=libypbx - Win32 Debug
 !MESSAGE This is not a valid makefile. To build this project using NMAKE,
 !MESSAGE use the Export Makefile command and run
 !MESSAGE 
-!MESSAGE NMAKE /f "libypri.mak".
+!MESSAGE NMAKE /f "libypbx.mak".
 !MESSAGE 
 !MESSAGE You can specify a configuration when running NMAKE
 !MESSAGE by defining the macro CFG on the command line. For example:
 !MESSAGE 
-!MESSAGE NMAKE /f "libypri.mak" CFG="libypri - Win32 Debug"
+!MESSAGE NMAKE /f "libypbx.mak" CFG="libypbx - Win32 Debug"
 !MESSAGE 
 !MESSAGE Possible choices for configuration are:
 !MESSAGE 
-!MESSAGE "libypri - Win32 Release" (based on "Win32 (x86) Static Library")
-!MESSAGE "libypri - Win32 Debug" (based on "Win32 (x86) Static Library")
+!MESSAGE "libypbx - Win32 Release" (based on "Win32 (x86) Static Library")
+!MESSAGE "libypbx - Win32 Debug" (based on "Win32 (x86) Static Library")
 !MESSAGE 
 
 # Begin Project
@@ -28,20 +28,20 @@ CFG=libypri - Win32 Debug
 CPP=cl.exe
 RSC=rc.exe
 
-!IF  "$(CFG)" == "libypri - Win32 Release"
+!IF  "$(CFG)" == "libypbx - Win32 Release"
 
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 0
-# PROP BASE Output_Dir "libypri___Win32_Release"
-# PROP BASE Intermediate_Dir "libypri___Win32_Release"
+# PROP BASE Output_Dir "libypbx___Win32_Release"
+# PROP BASE Intermediate_Dir "libypbx___Win32_Release"
 # PROP BASE Target_Dir ""
 # PROP Use_MFC 0
 # PROP Use_Debug_Libraries 0
 # PROP Output_Dir "Release"
-# PROP Intermediate_Dir "Release"
+# PROP Intermediate_Dir "Release\ypbx"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_MBCS" /D "_LIB" /YX /FD /c
-# ADD CPP /nologo /MD /W3 /O2 /I "." /I ".." /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "LIBYPRI_STATIC" /FD /c
+# ADD CPP /nologo /MD /W3 /O2 /I "." /I ".." /I "..\contrib\ypbx" /D "NDEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "LIBYPBX_STATIC" /FD /c
 # SUBTRACT CPP /YX
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
@@ -52,20 +52,20 @@ LIB32=link.exe -lib
 # ADD BASE LIB32 /nologo
 # ADD LIB32 /nologo
 
-!ELSEIF  "$(CFG)" == "libypri - Win32 Debug"
+!ELSEIF  "$(CFG)" == "libypbx - Win32 Debug"
 
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
-# PROP BASE Output_Dir "libypri___Win32_Debug"
-# PROP BASE Intermediate_Dir "libypri___Win32_Debug"
+# PROP BASE Output_Dir "libypbx___Win32_Debug"
+# PROP BASE Intermediate_Dir "libypbx___Win32_Debug"
 # PROP BASE Target_Dir ""
 # PROP Use_MFC 0
 # PROP Use_Debug_Libraries 1
 # PROP Output_Dir "Debug"
-# PROP Intermediate_Dir "Debug"
+# PROP Intermediate_Dir "Debug\ypbx"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
-# ADD CPP /nologo /MDd /W3 /Gm /Zi /Od /I "." /I ".." /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "LIBYPRI_STATIC" /FR /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /Gm /Zi /Od /I "." /I ".." /I "..\contrib\ypbx" /D "_DEBUG" /D "WIN32" /D "_MBCS" /D "_LIB" /D "LIBYPBX_STATIC" /FR /FD /GZ /c
 # SUBTRACT CPP /YX
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
@@ -80,14 +80,14 @@ LIB32=link.exe -lib
 
 # Begin Target
 
-# Name "libypri - Win32 Release"
-# Name "libypri - Win32 Debug"
+# Name "libypbx - Win32 Release"
+# Name "libypbx - Win32 Debug"
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=..\modules\libypri.cpp
+SOURCE=..\contrib\ypbx\multiroute.cpp
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -95,7 +95,7 @@ SOURCE=..\modules\libypri.cpp
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=..\modules\libypri.h
+SOURCE=..\contrib\ypbx\yatepbx.h
 # End Source File
 # End Group
 # End Target

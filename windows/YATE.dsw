@@ -191,6 +191,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _ilbccodec
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _dbpbx
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -307,6 +310,24 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_dbpbx"=.\_dbpbx.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libypbx
     End Project Dependency
 }}}
 
@@ -629,6 +650,21 @@ Package=<5>
 
 Package=<4>
 {{{
+}}}
+
+###############################################################################
+
+Project: "libypbx"=.\libypbx.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
 }}}
 
 ###############################################################################

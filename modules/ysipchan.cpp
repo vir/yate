@@ -622,6 +622,9 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     bool anonip = (privacy.find("addr") >= 0);
     bool privname = (privacy.find("name") >= 0);
     bool privuri = (privacy.find("uri") >= 0);
+    // allow for a simple "privacy=yes" or similar
+    if (privacy.toBoolean(false))
+	privname = privuri = true;
     if (anonip)
 	sip.setHeader("Anonymity","ipaddr");
     if (screen || privname || privuri) {

@@ -75,6 +75,7 @@ static int s_minport = MIN_PORT;
 static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
+static bool s_autoaddr = true;
 
 class YRTPSource;
 class YRTPConsumer;
@@ -356,8 +357,9 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 
     Debug(&splugin,DebugAll,"RTP format '%s' payload %d",format,payload);
 
+    bool autoaddr = msg.getBoolValue("autoaddr",s_autoaddr);
     SocketAddr addr(AF_INET);
-    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr,true))) {
+    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr,autoaddr))) {
 	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
 	return false;
     }
@@ -788,6 +790,7 @@ void YRTPPlugin::initialize()
     s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);
     s_tos = cfg.getValue("general","tos");
+    s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     setup();
     if (m_first) {
 	m_first = false;

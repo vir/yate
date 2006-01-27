@@ -14,3 +14,5 @@
 ; buffer: int: Maximum buffer size - used to fragment octet (G.711) audio streams
 ;buffer=240
 
+; autoaddr: bool: Auto change outgoing RTP address:port to match incoming
+;autoaddr=enabled

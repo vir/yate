@@ -31,6 +31,9 @@
 ; dtmfinband: bool: Generate DTMF inband by default
 ;dtmfinband=no
 
+; privacy: bool: Process and generate privacy related SIP headers
+;privacy=disable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

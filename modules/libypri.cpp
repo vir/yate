@@ -914,8 +914,14 @@ void PriChan::ring(pri_event_ring &ev)
 	m->addParam("caller",ev.callingnum);
     if (ev.callednum[0])
 	m->addParam("called",ev.callednum);
-    if ((ev.callingpres & PRESENTATION_BIT_MASK) == PRESENTATION_RESTRICTED)
-	m->addParam("privacy","name");
+    switch (ev.callingpres & PRESENTATION_BIT_MASK) {
+	case PRESENTATION_RESTRICTED:
+	    m->addParam("privacy",String::boolText(true));
+	    break;
+	case PRESENTATION_ALLOWED:
+	    m->addParam("privacy",String::boolText(false));
+	    break;
+    }
     switch (ev.callingpres & SCREENING_BIT_MASK) {
 	case SCREENING_USER_PASSED:
 	    m->addParam("screened","yes");

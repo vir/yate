@@ -1,0 +1,17 @@
+[general]
+; Settings for the DirectSound audio channel
+
+; primary: boolean: Use the primary playback sound buffer instead of a secondary
+;primary=yes
+
+; chunk: int: Number of bytes in the chunk of samples transferred at once
+;chunk=320
+
+; minsize: int: Number of bytes in buffer before we start playing back
+;minsize=chunk*2
+
+; bufsize: int: Bytes allocated for secondary playback and the record buffers
+;bufsize=chunk*3
+
+; maxsize: int: Number of buffered bytes after we start dropping chunks
+;maxsize=chunk*4

@@ -90,6 +90,9 @@ priority=120
 [call.route]
 ; Query and result name for the routing message
 
+; offlineauto: boolean: Set the "offline" error for queries that return records but no route
+;offlineauto=yes
+
 query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
 result=location
 priority=120

@@ -30,6 +30,7 @@ static Configuration s_cfg(Engine::configFile("register"));
 static bool s_critical = false;
 static u_int32_t s_nextTime = 0;
 static int s_expire = 30;
+static bool s_errOffline = true;
 static ObjList s_handlers;
 
 
@@ -246,9 +247,11 @@ bool AAAHandler::received(Message& msg)
 		    if (msg.retValue().null())
 		    {
 			// we know about the user but has no address of record
-			msg.retValue() = "-"; 
-			msg.setParam("error","offline");
-			msg.setParam("reason","Offline");
+			if (s_errOffline) {
+			    msg.retValue() = "-"; 
+			    msg.setParam("error","offline");
+			    msg.setParam("reason","Offline");
+			}
 			return false;
 		    }
 		    return true;
@@ -408,6 +411,7 @@ void RegistModule::initialize()
     setup();
     Output("Initializing module Register for database");
     s_expire = s_cfg.getIntValue("general","expires",s_expire);
+    s_errOffline = s_cfg.getBoolValue("call.route","offlineauto",true);
     Engine::install(new MessageRelay("engine.start",this,Private,150));
     addHandler("call.cdr",AAAHandler::Cdr);
     addHandler("linetracker",AAAHandler::Cdr);

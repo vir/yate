@@ -64,6 +64,10 @@ public:
     virtual bool setUrgent(const String& name, bool urgent) = 0;
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty()) = 0;
     virtual bool delOption(const String& name, const String& item) = 0;
+    virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
+    virtual bool delTableRow(const String& name, const String& item);
+    virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
+    virtual bool clearTable(const String& name);
     virtual bool getText(const String& name, String& text) = 0;
     virtual bool getCheck(const String& name, bool& checked) = 0;
     virtual bool getSelect(const String& name, String& item) = 0;
@@ -136,6 +140,7 @@ public:
     virtual bool select(Window* wnd, const String& name, const String& item, const String& text = String::empty());
     virtual bool callRouting(const String& caller, const String& called, Message* msg = 0);
     virtual bool callIncoming(const String& caller, const String& dest = String::empty(), Message* msg = 0);
+    virtual void updateCDR(const Message& msg);
     void clearActive(const String& id);
     void callAccept(const char* callId = 0);
     void callReject(const char* callId = 0);
@@ -157,6 +162,9 @@ public:
     bool setUrgent(const String& name, bool urgent, Window* wnd = 0, Window* skip = 0);
     bool addOption(const String& name, const String& item, bool atStart, const String& text = String::empty(), Window* wnd = 0, Window* skip = 0);
     bool delOption(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
+    bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false, Window* wnd = 0, Window* skip = 0);
+    bool delTableRow(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
+    bool setTableRow(const String& name, const String& item, const NamedList* data, Window* wnd = 0, Window* skip = 0);
     bool getText(const String& name, String& text, Window* wnd = 0, Window* skip = 0);
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
     bool getSelect(const String& name, String& item, Window* wnd = 0, Window* skip = 0);
@@ -179,6 +187,7 @@ protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
     virtual void initClient();
+    virtual void setChannelDisplay(ClientChannel* chan);
     void addChannel(ClientChannel* chan);
     void delChannel(ClientChannel* chan);
     void setChannel(ClientChannel* chan);

@@ -1271,6 +1271,14 @@ public:
     virtual bool msgUpdate(Message& msg);
 
     /**
+     * Notification on progress of prerouting incoming call
+     * @param msg Notification call.preroute message just after being dispatched
+     * @param handled True if a handler claimed having handled prerouting
+     * @return True to continue with the call, false to abort the route
+     */
+    virtual bool callPrerouted(Message& msg, bool handled);
+
+    /**
      * Notification on progress of routing incoming call
      * @param msg Notification call.route message just after being dispatched
      * @return True to continue with the call, false to abort the route

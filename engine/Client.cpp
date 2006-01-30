@@ -36,6 +36,15 @@ public:
     virtual bool received(Message &msg);
 };
 
+class UICdrHandler : public MessageHandler
+{
+public:
+    UICdrHandler()
+	: MessageHandler("call.cdr",90)
+	{ }
+    virtual bool received(Message &msg);
+};
+
 class ClientThreadProxy
 {
 public:
@@ -51,15 +60,19 @@ public:
 	setUrgent,
 	addOption,
 	delOption,
+	addTableRow,
+	delTableRow,
+	setTableRow,
 	getText,
 	getCheck,
 	getSelect,
     };
     ClientThreadProxy(int func, const String& name, bool show, Window* wnd = 0, Window* skip = 0);
-    ClientThreadProxy(int func, const String& name, const String& text, Window* wnd = 0, Window* skip = 0);
-    ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd = 0, Window* skip = 0);
-    ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd = 0, Window* skip = 0);
+    ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd, Window* skip);
     ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent);
+    ClientThreadProxy(int func, const String& name, const String& item, bool start, const NamedList* params, Window* wnd, Window* skip);
     void process();
     bool execute();
 private:
@@ -75,6 +88,7 @@ private:
     Window* m_skip;
     const NamedList* m_params;
 };
+
 
 // utility function to check if a string begins and ends with -dashes-
 static bool checkDashes(String& str)
@@ -139,6 +153,34 @@ bool Window::setParams(const NamedList& params)
     return ok;
 }
 
+bool Window::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub addTableRow('%s','%s',%p,%s) [%p]",
+	name.c_str(),item.c_str(),data,String::boolText(atStart),this);
+    return false;
+}
+
+bool Window::delTableRow(const String& name, const String& item)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub delTableRow('%s','%s') [%p]",
+	name.c_str(),item.c_str(),this);
+    return false;
+}
+
+bool Window::setTableRow(const String& name, const String& item, const NamedList* data)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub setTableRow('%s','%s',%p) [%p]",
+	name.c_str(),item.c_str(),data,this);
+    return false;
+}
+
+bool Window::clearTable(const String& name)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub clearTable('%s') [%p]",
+	name.c_str(),this);
+    return false;
+}
+
 
 UIFactory::UIFactory(const char* type, const char* name)
     : String(name)
@@ -195,6 +237,13 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedLi
 {
 }
 
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& item, bool start, const NamedList* params, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_item(item), m_bool(start), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(params)
+{
+}
+
 void ClientThreadProxy::process()
 {
     Debugger debug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
@@ -237,6 +286,15 @@ void ClientThreadProxy::process()
 	case delOption:
 	    m_rval = client->delOption(m_name,m_text,m_wnd,m_skip);
 	    break;
+	case addTableRow:
+	    m_rval = client->addTableRow(m_name,m_item,m_params,m_bool,m_wnd,m_skip);
+	    break;
+	case delTableRow:
+	    m_rval = client->delTableRow(m_name,m_text,m_wnd,m_skip);
+	    break;
+	case setTableRow:
+	    m_rval = client->setTableRow(m_name,m_item,m_params,m_wnd,m_skip);
+	    break;
 	case getText:
 	    m_rval = client->getText(m_name,*m_rtext,m_wnd,m_skip);
 	    break;
@@ -272,6 +330,7 @@ Client::Client(const char *name)
       m_multiLines(false), m_autoAnswer(false)
 {
     s_client = this;
+    Engine::install(new UICdrHandler);
     Engine::install(new UIHandler);
 }
 
@@ -578,6 +637,66 @@ bool Client::delOption(const String& name, const String& item, Window* wnd, Wind
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip))
 	    ok = wnd->delOption(name,item) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::addTableRow,name,item,atStart,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->addTableRow(name,item,data,atStart);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->addTableRow(name,item,data,atStart) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::delTableRow(const String& name, const String& item, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::delTableRow,name,item,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->delTableRow(name,item);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->delTableRow(name,item) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::setTableRow(const String& name, const String& item, const NamedList* data, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setTableRow,name,item,false,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setTableRow(name,item,data);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->setTableRow(name,item,data) || ok;
     }
     --s_changing;
     return ok;
@@ -890,6 +1009,28 @@ bool Client::callRouting(const String& caller, const String& called, Message* ms
     return true;
 }
 
+void Client::updateCDR(const Message& msg)
+{
+    String* dir = msg.getParam("direction");
+    if (!dir)
+	return;
+    String* id = msg.getParam("billid");
+    if (!id || id->null())
+	id = msg.getParam("id");
+    if (!id || id->null())
+	return;
+    String table;
+    // remember, directions are opposite of what the user expects
+    if (*dir == "outgoing")
+	table = "log_incoming";
+    else if (*dir == "incoming")
+	table = "log_outgoing";
+    else
+	return;
+    addTableRow(table,*id,&msg);
+    addTableRow("log_global",*id,&msg);
+}
+
 void Client::clearActive(const String& id)
 {
     if (id == m_activeId)
@@ -904,6 +1045,8 @@ void Client::addChannel(ClientChannel* chan)
 void Client::setChannel(ClientChannel* chan)
 {
     Debug(ClientDriver::self(),DebugAll,"setChannel %p",chan);
+    if (!chan)
+	return;
     lockOther();
     setChannelInternal(chan);
     unlockOther();
@@ -911,14 +1054,22 @@ void Client::setChannel(ClientChannel* chan)
 
 void Client::setChannelInternal(ClientChannel* chan)
 {
+    setChannelDisplay(chan);
+    bool upd = !m_multiLines;
+    if (!upd) {
+	String tmp;
+	upd = getSelect("channels",tmp) && (tmp == chan->id());
+    }
+    if (upd)
+	updateFrom(chan);
+}
+
+void Client::setChannelDisplay(ClientChannel* chan)
+{
     String tmp(chan->description());
     if (!setUrgent(chan->id(),chan->flashing()) && chan->flashing())
 	tmp << " <<<";
     setText(chan->id(),tmp);
-    bool upd = !m_multiLines;
-    upd = upd || (getSelect("channels",tmp) && (tmp == chan->id()));
-    if (upd)
-	updateFrom(chan);
 }
 
 void Client::delChannel(ClientChannel* chan)
@@ -990,6 +1141,17 @@ void Client::driverUnlock()
 {
     if (ClientDriver::self())
 	ClientDriver::self()->unlock();
+}
+
+
+bool UICdrHandler::received(Message &msg)
+{
+    if (!Client::self())
+	return false;
+    String* op = msg.getParam("operation");
+    if (op && (*op == "finalize"))
+	Client::self()->updateCDR(msg);
+    return false;
 }
 
 

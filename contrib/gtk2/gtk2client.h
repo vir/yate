@@ -87,6 +87,10 @@ public:
     virtual bool setUrgent(bool urgent);
     virtual bool addOption(const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& item);
+    virtual bool addTableRow(const String& item, const NamedList* data = 0, bool atStart = false);
+    virtual bool delTableRow(const String& item);
+    virtual bool setTableRow(const String& item, const NamedList* data);
+    virtual bool clearTable();
     virtual bool getText(String& text);
     virtual bool getCheck(bool& checked);
     virtual bool getSelect(String& item);
@@ -129,6 +133,10 @@ public:
     virtual bool setUrgent(const String& name, bool urgent);
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& name, const String& item);
+    virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
+    virtual bool delTableRow(const String& name, const String& item);
+    virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
+    virtual bool clearTable(const String& name);
     virtual bool getText(const String& name, String& text);
     virtual bool getCheck(const String& name, bool& checked);
     virtual bool getSelect(const String& name, String& item);
@@ -165,6 +173,10 @@ public:
     static bool setUrgent(GtkWidget* wid, bool urgent);
     static bool addOption(GtkWidget* wid, const String& item, bool atStart = false, const String& text = String::empty());
     static bool delOption(GtkWidget* wid, const String& item);
+    static bool addTableRow(GtkWidget* wid, const String& item, const NamedList* data = 0, bool atStart = false);
+    static bool delTableRow(GtkWidget* wid, const String& item);
+    static bool setTableRow(GtkWidget* wid, const String& item, const NamedList* data);
+    static bool clearTable(GtkWidget* wid);
     static bool getText(GtkWidget* wid, String& text);
     static bool getCheck(GtkWidget* wid, bool& checked);
     static bool getSelect(GtkWidget* wid, String& item);

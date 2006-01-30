@@ -36,6 +36,7 @@ static bool s_clickInfo = false;
 
 #define INVALID_POS (-1000000)
 #define MAX_CONTAINER_DEPTH 20
+#define MAX_COLUMNS_NUMBER 50
 
 #ifdef _WINDOWS
 #define BUGGY_IDLE
@@ -93,6 +94,14 @@ bool Widget::addOption(const String& item, bool atStart, const String& text)
     { return GTKWindow::addOption(m_widget,item,atStart,text); }
 bool Widget::delOption(const String& item)
     { return GTKWindow::delOption(m_widget,item); }
+bool Widget::addTableRow(const String& item, const NamedList* data, bool atStart)
+    { return GTKWindow::addTableRow(m_widget,item,data,atStart); }
+bool Widget::delTableRow(const String& item)
+    { return GTKWindow::delTableRow(m_widget,item); }
+bool Widget::setTableRow(const String& item, const NamedList* data)
+    { return GTKWindow::setTableRow(m_widget,item,data); }
+bool Widget::clearTable()
+    { return GTKWindow::clearTable(m_widget); }
 bool Widget::getText(String& text)
     { return GTKWindow::getText(m_widget,text); }
 bool Widget::getCheck(bool& checked)
@@ -304,6 +313,12 @@ static gboolean widgetCbSelection(GtkList* lst, GtkListItem* item, gpointer dat)
 	return FALSE;
     GTKWindow* wnd = getWidgetWindow((GtkWidget*)lst);
     return wnd && wnd->select(lst,item);
+}
+
+static gboolean widgetCbRowActivated(GtkTreeView* view, GtkTreePath* arg1, GtkTreeViewColumn* arg2, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbRowActivated(%p,%p,%p,%p)",view,arg1,arg2,dat);
+    return FALSE;
 }
 
 static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
@@ -519,6 +534,39 @@ static GtkWidget* gtkListNew(const gchar* text)
     return lst;
 }
 
+static GtkWidget* gtkTableNew(const gchar* text)
+{
+    String tmp(text);
+    ObjList* lst = tmp.split(',',false);
+    if (!lst)
+	return 0;
+    int ncol = lst->count();
+    // data column number zero is reserved as row identification
+    GType types[MAX_COLUMNS_NUMBER+1];
+    if (ncol > MAX_COLUMNS_NUMBER)
+	ncol = MAX_COLUMNS_NUMBER;
+    int i;
+    for (i = 0; i <= ncol; i++)
+	types[i] = G_TYPE_STRING;
+    GtkTreeModel* store = GTK_TREE_MODEL(gtk_list_store_newv(ncol+1,types));
+    GtkWidget* table = gtk_tree_view_new_with_model(store);
+    for (i = 0; i < ncol; i++) {
+	String* col = static_cast<String*>((*lst)[i]);
+	if (!col)
+	    continue;
+	GtkCellRenderer* renderer = gtk_cell_renderer_text_new();
+	// although undocumented we MUST set the "text" attribute which says which data to render
+	GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(col->safe(),renderer,
+	    "text",i+1,
+	    NULL);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(table),column);
+    }
+    // we can now unref the store as the view will hold a reference on it
+    g_object_unref(G_OBJECT(store));
+    lst->destruct();
+    return table;
+}
+
 static WidgetMaker s_widgetMakers[] = {
     { "label", gtkLeftLabelNew, 0, 0 },
     { "editor", gtkEntryNewWithText, "activate", G_CALLBACK(widgetCbAction) },
@@ -529,6 +577,7 @@ static WidgetMaker s_widgetMakers[] = {
     { "combo", gtkComboNewWithText, 0, 0 },
     { "option", gtkOptionMenuNew, "changed", G_CALLBACK(widgetCbSelected) },
     { "list", gtkListNew, "select-child", G_CALLBACK(widgetCbSelection) },
+    { "table", gtkTableNew, "row-activated", G_CALLBACK(widgetCbRowActivated) },
     { "frame", gtk_frame_new, 0, 0 },
     { "image", gtk_image_new_from_file, 0, 0 },
     { "hseparator", (GBuilder)gtk_hseparator_new, 0, 0 },
@@ -1315,6 +1364,103 @@ bool GTKWindow::delOption(GtkWidget* wid, const String& item)
     return false;
 }
 
+bool GTKWindow::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->addTableRow(item,data,atStart) : addTableRow(wid,item,data,atStart);
+}
+
+bool GTKWindow::delTableRow(const String& name, const String& item)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->delTableRow(item) : delTableRow(wid,item);
+}
+
+bool GTKWindow::setTableRow(const String& name, const String& item, const NamedList* data)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->setTableRow(item,data) : setTableRow(wid,item,data);
+}
+
+bool GTKWindow::clearTable(const String& name)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->clearTable() : clearTable(wid);
+}
+
+bool GTKWindow::addTableRow(GtkWidget* wid, const String& item, const NamedList* data, bool atStart)
+{
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::addTableRow(%p,'%s',%p,%s)",
+	wid,item.c_str(),data,String::boolText(atStart));
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	GtkListStore* store = GTK_LIST_STORE(model);
+	if (!store)
+	    return false;
+
+	int ncol = gtk_tree_model_get_n_columns(model);
+	DDebug(GTKDriver::self(),DebugInfo,"adding %d columns row to store %p of view %p",
+	    ncol,store,view);
+	GtkTreeIter iter;
+	if (atStart)
+	    gtk_list_store_insert(store,&iter,0);
+	else
+	    gtk_list_store_append(store,&iter);
+
+	if (!data)
+	    return true;
+
+	// data column number zero is used as row identification
+	gtk_list_store_set(store,&iter,0,item.safe(),-1);
+
+	for (int i = 0; i < ncol; i++) {
+	    GtkTreeViewColumn* column = gtk_tree_view_get_column(view,i);
+	    if (!column)
+		continue;
+	    String name = gtk_tree_view_column_get_title(column);
+	    name.toLower();
+	    const String* param = data->getParam(name);
+	    if (param)
+		gtk_list_store_set(store,&iter,i+1,param->safe(),-1);
+	}
+	return true;
+    }
+    return false;
+}
+
+bool GTKWindow::delTableRow(GtkWidget* wid, const String& item)
+{
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::addTableRow(%p,'%s')",
+	wid,item.c_str());
+    return false;
+}
+
+bool GTKWindow::setTableRow(GtkWidget* wid, const String& item, const NamedList* data)
+{
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::setTableRow(%p,'%s',%p)",
+	wid,item.c_str(),data);
+    return false;
+}
+
+bool GTKWindow::clearTable(GtkWidget* wid)
+{
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::clearTable(%p)",wid);
+    return false;
+}
+
 bool GTKWindow::getText(const String& name, String& text)
 {
     GtkWidget* wid = find(name);
@@ -1412,7 +1558,7 @@ bool GTKWindow::getSelect(GtkWidget* wid, String& item)
 
 void GTKWindow::menu(int x, int y)
 {
-    GtkWidget* mnu = gtk_menu_new();
+    GtkWidget* mnu = 0;
     ObjList* wnds = GTKClient::listWindows();
     for (ObjList* l = wnds; l; l = l->next()) {
 	String* s = static_cast<String*>(l->get());
@@ -1425,6 +1571,8 @@ void GTKWindow::menu(int x, int y)
 	    if (w->master() || w->popup())
 		continue;
 	}
+	if (!mnu)
+	    mnu = gtk_menu_new();
 	GtkWidget* item = gtk_check_menu_item_new_with_label(w->title().safe());
 	gtk_widget_set_name(item,s->c_str());
 	gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(item),w->visible());
@@ -1432,6 +1580,8 @@ void GTKWindow::menu(int x, int y)
 	gtk_menu_shell_append((GtkMenuShell*)mnu,item);
     }
     delete wnds;
+    if (!mnu)
+	return;
     gtk_widget_show_all(mnu);
     gtk_menu_popup((GtkMenu*)mnu,NULL,NULL,NULL,NULL,3,gtk_get_current_event_time());
 }

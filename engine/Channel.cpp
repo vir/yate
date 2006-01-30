@@ -470,6 +470,16 @@ bool Channel::msgUpdate(Message& msg)
     return false;
 }
 
+bool Channel::callPrerouted(Message& msg, bool handled)
+{
+    status("prerouted");
+    // accept a new billid at this stage
+    String* str = msg.getParam("billid");
+    if (str)
+	m_billid = *str;
+    return true;
+}
+
 bool Channel::callRouted(Message& msg)
 {
     status("routed");
@@ -1054,34 +1064,53 @@ bool Router::route()
 {
     DDebug(m_driver,DebugAll,"Routing thread for '%s' [%p]",m_id.c_str(),this);
 
+    RefPointer<Channel> chan;
     String tmp(m_msg->getValue("callto"));
     bool ok = !tmp.null();
     if (ok)
 	m_msg->retValue() = tmp;
     else {
 	if (*m_msg == "call.preroute") {
-	    Engine::dispatch(m_msg);
+	    ok = Engine::dispatch(m_msg);
+	    m_driver->lock();
+	    chan = m_driver->find(m_id);
+	    m_driver->unlock();
+	    if (!chan) {
+		Debug(m_driver,DebugInfo,"Connection '%s' vanished while prerouting!",m_id.c_str());
+		return false;
+	    }
+	    bool dropCall = ok && ((m_msg->retValue() == "-") || (m_msg->retValue() == "error"));
+	    if (dropCall)
+		chan->callRejected(m_msg->getValue("error","unknown"),
+		    m_msg->getValue("reason"),m_msg);
+	    else
+		dropCall = !chan->callPrerouted(*m_msg,ok);
+	    if (dropCall) {
+		// get rid of the dynamic chans
+		if (m_driver->varchan())
+		    chan->deref();
+		return false;
+	    }
+	    chan = 0;
 	    *m_msg = "call.route";
+	    m_msg->retValue().clear();
 	}
 	ok = Engine::dispatch(m_msg);
     }
 
     m_driver->lock();
-    Channel* chan = m_driver->find(m_id);
-    if (chan) {
-	// this will keep it referenced even if message user data is changed
-	chan->ref();
-	m_msg->userData(chan);
-    }
+    chan = m_driver->find(m_id);
     m_driver->unlock();
 
     if (!chan) {
 	Debug(m_driver,DebugInfo,"Connection '%s' vanished while routing!",m_id.c_str());
 	return false;
     }
+    // chan will keep it referenced even if message user data is changed
+    m_msg->userData(chan);
 
     if (ok) {
-	if (m_msg->retValue() == "-")
+	if ((m_msg->retValue() == "-") || (m_msg->retValue() == "error"))
 	    chan->callRejected(m_msg->getValue("error","unknown"),
 		m_msg->getValue("reason"),m_msg);
 	else if (m_msg->getIntValue("antiloop",1) <= 0)
@@ -1113,7 +1142,6 @@ bool Router::route()
 	chan->callRejected(m_msg->getValue("error","noroute"),
 	    m_msg->getValue("reason","No route to call target"),m_msg);
 
-    chan->deref();
     // dereference again if the channel is dynamic
     if (m_driver->varchan())
 	chan->deref();

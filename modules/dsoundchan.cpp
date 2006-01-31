@@ -94,6 +94,8 @@ private:
     DWORD m_buffSize;
     DWORD m_writePos;
     DataBlock m_buf;
+    u_int64_t m_start;
+    u_int64_t m_total;
 };
 
 // all DirectSound record related objects are created in this thread's apartment
@@ -118,6 +120,8 @@ private:
     LPDIRECTSOUNDCAPTUREBUFFER m_dsb;
     DWORD m_buffSize;
     DWORD m_readPos;
+    u_int64_t m_start;
+    u_int64_t m_total;
 };
 
 class DSoundChan : public Channel
@@ -153,7 +157,7 @@ INIT_PLUGIN(SoundDriver);
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
     : Thread("DirectSound Play",High),
       m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
-      m_buffSize(0), m_writePos(0)
+      m_buffSize(0), m_writePos(0), m_start(0), m_total(0)
 {
 }
 
@@ -161,6 +165,10 @@ DSoundPlay::~DSoundPlay()
 {
     if (m_owner)
 	m_owner->m_dsound = 0;
+    if (m_start && m_total) {
+	unsigned int rate = (unsigned int)(m_total * 1000000 / (Time::now() - m_start));
+	Debug(&__plugin,DebugInfo,"DSoundPlay transferred %u bytes/s, total " FMT64U,rate,m_total);
+    }
 }
 
 bool DSoundPlay::init()
@@ -262,6 +270,7 @@ void DSoundPlay::run()
 	    m_dsb->GetCurrentPosition(NULL,&m_writePos);
 	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
 		m_buf.length(),m_writePos);
+	    m_start = Time::now();
 	}
 	while (m_dsb && (m_buf.length() >= s_chunk)) {
 	    void* buf = 0;
@@ -292,6 +301,7 @@ void DSoundPlay::run()
 	    m_writePos += s_chunk;
 	    if (m_writePos >= m_buffSize)
 		m_writePos -= m_buffSize;
+	    m_total += s_chunk;
 	    m_buf.cut(-(int)s_chunk);
 	    unlock();
 	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
@@ -321,17 +331,15 @@ void DSoundPlay::put(const DataBlock& data)
     lock();
     if (m_buf.length() + data.length() <= s_maxsize)
 	m_buf += data;
-#ifdef DDEBUG
     else
 	Debug(&__plugin,DebugMild,"DSoundPlay skipped %u bytes, buffer is full",data.length());
-#endif
     unlock();
 }
 
 DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
     : Thread("DirectSound Rec",High),
       m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
-      m_buffSize(0), m_readPos(0)
+      m_buffSize(0), m_readPos(0), m_start(0), m_total(0)
 {
 }
 
@@ -339,6 +347,10 @@ DSoundRec::~DSoundRec()
 {
     if (m_owner)
 	m_owner->m_dsound = 0;
+    if (m_start && m_total) {
+	unsigned int rate = (unsigned int)(m_total * 1000000 / (Time::now() - m_start));
+	Debug(&__plugin,DebugInfo,"DSoundRec transferred %u bytes/s, total " FMT64U,rate,m_total);
+    }
 }
 
 bool DSoundRec::init()
@@ -410,6 +422,7 @@ void DSoundRec::run()
     if (m_owner)
 	m_owner->m_dsound = this;
     Debug(&__plugin,DebugInfo,"DSoundRec is initialized and running");
+    m_start = Time::now();
     while (m_owner) {
 	msleep(1,true);
 	if (m_dsb) {
@@ -432,6 +445,7 @@ void DSoundRec::run()
 	    if (buf2)
 		::memcpy(((char*)data.data())+len,buf2,len2);
 	    m_dsb->Unlock(buf,len,buf2,len2);
+	    m_total += (len+len2);
 	    m_readPos += (len+len2);
 	    if (m_readPos >= m_buffSize)
 		m_readPos -= m_buffSize;

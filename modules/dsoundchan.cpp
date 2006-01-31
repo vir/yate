@@ -42,12 +42,12 @@ using namespace TelEngine;
 // we should use the primary sound buffer else we will lose sound while we have no input focus
 static bool s_primary = true;
 
-// 20ms chunk, 100ms buffer
+// 20ms minimum chunk, 100ms buffer
 #define CHUNK_SIZE 320
 static unsigned int s_chunk = CHUNK_SIZE;
 static unsigned int s_minsize = 2*CHUNK_SIZE;
-static unsigned int s_bufsize = 3*CHUNK_SIZE;
-static unsigned int s_maxsize = 4*CHUNK_SIZE;
+static unsigned int s_bufsize = 4*CHUNK_SIZE;
+static unsigned int s_maxsize = 5*CHUNK_SIZE;
 
 class DSoundSource : public DataSource
 {
@@ -92,7 +92,6 @@ private:
     LPDIRECTSOUND m_ds;
     LPDIRECTSOUNDBUFFER m_dsb;
     DWORD m_buffSize;
-    DWORD m_writePos;
     DataBlock m_buf;
     u_int64_t m_start;
     u_int64_t m_total;
@@ -157,7 +156,7 @@ INIT_PLUGIN(SoundDriver);
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
     : Thread("DirectSound Play",High),
       m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
-      m_buffSize(0), m_writePos(0), m_start(0), m_total(0)
+      m_buffSize(0), m_start(0), m_total(0)
 {
 }
 
@@ -259,6 +258,7 @@ void DSoundPlay::run()
 	return;
     if (m_owner)
 	m_owner->m_dsound = this;
+    DWORD writeOffs = 0;
     bool first = true;
     Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
     while (m_owner) {
@@ -267,24 +267,45 @@ void DSoundPlay::run()
 	    if (m_buf.length() < s_minsize)
 		continue;
 	    first = false;
-	    m_dsb->GetCurrentPosition(NULL,&m_writePos);
+	    m_dsb->GetCurrentPosition(NULL,&writeOffs);
+	    writeOffs = (s_chunk/4 + writeOffs) % m_buffSize;
 	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
-		m_buf.length(),m_writePos);
+		m_buf.length(),writeOffs);
 	    m_start = Time::now();
 	}
 	while (m_dsb && (m_buf.length() >= s_chunk)) {
+	    DWORD playPos = 0;
+	    DWORD writePos = 0;
+	    bool adjust = false;
+	    // check if we slipped behind and advance our pointer if so
+	    if (SUCCEEDED(m_dsb->GetCurrentPosition(&playPos,&writePos))) {
+		if (playPos < writePos)
+		    // not wrapped - have to adjust if our pointer falls between play and write
+		    adjust = (playPos < writeOffs) && (writeOffs < writePos);
+		else
+		    // only write offset has wrapped - adjust if we are outside
+		    adjust = (writeOffs < writePos) || (playPos <= writeOffs) ;
+	    }
+	    if (adjust) {
+		DWORD adjOffs = (s_chunk/4 + writePos) % m_buffSize;
+		Debug(&__plugin,DebugInfo,"Slip detected, changing write offs from %u to %u, p=%u w=%u",
+		    writeOffs,adjOffs,playPos,writePos);
+		writeOffs = adjOffs;
+	    }
 	    void* buf = 0;
 	    void* buf2 = 0;
 	    DWORD len = 0;
 	    DWORD len2 = 0;
-	    HRESULT hr = m_dsb->Lock(m_writePos,s_chunk,&buf,&len,&buf2,&len2,0);
+	    // locking will prevent us to skip ahead and overwrite the play position
+	    HRESULT hr = m_dsb->Lock(writeOffs,s_chunk,&buf,&len,&buf2,&len2,0);
 	    if (FAILED(hr)) {
-		m_writePos = 0;
+		writeOffs = 0;
 		if ((hr == DSERR_BUFFERLOST) && SUCCEEDED(m_dsb->Restore())) {
 		    m_dsb->Play(0,0,DSBPLAY_LOOPING);
-		    m_dsb->GetCurrentPosition(NULL,&m_writePos);
+		    m_dsb->GetCurrentPosition(NULL,&writeOffs);
+		    writeOffs = (s_chunk/4 + writeOffs) % m_buffSize;
 		    Debug(&__plugin,DebugAll,"DirectSound buffer lost and restored, playing at %u",
-			m_writePos);
+			writeOffs);
 		}
 		else {
 		    lock();
@@ -298,9 +319,9 @@ void DSoundPlay::run()
 	    if (buf2)
 		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
 	    m_dsb->Unlock(buf,len,buf2,len2);
-	    m_writePos += s_chunk;
-	    if (m_writePos >= m_buffSize)
-		m_writePos -= m_buffSize;
+	    writeOffs += s_chunk;
+	    if (writeOffs >= m_buffSize)
+		writeOffs -= m_buffSize;
 	    m_total += s_chunk;
 	    m_buf.cut(-(int)s_chunk);
 	    unlock();
@@ -642,16 +663,29 @@ void SoundDriver::initialize()
     if (!m_handler) {
 	Configuration cfg(Engine::configFile("dsoundchan"));
 	s_chunk = cfg.getIntValue("general","chunk",CHUNK_SIZE);
-	// make sure the chunk is even sized
+	// make sure the chunk is even sized and has some decent limits (20-50 ms)
 	s_chunk &= ~1;
-	// and set some decent limits for it (5-100 ms)
-	if (s_chunk < 80)
-	    s_chunk = 80;
-	if (s_chunk > 1600)
-	    s_chunk = 1600;
+	if (s_chunk < 320)
+	    s_chunk = 320;
+	if (s_chunk > 800)
+	    s_chunk = 800;
 	s_minsize = cfg.getIntValue("general","minsize",2*s_chunk);
-	s_bufsize = cfg.getIntValue("general","bufsize",3*s_chunk);
-	s_maxsize = cfg.getIntValue("general","maxsize",4*s_chunk);
+	s_bufsize = cfg.getIntValue("general","bufsize",4*s_chunk);
+	s_maxsize = cfg.getIntValue("general","maxsize",5*s_chunk);
+	// the buffer MUST hold at least one chunk and about 15ms of audio - we allow 30
+	if (s_bufsize < s_chunk + 480)
+	    s_bufsize = s_chunk + 480;
+	// also keep it under 2s and even sized
+	if (s_bufsize > 32000)
+	    s_bufsize = 32000;
+	s_bufsize &= ~1;
+	// make sure playback can ever start
+	if (s_minsize > s_bufsize - s_chunk)
+	    s_minsize = s_bufsize - s_chunk;
+	// and that we don't do stupid drops
+	if (s_maxsize < s_bufsize + s_chunk)
+	    s_maxsize = s_bufsize + s_chunk;
+	// prefer primary buffer as we try to retain control of audio board
 	s_primary = cfg.getBoolValue("general","primary",true);
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);

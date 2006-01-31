@@ -4,14 +4,17 @@
 ; primary: boolean: Use the primary playback sound buffer instead of a secondary
 ;primary=yes
 
+; There is not much tweaking possible with these settings.
+; Some sanity is enforced in code but actual working limits depend on the sound drivers
+
 ; chunk: int: Number of bytes in the chunk of samples transferred at once
 ;chunk=320
 
 ; minsize: int: Number of bytes in buffer before we start playing back
-;minsize=chunk*2
+;minsize=640
 
 ; bufsize: int: Bytes allocated for secondary playback and the record buffers
-;bufsize=chunk*3
+;bufsize=1280
 
-; maxsize: int: Number of buffered bytes after we start dropping chunks
-;maxsize=chunk*4
+; maxsize: int: Number of buffered bytes when we start dropping chunks
+;maxsize=1600

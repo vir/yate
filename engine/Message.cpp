@@ -56,6 +56,13 @@ void Message::userData(RefObject* data)
 	tmp->deref();
 }
 
+void Message::dispatched(bool accepted)
+{
+    MessageNotifier* hook = YOBJECT(MessageNotifier,m_data);
+    if (hook)
+	hook->dispatched(*this,accepted);
+}
+
 String Message::encode(const char* id) const
 {
     String s("%%>message:");

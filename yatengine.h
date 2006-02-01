@@ -322,10 +322,12 @@ public:
 
 protected:
     /**
-     * Notify the message it has been dispatched
+     * Notify the message it has been dispatched.
+     * The default behaviour is to call the dispatched() method of the user
+     *  data if it implements @ref MessageNotifier
+     * @param accepted True if one handler accepted the message
      */
-    virtual void dispatched(bool accepted)
-	{ }
+    virtual void dispatched(bool accepted);
 
 private:
     Message(); // no default constructor please
@@ -454,10 +456,11 @@ private:
 
 /**
  * An abstract class to implement hook methods called after any message has
- *  been dispatched.
+ *  been dispatched. If an object implementing MessageNotifier is set as user
+ *  data in a @ref Message then the dispatched() method will be called.
  * @short Post-dispatching message hook
  */
-class YATE_API MessagePostHook : public GenObject
+class YATE_API MessageNotifier
 {
 public:
     /**
@@ -466,6 +469,16 @@ public:
      * @param handled True if a handler claimed to have handled the message
      */
     virtual void dispatched(const Message& msg, bool handled) = 0;
+};
+
+/**
+ * An abstract message notifier that can be inserted in a @ref MessageDispatcher
+ *  to implement hook methods called after any message has been dispatched.
+ * No new methods are provided - we only need the multiple inheritance.
+ * @short Post-dispatching message hook that can be added to a list
+ */
+class YATE_API MessagePostHook : public GenObject, public MessageNotifier
+{
 };
 
 /**

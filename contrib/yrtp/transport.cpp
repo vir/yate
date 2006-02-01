@@ -260,8 +260,9 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 {
     m_autoRemote = sniff;
     int p = addr.port();
-    // make sure we have a port and it's an even one
-    if (p && ((p & 1) == 0) && addr.valid()) {
+    // make sure we have a valid address and a port
+    // we do not check that it's even numbered as many NAPTs will break that
+    if (p && addr.valid()) {
 	m_remoteAddr = addr;
 	m_remoteRTCP = addr;
 	m_remoteRTCP.port(addr.port()+1);

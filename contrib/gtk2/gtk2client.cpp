@@ -396,10 +396,10 @@ static GtkWidget* gtkCheckButtonNew(const gchar* text)
 	return gtk_check_button_new_with_label(text);
 }
 
-static GtkWidget* populateButton(GtkWidget* btn, const gchar* str)
+static GtkWidget* populateIcon(const gchar* str)
 {
-    if (null(str) || !btn)
-	return btn;
+    if (null(str))
+	return 0;
     String text(str);
     String icon;
     Regexp r("^\"\\([^\"]*\\)\" *\\(.*\\)$");
@@ -411,12 +411,23 @@ static GtkWidget* populateButton(GtkWidget* btn, const gchar* str)
 	GtkWidget* box = gtk_vbox_new(FALSE,1);
 	gtk_container_add(GTK_CONTAINER(box),gtk_image_new_from_file(icon.c_str()));
 	gtk_container_add(GTK_CONTAINER(box),gtk_label_new(text.c_str()));
-	gtk_container_add(GTK_CONTAINER(btn),box);
+	gtk_widget_show_all(box);
+	return box;
     }
     else if (icon)
-	gtk_container_add(GTK_CONTAINER(btn),gtk_image_new_from_file(icon.c_str()));
+	return gtk_image_new_from_file(icon.c_str());
     else if (text)
-	gtk_container_add(GTK_CONTAINER(btn),gtk_label_new(text.c_str()));
+	return gtk_label_new(text.c_str());
+    return 0;
+}
+
+static GtkWidget* populateButton(GtkWidget* btn, const gchar* str)
+{
+    if (null(str) || !btn)
+	return btn;
+    GtkWidget* icon = populateIcon(str);
+    if (icon)
+	gtk_container_add(GTK_CONTAINER(btn),icon);
     return btn;
 }
 
@@ -834,12 +845,12 @@ void GTKWindow::insert(GtkWidget* wid, int x, int y, int w, int h)
 	gtk_layout_put(GTK_LAYOUT(filler()),wid,x,y);
     else if (GTK_IS_BOX(filler()))
 	gtk_box_pack_start(GTK_BOX(filler()),wid,(x > 0),(x > 1),y);
-    else if (GTK_IS_SCROLLED_WINDOW(filler()))
+    else if (GTK_IS_SCROLLED_WINDOW(filler()) && !GTK_IS_TREE_VIEW(wid))
 	gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(filler()),wid);
     else
 	gtk_container_add(GTK_CONTAINER(filler()),wid);
     if (GTK_IS_NOTEBOOK(filler()) && m_tabName)
-	gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(m_filler),wid,m_tabName.c_str());
+	gtk_notebook_set_tab_label(GTK_NOTEBOOK(m_filler),wid,populateIcon(m_tabName));
     m_tabName.clear();
 }
 

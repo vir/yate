@@ -55,6 +55,7 @@ static void evalFunc(String &str)
 	if (sep > 0) {
 	    par = str.substr(sep+1);
 	    str = str.substr(0,sep);
+	    sep = par.find(',');
 	}
 	if (str == "length")
 	    str = par.length();
@@ -62,6 +63,33 @@ static void evalFunc(String &str)
 	    str = par.toUpper();
 	else if (str == "lower")
 	    str = par.toLower();
+	else if ((sep > 0) && (str == "add")) {
+	    str = par.substr(0,sep);
+	    par = par.substr(sep+1);
+	    int len = str.length();
+	    sep = par.find(',');
+	    if (sep > 0) {
+		len = par.substr(sep+1).toInteger();
+		par = par.substr(0,sep);
+	    }
+	    str = str.toInteger(0,10) + par.toInteger(0,10);
+	    while (len > (int)str.length())
+		str = "0" + str;
+	}
+	else if ((sep > 0) && (str == "sub")) {
+	    str = par.substr(0,sep);
+	    par = par.substr(sep+1);
+	    int len = str.length();
+	    sep = par.find(',');
+	    if (sep > 0) {
+		len = par.substr(sep+1).toInteger();
+		par = par.substr(0,sep);
+	    }
+	    str = str.toInteger(0,10) - par.toInteger(0,10);
+	    // TODO: deal with negative results
+	    while (len > (int)str.length())
+		str = "0" + str;
+	}
 	else if (str == "random") {
 	    str.clear();
 	    for (unsigned int i = 0; i < par.length(); i++) {

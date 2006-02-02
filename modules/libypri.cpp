@@ -52,21 +52,40 @@ using namespace TelEngine;
 // default buffer length: 20 ms
 static int s_buflen = 160;
 
-#ifdef PRI_NEW_SET_API
-#define PRI_CB_STR struct pri *pri,
-#else
-#define PRI_CB_STR
-#endif
 
-static void pri_err_cb(PRI_CB_STR char *s)
+#ifdef PRI_NEW_SET_API
+
+static void pri_err_cb(struct pri *pri, char *s)
+{
+    PriSpan* span = pri ? (PriSpan*)::pri_get_userdata(pri) : 0;
+    if (span)
+	Debug(span->driver(),DebugWarn,"Span %d: %s",span->span(),s);
+    else
+	Debug("PRI",DebugWarn,"%s",s);
+}
+
+static void pri_msg_cb(struct pri *pri, char *s)
+{
+    PriSpan* span = pri ? (PriSpan*)::pri_get_userdata(pri) : 0;
+    if (span)
+	Debug(span->driver(),DebugInfo,"Span %d: %s",span->span(),s);
+    else
+	Debug("PRI",DebugInfo,"%s",s);
+}
+
+#else
+
+static void pri_err_cb(char *s)
 {
     Debug("PRI",DebugWarn,"%s",s);
 }
 
-static void pri_msg_cb(PRI_CB_STR char *s)
+static void pri_msg_cb(char *s)
 {
     Debug("PRI",DebugInfo,"%s",s);
 }
+
+#endif // PRI_NEW_SET_API
 
 /* Switch types */
 static TokenDict dict_str2switch[] = {

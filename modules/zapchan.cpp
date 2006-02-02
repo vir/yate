@@ -247,7 +247,7 @@ void ZapSpan::run()
 	    if (FD_ISSET(m_fd, &errfds)) {
 		int zev = zt_get_event(m_fd);
 		if (zev)
-		    Debug(DebugInfo,"Zapata event %d",zev);
+		    Debug(DebugInfo,"Zapata event %d on span %d",zev,span());
 	    }
 	    if (FD_ISSET(m_fd, &rdfds))
 		runEvent(false);
@@ -295,7 +295,10 @@ void ZapSource::run()
 	else
 	    break;
     }
-    Debug(m_owner,DebugAll,"ZapSource at EOF (read %d)",rd);
+    Debug(m_owner,DebugWarn,"ZapSource at EOF (read %d)",rd);
+    // TODO: find a better way of dealing with this abnormal condition
+    for (;;)
+	Thread::yield(true);
 }
 
 ZapConsumer::ZapConsumer(ZapChan *owner, const char* format, unsigned int bufsize)

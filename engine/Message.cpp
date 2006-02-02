@@ -26,7 +26,7 @@
 using namespace TelEngine;
 
 Message::Message(const char* name, const char* retval)
-    : NamedList(name), m_return(retval), m_data(0)
+    : NamedList(name), m_return(retval), m_data(0), m_notify(false)
 {
     XDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
@@ -48,6 +48,7 @@ void Message::userData(RefObject* data)
 {
     if (data == m_data)
 	return;
+    m_notify = false;
     RefObject* tmp = m_data;
     if (data && !data->ref())
 	data = 0;
@@ -58,6 +59,8 @@ void Message::userData(RefObject* data)
 
 void Message::dispatched(bool accepted)
 {
+    if (!m_notify)
+	return;
     MessageNotifier* hook = YOBJECT(MessageNotifier,m_data);
     if (hook)
 	hook->dispatched(*this,accepted);

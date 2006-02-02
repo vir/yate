@@ -252,6 +252,7 @@ public:
     /**
      * Set obscure data associated with the message.
      * The user data is reference counted to avoid stray pointers.
+     * Note that setting new user data will disable any notification.
      * @param data Pointer to arbitrary user data
      */
     void userData(RefObject* data);
@@ -263,6 +264,15 @@ public:
      */
     inline void* userObject(const String& name) const
 	{ return m_data ? m_data->getObject(name) : 0; }
+
+
+    /**
+     * Enable or disable notification of any @ref MessageNotifier that was set
+     *  as user data. This method must be called after userData()
+     * @param notify True to have the message call the notifier
+     */
+    inline void setNotify(bool notify = true)
+	{ m_notify = notify; }
 
     /**
      * Retrive a reference to the creation time of the message.
@@ -336,6 +346,7 @@ private:
     String m_return;
     Time m_time;
     RefObject* m_data;
+    bool m_notify;
     void commonEncode(String& str) const;
     int commonDecode(const char* str, int offs);
 };

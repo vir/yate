@@ -39,6 +39,8 @@
 
 using namespace TelEngine;
 
+#define MAX_INCOMING_LINE 8192
+
 static Configuration s_cfg;
 static ObjList s_chans;
 static ObjList s_modules;
@@ -685,7 +687,7 @@ void ExtModReceiver::run()
 	return;
     }
     use();
-    char buffer[1024];
+    char buffer[MAX_INCOMING_LINE];
     int posinbuf = 0;
     DDebug(DebugAll,"ExtModReceiver::run() entering loop [%p]",this);
     for (;;) {

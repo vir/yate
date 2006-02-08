@@ -34,6 +34,9 @@
 ; privacy: bool: Process and generate privacy related SIP headers
 ;privacy=disable
 
+; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
+;forward_sdp=disable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

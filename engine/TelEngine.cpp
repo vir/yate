@@ -48,7 +48,7 @@ namespace TelEngine {
 #define DebugMin DebugFail
 #define DebugMax DebugAll
 
-#define OUT_BUFFER_SIZE 2048
+#define OUT_BUFFER_SIZE 8192
 
 static int s_debug = DebugWarn;
 static int s_indent = 0;

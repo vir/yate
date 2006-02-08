@@ -308,7 +308,7 @@ private:
     SDPBody* createRtpSDP(const char* addr, const Message& msg);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
-    bool addRtpParams(Message& msg, const String& natAddr = String::empty());
+    bool addRtpParams(Message& msg, const String& natAddr, const SIPBody* body);
 
     SIPTransaction* m_tr;
     bool m_hungup;
@@ -406,6 +406,7 @@ static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
 static bool s_inband = false;
+static bool s_forward_sdp = false;
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -534,6 +535,9 @@ static const char* rejectHeaders[] = {
     "record-route",
     "call-id",
     "cseq",
+    "from",
+    "to",
+    "max-forwards",
     "content-length",
     "www-authenticate",
     "proxy-authenticate",
@@ -569,7 +573,7 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip)
 }
 
 // Copy headers from Yate message to SIP message
-static void copySipHeaders(SIPMessage& sip, const Message& msg)
+static void copySipHeaders(SIPMessage& sip, const Message& msg, const char* prefix = "sip_")
 {
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
@@ -577,7 +581,7 @@ static void copySipHeaders(SIPMessage& sip, const Message& msg)
 	if (!str)
 	    continue;
 	String name(str->name());
-	if (!name.startSkip("sip_",false))
+	if (!name.startSkip(prefix,false))
 	    continue;
 	if (name.trimBlanks().null())
 	    continue;
@@ -1330,9 +1334,10 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("ip_port",String(m_port));
     m->addParam("sip_uri",uri);
     m->addParam("sip_from",m_uri);
+    m->addParam("sip_to",ev->getMessage()->getHeaderValue("To"));
     m->addParam("sip_callid",m_callid);
-    m->addParam("sip_contact",ev->getMessage()->getHeaderValue("Contact"));
-    m->addParam("sip_user-agent",ev->getMessage()->getHeaderValue("User-Agent"));
+    m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
+    copySipHeaders(*m,*ev->getMessage());
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	setMedia(parseSDP(static_cast<SDPBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpMedia));
 	if (m_rtpMedia) {
@@ -1344,7 +1349,6 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		m->addParam("rtp_nat_addr",m_rtpAddr);
 		m_rtpAddr = m_host;
 	    }
-	    m->addParam("rtp_forward","possible");
 	    m->addParam("rtp_addr",m_rtpAddr);
 	    ObjList* l = m_rtpMedia->skipNull();
 	    for (; l; l = l->skipNext()) {
@@ -1354,6 +1358,14 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 		m->addParam("formats"+r->suffix(),r->formats());
 	    }
 	}
+	if (s_forward_sdp) {
+	    const DataBlock& raw = ev->getMessage()->body->getBody();
+	    String tmp((const char*)raw.data(),raw.length());
+	    m->addParam("sdp_raw",tmp);
+	    m_rtpForward = true;
+	}
+	if (m_rtpForward)
+	    m->addParam("rtp_forward","possible");
     }
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
     m_route = m;
@@ -1407,6 +1419,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
+    copySipHeaders(*m,msg,"osip_");
     m->complete(plugin.ep()->engine(),
 	msg.getValue("caller"),
 	msg.getValue("domain",(line ? line->domain().c_str() : 0)));
@@ -1663,6 +1676,11 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
     msg.clearParam("rtp_forward");
     if (!(m_rtpForward && tmp.toBoolean()))
 	return 0;
+    String* raw = msg.getParam("sdp_raw");
+    if (raw) {
+	msg.setParam("rtp_forward","accepted");
+	return new SDPBody("application/sdp",raw->safe(),raw->length());
+    }
     String addr(msg.getValue("rtp_addr"));
     if (addr.null())
 	return 0;
@@ -1936,7 +1954,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 }
 
 // Add RTP forwarding parameters to a message
-bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr)
+bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const SIPBody* body)
 {
     if (!(m_rtpMedia && m_rtpAddr))
 	return false;
@@ -1955,6 +1973,11 @@ bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr)
 	for (; l; l = l->skipNext()) {
 	    RtpMedia* m = static_cast<RtpMedia*>(l->get());
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
+	}
+	if (s_forward_sdp && body && body->isSDP()) {
+	    const DataBlock& raw = body->getBody();
+	    String tmp((const char*)raw.data(),raw.length());
+	    msg.addParam("sdp_raw",tmp);
 	}
 	return true;
     }
@@ -2012,14 +2035,14 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	setStatus("answered",Established);
 	maxcall(0);
 	Message *m = message("call.answered");
-	addRtpParams(*m,natAddr);
+	addRtpParams(*m,natAddr,msg->body);
 	Engine::enqueue(m);
     }
     if ((m_state < Ringing) && msg->isAnswer()) {
 	if (msg->code == 180) {
 	    setStatus("ringing",Ringing);
 	    Message *m = message("call.ringing");
-	    addRtpParams(*m,natAddr);
+	    addRtpParams(*m,natAddr,msg->body);
 	    if (m_rtpAddr.null())
 		m->addParam("earlymedia","false");
 	    Engine::enqueue(m);
@@ -2027,7 +2050,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	if (msg->code == 183) {
 	    setStatus("progressing");
 	    Message *m = message("call.progress");
-	    addRtpParams(*m,natAddr);
+	    addRtpParams(*m,natAddr,msg->body);
 	    if (m_rtpAddr.null())
 		m->addParam("earlymedia","false");
 	    Engine::enqueue(m);
@@ -2753,6 +2776,7 @@ void SIPDriver::initialize()
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
+    s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);

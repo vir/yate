@@ -177,7 +177,7 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
     ::pthread_attr_destroy(&attr);
 #endif
     if (e) {
-	Debug(DebugFail,"Error %d while creating pthread in '%s' [%p]",e,name,p);
+	Debug(DebugGoOn,"Error %d while creating pthread in '%s' [%p]",e,name,p);
 	p->m_thread = 0;
 	p->destroy();
 	return 0;
@@ -275,16 +275,27 @@ void ThreadPrivate::run()
 
 bool ThreadPrivate::cancel(bool hard)
 {
-    DDebug(DebugAll,"ThreadPrivate::cancel(%d) '%s' [%p]",hard,m_name,this);
+    DDebug(DebugAll,"ThreadPrivate::cancel(%s) '%s' [%p]",String::boolText(hard),m_name,this);
     bool ret = true;
     if (m_running) {
 	ret = false;
 	if (hard) {
+	    bool critical = m_thread && m_thread->m_locking;
+	    if (critical) {
+		// give the thread a chance to cancel without locking a mutex
+		Debug(DebugMild,"Hard canceling '%s' while is taking a lock [%p]",m_name,this);
+		m_cancel = true;
+		for (int i = 0; i < 50; i++) {
+		    Thread::msleep(1);
+		    if (!m_running)
+			return true;
+		}
+	    }
 #ifdef _WINDOWS
 	    Debug(DebugGoOn,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
-	    Debug(DebugMild,"ThreadPrivate terminating pthread %p [%p]",&thread,this);
+	    Debug(critical ? DebugInfo : DebugWarn,"ThreadPrivate terminating pthread %p [%p]",&thread,this);
 	    ret = !::pthread_cancel(thread);
 #endif
 	    if (ret) {
@@ -305,8 +316,8 @@ void ThreadPrivate::cleanup()
 	if (m_thread->m_private == this) {
 	    m_thread->m_private = 0;
 	    m_thread->cleanup();
-	    if (m_thread->locks())
-		Debug(DebugFail,"Thread '%s' destroyed with %d mutex locks [%p]",m_name,m_thread->locks(),m_thread);
+	    if (m_thread->locked())
+		Debug(DebugFail,"Thread '%s' destroyed with mutex locks (%d held) [%p]",m_name,m_thread->locks(),m_thread);
 	}
 	else {
 	    Debug(DebugFail,"ThreadPrivate::cleanup() %p '%s' mismatching %p [%p]",m_thread,m_name,m_thread->m_private,this);
@@ -424,7 +435,7 @@ Runnable::~Runnable()
 }
 
 Thread::Thread(const char* name, Priority prio)
-    : m_private(0), m_locks(0)
+    : m_private(0), m_locks(0), m_locking(false)
 {
 #ifdef DEBUG
     Debugger debug("Thread::Thread","(\"%s\",%d) [%p]",name,prio,this);
@@ -433,7 +444,7 @@ Thread::Thread(const char* name, Priority prio)
 }
 
 Thread::Thread(const char *name, const char* prio)
-    : m_private(0), m_locks(0)
+    : m_private(0), m_locks(0), m_locking(false)
 {
 #ifdef DEBUG
     Debugger debug("Thread::Thread","(\"%s\",\"%s\") [%p]",name,prio,this);

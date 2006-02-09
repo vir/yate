@@ -188,12 +188,16 @@ bool MutexPrivate::lock(long maxwait)
 {
     bool rval = false;
     bool warn = false;
+    bool dead = false;
     if (s_maxwait && (maxwait < 0)) {
 	maxwait = (long)s_maxwait;
 	warn = true;
     }
     GlobalMutex::lock();
     ref();
+    Thread* thr = Thread::current();
+    if (thr)
+	thr->m_locking = true;
     GlobalMutex::unlock();
 #ifdef _WINDOWS
     DWORD ms = 0;
@@ -211,6 +215,8 @@ bool MutexPrivate::lock(long maxwait)
     else {
 	u_int64_t t = Time::now() + maxwait;
 	do {
+	    if (dead = Thread::check(false))
+		break;
 	    rval = !::pthread_mutex_trylock(&m_mutex);
 	    if (rval)
 		break;
@@ -219,10 +225,11 @@ bool MutexPrivate::lock(long maxwait)
     }
 #endif
     GlobalMutex::lock();
+    if (thr)
+	thr->m_locking = false;
     if (rval) {
 	s_locks++;
 	m_locked++;
-	Thread* thr = Thread::current();
 	if (thr) {
 	    thr->m_locks++;
 	    m_owner = thr->name();
@@ -233,6 +240,8 @@ bool MutexPrivate::lock(long maxwait)
     else
 	deref();
     GlobalMutex::unlock();
+    if (dead)
+	Thread::exit();
     if (warn && !rval)
 	Debug(DebugFail,"Thread '%s' could not take lock owned by '%s' for %lu usec!",
 	    Thread::currentName(),m_owner,maxwait);

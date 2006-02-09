@@ -222,9 +222,9 @@ void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSour
 
 void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
-    Lock lock(m_mutex);
+    Lock lock(m_mutex,100000);
     // we DON'T refcount here, we rely on the mutex to keep us safe
-    if (!alive()) {
+    if (!(lock.mutex() && alive())) {
 	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
 	return;
     }

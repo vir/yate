@@ -2775,6 +2775,13 @@ public:
 	{ return m_locks; }
 
     /**
+     * Check if the thread is currently helding or attempting to lock a mutex
+     * @return True if the current thread is in an unsafe to cancel state
+     */
+    inline bool locked() const
+	{ return m_locking || m_locks; }
+
+    /**
      * Get the name of this thread
      * @return The pointer that was passed in the constructor
      */
@@ -2904,6 +2911,7 @@ protected:
 private:
     ThreadPrivate* m_private;
     int m_locks;
+    bool m_locking;
 };
 
 /**

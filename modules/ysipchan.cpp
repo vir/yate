@@ -227,6 +227,7 @@ public:
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
     void regreq(SIPEvent* e, SIPTransaction* t);
+    void options(SIPEvent* e, SIPTransaction* t);
     bool generic(SIPEvent* e, SIPTransaction* t);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0, const YateSIPLine* line = 0);
     inline YateSIPEngine* engine() const
@@ -324,6 +325,8 @@ private:
     String m_externalAddr;
     // if we do RTP forwarding or not
     bool m_rtpForward;
+    // if we forward the SDP as-is
+    bool m_sdpForward;
     // remote RTP address
     String m_rtpAddr;
     // local RTP address
@@ -407,6 +410,7 @@ static bool s_privacy = false;
 static bool s_auto_nat = true;
 static bool s_inband = false;
 static bool s_forward_sdp = false;
+static bool s_auth_register = true;
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -813,6 +817,8 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("CANCEL");
     if (s_cfg.getBoolValue("general","registrar"))
 	addAllowed("REGISTER");
+    if (s_cfg.getBoolValue("general","options"))
+	addAllowed("OPTIONS");
     m_prack = s_cfg.getBoolValue("general","prack");
     if (m_prack)
 	addAllowed("PRACK");
@@ -1099,6 +1105,8 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
     }
     else if (t->getMethod() == "REGISTER")
 	regreq(e,t);
+    else if (t->getMethod() == "OPTIONS")
+	options(e,t);
     else
 	return generic(e,t);
     return true;
@@ -1146,7 +1154,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     String user;
     int age = t->authUser(user);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
-    if ((age < 0) || (age > 10)) {
+    if (((age < 0) || (age > 10)) && s_auth_register) {
 	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
 	return;
     }
@@ -1227,6 +1235,18 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     m->destruct();
 }
 
+void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
+{
+    const SIPHeaderLine* acpt = e->getMessage()->getHeader("Accept");
+    if (acpt) {
+	if (*acpt != "application/sdp") {
+	    t->setResponse(415);
+	    return;
+	}
+    }
+    t->setResponse(200);
+}
+
 bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 {
     String meth(t->getMethod());
@@ -1273,7 +1293,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
       m_tr(tr), m_hungup(false), m_byebye(true),
-      m_state(Incoming), m_rtpForward(false), m_rtpMedia(0),
+      m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband)
 {
@@ -1379,7 +1399,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
       m_tr(0), m_hungup(false), m_byebye(true),
-      m_state(Outgoing), m_rtpForward(false), m_rtpMedia(0),
+      m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband)
 {
@@ -1678,8 +1698,11 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
 	return 0;
     String* raw = msg.getParam("sdp_raw");
     if (raw) {
-	msg.setParam("rtp_forward","accepted");
-	return new SDPBody("application/sdp",raw->safe(),raw->length());
+	m_sdpForward = m_sdpForward || s_forward_sdp;
+	if (m_sdpForward) {
+	    msg.setParam("rtp_forward","accepted");
+	    return new SDPBody("application/sdp",raw->safe(),raw->length());
+	}
     }
     String addr(msg.getValue("rtp_addr"));
     if (addr.null())
@@ -1974,7 +1997,7 @@ bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const 
 	    RtpMedia* m = static_cast<RtpMedia*>(l->get());
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
 	}
-	if (s_forward_sdp && body && body->isSDP()) {
+	if (m_sdpForward && body && body->isSDP()) {
 	    const DataBlock& raw = body->getBody();
 	    String tmp((const char*)raw.data(),raw.length());
 	    msg.addParam("sdp_raw",tmp);
@@ -2780,6 +2803,7 @@ void SIPDriver::initialize()
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
+    s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

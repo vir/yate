@@ -13,6 +13,9 @@
 ; registrar: bool: Allow the SIP module to receive registration requests
 ;registrar=disable
 
+; options: bool: Build and send a default 200 answer to OPTIONS requests
+;options=disable
+
 ; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
 ;prack=disable
 
@@ -49,6 +52,9 @@
 
 ; expires_max: int: Value used to limit the expiration time to something sane
 ;expires_max=3600
+
+; auth_required: bool: Automatically challenge all clients for authentication
+;auth_required=enable
 
 
 [codecs]

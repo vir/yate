@@ -679,10 +679,10 @@ RtpMedia::~RtpMedia()
 
 const char* RtpMedia::fmtList() const
 {
-    if (m_format)
-	return m_format.c_str();
     if (m_formats)
 	return m_formats.c_str();
+    if (m_format)
+	return m_format.c_str();
     // unspecified audio assumed to support G711
     if (m_audio)
 	return "alaw,mulaw";

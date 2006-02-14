@@ -61,6 +61,22 @@ class Yate
     }
 
     /**
+     * Static function to output a string to Yate's stderr or logfile
+     *  only if debugging was enabled.
+     * @param $str String to output, or boolean (true/false) to set debugging
+     */
+    static function Debug($str)
+    {
+	global $yate_stderr, $yate_debug;
+	if ($str === true)
+	    $yate_debug = true;
+	else if ($str === false)
+	    $yate_debug = false;
+	else if ($yate_debug)
+	    fputs($yate_stderr, $str . "\n");
+    }
+
+    /**
      * Static function to convert a Yate string representation to a boolean
      * @param $str String value to convert
      * @return True if $str is "true", false otherwise
@@ -323,7 +339,8 @@ class Yate
      */
     static function Init($async = false)
     {
-	global $yate_stdin, $yate_stdout, $yate_stderr;
+	global $yate_stdin, $yate_stdout, $yate_stderr, $yate_debug;
+	$yate_debug = false;
 	$yate_stdin = fopen("php://stdin","r");
 	$yate_stdout = fopen("php://stdout","w");
 	$yate_stderr = fopen("php://stderr","w");

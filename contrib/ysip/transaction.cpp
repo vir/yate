@@ -29,6 +29,7 @@
 
 using namespace TelEngine;
 
+// Constructor from new message
 SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outgoing)
     : m_outgoing(outgoing), m_invite(false), m_transmit(false), m_state(Invalid), m_response(0), m_timeout(0),
       m_firstMessage(message), m_lastMessage(0), m_pending(0), m_engine(engine), m_private(0)
@@ -69,6 +70,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
     m_engine->TransList.append(this);
 }
 
+// Constructor from original and authentication requesting answer
 SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
     : m_outgoing(true), m_invite(original.m_invite), m_transmit(false),
       m_state(Process), m_response(original.m_response), m_timeout(0),
@@ -98,9 +100,21 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
     original.m_firstMessage = msg;
     original.m_lastMessage = 0;
 
+#ifdef SIP_ACK_AFTER_NEW_INVITE
+    // if this transaction is an INVITE and we append it to the list its
+    //  ACK will be sent after the new INVITE which is legal but "unnatural"
+    // some SIP endpoints seem to assume things about transactions
     m_engine->TransList.append(this);
+#else
+    // insert this transaction rather than appending it
+    // this way we get a chance to send one ACK before a new INVITE
+    // note that there is no guarantee because of the possibility of the
+    //  packets getting lost and retransmitted or to use a different route
+    m_engine->TransList.insert(this);
+#endif
 }
 
+// Constructor from original and forked dialog tag
 SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag)
     : m_outgoing(true), m_invite(original.m_invite), m_transmit(false),
       m_state(Process), m_response(original.m_response), m_timeout(0),

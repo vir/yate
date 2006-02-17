@@ -1277,12 +1277,6 @@ public:
     virtual void msgStatus(Message& msg);
 
     /**
-     * Build the parameter reporting part of the status answer
-     * @param str String variable to fill up
-     */
-    virtual void statusParams(String& str);
-
-    /**
      * Notification on progress of prerouting incoming call
      * @param msg Notification call.preroute message just after being dispatched
      * @param handled True if a handler claimed having handled prerouting
@@ -1495,6 +1489,12 @@ protected:
      * @param newstat The new status as String
      */
     void status(const char* newstat);
+
+    /**
+     * Build the parameter reporting part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusParams(String& str);
 
     /**
      * Set the current direction of the channel

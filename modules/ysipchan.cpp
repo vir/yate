@@ -273,7 +273,6 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
-    virtual void statusParams(String& str);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -303,6 +302,7 @@ public:
     inline const String& getRtpAddr() const
 	{ return m_externalAddr ? m_externalAddr : m_rtpLocalAddr; }
 private:
+    virtual void statusParams(String& str);
     void setMedia(ObjList* media);
     void clearTransaction();
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);

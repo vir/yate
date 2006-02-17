@@ -48,10 +48,13 @@ scrdir = $(basedir)/scripts
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all everything
+.PHONY: all everything debug
 all: engine modules clients
 
 everything: engine contrib modules clients test apidocs
+
+debug:
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
 
 .PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:

@@ -11,7 +11,7 @@ MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
 MKDEPS  := ../config.status
-PROGS = msgsniff.yate randcall.yate
+PROGS = randcall.yate
 LIBS =
 OBJS =
 

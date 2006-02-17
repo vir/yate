@@ -470,6 +470,48 @@ bool Channel::msgUpdate(Message& msg)
     return false;
 }
 
+void Channel::msgStatus(Message& msg)
+{
+    String par;
+    Lock lock(mutex());
+    complete(msg);
+    statusParams(par);
+    lock.drop();
+    msg.retValue().clear();
+    msg.retValue() << "name=" << id() << ",type=channel;" << par << "\n";
+}
+
+void Channel::statusParams(String& str)
+{
+    if (m_driver)
+	str.append("module=",",") << m_driver->name();
+    if (getPeer())
+	str.append("peerid=",",") << getPeer()->id();
+    str.append("status=",",") << m_status;
+    str << ",direction=" << direction();
+    str << ",answered=" << m_answered;
+    str << ",targetid=" << m_targetid;
+    str << ",address=" << m_address;
+    str << ",billid=" << m_billid;
+    if (m_timeout || m_maxcall) {
+	u_int64_t t = Time::now();
+	if (m_timeout) {
+	    str << ",timeout=";
+	    if (m_timeout > t)
+		str << (unsigned int)((m_timeout - t) / 1000);
+	    else
+		str << "expired";
+	}
+	if (m_maxcall) {
+	    str << ",maxcall=";
+	    if (m_maxcall > t)
+		str << (unsigned int)((m_maxcall - t) / 1000);
+	    else
+		str << "expired";
+	}
+    }
+}
+
 bool Channel::callPrerouted(Message& msg, bool handled)
 {
     status("prerouted");
@@ -851,6 +893,10 @@ bool Driver::received(Message &msg, int id)
 		}
 	    }
 	case Status:
+	    // check if it's a channel status request
+	    dest = msg.getValue("module");
+	    if (dest.startsWith(m_prefix))
+		break;
 	case Level:
 	case Route:
 	    return Module::received(msg,id);
@@ -899,6 +945,9 @@ bool Driver::received(Message &msg, int id)
     }
 
     switch (id) {
+	case Status:
+	    chan->msgStatus(msg);
+	    return true;
 	case Progress:
 	    return chan->isIncoming() && chan->msgProgress(msg);
 	case Ringing:

@@ -273,6 +273,7 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    virtual void statusParams(String& str);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -2266,6 +2267,18 @@ bool YateSIPConnection::msgText(Message& msg, const char* text)
 	return true;
     }
     return false;
+}
+
+void YateSIPConnection::statusParams(String& str)
+{
+    Channel::statusParams(str);
+    if (m_line)
+	str << ",line=" << m_line;
+    if (m_user)
+	str << ",user=" << m_user;
+    if (m_rtpForward)
+	str << ",forward=" << (m_sdpForward ? "sdp" : "rtp");
+    str << ",inviting=" << (m_tr != 0);
 }
 
 bool YateSIPConnection::callRouted(Message& msg)

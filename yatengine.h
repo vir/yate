@@ -475,6 +475,11 @@ class YATE_API MessageNotifier
 {
 public:
     /**
+     * Destructor. Keeps compiler form complaining.
+     */
+    virtual ~MessageNotifier();
+
+    /**
      * This method is called after a message was dispatched.
      * @param msg The already dispatched message message
      * @param handled True if a handler claimed to have handled the message

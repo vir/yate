@@ -414,4 +414,9 @@ void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
     m_mutex.unlock();
 }
 
+
+MessageNotifier::~MessageNotifier()
+{
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

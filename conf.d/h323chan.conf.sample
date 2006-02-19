@@ -76,8 +76,11 @@
 ; lpc10: bool: Linear Prediction Codec (LPC-10)
 ;lpc10=default
 
-; ilbc: bool: Internet Low Bandwidth Codec (iLBC)
-;ilbc=default
+; ilbc20: bool: Internet Low Bandwidth Codec 20ms (iLBC-15k2)
+;ilbc20=default
+
+; ilbc30: bool: Internet Low Bandwidth Codec 30ms (iLBC-13k3)
+;ilbc30=default
 
 ; slin: bool: Signed Linear 16-bit uncompressed (PCM-16)
 ;slin=default

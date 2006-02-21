@@ -1573,6 +1573,13 @@ private:
     StringMatchPrivate* m_matches;
 };
 
+
+/**
+ * Utility function to destruct and zero out a @ref GenObject pointer
+ * @param obj Reference to the pointer to zero and destruct
+ */
+YATE_API void destruct(GenObject*& obj);
+
 /**
  * Utility function to replace NULL string pointers with an empty string
  * @param str Pointer to a C string that may be NULL

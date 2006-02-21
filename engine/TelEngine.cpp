@@ -407,6 +407,16 @@ void GenObject::destruct()
     delete this;
 }
 
+
+void destruct(GenObject*& obj)
+{
+    GenObject* tmp = obj;
+    obj = 0;
+    if (tmp)
+	tmp->destruct();
+}
+
+
 static Mutex s_refmutex;
 
 RefObject::~RefObject()

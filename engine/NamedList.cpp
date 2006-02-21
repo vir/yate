@@ -29,6 +29,16 @@ NamedList::NamedList(const char* name)
 {
 }
 
+NamedList::NamedList(const NamedList& original)
+    : String(original)
+{
+    for (unsigned int i = 0; i < original.length(); i++) {
+	const NamedString* p = original.getParam(i);
+	if (p)
+	    m_params.append(new NamedString(p->name(),*p));
+    }
+}
+
 NamedList& NamedList::addParam(NamedString* param)
 {
     XDebug(DebugInfo,"NamedList::addParam(%p) [\"%s\",\"%s\"]",

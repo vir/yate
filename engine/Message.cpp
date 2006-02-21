@@ -31,6 +31,14 @@ Message::Message(const char* name, const char* retval)
     XDebug(DebugAll,"Message::Message(\"%s\",\"%s\") [%p]",name,retval,this);
 }
 
+Message::Message(const Message& original)
+    : NamedList(original),
+      m_return(original.retValue()), m_time(original.msgTime()),
+      m_data(0), m_notify(false)
+{
+    XDebug(DebugAll,"Message::Message(&%p) [%p]",&original,this);
+}
+
 Message::~Message()
 {
     XDebug(DebugAll,"Message::~Message() '%s' [%p]",c_str(),this);

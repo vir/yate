@@ -2371,6 +2371,12 @@ public:
     NamedList(const char* name);
 
     /**
+     * Copy constructor
+     * @param original Named list we are copying
+     */
+    NamedList(const NamedList& original);
+
+    /**
      * Get the number of parameters
      * @return Count of named strings
      */
@@ -2465,7 +2471,6 @@ public:
 
 private:
     NamedList(); // no default constructor please
-    NamedList(const NamedList& value); // no copy constructor
     NamedList& operator=(const NamedList& value); // no assignment please
     ObjList m_params;
 };

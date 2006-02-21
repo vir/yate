@@ -217,6 +217,13 @@ public:
     Message(const char* name, const char* retval = 0);
 
     /**
+     * Copy constructor.
+     * Note that user data and notification are not copied.
+     * @param original Message we are copying from
+     */
+    Message(const Message& original);
+
+    /**
      * Destruct the message and dereferences any user data
      */
     ~Message();
@@ -341,7 +348,6 @@ protected:
 
 private:
     Message(); // no default constructor please
-    Message(const Message& value); // no copy constructor
     Message& operator=(const Message& value); // no assignment please
     String m_return;
     Time m_time;

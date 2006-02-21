@@ -617,9 +617,17 @@ public:
 
     /**
      * The current state of the transaction
+     * @return The current state as one of the State enums
      */
     inline int getState() const
 	{ return m_state; }
+
+    /**
+     * Check if the transaction is active for the upper layer
+     * @return True if the transaction is active, false if it finished
+     */
+    inline bool isActive() const
+	{ return (Invalid < m_state) && (m_state < Retrans); }
 
     /**
      * The first message that created this transaction
@@ -904,7 +912,7 @@ class YSIP_API SIPEvent
 public:
 
     SIPEvent()
-	: m_message(0), m_transaction(0)
+	: m_message(0), m_transaction(0), m_state(SIPTransaction::Invalid)
 	{ }
 
     SIPEvent(SIPMessage* message, SIPTransaction* transaction = 0);
@@ -960,6 +968,13 @@ public:
      */
     inline int getState() const
 	{ return m_state; }
+
+    /**
+     * Check if the transaction was active when the event was generated
+     * @return True if the transaction was active, false if it finished
+     */
+    inline bool isActive() const
+	{ return (SIPTransaction::Invalid < m_state) && (m_state < SIPTransaction::Retrans); }
 
 protected:
     SIPMessage* m_message;

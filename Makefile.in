@@ -48,13 +48,22 @@ scrdir = $(basedir)/scripts
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all everything debug
+.PHONY: all everything debug ddebug xdebug ndebug
 all: engine modules clients
 
 everything: engine contrib modules clients test apidocs
 
 debug:
 	$(MAKE) all DEBUG=-g3 MODSTRIP=
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
+
+ndebug:
+	$(MAKE) all DEBUG='-g0 -DNDEBUG'
 
 .PHONY: clean distclean cvsclean clean-config-files clean-tables clean-apidocs
 clean:
@@ -260,4 +269,5 @@ help:
 	    all engine contrib modules clients apidocs test everything\n\
 	    install uninstall install-noapi install-root uninstall-root\n\
 	    clean distclean cvsclean (avoid this one!)\n\
+	    debug ddebug xdebug (carefull!)\n\
 	    snapshot tarball'

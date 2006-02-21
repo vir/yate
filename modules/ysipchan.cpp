@@ -81,6 +81,7 @@ static TokenDict dict_errors[] = {
     { "noconn", 503 },
     { "noauth", 401 },
     { "nomedia", 415 },
+    { "nocall", 481 },
     { "busy", 486 },
     { "busy", 600 },
     { "noanswer", 487 },
@@ -91,6 +92,7 @@ static TokenDict dict_errors[] = {
     { "offline", 404 },
     { "congestion", 480 },
     { "failure", 500 },
+    { "pending", 491 },
     { "looping", 483 },
     {  0,   0 },
 };
@@ -273,6 +275,7 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgUpdate(Message& msg);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -305,18 +308,21 @@ private:
     virtual void statusParams(String& str);
     void setMedia(ObjList* media);
     void clearTransaction();
+    void detachTransaction2();
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
     bool dispatchRtp(RtpMedia* media, const char* addr, bool start, bool pick);
     SDPBody* createSDP(const char* addr = 0, ObjList* mediaList = 0);
     SDPBody* createProvisionalSDP(Message& msg);
-    SDPBody* createPasstroughSDP(Message& msg);
+    SDPBody* createPasstroughSDP(Message& msg, bool update = true);
     SDPBody* createRtpSDP(const char* addr, const Message& msg);
     SDPBody* createRtpSDP(bool start = false);
     bool startRtp();
+    bool addSdpParams(Message& msg, const SIPBody* body);
     bool addRtpParams(Message& msg, const String& natAddr, const SIPBody* body);
 
     SIPTransaction* m_tr;
+    SIPTransaction* m_tr2;
     bool m_hungup;
     bool m_byebye;
     int m_state;
@@ -1046,24 +1052,17 @@ void YateSIPEndPoint::run()
 		continue;
 	    plugin.lock();
 	    GenObject* obj = static_cast<GenObject*>(e->getTransaction()->getUserData());
-	    YateSIPConnection* conn = YOBJECT(YateSIPConnection,obj);
+	    RefPointer<YateSIPConnection> conn = YOBJECT(YateSIPConnection,obj);
 	    YateSIPLine* line = YOBJECT(YateSIPLine,obj);
 	    YateSIPGenerate* gen = YOBJECT(YateSIPGenerate,obj);
-	    if (conn && (conn->refcount() > 0))
-		conn->ref();
-	    else
-		conn = 0;
 	    plugin.unlock();
 	    if (conn) {
 		if (conn->process(e)) {
 		    delete e;
-		    conn->deref();
 		    break;
 		}
-		else {
-		    conn->deref();
+		else
 		    continue;
-		}
 	    }
 	    if (line) {
 		if (line->process(e)) {
@@ -1120,7 +1119,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 {
     if (!plugin.canAccept()) {
-	Debug(DebugWarn,"Refusing new SIP call, full or exiting");
+	Debug(&plugin,DebugWarn,"Refusing new SIP call, full or exiting");
 	t->setResponse(480);
 	return;
     }
@@ -1131,7 +1130,7 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 	if (conn)
 	    conn->reInvite(t);
 	else {
-	    Debug(DebugWarn,"Got re-INVITE for missing dialog");
+	    Debug(&plugin,DebugWarn,"Got re-INVITE for missing dialog");
 	    t->setResponse(481);
 	}
 	return;
@@ -1297,7 +1296,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 // Incoming call constructor - just before starting the routing thread
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
-      m_tr(tr), m_hungup(false), m_byebye(true),
+      m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true),
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband)
@@ -1403,7 +1402,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
-      m_tr(0), m_hungup(false), m_byebye(true),
+      m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true),
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband)
@@ -1531,9 +1530,10 @@ void YateSIPConnection::startRouter()
 
 void YateSIPConnection::clearTransaction()
 {
+    if (!(m_tr || m_tr2))
+	return;
+    Lock lock(driver());
     if (m_tr) {
-	if (driver())
-	    driver()->lock();
 	m_tr->setUserData(0);
 	if (m_tr->isIncoming()) {
 	    if (m_tr->setResponse(m_reasonCode,m_reason.null() ? "Request Terminated" : m_reason.c_str()))
@@ -1541,8 +1541,23 @@ void YateSIPConnection::clearTransaction()
 	}
 	m_tr->deref();
 	m_tr = 0;
-	if (driver())
-	    driver()->unlock();
+    }
+    // cancel any pending reINVITE
+    if (m_tr2) {
+	m_tr2->setUserData(0);
+	if (m_tr2->isIncoming())
+	    m_tr2->setResponse(487);
+	m_tr2->deref();
+	m_tr2 = 0;
+    }
+}
+
+void YateSIPConnection::detachTransaction2()
+{
+    if (m_tr2) {
+	m_tr2->setUserData(0);
+	m_tr2->deref();
+	m_tr2 = 0;
     }
 }
 
@@ -1695,7 +1710,7 @@ SDPBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 }
 
 // Creates a SDP from RTP address data present in message
-SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
+SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 {
     String tmp = msg.getValue("rtp_forward");
     msg.clearParam("rtp_forward");
@@ -1742,7 +1757,7 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
 	    tmp >> "_";
 	RtpMedia* rtp = 0;
 	// try to take the media descriptor from the old list
-	if (m_rtpMedia) {
+	if (update && m_rtpMedia) {
 	    ObjList* om = m_rtpMedia->find(tmp);
 	    if (om)
 		rtp = static_cast<RtpMedia*>(om->remove(false));
@@ -1758,9 +1773,14 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg)
     if (!lst)
 	return 0;
 
-    m_rtpLocalAddr = addr;
-    setMedia(lst);
-    SDPBody* sdp = createSDP(m_rtpLocalAddr);
+    SDPBody* sdp = createSDP(addr,lst);
+    if (update) {
+	m_rtpLocalAddr = addr;
+	setMedia(lst);
+    }
+    else
+	lst->destruct();
+
     if (sdp)
 	msg.setParam("rtp_forward","accepted");
     return sdp;
@@ -1981,6 +2001,19 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
     return sdp;
 }
 
+// Add raw SDP forwarding parameter to a message
+bool YateSIPConnection::addSdpParams(Message& msg, const SIPBody* body)
+{
+    if (m_sdpForward && body && body->isSDP()) {
+	const DataBlock& raw = body->getBody();
+	String tmp((const char*)raw.data(),raw.length());
+	msg.setParam("rtp_forward","yes");
+	msg.addParam("sdp_raw",tmp);
+	return true;
+    }
+    return false;
+}
+
 // Add RTP forwarding parameters to a message
 bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const SIPBody* body)
 {
@@ -2002,11 +2035,7 @@ bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const 
 	    RtpMedia* m = static_cast<RtpMedia*>(l->get());
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
 	}
-	if (m_sdpForward && body && body->isSDP()) {
-	    const DataBlock& raw = body->getBody();
-	    String tmp((const char*)raw.data(),raw.length());
-	    msg.addParam("sdp_raw",tmp);
-	}
+	addSdpParams(msg,body);
 	return true;
     }
     return false;
@@ -2017,14 +2046,57 @@ bool YateSIPConnection::process(SIPEvent* ev)
 {
     DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
 	ev,SIPTransaction::stateName(ev->getState()),this);
-    m_dialog = *ev->getTransaction()->recentMessage();
     const SIPMessage* msg = ev->getMessage();
     int code = ev->getTransaction()->getResponseCode();
+    if (ev->getTransaction() == m_tr2) {
+	// reINVITE transaction
+	if (ev->getState() == SIPTransaction::Cleared) {
+	    detachTransaction2();
+	    Message* m = message("call.update");
+	    m->addParam("operation","reject");
+	    m->addParam("error","timeout");
+	    Engine::enqueue(m);
+	    return false;
+	}
+	if (!msg || msg->isOutgoing() || !msg->isAnswer())
+	    return false;
+	if (code < 200)
+	    return false;
+	Message* m = message("call.update");
+	if (code < 300) {
+	    m->addParam("operation","notify");
+	    String natAddr;
+	    if (msg->body && msg->body->isSDP()) {
+		DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
+		setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
+		// guess if the call comes from behind a NAT
+		if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+		    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+			m_rtpAddr.c_str(),m_host.c_str());
+		    natAddr = m_rtpAddr;
+		    m_rtpAddr = m_host;
+		}
+		DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
+	    }
+	    if (!addRtpParams(*m,natAddr,msg->body))
+		addSdpParams(*m,msg->body);
+	    Engine::enqueue(m);
+	}
+	else {
+	    m->addParam("operation","reject");
+	    m->addParam("error",lookup(code,dict_errors,"failure"));
+	    m->addParam("reason",msg->reason);
+	}
+	detachTransaction2();
+	Engine::enqueue(m);
+	return false;
+    }
+    m_dialog = *ev->getTransaction()->recentMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	setReason(msg->reason,code);
 	hangup();
     }
-    if (ev->getState() == SIPTransaction::Cleared) {
+    if (!ev->isActive()) {
 	if (m_tr) {
 	    DDebug(this,DebugInfo,"YateSIPConnection clearing transaction %p [%p]",
 		m_tr,this);
@@ -2098,10 +2170,62 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
     if (!checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::reInvite(%p) [%p]",t,this);
+    if (m_tr || m_tr2) {
+	// another request pending - refuse this one
+	t->setResponse(491);
+	return;
+    }
     // hack: use a while instead of if so we can return or break out of it
     while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
-	// accept re-INVITE only for local RTP, not for pass-trough
-	if (m_rtpForward || (m_mediaStatus == MediaMissing))
+	// for pass-trough RTP we need support from our peer
+	if (m_rtpForward) {
+	    String addr;
+	    String natAddr;
+	    ObjList* lst = parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr);
+	    if (!lst)
+		break;
+	    // guess if the call comes from behind a NAT
+	    if (s_auto_nat && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
+		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+		    addr.c_str(),m_host.c_str());
+		natAddr = addr;
+		addr = m_host;
+	    }
+	    Debug(this,DebugAll,"reINVITE RTP addr '%s'",addr.c_str());
+
+	    Message msg("call.update");
+	    complete(msg);
+	    msg.addParam("operation","request");
+	    copySipHeaders(msg,*t->initialMessage());
+	    msg.addParam("rtp_forward","yes");
+	    msg.addParam("rtp_addr",addr);
+	    if (natAddr)
+		msg.addParam("rtp_nat_addr",natAddr);
+	    ObjList* l = lst->skipNull();
+	    for (; l; l = l->skipNext()) {
+		RtpMedia* r = static_cast<RtpMedia*>(l->get());
+		msg.addParam("media"+r->suffix(),"yes");
+		msg.addParam("rtp_port"+r->suffix(),r->remotePort());
+		msg.addParam("formats"+r->suffix(),r->formats());
+	    }
+	    if (m_sdpForward) {
+		const DataBlock& raw = t->initialMessage()->body->getBody();
+		String tmp((const char*)raw.data(),raw.length());
+		msg.addParam("sdp_raw",tmp);
+	    }
+	    // if peer doesn't support updates fail the reINVITE
+	    if (!Engine::dispatch(msg)) {
+		t->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
+		return;
+	    }
+	    // we remember the request and leave it pending
+	    t->ref();
+	    t->setUserData(this);
+	    m_tr2 = t;
+	    return;
+	}
+	// refuse request if we had no media at all before
+	if (m_mediaStatus == MediaMissing)
 	    break;
 	String addr;
 	ObjList* lst = parseSDP(static_cast<SDPBody*>(t->initialMessage()->body),addr);
@@ -2128,6 +2252,11 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	m->setBody(sdp);
 	t->setResponse(m);
 	m->deref();
+	Message* msg = message("call.update");
+	msg->addParam("operation","notify");
+	msg->addParam("mandatory","false");
+	msg->addParam("mute",String::boolText(MediaStarted != m_mediaStatus));
+	Engine::enqueue(msg);
 	return;
     }
     t->setResponse(488);
@@ -2264,6 +2393,67 @@ bool YateSIPConnection::msgText(Message& msg, const char* text)
 	m->setBody(new SIPStringBody("text/plain",text));
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
+	return true;
+    }
+    return false;
+}
+
+bool YateSIPConnection::msgUpdate(Message& msg)
+{
+    String* oper = msg.getParam("operation");
+    if (!oper || oper->null())
+	return false;
+    if (*oper == "request") {
+	if (m_tr || m_tr2) {
+	    msg.setParam("error","pending");
+	    msg.setParam("reason","Another INVITE Pending");
+	    return false;
+	}
+	SDPBody* sdp = createPasstroughSDP(msg,false);
+	if (!sdp) {
+	    msg.setParam("error","failure");
+	    msg.setParam("reason","Could not build the SDP");
+	    return false;
+	}
+	SIPMessage* m = createDlgMsg("INVITE");
+	copySipHeaders(*m,msg,"osip_");
+	if (s_privacy)
+	    copyPrivacy(*m,msg);
+	m->setBody(sdp);
+	m_tr2 = plugin.ep()->engine()->addMessage(m);
+	if (m_tr2) {
+	    m_tr2->ref();
+	    m_tr2->setUserData(this);
+	}
+	m->deref();
+	return true;
+    }
+    if (!m_tr2) {
+	msg.setParam("error","nocall");
+	return false;
+    }
+    if (!(m_tr2->isIncoming() && (m_tr2->getState() == SIPTransaction::Process))) {
+	msg.setParam("error","failure");
+	msg.setParam("reason","Incompatible Transaction State");
+	return false;
+    }
+    if (*oper == "notify") {
+	SDPBody* sdp = createPasstroughSDP(msg);
+	if (!sdp) {
+	    m_tr2->setResponse(500,"Server failed to build the SDP");
+	    detachTransaction2();
+	    return false;
+	}
+	SIPMessage* m = new SIPMessage(m_tr2->initialMessage(), 200);
+	m->setBody(sdp);
+	m_tr2->setResponse(m);
+	detachTransaction2();
+	m->deref();
+	return true;
+    }
+    else if (*oper == "reject") {
+	m_tr2->setResponse(msg.getIntValue("error",dict_errors,488),msg.getValue("reason"));
+	detachTransaction2();
 	return true;
     }
     return false;
@@ -2832,6 +3022,7 @@ void SIPDriver::initialize()
 	setup();
 	installRelay(Halt);
 	installRelay(Progress);
+	installRelay(Update);
 	Engine::install(new UserHandler);
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);

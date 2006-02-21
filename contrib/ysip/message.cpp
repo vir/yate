@@ -461,6 +461,14 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("CSeq",tmp);
     }
 
+    const char* info = isAnswer() ? "Server" : "User-Agent";
+    if (!(getHeader(info) || engine->getUserAgent().null()))
+	addHeader(info,engine->getUserAgent());
+
+    // keep 100 answers short - they are hop to hop anyway
+    if (isAnswer() && (code == 100))
+	return;
+
     if (!(isAnswer() || getHeader("Max-Forwards"))) {
 	String tmp(engine->getMaxForwards());
 	addHeader("Max-Forwards",tmp);
@@ -481,10 +489,6 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	    addHeader("Contact",tmp);
 	}
     }
-
-    const char* info = isAnswer() ? "Server" : "User-Agent";
-    if (!(getHeader(info) || engine->getUserAgent().null()))
-	addHeader(info,engine->getUserAgent());
 
     if (!getHeader("Allow"))
 	addHeader("Allow",engine->getAllowed());

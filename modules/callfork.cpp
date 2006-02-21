@@ -37,17 +37,24 @@ class ForkSlave;
 class ForkMaster : public CallEndpoint
 {
 public:
-    ForkMaster();
+    ForkMaster(ObjList* targets);
     virtual ~ForkMaster();
-    bool startCalling(Message& msg, ObjList* targets);
+    bool startCalling(Message& msg);
     void lostSlave(ForkSlave* slave, const char* reason);
     void msgAnswered(Message& msg, const String& dest);
     void msgProgress(Message& msg, const String& dest);
 protected:
     void clear();
+    String* getNextDest();
+    bool forkSlave(const char* dest);
+    bool callContinue();
     ObjList m_slaves;
     String m_ringing;
+    Regexp m_failures;
+    int m_index;
     bool m_answered;
+    ObjList* m_targets;
+    Message* m_exec;
 };
 
 class ForkSlave : public CallEndpoint
@@ -77,8 +84,8 @@ protected:
 INIT_PLUGIN(ForkModule);
 
 
-ForkMaster::ForkMaster()
-    : m_answered(false)
+ForkMaster::ForkMaster(ObjList* targets)
+    : m_index(0), m_answered(false), m_targets(targets), m_exec(0)
 {
     String tmp(MOD_PREFIX "/");
     s_mutex.lock();
@@ -86,7 +93,7 @@ ForkMaster::ForkMaster()
     setId(tmp);
     s_calls.append(this);
     s_mutex.unlock();
-    DDebug(&__plugin,DebugAll,"ForkMaster::ForkMaster() '%s'",id().c_str());
+    DDebug(&__plugin,DebugAll,"ForkMaster::ForkMaster(%p) '%s'",targets,id().c_str());
 }
 
 ForkMaster::~ForkMaster()
@@ -98,76 +105,98 @@ ForkMaster::~ForkMaster()
     clear();
 }
 
-bool ForkMaster::startCalling(Message& msg, ObjList* targets)
+String* ForkMaster::getNextDest()
 {
-    RefObject* obj = msg.userData();
-    if (!(obj && obj->ref()))
+    String* ret = 0;
+    while (!ret && m_targets && m_targets->count())
+	ret = static_cast<String*>(m_targets->remove(false));
+    return ret;
+}
+
+bool ForkMaster::forkSlave(const char* dest)
+{
+    if (null(dest))
 	return false;
-    String oid(msg.getValue("id"));
-    String error;
-    String reason;
-    int forks = 0;
-    int index = 0;
-    for (; targets; targets=targets->next()) {
-	// check if maybe the call was already answered
-	if (m_answered)
-	    break;
-	String* dest = static_cast<String*>(targets->get());
-	if (!dest)
-	    continue;
-	String tmp(id());
-	tmp << "/" << ++index;
-	ForkSlave* slave = new ForkSlave(this,tmp);
-	msg.setParam("id",tmp);
-	msg.setParam("callto",*dest);
-	msg.userData(slave);
-	msg.clearParam("error");
-	msg.clearParam("reason");
-	if (Engine::dispatch(msg)) {
-	    m_slaves.append(slave);
-	    forks++;
-	}
-	else {
-	    slave->lostMaster(msg.getValue("error","failure"));
-	    if (error.null())
-		error = msg.getValue("error");
-	    if (reason.null())
-		reason = msg.getValue("reason");
-	}
-	slave->deref();
+    bool ok = false;
+    String tmp(id());
+    tmp << "/" << ++m_index;
+    ForkSlave* slave = new ForkSlave(this,tmp);
+    m_exec->clearParam("error");
+    m_exec->clearParam("reason");
+    m_exec->clearParam("peerid");
+    m_exec->clearParam("targetid");
+    m_exec->setParam("id",tmp);
+    m_exec->setParam("callto",dest);
+    m_exec->userData(slave);
+    if (Engine::dispatch(m_exec)) {
+	Debug(&__plugin,DebugCall,"Call '%s' calling on '%s' target '%s'",
+	    getPeerId().c_str(),tmp.c_str(),dest);
+	m_slaves.append(slave);
+	ok = true;
     }
-    msg.userData(obj);
-    obj->deref();
-    msg.setParam("id",oid);
-    if (forks)
-	Debug(&__plugin,DebugCall,"Call '%s' forked to %d/%d targets",oid.c_str(),forks,index);
     else
-	Debug(&__plugin,DebugWarn,"Could not fork '%s' to any of the %d targets",oid.c_str(),index);
-    msg.clearParam("callto");
-    if (forks || error.null())
-	msg.clearParam("error");
-    else
-	msg.setParam("error",error);
-    if (forks || reason.null())
-	msg.clearParam("reason");
-    else
-	msg.setParam("reason",reason);
+	slave->lostMaster(m_exec->getValue("error","failure"));
+    slave->deref();
+    return ok;
+}
+
+bool ForkMaster::startCalling(Message& msg)
+{
+    m_exec = new Message(msg);
+    m_failures = msg.getValue("stoperror");
+    if (!callContinue()) {
+	msg.setParam("error",m_exec->getValue("error"));
+	msg.setParam("reason",m_exec->getValue("reason"));
+	return false;
+    }
     msg.setParam("peerid",id());
     msg.setParam("targetid",id());
-    return (forks != 0);
+    return true;
+}
+
+bool ForkMaster::callContinue()
+{
+    int forks = 0;
+    while (m_exec && !m_answered) {
+	String* dest = getNextDest();
+	if (!dest)
+	    break;
+	if (*dest == "|") {
+	    dest->destruct();
+	    if (forks)
+		break;
+	    continue;
+	}
+	if (forkSlave(*dest))
+	    ++forks;
+	dest->destruct();
+    }
+    return (forks > 0);
 }
 
 void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 {
-    s_mutex.lock();
+    Lock lock(s_mutex);
     if (m_ringing == slave->id())
 	m_ringing.clear();
     m_slaves.remove(slave,false);
     unsigned int slaves = m_slaves.count();
-    s_mutex.unlock();
-    DDebug(&__plugin,DebugInfo,"Master '%s' lost slave '%s' remaining %u [%p]",id().c_str(),slave->id().c_str(),slaves,this);
-    if (!(m_answered || slaves))
-	disconnect(reason);
+    if (m_answered)
+	return;
+    if (reason && m_failures && m_failures.matches(reason)) {
+	Debug(&__plugin,DebugCall,"Call '%s' terminating early on reason '%s'",
+	    getPeerId().c_str(),reason);
+    }
+    else {
+	Debug(&__plugin,DebugNote,"Call '%s' lost slave '%s' reason '%s' remaining %u",
+	    getPeerId().c_str(),slave->id().c_str(),reason,slaves);
+	if (slaves || callContinue())
+	    return;
+	Debug(&__plugin,DebugCall,"Call '%s' failed by '%s' after %d attempts with reason '%s'",
+	    getPeerId().c_str(),id().c_str(),m_index,reason);
+    }
+    lock.drop();
+    disconnect(reason);
 }
 
 void ForkMaster::msgAnswered(Message& msg, const String& dest)
@@ -186,10 +215,10 @@ void ForkMaster::msgAnswered(Message& msg, const String& dest)
     if (!call)
 	return;
     m_answered = true;
+    Debug(&__plugin,DebugCall,"Call '%s' answered on '%s' by '%s'",
+	peer->id().c_str(),dest.c_str(),call->id().c_str());
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
-    Debug(&__plugin,DebugCall,"Call '%s' answered by %s '%s'",
-	peer->id().c_str(),dest.c_str(),call->id().c_str());
     lock.drop();
     call->connect(peer);
 }
@@ -208,7 +237,7 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
 	return;
     if (m_ringing.null())
 	m_ringing = dest;
-    Debug(&__plugin,DebugCall,"Call '%s' going on %s '%s'",
+    Debug(&__plugin,DebugNote,"Call '%s' going on '%s' to '%s'",
 	peer->id().c_str(),dest.c_str(),msg.getValue("id"));
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
@@ -223,6 +252,14 @@ void ForkMaster::clear()
 	s_mutex.unlock();
 	slave->lostMaster("hangup");
 	s_mutex.lock();
+    }
+    if (m_exec) {
+	m_exec->destruct();
+	m_exec = 0;
+    }
+    if (m_targets) {
+	m_targets->destruct();
+	m_targets = 0;
     }
     s_mutex.unlock();
 }
@@ -279,11 +316,10 @@ bool ForkModule::msgExecute(Message& msg)
     ObjList* targets = dest.split(' ',false);
     if (!targets)
 	return false;
-    ForkMaster* master = new ForkMaster;
+    ForkMaster* master = new ForkMaster(targets);
     bool ok = false;
     if (master->connect(ch,msg.getValue("reason")))
-	ok = master->startCalling(msg, targets);
-    targets->destruct();
+	ok = master->startCalling(msg);
     master->deref();
     return ok;
 }

@@ -26,8 +26,17 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all
+.PHONY: all debug ddebug xdebug
 all: $(LIBS) $(PROGS)
+
+debug:
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
 
 .PHONY: strip
 strip: all

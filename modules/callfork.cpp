@@ -53,6 +53,8 @@ protected:
     Regexp m_failures;
     int m_index;
     bool m_answered;
+    bool m_rtpForward;
+    bool m_rtpStrict;
     ObjList* m_targets;
     Message* m_exec;
 };
@@ -85,7 +87,8 @@ INIT_PLUGIN(ForkModule);
 
 
 ForkMaster::ForkMaster(ObjList* targets)
-    : m_index(0), m_answered(false), m_targets(targets), m_exec(0)
+    : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
+      m_targets(targets), m_exec(0)
 {
     String tmp(MOD_PREFIX "/");
     s_mutex.lock();
@@ -127,15 +130,34 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("targetid");
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
+    m_exec->setParam("rtp_forward",String::boolText(m_rtpForward));
     m_exec->userData(slave);
+    const char* error = "failure";
     if (Engine::dispatch(m_exec)) {
+	ok = true;
+	if (m_rtpForward) {
+	    String rtp(m_exec->getValue("rtp_forward"));
+	    if (rtp != "accepted") {
+		error = "nomedia";
+		int level = DebugWarn;
+		if (m_rtpStrict) {
+		    ok = false;
+		    level = DebugCall;
+		}
+		Debug(&__plugin,level,"Call '%s' did not get RTP forward from '%s' target '%s'",
+		    getPeerId().c_str(),slave->getPeerId().c_str(),dest);
+	    }
+	}
+    }
+    else
+	error = m_exec->getValue("error",error);
+    if (ok) {
 	Debug(&__plugin,DebugCall,"Call '%s' calling on '%s' target '%s'",
 	    getPeerId().c_str(),tmp.c_str(),dest);
 	m_slaves.append(slave);
-	ok = true;
     }
     else
-	slave->lostMaster(m_exec->getValue("error","failure"));
+	slave->lostMaster(error);
     slave->deref();
     return ok;
 }
@@ -144,10 +166,22 @@ bool ForkMaster::startCalling(Message& msg)
 {
     m_exec = new Message(msg);
     m_failures = msg.getValue("stoperror");
+    m_exec->clearParam("stoperror");
+    m_rtpForward = msg.getBoolValue("rtp_forward");
+    m_rtpStrict = msg.getBoolValue("rtpstrict");
     if (!callContinue()) {
 	msg.setParam("error",m_exec->getValue("error"));
 	msg.setParam("reason",m_exec->getValue("reason"));
 	return false;
+    }
+    if (m_rtpForward) {
+	String tmp(m_exec->getValue("rtp_forward"));
+	if (tmp != "accepted") {
+	    // no RTP forwarding from now on
+	    m_rtpForward = false;
+	    tmp = String::boolText(false);
+	}
+	msg.setParam("rtp_forward",tmp);
     }
     msg.setParam("peerid",id());
     msg.setParam("targetid",id());

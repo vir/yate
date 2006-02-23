@@ -279,6 +279,12 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
 	message->complete(this);
     // locate the branch parameter of last Via header - added by the UA
     const SIPHeaderLine* hl = message->getLastHeader("Via");
+    if (!hl)
+#ifdef SIP_STRICT
+	return 0;
+#else
+	Debug(this,DebugMild,"Received message with no Via header! (sender bug)");
+#endif
     const NamedString* br = hl ? hl->getParam("branch") : 0;
     String branch(br ? *br : String::empty());
     if (!branch.startsWith("z9hG4bK"))

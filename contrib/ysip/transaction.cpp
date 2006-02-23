@@ -306,12 +306,14 @@ void SIPTransaction::setResponse(SIPMessage* message)
     setTransmit();
     if (message && (message->code >= 200)) {
 	if (isInvite()) {
-	    if (changeState(Finish))
-		setTimeout();
+	    // we need to actively retransmit this message
+	    if (changeState(Retrans))
+		setTimeout(m_engine->getTimer('G'),5);
 	}
 	else {
-	    setTimeout();
-	    changeState(Cleared);
+	    // just wait and reply to retransmits
+	    if (changeState(Finish))
+		setTimeout(m_engine->getTimer('J'));
 	}
     }
     // extend timeout for provisional messages, use proxy timeout (maximum)
@@ -387,26 +389,36 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 {
     if (!(message && m_firstMessage))
 	return NoMatch;
-    DDebug(getEngine(),DebugAll,"SIPTransaction::processMessage(%p,'%s') [%p]",
+    XDebug(getEngine(),DebugAll,"SIPTransaction::processMessage(%p,'%s') [%p]",
 	message,branch.c_str(),this);
     if (branch) {
 	if (branch != m_branch) {
 	    // different branch is allowed only for ACK in incoming INVITE...
 	    if (!(isInvite() && isIncoming() && message->isACK()))
 		return NoMatch;
-	    // ...and only if we sent a 200 response...
-	    if (!m_lastMessage || ((m_lastMessage->code / 100) != 2))
-		return NoMatch;
 	    // ...and if also matches the CSeq, Call-ID and To: tag
 	    if ((m_firstMessage->getCSeq() != message->getCSeq()) ||
 		(getCallID() != message->getHeaderValue("Call-ID")) ||
 		(getDialogTag() != message->getParamValue("To","tag")))
 		return NoMatch;
+	    // ...and only if we sent a 200 response...
+	    if (!m_lastMessage || ((m_lastMessage->code / 100) != 2))
+#ifdef SIP_STRICT
+		return NoMatch;
+#else
+		Debug(getEngine(),DebugMild,"Received non-branch ACK to non-2xx response! (sender bug)");
+#endif
 	    DDebug(getEngine(),DebugAll,"SIPTransaction found non-branch ACK response to our 2xx");
 	}
 	else if (getMethod() != message->method) {
 	    if (!(isIncoming() && isInvite() && message->isACK()))
 		return NoMatch;
+	    if (!m_lastMessage || ((m_lastMessage->code / 100) == 2))
+#ifdef SIP_STRICT
+		return NoMatch;
+#else
+		Debug(getEngine(),DebugMild,"Received branch ACK to 2xx response! (sender bug)");
+#endif
 	}
     }
     else {
@@ -504,15 +516,15 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		    setLatestMessage(new SIPMessage(m_firstMessage,message));
 		    m_lastMessage->deref();
 		    setTransmit();
-		    if (changeState(Retrans))
-			setTimeout(m_engine->getTimer('I'));
+		    if (changeState(Finish))
+			setTimeout(m_engine->getTimer('H'));
 		}
 		else
 		    changeState(Cleared);
 	    }
 	    break;
-	case Retrans:
-	    if (m_lastMessage && m_lastMessage->isACK())
+	case Finish:
+	    if (m_lastMessage && m_lastMessage->isACK() && (message->code >= 200))
 		setTransmit();
 	    break;
     }
@@ -544,8 +556,8 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 	    }
 	    break;
 	case Finish:
-	    setTimeout();
-	    changeState(Cleared);
+	    if (timeout == 0)
+		changeState(Cleared);
 	    break;
     }
     return e;
@@ -603,11 +615,6 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    if (timeout)
 		break;
 	    setResponse(408);
-	    break;
-	case Finish:
-	    e = new SIPEvent(m_lastMessage,this);
-	    setTimeout(m_engine->getTimer('G'),5);
-	    changeState(Retrans);
 	    break;
     }
     return e;

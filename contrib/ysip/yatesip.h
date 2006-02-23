@@ -565,10 +565,10 @@ public:
 	// Process state - while locally processing the event
 	Process,
 
-	// Retrans state - waiting for cleanup, retransmits latest message
+	// Retrans state - retransmits latest message until getting ACK
 	Retrans,
 
-	// Finish state - transmits the last message and goes to Retrans
+	// Finish state - transmits the last message on client retransmission
 	Finish,
 
 	// Cleared state - removed from engine, awaiting destruction
@@ -627,7 +627,7 @@ public:
      * @return True if the transaction is active, false if it finished
      */
     inline bool isActive() const
-	{ return (Invalid < m_state) && (m_state < Retrans); }
+	{ return (Invalid < m_state) && (m_state < Finish); }
 
     /**
      * The first message that created this transaction
@@ -974,7 +974,7 @@ public:
      * @return True if the transaction was active, false if it finished
      */
     inline bool isActive() const
-	{ return (SIPTransaction::Invalid < m_state) && (m_state < SIPTransaction::Retrans); }
+	{ return (SIPTransaction::Invalid < m_state) && (m_state < SIPTransaction::Finish); }
 
 protected:
     SIPMessage* m_message;

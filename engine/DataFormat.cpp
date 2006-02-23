@@ -395,6 +395,8 @@ bool DataEndpoint::connect(DataEndpoint* peer)
     bool native = (name() == peer->name()) && nativeConnect(peer);
 
     if (!native) {
+	XDebug(DebugInfo,"DataEndpoint s=%p c=%p peer @%p s=%p c=%p [%p]",
+	    getSource(),getConsumer(),peer,peer->getSource(),peer->getConsumer(),this);
 	DataSource* s = getSource();
 	DataConsumer* c = peer->getConsumer();
 	if (s && c)
@@ -456,6 +458,8 @@ void DataEndpoint::setSource(DataSource* source)
     DataConsumer* c1 = m_peer ? m_peer->getConsumer() : 0;
     DataConsumer* c2 = m_peer ? m_peer->getPeerRecord() : 0;
     DataSource* temp = m_source;
+    XDebug(DebugInfo,"DataEndpoint::setSource(%p) peer=%p s=%p c1=%p c2=%p cr=%p [%p]",
+	    source,m_peer,temp,c1,c2,m_callRecord,this);
     if (c1)
 	c1->ref();
     if (c2)
@@ -506,6 +510,8 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
 	return;
     DataSource* source = m_peer ? m_peer->getSource() : 0;
     DataConsumer* temp = m_consumer;
+    XDebug(DebugInfo,"DataEndpoint::setConsumer(%p) peer=%p c=%p ps=%p [%p]",
+	    consumer,m_peer,temp,source,this);
     if (consumer) {
 	if (consumer->ref()) {
 	    if (source)
@@ -529,6 +535,8 @@ void DataEndpoint::setPeerRecord(DataConsumer* consumer)
 	return;
     DataSource* source = m_peer ? m_peer->getSource() : 0;
     DataConsumer* temp = m_peerRecord;
+    XDebug(DebugInfo,"DataEndpoint::setPeerRecord(%p) peer=%p pr=%p ps=%p [%p]",
+	    consumer,m_peer,temp,source,this);
     if (consumer) {
 	if (consumer->ref()) {
 	    if (source)
@@ -551,6 +559,8 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
     if (consumer == m_callRecord)
 	return;
     DataConsumer* temp = m_callRecord;
+    XDebug(DebugInfo,"DataEndpoint::setCallRecord(%p) cr=%p s=%p [%p]",
+	    consumer,temp,m_source,this);
     if (consumer) {
 	if (consumer->ref()) {
 	    if (m_source)
@@ -749,7 +759,7 @@ int DataTranslator::cost(const DataFormat& sFormat, const DataFormat& dFormat)
 DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     if (sFormat == dFormat) {
-	DDebug(DebugAll,"Not creating identity DataTranslator for \"%s\"",sFormat.c_str());
+	DDebug(DebugAll,"Not creating identity DataTranslator for '%s'",sFormat.c_str());
 	return 0;
     }
 
@@ -773,16 +783,18 @@ DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataForm
     }
 
     if (trans)
-	Debug(DebugAll,"Created DataTranslator [%p] for \"%s\" -> \"%s\"",
+	Debug(DebugAll,"Created DataTranslator [%p] for '%s' -> '%s'",
 	    trans,sFormat.c_str(),dFormat.c_str());
     else
-	Debug(DebugInfo,"No DataTranslator created for \"%s\" -> \"%s\"",
+	Debug(DebugInfo,"No DataTranslator created for '%s' -> '%s'",
 	    sFormat.c_str(),dFormat.c_str());
     return trans;
 }
 
 bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, bool override)
 {
+    XDebug(DebugInfo,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s'",
+	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str());
     if (!source || !consumer || !source->getFormat() || !consumer->getFormat())
 	return false;
 
@@ -822,7 +834,7 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, boo
 	    }
 	}
     }
-    NDebug(retv ? DebugAll : DebugWarn,"DataTranslator::attachChain [%p] \"%s\" -> [%p] \"%s\" %s",
+    NDebug(retv ? DebugAll : DebugWarn,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s' %s",
 	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str(),
 	retv ? "succeeded" : "failed");
     return retv;

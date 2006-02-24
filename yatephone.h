@@ -388,7 +388,7 @@ public:
      * @param data The raw data block to forward; an empty block ends data
      * @param tStamp Timestamp of data - typically samples
      */
-    void Forward(const DataBlock& data, unsigned long tStamp = 0);
+    void Forward(const DataBlock& data, unsigned long tStamp = (unsigned long)-1);
 
     /**
      * Attach a data consumer

@@ -73,7 +73,7 @@ public:
 	    if (getTransSource()) {
 		DataBlock oblock;
 		if (oblock.convert(data, m_format, getTransSource()->getFormat())) {
-		    if (!tStamp) {
+		    if (tStamp == (unsigned long)-1) {
 			unsigned int delta = data.length();
 			if (delta > oblock.length())
 			    delta = oblock.length();
@@ -229,7 +229,7 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	return;
     }
     // no timestamp provided - try to guess
-    if (!tStamp) {
+    if (tStamp == (unsigned long)-1) {
 	tStamp = m_timestamp;
 	const FormatInfo* f = m_format.getInfo();
 	if (f)

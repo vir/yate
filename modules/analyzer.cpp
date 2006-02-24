@@ -7,6 +7,12 @@
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004, 2005 Null Team
  *
+ * FFT routine taken from Murphy McCauley's FFT DLL based in turn on the
+ *  work of Don Cross <dcross@intersrv.com>
+ * See http://www.fullspectrum.com/deeth/programming/fft.html
+ *  and http://www.constantthought.com/
+ * Thank both for a sleek routine that doesn't even fill a floppy ;-)
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -26,8 +32,81 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#ifndef M_2PI
+#define M_2PI (2*M_PI)
+#endif
 
 using namespace TelEngine;
+
+// FFT stuff
+
+static unsigned int bitsNeeded(unsigned powerOf2)
+{
+    for (unsigned int i = 0; i <= 256 ;i++)
+	if (powerOf2 & (1 << i))
+	    return i;
+    // oops!
+    return 0;
+}
+
+static unsigned int revBits(unsigned int index, unsigned int numBits)
+{
+    unsigned int i, rev;
+    for (i = rev = 0; i < numBits; i++) {
+	rev = (rev << 1) | (index & 1);
+	index >>= 1;
+    }
+    return rev;
+}
+
+static void fft(unsigned int numSamples, unsigned short* samples, double* realOut, double* imagOut)
+{
+    unsigned numBits = bitsNeeded(numSamples);
+    unsigned int i, j, n;
+    for (i = 0; i < numSamples; i++) {
+	j = revBits(i,numBits);
+	realOut[i] = samples[j];
+	imagOut[i] = 0.0;
+    }
+    unsigned int blockEnd = 1;
+    for (unsigned int blockSize = 2; blockSize <= numSamples; blockSize <<= 1) {
+	double delta_angle = M_2PI / blockSize;
+	double sm2 = sin(-2 * delta_angle);
+	double sm1 = sin(-delta_angle);
+	double cm2 = cos(-2 * delta_angle);
+	double cm1 = cos(-delta_angle);
+	double w = 2 * cm1;
+	double ar[3], ai[3];
+
+	for (i = 0; i < numSamples; i += blockSize) {
+	    ar[1] = cm1;
+	    ai[1] = sm1;
+	    ar[2] = cm2;
+	    ai[2] = sm2;
+
+	    for (j = i, n = 0; n < blockEnd; j++, n++) {
+		ar[0] = w*ar[1] - ar[2];
+		ar[2] = ar[1];
+		ar[1] = ar[0];
+		ai[0] = w*ai[1] - ai[2];
+		ai[2] = ai[1];
+		ai[1] = ai[0];
+
+		unsigned int k = j + blockEnd;
+		double tr = ar[0]*realOut[k] - ai[0]*imagOut[k];
+		double ti = ar[0]*imagOut[k] + ai[0]*realOut[k];
+	    }
+	}
+    }
+}
+
+// Yate stuff
 
 class AnalyzerCons : public DataConsumer
 {

@@ -44,69 +44,33 @@
 
 using namespace TelEngine;
 
-// FFT stuff
-
-static unsigned int bitsNeeded(unsigned powerOf2)
+// Asynchronous FFT on a power of 2 sample buffer
+class AsyncFFT : public Thread
 {
-    for (unsigned int i = 0; i <= 256 ;i++)
-	if (powerOf2 & (1 << i))
-	    return i;
-    // oops!
-    return 0;
-}
-
-static unsigned int revBits(unsigned int index, unsigned int numBits)
-{
-    unsigned int i, rev;
-    for (i = rev = 0; i < numBits; i++) {
-	rev = (rev << 1) | (index & 1);
-	index >>= 1;
-    }
-    return rev;
-}
-
-static void fft(unsigned int numSamples, unsigned short* samples, double* realOut, double* imagOut)
-{
-    unsigned numBits = bitsNeeded(numSamples);
-    unsigned int i, j, n;
-    for (i = 0; i < numSamples; i++) {
-	j = revBits(i,numBits);
-	realOut[i] = samples[j];
-	imagOut[i] = 0.0;
-    }
-    unsigned int blockEnd = 1;
-    for (unsigned int blockSize = 2; blockSize <= numSamples; blockSize <<= 1) {
-	double delta_angle = M_2PI / blockSize;
-	double sm2 = sin(-2 * delta_angle);
-	double sm1 = sin(-delta_angle);
-	double cm2 = cos(-2 * delta_angle);
-	double cm1 = cos(-delta_angle);
-	double w = 2 * cm1;
-	double ar[3], ai[3];
-
-	for (i = 0; i < numSamples; i += blockSize) {
-	    ar[1] = cm1;
-	    ai[1] = sm1;
-	    ar[2] = cm2;
-	    ai[2] = sm2;
-
-	    for (j = i, n = 0; n < blockEnd; j++, n++) {
-		ar[0] = w*ar[1] - ar[2];
-		ar[2] = ar[1];
-		ar[1] = ar[0];
-		ai[0] = w*ai[1] - ai[2];
-		ai[2] = ai[1];
-		ai[1] = ai[0];
-
-		unsigned int k = j + blockEnd;
-		double tr = ar[0]*realOut[k] - ai[0]*imagOut[k];
-		double ti = ar[0]*imagOut[k] + ai[0]*realOut[k];
-	    }
-	}
-    }
-}
-
-// Yate stuff
+public:
+    virtual ~AsyncFFT();
+    static AsyncFFT* create(unsigned int length, Priority prio = Low);
+    inline unsigned int length() const
+	{ return m_length; }
+    inline bool ready() const
+	{ return m_ready; }
+    double operator[](int index) const;
+    bool prepare(const short* samples);
+    inline void stop()
+	{ m_stop = true; }
+    virtual void run();
+private:
+    AsyncFFT(unsigned int length, Priority prio);
+    unsigned int revBits(unsigned int index, unsigned int numBits);
+    void compute();
+    bool m_ready;
+    bool m_start;
+    bool m_stop;
+    unsigned int m_length;
+    double* m_real;
+    double* m_imag;
+    unsigned int m_nBits;
+};
 
 class AnalyzerCons : public DataConsumer
 {
@@ -117,11 +81,12 @@ public:
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
     virtual void statusParams(String& str);
 protected:
+    DataBlock m_data;
     u_int64_t m_timeStart;
     unsigned long m_tsStart;
     unsigned int m_tsGapCount;
     unsigned long m_tsGapLength;
-    bool m_spectrum;
+    AsyncFFT* m_spectrum;
 };
 
 class AnalyzerChan : public Channel
@@ -187,16 +152,169 @@ static const char* printTime(char* buf,unsigned long usec)
     return buf;
 }
 
+
+AsyncFFT* AsyncFFT::create(unsigned int length, Priority prio)
+{
+    if (length < 2)
+	return 0;
+    // thanks to 'byang' for this cute power of two test!
+    if (length & (length - 1))
+	return 0;
+    AsyncFFT* fft = new AsyncFFT(length,prio);
+    if (fft->startup())
+	return fft;
+    delete fft;
+    return 0;
+}
+
+AsyncFFT::AsyncFFT(unsigned int length, Priority prio)
+    : Thread("AsyncFFT",prio), m_ready(false), m_start(false), m_stop(false),
+      m_length(0), m_real(0), m_imag(0), m_nBits(0)
+{
+    for (unsigned int i = 0; i <= 256 ;i++)
+	if (m_length & (1 << i)) {
+	    m_nBits = i;
+	    break;
+	}
+    if (!m_nBits)
+	return;
+    m_real = new double[m_length];
+    m_imag = new double[m_length];
+}
+
+AsyncFFT::~AsyncFFT()
+{
+    m_ready = false;
+    m_start = false;
+    delete[] m_real;
+    delete[] m_imag;
+}
+
+double AsyncFFT::operator[](int index) const
+{
+    if ((index < 0) || ((unsigned int)index > (m_length >> 1)))
+	return 0.0;
+    if (!m_ready)
+	return 0.0;
+    return m_real[index];
+}
+
+void AsyncFFT::run()
+{
+    while (!m_stop) {
+	while (!m_start)
+	    Thread::msleep(5);
+	if (m_stop)
+	    return;
+	m_ready = false;
+	compute();
+	m_ready = true;
+	m_start = false;
+    }
+}
+
+bool AsyncFFT::prepare(const short* samples)
+{
+    if (m_start || m_stop || !(samples && m_real))
+	return false;
+    m_ready = false;
+    XDebug(&__plugin,DebugAll,"Preparing FFT buffer from %u samples [%p]",m_length,this);
+    unsigned int i, j;
+    for (i = 0; i < m_length; i++) {
+	j = revBits(i,m_nBits);
+	m_real[i] = samples[j];
+	m_imag[i] = 0.0;
+    }
+    m_start = true;
+    return true;
+}
+
+unsigned int AsyncFFT::revBits(unsigned int index, unsigned int numBits)
+{
+    unsigned int i, rev;
+    for (i = rev = 0; i < numBits; i++) {
+	rev = (rev << 1) | (index & 1);
+	index >>= 1;
+    }
+    return rev;
+}
+
+void AsyncFFT::compute()
+{
+#ifdef XDEBUG
+    Debug(&__plugin,DebugAll,"Computing FFT with length %u [%p]",m_length,this);
+    Time t;
+#endif
+    unsigned int i, j, n;
+    unsigned int blockEnd = 1;
+    for (unsigned int blockSize = 2; blockSize <= m_length; blockSize <<= 1) {
+	double delta_angle = M_2PI / blockSize;
+	double sm1 = ::sin(-delta_angle);
+	double sm2 = ::sin(-2 * delta_angle);
+	double cm1 = ::cos(-delta_angle);
+	double cm2 = ::cos(-2 * delta_angle);
+	double w = 2 * cm1;
+	double ar[3], ai[3];
+
+	for (i = 0; i < m_length; i += blockSize) {
+	    ar[1] = cm1;
+	    ai[1] = sm1;
+	    ar[2] = cm2;
+	    ai[2] = sm2;
+
+	    if (m_stop)
+		return;
+	    for (j = i, n = 0; n < blockEnd; j++, n++) {
+		ar[0] = w*ar[1] - ar[2];
+		ar[2] = ar[1];
+		ar[1] = ar[0];
+		ai[0] = w*ai[1] - ai[2];
+		ai[2] = ai[1];
+		ai[1] = ai[0];
+
+		unsigned int k = j + blockEnd;
+		double tr = ar[0]*m_real[k] - ai[0]*m_imag[k];
+		double ti = ar[0]*m_imag[k] + ai[0]*m_real[k];
+		m_real[k] = m_real[j] - tr;
+		m_imag[k] = m_imag[j] - ti;
+		m_real[j] += tr;
+		m_imag[j] += ti;
+	    }
+	}
+    }
+#ifdef XDEBUG
+    Debug(&__plugin,DebugAll,"Computing FFT with length %u took " FMT64U " usec [%p]",
+	m_length,Time::now()-t,this);
+#endif
+}
+
+
 AnalyzerCons::AnalyzerCons(const String& type)
     : m_timeStart(0), m_tsStart(0), m_tsGapCount(0), m_tsGapLength(0),
       m_spectrum(false)
 {
+    unsigned int len = 0;
     if (type == "spectrum")
-	m_spectrum = true;
+	len = 1024;
+    else if (type == "fft1024")
+	len = 1024;
+    else if (type == "fft512")
+	len = 512;
+    else if (type == "fft256")
+	len = 256;
+    else if (type == "fft128")
+	len = 128;
+    if (len)
+	m_spectrum = AsyncFFT::create(len);
 }
 
 AnalyzerCons::~AnalyzerCons()
 {
+    if (m_spectrum) {
+	AsyncFFT* tmp = m_spectrum;
+	m_spectrum = 0;
+	tmp->stop();
+    }
 }
 
 void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
@@ -217,6 +335,18 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
 	m_tsGapCount++;
 	m_tsGapLength += delta;
     }
+    if (!m_spectrum)
+	return;
+    m_data += data;
+    unsigned int len = 2 * m_spectrum->length();
+    if (m_data.length() < len)
+	return;
+    // limit the length of the buffer
+    int toCut = data.length() - (2 * len);
+    if (toCut > 0)
+	m_data.cut(-toCut);
+    if (m_spectrum->prepare((const short*)m_data.data()))
+	m_data.cut(-(int)len);
 }
 
 void AnalyzerCons::statusParams(String& str)

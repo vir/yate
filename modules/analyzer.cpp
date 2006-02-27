@@ -42,14 +42,28 @@
 #define M_2PI (2*M_PI)
 #endif
 
+#ifndef M_4PI
+#define M_4PI (4*M_PI)
+#endif
+
 using namespace TelEngine;
 
 // Asynchronous FFT on a power of 2 sample buffer
 class AsyncFFT : public Thread
 {
 public:
+    enum WinType {
+	None = 0,
+	Rectangle = None,
+	Triangle,
+	Bartlett = Triangle,
+	Hanning,
+	Hamming,
+	Blackman,
+	FlatTop
+    };
     virtual ~AsyncFFT();
-    static AsyncFFT* create(unsigned int length, Priority prio = Low);
+    static AsyncFFT* create(unsigned int length, WinType window = Rectangle, Priority prio = Low);
     inline unsigned int length() const
 	{ return m_length; }
     inline bool ready() const
@@ -60,13 +74,15 @@ public:
 	{ m_stop = true; }
     virtual void run();
 private:
-    AsyncFFT(unsigned int length, Priority prio);
-    unsigned int revBits(unsigned int index, unsigned int numBits);
+    AsyncFFT(unsigned int length, WinType window, Priority prio);
+    void buildWindow(WinType window);
+    unsigned int revBits(unsigned int index);
     void compute();
     bool m_ready;
     bool m_start;
     bool m_stop;
     unsigned int m_length;
+    double* m_window;
     double* m_real;
     double* m_imag;
     unsigned int m_nBits;
@@ -76,7 +92,7 @@ class AnalyzerCons : public DataConsumer
 {
     YCLASS(AnalyzerCons,DataConsumer)
 public:
-    AnalyzerCons(const String& type);
+    AnalyzerCons(const String& type, const char* window = 0);
     virtual ~AnalyzerCons();
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
     virtual void statusParams(String& str);
@@ -92,7 +108,7 @@ protected:
 class AnalyzerChan : public Channel
 {
 public:
-    AnalyzerChan(const String& type, bool outgoing);
+    AnalyzerChan(const String& type, bool outgoing, const char* window = 0);
     virtual ~AnalyzerChan();
     virtual void statusParams(String& str);
     virtual bool callRouted(Message& msg);
@@ -107,6 +123,7 @@ protected:
     unsigned long m_timeRoute;
     unsigned long m_timeRing;
     unsigned long m_timeAnswer;
+    String m_window;
 };
 
 class AttachHandler : public MessageHandler
@@ -129,6 +146,19 @@ private:
 };
 
 INIT_PLUGIN(AnalyzerDriver);
+
+static TokenDict dict_windows[] = {
+    { "no",        AsyncFFT::None },
+    { "none",      AsyncFFT::None },
+    { "rectangle", AsyncFFT::Rectangle },
+    { "triangle",  AsyncFFT::Triangle },
+    { "bartlett",  AsyncFFT::Bartlett },
+    { "hanning",   AsyncFFT::Hanning },
+    { "hamming",   AsyncFFT::Hamming },
+    { "blackman",  AsyncFFT::Blackman },
+    { "flattop",   AsyncFFT::FlatTop },
+    { 0,   0 }
+};
 
 static int s_res = 1;
 
@@ -153,41 +183,82 @@ static const char* printTime(char* buf,unsigned long usec)
 }
 
 
-AsyncFFT* AsyncFFT::create(unsigned int length, Priority prio)
+AsyncFFT* AsyncFFT::create(unsigned int length, WinType window, Priority prio)
 {
     if (length < 2)
 	return 0;
     // thanks to 'byang' for this cute power of two test!
     if (length & (length - 1))
 	return 0;
-    AsyncFFT* fft = new AsyncFFT(length,prio);
+    AsyncFFT* fft = new AsyncFFT(length,window,prio);
     if (fft->startup())
 	return fft;
     delete fft;
     return 0;
 }
 
-AsyncFFT::AsyncFFT(unsigned int length, Priority prio)
+AsyncFFT::AsyncFFT(unsigned int length, WinType window, Priority prio)
     : Thread("AsyncFFT",prio), m_ready(false), m_start(false), m_stop(false),
-      m_length(0), m_real(0), m_imag(0), m_nBits(0)
+      m_length(0), m_window(0), m_real(0), m_imag(0), m_nBits(0)
 {
+    DDebug(&__plugin,DebugAll,"AsyncFFT::AsyncFFT(%u) [%p]",length,this);
     for (unsigned int i = 0; i <= 256 ;i++)
-	if (m_length & (1 << i)) {
+	if (length & (1 << i)) {
 	    m_nBits = i;
 	    break;
 	}
     if (!m_nBits)
 	return;
+    m_length = length;
     m_real = new double[m_length];
     m_imag = new double[m_length];
+    buildWindow(window);
 }
 
 AsyncFFT::~AsyncFFT()
 {
+    DDebug(&__plugin,DebugAll,"AsyncFFT::~AsyncFFT() [%p]",this);
     m_ready = false;
     m_start = false;
     delete[] m_real;
     delete[] m_imag;
+    delete[] m_window;
+}
+
+void AsyncFFT::buildWindow(WinType window)
+{
+    if (window == Rectangle)
+	return;
+    m_window = new double[m_length];
+    unsigned int n2 = m_length >> 1;
+    for (unsigned int i = 0; i < m_length; i++) {
+	double omega = i * M_2PI / m_length;
+	switch (window) {
+	    case Triangle:
+		{
+		    int k = i - n2;
+		    if (k > 0)
+			k = -k;
+		    k += n2;
+		    m_window[i] = k*1.0/n2;
+		}
+		break;
+	    case Hanning:
+		m_window[i] = 0.5 - 0.5 * ::cos(omega);
+		break;
+	    case Hamming:
+		m_window[i] = 0.54 - 0.46 * ::cos(omega);
+		break;
+	    case Blackman:
+		m_window[i] = 0.42 - 0.5 * ::cos(omega) + 0.08 * ::cos(2*omega);
+		break;
+	    case FlatTop:
+		m_window[i] = 0.2810639 - 0.5208972 * ::cos(omega) + 0.1980399 * ::cos(2*omega);
+		break;
+	    default:
+		m_window[i] = 1.0;
+	}
+    }
 }
 
 double AsyncFFT::operator[](int index) const
@@ -201,11 +272,13 @@ double AsyncFFT::operator[](int index) const
 
 void AsyncFFT::run()
 {
+    DDebug(&__plugin,DebugAll,"AsyncFFT::run() [%p]",this);
     while (!m_stop) {
-	while (!m_start)
+	while (!m_start) {
 	    Thread::msleep(5);
-	if (m_stop)
-	    return;
+	    if (m_stop)
+		return;
+	}
 	m_ready = false;
 	compute();
 	m_ready = true;
@@ -221,18 +294,21 @@ bool AsyncFFT::prepare(const short* samples)
     XDebug(&__plugin,DebugAll,"Preparing FFT buffer from %u samples [%p]",m_length,this);
     unsigned int i, j;
     for (i = 0; i < m_length; i++) {
-	j = revBits(i,m_nBits);
-	m_real[i] = samples[j];
+	j = revBits(i);
+	if (m_window)
+	    m_real[i] = m_window[j] * samples[j];
+	else
+	    m_real[i] = samples[j];
 	m_imag[i] = 0.0;
     }
     m_start = true;
     return true;
 }
 
-unsigned int AsyncFFT::revBits(unsigned int index, unsigned int numBits)
+unsigned int AsyncFFT::revBits(unsigned int index)
 {
     unsigned int i, rev;
-    for (i = rev = 0; i < numBits; i++) {
+    for (i = rev = 0; i < m_nBits; i++) {
 	rev = (rev << 1) | (index & 1);
 	index >>= 1;
     }
@@ -281,21 +357,34 @@ void AsyncFFT::compute()
 		m_imag[j] += ti;
 	    }
 	}
+	blockEnd = blockSize;
     }
+    n = m_length >> 1;
+    for (i = 0; i < n; i++)
+	m_real[i] = ::sqrt(m_real[i]*m_real[i] + m_imag[i]*m_imag[i]) / n;
 #ifdef XDEBUG
     Debug(&__plugin,DebugAll,"Computing FFT with length %u took " FMT64U " usec [%p]",
 	m_length,Time::now()-t,this);
 #endif
+
+    for (i = 0; i < n; i ++) {
+	Output("fft[%u] = %0.2f",i,m_real[i]);
+    }
 }
 
 
-AnalyzerCons::AnalyzerCons(const String& type)
+AnalyzerCons::AnalyzerCons(const String& type, const char* window)
     : m_timeStart(0), m_tsStart(0), m_tsGapCount(0), m_tsGapLength(0),
       m_spectrum(false)
 {
+    DDebug(&__plugin,DebugAll,"AnalyzerCons::AnalyzerCons('%s') [%p]",
+	type.c_str(),this);
     unsigned int len = 0;
-    if (type == "spectrum")
-	len = 1024;
+    if ((type == "spectrum") || type.startsWith("tone/probe")) {
+	len = 256;
+	m_spectrum = AsyncFFT::create(len,(AsyncFFT::WinType)lookup(window,dict_windows,AsyncFFT::Rectangle));
+	return;
+    }
     else if (type == "fft1024")
 	len = 1024;
     else if (type == "fft512")
@@ -304,12 +393,15 @@ AnalyzerCons::AnalyzerCons(const String& type)
 	len = 256;
     else if (type == "fft128")
 	len = 128;
+    else if (type == "fft64")
+	len = 64;
     if (len)
-	m_spectrum = AsyncFFT::create(len);
+	m_spectrum = AsyncFFT::create(len,(AsyncFFT::WinType)lookup(window,dict_windows,AsyncFFT::Triangle));
 }
 
 AnalyzerCons::~AnalyzerCons()
 {
+    DDebug(&__plugin,DebugAll,"AnalyzerCons::~AnalyzerCons() %p [%p]",m_spectrum,this);
     if (m_spectrum) {
 	AsyncFFT* tmp = m_spectrum;
 	m_spectrum = 0;
@@ -343,8 +435,10 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
 	return;
     // limit the length of the buffer
     int toCut = data.length() - (2 * len);
-    if (toCut > 0)
+    if (toCut > 0) {
+	DDebug(&__plugin,DebugInfo,"Dropping %d samples [%p]",toCut/2,this);
 	m_data.cut(-toCut);
+    }
     if (m_spectrum->prepare((const short*)m_data.data()))
 	m_data.cut(-(int)len);
 }
@@ -363,18 +457,19 @@ void AnalyzerCons::statusParams(String& str)
 }
 
 
-AnalyzerChan::AnalyzerChan(const String& type, bool outgoing)
+AnalyzerChan::AnalyzerChan(const String& type, bool outgoing, const char* window)
     : Channel(__plugin,0,outgoing),
-      m_timeStart(Time::now()), m_timeRoute(0), m_timeRing(0), m_timeAnswer(0)
+      m_timeStart(Time::now()), m_timeRoute(0), m_timeRing(0), m_timeAnswer(0),
+      m_window(window)
 {
-    Debug(this,DebugAll,"AnalyzerChan::AnalyzerChan('%s',%s) [%p]",
+    DDebug(this,DebugAll,"AnalyzerChan::AnalyzerChan('%s',%s) [%p]",
 	type.c_str(),String::boolText(outgoing),this);
     m_address = type;
 }
 
 AnalyzerChan::~AnalyzerChan()
 {
-    Debug(this,DebugAll,"AnalyzerChan::~AnalyzerChan() %s [%p]",id().c_str(),this);
+    DDebug(this,DebugAll,"AnalyzerChan::~AnalyzerChan() %s [%p]",id().c_str(),this);
     RefPointer<AnalyzerCons> cons = YOBJECT(AnalyzerCons,getConsumer());
     char buf[32];
     printTime(buf,(unsigned int)(Time::now() - m_timeStart));
@@ -477,7 +572,7 @@ void AnalyzerChan::addConsumer()
 {
     if (getConsumer())
 	return;
-    AnalyzerCons* cons = new AnalyzerCons(m_address);
+    AnalyzerCons* cons = new AnalyzerCons(m_address,m_window);
     setConsumer(cons);
     cons->deref();
 }
@@ -495,7 +590,7 @@ bool AnalyzerDriver::startCall(NamedList& params, const String& dest)
 	}
     }
     // this is an incoming call!
-    AnalyzerChan *ac = new AnalyzerChan(dest,false);
+    AnalyzerChan *ac = new AnalyzerChan(dest,false,params.getValue("window"));
     ac->startChannel(params);
     Message* m = ac->message("call.route",false,true);
     m->addParam("called",tmp);
@@ -512,7 +607,7 @@ bool AnalyzerDriver::msgExecute(Message& msg, String& dest)
 {
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch) {
-	AnalyzerChan *ac = new AnalyzerChan(dest,true);
+	AnalyzerChan *ac = new AnalyzerChan(dest,true,msg.getValue("window"));
 	if (ch->connect(ac,msg.getValue("reason"))) {
 	    msg.setParam("peerid",ac->id());
 	    ac->startChannel(msg);
@@ -546,7 +641,7 @@ bool AttachHandler::received(Message& msg)
     // if single attach was requested we can return true if everything is ok
     bool ret = msg.getBoolValue("single");
 
-    AnalyzerCons *ac = new AnalyzerCons(cons);
+    AnalyzerCons *ac = new AnalyzerCons(cons,msg.getValue("window"));
     ch->setConsumer(ac);
     ac->deref();
     return ret;

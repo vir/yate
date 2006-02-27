@@ -195,7 +195,6 @@ static const Tone t_noise[] = { { 2000, ToneData::getData("noise")->data() }, { 
     { DTMF_GAP, 0 }, \
     { 0, 0 } \
 }
-
 static const Tone t_dtmf[][4] = {
     MAKE_DTMF("1336+941"),
     MAKE_DTMF("1209+697"),
@@ -215,6 +214,17 @@ static const Tone t_dtmf[][4] = {
     MAKE_DTMF("1633+941")
 };
 #undef MAKE_DTMF
+
+#define MAKE_PROBE(s) { \
+    { 8000, ToneData::getData(s)->data() }, \
+    { 0, 0 } \
+}
+static const Tone t_probes[][2] = {
+    MAKE_PROBE("2000+125"),
+    MAKE_PROBE("2000*125"),
+    MAKE_PROBE("2000*1000"),
+};
+#undef MAKE_PROBE
 
 static const ToneDesc s_desc[] = {
     { t_dial, "dial", "dt" },
@@ -242,6 +252,9 @@ static const ToneDesc s_desc[] = {
     { t_dtmf[13], "dtmf/b", "b" },
     { t_dtmf[14], "dtmf/c", "c" },
     { t_dtmf[15], "dtmf/d", "d" },
+    { t_probes[0], "probe/1", "test1" },
+    { t_probes[1], "probe/2", "test2" },
+    { t_probes[2], "probe/3", "test3" },
     { 0, 0, 0 }
 };
 

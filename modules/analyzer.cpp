@@ -133,11 +133,14 @@ public:
     virtual bool callRouted(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
+    virtual void checkTimers(Message& msg, const Time& tmr);
     void startChannel(NamedList& params);
     void addSource();
     void addConsumer();
 protected:
+    void setDuration(NamedList& params);
     void localParams(String& str);
+    u_int64_t m_stopTime;
     u_int64_t m_timeStart;
     unsigned long m_timeRoute;
     unsigned long m_timeRing;
@@ -537,7 +540,7 @@ void AnalyzerCons::statusParams(String& str)
 
 
 AnalyzerChan::AnalyzerChan(const String& type, bool outgoing, const char* window)
-    : Channel(__plugin,0,outgoing),
+    : Channel(__plugin,0,outgoing), m_stopTime(0),
       m_timeStart(Time::now()), m_timeRoute(0), m_timeRing(0), m_timeAnswer(0),
       m_window(window)
 {
@@ -591,6 +594,7 @@ bool AnalyzerChan::callRouted(Message& msg)
 {
     if (!m_timeRoute)
 	m_timeRoute = Time::now() - m_timeStart;
+    setDuration(msg);
     return Channel::callRouted(msg);
 }
 
@@ -608,6 +612,14 @@ bool AnalyzerChan::msgAnswered(Message& msg)
     addConsumer();
     addSource();
     return Channel::msgAnswered(msg);
+}
+
+void AnalyzerChan::checkTimers(Message& msg, const Time& tmr)
+{
+    if (m_stopTime && (m_stopTime < tmr))
+	msgDrop(msg,"finished");
+    else
+	Channel::checkTimers(msg,tmr);
 }
 
 void AnalyzerChan::startChannel(NamedList& params)
@@ -629,6 +641,14 @@ void AnalyzerChan::startChannel(NamedList& params)
 	addConsumer();
 	addSource();
     }
+    setDuration(params);
+}
+
+void AnalyzerChan::setDuration(NamedList& params)
+{
+    int t = params.getIntValue("duration",120000);
+    if (t > 0)
+	m_stopTime = Time::now() + 1000 * (uint64_t)t;
 }
 
 void AnalyzerChan::addSource()

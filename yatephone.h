@@ -1277,6 +1277,13 @@ public:
     virtual void msgStatus(Message& msg);
 
     /**
+     * Timer check method, by default handles channel timeouts
+     * @param msg Timer message
+     * @param tmr Current time against which timers are compared
+     */
+    virtual void checkTimers(Message& msg, const Time& tmr);
+
+    /**
      * Notification on progress of prerouting incoming call
      * @param msg Notification call.preroute message just after being dispatched
      * @param handled True if a handler claimed having handled prerouting

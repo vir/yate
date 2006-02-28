@@ -512,6 +512,14 @@ void Channel::statusParams(String& str)
     }
 }
 
+void Channel::checkTimers(Message& msg, const Time& tmr)
+{
+    if (timeout() && (timeout() < tmr))
+	msgDrop(msg,"timeout");
+    else if (maxcall() && (maxcall() < tmr))
+	msgDrop(msg,"noanswer");
+}
+
 bool Channel::callPrerouted(Message& msg, bool handled)
 {
     status("prerouted");
@@ -885,6 +893,7 @@ bool Driver::received(Message &msg, int id)
 		    unlock();
 		    if (!c)
 			break;
+		    c->checkTimers(msg,t);
 		    if (c->timeout() && (c->timeout() < t))
 			c->msgDrop(msg,"timeout");
 		    else if (c->maxcall() && (c->maxcall() < t))

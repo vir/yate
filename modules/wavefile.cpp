@@ -716,9 +716,10 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     m = "call.execute";
     m.addParam("callto",callto);
     WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
-    m.setParam("targetid",c->id());
+    m.setParam("id",c->id());
     m.userData(c);
     if (Engine::dispatch(m)) {
+	msg.setParam("id",c->id());
 	c->deref();
 	return true;
     }

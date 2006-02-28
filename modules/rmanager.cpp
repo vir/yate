@@ -39,6 +39,7 @@ static const char s_helpmsg[] =
 "  help [command]\n"
 "  status [module]\n"
 "  machine [on|off]\n"
+"  output [on|off]\n"
 "  auth password\n"
 "Authenticated commands:\n"
 "  debug [level|on|off]\n"
@@ -84,6 +85,7 @@ public:
 private:
     bool m_auth;
     bool m_debug;
+    bool m_output;
     bool m_machine;
     Socket* m_socket;
     String m_address;
@@ -158,7 +160,8 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
-      m_auth(false), m_debug(false), m_machine(false), m_socket(sock), m_address(addr)
+      m_auth(false), m_debug(false), m_output(true), m_machine(false),
+      m_socket(sock), m_address(addr)
 {
     s_mutex.lock();
     connectionlist.append(this);
@@ -168,6 +171,7 @@ Connection::Connection(Socket* sock, const char* addr)
 Connection::~Connection()
 {
     m_debug = false;
+    m_output = false;
     s_mutex.lock();
     connectionlist.remove(this,false);
     s_mutex.unlock();
@@ -283,6 +287,14 @@ bool Connection::processLine(const char *line)
 	writeStr(str);
 	return false;
     }
+    else if (str.startSkip("output"))
+    {
+	str >> m_output;
+	str = "Output mode: ";
+	str += (m_output ? "on\n" : "off\n");
+	writeStr(str);
+	return false;
+    }
     else if (str.startSkip("quit"))
     {
 	writeStr(m_machine ? "%%=quit\n" : "Goodbye!\n");
@@ -360,8 +372,13 @@ bool Connection::processLine(const char *line)
 	m.addParam("callto",str.substr(0,pos));
 	m.addParam((target.find('/') > 0) ? "direct" : "target",target);
 
-	if (Engine::dispatch(m))
-	    str = (m_machine ? "%%=call:success:" : "Called ") + str + "\n";
+	if (Engine::dispatch(m)) {
+	    String id(m.getValue("id"));
+	    if (m_machine)
+		str = "%%=call:success:" + id + ":" + str + "\n";
+	    else
+		str = "Calling '" + id + "' " + str + "\n";
+	}
 	else
 	    str = (m_machine ? "%%=call:fail:" : "Could not call ") + str + "\n";
 	writeStr(str);
@@ -460,7 +477,9 @@ void Connection::writeStr(const Message &msg, bool received)
 
 void Connection::writeDebug(const char *str, int level)
 {
-    if (m_debug && !null(str))
+    if (null(str))
+	return;
+    if (m_debug || (m_output && (level < 0)))
 	writeStr(str,::strlen(str));
 }
 

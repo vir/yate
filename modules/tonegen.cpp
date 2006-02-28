@@ -252,9 +252,9 @@ static const ToneDesc s_desc[] = {
     { t_dtmf[13], "dtmf/b", "b" },
     { t_dtmf[14], "dtmf/c", "c" },
     { t_dtmf[15], "dtmf/d", "d" },
-    { t_probes[0], "probe/1", "test1" },
-    { t_probes[1], "probe/2", "test2" },
-    { t_probes[2], "probe/3", "test3" },
+    { t_probes[0], "probe/0", "probe" },
+    { t_probes[1], "probe/1", 0 },
+    { t_probes[2], "probe/2", 0 },
     { 0, 0, 0 }
 };
 
@@ -666,9 +666,10 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	m = "call.execute";
 	m.addParam("callto",callto);
 	ToneChan *tc = new ToneChan(dest);
-	m.setParam("targetid",tc->id());
+	m.setParam("id",tc->id());
 	m.userData(tc);
 	if (Engine::dispatch(m)) {
+	    msg.setParam("id",tc->id());
 	    tc->deref();
 	    return true;
 	}

@@ -325,6 +325,7 @@ bool MOHHandler::received(Message &msg)
 	    m.setParam("id",mc->id());
 	    m.userData(mc);
 	    if (Engine::dispatch(m)) {
+		msg.setParam("id",mc->id());
 		mc->deref();
 		return true;
 	    }

@@ -30,6 +30,13 @@
 
 #include <yatephone.h>
 
+// minimum allowed for the maximum
+#define ALLOW_MIN 2500.0
+// threshold from max we consider a peak
+#define PEAKS_THR 0.015
+// expected number of peaks
+#define PEAKS_NUM 2
+
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -64,15 +71,21 @@ public:
     };
     virtual ~AsyncFFT();
     static AsyncFFT* create(unsigned int length, WinType window = Rectangle, Priority prio = Low);
-    inline unsigned int length() const
+    inline unsigned int samples() const
 	{ return m_length; }
+    inline unsigned int length() const
+	{ return m_length >> 1; }
     inline bool ready() const
 	{ return m_ready; }
-    double operator[](int index) const;
-    bool prepare(const short* samples);
+    double at(int index) const;
+    inline double operator[](int index) const
+	{ return at(index); }
+    bool prepare(const short* samp);
     inline void stop()
-	{ m_stop = true; }
+	{ m_notify = 0; m_stop = true; }
     virtual void run();
+    inline void setNotify(Runnable* notified = 0)
+	{ m_notify = notified; }
 private:
     AsyncFFT(unsigned int length, WinType window, Priority prio);
     void buildWindow(WinType window);
@@ -81,14 +94,16 @@ private:
     bool m_ready;
     bool m_start;
     bool m_stop;
+    Runnable* m_notify;
     unsigned int m_length;
     double* m_window;
     double* m_real;
     double* m_imag;
     unsigned int m_nBits;
+    const char* m_winName;
 };
 
-class AnalyzerCons : public DataConsumer
+class AnalyzerCons : public DataConsumer, public Runnable
 {
     YCLASS(AnalyzerCons,DataConsumer)
 public:
@@ -96,6 +111,7 @@ public:
     virtual ~AnalyzerCons();
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
     virtual void statusParams(String& str);
+    virtual void run();
 protected:
     DataBlock m_data;
     u_int64_t m_timeStart;
@@ -103,6 +119,9 @@ protected:
     unsigned int m_tsGapCount;
     unsigned long m_tsGapLength;
     AsyncFFT* m_spectrum;
+    unsigned long m_total;
+    unsigned long m_valid;
+    bool m_analyze;
 };
 
 class AnalyzerChan : public Channel
@@ -148,9 +167,9 @@ private:
 INIT_PLUGIN(AnalyzerDriver);
 
 static TokenDict dict_windows[] = {
+    { "rectangle", AsyncFFT::Rectangle },
     { "no",        AsyncFFT::None },
     { "none",      AsyncFFT::None },
-    { "rectangle", AsyncFFT::Rectangle },
     { "triangle",  AsyncFFT::Triangle },
     { "bartlett",  AsyncFFT::Bartlett },
     { "hanning",   AsyncFFT::Hanning },
@@ -159,6 +178,8 @@ static TokenDict dict_windows[] = {
     { "flattop",   AsyncFFT::FlatTop },
     { 0,   0 }
 };
+
+static Mutex s_mutex;
 
 static int s_res = 1;
 
@@ -198,8 +219,9 @@ AsyncFFT* AsyncFFT::create(unsigned int length, WinType window, Priority prio)
 }
 
 AsyncFFT::AsyncFFT(unsigned int length, WinType window, Priority prio)
-    : Thread("AsyncFFT",prio), m_ready(false), m_start(false), m_stop(false),
-      m_length(0), m_window(0), m_real(0), m_imag(0), m_nBits(0)
+    : Thread("AsyncFFT",prio),
+      m_ready(false), m_start(false), m_stop(false), m_notify(0),
+      m_length(0), m_window(0), m_real(0), m_imag(0), m_nBits(0), m_winName(0)
 {
     DDebug(&__plugin,DebugAll,"AsyncFFT::AsyncFFT(%u) [%p]",length,this);
     for (unsigned int i = 0; i <= 256 ;i++)
@@ -218,6 +240,7 @@ AsyncFFT::AsyncFFT(unsigned int length, WinType window, Priority prio)
 AsyncFFT::~AsyncFFT()
 {
     DDebug(&__plugin,DebugAll,"AsyncFFT::~AsyncFFT() [%p]",this);
+    m_notify = 0;
     m_ready = false;
     m_start = false;
     delete[] m_real;
@@ -227,6 +250,7 @@ AsyncFFT::~AsyncFFT()
 
 void AsyncFFT::buildWindow(WinType window)
 {
+    m_winName = lookup(window,dict_windows);
     if (window == Rectangle)
 	return;
     m_window = new double[m_length];
@@ -261,7 +285,7 @@ void AsyncFFT::buildWindow(WinType window)
     }
 }
 
-double AsyncFFT::operator[](int index) const
+double AsyncFFT::at(int index) const
 {
     if ((index < 0) || ((unsigned int)index > (m_length >> 1)))
 	return 0.0;
@@ -282,13 +306,17 @@ void AsyncFFT::run()
 	m_ready = false;
 	compute();
 	m_ready = true;
+	s_mutex.lock();
+	if (m_notify)
+	    m_notify->run();
+	s_mutex.unlock();
 	m_start = false;
     }
 }
 
-bool AsyncFFT::prepare(const short* samples)
+bool AsyncFFT::prepare(const short* samp)
 {
-    if (m_start || m_stop || !(samples && m_real))
+    if (m_start || m_stop || !(samp && m_real))
 	return false;
     m_ready = false;
     XDebug(&__plugin,DebugAll,"Preparing FFT buffer from %u samples [%p]",m_length,this);
@@ -296,9 +324,9 @@ bool AsyncFFT::prepare(const short* samples)
     for (i = 0; i < m_length; i++) {
 	j = revBits(i);
 	if (m_window)
-	    m_real[i] = m_window[j] * samples[j];
+	    m_real[i] = m_window[j] * samp[j];
 	else
-	    m_real[i] = samples[j];
+	    m_real[i] = samp[j];
 	m_imag[i] = 0.0;
     }
     m_start = true;
@@ -318,7 +346,7 @@ unsigned int AsyncFFT::revBits(unsigned int index)
 void AsyncFFT::compute()
 {
 #ifdef XDEBUG
-    Debug(&__plugin,DebugAll,"Computing FFT with length %u [%p]",m_length,this);
+    Debug(&__plugin,DebugInfo,"Computing FFT with length %u [%p]",m_length,this);
     Time t;
 #endif
     unsigned int i, j, n;
@@ -363,26 +391,29 @@ void AsyncFFT::compute()
     for (i = 0; i < n; i++)
 	m_real[i] = ::sqrt(m_real[i]*m_real[i] + m_imag[i]*m_imag[i]) / n;
 #ifdef XDEBUG
-    Debug(&__plugin,DebugAll,"Computing FFT with length %u took " FMT64U " usec [%p]",
+    Debug(&__plugin,DebugInfo,"Computing FFT with length %u took " FMT64U " usec [%p]",
 	m_length,Time::now()-t,this);
 #endif
 
-    for (i = 0; i < n; i ++) {
-	Output("fft[%u] = %0.2f",i,m_real[i]);
-    }
+#ifdef XDEBUG
+    for (i = 0; i < n; i++)
+	Debug(&__plugin,DebugAll,"fft[%u] = %0.2f",i,m_real[i]);
+#endif
 }
 
 
 AnalyzerCons::AnalyzerCons(const String& type, const char* window)
     : m_timeStart(0), m_tsStart(0), m_tsGapCount(0), m_tsGapLength(0),
-      m_spectrum(false)
+      m_spectrum(false), m_total(0), m_valid(0), m_analyze(false)
 {
     DDebug(&__plugin,DebugAll,"AnalyzerCons::AnalyzerCons('%s') [%p]",
 	type.c_str(),this);
     unsigned int len = 0;
-    if ((type == "spectrum") || type.startsWith("tone/probe")) {
+    if ((type == "probe") || type.startsWith("tone/probe")) {
 	len = 256;
+	m_analyze = true;
 	m_spectrum = AsyncFFT::create(len,(AsyncFFT::WinType)lookup(window,dict_windows,AsyncFFT::Rectangle));
+	m_spectrum->setNotify(this);
 	return;
     }
     else if (type == "fft1024")
@@ -395,18 +426,22 @@ AnalyzerCons::AnalyzerCons(const String& type, const char* window)
 	len = 128;
     else if (type == "fft64")
 	len = 64;
-    if (len)
+    if (len) {
 	m_spectrum = AsyncFFT::create(len,(AsyncFFT::WinType)lookup(window,dict_windows,AsyncFFT::Triangle));
+	m_spectrum->setNotify(this);
+    }
 }
 
 AnalyzerCons::~AnalyzerCons()
 {
     DDebug(&__plugin,DebugAll,"AnalyzerCons::~AnalyzerCons() %p [%p]",m_spectrum,this);
+    s_mutex.lock();
     if (m_spectrum) {
 	AsyncFFT* tmp = m_spectrum;
 	m_spectrum = 0;
 	tmp->stop();
     }
+    s_mutex.unlock();
 }
 
 void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
@@ -430,7 +465,7 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
     if (!m_spectrum)
 	return;
     m_data += data;
-    unsigned int len = 2 * m_spectrum->length();
+    unsigned int len = 2 * m_spectrum->samples();
     if (m_data.length() < len)
 	return;
     // limit the length of the buffer
@@ -443,6 +478,44 @@ void AnalyzerCons::Consume(const DataBlock& data, unsigned long tStamp)
 	m_data.cut(-(int)len);
 }
 
+void AnalyzerCons::run()
+{
+    // this method is called with the mutex hold
+    if (!m_spectrum)
+	return;
+    unsigned int n = m_spectrum->length();
+    double max = 0.0;
+    unsigned int i;
+    for (i = 1; i < n; i++) {
+	double val = m_spectrum->at(i);
+	if (max < val)
+	    max = val;
+    }
+
+    if (!m_analyze)
+	return;
+
+    double limit = max;
+    if (max < ALLOW_MIN) {
+	// don't start until we get some data
+	if (!m_total)
+	    return;
+	limit = ALLOW_MIN;
+    }
+
+    unsigned int peaks = 0;
+    limit *= PEAKS_THR;
+    for (i = 1; i < n; i++) {
+	if (m_spectrum->at(i) > limit)
+	    peaks++;
+    }
+    DDebug(&__plugin,DebugInfo,"Got %u peaks, limit=%f, max=%f [%p]",peaks,limit,max,this);
+
+    m_total++;
+    if (peaks == PEAKS_NUM)
+	m_valid++;
+}
+
 void AnalyzerCons::statusParams(String& str)
 {
     unsigned long samples = timeStamp() - m_tsStart;
@@ -453,6 +526,12 @@ void AnalyzerCons::statusParams(String& str)
 	u_int64_t utime = Time::now() - m_timeStart;
 	utime = utime ? ((1000000 * (u_int64_t)samples) + (utime / 2)) / utime : 0;
 	str << ",rate=" << (unsigned int)utime;
+    }
+    if (m_total > 0) {
+	double q = m_valid * 100.0 / m_total;
+	char buf[64];
+	snprintf(buf,sizeof(buf)-1,"quality=%0.2f",q);
+	str.append(buf,",");
     }
 }
 
@@ -478,7 +557,7 @@ AnalyzerChan::~AnalyzerChan()
     str.append("totaltime=",",") << buf;
     if (cons)
 	cons->statusParams(str);
-    Output("Analyzer %s finished: %s",id().c_str(),str.c_str());
+    Output("Finished '%s' status: %s",id().c_str(),str.c_str());
     Engine::enqueue(message("chan.hangup"));
 }
 
@@ -556,7 +635,7 @@ void AnalyzerChan::addSource()
 {
     if (getSource())
 	return;
-    const char* src = "tone/dial";
+    const char* src = "tone/probe";
     if (m_address.startsWith("tone/"))
 	src = m_address;
     Message m("chan.attach");
@@ -600,6 +679,7 @@ bool AnalyzerDriver::startCall(NamedList& params, const String& dest)
     if (tmp.null())
 	tmp << prefix() << dest;
     m->addParam("caller",tmp);
+    params.setParam("id",ac->id());
     return ac->startRouter(m);
 }
 

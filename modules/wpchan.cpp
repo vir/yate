@@ -118,6 +118,7 @@ private:
     unsigned char* m_buffer;
     WpChan **m_chans;
     int m_samples;
+    bool m_swap;
     unsigned char m_rdError;
     unsigned char m_wrError;
 };
@@ -341,7 +342,7 @@ static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
 
 WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
     : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE),
-      m_buffer(0), m_chans(0), m_samples(50), m_rdError(0), m_wrError(0)
+      m_buffer(0), m_chans(0), m_samples(50), m_swap(true), m_rdError(0), m_wrError(0)
 {
     Debug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",
 	span,card,device,this);
@@ -352,6 +353,8 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
     }
     m_samples = cfg.getIntValue("general","samples",m_samples);
     m_samples = cfg.getIntValue(sect,"samples",m_samples);
+    m_swap = cfg.getIntValue("general","bitswap",m_swap);
+    m_swap = cfg.getIntValue(sect,"bitswap",m_swap);
 }
 
 WpData::~WpData()
@@ -419,7 +422,7 @@ void WpData::run()
 		    for (b = 0; b < bchans; b++) {
 			WpSource *s = m_chans[b]->m_wp_s;
 			if (s)
-			    s->put(PriDriver::bitswap(*dat));
+			    s->put(m_swap ? PriDriver::bitswap(*dat) : *dat);
 			dat++;
 		    }
 		m_span->unlock();
@@ -431,7 +434,8 @@ void WpData::run()
 	    for (int n = wr; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
-		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
+		    unsigned char d = c ? c->get() : 0xff;
+		    *dat++ = m_swap ? PriDriver::bitswap(d) : d;
 		}
 	    }
 	    m_span->unlock();

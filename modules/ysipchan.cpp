@@ -2514,10 +2514,12 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 {
     Channel::callRejected(error,reason,msg);
     int code = lookup(error,dict_errors,500);
-    if (code == 401)
-	m_tr->requestAuth("realm","",false);
-    else
-	m_tr->setResponse(code,reason);
+    if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+	if (code == 401)
+	    m_tr->requestAuth("realm","",false);
+	else
+	    m_tr->setResponse(code,reason);
+    }
     setReason(reason,code);
 }
 

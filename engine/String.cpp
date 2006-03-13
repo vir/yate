@@ -339,6 +339,17 @@ int String::toInteger(const TokenDict* tokens, int defvalue, int base) const
     return toInteger(defvalue,base);
 }
 
+double String::toDouble(double defvalue) const
+{
+    if (!m_string)
+	return defvalue;
+    char *eptr = 0;
+    double val= ::strtod(m_string,&eptr);
+    if (!eptr || *eptr)
+	return defvalue;
+    return val;
+}
+
 static const char* str_false[] = { "false", "no", "off", "disable", 0 };
 static const char* str_true[] = { "true", "yes", "on", "enable", 0 };
 
@@ -641,7 +652,7 @@ int String::rfind(char what) const
     return s ? s-m_string : -1;
 }
 
-bool String::startsWith(const char* what, bool wordBreak) const
+bool String::startsWith(const char* what, bool wordBreak, bool caseInsensitive) const
 {
     if (!(m_string && what && *what))
 	return false;
@@ -650,12 +661,15 @@ bool String::startsWith(const char* what, bool wordBreak) const
 	return false;
     else if (wordBreak && (m_length > l) && !isWordBreak(m_string[l]))
 	return false;
+
+    if (caseInsensitive)
+	return (::strncasecmp(m_string,what,l) == 0);
     return (::strncmp(m_string,what,l) == 0);
 }
 
-bool String::startSkip(const char* what, bool wordBreak)
+bool String::startSkip(const char* what, bool wordBreak, bool caseInsensitive)
 {
-    if (startsWith(what,wordBreak)) {
+    if (startsWith(what,wordBreak,caseInsensitive)) {
 	const char *p = m_string + ::strlen(what);
 	if (wordBreak)
 	    while (isWordBreak(*p))
@@ -666,7 +680,7 @@ bool String::startSkip(const char* what, bool wordBreak)
     return false;
 }
 
-bool String::endsWith(const char* what, bool wordBreak) const
+bool String::endsWith(const char* what, bool wordBreak, bool caseInsensitive) const
 {
     if (!(m_string && what && *what))
 	return false;
@@ -675,6 +689,8 @@ bool String::endsWith(const char* what, bool wordBreak) const
 	return false;
     else if (wordBreak && (m_length > l) && !isWordBreak(m_string[m_length-l-1]))
 	return false;
+    if (caseInsensitive)
+	return (::strncasecmp(m_string+m_length-l,what,l) == 0);
     return (::strncmp(m_string+m_length-l,what,l) == 0);
 }
 

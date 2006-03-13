@@ -118,6 +118,15 @@ public:
     int getIntValue(const String& sect, const String& key, const TokenDict* tokens, int defvalue = 0) const;
 
     /**
+     * Retrive the floating point value of a key in a section.
+     * @param sect Name of the section
+     * @param key Name of the key in section
+     * @param defvalue Default value to return if not found
+     * @return The numeric value contained in the key or the default
+     */
+    double getDoubleValue(const String& sect, const String& key, double defvalue = 0.0) const;
+
+    /**
      * Retrive the boolean value of a key in a section.
      * @param sect Name of the section
      * @param key Name of the key in section

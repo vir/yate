@@ -89,6 +89,12 @@ int Configuration::getIntValue(const String& sect, const String& key, const Toke
     return s ? s->toInteger(tokens,defvalue) : defvalue;
 }
 
+double Configuration::getDoubleValue(const String& sect, const String& key, double defvalue) const
+{
+    const NamedString *s = getKey(sect,key);
+    return s ? s->toDouble(defvalue) : defvalue;
+}
+
 bool Configuration::getBoolValue(const String& sect, const String& key, bool defvalue) const
 {
     const NamedString *s = getKey(sect,key);

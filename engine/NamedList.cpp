@@ -130,6 +130,12 @@ int NamedList::getIntValue(const String& name, const TokenDict* tokens, int defv
     return s ? s->toInteger(tokens,defvalue) : defvalue;
 }
 
+double NamedList::getDoubleValue(const String& name, double defvalue) const
+{
+    const NamedString *s = getParam(name);
+    return s ? s->toDouble(defvalue) : defvalue;
+}
+
 bool NamedList::getBoolValue(const String& name, bool defvalue) const
 {
     const NamedString *s = getParam(name);

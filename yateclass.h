@@ -79,6 +79,10 @@ typedef unsigned long in_addr_t;
 #define strcasecmp _stricmp
 #endif
 
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+
 #define vsnprintf _vsnprintf
 #define snprintf _snprintf
 #define strdup _strdup
@@ -1193,6 +1197,13 @@ public:
     int toInteger(const TokenDict* tokens, int defvalue = 0, int base = 0) const;
 
     /**
+     * Convert the string to a floating point value.
+     * @param defvalue Default to return if the string is not a number
+     * @return The floating-point interpretation or defvalue.
+     */
+    double toDouble(double defvalue = 0.0) const;
+
+    /**
      * Convert the string to a boolean value.
      * @param defvalue Default to return if the string is not a bool
      * @return The boolean interpretation or defvalue.
@@ -1426,17 +1437,19 @@ public:
      * Checks if the string starts with a substring
      * @param what Substring to search for
      * @param wordBreak Check if a word boundary follows the substring
+     * @param caseInsensitive Compare case-insensitive if set
      * @return True if the substring occurs at the beginning of the string
      */
-    bool startsWith(const char* what, bool wordBreak = false) const;
+    bool startsWith(const char* what, bool wordBreak = false, bool caseInsensitive = false) const;
 
     /**
      * Checks if the string ends with a substring
      * @param what Substring to search for
      * @param wordBreak Check if a word boundary precedes the substring
+     * @param caseInsensitive Compare case-insensitive if set
      * @return True if the substring occurs at the end of the string
      */
-    bool endsWith(const char* what, bool wordBreak = false) const;
+    bool endsWith(const char* what, bool wordBreak = false, bool caseInsensitive = false) const;
 
     /**
      * Checks if the string starts with a substring and removes it
@@ -1444,11 +1457,12 @@ public:
      * @param wordBreak Check if a word boundary follows the substring;
      *  this parameter defaults to True because the intended use of this
      *  method is to separate commands from their parameters
+     * @param caseInsensitive Compare case-insensitive if set
      * @return True if the substring occurs at the beginning of the string
      *  and also removes the substring; if wordBreak is True any word
      *  breaking characters are also removed
      */
-    bool startSkip(const char* what, bool wordBreak = true);
+    bool startSkip(const char* what, bool wordBreak = true, bool caseInsensitive = false);
 
     /**
      * Checks if matches another string
@@ -2460,6 +2474,14 @@ public:
      * @return The number contained in the named parameter or the default
      */
     int getIntValue(const String& name, const TokenDict* tokens, int defvalue = 0) const;
+
+    /**
+     * Retrive the floating point value of a parameter.
+     * @param name Name of parameter to locate
+     * @param defvalue Default value to return if not found
+     * @return The number contained in the named parameter or the default
+     */
+    double getDoubleValue(const String& name, double defvalue = 0.0) const;
 
     /**
      * Retrive the boolean value of a parameter.

@@ -478,7 +478,7 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 		    line >> num >> " ";
 		    if (num == var) {
 			for (const TokenDict* map = dict_rtpmap; map->token; map++) {
-			    if (line.startsWith(map->token)) {
+			    if (line.startsWith(map->token,false,true)) {
 				const char* pload = lookup(map->value,dict_payloads);
 				if (pload)
 				    payload = pload;
@@ -502,6 +502,8 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 		    payload = "ilbc20";
 		else if ((mode == 30) || (ptime == 30))
 		    payload = "ilbc30";
+		else
+		    payload = s_cfg.getValue("hacks","ilbc_default","ilbc30");
 	    }
 
 	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload.c_str());
@@ -856,6 +858,7 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     const String& method, const String& uri, const String& response, const SIPMessage* message)
 {
     Message m("user.auth");
+    m.addParam("protocol","sip");
     m.addParam("username",username);
     m.addParam("realm",realm);
     m.addParam("nonce",nonce);
@@ -865,8 +868,13 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     if (message) {
 	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
+	String addr = message->getParty()->getPartyAddr();
+	if (addr) {
+	    addr << ":" << message->getParty()->getPartyPort();
+	    m.addParam("address",addr);
+	}
     }
-    
+
     if (!Engine::dispatch(m))
 	return false;
     // FIXME: deal with empty passwords or just disallow them

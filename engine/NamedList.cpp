@@ -141,5 +141,31 @@ bool NamedList::getBoolValue(const String& name, bool defvalue) const
     const NamedString *s = getParam(name);
     return s ? s->toBoolean(defvalue) : defvalue;
 }
+
+int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
+{
+    int p1;
+    int cnt = 0;
+    while ((p1 = str.find("${")) >= 0) {
+	int p2 = str.find('}',p1+2);
+	if (p2 > 0) {
+	    String tmp = str.substr(p1+2,p2-p1-2);
+	    tmp.trimBlanks();
+	    DDebug(DebugAll,"NamedList replacing parameter '%s' [%p]",tmp.c_str(),this);
+	    tmp = getValue(tmp);
+	    if (sqlEsc)
+		tmp = tmp.sqlEscape(extraEsc);
+	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
+	    // put a limit to avoid infinite loops
+	    if (++cnt >= 1000) {
+		Debug(DebugWarn,"NamedList reached count %d replacing into '%s' [%p]",cnt,str.c_str(),this);
+		return -1;
+	    }
+	}
+	else
+	    return -1;
+    }
+    return cnt;
+}
 			
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -2491,6 +2491,15 @@ public:
      */
     bool getBoolValue(const String& name, bool defvalue = false) const;
 
+    /**
+     * Replaces all ${paramname} in a String with the corresponding parameters
+     * @param str String in which the replacements will be made
+     * @param sqlEsc True to apply SQL escaping to parameter values
+     * @param extraEsc Character to escape other than the SQL default ones
+     * @return Number of replacements made, -1 if an error occured
+     */
+    int replaceParams(String& str, bool sqlEsc = false, char extraEsc = 0) const;
+
 private:
     NamedList(); // no default constructor please
     NamedList& operator=(const NamedList& value); // no assignment please

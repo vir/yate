@@ -748,9 +748,10 @@ public:
      * @param user String to store the authenticated user name or user to
      *  look for (if not null on entry)
      * @param proxy True to authenticate as proxy, false as user agent
+     * @param userData Pointer to an optional object that is passed back to @ref SIPEngine::checkUser
      * @return Age of the nonce if user matches, negative for a failure
      */
-    int authUser(String& user, bool proxy = false);
+    int authUser(String& user, bool proxy = false, GenObject* userData = 0);
 
     /**
      * Check if a message belongs to this transaction and process it if so
@@ -1014,10 +1015,12 @@ public:
      * @param uri URI of the SIP message that is being authenticated
      * @param response Response computed by the authenticated entity
      * @param message Message that is to be authenticated
+     * @param userData Pointer to an optional object passed from @ref authUser
      * @return True if valid user/password, false if verification failed
      */
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
-	const String& method, const String& uri, const String& response, const SIPMessage* message);
+	const String& method, const String& uri, const String& response,
+	const SIPMessage* message, GenObject* userData);
 
     /**
      * Detect the proper credentials for any user in the engine
@@ -1025,9 +1028,10 @@ public:
      * @param user String to store the authenticated user name or user to
      *  look for (if not null on entry)
      * @param proxy True to authenticate as proxy, false as user agent
+     * @param userData Pointer to an optional object that is passed back to @ref checkUser
      * @return Age of the nonce if user matches, negative for a failure
      */
-    int authUser(const SIPMessage* message, String& user, bool proxy = false);
+    int authUser(const SIPMessage* message, String& user, bool proxy = false, GenObject* userData = 0);
 
     /**
      * Add a message into the transaction list

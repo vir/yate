@@ -128,6 +128,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("reason");
     m_exec->clearParam("peerid");
     m_exec->clearParam("targetid");
+    m_exec->setParam("cdrtrack",String::boolText(false));
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
     m_exec->setParam("rtp_forward",String::boolText(m_rtpForward));

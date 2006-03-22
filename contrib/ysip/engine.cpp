@@ -495,7 +495,8 @@ long SIPEngine::nonceAge(const String& nonce)
 }
 
 bool SIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
-    const String& method, const String& uri, const String& response, const SIPMessage* message)
+    const String& method, const String& uri, const String& response,
+    const SIPMessage* message, GenObject* userData)
 {
     return false;
 }
@@ -525,7 +526,7 @@ void SIPEngine::buildAuth(const String& hash_a1, const String& nonce, const Stri
     response = md5.hexDigest();
 }
 
-int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy)
+int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, GenObject* userData)
 {
     if (!message)
 	return -1;
@@ -564,7 +565,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy)
 	    String realm(t->getParam("realm"));
 	    delQuotes(realm);
 
-	    if (!checkUser(usr,realm,nonce,message->method,uri,res,message))
+	    if (!checkUser(usr,realm,nonce,message->method,uri,res,message,userData))
 		continue;
 
 	    if (user.null())

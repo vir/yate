@@ -90,7 +90,7 @@ public:
     virtual void run();
     bool init();
 private:
-    CallEndpoint* m_chan;
+    RefPointer<CallEndpoint> m_chan;
     Message* m_msg;
     bool m_source;
     bool m_disc;

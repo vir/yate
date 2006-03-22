@@ -1874,6 +1874,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
 	s->setParam("caller",msg->getValue("caller"));
 	s->setParam("called",msg->getValue("called"));
 	s->setParam("billid",msg->getValue("billid"));
+	s->setParam("username",msg->getValue("username"));
     }
     Engine::enqueue(s);
 }

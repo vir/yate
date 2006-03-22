@@ -79,6 +79,7 @@ private:
     String m_address;
     String m_caller;
     String m_called;
+    String m_username;
     String m_status;
     String m_reason;
     bool m_first;
@@ -153,6 +154,7 @@ void CdrBuilder::emit(const char *operation)
     m->addParam("billid",m_billid);
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
+    m->addParam("username",m_username);
     m->addParam("duration",printTime(buf,t_hangup - t_start));
     m->addParam("billtime",printTime(buf,t_hangup - t_answer));
     m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
@@ -215,6 +217,11 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	p = msg.getValue("called");
 	if (p)
 	    m_called = p;
+    }
+    if (m_username.null()) {
+	p = msg.getValue("username");
+	if (p)
+	    m_username = p;
     }
     p = msg.getValue("status");
     if (p) {

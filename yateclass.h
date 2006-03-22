@@ -2391,6 +2391,13 @@ public:
     NamedList(const NamedList& original);
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Get the number of parameters
      * @return Count of named strings
      */
@@ -3642,6 +3649,16 @@ public:
      * @return True if operation was successfull, false if an error occured
      */
     bool select(bool* readok, bool* writeok, bool* except, struct timeval* timeout = 0);
+
+    /**
+     * Determines the availability to perform synchronous I/O of the socket
+     * @param readok Address of a boolean variable to fill with readability status
+     * @param writeok Address of a boolean variable to fill with writeability status
+     * @param except Address of a boolean variable to fill with exceptions status
+     * @param timeout Maximum time until the method returns, -1 for blocking
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool select(bool* readok, bool* writeok, bool* except, int64_t timeout);
 
     /**
      * Create a pair of bidirectionally connected sockets

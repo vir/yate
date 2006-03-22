@@ -1,0 +1,100 @@
+[general]
+; set global parameters of the RADIUS client
+
+; addr: ipaddress: IP address to bind to - must be set to enable, 0.0.0.0 is OK
+;addr=
+
+; port: integer: UDP port to bind to, must be non-zero
+;port=1810
+
+; local_time: bool: Use local timestamps instead of GMT
+;local_time=false
+
+; auth_priority: integer: Priority of the user.auth handler
+;auth_priority=50
+
+; acct_priority: integer: Priority of the call.cdr handler
+;acct_priority=50
+
+
+[portabill]
+; Settings related to interoperation with PortaOne's PortaBill
+
+; enabled: bool: Enable handling of the routing parameters
+;enabled=no
+
+; parallel: bool: Make outgoing calls in parallel instead of sequence
+;parallel=no
+
+; simplify: bool: Simplify returned partial URIs by stripping parameters
+;simplify=no
+
+
+[nas register]
+; Sample SIP REGISTER authentication NAS
+rad_acct=false
+rad_server=common
+protocol=sip
+method=REGISTER
+add:Service-Type=15
+add:Cisco-AVPair=h323-session-protocol=sipv2
+
+
+[nas invite]
+; Sample SIP INVITE authentication NAS
+rad_acct=false
+rad_server=common
+protocol=sip
+method=INVITE
+add:Service-Type=15
+add:Cisco-AVPair=h323-session-protocol=sipv2
+; PortaOne specific
+;add:Cisco-AVPair=h323-ivr-out=PortaBilling_Routing:SIP
+
+
+[nas auth]
+; Sample authentication NAS
+; Settings and matching rules specific to this virtual Network Access Server
+rad_acct=no
+rad_server=common
+; Some RADIUS attributes you're likely to set
+add:Service-Type=8
+
+
+[nas acct]
+; Sample accounting NAS
+; Settings and matching rules specific to this virtual Network Access Server
+rad_auth=no
+rad_server=common
+; Some RADIUS attributes you're likely to set
+add:h323-conf-id=${billid}
+add:h323-disconnect-cause=${q931_cause}
+add:Acct-Delay-Time=0
+
+
+[radius common]
+; Settings specific to this RADIUS server
+
+; server: ipaddress: IP address of the server
+;server=
+
+; secret: string: Secret token (password) used to authenticate to the server
+;secret=
+
+; auth_port: integer: UDP port used by the server for authentication
+;auth_port=1812
+
+; acct_port: integer: UDP port used by the server for accounting
+acct_port=1813
+
+; timeout: integer: How much to wait for an answer from the server (milliseconds)
+;timeout=2000
+
+; retries: integer: How many attempts to make until timing out
+;retries=2
+
+; Some RADIUS attributes you're likely to set
+add:Cisco-NAS-Port=${chan}
+add:h323-remote-address=${address}
+add:NAS-Identifier=Yate
+;add:NAS-IP-Address=

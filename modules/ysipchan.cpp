@@ -156,10 +156,12 @@ public:
     YateSIPEngine(YateSIPEndPoint* ep);
     virtual bool buildParty(SIPMessage* message);
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
-	const String& method, const String& uri, const String& response, const SIPMessage* message);
+	const String& method, const String& uri, const String& response,
+	const SIPMessage* message, GenObject* userData);
     inline bool prack() const
 	{ return m_prack; }
 private:
+    static bool copyAuthParams(NamedList* dest, const NamedList& src);
     YateSIPEndPoint* m_ep;
     bool m_prack;
 };
@@ -854,8 +856,38 @@ bool YateSIPEngine::buildParty(SIPMessage* message)
     return m_ep->buildParty(message);
 }
 
+bool YateSIPEngine::copyAuthParams(NamedList* dest, const NamedList& src)
+{
+    // we added those and we want to exclude them from copy
+    static TokenDict exclude[] = {
+	{ "protocol", 1 },
+	// purposely copy the username and realm
+	{ "nonce", 1 },
+	{ "method", 1 },
+	{ "uri", 1 },
+	{ "response", 1 },
+	{ "ip_host", 1 },
+	{ "ip_port", 1 },
+	{ "address", 1 },
+	{  0,   0 },
+    };
+    if (!dest)
+	return true;
+    unsigned int n = src.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* s = src.getParam(i);
+	if (!s)
+	    continue;
+	if (s->name().toInteger(exclude,0))
+	    continue;
+	dest->setParam(s->name(),*s);
+    }
+    return true;
+}
+
 bool YateSIPEngine::checkUser(const String& username, const String& realm, const String& nonce,
-    const String& method, const String& uri, const String& response, const SIPMessage* message)
+    const String& method, const String& uri, const String& response,
+    const SIPMessage* message, GenObject* userData)
 {
     Message m("user.auth");
     m.addParam("protocol","sip");
@@ -875,21 +907,32 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	}
     }
 
+    NamedList* params = YOBJECT(NamedList,userData);
+    if (params) {
+	const char* str = params->getValue("caller");
+	if (str)
+	    m.addParam("caller",str);
+	str = params->getValue("called");
+	if (str)
+	    m.addParam("called",str);
+    }
+
     if (!Engine::dispatch(m))
 	return false;
-    // FIXME: deal with empty passwords or just disallow them
+
+    // empty password returned means authentication succeeded
     if (m.retValue().null())
-	return true;
+	return copyAuthParams(params,m);
     String res;
     buildAuth(username,realm,m.retValue(),nonce,method,uri,res);
     if (res == response)
-	return true;
+	return copyAuthParams(params,m);
     // if the URI included some parameters retry after stripping them off
     int sc = uri.find(';');
     if (sc < 0)
 	return false;
     buildAuth(username,realm,m.retValue(),nonce,method,uri.substr(0,sc),res);
-    return (res == response);
+    return (res == response) && copyAuthParams(params,m);
 }
 
 YateSIPEndPoint::YateSIPEndPoint()
@@ -1326,6 +1369,10 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     URI uri(m_tr->getURI());
     YateSIPLine* line = plugin.findLine(m_host,m_port,m_uri.getUser());
     Message *m = message("call.preroute");
+    m->addParam("caller",m_uri.getUser());
+    m->addParam("called",uri.getUser());
+    if (m_uri.getDescription())
+	m->addParam("callername",m_uri.getDescription());
 
     if (line) {
 	// call comes from line we have registered to - trust it...
@@ -1337,7 +1384,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     }
     else {
 	String user;
-	int age = tr->authUser(user);
+	int age = tr->authUser(user,false,m);
 	DDebug(this,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if (age >= 0) {
 	    if (age < 10) {
@@ -1352,10 +1399,6 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     if (s_privacy)
 	copyPrivacy(*m,*ev->getMessage());
 
-    m->addParam("caller",m_uri.getUser());
-    m->addParam("called",uri.getUser());
-    if (m_uri.getDescription())
-	m->addParam("callername",m_uri.getDescription());
     String tmp(ev->getMessage()->getHeaderValue("Max-Forwards"));
     int maxf = tmp.toInteger(s_maxForwards);
     if (maxf > s_maxForwards)
@@ -1404,6 +1447,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     Message* s = message("chan.startup");
     s->addParam("caller",m_uri.getUser());
     s->addParam("called",uri.getUser());
+    if (m_user)
+	s->addParam("username",m_user);
     Engine::enqueue(s);
 }
 
@@ -1494,6 +1539,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     s->setParam("caller",msg.getValue("caller"));
     s->setParam("called",msg.getValue("called"));
     s->setParam("billid",msg.getValue("billid"));
+    s->setParam("username",msg.getValue("username"));
     Engine::enqueue(s);
 }
 

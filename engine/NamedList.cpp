@@ -39,6 +39,14 @@ NamedList::NamedList(const NamedList& original)
     }
 }
 
+void* NamedList::getObject(const String& name) const
+{
+    if (name == "NamedList")
+	return const_cast<NamedList*>(this);
+    return String::getObject(name);
+}
+		
+
 NamedList& NamedList::addParam(NamedString* param)
 {
     XDebug(DebugInfo,"NamedList::addParam(%p) [\"%s\",\"%s\"]",

@@ -378,11 +378,11 @@ void SIPTransaction::requestAuth(const String& realm, const String& domain, bool
     msg->deref();
 }
 
-int SIPTransaction::authUser(String& user, bool proxy)
+int SIPTransaction::authUser(String& user, bool proxy, GenObject* userData)
 {
     if (!(m_engine && m_firstMessage))
 	return -1;
-    return m_engine->authUser(m_firstMessage, user, proxy);
+    return m_engine->authUser(m_firstMessage, user, proxy, userData);
 }
 
 SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, const String& branch)

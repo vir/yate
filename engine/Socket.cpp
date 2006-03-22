@@ -840,6 +840,15 @@ bool Socket::select(bool* readok, bool* writeok, bool* except, struct timeval* t
     return false;
 }
 
+bool Socket::select(bool* readok, bool* writeok, bool* except, int64_t timeout)
+{
+    if (timeout < 0)
+	return select(readok,writeok,except);
+    struct timeval tm;
+    Time::toTimeval(&tm,timeout);
+    return select(readok,writeok,except,&tm);
+}
+
 bool Socket::setOption(int level, int name, const void* value, socklen_t length)
 {
     if (!value)

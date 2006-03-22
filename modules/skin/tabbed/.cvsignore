@@ -1,0 +1,5 @@
+.xvpics
+core*
+*.orig
+*~
+.*.swp

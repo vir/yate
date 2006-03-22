@@ -178,6 +178,9 @@ done
 if [[ ! -f "$incpq/libpq-fe.h" ]]; then
     incpq="$incpq/pgsql"
 fi
+if [[ ! -f "$libpq" ]]; then
+    libpq="$ac_cv_use_libpq/lib64/libpq.so"
+fi
 if [[ -f "$incpq/libpq-fe.h" -a -f "$libpq" ]]; then
     HAVE_PGSQL=yes
     PGSQL_INC="-I$incpq"

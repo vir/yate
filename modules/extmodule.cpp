@@ -368,7 +368,9 @@ MsgHolder::MsgHolder(Message &msg)
     : m_msg(msg), m_ret(false)
 {
     // the address of this object should be unique
-    m_id << (unsigned int)this << "." << (unsigned int)random();
+    char buf[64];
+    ::sprintf(buf,"%p.%ld",this,random());
+    m_id = buf;
 }
 
 bool MsgHolder::decode(const char *s)

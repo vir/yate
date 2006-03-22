@@ -1356,14 +1356,14 @@ void RadiusModule::initialize()
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);
 
-    if (m_init)
+    if (m_init || !s_cfg.getBoolValue("general","enabled",true))
 	return;
 
     s_localAddr.host(s_cfg.getValue("general","addr"));
     s_localAddr.port(s_cfg.getIntValue("general","port",1810));
 
     if (!(s_localAddr.valid() && s_localAddr.host() && s_localAddr.port())) {
-	Debug(this,DebugWarn,"Invalid address %s:%d. Radius functions unavailable",
+	Debug(this,DebugNote,"Invalid address %s:%d. Radius functions unavailable",
 	    s_localAddr.host().c_str(),s_localAddr.port());
 	return;
     }

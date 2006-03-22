@@ -1,6 +1,9 @@
 [general]
 ; set global parameters of the RADIUS client
 
+; enabled: bool: Enable the RADIUS module
+;enabled=true
+
 ; addr: ipaddress: IP address to bind to - must be set to enable, 0.0.0.0 is OK
 ;addr=
 

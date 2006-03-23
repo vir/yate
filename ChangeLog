@@ -1,3 +1,62 @@
+Thu Mar 23 2006 Paul Chitescu <paulc-devel@null.ro>
+- More explicit configuration error messages, thanks to Carl Karsten
+
+Wed Mar 22 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added RADIUS client module based on code sent by Faizan Naqvi (Tili)
+- Applied various related and unrelated changes and fixes
+- Fixed building on x86_64
+
+Fri Feb 24 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added call quality analyzer module
+
+Thu Feb 23 2006 Paul Chitescu <paulc-devel@null.ro>
+- Fixed a minor bug in the SIP stack that caused excessive retransmissions
+- More buggy SIP implementations are accepted (with warnings)
+
+Tue Feb 21 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added SIP reINVITE forwarding in RTP and SDP forwarding modes
+
+Fri Feb 17 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added per channel status information retrieval
+
+Thu Feb 09 2006 Paul Chitescu <paulc-devel@null.ro>
+- Workaround segfault in older libpthread - thread cancelled while taking mutex
+- SDP can be forwarded as-is instead of the parsed version
+
+Tue Jan 31 2006 Paul Chitescu <paulc-devel@null.ro>
+- Fixed DirectSound playback buffer wrap-arounds
+
+Mon Jan 23 2006 Paul Chitescu <paulc-devel@null.ro>
+- Reorganized Module message IDs to make room for Route and Update
+
+Thu Jan 19 2006 Paul Chitescu <paulc-devel@null.ro>
+- Fixed several race and deadlock conditions
+- RTPGroup no longer corrupts memory if transports are removed from itself
+
+Wed Jan 18 2006 Paul Chitescu <paulc-devel@null.ro>
+- Fixed a nasty bug in Linux TLS initialization
+- Improved thread/mutex debugging
+- Reference counters are strictly enforced
+
+Thu Jan 12 2006 Paul Chitescu <paulc-devel@null.ro>
+- Refactored locking and list iteration to solve deadlocks and race conditions
+
+Mon Jan 09 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added PBX base classes and a database driven multi router
+
+Fri Dec 09 2005 Paul Chitescu <paulc-devel@null.ro>
+- Fixed a bug in Regexp match
+- Channel IDs are reported in debug messages
+- A debug filter can be set on channels
+
+Sat Nov 26 2005 Paul Chitescu <paulc-devel@null.ro>
+- Added default initialization of billid so it can track calls
+
+Tue Nov 08 2005 Paul Chitescu <paulc-devel@null.ro>
+- Added control of SIP registration expiration
+- Added support for sending UDP keepalives to keep NAT mappings in place
+- Improved chances of properly detecting public IP address from behind NAT
+
 Sat Nov 05 2005 Paul Chitescu <paulc-devel@null.ro>
 - Modified the PHP libraries to work with PHP 5, breaks PHP 4
 - Added pre-answer timeout in channels

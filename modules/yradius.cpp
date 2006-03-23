@@ -65,6 +65,8 @@ static ObjList acctBuilders;
 static SocketAddr s_localAddr(AF_INET);
 static Socket s_localSock;
 static bool s_localTime = false;
+static bool s_shortnum = false;
+static bool s_unisocket = false;
 static bool s_pb_enabled = false;
 static bool s_pb_parallel = false;
 static bool s_pb_simplify = false;
@@ -310,6 +312,7 @@ public:
 	{ return m_server; }
     bool setRadServer(const char* host, int authport, int acctport, const char* secret, int timeoutms = 4000, int retries = 2);
     bool setRadServer(const NamedList& sect);
+    bool addSocket();
     int doAuthenticate(ObjList* result = 0);
     int doAccounting(ObjList* result = 0);
     bool addAttribute(const char* attrib, const char* val, bool emptyOk = false);
@@ -756,12 +759,45 @@ Socket* RadiusClient::socket() const
     return m_socket ? m_socket : &s_localSock;
 }
 
+// Create and add a local UDP socket to the client request
+bool RadiusClient::addSocket()
+{
+    if (m_socket)
+	return true;
+    SocketAddr localAddr(AF_INET);
+    localAddr.host(s_localAddr.host());
+    if (!(localAddr.valid() && localAddr.host())) {
+	Debug(&__plugin,DebugInfo,"Invalid address '%s' - falling back to global socket",
+	    localAddr.host().c_str());
+	return false;
+    }
+
+    // we only have UDP support
+    Socket* s = new Socket(PF_INET,SOCK_DGRAM,IPPROTO_IP);
+    if (!(s && s->valid())) {
+	Debug(&__plugin,DebugWarn,"Error creating UDP socket - falling back to global socket");
+	delete s;
+	return false;
+    }
+    if (!s->bind(localAddr)) {
+	Debug(&__plugin,DebugWarn,"Error %d binding to %s - falling back to global socket",
+	    s->error(),localAddr.host().c_str());
+	delete s;
+	return false;
+    }
+    DDebug(&__plugin,DebugInfo,"Created new socket for request");
+    m_socket = s;
+    return true;
+}
+
+// Build incremental session ID byte
 unsigned char RadiusClient::newSessionId()
 {
     Lock lock(s_cfgMutex);
     return s_sessionId++;
 }
 
+// Set the server parameters
 bool RadiusClient::setRadServer(const char* host, int authport, int acctport, const char* secret, int timeoutms, int retries)
 {
     // adjust an absolute minimum of 1 try with a 500ms timeout
@@ -778,6 +814,7 @@ bool RadiusClient::setRadServer(const char* host, int authport, int acctport, co
     return (m_server && (m_authPort || m_acctPort));
 }
 
+// Set the server parameters from a config file section
 bool RadiusClient::setRadServer(const NamedList& sect)
 {
     return setRadServer(sect.getValue("server"),
@@ -788,6 +825,7 @@ bool RadiusClient::setRadServer(const NamedList& sect)
 	sect.getIntValue("retries",2));
 }
 
+// Fill a data block with (pseudo) random data
 bool RadiusClient::fillRandom(DataBlock& data, int len)
 {
     data.assign(0,len);
@@ -804,6 +842,7 @@ bool RadiusClient::fillRandom(DataBlock& data, int len)
     return true;
 }
 
+// Cryptographically check if the response is properly authenticated
 bool RadiusClient::checkAuthenticator(const unsigned char* buffer, int length)
 {
     if (!buffer)
@@ -819,13 +858,14 @@ bool RadiusClient::checkAuthenticator(const unsigned char* buffer, int length)
 	md5.update(recattr,attrlen);
     md5.update(m_secret);
     if (memcmp(md5.rawDigest(),recauth,16)) {
-	Debug(&__plugin,DebugWarn,"Authenticators do not match");
+	Debug(&__plugin,DebugMild,"Authenticators do not match");
 	return false;
     }
     Debug(&__plugin,DebugAll,"Authenticator matched for response");
     return true;
 }
 
+// Make one request, wait for answer and optionally decode it
 int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* response, ObjList* result)
 {
     if (!(port && socket() && socket()->valid()))
@@ -882,6 +922,9 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
     DataBlock radpckt(tmp,sizeof(tmp));
     radpckt.append(m_authdata);
     radpckt.append(attrdata);
+
+    if (!s_unisocket)
+	addSocket();
 
     // we have the data ready, send it and wait for an answer
     for (int r = m_retries; r > 0; r--) {
@@ -954,7 +997,7 @@ int RadiusClient::makeRequest(int port, unsigned char request, unsigned char* re
     return ServerErr;
 }
 
-
+// Make an authentication request, wait for answer
 int RadiusClient::doAuthenticate(ObjList* result)
 {
     unsigned char response = 0;
@@ -975,6 +1018,7 @@ int RadiusClient::doAuthenticate(ObjList* result)
     return AuthSuccess;
 }
 
+// Make an accounting request, wait for answer
 int RadiusClient::doAccounting(ObjList* result)
 {
     unsigned char response = 0;
@@ -995,6 +1039,7 @@ int RadiusClient::doAccounting(ObjList* result)
     return AcctSuccess;
 }
 
+// Add one text attribute
 bool RadiusClient::addAttribute(const char* attrib, const char* val, bool emptyOk)
 {
     if (null(attrib))
@@ -1010,6 +1055,7 @@ bool RadiusClient::addAttribute(const char* attrib, const char* val, bool emptyO
     return false;	
 }
 
+// Add one numeric attribute
 bool RadiusClient::addAttribute(const char* attrib, int val)
 {
     if (null(attrib))
@@ -1023,6 +1069,7 @@ bool RadiusClient::addAttribute(const char* attrib, int val)
     return false;	
 }
 
+// Add one text attribute with subtype
 bool RadiusClient::addAttribute(const char* attrib, unsigned char subType, const char* val, bool emptyOk)
 {
     if (null(attrib))
@@ -1038,6 +1085,7 @@ bool RadiusClient::addAttribute(const char* attrib, unsigned char subType, const
     return false;	
 }
 
+// Copy from parameter list (usually message) to RADIUS attributes
 void RadiusClient::addAttributes(NamedList& params, NamedList* list)
 {
     if (!list)
@@ -1089,10 +1137,23 @@ void RadiusClient::addAttributes(NamedList& params, NamedList* list)
     }
 }
 
+// Find matching NAS section and populate attributes accordingly
 bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct)
 {
     const char* caller = params.getValue("caller");
-    const char* called = params.getValue("called");
+    const char* called = 0;
+    if (s_shortnum) {
+	// prefer short called over calledfull
+	called = params.getValue("called");
+	if (!called)
+	    called = params.getValue("calledfull");
+    }
+    else {
+	// prefer long calledfull over called
+	called = params.getValue("calledfull");
+	if (!called)
+	    called = params.getValue("called");
+    }
     const char* username = params.getValue("username",caller);
     Lock lock(s_cfgMutex);
     NamedList* nasSect = 0;
@@ -1171,6 +1232,7 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct)
     return true;
 }
 
+// Copy some attributes back from RADIUS answer to parameter list (message)
 bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes)
 {
     Lock lock(s_cfgMutex);
@@ -1194,6 +1256,7 @@ bool RadiusClient::returnAttributes(NamedList& params, const ObjList* attributes
     }
     return true;
 }
+
 
 bool AuthHandler::received(Message& msg)
 {
@@ -1235,6 +1298,7 @@ bool AuthHandler::received(Message& msg)
 }
 
 
+// Build a Cisco style (like NTP) date/time string
 static bool ciscoTime(double t, String& ret)
 {
     time_t sec = (time_t)floor(t);
@@ -1287,6 +1351,7 @@ bool AcctHandler::received(Message& msg)
     RadiusClient radclient;
     if (!radclient.prepareAttributes(msg,true))
 	return false;
+    // cryptographically generate an unique call leg ID
     MD5 sid(billid);
     sid << msg.getValue("chan");
 
@@ -1351,7 +1416,9 @@ void RadiusModule::initialize()
     s_cfg = Engine::configFile("yradius");
     s_cfg.load();
     s_cfgMutex.unlock();
-    s_localTime = s_cfg.getBoolValue("general","local_time");
+    s_localTime = s_cfg.getBoolValue("general","local_time",false);
+    s_shortnum = s_cfg.getBoolValue("general","short_number",false);
+    s_unisocket = s_cfg.getBoolValue("general","single_socket",false);
     s_pb_enabled = s_cfg.getBoolValue("portabill","enabled",false);
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);

@@ -1540,6 +1540,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     s->setParam("called",msg.getValue("called"));
     s->setParam("billid",msg.getValue("billid"));
     s->setParam("username",msg.getValue("username"));
+    s->setParam("calledfull",m_uri.getUser());
     Engine::enqueue(s);
 }
 

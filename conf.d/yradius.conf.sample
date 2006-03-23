@@ -10,8 +10,14 @@
 ; port: integer: UDP port to bind to, must be non-zero
 ;port=1810
 
+; single_socket: bool: Share the socket for requests (not recommended)
+;single_socket=false
+
 ; local_time: bool: Use local timestamps instead of GMT
 ;local_time=false
+
+; short_number: bool: Prefer to use parameter "called" over "calledfull"
+;short_number=false
 
 ; auth_priority: integer: Priority of the user.auth handler
 ;auth_priority=50
@@ -31,6 +37,32 @@
 
 ; simplify: bool: Simplify returned partial URIs by stripping parameters
 ;simplify=no
+
+
+;[nas]
+;There can be several sections named [nas] or [nas SOMETHING]
+
+; rad_auth: bool: Enable authentication on this virtual NAS
+;rad_auth=yes
+
+; rad_acct: bool: Enable accounting on this virtual NAS
+;rad_acct=yes
+
+; rad_server: string: Name of the server to use, default [radius SOMETHING]
+;rad_server=
+
+; add: will add an attribute to the RADIUS request
+;add:attribute-name=EXPRESSION
+;add:subtype:attribute-name=EXPRESSION
+
+; set: will set message parameters
+;set:paramname=EXPRESSION
+
+; ret: will set authentication returned attributes back into message
+;ret:attribute-name=paramname
+
+; Any other parameter will attempt to match the right hand Regexp
+;paramname=REGEXP
 
 
 [nas register]
@@ -78,7 +110,7 @@ add:Acct-Delay-Time=0
 [radius common]
 ; Settings specific to this RADIUS server
 
-; server: ipaddress: IP address of the server
+; server: ipaddress: IP address of the server - must be set
 ;server=
 
 ; secret: string: Secret token (password) used to authenticate to the server
@@ -88,7 +120,7 @@ add:Acct-Delay-Time=0
 ;auth_port=1812
 
 ; acct_port: integer: UDP port used by the server for accounting
-acct_port=1813
+;acct_port=1813
 
 ; timeout: integer: How much to wait for an answer from the server (milliseconds)
 ;timeout=2000

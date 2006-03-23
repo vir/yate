@@ -196,7 +196,9 @@ bool Configuration::load()
 	::fclose(f);
 	return true;
     }
-    Debug(DebugInfo,"Failed to open config file '%s'",c_str());
+    int err = errno;
+    Debug(DebugNote,"Failed to open config file '%s', using defaults (%d: %s)",
+	c_str(),err,strerror(err));
     return false;
 }
 
@@ -224,6 +226,9 @@ bool Configuration::save() const
 	::fclose(f);
 	return true;
     }
+    int err = errno;
+    Debug(DebugWarn,"Failed to save config file '%s' (%d: %s)",
+	c_str(),err,strerror(err));
     return false;
 }
 

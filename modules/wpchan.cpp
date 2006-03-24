@@ -351,6 +351,12 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
 	m_fd = fd;
 	m_span->m_data = this;
     }
+
+    if (m_span->chans() == 24)
+	// for T1 we typically have 23 B channels so we adjust the number
+	//  of samples to get multiple of 32 bit and also reduce overhead
+	m_samples = 64;
+
     m_samples = cfg.getIntValue("general","samples",m_samples);
     m_samples = cfg.getIntValue(sect,"samples",m_samples);
     m_swap = cfg.getIntValue("general","bitswap",m_swap);

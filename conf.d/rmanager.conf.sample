@@ -12,3 +12,7 @@
 
 ; password: string: Password required to authenticate, default empty!
 ;password=
+
+; interactive: bool: Disable the TCP coalescing to improve interactivity
+;  this is almost never required and needs Yate to run as superuser
+;interactive=no

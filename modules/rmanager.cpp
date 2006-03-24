@@ -191,7 +191,8 @@ void Connection::run()
 
     // For the sake of responsiveness try to turn off the tcp assembly timer
     int arg = 1;
-    if (!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
+    if (s_cfg.getBoolValue("general","interactive",false) &&
+	!m_socket->setOption(SOL_SOCKET, TCP_NODELAY, &arg, sizeof(arg)))
 	Debug("RManager",DebugMild, "Failed to set tcp socket to TCP_NODELAY mode: %s\n", strerror(m_socket->error()));
 
     Output("Remote connection from %s",m_address.c_str());

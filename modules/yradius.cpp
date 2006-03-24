@@ -1429,8 +1429,13 @@ void RadiusModule::initialize()
     s_localAddr.host(s_cfg.getValue("general","addr"));
     s_localAddr.port(s_cfg.getIntValue("general","port",1810));
 
+    if (s_localAddr.host().null()) {
+	Debug(this,DebugNote,"Local address not set or invalid. Radius functions disabled");
+	return;
+    }
+
     if (!(s_localAddr.valid() && s_localAddr.host() && s_localAddr.port())) {
-	Debug(this,DebugNote,"Invalid address %s:%d. Radius functions unavailable",
+	Debug(this,DebugWarn,"Invalid address %s:%d. Radius functions unavailable",
 	    s_localAddr.host().c_str(),s_localAddr.port());
 	return;
     }

@@ -1,3 +1,8 @@
+Wed Mar 29 2006 Paul Chitescu <paulc-devel@null.ro>
+- Modified conference based on Andrew McDonald's idea of N-way mixing
+- Default output in rmanager is controlled by the config file
+- Added option to some CallEndpoint methods to disable disconnect notifications
+
 Thu Mar 23 2006 Paul Chitescu <paulc-devel@null.ro>
 - More explicit configuration error messages, thanks to Carl Karsten
 

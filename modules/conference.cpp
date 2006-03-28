@@ -7,6 +7,8 @@
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004, 2005 Null Team
  *
+ * N-way mixing with self echo suppresion idea by Andrew McDonald
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or

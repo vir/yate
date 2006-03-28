@@ -13,6 +13,9 @@
 ; password: string: Password required to authenticate, default empty!
 ;password=
 
+; output: bool: Enable output as soon as connecting
+;output=no
+
 ; interactive: bool: Disable the TCP coalescing to improve interactivity
 ;  this is almost never required and needs Yate to run as superuser
 ;interactive=no

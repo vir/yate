@@ -51,6 +51,8 @@ static const char s_helpmsg[] =
 
 static Configuration s_cfg;
 
+static bool s_output = false;
+
 /* I need this here because i'm gonna use it in both classes */
 Socket s_sock;
 Mutex s_mutex(true);
@@ -160,7 +162,7 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
-      m_auth(false), m_debug(false), m_output(true), m_machine(false),
+      m_auth(false), m_debug(false), m_output(s_output), m_machine(false),
       m_socket(sock), m_address(addr)
 {
     s_mutex.lock();
@@ -532,6 +534,7 @@ void RManager::initialize()
     Output("Initializing module RManager");
     s_cfg = Engine::configFile("rmanager");
     s_cfg.load();
+    s_output = s_cfg.getBoolValue("general","output",false);
 
     if (s_sock.valid())
 	return;

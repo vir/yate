@@ -24,15 +24,19 @@
 
 #include <yatephone.h>
 
-#include <stdlib.h>
-
 using namespace TelEngine;
 
+// size of the outgoing data blocks in bytes - divide by 2 to get samples
 #define DATA_CHUNK 320
+
+// minimum amount of buffered data when we start mixing
 #define MIN_BUFFER 960
+
+// maximum size we allow the buffer to grow
 #define MAX_BUFFER 1600
 
-// Absolute maximum possible energy
+
+// Absolute maximum possible energy (square +-32767 wave) - do not change
 #define ENERGY_MAX 1073676289
 
 // Default / minimum noise threshold
@@ -43,137 +47,324 @@ using namespace TelEngine;
 #define DECAY_STORE 995
 #define ATTACK_RATE (DECAY_TOTAL-DECAY_STORE)
 
-#if DECAY_TOTAL <= DECAY_STORE
-#error DECAY_TOTAL must be higher than DECAY_STORE
-#endif
-
 // Shift for noise margin
 #define SHIFT_LEVEL 5
 // Shift for noise decay rate
 #define SHIFT_RAISE 7
+
+// some sanity checks
+#if DECAY_TOTAL <= DECAY_STORE
+#error DECAY_TOTAL must be higher than DECAY_STORE
+#endif
 
 #if SHIFT_LEVEL >= SHIFT_RAISE
 #error SHIFT_RAISE must be higher than SHIFT_LEVEL
 #endif
 
 class ConfConsumer;
+class ConfChan;
 
+// The list of conference rooms
 static ObjList s_rooms;
 
+// Mutex that protects the source while accessed by the consumer
+static Mutex s_srcMutex;
+
+// Hold the number of the newest allocated dynamic room
+static int s_roomAlloc = 0;
+
+// The conference room holds a list of connected channels and does the mixing.
+// It does also act as a data source for the sum of all channels
 class ConfRoom : public DataSource
 {
 public:
-    ConfRoom(const String& name);
-    ~ConfRoom();
-    static ConfRoom* get(const String& name, bool create = false);
+    virtual ~ConfRoom();
+    static ConfRoom* get(const String& name, const NamedList* params = 0);
     virtual const String& toString() const
 	{ return m_name; }
     inline ObjList& channels()
 	{ return m_chans; }
-    void mix(ConfConsumer* cons);
+    inline int rate() const
+	{ return m_rate; }
+    inline int users() const
+	{ return m_users; }
+    inline bool full() const
+	{ return m_users >= m_maxusers; }
+    void mix(ConfConsumer* cons = 0);
+    void addChannel(ConfChan* chan);
+    void delChannel(ConfChan* chan);
 private:
+    ConfRoom(const String& name, const NamedList& params);
     String m_name;
     ObjList m_chans;
+    String m_notify;
+    bool m_lonely;
+    int m_rate;
+    int m_users;
+    int m_maxusers;
 };
 
+// A conference channel is just a dumb holder of its data channels
 class ConfChan : public Channel
 {
+    YCLASS(ConfChan,Channel)
 public:
-    ConfChan(const String& name, bool smart = false);
-    ~ConfChan();
+    ConfChan(const String& name, const NamedList& params);
+    ConfChan(ConfRoom* room, bool voice = false);
+    virtual ~ConfChan();
+    inline bool isUtility() const
+	{ return m_utility; }
+private:
+    RefPointer<ConfRoom> m_room;
+    bool m_utility;
+    bool m_billing;
 };
 
+// The data consumer computes energy and noise levels (if required) and
+//  triggers the mixing of data in the conference room
 class ConfConsumer : public DataConsumer
 {
     friend class ConfRoom;
+    friend class ConfChan;
+    friend class ConfSource;
 public:
     ConfConsumer(ConfRoom* room, bool smart = false)
-	: m_room(room), m_smart(smart),
+	: m_room(room), m_src(0), m_muted(false), m_smart(smart),
 	  m_energy2(ENERGY_MIN), m_noise2(ENERGY_MIN)
 	{ }
     ~ConfConsumer()
 	{ }
-    virtual void Consume(const DataBlock& data, unsigned long timeDelta);
+    virtual void Consume(const DataBlock& data, unsigned long tStamp);
     unsigned int energy() const;
     unsigned int noise() const;
     inline unsigned int energy2() const
 	{ return m_energy2; }
     inline unsigned int noise2() const
 	{ return m_noise2; }
+    inline bool muted() const
+	{ return m_muted; }
     inline bool hasSignal() const
-	{ return (m_buffer.length() > 1) && (m_energy2 >= m_noise2); }
+	{ return (!m_muted) && (m_buffer.length() > 1) && (m_energy2 >= m_noise2); }
 private:
-    void consumed(unsigned int samples);
+    void consumed(const int* mixed, unsigned int samples);
+    void dataForward(const int* mixed, unsigned int samples);
     ConfRoom* m_room;
+    ConfSource* m_src;
+    bool m_muted;
     bool m_smart;
     unsigned int m_energy2;
     unsigned int m_noise2;
     DataBlock m_buffer;
 };
 
+// Per channel data source with that channel's data removed from the mix
+class ConfSource : public DataSource
+{
+    friend class ConfChan;
+public:
+    ConfSource(ConfConsumer* cons);
+    ~ConfSource();
+private:
+    RefPointer<ConfConsumer> m_cons;
+};
+
+// Handler for call.conference message to join both legs of a call in conference
+class ConfHandler : public MessageHandler
+{
+public:
+    inline ConfHandler(unsigned int priority)
+	: MessageHandler("call.conference",priority)
+	{ }
+    virtual ~ConfHandler()
+	{ }
+    virtual bool received(Message& msg);
+};
+
+// The driver just holds all the channels (not conferences)
 class ConferenceDriver : public Driver
 {
 public:
     ConferenceDriver();
     virtual ~ConferenceDriver();
+    bool checkRoom(String& room, bool existing);
+protected:
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual void statusParams(String& str);
+private:
+    bool m_init;
 };
 
 INIT_PLUGIN(ConferenceDriver);
 
-ConfRoom* ConfRoom::get(const String& name, bool create)
+// Count the position of the most significant 1 bit - pretty close to logarithm
+static unsigned int binLog(unsigned int x)
+{
+    unsigned int v = 0;
+    while (x >>= 1)
+	v++;
+    return v;
+}
+
+
+// Get a pointer to a conference by name, optionally creates it with given parameters
+// If a pointer is returned it must be dereferenced by the caller
+// Thread safe
+ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 {
     if (name.null())
 	return 0;
+    Lock lock(&__plugin);
     ObjList* l = s_rooms.find(name);
     ConfRoom* room = l ? static_cast<ConfRoom*>(l->get()) : 0;
     if (room)
 	room->ref();
-    else if (create)
-	room = new ConfRoom(name);
+    else if (params)
+	room = new ConfRoom(name,*params);
     return room;
 }
 
-ConfRoom::ConfRoom(const String& name)
-    : m_name(name)
+// Private constructor, always called from ConfRoom::get() with mutex hold
+ConfRoom::ConfRoom(const String& name, const NamedList& params)
+    : m_name(name), m_lonely(false), m_rate(8000), m_users(0), m_maxusers(10)
 {
-    Debug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s') [%p]",name.c_str(),this);
+    DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
+	name.c_str(),&params,this);
+    m_rate = params.getIntValue("rate",m_rate);
+    m_maxusers = params.getIntValue("maxusers",m_maxusers);
+    m_notify = params.getValue("notify");
+    m_lonely = params.getValue("lonely");
     s_rooms.append(this);
+    // create outgoing call to room record utility channel
+    const char* callto = params.getValue("record");
+    if (callto) {
+	ConfChan* chan = new ConfChan(this);
+	Message* m = chan->message("call.execute");
+	m->userData(chan);
+	chan->deref();
+	m->setParam("callto",callto);
+	m->setParam("cdrtrack",String::boolText(false));
+	m->setParam("caller",params.getValue("caller"));
+	m->setParam("called",params.getValue("called"));
+	m->setParam("billid",params.getValue("billid"));
+	m->setParam("username",params.getValue("username"));
+	Engine::enqueue(m);
+    }
+    // emit room creation notification
+    if (m_notify) {
+	Message* m = new Message("chan.notify");
+	m->userData(this);
+	m->addParam("targetid",m_notify);
+	m->addParam("event","created");
+	m->addParam("room",m_name);
+	m->addParam("caller",params.getValue("caller"));
+	m->addParam("called",params.getValue("called"));
+	m->addParam("billid",params.getValue("billid"));
+	m->addParam("username",params.getValue("username"));
+	Engine::enqueue(m);
+    }
 }
 
 ConfRoom::~ConfRoom()
 {
-    Debug(&__plugin,DebugAll,"ConfRoom::~ConfRoom() '%s' [%p]",m_name.c_str(),this);
+    DDebug(&__plugin,DebugAll,"ConfRoom::~ConfRoom() '%s' [%p]",m_name.c_str(),this);
+    // plugin must be locked as the destructor is called when room is dereferenced
+    Lock lock(&__plugin);
     s_rooms.remove(this,false);
     m_chans.clear();
+    if (m_notify) {
+	Message* m = new Message("chan.notify");
+	m->addParam("targetid",m_notify);
+	m->addParam("event","destroyed");
+	m->addParam("room",m_name);
+	Engine::enqueue(m);
+    }
 }
 
+// Add one channel to the room
+void ConfRoom::addChannel(ConfChan* chan)
+{
+    if (!chan)
+	return;
+    m_chans.append(chan);
+    if (!chan->isUtility()) {
+	m_users++;
+	if (m_notify) {
+	    String tmp(m_users);
+	    Message* m = new Message("chan.notify");
+	    m->addParam("targetid",m_notify);
+	    m->addParam("event","joined");
+	    m->addParam("room",m_name);
+	    m->addParam("users",tmp);
+	    Engine::enqueue(m);
+	}
+    }
+}
+
+// Remove one channel from the room
+void ConfRoom::delChannel(ConfChan* chan)
+{
+    if (!chan)
+	return;
+    if (m_chans.remove(chan,false) && !chan->isUtility()) {
+	m_users--;
+	bool alone = (m_users == 1);
+	if (m_notify) {
+	    String tmp(m_users);
+	    Message* m = new Message("chan.notify");
+	    m->addParam("targetid",m_notify);
+	    m->addParam("event","left");
+	    m->addParam("room",m_name);
+	    m->addParam("users",tmp);
+	    // easy to check parameter indicating one user was left alone
+	    m->addParam("lonely",String::boolText(alone));
+	    Engine::enqueue(m);
+	}
+
+	// cleanup if there are only 1 or 0 (if lonely==true) real users left
+	if (m_users <= (m_lonely ? 0 : 1)) {
+	    // all channels left are utility or the lonely user - drop them
+	    // make sure we continue to exist at least as long as the iterator
+	    if (!ref())
+		return;
+	    ListIterator iter(m_chans);
+	    while (ConfChan* ch = static_cast<ConfChan*>(iter.get()))
+		ch->disconnect("hangup");
+	    deref();
+	}
+    }
+}
+
+// Mix in buffered data from all channels, only if we have enough in buffer
 void ConfRoom::mix(ConfConsumer* cons)
 {
     unsigned int len = MAX_BUFFER;
     unsigned int mlen = 0;
     Lock mylock(mutex());
+    // find out the minimum and maximum amount of data in buffers
     ObjList* l = m_chans.skipNull();
     for (; l; l = l->skipNext()) {
 	ConfChan* ch = static_cast<ConfChan*>(l->get());
 	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
 	if (co) {
-	    if (co->m_buffer.length() < len)
-		len = co->m_buffer.length();
-	    if (co->m_buffer.length() > mlen)
-		mlen = co->m_buffer.length();
+	    unsigned int buffered = co->m_buffer.length();
+	    if (len > buffered)
+		len = buffered;
+	    if (mlen < buffered)
+		mlen = buffered;
 	}
     }
     XDebug(DebugAll,"ConfRoom::mix() buffer %u - %u [%p]",len,mlen,this);
+    // make sure we mix in enough data to prevent channels from overflowing
     mlen = mlen + MIN_BUFFER - MAX_BUFFER;
     if (len < mlen)
 	len = mlen;
-    len /= DATA_CHUNK;
-    if (!len)
+    unsigned int chunks = len / DATA_CHUNK;
+    if (!chunks)
 	return;
-    len *= DATA_CHUNK / sizeof(int16_t);
-    int* buf = (int*)::calloc(len,sizeof(int));
+    len = chunks * DATA_CHUNK / sizeof(int16_t);
+    DataBlock mixbuf(0,len*sizeof(int));
+    int* buf = (int*)mixbuf.data();
     for (l = m_chans.skipNull(); l; l = l->skipNext()) {
 	ConfChan* ch = static_cast<ConfChan*>(l->get());
 	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
@@ -190,8 +381,14 @@ void ConfRoom::mix(ConfConsumer* cons)
 		for (unsigned int i=0; i < n; i++)
 		    buf[i] += *p++;
 	    }
-	    co->consumed(len);
 	}
+    }
+    // we finished mixing - notify consumers about it
+    for (l = m_chans.skipNull(); l; l = l->skipNext()) {
+	ConfChan* ch = static_cast<ConfChan*>(l->get());
+	ConfConsumer* co = static_cast<ConfConsumer*>(ch->getConsumer());
+	if (co)
+	    co->consumed(buf,len);
     }
     DataBlock data(0,len*sizeof(int16_t));
     int16_t* p = (int16_t*)data.data();
@@ -200,14 +397,16 @@ void ConfRoom::mix(ConfConsumer* cons)
 	// saturate symmetrically the result of addition
 	*p++ = (val < -32767) ? -32767 : ((val > 32767) ? 32767 : val);
     }
-    ::free(buf);
+    mixbuf.clear();
     mylock.drop();
     Forward(data);
 }
 
-void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
+
+// Compute the energy level and noise threshold, store the data and call mixer
+void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 {
-    if (data.null() || !m_room)
+    if (m_muted || data.null() || !m_room)
 	return;
     if (m_smart) {
 	// we need to compute the average energy and take decay into account
@@ -234,7 +433,14 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	if (m_noise2 < ENERGY_MIN)
 	    m_noise2 = ENERGY_MIN;
     }
-    m_room->mutex()->lock();
+    // make sure looping back conferences is not fatal
+    if (!m_room->mutex()->lock(150000)) {
+	Debug(&__plugin,DebugWarn,"Failed to lock room '%s' - data loopback? [%p]",
+	    m_room->toString().c_str(),this);
+	// mute the channel to avoid getting back here
+	m_muted = true;
+	return;
+    }
     if (m_buffer.length()+data.length() < MAX_BUFFER)
 	m_buffer += data;
     m_room->mutex()->unlock();
@@ -242,10 +448,13 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	m_room->mix(this);
 }
 
-void ConfConsumer::consumed(unsigned int samples)
+// Take out of the buffer the samples mixed in or skipped
+//  this method is called with the room locked
+void ConfConsumer::consumed(const int* mixed, unsigned int samples)
 {
     if (!samples)
 	return;
+    dataForward(mixed,samples);
     unsigned int n = m_buffer.length() / 2;
     if (samples > n) {
 	// buffer underflowed
@@ -264,12 +473,31 @@ void ConfConsumer::consumed(unsigned int samples)
     m_buffer.cut(-(int)samples);
 }
 
-static unsigned int binLog(unsigned int x)
+// Substract our own data from the mix and send it on the no-echo source
+void ConfConsumer::dataForward(const int* mixed, unsigned int samples)
 {
-    unsigned int v = 0;
-    while (x >>= 1)
-	v++;
-    return v;
+    if (!(m_src && mixed))
+	return;
+    // static lock is used while we reference the source
+    s_srcMutex.lock();
+    RefPointer<ConfSource> src = m_src;
+    s_srcMutex.unlock();
+    if (!src)
+	return;
+
+    int16_t* d = (int16_t*)m_buffer.data();
+    unsigned int n = m_buffer.length() / 2;
+    DataBlock data(0,samples*sizeof(int16_t));
+    int16_t* p = (int16_t*)data.data();
+    for (unsigned int i=0; i < samples; i++) {
+	int val = *mixed++;
+	// substract our own data - only as much as we have
+	if (i < n)
+	    val -= d[i];
+	// saturate symmetrically the result of additions and substraction
+	*p++ = (val < -32767) ? -32767 : ((val > 32767) ? 32767 : val);
+    }
+    src->Forward(data);
 }
 
 unsigned int ConfConsumer::energy() const
@@ -283,43 +511,191 @@ unsigned int ConfConsumer::noise() const
 }
 
 
-ConfChan::ConfChan(const String& name, bool smart)
-    : Channel(__plugin)
+ConfSource::ConfSource(ConfConsumer* cons)
+    : m_cons(cons)
 {
-    Debug(this,DebugAll,"ConfChan::ConfChan(%s,%s) %s [%p]",
-	name.c_str(),String::boolText(smart),id().c_str(),this);
-    Lock lock(&__plugin);
-    ConfRoom* room = ConfRoom::get(name,true);
-    if (room) {
-	m_address = name;
-	setSource(room);
-	room->deref();
-	room->channels().append(this);
-	setConsumer(new ConfConsumer(room,smart));
-	getConsumer()->deref();
+    if (m_cons)
+	m_cons->m_src = this;
+}
+
+ConfSource::~ConfSource()
+{
+    if (m_cons) {
+	s_srcMutex.lock();
+	m_cons->m_src = 0;
+	s_srcMutex.unlock();
     }
 }
 
+
+// Constructor of a new conference leg, creates or attaches to an existing
+//  conference room; noise and echo suppression are also set here
+ConfChan::ConfChan(const String& name, const NamedList& params)
+    : Channel(__plugin,0,true), m_utility(true), m_billing(false)
+{
+    DDebug(this,DebugAll,"ConfChan::ConfChan(%s,%p) %s [%p]",
+	name.c_str(),&params,id().c_str(),this);
+    // much of the defaults depend if this is an utility channel or not
+    m_utility = params.getBoolValue("utility",false);
+    m_billing = params.getBoolValue("billing",false);
+    bool smart = params.getBoolValue("smart",!m_utility);
+    bool echo = params.getBoolValue("echo",m_utility);
+    bool voice = params.getBoolValue("voice",true);
+    m_room = ConfRoom::get(name,&params);
+    if (m_room) {
+	m_address = name;
+	m_room->addChannel(this);
+	RefPointer<ConfConsumer> cons;
+	if (voice) {
+	    cons = new ConfConsumer(m_room,smart);
+	    setConsumer(cons);
+	    cons->deref();
+	}
+	if (echo || !cons)
+	    setSource(m_room);
+	else {
+	    ConfSource* src = new ConfSource(cons);
+	    setSource(src);
+	    src->deref();
+	}
+	// no need to keep it referenced - m_room wil do it automatically
+	m_room->deref();
+    }
+    if (m_billing) {
+	Message* s = message("chan.startup");
+	s->setParam("caller",params.getValue("caller"));
+	s->setParam("called",params.getValue("called"));
+	s->setParam("billid",params.getValue("billid"));
+	s->setParam("username",params.getValue("username"));
+	Engine::enqueue(s);
+    }
+}
+
+// Constructor of an utility conference leg (incoming call)
+ConfChan::ConfChan(ConfRoom* room, bool voice)
+    : Channel(__plugin), m_utility(true), m_billing(false)
+{
+    DDebug(this,DebugAll,"ConfChan::ConfChan(%p,%s) %s [%p]",
+	room,String::boolText(voice),id().c_str(),this);
+    m_room = room;
+    if (m_room) {
+	m_address = m_room->toString();
+	m_room->addChannel(this);
+	if (voice) {
+	    ConfConsumer* cons = new ConfConsumer(m_room);
+	    setConsumer(cons);
+	    cons->deref();
+	}
+	setSource(m_room);
+    }
+}
+
+// Destructor - remove itself from room and optionally emit chan.hangup
 ConfChan::~ConfChan()
 {
-    Debug(this,DebugAll,"ConfChan::~ConfChan() %s [%p]",id().c_str(),this);
+    DDebug(this,DebugAll,"ConfChan::~ConfChan() %s [%p]",id().c_str(),this);
     Lock lock(&__plugin);
+    // first make sure we don't pump any more data
     setConsumer();
-    if (getSource()) {
-	static_cast<ConfRoom*>(getSource())->channels().remove(this,false);
-	setSource();
-    }
+    setSource();
+    // then remove ourselves from the room
+    if (m_room)
+	m_room->delChannel(this);
+    if (m_billing)
+	Engine::enqueue(message("chan.hangup"));
 }
 
+
+bool ConfHandler::received(Message& msg)
+{
+    // we don't need a RefPointer for this one as the message keeps it referenced
+    CallEndpoint* chan = YOBJECT(CallEndpoint,msg.userData());
+    if (!chan) {
+	Debug(&__plugin,DebugWarn,"Conference request with no channel!");
+	return false;
+    }
+    if (chan->getObject("ConfChan")) {
+	Debug(&__plugin,DebugWarn,"Conference request from a conference leg!");
+	return false;
+    }
+
+    String room = msg.getValue("room");
+    if (!room.startSkip(__plugin.prefix(),false) || room.null())
+	return false;
+    if (!__plugin.checkRoom(room,msg.getBoolValue("existing")))
+	return false;
+
+    const char* reason = msg.getValue("reason","conference");
+
+    RefPointer<CallEndpoint> peer = chan->getPeer();
+    if (peer) {
+	ConfChan* conf = YOBJECT(ConfChan,peer);
+	if (conf) {
+	    // caller's peer is already a conference - check if the same
+	    if (conf->address() == room) {
+		Debug(&__plugin,DebugNote,"Do-nothing conference request to the same room");
+		return true;
+	    }
+	    // not same - we just drop old conference leg
+	    peer = 0;
+	}
+    }
+
+    // create a conference leg or even a room for the caller
+    ConfChan *c = new ConfChan(room,msg);
+    if (chan->connect(c,reason,false)) {
+	msg.setParam("peerid",c->id());
+	c->deref();
+	msg.setParam("room",__plugin.prefix()+room);
+	if (peer) {
+	    // create a conference leg for the old peer too
+	    ConfChan *p = new ConfChan(room,msg);
+	    peer->connect(p,reason,false);
+	    p->deref();
+	}
+	return true;
+    }
+    c->destruct();
+    return false;
+}
+
+
+/* "call.execute" message
+    Input parameters - per room:
+	"callto" - must be of the form "conf/NAME" where NAME is the name of
+	    the conference; an empty name will be replaced with a random one
+	"existing" - set to true to always attach to an existing conference;
+	    the call will fail if a conference with that name doesn't exist
+	"maxusers" - maximum number of users allowed to connect to this
+	    conference, not counting utility channels
+	"lonely" - set to true to allow lonely users to remain in conference
+	    else they will be disconnected
+	"notify" - ID used for "chan.notify" room notifications, an empty
+	    string (default) will disable notifications
+	"record" - route that will make an outgoing record-only call
+    Input parameters - per conference leg:
+	"utility" - true creates a channel that is used for housekeeping
+	    tasks like recording or playing prompts to everybody
+	"voice" - set to false to have the conference leg just listen to the
+	    voice mix without being able to talk
+	"smart" - set to false to disable energy and noise level calculation
+	"echo" - set to true to hear back the voice this channel has injected
+	    in the conference
+	"billing" - set to true to generate "chan.startup" and "chan.hangup"
+	    messages for billing purposes
+    Return parameters:
+	"room" - name of the conference room in the form "conf/NAME"
+	"peerid" - channel ID of the conference leg
+*/
+
+// Handle call.execute by creating or attaching to an existing conference
 bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 {
-    if (msg.getBoolValue("existing") && !ConfRoom::get(dest))
+    if (!checkRoom(dest,msg.getBoolValue("existing")))
 	return false;
-    if (dest.null())
-	dest << "x-" << (unsigned int)::random();
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	ConfChan *c = new ConfChan(dest,msg.getBoolValue("smart",true));
+	ConfChan *c = new ConfChan(dest,msg);
 	if (ch->connect(c)) {
 	    msg.setParam("peerid",c->id());
 	    c->deref();
@@ -331,12 +707,33 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 	    return false;
 	}
     }
+    // conference will never make outgoing calls
     Debug(DebugWarn,"Conference call with no call endpoint!");
     return false;
 }
 
+// Check if a room exists, allocates a new room name if not and asked so
+bool ConferenceDriver::checkRoom(String& room, bool existing)
+{
+    ConfRoom* conf = ConfRoom::get(room);
+    if (existing && !conf)
+	return false;
+    if (conf) {
+	bool ok = !conf->full();
+	conf->deref();
+	return ok;
+    }
+    if (room.null()) {
+	// allocate an atomically incremented room number
+	lock();
+	room << "x-" << ++s_roomAlloc;
+	unlock();
+    }
+    return true;
+}
+
 ConferenceDriver::ConferenceDriver()
-    : Driver("conf","misc")
+    : Driver("conf","misc"), m_init(false)
 {
     Output("Loaded module Conference");
 }
@@ -347,10 +744,21 @@ ConferenceDriver::~ConferenceDriver()
     s_rooms.clear();
 }
 
+void ConferenceDriver::statusParams(String& str)
+{
+    Driver::statusParams(str);
+    str.append("rooms=",",") << s_rooms.count();
+}
+    
+
 void ConferenceDriver::initialize()
 {
     Output("Initializing module Conference");
     setup();
+    if (m_init)
+	return;
+    m_init = true;
+    Engine::install(new ConfHandler(150));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

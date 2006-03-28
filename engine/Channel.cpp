@@ -48,7 +48,7 @@ CallEndpoint::~CallEndpoint()
 	Debug(DebugAll,"Endpoint at %p type '%s' refcount=%d",e,e->name().c_str(),e->refcount());
     }
 #endif
-    disconnect(true,0);
+    disconnect(true,0,true);
     m_data.clear();
 }
 
@@ -69,10 +69,10 @@ void CallEndpoint::setId(const char* newId)
     m_id = newId;
 }
 
-bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
+bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
 {
     if (!peer) {
-	disconnect(reason);
+	disconnect(reason,notify);
 	return false;
     }
     if (peer == m_peer)
@@ -90,13 +90,13 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
     // are we already dead?
     if (!ref())
 	return false;
-    disconnect(reason);
+    disconnect(reason,notify);
     // is our intended peer dead?
     if (!peer->ref()) {
 	deref();
 	return false;
     }
-    peer->disconnect(reason);
+    peer->disconnect(reason,notify);
 
     ObjList* l = m_data.skipNull();
     for (; l; l=l->skipNext()) {
@@ -105,7 +105,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
     }
 
     m_peer = peer;
-    peer->setPeer(this,reason);
+    peer->setPeer(this,reason,notify);
     connected(reason);
 
 #if 0
@@ -115,7 +115,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason)
     return true;
 }
 
-bool CallEndpoint::disconnect(bool final, const char* reason)
+bool CallEndpoint::disconnect(bool final, const char* reason, bool notify)
 {
     if (!m_peer)
 	return false;
@@ -140,7 +140,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason)
 	e->disconnect();
     }
 
-    temp->setPeer(0,reason);
+    temp->setPeer(0,reason,notify);
     if (final)
 	disconnected(true,reason);
     lock.drop();
@@ -148,12 +148,12 @@ bool CallEndpoint::disconnect(bool final, const char* reason)
     return deref();
 }
 
-void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason)
+void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify)
 {
     m_peer = peer;
     if (m_peer)
 	connected(reason);
-    else
+    else if (notify)
 	disconnected(false,reason);
 }
 

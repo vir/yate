@@ -859,17 +859,19 @@ public:
      * Connect the call endpoint to a peer.
      * @param peer Pointer to the peer call endpoint.
      * @param reason Text that describes connect reason.
+     * @param notify Call disconnected() notification method on old peer
      * @return True if connected, false if an error occured.
      */
-    bool connect(CallEndpoint* peer, const char* reason = 0);
+    bool connect(CallEndpoint* peer, const char* reason = 0, bool notify = true);
 
     /**
      * Disconnect from the connected peer call endpoint.
      * @param reason Text that describes disconnect reason.
+     * @param notify Call disconnected() notification method on old peer
      * @return True if the object was deleted, false if it still exists
      */
-    inline bool disconnect(const char* reason = 0)
-	{ return disconnect(false,reason); }
+    inline bool disconnect(const char* reason = 0, bool notify = true)
+	{ return disconnect(false,reason,notify); }
 
     /**
      * Get a data endpoint of this object
@@ -942,8 +944,9 @@ protected:
      * Set the peer call endpoint pointer.
      * @param peer A pointer to the new peer or NULL.
      * @param reason Text describing the reason in case of disconnect.
+     * @param notify Call notification methods - connected() or disconnected()
      */
-    void setPeer(CallEndpoint* peer, const char* reason = 0);
+    void setPeer(CallEndpoint* peer, const char* reason = 0, bool notify = true);
 
     /**
      * Set a new ID for this call endpoint
@@ -952,7 +955,7 @@ protected:
     virtual void setId(const char* newId);
 
 private:
-    bool disconnect(bool final, const char* reason);
+    bool disconnect(bool final, const char* reason, bool notify);
 };
 
 /**

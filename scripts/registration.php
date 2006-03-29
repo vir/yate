@@ -20,11 +20,11 @@ Yate::Install("user.auth",10);
 for (;;) {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
-    if ($ev == "EOF")
+    if ($ev === false)
         break;
     /* Empty events are normal in non-blocking operation.
        This is an opportunity to do idle tasks and check timers */
-    if ($ev == "") {
+    if ($ev === true) {
 //        Yate::Output("PHP event: empty");
         continue;
     }

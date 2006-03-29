@@ -56,8 +56,11 @@ class Yate
      */
     static function Output($str)
     {
-	global $yate_stderr;
-	fputs($yate_stderr, $str . "\n");
+	global $yate_stderr, $yate_socket;
+	if ($yate_socket)
+	    _yate_print("%%>output:$str\n");
+	else
+	    fputs($yate_stderr, "$str\n");
     }
 
     /**
@@ -73,7 +76,18 @@ class Yate
 	else if ($str === false)
 	    $yate_debug = false;
 	else if ($yate_debug)
-	    fputs($yate_stderr, $str . "\n");
+	    Yate::Output($str);
+    }
+
+    /**
+     * Static function to get the unique argument passed by Yate at start time
+     * @return First (and only) command line argument passed by Yate
+     */
+    static function Arg()
+    {
+	if (isset($_SERVER['argv'][1]))
+	    return $_SERVER['argv'][1];
+	return null;
     }
 
     /**
@@ -154,7 +168,7 @@ class Yate
 	$name=Yate::Escape($name);
 	if ($filtname)
 	    $filtname=":$filtname:$filtvalue";
-	print "%%>install:$priority:$name$filtname\n";
+	_yate_print("%%>install:$priority:$name$filtname\n");
     }
 
     /**
@@ -164,7 +178,27 @@ class Yate
     static function Uninstall($name)
     {
 	$name=Yate::Escape($name);
-	print "%%>uninstall:$name\n";
+	_yate_print("%%>uninstall:$name\n");
+    }
+
+    /**
+     * Install a Yate message watcher
+     * @param $name Name of the messages to watch
+     */
+    static function Watch($name)
+    {
+	$name=Yate::Escape($name);
+	_yate_print("%%>watch:$name\n");
+    }
+
+    /**
+     * Uninstall a Yate message watcher
+     * @param $name Name of the messages to stop watching
+     */
+    static function Unwatch($name)
+    {
+	$name=Yate::Escape($name);
+	_yate_print("%%>unwatch:$name\n");
     }
 
     /**
@@ -176,7 +210,7 @@ class Yate
     {
 	$name=Yate::Escape($name);
 	$value=Yate::Escape($value);
-	print "%%>setlocal:$name:$value\n";
+	_yate_print("%%>setlocal:$name:$value\n");
     }
 
     /**
@@ -209,6 +243,18 @@ class Yate
 	if (isset($this->params[$key]))
 	    return $this->params[$key];
 	return $defvalue;
+    }
+
+    /**
+     * Set a named parameter
+     * @param $key Name of the parameter to set
+     * @param $value Value to set in the parameter
+     */
+    function SetParam($key, $value)
+    {
+	if (($value === true) || ($value === false))
+	    $value = Yate::Bool2str($value);
+	$this->params[$key] = $value;
     }
 
     /**
@@ -246,7 +292,7 @@ class Yate
 	$p="";
 	$pa = array(&$p);
 	array_walk($this->params, "_yate_message_walk", $pa);
-	print "%%>message:$i:$t:$n:$r$p\n";
+	_yate_print("%%>message:$i:$t:$n:$r$p\n");
 	$this->type="dispatched";
     }
 
@@ -267,28 +313,44 @@ class Yate
 	$p="";
 	$pa = array(&$p);
 	array_walk($this->params, "_yate_message_walk", $pa);
-	print "%%<message:$i:$k:$n:$r$p\n";
+	_yate_print("%%<message:$i:$k:$n:$r$p\n");
 	$this->type="acknowledged";
     }
 
     /**
      * This static function processes just one input line.
      * It must be called in a loop to keep messages running. Or else.
-     * @return "EOF" if we should exit, "" if we should keep running,
-     *  or an Yate object instance
+     * @return false if we should exit, true if we should keep running,
+     *  or an Yate object instance. Remember to use === and !== operators
+     *  when comparing against true and false.
      */
     static function GetEvent()
     {
-	global $yate_stdin;
-	if (feof($yate_stdin))
-	    return "EOF";
-	$line=fgets($yate_stdin,4096);
-	if ($line == false)
-	    return "";
+	global $yate_stdin, $yate_socket;
+	if ($yate_socket) {
+	    $line = @socket_read($yate_socket,8192);
+	    // check for error
+	    if ($line == false)
+		return false;
+	    // check for EOF
+	    if ($line === "")
+		return false;
+	}
+	else {
+	    if ($yate_stdin == false)
+		return false;
+	    // check for EOF
+	    if (feof($yate_stdin))
+		return false;
+	    $line=fgets($yate_stdin,8192);
+	    // check for async read no data
+	    if ($line == false)
+		return true;
+	}
 	$line=str_replace("\n", "", $line);
 	if ($line == "")
-	    return "";
-	$ev="";
+	    return true;
+	$ev=true;
 	$part=explode(":", $line);
 	switch ($part[0]) {
 	    case "%%>message":
@@ -317,6 +379,24 @@ class Yate
 		$ev->type="uninstalled";
 		$ev->handled=Yate::Str2bool($part[3]);
 		break;
+	    case "%%<watch":
+		/* watch answer str_name:bool_success */
+		$ev=new Yate(Yate::Unescape($part[1]));
+		$ev->type="watched";
+		$ev->handled=Yate::Str2bool($part[2]);
+		break;
+	    case "%%<unwatch":
+		/* unwatch answer str_name:bool_success */
+		$ev=new Yate(Yate::Unescape($part[1]));
+		$ev->type="unwatched";
+		$ev->handled=Yate::Str2bool($part[2]);
+		break;
+	    case "%%<connect":
+		/* connect answer str_role:bool_success */
+		$ev=new Yate(Yate::Unescape($part[1]));
+		$ev->type="connected";
+		$ev->handled=Yate::Str2bool($part[2]);
+		break;
 	    case "%%<setlocal":
 		/* local parameter answer str_name:str_value:bool_success */
 		$ev=new Yate(Yate::Unescape($part[1]),Yate::Unescape($part[2]));
@@ -336,19 +416,50 @@ class Yate
      * This static function initializes globals in the PHP Yate External Module.
      * It should be called before any other method.
      * @param $async (optional) True if asynchronous, polled mode is desired
+     * @param $addr Hostname to connect to or UNIX socket path
+     * @param $port TCP port to connect to, zero to use UNIX sockets
+     * @param $role Role of this connection - "global" or "channel"
+     * @return True if initialization succeeded, false if failed
      */
-    static function Init($async = false)
+    static function Init($async = false, $addr = "", $port = 0, $role = "")
     {
-	global $yate_stdin, $yate_stdout, $yate_stderr, $yate_debug;
+	global $yate_stdin, $yate_stdout, $yate_stderr, $yate_socket, $yate_debug;
 	$yate_debug = false;
-	$yate_stdin = fopen("php://stdin","r");
-	$yate_stdout = fopen("php://stdout","w");
-	$yate_stderr = fopen("php://stderr","w");
+	$yate_stdin = false;
+	$yate_stdout = false;
+	$yate_stderr = false;
+	if ($addr) {
+	    $ok = false;
+	    if ($port) {
+		$yate_socket = @socket_create(AF_INET,SOCK_STREAM,SOL_TCP);
+		$ok = @socket_connect($yate_socket,$addr,$port);
+	    }
+	    else {
+		$yate_socket = @socket_create(AF_UNIX,SOCK_STREAM,0);
+		$ok = @socket_connect($yate_socket,$addr,$port);
+	    }
+	    if (($yate_socket === false) || !$ok) {
+		$yate_socket = false;
+		$yate_stderr = fopen("php://stderr","w");
+		Yate::Output("Socket error, initialization failed");
+		return false;
+	    }
+	}
+	else {
+	    $yate_socket = false;
+	    $yate_stdin = fopen("php://stdin","r");
+	    $yate_stdout = fopen("php://stdout","w");
+	    $yate_stderr = fopen("php://stderr","w");
+	    $role = "";
+	}
 	flush();
 	set_error_handler("_yate_error_handler");
 	ob_implicit_flush(1);
-	if ($async && function_exists("stream_set_blocking"))
+	if ($async && function_exists("stream_set_blocking") && $yate_stdin)
 	    stream_set_blocking($yate_stdin,false);
+	if ($role)
+	    _yate_print("%%>connect:$role\n");
+	return true;
     }
 
 }
@@ -359,20 +470,30 @@ function _yate_error_handler($errno, $errstr, $errfile, $errline)
     $str = " [$errno] $errstr in $errfile line $errline\n";
     switch ($errno) {
 	case E_USER_ERROR:
-	    Yate::Output("PHP fatal:" . $str);
+	    Yate::Output("PHP fatal: $str");
 	    exit(1);
 	    break;
 	case E_WARNING:
 	case E_USER_WARNING:
-	    Yate::Output("PHP error:" . $str);
+	    Yate::Output("PHP error: $str");
 	    break;
 	case E_NOTICE:
 	case E_USER_NOTICE:
-	    Yate::Output("PHP warning:" . $str);
+	    Yate::Output("PHP warning: $str");
 	    break;
 	default:
-	    Yate::Output("PHP unknown error:" . $str);
+	    Yate::Output("PHP unknown error: $str");
     }
+}
+
+/* Internal function */
+function _yate_print($str)
+{
+    global $yate_stdout, $yate_socket;
+    if ($yate_socket)
+	@socket_write($yate_socket, $str);
+    else if ($yate_stdout)
+	fputs($yate_stdout, $str);
 }
 
 /* Internal function */

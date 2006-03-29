@@ -324,10 +324,10 @@ function gotDTMF($text)
 while ($state != "") {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
-    if ($ev == "EOF")
+    if ($ev === false)
 	break;
     /* No need to handle empty events in this application */
-    if ($ev == "")
+    if ($ev === true)
 	continue;
     /* If we reached here we should have a valid object */
     switch ($ev->type) {
@@ -341,7 +341,7 @@ while ($state != "") {
 		    /* We must ACK this message before dispatching a call.answered */
 		    $ev->Acknowledge();
 		    /* Prevent a warning if trying to ACK this message again */
-		    $ev = "";
+		    $ev = false;
 
 		    /* Signal we are answering the call */
 		    $m = new Yate("call.answered");
@@ -374,7 +374,7 @@ while ($state != "") {
 	    }
 	    /* This is extremely important.
 	       We MUST let messages return, handled or not */
-	    if ($ev != "")
+	    if ($ev)
 		$ev->Acknowledge();
 	    break;
 	case "answer":

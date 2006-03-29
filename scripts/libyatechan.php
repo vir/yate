@@ -69,9 +69,9 @@ class YateChan
 	$loop = true;
 	while ($loop) {
 	    $ev=Yate::GetEvent();
-	    if ($ev == "")
+	    if ($ev === true)
 		continue;
-	    if ($ev == "EOF") {
+	    if ($ev === false) {
 		$chan_instance->exiting = true;
 		break;
 	    }
@@ -208,11 +208,13 @@ class YateChan
      * It will call Yate::Init internally.
      * @param $prefix (optional) Prefix used for the unique channel identifier
      * @param $async (optional) True if asynchronous, polled mode is desired
+     * @param $addr Hostname to connect to or UNIX socket path
+     * @param $port TCP port to connect to, zero to use UNIX sockets
      */
-    static function Init($prefix = "extchan", $async = false)
+    static function Init($prefix = "extchan", $async = false, $addr = "", $port = 0)
     {
 	global $chan_instance;
-	Yate::Init($async);
+	Yate::Init($async,$addr,$port,"channel");
 	$chan_instance = new YateChan($prefix);
 	YateChan::RunEvents();
 	if ($chan_instance->exiting)

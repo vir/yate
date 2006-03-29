@@ -163,9 +163,9 @@ function endRoute($callto,$ok,$err)
 while ($state != "") {
     $ev=Yate::GetEvent();
     /* If Yate disconnected us then exit cleanly */
-    if ($ev == "EOF")
+    if ($ev === false)
 	break;
-    if ($ev == "")
+    if ($ev === true)
 	continue;
     /* If we reached here we should have a valid object */
     switch ($ev->type) {
@@ -179,7 +179,7 @@ while ($state != "") {
 		    // we must ACK this message before dispatching a call.answered
 		    $ev->Acknowledge();
 		    // we already ACKed this message
-		    $ev = "";
+		    $ev = false;
 
 		    $m = new Yate("call.answered");
 		    $m->params["id"] = $ourcallid;
@@ -207,7 +207,7 @@ while ($state != "") {
 	    }
 	    /* This is extremely important.
 	       We MUST let messages return, handled or not */
-	    if ($ev != "")
+	    if ($ev)
 		$ev->Acknowledge();
 	    break;
 	case "answer":

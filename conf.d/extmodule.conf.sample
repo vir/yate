@@ -7,6 +7,28 @@
 ; Uncomment the following line when running in the sources directory
 ;scripts_dir=scripts/
 
+; timeout: int: How many milliseconds to wait for a module to answer
+;timeout=10000
+
+; timebomb: bool: Kill the module instance if it timed out
+;timebomb=false
+
+
+;[listener sample]
+; For each socket listener there should be a section starting with the
+;  "listener" keyword
+
+; type: keyword: Type of socket - "unix" or "tcp"
+
+; path: string: Path of the UNIX socket to create
+
+; addr: string: IP address to bind the TCP socket to
+;addr=127.0.0.1
+
+; port: int: TCP port to bind to, must be positive
+
+; role: keyword: Role of incoming connections - "global", "channel" or don't set
+
 
 [scripts]
 ; Add one entry in this section for each global external module that is to be
@@ -16,4 +38,14 @@
 ; The script name should hold either the absolute path and name or the path
 ;  and name relative to the sripts_dir in section [general]
 ; The parameter is optional and if present is passed to the script as the first
+;  (and single) parameter
+
+
+[execute]
+; Add one entry in this section for each external program that is to be
+;  executed on Yate startup
+; Each line has to be on the form:
+;   progname=parameter
+; The program name should hold the absolute path to the program
+; The parameter is optional and if present is passed to the program as the first
 ;  (and single) parameter

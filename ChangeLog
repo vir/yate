@@ -1,3 +1,10 @@
+Thu Mar 30 2006 Paul Chitescu <paulc-devel@null.ro>
+- Changed external module to allow to listen on sockets
+- Added the watch concept designed by Maciek Kaminski
+- Added many options that can be set per external module instance
+- Updated the PHP libraries to support the new functions
+- Changed the return values of GetEvent() to comply with typechecks in PHP5
+
 Wed Mar 29 2006 Paul Chitescu <paulc-devel@null.ro>
 - Modified conference based on Andrew McDonald's idea of N-way mixing
 - Default output in rmanager is controlled by the config file

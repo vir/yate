@@ -3150,10 +3150,23 @@ public:
     virtual bool terminate() = 0;
 
     /**
+     * Check if the last error code indicates a retryable condition
+     * @return True if error was temporary and operation should be retried
+     */
+    virtual bool canRetry() const;
+
+    /**
      * Check if this stream is valid
      * @return True if the stream is valid, false if it's invalid or closed
      */
     virtual bool valid() const = 0;
+
+    /**
+     * Set the blocking or non-blocking operation mode of the stream
+     * @param block True if I/O operations should block, false for non-blocking
+     * @return True if operation was successfull, false if an error occured
+     */
+    virtual bool setBlocking(bool block = true);
 
     /**
      * Write data to a connected stream
@@ -3288,6 +3301,12 @@ public:
 	{ return m_handle; }
 
     /**
+     * Check if the last error code indicates a retryable condition
+     * @return True if error was temporary and operation should be retried
+     */
+    virtual bool canRetry() const;
+
+    /**
      * Check if this file is valid
      * @return True if the file is valid, false if it's invalid or closed
      */
@@ -3298,6 +3317,13 @@ public:
      * @return Handle value for an invalid file
      */
     static HANDLE invalidHandle();
+
+    /**
+     * Set the blocking or non-blocking operation mode of the file
+     * @param block True if I/O operations should block, false for non-blocking
+     * @return True if operation was successfull, false if an error occured
+     */
+    virtual bool setBlocking(bool block = true);
 
     /**
      * Write data to an open file
@@ -3419,7 +3445,7 @@ public:
      * Check if the last error code indicates a retryable condition
      * @return True if error was temporary and operation should be retried
      */
-    bool canRetry() const;
+    virtual bool canRetry() const;
 
     /**
      * Check if this socket is valid
@@ -3469,7 +3495,7 @@ public:
      * @param block True if I/O operations should block, false for non-blocking
      * @return True if operation was successfull, false if an error occured
      */
-    bool setBlocking(bool block = true);
+    virtual bool setBlocking(bool block = true);
 
     /**
      * Associates the socket with a local address

@@ -282,6 +282,16 @@ Stream::~Stream()
 {
 }
 
+bool Stream::canRetry() const
+{
+    return false;
+}
+
+bool Stream::setBlocking(bool block)
+{
+    return false;
+}
+
 int Stream::writeData(const char* str)
 {
     if (null(str))
@@ -419,6 +429,37 @@ void File::copyError()
     m_error = (int)GetLastError();
 #else
     m_error = errno;
+#endif
+}
+
+bool File::canRetry() const
+{
+    if (!m_error)
+	return true;
+    return (m_error == EAGAIN) || (m_error == EINTR) || (m_error == EWOULDBLOCK);
+}
+
+bool File::setBlocking(bool block)
+{
+#ifdef _WINDOWS
+    return false;
+#else
+    unsigned long flags = 1;
+    flags = ::fcntl(m_handle,F_GETFL);
+    if (flags < 0) {
+	copyError();
+	return false;
+    }
+    if (block)
+	flags &= !O_NONBLOCK;
+    else
+	flags |= O_NONBLOCK;
+    if (::fcntl(m_handle,F_SETFL,flags) < 0) {
+	copyError();
+	return false;
+    }
+    clearError();
+    return true;
 #endif
 }
 

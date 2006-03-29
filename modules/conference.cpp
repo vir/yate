@@ -64,6 +64,7 @@ using namespace TelEngine;
 #endif
 
 class ConfConsumer;
+class ConfSource;
 class ConfChan;
 
 // The list of conference rooms

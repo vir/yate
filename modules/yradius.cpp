@@ -271,7 +271,7 @@ public:
     bool packTo(DataBlock& data) const;
     bool getString(String& retval) const;
     inline bool isValid() const
-	{ return m_type; }
+	{ return (m_type != 0); }
     inline bool isVendor() const
 	{ return (m_type && (m_type->code == 26)) && (m_vendor == 0); }
     inline int vendor() const
@@ -738,7 +738,7 @@ bool RadAttrib::getString(String& retval) const
 	    }
 	    break;
 	case a_int:
-	    retval = ntohl(*(int32_t*)m_value.data());
+	    retval = (int)ntohl(*(int32_t*)m_value.data());
 	    break;
 	default:
 	    return false;
@@ -747,7 +747,7 @@ bool RadAttrib::getString(String& retval) const
 }
 
 
-unsigned char RadiusClient::s_sessionId = (Time::now() & 0xff);
+unsigned char RadiusClient::s_sessionId = (unsigned char)(Time::now() & 0xff);
 
 RadiusClient::~RadiusClient()
 {

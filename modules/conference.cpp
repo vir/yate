@@ -236,7 +236,7 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     m_rate = params.getIntValue("rate",m_rate);
     m_maxusers = params.getIntValue("maxusers",m_maxusers);
     m_notify = params.getValue("notify");
-    m_lonely = params.getValue("lonely");
+    m_lonely = params.getBoolValue("lonely");
     s_rooms.append(this);
     // create outgoing call to room record utility channel
     const char* callto = params.getValue("record");
@@ -422,9 +422,9 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	    // use square of the energy as extracting the square root is expensive
 	    sum2 = (sum2 * DECAY_STORE + (int64_t)(samp*samp) * ATTACK_RATE) / DECAY_TOTAL;
 	    if (min2 > sum2)
-		min2 = sum2;
+		min2 = (unsigned int)sum2;
 	}
-	m_energy2 = sum2;
+	m_energy2 = (unsigned int)sum2;
 	// TODO: find a better algorithm to adjust the noise threshold
 	min2 += min2 >> SHIFT_LEVEL;
 	// try to keep noise threshold slightly above minimum energy
@@ -468,7 +468,7 @@ void ConfConsumer::consumed(const int* mixed, unsigned int samples)
 	    int64_t sum2 = m_energy2;
 	    while (n--)
 		sum2 = (sum2 * DECAY_STORE) / DECAY_TOTAL;
-	    m_energy2 = sum2;
+	    m_energy2 = (unsigned int)sum2;
 	}
 	return;
     }

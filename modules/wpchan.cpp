@@ -359,8 +359,8 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
 
     m_samples = cfg.getIntValue("general","samples",m_samples);
     m_samples = cfg.getIntValue(sect,"samples",m_samples);
-    m_swap = cfg.getIntValue("general","bitswap",m_swap);
-    m_swap = cfg.getIntValue(sect,"bitswap",m_swap);
+    m_swap = cfg.getBoolValue("general","bitswap",m_swap);
+    m_swap = cfg.getBoolValue(sect,"bitswap",m_swap);
 }
 
 WpData::~WpData()

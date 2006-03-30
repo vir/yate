@@ -72,6 +72,7 @@ typedef signed __int64 int64_t;
 typedef unsigned __int64 u_int64_t;
 typedef unsigned __int64 uint64_t;
 
+typedef int pid_t;
 typedef int socklen_t;
 typedef unsigned long in_addr_t;
 

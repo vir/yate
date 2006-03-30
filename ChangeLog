@@ -4,6 +4,8 @@ Thu Mar 30 2006 Paul Chitescu <paulc-devel@null.ro>
 - Added many options that can be set per external module instance
 - Updated the PHP libraries to support the new functions
 - Changed the return values of GetEvent() to comply with typechecks in PHP5
+- Added extmodule and yradius to the Visual C++ workspace
+- Made some fixes for Windows, solved some bugs exposed by the compiler
 
 Wed Mar 29 2006 Paul Chitescu <paulc-devel@null.ro>
 - Modified conference based on Andrew McDonald's idea of N-way mixing

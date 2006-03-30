@@ -24,10 +24,18 @@
  */
 
 #include <yatephone.h>
+
+#ifdef _WINDOWS
+
+#include <process.h>
+
+#else
 #include <yatepaths.h>
 
 #include <sys/stat.h>
 #include <sys/wait.h>
+#endif
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -280,9 +288,16 @@ private:
 
 static bool runProgram(const char *script, const char *args)
 {
+#ifdef _WINDOWS
+    int pid = ::_spawnl(_P_DETACH,script,args,NULL);
+    if (pid < 0) {
+	Debug(DebugWarn, "Failed to _spawnl(): %d: %s", errno, strerror(errno));
+	return false;
+    }
+#else
     int pid = ::fork();
     if (pid < 0) {
-	Debug(DebugWarn, "Failed to fork(): %s", strerror(errno));
+	Debug(DebugWarn, "Failed to fork(): %d: %s", errno, strerror(errno));
 	return false;
     }
     if (!pid) {
@@ -291,6 +306,7 @@ static bool runProgram(const char *script, const char *args)
 	// Try to immunize child from ^C and ^\ the console may receive
 	::signal(SIGINT,SIG_IGN);
 	::signal(SIGQUIT,SIG_IGN);
+
 	// And restore default handlers for other signals
 	::signal(SIGTERM,SIG_DFL);
 	::signal(SIGHUP,SIG_DFL);
@@ -301,10 +317,11 @@ static bool runProgram(const char *script, const char *args)
 	if (debugAt(DebugInfo))
 	    ::fprintf(stderr, "Execing program '%s' '%s'\n", script, args);
         ::execl(script, script, args, (char *)NULL);
-	::fprintf(stderr, "Failed to execute '%s': %s\n", script, strerror(errno));
+	::fprintf(stderr, "Failed to execute '%s': %d: %s\n", script, errno, strerror(errno));
 	// Shit happened. Die as quick and brutal as possible
 	::_exit(1);
     }
+#endif
     Debug(DebugInfo,"Launched external program %s", script);
     return true;
 }
@@ -353,7 +370,7 @@ void ExtModSource::run()
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("ExtModSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
-	    Thread::usleep(dly);
+	    Thread::usleep((unsigned long)dly);
 	}
 	if (r <= 0)
 	    continue;
@@ -361,7 +378,7 @@ void ExtModSource::run()
 	Forward(buf,m_total/2);
 	buf.clear(false);
 	m_total += r;
-	tpos += (r*1000000ULL/m_brate);
+	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(DebugAll,"ExtModSource [%p] end of data total=%u",this,m_total);
     m_chan->setRunning(false);
@@ -763,8 +780,10 @@ void ExtModReceiver::die(bool clearChan)
 
     // Now terminate the process and close its stdout pipe
     closeIn();
+#ifndef _WINDOWS
     if (m_pid > 0)
 	::kill(m_pid,SIGTERM);
+#endif
     if (chan && clearChan)
 	chan->disconnect();
     unuse();
@@ -806,7 +825,7 @@ bool ExtModReceiver::received(Message &msg, int id)
     while (ok) {
 	Thread::yield();
 	lock();
-	ok = m_waiting.find(&h);
+	ok = (m_waiting.find(&h) != 0);
 	if (ok && tout && (Time::now() > tout)) {
 	    Debug(DebugWarn,"Message '%s' did not return in %d msec [%p]",
 		msg.c_str(),m_timeout,this);
@@ -825,6 +844,9 @@ bool ExtModReceiver::received(Message &msg, int id)
 
 bool ExtModReceiver::create(const char *script, const char *args)
 {
+#ifdef _WINDOWS
+    return false;
+#else
     String tmp(script);
     int pid;
     HANDLE ext2yate[2];
@@ -898,6 +920,7 @@ bool ExtModReceiver::create(const char *script, const char *args)
     closeAudio();
     m_pid = pid;
     return true;
+#endif
 }
 
 void ExtModReceiver::cleanup()
@@ -905,6 +928,7 @@ void ExtModReceiver::cleanup()
 #ifdef DEBUG
     Debugger debug(DebugAll,"ExtModReceiver::cleanup()"," [%p]",this);
 #endif
+#ifndef _WINDOWS
     // We must call waitpid from here - same thread we started the child
     if (m_pid > 0) {
 	// No thread switching if possible
@@ -923,6 +947,7 @@ void ExtModReceiver::cleanup()
 	    Debug(DebugMild,"Failed waitpid on %d: %s",m_pid,strerror(errno));
 	m_pid = 0;
     }
+#endif
     unuse();
 }
 

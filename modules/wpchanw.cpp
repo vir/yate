@@ -1,8 +1,8 @@
 /**
- * wpchan.cpp
+ * wpchanw.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * Wanpipe PRI cards telephony driver
+ * Wanpipe PRI cards telephony driver for Windows
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004, 2005 Null Team
@@ -115,13 +115,14 @@ private:
 class WpData : public Thread
 {
 public:
-    WpData(WpSpan* span, const char* card, const char* device, Thread::Priority prio);
+    WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect);
     ~WpData();
     virtual void run();
 private:
     WpSpan* m_span;
     HANDLE m_fd;
     WpChan **m_chans;
+    bool m_swap;
 };
 
 class WpReader : public Thread
@@ -164,6 +165,14 @@ INIT_PLUGIN(WpDriver);
 #define WP_HEADER 21
 #define WP_BUFFER 8188 // maximum length of data = 8K - 4
 
+
+static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
+{
+    String tmp(cfg.getValue(sect,"thread"));
+    if (tmp.null())
+	tmp = cfg.getValue("general","thread");
+    return Thread::priority(tmp);
+}
 
 static void dump_buffer(const void* buf, int len)
 {
@@ -435,15 +444,17 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 
 
 
-WpData::WpData(WpSpan* span, const char* card, const char* device, Thread::Priority prio)
-    : Thread("WpData",prio), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_chans(0)
+WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
+    : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE), m_chans(0), m_swap(true)
 {
-    DDebug(&__plugin,DebugAll,"WpData::WpData(%p) [%p]",span,this);
+    DDebug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",span,card,device,this);
     HANDLE fd = wp_open(card,device);
     if (fd != INVALID_HANDLE_VALUE) {
 	m_fd = fd;
 	m_span->m_data = this;
     }
+    m_swap = cfg.getBoolValue("general","bitswap",m_swap);
+    m_swap = cfg.getBoolValue(sect,"bitswap",m_swap);
 }
 
 WpData::~WpData()
@@ -491,7 +502,7 @@ void WpData::run()
 		    for (b = 0; b < bchans; b++) {
 			WpSource *s = m_chans[b]->m_wp_s;
 			if (s)
-			    s->put(PriDriver::bitswap(*dat));
+			    s->put(m_swap ? PriDriver::bitswap(*dat) : *dat);
 			dat++;
 		    }
 		}
@@ -508,7 +519,8 @@ void WpData::run()
 	    for (int n = samp; n > 0; n--) {
 		for (b = 0; b < bchans; b++) {
 		    WpConsumer *c = m_chans[b]->m_wp_c;
-		    *dat++ = PriDriver::bitswap(c ? c->get() : 0xff);
+		    unsigned char d = c ? c->get() : 0xff;
+		    *dat++ = m_swap ? PriDriver::bitswap(d) : d;
 		}
 	    }
 	    m_span->unlock();
@@ -551,14 +563,6 @@ bool WpChan::openData(const char* format, int echoTaps)
     return true;
 }
 
-static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
-{
-    String tmp(cfg.getValue(sect,"thread"));
-    if (tmp.null())
-	tmp = cfg.getValue("general","thread");
-    return Thread::priority(tmp);
-}
-		    
 
 PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
 {
@@ -579,7 +583,7 @@ PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans,
     WpWriter* wr = new WpWriter(ps,card,dev);
     WpReader* rd = new WpReader(ps,card,dev);
     dev = cfg.getValue(sect,"bgroup","IF1");
-    WpData* dat = new WpData(ps,card,dev,cfgPriority(cfg,sect));
+    WpData* dat = new WpData(ps,card,dev,cfg,sect);
     wr->startup();
     rd->startup();
     dat->startup();

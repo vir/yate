@@ -436,7 +436,11 @@ bool File::canRetry() const
 {
     if (!m_error)
 	return true;
-    return (m_error == EAGAIN) || (m_error == EINTR) || (m_error == EWOULDBLOCK);
+    return (m_error == EAGAIN) || (m_error == EINTR)
+#ifndef _WINDOWS
+	|| (m_error == EWOULDBLOCK)
+#endif
+	;
 }
 
 bool File::setBlocking(bool block)

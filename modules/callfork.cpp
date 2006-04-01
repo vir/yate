@@ -280,13 +280,15 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
 
 void ForkMaster::clear()
 {
+    RefPointer<ForkSlave> slave;
     s_mutex.lock();
     ListIterator iter(m_slaves);
-    while (RefPointer<ForkSlave> slave = static_cast<ForkSlave*>(iter.get())) {
+    while (slave = static_cast<ForkSlave*>(iter.get())) {
 	m_slaves.remove(slave,false);
 	s_mutex.unlock();
 	slave->lostMaster("hangup");
 	s_mutex.lock();
+	slave = 0;
     }
     if (m_exec) {
 	m_exec->destruct();

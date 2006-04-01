@@ -195,6 +195,9 @@ Package=<4>
     Project_Dep_Name _dbpbx
     End Project Dependency
     Begin Project Dependency
+    Project_Dep_Name _callfork
+    End Project Dependency
+    Begin Project Dependency
     Project_Dep_Name _yradius
     End Project Dependency
     Begin Project Dependency
@@ -247,6 +250,21 @@ Package=<4>
 ###############################################################################
 
 Project: "_accfile"=.\_accfile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_callfork"=.\_callfork.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

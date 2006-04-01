@@ -27,6 +27,8 @@ Name: "engine"; Description: "Engine only (unlikely)"
 [Components]
 Name: "engine"; Description: "Engine library"; Types: full client server engine custom; Flags: fixed
 Name: "client"; Description: "Client files"; Types: full client
+Name: "client\skin"; Description: "Client skins"; Types: full client
+Name: "client\skin\tabbed"; Description: "Tabbed skin"; Types: full client
 Name: "server"; Description: "Server files"; Types: full server
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
@@ -43,6 +45,8 @@ Name: "database\pg\run"; Description: "PostgreSQL client libraries"; Types: full
 Name: "codecs"; Description: "Audio codecs"; Types: full client server
 Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
+Name: "external"; Description: "External interfaces"; Types: full server
+Name: "external\php"; Description: "PHP5 scripting"; Types: full server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
 Name: "devel"; Description: "Module development files"; Types: full engine
 
@@ -58,19 +62,22 @@ Source: "Release\yate-service.exe"; DestDir: "{app}"; Components: server
 Source: "Release\yate-console.exe"; DestDir: "{app}"; Components: debug
 
 Source: "Release\accfile.yate"; DestDir: "{app}\modules"; Components: client server
+Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Components: debug
 Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\conference.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\dsoundchan.yate"; DestDir: "{app}\modules"; Components: client
+Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Components: debug
 Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Components: client server debug
 Source: "Release\regfile.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: debug
+Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: server debug
 Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\register.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\dbpbx.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\yradius.yate"; DestDir: "{app}\modules"; Components: server
 
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323
@@ -96,12 +103,16 @@ Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
 
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
-Source: "..\modules\skin\default\gtk2client.ui"; DestDir: "{app}\modules\skin\default"; Components: client
-Source: "..\modules\skin\default\gtk2client.rc"; DestDir: "{app}\modules\skin\default"; Components: client
+
+Source: "..\modules\skin\default\gtk2client.??"; DestDir: "{app}\modules\skin\default"; Components: client
 Source: "..\modules\skin\default\*.png"; DestDir: "{app}\modules\skin\default"; Components: client
+Source: "..\modules\skin\tabbed\gtk2client.??"; DestDir: "{app}\modules\skin\tabbed"; Components: client\skin\tabbed
+Source: "..\modules\skin\tabbed\*.png"; DestDir: "{app}\modules\skin\tabbed"; Components: client\skin\tabbed
+
+Source: "..\scripts\*.php"; DestDir: "{app}\scripts"; Components: external\php
 
 Source: "Release\libyate.lib"; DestDir: "{app}\devel"; Components: devel
-Source: "..\*.h"; DestDir: "{app}\devel"; Components: devel
+Source: "..\yate*.h"; DestDir: "{app}\devel"; Components: devel
 Source: "yateversn.h"; DestDir: "{app}\devel"; Components: devel
 Source: "version.rc"; DestDir: "{app}\devel"; Components: devel
 

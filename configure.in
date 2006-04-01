@@ -255,6 +255,46 @@ HAVE_WANPIPE="yes"
 AC_MSG_RESULT([$HAVE_WANPIPE])
 AC_SUBST(HAVE_WANPIPE)
 
+HAVE_SOUNDCARD=no
+AC_MSG_CHECKING([for sound card headers])
+AC_TRY_COMPILE([
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <string.h>
+#include <fcntl.h>
+
+#if defined(__linux__)
+#include <linux/soundcard.h>
+#elif defined (__FreeBSD__)
+#include <machine/soundcard.h>
+#else
+#include <soundcard.h>
+#endif
+],[],
+HAVE_SOUNDCARD="yes"
+)
+AC_MSG_RESULT([$HAVE_SOUNDCARD])
+AC_SUBST(HAVE_SOUNDCARD)
+
+HAVE_ALSA=no
+AC_MSG_CHECKING([for ALSA headers])
+AC_TRY_COMPILE([
+#if defined(__linux__)
+#include <linux/soundcard.h>
+#elif defined (__FreeBSD__)
+#include <machine/soundcard.h>
+#else
+#include <soundcard.h>
+#endif
+
+#define ALSA_PCM_NEW_HW_PARAMS_API
+#include <alsa/asoundlib.h>
+],[],
+HAVE_ALSA="yes"
+)
+AC_MSG_RESULT([$HAVE_ALSA])
+AC_SUBST(HAVE_ALSA)
+
 HAVE_GSM=no
 GSM_INC=""
 AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])

@@ -25,7 +25,6 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
 	pbx.yate dbpbx.yate dumbchan.yate callfork.yate \
 	extmodule.yate yradius.yate \
-	osschan.yate \
 	ysipchan.yate yrtpchan.yate
 LIBS :=
 
@@ -39,6 +38,14 @@ endif
 
 ifneq (@HAVE_RESOLV@,no)
 PROGS := $(PROGS) enumroute.yate
+endif
+
+ifneq (@HAVE_SOUNDCARD@,no)
+PROGS := $(PROGS) osschan.yate
+endif
+
+ifneq (@HAVE_ALSA@,no)
+PROGS := $(PROGS) alsachan.yate
 endif
 
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
@@ -165,6 +172,8 @@ mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
 mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
 
 enumroute.yate: LOCALLIBS = -lresolv
+
+alsachan.yate: LOCALLIBS = -lasound
 
 iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@

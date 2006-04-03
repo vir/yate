@@ -1344,7 +1344,7 @@ static bool ciscoTime(double t, String& ret)
 	return false;
     char buf[64];
     ret.clear();
-    if (!strftime(buf,sizeof(buf),"%H:%m:%S",brokenTime))
+    if (!strftime(buf,sizeof(buf),"%H:%M:%S",brokenTime))
 	return false;
     ret = buf;
     sprintf(buf,".%03u ",msec);

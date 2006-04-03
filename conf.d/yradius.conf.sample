@@ -38,6 +38,13 @@
 ; simplify: bool: Simplify returned partial URIs by stripping parameters
 ;simplify=no
 
+; maxcall: int: Maximum time to wait until call is answered in milliseconds
+;maxcall=
+
+; stoperror: string: Regular expression matching the names of the errors
+;  that will terminate the entire call, not just one route
+;stoperror=busy
+
 
 ;[nas]
 ;There can be several sections named [nas] or [nas SOMETHING]
@@ -102,7 +109,6 @@ add:Service-Type=8
 rad_auth=no
 rad_server=common
 ; Some RADIUS attributes you're likely to set
-add:h323-conf-id=${billid}
 add:h323-disconnect-cause=${q931_cause}
 add:Acct-Delay-Time=0
 
@@ -130,6 +136,5 @@ add:Acct-Delay-Time=0
 
 ; Some RADIUS attributes you're likely to set
 add:Cisco-NAS-Port=${chan}
-add:h323-remote-address=${address}
 add:NAS-Identifier=Yate
 ;add:NAS-IP-Address=

@@ -70,6 +70,8 @@ static bool s_unisocket = false;
 static bool s_pb_enabled = false;
 static bool s_pb_parallel = false;
 static bool s_pb_simplify = false;
+static String s_pb_stoperror;
+static String s_pb_maxcall;
 
 // Attribute types, not exactly as in RFC 2865
 enum {
@@ -443,6 +445,10 @@ static void portaBillingRoute(NamedList& params, const ObjList* attributes)
     if (route) {
 	Debug(&__plugin,DebugCall,"PortaBilling returned route '%s'",route.c_str());
 	params.setParam("callto",route);
+	if (s_pb_maxcall)
+	    params.setParam("maxcall",s_pb_maxcall);
+	if (s_pb_stoperror && route.startsWith("fork",true))
+	    params.setParam("stoperror",s_pb_stoperror);
     }
 }
 
@@ -1367,6 +1373,11 @@ bool AcctHandler::received(Message& msg)
     if (billid.null())
 	return false;
 
+    String address = msg.getValue("address");
+    int sep = address.find(':');
+    if (sep >= 0)
+	address = address.substr(0,sep);
+
     String dir = msg.getValue("direction");
     if (dir == "incoming")
 	dir = "answer";
@@ -1378,17 +1389,33 @@ bool AcctHandler::received(Message& msg)
     RadiusClient radclient;
     if (!radclient.prepareAttributes(msg,true))
 	return false;
+
+    // create a Cisco-compatible conference ID
+    MD5 cid(billid);
+    String confid;
+    confid << cid.hexDigest().substr(0,8) << " ";
+    confid << cid.hexDigest().substr(8,8) << " ";
+    confid << cid.hexDigest().substr(16,8) << " ";
+    confid << cid.hexDigest().substr(24,8);
+    confid.toUpper();
+
     // cryptographically generate an unique call leg ID
     MD5 sid(billid);
     sid << msg.getValue("chan");
 
-    double t = msg.getDoubleValue("time");
-
     radclient.addAttribute("Acct-Session-Id",sid.hexDigest());
     radclient.addAttribute("Acct-Status-Type",acctStat);
     radclient.addAttribute("h323-call-origin",dir);
+    radclient.addAttribute("h323-conf-id",confid);
+    radclient.addAttribute("h323-remote-address",address);
 
-    String tmp;
+    String tmp("call-id=");
+    if (address.null())
+	address = s_localAddr.host();
+    tmp << billid << "@" << address;
+    radclient.addAttribute("Cisco-AVPair",tmp);
+
+    double t = msg.getDoubleValue("time");
     ciscoTime(t,tmp);
     radclient.addAttribute("h323-setup-time",tmp);
 
@@ -1442,13 +1469,15 @@ void RadiusModule::initialize()
     s_cfgMutex.lock();
     s_cfg = Engine::configFile("yradius");
     s_cfg.load();
-    s_cfgMutex.unlock();
     s_localTime = s_cfg.getBoolValue("general","local_time",false);
     s_shortnum = s_cfg.getBoolValue("general","short_number",false);
     s_unisocket = s_cfg.getBoolValue("general","single_socket",false);
     s_pb_enabled = s_cfg.getBoolValue("portabill","enabled",false);
     s_pb_parallel = s_cfg.getBoolValue("portabill","parallel",false);
     s_pb_simplify = s_cfg.getBoolValue("portabill","simplify",false);
+    s_pb_stoperror = s_cfg.getValue("portabill","stoperror","busy");
+    s_pb_maxcall = s_cfg.getValue("portabill","maxcall");
+    s_cfgMutex.unlock();
 
     if (m_init || !s_cfg.getBoolValue("general","enabled",true))
 	return;

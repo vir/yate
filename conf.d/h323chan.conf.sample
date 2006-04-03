@@ -25,6 +25,9 @@
 ; status: keyword: Code status: alpha, beta or release
 ;status=alpha
 
+; needmedia: bool: Drop calls for which no common media could be negotiated
+;needmedia=yes
+
 ; Use an external RTP module instead of the native OpenH323 RTP stack, which is
 ;  very cpu intensive. The no external RTP can be found it will fallback to the
 ;  native stack. The only external RTP now is yrtp (see the yrtpchan module).
@@ -48,6 +51,7 @@
 ;  in the cleanup queue. Set the limit to zero to disable this check.
 ; maxcleaning: int: default: 100
 ;maxcleaning=100
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -106,6 +110,9 @@ ep = true
 
 ; gw: bool: Set to true if you want this endpoint to declare itself as gateway
 gw = false
+
+; port: int: TCP port on which the endpoint will listen
+;port=1720
 
 ; alias: string: The alias used by h323 module to connect to gatekeeper
 alias = yate

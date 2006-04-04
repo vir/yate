@@ -709,6 +709,7 @@ void Engine::loadPlugins()
 	s_extramod = name;
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
     s_restarts = s_cfg.getIntValue("general","restarts");
+    m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
     NamedList *l = s_cfg.getSection("preload");
     if (l) {
         unsigned int len = l->length();

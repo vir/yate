@@ -229,7 +229,7 @@ void MessageHandler::clearFilter()
 }
 
 MessageDispatcher::MessageDispatcher()
-    : m_changes(0)
+    : m_changes(0), m_warnTime(0)
 {
     XDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }
@@ -318,8 +318,8 @@ bool MessageDispatcher::dispatch(Message& msg)
 	    retv = h->received(msg);
 #ifdef DEBUG
 	    tm = Time::now() - tm;
-	    if (tm > 200000)
-		Debug(DebugInfo,"Message '%s' [%p] passed trough %p in " FMT64U " usec",
+	    if (m_warnTime && (tm > m_warnTime))
+		Debug(DebugInfo,"Message '%s' [%p] passed through %p in " FMT64U " usec",
 		    msg.c_str(),&msg,h,tm);
 #endif
 	    if (retv)
@@ -352,7 +352,7 @@ bool MessageDispatcher::dispatch(Message& msg)
     msg.dispatched(retv);
 #ifndef NDEBUG
     t = Time::now() - t;
-    if (t > 200000) {
+    if (m_warnTime && (t > m_warnTime)) {
 	unsigned n = msg.length();
 	String p;
 	for (unsigned i = 0; i < n; i++) {

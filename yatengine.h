@@ -292,14 +292,14 @@ public:
 
     /**
      * Retrive a reference to the creation time of the message.
-     * @return A reference to the Time when the message was created
+     * @return A reference to the @ref Time when the message was created
      */
     inline Time& msgTime()
 	{ return m_time; }
 
     /**
      * Retrive a const reference to the creation time of the message.
-     * @return A reference to the Time when the message was created
+     * @return A reference to the @ref Time when the message was created
      */
     inline const Time& msgTime() const
 	{ return m_time; }
@@ -571,6 +571,13 @@ public:
     bool dequeueOne();
 
     /**
+     * Set a limit to generate warning when a message took too long to dispatch
+     * @param usec Warning time limit in microseconds, zero to disable
+     */
+    inline void warnTime(u_int64_t usec)
+	{ m_warnTime = usec; }
+
+    /**
      * Clear all the message handlers and post-dispatch hooks
      */
     inline void clear()
@@ -601,6 +608,7 @@ private:
     ObjList m_hooks;
     Mutex m_mutex;
     unsigned int m_changes;
+    u_int64_t m_warnTime;
 };
 
 /**

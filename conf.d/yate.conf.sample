@@ -21,6 +21,13 @@
 ;  restart every 10 seconds
 ;restarts=0
 
+; warntime: int: Warn time limit for message dispatch in milliseconds, a value
+;  of zero disables such warnings
+;warntime=0
+
+; msgsniff: bool: Activate message sniffer module (if loaded) at engine init time
+;msgsniff=disable
+
 
 [modules]
 ; This section should hold one line for each module whose loading behaviour

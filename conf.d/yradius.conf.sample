@@ -20,10 +20,10 @@
 ;short_number=false
 
 ; auth_priority: integer: Priority of the user.auth handler
-;auth_priority=50
+;auth_priority=70
 
 ; acct_priority: integer: Priority of the call.cdr handler
-;acct_priority=50
+;acct_priority=70
 
 
 [portabill]

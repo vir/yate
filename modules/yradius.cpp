@@ -348,7 +348,7 @@ public:
     bool addAttribute(const char* attrib, int val);
     bool addAttribute(const char* attrib, unsigned char subType, const char* val, bool emptyOk = false);
     void addAttributes(NamedList& params, NamedList* list);
-    bool prepareAttributes(NamedList& params, bool forAcct = false);
+    bool prepareAttributes(NamedList& params, bool forAcct = true, String* user = 0);
     bool returnAttributes(NamedList& params, const ObjList* attributes);
     static bool fillRandom(DataBlock& data, int len);
 
@@ -439,6 +439,18 @@ static void portaBillingRoute(NamedList& params, const ObjList* attributes)
 		if (!route.startsWith("fork",true))
 		    route = "fork " + route;
 		route << rsep << tmp;
+	    }
+	}
+	else if (tmp.startSkip("CLI:",false)) {
+	    if (tmp) {
+		Debug(&__plugin,DebugCall,"PortaBilling setting caller '%s'",tmp.c_str());
+		params.setParam("caller",tmp);
+	    }
+	}
+	else if (tmp.startSkip("CompleteNumber:",false)) {
+	    if (tmp) {
+		Debug(&__plugin,DebugCall,"PortaBilling setting called '%s'",tmp.c_str());
+		params.setParam("called",tmp);
 	    }
 	}
     }
@@ -1171,7 +1183,7 @@ void RadiusClient::addAttributes(NamedList& params, NamedList* list)
 }
 
 // Find matching NAS section and populate attributes accordingly
-bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct)
+bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct, String* user)
 {
     const char* caller = params.getValue("caller");
     const char* called = 0;
@@ -1187,7 +1199,17 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct)
 	if (!called)
 	    called = params.getValue("called");
     }
-    const char* username = params.getValue("username",caller);
+    const char* username = params.getValue("username");
+    if (!username)
+	username = params.getValue("authname");
+    if (!username) {
+	if (forAcct)
+	    username = caller;
+	// we were unable to build an username
+	// don't even send such a request to PortaOne
+	if (s_pb_enabled && !username)
+	    return false;
+    }
     Lock lock(s_cfgMutex);
     NamedList* nasSect = 0;
     String nasName;
@@ -1262,6 +1284,8 @@ bool RadiusClient::prepareAttributes(NamedList& params, bool forAcct)
     addAttribute("Called-Station-Id",called);
     addAttributes(params,nasSect);
     addAttributes(params,servSect);
+    if (user)
+	*user = username;
     return true;
 }
 
@@ -1297,37 +1321,54 @@ bool AuthHandler::received(Message& msg)
     if (proto.null())
 	return false;
     RadiusClient radclient;
-    if (!radclient.prepareAttributes(msg,false))
+    // preserve the actually authenticated username in case we succeed
+    String user;
+    if (!radclient.prepareAttributes(msg,false,&user))
 	return false;
+    // TODO: process plaintext password
     if ((proto == "digest") || (proto == "sip")) {
-	// mandatory auth parameters
-	if (!radclient.addAttribute("Digest-Response",msg.getValue("response")))
-	    return false;
-	if (!(
-	    radclient.addAttribute("Digest-Attributes",Digest_Nonce,msg.getValue("nonce")) &&
-	    radclient.addAttribute("Digest-Attributes",Digest_Method,msg.getValue("method")) &&
-	    radclient.addAttribute("Digest-Attributes",Digest_URI,msg.getValue("uri")) &&
-	    radclient.addAttribute("Digest-Attributes",Digest_UserName,msg.getValue("username"))
-	))
-	    return false;
-	// optional auth parameters
-	radclient.addAttribute("Digest-Attributes",Digest_Realm,msg.getValue("realm"));
-	radclient.addAttribute("Digest-Attributes",Digest_Algo,msg.getValue("algorithm","MD5"));
-	radclient.addAttribute("Digest-Attributes",Digest_QOP,msg.getValue("qop"));
-	ObjList result;
-	if (radclient.doAuthenticate(&result) != AuthSuccess)
-	    return false;
-	radclient.returnAttributes(msg,&result);
-	if (s_pb_enabled)
-	    portaBillingRoute(msg,&result);
-	// signal we don't return a password
-	msg.retValue().clear();
-	return true;
+	const char* resp = msg.getValue("response");
+	const char* nonce = msg.getValue("nonce");
+	const char* method = msg.getValue("method");
+	const char* uri = msg.getValue("uri");
+	const char* user = msg.getValue("username");
+	if (resp && nonce && method && uri && user) {
+	    // mandatory auth parameters
+	    if (!(
+		radclient.addAttribute("Digest-Response",resp) &&
+		radclient.addAttribute("Digest-Attributes",Digest_Nonce,nonce) &&
+		radclient.addAttribute("Digest-Attributes",Digest_Method,method) &&
+		radclient.addAttribute("Digest-Attributes",Digest_URI,uri) &&
+		radclient.addAttribute("Digest-Attributes",Digest_UserName,user)
+	    ))
+		return false;
+	    // optional auth parameters
+	    radclient.addAttribute("Digest-Attributes",Digest_Realm,msg.getValue("realm"));
+	    radclient.addAttribute("Digest-Attributes",Digest_Algo,msg.getValue("algorithm","MD5"));
+	    radclient.addAttribute("Digest-Attributes",Digest_QOP,msg.getValue("qop"));
+	}
     }
-    else {
-	Debug(&__plugin,DebugMild,"Protocol '%s' not supported!",proto.c_str());
+
+    String address = msg.getValue("address");
+    // suppress any port number - IMHO this is stupid
+    int sep = address.find(':');
+    if (sep >= 0)
+	address = address.substr(0,sep);
+    radclient.addAttribute("h323-remote-address",address);
+
+    ObjList result;
+    if (radclient.doAuthenticate(&result) != AuthSuccess)
 	return false;
-    }
+    // copy back the username we actually authenticated
+    if (user)
+	msg.setParam("username",user);
+    // and pick whatever other parameters we want to return
+    radclient.returnAttributes(msg,&result);
+    if (s_pb_enabled)
+	portaBillingRoute(msg,&result);
+    // signal we don't return a password
+    msg.retValue().clear();
+    return true;
 }
 
 
@@ -1387,7 +1428,7 @@ bool AcctHandler::received(Message& msg)
 	return false;
 
     RadiusClient radclient;
-    if (!radclient.prepareAttributes(msg,true))
+    if (!radclient.prepareAttributes(msg))
 	return false;
 
     // create a Cisco-compatible conference ID
@@ -1510,8 +1551,8 @@ void RadiusModule::initialize()
     m_init = true;
     setup();
 
-    Engine::install(new AuthHandler(s_cfg.getIntValue("general","auth_priority",50)));
-    Engine::install(new AcctHandler(s_cfg.getIntValue("general","acct_priority",50)));
+    Engine::install(new AuthHandler(s_cfg.getIntValue("general","auth_priority",70)));
+    Engine::install(new AcctHandler(s_cfg.getIntValue("general","acct_priority",70)));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

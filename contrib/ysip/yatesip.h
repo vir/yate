@@ -1023,6 +1023,16 @@ public:
 	const SIPMessage* message, GenObject* userData);
 
     /**
+     * Authenticate a message by other means than user credentials. By default
+     *  it calls @ref checkUser with empty user credential fields
+     * @param noUser No plausible user credentials were detected so far
+     * @param message Message that is to be authenticated
+     * @param userData Pointer to an optional object passed from @ref authUser
+     * @return True if message is authenticated, false if verification failed
+     */
+    virtual bool checkAuth(bool noUser, const SIPMessage* message, GenObject* userData);
+
+    /**
      * Detect the proper credentials for any user in the engine
      * @param message Pointer to the message to check
      * @param user String to store the authenticated user name or user to

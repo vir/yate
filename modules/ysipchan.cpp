@@ -889,14 +889,18 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     const String& method, const String& uri, const String& response,
     const SIPMessage* message, GenObject* userData)
 {
+    NamedList* params = YOBJECT(NamedList,userData);
+
     Message m("user.auth");
     m.addParam("protocol","sip");
-    m.addParam("username",username);
-    m.addParam("realm",realm);
-    m.addParam("nonce",nonce);
+    if (username) {
+	m.addParam("username",username);
+	m.addParam("realm",realm);
+	m.addParam("nonce",nonce);
+	m.addParam("response",response);
+    }
     m.addParam("method",method);
     m.addParam("uri",uri);
-    m.addParam("response",response);
     if (message) {
 	m.addParam("ip_host",message->getParty()->getPartyAddr());
 	m.addParam("ip_port",String(message->getParty()->getPartyPort()));
@@ -907,7 +911,6 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	}
     }
 
-    NamedList* params = YOBJECT(NamedList,userData);
     if (params) {
 	const char* str = params->getValue("caller");
 	if (str)
@@ -923,6 +926,22 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
     // empty password returned means authentication succeeded
     if (m.retValue().null())
 	return copyAuthParams(params,m);
+    // check for refusals
+    if (m.retValue() == "-") {
+	if (params) {
+	    const char* err = m.getValue("error");
+	    if (err)
+		params->setParam("error",err);
+	    err = m.getValue("reason");
+	    if (err)
+		params->setParam("reason",err);
+	}
+	return false;
+    }
+    // password works only with username
+    if (!username)
+	return false;
+
     String res;
     buildAuth(username,realm,m.retValue(),nonce,method,uri,res);
     if (res == response)

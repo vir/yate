@@ -503,6 +503,11 @@ bool SIPEngine::checkUser(const String& username, const String& realm, const Str
     return false;
 }
 
+bool SIPEngine::checkAuth(bool noUser, const SIPMessage* message, GenObject* userData)
+{
+    return message && noUser && checkUser("","","",message->method,message->uri,"",message,userData);
+}
+
 // response = md5(md5(username:realm:password):nonce:md5(method:uri))
 void SIPEngine::buildAuth(const String& username, const String& realm, const String& passwd,
     const String& nonce, const String& method, const String& uri, String& response)
@@ -532,6 +537,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 {
     if (!message)
 	return -1;
+    bool noUser = true;
     const char* hdr = proxy ? "Proxy-Authorization" : "Authorization";
     const ObjList* l = &message->header;
     for (; l; l = l->next()) {
@@ -555,6 +561,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	    long age = nonceAge(nonce);
 	    if (age < 0)
 		continue;
+	    noUser = false;
 	    XDebug(this,DebugAll,"authUser nonce age is %ld",age);
 	    String res(t->getParam("response"));
 	    delQuotes(res);
@@ -575,6 +582,9 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	    return age;
 	}
     }
+    // we got no auth headers - try to authenticate by other means
+    if (checkAuth(noUser,message,userData))
+	return 0;
     return -1;
 }
 

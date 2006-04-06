@@ -668,7 +668,7 @@ ExtModReceiver::~ExtModReceiver()
     s_modules.remove(this,false);
     s_mutex.unlock();
     die();
-    if (m_pid > 0)
+    if (m_pid > 1)
 	Debug(DebugWarn,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
     closeAudio();
 }
@@ -767,7 +767,7 @@ void ExtModReceiver::die(bool clearChan)
 
     // Give the external script a chance to die gracefully
     closeOut();
-    if (m_pid > 0) {
+    if (m_pid > 1) {
 	Debug(DebugAll,"ExtModReceiver::die() waiting for pid=%d to die",m_pid);
 	for (int i=0; i<100; i++) {
 	    Thread::yield();
@@ -775,13 +775,13 @@ void ExtModReceiver::die(bool clearChan)
 		break;
 	}
     }
-    if (m_pid > 0)
+    if (m_pid > 1)
 	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit?",m_pid);
 
     // Now terminate the process and close its stdout pipe
     closeIn();
 #ifndef _WINDOWS
-    if (m_pid > 0)
+    if (m_pid > 1)
 	::kill(m_pid,SIGTERM);
 #endif
     if (chan && clearChan)
@@ -930,7 +930,7 @@ void ExtModReceiver::cleanup()
 #endif
 #ifndef _WINDOWS
     // We must call waitpid from here - same thread we started the child
-    if (m_pid > 0) {
+    if (m_pid > 1) {
 	// No thread switching if possible
 	closeOut();
 	Thread::yield();
@@ -945,8 +945,9 @@ void ExtModReceiver::cleanup()
 	    Debug(DebugWarn,"Process %d has still not exited yet?",m_pid);
 	else if ((w < 0) && (errno != ECHILD))
 	    Debug(DebugMild,"Failed waitpid on %d: %s",m_pid,strerror(errno));
-	m_pid = 0;
     }
+    if (m_pid > 0)
+	m_pid = 0;
 #endif
     unuse();
 }
@@ -955,8 +956,8 @@ void ExtModReceiver::run()
 {
     // the i/o streams may be already allocated
     if (m_in && m_out)
-	m_pid = 0;
-    // we must do the forking from this thread
+	m_pid = 1; // just an indicator, not really init ;-)
+    // we must do the forking from this thread so we can later wait() on it
     else if (!create(m_script.safe(),m_args.safe())) {
 	m_pid = 0;
 	return;
@@ -1018,7 +1019,8 @@ void ExtModReceiver::run()
 
 bool ExtModReceiver::outputLine(const char* line)
 {
-    DDebug("ExtModReceiver",DebugAll,"outputLine '%s'", line);
+    DDebug("ExtModReceiver",DebugAll,"%soutputLine '%s'",
+	(m_out ? "" : "failing "), line);
     if (!m_out)
 	return false;
     m_out->writeData(line);

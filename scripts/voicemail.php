@@ -65,7 +65,7 @@ function setState($newstate)
     if ($state == "")
 	return;
 
-    Yate::Output("setState('$newstate') state: $state");
+    Yate::Debug("setState('$newstate') state: $state");
 
     // always obey a return to prompt
     switch ($newstate) {
@@ -163,7 +163,7 @@ function initUser()
     vmInitMessageDir($mailbox);
     vmGetMessageFiles($mailbox,$files);
     $dir = "$vm_base/$mailbox";
-    Yate::Output("found " . count($files) . " file entries");
+    Yate::Output("found " . count($files) . " file entries for mailbox $mailbox");
     setState("prompt");
 }
 
@@ -198,7 +198,7 @@ function checkAuth($pass)
     global $collect_user;
     global $collect_pass;
     global $mailbox;
-//    Yate::Output("checking passwd if '$collect_pass' == '$pass'");
+//    Yate::Debug("checking passwd if '$collect_pass' == '$pass'");
     if ($collect_pass == $pass) {
 	$mailbox = $collect_user;
 	initUser();
@@ -215,7 +215,7 @@ function gotNotify()
     global $partycallid;
     global $state;
 
-    Yate::Output("gotNotify() state: $state");
+    Yate::Debug("gotNotify() state: $state");
 
     switch ($state) {
 	case "goodbye":
@@ -290,7 +290,7 @@ function gotDTMF($text)
     global $collect_user;
     global $collect_pass;
 
-    Yate::Output("gotDTMF('$text') state: $state");
+    Yate::Debug("gotDTMF('$text') state: $state");
 
     switch ($state) {
 	case "user":
@@ -334,8 +334,8 @@ while ($state != "") {
 	case "incoming":
 	    switch ($ev->name) {
 		case "call.execute":
-		    $mailbox = $ev->params["user"];
-		    $partycallid = $ev->params["id"];
+		    $mailbox = $ev->GetValue("user");
+		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $ev->handled = true;
 		    /* We must ACK this message before dispatching a call.answered */
@@ -357,15 +357,15 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->params["targetid"] == $ourcallid) {
+		    if ($ev->GetValue("targetid") == $ourcallid) {
 			gotNotify();
 			$ev->handled = true;
 		    }
 		    break;
 
 		case "chan.dtmf":
-		    if ($ev->params["targetid"] == $ourcallid ) {
-			$text = $ev->params["text"];
+		    if ($ev->GetValue("targetid") == $ourcallid ) {
+			$text = $ev->GetValue("text");
 			for ($i = 0; $i < strlen($text); $i++)
 			    gotDTMF($text[$i]);
 			$ev->handled = true;
@@ -378,18 +378,18 @@ while ($state != "") {
 		$ev->Acknowledge();
 	    break;
 	case "answer":
-	    Yate::Output("PHP Answered: " . $ev->name . " id: " . $ev->id);
+	    // Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);
 	    if ($ev->name == "user.auth")
 		checkAuth($ev->retval);
 	    break;
 	case "installed":
-	    Yate::Output("PHP Installed: " . $ev->name);
+	    // Yate::Debug("PHP Installed: " . $ev->name);
 	    break;
 	case "uninstalled":
-	    Yate::Output("PHP Uninstalled: " . $ev->name);
+	    // Yate::Debug("PHP Uninstalled: " . $ev->name);
 	    break;
 	default:
-	    Yate::Output("PHP Event: " . $ev->type);
+	    // Yate::Output("PHP Event: " . $ev->type);
     }
 }
 

@@ -36,11 +36,11 @@ function vmGetMessageStats($mailbox,&$total,&$unread,$type = "voicemail")
     if (is_dir($dir) && ($d = @opendir($dir))) {
 	while (($f = readdir($d)) !== false) {
 	    if (substr($f,0,4) == "nvm-") {
-		Yate::Output("found new file '$f'");
+		Yate::Debug("found new file '$f'");
 		$n++;
 	    }
 	    else if (substr($f,0,3) == "vm-") {
-		Yate::Output("found old file '$f'");
+		Yate::Debug("found old file '$f'");
 		$o++;
 	    }
 	}
@@ -55,13 +55,15 @@ function vmGetMessageFiles($mailbox,&$files)
     global $vm_base;
     $dir = "$vm_base/$mailbox";
     if (is_dir($dir) && ($d = @opendir($dir))) {
+	$nf = array();
+	$of = array();
 	while (($f = readdir($d)) !== false) {
 	    if (substr($f,0,4) == "nvm-") {
-		Yate::Output("found new file '$f'");
+		Yate::Debug("found new file '$f'");
 		$nf[] = $f;
 	    }
 	    else if (substr($f,0,3) == "vm-") {
-		Yate::Output("found old file '$f'");
+		Yate::Debug("found old file '$f'");
 		$of[] = $f;
 	    }
 	}

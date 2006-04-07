@@ -139,14 +139,14 @@ while ($state != "") {
 	case "incoming":
 	    switch ($ev->name) {
 		case "call.execute":
-		    $partycallid = $ev->params["id"];
+		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $ev->handled = true;
 		    /* We must ACK this message before dispatching a call.answered */
 		    $ev->Acknowledge();
 
 		    /* Check if the mailbox exists, answer only if that's the case */
-		    if (checkUser($ev->params["called"],$ev->params["caller"])) {
+		    if (checkUser($ev->GetValue("called"),$ev->GetValue("caller"))) {
 			$m = new Yate("call.answered");
 			$m->params["id"] = $ourcallid;
 			$m->params["targetid"] = $partycallid;
@@ -162,7 +162,7 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->params["targetid"] == $ourcallid) {
+		    if ($ev->GetValue("targetid") == $ourcallid) {
 			gotNotify();
 			$ev->handled = true;
 		    }
@@ -174,16 +174,16 @@ while ($state != "") {
 		$ev->Acknowledge();
 	    break;
 	case "answer":
-	    Yate::Output("PHP Answered: " . $ev->name . " id: " . $ev->id);
+	    // Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);
 	    break;
 	case "installed":
-	    Yate::Output("PHP Installed: " . $ev->name);
+	    // Yate::Debug("PHP Installed: " . $ev->name);
 	    break;
 	case "uninstalled":
-	    Yate::Output("PHP Uninstalled: " . $ev->name);
+	    // Yate::Debug("PHP Uninstalled: " . $ev->name);
 	    break;
 	default:
-	    Yate::Output("PHP Event: " . $ev->type);
+	    // Yate::Output("PHP Event: " . $ev->type);
     }
 }
 

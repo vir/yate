@@ -85,11 +85,13 @@ public:
     virtual bool setCheck(bool checked);
     virtual bool setSelect(const String& item);
     virtual bool setUrgent(bool urgent);
+    virtual bool hasOption(const String& item);
     virtual bool addOption(const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& item);
     virtual bool addTableRow(const String& item, const NamedList* data = 0, bool atStart = false);
     virtual bool delTableRow(const String& item);
     virtual bool setTableRow(const String& item, const NamedList* data);
+    virtual bool getTableRow(const String& item, NamedList* data = 0);
     virtual bool clearTable();
     virtual bool getText(String& text);
     virtual bool getCheck(bool& checked);
@@ -131,11 +133,13 @@ public:
     virtual bool setCheck(const String& name, bool checked);
     virtual bool setSelect(const String& name, const String& item);
     virtual bool setUrgent(const String& name, bool urgent);
+    virtual bool hasOption(const String& name, const String& item);
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty());
     virtual bool delOption(const String& name, const String& item);
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
     virtual bool delTableRow(const String& name, const String& item);
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
+    virtual bool getTableRow(const String& name, const String& item, NamedList* data = 0);
     virtual bool clearTable(const String& name);
     virtual bool getText(const String& name, String& text);
     virtual bool getCheck(const String& name, bool& checked);
@@ -158,6 +162,7 @@ public:
     virtual bool toggle(GtkWidget* wid, gboolean active);
     virtual bool select(GtkOptionMenu* opt, gint selected);
     virtual bool select(GtkList* lst, GtkListItem* item);
+    virtual bool select(GtkTreeView* view);
     virtual void menu(int x, int y);
     inline GtkWidget* widget() const
 	{ return m_widget; }
@@ -171,20 +176,23 @@ public:
     static bool setCheck(GtkWidget* wid, bool checked);
     static bool setSelect(GtkWidget* wid, const String& item);
     static bool setUrgent(GtkWidget* wid, bool urgent);
+    static bool hasOption(GtkWidget* wid, const String& item);
     static bool addOption(GtkWidget* wid, const String& item, bool atStart = false, const String& text = String::empty());
     static bool delOption(GtkWidget* wid, const String& item);
     static bool addTableRow(GtkWidget* wid, const String& item, const NamedList* data = 0, bool atStart = false);
     static bool delTableRow(GtkWidget* wid, const String& item);
     static bool setTableRow(GtkWidget* wid, const String& item, const NamedList* data);
+    static bool getTableRow(GtkWidget* wid, const String& item, NamedList* data = 0);
     static bool clearTable(GtkWidget* wid);
     static bool getText(GtkWidget* wid, String& text);
     static bool getCheck(GtkWidget* wid, bool& checked);
     static bool getSelect(GtkWidget* wid, String& item);
 protected:
+    bool m_decorated;
+    int m_layout;
     GtkWidget* m_widget;
     GtkWidget* m_filler;
     String m_tabName;
-    int m_layout;
     int m_state;
     gint m_posX;
     gint m_posY;

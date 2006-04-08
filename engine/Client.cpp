@@ -45,6 +45,15 @@ public:
     virtual bool received(Message &msg);
 };
 
+class UIUserHandler : public MessageHandler
+{
+public:
+    UIUserHandler()
+	: MessageHandler("user.login",50)
+	{ }
+    virtual bool received(Message &msg);
+};
+
 class ClientThreadProxy
 {
 public:
@@ -58,11 +67,14 @@ public:
 	setCheck,
 	setSelect,
 	setUrgent,
+	hasOption,
 	addOption,
 	delOption,
 	addTableRow,
 	delTableRow,
 	setTableRow,
+	getTableRow,
+	clearTable,
 	getText,
 	getCheck,
 	getSelect,
@@ -91,13 +103,21 @@ private:
 
 
 // utility function to check if a string begins and ends with -dashes-
-static bool checkDashes(String& str)
+static bool checkDashes(const String& str)
 {
-    if (str.startsWith("-") && str.endsWith("-"))
+    return str.startsWith("-") && str.endsWith("-");
+}
+
+// utility function to make empty a string that begins and ends with -dashes-
+// returns true if fixed string is empty
+static bool fixDashes(String& str)
+{
+    if (checkDashes(str))
 	str.clear();
+    str.trimBlanks();
     return str.null();
 }
-			
+
 Window::Window(const char* id)
     : m_id(id), m_visible(false), m_master(false), m_popup(false)
 {
@@ -170,6 +190,13 @@ bool Window::delTableRow(const String& name, const String& item)
 bool Window::setTableRow(const String& name, const String& item, const NamedList* data)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub setTableRow('%s','%s',%p) [%p]",
+	name.c_str(),item.c_str(),data,this);
+    return false;
+}
+
+bool Window::getTableRow(const String& name, const String& item, NamedList* data)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub getTableRow('%s','%s',%p) [%p]",
 	name.c_str(),item.c_str(),data,this);
     return false;
 }
@@ -280,6 +307,9 @@ void ClientThreadProxy::process()
 	case setUrgent:
 	    m_rval = client->setUrgent(m_name,m_bool,m_wnd,m_skip);
 	    break;
+	case hasOption:
+	    m_rval = client->hasOption(m_name,m_text,m_wnd,m_skip);
+	    break;
 	case addOption:
 	    m_rval = client->addOption(m_name,m_item,m_bool,m_text,m_wnd,m_skip);
 	    break;
@@ -294,6 +324,12 @@ void ClientThreadProxy::process()
 	    break;
 	case setTableRow:
 	    m_rval = client->setTableRow(m_name,m_item,m_params,m_wnd,m_skip);
+	    break;
+	case getTableRow:
+	    m_rval = client->getTableRow(m_name,m_item,const_cast<NamedList*>(m_params),m_wnd,m_skip);
+	    break;
+	case clearTable:
+	    m_rval = client->clearTable(m_name);
 	    break;
 	case getText:
 	    m_rval = client->getText(m_name,*m_rtext,m_wnd,m_skip);
@@ -326,11 +362,12 @@ Client* Client::s_client = 0;
 int Client::s_changing = 0;
 
 Client::Client(const char *name)
-    : Thread(name), m_line(0), m_oneThread(true),
+    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
       m_multiLines(false), m_autoAnswer(false)
 {
     s_client = this;
     Engine::install(new UICdrHandler);
+    Engine::install(new UIUserHandler);
     Engine::install(new UIHandler);
 }
 
@@ -351,6 +388,7 @@ void Client::run()
     initClient();
     updateFrom(0);
     setStatus("");
+    m_initialized = true;
     msg.setParam("event","init");
     Engine::dispatch(msg);
     main();
@@ -455,6 +493,7 @@ bool Client::openMessage(const char* text, const Window* parent)
 {
     NamedList params("");
     params.addParam("text",text);
+    params.addParam("modal",String::boolText(parent != 0));
     return openPopup("message",&params,parent);
 }
 
@@ -462,6 +501,7 @@ bool Client::openConfirm(const char* text, const Window* parent)
 {
     NamedList params("");
     params.addParam("text",text);
+    params.addParam("modal",String::boolText(parent != 0));
     return openPopup("confirm",&params,parent);
 }
 
@@ -602,6 +642,23 @@ bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* ski
     return ok;
 }
 
+bool Client::hasOption(const String& name, const String& item, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::hasOption,name,item,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->hasOption(name,item);
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip) && wnd->hasOption(name,item))
+	    return true;
+    }
+    return false;
+}
+
 bool Client::addOption(const String& name, const String& item, bool atStart, const String& text, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -702,6 +759,43 @@ bool Client::setTableRow(const String& name, const String& item, const NamedList
     return ok;
 }
 
+bool Client::getTableRow(const String& name, const String& item, NamedList* data, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getTableRow,name,item,false,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->getTableRow(name,item,data);
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip) && wnd->getTableRow(name,item,data))
+	    return true;
+    }
+    return false;
+}
+
+bool Client::clearTable(const String& name, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::clearTable,name,false,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->clearTable(name);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->clearTable(name) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
 bool Client::getText(const String& name, String& text, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -779,15 +873,15 @@ bool Client::action(Window* wnd, const String& name)
 	String line;
 	getText("line",line,wnd);
 	line.trimBlanks();
-	checkDashes(line);
+	fixDashes(line);
 	String proto;
 	getText("protocol",proto,wnd);
 	proto.trimBlanks();
-	checkDashes(proto);
+	fixDashes(proto);
 	String account;
 	getText("account",account,wnd);
 	account.trimBlanks();
-	checkDashes(account);
+	fixDashes(account);
 	return callStart(target,line,proto,account);
     }
     else if (name.startsWith("callto:"))
@@ -827,6 +921,97 @@ bool Client::action(Window* wnd, const String& name)
 	    return true;
 	}
     }
+    // accounts window actions
+    else if (name == "acc_new") {
+	NamedList params("");
+	params.setParam("select:acc_provider","--");
+	params.setParam("acc_account","");
+	params.setParam("acc_account_orig","");
+	params.setParam("acc_username","");
+	params.setParam("acc_password","");
+	params.setParam("acc_server","");
+	params.setParam("acc_domain","");
+	params.setParam("acc_outbound","");
+	params.setParam("modal",String::boolText(true));
+	if (openPopup("account",&params,wnd))
+	    return true;
+    }
+    else if (name == "acc_edit") {
+	String acc;
+	if (getSelect("accounts",acc,wnd)) {
+	    NamedList params("");
+	    params.setParam("select:acc_provider","--");
+	    params.setParam("acc_account",acc);
+	    params.setParam("acc_account_orig",acc);
+	    params.setParam("modal",String::boolText(true));
+	    if (openPopup("account",&params,wnd))
+		return true;
+	}
+	else
+	    return false;
+    }
+    else if (name == "acc_del") {
+	String acc;
+	if (getSelect("accounts",acc,wnd)) {
+	    if (openConfirm("Delete account "+acc,wnd))
+		return true;
+	}
+	else
+	    return false;
+    }
+    // address book window actions
+    else if (name == "abk_new") {
+	NamedList params("");
+	params.setParam("abk_contact","");
+	params.setParam("abk_contact_orig","");
+	params.setParam("abk_number","");
+	params.setParam("modal",String::boolText(true));
+	if (openPopup("addrbook",&params,wnd))
+	    return true;
+    }
+    else if (name == "abk_edit") {
+	String cnt;
+	if (getSelect("contacts",cnt,wnd)) {
+	    NamedList params("");
+	    params.setParam("abk_contact_orig",cnt);
+	    params.setParam("abk_contact",cnt);
+	    params.setParam("modal",String::boolText(true));
+	    if (openPopup("addrbook",&params,wnd))
+		return true;
+	}
+	else
+	    return false;
+    }
+    else if (name == "abk_del") {
+	String cnt;
+	if (getSelect("contacts",cnt,wnd)) {
+	    if (openConfirm("Delete contact "+cnt,wnd))
+		return true;
+	}
+	else
+	    return false;
+    }
+    // outgoing (placed) call log actions
+    else if (name == "log_out_clear") {
+	if (clearTable("log_outgoing"))
+	    return true;
+    }
+    else if (name == "log_out_call") {
+	NamedList log("");
+	if (getTableRow("log_outgoing","",&log,wnd)) {
+//	    if (openConfirm("Call to "+log,wnd))
+//		return true;
+	}
+	else
+	    return false;
+    }
+    // incoming (received) call log actions
+    else if (name == "log_in_clear") {
+	if (clearTable("log_incoming"))
+	    return true;
+    }
+
+    // unknown/unhandled - generate a message for them
     Message* m = new Message("ui.event");
     if (wnd)
 	m->addParam("window",wnd->id());
@@ -840,8 +1025,10 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 {
     DDebug(ClientDriver::self(),DebugInfo,"Toggle '%s' %s in %p",
 	name.c_str(),String::boolText(active),wnd);
+    // handle the window visibility buttons, these will sync toggles themselves
     if (setVisible(name,active))
 	return true;
+    // keep the toggle in sync in all windows
     setCheck(name,active,0,wnd);
     if (name == "autoanswer") {
 	m_autoAnswer = active;
@@ -851,6 +1038,8 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 	m_multiLines = active;
 	return true;
     }
+
+    // unknown/unhandled - generate a message for them
     Message* m = new Message("ui.event");
     if (wnd)
 	m->addParam("window",wnd->id());
@@ -865,11 +1054,26 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 {
     DDebug(ClientDriver::self(),DebugInfo,"Select '%s' '%s' in %p",
 	name.c_str(),item.c_str(),wnd);
+    // keep the item in sync in all windows
     setSelect(name,item,0,wnd);
     if (name == "channels") {
 	updateFrom(item);
 	return true;
     }
+    else if (name == "account") {
+	// selecting an account unselects protocol
+	if (!checkDashes(item))
+	    if (setSelect("protocol","") || setSelect("protocol","--"))
+		return true;
+    }
+    else if (name == "protocol") {
+	// selecting a protocol unselects account
+	if (!checkDashes(item))
+	    if (setSelect("account","") || setSelect("account","--"))
+		return true;
+    }
+
+    // unknown/unhandled - generate a message for them
     Message* m = new Message("ui.event");
     if (wnd)
 	m->addParam("window",wnd->id());
@@ -1148,6 +1352,11 @@ bool UICdrHandler::received(Message &msg)
 {
     if (!Client::self())
 	return false;
+
+    // block until client finishes initialization
+    while (!Client::self()->initialized())
+	Thread::msleep(10);
+
     String* op = msg.getParam("operation");
     if (op && (*op == "finalize"))
 	Client::self()->updateCDR(msg);
@@ -1162,6 +1371,11 @@ bool UIHandler::received(Message &msg)
     String action(msg.getValue("action"));
     if (action.null())
 	return false;
+
+    // block until client finishes initialization
+    while (!Client::self()->initialized())
+	Thread::msleep(10);
+
     Window* wnd = Client::getWindow(msg.getValue("window"));
     if (action == "set_status")
 	return Client::self()->setStatusLocked(msg.getValue("status"),wnd);
@@ -1194,6 +1408,8 @@ bool UIHandler::received(Message &msg)
 	ok = Client::self()->setActive(name,msg.getBoolValue("active"),wnd);
     else if (action == "set_visible")
 	ok = Client::self()->setShow(name,msg.getBoolValue("visible"),wnd);
+    else if (action == "has_option")
+	ok = Client::self()->hasOption(name,msg.getValue("item"),wnd);
     else if (action == "add_option")
 	ok = Client::self()->addOption(name,msg.getValue("item"),msg.getBoolValue("insert"),msg.getValue("text"),wnd);
     else if (action == "del_option")
@@ -1225,6 +1441,34 @@ bool UIHandler::received(Message &msg)
     Client::self()->unlockOther();
     return ok;
 }
+
+
+bool UIUserHandler::received(Message &msg)
+{
+    if (!Client::self())
+	return false;
+    String account = msg.getValue("account");
+    if (account.null())
+	return false;
+
+    // block until client finishes initialization
+    while (!Client::self()->initialized())
+	Thread::msleep(10);
+
+    String op = msg.getParam("operation");
+    if ((op == "create") || (op == "login") || op.null()) {
+	if (!Client::self()->hasOption("accounts",account))
+	    Client::self()->addOption("accounts",account,false);
+	if (!Client::self()->hasOption("account",account))
+	    Client::self()->addOption("account",account,false);
+    }
+    else if (op == "delete") {
+	Client::self()->delOption("account",account);
+	Client::self()->delOption("accounts",account);
+    }
+    return false;
+}
+
 
 // IMPORTANT: having a target means "from inside Yate to the user"
 //  An user initiated call must be incoming (no target)

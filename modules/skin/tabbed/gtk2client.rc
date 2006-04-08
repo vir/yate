@@ -49,10 +49,18 @@ style "caption" {
     bg[NORMAL] = { 0.93, 0.95, 0.96 }
 }
 
+binding "help" {
+    bind "F1" {
+	"show-help" (0,2,0)
+	"debug-msg" ("Help requested")
+    }
+}
+
 widget "gtk-tooltips" style "tips"
 widget "gtk-tooltips*GtkLabel" style "tips"
 
 class "GtkWindow" style "window"
+class "GtkWindow" binding "help"
 class "GtkWidget" style "window"
 widget_class "GtkWindow.GtkFrame" style "border"
 class "GtkButton" style "button"

@@ -62,11 +62,13 @@ public:
     virtual bool setCheck(const String& name, bool checked) = 0;
     virtual bool setSelect(const String& name, const String& item) = 0;
     virtual bool setUrgent(const String& name, bool urgent) = 0;
+    virtual bool hasOption(const String& name, const String& item) = 0;
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty()) = 0;
     virtual bool delOption(const String& name, const String& item) = 0;
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
     virtual bool delTableRow(const String& name, const String& item);
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
+    virtual bool getTableRow(const String& name, const String& item, NamedList* data = 0);
     virtual bool clearTable(const String& name);
     virtual bool getText(const String& name, String& text) = 0;
     virtual bool getCheck(const String& name, bool& checked) = 0;
@@ -160,15 +162,20 @@ public:
     bool setCheck(const String& name, bool checked, Window* wnd = 0, Window* skip = 0);
     bool setSelect(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool setUrgent(const String& name, bool urgent, Window* wnd = 0, Window* skip = 0);
+    bool hasOption(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool addOption(const String& name, const String& item, bool atStart, const String& text = String::empty(), Window* wnd = 0, Window* skip = 0);
     bool delOption(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false, Window* wnd = 0, Window* skip = 0);
     bool delTableRow(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool setTableRow(const String& name, const String& item, const NamedList* data, Window* wnd = 0, Window* skip = 0);
+    bool getTableRow(const String& name, const String& item, NamedList* data = 0, Window* wnd = 0, Window* skip = 0);
+    bool clearTable(const String& name, Window* wnd = 0, Window* skip = 0);
     bool getText(const String& name, String& text, Window* wnd = 0, Window* skip = 0);
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
     bool getSelect(const String& name, String& item, Window* wnd = 0, Window* skip = 0);
     void moveRelated(const Window* wnd, int dx, int dy);
+    inline bool initialized() const
+	{ return m_initialized; }
     inline static Client* self()
 	{ return s_client; }
     inline static bool changing()
@@ -202,6 +209,7 @@ protected:
     static void driverUnlock();
     ObjList m_windows;
     String m_activeId;
+    bool m_initialized;
     int m_line;
     bool m_oneThread;
     bool m_multiLines;

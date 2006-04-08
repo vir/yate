@@ -25,6 +25,8 @@
 
 #include "gtk2client.h"
 
+#include <gdk/gdkkeysyms.h>
+
 using namespace TelEngine;
 
 static int s_shown = 0;
@@ -82,6 +84,7 @@ GtkWidget* WidgetFinder::find(GtkContainer* container)
     return m_widget;
 }
 
+// Default Widget behaviour is to use GTKWindow's static methods
 bool Widget::setText(const String& text)
     { return GTKWindow::setText(m_widget,text); }
 bool Widget::setCheck(bool checked)
@@ -90,6 +93,8 @@ bool Widget::setSelect(const String& item)
     { return GTKWindow::setSelect(m_widget,item); }
 bool Widget::setUrgent(bool urgent)
     { return GTKWindow::setUrgent(m_widget,urgent); }
+bool Widget::hasOption(const String& item)
+    { return GTKWindow::hasOption(m_widget,item); }
 bool Widget::addOption(const String& item, bool atStart, const String& text)
     { return GTKWindow::addOption(m_widget,item,atStart,text); }
 bool Widget::delOption(const String& item)
@@ -100,6 +105,8 @@ bool Widget::delTableRow(const String& item)
     { return GTKWindow::delTableRow(m_widget,item); }
 bool Widget::setTableRow(const String& item, const NamedList* data)
     { return GTKWindow::setTableRow(m_widget,item,data); }
+bool Widget::getTableRow(const String& item, NamedList* data)
+    { return GTKWindow::getTableRow(m_widget,item,data); }
 bool Widget::clearTable()
     { return GTKWindow::clearTable(m_widget); }
 bool Widget::getText(String& text)
@@ -315,10 +322,27 @@ static gboolean widgetCbSelection(GtkList* lst, GtkListItem* item, gpointer dat)
     return wnd && wnd->select(lst,item);
 }
 
+static gboolean widgetCbCursorChanged(GtkTreeView* view, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbCursorChanged(%p,%p)",view,dat);
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow((GtkWidget*)view);
+    return wnd && wnd->select(view);
+    GtkTreePath* path = 0;
+    gtk_tree_view_get_cursor(view,&path,NULL);
+    if (!path)
+	return FALSE;
+    gtk_tree_path_free(path);
+}
+
 static gboolean widgetCbRowActivated(GtkTreeView* view, GtkTreePath* arg1, GtkTreeViewColumn* arg2, gpointer dat)
 {
     Debug(GTKDriver::self(),DebugAll,"widgetCbRowActivated(%p,%p,%p,%p)",view,arg1,arg2,dat);
-    return FALSE;
+    if (GTKClient::changing())
+	return FALSE;
+    GTKWindow* wnd = getWidgetWindow((GtkWidget*)view);
+    return wnd && wnd->action((GtkWidget*)view);
 }
 
 static gboolean widgetCbMinimize(GtkWidget* wid, gpointer dat)
@@ -363,6 +387,19 @@ static gboolean widgetCbShow(GtkWidget* wid, gpointer dat)
     const gchar* name = gtk_widget_get_name(wid);
     Debug(GTKDriver::self(),DebugAll,"widgetCbShow(%p,%p) '%s'",wid,dat,name);
     return GTKClient::setVisible(name);
+}
+
+static gboolean widgetCbSwitch(GtkNotebook* nbk, GtkNotebookPage* page, guint page_num, gpointer dat)
+{
+    const gchar* name = gtk_widget_get_name(GTK_WIDGET(nbk));
+    Debug(GTKDriver::self(),DebugAll,"widgetCbSwitch(%p,%p,%u,%p) '%s'",nbk,page,page_num,dat,name);
+    return FALSE;
+}
+
+static gboolean widgetCbHelp(GtkWidget* wid, GtkWidgetHelpType typ, gpointer dat)
+{
+    Debug(GTKDriver::self(),DebugAll,"widgetCbHelp(%p,%d,%p)",wid,typ,dat);
+    return FALSE;
 }
 
 // Hopefully we'll have no threading issues.
@@ -575,6 +612,7 @@ static GtkWidget* gtkTableNew(const gchar* text)
     // we can now unref the store as the view will hold a reference on it
     g_object_unref(G_OBJECT(store));
     lst->destruct();
+    g_signal_connect(G_OBJECT(table),"row_activated",G_CALLBACK(widgetCbRowActivated),0);
     return table;
 }
 
@@ -588,7 +626,7 @@ static WidgetMaker s_widgetMakers[] = {
     { "combo", gtkComboNewWithText, 0, 0 },
     { "option", gtkOptionMenuNew, "changed", G_CALLBACK(widgetCbSelected) },
     { "list", gtkListNew, "select-child", G_CALLBACK(widgetCbSelection) },
-    { "table", gtkTableNew, "row-activated", G_CALLBACK(widgetCbRowActivated) },
+    { "table", gtkTableNew, "cursor-changed", G_CALLBACK(widgetCbCursorChanged) },
     { "frame", gtk_frame_new, 0, 0 },
     { "image", gtk_image_new_from_file, 0, 0 },
     { "hseparator", (GBuilder)gtk_hseparator_new, 0, 0 },
@@ -702,6 +740,7 @@ static TokenDict s_reliefs[] = {
     { 0, 0 },
 };
 
+
 Widget::Widget()
     : m_widget(0)
 {
@@ -745,7 +784,8 @@ void Widget::destroyCb(GtkObject* obj, gpointer dat)
 
 
 GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
-    : Window(id), m_widget(0), m_filler(0), m_layout(layout), m_state(0),
+    : Window(id), m_decorated(decorated), m_layout(layout),
+      m_widget(0), m_filler(0), m_state(0),
       m_posX(INVALID_POS), m_posY(INVALID_POS), m_sizeW(0), m_sizeH(0)
 {
     m_widget = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -760,6 +800,7 @@ GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
     g_signal_connect(G_OBJECT(m_widget),"delete_event",G_CALLBACK(windowCbClose),this);
     g_signal_connect(G_OBJECT(m_widget),"configure_event",G_CALLBACK(windowCbConfig),this);
     g_signal_connect(G_OBJECT(m_widget),"window_state_event",G_CALLBACK(windowCbState),this);
+    g_signal_connect(G_OBJECT(m_widget),"show_help",G_CALLBACK(widgetCbHelp),this);
 #ifdef XDEBUG
     g_signal_connect(G_OBJECT(m_widget),"event",G_CALLBACK(windowCbEvent),this);
 #endif
@@ -806,7 +847,11 @@ GtkWidget* GTKWindow::container(Layout layout) const
 	case Boxed:
 	    return gtk_event_box_new();
 	case Tabbed:
-	    return gtk_notebook_new();
+	    {
+		GtkWidget* nbk = gtk_notebook_new();
+		g_signal_connect(G_OBJECT(nbk),"switch_page",G_CALLBACK(widgetCbSwitch),0);
+		return nbk;
+	    }
 	case Framed:
 	    return gtk_frame_new(NULL);
 	case Scroll:
@@ -936,6 +981,18 @@ void GTKWindow::populate()
 	    }
 	    else
 		Debug(GTKDriver::self(),DebugInfo,"Could not set tooltip '%s' on widget %p",
+		    p->c_str(),lastWidget);
+	    continue;
+	}
+	else if (p->name() == "accelerator") {
+	    guint keyval = gdk_keyval_from_name(p->safe());
+	    if (lastWidget && (keyval != GDK_VoidSymbol)) {
+		Debug(GTKDriver::self(),DebugInfo,"Seting accelerator '%s' (0x%06X) on widget %p",
+		    p->c_str(),keyval,lastWidget);
+		gtk_window_add_mnemonic((GtkWindow*)m_widget,keyval,lastWidget);
+	    }
+	    else
+		Debug(GTKDriver::self(),DebugWarn,"Could not set accelerator '%s' on widget %p",
 		    p->c_str(),lastWidget);
 	    continue;
 	}
@@ -1087,7 +1144,7 @@ void GTKWindow::geometry(int x, int y, int w, int h)
 	return;
     XDebug(GTKDriver::self(),DebugAll,"geometry '%s' %d,%d %dx%d moved %d,%d",
 	m_id.c_str(),x,y,w,h,dx,dy);
-    if (GTKClient::self() && (dx || dy) && m_master)
+    if (GTKClient::self() && (dx || dy) && m_master && !m_decorated)
 	GTKClient::self()->moveRelated(this,dx,dy);
 }
 
@@ -1159,8 +1216,8 @@ bool GTKWindow::select(GtkOptionMenu* opt, gint selected)
 bool GTKWindow::select(GtkList* lst, GtkListItem* item)
 {
     const gchar* name = gtk_widget_get_name((GtkWidget*)lst);
-    Debug(GTKDriver::self(),DebugAll,"select '%s' lst=%p [%p]",
-	name,lst,this);
+    Debug(GTKDriver::self(),DebugAll,"select '%s' lst=%p item=%p [%p]",
+	name,lst,item,this);
     GtkWidget* lbl = gtk_bin_get_child(GTK_BIN(item));
     if (!lbl)
 	lbl = (GtkWidget*)g_object_get_data((GObject*)item,"Yate::Label");
@@ -1170,6 +1227,35 @@ bool GTKWindow::select(GtkList* lst, GtkListItem* item)
 	return GTKClient::self() && GTKClient::self()->select(this,name,item,val);
     }
     return false;
+}
+
+bool GTKWindow::select(GtkTreeView* view)
+{
+    const gchar* name = gtk_widget_get_name((GtkWidget*)view);
+    Debug(GTKDriver::self(),DebugAll,"select '%s' view=%p [%p]",
+	name,view,this);
+
+    GtkTreeModel* model = gtk_tree_view_get_model(view);
+    if (!model)
+	return false;
+
+    GtkTreePath* path = 0;
+    gtk_tree_view_get_cursor(view,&path,NULL);
+    if (!path)
+	return FALSE;
+    GtkTreeIter iter;
+    if (!gtk_tree_model_get_iter(model,&iter,path))
+	return false;
+    gtk_tree_path_free(path);
+
+    String item;
+    gchar* val = 0;
+    // column 0 is reserved for row/item name
+    gtk_tree_model_get(model,&iter,0,&val,-1);
+    item = val;
+    ::free(val);
+
+    return GTKClient::self() && GTKClient::self()->select(this,name,item);
 }
 
 bool GTKWindow::setShow(const String& name, bool visible)
@@ -1291,6 +1377,31 @@ bool GTKWindow::setUrgent(GtkWidget* wid, bool urgent)
     return false;
 }
 
+bool GTKWindow::hasOption(const String& name, const String& item)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->hasOption(item) : hasOption(wid,item);
+}
+
+bool GTKWindow::hasOption(GtkWidget* wid, const String& item)
+{
+    XDebug(GTKDriver::self(),DebugAll,"GTKWindow::hasOption(%p,'%s')",wid,item.safe());
+    if (GTK_IS_OPTION_MENU(wid)) {
+	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
+	GtkWidget* it = getOptionItem(opt,item);
+	return (it != 0);
+    }
+    if (GTK_IS_LIST(wid)) {
+	GtkList* lst = GTK_LIST(wid);
+	GtkWidget* it = getListItem(lst,item);
+	return (it != 0);
+    }
+    return false;
+}
+
 bool GTKWindow::addOption(const String& name, const String& item, bool atStart, const String& text)
 {
     GtkWidget* wid = find(name);
@@ -1402,6 +1513,15 @@ bool GTKWindow::setTableRow(const String& name, const String& item, const NamedL
     return yw ? yw->setTableRow(item,data) : setTableRow(wid,item,data);
 }
 
+bool GTKWindow::getTableRow(const String& name, const String& item, NamedList* data)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    Widget* yw = getWidget(wid);
+    return yw ? yw->getTableRow(item,data) : getTableRow(wid,item,data);
+}
+
 bool GTKWindow::clearTable(const String& name)
 {
     GtkWidget* wid = find(name);
@@ -1452,10 +1572,51 @@ bool GTKWindow::addTableRow(GtkWidget* wid, const String& item, const NamedList*
     return false;
 }
 
+// Helper function to find a row by name and set a GetTreeIter to it
+static bool findTableRow(GtkTreeModel* model, const String& item, GtkTreeIter* iter)
+{
+    if (!gtk_tree_model_get_iter_first(model,iter))
+	return false;
+    for (;;) {
+	gchar* val = 0;
+	// column 0 is reserved for row/item name
+	gtk_tree_model_get(model,iter,0,&val,-1);
+	bool found = (item == val);
+	::free(val);
+	if (found)
+	    return true;
+	if (!gtk_tree_model_iter_next(model,iter))
+	    break;
+    }
+    return false;
+}
+
+static bool findTableRow(GtkTreeView* view, const String& item, GtkTreeIter* iter)
+{
+    GtkTreeModel* model = gtk_tree_view_get_model(view);
+    if (!model)
+	return false;
+    return findTableRow(model,item,iter);
+}
+
 bool GTKWindow::delTableRow(GtkWidget* wid, const String& item)
 {
-    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::addTableRow(%p,'%s')",
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::delTableRow(%p,'%s')",
 	wid,item.c_str());
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	if (!model)
+	    return false;
+	GtkListStore* store = GTK_LIST_STORE(model);
+	if (!store)
+	    return false;
+	GtkTreeIter iter;
+	if (!findTableRow(model,item,&iter))
+	    return false;
+	gtk_list_store_remove(store,&iter);
+	return true;
+    }
     return false;
 }
 
@@ -1463,12 +1624,80 @@ bool GTKWindow::setTableRow(GtkWidget* wid, const String& item, const NamedList*
 {
     DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::setTableRow(%p,'%s',%p)",
 	wid,item.c_str(),data);
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	if (!model)
+	    return false;
+	GtkListStore* store = GTK_LIST_STORE(model);
+	if (!store)
+	    return false;
+	GtkTreeIter iter;
+	if (!findTableRow(view,item,&iter))
+	    return false;
+
+	int ncol = gtk_tree_model_get_n_columns(model);
+	for (int i = 0; i < ncol; i++) {
+	    GtkTreeViewColumn* column = gtk_tree_view_get_column(view,i);
+	    if (!column)
+		continue;
+	    String name = gtk_tree_view_column_get_title(column);
+	    name.toLower();
+	    const String* param = data->getParam(name);
+	    if (param)
+		gtk_list_store_set(store,&iter,i+1,param->safe(),-1);
+	}
+    }
+    return false;
+}
+
+bool GTKWindow::getTableRow(GtkWidget* wid, const String& item, NamedList* data)
+{
+    DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::getTableRow(%p,'%s',%p)",
+	wid,item.c_str(),data);
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	if (!model)
+	    return false;
+	GtkTreeIter iter;
+	if (!findTableRow(model,item,&iter))
+	    return false;
+	if (data) {
+	    int ncol = gtk_tree_model_get_n_columns(model);
+	    for (int i = 0; i < ncol; i++) {
+		GtkTreeViewColumn* column = gtk_tree_view_get_column(view,i);
+		if (!column)
+		    continue;
+		String name = gtk_tree_view_column_get_title(column);
+		name.toLower();
+		gchar* val = 0;
+		// read past column 0 which is reserved for row/item name
+		gtk_tree_model_get(model,&iter,i+1,&val,-1);
+Debug(DebugWarn,"i=%d name='%s' val='%s'",i,name.c_str(),val);
+		data->setParam(name,val);
+		::free(val);
+	    }
+	}
+	return true;
+    }
     return false;
 }
 
 bool GTKWindow::clearTable(GtkWidget* wid)
 {
     DDebug(GTKDriver::self(),DebugInfo,"GTKWindow::clearTable(%p)",wid);
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	if (!model)
+	    return false;
+	GtkListStore* store = GTK_LIST_STORE(model);
+	if (!store)
+	    return false;
+	gtk_list_store_clear(store);
+	return true;
+    }
     return false;
 }
 
@@ -1563,6 +1792,28 @@ bool GTKWindow::getSelect(GtkWidget* wid, String& item)
 	    }
 	}
 	return false;
+    }
+    if (GTK_IS_TREE_VIEW(wid)) {
+	GtkTreeView* view = GTK_TREE_VIEW(wid);
+	GtkTreeModel* model = gtk_tree_view_get_model(view);
+	if (!model)
+	    return false;
+
+	GtkTreePath* path = 0;
+	gtk_tree_view_get_cursor(view,&path,NULL);
+	if (!path)
+	    return false;
+	GtkTreeIter iter;
+	if (!gtk_tree_model_get_iter(model,&iter,path))
+	    return false;
+	gtk_tree_path_free(path);
+
+	gchar* val = 0;
+	// column 0 is reserved for row/item name
+	gtk_tree_model_get(model,&iter,0,&val,-1);
+	item = val;
+	::free(val);
+	return true;
     }
     return false;
 }

@@ -437,15 +437,34 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	    return NoMatch;
 	// extra checks are to be made for ACK only
 	if (message->isACK()) {
-	    // Hack to match URIs with lost tags. Cisco sucks. Period.
-	    String tmp = getURI();
-	    int sc = tmp.find(';');
-	    if (sc > 0)
-		tmp.assign(tmp,sc);
-	    if ((getURI() != message->uri) && (tmp != message->uri))
-		return NoMatch;
 	    if (getDialogTag() != message->getParamValue("To","tag"))
 		return NoMatch;
+	    // use a while so we can either break or return
+	    while (getURI() != message->uri) {
+#ifndef SIP_STRICT
+		// hack to match URIs with lost tags. Cisco sucks. Period.
+		String tmp = getURI();
+		int sc = tmp.find(';');
+		if (sc > 0) {
+		    tmp.assign(tmp,sc);
+		    if (tmp == message->uri) {
+			Debug(getEngine(),DebugMild,"Received no-branch ACK with lost URI tags! (sender bug)");
+			break;
+		    }
+		}
+		// now try to match only the user part - Cisco strikes again...
+		sc = tmp.find('@');
+		if (sc > 0) {
+		    tmp.assign(tmp,sc);
+		    sc = message->uri.find('@');
+		    if ((sc > 0) && (tmp == message->uri.substr(0,sc))) {
+			Debug(getEngine(),DebugMild,"Received no-branch ACK with only user matching! (sender bug)");
+			break;
+		    }
+		}
+#endif
+		return NoMatch;
+	    }
 	}
     }
     if (!message->getParty())

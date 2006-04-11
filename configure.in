@@ -347,7 +347,9 @@ prtti=`$ac_cv_use_pwlib/bin/ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/lib/libpt.so"
 PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
-if [[ "$verpw" '<' "1.6.0" -a "$verpw" '<' "1.10.0" ]]; then
+# convert version into something comparable lexicographically
+vpw=`echo "$verpw" | sed 's/\(^\|[[^1-9]]\)\([[0-9]]\)/\10\2/g'`
+if [[ "$vpw" '<' "01.06.00" ]]; then
     PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib/unix/ptlib -I$ac_cv_use_pwlib/include/ptlib/unix $PWLIB_INC"
 fi
 if [[ -f "$incpw" -a -f "$libpw" ]]; then

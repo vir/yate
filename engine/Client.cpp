@@ -1191,6 +1191,12 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 	    tmp << " " << caller;
 	    setStatus(tmp);
 	    setText("incoming",tmp);
+	    String* info = msg->getParam("caller_info_uri");
+	    if (info && (info->startsWith("http://",false) || info->startsWith("http://",false)))
+		setText("caller_info",*info);
+	    info = msg->getParam("caller_icon_uri");
+	    if (info && (info->startsWith("http://",false) || info->startsWith("http://",false)))
+		setText("caller_icon",*info);
 	    if (m_autoAnswer) {
 		cc->callAnswer();
 		setChannelInternal(cc);

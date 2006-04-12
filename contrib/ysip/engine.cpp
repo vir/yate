@@ -101,103 +101,6 @@ static TokenDict sip_responses[] = {
 
 TokenDict* TelEngine::SIPResponses = sip_responses;
 
-URI::URI()
-    : m_parsed(false)
-{
-}
-
-URI::URI(const String& uri)
-    : String(uri), m_parsed(false)
-{
-}
-
-URI::URI(const URI& uri)
-    : String(uri), m_parsed(false)
-{
-    m_desc = uri.getDescription();
-    m_proto = uri.getProtocol();
-    m_user = uri.getUser();
-    m_host = uri.getHost();
-    m_port = uri.getPort();
-    m_parsed = true;
-}
-
-URI::URI(const char* proto, const char* user, const char* host, int port, const char* desc)
-    : m_desc(desc), m_proto(proto), m_user(user), m_host(host), m_port(port)
-{
-    if (desc)
-	*this << "\"" << m_desc << "\" <";
-    *this << m_proto << ":";
-    if (user)
-	*this << m_user << "@";
-    *this << m_host;
-    if (m_port > 0)
-	*this << ":" << m_port;
-    if (desc)
-	*this << ">";
-    m_parsed = true;
-}
-
-void URI::changed()
-{
-    m_parsed = false;
-}
-
-void URI::parse() const
-{
-    if (m_parsed)
-	return;
-    DDebug("URI",DebugAll,"parsing '%s' [%p]",c_str(),this);
-    m_port = 0;
-    m_desc.clear();
-
-    // the compiler generates wrong code so use the temporary
-    String tmp(*this);
-    bool hasDesc = false;
-    Regexp r("^[[:space:]]*\"\\([^\"]\\+\\)\"[[:space:]]*\\(.*\\)$");
-    if (tmp.matches(r))
-	hasDesc = true;
-    else {
-	r = "^[[:space:]]*\\([^<]\\+\\)[[:space:]]*<\\([^>]\\+\\)";
-	hasDesc = tmp.matches(r);
-    }
-    if (hasDesc) {
-	m_desc = tmp.matchString(1);
-	tmp = tmp.matchString(2);
-	*const_cast<URI*>(this) = tmp;
-	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
-    }
-
-    r = "<\\([^>]\\+\\)>";
-    if (tmp.matches(r)) {
-	tmp = tmp.matchString(1);
-	*const_cast<URI*>(this) = tmp;
-	DDebug("URI",DebugAll,"new value='%s' [%p]",c_str(),this);
-    }
-
-    // [proto:][user[:passwd]@]hostname[:port][/path][?param=value[&param=value...]]
-    // [proto:][user@]hostname[:port][/path][;params][?params][&params]
-    r = "^\\([[:alpha:]]\\+:\\)\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
-    if (tmp.matches(r)) {
-	m_proto = tmp.matchString(1).toLower();
-	m_proto = m_proto.substr(0,m_proto.length()-1);
-	m_user = tmp.matchString(2);
-	m_user = m_user.substr(0,m_user.length()-1);
-	m_host = tmp.matchString(3).toLower();
-	tmp = tmp.matchString(4);
-	tmp >> ":" >> m_port;
-	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",
-	    m_desc.c_str(), m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
-    }
-    else {
-	m_desc.clear();
-	m_proto.clear();
-	m_user.clear();
-	m_host.clear();
-    }
-    m_parsed = true;
-}
-
 SIPParty::SIPParty()
     : m_reliable(false)
 {
@@ -214,6 +117,7 @@ SIPParty::~SIPParty()
 {
     DDebug(DebugAll,"SIPParty::~SIPParty() [%p]",this);
 }
+
 
 SIPEvent::SIPEvent(SIPMessage* message, SIPTransaction* transaction)
     : m_message(message), m_transaction(transaction),
@@ -236,6 +140,7 @@ SIPEvent::~SIPEvent()
     if (m_message)
 	m_message->deref();
 }
+
 
 SIPEngine::SIPEngine(const char* userAgent)
     : m_mutex(true),

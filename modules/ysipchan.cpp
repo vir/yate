@@ -535,6 +535,7 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
     return lst;
 }
 
+// Check if an IPv4 address belongs to one of the non-routable blocks
 static bool isPrivateAddr(const String& host)
 {
     if (host.startsWith("192.168.") || host.startsWith("169.254.") || host.startsWith("10."))
@@ -545,6 +546,13 @@ static bool isPrivateAddr(const String& host)
     int i = 0;
     s >> i;
     return (i >= 16) && (i <= 31) && s.startsWith(".");
+}
+
+// Check if there may be a NAT between an address embedded in the protocol
+//  and an address obtained from the network layer
+static bool isNatBetween(const String& embAddr, const String& netAddr)
+{
+    return isPrivateAddr(embAddr) && !isPrivateAddr(netAddr);
 }
 
 // List of critical headers we don't want to handle generically
@@ -1225,8 +1233,9 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	return;
     }
 
+    Message msg("user.register");
     String user;
-    int age = t->authUser(user);
+    int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if (((age < 0) || (age > 10)) && s_auth_register) {
 	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
@@ -1240,19 +1249,19 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     }
 
     URI addr(*hl);
-    Message *m = new Message("user.register");
-    m->addParam("username",user);
-    m->addParam("number",addr.getUser());
-    m->addParam("driver","sip");
+    msg.setParam("username",user);
+    msg.setParam("number",addr.getUser());
+    msg.setParam("driver","sip");
     String data("sip/" + addr);
-    if (s_auto_nat && isPrivateAddr(addr.getHost()) && !isPrivateAddr(message->getParty()->getPartyAddr())) {
+    bool nat = isNatBetween(addr.getHost(),message->getParty()->getPartyAddr());
+    if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
 	Debug(DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
 		    addr.getHost().c_str(),addr.getPort(),
 		    message->getParty()->getPartyAddr().c_str(),
 		    message->getParty()->getPartyPort());
 	String tmp(addr.getHost());
 	tmp << ":" << addr.getPort();
-	m->addParam("reg_nat_addr",tmp);
+	msg.addParam("reg_nat_addr",tmp);
 	int pos = data.find(tmp);
 	if (pos >= 0) {
 	    int len = tmp.length();
@@ -1262,9 +1271,9 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	    data = tmp;
 	}
     }
-    m->addParam("data",data);
-    m->addParam("ip_host",message->getParty()->getPartyAddr());
-    m->addParam("ip_port",String(message->getParty()->getPartyPort()));
+    msg.setParam("data",data);
+    msg.setParam("ip_host",message->getParty()->getPartyAddr());
+    msg.setParam("ip_port",String(message->getParty()->getPartyPort()));
 
     bool dereg = false;
     String tmp(message->getHeader("Expires"));
@@ -1282,20 +1291,20 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	return;
     }
     tmp = expires;
-    m->addParam("expires",tmp);
+    msg.setParam("expires",tmp);
     if (!expires) {
-	*m = "user.unregister";
+	msg = "user.unregister";
 	dereg = true;
     }
     hl = message->getHeader("User-Agent");
     if (hl)
-	m->addParam("device",*hl);
+	msg.setParam("device",*hl);
     // Always OK deregistration attempts
-    if (Engine::dispatch(m) || dereg) {
+    if (Engine::dispatch(msg) || dereg) {
 	if (dereg)
 	    t->setResponse(200);
 	else {
-	    tmp = m->getValue("expires",tmp);
+	    tmp = msg.getValue("expires",tmp);
 	    if (tmp.null())
 		tmp = expires;
 	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
@@ -1306,7 +1315,6 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     }
     else
 	t->setResponse(404);
-    m->destruct();
 }
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
@@ -1392,6 +1400,16 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("called",uri.getUser());
     if (m_uri.getDescription())
 	m->addParam("callername",m_uri.getDescription());
+    const SIPHeaderLine* hl = m_tr->initialMessage()->getHeader("Call-Info");
+    if (hl) {
+	const NamedString* type = hl->getParam("purpose");
+	if (!type || *type == "info")
+	    m->addParam("caller_info_uri",*type);
+	else if (*type == "icon")
+	    m->addParam("caller_icon_uri",*type);
+	else if (*type == "card")
+	    m->addParam("caller_card_uri",*type);
+    }
 
     if (line) {
 	// call comes from line we have registered to - trust it...
@@ -1437,7 +1455,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	if (m_rtpMedia) {
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
-	    if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	    bool nat = isNatBetween(m_rtpAddr,m_host);
+	    if (m->getBoolValue("nat_support",s_auto_nat && nat)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		    m_rtpAddr.c_str(),m_host.c_str());
 		m->addParam("rtp_nat_addr",m_rtpAddr);
@@ -1542,6 +1561,27 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_dialog = *m;
     if (s_privacy)
 	copyPrivacy(*m,msg);
+
+    // add some Call-Info headers
+    const char* info = msg.getValue("caller_info_uri");
+    if (info) {
+	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	hl->setParam("purpose","info");
+	m->addHeader(hl);
+    }
+    info = msg.getValue("caller_icon_uri");
+    if (info) {
+	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	hl->setParam("purpose","icon");
+	m->addHeader(hl);
+    }
+    info = msg.getValue("caller_card_uri");
+    if (info) {
+	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	hl->setParam("purpose","card");
+	m->addHeader(hl);
+    }
+
     SDPBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
@@ -2144,7 +2184,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
 		setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
 		// guess if the call comes from behind a NAT
-		if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+		if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 			m_rtpAddr.c_str(),m_host.c_str());
 		    natAddr = m_rtpAddr;
@@ -2189,7 +2229,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
 	setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
-	if (s_auto_nat && isPrivateAddr(m_rtpAddr) && !isPrivateAddr(m_host)) {
+	if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		m_rtpAddr.c_str(),m_host.c_str());
 	    natAddr = m_rtpAddr;
@@ -2259,7 +2299,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	    if (!lst)
 		break;
 	    // guess if the call comes from behind a NAT
-	    if (s_auto_nat && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
+	    if (s_auto_nat && isNatBetween(addr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		    addr.c_str(),m_host.c_str());
 		natAddr = addr;
@@ -2306,7 +2346,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (!lst)
 	    break;
 	// guess if the call comes from behind a NAT
-	if (s_auto_nat && isPrivateAddr(addr) && !isPrivateAddr(m_host)) {
+	if (s_auto_nat && isNatBetween(addr,m_host)) {
 	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
 		addr.c_str(),m_host.c_str());
 	    addr = m_host;

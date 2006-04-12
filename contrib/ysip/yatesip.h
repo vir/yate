@@ -52,40 +52,6 @@ namespace TelEngine {
  */
 extern YSIP_API TokenDict* SIPResponses;
 
-class YSIP_API URI : public String
-{
-public:
-    URI();
-    URI(const String& uri);
-    URI(const URI& uri);
-    URI(const char* proto, const char* user, const char* host, int port = 0, const char* desc = 0);
-    void parse() const;
-    inline URI& operator=(const URI& value)
-	{ String::operator=(value); return *this; }
-    inline URI& operator=(const String& value)
-	{ String::operator=(value); return *this; }
-    inline URI& operator=(const char value)
-	{ String::operator=(value); return *this; }
-    inline const String& getDescription() const
-	{ parse(); return m_desc; }
-    inline const String& getProtocol() const
-	{ parse(); return m_proto; }
-    inline const String& getUser() const
-	{ parse(); return m_user; }
-    inline const String& getHost() const
-	{ parse(); return m_host; }
-    inline int getPort() const
-	{ parse(); return m_port; }
-protected:
-    virtual void changed();
-    mutable bool m_parsed;
-    mutable String m_desc;
-    mutable String m_proto;
-    mutable String m_user;
-    mutable String m_host;
-    mutable int m_port;
-};
-
 class SIPEngine;
 class SIPEvent;
 

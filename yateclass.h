@@ -2514,6 +2514,122 @@ private:
     ObjList m_params;
 };
 
+/**
+ * Uniform Resource Identifier encapsulation and parser.
+ * For efficiency reason the parsing is delayed as long as possible
+ * @short Encapsulation for an URI
+ */
+class YATE_API URI : public String
+{
+public:
+    /**
+     * Empty URI constructor
+     */
+    URI();
+
+    /**
+     * Copy constructor
+     * @param uri Original URI to copy
+     */
+    URI(const URI& uri);
+
+    /**
+     * Constructor from a String that gets parsed later
+     * @param uri String form of the URI
+     */
+    URI(const String& uri);
+
+    /**
+     * Constructor from a C string that gets parsed later
+     * @param uri String form of the URI
+     */
+    URI(const char* uri);
+
+    /**
+     * Constructor from URI components
+     * @param proto Protocol - something like "http", "sip", etc.
+     * @param user User component of the URI
+     * @param host Hostname component of the URI
+     * @param port Port part of the URI (optional)
+     * @param desc Description part in front of the URI (optional)
+     */
+    URI(const char* proto, const char* user, const char* host, int port = 0, const char* desc = 0);
+
+    /**
+     * Calling this method ensures the string URI is parsed into components
+     */
+    void parse() const;
+
+    /**
+     * Assignment operator from URI
+     * @param value New URI value to assign
+     */
+    inline URI& operator=(const URI& value)
+	{ String::operator=(value); return *this; }
+
+    /**
+     * Assignment operator from String
+     * @param value New URI value to assign
+     */
+    inline URI& operator=(const String& value)
+	{ String::operator=(value); return *this; }
+
+    /**
+     * Assignment operator from C string
+     * @param value New URI value to assign
+     */
+    inline URI& operator=(const char* value)
+	{ String::operator=(value); return *this; }
+
+    /**
+     * Access method to the description part of the URI
+     * @return Description part of the URI
+     */
+    inline const String& getDescription() const
+	{ parse(); return m_desc; }
+
+    /**
+     * Access method to the protocol part of the URI
+     * @return Protocol part of the URI
+     */
+    inline const String& getProtocol() const
+	{ parse(); return m_proto; }
+
+    /**
+     * Access method to the user part of the URI
+     * @return User component of the URI
+     */
+    inline const String& getUser() const
+	{ parse(); return m_user; }
+
+    /**
+     * Access method to the host part of the URI
+     * @return Hostname part of the URI
+     */
+    inline const String& getHost() const
+	{ parse(); return m_host; }
+
+    /**
+     * Access method to the port part of the URI
+     * @return Port of the URI, zero if not set
+     */
+    inline int getPort() const
+	{ parse(); return m_port; }
+protected:
+    /**
+     * Notification method called whenever the string URI has changed.
+     * The default behaviour is to invalidate the parsed flag and cal the
+     *  method inherited from @ref String.
+     */
+    virtual void changed();
+    mutable bool m_parsed;
+    mutable String m_desc;
+    mutable String m_proto;
+    mutable String m_user;
+    mutable String m_host;
+    mutable int m_port;
+};
+
 class MutexPrivate;
 class ThreadPrivate;
 

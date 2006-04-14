@@ -936,7 +936,7 @@ bool Client::action(Window* wnd, const String& name)
 	if (openPopup("account",&params,wnd))
 	    return true;
     }
-    else if (name == "acc_edit") {
+    else if ((name == "acc_edit") || (name == "accounts")) {
 	String acc;
 	if (getSelect("accounts",acc,wnd)) {
 	    NamedList params("");
@@ -959,7 +959,11 @@ bool Client::action(Window* wnd, const String& name)
 	else
 	    return false;
     }
+    else if (name == "acc_accept") {
+    }
     // address book window actions
+    else if ((name == "abk_call") || (name == "contacts")) {
+    }
     else if (name == "abk_new") {
 	NamedList params("");
 	params.setParam("abk_contact","");
@@ -991,16 +995,19 @@ bool Client::action(Window* wnd, const String& name)
 	else
 	    return false;
     }
+    else if (name == "abk_accept") {
+    }
     // outgoing (placed) call log actions
     else if (name == "log_out_clear") {
 	if (clearTable("log_outgoing"))
 	    return true;
     }
-    else if (name == "log_out_call") {
+    else if ((name == "log_out_call") || (name == "log_outgoing")) {
 	NamedList log("");
 	if (getTableRow("log_outgoing","",&log,wnd)) {
-//	    if (openConfirm("Call to "+log,wnd))
-//		return true;
+	    String* called = log.getParam("called");
+	    if (called && *called && openConfirm("Call to "+*called,wnd))
+		return true;
 	}
 	else
 	    return false;
@@ -1008,6 +1015,21 @@ bool Client::action(Window* wnd, const String& name)
     // incoming (received) call log actions
     else if (name == "log_in_clear") {
 	if (clearTable("log_incoming"))
+	    return true;
+    }
+    else if ((name == "log_in_call") || (name == "log_incoming")) {
+	NamedList log("");
+	if (getTableRow("log_incoming","",&log,wnd)) {
+	    String* caller = log.getParam("caller");
+	    if (caller && *caller && openConfirm("Call to "+*caller,wnd))
+		return true;
+	}
+	else
+	    return false;
+    }
+    // mixed call log actions
+    else if (name == "log_clear") {
+	if (clearTable("log_global"))
 	    return true;
     }
 
@@ -1061,16 +1083,26 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 	return true;
     }
     else if (name == "account") {
+	if (checkDashes(item))
+	    return true;
 	// selecting an account unselects protocol
-	if (!checkDashes(item))
-	    if (setSelect("protocol","") || setSelect("protocol","--"))
-		return true;
+	if (setSelect("protocol","") || setSelect("protocol","--"))
+	    return true;
     }
     else if (name == "protocol") {
+	if (checkDashes(item))
+	    return true;
 	// selecting a protocol unselects account
-	if (!checkDashes(item))
-	    if (setSelect("account","") || setSelect("account","--"))
-		return true;
+	if (setSelect("account","") || setSelect("account","--"))
+	    return true;
+    }
+    else if (name == "acc_provider") {
+	// apply provider template
+	if (checkDashes(item))
+	    return true;
+	// reset selection after we apply it
+	if (setSelect(name,"--") || setSelect(name,"--"))
+	    return true;
     }
 
     // unknown/unhandled - generate a message for them
@@ -1192,10 +1224,10 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 	    setStatus(tmp);
 	    setText("incoming",tmp);
 	    String* info = msg->getParam("caller_info_uri");
-	    if (info && (info->startsWith("http://",false) || info->startsWith("http://",false)))
+	    if (info && (info->startsWith("http://",false) || info->startsWith("https://",false)))
 		setText("caller_info",*info);
 	    info = msg->getParam("caller_icon_uri");
-	    if (info && (info->startsWith("http://",false) || info->startsWith("http://",false)))
+	    if (info && (info->startsWith("http://",false) || info->startsWith("https://",false)))
 		setText("caller_icon",*info);
 	    if (m_autoAnswer) {
 		cc->callAnswer();

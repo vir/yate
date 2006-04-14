@@ -1596,6 +1596,16 @@ static bool findTableRow(GtkTreeView* view, const String& item, GtkTreeIter* ite
     GtkTreeModel* model = gtk_tree_view_get_model(view);
     if (!model)
 	return false;
+    if (item.null()) {
+	// find currently selected table row
+	GtkTreePath* path = 0;
+	gtk_tree_view_get_cursor(view,&path,NULL);
+	if (!path)
+	    return false;
+	bool ok = gtk_tree_model_get_iter(model,iter,path);
+	gtk_tree_path_free(path);
+	return ok;
+    }
     return findTableRow(model,item,iter);
 }
 
@@ -1661,8 +1671,11 @@ bool GTKWindow::getTableRow(GtkWidget* wid, const String& item, NamedList* data)
 	if (!model)
 	    return false;
 	GtkTreeIter iter;
-	if (!findTableRow(model,item,&iter))
+	if (!findTableRow(view,item,&iter)) {
+	    Debug(GTKDriver::self(),DebugMild,"Could not find row '%s' in table %p",
+		item.c_str(),wid);
 	    return false;
+	}
 	if (data) {
 	    int ncol = gtk_tree_model_get_n_columns(model);
 	    for (int i = 0; i < ncol; i++) {
@@ -1674,7 +1687,6 @@ bool GTKWindow::getTableRow(GtkWidget* wid, const String& item, NamedList* data)
 		gchar* val = 0;
 		// read past column 0 which is reserved for row/item name
 		gtk_tree_model_get(model,&iter,i+1,&val,-1);
-Debug(DebugWarn,"i=%d name='%s' val='%s'",i,name.c_str(),val);
 		data->setParam(name,val);
 		::free(val);
 	    }

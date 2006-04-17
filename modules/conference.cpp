@@ -32,10 +32,10 @@ using namespace TelEngine;
 #define DATA_CHUNK 320
 
 // minimum amount of buffered data when we start mixing
-#define MIN_BUFFER 960
+#define MIN_BUFFER 480
 
 // maximum size we allow the buffer to grow
-#define MAX_BUFFER 1600
+#define MAX_BUFFER 960
 
 
 // Absolute maximum possible energy (square +-32767 wave) - do not change
@@ -444,7 +444,7 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	m_muted = true;
 	return;
     }
-    if (m_buffer.length()+data.length() < MAX_BUFFER)
+    if (m_buffer.length()+data.length() <= MAX_BUFFER)
 	m_buffer += data;
     m_room->mutex()->unlock();
     if (m_buffer.length() >= MIN_BUFFER)

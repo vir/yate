@@ -140,6 +140,11 @@ void Window::title(const String& text)
     m_title = text;
 }
 
+void Window::context(const String& text)
+{
+    m_context = text;
+}
+
 bool Window::related(const Window* wnd) const
 {
     if ((wnd == this) || !wnd || wnd->master())
@@ -157,6 +162,8 @@ bool Window::setParams(const NamedList& params)
 	    String n(s->name());
 	    if (n == "title")
 		title(*s);
+	    if (n == "context")
+		context(*s);
 	    else if (n.startSkip("show:",false))
 		ok = setShow(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("active:",false))
@@ -363,10 +370,20 @@ Client* Client::s_client = 0;
 int Client::s_changing = 0;
 static Configuration s_accounts;
 static Configuration s_contacts;
+static Configuration s_providers;
 
+// Parameters that are stored with account
 static const char* s_accParams[] = {
     "username",
     "password",
+    "server",
+    "domain",
+    "outbound",
+    0
+};
+
+// Parameters that are applied from provider template
+static const char* s_provParams[] = {
     "server",
     "domain",
     "outbound",
@@ -495,6 +512,17 @@ void Client::initClient()
 	}
     }
 
+    s_providers = Engine::configFile("providers");
+    s_providers.load();
+    n = s_providers.sections();
+    for (i=0; i<n; i++) {
+	NamedList* sect = s_providers.getSection(i);
+	if (sect && sect->getBoolValue("enabled",true)) {
+	    if (!hasOption("acc_providers",*sect))
+		addOption("acc_providers",*sect,false);
+	}
+    }
+
     bool tmp =
 	getWindow("channels") || hasElement("channels") ||
 	getWindow("lines") || hasElement("lines");
@@ -527,6 +555,7 @@ bool Client::openPopup(const String& name, const NamedList* params, const Window
     Window* wnd = getWindow(name);
     if (!wnd)
 	return false;
+    wnd->context("");
     if (params)
 	wnd->setParams(*params);
     if (parent)
@@ -970,9 +999,8 @@ bool Client::action(Window* wnd, const String& name)
     // accounts window actions
     else if (name == "acc_new") {
 	NamedList params("");
-	params.setParam("select:acc_provider","--");
+	params.setParam("select:acc_providers","--");
 	params.setParam("acc_account","");
-	params.setParam("acc_account_orig","");
 	params.setParam("acc_username","");
 	params.setParam("acc_password","");
 	params.setParam("acc_server","");
@@ -986,9 +1014,9 @@ bool Client::action(Window* wnd, const String& name)
 	String acc;
 	if (getSelect("accounts",acc,wnd)) {
 	    NamedList params("");
-	    params.setParam("select:acc_provider","--");
+	    params.setParam("context",acc);
+	    params.setParam("select:acc_providers","--");
 	    params.setParam("acc_account",acc);
-	    params.setParam("acc_account_orig",acc);
 	    NamedList* sect = s_accounts.getSection(acc);
 	    if (sect) {
 		params.setParam("select:acc_protocol",sect->getValue("protocol"));
@@ -1030,11 +1058,10 @@ bool Client::action(Window* wnd, const String& name)
 		return false;
 	    }
 	    // check if the account name has changed, delete old if so
-	    String oldAcc;
-	    if (getText("acc_account_orig",oldAcc,wnd) && oldAcc && (oldAcc != newAcc)) {
-		s_accounts.clearSection(oldAcc);
+	    if (wnd && wnd->context() && (wnd->context() != newAcc)) {
+		s_accounts.clearSection(wnd->context());
 		Message* m = new Message("user.login");
-		m->addParam("account",oldAcc);
+		m->addParam("account",wnd->context());
 		m->addParam("operation","delete");
 		Engine::enqueue(m);
 	    }
@@ -1067,7 +1094,6 @@ bool Client::action(Window* wnd, const String& name)
     else if (name == "abk_new") {
 	NamedList params("");
 	params.setParam("abk_contact","");
-	params.setParam("abk_contact_orig","");
 	params.setParam("abk_number","");
 	params.setParam("modal",String::boolText(true));
 	if (openPopup("addrbook",&params,wnd))
@@ -1077,8 +1103,8 @@ bool Client::action(Window* wnd, const String& name)
 	String cnt;
 	if (getSelect("contacts",cnt,wnd)) {
 	    NamedList params("");
-	    params.setParam("abk_contact_orig",cnt);
 	    params.setParam("abk_contact",cnt);
+	    params.setParam("context",cnt);
 	    params.setParam("modal",String::boolText(true));
 	    if (openPopup("addrbook",&params,wnd))
 		return true;
@@ -1196,13 +1222,23 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 	if (setSelect("account","") || setSelect("account","--"))
 	    return true;
     }
-    else if (name == "acc_provider") {
+    else if (name == "acc_providers") {
 	// apply provider template
 	if (checkDashes(item))
 	    return true;
 	// reset selection after we apply it
-	if (setSelect(name,"") || setSelect(name,"--"))
-	    return true;
+	if (!setSelect(name,""))
+	    setSelect(name,"--");
+	NamedList* sect = s_providers.getSection(item);
+	if (!sect)
+	    return false;
+	setSelect("acc_protocol",sect->getValue("protocol"));
+	for (const char** par = s_provParams; *par; par++) {
+	    String name;
+	    name << "acc_" << *par;
+	    setText(name,sect->getValue(*par));
+	}
+	return true;
     }
 
     // unknown/unhandled - generate a message for them

@@ -49,22 +49,129 @@ class YATE_API Window : public GenObject
 {
     friend class Client;
 public:
+    /**
+     * Constructor, creates a new windows with an ID
+     * @param id String identifier of the new window
+     */
     Window(const char* id = 0);
+
+    /**
+     * Destructor
+     */
     virtual ~Window();
+
+    /**
+     * Retrive the standard name of this Window, used to search in lists
+     * @return Identifier of this window
+     */
     virtual const String& toString() const;
+
+    /*
+     * Get the window's title (may not be displayed on screen)
+     * @return Title of this window
+     */
     virtual void title(const String& text);
+
+    /**
+     * Get the contextual information previously associated with this window
+     * @return String contextual information
+     */
+    virtual void context(const String& text);
+
+    /**
+     * Set window parameters or widget contents
+     * @param params List of parameters to set in the window and its widgets
+     * @return True if all parameters could be set
+     */
     virtual bool setParams(const NamedList& params);
+
+    /**
+     * Force this window on top of another one which becomes its parent
+     * @param parent Window to force as parent of this one
+     */
     virtual void setOver(const Window* parent) = 0;
+
+    /**
+     * Check if this window has an element by name
+     * @param name Name of the element to search for
+     * @return True if one element with the given name exists
+     */
     virtual bool hasElement(const String& name) = 0;
+
+    /**
+     * Set an element as interactive in the window
+     * @param name Name of the element
+     * @param active True to make interactive, false to disallow interaction
+     * @return True if the operation was successfull
+     */
     virtual bool setActive(const String& name, bool active) = 0;
+
+    /**
+     * Set the visibility of an element in the window
+     * @param name Name of the element
+     * @param visible True to make element visible, false to hide it
+     * @return True if the operation was successfull
+     */
     virtual bool setShow(const String& name, bool visible) = 0;
+
+    /**
+     * Set the displayed text of an element in the window
+     * @param name Name of the element
+     * @param text Text value to set in the element
+     * @return True if the operation was successfull
+     */
     virtual bool setText(const String& name, const String& text) = 0;
+
+    /**
+     * Set the checked or toggled status of an element in the window
+     * @param name Name of the element
+     * @param checked True to make element checked or toggled
+     * @return True if the operation was successfull
+     */
     virtual bool setCheck(const String& name, bool checked) = 0;
+
+    /**
+     * Set the selection of an item in an element in the window
+     * @param name Name of the element
+     * @param item Name of the item that should be selected
+     * @return True if the operation was successfull
+     */
     virtual bool setSelect(const String& name, const String& item) = 0;
+
+    /**
+     * Flag an element as requiring immediate attention
+     * @param name Name of the element
+     * @param urgent True if the element requires immediate attention
+     * @return True if the operation was successfull
+     */
     virtual bool setUrgent(const String& name, bool urgent) = 0;
+
+    /**
+     * Check if an element has an item by its name
+     * @param name Name of the element to search for
+     * @param item Name of the item that should be searched
+     * @return True if one item with the given name exists in the element
+     */
     virtual bool hasOption(const String& name, const String& item) = 0;
+
+    /**
+     * Add an item to an element that supports such an operation (list)
+     * @param name Name of the element
+     * @param item Name of the item to add
+     * @param atStart True to insert item on the first position, false to append
+     * @param text Displayed text to associate with the item (not all lists support it)
+     * @return True if the operation was successfull
+     */
     virtual bool addOption(const String& name, const String& item, bool atStart = false, const String& text = String::empty()) = 0;
+
+    /**
+     * Remove an item from an element (list)
+     * @param name Name of the element
+     * @param item Name of the item to remove
+     * @return True if the operation was successfull
+     */
     virtual bool delOption(const String& name, const String& item) = 0;
+
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
     virtual bool delTableRow(const String& name, const String& item);
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
@@ -82,21 +189,60 @@ public:
     virtual void moveRel(int dx, int dy) = 0;
     virtual bool related(const Window* wnd) const;
     virtual void menu(int x, int y) = 0;
+
+    /**
+     * Retrive the standard name of this Window
+     * @return Identifier of this window
+     */
     inline const String& id() const
 	{ return m_id; }
+
+    /*
+     * Get the window's title (may not be displayed on screen)
+     * @return Title of this window
+     */
     inline const String& title() const
 	{ return m_title; }
+
+    /**
+     * Get the contextual information previously associated with this window
+     * @return String contextual information
+     */
+    inline const String& context() const
+	{ return m_context; }
+
+    /**
+     * Get the visibility status of this window
+     * @return True if window is visible, false if it's hidden
+     */
     inline bool visible() const
 	{ return m_visible; }
+
+    /**
+     * Set the visibility status of this window
+     * @param yes True if window should be visible
+     */
     inline void visible(bool yes)
 	{ if (yes) show(); else hide(); }
+
+    /**
+     * Check if this window is a master (topmost) window
+     * @return True if this window is topmost
+     */
     inline bool master() const
 	{ return m_master; }
+
+    /**
+     * Check if this window is a popup window
+     * @return True if this window is initially hidden
+     */
     inline bool popup() const
 	{ return m_popup; }
+
 protected:
     String m_id;
     String m_title;
+    String m_context;
     bool m_visible;
     bool m_master;
     bool m_popup;

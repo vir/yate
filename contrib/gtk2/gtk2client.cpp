@@ -1792,6 +1792,10 @@ bool GTKWindow::getSelect(const String& name, String& item)
 bool GTKWindow::getSelect(GtkWidget* wid, String& item)
 {
     XDebug(GTKDriver::self(),DebugAll,"GTKWindow::getSelect(%p)",wid);
+    if (GTK_IS_OPTION_MENU(wid)) {
+	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
+	return getOptionText(opt,gtk_option_menu_get_history(opt),item);
+    }
     if (GTK_IS_LIST(wid)) {
 	GtkWidget* it = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
 	if (it) {

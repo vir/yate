@@ -118,6 +118,7 @@ static bool fixDashes(String& str)
     return str.null();
 }
 
+
 Window::Window(const char* id)
     : m_id(id), m_visible(false), m_master(false), m_popup(false)
 {
@@ -360,6 +361,18 @@ bool ClientThreadProxy::execute()
 
 Client* Client::s_client = 0;
 int Client::s_changing = 0;
+static Configuration s_accounts;
+static Configuration s_contacts;
+
+static const char* s_accParams[] = {
+    "username",
+    "password",
+    "server",
+    "domain",
+    "outbound",
+    0
+};
+
 
 Client::Client(const char *name)
     : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
@@ -449,6 +462,39 @@ void Client::initWindows()
 
 void Client::initClient()
 {
+    s_accounts = Engine::configFile("client_accounts");
+    s_accounts.load();
+    unsigned int n = s_accounts.sections();
+    unsigned int i;
+    for (i=0; i<n; i++) {
+	NamedList* sect = s_accounts.getSection(i);
+	if (sect) {
+	    if (!hasOption("accounts",*sect))
+		addOption("accounts",*sect,false);
+	    Message* m = new Message("user.login");
+	    m->addParam("account",*sect);
+//	    m->addParam("operation","create");
+	    unsigned int n2 = sect->length();
+	    for (unsigned int j=0; j<n2; j++) {
+		NamedString* param = sect->getParam(j);
+		if (param)
+		    m->addParam(param->name(),*param);
+	    }
+	    Engine::enqueue(m);
+	}
+    }
+
+    s_contacts = Engine::configFile("client_contacts");
+    s_contacts.load();
+    n = s_contacts.sections();
+    for (i=0; i<n; i++) {
+	NamedList* sect = s_contacts.getSection(i);
+	if (sect) {
+	    if (!hasOption("contacts",*sect))
+		addOption("contacts",*sect,false);
+	}
+    }
+
     bool tmp =
 	getWindow("channels") || hasElement("channels") ||
 	getWindow("lines") || hasElement("lines");
@@ -943,6 +989,15 @@ bool Client::action(Window* wnd, const String& name)
 	    params.setParam("select:acc_provider","--");
 	    params.setParam("acc_account",acc);
 	    params.setParam("acc_account_orig",acc);
+	    NamedList* sect = s_accounts.getSection(acc);
+	    if (sect) {
+		params.setParam("select:acc_protocol",sect->getValue("protocol"));
+		for (const char** par = s_accParams; *par; par++) {
+		    String name;
+		    name << "acc_" << *par;
+		    params.setParam(name,sect->getValue(*par));
+		}
+	    }
 	    params.setParam("modal",String::boolText(true));
 	    if (openPopup("account",&params,wnd))
 		return true;
@@ -952,14 +1007,59 @@ bool Client::action(Window* wnd, const String& name)
     }
     else if (name == "acc_del") {
 	String acc;
-	if (getSelect("accounts",acc,wnd)) {
-	    if (openConfirm("Delete account "+acc,wnd))
-		return true;
+	if (getSelect("accounts",acc,wnd) && acc) {
+//	    if (openConfirm("Delete account "+acc,wnd))
+//		return true;
+	    s_accounts.clearSection(acc);
+	    s_accounts.save();
+	    Message* m = new Message("user.login");
+	    m->addParam("account",acc);
+	    m->addParam("operation","delete");
+	    Engine::enqueue(m);
+	    return true;
 	}
 	else
 	    return false;
     }
     else if (name == "acc_accept") {
+	String newAcc;
+	if (getText("acc_account",newAcc,wnd) && newAcc) {
+	    String proto;
+	    if (!(getSelect("acc_protocol",proto,wnd) && proto)) {
+		Debug(ClientDriver::self(),DebugWarn,"No protocol is set for account '%s' in %p",newAcc.c_str(),wnd);
+		return false;
+	    }
+	    // check if the account name has changed, delete old if so
+	    String oldAcc;
+	    if (getText("acc_account_orig",oldAcc,wnd) && oldAcc && (oldAcc != newAcc)) {
+		s_accounts.clearSection(oldAcc);
+		Message* m = new Message("user.login");
+		m->addParam("account",oldAcc);
+		m->addParam("operation","delete");
+		Engine::enqueue(m);
+	    }
+	    if (!hasOption("accounts",newAcc))
+		addOption("accounts",newAcc,false);
+	    Message* m = new Message("user.login");
+	    m->addParam("account",newAcc);
+//	    m->addParam("operation","create");
+	    s_accounts.setValue(newAcc,"protocol",proto);
+	    m->addParam("protocol",proto);
+	    for (const char** par = s_accParams; *par; par++) {
+		String name;
+		name << "acc_" << *par;
+		String val;
+		if (getText(name,val,wnd) && val) {
+		    s_accounts.setValue(newAcc,*par,val);
+		    m->addParam(*par,val);
+		}
+	    }
+	    Engine::enqueue(m);
+	    s_accounts.save();
+	    if (wnd)
+		wnd->hide();
+	    return true;
+	}
     }
     // address book window actions
     else if ((name == "abk_call") || (name == "contacts")) {
@@ -1101,7 +1201,7 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 	if (checkDashes(item))
 	    return true;
 	// reset selection after we apply it
-	if (setSelect(name,"--") || setSelect(name,"--"))
+	if (setSelect(name,"") || setSelect(name,"--"))
 	    return true;
     }
 
@@ -1493,10 +1593,9 @@ bool UIUserHandler::received(Message &msg)
     while (!Client::self()->initialized())
 	Thread::msleep(10);
 
+    Client::self()->lockOther();
     String op = msg.getParam("operation");
     if ((op == "create") || (op == "login") || op.null()) {
-	if (!Client::self()->hasOption("accounts",account))
-	    Client::self()->addOption("accounts",account,false);
 	if (!Client::self()->hasOption("account",account))
 	    Client::self()->addOption("account",account,false);
     }
@@ -1504,6 +1603,7 @@ bool UIUserHandler::received(Message &msg)
 	Client::self()->delOption("account",account);
 	Client::self()->delOption("accounts",account);
     }
+    Client::self()->unlockOther();
     return false;
 }
 

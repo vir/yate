@@ -423,7 +423,8 @@ bool Disconnector::init()
 
 void Disconnector::run()
 {
-    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p",m_chan,m_msg);
+    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p",
+	(void*)m_chan,m_msg);
     if (!m_chan)
 	return;
     if (m_source) {

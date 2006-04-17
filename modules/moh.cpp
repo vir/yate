@@ -248,7 +248,7 @@ void MOHSource::run()
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("MOH",DebugAll,"Sleeping for " FMT64 " usec",dly);
-	    ::usleep((unsigned long)dly);
+	    Thread::usleep((unsigned long)dly);
 	}
 	Forward(m_data);
 	tpos += (r*1000000ULL/m_brate);

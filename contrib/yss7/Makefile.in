@@ -1,0 +1,58 @@
+# Makefile
+# This file holds the make rules for the libyatess7
+
+DEBUG :=
+
+CXX  := @CXX@ -Wall
+AR  := ar
+DEFS :=
+INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
+CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+LDFLAGS:= -L.. -lyate
+INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatess7.h
+
+PROGS=
+LIBS = libyatess7.a
+OBJS = engine.o sigcall.o \
+	layer2.o layer3.o \
+	sigtran.o
+
+LOCALFLAGS =
+LOCALLIBS =
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+LINK = $(CC) $(LDFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+# include optional local make rules
+-include YateLocal.mak
+
+.PHONY: all debug ddebug xdebug
+all: $(LIBS) $(PROGS)
+
+debug:
+	$(MAKE) all DEBUG=-g3 MODSTRIP=
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG' MODSTRIP=
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG' MODSTRIP=
+
+.PHONY: strip
+strip: all
+	strip --strip-debug --discard-locals $(PROGS)
+
+.PHONY: clean
+clean:
+	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+
+%.o: @srcdir@/%.cpp $(INCFILES)
+	$(COMPILE) -c $<
+
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status
+
+libyatess7.a: $(OBJS)
+	$(AR) rcs $@ $^

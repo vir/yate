@@ -49,7 +49,10 @@ namespace TelEngine {
 
 class SignallingEngine;
 class SignallingReceiver;
-class SS7Layer3;
+class SCCPUser;
+class SS7MTP3;
+class SS7TCAP;
+class ISDNLayer3;
 
 /**
  * Interface to an abstract signalling component that is managed by an engine.
@@ -61,12 +64,12 @@ class YSS7_API SignallingComponent : public GenObject
     friend class SignallingEngine;
 public:
     /**
-     * Destructor
+     * Destructor, detaches the engine and other components
      */
     virtual ~SignallingComponent();
 
     /**
-     * Get the @ref SignallingEngine that manages this component
+     * Get the @ref TelEngine::SignallingEngine that manages this component
      * @return Pointer to engine or NULL if not managed by an engine
      */
     inline SignallingEngine* engine() const
@@ -206,6 +209,20 @@ class YSS7_API ASPUser
  */
 class YSS7_API SCCP
 {
+public:
+    /**
+     * Destructor
+     */
+    virtual ~SCCP();
+
+    /**
+     * Attach an user to this SS7 SCCP
+     * @param sccp Pointer to the SCCP user
+     */
+    virtual void attach(SCCPUser* user);
+
+protected:
+    ObjList m_users;
 };
 
 /**
@@ -214,6 +231,12 @@ class YSS7_API SCCP
  */
 class YSS7_API SCCPUser
 {
+public:
+    /**
+     * Attach as user to a SS7 SCCP
+     * @param sccp Pointer to the SCCP to use
+     */
+    virtual void attach(SCCP* sccp);
 };
 
 /**
@@ -222,6 +245,15 @@ class YSS7_API SCCPUser
  */
 class YSS7_API TCAPUser
 {
+public:
+    /**
+     * Attach as user to a SS7 TCAP
+     * @param tcap Pointer to the TCAP to use
+     */
+    void attach(SS7TCAP* tcap);
+
+protected:
+    SS7TCAP* m_tcap;
 };
 
 /**
@@ -232,13 +264,20 @@ class YSS7_API SS7Layer2 : virtual public SignallingComponent
 {
 public:
     /**
-     * Attach a SS7 Layer 3 (network) to the data link
-     * @param link Pointer to network to attach
+     * Attach a SS7 MTP3 (network) to the data link
+     * @param mtp3 Pointer to network to attach
      */
-    void attach(SS7Layer3* network);
+    void attach(SS7MTP3* mtp3);
+
+    /**
+     * Get the MTP3 network that works with this data link
+     * @return Pointer to the SS7MTP3 to which the messages are sent
+     */
+    inline SS7MTP3* mtp3() const
+	{ return m_mtp3; }
 
 protected:
-    SS7Layer3* m_network;
+    SS7MTP3* m_mtp3;
 };
 
 /**
@@ -254,22 +293,6 @@ class YSS7_API SS7Layer3 : virtual public SignallingComponent
  * @short Abstract SS7 layer 4 (application) protocol
  */
 class YSS7_API SS7Layer4 : virtual public SignallingComponent
-{
-};
-
-/**
- * An interface to a Layer 2 (Q.921) ISDN message transport
- * @short Abstract ISDN layer 2 (Q.921) message transport
- */
-class YSS7_API ISDNLayer2 : virtual public SignallingComponent
-{
-};
-
-/**
- * An interface to a Layer 3 (Q.931) ISDN message transport
- * @short Abstract ISDN layer 3 (Q.931) message transport
- */
-class YSS7_API ISDNLayer3 : virtual public SignallingComponent
 {
 };
 
@@ -368,12 +391,6 @@ class YSS7_API SS7SUA : public SIGTRAN, public SCCP
  */
 class YSS7_API SS7ASP : public SCCPUser, virtual public SignallingComponent
 {
-    /**
-     * Attach a SS7 SCCP to the ASP
-     * @param sccp Pointer to the SCCP to attach
-     */
-    void attach(SCCP* sccp);
-
 private:
     ObjList m_sccps;
 };
@@ -390,6 +407,30 @@ class YSS7_API SS7TCAP : public ASPUser, virtual public SignallingComponent
      */
     void attach(TCAPUser* user);
 
+};
+
+// The following classes are ISDN, not SS7, but they use the same signalling
+//  interfaces so they will remain here
+
+/**
+ * An interface to a Layer 2 (Q.921) ISDN message transport
+ * @short Abstract ISDN layer 2 (Q.921) message transport
+ */
+class YSS7_API ISDNLayer2 : virtual public SignallingComponent
+{
+    /**
+     * Attach an ISDN Q.931 call control
+     * @param user Pointer to the Q.931 call control to attach
+     */
+    void attach(ISDNLayer3* q931);
+};
+
+/**
+ * An interface to a Layer 3 (Q.931) ISDN message transport
+ * @short Abstract ISDN layer 3 (Q.931) message transport
+ */
+class YSS7_API ISDNLayer3 : virtual public SignallingComponent
+{
 };
 
 /**

@@ -1,0 +1,228 @@
+How to use the YSS7 (Yet Another SS7 Stack)
+===========================================
+
+YSS7 is a library usable mainly for telephony call signalling and related
+services. It implements a subset of the ITU Signalling System no. 7 and it
+also implements a subset of ISDN (Integrated Services Digital Network).
+
+The library is written in C++ and uses the base classes provided by Yate
+(Yet Another Telephony Engine) for its basic needs. As a result it supports
+any operating system supported by Yate but with some limitations regarding
+low level drivers and protocol support.
+
+The architecture of the classes in YSS7 loosely follows the layers defined
+in SS7. Each layer talks to the next one through standard interfaces. Multiple
+inheritance is used so one object can simultaneously implement an interface
+to a lower layer, an interface to a higher layer and some local processing.
+
+The base of any usage of YSS7 is the SignallingEngine class. Typically only
+one instance of this class is created although it is possible to create
+multiple, completely independent engines. The SignallingEngine object holds
+together all parts of the stack (which are derived from SignallingComponent)
+and periodically calls a timer method to allow for a simple implementation of
+asynchronous processing and timeouts.
+
+Each other signalling object is derived from SignallingComponent so that it
+keeps the connection to the engine. Because many classes are using multiple
+inheritance the SignallingComponent class is usually inherited virtually to
+make sure only one copy exists per signalling object.
+
+A protocol stack is built by first creating an empty SignallingEngine object
+and then populating it with instances of the different layers. In most cases
+it is unnecessary to explicitely add an object to the engine if it is
+connected to another component as the base SignallingComponent class will do
+so automatically. However, the components that are created the first time have
+to be explicitely added to the engine.
+
+Example:
+    SignallingEngine* engine = new SignallingEngine;
+    SS7Router* router = new SS7Router;
+    engine->insert(router);
+    // now the router is managed by the engine
+    SS7MTP3* network = new SS7MTP3;
+    router->attach(network);
+    // the network is now implicitely inserted in the engine
+    SS7MTP2* link = new SS7MTP2;
+    network->attach(link);
+    // now the data link is inserted in the engine as well
+
+
+The Interfaces of YSS7
+======================
+
+An interface is a base class that provides some functionality to an object.
+Actually usable classes inherit an interface to provide that functionality.
+
+SignallingInterface
+-------------------
+This class is an abstraction of Layer 1 (hardware).
+- talks to the hardware through specific code
+- pushes received data to a SignallingReceiver
+- sends out data to the hardware
+- notifies a SignallingReceiver about status changes and errors
+- receives activation and deactivation commands
+
+SignallingReceiver
+------------------
+The purpose of this class is to talk to Layer 1
+- gets data pushed from a SignallingInterface
+- sends out data to the hardware by calling methods of SignallingInterface
+- receives notification events from a SignallingInterface
+Inherited by: SS7MTP2, ISDNQ921
+
+SS7Layer2
+---------
+Provides Data Link control to interface to SS7 Layer 3 (MTP3)
+- pushes Message Signal Units (MSU) to layer 3
+- sends out MSUs received from layer 3
+- generates notifications about data link status to upper layers
+- activates or deactivates the link as requested from the upper layers
+Inherited by: SS7MTP2, SS7M2PA, SS7M2UA
+
+SS7Layer3
+---------
+Provides SS7 network layer functions
+- forwards messages to a router to be distributed
+- properly label and send out MSUs received from services
+Inherited by: SS7MTP3, SS7M3UA
+
+SS7Layer4
+---------
+Application (Layer 4) interface
+- gets messages from Layer 3
+- sends messages to Layer 3
+- receives network status notifications
+Inherited by: SS7ISUP, SS7BISUP, SS7TUP, SS7SCCP
+
+SCCP
+----
+Abstract Signalling Connection Control Part
+- performs end-to-end routing of messages
+Inherited by: SS7SCCP, SS7SUA
+
+SCCPUser
+--------
+Interface to Signalling Connection Control Part
+- sends and receives messages to / from SCCP
+Inherited by: SS7ASP
+
+ASPUser
+-------
+Interface to Application Service Part
+- sends and receives messages to / from ASP
+Inherited by: SS7TCAP
+
+TCAPUser
+--------
+Interface to a TCAP implementation
+- sends and receives commands, queries and answers to / from TCAP
+
+ISDNLayer2
+----------
+Interfaces to an ISDN Layer 3 (Q.931) implementation
+- pushes Q.921 messages to upper layer
+- sends out Q.921 messages from upper layer
+- generate network status changes notifications
+Inherited by: ISDNQ921, ISDNIUA
+
+ISDNLayer3
+----------
+Interfaces to an ISDN Layer 2 (Q.921) implementation
+- sends Q.921 messages to network
+- receives Q.921 messages from network
+- receives network status notifications
+Inherited by: ISDNQ931
+
+SIGTRAN
+-------
+Generic interface for transporting signalling over SCTP/IP
+- creates and connects to SCTP sockets
+- sets up alternative routing
+- transfers data to / from the IP network
+- generates network status notifications
+Inherited by: SS7M2PA, SS7M2UA, SS7M3UA, SS7SUA, ISDNIUA
+
+CallSignalling
+--------------
+This class provides an uniform interface to telephony call control
+- receive requests for call setup, teardown, transfer, etc.
+- acknowledge or reject requests
+- report call status and events
+Inherited by: SS7ISUP, SS7BISUP, SS7TUP, ISDNQ931
+
+
+The Implementations of YSS7
+===========================
+Implementations are fully usable classes that implement the actual
+functionality and also talk to other components through interfaces.
+
+SS7MTP2
+-------
+Provides an implementation of ITU MTP2 on top of a synchronous (HDLC) hardware
+interface.
+Implements: SS7Layer2, SignallingReceiver
+
+SS7MTP3
+-------
+Provides an implementation of ITU MTP3 on top of one or more Data Links (SS7
+Layer 2) and takes care of load balancing and link failover.
+Implements: SS7Layer3
+
+SS7Router
+---------
+This class is used to route messages between multiple Layer 3 and Layer 4
+components. Usually there is one router per signalling engine.
+- forwards messages to Layer 3
+- distributes messages to Layer 4 according to service type
+
+SS7ISUP, SS7BISUP, SS7TUP
+-------------------------
+These 3 classes implement SS7 telephony call control according to different
+subprotocols used around the world.
+Implement: SS7Layer4, CallSignalling
+
+SS7SCCP
+-------
+Implementation of SS7 Signalling Connection Control Part
+Implements: SS7Layer4, SCCP
+
+SS7ASP
+------
+Implementation of SS7 Application Service Part
+Implements: SCCPUser
+
+SS7TCAP
+-------
+Implementation of SS7 Transactional Capabilities Application Part
+Implements: ASPUser
+
+SS7M2PA, SS7M2UA
+----------------
+SIGTRAN implementations of SS7 Layer 2 over SCTP/IP
+Implement: SS7Layer2, SIGTRAN
+
+SS7M3UA
+-------
+SIGTRAN implementation of SS7 Layer 3 over SCTP/IP
+Implements: SS7Layer3, SIGTRAN
+
+SS7SUA
+------
+SIGTRAN implementation of SCCP over SCTP/IP
+Implements: SCCP, SIGTRAN
+
+ISDNQ921
+--------
+Provides an implementation of ITU Q.921 on top of a synchronous (HDLC) hardware
+interface.
+Implements: ISDNLayer2, SignallingReceiver
+
+ISDNQ931
+--------
+Provides an implementation of ITU Q.931 telephony call control on top of Q.921
+Implements: ISDNLayer3, CallSignalling
+
+ISDNIUA
+-------
+SIGTRAN implementation of Q.921 over SCTP/IP
+Implements: ISDNLayer2, SIGTRAN

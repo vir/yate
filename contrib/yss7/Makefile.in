@@ -13,7 +13,7 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatess7.h
 
 PROGS=
 LIBS = libyatess7.a
-OBJS = engine.o sigcall.o \
+OBJS = engine.o router.o sigcall.o \
 	layer2.o layer3.o \
 	sigtran.o
 

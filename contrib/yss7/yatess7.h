@@ -50,6 +50,7 @@ namespace TelEngine {
 class SignallingEngine;
 class SignallingReceiver;
 class SCCPUser;
+class SS7Router;
 class SS7MTP3;
 class SS7TCAP;
 class ISDNLayer3;
@@ -156,6 +157,13 @@ class YSS7_API CallSignalling
  */
 class YSS7_API SignallingInterface : virtual public SignallingComponent
 {
+public:
+    /**
+     * Attach a receiver to the interface
+     * @param iface Pointer to receiver to attach
+     */
+    void attach(SignallingReceiver* receiver);
+
 private:
     SignallingReceiver* m_receiver;
 };
@@ -286,6 +294,22 @@ protected:
  */
 class YSS7_API SS7Layer3 : virtual public SignallingComponent
 {
+public:
+    /**
+     * Attach a SS7 router to this network
+     * @param router Pointer to router to attach
+     */
+    void attach(SS7Router* router);
+
+    /**
+     * Retrive the SS7 Message Router to which this network is attached
+     * @return Pointer to the router this network is attached to
+     */
+    inline SS7Router* router() const
+	{ return m_router; }
+
+private:
+    SS7Router* m_router;
 };
 
 /**
@@ -294,6 +318,47 @@ class YSS7_API SS7Layer3 : virtual public SignallingComponent
  */
 class YSS7_API SS7Layer4 : virtual public SignallingComponent
 {
+public:
+    /**
+     * Attach a SS7 router to this service
+     * @param router Pointer to router to attach
+     */
+    void attach(SS7Router* router);
+
+    /**
+     * Retrive the SS7 Message Router to which this service is attached
+     * @return Pointer to the router this service is attached to
+     */
+    inline SS7Router* router() const
+	{ return m_router; }
+
+private:
+    SS7Router* m_router;
+};
+
+/**
+ * A message router between Transfer and Application layers.
+ * Messages are distributed according to the service type
+ * @short Message router between Layer 3 and Layer 4
+ */
+class YSS7_API SS7Router : public SignallingComponent
+{
+public:
+    /**
+     * Attach a SS7 Layer 3 (network) to the router
+     * @param network Pointer to network to attach
+     */
+    void attach(SS7Layer3* network);
+
+    /**
+     * Attach a SS7 Layer 4 (service) to the router
+     * @param service Pointer to service to attach
+     */
+    void attach(SS7Layer4* service);
+
+private:
+    ObjList m_layer3;
+    ObjList m_layer4;
 };
 
 /**

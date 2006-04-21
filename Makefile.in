@@ -73,7 +73,7 @@ clean:
 	$(MAKE) -C ./clients $@
 	$(MAKE) -C ./test $@
 	@for i in contrib/*; do \
-	    test -f "$$i/Makefile" && $(MAKE) -C "$$i" clean ; \
+	    test ! -f "$$i/Makefile" || $(MAKE) -C "$$i" clean ; \
 	done
 
 check-topdir:
@@ -127,7 +127,7 @@ modules clients test: engine
 
 contrib: engine
 	@for i in contrib/*; do \
-	    test -f "$$i/Makefile" && $(MAKE) -C "$$i" all ; \
+	    test ! -f "$$i/Makefile" || $(MAKE) -C "$$i" all ; \
 	done
 
 tables: @srcdir@/tables/all.h

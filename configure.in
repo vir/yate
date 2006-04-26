@@ -137,6 +137,29 @@ if [[ "x$ac_cv_use_fdsize" != "xno" ]]; then
 fi
 AC_SUBST(FDSIZE_HACK)
 
+HAVE_SCTP=no
+HAVE_SCTP_NETINET=no
+AC_LANG_SAVE
+AC_LANG_C
+AC_MSG_CHECKING([for basic SCTP support])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>],[int fd = socket(PF_INET,SOCK_SEQPACKET,IPPROTO_SCTP);],[HAVE_SCTP=yes])
+AC_MSG_RESULT([$HAVE_SCTP])
+AC_MSG_CHECKING([for netinet/sctp.h usability])
+AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>],[int fd = socket(PF_INET,SOCK_SEQPACKET,IPPROTO_SCTP);],[HAVE_SCTP_NETINET=yes])
+AC_MSG_RESULT([$HAVE_SCTP_NETINET])
+if [[ "x$HAVE_SCTP_NETINET" != "xno" ]]; then
+# including netinet/sctp.h fixes SCTP support so enable it
+HAVE_SCTP=yes
+fi
+AC_LANG_RESTORE
+AC_SUBST(HAVE_SCTP)
+AC_SUBST(HAVE_SCTP_NETINET)
+
 # Checks for optional libraries.
 
 HAVE_RESOLV=no

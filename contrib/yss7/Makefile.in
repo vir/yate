@@ -13,9 +13,10 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatess7.h
 
 PROGS=
 LIBS = libyatess7.a
-OBJS = engine.o router.o sigcall.o \
+OBJS = engine.o sigcall.o sigtran.o \
 	layer2.o layer3.o \
-	sigtran.o
+	router.o sccp.o tcap.o \
+	q921.o q931.o
 
 LOCALFLAGS =
 LOCALLIBS =

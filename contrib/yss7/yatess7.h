@@ -50,8 +50,9 @@ namespace TelEngine {
 class SignallingEngine;
 class SignallingReceiver;
 class SCCPUser;
+class SS7Layer2;
+class SS7Layer3;
 class SS7Router;
-class SS7MTP3;
 class SS7TCAP;
 class ISDNLayer3;
 
@@ -162,7 +163,14 @@ public:
      * Attach a receiver to the interface
      * @param iface Pointer to receiver to attach
      */
-    void attach(SignallingReceiver* receiver);
+    virtual void attach(SignallingReceiver* receiver);
+
+    /**
+     * Retrive the signalling receiver attached to this interface
+     * @return Pointer to attached receiver, NULL if none
+     */
+    inline SignallingReceiver* receiver() const
+	{ return m_receiver; }
 
 private:
     SignallingReceiver* m_receiver;
@@ -179,9 +187,16 @@ public:
      * Attach a hardware interface to the data link
      * @param iface Pointer to interface to attach
      */
-    void attach(SignallingInterface* iface);
+    virtual void attach(SignallingInterface* iface);
 
-protected:
+    /**
+     * Retrive the interface used by this receiver
+     * @return Pointer to the attached interface or NULL
+     */
+    inline SignallingInterface* iface() const
+	{ return m_interface; }
+
+private:
     SignallingInterface* m_interface;
 };
 
@@ -241,10 +256,20 @@ class YSS7_API SCCPUser
 {
 public:
     /**
-     * Attach as user to a SS7 SCCP
+     * Attach as user to a SCCP
      * @param sccp Pointer to the SCCP to use
      */
     virtual void attach(SCCP* sccp);
+
+    /**
+     * Retrive the SCCP to which this component is attached
+     * @return Pointer to the attached SCCP or NULL
+     */
+    inline SCCP* sccp() const
+	{ return m_sccp; }
+
+private:
+    SCCP* m_sccp;
 };
 
 /**
@@ -258,10 +283,25 @@ public:
      * Attach as user to a SS7 TCAP
      * @param tcap Pointer to the TCAP to use
      */
-    void attach(SS7TCAP* tcap);
+    virtual void attach(SS7TCAP* tcap);
 
-protected:
+    /**
+     * Retrive the TCAP to which this user is attached
+     * @return Pointer to a SS7 TCAP interface or NULL
+     */
+    inline SS7TCAP* tcap() const
+	{ return m_tcap; }
+
+private:
     SS7TCAP* m_tcap;
+};
+
+/**
+ * An user of a Layer 2 (data link) SS7 message transfer part
+ * @short Abstract user of SS7 layer 2 (data link) message transfer part
+ */
+class YSS7_API SS7L2User : virtual public SignallingComponent
+{
 };
 
 /**
@@ -272,20 +312,30 @@ class YSS7_API SS7Layer2 : virtual public SignallingComponent
 {
 public:
     /**
-     * Attach a SS7 MTP3 (network) to the data link
-     * @param mtp3 Pointer to network to attach
+     * Attach a Layer 2 user component to the data link
+     * @param l2user Pointer to Layer 2 user component to attach
      */
-    void attach(SS7MTP3* mtp3);
+    void attach(SS7L2User* l2user);
 
     /**
-     * Get the MTP3 network that works with this data link
-     * @return Pointer to the SS7MTP3 to which the messages are sent
+     * Get the Layer 2 user component that works with this data link
+     * @return Pointer to the user component to which the messages are sent
      */
-    inline SS7MTP3* mtp3() const
-	{ return m_mtp3; }
+    inline SS7L2User* user() const
+	{ return m_l2user; }
 
-protected:
-    SS7MTP3* m_mtp3;
+private:
+    SS7L2User* m_l2user;
+};
+
+/**
+ * An user of a Layer 3 (data link) SS7 message transfer part
+ * @short Abstract user of SS7 layer 3 (network) message transfer part
+ */
+class YSS7_API SS7L3User : virtual public SignallingComponent
+{
+private:
+    SS7Layer3* m_layer3;
 };
 
 /**
@@ -296,20 +346,20 @@ class YSS7_API SS7Layer3 : virtual public SignallingComponent
 {
 public:
     /**
-     * Attach a SS7 router to this network
-     * @param router Pointer to router to attach
+     * Attach a Layer 3 user component to this network
+     * @param l3user Pointer to Layer 3 user component to attach
      */
-    void attach(SS7Router* router);
+    void attach(SS7L3User* l3user);
 
     /**
-     * Retrive the SS7 Message Router to which this network is attached
-     * @return Pointer to the router this network is attached to
+     * Retrive the Layer 3 user component to which this network is attached
+     * @return Pointer to the Layer 3 user this network is attached to
      */
-    inline SS7Router* router() const
-	{ return m_router; }
+    inline SS7L3User* user() const
+	{ return m_l3user; }
 
 private:
-    SS7Router* m_router;
+    SS7L3User* m_l3user;
 };
 
 /**
@@ -338,7 +388,7 @@ private:
 
 /**
  * A message router between Transfer and Application layers.
- * Messages are distributed according to the service type
+ *  Messages are distributed according to the service type.
  * @short Message router between Layer 3 and Layer 4
  */
 class YSS7_API SS7Router : public SignallingComponent
@@ -356,13 +406,15 @@ public:
      */
     void attach(SS7Layer4* service);
 
-private:
+protected:
     ObjList m_layer3;
     ObjList m_layer4;
 };
 
 /**
- * RFC4165 SS7 Layer 2 implementation over SCTP/IP
+ * RFC4165 SS7 Layer 2 implementation over SCTP/IP.
+ * M2PA is intended to be used as a symmetrical Peer-to-Peer replacement of
+ *  a hardware based SS7 data link.
  * @short SIGTRAN MTP2 User Peer-to-Peer Adaptation Layer
  */
 class YSS7_API SS7M2PA : public SS7Layer2, public SIGTRAN
@@ -370,7 +422,9 @@ class YSS7_API SS7M2PA : public SS7Layer2, public SIGTRAN
 };
 
 /**
- * RFC3331 SS7 Layer 2 implementation over SCTP/IP
+ * RFC3331 SS7 Layer 2 implementation over SCTP/IP.
+ * M2UA is intended to be used as a Provider-User where real MTP2 runs on a
+ *  Signalling Gateway and MTP3 runs on an Application Server.
  * @short SIGTRAN MTP2 User Adaptation Layer
  */
 class YSS7_API SS7M2UA : public SS7Layer2, public SIGTRAN
@@ -378,7 +432,9 @@ class YSS7_API SS7M2UA : public SS7Layer2, public SIGTRAN
 };
 
 /**
- * RFC3332 SS7 Layer 3 implementation over SCTP/IP
+ * RFC3332 SS7 Layer 3 implementation over SCTP/IP.
+ * M3UA is intended to be used as a Provider-User where real MTP3 runs on a
+ *  Signalling Gateway and MTP users are located on an Application Server.
  * @short SIGTRAN MTP3 User Adaptation Layer
  */
 class YSS7_API SS7M3UA : public SS7Layer3, public SIGTRAN
@@ -386,7 +442,7 @@ class YSS7_API SS7M3UA : public SS7Layer3, public SIGTRAN
 };
 
 /**
- *
+ * Q.703 SS7 Layer 2 (Data Link) implementation on top of a hardware interface
  * @short SS7 Layer 2 implementation on top of a hardware interface
  */
 class YSS7_API SS7MTP2 : public SS7Layer2, public SignallingReceiver
@@ -394,7 +450,7 @@ class YSS7_API SS7MTP2 : public SS7Layer2, public SignallingReceiver
 };
 
 /**
- *
+ * Q.704 SS7 Layer 3 (Network) implementation on top of SS7 Layer 2
  * @short SS7 Layer 3 implementation on top of Layer 2
  */
 class YSS7_API SS7MTP3 : public SS7Layer3
@@ -406,7 +462,7 @@ public:
      */
     void attach(SS7Layer2* link);
 
-private:
+protected:
     ObjList m_links;
 };
 
@@ -444,6 +500,8 @@ class YSS7_API SS7SCCP : public SS7Layer4, public SCCP
 
 /**
  * RFC3868 SS7 SCCP implementation over SCTP/IP
+ * SUA is intended to be used as a Provider-User where real SCCP runs on a
+ *  Signalling Gateway and SCCP users are located on an Application Server.
  * @short SIGTRAN SCCP User Adaptation Layer
  */
 class YSS7_API SS7SUA : public SIGTRAN, public SCCP
@@ -456,7 +514,7 @@ class YSS7_API SS7SUA : public SIGTRAN, public SCCP
  */
 class YSS7_API SS7ASP : public SCCPUser, virtual public SignallingComponent
 {
-private:
+protected:
     ObjList m_sccps;
 };
 
@@ -472,6 +530,8 @@ class YSS7_API SS7TCAP : public ASPUser, virtual public SignallingComponent
      */
     void attach(TCAPUser* user);
 
+protected:
+    ObjList* m_users;
 };
 
 // The following classes are ISDN, not SS7, but they use the same signalling
@@ -488,6 +548,9 @@ class YSS7_API ISDNLayer2 : virtual public SignallingComponent
      * @param user Pointer to the Q.931 call control to attach
      */
     void attach(ISDNLayer3* q931);
+
+private:
+    ISDNLayer3* m_q931;
 };
 
 /**
@@ -499,7 +562,7 @@ class YSS7_API ISDNLayer3 : virtual public SignallingComponent
 };
 
 /**
- *
+ * Q.921 ISDN Layer 2 implementation on top of a hardware HDLC interface
  * @short ISDN Q.921 implementation on top of a hardware interface
  */
 class YSS7_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver
@@ -508,6 +571,8 @@ class YSS7_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver
 
 /**
  * RFC4233 ISDN Layer 2 implementation over SCTP/IP
+ * IUA is intended to be used as a Provider-User where Q.921 runs on a
+ *  Signalling Gateway and the user (Q.931) runs on an Application Server.
  * @short SIGTRAN ISDN Q.921 User Adaptation Layer
  */
 class YSS7_API ISDNIUA : public ISDNLayer2, public SIGTRAN
@@ -515,7 +580,7 @@ class YSS7_API ISDNIUA : public ISDNLayer2, public SIGTRAN
 };
 
 /**
- *
+ * Q.931 ISDN Layer 3 implementation on top of a Layer 2
  * @short ISDN Q.931 implementation on top of Q.921
  */
 class YSS7_API ISDNQ931 : public CallSignalling, public ISDNLayer3
@@ -525,6 +590,9 @@ class YSS7_API ISDNQ931 : public CallSignalling, public ISDNLayer3
      * @param user Pointer to the Q.921 transport to attach
      */
     void attach(ISDNLayer2* q921);
+
+private:
+    ISDNLayer2* m_q921;
 };
 
 }

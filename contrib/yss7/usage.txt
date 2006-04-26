@@ -72,25 +72,39 @@ Inherited by: SS7MTP2, ISDNQ921
 
 SS7Layer2
 ---------
-Provides Data Link control to interface to SS7 Layer 3 (MTP3)
-- pushes Message Signal Units (MSU) to layer 3
-- sends out MSUs received from layer 3
+Provides Data Link control to interface to a L2User, usually SS7 Layer 3 (MTP3)
+- pushes Message Signal Units (MSU) to user
+- sends out MSUs received from user interface
 - generates notifications about data link status to upper layers
 - activates or deactivates the link as requested from the upper layers
 Inherited by: SS7MTP2, SS7M2PA, SS7M2UA
 
+SS7L2User
+---------
+Connects to a SS7 Layer 2 interface
+- pushes MSUs to Layer 2
+- receives MSUs and notifications from Layer2
+Used internally by: SS7MTP3
+
 SS7Layer3
 ---------
-Provides SS7 network layer functions
+Provides SS7 network layer functions to a L3User, usually a SS7Router
 - forwards messages to a router to be distributed
 - properly label and send out MSUs received from services
 Inherited by: SS7MTP3, SS7M3UA
 
+SS7L3User
+---------
+Connects to a SS7 Layer 3 interface
+- forwards messages to the connected Layer 3
+- sends messages to Layer 3
+Used internally by: SS7Router
+
 SS7Layer4
 ---------
 Application (Layer 4) interface
-- gets messages from Layer 3
-- sends messages to Layer 3
+- gets messages from a SS7Router
+- sends messages to a SS7Router
 - receives network status notifications
 Inherited by: SS7ISUP, SS7BISUP, SS7TUP, SS7SCCP
 
@@ -166,7 +180,7 @@ SS7MTP3
 -------
 Provides an implementation of ITU MTP3 on top of one or more Data Links (SS7
 Layer 2) and takes care of load balancing and link failover.
-Implements: SS7Layer3
+Implements: SS7Layer3, SS7L2User
 
 SS7Router
 ---------
@@ -226,3 +240,58 @@ ISDNIUA
 -------
 SIGTRAN implementation of Q.921 over SCTP/IP
 Implements: ISDNLayer2, SIGTRAN
+
+
+Standards and Recommendations
+=============================
+
+Basic SS7 concepts
+    ITU-T: Q.700
+
+Message Transfer Part (MTP)
+    ITU-T: Q.701 - Q.704, Q.706, Q.707
+
+Telephone User Part (TUP)
+    ITU-T: Q.721 - Q.725
+
+Supplementary services
+    ITU-T: Q.730 - Q.739
+
+ISDN User Part (ISUP)
+    ITU-T: Q.761 - Q.764, Q.766
+
+Signalling Connection Control Part (SCCP)
+    ITU-T: Q.711 - Q.714, Q.716
+
+Transaction Capabilities
+    ITU-T: Q.771 - Q.775
+
+Operations Maintenance and Administration Part (OMAP)
+    ITU-T: Q.750 - Q.755
+
+ISDN User-Network Interface - Link Layer specification
+    ITU-T: Q.921
+
+ISDN User-Network Interface - Layer 3 specification for Basic Call Control
+    ITU-T: Q.931
+
+ISDN Service Indicator Codings
+    ITU-T: Q.939
+
+Usage of the Cause and Location Codes
+    ITU-T: Q.850
+
+MTP2 User Peer-to-Peer Adaptation Layer
+    IETF: RFC 4165
+
+MTP2 User Adaptation Layer
+    IETF: RFC 3331
+
+MTP3 User Adaptation Layer
+    IETF: RFC 3332
+
+SCCP User Adaptation Layer
+    IETF: RFC 3868
+
+ISDN Q.921 User Adaptation Layer
+    IETF: RFC 4233

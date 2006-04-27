@@ -48,6 +48,7 @@
 namespace TelEngine {
 
 class SignallingEngine;
+class SignallingThreadPrivate;
 class SignallingReceiver;
 class SCCPUser;
 class SS7Layer2;
@@ -71,6 +72,12 @@ public:
     virtual ~SignallingComponent();
 
     /**
+     * Get the component's name so it can be used for list searches
+     * @return A reference to the name by which the component is known to engine
+     */
+    virtual const String& toString();
+
+    /**
      * Get the @ref TelEngine::SignallingEngine that manages this component
      * @return Pointer to engine or NULL if not managed by an engine
      */
@@ -79,14 +86,25 @@ public:
 
 protected:
     /**
-     * Default constructor
+     * Constructor with a default empty component name
+     * @param name Name of this component
      */
-    inline SignallingComponent()
-	: m_engine(0)
+    inline SignallingComponent(const char* name = 0)
+	: m_engine(0), m_name(name)
 	{ }
 
     /**
-     * Detach this component from all its links - components and engine
+     * Insert another component in the same engine as this one.
+     * This method should be called for every component we attach.
+     * @param component Pointer to component to insert in engine
+     */
+    void insert(SignallingComponent* component);
+
+    /**
+     * Detach this component from all its links - components and engine.
+     * Reimplement this method in all components that keep pointers to
+     *  other components.
+     * The default implementation detaches from the engine.
      */
     virtual void detach();
 
@@ -96,18 +114,27 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
+    /**
+     * Change the name of the component after it was constructed
+     * @param name Name of this component
+     */
+    inline void setName(const char* name)
+	{ m_name = name; }
+
 private:
     SignallingEngine* m_engine;
+    String m_name;
 };
 
 /**
  * The engine is the center of all SS7 or ISDN applications.
  * It is used as a base to build the protocol stack from components.
- * @short Main message transfer and application hub
+ * @short Main signalling component holder
  */
 class YSS7_API SignallingEngine : public DebugEnabler, public Mutex
 {
     friend class SignallingComponent;
+    friend class SignallingThreadPrivate;
 public:
     /**
      * Constructor of an empty engine
@@ -119,21 +146,55 @@ public:
      */
     virtual ~SignallingEngine();
 
-protected:
     /**
-     * Insert a component in the engine
+     * Insert a component in the engine, lock the list while doing so
      * @param component Pointer to component to insert in engine
      */
     void insert(SignallingComponent* component);
 
     /**
-     * Remove a component from the engine
+     * Remove a component from the engine, lock the list while doing so
      * @param component Pointer to component to remove from engine
      */
     void remove(SignallingComponent* component);
 
     /**
-     * Method called periodically by a @ref Thread to keep everything alive
+     * Remove and destroy a component from the engine by name
+     * @param name Name of component to remove from engine
+     * @return True if a component was found and destroyed
+     */
+    bool remove(const String& name);
+
+    /**
+     * Retrive a component by name, lock the list while searching for it
+     * @param name Name of the component to find
+     * @return Pointer to component found or NULL
+     */
+    SignallingComponent* find(const String& name);
+
+    /**
+     * Starts the worker thread that keeps components alive
+     * @param name Static name of the thread
+     * @param prio Thread's priority
+     * @param usec How long to sleep between iterations, in microseconds
+     * @return True if (already) started, false if an error occured
+     */
+    bool start(const char* name = "Signalling", Thread::Priority prio = Thread::Normal, unsigned long usec = 1000);
+
+    /**
+     * Stops and destroys the worker thread if running
+     */
+    void stop();
+
+    /**
+     * Return a pointer to the worker thread
+     * @return Pointer to running worker thread or NULL
+     */
+    Thread* thread() const;
+
+protected:
+    /**
+     * Method called periodically by the @ref Thread to keep everything alive
      * @param when Time to use as computing base for events and timeouts
      */
     virtual void timerTick(const Time& when);
@@ -142,13 +203,17 @@ protected:
      * The list of components managed by this engine
      */
     ObjList m_components;
+
+private:
+    SignallingThreadPrivate* m_thread;
+    bool m_listChanged;
 };
 
 /**
- * Interface of protocol independent call signalling
+ * Interface of protocol independent signalling for phone calls
  * @short Abstract phone call signalling
  */
-class YSS7_API CallSignalling
+class YSS7_API SignallingCall
 {
 };
 
@@ -389,7 +454,7 @@ private:
 /**
  * A message router between Transfer and Application layers.
  *  Messages are distributed according to the service type.
- * @short Message router between Layer 3 and Layer 4
+ * @short Main router for SS7 message transfer and applications
  */
 class YSS7_API SS7Router : public SignallingComponent
 {
@@ -470,7 +535,7 @@ protected:
  * Implementation of SS7 ISDN User Part
  * @short SS7 ISUP implementation
  */
-class YSS7_API SS7ISUP : public CallSignalling, public SS7Layer4
+class YSS7_API SS7ISUP : public SignallingCall, public SS7Layer4
 {
 };
 
@@ -478,7 +543,7 @@ class YSS7_API SS7ISUP : public CallSignalling, public SS7Layer4
  * Implementation of SS7 Broadband ISDN User Part
  * @short SS7 BISUP implementation
  */
-class YSS7_API SS7BISUP : public CallSignalling, public SS7Layer4
+class YSS7_API SS7BISUP : public SignallingCall, public SS7Layer4
 {
 };
 
@@ -486,7 +551,7 @@ class YSS7_API SS7BISUP : public CallSignalling, public SS7Layer4
  * Implementation of SS7 Telephone User Part
  * @short SS7 TUP implementation
  */
-class YSS7_API SS7TUP : public CallSignalling, public SS7Layer4
+class YSS7_API SS7TUP : public SignallingCall, public SS7Layer4
 {
 };
 
@@ -583,7 +648,7 @@ class YSS7_API ISDNIUA : public ISDNLayer2, public SIGTRAN
  * Q.931 ISDN Layer 3 implementation on top of a Layer 2
  * @short ISDN Q.931 implementation on top of Q.921
  */
-class YSS7_API ISDNQ931 : public CallSignalling, public ISDNLayer3
+class YSS7_API ISDNQ931 : public SignallingCall, public ISDNLayer3
 {
     /**
      * Attach an ISDN Q.921 transport

@@ -156,7 +156,7 @@ Generic interface for transporting signalling over SCTP/IP
 - generates network status notifications
 Inherited by: SS7M2PA, SS7M2UA, SS7M3UA, SS7SUA, ISDNIUA
 
-CallSignalling
+SignallingCall
 --------------
 This class provides an uniform interface to telephony call control
 - receive requests for call setup, teardown, transfer, etc.
@@ -193,7 +193,7 @@ SS7ISUP, SS7BISUP, SS7TUP
 -------------------------
 These 3 classes implement SS7 telephony call control according to different
 subprotocols used around the world.
-Implement: SS7Layer4, CallSignalling
+Implement: SS7Layer4, SignallingCall
 
 SS7SCCP
 -------
@@ -234,7 +234,7 @@ Implements: ISDNLayer2, SignallingReceiver
 ISDNQ931
 --------
 Provides an implementation of ITU Q.931 telephony call control on top of Q.921
-Implements: ISDNLayer3, CallSignalling
+Implements: ISDNLayer3, SignallingCall
 
 ISDNIUA
 -------

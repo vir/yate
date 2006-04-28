@@ -540,14 +540,6 @@ class YSS7_API SS7ISUP : public SignallingCall, public SS7Layer4
 };
 
 /**
- * Implementation of SS7 Broadband ISDN User Part
- * @short SS7 BISUP implementation
- */
-class YSS7_API SS7BISUP : public SignallingCall, public SS7Layer4
-{
-};
-
-/**
  * Implementation of SS7 Telephone User Part
  * @short SS7 TUP implementation
  */

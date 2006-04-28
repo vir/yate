@@ -106,7 +106,7 @@ Application (Layer 4) interface
 - gets messages from a SS7Router
 - sends messages to a SS7Router
 - receives network status notifications
-Inherited by: SS7ISUP, SS7BISUP, SS7TUP, SS7SCCP
+Inherited by: SS7ISUP, SS7TUP, SS7SCCP
 
 SCCP
 ----
@@ -162,7 +162,7 @@ This class provides an uniform interface to telephony call control
 - receive requests for call setup, teardown, transfer, etc.
 - acknowledge or reject requests
 - report call status and events
-Inherited by: SS7ISUP, SS7BISUP, SS7TUP, ISDNQ931
+Inherited by: SS7ISUP, SS7TUP, ISDNQ931
 
 
 The Implementations of YSS7
@@ -189,9 +189,9 @@ components. Usually there is one router per signalling engine.
 - forwards messages to Layer 3
 - distributes messages to Layer 4 according to service type
 
-SS7ISUP, SS7BISUP, SS7TUP
+SS7ISUP, SS7TUP
 -------------------------
-These 3 classes implement SS7 telephony call control according to different
+These 2 classes implement SS7 telephony call control according to different
 subprotocols used around the world.
 Implement: SS7Layer4, SignallingCall
 

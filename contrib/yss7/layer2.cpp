@@ -26,4 +26,19 @@
 
 using namespace TelEngine;
 
+bool SS7MTP2::receivedMSU()
+{
+    Debug("STUB",DebugWarn,"Please implement SS7MTP2::receivedMSU()");
+}
+
+bool SS7MTP2::transmitMSU()
+{
+    Debug("STUB",DebugWarn,"Please implement SS7MTP2::transmitMSU()");
+}
+
+bool SS7MTP2::receivedPacket()
+{
+    Debug("STUB",DebugWarn,"Please implement SS7MTP2::receivedPacket()");
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

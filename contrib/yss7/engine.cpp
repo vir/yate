@@ -47,6 +47,7 @@ using namespace TelEngine;
 
 SignallingComponent::~SignallingComponent()
 {
+    DDebug(engine(),DebugAll,"Component '%s' deleted [%p]",toString().c_str(),this);
     detach();
 }
 
@@ -79,6 +80,8 @@ void SignallingComponent::detach()
 
 void SignallingComponent::timerTick(const Time& when)
 {
+    XDebug(engine(),DebugAll,"Timer ticked for component '%s' [%p]",
+	toString().c_str(),this);
 }
 
 
@@ -109,6 +112,8 @@ void SignallingEngine::insert(SignallingComponent* component)
     if (component->engine() == this)
 	return;
     Lock lock(this);
+    DDebug(this,DebugAll,"Engine inserting component '%s' @%p [%p]",
+	component->toString().c_str(),component,this);
     component->detach();
     component->m_engine = this;
     m_components.append(component);
@@ -121,6 +126,8 @@ void SignallingEngine::remove(SignallingComponent* component)
     if (component->engine() != this)
 	return;
     Lock lock(this);
+    DDebug(this,DebugAll,"Engine removing component '%s' @%p [%p]",
+	component->toString().c_str(),component,this);
     component->m_engine = 0;
     component->detach();
     m_components.remove(component,false);
@@ -134,6 +141,8 @@ bool SignallingEngine::remove(const String& name)
     SignallingComponent* component = static_cast<SignallingComponent*>(m_components[name]);
     if (!component)
 	return false;
+    DDebug(this,DebugAll,"Engine removing component '%s' @%p [%p]",
+	component->toString().c_str(),component,this);
     component->m_engine = 0;
     component->detach();
     m_components.remove(component);
@@ -151,9 +160,11 @@ bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned l
     SignallingThreadPrivate* tmp = new SignallingThreadPrivate(this,name,prio,usec);
     if (tmp->startup()) {
 	m_thread = tmp;
+	DDebug(this,DebugInfo,"Engine started worker thread [%p]",this);
 	return true;
     }
     delete tmp;
+    Debug(this,DebugGoOn,"Engine failed to start worker thread [%p]",this);
     return false;
 }
 
@@ -162,8 +173,10 @@ void SignallingEngine::stop()
     lock();
     SignallingThreadPrivate* tmp = m_thread;
     m_thread = 0;
-    if (tmp)
+    if (tmp) {
 	delete tmp;
+	DDebug(this,DebugInfo,"Engine stopped worker thread [%p]",this);
+    }
     unlock();
 }
 

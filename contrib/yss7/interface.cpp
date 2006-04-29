@@ -26,4 +26,39 @@
 
 using namespace TelEngine;
 
+SignallingInterface::~SignallingInterface()
+{
+    Debug("STUB",DebugWarn,"Please implement SignallingInterface::~");
+}
+
+void SignallingInterface::attach(SignallingReceiver* receiver)
+{
+    if (m_receiver == receiver)
+	return;
+    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::attach()");
+}
+
+bool SignallingInterface::control(Operation oper, NamedList* params)
+{
+    return false;
+}
+
+bool SignallingInterface::receivedPacket()
+{
+    return m_receiver && m_receiver->receivedPacket();
+}
+
+
+SignallingReceiver::~SignallingReceiver()
+{
+    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::~");
+}
+
+void SignallingReceiver::attach(SignallingInterface* iface)
+{
+    if (m_interface == iface)
+	return;
+    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::attach()");
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

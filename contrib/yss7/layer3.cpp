@@ -26,4 +26,15 @@
 
 using namespace TelEngine;
 
+void SS7MTP3::attach(SS7Layer2* link)
+{
+    Debug("STUB",DebugWarn,"Please implement SS7MTP3::attach()");
+    SignallingComponent::insert(link);
+}
+
+bool SS7MTP3::receivedMSU()
+{
+    Debug("STUB",DebugWarn,"Please implement SS7MTP3::receivedMSU()");
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

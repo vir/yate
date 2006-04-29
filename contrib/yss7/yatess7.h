@@ -223,7 +223,32 @@ class YSS7_API SignallingCall
  */
 class YSS7_API SignallingInterface : virtual public SignallingComponent
 {
+    friend class SignallingReceiver;
 public:
+    /**
+     * Interface control operations
+     */
+    enum Operation {
+	Specific  = 0,
+	EnableTx  = 0x01,
+	EnableRx  = 0x02,
+	Enable    = 0x03,
+	DisableTx = 0x04,
+	DisableRx = 0x08,
+	Disable   = 0x0c,
+	FlushTx   = 0x10,
+	FlushRx   = 0x20,
+	Flush     = 0x30,
+	QueryTx   = 0x40,
+	QueryRx   = 0x80,
+	Query     = 0xc0
+    };
+
+    /**
+     * Destructor, stops and detaches the interface
+     */
+    virtual ~SignallingInterface();
+
     /**
      * Attach a receiver to the interface
      * @param iface Pointer to receiver to attach
@@ -237,17 +262,48 @@ public:
     inline SignallingReceiver* receiver() const
 	{ return m_receiver; }
 
+    /**
+     * Execute a control operation. Operations can enable, disable or flush
+     *  the transmitter, receiver or both. The status (enabled/disabled) can
+     *  be queried and also interface-specific operations can be executed.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the interface is enabled and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
+
+protected:
+    /**
+     * Transmit a packet over the hardware interface
+     * @return True if the interface accepted the packet
+     */
+    virtual bool transmitPacket() = 0;
+
+    /**
+     * Push a received Signalling Packet up the protocol stack
+     * @return True if packet was successfully delivered to the receiver
+     */
+    bool receivedPacket();
+
 private:
     SignallingReceiver* m_receiver;
 };
 
 /**
- * An interface to an abstraction of a Layer 2 data receiver
- * @short Abstract Layer 2 data receiver
+ * An interface to an abstraction of a Layer 2 packet data receiver
+ * @short Abstract Layer 2 packet data receiver
  */
 class YSS7_API SignallingReceiver
 {
+    friend class SignallingInterface;
 public:
+
+    /**
+     * Destructor, stops the interface and detaches from it
+     */
+    virtual ~SignallingReceiver();
+
     /**
      * Attach a hardware interface to the data link
      * @param iface Pointer to interface to attach
@@ -260,6 +316,30 @@ public:
      */
     inline SignallingInterface* iface() const
 	{ return m_interface; }
+
+    /**
+     * Execute a control operation on the attached interface.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the interface is enabled and operational
+     */
+    inline bool control(SignallingInterface::Operation oper, NamedList* params = 0)
+	{ return m_interface && m_interface->control(oper,params); }
+
+protected:
+    /**
+     * Send a packet to the attached interface for transmission
+     * @return True if the interface accepted the packet
+     */
+    inline bool transmitPacket()
+	{ return m_interface && m_interface->transmitPacket(); }
+
+    /**
+     * Process a Signalling Packet received by the interface
+     * @return True if message was successfully processed
+     */
+    virtual bool receivedPacket() = 0;
 
 private:
     SignallingInterface* m_interface;
@@ -321,6 +401,11 @@ class YSS7_API SCCPUser
 {
 public:
     /**
+     * Destructor, detaches from the SCCP implementation
+     */
+    virtual ~SCCPUser();
+
+    /**
      * Attach as user to a SCCP
      * @param sccp Pointer to the SCCP to use
      */
@@ -345,6 +430,11 @@ class YSS7_API TCAPUser
 {
 public:
     /**
+     * Destructor, detaches from the TCAP implementation
+     */
+    virtual ~TCAPUser();
+
+    /**
      * Attach as user to a SS7 TCAP
      * @param tcap Pointer to the TCAP to use
      */
@@ -367,6 +457,20 @@ private:
  */
 class YSS7_API SS7L2User : virtual public SignallingComponent
 {
+    friend class SS7Layer2;
+public:
+    /**
+     * Attach a SS7 Layer 2 (data link) to the user component
+     * @param link Pointer to data link to attach
+     */
+    virtual void attach(SS7Layer2* link) = 0;
+
+protected:
+    /**
+     * Process a MSU received from the Layer 2 component
+     * @return True if the MSU was processed
+     */
+    virtual bool receivedMSU() = 0;
 };
 
 /**
@@ -376,6 +480,18 @@ class YSS7_API SS7L2User : virtual public SignallingComponent
 class YSS7_API SS7Layer2 : virtual public SignallingComponent
 {
 public:
+    enum Primitive {
+	Pause,
+	Resume,
+	Status
+    };
+
+    /**
+     * Push a Message Signalling Unit down the protocol stack
+     * @return True if message was successfully queued
+     */
+    virtual bool transmitMSU() = 0;
+
     /**
      * Attach a Layer 2 user component to the data link
      * @param l2user Pointer to Layer 2 user component to attach
@@ -389,6 +505,15 @@ public:
     inline SS7L2User* user() const
 	{ return m_l2user; }
 
+protected:
+
+    /**
+     * Push a received Message Signalling Unit up the protocol stack
+     * @return True if message was successfully delivered to the user component
+     */
+    inline bool receivedMSU()
+	{ return m_l2user && m_l2user->receivedMSU(); }
+
 private:
     SS7L2User* m_l2user;
 };
@@ -399,8 +524,6 @@ private:
  */
 class YSS7_API SS7L3User : virtual public SignallingComponent
 {
-private:
-    SS7Layer3* m_layer3;
 };
 
 /**
@@ -431,24 +554,24 @@ private:
  * An interface to a Layer 4 (application) SS7 protocol
  * @short Abstract SS7 layer 4 (application) protocol
  */
-class YSS7_API SS7Layer4 : virtual public SignallingComponent
+class YSS7_API SS7Layer4 : public SS7L3User
 {
 public:
     /**
-     * Attach a SS7 router to this service
-     * @param router Pointer to router to attach
+     * Attach a SS7 network or router to this service
+     * @param router Pointer to network or router to attach
      */
-    void attach(SS7Router* router);
+    void attach(SS7Layer3* network);
 
     /**
-     * Retrive the SS7 Message Router to which this service is attached
-     * @return Pointer to the router this service is attached to
+     * Retrive the SS7 network or router to which this service is attached
+     * @return Pointer to the network or router this service is attached to
      */
-    inline SS7Router* router() const
-	{ return m_router; }
+    inline SS7Layer3* network() const
+	{ return m_layer3; }
 
 private:
-    SS7Router* m_router;
+    SS7Layer3* m_layer3;
 };
 
 /**
@@ -456,7 +579,7 @@ private:
  *  Messages are distributed according to the service type.
  * @short Main router for SS7 message transfer and applications
  */
-class YSS7_API SS7Router : public SignallingComponent
+class YSS7_API SS7Router : public SS7L3User, public SS7Layer3
 {
 public:
     /**
@@ -512,22 +635,48 @@ class YSS7_API SS7M3UA : public SS7Layer3, public SIGTRAN
  */
 class YSS7_API SS7MTP2 : public SS7Layer2, public SignallingReceiver
 {
+public:
+    /**
+     * Push a Message Signalling Unit down the protocol stack
+     * @return True if message was successfully queued
+     */
+    virtual bool transmitMSU();
+
+protected:
+    /**
+     * Process a MSU received from the Layer 2 component
+     * @return True if the MSU was processed
+     */
+    virtual bool receivedMSU();
+
+    /**
+     * Process a Signalling Packet received by the hardware interface
+     * @return True if message was successfully processed
+     */
+    virtual bool receivedPacket();
+
 };
 
 /**
  * Q.704 SS7 Layer 3 (Network) implementation on top of SS7 Layer 2
  * @short SS7 Layer 3 implementation on top of Layer 2
  */
-class YSS7_API SS7MTP3 : public SS7Layer3
+class YSS7_API SS7MTP3 : public SS7Layer3, public SS7L2User
 {
 public:
     /**
      * Attach a SS7 Layer 2 (data link) to the network transport
      * @param link Pointer to data link to attach
      */
-    void attach(SS7Layer2* link);
+    virtual void attach(SS7Layer2* link);
 
 protected:
+    /**
+     * Process a MSU received from the Layer 2 component
+     * @return True if the MSU was processed
+     */
+    virtual bool receivedMSU();
+
     ObjList m_links;
 };
 

@@ -26,4 +26,16 @@
 
 using namespace TelEngine;
 
+void SS7Router::attach(SS7Layer3* network)
+{
+    Debug("STUB",DebugWarn,"Please implement SS7Router::attach()");
+    SignallingComponent::insert(network);
+}
+
+void SS7Router::attach(SS7Layer4* service)
+{
+    Debug("STUB",DebugWarn,"Please implement SS7Router::attach()");
+    SignallingComponent::insert(service);
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

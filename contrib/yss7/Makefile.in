@@ -6,12 +6,13 @@ DEBUG :=
 CXX  := @CXX@ -Wall
 AR  := ar
 DEFS :=
+LIBTHR := -lpthread
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L../.. -lyate
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatess7.h
 
-PROGS=
+PROGS= yate-ss7test
 LIBS = libyatess7.a
 OBJS = engine.o sigcall.o sigtran.o \
 	interface.o layer2.o layer3.o \
@@ -55,5 +56,10 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
+yate-%: @srcdir@/main-%.cpp $(MKDEPS) libyatess7.a ../../libyate.so $(INCFILES)
+	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
+
 libyatess7.a: $(OBJS)
 	$(AR) rcs $@ $^
+
+yate-ss7test: LOCALLIBS += -L. -lyatess7

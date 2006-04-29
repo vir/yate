@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Script to run the SS7 test from the build directory
+
+exefile="yate-ss7test"
+if [ -x "$exefile" -a -x ../../run ]; then
+    cd ../..; exec ./run --executable "contrib/yss7/$exefile" "$@"
+else
+    echo "Could not find '$exefile' executable or run script" >&2
+fi

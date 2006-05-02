@@ -383,6 +383,210 @@ private:
 };
 
 /**
+ * A raw data block with a little more understanding about MSU format
+ * @short A block of data that holds a Message Signal Unit
+ */
+class YSS7_API SS7MSU : public DataBlock
+{
+public:
+    /**
+     * Service indicator values
+     */
+    enum Services {
+	// Signalling Network Management
+	SNM   = 0,
+	// Maintenance
+	MTN   = 1,
+	// Maintenance special
+	MTNS  = 2,
+	// Signalling Connection Control Part
+	SCCP  = 3,
+	// Telephone User Part
+	TUP   = 4,
+	// ISDN User Part
+	ISUP  = 5,
+	// Data User Part - call and circuit related
+	DUP_C = 6,
+	// Data User Part - facility messages
+	DUP_F = 7,
+    };
+
+    /**
+     * Priority values
+     */
+    enum Priority {
+	Regular  = 0x00,
+	Special  = 0x10,
+	Circuit  = 0x20,
+	Facility = 0x30
+    };
+
+    /**
+     * Subservice types
+     */
+    enum NetIndicator {
+	International      = 0x00,
+	SpareInternational = 0x40,
+	National           = 0x80,
+	ReservedNational   = 0xc0
+    };
+
+    /**
+     * Empty MSU constructor
+     */
+    inline SS7MSU()
+	{ }
+
+    /**
+     * Copy constructor
+     * @param value Original MSU
+     */
+    inline SS7MSU(const SS7MSU& value)
+	: DataBlock(value)
+	{ }
+
+    /**
+     * Constructor from data block
+     * @param value Raw data block to copy
+     */
+    inline SS7MSU(const DataBlock& value)
+	: DataBlock(value)
+	{ }
+
+    /**
+     * Constructor of an initialized MSU
+     * @param value Data to assign, may be NULL to fill with zeros
+     * @param len Length of data, may be zero (then value is ignored)
+     * @param copyData True to make a copy of the data, false to use the pointer
+     */
+    inline SS7MSU(void* value, unsigned int len, bool copyData = true)
+	: DataBlock(value,len,copyData)
+	{ }
+
+    /**
+     * Destructor
+     */
+    virtual ~SS7MSU();
+
+    /**
+     * Assignment operator
+     * @param value Original MSU
+     * @return A reference to this MSU
+     */
+    inline SS7MSU& operator=(const SS7MSU& value)
+	{ DataBlock::operator=(value); return *this; }
+
+    /**
+     * Assignment operator from data block
+     * @param value Data block to assign
+     * @return A reference to this MSU
+     */
+    inline SS7MSU& operator=(const DataBlock& value)
+	{ DataBlock::operator=(value); return *this; }
+
+    /**
+     * Check if the MSU length appears valid
+     * @return True if the MSU length is valid
+     */
+    bool valid() const;
+
+    /**
+     * Retrive the Service Information Octet
+     * @return Value of the SIO or -1 if the MSU is empty
+     */
+    inline int getSIO() const
+	{ return null() ? -1 : *(const unsigned char*)data(); }
+
+    /**
+     * Retrive the Service Information Field
+     * @return Value of the SIF or -1 if the MSU is empty
+     */
+    inline int getSIF() const
+	{ return null() ? -1 : 0x0f & *(const unsigned char*)data(); }
+
+    /**
+     * Retrive the Subservice Field (SSF)
+     * @return Value of the subservice or -1 if the MSU is empty
+     */
+    inline int getSSF() const
+	{ return null() ? -1 : 0xf0 & *(const unsigned char*)data(); }
+
+    /**
+     * Retrive the Priority Field
+     * @return Value of the priority or -1 if the MSU is empty
+     */
+    inline int getPrio() const
+	{ return null() ? -1 : 0x30 & *(const unsigned char*)data(); }
+
+    /**
+     * Retrive the Network Indicator (NI)
+     * @return Value of the subservice or -1 if the MSU is empty
+     */
+    inline int getNI() const
+	{ return null() ? -1 : 0xc0 & *(const unsigned char*)data(); }
+};
+
+/**
+ * An universal SS7 Layer 3 routing Code Point
+ * @short SS7 Code Point
+ */
+class YSS7_API SS7CodePoint
+{
+public:
+    /**
+     * Constructor from components
+     * @param network ANSI Network Identifier / ITU-T Zone Identification
+     * @param cluster ANSI Network Cluster / ITU-T Area/Network Identification
+     * @param member ANSI Cluster Member / ITU-T Signalling Point Identification
+     */
+    inline SS7CodePoint(unsigned char network, unsigned char cluster, unsigned char member)
+	: m_network(network), m_cluster(cluster), m_member(member)
+	{ }
+
+    /**
+     * Retrive the Network / Zone component of the Code Point
+     * @return ANSI Network Identifier / ITU-T Zone Identification
+     */
+    inline unsigned char network() const
+	{ return m_network; }
+
+    /**
+     * Retrive the Cluster / Area component of the Code Point
+     * @return ANSI Network Cluster / ITU-T Area/Network Identification
+     */
+    inline unsigned char cluster() const
+	{ return m_cluster; }
+
+    /**
+     * Retrive the Cluster / Point component of the Code Point
+     * @return ANSI Cluster Member / ITU-T Signalling Point Identification
+     */
+    inline unsigned char member() const
+	{ return m_member; }
+
+    /**
+     * Check if the codepoint is compatible with ITU-T
+     * @return True if the Network and Member fit in the ITU 3 bit storage
+     */
+    inline bool ituCompatible() const
+	{ return ((m_network | m_member) & 0xf8) == 0; }
+
+private:
+    unsigned char m_network;
+    unsigned char m_cluster;
+    unsigned char m_member;
+};
+
+/**
+ * A SS7 Layer 3 routing label, both ANSI and ITU capable
+ * @short SS7 Routing Label
+ */
+class YSS7_API SS7Label
+{
+private:
+};
+
+/**
  * An interface to a Signalling Transport component
  * @short Abstract SIGTRAN component
  */
@@ -508,7 +712,7 @@ protected:
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if the MSU was processed
      */
-    virtual bool receivedMSU(const DataBlock& msu) = 0;
+    virtual bool receivedMSU(const SS7MSU& msu) = 0;
 };
 
 /**
@@ -518,10 +722,33 @@ protected:
 class YSS7_API SS7Layer2 : virtual public SignallingComponent
 {
 public:
-    enum Primitive {
-	Pause,
-	Resume,
-	Status
+    /**
+     * LSSU Status Indications
+     */
+    enum LinkStatus {
+	OutOfAlignment = 0,
+	NormalAlignment = 1,
+	EmergencyAlignment = 2,
+	OutOfService = 3,
+	ProcessorOutage = 4,
+	Busy = 5,
+	// short versions as defined by RFC
+	O = OutOfAlignment,
+	N = NormalAlignment,
+	E = EmergencyAlignment,
+	OS = OutOfService,
+	PO = ProcessorOutage,
+	B = Busy,
+    };
+
+    /**
+     * Control primitives
+     */
+    enum Operation {
+	Pause  = 0x100,
+	Resume = 0x200,
+	Align  = 0x300,
+	Status = 0x400,
     };
 
     /**
@@ -529,7 +756,13 @@ public:
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if message was successfully queued
      */
-    virtual bool transmitMSU(const DataBlock& msu) = 0;
+    virtual bool transmitMSU(const SS7MSU& msu) = 0;
+
+    /**
+     * Retrive the current link status indications
+     * @return Link status indication bits
+     */
+    virtual unsigned int status() const;
 
     /**
      * Attach a Layer 2 user component to the data link
@@ -544,6 +777,16 @@ public:
     inline SS7L2User* user() const
 	{ return m_l2user; }
 
+    /**
+     * Execute a control operation. Operations can change the link status or
+     *  can query the aligned status.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the data link is aligned and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
+
 protected:
 
     /**
@@ -551,7 +794,7 @@ protected:
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if message was successfully delivered to the user component
      */
-    inline bool receivedMSU(const DataBlock& msu)
+    inline bool receivedMSU(const SS7MSU& msu)
 	{ return m_l2user && m_l2user->receivedMSU(msu); }
 
 private:
@@ -679,13 +922,30 @@ public:
     /**
      * Constructor
      */
-    SS7MTP2();
+    SS7MTP2(unsigned int status = OutOfService);
 
     /**
      * Push a Message Signal Unit down the protocol stack
+     * @param msu MSU data to transmit
      * @return True if message was successfully queued
      */
-    virtual bool transmitMSU(const DataBlock& msu);
+    virtual bool transmitMSU(const SS7MSU& msu);
+
+    /**
+     * Retrive the current link status indications
+     * @return Link status indication bits
+     */
+    virtual unsigned int status() const;
+
+    /**
+     * Execute a control operation. Operations can change the link status or
+     *  can query the aligned status.
+     * @param oper Operation to execute
+     * @param params Optional parameters for the operation
+     * @return True if the command completed successfully, for query operations
+     *  also indicates the data link is aligned and operational
+     */
+    virtual bool control(Operation oper, NamedList* params = 0);
 
 protected:
 
@@ -702,12 +962,45 @@ protected:
 
     /**
      * Process a received Link Status Signal Unit
+     * @param status Link status indications
      */
     virtual void processLSSU(unsigned int status);
+
+    /**
+     * Push a Link Status Signal Unit down the protocol stack
+     * @param status Link status indications
+     * @return True if message was successfully queued
+     */
+    bool transmitLSSU(unsigned int status);
+
+    /**
+     * Push a Link Status Signal Unit with the current status down the protocol stack
+     * @return True if message was successfully queued
+     */
+    inline bool transmitLSSU()
+	{ return transmitLSSU(m_status); }
+
+    /**
+     * Push a Fill-In Signal Unit down the protocol stack
+     * @return True if message was successfully queued
+     */
+    bool transmitFISU();
+
+    /**
+     * Initiates alignment and proving procedure
+     */
+    void startAlignment();
+
+    /**
+     * Abort an alignment procedure if link errors occur
+     */
+    void abortAlignment();
 
 private:
     // sent but yet unacknowledged packets
     ObjList m_queue;
+    // data link status (alignment)
+    unsigned int m_status;
     // backward and forward sqeuence numbers
     unsigned char m_bsn, m_fsn;
     // backward and forward indicator bits
@@ -733,7 +1026,7 @@ protected:
      * @param msu Message data, starting with Service Indicator Octet
      * @return True if the MSU was processed
      */
-    virtual bool receivedMSU(const DataBlock& msu);
+    virtual bool receivedMSU(const SS7MSU& msu);
 
     ObjList m_links;
 };

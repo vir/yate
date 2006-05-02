@@ -40,12 +40,19 @@ void SignallingInterface::attach(SignallingReceiver* receiver)
 
 bool SignallingInterface::control(Operation oper, NamedList* params)
 {
+    DDebug(engine(),DebugInfo,"Unhandled SignallingInterface::control(%d,%p) [%p]",
+	oper,params,this);
     return false;
 }
 
-bool SignallingInterface::receivedPacket()
+bool SignallingInterface::receivedPacket(const DataBlock& packet)
 {
-    return m_receiver && m_receiver->receivedPacket();
+    return m_receiver && m_receiver->receivedPacket(packet);
+}
+
+bool SignallingInterface::notify(Notification event)
+{
+    return m_receiver && m_receiver->notify(event);
 }
 
 
@@ -59,6 +66,12 @@ void SignallingReceiver::attach(SignallingInterface* iface)
     if (m_interface == iface)
 	return;
     Debug("STUB",DebugWarn,"Please implement SignallingReceiver::attach()");
+}
+
+bool SignallingReceiver::notify(SignallingInterface::Notification event)
+{
+    DDebug(engine(),DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

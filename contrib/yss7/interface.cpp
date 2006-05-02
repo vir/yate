@@ -70,7 +70,7 @@ void SignallingReceiver::attach(SignallingInterface* iface)
 
 bool SignallingReceiver::notify(SignallingInterface::Notification event)
 {
-    DDebug(engine(),DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
+    DDebug(DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
     return false;
 }
 

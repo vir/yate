@@ -168,6 +168,10 @@ SOURCE=..\engine\Thread.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\engine\URI.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\engine\YMD5.cpp
 # End Source File
 # End Group

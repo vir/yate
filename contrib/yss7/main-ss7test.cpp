@@ -17,4 +17,5 @@ int main()
     Thread::msleep(100);
     delete engine;
     Output("SS7 library test stopped");
+    return 0;
 }

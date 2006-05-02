@@ -50,6 +50,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name libyrtp
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyss7
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -217,6 +220,24 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "TestSS7"=.\TestSS7.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyss7
     End Project Dependency
 }}}
 
@@ -739,6 +760,21 @@ Package=<4>
 ###############################################################################
 
 Project: "libysip"=.\libysip.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libyss7"=.\libyss7.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

@@ -35,6 +35,7 @@ void SS7MTP3::attach(SS7Layer2* link)
 bool SS7MTP3::receivedMSU(const SS7MSU& msu)
 {
     Debug("STUB",DebugWarn,"Please implement SS7MTP3::receivedMSU()");
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

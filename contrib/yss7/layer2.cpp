@@ -107,7 +107,7 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     Debug("STUB",DebugWarn,"Please implement SS7MTP2::receivedPacket()");
     if (packet.length() < 3) {
 	XDebug(engine(),DebugMild,"Received short packet of length %u [%p]",
-	    packet.length(),this)
+	    packet.length(),this);
 	return false;
     }
     const unsigned char* buf = (const unsigned char*)packet.data();

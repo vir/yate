@@ -1338,7 +1338,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    t->requestAuth("realm","",age >= 0);
+	    t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
 	    return true;
 	}
     }
@@ -2385,7 +2385,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
-	t->requestAuth("realm","",false);
+	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
     return false;
 }
 
@@ -2630,7 +2630,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     int code = lookup(error,dict_errors,500);
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
-	    m_tr->requestAuth("realm","",false);
+	    m_tr->requestAuth(s_cfg.getValue("general","realm","Yate"),"",false);
 	else
 	    m_tr->setResponse(code,reason);
     }

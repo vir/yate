@@ -33,6 +33,10 @@
 
 #include "yateclass.h"
 
+#ifdef HAVE_SCTP_NETINET
+#include <netinet/sctp.h>
+#endif
+
 #include <string.h>
 
 #undef HAS_AF_UNIX
@@ -47,6 +51,18 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
+#endif
+
+#ifndef SHUT_RD
+#define SHUT_RD 0
+#endif
+
+#ifndef SHUT_WR
+#define SHUT_WR 1
+#endif
+
+#ifndef SHUT_RDWR
+#define SHUT_RDWR 2
 #endif
 
 #define MAX_SOCKLEN 1024
@@ -724,11 +740,52 @@ SOCKET Socket::acceptHandle(struct sockaddr* addr, socklen_t* addrlen)
     return res;
 }
 
+Socket* Socket::peelOff(unsigned int assoc)
+{
+    SOCKET sock = peelOffHandle(assoc);
+    return (sock == invalidHandle()) ? 0 : new Socket(sock);
+}
+
+SOCKET Socket::peelOffHandle(unsigned int assoc)
+{
+#ifdef SCTP_SOCKOPT_PEELOFF
+    sctp_peeloff_arg_t buffer;
+    buffer.associd = assoc;
+    buffer.sd = invalidHandle();
+    socklen_t length = sizeof(buffer);
+    if (!getOption(SOL_SCTP, SCTP_SOCKOPT_PEELOFF, &buffer, &length))
+	return invalidHandle();
+    return buffer.sd;
+#else
+    Debug(DebugMild,"Socket::peelOffHandle() not supported on this platform");
+    return invalidHandle();
+#endif
+}
+
 bool Socket::connect(struct sockaddr* addr, socklen_t addrlen)
 {
     if (addrlen && !addr)
 	addrlen = 0;
     return checkError(::connect(m_handle,addr,addrlen));
+}
+
+bool Socket::shutdown(bool stopReads, bool stopWrites)
+{
+    int how;
+    if (stopReads) {
+	if (stopWrites)
+	    how = SHUT_RDWR;
+	else
+	    how = SHUT_RD;
+    }
+    else {
+	if (stopWrites)
+	    how = SHUT_WR;
+	else
+	    // nothing to do - no error
+	    return true;
+    }
+    return checkError(::shutdown(m_handle,how));
 }
 
 bool Socket::getSockName(struct sockaddr* addr, socklen_t* addrlen)

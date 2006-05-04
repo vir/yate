@@ -3405,7 +3405,7 @@ public:
     void attach(HANDLE handle);
 
     /**
-     * Detaches the object from the socket handle
+     * Detaches the object from the file handle
      * @return The handle previously owned by this object
      */
     HANDLE detach();
@@ -3661,6 +3661,20 @@ public:
     SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
 
     /**
+     * Create a new socket by peeling off an association from a SCTP socket
+     * @param assoc Identifier of the association to peel off
+     * @return Open socket to the association or NULL on failure
+     */
+    Socket* peelOff(unsigned int assoc);
+
+    /**
+     * Create a new socket by peeling off an association from a SCTP socket
+     * @param assoc Identifier of the association to peel off
+     * @return Operating system handle to the association or @ref invalidHandle() on failure
+     */
+    SOCKET peelOffHandle(unsigned int assoc);
+
+    /**
      * Connects the socket to a remote address
      * @param addr Address to connect to
      * @param addrlen Length of the address structure
@@ -3675,6 +3689,14 @@ public:
      */
     inline bool connect(const SocketAddr& addr)
 	{ return connect(addr.address(), addr.length()); }
+
+    /**
+     * Shut down one or both directions of a full-duplex socket.
+     * @param stopReads Request to shut down the read side of the socket
+     * @param stopWrites Request to shut down the write side of the socket
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool shutdown(bool stopReads, bool stopWrites);
 
     /**
      * Retrive the address of the local socket of a connection

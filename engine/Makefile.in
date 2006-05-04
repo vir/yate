@@ -31,6 +31,14 @@ LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS) $(CLIOBJS)
 CLEANS = $(LIBOBJS) core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
+SCTPOPTS:=
+
+ifneq (@HAVE_SCTP@,no)
+SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP
+endif
+ifneq (@HAVE_SCTP_NETINET@,no)
+SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP_NETINET
+endif
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -68,7 +76,7 @@ DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
 Socket.o: @srcdir@/Socket.cpp $(MKDEPS) $(CINC)
-	$(COMPILE) @FDSIZE_HACK@ -c $<
+	$(COMPILE) @FDSIZE_HACK@ $(SCTPOPTS) -c $<
 
 Mutex.o: @srcdir@/Mutex.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @MUTEX_HACK@ -c $<

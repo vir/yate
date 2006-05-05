@@ -418,6 +418,7 @@ private:
 static SIPDriver plugin;
 static ObjList s_lines;
 static Configuration s_cfg;
+static String s_realm = "Yate";
 static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
@@ -1035,7 +1036,7 @@ bool YateSIPEndPoint::Init()
 
     m_sock = new Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (!m_sock->valid()) {
-	Debug(DebugGoOn,"Unable to allocate UDP socket");
+	Debug(&plugin,DebugGoOn,"Unable to allocate UDP socket");
 	return false;
     }
     
@@ -1044,23 +1045,23 @@ bool YateSIPEndPoint::Init()
     addr.host(s_cfg.getValue("general","addr","0.0.0.0"));
 
     if (!m_sock->bind(addr)) {
-	Debug(DebugWarn,"Unable to bind to preferred port - using random one instead");
+	Debug(&plugin,DebugWarn,"Unable to bind to preferred port - using random one instead");
 	addr.port(0);
 	if (!m_sock->bind(addr)) {
-	    Debug(DebugGoOn,"Unable to bind to any port");
+	    Debug(&plugin,DebugGoOn,"Unable to bind to any port");
 	    return false;
 	}
     }
     
     if (!m_sock->getSockName(addr)) {
-	Debug(DebugGoOn,"Unable to figure out what I'm bound to");
+	Debug(&plugin,DebugGoOn,"Unable to figure out what I'm bound to");
 	return false;
     }
     if (!m_sock->setBlocking(false)) {
-	Debug(DebugGoOn,"Unable to set non-blocking mode");
+	Debug(&plugin,DebugGoOn,"Unable to set non-blocking mode");
 	return false;
     }
-    Debug(DebugInfo,"SIP Started on %s:%d", addr.host().safe(), addr.port());
+    Debug(&plugin,DebugCall,"Started on %s:%d", addr.host().safe(), addr.port());
     m_port = addr.port();
     m_engine = new YateSIPEngine(this);
     return true;
@@ -1106,7 +1107,7 @@ void YateSIPEndPoint::run()
 	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,m_addr);
 	    if (res <= 0) {
 		if (!m_sock->canRetry()) {
-		    Debug(DebugGoOn,"SIP error on read: %d", m_sock->error());
+		    Debug(&plugin,DebugGoOn,"Error on read: %d", m_sock->error());
 		}
 	    } else if (res >= 72) {
 		buf[res]=0;
@@ -1238,7 +1239,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     int age = t->authUser(user,false,&msg);
     DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
     if (((age < 0) || (age > 10)) && s_auth_register) {
-	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
+	t->requestAuth(s_realm,"",age >= 0);
 	return;
     }
 
@@ -1255,7 +1256,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     String data("sip/" + addr);
     bool nat = isNatBetween(addr.getHost(),message->getParty()->getPartyAddr());
     if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
-	Debug(DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
+	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
 		    addr.getHost().c_str(),addr.getPort(),
 		    message->getParty()->getPartyAddr().c_str(),
 		    message->getParty()->getPartyPort());
@@ -1301,8 +1302,10 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	msg.setParam("device",*hl);
     // Always OK deregistration attempts
     if (Engine::dispatch(msg) || dereg) {
-	if (dereg)
+	if (dereg) {
 	    t->setResponse(200);
+	    Debug(&plugin,DebugNote,"Unregistered user '%s'",user.c_str());
+	}
 	else {
 	    tmp = msg.getValue("expires",tmp);
 	    if (tmp.null())
@@ -1311,6 +1314,8 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	    r->addHeader("Expires",tmp);
 	    t->setResponse(r);
 	    r->deref();
+	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s",
+		user.c_str(),tmp.c_str());
 	}
     }
     else
@@ -1338,7 +1343,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	int age = t->authUser(user);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
-	    t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
+	    t->requestAuth(s_realm,"",age >= 0);
 	    return true;
 	}
     }
@@ -2385,7 +2390,7 @@ bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
 	return true;
     DDebug(this,DebugAll,"YateSIPConnection::checkUser(%p) failed, age %d [%p]",t,age,this);
     if (refuse)
-	t->requestAuth(s_cfg.getValue("general","realm","Yate"),"",age >= 0);
+	t->requestAuth(s_realm,"",age >= 0);
     return false;
 }
 
@@ -2409,8 +2414,10 @@ void YateSIPConnection::doBye(SIPTransaction* t)
 void YateSIPConnection::doCancel(SIPTransaction* t)
 {
 #ifdef DEBUG
-    if (!checkUser(t,false))
-	Debug(DebugMild,"User authentication failed for user '%s' but CANCELing anyway [%p]",
+    // CANCEL cannot be challenged but it may (should?) be authenticated with
+    //  an old nonce from the transaction that is being cancelled
+    if (m_user && (t->authUser(m_user) < 0))
+	Debug(&plugin,DebugMild,"User authentication failed for user '%s' but CANCELing anyway [%p]",
 	    m_user.c_str(),this);
 #endif
     DDebug(this,DebugAll,"YateSIPConnection::doCancel(%p) [%p]",t,this);
@@ -2630,7 +2637,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
     int code = lookup(error,dict_errors,500);
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
-	    m_tr->requestAuth(s_cfg.getValue("general","realm","Yate"),"",false);
+	    m_tr->requestAuth(s_realm,"",false);
 	else
 	    m_tr->setResponse(code,reason);
     }
@@ -2791,7 +2798,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
 	    m_valid = true;
-	    Debug(&plugin,DebugInfo,"SIP line '%s' logon success to %s:%d",
+	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s:%d",
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
 	default:
@@ -3118,6 +3125,7 @@ void SIPDriver::initialize()
     Output("Initializing module SIP Channel");
     s_cfg = Engine::configFile("ysipchan");
     s_cfg.load();
+    s_realm = s_cfg.getValue("general","realm","Yate");
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);

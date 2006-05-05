@@ -539,8 +539,14 @@ public:
      * @param cluster ANSI Network Cluster / ITU-T Area/Network Identification
      * @param member ANSI Cluster Member / ITU-T Signalling Point Identification
      */
-    inline SS7CodePoint(unsigned char network, unsigned char cluster, unsigned char member)
+    inline SS7CodePoint(unsigned char network = 0, unsigned char cluster = 0, unsigned char member = 0)
 	: m_network(network), m_cluster(cluster), m_member(member)
+	{ }
+
+    /**
+     * Destructor
+     */
+    inline ~SS7CodePoint()
 	{ }
 
     /**
@@ -565,17 +571,49 @@ public:
 	{ return m_member; }
 
     /**
+     * Assignment from components
+     * @param network ANSI Network Identifier / ITU-T Zone Identification
+     * @param cluster ANSI Network Cluster / ITU-T Area/Network Identification
+     * @param member ANSI Cluster Member / ITU-T Signalling Point Identification
+     */
+    inline void assign(unsigned char network, unsigned char cluster, unsigned char member)
+	{ m_network = network; m_cluster = cluster; m_member = member; }
+
+    /**
      * Check if the codepoint is compatible with ITU-T
      * @return True if the Network and Member fit in the ITU 3 bit storage
      */
     inline bool ituCompatible() const
 	{ return ((m_network | m_member) & 0xf8) == 0; }
 
+    /**
+     * Return the code point as compact bits in ITU-T format. No error check is
+     *  performed so data truncation may occur if not checked in advance.
+     * @return Compact code point as 14-bit integer
+     */
+    inline unsigned int packITU() const
+	{ return ((m_network & 7) << 11) | (m_cluster << 3) | (m_member & 7); }
+
+    /**
+     * Return the code point as compact bits in ANSI format
+     * @return Compact code point as 24-bit integer
+     */
+    inline unsigned int packANSI() const
+	{ return (m_network << 16) | (m_cluster << 8) | m_member; }
+
 private:
     unsigned char m_network;
     unsigned char m_cluster;
     unsigned char m_member;
 };
+
+/**
+ * Operator to write a codepoint to a string
+ * @param str String to append to
+ * @param cp Codepoint to append to the string
+ */
+inline String& operator<<(String& str, const SS7CodePoint& cp)
+    { str << (int)cp.network() << "-" << (int)cp.cluster() << "-" << (int)cp.member(); return str; }
 
 /**
  * A SS7 Layer 3 routing label, both ANSI and ITU capable
@@ -763,6 +801,13 @@ public:
      * @return Link status indication bits
      */
     virtual unsigned int status() const;
+
+    /**
+     * Check if the link is aligned
+     * @return True if the link is aligned and operational
+     */
+    inline bool aligned() const
+	{ return status() == NormalAlignment; }
 
     /**
      * Attach a Layer 2 user component to the data link

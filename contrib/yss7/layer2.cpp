@@ -76,8 +76,12 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 {
     if (msu.length() < 3) {
-	Debug(engine(),DebugMild,"Asked to send MSU of length %u [%p]",
+	Debug(engine(),DebugWarn,"Asked to send MSU of length %u [%p]",
 	    msu.length(),this);
+	return false;
+    }
+    if (!aligned()) {
+	DDebug(engine(),DebugInfo,"Asked to send MSU while unaligned [%p]",this);
 	return false;
     }
     XDebug(engine(),DebugAll,"SS7MTP2::transmitMSU(%p) len=%u [%p]",

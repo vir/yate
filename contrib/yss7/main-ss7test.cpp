@@ -6,6 +6,10 @@ int main()
 {
     debugLevel(DebugAll);
     Output("SS7 library test starting");
+    SS7CodePoint scp(2,141,4);
+    String s = "Code point is ";
+    s << scp;
+    Output(s);
     SignallingEngine* engine = new SignallingEngine;
     SS7Router* router = new SS7Router;
     engine->insert(router);

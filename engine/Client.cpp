@@ -986,14 +986,37 @@ bool Client::action(Window* wnd, const String& name)
 	return true;
     }
     else if (name.startsWith("digit:")) {
-	emitDigit(name.at(6));
-	return true;
+	if (m_activeId) {
+	    emitDigit(name.at(6));
+	    return true;
+	}
+	String target;
+	if (getText("callto",target)) {
+	    target += name.at(6);
+	    if (setText("callto",target))
+		return true;
+	}
     }
     else if (name.startsWith("line:")) {
 	int l = name.substr(5).toInteger(-1);
 	if (l >= 0) {
 	    line(l);
 	    return true;
+	}
+    }
+    else if (name.startsWith("clear:")) {
+	// clear a text field or table
+	String wid = name.substr(6);
+	if (wid && (setText(wid,"") || clearTable(wid)))
+	    return true;
+    }
+    else if (name.startsWith("back:")) {
+	// delete last character (backspace)
+	String wid = name.substr(5);
+	String str;
+	if (getText(wid,str,wnd)) {
+	    if (str.null() || setText(wid,str.substr(0,str.length()-1),wnd))
+		return true;
 	}
     }
     // accounts window actions

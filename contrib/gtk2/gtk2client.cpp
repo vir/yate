@@ -684,6 +684,8 @@ static gboolean windowCbClick(GtkWidget* wid, GdkEventButton* evt, gpointer dat)
     }
     if (evt->button != 1)
 	return FALSE;
+    if (wnd && !wnd->dragable())
+	return FALSE;
     GtkWidget* top = gtk_widget_get_toplevel(wid);
     if (top) {
 	s_moving = top;
@@ -784,7 +786,7 @@ void Widget::destroyCb(GtkObject* obj, gpointer dat)
 
 
 GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
-    : Window(id), m_decorated(decorated), m_layout(layout),
+    : Window(id), m_decorated(decorated), m_dragable(false), m_layout(layout),
       m_widget(0), m_filler(0), m_state(0),
       m_posX(INVALID_POS), m_posY(INVALID_POS), m_sizeW(0), m_sizeH(0)
 {
@@ -922,6 +924,7 @@ void GTKWindow::populate()
     NamedList* sect = s_cfg.getSection(m_id);
     if (!sect)
 	return;
+    m_dragable = sect->getBoolValue("dragable",true);
     s_radioGroup = 0;
     GtkWidget* containerStack[MAX_CONTAINER_DEPTH];
     GtkTooltips* tips = 0;

@@ -1353,7 +1353,18 @@ bool Client::callStart(const String& target, const String& line,
 bool Client::emitDigit(char digit)
 {
     Debug(ClientDriver::self(),DebugInfo,"emitDigit('%c')",digit);
-    return false;
+    if (!ClientDriver::self())
+	return false;
+    Channel* chan = ClientDriver::self()->find(m_activeId);
+    if (!chan)
+	return false;
+    char buf[2];
+    buf[0] = digit;
+    buf[1] = '\0';
+    Message* m = chan->message("chan.dtmf");
+    m->addParam("text",buf);
+    Engine::enqueue(m);
+    return true;
 }
 
 bool Client::callIncoming(const String& caller, const String& dest, Message* msg)
@@ -1500,6 +1511,7 @@ void Client::updateFrom(const ClientChannel* chan)
     enableAction(chan,"voicemail");
     enableAction(chan,"transfer");
     enableAction(chan,"conference");
+    setActive("call",m_multiLines || m_activeId.null());
 }
 
 void Client::enableAction(const ClientChannel* chan, const String& action)

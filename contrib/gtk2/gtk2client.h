@@ -170,6 +170,8 @@ public:
 	{ return m_state; }
     inline void state(int gdkState)
 	{ m_state = gdkState; }
+    inline bool dragable() const
+	{ return m_dragable; }
     bool prepare();
     bool restore();
     static bool setText(GtkWidget* wid, const String& text);
@@ -189,6 +191,7 @@ public:
     static bool getSelect(GtkWidget* wid, String& item);
 protected:
     bool m_decorated;
+    bool m_dragable;
     int m_layout;
     GtkWidget* m_widget;
     GtkWidget* m_filler;

@@ -371,6 +371,7 @@ int Client::s_changing = 0;
 static Configuration s_accounts;
 static Configuration s_contacts;
 static Configuration s_providers;
+static Configuration s_history;
 
 // Parameters that are stored with account
 static const char* s_accParams[] = {
@@ -521,6 +522,15 @@ void Client::initClient()
 	    if (!hasOption("acc_providers",*sect))
 		addOption("acc_providers",*sect,false);
 	}
+    }
+
+    s_history = Engine::configFile("client_history");
+    s_history.load();
+    n = s_history.sections();
+    for (i=0; i<n; i++) {
+	NamedList* sect = s_history.getSection(i);
+	if (sect)
+	    updateCallHist(*sect);
     }
 
     bool tmp =
@@ -1148,8 +1158,21 @@ bool Client::action(Window* wnd, const String& name)
     }
     // outgoing (placed) call log actions
     else if (name == "log_out_clear") {
-	if (clearTable("log_outgoing"))
+	if (clearTable("log_outgoing")) {
+	    for (unsigned int i = 0; i < s_history.sections(); i++) {
+		NamedList* sect = s_history.getSection(i);
+		if (!sect)
+		    continue;
+		String* dir = sect->getParam("direction");
+		// directions are backwards
+		if (dir && (*dir == "incoming")) {
+		    s_history.clearSection(*sect);
+		    i--;
+		}
+	    }
+	    s_history.save();
 	    return true;
+	}
     }
     else if ((name == "log_out_call") || (name == "log_outgoing")) {
 	NamedList log("");
@@ -1163,8 +1186,21 @@ bool Client::action(Window* wnd, const String& name)
     }
     // incoming (received) call log actions
     else if (name == "log_in_clear") {
-	if (clearTable("log_incoming"))
+	if (clearTable("log_incoming")) {
+	    for (unsigned int i = 0; i < s_history.sections(); i++) {
+		NamedList* sect = s_history.getSection(i);
+		if (!sect)
+		    continue;
+		String* dir = sect->getParam("direction");
+		// directions are backwards, remember?
+		if (dir && (*dir == "outgoing")) {
+		    s_history.clearSection(*sect);
+		    i--;
+		}
+	    }
+	    s_history.save();
 	    return true;
+	}
     }
     else if ((name == "log_in_call") || (name == "log_incoming")) {
 	NamedList log("");
@@ -1178,8 +1214,11 @@ bool Client::action(Window* wnd, const String& name)
     }
     // mixed call log actions
     else if (name == "log_clear") {
-	if (clearTable("log_global"))
+	if (clearTable("log_global")) {
+	    s_history.clearSection();
+	    s_history.save();
 	    return true;
+	}
     }
 
     // unknown/unhandled - generate a message for them
@@ -1380,7 +1419,7 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
     if (msg && msg->userData()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
 	lockOther();
-	ClientChannel* cc = new ClientChannel(caller,ch->id());
+	ClientChannel* cc = new ClientChannel(caller,ch->id(),msg);
 	unlockOther();
 	if (cc->connect(ch,msg->getValue("reason"))) {
 	    m_activeId = cc->id();
@@ -1423,14 +1462,40 @@ bool Client::callRouting(const String& caller, const String& called, Message* ms
 
 void Client::updateCDR(const Message& msg)
 {
-    String* dir = msg.getParam("direction");
-    if (!dir)
+    if (!updateCallHist(msg))
 	return;
-    String* id = msg.getParam("billid");
-    if (!id || id->null())
+    String id = msg.getParam("billid");
+    if (id.null())
 	id = msg.getParam("id");
-    if (!id || id->null())
+    // it worked before - but paranoia can be fun
+    if (id.null())
 	return;
+    while (s_history.sections() >= 20) {
+	NamedList* sect = s_history.getSection(0);
+	if (!sect)
+	    break;
+	s_history.clearSection(*sect);
+    }
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = msg.getParam(i);
+	if (!param)
+	    continue;
+	s_history.setValue(id,param->name(),param->c_str());
+    }
+    s_history.save();
+}
+
+bool Client::updateCallHist(const NamedList& params)
+{
+    String* dir = params.getParam("direction");
+    if (!dir)
+	return false;
+    String* id = params.getParam("billid");
+    if (!id || id->null())
+	id = params.getParam("id");
+    if (!id || id->null())
+	return false;
     String table;
     // remember, directions are opposite of what the user expects
     if (*dir == "outgoing")
@@ -1438,9 +1503,10 @@ void Client::updateCDR(const Message& msg)
     else if (*dir == "incoming")
 	table = "log_outgoing";
     else
-	return;
-    addTableRow(table,*id,&msg);
-    addTableRow("log_global",*id,&msg);
+	return false;
+    bool ok = addTableRow(table,*id,&params);
+    ok = addTableRow("log_global",*id,&params) || ok;
+    return ok;
 }
 
 void Client::clearActive(const String& id)
@@ -1562,13 +1628,18 @@ bool UICdrHandler::received(Message &msg)
     if (!Client::self())
 	return false;
 
+    String* op = msg.getParam("operation");
+    if (!(op && (*op == "finalize")))
+	return false;
+    op = msg.getParam("chan");
+    if (!(op && op->startsWith("client/",false)))
+	return false;
+
     // block until client finishes initialization
     while (!Client::self()->initialized())
 	Thread::msleep(10);
 
-    String* op = msg.getParam("operation");
-    if (op && (*op == "finalize"))
-	Client::self()->updateCDR(msg);
+    Client::self()->updateCDR(msg);
     return false;
 }
 
@@ -1681,7 +1752,7 @@ bool UIUserHandler::received(Message &msg)
 
 // IMPORTANT: having a target means "from inside Yate to the user"
 //  An user initiated call must be incoming (no target)
-ClientChannel::ClientChannel(const String& party, const char* target)
+ClientChannel::ClientChannel(const String& party, const char* target, const Message* msg)
     : Channel(ClientDriver::self(),0,(target != 0)),
       m_party(party), m_line(0), m_flashing(false),
       m_canAnswer(false), m_canTransfer(false), m_canConference(false)
@@ -1695,7 +1766,13 @@ ClientChannel::ClientChannel(const String& party, const char* target)
     update(false);
     if (Client::self())
 	Client::self()->addChannel(this);
-    Engine::enqueue(message("chan.startup"));
+    Message* s = message("chan.startup");
+    if (msg) {
+	s->setParam("caller",msg->getValue("caller"));
+	s->setParam("called",msg->getValue("called"));
+	s->setParam("billid",msg->getValue("billid"));
+    }
+    Engine::enqueue(s);
 }
 
 ClientChannel::~ClientChannel()

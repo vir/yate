@@ -389,6 +389,13 @@ static gboolean widgetCbShow(GtkWidget* wid, gpointer dat)
     return GTKClient::setVisible(name);
 }
 
+static gboolean widgetCbChanged(GtkRange* range, gpointer dat)
+{
+    const gchar* name = gtk_widget_get_name((GtkWidget*)range);
+    Debug(GTKDriver::self(),DebugAll,"widgetCbChanged(%p,%p) '%s'",range,dat,name);
+    return FALSE;
+}
+
 static gboolean widgetCbSwitch(GtkNotebook* nbk, GtkNotebookPage* page, guint page_num, gpointer dat)
 {
     const gchar* name = gtk_widget_get_name(GTK_WIDGET(nbk));
@@ -616,6 +623,16 @@ static GtkWidget* gtkTableNew(const gchar* text)
     return table;
 }
 
+static GtkWidget* gtkHscaleNew(const gchar* text)
+{
+    return gtk_hscale_new_with_range(0,100,10);
+}
+
+static GtkWidget* gtkVscaleNew(const gchar* text)
+{
+    return gtk_vscale_new_with_range(0,100,10);
+}
+
 static WidgetMaker s_widgetMakers[] = {
     { "label", gtkLeftLabelNew, 0, 0 },
     { "editor", gtkEntryNewWithText, "activate", G_CALLBACK(widgetCbAction) },
@@ -635,6 +652,8 @@ static WidgetMaker s_widgetMakers[] = {
     { "button_icon", gtkButtonNew, "clicked", G_CALLBACK(widgetCbMinimize) },
     { "button_hide", gtkButtonNew, "clicked", G_CALLBACK(widgetCbHide) },
     { "button_max", gtkButtonNew, "clicked", G_CALLBACK(widgetCbMaximize) },
+    { "hscale", gtkHscaleNew, "value-changed", G_CALLBACK(widgetCbChanged) },
+    { "vscale", gtkVscaleNew, "value-changed", G_CALLBACK(widgetCbChanged) },
     { 0, 0, 0, 0 },
 };
 //    { "", gtk__new, "", },
@@ -1313,6 +1332,10 @@ bool GTKWindow::setText(GtkWidget* wid, const String& text)
     }
     if (GTK_IS_COMBO(wid)) {
 	gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(wid)->entry),text.safe());
+	return true;
+    }
+    if (GTK_IS_ADJUSTMENT(wid)) {
+	gtk_adjustment_set_value(GTK_ADJUSTMENT(wid),text.toDouble());
 	return true;
     }
     return false;

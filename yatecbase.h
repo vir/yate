@@ -341,6 +341,7 @@ protected:
     virtual void initWindows();
     virtual void initClient();
     virtual void setChannelDisplay(ClientChannel* chan);
+    virtual bool updateCallHist(const NamedList& params);
     void addChannel(ClientChannel* chan);
     void delChannel(ClientChannel* chan);
     void setChannel(ClientChannel* chan);
@@ -372,7 +373,7 @@ class YATE_API ClientChannel : public Channel
 {
     friend class ClientDriver;
 public:
-    ClientChannel(const String& party, const char* target = 0);
+    ClientChannel(const String& party, const char* target = 0, const Message* msg = 0);
     virtual ~ClientChannel();
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);

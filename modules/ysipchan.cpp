@@ -187,6 +187,8 @@ public:
 	{ return m_localPort; }
     inline int getPartyPort() const
 	{ return m_partyPort; }
+    inline const String& getFullName() const
+	{ return m_display; }
     inline const String& getUserName() const
 	{ return m_username; }
     inline const String& getAuthName() const
@@ -1540,12 +1542,14 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg,"osip_");
+    String caller = msg.getValue("caller",(line ? line->getUserName() : 0));
+    String display = msg.getValue("callername",(line ? line->getFullName() : 0));
     m->complete(plugin.ep()->engine(),
-	msg.getValue("caller"),
+	caller,
 	msg.getValue("domain",(line ? line->domain().c_str() : 0)));
-    if (msg.getParam("callername")) {
+    if (display) {
 	String desc;
-	desc << "\"" << msg.getValue("callername") << "\" ";
+	desc << "\"" << display << "\" ";
 	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(m->getHeader("From"));
 	if (hl)
 	    *hl = desc + *hl;
@@ -1600,7 +1604,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m->deref();
     setMaxcall(msg);
     Message* s = message("chan.startup");
-    s->setParam("caller",msg.getValue("caller"));
+    s->setParam("caller",caller);
     s->setParam("called",msg.getValue("called"));
     s->setParam("billid",msg.getValue("billid"));
     s->setParam("username",msg.getValue("username"));

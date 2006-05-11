@@ -394,21 +394,27 @@ public:
      */
     enum Services {
 	// Signalling Network Management
-	SNM   = 0,
+	SNM   =  0,
 	// Maintenance
-	MTN   = 1,
+	MTN   =  1,
 	// Maintenance special
-	MTNS  = 2,
+	MTNS  =  2,
 	// Signalling Connection Control Part
-	SCCP  = 3,
+	SCCP  =  3,
 	// Telephone User Part
-	TUP   = 4,
+	TUP   =  4,
 	// ISDN User Part
-	ISUP  = 5,
+	ISUP  =  5,
 	// Data User Part - call and circuit related
-	DUP_C = 6,
+	DUP_C =  6,
 	// Data User Part - facility messages
-	DUP_F = 7,
+	DUP_F =  7,
+	// MTP Testing User Part (reserved)
+	MTP_T =  8,
+	// Broadband ISDN User Part
+	BISUP =  9,
+	// Satellite ISDN User Part
+	SISUP = 10,
     };
 
     /**
@@ -534,6 +540,17 @@ class YSS7_API SS7CodePoint
 {
 public:
     /**
+     * Different incompatible types of codepoints
+     */
+    enum Type {
+	Other = 0,
+	ITU   = 1,
+	ANSI  = 2,
+	China = 3,
+	Japan = 4,
+    };
+
+    /**
      * Constructor from components
      * @param network ANSI Network Identifier / ITU-T Zone Identification
      * @param cluster ANSI Network Cluster / ITU-T Area/Network Identification
@@ -541,6 +558,14 @@ public:
      */
     inline SS7CodePoint(unsigned char network = 0, unsigned char cluster = 0, unsigned char member = 0)
 	: m_network(network), m_cluster(cluster), m_member(member)
+	{ }
+
+    /**
+     * Copy constructor
+     * @param original Code point to be copied
+     */
+    inline SS7CodePoint(const SS7CodePoint& original)
+	: m_network(original.network()), m_cluster(original.cluster()), m_member(original.member())
 	{ }
 
     /**
@@ -580,26 +605,31 @@ public:
 	{ m_network = network; m_cluster = cluster; m_member = member; }
 
     /**
-     * Check if the codepoint is compatible with ITU-T
-     * @return True if the Network and Member fit in the ITU 3 bit storage
+     * Assignment operator
+     * @param original Code point to be copied
      */
-    inline bool ituCompatible() const
-	{ return ((m_network | m_member) & 0xf8) == 0; }
+    inline SS7CodePoint& operator=(const SS7CodePoint& original)
+	{ assign(original.network(),original.cluster(),original.member()); return *this; }
 
     /**
-     * Return the code point as compact bits in ITU-T format. No error check is
-     *  performed so data truncation may occur if not checked in advance.
-     * @return Compact code point as 14-bit integer
+     * Check if the codepoint is compatible with a packing type
+     * @return True if the Network and Member fit in the packing format
      */
-    inline unsigned int packITU() const
-	{ return ((m_network & 7) << 11) | (m_cluster << 3) | (m_member & 7); }
+    bool compatible(Type type) const;
 
     /**
-     * Return the code point as compact bits in ANSI format
-     * @return Compact code point as 24-bit integer
+     * Pack the code point into a single integer number.
+     * @param type Type of the packing desired
+     * @return Compact code point as integer or zero if the packing type is not supported
      */
-    inline unsigned int packANSI() const
-	{ return (m_network << 16) | (m_cluster << 8) | m_member; }
+    unsigned int pack(Type type) const;
+
+    /**
+     * Get the size (in bits) of a packed code point according to its type
+     * @param type Type of the packing
+     * @return Number of bits required to represent the code point, zero if unknown
+     */
+    static unsigned char size(Type type);
 
 private:
     unsigned char m_network;
@@ -612,8 +642,7 @@ private:
  * @param str String to append to
  * @param cp Codepoint to append to the string
  */
-inline String& operator<<(String& str, const SS7CodePoint& cp)
-    { str << (int)cp.network() << "-" << (int)cp.cluster() << "-" << (int)cp.member(); return str; }
+String& operator<<(String& str, const SS7CodePoint& cp);
 
 /**
  * A SS7 Layer 3 routing label, both ANSI and ITU capable
@@ -621,8 +650,75 @@ inline String& operator<<(String& str, const SS7CodePoint& cp)
  */
 class YSS7_API SS7Label
 {
+public:
+    /**
+     * Check if the label is compatible with another packing type
+     * @return True if the DLC, SLC and SLS fit in the new packing format
+     */
+    bool compatible(SS7CodePoint::Type type) const;
+
+    /**
+     * Get the type (SS7 dialect) of the routing label
+     * @return Dialect of the routing label as enumeration
+     */
+    inline SS7CodePoint::Type type() const
+	{ return m_type; }
+
+    /**
+     * Get the Destination Code Point inside the label
+     * @return Reference of the destination code point
+     */
+    inline const SS7CodePoint& dpc() const
+	{ return m_dpc; }
+
+    /**
+     * Get the Source Code Point inside the label
+     * @return Reference of the source code point
+     */
+    inline const SS7CodePoint& spc() const
+	{ return m_spc; }
+
+    /**
+     * Get the Signalling Link Selection inside the label
+     * @return Value of the SLS field
+     */
+    inline unsigned char sls() const
+	{ return m_sls; }
+
+    /**
+     * Get the length (in bytes) of this routing label
+     * @return Number of bytes required to represent the label, zero if unknown
+     */
+    inline unsigned int length() const
+	{ return length(m_type); }
+
+    /**
+     * Get the length (in bytes) of a packed routing label according to its type
+     * @param type Type of the packing
+     * @return Number of bytes required to represent the label, zero if unknown
+     */
+    static unsigned int length(SS7CodePoint::Type type);
+
+    /**
+     * Get the size (in bits) of a packed routing label according to its type
+     * @param type Type of the packing
+     * @return Number of bits required to represent the label, zero if unknown
+     */
+    static unsigned char size(SS7CodePoint::Type type);
+
 private:
+    SS7CodePoint::Type m_type;
+    SS7CodePoint m_dpc;
+    SS7CodePoint m_spc;
+    unsigned char m_sls;
 };
+
+/**
+ * Operator to write a routing label to a string
+ * @param str String to append to
+ * @param cp Label to append to the string
+ */
+String& operator<<(String& str, const SS7Label& label);
 
 /**
  * An interface to a Signalling Transport component
@@ -783,9 +879,13 @@ public:
      * Control primitives
      */
     enum Operation {
+	// take link out of service
 	Pause  = 0x100,
+	// start link operation, align if it needs to
 	Resume = 0x200,
+	// start link, force realignment
 	Align  = 0x300,
+	// get operational status
 	Status = 0x400,
     };
 

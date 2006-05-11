@@ -62,11 +62,18 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 {
     switch (oper) {
 	case Pause:
+	    abortAlignment();
+	    return true;
 	case Resume:
+	    if (aligned())
+		return true;
+	    // fall-through
 	case Align:
+	    startAlignment();
+	    return true;
 	    break;
 	case Status:
-	    return (m_status == NormalAlignment);
+	    return aligned();
 	default:
 	    return SignallingReceiver::control((SignallingInterface::Operation)oper,params);
     }
@@ -76,7 +83,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 {
     if (msu.length() < 3) {
-	Debug(engine(),DebugWarn,"Asked to send MSU of length %u [%p]",
+	Debug(engine(),DebugWarn,"Asked to send too short MSU of length %u [%p]",
 	    msu.length(),this);
 	return false;
     }
@@ -126,9 +133,12 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     bool ok = true;
     // packet length is valid, check sequence numbers
     unsigned char bsn = buf[0] & 0x7f;
-    bool bib = (buf[0] & 0x80) != 0;
     unsigned char fsn = buf[1] & 0x7f;
+    bool bib = (buf[0] & 0x80) != 0;
     bool fib = (buf[1] & 0x80) != 0;
+    // lock the object as we modify members
+    lock();
+    unlock();
 
     //TODO: implement Q.703 6.3.1
 
@@ -201,10 +211,12 @@ bool SS7MTP2::transmitFISU()
 
 void SS7MTP2::startAlignment()
 {
+    m_status = OutOfAlignment;
 }
 
 void SS7MTP2::abortAlignment()
 {
+    m_status = OutOfService;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

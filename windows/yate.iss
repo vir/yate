@@ -101,6 +101,7 @@ Source: "Runtimes\krb5_32.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libintl-2.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
 
+Source: "..\yate.url"; DestDir: "{app}"
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 
@@ -122,6 +123,7 @@ Name: "{group}\Yate Console"; Filename: "{app}\yate-console.exe"; Parameters: "-
 Name: "{group}\Register Service"; Filename: "{app}\yate-service.exe"; Parameters: "--install -w ""{app}"""; Components: server
 Name: "{group}\Unregister Service"; Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 Name: "{group}\Uninstall"; Filename: "{uninstallexe}"
+Name: "{group}\Yate Web Site"; Filename: "{app}\yate.url"
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client; Tasks: qlaunch
 Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client; Tasks: desktop
 
@@ -133,4 +135,46 @@ Filename: "{app}\yate-gtk2.exe"; Description: "Launch client"; Components: clien
 [UninstallRun]
 Filename: "net.exe"; Parameters: "stop yate"; Components: server
 Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
+
+[Code]
+var
+    GtkRegistry : Boolean;
+    GtkLoadable : Boolean;
+
+function GtkTrue() : Integer;
+external 'gtk_true@LIBGTK-WIN32-2.0-0.DLL stdcall delayload setuponly';
+
+function InitializeSetup() : Boolean;
+begin
+    GtkRegistry := RegValueExists(HKEY_LOCAL_MACHINE, 'SOFTWARE\GTK\2.0', 'DllPath');
+    try
+        GtkLoadable := GtkTrue() <> 0;
+        UnloadDLL('LIBGTK-WIN32-2.0-0.DLL');
+    except
+        GtkLoadable := False;
+    end;
+    Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+    msg : String;
+    url : String;
+    err : Integer;
+begin
+    if (CurStep = ssInstall) and IsComponentSelected('client') then begin
+        if not (GtkRegistry and GtkLoadable) then begin
+            msg := 'Gtk2 client installation requested' #13 'but Gtk2 is not ';
+            if GtkRegistry then msg := msg + 'loadable'
+            else if GtkLoadable then msg := msg + 'in Registry'
+            else msg := msg + 'installed';
+            msg := msg + #13 #13 'Do you want to install Gtk2 now?';
+            if SuppressibleMsgBox(msg, mbConfirmation, MB_YESNO, IDNO) = IDYES then begin
+                url := 'http://yate.null.ro/gtk2win.php';
+                if not ShellExec('open', url, '', '', SW_SHOW, ewNoWait, err) then
+                    MsgBox('Browser failed. Please go to:' #13 + url,mbError,MB_OK);
+            end;
+        end;
+    end;
+end;
 

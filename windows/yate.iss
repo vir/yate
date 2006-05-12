@@ -117,6 +117,8 @@ Source: "..\yate*.h"; DestDir: "{app}\devel"; Components: devel
 Source: "yateversn.h"; DestDir: "{app}\devel"; Components: devel
 Source: "version.rc"; DestDir: "{app}\devel"; Components: devel
 
+Source: "Runtimes\gtk+-2.6.9-setup.exe"; DestDir: "{app}"; Components: client; Flags: skipifsourcedoesntexist dontcopy nocompression
+
 [Icons]
 Name: "{group}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client
 Name: "{group}\Yate Console"; Filename: "{app}\yate-console.exe"; Parameters: "-n yate-console -w ""{app}"""; Components: debug
@@ -169,7 +171,19 @@ begin
             else if GtkLoadable then msg := msg + 'in Registry'
             else msg := msg + 'installed';
             msg := msg + #13 #13 'Do you want to install Gtk2 now?';
-            if SuppressibleMsgBox(msg, mbConfirmation, MB_YESNO, IDNO) = IDYES then begin
+            repeat
+                err := SuppressibleMsgBox(msg, mbConfirmation, MB_YESNOCANCEL, IDNO);
+                if (err = IDCANCEL) and ExitSetupMsgBox() then Abort;
+            until err <> IDCANCEL;
+            if err = IDYES then begin
+                url := 'gtk+-2.6.9-setup.exe';
+                try
+                    ExtractTemporaryFile(url);
+                    url := ExpandConstant('{tmp}\') + url;
+                    if FileExists(url) and ShellExec('open', url, '', '', SW_SHOW, ewWaitUntilTerminated, err) then
+                        exit;
+                except
+                end;
                 url := 'http://yate.null.ro/gtk2win.php';
                 if not ShellExec('open', url, '', '', SW_SHOW, ewNoWait, err) then
                     MsgBox('Browser failed. Please go to:' #13 + url,mbError,MB_OK);

@@ -272,6 +272,7 @@ public:
     virtual ~H323Driver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual bool msgRoute(Message& msg);
     virtual bool received(Message &msg, int id);
     virtual void statusParams(String& str);
     void cleanup();
@@ -2153,6 +2154,22 @@ void H323Driver::statusParams(String& str)
     str.append("cleaning=",",") << cleaningCount();
 }
     
+bool H323Driver::msgRoute(Message& msg)
+{
+    String called = msg.getValue("called");
+    if (called.null() || (called.find('@') >= 0))
+	return false;
+    String line = msg.getValue("line");
+    if (line.null())
+	line = msg.getValue("account");
+    if (line && hplugin.findEndpoint(line)) {
+	// asked to route to a line we have locally
+	msg.setParam("line",line);
+	msg.retValue() = prefix() + called;
+	return true;
+    }
+    return false;
+}
 
 bool H323Driver::msgExecute(Message& msg, String& dest)
 {
@@ -2206,6 +2223,7 @@ void H323Driver::initialize()
 	installRelay(Halt);
 	s_process = new H323Process;
 	installRelay(Progress);
+	installRelay(Route);
 	Engine::install(new UserHandler);
     }
     int dbg = s_cfg.getIntValue("general","debug");

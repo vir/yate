@@ -405,7 +405,8 @@ public:
     ~SIPDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
-    virtual bool received(Message &msg, int id);
+    virtual bool msgRoute(Message& msg);
+    virtual bool received(Message& msg, int id);
     inline YateSIPEndPoint* ep() const
 	{ return m_endpoint; }
     YateSIPConnection* findCall(const String& callid);
@@ -2877,7 +2878,7 @@ bool YateSIPLine::update(const Message& msg)
 	return true;
     }
     bool chg = false;
-    chg = change(m_registrar,msg.getValue("registrar")) || chg;
+    chg = change(m_registrar,msg.getValue("registrar",msg.getValue("server"))) || chg;
     chg = change(m_outbound,msg.getValue("outbound")) || chg;
     chg = change(m_username,msg.getValue("username")) || chg;
     chg = change(m_authname,msg.getValue("authname")) || chg;
@@ -3073,7 +3074,7 @@ bool SIPDriver::validLine(const String& line)
     return l && l->valid();
 }
 
-bool SIPDriver::received(Message &msg, int id)
+bool SIPDriver::received(Message& msg, int id)
 {
     if (id == Timer) {
 	ObjList* l = s_lines.skipNull();
@@ -3086,6 +3087,23 @@ bool SIPDriver::received(Message &msg, int id)
 	s_lines.clear();
     }
     return Driver::received(msg,id);
+}
+
+bool SIPDriver::msgRoute(Message& msg)
+{
+    String called = msg.getValue("called");
+    if (called.null() || (called.find('@') >= 0))
+	return false;
+    String line = msg.getValue("line");
+    if (line.null())
+	line = msg.getValue("account");
+    if (line && findLine(line)) {
+	// asked to route to a line we have locally
+	msg.setParam("line",line);
+	msg.retValue() = prefix() + called;
+	return true;
+    }
+    return false;
 }
 
 bool SIPDriver::msgExecute(Message& msg, String& dest)
@@ -3151,6 +3169,7 @@ void SIPDriver::initialize()
 	installRelay(Halt);
 	installRelay(Progress);
 	installRelay(Update);
+	installRelay(Route);
 	Engine::install(new UserHandler);
 	if (s_cfg.getBoolValue("general","generate"))
 	    Engine::install(new SipHandler);

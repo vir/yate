@@ -1,4 +1,5 @@
 #!/usr/bin/php -q
+
 <?
 /* Test script for the Yate PHP interface
    To test add in extmodule.conf
@@ -11,17 +12,9 @@ require_once("libyate.php");
 /* Always the first action to do */
 Yate::Init();
 
-/* Install a handler for the engine generated timer message */
-//Yate::Install("engine.timer",10);
-Yate::Install("chan.dtmf",10);
-Yate::Install("chan.text",10);
+/* Install a handler for the call routing message */
+Yate::Install("call.route",80);
 
-/* Create and dispatch an initial test message */
-/*$m=new Yate("test");
-$m->params["param1"]="val1";
-$m->retval="ret_value";
-$m->Dispatch();
-*/
 /* The main loop. We pick events and handle them */
 for (;;) {
     $ev=Yate::GetEvent();
@@ -38,24 +31,12 @@ for (;;) {
     switch ($ev->type) {
 	case "incoming":
 	//    Yate::Output("PHP Message: " . $ev->name . " id: " . $ev->id . " called: " . $ev->params["called"] . " caller: " . $ev->params["caller"]);
-	  //  if ($ev->params["called"] == "1")
-//	    {
-//		$ev->params["response"] = "405";
-//		$ev->retval = "tone/dial";
-//		$ev->handled = true;
-//		Yate::Output("PHP : " . $ev->params["called"] . "vias  " . $ev->params["vias"] . " cseq " . $ev->params["cseq"]);
-//	    }
-	    Yate::Output("PHP Message: " . $ev->name . " text: " . $ev->params["text"] . " ourcallid: " . $ev->params["ourcallid"] . "partycallid:" . $ev->params["partycallid"]);
-	    $ev->handled = true;
+	    if ($ev->getValue("called") == "321") {
+		$ev->retval = "tone/dial";
+		$ev->handled = true;
+	    }
 	    /* This is extremely important.
 	       We MUST let messages return, handled or not */
-	    $m=new Yate("chan.text");
-	    $m->params["ourcallid"]= $ev->params["partycallid"];
-	    $m->params["partycallid"]= $ev->params["ourcallid"];
-	    $m->params["text"] = $ev->params["text"];
-	    $m->retval="ret_value";
-	    $m->Dispatch();
-	       
 	    $ev->Acknowledge();
 	    break;
 	case "answer":

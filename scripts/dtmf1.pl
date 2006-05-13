@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 use lib 'scripts/';
-use YateMessage;
+use Yate;
 
 sub OnDTMF($) {
   my $message = shift;
@@ -15,7 +15,7 @@ sub OnNotify($) {
   #$message->dump();
 }
 
-my $message = new YateMessage();
+my $message = new Yate();
 $message->install("chan.dtmf",\&OnDTMF,10);
 $message->install("chan.notify",\&OnNotify);
 

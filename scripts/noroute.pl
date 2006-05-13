@@ -27,7 +27,7 @@ sub demo2($) {
   return ("true","tone/dial");
 }
 
-my $message = new YateMessage();
+my $message = new Yate();
 $message->install("engine.timer",\&demo);
 $message->install("call.route",\&demo2);
 $message->listen();

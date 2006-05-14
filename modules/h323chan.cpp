@@ -1686,14 +1686,17 @@ BOOL YateH323AudioSource::Write(const void *buf, PINDEX len)
 }
 
 
-BOOL YateGatekeeperServer::GetUsersPassword(const PString & alias,PString & password) const
+BOOL YateGatekeeperServer::GetUsersPassword(const PString& alias, PString& password) const
 {
-    Message *m = new Message("user.auth");
-    m->addParam("username",alias);
+    Message m("user.auth");
+    m.addParam("protocol","h323");
+    m.addParam("username",alias);
+    m.addParam("endpoint",m_endpoint);
+    m.addParam("gatekeeper",GetGatekeeperIdentifier());
     Engine::dispatch(m);
-    if (m->retValue().null())
+    if (m.retValue().null())
 	return FALSE;
-    password = m->retValue();
+    password = m.retValue();
     return TRUE;
 }
 
@@ -1724,6 +1727,8 @@ H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323Gatekee
 	    m.addParam("username",alias);
 	    m.addParam("driver","h323");
 	    m.addParam("data",ips);
+	    ips = GetTimeToLive();
+	    m.addParam("expires",ips);
 	    if (Engine::dispatch(m))
 		return H323GatekeeperRequest::Confirm;
 	}

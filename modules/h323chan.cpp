@@ -1693,10 +1693,10 @@ BOOL YateGatekeeperServer::GetUsersPassword(const PString& alias, PString& passw
     m.addParam("username",alias);
     m.addParam("endpoint",m_endpoint);
     m.addParam("gatekeeper",GetGatekeeperIdentifier());
-    Engine::dispatch(m);
-    if (m.retValue().null())
+    if (!Engine::dispatch(m))
 	return FALSE;
-    password = m.retValue();
+    // as usual empty password means authenticated
+    password = m.retValue().c_str();
     return TRUE;
 }
 
@@ -1716,13 +1716,17 @@ H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323Gatekee
 	    alias = H323GetAliasAddressString(request.rrq.m_terminalAlias[j]);
 	    r = H323GetAliasAddressE164(request.rrq.m_terminalAlias[j]);
 	    H225_TransportAddress_ipAddress ip;
-	    if (request.rrq.m_callSignalAddress.GetSize() >0)
-		ip=request.rrq.m_callSignalAddress[0];
-	    ips = "h323/" + String(ip.m_ip[0]) + "." + String(ip.m_ip[1]) + "." + String(ip.m_ip[2]) + "."  + String(ip.m_ip[3]) + ":" + String((int)ip.m_port);
-	    /** 
-	    * we deal just with the first callSignalAddress, since openh323 
-	    * don't give a shit for multi hosted boxes.
-	    */
+	    for (int k = 0; k < request.rrq.m_callSignalAddress.GetSize(); k++) {
+		ip = request.rrq.m_callSignalAddress[k];
+		// search for the first address that is not localhost (127.*)
+		if (ip.m_ip[0] != 127)
+		    break;
+	    }
+	    ips = "h323/";
+	    if (!alias.IsEmpty())
+		ips << alias << "@";
+	    ips << ip.m_ip[0] << "." << ip.m_ip[1] << "." << ip.m_ip[2] << "." << ip.m_ip[3] << ":" << (int)ip.m_port;
+
 	    Message m("user.register");
 	    m.addParam("username",alias);
 	    m.addParam("driver","h323");

@@ -1724,7 +1724,7 @@ H323GatekeeperRequest::Response YateGatekeeperServer::OnRegistration(H323Gatekee
 	    }
 	    ips = "h323/";
 	    if (!alias.IsEmpty())
-		ips << alias << "@";
+		ips << (const char*)alias << "@";
 	    ips << ip.m_ip[0] << "." << ip.m_ip[1] << "." << ip.m_ip[2] << "." << ip.m_ip[3] << ":" << (int)ip.m_port;
 
 	    Message m("user.register");

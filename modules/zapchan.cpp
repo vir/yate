@@ -42,6 +42,17 @@ extern "C" {
 #include <fcntl.h>
 #endif
 
+#ifndef ZT_EVENT_DTMFDIGIT
+#ifdef ZT_EVENT_DTMFDOWN
+#define ZT_EVENT_DTMFDIGIT ZT_EVENT_DTMFDOWN
+#else
+#define ZT_EVENT_DTMFDIGIT 0
+#endif
+#endif
+
+#ifndef ZT_EVENT_PULSEDIGIT
+#define ZT_EVENT_PULSEDIGIT 0
+#endif
 
 using namespace TelEngine;
 

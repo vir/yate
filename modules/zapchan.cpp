@@ -277,25 +277,31 @@ void ZapSource::run()
 	int fd = static_cast<ZapChan*>(m_owner)->fd();
 	if (fd != -1) {
 	    rd = ::read(fd,m_buffer.data(),m_buffer.length());
-	    XDebug(DebugAll,"ZapSource read %d bytes",rd);
-	    if (rd > 0) {
-		int samp = rd;
-		switch (static_cast<ZapChan*>(m_owner)->law()) {
-		    case -1:
-			samp /= 2;
+	    XDebug(m_owner,DebugAll,"ZapSource read %d bytes [%p]",rd,this);
+	    if (rd > 0)
+		Forward(m_buffer);
+	    else if (rd < 0) {
+		if ((errno != EAGAIN) && (errno != EINTR)) {
+		    int zev = zt_get_event(fd);
+		    if (zev) {
+			Debug(m_owner,DebugInfo,"ZapSource event %d [%p]",zev,this);
+			// driver-decoded digit arrived
+			if (zev & (ZT_EVENT_DTMFDIGIT | ZT_EVENT_PULSEDIGIT)) {
+			    char buf[2];
+			    buf[0] = zev & 0xff;
+			    buf[1] = '\0';
+			    m_owner->gotDigits(buf);
+			}
+		    }
+		    else
 			break;
 		}
-		Forward(m_buffer,samp);
-	    }
-	    else if (rd < 0) {
-		if ((errno != EAGAIN) && (errno != EINTR))
-		    break;
 	    }
 	}
 	else
 	    break;
     }
-    Debug(m_owner,DebugWarn,"ZapSource at EOF (read %d)",rd);
+    Debug(m_owner,DebugWarn,"ZapSource at EOF (read %d) [%p]",rd,this);
     // TODO: find a better way of dealing with this abnormal condition
     for (;;)
 	Thread::yield(true);

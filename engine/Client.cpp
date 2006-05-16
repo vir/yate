@@ -574,19 +574,23 @@ bool Client::openPopup(const String& name, const NamedList* params, const Window
     return true;
 }
 
-bool Client::openMessage(const char* text, const Window* parent)
+bool Client::openMessage(const char* text, const Window* parent, const char* context)
 {
     NamedList params("");
     params.addParam("text",text);
     params.addParam("modal",String::boolText(parent != 0));
+    if (!null(context))
+	params.addParam("context",context);
     return openPopup("message",&params,parent);
 }
 
-bool Client::openConfirm(const char* text, const Window* parent)
+bool Client::openConfirm(const char* text, const Window* parent, const char* context)
 {
     NamedList params("");
     params.addParam("text",text);
     params.addParam("modal",String::boolText(parent != 0));
+    if (!null(context))
+	params.addParam("context",context);
     return openPopup("confirm",&params,parent);
 }
 
@@ -949,6 +953,13 @@ bool Client::setStatusLocked(const String& text, Window* wnd)
 bool Client::action(Window* wnd, const String& name)
 {
     DDebug(ClientDriver::self(),DebugInfo,"Action '%s' in %p",name.c_str(),wnd);
+    // hack to simplify actions from confirmation boxes
+    if (wnd && wnd->context() && (name == "ok") && (wnd->context() != "ok")) {
+	bool ok = action(wnd,wnd->context());
+	if (ok)
+	    wnd->hide();
+	return ok;
+    }
     if (name == "call" || name == "callto") {
 	String target;
 	getText("callto",target,wnd);
@@ -1069,18 +1080,21 @@ bool Client::action(Window* wnd, const String& name)
     else if (name == "acc_del") {
 	String acc;
 	if (getSelect("accounts",acc,wnd) && acc) {
-//	    if (openConfirm("Delete account "+acc,wnd))
-//		return true;
-	    s_accounts.clearSection(acc);
-	    s_accounts.save();
-	    Message* m = new Message("user.login");
-	    m->addParam("account",acc);
-	    m->addParam("operation","delete");
-	    Engine::enqueue(m);
-	    return true;
+	    if (openConfirm("Delete account "+acc,wnd,name + ":" + acc))
+		return true;
 	}
 	else
 	    return false;
+    }
+    else if (name.startsWith("acc_del:")) {
+	String acc = name.substr(8);
+	s_accounts.clearSection(acc);
+	s_accounts.save();
+	Message* m = new Message("user.login");
+	m->addParam("account",acc);
+	m->addParam("operation","delete");
+	Engine::enqueue(m);
+	return true;
     }
     else if (name == "acc_accept") {
 	String newAcc;
@@ -1123,10 +1137,24 @@ bool Client::action(Window* wnd, const String& name)
     }
     // address book window actions
     else if ((name == "abk_call") || (name == "contacts")) {
+	String cnt;
+	if (getSelect("contacts",cnt,wnd) && cnt) {
+	    NamedList* sect = s_contacts.getSection(cnt);
+	    if (sect) {
+		String* callto = sect->getParam("callto");
+		if (!(callto && *callto))
+		    callto = sect->getParam("number");
+		if (callto && *callto && openConfirm("Call to "+*callto,wnd,"callto:" + *callto))
+		    return true;
+	    }
+	}
+	else
+	    return false;
     }
     else if (name == "abk_new") {
 	NamedList params("");
 	params.setParam("abk_contact","");
+	params.setParam("abk_callto","");
 	params.setParam("abk_number","");
 	params.setParam("modal",String::boolText(true));
 	if (openPopup("addrbook",&params,wnd))
@@ -1137,6 +1165,8 @@ bool Client::action(Window* wnd, const String& name)
 	if (getSelect("contacts",cnt,wnd)) {
 	    NamedList params("");
 	    params.setParam("abk_contact",cnt);
+	    params.setParam("abk_callto",s_contacts.getValue(cnt,"callto"));
+	    params.setParam("abk_number",s_contacts.getValue(cnt,"number"));
 	    params.setParam("context",cnt);
 	    params.setParam("modal",String::boolText(true));
 	    if (openPopup("addrbook",&params,wnd))
@@ -1148,13 +1178,45 @@ bool Client::action(Window* wnd, const String& name)
     else if (name == "abk_del") {
 	String cnt;
 	if (getSelect("contacts",cnt,wnd)) {
-	    if (openConfirm("Delete contact "+cnt,wnd))
+	    if (openConfirm("Delete contact "+cnt,wnd,name + ":" + cnt))
 		return true;
 	}
 	else
 	    return false;
     }
+    else if (name.startsWith("abk_del:")) {
+	String cnt = name.substr(8);
+	delOption("contacts",cnt);
+	s_contacts.clearSection(cnt);
+	s_contacts.save();
+	return true;
+    }
     else if (name == "abk_accept") {
+	String newAbk;
+	if (getText("abk_contact",newAbk,wnd) && newAbk) {
+	    // check if the contact name has changed, delete old if so
+	    if (wnd && wnd->context() && (wnd->context() != newAbk)) {
+		s_contacts.clearSection(wnd->context());
+		delOption("contacts",wnd->context());
+	    }
+	    if (!hasOption("contacts",newAbk))
+		addOption("contacts",newAbk,false);
+	    String tmp;
+	    if (getText("abk_callto",tmp,wnd))
+		s_contacts.setValue(newAbk,"callto",tmp);
+	    else
+		s_contacts.clearKey(newAbk,"callto");
+	    if (getText("abk_number",tmp,wnd))
+		s_contacts.setValue(newAbk,"number",tmp);
+	    else
+		s_contacts.clearKey(newAbk,"callto");
+	    s_contacts.save();
+	    if (wnd)
+		wnd->hide();
+	    return true;
+	}
+	else
+	    return false;
     }
     // outgoing (placed) call log actions
     else if (name == "log_out_clear") {
@@ -1178,8 +1240,25 @@ bool Client::action(Window* wnd, const String& name)
 	NamedList log("");
 	if (getTableRow("log_outgoing","",&log,wnd)) {
 	    String* called = log.getParam("called");
-	    if (called && *called && openConfirm("Call to "+*called,wnd))
+	    if (called && *called && openConfirm("Call to "+*called,wnd,"callto:" + *called))
 		return true;
+	}
+	else
+	    return false;
+    }
+    else if (name == "log_out_contact") {
+	NamedList log("");
+	if (getTableRow("log_outgoing","",&log,wnd)) {
+	    String* called = log.getParam("called");
+	    if (called && *called) {
+		NamedList params("");
+		params.setParam("abk_contact","");
+		params.setParam("abk_callto","");
+		params.setParam("abk_number",*called);
+		params.setParam("modal",String::boolText(true));
+		if (openPopup("addrbook",&params,wnd))
+		    return true;
+	    }
 	}
 	else
 	    return false;
@@ -1206,8 +1285,25 @@ bool Client::action(Window* wnd, const String& name)
 	NamedList log("");
 	if (getTableRow("log_incoming","",&log,wnd)) {
 	    String* caller = log.getParam("caller");
-	    if (caller && *caller && openConfirm("Call to "+*caller,wnd))
+	    if (caller && *caller && openConfirm("Call to "+*caller,wnd,"callto:" + *caller))
 		return true;
+	}
+	else
+	    return false;
+    }
+    else if (name == "log_in_contact") {
+	NamedList log("");
+	if (getTableRow("log_incoming","",&log,wnd)) {
+	    String* caller = log.getParam("caller");
+	    if (caller && *caller) {
+		NamedList params("");
+		params.setParam("abk_contact","");
+		params.setParam("abk_callto","");
+		params.setParam("abk_number",*caller);
+		params.setParam("modal",String::boolText(true));
+		if (openPopup("addrbook",&params,wnd))
+		    return true;
+	    }
 	}
 	else
 	    return false;
@@ -1661,13 +1757,13 @@ bool UIHandler::received(Message &msg)
 	return Client::self()->setStatusLocked(msg.getValue("status"),wnd);
     else if (action == "show_message") {
 	Client::self()->lockOther();
-	bool ok = Client::openMessage(msg.getValue("text"),Client::getWindow(msg.getValue("parent")));
+	bool ok = Client::openMessage(msg.getValue("text"),Client::getWindow(msg.getValue("parent")),msg.getValue("context"));
 	Client::self()->unlockOther();
 	return ok;
     }
     else if (action == "show_confirm") {
 	Client::self()->lockOther();
-	bool ok = Client::openConfirm(msg.getValue("text"),Client::getWindow(msg.getValue("parent")));
+	bool ok = Client::openConfirm(msg.getValue("text"),Client::getWindow(msg.getValue("parent")),msg.getValue("context"));
 	Client::self()->unlockOther();
 	return ok;
     }

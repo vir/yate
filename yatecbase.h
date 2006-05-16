@@ -73,8 +73,8 @@ public:
     virtual void title(const String& text);
 
     /**
-     * Get the contextual information previously associated with this window
-     * @return String contextual information
+     * Set the contextual information previously associated with this window
+     * @param text New contextual information
      */
     virtual void context(const String& text);
 
@@ -332,8 +332,8 @@ public:
     static bool setVisible(const String& name, bool show = true);
     static bool getVisible(const String& name);
     static bool openPopup(const String& name, const NamedList* params = 0, const Window* parent = 0);
-    static bool openMessage(const char* text, const Window* parent = 0);
-    static bool openConfirm(const char* text, const Window* parent = 0);
+    static bool openMessage(const char* text, const Window* parent = 0, const char* context = 0);
+    static bool openConfirm(const char* text, const Window* parent = 0, const char* context = 0);
     static ObjList* listWindows();
     void idleActions();
 protected:

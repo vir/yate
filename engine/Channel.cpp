@@ -77,6 +77,10 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
     }
     if (peer == m_peer)
 	return true;
+    if (peer == this) {
+	Debug(DebugWarn,"CallEndpoint '%s' trying to connect to itself! [%p]",m_id.c_str(),this);
+	return false;
+    }
     DDebug(DebugAll,"CallEndpoint '%s' connecting peer %p to [%p]",m_id.c_str(),peer,this);
 
 #if 0

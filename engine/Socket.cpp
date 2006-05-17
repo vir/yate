@@ -483,6 +483,69 @@ bool File::setBlocking(bool block)
 #endif
 }
 
+bool File::openPath(const char* name, bool canWrite, bool canRead, bool create, bool append)
+{
+    if (!terminate())
+	return false;
+    if (null(name) || !(canWrite || canRead))
+	return false;
+#ifdef _WINDOWS
+    DWORD access = 0;
+    if (canWrite)
+	access |= GENERIC_WRITE;
+    if (canRead)
+	access |= GENERIC_READ;
+    HANDLE h = CreateFile(name,access,0,NULL,create ? OPEN_ALWAYS : OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
+    if (h == invalidHandle()) {
+	copyError();
+	return false;
+    }
+    if (append)
+	SetFilePointer(h,0,NULL,FILE_END);
+#else
+    int flags = 0;
+    if (canWrite)
+	flags = canRead ? O_RDWR : O_WRONLY;
+    else if (canRead)
+	flags = O_RDONLY;
+    if (create)
+	flags |= O_CREAT;
+    if (append)
+	flags |= O_APPEND;
+    HANDLE h = ::open(name,flags,S_IRWXU);
+    if (h == invalidHandle()) {
+	copyError();
+	return false;
+    }
+#endif
+    attach(h);
+    clearError();
+    return true;
+}
+
+unsigned int File::length()
+{
+    if (!valid())
+	return 0;
+#ifdef _WINDOWS
+    DWORD sz = GetFileSize(m_handle,NULL);
+    if (sz == (DWORD)-1) {
+	copyError();
+	return 0;
+    }
+    return sz;
+#else
+    off_t pos = ::lseek(m_handle,0,SEEK_CUR);
+    if (pos == (off_t)-1) {
+	copyError();
+	return 0;
+    }
+    off_t len = ::lseek(m_handle,0,SEEK_END);
+    ::lseek(m_handle,pos,SEEK_SET);
+    return (len == (off_t)-1) ? 0 : len;
+#endif
+}
+
 int File::writeData(const void* buffer, int length)
 {
     if (!buffer)

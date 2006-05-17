@@ -109,6 +109,7 @@ Source: "..\modules\skin\default\gtk2client.??"; DestDir: "{app}\modules\skin\de
 Source: "..\modules\skin\default\*.png"; DestDir: "{app}\modules\skin\default"; Components: client
 Source: "..\modules\skin\tabbed\gtk2client.??"; DestDir: "{app}\modules\skin\tabbed"; Components: client\skin\tabbed
 Source: "..\modules\skin\tabbed\*.png"; DestDir: "{app}\modules\skin\tabbed"; Components: client\skin\tabbed
+Source: "..\modules\help\*.yhlp"; DestDir: "{app}\modules\help"; Components: client
 
 Source: "..\scripts\*.php"; DestDir: "{app}\scripts"; Components: external\php
 

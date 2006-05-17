@@ -1327,7 +1327,10 @@ bool GTKWindow::setText(GtkWidget* wid, const String& text)
 {
     XDebug(GTKDriver::self(),DebugAll,"GTKWindow::setText(%p,'%s')",wid,text.safe());
     if (GTK_IS_LABEL(wid)) {
-	gtk_label_set_text(GTK_LABEL(wid),text.safe());
+	if (text.startsWith("<markup>"))
+	    gtk_label_set_markup(GTK_LABEL(wid),text.safe());
+	else
+	    gtk_label_set_text(GTK_LABEL(wid),text.safe());
 	return true;
     }
     if (GTK_IS_BUTTON(wid)) {

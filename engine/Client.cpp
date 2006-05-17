@@ -542,6 +542,9 @@ void Client::initClient()
     m_autoAnswer = Engine::config().getBoolValue("client","autoanswer",tmp);
     setCheck("multilines",m_multiLines);
     setCheck("autoanswer",m_autoAnswer);
+    Window* help = getWindow("help");
+    if (help)
+	action(help,"help_home");
 }
 
 void Client::moveRelated(const Window* wnd, int dx, int dy)
@@ -1313,6 +1316,48 @@ bool Client::action(Window* wnd, const String& name)
 	if (clearTable("log_global")) {
 	    s_history.clearSection();
 	    s_history.save();
+	    return true;
+	}
+    }
+    // help window actions
+    else if (wnd && name.startsWith("help_")) {
+	bool show = false;
+	int page = wnd->context().toInteger();
+	if (name == "help_home")
+	    page = 0;
+	else if (name == "help_prev")
+	    page--;
+	else if (name == "help_next")
+	    page++;
+	else if (name.startsWith("help_page:"))
+	    page = name.substr(10).toInteger(page);
+	else if (name.startsWith("help_show:")) {
+	    page = name.substr(10).toInteger(page);
+	    show = true;
+	}
+	if (page < 0)
+	    page = 0;
+	String helpFile = Engine::config().getValue("client","helpbase");
+	if (helpFile.null())
+	    helpFile << Engine::modulePath() << Engine::pathSeparator() << "help";
+	if (!helpFile.endsWith(Engine::pathSeparator()))
+	    helpFile << Engine::pathSeparator();
+	helpFile << page << ".yhlp";
+	File f;
+	f.openPath(helpFile);
+	unsigned int len = f.length();
+	if (len) {
+	    String helpText(' ',len);
+	    int rd = f.readData(const_cast<char*>(helpText.c_str()),len);
+	    if (rd == (int)len) {
+		setText("help_text",helpText,wnd);
+		wnd->context(page);
+		if (show)
+		    wnd->show();
+	    }
+	    else
+		Debug(ClientDriver::self(),DebugWarn,"Read only %d out of %u bytes in file %s",
+		    rd,len,helpFile.c_str());
 	    return true;
 	}
     }

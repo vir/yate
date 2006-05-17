@@ -3393,6 +3393,17 @@ public:
     virtual ~File();
 
     /**
+     * Opens a file from the filesystem pathname
+     * @param name Name of the file according to the operating system's conventions
+     * @param canWrite Open the file for writing
+     * @param canRead Open the file for reading
+     * @param create Create the file if it doesn't exist
+     * @param append Set the write pointer at the end of an existing file
+     * @return True if the file was successfully opened
+     */
+    virtual bool openPath(const char* name, bool canWrite = false, bool canRead = true, bool create = false, bool append = false);
+
+    /**
      * Closes the file handle
      * @return True if the file was (already) closed, false if an error occured
      */
@@ -3441,6 +3452,12 @@ public:
      * @return True if operation was successfull, false if an error occured
      */
     virtual bool setBlocking(bool block = true);
+
+    /**
+     * Find the length of the file if it has one
+     * @return Length of the file or zero if length is not defined
+     */
+    virtual unsigned int length();
 
     /**
      * Write data to an open file

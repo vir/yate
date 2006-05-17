@@ -43,6 +43,7 @@
 
 #ifndef _WINDOWS
 
+#include <sys/stat.h>
 #include <sys/un.h>
 #define HAS_AF_UNIX
 #ifndef UNIX_PATH_MAX

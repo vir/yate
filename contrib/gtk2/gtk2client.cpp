@@ -128,6 +128,11 @@ public:
     GCallback cb;
 };
 
+static bool validPos(int x, int y)
+{
+    return (-10000 < x) && (x < 10000) && (-10000 < y) && (y < 10000);
+}
+
 static gboolean gtkIdleCb(gpointer dat)
 {
     if (dat) {
@@ -148,8 +153,8 @@ static gboolean debugCbInfo(GtkWidget* wid)
     gtk_widget_class_path(wid,NULL,&wcp,NULL);
     Debug(GTKDriver::self(),DebugAll,"debugCbInfo widget %p path '%s' class path '%s'",
 	wid,wp,wcp);
-    ::free(wp);
-    ::free(wcp);
+    g_free(wp);
+    g_free(wcp);
     return FALSE;
 }
 
@@ -831,7 +836,7 @@ GTKWindow::~GTKWindow()
 {
     prepare();
     m_widget = 0;
-    if ((m_posX != INVALID_POS) && (m_posY != INVALID_POS)) {
+    if (validPos(m_posX,m_posY)) {
 	Debug(GTKDriver::self(),DebugAll,"saving '%s' %d,%d",m_id.c_str(),m_posX,m_posY);
 	s_save.setValue(m_id,"x",m_posX);
 	s_save.setValue(m_id,"y",m_posY);
@@ -1076,7 +1081,7 @@ void GTKWindow::init()
     m_posY = s_save.getIntValue(m_id,"y",m_posY);
     m_sizeW = s_save.getIntValue(m_id,"w",m_sizeW);
     m_sizeH = s_save.getIntValue(m_id,"h",m_sizeH);
-    bool initial = m_master || s_cfg.getBoolValue(m_id,"visible",true);
+    bool initial = s_cfg.getBoolValue(m_id,"visible",m_master);
     initial = s_save.getBoolValue(m_id,"visible",initial);
     restore();
     // we realize the widget explicitely to avoid a gtk-win32 bug
@@ -1139,6 +1144,8 @@ void GTKWindow::size(int width, int height)
 
 void GTKWindow::move(int x, int y)
 {
+    if (!validPos(x,y))
+	return;
     m_posX = x;
     m_posY = y;
     if (m_widget)
@@ -1147,14 +1154,14 @@ void GTKWindow::move(int x, int y)
 
 void GTKWindow::moveRel(int dx, int dy)
 {
-    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+    if (!validPos(m_posX,m_posY))
 	return;
     move(m_posX+dx,m_posY+dy);
 }
 
 void GTKWindow::geometry(int x, int y, int w, int h)
 {
-    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+    if (!validPos(m_posX,m_posY))
 	return;
     int dx = x - m_posX;
     int dy = y - m_posY;
@@ -1183,7 +1190,7 @@ bool GTKWindow::restore()
 {
     if (!m_widget)
 	return false;
-    if ((m_posX == INVALID_POS) || (m_posY == INVALID_POS))
+    if (!validPos(m_posX,m_posY))
 	return false;
     move(m_posX,m_posY);
     size(m_sizeW,m_sizeH);
@@ -1203,8 +1210,9 @@ void GTKWindow::setOver(const Window* parent)
     GTKWindow* gwnd = YOBJECT(GTKWindow,parent);
     if (gwnd) {
 	gtk_window_set_transient_for(GTK_WINDOW(m_widget),GTK_WINDOW(gwnd->widget()));
-	m_posX = gwnd->m_posX + (gwnd->m_sizeW - m_sizeW) / 2;
-	m_posY = gwnd->m_posY + (gwnd->m_sizeH - m_sizeH) / 2;
+	if (gwnd->prepare() && validPos(gwnd->m_posX,gwnd->m_posY))
+	    move(gwnd->m_posX + (gwnd->m_sizeW - m_sizeW) / 2,
+		gwnd->m_posY + (gwnd->m_sizeH - m_sizeH) / 2);
     }
 }
 
@@ -1275,7 +1283,7 @@ bool GTKWindow::select(GtkTreeView* view)
     // column 0 is reserved for row/item name
     gtk_tree_model_get(model,&iter,0,&val,-1);
     item = val;
-    ::free(val);
+    g_free(val);
 
     return GTKClient::self() && GTKClient::self()->select(this,name,item);
 }
@@ -1608,7 +1616,7 @@ static bool findTableRow(GtkTreeModel* model, const String& item, GtkTreeIter* i
 	// column 0 is reserved for row/item name
 	gtk_tree_model_get(model,iter,0,&val,-1);
 	bool found = (item == val);
-	::free(val);
+	g_free(val);
 	if (found)
 	    return true;
 	if (!gtk_tree_model_iter_next(model,iter))
@@ -1714,7 +1722,7 @@ bool GTKWindow::getTableRow(GtkWidget* wid, const String& item, NamedList* data)
 		// read past column 0 which is reserved for row/item name
 		gtk_tree_model_get(model,&iter,i+1,&val,-1);
 		data->setParam(name,val);
-		::free(val);
+		g_free(val);
 	    }
 	}
 	return true;
@@ -1854,7 +1862,7 @@ bool GTKWindow::getSelect(GtkWidget* wid, String& item)
 	// column 0 is reserved for row/item name
 	gtk_tree_model_get(model,&iter,0,&val,-1);
 	item = val;
-	::free(val);
+	g_free(val);
 	return true;
     }
     return false;

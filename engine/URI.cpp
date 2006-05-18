@@ -113,8 +113,8 @@ void URI::parse() const
 	m_proto = tmp.matchString(1).toLower();
 	m_proto = m_proto.substr(0,m_proto.length()-1);
 	m_user = tmp.matchString(2);
-	m_user = m_user.substr(0,m_user.length()-1);
-	m_host = tmp.matchString(3).toLower();
+	m_user = m_user.substr(0,m_user.length()-1).uriUnescape();
+	m_host = tmp.matchString(3).uriUnescape().toLower();
 	tmp = tmp.matchString(4);
 	tmp >> ":" >> m_port;
 	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",

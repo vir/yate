@@ -1573,6 +1573,38 @@ public:
     inline String sqlEscape(char extraEsc = 0) const
 	{ return sqlEscape(c_str(),extraEsc); }
 
+    /**
+     * Create an escaped string suitable for use in URIs
+     * @param str String to convert to escaped format
+     * @param extraEsc Character to escape other than the default ones
+     * @return The string with special characters escaped
+     */
+    static String uriEscape(const char* str, char extraEsc = 0);
+
+    /**
+     * Create an escaped string suitable for use in URI
+     * @param extraEsc Character to escape other than the default ones
+     * @return The string with special characters escaped
+     */
+    inline String uriEscape(char extraEsc = 0) const
+	{ return uriEscape(c_str(),extraEsc); }
+
+    /**
+     * Decode an URI escaped string back to its raw form
+     * @param str String to convert to unescaped format
+     * @param errptr Pointer to an integer to receive the place of 1st error
+     * @return The string with special characters unescaped
+     */
+    static String uriUnescape(const char* str, int* errptr = 0);
+
+    /**
+     * Decode an URI escaped string back to its raw form
+     * @param errptr Pointer to an integer to receive the place of 1st error
+     * @return The string with special characters unescaped
+     */
+    inline String uriUnescape(int* errptr = 0) const
+	{ return uriUnescape(c_str(),errptr); }
+
 protected:
     /**
      * Called whenever the value changed (except in constructors).

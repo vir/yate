@@ -98,6 +98,25 @@ static bool isWordBreak(char c, bool nullOk = false)
     return (c == ' ' || c == '\t' || c == '\n' || (nullOk && !c));
 }
 
+// Decode a single nibble, return -1 on error
+static int hexDecode(char c)
+{
+    if (('0' <= c) && (c <= '9'))
+	return c - '0';
+    if (('A' <= c) && (c <= 'F'))
+	return c - 'A' + 10;
+    if (('a' <= c) && (c <= 'f'))
+	return c - 'a' + 10;
+    return -1;
+}
+
+// Encode a single nibble
+static inline char hexEncode(char nib)
+{
+    static const char hex[] = "0123456789abcdef";
+    return hex[nib & 0x0f];
+}
+
 StringMatchPrivate::StringMatchPrivate()
 {
     XDebug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
@@ -781,9 +800,9 @@ ObjList* String::split(char separator, bool emptyOK) const
 
 String String::msgEscape(const char* str, char extraEsc)
 {
-    if (!str)
-	str = "";
     String s;
+    if (TelEngine::null(str))
+	return s;
     char c;
     while ((c=*str++)) {
 	if (c < ' ' || c == ':' || c == extraEsc) {
@@ -799,17 +818,17 @@ String String::msgEscape(const char* str, char extraEsc)
 
 String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 {
-    if (!str)
-	str = "";
+    String s;
+    if (TelEngine::null(str))
+	return s;
     if (extraEsc)
 	extraEsc += '@';
     const char *pos = str;
-    String s;
     char c;
     while ((c=*pos++)) {
 	if (c < ' ') {
 	    if (errptr)
-		*errptr = (pos-str);
+		*errptr = (pos-str) - 1;
 	    return s;
 	}
 	else if (c == '%') {
@@ -818,7 +837,7 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 		c -= '@';
 	    else if (c != '%') {
 		if (errptr)
-		    *errptr = (pos-str);
+		    *errptr = (pos-str) - 1;
 		return s;
 	    }
 	}
@@ -831,15 +850,65 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 
 String String::sqlEscape(const char* str, char extraEsc)
 {
-    if (!str)
-	str = "";
     String s;
+    if (TelEngine::null(str))
+	return s;
     char c;
     while ((c=*str++)) {
 	if (c == '\\' || c == '\'' || c == extraEsc)
 	    s += '\\';
 	s += c;
     }
+    return s;
+}
+
+String String::uriEscape(const char* str, char extraEsc)
+{
+    String s;
+    if (TelEngine::null(str))
+	return s;
+    char c;
+    while ((c=*str++)) {
+	if (c <= ' ' || c == '%' || c == '+' || c == '?' || c == '&' || c == extraEsc)
+	    s << '%' << hexEncode(c >> 4) << hexEncode(c);
+	else
+	    s += c;
+    }
+    return s;
+}
+
+String String::uriUnescape(const char* str, int* errptr)
+{
+    String s;
+    if (TelEngine::null(str))
+	return s;
+    const char *pos = str;
+    char c;
+    while ((c=*pos++)) {
+	if (c < ' ') {
+	    if (errptr)
+		*errptr = (pos-str) - 1;
+	    return s;
+	}
+	else if (c == '%') {
+	    int hiNibble = hexDecode(*pos++);
+	    if (hiNibble < 0) {
+		if (errptr)
+		    *errptr = (pos-str) - 1;
+		return s;
+	    }
+	    int loNibble = hexDecode(*pos++);
+	    if (loNibble < 0) {
+		if (errptr)
+		    *errptr = (pos-str) - 1;
+		return s;
+	    }
+	    c = ((hiNibble << 4) | loNibble) & 0xff;
+	}
+	s += c;
+    }
+    if (errptr)
+	*errptr = -1;
     return s;
 }
 

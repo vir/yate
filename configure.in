@@ -139,6 +139,8 @@ AC_SUBST(FDSIZE_HACK)
 
 HAVE_SCTP=no
 HAVE_SCTP_NETINET=no
+AC_ARG_ENABLE(sctp,AC_HELP_STRING([--enable-sctp],[Enable SCTP sockets (default: if available)]),want_sctp=$enableval,want_sctp=yes)
+if [[ "x$want_sctp" = "xyes" ]]; then
 AC_LANG_SAVE
 AC_LANG_C
 AC_MSG_CHECKING([for basic SCTP support])
@@ -150,13 +152,14 @@ AC_MSG_CHECKING([for netinet/sctp.h usability])
 AC_TRY_COMPILE([#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netinet/sctp.h>],[int fd = socket(PF_INET,SOCK_SEQPACKET,IPPROTO_SCTP);],[HAVE_SCTP_NETINET=yes])
+#include <netinet/sctp.h>],[sctp_assoc_t assoc; int fd = socket(PF_INET,SOCK_SEQPACKET,IPPROTO_SCTP); assoc = 1;],[HAVE_SCTP_NETINET=yes])
 AC_MSG_RESULT([$HAVE_SCTP_NETINET])
 if [[ "x$HAVE_SCTP_NETINET" != "xno" ]]; then
 # including netinet/sctp.h fixes SCTP support so enable it
 HAVE_SCTP=yes
 fi
 AC_LANG_RESTORE
+fi
 AC_SUBST(HAVE_SCTP)
 AC_SUBST(HAVE_SCTP_NETINET)
 
@@ -340,7 +343,7 @@ AC_SUBST(GSM_INC)
 
 HAVE_ILBC=no
 ILBC_INC=""
-AC_ARG_ENABLE(ilbc,AC_HELP_STRING([--enable-ilbc],[Enable iLBC codec]),want_ilbc=$enableval,want_ilbc=yes)
+AC_ARG_ENABLE(ilbc,AC_HELP_STRING([--enable-ilbc],[Enable iLBC codec (default: yes)]),want_ilbc=$enableval,want_ilbc=yes)
 if [[ "x$want_ilbc" = "xyes" ]]; then
 AC_MSG_CHECKING([for iLBC in contrib])
 	basedir=`cd "$srcdir" && pwd`

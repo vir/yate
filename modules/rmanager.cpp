@@ -40,6 +40,7 @@ static const char s_helpmsg[] =
 "  status [module]\n"
 "  machine [on|off]\n"
 "  output [on|off]\n"
+"  color [on|off]\n"
 "  auth password\n"
 "Authenticated commands:\n"
 "  debug [level|on|off]\n"
@@ -88,9 +89,11 @@ private:
     bool m_auth;
     bool m_debug;
     bool m_output;
+    bool m_colorize;
     bool m_machine;
     Socket* m_socket;
     String m_address;
+    String m_lastcmd;
 };
 
 class RManager : public Plugin
@@ -162,7 +165,7 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
 
 Connection::Connection(Socket* sock, const char* addr)
     : Thread("RManager Connection"),
-      m_auth(false), m_debug(false), m_output(s_output), m_machine(false),
+      m_auth(false), m_debug(false), m_output(s_output), m_colorize(false), m_machine(false),
       m_socket(sock), m_address(addr)
 {
     s_mutex.lock();
@@ -264,8 +267,15 @@ bool Connection::processLine(const char *line)
     DDebug("RManager",DebugInfo,"processLine = %s",line);
     String str(line);
     str.trimBlanks();
-    if (str.null())
-	return false;
+
+    // backslash or ANSI up arrow to repeat last command - very handy
+    if ((str == "\\") || (str == "\033[A") || (str == "\033[1A") || (str == "\033A")) {
+	if (m_lastcmd.null())
+	    return false;
+	str = m_lastcmd;
+    }
+    else
+	m_lastcmd = str;
 
     if (str.startSkip("status"))
     {
@@ -295,6 +305,14 @@ bool Connection::processLine(const char *line)
 	str >> m_output;
 	str = "Output mode: ";
 	str += (m_output ? "on\n" : "off\n");
+	writeStr(str);
+	return false;
+    }
+    else if (str.startSkip("color"))
+    {
+	str >> m_colorize;
+	str = "Colorized output: ";
+	str += (m_colorize ? "yes\n" : "no\n");
 	writeStr(str);
 	return false;
     }
@@ -482,8 +500,16 @@ void Connection::writeDebug(const char *str, int level)
 {
     if (null(str))
 	return;
-    if (m_debug || (m_output && (level < 0)))
+    if (m_debug || (m_output && (level < 0))) {
+	const char* col = m_colorize ? debugColor(level) : 0;
+	if (col)
+	    writeStr(col,::strlen(col));
 	writeStr(str,::strlen(str));
+	if (col)
+	    col = debugColor(-2);
+	if (col)
+	    writeStr(col,::strlen(col));
+    }
 }
 
 void Connection::writeStr(const char *str, int len)

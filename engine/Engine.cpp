@@ -832,7 +832,6 @@ static void usage(bool client, FILE* f)
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -w directory   Change working directory\n"
-#ifndef NDEBUG
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
@@ -840,8 +839,8 @@ static void usage(bool client, FILE* f)
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
 "     w            Delay creation of 1st worker thread\n"
+"     o            Colorize output using ANSI codes\n"
 "     t            Timestamp debugging messages\n"
-#endif
     ,client ? "" :
 #ifdef _WINDOWS
 "   --service      Run as Windows service\n"
@@ -884,6 +883,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 #endif
     bool client = (mode == Client);
     bool tstamp = false;
+    bool colorize = false;
     const char* pidfile = 0;
     const char* workdir = 0;
     int debug_level = debugLevel();
@@ -1003,7 +1003,6 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			pc = 0;
 			workdir = argv[++i];
 			break;
-#ifndef NDEBUG
 		    case 'D':
 			while (*++pc) {
 			    switch (*pc) {
@@ -1025,6 +1024,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				case 'w':
 				    s_makeworker = false;
 				    break;
+				case 'o':
+				    colorize = true;
+				    break;
 				case 't':
 				    tstamp = true;
 				    break;
@@ -1035,7 +1037,6 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			break;
-#endif
 		    case 'V':
 			version();
 			return 0;
@@ -1123,6 +1124,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	::fprintf(stderr,"Options -d and -s not supported in client mode\n");
 	return EINVAL;
     }
+    Debugger::enableOutput(true,colorize);
     if (daemonic) {
 	Debugger::enableOutput(false);
 	// Make sure X client modules fail initialization in daemon mode

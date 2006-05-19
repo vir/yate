@@ -241,6 +241,14 @@ YATE_API int debugLevel(int level);
 YATE_API bool debugAt(int level);
 
 /**
+ * Get an ANSI string to colorize debugging output
+ * @param level The debug level who's color is requested.
+ *  Negative or out of range will reset to the default color
+ * @return ANSI string that sets color corresponding to level
+ */
+YATE_API const char* debugColor(int level);
+
+/**
  * Holds a local debugging level that can be modified separately from the
  *  global debugging
  * @short A holder for a debug level
@@ -514,8 +522,10 @@ public:
 
     /**
      * Enable or disable the debug output
+     * @param enable Set to true to globally enable output
+     * @param colorize Enable ANSI colorization of output
      */
-    static void enableOutput(bool enable = true);
+    static void enableOutput(bool enable = true, bool colorize = false);
 
 private:
     const char* m_name;

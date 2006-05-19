@@ -56,9 +56,55 @@ static bool s_debugging = true;
 static bool s_abort = false;
 static u_int64_t s_timestamp = 0;
 
+static const char* const s_colors[11] = {
+    "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
+    "\033[41;1;33m\033[K",  // Unnamed   - yellow on red
+    "\033[41;1;37m\033[K",  // DebugGoOn - white on red
+    "\033[41;37m\033[K",    // Unnamed   - gray on red
+    "\033[41;37m\033[K",    // Unnamed   - gray on red
+    "\033[40;1;31m\033[K",  // DebugWarn - light red on black
+    "\033[40;1;33m\033[K",  // DebugMild - yellow on black
+    "\033[40;1;37m\033[K",  // DebugCall - white on black
+    "\033[40;1;32m\033[K",  // DebugNote - light green on black
+    "\033[40;1;36m\033[K",  // DebugInfo - light cyan on black
+    "\033[40;36m\033[K"     // DebugAll  - cyan on black
+};
+
+static const char* const s_levels[11] = {
+    "FAIL",
+    "FAIL",
+    "GOON",
+    "GOON",
+    "GOON",
+    "WARN",
+    "MILD",
+    "CALL",
+    "NOTE",
+    "INFO",
+    "ALL",
+};
+
+static const char* dbg_level(int level)
+{
+    if (level < DebugMin)
+	level = DebugMin;
+    if (level > DebugMax)
+	level = DebugMax;
+    return s_levels[level];
+}
+
 static void dbg_stderr_func(const char* buf, int level)
 {
     ::write(2,buf,::strlen(buf));
+}
+
+static void dbg_colorize_func(const char* buf, int level)
+{
+    const char* col = debugColor(level);
+    ::write(2,col,::strlen(col));
+    ::write(2,buf,::strlen(buf));
+    col = debugColor(-2);
+    ::write(2,col,::strlen(col));
 }
 
 static void (*s_output)(const char*,int) = dbg_stderr_func;
@@ -138,7 +184,7 @@ void Debug(int level, const char* format, ...)
     if (!format)
 	format = "";
     char buf[32];
-    ::sprintf(buf,"<%d> ",level);
+    ::sprintf(buf,"<%s> ",dbg_level(level));
     va_list va;
     va_start(va,format);
     ind_mux.lock();
@@ -158,7 +204,7 @@ void Debug(const char* facility, int level, const char* format, ...)
     if (!format)
 	format = "";
     char buf[64];
-    ::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
+    ::snprintf(buf,sizeof(buf),"<%s:%s> ",facility,dbg_level(level));
     va_list va;
     va_start(va,format);
     ind_mux.lock();
@@ -187,9 +233,9 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
 	format = "";
     char buf[64];
     if (facility)
-	::snprintf(buf,sizeof(buf),"<%s:%d> ",facility,level);
+	::snprintf(buf,sizeof(buf),"<%s:%s> ",facility,dbg_level(level));
     else
-	::sprintf(buf,"<%d> ",level);
+	::sprintf(buf,"<%s> ",dbg_level(level));
     va_list va;
     va_start(va,format);
     ind_mux.lock();
@@ -230,6 +276,15 @@ int debugLevel(int level)
 bool debugAt(int level)
 {
     return (s_debugging && (level <= s_debug));
+}
+
+const char* debugColor(int level)
+{
+    if (level == -2)
+	return "\033[0m\033[K"; // reset to defaults
+    if ((level < DebugMin) || (level > DebugMax))
+	return "\033[0;40;37m\033[K"; // light gray on black
+    return s_colors[level];
 }
 
 void setDebugTimestamp()
@@ -339,9 +394,11 @@ void Debugger::setIntOut(void (*outFunc)(const char*,int))
     out_mux.unlock();
 }
 
-void Debugger::enableOutput(bool enable)
+void Debugger::enableOutput(bool enable, bool colorize)
 {
     s_debugging = enable;
+    if (colorize)
+	setOutput(dbg_colorize_func);
 }
 
 

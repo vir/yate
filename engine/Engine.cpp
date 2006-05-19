@@ -1124,6 +1124,10 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	::fprintf(stderr,"Options -d and -s not supported in client mode\n");
 	return EINVAL;
     }
+    if (colorize && s_logfile) {
+	::fprintf(stderr,"Option -Do not supported when logging to file\n");
+	return EINVAL;
+    }
     Debugger::enableOutput(true,colorize);
     if (daemonic) {
 	Debugger::enableOutput(false);

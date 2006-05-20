@@ -249,6 +249,7 @@ public:
 private:
     void addMessage(const char* buf, int len, const SocketAddr& addr, int port);
     int m_port;
+    String m_local;
     Socket* m_sock;
     SocketAddr m_addr;
     YateSIPEngine *m_engine;
@@ -765,13 +766,11 @@ YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int localPort, 
     if (localAddr)
 	m_local = localAddr;
     else {
-	m_local = "localhost";
-	Socket s(PF_INET,SOCK_DGRAM,IPPROTO_UDP);
-	if (s.valid() && s.connect(m_addr)) {
-	    SocketAddr laddr;
-	    if (s.getSockName(laddr))
-		m_local = laddr.host();
-	}
+	SocketAddr laddr;
+	if (laddr.local(addr))
+	    m_local = laddr.host();
+	else
+	    m_local = "localhost";
     }
     DDebug(&plugin,DebugAll,"YateUDPParty local %s:%d party %s:%d",
 	m_local.c_str(),m_localPort,
@@ -1020,8 +1019,10 @@ bool YateSIPEndPoint::buildParty(SIPMessage* message, const char* host, int port
     DDebug(&plugin,DebugAll,"built addr: %s:%d",
 	addr.host().c_str(),addr.port());
     // reuse the variables now we finished with them
-    host = line ? line->getLocalAddr().c_str() : 0;
+    host = line ? line->getLocalAddr().c_str() : (const char*)0;
     port = line ? line->getLocalPort() : 0;
+    if (!host)
+	host = m_local;
     if (port <= 0)
 	port = m_port;
     YateUDPParty* party = new YateUDPParty(m_sock,addr,port,host);
@@ -1065,6 +1066,8 @@ bool YateSIPEndPoint::Init()
 	return false;
     }
     Debug(&plugin,DebugCall,"Started on %s:%d", addr.host().safe(), addr.port());
+    if (addr.host() != "0.0.0.0")
+	m_local = addr.host();
     m_port = addr.port();
     m_engine = new YateSIPEngine(this);
     return true;
@@ -1543,11 +1546,11 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg,"osip_");
-    String caller = msg.getValue("caller",(line ? line->getUserName() : 0));
-    String display = msg.getValue("callername",(line ? line->getFullName() : 0));
+    String caller = msg.getValue("caller",(line ? line->getUserName().c_str() : (const char*)0));
+    String display = msg.getValue("callername",(line ? line->getFullName().c_str() : (const char*)0));
     m->complete(plugin.ep()->engine(),
 	caller,
-	msg.getValue("domain",(line ? line->domain().c_str() : 0)));
+	msg.getValue("domain",(line ? line->domain().c_str() : (const char*)0)));
     if (display) {
 	String desc;
 	desc << "\"" << display << "\" ";

@@ -210,11 +210,66 @@ private:
 };
 
 /**
+ * Interface of protocol independent signalling element
+ * @short Abstract signalling information element
+ */
+class YSS7_API SignallingElement : public NamedString
+{
+};
+
+/**
+ * Interface of protocol independent signalling message
+ * @short Abstract signalling message
+ */
+class YSS7_API SignallingMessage : public RefObject
+{
+public:
+    /**
+     * Append an information element to this message
+     * @param element Information element to add
+     * @return True if the IE was added or replaced, false if it was invalid
+     */
+    virtual bool append(const SignallingElement& element) = 0;
+
+    /**
+     * Appending operator for signalling elements
+     */
+    inline SignallingMessage& operator+=(const SignallingElement& element)
+	{ append(element); return *this; }
+
+    /**
+     * Stream style appending operator for signalling elements
+     */
+    inline SignallingMessage& operator<<(const SignallingElement& element)
+	{ append(element); return *this; }
+};
+
+/**
  * Interface of protocol independent signalling for phone calls
  * @short Abstract phone call signalling
  */
-class YSS7_API SignallingCall
+class YSS7_API SignallingCallControl
 {
+};
+
+/**
+ * Interface of protocol independent phone call
+ * @short Abstract single phone call
+ */
+class YSS7_API SignallingCall : public RefObject
+{
+};
+
+/**
+ * An object holding a signalling event and related references
+ * @short A single signalling related event
+ */
+class YSS7_API SignallingEvent
+{
+    
+protected:
+    SignallingMessage* m_message;
+    SignallingCall* m_call;
 };
 
 /**
@@ -1177,10 +1232,28 @@ protected:
 };
 
 /**
+ * Decoded ISDN User Part message
+ * @short ISUP signalling message
+ */
+class YSS7_API ISUPMessage : public SignallingMessage
+{
+public:
+    enum Type {
+	IAM   = 0x01, // Initial Address Message
+	SAM   = 0x02, // Subsequent Address Message
+	ACM   = 0x06, // Address Complete Message
+	CON   = 0x07, // Connect Message
+	ANM   = 0x09, // Answer Message
+	REL   = 0x0c, // Release Request
+	RLC   = 0x10, // Release Complete
+    };
+};
+
+/**
  * Implementation of SS7 ISDN User Part
  * @short SS7 ISUP implementation
  */
-class YSS7_API SS7ISUP : public SignallingCall, public SS7Layer4
+class YSS7_API SS7ISUP : public SignallingCallControl, public SS7Layer4
 {
 };
 
@@ -1188,7 +1261,7 @@ class YSS7_API SS7ISUP : public SignallingCall, public SS7Layer4
  * Implementation of SS7 Telephone User Part
  * @short SS7 TUP implementation
  */
-class YSS7_API SS7TUP : public SignallingCall, public SS7Layer4
+class YSS7_API SS7TUP : public SignallingCallControl, public SS7Layer4
 {
 };
 
@@ -1285,7 +1358,7 @@ class YSS7_API ISDNIUA : public ISDNLayer2, public SIGTRAN
  * Q.931 ISDN Layer 3 implementation on top of a Layer 2
  * @short ISDN Q.931 implementation on top of Q.921
  */
-class YSS7_API ISDNQ931 : public SignallingCall, public ISDNLayer3
+class YSS7_API ISDNQ931 : public SignallingCallControl, public ISDNLayer3
 {
     /**
      * Attach an ISDN Q.921 transport

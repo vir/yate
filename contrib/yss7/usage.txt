@@ -156,13 +156,22 @@ Generic interface for transporting signalling over SCTP/IP
 - generates network status notifications
 Inherited by: SS7M2PA, SS7M2UA, SS7M3UA, SS7SUA, ISDNIUA
 
-SignallingCall
---------------
+SignallingCallControl
+---------------------
 This class provides an uniform interface to telephony call control
 - receive requests for call setup, teardown, transfer, etc.
 - acknowledge or reject requests
 - report call status and events
 Inherited by: SS7ISUP, SS7TUP, ISDNQ931
+
+SignallingCall
+--------------
+Each instance of this class represents one phone call
+
+SignallingEvent
+---------------
+These object are used to transport event notifications and all related
+information between the library and the user application.
 
 
 The Implementations of YSS7
@@ -193,7 +202,7 @@ SS7ISUP, SS7TUP
 -------------------------
 These 2 classes implement SS7 telephony call control according to different
 subprotocols used around the world.
-Implement: SS7Layer4, SignallingCall
+Implement: SS7Layer4, SignallingCallControl
 
 SS7SCCP
 -------
@@ -234,7 +243,7 @@ Implements: ISDNLayer2, SignallingReceiver
 ISDNQ931
 --------
 Provides an implementation of ITU Q.931 telephony call control on top of Q.921
-Implements: ISDNLayer3, SignallingCall
+Implements: ISDNLayer3, SignallingCallControl
 
 ISDNIUA
 -------

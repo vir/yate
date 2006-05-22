@@ -18,6 +18,7 @@ OBJS = engine.o address.o sigcall.o sigtran.o \
 	interface.o layer2.o layer3.o \
 	router.o sccp.o tcap.o \
 	q921.o q931.o
+DOCS = classes.png
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -30,8 +31,10 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all debug ddebug xdebug
+.PHONY: all debug ddebug xdebug docs
 all: $(LIBS) $(PROGS)
+
+docs: $(DOCS)
 
 debug:
 	$(MAKE) all DEBUG=-g3 MODSTRIP=
@@ -63,3 +66,6 @@ libyatess7.a: $(OBJS)
 	$(AR) rcs $@ $^
 
 yate-ss7test: LOCALLIBS += -L. -lyatess7
+
+%.png: @srcdir@/%.dia
+	dia --export-to-format=png --export=$@ $<

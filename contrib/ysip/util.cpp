@@ -73,8 +73,13 @@ String* getUnfoldedLine(const char** buf, int* len)
 		break;
 	    case '\0':
 		// Should not happen - but let's accept what we got
+		Debug(DebugMild,"Unexpected NUL character while unfolding lines");
 		*res << s;
 		goOut = true;
+		// End parsing
+		b += l;
+		l = 0;
+		e = 0;
 		break;
 	    default:
 		// Just count this character - we'll pick it later
@@ -86,6 +91,11 @@ String* getUnfoldedLine(const char** buf, int* len)
     }
     *buf = b;
     *len = l;
+    // Collect any leftover characters
+    if (e) {
+	String line(s,e);
+	*res << line;
+    }
     res->trimBlanks();
     return res;
 }

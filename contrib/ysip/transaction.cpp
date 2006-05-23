@@ -276,10 +276,12 @@ SIPEvent* SIPTransaction::getEvent()
 		break;
 	    if (timeout && m_lastMessage)
 		e = new SIPEvent(m_lastMessage,this);
+	    // fall through because we recheck the timeout
+	case Finish:
 	    if (timeout)
 		break;
 	    changeState(Cleared);
-	    // fall trough so we don't wait another turn for processing
+	    // fall through so we don't wait another turn for processing
 	case Cleared:
 	    setTimeout();
 	    e = new SIPEvent(m_firstMessage,this);
@@ -573,10 +575,6 @@ SIPEvent* SIPTransaction::getClientEvent(int state, int timeout)
 		m_response = 408;
 		changeState(Cleared);
 	    }
-	    break;
-	case Finish:
-	    if (timeout == 0)
-		changeState(Cleared);
 	    break;
     }
     return e;

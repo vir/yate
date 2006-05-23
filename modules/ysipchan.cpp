@@ -2074,7 +2074,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	String frm(m->fmtList());
 	ObjList* l = frm.split(',',false);
 	frm = *m;
-	frm << " " << m->localPort() << " RTP/AVP";
+	frm << " " << (m->localPort() ? m->localPort().c_str() : "0") << " RTP/AVP";
 	ObjList rtpmap;
 	int ptime = 0;
 	ObjList* f = l;

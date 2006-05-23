@@ -607,18 +607,23 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
     SIPEvent *e = 0;
     switch (state) {
 	case Initial:
-	    if (m_engine->isAllowed(m_firstMessage->method)) {
+	    if (!( (m_firstMessage->getCSeq() > 0) &&
+		m_firstMessage->getHeader("Call-ID") &&
+		m_firstMessage->getHeader("From") &&
+		m_firstMessage->getHeader("To") ))
+		setResponse(400);
+	    else if (!m_engine->isAllowed(m_firstMessage->method))
+		setResponse(501);
+	    else {
 		setResponse(100);
 		changeState(Trying);
+		break;
 	    }
-	    else {
-		setResponse(501);
-		e = new SIPEvent(m_lastMessage,this);
-		m_transmit = false;
-		changeState(Invalid);
-		// remove from list and dereference
-		m_engine->TransList.remove(this);
-	    }
+	    e = new SIPEvent(m_lastMessage,this);
+	    m_transmit = false;
+	    changeState(Invalid);
+	    // remove from list and dereference
+	    m_engine->TransList.remove(this);
 	    break;
 	case Trying:
 	    e = new SIPEvent(m_firstMessage,this);

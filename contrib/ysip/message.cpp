@@ -428,33 +428,35 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	hl->setParam("rport",String(getParty()->getPartyPort()));
     }
 
-    hl = const_cast<SIPHeaderLine*>(getHeader("From"));
-    if (!hl) {
-	String tmp;
-	tmp << "<sip:" << luser << "@" << domain << ">";
-	hl = new SIPHeaderLine("From",tmp);
-	header.append(hl);
+    if (!isAnswer()) {
+	hl = const_cast<SIPHeaderLine*>(getHeader("From"));
+	if (!hl) {
+	    String tmp;
+	    tmp << "<sip:" << luser << "@" << domain << ">";
+	    hl = new SIPHeaderLine("From",tmp);
+	    header.append(hl);
+	}
+	if (!hl->getParam("tag"))
+	    hl->setParam("tag",String((int)::random()));
     }
-    if (!(isAnswer() || hl->getParam("tag")))
-	hl->setParam("tag",String((int)::random()));
 
     hl = const_cast<SIPHeaderLine*>(getHeader("To"));
-    if (!hl) {
+    if (!(isAnswer() || hl)) {
 	String tmp;
 	tmp << "<" << uri << ">";
 	hl = new SIPHeaderLine("To",tmp);
 	header.append(hl);
     }
-    if (dlgTag && !hl->getParam("tag"))
+    if (hl && dlgTag && !hl->getParam("tag"))
 	hl->setParam("tag",dlgTag);
 
-    if (!getHeader("Call-ID")) {
+    if (!(isAnswer() || getHeader("Call-ID"))) {
 	String tmp;
 	tmp << (int)::random() << "@" << domain;
 	addHeader("Call-ID",tmp);
     }
 
-    if (!getHeader("CSeq")) {
+    if (!(isAnswer() || getHeader("CSeq"))) {
 	String tmp;
 	m_cseq = engine->getNextCSeq();
 	tmp << m_cseq << " " << method;
@@ -576,6 +578,7 @@ bool SIPMessage::parse(const char* buf, int len)
     }
     line->destruct();
     String content;
+    int clen = -1;
     while (len > 0) {
 	line = getUnfoldedLine(&buf,&len);
 	if (line->null()) {
@@ -611,7 +614,9 @@ bool SIPMessage::parse(const char* buf, int len)
 	    content = *line;
 	    content.toLower();
 	}
-	if ((m_cseq < 0) && (name &= "CSeq")) {
+	else if ((clen < 0) && (name &= "Content-Length"))
+	    clen = line->toInteger(-1,10);
+	else if ((m_cseq < 0) && (name &= "CSeq")) {
 	    String seq = *line;
 	    seq >> m_cseq;
 	    if (m_answer) {
@@ -620,6 +625,14 @@ bool SIPMessage::parse(const char* buf, int len)
 	    }
 	}
 	line->destruct();
+    }
+    if (clen >= 0) {
+	if (clen > len)
+	    Debug("SIPMessage",DebugMild,"Content length is %d but only %d in buffer",clen,len);
+	else if (clen < len) {
+	    DDebug("SIPMessage",DebugInfo,"Got %d garbage bytes after content",len - clen);
+	    len = clen;
+	}
     }
     body = SIPBody::build(buf,len,content);
     DDebug(DebugAll,"SIPMessage::parse %d header lines, body %p",

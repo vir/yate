@@ -1422,6 +1422,13 @@ public:
     String& append(const char* value, const char* separator = 0, bool force = false);
 
     /**
+     * Explicit double append
+     * @param value Value to append
+     * @param decimals Number of decimals
+     */
+    String& append(double value, unsigned int decimals = 3);
+
+    /**
      * Locate the first instance of a character in the string
      * @param what Character to search for
      * @param offs Offset in string to start searching from
@@ -2051,10 +2058,18 @@ public:
 	{ }
 
     /**
-     * Constructs a Time object from a timeval structure
+     * Constructs a Time object from a timeval structure pointer
      * @param tv Pointer to the timeval structure
      */
-    inline Time(struct timeval* tv)
+    inline Time(const struct timeval* tv)
+	: m_time(fromTimeval(tv))
+	{ }
+
+    /**
+     * Constructs a Time object from a timeval structure
+     * @param tv Reference of the timeval structure
+     */
+    inline Time(const struct timeval& tv)
 	: m_time(fromTimeval(tv))
 	{ }
 
@@ -2129,7 +2144,15 @@ public:
      * @param tv Pointer to the timeval structure
      * @return Corresponding time in microseconds or zero if tv is NULL
      */
-    static u_int64_t fromTimeval(struct timeval* tv);
+    static u_int64_t fromTimeval(const struct timeval* tv);
+
+    /**
+     * Convert time in a timeval struct to microseconds
+     * @param tv Reference of the timeval structure
+     * @return Corresponding time in microseconds
+     */
+    inline static u_int64_t fromTimeval(const struct timeval& tv)
+	{ return fromTimeval(&tv); }
 
     /**
      * Get the current system time in microseconds
@@ -3909,6 +3932,61 @@ protected:
     bool checkError(int retcode, bool strict = false);
 
     SOCKET m_handle;
+};
+
+/**
+ * The SysUsage class allows collecting some statistics about engine's usage
+ *  of system resources
+ * @short A class exposing system resources usage
+ */
+class YATE_API SysUsage
+{
+public:
+    enum Type {
+	WallTime,
+	UserTime,
+	KernelTime
+    };
+
+    /**
+     * Initialize the system start variable
+     */
+    static void init();
+
+    /**
+     * Get the wall time used as start for the usage time
+     * @return Time of the first direct or implicit call of @ref init()
+     */
+    static u_int64_t startTime();
+
+    /**
+     * Get the program's running time in microseconds
+     * @param type Type of running time requested
+     * @return Time in microseconds since the start of the program
+     */
+    static u_int64_t usecRunTime(Type type = WallTime);
+
+    /**
+     * Get the program's running time in milliseconds
+     * @param type Type of running time requested
+     * @return Time in milliseconds since the start of the program
+     */
+    static u_int64_t msecRunTime(Type type = WallTime);
+
+    /**
+     * Get the program's running time in seconds
+     * @param type Type of running time requested
+     * @return Time in seconds since the start of the program
+     */
+    static u_int32_t secRunTime(Type type = WallTime);
+
+    /**
+     * Get the program's running time in seconds
+     * @param type Type of running time requested
+     * @return Time in seconds since the start of the program
+     */
+    static double runTime(Type type = WallTime);
+
 };
 
 }; // namespace TelEngine

@@ -605,6 +605,17 @@ String& String::append(const char* value, const char* separator, bool force)
     return *this;
 }
 
+String& String::append(double value, unsigned int decimals)
+{
+    if (decimals > 12)
+	decimals = 12;
+    char fmt[8];
+    ::sprintf(fmt,"%%0.%uf",decimals);
+    char buf[80];
+    ::sprintf(buf,fmt,value);
+    return operator+=(buf);
+}
+
 bool String::operator==(const char* value) const
 {
     if (!m_string)

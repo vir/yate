@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <string.h>
+#include <stdio.h>
 #include <fcntl.h>
 
 using namespace TelEngine;
@@ -38,6 +39,7 @@ static const char s_helpmsg[] =
 "  quit\n"
 "  help [command]\n"
 "  status [module]\n"
+"  uptime\n"
 "  machine [on|off]\n"
 "  output [on|off]\n"
 "  color [on|off]\n"
@@ -313,6 +315,26 @@ bool Connection::processLine(const char *line)
 	str >> m_colorize;
 	str = "Colorized output: ";
 	str += (m_colorize ? "yes\n" : "no\n");
+	writeStr(str);
+	return false;
+    }
+    else if (str.startSkip("uptime"))
+    {
+	str.clear();
+	u_int32_t t = SysUsage::secRunTime();
+	if (m_machine) {
+	    str << "%%=uptime:" << t;
+	    (str << ":").append(SysUsage::runTime(SysUsage::UserTime));
+	    (str << ":").append(SysUsage::runTime(SysUsage::KernelTime));
+	}
+	else {
+	    char buf[64];
+	    ::sprintf(buf,"%u:%02u:%02u (%u)",t / 3600,(t / 60) % 60,t % 60,t);
+	    str << "Uptime: " << buf;
+	    (str << " user: ").append(SysUsage::runTime(SysUsage::UserTime));
+	    (str << " kernel: ").append(SysUsage::runTime(SysUsage::KernelTime));
+	}
+	str << "\n";
 	writeStr(str);
 	return false;
     }

@@ -479,6 +479,7 @@ int Engine::run()
 #else
     ::signal(SIGPIPE,SIG_IGN);
 #endif
+    SysUsage::init();
     s_runid = Time::secNow();
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();

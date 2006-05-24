@@ -40,6 +40,8 @@ void srandom(unsigned int seed)
 { s_randSeed = seed % RAND_MAX; }
 
 }
+#else
+#include <sys/resource.h>
 #endif
 
 
@@ -55,6 +57,7 @@ static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
 static u_int64_t s_timestamp = 0;
+static u_int64_t s_startTime = 0;
 
 static const char* const s_colors[11] = {
     "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
@@ -433,7 +436,7 @@ u_int32_t Time::secNow()
 #endif
 }
 
-u_int64_t Time::fromTimeval(struct timeval* tv)
+u_int64_t Time::fromTimeval(const struct timeval* tv)
 {
     u_int64_t rval = 0;
     if (tv) {
@@ -531,6 +534,75 @@ void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
     m_pointer = (newptr && newptr->ref()) ? pointer : 0;
     if (oldptr)
 	oldptr->deref();
+}
+
+
+void SysUsage::init()
+{
+    if (!s_startTime)
+	s_startTime = Time::now();
+}
+
+u_int64_t SysUsage::startTime()
+{
+    init();
+    return s_startTime;
+}
+
+u_int64_t SysUsage::usecRunTime(Type type)
+{
+    switch (type) {
+	case WallTime:
+	    return Time::now() - startTime();
+	case UserTime:
+	    {
+#ifdef _WINDOWS
+		FILETIME ft;
+		if (GetProcessTimes(GetCurrentProcess(),NULL,NULL,NULL,&ft)) {
+		    u_int64_t t = ft.dwLowDateTime | (((u_int64_t)ft.dwHighDateTime) << 32);
+		    return t / 10;
+		}
+#else
+		struct rusage usage;
+		// FIXME: this is broken, may not sum all threads
+		if (!::getrusage(RUSAGE_SELF,&usage))
+		    return Time::fromTimeval(usage.ru_utime);
+#endif
+	    }
+	    break;
+	case KernelTime:
+	    {
+#ifdef _WINDOWS
+		FILETIME ft;
+		if (GetProcessTimes(GetCurrentProcess(),NULL,NULL,&ft,NULL)) {
+		    u_int64_t t = ft.dwLowDateTime | (((u_int64_t)ft.dwHighDateTime) << 32);
+		    return t / 10;
+		}
+#else
+		struct rusage usage;
+		// FIXME: this is broken, may not sum all threads
+		if (!::getrusage(RUSAGE_SELF,&usage))
+		    return Time::fromTimeval(usage.ru_stime);
+#endif
+	    }
+	    break;
+    }
+    return 0;
+}
+
+u_int64_t SysUsage::msecRunTime(Type type)
+{
+    return usecRunTime(type) / 1000;
+}
+
+u_int32_t SysUsage::secRunTime(Type type)
+{
+    return (u_int32_t)(usecRunTime(type) / 1000000);
+}
+
+double SysUsage::runTime(Type type)
+{
+    return 0.000001 * usecRunTime(type);
 }
 
 };

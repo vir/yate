@@ -229,6 +229,7 @@ private:
     String m_script, m_args;
     ObjList m_waiting;
     ObjList m_relays;
+    String m_reason;
 };
 
 class ExtThread : public Thread
@@ -785,7 +786,7 @@ void ExtModReceiver::die(bool clearChan)
 	::kill(m_pid,SIGTERM);
 #endif
     if (chan && clearChan)
-	chan->disconnect();
+	chan->disconnect(m_reason);
     unuse();
 }
 
@@ -1196,6 +1197,10 @@ bool ExtModReceiver::processLine(const char* line)
 	    else if (m_chan && (id == "disconnected")) {
 		m_chan->setDisconn(val.toBoolean(m_chan->disconn()));
 		val = m_chan->disconn();
+		ok = true;
+	    }
+	    else if (id == "reason") {
+		m_reason = val;
 		ok = true;
 	    }
 	    else if (id == "timeout") {

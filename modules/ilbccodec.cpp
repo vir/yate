@@ -34,9 +34,13 @@ extern "C" {
 
 using namespace TelEngine;
 
-static TranslatorCaps caps[] = {
+static TranslatorCaps s_caps20[] = {
     { 0, 0 },
     { 0, 0 },
+    { 0, 0 }
+};
+
+static TranslatorCaps s_caps30[] = {
     { 0, 0 },
     { 0, 0 },
     { 0, 0 }
@@ -45,15 +49,29 @@ static TranslatorCaps caps[] = {
 static Mutex s_cmutex;
 static int s_count = 0;
 
-class iLBCPlugin : public Plugin, public TranslatorFactory
+class iLBCFactory : public TranslatorFactory
+{
+public:
+    inline iLBCFactory(const TranslatorCaps* caps)
+	: m_caps(caps)
+	{ }
+    virtual const TranslatorCaps* getCapabilities() const
+	{ return m_caps; }
+    virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
+private:
+    const TranslatorCaps* m_caps;
+};
+
+class iLBCPlugin : public Plugin
 {
 public:
     iLBCPlugin();
     ~iLBCPlugin();
     virtual void initialize() { }
     virtual bool isBusy() const;
-    virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
-    virtual const TranslatorCaps* getCapabilities() const;
+private:
+    iLBCFactory* m_ilbc20;
+    iLBCFactory* m_ilbc30;
 };
 
 class iLBCCodec : public DataTranslator
@@ -164,19 +182,28 @@ void iLBCCodec::Consume(const DataBlock& data, unsigned long tStamp)
 }
 
 iLBCPlugin::iLBCPlugin()
+    : m_ilbc20(0), m_ilbc30(0)
 {
     Output("Loaded module iLBC - based on iLBC library");
     const FormatInfo* f = FormatRepository::addFormat("ilbc20",NO_OF_BYTES_20MS,20000);
-    caps[0].src = caps[1].dest = f;
-    caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
+    s_caps20[0].src = s_caps20[1].dest = f;
+    s_caps20[0].dest = s_caps20[1].src = FormatRepository::getFormat("slin");
+    // FIXME: put proper conversion costs
+    s_caps20[0].cost = s_caps20[1].cost = 10;
     f = FormatRepository::addFormat("ilbc30",NO_OF_BYTES_30MS,30000);
-    caps[2].src = caps[3].dest = f;
-    caps[2].dest = caps[3].src = FormatRepository::getFormat("slin");
+    s_caps30[0].src = s_caps30[1].dest = f;
+    s_caps30[0].dest = s_caps30[1].src = FormatRepository::getFormat("slin");
+    // FIXME: put proper conversion costs
+    s_caps30[0].cost = s_caps30[1].cost = 9;
+    m_ilbc20 = new iLBCFactory(s_caps20);
+    m_ilbc30 = new iLBCFactory(s_caps30);
 }
 
 iLBCPlugin::~iLBCPlugin()
 {
     Output("Unloading module iLBC with %d codecs still in use",s_count);
+    delete m_ilbc20;
+    delete m_ilbc30;
 }
 
 bool iLBCPlugin::isBusy() const
@@ -184,7 +211,7 @@ bool iLBCPlugin::isBusy() const
     return (s_count != 0);
 }
 
-DataTranslator* iLBCPlugin::create(const DataFormat& sFormat, const DataFormat& dFormat)
+DataTranslator* iLBCFactory::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
     if (sFormat == "slin") {
 	// encoding from slin
@@ -201,11 +228,6 @@ DataTranslator* iLBCPlugin::create(const DataFormat& sFormat, const DataFormat& 
 	    return new iLBCCodec(sFormat,dFormat,false,30);
     }
     return 0;
-}
-
-const TranslatorCaps* iLBCPlugin::getCapabilities() const
-{
-    return caps;
 }
 
 INIT_PLUGIN(iLBCPlugin);

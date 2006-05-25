@@ -132,6 +132,8 @@ GsmPlugin::GsmPlugin()
     const FormatInfo* f = FormatRepository::addFormat("gsm",33,20000);
     caps[0].src = caps[1].dest = f;
     caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
+    // FIXME: put proper conversion costs
+    caps[0].cost = caps[1].cost = 5;
 }
 
 GsmPlugin::~GsmPlugin()

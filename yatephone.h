@@ -91,6 +91,11 @@ struct YATE_API FormatInfo {
     int numChannels;
 
     /**
+     * If this is a valid candidate for conversion
+     */
+    bool converter;
+
+    /**
      * Guess the number of samples in an encoded data block
      * @param len Length of the data block in octets
      * @return Number of samples or 0 if unknown
@@ -109,17 +114,19 @@ struct YATE_API FormatInfo {
     inline FormatInfo()
 	: name(0), type("audio"),
 	  frameSize(0), frameTime(0),
-	  sampleRate(8000), numChannels(1)
+	  sampleRate(8000), numChannels(1),
+	  converter(false)
 	{ }
 
     /**
      * Normal constructor
      */
     inline FormatInfo(const char* _name, int fsize = 0, int ftime = 10000,
-	const char* _type = "audio", int srate = 8000, int nchan = 1)
+	const char* _type = "audio", int srate = 8000, int nchan = 1, bool convert = false)
 	: name(_name), type(_type),
 	  frameSize(fsize), frameTime(ftime),
-	  sampleRate(srate), numChannels(nchan)
+	  sampleRate(srate), numChannels(nchan),
+	  converter(convert)
 	{ }
 };
 
@@ -178,7 +185,7 @@ class YATE_API DataFormat : public String
 {
 public:
     /**
-     * Creates a new, empty string.
+     * Creates a new, empty format string.
      */
     inline DataFormat()
 	: m_parsed(0)
@@ -196,15 +203,15 @@ public:
      * Copy constructor.
      * @param value Initial value of the format
      */
-    DataFormat(const DataFormat& value)
-	: String(value), m_parsed(0)
+    inline DataFormat(const DataFormat& value)
+	: String(value), m_parsed(value.getInfo())
 	{ }
 
     /**
      * Constructor from String reference
      * @param value Initial value of the format
      */
-    DataFormat(const String& value)
+    inline DataFormat(const String& value)
 	: String(value), m_parsed(0)
 	{ }
 
@@ -212,8 +219,16 @@ public:
      * Constructor from String pointer.
      * @param value Initial value of the format
      */
-    DataFormat(const String* value)
+    inline DataFormat(const String* value)
 	: String(value), m_parsed(0)
+	{ }
+
+    /**
+     * Constructor from format information
+     * @param format Pointer to existing FormatInfo
+     */
+    inline DataFormat(const FormatInfo* format)
+	: String(format ? format->name : (const char*)0), m_parsed(format)
 	{ }
 
     /**
@@ -228,12 +243,46 @@ public:
      */
     const FormatInfo* getInfo() const;
 
+    /**
+     * Retrive the frame size
+     * @param defValue Default value to return if format is unknown
+     * @return Frame size in octets/frame, 0 for non-framed, defValue if unknown
+     */
+    inline int frameSize(int defValue = 0) const
+	{ return getInfo() ? getInfo()->frameSize : defValue; }
+
+    /**
+     * Retrive the frame time
+     * @param defValue Default value to return if format is unknown
+     * @return Frame time in microseconds, 0 for variable, defValue if unknown
+     */
+    inline int frameTime(int defValue = 0) const
+	{ return getInfo() ? getInfo()->frameTime : defValue; }
+
+    /**
+     * Retrive the sample rate
+     * @param defValue Default value to return if format is unknown
+     * @return Rate in samples/second (audio) or 1e-6 frames/second (video),
+     *  0 for unknown, defValue if unknown format
+     */
+    inline int sampleRate(int defValue = 0) const
+	{ return getInfo() ? getInfo()->sampleRate : defValue; }
+
+    /**
+     * Retrive the number of channels
+     * @param defValue Default value to return if format is unknown
+     * @return Number of channels (typically 1), defValue if unknown format
+     */
+    inline int numChannels(int defValue = 1) const
+	{ return getInfo() ? getInfo()->numChannels : defValue; }
+
 protected:
     /**
      * Called whenever the value changed (except in constructors).
      */
     virtual void changed();
 
+private:
     mutable const FormatInfo* m_parsed;
 };
 
@@ -531,18 +580,36 @@ public:
 	{ return m_tsource; }
 
     /**
-     * Get a textual list of formats supported for a given output format.
-     * @param dFormat Name of destination format
-     * @return Space separated list of source formats
+     * Get the first translator from a chain
+     * @return Pointer to the first translator in a chain
      */
-    static String srcFormats(const DataFormat& dFormat = "slin");
+    DataTranslator* getFirstTranslator();
 
     /**
-     * Get a textual list of formats supported for a given input format
-     * @param sFormat Name of source format
-     * @return Space separated list of destination formats
+     * Constant version to get the first translator from a chain
+     * @return Pointer to the first translator in a chain
      */
-    static String destFormats(const DataFormat& sFormat = "slin");
+    const DataTranslator* getFirstTranslator() const;
+
+    /**
+     * Get a list of formats supported for a given output format.
+     * @param dFormat Name of destination format
+     * @param maxCost Maximum cost of candidates to consider, -1 to accept all
+     * @param maxLen Maximum length of codec chains to consider, 0 to accept all
+     * @param lst Initial list, will append to it if not empty
+     * @return List of source format names, must be freed by the caller
+     */
+    static ObjList* srcFormats(const DataFormat& dFormat = "slin", int maxCost = -1, unsigned int maxLen = 0, ObjList* lst = 0);
+
+    /**
+     * Get a list of formats supported for a given input format
+     * @param sFormat Name of source format
+     * @param maxCost Maximum cost of candidates to consider, -1 to accept all
+     * @param maxLen Maximum length of codec chains to consider, 0 to accept all
+     * @param lst Initial list, will append to it if not empty
+     * @return List of destination format names, must be freed by the caller
+     */
+    static ObjList* destFormats(const DataFormat& sFormat = "slin", int maxCost = -1, unsigned int maxLen = 0, ObjList* lst = 0);
 
     /**
      * Check if bidirectional conversion can be performed by installed translators
@@ -585,6 +652,12 @@ public:
      */
     static bool detachChain(DataSource* source, DataConsumer* consumer);
 
+    /**
+     * Set the length of the longest translator chain we are allowed to create
+     * @param maxChain Desired longest chain length
+     */
+    static void setMaxChain(unsigned int maxChain);
+
 protected:
     /**
      * Install a Translator Factory in the list of known codecs
@@ -600,9 +673,13 @@ protected:
 
 private:
     DataTranslator(); // No default constructor please
+    static void compose();
+    static void compose(TranslatorFactory* factory);
+    static bool canConvert(const FormatInfo* fmt1, const FormatInfo* fmt2);
     DataSource* m_tsource;
     static Mutex s_mutex;
     static ObjList s_factories;
+    static unsigned int s_maxChain;
 };
 
 /**
@@ -612,18 +689,30 @@ private:
  */
 class YATE_API TranslatorFactory : public GenObject
 {
-public:
-    TranslatorFactory()
+protected:
+    /**
+     * Constructor - registers the factory in the global list
+     */
+    inline TranslatorFactory()
 	{ DataTranslator::install(this); }
 
-    virtual ~TranslatorFactory()
-	{ DataTranslator::uninstall(this); }
+public:
+    /**
+     * Destructor - unregisters from the global list
+     */
+    virtual ~TranslatorFactory();
+
+    /**
+     * Notification that another factory was removed from the list
+     * @param factory Pointer to the factory that just got removed
+     */
+    virtual void removed(const TranslatorFactory* factory);
 
     /**
      * Creates a translator given the source and destination format names
      * @param sFormat Name of the source format (data received from the consumer)
      * @param dFormat Name of the destination format (data supplied to the source)
-     * @return A pointer to a DataTranslator object or NULL
+     * @return A pointer to the end of a DataTranslator chain or NULL
      */
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat) = 0;
 
@@ -632,6 +721,33 @@ public:
      * @return A pointer to the first element of the capabilities table
      */
     virtual const TranslatorCaps* getCapabilities() const = 0;
+
+    /**
+     * Check if this factory can build a translator for given data formats
+     * @param sFormat Name of the source format
+     * @param dFormat Name of the destination format
+     * @return True if a conversion between formats is possible
+     */
+    virtual bool converts(const DataFormat& sFormat, const DataFormat& dFormat) const;
+
+    /**
+     * Get the length of the translator chain built by this factory
+     * @return How many translators will build the factory
+     */
+    virtual unsigned int length() const;
+
+    /**
+     * Check if a data format is used as intermediate in a translator chain
+     * @param info Format to check for
+     * @return True if the format is used internally as intermediate
+     */
+    virtual bool intermediate(const FormatInfo* info) const;
+
+    /**
+     * Get the intermediate format used by a translator chain
+     * @return Pointer to intermediate format or NULL
+     */
+    virtual const FormatInfo* intermediate() const;
 };
 
 /**

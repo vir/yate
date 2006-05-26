@@ -32,6 +32,10 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#ifdef HAVE_COREDUMPER
+#include <google/coredumper.h>
+#endif
+
 using namespace TelEngine;
 
 static const char s_helpmsg[] =
@@ -46,6 +50,9 @@ static const char s_helpmsg[] =
 "  auth password\n"
 "Authenticated commands:\n"
 "  debug [level|on|off]\n"
+#ifdef HAVE_COREDUMPER
+"  coredump [filename]\n"
+#endif
 "  drop {chan|*|all}\n"
 "  call chan target\n"
 "  reload\n"
@@ -274,6 +281,9 @@ bool Connection::processLine(const char *line)
     if ((str == "\\") || (str == "\033[A") || (str == "\033[1A") || (str == "\033A")) {
 	if (m_lastcmd.null())
 	    return false;
+	// display up arrow, clear to EOL, last command
+	str = "\033[A\033[K" + m_lastcmd + "\n";
+	writeStr(str);
 	str = m_lastcmd;
     }
     else
@@ -470,6 +480,37 @@ bool Connection::processLine(const char *line)
 	}
 	writeStr(str);
     }
+#ifdef HAVE_COREDUMPER
+    else if (str.startSkip("coredump"))
+    {
+	if (str.null())
+	    (str << "core.yate-" << ::getpid() << "-").append(SysUsage::runTime());
+	s_mutex.lock();
+	int err = 0;
+	for (int i = 0; i < 4; i++) {
+	    if (!WriteCoreDump(str)) {
+		err = 0;
+		break;
+	    }
+	    err = errno;
+	    switch (err) {
+		case EINTR:
+		case EAGAIN:
+		case ECHILD:
+		    continue;
+	    }
+	    break;
+	}
+	if (err) {
+	    str = "Failed to dump core: ";
+	    str << ::strerror(err) << " (" << err << ")\n";
+	}
+	else
+	    str = "Dumped core to: " + str + "\n";
+	s_mutex.unlock();
+	writeStr(str);
+    }
+#endif
     else if (str.startSkip("reload"))
     {
 	writeStr(m_machine ? "%%=reload\n" : "Reinitializing...\n");

@@ -550,6 +550,30 @@ AC_SUBST(HAVE_GMOZ)
 AC_SUBST(GMOZ_INC)
 AC_SUBST(GMOZ_LIB)
 
+HAVE_COREDUMPER=no
+COREDUMPER_INC=""
+COREDUMPER_LIB=""
+AC_ARG_WITH(coredumper,AC_HELP_STRING([--with-coredumper],[use Google coredumper if available (default)]),[ac_cv_use_coredumper=$withval],[ac_cv_use_coredumper=yes])
+gcdinc="include/google/coredumper.h"
+if [[ "x$ac_cv_use_coredumper" = "xyes" ]]; then
+for i in /usr /usr/local; do
+    ac_cv_use_coredumper="$i"
+    test -f "$ac_cv_use_coredumper/$gcdinc" && break
+done
+fi
+if [[ "x$ac_cv_use_coredumper" != "xno" ]]; then
+AC_MSG_CHECKING([for coredumper.h in $ac_cv_use_coredumper])
+if [[ -f "$ac_cv_use_coredumper/$gcdinc" ]]; then
+    HAVE_COREDUMPER=yes
+    COREDUMPER_INC="-I$ac_cv_use_coredumper"
+    COREDUMPER_LIB="-L$ac_cv_use_coredumper -lcoredumper"
+fi
+AC_MSG_RESULT([$HAVE_COREDUMPER])
+fi
+AC_SUBST(HAVE_COREDUMPER)
+AC_SUBST(COREDUMPER_INC)
+AC_SUBST(COREDUMPER_LIB)
+
 RTTI_OPT=""
 AC_ARG_ENABLE(rtti,AC_HELP_STRING([--enable-rtti],[Enable RTTI support (default: like pwlib)]),want_rtti=$enableval,want_rtti=auto)
 AC_MSG_CHECKING([whether to enable RTTI support])

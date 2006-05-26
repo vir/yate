@@ -323,7 +323,7 @@ bool Connection::processLine(const char *line)
 	str.clear();
 	u_int32_t t = SysUsage::secRunTime();
 	if (m_machine) {
-	    str << "%%=uptime:" << t;
+	    str << "%%=uptime:" << (unsigned int)t;
 	    (str << ":").append(SysUsage::runTime(SysUsage::UserTime));
 	    (str << ":").append(SysUsage::runTime(SysUsage::KernelTime));
 	}

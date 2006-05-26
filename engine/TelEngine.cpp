@@ -602,7 +602,12 @@ u_int32_t SysUsage::secRunTime(Type type)
 
 double SysUsage::runTime(Type type)
 {
+#ifdef _WINDOWS
+    // VC++ 6 does not implement conversion from UINT64 to double!
+    return 0.000001 * (int64_t)usecRunTime(type);
+#else
     return 0.000001 * usecRunTime(type);
+#endif
 }
 
 };

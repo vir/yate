@@ -1310,7 +1310,7 @@ ChainedFactory::~ChainedFactory()
 {
     XDebug(DebugInfo,"ChainedFactory::~ChainedFactory() %p,%p,'%s' [%p]",
 	m_factory1,m_factory2,m_format.c_str(),this);
-    delete[] m_capabilities;
+    delete[] const_cast<TranslatorCaps*>(m_capabilities);
     m_capabilities = 0;
 }
 

@@ -235,16 +235,16 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     unsigned char* pc = (unsigned char*)buf.data();
     *pc++ = 0x80;
     *pc++ = payload;
-    *pc++ = m_seq >> 8;
-    *pc++ = m_seq & 0xff;
-    *pc++ = timestamp >> 24;
-    *pc++ = timestamp >> 16;
-    *pc++ = timestamp >> 8;
-    *pc++ = timestamp & 0xff;
-    *pc++ = m_ssrc >> 24;
-    *pc++ = m_ssrc >> 16;
-    *pc++ = m_ssrc >> 8;
-    *pc++ = m_ssrc & 0xff;
+    *pc++ = (unsigned char)(m_seq >> 8);
+    *pc++ = (unsigned char)(m_seq & 0xff);
+    *pc++ = (unsigned char)(timestamp >> 24);
+    *pc++ = (unsigned char)(timestamp >> 16);
+    *pc++ = (unsigned char)(timestamp >> 8);
+    *pc++ = (unsigned char)(timestamp & 0xff);
+    *pc++ = (unsigned char)(m_ssrc >> 24);
+    *pc++ = (unsigned char)(m_ssrc >> 16);
+    *pc++ = (unsigned char)(m_ssrc >> 8);
+    *pc++ = (unsigned char)(m_ssrc & 0xff);
     if (data && len)
 	::memcpy(pc,data,len);
     static_cast<RTPProcessor*>(m_session->transport())->rtpData(buf.data(),buf.length());

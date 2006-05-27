@@ -5,7 +5,7 @@
  * Conference room data mixer
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004, 2005 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * N-way mixing with self echo suppresion idea by Andrew McDonald
  *
@@ -21,7 +21,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #include <yatephone.h>

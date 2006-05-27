@@ -28,6 +28,7 @@
 #include <stdio.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 enum {
     CdrStart,
@@ -360,5 +361,7 @@ void CdrBuildPlugin::initialize()
 }
 
 INIT_PLUGIN(CdrBuildPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -40,6 +40,7 @@ extern "C" {
 
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static TokenDict dict_iaxformats[] = {
     // audio formats
@@ -917,5 +918,7 @@ void IAXDriver::initialize()
     IAXEndPoint::Setup();
     setup();
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

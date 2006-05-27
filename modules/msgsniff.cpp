@@ -25,6 +25,7 @@
 #include <yatengine.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class MsgSniff : public Plugin
 {
@@ -132,5 +133,7 @@ void MsgSniff::initialize()
 }
 
 INIT_PLUGIN(MsgSniff);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

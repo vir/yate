@@ -51,8 +51,9 @@ extern "C" {
 #include <errno.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
-class FaxChan : public DataEndpoint
+class FaxChan : public CallEndpoint
 {
 public:
     FaxChan(const char *file, bool receive, bool iscaller, const char *ident = 0);
@@ -187,7 +188,7 @@ static void phase_e_handler(t30_state_t *s, void *user_data, int result)
 
 
 FaxChan::FaxChan(const char *file, bool receive, bool iscaller, const char *ident)
-    : DataEndpoint("faxfile"), m_lastr(0), m_eof(false)
+    : CallEndpoint("faxfile"), m_lastr(0), m_eof(false)
 {
     Debug(DebugAll,"FaxChan::FaxChan(%s \"%s\") [%p]",
 	(receive ? "receive" : "transmit"),file,this);
@@ -335,9 +336,9 @@ bool FaxHandler::received(Message &msg)
 	Debug(DebugInfo,"Receive fax into file '%s'",dest.matchString(3).c_str());
 	fc = new FaxChan(dest.matchString(3).c_str(),true,iscaller);
     }
-    DataEndpoint *dd = static_cast<DataEndpoint *>(msg.userData());
-    if (dd) {
-	if (dd->connect(fc)) {
+    CallEndpoint* ce = static_cast<CallEndpoint *>(msg.userData());
+    if (ce) {
+	if (ce->connect(fc)) {
 	    fc->deref();
 	    return true;
 	}
@@ -387,5 +388,7 @@ void FaxPlugin::initialize()
 }
 
 INIT_PLUGIN(FaxPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

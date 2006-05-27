@@ -37,6 +37,7 @@
 #define DTMF_GAP 320
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static ObjList tones;
 static ObjList datas;
@@ -781,5 +782,7 @@ void ToneGenDriver::initialize()
 	Engine::install(m_handler);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

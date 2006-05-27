@@ -34,6 +34,7 @@
 #define BUF_SIZE 240
 
 using namespace TelEngine;
+namespace { // anonymous
 
 /* Payloads for the AV profile */
 static TokenDict dict_payloads[] = {
@@ -76,6 +77,9 @@ static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
 static bool s_autoaddr = true;
+
+static int s_minjitter = 0;
+static int s_maxjitter = 0;
 
 class YRTPSource;
 class YRTPConsumer;
@@ -356,6 +360,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     }
 
     Debug(&splugin,DebugAll,"RTP format '%s' payload %d",format,payload);
+    int minJitter = msg.getIntValue("minjitter",s_minjitter);
+    int maxJitter = msg.getIntValue("maxjitter",s_maxjitter);
 
     bool autoaddr = msg.getBoolValue("autoaddr",s_autoaddr);
     SocketAddr addr(AF_INET);
@@ -392,6 +398,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
+//    if (maxJitter > 0)
+//	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
     return true;
 }
@@ -789,6 +797,8 @@ void YRTPPlugin::initialize()
     s_minport = cfg.getIntValue("general","minport",MIN_PORT);
     s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);
+    s_minjitter = cfg.getIntValue("general","minjitter");
+    s_maxjitter = cfg.getIntValue("general","maxjitter");
     s_tos = cfg.getValue("general","tos");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     setup();
@@ -799,5 +809,7 @@ void YRTPPlugin::initialize()
 	Engine::install(new DTMFHandler);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

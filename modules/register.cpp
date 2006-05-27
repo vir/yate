@@ -25,6 +25,7 @@
 #include <yatephone.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Configuration s_cfg(Engine::configFile("register"));
 static bool s_critical = false;
@@ -422,5 +423,7 @@ void RegistModule::initialize()
     addHandler("call.preroute",AAAHandler::PreRoute);
     addHandler("call.route",AAAHandler::Route);
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -31,6 +31,7 @@ typedef gsm_signal gsm_block[160];
 }
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static TranslatorCaps caps[] = {
     { 0, 0 },
@@ -161,5 +162,7 @@ const TranslatorCaps* GsmPlugin::getCapabilities() const
 }
 
 INIT_PLUGIN(GsmPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

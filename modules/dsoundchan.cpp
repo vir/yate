@@ -38,6 +38,7 @@
 #include <dsound.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 // we should use the primary sound buffer else we will lose sound while we have no input focus
 static bool s_primary = true;
@@ -691,6 +692,8 @@ void SoundDriver::initialize()
 	Engine::install(m_handler);
     }
 }
+
+}; // anonymous namespace
 
 #endif /* _WINDOWS */
 

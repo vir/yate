@@ -83,6 +83,7 @@
 #include <string.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static bool s_externalRtp;
 static bool s_fallbackRtp;
@@ -2259,5 +2260,7 @@ void H323Driver::initialize()
 	}
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

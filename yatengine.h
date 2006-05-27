@@ -903,9 +903,11 @@ protected:
 
     /**
      * Loads one plugin from a shared object file
+     * @param file Name of the plugin file to load
+     * @param local Attempt to keep symbols local if supported by the system
      * @return True if success, false on failure
      */
-    bool loadPlugin(const char* file);
+    bool loadPlugin(const char* file, bool local = false);
 
     /**
      * Loads the plugins from the plugins directory

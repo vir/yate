@@ -33,6 +33,7 @@ extern "C" {
 }
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static TranslatorCaps s_caps20[] = {
     { 0, 0 },
@@ -231,5 +232,7 @@ DataTranslator* iLBCFactory::create(const DataFormat& sFormat, const DataFormat&
 }
 
 INIT_PLUGIN(iLBCPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

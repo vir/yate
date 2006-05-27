@@ -43,6 +43,7 @@
 #define MIN_SWITCH_TIME 600000
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class OssDevice;
 
@@ -652,5 +653,7 @@ bool OssPlugin::isBusy() const
 }
 
 INIT_PLUGIN(OssPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

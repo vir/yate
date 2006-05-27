@@ -25,6 +25,7 @@
 #include <yatengine.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 Mutex lmutex;
 
@@ -199,5 +200,7 @@ void RegfilePlugin::initialize()
 }
 
 INIT_PLUGIN(RegfilePlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

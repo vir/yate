@@ -25,6 +25,7 @@
 #include <yatepbx.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Configuration s_cfg(Engine::configFile("dbpbx"));
 
@@ -217,5 +218,7 @@ void DbPbxPlugin::initialize()
 }
 
 INIT_PLUGIN(DbPbxPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

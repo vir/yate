@@ -27,6 +27,7 @@
 #include <stdlib.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Mutex s_mutex(true);
 static ObjList s_calls;
@@ -554,5 +555,7 @@ void CallGenPlugin::initialize()
 }
 
 INIT_PLUGIN(CallGenPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

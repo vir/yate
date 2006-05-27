@@ -55,6 +55,7 @@ extern "C" {
 #endif
 
 using namespace TelEngine;
+namespace { // anonymous
 
 /* Zaptel formats */
 static TokenDict dict_str2ztlaw[] = {
@@ -446,6 +447,8 @@ void ZapDriver::initialize()
     Output("Initializing module Zapchan");
     init("zapchan");
 }
+
+}; // anonymous namespace
 
 #endif /* _WINDOWS */
 

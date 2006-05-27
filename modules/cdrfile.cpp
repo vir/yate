@@ -27,6 +27,7 @@
 #include <stdio.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class CdrFileHandler : public MessageHandler
 {
@@ -119,5 +120,7 @@ void CdrFilePlugin::initialize()
 }
 
 INIT_PLUGIN(CdrFilePlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

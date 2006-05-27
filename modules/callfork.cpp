@@ -25,6 +25,7 @@
 #include <yatephone.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 #define MOD_PREFIX "fork"
 
@@ -394,5 +395,7 @@ bool ForkModule::received(Message& msg, int id)
 	    return Module::received(msg,id);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

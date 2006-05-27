@@ -89,6 +89,7 @@ static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
 static int s_super_handle = -1;
+static bool s_localsymbol = false;
 
 static void sighandler(int signal)
 {
@@ -142,7 +143,7 @@ class SLib : public GenObject
 {
 public:
     virtual ~SLib();
-    static SLib* load(const char* file);
+    static SLib* load(const char* file, bool local);
 private:
     SLib(HMODULE handle, const char* file);
     const char* m_file;
@@ -434,10 +435,15 @@ SLib::~SLib()
     checkPoint();
 }
 
-SLib* SLib::load(const char* file)
+SLib* SLib::load(const char* file, bool local)
 {
     DDebug(DebugAll,"SLib::load('%s')",file);
-    HMODULE handle = ::dlopen(file,RTLD_NOW);
+    int flags = RTLD_NOW;
+#ifdef RTLD_GLOBAL
+    if (!local)
+	flags |= RTLD_GLOBAL;
+#endif
+    HMODULE handle = ::dlopen(file,flags);
     if (handle)
 	return new SLib(handle,file);
 #ifdef _WINDOWS
@@ -638,10 +644,10 @@ bool Engine::Register(const Plugin* plugin, bool reg)
     return true;
 }
 
-bool Engine::loadPlugin(const char* file)
+bool Engine::loadPlugin(const char* file, bool local)
 {
     s_dynplugin = false;
-    SLib *lib = SLib::load(file);
+    SLib *lib = SLib::load(file,local);
     s_dynplugin = true;
     if (lib) {
 	m_libs.append(lib);
@@ -692,7 +698,8 @@ bool Engine::loadPluginDir(const String& relPath)
 	int n = ::strlen(entry->d_name) - s_modsuffix.length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,s_modsuffix)) {
 	    if (s_cfg.getBoolValue("modules",entry->d_name,defload))
-		loadPlugin(path + PATH_SEP + entry->d_name);
+		loadPlugin(path + PATH_SEP + entry->d_name,
+		    s_cfg.getBoolValue("localsym",entry->d_name,s_localsymbol));
 	}
     }
     ::closedir(dir);
@@ -836,6 +843,9 @@ static void usage(bool client, FILE* f)
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
+#ifdef RTLD_GLOBAL
+"     l            Try to keep module symbols local\n"
+#endif
 "     c            Call dlclose() until it gets an error\n"
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
@@ -1013,6 +1023,11 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				case 'm':
 				    Mutex::wait(10000000);
 				    break;
+#ifdef RTLD_GLOBAL
+				case 'l':
+				    s_localsymbol = true;
+				    break;
+#endif
 				case 'c':
 				    s_keepclosing = true;
 				    break;

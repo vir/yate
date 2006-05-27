@@ -25,6 +25,7 @@
 #include <yatengine.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Mutex s_mutex;
 static Configuration s_cfg(Engine::configFile("accfile"));
@@ -192,5 +193,7 @@ void AccFilePlugin::initialize()
 }
 
 INIT_PLUGIN(AccFilePlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

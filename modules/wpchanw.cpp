@@ -48,8 +48,8 @@ extern "C" {
 #include <string.h>
 #include <sys/stat.h>
 
-
 using namespace TelEngine;
+namespace { // anonymous
 
 class WpChan;
 
@@ -635,6 +635,7 @@ bool WpDriver::received(Message &msg, int id)
     return ok;
 }
 
+}; // anonymous namespace
 
 #endif /* _WINDOWS */
 

@@ -54,6 +54,7 @@
 #endif
 
 using namespace TelEngine;
+namespace { // anonymous
 
 // Asynchronous FFT on a power of 2 sample buffer
 class AsyncFFT : public Thread
@@ -774,5 +775,7 @@ void AnalyzerDriver::initialize()
 	Engine::install(m_handler);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

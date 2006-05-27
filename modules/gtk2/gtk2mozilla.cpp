@@ -27,6 +27,7 @@
 #include <gtkmozembed.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 // Embedded Mozilla widget
 class MozWidget : public Widget
@@ -101,5 +102,7 @@ void MozWidget::setTextAsync()
     }
     s_mutex.unlock();
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

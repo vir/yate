@@ -47,8 +47,8 @@ extern "C" {
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
-
 using namespace TelEngine;
+namespace { // anonymous
 
 class WpChan;
 
@@ -531,6 +531,8 @@ void WpDriver::initialize()
     Output("Initializing module Wanpipe");
     init("wpchan");
 }
+
+}; // anonymous namespace
 
 #endif /* _WINDOWS */
 

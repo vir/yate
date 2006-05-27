@@ -64,7 +64,7 @@ static const char* const s_colors[11] = {
     "\033[41;1;33m\033[K",  // Unnamed   - yellow on red
     "\033[41;1;37m\033[K",  // DebugGoOn - white on red
     "\033[41;37m\033[K",    // Unnamed   - gray on red
-    "\033[41;37m\033[K",    // Unnamed   - gray on red
+    "\033[40;31m\033[K",    // DebugStub - red on black
     "\033[40;1;31m\033[K",  // DebugWarn - light red on black
     "\033[40;1;33m\033[K",  // DebugMild - yellow on black
     "\033[40;1;37m\033[K",  // DebugCall - white on black
@@ -78,7 +78,7 @@ static const char* const s_levels[11] = {
     "FAIL",
     "GOON",
     "GOON",
-    "GOON",
+    "STUB",
     "WARN",
     "MILD",
     "CALL",

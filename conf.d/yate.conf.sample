@@ -38,6 +38,18 @@
 ;  information should be specified
 
 
+[localsym]
+; This section is used to force some modules to be loaded without their
+;  symbols being globally available - if the operating system supports.
+; Windows will ignore this section completely.
+; Each line has to be of the form:
+;   modulename.yate=boolean
+
+; pwlib does not clean up properly on Linux so we must disable global symbols
+;  unfortunately preventing all pwlib plugins from loading
+h323chan.yate=yes
+
+
 [preload]
 ; Put a line in this section for each shared library that you want to load
 ;  before any Yate module

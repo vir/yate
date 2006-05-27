@@ -41,6 +41,7 @@
 #endif
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static ObjList s_conns;
 Mutex s_conmutex;
@@ -371,5 +372,7 @@ void MyModule::initialize()
 	}
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

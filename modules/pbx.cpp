@@ -25,6 +25,7 @@
 #include <yatephone.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class ConnHandler : public MessageHandler
 {
@@ -91,5 +92,7 @@ void PbxPlugin::initialize()
 }
 
 INIT_PLUGIN(PbxPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

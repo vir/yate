@@ -29,6 +29,7 @@
 
 
 using namespace TelEngine;
+namespace { // anonymous
 
 #define EXPIRES_MIN 60
 #define EXPIRES_DEF 600
@@ -3178,5 +3179,7 @@ void SIPDriver::initialize()
 	    Engine::install(new SipHandler);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

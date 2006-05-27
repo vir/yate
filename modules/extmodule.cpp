@@ -44,6 +44,7 @@
 
 
 using namespace TelEngine;
+namespace { // anonymous
 
 // Maximum length of an incoming line
 #define MAX_INCOMING_LINE 8192
@@ -1534,5 +1535,7 @@ void ExtModulePlugin::initialize()
 }
 
 INIT_PLUGIN(ExtModulePlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

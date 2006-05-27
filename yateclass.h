@@ -212,6 +212,7 @@ YATE_API void setDebugTimestamp();
 enum DebugLevel {
     DebugFail = 0,
     DebugGoOn = 2,
+    DebugStub = 4,
     DebugWarn = 5,
     DebugMild = 6,
     DebugCall = 7,

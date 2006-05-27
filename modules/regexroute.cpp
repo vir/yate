@@ -28,6 +28,7 @@
 #include <string.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Configuration s_cfg;
 static bool s_extended;
@@ -395,5 +396,7 @@ void RegexRoutePlugin::initialize()
 }
 
 INIT_PLUGIN(RegexRoutePlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

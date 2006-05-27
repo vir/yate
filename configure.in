@@ -608,7 +608,7 @@ fi
 
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
-MODULE_LDFLAGS="-export-dynamic -shared"
+MODULE_LDFLAGS="-export-dynamic -shared -Wl,--unresolved-symbols=ignore-in-shared-libs"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_CPPFLAGS)

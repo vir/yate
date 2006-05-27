@@ -27,6 +27,7 @@
 #include <yatephone.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 // size of the outgoing data blocks in bytes - divide by 2 to get samples
 #define DATA_CHUNK 320
@@ -763,5 +764,7 @@ void ConferenceDriver::initialize()
     m_init = true;
     Engine::install(new ConfHandler(150));
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

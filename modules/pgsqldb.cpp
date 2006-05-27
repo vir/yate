@@ -28,6 +28,7 @@
 #include <libpq-fe.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static ObjList s_conns;
 Mutex s_conmutex;
@@ -372,5 +373,7 @@ void PgModule::initialize()
     }
 
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

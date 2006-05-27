@@ -44,6 +44,7 @@
 
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Configuration s_cfg;
 
@@ -411,5 +412,7 @@ void MOHPlugin::initialize()
 }
 
 INIT_PLUGIN(MOHPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

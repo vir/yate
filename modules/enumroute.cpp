@@ -30,6 +30,7 @@
 
 
 using namespace TelEngine;
+namespace { // anonymous
 
 #define ENUM_DEF_TIMEOUT 3
 #define ENUM_DEF_RETRIES 2
@@ -413,5 +414,7 @@ void EnumModule::initialize()
     else
 	Engine::install(new EnumHandler(cfg.getIntValue("general","priority",prio)));
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

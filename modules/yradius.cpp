@@ -34,6 +34,7 @@
 #include <math.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 #define RADIUS_MAXLEN 4096
 
@@ -1554,5 +1555,7 @@ void RadiusModule::initialize()
     Engine::install(new AuthHandler(s_cfg.getIntValue("general","auth_priority",70)));
     Engine::install(new AcctHandler(s_cfg.getIntValue("general","acct_priority",70)));
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

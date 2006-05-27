@@ -22,6 +22,7 @@
 #include <yatephone.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class DumbDriver : public Driver
 {
@@ -126,5 +127,7 @@ void DumbDriver::initialize()
     setup();
     Output("DumbChannel initialized");
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

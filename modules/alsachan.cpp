@@ -43,6 +43,7 @@
 #define MIN_SWITCH_TIME 600000
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static Mutex s_mutex;
 
@@ -690,5 +691,7 @@ bool AlsaPlugin::isBusy() const
 }
 
 INIT_PLUGIN(AlsaPlugin);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

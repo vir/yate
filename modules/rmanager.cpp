@@ -37,6 +37,7 @@
 #endif
 
 using namespace TelEngine;
+namespace { // anonymous
 
 static const char s_helpmsg[] =
 "Available commands:\n"
@@ -672,5 +673,7 @@ void RManager::initialize()
 }
 
 INIT_PLUGIN(RManager);
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

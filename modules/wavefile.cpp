@@ -31,6 +31,7 @@
 #include <errno.h>
 
 using namespace TelEngine;
+namespace { // anonymous
 
 class WaveSource : public ThreadedSource
 {
@@ -745,5 +746,7 @@ void WaveFileDriver::initialize()
 	Engine::install(new RecordHandler);
     }
 }
+
+}; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

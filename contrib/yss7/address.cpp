@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro 
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2006 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #include "yatess7.h"
@@ -38,6 +38,25 @@ unsigned int SS7CodePoint::pack(Type type) const
 	// TODO: handle China and Japan
 	default:
 	    return 0;
+    }
+}
+
+bool SS7CodePoint::unpack(Type type, unsigned int packed)
+{
+    switch (type) {
+	case ITU:
+	    if (packed & ~0x3fff)
+		return false;
+	    assign((packed >> 11) & 7,(packed >> 3) & 0xff,packed & 7);
+	    return true;
+	case ANSI:
+	    if (packed & ~0xffffff)
+		return false;
+	    assign((packed >> 16) & 0xff,(packed >> 8) & 0xff,packed & 0xff);
+	    return true;
+	// TODO: handle China and Japan
+	default:
+	    return false;
     }
 }
 

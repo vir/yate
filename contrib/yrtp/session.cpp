@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004, 2005 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #include <yatertp.h>
@@ -55,6 +55,29 @@ bool RTPBaseIO::silencePayload(int type)
     return false;
 }
 
+
+RTPReceiver::~RTPReceiver()
+{
+    setDejitter(0);
+}
+
+void RTPReceiver::setDejitter(RTPDejitter* dejitter)
+{
+    if (dejitter == m_dejitter)
+	return;
+    DDebug(DebugInfo,"RTP setting new dejitter %p [%p]",dejitter,this);
+    RTPDejitter* tmp = m_dejitter;
+    m_dejitter = 0;
+    if (tmp) {
+	tmp->group(0);
+	tmp->destruct();
+    }
+    // make the dejitter buffer belong to the same group as the session
+    if (dejitter && m_session)
+	dejitter->group(m_session->group());
+    m_dejitter = dejitter;
+}
+
 void RTPReceiver::rtpData(const void* data, int len)
 {
     // trivial check for basic fields validity
@@ -83,8 +106,8 @@ void RTPReceiver::rtpData(const void* data, int len)
     // grab some data at the first packet received or resync
     if (!m_ssrc) {
 	m_ssrc = ss;
-	m_ts = ts;
-	m_seq = seq;
+	m_ts = ts - m_tsLast;
+	m_seq = seq-1;
 	m_warn = true;
     }
 
@@ -99,6 +122,17 @@ void RTPReceiver::rtpData(const void* data, int len)
 	}
 	return;
     }
+
+    // substraction with overflow
+    int16_t ds = seq - m_seq;
+    // received duplicate or delayed packet?
+    if (ds <= 0) {
+	DDebug(DebugMild,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
+	return;
+    }
+    // keep track of the last sequence number and timestamp we have seen
+    m_seq = seq;
+    m_tsLast = ts - m_ts;
 
     // skip over header and any CSRC
     pc += 12+(4*cc);
@@ -115,7 +149,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 	return;
     if (!len)
 	pc = 0;
-    rtpRecv(marker,typ,ts-m_ts,pc,len);
+    rtpRecv(marker,typ,m_tsLast,pc,len);
 }
 
 void RTPReceiver::rtcpData(const void* data, int len)
@@ -131,8 +165,15 @@ bool RTPReceiver::rtpRecv(bool marker, int payload, unsigned int timestamp, cons
     if (payload == silencePayload())
 	return decodeSilence(marker,timestamp,data,len);
     finishEvent(timestamp);
-    if (payload == dataPayload())
-	return rtpRecvData(marker,timestamp,data,len);
+    if (payload == dataPayload()) {
+#if 0
+// dejitter is broken - don't use it
+	if (m_dejitter)
+	    return m_dejitter->rtpRecvData(marker,timestamp,data,len);
+	else
+#endif
+	    return rtpRecvData(marker,timestamp,data,len);
+    }
     return false;
 }
 
@@ -214,6 +255,7 @@ bool RTPReceiver::pushEvent(int event, int duration, int volume, unsigned int ti
 void RTPReceiver::timerTick(const Time& when)
 {
 }
+
 
 bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {
@@ -322,6 +364,7 @@ bool RTPSender::sendEventData(unsigned int timestamp)
 void RTPSender::timerTick(const Time& when)
 {
 }
+
 
 RTPSession::RTPSession()
     : m_transport(0), m_direction(FullStop), m_send(0), m_recv(0)

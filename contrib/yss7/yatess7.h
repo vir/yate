@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2006 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #ifndef __YATESS7_H
@@ -56,6 +56,59 @@ class SS7Layer3;
 class SS7Router;
 class SS7TCAP;
 class ISDNLayer3;
+
+#define YSIGFACTORY(clas,iface) \
+class clas ## Factory : public SignallingFactory \
+{ \
+protected: \
+virtual void* create(const String& type, const NamedList& name) \
+    { return (name == #clas) ? static_cast<iface*>(new clas) : 0; } \
+}; \
+static clas ## Factory s_ ## clas ## Factory
+
+#define YSIGFACTORY2(clas,iface) \
+class clas ## Factory : public SignallingFactory \
+{ \
+protected: \
+virtual void* create(const String& type, const NamedList& name) \
+    { return clas::create(type,name); } \
+}; \
+static clas ## Factory s_ ## clas ## Factory
+
+/**
+ * A factory that constructs various elements by name
+ * @short A signalling component factory
+ */
+class YSS7_API SignallingFactory : public GenObject
+{
+public:
+    /**
+     * Constructor, adds the factory to the global list
+     */
+    SignallingFactory();
+
+    /**
+     * Destructor, removes the factory from list
+     */
+    virtual ~SignallingFactory();
+
+    /**
+     * Builds a component given its name and arbitrary parameters
+     * @param type The name of the interface that should be returned
+     * @param name Name of the requested component and additional parameters
+     * @return Pointer to the requested interface of the created component
+     */
+    static void* build(const String& type, const NamedList* name = 0);
+
+protected:
+    /**
+     * Creates a component given its name and arbitrary parameters
+     * @param type The name of the interface that should be returned
+     * @param name Name of the requested component and additional parameters
+     * @return Pointer to the requested interface of the created component
+     */
+    virtual void* create(const String& type, const NamedList& name) = 0;
+};
 
 /**
  * Interface to an abstract signalling component that is managed by an engine.
@@ -376,7 +429,7 @@ private:
  * An interface to an abstraction of a Layer 2 packet data receiver
  * @short Abstract Layer 2 packet data receiver
  */
-class YSS7_API SignallingReceiver
+class YSS7_API SignallingReceiver : virtual public SignallingComponent
 {
     friend class SignallingInterface;
 public:
@@ -616,6 +669,15 @@ public:
 	{ }
 
     /**
+     * Constructor from unpacked format
+     * @param type Type of the unpacking desired
+     * @param packed Packed format of the codepoint
+     */
+    inline SS7CodePoint(Type type, unsigned int packed)
+	: m_network(0), m_cluster(0), m_member(0)
+	{ unpack(type,packed); }
+
+    /**
      * Copy constructor
      * @param original Code point to be copied
      */
@@ -678,6 +740,14 @@ public:
      * @return Compact code point as integer or zero if the packing type is not supported
      */
     unsigned int pack(Type type) const;
+
+    /**
+     * Unpack an integer number into a codepoint
+     * @param type Type of the unpacking desired
+     * @param packed Packed format of the codepoint
+     * @return True if the unpacking succeeded and the codepoint was updated
+     */
+    bool unpack(Type type, unsigned int packed);
 
     /**
      * Get the size (in bits) of a packed code point according to its type
@@ -1119,6 +1189,15 @@ class YSS7_API SS7M3UA : public SS7Layer3, public SIGTRAN
 class YSS7_API SS7MTP2 : public SS7Layer2, public SignallingReceiver, public Mutex
 {
 public:
+    /**
+     * Types of error correction
+     */
+    enum ErrorCorrection {
+	Basic,       // retransmits only based on sequence numbers
+	Preventive,  // continuously retransmit unacknowledged packets
+	Adaptive,    // switch to using preventive retransmission dynamically
+    };
+
     /**
      * Constructor
      */

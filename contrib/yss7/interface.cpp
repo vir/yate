@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro 
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2006 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #include "yatess7.h"
@@ -28,14 +28,14 @@ using namespace TelEngine;
 
 SignallingInterface::~SignallingInterface()
 {
-    Debug("STUB",DebugWarn,"Please implement SignallingInterface::~");
+    Debug(engine(),DebugStub,"Please implement SignallingInterface::~");
 }
 
 void SignallingInterface::attach(SignallingReceiver* receiver)
 {
     if (m_receiver == receiver)
 	return;
-    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::attach()");
+    Debug(engine(),DebugStub,"Please implement SignallingReceiver::attach()");
 }
 
 bool SignallingInterface::control(Operation oper, NamedList* params)
@@ -58,14 +58,19 @@ bool SignallingInterface::notify(Notification event)
 
 SignallingReceiver::~SignallingReceiver()
 {
-    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::~");
+    Debug(engine(),DebugStub,"Please implement SignallingReceiver::~");
 }
 
 void SignallingReceiver::attach(SignallingInterface* iface)
 {
     if (m_interface == iface)
 	return;
-    Debug("STUB",DebugWarn,"Please implement SignallingReceiver::attach()");
+    Debug(engine(),DebugStub,"Please implement SignallingReceiver::attach()");
+    m_interface = iface;
+    if (!iface)
+	return;
+    insert(iface);
+    iface->attach(this);
 }
 
 bool SignallingReceiver::notify(SignallingInterface::Notification event)

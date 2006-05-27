@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro 
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2006 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #include "yatess7.h"
@@ -44,6 +44,54 @@ private:
 };
 
 using namespace TelEngine;
+
+static ObjList s_factories;
+static Mutex s_mutex(true);
+
+SignallingFactory::SignallingFactory()
+{
+    s_mutex.lock();
+    s_factories.append(this)->setDelete(false);
+    s_mutex.unlock();
+}
+
+SignallingFactory::~SignallingFactory()
+{
+    s_mutex.lock();
+    s_factories.remove(this,false);
+    s_mutex.unlock();
+}
+
+void* SignallingFactory::build(const String& type, const NamedList* name)
+{
+    if (type.null())
+	return 0;
+    NamedList dummy(type);
+    if (!name)
+	name = &dummy;
+    Lock lock(s_mutex);
+    for (ObjList* l = &s_factories; l; l = l->next()) {
+	SignallingFactory* f = static_cast<SignallingFactory*>(l->get());
+	if (!f)
+	    continue;
+	XDebug(DebugAll,"Attempting to create a %s %s using factory %p",
+	    name->c_str(),type.c_str(),f);
+	void* obj = f->create(type,*name);
+	if (obj)
+	    return obj;
+    }
+    lock.drop();
+    // now build some objects we know about
+    if (type == "SignallingEngine")
+	return new SignallingEngine;
+    else if (type == "SS7MTP2")
+	return new SS7MTP2;
+    else if (type == "SS7MTP3")
+	return new SS7MTP3;
+    else if (type == "SS7Router")
+	return new SS7Router;
+    else return 0;
+}
 
 SignallingComponent::~SignallingComponent()
 {

@@ -4,7 +4,7 @@
  * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
- * Copyright (C) 2004, 2005 Null Team
+ * Copyright (C) 2004-2006 Null Team
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
 #ifndef __YATERTP_H
@@ -51,6 +51,7 @@ class RTPGroup;
 class RTPTransport;
 class RTPSession;
 class RTPSender;
+class RTPReceiver;
 
 /**
  * A base class that contains just placeholders to process raw RTP and RTCP packets.
@@ -62,6 +63,7 @@ class YRTP_API RTPProcessor : public GenObject
     friend class RTPTransport;
     friend class RTPSession;
     friend class RTPSender;
+    friend class RTPReceiver;
 
 public:
     /**
@@ -86,14 +88,14 @@ public:
      * @param data Pointer to raw RTP data
      * @param len Length of the data packet
      */
-    virtual void rtpData(const void* data, int len) = 0;
+    virtual void rtpData(const void* data, int len);
 
     /**
      * This method is called to send or process a RTCP packet
      * @param data Pointer to raw RTCP data
      * @param len Length of the data packet
      */
-    virtual void rtcpData(const void* data, int len) = 0;
+    virtual void rtcpData(const void* data, int len);
 
 protected:
     /**
@@ -267,6 +269,57 @@ private:
 };
 
 /**
+ * A dejitter buffer that can be inserted in the receive data path to
+ *  absorb variations in packet arrival time. Incoming packets are stored
+ *  and forwarded at fixed intervals.
+ * @short Dejitter buffer for incoming data packets
+ */
+class YRTP_API RTPDejitter : public RTPProcessor
+{
+public:
+    /**
+     * Constructor of a new jitter attenuator
+     * @param receiver RTP receiver which gets the delayed packets
+     * @param mindelay Minimum length of the dejitter buffer in microseconds
+     * @param maxdelay Maximum length of the dejitter buffer in microseconds
+     */
+    RTPDejitter(RTPReceiver* receiver, unsigned int mindelay, unsigned int maxdelay);
+
+    /**
+     * Destructor - drops the packets and shows statistics
+     */
+    virtual ~RTPDejitter();
+
+    /**
+     * Process and store one RTP data packet
+     * @param marker True if the marker bit is set in data packet
+     * @param timestamp Sampling instant of the packet data
+     * @param data Pointer to data block to process
+     * @param len Length of the data block in bytes
+     * @return True if data was handled
+     */
+    virtual bool rtpRecvData(bool marker, unsigned int timestamp,
+	const void* data, int len);
+
+protected:
+    /**
+     * Method called periodically to keep the data flowing
+     * @param when Time to use as base in all computing
+     */
+    virtual void timerTick(const Time& when);
+
+private:
+    ObjList m_packets;
+    RTPReceiver* m_receiver;
+    unsigned int m_mindelay;
+    unsigned int m_maxdelay;
+    unsigned int m_headStamp;
+    unsigned int m_tailStamp;
+    u_int64_t m_headTime;
+    u_int64_t m_tailTime;
+};
+
+/**
  * Base class that holds common sender and receiver methods
  * @short Common send/recv variables holder
  */
@@ -383,14 +436,27 @@ public:
      * Constructor
      */
     inline RTPReceiver(RTPSession* session = 0)
-	: RTPBaseIO(session), m_warn(true)
+	: RTPBaseIO(session), m_dejitter(0), m_tsLast(0), m_warn(true)
 	{ }
 
     /**
-     * Do-nothing destructor
+     * Destructor - gets rid of the jitter buffer if present
      */
-    virtual ~RTPReceiver()
-	{ }
+    virtual ~RTPReceiver();
+
+    /**
+     * Set a new dejitter buffer in this receiver
+     * @param dejitter New dejitter buffer to set, NULL to remove
+     */
+    void setDejitter(RTPDejitter* dejitter);
+
+    /**
+     * Allocate and set a new dejitter buffer in this receiver
+     * @param mindelay Minimum length of the dejitter buffer in microseconds
+     * @param maxdelay Maximum length of the dejitter buffer in microseconds
+     */
+    inline void setDejitter(unsigned int mindelay, unsigned int maxdelay)
+	{ setDejitter(new RTPDejitter(this,mindelay,maxdelay)); }
 
     /**
      * Process one RTP payload packet.
@@ -459,6 +525,8 @@ private:
     bool decodeSilence(bool marker, unsigned int timestamp, const void* data, int len);
     void finishEvent(unsigned int timestamp);
     bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
+    RTPDejitter* m_dejitter;
+    unsigned int m_tsLast;
     bool m_warn;
 };
 
@@ -695,6 +763,14 @@ public:
      */
     inline bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0)
 	{ return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
+
+    /**
+     * Allocate and set a new dejitter buffer for the receiver in the session
+     * @param mindelay Minimum length of the dejitter buffer in microseconds
+     * @param maxdelay Maximum length of the dejitter buffer in microseconds
+     */
+    inline void setDejitter(unsigned int mindelay = 20, unsigned int maxdelay = 50)
+	{ if (m_recv) m_recv->setDejitter(mindelay,maxdelay); }
 
     /**
      * Get the RTP/RTCP transport of data handled by this session.

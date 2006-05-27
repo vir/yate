@@ -12,8 +12,6 @@ INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @GTK2_INC@
 CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L../.. -lyate
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/gtk2client.h
-MODFLAGS:= @MODULE_LDFLAGS@
-MODSTRIP:= @MODULE_SYMBOLS@
 
 PROJECT = libgtk2client.a
 SOURCES = gtk2client.cpp

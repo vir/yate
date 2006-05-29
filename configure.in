@@ -36,7 +36,7 @@ ld_unresolved_symbols=no
 AC_MSG_CHECKING([if ld supports reporting unresolved symbols])
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
-AC_TRY_COMPILE([],[],[ld_unresolved_symbols=yes],[GCC_UNRESOLVED_SYMBOLS=""])
+AC_TRY_LINK([],[],[ld_unresolved_symbols=yes],[GCC_UNRESOLVED_SYMBOLS=""])
 CFLAGS="$SAVE_CFLAGS"
 AC_MSG_RESULT([$ld_unresolved_symbols])
 

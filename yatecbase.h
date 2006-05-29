@@ -107,6 +107,13 @@ public:
     virtual bool setActive(const String& name, bool active) = 0;
 
     /**
+     * Set an element as receiving input in the window
+     * @param name Name of the element
+     * @return True if the operation was successfull
+     */
+    virtual bool setFocus(const String& name, bool select = false) = 0;
+
+    /**
      * Set the visibility of an element in the window
      * @param name Name of the element
      * @param visible True to make element visible, false to hide it
@@ -303,6 +310,7 @@ public:
     void line(int newLine);
     bool hasElement(const String& name, Window* wnd = 0, Window* skip = 0);
     bool setActive(const String& name, bool active, Window* wnd = 0, Window* skip = 0);
+    bool setFocus(const String& name, bool select = false, Window* wnd = 0, Window* skip = 0);
     bool setShow(const String& name, bool visible, Window* wnd = 0, Window* skip = 0);
     bool setText(const String& name, const String& text, Window* wnd = 0, Window* skip = 0);
     bool setCheck(const String& name, bool checked, Window* wnd = 0, Window* skip = 0);

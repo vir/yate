@@ -128,6 +128,7 @@ public:
     virtual bool hasElement(const String& name);
     virtual void setOver(const Window* parent);
     virtual bool setActive(const String& name, bool active);
+    virtual bool setFocus(const String& name, bool select);
     virtual bool setShow(const String& name, bool visible);
     virtual bool setText(const String& name, const String& text);
     virtual bool setCheck(const String& name, bool checked);

@@ -64,6 +64,7 @@ public:
 	setShow,
 	setText,
 	setActive,
+	setFocus,
 	setCheck,
 	setSelect,
 	setUrgent,
@@ -168,6 +169,8 @@ bool Window::setParams(const NamedList& params)
 		ok = setShow(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("active:",false))
 		ok = setActive(n,s->toBoolean()) && ok;
+	    else if (n.startSkip("focus:",false))
+		ok = setFocus(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("check:",false))
 		ok = setCheck(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("select:",false))
@@ -305,6 +308,9 @@ void ClientThreadProxy::process()
 	    break;
 	case setActive:
 	    m_rval = client->setActive(m_name,m_bool,m_wnd,m_skip);
+	    break;
+	case setFocus:
+	    m_rval = client->setFocus(m_name,m_bool,m_wnd,m_skip);
 	    break;
 	case setCheck:
 	    m_rval = client->setCheck(m_name,m_bool,m_wnd,m_skip);
@@ -649,6 +655,26 @@ bool Client::setActive(const String& name, bool active, Window* wnd, Window* ski
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip))
 	    ok = wnd->setActive(name,active) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::setFocus(const String& name, bool select, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setFocus,name,select,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setFocus(name,select);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->setFocus(name,select) || ok;
     }
     --s_changing;
     return ok;
@@ -1015,10 +1041,13 @@ bool Client::action(Window* wnd, const String& name)
 	    return true;
 	}
 	String target;
+	Window* win = (wnd && hasElement("callto",wnd)) ? wnd : 0;
 	if (getText("callto",target)) {
 	    target += name.at(6);
-	    if (setText("callto",target))
+	    if (setText("callto",target,win)) {
+		setFocus("callto",false,win);
 		return true;
+	    }
 	}
     }
     else if (name.startsWith("line:")) {
@@ -1031,16 +1060,22 @@ bool Client::action(Window* wnd, const String& name)
     else if (name.startsWith("clear:")) {
 	// clear a text field or table
 	String wid = name.substr(6);
-	if (wid && (setText(wid,"") || clearTable(wid)))
+	Window* win = (wnd && hasElement(wid,wnd)) ? wnd : 0;
+	if (wid && (setText(wid,"",win) || clearTable(wid,win))) {
+	    setFocus(wid,false,win);
 	    return true;
+	}
     }
     else if (name.startsWith("back:")) {
 	// delete last character (backspace)
 	String wid = name.substr(5);
 	String str;
-	if (getText(wid,str,wnd)) {
-	    if (str.null() || setText(wid,str.substr(0,str.length()-1),wnd))
+	Window* win = (wnd && hasElement(wid,wnd)) ? wnd : 0;
+	if (getText(wid,str,win)) {
+	    if (str.null() || setText(wid,str.substr(0,str.length()-1),win)) {
+		setFocus(wid,false,win);
 		return true;
+	    }
 	}
     }
     // accounts window actions
@@ -1379,6 +1414,10 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     // handle the window visibility buttons, these will sync toggles themselves
     if (setVisible(name,active))
 	return true;
+    else if (name.startsWith("display:")) {
+	if (setShow(name.substr(8),active,wnd))
+	    return true;
+    }
     // keep the toggle in sync in all windows
     setCheck(name,active,0,wnd);
     if (name == "autoanswer") {
@@ -1827,6 +1866,8 @@ bool UIHandler::received(Message &msg)
 	ok = Client::self()->setSelect(name,msg.getValue("item"),wnd);
     else if (action == "set_active")
 	ok = Client::self()->setActive(name,msg.getBoolValue("active"),wnd);
+    else if (action == "set_focus")
+	ok = Client::self()->setFocus(name,msg.getBoolValue("select"),wnd);
     else if (action == "set_visible")
 	ok = Client::self()->setShow(name,msg.getBoolValue("visible"),wnd);
     else if (action == "has_option")

@@ -1314,6 +1314,22 @@ bool GTKWindow::setActive(const String& name, bool active)
     return true;
 }
 
+bool GTKWindow::setFocus(const String& name, bool select)
+{
+    GtkWidget* wid = find(name);
+    if (!wid)
+	return false;
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->entry;
+    gtk_widget_grab_focus(wid);
+    if (GTK_IS_EDITABLE(wid)) {
+	GtkEditable* edit = GTK_EDITABLE(wid);
+	gtk_editable_select_region(edit,0,select ? -1 : 0);
+	gtk_editable_set_position(edit,-1);
+    }
+    return true;
+}
+
 bool GTKWindow::setText(const String& name, const String& text)
 {
     GtkWidget* wid = find(name);

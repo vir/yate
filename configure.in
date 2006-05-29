@@ -31,6 +31,15 @@ if [[ "x$ac_cv_format_checks" = "xyes" ]]; then
 fi
 AC_MSG_RESULT([$ac_cv_format_checks])
 
+GCC_UNRESOLVED_SYMBOLS="-Wl,--unresolved-symbols=ignore-in-shared-libs"
+ld_unresolved_symbols=no
+AC_MSG_CHECKING([if ld supports reporting unresolved symbols])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
+AC_TRY_COMPILE([],[],[ld_unresolved_symbols=yes],[GCC_UNRESOLVED_SYMBOLS=""])
+CFLAGS="$SAVE_CFLAGS"
+AC_MSG_RESULT([$ld_unresolved_symbols])
+
 # Checks for header files.
 AC_HEADER_DIRENT
 AC_HEADER_STDC
@@ -609,7 +618,7 @@ fi
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDRELAX="-export-dynamic -shared"
-MODULE_LDFLAGS="$MODULE_LDRELAX -Wl,--unresolved-symbols=ignore-in-shared-libs"
+MODULE_LDFLAGS="$MODULE_LDRELAX $GCC_UNRESOLVED_SYMBOLS"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_CPPFLAGS)

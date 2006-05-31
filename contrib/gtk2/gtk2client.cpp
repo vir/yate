@@ -1075,7 +1075,7 @@ void GTKWindow::init()
     title(s_cfg.getValue(m_id,"title",m_id));
     m_master = s_cfg.getBoolValue(m_id,"master");
     m_popup = s_cfg.getBoolValue(m_id,"popup");
-    if (!m_master)
+    if (!(m_master || m_decorated))
 	gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_TOOLBAR);
     m_posX = s_save.getIntValue(m_id,"x",m_posX);
     m_posY = s_save.getIntValue(m_id,"y",m_posY);

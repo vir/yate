@@ -1412,6 +1412,15 @@ bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
 	}
 	return false;
     }
+    if (GTK_IS_LIST(wid)) {
+	GtkList* lst = GTK_LIST(wid);
+	GtkWidget* it = getListItem(lst,item);
+	if (it) {
+	    gtk_list_select_child(lst,it);
+	    return true;
+	}
+	return false;
+    }
     return false;
 }
 

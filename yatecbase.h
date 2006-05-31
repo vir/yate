@@ -354,6 +354,7 @@ protected:
     void delChannel(ClientChannel* chan);
     void setChannel(ClientChannel* chan);
     void setChannelInternal(ClientChannel* chan);
+    void selectChannel(ClientChannel* chan, bool force = false);
     void updateFrom(const String& id);
     void updateFrom(const ClientChannel* chan);
     void enableAction(const ClientChannel* chan, const String& action);

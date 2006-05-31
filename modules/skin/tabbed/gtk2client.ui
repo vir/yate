@@ -169,8 +169,14 @@ tabbed=2,,,,>
 	tooltip=Domain name to use in VoIP addresses
     leave=<vbox
 leave=<
-label=,,,,status,Initializing...
-property:int:xpad=2
+hbox=>
+    label=2,,,,status,Initializing...
+    property:int:xpad=4
+    property:align:yalign=50
+    check=,,,,help,
+    accelerator=F1
+    tooltip=Show or hide the Help window
+leave=<
 
 [skinned]
 enabled=no

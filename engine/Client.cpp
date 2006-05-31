@@ -1379,7 +1379,10 @@ bool Client::action(Window* wnd, const String& name)
 	    helpFile << Engine::pathSeparator();
 	helpFile << page << ".yhlp";
 	File f;
-	f.openPath(helpFile);
+	if (!f.openPath(helpFile)) {
+	    Debug(ClientDriver::self(),DebugMild,"Could not open help file '%s'",helpFile.c_str());
+	    return false;
+	}
 	unsigned int len = f.length();
 	if (len) {
 	    String helpText(' ',len);
@@ -1550,6 +1553,7 @@ bool Client::callStart(const String& target, const String& line,
     if (!driverLockLoop())
 	return false;
     ClientChannel* cc = new ClientChannel(target);
+    selectChannel(cc);
     Message* m = cc->message("call.route");
     driverUnlock();
     Regexp r("^[a-z0-9]\\+/");
@@ -1600,6 +1604,7 @@ bool Client::callIncoming(const String& caller, const String& dest, Message* msg
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
 	lockOther();
 	ClientChannel* cc = new ClientChannel(caller,ch->id(),msg);
+	selectChannel(cc);
 	unlockOther();
 	if (cc->connect(ch,msg->getValue("reason"))) {
 	    m_activeId = cc->id();
@@ -1736,6 +1741,16 @@ void Client::delChannel(ClientChannel* chan)
     clearActive(chan->id());
     delOption("channels",chan->id());
     unlockOther();
+}
+
+void Client::selectChannel(ClientChannel* chan, bool force)
+{
+    if (!chan)
+	return;
+    if (force || m_activeId.null()) {
+	setSelect("channels",chan->id());
+	updateFrom(chan);
+    }
 }
 
 void Client::updateFrom(const String& id)

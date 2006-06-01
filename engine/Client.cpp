@@ -1765,7 +1765,7 @@ void Client::updateFrom(const String& id)
 
 void Client::updateFrom(const ClientChannel* chan)
 {
-    m_activeId = chan ? chan->id() : "";
+    m_activeId = chan ? chan->id().c_str() : "";
     enableAction(chan,"accept");
     enableAction(chan,"reject");
     enableAction(chan,"hangup");

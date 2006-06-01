@@ -94,15 +94,19 @@ public:
 	{ return m_users; }
     inline bool full() const
 	{ return m_users >= m_maxusers; }
+    inline ConfChan* recorder() const
+	{ return m_record; }
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan);
     void delChannel(ConfChan* chan);
+    bool setRecording(const NamedList& params);
 private:
     ConfRoom(const String& name, const NamedList& params);
     String m_name;
     ObjList m_chans;
     String m_notify;
     bool m_lonely;
+    ConfChan* m_record;
     int m_rate;
     int m_users;
     int m_maxusers;
@@ -118,6 +122,8 @@ public:
     virtual ~ConfChan();
     inline bool isUtility() const
 	{ return m_utility; }
+    inline bool isRecorder() const
+	{ return m_room && (m_room->recorder() == this); }
 private:
     RefPointer<ConfRoom> m_room;
     bool m_utility;
@@ -230,7 +236,8 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
 
 // Private constructor, always called from ConfRoom::get() with mutex hold
 ConfRoom::ConfRoom(const String& name, const NamedList& params)
-    : m_name(name), m_lonely(false), m_rate(8000), m_users(0), m_maxusers(10)
+    : m_name(name), m_lonely(false), m_record(0),
+      m_rate(8000), m_users(0), m_maxusers(10)
 {
     DDebug(&__plugin,DebugAll,"ConfRoom::ConfRoom('%s',%p) [%p]",
 	name.c_str(),&params,this);
@@ -239,21 +246,8 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     m_notify = params.getValue("notify");
     m_lonely = params.getBoolValue("lonely");
     s_rooms.append(this);
-    // create outgoing call to room record utility channel
-    const char* callto = params.getValue("record");
-    if (callto) {
-	ConfChan* chan = new ConfChan(this);
-	Message* m = chan->message("call.execute");
-	m->userData(chan);
-	chan->deref();
-	m->setParam("callto",callto);
-	m->setParam("cdrtrack",String::boolText(false));
-	m->setParam("caller",params.getValue("caller"));
-	m->setParam("called",params.getValue("called"));
-	m->setParam("billid",params.getValue("billid"));
-	m->setParam("username",params.getValue("username"));
-	Engine::enqueue(m);
-    }
+    // possibly create outgoing call to room record utility channel
+    setRecording(params);
     // emit room creation notification
     if (m_notify) {
 	Message* m = new Message("chan.notify");
@@ -310,6 +304,8 @@ void ConfRoom::delChannel(ConfChan* chan)
 {
     if (!chan)
 	return;
+    if (chan == m_record)
+	m_record = 0;
     if (m_chans.remove(chan,false) && !chan->isUtility()) {
 	m_users--;
 	bool alone = (m_users == 1);
@@ -337,6 +333,66 @@ void ConfRoom::delChannel(ConfChan* chan)
 	    deref();
 	}
     }
+}
+
+// Create or stop outgoing call to room record utility channel
+bool ConfRoom::setRecording(const NamedList& params)
+{
+    const String* record = params.getParam("record");
+    // only do something if the "record" parameter is present
+    if (!record)
+	return false;
+    // keep us safe - we may drop the recording of a lonely channel
+    if (!ref())
+	return false;
+
+    // stop any old recording channel
+    ConfChan* ch = m_record;
+    m_record = 0;
+    if (ch) {
+	DDebug(&__plugin,DebugCall,"Stopping record leg '%s'",ch->id().c_str());
+	ch->disconnect(params.getValue("reason","hangup"));
+    }
+    // create recorder if "record" is anything but "", "no", "false" or "disable"
+    if (*record && (*record != "-") && record->toBoolean(true)) {
+	String warn = params.getValue("recordwarn");
+	ch = new ConfChan(this,!warn.null());
+	DDebug(&__plugin,DebugCall,"Starting record leg '%s' to '%s'",
+	    ch->id().c_str(),record->c_str());
+	Message* m = ch->message("call.execute");
+	m->userData(ch);
+	m->setParam("callto",*record);
+	m->setParam("cdrtrack",String::boolText(false));
+	m->setParam("caller",params.getValue("caller"));
+	m->setParam("called",params.getValue("called"));
+	m->setParam("billid",params.getValue("billid"));
+	m->setParam("username",params.getValue("username"));
+	m->addParam("room",m_name);
+	Engine::enqueue(m);
+	if (warn) {
+	    // play record warning to the entire conference
+	    m = ch->message("chan.attach",true,true);
+	    m->addParam("override",warn);
+	    m->addParam("single",String::boolText(true));
+	    m->addParam("room",m_name);
+	    Engine::enqueue(m);
+	}
+	else
+	    Debug(&__plugin,DebugNote,"Recording '%s' without playing tone!",m_name.c_str());
+	if (m_notify) {
+	    m = ch->message("chan.notify",true,true);
+	    m->addParam("targetid",m_notify);
+	    m->addParam("event","recording");
+	    m->addParam("room",m_name);
+	    m->addParam("record",*record);
+	    Engine::enqueue(m);
+	}
+	m_record = ch;
+	ch->deref();
+    }
+
+    deref();
+    return true;
 }
 
 // Mix in buffered data from all channels, only if we have enough in buffer
@@ -612,20 +668,27 @@ ConfChan::~ConfChan()
 
 bool ConfHandler::received(Message& msg)
 {
+    String room = msg.getValue("room");
+    if (!room.startSkip(__plugin.prefix(),false) || room.null())
+	return false;
     // we don't need a RefPointer for this one as the message keeps it referenced
     CallEndpoint* chan = YOBJECT(CallEndpoint,msg.userData());
     if (!chan) {
-	Debug(&__plugin,DebugWarn,"Conference request with no channel!");
-	return false;
+	bool ok = false;
+	ConfRoom* cr = ConfRoom::get(room);
+	if (cr) {
+	    ok = cr->setRecording(msg);
+	    cr->deref();
+	}
+	if (!ok)
+	    Debug(&__plugin,DebugNote,"Conference request with no channel!");
+	return ok;
     }
     if (chan->getObject("ConfChan")) {
 	Debug(&__plugin,DebugWarn,"Conference request from a conference leg!");
 	return false;
     }
 
-    String room = msg.getValue("room");
-    if (!room.startSkip(__plugin.prefix(),false) || room.null())
-	return false;
     if (!__plugin.checkRoom(room,msg.getBoolValue("existing")))
 	return false;
 

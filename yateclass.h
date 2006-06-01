@@ -760,13 +760,13 @@ public:
     /**
      * Member access operator
      */
-    inline Obj* operator->()
+    inline Obj* operator->() const
 	{ return pointer(); }
 
     /**
      * Dereferencing operator
      */
-    inline Obj& operator*()
+    inline Obj& operator*() const
 	{ return *pointer(); }
 };
 

@@ -1,0 +1,52 @@
+[general]
+; Common settings
+
+; enabled: bool: Enable the module
+;enabled=yes
+
+; priority: int: Priority to install message handlers into engine
+;priority=15
+
+; minlen: int: Minimum length of command sequences
+;minlen=2
+
+; maxlen: int: Maximum length of command sequences
+;maxlen=20
+
+; timeout: int: Inter-digit timeout in milliseconds
+;timeout=30000
+
+; retake: string: Exact sequence to exit DTMF pass-through mode
+;retake=###
+
+
+; Every other section defines an operation to trigger
+;[operation]
+; The name of the section is used as the default operation name
+
+; trigger: regexp: Trigger key sequence
+;trigger=
+
+; operation: string: Operation name, will use section name if missing
+;operation=
+
+; message: string: Message to emit for this operation
+;message=chan.operation
+
+; remember: bool: Remember peer's ID just before performing the operation
+;remember=yes
+
+; All other parameters are copied in the generated message after having
+;  the \0 .. \9 placeholders replaced with matches from the trigger
+
+
+; Example: enter DTMF pass-through mode with 3 successive asterisks
+;[passthrough]
+;trigger=\*\*\*
+
+
+; Example: enter conference named conf/dyn-N with key sequence #N# where N=0..9
+;[conference]
+;trigger=#\([0-9]\)#$
+;message=call.conference
+;room=conf/dyn-\1

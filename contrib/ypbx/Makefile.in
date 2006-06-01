@@ -13,7 +13,7 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatepbx.h
 
 PROGS=
 LIBS = libyatepbx.a
-OBJS = multiroute.o
+OBJS = multiroute.o assist.o
 
 LOCALFLAGS =
 LOCALLIBS =

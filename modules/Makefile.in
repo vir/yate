@@ -24,7 +24,7 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate accfile.yate register.yate \
 	tonegen.yate wavefile.yate conference.yate moh.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
-	pbx.yate dbpbx.yate dumbchan.yate callfork.yate \
+	pbx.yate dbpbx.yate pbxassist.yate dumbchan.yate callfork.yate \
 	extmodule.yate yradius.yate \
 	ysipchan.yate yrtpchan.yate
 LIBS :=
@@ -189,6 +189,10 @@ iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
 dbpbx.yate: ../contrib/ypbx/libyatepbx.a
 dbpbx.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ypbx
 dbpbx.yate: LOCALLIBS = ../contrib/ypbx/libyatepbx.a
+
+pbxassist.yate: ../contrib/ypbx/libyatepbx.a
+pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ypbx
+pbxassist.yate: LOCALLIBS = ../contrib/ypbx/libyatepbx.a
 
 ilbccodec.yate: ../contrib/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = ../contrib/ilbc/libilbc.a

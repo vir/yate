@@ -126,6 +126,61 @@ private:
     MessageRelay* m_relDisconnected;
 };
 
-}
+class ChanAssistList;
 
+class YPBX_API ChanAssist :  public RefObject
+{
+public:
+    virtual ~ChanAssist();
+    virtual const String& toString() const
+	{ return m_chanId; }
+    virtual void msgStartup(Message& msg);
+    virtual void msgHangup(Message& msg);
+    virtual bool msgDisconnect(Message& msg, const String& reason);
+    inline ChanAssistList* list() const
+	{ return m_list; }
+    inline const String& id() const
+	{ return m_chanId; }
+    static RefPointer<CallEndpoint> locate(const String& id);
+    inline RefPointer<CallEndpoint> locate() const
+	{ return locate(m_chanId); }
+protected:
+    inline ChanAssist(ChanAssistList* list, const String& id)
+	: m_list(list), m_chanId(id)
+	{ }
+private:
+    ChanAssistList* m_list;
+    String m_chanId;
+};
+
+class YPBX_API ChanAssistList : public Module
+{
+    friend class ChanAssist;
+public:
+    enum {
+	Startup = Private,
+	Hangup,
+	Disconnected,
+	AssistPrivate
+    };
+    virtual ~ChanAssistList()
+	{ }
+    virtual bool received(Message& msg, int id);
+    virtual bool received(Message& msg, int id, ChanAssist* assist);
+    virtual void initialize();
+    virtual ChanAssist* create(Message& msg, const String& id)=0;
+    virtual void init(int priority = 15);
+    inline ChanAssist* find(const String& id) const
+	{ return static_cast<ChanAssist*>(m_calls[id]); }
+protected:
+    inline ChanAssistList(const char* name)
+	: Module(name, "misc"), m_first(true)
+	{ }
+    void removeAssist(ChanAssist* assist);
+private:
+    HashList m_calls;
+    bool m_first;
+};
+
+}
 /* vi: set ts=8 sw=4 sts=4 noet: */

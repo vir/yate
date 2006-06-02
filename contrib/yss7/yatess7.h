@@ -1242,6 +1242,11 @@ public:
     virtual bool control(Operation oper, NamedList* params = 0);
 
 protected:
+    /**
+     * Periodical timer tick used to perform alignment and housekeeping
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
 
     /**
      * Process a Signalling Packet received by the hardware interface

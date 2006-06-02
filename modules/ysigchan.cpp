@@ -77,6 +77,7 @@ void SigDriver::buildStack()
     link->SignallingReceiver::attach(iface);
     m_engine->start("SS7test",Thread::Normal,20000);
     iface->control(SignallingInterface::Enable);
+    link->control(SS7Layer2::Align);
 }
 
 void SigDriver::initialize()

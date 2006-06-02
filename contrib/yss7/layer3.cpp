@@ -28,13 +28,13 @@ using namespace TelEngine;
 
 void SS7MTP3::attach(SS7Layer2* link)
 {
-    Debug("STUB",DebugWarn,"Please implement SS7MTP3::attach()");
+    Debug(toString(),DebugStub,"Please implement SS7MTP3::attach()");
     SignallingComponent::insert(link);
 }
 
 bool SS7MTP3::receivedMSU(const SS7MSU& msu)
 {
-    Debug("STUB",DebugWarn,"Please implement SS7MTP3::receivedMSU()");
+    Debug(toString(),DebugStub,"Please implement SS7MTP3::receivedMSU()");
     return false;
 }
 

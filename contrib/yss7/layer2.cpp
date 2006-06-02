@@ -79,6 +79,14 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
     }
 }
 
+void SS7MTP2::timerTick(const Time& when)
+{
+    if (aligned())
+	transmitFISU();
+    else
+	transmitLSSU();
+}
+
 // Transmit a MSU retaining a copy for retransmissions
 bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 {
@@ -115,7 +123,6 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 // Decode a received packet into signalling units
 bool SS7MTP2::receivedPacket(const DataBlock& packet)
 {
-    Debug("STUB",DebugWarn,"Please implement SS7MTP2::receivedPacket()");
     if (packet.length() < 3) {
 	XDebug(engine(),DebugMild,"Received short packet of length %u [%p]",
 	    packet.length(),this);
@@ -138,6 +145,13 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     bool fib = (buf[1] & 0x80) != 0;
     // lock the object as we modify members
     lock();
+    XDebug(engine(),DebugInfo,"got bsn=%u/%d fsn=%u/%d local bsn=%u/%d fsn=%u/%d [%p]",
+	bsn,bib,fsn,fib,m_bsn,m_bib,m_fsn,m_fib,this);
+
+    ok = (fsn == ((m_bsn + 1) & 0x7f));
+    if (ok)
+	m_bsn = fsn;
+
     unlock();
 
     //TODO: implement Q.703 6.3.1
@@ -153,6 +167,9 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	    processFISU();
 	    return ok;
     }
+    // just drop MSUs
+    if (!(ok && aligned()))
+	return false;
     SS7MSU msu((void*)(buf+3),len,false);
     ok = receivedMSU(msu);
     msu.clear(false);
@@ -162,12 +179,45 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 // Process incoming FISU
 void SS7MTP2::processFISU()
 {
+    XDebug(toString(),DebugStub,"Please implement SS7MTP2::processFISU()");
+    switch (m_status) {
+	case EmergencyAlignment:
+	    m_status = NormalAlignment;
+	case NormalAlignment:
+	    transmitFISU();
+	    break;
+	default:
+	    transmitLSSU();
+    }
 }
 
 // Process incoming LSSU
 void SS7MTP2::processLSSU(unsigned int status)
 {
-    Debug("STUB",DebugWarn,"Please implement SS7MTP2::processLSSU()");
+    XDebug(toString(),DebugStub,"Please implement SS7MTP2::processLSSU(%u)",status);
+    switch (status) {
+	case NormalAlignment:
+	case EmergencyAlignment:
+	    switch (m_status) {
+		case NormalAlignment:
+		case EmergencyAlignment:
+		    m_status = NormalAlignment;
+		    transmitFISU();
+		    break;
+		default:
+		    m_status = status;
+		    transmitLSSU();
+	    }
+	    break;
+	default:
+	    switch (m_status) {
+		case NormalAlignment:
+		case EmergencyAlignment:
+		    m_status = OutOfAlignment;
+	    }
+	    transmitLSSU();
+	    break;
+    }
 }
 
 // Emit a locally generated LSSU
@@ -211,12 +261,18 @@ bool SS7MTP2::transmitFISU()
 
 void SS7MTP2::startAlignment()
 {
+    lock();
     m_status = OutOfAlignment;
+    m_queue.clear();
+    unlock();
 }
 
 void SS7MTP2::abortAlignment()
 {
+    lock();
     m_status = OutOfService;
+    m_queue.clear();
+    unlock();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

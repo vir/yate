@@ -87,6 +87,7 @@ private:
     String m_device;
     WpSigThread* m_thread;
     bool m_received;
+    int m_overRead;
 };
 
 class WpSigThread : public Thread
@@ -107,13 +108,17 @@ YSIGFACTORY2(WpInterface,SignallingInterface);
 
 void* WpInterface::create(const String& type, const NamedList& name)
 {
-    if (type == "WpInterface")
-	return static_cast<WpInterface*>(new WpInterface(name.getValue("card"),name.getValue("device")));
+    if (type == "WpInterface") {
+	WpInterface* iface = new WpInterface(name.getValue("card"),name.getValue("device"));
+	iface->setName(name.getValue("name",type));
+	return iface;
+    }
     return 0;
 }
 
 WpInterface::WpInterface(const char* card, const char* device)
-    : m_card(card), m_device(device), m_thread(0), m_received(false)
+    : m_card(card), m_device(device), m_thread(0), m_received(false),
+      m_overRead(3)
 {
     Debug(DebugAll,"WpInterface::WpInterface('%s','%s') [%p]",
 	card,device,this);
@@ -135,6 +140,23 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 {
     if (!m_socket.valid())
 	return false;
+
+#ifdef XDEBUG
+    if (debugAt(DebugAll)) {
+	const char hex[] = "0123456789abcdef";
+	unsigned char* s = (unsigned char*) packet.data();
+	unsigned int len = packet.length();
+	String str(' ',3*len);
+	char* d = (char*) str.c_str();
+	for (unsigned int i = 0; i < len; i++) {
+	    unsigned char c = *s++;
+	    *d++ = ' ';
+	    *d++ = hex[(c >> 4) & 0x0f];
+	    *d++ = hex[c & 0x0f];
+	}
+	Debug(toString(),DebugAll,"Sending %u bytes:%s",packet.length(),str.c_str());
+    }
+#endif
 
     int sz = WP_HEADER + packet.length();
     DataBlock data(0,WP_HEADER);
@@ -162,6 +184,7 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 	DDebug(toString(),DebugWarn,"Sent %d instead of %d bytes [%p]",w,sz,this);
 	return false;
     }
+    w -= WP_HEADER;
     XDebug(toString(),DebugAll,"Successfully sent %d bytes packet [%p]",w,this);
     return true;
 }
@@ -179,8 +202,8 @@ void WpInterface::receiveAttempt()
 	    m_socket.error(),::strerror(m_socket.error()),this);
 	return;
     }
-    if (r > WP_HEADER) {
-	r -= WP_HEADER;
+    if (r > (WP_HEADER + m_overRead)) {
+	r -= (WP_HEADER + m_overRead);
 	XDebug(toString(),DebugAll,"Received %d bytes packet [%p]",r,this);
 	if (buf[WP_RD_ERROR]) {
 	    DDebug(toString(),DebugWarn,"Packet got error: %u [%p]",
@@ -193,6 +216,23 @@ void WpInterface::receiveAttempt()
 		notify(AlignError);
 	    return;
 	}
+
+#ifdef XDEBUG
+    if (debugAt(DebugAll)) {
+	const char hex[] = "0123456789abcdef";
+	unsigned char* s = buf+WP_HEADER;
+	String str(' ',3*r);
+	char* d = (char*) str.c_str();
+	for (unsigned int i = 0; i < (unsigned int)r; i++) {
+	    unsigned char c = *s++;
+	    *d++ = ' ';
+	    *d++ = hex[(c >> 4) & 0x0f];
+	    *d++ = hex[c & 0x0f];
+	}
+	Debug(toString(),DebugAll,"Received %d bytes:%s",r,str.c_str());
+    }
+#endif
+
 	m_received = true;
 	DataBlock data(buf+WP_HEADER,r);
 	receivedPacket(data);

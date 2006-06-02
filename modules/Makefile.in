@@ -168,6 +168,10 @@ zapchan.yate: LOCALFLAGS = libypri.o -lpri
 wpchan.yate: libypri.o
 wpchan.yate: LOCALFLAGS = libypri.o -lpri
 
+ysigchan.yate wpcard.yate: ../libyatess7.so
+ysigchan.yate wpcard.yate: LOCALFLAGS = -I../contrib/yss7
+ysigchan.yate wpcard.yate: LOCALLIBS = -lyatess7
+
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
 
@@ -216,6 +220,11 @@ gtk2/gtk2mozilla.yate: MODFLAGS = $(MODRELAX)
 
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
+
+../libyatess7.so:
+	$(MAKE) -C ../contrib/yss7
+../contrib/yss7/libyatess7.a:
+	$(MAKE) -C ../contrib/yss7
 
 ../contrib/iax/libiax.a:
 	$(MAKE) -C ../contrib/iax

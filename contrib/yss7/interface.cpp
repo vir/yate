@@ -35,7 +35,12 @@ void SignallingInterface::attach(SignallingReceiver* receiver)
 {
     if (m_receiver == receiver)
 	return;
-    Debug(engine(),DebugStub,"Please implement SignallingReceiver::attach()");
+    Debug(engine(),DebugStub,"Please implement SignallingInterface::attach()");
+    m_receiver = receiver;
+    if (!receiver)
+	return;
+    insert(receiver);
+    receiver->attach(this);
 }
 
 bool SignallingInterface::control(Operation oper, NamedList* params)

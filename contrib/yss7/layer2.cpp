@@ -49,7 +49,7 @@ bool SS7Layer2::control(Operation oper, NamedList* params)
 
 SS7MTP2::SS7MTP2(unsigned int status)
     : Mutex(false), m_status(status),
-      m_bsn(0), m_fsn(0), m_bib(false), m_fib(false)
+      m_bsn(127), m_fsn(127), m_bib(true), m_fib(true)
 {
 }
 
@@ -109,7 +109,7 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     m_fsn = (m_fsn + 1) & 0x7f;
     m_queue.append(packet);
-    return transmitPacket(*packet,false);
+    return transmitPacket(*packet,false,SignallingInterface::SS7Msu);
 }
 
 // Decode a received packet into signalling units
@@ -187,7 +187,7 @@ bool SS7MTP2::transmitLSSU(unsigned int status)
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,buf[2]+3,false);
-    bool ok = transmitPacket(packet,true);
+    bool ok = transmitPacket(packet,true,SignallingInterface::SS7Lssu);
     unlock();
     packet.clear(false);
     return ok;
@@ -203,7 +203,7 @@ bool SS7MTP2::transmitFISU()
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,3,false);
-    bool ok = transmitPacket(packet,true);
+    bool ok = transmitPacket(packet,true,SignallingInterface::SS7Fisu);
     unlock();
     packet.clear(false);
     return ok;

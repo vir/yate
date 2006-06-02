@@ -57,15 +57,17 @@ class SS7Router;
 class SS7TCAP;
 class ISDNLayer3;
 
+// Macro to create a factory that builds a component by class name
 #define YSIGFACTORY(clas,iface) \
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \
 virtual void* create(const String& type, const NamedList& name) \
-    { return (name == #clas) ? static_cast<iface*>(new clas) : 0; } \
+    { return (type == #clas) ? static_cast<iface*>(new clas) : 0; } \
 }; \
 static clas ## Factory s_ ## clas ## Factory
 
+// Macro to create a factory that calls a component's static create method
 #define YSIGFACTORY2(clas,iface) \
 class clas ## Factory : public SignallingFactory \
 { \
@@ -369,6 +371,17 @@ public:
     };
 
     /**
+     * Packet types
+     */
+    enum PacketType {
+	Unknown = 0,
+	SS7Fisu,
+	SS7Lssu,
+	SS7Msu,
+	Q921
+    };
+
+    /**
      * Destructor, stops and detaches the interface
      */
     virtual ~SignallingInterface();
@@ -403,9 +416,10 @@ protected:
      * @param packet Packet data to send
      * @param repeat Continuously send a copy of the packet while no other
      *  data is available for transmission
+     * @param type Type of the packet to send
      * @return True if the interface accepted the packet
      */
-    virtual bool transmitPacket(const DataBlock& packet, bool repeat) = 0;
+    virtual bool transmitPacket(const DataBlock& packet, bool repeat, PacketType type) = 0;
 
     /**
      * Push a valid received Signalling Packet up the protocol stack.
@@ -468,10 +482,11 @@ protected:
      * @param packet Packet data to send
      * @param repeat Continuously send a copy of the packet while no other
      *  data is available for transmission
+     * @param type Type of the packet to send
      * @return True if the interface accepted the packet
      */
-    inline bool transmitPacket(const DataBlock& packet, bool repeat)
-	{ return m_interface && m_interface->transmitPacket(packet,repeat); }
+    inline bool transmitPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type = SignallingInterface::Unknown)
+	{ return m_interface && m_interface->transmitPacket(packet,repeat,type); }
 
     /**
      * Process a Signalling Packet received by the interface

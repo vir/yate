@@ -26,9 +26,13 @@ int main()
     ifdefs.addParam("card","wanpipe1");
     ifdefs.addParam("device","w1g1");
     SignallingInterface* iface = static_cast<SignallingInterface*>(SignallingFactory::build(ifdefs,&ifdefs));
-    link->SignallingReceiver::attach(iface);
+    if (iface) {
+	link->SignallingReceiver::attach(iface);
+	iface->control(SignallingInterface::Enable);
+    }
+    else
+	Debug(DebugWarn,"Failed to create '%s'",ifdefs.c_str());
     engine->start("SS7test",Thread::Normal,20000);
-    iface->control(SignallingInterface::Enable);
     Thread::msleep(100);
     delete engine;
     Output("SS7 library test stopped");

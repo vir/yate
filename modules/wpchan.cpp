@@ -51,6 +51,8 @@ using namespace TelEngine;
 namespace { // anonymous
 
 class WpChan;
+class WpData;
+class WpDriver;
 
 class WpSpan : public PriSpan, public Thread
 {

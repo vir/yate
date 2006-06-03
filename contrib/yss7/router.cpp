@@ -38,4 +38,10 @@ void SS7Router::attach(SS7Layer4* service)
     SignallingComponent::insert(service);
 }
 
+bool SS7Router::receivedMSU(const SS7MSU& msu, SS7Layer3* network)
+{
+    Debug(toString(),DebugStub,"Please implement SS7Router::receivedMSU(%p,%p)",&msu,network);
+    return false;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

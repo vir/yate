@@ -79,7 +79,7 @@ public:
     virtual bool control(Operation oper, NamedList* params);
 protected:
     virtual void timerTick(const Time& when);
-    void receiveAttempt();
+    bool receiveAttempt();
 private:
     bool openSocket();
     Socket m_socket;
@@ -103,6 +103,8 @@ private:
 };
 
 YSIGFACTORY2(WpInterface,SignallingInterface);
+
+static const char hex[] = "0123456789abcdef";
 
 //class WpSigFactory : public SignallingFactory
 
@@ -143,7 +145,6 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 
 #ifdef XDEBUG
     if (debugAt(DebugAll)) {
-	const char hex[] = "0123456789abcdef";
 	unsigned char* s = (unsigned char*) packet.data();
 	unsigned int len = packet.length();
 	String str(' ',3*len);
@@ -184,27 +185,27 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 	DDebug(toString(),DebugWarn,"Sent %d instead of %d bytes [%p]",w,sz,this);
 	return false;
     }
-    w -= WP_HEADER;
-    XDebug(toString(),DebugAll,"Successfully sent %d bytes packet [%p]",w,this);
+//    w -= WP_HEADER;
+//    XDebug(toString(),DebugAll,"Successfully sent %d bytes packet [%p]",w,this);
     return true;
 }
 
-void WpInterface::receiveAttempt()
+bool WpInterface::receiveAttempt()
 {
     if (!m_socket.valid())
-	return;
+	return false;
     unsigned char buf[WP_HEADER + MAX_PACKET];
     int r = m_socket.recv(buf,sizeof(buf));
     if (Socket::socketError() == r) {
 	if (m_socket.canRetry())
-	    return;
+	    return false;
 	DDebug(toString(),DebugWarn,"Error on reading packet: %d: %s [%p]",
 	    m_socket.error(),::strerror(m_socket.error()),this);
-	return;
+	return false;
     }
     if (r > (WP_HEADER + m_overRead)) {
 	r -= (WP_HEADER + m_overRead);
-	XDebug(toString(),DebugAll,"Received %d bytes packet [%p]",r,this);
+//	XDebug(toString(),DebugAll,"Received %d bytes packet [%p]",r,this);
 	if (buf[WP_RD_ERROR]) {
 	    DDebug(toString(),DebugWarn,"Packet got error: %u [%p]",
 		buf[WP_RD_ERROR],this);
@@ -214,12 +215,11 @@ void WpInterface::receiveAttempt()
 		notify(CksumError);
 	    if (buf[WP_RD_ERROR] & WP_ERR_ABORT)
 		notify(AlignError);
-	    return;
+	    return true;
 	}
 
 #ifdef XDEBUG
     if (debugAt(DebugAll)) {
-	const char hex[] = "0123456789abcdef";
 	unsigned char* s = buf+WP_HEADER;
 	String str(' ',3*r);
 	char* d = (char*) str.c_str();
@@ -238,6 +238,7 @@ void WpInterface::receiveAttempt()
 	receivedPacket(data);
 	data.clear(false);
     }
+    return true;
 }
 
 bool WpInterface::openSocket()
@@ -308,8 +309,8 @@ void WpSigThread::run()
     Debug(DebugAll,"WpSigThread::run() [%p]",this);
     for (;;) {
 	Thread::yield(true);
-	if (m_interface)
-	    m_interface->receiveAttempt();
+	while (m_interface && m_interface->receiveAttempt())
+	    ;
     }
 }
 

@@ -653,6 +653,24 @@ public:
      */
     inline int getNI() const
 	{ return null() ? -1 : 0xc0 & *(const unsigned char*)data(); }
+
+    /**
+     * Retrive the name of the Service as decoded from the SIF
+     * @return Name of the service, NULL if unknown or invalid MSU
+     */
+    const char* getServiceName() const;
+
+    /**
+     * Retrive the name of the Priority as decoded from the SIF
+     * @return Name of the priority, NULL if unknown or invalid MSU
+     */
+    const char* getPriorityName() const;
+
+    /**
+     * Retrive the name of the Network Indicator as decoded from the SIF
+     * @return Name of the network indicator, NULL if unknown or invalid MSU
+     */
+    const char* getIndicatorName() const;
 };
 
 /**
@@ -984,9 +1002,10 @@ protected:
     /**
      * Process a MSU received from the Layer 2 component
      * @param msu Message data, starting with Service Indicator Octet
+     * @param link Data link that delivered the MSU
      * @return True if the MSU was processed
      */
-    virtual bool receivedMSU(const SS7MSU& msu) = 0;
+    virtual bool receivedMSU(const SS7MSU& msu, SS7Layer2* link) = 0;
 };
 
 /**
@@ -1043,11 +1062,26 @@ public:
     virtual unsigned int status() const;
 
     /**
-     * Check if the link is aligned
+     * Get the name of a Layer 2 status
+     * @param status Status indication value
+     * @param brief Request to return the short status name
+     * @return String describing the status
+     */
+    virtual const char* statusName(unsigned int status, bool brief) const;
+
+    /**
+     * Get the name of the current local Layer 2 status
+     * @param brief Request to return the short status name
+     * @return String describing the status
+     */
+    inline const char* statusName(bool brief = false) const
+	{ return statusName(status(),brief); }
+
+    /**
+     * Check if the link is fully operational
      * @return True if the link is aligned and operational
      */
-    inline bool aligned() const
-	{ return status() == NormalAlignment; }
+    virtual bool operational() const = 0;
 
     /**
      * Attach a Layer 2 user component to the data link
@@ -1073,6 +1107,12 @@ public:
     virtual bool control(Operation oper, NamedList* params = 0);
 
 protected:
+    /**
+     * Constructor
+     */
+    inline SS7Layer2()
+	: m_l2user(0)
+	{ }
 
     /**
      * Push a received Message Signal Unit up the protocol stack
@@ -1080,7 +1120,7 @@ protected:
      * @return True if message was successfully delivered to the user component
      */
     inline bool receivedMSU(const SS7MSU& msu)
-	{ return m_l2user && m_l2user->receivedMSU(msu); }
+	{ return m_l2user && m_l2user->receivedMSU(msu,this); }
 
 private:
     SS7L2User* m_l2user;
@@ -1092,6 +1132,15 @@ private:
  */
 class YSS7_API SS7L3User : virtual public SignallingComponent
 {
+    friend class SS7Layer3;
+protected:
+    /**
+     * Process a MSU received from the Layer 3 component
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param link Network layer that delivered the MSU
+     * @return True if the MSU was processed
+     */
+    virtual bool receivedMSU(const SS7MSU& msu, SS7Layer3* network) = 0;
 };
 
 /**
@@ -1113,6 +1162,22 @@ public:
      */
     inline SS7L3User* user() const
 	{ return m_l3user; }
+
+protected:
+    /**
+     * Constructor
+     */
+    inline SS7Layer3()
+	: m_l3user(0)
+	{ }
+
+    /**
+     * Push a received Message Signal Unit up the protocol stack
+     * @param msu Message data, starting with Service Indicator Octet
+     * @return True if message was successfully delivered to the user component
+     */
+    inline bool receivedMSU(const SS7MSU& msu)
+	{ return m_l3user && m_l3user->receivedMSU(msu,this); }
 
 private:
     SS7L3User* m_l3user;
@@ -1163,6 +1228,14 @@ public:
     void attach(SS7Layer4* service);
 
 protected:
+    /**
+     * Process a MSU received from the Layer 3 component
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param link Network layer that delivered the MSU
+     * @return True if the MSU was processed
+     */
+    virtual bool receivedMSU(const SS7MSU& msu, SS7Layer3* network);
+
     ObjList m_layer3;
     ObjList m_layer4;
 };
@@ -1232,6 +1305,19 @@ public:
     virtual unsigned int status() const;
 
     /**
+     * Check if the link is aligned.
+     * The link may not be operational, the other side may be still proving.
+     * @return True if the link is aligned
+     */
+    virtual bool aligned() const;
+
+    /**
+     * Check if the link is aligned and operational
+     * @return True if the link is operational
+     */
+    virtual bool operational() const;
+
+    /**
      * Execute a control operation. Operations can change the link status or
      *  can query the aligned status.
      * @param oper Operation to execute
@@ -1287,19 +1373,32 @@ protected:
 
     /**
      * Initiates alignment and proving procedure
+     * @param emergency True if emergency alignment is desired
      */
-    void startAlignment();
+    void startAlignment(bool emergency = false);
 
     /**
      * Abort an alignment procedure if link errors occur
      */
     void abortAlignment();
 
+    /**
+     * Start the link proving period
+     * @return True if proving period was started
+     */
+    bool startProving();
+
 private:
+    void setLocalStatus(unsigned int status);
+    void setRemoteStatus(unsigned int status);
     // sent but yet unacknowledged packets
     ObjList m_queue;
-    // data link status (alignment)
-    unsigned int m_status;
+    // data link status (alignment) - desired, local and remote
+    unsigned int m_status, m_lStatus, m_rStatus;
+    // various interval period end
+    u_int64_t m_interval;
+    // remote congestion indicator
+    bool m_congestion;
     // backward and forward sqeuence numbers
     unsigned char m_bsn, m_fsn;
     // backward and forward indicator bits
@@ -1323,9 +1422,10 @@ protected:
     /**
      * Process a MSU received from the Layer 2 component
      * @param msu Message data, starting with Service Indicator Octet
+     * @param link Data link that delivered the MSU
      * @return True if the MSU was processed
      */
-    virtual bool receivedMSU(const SS7MSU& msu);
+    virtual bool receivedMSU(const SS7MSU& msu, SS7Layer2* link);
 
     ObjList m_links;
 };

@@ -32,7 +32,7 @@ void SS7MTP3::attach(SS7Layer2* link)
     SignallingComponent::insert(link);
 }
 
-bool SS7MTP3::receivedMSU(const SS7MSU& msu)
+bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link)
 {
     Debug(toString(),DebugStub,"Please implement SS7MTP3::receivedMSU()");
     return false;

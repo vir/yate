@@ -35,10 +35,72 @@ bool SS7MSU::valid() const
     return (3 < length()) && (length() < 273);
 }
 
+#define CASE_STR(x) case x: return #x
+const char* SS7MSU::getServiceName() const
+{
+    switch (getSIF()) {
+	CASE_STR(SNM);
+	CASE_STR(MTN);
+	CASE_STR(MTNS);
+	CASE_STR(SCCP);
+	CASE_STR(TUP);
+	CASE_STR(ISUP);
+	CASE_STR(DUP_C);
+	CASE_STR(DUP_F);
+	CASE_STR(MTP_T);
+	CASE_STR(BISUP);
+	CASE_STR(SISUP);
+    }
+    return 0;
+}
+
+const char* SS7MSU::getPriorityName() const
+{
+    switch (getPrio()) {
+	CASE_STR(Regular);
+	CASE_STR(Special);
+	CASE_STR(Circuit);
+	CASE_STR(Facility);
+    }
+    return 0;
+}
+
+const char* SS7MSU::getIndicatorName() const
+{
+    switch (getNI()) {
+	CASE_STR(International);
+	CASE_STR(SpareInternational);
+	CASE_STR(National);
+	CASE_STR(ReservedNational);
+    }
+    return 0;
+}
+#undef CASE_STR
+
 
 unsigned int SS7Layer2::status() const
 {
     return ProcessorOutage;
+}
+
+const char* SS7Layer2::statusName(unsigned int status, bool brief) const
+{
+    switch (status) {
+	case OutOfAlignment:
+	    return brief ? "O" : "Out Of Alignment";
+	case NormalAlignment:
+	    return brief ? "N" : "Normal Alignment";
+	case EmergencyAlignment:
+	    return brief ? "E" : "Emergency Alignment";
+	case OutOfService:
+	    return brief ? "OS" : "Out Of Service";
+	case ProcessorOutage:
+	    return brief ? "PO" : "Processor Outage";
+	case Busy:
+	    return brief ? "B" : "Busy";
+	default:
+	    return brief ? "?" : "Unknown Status";
+    }
 }
 
 bool SS7Layer2::control(Operation oper, NamedList* params)
@@ -48,20 +110,53 @@ bool SS7Layer2::control(Operation oper, NamedList* params)
 
 
 SS7MTP2::SS7MTP2(unsigned int status)
-    : Mutex(false), m_status(status),
+    : Mutex(false),
+      m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
+      m_interval(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true)
 {
+    setName("mtp2");
 }
 
 unsigned int SS7MTP2::status() const
 {
-    return m_status;
+    return m_lStatus;
+}
+
+void SS7MTP2::setLocalStatus(unsigned int status)
+{
+    if (status == m_lStatus)
+	return;
+    DDebug(engine(),DebugInfo,"Local status change: %s -> %s [%p]",
+	statusName(m_lStatus,true),statusName(status,true),this);
+    m_lStatus = status;
+}
+
+void SS7MTP2::setRemoteStatus(unsigned int status)
+{
+    if (status == m_rStatus)
+	return;
+    DDebug(engine(),DebugInfo,"Remote status change: %s -> %s [%p]",
+	statusName(m_rStatus,true),statusName(status,true),this);
+    m_rStatus = status;
+}
+
+bool SS7MTP2::aligned() const
+{
+    return ((m_lStatus == NormalAlignment) || (m_lStatus == EmergencyAlignment)) &&
+	((m_rStatus == NormalAlignment) || (m_rStatus == EmergencyAlignment));
+}
+
+bool SS7MTP2::operational() const
+{
+    return aligned() && !m_interval;
 }
 
 bool SS7MTP2::control(Operation oper, NamedList* params)
 {
     switch (oper) {
 	case Pause:
+	    m_status = OutOfService;
 	    abortAlignment();
 	    return true;
 	case Resume:
@@ -73,7 +168,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	    return true;
 	    break;
 	case Status:
-	    return aligned();
+	    return operational();
 	default:
 	    return SignallingReceiver::control((SignallingInterface::Operation)oper,params);
     }
@@ -81,10 +176,29 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 
 void SS7MTP2::timerTick(const Time& when)
 {
-    if (aligned())
+    lock();
+    bool tout = m_interval && (when >= m_interval);
+    if (tout)
+	m_interval = 0;
+    unlock();
+    if (operational()) {
+	if (tout)
+	    DDebug(engine(),DebugInfo,"Proving period ended, link operational [%p]",this);
 	transmitFISU();
-    else
+    }
+    else {
+	if (tout && (m_lStatus == OutOfService)) {
+	    switch (m_status) {
+		case NormalAlignment:
+		case EmergencyAlignment:
+		    setLocalStatus(OutOfAlignment);
+		    break;
+		default:
+		    setLocalStatus(m_status);
+	    }
+	}
 	transmitLSSU();
+    }
 }
 
 // Transmit a MSU retaining a copy for retransmissions
@@ -95,8 +209,8 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 	    msu.length(),this);
 	return false;
     }
-    if (!aligned()) {
-	DDebug(engine(),DebugInfo,"Asked to send MSU while unaligned [%p]",this);
+    if (!operational()) {
+	DDebug(engine(),DebugInfo,"Asked to send MSU while not operational [%p]",this);
 	return false;
     }
     XDebug(engine(),DebugAll,"SS7MTP2::transmitMSU(%p) len=%u [%p]",
@@ -137,7 +251,6 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	    len,packet.length(),this);
 	return false;
     }
-    bool ok = true;
     // packet length is valid, check sequence numbers
     unsigned char bsn = buf[0] & 0x7f;
     unsigned char fsn = buf[1] & 0x7f;
@@ -148,10 +261,26 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     XDebug(engine(),DebugInfo,"got bsn=%u/%d fsn=%u/%d local bsn=%u/%d fsn=%u/%d [%p]",
 	bsn,bib,fsn,fib,m_bsn,m_bib,m_fsn,m_fib,this);
 
-    ok = (fsn == ((m_bsn + 1) & 0x7f));
-    if (ok)
+    if ((m_rStatus == OutOfAlignment) || (m_rStatus == OutOfService)) {
+	// sync sequence
 	m_bsn = fsn;
+	m_bib = fib;
+    }
+    // sequence control as explained by Q.703 5.2.2
+    bool same = (fsn == m_bsn);
+    bool next = false;
 
+    // hack - use a while so we can break out
+    while (!same) {
+	if (len >= 3) {
+	    next = (fsn == ((m_bsn + 1) & 0x7f));
+	    if (next)
+		break;
+	}
+	Debug(engine(),DebugMild,"Detected loss of %u packets",(fsn - m_bsn) & 0x7f);
+	m_bib = !m_bib;
+	break;
+    }
     unlock();
 
     //TODO: implement Q.703 6.3.1
@@ -159,19 +288,27 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     switch (len) {
 	case 2:
 	    processLSSU(buf[3] + (buf[4] << 8));
-	    return ok;
+	    return true;
 	case 1:
 	    processLSSU(buf[3]);
-	    return ok;
+	    return true;
 	case 0:
 	    processFISU();
-	    return ok;
+	    return true;
     }
     // just drop MSUs
-    if (!(ok && aligned()))
+    if (!(next && operational()))
 	return false;
+    m_bsn = fsn;
     SS7MSU msu((void*)(buf+3),len,false);
-    ok = receivedMSU(msu);
+    bool ok = receivedMSU(msu);
+    if (!ok) {
+	String s;
+	s.hexify(msu.data(),msu.length(),' ');
+	Debug(toString(),DebugMild,"Unhandled MSU len=%u Serv: %s, Prio: %s, Net: %s, Data: %s",
+	    msu.length(),msu.getServiceName(),msu.getPriorityName(),
+	    msu.getIndicatorName(),s.c_str());
+    }
     msu.clear(false);
     return ok;
 }
@@ -179,44 +316,41 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 // Process incoming FISU
 void SS7MTP2::processFISU()
 {
-    XDebug(toString(),DebugStub,"Please implement SS7MTP2::processFISU()");
-    switch (m_status) {
-	case EmergencyAlignment:
-	    m_status = NormalAlignment;
-	case NormalAlignment:
-	    transmitFISU();
-	    break;
-	default:
-	    transmitLSSU();
-    }
+    if (!aligned())
+	transmitLSSU();
 }
 
 // Process incoming LSSU
 void SS7MTP2::processLSSU(unsigned int status)
 {
-    XDebug(toString(),DebugStub,"Please implement SS7MTP2::processLSSU(%u)",status);
-    switch (status) {
+    status &= 0x07;
+    bool unaligned = true;
+    switch (m_rStatus) {
 	case NormalAlignment:
 	case EmergencyAlignment:
-	    switch (m_status) {
-		case NormalAlignment:
-		case EmergencyAlignment:
-		    m_status = NormalAlignment;
-		    transmitFISU();
-		    break;
-		default:
-		    m_status = status;
-		    transmitLSSU();
-	    }
+	    unaligned = false;
+    }
+    if (status == Busy) {
+	if (unaligned)
+	    abortAlignment();
+	else
+	    m_congestion = true;
+	return;
+    }
+    setRemoteStatus(status);
+    // cancel any timer except aborted alignment
+    switch (status) {
+	case OutOfAlignment:
+	case NormalAlignment:
+	case EmergencyAlignment:
+	    if (!(unaligned && startProving()))
+		setLocalStatus(m_status);
 	    break;
 	default:
-	    switch (m_status) {
-		case NormalAlignment:
-		case EmergencyAlignment:
-		    m_status = OutOfAlignment;
-	    }
-	    transmitLSSU();
-	    break;
+	    if (!m_interval)
+		abortAlignment();
+	    else if (m_lStatus != OutOfService)
+		m_interval = 0;
     }
 }
 
@@ -259,20 +393,38 @@ bool SS7MTP2::transmitFISU()
     return ok;
 }
 
-void SS7MTP2::startAlignment()
+void SS7MTP2::startAlignment(bool emergency)
 {
     lock();
-    m_status = OutOfAlignment;
+    m_status = emergency ? EmergencyAlignment : NormalAlignment;
+    m_interval = 0;
+    setLocalStatus(OutOfAlignment);
     m_queue.clear();
     unlock();
+    transmitLSSU();
 }
 
 void SS7MTP2::abortAlignment()
 {
     lock();
-    m_status = OutOfService;
+    setLocalStatus(OutOfService);
+    m_interval = Time::now() + 1000000;
     m_queue.clear();
     unlock();
+}
+
+bool SS7MTP2::startProving()
+{
+    if (m_interval || !aligned())
+	return false;
+    lock();
+    Debug(engine(),DebugInfo,"Starting proving interval [%p]",this);
+    // proving interval is defined in octet transmission times
+    u_int64_t interval = (m_rStatus == EmergencyAlignment) ? 4096 : 65536;
+    // FIXME: assuming 64 kbit/s, 125 usec/octet
+    m_interval = Time::now() + (125 * interval);
+    unlock();
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

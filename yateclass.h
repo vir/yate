@@ -1250,6 +1250,7 @@ public:
 
     /**
      * Conversion to "const char *" operator.
+     * @return Pointer to the internally stored string
      */
     inline operator const char*() const
 	{ return m_string; };
@@ -1258,8 +1259,27 @@ public:
      * Assigns a new value to the string from a character block.
      * @param value New value of the string
      * @param len Length of the data to copy, -1 for full string
+     * @return Reference to the String
      */
     String& assign(const char* value, int len = -1);
+
+    /**
+     * Assigns a new value by filling with a repeated character
+     * @param value Character to fill the string
+     * @param repeat How many copies of the character to use
+     * @return Reference to the String
+     */
+    String& assign(char value, unsigned int repeat = 1);
+
+    /**
+     * Build a hexadecimal representation of a buffer of data
+     * @param data Pointer to data to dump
+     * @param len Length of the data buffer
+     * @param sep Separator character to use between octets
+     * @param upCase Set to true to use upper case characters in hexa
+     * @return Reference to the String
+     */
+    String& hexify(void* data, unsigned int len, char sep = 0, bool upCase = false);
 
     /**
      * Assignment operator.

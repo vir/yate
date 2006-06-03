@@ -280,11 +280,11 @@ String& String::assign(const char* value, int len)
 	    len = l;
 	}
 	if (value != m_string || len != (int)m_length) {
-	    char *data = (char *) ::malloc(len+1);
+	    char* data = (char*) ::malloc(len+1);
 	    if (data) {
 		::memcpy(data,value,len);
 		data[len] = 0;
-		char *odata = m_string;
+		char* odata = m_string;
 		m_string = data;
 		changed();
 		if (odata)
@@ -293,6 +293,62 @@ String& String::assign(const char* value, int len)
 	    else
 		Debug("String",DebugFail,"malloc(%d) returned NULL!",len+1);
 	}
+    }
+    else
+	clear();
+    return *this;
+}
+
+String& String::assign(char value, unsigned int repeat)
+{
+    if (repeat && value) {
+	char* data = (char*) ::malloc(repeat+1);
+	if (data) {
+	    ::memset(data,value,repeat);
+	    data[repeat] = 0;
+	    char* odata = m_string;
+	    m_string = data;
+	    changed();
+	    if (odata)
+		::free(odata);
+	}
+	else
+	    Debug("String",DebugFail,"malloc(%d) returned NULL!",repeat+1);
+    }
+    else
+	clear();
+    return *this;
+}
+
+String& String::hexify(void* data, unsigned int len, char sep, bool upCase)
+{
+    const char* hex = upCase ? "0123456789ABCDEF" : "0123456789abcdef";
+    if (data && len) {
+	const unsigned char* s = (const unsigned char*) data;
+	unsigned int repeat = sep ? 3*len-1 : 2*len;
+	// I know it's ugly to reuse but... copy/paste...
+	char* data = (char*) ::malloc(repeat+1);
+	if (data) {
+	    char* d = data;
+	    while (len--) {
+		unsigned char c = *s++;
+		*d++ = hex[(c >> 4) & 0x0f];
+		*d++ = hex[c & 0x0f];
+		if (sep)
+		    *d++ = sep;
+	    }
+	    // wrote one too many - go back...
+	    if (sep)
+		d--;
+	    *d = '\0';
+	    char* odata = m_string;
+	    m_string = data;
+	    changed();
+	    if (odata)
+		::free(odata);
+	}
+	else
+	    Debug("String",DebugFail,"malloc(%d) returned NULL!",repeat+1);
     }
     else
 	clear();

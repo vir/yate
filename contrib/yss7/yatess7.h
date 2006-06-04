@@ -810,6 +810,26 @@ class YSS7_API SS7Label
 {
 public:
     /**
+     * Constructor of an empty, invalid label
+     */
+    SS7Label();
+
+    /**
+     * Constructor from type and received MSU
+     * @param type Type of codepoint to use to decode the MSU
+     * @param msu A received MSU to be parsed
+     */
+    SS7Label(SS7CodePoint::Type type, const SS7MSU& msu);
+
+    /**
+     * Assignment from type and received MSU
+     * @param type Type of codepoint to use to decode the MSU
+     * @param msu A received MSU to be parsed
+     * @return True if the assignment succeeded
+     */
+    bool assign(SS7CodePoint::Type type, const SS7MSU& msu);
+
+    /**
      * Check if the label is compatible with another packing type
      * @return True if the DLC, SLC and SLS fit in the new packing format
      */
@@ -1163,12 +1183,20 @@ public:
     inline SS7L3User* user() const
 	{ return m_l3user; }
 
+    /**
+     * Retrive the codepoint type of this Layer 3 component
+     * @return The type of codepoint this component is able to use
+     */
+    inline SS7CodePoint::Type type() const
+	{ return m_cpType; }
+
 protected:
     /**
      * Constructor
+     * @param type Codepoint type
      */
-    inline SS7Layer3()
-	: m_l3user(0)
+    inline SS7Layer3(SS7CodePoint::Type type = SS7CodePoint::Other)
+	: m_l3user(0), m_cpType(type)
 	{ }
 
     /**
@@ -1181,6 +1209,7 @@ protected:
 
 private:
     SS7L3User* m_l3user;
+    SS7CodePoint::Type m_cpType;
 };
 
 /**
@@ -1412,6 +1441,11 @@ private:
 class YSS7_API SS7MTP3 : public SS7Layer3, public SS7L2User
 {
 public:
+    /**
+     * Constructor
+     */
+    SS7MTP3(SS7CodePoint::Type type = SS7CodePoint::Other);
+
     /**
      * Attach a SS7 Layer 2 (data link) to the network transport
      * @param link Pointer to data link to attach

@@ -95,6 +95,45 @@ String& TelEngine::operator<<(String& str, const SS7CodePoint& cp)
 }
 
 
+SS7Label::SS7Label()
+    : m_type(SS7CodePoint::Other), m_sls(0)
+{
+}
+
+SS7Label::SS7Label(SS7CodePoint::Type type, const SS7MSU& msu)
+    : m_type(SS7CodePoint::Other), m_sls(0)
+{
+    assign(type,msu);
+}
+
+bool SS7Label::assign(SS7CodePoint::Type type, const SS7MSU& msu)
+{
+    unsigned int llen = length(type);
+    if (llen && llen < msu.length()) {
+	const unsigned char* s = (const unsigned char*) msu.data();
+	switch (type) {
+	    case SS7CodePoint::ITU:
+		m_type = type;
+		// it's easier to pack/unpack than to pick all those bits separately
+		m_dpc.unpack(type,s[1] | ((s[2] & 0x3f) << 8));
+		m_spc.unpack(type,((s[2] & 0xc0) >> 6) | (s[3] << 2) | ((s[4] & 0x0f) << 10));
+		m_sls = (s[4] >> 4) & 0x0f;
+		return true;
+		return 4;
+	    case SS7CodePoint::ANSI:
+		m_type = type;
+		m_dpc.assign(s[3],s[2],s[1]);
+		m_spc.assign(s[6],s[5],s[4]);
+		m_sls = s[7] & 0x1f;
+		return true;
+	    // TODO: handle China and Japan
+	    default:
+		break;
+	}
+    }
+    return false;
+}
+
 bool SS7Label::compatible(SS7CodePoint::Type type) const
 {
     switch (type) {

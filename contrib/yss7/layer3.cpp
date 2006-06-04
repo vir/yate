@@ -26,6 +26,11 @@
 
 using namespace TelEngine;
 
+SS7MTP3::SS7MTP3(SS7CodePoint::Type type)
+    : SS7Layer3(type)
+{
+}
+
 void SS7MTP3::attach(SS7Layer2* link)
 {
     Debug(toString(),DebugStub,"Please implement SS7MTP3::attach()");
@@ -35,6 +40,20 @@ void SS7MTP3::attach(SS7Layer2* link)
 bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link)
 {
     Debug(toString(),DebugStub,"Please implement SS7MTP3::receivedMSU()");
+    unsigned int llen = SS7Label::length(type());
+    if (!llen)
+	return false;
+    // check MSU length against SIO + label length
+    if (msu.length() <= llen) {
+	XDebug(engine(),DebugMild,"Received short MSU of length %u [%p]",
+	    msu.length(),this);
+	return false;
+    }
+    SS7Label label(type(),msu);
+    String tmp;
+    tmp << label;
+    DDebug(name(),DebugInfo,"MSU address: %s",tmp.c_str());
+
     return false;
 }
 

@@ -771,6 +771,73 @@ public:
 };
 
 /**
+ * @short Templated pointer that can be inserted in a list
+ */
+template <class Obj = GenObject> class YATE_API GenPointer : public GenObject
+{
+private:
+    /**
+     * The stored pointer
+     */
+    Obj* m_pointer;
+
+public:
+    /**
+     * Default constructor - creates a null pointer
+     */
+    inline GenPointer()
+	: m_pointer(0)
+	{ }
+
+    /**
+     * Copy constructor
+     * @param value Original GenPointer
+     */
+    inline GenPointer(const GenPointer<Obj>& value)
+	: m_pointer(value)
+	{ }
+
+    /**
+     * Constructs an initialized pointer
+     * @param object Pointer to object
+     */
+    inline GenPointer(Obj* object)
+	: m_pointer(object)
+	{ }
+
+    /**
+     * Assignment from another GenPointer
+     */
+    inline GenPointer<Obj>& operator=(const GenPointer<Obj>& value)
+	{ m_pointer = value; return *this; }
+
+    /**
+     * Assignment from regular pointer
+     */
+    inline GenPointer<Obj>& operator=(Obj* object)
+	{ m_pointer = object; return *this; }
+
+    /**
+     * Conversion to regular pointer operator
+     * @return The stored pointer
+     */
+    inline operator Obj*() const
+	{ return m_pointer; }
+
+    /**
+     * Member access operator
+     */
+    inline Obj* operator->() const
+	{ return m_pointer; }
+
+    /**
+     * Dereferencing operator
+     */
+    inline Obj& operator*() const
+	{ return *m_pointer; }
+};
+
+/**
  * A simple single-linked object list handling class
  * @short An object list class
  */

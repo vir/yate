@@ -26,33 +26,66 @@
 
 using namespace TelEngine;
 
+void SS7Layer3::attach(SS7L3User* l3user)
+{
+    if (m_l3user == l3user)
+	return;
+    Debug(toString(),DebugStub,"Please implement SS7Layer3::attach()");
+    m_l3user = l3user;
+    if (!l3user)
+	return;
+    insert(l3user);
+    l3user->attach(this);
+}
+
+
 SS7MTP3::SS7MTP3(SS7CodePoint::Type type)
     : SS7Layer3(type)
 {
+    setName("mtp3");
 }
 
 void SS7MTP3::attach(SS7Layer2* link)
 {
+    if (!link)
+	return;
     Debug(toString(),DebugStub,"Please implement SS7MTP3::attach()");
     SignallingComponent::insert(link);
+    if (!m_links.find(link))
+	m_links.append(new GenPointer<SS7Layer2>(link));
+    link->attach(this);
+}
+
+bool SS7MTP3::transmitMSU(const SS7MSU& msu, int sls)
+{
+    Debug(toString(),DebugStub,"Please implement SS7MTP3::transmitMSU(%p,%d) type=%d [%p]",
+	&msu,sls,type(),this);
+    return false;
 }
 
 bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link)
 {
-    Debug(toString(),DebugStub,"Please implement SS7MTP3::receivedMSU()");
+    Debug(toString(),DebugStub,"Please implement SS7MTP3::receivedMSU(%p,%p) type=%d [%p]",
+	&msu,link,type(),this);
     unsigned int llen = SS7Label::length(type());
-    if (!llen)
+    if (!llen) {
+	Debug(toString(),DebugWarn,"Received MSU but codepoint type is unconfigured [%p]",this);
 	return false;
+    }
     // check MSU length against SIO + label length
     if (msu.length() <= llen) {
-	XDebug(engine(),DebugMild,"Received short MSU of length %u [%p]",
+	Debug(engine(),DebugMild,"Received short MSU of length %u [%p]",
 	    msu.length(),this);
 	return false;
     }
     SS7Label label(type(),msu);
-    String tmp;
-    tmp << label;
-    DDebug(name(),DebugInfo,"MSU address: %s",tmp.c_str());
+#ifdef DEBUG
+    if (debugAt(DebugInfo)) {
+	String tmp;
+	tmp << label << " (" << label.spc().pack(type()) << ":" << label.dpc().pack(type()) << ":" << label.sls() << ")";
+	Debug(toString(),DebugInfo,"MSU address: %s",tmp.c_str());
+    }
+#endif
 
     return false;
 }

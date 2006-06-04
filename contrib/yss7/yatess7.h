@@ -1153,6 +1153,13 @@ private:
 class YSS7_API SS7L3User : virtual public SignallingComponent
 {
     friend class SS7Layer3;
+public:
+    /**
+     * Attach a SS7 Layer 3 (network) to the user component
+     * @param network Pointer to network component to attach
+     */
+    virtual void attach(SS7Layer3* network) = 0;
+
 protected:
     /**
      * Process a MSU received from the Layer 3 component
@@ -1170,6 +1177,14 @@ protected:
 class YSS7_API SS7Layer3 : virtual public SignallingComponent
 {
 public:
+    /**
+     * Push a Message Signal Unit down the protocol stack
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param sls Signalling Link Selection, negative to choose best
+     * @return True if message was successfully queued to a link
+     */
+    virtual bool transmitMSU(const SS7MSU& msu, int sls = -1) = 0;
+
     /**
      * Attach a Layer 3 user component to this network
      * @param l3user Pointer to Layer 3 user component to attach
@@ -1223,7 +1238,7 @@ public:
      * Attach a SS7 network or router to this service
      * @param router Pointer to network or router to attach
      */
-    void attach(SS7Layer3* network);
+    virtual void attach(SS7Layer3* network);
 
     /**
      * Retrive the SS7 network or router to which this service is attached
@@ -1245,10 +1260,18 @@ class YSS7_API SS7Router : public SS7L3User, public SS7Layer3
 {
 public:
     /**
+     * Push a Message Signal Unit down the protocol stack
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param sls Signalling Link Selection, negative to choose best
+     * @return True if message was successfully queued to a link
+     */
+    virtual bool transmitMSU(const SS7MSU& msu, int sls = -1);
+
+    /**
      * Attach a SS7 Layer 3 (network) to the router
      * @param network Pointer to network to attach
      */
-    void attach(SS7Layer3* network);
+    virtual void attach(SS7Layer3* network);
 
     /**
      * Attach a SS7 Layer 4 (service) to the router
@@ -1445,6 +1468,14 @@ public:
      * Constructor
      */
     SS7MTP3(SS7CodePoint::Type type = SS7CodePoint::Other);
+
+    /**
+     * Push a Message Signal Unit down the protocol stack
+     * @param msu Message data, starting with Service Indicator Octet
+     * @param sls Signalling Link Selection, negative to choose best
+     * @return True if message was successfully queued to a link
+     */
+    virtual bool transmitMSU(const SS7MSU& msu, int sls = -1);
 
     /**
      * Attach a SS7 Layer 2 (data link) to the network transport

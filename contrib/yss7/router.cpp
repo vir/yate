@@ -28,14 +28,30 @@ using namespace TelEngine;
 
 void SS7Router::attach(SS7Layer3* network)
 {
+    if (!network)
+	return;
     Debug(toString(),DebugStub,"Please implement SS7Router::attach()");
     SignallingComponent::insert(network);
+    if (!m_layer3.find(network))
+	m_layer3.append(new GenPointer<SS7Layer3>(network));
+    network->attach(this);
 }
 
 void SS7Router::attach(SS7Layer4* service)
 {
+    if (!service)
+	return;
     Debug(toString(),DebugStub,"Please implement SS7Router::attach()");
     SignallingComponent::insert(service);
+    if (!m_layer4.find(service))
+	m_layer4.append(new GenPointer<SS7Layer4>(service));
+    service->attach(this);
+}
+
+bool SS7Router::transmitMSU(const SS7MSU& msu, int sls)
+{
+    Debug(toString(),DebugStub,"Please implement SS7Router::transmitMSU(%p,%d)",&msu,sls);
+    return false;
 }
 
 bool SS7Router::receivedMSU(const SS7MSU& msu, SS7Layer3* network)

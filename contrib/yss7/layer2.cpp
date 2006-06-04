@@ -78,6 +78,18 @@ const char* SS7MSU::getIndicatorName() const
 #undef CASE_STR
 
 
+void SS7Layer2::attach(SS7L2User* l2user)
+{
+    if (m_l2user == l2user)
+	return;
+    Debug(toString(),DebugStub,"Please implement SS7Layer2::attach()");
+    m_l2user = l2user;
+    if (!l2user)
+	return;
+    insert(l2user);
+    l2user->attach(this);
+}
+
 unsigned int SS7Layer2::status() const
 {
     return ProcessorOutage;
@@ -183,7 +195,7 @@ void SS7MTP2::timerTick(const Time& when)
     unlock();
     if (operational()) {
 	if (tout)
-	    DDebug(engine(),DebugInfo,"Proving period ended, link operational [%p]",this);
+	    Debug(engine(),DebugInfo,"Proving period ended, link operational [%p]",this);
 	transmitFISU();
     }
     else {
@@ -418,9 +430,11 @@ bool SS7MTP2::startProving()
     if (m_interval || !aligned())
 	return false;
     lock();
-    Debug(engine(),DebugInfo,"Starting proving interval [%p]",this);
+    bool emg = (m_rStatus == EmergencyAlignment);
+    Debug(engine(),DebugInfo,"Starting %s proving interval [%p]",
+	emg ? "emergency" : "normal",this);
     // proving interval is defined in octet transmission times
-    u_int64_t interval = (m_rStatus == EmergencyAlignment) ? 4096 : 65536;
+    u_int64_t interval = emg ? 4096 : 65536;
     // FIXME: assuming 64 kbit/s, 125 usec/octet
     m_interval = Time::now() + (125 * interval);
     unlock();

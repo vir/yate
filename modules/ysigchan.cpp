@@ -72,9 +72,15 @@ void SigDriver::buildStack()
 	Debug(this,DebugGoOn,"Failed to create interface '%s'",ifdefs.c_str());
 	return;
     }
+    SS7Router* router = new SS7Router;
+    m_engine->insert(router);
+    SS7MTP3* net = new SS7MTP3(SS7CodePoint::ITU);
+    m_engine->insert(net);
     SS7MTP2* link = new SS7MTP2;
     m_engine->insert(link);
     link->SignallingReceiver::attach(iface);
+    link->SS7Layer2::attach(net);
+    router->attach(net);
     m_engine->start("SS7test",Thread::Normal,20000);
     iface->control(SignallingInterface::Enable);
     link->control(SS7Layer2::Align);

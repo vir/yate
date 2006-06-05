@@ -58,7 +58,7 @@ public:
     virtual bool received(Message &msg);
 };
 
-class CdrBuilder : public String
+class CdrBuilder : public NamedList
 {
 public:
     CdrBuilder(const char *name);
@@ -67,7 +67,7 @@ public:
     void update(const Message& msg, int type, u_int64_t val);
     void emit(const char *operation = 0);
     String getStatus() const;
-    static CdrBuilder *find(String &id);
+    static CdrBuilder* find(String &id);
 private:
     u_int64_t
 	m_start,
@@ -76,19 +76,65 @@ private:
 	m_answer,
 	m_hangup;
     String m_dir;
-    String m_billid;
-    String m_address;
-    String m_caller;
-    String m_called;
-    String m_username;
-    String m_calledfull;
     String m_status;
-    String m_reason;
     bool m_first;
 };
 
-static ObjList cdrs;
+class Param : public String
+{
+public:
+    inline Param(const char* name, bool replace)
+	: String(name), m_overwrite(replace)
+	{ }
+    inline bool overwrite() const
+	{ return m_overwrite; }
+    inline void overwrite(bool replace)
+	{ m_overwrite = replace; }
+private:
+    bool m_overwrite;
+};
+
+static ObjList s_cdrs;
+
+static Mutex s_mutex;
+static ObjList s_params;
 static int s_res = 1;
+
+// Time resolutions
+static TokenDict const s_timeRes[] = {
+    { "sec",  0 },
+    { "msec", 1 },
+    { "usec", 2 },
+    { 0, 0 },
+};
+
+// Default but overridable parameters
+static struct _params {
+    const char* name;
+    bool overwrite;
+} const s_defParams[] = {
+    { "billid",     true },
+    { "reason",     true },
+    { "address",    false },
+    { "caller",     false },
+    { "called",     false },
+    { "calledfull", false },
+    { "username",   false },
+    { 0, false },
+};
+
+// Internally built, non-overridable parameters
+static const char* const s_forbidden[] = {
+    "time",
+    "chan",
+    "operation",
+    "direction",
+    "status",
+    "duration",
+    "billtime",
+    "ringtime",
+    0
+};
 
 static const char* printTime(char* buf,u_int64_t usec)
 {
@@ -111,7 +157,7 @@ static const char* printTime(char* buf,u_int64_t usec)
 }
 
 CdrBuilder::CdrBuilder(const char *name)
-    : String(name), m_dir("unknown"), m_status("unknown"), m_first(true)
+    : NamedList(name), m_dir("unknown"), m_status("unknown"), m_first(true)
 {
     m_start = m_call = m_ringing = m_answer = m_hangup = 0;
 }
@@ -148,32 +194,37 @@ void CdrBuilder::emit(const char *operation)
 
     char buf[64];
     Message *m = new Message("call.cdr");
-    m->addParam("operation",operation);
     m->addParam("time",printTime(buf,t_start));
     m->addParam("chan",c_str());
-    m->addParam("address",m_address);
+    m->addParam("operation",operation);
     m->addParam("direction",m_dir);
-    m->addParam("billid",m_billid);
-    m->addParam("caller",m_caller);
-    m->addParam("called",m_called);
-    m->addParam("username",m_username);
-    m->addParam("calledfull",m_calledfull);
     m->addParam("duration",printTime(buf,t_hangup - t_start));
     m->addParam("billtime",printTime(buf,t_hangup - t_answer));
     m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
     m->addParam("status",m_status);
-    m->addParam("reason",m_reason);
-    if (m_dir == "incoming")
-	m->addParam("external",m_caller);
-    else if (m_dir == "outgoing")
-	m->addParam("external",m_called);
+    if (!getValue("external")) {
+	const char* ext = 0;
+	if (m_dir == "incoming")
+	    ext = getValue("caller");
+	else if (m_dir == "outgoing")
+	    ext = getValue("called");
+	if (ext)
+	    m->setParam("external",ext);
+    }
+    unsigned int n = length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* s = getParam(i);
+	if (!s)
+	    continue;
+	m->addParam(s->name(),*s);
+    }
     Engine::enqueue(m);
 }
 
 String CdrBuilder::getStatus() const
 {
     String s(m_status);
-    s << "|" << m_caller << "|" << m_called;
+    s << "|" << getValue("caller") << "|" << getValue("called");
     return s;
 }
 
@@ -196,72 +247,57 @@ void CdrBuilder::update(int type, u_int64_t val)
 	    break;
 	case CdrHangup:
 	    m_hangup = val;
-	    cdrs.remove(this);
+	    s_cdrs.remove(this);
 	    return;
     }
 }
 
 void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 {
-    const char* p = msg.getValue("billid");
-    if (p)
-	m_billid = p;
-    if (m_address.null()) {
-	p = msg.getValue("address");
-	if (p)
-	    m_address = p;
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* s = msg.getParam(i);
+	if (!s)
+	    continue;
+	if (s->null())
+	    continue;
+	if (s->name() == "status") {
+	    m_status = *s;
+	    if ((m_status == "incoming") || (m_status == "outgoing"))
+		m_dir = m_status;
+	}
+	else if (s->name() == "direction")
+	    m_dir = *s;
+	else {
+	    // search the parameter
+	    Lock lock(s_mutex);
+	    Param* p = static_cast<Param*>(s_params[s->name()]);
+	    if (!p)
+		continue;
+	    bool overwrite = p->overwrite();
+	    lock.drop();
+	    NamedString* str = getParam(s->name());
+	    // parameter is not yet stored - store a copy
+	    if (!str)
+		addParam(s->name(),*s);
+	    // parameter is stored but we should overwrite it
+	    else if (overwrite)
+		*str = *s;
+	}
     }
-    if (m_caller.null()) {
-	p = msg.getValue("caller");
-	if (p)
-	    m_caller = p;
-    }
-    if (m_called.null()) {
-	p = msg.getValue("called");
-	if (p)
-	    m_called = p;
-    }
-    if (m_username.null()) {
-	p = msg.getValue("username");
-	if (p)
-	    m_username = p;
-    }
-    if (m_calledfull.null()) {
-	p = msg.getValue("calledfull");
-	if (p)
-	    m_calledfull = p;
-    }
-    p = msg.getValue("status");
-    if (p) {
-	m_status = p;
-	if ((m_status == "incoming") || (m_status == "outgoing"))
-	    m_dir = m_status;
-    }
-    p = msg.getValue("direction");
-    if (p)
-	m_dir = p;
-    p = msg.getValue("reason");
-    if (p)
-	m_reason = p;
 
     update(type,val);
 
     if (type == CdrHangup) {
-	cdrs.remove(this);
+	s_cdrs.remove(this);
 	return;
     }
     emit();
 }
 
-CdrBuilder *CdrBuilder::find(String &id)
+CdrBuilder* CdrBuilder::find(String &id)
 {
-    ObjList *l = &cdrs;
-    for (; l; l=l->next()) {
-	CdrBuilder *b = static_cast<CdrBuilder *>(l->get());
-	if (b && (*b == id))
-	    return b;
-    }
-    return 0;
+    return static_cast<CdrBuilder*>(s_cdrs[id]);
 }
 
 bool CdrHandler::received(Message &msg)
@@ -269,7 +305,7 @@ bool CdrHandler::received(Message &msg)
     static Mutex mutex;
     Lock lock(mutex);
     if (m_type == EngHalt) {
-	cdrs.clear();
+	s_cdrs.clear();
 	return false;
     }
     if (!msg.getBoolValue("cdrtrack",true))
@@ -287,7 +323,7 @@ bool CdrHandler::received(Message &msg)
     CdrBuilder *b = CdrBuilder::find(id);
     if (!b && ((m_type == CdrStart) || (m_type == CdrCall))) {
 	b = new CdrBuilder(id);
-	cdrs.append(b);
+	s_cdrs.append(b);
     }
     if (b)
 	b->update(msg,m_type,msg.msgTime().usec());
@@ -310,8 +346,8 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
     String st("name=cdrbuild,type=cdr,format=Status|Caller|Called");
-    st << ";cdrs=" << cdrs.count() << ";";
-    ObjList *l = &cdrs;
+    st << ";cdrs=" << s_cdrs.count() << ";";
+    ObjList *l = &s_cdrs;
     bool first = true;
     for (; l; l=l->next()) {
 	CdrBuilder *b = static_cast<CdrBuilder *>(l->get());
@@ -346,6 +382,36 @@ CdrBuildPlugin::CdrBuildPlugin()
 void CdrBuildPlugin::initialize()
 {
     Output("Initializing module CdrBuild");
+    Configuration cfg(Engine::configFile("cdrbuild"));
+    s_res = cfg.getIntValue("general","resolution",s_timeRes,1);
+    s_mutex.lock();
+    s_params.clear();
+    const struct _params* params = s_defParams;
+    for (; params->name; params++)
+	s_params.append(new Param(params->name,params->overwrite));
+    const NamedList* sect = cfg.getSection("parameters");
+    if (sect) {
+	unsigned int n = sect->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* p = sect->getParam(i);
+	    if (!p)
+		continue;
+	    const char* const* f = s_forbidden;
+	    for (; *f; f++)
+		if (p->name() == *f)
+		    break;
+	    if (*f) {
+		Debug("cdrbuild",DebugWarn,"Cannot override parameter '%s'",p->name().c_str());
+		continue;
+	    }
+	    Param* par = static_cast<Param*>(s_params[p->name()]);
+	    if (par)
+		par->overwrite(p->toBoolean(par->overwrite()));
+	    else
+		s_params.append(new Param(p->name(),p->toBoolean(false)));
+	}
+    }
+    s_mutex.unlock();
     if (m_first) {
 	m_first = false;
 	Engine::install(new CdrHandler("chan.startup",CdrStart));

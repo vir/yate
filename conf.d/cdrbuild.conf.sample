@@ -1,0 +1,21 @@
+[general]
+
+; resolution: keyword: Resolution for time representation: sec, msec or usec
+;resolution=msec
+
+
+[parameters]
+; Each line consists of name=bool where name is the name of the parameter being
+;  monitored while bool allows or disallows subsequent overwrites of the initial
+;  non-empty value
+
+;billid=true
+;reason=true
+;address=false
+;caller=false
+;called=false
+;calledfull=false
+;username=false
+
+; The following parameters are handled internally and cannot be changed:
+; time, chan, operation, direction, status, duration, billtime, ringtime

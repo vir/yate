@@ -1,3 +1,17 @@
 [general]
+; file: string: Name of the file to write the CDR to
+;file=
 file=/tmp/cdr.tsv
+
+; tabs: bool: Use tab-separated instead of comma-separated if format is missing
+;tabs=false
 tabs=true
+
+; format: string: Custom format to use, overrides default. Each ${parameter}
+;  is replaced with the value of that parameter in the call.cdr message
+
+; tab-separated (.tsv)
+;format=${time}	${billid}	${chan}	${address}	${caller}	${called}	${billtime}	${ringtime}	${duration}	${direction}	${status}	${reason}
+
+; comma-separated (.csv)
+;format=${time},"${billid}","${chan}","${address}","${caller}","${called}",${billtime},${ringtime},${duration},"${direction}","${status}","${reason}"

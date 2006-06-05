@@ -33,13 +33,13 @@ class CdrFileHandler : public MessageHandler
 {
 public:
     CdrFileHandler(const char *name)
-	: MessageHandler(name), m_tabs(0), m_file(0) { }
+	: MessageHandler(name), m_file(0) { }
     virtual ~CdrFileHandler();
     virtual bool received(Message &msg);
-    void init(const char *fname, bool tabsep);
+    void init(const char *fname, bool tabsep, const char* format);
 private:
-    bool m_tabs;
     FILE *m_file;
+    String m_format;
     Mutex m_lock;
 };
 
@@ -52,12 +52,16 @@ CdrFileHandler::~CdrFileHandler()
     }
 }
 
-void CdrFileHandler::init(const char *fname, bool tabsep)
+void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
 {
     Lock lock(m_lock);
     if (m_file)
 	::fclose(m_file);
-    m_tabs = tabsep;
+    m_format = format;
+    if (m_format.null())
+	m_format = tabsep
+	    ? "${time}\t${billid}\t${chan}\t${address}\t${caller}\t${called}\t${billtime}\t${ringtime}\t${duration}\t${direction}\t${status}\t${reason}"
+	    : "${time},\"${billid}\",\"${chan}\",\"${address}\",\"${caller}\",\"${called}\",${billtime},${ringtime},${duration},\"${direction}\",\"${status}\",\"${reason}\"";
     m_file = fname ? ::fopen(fname,"a") : 0;
 }
 
@@ -68,24 +72,11 @@ bool CdrFileHandler::received(Message &msg)
 	return false;
 
     Lock lock(m_lock);
-    if (m_file) {
-	const char *format = m_tabs
-	    ? "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
-	    : "%s,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%s,%s,%s,\"%s\",\"%s\",\"%s\"\n";
-	::fprintf(m_file,format,
-	    c_safe(msg.getValue("time")),
-	    c_safe(msg.getValue("billid")),
-	    c_safe(msg.getValue("chan")),
-	    c_safe(msg.getValue("address")),
-	    c_safe(msg.getValue("caller")),
-	    c_safe(msg.getValue("called")),
-	    c_safe(msg.getValue("billtime")),
-	    c_safe(msg.getValue("ringtime")),
-	    c_safe(msg.getValue("duration")),
-	    c_safe(msg.getValue("direction")),
-	    c_safe(msg.getValue("status")),
-	    c_safe(msg.getValue("reason"))
-	    );
+    if (m_file && m_format) {
+	String str = m_format;
+	str += "\n";
+	msg.replaceParams(str);
+	::fputs(str.safe(),m_file);
 	::fflush(m_file);
     }
     return false;
@@ -116,7 +107,7 @@ void CdrFilePlugin::initialize()
 	Engine::install(m_handler);
     }
     if (m_handler)
-	m_handler->init(file,cfg.getBoolValue("general","tabs"));
+	m_handler->init(file,cfg.getBoolValue("general","tabs"),cfg.getValue("general","format"));
 }
 
 INIT_PLUGIN(CdrFilePlugin);

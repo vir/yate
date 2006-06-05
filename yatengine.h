@@ -546,14 +546,14 @@ public:
     bool uninstall(MessageHandler* handler);
 
     /**
-     * Dispatch a message to the installed handlers
+     * Synchronously dispatch a message to the installed handlers
      * @param msg The message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */
     bool dispatch(Message& msg);
 
     /**
-     * Put a message in the waiting queue
+     * Put a message in the waiting queue for asynchronous dispatching
      * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if successfully queued, false otherwise
      */
@@ -822,7 +822,7 @@ public:
     static bool uninstall(MessageHandler* handler);
 
     /**
-     * Enqueue a message in the message queue
+     * Enqueue a message in the message queue for asynchronous dispatching
      * @param msg The message to enqueue, will be destroyed after dispatching
      * @return True if enqueued, false on error (already queued)
      */
@@ -838,14 +838,14 @@ public:
 	{ return (name && *name) ? enqueue(new Message(name)) : false; }
 
     /**
-     * Dispatch a message to the registered handlers
+     * Synchronously dispatch a message to the registered handlers
      * @param msg Pointer to the message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */
     static bool dispatch(Message* msg);
 
     /**
-     * Dispatch a message to the registered handlers
+     * Synchronously dispatch a message to the registered handlers
      * @param msg The message to dispatch
      * @return True if one handler accepted it, false if all ignored
      */

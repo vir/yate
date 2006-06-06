@@ -188,6 +188,8 @@ public:
 	{ return m_localPort; }
     inline int getPartyPort() const
 	{ return m_partyPort; }
+    inline bool localDetect() const
+	{ return m_localDetect; }
     inline const String& getFullName() const
 	{ return m_display; }
     inline const String& getUserName() const
@@ -2253,6 +2255,23 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
     if ((!m_routes) && msg->isAnswer() && (msg->code > 100) && (msg->code < 300))
 	m_routes = msg->getRoutes();
+
+    if (msg->isAnswer() && m_externalAddr.null() && m_line) {
+	// see if we should detect our external address
+	const YateSIPLine* line = plugin.findLine(m_line);
+	if (line && line->localDetect()) {
+	    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
+	    if (hl) {
+		const NamedString* par = hl->getParam("received");
+		if (par && *par) {
+		    m_externalAddr = *par;
+		    Debug(this,DebugInfo,"Detected local address '%s' [%p]",
+			m_externalAddr.c_str(),this);
+		}
+	    }
+	}
+    }
+
     if (msg->isAnswer() && ((msg->code / 100) == 2)) {
 	const SIPMessage* ack = m_tr->latestMessage();
 	if (ack && ack->isACK()) {
@@ -2890,9 +2909,13 @@ bool YateSIPLine::update(const Message& msg)
     chg = change(m_domain,msg.getValue("domain")) || chg;
     m_display = msg.getValue("description");
     m_interval = msg.getIntValue("interval",600);
-    String tmp(msg.getValue("localaddress"));
-    m_localDetect = (tmp == "auto");
+    String tmp(msg.getValue("localaddress",s_auto_nat ? "auto" : ""));
+    // "auto", "yes", "enable" or "true" to autodetect local address
+    m_localDetect = (tmp == "auto") || tmp.toBoolean(false);
     if (!m_localDetect) {
+	// "no", "disable" or "false" to just disable detection
+	if (!tmp.toBoolean(true))
+	    tmp.clear();
 	int port = 0;
 	if (tmp) {
 	    int sep = tmp.find(':');

@@ -802,7 +802,8 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    ali = params->getValue("alias",ali);
 	}
 	SetLocalUserName(ali);
-	if (params && params->getBoolValue("gkclient")) {
+	String server = params->getValue("server");
+	if (params && params->getBoolValue("gkclient",!server.null())) {
 	    int ttl = params->getIntValue("gkttl",300);
 	    if (ttl > 0) {
 		// adjust time to live between 1 minute and 1 day
@@ -820,7 +821,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
 		SetGatekeeperPassword(p);
 		Debug(&hplugin,DebugInfo,"Enabling H.235 security access to gatekeeper %s",p);
 	    }
-	    const char* d = params->getValue("gkip");
+	    const char* d = params->getValue("gkip",server);
 	    const char* a = params->getValue("gkname");
 	    if (d)
 		startGkClient(ByAddr,retry,d);

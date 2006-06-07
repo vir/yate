@@ -206,6 +206,7 @@ public:
 	{ m_marked = mark; }
 private:
     void clearTransaction();
+    void detectLocal(const SIPMessage* msg);
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
     void keepalive();
@@ -2793,35 +2794,8 @@ bool YateSIPLine::process(SIPEvent* ev)
 	    // re-register at 3/4 of the expire interval
 	    m_resend = m_interval*(int64_t)750000 + Time::now();
 	    m_keepalive = m_alive ? m_alive*(int64_t)1000000 + Time::now() : 0;
+	    detectLocal(msg);
 	    if (msg->getParty()) {
-		if (m_localDetect) {
-		    String laddr = m_localAddr;
-		    int lport = m_localPort;
-		    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
-		    if (hl) {
-			const NamedString* par = hl->getParam("received");
-			if (par && *par)
-			    laddr = *par;
-			par = hl->getParam("rport");
-			if (par) {
-			    int port = par->toInteger(0,10);
-			    if (port > 0)
-				lport = port;
-			}
-		    }
-		    if (laddr.null())
-			laddr = msg->getParty()->getLocalAddr();
-		    if (!lport)
-			lport = msg->getParty()->getLocalPort();
-		    if ((laddr != m_localAddr) || (lport != m_localPort)) {
-			Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
-			    laddr.c_str(),lport,c_str());
-			m_localAddr = laddr;
-			m_localPort = lport;
-			// since local address changed register again in 5 seconds
-			m_resend = 5000000 + Time::now();
-		    }
-		}
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
@@ -2830,10 +2804,45 @@ bool YateSIPLine::process(SIPEvent* ev)
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
 	default:
+	    // detect local address even from failed attempts - helps next time
+	    detectLocal(msg);
 	    m_valid = false;
-	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d",c_str(),msg->code);
+	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",
+		c_str(),msg->code,msg->reason.safe());
     }
     return false;
+}
+
+void YateSIPLine::detectLocal(const SIPMessage* msg)
+{
+    if (!(m_localDetect && msg->getParty()))
+	return;
+    String laddr = m_localAddr;
+    int lport = m_localPort;
+    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
+    if (hl) {
+	const NamedString* par = hl->getParam("received");
+	if (par && *par)
+	    laddr = *par;
+	par = hl->getParam("rport");
+	if (par) {
+	    int port = par->toInteger(0,10);
+	    if (port > 0)
+		lport = port;
+	}
+    }
+    if (laddr.null())
+	laddr = msg->getParty()->getLocalAddr();
+    if (!lport)
+	lport = msg->getParty()->getLocalPort();
+    if ((laddr != m_localAddr) || (lport != m_localPort)) {
+	Debug(&plugin,DebugInfo,"Detected local address %s:%d for SIP line '%s'",
+	    laddr.c_str(),lport,c_str());
+	m_localAddr = laddr;
+	m_localPort = lport;
+	// since local address changed register again in 2 seconds
+	m_resend = 2000000 + Time::now();
+    }
 }
 
 void YateSIPLine::keepalive()

@@ -1,4 +1,4 @@
-/**
+/*
  * yateclass.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
@@ -260,6 +260,7 @@ public:
     /**
      * Constructor
      * @param level The initial local debug level
+     * @param enabled Enable debugging on this object
      */
     inline DebugEnabler(int level = TelEngine::debugLevel(), bool enabled = true)
 	: m_level(DebugFail), m_enabled(enabled), m_chain(0), m_name(0)
@@ -345,7 +346,7 @@ private:
     const char* m_name;
 };
 
-#if 0
+#if 0 /* for documentation generator */
 /**
  * Convenience macro.
  * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
@@ -475,7 +476,6 @@ YATE_API void Debug(const DebugEnabler* local, int level, const char* format, ..
 
 /**
  * Outputs a string to the debug console with formatting
- * @param facility Facility that outputs the message
  * @param format A printf() style format string
  */
 YATE_API void Output(const char* format, ...) FORMAT_CHECK(1);
@@ -537,11 +537,35 @@ private:
  * A table of such structures must end with an entry with a null token
  */
 struct TokenDict {
+    /**
+     * Token to match
+     */
     const char* token;
+
+    /**
+     * Value the token translates to
+     */
     int value;
 };
 
 class String;
+
+#if 0 /* for documentation generator */
+/**
+ * Macro to create a GenObject class from a base class and implement @ref GenObject::getObject
+ * @param type Class that is declared
+ * @param base Base class that is inherited
+ */
+void YCLASS(class type,class base);
+
+/**
+ * Macro to retrive a typed pointer to an interface from an object
+ * @param type Class we want to return
+ * @param pntr Pointer to the object we want to get the interface from
+ * @return Pointer to the class we want or NULL
+ */
+class* YOBJECT(class type,GenObject* pntr);
+#endif
 
 #define YCLASS(type,base) \
 public: virtual void* getObject(const String& name) const \
@@ -966,7 +990,7 @@ public:
 
     /**
      * Delete this list item
-     * @param delold True to delete the object (default)
+     * @param delobj True to delete the object (default)
      * @return Pointer to the object if not destroyed
      */
     GenObject* remove(bool delobj = true);
@@ -1074,6 +1098,7 @@ public:
     
     /**
      * Store an object in the array
+     * @param obj Object to store in the array
      * @param column Number of the column in the array
      * @param row Number of the row in the array
      * @return True for success, false if indexes were out of bounds
@@ -2285,7 +2310,7 @@ public:
     /**
      * Constructs an initialized data block
      * @param value Data to assign, may be NULL to fill with zeros
-     * @param len Length of data, may be zero (then @ref value is ignored)
+     * @param len Length of data, may be zero (then value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
      */
     DataBlock(void* value, unsigned int len, bool copyData = true);
@@ -2337,7 +2362,7 @@ public:
     /**
      * Assign data to the object
      * @param value Data to assign, may be NULL to fill with zeros
-     * @param len Length of data, may be zero (then @ref value is ignored)
+     * @param len Length of data, may be zero (then value is ignored)
      * @param copyData True to make a copy of the data, false to just insert the pointer
      */
     DataBlock& assign(void* value, unsigned int len, bool copyData = true);
@@ -2431,8 +2456,8 @@ public:
     MD5(const void* buf, unsigned int len);
 
     /**
-     * Construct a digest from a String
-     * @param str String to be included in digest
+     * Construct a digest from a binary DataBlock
+     * @param data Binary data to be included in digest
      */
     MD5(const DataBlock& data);
 
@@ -2810,7 +2835,7 @@ public:
      * Copy constructor creates a shared mutex
      * @param original Reference of the mutex to share
      */
-    Mutex(const Mutex& orginal);
+    Mutex(const Mutex& original);
 
     /**
      * Destroy the mutex
@@ -3122,14 +3147,14 @@ public:
 
     /**
      * Sleep for a number of milliseconds
-     * @param sec Number of milliseconds to sleep
+     * @param msec Number of milliseconds to sleep
      * @param exitCheck Terminate the thread if asked so
      */
     static void msleep(unsigned long msec, bool exitCheck = false);
 
     /**
      * Sleep for a number of microseconds
-     * @param sec Number of microseconds to sleep, may be rounded to
+     * @param usec Number of microseconds to sleep, may be rounded to
      *  milliseconds on some platforms
      * @param exitCheck Terminate the thread if asked so
      */
@@ -3754,6 +3779,7 @@ public:
 
     /**
      * Set socket options
+     * @param level Level of the option to set
      * @param name Socket option for which the value is to be set
      * @param value Pointer to a buffer holding the value for the requested option
      * @param length Size of the supplied buffer
@@ -3763,8 +3789,9 @@ public:
 
     /**
      * Get socket options
+     * @param level Level of the option to set
      * @param name Socket option for which the value is to be set
-     * @param value Pointer to a buffer to return the value for the requested option
+     * @param buffer Pointer to a buffer to return the value for the requested option
      * @param length Pointer to size of the supplied buffer, will be filled on return
      * @return True if operation was successfull, false if an error occured
      */
@@ -3903,7 +3930,7 @@ public:
      * @param buffer Buffer for data transfer
      * @param length Length of the buffer
      * @param addr Address to send the message to
-     * @param addrlen Length of the address structure
+     * @param adrlen Length of the address structure
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
@@ -3942,7 +3969,7 @@ public:
      * @param buffer Buffer for data transfer
      * @param length Length of the buffer
      * @param addr Address to fill in with the address of the incoming data
-     * @param addrlen Length of the address structure on input, length of address data on return
+     * @param adrlen Length of the address structure on input, length of address data on return
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
      */
@@ -4030,6 +4057,9 @@ protected:
 class YATE_API SysUsage
 {
 public:
+    /**
+     * Type of time usage requested
+     */
     enum Type {
 	WallTime,
 	UserTime,

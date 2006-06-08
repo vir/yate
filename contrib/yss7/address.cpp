@@ -119,7 +119,6 @@ bool SS7Label::assign(SS7CodePoint::Type type, const SS7MSU& msu)
 		m_spc.unpack(type,((s[2] & 0xc0) >> 6) | (s[3] << 2) | ((s[4] & 0x0f) << 10));
 		m_sls = (s[4] >> 4) & 0x0f;
 		return true;
-		return 4;
 	    case SS7CodePoint::ANSI:
 		m_type = type;
 		m_dpc.assign(s[3],s[2],s[1]);

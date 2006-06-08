@@ -1,4 +1,4 @@
-/**
+/*
  * yatecbase.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
@@ -24,7 +24,7 @@
 
 #ifndef __YATECBASE_H
 #define __YATECBASE_H
-                                                                                
+
 #ifndef __cplusplus
 #error C++ is required
 #endif
@@ -109,6 +109,7 @@ public:
     /**
      * Set an element as receiving input in the window
      * @param name Name of the element
+     * @param select Also select the content of the focused element
      * @return True if the operation was successfull
      */
     virtual bool setFocus(const String& name, bool select = false) = 0;

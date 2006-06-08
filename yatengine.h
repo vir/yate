@@ -1,4 +1,4 @@
-/**
+/*
  * yatengine.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
@@ -638,7 +638,8 @@ public:
 
     /**
      * Destroys the plugin.
-     * The destructor must never be called directly - the Loader will do it when @ref refCount() reaches zero.
+     * The destructor must never be called directly - the Loader will do it
+     *  when the shared object's reference count reaches zero.
      */
     virtual ~Plugin();
 
@@ -662,10 +663,14 @@ public:
 	{ return false; }
 };
 
+#if 0 /* for documentation generator */
 /**
  * Macro to create static instance of the plugin
  * @param pclass Class of the plugin to create
  */
+void INIT_PLUGIN(class pclass);
+#endif
+
 #define INIT_PLUGIN(pclass) static pclass __plugin
 
 /**
@@ -692,7 +697,7 @@ public:
      * @param argc Argument count
      * @param argv Argument array
      * @param env Environment variables
-     * @param client True to parse arguments and run as a client
+     * @param mode Mode the engine must run as - Console, Client or Server
      * @param fail Fail and return after parsing command line arguments
      * @return Program exit code
      */
@@ -701,6 +706,7 @@ public:
 
     /**
      * Display the help information on console
+     * @param client Display help for client running mode
      * @param errout Display on stderr intead of stdout
      */
     static void help(bool client, bool errout = false);

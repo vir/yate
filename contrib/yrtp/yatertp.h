@@ -1,4 +1,4 @@
-/**
+/*
  * yatertp.h
  * Yet Another RTP Stack
  * This file is part of the YATE Project http://YATE.null.ro
@@ -148,13 +148,13 @@ public:
 protected:
     /**
      * Add a RTP processor to this group
-     * @param processor Pointer to the RTP processor to add
+     * @param proc Pointer to the RTP processor to add
      */
     void join(RTPProcessor* proc);
 
     /**
      * Remove a RTP processor from this group
-     * @param processor Pointer to the RTP processor to remove
+     * @param proc Pointer to the RTP processor to remove
      */
     void part(RTPProcessor* proc);
 
@@ -170,6 +170,9 @@ private:
 class YRTP_API RTPTransport : public RTPProcessor
 {
 public:
+    /**
+     * Activation status of the transport
+     */
     enum Activation {
 	Inactive,
 	Bound,
@@ -178,7 +181,6 @@ public:
 
     /**
      * Constructor, creates an unconnected transport
-     * @param grp RTP group to join
      */
     RTPTransport();
 
@@ -613,6 +615,9 @@ private:
 class YRTP_API RTPSession : public RTPProcessor
 {
 public:
+    /**
+     * Direction of the session
+     */
     enum Direction {
 	FullStop = 0,
 	RecvOnly = 1,

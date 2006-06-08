@@ -1,4 +1,4 @@
-/**
+/*
  * yatephone.h
  * This file is part of the YATE Project http://YATE.null.ro
  *
@@ -861,14 +861,14 @@ public:
     inline DataConsumer* getCallRecord() const
 	{ return m_callRecord; }
 
-    /*
+    /**
      * Get a pointer to the peer endpoint
      * @return A pointer to the peer endpoint or NULL
      */
     inline DataEndpoint* getPeer() const
 	{ return m_peer; }
 
-    /*
+    /**
      * Get a pointer to the owner call
      * @return A pointer to the owner call or NULL
      */
@@ -1354,7 +1354,7 @@ public:
     /**
      * Notification on remote tone(s)
      * @param msg Notification message
-     * @param tones Pointer to the received tone(s)
+     * @param tone Pointer to the received tone(s)
      * @return True to stop processing the message, false to let it flow
      */
     virtual bool msgTone(Message& msg, const char* tone);

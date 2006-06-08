@@ -1,4 +1,4 @@
-/**
+/*
  * yatepbx.h
  * This file is part of the YATE Project http://YATE.null.ro
  *

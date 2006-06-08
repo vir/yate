@@ -48,15 +48,15 @@ void SS7Router::attach(SS7Layer4* service)
     service->attach(this);
 }
 
-bool SS7Router::transmitMSU(const SS7MSU& msu, int sls)
+int SS7Router::transmitMSU(const SS7MSU& msu, int sls)
 {
     Debug(toString(),DebugStub,"Please implement SS7Router::transmitMSU(%p,%d)",&msu,sls);
-    return false;
+    return -1;
 }
 
-bool SS7Router::receivedMSU(const SS7MSU& msu, SS7Layer3* network)
+bool SS7Router::receivedMSU(const SS7MSU& msu, SS7Layer3* network, int sls)
 {
-    Debug(toString(),DebugStub,"Please implement SS7Router::receivedMSU(%p,%p)",&msu,network);
+    Debug(toString(),DebugStub,"Please implement SS7Router::receivedMSU(%p,%p,%d)",&msu,network,sls);
     return false;
 }
 

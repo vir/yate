@@ -1,4 +1,4 @@
-/**
+/*
  * yatesip.h
  * Yet Another SIP Stack
  * This file is part of the YATE Project http://YATE.null.ro
@@ -774,6 +774,7 @@ protected:
     /**
      * Constructor from previous auto authenticated transaction. This is used only internally
      * @param original Original transaction that failed authentication
+     * @param answer SIP answer that creates the new transaction
      */
     SIPTransaction(SIPTransaction& original, SIPMessage* answer);
 
@@ -1011,6 +1012,7 @@ public:
 
     /**
      * Add a message into the transaction list
+     * @param ep Party of the received message
      * @param buf A buffer containing the SIP message text
      * @param len The length of the message or -1 to interpret as C string
      * @return Pointer to the transaction or NULL if message was invalid

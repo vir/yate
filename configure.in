@@ -626,6 +626,37 @@ AC_SUBST(MODULE_LDRELAX)
 AC_SUBST(MODULE_LDFLAGS)
 AC_SUBST(MODULE_SYMBOLS)
 
+DOXYGEN_BIN=""
+AC_ARG_WITH(doxygen,AC_HELP_STRING([--with-doxygen=EXE],[use doxygen to generate API docs (default: PATH)]),[ac_cv_use_doxygen=$withval],[ac_cv_use_doxygen=yes])
+if [[ "x$ac_cv_use_doxygen" != "xno" ]]; then
+test "x$ac_cv_use_doxygen" = "xyes" && ac_cv_use_doxygen=`which doxygen 2>/dev/null`
+AC_MSG_CHECKING([for doxygen version])
+if [[ "x$ac_cv_use_doxygen" != "x" -a -x "$ac_cv_use_doxygen" ]]; then
+DOXYGEN_BIN="$ac_cv_use_doxygen"
+ac_cv_use_doxygen=`$DOXYGEN_BIN --version 2>/dev/null`
+else
+ac_cv_use_doxygen="no"
+fi
+AC_MSG_RESULT([$ac_cv_use_doxygen])
+fi
+AC_SUBST(DOXYGEN_BIN)
+
+KDOC_BIN=""
+AC_ARG_WITH(kdoc,AC_HELP_STRING([--with-kdoc=EXE],[use kdoc to generate API docs (default: PATH)]),[ac_cv_use_kdoc=$withval],[ac_cv_use_kdoc=yes])
+if [[ "x$ac_cv_use_kdoc" != "xno" ]]; then
+test "x$ac_cv_use_kdoc" = "xyes" && ac_cv_use_kdoc=`which kdoc 2>/dev/null`
+AC_MSG_CHECKING([for kdoc version])
+if [[ "x$ac_cv_use_kdoc" != "x" -a -x "$ac_cv_use_kdoc" ]]; then
+KDOC_BIN="$ac_cv_use_kdoc"
+ac_cv_use_kdoc=`$KDOC_BIN --version 2>&1 | awk '{ print $2 }'`
+else
+ac_cv_use_kdoc="no"
+fi
+AC_MSG_RESULT([$ac_cv_use_kdoc])
+fi
+AC_SUBST(KDOC_BIN)
+
+
 AC_CONFIG_FILES([yate.spec
                  yate.pc
 		 yateversn.h

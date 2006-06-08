@@ -31,6 +31,14 @@ CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) yatepaths.h core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
+DOCGEN :=
+ifneq (_@KDOC_BIN@,_)
+DOCGEN := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) contrib/ysip/yatesip.h contrib/yrtp/yatertp.h
+endif
+ifneq (_@DOXYGEN_BIN@,_)
+DOCGEN := @DOXYGEN_BIN@ Doxyfile
+endif
+
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 
@@ -88,7 +96,7 @@ clean-tables: check-topdir
 	$(MAKE) -C ./tables -f Makefile.tables mrproper
 
 clean-apidocs: check-topdir
-	-rm docs/api/*.html
+	-rm docs/api/*.html docs/api/*.png
 
 distclean: check-topdir clean clean-config-files
 
@@ -99,11 +107,16 @@ cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 engine: tables library libyate.so $(PROGS)
 
 apidocs-build: check-topdir
-	kdoc -C ./kdoc-filter.sh -d docs/api/ $(INCS) contrib/ysip/yatesip.h contrib/yrtp/yatertp.h
+	@if [ -n "$(DOCGEN)" ]; then \
+	    $(DOCGEN) ; \
+	else \
+	    echo "Neither kdoc or doxygen is installed!" ; exit 1 ; \
+	fi
 
 apidocs: @srcdir@/docs/api/index.html
 
-@srcdir@/docs/api/index.html: @srcdir@/yateclass.h @srcdir@/yatengine.h \
+@srcdir@/docs/api/index.html: Doxyfile \
+    @srcdir@/yateclass.h @srcdir@/yatengine.h \
     @srcdir@/yatephone.h @srcdir@/yatecbase.h \
     @srcdir@/contrib/ysip/yatesip.h @srcdir@/contrib/yrtp/yatertp.h
 	$(MAKE) apidocs-build
@@ -181,8 +194,9 @@ install-noapi: all
 	done ;
 
 install-api: apidocs
+	mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
-	install -m 0644 @srcdir@/docs/api/*.html "$(DESTDIR)$(docdir)/api/"
+	install -m 0644 @srcdir@/docs/api/*.* "$(DESTDIR)$(docdir)/api/"
 
 uninstall uninstall-root:
 	@-for i in $(SLIBS) ; do \
@@ -268,6 +282,6 @@ help:
 	@echo -e 'Usual make targets:\n\
 	    all engine contrib modules clients apidocs test everything\n\
 	    install uninstall install-noapi install-root uninstall-root\n\
-	    clean distclean cvsclean (avoid this one!)\n\
+	    clean distclean cvsclean (avoid this one!) clean-apidocs\n\
 	    debug ddebug xdebug (carefull!)\n\
 	    snapshot tarball'

@@ -194,8 +194,10 @@ void SS7MTP2::timerTick(const Time& when)
 	m_interval = 0;
     unlock();
     if (operational()) {
-	if (tout)
+	if (tout) {
 	    Debug(engine(),DebugInfo,"Proving period ended, link operational [%p]",this);
+	    SS7Layer2::notify();
+	}
 	transmitFISU();
     }
     else {
@@ -423,6 +425,7 @@ void SS7MTP2::abortAlignment()
     m_interval = Time::now() + 1000000;
     m_queue.clear();
     unlock();
+    SS7Layer2::notify();
 }
 
 bool SS7MTP2::startProving()

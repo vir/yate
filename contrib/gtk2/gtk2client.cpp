@@ -26,6 +26,7 @@
 #include "gtk2client.h"
 
 #include <gdk/gdkkeysyms.h>
+#include <gobject/gmarshal.h>
 
 using namespace TelEngine;
 
@@ -133,6 +134,23 @@ static bool validPos(int x, int y)
     return (-10000 < x) && (x < 10000) && (-10000 < y) && (y < 10000);
 }
 
+static void makeUserSignal(GtkWidget* wid)
+{
+    static guint action = (guint)-1;
+    if ((action != (guint)-1) || !wid)
+	return;
+    static GType type = G_TYPE_STRING;
+    action = g_signal_newv("user_action",
+	GTK_WIDGET_TYPE(wid),
+	(GSignalFlags)(G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION),
+	NULL,
+	NULL,NULL,
+	g_cclosure_marshal_VOID__STRING,
+	G_TYPE_NONE,
+	1, &type);
+    DDebug(GTKDriver::self(),DebugInfo,"Created user signal %u",action);
+}
+
 static gboolean gtkIdleCb(gpointer dat)
 {
     if (dat) {
@@ -151,7 +169,7 @@ static gboolean debugCbInfo(GtkWidget* wid)
     gchar* wcp = NULL;
     gtk_widget_path(wid,NULL,&wp,NULL);
     gtk_widget_class_path(wid,NULL,&wcp,NULL);
-    Debug(GTKDriver::self(),DebugAll,"debugCbInfo widget %p path '%s' class path '%s'",
+    Debug(GTKDriver::self(),DebugNote,"debugCbInfo widget %p path '%s' class path '%s'",
 	wid,wp,wcp);
     g_free(wp);
     g_free(wcp);
@@ -279,6 +297,16 @@ static GtkWidget* getListItem(GtkList* lst, const String& item)
     }
     g_list_free(listItems);
     return ret;
+}
+
+static gboolean widgetCbUser(GtkWidget* wid, const gchar* str)
+{
+    DDebug(GTKDriver::self(),DebugAll,"gtkUserAction widget %p action '%s'",wid,str);
+    if (GTKClient::changing())
+	return FALSE;
+    if (s_clickInfo)
+	debugCbInfo(wid);
+    return GTKClient::self() && GTKClient::self()->action(getWidgetWindow(wid),str);
 }
 
 static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
@@ -811,10 +839,11 @@ void Widget::destroyCb(GtkObject* obj, gpointer dat)
 
 GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
     : Window(id), m_decorated(decorated), m_dragable(false), m_layout(layout),
-      m_widget(0), m_filler(0), m_state(0),
+      m_widget(0), m_filler(0), m_group(0), m_state(0),
       m_posX(INVALID_POS), m_posY(INVALID_POS), m_sizeW(0), m_sizeH(0)
 {
     m_widget = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    makeUserSignal(m_widget);
     g_object_set_data((GObject*)m_widget,"Yate::Window",this);
     gtk_window_set_role((GtkWindow*)m_widget,id);
 //    gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_DIALOG);
@@ -827,6 +856,7 @@ GTKWindow::GTKWindow(const char* id, bool decorated, Layout layout)
     g_signal_connect(G_OBJECT(m_widget),"configure_event",G_CALLBACK(windowCbConfig),this);
     g_signal_connect(G_OBJECT(m_widget),"window_state_event",G_CALLBACK(windowCbState),this);
     g_signal_connect(G_OBJECT(m_widget),"show_help",G_CALLBACK(widgetCbHelp),this);
+    g_signal_connect(G_OBJECT(m_widget),"user_action",G_CALLBACK(widgetCbUser),this);
 #ifdef XDEBUG
     g_signal_connect(G_OBJECT(m_widget),"event",G_CALLBACK(windowCbEvent),this);
 #endif
@@ -1075,7 +1105,12 @@ void GTKWindow::init()
     title(s_cfg.getValue(m_id,"title",m_id));
     m_master = s_cfg.getBoolValue(m_id,"master");
     m_popup = s_cfg.getBoolValue(m_id,"popup");
-    if (!(m_master || m_decorated))
+    if (m_master || m_decorated) {
+	// put these windows in their own group
+	m_group = gtk_window_group_new();
+	gtk_window_group_add_window(m_group,(GtkWindow*)m_widget);
+    }
+    else
 	gtk_window_set_type_hint((GtkWindow*)m_widget,GDK_WINDOW_TYPE_HINT_TOOLBAR);
     m_posX = s_save.getIntValue(m_id,"x",m_posX);
     m_posY = s_save.getIntValue(m_id,"y",m_posY);
@@ -1209,6 +1244,8 @@ void GTKWindow::setOver(const Window* parent)
 {
     GTKWindow* gwnd = YOBJECT(GTKWindow,parent);
     if (gwnd) {
+	if (gwnd->group())
+	    gtk_window_group_add_window(gwnd->group(),GTK_WINDOW(m_widget));
 	gtk_window_set_transient_for(GTK_WINDOW(m_widget),GTK_WINDOW(gwnd->widget()));
 	if (gwnd->prepare() && validPos(gwnd->m_posX,gwnd->m_posY))
 	    move(gwnd->m_posX + (gwnd->m_sizeW - m_sizeW) / 2,

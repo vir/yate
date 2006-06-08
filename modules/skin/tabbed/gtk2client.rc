@@ -49,18 +49,25 @@ style "caption" {
     bg[NORMAL] = { 0.93, 0.95, 0.96 }
 }
 
-binding "help" {
-    bind "F1" {
-	"show-help" (0,2,0)
-	"debug-msg" ("Help requested")
-    }
+binding "help_main" {
+    bind "F1" {	"user-action" ("help_show:0") }
+}
+
+binding "help_p1" {
+    bind "F1" {	"user-action" ("help_show:1") }
+}
+
+binding "help_p2" {
+    bind "F1" {	"user-action" ("help_show:2") }
 }
 
 widget "gtk-tooltips" style "tips"
 widget "gtk-tooltips*GtkLabel" style "tips"
 
+widget "addrbook" binding "help_p1"
+widget "account" binding "help_p2"
+class "GtkWindow" binding "help_main"
 class "GtkWindow" style "window"
-class "GtkWindow" binding "help"
 class "GtkWidget" style "window"
 widget_class "GtkWindow.GtkFrame" style "border"
 class "GtkButton" style "button"

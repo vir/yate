@@ -173,6 +173,8 @@ public:
 	{ m_state = gdkState; }
     inline bool dragable() const
 	{ return m_dragable; }
+    inline GtkWindowGroup* group() const
+	{ return m_group; }
     bool prepare();
     bool restore();
     static bool setText(GtkWidget* wid, const String& text);
@@ -196,6 +198,7 @@ protected:
     int m_layout;
     GtkWidget* m_widget;
     GtkWidget* m_filler;
+    GtkWindowGroup* m_group;
     String m_tabName;
     int m_state;
     gint m_posX;

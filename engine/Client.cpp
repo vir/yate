@@ -989,6 +989,11 @@ bool Client::action(Window* wnd, const String& name)
 	    wnd->hide();
 	return ok;
     }
+    if (name.startsWith("help_show:")) {
+	Window* help = getWindow("help");
+	if (help)
+	    wnd = help;
+    }
     if (name == "call" || name == "callto") {
 	String target;
 	getText("callto",target,wnd);

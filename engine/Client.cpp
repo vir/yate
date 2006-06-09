@@ -1787,12 +1787,16 @@ void Client::enableAction(const ClientChannel* chan, const String& action)
 
 void Client::idleActions()
 {
-    if (!s_busy)
-	return;
-    ClientThreadProxy* tmp = s_proxy;
-    s_proxy = 0;
-    if (tmp)
+    // arbitrary limit to let other threads run too
+    for (int i = 0; i < 4; i++) {
+	if (!s_busy)
+	    return;
+	ClientThreadProxy* tmp = s_proxy;
+	s_proxy = 0;
+	if (!tmp)
+	    return;
 	tmp->process();
+    }
 }
 
 bool Client::driverLock(long maxwait)

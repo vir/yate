@@ -349,63 +349,63 @@ private:
 #if 0 /* for documentation generator */
 /**
  * Convenience macro.
- * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ * Does the same as @ref Debug if DEBUG is \#defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
 void DDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ * Does the same as @ref Debug if DEBUG is \#defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
 void DDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if DEBUG is #defined (compiling for debugging)
+ * Does the same as @ref Debug if DEBUG is \#defined (compiling for debugging)
  *  else it does not get compiled at all.
  */
 void DDebug(const DebugEnabler* local, int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * Does the same as @ref Debug if XDEBUG is \#defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
 void XDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * Does the same as @ref Debug if XDEBUG is \#defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
 void XDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if XDEBUG is #defined (compiling for extra
+ * Does the same as @ref Debug if XDEBUG is \#defined (compiling for extra
  * debugging) else it does not get compiled at all.
  */
 void XDebug(const DebugEnabler* local, int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if NDEBUG is not #defined
+ * Does the same as @ref Debug if NDEBUG is not \#defined
  *  else it does not get compiled at all (compiling for mature release).
  */
 void NDebug(int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if NDEBUG is not #defined
+ * Does the same as @ref Debug if NDEBUG is not \#defined
  *  else it does not get compiled at all (compiling for mature release).
  */
 void NDebug(const char* facility, int level, const char* format, ...);
 
 /**
  * Convenience macro.
- * Does the same as @ref Debug if NDEBUG is not #defined
+ * Does the same as @ref Debug if NDEBUG is not \#defined
  *  else it does not get compiled at all (compiling for mature release).
  */
 void NDebug(const DebugEnabler* local, int level, const char* format, ...);

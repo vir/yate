@@ -36,6 +36,7 @@ static Configuration s_cfg;
 static Configuration s_save;
 static ObjList s_factories;
 static bool s_clickInfo = false;
+static bool s_idleYield = false;
 
 #define INVALID_POS (-1000000)
 #define MAX_CONTAINER_DEPTH 20
@@ -159,6 +160,9 @@ static gboolean gtkIdleCb(gpointer dat)
 	gdk_threads_enter();
 	static_cast<GTKClient*>(dat)->idleActions();
 	gdk_threads_leave();
+	// some versions of glib/gtk eat 100% CPU if we don't yield here
+	if (s_idleYield)
+	    Thread::yield();
     }
     return true;
 }
@@ -2052,7 +2056,7 @@ void GTKClient::loadWindows()
     g_timeout_add(1,gtkIdleCb,this);
 #else
     // but on Linux the 1ms timeout makes the UI crawl...
-    gtk_idle_add(gtkIdleCb,this);
+    g_idle_add(gtkIdleCb,this);
 #endif
 }
 
@@ -2071,6 +2075,7 @@ void GTKDriver::initialize()
     s_device = Engine::config().getValue("client","device",DEFAULT_DEVICE);
     if (!GTKClient::self())
     {
+	s_idleYield = Engine::config().getBoolValue("client","idleyield");
 	s_clickInfo = Engine::config().getBoolValue("client","clickinfo");
 	debugCopy();
 	new GTKClient;

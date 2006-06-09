@@ -33,7 +33,9 @@ LINK = $(CXX) $(LDFLAGS)
 
 DOCGEN :=
 ifneq (_@KDOC_BIN@,_)
-DOCGEN := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) contrib/ysip/yatesip.h contrib/yrtp/yatertp.h
+DOCGEN := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) \
+    contrib/ysip/yatesip.h contrib/yrtp/yatertp.h \
+    contrib/ysip/yatepbx.h contrib/yrtp/yatess7.h
 endif
 ifneq (_@DOXYGEN_BIN@,_)
 DOCGEN := @DOXYGEN_BIN@ Doxyfile
@@ -118,7 +120,10 @@ apidocs: @srcdir@/docs/api/index.html
 @srcdir@/docs/api/index.html: Doxyfile \
     @srcdir@/yateclass.h @srcdir@/yatengine.h \
     @srcdir@/yatephone.h @srcdir@/yatecbase.h \
-    @srcdir@/contrib/ysip/yatesip.h @srcdir@/contrib/yrtp/yatertp.h
+    @srcdir@/contrib/ysip/yatesip.h \
+    @srcdir@/contrib/yrtp/yatertp.h \
+    @srcdir@/contrib/ypbx/yatepbx.h \
+    @srcdir@/contrib/yss7/yatess7.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war

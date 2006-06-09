@@ -1242,7 +1242,7 @@ void YateH323Connection::OnUserInputString(const PString &value)
     if (!m_chan)
 	return;
     String text((const char *)value);
-    const char *type = text.startSkip("MSG") ? "chan.text" : "chan.dtmf";
+    const char *type = text.startSkip("MSG",false) ? "chan.text" : "chan.dtmf";
     Message *m = m_chan->message(type,false,true);
     lock.drop();
     m->addParam("text",text);

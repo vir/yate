@@ -130,6 +130,7 @@ int EnginePrivate::count = 0;
 static bool s_init = false;
 static bool s_dynplugin = false;
 static int s_maxworkers = 10;
+static bool s_debug = true;
 
 static bool s_sigabrt = false;
 static const char* s_cfgfile = 0;
@@ -539,6 +540,24 @@ int Engine::run()
 	if (s_init) {
 	    s_init = false;
 	    initPlugins();
+	}
+
+	if (s_debug) {
+	    // one-time sending of debug setup messages
+	    s_debug = false;
+	    const NamedList* sect = s_cfg.getSection("debug");
+	    if (sect) {
+		unsigned int n = sect->length();
+		for (unsigned int i = 0; i < n; i++) {
+		    const NamedString* str = sect->getParam(i);
+		    if (!(str && str->name() && *str))
+			continue;
+		    Message* m = new Message("engine.debug");
+		    m->addParam("module",str->name());
+		    m->addParam("line",*str);
+		    enqueue(m);
+		}
+	    }
 	}
 
 	// Create worker thread if we didn't hear about any of them in a while

@@ -68,6 +68,19 @@ h323chan.yate=yes
 ;  system specific - usually .so for *NIX systems and .dll for Windows
 
 
+[debug]
+; Each line in this section generates an engine.debug message immediately
+;  after the first initialization. This is equivalent of issuing the debug
+;  command in the Remote Manager.
+; Each line has to be of the form:
+;  modulename=parameters to debug
+; Examples:
+;  tone=off
+;  h323=level 9
+;  sip=level 8
+;  sip=filter 127.0.0.1
+
+
 [telephony]
 ; Default settings for telephony drivers
 

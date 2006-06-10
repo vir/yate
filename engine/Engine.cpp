@@ -127,9 +127,9 @@ String Engine::s_modsuffix(DLL_SUFFIX);
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
-bool s_init = false;
-bool s_dynplugin = false;
-int s_maxworkers = 10;
+static bool s_init = false;
+static bool s_dynplugin = false;
+static int s_maxworkers = 10;
 
 static bool s_sigabrt = false;
 static const char* s_cfgfile = 0;

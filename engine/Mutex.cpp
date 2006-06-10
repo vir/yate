@@ -86,8 +86,8 @@ private:
 
 using namespace TelEngine;
 
-GlobalMutex s_global;
-unsigned long s_maxwait = 0;
+static GlobalMutex s_global;
+static unsigned long s_maxwait = 0;
 
 volatile int MutexPrivate::s_count = 0;
 volatile int MutexPrivate::s_locks = 0;

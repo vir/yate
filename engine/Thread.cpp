@@ -76,7 +76,7 @@ using namespace TelEngine;
 #define KILL_WAIT 32
 
 #ifdef _WINDOWS
-DWORD tls_index = ::TlsAlloc();
+static DWORD tls_index = ::TlsAlloc();
 #else
 static pthread_key_t current_key;
 
@@ -102,8 +102,8 @@ static TokenDict s_prio[] = {
     { 0, 0 }
 };
 
-ObjList threads;
-Mutex tmutex(true);
+static ObjList s_threads;
+static Mutex s_tmutex(true);
 
 ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority prio)
 {
@@ -192,8 +192,8 @@ ThreadPrivate::ThreadPrivate(Thread* t,const char* name)
 #ifdef DEBUG
     Debugger debug("ThreadPrivate::ThreadPrivate","(%p,\"%s\") [%p]",t,name,this);
 #endif
-    Lock lock(tmutex);
-    threads.append(this);
+    Lock lock(s_tmutex);
+    s_threads.append(this);
 }
 
 ThreadPrivate::~ThreadPrivate()
@@ -202,8 +202,8 @@ ThreadPrivate::~ThreadPrivate()
     Debugger debug("ThreadPrivate::~ThreadPrivate()"," %p '%s' [%p]",m_thread,m_name,this);
 #endif
     m_running = false;
-    Lock lock(tmutex);
-    threads.remove(this,false);
+    Lock lock(s_tmutex);
+    s_threads.remove(this,false);
     if (m_thread && m_updest) {
 	Thread *t = m_thread;
 	m_thread = 0;
@@ -238,9 +238,9 @@ void ThreadPrivate::pubdestroy()
 	cancel(false);
 	// delay a little so thread has a chance to clean up
 	for (int i=0; i<20; i++) {
-	    tmutex.lock();
-	    bool done = !threads.find(this);
-	    tmutex.unlock();
+	    s_tmutex.lock();
+	    bool done = !s_threads.find(this);
+	    s_tmutex.unlock();
 	    if (done)
 		return;
 	    Thread::msleep(5,false);
@@ -341,8 +341,8 @@ void ThreadPrivate::killall()
     ThreadPrivate *t;
     bool sledgehammer = false;
     int c = 1;
-    tmutex.lock();
-    ObjList *l = &threads;
+    s_tmutex.lock();
+    ObjList *l = &s_threads;
     while (l && (t = static_cast<ThreadPrivate *>(l->get())) != 0)
     {
 	Debug(DebugInfo,"Trying to kill ThreadPrivate '%s' [%p], attempt %d",t->m_name,t,c);
@@ -351,10 +351,10 @@ void ThreadPrivate::killall()
 	    int d = 0;
 	    // delay a little (exponentially) so threads have a chance to clean up
 	    for (int i=1; i<=KILL_WAIT; i<<=1) {
-		tmutex.unlock();
+		s_tmutex.unlock();
 		Thread::msleep(i-d);
 		d = i;
-		tmutex.lock();
+		s_tmutex.lock();
 		if (t != l->get())
 		    break;
 	    }
@@ -364,9 +364,9 @@ void ThreadPrivate::killall()
 	else {
 	    if (ok) {
 		Debug(DebugGoOn,"Could not kill %p but seems OK to delete it (library bug?)",t);
-		tmutex.unlock();
+		s_tmutex.unlock();
 		t->destroy();
-		tmutex.lock();
+		s_tmutex.lock();
 		if (t != l->get())
 		    c = 1;
 		continue;
@@ -381,7 +381,7 @@ void ThreadPrivate::killall()
 	    }
 	}
     }
-    tmutex.unlock();
+    s_tmutex.unlock();
     // last solution - a REALLY BIG tool!
     // usually too big since many libraries have threads of their own...
     if (sledgehammer) {
@@ -496,8 +496,8 @@ const char* Thread::currentName()
 
 int Thread::count()
 {
-    Lock lock(tmutex);
-    return threads.count();
+    Lock lock(s_tmutex);
+    return s_threads.count();
 }
 
 void Thread::cleanup()

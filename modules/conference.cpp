@@ -669,7 +669,8 @@ ConfChan::~ConfChan()
 bool ConfHandler::received(Message& msg)
 {
     String room = msg.getValue("room");
-    if (!room.startSkip(__plugin.prefix(),false) || room.null())
+    // if a room name is provided it must be like room/SOMETHING
+    if (room && (!room.startSkip(__plugin.prefix(),false) || room.null()))
 	return false;
     // we don't need a RefPointer for this one as the message keeps it referenced
     CallEndpoint* chan = YOBJECT(CallEndpoint,msg.userData());

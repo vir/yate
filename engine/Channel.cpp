@@ -27,6 +27,40 @@
 
 using namespace TelEngine;
 
+// Find if a string appears to be an E164 phone number
+bool TelEngine::isE164(const char* str)
+{
+    if (!str)
+	return false;
+    // an initial + character is ok, we skip it
+    if (*str == '+')
+	str++;
+    // at least one valid character is required
+    if (!*str)
+	return false;
+    for (;;) {
+	switch (*str++) {
+	    case '0':
+	    case '1':
+	    case '2':
+	    case '3':
+	    case '4':
+	    case '5':
+	    case '6':
+	    case '7':
+	    case '8':
+	    case '9':
+	    case '*':
+	    case '#':
+		break;
+	    case '\0':
+		return true;
+	    default:
+		return false;
+	}
+    }
+}
+
 static unsigned int s_callid = 0;
 static Mutex s_callidMutex;
 

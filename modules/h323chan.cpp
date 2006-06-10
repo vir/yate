@@ -208,33 +208,6 @@ static const char* CallEndReasonText(int reason)
 #undef MAKE_END_REASON
 }
 
-static bool isE164(const char* str)
-{
-    if (!(str && *str))
-	return false;
-    for (;;) {
-	switch (*str++) {
-	    case '0':
-	    case '1':
-	    case '2':
-	    case '3':
-	    case '4':
-	    case '5':
-	    case '6':
-	    case '7':
-	    case '8':
-	    case '9':
-	    case '*':
-	    case '#':
-		continue;
-	    case 0:
-		return true;
-	    default:
-		return false;
-	}
-    }
-}
-
 static int cleaningCount()
 {
     Lock lock(s_mutex);

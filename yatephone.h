@@ -1921,6 +1921,13 @@ protected:
 	{ return m_id; }
 };
 
+/**
+ * Find if a string appears to be an E164 phone number
+ * @param str String to check
+ * @return True if str appears to be a valid E164 number
+ */
+YATE_API bool isE164(const char* str);
+
 }; // namespace TelEngine
 
 #endif /* __YATEPHONE_H */

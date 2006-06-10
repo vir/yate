@@ -353,23 +353,36 @@ bool OssDevice::timePassed(void)
 
 bool OssDevice::setPcmFormat()
 {
-    int fmt = AFMT_S16_LE;
-    int res = ::ioctl(m_fd, SNDCTL_DSP_SETFMT, &fmt);
-    if (res < 0) {
-	Debug(DebugWarn, "Unable to set format to 16-bit signed");
-	return false;
-    }
+    // set fragment to 4 buffers, 2^9=512 bytes each
+    int fmt = (4 << 16) | 9;
+    int res = ::ioctl(m_fd, SNDCTL_DSP_SETFRAGMENT, &fmt);
+    if (res < 0)
+	Debug(DebugWarn, "Unable to set fragment size - sound may be choppy");
+
+    // try to set full duplex mode
     res = ::ioctl(m_fd, SNDCTL_DSP_SETDUPLEX, 0);
     if (res >= 0) {
 	Debug(DebugInfo,"OSS audio device is full duplex");
 	m_fullDuplex = true;
     }
+
+    // format 16-bit signed linear
+    fmt = AFMT_S16_LE;
+    res = ::ioctl(m_fd, SNDCTL_DSP_SETFMT, &fmt);
+    if (res < 0) {
+	Debug(DebugWarn, "Unable to set format to 16-bit signed");
+	return false;
+    }
+
+    // disable stereo mode
     fmt = 0;
     res = ::ioctl(m_fd, SNDCTL_DSP_STEREO, &fmt);
     if (res < 0) {
 	Debug(DebugWarn, "Failed to set audio device to mono");
 	return false;
     }
+
+    // try to set the desired speed (8kHz) and check if it was actually set
     int desired = 8000;
     fmt = desired;
     res = ::ioctl(m_fd, SNDCTL_DSP_SPEED, &fmt);
@@ -379,10 +392,6 @@ bool OssDevice::setPcmFormat()
     }
     if (fmt != desired)
 	Debug(DebugWarn, "Requested %d Hz, got %d Hz - sound may be choppy", desired, fmt);
-    fmt = (2 << 16) | 8;
-    res = ::ioctl(m_fd, SNDCTL_DSP_SETFRAGMENT, &fmt);
-    if (res < 0)
-	Debug(DebugWarn, "Unable to set fragment size - sound may be choppy");
     return true;
 }
 

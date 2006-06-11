@@ -46,7 +46,9 @@ public:
 
 static void evalFunc(String &str)
 {
-    if (str.startSkip("++",false))
+    if (str.null())
+	str = ";";
+    else if (str.startSkip("++",false))
 	str = str.toInteger(0,10) + 1;
     else if (str.startSkip("--",false))
 	str = str.toInteger(0,10) - 1;

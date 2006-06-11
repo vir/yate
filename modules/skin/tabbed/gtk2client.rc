@@ -61,11 +61,21 @@ binding "help_p2" {
     bind "F1" {	"user-action" ("help_show:2") }
 }
 
+binding "help_p3" {
+    bind "F1" {	"user-action" ("help_show:3") }
+}
+
+binding "help_help" {
+    bind "F1" {	"user-action" ("help_show:4") }
+}
+
 widget "gtk-tooltips" style "tips"
 widget "gtk-tooltips*GtkLabel" style "tips"
 
-widget "addrbook" binding "help_p1"
-widget "account" binding "help_p2"
+widget "tabbedwin" binding "help_p1"
+widget "addrbook" binding "help_p2"
+widget "account" binding "help_p3"
+widget "help" binding "help_help"
 class "GtkWindow" binding "help_main"
 class "GtkWindow" style "window"
 class "GtkWidget" style "window"

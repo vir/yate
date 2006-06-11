@@ -1,4 +1,18 @@
-<markup><big><b>Yate Help Page 1</b></big>
+<markup><big><b>Main Window</b></big>
 
-Page 1 text here
+Click on the left side tabs to select the panel
+with the functions you need:
+  - <b>Calls</b> contains tools to create and control a
+    call and also a keypad to enter numbers and
+    in-call navigation keys.
+  - <b>Received</b> contains a log of incoming calls,
+    answered or missed.
+  - <b>Dialed</b> contains a log of outgoing (placed)
+    calls.
+  - <b>Contacts</b> allows associating names to phone
+    numbers.
+  - <b>Accounts</b> creates and modifies any accounts
+    you may have with IP telephony providers.
+  - <b>Settings</b> to make changes to some global
+    attributes of the program.
 </markup><!-- pango -->

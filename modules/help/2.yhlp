@@ -1,0 +1,13 @@
+<markup><big><b>Address Book</b></big>
+
+The <b>Contact</b> window creates or changes
+individual contact addresses.
+
+Each contact has a descriptive name that gets
+displayed and a phone number used to place
+new phone calls.
+
+You can create new contacts by hand or by using
+the <b>Contact</b> button in either Received or
+Dialed log panel.
+</markup><!-- pango -->

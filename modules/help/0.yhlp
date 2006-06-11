@@ -1,12 +1,18 @@
-<markup><big><b>Yate Help Contents</b></big>
+<markup><big><b>Help Contents</b></big>
 
 Yate is a next-generation telephony engine;
 while currently focused on Voice over Internet
-  Protocol (VoIP) and PSTN, its power lies in
-  its ability to be easily extended.
+Protocol (VoIP) and PSTN, its power lies in its
+ability to be easily extended.
+
 Voice, video, data and instant messaging can
-  all be unified under Yate's flexible routing
-  engine, maximizing communications efficiency
-  and minimizing infrastructure costs for
-  businesses.
+all be unified under Yate's flexible routing
+engine, maximizing communications efficiency
+and minimizing infrastructure costs for
+businesses.
+
+What you see now is the Client component of
+Yate, a skinnable soft phone that uses the same
+proved engine and protocol drivers as the server
+version.
 </markup><!-- pango -->

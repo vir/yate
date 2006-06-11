@@ -22,6 +22,7 @@
 
 
 #include "yatecbase.h"
+#include "yateversn.h"
 
 #include <stdio.h>
 
@@ -424,7 +425,7 @@ void Client::run()
     initWindows();
     initClient();
     updateFrom(0);
-    setStatus("");
+    setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " " YATE_RELEASE));
     m_initialized = true;
     msg.setParam("event","init");
     Engine::dispatch(msg);
@@ -1048,10 +1049,13 @@ bool Client::action(Window* wnd, const String& name)
 	String target;
 	Window* win = (wnd && hasElement("callto",wnd)) ? wnd : 0;
 	if (getText("callto",target)) {
-	    target += name.at(6);
-	    if (setText("callto",target,win)) {
-		setFocus("callto",false,win);
-		return true;
+	    String digits = name.at(6);
+	    if (isE164(digits)) {
+		target += digits;
+		if (setText("callto",target,win)) {
+		    setFocus("callto",false,win);
+		    return true;
+		}
 	    }
 	}
     }

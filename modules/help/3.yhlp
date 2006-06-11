@@ -1,0 +1,18 @@
+<markup><big><b>Account Setup</b></big>
+
+You can set up or modify settings for accounts
+you have with IP telephony providers or other
+VoIP networks.
+
+You have to provide an unique <b>Account name</b>
+that will identify the account when making calls.
+The <b>Username</b> and <b>Password</b> are
+credentials used to authenticate with the server.
+
+Specific provider settings can be applied from a
+template file. These will not change the user
+specific settings described above.
+
+It is also possible to set manually the protocol
+and server details in the right hand column.
+</markup><!-- pango -->

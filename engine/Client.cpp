@@ -487,7 +487,7 @@ void Client::initWindows()
 
 void Client::initClient()
 {
-    s_accounts = Engine::configFile("client_accounts");
+    s_accounts = Engine::configFile("client_accounts",true);
     s_accounts.load();
     unsigned int n = s_accounts.sections();
     unsigned int i;
@@ -509,7 +509,7 @@ void Client::initClient()
 	}
     }
 
-    s_contacts = Engine::configFile("client_contacts");
+    s_contacts = Engine::configFile("client_contacts",true);
     s_contacts.load();
     n = s_contacts.sections();
     for (i=0; i<n; i++) {
@@ -531,7 +531,7 @@ void Client::initClient()
 	}
     }
 
-    s_history = Engine::configFile("client_history");
+    s_history = Engine::configFile("client_history",true);
     s_history.load();
     n = s_history.sections();
     for (i=0; i<n; i++) {

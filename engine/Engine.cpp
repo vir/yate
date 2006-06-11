@@ -22,7 +22,9 @@
 
 #include "yatengine.h"
 #include "yateversn.h"
+
 #ifdef _WINDOWS
+
 #include <process.h>
 #define RTLD_NOW 0
 #define dlopen(name,flags) LoadLibrary(name)
@@ -32,13 +34,22 @@
 #define YSERV_INS 2
 #define YSERV_DEL 4
 #define PATH_SEP "\\"
+#define CFG_DIR "Yate"
+
+#ifndef SHGetSpecialFolderPath
+__declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
+#endif
+
 #else
+
 #include "yatepaths.h"
 #include <dirent.h>
 #include <dlfcn.h>
 #include <sys/wait.h>
 typedef void* HMODULE;
 #define PATH_SEP "/"
+#define CFG_DIR ".yate"
+
 #endif
 
 #include <unistd.h>
@@ -638,9 +649,30 @@ const char* Engine::pathSeparator()
     return PATH_SEP;
 }
 
-String Engine::configFile(const char* name)
+String Engine::configFile(const char* name, bool user)
 {
-    return s_cfgpath + PATH_SEP + name + s_cfgsuffix;
+    String path;
+    if (user) {
+#ifdef _WINDOWS
+	// we force using the ANSI version
+	char szPath[MAX_PATH];
+	if (SHGetSpecialFolderPathA(NULL,szPath,CSIDL_APPDATA,TRUE))
+	    path = szPath;
+#else
+	path = ::getenv("HOME");
+#endif
+    }
+    if (path.null())
+	path = s_cfgpath;
+    else {
+	if (!path.endsWith(PATH_SEP))
+	    path += PATH_SEP;
+	path += CFG_DIR;
+	::mkdir(path,S_IRWXU);
+    }
+    if (!path.endsWith(PATH_SEP))
+	path += PATH_SEP;
+    return path + name + s_cfgsuffix;
 }
 
 const Configuration& Engine::config()

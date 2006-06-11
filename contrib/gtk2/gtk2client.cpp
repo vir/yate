@@ -1982,7 +1982,7 @@ GTKClient::GTKClient()
 	s_skinPath << Engine::pathSeparator();
     s_cfg = s_skinPath + "gtk2client.ui";
     s_cfg.load();
-    s_save = Engine::configFile("gtk2client");
+    s_save = Engine::configFile("gtk2client",true);
     s_save.load();
 }
 

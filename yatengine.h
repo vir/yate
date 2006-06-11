@@ -732,18 +732,23 @@ public:
     static bool Register(const Plugin* plugin, bool reg = true);
 
     /**
-     * The configuration directory path
+     * Get the filename for a specific configuration
+     * @param name Name of the configuration requested
+     * @param user True to build a user settings path
+     * @return A full path configuration file name
      */
-    static String configFile(const char* name);
+    static String configFile(const char* name, bool user = false);
 
     /**
-     * The configuration directory path
+     * Get the system configuration directory path
+     * @return The directory path for system configuration files
      */
     inline static String& configPath()
 	{ return s_cfgpath; }
 
     /**
-     * The configuration file suffix
+     * Get the configuration file suffix
+     * @return The suffix for configuration files
      */
     inline static String& configSuffix()
 	{ return s_cfgsuffix; }
@@ -762,13 +767,15 @@ public:
 	{ return s_extramod; }
 
     /**
-     * The module suffix
+     * Get the module filename suffix
+     * @return The suffix for module files
      */
     inline static String& moduleSuffix()
 	{ return s_modsuffix; }
 
     /**
-     * The operating system specific path element separator
+     * Get the canonical path element separator for the operating system
+     * @return The operating system specific path element separator
      */
     static const char* pathSeparator();
 

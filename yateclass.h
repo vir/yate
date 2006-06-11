@@ -94,6 +94,7 @@ typedef unsigned long in_addr_t;
 #define close _close
 #define getpid _getpid
 #define chdir _chdir
+#define mkdir(p,m) _mkdir(p)
 #define unlink _unlink
 
 #define O_RDWR   _O_RDWR

@@ -75,9 +75,11 @@ Source: "Release\regfile.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: server debug
 Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\base
+Source: "Release\yradius.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\register.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\dbpbx.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\yradius.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\pbxassist.yate"; DestDir: "{app}\modules"; Components: server
 
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323

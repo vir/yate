@@ -26,6 +26,7 @@
 #ifdef _WINDOWS
 
 #include <process.h>
+#include <shlobj.h>
 #define RTLD_NOW 0
 #define dlopen(name,flags) LoadLibrary(name)
 #define dlclose !FreeLibrary

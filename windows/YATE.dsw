@@ -206,6 +206,12 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _extmodule
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _pbx
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _pbxassist
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -499,6 +505,39 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_pbx"=.\_pbx.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_pbxassist"=.\_pbxassist.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libypbx
     End Project Dependency
 }}}
 

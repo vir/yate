@@ -98,7 +98,7 @@ clean-tables: check-topdir
 	$(MAKE) -C ./tables -f Makefile.tables mrproper
 
 clean-apidocs: check-topdir
-	-rm docs/api/*.html docs/api/*.png
+	-rm docs/api/*.*
 
 distclean: check-topdir clean clean-config-files
 

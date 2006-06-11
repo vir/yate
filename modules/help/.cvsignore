@@ -1,0 +1,6 @@
+Makefile
+.xvpics
+core*
+*.orig
+*~
+.*.swp

@@ -58,6 +58,8 @@ The yate-client package includes the files needed to use YATE as a VoIP client
 /usr/bin/yate-gtk2
 %dir /usr/lib/yate/modules/skin
 /usr/lib/yate/modules/skin/*
+%dir /usr/lib/yate/modules/help
+/usr/lib/yate/modules/help/*
 %dir /usr/lib/yate/modules/gtk2
 /usr/lib/yate/modules/gtk2/*
 

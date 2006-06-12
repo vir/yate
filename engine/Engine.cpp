@@ -145,7 +145,7 @@ static int s_maxworkers = 10;
 static bool s_debug = true;
 
 static bool s_sigabrt = false;
-static const char* s_cfgfile = 0;
+static String s_cfgfile;
 static const char* s_logfile = 0;
 static Configuration s_cfg;
 static ObjList plugins;
@@ -913,7 +913,7 @@ static void usage(bool client, FILE* f)
 "   -d             Daemonify, suppress output unless logged\n"
 "   -s             Supervised, restart if crashes or locks up\n"
 #endif
-    ,s_cfgfile);
+    ,s_cfgfile.safe());
 }
 
 static void badopt(bool client, char chr, const char* opt)
@@ -951,14 +951,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     const char* workdir = 0;
     int debug_level = debugLevel();
 
-    s_cfgfile = ::strrchr(argv[0],'/');
-    if (!s_cfgfile)
-	s_cfgfile = ::strrchr(argv[0],'\\');
-    if (s_cfgfile)
-	s_cfgfile++;
+    const char* cfgfile = ::strrchr(argv[0],'/');
+    if (!cfgfile)
+	cfgfile = ::strrchr(argv[0],'\\');
+    if (cfgfile)
+	cfgfile++;
 
-    if (!s_cfgfile)
-	s_cfgfile = argv[0][0] ? argv[0] : "yate";
+    if (!cfgfile)
+	cfgfile = argv[0][0] ? argv[0] : "yate";
 
     int i;
     bool inopt = true;
@@ -1040,7 +1040,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    return ENOENT;
 			}
 			pc = 0;
-			s_cfgfile=argv[++i];
+			cfgfile=argv[++i];
 			break;
 		    case 'c':
 			if (i+1 >= argc) {
@@ -1123,6 +1123,10 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
     if (fail)
 	return EINVAL;
+
+    s_cfgfile = cfgfile;
+    if (s_cfgfile.endsWith(".exe") || s_cfgfile.endsWith(".EXE"))
+	s_cfgfile = s_cfgfile.substr(0,s_cfgfile.length()-4);
 
     if (workdir)
 	::chdir(workdir);

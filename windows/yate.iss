@@ -62,6 +62,7 @@ Source: "Release\yate-service.exe"; DestDir: "{app}"; Components: server
 Source: "Release\yate-console.exe"; DestDir: "{app}"; Components: debug
 
 Source: "Release\accfile.yate"; DestDir: "{app}\modules"; Components: client server
+Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Components: server debug
 Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Components: debug
 Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Components: server

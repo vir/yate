@@ -1,5 +1,8 @@
-; This file is here just to set the default skin.
+; This minimal file is here just to set the default skin.
 ; You can replace it with a more complete version from yate.conf.sample
 
 [client]
 skin=tabbed
+
+[localsym]
+h323chan.yate=yes

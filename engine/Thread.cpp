@@ -76,7 +76,19 @@ using namespace TelEngine;
 #define KILL_WAIT 32
 
 #ifdef _WINDOWS
-static DWORD tls_index = ::TlsAlloc();
+#define TLS_MAGIC 0xfeeb1e
+static DWORD tls_index = TLS_MAGIC;
+static DWORD getTls()
+{
+    // this seems unsafe but is not - allocation happens once before
+    //  any Thread is actually created
+    if (tls_index == TLS_MAGIC)
+	tls_index = ::TlsAlloc();
+    if (tls_index == (DWORD)-1)
+	// if it happened is REALLY BAD so better die quick and clean!
+	abort();
+    return tls_index;
+}
 #else
 static pthread_key_t current_key;
 
@@ -254,7 +266,7 @@ void ThreadPrivate::run()
 {
     DDebug(DebugAll,"ThreadPrivate::run() '%s' [%p]",m_name,this);
 #ifdef _WINDOWS
-    ::TlsSetValue(tls_index,this);
+    ::TlsSetValue(getTls(),this);
 #else
     ::pthread_setspecific(current_key,this);
     pthread_cleanup_push(cleanupFunc,this);
@@ -329,7 +341,7 @@ void ThreadPrivate::cleanup()
 ThreadPrivate* ThreadPrivate::current()
 {
 #ifdef _WINDOWS
-    return reinterpret_cast<ThreadPrivate *>(::TlsGetValue(tls_index));
+    return reinterpret_cast<ThreadPrivate *>(::TlsGetValue(getTls()));
 #else
     return reinterpret_cast<ThreadPrivate *>(::pthread_getspecific(current_key));
 #endif

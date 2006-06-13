@@ -212,6 +212,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _pbxassist
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _analyzer
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -277,6 +280,21 @@ Package=<4>
 ###############################################################################
 
 Project: "_accfile"=.\_accfile.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_analyzer"=.\_analyzer.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

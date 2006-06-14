@@ -94,6 +94,8 @@ public:
 	{ return m_overlapped; }
     inline bool inband() const
 	{ return m_inband; }
+    inline bool detect() const
+	{ return m_detect; }
     inline bool outOfOrder() const
 	{ return !m_ok; }
     inline int buflen() const
@@ -128,6 +130,7 @@ protected:
     int m_buflen;
     int m_layer1;
     bool m_inband;
+    bool m_detect;
     unsigned int m_overlapped;
     String m_callednumber;
     struct pri *m_pri;
@@ -185,6 +188,8 @@ public:
 	{ return (m_ring || m_call); }
     inline bool inband() const
 	{ return m_inband; }
+    inline bool detect() const
+	{ return m_detect; }
     void ring(pri_event_ring &ev);
     void hangup(int cause = 0);
     void sendDigit(char digit);
@@ -213,6 +218,7 @@ protected:
     int m_abschan;
     bool m_isdn;
     bool m_inband;
+    bool m_detect;
 };
 
 class PriDriver : public Driver

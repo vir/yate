@@ -140,6 +140,10 @@ public:
 INIT_PLUGIN(WpDriver);
 
 #define WP_HEADER 16
+#define WP_OFFS_ERROR 0
+#define WP_OFFS_EVENT 3
+#define WP_OFFS_DIGIT 4
+#define WP_OFFS_DTYPE 5
 #define MAX_DATA_ERRORS 250
 
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
@@ -213,6 +217,19 @@ static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
     if (errp)
 	*errp = FD_ISSET(fd,&errfds);
     return FD_ISSET(fd,&rdfds);
+}
+
+static bool wp_dtmfs(HANDLE fd, bool detect, int chan = 0)
+{
+#ifdef WP_API_EVENT_DTMF_PRESENT
+    return (::ioctl(fd,SIOC_WANPIPE_API,&api_tx_hdr) >= 0);
+#else
+    // pretend enabling fails, disabling succeeds
+    if (!detect)
+	return true;
+    errno = ENOSYS;
+    return false;
+#endif
 }
 
 void wp_close(HANDLE fd)
@@ -352,6 +369,13 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
     if (fd != INVALID_HANDLE_VALUE) {
 	m_fd = fd;
 	m_span->m_data = this;
+	bool detect = m_span->detect();
+	if (!wp_dtmfs(fd,detect)) {
+	    int err = errno;
+	    Debug(&__plugin,detect ? DebugFail : DebugMild,
+		"Failed to %s DTMF detection on span %d: %s (%d)",
+		detect ? "enable" : "disable",m_span->span(),strerror(err),err);
+	}
     }
 
     if (m_span->chans() == 24)
@@ -407,20 +431,35 @@ void WpData::run()
 	}
 
 	if (rd) {
-	    m_buffer[0] = 0;
+	    m_buffer[WP_OFFS_ERROR] = 0;
 	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
 	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
 	    r -= WP_HEADER;
-	    if (m_buffer[0]) {
+	    if (m_buffer[WP_OFFS_ERROR]) {
 		if (!m_rdError)
 		    Debug(&__plugin,DebugWarn,"Read data error 0x%02X on span %d [%p]",
-			m_buffer[0],m_span->span(),this);
+			m_buffer[WP_OFFS_ERROR],m_span->span(),this);
 		if (m_rdError < MAX_DATA_ERRORS)
 		    m_rdError++;
 	    }
 	    else
 		m_rdError = 0;
+#ifdef WP_API_EVENT_DTMF_PRESENT
+	    switch (m_buffer[WP_OFFS_EVENT]) {
+		case WP_API_EVENT_NONE:
+		    break;
+		case WP_API_EVENT_DTMF:
+		    if (m_buffer[WP_OFFS_DTYPE] & WP_API_EVENT_DTMF_PRESENT) {
+			Debug(&__plugin,DebugMild,"Not knowing how to deal with received DTMF '%c'",m_buffer[WP_OFFS_DIGIT]);
+		    }
+		    continue;
+		default:
+		    Debug(&__plugin,DebugMild,"Unhandled event %u on span %d [%p]",
+			m_buffer[WP_OFFS_EVENT],m_span->span(),this);
+		    continue;
+	    }
+#endif
 	    // We should have read N bytes for each B channel
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;

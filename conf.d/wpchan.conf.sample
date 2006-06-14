@@ -19,6 +19,7 @@
 ;restart=0
 ;dumpevents=no
 ;dtmfinband=no
+;dtmfdetect=no
 
 [span 1]
 ;dgroup=w1g1

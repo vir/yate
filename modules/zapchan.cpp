@@ -223,6 +223,21 @@ static bool zt_echo_cancel(int fd, int taps)
     return false;
 }
 
+static bool zt_dtmf_detect(int fd, bool detect)
+{
+#ifdef ZT_TONEDETECT
+    int tdetect = detect ? ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE : 0;
+    if (::ioctl(fd, ZT_TONEDETECT, &tdetect) >= 0)
+	return true;
+#else
+    // pretend enabling fails, disabling succeeds
+    if (!detect)
+	return true;
+    errno = ENOSYS;
+#endif
+    return false;
+}
+
 ZapSpan::ZapSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd)
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("ZapSpan"),
       m_fd(fd)
@@ -387,6 +402,11 @@ bool ZapChan::openData(const char* format, int echoTaps)
 	Debug(this,DebugInfo,"Opened Zap channel %d, law is: %s",m_abschan,format);
     }
     zt_echo_cancel(m_fd,echoTaps);
+    if (!zt_dtmf_detect(m_fd,m_detect)) {
+	Debug(this,m_detect ? DebugFail : DebugMild,
+	    "Failed to %s DTMF detection: %s (%d)",
+	    m_detect ? "enable" : "disable",::strerror(errno),errno);
+    }
     ZapSource* src = new ZapSource(this,format,m_bufsize);
     setSource(src);
     src->startup();

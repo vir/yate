@@ -342,6 +342,7 @@ PriSpan::PriSpan(struct pri *_pri, PriDriver* driver, int span, int first, int c
     int buflength = cfg.getIntValue(sect,"buflen", s_buflen);
 
     m_inband = cfg.getBoolValue(sect,"dtmfinband",cfg.getBoolValue("general","dtmfinband"));
+    m_detect = cfg.getBoolValue(sect,"dtmfdetect",cfg.getBoolValue("general","dtmfdetect",m_inband));
     m_layer1 = cfg.getIntValue(sect,"format",dict_str2law,(chans == 24) ? PRI_LAYER_1_ULAW : PRI_LAYER_1_ALAW);
     m_dplan = cfg.getIntValue(sect,"dialplan",dict_str2dplan,PRI_UNKNOWN);
     m_pres = cfg.getIntValue(sect,"presentation",dict_str2pres,PRES_ALLOWED_USER_NUMBER_NOT_SCREENED);
@@ -854,6 +855,7 @@ bool PriChan::call(Message &msg, const char *called)
     else
 	msg.userData(this);
     m_inband = msg.getBoolValue("dtmfinband",m_span->inband());
+    m_detect = msg.getBoolValue("dtmfdetect",m_span->detect());
     char *caller = (char *)msg.getValue("caller");
     int callerplan = msg.getIntValue("callerplan",dict_str2dplan,m_span->dplan());
     char *callername = (char *)msg.getValue("callername");
@@ -920,6 +922,7 @@ void PriChan::ring(pri_event_ring &ev)
     Engine::enqueue(m);
 
     m_inband = m_span->inband();
+    m_detect = m_span->inband();
     openData(lookup(ev.layer1,dict_str2law),0);
 
     m = message("call.preroute");

@@ -20,11 +20,15 @@ SUBDIRS :=
 MKDEPS  := ../config.status
 PROGS :=
 LIBS :=
+MENUFILES :=
+DESKFILES :=
 
 GTKCLIENT := ../contrib/gtk2/libgtk2client.a
 
 ifneq (@HAVE_GTK2@,no)
 PROGS := $(PROGS) yate-gtk2
+MENUFILES := $(MENUFILES) yate-gtk2.menu
+DESKFILES := $(DESKFILES) yate-gtk2.desktop
 endif
 
 LOCALFLAGS =
@@ -36,6 +40,8 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 bindir = @bindir@
 moddir = @libdir@/yate
+menudir= @libdir@/menu
+deskdir= $(prefix)/share/applications
 
 # include optional local make rules
 -include YateLocal.mak
@@ -56,13 +62,29 @@ install: all do-install
 	@mkdir -p "$(DESTDIR)$(bindir)/" && \
 	test -z "$(PROGS)" || \
 	install $(PROGS) "$(DESTDIR)$(bindir)/"
+	@mkdir -p "$(DESTDIR)$(menudir)/" && \
+	for i in $(MENUFILES) ; do \
+	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(menudir)/$$i" ; \
+	done
+	@mkdir -p "$(DESTDIR)$(deskdir)/" && \
+	for i in $(DESKFILES) ; do \
+	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(deskdir)/$$i" ; \
+	done
 
 .PHONY: uninstall
 uninstall: do-uninstall
 	@-for i in $(PROGS) ; do \
 	    rm "$(DESTDIR)$(bindir)/$$i" ; \
-	done; \
-	rmdir "$(DESTDIR)$(bindir)"
+	done
+	@-rmdir "$(DESTDIR)$(bindir)"
+	@-for i in $(MENUFILES) ; do \
+	    rm "$(DESTDIR)$(menudir)/$$i" ; \
+	done
+	@-rmdir "$(DESTDIR)$(menudir)"
+	@-for i in $(DESKFILES) ; do \
+	    rm "$(DESTDIR)$(deskdir)/$$i" ; \
+	done
+	@-rmdir "$(DESTDIR)$(deskdir)"
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<

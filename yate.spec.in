@@ -56,12 +56,20 @@ The yate-client package includes the files needed to use YATE as a VoIP client
 %files client
 %defattr(-, root, root)
 /usr/bin/yate-gtk2
+/usr/lib/menu/yate-gtk2.menu
+/usr/share/applications/yate-gtk2.desktop
 %dir /usr/lib/yate/modules/skin
 /usr/lib/yate/modules/skin/*
 %dir /usr/lib/yate/modules/help
 /usr/lib/yate/modules/help/*
 %dir /usr/lib/yate/modules/gtk2
 /usr/lib/yate/modules/gtk2/*
+
+%post client
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
+
+%postun client
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 
 %package devel
 Summary:	Development package for yate
@@ -121,6 +129,9 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 rm -rf %{buildroot}
 
 %changelog
+* Fri Jun 16 2006 Paul Chitescu <paulc@voip.null.ro>
+- Added .desktop and .menu files and update-menus scriptlets
+
 * Mon Nov 07 2005 Paul Chitescu <paulc-devel@null.ro>
 - Version 0.9.0-pre4
 - Separated modules and scripts directories

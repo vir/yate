@@ -208,9 +208,14 @@ bool Configuration::save() const
 	return false;
     FILE *f = ::fopen(c_str(),"w");
     if (f) {
+	bool separ = false;
 	ObjList *ol = m_sections.skipNull();
 	for (;ol;ol=ol->skipNext()) {
 	    NamedList *nl = static_cast<NamedList *>(ol->get());
+	    if (separ)
+		::fprintf(f,"\n");
+	    else
+		separ = true;
 	    ::fprintf(f,"[%s]\n",nl->c_str());
 	    unsigned int n = nl->length();
 	    for (unsigned int i = 0; i < n; i++) {

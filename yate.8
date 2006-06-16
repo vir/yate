@@ -71,13 +71,16 @@ Abort (coredumps if allowed) if bugs are encountered
 .B \-Dm
 Attempt to debug mutex deadlocks by setting a maximum 10s limit
 .TP
+.B \-Dl
+Attempt to load modules without having their symbols globally visible
+.TP
 .B \-Dc
 Call
 .I dlclose()
 until it gets an error
 .TP
-.B \-Dl
-Attempt to load modules without having their symbols globally visible
+.B \-Du
+Do not unload modules, just try to call thier finalization code
 .TP
 .B \-Di
 Reinitialize after first initialization

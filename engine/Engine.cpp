@@ -100,6 +100,7 @@ static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
 static bool s_keepclosing = false;
+static bool s_nounload = false;
 static int s_super_handle = -1;
 static bool s_localsymbol = false;
 
@@ -434,6 +435,26 @@ SLib::~SLib()
 #ifdef DEBUG
     Debugger debug("SLib::~SLib()"," [%p]",this);
 #endif
+    if (s_nounload) {
+#ifdef _WINDOWS
+	typedef WINAPI void (*pFini)(HINSTANCE,DWORD,LPVOID);
+	pFini fini = (pFini)GetProcAddress(m_handle,"_DllMainCRTStartup");
+	if (!fini)
+	    fini = (pFini)GetProcAddress(m_handle,"_CRT_INIT");
+	if (fini)
+	    fini(m_handle,DLL_PROCESS_DETACH,NULL);
+#else
+	typedef void (*pFini)();
+	pFini fini = (pFini)dlsym(m_handle,"_fini");
+	if (fini)
+	    fini();
+#endif
+	if (fini) {
+	    checkPoint();
+	    return;
+	}
+	Debug(DebugGoOn,"Could not finalize, will dlclose(%p)",m_handle);
+    }
     int err = dlclose(m_handle);
     if (err)
 	Debug(DebugGoOn,"Error %d on dlclose(%p)",err,m_handle);
@@ -899,6 +920,7 @@ static void usage(bool client, FILE* f)
 "     l            Try to keep module symbols local\n"
 #endif
 "     c            Call dlclose() until it gets an error\n"
+"     u            Do not unload modules on exit, just finalize\n"
 "     i            Reinitialize after 1st initialization\n"
 "     x            Exit immediately after initialization\n"
 "     w            Delay creation of 1st worker thread\n"
@@ -1082,6 +1104,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 #endif
 				case 'c':
 				    s_keepclosing = true;
+				    break;
+				case 'u':
+				    s_nounload = true;
 				    break;
 				case 'i':
 				    s_init = true;

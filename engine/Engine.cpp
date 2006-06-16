@@ -437,7 +437,7 @@ SLib::~SLib()
 #endif
     if (s_nounload) {
 #ifdef _WINDOWS
-	typedef WINAPI void (*pFini)(HINSTANCE,DWORD,LPVOID);
+	typedef void (WINAPI *pFini)(HINSTANCE,DWORD,LPVOID);
 	pFini fini = (pFini)GetProcAddress(m_handle,"_DllMainCRTStartup");
 	if (!fini)
 	    fini = (pFini)GetProcAddress(m_handle,"_CRT_INIT");
@@ -453,7 +453,7 @@ SLib::~SLib()
 	    checkPoint();
 	    return;
 	}
-	Debug(DebugGoOn,"Could not finalize, will dlclose(%p)",m_handle);
+	Debug(DebugWarn,"Could not finalize, will dlclose(%p)",m_handle);
     }
     int err = dlclose(m_handle);
     if (err)

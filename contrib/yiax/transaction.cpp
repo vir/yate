@@ -1010,6 +1010,7 @@ IAXConnectionlessTransaction::IAXConnectionlessTransaction(IAXEngine* engine, IA
     // Append frame to incoming list
     Lock lock(this);
     m_inFrames.append(frame);
+    incrementSeqNo(frame,true);
     sendAck(frame->fullFrame());
     XDebug(m_engine,DebugAll,"IAXConnectionlessTransaction::IAXConnectionlessTransaction(%u,%u) incoming Type: %u [%p]",
 	localCallNo(),remoteCallNo(),m_type,this);

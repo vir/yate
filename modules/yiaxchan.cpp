@@ -121,6 +121,11 @@ public:
     inline ~YIAXLineContainer() {}
 
     /**
+     * logout and remove all lines
+     */
+    void clear();
+
+    /**
      * Update a line from a message
      * This method is thread safe 
      * @param msg Received message
@@ -530,7 +535,7 @@ private:
 /* Init the driver */
 static YIAXDriver iplugin;
 /* Lines */
-static YIAXLineContainer m_lines;
+static YIAXLineContainer s_lines;
 
 /**
  * Class definitions
@@ -540,7 +545,9 @@ static YIAXLineContainer m_lines;
  * YIAXLine
  */
 YIAXLine::YIAXLine(const String& name)
-	: String(name), m_state(Idle), m_expire(60), m_localPort(4569), m_remotePort(4569), m_nextReg(Time::secNow() + 40)
+    : String(name),
+      m_state(Idle), m_expire(60), m_localPort(4569), m_remotePort(4569),
+      m_nextReg(Time::secNow() + 40)
 {
 //    yiax_line_allocated++;
 }
@@ -597,7 +604,8 @@ void YIAXLineContainer::regAck(IAXRegData& regdata)
     YIAXLine* line = findLine(regdata.m_name);
     if (!line)
 	return;
-    line->m_nextReg = Time::secNow() + line->m_expire * 5 / 6;
+    // re-register at 75% of the expire time
+    line->m_nextReg = Time::secNow() + (line->expire() * 3 / 4);
     line->m_callingNo = regdata.m_callingNo;
     line->m_callingName = regdata.m_callingName;
     Debug(&iplugin,DebugAll,"YIAXLineContainer - regAck[%s]. %s.",
@@ -615,7 +623,8 @@ void YIAXLineContainer::regRej(IAXRegData& regdata)
     YIAXLine* line = findLine(regdata.m_name);
     if (!line)
 	return;
-    line->m_nextReg = Time::secNow() + line->m_expire * 5 / 6;
+    // retry at 25% of the expire time
+    line->m_nextReg = Time::secNow() + (line->expire() / 4);
     Debug(&iplugin,DebugAll,"YIAXLineContainer - regRej[%s]. %s.",
 	regdata.m_name.c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister");
     if (line->state() == YIAXLine::Unregistering) {
@@ -631,7 +640,8 @@ void YIAXLineContainer::regTimeout(IAXRegData& regdata)
     YIAXLine* line = findLine(regdata.m_name);
     if (!line)
 	return;
-    line->m_nextReg = Time::secNow() + line->m_expire * 5 / 6;
+    // retry at 50% of the expire time
+    line->m_nextReg = Time::secNow() + (line->expire() / 2);
     Debug(&iplugin,DebugAll,"YIAXLineContainer - regTimeout[%s]. %s.",
 	regdata.m_name.c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister");
     if (line->state() == YIAXLine::Unregistering) {
@@ -643,21 +653,22 @@ void YIAXLineContainer::regTimeout(IAXRegData& regdata)
 
 void YIAXLineContainer::evTimer(Time& time)
 {
+    u_int32_t sec = time.sec();
     Lock lock(this);
     for (ObjList* l = m_lines.skipNull(); l; l = l->next()) {
 	YIAXLine* line = static_cast<YIAXLine*>(l->get());
 	if (!line)
 	    continue;
-	if (time.sec() > line->m_nextKeepAlive) {
+	if (sec > line->m_nextKeepAlive) {
+	    line->m_nextKeepAlive = sec + 25;
 	    SocketAddr addr(AF_INET);
 	    addr.host(line->remoteAddr());
 	    addr.port(line->remotePort());
 	    iplugin.getEngine()->keepAlive(addr);
-	    line->m_nextKeepAlive = time.sec() + 25;
 	}
-	if (time.sec() > line->m_nextReg) {
+	if (sec > line->m_nextReg) {
+	    line->m_nextReg += line->expire();
 	    startRegisterLine(line);
-	    line->m_nextReg += line->m_expire;
 	}
     }
 }
@@ -687,7 +698,7 @@ bool YIAXLineContainer::updateLine(YIAXLine* line, Message& msg)
 	line->m_expire = String(msg.getValue("interval")).toInteger();
 	change = true;
     }
-    line->m_nextReg = Time::secNow() + line->m_expire * 5 / 6;
+    line->m_nextReg = Time::secNow() + (line->m_expire * 3 / 4);
     line->m_nextKeepAlive = Time::secNow() + 25;
     if (change || op == "login")
 	startRegisterLine(line);
@@ -702,10 +713,10 @@ bool YIAXLineContainer::addLine(Message& msg)
     line->m_remoteAddr = msg.getValue("server");
     line->m_username = msg.getValue("username");
     line->m_password = msg.getValue("password");
-    line->m_expire = String(msg.getValue("interval")).toInteger();
-    line->m_nextReg = Time::secNow() + line->m_expire * 5 / 6;
+    line->m_expire = msg.getIntValue("interval",60);
+    line->m_nextReg = Time::secNow() + line->m_expire;
     String op = msg.getValue("operation");
-    if (op == "login")
+    if (op.null() || (op == "login"))
 	startRegisterLine(line);
     else
 	if (op == "logout")
@@ -734,6 +745,15 @@ void YIAXLineContainer::startUnregisterLine(YIAXLine* line)
 {
     if (iplugin.getEngine()->reg(line,false))
 	line->m_state = YIAXLine::Unregistering;
+}
+
+void YIAXLineContainer::clear()
+{
+    for (ObjList* l = m_lines.skipNull(); l; l = l->next()) {
+	YIAXLine* line = static_cast<YIAXLine*>(l->get());
+	if (line)
+	    startUnregisterLine(line);
+    }
 }
 
 /**
@@ -1011,7 +1031,7 @@ void YIAXEngine::evRegAck(IAXEvent* event, IAXConnectionlessTransaction* transac
 	return;
     IAXRegData regdata;
     transaction->fillRegData(regdata);
-    m_lines.regAck(regdata);
+    s_lines.regAck(regdata);
 }
 
 void YIAXEngine::evRegRej(IAXEvent* event, IAXConnectionlessTransaction* transaction)
@@ -1020,7 +1040,7 @@ void YIAXEngine::evRegRej(IAXEvent* event, IAXConnectionlessTransaction* transac
 	return;
     IAXRegData regdata;
     transaction->fillRegData(regdata);
-    m_lines.regRej(regdata);
+    s_lines.regRej(regdata);
 }
 
 void YIAXEngine::evRegTimeout(IAXEvent* event, IAXConnectionlessTransaction* transaction)
@@ -1029,7 +1049,7 @@ void YIAXEngine::evRegTimeout(IAXEvent* event, IAXConnectionlessTransaction* tra
 	return;
     IAXRegData regdata;
     transaction->fillRegData(regdata);
-    m_lines.regTimeout(regdata);
+    s_lines.regTimeout(regdata);
 }
 
 void YIAXEngine::processEvent(IAXEvent* event)
@@ -1090,7 +1110,7 @@ bool YIAXRegDataHandler::received(Message& msg)
     tmp = msg.getValue("account");
     if (tmp.null())
 	return false;
-    m_lines.updateLine(msg);
+    s_lines.updateLine(msg);
     return true;
 }
 
@@ -1188,14 +1208,15 @@ void YIAXDriver::initialize()
 bool YIAXDriver::msgExecute(Message& msg, String& dest)
 {
     if (!msg.userData()) {
-	Debug(this,DebugAll,"YIAXDriver - msgExecute. No data channel for this IAX call!");
+	Debug(this,DebugAll,"No data channel for this IAX call!");
 	return false;
     }
-    IAXRegData regdata(String(msg.getValue("line")));
-    if (!m_lines.fillRegData(regdata)) {
-	Debug(this,DebugAll,"YIAXDriver - msgExecute. No line ['%s'] for this IAX call!",regdata.m_name.c_str());
+    const char* line = msg.getValue("line");
+    IAXRegData regdata(line);
+    if (line && !s_lines.fillRegData(regdata)) {
+	Debug(this,DebugNote,"No line ['%s'] for this IAX call!",line);
 	msg.setParam("error","offline");
-//	return false;
+	return false;
     }
     IAXTransaction* tr = m_iaxEngine->call(dest.c_str(),msg,&regdata.m_username);
     if (!tr)
@@ -1216,11 +1237,12 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
 bool YIAXDriver::received(Message& msg, int id)
 {
     if (id == Timer)
-	m_lines.evTimer(msg.msgTime());
+	s_lines.evTimer(msg.msgTime());
     else 
 	if (id == Halt) {
 	    dropAll(msg);
 	    channels().clear();
+	    s_lines.clear();
 	}
     return Driver::received(msg,id);
 }
@@ -1253,7 +1275,7 @@ void YIAXConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 {
     if (m_connection && !m_connection->mutedOut()) {
 	m_total += data.length();
-	if(m_connection->transaction())
+	if (m_connection->transaction())
 	    m_connection->transaction()->sendMedia(data,m_connection->format());
     }
 }
@@ -1291,7 +1313,7 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
 {
 //    yiax_connection_allocated++;
 
-    Debug(this,DebugAll,"YIAXConnection::YIAXConnection [%p]",this);
+    DDebug(this,DebugAll,"YIAXConnection::YIAXConnection [%p]",this);
     if (username)
 	m_username = *username;
     m_address << transaction->remoteAddr().host() << ":" << transaction->remoteAddr().port();
@@ -1317,12 +1339,12 @@ YIAXConnection::~YIAXConnection()
     setConsumer();
     setSource();
     hangup();
-    Debug(this,DebugAll,"YIAXConnection::~YIAXConnection  [%p]",this);
+    DDebug(this,DebugAll,"YIAXConnection::~YIAXConnection [%p]",this);
 }
 
 void YIAXConnection::callAccept(Message& msg)
 {
-    Debug(this,DebugAll,"YIAXConnection - callAccept [%p]",this);
+    DDebug(this,DebugAll,"callAccept [%p]",this);
     if (m_transaction)
 	m_transaction->sendAccept(m_format);
     Channel::callAccept(msg);
@@ -1336,16 +1358,16 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
     m_reason = error;
     if (!reason)
 	reason = error;
-    Debug(this,DebugAll,"YIAXConnection - callRejected [%p]. Error: '%s'",this,error);
+    DDebug(this,DebugInfo,"callRejected [%p]. Error: '%s'",this,error);
     String s(error);
     if (s == "noauth" && m_transaction && !safeGetRefIncreased()) {
-	Debug(this,DebugAll,"YIAXConnection - callRejected [%p]. Request authentication",this);
+	Debug(this,DebugAll,"callRejected [%p]. Request authentication",this);
 	srand(Time::secNow());
 	m_challenge = rand();
 	m_transaction->sendAuthReq(m_username,IAXAuthMethod::MD5,&m_challenge);
 	if (ref()) {
 	    m_refIncreased = true;
-	    Debug(this,DebugAll,"YIAXConnection - callRejected [%p]. Authentication requested. Increased references counter",this);
+	    DDebug(this,DebugInfo,"callRejected [%p]. Authentication requested. Increased references counter",this);
 	}
 	return;
     }
@@ -1355,10 +1377,10 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 bool YIAXConnection::callRouted(Message& msg)
 {
     if (!m_transaction) {
-	Debug(this,DebugAll,"YIAXConnection - callRouted [%p]. No transaction: ABORT",this);
+	Debug(this,DebugMild,"callRouted [%p]. No transaction: ABORT",this);
 	return false;
     }
-    Debug(this,DebugAll,"YIAXConnection - callRouted [%p]",this);
+    DDebug(this,DebugAll,"callRouted [%p]",this);
     return true;
 }
 
@@ -1404,7 +1426,7 @@ bool YIAXConnection::msgText(Message& msg, const char* text)
 
 void YIAXConnection::disconnected(bool final, const char* reason)
 {
-    Debug(this,DebugAll,"YIAXConnection - disconnected [%p]",this);
+    DDebug(this,DebugAll,"disconnected [%p]",this);
     Channel::disconnected(final,reason);
     safeDeref();
 }
@@ -1412,10 +1434,10 @@ void YIAXConnection::disconnected(bool final, const char* reason)
 bool YIAXConnection::callPrerouted(Message& msg, bool handled)
 {
     if (!m_transaction) {
-	Debug(this,DebugAll,"YIAXConnection - callPrerouted [%p]. No transaction: ABORT",this);
+	Debug(this,DebugMild,"callPrerouted [%p]. No transaction: ABORT",this);
 	return false;
     }
-    Debug(this,DebugAll,"YIAXConnection - callPrerouted [%p]",this);
+    DDebug(this,DebugAll,"callPrerouted [%p]",this);
     return true;
 }
 
@@ -1482,12 +1504,12 @@ bool YIAXConnection::init(IAXEvent* event)
 {
     if (event->type() != IAXEvent::NewCall)
 	return false;
-    Debug(this,DebugAll,"YIAXConnection - NEW INCOMING CALL.");
+    DDebug(this,DebugAll,"New incoming call");
     IAXInfoElementNumeric* ief = static_cast<IAXInfoElementNumeric*>(event->getIE(IAXInfoElement::FORMAT));
     IAXInfoElementNumeric* iec = static_cast<IAXInfoElementNumeric*>(event->getIE(IAXInfoElement::CAPABILITY));
     setFormatAndCapability(ief ? ief->data() : 0,iec ? iec->data() : 0);
     if (!m_format) {
-	Debug(this,DebugAll,"YIAXConnection - NEW INCOMING CALL. No valid format. Reject.");
+	Debug(this,DebugWarn,"Incoming call - no valid format. Reject.");
 	hangup(event,s_modNoMediaFormat,true);
 	return false;
     }
@@ -1542,19 +1564,19 @@ void YIAXConnection::hangup(const char *reason, bool reject)
     m->setParam("status","hangup");
     m->setParam("reason",reason);
     Engine::enqueue(m);
-    Debug(this,DebugAll,"YIAXConnection - hangup ('%s') [%p]",reason,this);
+    Debug(this,DebugCall,"Hangup ('%s') [%p]",reason,this);
 }
 
 bool YIAXConnection::route(bool authenticated)
 {
     Message* m = message("call.preroute",false,true);
     if (authenticated) {
-	Debug(this,DebugAll,"YIAXConnection - route. Pass 2: Password accepted.");
+	DDebug(this,DebugAll,"Route pass 2: Password accepted.");
 	m_refIncreased = false;
 	m->addParam("username",m_username);
     }
     else {
-	Debug(this,DebugAll,"YIAXConnection - route. Pass 1: No username.");
+	DDebug(this,DebugAll,"Route pass 1: No username.");
 	// advertise the not yet authenticated username
 	if (m_username)
 	    m->addParam("authname",m_username);
@@ -1571,7 +1593,7 @@ void YIAXConnection::startAudioIn()
     const char* formatText = IAXFormat::audioText(m_format);
     setSource(new YIAXSource(this,formatText));
     getSource()->deref();
-    Debug(this,DebugAll,"YIAXConnection - startAudioIn - Format %u: '%s'",m_format,formatText);
+    DDebug(this,DebugAll,"startAudioIn - Format %u: '%s'",m_format,formatText);
 }
 
 void YIAXConnection::startAudioOut()
@@ -1581,27 +1603,26 @@ void YIAXConnection::startAudioOut()
     const char* formatText = (char*)IAXFormat::audioText(m_format);
     setConsumer(new YIAXConsumer(this,formatText));
     getConsumer()->deref();
-    Debug(this,DebugAll,"YIAXConnection - startAudioOut - Format %u: '%s'",m_format,formatText);
+    DDebug(this,DebugAll,"startAudioOut - Format %u: '%s'",m_format,formatText);
 }
 
 void YIAXConnection::evAccept(IAXEvent* event)
 {
-    Debug(this,DebugAll,"YIAXConnection - ACCEPT (%s)",isOutgoing()?"outgoing":"incoming");
+    DDebug(this,DebugAll,"ACCEPT (%s)",isOutgoing() ? "outgoing" : "incoming");
     if (isOutgoing()) {
 	IAXInfoElementNumeric* ief = static_cast<IAXInfoElementNumeric*>(event->getIE(IAXInfoElement::FORMAT));
 	if (ief)
 	    setFormatAndCapability(ief->data(),m_capability);
 	/* m_format is a valid codec received ? */
 	if (!m_format) {
-	    Debug(this,DebugAll,"YIAXConnection - ACCEPT: Unsupported codec: %u. Reject.",m_format);
+	    Debug(this,DebugWarn,"ACCEPT - Unsupported codec: %u. Reject.",m_format);
 	    hangup(event,s_modNoMediaFormat,true);
 	    return;
 	}
+	startAudioIn();
     }
     else
-	m_transaction->sendAnswer();
-    startAudioIn();
-    startAudioOut();
+	startAudioOut();
 }
 
 void YIAXConnection::evReject(IAXEvent* event)
@@ -1687,7 +1708,7 @@ void YIAXConnection::evProgressing(IAXEvent* event)
 
 void YIAXConnection::evAuthReq(IAXEvent* event)
 {
-    Debug(this,DebugAll,"YIAXConnection - AUTHREQ");
+    DDebug(this,DebugAll,"YIAXConnection - AUTHREQ");
     IAXInfoElement* ie = event->getIE(IAXInfoElement::USERNAME);
     if (ie)
 	m_username = (static_cast<IAXInfoElementString*>(ie))->data();
@@ -1699,7 +1720,7 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 	    case IAXAuthMethod::MD5:
 		ie = event->getIE(IAXInfoElement::CHALLENGE);
 		if (!ie) {
-		    Debug(this,DebugAll,"YIAXConnection - AUTHREQ. No challenge. Hangup.");
+		    Debug(this,DebugWarn,"AUTHREQ without challenge. Hangup.");
 		    hangup(event,s_modInvalidAuth,true);
 		    return;
 		}
@@ -1707,14 +1728,14 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 		YIAXEngine::getMD5FromChallenge(iedata,m_challenge,m_password);
 		break;
 	    case IAXAuthMethod::RSA:
-		Debug(this,DebugAll,"YIAXConnection - AUTHREQ. RSA not supported. Hangup.");
+		Debug(this,DebugWarn,"AUTHREQ - RSA not supported yet. Hangup.");
 		hangup(event,s_modNoAuthMethod,true);
 		return;
 	    case IAXAuthMethod::Text:
 		iedata = m_password;
 		break;
 	    default:
-		Debug(this,DebugAll,"YIAXConnection - AUTHREQ. Unsupported enchryption format. Hangup.");
+		Debug(this,DebugWarn,"AUTHREQ - Unsupported encryption format. Hangup.");
 		hangup(event,s_modInvalidAuth,true);
 		return;
 	}
@@ -1724,7 +1745,7 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 
 void YIAXConnection::evAuthRep(IAXEvent* event)
 {
-    Debug(this,DebugAll,"YIAXConnection - AUTHREP");
+    DDebug(this,DebugAll,"YIAXConnection - AUTHREP");
     IAXInfoElement* ie = event->getIE(IAXInfoElement::MD5_RESULT);
     if (!ie) {
 	hangup(event,s_modInvalidAuth,true);
@@ -1751,7 +1772,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     }
     if (!YIAXEngine::isMD5ChallengeCorrect((static_cast<IAXInfoElementString*>(ie))->data(),m_challenge,m_password)) {
 	/* Incorrect data received */
-	Debug(this,DebugAll,"YIAXConnection - AUTHREP. Incorrect MD5 challenge. Reject.");
+	DDebug(this,DebugAll,"AUTHREP - Incorrect MD5 answer. Reject.");
 	hangup(event,s_modInvalidAuth,true);
 	return;
     }

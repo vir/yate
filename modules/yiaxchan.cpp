@@ -50,9 +50,9 @@ u_int64_t yiax_line_released = 0;
 #endif
 
 static Configuration s_cfg;
-static String m_modNoMediaFormat("Unsupported media format or capability");
-static String m_modNoAuthMethod("Unsupported authentication method");
-static String m_modInvalidAuth("Invalid authentication request, response or challenge");
+static String s_modNoMediaFormat("Unsupported media format or capability");
+static String s_modNoAuthMethod("Unsupported authentication method");
+static String s_modInvalidAuth("Invalid authentication request, response or challenge");
 
 class YIAXLineContainer;
 class YIAXEngine;
@@ -1479,7 +1479,7 @@ bool YIAXConnection::init(IAXEvent* event)
     setFormatAndCapability(ief ? ief->data() : 0,iec ? iec->data() : 0);
     if (!m_format) {
 	Debug(this,DebugAll,"YIAXConnection - NEW INCOMING CALL. No valid format. Reject.");
-	hangup(event,m_modNoMediaFormat.c_str(),true);
+	hangup(event,s_modNoMediaFormat,true);
 	return false;
     }
     IAXInfoElement* ie = event->getIE(IAXInfoElement::USERNAME);
@@ -1540,12 +1540,16 @@ bool YIAXConnection::route(bool authenticated)
 {
     Message* m = message("call.preroute",false,true);
     if (authenticated) {
+	Debug(this,DebugAll,"YIAXConnection - route. Pass 2: Password accepted.");
 	m_refIncreased = false;
 	m->addParam("username",m_username);
-	Debug(this,DebugAll,"YIAXConnection - route. Pass 2: Password accepted.");
     }
-    else
+    else {
 	Debug(this,DebugAll,"YIAXConnection - route. Pass 1: No username.");
+	// advertise the not yet authenticated username
+	if (m_username)
+	    m->addParam("authname",m_username);
+    }
     m->addParam("called",m_calledNumber);
     m->addParam("callername",m_callingName);
     return startRouter(m);
@@ -1617,7 +1621,7 @@ void YIAXConnection::evAccept(IAXEvent* event)
 	/* m_format is a valid codec received ? */
 	if (!m_format) {
 	    Debug(this,DebugAll,"YIAXConnection - ACCEPT: Unsupported codec: %u. Reject.",m_format);
-	    hangup(event,m_modNoMediaFormat.c_str(),true);
+	    hangup(event,s_modNoMediaFormat,true);
 	    return;
 	}
     }
@@ -1716,7 +1720,7 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 		ie = event->getIE(IAXInfoElement::CHALLENGE);
 		if (!ie) {
 		    Debug(this,DebugAll,"YIAXConnection - AUTHREQ. No challenge. Hangup.");
-		    hangup(event,m_modInvalidAuth.c_str(),true);
+		    hangup(event,s_modInvalidAuth,true);
 		    return;
 		}
 		m_challenge = ((static_cast<IAXInfoElementString*>(ie))->data());
@@ -1724,14 +1728,14 @@ void YIAXConnection::evAuthReq(IAXEvent* event)
 		break;
 	    case IAXAuthMethod::RSA:
 		Debug(this,DebugAll,"YIAXConnection - AUTHREQ. RSA not supported. Hangup.");
-		hangup(event,m_modNoAuthMethod,true);
+		hangup(event,s_modNoAuthMethod,true);
 		return;
 	    case IAXAuthMethod::Text:
 		iedata = m_password;
 		break;
 	    default:
 		Debug(this,DebugAll,"YIAXConnection - AUTHREQ. Unsupported enchryption format. Hangup.");
-		hangup(event,m_modInvalidAuth,true);
+		hangup(event,s_modInvalidAuth,true);
 		return;
 	}
     if (m_transaction)
@@ -1743,7 +1747,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     Debug(this,DebugAll,"YIAXConnection - AUTHREP");
     IAXInfoElement* ie = event->getIE(IAXInfoElement::MD5_RESULT);
     if (!ie) {
-	hangup(event,m_modInvalidAuth.c_str(),true);
+	hangup(event,s_modInvalidAuth,true);
 	return;
     }
     /* Try to obtain a password from Engine */
@@ -1768,7 +1772,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     if (!YIAXEngine::isMD5ChallengeCorrect((static_cast<IAXInfoElementString*>(ie))->data(),m_challenge,m_password)) {
 	/* Incorrect data received */
 	Debug(this,DebugAll,"YIAXConnection - AUTHREP. Incorrect MD5 challenge. Reject.");
-	hangup(event,m_modInvalidAuth.c_str(),true);
+	hangup(event,s_modInvalidAuth,true);
 	return;
     }
     /* Password is correct. Route the user. */

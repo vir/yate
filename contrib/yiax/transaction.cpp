@@ -821,7 +821,7 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 	return;
     unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
 			     frame->timeStamp() >> 24,frame->timeStamp() >> 16,frame->timeStamp() >> 8,frame->timeStamp(),
-			     frame->oSeqNo(),frame->iSeqNo(),IAXFrame::IAX,IAXControl::Ack};
+			     m_oSeqNo,m_iSeqNo,IAXFrame::IAX,IAXControl::Ack};
     m_engine->writeSocket(buf,12,remoteAddr());
 }
 

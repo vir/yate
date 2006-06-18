@@ -26,7 +26,7 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
 	pbx.yate dbpbx.yate pbxassist.yate dumbchan.yate callfork.yate \
 	extmodule.yate yradius.yate \
-	ysipchan.yate yrtpchan.yate
+	ysipchan.yate yrtpchan.yate yiaxchan.yate
 LIBS :=
 
 ifneq (@HAVE_PGSQL@,no)
@@ -63,6 +63,10 @@ endif
 
 ifneq (@HAVE_IAX2@,no)
 PROGS := $(PROGS) iaxchan.yate
+endif
+
+ifneq (@HAVE_YIAX2@,no)
+PROGS := $(PROGS) yiaxchan.yate
 endif
 
 ifneq (@HAVE_GSM@,no)
@@ -189,6 +193,9 @@ iaxchan.yate: @IAX2_DEP@
 iaxchan.yate: LOCALLIBS = @IAX2_DEP@
 iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
 
+yiaxchan.yate: ../contrib/yiax/libyateiax.a
+yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yiax
+yiaxchan.yate: LOCALLIBS = -L../contrib/yiax -lyateiax
 
 dbpbx.yate: ../contrib/ypbx/libyatepbx.a
 dbpbx.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ypbx
@@ -237,6 +244,9 @@ rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 ../contrib/yrtp/libyatertp.a:
 	$(MAKE) -C ../contrib/yrtp
+
+../contrib/yiax/libyateiax.a:
+	$(MAKE) -C ../contrib/yiax
 
 ../contrib/ypbx/libyatepbx.a:
 	$(MAKE) -C ../contrib/ypbx

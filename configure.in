@@ -672,6 +672,7 @@ AC_CONFIG_FILES([yate.spec
                  contrib/ilbc/Makefile
                  contrib/ysip/Makefile
                  contrib/yrtp/Makefile
+		 contrib/yiax/Makefile
                  contrib/ypbx/Makefile
                  contrib/gtk2/Makefile
                  test/Makefile])

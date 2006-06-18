@@ -44,7 +44,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame,
     m_lCallNo(lcallno),
     m_rCallNo(frame->sourceCallNo()),
     m_oSeqNo(0),
-    m_iSeqNo(1),
+    m_iSeqNo(0),
     m_engine(engine),
     m_private(data),
     m_lastMiniFrameOut(0xFFFF),
@@ -89,7 +89,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_lCallNo(lcallno),
     m_rCallNo(0),
     m_oSeqNo(0),
-    m_iSeqNo(1),
+    m_iSeqNo(0),
     m_engine(engine),
     m_private(data),
     m_lastMiniFrameOut(0xFFFF),
@@ -531,11 +531,13 @@ bool IAXTransaction::isFrameAcceptable(const IAXFullFrame* frame)
 	return true;
     if (delta > 0) {
 	// We missed some frames before this one: Send VNAK
-	Debug(m_engine,DebugAll,"IAXTransaction(%u,%u) - received frame out of order!!! Send VNAK",
+	Debug(m_engine,DebugInfo,"IAXTransaction(%u,%u) - received frame out of order!!! Send VNAK",
 	    localCallNo(),remoteCallNo());
 	postFrame(IAXFrame::IAX,IAXControl::VNAK,0,0,0,true);
 	m_inOutOfOrderFrames++;
     }
+    DDebug(m_engine,DebugInfo,"IAXTransaction(%u,%u) - received late frame with oseq=%u expecting %u [%p]",
+	localCallNo(),remoteCallNo(),frame->oSeqNo(),m_iSeqNo,this);
     return false;
 }
 

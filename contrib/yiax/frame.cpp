@@ -591,7 +591,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_i
     : IAXFrame(type,sCallNo,tStamp,retrans,buf,len),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo)
 {
-    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+    DDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 	type,subClass,this);
     m_subclass = subClass;
 }
@@ -603,7 +603,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_i
     : IAXFrame(type,sCallNo,tStamp,false,0,0),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo)
 {
-    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+    DDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 	type,subClass,this);
 
     unsigned char header[12];
@@ -638,6 +638,8 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_i
 
 IAXFullFrame::~IAXFullFrame()
 {
+    DDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
+	m_type,m_subclass,this);
 }
 
 const IAXFullFrame* IAXFullFrame::fullFrame() const

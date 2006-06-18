@@ -412,6 +412,8 @@ public:
     virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
     virtual bool callPrerouted(Message& msg, bool handled);
     virtual bool callRouted(Message& msg);
+    virtual bool msgRinging(Message& msg);
+    virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
     virtual void disconnected(bool final, const char* reason);
@@ -448,20 +450,6 @@ protected:
     void startAudioIn();
     /* Start source */
     void startAudioOut();
-
-    /**
-     * Transport a text inside a call
-     * @param text Text to transport
-     * @param incoming The direction. If true, it's an incoming (from the remote peer) text
-     */
-    void YIAXConnection::transportText(String& text, bool incoming);
-
-    /**
-     * Transport a DTMF text inside a call
-     * @param text DTMF text to transport
-     * @param incoming The direction. If true, it's an incoming (from the remote peer) DTMF text
-     */
-    void YIAXConnection::transportDtmf(String& text, bool incoming);
 
     /* Events */
     void evAccept(IAXEvent* ev);
@@ -1313,6 +1301,7 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
     Message* m = message("chan.startup");
     m->setParam("direction",status());
     if (msg) {
+	m_targetid = msg->getValue("id");
 	m->setParam("caller",msg->getValue("caller"));
 	m->setParam("called",msg->getValue("called"));
 	m->setParam("billid",msg->getValue("billid"));
@@ -1373,11 +1362,32 @@ bool YIAXConnection::callRouted(Message& msg)
     return true;
 }
 
+bool YIAXConnection::msgRinging(Message& msg)
+{
+    if (m_transaction) {
+	m_transaction->sendRinging();
+	startAudioOut();
+	return Channel::msgRinging(msg);
+    }
+    return false;
+}
+
+bool YIAXConnection::msgAnswered(Message& msg)
+{
+    if (m_transaction) {
+	m_transaction->sendAnswer();
+	startAudioIn();
+	startAudioOut();
+	return Channel::msgAnswered(msg);
+    }
+    return false;
+}
+
 bool YIAXConnection::msgTone(Message& msg, const char* tone)
 {
-    if (Channel::id() == msg.getValue("targetid")) {
-	String t(tone);
-	transportText(t,false);
+    if (m_transaction) {
+	while (tone && *tone)
+	    m_transaction->sendDtmf(*tone++);
 	return true;
     }
     return false;
@@ -1385,9 +1395,8 @@ bool YIAXConnection::msgTone(Message& msg, const char* tone)
 
 bool YIAXConnection::msgText(Message& msg, const char* text)
 {
-    if (Channel::id() == msg.getValue("targetid")) {
-	String t(text);
-	transportText(t,false);
+    if (m_transaction) {
+	m_transaction->sendText(text);
 	return true;
     }
     return false;
@@ -1575,42 +1584,6 @@ void YIAXConnection::startAudioOut()
     Debug(this,DebugAll,"YIAXConnection - startAudioOut - Format %u: '%s'",m_format,formatText);
 }
 
-void YIAXConnection::transportText(String& text, bool incoming)
-{
-    if (!text.length())
-	return;
-    if (incoming) {
-	Message* m = message("chan.text");
-	m->addParam("text",text);
-        Engine::enqueue(m);
-    }
-    else
-	if (m_transaction)
-	    m_transaction->sendText(text);
-}
-
-void YIAXConnection::transportDtmf(String& text, bool incoming)
-{
-    if (!text.length())
-	return;
-#if 0
-	if ((dtmf >= '0' && dtmf <= '9') ||
-	    (dtmf == '*') ||
-	    (dtmf == '#') ||
-	    (dtmf >= 'A' && dtmf <= 'D') ||
-	    (dtmf >= 'a' && dtmf <= 'd'))
-#endif
-    if (incoming) {
-	Message* m = message("chan.dtmf");
-	m->addParam("text",text);
-	Engine::enqueue(m);
-    }
-    else
-	if (m_transaction)
-	    for(u_int16_t i = 0; i < text.length(); i++)
-		m_transaction->sendDtmf(text[i]);
-}
-
 void YIAXConnection::evAccept(IAXEvent* event)
 {
     Debug(this,DebugAll,"YIAXConnection - ACCEPT (%s)",isOutgoing()?"outgoing":"incoming");
@@ -1644,15 +1617,17 @@ void YIAXConnection::evAnswer(IAXEvent* event)
     Debug(this,DebugAll,"YIAXConnection - ANSWERED (%s)",isOutgoing()?"outgoing":"incoming");
     if (isAnswered())
 	return;
-    Engine::enqueue(message("call.answered"));
+    status("answered");
     startAudioIn();
     startAudioOut();
+    Engine::enqueue(message("call.answered",false,true));
 }
 
 void YIAXConnection::evRinging(IAXEvent* event)
 {
     Debug(this,DebugAll,"YIAXConnection - RINGING");
-    Engine::enqueue(message("call.ringing"));
+    startAudioIn();
+    Engine::enqueue(message("call.ringing",false,true));
 }
 
 void YIAXConnection::evBusy(IAXEvent* event)
@@ -1683,15 +1658,20 @@ void YIAXConnection::evText(IAXEvent* event)
 {
     Debug(this,DebugAll,"YIAXConnection - TEXT");
     IAXInfoElement* ie = event->getIE(IAXInfoElement::textframe);
-    if (ie)
-	transportText((static_cast<IAXInfoElementString*>(ie))->data(),true);
+    if (ie) {
+	Message* m = message("chan.text");
+	m->addParam("text",static_cast<IAXInfoElementString*>(ie)->data());
+        Engine::enqueue(m);
+    }
 }
 
 void YIAXConnection::evDtmf(IAXEvent* event)
 {
     Debug(this,DebugAll,"YIAXConnection - DTMF: %c",(char)event->subclass());
     String dtmf((char)event->subclass());
-    transportDtmf(dtmf,true);
+    Message* m = message("chan.dtmf");
+    m->addParam("text",dtmf);
+    Engine::enqueue(m);
 }
 
 void YIAXConnection::evNoise(IAXEvent* event)
@@ -1755,7 +1735,7 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
     msg.addParam("username",m_username.c_str());
     if (Engine::dispatch(msg)) {
 	String pwd = msg.retValue();
-	if (pwd.length())
+;	if (pwd.length())
 	    /* Received a password */
 	    m_password = pwd;
 	else {

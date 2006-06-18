@@ -778,6 +778,14 @@ public:
 	{ return sendConnected(IAXFullFrame::Answer); }
 
     /**
+     * Send a RINGING frame to remote peer.
+     * This method is thread safe.
+     * @return False if the current transaction state is not Connected.
+     */
+    inline bool sendRinging()
+	{ return sendConnected(IAXFullFrame::Ringing); }
+
+    /**
      * Send an ACCEPT frame to remote peer.
      * This method is thread safe.
      * @param format Media format for transmission.

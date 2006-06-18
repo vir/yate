@@ -411,7 +411,7 @@ ObjList* IAXFrame::getIEList(const IAXFullFrame* frame, bool& invalid)
 	return 0;
     }
     for (i = 1; i < len;) {
-	if (i + data[i] >= len) {
+	if (i + (unsigned int)data[i] >= len) {
 	    i = 0xFFFF;
 	    break;
 	}

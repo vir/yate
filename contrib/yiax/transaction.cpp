@@ -699,11 +699,12 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
 IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame)
 {
     delFrame = true;
+    IAXEvent* ev = 0;
     switch (type()) {
 	case New:
 	    if (!(frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::New))
 		break;
-	    IAXEvent* ev = createEvent(IAXEvent::NewCall,frame,NewRecv);
+	    ev = createEvent(IAXEvent::NewCall,frame,NewRecv);
 	    if (ev) {
 		IAXInfoElement* ie = ev->getIE(IAXInfoElement::VERSION);
 		if (!ie || (static_cast<IAXInfoElementNumeric*>(ie))->data() > IAX_PROTOCOL_VERSION) {
@@ -958,7 +959,8 @@ IAXEvent* IAXTransaction::remoteRejectCall(const IAXFullFrame* frame, bool& delF
 IAXEvent* IAXTransaction::getEventTerminating(u_int64_t time)
 {
     if (time > m_timeout) {
-	Debug(m_engine,DebugAll,"Transaction(%u,%u) - Timeout on remote request. Timestamp: %lu",localCallNo(),remoteCallNo(),timeStamp());
+	Debug(m_engine,DebugAll,"Transaction(%u,%u) - Timeout on remote request. Timestamp: " FMT64U,
+	    localCallNo(),remoteCallNo(),timeStamp());
 	return terminate(IAXEvent::Timeout);
     }
     return 0;

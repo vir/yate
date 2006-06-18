@@ -120,9 +120,12 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	case IAXControl::RegRel:
 	case IAXControl::Poke:
 	    break;
+	case IAXControl::Inval:
+	    // These are often used as keepalives
+	    return 0;
 	case IAXControl::FwDownl:
 	default:
-	    DDebug(this,DebugAll,"Unsuported incoming transaction Frame(%u,%u)",
+	    DDebug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u)",
 		frame->type(),frame->subclass());
 	    return 0;
     }

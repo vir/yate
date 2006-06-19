@@ -767,7 +767,7 @@ public:
      * Assignment from smart pointer
      */
     inline RefPointer<Obj>& operator=(const RefPointer<Obj>& value)
-	{ assign(const_cast<const Obj*>(value)); return *this; }
+	{ assign(value.pointer()); return *this; }
 
     /**
      * Assignment from regular pointer

@@ -25,7 +25,7 @@
 #include <yatephone.h>
 
 #ifdef _WINDOWS
-                                                                                
+
 #ifdef LIBYPBX_EXPORTS
 #define YPBX_API __declspec(dllexport)
 #else
@@ -33,9 +33,9 @@
 #define YPBX_API __declspec(dllimport)
 #endif
 #endif
-                                                                                
+
 #endif /* _WINDOWS */
-                                                                                
+
 #ifndef YPBX_API
 #define YPBX_API
 #endif
@@ -128,56 +128,171 @@ private:
 
 class ChanAssistList;
 
+/**
+ * Object that assists a channel
+ */
 class YPBX_API ChanAssist :  public RefObject
 {
 public:
+    /**
+     * Destructor
+     */
     virtual ~ChanAssist();
+
+    /**
+     * Get the String value of this object
+     * @return ID of the assisted channel
+     */
     virtual const String& toString() const
 	{ return m_chanId; }
+
+    /**
+     * Process the chan.startup message
+     * @param msg First channel message
+     */
     virtual void msgStartup(Message& msg);
+
+    /**
+     * Process the chan.hangup message
+     * @param msg Last channel message
+     */
     virtual void msgHangup(Message& msg);
+
+    /**
+     * Process the channel disconnect message, may connect to something else
+     * @param msg The chan.disconnected message
+     * @param reason The disconnection reason
+     */
     virtual bool msgDisconnect(Message& msg, const String& reason);
+
+    /**
+     * Retrive the list that owns this object
+     * @return Pointer to the owner list
+     */
     inline ChanAssistList* list() const
 	{ return m_list; }
+
+    /**
+     * Get the name of the assisted channel
+     * @return Identifier of the channel
+     */
     inline const String& id() const
 	{ return m_chanId; }
+
+    /**
+     * Retrive a smart pointer to an arbitrary channel
+     * @param id Identifier of the channel to locate
+     * @return Smart pointer to the channel or NULL if not found or dead
+     */
     static RefPointer<CallEndpoint> locate(const String& id);
+
+    /**
+     * Retrive a smart pointer to the assisted channel
+     * @return Smart pointer to the channel or NULL if not found or dead
+     */
     inline RefPointer<CallEndpoint> locate() const
 	{ return locate(m_chanId); }
+
 protected:
+    /**
+     * Constructor of base class
+     * @param list ChanAssistList that owns this object
+     * @param id Identifier of the assisted channel
+     */
     inline ChanAssist(ChanAssistList* list, const String& id)
 	: m_list(list), m_chanId(id)
 	{ }
 private:
+    ChanAssist(); // no default constructor please
     ChanAssistList* m_list;
     String m_chanId;
 };
 
+/**
+ * Class keeping a list of ChanAssist objects. It also serves as base to
+ *  implement channel assisting plugins.
+ */
 class YPBX_API ChanAssistList : public Module
 {
     friend class ChanAssist;
 public:
+    /**
+     * Message realy IDs
+     */
     enum {
 	Startup = Private,
 	Hangup,
 	Disconnected,
 	AssistPrivate
     };
+
+    /**
+     * Destructor
+     */
     virtual ~ChanAssistList()
 	{ }
+
+    /**
+     * Message handler called internally
+     * @param msg Received nessage
+     * @param id Numeric identifier of the message type
+     * @return True if the message was handled and further processing should stop
+     */
     virtual bool received(Message& msg, int id);
+
+    /**
+     * Message handler for an assistant object
+     * @param msg Received nessage
+     * @param id Numeric identifier of the message type
+     * @param assist Pointer to the matching assistant object
+     * @return True if the message was handled and further processing should stop
+     */
     virtual bool received(Message& msg, int id, ChanAssist* assist);
+
+    /**
+     * Method to (re)initialize the plugin
+     */
     virtual void initialize();
-    virtual ChanAssist* create(Message& msg, const String& id)=0;
+
+    /**
+     * Create a new channel assistant
+     * @param msg Message that triggered the creation
+     * @param id Channel's identifier
+     * @return Pointer to new assistant object, NULL if unacceptable
+     */
+    virtual ChanAssist* create(Message& msg, const String& id) = 0;
+
+    /**
+     * Initialize the plugin for the first time
+     * @param priority Priority used to install message handlers
+     */
     virtual void init(int priority = 15);
+
+    /**
+     * Find a channel assistant by channel ID
+     * @param id Identifier of the assisted channel
+     * @return Pointer to the assistant object
+     */
     inline ChanAssist* find(const String& id) const
 	{ return static_cast<ChanAssist*>(m_calls[id]); }
+
 protected:
+    /**
+     * Constructor
+     * @param name Name of the module
+     */
     inline ChanAssistList(const char* name)
 	: Module(name, "misc"), m_first(true)
 	{ }
+
+    /**
+     * Removes an assistant object from list
+     * @param assist Object to remove from list
+     */
     void removeAssist(ChanAssist* assist);
+
 private:
+    ChanAssistList(); // no default constructor please
     HashList m_calls;
     bool m_first;
 };

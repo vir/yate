@@ -32,7 +32,7 @@ bool ChanAssistList::received(Message& msg, int id)
     if (!chanId || chanId->null())
 	return (id < Private) && Module::received(msg,id);
     lock();
-    RefPointer <ChanAssist> ca = find(*chanId); 
+    RefPointer <ChanAssist> ca = find(*chanId);
     unlock();
     switch (id) {
 	case Startup:
@@ -43,25 +43,21 @@ bool ChanAssistList::received(Message& msg, int id)
 	    ca = create(msg,*chanId);
 	    if (ca) {
 		m_calls.append(ca);
-		// only notify the constructed and added to list assistant
 		ca->msgStartup(msg);
 	    }
 	    return false;
 	case Hangup:
 	    if (ca) {
 		ca->msgHangup(msg);
-		// remove and deref
 		m_calls.remove(ca,true);
 	    }
 	    return false;
 	case Execute:
 	    if (ca)
 		return false;
-	    // for incoming channels the decision can be in routing
 	    ca = create(msg,*chanId);
 	    if (ca) {
 		m_calls.append(ca);
-		// only notify the constructed and added to list assistant
 		ca->msgStartup(msg);
 	    }
 	    return false;
@@ -107,7 +103,6 @@ void ChanAssistList::init(int priority)
 ChanAssist::~ChanAssist()
 {
     Debug(list(),DebugAll,"Assistant for '%s' deleted",id().c_str());
-    // remove form the list if we happen to be still there
     if (list())
 	list()->removeAssist(this);
 }

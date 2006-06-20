@@ -65,17 +65,28 @@ public:
     virtual bool received(Message& msg, int id, ChanAssist* assist);
 };
 
+// assist all channels by default?
+static bool s_assist = true;
 
+// filter for channel names to enable assistance
+static Regexp s_filter;
+
+// interdigit timeout, clear collected digits if last was older than this
 static unsigned int s_timeout = 30000000;
 
+// minimum length of collected digits before we start interpreting
 static int s_minlen = 2;
 
+// maximum length of collected digits, drop old if longer
 static int s_maxlen = 20;
 
+// command to take back from DTMF pass-through mode
 static String s_retake;
 
+// on-hold (music) source name
 static String s_onhold;
 
+// error beep override source name
 static String s_error;
 
 static Configuration s_cfg;
@@ -83,8 +94,14 @@ static Configuration s_cfg;
 ChanAssist* PBXList::create(Message& msg, const String& id)
 {
     Debug(this,DebugCall,"Asked to create assistant for '%s'",id.c_str());
-    if (msg == "chan.startup" || msg.userObject("Channel"))
-	return new PBXAssist(this,id);
+    if (msg == "chan.startup" || msg.userObject("Channel")) {
+	// if a filter is set try to match it
+	if (s_filter && !s_filter.matches(id))
+	    return 0;
+	// allow routing to enable/disable assistance
+	if (msg.getBoolValue("pbxassist",s_assist))
+	    return new PBXAssist(this,id);
+    }
     return 0;
 
 }
@@ -102,6 +119,8 @@ void PBXList::initialize()
     lock();
     s_cfg = Engine::configFile(name());
     s_cfg.load();
+    s_assist = s_cfg.getBoolValue("general","default",true);
+    s_filter = s_cfg.getValue("general","filter");
     s_minlen = s_cfg.getIntValue("general","minlen",2);
     if (s_minlen < 1)
 	s_minlen = 1;
@@ -122,6 +141,7 @@ void PBXList::initialize()
 	ChanAssistList::initialize();
 }
 
+// Handler for relayed messages, call corresponding assistant method
 bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 {
     switch (id) {
@@ -269,10 +289,17 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	return true;
     }
 
+    else if (operation == "setstate") {
+	// just set the current state and conference room
+	m_state = msg.getValue("state");
+	m_room = msg.getValue("room");
+	return true;
+    }
+
     else if (operation == "conference") {
 	// turn the call into a conference or connect back to one it left
 	if (m_state=="conference")
-		return errorBeep();
+	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
 	    return errorBeep();
@@ -315,12 +342,6 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	m->addParam("pbxstate",m_state);
 	Engine::enqueue(m);
 	return true;
-    }
-
-    else if (operation == "setstate") {
-	// just set the current state and conference room
-	m_state = msg.getValue("state");
-	m_room = msg.getValue("room");
     }
 
     else if (operation == "secondcall") {

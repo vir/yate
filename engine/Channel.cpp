@@ -812,9 +812,6 @@ bool Module::received(Message &msg, int id)
     }
     else if (id == Level)
 	return setDebug(msg,dest);
-    else
-	Debug(this,DebugGoOn,"Invalid relay id %d in module '%s', message '%s'",
-	    id,m_name.c_str(),msg.c_str());
 
     return false;
 }

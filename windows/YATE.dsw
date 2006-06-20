@@ -215,6 +215,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _analyzer
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _yiaxchan
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -684,6 +687,24 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_yiaxchan"=.\_yiaxchan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyiax
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "_yradius"=.\_yradius.dsp - Package Owner=<4>
 
 Package=<5>
@@ -767,6 +788,21 @@ Package=<5>
 
 Package=<4>
 {{{
+}}}
+
+###############################################################################
+
+Project: "libyiax"=.\libyiax.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
 }}}
 
 ###############################################################################

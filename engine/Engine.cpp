@@ -47,6 +47,7 @@ __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
 #include <dirent.h>
 #include <dlfcn.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 typedef void* HMODULE;
 #define PATH_SEP "/"
 #define CFG_DIR ".yate"
@@ -145,6 +146,7 @@ static bool s_dynplugin = false;
 static int s_maxworkers = 10;
 static bool s_debug = true;
 
+static bool s_coredump = false;
 static bool s_sigabrt = false;
 static String s_cfgfile;
 static const char* s_logfile = 0;
@@ -913,6 +915,9 @@ static void usage(bool client, FILE* f)
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -w directory   Change working directory\n"
+#ifdef RLIMIT_CORE
+"   -C             Enable core dumps if possible\n"
+#endif
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
@@ -1088,6 +1093,11 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			pc = 0;
 			workdir = argv[++i];
 			break;
+#ifdef RLIMIT_CORE
+		    case 'C':
+			s_coredump = true;
+			break;
+#endif
 		    case 'D':
 			while (*++pc) {
 			    switch (*pc) {
@@ -1268,6 +1278,24 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
     debugLevel(debug_level);
     abortOnBug(s_sigabrt);
+
+#ifdef RLIMIT_CORE
+    while (s_coredump) {
+	struct rlimit lim;
+	if (!::getrlimit(RLIMIT_CORE,&lim)) {
+	    errno = 0;
+	    lim.rlim_cur = lim.rlim_max;
+	    // if limit is zero but user is root set limit to infinity
+	    if (!(lim.rlim_cur || ::getuid()))
+		lim.rlim_cur = lim.rlim_max = RLIM_INFINITY;
+	    if (lim.rlim_cur && !::setrlimit(RLIMIT_CORE,&lim))
+		break;
+	}
+	Debug(DebugWarn,"Could not enable core dumps: %s (%d)",
+	    errno ? strerror(errno) : "hard limit",errno);
+	break;
+    }
+#endif
 
     int retcode = -1;
 #ifndef _WINDOWS

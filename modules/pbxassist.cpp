@@ -116,7 +116,7 @@ void PBXList::initialize()
     s_timeout = (unsigned int)tout * 1000;
     s_retake = s_cfg.getValue("general","retake","###");
     s_onhold = s_cfg.getValue("general","onhold","moh/default");
-    s_error = s_cfg.getValue("general","error","tone/150");
+    s_error = s_cfg.getValue("general","error","tone/outoforder");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",true))
 	ChanAssistList::initialize();

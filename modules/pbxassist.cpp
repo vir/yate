@@ -40,6 +40,7 @@ public:
     virtual bool msgTone(Message& msg);
     virtual bool msgOperation(Message& msg, const String& operation);
 protected:
+    bool errorBeep();
     bool rememberPeer(const String& peer);
     u_int64_t m_last;
     bool m_pass;
@@ -74,6 +75,8 @@ static int s_maxlen = 20;
 static String s_retake;
 
 static String s_onhold;
+
+static String s_error;
 
 static Configuration s_cfg;
 
@@ -113,6 +116,7 @@ void PBXList::initialize()
     s_timeout = (unsigned int)tout * 1000;
     s_retake = s_cfg.getValue("general","retake","###");
     s_onhold = s_cfg.getValue("general","onhold","moh/default");
+    s_error = s_cfg.getValue("general","error","tone/150");
     unlock();
     if (s_cfg.getBoolValue("general","enabled",true))
 	ChanAssistList::initialize();
@@ -131,6 +135,7 @@ bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 }
 
 
+// Handler for channel disconnects, may go on hold or to dialtone
 bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 {
     if ((reason == "hold") || (reason == "park")) {
@@ -160,6 +165,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
     return ChanAssist::msgDisconnect(msg,reason);
 }
 
+// Handler for channel's DTMF
 bool PBXAssist::msgTone(Message& msg)
 {
     const char* tone = msg.getValue("text");
@@ -232,6 +238,22 @@ bool PBXAssist::msgTone(Message& msg)
     return false;
 }
 
+// Start an error beep and return false so we can "return errorBeep()"
+bool PBXAssist::errorBeep()
+{
+    if (s_error.null())
+	return false;
+    Message *m=new Message("chan.masquerade");
+    m->addParam("message","chan.attach");
+    m->addParam("id",id());
+    m->addParam("pbxstate",m_state);
+    m->addParam("override",s_error);
+    m->addParam("single","yes");
+    Engine::enqueue(m);
+    return false;
+}
+
+// Operation message handler
 bool PBXAssist::msgOperation(Message& msg, const String& operation)
 {
     if (operation == "passthrough") {
@@ -249,11 +271,15 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 
     else if (operation == "conference") {
 	// turn the call into a conference or connect back to one it left
+	if (m_state=="conference")
+		return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
-	    return false;
+	    return errorBeep();
 	String peer = c->getPeerId();
-	if (!peer.startsWith("tone")) {
+
+	if (!peer.startsWith("tone"))
+	{
 	    Message m("call.conference");
 	    m.addParam("id",id());
 	    m.userData(c);
@@ -266,12 +292,13 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 		if (m.userData())
 		    m_room=(String)(m.getParam("room"));
 	}
-	else {
+	else 
+	{
 	    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	    if (!c)
-		return false;
+		return errorBeep();
 	    if (!m_room)
-		return false;
+		return errorBeep();
 	    Message *m = c->message("call.execute",false,true);
 	    m->addParam("callto",m_room);
 	    m->addParam("pbxstate",m_state);
@@ -306,9 +333,9 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	Engine::dispatch(m);
 	m = "call.route";
 	if (!Engine::dispatch(m))
-	    return false;
+	    return errorBeep();
 	if (m.retValue().null())
-	    return false;
+	    return errorBeep();
 	m_state="call";
 	String peer = m.retValue();
 	Message *m2=new Message("chan.masquerade");
@@ -323,12 +350,13 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     else if (operation == "onhold") {
 	// put the peer on hold and connect to a dialtone
 	if ((m_state=="conference") || (m_state=="dial"))
-	    return false;
+	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
-	    return false;
+	    return errorBeep();
 	String peer = c->getPeerId();
-	rememberPeer(peer);
+	if (!rememberPeer(peer))
+	    return errorBeep();
 
 	m_state="dial";
 	Message* m = new Message("chan.masquerade");
@@ -346,7 +374,7 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	RefPointer<CallEndpoint>c1 = locate(id());
 	RefPointer<CallEndpoint>c2 = locate(m_peer1);
 	if (!(c1 && c2))
-	    return false;
+	    return errorBeep();
 	c1->connect(c2);
 	m_state="call";
 	m_peer1.clear();
@@ -356,10 +384,10 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     else if (operation == "returnconf") {
 	// return to the conference
 	if ((m_state=="conference") || (m_state=="new") || (!m_room))
-	    return false;
+	    return errorBeep();
 	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	if (!c)
-	    return false;
+	    return errorBeep();
 	m_state="conference";
 	Message *m= c->message("call.execute",false,true);
 	m->addParam("callto",m_room);
@@ -383,14 +411,14 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     else if (operation == "dotransfer") {
 	// connect our current peer to that we have on hold, hangup this channel
 	if (m_peer1.null() || (m_state != "call"))
-	    return false;
+	    return errorBeep();
 	RefPointer<CallEndpoint> c1 = locate();
 	if (!c1)
-	    return false;
+	    return errorBeep();
 	c1 = locate(c1->getPeerId());
 	RefPointer<CallEndpoint>c2 = locate(m_peer1);
 	if (!(c1 && c2))
-	    return false;
+	    return errorBeep();
 	m_state=msg.getValue("state","hangup");
 	m_peer1.clear();
 	c1->connect(c2);
@@ -399,10 +427,10 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     else if (operation == "transfer") {
 	// unassisted transfer
 	if ((m_state=="conference") || (m_state=="dial"))
-	    return false;
+	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
-	    return false;
+	    return errorBeep();
 	String peer = c->getPeerId();
 
 	Message m1("call.preroute");
@@ -413,9 +441,9 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	Engine::dispatch(m1);
 	m1 = "call.route";
 	if (!Engine::dispatch(m1))
-	    return false;
+	    return errorBeep();
 	if (m1.retValue().null())
-	    return false;
+	    return errorBeep();
 	String callto = m1.retValue();
 	m_state="dial";
 	Message *m2=new Message("chan.masquerade");
@@ -430,12 +458,13 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     else if (operation == "fortransfer") {
 	// enter assisted transfer - hold peer and dial another number
 	if ((m_state=="conference") || (m_state=="dial"))
-	    return false;
+	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
-	    return false;
+	    return errorBeep();
 	String peer = c->getPeerId();
-	rememberPeer(peer);
+	if (!rememberPeer(peer))
+	    return errorBeep();
 	Message m1("call.preroute");
 	m1.addParam("id",id());
 	m1.addParam("called",msg.getValue("target"));
@@ -444,9 +473,9 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	Engine::dispatch(m1);
 	m1 = "call.route";
 	if (!Engine::dispatch(m1))
-	    return false;
+	    return errorBeep();
 	if (m1.retValue().null())
-	    return false;
+	    return errorBeep();
 	String callto = m1.retValue();
 	m_state="call";
 	Message *m2=new Message("chan.masquerade");

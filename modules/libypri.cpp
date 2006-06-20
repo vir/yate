@@ -61,7 +61,7 @@ static void pri_err_cb(struct pri *pri, char *s)
     if (span)
 	Debug(span->driver(),DebugWarn,"Span %d: %s",span->span(),s);
     else
-	Debug("PRI",DebugWarn,"%s",s);
+	Debug("libpri",DebugWarn,"%s",s);
 }
 
 static void pri_msg_cb(struct pri *pri, char *s)
@@ -70,19 +70,19 @@ static void pri_msg_cb(struct pri *pri, char *s)
     if (span)
 	Debug(span->driver(),DebugInfo,"Span %d: %s",span->span(),s);
     else
-	Debug("PRI",DebugInfo,"%s",s);
+	Debug("libpri",DebugInfo,"%s",s);
 }
 
 #else
 
 static void pri_err_cb(char *s)
 {
-    Debug("PRI",DebugWarn,"%s",s);
+    Debug("libpri",DebugWarn,"%s",s);
 }
 
 static void pri_msg_cb(char *s)
 {
-    Debug("PRI",DebugInfo,"%s",s);
+    Debug("libpri",DebugInfo,"%s",s);
 }
 
 #endif // PRI_NEW_SET_API
@@ -720,7 +720,7 @@ const char *PriChan::chanStatus() const
 void PriChan::idle()
 {
     if (m_timeout && (Time::now() > m_timeout)) {
-	Debug("PriChan",DebugWarn,"Timeout %s channel %s (%s)",
+	Debug(this,DebugWarn,"Timeout %s channel %s (%s)",
 	    chanStatus(),id().c_str(),address().c_str());
 	m_timeout = 0;
 	hangup(PRI_CAUSE_RECOVERY_ON_TIMER_EXPIRE);
@@ -746,7 +746,7 @@ void PriChan::closeData()
 bool PriChan::answer()
 {
     if (!m_ring) {
-	Debug("PriChan",DebugWarn,"Answer request on %s channel %s (%s)",
+	Debug(this,DebugWarn,"Answer request on %s channel %s (%s)",
 	    chanStatus(),id().c_str(),address().c_str());
 	return false;
     }
@@ -793,7 +793,7 @@ void PriChan::hangup(int cause)
 void PriChan::answered()
 {
     if (!m_call) {
-	Debug("PriChan",DebugWarn,"Answer detected on %s channel %s (%s)",
+	Debug(this,DebugWarn,"Answer detected on %s channel %s (%s)",
 	    chanStatus(),id().c_str(),address().c_str());
 	return;
     }
@@ -833,7 +833,7 @@ void PriChan::sendDigit(char digit)
 bool PriChan::call(Message &msg, const char *called)
 {
     if (m_span->outOfOrder()) {
-	Debug("PriChan",DebugMild,"Span %d is out of order, failing call",m_span->span());
+	Debug(this,DebugMild,"Span %d is out of order, failing call",m_span->span());
 	msg.setParam("error","offline");
 	return false;
     }
@@ -841,6 +841,12 @@ bool PriChan::call(Message &msg, const char *called)
 	called = msg.getValue("called");
     Debug(this,DebugInfo,"Calling '%s' on %s (%s)",
 	called,id().c_str(),address().c_str());
+    int complete = 1;
+    if (m_span->overlapped()) {
+	// if asked explicitely or number is too short mark it as incomplete
+	if (msg.getBoolValue("overlapped",!called || (m_span->overlapped() < ::strlen(called))))
+	    complete = 0;
+    }
     int layer1 = msg.getIntValue("format",dict_str2law,m_span->layer1());
     hangup(PRI_CAUSE_PRE_EMPTED);
     setOutgoing(true);
@@ -878,7 +884,7 @@ bool PriChan::call(Message &msg, const char *called)
     ::pri_sr_set_bearer(req,0/*transmode*/,layer1);
     ::pri_sr_set_channel(req,m_chan,1/*exclusive*/,!m_isdn);
     ::pri_sr_set_caller(req,caller,callername,callerplan,callerpres);
-    ::pri_sr_set_called(req,(char *)called,calledplan,1/*complete*/);
+    ::pri_sr_set_called(req,(char *)called,calledplan,complete);
     ::q931_setup(span()->pri(),m_call,req);
 #else
     ::pri_call(m_span->pri(),(q931_call*)m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
@@ -922,7 +928,7 @@ void PriChan::ring(pri_event_ring &ev)
     Engine::enqueue(m);
 
     m_inband = m_span->inband();
-    m_detect = m_span->inband();
+    m_detect = m_span->detect();
     openData(lookup(ev.layer1,dict_str2law),0);
 
     m = message("call.preroute");
@@ -975,6 +981,13 @@ void PriChan::callAccept(Message& msg)
 
 void PriChan::callRejected(const char* error, const char* reason, const Message* msg)
 {
+    if (m_span->overlapped() && error && msg && msg->getBoolValue("overlapped")) {
+	// call was using overlapped dialing, check for incomplete numbers
+	if (!::strcmp(error,"incomplete")) {
+	    ::pri_need_more_info(m_span->pri(),m_call,m_chan,!isISDN());
+	    return;
+	}
+    }
     int cause = lookup(error,dict_str2cause,PRI_CAUSE_NETWORK_OUT_OF_ORDER);
     Channel::callRejected(error,reason,msg);
     hangup(cause);

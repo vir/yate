@@ -528,12 +528,14 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 
     else if (operation == "fortransfer") {
 	// enter assisted transfer - hold peer and dial another number
-	if ((m_state=="conference") || (m_state=="dial"))
+	if (m_state=="conference")
 	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
 	    return errorBeep();
-	String peer = c->getPeerId();
+	String peer;
+	if (m_state!="dial")
+	    peer = c->getPeerId();
 	if (peer) {
 	    // check if we already have another party on hold
 	    if (m_peer1 && (m_peer1 != peer))

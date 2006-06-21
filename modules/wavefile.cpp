@@ -46,7 +46,7 @@ private:
     void detectWavFormat();
     void detectIlbcFormat();
     bool computeDataRate();
-    void notify();
+    bool notify();
     CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
@@ -56,6 +56,7 @@ private:
     u_int64_t m_time;
     String m_id;
     bool m_autoclose;
+    bool m_autoclean;
     bool m_nodata;
 };
 
@@ -125,7 +126,8 @@ INIT_PLUGIN(WaveFileDriver);
 
 WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0),
-      m_total(0), m_time(0), m_autoclose(autoclose), m_nodata(false)
+      m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
+      m_nodata(false)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file.c_str(),chan,this);
     if (file == "-") {
@@ -309,12 +311,15 @@ void WaveSource::run()
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource [%p] end of data [%p] [%s] ",this,m_chan,m_id.c_str());
-    notify();
+    // at cleanup time deref the data source if we start no disconnector thread
+    m_autoclean = !notify();
 }
 
 void WaveSource::cleanup()
 {
     Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
+    if (m_autoclean)
+	deref();
 }
 
 void WaveSource::setNotify(const String& id)
@@ -324,12 +329,13 @@ void WaveSource::setNotify(const String& id)
 	notify();
 }
 
-void WaveSource::notify()
+bool WaveSource::notify()
 {
     if (m_id || m_autoclose) {
 	Disconnector *disc = new Disconnector(m_chan,m_id,true,m_autoclose);
-	disc->init();
+	return disc->init();
     }
+    return false;
 }
 
 WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen)
@@ -418,8 +424,7 @@ bool Disconnector::init()
 	delete this;
 	return false;
     }
-    startup();
-    return true;
+    return startup();
 }
 
 void Disconnector::run()

@@ -32,8 +32,8 @@ namespace { //anonymous
 class YPBX_API PBXAssist : public ChanAssist
 {
 public:
-    inline PBXAssist(ChanAssistList* list, const String& id)
-	: ChanAssist(list,id), m_last(0), m_pass(false), m_state("new")
+    inline PBXAssist(ChanAssistList* list, const String& id, bool pass)
+	: ChanAssist(list,id), m_last(0), m_pass(pass), m_state("new")
 	{ Debug(list,DebugCall,"Created assistant for '%s'",id.c_str()); }
     virtual void msgHangup(Message& msg);
     virtual bool msgDisconnect(Message& msg, const String& reason);
@@ -41,7 +41,6 @@ public:
     virtual bool msgOperation(Message& msg, const String& operation);
 protected:
     bool errorBeep();
-    bool rememberPeer(const String& peer);
     u_int64_t m_last;
     bool m_pass;
     String m_tones;
@@ -70,6 +69,9 @@ static bool s_assist = true;
 
 // filter for channel names to enable assistance
 static Regexp s_filter;
+
+// DTMF pass-through all channels by default?
+static bool s_pass = false;
 
 // interdigit timeout, clear collected digits if last was older than this
 static unsigned int s_timeout = 30000000;
@@ -100,7 +102,7 @@ ChanAssist* PBXList::create(Message& msg, const String& id)
 	    return 0;
 	// allow routing to enable/disable assistance
 	if (msg.getBoolValue("pbxassist",s_assist))
-	    return new PBXAssist(this,id);
+	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass));
     }
     return 0;
 
@@ -119,8 +121,9 @@ void PBXList::initialize()
     lock();
     s_cfg = Engine::configFile(name());
     s_cfg.load();
-    s_assist = s_cfg.getBoolValue("general","default",true);
+    s_assist = s_cfg.getBoolValue("general","default",false);
     s_filter = s_cfg.getValue("general","filter");
+    s_pass = s_cfg.getBoolValue("general","dtmfpass",false);
     s_minlen = s_cfg.getIntValue("general","minlen",2);
     if (s_minlen < 1)
 	s_minlen = 1;
@@ -144,6 +147,9 @@ void PBXList::initialize()
 // Handler for relayed messages, call corresponding assistant method
 bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 {
+    // check if processing was explicitely disallowed
+    if (!msg.getBoolValue("pbxassist",true))
+	return false;
     switch (id) {
 	case Tone:
 	    return static_cast<PBXAssist*>(assist)->msgTone(msg);
@@ -158,6 +164,9 @@ bool PBXList::received(Message& msg, int id, ChanAssist* assist)
 // Handler for channel disconnects, may go on hold or to dialtone
 bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 {
+    if (m_state == "hangup")
+	return ChanAssist::msgDisconnect(msg,reason);
+
     if ((reason == "hold") || (reason == "park")) {
 	if (s_onhold) {
 	    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
@@ -171,7 +180,8 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	}
 	return false;
     }
-    if ((m_state != "new") && (m_state != "hangup")) {
+
+    if (m_state != "new") {
 	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	if (!c)
 	    return false;
@@ -182,6 +192,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	Engine::enqueue(m);
 	return false;
     }
+
     return ChanAssist::msgDisconnect(msg,reason);
 }
 
@@ -199,18 +210,20 @@ bool PBXAssist::msgTone(Message& msg)
     m_tones += tone;
     if ((int)m_tones.length() > s_maxlen)
 	m_tones = m_tones.substr(-s_maxlen);
-    Debug(list(),DebugCall,"Chan '%s' got tone '%s' collected '%s'",id().c_str(),tone,m_tones.c_str());
-    if ((int)m_tones.length() < s_minlen)
-	return false;
+    Debug(list(),DebugInfo,"Chan '%s' got tone '%s' collected '%s'",id().c_str(),tone,m_tones.c_str());
     if (m_pass) {
 	if (m_tones.endsWith(s_retake)) {
-	    Debug(list(),DebugCall,"Chan '%s' back in tone collect mode",id().c_str());
+	    Debug(list(),DebugCall,"Chan '%s' back in command hunt mode",id().c_str());
 	    m_pass = false;
 	    m_tones.clear();
+	    // we just preserve the last state we were in
 	    return true;
 	}
 	return false;
     }
+    if ((int)m_tones.length() < s_minlen)
+	return true;
+
     Lock lock(list());
     int n = s_cfg.sections();
     for (int i = 0; i < n; i++) {
@@ -234,7 +247,8 @@ bool PBXAssist::msgTone(Message& msg)
 
 	tmp = sect->getValue("operation",*sect);
 	if (tmp) {
-	    Debug(list(),DebugInfo,"Chan '%s' triggered operation '%s'",id().c_str(),tmp);
+	    Debug(list(),DebugNote,"Chan '%s' triggered operation '%s' in state '%s' holding '%s'",
+		id().c_str(),tmp,m_state.c_str(),m_peer1.c_str());
 	    Message* m = new Message("chan.masquerade");
 	    m->addParam("id",id());
 	    m->addParam("message",sect->getValue("message","chan.operation"));
@@ -253,9 +267,9 @@ bool PBXAssist::msgTone(Message& msg)
 	    Engine::enqueue(m);
 	}
 	m_tones.clear();
-	return true;
     }
-    return false;
+    // swallow the tone
+    return true;
 }
 
 // Start an error beep and return false so we can "return errorBeep()"
@@ -285,14 +299,14 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	Debug(list(),DebugCall,"Chan '%s' entering tone pass-through mode",id().c_str());
 	m_pass = true;
 	m_tones.clear();
-	m_state="passthrough";
+	// don't change state as we have a special variable for this mode
 	return true;
     }
 
     else if (operation == "setstate") {
 	// just set the current state and conference room
-	m_state = msg.getValue("state");
-	m_room = msg.getValue("room");
+	m_state = msg.getValue("state",m_state);
+	m_room = msg.getValue("room",m_room);
 	return true;
     }
 
@@ -304,43 +318,65 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	if (!c)
 	    return errorBeep();
 	String peer = c->getPeerId();
+	const char* room = msg.getValue("room",m_room);
 
-	if (!peer.startsWith("tone"))
+	if (peer && !peer.startsWith("tone"))
 	{
 	    Message m("call.conference");
 	    m.addParam("id",id());
 	    m.userData(c);
 	    m.addParam("lonely","yes");
-	    if (m_room)
-		m.addParam("room",m_room);
+	    if (room)
+		m.addParam("room",room);
 	    m.addParam("pbxstate",m_state);
 
-	    if (Engine::dispatch(m))
-		if (m.userData())
-		    m_room=(String)(m.getParam("room"));
+	    if (Engine::dispatch(m) && m.userData()) {
+		m_room=m.getParam("room");
+		if (m_peer1 && (m_peer1 != peer)) {
+		    // take the held party in the conference
+		    Message* m = new Message("chan.masquerade");
+		    m->addParam("id",m_peer1);
+		    m->addParam("message","call.execute");
+		    m->addParam("callto",m_room);
+		    Engine::enqueue(m);
+		    // also set held peer's PBX state if it has one
+		    m = new Message("chan.operation");
+		    m->addParam("operation","setstate");
+		    m->addParam("id",m_peer1);
+		    m->addParam("state","conference");
+		    m->addParam("room",m_room);
+		    m->addParam("pbxstate",m_state);
+		    Engine::enqueue(m);
+		    // no longer holding it
+		    m_peer1.clear();
+		}
+	    }
 	}
 	else 
 	{
 	    Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	    if (!c)
 		return errorBeep();
-	    if (!m_room)
+	    if (!room)
 		return errorBeep();
+	    m_room = room;
 	    Message *m = c->message("call.execute",false,true);
-	    m->addParam("callto",m_room);
+	    m->addParam("callto",room);
 	    m->addParam("pbxstate",m_state);
 	    Engine::enqueue(m);
 	}
 
 	m_state="conference";
-	Message *m=new Message("chan.masquerade");
-	m->addParam("message","chan.operation");
-	m->addParam("id",peer);
-	m->addParam("state","conference");
-	m->addParam("room",m_room);
-	m->addParam("operation","setstate");
-	m->addParam("pbxstate",m_state);
-	Engine::enqueue(m);
+	if (peer) {
+	    // set the peer's PBX state and room name
+	    Message *m=new Message("chan.operation");
+	    m->addParam("operation","setstate");
+	    m->addParam("id",peer);
+	    m->addParam("state","conference");
+	    m->addParam("room",m_room);
+	    m->addParam("pbxstate",m_state);
+	    Engine::enqueue(m);
+	}
 	return true;
     }
 
@@ -369,42 +405,56 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     }
 
     else if (operation == "onhold") {
-	// put the peer on hold and connect to a dialtone
-	if ((m_state=="conference") || (m_state=="dial"))
+	// put the peer on hold and connect to old held party or a dialtone
+	if (m_state=="conference")
 	    return errorBeep();
 	RefPointer<CallEndpoint> c = locate();
 	if (!c)
 	    return errorBeep();
-	String peer = c->getPeerId();
-	if (!rememberPeer(peer))
-	    return errorBeep();
+	RefPointer<CallEndpoint> c2 = locate(m_peer1);
+	// no need to check old m_peer1
+	if (m_state=="dial")
+	    m_peer1.clear();
+	else
+	    m_peer1 = c->getPeerId();
 
-	m_state="dial";
-	Message* m = new Message("chan.masquerade");
-	m->addParam("id",id());
-	m->addParam("callto","tone/dial");
-	m->addParam("message","call.execute");
-	m->addParam("reason","hold");
+	Message* m;
+	if (c2) {
+	    m = new Message("chan.operation");
+	    m->addParam("operation","setstate");
+	    m->addParam("id",c2->id());
+	    m->addParam("state","call");
+	    m_state="call";
+	    c->connect(c2,"hold");
+	}
+	else {
+	    m = new Message("chan.masquerade");
+	    m->addParam("id",id());
+	    m->addParam("callto","tone/dial");
+	    m->addParam("message","call.execute");
+	    m->addParam("reason","hold");
+	    m_state="dial";
+	}
 	m->addParam("pbxstate",m_state);
 	Engine::enqueue(m);
 	return true;
     }
 
     else if (operation == "returnhold") {
-	// return to a peer left on hold
-	RefPointer<CallEndpoint>c1 = locate(id());
-	RefPointer<CallEndpoint>c2 = locate(m_peer1);
+	// return to a peer left on hold, hang up the current peer
+	RefPointer<CallEndpoint> c1 = locate(id());
+	RefPointer<CallEndpoint> c2 = locate(m_peer1);
 	if (!(c1 && c2))
 	    return errorBeep();
-	c1->connect(c2);
-	m_state="call";
 	m_peer1.clear();
+	m_state="call";
+	c1->connect(c2);
 	return true;
     }
 
     else if (operation == "returnconf") {
 	// return to the conference
-	if ((m_state=="conference") || (m_state=="new") || (!m_room))
+	if ((m_state=="conference") || (m_state=="new") || m_room.null())
 	    return errorBeep();
 	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	if (!c)
@@ -430,8 +480,8 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     }
 
     else if (operation == "dotransfer") {
-	// connect our current peer to that we have on hold, hangup this channel
-	if (m_peer1.null() || (m_state != "call"))
+	// connect our current peer to what we have on hold, hangup this channel
+	if (m_peer1.null() || ((m_state != "call") && (m_state != "fortransfer")))
 	    return errorBeep();
 	RefPointer<CallEndpoint> c1 = locate();
 	if (!c1)
@@ -484,8 +534,12 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	if (!c)
 	    return errorBeep();
 	String peer = c->getPeerId();
-	if (!rememberPeer(peer))
-	    return errorBeep();
+	if (peer) {
+	    // check if we already have another party on hold
+	    if (m_peer1 && (m_peer1 != peer))
+		return errorBeep();
+	    m_peer1 = peer;
+	}
 	Message m1("call.preroute");
 	m1.addParam("id",id());
 	m1.addParam("called",msg.getValue("target"));
@@ -498,7 +552,7 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
 	if (m1.retValue().null())
 	    return errorBeep();
 	String callto = m1.retValue();
-	m_state="call";
+	m_state="fortransfer";
 	Message *m2=new Message("chan.masquerade");
 	m2->addParam("message","call.execute");
 	m2->addParam("id",id());
@@ -522,20 +576,6 @@ void PBXAssist::msgHangup(Message& msg)
 	Engine::enqueue(m);
     }
     ChanAssist::msgHangup(msg);
-}
-
-bool PBXAssist::rememberPeer(const String& peer)
-{
-    if (peer.null() || (peer == id()))
-	return false;
-    if (peer == m_peer1)
-	return true;
-    if (m_peer1) {
-	Debug (DebugWarn,"Sorry, can't put %s on hold, you already have %s on hold",peer.c_str(),m_peer1.c_str());
-	return false;
-    }
-    m_peer1=peer;
-    return true;
 }
 
 INIT_PLUGIN(PBXList);

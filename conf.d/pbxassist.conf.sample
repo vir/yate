@@ -8,10 +8,13 @@
 ;priority=15
 
 ; default: bool: Assist channels by default
-;default=yes
+;default=no
 
 ; filter: regexp: Expression matching assisted channel IDs, default all
 ;filter=
+
+; dtmfpass: bool: Enter DTMF pass-through mode by default
+;dtmfpass=no
 
 ; minlen: int: Minimum length of command sequences
 ;minlen=2

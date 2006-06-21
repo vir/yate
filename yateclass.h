@@ -3090,7 +3090,7 @@ public:
 
     /**
      * Actually starts running the new thread which lingers after creation
-     * @return True if an error occured, false if started ok
+     * @return False if an error occured, true if started ok
      */
     bool startup();
 

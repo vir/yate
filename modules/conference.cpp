@@ -415,8 +415,12 @@ void ConfRoom::mix(ConfConsumer* cons)
 	}
     }
     XDebug(DebugAll,"ConfRoom::mix() buffer %u - %u [%p]",len,mlen,this);
+    mlen += MIN_BUFFER;
+    // do we have at least minimum amount of data in buffer?
+    if (mlen <= MAX_BUFFER)
+	return;
+    mlen -= MAX_BUFFER;
     // make sure we mix in enough data to prevent channels from overflowing
-    mlen = mlen + MIN_BUFFER - MAX_BUFFER;
     if (len < mlen)
 	len = mlen;
     unsigned int chunks = len / DATA_CHUNK;

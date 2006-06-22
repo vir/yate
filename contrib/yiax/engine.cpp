@@ -28,14 +28,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-//static u_int64_t iax_events_allocated = 0;
-//static u_int64_t iax_events_released = 0;
-
 using namespace TelEngine;
 
-IAXEngine::IAXEngine(int transCount, int retransCount, int retransInterval, int maxFullFrameDataLen, u_int32_t transTimeout)
+IAXEngine::IAXEngine(int transCount, int retransCount, int retransInterval, int maxFullFrameDataLen, u_int32_t transTimeout,
+	u_int32_t format, u_int32_t capab)
     : Mutex(true), m_transList(0), m_transListCount(0), m_retransCount(retransCount),
-      m_retransInterval(retransInterval), m_maxFullFrameDataLen(maxFullFrameDataLen), m_transactionTimeout(transTimeout)
+      m_retransInterval(retransInterval), m_maxFullFrameDataLen(maxFullFrameDataLen), m_transactionTimeout(transTimeout),
+      m_format(format), m_capability(capab)
 {
     debugName("iaxengine");
     if (transCount < 4)
@@ -164,10 +163,7 @@ bool IAXEngine::process()
 	    delete event;
 	    continue;
 	}
-	if (!event->getTransaction()->connectionless()) 
-	    processEvent(event);
-	else
-	    processConnectionlessEvent(event);
+	processEvent(event);
     }
     return ok;
 }
@@ -240,14 +236,10 @@ u_int32_t IAXEngine::transactionCount()
 
     Lock lock(this);
     // Incomplete transactions
-    for (l = m_incompleteTransList.skipNull(); l; l = l->next())
-	if (l->get())
-	    n++;
+    n += m_incompleteTransList.count();
     // Complete transactions
     for (int i = 0; i < m_transListCount; i++)
-	for (l = m_transList[i]->skipNull(); l; l = l->next())
-	    if (l->get())
-		n++;	
+	n += m_transList[i]->count();
     return n;	
 }
 
@@ -260,13 +252,6 @@ void IAXEngine::keepAlive(SocketAddr& addr)
 void IAXEngine::processEvent(IAXEvent* event)
 {
     XDebug(this,DebugAll,"Default processing - deleting event %p Subclass %u",
-	event,event->subclass());
-    delete event;
-}
-
-void IAXEngine::processConnectionlessEvent(IAXEvent* event)
-{
-    XDebug(this,DebugAll,"Default conectionless processing - deleting event %p Subclass %u",
 	event,event->subclass());
     delete event;
 }
@@ -327,11 +312,8 @@ void IAXEngine::releaseCallNo(u_int16_t lcallno)
     m_lUsedCallNo[lcallno] = false;
 }
 
-IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, ObjList* ieList, IAXRegData* regdata)
+IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList)
 {
-    DataBlock data;
-    bool localIEList = (ieList == 0);
-
     switch (type) {
 	case IAXTransaction::New:
 	case IAXTransaction::RegReq:
@@ -343,66 +325,64 @@ IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, cons
 	    Debug(this,DebugWarn,"Unsupported new transaction type %u requested",type);
 	    return 0;
     }
-    // Add fields
-    if (type == IAXTransaction::New) {
-	if (localIEList)
-	    ieList = new ObjList;
-	// ADD Version
-	if (!IAXFrame::getIE(ieList,IAXInfoElement::VERSION))
-	    ieList->insert(new IAXInfoElementNumeric(IAXInfoElement::VERSION,IAX_PROTOCOL_VERSION,2));
-    }
-    if (ieList) {
-	IAXFrame::createIEListBuffer(ieList,data);
-	if (localIEList)
-	    delete ieList;
-	if (data.length() > (unsigned int)m_maxFullFrameDataLen) {
-	    Debug(this,DebugWarn,"New transaction IE list buffer too long (%u > %u)",
-		data.length(),m_maxFullFrameDataLen);
-	    return 0;
-	}
-    }
     Lock lock(this);
     u_int16_t lcn = generateCallNo();
     if (!lcn)
 	return 0;
-    switch (type) {
-	case IAXTransaction::New:
-	case IAXTransaction::Poke:
-	    regdata = 0;
-	    break;
-	case IAXTransaction::RegReq:
-	case IAXTransaction::RegRel:
-	    break;
-	default: ;
+    IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,ieList);
+    if (tr->type() == IAXTransaction::Incorrect) {
+	Debug(this,DebugWarn,"Error initializing transaction");
+	delete tr;
+	return 0;
     }
-    IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,regdata,(unsigned char*)data.data(),data.length());
     m_incompleteTransList.append(tr);
     return tr;
+}
+
+void IAXEngine::getMD5FromChallenge(String& md5data, const String& challenge, const String& password)
+{
+    MD5 md5;
+    md5 << challenge << password;
+    md5data = md5.hexDigest();
+}
+
+bool IAXEngine::isMD5ChallengeCorrect(const String& md5data, const String& challenge, const String& password)
+{
+    MD5 md5;
+    md5 << challenge << password;
+    return md5data == md5.hexDigest();
 }
 
 /*
 * IAXEvent
 */
-IAXEvent::IAXEvent(Type type, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int8_t subclass, ObjList* ieList)
-    : m_type(type), m_frameType(frameType), m_subClass(subclass), m_final(final), m_transaction(0), m_ieList(ieList)
-{
-//    iax_events_allocated++;
+IAXEvent::IAXEvent(Type type, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int8_t subclass)
+    : m_type(type), m_frameType(frameType), m_subClass(subclass), m_final(final), m_transaction(0)
 
+{
     if (transaction && transaction->ref())
 	m_transaction = transaction;
 }
 
+IAXEvent::IAXEvent(Type type, bool final, IAXTransaction* transaction, const IAXFullFrame* frame)
+    : m_type(type), m_frameType(0), m_subClass(0), m_final(final), m_transaction(0), m_ieList(frame)
+
+{
+    if (transaction && transaction->ref())
+	m_transaction = transaction;
+    if (frame) {
+	m_frameType = frame->type();
+	m_subClass = frame->subclass();
+    }
+}
+
 IAXEvent::~IAXEvent()
 {
-//    iax_events_released++;
-
     if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated) {
 	m_transaction->getEngine()->removeTransaction(m_transaction);
     }
     if (m_transaction)
 	m_transaction->deref();
-    if (m_ieList)
-	delete m_ieList;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

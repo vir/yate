@@ -26,24 +26,6 @@
 
 using namespace TelEngine;
 
-//static u_int64_t iax_frame_allocated = 0;
-//static u_int64_t iax_frame_released = 0;
-//static u_int64_t iax_ies_allocated = 0;
-//static u_int64_t iax_ies_released = 0;
-
-
-IAXInfoElement::IAXInfoElement(Type type)
-    : m_type(type)
-{
-//    iax_ies_allocated++;
-}
-
-IAXInfoElement::~IAXInfoElement()
-{
-//    iax_ies_released++;
-}
-
-
 /**
  * IAXInfoElement
  */
@@ -193,6 +175,228 @@ bool IAXInfoElementBinary::unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie)
 }
 
 /**
+ * IAXIEList
+ */
+
+void IAXIEList::insertVersion()
+{
+    if (!getIE(IAXInfoElement::VERSION))
+	m_list.insert(new IAXInfoElementNumeric(IAXInfoElement::VERSION,IAX_PROTOCOL_VERSION,2));
+}
+
+bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
+{
+    m_invalidIEList = false;
+    m_list.clear();
+    if (!frame)
+	return true;
+    unsigned char* data = (unsigned char*)(((IAXFullFrame*)frame)->data().data());
+    unsigned int len = ((IAXFullFrame*)frame)->data().length();
+    u_int16_t i;       // Current index of IE buffer
+    u_int32_t value;
+    if (frame->type() == IAXFrame::Text)
+    {
+	// Create even if text is empty
+	appendString(IAXInfoElement::textframe,data,len);
+	return true;
+    }
+    if (len < 2) {
+	m_invalidIEList = len ? true : false;
+	return !m_invalidIEList;
+    }
+    for (i = 1; i < len;) {
+	if (i + (unsigned int)data[i] >= len) {
+	    i = 0xFFFF;
+	    break;
+	}
+	switch (data[i-1]) {
+	    // Text
+	    case IAXInfoElement::CALLED_NUMBER:
+	    case IAXInfoElement::CALLING_NUMBER:
+	    case IAXInfoElement::CALLING_ANI:
+	    case IAXInfoElement::CALLING_NAME:
+	    case IAXInfoElement::CALLED_CONTEXT:
+	    case IAXInfoElement::USERNAME:
+	    case IAXInfoElement::PASSWORD:
+	    case IAXInfoElement::LANGUAGE:
+	    case IAXInfoElement::DNID:
+	    case IAXInfoElement::CHALLENGE:
+	    case IAXInfoElement::MD5_RESULT:
+	    case IAXInfoElement::RSA_RESULT:
+	    case IAXInfoElement::CAUSE:
+	    case IAXInfoElement::MUSICONHOLD:        // Optional
+	    case IAXInfoElement::RDNIS: 
+	    case IAXInfoElement::DEVICETYPE:
+		if (data[i])
+		    appendString((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		else
+		    appendString((IAXInfoElement::Type)data[i-1],0,0);
+		i += data[i] + 1;
+		break;
+	    // Binary
+	    case IAXInfoElement::CODEC_PREFS:        // LIST of strings
+		if (data[i])
+		    appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		else
+		    appendBinary((IAXInfoElement::Type)data[i-1],0,0);
+		i += data[i] + 1;
+		break;
+	    case IAXInfoElement::APPARENT_ADDR:
+	    case IAXInfoElement::PROVISIONING:
+	    case IAXInfoElement::AESPROVISIONING:
+	    case IAXInfoElement::SERVICEIDENT:       // Length must be 6
+	    case IAXInfoElement::FWBLOCKDATA:        // Length can be 0
+	    case IAXInfoElement::ENKEY:
+		if (data[i-1] != IAXInfoElement::FWBLOCKDATA && !data[i]) {
+		    i = 0xFFFF;
+		    break;
+		}
+		if (data[i-1] == IAXInfoElement::SERVICEIDENT && data[i] != 6) {
+		    i = 0xFFFF;
+		    break;
+		}
+		appendBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
+		i += data[i] + 1;
+		break;
+	    // 4 bytes
+	    case IAXInfoElement::CAPABILITY:
+	    case IAXInfoElement::FORMAT:
+	    case IAXInfoElement::TRANSFERID:
+	    case IAXInfoElement::DATETIME:
+	    case IAXInfoElement::PROVVER:
+	    case IAXInfoElement::FWBLOCKDESC:
+	    case IAXInfoElement::SAMPLINGRATE:
+	    case IAXInfoElement::RR_JITTER:
+	    case IAXInfoElement::RR_LOSS:
+	    case IAXInfoElement::RR_PKTS:
+	    case IAXInfoElement::RR_DROPPED:
+	    case IAXInfoElement::RR_OOO:
+		if (data[i] != 4) {
+		    i = 0xFFFF;
+		    break;
+		}
+		value = (data[i+1] << 24) | (data[i+2] << 16) | (data[i+3] << 8) | data[i+4];
+		appendNumeric((IAXInfoElement::Type)data[i-1],value,4);
+		i += 5;
+		break;
+	    // 2 bytes
+	    case IAXInfoElement::VERSION:             // Value: 0x0002
+	    case IAXInfoElement::ADSICPE:
+	    case IAXInfoElement::AUTHMETHODS:
+	    case IAXInfoElement::REFRESH:
+	    case IAXInfoElement::DPSTATUS:
+	    case IAXInfoElement::CALLNO: 
+	    case IAXInfoElement::MSGCOUNT:
+	    case IAXInfoElement::CALLINGTNS:
+	    case IAXInfoElement::FIRMWAREVER:
+	    case IAXInfoElement::RR_DELAY:
+		if (data[i] != 2) {
+		    i = 0xFFFF;
+		    break;
+		}
+		value = (data[i+1] << 8) | data[i+2];
+		if (data[i-1] == IAXInfoElement::VERSION && value != IAX_PROTOCOL_VERSION) {
+		    i = 0xFFFF;
+		    break;
+		}
+		appendNumeric((IAXInfoElement::Type)data[i-1],value,2);
+		i += 3;
+		break;
+	    // 1 byte
+	    case IAXInfoElement::IAX_UNKNOWN:
+	    case IAXInfoElement::CALLINGPRES:
+	    case IAXInfoElement::CALLINGTON:
+	    case IAXInfoElement::CAUSECODE:
+	    case IAXInfoElement::ENCRYPTION:
+		if (data[i] != 1) {
+		    i = 0xFFFF;
+		    break;
+		}
+		value = data[i+1];
+		appendNumeric((IAXInfoElement::Type)data[i-1],value,1);
+		i += 2;
+		break;
+	    // None
+	    case IAXInfoElement::AUTOANSWER:
+		if (data[i]) {
+		    i = 0xFFFF;
+		    break;
+		}
+		appendNull(IAXInfoElement::AUTOANSWER);
+		i += 1;
+		break;
+	    default:
+		Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with unknown IE identifier %u [%p]",
+		    frame->type(),frame->subclass(),data[i-1],frame);
+		i = 0xFFFF;
+	}
+	if (i == 0xFFFF)
+	    break;
+	if (i == len -1)
+	    i = 0xFFFF;
+	else
+	    i++;
+    }
+    m_invalidIEList = i == 0xFFFF;
+    if (!m_invalidIEList)
+	return true;
+    Debug(DebugWarn,"IAXIEList::createFromFrame. Frame(%u,%u) with invalid IE [%p]",frame->type(),frame->subclass(),frame);
+    return false;
+}
+
+void IAXIEList::toBuffer(DataBlock& buf)
+{
+    DataBlock data;
+    buf.clear();
+    for (ObjList* l = m_list.skipNull(); l; l = l->next()) {
+	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
+	if (!ie)
+	    continue;
+	ie->toBuffer(data);
+	buf.append(data);
+    }
+}
+
+IAXInfoElement* IAXIEList::getIE(IAXInfoElement::Type type)
+{
+    for (ObjList* l = m_list.skipNull(); l; l = l->next()) {
+	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
+	if (ie && ie->type() == type)
+	    return ie;
+    }
+    return 0;
+}
+
+bool IAXIEList::getString(IAXInfoElement::Type type, String& dest)
+{
+    IAXInfoElementString* ie = static_cast<IAXInfoElementString*>(getIE(type));
+    dest.clear();
+    if (!ie)
+	return false;
+    dest = ie->data();
+    return true;
+}
+
+bool IAXIEList::getNumeric(IAXInfoElement::Type type, u_int32_t& dest)
+{
+    IAXInfoElementNumeric* ie = static_cast<IAXInfoElementNumeric*>(getIE(type));
+    if (!ie)
+	return false;
+    dest = ie->data();
+    return true;
+}
+
+bool IAXIEList::getBinary(IAXInfoElement::Type type, DataBlock& dest)
+{
+    IAXInfoElementBinary* ie = static_cast<IAXInfoElementBinary*>(getIE(type));
+    dest.clear();
+    if (!ie)
+	return false;
+    dest = ie->data();
+    return true;
+}
+
+/**
  * IAXFormat
  */
 TokenDict IAXFormat::audioData[] = {
@@ -242,13 +446,11 @@ IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
     : m_type(type), m_data((char*)buf,len,true), m_retrans(retrans),
       m_sCallNo(sCallNo), m_tStamp(tStamp), m_subclass(0)
 {
-//    iax_frame_allocated++;
-    XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
+    XDebug(DebugAll,"IAXFrame::IAXFrame(%u,%u) [%p]",type,this);
 }
 
 IAXFrame::~IAXFrame()
 {
-//    iax_frame_released++;
     XDebug(DebugAll,"IAXFrame::~IAXFrame() [%p]",this);
 }
 
@@ -308,27 +510,7 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 	buf += 8;
 	len -= 8;
 	if (tstamps) {
-	    // Trunk timestamps
-	    while (len >= 4) {
-		u_int16_t dlen = (buf[2] << 8) | buf[3];
-		if ((unsigned int)(dlen + 4) > len)
-		    return 0;
-		scn = (buf[0] << 8) | buf[1];
-		bool retrans = false;
-		if (scn & 0x8000) {
-		    retrans = true;
-		    scn &= 0x7fff;
-		}
-		IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,0,retrans,buf+4,dlen);
-		engine->addFrame(*addr,frame);
-		frame->deref();
-		dlen += 4;
-		buf += dlen;
-		len -= dlen;
-	    }
-	}
-	else {
-	    // No trunk timestamps
+	    // Trunk timestamps (mini frames)
 	    while (len >= 6) {
 		u_int16_t dlen = (buf[0] << 8) | buf[1];
 		if ((unsigned int)(dlen + 6) > len)
@@ -344,6 +526,26 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 		engine->addFrame(*addr,frame);
 		frame->deref();
 		dlen += 6;
+		buf += dlen;
+		len -= dlen;
+	    }
+	}
+	else {
+	    // No trunk timestamps
+	    while (len >= 4) {
+		u_int16_t dlen = (buf[2] << 8) | buf[3];
+		if ((unsigned int)(dlen + 4) > len)
+		    return 0;
+		scn = (buf[0] << 8) | buf[1];
+		bool retrans = false;
+		if (scn & 0x8000) {
+		    retrans = true;
+		    scn &= 0x7fff;
+		}
+		IAXFrame* frame = new IAXFrame(IAXFrame::Voice,scn,0,retrans,buf+4,dlen);
+		engine->addFrame(*addr,frame);
+		frame->deref();
+		dlen += 4;
 		buf += dlen;
 		len -= dlen;
 	    }
@@ -388,196 +590,6 @@ u_int32_t IAXFrame::unpackSubclass(u_int8_t value)
 
 const IAXFullFrame* IAXFrame::fullFrame() const
 {
-    return 0;
-}
-
-ObjList* IAXFrame::getIEList(const IAXFullFrame* frame, bool& invalid)
-{
-    unsigned char* data = (unsigned char*)(((IAXFullFrame*)frame)->data().data());
-    unsigned int len = ((IAXFullFrame*)frame)->data().length();
-    ObjList* ieList = new ObjList;
-    u_int16_t i;       // Current index of IE buffer
-    u_int32_t value;
-
-    if (frame->type() == IAXFrame::Text)
-    {
-	// Create even if text is empty
-	ieList->append(new IAXInfoElementString(IAXInfoElement::textframe,data,len));
-	return ieList;
-    }
-    if (len < 2) {
-	invalid = len ? true : false;
-	delete ieList;
-	return 0;
-    }
-    for (i = 1; i < len;) {
-	if (i + (unsigned int)data[i] >= len) {
-	    i = 0xFFFF;
-	    break;
-	}
-	switch (data[i-1]) {
-	    // Text
-	    case IAXInfoElement::CALLED_NUMBER:
-	    case IAXInfoElement::CALLING_NUMBER:
-	    case IAXInfoElement::CALLING_ANI:
-	    case IAXInfoElement::CALLING_NAME:
-	    case IAXInfoElement::CALLED_CONTEXT:
-	    case IAXInfoElement::USERNAME:
-	    case IAXInfoElement::PASSWORD:
-	    case IAXInfoElement::LANGUAGE:
-	    case IAXInfoElement::DNID:
-	    case IAXInfoElement::CHALLENGE:
-	    case IAXInfoElement::MD5_RESULT:
-	    case IAXInfoElement::RSA_RESULT:
-	    case IAXInfoElement::CAUSE:
-	    case IAXInfoElement::MUSICONHOLD:        // Optional
-	    case IAXInfoElement::RDNIS: 
-	    case IAXInfoElement::DEVICETYPE:
-		if (data[i])
-		    ieList->append(new IAXInfoElementString((IAXInfoElement::Type)data[i-1],data+i+1,data[i]));
-		else
-		    ieList->append(new IAXInfoElementString((IAXInfoElement::Type)data[i-1],0,0));
-		i += data[i] + 1;
-		break;
-	    // Binary
-	    case IAXInfoElement::CODEC_PREFS:        // LIST of strings
-		if (data[i])
-		    ieList->append(new IAXInfoElementString((IAXInfoElement::Type)data[i-1],data+i+1,data[i]));
-		else
-		    ieList->append(new IAXInfoElementBinary((IAXInfoElement::Type)data[i-1],0,0));
-		i += data[i] + 1;
-		break;
-	    case IAXInfoElement::APPARENT_ADDR:
-	    case IAXInfoElement::PROVISIONING:
-	    case IAXInfoElement::AESPROVISIONING:
-	    case IAXInfoElement::SERVICEIDENT:       // Length must be 6
-	    case IAXInfoElement::FWBLOCKDATA:        // Length can be 0
-	    case IAXInfoElement::ENKEY:
-		if (data[i-1] != IAXInfoElement::FWBLOCKDATA && !data[i]) {
-		    i = 0xFFFF;
-		    break;
-		}
-		if (data[i-1] == IAXInfoElement::SERVICEIDENT && data[i] != 6) {
-		    i = 0xFFFF;
-		    break;
-		}
-		ieList->append(new IAXInfoElementBinary((IAXInfoElement::Type)data[i-1],data+i+1,data[i]));
-		i += data[i] + 1;
-		break;
-	    // 4 bytes
-	    case IAXInfoElement::CAPABILITY:
-	    case IAXInfoElement::FORMAT:
-	    case IAXInfoElement::TRANSFERID:
-	    case IAXInfoElement::DATETIME:
-	    case IAXInfoElement::PROVVER:
-	    case IAXInfoElement::FWBLOCKDESC:
-	    case IAXInfoElement::SAMPLINGRATE:
-	    case IAXInfoElement::RR_JITTER:
-	    case IAXInfoElement::RR_LOSS:
-	    case IAXInfoElement::RR_PKTS:
-	    case IAXInfoElement::RR_DROPPED:
-	    case IAXInfoElement::RR_OOO:
-		if (data[i] != 4) {
-		    i = 0xFFFF;
-		    break;
-		}
-		value = (data[i+1] << 24) | (data[i+2] << 16) | (data[i+3] << 8) | data[i+4];
-		ieList->append(new IAXInfoElementNumeric((IAXInfoElement::Type)data[i-1],value,4));
-		i += 5;
-		break;
-	    // 2 bytes
-	    case IAXInfoElement::VERSION:             // Value: 0x0002
-	    case IAXInfoElement::ADSICPE:
-	    case IAXInfoElement::AUTHMETHODS:
-	    case IAXInfoElement::REFRESH:
-	    case IAXInfoElement::DPSTATUS:
-	    case IAXInfoElement::CALLNO: 
-	    case IAXInfoElement::MSGCOUNT:
-	    case IAXInfoElement::CALLINGTNS:
-	    case IAXInfoElement::FIRMWAREVER:
-	    case IAXInfoElement::RR_DELAY:
-		if (data[i] != 2) {
-		    i = 0xFFFF;
-		    break;
-		}
-		value = (data[i+1] << 8) | data[i+2];
-		if (data[i-1] == IAXInfoElement::VERSION && value != IAX_PROTOCOL_VERSION) {
-		    i = 0xFFFF;
-		    break;
-		}
-		ieList->append(new IAXInfoElementNumeric((IAXInfoElement::Type)data[i-1],value,2));
-		i += 3;
-		break;
-	    // 1 byte
-	    case IAXInfoElement::IAX_UNKNOWN:
-	    case IAXInfoElement::CALLINGPRES:
-	    case IAXInfoElement::CALLINGTON:
-	    case IAXInfoElement::CAUSECODE:
-	    case IAXInfoElement::ENCRYPTION:
-		if (data[i] != 1) {
-		    i = 0xFFFF;
-		    break;
-		}
-		value = data[i+1];
-		ieList->append(new IAXInfoElementNumeric((IAXInfoElement::Type)data[i-1],value,1));
-		i += 2;
-		break;
-	    // None
-	    case IAXInfoElement::AUTOANSWER:
-		if (data[i]) {
-		    i = 0xFFFF;
-		    break;
-		}
-		ieList->append(new IAXInfoElement(IAXInfoElement::AUTOANSWER));
-		i += 1;
-		break;
-	    default:
-		Debug(DebugWarn,"IAXFrame(%u,%u) with unknown IE identifier %u [%p]",
-		    frame->type(),frame->subclass(),data[i-1],frame);
-		i = 0xFFFF;
-	}
-	if (i == 0xFFFF)
-	    break;
-	if (i == len -1)
-	    i = 0xFFFF;
-	else
-	    i++;
-    }
-    invalid = (bool)(i == 0xFFFF);
-    if (!invalid)
-	return ieList;
-    Debug(DebugWarn,"IAXFrame(%u,%u) with invalid IE [%p]",
-	frame->type(),frame->subclass(),frame);
-    delete ieList;
-    return 0;
-}
-
-bool IAXFrame::createIEListBuffer(ObjList* ieList, DataBlock& buf)
-{
-    if (!ieList)
-	return false;
-    DataBlock data;
-    buf.clear();
-    for (ObjList* l = ieList->skipNull(); l; l = l->next()) {
-	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
-	if (!ie)
-	    continue;
-	ie->toBuffer(data);
-	buf.append(data);
-    }
-    return true;
-}
-
-IAXInfoElement* IAXFrame::getIE(ObjList* ieList, IAXInfoElement::Type type)
-{
-    if (!ieList)
-	return 0;
-    for (ObjList* l = ieList->skipNull(); l; l = l->next()) {
-	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
-	if (!(ie && ie->type() == type))
-	   continue;
-	return ie;
-    }
     return 0;
 }
 

@@ -1,7 +1,7 @@
 /**
  * frame.cpp
  * Yet Another IAX2 Stack
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team
@@ -124,7 +124,7 @@ IAXInfoElementNumeric::IAXInfoElementNumeric(Type type, u_int32_t val, u_int8_t 
 	    break;
     }
 }
-	
+
 void IAXInfoElementNumeric::toBuffer(DataBlock& buf)
 {
     unsigned char d[6] = {m_type,m_length};
@@ -158,10 +158,8 @@ void IAXInfoElementBinary::toBuffer(DataBlock& buf)
     buf += m_data;
 }
 
-IAXInfoElementBinary* IAXInfoElementBinary::packIP(const SocketAddr& addr, bool ipv4)
+IAXInfoElementBinary* IAXInfoElementBinary::packIP(const SocketAddr& addr)
 {
-    if (!ipv4)
-	return 0;
     return new IAXInfoElementBinary(IAXInfoElement::APPARENT_ADDR,(unsigned char*)(addr.address()),addr.length());
 }
 
@@ -177,7 +175,6 @@ bool IAXInfoElementBinary::unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie)
 /**
  * IAXIEList
  */
-
 void IAXIEList::insertVersion()
 {
     if (!getIE(IAXInfoElement::VERSION))
@@ -225,7 +222,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
 	    case IAXInfoElement::RSA_RESULT:
 	    case IAXInfoElement::CAUSE:
 	    case IAXInfoElement::MUSICONHOLD:        // Optional
-	    case IAXInfoElement::RDNIS: 
+	    case IAXInfoElement::RDNIS:
 	    case IAXInfoElement::DEVICETYPE:
 		if (data[i])
 		    appendString((IAXInfoElement::Type)data[i-1],data+i+1,data[i]);
@@ -247,10 +244,6 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
 	    case IAXInfoElement::SERVICEIDENT:       // Length must be 6
 	    case IAXInfoElement::FWBLOCKDATA:        // Length can be 0
 	    case IAXInfoElement::ENKEY:
-		if (data[i-1] != IAXInfoElement::FWBLOCKDATA && !data[i]) {
-		    i = 0xFFFF;
-		    break;
-		}
 		if (data[i-1] == IAXInfoElement::SERVICEIDENT && data[i] != 6) {
 		    i = 0xFFFF;
 		    break;
@@ -285,7 +278,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
 	    case IAXInfoElement::AUTHMETHODS:
 	    case IAXInfoElement::REFRESH:
 	    case IAXInfoElement::DPSTATUS:
-	    case IAXInfoElement::CALLNO: 
+	    case IAXInfoElement::CALLNO:
 	    case IAXInfoElement::MSGCOUNT:
 	    case IAXInfoElement::CALLINGTNS:
 	    case IAXInfoElement::FIRMWAREVER:
@@ -295,10 +288,6 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
 		    break;
 		}
 		value = (data[i+1] << 8) | data[i+2];
-		if (data[i-1] == IAXInfoElement::VERSION && value != IAX_PROTOCOL_VERSION) {
-		    i = 0xFFFF;
-		    break;
-		}
 		appendNumeric((IAXInfoElement::Type)data[i-1],value,2);
 		i += 3;
 		break;
@@ -424,18 +413,12 @@ TokenDict IAXFormat::videoData[] = {
 
 const char* IAXFormat::audioText(u_int8_t audio)
 {
-    for (int i = 0; audioData[i].value; i++)
-	if (audioData[i].value == audio)
-	    return audioData[i].token;
-    return 0;
+    return lookup(audio,audioData);
 }
 
 const char* IAXFormat::videoText(u_int8_t video)
 {
-    for (int i = 0; videoData[i].value; i++)
-	if (videoData[i].value == video)
-	    return videoData[i].token;
-    return 0;
+    return lookup(video,videoData);
 }
 
 /**
@@ -446,21 +429,12 @@ IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
     : m_type(type), m_data((char*)buf,len,true), m_retrans(retrans),
       m_sCallNo(sCallNo), m_tStamp(tStamp), m_subclass(0)
 {
-    XDebug(DebugAll,"IAXFrame::IAXFrame(%u,%u) [%p]",type,this);
+    XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
 }
 
 IAXFrame::~IAXFrame()
 {
     XDebug(DebugAll,"IAXFrame::~IAXFrame() [%p]",this);
-}
-
-bool IAXFrame::setRetrans()
-{
-    if (!m_retrans) {
-	m_retrans = true;
-	((unsigned char*)m_data.data())[2] |= 0x80;
-    }
-    return true;
 }
 
 IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine* engine, const SocketAddr* addr)
@@ -577,7 +551,7 @@ u_int8_t IAXFrame::packSubclass(u_int32_t value)
     return 0;
 }
 
-u_int32_t IAXFrame::unpackSubclass(u_int8_t value) 
+u_int32_t IAXFrame::unpackSubclass(u_int8_t value)
 {
     if (value > 0x9f) {
 	DDebug(DebugMild,"IAXFrame nonstandard unpack %u",value);
@@ -658,5 +632,30 @@ const IAXFullFrame* IAXFullFrame::fullFrame() const
 {
     return this;
 }
+
+/**
+ * IAXFrameOut
+ */
+void IAXFrameOut::transmitted()
+{
+    if (m_retransCount) {
+	m_retransCount--;
+	m_retransTimeInterval *= 2;
+	m_nextTransTime += m_retransTimeInterval;
+	if (!m_retrans) {
+	    m_retrans = true;
+	    ((unsigned char*)m_data.data())[2] |= 0x80;
+	}
+   }
+}
+
+void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
+{
+    if (!(type() == IAXFrame::IAX && (subclass() == IAXControl::AuthReq || subclass() ==IAXControl::RegAuth)))
+	return;
+    m_retransCount = 1;
+    m_nextTransTime = nextTransTime;
+}
+
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -1,4 +1,4 @@
-/**
+/*
  * yateiax.h
  * Yet Another IAX2 Stack
  * This file is part of the YATE Project http://YATE.null.ro
@@ -42,7 +42,7 @@
 #define YIAX_API
 #endif
 
-/** 
+/**
  * Holds all Telephony Engine related classes.
  */
 namespace TelEngine {
@@ -174,7 +174,7 @@ public:
     inline int length() const
         { return m_strData.length(); }
 
-    inline String& data() 
+    inline String& data()
         { return m_strData; }
 
     virtual void toBuffer(DataBlock& buf);
@@ -190,8 +190,8 @@ class IAXInfoElementNumeric : public IAXInfoElement
 {
 public:
     IAXInfoElementNumeric(Type type, u_int32_t val, u_int8_t len);
-	
-    virtual ~IAXInfoElementNumeric() {}	
+
+    virtual ~IAXInfoElementNumeric() {}
 
     inline int length() const
         { return m_length; }
@@ -225,7 +225,7 @@ public:
 
     virtual void toBuffer(DataBlock& buf);
 
-    static IAXInfoElementBinary* packIP(const SocketAddr& addr, bool ipv4 = true);
+    static IAXInfoElementBinary* packIP(const SocketAddr& addr);
 
     static bool unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie);
 
@@ -314,7 +314,7 @@ public:
  * This class holds the enumeration values for audio and video formats
  * @short Wrapper class for audio and video formats
  */
-class YIAX_API IAXFormat 
+class YIAX_API IAXFormat
 {
 public:
     enum Audio {
@@ -348,7 +348,7 @@ public:
 /**
  * This class holds the enumeration values for IAX control (subclass)
  */
-class YIAX_API IAXControl 
+class YIAX_API IAXControl
 {
 public:
     enum Type {
@@ -425,8 +425,6 @@ public:
     inline bool retrans() const
 	{ return m_retrans; }
 
-    bool setRetrans();
-
     inline u_int16_t sourceCallNo() const
 	{ return m_sCallNo; }
 
@@ -451,7 +449,7 @@ public:
 
     /**
      * Unpack the the value received according to IAX protocol
-     * @return The unpacked subclass 
+     * @return The unpacked subclass
      */
     static u_int32_t IAXFrame::unpackSubclass(u_int8_t value);
 
@@ -535,21 +533,19 @@ public:
 
     virtual ~IAXFrameOut()
 	{}
-	
+
     inline bool timeout() const
         { return !(bool)m_retransCount; }
-	
-    inline bool needRetrans(u_int64_t time)
-        { return !ack() && time > m_nextTransTime; }
 
-    inline void transmitted() {
-            if (m_retransCount) {
-                m_retransCount--;
-                m_retransTimeInterval *= 2;
-		m_nextTransTime += m_retransTimeInterval;
-	    }
-	}
-	
+
+    inline bool timeForRetrans(u_int64_t time)
+        { return time > m_nextTransTime; }
+
+    void transmitted();
+
+    inline void hurryTransmission(u_int64_t time = Time::msecNow())
+	{ m_nextTransTime = time; }
+
     inline bool ack()
 	{ return m_ack; }
 
@@ -559,6 +555,12 @@ public:
     inline bool ackOnly()
 	{ return m_ackOnly; }
 
+    /**
+     * Increase the timeout for acknoledged authentication frames sent and set the counter to 1
+     * @param nextTransTime Next transmission time
+     */
+    void adjustAuthTimeout(u_int64_t nextTransTime);
+
 protected:
     bool m_ack;                        /* Acknoledge flag */
     bool m_ackOnly;                    /* frame need only Ack as response */
@@ -567,35 +569,12 @@ protected:
     u_int64_t m_nextTransTime;         /* Next transmission time */
 };
 
-class IAXConnectionlessTransaction;
-
-/**
- * Keep registration data
- */
-class YIAX_API IAXRegData
-{
-public:
-    inline IAXRegData() : m_expire(60), m_userdata(0)
-	{}
-    inline IAXRegData(const String& username, const String& password, const String& callingNo, const String& callingName,
-	u_int16_t expire, void* userdata = 0)
-	: m_username(username), m_password(password), m_callingNo(callingNo), m_callingName(callingName),
-	  m_expire(expire), m_userdata(userdata)
-	{}
-
-    String m_username;                  /* Username */
-    String m_password;                  /* Password */
-    String m_callingNo;                 /* Calling number */
-    String m_callingName;               /* Calling name */
-    u_int32_t m_expire;                 /* Expire time */
-    void* m_userdata;                   /* */
-};
-
 /**
  * Handle transactions of type New
  */
 class YIAX_API IAXTransaction : public RefObject, public Mutex
 {
+    friend class IAXEvent;
     friend class IAXEngine;
 public:
     enum Type {
@@ -611,62 +590,62 @@ public:
 	/* *** New */
         Connected,		     /* Call leg established (Accepted). */
 	/* Outgoing */
-	NewLocalInvite,		     /* Sent: New, RegReq/RegRel */ 
+	NewLocalInvite,		     /* Sent: New, RegReq/RegRel */
 					/* New */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* Hangup --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* AuthReq --> NewLocalInvite_AuthRecv */
 						/* Accept -->  Connected */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegAuth -->  NewLocalInvite_AuthRecv */
 						/* RegAck (if RegReq) -->  Terminating */
 						/* RegRej --> Terminating */
 	NewLocalInvite_AuthRecv,     /* Received: AuthReq, RegReq/RegRel */
 					/* New */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* AuthRep --> NewLocalInvite_RepSent */
 						/* Hangup, Reject --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* RegReq/RegRel --> NewLocalInvite_RepSent */
 						/* RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegRej --> Terminating */
 	NewLocalInvite_RepSent,	     /* Sent: AuthRep, RegReq/RegRel */
 					/* New */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* Hangup --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* Accept -->  Connected */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegAck --> Terminating */
 						/* RegRej --> Terminating */
 	/* Incoming */
 	NewRemoteInvite,             /* Received: New, RegReq/RegRel*/
 					/* New */
-						/* *** Send: */ 
+						/* *** Send: */
 						/* AuthReq --> NewRemoteInvite_AuthSent */
 						/* Accept -->  Connected */
 						/* Hangup --> Terminating */
-						/* *** Receive: */ 
+						/* *** Receive: */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
-						/* *** Send: */ 
+						/* *** Send: */
 						/* RegAuth -->  NewRemoteInvite_AuthSent */
 						/* RegAck (if RegReq) -->  Terminated */
 						/* RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegRej --> Terminating */
 	NewRemoteInvite_AuthSent,    /* Sent: AuthReq, RegAuth */
 					/* New */
@@ -676,28 +655,28 @@ public:
 						/* AuthRep --> NewRemoteInvite_RepRecv */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegReq/RegRel --> NewRemoteInvite_RepRecv */
 						/* RegRej --> Terminating */
 	NewRemoteInvite_RepRecv,     /* Received: AuthRep, RegReq/RegRel*/
 					/* New */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* Accept -->  Connected */
 						/* Hangup --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* Reject, Hangup --> Terminating */
 					/* RegReq/RegRel */
- 						/* *** Send: */ 
+ 						/* *** Send: */
 						/* RegAck, RegRej --> Terminating */
- 						/* *** Receive: */ 
+ 						/* *** Receive: */
 						/* RegRej --> Terminating */
 	/* Not initialized or terminated */
 	Unknown,                     /* Initial state. */
 	Terminated,                  /* Terminated. No more frames accepted. */
         Terminating,                 /* Terminating. Wait for ACK or timeout to terminate. */
-    };	
+    };
 
     /**
      * Destructor
@@ -725,7 +704,7 @@ public:
      * @param ieList Starting IE list
      * @param data Pointer to arbitrary user data
      */
-    static IAXTransaction* factoryOut(IAXEngine* engine, Type type, u_int16_t lcallno, const SocketAddr& addr, 
+    static IAXTransaction* factoryOut(IAXEngine* engine, Type type, u_int16_t lcallno, const SocketAddr& addr,
 		IAXIEList& ieList, void* data = 0);
 
     /**
@@ -820,6 +799,12 @@ public:
     inline u_int32_t format()
 	{ return m_format; }
 
+    inline u_int32_t formatIn()
+	{ return m_formatIn; }
+
+    inline u_int32_t formatOut()
+	{ return m_formatOut; }
+
     inline u_int32_t capability()
 	{ return m_capability; }
 
@@ -841,7 +826,7 @@ public:
     /**
      * Process received mini frame data
      * @param data Received data
-     * @param tStamp Mini frame timestamp 
+     * @param tStamp Mini frame timestamp
      * @param voice True if received mini frame inside a Voice full frame
      * @return 'this' if successful or 0
      */
@@ -918,7 +903,7 @@ public:
      * @param pwd Required password
      * @return False if the current transaction state is not NewRemoteInvite.
      */
-    bool sendAuth(String& pwd);
+    bool sendAuth(const String& pwd);
 
     /**
      * Send an AUTHREP/REGREQ/REGREL frame to remote peer as a response to AUTHREQ/REGREQ/REGREL.
@@ -953,9 +938,21 @@ public:
     inline bool sendNoise(u_int8_t noise)
 	{ return noise <= 127 ? sendConnected((IAXFullFrame::ControlType)noise,IAXFrame::Noise) : false; }
 
-    bool setFormatAndCapability();
-
+    /**
+     * Abort a registration transaction.
+     * This method is thread safe.
+     * @return False transaction is not a registration one or is already terminating.
+     */
     bool abortReg();
+
+    /**
+     * Print transaction data on stdin.
+     */
+    void print();
+
+    static String s_iax_modNoAuthMethod;
+    static String s_iax_modNoMediaFormat;
+    static String s_iax_modInvalidAuth;
 
 protected:
     /**
@@ -1011,19 +1008,21 @@ protected:
     /**
      * Terminate the transaction.
      * @param evType IAXEvent type to generate.
+     * @param local If true it is a locally generated event.
      * @param frame Frame to build event from.
      * @param createIEList If true create IE list in the generated event.
      * @return Pointer to a valid IAXEvent with the reason.
      */
-    IAXEvent* terminate(u_int8_t evType, const IAXFullFrame* frame = 0, bool createIEList = true);
+    IAXEvent* terminate(u_int8_t evType, bool local, const IAXFullFrame* frame = 0, bool createIEList = true);
 
     /**
-     * Terminate the transaction. Wait for ACK to terminate. No more events will be generated 
+     * Terminate the transaction. Wait for ACK to terminate. No more events will be generated
      * @param evType IAXEvent type to generate.
+     * @param local If true it is a locally generated event.
      * @param frame Frame to build event from.
      * @return Pointer to a valid IAXEvent with the reason.
      */
-    IAXEvent* waitForTerminate(u_int8_t evType, const IAXFullFrame* frame);
+    IAXEvent* waitForTerminate(u_int8_t evType, bool local, const IAXFullFrame* frame);
 
     /**
      * Send a full frame to remote peer and put it in transmission list
@@ -1035,30 +1034,34 @@ protected:
 
     /**
      * Send a full frame to remote peer.
+     * @param frame Frame to send.
+     * @param vnak If true the transmission is a response to a VNAK frame.
      * @return True on success.
      */
-    bool sendFrame(IAXFrameOut* frame);
+    bool sendFrame(IAXFrameOut* frame, bool vnak = false);
 
     /**
      * Create an event from a frame.
      * @param evType Event type
+     * @param local If true it is a locally generated event.
      * @param frameOut Frame to create from
      * @param newState The transaction new state
      * @return Pointer to an IAXEvent or 0 (Invalid IE list)
      */
-    IAXEvent* createEvent(u_int8_t evType, const  IAXFullFrame* frame, State newState);
+    IAXEvent* createEvent(u_int8_t evType, bool local, const  IAXFullFrame* frame, State newState);
 
     /**
-     * Create an event from a received frame that is a response to a sent frame and 
+     * Create an event from a received frame that is a response to a sent frame and
      *  change the transaction state to newState. Remove the response from incoming list.
      * @param frame Frame to create response for
      * @param findType Frame type to find
      * @param findSubclass Frame subclass to find
      * @param evType Event type to generate
+     * @param local local flag for the generated event.
      * @param newState New transaction state if an event was generated
      * @return Pointer to an IAXEvent or 0 (Invalid IE list)
      */
-    IAXEvent* createResponse(IAXFrameOut* frame, u_int8_t findType, u_int8_t findSubclass, u_int8_t evType, State newState);
+    IAXEvent* createResponse(IAXFrameOut* frame, u_int8_t findType, u_int8_t findSubclass, u_int8_t evType, bool local, State newState);
 
     /**
      * Find a response for a previously sent frame.
@@ -1112,7 +1115,14 @@ protected:
      * @param subclass Frame subclass to find
      * @return True if found.
      */
-    bool findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame::Type type = IAXFrame::IAX, u_int32_t subclass = IAXControl::Ack);
+    bool findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame::Type type, u_int32_t subclass);
+
+    /**
+     * Search in m_inFrames for an ACK frame which confirm @ref frame.
+     * @param frameOut Frame to find response for
+     * @return True if found.
+     */
+    bool findInFrameAck(const IAXFullFrame* frameOut);
 
     /**
      * Send a frame to remote peer in state Connected.
@@ -1132,6 +1142,11 @@ protected:
      * Send an INVAL frame.
      */
     void sendInval();
+
+    /**
+     * Send an VNAK frame.
+     */
+    void sendVNAK();
 
     /**
      * Internal protocol outgoing frames processing (e.g. IAX PING, LAGRQ).
@@ -1175,9 +1190,53 @@ protected:
 
     /**
      * Terminate the transaction if state is Terminating and timeout.
+     * @param time Current time
      * @return A valid IAXEvent or 0.
      */
     IAXEvent* getEventTerminating(u_int64_t time);
+
+    /**
+     * Send all frames from outgoing queue with
+     *  outbound sequence number starting with @ref seqNo.
+     * @param seqNo Requested sequence number
+     * @return 0.
+     */
+    IAXTransaction* IAXTransaction::retransmittOnVNAK(u_int16_t seqNo);
+
+    /**
+     * Generate an Accept event after internally accepting a transaction.
+     * @return A valid IAXEvent.
+     */
+    IAXEvent* internalAccept();
+
+    /**
+     * Generate a Reject event after internally rejecting a transaction.
+     * @param reason The reason of rejecting
+     * @return A valid IAXEvent.
+     */
+    IAXEvent* internalReject(String& reason);
+
+    /**
+     * Event terminated feedback.
+     * This method is thread safe.
+     * @param event The event notifying termination.
+     */
+    inline void eventTerminated(IAXEvent* event) {
+	Lock lock(this);
+	if (event == m_currentEvent)
+	    m_currentEvent = 0;
+    }
+
+    /**
+     * Set the current event.
+     * @param event The event notifying termination.
+     * @return @ref event.
+     */
+    inline IAXEvent* keepEvent(IAXEvent* event) {
+	m_currentEvent = event;
+	return event;
+    }
+
 
 private:
     /* Params */
@@ -1194,9 +1253,11 @@ private:
     unsigned char m_iSeqNo;                    /* Incoming frame sequence number */
     IAXEngine* m_engine;                       /* Engine that owns this transaction */
     void* m_userdata;                          /* User data */
-    u_int16_t m_lastMiniFrameOut;              /* Last transmitted mini frame timestamp */ 
-    u_int32_t m_lastMiniFrameIn;               /* Last received mini frame timestamp */ 
+    u_int16_t m_lastMiniFrameOut;              /* Last transmitted mini frame timestamp */
+    u_int32_t m_lastMiniFrameIn;               /* Last received mini frame timestamp */
     Mutex m_mutexInMedia;                      /* Keep received media thread safe */
+    IAXEvent* m_pendingEvent;                  /* Pointer to a pending event or 0 */
+    IAXEvent* m_currentEvent;                  /* Pointer to last generated event or 0 */
     /* Outgoing frames management */
     ObjList m_outFrames;                       /* Transaction & protocol control outgoing frames */
     u_int16_t m_retransCount;                  /* Retransmission counter. 0 --> Timeout */
@@ -1221,9 +1282,11 @@ private:
     String m_calledContext;                    /* Called context */
     String m_challenge;                        /* Challenge */
     String m_authdata;                         /* Auth data received with auth reply */
-    u_int32_t m_format;                        /* Media format */
-    u_int32_t m_capability;                    /* Media format */
     u_int32_t m_expire;                        /* Registration expiring time */
+    u_int32_t m_format;                        /* Media format used for initial negotiation */
+    u_int32_t m_formatIn;                      /* Incoming media format */
+    u_int32_t m_formatOut;                     /* Outgoing media format */
+    u_int32_t m_capability;                    /* Media capability of this transaction */
 };
 
 class YIAX_API IAXEvent
@@ -1236,17 +1299,16 @@ public:
      */
     enum Type {
         Invalid = 0,
-	Unexpected,
 	Terminated,
         Timeout,
 	NotImplemented,
-	New,                    /* New remote transaction. Need Auth. */
-	AuthRep,                /* Auth reply. Need Auth for password. */
+	New,                    /* New remote transaction. */
+	AuthReq,                /* Auth request. Internally processed. */
+	AuthRep,                /* Auth reply. */
 	Accept,
 	Hangup,
 	Reject,
 	Busy,
-	Voice,
 	Text,
 	Dtmf,
 	Noise,
@@ -1270,6 +1332,13 @@ public:
      */
     inline Type type() const
 	{ return m_type; }
+
+    /**
+     * Check if this is a locally generated event
+     * @return True if it is a locally generated event
+     */
+    inline bool local() const
+        { return m_local; }
 
     /**
      * Check if this is a transaction finalization event.
@@ -1328,14 +1397,15 @@ protected:
      * Constructor
      * @param transaction IAX transaction that generated the event
      */
-    IAXEvent(Type type, bool final, IAXTransaction* transaction, u_int8_t frameType = 0, u_int8_t subclass = 0);
+    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType = 0, u_int8_t subclass = 0);
 
-    IAXEvent(Type type, bool final, IAXTransaction* transaction, const IAXFullFrame* frame = 0);
+    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, const IAXFullFrame* frame = 0);
 
 private:
     Type m_type;                     /* Event type */
     u_int8_t m_frameType;            /* Frame type */
     u_int8_t m_subClass;             /* Frame subclass */
+    bool m_local;                    /* If true the event is generated locally, the receiver MUST not respond */
     bool m_final;                    /* Final event flag */
     IAXTransaction* m_transaction;   /* Transaction that generated this event */
     IAXIEList m_ieList;              /* IAXInfoElement list */
@@ -1346,16 +1416,18 @@ class YIAX_API IAXEngine : public DebugEnabler, public Mutex
 public:
     /**
      * Constructor
-     * @param transCount Number of entries in the transaction hash table
-     * @param retransCount Number of frame retransmission before timeout
-     * @param retransTime Default retransmission time
+     * @param port UDP port to run the protocol on
+     * @param transListCount Number of entries in the transaction hash table
+     * @param retransCount Retransmission counter for each transaction belonging to this engine
+     * @param retransInterval Retransmission interval default value in miliseconds
+     * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
+     * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
-     * @param transTimeout Timeout (in seconds) of transactions belonging to this engine
      * @param format Default media format
      * @param capab Media capabilities of this engine
      */
-    IAXEngine(int transCount, int retransCount, int retransInterval, int maxFullFrameDataLen, u_int32_t transTimeout,
-	u_int32_t format, u_int32_t capab);
+    IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen, u_int32_t format, u_int32_t capab);
 
     /**
      * Destructor
@@ -1382,10 +1454,10 @@ public:
     /**
      * Process media from remote peer. Descendents must override this method.
      * @param transaction IAXTransaction that owns the call leg
-     * @param data Media data. 
-     * @param tStamp Media timestamp. 
+     * @param data Media data.
+     * @param tStamp Media timestamp.
      */
-    virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp) 
+    virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp)
 	{}
 
     /**
@@ -1410,13 +1482,20 @@ public:
         { return m_retransInterval; }
 
     /**
+     * Get the timeout (in seconds) of acknoledged auth frames sent.
+     * @return Auth timeout in seconds
+     */
+    inline u_int16_t authTimeout()
+        { return m_authTimeout; }
+
+    /**
      * Get the timeout (in seconds) of transactions belonging to this engine.
      * @return Timeout (in seconds) of transactions belonging to this engine
      */
     inline u_int32_t transactionTimeout()
-        { return m_transactionTimeout; }
+        { return m_transTimeout; }
 
-    inline int maxFullFrameDataLen()
+    inline u_int16_t maxFullFrameDataLen()
         { return m_maxFullFrameDataLen; }
 
     inline u_int32_t format()
@@ -1426,7 +1505,7 @@ public:
         { return m_capability; }
 
     /**
-     * Read data from socket 
+     * Read data from socket
      */
     void readSocket(SocketAddr& addr);
 
@@ -1456,10 +1535,39 @@ public:
     u_int32_t transactionCount();
 
     /**
-     * Send an Ack to a remote peer to keep alive.
+     * Send an INVAL with call numbers set to 0 to a remote peer to keep alive.
      * @param addr Address to send.
      */
     void keepAlive(SocketAddr& addr);
+
+    /**
+     * Process a new format received with a Voice frame.
+     * @param trans Transaction that received the new format.
+     * @param format The received format.
+     * @return True if accepted.
+     */
+    virtual bool voiceFormatChanged(IAXTransaction* trans, u_int32_t format)
+	{ return false; }
+
+    /**
+     * Process the initial received format and capability. If accepted on exit will set the transaction format and capability.
+     * @param trans Transaction that received the new format.
+     * @return True if accepted.
+     */
+    bool acceptFormatAndCapability(IAXTransaction* trans);
+
+    /**
+     * Default event handler. @ref event MUST NOT be deleted.
+     * @param event The event to handle.
+     */
+    virtual void defaultEventHandler(IAXEvent* event);
+
+    /**
+     * Get the socket used for engine operation
+     * @return Reference to the UDP socket
+     */
+    inline Socket& socket()
+	{ return m_socket; }
 
     static void getMD5FromChallenge(String& md5data, const String& challenge, const String& password);
 
@@ -1505,15 +1613,16 @@ private:
     Socket m_socket;                             /* Socket */
     ObjList** m_transList;                       /* Full transactions */
     ObjList m_incompleteTransList;               /* Incomplete transactions (no remote call number) */
-    int m_transListCount;                        /* m_transList count */
-    u_int16_t m_retransCount;                    /* Retransmission counter for each transaction belonging to this engine */
-    u_int16_t m_retransInterval;                 /* Retransmission interval default value */
     bool m_lUsedCallNo[IAX2_MAX_CALLNO + 1];     /* Used local call numnmbers flags */
     int m_lastGetEvIndex;                        /* getEvent: keep last array entry */
     /* Parameters */
     int m_maxFullFrameDataLen;                   /* Max full frame data (IE list) length */
     u_int16_t m_startLocalCallNo;                /* Start index of local call number allocation */
-    u_int32_t m_transactionTimeout;              /* Timeout (in seconds) of transactions belonging to this engine */
+    u_int16_t m_transListCount;                  /* m_transList count */
+    u_int16_t m_retransCount;                    /* Retransmission counter for each transaction belonging to this engine */
+    u_int16_t m_retransInterval;                 /* Retransmission interval default value in miliseconds */
+    u_int16_t m_authTimeout;                     /* Timeout (in seconds) of acknoledged auth frames sent */
+    u_int32_t m_transTimeout;                    /* Timeout (in seconds) on remote request of transactions belonging to this engine */
     /* Media */
     u_int32_t m_format;
     u_int32_t m_capability;

@@ -1,7 +1,7 @@
 /**
  * engine.cpp
  * Yet Another IAX2 Stack
- * This file is part of the YATE Project http://YATE.null.ro 
+ * This file is part of the YATE Project http://YATE.null.ro
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team
@@ -30,31 +30,40 @@
 
 using namespace TelEngine;
 
-IAXEngine::IAXEngine(int transCount, int retransCount, int retransInterval, int maxFullFrameDataLen, u_int32_t transTimeout,
-	u_int32_t format, u_int32_t capab)
-    : Mutex(true), m_transList(0), m_transListCount(0), m_retransCount(retransCount),
-      m_retransInterval(retransInterval), m_maxFullFrameDataLen(maxFullFrameDataLen), m_transactionTimeout(transTimeout),
-      m_format(format), m_capability(capab)
+IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen, u_int32_t format, u_int32_t capab)
+    : Mutex(true),
+    m_lastGetEvIndex(0),
+    m_maxFullFrameDataLen(maxFullFrameDataLen),
+    m_startLocalCallNo(0),
+    m_transListCount(0),
+    m_retransCount(retransCount),
+    m_retransInterval(retransInterval),
+    m_authTimeout(authTimeout),
+    m_transTimeout(transTimeout),
+    m_format(format),
+    m_capability(capab)
 {
     debugName("iaxengine");
-    if (transCount < 4)
-	transCount = 4;
-    else if (transCount > 256)
-	transCount = 256;
-    m_transList = new ObjList*[transCount];
+    if ((port <= 0) || port > 65535)
+	port = 4569;
+    if (transListCount < 4)
+	transListCount = 4;
+    else if (transListCount > 256)
+	transListCount = 256;
+    m_transList = new ObjList*[transListCount];
     int i;
-    for (i = 0; i < transCount; i++)
+    for (i = 0; i < transListCount; i++)
 	m_transList[i] = new ObjList;
-    m_transListCount = transCount;
+    m_transListCount = transListCount;
     for(i = 0; i <= IAX2_MAX_CALLNO; i++)
 	m_lUsedCallNo[i] = false;
-    m_lastGetEvIndex = 0;
     m_socket.create(AF_INET,SOCK_DGRAM);
     SocketAddr addr(AF_INET);
-    addr.port(4569);
+    addr.port(port);
     m_socket.setBlocking(false);
     if (!m_socket.bind(addr))
-	Debug(this,DebugWarn,"Failed to bind socket!");
+	Debug(this,DebugWarn,"Failed to bind socket on port %d",port);
     m_startLocalCallNo = 1 + (u_int16_t)(random() % IAX2_MAX_CALLNO);
 }
 
@@ -85,7 +94,7 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 		tr->m_rCallNo = frame->sourceCallNo();
 		m_incompleteTransList.remove(tr,false);
 		m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
-		XDebug(this,DebugAll,"New remote transaction completed (%u,%u)",
+		XDebug(this,DebugAll,"New incomplete outgoing transaction completed (%u,%u)",
 		    tr->localCallNo(),tr->remoteCallNo());
 		return tr;
 	    }
@@ -134,7 +143,10 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	return 0;
     // Create and add transaction
     tr = IAXTransaction::factoryIn(this,(IAXFullFrame*)frame->fullFrame(),lcn,addr);
-    m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
+    if (tr)
+	m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
+    else
+	releaseCallNo(lcn);
     return tr;
 }
 
@@ -232,7 +244,6 @@ void IAXEngine::removeTransaction(IAXTransaction* transaction)
 u_int32_t IAXEngine::transactionCount()
 {
     u_int32_t n = 0;
-    ObjList* l;
 
     Lock lock(this);
     // Incomplete transactions
@@ -240,7 +251,7 @@ u_int32_t IAXEngine::transactionCount()
     // Complete transactions
     for (int i = 0; i < m_transListCount; i++)
 	n += m_transList[i]->count();
-    return n;	
+    return n;
 }
 
 void IAXEngine::keepAlive(SocketAddr& addr)
@@ -314,29 +325,65 @@ void IAXEngine::releaseCallNo(u_int16_t lcallno)
 
 IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList)
 {
-    switch (type) {
-	case IAXTransaction::New:
-	case IAXTransaction::RegReq:
-	case IAXTransaction::RegRel:
-	case IAXTransaction::Poke:
-	    break;
-	case IAXTransaction::FwDownl:
-	default:
-	    Debug(this,DebugWarn,"Unsupported new transaction type %u requested",type);
-	    return 0;
-    }
     Lock lock(this);
     u_int16_t lcn = generateCallNo();
     if (!lcn)
 	return 0;
     IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,ieList);
-    if (tr->type() == IAXTransaction::Incorrect) {
-	Debug(this,DebugWarn,"Error initializing transaction");
-	delete tr;
-	return 0;
-    }
-    m_incompleteTransList.append(tr);
+    if (tr)
+	m_incompleteTransList.append(tr);
+    else
+	releaseCallNo(lcn);
     return tr;
+}
+
+bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
+{
+    if (!trans)
+	return false;
+    u_int32_t format = trans->format();
+    u_int32_t capability = m_capability & trans->capability();
+    // Valid capability ?
+    if (!capability)
+	return false;
+    for (;;) {
+	// Received format is valid ?
+	if (0 != (format & capability) && IAXFormat::audioText(format))
+	    break;
+	// Local format is valid ?
+	format = m_format;
+	if (0 != (m_format & capability) && IAXFormat::audioText(format))
+	    break;
+	// No valid format: choose one from capability
+	format = 0;
+	u_int32_t i = 0;
+	for (; IAXFormat::audioData[i].value; i++)
+	    if (0 != (capability & IAXFormat::audioData[i].value))
+		break;
+	if (IAXFormat::audioData[i].value) {
+	    format = IAXFormat::audioData[i].value;
+	    break;
+	}
+	return false;
+    }
+    trans->m_format = format;
+    trans->m_formatIn = format;
+    trans->m_formatOut = format;
+    trans->m_capability = capability;
+    return true;
+}
+
+void IAXEngine::defaultEventHandler(IAXEvent* event)
+{
+    DDebug(this,DebugAll,"defaultEventHandler - Event type: %u. Frame - Type: %u Subclass: %u",
+	event->type(),event->frameType(),event->subclass());
+    IAXTransaction* tr = event->getTransaction();
+    switch (event->type()) {
+	case IAXEvent::New:
+	    tr->sendReject("Feature not implemented or unsupported");
+	    break;
+	default: ;
+    }
 }
 
 void IAXEngine::getMD5FromChallenge(String& md5data, const String& challenge, const String& password)
@@ -356,16 +403,16 @@ bool IAXEngine::isMD5ChallengeCorrect(const String& md5data, const String& chall
 /*
 * IAXEvent
 */
-IAXEvent::IAXEvent(Type type, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int8_t subclass)
-    : m_type(type), m_frameType(frameType), m_subClass(subclass), m_final(final), m_transaction(0)
+IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int8_t subclass)
+    : m_type(type), m_frameType(frameType), m_subClass(subclass), m_local(local), m_final(final), m_transaction(0)
 
 {
     if (transaction && transaction->ref())
 	m_transaction = transaction;
 }
 
-IAXEvent::IAXEvent(Type type, bool final, IAXTransaction* transaction, const IAXFullFrame* frame)
-    : m_type(type), m_frameType(0), m_subClass(0), m_final(final), m_transaction(0), m_ieList(frame)
+IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, const IAXFullFrame* frame)
+    : m_type(type), m_frameType(0), m_subClass(0), m_local(local), m_final(final), m_transaction(0), m_ieList(frame)
 
 {
     if (transaction && transaction->ref())
@@ -381,8 +428,10 @@ IAXEvent::~IAXEvent()
     if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated) {
 	m_transaction->getEngine()->removeTransaction(m_transaction);
     }
-    if (m_transaction)
+    if (m_transaction) {
+	m_transaction->eventTerminated(this);
 	m_transaction->deref();
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

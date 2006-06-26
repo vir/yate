@@ -277,7 +277,7 @@ protected:
     /**
      * Send Register/Unregister messages to Engine
      */
-    bool userreg(const String& username, u_int16_t refresh, bool regrel = true);
+    bool userreg(IAXTransaction* tr, bool regrel = true);
 
 private:
     bool m_threadsCreated;      /* True if reading and get events threads were created */
@@ -885,6 +885,8 @@ void YIAXEngine::processRemoteReg(IAXEvent* event)
 	tr->type() == IAXTransaction::RegReq?"Register":"Unregister",tr->username().c_str());
     Message msg("user.auth");
     msg.addParam("username",tr->username());
+    msg.addParam("ip_host",tr->remoteAddr().host());
+    msg.addParam("ip_port",String(tr->remoteAddr().port()));
     if (!Engine::dispatch(msg)) {
 	// Not authenticated
 	Debug(this,DebugAll,"processRemoteReg. Not authenticated. Reject");
@@ -894,7 +896,7 @@ void YIAXEngine::processRemoteReg(IAXEvent* event)
     String password = msg.retValue();
     if (!password.length()) {
 	// Authenticated, no password. Try to (un)register
-	if (userreg(tr->username(),tr->expire(),event->subclass() == IAXControl::RegRel)) {
+	if (userreg(tr,event->subclass() == IAXControl::RegRel)) {
 	    Debug(this,DebugAll,"processRemoteReg. Authenticated and (un)registered. Ack");
 	    tr->sendAccept();
 	}
@@ -909,14 +911,24 @@ void YIAXEngine::processRemoteReg(IAXEvent* event)
     tr->sendAuth(password);
 }
 
-bool YIAXEngine::userreg(const String& username, u_int16_t refresh, bool regrel)
+bool YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 {
-    Debug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s'",regrel ? "Unregistering":"Registering",username.c_str());
+    Debug(this,DebugAll,"YIAXEngine - userreg. %s username: '%s'",
+	regrel ? "Unregistering":"Registering",tr->username().c_str());
     Message msg(regrel ? "user.unregister" : "user.register");
-    msg.addParam("username",username);
-    msg.setParam("driver","iax");
-    if (!regrel)
-	msg.addParam("expires",(String(refresh)).c_str());
+    msg.addParam("username",tr->username());
+    msg.addParam("driver","iax");
+    if (!regrel) {
+	String data = "iax/iax2:";
+	data << tr->username() << "@";
+	data << tr->remoteAddr().host() << ":" << tr->remoteAddr().port();
+	// TODO: support number != username
+	data << "/" << tr->username();
+	msg.addParam("data",data);
+	msg.addParam("expires",String(tr->expire()));
+    }
+    msg.addParam("ip_host",tr->remoteAddr().host());
+    msg.addParam("ip_port",String(tr->remoteAddr().port()));
     return Engine::dispatch(msg);
 }
 
@@ -1143,6 +1155,8 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
     setMaxcall(msg);
     Message* m = message("chan.startup");
     m->setParam("direction",status());
+    if (transaction)
+	m_address << transaction->remoteAddr().host() << ":" << transaction->remoteAddr().port();
     if (msg) {
 	m_targetid = msg->getValue("id");
 	m_password = msg->getValue("password");
@@ -1383,6 +1397,8 @@ bool YIAXConnection::route(bool authenticated)
     }
     m->addParam("called",m_transaction->calledNo());
     m->addParam("callername",m_transaction->callingName());
+    m->addParam("ip_host",m_transaction->remoteAddr().host());
+    m->addParam("ip_port",String(m_transaction->remoteAddr().port()));
     return startRouter(m);
 }
 

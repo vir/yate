@@ -1685,6 +1685,7 @@ void YateSIPConnection::clearTransaction()
 
 void YateSIPConnection::detachTransaction2()
 {
+    Lock lock(driver());
     if (m_tr2) {
 	m_tr2->setUserData(0);
 	m_tr2->deref();
@@ -2228,6 +2229,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	hangup();
     }
     if (!ev->isActive()) {
+	Lock lock(driver());
 	if (m_tr) {
 	    DDebug(this,DebugInfo,"YateSIPConnection clearing transaction %p [%p]",
 		m_tr,this);
@@ -2274,11 +2276,13 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
 
     if (msg->isAnswer() && ((msg->code / 100) == 2)) {
-	const SIPMessage* ack = m_tr->latestMessage();
+	Lock lock(driver());
+	const SIPMessage* ack = m_tr ? m_tr->latestMessage() : 0;
 	if (ack && ack->isACK()) {
 	    m_uri = ack->uri;
 	    m_uri.parse();
 	}
+	lock.drop();
 	setReason("",0);
 	setStatus("answered",Established);
 	maxcall(0);
@@ -2476,6 +2480,7 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
 bool YateSIPConnection::msgProgress(Message& msg)
 {
     Channel::msgProgress(msg);
+    Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 183);
 	m->setBody(createProvisionalSDP(msg));
@@ -2489,6 +2494,7 @@ bool YateSIPConnection::msgProgress(Message& msg)
 bool YateSIPConnection::msgRinging(Message& msg)
 {
     Channel::msgRinging(msg);
+    Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180);
 	m->setBody(createProvisionalSDP(msg));
@@ -2501,6 +2507,7 @@ bool YateSIPConnection::msgRinging(Message& msg)
 
 bool YateSIPConnection::msgAnswered(Message& msg)
 {
+    Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
 	SDPBody* sdp = createPasstroughSDP(msg);
@@ -2553,6 +2560,7 @@ bool YateSIPConnection::msgUpdate(Message& msg)
     String* oper = msg.getParam("operation");
     if (!oper || oper->null())
 	return false;
+    Lock lock(driver());
     if (*oper == "request") {
 	if (m_tr || m_tr2) {
 	    msg.setParam("error","pending");
@@ -2624,6 +2632,7 @@ void YateSIPConnection::statusParams(String& str)
 bool YateSIPConnection::callRouted(Message& msg)
 {
     Channel::callRouted(msg);
+    Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	String s(msg.retValue());
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue("redirect")) {
@@ -2664,6 +2673,7 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 {
     Channel::callRejected(error,reason,msg);
     int code = lookup(error,dict_errors,500);
+    Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	if (code == 401)
 	    m_tr->requestAuth(s_realm,"",false);

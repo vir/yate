@@ -1201,7 +1201,7 @@ protected:
      * @param seqNo Requested sequence number
      * @return 0.
      */
-    IAXTransaction* IAXTransaction::retransmittOnVNAK(u_int16_t seqNo);
+    IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo);
 
     /**
      * Generate an Accept event after internally accepting a transaction.
@@ -1253,6 +1253,7 @@ private:
     unsigned char m_iSeqNo;                    /* Incoming frame sequence number */
     IAXEngine* m_engine;                       /* Engine that owns this transaction */
     void* m_userdata;                          /* User data */
+    u_int32_t m_lastFullFrameOut;              /* Last transmitted full frame timestamp */
     u_int16_t m_lastMiniFrameOut;              /* Last transmitted mini frame timestamp */
     u_int32_t m_lastMiniFrameIn;               /* Last received mini frame timestamp */
     Mutex m_mutexInMedia;                      /* Keep received media thread safe */

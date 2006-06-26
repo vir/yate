@@ -49,6 +49,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame,
     m_iSeqNo(0),
     m_engine(engine),
     m_userdata(data),
+    m_lastFullFrameOut(0),
     m_lastMiniFrameOut(0xFFFF),
     m_lastMiniFrameIn(0),
     m_mutexInMedia(true),
@@ -116,6 +117,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_iSeqNo(0),
     m_engine(engine),
     m_userdata(data),
+    m_lastFullFrameOut(0),
     m_lastMiniFrameOut(0xFFFF),
     m_lastMiniFrameIn(0),
     m_mutexInMedia(true),
@@ -249,7 +251,7 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
     m_inTotalFramesCount++;
     // Frame is VNAK ?
     if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::VNAK)
-	return retransmittOnVNAK(frame->fullFrame()->iSeqNo());
+	return retransmitOnVNAK(frame->fullFrame()->iSeqNo());
     // Do we have space?
     if (m_inFrames.count() == m_maxInFrames) {
 //    Output("     Buffer overrun. DROP");
@@ -786,8 +788,16 @@ void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* da
     Lock lock(this);
     if (state() == Terminated)
 	return;
-    if (!tStamp)
+    if (!tStamp) {
 	tStamp = timeStamp();
+	if (m_lastFullFrameOut) {
+	    // adjust timestamp to be different from the last sent
+	    int32_t delta = tStamp - m_lastFullFrameOut;
+	    if (delta <= 0)
+		tStamp = m_lastFullFrameOut+1;
+	}
+	m_lastFullFrameOut = tStamp;
+    }
     IAXFrameOut* frame = new IAXFrameOut(type,subclass,m_lCallNo,m_rCallNo,m_oSeqNo,m_iSeqNo,tStamp,
 			 (unsigned char*)data,len,m_retransCount,m_retransInterval,ackOnly);
     DDebug(m_engine,DebugAll,"Transaction posting Frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
@@ -1364,15 +1374,18 @@ IAXEvent* IAXTransaction::getEventTerminating(u_int64_t time)
     return 0;
 }
 
-IAXTransaction* IAXTransaction::retransmittOnVNAK(u_int16_t seqNo)
+IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo)
 {
-    DDebug(m_engine,DebugNote,"Transaction(%u,%u) - Received VNAK. Request: %u",localCallNo(),remoteCallNo(),seqNo);
+    int c = 0;
     for (ObjList* l = m_outFrames.skipNull(); l; l = l->next()) {
 	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
 	if (frame && frame->oSeqNo() >= seqNo) {
 	    sendFrame(frame,true);
+	    c++;
         }
     }
+    DDebug(m_engine,DebugNote,"Transaction(%u,%u) - Retransmitted %d frames on VNAK(%u)",
+	localCallNo(),remoteCallNo(),c,seqNo);
     return 0;
 }
 

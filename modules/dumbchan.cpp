@@ -66,6 +66,10 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	DumbChannel *c = new DumbChannel(dest);
 	if (dd->connect(c)) {
 	    msg.setParam("peerid", c->id());
+	    msg.setParam("targetid", c->id());
+	    // autoring unless parameter is already set in message
+	    if (!msg.getParam("autoring"))
+		msg.addParam("autoring","true");
 	    c->deref();
 	    return true;
 	}
@@ -81,9 +85,11 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
 
+    DumbChannel* c = new DumbChannel(dest);
+
     Message m("call.route");
     m.addParam("driver","dumb");
-    m.addParam("id", dest);
+    m.addParam("id", c->id());
     m.addParam("caller",dest);
     m.addParam("called",targ);
 
@@ -91,22 +97,24 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	m = "call.execute";
 	m.addParam("callto",m.retValue());
 	if (msg.getParam("maxcall"))
-	    m.setParam("maxcall", msg.getParam("maxcall")->c_str());
+	    m.setParam("maxcall", msg.getValue("maxcall"));
 	m.retValue().clear();
-	DumbChannel *c = new DumbChannel(dest);
 	m.setParam("id", c->id());
 	m.userData(c);
 	if (Engine::dispatch(m)) {
 	    c->deref();
-	    msg.setParam("id", m.getParam("id")->c_str());
-	    msg.setParam("peerid", m.getParam("peerid")->c_str());
+	    msg.setParam("id", m.getValue("id"));
+	    msg.setParam("targetid", m.getValue("targetid"));
+	    msg.setParam("peerid", m.getValue("peerid"));
 	    return true;
 	}
+	else if (m.getParam("reason"))
+	    msg.setParam("reason", m.getValue("reason"));
 	Debug(this,DebugWarn,"Outgoing call not accepted!");
-	c->destruct();
     }
     else
 	Debug(this,DebugWarn,"Outgoing call but no route!");
+    c->destruct();
     return false;
 }
 

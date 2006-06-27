@@ -282,8 +282,10 @@ AC_TRY_COMPILE([
 #include <netinet/in.h>
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
+#include <linux/wanpipe_defines.h>
+#include <linux/wanpipe_cfg.h>
 #include <linux/wanpipe.h>
-#include <linux/sdla_bitstrm.h>
+#include <linux/sdla_aft_te1.h>
 ],[],
 HAVE_WANPIPE="yes"
 )

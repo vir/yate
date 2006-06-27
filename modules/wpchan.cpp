@@ -34,8 +34,10 @@ extern "C" {
 #define __LINUX__
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
+#include <linux/wanpipe_defines.h>
+#include <linux/wanpipe_cfg.h>
 #include <linux/wanpipe.h>
-#include <linux/sdla_bitstrm.h>
+#include <linux/sdla_aft_te1.h>
 
 };
 
@@ -140,10 +142,6 @@ public:
 INIT_PLUGIN(WpDriver);
 
 #define WP_HEADER 16
-#define WP_OFFS_ERROR 0
-#define WP_OFFS_EVENT 3
-#define WP_OFFS_DIGIT 4
-#define WP_OFFS_DTYPE 5
 #define MAX_DATA_ERRORS 250
 
 static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
@@ -222,6 +220,13 @@ static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
 static bool wp_dtmfs(HANDLE fd, bool detect, int chan = 0)
 {
 #ifdef WP_API_EVENT_DTMF_PRESENT
+    api_tx_hdr_t api_tx_hdr;
+    ::memset(&api_tx_hdr,0,sizeof(api_tx_hdr_t));
+    api_tx_hdr.wp_api_tx_hdr_event_type = WP_API_EVENT_DTMF;
+    api_tx_hdr.wp_api_tx_hdr_event_channel = chan;
+    api_tx_hdr.wp_api_tx_hdr_event_dtmf_mode = detect ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
+    // event on start of tone, before echo canceller
+    api_tx_hdr.wp_api_tx_hdr_event_dtmf_type = WP_API_EVENT_DTMF_PRESENT | WP_API_EVENT_DTMF_SOUT;
     return (::ioctl(fd,SIOC_WANPIPE_API,&api_tx_hdr) >= 0);
 #else
     // pretend enabling fails, disabling succeeds
@@ -372,7 +377,7 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
 	bool detect = m_span->detect();
 	if (!wp_dtmfs(fd,detect)) {
 	    int err = errno;
-	    Debug(&__plugin,detect ? DebugFail : DebugMild,
+	    Debug(&__plugin,detect ? DebugWarn : DebugMild,
 		"Failed to %s DTMF detection on span %d: %s (%d)",
 		detect ? "enable" : "disable",m_span->span(),strerror(err),err);
 	}
@@ -431,32 +436,44 @@ void WpData::run()
 	}
 
 	if (rd) {
-	    m_buffer[WP_OFFS_ERROR] = 0;
+	    api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
+	    ev->error_flag = 0;
 	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
 	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
 	    r -= WP_HEADER;
-	    if (m_buffer[WP_OFFS_ERROR]) {
+	    if (ev->error_flag) {
 		if (!m_rdError)
 		    Debug(&__plugin,DebugWarn,"Read data error 0x%02X on span %d [%p]",
-			m_buffer[WP_OFFS_ERROR],m_span->span(),this);
+			ev->error_flag,m_span->span(),this);
 		if (m_rdError < MAX_DATA_ERRORS)
 		    m_rdError++;
 	    }
 	    else
 		m_rdError = 0;
 #ifdef WP_API_EVENT_DTMF_PRESENT
-	    switch (m_buffer[WP_OFFS_EVENT]) {
+	    if (ev->event_type)
+		DDebug(&__plugin,DebugInfo,"Got event %d on span %d",
+		    ev->event_type,m_span->span());
+	    switch (ev->event_type) {
 		case WP_API_EVENT_NONE:
 		    break;
 		case WP_API_EVENT_DTMF:
-		    if (m_buffer[WP_OFFS_DTYPE] & WP_API_EVENT_DTMF_PRESENT) {
-			Debug(&__plugin,DebugMild,"Not knowing how to deal with received DTMF '%c'",m_buffer[WP_OFFS_DIGIT]);
+		    if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
+			String tone((char)ev->wp_api_hdr_event_dtmf_digit);
+			tone.toUpper();
+			int chan = ev->wp_api_hdr_event_channel;
+			PriChan* c = m_span->getChan(chan);
+			if (c)
+			    c->gotDigits(tone);
+			else
+			    Debug(&__plugin,DebugMild,"Detected DTMF '%s' for invalid channel %d on span %d [%p]",
+				tone.c_str(),chan,m_span->span(),this);
 		    }
 		    continue;
 		default:
 		    Debug(&__plugin,DebugMild,"Unhandled event %u on span %d [%p]",
-			m_buffer[WP_OFFS_EVENT],m_span->span(),this);
+			ev->event_type,m_span->span(),this);
 		    continue;
 	    }
 #endif

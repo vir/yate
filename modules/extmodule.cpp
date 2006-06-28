@@ -973,7 +973,6 @@ void ExtModReceiver::run()
     for (;;) {
 	use();
 	int readsize = m_in ? m_in->readData(buffer+posinbuf,sizeof(buffer)-posinbuf-1) : 0;
-	XDebug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 	if (unuse())
 	    return;
 	if (!readsize) {
@@ -995,6 +994,7 @@ void ExtModReceiver::run()
 	    Debug("ExtModule",DebugWarn,"Read error %d on %p [%p]",errno,m_in,this);
 	    break;
 	}
+	XDebug(DebugAll,"ExtModReceiver::run() read %d",readsize);
 	int totalsize = readsize + posinbuf;
 	buffer[totalsize]=0;
 	for (;;) {

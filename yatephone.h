@@ -354,7 +354,8 @@ public:
      */
     inline DataConsumer(const char* format = "slin")
 	: DataNode(format),
-	  m_source(0), m_override(0), m_overrideTsDelta(0), m_lastTsTime(0)
+	  m_source(0), m_override(0),
+	  m_regularTsDelta(0), m_overrideTsDelta(0), m_lastTsTime(0)
 	{ }
 
     /**
@@ -397,10 +398,19 @@ public:
     virtual DataSource* getTransSource() const
 	{ return 0; }
 
+protected:
+    /**
+     * Synchronize the consumer with a source
+     * @param source Data source to copy the timestamp from
+     * @return True if we could synchronize with the source
+     */
+    virtual bool synchronize(DataSource* source);
+
 private:
     void Consume(const DataBlock& data, unsigned long tStamp, DataSource* source);
     DataSource* m_source;
     DataSource* m_override;
+    long m_regularTsDelta;
     long m_overrideTsDelta;
     u_int64_t m_lastTsTime;
 };
@@ -472,6 +482,12 @@ public:
      */
     inline DataTranslator* getTranslator() const
 	{ return m_translator; }
+
+    /**
+     * Synchronize the source and attached consumers with another timestamp
+     * @param tStamp New timestamp of data - typically samples
+     */
+    void synchronize(unsigned long tStamp);
 
 protected:
     DataTranslator* m_translator;
@@ -659,6 +675,13 @@ public:
     static void setMaxChain(unsigned int maxChain);
 
 protected:
+    /**
+     * Synchronize the consumer with a source
+     * @param source Data source to copy the timestamp from
+     * @return True if we could synchronize with the source
+     */
+    virtual bool synchronize(DataSource* source);
+
     /**
      * Install a Translator Factory in the list of known codecs
      * @param factory A pointer to a TranslatorFactory instance

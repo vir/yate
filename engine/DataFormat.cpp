@@ -432,10 +432,48 @@ void DataConsumer::Consume(const DataBlock& data, unsigned long tStamp, DataSour
 	tStamp += m_overrideTsDelta;
     else if (m_override || (source != m_source))
 	return;
+    else
+	tStamp += m_regularTsDelta;
     u_int64_t tsTime = Time::now();
     Consume(data,tStamp);
     m_timestamp = tStamp;
     m_lastTsTime = tsTime;
+}
+
+bool DataConsumer::synchronize(DataSource* source)
+{
+    if (!source)
+	return false;
+    bool override = false;
+    if (source == m_override)
+	override = true;
+    else if (source != m_source)
+	return false;
+    if (!(m_timestamp || m_regularTsDelta || m_overrideTsDelta)) {
+	// first time
+	m_timestamp = source->timeStamp();
+	return true;
+    }
+    const FormatInfo* info = getFormat().getInfo();
+    int64_t dt = 0;
+    if (info) {
+	// adjust timestamp for possible silence or gaps in data, at least 25ms
+	dt = Time::now() - m_lastTsTime;
+	if (dt >= 25000) {
+	    dt = (dt * info->sampleRate) / 1000000;
+	    DDebug(DebugInfo,"Data gap, offsetting consumer timestamps by " FMT64 " [%p]",dt,this);
+	}
+	else
+	    dt = 0;
+    }
+    dt += m_timestamp - source->timeStamp();
+    DDebug(DebugInfo,"Offsetting consumer %s timestamps by " FMT64 " [%p]",
+	(override ? "override" : "regular"),dt,this);
+    if (override)
+	m_overrideTsDelta = dt;
+    else
+	m_regularTsDelta = dt;
+    return true;
 }
 
 
@@ -474,23 +512,16 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
 	return false;
     Lock lock(m_mutex);
     if (override) {
-	// adjust timestamp for possible gaps in data
-	int64_t dt = Time::now() - consumer->m_lastTsTime;
-	const FormatInfo* info = consumer->getFormat().getInfo();
-	if (info)
-	    dt = (dt * info->sampleRate) / 1000000;
-	else
-	    dt = 0;
 	if (consumer->m_override)
 	    consumer->m_override->detach(consumer);
 	consumer->m_override = this;
-	consumer->m_overrideTsDelta = (long)(consumer->m_timestamp - m_timestamp + dt);
     }
     else {
 	if (consumer->m_source)
 	    consumer->m_source->detach(consumer);
 	consumer->m_source = this;
     }
+    consumer->synchronize(this);
     m_consumers.append(consumer);
     return true;
 }
@@ -541,6 +572,21 @@ void DataSource::clear()
     while (detachInternal(static_cast<DataConsumer*>(m_consumers.get())))
 	;
     m_mutex.unlock();
+}
+
+void DataSource::synchronize(unsigned long tStamp)
+{
+    Lock lock(m_mutex,100000);
+    if (!(lock.mutex() && alive())) {
+	DDebug(DebugInfo,"Synchronizing on a dead DataSource! [%p]",this);
+	return;
+    }
+    m_timestamp = tStamp;
+    ObjList *l = m_consumers.skipNull();
+    for (; l; l=l->skipNext()) {
+	DataConsumer *c = static_cast<DataConsumer *>(l->get());
+	c->synchronize(this);
+    }
 }
 
 void* DataSource::getObject(const String& name) const
@@ -889,6 +935,15 @@ const DataTranslator* DataTranslator::getFirstTranslator() const
 	return this;
     const DataTranslator* trans = tsource->getTranslator();
     return trans ? trans->getFirstTranslator() : this;
+}
+
+bool DataTranslator::synchronize(DataSource* source)
+{
+    if (!DataConsumer::synchronize(source))
+	return false;
+    if (m_tsource)
+	m_tsource->synchronize(timeStamp());
+    return true;
 }
 
 Mutex DataTranslator::s_mutex(true);

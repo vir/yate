@@ -560,9 +560,9 @@ void YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     if (!(m_wrap && m_wrap->bufSize() && m_wrap->rtp()))
 	return;
-    unsigned long delta = tStamp ? (tStamp - m_timestamp) : 0;
+    unsigned long delta = (tStamp && m_timestamp) ? (tStamp - m_timestamp) : 0;
     XDebug(&splugin,DebugAll,"YRTPConsumer writing %d bytes, delta=%lu ts=%lu [%p]",
-	data.length(),delta,m_timestamp,this);
+	data.length(),delta,tStamp,this);
     unsigned int buf = m_wrap->bufSize();
     const char* ptr = (const char*)data.data();
     unsigned int len = data.length();
@@ -575,9 +575,9 @@ void YRTPConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	    DDebug(&splugin,DebugAll,"Creating %u bytes fragment of %u bytes buffer",buf,len);
 	    sz = buf;
 	}
-	m_wrap->rtp()->rtpSendData(false,m_timestamp,ptr,sz);
+	m_wrap->rtp()->rtpSendData(false,tStamp,ptr,sz);
 	// if timestamp increment is not provided we have to guess...
-	m_timestamp += delta ? delta : sz;
+	tStamp += delta ? delta : sz;
 	len -= sz;
 	ptr += sz;
     }

@@ -318,8 +318,12 @@ void WaveSource::run()
 void WaveSource::cleanup()
 {
     Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
-    if (m_autoclean)
-	deref();
+    if (m_autoclean) {
+	if (m_chan && (m_chan->getSource() == this))
+	    m_chan->setSource();
+	else
+	    deref();
+    }
 }
 
 void WaveSource::setNotify(const String& id)

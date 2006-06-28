@@ -476,7 +476,8 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	addHeader("Max-Forwards",tmp);
     }
 
-    if (!getHeader("Contact")) {
+    if ((method == "INVITE") && !getHeader("Contact")) {
+	// automatically add a contact field to (re)INVITE and its answers
 	String tmp(user);
 	if (!tmp) {
 	    tmp = uri;

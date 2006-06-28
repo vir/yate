@@ -1793,8 +1793,6 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     if (tmp)
 	hl->setParam("tag",tmp);
     m->addHeader(hl);
-    if (m_tr && m_tr->initialMessage())
-	m->copyHeader(m_tr->initialMessage(),"Contact");
     return m;
 }
 

@@ -96,12 +96,11 @@ public:
 	{ return m_name; }
     bool startup();
     static ToneSource* getTone(String& tone);
-    static const Tone* getBlock(String& tone);
+    static const ToneDesc* getBlock(String& tone);
     static Tone* buildCadence(const String& desc);
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
-    ToneSource();
-    ToneSource(String& tone);
+    ToneSource(const ToneDesc* tone = 0);
     String m_name;
     const Tone* m_tone;
     int m_repeat;
@@ -384,21 +383,16 @@ ToneData* ToneData::getData(const char* desc)
     return d;
 }
 
-ToneSource::ToneSource()
-    : m_tone(0), m_repeat(1),
+ToneSource::ToneSource(const ToneDesc* tone)
+    : m_tone(0), m_repeat(tone == 0),
       m_data(0,320), m_brate(16000), m_total(0), m_time(0)
 {
-    Debug(&__plugin,DebugAll,"ToneSource::ToneSource() [%p]",this);
-}
-
-ToneSource::ToneSource(String& tone)
-    : m_name(tone), m_tone(0), m_repeat(0),
-      m_data(0,320), m_brate(16000), m_total(0), m_time(0)
-{
-    Debug(&__plugin,DebugAll,"ToneSource::ToneSource(\"%s\") [%p]",tone.c_str(),this);
-    m_tone = getBlock(tone);
-    if (!m_tone)
-	Debug(DebugWarn,"No waveform is defined for tone '%s'",tone.c_str());
+    if (tone) {
+	m_tone = tone->tone;
+	m_name = tone->name;
+    }
+    Debug(&__plugin,DebugAll,"ToneSource::ToneSource(%p) '%s' [%p]",
+	tone,m_name.c_str(),this);
 }
 
 ToneSource::~ToneSource()
@@ -421,17 +415,17 @@ bool ToneSource::startup()
     return m_tone && start("ToneSource");
 }
 
-const Tone* ToneSource::getBlock(String& tone)
+const ToneDesc* ToneSource::getBlock(String& tone)
 {
     if (tone.trimBlanks().toLower().null())
 	return 0;
     const ToneDesc* d = s_desc;
     for (; d->tone; d++) {
 	if (tone == d->name)
-	    return d->tone;
+	    return d;
 	if (d->alias && (tone == d->alias)) {
 	    tone = d->name;
-	    return d->tone;
+	    return d;
 	}
     }
     return 0;
@@ -486,6 +480,8 @@ Tone* ToneSource::buildDtmf(const String& dtmf, int len, int gap)
 
 ToneSource* ToneSource::getTone(String& tone)
 {
+    const ToneDesc* td = ToneSource::getBlock(tone);
+    // tone name is now canonical
     ObjList* l = &tones;
     for (; l; l = l->next()) {
 	ToneSource* t = static_cast<ToneSource*>(l->get());
@@ -494,7 +490,7 @@ ToneSource* ToneSource::getTone(String& tone)
 	    return t;
 	}
     }
-    ToneSource* t = new ToneSource(tone);
+    ToneSource* t = new ToneSource(td);
     tones.append(t);
     t->startup();
     return t;
@@ -566,9 +562,11 @@ TempSource::TempSource(String& desc)
     if (desc.startSkip("*",false))
 	m_repeat = 0;
     // try first the named tones
-    m_tone = getBlock(desc);
-    if (m_tone)
+    const ToneDesc* tde = getBlock(desc);
+    if (tde) {
+	m_tone = tde->tone;
 	return;
+    }
     // for performance reason accept an entire string of DTMFs
     if (desc.startSkip("dtmfstr/",false)) {
 	m_tone = m_single = buildDtmf(desc);
@@ -780,6 +778,7 @@ void ToneGenDriver::initialize()
     if (!m_handler) {
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);
+	installRelay(Halt);
     }
 }
 

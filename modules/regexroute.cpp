@@ -126,22 +126,6 @@ static void replaceFuncs(String &str)
     }
 }
 
-// handle ${paramname} replacements
-static void replaceParams(const Message &msg, String &str)
-{
-    int p1;
-    while ((p1 = str.find("${")) >= 0) {
-	int p2 = str.find('}',p1+2);
-	if (p2 > 0) {
-	    String v = str.substr(p1+2,p2-p1-2);
-	    v.trimBlanks();
-	    DDebug("RegexRoute",DebugAll,"Replacing parameter '%s'",
-		v.c_str());
-	    str = str.substr(0,p1) + msg.getValue(v) + str.substr(p2+1);
-	}
-    }
-}
-
 // handle ;paramname[=value] assignments
 static void setMessage(Message &msg, String &line)
 {
@@ -150,7 +134,7 @@ static void setMessage(Message &msg, String &line)
     for (ObjList *p = strs; p; p=p->next()) {
 	String *s = static_cast<String*>(p->get());
 	if (s) {
-	    replaceParams(msg,*s);
+	    msg.replaceParams(*s);
 	    replaceFuncs(*s);
 	}
 	if (first) {
@@ -223,7 +207,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    val = val.replaceMatches(*n);
 		    if (val.startSkip("echo") || val.startSkip("output")) {
 			// special case: display the line but don't set params
-			replaceParams(msg,val);
+			msg.replaceParams(val);
 			replaceFuncs(val);
 			Output("%s",val.safe());
 			continue;

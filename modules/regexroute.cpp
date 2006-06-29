@@ -35,6 +35,7 @@ static bool s_extended;
 static bool s_insensitive;
 static Mutex s_mutex;
 static ObjList s_extra;
+static NamedList s_vars("");
 
 class RouteHandler : public MessageHandler
 {
@@ -44,14 +45,74 @@ public:
     virtual bool received(Message &msg);
 };
 
-static void evalFunc(String &str)
+static String& vars(String& s, String* vName = 0)
+{
+    if (s.startSkip("$",false)) {
+	s.trimBlanks();
+	if (vName)
+	    *vName = s;
+	s = s_vars.getValue(s);
+    }
+    return s;
+}
+
+#define OPER_ADD 1
+#define OPER_SUB 2
+#define OPER_MUL 3
+#define OPER_DIV 4
+#define OPER_MOD 5
+
+static void mathOper(String& str, String& par, int sep, int oper)
+{
+    str = par.substr(0,sep);
+    par = par.substr(sep+1);
+    int len = str.length();
+    sep = par.find(',');
+    if (sep > 0) {
+	String tmp = par.substr(sep+1);
+	len = vars(tmp).toInteger();
+	par = par.substr(0,sep);
+    }
+    int p1 = vars(str).toInteger(0,10);
+    int p2 = vars(par).toInteger(0,10);
+    switch (oper) {
+	case OPER_ADD:
+	    str = p1+p2;
+	    break;
+	case OPER_SUB:
+	    str = p1-p2;
+	    break;
+	case OPER_MUL:
+	    str = p1*p2;
+	    break;
+	case OPER_DIV:
+	    str = p2 ? p1/p2 : 0;
+	    break;
+	case OPER_MOD:
+	    str = p2 ? p1%p2 : 0;
+	    break;
+    }
+    // TODO: deal with negative results
+    while (len > (int)str.length())
+	str = "0" + str;
+}
+
+static void evalFunc(String& str)
 {
     if (str.null())
 	str = ";";
-    else if (str.startSkip("++",false))
-	str = str.toInteger(0,10) + 1;
-    else if (str.startSkip("--",false))
-	str = str.toInteger(0,10) - 1;
+    else if (str.startSkip("++",false)) {
+	String tmp;
+	str = vars(str,&tmp).toInteger(0,10) + 1;
+	if (tmp)
+	    s_vars.setParam(tmp,str);
+    }
+    else if (str.startSkip("--",false)) {
+	String tmp;
+	str = vars(str,&tmp).toInteger(0,10) - 1;
+	if (tmp)
+	    s_vars.setParam(tmp,str);
+    }
     else {
 	int sep = str.find(',');
 	String par;
@@ -61,40 +122,24 @@ static void evalFunc(String &str)
 	    sep = par.find(',');
 	}
 	if (str == "length")
-	    str = par.length();
+	    str = vars(par).length();
 	else if (str == "upper")
-	    str = par.toUpper();
+	    str = vars(par).toUpper();
 	else if (str == "lower")
-	    str = par.toLower();
-	else if ((sep > 0) && (str == "add")) {
-	    str = par.substr(0,sep);
-	    par = par.substr(sep+1);
-	    int len = str.length();
-	    sep = par.find(',');
-	    if (sep > 0) {
-		len = par.substr(sep+1).toInteger();
-		par = par.substr(0,sep);
-	    }
-	    str = str.toInteger(0,10) + par.toInteger(0,10);
-	    while (len > (int)str.length())
-		str = "0" + str;
-	}
-	else if ((sep > 0) && (str == "sub")) {
-	    str = par.substr(0,sep);
-	    par = par.substr(sep+1);
-	    int len = str.length();
-	    sep = par.find(',');
-	    if (sep > 0) {
-		len = par.substr(sep+1).toInteger();
-		par = par.substr(0,sep);
-	    }
-	    str = str.toInteger(0,10) - par.toInteger(0,10);
-	    // TODO: deal with negative results
-	    while (len > (int)str.length())
-		str = "0" + str;
-	}
+	    str = vars(par).toLower();
+	else if ((sep > 0) && ((str == "add") || (str == "+")))
+	    mathOper(str,par,sep,OPER_ADD);
+	else if ((sep > 0) && ((str == "sub") || (str == "-")))
+	    mathOper(str,par,sep,OPER_SUB);
+	else if ((sep > 0) && ((str == "mul") || (str == "*")))
+	    mathOper(str,par,sep,OPER_MUL);
+	else if ((sep > 0) && ((str == "div") || (str == "/")))
+	    mathOper(str,par,sep,OPER_DIV);
+	else if ((sep > 0) && ((str == "mod") || (str == "%")))
+	    mathOper(str,par,sep,OPER_MOD);
 	else if (str == "random") {
 	    str.clear();
+	    vars(par);
 	    for (unsigned int i = 0; i < par.length(); i++) {
 		if (par.at(i) == '?')
 		    str << (int)(::random() % 10);
@@ -102,6 +147,44 @@ static void evalFunc(String &str)
 		    str << par.at(i);
 	    }
 	}
+	else if ((sep > 0) && ((str == "index") || (str == "rotate"))) {
+	    bool rotate = (str == "rotate");
+	    String vname;
+	    str = par.substr(0,sep);
+	    par = par.substr(sep+1).trimBlanks();
+	    int idx = vars(str,&vname).toInteger(0,10);
+	    ObjList* lst = par.split(',');
+	    str.clear();
+	    par.clear();
+	    unsigned int n = lst->count();
+	    if (n) {
+		int i = idx % n;
+		for (ObjList* l = lst->skipNull(); l; l = l->skipNext()) {
+		    String* s = static_cast<String*>(l->get());
+		    vars(*s);
+		    if (rotate) {
+			if (i > 0)
+			    par.append(*s," ");
+			else
+			    str.append(*s," ");
+		    }
+		    else if (0 == i) {
+			str = *s;
+			break;
+		    }
+		    i--;
+		}
+		str.append(par," ");
+		// auto increment the index variable if any
+		if (vname) {
+		    par = (idx + 1) % n;
+		    s_vars.setParam(vname,par);
+		}
+	    }
+	    lst->destruct();
+	}
+	else if ((sep < 0) && str.trimBlanks())
+	    str = s_vars.getValue(str);
 	else {
 	    Debug("RegexRoute",DebugWarn,"Invalid function '%s'",str.c_str());
 	    str.clear();
@@ -150,11 +233,17 @@ static void setMessage(Message &msg, String &line)
 		n.trimBlanks();
 		v.trimBlanks();
 		DDebug("RegexRoute",DebugAll,"Setting '%s' to '%s'",n.c_str(),v.c_str());
-		msg.setParam(n,v);
+		if (n.startSkip("$",false))
+		    s_vars.setParam(n,v);
+		else
+		    msg.setParam(n,v);
 	    }
 	    else {
 		DDebug("RegexRoute",DebugAll,"Clearing parameter '%s'",s->c_str());
-		msg.clearParam(s);
+		if (s->startSkip("$",false))
+		    s_vars.clearParam(*s);
+		else
+		    msg.clearParam(*s);
 	    }
 	}
     }
@@ -334,13 +423,27 @@ public:
     RegexRoutePlugin();
     virtual void initialize();
 private:
+    void initVars(NamedList* sect);
     MessageHandler *m_preroute, *m_route;
+    bool m_first;
 };
 
 RegexRoutePlugin::RegexRoutePlugin()
-    : m_preroute(0), m_route(0)
+    : m_preroute(0), m_route(0), m_first(true)
 {
     Output("Loaded module RegexRoute");
+}
+
+void RegexRoutePlugin::initVars(NamedList* sect)
+{
+    if (!sect)
+	return;
+    unsigned int len = sect->length();
+    for (unsigned int i=0; i<len; i++) {
+	NamedString* n = sect->getParam(i);
+	if (n)
+	    s_vars.setParam(n->name(),*n);
+    }
 }
 
 void RegexRoutePlugin::initialize()
@@ -370,15 +473,20 @@ void RegexRoutePlugin::initialize()
 	m_route = new RouteHandler(priority);
 	Engine::install(m_route);
     }
-    NamedList *l = s_cfg.getSection("extra");
+    NamedList* l = s_cfg.getSection("extra");
     if (l) {
 	unsigned int len = l->length();
 	for (unsigned int i=0; i<len; i++) {
-	    NamedString *n = l->getParam(i);
+	    NamedString* n = l->getParam(i);
 	    if (n)
 		Engine::install(new GenericHandler(n->name(),n->toInteger()));
 	}
     }
+    if (m_first) {
+	m_first = false;
+	initVars(s_cfg.getSection("$once"));
+    }
+    initVars(s_cfg.getSection("$init"));
 }
 
 INIT_PLUGIN(RegexRoutePlugin);

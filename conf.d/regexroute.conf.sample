@@ -16,6 +16,25 @@
 ;  characters except in lists
 ; Please see the manual pages for grep and sed for more information
 
+; Functions callable in the right-hand side:
+;  $() = a ; character
+;  $(++N) = N+1
+;  $(--N) = N-1
+;  $(length,STRING) = length of STRING
+;  $(upper,STRING) = STRING converted to upper case
+;  $(lower,STRING) = STRING converted to lower case
+;  $(add,VAL1,VAL2[,LEN]) = VAL1+VAL2 left filled to LEN or length of VAL1
+;  $(sub,VAL1,VAL2[,LEN]) = VAL1-VAL2 left filled to LEN or length of VAL1
+;  $(mul,VAL1,VAL2[,LEN]) = VAL1*VAL2 left filled to LEN or length of VAL1
+;  $(div,VAL1,VAL2[,LEN]) = VAL1/VAL2 left filled to LEN or length of VAL1
+;  $(mod,VAL1,VAL2[,LEN]) = VAL1%VAL2 left filled to LEN or length of VAL1
+;  $(random,STRING) = STRING with each ? character replaced with a random digit
+;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
+;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
+; Note that functions ++, --, index and rotate will automatically update N
+;  if it is a variable in the $varname format.
+
+
 [priorities]
 ; Set the priorities for the insertion of the regular expression module in the
 ;  handler chain; a priority of 0 disables the handler entirely
@@ -25,6 +44,19 @@
 
 ; route: int: Priority of the routing message handler
 ;route=100
+
+
+[$once]
+; First-time only global variables initialization.
+; It is executed during first initialization before the [$init] section
+; Each line must be of the form:
+;  varname=value
+
+
+[$init]
+; Reload time global variables initialization
+; Each line must be of the form:
+;  varname=value
 
 
 [contexts]
@@ -62,8 +94,9 @@
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the target using \1, \2, \3, ...
 ; Message parameters can be inserted in the target using ${paramname}
+; Functions can be inserted using $(function,param,param)
 ;
-; First word of a matched target can have a special meaning
+; First word of a matched target has a special meaning:
 ; return - returns immediately from the context without routing
 ; include - calls another context, returns at the next entry if the other
 ;   context did not return successfully
@@ -73,6 +106,10 @@
 ;
 ; It is possible to set message parameters by appending them as name=value
 ;  while separating them with semicolons (;)
+; Placing just the parameter name without the =  sign will clear the parameter
+; Using $name=value will instead change the global variable with that name.
+; Similarily specifying just $name will clear the global variable
+;
 ; Please note that the match string is not changed together with the message
 ;  parameter from which it was copied; for example in routing stage using
 ;  "match 123" and ";called=123" have different effects

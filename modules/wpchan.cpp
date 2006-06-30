@@ -424,19 +424,55 @@ void WpData::run()
     }
     while (m_span && (m_fd >= 0)) {
 	Thread::check();
+	api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
 	bool oob = false;
 	bool rd = wp_select(m_fd,m_samples,&oob);
 	if (oob) {
 	    XDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
 	    XDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
-	    if (r > 0)
-		Debug(&__plugin,DebugInfo,"Read %d bytes of OOB data on span %d [%p]",
-		    r,m_span->span(),this);
+	    if (r < 0) {
+#ifdef SIOC_WANPIPE_SOCK_STATE
+		r = ::ioctl(m_fd,SIOC_WANPIPE_SOCK_STATE,0);
+		Debug(&__plugin,DebugNote,"Socket for span %d is %s",
+		    m_span->span(),
+		    (r == 0) ? "connected" : ((r == 1) ? "disconnected" : "connecting"));
+#else
+		Debug(&__plugin,DebugNote,"Failed to read OOB on span %d",
+		    m_span->span());
+#endif
+	    }
+#ifdef WP_API_EVENT_DTMF_PRESENT
+	    else if (r >= WP_HEADER) {
+		if (ev->event_type)
+		    DDebug(&__plugin,DebugInfo,"Got event %d on span %d [%p]",
+			ev->event_type,m_span->span(),this);
+		switch (ev->event_type) {
+		    case WP_API_EVENT_NONE:
+			break;
+		    case WP_API_EVENT_DTMF:
+			if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
+			    String tone((char)ev->wp_api_hdr_event_dtmf_digit);
+			    tone.toUpper();
+			    int chan = ev->wp_api_hdr_event_channel;
+			    PriChan* c = m_span->getChan(chan);
+			    if (c)
+				c->gotDigits(tone);
+			    else
+				Debug(&__plugin,DebugMild,"Detected DTMF '%s' for invalid channel %d on span %d",
+				    tone.c_str(),chan,m_span->span());
+			}
+			break;
+		    default:
+			Debug(&__plugin,DebugMild,"Unhandled event %u on span %d",
+			    ev->event_type,m_span->span());
+			break;
+		}
+	    }
+#endif
 	}
 
 	if (rd) {
-	    api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
 	    ev->error_flag = 0;
 	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
 	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
@@ -451,32 +487,6 @@ void WpData::run()
 	    }
 	    else
 		m_rdError = 0;
-#ifdef WP_API_EVENT_DTMF_PRESENT
-	    if (ev->event_type)
-		DDebug(&__plugin,DebugInfo,"Got event %d on span %d",
-		    ev->event_type,m_span->span());
-	    switch (ev->event_type) {
-		case WP_API_EVENT_NONE:
-		    break;
-		case WP_API_EVENT_DTMF:
-		    if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
-			String tone((char)ev->wp_api_hdr_event_dtmf_digit);
-			tone.toUpper();
-			int chan = ev->wp_api_hdr_event_channel;
-			PriChan* c = m_span->getChan(chan);
-			if (c)
-			    c->gotDigits(tone);
-			else
-			    Debug(&__plugin,DebugMild,"Detected DTMF '%s' for invalid channel %d on span %d [%p]",
-				tone.c_str(),chan,m_span->span(),this);
-		    }
-		    continue;
-		default:
-		    Debug(&__plugin,DebugMild,"Unhandled event %u on span %d [%p]",
-			ev->event_type,m_span->span(),this);
-		    continue;
-	    }
-#endif
 	    // We should have read N bytes for each B channel
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;

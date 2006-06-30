@@ -332,8 +332,12 @@ private:
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
+    // are we already hung up?
     bool m_hungup;
+    // should we send a BYE?
     bool m_byebye;
+    // should we CANCEL?
+    bool m_cancel;
     int m_state;
     String m_reason;
     int m_reasonCode;
@@ -1390,7 +1394,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 // Incoming call constructor - just before starting the routing thread
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
-      m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true),
+      m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband)
@@ -1509,7 +1513,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 // Outgoing call constructor - in call.execute handler
 YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char* target)
     : Channel(plugin,0,true),
-      m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true),
+      m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband)
@@ -1718,7 +1722,7 @@ void YateSIPConnection::hangup()
 	    break;
 	case Outgoing:
 	case Ringing:
-	    if (m_tr) {
+	    if (m_cancel && m_tr) {
 		SIPMessage* m = new SIPMessage("CANCEL",m_uri);
 		plugin.ep()->buildParty(m,m_host,m_port,plugin.findLine(m_line));
 		if (!m->getParty())
@@ -2224,6 +2228,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
     m_dialog = *ev->getTransaction()->recentMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
+	m_cancel = false;
+	m_byebye = false;
 	setReason(msg->reason,code);
 	hangup();
     }
@@ -2275,6 +2281,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
     }
 
     if (msg->isAnswer() && ((msg->code / 100) == 2)) {
+	m_cancel = false;
 	Lock lock(driver());
 	const SIPMessage* ack = m_tr ? m_tr->latestMessage() : 0;
 	if (ack && ack->isACK()) {

@@ -69,6 +69,7 @@ Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\conference.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\dsoundchan.yate"; DestDir: "{app}\modules"; Components: client
+Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Components: debug
 Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Components: client server debug

@@ -1457,7 +1457,6 @@ ExtListener* ExtListener::build(const char* name, const NamedList& sect)
 {
     if (null(name))
 	return 0;
-    SocketAddr addr;
     ExtListener* ext = new ExtListener(name);
     if (!ext->init(sect)) {
 	Debug(DebugGoOn,"Could not start listener '%s'",name);

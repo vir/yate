@@ -340,6 +340,7 @@ private:
     String m_callid;
     // SIP dialog of this call, used for re-INVITE or BYE
     SIPDialog m_dialog;
+    // remote URI as we send in dialog messages
     URI m_uri;
     // our external IP address, possibly outside of a NAT
     String m_externalAddr;
@@ -2277,6 +2278,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Lock lock(driver());
 	const SIPMessage* ack = m_tr ? m_tr->latestMessage() : 0;
 	if (ack && ack->isACK()) {
+	    // accept any URI change caused by a Contact: header in the 2xx
 	    m_uri = ack->uri;
 	    m_uri.parse();
 	}
@@ -2515,6 +2517,15 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	    sdp = createRtpSDP(false);
 	}
 	m->setBody(sdp);
+
+	const SIPHeaderLine* co = m_tr->initialMessage()->getHeader("Contact");
+	if (co) {
+	    // INVITE had a Contact: header - time to change remote URI
+	    m_uri = *co;
+	    m_uri.parse();
+	}
+
+	// and finally send the answer, transaction will finish soon afterwards
 	m_tr->setResponse(m);
 	m->deref();
     }

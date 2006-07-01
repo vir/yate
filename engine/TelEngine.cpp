@@ -557,8 +557,8 @@ u_int64_t SysUsage::usecRunTime(Type type)
 	case UserTime:
 	    {
 #ifdef _WINDOWS
-		FILETIME ft;
-		if (GetProcessTimes(GetCurrentProcess(),NULL,NULL,NULL,&ft)) {
+		FILETIME dummy,ft;
+		if (GetProcessTimes(GetCurrentProcess(),&dummy,&dummy,&dummy,&ft)) {
 		    u_int64_t t = ft.dwLowDateTime | (((u_int64_t)ft.dwHighDateTime) << 32);
 		    return t / 10;
 		}
@@ -573,8 +573,8 @@ u_int64_t SysUsage::usecRunTime(Type type)
 	case KernelTime:
 	    {
 #ifdef _WINDOWS
-		FILETIME ft;
-		if (GetProcessTimes(GetCurrentProcess(),NULL,NULL,&ft,NULL)) {
+		FILETIME dummy,ft;
+		if (GetProcessTimes(GetCurrentProcess(),&dummy,&dummy,&ft,&dummy)) {
 		    u_int64_t t = ft.dwLowDateTime | (((u_int64_t)ft.dwHighDateTime) << 32);
 		    return t / 10;
 		}

@@ -101,6 +101,7 @@ typedef unsigned long in_addr_t;
 #define O_RDONLY _O_RDONLY
 #define O_WRONLY _O_WRONLY
 #define O_APPEND _O_APPEND
+#define O_BINARY _O_BINARY
 #define O_EXCL   _O_EXCL
 #define O_CREAT  _O_CREAT
 #define O_TRUNC  _O_TRUNC
@@ -145,6 +146,10 @@ typedef int SOCKET;
 #endif
 #ifndef HANDLE
 typedef int HANDLE;
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
 #endif
 
 #if _WORDSIZE == 64
@@ -3578,9 +3583,11 @@ public:
      * @param canRead Open the file for reading
      * @param create Create the file if it doesn't exist
      * @param append Set the write pointer at the end of an existing file
+     * @param binary Open the file in binary mode if applicable
      * @return True if the file was successfully opened
      */
-    virtual bool openPath(const char* name, bool canWrite = false, bool canRead = true, bool create = false, bool append = false);
+    virtual bool openPath(const char* name, bool canWrite = false, bool canRead = true,
+	bool create = false, bool append = false, bool binary = false);
 
     /**
      * Closes the file handle

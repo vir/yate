@@ -484,7 +484,8 @@ bool File::setBlocking(bool block)
 #endif
 }
 
-bool File::openPath(const char* name, bool canWrite, bool canRead, bool create, bool append)
+bool File::openPath(const char* name, bool canWrite, bool canRead,
+    bool create, bool append, bool binary)
 {
     if (!terminate())
 	return false;
@@ -513,6 +514,8 @@ bool File::openPath(const char* name, bool canWrite, bool canRead, bool create, 
 	flags |= O_CREAT;
     if (append)
 	flags |= O_APPEND;
+    if (binary)
+	flags |= O_BINARY;
     HANDLE h = ::open(name,flags,S_IRWXU);
     if (h == invalidHandle()) {
 	copyError();

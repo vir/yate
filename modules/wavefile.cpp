@@ -136,7 +136,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	start("WaveSource");
 	return;
     }
-    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY);
+    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY|O_BINARY);
     if (m_fd < 0) {
 	Debug(DebugWarn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
@@ -359,7 +359,7 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "ilbc20";
     else if (file.endsWith(".ilbc30"))
 	m_format = "ilbc30";
-    m_fd = ::creat(file.safe(),S_IRUSR|S_IWUSR);
+    m_fd = ::open(file.safe(),O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_BINARY,S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));

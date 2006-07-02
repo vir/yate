@@ -83,8 +83,9 @@ protected:
     int m_partyPort;
 };
 
-class YSIP_API SIPBody
+class YSIP_API SIPBody : public GenObject
 {
+    YCLASS(SIPBody,GenObject)
 public:
     SIPBody(const String& type);
     virtual ~SIPBody();
@@ -103,6 +104,7 @@ protected:
 
 class YSIP_API SDPBody : public SIPBody
 {
+    YCLASS(SDPBody,SIPBody)
 public:
     SDPBody();
     SDPBody(const String& type, const char* buf, int len);
@@ -124,6 +126,7 @@ protected:
 
 class YSIP_API SIPBinaryBody : public SIPBody
 {
+    YCLASS(SIPBinaryBody,SIPBody)
 public:
     SIPBinaryBody(const String& type, const char* buf, int len);
     virtual ~SIPBinaryBody();
@@ -135,14 +138,34 @@ protected:
 
 class YSIP_API SIPStringBody : public SIPBody
 {
+    YCLASS(SIPStringBody,SIPBody)
 public:
     SIPStringBody(const String& type, const char* buf, int len = -1);
     virtual ~SIPStringBody();
     virtual SIPBody* clone() const;
+    inline const String& text() const
+	{ return m_text; }
 protected:
     SIPStringBody(const SIPStringBody& original);
     virtual void buildBody() const;
     String m_text;
+};
+
+class YSIP_API SIPLinesBody : public SIPBody
+{
+    YCLASS(SIPLinesBody,SIPBody)
+public:
+    SIPLinesBody(const String& type, const char* buf, int len);
+    virtual ~SIPLinesBody();
+    virtual SIPBody* clone() const;
+    inline const ObjList& lines() const
+	{ return m_lines; }
+    inline void addLine(const char* line)
+	{ m_lines.append(new String(line)); }
+protected:
+    SIPLinesBody(const SIPLinesBody& original);
+    virtual void buildBody() const;
+    ObjList m_lines;
 };
 
 class YSIP_API SIPHeaderLine : public NamedString

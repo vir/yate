@@ -54,7 +54,9 @@ SIPBody* SIPBody::build(const char* buf, int len, const String& type)
 	return 0;
     if (type == "application/sdp")
 	return new SDPBody(type,buf,len);
-    if (type.startsWith("text/"))
+    if (type == "application/dtmf-relay")
+	return new SIPLinesBody(type,buf,len);
+    if (type.startsWith("text/") || (type == "application/dtmf"))
 	return new SIPStringBody(type,buf,len);
     return new SIPBinaryBody(type,buf,len);
 }
@@ -139,6 +141,7 @@ const NamedString* SDPBody::getNextLine(const NamedString* line) const
     return 0;
 }
 
+
 SIPBinaryBody::SIPBinaryBody(const String& type, const char* buf, int len)
     : SIPBody(type)
 {
@@ -166,6 +169,7 @@ SIPBody* SIPBinaryBody::clone() const
     return new SIPBinaryBody(*this);
 }
 
+
 SIPStringBody::SIPStringBody(const String& type, const char* buf, int len)
     : SIPBody(type), m_text(buf,len)
 {
@@ -189,6 +193,48 @@ void SIPStringBody::buildBody() const
 SIPBody* SIPStringBody::clone() const
 {
     return new SIPStringBody(*this);
+}
+
+
+SIPLinesBody::SIPLinesBody(const String& type, const char* buf, int len)
+    : SIPBody(type)
+{
+    while (len > 0)
+        m_lines.append(getUnfoldedLine(&buf,&len));
+}
+
+SIPLinesBody::SIPLinesBody(const SIPLinesBody& original)
+    : SIPBody(original.getType())
+{
+    const ObjList* l = &original.m_lines;
+    for (; l; l = l->next()) {
+    	const String* s = static_cast<String*>(l->get());
+        if (s)
+	    m_lines.append(new String(*s));
+    }
+}
+
+SIPLinesBody::~SIPLinesBody()
+{
+}
+
+void SIPLinesBody::buildBody() const
+{
+    DDebug(DebugAll,"SIPLinesBody::buildBody() [%p]",this);
+    const ObjList* l = &m_lines;
+    for (; l; l = l->next()) {
+    	const String* s = static_cast<String*>(l->get());
+        if (s) {
+	    String line;
+	    line << *s << "\r\n";
+	    m_body += line;
+	}
+    }
+}
+
+SIPBody* SIPLinesBody::clone() const
+{
+    return new SIPLinesBody(*this);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

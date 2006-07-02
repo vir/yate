@@ -98,6 +98,8 @@ static TokenDict dict_errors[] = {
     {  0,   0 },
 };
 
+static const char s_dtmfs[] = "0123456789*#ABCDF";
+
 class RtpMedia : public String
 {
 public:
@@ -161,10 +163,13 @@ public:
 	const SIPMessage* message, GenObject* userData);
     inline bool prack() const
 	{ return m_prack; }
+    inline bool info() const
+	{ return m_info; }
 private:
     static bool copyAuthParams(NamedList* dest, const NamedList& src);
     YateSIPEndPoint* m_ep;
     bool m_prack;
+    bool m_info;
 };
 
 class YateSIPLine : public String
@@ -293,6 +298,7 @@ public:
     bool checkUser(SIPTransaction* t, bool refuse = true);
     void doBye(SIPTransaction* t);
     void doCancel(SIPTransaction* t);
+    void doInfo(SIPTransaction* t);
     void reInvite(SIPTransaction* t);
     void hangup();
     inline const SIPDialog& dialog() const
@@ -371,6 +377,7 @@ private:
     bool m_authBye;
     int m_mediaStatus;
     bool m_inband;
+    bool m_info;
 };
 
 class YateSIPGenerate : public GenObject
@@ -436,6 +443,7 @@ static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
 static bool s_inband = false;
+static bool s_info = false;
 static bool s_forward_sdp = false;
 static bool s_auth_register = true;
 
@@ -845,7 +853,7 @@ bool YateUDPParty::setParty(const URI& uri)
 
 YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     : SIPEngine(s_cfg.getValue("general","useragent")),
-      m_ep(ep), m_prack(false)
+      m_ep(ep), m_prack(false), m_info(false)
 {
     addAllowed("INVITE");
     addAllowed("BYE");
@@ -857,6 +865,9 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_prack = s_cfg.getBoolValue("general","prack");
     if (m_prack)
 	addAllowed("PRACK");
+    m_info = s_cfg.getBoolValue("general","info",true);
+    if (m_info)
+	addAllowed("INFO");
     NamedList *l = s_cfg.getSection("methods");
     if (l) {
 	unsigned int len = l->length();
@@ -1201,6 +1212,13 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	else
 	    t->setResponse(481);
     }
+    else if (t->getMethod() == "INFO") {
+	YateSIPConnection* conn = plugin.findCall(t->getCallID());
+	if (conn)
+	    conn->doInfo(t);
+	else
+	    t->setResponse(481);
+    }
     else if (t->getMethod() == "REGISTER")
 	regreq(e,t);
     else if (t->getMethod() == "OPTIONS")
@@ -1397,7 +1415,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband)
+      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1516,13 +1534,14 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband)
+      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
     m_targetid = target;
     setReason();
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
+    m_info = msg.getBoolValue("dtmfinfo",s_info);
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_line = msg.getValue("line");
     String tmp;
@@ -2471,6 +2490,42 @@ void YateSIPConnection::doCancel(SIPTransaction* t)
 	t->setResponse(481);
 }
 
+void YateSIPConnection::doInfo(SIPTransaction* t)
+{
+    if (m_authBye && !checkUser(t))
+	return;
+    DDebug(this,DebugAll,"YateSIPConnection::doInfo(%p) [%p]",t,this);
+    int sig = -1;
+    const SIPLinesBody* lb = YOBJECT(SIPLinesBody,t->initialMessage()->body);
+    const SIPStringBody* sb = YOBJECT(SIPStringBody,t->initialMessage()->body);
+    if (lb && (lb->getType() == "application/dtmf-relay")) {
+	const ObjList* l = lb->lines().skipNull();
+	for (; l; l = l->skipNext()) {
+	    String tmp = static_cast<String*>(l->get());
+	    tmp.toLower();
+	    if (tmp.startSkip("signal=",false)) {
+		sig = tmp.toInteger(-1);
+		break;
+	    }
+	}
+    }
+    else if (sb && (sb->getType() == "application/dtmf"))
+	sig = sb->text().toInteger(-1);
+    else {
+	t->setResponse(415);
+	return;
+    }
+    t->setResponse(200);
+    if ((sig >= 0) && (sig <= 16)) {
+	char tmp[2];
+	tmp[0] = s_dtmfs[sig];
+	tmp[1] = '\0';
+	Message* msg = message("chan.dtmf");
+	msg->addParam("text",tmp);
+	Engine::enqueue(msg);
+    }
+}
+
 void YateSIPConnection::disconnected(bool final, const char *reason)
 {
     Debug(this,DebugAll,"YateSIPConnection::disconnected() '%s' [%p]",reason,this);
@@ -2543,6 +2598,25 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
+    if (m_info) {
+	for (; tone && *tone; tone++) {
+	    char c = *tone;
+	    for (int i = 0; i <= 16; i++) {
+		if (s_dtmfs[i] == c) {
+		    SIPMessage* m = createDlgMsg("INFO");
+		    if (m) {
+			String tmp;
+			tmp << "Signal=" << i << "\r\n";
+			m->setBody(new SIPStringBody("application/dtmf-relay",tmp));
+			plugin.ep()->engine()->addMessage(m);
+			m->deref();
+		    }
+		    break;
+		}
+	    }
+	}
+	return true;
+    }
     if (m_rtpMedia && (m_mediaStatus == MediaStarted)) {
 	ObjList* l = m_rtpMedia->find("audio");
 	const RtpMedia* m = static_cast<const RtpMedia*>(l ? l->get() : 0);
@@ -2553,7 +2627,6 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 	    return false;
 	}
     }
-    // FIXME: when muted or doing RTP forwarding we should use INFO messages
     return false;
 }
 
@@ -3214,6 +3287,7 @@ void SIPDriver::initialize()
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
+    s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);

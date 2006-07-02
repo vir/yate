@@ -660,8 +660,8 @@ bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
 void IAXTransaction::print()
 {
     Debug(m_engine,DebugInfo,"Transaction - START PRINT [%p]",this);
-    Output("Local call no:    %u\nRemote call no:   %u\nType:             %u\nState:            %u\nTimestamp:        %llu",
-	localCallNo(),remoteCallNo(),type(),state(),(long unsigned long)timeStamp());
+    Output("Local call no:    %u\nRemote call no:   %u\nType:             %u\nState:            %u\nTimestamp:        " FMT64U,
+	localCallNo(),remoteCallNo(),type(),state(),(u_int64_t)timeStamp());
     Output("Queues:\nOutgoing:         %u",m_outFrames.count());
     ObjList* l;
     int i;

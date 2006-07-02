@@ -518,14 +518,14 @@ public:
      * @param audio The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist
     */
-    static const char* audioText(u_int8_t audio);
+    static const char* audioText(u_int32_t audio);
 
     /**
      * Get the text associated with a video format
      * @param video The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist
     */
-    static const char* videoText(u_int8_t video);
+    static const char* videoText(u_int32_t video);
 
     /**
      * Keep the texts associated with the audio formats
@@ -692,7 +692,7 @@ public:
      * @param value Value to unpack
      * @return The unpacked subclass value
      */
-    static u_int32_t IAXFrame::unpackSubclass(u_int8_t value);
+    static u_int32_t unpackSubclass(u_int8_t value);
 
 protected:
     Type m_type;		// Frame type
@@ -852,7 +852,7 @@ public:
      * @return True if the retransmission counter is 0
      */
     inline bool timeout() const
-        { return !(bool)m_retransCount; }
+        { return m_retransCount == 0; }
 
     /**
      * Ask the frame if it's time for retransmit
@@ -1187,7 +1187,7 @@ public:
      * Retrive the expiring time for a register/unregister transaction
      * @return The expiring time for a register/unregister transaction
      */
-    inline u_int16_t expire() const
+    inline u_int32_t expire() const
 	{ return m_expire; }
 
     /**

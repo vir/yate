@@ -153,7 +153,7 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	    if (frame->fullFrame()) {
 	        if (frame->fullFrame()->destCallNo())
 		    XDebug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
-			frame->type(),frame->subclass(),frame->fullFrame()->destCallNo(),frame->fullFrame()->sourceCallNo());
+			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->destCallNo(),frame->fullFrame()->sourceCallNo());
 		else
 		    DDebug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
 			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->sourceCallNo());

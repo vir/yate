@@ -413,12 +413,12 @@ TokenDict IAXFormat::videoData[] = {
     {0, 0}
 };
 
-const char* IAXFormat::audioText(u_int8_t audio)
+const char* IAXFormat::audioText(u_int32_t audio)
 {
     return lookup(audio,audioData);
 }
 
-const char* IAXFormat::videoText(u_int8_t video)
+const char* IAXFormat::videoText(u_int32_t video)
 {
     return lookup(video,videoData);
 }
@@ -580,7 +580,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
     XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-	type,subClass,this);
+	type,subclass,this);
 }
 
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
@@ -591,7 +591,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
     XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-	type,subClass,this);
+	type,subclass,this);
 
     unsigned char header[12];
     DataBlock ie;

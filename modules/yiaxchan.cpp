@@ -926,7 +926,7 @@ bool YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 	// TODO: support number != username
 	data << "/" << tr->username();
 	msg.addParam("data",data);
-	msg.addParam("expires",String(tr->expire()));
+	msg.addParam("expires",String((long)tr->expire()));
     }
     msg.addParam("ip_host",tr->remoteAddr().host());
     msg.addParam("ip_port",String(tr->remoteAddr().port()));

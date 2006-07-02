@@ -24,6 +24,8 @@
 
 #include <yateiax.h>
 
+#include <string.h>  // For memcpy()
+
 using namespace TelEngine;
 
 /**
@@ -421,13 +423,13 @@ const char* IAXFormat::videoText(u_int8_t video)
     return lookup(video,videoData);
 }
 
-/**
- * IAXFrame
- */
+/*
+* IAXFrame
+*/
 IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
 		   const unsigned char* buf, unsigned int len)
     : m_type(type), m_data((char*)buf,len,true), m_retrans(retrans),
-      m_sCallNo(sCallNo), m_tStamp(tStamp), m_subclass(0)
+      m_sCallNo(sCallNo), m_tStamp(tStamp)
 {
     XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
 }
@@ -540,7 +542,7 @@ u_int8_t IAXFrame::packSubclass(u_int32_t value)
 	DDebug(DebugMild,"IAXFrame nonstandard pack %u",value);
 	return value;
     }
-    // no need to start from zero, we already know it's >= 2^8
+    // No need to start from zero, we already know it's >= 2^8
     u_int32_t v = 0x100;
     for (u_int8_t i = 8; i < 32; i++) {
 	if (v == value)
@@ -570,32 +572,30 @@ const IAXFullFrame* IAXFrame::fullFrame() const
 /**
  * IAXFullFrame
  */
-IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_int16_t dCallNo,
+IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 	unsigned char oSeqNo, unsigned char iSeqNo,
 	u_int32_t tStamp, bool retrans,
 	const unsigned char* buf, unsigned int len)
     : IAXFrame(type,sCallNo,tStamp,retrans,buf,len),
-      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo)
+      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
-    DDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 	type,subClass,this);
-    m_subclass = subClass;
 }
 
-IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_int16_t dCallNo,
+IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 	unsigned char oSeqNo, unsigned char iSeqNo,
 	u_int32_t tStamp,
 	const unsigned char* buf, unsigned int len)
     : IAXFrame(type,sCallNo,tStamp,false,0,0),
-      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo)
+      m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
-    DDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
 	type,subClass,this);
 
     unsigned char header[12];
     DataBlock ie;
 
-    m_subclass = subClass;
     // Full frame flag + Source call number
     header[0] = 0x80 | (unsigned char)(m_sCallNo >> 8);
     header[1] = (unsigned char)(m_sCallNo);
@@ -624,7 +624,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subClass, u_int16_t sCallNo, u_i
 
 IAXFullFrame::~IAXFullFrame()
 {
-    DDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
+    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
 	m_type,m_subclass,this);
 }
 
@@ -636,16 +636,20 @@ const IAXFullFrame* IAXFullFrame::fullFrame() const
 /**
  * IAXFrameOut
  */
+void IAXFrameOut::setRetrans()
+{
+    if (!m_retrans) {
+	m_retrans = true;
+	((unsigned char*)m_data.data())[2] |= 0x80;
+    }
+}
+
 void IAXFrameOut::transmitted()
 {
     if (m_retransCount) {
 	m_retransCount--;
 	m_retransTimeInterval *= 2;
 	m_nextTransTime += m_retransTimeInterval;
-	if (!m_retrans) {
-	    m_retrans = true;
-	    ((unsigned char*)m_data.data())[2] |= 0x80;
-	}
    }
 }
 
@@ -657,5 +661,74 @@ void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
     m_nextTransTime = nextTransTime;
 }
 
+/**
+ * IAXFrameOut
+ */
+#define IAX2_METATRUNK_HEADERLENGTH 8
+#define IAX2_MINIFRAME_HEADERLENGTH 6
+
+IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr)
+    : Mutex(true), m_data(0), m_dataAddIdx(IAX2_METATRUNK_HEADERLENGTH), m_engine(engine), m_addr(addr)
+{
+    m_data = new u_int8_t[m_engine->maxFullFrameDataLen()];
+    // Meta indicator
+    *(u_int16_t*)m_data = 0;
+    // Meta command & Command data (use timestamps)
+    m_data[2] = 1;
+    m_data[3] = 1;
+    // Frame timestamp
+    setTimestamp(Time::msecNow());
+}
+
+IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
+{ 
+    m_engine->removeTrunkFrame(this);
+    delete[] m_data; 
+}
+
+void IAXMetaTrunkFrame::setTimestamp(u_int32_t tStamp)
+{
+    m_timestamp = tStamp;
+    m_data[4] = tStamp >> 24;
+    m_data[5] = tStamp >> 16;
+    m_data[6] = tStamp >> 8;
+    m_data[7] = tStamp;
+}
+
+bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
+{
+    Lock lock(this);
+    bool b = true;
+    // Do we have data ?
+    if (!data.length())
+	return b;
+    // If no more room, send it
+    if (m_dataAddIdx + data.length() + IAX2_MINIFRAME_HEADERLENGTH > m_engine->maxFullFrameDataLen())
+	b = send(Time::msecNow());
+    // Is the first mini frame ?
+    if (m_dataAddIdx == IAX2_METATRUNK_HEADERLENGTH)
+	m_timestamp = Time::msecNow();
+    // Add the mini frame
+    m_data[m_dataAddIdx++] = data.length() >> 8;
+    m_data[m_dataAddIdx++] = data.length();
+    m_data[m_dataAddIdx++] = sCallNo >> 8;
+    m_data[m_dataAddIdx++] = sCallNo;
+    m_data[m_dataAddIdx++] = tStamp >> 8;
+    m_data[m_dataAddIdx++] = tStamp;
+    memcpy(m_data + m_dataAddIdx,data.data(),data.length());
+    m_dataAddIdx += data.length();
+    return b;
+}
+
+bool IAXMetaTrunkFrame::send(u_int32_t tStamp)
+{
+    Lock lock(this);
+    setTimestamp(tStamp);
+    bool b = m_engine->writeSocket(m_data,m_dataAddIdx,m_addr);
+    // Reset index & timestamp
+    m_dataAddIdx = IAX2_METATRUNK_HEADERLENGTH;
+    m_timestamp = 0;
+    return b;
+}
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

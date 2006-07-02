@@ -45,12 +45,13 @@ static TokenDict dict_tos[] = {
     { 0, 0 }
 };
 
-static Configuration s_cfg;
-
 class YIAXLineContainer;
 class YIAXEngine;
 class IAXURI;
 
+/*
+ * Keep a single registration line
+ */
 class YIAXLine : public String
 {
     friend class YIAXLineContainer;
@@ -61,10 +62,8 @@ public:
 	Registering,
 	Unregistering,
     };
-
     YIAXLine(const String& name);
     virtual ~YIAXLine();
-
     inline State state() const
 	{ return m_state; }
     inline bool registered() const
@@ -87,27 +86,26 @@ public:
 	{ return m_localPort; }
     inline int remotePort() const
 	{ return m_remotePort; }
-
 private:
     State m_state;
-    String m_username;                  /* Username */
-    String m_password;                  /* Password */
-    String m_callingNo;                 /* Calling number */
-    String m_callingName;               /* Calling name */
-    u_int16_t m_expire;                 /* Expire time */
+    String m_username;                  // Username
+    String m_password;                  // Password
+    String m_callingNo;                 // Calling number
+    String m_callingName;               // Calling name
+    u_int16_t m_expire;                 // Expire time
     String m_localAddr;
     String m_remoteAddr;
     int m_localPort;
     int m_remotePort;
-    u_int32_t m_nextReg;                /* Time to next registration */
-    u_int32_t m_nextKeepAlive;          /* Time to next keep alive signal */
-    bool m_registered;
-    bool m_register;                    /* Operation flag: True - register */
+    u_int32_t m_nextReg;                // Time to next registration
+    u_int32_t m_nextKeepAlive;          // Time to next keep alive signal
+    bool m_registered;			// Registered flag. If true the line is registered
+    bool m_register;                    // Operation flag: True - register
     IAXTransaction* m_transaction;
 };
 
-/**
- * YIAXLineContainer
+/*
+ * Line container: Add/Delete/Update/Register/Unregister lines
  */
 class YIAXLineContainer : public Mutex
 {
@@ -115,12 +113,12 @@ public:
     inline YIAXLineContainer() : Mutex(true) {}
     inline ~YIAXLineContainer() {}
 
-    /**
+    /*
      * Logout and remove all lines
      */
     void clear();
 
-    /**
+    /*
      * Update a line from a message
      * This method is thread safe 
      * @param msg Received message
@@ -128,33 +126,33 @@ public:
      */
     bool updateLine(Message &msg);
 
-    /**
+    /*
      * Event handler for a registration.
      * @param event The event.
      */
     void handleEvent(IAXEvent* event);
 
-    /**
+    /*
      * Terminate notification of a Register/Unregister operation
      * This method is thread safe
      * @param event The event (result)
      */
     void regTerminate(IAXEvent* event);
 
-    /**
+    /*
      * Timer notification
      * This method is thread safe
      * @param time Time
      */
     void evTimer(Time& time);
 
-    /**
+    /*
      * Fill a named list from a line
      * This method is thread safe
      */
     bool fillList(String& name, NamedList& dest, SocketAddr& addr, bool& registered);
 
-    /**
+    /*
      * Check if a line exists
      */
     inline bool hasLine(const String& line)
@@ -171,7 +169,7 @@ private:
     ObjList m_lines;
 };
 
-/**
+/*
  * Thread class for reading data from socket for the specified IAX engine
  */
 class YIAX_API YIAXListener : public Thread
@@ -185,7 +183,7 @@ protected:
     YIAXEngine* m_engine;
 };
 
-/**
+/*
  * Thread class for reading events for the specified IAX engine
  */
 class YIAX_API YIAXGetEvent : public Thread
@@ -199,13 +197,27 @@ protected:
     YIAXEngine* m_engine;
 };
 
-/**
- * YIAXEngine
+/*
+ * Thread class for sending trunked mini frames for the specified IAX engine
+ */
+class YIAX_API YIAXTrunking : public Thread
+{
+public:
+    inline YIAXTrunking(YIAXEngine* engine, const char* name = 0, Priority prio = Normal)
+	: Thread(name,prio), m_engine(engine)
+	{}
+    virtual void run();
+protected:
+    YIAXEngine* m_engine;
+};
+
+/*
+ * The IAX engine for this driver
  */
 class YIAXEngine : public IAXEngine
 {
 public:
-    /**
+    /*
      * Constructor
      * @param port UDP port to use
      * @param transListCount Number of entries in the transaction hash table
@@ -214,17 +226,16 @@ public:
      * @param authTimeout Timeout (in seconds) of acknoledged auth frames sent
      * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
+     * @param trunkSendInterval Send trunk meta frame interval
      */
     YIAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen);
+	u_int16_t authTimeout, u_int16_t transTimeout,
+	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval);
 
-    /**
-     * Destructor
-     */
     virtual ~YIAXEngine()
 	{}
 
-    /**
+    /*
      * Process media from remote peer.
      * @param transaction IAXTransaction that owns the call leg
      * @param data Media data. 
@@ -232,7 +243,7 @@ public:
      */
     virtual void processMedia(IAXTransaction* transaction, DataBlock& data, u_int32_t tStamp);
 
-    /**
+    /*
      * Initiate an outgoing registration (release) request.
      * @param line YIAXLine pointer to use for registration.
      * @param regreq Registration request flag. If false a registration release will take place.
@@ -240,7 +251,7 @@ public:
      */
     IAXTransaction* reg(YIAXLine* line, bool regreq = true);
 
-    /**
+    /*
      * Initiate an aoutgoing call.
      * @param addr Address to poke.
      * @param params Call parameters.
@@ -248,42 +259,43 @@ public:
      */
     IAXTransaction* call(SocketAddr& addr, NamedList& params);
 
-    /**
+    /*
      * Initiate a test of existence of a remote IAX peer.
      * @param addr Address to poke.
      * @return IAXTransaction pointer on success.
      */
     IAXTransaction* poke(SocketAddr& addr);
 
-    /**
+    /*
      * Start thread members
      * @param listenThreadCount Reading socket thread count.
      * @param eventThreadCount Reading event thread count.
+     * @param trunkingThreadCount Trunking thread count.
      */
-    void start(u_int16_t listenThreadCount, u_int16_t eventThreadCount);
+    void start(u_int16_t listenThreadCount, u_int16_t eventThreadCount,u_int16_t trunkingThreadCount);
 
 protected:
 
-    /**
+    /*
      * Event handler for transaction with a connection.
      */
     virtual void processEvent(IAXEvent* event);
 
-    /**
+    /*
      * Event handler for incoming registration transactions.
      */
     void processRemoteReg(IAXEvent* event);
 
-    /**
+    /*
      * Send Register/Unregister messages to Engine
      */
     bool userreg(IAXTransaction* tr, bool regrel = true);
 
 private:
-    bool m_threadsCreated;      /* True if reading and get events threads were created */
+    bool m_threadsCreated;      // True if reading and get events threads were created
 };
 
-/**
+/*
  * YIAXRegDataHandler
  */
 class YIAXRegDataHandler : public MessageHandler
@@ -295,7 +307,7 @@ public:
     virtual bool received(Message &msg);
 };
 
-/**
+/*
  * YIAXDriver
  */
 class YIAXDriver : public Driver
@@ -304,11 +316,8 @@ public:
     YIAXDriver();
     virtual ~YIAXDriver();
     virtual void initialize();
-    /* Create an outgoing call */
     virtual bool msgExecute(Message& msg, String& dest);
-
     virtual bool msgRoute(Message& msg);
-
     virtual bool received(Message& msg, int id);
 
     inline u_int32_t defaultCodec() const
@@ -325,15 +334,15 @@ public:
 
 protected:
     YIAXEngine* m_iaxEngine;
-    u_int32_t m_defaultCodec;           /* Default codec */
-    u_int32_t m_codecs;                 /* Capability */
-    int m_port;				/* Default UDP port */
+    u_int32_t m_defaultCodec;
+    u_int32_t m_codecs;
+    int m_port;				// Default UDP port
 };
 
 class YIAXConnection;
 
-/**
- * YIAXConsumer
+/*
+ * Connection's data consumer
  */
 class YIAXConsumer : public DataConsumer
 {
@@ -347,8 +356,8 @@ private:
     u_int32_t m_format;
 };
 
-/**
- * YIAXSource
+/*
+ * Connection's data source
  */
 class YIAXSource : public DataSource
 {
@@ -362,8 +371,8 @@ private:
     u_int32_t m_format;
 };
 
-/**
- * YIAXConnection
+/*
+ * The connection
  */
 class YIAXConnection : public Channel
 {
@@ -391,28 +400,20 @@ public:
 
     void handleEvent(IAXEvent* event);
 
-    /* Start router */
     bool route(bool authenticated = false);
 
 protected:
-    /* Hangup */
     void hangup(const char* reason = 0, bool reject = false);
-    /* Hangup */
     inline void hangup(IAXEvent* event, const char* reason = 0, bool reject = false) {
 	    event->setFinal();
 	    hangup(reason,reject);
 	}
-    /* Start consumer */
     void startAudioIn();
-    /* Start source */
     void startAudioOut();
-    /* Events */
     void evAuthRep(IAXEvent* event);
-
+    // Safe deref the connection if the reference counter was increased during registration
     void safeDeref();
-
     bool safeRefIncrease();
-
 private:
     YIAXEngine* m_iaxEngine;            // IAX engine owning the transaction
     IAXTransaction* m_transaction;      // IAX transaction
@@ -421,11 +422,12 @@ private:
     bool m_mutedOut;                    // No local media accepted
     String m_reason;                    // Call end reason text
     bool m_hangup;			// Need to send chan.hangup message
+    Mutex m_mutexTrans;                 // Safe m_transaction operations
     Mutex m_mutexRefIncreased;          // Safe ref/deref connection
     bool m_refIncreased;                // If true, the reference counter was increased
 };
 
-/**
+/*
  * IAXURI
  *  [iax[2]:][username@]host[:port][/called_number[@called_context]]
  */
@@ -461,19 +463,18 @@ private:
 };
 
 
-/**
+/*
  * Local data
  */
-/* Init the driver */
-static YIAXDriver iplugin;
-/* Lines */
-static YIAXLineContainer s_lines;
+static Configuration s_cfg; 		// Configuration file
+static YIAXDriver iplugin;		// Init the driver
+static YIAXLineContainer s_lines;	// Lines
 
-/**
+/*
  * Class definitions
  */
 
-/**
+/*
  * YIAXLine
  */
 YIAXLine::YIAXLine(const String& name)
@@ -489,7 +490,7 @@ YIAXLine::~YIAXLine()
 {
 }
 
-/**
+/*
  * YIAXLineContainer
  */
 bool YIAXLineContainer::updateLine(Message& msg)
@@ -568,8 +569,10 @@ void YIAXLineContainer::evTimer(Time& time)
     Lock lock(this);
     for (ObjList* l = m_lines.skipNull(); l; l = l->next()) {
 	YIAXLine* line = static_cast<YIAXLine*>(l->get());
+	// Line exists and is idle ?
 	if (!line || line->state() != YIAXLine::Idle)
 	    continue;
+	// Time to keep alive
 	if (sec > line->m_nextKeepAlive) {
 	    line->m_nextKeepAlive = sec + 25;
 	    SocketAddr addr(AF_INET);
@@ -577,6 +580,7 @@ void YIAXLineContainer::evTimer(Time& time)
 	    addr.port(line->remotePort());
 	    iplugin.getEngine()->keepAlive(addr);
 	}
+	// Time to reg/unreg
 	if (sec > line->m_nextReg) {
 	    line->m_nextReg += line->expire();
 	    if (line->m_register)
@@ -733,12 +737,21 @@ void YIAXGetEvent::run()
 }
 
 /**
+ * YIAXTrunking
+ */
+void YIAXTrunking::run()
+{
+    Debug(m_engine,DebugAll,"%s started",currentName());
+    m_engine->runProcessTrunkFrames();
+}
+
+/**
  * YIAXEngine
  */
 YIAXEngine::YIAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen)
+	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval)
     : IAXEngine(port,transListCount,retransCount,retransInterval,authTimeout,transTimeout,
-      maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs()),
+      maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs(),trunkSendInterval),
       m_threadsCreated(false)
 {
 }
@@ -806,7 +819,7 @@ IAXTransaction* YIAXEngine::poke(SocketAddr& addr)
     return startLocalTransaction(IAXTransaction::Poke,addr,ieList);
 }
 
-void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount)
+void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, u_int16_t trunkThreadCount)
 {
     if (m_threadsCreated)
 	return;
@@ -814,18 +827,19 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount)
 	Debug(DebugWarn,"YIAXEngine - start. No reading socket threads(s)!.");
     if (!eventThreadCount)
 	Debug(DebugWarn,"YIAXEngine - start. No reading event threads(s)!.");
+    if (!trunkThreadCount)
+	Debug(DebugWarn,"YIAXEngine - start. No trunking threads(s)!.");
     for (; listenThreadCount; listenThreadCount--)
 	(new YIAXListener(this,"YIAXListener thread"))->startup();
     for (; eventThreadCount; eventThreadCount--)
 	(new YIAXGetEvent(this,"YIAXGetEvent thread"))->startup();
+    for (; trunkThreadCount; trunkThreadCount--)
+	(new YIAXTrunking(this,"YIAXTrunking thread"))->startup();
     m_threadsCreated = true;
 }
 
 void YIAXEngine::processEvent(IAXEvent* event)
 {
-#if 0
-static u_int16_t hp = 0, rej = 0, final = 0;
-#endif
     YIAXConnection* connection = 0;
     switch (event->getTransaction()->type()) {
 	case IAXTransaction::New:
@@ -834,21 +848,6 @@ static u_int16_t hp = 0, rej = 0, final = 0;
 		// We already have a channel for this call
 		connection->handleEvent(event);
 		if (event->final()) {
-#if 0
-final++;
-switch (event->type()) {
-  case IAXEvent::Hangup: hp++; break;
-  case IAXEvent::Reject: rej++; break;
-  case IAXEvent::Timeout:
-	Output("****************************  Engine HALT: Channels: %u  ****************************",iplugin.channels().count());
-	Output("Final events: %u Hangup: %u, Reject: %u",final,hp,rej);
-	event->getTransaction()->print();
-	Engine::halt(0xFF);
-	break;
-  default:
-	break;
-}
-#endif
 		    // Final event: disconnect
 		    Debug(this,DebugAll,"YIAXEngine::processEvent - Disconnect connection [%p]",connection);
 		    connection->disconnect();
@@ -861,6 +860,8 @@ switch (event->type()) {
 		    event->getTransaction()->setUserData(connection);
 		    if (!connection->route())
 			event->getTransaction()->setUserData(0);
+		    else
+			enableTrunking(event->getTransaction());
 		}
 	    }
 	    break;
@@ -1001,15 +1002,17 @@ void YIAXDriver::initialize()
     installRelay(Halt);
     installRelay(Route);
     // Init IAX engine
-    u_int16_t transListCount = 16;
+    u_int16_t transListCount = 64;
     u_int16_t retransCount = 5;
     u_int16_t retransInterval = 500;
     u_int16_t authTimeout = 30;
     u_int16_t transTimeout = 10;
     u_int16_t maxFullFrameDataLen = 1400;
+    u_int32_t trunkSendInterval = 10;
     if (!m_iaxEngine) {
 	Engine::install(new YIAXRegDataHandler);
-	m_iaxEngine = new YIAXEngine(m_port,transListCount,retransCount,retransInterval,authTimeout,transTimeout,maxFullFrameDataLen);
+	m_iaxEngine = new YIAXEngine(m_port,transListCount,retransCount,retransInterval,authTimeout,
+		transTimeout,maxFullFrameDataLen,trunkSendInterval);
 	m_iaxEngine->debugChain(this);
 	int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
 	if (tos) {
@@ -1019,7 +1022,8 @@ void YIAXDriver::initialize()
     }
     int readThreadCount = 3;
     int eventThreadCount = 3;
-    m_iaxEngine->start(readThreadCount,eventThreadCount);
+    int trunkingThreadCount = 1;
+    m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
 }
 
 bool YIAXDriver::msgRoute(Message& msg)
@@ -1149,7 +1153,7 @@ void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp)
 YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg)
     : Channel(&iplugin,0,transaction->outgoing()),
       m_iaxEngine(iaxEngine), m_transaction(transaction), m_mutedIn(false), m_mutedOut(false),
-      m_hangup(true), m_mutexRefIncreased(true), m_refIncreased(false)
+      m_hangup(true), m_mutexTrans(true), m_mutexRefIncreased(true), m_refIncreased(false)
 {
     DDebug(this,DebugAll,"YIAXConnection::YIAXConnection [%p]",this);
     setMaxcall(msg);
@@ -1179,8 +1183,10 @@ YIAXConnection::~YIAXConnection()
 void YIAXConnection::callAccept(Message& msg)
 {
     DDebug(this,DebugAll,"callAccept [%p]",this);
+    m_mutexTrans.lock();
     if (m_transaction)
 	m_transaction->sendAccept();
+    m_mutexTrans.unlock();
     Channel::callAccept(msg);
 }
 
@@ -1194,11 +1200,14 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	reason = error;
     DDebug(this,DebugInfo,"callRejected [%p]. Error: '%s'",this,error);
     String s(error);
+    m_mutexTrans.lock();
     if (m_transaction && (s == "noauth") && safeRefIncrease()) {
 	Debug(this,DebugAll,"callRejected [%p]. Requesting authentication",this);
 	m_transaction->sendAuth(m_password);
+	m_mutexTrans.unlock();
 	return;
     }
+    m_mutexTrans.unlock();
     hangup(reason,true);
 }
 
@@ -1214,6 +1223,7 @@ bool YIAXConnection::callRouted(Message& msg)
 
 bool YIAXConnection::msgRinging(Message& msg)
 {
+    Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	m_transaction->sendRinging();
 	startAudioOut();
@@ -1224,6 +1234,7 @@ bool YIAXConnection::msgRinging(Message& msg)
 
 bool YIAXConnection::msgAnswered(Message& msg)
 {
+    Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	m_transaction->sendAnswer();
 	startAudioIn();
@@ -1235,6 +1246,7 @@ bool YIAXConnection::msgAnswered(Message& msg)
 
 bool YIAXConnection::msgTone(Message& msg, const char* tone)
 {
+    Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	while (tone && *tone)
 	    m_transaction->sendDtmf(*tone++);
@@ -1245,6 +1257,7 @@ bool YIAXConnection::msgTone(Message& msg, const char* tone)
 
 bool YIAXConnection::msgText(Message& msg, const char* text)
 {
+    Lock lock(&m_mutexTrans);
     if (m_transaction) {
 	m_transaction->sendText(text);
 	return true;
@@ -1329,7 +1342,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    break;
 	case IAXEvent::Timeout:
 	    DDebug(this,DebugNote,"YIAXConnection - TIMEOUT. Transaction: %u,%u, Frame: %u,%u ",
-		m_transaction->localCallNo(),m_transaction->remoteCallNo(),event->frameType(),event->subclass());
+		event->getTransaction()->localCallNo(),event->getTransaction()->remoteCallNo(),event->frameType(),event->subclass());
 	    m_reason = "Timeout";
 	    break;
 	case IAXEvent::Busy:
@@ -1350,7 +1363,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
     }
 }
 
-void YIAXConnection::hangup(const char *reason, bool reject)
+void YIAXConnection::hangup(const char* reason, bool reject)
 {
     if (!m_hangup)
 	// Already done
@@ -1360,6 +1373,7 @@ void YIAXConnection::hangup(const char *reason, bool reject)
 	reason = m_reason;
     if (!reason)
 	reason = Engine::exiting() ? "Server shutdown" : "Unexpected problem";
+    m_mutexTrans.lock();
     if (m_transaction) {
 	m_transaction->setUserData(0);
 	if (reject)
@@ -1368,6 +1382,7 @@ void YIAXConnection::hangup(const char *reason, bool reject)
 	    m_transaction->sendHangup(reason);
         m_transaction = 0;
     }
+    m_mutexTrans.unlock();
     Message* m = message("chan.hangup",true);
     m->setParam("status","hangup");
     m->setParam("reason",reason);
@@ -1380,6 +1395,7 @@ bool YIAXConnection::route(bool authenticated)
     if (!m_transaction)
 	return false;
     Message* m = message("call.preroute",false,true);
+    Lock lock(&m_mutexTrans);
     if (authenticated) {
 	DDebug(this,DebugAll,"Route pass 2: Password accepted.");
 	m_refIncreased = false;
@@ -1407,8 +1423,10 @@ void YIAXConnection::startAudioIn()
     if (getSource())
 	return;
     u_int32_t format = 0;
+    m_mutexTrans.lock();
     if (m_transaction)
 	format = m_transaction->formatIn();
+    m_mutexTrans.unlock();
     const char* formatText = IAXFormat::audioText(format);
     setSource(new YIAXSource(this,format,formatText));
     getSource()->deref();
@@ -1420,8 +1438,10 @@ void YIAXConnection::startAudioOut()
     if (getConsumer())
 	return;
     u_int32_t format = 0;
+    m_mutexTrans.lock();
     if (m_transaction)
 	format = m_transaction->formatOut();
+    m_mutexTrans.unlock();
     const char* formatText = (char*)IAXFormat::audioText(format);
     setConsumer(new YIAXConsumer(this,format,formatText));
     getConsumer()->deref();

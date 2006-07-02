@@ -31,7 +31,8 @@
 using namespace TelEngine;
 
 IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen, u_int32_t format, u_int32_t capab)
+	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
+	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval)
     : Mutex(true),
     m_lastGetEvIndex(0),
     m_maxFullFrameDataLen(maxFullFrameDataLen),
@@ -42,7 +43,11 @@ IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount,
     m_authTimeout(authTimeout),
     m_transTimeout(transTimeout),
     m_format(format),
-    m_capability(capab)
+    m_capability(capab),
+    m_mutexTrunk(true),
+    m_trunkSendInterval(trunkSendInterval),
+    m_writeCommands(0),
+    m_writeCommandsFail(0)
 {
     debugName("iaxengine");
     if ((port <= 0) || port > 65535)
@@ -72,6 +77,10 @@ IAXEngine::~IAXEngine()
     for (int i = 0; i < m_transListCount; i++)
 	delete m_transList[i];
     delete[] m_transList;
+
+
+
+    print();
 }
 
 IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
@@ -91,7 +100,7 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 		continue;
 	    // Complete transaction
 	    if (tr->processFrame(frame)) {
-		tr->m_rCallNo = frame->sourceCallNo();
+	    	tr->m_rCallNo = frame->sourceCallNo();
 		m_incompleteTransList.remove(tr,false);
 		m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
 		XDebug(this,DebugAll,"New incomplete outgoing transaction completed (%u,%u)",
@@ -109,20 +118,28 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	    continue;
 	// Mini frame
 	if (!frame->fullFrame()) {
-	    if (addr == tr->remoteAddr())
-		return tr->processFrame(frame);
+	    if (addr == tr->remoteAddr()) {
+		// keep transaction referenced but unlock the engine
+		RefPointer<IAXTransaction> t = tr;
+		lock.drop();
+		return t ? t->processFrame(frame) : 0;
+	    }
 	    continue;
 	}
 	// Full frame
 	// Has a local number assigned? If not, test socket
-	if ((frame->fullFrame())->destCallNo() || addr == tr->remoteAddr())
-	    return tr->processFrame(frame);
+	if ((frame->fullFrame())->destCallNo() || addr == tr->remoteAddr()) {
+	    // keep transaction referenced but unlock the engine
+	    RefPointer<IAXTransaction> t = tr;
+	    lock.drop();
+	    return t ? t->processFrame(frame) : 0;
+	}
     }
     // Frame doesn't belong to an existing transaction
     // Test if it is a full frame with an IAX control message that needs a new transaction
     if (!frame->fullFrame() || frame->type() != IAXFrame::IAX)
 	return 0;
-    switch (frame->subclass()) {
+    switch (frame->fullFrame()->subclass()) {
 	case IAXControl::New:
 	case IAXControl::RegReq:
 	case IAXControl::RegRel:
@@ -133,8 +150,14 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 	    return 0;
 	case IAXControl::FwDownl:
 	default:
-	    DDebug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u)",
-		frame->type(),frame->subclass());
+	    if (frame->fullFrame()) {
+	        if (frame->fullFrame()->destCallNo())
+		    XDebug(this,DebugAll,"Unmatched Frame(%u,%u) for (%u,%u)",
+			frame->type(),frame->subclass(),frame->fullFrame()->destCallNo(),frame->fullFrame()->sourceCallNo());
+		else
+		    DDebug(this,DebugAll,"Unsupported incoming transaction Frame(%u,%u). Source call no: %u",
+			frame->type(),frame->fullFrame()->subclass(),frame->fullFrame()->sourceCallNo());
+	    }
 	    return 0;
     }
     // Generate local number
@@ -200,9 +223,14 @@ void IAXEngine::readSocket(SocketAddr& addr)
 bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr)
 {
     len = m_socket.sendTo(buf,len,addr);
+    m_writeCommands++;
     if (len == Socket::socketError()) {
+	m_writeCommandsFail++;
 	if (!m_socket.canRetry())
 	    Debug(this,DebugWarn,"Socket write error: %s (%d)",
+		::strerror(m_socket.error()),m_socket.error());
+	else
+	    DDebug(this,DebugMild,"Socket temporary unavailable: %s (%d)",
 		::strerror(m_socket.error()),m_socket.error());
 	return false;
     }
@@ -260,6 +288,25 @@ void IAXEngine::keepAlive(SocketAddr& addr)
     writeSocket(buf,sizeof(buf),addr);
 }
 
+bool IAXEngine::processTrunkFrames(u_int32_t time)
+{
+    Lock lock(&m_mutexTrunk);
+    bool sent = false;
+    for (ObjList* l = m_trunkList.skipNull(); l; l = l->next()) {
+	IAXMetaTrunkFrame* frame = static_cast<IAXMetaTrunkFrame*>(l->get());
+	// Frame has mini frame(s) ?
+	if (!frame->timestamp())
+	    continue;
+	int32_t interval = time - frame->timestamp();
+        if (!interval || (interval && (u_int32_t)interval < m_trunkSendInterval))
+	    continue;
+	// If the time wrapped around, send it. Worst case: we'll send an empty frame
+	frame->send(time);
+	sent = true;
+    }
+    return sent;
+}
+
 void IAXEngine::processEvent(IAXEvent* event)
 {
     XDebug(this,DebugAll,"Default processing - deleting event %p Subclass %u",
@@ -273,26 +320,40 @@ IAXEvent* IAXEngine::getEvent(u_int64_t time)
     IAXEvent* ev;
     ObjList* l;
 
-    Lock lock(this);
+    lock();
     // Find for incomplete transactions
     l = m_incompleteTransList.skipNull();
     for (; l; l = l->next()) {
 	tr = static_cast<IAXTransaction*>(l->get());
-	if (tr && 0 != (ev = tr->getEvent(time)))
+	if (tr && 0 != (ev = tr->getEvent(time))) {
+	    unlock();
 	    return ev;
+	}
 	continue;
     }
-    // Find for complete transactions
-    for (; m_lastGetEvIndex < m_transListCount; m_lastGetEvIndex++) {
-	l = m_transList[m_lastGetEvIndex]->skipNull();
-	for (; l; l = l->next()) {
-	    tr = static_cast<IAXTransaction*>(l->get());
-	    if (tr && 0 != (ev = tr->getEvent(time)))
-		return ev;
+    // Find for complete transactions, start with current index
+    while (m_lastGetEvIndex < m_transListCount) {
+	l = m_transList[m_lastGetEvIndex++]->skipNull();
+	if (!l)
 	    continue;
+	ListIterator iter(*l);
+	for (;;) {
+	    tr = static_cast<IAXTransaction*>(iter.get());
+	    // end of iteration?
+	    if (!tr)
+		break;
+	    RefPointer<IAXTransaction> t = tr;
+	    // dead pointer?
+	    if (!t)
+		continue;
+	    unlock();
+	    if (0 != (ev = t->getEvent(time)))
+		return ev;
+	    lock();
 	}
     }
     m_lastGetEvIndex = 0;
+    unlock();
     return 0;
 }
 
@@ -323,15 +384,18 @@ void IAXEngine::releaseCallNo(u_int16_t lcallno)
     m_lUsedCallNo[lcallno] = false;
 }
 
-IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList)
+IAXTransaction* IAXEngine::startLocalTransaction(IAXTransaction::Type type, const SocketAddr& addr, IAXIEList& ieList, bool trunking)
 {
     Lock lock(this);
     u_int16_t lcn = generateCallNo();
     if (!lcn)
 	return 0;
     IAXTransaction* tr = IAXTransaction::factoryOut(this,type,lcn,addr,ieList);
-    if (tr)
+    if (tr) {
 	m_incompleteTransList.append(tr);
+	if (trunking)
+	    enableTrunking(tr);
+    }
     else
 	releaseCallNo(lcn);
     return tr;
@@ -386,6 +450,47 @@ void IAXEngine::defaultEventHandler(IAXEvent* event)
     }
 }
 
+void IAXEngine::enableTrunking(IAXTransaction* trans)
+{
+    Lock lock(&m_mutexTrunk);
+    IAXMetaTrunkFrame* frame;
+    // Already enabled ?
+    for (ObjList* l = m_trunkList.skipNull(); l; l = l->next()) {
+	frame = static_cast<IAXMetaTrunkFrame*>(l->get());
+	if (frame && frame->addr() == trans->remoteAddr()) {
+	    trans->enableTrunking(frame);
+	    return;
+	}
+    }
+    frame = new IAXMetaTrunkFrame(this,trans->remoteAddr());
+    if (trans->enableTrunking(frame))
+	m_trunkList.append(frame);
+    // Deref frame: Only transactions are allowed to keep references for it
+    frame->deref();
+}
+
+void IAXEngine::removeTrunkFrame(IAXMetaTrunkFrame* trunkFrame)
+{
+    Lock lock(&m_mutexTrunk);
+    m_trunkList.remove(trunkFrame,false);
+}
+
+void IAXEngine::runProcessTrunkFrames()
+{
+    while (1) {
+	processTrunkFrames();
+	Thread::msleep(2,true);
+    }
+}
+
+void IAXEngine::print()
+{
+    Debug(this,DebugInfo,"IAXEngine - START PRINT [%p]",this);
+    Output("Write commands: " FMT64U,m_writeCommands);
+    Output("Write commands failed: " FMT64U,m_writeCommandsFail);
+    Debug(this,DebugInfo,"IAXEngine - END PRINT [%p]",this);
+}
+
 void IAXEngine::getMD5FromChallenge(String& md5data, const String& challenge, const String& password)
 {
     MD5 md5;
@@ -425,9 +530,10 @@ IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transactio
 
 IAXEvent::~IAXEvent()
 {
-    if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated) {
-	m_transaction->getEngine()->removeTransaction(m_transaction);
-    }
+// Moved to transaction destructor
+//    if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated) {
+//	m_transaction->getEngine()->removeTransaction(m_transaction);
+//    }
     if (m_transaction) {
 	m_transaction->eventTerminated(this);
 	m_transaction->deref();

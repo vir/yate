@@ -4,18 +4,17 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING .ISS SCRIPT FILES!
 
 [Setup]
+#include "yateiss.inc"
 AppName=Yet Another Telephony Engine
-AppVerName=Yate version 0.9.0
 AppPublisher=Null Team Impex SRL
 AppPublisherURL=http://yate.null.ro/
-AppVersion=0.9.0
-VersionInfoVersion=0.9.0
 DefaultDirName={pf}\Yate
 DefaultGroupName=Yate
 UninstallDisplayIcon={app}\null_team.ico
 Compression=lzma
 SolidCompression=yes
 OutputBaseFilename=yate-setup
+SetupIconFile=null_team.ico
 
 [Types]
 Name: "full"; Description: "Full installation"
@@ -49,6 +48,7 @@ Name: "external"; Description: "External interfaces"; Types: full server
 Name: "external\php"; Description: "PHP5 scripting"; Types: full server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
 Name: "devel"; Description: "Module development files"; Types: full engine
+Name: "devel\doc"; Description: "Development documentation"; Types: full
 
 [Tasks]
 Name: "qlaunch"; Description: "Create a &Quick Launch icon"; GroupDescription: "Additional icons:"; Components: client; Flags: unchecked
@@ -105,6 +105,7 @@ Source: "Runtimes\krb5_32.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libintl-2.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
 
+Source: "..\COPYING"; DestName: "COPYING.txt"; DestDir: "{app}"
 Source: "..\yate.url"; DestDir: "{app}"
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
@@ -122,6 +123,12 @@ Source: "Release\libyate.lib"; DestDir: "{app}\devel"; Components: devel
 Source: "..\yate*.h"; DestDir: "{app}\devel"; Components: devel
 Source: "yateversn.h"; DestDir: "{app}\devel"; Components: devel
 Source: "version.rc"; DestDir: "{app}\devel"; Components: devel
+Source: "..\README"; DestName: "README.txt"; DestDir: "{app}\devel"; Components: devel
+Source: "..\ChangeLog"; DestName: "ChangeLog.txt"; DestDir: "{app}\devel"; Components: devel
+Source: "..\docs\*.html"; DestDir: "{app}\devel\docs"; Components: devel\doc
+Source: "..\docs\api\*.html"; DestDir: "{app}\devel\docs\api"; Components: devel\doc; Flags: skipifsourcedoesntexist
+Source: "..\docs\api\*.png"; DestDir: "{app}\devel\docs\api"; Components: devel\doc; Flags: skipifsourcedoesntexist
+Source: "..\docs\api\*.css"; DestDir: "{app}\devel\docs\api"; Components: devel\doc; Flags: skipifsourcedoesntexist
 
 Source: "Runtimes\gtk+-2.6.9-setup.exe"; DestDir: "{app}"; Components: client; Flags: skipifsourcedoesntexist dontcopy nocompression
 

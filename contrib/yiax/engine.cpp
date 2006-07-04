@@ -45,9 +45,7 @@ IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount,
     m_format(format),
     m_capability(capab),
     m_mutexTrunk(true),
-    m_trunkSendInterval(trunkSendInterval),
-    m_writeCommands(0),
-    m_writeCommandsFail(0)
+    m_trunkSendInterval(trunkSendInterval)
 {
     debugName("iaxengine");
     if ((port <= 0) || port > 65535)
@@ -77,10 +75,6 @@ IAXEngine::~IAXEngine()
     for (int i = 0; i < m_transListCount; i++)
 	delete m_transList[i];
     delete[] m_transList;
-
-
-
-    print();
 }
 
 IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
@@ -100,7 +94,7 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, IAXFrame* frame)
 		continue;
 	    // Complete transaction
 	    if (tr->processFrame(frame)) {
-	    	tr->m_rCallNo = frame->sourceCallNo();
+		tr->m_rCallNo = frame->sourceCallNo();
 		m_incompleteTransList.remove(tr,false);
 		m_transList[frame->sourceCallNo() % m_transListCount]->append(tr);
 		XDebug(this,DebugAll,"New incomplete outgoing transaction completed (%u,%u)",
@@ -223,9 +217,7 @@ void IAXEngine::readSocket(SocketAddr& addr)
 bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr)
 {
     len = m_socket.sendTo(buf,len,addr);
-    m_writeCommands++;
     if (len == Socket::socketError()) {
-	m_writeCommandsFail++;
 	if (!m_socket.canRetry())
 	    Debug(this,DebugWarn,"Socket write error: %s (%d)",
 		::strerror(m_socket.error()),m_socket.error());
@@ -452,6 +444,8 @@ void IAXEngine::defaultEventHandler(IAXEvent* event)
 
 void IAXEngine::enableTrunking(IAXTransaction* trans)
 {
+    if (!trans || trans->type() != IAXTransaction::New)
+	return;
     Lock lock(&m_mutexTrunk);
     IAXMetaTrunkFrame* frame;
     // Already enabled ?
@@ -481,14 +475,6 @@ void IAXEngine::runProcessTrunkFrames()
 	processTrunkFrames();
 	Thread::msleep(2,true);
     }
-}
-
-void IAXEngine::print()
-{
-    Debug(this,DebugInfo,"IAXEngine - START PRINT [%p]",this);
-    Output("Write commands: " FMT64U,m_writeCommands);
-    Output("Write commands failed: " FMT64U,m_writeCommandsFail);
-    Debug(this,DebugInfo,"IAXEngine - END PRINT [%p]",this);
 }
 
 void IAXEngine::getMD5FromChallenge(String& md5data, const String& challenge, const String& password)
@@ -530,10 +516,8 @@ IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transactio
 
 IAXEvent::~IAXEvent()
 {
-// Moved to transaction destructor
-//    if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated) {
-//	m_transaction->getEngine()->removeTransaction(m_transaction);
-//    }
+    if (m_final && m_transaction && m_transaction->state() == IAXTransaction::Terminated)
+	m_transaction->getEngine()->removeTransaction(m_transaction);
     if (m_transaction) {
 	m_transaction->eventTerminated(this);
 	m_transaction->deref();

@@ -332,6 +332,10 @@ public:
     inline YIAXEngine* getEngine() const
 	{ return m_iaxEngine; }
 
+    static bool msgHasTrunkIn(Message& msg);    // Test param: trunkin=yes
+
+    static bool msgHasTrunkOut(Message& msg);   // Test param: trunkout=yes
+
 protected:
     YIAXEngine* m_iaxEngine;
     u_int32_t m_defaultCodec;
@@ -520,14 +524,14 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	    line->m_nextReg = Time::secNow() + (line->expire() * 3 / 4);
 	    line->m_callingNo = trans->callingNo();
 	    line->m_callingName = trans->callingName();
-	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - Ack for '%s'. Next: %u",
+	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - ACK for '%s'. Next: %u",
 		line->c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister",line->m_nextReg);
 	    line->m_registered = true;
 	    break;
 	case IAXEvent::Reject:
 	    // retry at 25% of the expire time
 	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
-	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - Reject for '%s'. Next: %u",
+	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - REJECT for '%s'. Next: %u",
 		line->c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister",line->m_nextReg);
 	    line->m_registered = false;
 	    break;
@@ -779,7 +783,7 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     addr.host(line->remoteAddr());
     addr.port(line->remotePort());
     Debug(this,DebugAll,"Outgoing Registration[%s]:\nUsername: %s\nHost: %s\nPort: %d\nTime(sec): %u",
-		line->c_str(),line->username().c_str(),addr.host().c_str(),addr.port(),Time::secNow());
+	line->c_str(),line->username().c_str(),addr.host().c_str(),addr.port(),Time::secNow());
     // Create IE list
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,line->username());
@@ -824,11 +828,11 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, 
     if (m_threadsCreated)
 	return;
     if (!listenThreadCount)
-	Debug(DebugWarn,"YIAXEngine - start. No reading socket threads(s)!.");
+	Debug(DebugWarn,"YIAXEngine. No reading socket threads(s)!.");
     if (!eventThreadCount)
-	Debug(DebugWarn,"YIAXEngine - start. No reading event threads(s)!.");
+	Debug(DebugWarn,"YIAXEngine. No reading event threads(s)!.");
     if (!trunkThreadCount)
-	Debug(DebugWarn,"YIAXEngine - start. No trunking threads(s)!.");
+	Debug(DebugWarn,"YIAXEngine. No trunking threads(s)!.");
     for (; listenThreadCount; listenThreadCount--)
 	(new YIAXListener(this,"YIAXListener thread"))->startup();
     for (; eventThreadCount; eventThreadCount--)
@@ -860,8 +864,6 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		    event->getTransaction()->setUserData(connection);
 		    if (!connection->route())
 			event->getTransaction()->setUserData(0);
-		    else
-			enableTrunking(event->getTransaction());
 		}
 	    }
 	    break;
@@ -1086,6 +1088,9 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     if (ch && conn->connect(ch,msg.getValue("reason"))) {
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
+	// Enable trunking
+	if (msgHasTrunkOut(msg))
+	    m_iaxEngine->enableTrunking(tr);
     }
     else
 	tr->setUserData(0);
@@ -1104,6 +1109,16 @@ bool YIAXDriver::received(Message& msg, int id)
 	    s_lines.clear();
 	}
     return Driver::received(msg,id);
+}
+
+bool YIAXDriver::msgHasTrunkIn(Message& msg)
+{
+    return String(msg.getValue("trunkin")) == "yes";
+}
+
+bool YIAXDriver::msgHasTrunkOut(Message& msg)
+{
+    return String(msg.getValue("trunkout")) == "yes";
 }
 
 /**
@@ -1184,8 +1199,12 @@ void YIAXConnection::callAccept(Message& msg)
 {
     DDebug(this,DebugAll,"callAccept [%p]",this);
     m_mutexTrans.lock();
-    if (m_transaction)
+    if (m_transaction) {
 	m_transaction->sendAccept();
+	// Enable trunking
+	if (YIAXDriver::msgHasTrunkIn(msg))
+	    m_iaxEngine->enableTrunking(m_transaction);
+    }
     m_mutexTrans.unlock();
     Channel::callAccept(msg);
 }
@@ -1316,7 +1335,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	case IAXEvent::Answer:
 	    if (isAnswered())
 		break;
-	    Debug(this,DebugAll,"YIAXConnection - ANSWERED (%s)",isOutgoing()?"outgoing":"incoming");
+	    Debug(this,DebugAll,"YIAXConnection - ANSWER");
 	    status("answered");
 	    startAudioIn();
 	    startAudioOut();
@@ -1430,7 +1449,7 @@ void YIAXConnection::startAudioIn()
     const char* formatText = IAXFormat::audioText(format);
     setSource(new YIAXSource(this,format,formatText));
     getSource()->deref();
-    DDebug(this,DebugAll,"startAudioIn - Format %u: '%s'",format,formatText);
+    DDebug(this,DebugAll,"startAudioIn. Format %u: '%s'",format,formatText);
 }
 
 void YIAXConnection::startAudioOut()
@@ -1445,7 +1464,7 @@ void YIAXConnection::startAudioOut()
     const char* formatText = (char*)IAXFormat::audioText(format);
     setConsumer(new YIAXConsumer(this,format,formatText));
     getConsumer()->deref();
-    DDebug(this,DebugAll,"startAudioOut - Format %u: '%s'",format,formatText);
+    DDebug(this,DebugAll,"startAudioOut. Format %u: '%s'",format,formatText);
 }
 
 void YIAXConnection::evAuthRep(IAXEvent* event)

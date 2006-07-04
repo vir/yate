@@ -28,7 +28,7 @@
 
 using namespace TelEngine;
 
-/**
+/*
  * IAXInfoElement
  */
 static TokenDict s_ieData[] = {
@@ -94,20 +94,20 @@ const char* IAXInfoElement::ieText(u_int8_t ieCode)
 void IAXInfoElement::toBuffer(DataBlock& buf)
 {
     unsigned char d[2] = {m_type,0};
-    buf.assign(d,2);
+    buf.assign(d,sizeof(d));
 }
 
-/**
+/*
  * IAXInfoElementString
  */
 void IAXInfoElementString::toBuffer(DataBlock& buf)
 {
-    unsigned char d[2] = {m_type,m_strData.length()};
-    buf.assign(d,2);
+    unsigned char d[2] = {type(),m_strData.length()};
+    buf.assign(d,sizeof(d));
     buf.append(data());
 }
 
-/**
+/*
  * IAXInfoElementNumeric
  */
 IAXInfoElementNumeric::IAXInfoElementNumeric(Type type, u_int32_t val, u_int8_t len)
@@ -129,7 +129,7 @@ IAXInfoElementNumeric::IAXInfoElementNumeric(Type type, u_int32_t val, u_int8_t 
 
 void IAXInfoElementNumeric::toBuffer(DataBlock& buf)
 {
-    unsigned char d[6] = {m_type,m_length};
+    unsigned char d[6] = {type(),m_length};
 
     switch (m_length) {
 	case 1:
@@ -149,14 +149,13 @@ void IAXInfoElementNumeric::toBuffer(DataBlock& buf)
     buf.assign(d,2 + m_length);
 }
 
-/**
+/*
  * IAXInfoElementBinary
  */
 void IAXInfoElementBinary::toBuffer(DataBlock& buf)
 {
-    unsigned char d[2] = {m_type,m_data.length()};
-    DataBlock data(d,2);
-    buf.assign(d,2);
+    unsigned char d[2] = {type(),m_data.length()};
+    buf.assign(d,sizeof(d));
     buf += m_data;
 }
 
@@ -174,7 +173,7 @@ bool IAXInfoElementBinary::unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie)
     return true;
 }
 
-/**
+/*
  * IAXIEList
  */
 void IAXIEList::insertVersion()
@@ -275,7 +274,7 @@ bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
 		i += 5;
 		break;
 	    // 2 bytes
-	    case IAXInfoElement::VERSION:             // Value: 0x0002
+	    case IAXInfoElement::VERSION:
 	    case IAXInfoElement::ADSICPE:
 	    case IAXInfoElement::AUTHMETHODS:
 	    case IAXInfoElement::REFRESH:
@@ -387,7 +386,7 @@ bool IAXIEList::getBinary(IAXInfoElement::Type type, DataBlock& dest)
     return true;
 }
 
-/**
+/*
  * IAXFormat
  */
 TokenDict IAXFormat::audioData[] = {
@@ -428,7 +427,7 @@ const char* IAXFormat::videoText(u_int32_t video)
 */
 IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
 		   const unsigned char* buf, unsigned int len)
-    : m_type(type), m_data((char*)buf,len,true), m_retrans(retrans),
+    : m_data((char*)buf,len,true), m_retrans(retrans), m_type(type),
       m_sCallNo(sCallNo), m_tStamp(tStamp)
 {
     XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
@@ -569,7 +568,7 @@ const IAXFullFrame* IAXFrame::fullFrame() const
     return 0;
 }
 
-/**
+/*
  * IAXFullFrame
  */
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
@@ -597,25 +596,25 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
     DataBlock ie;
 
     // Full frame flag + Source call number
-    header[0] = 0x80 | (unsigned char)(m_sCallNo >> 8);
-    header[1] = (unsigned char)(m_sCallNo);
+    header[0] = 0x80 | (unsigned char)(sourceCallNo() >> 8);
+    header[1] = (unsigned char)(sourceCallNo());
     // Retrans + Destination call number
-    header[2] = (unsigned char)(m_dCallNo >> 8);  // retrans is false: bit 7 is 0
-    header[3] = (unsigned char)m_dCallNo;
+    header[2] = (unsigned char)(destCallNo() >> 8);  // retrans is false: bit 7 is 0
+    header[3] = (unsigned char)destCallNo();
     // Timestamp
-    header[4] = (unsigned char)(m_tStamp >> 24);
-    header[5] = (unsigned char)(m_tStamp >> 16);
-    header[6] = (unsigned char)(m_tStamp >> 8);
-    header[7] = (unsigned char)m_tStamp;
+    header[4] = (unsigned char)(timeStamp() >> 24);
+    header[5] = (unsigned char)(timeStamp() >> 16);
+    header[6] = (unsigned char)(timeStamp() >> 8);
+    header[7] = (unsigned char)timeStamp();
     // oSeqNo + iSeqNo
     header[8] = m_oSeqNo;
     header[9] = m_iSeqNo;
     // Type
-    header[10] = m_type;
+    header[10] = type;
     // Subclass
     header[11] = packSubclass(m_subclass);
     // Set data
-    m_data.assign(header,12);
+    m_data.assign(header,sizeof(header));
     if (buf) {
 	ie.assign((void*)buf,(unsigned int)len);
 	m_data += ie;
@@ -633,7 +632,7 @@ const IAXFullFrame* IAXFullFrame::fullFrame() const
     return this;
 }
 
-/**
+/*
  * IAXFrameOut
  */
 void IAXFrameOut::setRetrans()
@@ -661,9 +660,9 @@ void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
     m_nextTransTime = nextTransTime;
 }
 
-/**
- * IAXFrameOut
- */
+/*
+* IAXMetaTrunkFrame
+*/
 #define IAX2_METATRUNK_HEADERLENGTH 8
 #define IAX2_MINIFRAME_HEADERLENGTH 6
 

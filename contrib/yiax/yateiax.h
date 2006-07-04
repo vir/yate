@@ -52,6 +52,7 @@ class IAXInfoElementString;
 class IAXInfoElementNumeric;
 class IAXInfoElementBinary;
 class IAXFullFrame;
+class IAXFrameOut;
 class IAXEvent;
 class IAXEngine;
 
@@ -155,7 +156,7 @@ public:
      */
     static const char* ieText(u_int8_t ieCode);
 
-protected:
+private:
     Type m_type;		// Type of this IE
 };
 
@@ -200,7 +201,7 @@ public:
      */
     virtual void toBuffer(DataBlock& buf);
 
-protected:
+private:
     String m_strData;		// IE text data
 };
 
@@ -244,7 +245,7 @@ public:
      */
     virtual void toBuffer(DataBlock& buf);
 
-protected:
+private:
     u_int8_t m_length;		// IE data length
     u_int32_t m_numericData;	// IE numeric data
 };
@@ -305,7 +306,7 @@ public:
      */
     static bool unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie);
 
-protected:
+private:
     DataBlock m_data;		// IE binary data
 };
 
@@ -695,9 +696,18 @@ public:
     static u_int32_t unpackSubclass(u_int8_t value);
 
 protected:
+    /**
+     * Contains the frame's IE list for an incoming frame or the whole frame for an outgoing one
+     */
+    DataBlock m_data;
+
+    /**
+     * Retransmission flag
+     */
+    bool m_retrans;
+
+private:
     Type m_type;		// Frame type
-    DataBlock m_data;		// Frame IE list if incoming, the whole frame if outgoing
-    bool m_retrans;		// Retransmission flag
     u_int16_t m_sCallNo;	// Source call number
     u_int32_t m_tStamp;		// Frame timestamp
 };
@@ -804,7 +814,7 @@ public:
      */
     virtual const IAXFullFrame* fullFrame() const;
 
-protected:
+private:
     u_int16_t m_dCallNo;	// Destination call number
     unsigned char m_oSeqNo;	// Out sequence number
     unsigned char m_iSeqNo;	// In sequence number
@@ -898,7 +908,7 @@ public:
      */
     void adjustAuthTimeout(u_int64_t nextTransTime);
 
-protected:
+private:
     bool m_ack;				// Acknoledge flag
     bool m_ackOnly;			// Frame need only ACK as a response
     u_int16_t m_retransCount;		// Retransmission counter
@@ -961,7 +971,7 @@ public:
      */
     bool send(u_int32_t tStamp);
 
-protected:
+private:
     u_int8_t* m_data;		// Data buffer
     u_int16_t m_dataAddIdx;	// Current add index
     u_int32_t m_timestamp;	// Frame timestamp
@@ -2093,11 +2103,6 @@ public:
 	{ return m_socket; }
 
     /**
-     * Print engine data on stdin
-     */
-    void print();
-
-    /**
      * Get the MD5 data from a challenge and a password
      * @param md5data Destination String
      * @param challenge Challenge source
@@ -2180,9 +2185,6 @@ private:
     Mutex m_mutexTrunk;				// Mutex for trunk operations
     ObjList m_trunkList;			// Trunk frames list
     u_int32_t m_trunkSendInterval;		// Trunk frame send interval
-    // Statistics
-    u_int64_t m_writeCommands;
-    u_int64_t m_writeCommandsFail;
 };
 
 }

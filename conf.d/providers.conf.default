@@ -20,6 +20,12 @@ description=Free SIP registrar and gateway
 protocol=sip
 server=sipgate.co.uk
 
+[iaxtel.com]
+enabled=yes
+description=Free IAX interconnect service
+protocol=iax
+server=iaxtel.com
+
 [ekiga.net]
 enabled=yes
 description=Ekiga personal SIP address

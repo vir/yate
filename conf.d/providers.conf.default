@@ -1,0 +1,33 @@
+; This file is used to provide template settings for the client.
+; Each section describes provider specific settings that can be applied
+;  in the Account setup window.
+
+[FWD]
+enabled=yes
+description=Free World Dialup
+protocol=sip
+server=fwd.pulver.com
+
+[iptel.org]
+enabled=yes
+description=Free SIP proxy and services
+protocol=sip
+server=iptel.org
+
+[sipgate.co.uk]
+enabled=yes
+description=Free SIP registrar and gateway
+protocol=sip
+server=sipgate.co.uk
+
+[ekiga.net]
+enabled=yes
+description=Ekiga personal SIP address
+protocol=sip
+server=ekiga.net
+
+[voxgratia.org]
+enabled=yes
+description=Vox Gratia Test Gatekeeper
+protocol=h323
+server=66.135.35.44

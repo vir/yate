@@ -276,7 +276,7 @@ IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, 
     Lock lock(&m_mutexInMedia);
     if (!(voice || (tStamp & 0xffff0000))) {
 	// Miniframe timestamp
-	int16_t delta = tStamp - m_lastMiniFrameIn;
+	int16_t delta = (int16_t)(tStamp - m_lastMiniFrameIn);
 	if (delta < 0)
 	    return 0;
 	// add upper bits from last frame
@@ -306,7 +306,7 @@ IAXTransaction* IAXTransaction::sendMedia(const DataBlock& data, u_int32_t forma
 {
     if (!data.length())
 	return 0;
-    u_int32_t ts = timeStamp();
+    u_int32_t ts = (u_int32_t)timeStamp();
     // Format changed or timestamp wrapped around? Send Voice full frame
     if ((u_int16_t)ts < m_lastMiniFrameOut || m_formatOut != format ) {
 	if (m_formatOut != format) {
@@ -359,7 +359,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     }
     // Time to Ping remote peer ?
     if (time > m_timeToNextPing && state() != Terminating) {
-	postFrame(IAXFrame::IAX,IAXControl::Ping,0,0,timeStamp(),false);
+	postFrame(IAXFrame::IAX,IAXControl::Ping,0,0,(u_int32_t)timeStamp(),false);
 	m_timeToNextPing = time + m_pingInterval;
     }
     // Process outgoing frames
@@ -799,7 +799,7 @@ void IAXTransaction::postFrame(IAXFrame::Type type, u_int32_t subclass, void* da
     if (state() == Terminated)
 	return;
     if (!tStamp) {
-	tStamp = timeStamp();
+	tStamp = (u_int32_t)timeStamp();
 	if (m_lastFullFrameOut) {
 	    // adjust timestamp to be different from the last sent
 	    int32_t delta = tStamp - m_lastFullFrameOut;
@@ -1241,7 +1241,7 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 
 void IAXTransaction::sendInval()
 {
-    u_int32_t ts = timeStamp();
+    u_int32_t ts = (u_int32_t)timeStamp();
     unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
 			     ts >> 24,ts >> 16,ts >> 8,ts,
 			     m_oSeqNo++,m_iSeqNo,IAXFrame::IAX,IAXControl::Inval};
@@ -1250,7 +1250,7 @@ void IAXTransaction::sendInval()
 
 void IAXTransaction::sendVNAK()
 {
-    u_int32_t ts = timeStamp();
+    u_int32_t ts = (u_int32_t)timeStamp();
     unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
 			     ts >> 24,ts >> 16,ts >> 8,ts,
 			     m_oSeqNo,m_iSeqNo,IAXFrame::IAX,IAXControl::VNAK};

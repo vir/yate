@@ -136,13 +136,13 @@ void IAXInfoElementNumeric::toBuffer(DataBlock& buf)
 	    d[2] = (unsigned char)m_numericData;
 	    break;
 	case 2:
-	    d[2] = ((unsigned short)m_numericData) >> 8;
+	    d[2] = (unsigned char)(m_numericData >> 8);
 	    d[3] = (unsigned char)m_numericData;
 	    break;
 	case 4:
-	    d[2] = ((unsigned long)m_numericData) >> 24;
-	    d[3] = ((unsigned long)m_numericData) >> 16;
-	    d[4] = ((unsigned long)m_numericData) >> 8;
+	    d[2] = (unsigned char)(m_numericData >> 24);
+	    d[3] = (unsigned char)(m_numericData >> 16);
+	    d[4] = (unsigned char)(m_numericData >> 8);
 	    d[5] = (unsigned char)m_numericData;
 	    break;
     }
@@ -534,12 +534,12 @@ IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine*
 u_int8_t IAXFrame::packSubclass(u_int32_t value)
 {
     if (value < 0x80)
-	return value;
+	return (u_int8_t)value;
     if (value == 0x80)
 	return 0x87;
     if ((value > 0x9f) && (value <= 0xff)) {
 	DDebug(DebugMild,"IAXFrame nonstandard pack %u",value);
-	return value;
+	return (u_int8_t)value;
     }
     // No need to start from zero, we already know it's >= 2^8
     u_int32_t v = 0x100;
@@ -624,7 +624,7 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 IAXFullFrame::~IAXFullFrame()
 {
     XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
-	m_type,m_subclass,this);
+	type(),m_subclass,this);
 }
 
 const IAXFullFrame* IAXFullFrame::fullFrame() const
@@ -676,7 +676,7 @@ IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr)
     m_data[2] = 1;
     m_data[3] = 1;
     // Frame timestamp
-    setTimestamp(Time::msecNow());
+    setTimestamp((u_int32_t)Time::msecNow());
 }
 
 IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
@@ -688,10 +688,10 @@ IAXMetaTrunkFrame::~IAXMetaTrunkFrame()
 void IAXMetaTrunkFrame::setTimestamp(u_int32_t tStamp)
 {
     m_timestamp = tStamp;
-    m_data[4] = tStamp >> 24;
-    m_data[5] = tStamp >> 16;
-    m_data[6] = tStamp >> 8;
-    m_data[7] = tStamp;
+    m_data[4] = (u_int8_t)(tStamp >> 24);
+    m_data[5] = (u_int8_t)(tStamp >> 16);
+    m_data[6] = (u_int8_t)(tStamp >> 8);
+    m_data[7] = (u_int8_t)tStamp;
 }
 
 bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t tStamp)
@@ -703,17 +703,17 @@ bool IAXMetaTrunkFrame::add(u_int16_t sCallNo, const DataBlock& data, u_int32_t 
 	return b;
     // If no more room, send it
     if (m_dataAddIdx + data.length() + IAX2_MINIFRAME_HEADERLENGTH > m_engine->maxFullFrameDataLen())
-	b = send(Time::msecNow());
+	b = send((u_int32_t)Time::msecNow());
     // Is the first mini frame ?
     if (m_dataAddIdx == IAX2_METATRUNK_HEADERLENGTH)
-	m_timestamp = Time::msecNow();
+	m_timestamp = (u_int32_t)Time::msecNow();
     // Add the mini frame
-    m_data[m_dataAddIdx++] = data.length() >> 8;
-    m_data[m_dataAddIdx++] = data.length();
-    m_data[m_dataAddIdx++] = sCallNo >> 8;
-    m_data[m_dataAddIdx++] = sCallNo;
-    m_data[m_dataAddIdx++] = tStamp >> 8;
-    m_data[m_dataAddIdx++] = tStamp;
+    m_data[m_dataAddIdx++] = (u_int8_t)(data.length() >> 8);
+    m_data[m_dataAddIdx++] = (u_int8_t)data.length();
+    m_data[m_dataAddIdx++] = (u_int8_t)(sCallNo >> 8);
+    m_data[m_dataAddIdx++] = (u_int8_t)sCallNo;
+    m_data[m_dataAddIdx++] = (u_int8_t)(tStamp >> 8);
+    m_data[m_dataAddIdx++] = (u_int8_t)tStamp;
     memcpy(m_data + m_dataAddIdx,data.data(),data.length());
     m_dataAddIdx += data.length();
     return b;

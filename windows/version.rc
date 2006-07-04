@@ -23,7 +23,7 @@ BEGIN
             VALUE "FileDescription", "Yet Another Telephony Engine\0"
             VALUE "FileVersion", YATE_WINVER_S
             VALUE "InternalName", "YATE\0"
-            VALUE "LegalCopyright", "Copyright © 2004, 2005 Null Team\0"
+            VALUE "LegalCopyright", "Copyright © 2004-2006 Null Team\0"
             VALUE "License", "GPL\0"
             VALUE "ProductName", "YATE\0"
             VALUE "ProductVersion", YATE_WINVER_S

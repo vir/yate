@@ -5,6 +5,7 @@ configure
 config.*
 yatepaths.h
 yateversn.h
+yateiss.inc
 run
 yate.spec
 yate

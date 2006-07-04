@@ -89,6 +89,9 @@ clean:
 check-topdir:
 	@test -f configure || (echo "Must make this target in the top source directory"; exit 1)
 
+check-root:
+	@test `id -u` = '0' || (echo "You must run this command as root"; exit 1)
+
 clean-config-files: check-topdir
 	-rm -rf auto*.cache
 	-rm -f @CONFIGURE_FILES@
@@ -160,6 +163,7 @@ yatepaths.h: $(MKDEPS)
 
 windows: check-topdir
 	@cmp -s yateversn.h $@/yateversn.h || cp -p yateversn.h $@/yateversn.h
+	@cmp -s yateiss.inc $@/yateiss.inc || cp -p yateiss.inc $@/yateiss.inc
 
 .PHONY: install install-root install-noapi install-api uninstall uninstall-root
 install install-root: all apidocs install-noapi install-api
@@ -229,7 +233,7 @@ uninstall uninstall-root:
 
 install-root uninstall-root: LDCONFIG:=ldconfig
 
-.PHONY: snapshot tarball
+.PHONY: snapshot tarball rpm
 snapshot tarball: check-topdir clean tables windows apidocs
 	@if [ $@ = snapshot ]; then ver="`date '+CVS-%Y%m%d'`"; else ver="@PACKAGE_VERSION@@PACKAGE_RELEASE@"; fi ; \
 	wd=`pwd|sed 's,^.*/,,'`; \
@@ -260,6 +264,9 @@ snapshot tarball: check-topdir clean tables windows apidocs
 	$$wd; \
 	rm $$wd/tar-exclude
 
+rpm: check-root tarball
+	rpmbuild -tb tarballs/yate-@PACKAGE_VERSION@@PACKAGE_RELEASE@.tar.gz
+
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<
 
@@ -289,4 +296,4 @@ help:
 	    install uninstall install-noapi install-root uninstall-root\n\
 	    clean distclean cvsclean (avoid this one!) clean-apidocs\n\
 	    debug ddebug xdebug (carefull!)\n\
-	    snapshot tarball'
+	    snapshot tarball rpm'

@@ -1,10 +1,13 @@
+# to add a distro release tag run rpmbuild --define 'dist value'
+#%{!?dist:%define dist %{nil}}
+
 Summary:	Yet Another Telephony Engine
-Name:     	yate
+Name:     	@PACKAGE_TARNAME@
 Version: 	@PACKAGE_VERSION@
-Release:	@PACKAGE_RELEASE@
+Release:	@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc-devel@null.ro>
-Source:		http://yate.null.ro/%{name}-%{version}%{release}.tar.gz
+Source:		http://yate.null.ro/%{name}-%{version}@PACKAGE_RELEASE@.tar.gz
 Group:		Applications/Communications
 BuildRoot:	%{_tmppath}/%{name}-%{version}%{release}-root
 URL:		http://yate.null.ro/
@@ -129,6 +132,10 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 rm -rf %{buildroot}
 
 %changelog
+* Tue Jul 04 2006 Paul Chitescu <paulc@voip.null.ro>
+- Version 1.0.0-pre1
+- Capability to add a distro release tag at rpmbuild time
+
 * Fri Jun 16 2006 Paul Chitescu <paulc@voip.null.ro>
 - Added .desktop and .menu files and update-menus scriptlets
 

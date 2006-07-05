@@ -74,10 +74,13 @@ class ZapSpan : public PriSpan, public Thread
 public:
     virtual ~ZapSpan();
     virtual void run();
+    inline int train() const
+	{ return m_train; }
 
 private:
     ZapSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd);
     int m_fd;
+    int m_train;
 };
 
 class ZapSource : public PriSource, public Thread
@@ -114,9 +117,12 @@ public:
 	{ return m_fd; }
     inline int law() const
 	{ return m_law; }
+protected:
+    virtual void dataChanged();
 private:
     int m_fd;
     int m_law;
+    bool m_train;
 };
 
 class ZapDriver : public PriDriver
@@ -147,22 +153,22 @@ static int zt_open_dchan(int channo, int bsize = 1024, int nbufs = 16)
     DDebug(&__plugin,DebugInfo,"Opening zap d-channel %d with %d x %d buffers",channo,nbufs,bsize);
     int fd = ::open("/dev/zap/channel", O_RDWR, 0600);
     if (fd < 0) {
-	Debug("Zaptel",DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
+	Debug(&__plugin,DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
 	return -1;
     }
     if (::ioctl(fd,ZT_SPECIFY,&channo) == -1) {
-	Debug("Zaptel",DebugGoOn,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
+	Debug(&__plugin,DebugGoOn,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
 	::close(fd);
 	return -1;
     }
     ZT_PARAMS par;
     if (::ioctl(fd, ZT_GET_PARAMS, &par) == -1) {
-	Debug("Zaptel",DebugGoOn,"Failed to get params of chan %d: error %d: %s",channo,errno,::strerror(errno));
+	Debug(&__plugin,DebugGoOn,"Failed to get params of chan %d: error %d: %s",channo,errno,::strerror(errno));
 	::close(fd);
 	return -1;
     }
     if (par.sigtype != ZT_SIG_HDLCFCS) {
-	Debug("Zaptel",DebugGoOn,"Channel %d is not in HDLC/FCS mode",channo);
+	Debug(&__plugin,DebugGoOn,"Channel %d is not in HDLC/FCS mode",channo);
 	::close(fd);
 	return -1;
     }
@@ -172,7 +178,7 @@ static int zt_open_dchan(int channo, int bsize = 1024, int nbufs = 16)
     bi.numbufs = nbufs;
     bi.bufsize = bsize;
     if (::ioctl(fd, ZT_SET_BUFINFO, &bi) == -1)
-	Debug("Zaptel",DebugWarn,"Could not set buffering on %d: error %d: %s",channo,errno,::strerror(errno));
+	Debug(&__plugin,DebugWarn,"Could not set buffering on %d: error %d: %s",channo,errno,::strerror(errno));
     return fd;
 }
 
@@ -181,19 +187,19 @@ static int zt_open_bchan(int channo, bool subchan, unsigned int blksize)
     DDebug(&__plugin,DebugInfo,"Opening zap b-channel %d with block size=%d",channo,blksize);
     int fd = ::open(subchan ? "/dev/zap/pseudo" : "/dev/zap/channel",O_RDWR|O_NONBLOCK);
     if (fd < 0) {
-	Debug("Zaptel",DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
+	Debug(&__plugin,DebugGoOn,"Failed to open device: error %d: %s",errno,::strerror(errno));
 	return -1;
     }
     if (channo) {
 	if (::ioctl(fd, subchan ? ZT_CHANNO : ZT_SPECIFY, &channo)) {
-	    Debug("Zaptel",DebugGoOn,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
+	    Debug(&__plugin,DebugGoOn,"Failed to specify chan %d: error %d: %s",channo,errno,::strerror(errno));
 	    ::close(fd);
 	    return -1;
 	}
     }
     if (blksize) {
 	if (::ioctl(fd, ZT_SET_BLOCKSIZE, &blksize) == -1) {
-	    Debug("Zaptel",DebugGoOn,"Failed to set block size %d: error %d: %s",blksize,errno,::strerror(errno));
+	    Debug(&__plugin,DebugGoOn,"Failed to set block size %d: error %d: %s",blksize,errno,::strerror(errno));
 	    ::close(fd);
 	    return -1;
 	}
@@ -211,16 +217,31 @@ static bool zt_set_law(int fd, int law)
     else
 	if (::ioctl(fd, ZT_SETLAW, &law) != -1)
 	    return true;
-    DDebug("Zaptel",DebugInfo,"Failed to set law %d: error %d: %s",law,errno,::strerror(errno));
+    DDebug(&__plugin,DebugInfo,"Failed to set law %d: error %d: %s",law,errno,::strerror(errno));
     return false;
 }
 
 static bool zt_echo_cancel(int fd, int taps)
 {
-    if (::ioctl(fd, ZT_ECHOCANCEL, &taps) != -1)
-	return true;
-    DDebug("Zaptel",DebugInfo,"Failed to set %d echo cancellation taps: error %d: %s",taps,errno,::strerror(errno));
-    return false;
+    int tmp = 1;
+    if (taps && (::ioctl(fd, ZT_AUDIOMODE, &tmp) < 0)) {
+	Debug(&__plugin,DebugNote,"Failed to set audio mode: error %d: %s",errno,::strerror(errno));
+	return false;
+    }
+    if (::ioctl(fd, ZT_ECHOCANCEL, &taps) < 0) {
+	Debug(&__plugin,DebugMild,"Failed to set %d echo cancellation taps: error %d: %s",taps,errno,::strerror(errno));
+	return false;
+    }
+    return true;
+}
+
+static bool zt_echo_train(int fd, int train = 400)
+{
+    if ((train > 0) && (::ioctl(fd, ZT_ECHOTRAIN, &train) < 0)) {
+	Debug(&__plugin,DebugMild,"Failed to start echo trainig for %d ms: error %d: %s",train,errno,::strerror(errno));
+	return false;
+    }
+    return true;
 }
 
 static bool zt_dtmf_detect(int fd, bool detect)
@@ -240,9 +261,10 @@ static bool zt_dtmf_detect(int fd, bool detect)
 
 ZapSpan::ZapSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, int fd)
     : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("ZapSpan"),
-      m_fd(fd)
+      m_fd(fd), m_train(0)
 {
     Debug(m_driver,DebugAll,"ZapSpan::ZapSpan() [%p]",this);
+    m_train = cfg.getIntValue(sect,"echotrain",cfg.getIntValue("general","echotrain",400));
 }
 
 ZapSpan::~ZapSpan()
@@ -378,7 +400,7 @@ void ZapConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 }
 
 ZapChan::ZapChan(const PriSpan *parent, int chan, unsigned int bufsize)
-    : PriChan(parent,chan,bufsize), m_fd(-1), m_law(-1)
+    : PriChan(parent,chan,bufsize), m_fd(-1), m_law(-1), m_train(false)
 {
 }
 
@@ -401,7 +423,8 @@ bool ZapChan::openData(const char* format, int echoTaps)
 	format = lookup(m_law,dict_str2ztlaw,"unknown");
 	Debug(this,DebugInfo,"Opened Zap channel %d, law is: %s",m_abschan,format);
     }
-    zt_echo_cancel(m_fd,echoTaps);
+    if (zt_echo_cancel(m_fd,echoTaps) && echoTaps)
+	m_train = true;
     if (!zt_dtmf_detect(m_fd,m_detect)) {
 	Debug(this,m_detect ? DebugFail : DebugMild,
 	    "Failed to %s DTMF detection: %s (%d)",
@@ -416,9 +439,16 @@ bool ZapChan::openData(const char* format, int echoTaps)
     return true;
 }
 
+void ZapChan::dataChanged()
+{
+    if (m_train && zt_echo_train(m_fd,static_cast<ZapSpan*>(span())->train()))
+	Debug(this,DebugCall,"Started echo canceller training [%p]",this);
+}
+
 void ZapChan::closeData()
 {
     PriChan::closeData();
+    m_train = false;
     if (m_fd != -1) {
 	::close(m_fd);
 	m_fd = -1;

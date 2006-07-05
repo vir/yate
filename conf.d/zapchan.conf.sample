@@ -20,6 +20,7 @@
 ;dumpevents=no
 ;dtmfinband=no
 ;dtmfdetect=no
+;echotrain=400
 
 [span 1]
 chans=31

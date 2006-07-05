@@ -517,10 +517,10 @@ bool WpData::decodeEvent(const api_rx_hdr_t* ev)
 	case WP_API_EVENT_NONE:
 	    return false;
 	case WP_API_EVENT_DTMF:
-	    if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
-		String tone((char)ev->wp_api_hdr_event_dtmf_digit);
+	    if (ev->hdr_u.wp_api_event.u_event.dtmf.type & WP_API_EVENT_DTMF_PRESENT) {
+		String tone((char)ev->hdr_u.wp_api_event.u_event.dtmf.digit);
 		tone.toUpper();
-		int chan = ev->wp_api_hdr_event_channel;
+		int chan = ev->hdr_u.wp_api_event.channel;
 		PriChan* c = m_span->getChan(chan);
 		if (c)
 		    c->gotDigits(tone);

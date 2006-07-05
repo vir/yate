@@ -1506,14 +1506,22 @@ protected:
     /**
      * Process an authentication request. If valid, send an authentication reply
      * @param event Already generated event
-     * @return Pointer to an IAXEvent or 0
+     * @return Pointer to a valid IAXEvent
      */
     IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event);
 
     /**
+     * Process an accept. If not valid (call m_engine->acceptFormatAndCapability) send a reject.
+     *  Otherwise return the event
+     * @param event Already generated event
+     * @return Pointer to a valid IAXEvent
+     */
+    IAXEvent* IAXTransaction::processAccept(IAXEvent* event);
+
+    /**
      * Process an authentication reply
      * @param event Already generated event
-     * @return Pointer to an IAXEvent or 0
+     * @return Pointer to a valid IAXEvent
      */
     IAXEvent* IAXTransaction::processAuthRep(IAXEvent* event);
 
@@ -1609,6 +1617,12 @@ protected:
      * Send an VNAK frame
      */
     void sendVNAK();
+
+    /**
+     * Send an Unsupport frame
+     * @param subclass Unsupported frame's subclass
+     */
+    void sendUnsupport(u_int32_t subclass);
 
     /**
      * Internal protocol outgoing frames processing (PING/LAGRQ)
@@ -1839,7 +1853,7 @@ public:
      * Get the subclass of the frame that generated the event
      * @return Frame subclass
      */
-    inline u_int8_t subclass()
+    inline u_int32_t subclass()
 	{ return m_subClass; }
 
     /**
@@ -1880,7 +1894,7 @@ protected:
      * @param frameType The type of the frame that generated the event
      * @param subclass The subclass of the frame that generated the event
      */
-    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType = 0, u_int8_t subclass = 0);
+    IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType = 0, u_int32_t subclass = 0);
 
     /**
      * Constructor
@@ -1897,7 +1911,7 @@ private:
 
     Type m_type;			// Event type
     u_int8_t m_frameType;		// Frame type
-    u_int8_t m_subClass;		// Frame subclass
+    u_int32_t m_subClass;		// Frame subclass
     bool m_local;			// If true the event is generated locally, the receiver MUST not respond
     bool m_final;			// Final event flag
     IAXTransaction* m_transaction;	// Transaction that generated this event

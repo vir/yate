@@ -423,9 +423,11 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	return false;
     }
     trans->m_format = format;
-    trans->m_formatIn = format;
-    trans->m_formatOut = format;
     trans->m_capability = capability;
+    if (trans->outgoing())
+	trans->m_formatIn = format;
+    else
+	trans->m_formatOut = format;
     return true;
 }
 
@@ -494,7 +496,7 @@ bool IAXEngine::isMD5ChallengeCorrect(const String& md5data, const String& chall
 /*
 * IAXEvent
 */
-IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int8_t subclass)
+IAXEvent::IAXEvent(Type type, bool local, bool final, IAXTransaction* transaction, u_int8_t frameType, u_int32_t subclass)
     : m_type(type), m_frameType(frameType), m_subClass(subclass), m_local(local), m_final(final), m_transaction(0)
 
 {

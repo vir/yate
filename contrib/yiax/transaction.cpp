@@ -365,17 +365,20 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     // Process outgoing frames
     ListIterator lout(m_outFrames);
     IAXFrameOut* lastFrameAck = 0;
+    delFrame = false;
     for (; (obj = lout.get());) {
 	IAXFrameOut* frame = static_cast<IAXFrameOut*>(obj);
 	ev = getEventResponse(frame,delFrame);
-	if (delFrame)
+	// Frame received ACK or other response ?
+	if (frame->ack() || delFrame) {
 	    frame->setAck();
-	if(frame->ack())
 	    lastFrameAck = frame;
-	if (ev)
-	    break;
-	if(frame->ack() && frame->ackOnly())
-	    continue;
+	    // Frame received non ACK response
+	    if (ev || delFrame)
+		break;
+	    if (frame->ackOnly())
+		continue;
+	}
 	// Adjust timeout for acknoledged auth frames sent with no auth response
 	if (state() == NewRemoteInvite_AuthSent && frame->ack())
 	    frame->adjustAuthTimeout(time + m_engine->authTimeout() * 1000);
@@ -406,10 +409,12 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
         for (; (obj = lout.get());) {
 	    IAXFrameOut* frame = static_cast<IAXFrameOut*>(obj);
 	    if (frame == lastFrameAck) {
-	        DDebug(m_engine,DebugAll,"Transaction(%u,%u) removing outgoing frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
-		    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),
-		    frame->iSeqNo(),frame->timeStamp(),this);
-	        m_outFrames.remove(frame,true);
+		if (ev || delFrame || frame->ackOnly()) {
+	            DDebug(m_engine,DebugAll,"Transaction(%u,%u) removing outgoing frame(%u,%u) oseq=%u iseq=%u stamp=%u [%p]",
+			localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),
+			frame->iSeqNo(),frame->timeStamp(),this);
+	            m_outFrames.remove(frame,true);
+		}
 		break;
 	    }
 	    frame->setAck();
@@ -420,13 +425,16 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
 	        m_outFrames.remove(frame,true);
 	    }
 	}
-    }	
+    }
     if (ev)
         return keepEvent(ev);
     // Process incoming frames
     ListIterator lin(m_inFrames);
     for (; (obj = lin.get());) {
 	IAXFullFrame* frame = static_cast<IAXFullFrame*>(obj);
+	// If frame is ACK, ignore it
+	if (frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Ack)
+	    continue;
 	DDebug(m_engine,DebugAll,"Transaction(%u,%u) dequeued Frame(%u,%u) iseq=%u oseq=%u stamp=%u [%p]",
 	    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->iSeqNo(),frame->oSeqNo(),frame->timeStamp(),this);
 	if (m_state == IAXTransaction::Unknown)
@@ -669,14 +677,14 @@ void IAXTransaction::print()
     for(i = 0, l = m_outFrames.skipNull(); l; l = l->next(), i++) {
 	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
 	if (frame)
-	    Output("     %5u Type: %3u Subclass: %3u Out: %5u In: %5u Timestamp: %5u Ack: %u AckOnly: %u",
+	    Output("     %5u  Type: %-3u Subclass: %-3u Out: %-5u In: %-5u Timestamp: %-5u Ack: %u AckOnly: %u",
 		i+1,frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo(), frame->timeStamp(),frame->ack(),frame->ackOnly());
     }
     Output("Incoming:         %u",m_inFrames.count());
     for(i = 0, l = m_inFrames.skipNull(); l; l = l->next(), i++) {
 	IAXFullFrame* frame = static_cast<IAXFrameOut*>(l->get());
 	if (frame)
-	    Output("     %5u Type: %3u Subclass: %3u Out: %5u In: %5u Timestamp: %5u",
+	    Output("     %5u  Type: %-3u Subclass: %-3u Out: %-5u In: %-5u Timestamp: %-5u",
 		i+1,frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo(), frame->timeStamp());
     }
     Debug(m_engine,DebugInfo,"Transaction - END PRINT [%p]",this);
@@ -694,7 +702,10 @@ void IAXTransaction::init(IAXIEList& ieList)
 	    ieList.getString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
 	    ieList.getNumeric(IAXInfoElement::FORMAT,m_format);
 	    ieList.getNumeric(IAXInfoElement::CAPABILITY,m_capability);
-	    m_formatIn = m_formatOut = m_format;
+	    if (outgoing())
+		m_formatOut = m_format;
+	    else
+		m_formatIn = m_format;
 	    break;
 	case RegReq:
 	case RegRel:
@@ -880,11 +891,9 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
 	    return 0;
     }
     // Frame only need ACK. Didn't found it. Return
-    delFrame = true;
-    if (frame->ackOnly()) {
-	delFrame = false;
+    if (frame->ackOnly()) 
 	return 0;
-    }
+    delFrame = true;
     switch (type()) {
 	case New:
 	    return getEventResponse_New(frame,delFrame);
@@ -901,7 +910,8 @@ IAXEvent* IAXTransaction::getEventResponse(IAXFrameOut* frame, bool& delFrame)
 	default: ;
     }
     delFrame = false;
-    return 0;
+    // Internal stuff
+    return processInternalOutgoingRequest(frame,delFrame);
 }
 
 IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFrame)
@@ -917,8 +927,8 @@ IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFram
 	    // Frame is NEW: AUTHREQ, ACCEPT, REJECT, HANGUP ?
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::AuthReq,IAXEvent::AuthReq,false,NewLocalInvite_AuthRecv)))
 		return processAuthReq(ev);
-	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Accept,IAXEvent::Accept,false,Connected)))
-		return ev;
+	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Accept,IAXEvent::Accept,false,Connected))) 
+		return processAccept(ev);
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Reject,IAXEvent::Reject,false,Terminating)))
 		return ev;
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Hangup,IAXEvent::Hangup,false,Terminating)))
@@ -929,7 +939,7 @@ IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFram
 		break;
 	    // Frame is AUTHREP: ACCEPT, REJECT, HANGUP ?
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Accept,IAXEvent::Accept,false,Connected)))
-		return ev;
+		return processAccept(ev);
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Reject,IAXEvent::Reject,false,Terminating)))
 		return ev;
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Hangup,IAXEvent::Hangup,false,Terminating)))
@@ -955,43 +965,51 @@ IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFram
 
 IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event)
 {
-    Debug(m_engine,DebugAll,"Transaction(%u,%u). AuthReq received",localCallNo(),remoteCallNo());
-    if (event->type() == IAXEvent::Invalid)
+    if (event->type() != IAXEvent::AuthReq)
 	return event;
+    Debug(m_engine,DebugAll,"Transaction(%u,%u). AuthReq received",localCallNo(),remoteCallNo());
     // Valid authmethod & challenge ?
     u_int32_t authmethod;
     bool bAuthMethod = event->getList().getNumeric(IAXInfoElement::AUTHMETHODS,authmethod) && (authmethod & m_authmethod);
     bool bChallenge = event->getList().getString(IAXInfoElement::CHALLENGE,m_challenge);
-    IAXEvent* retEv;
     if (bAuthMethod && bChallenge) {
 	Debug(m_engine,DebugAll,"Transaction(%u,%u). Internal authentication reply",localCallNo(),remoteCallNo());
 	sendAuthReply();
-	retEv = event;
+	return event;
     }
-    else {
-	delete event;
-	retEv = internalReject(s_iax_modNoAuthMethod);
-    }
-    return retEv;
+    delete event;
+    return internalReject(s_iax_modNoAuthMethod);
+}
+
+IAXEvent* IAXTransaction::processAccept(IAXEvent* event)
+{
+    if (event->type() != IAXEvent::Accept)
+	return event;
+    Debug(m_engine,DebugAll,"Transaction(%u,%u). Accept received",localCallNo(),remoteCallNo());
+    // We might have a format received with a Voice frame
+    if (m_formatIn)
+	return event;
+    m_format = 0;
+    event->getList().getNumeric(IAXInfoElement::FORMAT,m_format);
+    if (m_engine->acceptFormatAndCapability(this))
+	return event;
+    delete event;
+    return internalReject(s_iax_modNoMediaFormat);
 }
 
 IAXEvent* IAXTransaction::processAuthRep(IAXEvent* event)
 {
-    Debug(m_engine,DebugAll,"Transaction(%u,%u). Auth Reply received",localCallNo(),remoteCallNo());
-    if (event->type() == IAXEvent::Invalid)
+    if (event->type() != IAXEvent::AuthRep)
 	return event;
+    Debug(m_engine,DebugAll,"Transaction(%u,%u). Auth Reply received",localCallNo(),remoteCallNo());
     event->getList().getString(IAXInfoElement::MD5_RESULT,m_authdata);
-    IAXEvent* retEv;
     if (type() == RegReq || type() == RegRel) {
-	if (!IAXEngine::isMD5ChallengeCorrect(m_authdata,m_challenge,m_password))
-	    retEv = internalReject(s_iax_modInvalidAuth);
-	else
-	    retEv = internalAccept();
         delete event;
+	if (!IAXEngine::isMD5ChallengeCorrect(m_authdata,m_challenge,m_password))
+	    return internalReject(s_iax_modInvalidAuth);
+	return internalAccept();
     }
-    else
-	retEv = event;
-    return retEv;
+    return event;
 }
 
 IAXEvent* IAXTransaction::getEventResponse_Reg(IAXFrameOut* frame, bool& delFrame)
@@ -1257,6 +1275,12 @@ void IAXTransaction::sendVNAK()
     m_engine->writeSocket(buf,sizeof(buf),remoteAddr());
 }
 
+void IAXTransaction::sendUnsupport(u_int32_t subclass)
+{
+    unsigned char d[3] = {IAXInfoElement::IAX_UNKNOWN,1,IAXFrame::packSubclass(subclass)};
+    postFrame(IAXFrame::IAX,IAXControl::Unsupport,d,sizeof(d),0,true);
+}
+
 IAXEvent* IAXTransaction::processInternalOutgoingRequest(IAXFrameOut* frame, bool& delFrame)
 {
     delFrame = false;
@@ -1349,7 +1373,7 @@ IAXEvent* IAXTransaction::processMidCallIAXControl(const IAXFullFrame* frame, bo
 	    return 0;
 	case IAXControl::Transfer:
 	case IAXControl::TxReady:
-	    postFrame(IAXFrame::IAX,IAXControl::Unsupport,0,0,0,true);
+	    sendUnsupport(frame->subclass());
 	    return createEvent(IAXEvent::NotImplemented,false,frame,Terminating);
 	case IAXControl::DpReq:
 	case IAXControl::DpRep:
@@ -1362,7 +1386,7 @@ IAXEvent* IAXTransaction::processMidCallIAXControl(const IAXFullFrame* frame, bo
 	case IAXControl::MWI:
 	case IAXControl::Provision:
 	case IAXControl::FwData:
-	    //postFrame(IAXFrame::IAX,IAXControl::Unsupport,0,0,0,true);
+	    sendUnsupport(frame->subclass());
 	    return createEvent(IAXEvent::NotImplemented,false,frame,state());
 	default: ;
     }
@@ -1405,15 +1429,25 @@ IAXTransaction* IAXTransaction::processVoiceFrame(const IAXFullFrame* frame)
     // Process format 
     DDebug(m_engine,DebugAll,"Transaction(%u,%u). Received Voice Frame(%u,%u) iseq=%u oseq=%u stamp=%u [%p]",
 	localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),
-	frame->fullFrame()->iSeqNo(),frame->fullFrame()->oSeqNo(),frame->timeStamp(),this);
+	frame->iSeqNo(),frame->oSeqNo(),frame->timeStamp(),this);
     sendAck(frame);
-    if (frame->fullFrame()->subclass() && frame->fullFrame()->subclass() != m_formatIn) {
-	// Format changed.
-	if (m_engine->voiceFormatChanged(this,frame->fullFrame()->subclass()))
-	    m_formatIn = frame->fullFrame()->subclass();
-	else {
-	    DDebug(m_engine,DebugAll,"IAXTransaction(%u,%u). Process Voice Frame. Media format (%u) change rejected!",
-		localCallNo(),remoteCallNo(),m_format);
+    // We might have an incoming media format received with an Accept frame
+    if (m_formatIn) {
+	if (frame->subclass() && frame->subclass() != m_formatIn) {
+	    // Format changed.
+	    if (m_engine->voiceFormatChanged(this,frame->fullFrame()->subclass()))
+		m_formatIn = frame->fullFrame()->subclass();
+	    else {
+		DDebug(m_engine,DebugAll,"IAXTransaction(%u,%u). Process Voice Frame. Media format (%u) change rejected!",
+		    localCallNo(),remoteCallNo(),m_format);
+		m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
+		return 0;
+	    }
+        }
+    }
+    else {
+	m_format = frame->subclass();
+	if (!m_engine->acceptFormatAndCapability(this)) {
 	    m_pendingEvent = internalReject(s_iax_modNoMediaFormat);
 	    return 0;
 	}

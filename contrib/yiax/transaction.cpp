@@ -960,7 +960,7 @@ IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event)
 	return event;
     // Valid authmethod & challenge ?
     u_int32_t authmethod;
-    bool bAuthMethod = event->getList().getNumeric(IAXInfoElement::AUTHMETHODS,authmethod) && authmethod == (u_int32_t)m_authmethod;
+    bool bAuthMethod = event->getList().getNumeric(IAXInfoElement::AUTHMETHODS,authmethod) && (authmethod & m_authmethod);
     bool bChallenge = event->getList().getString(IAXInfoElement::CHALLENGE,m_challenge);
     IAXEvent* retEv;
     if (bAuthMethod && bChallenge) {

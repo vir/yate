@@ -960,7 +960,7 @@ static void noarg(bool client, const char* opt)
 
 static void version()
 {
-    ::fprintf(stdout,"Yate " YATE_VERSION "\n");
+    ::fprintf(stdout,"Yate " YATE_VERSION " " YATE_RELEASE "\n");
 }
 
 int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bool fail)

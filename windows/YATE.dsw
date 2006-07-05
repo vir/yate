@@ -45,9 +45,6 @@ Package=<4>
     Project_Dep_Name libysip
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name libiax
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name libyrtp
     End Project Dependency
     Begin Project Dependency
@@ -157,9 +154,6 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name _cdrfile
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name _iaxchan
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name _regexroute
@@ -483,24 +477,6 @@ Package=<4>
 
 ###############################################################################
 
-Project: "_iaxchan"=.\_iaxchan.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
-    Begin Project Dependency
-    Project_Dep_Name libiax
-    End Project Dependency
-    Begin Project Dependency
-    Project_Dep_Name Libyate
-    End Project Dependency
-}}}
-
-###############################################################################
-
 Project: "_ilbccodec"=.\_ilbccodec.dsp - Package Owner=<4>
 
 Package=<5>
@@ -770,18 +746,6 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name libysip
     End Project Dependency
-}}}
-
-###############################################################################
-
-Project: "libiax"=.\libiax.dsp - Package Owner=<4>
-
-Package=<5>
-{{{
-}}}
-
-Package=<4>
-{{{
 }}}
 
 ###############################################################################

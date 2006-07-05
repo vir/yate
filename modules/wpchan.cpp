@@ -117,6 +117,7 @@ public:
     ~WpData();
     virtual void run();
 private:
+    bool decodeEvent(const api_rx_hdr_t* ev);
     WpSpan* m_span;
     HANDLE m_fd;
     unsigned char* m_buffer;
@@ -442,34 +443,8 @@ void WpData::run()
 		    m_span->span());
 #endif
 	    }
-#ifdef WP_API_EVENT_DTMF_PRESENT
-	    else if (r >= WP_HEADER) {
-		if (ev->event_type)
-		    DDebug(&__plugin,DebugInfo,"Got event %d on span %d [%p]",
-			ev->event_type,m_span->span(),this);
-		switch (ev->event_type) {
-		    case WP_API_EVENT_NONE:
-			break;
-		    case WP_API_EVENT_DTMF:
-			if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
-			    String tone((char)ev->wp_api_hdr_event_dtmf_digit);
-			    tone.toUpper();
-			    int chan = ev->wp_api_hdr_event_channel;
-			    PriChan* c = m_span->getChan(chan);
-			    if (c)
-				c->gotDigits(tone);
-			    else
-				Debug(&__plugin,DebugMild,"Detected DTMF '%s' for invalid channel %d on span %d",
-				    tone.c_str(),chan,m_span->span());
-			}
-			break;
-		    default:
-			Debug(&__plugin,DebugMild,"Unhandled event %u on span %d",
-			    ev->event_type,m_span->span());
-			break;
-		}
-	    }
-#endif
+	    else if (r >= WP_HEADER)
+		decodeEvent(ev);
 	}
 
 	if (rd) {
@@ -487,6 +462,11 @@ void WpData::run()
 	    }
 	    else
 		m_rdError = 0;
+
+	    // check if a DTMF was received with the data
+	    if (r >= 0)
+		decodeEvent(ev);
+
 	    // We should have read N bytes for each B channel
 	    if ((r > 0) && ((r % bchans) == 0)) {
 		r /= bchans;
@@ -528,6 +508,36 @@ void WpData::run()
 		m_wrError = 0;
 	}
     }
+}
+
+bool WpData::decodeEvent(const api_rx_hdr_t* ev)
+{
+#ifdef WP_API_EVENT_DTMF_PRESENT
+    switch (ev->event_type) {
+	case WP_API_EVENT_NONE:
+	    return false;
+	case WP_API_EVENT_DTMF:
+	    if (ev->wp_api_hdr_event_dtmf_type & WP_API_EVENT_DTMF_PRESENT) {
+		String tone((char)ev->wp_api_hdr_event_dtmf_digit);
+		tone.toUpper();
+		int chan = ev->wp_api_hdr_event_channel;
+		PriChan* c = m_span->getChan(chan);
+		if (c)
+		    c->gotDigits(tone);
+		else
+		    Debug(&__plugin,DebugMild,"Detected DTMF '%s' for invalid channel %d on span %d",
+			tone.c_str(),chan,m_span->span());
+	    }
+	    break;
+	default:
+	    Debug(&__plugin,DebugMild,"Unhandled event %u on span %d",
+		ev->event_type,m_span->span());
+	    break;
+    }
+    return true;
+#else
+    return false;
+#endif
 }
 
 WpChan::WpChan(const PriSpan *parent, int chan, unsigned int bufsize)

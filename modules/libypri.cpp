@@ -802,6 +802,7 @@ void PriChan::answered()
     status(chanStatus());
     Debug(this,DebugInfo,"Remote answered on %s (%s)",id().c_str(),address().c_str());
     maxcall(0);
+    dataChanged();
     Message *m = message("call.answered");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
@@ -972,6 +973,10 @@ void PriChan::ring(pri_event_ring &ev)
 	hangup(PRI_CAUSE_SWITCH_CONGESTION);
 }
 
+void PriChan::dataChanged()
+{
+}
+
 void PriChan::callAccept(Message& msg)
 {
     Debug(this,DebugAll,"PriChan::callAccept() [%p]",this);
@@ -1002,6 +1007,7 @@ bool PriChan::msgRinging(Message& msg)
 bool PriChan::msgAnswered(Message& msg)
 {
     answer();
+    dataChanged();
     return true;
 }
 

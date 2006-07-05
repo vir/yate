@@ -209,6 +209,7 @@ public:
 	{ return m_isdn; }
 protected:
     PriChan(const PriSpan *parent, int chan, unsigned int bufsize);
+    virtual void dataChanged();
     PriSpan *m_span;
     int m_chan;
     bool m_ring;

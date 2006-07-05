@@ -463,55 +463,6 @@ AC_SUBST(H323_INC)
 AC_SUBST(H323_LIB)
 AC_SUBST(H323_RUN)
 
-HAVE_IAX2=no
-IAX2_INC=""
-IAX2_LIB=""
-IAX2_DEP=""
-AC_ARG_WITH(libIAX2,AC_HELP_STRING([--with-libiax2=DIR],[use IAX 2 from DIR (default: included)]),[ac_cv_use_libiax2=$withval],[ac_cv_use_libiax2=included])
-if [[ "x$ac_cv_use_libiax2" = "xincluded" ]]; then
-    ac_cv_use_libiax2="no"
-    basedir=`cd "$srcdir" && pwd`
-    AC_MSG_CHECKING([for IAX 2 in contrib])
-    inci2="contrib/iax"
-    if [[ -f "$basedir/$inci2/iax2.h" ]]; then
-	HAVE_IAX2=yes
-	IAX2_INC="-I$basedir/$inci2"
-	IAX2_DEP="../$inci2/libiax.a"
-    fi
-    AC_MSG_RESULT([$HAVE_IAX2])
-fi
-if [[ "x$ac_cv_use_libiax2" = "xyes" ]]; then
-    AC_MSG_CHECKING([for IAX 2 using iax-config])
-    veri2=`iax-config --version 2>/dev/null`
-    inci2=`iax-config --cflags 2>/dev/null`
-    libi2=`iax-config --libs 2>/dev/null`
-    if [[ "x$inci2" != "x" -a "x$libi2" != "x" ]]; then
-	HAVE_IAX2=yes
-	IAX2_INC="$inci2"
-	IAX2_LIB="$libi2"
-	ac_cv_use_libiax2="no"
-    else
-	ac_cv_use_libiax2="/usr"
-	verg2="no"
-    fi
-    AC_MSG_RESULT([$veri2])
-fi
-if [[ "x$ac_cv_use_libiax2" != "xno" ]]; then
-AC_MSG_CHECKING([for IAX 2 in $ac_cv_use_libiax2])
-inci2="$ac_cv_use_libiax2"
-libi2="$ac_cv_use_libiax2/lib"
-if [[ -f "$inci2/include/iax/iax2.h" -a -f "$libi2/libiax.so" ]]; then
-    HAVE_IAX2=yes
-    IAX2_INC="-I$inci2/include/iax"
-    IAX2_LIB="-L$libi2 -liax"
-fi
-AC_MSG_RESULT([$HAVE_IAX2])
-fi
-AC_SUBST(HAVE_IAX2)
-AC_SUBST(IAX2_INC)
-AC_SUBST(IAX2_LIB)
-AC_SUBST(IAX2_DEP)
-
 HAVE_GTK2=no
 GTK2_INC=""
 GTK2_LIB=""
@@ -673,7 +624,6 @@ AC_CONFIG_FILES([yate.spec
                  clients/Makefile
                  scripts/Makefile
                  conf.d/Makefile
-                 contrib/iax/Makefile
                  contrib/ilbc/Makefile
                  contrib/ysip/Makefile
                  contrib/yrtp/Makefile

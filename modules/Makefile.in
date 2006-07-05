@@ -61,14 +61,6 @@ ifneq (@HAVE_H323@,no)
 PROGS := $(PROGS) h323chan.yate
 endif
 
-ifneq (@HAVE_IAX2@,no)
-PROGS := $(PROGS) iaxchan.yate
-endif
-
-ifneq (@HAVE_YIAX2@,no)
-PROGS := $(PROGS) yiaxchan.yate
-endif
-
 ifneq (@HAVE_GSM@,no)
 PROGS := $(PROGS) gsmcodec.yate
 endif
@@ -189,10 +181,6 @@ enumroute.yate: LOCALLIBS = -lresolv
 
 alsachan.yate: LOCALLIBS = -lasound
 
-iaxchan.yate: @IAX2_DEP@
-iaxchan.yate: LOCALLIBS = @IAX2_DEP@
-iaxchan.yate: LOCALFLAGS = @IAX2_INC@ @IAX2_LIB@
-
 yiaxchan.yate: ../contrib/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yiax
 yiaxchan.yate: LOCALLIBS = -L../contrib/yiax -lyateiax
@@ -232,9 +220,6 @@ rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 	$(MAKE) -C ../contrib/yss7
 ../contrib/yss7/libyatess7.a:
 	$(MAKE) -C ../contrib/yss7
-
-../contrib/iax/libiax.a:
-	$(MAKE) -C ../contrib/iax
 
 ../contrib/ilbc/libilbc.a:
 	$(MAKE) -C ../contrib/ilbc

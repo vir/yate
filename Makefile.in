@@ -34,8 +34,8 @@ LINK = $(CXX) $(LDFLAGS)
 DOCGEN :=
 ifneq (_@KDOC_BIN@,_)
 DOCGEN := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) \
-    contrib/ysip/yatesip.h contrib/yrtp/yatertp.h \
-    contrib/ypbx/yatepbx.h contrib/yss7/yatess7.h
+#    contrib/ysip/yatesip.h contrib/yrtp/yatertp.h contrib/yss7/yatess7.h \
+    contrib/ypbx/yatepbx.h
 endif
 ifneq (_@DOXYGEN_BIN@,_)
 DOCGEN := @DOXYGEN_BIN@ Doxyfile

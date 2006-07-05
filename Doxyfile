@@ -66,10 +66,10 @@ INPUT                  = yatecbase.h \
                          yateclass.h \
                          yatengine.h \
                          yatephone.h \
-                         contrib/ysip/yatesip.h \
-                         contrib/yrtp/yatertp.h \
-                         contrib/ypbx/yatepbx.h \
-                         contrib/yss7/yatess7.h
+#                         contrib/ysip/yatesip.h \
+#                         contrib/yrtp/yatertp.h \
+#                         contrib/yss7/yatess7.h \
+                         contrib/ypbx/yatepbx.h
 FILE_PATTERNS          = 
 RECURSIVE              = NO
 EXCLUDE                = 

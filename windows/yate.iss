@@ -89,7 +89,7 @@ Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\si
 Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
 Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323\run
 Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323\run
-Source: "Release\iaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
+Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
 
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc
@@ -141,6 +141,7 @@ Name: "{group}\Register Service"; Filename: "{app}\yate-service.exe"; Parameters
 Name: "{group}\Unregister Service"; Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 Name: "{group}\Uninstall"; Filename: "{uninstallexe}"
 Name: "{group}\Yate Web Site"; Filename: "{app}\yate.url"
+Name: "{group}\Developer docs"; Filename: "{app}\devel\docs\index.html"; Components: devel\doc
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client; Tasks: qlaunch
 Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client; Tasks: desktop
 

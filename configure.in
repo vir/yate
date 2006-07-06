@@ -295,11 +295,11 @@ AC_MSG_RESULT([$HAVE_WANPIPE])
 AC_SUBST(HAVE_WANPIPE)
 
 WANPIPE_HWEC_INC=""
-AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe HWEC headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=no])
+AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=no])
 if [[ "x$ac_cv_use_wphwec" != "xno" ]]; then
-AC_MSG_CHECKING([for Wanpipe HWEC headers])
-if [[ -f "$ac_cv_use_wphwec/wanec_iface.h" ]]; then
-    WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec"
+AC_MSG_CHECKING([for Wanpipe/Octasic headers])
+if [[ -f "$ac_cv_use_wphwec/wanec_iface.h" -a -f "$ac_cv_use_wphwec/oct6100_api/oct6100api/oct6100_api.h" ]]; then
+    WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec -I$ac_cv_use_wphwec/oct6100_api"
     ac_cv_use_wphwec=yes
 else
     ac_cv_use_wphwec=no

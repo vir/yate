@@ -39,6 +39,10 @@ extern "C" {
 #include <linux/wanpipe.h>
 #include <linux/sdla_aft_te1.h>
 
+#ifdef HAVE_WANPIPE_HWEC
+#include <wanec_iface.h>
+#endif
+
 };
 
 #include <stdio.h>
@@ -65,6 +69,7 @@ public:
     virtual void run();
     inline int overRead() const
 	{ return m_overRead; }
+    unsigned long bChanMap() const;
 
 private:
     WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd);
@@ -218,16 +223,68 @@ static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
     return FD_ISSET(fd,&rdfds);
 }
 
-static bool wp_dtmfs(HANDLE fd, bool detect, int chan = 0)
+#ifdef HAVE_WANPIPE_HWEC
+
+static bool wp_hwec_ioctl(wan_ec_api_t* ecapi)
 {
-#ifdef WP_API_EVENT_DTMF_PRESENT
+    if (!ecapi)
+	return false;
+    int fd = -1;
+    for (int i = 0; i < 5; i++) {
+	fd = open(WANEC_DEV_DIR WANEC_DEV_NAME, O_RDONLY);
+	if (fd >= 0)
+	    break;
+	Thread::msleep(200);
+    }
+    if (fd < 0)
+	return false;
+    ecapi->err = WAN_EC_API_RC_OK;
+    if (::ioctl(fd,ecapi->cmd,ecapi)) {
+	// preserve errno while we close the handle
+	int err = errno;
+	::close(fd);
+	errno = err;
+	return false;
+    }
+    ::close(fd);
+    return true;
+}
+
+// Configure the DTMF detection of the DSP
+static bool wp_dtmf_config(const char* card, const char* device, bool enable, unsigned long chanmap)
+{
+    wan_ec_api_t ecapi;
+    ::memset(&ecapi,0,sizeof(ecapi));
+    ::strncpy((char*)ecapi.devname,card,sizeof(ecapi.devname));
+    ::strncpy((char*)ecapi.if_name,device,sizeof(ecapi.if_name));
+    ecapi.channel_map = chanmap;
+    if (enable) {
+	ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
+	// event on start of tone, before echo canceller
+	ecapi.u_dtmf_config.type = WP_API_EVENT_DTMF_PRESENT | WP_API_EVENT_DTMF_SOUT;
+    }
+    else
+	ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;
+    return wp_hwec_ioctl(&ecapi);
+}
+
+#else
+
+static bool wp_dtmf_config(const char* card, const char* device, bool enable, unsigned long chanmap)
+{
+    return false;
+}
+
+#endif // HAVE_WANPIPE_HWEC
+
+// Enable/disable DTMF events
+static bool wp_dtmfs(HANDLE fd, bool detect)
+{
+#ifdef HAVE_WANPIPE_HWEC
     api_tx_hdr_t api_tx_hdr;
     ::memset(&api_tx_hdr,0,sizeof(api_tx_hdr_t));
     api_tx_hdr.wp_api_tx_hdr_event_type = WP_API_EVENT_DTMF;
-    api_tx_hdr.wp_api_tx_hdr_event_channel = chan;
-    api_tx_hdr.wp_api_tx_hdr_event_dtmf_mode = detect ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
-    // event on start of tone, before echo canceller
-    api_tx_hdr.wp_api_tx_hdr_event_dtmf_type = WP_API_EVENT_DTMF_PRESENT | WP_API_EVENT_DTMF_SOUT;
+    api_tx_hdr.wp_api_tx_hdr_event_mode = detect ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
     return (::ioctl(fd,SIOC_WANPIPE_API,&api_tx_hdr) >= 0);
 #else
     // pretend enabling fails, disabling succeeds
@@ -311,6 +368,16 @@ void WpSpan::run()
     }
 }
 
+unsigned long WpSpan::bChanMap() const
+{
+    unsigned long res = 0;
+    for (int i = 1; i <= 31; i++)
+	if (validChan(i))
+	    res |= ((unsigned long)1 << i);
+    return res;
+}
+
+
 WpSource::WpSource(WpChan *owner, const char* format, unsigned int bufsize)
     : PriSource(owner,format,bufsize),
       m_bufpos(0)
@@ -333,6 +400,7 @@ void WpSource::put(unsigned char val)
 	Forward(m_buffer);
     }
 }
+
 
 WpConsumer::WpConsumer(WpChan *owner, const char* format, unsigned int bufsize)
     : PriConsumer(owner,format,bufsize), Fifo(2*bufsize)
@@ -357,6 +425,7 @@ void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	m_overruns.update(err);
 }
 
+
 static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
 {
     String tmp(cfg.getValue(sect,"thread"));
@@ -364,6 +433,7 @@ static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
 	tmp = cfg.getValue("general","thread");
     return Thread::priority(tmp);
 }
+
 
 WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
     : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE),
@@ -376,7 +446,7 @@ WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration
 	m_fd = fd;
 	m_span->m_data = this;
 	bool detect = m_span->detect();
-	if (!wp_dtmfs(fd,detect)) {
+	if (!(wp_dtmf_config(card,device,detect,m_span->bChanMap()) && wp_dtmfs(fd,detect))) {
 	    int err = errno;
 	    Debug(&__plugin,detect ? DebugWarn : DebugMild,
 		"Failed to %s DTMF detection on span %d: %s (%d)",

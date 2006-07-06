@@ -11,10 +11,10 @@
 ;useragent=YATE/0.9.0
 
 ; registrar: bool: Allow the SIP module to receive registration requests
-;registrar=disable
+;registrar=enable
 
 ; options: bool: Build and send a default 200 answer to OPTIONS requests
-;options=disable
+;options=enable
 
 ; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
 ;prack=disable

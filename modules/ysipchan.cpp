@@ -858,9 +858,9 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("INVITE");
     addAllowed("BYE");
     addAllowed("CANCEL");
-    if (s_cfg.getBoolValue("general","registrar"))
+    if (s_cfg.getBoolValue("general","registrar",true))
 	addAllowed("REGISTER");
-    if (s_cfg.getBoolValue("general","options"))
+    if (s_cfg.getBoolValue("general","options",true))
 	addAllowed("OPTIONS");
     m_prack = s_cfg.getBoolValue("general","prack");
     if (m_prack)

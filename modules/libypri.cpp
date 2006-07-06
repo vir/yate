@@ -55,6 +55,22 @@ static int s_buflen = 160;
 
 #ifdef PRI_NEW_SET_API
 
+#ifdef BRI_NETWORK_PTMP
+
+// bristuff patch changed the error reporting for no good reason
+
+static void pri_err_cb(char *s, int span)
+{
+    Debug("libpri",DebugWarn,"Span %d: %s",span,s);
+}
+
+static void pri_msg_cb(char *s, int span)
+{
+    Debug("libpri",DebugInfo,"Span %d: %s",span,s);
+}
+
+#else
+
 static void pri_err_cb(struct pri *pri, char *s)
 {
     PriSpan* span = pri ? (PriSpan*)::pri_get_userdata(pri) : 0;
@@ -72,6 +88,8 @@ static void pri_msg_cb(struct pri *pri, char *s)
     else
 	Debug("libpri",DebugInfo,"%s",s);
 }
+
+#endif // BRI_NETWORK_PTMP
 
 #else
 

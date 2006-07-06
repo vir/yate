@@ -467,7 +467,12 @@ PriSpan* ZapDriver::createSpan(PriDriver* driver, int span, int first, int chans
     int fd = zt_open_dchan(dchan+first-1);
     if (fd < 0)
 	return 0;
+#if defined(PRI_NEW_SET_API) && defined(BRI_NETWORK_PTMP)
+    // Klaus-Peter Junghanns broke this one too
+    pri* p = ::pri_new(fd,netType,swType,span);
+#else
     pri* p = ::pri_new(fd,netType,swType);
+#endif
     if (!p)
 	return 0;
     ZapSpan *zs = new ZapSpan(p,driver,span,first,chans,dchan,cfg,sect,fd);

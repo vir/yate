@@ -793,7 +793,6 @@ void YRTPPlugin::initialize()
 {
     Output("Initializing module YRTP");
     Configuration cfg(Engine::configFile("yrtpchan"));
-    cfg.load();
     s_minport = cfg.getIntValue("general","minport",MIN_PORT);
     s_maxport = cfg.getIntValue("general","maxport",MAX_PORT);
     s_bufsize = cfg.getIntValue("general","buffer",BUF_SIZE);

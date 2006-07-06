@@ -283,8 +283,8 @@ static bool wp_dtmfs(HANDLE fd, bool detect)
 #ifdef HAVE_WANPIPE_HWEC
     api_tx_hdr_t api_tx_hdr;
     ::memset(&api_tx_hdr,0,sizeof(api_tx_hdr_t));
-    api_tx_hdr.wp_api_tx_hdr_event_type = WP_API_EVENT_DTMF;
-    api_tx_hdr.wp_api_tx_hdr_event_mode = detect ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
+    api_tx_hdr.u.event.type = WP_API_EVENT_DTMF;
+    api_tx_hdr.u.event.mode = detect ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
     return (::ioctl(fd,SIOC_WANPIPE_API,&api_tx_hdr) >= 0);
 #else
     // pretend enabling fails, disabling succeeds

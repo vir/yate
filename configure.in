@@ -294,6 +294,20 @@ HAVE_WANPIPE="yes"
 AC_MSG_RESULT([$HAVE_WANPIPE])
 AC_SUBST(HAVE_WANPIPE)
 
+WANPIPE_HWEC_INC=""
+AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe HWEC headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=no])
+if [[ "x$ac_cv_use_wphwec" != "xno" ]]; then
+AC_MSG_CHECKING([for Wanpipe HWEC headers])
+if [[ -f "$ac_cv_use_wphwec/wanec_iface.h" ]]; then
+    WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec"
+    ac_cv_use_wphwec=yes
+else
+    ac_cv_use_wphwec=no
+fi
+AC_MSG_RESULT([$ac_cv_use_wphwec])
+fi
+AC_SUBST(WANPIPE_HWEC_INC)
+
 HAVE_SOUNDCARD=no
 AC_MSG_CHECKING([for sound card headers])
 AC_TRY_COMPILE([

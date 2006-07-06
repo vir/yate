@@ -162,7 +162,7 @@ zapchan.yate: libypri.o
 zapchan.yate: LOCALFLAGS = libypri.o -lpri
 
 wpchan.yate: libypri.o
-wpchan.yate: LOCALFLAGS = libypri.o -lpri
+wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@ libypri.o -lpri
 
 ysigchan.yate wpcard.yate: ../libyatess7.so
 ysigchan.yate wpcard.yate: LOCALFLAGS = -I../contrib/yss7

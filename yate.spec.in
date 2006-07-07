@@ -170,6 +170,49 @@ that support database access will be able to use MySQL.
 %config /etc/yate/mysqldb.conf
 
 
+%package gtk2
+Summary:	Gtk2 client package for Yate
+Group:		Applications/Communication
+Provides:	yate-client
+
+%description gtk2
+The yate-gtk2 package includes the files needed to use Yate as a VoIP client
+with a Gtk2 graphical interface.
+
+%files gtk2
+%defattr(-, root, root)
+/usr/bin/yate-gtk2
+/usr/lib/menu/yate-gtk2.menu
+/usr/share/applications/yate-gtk2.desktop
+%dir /usr/lib/yate/modules/skin
+/usr/lib/yate/modules/skin/*
+%dir /usr/lib/yate/modules/help
+/usr/lib/yate/modules/help/*
+%config /etc/yate/yate-gtk2.conf
+%config /etc/yate/providers.conf
+
+%post gtk2
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
+
+%postun gtk2
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
+
+
+%package mozilla
+Summary:	Mozilla embedding in Yate
+Group:		Applications/Communication
+Requires:	yate-gtk2 = %{version}
+Provides:	yate-browser
+
+%description mozilla
+This package adds a Mozilla widget that can be embedded in a Yate client window.
+
+%files mozilla
+%defattr(-, root, root)
+%dir /usr/lib/yate/modules/gtk2
+/usr/lib/yate/modules/gtk2/*
+
+
 %package scripts
 Summary:	External scripting package for Yate
 Group:		Applications/Communication
@@ -181,35 +224,6 @@ The yate-scripts package includes libraries for using external scripts with Yate
 %files scripts
 %dir /usr/lib/yate/scripts
 /usr/lib/yate/scripts/*.*
-
-
-%package client
-Summary:	Client package for Yate
-Group:		Applications/Communication
-
-%description client
-The yate-client package includes the files needed to use Yate as a VoIP client
-with a Gtk2 graphical interface.
-
-%files client
-%defattr(-, root, root)
-/usr/bin/yate-gtk2
-/usr/lib/menu/yate-gtk2.menu
-/usr/share/applications/yate-gtk2.desktop
-%dir /usr/lib/yate/modules/skin
-/usr/lib/yate/modules/skin/*
-%dir /usr/lib/yate/modules/help
-/usr/lib/yate/modules/help/*
-%dir /usr/lib/yate/modules/gtk2
-/usr/lib/yate/modules/gtk2/*
-%config /etc/yate/yate-gtk2.conf
-%config /etc/yate/providers.conf
-
-%post client
-test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
-
-%postun client
-test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 
 
 %package devel

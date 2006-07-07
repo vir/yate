@@ -235,7 +235,7 @@ install-root uninstall-root: LDCONFIG:=ldconfig
 
 .PHONY: snapshot tarball rpm
 snapshot tarball: check-topdir clean tables windows apidocs
-	@if [ $@ = snapshot ]; then ver="`date '+CVS-%Y%m%d'`"; else ver="@PACKAGE_VERSION@@PACKAGE_RELEASE@"; fi ; \
+	@if [ $@ = snapshot ]; then ver="`date '+CVS-%Y%m%d'`"; else ver="@PACKAGE_VERSION@-@PACKAGE_RELEASE@"; fi ; \
 	wd=`pwd|sed 's,^.*/,,'`; \
 	mkdir -p tarballs; cd ..; \
 	echo $$wd/tar-exclude >$$wd/tar-exclude; \

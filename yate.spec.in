@@ -10,9 +10,9 @@ Version: 	@PACKAGE_VERSION@
 Release:	@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc@voip.null.ro>
-Source:		http://yate.null.ro/%{name}-%{version}@PACKAGE_RELEASE@.tar.gz
+Source:		http://yate.null.ro/%{name}-%{version}-@PACKAGE_RELEASE@.tar.gz
 Group:		Applications/Communications
-BuildRoot:	%{_tmppath}/%{name}-%{version}%{release}-root
+BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root
 URL:		http://yate.null.ro/
 BuildRequires:	gcc-c++
 

@@ -92,7 +92,6 @@ ldconfig
 %package alsa
 Summary:	ALSA sound driver for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 ExclusiveOS:	linux
 
 %description alsa
@@ -106,7 +105,6 @@ audio interface for using the client under Linux.
 %package gsm
 Summary:	GSM audio codec for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 
 %description gsm
 European GSM 06.10 audio codec for Yate. This is a low CPU usage codec that
@@ -119,7 +117,6 @@ provides moderate compression and good voice quality.
 %package h323
 Summary:	H.323 protocol driver for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 
 %description h323
 Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
@@ -132,7 +129,6 @@ Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 %package isdn
 Summary:	ISDN PRI card and protocol drivers for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 ExclusiveOS:	linux
 
 %description isdn
@@ -149,7 +145,6 @@ interfaces.
 %package pgsql
 Summary:	PostgreSQL database driver for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 Provides:	yate-database
 
 %description pgsql
@@ -164,7 +159,6 @@ modules that support database access will be able to use PostgreSQL.
 %package mysql
 Summary:	MySQL database driver for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 Provides:	yate-database
 
 %description mysql
@@ -180,7 +174,6 @@ that support database access will be able to use MySQL.
 Summary:	External scripting package for Yate
 Group:		Applications/Communication
 Requires:	%{name}
-BuildArch:	noarch
 
 %description scripts
 The yate-scripts package includes libraries for using external scripts with Yate.
@@ -193,7 +186,6 @@ The yate-scripts package includes libraries for using external scripts with Yate
 %package client
 Summary:	Client package for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
 
 %description client
 The yate-client package includes the files needed to use Yate as a VoIP client

@@ -4,8 +4,8 @@
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
 
-SCRIPTS :=
-SCRLIBS := libyate.php libyatechan.php libyate.py Yate.pm
+SCRIPTS := leavemail.php voicemail.php route.php
+SCRLIBS := libyate.php libyatechan.php libvoicemail.php libyate.py Yate.pm
 
 basedir = @libdir@/yate
 prefix = @prefix@

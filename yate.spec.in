@@ -1,5 +1,8 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
-#%{!?dist:%define dist %{nil}}
+# to suppress auto dependencies run rpmbuild --define 'nodeps 1'
+
+%{!?dist:%define dist %{nil}}
+%{?nodeps:%define no_auto_deps 1}
 
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@
@@ -11,17 +14,13 @@ Source:		http://yate.null.ro/%{name}-%{version}@PACKAGE_RELEASE@.tar.gz
 Group:		Applications/Communications
 BuildRoot:	%{_tmppath}/%{name}-%{version}%{release}-root
 URL:		http://yate.null.ro/
-
 BuildRequires:	gcc-c++
-Group:		System Environment/Libraries
 
 %define prefix  /usr
 
-# to include deps run rpmbuild --define 'keepdeps 1'
-%{?keepdeps:%define keep_auto_deps 1}
 
 %description
-YATE is a telephony engine designed to implement PBX and IVR solutions
+Yate is a telephony engine designed to implement PBX and IVR solutions
 for small to large scale projects.
 
 %files
@@ -30,17 +29,58 @@ for small to large scale projects.
 %doc /usr/share/doc/yate-%{version}/README
 %doc /usr/share/doc/yate-%{version}/COPYING
 %doc /usr/share/doc/yate-%{version}/ChangeLog
-%dir /etc/yate
-%config /etc/yate/*
 /usr/lib/lib*.so.*
 /usr/bin/yate
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
 %dir /usr/lib/yate
 %dir /usr/lib/yate/modules
-/usr/lib/yate/modules/*.*
-%dir /usr/lib/yate/scripts
-/usr/lib/yate/scripts/*.*
+%dir /etc/yate
+/usr/lib/yate/modules/cdrbuild.yate
+/usr/lib/yate/modules/cdrfile.yate
+/usr/lib/yate/modules/regexroute.yate
+/usr/lib/yate/modules/regfile.yate
+/usr/lib/yate/modules/accfile.yate
+/usr/lib/yate/modules/register.yate
+/usr/lib/yate/modules/tonegen.yate
+/usr/lib/yate/modules/wavefile.yate
+/usr/lib/yate/modules/conference.yate
+/usr/lib/yate/modules/moh.yate
+/usr/lib/yate/modules/callgen.yate
+/usr/lib/yate/modules/analyzer.yate
+/usr/lib/yate/modules/rmanager.yate
+/usr/lib/yate/modules/msgsniff.yate
+/usr/lib/yate/modules/pbx.yate
+/usr/lib/yate/modules/dbpbx.yate
+/usr/lib/yate/modules/pbxassist.yate
+/usr/lib/yate/modules/dumbchan.yate
+/usr/lib/yate/modules/callfork.yate
+/usr/lib/yate/modules/extmodule.yate
+/usr/lib/yate/modules/yradius.yate
+/usr/lib/yate/modules/ysipchan.yate
+/usr/lib/yate/modules/yrtpchan.yate
+/usr/lib/yate/modules/yiaxchan.yate
+/usr/lib/yate/modules/enumroute.yate
+/usr/lib/yate/modules/osschan.yate
+/usr/lib/yate/modules/ilbccodec.yate
+%config /etc/yate/accfile.conf
+%config /etc/yate/cdrbuild.conf
+%config /etc/yate/cdrfile.conf
+%config /etc/yate/dbpbx.conf
+%config /etc/yate/dsoundchan.conf
+%config /etc/yate/enumroute.conf
+%config /etc/yate/extmodule.conf
+%config /etc/yate/moh.conf
+%config /etc/yate/pbxassist.conf
+%config /etc/yate/regexroute.conf
+%config /etc/yate/regfile.conf
+%config /etc/yate/register.conf
+%config /etc/yate/rmanager.conf
+%config /etc/yate/yate.conf
+%config /etc/yate/yiaxchan.conf
+%config /etc/yate/yradius.conf
+%config /etc/yate/yrtpchan.conf
+%config /etc/yate/ysipchan.conf
 
 %post
 ldconfig
@@ -48,13 +88,116 @@ ldconfig
 %postun
 ldconfig
 
+
+%package alsa
+Summary:	ALSA sound driver for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+ExclusiveOS:	linux
+
+%description alsa
+Advanced Linux Sound Architecture audio driver for Yate. This is the recommended
+audio interface for using the client under Linux.
+
+%files alsa
+/usr/lib/yate/modules/alsachan.yate
+
+
+%package gsm
+Summary:	GSM audio codec for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+
+%description gsm
+European GSM 06.10 audio codec for Yate. This is a low CPU usage codec that
+provides moderate compression and good voice quality.
+
+%files gsm
+/usr/lib/yate/modules/gsmcodec.yate
+
+
+%package h323
+Summary:	H.323 protocol driver for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+
+%description h323
+Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
+
+%files h323
+/usr/lib/yate/modules/h323chan.yate
+%config /etc/yate/h323chan.conf
+
+
+%package isdn
+Summary:	ISDN PRI card and protocol drivers for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+ExclusiveOS:	linux
+
+%description isdn
+Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe kernel
+interfaces.
+
+%files isdn
+/usr/lib/yate/modules/wpchan.yate
+/usr/lib/yate/modules/zapchan.yate
+%config /etc/yate/wpchan.conf
+%config /etc/yate/zapchan.conf
+
+
+%package pgsql
+Summary:	PostgreSQL database driver for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+Provides:	yate-database
+
+%description pgsql
+This package allows Yate to connect to a PostgreSQL database server. All
+modules that support database access will be able to use PostgreSQL.
+
+%files pgsql
+/usr/lib/yate/modules/pgsqldb.yate
+%config /etc/yate/pgsqldb.conf
+
+
+%package mysql
+Summary:	MySQL database driver for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+Provides:	yate-database
+
+%description mysql
+This package allows Yate to connect to a MySQL database server. All modules
+that support database access will be able to use MySQL.
+
+%files mysql
+/usr/lib/yate/modules/mysqldb.yate
+%config /etc/yate/mysqldb.conf
+
+
+%package scripts
+Summary:	External scripting package for Yate
+Group:		Applications/Communication
+Requires:	%{name}
+BuildArch:	noarch
+
+%description scripts
+The yate-scripts package includes libraries for using external scripts with Yate.
+
+%files scripts
+%dir /usr/lib/yate/scripts
+/usr/lib/yate/scripts/*.*
+
+
 %package client
-Summary:	Client package for yate
+Summary:	Client package for Yate
 Group:		Applications/Communication
 Requires:	%{name} = %{version}
 
 %description client
-The yate-client package includes the files needed to use YATE as a VoIP client
+The yate-client package includes the files needed to use Yate as a VoIP client
+with a Gtk2 graphical interface.
 
 %files client
 %defattr(-, root, root)
@@ -67,6 +210,8 @@ The yate-client package includes the files needed to use YATE as a VoIP client
 /usr/lib/yate/modules/help/*
 %dir /usr/lib/yate/modules/gtk2
 /usr/lib/yate/modules/gtk2/*
+%config /etc/yate/yate-gtk2.conf
+%config /etc/yate/providers.conf
 
 %post client
 test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
@@ -74,13 +219,15 @@ test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 %postun client
 test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 
+
 %package devel
-Summary:	Development package for yate
+Summary:	Development package for Yate
 Group:		Development/Libraries
 Requires:	%{name} = %{version}
 
 %description devel
-The yate-devel package includes the libraries and header files for YATE
+The yate-devel package includes the libraries and header files for Yate that
+can be used to build and install new modules.
 
 %files devel
 %defattr(-, root, root)
@@ -92,10 +239,11 @@ The yate-devel package includes the libraries and header files for YATE
 /usr/share/man/*/yate-config.*
 /usr/lib/pkgconfig/yate.pc
 
+
 %prep
 %setup -q -n %{name}
 
-%if "%{keep_auto_deps}" != "1"
+%if "%{no_auto_deps}" == "1"
 %define local_find_requires %{_builddir}/%{name}/local-find-requires
 %define local_find_provides %{_builddir}/%{name}/local-find-provides
 #
@@ -131,7 +279,12 @@ cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
 # make clean
 rm -rf %{buildroot}
 
+
 %changelog
+* Fri Jul 07 2006 Paul Chitescu <paulc@voip.null.ro>
+- Built separate packages for modules with external dependencies
+- By default packages have dependencies
+
 * Tue Jul 04 2006 Paul Chitescu <paulc@voip.null.ro>
 - Version 1.0.0-pre1
 - Capability to add a distro release tag at rpmbuild time

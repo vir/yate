@@ -256,12 +256,14 @@ static bool wp_dtmf_config(const char* card, const char* device, bool enable, un
     wan_ec_api_t ecapi;
     ::memset(&ecapi,0,sizeof(ecapi));
     ::strncpy((char*)ecapi.devname,card,sizeof(ecapi.devname));
-    ::strncpy((char*)ecapi.if_name,device,sizeof(ecapi.if_name));
+    //::strncpy((char*)ecapi.if_name,device,sizeof(ecapi.if_name));
     ecapi.channel_map = chanmap;
     if (enable) {
 	ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
+	ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
 	// event on start of tone, before echo canceller
-	ecapi.u_dtmf_config.type = WP_API_EVENT_DTMF_PRESENT | WP_API_EVENT_DTMF_SOUT;
+	ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
+	ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
     }
     else
 	ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;
@@ -582,12 +584,12 @@ void WpData::run()
 
 bool WpData::decodeEvent(const api_rx_hdr_t* ev)
 {
-#ifdef WP_API_EVENT_DTMF_PRESENT
+#ifdef WAN_EC_TONE_PRESENT
     switch (ev->event_type) {
 	case WP_API_EVENT_NONE:
 	    return false;
 	case WP_API_EVENT_DTMF:
-	    if (ev->hdr_u.wp_api_event.u_event.dtmf.type & WP_API_EVENT_DTMF_PRESENT) {
+	    if (ev->hdr_u.wp_api_event.u_event.dtmf.type == WAN_EC_TONE_PRESENT) {
 		String tone((char)ev->hdr_u.wp_api_event.u_event.dtmf.digit);
 		tone.toUpper();
 		int chan = ev->hdr_u.wp_api_event.channel;

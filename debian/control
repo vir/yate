@@ -17,7 +17,6 @@ Description: Yate - Yet Another Telephony Engine
 Package: yate-alsa
 Architecture: any
 Depends: yate (= ${Source-Version}), ${shlibs:Depends}
-Build-Depends: libasound-dev
 Description: ALSA sound driver for Yate
  Yate is a telephony engine aimed at creating a telephony server that
  performs well enough to deal with PBX requirements and also flexible

@@ -1170,9 +1170,13 @@ bool Client::action(Window* wnd, const String& name)
 		String name;
 		name << "acc_" << *par;
 		String val;
-		if (getText(name,val,wnd) && val) {
-		    s_accounts.setValue(newAcc,*par,val);
-		    m->addParam(*par,val);
+		if (getText(name,val,wnd)) {
+		    if (val.null())
+			s_accounts.clearKey(newAcc,*par);
+		    else {
+			s_accounts.setValue(newAcc,*par,val);
+			m->addParam(*par,val);
+		    }
 		}
 	    }
 	    Engine::enqueue(m);

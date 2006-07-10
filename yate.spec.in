@@ -246,6 +246,26 @@ can be used to build and install new modules.
 /usr/lib/pkgconfig/yate.pc
 
 
+%package all
+Summary:	Metapackage for Yate
+Group:		Applications/Communication
+Requires:	%{name} = %{version}
+Requires:	%{name}-alsa = %{version}
+Requires:	%{name}-gsm = %{version}
+Requires:	%{name}-h323 = %{version}
+Requires:	%{name}-isdn = %{version}
+Requires:	%{name}-mysql = %{version}
+Requires:	%{name}-pgsql = %{version}
+Requires:	%{name}-gtk2 = %{version}
+Requires:	%{name}-mozilla = %{version}
+Requires:	%{name}-scripts = %{version}
+Requires:	%{name}-devel = %{version}
+
+%description all
+Metapackage for Yate allowing to fetch and install all components at once.
+It contains no files, just dependencies to all other packages.
+
+
 %prep
 %setup -q -n %{name}
 
@@ -287,6 +307,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Mon Jul 10 2006 Paul Chitescu <paulc@voip.null.ro>
+- Added metapackage yate-all
+
 * Fri Jul 07 2006 Paul Chitescu <paulc@voip.null.ro>
 - Built separate packages for modules with external dependencies
 - By default packages have dependencies

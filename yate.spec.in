@@ -265,6 +265,9 @@ Requires:	%{name}-devel = %{version}
 Metapackage for Yate allowing to fetch and install all components at once.
 It contains no files, just dependencies to all other packages.
 
+%files all
+%defattr(-,root,root)
+
 
 %prep
 %setup -q -n %{name}

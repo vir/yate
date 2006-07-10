@@ -425,7 +425,7 @@ void Client::run()
     initWindows();
     initClient();
     updateFrom(0);
-    setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " " YATE_RELEASE));
+    setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " - " YATE_RELEASE));
     m_initialized = true;
     msg.setParam("event","init");
     Engine::dispatch(msg);

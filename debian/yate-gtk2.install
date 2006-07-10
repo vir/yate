@@ -1,0 +1,7 @@
+debian/tmp/usr/bin/yate-gtk2
+debian/tmp/usr/lib/yate/modules/skin/*
+debian/tmp/usr/lib/yate/modules/help/*
+debian/tmp/usr/lib/menu/yate-gtk2.menu
+debian/tmp/usr/share/applications/yate-gtk2.desktop
+debian/tmp/etc/yate/yate-gtk2.conf
+debian/tmp/etc/yate/providers.conf

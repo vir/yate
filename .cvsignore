@@ -3,6 +3,7 @@ Makefile
 YateLocal.mak
 configure
 config.*
+*-stamp
 yatepaths.h
 yateversn.h
 yateiss.inc

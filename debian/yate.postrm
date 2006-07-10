@@ -1,0 +1,13 @@
+#!/bin/sh 
+
+set -e
+
+if [ "$1" = "remove" ]; then
+	if [ "$2" = "purge" ];then
+		. /etc/default/yate
+		deluser --quiet --system $YATE_USER
+		delgroup --quiet $YATE_GROUP
+	fi
+fi
+
+#DEBHELPER#

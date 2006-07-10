@@ -1,0 +1,137 @@
+Source: yate
+Section: comm
+Priority: optional
+Maintainer: Debian VoIP Team <pkg-voip-maintainers@lists.alioth.debian.org>
+Uploaders: Kilian Krause <kk@verfaction.de>, Jose Carlos Garcia Sogo <jsogo@debian.org>, Mark Purcell <msp@debian.org>, Santiago Garcia Mantinan <manty@debian.org>
+Build-Depends: debhelper (>= 4.0.0), autotools-dev, dpatch, libopenh323-dev (>= 1.15.3-1), libasound-dev, libgsm1-dev, libpri-dev, zaptel-source, libmysqlclient-dev, postgresql-dev, libgtk2.0-dev, mozilla-dev
+Standards-Version: 3.6.1
+
+Package: yate
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Yate - Yet Another Telephony Engine
+ Yate is a telephony engine aimed at creating a telephony server that 
+ performs well enough to deal with PBX requirements and also flexible 
+ enough for complex Gateway and IVR solutions. 
+
+Package: yate-alsa
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Build-Depends: libasound-dev
+Description: ALSA sound driver for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ ALSA audio driver for Yate. This is the recommended audio interface for Linux.
+
+Package: yate-gsm
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: GSM audio codec for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ European GSM 06.10 audio codec for Yate.
+
+Package: yate-h323
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: H.323 module for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This is the H.323 VoIP protocol module.
+
+Package: yate-isdn
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: ISDN PRI card and protocol drivers for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe interface.
+
+Package: yate-pgsql
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: PostgreSQL module for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This is the module that interfaces to postgresql.
+
+Package: yate-mysql
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: MySQL module for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This is the module that interfaces to mysql.
+
+Package: yate-gtk2
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: Gtk2 client component of Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This is the Gtk2 VoIP client based on the Yate architecture.
+
+Package: yate-mozilla
+Architecture: any
+Depends: yate (= ${Source-Version}), ${shlibs:Depends}
+Description: Mozilla embedding in Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This module adds a Mozilla widget that can be embedded in a Yate client window.
+
+Package: yate-dev
+Architecture: any
+Section: libdevel
+Depends: yate (= ${Source-Version})
+Description: Development files for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This package contains development libraries for Yate.
+
+Package: yate-scripts
+Architecture: all
+Depends: yate (= ${Source-Version})
+Description: External scripting package for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This package includes libraries for using external scripts with Yate.
+
+Package: yate-doc
+Section: doc
+Architecture: all
+Description: Documentation for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This package provides documentation for Yate.
+
+Package: yate-all
+Architecture: all
+Depends: yate (= ${Source-Version}),yate-alsa,yate-gsm,yate-h323,yate-isdn,yate-mysql,yate-pgsql,yate-gtk2,yate-mozilla,yate-scripts,yate-dev,yate-doc
+Description: Metapackage for Yate
+ Yate is a telephony engine aimed at creating a telephony server that
+ performs well enough to deal with PBX requirements and also flexible
+ enough for complex Gateway and IVR solutions.
+ .
+ This metapackage allows to fetch and install all Yate components at once.

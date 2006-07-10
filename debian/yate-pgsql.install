@@ -1,0 +1,2 @@
+debian/tmp/usr/lib/yate/modules/pgsqldb.yate
+debian/tmp/etc/yate/pgsqldb.conf

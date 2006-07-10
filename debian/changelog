@@ -1,0 +1,25 @@
+yate (1.0.0-1) unstable; urgency=low
+
+  * Upgraded for version 1.0.0
+
+ -- Paul Chitescu <paulc@voip.null.ro>  Mon, 10 Jul 2006 17:38:15 +0300
+
+yate (0.8.7+cvs20050604-1) unstable; urgency=low
+
+  * Fixed zaphfc support with CVS version.
+  * Install into /usr/bin as this is supposed to be a client too.
+
+ -- Kilian Krause <kk@verfaction.de>  Sat,  4 Jun 2005 19:47:56 +0200
+
+yate (0.8.7-2) unstable; urgency=low
+
+  * Bumped version to Mimas version of OpenH323.
+
+ -- Kilian Krause <kk@verfaction.de>  Mon, 21 Feb 2005 22:47:28 +0100
+
+yate (0.8.7-1) unstable; urgency=low
+
+  * Initial Release. (Closes: #288576)
+
+ -- Kilian Krause <kk@verfaction.de>  Tue, 18 Jan 2005 02:25:00 +0100
+

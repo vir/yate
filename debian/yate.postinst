@@ -1,0 +1,34 @@
+#!/bin/sh 
+
+set -e
+
+if [ "$1" = "configure" ]; then
+	if [ "$2" = "" ];then
+		. /etc/default/yate
+		echo "Creating/updating yate user account and group..."
+		addgroup --system $YATE_GROUP || {
+		  # addgroup failed. Why?
+				if ! getent group $YATE_GROUP >/dev/null ; then
+					echo "Could not create system group $YATE_GROUP." >&2
+					exit 1
+				fi
+		  # well, the group is there, so just ignore the error
+		}
+		adduser --system --ingroup $YATE_GROUP --home /var/lib/yate \
+		    --gecos "YATE daemon" --shell /bin/sh \
+		    --disabled-password $YATE_USER || {
+		  # adduser failed. Why?
+				if getent passwd $YATE_USER >/dev/null ; then
+					echo "Non-system user $YATE_USER found. I will not overwrite a non-system" >&2
+					echo "user.  Remove the user and reinstall yate." >&2
+					exit 1
+				fi
+		  # unknown adduser error, simply exit
+				exit 1
+		}
+		mkdir -p /var/lib/yate
+		chown -R $YATE_USER.$YATE_GROUP /var/lib/yate
+	fi
+fi
+
+#DEBHELPER#

@@ -1501,14 +1501,14 @@ protected:
      * @param delFrame Delete frame flag. If true on exit, a response was found
      * @return Pointer to an IAXEvent or 0
      */
-    IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFrame);
+    IAXEvent* getEventResponse_New(IAXFrameOut* frame, bool& delFrame);
 
     /**
      * Process an authentication request. If valid, send an authentication reply
      * @param event Already generated event
      * @return Pointer to a valid IAXEvent
      */
-    IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event);
+    IAXEvent* processAuthReq(IAXEvent* event);
 
     /**
      * Process an accept. If not valid (call m_engine->acceptFormatAndCapability) send a reject.
@@ -1516,14 +1516,14 @@ protected:
      * @param event Already generated event
      * @return Pointer to a valid IAXEvent
      */
-    IAXEvent* IAXTransaction::processAccept(IAXEvent* event);
+    IAXEvent* processAccept(IAXEvent* event);
 
     /**
      * Process an authentication reply
      * @param event Already generated event
      * @return Pointer to a valid IAXEvent
      */
-    IAXEvent* IAXTransaction::processAuthRep(IAXEvent* event);
+    IAXEvent* processAuthRep(IAXEvent* event);
 
     /**
      * Find a response for a previously sent frame if the transaction type is RegReq/RegRel
@@ -1531,14 +1531,14 @@ protected:
      * @param delFrame Delete frame flag. If true on exit, a response was found
      * @return Pointer to an IAXEvent or 0
      */
-    IAXEvent* IAXTransaction::getEventResponse_Reg(IAXFrameOut* frame, bool& delFrame);
+    IAXEvent* getEventResponse_Reg(IAXFrameOut* frame, bool& delFrame);
 
     /**
      * Update transaction data from the event
      * @param event Already generated event
      * @return The received event
      */
-    IAXEvent* IAXTransaction::processRegAck(IAXEvent* event);
+    IAXEvent* processRegAck(IAXEvent* event);
 
     /**
      * Find out if an incoming frame would start a transaction
@@ -1683,7 +1683,7 @@ protected:
      * @param seqNo Requested sequence number
      * @return 0
      */
-    IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo);
+    IAXTransaction* retransmitOnVNAK(u_int16_t seqNo);
 
     /**
      * Generate an Accept event after internally accepting a transaction

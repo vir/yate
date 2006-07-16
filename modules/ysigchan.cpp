@@ -74,7 +74,7 @@ void SigDriver::buildStack()
     }
     SS7Router* router = new SS7Router;
     m_engine->insert(router);
-    SS7MTP3* net = new SS7MTP3(SS7CodePoint::ITU);
+    SS7MTP3* net = new SS7MTP3(SS7PointCode::ITU);
     m_engine->insert(net);
     SS7MTP2* link = new SS7MTP2;
     m_engine->insert(link);

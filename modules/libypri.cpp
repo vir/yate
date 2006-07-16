@@ -791,7 +791,7 @@ void PriChan::hangup(int cause)
 	    id().c_str(),address().c_str(),chanStatus(),reason,cause);
     m_timeout = 0;
     m_targetid.clear();
-    disconnect(reason);
+    disconnect(lookup(cause,dict_str2cause,reason));
     closeData();
     m_ring = false;
     if (m_call) {

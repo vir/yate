@@ -104,8 +104,6 @@ private:
 
 YSIGFACTORY2(WpInterface,SignallingInterface);
 
-static const char hex[] = "0123456789abcdef";
-
 //class WpSigFactory : public SignallingFactory
 
 void* WpInterface::create(const String& type, const NamedList& name)
@@ -145,17 +143,9 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 
 #ifdef XDEBUG
     if (debugAt(DebugAll)) {
-	unsigned char* s = (unsigned char*) packet.data();
-	unsigned int len = packet.length();
-	String str(' ',3*len);
-	char* d = (char*) str.c_str();
-	for (unsigned int i = 0; i < len; i++) {
-	    unsigned char c = *s++;
-	    *d++ = ' ';
-	    *d++ = hex[(c >> 4) & 0x0f];
-	    *d++ = hex[c & 0x0f];
-	}
-	Debug(toString(),DebugAll,"Sending %u bytes:%s",packet.length(),str.c_str());
+	String str;
+	str.hexify(packet.data(),packet.length(),' ');
+	Debug(toString(),DebugAll,"Sending %u bytes: %s",packet.length(),str.c_str());
     }
 #endif
 
@@ -220,16 +210,9 @@ bool WpInterface::receiveAttempt()
 
 #ifdef XDEBUG
     if (debugAt(DebugAll)) {
-	unsigned char* s = buf+WP_HEADER;
-	String str(' ',3*r);
-	char* d = (char*) str.c_str();
-	for (unsigned int i = 0; i < (unsigned int)r; i++) {
-	    unsigned char c = *s++;
-	    *d++ = ' ';
-	    *d++ = hex[(c >> 4) & 0x0f];
-	    *d++ = hex[c & 0x0f];
-	}
-	Debug(toString(),DebugAll,"Received %d bytes:%s",r,str.c_str());
+	String str;
+	str.hexify(buf+WP_HEADER,r,' ');
+	Debug(toString(),DebugAll,"Received %d bytes: %s",r,str.c_str());
     }
 #endif
 

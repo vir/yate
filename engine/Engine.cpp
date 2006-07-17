@@ -148,6 +148,7 @@ static bool s_debug = true;
 
 static bool s_coredump = false;
 static bool s_sigabrt = false;
+static bool s_lateabrt = false;
 static String s_cfgfile;
 static const char* s_logfile = 0;
 static Configuration s_cfg;
@@ -642,7 +643,7 @@ int Engine::run()
     m_dispatcher.dequeue();
     checkPoint();
     // We are occasionally doing things that can cause crashes so don't abort
-    abortOnBug(false);
+    abortOnBug(s_sigabrt && s_lateabrt);
     Thread::killall();
     checkPoint();
     m_dispatcher.dequeue();
@@ -930,6 +931,7 @@ static void usage(bool client, FILE* f)
 "     x            Exit immediately after initialization\n"
 "     w            Delay creation of 1st worker thread\n"
 "     o            Colorize output using ANSI codes\n"
+"     s            Abort on bugs even during shutdown\n"
 "     t            Timestamp debugging messages\n"
     ,client ? "" :
 #ifdef _WINDOWS
@@ -1103,6 +1105,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    switch (*pc) {
 				case 'a':
 				    s_sigabrt = true;
+				    break;
+				case 's':
+				    s_lateabrt = true;
 				    break;
 				case 'm':
 				    Mutex::wait(10000000);

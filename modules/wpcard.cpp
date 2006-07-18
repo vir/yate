@@ -120,13 +120,13 @@ WpInterface::WpInterface(const char* card, const char* device)
     : m_card(card), m_device(device), m_thread(0), m_received(false),
       m_overRead(3)
 {
-    Debug(DebugAll,"WpInterface::WpInterface('%s','%s') [%p]",
+    Debug(this,DebugAll,"WpInterface::WpInterface('%s','%s') [%p]",
 	card,device,this);
 }
 
 WpInterface::~WpInterface()
 {
-    Debug(DebugAll,"WpInterface::~WpInterface() [%p]",this);
+    Debug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
     if (m_thread) {
 	m_thread->cancel();
 	while (m_thread)
@@ -145,7 +145,7 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     if (debugAt(DebugAll)) {
 	String str;
 	str.hexify(packet.data(),packet.length(),' ');
-	Debug(toString(),DebugAll,"Sending %u bytes: %s",packet.length(),str.c_str());
+	Debug(this,DebugAll,"Sending %u bytes: %s",packet.length(),str.c_str());
     }
 #endif
 
@@ -167,12 +167,12 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     }
     int w = m_socket.send(data.data(),data.length());
     if (Socket::socketError() == w) {
-	DDebug(toString(),DebugWarn,"Error on sending packet of %u bytes: %d: %s [%p]",
+	DDebug(this,DebugWarn,"Error on sending packet of %u bytes: %d: %s [%p]",
 	    packet.length(),m_socket.error(),::strerror(m_socket.error()),this);
 	return false;
     }
     if (w != sz) {
-	DDebug(toString(),DebugWarn,"Sent %d instead of %d bytes [%p]",w,sz,this);
+	DDebug(this,DebugWarn,"Sent %d instead of %d bytes [%p]",w,sz,this);
 	return false;
     }
 //    w -= WP_HEADER;
@@ -189,7 +189,7 @@ bool WpInterface::receiveAttempt()
     if (Socket::socketError() == r) {
 	if (m_socket.canRetry())
 	    return false;
-	DDebug(toString(),DebugWarn,"Error on reading packet: %d: %s [%p]",
+	DDebug(this,DebugWarn,"Error on reading packet: %d: %s [%p]",
 	    m_socket.error(),::strerror(m_socket.error()),this);
 	return false;
     }
@@ -212,7 +212,7 @@ bool WpInterface::receiveAttempt()
     if (debugAt(DebugAll)) {
 	String str;
 	str.hexify(buf+WP_HEADER,r,' ');
-	Debug(toString(),DebugAll,"Received %d bytes: %s",r,str.c_str());
+	Debug(this,DebugAll,"Received %d bytes: %s",r,str.c_str());
     }
 #endif
 
@@ -226,9 +226,9 @@ bool WpInterface::receiveAttempt()
 
 bool WpInterface::openSocket()
 {
-    Debug(DebugAll,"WpInterface::openSocket() [%p]",this);
+    Debug(this,DebugAll,"WpInterface::openSocket() [%p]",this);
     if (!m_socket.create(AF_WANPIPE,SOCK_RAW)) {
-	Debug(DebugGoOn,"Wanpipe failed to create socket, error %d: %s",
+	Debug(this,DebugGoOn,"Wanpipe failed to create socket, error %d: %s",
 	    m_socket.error(),::strerror(m_socket.error()));
 	return false;
     }
@@ -240,13 +240,13 @@ bool WpInterface::openSocket()
     sa.sll_protocol = htons(PVC_PROT);
     sa.sll_family=AF_WANPIPE;
     if (!m_socket.bind((struct sockaddr *)&sa, sizeof(sa))) {
-	Debug(DebugGoOn,"Wanpipe failed to bind socket, error %d: %s",
+	Debug(this,DebugGoOn,"Wanpipe failed to bind socket, error %d: %s",
 	    m_socket.error(),::strerror(m_socket.error()));
 	m_socket.terminate();
 	return false;
     }
     if (!m_socket.setBlocking(false)) {
-	Debug(DebugGoOn,"Wanpipe failed to set socket non-blocking, error %d: %s",
+	Debug(this,DebugGoOn,"Wanpipe failed to set socket non-blocking, error %d: %s",
 	    m_socket.error(),::strerror(m_socket.error()));
 	m_socket.terminate();
 	return false;
@@ -275,21 +275,21 @@ void WpInterface::timerTick(const Time& when)
     if (m_received)
 	m_received = false;
     else {
-	XDebug(toString(),DebugAll,"Not received any packets in the last tick [%p]",this);
+	XDebug(this,DebugAll,"Not received any packets in the last tick [%p]",this);
     }
 }
 
 
 WpSigThread::~WpSigThread()
 {
-    Debug(DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
+    Debug(m_interface,DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
     if (m_interface)
 	m_interface->m_thread = 0;
 }
 
 void WpSigThread::run()
 {
-    Debug(DebugAll,"WpSigThread::run() [%p]",this);
+    Debug(m_interface,DebugAll,"WpSigThread::run() [%p]",this);
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())

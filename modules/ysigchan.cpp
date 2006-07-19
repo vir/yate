@@ -81,6 +81,8 @@ void SigDriver::buildStack()
     link->SignallingReceiver::attach(iface);
     link->SS7Layer2::attach(net);
     router->attach(net);
+    SS7ISUP* isup = new SS7ISUP;
+    router->attach(isup);
     m_engine->start("SS7test",Thread::Normal,20000);
     iface->control(SignallingInterface::Enable);
     link->control(SS7Layer2::Align);

@@ -94,7 +94,7 @@ class WpSigThread : public Thread
 {
 public:
     inline WpSigThread(WpInterface* iface)
-	: m_interface(iface)
+	: Thread("WpSignal"), m_interface(iface)
 	{ }
     virtual ~WpSigThread();
     virtual void run();
@@ -282,14 +282,14 @@ void WpInterface::timerTick(const Time& when)
 
 WpSigThread::~WpSigThread()
 {
-    Debug(m_interface,DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
+    DDebug(m_interface,DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
     if (m_interface)
 	m_interface->m_thread = 0;
 }
 
 void WpSigThread::run()
 {
-    Debug(m_interface,DebugAll,"WpSigThread::run() [%p]",this);
+    DDebug(m_interface,DebugAll,"WpSigThread::run() [%p]",this);
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())

@@ -36,13 +36,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
     if (value.null())
 	return;
     XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
-    int sp = value.find(m_separator);
-    // skip past URIs with parameters
-    int lim = value.find('<');
-    if ((sp >= 0) && (lim >= 0) && (lim < sp)) {
-	lim = value.find('>');
-	sp = value.find(m_separator,lim);
-    }
+    int sp = findSep(value,m_separator);
     if (sp < 0) {
 	assign(value);
 	return;
@@ -50,7 +44,7 @@ SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
     assign(value,sp);
     trimBlanks();
     while (sp < (int)value.length()) {
-	int ep = value.find(m_separator,sp+1);
+	int ep = findSep(value,m_separator,sp+1);
 	if (ep <= sp)
 	    ep = value.length();
 	int eq = value.find('=',sp+1);
@@ -835,9 +829,37 @@ ObjList* SIPMessage::getRoutes() const
     for (; l; l = l->next()) {
 	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,l->get());
 	if (h && (h->name() &= "Record-Route")) {
-	    if (!list)
-		list = new ObjList;
-	    list->append(new SIPHeaderLine(*h,"Route"));
+	    int p = 0;
+	    while (p >= 0) {
+		SIPHeaderLine* line = 0;
+		int s = findSep(*h,',',p);
+		String tmp;
+		if (s < 0) {
+		    if (p)
+			tmp = h->substr(p);
+		    else
+			line = new SIPHeaderLine(*h,"Route");
+		    p = -1;
+		}
+		else {
+		    if (s > p)
+			tmp = h->substr(p,s-p);
+		    p = s + 1;
+		}
+		tmp.trimBlanks();
+		if (tmp)
+		    line = new SIPHeaderLine("Route",tmp);
+		if (!line)
+		    continue;
+		if (!list)
+		    list = new ObjList;
+		if (isAnswer())
+		    // route set learned from an answer, preserve order
+		    list->append(line);
+		else
+		    // route set learned from a request, reverse order
+		    list->insert(line);
+	    }
 	}
     }
     return list;
@@ -845,11 +867,36 @@ ObjList* SIPMessage::getRoutes() const
 
 void SIPMessage::addRoutes(const ObjList* routes)
 {
+    if (isAnswer() || !routes)
+	return;
+    SIPHeaderLine* hl = YOBJECT(SIPHeaderLine,routes->get());
+    if (hl) {
+	// check if first route is to a RFC 2543 proxy
+	String tmp = *hl;
+	Regexp r("<\\([^>]\\+\\)>");
+	if (tmp.matches(r))
+	    tmp = tmp.matchString(1);
+	if (tmp.find(";lr") < 0) {
+	    // prepare a new final route
+	    hl = new SIPHeaderLine("Route","<" + uri + ">");
+	    // set the first route as Request-URI and then skip it
+	    uri = tmp;
+	    routes = routes->next();
+	}
+	else
+	    hl = 0;
+    }
+
+    // add (remaining) routes
     for (; routes; routes = routes->next()) {
 	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,routes->get());
 	if (h)
 	    addHeader(h->clone());
     }
+
+    // if first route was to a RFC 2543 proxy add the old Request-URI
+    if (hl)
+	addHeader(hl);
 }
 
 SIPDialog::SIPDialog()

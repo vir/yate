@@ -172,6 +172,39 @@ String quote(const String& str)
     return tmp;
 }
 
+// Utility function to find a separator not in "quotes" or inside <uri>
+int findSep(const char* str, char sep, int offs)
+{
+    if (!(str && sep))
+	return -1;
+    str += offs;
+    bool inQ = false;
+    bool inU = false;
+    for (; char c = *str++ ; offs++) {
+	if (inQ) {
+	    if (c == '"')
+		inQ = false;
+	    continue;
+	}
+	if (inU) {
+	    if (c == '>')
+		inU = false;
+	    continue;
+	}
+	if (c == sep)
+	    return offs;
+	switch (c) {
+	    case '"':
+		inQ = true;
+		break;
+	    case '<':
+		inU = true;
+		break;
+	}
+    }
+    return -1;
+}
+
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

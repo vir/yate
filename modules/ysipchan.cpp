@@ -264,6 +264,22 @@ private:
     YateSIPEngine *m_engine;
 };
 
+class YateSIPRefer : public Thread
+{
+public:
+    YateSIPRefer(const String& transferorID, const String& transferredID, 
+	Driver* transferredDrv, Message* msg, SIPMessage* sipNotify);
+    virtual void run(void);
+    virtual void cleanup(void);
+private:
+    bool route(void);
+    String m_transferorID;           // Transferor channel's id
+    String m_transferredID;          // Transferred channel's id
+    Driver* m_transferredDrv;        // Transferred driver's pointer
+    Message* m_msg;                  // 'call.route' message
+    SIPMessage* m_sipNotify;         // NOTIFY message to send the result
+};
+
 class YateSIPConnection : public Channel
 {
     YCLASS(YateSIPConnection,Channel)
@@ -299,6 +315,7 @@ public:
     void doBye(SIPTransaction* t);
     void doCancel(SIPTransaction* t);
     void doInfo(SIPTransaction* t);
+    void doRefer(SIPTransaction* t);
     void reInvite(SIPTransaction* t);
     void hangup();
     inline const SIPDialog& dialog() const
@@ -319,6 +336,8 @@ public:
 	{ return m_port; }
     inline const String& getRtpAddr() const
 	{ return m_externalAddr ? m_externalAddr : m_rtpLocalAddr; }
+    inline void referTerminated()
+	{ m_referring = false; }
 private:
     virtual void statusParams(String& str);
     void setMedia(ObjList* media);
@@ -335,6 +354,7 @@ private:
     bool startRtp();
     bool addSdpParams(Message& msg, const SIPBody* body);
     bool addRtpParams(Message& msg, const String& natAddr, const SIPBody* body);
+    bool initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer, const SIPHeaderLine* refHdr);
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -378,6 +398,8 @@ private:
     int m_mediaStatus;
     bool m_inband;
     bool m_info;
+    // REFER already running
+    bool m_referring;
 };
 
 class YateSIPGenerate : public GenObject
@@ -860,6 +882,8 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("CANCEL");
     if (s_cfg.getBoolValue("general","registrar",true))
 	addAllowed("REGISTER");
+    if (s_cfg.getBoolValue("general","transfer",true))
+	addAllowed("REFER");
     if (s_cfg.getBoolValue("general","options",true))
 	addAllowed("OPTIONS");
     m_prack = s_cfg.getBoolValue("general","prack");
@@ -1223,6 +1247,13 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	regreq(e,t);
     else if (t->getMethod() == "OPTIONS")
 	options(e,t);
+    else if (t->getMethod() == "REFER") {
+	YateSIPConnection* conn = plugin.findCall(t->getCallID());
+	if (conn)
+	    conn->doRefer(t);
+	else
+	    t->setResponse(481);
+    }
     else
 	return generic(e,t);
     return true;
@@ -1409,13 +1440,85 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     return false;
 }
 
+// transferorID: Channel id of the sip connection that received the REFER request
+// transferredID: Channel id of the transferor's peer
+// transferredDrv: Channel driver of the transferor's peer
+// msg: already populated 'call.route'
+// sipNotify: already populated SIPMessage("NOTIFY")
+YateSIPRefer::YateSIPRefer(const String& transferorID, const String& transferredID,
+			   Driver* transferredDrv, Message* msg, SIPMessage* sipNotify)
+    : Thread("SIP Transfer"), m_transferorID(transferorID), m_transferredID(transferredID),
+      m_transferredDrv(transferredDrv), m_msg(msg), m_sipNotify(sipNotify)
+{
+}
+
+void YateSIPRefer::run()
+{
+    bool ok = false;
+    if (m_transferredDrv && m_msg)
+	ok = route();
+    // Send response
+    String s(ok ? "SIP/2.0 200 OK\r\n" : "SIP/2.0 603 Declined\r\n");
+    m_sipNotify->setBody(new SIPStringBody("message/sipfrag;version=2.0",s));
+    plugin.ep()->engine()->addMessage(m_sipNotify);
+    // Notify termination to transferor
+    plugin.lock();
+    YateSIPConnection* conn = static_cast<YateSIPConnection*>(plugin.find(m_transferorID));
+    if (conn)
+	conn->referTerminated();
+    plugin.unlock();
+}
+
+bool YateSIPRefer::route()
+{
+    DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. Transferring to '%s'",name(),m_transferredID.c_str(),this,m_msg->getValue("called"));
+    RefPointer<Channel> chan;
+    // Route the call
+    bool ok = Engine::dispatch(m_msg);
+    m_transferredDrv->lock();
+    chan = m_transferredDrv->find(m_transferredID);
+    m_transferredDrv->unlock();
+    if (!chan) {
+	DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. Connection vanished while routing!",name(),m_transferredID.c_str(),this);
+	return false;
+    }
+    m_msg->userData(chan);
+    if (ok) {
+	DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. Call succesfully routed.",name(),m_transferredID.c_str(),this);
+	if ((m_msg->retValue() == "-") || (m_msg->retValue() == "error"))
+	    m_msg->setParam("reason","unknown");
+	else if (m_msg->getIntValue("antiloop",1) <= 0)
+	    m_msg->setParam("reason","Call is looping");
+	else {
+	    *m_msg = "call.execute";
+	    m_msg->setParam("callto",m_msg->retValue());
+	    m_msg->clearParam("error");
+	    m_msg->retValue().clear();
+	    // Execute the call
+	    ok = Engine::dispatch(m_msg);
+	    DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. 'call.execute' %s.",
+		name(),m_transferredID.c_str(),this,ok ? "succeeded" : "failed");
+	}
+    }
+    else
+	DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. 'call.route' failed.",
+	    name(),m_transferredID.c_str(),this);
+    return ok;
+}
+
+void YateSIPRefer::cleanup()
+{
+    delete m_msg;
+}
+
 // Incoming call constructor - just before starting the routing thread
 YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     : Channel(plugin,0,false),
       m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info)
+      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
+      m_referring(false)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1534,7 +1637,8 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info)
+      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
+      m_referring(false)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -2442,7 +2546,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 
 bool YateSIPConnection::checkUser(SIPTransaction* t, bool refuse)
 {
-    if (m_user.null())
+    // don't try to authenticate requests from server
+    if (m_user.null() || m_line)
 	return true;
     int age = t->authUser(m_user);
     if ((age >= 0) && (age <= 10))
@@ -2524,6 +2629,46 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	msg->addParam("text",tmp);
 	Engine::enqueue(msg);
     }
+}
+
+void YateSIPConnection::doRefer(SIPTransaction* t)
+{
+    if (m_authBye && !checkUser(t))
+	return;
+    DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p]",t,this);
+    if (m_referring) {
+	DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p].  Already referring.",t,this);
+	t->setResponse(491);           // Request Pending
+	return;
+    }
+    m_referring = true;
+    const SIPHeaderLine* refHdr = t->initialMessage()->getHeader("Refer-To");
+    if (!(refHdr && refHdr->length())) {
+	DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p]. Empty or missing 'Refer-To' header.",t,this);
+	t->setResponse(400);           // Bad request
+	m_referring = false;
+	return;
+    }
+    bool unattended = (refHdr->find("?") == -1);
+    if (unattended) {
+	Message* msg = 0;
+	SIPMessage* sipNotify = 0;
+	if (initUnattendedTransfer(msg,sipNotify,t->initialMessage(),refHdr)) {
+	    Channel* ch = YOBJECT(Channel,getPeer());
+	    if (ch && ch->driver()) {
+		t->setResponse(202);   // Accept
+		(new YateSIPRefer(id(),getPeer()->id(),ch->driver(),msg,sipNotify))->startup();
+		return;
+	    }
+	    DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p]. The transferred party has no driver!",t,this);
+	} 
+	t->setResponse(503);           // Service Unavailable
+    }
+    else {
+	DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p]. Received attended transfer request. Not implemented.",t,this);
+	t->setResponse(501);           // Not implemented
+    }
+    m_referring = false;
 }
 
 void YateSIPConnection::disconnected(bool final, const char *reason)
@@ -2770,6 +2915,60 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	    m_tr->setResponse(code,reason);
     }
     setReason(reason,code);
+}
+
+// msg: 'call.route' message to create & fill
+// sipNotify: NOTIFY message to create & fill
+// sipRefer: received REFER message, refHdr: 'Refer-To' header
+// If return false, msg and sipNotify are 0
+bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify,
+    const SIPMessage* sipRefer, const SIPHeaderLine* refHdr)
+{
+    // call.route
+    msg = new Message("call.route");
+    msg->addParam("id",getPeer()->id());
+    const SIPHeaderLine* sh = sipRefer->getHeader("To");                   // caller
+    if (sh) {
+	URI uriCaller(*sh);
+	uriCaller.parse();
+	msg->addParam("caller",uriCaller.getUser());
+	msg->addParam("callername",uriCaller.getDescription());
+    }
+    URI referTo(*refHdr);                                                  // called
+    referTo.parse();
+    msg->addParam("called",referTo.getUser());
+    msg->addParam("calledname",referTo.getDescription());
+    sh = sipRefer->getHeader("Referred-By");                               // diverter
+    if (sh) {
+	URI referBy(*sh);
+	referBy.parse();
+	msg->addParam("diverter",referBy.getUser());
+	msg->addParam("divertername",referBy.getDescription());
+    }
+    msg->addParam("reason","transfer");                                    // reason
+    // NOTIFY
+    sh = sipRefer->getHeader("From");
+    String sUri;
+    if (sh) {
+	URI uri(*sh);
+	uri.parse();
+	sUri << uri.getProtocol() << ":" << uri.getUser() << "@" << uri.getHost();
+    }
+    sipNotify = createDlgMsg("NOTIFY",sUri);
+    plugin.ep()->buildParty(sipNotify);
+    if (!sipNotify->getParty()) {
+	DDebug(&plugin,DebugAll,"YateSIPConnection::initUnattendedTransfer. Could not create party to send NOTIFY");
+	sipNotify->destruct();
+	sipNotify = 0;
+	delete msg;
+	msg = 0;
+	return false;
+    }
+    sipNotify->complete(plugin.ep()->engine());
+    sipNotify->addHeader("Event","refer");
+    sipNotify->addHeader("Subscription-State","terminated;reason=noresource");
+    sipNotify->addHeader("Contact",sipRefer->uri.c_str());
+    return true;
 }
 
 YateSIPLine::YateSIPLine(const String& name)

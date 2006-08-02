@@ -2947,14 +2947,15 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     }
     msg->addParam("reason","transfer");                                    // reason
     // NOTIFY
-    sh = sipRefer->getHeader("From");
-    String sUri;
-    if (sh) {
-	URI uri(*sh);
-	uri.parse();
-	sUri << uri.getProtocol() << ":" << uri.getUser() << "@" << uri.getHost();
+    String tmp;
+    const SIPHeaderLine* co = sipRefer->getHeader("Contact");
+    if (co) {
+	tmp = *co;
+	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
+	if (tmp.matches(r))
+	    tmp = tmp.matchString(1);
     }
-    sipNotify = createDlgMsg("NOTIFY",sUri);
+    sipNotify = createDlgMsg("NOTIFY",tmp);
     plugin.ep()->buildParty(sipNotify);
     if (!sipNotify->getParty()) {
 	DDebug(&plugin,DebugAll,"YateSIPConnection::initUnattendedTransfer. Could not create party to send NOTIFY");
@@ -2967,7 +2968,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     sipNotify->complete(plugin.ep()->engine());
     sipNotify->addHeader("Event","refer");
     sipNotify->addHeader("Subscription-State","terminated;reason=noresource");
-    sipNotify->addHeader("Contact",sipRefer->uri.c_str());
+    sipNotify->addHeader("Contact",sipRefer->uri);
     return true;
 }
 

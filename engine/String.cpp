@@ -872,7 +872,7 @@ String String::msgEscape(const char* str, char extraEsc)
 	return s;
     char c;
     while ((c=*str++)) {
-	if (c < ' ' || c == ':' || c == extraEsc) {
+	if ((unsigned char)c < ' ' || c == ':' || c == extraEsc) {
 	    c += '@';
 	    s += '%';
 	}
@@ -893,7 +893,7 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
     const char *pos = str;
     char c;
     while ((c=*pos++)) {
-	if (c < ' ') {
+	if ((unsigned char)c < ' ') {
 	    if (errptr)
 		*errptr = (pos-str) - 1;
 	    return s;
@@ -936,7 +936,7 @@ String String::uriEscape(const char* str, char extraEsc)
 	return s;
     char c;
     while ((c=*str++)) {
-	if (c <= ' ' || c == '%' || c == '+' || c == '?' || c == '&' || c == extraEsc)
+	if ((unsigned char)c <= ' ' || c == '%' || c == '+' || c == '?' || c == '&' || c == extraEsc)
 	    s << '%' << hexEncode(c >> 4) << hexEncode(c);
 	else
 	    s += c;
@@ -952,7 +952,7 @@ String String::uriUnescape(const char* str, int* errptr)
     const char *pos = str;
     char c;
     while ((c=*pos++)) {
-	if (c < ' ') {
+	if ((unsigned char)c < ' ') {
 	    if (errptr)
 		*errptr = (pos-str) - 1;
 	    return s;

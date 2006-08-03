@@ -10,6 +10,9 @@
 ; useragent: string: String to set in User-Agent or Server headers
 ;useragent=YATE/0.9.0
 
+; transfer: bool: Allow handling the REFER message to perform transfers
+;transfer=enable
+
 ; registrar: bool: Allow the SIP module to receive registration requests
 ;registrar=enable
 

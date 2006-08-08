@@ -1927,6 +1927,7 @@ class YIAX_API IAXEngine : public DebugEnabler, public Mutex
 public:
     /**
      * Constructor
+     * @param iface Address of the interface to use, default all (0.0.0.0)
      * @param port UDP port to run the protocol on
      * @param transListCount Number of entries in the transaction hash table
      * @param retransCount Retransmission counter for each transaction belonging to this engine
@@ -1938,7 +1939,7 @@ public:
      * @param capab Media capabilities of this engine
      * @param trunkSendInterval Send trunk meta frame interval
      */
-    IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+    IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval);
 

@@ -4,6 +4,9 @@
 ; port: int: UDP port for incoming connections
 ;port=4569
 
+; addr: ipaddress: IP address to bind to
+;addr=0.0.0.0
+
 ; tos: keyword: Type Of Service to set in outgoing UDP packets
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0

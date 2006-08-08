@@ -30,7 +30,7 @@
 
 using namespace TelEngine;
 
-IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
+IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval)
     : Mutex(true),
@@ -63,10 +63,11 @@ IAXEngine::IAXEngine(int port, u_int16_t transListCount, u_int16_t retransCount,
 	m_lUsedCallNo[i] = false;
     m_socket.create(AF_INET,SOCK_DGRAM);
     SocketAddr addr(AF_INET);
+    addr.host(iface);
     addr.port(port);
     m_socket.setBlocking(false);
     if (!m_socket.bind(addr))
-	Debug(this,DebugWarn,"Failed to bind socket on port %d",port);
+	Debug(this,DebugWarn,"Failed to bind socket to %s:%d",c_safe(iface),port);
     m_startLocalCallNo = 1 + (u_int16_t)(random() % IAX2_MAX_CALLNO);
 }
 

@@ -351,8 +351,10 @@ public:
     void asyncGkClient(int mode, const PString& name, int retry);
 protected:
     bool internalGkClient(int mode, const PString& name);
+    void internalGkNotify(bool registered);
     YateGatekeeperServer* m_gkServer;
     YateGkRegThread* m_thread;
+    bool m_registered;
 };
 
 class YateH323Connection :  public H323Connection, public DebugEnabler
@@ -655,7 +657,7 @@ BOOL YateGatekeeperServer::Init()
 }
 
 YateH323EndPoint::YateH323EndPoint(const NamedList* params, const char* name)
-    : String(name), m_gkServer(0), m_thread(0)
+    : String(name), m_gkServer(0), m_thread(0), m_registered(false)
 {
     Debug(&hplugin,DebugAll,"YateH323EndPoint::YateH323EndPoint(%p,\"%s\") [%p]",
 	params,name,this);
@@ -792,7 +794,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    const char *p = params->getValue("password");
 	    if (p) {
 		SetGatekeeperPassword(p);
-		Debug(&hplugin,DebugInfo,"Enabling H.235 security access to gatekeeper %s",p);
+		DDebug(&hplugin,DebugInfo,"Enabling H.235 security access to gatekeeper: '%s'",p);
 	    }
 	    const char* d = params->getValue("gkip",server);
 	    const char* a = params->getValue("gkname");
@@ -845,12 +847,14 @@ void YateH323EndPoint::stopGkClient()
 	lock.drop();
 	RemoveGatekeeper();
     }
+    internalGkNotify(false);
 }
 
 void YateH323EndPoint::asyncGkClient(int mode, const PString& name, int retry)
 {
     while (!internalGkClient(mode,name) && (retry > 0))
 	Thread::sleep(retry);
+    Debug(&hplugin,DebugNote,"Thread for GK client '%s' finished",(const char*)name);
     hplugin.lock();
     m_thread = 0;
     hplugin.unlock();
@@ -863,6 +867,7 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 	    if (SetGatekeeper(name,new H323TransportUDP(*this))) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to GK addr '%s'",
 		    safe(),(const char*)name);
+		internalGkNotify(true);
 		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK addr '%s'",
@@ -872,6 +877,7 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 	    if (LocateGatekeeper(name)) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to GK name '%s'",
 		    safe(),(const char*)name);
+		internalGkNotify(true);
 		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to connect '%s' to GK name '%s'",
@@ -880,6 +886,7 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 	case Discover:
 	    if (DiscoverGatekeeper(new H323TransportUDP(*this))) {
 		Debug(&hplugin,DebugInfo,"Connected '%s' to discovered GK",safe());
+		internalGkNotify(true);
 		return true;
 	    }
 	    Debug(&hplugin,DebugWarn,"Failed to discover a GK in '%s'",safe());
@@ -887,10 +894,25 @@ bool YateH323EndPoint::internalGkClient(int mode, const PString& name)
 	case Unregister:
 	    RemoveGatekeeper();
 	    Debug(&hplugin,DebugInfo,"Removed the GK in '%s'",safe());
+	    internalGkNotify(false);
 	    return true;
     }
+    internalGkNotify(false);
     return false;
 }
+
+void YateH323EndPoint::internalGkNotify(bool registered)
+{
+    if ((m_registered == registered) || null())
+	return;
+    m_registered = registered;
+    Message* m = new Message("user.notify");
+    m->addParam("account",*this);
+    m->addParam("protocol","h323");
+    m->addParam("registered",String::boolText(registered));
+    Engine::enqueue(m);
+}
+
 
 YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
     H323Transport* transport, unsigned callReference, void* userdata)

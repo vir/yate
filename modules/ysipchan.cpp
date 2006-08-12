@@ -215,6 +215,7 @@ private:
     bool change(String& dest, const String& src);
     bool change(int& dest, int src);
     void keepalive();
+    void setValid(bool valid, const char* reason = 0);
     String m_registrar;
     String m_username;
     String m_authname;
@@ -2994,6 +2995,23 @@ void YateSIPLine::setupAuth(SIPMessage* msg) const
 	msg->setAutoAuth(getAuthName(),m_password);
 }
 
+void YateSIPLine::setValid(bool valid, const char* reason)
+{
+    if ((m_valid == valid) && !reason)
+	return;
+    m_valid = valid;
+    if (m_registrar && m_username) {
+	Message* m = new Message("user.notify");
+	m->addParam("account",*this);
+	m->addParam("protocol","sip");
+	m->addParam("username",m_username);
+	m->addParam("registered",String::boolText(valid));
+	if (reason)
+	    m->addParam("reason",reason);
+	Engine::enqueue(m);
+    }
+}
+
 SIPMessage* YateSIPLine::buildRegister(int expires) const
 {
     String exp(expires);
@@ -3027,7 +3045,7 @@ void YateSIPLine::login()
     m_keepalive = 0;
     if (m_registrar.null() || m_username.null()) {
 	logout();
-	m_valid = true;
+	setValid(true);
 	return;
     }
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging in [%p]",c_str(),this);
@@ -3035,7 +3053,7 @@ void YateSIPLine::login()
 
     SIPMessage* m = buildRegister(m_interval);
     if (!m) {
-	m_valid = false;
+	setValid(false);
 	return;
     }
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' emiting %p [%p]",
@@ -3054,7 +3072,7 @@ void YateSIPLine::logout()
     m_keepalive = 0;
     bool sendLogout = m_valid && m_registrar && m_username;
     clearTransaction();
-    m_valid = false;
+    setValid(false);
     if (sendLogout) {
 	DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging out [%p]",c_str(),this);
 	SIPMessage* m = buildRegister(0);
@@ -3075,7 +3093,7 @@ bool YateSIPLine::process(SIPEvent* ev)
 	return false;
     if (ev->getState() == SIPTransaction::Cleared) {
 	clearTransaction();
-	m_valid = false;
+	setValid(false,"timeout");
 	m_resend = m_interval*(int64_t)1000000 + Time::now();
 	m_keepalive = 0;
 	return false;
@@ -3098,14 +3116,14 @@ bool YateSIPLine::process(SIPEvent* ev)
 		m_partyAddr = msg->getParty()->getPartyAddr();
 		m_partyPort = msg->getParty()->getPartyPort();
 	    }
-	    m_valid = true;
+	    setValid(true);
 	    Debug(&plugin,DebugCall,"SIP line '%s' logon success to %s:%d",
 		c_str(),m_partyAddr.c_str(),m_partyPort);
 	    break;
 	default:
 	    // detect local address even from failed attempts - helps next time
 	    detectLocal(msg);
-	    m_valid = false;
+	    setValid(false,msg->reason);
 	    Debug(&plugin,DebugWarn,"SIP line '%s' logon failure %d: %s",
 		c_str(),msg->code,msg->reason.safe());
     }

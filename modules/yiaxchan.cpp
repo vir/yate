@@ -87,6 +87,7 @@ public:
     inline int remotePort() const
 	{ return m_remotePort; }
 private:
+    void setRegistered(bool registered, const char* reason = 0);
     State m_state;
     String m_username;                  // Username
     String m_password;                  // Password
@@ -491,6 +492,26 @@ YIAXLine::YIAXLine(const String& name)
 
 YIAXLine::~YIAXLine()
 {
+    // just in case
+    setRegistered(false);
+}
+
+// Set the registered status, emits user.notify messages if necessary
+void YIAXLine::setRegistered(bool registered, const char* reason)
+{
+    if ((m_registered == registered) && !reason)
+	return;
+    m_registered = registered;
+    if (m_username) {
+	Message* m = new Message("user.notify");
+	m->addParam("account",*this);
+	m->addParam("protocol","iax");
+	m->addParam("username",m_username);
+	m->addParam("registered",String::boolText(registered));
+	if (reason)
+	    m->addParam("reason",reason);
+	Engine::enqueue(m);
+    }
 }
 
 // Find and update a line with parameters from message, create if needed
@@ -524,21 +545,21 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
 	    line->m_callingName = trans->callingName();
 	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - ACK for '%s'. Next: %u",
 		line->c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister",line->m_nextReg);
-	    line->m_registered = true;
+	    line->setRegistered(true);
 	    break;
 	case IAXEvent::Reject:
 	    // retry at 25% of the expire time
 	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
 	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - REJECT for '%s'. Next: %u",
 		line->c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister",line->m_nextReg);
-	    line->m_registered = false;
+	    line->setRegistered(false,"rejected");
 	    break;
 	case IAXEvent::Timeout:
 	    // retry at 50% of the expire time
 	    line->m_nextReg = Time::secNow() + (line->expire() / 2);
 	    Debug(&iplugin,DebugAll,"YIAXLineContainer::regTerminate[%s] - Timeout for '%s'. Next: %u",
 		line->c_str(),line->state() == YIAXLine::Registering?"Register":"Unregister",line->m_nextReg);
-	    line->m_registered = false;
+	    line->setRegistered(false,"timeout");
 	    break;
 	default:
 	    return;

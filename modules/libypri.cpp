@@ -761,6 +761,32 @@ void PriChan::closeData()
     m_span->unlock();
 }
 
+bool PriChan::progress()
+{
+    if (!m_call) {
+	Debug(this,DebugWarn,"Progress request on %s channel %s (%s)",
+	    chanStatus(),id().c_str(),address().c_str());
+	return false;
+    }
+    Debug(this,DebugInfo,"Progressing on %s (%s)",id().c_str(),address().c_str());
+#ifdef PRI_PROGRESS
+    ::pri_progress(m_span->pri(),m_call,m_chan,1);
+#endif
+    return true;
+}
+
+bool PriChan::ringing()
+{
+    if (!m_call) {
+	Debug(this,DebugWarn,"Ringing request on %s channel %s (%s)",
+	    chanStatus(),id().c_str(),address().c_str());
+	return false;
+    }
+    Debug(this,DebugInfo,"Answering on %s (%s)",id().c_str(),address().c_str());
+    ::pri_acknowledge(m_span->pri(),m_call,m_chan,1);
+    return true;
+}
+
 bool PriChan::answer()
 {
     if (!m_ring) {
@@ -772,7 +798,7 @@ bool PriChan::answer()
     m_timeout = 0;
     status(chanStatus());
     Debug(this,DebugInfo,"Answering on %s (%s)",id().c_str(),address().c_str());
-    ::pri_answer(m_span->pri(),(q931_call*)m_call,m_chan,!m_isdn);
+    ::pri_answer(m_span->pri(),m_call,m_chan,!m_isdn);
     return true;
 }
 
@@ -795,8 +821,8 @@ void PriChan::hangup(int cause)
     closeData();
     m_ring = false;
     if (m_call) {
-	::pri_hangup(m_span->pri(),(q931_call*)m_call,cause);
-	::pri_destroycall(m_span->pri(),(q931_call*)m_call);
+	::pri_hangup(m_span->pri(),m_call,cause);
+	::pri_destroycall(m_span->pri(),m_call);
 	m_call = 0;
 	Message *m = message("chan.hangup");
 	m->addParam("span",String(m_span->span()));
@@ -846,7 +872,7 @@ void PriChan::gotDigits(const char *digits, bool overlapped)
 void PriChan::sendDigit(char digit)
 {
     if (m_call)
-	::pri_information(m_span->pri(),(q931_call*)m_call,digit);
+	::pri_information(m_span->pri(),m_call,digit);
 }
 
 bool PriChan::call(Message &msg, const char *called)
@@ -906,7 +932,7 @@ bool PriChan::call(Message &msg, const char *called)
     ::pri_sr_set_called(req,(char *)called,calledplan,complete);
     ::q931_setup(span()->pri(),m_call,req);
 #else
-    ::pri_call(m_span->pri(),(q931_call*)m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
+    ::pri_call(m_span->pri(),m_call,0/*transmode*/,m_chan,1/*exclusive*/,!m_isdn,
 	caller,callerplan,callername,callerpres,(char *)called,calledplan,layer1
     );
 #endif
@@ -939,7 +965,12 @@ void PriChan::ring(pri_event_ring &ev)
     m_call = call;
     m_ring = true;
     status(chanStatus());
+#ifdef PRI_PROCEEDING_FULL
+    ::pri_proceeding(m_span->pri(),m_call,m_chan,1);
+#else
+    // we signal ringing without media if the library doesn't know any better
     ::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
+#endif
     Message *m = message("chan.startup");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
@@ -1016,17 +1047,26 @@ void PriChan::callRejected(const char* error, const char* reason, const Message*
     hangup(cause);
 }
 
+bool PriChan::msgProgress(Message& msg)
+{
+    if (!progress())
+	return true;
+    return Channel::msgProgress(msg);
+}
+
 bool PriChan::msgRinging(Message& msg)
 {
-    status("ringing");
-    return true;
+    if (!ringing())
+	return true;
+    return Channel::msgRinging(msg);
 }
 
 bool PriChan::msgAnswered(Message& msg)
 {
-    answer();
+    if (!answer())
+	return true;
     dataChanged();
-    return true;
+    return Channel::msgAnswered(msg);
 }
 
 bool PriChan::msgTone(Message& msg, const char* tone)

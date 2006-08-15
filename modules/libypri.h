@@ -171,6 +171,7 @@ public:
     virtual ~PriChan();
     virtual void disconnected(bool final, const char *reason);
     virtual bool nativeConnect(DataEndpoint *peer);
+    virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
@@ -197,6 +198,8 @@ public:
     bool call(Message &msg, const char *called = 0);
     bool answer();
     void answered();
+    bool progress();
+    bool ringing();
     void idle();
     void restart(bool outgoing = false);
     virtual bool openData(const char* format, int echoTaps = 0) = 0;

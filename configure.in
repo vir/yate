@@ -16,6 +16,12 @@ AC_SUBST(PACKAGE_VERSION_BUILD)
 AC_SUBST(PACKAGE_VERSION_RELEASE)
 AC_SUBST(PACKAGE_RELEASE)
 
+# We may need the host OS type but avoid the overhead of AC_CANONICAL_SYSTEM
+AC_MSG_CHECKING([for local operating system type])
+uname_os=`uname -s`
+test -x "$uname_os" && uname_os=Unknown
+AC_MSG_RESULT([$uname_os])
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
@@ -186,6 +192,27 @@ AC_TRY_LINK([#include <netinet/in.h>
 AC_LANG_RESTORE
 AC_MSG_RESULT([$HAVE_RESOLV])
 AC_SUBST(HAVE_RESOLV)
+
+INTERNAL_REGEX=yes
+AC_ARG_ENABLE(internalregex,AC_HELP_STRING([--enable-internalregex],[Use internal regexp library (default: not on Linux)]),want_internalregex=$enableval,want_internalregex=auto)
+AC_MSG_CHECKING([whether to use the internal regexp library])
+case "x$want_internalregex" in
+    xno|xdisable|xnot)
+	INTERNAL_REGEX=no
+	;;
+    xyes|xenable)
+	;;
+    xauto)
+	if [[ "x$uname_os" = "xLinux" ]]; then
+	    INTERNAL_REGEX=no
+	fi
+	;;
+    *)
+	AC_ERROR([Invalid argument passed to --enable-internalregex])
+	;;
+esac
+AC_MSG_RESULT([$INTERNAL_REGEX])
+AC_SUBST(INTERNAL_REGEX)
 
 HAVE_PRI=no
 HAVE_PRI_CB=no

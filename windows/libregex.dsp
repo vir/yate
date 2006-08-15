@@ -87,7 +87,7 @@ LIB32=link.exe -lib
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\regex.c
+SOURCE=..\contrib\regex\regex.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -95,7 +95,7 @@ SOURCE=.\regex.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\regex.h
+SOURCE=..\contrib\regex\regex.h
 # End Source File
 # End Group
 # End Target

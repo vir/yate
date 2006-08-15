@@ -4,13 +4,15 @@
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
+CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 LIBAUX:= @DLOPEN_LIB@
 LIBTHR:= -lpthread
 INCLUDES := -I.. -I@top_srcdir@
-CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CPPFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
 
@@ -29,7 +31,8 @@ CLIOBJS := Client.o
 
 LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS) $(CLIOBJS)
 CLEANS = $(LIBOBJS) core
-COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+CCOMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 SCTPOPTS:=
 
@@ -38,6 +41,12 @@ SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP
 endif
 ifneq (@HAVE_SCTP_NETINET@,no)
 SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP_NETINET
+endif
+ifeq (@INTERNAL_REGEX@,yes)
+REGEX_INC:= -I@top_srcdir@/contrib/regex
+LIBOBJS := $(LIBOBJS) regex.o
+else
+REGEX_INC:=
 endif
 
 prefix = @prefix@
@@ -86,6 +95,12 @@ Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<
+
+String.o: @srcdir@/String.cpp $(MKDEPS) $(CINC)
+	$(COMPILE) $(REGEX_INC) -c $<
+
+regex.o: @top_srcdir@/contrib/regex/regex.c $(MKDEPS)
+	$(CCOMPILE) -DSTDC_HEADERS $(REGEX_INC) -c $<
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)
 	$(COMPILE) -c $<

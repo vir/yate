@@ -349,6 +349,7 @@ protected:
     virtual void loadWindows() = 0;
     virtual void initWindows();
     virtual void initClient();
+    virtual void exitClient();
     virtual void setChannelDisplay(ClientChannel* chan);
     virtual bool updateCallHist(const NamedList& params);
     void addChannel(ClientChannel* chan);

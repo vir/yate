@@ -430,6 +430,7 @@ void Client::run()
     msg.setParam("event","init");
     Engine::dispatch(msg);
     main();
+    exitClient();
 }
 
 Window* Client::getWindow(const String& name)
@@ -540,18 +541,45 @@ void Client::initClient()
 	    updateCallHist(*sect);
     }
 
+    Configuration settings(Engine::configFile("client_settings",true));
+    settings.load();
+    // guess if we at least can support multiple lines
     bool tmp =
 	getWindow("channels") || hasElement("channels") ||
 	getWindow("lines") || hasElement("lines");
+    // then apply saved preferences
+    tmp = settings.getBoolValue("general","multilines",tmp);
+    // finally restrict from the main config file
     m_multiLines = Engine::config().getBoolValue("client","multilines",tmp);
     tmp = false;
     getCheck("autoanswer",tmp);
+    tmp = settings.getBoolValue("general","autoanswer",tmp);
     m_autoAnswer = Engine::config().getBoolValue("client","autoanswer",tmp);
     setCheck("multilines",m_multiLines);
     setCheck("autoanswer",m_autoAnswer);
+    setText("def_username",settings.getValue("default","username"));
+    setText("def_callerid",settings.getValue("default","callerid"));
+    setText("def_domain",settings.getValue("default","domain"));
     Window* help = getWindow("help");
     if (help)
 	action(help,"help_home");
+}
+
+void Client::exitClient()
+{
+    Configuration settings(Engine::configFile("client_settings",true));
+    settings.setValue("general","multilines",m_multiLines);
+    settings.setValue("general","autoanswer",m_autoAnswer);
+    String tmp;
+    if (getText("def_username",tmp))
+	settings.setValue("default","username",tmp);
+    tmp.clear();
+    if (getText("def_callerid",tmp))
+	settings.setValue("default","callerid",tmp);
+    tmp.clear();
+    if (getText("def_domain",tmp))
+	settings.setValue("default","domain",tmp);
+    settings.save();
 }
 
 void Client::moveRelated(const Window* wnd, int dx, int dy)

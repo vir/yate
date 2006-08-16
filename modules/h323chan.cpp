@@ -247,6 +247,7 @@ public:
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
     virtual bool msgRoute(Message& msg);
+    virtual void msgTimer(Message& msg);
     virtual bool received(Message &msg, int id);
     virtual void statusParams(String& str);
     void cleanup();
@@ -349,6 +350,7 @@ public:
     bool startGkClient(int mode, int retry = 0, const char* name = "");
     void stopGkClient();
     void asyncGkClient(int mode, const PString& name, int retry);
+    void checkGkClient();
 protected:
     bool internalGkClient(int mode, const PString& name);
     void internalGkNotify(bool registered);
@@ -911,6 +913,12 @@ void YateH323EndPoint::internalGkNotify(bool registered)
     m->addParam("protocol","h323");
     m->addParam("registered",String::boolText(registered));
     Engine::enqueue(m);
+}
+
+void YateH323EndPoint::checkGkClient()
+{
+    if (!m_thread)
+	internalGkNotify(IsRegisteredWithGatekeeper());
 }
 
 
@@ -2204,6 +2212,14 @@ bool H323Driver::msgExecute(Message& msg, String& dest)
     msg.setParam("error","offline");
     return false;
 };
+
+void H323Driver::msgTimer(Message& msg)
+{
+    Driver::msgTimer(msg);
+    ObjList* l = m_endpoints.skipNull();
+    for (; l; l = l->skipNext())
+	static_cast<YateH323EndPoint*>(l->get())->checkGkClient();
+}
 		    
 YateH323EndPoint* H323Driver::findEndpoint(const String& ep) const
 {

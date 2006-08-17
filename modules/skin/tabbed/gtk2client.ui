@@ -95,8 +95,8 @@ tabbed=2,,,,>
 	    label=1,,,,
 	    button=,,68,30,accept,Accept
 	    button=,,68,30,reject,Reject
-	    button=,,68,30,transfer,Transfer
-	    button=,,68,30,conference,Conference
+;	    button=,,68,30,transfer,Transfer
+;	    button=,,68,30,conference,Conference
 	leave=<hbox
 
     leave=<

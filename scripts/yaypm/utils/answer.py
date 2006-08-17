@@ -9,11 +9,16 @@ from yaypm import AbandonedException, TCPDispatcherFactory
 from yaypm.flow import go, getResult
 from yaypm.utils import RestrictedDispatcher, sleep
 
-logger = logging.getLogger('answer')
+logger = logging.getLogger('yaypm.answer')
 
 def answer(yate, called,
            answered_handler = None,
-           answered_target = "moh/default"):
+           answered_target = "moh/default",
+           extensions = {"answered": "1",
+                      "unanswered": "2",
+                      "busy": "3",
+                      "notfound": "4",
+                      "random": "5"}):
     
     def unanswered(yate, route):
         callid = route["id"]
@@ -90,18 +95,18 @@ def answer(yate, called,
 
     def notfound(yate, route):
         route.ret(False)
-        logger.info("[%s, %s] Call not found.", called, route["id"])
+        logger.info("[%s, %s] Number not found.", called, route["id"])
 
     def random(yate, route):
         handlers = [answered, unanswered, busy, notfound]
         h = handlers[randint(0, len(handlers)-1)]
         go(h(yate, route))
     
-    called_aswered = "%s-answered" % called
-    called_unanswered = "%s-unanswered" % called
-    called_busy = "%s-busy" % called
-    called_notfound = "%s-notfound" % called
-    called_random = "%s-random" % called
+    called_aswered = "%s%s" % (called, extensions["answered"])
+    called_unanswered = "%s%s" % (called, extensions["unanswered"])
+    called_busy = "%s%s" % (called, extensions["busy"])
+    called_notfound = "%s%s" % (called, extensions["notfound"])
+    called_random = "%s%s" % (called, extensions["random"])
 
     handlers = {called_aswered: answered,
                 called_unanswered: unanswered,
@@ -121,29 +126,8 @@ def answer(yate, called,
 
 if __name__ in ["__main__", "__embedded_yaypm_module__"]:
     def start(yate):
-        go(answer(yate, "answer"))
-
-if __name__ == "__main__":
-    hdlr = logging.StreamHandler()
-    f = TCPDispatcherFactory(start)
-    reactor.connectTCP("localhost", 5039, f)
-    installSignalHandlers = 1
-elif __name__ == "__embedded_yaypm_module__":
-    hdlr = yaypm.util.YateLogHandler()
-    yaypm.embededStart(start)
-    installSignalHandlers = 0
-
-if __name__ in ["__main__", "__embedded_yaypm_module__"]:
-
-    hdlr = logging.StreamHandler()
+        go(answer(yate, "1234"))
 
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(hdlr)
 
-    yaypm.logger.setLevel(logging.INFO)
-    yaypm.logger.addHandler(hdlr)
-
-    yaypm.logger_messages.setLevel(logging.INFO)
-    yaypm.logger_messages.addHandler(hdlr)
-
-    reactor.run(installSignalHandlers)
+    yaypm.utils.setup(start)

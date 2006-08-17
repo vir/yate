@@ -1,7 +1,7 @@
-import logging
+import logging, yaypm
 from twisted.internet import reactor, defer
 from twisted.python import failure
-from yaypm import CancellableDeferred
+from yaypm import CancellableDeferred, TCPDispatcherFactory
 
 
 def sleep(time, until = None):
@@ -14,6 +14,38 @@ def sleep(time, until = None):
     
     reactor.callLater(time, lambda : not d.cancelled and d.callback(None))
     return d
+
+def setup(start, args = [], kwargs = {},
+          host = "localhost", port = 5039,
+          defaultLogging = True, runreactor = True):
+    try:
+        import yateproxy
+        embedded = True
+    except Exception:
+        embedded = False
+
+    if embedded:
+        yaypm.embeddedStart(start, args, kwargs)
+    else:
+        reactor.connectTCP(host, port,
+            TCPDispatcherFactory(start, args, kwargs))
+
+        if defaultLogging:
+            hdlr = logging.StreamHandler()
+            formatter = ConsoleFormatter('%(name)s %(levelname)s %(message)s')                                
+
+            hdlr.setFormatter(formatter)
+            logger = logging.getLogger()
+
+            logger.addHandler(hdlr)
+            logger.setLevel(logging.DEBUG)
+
+            yaypm.logger.setLevel(logging.INFO)
+            yaypm.logger_messages.setLevel(logging.INFO)
+
+    if not embedded and runreactor:
+        reactor.run()
+
     
 class XOR(CancellableDeferred):
     def __init__(self, *deferreds):

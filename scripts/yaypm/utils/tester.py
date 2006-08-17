@@ -15,120 +15,132 @@ digitresource = "wave/play/./sounds/digits/pl/%s.gsm"
 
 extended_calls = []
 
-impossible_prefix = "tester_prefix"
+impossible_prefix = "_aaaa_tester_prefix"
 
-def do_nothing(client_yate, server_yate, targetid, callid, remoteid, duration):
-    logger.info("doing nothing on %s for %d s." % (callid, duration))    
+def do_nothing(client_yate, server_yate, testid, targetid, callid, remoteid, duration):
+    logger.debug("[%d] doing nothing on %s for %d s." % (testid, callid, duration))
     yield sleep(duration)
     getResult()
-    logger.info("dropping: %s" % callid)        
-    yield client_yate.msg("call.drop", {"id": callid}).dispatch()    
+    logger.debug("[%d] dropping: %s" % (testid, callid))
+    yield client_yate.msg("call.drop", {"id": callid}).dispatch()
     getResult()
 
-def detect_dtmf_and_do_nothing(client_yate, server_yate, targetid, callid, remoteid, duration):
+def detect_dtmf_and_do_nothing(client_yate, server_yate, testid, targetid, callid, remoteid, duration):
     server_yate.msg("chan.masquerade",
         attrs = {"message" : "chan.detectdtmf",
                  "id": remoteid,
                  "consumer": "dtmf/"}).enqueue()
         
-    logger.info("detecting dtmf on %s for %d s." % (callid, duration))    
+    logger.debug("[%d] detecting dtmf on %s for %d s." % (testid, callid, duration))
     yield sleep(duration)
     getResult()
-    logger.info("dropping: %s" % callid)        
-    yield client_yate.msg("call.drop", {"id": callid}).dispatch()    
+    logger.debug("[%d] dropping: %s" % (testid, callid))
+    yield client_yate.msg("call.drop", {"id": callid}).dispatch()
     getResult()
 
     
-def send_dtmfs(client_yate, server_yate, targetid, callid, remoteid, dtmfs):
-    # znak        - wysyla znak jako dtmf
-    # connected?  - czeka checkpoint,
-    # connected?x - czeka x sekund na checkpoint,
-    # s:x,c:y     - robi chan attach z source s i consumer c
-    # _           - przerwa 1s, _*x - x razy 1s
-    # ...         - konczy watek testera, ale nie rozlacza sie
+def send_dtmfs(client_yate, server_yate, testid, targetid, callid, remoteid, dtmfs):
+    # dtmfs syntax
+    # 1-9,*,#     - sends x as dtmf
+    # connected?  - waits for test.checkpoint message with check==connected
+    # connected?x - waits for test.checkpoint message with check==connected for x secs
+    # s:x,c:y     - does chan.attach with source==s and consumer==c
+    # _           - 1s break, _*x - x times 1s
+    # timeout:t   - starts timer that drops connection after t secs
+    # ...         - ends tester thread but does not drop connection
     
-    end = client_yate.onwatch("chan.hangup", lambda m : m["id"] == callid)
-    try:
-        for text in [t.strip() for t in dtmfs.split(",")]:
-            if "c:" in text or "s:" in text:
-                media = text.split("|")
-                consumer = None
-                source = None
-                for m in media:
-                    if m.startswith("c:"):
-                        consumer = m[2:]
-                    elif m.startswith("s:"):
-                        source = m[2:]
-                if source or consumer:
-                    attrs = {"message": "chan.attach",
-                             "id": callid}
-                    if source:
-                        attrs["source"] = source
-                    if consumer:
-                        attrs["consumer"] = consumer
-                    client_yate.msg("chan.masquerade", attrs).enqueue()
-            elif text == "...":
-                logger.info("call %s extended" % callid)
-                extended_calls.append(callid)
-                return
-            elif "?" in text:
-                i = text.find("?")
-                check = text[:i]
-                timeout = None
-                if len(text) > i + 1:
-                    timeout = int(text[i+1:])
 
-                check_def = server_yate.onwatch(
-                        "test.checkpoint",
-                        lambda m : m["id"] == remoteid and m["check"] == check)
+    end = client_yate.onwatch("chan.hangup", lambda m : m["id"] == targetid)
 
-                if timeout:
-                    logger.info(
-                        "waiting for: %ds for checkpoint: %s on: %s" % \
-                                 (timeout, check, remoteid))
-                    yield XOR(check_def, sleep(timeout))
-                    what, _ = getResult()
-                    if what > 0:
-                        logger.info(
-                            "timeout while waiting for: %s on: %s" % \
-                            (check, remoteid))
-                        client_yate.msg("call.drop", {"id": callid}).enqueue()
-                        logger.info(
-                            "dropping connection: %s" % remoteid)                        
-                        return
-                else:
-                    logger.info(
-                        "Waiting for checkpoint: '%s' on: %s" % \
-                            (check, remoteid))                
-                    yield check_def
-                    getResult()
-                    
-            elif text in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "#", "*"]:
-                logger.info("Sending dtmf: %s to %s" % (text, targetid))
-                client_yate.msg(
-                    "chan.dtmf",
-                    {"id": callid, "targetid": targetid, "text": text}).enqueue()
+    for text in [t.strip() for t in dtmfs.split(",")]:
+        if "c:" in text or "s:" in text:
+            media = text.split("|")
+            consumer = None
+            source = None
+            for m in media:
+                if m.startswith("c:"):
+                    consumer = m[2:]
+                elif m.startswith("s:"):
+                    source = m[2:]
+            if source or consumer:
+                attrs = {"message": "chan.attach",
+                         "id": callid}
+                if source:
+                    attrs["source"] = source
+                if consumer:
+                    attrs["consumer"] = consumer
+                client_yate.msg("chan.masquerade", attrs).enqueue()
+        elif text == "...":
+            logger.debug("[%d] call %s extended" % (testid, callid))
+            extended_calls.append(callid)
+            return
+##         elif text.startswith("timeout:"):
+##             timeout = int(text[len("timeout:"):])
+##             drop = client_yate.msg("call.drop",
+##                             {"id": targetid, "reason": "timeout"})
+##             logger.debug(
+##                 "[%d] Setting absolute timeout to: %d s" % (testid, timeout))
+##             reactor.callLater(timeout, drop.enqueue)
+        elif "?" in text:
+            i = text.find("?")
+            check = text[:i]
+            timeout = None
+            if len(text) > i + 1:
+                timeout = int(text[i+1:])
+
+            check_def = server_yate.onwatch(
+                    "test.checkpoint",
+                    lambda m : m["id"] == remoteid and m["check"] == check,
+                    until = end)
+
+            if timeout:
+                logger.debug(
+                    "[%d] waiting for: %ds for checkpoint: %s on: %s" % \
+                             (testid, timeout, check, remoteid))
+                yield XOR(check_def, sleep(timeout))
+                what, _ = getResult()
+                if what > 0:
+                    logger.debug(
+                        "[%d] timeout while waiting %d s for checkpoint: %s on: %s" % \
+                        (testid, timeout, check, remoteid))
+                    client_yate.msg("call.drop", {"id": callid}).enqueue()
+                    logger.debug(
+                        "[%d] dropping connection: %s" % (testid, remoteid))
+                    raise Exception("Timeout while waiting %d s for checkpoint: %s on: %s" % \
+                        (timeout, check, remoteid))
             else:
-                t = 1
-                if "*" in text:
-                    try:
-                        t = int(text[2:])
-                    except ValueError:
-                        pass
-                logger.info("Sleeping for: %d s." % t)
-                yield sleep(t)
+                logger.debug(
+                    "[%d] Waiting for checkpoint: '%s' on: %s" % \
+                        (testid, check, remoteid))                
+                yield check_def
                 getResult()
-        yield sleep(1)
-        getResult()
-        logger.info("dropping: %s" % callid)        
-        yield client_yate.msg("call.drop", {"id": callid}).dispatch()
-        getResult()
-    except AbandonedException, e:
-        logger.info("call %s abandoned" % callid)
-    except DisconnectedException:
-        logger.info("call %s disconnected" % callid)
 
-    logger.info("call %s finished" % callid)
+        elif text in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "#", "*"]:
+            logger.debug("[%d] Sending dtmf: %s to %s" % (testid, text, targetid))
+            client_yate.msg(
+                "chan.dtmf",
+                {"id": callid, "targetid": targetid, "text": text}).enqueue()
+        else:
+            t = 1
+            if "*" in text:
+                try:
+                    t = int(text[2:])
+                except ValueError:
+                    pass
+            logger.debug("[%d] Sleeping for: %d s." % (testid, t))
+            yield sleep(t)
+            getResult()
+    yield sleep(1)
+    getResult()
+    logger.debug("[%d] dropping: %s" % (testid, callid))        
+    yield client_yate.msg("call.drop", {"id": callid}).dispatch()
+    getResult()
+##     except AbandonedException, e:
+##         logger.debug("[%d] call %s abandoned" % (testid, callid))
+##     except DisconnectedException:
+##         logger.debug("[%d] call %s disconnected" % (testid, callid))
+
+    logger.debug("[%d] call %s finished" % (testid, callid))
 
 def select_non_called(dfrs):
     r = []
@@ -142,6 +154,14 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
     concurrent = []
     monitored = []
 
+    successes, failures = {}, {}
+
+    def success(_, t, start):
+        successes[t] = time.time() - start 
+
+    def failure(f, t, start):
+        failures[t] = (time.time() - start, f)
+
     yield server_yate.installMsgHandler("call.route", prio = 50)
     getResult()
     yield client_yate.installWatchHandler("call.answered")
@@ -153,9 +173,9 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
         monitorid = None
         monitor_room = None
 
-        logger.info("Creating monitoring connection.")
+        logger.debug("Creating monitoring connection.")
         
-        execute = client_yae.msg("call.execute",
+        execute = client_yate.msg("call.execute",
          {"callto": "dumb/",
           "target": monitor})
         yield execute.dispatch()
@@ -173,7 +193,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                     lambda m : m["id"] ==  execute["targetid"],
                     until = end)
                 getResult()
-                logger.info("Monitor connection answered.")
+                logger.debug("Monitor connection answered.")
 
                 dumbid = execute["id"]
                 monitorid = execute["targetid"]
@@ -197,16 +217,20 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                     logger.warn("can't create monitor conference on %s" % monitor)
                     monitor = None
             except AbandonedException:
-                logger.info("Monitor connection not answered.")
+                logger.debug("Monitor connection not answered.")
                 monitor = None                
 
+    count = 0
+
     for t in tests:
+        concurrent = select_non_called(concurrent)        
         if len(concurrent) >= con_max:
-            concurrent = select_non_called(concurrent)
             logger.debug("waiting on concurrency limit: %d" % con_max)
             yield defer.DeferredList(concurrent, fireOnOneCallback=True)
             _, fired = getResult()
             concurrent.remove(concurrent[fired])
+
+        count = count + 1
 
         route = server_yate.onmsg(
             "call.route",
@@ -222,11 +246,12 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             return
 
         remoteid_def = go(getRemoteId(route))
-       
+      
         execute = client_yate.msg(
             "call.execute",
             {"callto": "dumb/",
-             "target": target % impossible_prefix})
+             "target": target % impossible_prefix,
+             "maxcall": 1000})
 
         yield execute.dispatch()
 
@@ -249,7 +274,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             if end_first:
                 raise AbandonedException("Call to: %s hungup." % target)
 
-            logger.info("outgoing call to %s" % (callid))
+            logger.debug("[%d] outgoing call to %s" % (count, callid))
         
             yield client_yate.onwatch(
                 "call.answered",
@@ -262,7 +287,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             monitoring = False
 
             if monitor and not monitored :
-                logger.debug("monitoring: %s" % callid)
+                logger.debug("[%d] monitoring: %s" % (count, callid))
                 monitored.append(callid)
                 end.addCallback(
                     lambda _, targetid = targetid: client_yate.msg("call.drop", {"id": targetid}).enqueue())
@@ -275,12 +300,13 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                 getResult()
                 monitoring = True
 
-            logger.debug("recording: %s" % str(callid))
+            logger.debug("[%d] recording: %s" % (count, str(callid)))
             client_yate.msg(
                 "chan.masquerade",
                 {"message": "chan.attach",
                  "id": callid,
-                 "source": "moh/default",
+#                 "source": "moh/default",
+                 "source": "tone/silence",                 
                  "consumer": "wave/record//tmp/recording%s.slin" % \
                      callid.replace("/", "-"),
                  "maxlen": 0}).enqueue()
@@ -288,22 +314,36 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             yield remoteid_def
             remoteid = getResult()
 
+            logger.debug(
+                "[%d] running test with local=(%s, %s) remote=%s" %
+                (count, targetid, callid, remoteid))
+
+            start = time.time()
+
             result = go(handler(
                 client_yate, server_yate,
+                count,
                 targetid,                
                 callid, remoteid, t))
+
+            result.addCallbacks(success, failure,
+                                callbackArgs=(count, start),
+                                errbackArgs=(count, start))
 
             if monitoring:
                 result.addCallback(
                     lambda _, mon_id: monitored.remove(mon_id),
                     callid)
+                
             concurrent.append(result)
         except AbandonedException, e:
             if not route.called:
                 route.cancel()
-            logger.exception("outgoing call to %s abandoned" % callid)
+            logger.warn("[%d] outgoing call to %s abandoned" % (count, callid))
 
-    yield defer.DeferredList(concurrent)            
+    logger.debug(
+        "Waiting for %d tests to finish" % len(select_non_called(concurrent)))
+    yield defer.DeferredList(concurrent)
     logger.info("Test finished!")
 
     if monitor and monitorid:
@@ -312,8 +352,29 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
         getResult()
         yield sleep(1)
         getResult()
+
+    logger.debug("stopping reactor!")        
     reactor.stop()
-                
+
+    logger.info("-"*80)    
+    logger.info("Summary")
+    logger.info("-"*80)
+    logger.info("Tests: %d" % (len(successes) + len(failures)))
+    if successes:
+        logger.info("-"*80)        
+        logger.info("Successes: %d" % len(successes))
+        logger.info("Avg time: %.2f s" %
+                    (reduce(lambda x, y: x + y, successes.values(), 0) /
+                     len(successes)))
+    if failures:
+        logger.info("-"*80)        
+        logger.info("Failures: %d" % len(failures))
+        sumt = 0
+        for tid, (t, f) in failures.iteritems():
+            logger.info("%d, %s %s" % (tid, str(f.type), f.getErrorMessage()))
+            sumt = sumt + t
+        logger.info("Avg time: %.2f s" % (sumt/len(failures)))
+
 def sequential_n(n, tests):
     i = 0
     l = len(tests)
@@ -331,7 +392,7 @@ def do_load_test(
     local_addr, local_port,
     remote_addr, remote_port,
     dest, handler, con_max, tests,
-    monitor = True):
+    monitor = None):
 
     def start_client(client_yate):
         logger.debug("client started");

@@ -50,8 +50,8 @@ try:
 except Exception:
     pass
 
-logger = logging.getLogger('yaypm')
-logger_messages = logging.getLogger('yaypm_messages')
+logger = logging.getLogger('yaypm.debug')
+logger_messages = logging.getLogger('yaypm.debug.messages')
 
 _HANDLER_TYPE_MSG=0
 _HANDLER_TYPE_WCH=1
@@ -60,7 +60,7 @@ _DEFAULT_HANDLER_PRIO=100
 
 _MSG_TYPE_DSCS = ("message", "watch")
 
-def embededStart(*args):
+def embeddedStart(*args):
     """
     Stub, redefined later.
     """
@@ -428,23 +428,24 @@ class EmbeddedDispatcher(Dispatcher):
         run Twisted reactor.
         """
         hdlr = YateLogHandler()
-        logger.setLevel(logging.INFO)
-        logger.addHandler(hdlr)
+        root_logger = logging.getLogger()
+
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(hdlr)
 
         logger_messages.setLevel(logging.INFO)
-        logger_messages.addHandler(hdlr)
        
         Dispatcher.__init__(self)
 
         self._timeout = timeout
 
-        global embededStart        
-        embededStart = lambda start: reactor.callLater(0, start, self)
+        global embeddedStart        
+        embeddedStart = lambda start, args, kwargs: reactor.callLater(0, start, self, *args, **kwargs)
 
         for i, script in enumerate(scripts):
             try:
                 logger.info("Loading script: %s" % script)
-                imp.load_source("__embedded_yaypm_module__%d" % i, script)
+                imp.load_source("__embedded_yaypm_module__", script)
             except Exception:
                 logger.exception("Exception while loading: %s" % script)
                 
@@ -845,7 +846,8 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             if logger.isEnabledFor(logging.WARN):
                 logger.warn("Local %s not set to: %s" % (name, value))
 
-    def __init__(self, connected, reenter = True, selfwatch = True):
+    def __init__(self, connected, args = [], kwargs = {},
+                 reenter = True, selfwatch = True):
         """
         Create a dispatcher.
         """
@@ -856,6 +858,8 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         self.reenter = reenter
         self.selfwatch = selfwatch        
         self.connectedFunction = connected
+        self.args = args
+        self.kwargs = kwargs
         self.afterFirstLine = False
         self.waiting = {}
         self.parsers = {"%%>message": self._messageReceived,
@@ -871,10 +875,10 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             "%%%%>setlocal:reenter:%s\n" % str(self.reenter).lower())
         self.transport.write(
             "%%%%>setlocal:selfwatch:%s\n" % str(self.selfwatch).lower())        
-        self.connectedFunction(self)
+        self.connectedFunction(self, *self.args, **self.kwargs)
 
     def connectionLost(self, reason):
-        logger.info("Connection lost: %s" % reason);
+        logger.info("Connection lost: %s" % reason.getErrorMessage());
         for _, d in self.waiting.values():
             try:
                 raise DisconnectedException()

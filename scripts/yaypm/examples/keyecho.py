@@ -36,10 +36,9 @@ def route(yate):
         lambda m : m["called"] == "ivr").addCallback(on_route)
 
 if __name__ == '__main__':
-
     f = TCPDispatcherFactory(route)
     reactor.connectTCP("localhost", 5039, f)
-       reactor.run()
+    reactor.run()
 elif __name__ == "__embedded_yaypm_module__":
     embededStart(route)
     installSignalHandlers = 0

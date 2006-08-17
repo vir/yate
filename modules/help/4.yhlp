@@ -1,11 +1,14 @@
-<markup><big><b>Help on Help</b></big>
+<markup><big><b>Events Log</b></big>
 
-Yate's help is just a quick source of information.
-Help pages can be browsed by using the buttons
-at the bottom of this window.
+This window keeps record of status messages
+displayed by Yate. You can use it to have a
+second look at the messages that show up for a
+too short time.
 
-In any Yate window you can press the <b>F1</b> key
-to get information specific to that window.
+Text can be copied from here and pasted in an
+editor or e-mail client for debugging purposes.
 
-For more details please visit http://yate.null.ro/
+Please note that the event window text will not
+persist if you stop the Yate client. You have
+to copy any data before closing the program.
 </markup><!-- pango -->

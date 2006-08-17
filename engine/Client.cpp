@@ -379,6 +379,7 @@ static Configuration s_accounts;
 static Configuration s_contacts;
 static Configuration s_providers;
 static Configuration s_history;
+static unsigned int s_eventLen = 0;
 
 // Parameters that are stored with account
 static const char* s_accParams[] = {
@@ -488,6 +489,12 @@ void Client::initWindows()
 
 void Client::initClient()
 {
+    s_eventLen = Engine::config().getIntValue("client","eventlen",4096);
+    if (s_eventLen > 65535)
+	s_eventLen = 65535;
+    else if (s_eventLen && (s_eventLen < 1024))
+	s_eventLen = 1024;
+
     s_accounts = Engine::configFile("client_accounts",true);
     s_accounts.load();
     unsigned int n = s_accounts.sections();
@@ -997,6 +1004,17 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
 bool Client::setStatus(const String& text, Window* wnd)
 {
     Debug(ClientDriver::self(),DebugInfo,"Status '%s' in window %p",text.c_str(),wnd);
+    String tmp;
+    if (getText("log_events",tmp)) {
+	tmp.append(text,"\n");
+	while (s_eventLen && (tmp.length() > s_eventLen)) {
+	    int pos = tmp.find('\n');
+	    if (pos < 0)
+		break;
+	    tmp.assign(tmp.c_str()+pos+1);
+	}
+	setText("log_events",tmp);
+    }
     return setText("status",text,wnd);
 }
 
@@ -1394,6 +1412,13 @@ bool Client::action(Window* wnd, const String& name)
 	    s_history.save();
 	    return true;
 	}
+    }
+    // event log actions
+    else if (name == "log_events_clear") {
+	// clear the event log, be it table or text
+	bool ok = clearTable("log_events");
+	ok = setText("log_events","") || ok;
+	return ok;
     }
     // help window actions
     else if (wnd && name.startsWith("help_")) {

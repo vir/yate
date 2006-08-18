@@ -781,7 +781,9 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	SetLocalUserName(ali);
 	const char* server = params ? params->getValue("server") : 0;
 	if (params && params->getBoolValue("gkclient",server != 0)) {
-	    int ttl = params->getIntValue("gkttl",300);
+	    int ttl = params->getIntValue("interval",300);
+	    // "gkttl" is deprecated
+	    ttl = params->getIntValue("gkttl",ttl);
 	    if (ttl > 0) {
 		// adjust time to live between 1 minute and 1 day
 		if (ttl < 60)

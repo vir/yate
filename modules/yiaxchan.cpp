@@ -116,8 +116,9 @@ public:
 
     /*
      * Logout and remove all lines
+     * @param forced Forcedly remove lines synchronously
      */
-    void clear();
+    void clear(bool forced = false);
 
     /*
      * Update a line from a message
@@ -492,8 +493,6 @@ YIAXLine::YIAXLine(const String& name)
 
 YIAXLine::~YIAXLine()
 {
-    // just in case
-    setRegistered(false);
 }
 
 // Set the registered status, emits user.notify messages if necessary
@@ -567,6 +566,7 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
     line->m_transaction = 0;
     // Unregister operation. Remove line
     if (line->state() == YIAXLine::Unregistering) {
+	line->setRegistered(false);
 	m_lines.remove(line,true);
 	return;
     }
@@ -740,9 +740,13 @@ void YIAXLineContainer::startUnregisterLine(YIAXLine* line)
 }
 
 // Unregister all lines
-void YIAXLineContainer::clear()
+void YIAXLineContainer::clear(bool forced)
 {
     Lock lock(this);
+    if (forced) {
+	m_lines.clear();
+	return;
+    }
     for (ObjList* l = m_lines.skipNull(); l; l = l->next()) {
 	YIAXLine* line = static_cast<YIAXLine*>(l->get());
 	if (line)
@@ -989,6 +993,7 @@ YIAXDriver::~YIAXDriver()
     Output("Unloading module YIAX");
     lock();
     channels().clear();
+    s_lines.clear(true);
     unlock();
     delete m_iaxEngine;
 }

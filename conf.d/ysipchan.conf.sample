@@ -8,7 +8,10 @@
 ;addr=0.0.0.0
 
 ; useragent: string: String to set in User-Agent or Server headers
-;useragent=YATE/0.9.0
+;useragent=YATE/1.0.0
+
+; realm: string: Authentication realm to offer in authentication requests
+;realm=Yate
 
 ; transfer: bool: Allow handling the REFER message to perform transfers
 ;transfer=enable
@@ -36,6 +39,9 @@
 
 ; dtmfinband: bool: Generate DTMF inband by default
 ;dtmfinband=no
+
+; dtmfinfo: bool: Generate INFO messages to send keypad tones
+;dtmfinfo=no
 
 ; privacy: bool: Process and generate privacy related SIP headers
 ;privacy=disable

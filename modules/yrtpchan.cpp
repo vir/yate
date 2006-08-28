@@ -302,7 +302,7 @@ void YRTPWrapper::setupRTP(const char* localip)
     }
     SocketAddr addr(AF_INET);
     if (!addr.host(localip)) {
-	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] could not parse address '%s'",this,localip);
+	Debug(&splugin,DebugWarn,"Wrapper could not parse address '%s' [%p]",localip,this);
 	return;
     }
     for (; attempt; attempt--) {
@@ -310,7 +310,7 @@ void YRTPWrapper::setupRTP(const char* localip)
 	addr.port(lport);
 	if (m_rtp->localAddr(addr)) {
 	    m_port = lport;
-	    Debug(&splugin,DebugAll,"YRTPWrapper [%p] RTP %p bound to %s:%u",this,m_rtp,localip,m_port);
+	    Debug(&splugin,DebugAll,"Session %p bound to %s:%u [%p]",m_rtp,localip,m_port,this);
 	    return;
 	}
     }
@@ -321,12 +321,12 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
     if (!m_rtp) {
-	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] attempted to start RTP before setup!",this);
+	Debug(&splugin,DebugWarn,"Wrapper attempted to start RTP before setup! [%p]",this);
 	return false;
     }
 
     if (m_bufsize) {
-	DDebug(&splugin,DebugAll,"YRTPWrapper [%p] attempted to restart RTP!",this);
+	DDebug(&splugin,DebugAll,"Wrapper attempted to restart RTP! [%p]",this);
 	m_rtp->resync();
 	return true;
     }
@@ -343,19 +343,22 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     if (!format)
 	format = lookup(payload, dict_payloads);
     if (!format) {
-	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] can't find name for payload %d",this,payload);
+	if (payload < 0)
+	    Debug(&splugin,DebugWarn,"Wrapper neither format nor payload specified [%p]",this);
+	else
+	    Debug(&splugin,DebugWarn,"Wrapper can't find name for payload %d [%p]",payload,this);
 	return false;
     }
 
     if (payload == -1)
 	payload = lookup(format, dict_payloads, -1);
     if (payload == -1) {
-	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] can't find payload for format %s",this,format);
+	Debug(&splugin,DebugWarn,"Wrapper can't find payload for format %s [%p]",format,this);
 	return false;
     }
 
     if ((payload < 0) || (payload >= 127)) {
-	Debug(&splugin,DebugWarn,"YRTPWrapper [%p] received invalid payload %d",this,payload);
+	Debug(&splugin,DebugWarn,"Wrapper received invalid payload %d [%p]",payload,this);
 	return false;
     }
 
@@ -697,11 +700,11 @@ bool RtpHandler::received(Message &msg)
 
     YRTPWrapper *w = YRTPWrapper::find(ch,media);
     if (w)
-	Debug(&splugin,DebugAll,"YRTPWrapper %p found by CallEndpoint",w);
+	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint",w);
     if (!w) {
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
 	if (w)
-	    Debug(&splugin,DebugAll,"YRTPWrapper %p found by ID",w);
+	    Debug(&splugin,DebugAll,"Wrapper %p found by ID",w);
     }
     if (!w) {
 	String lip(msg.getValue("localip"));

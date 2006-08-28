@@ -555,8 +555,8 @@ void ConfConsumer::dataForward(const int* mixed, unsigned int samples)
     int16_t* p = (int16_t*)data.data();
     for (unsigned int i=0; i < samples; i++) {
 	int val = *mixed++;
-	// substract our own data - only as much as we have
-	if (i < n)
+	// substract our own data if we contributed - only as much as we have
+	if ((i < n) && hasSignal())
 	    val -= d[i];
 	// saturate symmetrically the result of additions and substraction
 	*p++ = (val < -32767) ? -32767 : ((val > 32767) ? 32767 : val);

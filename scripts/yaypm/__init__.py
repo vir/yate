@@ -29,7 +29,7 @@ from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
 from threading import Thread, Event
 from logging import Formatter
-import logging, imp, time, random
+import logging, imp, time, random, traceback, string
 
 try:
     import yateproxy
@@ -427,13 +427,13 @@ class EmbeddedDispatcher(Dispatcher):
         Create a dispatcher. Execute script in another thread. It should
         run Twisted reactor.
         """
-        hdlr = YateLogHandler()
-        root_logger = logging.getLogger()
+##         hdlr = YateLogHandler()
+##         root_logger = logging.getLogger()
 
-        root_logger.setLevel(logging.INFO)
-        root_logger.addHandler(hdlr)
+##         root_logger.setLevel(logging.INFO)
+##         root_logger.addHandler(hdlr)
 
-        logger_messages.setLevel(logging.INFO)
+##         logger_messages.setLevel(logging.INFO)
        
         Dispatcher.__init__(self)
 
@@ -444,10 +444,22 @@ class EmbeddedDispatcher(Dispatcher):
 
         for i, script in enumerate(scripts):
             try:
-                logger.info("Loading script: %s" % script)
+                yateproxy.debug("pymodule(%s)" % "yaypm", 
+                                logging.DEBUG,
+                                "Loading script: %s" % script)
                 imp.load_source("__embedded_yaypm_module__", script)
             except Exception:
-                logger.exception("Exception while loading: %s" % script)
+                yateproxy.debug("pymodule(%s)" % "yaypm", 
+                                logging.ERROR,
+                                "Exception while loading: %s\n%s\n%s" %
+                                (script,
+                                 sys.exc_info()[1],
+                                 string.join(traceback.format_tb(sys.exc_info()[2]))))
+                yateproxy.debug("pymodule(%s)" % "yaypm", 
+                                logging.WARN,
+                                "Reactor thread not started!")
+                self.thread = None
+                return
                 
         self.thread = Thread(
             name = "pymodule script thread",
@@ -457,6 +469,10 @@ class EmbeddedDispatcher(Dispatcher):
         self.interpreter = interpreter
                
         self.thread.start()
+
+        yateproxy.debug("pymodule(%s)" % "yaypm", 
+                        logging.INFO,
+                        "Reactor thread started!")
            
     def installMsgHandler(self, name, prio = 100):
         """
@@ -497,9 +513,11 @@ class EmbeddedDispatcher(Dispatcher):
         Stop dispatcher by stopping reactor.
         """
         
-        reactor.callFromThread(reactor.stop)        
-        while self.thread.isAlive():
-            self.thread.join(1)
+        reactor.callFromThread(reactor.stop)
+
+        if self.thread:
+            while self.thread.isAlive():
+                self.thread.join(1)
         
     def _fireHandlersAndSignal(self, m, hdlr_type):
         """
@@ -874,7 +892,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         self.transport.write(
             "%%%%>setlocal:reenter:%s\n" % str(self.reenter).lower())
         self.transport.write(
-            "%%%%>setlocal:selfwatch:%s\n" % str(self.selfwatch).lower())        
+            "%%%%>setlocal:selfwatch:%s\n" % str(self.selfwatch).lower())
         self.connectedFunction(self, *self.args, **self.kwargs)
 
     def connectionLost(self, reason):
@@ -963,8 +981,12 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             self, name = name, retvalue = retValue, attrs = attrs) 
 
 class TCPDispatcherFactory(ClientFactory):
-    def __init__(self, connected, reenter = True, selfwatch = True):
+    def __init__(self, connected,
+                 args = [], kwargs = {},
+                 reenter = True, selfwatch = True):
         self.connected = connected
+        self.args = args
+        self.kwargs = kwargs
         self.reenter = reenter
         self.selfwatch = selfwatch
 
@@ -976,7 +998,10 @@ class TCPDispatcherFactory(ClientFactory):
         if logger.isEnabledFor(logging.DEBUG):        
             logger.debug("Connected.")        
         return TCPDispatcher(
-            self.connected, self.reenter, self.selfwatch)
+            self.connected,
+            self.args, self.kwargs,
+            self.reenter,
+            self.selfwatch)
     
     def clientConnectionLost(self, connector, reason):
         pass

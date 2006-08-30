@@ -5,7 +5,7 @@
 
  Flow submodule for YAYPM.
  
- Copyright (C) 2005 Maciek Kaminski 
+ Copyright (C) 2006 Maciek Kaminski 
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by

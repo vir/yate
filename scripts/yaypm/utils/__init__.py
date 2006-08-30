@@ -1,3 +1,25 @@
+#!/usr/bin/python
+# -*- coding: iso-8859-2; -*-
+"""
+ Utils module for YAYPM
+ 
+ Copyright (C) 2005 Maciek Kaminski
+ 
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+"""
+
 import logging, yaypm
 from twisted.internet import reactor, defer
 from twisted.python import failure
@@ -19,13 +41,17 @@ def setup(start, args = [], kwargs = {},
           host = "localhost", port = 5039,
           defaultLogging = True, runreactor = True):
     try:
-        import yateproxy
+        import yateproxy, YateLogHandler
         embedded = True
     except Exception:
         embedded = False
 
     if embedded:
         yaypm.embeddedStart(start, args, kwargs)
+        if defaultLogging:        
+            hdlr = YateLogHandler()
+            formatter = ConsoleFormatter('%(message)s')                                
+        
     else:
         reactor.connectTCP(host, port,
             TCPDispatcherFactory(start, args, kwargs))
@@ -34,14 +60,15 @@ def setup(start, args = [], kwargs = {},
             hdlr = logging.StreamHandler()
             formatter = ConsoleFormatter('%(name)s %(levelname)s %(message)s')                                
 
-            hdlr.setFormatter(formatter)
-            logger = logging.getLogger()
+    if defaultLogging:
+        hdlr.setFormatter(formatter)
+        logger = logging.getLogger()
 
-            logger.addHandler(hdlr)
-            logger.setLevel(logging.DEBUG)
+        logger.addHandler(hdlr)
+        logger.setLevel(logging.DEBUG)
 
-            yaypm.logger.setLevel(logging.INFO)
-            yaypm.logger_messages.setLevel(logging.INFO)
+        yaypm.logger.setLevel(logging.INFO)
+        yaypm.logger_messages.setLevel(logging.INFO)
 
     if not embedded and runreactor:
         reactor.run()

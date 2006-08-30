@@ -1,5 +1,26 @@
 #!/usr/bin/python
 # -*- coding: iso-8859-2; -*-
+"""
+ Tester module for YAYPM. Generates calls, and allows to define incall
+ activity like sending DTMFs. Can be run on to separate yates to imitate
+ realistic load.
+ 
+ Copyright (C) 2005 Maciek Kaminski
+ 
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+"""
 
 from yaypm import TCPDispatcherFactory, AbandonedException
 from yaypm.flow import go, logger_flow, getResult
@@ -18,6 +39,9 @@ extended_calls = []
 impossible_prefix = "_aaaa_tester_prefix"
 
 def do_nothing(client_yate, server_yate, testid, targetid, callid, remoteid, duration):
+    """
+    Defines incall activity. Does nothing for specified number of seconds.
+    """
     logger.debug("[%d] doing nothing on %s for %d s." % (testid, callid, duration))
     yield sleep(duration)
     getResult()
@@ -26,6 +50,10 @@ def do_nothing(client_yate, server_yate, testid, targetid, callid, remoteid, dur
     getResult()
 
 def detect_dtmf_and_do_nothing(client_yate, server_yate, testid, targetid, callid, remoteid, duration):
+    """
+    Defines incall activity. Enables dtmf detection on server and does nothing
+    for specified number of seconds.
+    """
     server_yate.msg("chan.masquerade",
         attrs = {"message" : "chan.detectdtmf",
                  "id": remoteid,
@@ -40,15 +68,18 @@ def detect_dtmf_and_do_nothing(client_yate, server_yate, testid, targetid, calli
 
     
 def send_dtmfs(client_yate, server_yate, testid, targetid, callid, remoteid, dtmfs):
-    # dtmfs syntax
-    # 1-9,*,#     - sends x as dtmf
-    # connected?  - waits for test.checkpoint message with check==connected
-    # connected?x - waits for test.checkpoint message with check==connected for x secs
-    # s:x,c:y     - does chan.attach with source==s and consumer==c
-    # _           - 1s break, _*x - x times 1s
-    # timeout:t   - starts timer that drops connection after t secs
-    # ...         - ends tester thread but does not drop connection
-    
+    """
+    Defines incall activity. Activity is defined in dtmfs string according
+    to the following rules:
+      1-9,*,#     - sends x as dtmf
+      connected?  - waits for test.checkpoint message with check==connected
+      connected?x - waits for test.checkpoint message with check==connected for x secs
+      s:x,c:y     - does chan.attach with source==s and consumer==c
+      _           - 1s break, _*x - x times 1s
+      timeout:t   - starts timer that drops connection after t secs
+      ...         - ends tester thread but does not drop connection
+    Example: _,1,1? - waits 1 second, sends 1, waits for 1 checkpoint.
+    """
 
     end = client_yate.onwatch("chan.hangup", lambda m : m["id"] == targetid)
 
@@ -142,7 +173,11 @@ def send_dtmfs(client_yate, server_yate, testid, targetid, callid, remoteid, dtm
 
     logger.debug("[%d] call %s finished" % (testid, callid))
 
+
 def select_non_called(dfrs):
+    """
+    Select deferreds that have not been fired.
+    """
     r = []
     for d in dfrs:
         if not d.called:
@@ -150,7 +185,16 @@ def select_non_called(dfrs):
     return r
 
 def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
-
+    """
+    Generate load. Needs:
+        client and server yate connections;
+        target number;
+        handler function that defines incall activity;
+        starts not more than con_max concurrent calls;
+        tests is a list of tests to execute
+        monitor is a extension that will be used to monitor tests.
+    """
+    
     concurrent = []
     monitored = []
 
@@ -376,6 +420,9 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
         logger.info("Avg time: %.2f s" % (sumt/len(failures)))
 
 def sequential_n(n, tests):
+    """
+    Repeat tests sequentially n times
+    """
     i = 0
     l = len(tests)
     while i < n:
@@ -383,6 +430,9 @@ def sequential_n(n, tests):
         i = i + 1
 
 def random_n(n, tests):
+    """
+    Repeat tests in random order n times.
+    """
     i = 0
     while i < n:
         yield tests[random.randint(0, len(tests)-1)]
@@ -393,6 +443,10 @@ def do_load_test(
     remote_addr, remote_port,
     dest, handler, con_max, tests,
     monitor = None):
+
+    """
+    Executes test.
+    """
 
     def start_client(client_yate):
         logger.debug("client started");

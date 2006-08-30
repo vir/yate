@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from twisted.internet import reactor, defer
-from yaypm import TCPDispatcherFactory, embededStart
+from yaypm import TCPDispatcherFactory, embeddedStart
 
 def route(yate):
     def on_route(route):
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     reactor.connectTCP("localhost", 5039, f)
     reactor.run()
 elif __name__ == "__embedded_yaypm_module__":
-    embededStart(route)
+    embeddedStart(route)
     installSignalHandlers = 0
     reactor.run(installSignalHandlers)
 

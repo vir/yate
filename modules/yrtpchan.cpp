@@ -664,6 +664,9 @@ bool AttachHandler::received(Message &msg)
 
 bool RtpHandler::received(Message &msg)
 {
+    String trans = msg.getValue("transport");
+    if (trans && !trans.startsWith("RTP/"))
+	return false;
     Debug(&splugin,DebugAll,"RTP message received");
     String dir(msg.getValue("direction"));
     RTPSession::Direction direction = RTPSession::SendRecv;

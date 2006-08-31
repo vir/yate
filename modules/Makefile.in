@@ -7,11 +7,13 @@ DESTDIR :=
 # override DEBUG at compile time to enable full debug or remove it all
 DEBUG :=
 
+CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
-CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+CFLAGS := -O2 @MODULE_CFLAGS@ @INLINE_FLAGS@
+CPPFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODRELAX:= @MODULE_LDRELAX@
@@ -22,7 +24,8 @@ SUBDIRS := skin help gtk2
 MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate \
 	regexroute.yate regfile.yate accfile.yate register.yate \
-	tonegen.yate wavefile.yate conference.yate moh.yate \
+	tonegen.yate tonedetect.yate wavefile.yate \
+	conference.yate moh.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
 	pbx.yate dbpbx.yate pbxassist.yate dumbchan.yate callfork.yate \
 	extmodule.yate yradius.yate \
@@ -57,6 +60,10 @@ ifeq (@HAVE_PRI_CB@_@HAVE_WANPIPE@,yes_yes)
 PROGS := $(PROGS) wpchan.yate
 endif
 
+ifneq (@HAVE_SPANDSP@,no)
+PROGS := $(PROGS) faxchan.yate
+endif
+
 ifneq (@HAVE_H323@,no)
 PROGS := $(PROGS) h323chan.yate
 endif
@@ -80,7 +87,8 @@ endif
 
 LOCALFLAGS =
 LOCALLIBS =
-COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+CCOMPILE = $(CC) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CPPFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
@@ -199,6 +207,9 @@ ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
+
+faxchan.yate: LOCALLIBS = -lspandsp
+faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
 ysipchan.yate: ../contrib/ysip/libyatesip.a
 ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ysip

@@ -412,6 +412,51 @@ fi
 AC_SUBST(HAVE_ILBC)
 AC_SUBST(ILBC_INC)
 
+HAVE_SPANDSP=no
+SPANDSP_INC=""
+AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp],[use spandsp library if available (default)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=yes])
+if [[ "x$ac_cv_use_spandsp" = "xyes" ]]; then
+for i in /usr/include /usr/local/include; do
+    ac_cv_use_spandsp="$i"
+    test -f "$ac_cv_use_spandsp/spandsp.h" && break
+done
+fi
+if [[ "x$ac_cv_use_spandsp" != "xno" ]]; then
+AC_MSG_CHECKING([for usable spandsp in $ac_cv_use_spandsp])
+if [[ -f "$ac_cv_use_spandsp/spandsp.h" ]]; then
+AC_LANG_SAVE
+AC_LANG([C++])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror"
+AC_TRY_COMPILE([
+#define __STDC_LIMIT_MACROS
+#include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <spandsp.h>
+],[
+fax_state_t fax_state;
+t38_terminal_state_t t38_t_state;
+t38_gateway_state_t t38_g_state;
+fax_init(&fax_state,TRUE);
+t30_set_tx_file(&fax_state.t30_state,"abc",-1,-1);
+t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
+t38_gateway_init(&t38_g_state,NULL,NULL);
+],
+HAVE_SPANDSP="yes"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_LANG_RESTORE
+if [[ "x$HAVE_SPANDSP" = "xyes" ]]; then
+SPANDSP_INC="-I$ac_cv_use_spandsp"
+fi
+fi
+AC_MSG_RESULT([$HAVE_SPANDSP])
+fi
+AC_SUBST(HAVE_SPANDSP)
+AC_SUBST(SPANDSP_INC)
+
 HAVE_PWLIB=no
 PWLIB_RTTI=none
 PWLIB_INC=""

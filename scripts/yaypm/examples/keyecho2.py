@@ -2,6 +2,9 @@
 from twisted.internet import reactor, defer
 from yaypm import TCPDispatcherFactory, AbandonedException
 from yaypm.flow import go, getResult
+import logging, yaypm.utils
+
+logger = logging.getLogger('yaypm.examples')
 
 def ivr(yate, callid):
     try:
@@ -18,7 +21,7 @@ def ivr(yate, callid):
                  {"id": targetid,
                   "targetid": callid}).enqueue()
 
-        print "Call %s answered." % callid
+        logger.debug("Call %s answered." % callid)
 
         while True:
             yield yate.onmsg(
@@ -27,7 +30,7 @@ def ivr(yate, callid):
                 end)
             dtmf = getResult()
 
-            print "Dtmf %s received." % dtmf["text"]
+            logger.debug("Dtmf %s received." % dtmf["text"])
 
             yate.msg("chan.masquerade",
                 {"message" : "chan.attach",
@@ -38,7 +41,7 @@ def ivr(yate, callid):
             dtmf.ret(True)
 
     except AbandonedException, e:
-        print "Call %s abandoned." % callid
+        logger.debug("Call %s abandoned." % callid)
 
 def route(yate):
     while True:
@@ -47,10 +50,7 @@ def route(yate):
         go(ivr(yate, route["id"]))
         route.ret(True, "dumb/")
 
-def start(yate):
-    go(route(yate))
+if __name__ in ["__main__", "__embedded_yaypm_module__"]:
+    logger.setLevel(logging.DEBUG)
+    yaypm.utils.setup(lambda yate: go(route(yate)))
 
-if __name__ == '__main__':
-    f = TCPDispatcherFactory(start)
-    reactor.connectTCP("localhost", 5039, f)
-    reactor.run()

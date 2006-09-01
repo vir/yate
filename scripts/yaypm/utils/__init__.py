@@ -41,9 +41,10 @@ def setup(start, args = [], kwargs = {},
           host = "localhost", port = 5039,
           defaultLogging = True, runreactor = True):
     try:
-        import yateproxy, YateLogHandler
+        import yateproxy
+        from yaypm import YateLogHandler
         embedded = True
-    except Exception:
+    except Exception, e:
         embedded = False
 
     if embedded:

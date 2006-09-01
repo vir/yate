@@ -264,11 +264,18 @@ void FaxWrapper::debugName(const char* name)
 	DebugEnabler::debugName(m_name);
     }
     if (m_t30) {
-	int level = SPAN_LOG_SHOW_SEVERITY|SPAN_LOG_SHOW_PROTOCOL|SPAN_LOG_SHOW_TAG;
-	if (debugAt(DebugAll))
+	int level = SPAN_LOG_SHOW_PROTOCOL|SPAN_LOG_SHOW_TAG;
+	// this is ugly - but spandsp's logging isn't fine enough
+	if (false)
+	    ;
+#ifdef XDEBUG
+	else if (debugAt(DebugAll))
 	    level |= SPAN_LOG_DEBUG;
+#endif
+#ifdef DDEBUG
 	else if (debugAt(DebugInfo))
 	    level |= SPAN_LOG_FLOW;
+#endif
 	else if (debugAt(DebugNote))
 	    level |= SPAN_LOG_PROTOCOL_WARNING;
 	else if (debugAt(DebugMild))

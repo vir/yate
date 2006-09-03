@@ -49,7 +49,8 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
-#define DATA_CHUNK 320
+#define FAX_DATA_CHUNK 320
+#define T38_DATA_CHUNK 160
 
 class FaxWrapper;
 
@@ -138,7 +139,17 @@ public:
     virtual void run();
     virtual void rxData(const DataBlock& data, unsigned long tStamp);
 private:
+    int txData(const void* buf, int len, int seq, int count);
+    static int txHandler(t38_core_state_t* t38s, void* userData,
+	const uint8_t* buf, int len, int count);
     t38_terminal_state_t m_t38;
+};
+
+// A gateway between analogic and digital fax
+class T38Gatway : public FaxWrapper
+{
+private:
+    t38_gateway_state_t m_t38;
 };
 
 // A channel (terminal) that sends or receives a local TIFF file
@@ -420,9 +431,9 @@ int FaxTerminal::txBlock()
     if (m_lastr < 0)
 	return m_lastr;
 
-    DataBlock data(0,DATA_CHUNK);
+    DataBlock data(0,FAX_DATA_CHUNK);
     int r = 2*fax_tx(&m_fax, (int16_t *) data.data(),data.length()/2);
-    if (r != DATA_CHUNK && r != m_lastr)
+    if (r != FAX_DATA_CHUNK && r != m_lastr)
 	Debug(this,DebugNote,"Generated %d bytes! [%p]",r,this);
     m_lastr = r;
     lock.drop();
@@ -446,8 +457,8 @@ void FaxTerminal::rxData(const DataBlock& data, unsigned long tStamp)
     {
 	// feed the decoder with small chunks of data (16 bytes/ms)
 	int len = data.length() - pos;
-	if (len > DATA_CHUNK)
-	    len = DATA_CHUNK;
+	if (len > FAX_DATA_CHUNK)
+	    len = FAX_DATA_CHUNK;
 	rxBlock(((char *)data.data())+pos, len);
 	pos += len;
     }
@@ -461,7 +472,8 @@ T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool 
 	(iscaller ? "caller" : "called"),
 	(sender ? "transmit" : "receive"),
 	file,this);
-    t38_terminal_init(&m_t38,iscaller,NULL,this);
+    t38_terminal_init(&m_t38,iscaller,txHandler,this);
+    t38_set_t38_version(&m_t38.t38,1);
     init(&m_t38.t30_state,ident,file,sender);
 }
 
@@ -474,12 +486,28 @@ T38Terminal::~T38Terminal()
 void T38Terminal::run()
 {
     Debug(this,DebugStub,"Please implement T38Terminal::run()");
+    t38_terminal_send_timeout(&m_t38,T38_DATA_CHUNK);
+}
+
+// Static callback that sends out T.38 data
+int T38Terminal::txHandler(t38_core_state_t* t38s, void* userData,
+    const uint8_t* buf, int len, int count)
+{
+    if (!(t38s && userData))
+	return 1;
+    return static_cast<T38Terminal*>(userData)->txData(buf,len,t38s->tx_seq_no,count);
 }
 
 // Handle received digital data
 void T38Terminal::rxData(const DataBlock& data, unsigned long tStamp)
 {
     Debug(this,DebugStub,"Please implement T38Terminal::rxData()");
+    t38_core_rx_ifp_packet(&m_t38.t38,tStamp,(uint8_t*)data.data(),data.length());
+}
+
+int T38Terminal::txData(const void* buf, int len, int seq, int count)
+{
+    Debug(this,DebugStub,"Please implement T38Terminal::txData()");
 }
 
 

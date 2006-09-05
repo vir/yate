@@ -593,11 +593,8 @@ bool AttachHandler::received(Message &msg)
     if (src.null())
 	more--;
     else {
-	Regexp r("^rtp/\\(.*\\)$");
-	if (src.matches(r)) {
-	    src = src.matchString(1);
+	if (src.startSkip("rtp/",false))
 	    more--;
-	}
 	else
 	    src = "";
     }
@@ -606,11 +603,8 @@ bool AttachHandler::received(Message &msg)
     if (cons.null())
 	more--;
     else {
-	Regexp r("^rtp/\\(.*\\)$");
-	if (cons.matches(r)) {
-	    cons = cons.matchString(2);
+	if (cons.startSkip("rtp/",false))
 	    more--;
-	}
 	else
 	    cons = "";
     }

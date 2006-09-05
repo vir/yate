@@ -644,6 +644,9 @@ bool AttachHandler::received(Message &msg)
 	    ch->setConsumer(c,media);
 	    c->deref();
 	}
+
+	if (w->deref())
+	    return false;
     }
 
     if (rip && rport)

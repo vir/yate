@@ -647,7 +647,7 @@ void PriSpan::proceedingChan(int chan)
 	return;
     }
     Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
-    getChan(chan)->setTimeout(120000000);
+    getChan(chan)->extTimeout(120000000);
     Engine::enqueue(getChan(chan)->message("call.progress"));
 }
 
@@ -658,7 +658,7 @@ void PriSpan::ringingChan(int chan)
 	return;
     }
     Debug(m_driver,DebugInfo,"Extending timeout on channel %d on span %d",chan,m_span);
-    getChan(chan)->setTimeout(120000000);
+    getChan(chan)->extTimeout(120000000);
     Engine::enqueue(getChan(chan)->message("call.ringing"));
 }
 
@@ -1029,7 +1029,7 @@ void PriChan::dataChanged()
 void PriChan::callAccept(Message& msg)
 {
     Debug(this,DebugAll,"PriChan::callAccept() [%p]",this);
-    setTimeout(180000000);
+    extTimeout(180000000);
     Channel::callAccept(msg);
 }
 

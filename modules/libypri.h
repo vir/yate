@@ -207,6 +207,8 @@ public:
     virtual void goneUp();
     inline void setTimeout(u_int64_t tout)
 	{ m_timeout = tout ? Time::now()+tout : 0; }
+    inline void extTimeout(u_int64_t tout)
+	{ if (m_timeout) setTimeout(tout); }
     const char *chanStatus() const;
     bool isISDN() const
 	{ return m_isdn; }

@@ -215,6 +215,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _yiaxchan
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _tonedetect
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -619,6 +622,21 @@ Package=<4>
 ###############################################################################
 
 Project: "_rmanager"=.\_rmanager.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_tonedetect"=.\_tonedetect.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

@@ -76,6 +76,7 @@ Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Components: client 
 Source: "Release\regfile.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: server debug
 Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Components: driver\base
+Source: "Release\tonedetect.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\base
 Source: "Release\yradius.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\register.yate"; DestDir: "{app}\modules"; Components: server

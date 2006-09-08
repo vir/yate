@@ -885,6 +885,33 @@ public:
 	{ return m_callRecord; }
 
     /**
+     * Adds a data consumer to the list of sniffers of the local call data
+     * @param sniffer Pointer to the DataConsumer to add to sniffer list
+     * @return True if the sniffer was added to list, false if NULL or already added
+     */
+    bool addSniffer(DataConsumer* sniffer);
+
+    /**
+     * Remove a data consumer from the list of sniffers of the local call data
+     * @param sniffer Pointer to the DataConsumer to remove from sniffer list
+     * @return True if the sniffer was removed from list
+     */
+    bool delSniffer(DataConsumer* sniffer);
+
+    /**
+     * Find a sniffer by name
+     * @param name Name of the sniffer to find
+     * @return Pointer to DataConsumer or NULL if not found
+     */
+    inline DataConsumer* getSniffer(const String& name)
+	{ return static_cast<DataConsumer*>(m_sniffers[name]); }
+
+    /**
+     * Removes all sniffers from the list and dereferences them
+     */
+    void clearSniffers();
+
+    /**
      * Get a pointer to the peer endpoint
      * @return A pointer to the peer endpoint or NULL
      */
@@ -922,6 +949,7 @@ private:
     CallEndpoint* m_call;
     DataConsumer* m_peerRecord;
     DataConsumer* m_callRecord;
+    ObjList m_sniffers;
 };
 
 /**
@@ -1455,6 +1483,13 @@ public:
     virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
 
     /**
+     * Common processing after connecting the outgoing call, should be called
+     *  from Driver's msgExecute()
+     * @param msg Notification call.execute message while being dispatched
+     */
+    virtual void callConnect(Message& msg);
+
+    /**
      * Set the local debugging level
      * @param msg Debug setting message
      */
@@ -1659,6 +1694,14 @@ protected:
      * @return True on success
      */
     bool dtmfInband(const char* tone);
+
+    /**
+     * Attempt to install a data sniffer to detect inband tones
+     * Needs a tone detector module capable of attaching sniffer consumers.
+     * @param sniffer Name of the sniffer to install
+     * @return True on success
+     */
+    bool toneDetect(const char* sniffer = "tone/*");
 
 private:
     void init();

@@ -616,6 +616,7 @@ DataEndpoint::~DataEndpoint()
     disconnect();
     setPeerRecord();
     setCallRecord();
+    clearSniffers();
     setSource();
     setConsumer();
 }
@@ -748,6 +749,9 @@ void DataEndpoint::setSource(DataSource* source)
 	    if (m_callRecord->getConnSource())
 		Debug(DebugWarn,"consumer source not cleared in %p",m_callRecord);
 	}
+	ObjList* l = m_sniffers.skipNull();
+	for (; l; l = l->skipNext())
+	    DataTranslator::detachChain(temp,static_cast<DataConsumer*>(l->get()));
 	temp->deref();
     }
     if (source) {
@@ -758,6 +762,9 @@ void DataEndpoint::setSource(DataSource* source)
 	    DataTranslator::attachChain(source,c2);
 	if (m_callRecord)
 	    DataTranslator::attachChain(source,m_callRecord);
+	ObjList* l = m_sniffers.skipNull();
+	for (; l; l = l->skipNext())
+	    DataTranslator::attachChain(source,static_cast<DataConsumer*>(l->get()));
     }
     m_source = source;
     if (c1)
@@ -839,6 +846,53 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
 	if (m_source)
 	    DataTranslator::detachChain(m_source,temp);
 	temp->deref();
+    }
+}
+
+bool DataEndpoint::addSniffer(DataConsumer* sniffer)
+{
+    if (!sniffer)
+	return false;
+    Lock lock(s_dataMutex);
+    if (m_sniffers.find(sniffer))
+	return false;
+    if (!sniffer->ref())
+	return false;
+    XDebug(DebugInfo,"DataEndpoint::addSniffer(%p) s=%p [%p]",
+	sniffer,m_source,this);
+    m_sniffers.append(sniffer);
+    if (m_source)
+	DataTranslator::attachChain(m_source,sniffer);
+    return true;
+}
+
+bool DataEndpoint::delSniffer(DataConsumer* sniffer)
+{
+    if (!sniffer)
+	return false;
+    Lock lock(s_dataMutex);
+    XDebug(DebugInfo,"DataEndpoint::delSniffer(%p) s=%p [%p]",
+	sniffer,m_source,this);
+    if (!m_sniffers.remove(sniffer,false))
+	return false;
+    if (m_source)
+	DataTranslator::detachChain(m_source,sniffer);
+    sniffer->deref();
+    return true;
+}
+
+void DataEndpoint::clearSniffers()
+{
+    Lock lock(s_dataMutex);
+    for (;;) {
+	DataConsumer* sniffer = static_cast<DataConsumer*>(m_sniffers.remove(false));
+	if (!sniffer)
+	    return;
+	XDebug(DebugInfo,"DataEndpoint::clearSniffers() sn=%p s=%p [%p]",
+	    sniffer,m_source,this);
+	if (m_source)
+	    DataTranslator::detachChain(m_source,sniffer);
+	sniffer->deref();
     }
 }
 

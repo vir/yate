@@ -956,6 +956,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg->userData());
     if (ch && ch->connect(m_chan,msg->getValue("reason"))) {
+	m_chan->callConnect(*msg);
 	m_chan->setTarget(msg->getValue("id"));
 	msg->setParam("peerid",m_chan->id());
 	msg->setParam("targetid",m_chan->id());

@@ -585,6 +585,12 @@ void Channel::callAccept(Message& msg)
     if (m_billid.null())
 	m_billid = msg.getValue("billid");
     m_targetid = msg.getValue("targetid");
+    String detect = msg.getValue("tonedetect_in");
+    if (detect && detect.toBoolean(true)) {
+	if (detect.toBoolean(false))
+	    detect = "tone/*";
+	toneDetect(detect);
+    }
     if (msg.getBoolValue("autoanswer"))
 	msgAnswered(msg);
     else if (msg.getBoolValue("autoring"))
@@ -596,6 +602,16 @@ void Channel::callAccept(Message& msg)
 	Debug(this,DebugNote,"Answering now call %s because we have no targetid [%p]",
 	    id().c_str(),this);
 	msgAnswered(msg);
+    }
+}
+
+void Channel::callConnect(Message& msg)
+{
+    String detect = msg.getValue("tonedetect_out");
+    if (detect && detect.toBoolean(true)) {
+	if (detect.toBoolean(false))
+	    detect = "tone/*";
+	toneDetect(detect);
     }
 }
 
@@ -615,6 +631,18 @@ bool Channel::dtmfInband(const char* tone)
     String tmp("tone/dtmfstr/");
     tmp += tone;
     m.setParam("override",tmp);
+    m.setParam("single","yes");
+    return Engine::dispatch(m);
+}
+
+bool Channel::toneDetect(const char* sniffer)
+{
+    if (null(sniffer))
+	return false;
+    Message m("chan.attach");
+    complete(m,true);
+    m.userData(this);
+    m.setParam("sniffer",sniffer);
     m.setParam("single","yes");
     return Engine::dispatch(m);
 }

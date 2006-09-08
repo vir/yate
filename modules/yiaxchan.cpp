@@ -1118,6 +1118,7 @@ bool YIAXDriver::msgExecute(Message& msg, String& dest)
     tr->setUserData(conn);
     Channel* ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
 	// Enable trunking if trunkout parameter is enabled

@@ -3505,6 +3505,7 @@ bool SIPDriver::msgExecute(Message& msg, String& dest)
     if (conn->getTransaction()) {
 	CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
 	if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	    conn->callConnect(msg);
 	    msg.setParam("peerid",conn->id());
 	    msg.setParam("targetid",conn->id());
 	    conn->deref();

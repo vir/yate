@@ -434,7 +434,7 @@ int FaxTerminal::txBlock()
     DataBlock data(0,FAX_DATA_CHUNK);
     int r = 2*fax_tx(&m_fax, (int16_t *) data.data(),data.length()/2);
     if (r != FAX_DATA_CHUNK && r != m_lastr)
-	Debug(this,DebugNote,"Generated %d bytes! [%p]",r,this);
+	Debug(this,r ? DebugNote : DebugAll,"Generated %d bytes [%p]",r,this);
     m_lastr = r;
     lock.drop();
     if (m_source)

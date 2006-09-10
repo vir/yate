@@ -189,11 +189,13 @@ public:
     FaxDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual bool setDebug(Message& msg, const String& target);
 private:
     bool m_first;
 };
 
 static FaxDriver plugin;
+static bool s_debug = false;
 
 FaxSource::FaxSource(FaxWrapper* wrapper, const char* format)
     : DataSource(format), m_wrap(wrapper)
@@ -275,18 +277,12 @@ void FaxWrapper::debugName(const char* name)
 	DebugEnabler::debugName(m_name);
     }
     if (m_t30) {
-	int level = SPAN_LOG_SHOW_PROTOCOL|SPAN_LOG_SHOW_TAG;
+	int level = SPAN_LOG_SHOW_PROTOCOL|SPAN_LOG_SHOW_TAG|SPAN_LOG_SHOW_SEVERITY;
 	// this is ugly - but spandsp's logging isn't fine enough
-	if (false)
-	    ;
-#ifdef XDEBUG
-	else if (debugAt(DebugAll))
+	if (s_debug && debugAt(DebugAll))
 	    level |= SPAN_LOG_DEBUG;
-#endif
-#ifdef DDEBUG
-	else if (debugAt(DebugInfo))
+	else if (s_debug && debugAt(DebugInfo))
 	    level |= SPAN_LOG_FLOW;
-#endif
 	else if (debugAt(DebugNote))
 	    level |= SPAN_LOG_PROTOCOL_WARNING;
 	else if (debugAt(DebugMild))
@@ -351,13 +347,15 @@ void FaxWrapper::cleanup()
 // Called on intermediate states
 void FaxWrapper::phaseB(int result)
 {
-    Debug(this,DebugInfo,"Phase B code 0x%X [%p]",result,this);
+    Debug(this,DebugInfo,"Phase B code 0x%X: %s [%p]",
+	result,t30_frametype(result),this);
 }
 
 // Called after transferring a page
 void FaxWrapper::phaseD(int result)
 {
-    Debug(this,DebugInfo,"Phase D code 0x%X [%p]",result,this);
+    Debug(this,DebugInfo,"Phase D code 0x%X: %s [%p]",
+	result,t30_completion_code_to_str(result),this);
 
     t30_stats_t t;
     char ident[21];
@@ -382,7 +380,8 @@ void FaxWrapper::phaseD(int result)
 // Called to report end of transfer
 void FaxWrapper::phaseE(int result)
 {
-    Debug(this,DebugInfo,"Phase E code 0x%X [%p]",result,this);
+    Debug(this,DebugInfo,"Phase E code 0x%X: %s [%p]",
+	result,t30_completion_code_to_str(result),this);
     m_eof = true;
 }
 
@@ -590,6 +589,7 @@ void FaxChan::answer(const char* targetid)
     Engine::enqueue(message("call.answered"));
 }
 
+
 bool FaxDriver::msgExecute(Message& msg, String& dest)
 {
     Regexp r("^\\([^/]*\\)/\\(.*\\)$");
@@ -651,6 +651,16 @@ bool FaxDriver::msgExecute(Message& msg, String& dest)
 	Debug(this,DebugWarn,"Outgoing fax call not accepted!");
     }
     return false;
+}
+
+bool FaxDriver::setDebug(Message& msg, const String& target)
+{
+    if (target == "spandsp") {
+	s_debug = msg.getBoolValue("line",s_debug);
+	msg.retValue() << "Detailed spandsp debugging " << (s_debug ? "on" : "off") << "\n";
+	return true;
+    }
+    return Driver::setDebug(msg,target);
 }
 
 FaxDriver::FaxDriver()

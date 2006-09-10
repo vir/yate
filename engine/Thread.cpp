@@ -257,7 +257,7 @@ void ThreadPrivate::pubdestroy()
 		return;
 	    Thread::msleep(5,false);
 	}
-	if (!cancel(true))
+	if (m_cancel && !cancel(true))
 	    Debug(DebugWarn,"ThreadPrivate::pubdestroy() %p '%s' failed cancel [%p]",m_thread,m_name,this);
     }
 }
@@ -303,6 +303,7 @@ bool ThreadPrivate::cancel(bool hard)
 			return true;
 		}
 	    }
+	    m_running = false;
 #ifdef _WINDOWS
 	    Debug(DebugGoOn,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
@@ -311,10 +312,12 @@ bool ThreadPrivate::cancel(bool hard)
 	    ret = !::pthread_cancel(thread);
 #endif
 	    if (ret) {
-		m_running = false;
+		// hard cancel succeeded - object is unsafe to touch any more
 		Thread::msleep(1);
 		return true;
 	    }
+	    // hard cancel failed - set back the running flag
+	    m_running = true;
 	}
 	m_cancel = true;
     }

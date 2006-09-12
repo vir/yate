@@ -840,7 +840,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendString(IAXInfoElement::CALLING_NUMBER,params.getValue("caller"));
     ieList.appendString(IAXInfoElement::CALLING_NAME,params.getValue("callername"));
     ieList.appendString(IAXInfoElement::CALLED_NUMBER,params.getValue("called"));
-    ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("calledname"));
+    ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("iaxcontext"));
     ieList.appendNumeric(IAXInfoElement::FORMAT,iplugin.defaultCodec(),4);
     ieList.appendNumeric(IAXInfoElement::CAPABILITY,iplugin.codecs(),4);
     return startLocalTransaction(IAXTransaction::New,addr,ieList);
@@ -1614,7 +1614,7 @@ bool IAXURI::fillList(NamedList& dest)
     if (m_calledNo.length())
 	dest.setParam("called",m_calledNo);
     if (m_calledContext.length())
-	dest.setParam("calledname",m_calledContext);
+	dest.setParam("iaxcontext",m_calledContext);
     return true;
 }
 

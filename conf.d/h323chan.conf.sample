@@ -29,10 +29,10 @@
 ;needmedia=yes
 
 ; Use an external RTP module instead of the native OpenH323 RTP stack, which is
-;  very cpu intensive. The no external RTP can be found it will fallback to the
+;  very cpu intensive. If no external RTP can be found it will fallback to the
 ;  native stack. The only external RTP now is yrtp (see the yrtpchan module).
-; external_rtp: bool: default: no
-;external_rtp=no
+; external_rtp: bool: default: yes
+;external_rtp=yes
 
 ; Attempt to use native (OpenH323) RTP if external fails to start. This is
 ;  usefull only if the failure is caused by the external RTP module not

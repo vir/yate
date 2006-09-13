@@ -2236,7 +2236,7 @@ void H323Driver::initialize()
     s_cfg = Engine::configFile("h323chan");
     s_cfg.load();
     setup();
-    s_externalRtp = s_cfg.getBoolValue("general","external_rtp",false);
+    s_externalRtp = s_cfg.getBoolValue("general","external_rtp",true);
     s_passtrough = s_cfg.getBoolValue("general","forward_rtp",false);
     s_fallbackRtp = s_cfg.getBoolValue("general","fallback_rtp",true);
     // mantain compatibility with old config files

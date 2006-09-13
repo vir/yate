@@ -334,7 +334,7 @@ public:
      * Default constructor.
      */
     inline RTPBaseIO(RTPSession* session = 0)
-	: m_session(session), m_ssrc(0), m_ts(0), m_seq(0),
+	: m_session(session), m_ssrcInit(true), m_ssrc(0), m_ts(0), m_seq(0),
 	  m_evTs(0), m_evNum(-1), m_evVol(-1),
 	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
@@ -389,22 +389,22 @@ public:
     bool silencePayload(int type);
 
     /**
-     * Reset the SSRC requesting generation/grabbing of a new one
+     * Requesting generation/grabbing of a new SSRC
      */
     inline void reset()
-	{ m_ssrc = 0; }
+	{ m_ssrcInit = true; }
 
     /**
      * Get the value of the current SSRC, zero if not initialized yet
      */
     inline unsigned int ssrc() const
-	{ return m_ssrc; }
+	{ return m_ssrcInit ? 0 : m_ssrc; }
 
     /**
      * Force a new known SSRC for all further packets
      */
     inline void ssrc(unsigned int src)
-	{ m_ssrc = src; }
+	{ m_ssrc = src; m_ssrcInit = false; }
 
 protected:
     /**
@@ -414,6 +414,7 @@ protected:
     virtual void timerTick(const Time& when) = 0;
 
     RTPSession* m_session;
+    bool m_ssrcInit;
     u_int32_t m_ssrc;
     u_int32_t m_ts;
     u_int16_t m_seq;

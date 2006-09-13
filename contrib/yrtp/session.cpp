@@ -104,7 +104,8 @@ void RTPReceiver::rtpData(const void* data, int len)
 	((u_int32_t)pc[10] << 8) | pc[11];
 
     // grab some data at the first packet received or resync
-    if (!m_ssrc) {
+    if (m_ssrcInit) {
+	m_ssrcInit = false;
 	m_ssrc = ss;
 	m_ts = ts - m_tsLast;
 	m_seq = seq-1;
@@ -276,8 +277,10 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
 	payload |= 0x80;
     m_tsLast = timestamp;
     timestamp += m_ts;
-    if (!m_ssrc)
+    if (m_ssrcInit) {
+	m_ssrcInit = false;
 	m_ssrc = ::random();
+    }
     m_seq++;
 
     DataBlock buf(0,len+12);

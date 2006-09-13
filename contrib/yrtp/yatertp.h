@@ -218,9 +218,10 @@ public:
     /**
      * Set the local network address of the RTP transport
      * @param addr New local RTP transport address
+     * @param rtcp Enable RTCP transport
      * @return True if address set, false if a failure occured
      */
-    bool localAddr(SocketAddr& addr);
+    bool localAddr(SocketAddr& addr, bool rtcp = true);
 
     /**
      * Set the remote network address of the RTP transport
@@ -541,10 +542,10 @@ class YRTP_API RTPSender : public RTPBaseIO
 public:
     /**
      * Constructor
+     * @param session RTP session the sender belongs
+     * @param randomTs Initialize a random timestamp offset
      */
-    inline RTPSender(RTPSession* session = 0)
-	: RTPBaseIO(session), m_evTime(0), m_tsLast(0)
-	{ }
+    RTPSender(RTPSession* session = 0, bool randomTs = true);
 
     /**
      * Do-nothing destructor
@@ -873,10 +874,11 @@ public:
     /**
      * Set the local network address of the RTP transport of this session
      * @param addr New local RTP transport address
+     * @param rtpc Enable RTCP in this session
      * @return True if address set, false if a failure occured
      */
-    inline bool localAddr(SocketAddr& addr)
-	{ return m_transport && m_transport->localAddr(addr); }
+    inline bool localAddr(SocketAddr& addr, bool rtcp = true)
+	{ return m_transport && m_transport->localAddr(addr,rtcp); }
 
     /**
      * Set the remote network address of the RTP transport of this session

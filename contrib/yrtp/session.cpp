@@ -256,6 +256,13 @@ void RTPReceiver::timerTick(const Time& when)
 {
 }
 
+RTPSender::RTPSender(RTPSession* session, bool randomTs)
+    : RTPBaseIO(session), m_evTime(0), m_tsLast(0)
+{
+    if (randomTs)
+	m_ts = ::random() & ~1;
+}
+		
 
 bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const void* data, int len)
 {

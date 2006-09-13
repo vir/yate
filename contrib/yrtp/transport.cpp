@@ -241,17 +241,23 @@ void RTPTransport::setMonitor(RTPProcessor* monitor)
     m_monitor = monitor;
 }
 
-bool RTPTransport::localAddr(SocketAddr& addr)
+bool RTPTransport::localAddr(SocketAddr& addr, bool rtcp)
 {
     // check if sockets are already created and bound
     if (m_rtpSock.valid())
 	return false;
     int p = addr.port();
-    // make sure we don't have a port or it's an even one
-    if ((p & 1))
+    // for RTCP make sure we don't have a port or it's an even one
+    if (rtcp && (p & 1))
 	return false;
     if (m_rtpSock.create(addr.family(),SOCK_DGRAM) && m_rtpSock.bind(addr)) {
 	m_rtpSock.setBlocking(false);
+	if (!rtcp) {
+	    // RTCP not requested - we are done
+	    m_rtpSock.getSockName(addr);
+	    m_localAddr = addr;
+	    return true;
+	}
 	if (!p) {
 	    m_rtpSock.getSockName(addr);
 	    p = addr.port();

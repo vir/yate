@@ -4,6 +4,9 @@
 ; expires: int: Will execute the engine.timer query only every that many seconds
 ;expires=30
 
+; stoperror: regexp: Regular expression matching errors that will stop fallback
+;stoperror=busy
+
 
 ; The following parameters enable handling of individual messages
 ; Each must be enabled manually in this config file
@@ -31,6 +34,13 @@
 
 ; linetracker: bool: Activate line status tracking on "call.cdr"
 ;linetracker=no
+
+; fallback: bool: Activate fallback routing handlers on the "chan.disconnected",
+;  "call.answered" and "chan.hangup" messages
+;fallback=no
+
+; accounts: bool: Activate client registrations on "user.notify" and "engine.timer"
+;accounts=no
 
 
 [default]
@@ -116,6 +126,19 @@ cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid
 ; critical: boolean: Reject all registrations and routing if query fails
 ;critical=no
 
-initquery=UPDATE users SET inuse='0'
+initquery=UPDATE users SET inuse=0
 cdr_initialize=UPDATE users SET inuse=inuse+1 WHERE username='${external}'
 cdr_finalize=UPDATE users SET inuse=(CASE WHEN inuse>0 THEN inuse-1 ELSE 0 END) WHERE username='${external}'
+
+
+[accounts]
+; Queries for registering as client to other servers
+
+; query executed only once to create client registrations at startup
+queryinit=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
+
+; poll on timer to update registrations if database was changed externally
+querytimer=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
+
+; update account status after receiving an user.notify
+querystatus=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'

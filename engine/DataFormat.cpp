@@ -485,12 +485,19 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
 	return;
     }
-    // no timestamp provided - try to guess
-    if (tStamp == (unsigned long)-1) {
-	tStamp = m_timestamp;
-	const FormatInfo* f = m_format.getInfo();
-	if (f)
-	    tStamp += f->guessSamples(data.length());
+
+    // try to evaluate amount of samples in this packet
+    const FormatInfo* f = m_format.getInfo();
+    unsigned long nSamp = f ? f->guessSamples(data.length()) : 0;
+
+    // if no timestamp provided - try to use next expected
+    if (tStamp == invalidStamp())
+	tStamp = m_nextStamp;
+    // still no timestamp known - wild guess based on this packet size
+    if (tStamp == invalidStamp()) {
+	DDebug(DebugNote,"Unknow timestamp - assuming %lu + %lu [%p]",
+	    m_timestamp,nSamp,this);
+	tStamp = m_timestamp + nSamp;
     }
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
@@ -498,6 +505,7 @@ void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 	c->Consume(data,tStamp,this);
     }
     m_timestamp = tStamp;
+    m_nextStamp = nSamp ? (tStamp + nSamp) : invalidStamp();
 }
 
 bool DataSource::attach(DataConsumer* consumer, bool override)
@@ -582,6 +590,7 @@ void DataSource::synchronize(unsigned long tStamp)
 	return;
     }
     m_timestamp = tStamp;
+    m_nextStamp = invalidStamp();
     ObjList *l = m_consumers.skipNull();
     for (; l; l=l->skipNext()) {
 	DataConsumer *c = static_cast<DataConsumer *>(l->get());

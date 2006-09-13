@@ -330,6 +330,13 @@ public:
     inline unsigned long timeStamp() const
 	{ return m_timestamp; }
 
+    /**
+     * Get the internal representation of an invalid or unknown timestamp
+     * @return Invalid timestamp - unsigned long conversion of -1
+     */
+    inline static unsigned long invalidStamp()
+	{ return (unsigned long)-1; }
+
 protected:
     DataFormat m_format;
     unsigned long m_timestamp;
@@ -428,7 +435,7 @@ public:
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline DataSource(const char* format = "slin")
-	: DataNode(format), m_translator(0) { }
+	: DataNode(format), m_nextStamp(invalidStamp()), m_translator(0) { }
 
     /**
      * Source's destructor - detaches all consumers
@@ -447,7 +454,7 @@ public:
      * @param data The raw data block to forward; an empty block ends data
      * @param tStamp Timestamp of data - typically samples
      */
-    void Forward(const DataBlock& data, unsigned long tStamp = (unsigned long)-1);
+    void Forward(const DataBlock& data, unsigned long tStamp = invalidStamp());
 
     /**
      * Attach a data consumer
@@ -489,7 +496,15 @@ public:
      */
     void synchronize(unsigned long tStamp);
 
+    /**
+     * Get the next expected position in the data stream
+     * @return Timestamp of next expected data position, may be invalid/unknown
+     */
+    inline unsigned long nextStamp() const
+	{ return m_nextStamp; }
+
 protected:
+    unsigned long m_nextStamp;
     DataTranslator* m_translator;
     ObjList m_consumers;
     Mutex m_mutex;

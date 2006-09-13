@@ -3820,6 +3820,23 @@ public:
     virtual bool setBlocking(bool block = true);
 
     /**
+     * Set the local address+port reuse flag of the socket.
+     * This method should be called before bind() or it will have no effect.
+     * @param reuse True if other sockets may listen on same address+port
+     * @param exclusive Grant exclusive access to the address
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool setReuse(bool reuse = true, bool exclusive = false);
+
+    /**
+     * Set the way closing a socket is handled
+     * @param seconds How much to block waiting for socket to close,
+     *  negative to no wait (close in background), zero to reset connection
+     * @return True if operation was successfull, false if an error occured
+     */
+    bool setLinger(int seconds = -1);
+
+    /**
      * Associates the socket with a local address
      * @param addr Address to assign to this socket
      * @param addrlen Length of the address structure

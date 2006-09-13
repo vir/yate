@@ -1063,6 +1063,38 @@ bool Socket::setBlocking(bool block)
 #endif
 }
 
+bool Socket::setReuse(bool reuse, bool exclusive)
+{
+    int i = reuse ? 1 : 0;
+    if (!setOption(SOL_SOCKET,SO_REUSEADDR,&i,sizeof(i)))
+	return false;
+#ifdef SO_EXCLUSIVEADDRUSE
+    i = exclusive ? 1 : 0;
+    if (!setOption(SOL_SOCKET,SO_EXCLUSIVEADDRUSE,&i,sizeof(i)) && exclusive)
+	return false;
+#else
+    if (exclusive) {
+	Debug(DebugMild,"Socket SO_EXCLUSIVEADDRUSE not supported on this platform");
+	return false;
+    }
+#endif
+    return true;
+}
+
+bool Socket::setLinger(int seconds)
+{
+#ifdef SO_DONTLINGER
+    if (seconds < 0) {
+	int i = 1;
+	return setOption(SOL_SOCKET,SO_DONTLINGER,&i,sizeof(i));
+    }
+#endif
+    linger l;
+    l.l_onoff = (seconds >= 0) ? 1 : 0;
+    l.l_linger = (seconds >= 0) ? seconds : 0;
+    return setOption(SOL_SOCKET,SO_LINGER,&l,sizeof(l));
+}
+
 bool Socket::createPair(Socket& sock1, Socket& sock2, int domain)
 {
 #ifndef _WINDOWS

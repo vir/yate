@@ -2051,6 +2051,9 @@ void YateH323Chan::callAccept(Message& msg)
 void YateH323Chan::callRejected(const char* error, const char* reason, const Message* msg)
 {
     Channel::callRejected(error,reason,msg);
+    stopDataLinks();
+    if (m_conn)
+	m_conn->ClearCall((H323Connection::CallEndReason)lookup(error,dict_errors,H323Connection::EndedByLocalUser));
 }
 
 bool YateH323Chan::msgProgress(Message& msg)

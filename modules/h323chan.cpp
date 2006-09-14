@@ -464,6 +464,7 @@ public:
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
     virtual bool setDebug(Message& msg);
+    void setAddress(const char* addr);
     inline void setTarget(const char* targetid)
 	{ m_targetid = targetid; }
 private:
@@ -1145,6 +1146,8 @@ void YateH323Connection::OnEstablished()
     Debug(this,DebugInfo,"YateH323Connection::OnEstablished() [%p]",this);
     if (!m_chan)
 	return;
+    if (m_chan->address().null())
+	m_chan->setAddress(GetControlChannel().GetRemoteAddress());
     if (HadAnsweredCall()) {
 	m_chan->status("connected");
 	return;
@@ -1881,9 +1884,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
     s_mutex.lock();
     s_chanCount++;
     s_mutex.unlock();
-    m_address = addr;
-    m_address.startSkip("ip$",false);
-    filterDebug(m_address);
+    setAddress(addr);
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     setMaxcall(msg);
@@ -1977,6 +1978,14 @@ void YateH323Chan::disconnected(bool final, const char *reason)
     stopDataLinks();
     if (m_conn)
 	m_conn->ClearCall((H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser));
+}
+
+// Set the signalling address
+void YateH323Chan::setAddress(const char* addr)
+{
+    m_address = addr;
+    m_address.startSkip("ip$",false);
+    filterDebug(m_address);
 }
 
 // Shut down the data transfers so OpenH323 can stop its related threads

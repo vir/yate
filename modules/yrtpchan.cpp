@@ -177,7 +177,7 @@ public:
     ~YRTPConsumer();
     virtual void Consume(const DataBlock &data, unsigned long tStamp);
     inline void setSplitable()
-	{ m_splitable = (m_format == "alaw") || (m_format = "mulaw"); }
+	{ m_splitable = (m_format == "alaw") || (m_format == "mulaw"); }
 private:
     YRTPWrapper* m_wrap;
     bool m_splitable;

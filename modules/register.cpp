@@ -471,7 +471,7 @@ void RegistModule::statusParams(String& str)
 {
     NamedString* names;
     str.append("critical=",",") << s_critical;
-    for (uint i=0; i < s_statusaccounts.count(); i++) {
+    for (unsigned int i=0; i < s_statusaccounts.count(); i++) {
 	names = s_statusaccounts.getParam(i);
 	if (names)
     	    str << "," << names->name() << "=" << names->at(0);

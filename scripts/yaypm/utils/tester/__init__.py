@@ -24,9 +24,10 @@
 
 from yaypm import TCPDispatcherFactory, AbandonedException
 from yaypm.flow import go, logger_flow, getResult
-from yaypm.utils import XOR, sleep
+from yaypm.utils import XOR, sleep, OR
 from yaypm.utils.tester import dtmfetc
 from twisted.internet import reactor, defer
+from twisted.python.failure import Failure
 
 import sys, logging, yaypm, time
 
@@ -107,6 +108,8 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
     getResult()
     yield client_yate.installWatchHandler("chan.hangup")
     getResult()
+    yield server_yate.installWatchHandler("test.checkpoint")
+    getResult()    
    
     if monitor:
         monitorid = None
@@ -170,6 +173,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             concurrent.remove(concurrent[fired])
 
         count = count + 1
+        start = time.time()
 
         route = server_yate.onmsg(
             "call.route",
@@ -205,11 +209,10 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                 "chan.hangup",
                 lambda m, callid = callid : m["id"] == callid)
 
-            yield defer.DeferredList(
-                [remoteid_def, end],
-                fireOnOneCallback=True, fireOnOneErrback=True)
+            yield OR(remoteid_def, end, patient = False)
 
-            result, end_first  = getResult()
+            end_first, remoteid  = getResult()
+
             if end_first:
                 raise AbandonedException("Call to: %s hungup." % target)
 
@@ -250,8 +253,8 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
                      callid.replace("/", "-"),
                  "maxlen": 0}).enqueue()
 
-            yield remoteid_def
-            remoteid = getResult()
+#            yield remoteid_def
+#            remoteid = getResult()
 
             logger.debug(
                 "[%d] running test with local=(%s, %s) remote=%s" %
@@ -279,6 +282,7 @@ def load(client_yate, server_yate, target, handler, con_max, tests, monitor):
             if not route.called:
                 route.cancel()
             logger.warn("[%d] outgoing call to %s abandoned" % (count, callid))
+            failure(Failure(e), count, start)            
 
     logger.debug(
         "Waiting for %d tests to finish" % len(select_non_called(concurrent)))

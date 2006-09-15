@@ -751,11 +751,11 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             name = unescape(values[2]),
             retvalue = None,
             attrs = None)
-       
+
         l = len(values)
         if l > 3: m.setRetValue(unescape(values[3]))
         if l > 4: m._attrs = self._parse_attrs(values[4])
-      
+    
         if not self._fireHandlers(m, _HANDLER_TYPE_MSG):
             m.ret(False)
 
@@ -772,6 +772,11 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             retvalue = unescape(values[3]),
             attrs = self._parse_attrs(values[4]))
 
+##        if w.getName() in ["test.checkpoint"]:
+##            logger.warn("received checkpoint: " + w["check"])                 
+##         if w.getName() in ["chan.hangup"]:
+##             logger.warn("chan.hangup: " + w["id"])
+      
         self._fireHandlers(w, _HANDLER_TYPE_WCH)
 
     def _messageResponse(self, values):

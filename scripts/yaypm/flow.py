@@ -23,6 +23,7 @@
 """
 
 from twisted.internet import reactor, defer
+from twisted.python import failure
 import types
 
 import sys, logging, random, time, types, traceback, yaypm
@@ -58,6 +59,7 @@ def getResult():
         return current_result.getResult()
     else:
         None
+
         
 class Flow:
     def step(self):
@@ -73,7 +75,9 @@ class Flow:
         except StopIteration:
             if d:
                 self.return_with.callback(d)
-            self.return_with.callback(None)       
+            self.return_with.callback(None)
+#        except Exception, e:
+#            self.return_with.errback(failure.Failure(e))
     
     def __init__(self, fun_todo, return_with):
         self.fun_todo = fun_todo

@@ -101,9 +101,47 @@ class XOR(CancellableDeferred):
         if succeeded:
             self.callback((index, result))
         else:
-            self.errback(failure.Failure())
+            self.errback(result)
 
         return None
+
+class OR(CancellableDeferred):
+    def __init__(self, *deferreds, **kwargs):
+        defer.Deferred.__init__(self)
+        self.deferreds = deferreds
+        self.done = False
+        self.errors = 0
+        self.patient = kwargs.get("patient", True)
+        
+        index = 0
+        for deferred in deferreds:
+            deferred.addCallbacks(self._callback, self._callback,
+                                  callbackArgs=(index,True),
+                                  errbackArgs=(index,False))
+            index = index + 1
+
+    def _callback(self, result, index, succeeded):
+
+        i = 0
+        for deferred in self.deferreds:
+            if index != i:
+                deferred.addErrback(lambda _: None)
+            i = i + 1
+
+        if succeeded:
+            self.callback((index, result))
+            self.done = True            
+        else:
+            if self.patient:
+                self.errors = self.errors + 1
+                if self.errors == len(self.deferreds):
+                    self.done = True
+                    self.errback(result)
+            else:
+                self.done = True                
+                self.errback(result)                
+        return None
+
 
 class RestrictedDispatcher:
 

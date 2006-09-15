@@ -24,7 +24,7 @@
 
 from yaypm import TCPDispatcherFactory, AbandonedException
 from yaypm.flow import go, logger_flow, getResult
-from yaypm.utils import XOR, sleep #, tester
+from yaypm.utils import XOR, OR, sleep #, tester
 from twisted.internet import reactor, defer
 
 import sys, logging, yaypm, time
@@ -42,7 +42,6 @@ class peep:
         
     def next(self):
         if self.peep:
-            print "peep", self.peep
             tmp = self.peep
             self.peep = None
             return tmp
@@ -77,13 +76,13 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
       error!      - raise exception on test.checkpoint message with check==error
       s:x,c:y     - does chan.attach with source==s and consumer==c
       _           - 1s break, _*x - x times 1s
-      timeout:t   - starts timer that drops connection after t secs
       ...         - ends tester thread but does not drop connection
     Example: _,1,1? - waits 1 second, sends 1, waits for 1 checkpoint.
     """
 
-    end = client_yate.onwatch("chan.hangup", lambda m : m["id"] == targetid)
-
+    end = [server_yate.onwatch("chan.hangup", lambda m : m["id"] == remoteid)]
+    ignore_hangup = [False]
+    
     def one_step(step):
         if "c:" in step or "s:" in step:
             media = step.split("|")
@@ -108,10 +107,9 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             return
 
         elif "?" in step:
-            i = step.find("?")
-            
+            i = step.find("?")            
             check = step[:i]
-                           
+                
             timeout = None
             if len(step) > i + 1:
                 timeout = int(step[i+1:])
@@ -119,7 +117,7 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
             check_def = server_yate.onwatch(
                     "test.checkpoint",
                     lambda m : m["id"] == remoteid and m["check"] == check,
-                    until = end)
+                    until = end[0])
 
             if timeout:
                 logger.debug(
@@ -128,26 +126,43 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
                 yield XOR(check_def, sleep(timeout))
                 what, _ = getResult()
                 if what > 0:
-                    logger.debug(
+                    logger.warn(
                         "[%d] timeout while waiting %d s for checkpoint: %s on: %s" % \
                         (testid, timeout, check, remoteid))
-                    client_yate.msg("call.drop", {"id": callid}).enqueue()
-                    logger.debug(
-                        "[%d] dropping connection: %s" % (testid, remoteid))
+##                     client_yate.msg("call.drop", {"id": callid}).enqueue()
+##                     logger.debug(
+##                         "[%d] dropping connection because of timeout: %s" % (testid, remoteid))
                     raise Exception("Timeout while waiting %d s for checkpoint: %s on: %s" % \
                         (timeout, check, remoteid))
+                logger.debug(
+                    "[%d] checkpoint: %s on: %s passed" % \
+                    (testid, check, remoteid))
             else:
                 logger.debug(
                     "[%d] Waiting for checkpoint: '%s' on: %s" % \
                         (testid, check, remoteid))                
                 yield check_def
                 getResult()
+        elif "!" in step:
+            check = step[:-1]
+            error = server_yate.onwatch(
+                    "test.checkpoint",
+                    lambda m : m["id"] == remoteid and m["check"] == check,
+                    until = end[0])
+            end[0] = OR(end[0], error)
 
         elif step in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "#", "*"]:
             logger.debug("[%d] Sending dtmf: %s to %s" % (testid, step, targetid))
             client_yate.msg(
                 "chan.dtmf",
                 {"id": callid, "targetid": targetid, "text": step}).enqueue()
+        elif "&" in step:
+            timeout = int(step[1:])
+            ignore_hangup[0] = True
+            logger.debug("[%d] Waiting for 'end' checkpoint after hangup for: %d s." % (testid, timeout))
+            yield OR(end[0], sleep(timeout), patient = False)            
+            getResult()
+            raise AbandonedException("Timeout while waiting for end.")
         else:
             t = 1
             if "*" in step:
@@ -156,24 +171,22 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
                 except ValueError:
                     pass
             logger.debug("[%d] Sleeping for: %d s." % (testid, t))
-            yield sleep(t)
+            yield OR(end[0], sleep(t), patient = False)
             getResult()
         
     
     def parse(toparse):
-        print "parse"
-        stack = []
+        last = None
         for t in toparse:
-            print "t:", t
             if t == ",":
                 def x(a, b):
-                    yield go()
+                    yield go(a)
                     getResult()
                     yield go(b)
                     getResult()
-                stack.append(x(stack.pop(), parse(toparse)))
+                last = (x(last, parse(toparse)))
             elif t == "(":
-                stack.append(parse(toparse))
+                last = parse(toparse)
                 if toparse.next() != ")":
                     raise Excepion("Unmatched bracket!")
             elif t == ")":
@@ -181,28 +194,49 @@ def dtmf_etc(client_yate, server_yate, testid, targetid, callid, remoteid, test)
                 break
             elif t == "|":
                 def x(a, b):
-                    yield defer.DeferredList([a, b],
-                                                fireOnOneCallback=True)
-                    getResult()
-                stack.append(x(stack.pop(), parse(toparse)))
+                    yield OR(go(a), go(b))
+                    r = getResult()
+                last = x(last, parse(toparse))
             else:
-                stack.append(one_step(t))
+                last = one_step(t)
 
-        if stack:
-            return stack[0]
+        if last:
+            return last
         else:
             return None  
 
-
-    yield go(parse(parse(peep(tokenize(x)))))
-
-    getResult()
+    try:
+        yield go(parse(peep(tokenize(test))))
+        getResult()
         
-    yield sleep(0.1)
-    getResult()
+        yield sleep(0.1)
+        getResult()
+    except Exception, e:
+        logger.info("[%d] dropping: %s" % (testid, callid))
+
+        d = OR(client_yate.msg("call.drop", {"id": callid}).dispatch(),
+           server_yate.msg("call.drop", {"id": remoteid}).dispatch())
+
+        if type(e) == type(AbandonedException("")) and ignore_hangup[0]:
+            yield server_yate.onwatch(
+                "test.checkpoint",
+                lambda m : m["id"] == remoteid and m["check"] == "end",
+                until = sleep(1))
+            getResult()
+            logger.debug("[%d] call %s finished" % (testid, callid))
+            return           
+            
+        yield d
+        getResult()
+
+        logger.debug("[%d] call %s finished" % (testid, callid))
+
+        raise e
+
     logger.debug("[%d] dropping: %s" % (testid, callid))        
     yield client_yate.msg("call.drop", {"id": callid}).dispatch()
     getResult()
+    yield server_yate.msg("call.drop", {"id": remoteid}).dispatch()
+    getResult()        
 
     logger.debug("[%d] call %s finished" % (testid, callid))
-

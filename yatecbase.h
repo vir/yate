@@ -289,7 +289,9 @@ public:
 	{ if (!m_oneThread) unlock(); }
     virtual void allHidden() = 0;
     virtual bool createWindow(const String& name) = 0;
+    virtual bool addToLog(const String& text, Window* wnd = 0);
     virtual bool setStatus(const String& text, Window* wnd = 0);
+    bool addToLogLocked(const String& text, Window* wnd = 0);
     bool setStatusLocked(const String& text, Window* wnd = 0);
     virtual bool action(Window* wnd, const String& name);
     virtual bool toggle(Window* wnd, const String& name, bool active);

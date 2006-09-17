@@ -55,6 +55,15 @@ public:
     virtual bool received(Message &msg);
 };
 
+class UIUserNotifyHandler : public MessageHandler
+{
+public:
+    UIUserNotifyHandler()
+	: MessageHandler("user.notify",50)
+	{ }
+    virtual bool received(Message &msg);
+};
+
 class ClientThreadProxy
 {
 public:
@@ -407,6 +416,7 @@ Client::Client(const char *name)
     s_client = this;
     Engine::install(new UICdrHandler);
     Engine::install(new UIUserHandler);
+    Engine::install(new UIUserNotifyHandler);
     Engine::install(new UIHandler);
 }
 
@@ -1001,11 +1011,10 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
     return false;
 }
 
-bool Client::setStatus(const String& text, Window* wnd)
+bool Client::addToLog(const String& text, Window* wnd)
 {
-    Debug(ClientDriver::self(),DebugInfo,"Status '%s' in window %p",text.c_str(),wnd);
     String tmp;
-    if (getText("log_events",tmp)) {
+    if (getText("log_events",tmp,wnd)) {
 	tmp.append(text,"\n");
 	while (s_eventLen && (tmp.length() > s_eventLen)) {
 	    int pos = tmp.find('\n');
@@ -1013,9 +1022,25 @@ bool Client::setStatus(const String& text, Window* wnd)
 		break;
 	    tmp.assign(tmp.c_str()+pos+1);
 	}
-	setText("log_events",tmp);
+	setText("log_events",tmp,wnd);
+	return true;
     }
-    return setText("status",text,wnd);
+    return false;
+}
+
+bool Client::setStatus(const String& text, Window* wnd)
+{
+    Debug(ClientDriver::self(),DebugInfo,"Status '%s' in window %p",text.c_str(),wnd);
+    bool ok = addToLog(text,wnd);
+    return setText("status",text,wnd) || ok;
+}
+
+bool Client::addToLogLocked(const String& text, Window* wnd)
+{
+    lockOther();
+    bool ok = addToLog(text,wnd);
+    unlockOther();
+    return ok;
 }
 
 bool Client::setStatusLocked(const String& text, Window* wnd)
@@ -1924,6 +1949,8 @@ bool UIHandler::received(Message &msg)
     Window* wnd = Client::getWindow(msg.getValue("window"));
     if (action == "set_status")
 	return Client::self()->setStatusLocked(msg.getValue("status"),wnd);
+    else if (action == "add_log")
+	return Client::self()->addToLogLocked(msg.getValue("text"),wnd);
     else if (action == "show_message") {
 	Client::self()->lockOther();
 	bool ok = Client::openMessage(msg.getValue("text"),Client::getWindow(msg.getValue("parent")),msg.getValue("context"));
@@ -2013,6 +2040,32 @@ bool UIUserHandler::received(Message &msg)
 	Client::self()->delOption("accounts",account);
     }
     Client::self()->unlockOther();
+    return false;
+}
+
+
+bool UIUserNotifyHandler::received(Message &msg)
+{
+    if (!Client::self())
+	return false;
+    String account = msg.getValue("account");
+    if (account.null())
+	return false;
+    bool reg = msg.getBoolValue("registered");
+    const char* proto = msg.getValue("protocol");
+    const char* reason = msg.getValue("reason");
+    String txt = reg ? "Registered" : "Unregistered";
+    if (proto)
+	txt << " " << proto;
+    txt << " account " << account;
+    if (reason)
+	txt << " reason: " << reason;
+
+    // block until client finishes initialization
+    while (!Client::self()->initialized())
+	Thread::msleep(10);
+
+    Client::self()->addToLogLocked(txt);
     return false;
 }
 
@@ -2146,7 +2199,7 @@ bool ClientChannel::callRouted(Message& msg)
 void ClientChannel::callAccept(Message& msg)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAccept() [%p]",this);
-    Client::self()->setStatusLocked("Call connected");
+    Client::self()->setStatusLocked("Calling target");
     Channel::callAccept(msg);
     update();
 }

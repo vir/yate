@@ -43,6 +43,7 @@ for small to large scale projects.
 /usr/lib/yate/modules/accfile.yate
 /usr/lib/yate/modules/register.yate
 /usr/lib/yate/modules/tonegen.yate
+/usr/lib/yate/modules/tonedetect.yate
 /usr/lib/yate/modules/wavefile.yate
 /usr/lib/yate/modules/conference.yate
 /usr/lib/yate/modules/moh.yate

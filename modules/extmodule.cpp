@@ -1414,6 +1414,7 @@ bool ExtListener::init(const NamedList& sect)
 	    m_name.c_str(),m_socket.error(),strerror(m_socket.error()));
 	return false;
     }
+    m_socket.setReuse();
     if (!m_socket.bind(addr)) {
 	Debug(DebugWarn,"Could not bind listener '%s' error %d: %s",
 	    m_name.c_str(),m_socket.error(),strerror(m_socket.error()));

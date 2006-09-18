@@ -652,6 +652,7 @@ void RManager::initialize()
     SocketAddr sa(AF_INET);
     sa.host(host);
     sa.port(port);
+    s_sock.setReuse();
     if (!s_sock.bind(sa)) {
 	Debug("RManager",DebugGoOn,"Failed to bind to %s:%u : %s",sa.host().c_str(),sa.port(),strerror(s_sock.error()));
 	s_sock.terminate();

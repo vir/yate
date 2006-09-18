@@ -32,13 +32,17 @@ COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
 DOCGEN :=
+DOCGEN_K :=
+DOCGEN_D :=
 ifneq (_@KDOC_BIN@,_)
-DOCGEN := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) \
+DOCGEN_K := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) \
     contrib/ypbx/yatepbx.h
 #    contrib/ysip/yatesip.h contrib/yrtp/yatertp.h contrib/yss7/yatess7.h
+DOCGEN := $(DOCGEN_K)
 endif
 ifneq (_@DOXYGEN_BIN@,_)
-DOCGEN := @DOXYGEN_BIN@ Doxyfile
+DOCGEN_D := @DOXYGEN_BIN@ Doxyfile
+DOCGEN := $(DOCGEN_D)
 endif
 
 prefix = @prefix@
@@ -108,8 +112,22 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
-.PHONY: engine contrib modules clients test apidocs-build check-topdir windows
+.PHONY: engine contrib modules clients test apidocs-build apidocs-kdoc apidocs-doxygen check-topdir windows
 engine: tables library libyate.so $(PROGS)
+
+apidocs-kdoc: check-topdir
+	@if [ -n "$(DOCGEN_K)" ]; then \
+	    $(DOCGEN_K) ; \
+	else \
+	    echo "Executable kdoc is not installed!" ; exit 1 ; \
+	fi
+
+apidocs-doxygen: check-topdir
+	@if [ -n "$(DOCGEN_D)" ]; then \
+	    $(DOCGEN_D) ; \
+	else \
+	    echo "Executable doxygen is not installed!" ; exit 1 ; \
+	fi
 
 apidocs-build: check-topdir
 	@if [ -n "$(DOCGEN)" ]; then \

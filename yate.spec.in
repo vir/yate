@@ -310,6 +310,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Mon Sep 18 2006 Paul Chitescu <paulc@voip.null.ro>
+- Version 1.1.0-1
+
 * Mon Jul 10 2006 Paul Chitescu <paulc@voip.null.ro>
 - Added metapackage yate-all
 

@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 1.0.0)
+AC_INIT(Yate, 1.1.0)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -440,7 +440,10 @@ fax_state_t fax_state;
 t38_terminal_state_t t38_t_state;
 t38_gateway_state_t t38_g_state;
 fax_init(&fax_state,TRUE);
+t30_set_ecm_capability(&fax_state.t30_state,1);
+t30_set_supported_compressions(&fax_state.t30_state,T30_SUPPORT_T6_COMPRESSION);
 t30_set_tx_file(&fax_state.t30_state,"abc",-1,-1);
+fax_set_transmit_on_idle(&fax_state,1);
 t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
 t38_gateway_init(&t38_g_state,NULL,NULL);
 ],

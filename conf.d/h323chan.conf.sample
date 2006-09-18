@@ -14,13 +14,13 @@
 ;product=YATE
 
 ; major: int: Major version number
-;major=0
+;major=1
 
 ; minor: int: Minor version number
-;minor=9
+;minor=1
 
 ; build: int: Build number
-;build=1
+;build=0
 
 ; status: keyword: Code status: alpha, beta or release
 ;status=alpha
@@ -183,8 +183,7 @@ gkclient = false
 ; You must define the binding interfaces. Right now the multi hosted boxes don't
 ; work very well because OpenH323 mechanism, but we will fix that if someone
 ; have any problem.
-
-interface1=10.0.0.1
+;interface1=10.0.0.1
 
 ; port: int: Port on which the gatekeeper listens for connections
 ;port = 1719
@@ -200,7 +199,7 @@ interface1=10.0.0.1
 ; This section sets defaults for the incoming H.323 calls
 
 ; context: string: Input context
-context=default
+;context=default
 
 ; maxqueue: int: Maximum length of the routing queue
 ; Normaly you will like to have this setup to a certain value so someone can't

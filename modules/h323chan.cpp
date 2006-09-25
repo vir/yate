@@ -368,6 +368,7 @@ public:
     ~YateH323Connection();
     virtual H323Connection::AnswerCallResponse OnAnswerCall(const PString& caller,
 	const H323SignalPDU& signalPDU, H323SignalPDU& connectPDU);
+    virtual H323Connection::CallEndReason SendSignalSetup(const PString& alias, const H323TransportAddress& address);
     virtual void OnEstablished();
     virtual void OnCleared();
     virtual BOOL OnAlerting(const H323SignalPDU& alertingPDU, const PString& user);
@@ -1138,6 +1139,13 @@ void YateH323Connection::answerCall(AnswerCallResponse response)
 	}
     }
     AnsweringCall(response);
+}
+
+H323Connection::CallEndReason YateH323Connection::SendSignalSetup(const PString& alias, const H323TransportAddress& address)
+{
+    if (m_chan && m_chan->address().null())
+	m_chan->setAddress(address);
+    return H323Connection::SendSignalSetup(alias,address);
 }
 
 void YateH323Connection::OnEstablished()

@@ -142,6 +142,12 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing [%p]",
 	localCallNo(),remoteCallNo(),this);
     // Init data members
+    if (!m_addr.port()) {
+	XDebug(m_engine,DebugAll,
+	    "IAXTransaction::IAXTransaction(%u,%u) [%p]. No remote port. Set to default. ",
+	    localCallNo(),remoteCallNo(),this);
+	m_addr.port(4569);
+    }
     m_retransCount = engine->retransCount();
     m_retransInterval = engine->retransInterval();
     m_timeToNextPing = m_timeStamp + m_pingInterval;
@@ -460,7 +466,8 @@ bool IAXTransaction::sendAccept()
 	((type() == RegReq || type() == RegRel) && state() == NewRemoteInvite_RepRecv)))
 	return false;
     if (type() == New) {
-	unsigned char d[6] = {IAXInfoElement::FORMAT,4,m_format >> 24,m_format >> 16,m_format >> 8,m_format};
+	unsigned char d[12] = {IAXInfoElement::FORMAT,4,m_format >> 24,m_format >> 16,m_format >> 8,m_format,
+		IAXInfoElement::CAPABILITY,4,m_capability >> 24,m_capability >> 16,m_capability >> 8,m_capability};
 	postFrame(IAXFrame::IAX,IAXControl::Accept,d,sizeof(d),0,true);
 	changeState(Connected);
     }

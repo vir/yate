@@ -400,9 +400,23 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	return false;
     u_int32_t format = trans->format();
     u_int32_t capability = m_capability & trans->capability();
+#ifdef XDEBUG
+    if (!trans->outgoing()) {
+	String rec;
+	IAXFormat::formatList(rec,m_capability);
+	Debug(this,DebugAll,"acceptFormatAndCapability. Local: Format: %u(%s). Capabilities: '%s'.",
+	    m_format,IAXFormat::audioText(m_format),rec.c_str());
+	IAXFormat::formatList(rec,trans->capability());
+	Debug(this,DebugAll,"acceptFormatAndCapability. Received: Format: %u(%s). Capabilities: '%s'.",
+	    format,IAXFormat::audioText(format),rec.c_str());
+    }
+#endif //XDEBUG
     // Valid capability ?
-    if (!capability)
+    if (!capability) {
+	if (!trans->outgoing())
+	    XDebug(this,DebugAll,"acceptFormatAndCapability. No capabilities received.");
 	return false;
+    }
     for (;;) {
 	// Received format is valid ?
 	if (0 != (format & capability) && IAXFormat::audioText(format))
@@ -421,13 +435,15 @@ bool IAXEngine::acceptFormatAndCapability(IAXTransaction* trans)
 	    format = IAXFormat::audioData[i].value;
 	    break;
 	}
+	XDebug(this,DebugAll,"acceptFormatAndCapability. Unable to choose a format.");
 	return false;
     }
+    XDebug(this,DebugAll,"acceptFormatAndCapability. Format %u: '%s'.",
+	format,IAXFormat::audioText(format));
     trans->m_format = format;
     trans->m_capability = capability;
-    if (trans->outgoing())
-	trans->m_formatIn = format;
-    else
+    trans->m_formatIn = format;
+    if (!trans->outgoing())
 	trans->m_formatOut = format;
     return true;
 }

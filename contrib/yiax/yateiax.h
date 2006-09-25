@@ -515,6 +515,14 @@ public:
     };
 
     /**
+     * Create a string list from formats
+     * @param dest The destination
+     * @param formats The formats
+     * @param sep The separator to use
+    */
+    static void IAXFormat::formatList(String& dest, u_int32_t formats, char sep = ',');
+
+    /**
      * Get the text associated with an audio format
      * @param audio The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist

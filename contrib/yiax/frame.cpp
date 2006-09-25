@@ -412,6 +412,21 @@ TokenDict IAXFormat::videoData[] = {
     {0, 0}
 };
 
+void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
+{
+    dest = "";
+    bool first = true;
+    for (u_int32_t i = 0; audioData[i].value; i++) {
+	if (0 == (audioData[i].value & formats))
+	    continue;
+	if (first)
+	    first = false;
+	else
+	    dest += sep;
+	dest += audioData[i].token;
+    }
+}
+
 const char* IAXFormat::audioText(u_int32_t audio)
 {
     return lookup(audio,audioData);
@@ -430,12 +445,12 @@ IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
     : m_data((char*)buf,len,true), m_retrans(retrans), m_type(type),
       m_sCallNo(sCallNo), m_tStamp(tStamp)
 {
-    XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
+//    XDebug(DebugAll,"IAXFrame::IAXFrame(%u) [%p]",type,this);
 }
 
 IAXFrame::~IAXFrame()
 {
-    XDebug(DebugAll,"IAXFrame::~IAXFrame() [%p]",this);
+//    XDebug(DebugAll,"IAXFrame::~IAXFrame() [%p]",this);
 }
 
 IAXFrame* IAXFrame::parse(const unsigned char* buf, unsigned int len, IAXEngine* engine, const SocketAddr* addr)
@@ -578,8 +593,8 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
     : IAXFrame(type,sCallNo,tStamp,retrans,buf,len),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
-    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-	type,subclass,this);
+//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+//	type,subclass,this);
 }
 
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
@@ -589,8 +604,8 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
     : IAXFrame(type,sCallNo,tStamp,false,0,0),
       m_dCallNo(dCallNo), m_oSeqNo(oSeqNo), m_iSeqNo(iSeqNo), m_subclass(subclass)
 {
-    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
-	type,subclass,this);
+//    XDebug(DebugAll,"IAXFullFrame::IAXFullFrame(%u,%u) [%p]",
+//	type,subclass,this);
 
     unsigned char header[12];
     DataBlock ie;
@@ -623,8 +638,8 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 
 IAXFullFrame::~IAXFullFrame()
 {
-    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
-	type(),m_subclass,this);
+//    XDebug(DebugAll,"IAXFullFrame::~IAXFullFrame(%u,%u) [%p]",
+//	type(),m_subclass,this);
 }
 
 const IAXFullFrame* IAXFullFrame::fullFrame() const

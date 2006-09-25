@@ -339,6 +339,12 @@ public:
     inline YIAXEngine* getEngine() const
 	{ return m_iaxEngine; }
 
+    // Update codecs from 'formats' parameter of a message
+    // @param codecs Codec list to update
+    // @param formats The 'formats' parameter of a message
+    // @return False if formtas is not 0 and the result is 0 (no intersection)
+    bool updateCodecsFromRoute(u_int32_t& codecs, const char* formats);
+
 protected:
     YIAXEngine* m_iaxEngine;
     u_int32_t m_defaultCodec;
@@ -757,7 +763,7 @@ void YIAXLineContainer::clear(bool forced)
 // Run the socket listening thread
 void YIAXListener::run()
 {
-    Debug(m_engine,DebugAll,"%s started",currentName());
+    DDebug(m_engine,DebugAll,"%s started",currentName());
     SocketAddr addr;
     m_engine->readSocket(addr);
 }
@@ -765,14 +771,14 @@ void YIAXListener::run()
 // Run the event retriving thread
 void YIAXGetEvent::run()
 {
-    Debug(m_engine,DebugAll,"%s started",currentName());
+    DDebug(m_engine,DebugAll,"%s started",currentName());
     m_engine->runGetEvents();
 }
 
 // Run the trunk sending thread
 void YIAXTrunking::run()
 {
-    Debug(m_engine,DebugAll,"%s started",currentName());
+    DDebug(m_engine,DebugAll,"%s started",currentName());
     m_engine->runProcessTrunkFrames();
 }
 
@@ -842,7 +848,14 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendString(IAXInfoElement::CALLED_NUMBER,params.getValue("called"));
     ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("iaxcontext"));
     ieList.appendNumeric(IAXInfoElement::FORMAT,iplugin.defaultCodec(),4);
-    ieList.appendNumeric(IAXInfoElement::CAPABILITY,iplugin.codecs(),4);
+    // Set capabilities
+    u_int32_t codecs = iplugin.codecs();
+    if (!iplugin.updateCodecsFromRoute(codecs,params.getValue("formats"))) {
+	DDebug(this,DebugAll,"Outgoing call failed: No codecs.");
+	params.setParam("error","nomedia");
+	return 0;
+    }
+    ieList.appendNumeric(IAXInfoElement::CAPABILITY,codecs,4);
     return startLocalTransaction(IAXTransaction::New,addr,ieList);
 }
 
@@ -1014,6 +1027,8 @@ void YIAXDriver::initialize()
     for (int i = 0; IAXFormat::audioData[i].token; i++) {
 	if (s_cfg.getBoolValue("formats",IAXFormat::audioData[i].token,
 	    def && DataTranslator::canConvert(IAXFormat::audioData[i].token))) {
+	    XDebug(this,DebugAll,"Adding supported codec %u: '%s'.",
+		IAXFormat::audioData[i].value,IAXFormat::audioData[i].token);
 	    m_codecs |= IAXFormat::audioData[i].value;
 	    fallback = IAXFormat::audioData[i].value;
 	    // Set default (desired) codec
@@ -1142,6 +1157,40 @@ bool YIAXDriver::received(Message& msg, int id)
 	    s_lines.clear();
 	}
     return Driver::received(msg,id);
+}
+
+bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
+{
+// Extract individual codecs from 'formats'
+// Check if IAXFormat contains it
+// Before exiting: update 'codecs'
+    if (!formats)
+	return true;
+    u_int32_t codec_formats = 0;
+    for (u_int32_t i = 0; formats[i];) {
+	// Skip separator(s)
+	for (; formats[i] && formats[i] == ','; i++) ;
+	// Find first separator
+	u_int32_t start = i;
+	for (; formats[i] && formats[i] != ','; i++) ;
+	// Get format
+	if (start != i) {
+	    // Get string
+	    String tmp(formats + start,i - start);
+	    // Get format from IAXFormat::audioData
+	    u_int32_t format = 0;
+	    for (u_int32_t j = 0; IAXFormat::audioData[j].value; j++)
+		if (tmp == IAXFormat::audioData[j].token) {
+		    format = IAXFormat::audioData[j].value;
+		    break;
+		}
+	    if (format)
+		codec_formats |= format;
+	}
+    }
+    // Set intersection
+    codecs &= codec_formats;
+    return codecs != 0;
 }
 
 /**
@@ -1390,7 +1439,8 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    break;
 	case IAXEvent::Timeout:
 	    DDebug(this,DebugNote,"YIAXConnection - TIMEOUT. Transaction: %u,%u, Frame: %u,%u ",
-		event->getTransaction()->localCallNo(),event->getTransaction()->remoteCallNo(),event->frameType(),event->subclass());
+		event->getTransaction()->localCallNo(),event->getTransaction()->remoteCallNo(),
+		event->frameType(),event->subclass());
 	    m_reason = "Timeout";
 	    break;
 	case IAXEvent::Busy:
@@ -1455,11 +1505,16 @@ bool YIAXConnection::route(bool authenticated)
 	    hangup(IAXTransaction::s_iax_modNoMediaFormat,true);
 	    return false;
 	}
-	// advertise the not yet authenticated username
+	// Advertise the not yet authenticated username
 	if (m_transaction->username())
 	    m->addParam("authname",m_transaction->username());
+	// Set 'formats' parameter
+	String formats;
+	IAXFormat::formatList(formats,m_transaction->capability(),',');
+	m->addParam("formats",formats);
     }
     m->addParam("called",m_transaction->calledNo());
+    m->addParam("caller",m_transaction->callingNo());
     m->addParam("callername",m_transaction->callingName());
     m->addParam("ip_host",m_transaction->remoteAddr().host());
     m->addParam("ip_port",String(m_transaction->remoteAddr().port()));
@@ -1624,7 +1679,7 @@ bool IAXURI::setAddr(SocketAddr& dest)
     if (!m_host.length())
 	return false;
     dest.host(m_host);
-    dest.port(m_port ? m_port : iplugin.port());
+    dest.port(m_port ? m_port : 0);
     return true;
 }
 

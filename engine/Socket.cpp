@@ -295,6 +295,30 @@ bool SocketAddr::supports(int family)
 }
 
 
+SocketFilter::SocketFilter()
+    : m_socket(0)
+{
+}
+
+SocketFilter::~SocketFilter()
+{
+    if (m_socket)
+	m_socket->removeFilter(this);
+}
+
+void* SocketFilter::getObject(const String& name) const
+{
+    if (name == "SocketFilter")
+	return const_cast<SocketFilter*>(this);
+    return GenObject::getObject(name);
+}
+
+bool SocketFilter::valid() const
+{
+    return m_socket && m_socket->valid();
+}
+
+
 Stream::~Stream()
 {
 }
@@ -650,6 +674,7 @@ Socket::Socket(int domain, int type, int protocol)
 Socket::~Socket()
 {
     DDebug(DebugAll,"Socket::~Socket() handle=%d [%p]",m_handle,this);
+    clearFilters();
     terminate();
 }
 
@@ -891,6 +916,8 @@ bool Socket::getPeerName(SocketAddr& addr)
 
 int Socket::sendTo(const void* buffer, int length, const struct sockaddr* addr, socklen_t adrlen, int flags)
 {
+    if (!addr)
+	return send(buffer,length,flags);
     if (!buffer)
 	length = 0;
     int res = ::sendto(m_handle,(const char*)buffer,length,flags,addr,adrlen);
@@ -927,7 +954,10 @@ int Socket::recvFrom(void* buffer, int length, struct sockaddr* addr, socklen_t*
     if (adrlen && !addr)
 	*adrlen = 0;
     int res = ::recvfrom(m_handle,(char*)buffer,length,flags,addr,adrlen);
-    checkError(res,true);
+    if (checkError(res,true) && applyFilters(buffer,res,flags,addr,(adrlen ? *adrlen : 0))) {
+	m_error = EAGAIN;
+	res = socketError();
+    }
     return res;
 }
 
@@ -946,7 +976,10 @@ int Socket::recv(void* buffer, int length, int flags)
     if (!buffer)
 	length = 0;
     int res = ::recv(m_handle,(char*)buffer,length,flags);
-    checkError(res,true);
+    if (checkError(res,true) && applyFilters(buffer,res,flags)) {
+	m_error = EAGAIN;
+	res = socketError();
+    }
     return res;
 }
 
@@ -1105,6 +1138,38 @@ bool Socket::createPair(Socket& sock1, Socket& sock2, int domain)
 	return true;
     }
 #endif
+    return false;
+}
+
+bool Socket::installFilter(SocketFilter* filter)
+{
+    if (!filter || filter->socket())
+	return false;
+    if (m_filters.find(filter))
+	return false;
+    filter->m_socket = this;
+    m_filters.append(filter);
+    return true;
+}
+
+void Socket::removeFilter(SocketFilter* filter, bool delobj)
+{
+    if (m_filters.remove(filter,delobj))
+	filter->m_socket = 0;
+}
+
+void Socket::clearFilters()
+{
+    m_filters.clear();
+}
+
+bool Socket::applyFilters(void* buffer, int length, int flags, const struct sockaddr* addr, socklen_t adrlen)
+{
+    for (ObjList* l = &m_filters; l; l = l->next()) {
+	SocketFilter* filter = static_cast<SocketFilter*>(l->get());
+	if (filter && filter->received(buffer,length,flags,addr,adrlen))
+	    return true;
+    }
     return false;
 }
 

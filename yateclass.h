@@ -3258,6 +3258,8 @@ private:
     bool m_locking;
 };
 
+class Socket;
+
 /**
  * Wrapper class to keep a socket address
  * @short A socket address holder
@@ -3423,6 +3425,59 @@ protected:
     struct sockaddr* m_address;
     socklen_t m_length;
     String m_host;
+};
+
+/**
+ * Abstract interface for an object that filters socket received data packets
+ * @short A filter for received socket data
+ */
+class YATE_API SocketFilter : public GenObject
+{
+    friend class Socket;
+public:
+    /**
+     * Constructor
+     */
+    SocketFilter();
+
+    /**
+     * Destructor, unregisters from socket
+     */
+    virtual ~SocketFilter();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Notify this filter about a received block of data
+     * @param buffer Buffer for received data
+     * @param length Length of the data in buffer
+     * @param flags Operating system specific bit flags of the operation
+     * @param addr Address of the incoming data, may be NULL
+     * @param adrlen Length of the valid data in address structure
+     * @return True if this filter claimed the data
+     */
+    virtual bool received(void* buffer, int length, int flags, const struct sockaddr* addr, socklen_t adrlen) = 0;
+
+    /**
+     * Get the socket to which the filter is currently attached
+     * @return Pointer to the socket of this filter
+     */
+    inline Socket* socket() const
+	{ return m_socket; }
+
+    /**
+     * Check if the socket of this filter is valid
+     * @return True if the filter has a valid socket
+     */
+    bool valid() const;
+
+private:
+    Socket* m_socket;
 };
 
 /**
@@ -3954,7 +4009,7 @@ public:
      * Send a message over a connected or unconnected socket
      * @param buffer Buffer for data transfer
      * @param length Length of the buffer
-     * @param addr Address to send the message to
+     * @param addr Address to send the message to, if NULL will behave like @ref send()
      * @param adrlen Length of the address structure
      * @param flags Operating system specific bit flags that change the behaviour
      * @return Number of bytes transferred, @ref socketError() if an error occurred
@@ -4048,6 +4103,24 @@ public:
     bool select(bool* readok, bool* writeok, bool* except, int64_t timeout);
 
     /**
+     * Install a new packet filter in the socket
+     * @param filter Pointer to the packet filter to install
+     * @return True if the filter was installed
+     */
+    bool installFilter(SocketFilter* filter);
+
+    /**
+     * Removes a packet filter and optionally destroys it
+     * @param delobj Set to true to also delete the filter
+     */
+    void removeFilter(SocketFilter* filter, bool delobj = false);
+
+    /**
+     * Removes and destroys all packet filters
+     */
+    void clearFilters();
+
+    /**
      * Create a pair of bidirectionally connected sockets
      * @param sock1 Reference to first Socket to be paired
      * @param sock2 Reference to second Socket to be paired
@@ -4071,7 +4144,19 @@ protected:
      */
     bool checkError(int retcode, bool strict = false);
 
+    /**
+     * Apply installed filters to a received block of data
+     * @param buffer Buffer for received data
+     * @param length Length of the data in buffer
+     * @param flags Operating system specific bit flags of the operation
+     * @param addr Address of the incoming data, may be NULL
+     * @param adrlen Length of the valid data in address structure
+     * @return True if one of the filters claimed the data
+     */
+    bool applyFilters(void* buffer, int length, int flags, const struct sockaddr* addr = 0, socklen_t adrlen = 0);
+
     SOCKET m_handle;
+    ObjList m_filters;
 };
 
 /**

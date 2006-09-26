@@ -16,3 +16,9 @@
 
 ; autoaddr: bool: Auto change outgoing RTP address:port to match incoming
 ;autoaddr=enabled
+
+; defsleep: int: Default in-loop sleep time for new RTP sessions in milliseconds
+;defsleep=5
+
+; minsleep: int: Minimum allowed in-loop sleep time in milliseconds
+;minsleep=1

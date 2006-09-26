@@ -17,6 +17,9 @@
 ; autoaddr: bool: Auto change outgoing RTP address:port to match incoming
 ;autoaddr=enabled
 
+; rtcp: bool: Allocate socket for the RTCP protocol by default
+;rtcp=enabled
+
 ; defsleep: int: Default in-loop sleep time for new RTP sessions in milliseconds
 ;defsleep=5
 

@@ -78,6 +78,7 @@ static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
 static bool s_autoaddr = true;
+static bool s_rtcp = true;
 
 static int s_sleep = 5;
 static int s_minjitter = 0;
@@ -638,7 +639,7 @@ bool AttachHandler::received(Message &msg)
     if (!w)
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
     if (!w) {
-	w = new YRTPWrapper(lip,ch,media);
+	w = new YRTPWrapper(lip,ch,media,RTPSession::SendRecv,msg.getBoolValue("rtcp",s_rtcp));
 	w->setMaster(msg.getValue("id"));
 
 	if (!src.null()) {
@@ -724,7 +725,7 @@ bool RtpHandler::received(Message &msg)
 	}
 	msg.setParam("localip",lip);
 
-	w = new YRTPWrapper(lip,ch,media,direction,msg.getBoolValue("rtcp",true));
+	w = new YRTPWrapper(lip,ch,media,direction,msg.getBoolValue("rtcp",s_rtcp));
 	w->setMaster(msg.getValue("id"));
     }
     else {
@@ -815,6 +816,7 @@ void YRTPPlugin::initialize()
     s_maxjitter = cfg.getIntValue("general","maxjitter");
     s_tos = cfg.getValue("general","tos");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
+    s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     setup();

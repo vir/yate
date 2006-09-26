@@ -1100,12 +1100,17 @@ void Driver::genUpdate(Message& msg)
 void Driver::msgStatus(Message& msg)
 {
     String mod, par, c;
+    bool details = msg.getBoolValue("details",true);
     lock();
     statusModule(mod);
     statusParams(par);
-    statusChannels(c);
+    if (details)
+	statusChannels(c);
     unlock();
-    msg.retValue() << mod << ";" << par << ";" << c << "\n";
+    msg.retValue() << mod << ";" << par;
+    if (details)
+	msg.retValue() << ";" << c;
+    msg.retValue() << "\n";
 }
 
 void Driver::statusModule(String& str)

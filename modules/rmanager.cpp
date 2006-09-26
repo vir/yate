@@ -43,7 +43,7 @@ static const char s_helpmsg[] =
 "Available commands:\n"
 "  quit\n"
 "  help [command]\n"
-"  status [module]\n"
+"  status [overview] [modulename]\n"
 "  uptime\n"
 "  machine [on|off]\n"
 "  output [on|off]\n"
@@ -293,10 +293,12 @@ bool Connection::processLine(const char *line)
     if (str.startSkip("status"))
     {
 	Message m("engine.status");
+	if (str.startSkip("overview"))
+	    m.addParam("details",String::boolText(false));
 	if (str.null() || (str == "rmanager"))
 	    m.retValue() << "name=rmanager,type=misc;conn=" << connectionlist.count() << "\n";
 	if (!str.null()) {
-	    m.addParam("module",str); 
+	    m.addParam("module",str);
 	    str = ":" + str;
 	}
 	Engine::dispatch(m);

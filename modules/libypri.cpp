@@ -756,8 +756,8 @@ void PriChan::restart(bool outgoing)
 void PriChan::closeData()
 {
     m_span->lock();
-    setSource();
-    setConsumer();
+    // remove all types of data nodes
+    clearEndpoint();
     m_span->unlock();
 }
 

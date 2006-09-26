@@ -27,6 +27,8 @@
 
 using namespace TelEngine;
 
+static unsigned long s_sleep = 5;
+
 class RTPDelayedData : public DataBlock
 {
 public:
@@ -48,10 +50,15 @@ private:
 };
 
 
-RTPGroup::RTPGroup(Priority prio)
+RTPGroup::RTPGroup(int msec, Priority prio)
     : Mutex(true), Thread("RTP Group",prio), m_listChanged(false)
 {
     DDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
+    if (msec < 1)
+	msec = 1;
+    if (msec > 50)
+	msec = 50;
+    m_sleep = msec;
 }
 
 RTPGroup::~RTPGroup()
@@ -83,6 +90,9 @@ void RTPGroup::run()
     DDebug(DebugInfo,"RTPGroup::run() [%p]",this);
     bool ok = true;
     while (ok) {
+	unsigned long msec = m_sleep;
+	if (msec < s_sleep)
+	    msec = s_sleep;
 	lock();
 	Time t;
 	ObjList* l = &m_processors;
@@ -100,7 +110,7 @@ void RTPGroup::run()
 	    }
 	}
 	unlock();
-	Thread::msleep(1,true);
+	Thread::msleep(msec,true);
     }
     DDebug(DebugInfo,"RTPGroup::run() ran out of processors [%p]",this);
 }
@@ -124,6 +134,14 @@ void RTPGroup::part(RTPProcessor* proc)
     unlock();
 }
 
+void RTPGroup::setMinSleep(int msec)
+{
+    if (msec < 1)
+	msec = 1;
+    if (msec > 20)
+	msec = 20;
+    s_sleep = msec;
+}
 
 RTPProcessor::RTPProcessor()
     : m_group(0)

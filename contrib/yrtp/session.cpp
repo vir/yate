@@ -457,7 +457,7 @@ RTPTransport* RTPSession::createTransport()
     return trans;
 }
 
-bool RTPSession::initGroup()
+bool RTPSession::initGroup(int msec, Thread::Priority prio)
 {
     if (m_group)
 	return true;
@@ -465,7 +465,7 @@ bool RTPSession::initGroup()
     if (m_transport)
 	group(m_transport->group());
     if (!m_group)
-	group(new RTPGroup());
+	group(new RTPGroup(msec,prio));
     if (!m_group)
 	return false;
     if (m_transport)

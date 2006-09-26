@@ -126,9 +126,10 @@ class YRTP_API RTPGroup : public GenObject, public Mutex, public Thread
 public:
     /**
      * Constructor
+     * @param msec Minimum time to sleep in loop in milliseconds
      * @param prio Thread priority to run this group
      */
-    RTPGroup(Priority prio = Normal);
+    RTPGroup(int msec = 0, Priority prio = Normal);
 
     /**
      * Group destructor, removes itself from all remaining processors
@@ -144,6 +145,12 @@ public:
      * Inherited thread run method
      */
     virtual void run();
+
+    /**
+     * Set the system global minimum time to sleep in loop
+     * @param msec Minimum time to sleep in loop in milliseconds
+     */
+    static void setMinSleep(int msec);
 
 protected:
     /**
@@ -161,6 +168,7 @@ protected:
 private:
     ObjList m_processors;
     bool m_listChanged;
+    unsigned long m_sleep;
 };
 
 /**
@@ -720,9 +728,11 @@ public:
 
     /**
      * Initialize the RTP session, attach a group if none is present
+     * @param msec Minimum time to sleep in group loop in milliseconds
+     * @param prio Thread priority to run the new group
      * @return True if initialized, false on some failure
      */
-    bool initGroup();
+    bool initGroup(int msec = 0, Thread::Priority prio = Thread::Normal);
 
     /**
      * Send one RTP payload packet

@@ -79,6 +79,7 @@ static int s_bufsize = BUF_SIZE;
 static String s_tos;
 static bool s_autoaddr = true;
 
+static int s_sleep = 5;
 static int s_minjitter = 0;
 static int s_maxjitter = 0;
 
@@ -343,6 +344,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     const char* format = msg.getValue("format");
     p = msg.getValue("tos",s_tos);
     int tos = p.toInteger(dict_tos,0);
+    int msec = msg.getIntValue("msleep",s_sleep);
 
     if (!format)
 	format = lookup(payload, dict_payloads);
@@ -401,7 +403,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 	    m_consumer->deref();
 	}
     }
-    if (!(m_rtp->initGroup() && m_rtp->direction(m_dir)))
+    if (!(m_rtp->initGroup(msec) && m_rtp->direction(m_dir)))
 	return false;
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
@@ -808,6 +810,8 @@ void YRTPPlugin::initialize()
     s_maxjitter = cfg.getIntValue("general","maxjitter");
     s_tos = cfg.getValue("general","tos");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
+    s_sleep = cfg.getIntValue("general","defsleep",5);
+    RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     setup();
     if (m_first) {
 	m_first = false;

@@ -346,17 +346,20 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
     String st("name=cdrbuild,type=cdr,format=Status|Caller|Called");
-    st << ";cdrs=" << s_cdrs.count() << ";";
-    ObjList *l = &s_cdrs;
-    bool first = true;
-    for (; l; l=l->next()) {
-	CdrBuilder *b = static_cast<CdrBuilder *>(l->get());
-	if (b) {
-	    if (first)
-		first = false;
-	    else
-		st << ",";
-	    st << *b << "=" << b->getStatus();
+    st << ";cdrs=" << s_cdrs.count();
+    if (msg.getBoolValue("details",true)) {
+	st << ";";
+	ObjList *l = &s_cdrs;
+	bool first = true;
+	for (; l; l=l->next()) {
+	    CdrBuilder *b = static_cast<CdrBuilder *>(l->get());
+	    if (b) {
+		if (first)
+		    first = false;
+		else
+		    st << ",";
+		st << *b << "=" << b->getStatus();
+	    }
 	}
     }
     msg.retValue() << st << "\n";

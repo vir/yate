@@ -150,18 +150,21 @@ bool StatusHandler::received(Message &msg)
     unsigned int n = s_cfg.sections();
     if (!s_cfg.getSection(0))
 	--n;
-    msg.retValue() << "name=accfile,type=misc;users=" << n << ";";
-    bool first = true;
-    for (unsigned int i=0;i<s_cfg.sections();i++) {
-	NamedList *acct = s_cfg.getSection(i);
-	if (!acct)
-	    continue;
-	const char* user = acct->getValue("username");
-	if (first)
-	    first = false;
-	else
-	    msg.retValue() << ",";
-	msg.retValue() << *acct << "=" << user;
+    msg.retValue() << "name=accfile,type=misc;users=" << n;
+    if (msg.getBoolValue("details",true)) {
+	msg.retValue() << ";";
+	bool first = true;
+	for (unsigned int i=0;i<s_cfg.sections();i++) {
+	    NamedList *acct = s_cfg.getSection(i);
+	    if (!acct)
+		continue;
+	    const char* user = acct->getValue("username");
+	    if (first)
+		first = false;
+	    else
+		msg.retValue() << ",";
+	    msg.retValue() << *acct << "=" << user;
+	}
     }
     msg.retValue() <<"\n";
     return false;

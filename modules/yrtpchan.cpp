@@ -212,6 +212,7 @@ public:
     virtual ~YRTPPlugin();
     virtual void initialize();
     virtual void statusParams(String& str);
+    virtual void statusDetail(String& str);
 private:
     bool m_first;
 };
@@ -787,16 +788,20 @@ YRTPPlugin::~YRTPPlugin()
 
 void YRTPPlugin::statusParams(String& str)
 {
-    String tmp;
     s_mutex.lock();
     str.append("chans=",",") << s_calls.count();
+    s_mutex.unlock();
+}
+
+void YRTPPlugin::statusDetail(String& str)
+{
+    s_mutex.lock();
     ObjList* l = s_calls.skipNull();
     for (; l; l=l->skipNext()) {
 	YRTPWrapper* w = static_cast<YRTPWrapper*>(l->get());
-        tmp.append(w->id(),",") << "=" << w->callId();
+        str.append(w->id(),",") << "=" << w->callId();
     }
     s_mutex.unlock();
-    str << ";" << tmp;
 }
 
 void YRTPPlugin::initialize()

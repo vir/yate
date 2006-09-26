@@ -163,18 +163,21 @@ bool StatusHandler::received(Message &msg)
     unsigned int n = s_cfg.sections();
     if (!s_cfg.getSection(0))
 	--n;
-    msg.retValue() << "name=regfile,type=misc;users=" << n << ";";
-    bool first = true;
-    for (unsigned int i=0;i<s_cfg.sections();i++) {
-	NamedList *user = s_cfg.getSection(i);
-	if (!user || (*user == "general"))
-	    continue;
-	const char* data = s_cfg.getValue(*user,"data");
-	if (first)
-	    first = false;
-	else
-	    msg.retValue() << ",";
-	msg.retValue() << *user << "=" << (data ? data : "offline");
+    msg.retValue() << "name=regfile,type=misc;users=" << n;
+    if (msg.getBoolValue("details",true)) {
+    msg.retValue() << ";";
+	bool first = true;
+	for (unsigned int i=0;i<s_cfg.sections();i++) {
+	    NamedList *user = s_cfg.getSection(i);
+	    if (!user || (*user == "general"))
+		continue;
+	    const char* data = s_cfg.getValue(*user,"data");
+	    if (first)
+		first = false;
+	    else
+		msg.retValue() << ",";
+	    msg.retValue() << *user << "=" << (data ? data : "offline");
+	}
     }
     msg.retValue() <<"\n";
     return false;

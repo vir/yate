@@ -1333,6 +1333,12 @@ protected:
     virtual void statusParams(String& str);
 
     /**
+     * Build the details reporting part of the status answer
+     * @param str String variable to fill up
+     */
+    virtual void statusDetail(String& str);
+
+    /**
      * Set the local debugging level
      * @param msg Debug setting message
      * @param target String to match for local settings
@@ -1908,10 +1914,10 @@ protected:
     virtual void statusParams(String& str);
 
     /**
-     * Build the clannel list part of the status answer
+     * Build the channel list part of the status answer
      * @param str String variable to fill up
      */
-    virtual void statusChannels(String& str);
+    void statusDetail(String& str);
 
     /**
      * Set the local debugging level

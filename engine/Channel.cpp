@@ -789,12 +789,18 @@ bool Module::msgRoute(Message& msg)
 
 void Module::msgStatus(Message& msg)
 {
-    String mod, par;
+    String mod, par, det;
+    bool details = msg.getBoolValue("details",true);
     lock();
     statusModule(mod);
     statusParams(par);
+    if (details)
+	statusDetail(det);
     unlock();
-    msg.retValue() << mod << ";" << par << "\n";
+    msg.retValue() << mod << ";" << par;
+    if (det)
+	msg.retValue() << ";" << det;
+    msg.retValue() << "\n";
 }
 
 void Module::statusModule(String& str)
@@ -805,6 +811,10 @@ void Module::statusModule(String& str)
 }
 
 void Module::statusParams(String& str)
+{
+}
+
+void Module::statusDetail(String& str)
 {
 }
 
@@ -1099,17 +1109,17 @@ void Driver::genUpdate(Message& msg)
 
 void Driver::msgStatus(Message& msg)
 {
-    String mod, par, c;
+    String mod, par, det;
     bool details = msg.getBoolValue("details",true);
     lock();
     statusModule(mod);
     statusParams(par);
     if (details)
-	statusChannels(c);
+	statusDetail(det);
     unlock();
     msg.retValue() << mod << ";" << par;
     if (details)
-	msg.retValue() << ";" << c;
+	msg.retValue() << ";" << det;
     msg.retValue() << "\n";
 }
 
@@ -1128,7 +1138,7 @@ void Driver::statusParams(String& str)
     str << ",chans=" << m_chans.count();
 }
 
-void Driver::statusChannels(String& str)
+void Driver::statusDetail(String& str)
 {
     ObjList* l = m_chans.skipNull();
     for (; l; l=l->skipNext()) {

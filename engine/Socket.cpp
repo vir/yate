@@ -1165,6 +1165,10 @@ void Socket::clearFilters()
 
 bool Socket::applyFilters(void* buffer, int length, int flags, const struct sockaddr* addr, socklen_t adrlen)
 {
+    if ((length <= 0) || !buffer)
+	return false;
+    if (!addr)
+	adrlen = 0;
     for (ObjList* l = &m_filters; l; l = l->next()) {
 	SocketFilter* filter = static_cast<SocketFilter*>(l->get());
 	if (filter && filter->received(buffer,length,flags,addr,adrlen))

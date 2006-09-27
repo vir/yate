@@ -4111,6 +4111,7 @@ public:
 
     /**
      * Removes a packet filter and optionally destroys it
+     * @param filter Pointer to the packet filter to remove from socket
      * @param delobj Set to true to also delete the filter
      */
     void removeFilter(SocketFilter* filter, bool delobj = false);

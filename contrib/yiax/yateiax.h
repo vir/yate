@@ -520,7 +520,7 @@ public:
      * @param formats The formats
      * @param sep The separator to use
     */
-    static void IAXFormat::formatList(String& dest, u_int32_t formats, char sep = ',');
+    static void formatList(String& dest, u_int32_t formats, char sep = ',');
 
     /**
      * Get the text associated with an audio format

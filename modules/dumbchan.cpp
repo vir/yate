@@ -38,7 +38,9 @@ INIT_PLUGIN(DumbDriver);
 class DumbChannel :  public Channel
 {
 public:
-    DumbChannel(const char* addr = 0) : Channel(__plugin) {
+    DumbChannel(const char* addr = 0, bool outgoing = false) : 
+      Channel(__plugin, 0, outgoing) 
+    {
 	m_address = addr;
 	Engine::enqueue(message("chan.startup"));
     };
@@ -57,7 +59,6 @@ DumbChannel::~DumbChannel()
     Debug(this,DebugAll,"DumbChannel::~DumbChannel() src=%p cons=%p",getSource(),getConsumer());
     Engine::enqueue(message("chan.hangup"));
 }
-
 
 bool DumbDriver::msgExecute(Message& msg, String& dest)
 {
@@ -85,13 +86,21 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
 
-    DumbChannel* c = new DumbChannel(dest);
+    DumbChannel* c = new DumbChannel(dest, true);
+
+    String caller = msg.getValue("caller");
+    if (caller.null())
+	caller << prefix() << dest;
+    String callername = msg.getValue("callername");
 
     Message m("call.route");
     m.addParam("driver","dumb");
     m.addParam("id", c->id());
-    m.addParam("caller",dest);
+    m.addParam("caller",caller);
     m.addParam("called",targ);
+
+    if (!callername.null())
+	m.addParam("callername",callername);
 
     if (Engine::dispatch(m)) {
 	m = "call.execute";

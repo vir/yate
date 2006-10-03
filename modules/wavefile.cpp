@@ -46,7 +46,7 @@ private:
     void detectWavFormat();
     void detectIlbcFormat();
     bool computeDataRate();
-    bool notify();
+    bool notify(DataSource* source);
     CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
@@ -141,7 +141,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	Debug(DebugWarn,"Opening '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
 	m_format.clear();
-	notify();
+	notify(this);
 	return;
     }
     if (file.endsWith(".gsm"))
@@ -166,7 +166,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	start("WaveSource");
     else {
 	Debug(DebugWarn,"Unable to compute data rate for file '%s'",file.c_str());
-	notify();
+	notify(this);
     }
 }
 
@@ -304,8 +304,11 @@ void WaveSource::run()
 	    XDebug(&__plugin,DebugAll,"WaveSource sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	if (!alive())
+	if (!alive()) {
+	    m_autoclose = false;
+	    notify(0);
 	    return;
+	}
 	Forward(m_data,ts);
 	ts += m_data.length()*8000/m_brate;
 	m_total += r;
@@ -313,7 +316,7 @@ void WaveSource::run()
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",m_id.c_str(),m_total,m_chan,this);
     // at cleanup time deref the data source if we start no disconnector thread
-    m_autoclean = !notify();
+    m_autoclean = !notify(this);
 }
 
 void WaveSource::cleanup()
@@ -331,13 +334,15 @@ void WaveSource::setNotify(const String& id)
 {
     m_id = id;
     if ((m_fd < 0) && !m_nodata)
-	notify();
+	notify(this);
 }
 
-bool WaveSource::notify()
+bool WaveSource::notify(DataSource* source)
 {
     if (m_id || m_autoclose) {
-	Disconnector *disc = new Disconnector(m_chan,m_id,this,m_autoclose);
+	DDebug(&__plugin,DebugInfo,"Preparing disconnector for '%s' source=%p [%p]",
+	    m_id.c_str(),source,this);
+	Disconnector *disc = new Disconnector(m_chan,m_id,source,m_autoclose);
 	return disc->init();
     }
     return false;
@@ -418,8 +423,10 @@ Disconnector::Disconnector(CallEndpoint* chan, const String& id, DataSource* sou
 
 Disconnector::~Disconnector()
 {
-    if (m_msg)
+    if (m_msg) {
+	DDebug(&__plugin,DebugAll,"Disconnector enqueueing notify message [%p]",this);
 	Engine::enqueue(m_msg);
+    }
 }
 
 bool Disconnector::init()
@@ -434,8 +441,8 @@ bool Disconnector::init()
 
 void Disconnector::run()
 {
-    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p source=%s disc=%s",
-	(void*)m_chan,m_msg,String::boolText(m_source),String::boolText(m_disc));
+    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p source=%s disc=%s [%p]",
+	(void*)m_chan,m_msg,String::boolText(m_source),String::boolText(m_disc),this);
     if (!m_chan)
 	return;
     if (m_source) {

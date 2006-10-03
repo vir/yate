@@ -313,6 +313,10 @@ void* SocketFilter::getObject(const String& name) const
     return GenObject::getObject(name);
 }
 
+void SocketFilter::timerTick(const Time& when)
+{
+}
+
 bool SocketFilter::valid() const
 {
     return m_socket && m_socket->valid();
@@ -1175,6 +1179,15 @@ bool Socket::applyFilters(void* buffer, int length, int flags, const struct sock
 	    return true;
     }
     return false;
+}
+
+void Socket::timerTick(const Time& when)
+{
+    for (ObjList* l = &m_filters; l; l = l->next()) {
+	SocketFilter* filter = static_cast<SocketFilter*>(l->get());
+	if (filter)
+	    filter->timerTick(when);
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

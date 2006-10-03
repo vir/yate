@@ -3453,6 +3453,12 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
+     * Run whatever actions required on idle thread runs
+     * @param when Time when the idle run started
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
      * Notify this filter about a received block of data
      * @param buffer Buffer for received data
      * @param length Length of the data in buffer
@@ -4120,6 +4126,14 @@ public:
      * Removes and destroys all packet filters
      */
     void clearFilters();
+
+    /**
+     * Run whatever actions required on idle thread runs.
+     * The default implementation calls @ref SocketFilter::timerTick()
+     *  for all installed filters.
+     * @param when Time when the idle run started
+     */
+    virtual void timerTick(const Time& when);
 
     /**
      * Create a pair of bidirectionally connected sockets

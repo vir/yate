@@ -212,6 +212,7 @@ void RTPTransport::timerTick(const Time& when)
 		    m_monitor->rtpData(buf,len);
 	    }
 	}
+	m_rtpSock.timerTick(when);
     }
     if (m_rtcpSock.valid()) {
 	char buf[BUF_SIZE];
@@ -223,6 +224,7 @@ void RTPTransport::timerTick(const Time& when)
 	    if (m_monitor)
 		m_monitor->rtcpData(buf,len);
 	}
+	m_rtcpSock.timerTick(when);
     }
 }
 

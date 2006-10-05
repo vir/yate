@@ -167,6 +167,7 @@ public:
     virtual bool checkUser(const String& username, const String& realm, const String& nonce,
 	const String& method, const String& uri, const String& response,
 	const SIPMessage* message, GenObject* userData);
+    virtual SIPTransaction* forkInvite(SIPMessage* answer, SIPTransaction* trans);
     inline bool prack() const
 	{ return m_prack; }
     inline bool info() const
@@ -176,6 +177,7 @@ private:
     YateSIPEndPoint* m_ep;
     bool m_prack;
     bool m_info;
+    bool m_fork;
 };
 
 class YateSIPLine : public String
@@ -933,6 +935,7 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_info = s_cfg.getBoolValue("general","info",true);
     if (m_info)
 	addAllowed("INFO");
+    m_fork = s_cfg.getBoolValue("general","fork",true);
     NamedList *l = s_cfg.getSection("methods");
     if (l) {
 	unsigned int len = l->length();
@@ -946,6 +949,18 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
 	}
     }
 }
+
+SIPTransaction* YateSIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)
+{
+    if (m_fork && trans->isActive() && (answer->code/100) == 2)
+    {
+	Debug(this,DebugNote,"Changing early dialog tag because of forked 2xx");
+	trans->setDialogTag(answer->getParamValue("To","tag"));
+	return trans;
+    }
+    return SIPEngine::forkInvite(answer,trans);
+}
+
 
 bool YateSIPEngine::buildParty(SIPMessage* message)
 {

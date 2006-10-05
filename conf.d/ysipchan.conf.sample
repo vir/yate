@@ -25,6 +25,12 @@
 ; prack: bool: Enable acknowledging provisional 1xx answers (RFC 3262)
 ;prack=disable
 
+; info: bool: Accept incoming INFO messages
+;info=enable
+
+; fork: bool: Follow first forked 2xx answer on early dialogs
+;fork=enable
+
 ; progress: bool: Send an "183 Session Progress" just after successfull routing
 ;progress=disable
 

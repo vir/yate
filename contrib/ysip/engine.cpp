@@ -235,7 +235,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     return new SIPTransaction(message,this,message->isOutgoing());
 }
 
-SIPTransaction* SIPEngine::forkInvite(SIPMessage* answer, const SIPTransaction* trans)
+SIPTransaction* SIPEngine::forkInvite(SIPMessage* answer, SIPTransaction* trans)
 {
     // TODO: build new transaction or CANCEL
     Debug(this,DebugInfo,"Message %p was a forked INVITE answer [%p]",answer,this);

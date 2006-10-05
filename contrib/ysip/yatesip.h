@@ -1080,7 +1080,7 @@ public:
      * @param trans One of the transactions part of the same INVITE
      * @return Pointer to new transaction or NULL if message is ignored
      */
-    virtual SIPTransaction* forkInvite(SIPMessage* answer, const SIPTransaction* trans);
+    virtual SIPTransaction* forkInvite(SIPMessage* answer, SIPTransaction* trans);
 
     /**
      * Get the timeout to be used for transactions involving human interaction.

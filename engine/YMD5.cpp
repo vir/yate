@@ -37,7 +37,7 @@ typedef struct MD5Context {
 } MD5_CTX;
 			
 
-#if defined(WORDS_BIGENDIAN) || defined(BIGENDIAN)
+#if !(defined(WORDS_BIGENDIAN) || defined(BIGENDIAN))
 #define byteReverse(buf, len)	/* Nothing */
 #else
 

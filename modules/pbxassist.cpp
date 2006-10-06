@@ -95,14 +95,15 @@ static Configuration s_cfg;
 
 ChanAssist* PBXList::create(Message& msg, const String& id)
 {
-    Debug(this,DebugCall,"Asked to create assistant for '%s'",id.c_str());
     if (msg == "chan.startup" || msg.userObject("Channel")) {
 	// if a filter is set try to match it
 	if (s_filter && !s_filter.matches(id))
 	    return 0;
 	// allow routing to enable/disable assistance
-	if (msg.getBoolValue("pbxassist",s_assist))
+	if (msg.getBoolValue("pbxassist",s_assist)) {
+	    Debug(this,DebugCall,"Creating assistant for '%s'",id.c_str());
 	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass));
+	}
     }
     return 0;
 
@@ -121,7 +122,7 @@ void PBXList::initialize()
     lock();
     s_cfg = Engine::configFile(name());
     s_cfg.load();
-    s_assist = s_cfg.getBoolValue("general","default",false);
+    s_assist = s_cfg.getBoolValue("general","default",true);
     s_filter = s_cfg.getValue("general","filter");
     s_pass = s_cfg.getBoolValue("general","dtmfpass",false);
     s_minlen = s_cfg.getIntValue("general","minlen",2);
@@ -140,7 +141,7 @@ void PBXList::initialize()
     s_onhold = s_cfg.getValue("general","onhold","moh/default");
     s_error = s_cfg.getValue("general","error","tone/outoforder");
     unlock();
-    if (s_cfg.getBoolValue("general","enabled",true))
+    if (s_cfg.getBoolValue("general","enabled",false))
 	ChanAssistList::initialize();
 }
 

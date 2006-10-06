@@ -1,14 +1,14 @@
 [general]
 ; Common settings
 
-; enabled: bool: Enable the module
-;enabled=yes
+; enabled: bool: Enable the module and install message handlers
+;enabled=no
 
 ; priority: int: Priority to install message handlers into engine
 ;priority=15
 
-; default: bool: Assist channels by default
-;default=no
+; default: bool: Assist channels by default, module must be enabled first
+;default=yes
 
 ; filter: regexp: Expression matching assisted channel IDs, default all
 ;filter=

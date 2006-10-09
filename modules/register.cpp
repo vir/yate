@@ -156,6 +156,7 @@ protected:
     virtual void initialize();
 private:
     bool m_init;
+    u_int32_t m_nextTime;
     String m_queryInit;
     String m_queryTimer;
     String m_updateStatus;
@@ -610,7 +611,7 @@ bool FallBackHandler::received(Message &msg)
 
 
 AccountsModule::AccountsModule()
-    : m_init(false)
+    : m_init(false), m_nextTime(0)
 { 
     Output("Loaded modules Accounts for database"); 
     m_account = s_cfg.getValue("accounts","account", s_cfg.getValue("default","account"));
@@ -649,9 +650,16 @@ bool AccountsModule::received(Message &msg, int id)
 	return false;
     }
     if (id == Timer) {
-	String query;
 	if (m_account.null())
 	    return false;
+	u_int32_t t = msg.msgTime().sec();
+	if (t >= m_nextTime)
+	    // we look for account changes every 30 seconds
+	    m_nextTime = t + s_expire;
+	else
+	    return false;
+
+	String query;
 	if (m_init)
 	    query = m_queryTimer;
 	else {

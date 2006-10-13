@@ -808,6 +808,10 @@ SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& passwor
 	    auth->setParam("uri",quote(msguri));
 	    auth->setParam("response",quote(response));
 	    auth->setParam("algorithm","MD5");
+	    // copy opaque data as-is, only if present
+	    const NamedString* opaque = t->getParam("opaque");
+	    if (opaque)
+		auth->setParam(opaque->name(),*opaque);
 	    return auth;
 	}
     }

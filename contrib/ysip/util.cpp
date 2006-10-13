@@ -181,7 +181,7 @@ int findSep(const char* str, char sep, int offs)
     bool inQ = false;
     bool inU = false;
     char c;
-    for (; c = *str++ ; offs++) {
+    for (; (c = *str++) ; offs++) {
 	if (inQ) {
 	    if (c == '"')
 		inQ = false;

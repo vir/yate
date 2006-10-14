@@ -32,9 +32,10 @@ using namespace TelEngine;
 
 IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval)
+	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired)
     : Mutex(true),
     m_lastGetEvIndex(0),
+    m_authRequired(authRequired),
     m_maxFullFrameDataLen(maxFullFrameDataLen),
     m_startLocalCallNo(0),
     m_transListCount(0),
@@ -48,6 +49,8 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_trunkSendInterval(trunkSendInterval)
 {
     debugName("iaxengine");
+    Debug(this,DebugAll,"Automatically request authentication set to '%s'.",
+	(authRequired?"YES":"NO"));
     if ((port <= 0) || port > 65535)
 	port = 4569;
     if (transListCount < 4)

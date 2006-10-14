@@ -30,6 +30,7 @@ using namespace TelEngine;
 String IAXTransaction::s_iax_modNoAuthMethod("Unsupported or missing authentication method or missing challenge");
 String IAXTransaction::s_iax_modNoMediaFormat("Unsupported or missing media format or capability");
 String IAXTransaction::s_iax_modInvalidAuth("Invalid authentication request, response or challenge");
+String IAXTransaction::s_iax_modNoUsername("Username is missing");
 
 unsigned char IAXTransaction::m_maxInFrames = 100;
 
@@ -558,12 +559,11 @@ bool IAXTransaction::sendReject(const char* cause, u_int8_t code)
     return true;
 }
 
-bool IAXTransaction::sendAuth(const String& pwd)
+bool IAXTransaction::sendAuth()
 {
     Lock lock(this);
     if (!((type() == New || type() == RegReq || type() == RegRel) && state() == NewRemoteInvite))
 	return false;
-    m_password = pwd;
     switch (m_authmethod) {
 	case IAXAuthMethod::MD5:
 	    m_challenge = (int)random();
@@ -593,13 +593,13 @@ bool IAXTransaction::sendAuth(const String& pwd)
     return true;
 }
 
-bool IAXTransaction::sendAuthReply()
+bool IAXTransaction::sendAuthReply(const String& response)
 {
     Lock lock(this);
     if (state() != NewLocalInvite_AuthRecv)
 	return false;
+    m_authdata = response;
     IAXIEList ieList;
-    String authdata;
     IAXControl::Type subclass;
     switch (type()) {
 	case New:
@@ -618,8 +618,7 @@ bool IAXTransaction::sendAuthReply()
     }
     if (m_authmethod != IAXAuthMethod::MD5)
 	return false;
-    m_engine->getMD5FromChallenge(authdata,m_challenge,m_password);
-    ieList.appendString(IAXInfoElement::MD5_RESULT,authdata);
+    ieList.appendString(IAXInfoElement::MD5_RESULT,response);
     DataBlock data;
     ieList.toBuffer(data);
     postFrame(IAXFrame::IAX,subclass,data.data(),data.length(),0,false);
@@ -702,7 +701,6 @@ void IAXTransaction::init(IAXIEList& ieList)
     switch (type()) {
 	case New:
 	    ieList.getString(IAXInfoElement::USERNAME,m_username);
-	    ieList.getString(IAXInfoElement::PASSWORD,m_password);
 	    ieList.getString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
 	    ieList.getString(IAXInfoElement::CALLING_NAME,m_callingName);
 	    ieList.getString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
@@ -717,7 +715,6 @@ void IAXTransaction::init(IAXIEList& ieList)
 	case RegReq:
 	case RegRel:
 	    ieList.getString(IAXInfoElement::USERNAME,m_username);
-	    ieList.getString(IAXInfoElement::PASSWORD,m_password);
 	    ieList.getNumeric(IAXInfoElement::REFRESH,m_expire);
 	    break;
 	case Poke:
@@ -979,11 +976,8 @@ IAXEvent* IAXTransaction::processAuthReq(IAXEvent* event)
     u_int32_t authmethod;
     bool bAuthMethod = event->getList().getNumeric(IAXInfoElement::AUTHMETHODS,authmethod) && (authmethod & m_authmethod);
     bool bChallenge = event->getList().getString(IAXInfoElement::CHALLENGE,m_challenge);
-    if (bAuthMethod && bChallenge) {
-	Debug(m_engine,DebugAll,"Transaction(%u,%u). Internal authentication reply",localCallNo(),remoteCallNo());
-	sendAuthReply();
+    if (bAuthMethod && bChallenge)
 	return event;
-    }
     delete event;
     return internalReject(s_iax_modNoAuthMethod);
 }
@@ -1010,12 +1004,6 @@ IAXEvent* IAXTransaction::processAuthRep(IAXEvent* event)
 	return event;
     Debug(m_engine,DebugAll,"Transaction(%u,%u). Auth Reply received",localCallNo(),remoteCallNo());
     event->getList().getString(IAXInfoElement::MD5_RESULT,m_authdata);
-    if (type() == RegReq || type() == RegRel) {
-        delete event;
-	if (!IAXEngine::isMD5ChallengeCorrect(m_authdata,m_challenge,m_password))
-	    return internalReject(s_iax_modInvalidAuth);
-	return internalAccept();
-    }
     return event;
 }
 
@@ -1087,12 +1075,16 @@ IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame
 		break;
 	    ev = createEvent(IAXEvent::New,false,frame,NewRemoteInvite);
 	    if (ev) {
+		// Check version
 		if (!ev->getList().validVersion()) {
 		    delete ev;
 		    sendReject("Unsupported or missing protocol version");
 		    return 0;
 		}
 		init(ev->getList());
+		// Check username
+		if (!m_username)
+		    return internalReject(s_iax_modNoUsername);
 	    }
 	    return ev;
 	case RegReq:
@@ -1102,6 +1094,9 @@ IAXEvent* IAXTransaction::getEventStartTrans(IAXFullFrame* frame, bool& delFrame
 		break;
 	    ev = createEvent(IAXEvent::New,false,frame,NewRemoteInvite);
 	    init(ev->getList());
+	    // Check username
+	    if (!m_username)
+		return internalReject(s_iax_modNoUsername);
 	    return ev;
 	case Poke:
 	    if (!(frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::Poke))

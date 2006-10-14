@@ -1132,13 +1132,6 @@ public:
 	{ return m_username; }
 
     /**
-     * Retrive the password
-     * @return A reference to the password
-     */
-    inline const String& password()
-	{ return m_password; }
-
-    /**
      * Retrive the calling number
      * @return A reference to the calling number
      */
@@ -1307,17 +1300,17 @@ public:
     /**
      * Send an AUTHREQ/REGAUTH frame to remote peer
      * This method is thread safe
-     * @param pwd Required password
      * @return False if the current transaction state is not NewRemoteInvite
      */
-    bool sendAuth(const String& pwd);
+    bool sendAuth();
 
     /**
      * Send an AUTHREP/REGREQ/REGREL frame to remote peer as a response to AUTHREQ/REGREQ/REGREL
      * This method is thread safe
+     * @param response Response to send
      * @return False if the current transaction state is not NewLocalInvite_AuthRecv
      */
-    bool sendAuthReply();
+    bool sendAuthReply(const String& response);
 
     /**
      * Send a DTMF frame to remote peer
@@ -1378,6 +1371,11 @@ public:
      * Standard message sent if the received authentication data is incorrect
      */
     static String s_iax_modInvalidAuth;
+
+    /**
+     * Standard message sent if a received frame doesn't have an username information element
+     */
+    static String s_iax_modNoUsername;
 
 protected:
     /**
@@ -1766,7 +1764,6 @@ private:
     // Data
     IAXAuthMethod::Type m_authmethod;		// Authentication method to use
     String m_username;				// Username
-    String m_password;				//  Password
     String m_callingNo;				// Calling number
     String m_callingName;			// Calling name
     String m_calledNo;				// Called number
@@ -1800,7 +1797,7 @@ public:
         Timeout,		// Transaction timeout
 	NotImplemented,		// Feature not implemented
 	New,			// New remote transaction
-	AuthReq,		// Auth request. Internally processed
+	AuthReq,		// Auth request
 	AuthRep,		// Auth reply
 	Accept,			// Request accepted
 	Hangup,			// Remote hangup
@@ -1946,10 +1943,11 @@ public:
      * @param format Default media format
      * @param capab Media capabilities of this engine
      * @param trunkSendInterval Send trunk meta frame interval
+     * @param authRequired Automatically challenge all clients for authentication
      */
     IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
-	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval);
+	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired);
 
     /**
      * Destructor
@@ -2003,6 +2001,13 @@ public:
      */
     inline u_int16_t retransInterval() const
         { return m_retransInterval; }
+
+    /**
+     * Check if a transaction should automatically request authentication
+     * @return True to automatically request authentication
+     */
+    inline bool authRequired() const
+        { return m_authRequired; }
 
     /**
      * Get the timeout (in seconds) of acknoledged auth frames sent
@@ -2194,13 +2199,15 @@ private:
     bool m_lUsedCallNo[IAX2_MAX_CALLNO + 1];	// Used local call numnmbers flags
     int m_lastGetEvIndex;			// getEvent: keep last array entry
     // Parameters
+    bool m_authRequired;			// Automatically request authentication
     int m_maxFullFrameDataLen;			// Max full frame data (IE list) length
     u_int16_t m_startLocalCallNo;		// Start index of local call number allocation
     u_int16_t m_transListCount;			// m_transList count
     u_int16_t m_retransCount;			// Retransmission counter for each transaction belonging to this engine
     u_int16_t m_retransInterval;		// Retransmission interval default value in miliseconds
     u_int16_t m_authTimeout;			// Timeout (in seconds) of acknoledged auth frames sent
-    u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions belonging to this engine
+    u_int32_t m_transTimeout;			// Timeout (in seconds) on remote request of transactions
+    						//  belonging to this engine
     // Media
     u_int32_t m_format;				// The default media format
     u_int32_t m_capability;			// The media capability

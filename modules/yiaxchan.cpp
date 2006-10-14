@@ -230,10 +230,11 @@ public:
      * @param transTimeout Timeout (in seconds) on remote request of transactions belonging to this engine
      * @param maxFullFrameDataLen Max full frame IE list (buffer) length
      * @param trunkSendInterval Send trunk meta frame interval
+     * @param authRequired Automatically challenge all clients for authentication
      */
     YIAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout,
-	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval);
+	u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval, bool authRequired);
 
     virtual ~YIAXEngine()
 	{}
@@ -286,8 +287,11 @@ protected:
 
     /*
      * Event handler for incoming registration transactions.
+     * @param event The event.
+     * @param first True if this is the first request.
+     *  False if it is a response to an authentication request.
      */
-    void processRemoteReg(IAXEvent* event);
+    void processRemoteReg(IAXEvent* event,bool first);
 
     /*
      * Send Register/Unregister messages to Engine
@@ -344,6 +348,15 @@ public:
     // @param formats The 'formats' parameter of a message
     // @return False if formtas is not 0 and the result is 0 (no intersection)
     bool updateCodecsFromRoute(u_int32_t& codecs, const char* formats);
+
+    // Dispatch user.auth
+    // @tr The IAX transaction
+    // @param response True if it is a response.
+    // @param requestAuth True on exit: the caller should request authentication
+    // @param invalidAuth True on exit: authentication response is incorrect
+    // @return False if not authenticated
+    bool userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
+	bool& invalidAuth);
 
 protected:
     YIAXEngine* m_iaxEngine;
@@ -785,10 +798,13 @@ void YIAXTrunking::run()
 /**
  * YIAXEngine
  */
-YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
-	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen, u_int32_t trunkSendInterval)
-    : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,transTimeout,
-      maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs(),trunkSendInterval),
+YIAXEngine::YIAXEngine(const char* iface, int port, u_int16_t transListCount,
+	u_int16_t retransCount, u_int16_t retransInterval, u_int16_t authTimeout,
+	u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
+	u_int32_t trunkSendInterval, bool authRequired)
+    : IAXEngine(iface,port,transListCount,retransCount,retransInterval,authTimeout,
+	transTimeout,maxFullFrameDataLen,iplugin.defaultCodec(),iplugin.codecs(),
+	trunkSendInterval,authRequired),
       m_threadsCreated(false)
 {
 }
@@ -914,8 +930,8 @@ void YIAXEngine::processEvent(IAXEvent* event)
 	    break;
 	case IAXTransaction::RegReq:
 	case IAXTransaction::RegRel:
-	    if (event->type() == IAXEvent::New)
-		processRemoteReg(event);
+	    if (event->type() == IAXEvent::New || event->type() == IAXEvent::AuthRep)
+		processRemoteReg(event,(event->type() == IAXEvent::New));
 	    else
 		if (event->getTransaction()->getUserData())
 		    s_lines.handleEvent(event);
@@ -926,38 +942,44 @@ void YIAXEngine::processEvent(IAXEvent* event)
 }
 
 // Process events for remote users registering to us
-void YIAXEngine::processRemoteReg(IAXEvent* event)
+void YIAXEngine::processRemoteReg(IAXEvent* event, bool first)
 {
     IAXTransaction* tr = event->getTransaction();
-
     Debug(this,DebugAll,"processRemoteReg: %s username: '%s'",
 	tr->type() == IAXTransaction::RegReq?"Register":"Unregister",tr->username().c_str());
-    Message msg("user.auth");
-    msg.addParam("username",tr->username());
-    msg.addParam("ip_host",tr->remoteAddr().host());
-    msg.addParam("ip_port",String(tr->remoteAddr().port()));
-    if (!Engine::dispatch(msg)) {
-	// Not authenticated
-	Debug(this,DebugAll,"processRemoteReg. Not authenticated. Reject");
-	tr->sendReject();
+    // Check for automatomatically authentication request if it's the first request
+    if (first && iplugin.getEngine()->authRequired()) {
+	Debug(this,DebugAll,"processRemoteReg. Request authentication");
+	tr->sendAuth();
 	return;
     }
-    String password = msg.retValue();
-    if (password.null()) {
-	// Authenticated, no password. Try to (un)register
+    // Authenticated: register/unregister
+    bool requestAuth = false, invalidAuth = false;
+    if (iplugin.userAuth(tr,!first,requestAuth,invalidAuth)) {
+	// Authenticated. Try to (un)register
 	if (userreg(tr,event->subclass() == IAXControl::RegRel)) {
 	    Debug(this,DebugAll,"processRemoteReg. Authenticated and (un)registered. Ack");
 	    tr->sendAccept();
 	}
 	else {
 	    Debug(this,DebugAll,"processRemoteReg. Authenticated but not (un)registered. Reject");
-	    tr->sendReject();
+	    tr->sendReject("not registered");
 	}
 	return;
     }
-    // Authenticated, password required
-    Debug(this,DebugAll,"processRemoteReg. Request authentication");
-    tr->sendAuth(password);
+    // First request: check if we should request auth
+    const char* reason = 0;
+    if (first && requestAuth) {
+	Debug(this,DebugAll,"processRemoteReg. Request authentication");
+	tr->sendAuth();
+	return;
+    }
+    else if (invalidAuth)
+	 reason = IAXTransaction::s_iax_modInvalidAuth;
+    if (!reason)
+	reason = "not authenticated";
+    Debug(this,DebugAll,"processRemoteReg. Not authenticated ('%s'). Reject",reason);
+    tr->sendReject(reason);
 }
 
 // Build and dispatch the user.(un)register message
@@ -1044,6 +1066,7 @@ void YIAXDriver::initialize()
     // Port and interface
     m_port = s_cfg.getIntValue("general","port",4569);
     String iface = s_cfg.getValue("general","addr");
+    bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
     unlock();
     setup();
     // We need channels to be dropped on shutdown
@@ -1060,7 +1083,7 @@ void YIAXDriver::initialize()
     if (!m_iaxEngine) {
 	Engine::install(new YIAXRegDataHandler);
 	m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
-		transTimeout,maxFullFrameDataLen,trunkSendInterval);
+		transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq);
 	m_iaxEngine->debugChain(this);
 	int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
 	if (tos) {
@@ -1193,6 +1216,42 @@ bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
     return codecs != 0;
 }
 
+bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
+	bool& invalidAuth)
+{
+    requestAuth = invalidAuth = false;
+    // Create and dispatch user.auth
+    Message msg("user.auth");
+    msg.addParam("protocol","iax");
+    msg.addParam("username",tr->username());
+    msg.addParam("called",tr->calledNo());
+    msg.addParam("caller",tr->callingNo());
+    msg.addParam("callername",tr->callingName());
+    msg.addParam("ip_host",tr->remoteAddr().host());
+    msg.addParam("ip_port",String(tr->remoteAddr().port()));
+    if (response) {
+	msg.addParam("nonce",tr->challenge());
+	msg.addParam("response",tr->authdata());
+    }
+    if (!Engine::dispatch(msg))
+	return false;
+    String pwd = msg.retValue();
+    // We have a password
+    if (pwd) {
+	// Not a response: request authentication
+	if (!response) {
+	    requestAuth = true;
+	    return false;
+	}
+	// Check response
+	if (!IAXEngine::isMD5ChallengeCorrect(tr->authdata(),tr->challenge(),pwd)) {
+	    invalidAuth = true;
+	    return false;
+	}
+    }
+    return true;
+}
+
 /**
  * IAXConsumer
  */
@@ -1293,14 +1352,13 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	reason = error;
     DDebug(this,DebugInfo,"callRejected [%p]. Error: '%s'",this,error);
     String s(error);
-    m_mutexTrans.lock();
+    Lock lock(m_mutexTrans);
     if (m_transaction && (s == "noauth") && safeRefIncrease()) {
-	Debug(this,DebugAll,"callRejected [%p]. Requesting authentication",this);
-	m_transaction->sendAuth(m_password);
-	m_mutexTrans.unlock();
+	Debug(this,DebugAll,"callRejected [%p]. Request authentication",this);
+	m_transaction->sendAuth();
 	return;
     }
-    m_mutexTrans.unlock();
+    lock.drop();
     hangup(reason,true);
 }
 
@@ -1556,29 +1614,15 @@ void YIAXConnection::startAudioOut()
 void YIAXConnection::evAuthRep(IAXEvent* event)
 {
     DDebug(this,DebugAll,"YIAXConnection - AUTHREP");
-    IAXTransaction* tr = event->getTransaction();
-    // Try to obtain a password from Engine
-    Message msg("user.auth");
-    msg.addParam("username",tr->username());
-    if (!Engine::dispatch(msg)) {
-	// NOT Authenticated
-	hangup(event,"",true);
+    bool requestAuth, invalidAuth;
+    if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth)) {
+	// Authenticated. Route the user.
+	route(true);
 	return;
     }
-    String pwd = msg.retValue();
-    if (pwd.null()) {
-	// Authenticated
-	tr->sendAccept();
-	return;
-    }
-    if (!IAXEngine::isMD5ChallengeCorrect(tr->authdata(),tr->challenge(),pwd)) {
-	// Incorrect data received
-	DDebug(this,DebugAll,"AUTHREP - Incorrect MD5 answer. Reject.");
-	hangup(event,IAXTransaction::s_iax_modInvalidAuth,true);
-	return;
-    }
-    // Password is correct. Route the user.
-    route(true);
+    const char* reason = invalidAuth ? IAXTransaction::s_iax_modInvalidAuth : "not authenticated";
+    DDebug(this,DebugAll,"Not authenticated. Reason: '%s'. Reject.",reason);
+    hangup(event,reason,true);
 }
 
 // Get rid of the extra reference

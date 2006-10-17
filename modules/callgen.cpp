@@ -41,7 +41,8 @@ static int s_answers = 0;
 
 static int s_numcalls = 0;
 
-static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}";
+static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}"
+    "\r\nCommands to control the Call Generator";
 
 class GenConnection : public CallEndpoint
 {
@@ -113,6 +114,7 @@ public:
     };
     virtual bool received(Message &msg, int id);
     bool doCommand(String& line, String& rval);
+    bool doComplete(const String& partLine, const String& partWord, String& rval);
 };
 
 class CallGenPlugin : public Plugin
@@ -357,6 +359,38 @@ void CleanThread::run()
     }
 }
 
+static const char* s_cmds[] = {
+    "start",
+    "stop",
+    "drop",
+    "pause",
+    "resume",
+    "single",
+    "info",
+    "reset",
+    "load",
+    "save",
+    "set",
+    0
+};
+
+bool CmdHandler::doComplete(const String& partLine, const String& partWord, String& rval)
+{
+    if (partLine.null() || (partLine == "help")) {
+	if (partWord.null() || String("callgen").startsWith(partWord))
+	    rval.append("callgen","\t");
+    }
+    else if (partLine == "callgen") {
+	for (const char** list = s_cmds; *list; list++) {
+	    String tmp = *list;
+	    if (partWord.null() || tmp.startsWith(partWord))
+		rval.append(tmp,"\t");
+	}
+	return true;
+    }
+    return false;
+}
+
 bool CmdHandler::doCommand(String& line, String& rval)
 {
     if (line.startSkip("set")) {
@@ -451,7 +485,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	rval << "Usage: " << s_help;
     else
 	return false;
-    rval << "\n";
+    rval << "\r\n";
     return true;
 }
 
@@ -480,7 +514,7 @@ bool CmdHandler::received(Message &msg, int id)
 			msg.retValue() << c->id() << "=" << c->status() << "|" << c->party();
 		    }
 		}
-		msg.retValue() << "\n";
+		msg.retValue() << "\r\n";
 		s_mutex.unlock();
 		if (tmp)
 		    return true;
@@ -490,11 +524,12 @@ bool CmdHandler::received(Message &msg, int id)
 	    tmp = msg.getValue("line");
 	    if (tmp.startSkip("callgen"))
 		return doCommand(tmp,msg.retValue());
+	    return doComplete(msg.getValue("partline"),msg.getValue("partword"),msg.retValue());
 	    break;
 	case Help:
 	    tmp = msg.getValue("line");
 	    if (tmp.null() || (tmp == "callgen")) {
-		msg.retValue() << "  " << s_help << "\n";
+		msg.retValue() << "  " << s_help << "\r\n";
 		if (tmp)
 		    return true;
 	    }

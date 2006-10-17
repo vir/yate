@@ -516,7 +516,7 @@ void Channel::msgStatus(Message& msg)
     statusParams(par);
     lock.drop();
     msg.retValue().clear();
-    msg.retValue() << "name=" << id() << ",type=channel;" << par << "\n";
+    msg.retValue() << "name=" << id() << ",type=channel;" << par << "\r\n";
 }
 
 void Channel::statusParams(String& str)
@@ -638,7 +638,7 @@ bool Channel::dtmfInband(const char* tone)
 bool Channel::toneDetect(const char* sniffer)
 {
     if (null(sniffer))
-	return false;
+	sniffer = "tone/*";
     Message m("chan.attach");
     complete(m,true);
     m.userData(this);
@@ -663,7 +663,7 @@ bool Channel::setDebug(Message& msg)
 	debugEnabled(str.toBoolean(debugEnabled()));
     msg.retValue() << "Channel " << id()
 	<< " debug " << (debugEnabled() ? "on" : "off")
-	<< " level " << debugLevel() << (debugChained() ? " chained" : "") << "\n";
+	<< " level " << debugLevel() << (debugChained() ? " chained" : "") << "\r\n";
     return true;
 }
 
@@ -763,6 +763,7 @@ void Module::setup()
     installRelay(Timer,90);
     installRelay(Status,110);
     installRelay(Level,120);
+    installRelay(Command,120);
 }
 
 void Module::changed()
@@ -787,6 +788,32 @@ bool Module::msgRoute(Message& msg)
     return false;
 }
 
+bool Module::msgCommand(Message& msg)
+{
+    const NamedString* line = msg.getParam("line");
+    if (line)
+	return commandExecute(msg.retValue(),*line);
+    if (msg.getParam("partline") || msg.getParam("partword"))
+	return commandComplete(msg,msg.getValue("partline"),msg.getValue("partword"));
+    return false;
+}
+
+bool Module::commandExecute(String& retVal, const String& line)
+{
+    return false;
+}
+
+bool Module::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    if ((partLine == "debug") || (partLine == "status")) {
+	if (partWord.null() || name().startsWith(partWord)) {
+	    msg.retValue().append(name(),"\t");
+	    return false;
+	}
+    }
+    return false;
+}
+
 void Module::msgStatus(Message& msg)
 {
     String mod, par, det;
@@ -800,7 +827,7 @@ void Module::msgStatus(Message& msg)
     msg.retValue() << mod << ";" << par;
     if (det)
 	msg.retValue() << ";" << det;
-    msg.retValue() << "\n";
+    msg.retValue() << "\r\n";
 }
 
 void Module::statusModule(String& str)
@@ -850,6 +877,8 @@ bool Module::received(Message &msg, int id)
     }
     else if (id == Level)
 	return setDebug(msg,dest);
+    else if (id == Command)
+	return msgCommand(msg);
 
     return false;
 }
@@ -881,7 +910,7 @@ bool Module::setDebug(Message& msg, const String& target)
 	<< " level " << debugLevel();
     if (m_filter)
 	msg.retValue() << " filter: " << m_filter;
-    msg.retValue() << "\n";
+    msg.retValue() << "\r\n";
     return true;
 }
 
@@ -981,6 +1010,7 @@ bool Driver::received(Message &msg, int id)
 		break;
 	case Level:
 	case Route:
+	case Command:
 	    return Module::received(msg,id);
 	case Halt:
 	    dropAll(msg);
@@ -1120,7 +1150,7 @@ void Driver::msgStatus(Message& msg)
     msg.retValue() << mod << ";" << par;
     if (details)
 	msg.retValue() << ";" << det;
-    msg.retValue() << "\n";
+    msg.retValue() << "\r\n";
 }
 
 void Driver::statusModule(String& str)
@@ -1145,6 +1175,36 @@ void Driver::statusDetail(String& str)
 	Channel* c = static_cast<Channel*>(l->get());
 	str.append(c->id(),",") << "=" << c->status() << "|" << c->address() << "|" << c->getPeerId();
     }
+}
+
+bool Driver::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    bool ok = false;
+    bool listChans = String(msg.getValue("complete")) == "channels";
+    if (listChans && (partWord.null() || name().startsWith(partWord)))
+	msg.retValue().append(name(),"\t");
+    else
+	ok = Module::commandComplete(msg,partLine,partWord);
+    lock();
+    unsigned int nchans = m_chans.count();
+    unlock();
+    if (nchans && listChans) {
+	if (name().startsWith(partWord)) {
+	    msg.retValue().append(prefix(),"\t");
+	    return ok;
+	}
+	if (partWord.startsWith(prefix()))
+	    ok = true;
+	lock();
+	ObjList* l = m_chans.skipNull();
+	for (; l; l=l->skipNext()) {
+	    Channel* c = static_cast<Channel*>(l->get());
+	    if (c->id().startsWith(partWord))
+		msg.retValue().append(c->id(),"\t");
+	}
+	unlock();
+    }
+    return ok;
 }
 
 bool Driver::setDebug(Message& msg, const String& target)

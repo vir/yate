@@ -179,7 +179,7 @@ bool StatusHandler::received(Message &msg)
 	    msg.retValue() << *user << "=" << (data ? data : "offline");
 	}
     }
-    msg.retValue() <<"\n";
+    msg.retValue() << "\r\n";
     return false;
 }
 

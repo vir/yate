@@ -333,42 +333,42 @@ bool AlsaDevice::open()
     snd_pcm_uframes_t period_size_out = 20 * 4;
     snd_pcm_uframes_t buffer_size_out= period_size_out * 16;
     snd_pcm_sw_params_t *swparams = NULL;
-	Debug(DebugNote, "Opening ALSA input device\n");
+	Debug(DebugNote, "Opening ALSA input device %s",m_dev_in.c_str());
 	Lock lock(s_mutex);
     if ((err = snd_pcm_open (&m_handle_in, m_dev_in.c_str(), SND_PCM_STREAM_CAPTURE, 0)) < 0) {
-	Debug(DebugWarn, "cannot open audio device %s (%s)\n", m_dev.c_str(),snd_strerror (err));
+	Debug(DebugWarn, "cannot open audio device %s (%s)", m_dev.c_str(),snd_strerror (err));
 	return false;
     }
     if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-	Debug(DebugWarn, "cannot allocate hardware parameter structure (%s)\n", snd_strerror (err));
+	Debug(DebugWarn, "cannot allocate hardware parameter structure (%s)", snd_strerror (err));
 	return false;
     }
-    if ((err = snd_pcm_hw_params_any (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_access (m_handle_in, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_format (m_handle_in, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_in, hw_params, &rate_in, &direction)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_channels (m_handle_in, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_any (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_access (m_handle_in, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_format (m_handle_in, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_in, hw_params, &rate_in, &direction)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_channels (m_handle_in, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params (m_handle_in, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)", snd_strerror (err));
     snd_pcm_hw_params_free (hw_params);
 
-    Debug(DebugNote, "Opening ALSA output device\n");
+    Debug(DebugNote, "Opening ALSA output device %s",m_dev_out.c_str());
     if ((err = snd_pcm_open (&m_handle_out, m_dev_out.c_str(), SND_PCM_STREAM_PLAYBACK, 0)) < 0) {
-	Debug(DebugWarn, "cannot open audio device %s (%s)\n", m_dev.c_str(), snd_strerror (err));
+	Debug(DebugWarn, "cannot open audio device %s (%s)", m_dev.c_str(), snd_strerror (err));
 	return false;
     }
 
     if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-	Debug(DebugWarn, "cannot allocate hardware parameter structure (%s)\n", snd_strerror (err));
+	Debug(DebugWarn, "cannot allocate hardware parameter structure (%s)", snd_strerror (err));
 	return false;
     }
-    if ((err = snd_pcm_hw_params_any (m_handle_out, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_access (m_handle_out, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_format (m_handle_out, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_out, hw_params, &rate_out, 0)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_channels (m_handle_out, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_period_size_near(m_handle_out, hw_params, &period_size_out, &direction)) < 0) Debug(DebugWarn, "cannot set period size (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params_set_buffer_size_near(m_handle_out, hw_params, &buffer_size_out)) < 0) Debug(DebugWarn, "cannot set buffer size (%s)\n", snd_strerror (err));
-    if ((err = snd_pcm_hw_params (m_handle_out, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_any (m_handle_out, hw_params)) < 0) Debug(DebugWarn, "cannot initialize hardware parameter structure (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_access (m_handle_out, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) Debug(DebugWarn, "cannot set access type (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_format (m_handle_out, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) Debug(DebugWarn, "cannot set sample format (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_rate_near (m_handle_out, hw_params, &rate_out, 0)) < 0) Debug(DebugWarn, "cannot set sample rate (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_channels (m_handle_out, hw_params, 1)) < 0) Debug(DebugWarn, "cannot set channel count (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_period_size_near(m_handle_out, hw_params, &period_size_out, &direction)) < 0) Debug(DebugWarn, "cannot set period size (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params_set_buffer_size_near(m_handle_out, hw_params, &buffer_size_out)) < 0) Debug(DebugWarn, "cannot set buffer size (%s)", snd_strerror (err));
+    if ((err = snd_pcm_hw_params (m_handle_out, hw_params)) < 0) Debug(DebugWarn, "cannot set parameters (%s)", snd_strerror (err));
     snd_pcm_hw_params_free (hw_params);
 
     snd_pcm_uframes_t val;
@@ -376,19 +376,19 @@ bool AlsaDevice::open()
     snd_pcm_sw_params_alloca(&swparams);
     snd_pcm_sw_params_current(m_handle_out, swparams);
 
-    if ((err = snd_pcm_sw_params_get_start_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get start threshold: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params_get_start_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get start threshold: (%s)", snd_strerror (err));
 
-    if ((err = snd_pcm_sw_params_get_stop_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get stop threshold: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params_get_stop_threshold( swparams, &val)) < 0) Debug(DebugWarn, "cannot get stop threshold: (%s)", snd_strerror (err));
 
-    if ((err = snd_pcm_sw_params_get_boundary( swparams, &val)) < 0) Debug(DebugWarn, "cannot get boundary: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params_get_boundary( swparams, &val)) < 0) Debug(DebugWarn, "cannot get boundary: (%s)", snd_strerror (err));
 
-    if ((err = snd_pcm_sw_params_set_silence_threshold(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence threshold: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params_set_silence_threshold(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence threshold: (%s)", snd_strerror (err));
 
-    if ((err = snd_pcm_sw_params_set_silence_size(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence size: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params_set_silence_size(m_handle_out, swparams, 0)) < 0) Debug(DebugWarn, "cannot set silence size: (%s)", snd_strerror (err));
 
-    if ((err = snd_pcm_sw_params(m_handle_out, swparams)) < 0) Debug(DebugWarn, "cannot set sw param: (%s)\n", snd_strerror (err));
+    if ((err = snd_pcm_sw_params(m_handle_out, swparams)) < 0) Debug(DebugWarn, "cannot set sw param: (%s)", snd_strerror (err));
 
-    Debug(DebugNote, "Alsa(%s/%s) %u/%u %u/%u %u/%u\n", m_dev_in.c_str(),m_dev_out.c_str(),rate_in,rate_out,(unsigned int)period_size_in,(unsigned int)period_size_out,(unsigned int)buffer_size_in,(unsigned int)buffer_size_out);
+    Debug(DebugNote, "Alsa(%s/%s) %u/%u %u/%u %u/%u", m_dev_in.c_str(),m_dev_out.c_str(),rate_in,rate_out,(unsigned int)period_size_in,(unsigned int)period_size_out,(unsigned int)buffer_size_in,(unsigned int)buffer_size_out);
     m_closed = false;
     m_lastTime = Time::now() + MIN_SWITCH_TIME;
     return true;
@@ -420,10 +420,10 @@ int AlsaDevice::read(void *buffer, int frames)
     if (rc <= 0) {
         int err = rc;
         if (err == -EPIPE) {    /* under-run */
-            Debug(DebugWarn, "ALSA read underrun: %s\n", snd_strerror(err));
+            Debug(DebugWarn, "ALSA read underrun: %s", snd_strerror(err));
             err = snd_pcm_prepare(m_handle_in);
             if (err < 0)
-                    Debug(DebugWarn, "ALSA read can't recover from underrun, prepare failed: %s\n", snd_strerror(err));
+                    Debug(DebugWarn, "ALSA read can't recover from underrun, prepare failed: %s", snd_strerror(err));
             return 0;
         } else if (err == -ESTRPIPE) {
                 while ((err = snd_pcm_resume(m_handle_in)) == -EAGAIN)
@@ -431,7 +431,7 @@ int AlsaDevice::read(void *buffer, int frames)
                 if (err < 0) {
                         err = snd_pcm_prepare(m_handle_in);
                         if (err < 0)
-                                Debug(DebugWarn, "ALSA read can't recover from suspend, prepare failed: %s\n", snd_strerror(err));
+                                Debug(DebugWarn, "ALSA read can't recover from suspend, prepare failed: %s", snd_strerror(err));
                 }
                 return 0;
         }
@@ -445,18 +445,18 @@ int AlsaDevice::write(void *buffer, int frames)
     if (closed() || !m_handle_out) return 0;
     int rc = snd_pcm_writei(m_handle_out, buffer, frames);
     if (rc == -EPIPE) {
-		Debug(DebugWarn, "ALSA write underrun occurred\n");
+		Debug(DebugWarn, "ALSA write underrun occurred");
 		snd_pcm_prepare(m_handle_out);
-		Debug(DebugWarn, "ALSA write underrun fix frame 1\n");
+		Debug(DebugWarn, "ALSA write underrun fix frame 1");
 		rc = snd_pcm_writei(m_handle_out, buffer, frames);
     	if (rc == -EPIPE) snd_pcm_prepare(m_handle_out);
-		Debug(DebugWarn, "ALSA write underrun fix frame 2\n"); //to catch-up missed time
+		Debug(DebugWarn, "ALSA write underrun fix frame 2"); //to catch-up missed time
 		rc = snd_pcm_writei(m_handle_out, buffer, frames);
     	if (rc == -EPIPE) snd_pcm_prepare(m_handle_out);
     } else if (rc < 0) {
-      Debug(DebugWarn,"ALSA error from writei: %s\n",::snd_strerror(rc));
+      Debug(DebugWarn,"ALSA error from writei: %s",::snd_strerror(rc));
     }  else if (rc != (int)frames) {
-      Debug(DebugWarn,"ALSA short write, writei wrote %d frames\n", rc);
+      Debug(DebugWarn,"ALSA short write, writei wrote %d frames", rc);
     }
 	return rc;
 }
@@ -569,7 +569,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"alsa"))
 	return false;
-    msg.retValue() << "name=alsa,type=misc;alsachan=" << (s_chan != 0 ) << "\n";
+    msg.retValue() << "name=alsa,type=misc;alsachan=" << (s_chan != 0 ) << "\r\n";
     return false;
 }
 

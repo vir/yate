@@ -57,7 +57,7 @@ static void dumpParams(const Message &msg, String& par)
     for (unsigned i = 0; i < n; i++) {
 	const NamedString *s = msg.getParam(i);
 	if (s) {
-	    par << "\n  param['" << s->name() << "'] = ";
+	    par << "\r\n  param['" << s->name() << "'] = ";
 	    if (s->name() == "password")
 		par << "(hidden)";
 	    else
@@ -74,7 +74,7 @@ bool SniffHandler::received(Message &msg)
 	String line(msg.getValue("line"));
 	if (line.startSkip("sniffer")) {
 	    line >> s_active;
-	    msg.retValue() << "Message sniffer is " << (s_active ? "on" : "off") << "\n";
+	    msg.retValue() << "Message sniffer is " << (s_active ? "on" : "off") << "\r\n";
 	    return true;
 	}
     }
@@ -82,7 +82,7 @@ bool SniffHandler::received(Message &msg)
 	return false;
     String par;
     dumpParams(msg,par);
-    Output("Sniffed '%s' time=%u.%06u\n  thread=%p '%s'\n  data=%p\n  retval='%s'%s",
+    Output("Sniffed '%s' time=%u.%06u\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
 	msg.c_str(),
 	(unsigned int)(msg.msgTime().usec() / 1000000),
 	(unsigned int)(msg.msgTime().usec() % 1000000),
@@ -102,7 +102,7 @@ void HookHandler::dispatched(const Message& msg, bool handled)
     u_int64_t dt = Time::now() - msg.msgTime().usec();
     String par;
     dumpParams(msg,par);
-    Output("Returned %s '%s' delay=%u.%06u\n  thread=%p '%s'\n  data=%p\n  retval='%s'%s",
+    Output("Returned %s '%s' delay=%u.%06u\r\n  thread=%p '%s'\r\n  data=%p\r\n  retval='%s'%s",
 	String::boolText(handled),
 	msg.c_str(),
 	(unsigned int)(dt / 1000000),

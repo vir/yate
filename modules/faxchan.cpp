@@ -657,7 +657,7 @@ bool FaxDriver::setDebug(Message& msg, const String& target)
 {
     if (target == "spandsp") {
 	s_debug = msg.getBoolValue("line",s_debug);
-	msg.retValue() << "Detailed spandsp debugging " << (s_debug ? "on" : "off") << "\n";
+	msg.retValue() << "Detailed spandsp debugging " << (s_debug ? "on" : "off") << "\r\n";
 	return true;
     }
     return Driver::setDebug(msg,target);

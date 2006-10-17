@@ -877,7 +877,7 @@ void YateUDPParty::transmit(SIPEvent* event)
 	tmp << "'" << msg->method << " " << msg->uri << "'";
     if (plugin.debugAt(DebugInfo)) {
 	String buf((char*)msg->getBuffer().data(),msg->getBuffer().length());
-	Debug(&plugin,DebugInfo,"Sending %s %p to %s:%d\n------\n%s------",
+	Debug(&plugin,DebugInfo,"Sending %s %p to %s:%d\r\n------\r\n%s------",
 	    tmp.c_str(),msg,m_addr.host().c_str(),m_addr.port(),buf.c_str());
     }
     m_sock->sendTo(
@@ -1217,7 +1217,7 @@ void YateSIPEndPoint::run()
 		}
 	    } else if (res >= 72) {
 		buf[res]=0;
-		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d\n------\n%s------",
+		Debug(&plugin,DebugInfo,"Received %d bytes SIP message from %s:%d\r\n------\r\n%s------",
 		    res,m_addr.host().c_str(),m_addr.port(),buf);
 		// we got already the buffer and here we start to do "good" stuff
 		addMessage(buf,res,m_addr,m_port);

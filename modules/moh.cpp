@@ -373,7 +373,7 @@ bool StatusHandler::received(Message &msg)
 	return false;
     msg.retValue() << "name=moh,type=misc"
 		   << ";sources=" << sources.count()
-		   << ",chans=" << chans.count() << "\n";
+		   << ",chans=" << chans.count() << "\r\n";
     return false;
 }
 

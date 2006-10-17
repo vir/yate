@@ -362,7 +362,7 @@ bool StatusHandler::received(Message &msg)
 	    }
 	}
     }
-    msg.retValue() << st << "\n";
+    msg.retValue() << st << "\r\n";
     return false;
 }
 			

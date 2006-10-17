@@ -5,11 +5,12 @@
 
    [scripts]
    detector.php=
-#!/usr/bin/php -q
 */
 require_once("libyate.php");
 
-// set to tru in the next line to work from startup
+$detHelp = "  detect [on|off|chanid]\r\n";
+
+// set to true in the next line to work from startup
 $detect = false;
 
 function onCommand($l,&$retval)
@@ -17,19 +18,19 @@ function onCommand($l,&$retval)
     global $detect;
     if ($l == "detect") {
 	$retval = $detect ? "active" : "inactive";
-	$retval = "Fax detection on new calls is $retval\n";
+	$retval = "Fax detection on new calls is $retval\r\n";
 	return true;
     }
     if (strpos($l,"detect ") === 0) {
 	$d = substr($l,7);
 	if ($d == "on") {
 	    $detect = true;
-	    $retval = "Detection activated on all new calls\n";
+	    $retval = "Detection activated on all new calls\r\n";
 	    return true;
 	}
 	if ($d == "off") {
 	    $detect = false;
-	    $retval = "Detection on new calls disabled\n";
+	    $retval = "Detection on new calls disabled\r\n";
 	    return true;
 	}
 	$m = new Yate("chan.masquerade");
@@ -38,22 +39,45 @@ function onCommand($l,&$retval)
 	$m->params["id"] = $d;
 	$m->params["call"] = "tone/";
 	$m->Dispatch();
-	$retval = "Starting detection on $d\n";
+	$retval = "Starting detection on $d\r\n";
 	return true;
     }
     return false;
 }
 
+function oneCompletion(&$ret,$str,$part)
+{
+    if (($part != "") && (strpos($str,$part) !== 0))
+	return;
+    if ($ret != "")
+	$ret .= "\t";
+    $ret .= $str;
+}
+
+function onComplete(&$ev,$l,$w)
+{
+    if ($l == "")
+	oneCompletion($ev->retval,"detect",$w);
+    else if ($l == "help")
+	oneCompletion($ev->retval,"detect",$w);
+    else if ($l == "detect") {
+	oneCompletion($ev->retval,"on",$w);
+	oneCompletion($ev->retval,"off",$w);
+	$ev->params["complete"] = "channels";
+    }
+}
+
 function onHelp($l,&$retval)
 {
+    global $detHelp;
     if ($l) {
 	if ($l == "detect") {
-	    $retval = "Activate, deactivate or query status of fax detection\n";
+	    $retval = "${detHelp}Activate, deactivate or query status of fax detection\r\n";
 	    return true;
 	}
 	return false;
     }
-    $retval .= "  detect [on|off|chanid]\n";
+    $retval .= $detHelp;
     return false;
 }
 
@@ -90,7 +114,7 @@ function onFax($id)
 /* Always the first action to do */
 Yate::Init();
 
-Yate::Install("engine.command",125);
+Yate::Install("engine.command",85);
 Yate::Install("engine.help",125);
 Yate::Install("call.execute",25);
 Yate::Install("call.fax",25);
@@ -112,7 +136,10 @@ for (;;) {
 	case "incoming":
 	    switch ($ev->name) {
 		case "engine.command":
-		    $ev->handled = onCommand($ev->GetValue("line"),$ev->retval);
+		    if ($ev->GetValue("line"))
+			$ev->handled = onCommand($ev->GetValue("line"),$ev->retval);
+		    else
+			onComplete($ev,$ev->GetValue("partline"),$ev->GetValue("partword"));
 		    break;
 		case "engine.help":
 		    $ev->handled = onHelp($ev->GetValue("line"),$ev->retval);

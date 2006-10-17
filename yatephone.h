@@ -1317,8 +1317,17 @@ protected:
     /**
      * Routing message handler that is invoked for all call.route messages.
      * @param msg Call routing message
+     * @return True to stop processing the message, false to try other handlers
      */
     virtual bool msgRoute(Message& msg);
+
+    /**
+     * Handler for special commands and line completion requests.
+     * By default it calls @ref commandExecute() or @ref commandComplete().
+     * @param msg Command message
+     * @return True to stop processing the message, false to try other handlers
+     */
+    virtual bool msgCommand(Message& msg);
 
     /**
      * Build the module identification part of the status answer
@@ -1337,6 +1346,23 @@ protected:
      * @param str String variable to fill up
      */
     virtual void statusDetail(String& str);
+
+    /**
+     * Execute a specific command
+     * @param retVal String to append the textual command output to
+     * @param line Command line to attempt to execute
+     * @return True to stop processing the message, false to try other handlers
+     */
+    virtual bool commandExecute(String& retVal, const String& line);
+
+    /**
+     * Complete a command line
+     * @param msg Message to return completion into
+     * @param partLine Partial line to complete, excluding the last word
+     * @param partWord Partial word to complete
+     * @return True to stop processing the message, false to try other handlers
+     */
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 
     /**
      * Set the local debugging level
@@ -1719,10 +1745,10 @@ protected:
     /**
      * Attempt to install a data sniffer to detect inband tones
      * Needs a tone detector module capable of attaching sniffer consumers.
-     * @param sniffer Name of the sniffer to install
+     * @param sniffer Name of the sniffer to install, default will detect all tones
      * @return True on success
      */
-    bool toneDetect(const char* sniffer = "tone/*");
+    bool toneDetect(const char* sniffer = 0);
 
 private:
     void init();
@@ -1896,6 +1922,15 @@ protected:
     virtual bool msgExecute(Message& msg, String& dest) = 0;
 
     /**
+     * Complete a command line
+     * @param msg Message to return completion into
+     * @param partLine Partial line to complete, excluding the last word
+     * @param partWord Partial word to complete
+     * @return True to stop processing the message, false to try other handlers
+     */
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
+
+    /**
      * Status message handler that is invoked only for matching messages.
      * @param msg Status message
      */
@@ -1917,7 +1952,7 @@ protected:
      * Build the channel list part of the status answer
      * @param str String variable to fill up
      */
-    void statusDetail(String& str);
+    virtual void statusDetail(String& str);
 
     /**
      * Set the local debugging level

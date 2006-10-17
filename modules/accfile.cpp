@@ -166,7 +166,7 @@ bool StatusHandler::received(Message &msg)
 	    msg.retValue() << *acct << "=" << user;
 	}
     }
-    msg.retValue() <<"\n";
+    msg.retValue() << "\r\n";
     return false;
 }
 

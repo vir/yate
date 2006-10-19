@@ -2543,6 +2543,13 @@ public:
     const unsigned char* rawDigest();
 
     /**
+     * Return the length of the raw binary digest
+     * @return Constant value of 16
+     */
+    inline static unsigned int rawLength()
+	{ return 16; }
+
+    /**
      * Returns the standard hexadecimal representation of the message digest.
      * The digest is finalized if if wasn't already
      * @return A String which holds the hex digest or a null one if some error occured
@@ -2656,11 +2663,18 @@ public:
     SHA1& operator<<(const char* value);
 
     /**
-     * Returns a pointer to the raw 16-byte binary value of the message digest.
+     * Returns a pointer to the raw 20-byte binary value of the message digest.
      * The digest is finalized if if wasn't already
      * @return Pointer to the raw digest data or NULL if some error occured
      */
     const unsigned char* rawDigest();
+
+    /**
+     * Return the length of the raw binary digest
+     * @return Constant value of 20
+     */
+    inline static unsigned int rawLength()
+	{ return 20; }
 
     /**
      * Returns the standard hexadecimal representation of the message digest.

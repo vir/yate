@@ -78,6 +78,7 @@ static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
 static bool s_autoaddr = true;
+static bool s_anyssrc = false;
 static bool s_rtcp = true;
 
 static int s_sleep = 5;
@@ -96,8 +97,10 @@ class YRTPWrapper : public RefObject
 public:
     YRTPWrapper(const char *localip, CallEndpoint* conn = 0, const char* media = "audio", RTPSession::Direction direction = RTPSession::SendRecv, bool rtcp = true);
     ~YRTPWrapper();
+    virtual void* getObject(const String &name) const;
     void setupRTP(const char* localip, bool rtcp);
     bool startRTP(const char* raddr, unsigned int rport, const Message& msg);
+    bool setRemote(const char* raddr, unsigned int rport, const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
     inline YRTPSession* rtp() const
@@ -140,9 +143,10 @@ private:
 
 class YRTPSession : public RTPSession
 {
+    friend class RTPSession;
 public:
     inline YRTPSession(YRTPWrapper* wrap)
-	: m_wrap(wrap), m_resync(false)
+	: m_wrap(wrap), m_resync(false), m_anyssrc(false)
 	{ }
     virtual ~YRTPSession();
     virtual bool rtpRecvData(bool marker, unsigned int timestamp,
@@ -153,9 +157,12 @@ public:
     virtual void rtpNewSSRC(u_int32_t newSsrc);
     inline void resync()
 	{ m_resync = true; }
+    inline void anySSRC(bool acceptAny = true)
+	{ m_anyssrc = acceptAny; }
 private:
     YRTPWrapper* m_wrap;
     bool m_resync;
+    bool m_anyssrc;
 };
 
 class YRTPSource : public DataSource
@@ -266,6 +273,13 @@ YRTPWrapper::~YRTPWrapper()
     s_mutex.unlock();
 }
 
+void* YRTPWrapper::getObject(const String &name) const
+{
+    if (name == "Socket")
+	return m_rtp ? m_rtp->rtpSock() : 0;
+    return RefObject::getObject(name);
+}
+
 YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, const String& media)
 {
     Lock lock(s_mutex);
@@ -324,6 +338,16 @@ void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
     Debug(&splugin,DebugWarn,"YRTPWrapper [%p] RTP bind failed in range %d-%d",this,minport,maxport);
 }
 
+bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message& msg)
+{
+    SocketAddr addr(AF_INET);
+    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr,msg.getBoolValue("autoaddr",s_autoaddr)))) {
+	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
+	return false;
+    }
+    return true;
+}
+
 bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message& msg)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
@@ -334,6 +358,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 
     if (m_bufsize) {
 	DDebug(&splugin,DebugAll,"Wrapper attempted to restart RTP! [%p]",this);
+	setRemote(raddr,rport,msg);
 	m_rtp->resync();
 	return true;
     }
@@ -374,12 +399,9 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     int minJitter = msg.getIntValue("minjitter",s_minjitter);
     int maxJitter = msg.getIntValue("maxjitter",s_maxjitter);
 
-    bool autoaddr = msg.getBoolValue("autoaddr",s_autoaddr);
-    SocketAddr addr(AF_INET);
-    if (!(addr.host(raddr) && addr.port(rport) && m_rtp->remoteAddr(addr,autoaddr))) {
-	Debug(&splugin,DebugWarn,"RTP failed to set remote address %s:%d [%p]",raddr,rport,this);
+    if (!setRemote(raddr,rport,msg))
 	return false;
-    }
+    m_rtp->anySSRC(msg.getBoolValue("anyssrc",s_anyssrc));
     // Change format of source and/or consumer,
     //  reinstall them to rebuild codec chains
     if (m_source) {
@@ -511,7 +533,7 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 
 void YRTPSession::rtpNewSSRC(u_int32_t newSsrc)
 {
-    if (m_resync && receiver()) {
+    if ((m_anyssrc || m_resync) && receiver()) {
 	m_resync = false;
 	Debug(&splugin,DebugInfo,"Changing SSRC from %08X to %08X in wrapper %p",
 	    receiver()->ssrc(),newSsrc,m_wrap);
@@ -691,31 +713,30 @@ bool RtpHandler::received(Message &msg)
 	direction = RTPSession::SendOnly;
     }
 
-    if (!(d_recv || d_send))
-	return false;
-
+    YRTPWrapper* w = 0;
     const char* media = msg.getValue("media","audio");
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
-    if (!ch) {
-	if (d_recv)
-	    Debug(&splugin,DebugWarn,"RTP recv request with no call channel!");
-	if (d_send)
-	    Debug(&splugin,DebugWarn,"RTP send request with no call channel!");
-	return false;
+    if (ch) {
+	w = YRTPWrapper::find(ch,media);
+	if (w)
+	    Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint",w);
     }
-
-    String rip(msg.getValue("remoteip"));
-    String rport(msg.getValue("remoteport"));
-
-    YRTPWrapper *w = YRTPWrapper::find(ch,media);
-    if (w)
-	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint",w);
     if (!w) {
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID",w);
     }
+    if (!(ch || w)) {
+	Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
+	return false;
+    }
+
+    String rip(msg.getValue("remoteip"));
+
     if (!w) {
+	// it would be pointless to create an unreferenced wrapper
+	if (!(d_recv || d_send))
+	    return false;
 	String lip(msg.getValue("localip"));
 	if (lip.null())
 	    YRTPWrapper::guessLocal(rip,lip);
@@ -733,13 +754,13 @@ bool RtpHandler::received(Message &msg)
 	w->addDirection(direction);
     }
 
-    if (d_recv && !ch->getSource(media)) {
+    if (d_recv && ch && !ch->getSource(media)) {
 	YRTPSource* s = new YRTPSource(w);
 	ch->setSource(s,media);
 	s->deref();
     }
 
-    if (d_send && !ch->getConsumer(media)) {
+    if (d_send && ch && !ch->getConsumer(media)) {
 	YRTPConsumer* c = new YRTPConsumer(w);
 	ch->setConsumer(c,media);
 	c->deref();
@@ -748,11 +769,14 @@ bool RtpHandler::received(Message &msg)
     if (w->deref())
 	return false;
 
+    String rport(msg.getValue("remoteport"));
     if (rip && rport)
 	w->startRTP(rip,rport.toInteger(),msg);
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
 
+    if (msg.getBoolValue("getsession",!msg.userData()))
+	msg.userData(w);
     return true;
 }
 
@@ -816,6 +840,7 @@ void YRTPPlugin::initialize()
     s_maxjitter = cfg.getIntValue("general","maxjitter");
     s_tos = cfg.getValue("general","tos");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
+    s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));

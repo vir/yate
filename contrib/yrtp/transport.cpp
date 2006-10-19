@@ -198,6 +198,9 @@ void RTPTransport::timerTick(const Time& when)
 	SocketAddr addr;
 	int len;
 	while ((len = m_rtpSock.recvFrom(buf,sizeof(buf),addr)) >= 12) {
+	    if (((unsigned char)buf[0] & 0xc0) != 0x80)
+		continue;
+	    // looks like it's RTP, at least by version
 	    if (m_autoRemote && (addr != m_remoteAddr)) {
 		Debug(DebugInfo,"Auto changing RTP address from %s:%d to %s:%d",
 		    m_remoteAddr.host().c_str(),m_remoteAddr.port(),

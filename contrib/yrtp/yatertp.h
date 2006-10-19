@@ -247,6 +247,13 @@ public:
     inline bool setTOS(int tos)
 	{ return m_rtpSock.setTOS(tos); }
 
+    /**
+     * Get the RTP socket used by this transport
+     * @return Pointer to the RTP socket
+     */
+    inline Socket* rtpSock()
+	{ return &m_rtpSock; }
+
 protected:
     /**
      * Method called periodically to read data out of sockets
@@ -907,6 +914,13 @@ public:
      */
     inline bool setTOS(int tos)
 	{ return m_transport && m_transport->setTOS(tos); }
+
+    /**
+     * Get the RTP socket used by this session
+     * @return Pointer to the RTP socket, NULL if no transport exists
+     */
+    inline Socket* rtpSock()
+	{ return m_transport ? m_transport->rtpSock() : 0; }
 
 protected:
     /**

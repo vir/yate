@@ -2557,6 +2557,126 @@ private:
 };
 
 /**
+ * A class to compute and check SHA1 digests
+ * @short A standard SHA1 digest calculator
+ */
+class YATE_API SHA1
+{
+public:
+    /**
+     * Construct a fresh initialized instance
+     */
+    SHA1();
+
+    /**
+     * Copy constructor
+     * @param original SHA1 instance to copy
+     */
+    SHA1(const SHA1& original);
+
+    /**
+     * Construct a digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     */
+    SHA1(const void* buf, unsigned int len);
+
+    /**
+     * Construct a digest from a binary DataBlock
+     * @param data Binary data to be included in digest
+     */
+    SHA1(const DataBlock& data);
+
+    /**
+     * Construct a digest from a String
+     * @param str String to be included in digest
+     */
+    SHA1(const String& str);
+
+    /**
+     * Destroy the instance, free allocated memory
+     */
+    ~SHA1();
+
+    /**
+     * Assignment operator.
+     */
+    SHA1& operator=(const SHA1& original);
+
+    /**
+     * Clear the digest and prepare for reuse
+     */
+    void clear();
+
+    /**
+     * Finalize the digest computation, make result ready.
+     * Subsequent calls to @ref update() will fail
+     */
+    void finalize();
+
+    /**
+     * Update the digest from a buffer of data
+     * @param buf Pointer to the data to be included in digest
+     * @param len Length of data in the buffer
+     * @return True if success, false if @ref finalize() was already called
+     */
+    bool update(const void* buf, unsigned int len);
+
+    /**
+     * Update the digest from the content of a DataBlock
+     * @param data Data to be included in digest
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const DataBlock& data)
+	{ return update(data.data(), data.length()); }
+
+    /**
+     * Update the digest from the content of a String
+     * @param str String to be included in digest
+     * @return True if success, false if @ref finalize() was already called
+     */
+    inline bool update(const String& str)
+	{ return update(str.c_str(), str.length()); }
+
+    /**
+     * SHA1 updating operator for Strings
+     */
+    inline SHA1& operator<<(const String& value)
+	{ update(value); return *this; }
+
+    /**
+     * SHA1 updating operator for DataBlocks
+     */
+    inline SHA1& operator<<(const DataBlock& data)
+	{ update(data); return *this; }
+
+    /**
+     * SHA1 updating operator for C strings
+     */
+    SHA1& operator<<(const char* value);
+
+    /**
+     * Returns a pointer to the raw 16-byte binary value of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return Pointer to the raw digest data or NULL if some error occured
+     */
+    const unsigned char* rawDigest();
+
+    /**
+     * Returns the standard hexadecimal representation of the message digest.
+     * The digest is finalized if if wasn't already
+     * @return A String which holds the hex digest or a null one if some error occured
+     */
+    const String& hexDigest();
+
+private:
+    void init();
+    void* m_private;
+    String m_hex;
+    unsigned char m_bin[20];
+};
+
+/**
  * This class holds a named list of named strings
  * @short A named string container class
  */

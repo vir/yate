@@ -17,6 +17,9 @@
 ; autoaddr: bool: Auto change outgoing RTP address:port to match incoming
 ;autoaddr=enabled
 
+; anyssrc: bool: Accept any incoming SSRC, even if it changes frequently
+;anyssrc=disabled
+
 ; rtcp: bool: Allocate socket for the RTCP protocol by default
 ;rtcp=enabled
 

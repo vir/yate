@@ -521,10 +521,10 @@ bool JGSession::decodeError(JGEvent* event)
     event->m_type = JGEvent::Error;
     XMLElement* element = event->element();
     if (!element)
-	return event;
+	return (event != 0);
     element = element->findFirstChild("error");
     if (!element)
-	return event;
+	return (event != 0);
     XMLElement* tmp = element->findFirstChild();
     if (tmp) {
 	event->m_reason = tmp->name();
@@ -532,7 +532,7 @@ bool JGSession::decodeError(JGEvent* event)
 	if (tmp)
 	    event->m_text = tmp->getText();
     }
-    return event;
+    return (event != 0);
 }
 
 JGEvent* JGSession::createEvent(JBEvent* jbev)
@@ -621,7 +621,7 @@ bool JGSession::sendXML(XMLElement* e, bool addId)
     if (addId) {
 	// Create id
 	String id = m_localSid;
-	id << "_" << m_stanzaId;
+	id << "_" << (unsigned int)m_stanzaId;
 	m_stanzaId++;
 	e->setAttribute("id",id);
 	appendSent(e);

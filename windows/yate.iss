@@ -35,6 +35,7 @@ Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client serve
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\h323\run"; Description: "OpenH323 library"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
+Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full client server
 Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
 Name: "database"; Description: "Database drivers"; Types: full server
 Name: "database\my"; Description: "MySQL database driver"; Types: full server
@@ -85,12 +86,14 @@ Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\pbxassist.yate"; DestDir: "{app}\modules"; Components: server
 
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
-Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323
+Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323 driver\jingle
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
 Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
 Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323\run
 Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323\run
 Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
+Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
+Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
 
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc

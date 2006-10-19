@@ -271,7 +271,7 @@ void SHA1::finalize()
     if (m_hex)
 	return;
     init();
-    sha1_final((sha1_ctx*)m_private, m_bin);
+    sha1_final((sha1_ctx*)m_private, (u_int8_t*)m_bin);
     m_hex.hexify(m_bin,sizeof(m_bin));
 }
 
@@ -285,7 +285,7 @@ bool SHA1::update(const void* buf, unsigned int len)
     if (!buf)
 	return false;
     init();
-    sha1_update((sha1_ctx*)m_private, (unsigned char const*)buf, len);
+    sha1_update((sha1_ctx*)m_private, (const u_int8_t*)buf, len);
     return true;
 }
 

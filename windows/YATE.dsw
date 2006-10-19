@@ -218,6 +218,12 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _tonedetect
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _yjinglechan
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _ystunchan
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -714,6 +720,27 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_yjinglechan"=.\_yjinglechan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyjingle
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name libyxml
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "_yradius"=.\_yradius.dsp - Package Owner=<4>
 
 Package=<5>
@@ -765,6 +792,21 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_ystunchan"=.\_ystunchan.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "libilbc"=.\libilbc.dsp - Package Owner=<4>
 
 Package=<5>
@@ -799,6 +841,21 @@ Package=<4>
 {{{
     Begin Project Dependency
     Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libyjingle"=.\libyjingle.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name libyxml
     End Project Dependency
 }}}
 
@@ -865,6 +922,21 @@ Package=<4>
 ###############################################################################
 
 Project: "libyss7"=.\libyss7.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "libyxml"=.\libyxml.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

@@ -1617,12 +1617,14 @@ void YJGConnection::handleJingle(JGEvent* event)
 {
     switch (event->action()) {
 	case JGSession::ActTransportInfo:
-	    bool accept = !m_transport->transportReady() &&
-		m_transport->updateTransport(event->transport());
-	    DDebug(this,DebugInfo,"handleJingle [%p]. Transport-info. %s.",
-		this,accept?"Accepted":"Not accepted");
-	    if (accept && isOutgoing())
-		m_session->acceptTransport(0);
+	    {
+		bool accept = !m_transport->transportReady() &&
+		    m_transport->updateTransport(event->transport());
+		DDebug(this,DebugInfo,"handleJingle [%p]. Transport-info. %s.",
+		    this,accept?"Accepted":"Not accepted");
+		if (accept && isOutgoing())
+		    m_session->acceptTransport(0);
+	    }
 	    m_transport->start();
 	    break;
 	case JGSession::ActTransportAccept:
@@ -1806,9 +1808,9 @@ bool YJGDriver::getParts(NamedList& dest, const char* src, const char sep,
 	if (start != i) {
 	    String tmp(src + start,i - start);
 	    if (nameFirst)
-		dest.setParam(tmp,String(index++));
+		dest.setParam(tmp,String((int)index++));
 	    else
-		dest.setParam(String(index++),tmp);
+		dest.setParam(String((int)index++),tmp);
 	}
     }
     return true;

@@ -509,7 +509,7 @@ void YStunAttributeError::toBuffer(DataBlock& buffer)
 // YStunAttributeChangeReq
 void YStunAttributeChangeReq::toString(String& dest)
 {
-    dest = m_flags;
+    dest = (unsigned int)m_flags;
 }
 
 bool YStunAttributeChangeReq::fromBuffer(u_int8_t* buffer, u_int16_t len)

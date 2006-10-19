@@ -174,6 +174,10 @@ SOURCE=..\engine\URI.cpp
 
 SOURCE=..\engine\YMD5.cpp
 # End Source File
+# Begin Source File
+
+SOURCE=..\engine\YSHA1.cpp
+# End Source File
 # End Group
 # Begin Group "Header Files"
 

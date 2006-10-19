@@ -183,7 +183,7 @@ bool JBComponentStream::receive()
 	Debug(m_engine,DebugNote,
 	    "Stream::receive. Error parsing data: '%s'. [%p]",
 	    m_parser.ErrorDesc(),this);
-	XDebug(m_engine,DebugAll,"Parser buffer: %s",m_buffer.buffer().c_str());
+	XDebug(m_engine,DebugAll,"Parser buffer: %s",buf);
 	e = XMPPUtils::createStreamError(XMPPError::Xml,m_parser.ErrorDesc());
 	sendEnd = true;
     }
@@ -539,17 +539,19 @@ bool JBComponentStream::processStateRunning(XMLElement* e)
 	    return processIncomingIq(e);
 	case XMLElement::Presence:
 	case XMLElement::Message:
-	    JBEvent::Type evType;
-	    if (e->type() == XMLElement::Presence)
-		evType = JBEvent::Presence;
-	    else
-		evType = JBEvent::Message;
-	    // Create event
-	    JBEvent* event = addEvent(evType,e);
-	    event->m_stanzaType = e->getAttribute("type");
-	    event->m_from = e->getAttribute("from");
-	    event->m_to = e->getAttribute("to");
-	    event->m_id = e->getAttribute("id");
+	    {
+		JBEvent::Type evType;
+		if (e->type() == XMLElement::Presence)
+		    evType = JBEvent::Presence;
+		else
+		    evType = JBEvent::Message;
+		// Create event
+		JBEvent* event = addEvent(evType,e);
+		event->m_stanzaType = e->getAttribute("type");
+		event->m_from = e->getAttribute("from");
+		event->m_to = e->getAttribute("to");
+		event->m_id = e->getAttribute("id");
+	    }
 	    return true;
 	default: ;
     }

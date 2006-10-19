@@ -166,7 +166,7 @@ void JGEngine::createSessionId(String& id)
 {
     Lock lock(m_sessionIdMutex);
     id = "JG";
-    id << m_sessionId << "_" << (int)random();
+    id << (unsigned int)m_sessionId << "_" << (int)random();
     m_sessionId++;
 }
 

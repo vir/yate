@@ -1,0 +1,9 @@
+[general]
+
+
+[filters]
+; This section configure the STUN socket filters
+
+; bindrequest_interval: integer: Set the interval (in miliseconds) to send Binding Requests
+; It takes values between 5000 and 60000
+;bindrequest_interval=15000

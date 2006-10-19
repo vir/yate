@@ -1,0 +1,79 @@
+[general]
+; Global settings of Jabber and Jingle engines
+
+; localip: string: Set this machine's IP address. If missing, we will try to guess one
+;localip=
+
+; request_subscribe: boolean: Always request to subscribe before making a Jingle call
+; If disabled and we already know that the remote user is unavailable the call will fail
+;request_subscribe=enable
+
+; xmlparser_maxbuffer: integer: Maximum length of text we ever parse as XML
+;xmlparser_maxbuffer=8192
+
+; stream_partialrestart: integer: Number of failures between 2 successfull Jabber
+;  stream connect attempts, -1 to keep trying
+;stream_partialrestart=-1
+
+; stream_totalrestart: integer: How many times stream_partialrestart will reach 0.
+;  If the the value is -1 the engine will try to connect until stopped.
+;stream_totalrestart=-1
+
+
+[codecs]
+; This section allows to individually enable or disable the codecs
+
+; default: bool: Enable all unlisted codecs by default
+default=false
+
+; mulaw: bool: Companded-only G711 mu-law (PCMU/8000)
+mulaw=default
+
+; alaw: bool: Companded-only G711 a-law (PCMU/8000)
+alaw=true
+
+; gsm: bool: European GSM 06.10 (GSM/8000)
+gsm=default
+
+; lpc10: bool: Linear Prediction Codec (LPC/8000)
+lpc10=default
+
+; slin: bool: Signed Linear 16-bit uncompressed (L16/8000)
+slin=default
+
+; g723: bool: ITU G.723 all variations (G723/8000)
+g723=default
+
+; g726: bool: ITU G.726 32-bit (G726-32/8000)
+g726=default
+
+; g728: bool: ITU G.728 all variations (G728/8000)
+g728=default
+
+; g729: bool: ITU G.729 all variations (G729/8000)
+g729=default
+
+
+[jabber.domain]
+; Each other section is used to initialize the server list as a Jabber Component
+; The name of the section is the used as base Jabber domain
+; Changes don't affect the already opened streams
+
+; address: string: The IP address of the server (required)
+;address=
+
+; port: integer: The port on server to connect to (required)
+;port=
+
+; password: string: The password used by Yate to authenticate with the server
+;password=
+
+; identity: string: The subdomain used by the component (required)
+;identity=yate
+
+; startup: boolean: True to open the stream when initializing the driver
+;startup=true
+
+; default: boolean: This is the default component to use. If no component is
+;  marked as default the first will be implicitely default
+;default=false

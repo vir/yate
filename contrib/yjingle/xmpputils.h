@@ -661,9 +661,9 @@ public:
      * Print an XMLElement to a string.
      * @param xmlStr The destination string.
      * @param element The element to print.
-     * @param indent The indent.
+     * @param indent The indent. 0 if it is the root element.
      */
-    static void print(String& xmlStr, XMLElement* element, const char* indent = "");
+    static void print(String& xmlStr, XMLElement* element, const char* indent = 0);
 
     /**
      * Get the type of an 'iq' stanza as enumeration.

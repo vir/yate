@@ -995,18 +995,19 @@ public:
      * @param text The text to check.
      * @return Presence type as enumeration.
      */
-    static Presence presenceType(const char* txt);
-
+    static inline Presence presenceType(const char* txt)
+	{ return (Presence)lookup(txt,s_presence,None); }
     /**
      * Get the text from a presence type.
      * @param presence The presence type.
      * @return The associated text or 0.
      */
-    static const char* presenceText(Presence presence);
+    static inline const char* presenceText(Presence presence)
+	{ return lookup(presence,s_presence,0); }
 
 protected:
     ObjList m_events;                    // Incoming events from Jabber engine
-    static const char* s_presence[];     // Keep the types of 'presence'
+    static TokenDict s_presence[];       // Keep the types of 'presence'
 };
 
 };

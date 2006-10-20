@@ -558,15 +558,15 @@ JBClient::~JBClient()
 /**
  * JBPresence
  */
-const char* JBPresence::s_presence[] = {
-	"error",
-	"probe",
-	"subscribe",
-	"subscribed",
-	"unavailable",
-	"unsubscribe",
-	"unsubscribed",
-	"\0",
+TokenDict JBPresence::s_presence[] = {
+	{"error",         Error},
+	{"probe",         Probe},
+	{"subscribe",     Subscribe},
+	{"subscribed",    Subscribed},
+	{"unavailable",   Unavailable},
+	{"unsubscribe",   Unsubscribe},
+	{"unsubscribed",  Unsubscribed},
+	{0,0}
 	};
 
 JBPresence::JBPresence(JBEngine* engine)
@@ -593,7 +593,6 @@ bool JBPresence::receive(JBEvent* event)
 //	Keep a list with servers to accept
 //	Check destination's server name
 //	Reject not owned
-
 
     if (!event)
 	return false;
@@ -673,7 +672,7 @@ void JBPresence::runProcess()
 #define show(method,e) \
 { \
     DDebug(this,DebugAll, \
-	"%s. Event: (%p). From: '%s' To: '%s'.", \
+	"JBPresence::%s. Event: (%p). From: '%s' To: '%s'.", \
 	method,e,e->from().c_str(),e->to().c_str()); \
 }
 
@@ -726,7 +725,7 @@ XMLElement* JBPresence::createPresence(const char* from,
 	const char* to, Presence type)
 {
     XMLElement* presence = new XMLElement(XMLElement::Presence);
-    presence->setAttributeValid("type",type < None ? s_presence[type] : "");
+    presence->setAttributeValid("type",presenceText(type));
     presence->setAttribute("from",from);
     presence->setAttribute("to",to);
     return presence;
@@ -749,21 +748,6 @@ bool JBPresence::decodeError(const XMLElement* element,
     if (child)
 	error = child->name();
     return true;
-}
-
-JBPresence::Presence JBPresence::presenceType(const char* txt)
-{
-    if (!txt)
-	return None;
-    for (u_int16_t i = 0; i < None; i++)
-	if (s_presence[i] && 0 == strcmp(txt,s_presence[i]))
-	    return (Presence)i;
-    return None;
-}
-
-const char* JBPresence::presenceText(JBPresence::Presence presence)
-{
-    return ((presence < None) ? s_presence[presence] : 0);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

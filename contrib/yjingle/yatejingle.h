@@ -40,8 +40,8 @@ class JGEngine;
 class JGSentStanza;
 
 // Defines
-#define JGSESSION_ENDTIMEOUT           2 // Time to wait before destroing a session after hangup
-#define JGSESSION_STANZATIMEOUT       10 // Time to wait for a response
+#define JGSESSION_ENDTIMEOUT          2  // Time to wait before destroing a session after hangup
+#define JGSESSION_STANZATIMEOUT      10  // Time to wait for a response
 
 /**
  * This class holds a Jingle audio payload description.
@@ -576,7 +576,6 @@ private:
     String m_sid;                        // Session id
     JabberID m_localJID;                 // Local peer's JID
     JabberID m_remoteJID;                // Remote peer's JID
-    JabberID m_initiatorJID;             // Initiator's JID
     // Session data
     ObjList m_events;                    // Incoming events from Jabber engine
     JGEvent* m_lastEvent;                // Last generated event
@@ -740,7 +739,7 @@ public:
 
     /**
      * Initialize this engine.
-     * Parameters:
+     * Parameters: None
      * @param params Engine's parameters.
      */
     void initialize(const NamedList& params);

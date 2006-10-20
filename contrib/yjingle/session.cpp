@@ -147,10 +147,9 @@ JGSession::JGSession(JGEngine* engine, JBComponentStream* stream,
     m_engine->createSessionId(m_localSid);
     m_sid = m_localSid;
     m_localJID.set(callerJID);
-    m_initiatorJID.set(m_localJID);
     m_remoteJID.set(calledJID);
-    DDebug(m_engine,DebugAll,"Session [%p]. Outgoing. ID: '%s'",
-	this,m_sid.c_str());
+    DDebug(m_engine,DebugAll,"Session. Outgoing. ID: '%s'. [%p]",
+	m_sid.c_str(),this);
 }
 
 JGSession::JGSession(JGEngine* engine, JBEvent* event)
@@ -167,7 +166,7 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event)
     // This should never happen
     if (!(event && event->stream() && event->stream()->ref() &&
 	event->element() && event->child())) {
-	Debug(m_engine,DebugFail,"Session [%p]. Incoming. Invalid event.",this);
+	Debug(m_engine,DebugFail,"Session. Incoming. Invalid event. [%p]",this);
 	if (event)
 	    event->deref();
 	m_state = Destroy;
@@ -181,8 +180,8 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event)
     event->child()->getAttribute("id",m_sid);
     // Create local sid
     m_engine->createSessionId(m_localSid);
-    DDebug(m_engine,DebugAll,"Session [%p]. Incoming. ID: '%s'",
-	this,m_sid.c_str());
+    DDebug(m_engine,DebugAll,"Session. Incoming. ID: '%s'. [%p]",
+	m_sid.c_str(),this);
 }
 
 JGSession::~JGSession()
@@ -195,25 +194,27 @@ JGSession::~JGSession()
     }
     m_events.clear();
     m_engine->removeSession(this);
-    DDebug(m_engine,DebugAll,"~Session [%p].",this);
+    DDebug(m_engine,DebugAll,"~Session. [%p]",this);
 }
 
 bool JGSession::sendMessage(const char* message)
 {
     XMLElement* xml = XMPPUtils::createMessage(XMPPUtils::MsgChat,
-	m_localJID,m_remoteJID,"",message);
-    return sendXML(xml);
+	m_localJID,m_remoteJID,0,message);
+    return sendXML(xml,false);
 }
 
 bool JGSession::hangup(bool reject, const char* message)
 {
     if (!(state() == Pending || state() == Active))
 	return false;
-    DDebug(m_engine,DebugAll,"Session::Hangup [%p]. Message: '%s'.",this,message);
-    if (message && !sendMessage(message))
-	return false;
-    XMLElement* xml = createJingleSet(reject ? ActReject : ActTerminate);
     Lock lock(this);
+    DDebug(m_engine,DebugAll,"Session. %s('%s'). [%p]",
+	reject?"Reject":"Hangup",message,this);
+    if (message)
+	sendMessage(message);
+    XMLElement* xml = createJingleSet(reject ? ActReject : ActTerminate);
+    // Clear sent stanzas list. We will wait for this element to be confirmed
     m_sentStanza.clear();
     m_state = Ending;
     m_timeout = Time::msecNow() + JGSESSION_ENDTIMEOUT * 1000;
@@ -274,8 +275,8 @@ bool JGSession::receive(JBEvent* event)
 	return false;
     // Check destination
     DDebug(m_engine,DebugAll,
-	"Session::receive [%p]. Check event (%p) from Jabber. Type: %u. To: '%s'",
-	this,event,event->type(),event->to().c_str());
+	"Session. Check event ((%p): %u) from Jabber. [%p]",
+	event,event->type(),this);
     switch (event->type()) {
 	// Incoming data is accepted if 'to' is this session
 	case JBEvent::IqResult:
@@ -294,10 +295,12 @@ bool JGSession::receive(JBEvent* event)
 	case JBEvent::Destroy:
 	    lock();
 	    // Ignore: session is already ending or destroying
-	    if (state() == Ending && state() != Destroy) {
+	    if (state() != Ending && state() != Destroy) {
+		DDebug(m_engine,DebugAll,
+		    "Session. Terminate on stream destroy. [%p]",this);
 		m_state = Destroy;
 		m_lastEvent = new JGEvent(JGEvent::Terminated,this);
-		m_lastEvent->m_reason = "Stream terminated";
+		m_lastEvent->m_reason = "noconn";
 	    }
 	    unlock();
 	    return false;
@@ -308,14 +311,14 @@ bool JGSession::receive(JBEvent* event)
     // Delete event if in terminating state
     if (state() == Destroy) {
 	DDebug(m_engine,DebugAll,
-	    "Session::receive [%p]. Received event (%p. Type: %u) from Jabber in terminating state. Deleting.",
-	    this,event,event->type());
+	    "Session. Received event ((%p). %u) from Jabber in terminating state. Deleting. [%p]",
+	    event,event->type(),this);
 	event->deref();
 	return true;
     }
     DDebug(m_engine,DebugAll,
-	"Session::receive [%p]. Accepted event (%p) from Jabber. Type: %u.",
-	this,event,event->type());
+	"Session. Accepted event ((%p): %u) from Jabber. [%p]",
+	event,event->type(),this);
     // Unlock stream events
     event->releaseStream();
     // Keep event
@@ -338,8 +341,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	// Process the event
 	JBEvent* jbev = static_cast<JBEvent*>(obj);
 	DDebug(m_engine,DebugAll,
-	    "Session::getEvent [%p]. Process received element with id '%s'",
-	    this,jbev->id().c_str());
+	    "Session. Process Jabber event ((%p): %u). [%p]",
+	    jbev,jbev->type(),this);
 	JGEvent* event = processEvent(jbev,time);
 	// No event: check timeout
 	if (!event && timeout(time)) {
@@ -348,8 +351,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	}
 	// Remove jabber event
 	DDebug(m_engine,DebugAll,
-	    "Session::getEvent [%p]. Remove Jabber event (%p) from queue",
-	    this,jbev);
+	    "Session. Remove Jabber event ((%p): %u) from queue. [%p]",
+	    jbev,jbev->type(),this);
 	m_events.remove(jbev,true);
 	// Raise ?
 	if (event)
@@ -364,7 +367,7 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 
 JGEvent* JGSession::badRequest(JGEvent* event)
 {
-    DDebug(m_engine,DebugAll,"Session::badRequest [%p].",this);
+    XDebug(m_engine,DebugAll,"Session::badRequest. [%p]",this);
     sendEBadRequest(event->releaseXML());
     delete event;
     return 0;
@@ -377,8 +380,8 @@ JGEvent* JGSession::processEvent(JBEvent* jbev, u_int64_t time)
     if (state() == Ending) {
 	if (isResponse(jbev) || time > m_timeout) {
 	    DDebug(m_engine,DebugAll,
-		"Session [%p]. Terminated in state Ending. Reason: '%s'.",
-		this,time > m_timeout ? "Timeout" : "Hangup");
+		"Session. Terminated in state Ending. Reason: '%s'. [%p]",
+		this,time > m_timeout ? "timeout" : "hangup");
 	    event = new JGEvent(JGEvent::Destroy,this);
 	}
     }
@@ -405,7 +408,7 @@ JGEvent* JGSession::processEvent(JBEvent* jbev, u_int64_t time)
 
 JGEvent* JGSession::processStatePending(JBEvent* jbev, JGEvent* event)
 {
-    DDebug(m_engine,DebugAll,"Session::processStatePending [%p].",this);
+    XDebug(m_engine,DebugAll,"Session::processStatePending. [%p]",this);
     // Check event type
     if (event->type() != JGEvent::Jingle) {
 	confirmIq(event->element());
@@ -432,7 +435,7 @@ JGEvent* JGSession::processStatePending(JBEvent* jbev, JGEvent* event)
 
 JGEvent* JGSession::processStateActive(JBEvent* jbev, JGEvent* event)
 {
-    DDebug(m_engine,DebugAll,"Session::processStateActive [%p].",this);
+    XDebug(m_engine,DebugAll,"Session::processStateActive. [%p]",this);
     if (event->type() == JGEvent::Terminated)
 	m_state = Destroy;
     confirmIq(event->element());
@@ -441,7 +444,7 @@ JGEvent* JGSession::processStateActive(JBEvent* jbev, JGEvent* event)
 
 JGEvent* JGSession::processStateIdle(JBEvent* jbev, JGEvent* event)
 {
-    DDebug(m_engine,DebugAll,"Session::processStateIdle [%p].",this);
+    XDebug(m_engine,DebugAll,"Session::processStateIdle. [%p]",this);
     if (!incoming())
 	return badRequest(event);
     if (event->action() != ActInitiate) {
@@ -451,8 +454,6 @@ JGEvent* JGSession::processStateIdle(JBEvent* jbev, JGEvent* event)
     m_localJID.set(jbev->to());
     m_remoteJID.set(jbev->from());
     confirmIq(event->element());
-    if (jbev->child())
-	m_initiatorJID.set(jbev->child()->getAttribute("initiator"));
     m_state = Pending;
     return event;
 }
@@ -504,7 +505,7 @@ bool JGSession::decodeJingle(JGEvent* event)
 	    sendEServiceUnavailable(event->releaseXML());
 	    return false;
 	}
-	// Get payloads
+	// Get transports
 	XMLElement* t = trans->findFirstChild(XMLElement::Candidate);
 	for (; t; t = trans->findNextChild(t,XMLElement::Candidate)) {
 	    JGTransport* tr = new JGTransport(t);
@@ -545,8 +546,8 @@ JGEvent* JGSession::createEvent(JBEvent* jbev)
     switch (jbev->type()) {
 	case JBEvent::IqResult:
 	    DDebug(m_engine,DebugAll,
-		"Session::createEvent [%p]. Received confirmation. ID: '%s'.",
-		this,jbev->id().c_str());
+		"Session. Received confirmation. ID: '%s'. [%p]",
+		jbev->id().c_str(),this);
 	    sent = isResponse(jbev);
 	    if (sent)
 		m_sentStanza.remove(sent,true);
@@ -558,8 +559,8 @@ JGEvent* JGSession::createEvent(JBEvent* jbev)
 	    break;
 	case JBEvent::IqError:
 	    DDebug(m_engine,DebugAll,
-		"Session::createEvent [%p]. Received error. ID: '%s'.",
-		this,jbev->id().c_str());
+		"Session. Received error. ID: '%s'. [%p]",
+		jbev->id().c_str(),this);
 	    sent = isResponse(jbev);
 	    if (sent)
 		m_sentStanza.remove(sent,true);
@@ -570,7 +571,7 @@ JGEvent* JGSession::createEvent(JBEvent* jbev)
 	    sent = isResponse(jbev);
 	    if (sent)
 		m_sentStanza.remove(sent,true);
-	    event->m_reason = "socket-error";
+	    event->m_reason = "noconn";
 	    event->m_type = JGEvent::Terminated;
 	    return event;
 	default: ;
@@ -582,8 +583,8 @@ JGEvent* JGSession::createEvent(JBEvent* jbev)
 JGEvent* JGSession::raiseEvent(JGEvent* event)
 {
     if (m_lastEvent)
-	Debug(m_engine,DebugGoOn,"Session::raiseEvent [%p]. Last event already set to %p.",
-	    this,m_lastEvent);
+	Debug(m_engine,DebugGoOn,"Session::raiseEvent. Last event already set to %p. [%p]",
+	    m_lastEvent,this);
     m_lastEvent = event;
     // Do specific actions: change state, deref() ...
     switch (event->type()) {
@@ -596,8 +597,8 @@ JGEvent* JGSession::raiseEvent(JGEvent* event)
 	    break;
 	default: ;
     }
-    DDebug(m_engine,DebugAll,"Session::raiseEvent [%p]. Event (%p) type: %u. Action: %u.",
-	this,event,event->type(),event->action());
+    DDebug(m_engine,DebugAll,"Session. Raising event((%p): %u). Action: %u. [%p]",
+	event,event->type(),event->action(),this);
     return event;
 }
 
@@ -605,7 +606,7 @@ bool JGSession::initiate(XMLElement* media, XMLElement* transport)
 {
     if (incoming() || state() != Idle)
 	return false;
-    DDebug(m_engine,DebugAll,"Session::initiate [%p]. From: '%s' To: '%s'",
+    DDebug(m_engine,DebugAll,"Session. Initiate from '%s' to '%s'. [%p]",
 	this,m_localJID.c_str(),m_remoteJID.c_str());
     XMLElement* xml = createJingleSet(ActInitiate,media,transport);
     if (sendXML(xml))
@@ -617,7 +618,8 @@ bool JGSession::sendXML(XMLElement* e, bool addId)
 {
     if (!e)
 	return false;
-    DDebug(m_engine,DebugAll,"Session::sendXML ('%s') [%p].",e->name(),this);
+    Lock lock(this);
+    DDebug(m_engine,DebugAll,"Session::sendXML((%p): '%s'). [%p]",e,e->name(),this);
     if (addId) {
 	// Create id
 	String id = m_localSid;
@@ -645,9 +647,8 @@ XMLElement* JGSession::createJingleSet(Action action,
 	XMPPNamespace::Jingle);
     if (action < ActCount)
 	jingle->setAttribute("type",actionText(action));
-    jingle->setAttribute("initiator",m_initiatorJID);
-//    if (incoming())
-//	jingle->setAttribute("responder",m_localJID);
+    jingle->setAttribute("initiator",initiator());
+//    jingle->setAttribute("responder",incoming()?m_localJID:m_remoteJID);
     jingle->setAttribute("id",m_sid);
     if (media)
 	jingle->addChild(media);
@@ -661,12 +662,10 @@ void JGSession::confirmIq(XMLElement* element)
 {
     if (!(element && element->type() == XMLElement::Iq))
 	return;
-
     XMPPUtils::IqType type = XMPPUtils::iqType(element->getAttribute("type"));
     if (type == XMPPUtils::IqResult || type == XMPPUtils::IqError)
 	return;
     String id = element->getAttribute("id");
-
     sendResult(id);
 }
 
@@ -675,11 +674,12 @@ void JGSession::eventTerminated(JGEvent* event)
     lock();
     if (event == m_lastEvent) {
 	DDebug(m_engine,DebugAll,
-	    "Session::eventTerminated [%p]. Event (%p).",this,event);
+	    "Session. Event((%p): %u) terminated. [%p]",event,event->type(),this);
 	m_lastEvent = 0;
     }
     else if (m_lastEvent)
-	Debug(m_engine,DebugNote,"Event %p replaced while processed [%p]",event,this);
+	Debug(m_engine,DebugNote,"Event((%p): %u) replaced while processed. [%p]",
+	    event,event->type(),this);
     unlock();
 }
 
@@ -691,8 +691,8 @@ JGSentStanza* JGSession::isResponse(const JBEvent* jbev)
 	JGSentStanza* tmp = static_cast<JGSentStanza*>(obj->get());
 	if (tmp->isResponse(jbev)) {
 	    DDebug(m_engine,DebugAll,
-		"Session [%p]. Sent element with id '%s' confirmed.",
-		this,tmp->m_id.c_str());
+		"Session. Sent element with id '%s' confirmed. [%p]",
+		tmp->m_id.c_str(),this);
 	    return tmp;
 	}
     }
@@ -707,8 +707,8 @@ bool JGSession::timeout(u_int64_t time)
 	JGSentStanza* tmp = static_cast<JGSentStanza*>(obj->get());
 	if (tmp->timeout(time)) {
 	    DDebug(m_engine,DebugAll,
-		"Session [%p]. Sent element with id '%s' timed out.",
-		this,tmp->m_id.c_str());
+		"Session. Sent element with id '%s' timed out. [%p]",
+		tmp->m_id.c_str(),this);
 	    return true;
 	}
     }

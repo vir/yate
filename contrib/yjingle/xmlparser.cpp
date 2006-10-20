@@ -55,7 +55,7 @@ XMLElement::XMLElement()
     : m_type(StreamEnd), m_owner(true), m_element(0)
 {
     m_element = new TiXmlElement(typeName(m_type));
-//    DDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
 }
 
 XMLElement::XMLElement(const char* name, NamedList* attributes,
@@ -77,7 +77,7 @@ XMLElement::XMLElement(const char* name, NamedList* attributes,
 	}
     }
     setType();
-//    DDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name);
+//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name);
 }
 
 XMLElement::XMLElement(Type type, NamedList* attributes,
@@ -98,21 +98,21 @@ XMLElement::XMLElement(Type type, NamedList* attributes,
 	    m_element->SetAttribute(ns->name().c_str(),ns->c_str());
 	}
     }
-//    DDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
 }
 
 XMLElement::XMLElement(TiXmlElement* element, bool owner)
     : m_type(Unknown), m_owner(owner), m_element(element)
 {
     setType();
-//    DDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
 }
 
 XMLElement::~XMLElement()
 {
     if (m_owner && m_element)
 	delete m_element;
-//    DDebug(DebugAll,"XMLElement::~XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::~XMLElement [%p]. Name: '%s'",this,name());
 }
 
 void XMLElement::toString(String& dest, bool unclose) const

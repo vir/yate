@@ -358,7 +358,8 @@ XMLElement* XMPPUtils::createMessage(MsgType type, const char* from,
     msg->setAttribute("type",lookup(type,s_msg,""));
     msg->setAttribute("from",from);
     msg->setAttribute("to",to);
-    msg->setAttribute("id",id);
+    if (id)
+	msg->setAttributeValid("id",id);
     msg->addChild(new XMLElement(XMLElement::Body,0,message));
     return msg;
 }

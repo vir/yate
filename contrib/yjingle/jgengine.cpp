@@ -51,7 +51,7 @@ void JGEngine::initialize(const NamedList& params)
 JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
 	XMLElement* media, XMLElement* transport, const char* message)
 {
-    DDebug(this,DebugAll,"call. New outgoing call from '%s' to '%s'",
+    DDebug(this,DebugAll,"call. New outgoing call from '%s' to '%s'.",
 	localJID.c_str(),remoteJID.c_str());
     JBComponentStream* stream = m_engine->getStream();
     if (stream) {
@@ -66,7 +66,7 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
 	}
 	session->deref();
     }
-    DDebug(this,DebugAll,"call. Outgoing call to '%s' failed",remoteJID.c_str());
+    DDebug(this,DebugCall,"call. Outgoing call to '%s' failed. No stream.",remoteJID.c_str());
     return 0;
 }
 
@@ -113,7 +113,7 @@ bool JGEngine::process()
 	    break;
 	ok = true;
 	if (event->type() == JGEvent::Destroy) {
-	    DDebug(this,DebugAll,"Deleting internal event 'Destroy'.");
+	    DDebug(this,DebugAll,"Deleting internal event(%p) 'Destroy'.",event);
 	    delete event;
 	    continue;
 	}
@@ -157,8 +157,8 @@ void JGEngine::defProcessEvent(JGEvent* event)
 {
     if (!event) 
 	return;
-    DDebug(this,DebugAll,"JGEngine::defprocessEvent. Type %u. Delete event.",
-	event->type());
+    DDebug(this,DebugAll,"JGEngine::defprocessEvent. Deleting event(%p). Type %u.",
+	event,event->type());
     delete event;
 }
 

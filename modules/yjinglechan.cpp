@@ -69,11 +69,11 @@ static TokenDict dict_payloads[] = {
     {      0,    0 },
 };
 
-#define JINGLE_RESOURCE "Talk"           // Default resource for local party
-#define JINGLE_VOICE "voice-v1"          // Voice capability for Google Talk
-#define JINGLE_VERSION "1.0"             // Version capability
+#define JINGLE_RESOURCE          "Talk"  // Default resource for local party
+#define JINGLE_VOICE         "voice-v1"  // Voice capability for Google Talk
+#define JINGLE_VERSION            "1.0"  // Version capability
 
-#define JINGLE_AUTHSTRINGLEN 16          // Username/Password length for transport
+#define JINGLE_AUTHSTRINGLEN         16  // Username/Password length for transport
 
 /**
  * YJBEngine
@@ -148,10 +148,12 @@ private:
 class YJGEngine : public JGEngine
 {
 public:
-    inline YJGEngine(YJBEngine* jb, const NamedList& jgParams, bool requestSubscribe)
-	: JGEngine(jb,jgParams), m_requestSubscribe(requestSubscribe) {}
+    inline YJGEngine(YJBEngine* jb, const NamedList& jgParams)
+	: JGEngine(jb,jgParams), m_requestSubscribe(true) {}
     virtual ~YJGEngine() {}
     virtual void processEvent(JGEvent* event);
+    void requestSubscribe(bool value)
+	{ m_requestSubscribe = value; }
     bool requestSubscribe()
 	{ return m_requestSubscribe; }
     // Start thread members
@@ -255,8 +257,6 @@ public:
     bool updateTransport(ObjList& transport, bool start = false);
     // Start RTP
     bool start();
-    // chan.stun
-    void startStun();
     // Send transport through the given session
     inline bool send(JGSession* session)
 	{ return session->requestTransport(new JGTransport(*this)); }
@@ -267,12 +267,12 @@ public:
 protected:
     bool m_mediaReady;                   // Media ready (updated) flag
     bool m_transportReady;               // Transport ready (both parties) flag
+    bool m_started;                      // True if chan.stun already sent
     JGTransport* m_remote;               // The remote transport info
     ObjList m_formats;                   // The media formats
     YJGConnection* m_connection;         // The connection
     RefObject* m_rtpData;
     String m_rtpId;
-//    String m_socketFilter;               // The socket for the STUN filter
 };
 
 /**
@@ -297,10 +297,9 @@ public:
 	{ return m_local; }
     inline const JabberID& remote() const
 	{ return m_remote; }
-    virtual void YJGConnection::callAccept(Message& msg);
-    virtual void YJGConnection::callRejected(const char* error,
-	const char* reason, const Message* msg);
-    virtual bool YJGConnection::callRouted(Message& msg);
+    virtual void callAccept(Message& msg);
+    virtual void callRejected(const char* error, const char* reason, const Message* msg);
+    virtual bool callRouted(Message& msg);
     virtual void disconnected(bool final, const char* reason);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgUpdate(Message& msg);
@@ -339,7 +338,7 @@ private:
 };
 
 /**
- * LibThread
+ * YJGLibThread
  * Thread class for library asynchronous operations
  */
 class YJGLibThread : public Thread
@@ -353,17 +352,10 @@ public:
 	JGProcess,                       // m_jg->runProcess()
 	JBPresence,                      // m_presence->runProcess()
     };
-    inline YJGLibThread(Action action, const char* name = 0,
-	Priority prio = Normal)
-        : Thread(name,prio), m_action(action), m_stream(0)
-        {}
-    inline YJGLibThread(JBComponentStream* stream, const char* name = 0,
-	Priority prio = Normal)
-        : Thread(name,prio), m_action(JBConnect), m_stream(0)
-        {
-	    if (stream && stream->ref())
-		m_stream = stream;
-	}
+    YJGLibThread(Action action, const char* name = 0,
+	Priority prio = Normal);
+    YJGLibThread(JBComponentStream* stream, const char* name = 0,
+	Priority prio = Normal);
     virtual void run();
 protected:
     Action m_action;                     // Action
@@ -534,7 +526,7 @@ void YJBPresence::processProbe(JBEvent* event)
 	if (local.bare() != yup->local().bare() || remote != yup->remote())
 	    continue;
 	found = true;
-	XDebug(this,DebugAll,"processProbe. Sending probe from existing %p.",yup);
+	XDebug(this,DebugAll,"processProbe. Sending presence from existing %p.",yup);
 	yup->send();
     }
     if (found)
@@ -1167,6 +1159,7 @@ YJGTransport::YJGTransport(YJGConnection* connection, Message* msg)
     : Mutex(true),
       m_mediaReady(false),
       m_transportReady(false),
+      m_started(false),
       m_remote(0),
       m_connection(connection),
       m_rtpData(0)
@@ -1243,8 +1236,11 @@ bool YJGTransport::initLocal()
 	    m_connection->getRemoteAddr(s);
 	m.setParam("remoteip",s);
     }
-    if (!Engine::dispatch(m))
+    if (!Engine::dispatch(m)) {
+	DDebug(m_connection,DebugAll,"Transport. Init RTP failed. [%p]",
+	    m_connection);
 	return false;
+    }
     m_address = m.getValue("localip",m_address);
     m_port = m.getValue("localport","-1");
     return true;
@@ -1253,11 +1249,11 @@ bool YJGTransport::initLocal()
 bool YJGTransport::start()
 {
     Lock lock(this);
-    if (!(m_connection && m_mediaReady && m_transportReady))
+    if (m_started || !(m_connection && m_mediaReady && m_transportReady))
 	return false;
-    DDebug(m_connection,DebugCall,"Transport. Start. Local: '%s:%s'. Remote: '%s:%s'.",
+    DDebug(m_connection,DebugCall,"Transport. Start. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
 	m_address.c_str(),m_port.c_str(),
-	m_remote->m_address.c_str(),m_remote->m_port.c_str());
+	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
     Message* m = new Message("chan.rtp");
     m->userData(static_cast<CallEndpoint*>(m_connection));
     m_connection->complete(*m);
@@ -1273,7 +1269,9 @@ bool YJGTransport::start()
     m->addParam("rtcp","false");
     m->addParam("getsession","true");
     if (!Engine::dispatch(m)) {
-	DDebug(m_connection,DebugAll,"Transport. 'chan.rtp' failed.");
+	Debug(m_connection,DebugCall,"Transport. Start RTP failed. [%p]",
+	    m_connection);
+	delete m;
 	return false;
     }
     // chan.stun
@@ -1286,27 +1284,14 @@ bool YJGTransport::start()
     msg->addParam("userid",m->getValue("rtpid"));
     delete m;
     Engine::enqueue(msg);
+    m_started = true;
     return true;
-}
-
-void YJGTransport::startStun()
-{
-    if (!m_transportReady)
-	return;
-    Message* msg = new Message("chan.stun");
-    msg->userData(m_rtpData);
-    msg->addParam("userid",m_rtpId);
-//    msg->addParam("socketfilter",m_socketFilter);
-    msg->addParam("localusername",m_remote->m_username + m_username);
-    msg->addParam("remoteusername",m_username + m_remote->m_username);
-    msg->addParam("remoteip",m_remote->m_address);
-    msg->addParam("remoteport",m_remote->m_port);
-    msg->addParam("userid",m_connection->id());
-    Engine::enqueue(msg);
 }
 
 bool YJGTransport::updateMedia(ObjList& media, bool start)
 {
+    if (!m_connection)
+	return false;
     Lock lock(this);
     if (m_mediaReady) {
 	if (start)
@@ -1315,8 +1300,10 @@ bool YJGTransport::updateMedia(ObjList& media, bool start)
     }
     // Check if we received any media
     if (0 == media.skipNull()) {
-	DDebug(m_connection,DebugWarn,"Transport. The remote party has no media. Reject.");
-	m_connection->hangup(true,"nomedia");
+	DDebug(m_connection,DebugWarn,
+	    "Transport. The remote party has no media. [%p]",
+	    m_connection);
+	m_connection->hangup(false,"nomedia");
 	return false;
     }
     ListIterator iter_local(m_formats);
@@ -1342,12 +1329,13 @@ bool YJGTransport::updateMedia(ObjList& media, bool start)
     // Check if both parties have common media
     if (0 == m_formats.skipNull()) {
 	DDebug(m_connection,DebugWarn,
-	    "Transport. Unable to negotiate media (no common formats). Reject.");
-	m_connection->hangup(true,"nomedia");
+	    "Transport. Unable to negotiate media (no common formats). [%p]",
+	    m_connection);
+	m_connection->hangup(false,"nomedia");
 	return false;
     }
     m_mediaReady = true;
-    DDebug(m_connection,DebugCall,"Transport. Media is ready.");
+    DDebug(m_connection,DebugCall,"Transport. Media is ready. [%p]",m_connection);
     if (start)
 	return this->start();
     return true;
@@ -1384,9 +1372,9 @@ bool YJGTransport::updateTransport(ObjList& transport, bool start)
     m_remote = new JGTransport(*remote);
     m_transportReady = true;
     DDebug(m_connection,DebugCall,
-	"Transport. Transport is ready. Local: '%s:%s'. Remote: '%s:%s'.",
+	"Transport. Transport is ready. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
 	m_address.c_str(),m_port.c_str(),
-	m_remote->m_address.c_str(),m_remote->m_port.c_str());
+	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
     if (start)
 	return this->start();
     return true;
@@ -1441,7 +1429,7 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message* msg, const char* call
       m_transport(0),
       m_hangup(false)
 {
-    XDebug(this,DebugInfo,"YJGConnection [%p]. Outgoing.",this);
+    XDebug(this,DebugInfo,"YJGConnection. Outgoing. [%p]",this);
     if (msg)
 	m_callerPrompt = msg->getValue("callerprompt");
     // Init transport
@@ -1474,7 +1462,7 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
       m_transport(0),
       m_hangup(false)
 {
-    XDebug(this,DebugInfo,"YJGConnection [%p]. Incoming.",this);
+    XDebug(this,DebugInfo,"YJGConnection. Incoming. [%p]",this);
     // Set session
     m_session->jingleConn(this);
     // Init transport
@@ -1520,7 +1508,7 @@ void YJGConnection::callAccept(Message& msg)
     // Accept session and transport
     // Request transport
     // Try to start transport
-    DDebug(this,DebugCall,"callAccept [%p].",this);
+    DDebug(this,DebugCall,"callAccept. [%p]",this);
     m_transport->initLocal();
     m_session->accept(m_transport->createDescription());
     m_session->acceptTransport(0);
@@ -1537,32 +1525,31 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 	m_reason = error;
     else
 	m_reason = reason;
-    DDebug(this,DebugCall,"callRejected [%p]. Reason: '%s'.",
-	this,m_reason.c_str());
+    DDebug(this,DebugCall,"callRejected. Reason: '%s'. [%p]",m_reason.c_str(),this);
     hangup(true);
 }
 
 bool YJGConnection::callRouted(Message& msg)
 {
-    DDebug(this,DebugCall,"callRouted [%p].",this);
+    DDebug(this,DebugCall,"callRouted. [%p]",this);
     return true;
 }
 
 void YJGConnection::disconnected(bool final, const char* reason)
 {
-    DDebug(this,DebugCall,"disconnected [%p].",this);
+    DDebug(this,DebugCall,"disconnected. [%p]",this);
     Channel::disconnected(final,reason?reason:m_reason.c_str());
 }
 
 bool YJGConnection::msgAnswered(Message& msg)
 {
-    DDebug(this,DebugCall,"msgAnswered [%p].",this);
+    DDebug(this,DebugCall,"msgAnswered. [%p]",this);
     return true;
 }
 
 bool YJGConnection::msgUpdate(Message& msg)
 {
-    DDebug(this,DebugCall,"msgUpdate [%p].",this);
+    DDebug(this,DebugCall,"msgUpdate. [%p]",this);
     return true;
 }
 
@@ -1586,7 +1573,7 @@ void YJGConnection::hangup(bool reject, const char* reason)
 	m_session->jingleConn(0);
 	m_session->hangup(reject,m_reason);
     }
-    DDebug(this,DebugCall,"hangup [%p]. Reason: '%s'",this,m_reason.c_str());
+    Debug(this,DebugCall,"hangup. Reason: '%s'. [%p]",m_reason.c_str(),this);
 }
 
 void YJGConnection::handleEvent(JGEvent* event)
@@ -1599,16 +1586,17 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	case JGEvent::Terminated:
 	    m_reason = event->reason();
-	    DDebug(this,DebugCall,"handleEvent [%p]. Terminated. Reason: '%s'.",
-		this,m_reason.c_str());
+	    DDebug(this,DebugCall,"handleEvent((%p): %u). Terminated. Reason: '%s'. [%p]",
+		event,event->type(),m_reason.c_str(),this);
 	    break;
 	case JGEvent::Error:
 	    DDebug(this,DebugCall,
-		"handleEvent [%p]. Error. Id: '%s'. Reason: '%s'. Text: '%s'.",
-		this,event->id().c_str(),event->reason().c_str(),event->text().c_str());
+		"handleEvent((%p): %u). Error. Id: '%s'. Reason: '%s'. Text: '%s'. [%p]",
+		event,event->type(),event->id().c_str(),event->reason().c_str(),
+		event->text().c_str(),this);
 	    break;
 	default:
-	    DDebug(this,DebugCall,"handleEvent [%p]. Event (%p) type: %u.",
+	    DDebug(this,DebugCall,"handleEvent((%p): %u). [%p]",
 		this,event,event->type());
     }
 }
@@ -1620,21 +1608,21 @@ void YJGConnection::handleJingle(JGEvent* event)
 	    {
 		bool accept = !m_transport->transportReady() &&
 		    m_transport->updateTransport(event->transport());
-		DDebug(this,DebugInfo,"handleJingle [%p]. Transport-info. %s.",
-		    this,accept?"Accepted":"Not accepted");
+		DDebug(this,DebugInfo,"handleJingle. Transport-info. %s. [%p]",
+		    accept?"Accepted":"Not accepted",this);
 		if (accept && isOutgoing())
 		    m_session->acceptTransport(0);
 	    }
 	    m_transport->start();
 	    break;
 	case JGSession::ActTransportAccept:
-	    DDebug(this,DebugNote,"handleJingle [%p]. Transport-accept.",this);
+	    DDebug(this,DebugNote,"handleJingle. Transport-accept. [%p]",this);
 	    break;
 	case JGSession::ActAccept:
 	    if (isAnswered())
 		break;
 	    // Update media
-	    Debug(this,DebugCall,"handleJingle [%p]. Accept.",this);
+	    Debug(this,DebugCall,"handleJingle. Accepted. [%p]",this);
 	    m_transport->updateMedia(event->audio(),true);
 	    // Notify engine
 	    maxcall(0);
@@ -1642,30 +1630,30 @@ void YJGConnection::handleJingle(JGEvent* event)
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;
 	case JGSession::ActModify:
-	    Debug(this,DebugWarn,"handleJingle [%p]. Modify: not implemented.",this);
+	    Debug(this,DebugWarn,"handleJingle. Modify: not implemented. [%p]",this);
 	    break;
 	case JGSession::ActRedirect:
-	    Debug(this,DebugWarn,"handleJingle [%p]. Redirect: not implemented. Hangup.",this);
+	    Debug(this,DebugWarn,"handleJingle. Redirect: not implemented. [%p]",this);
 	    break;
 	default: ;
 	    DDebug(this,DebugWarn,
-		"handleJingle [%p]. Event (%p). Action: %u. Unexpected.",
-		this,event,event->action());
+		"handleJingle. Event (%p). Action: %u. Unexpected. [%p]",
+		event,event->action(),this);
     }
 }
 
 bool YJGConnection::processPresence(bool available, const char* error)
 {
     if (m_state == Terminated) {
-	DDebug(this,DebugCall,
-	    "processPresence [%p]. Received presence in Terminated state.",this);
+	DDebug(this,DebugInfo,
+	    "processPresence. Received presence in Terminated state. [%p]",this);
 	return false;
     }
     // Check if error or unavailable in any other state
     if (!(error || available))
 	error = "offline";
     if (error) {
-	DDebug(this,DebugCall,"processPresence [%p]. Hangup (%s).",this,error);
+	DDebug(this,DebugCall,"processPresence. Hangup (%s). [%p]",error,this);
 	hangup(false,error);
 	return true;
     }
@@ -1674,8 +1662,8 @@ bool YJGConnection::processPresence(bool available, const char* error)
 	return false;
     // Make the call
     m_state = Active;
-    DDebug(this,DebugCall,"call [%p]. Caller: '%s'. Called: '%s'.",
-	this,m_local.c_str(),m_remote.c_str());
+    Debug(this,DebugCall,"call. Caller: '%s'. Called: '%s'. [%p]",
+	m_local.c_str(),m_remote.c_str(),this);
     // Make the call
     m_session = iplugin.m_jg->call(m_local,m_remote,
 	m_transport->createDescription(),
@@ -1696,6 +1684,19 @@ bool YJGConnection::processPresence(bool available, const char* error)
 /**
  * YJGLibThread
  */
+YJGLibThread::YJGLibThread(Action action, const char* name, Priority prio)
+    : Thread(name,prio), m_action(action), m_stream(0)
+{
+}
+
+YJGLibThread::YJGLibThread(JBComponentStream* stream, const char* name,
+	Priority prio)
+    : Thread(name,prio), m_action(JBConnect), m_stream(0)
+{
+    if (stream && stream->ref())
+	m_stream = stream;
+}
+
 void YJGLibThread::run()
 {
     switch (m_action) {
@@ -1922,14 +1923,14 @@ void YJGDriver::initJG(const NamedList& sect)
     if (m_jg)
 	m_jg->initialize(sect);
     else {
-	bool req = sect.getBoolValue("request_subscribe",true);
-	m_jg = new YJGEngine(m_jb,sect,req);
+	m_jg = new YJGEngine(m_jb,sect);
 	m_jg->debugChain(this);
 	// Init threads
 	int read = 1;
 	int process = 1;
 	m_jg->startThreads(read,process);
     }
+    m_jg->requestSubscribe(sect.getBoolValue("request_subscribe",true));
 }
 
 bool YJGDriver::msgExecute(Message& msg, String& dest)
@@ -1949,6 +1950,8 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     }
     JabberID caller(msg.getValue("caller"),identity,JINGLE_RESOURCE);
     JabberID called(dest);
+    DDebug(this,DebugAll,"msgExecute. Caller: '%s'. Called: '%s'.",
+	caller.c_str(),called.c_str());
     bool newPresence = true;
     bool available = iplugin.m_presence->get(caller,called,newPresence);
     if (!(newPresence || available)) {
@@ -1956,9 +1959,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","offline");
 	return false;
     }
-    // Parameters OK. Create connection
-    DDebug(this,DebugAll,"msgExecute. Caller: '%s'. Called: '%s'.",
-	caller.c_str(),called.c_str());
+    // Parameters OK. Create connection and init channel
     YJGConnection* conn = new YJGConnection(m_jg,&msg,caller,called,available);
     Channel* ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {

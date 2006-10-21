@@ -11,6 +11,9 @@
 ; xmlparser_maxbuffer: integer: Maximum length of text we ever parse as XML
 ;xmlparser_maxbuffer=8192
 
+; stream_partialrestart: integer: Number of quick Jabber stream connect attempts
+;stream_partialrestart=2
+
 ; stream_partialrestart: integer: Number of failures between 2 successfull Jabber
 ;  stream connect attempts, -1 to keep trying
 ;stream_partialrestart=-1

@@ -30,7 +30,7 @@ using namespace TelEngine;
  */
 
 // Default values
-#define JB_STREAM_PARTIALRESTART      -1
+#define JB_STREAM_PARTIALRESTART       2
 #define JB_STREAM_TOTALRESTART        -1
 
 // Sleep time for threads
@@ -63,6 +63,9 @@ void JBEngine::initialize(const NamedList& params)
     // Stream restart attempts
     m_partialStreamRestart =
 	params.getIntValue("stream_partialrestart",JB_STREAM_PARTIALRESTART);
+    // sanity check to avoid perpetual retries
+    if (m_partialStreamRestart < 1)
+	m_partialStreamRestart = 1;
     m_totalStreamRestart =
 	params.getIntValue("stream_totalrestart",JB_STREAM_TOTALRESTART);
     // XML parser max receive buffer
@@ -107,7 +110,7 @@ JBComponentStream* JBEngine::getStream(const char* domain)
 	domain = m_componentDomain;
     JBComponentStream* stream = findStream(domain);
     XDebug(this,DebugAll,
-	"getStream. Remote: '%s'. Stream exists: %s",domain,stream?"YES":"NO");
+	"getStream. Remote: '%s'. Stream exists: %s (%p)",domain,stream?"YES":"NO",stream);
     if (!stream) {
 	SocketAddr addr(PF_INET);
 	addr.host(domain);

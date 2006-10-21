@@ -50,7 +50,7 @@ JBComponentStream::JBComponentStream(JBEngine* engine, const String& remoteName,
       m_receiveMutex(true),
       m_lastEvent(0),
       m_terminateEvent(0),
-      m_partialRestart(-1),
+      m_partialRestart(2),
       m_totalRestart(-1),
       m_waitBeforeConnect(false)
 {
@@ -149,6 +149,8 @@ void JBComponentStream::terminate(bool destroy, bool sendEnd,
     Lock2 lock(*this,m_receiveMutex);
     if (m_state == Destroy || m_state == Terminated)
 	return;
+    DDebug(m_engine,DebugAll,"JBComponentStream::terminate(%s, %s, %p, %s) [%p]",
+	String::boolText(destroy),String::boolText(sendEnd),error,String::boolText(sendError),this);
     // Error is sent only if end stream is sent
     XMLElement* eventError = 0;
     if (sendEnd && sendError) {
@@ -167,7 +169,7 @@ void JBComponentStream::terminate(bool destroy, bool sendEnd,
     }
     else {
 	addEvent(JBEvent::Terminated,eventError);
-	m_state = Destroy;
+	m_state = Terminated;
     }
     Debug(m_engine,DebugAll,"Stream. %s. [%p]",destroy?"Destroy":"Terminate",this);
 }
@@ -297,6 +299,8 @@ void JBComponentStream::cleanup(bool endStream, XMLElement* e)
 	    delete e;
 	return;
     }
+    DDebug(m_engine,DebugAll,"Stream::cleanup(%s, %p) [%p]",
+	String::boolText(endStream),e,this);
     bool partialData = false;
     // Remove first element from queue if partial data was sent
     ObjList* obj = m_outXML.skipNull();
@@ -758,7 +762,7 @@ bool JBComponentStream::readSocket(char* data, u_int32_t& len)
 #ifdef XDEBUG
     if (len) {
 	String s(data,len);
-	XDebug(m_engine,DebugAll,"Stream::readSocket [%p]\r\nData: %s",s.c_str(),this);
+	XDebug(m_engine,DebugAll,"Stream::readSocket [%p] Data:\r\n%s",this,s.c_str());
     }
 #endif //XDEBUG
     return true;
@@ -774,7 +778,7 @@ bool JBComponentStream::writeSocket(const char* data, u_int32_t& len)
 	return false;
     }
     // Write data
-    XDebug(m_engine,DebugAll,"Stream::writeSocket. [%p]\r\nData: %s",this,data);
+    XDebug(m_engine,DebugAll,"Stream::writeSocket [%p] Data:\r\n%s",this,data);
     int c = m_socket->send(data,len);
     if (c == Socket::socketError()) {
 	c = 0;

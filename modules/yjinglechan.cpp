@@ -742,8 +742,13 @@ bool YJBPresence::get(const JabberID& local, JabberID& remote, bool& newPresence
 	    yup->remote().match(remote)) {
 	    // We found a remote user for the local one. Set the resource
 	    remote.resource(yup->remote().resource());
-	    if (iplugin.m_jg->requestSubscribe())
+	    if (iplugin.m_jg->requestSubscribe()) {
+		bool avail = yup->available();
 		yup->send(JBPresence::Subscribe);
+		// simulate a new presence while we get an answer
+		newPresence = !avail;
+		return avail;
+	    }
 	    break;
 	}
 	yup = 0;
@@ -1597,7 +1602,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	default:
 	    DDebug(this,DebugCall,"handleEvent((%p): %u). [%p]",
-		this,event,event->type());
+		event,event->type(),event);
     }
 }
 
@@ -1731,6 +1736,7 @@ void YJGLibThread::run()
 	    iplugin.m_presence->runProcess();
 	    break;
     }
+    DDebug(iplugin.m_jb,DebugAll,"%s end of run.",name());
 }
 
 

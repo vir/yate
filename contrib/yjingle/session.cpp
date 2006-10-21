@@ -381,7 +381,7 @@ JGEvent* JGSession::processEvent(JBEvent* jbev, u_int64_t time)
 	if (isResponse(jbev) || time > m_timeout) {
 	    DDebug(m_engine,DebugAll,
 		"Session. Terminated in state Ending. Reason: '%s'. [%p]",
-		this,time > m_timeout ? "timeout" : "hangup");
+		time > m_timeout ? "timeout" : "hangup",this);
 	    event = new JGEvent(JGEvent::Destroy,this);
 	}
     }
@@ -607,7 +607,7 @@ bool JGSession::initiate(XMLElement* media, XMLElement* transport)
     if (incoming() || state() != Idle)
 	return false;
     DDebug(m_engine,DebugAll,"Session. Initiate from '%s' to '%s'. [%p]",
-	this,m_localJID.c_str(),m_remoteJID.c_str());
+	m_localJID.c_str(),m_remoteJID.c_str(),this);
     XMLElement* xml = createJingleSet(ActInitiate,media,transport);
     if (sendXML(xml))
 	m_state = Pending;

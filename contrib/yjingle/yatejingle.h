@@ -539,6 +539,12 @@ protected:
     void confirmIq(XMLElement* element);
 
     /**
+     * Selectively confirm an 'iq' (skip confirmation for transport-info).
+     * @param element The event containing the element to confirm.
+     */
+    void confirmIqSelect(JGEvent* event);
+
+    /**
      * Terminate notification from an event. Reset the last generated event.
      * @param event The notifier.
      */

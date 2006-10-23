@@ -251,10 +251,10 @@ public:
 	{ return m_transportReady; }
     // Init local address/port
     bool initLocal();
-    // Update media. Start RTP if start is true
-    bool updateMedia(ObjList& media, bool start = false);
-    // Update transport. Start RTP if start is true
-    bool updateTransport(ObjList& transport, bool start = false);
+    // Update media
+    bool updateMedia(ObjList& media);
+    // Update transport
+    bool updateTransport(ObjList& transport);
     // Start RTP
     bool start();
     // Send transport through the given session
@@ -1256,7 +1256,7 @@ bool YJGTransport::start()
     Lock lock(this);
     if (m_started || !(m_connection && m_mediaReady && m_transportReady))
 	return false;
-    DDebug(m_connection,DebugCall,"Transport. Start. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
+    Debug(m_connection,DebugCall,"Transport. Start. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
 	m_address.c_str(),m_port.c_str(),
 	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
     Message* m = new Message("chan.rtp");
@@ -1265,12 +1265,18 @@ bool YJGTransport::start()
     m->addParam("direction","bidir");
     m->addParam("media","audio");
     //TODO: Add real media
+#if 0
+    String formats;
+    createMediaString(formats);
+    m->addParam("formats",formats);
+    //TODO: Choose one format
+#endif
     m->addParam("format","alaw");
     m->addParam("localip",m_address);
     m->addParam("localport",m_port);
     m->addParam("remoteip",m_remote->m_address);
     m->addParam("remoteport",m_remote->m_port);
-//    m.addParam("autoaddr","false");
+    //m.addParam("autoaddr","false");
     m->addParam("rtcp","false");
     m->addParam("getsession","true");
     if (!Engine::dispatch(m)) {
@@ -1293,21 +1299,15 @@ bool YJGTransport::start()
     return true;
 }
 
-bool YJGTransport::updateMedia(ObjList& media, bool start)
+bool YJGTransport::updateMedia(ObjList& media)
 {
-    if (!m_connection)
-	return false;
     Lock lock(this);
-    if (m_mediaReady) {
-	if (start)
-	    return this->start();
-	return true;
-    }
+    if (m_mediaReady || !m_connection)
+	return false;
     // Check if we received any media
     if (0 == media.skipNull()) {
 	DDebug(m_connection,DebugWarn,
-	    "Transport. The remote party has no media. [%p]",
-	    m_connection);
+	    "Transport. The remote party has no media. [%p]",m_connection);
 	m_connection->hangup(false,"nomedia");
 	return false;
     }
@@ -1340,20 +1340,20 @@ bool YJGTransport::updateMedia(ObjList& media, bool start)
 	return false;
     }
     m_mediaReady = true;
-    DDebug(m_connection,DebugCall,"Transport. Media is ready. [%p]",m_connection);
-    if (start)
-	return this->start();
+    if (iplugin.debugAt(DebugCall)) {
+	String s;
+	createMediaString(s);
+	Debug(m_connection,DebugCall,"Transport. Media is ready ('%s'). [%p]",
+	    s.c_str(),m_connection);
+    }
     return true;
 }
 
-bool YJGTransport::updateTransport(ObjList& transport, bool start)
+bool YJGTransport::updateTransport(ObjList& transport)
 {
     Lock lock(this);
-    if (m_transportReady) {
-	if (start)
-	    return this->start();
-	return true;
-    }
+    if (m_transportReady || !m_connection)
+	return false;
     JGTransport* remote = 0;
     // Find a transport we'd love to use
     ObjList* obj = transport.skipNull();
@@ -1376,12 +1376,10 @@ bool YJGTransport::updateTransport(ObjList& transport, bool start)
 	m_remote->deref();
     m_remote = new JGTransport(*remote);
     m_transportReady = true;
-    DDebug(m_connection,DebugCall,
+    Debug(m_connection,DebugCall,
 	"Transport. Transport is ready. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
 	m_address.c_str(),m_port.c_str(),
 	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
-    if (start)
-	return this->start();
     return true;
 }
 
@@ -1472,8 +1470,8 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
     m_session->jingleConn(this);
     // Init transport
     m_transport = new YJGTransport(this);
-    m_transport->updateMedia(event->audio(),false);
-    m_transport->updateTransport(event->transport(),false);
+    m_transport->updateMedia(event->audio());
+    m_transport->updateTransport(event->transport());
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());
@@ -1513,7 +1511,7 @@ void YJGConnection::callAccept(Message& msg)
     // Accept session and transport
     // Request transport
     // Try to start transport
-    DDebug(this,DebugCall,"callAccept. [%p]",this);
+    Debug(this,DebugCall,"callAccept. [%p]",this);
     m_transport->initLocal();
     m_session->accept(m_transport->createDescription());
     m_session->acceptTransport(0);
@@ -1530,7 +1528,7 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 	m_reason = error;
     else
 	m_reason = reason;
-    DDebug(this,DebugCall,"callRejected. Reason: '%s'. [%p]",m_reason.c_str(),this);
+    Debug(this,DebugCall,"callRejected. Reason: '%s'. [%p]",m_reason.c_str(),this);
     hangup(true);
 }
 
@@ -1591,7 +1589,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	case JGEvent::Terminated:
 	    m_reason = event->reason();
-	    DDebug(this,DebugCall,"handleEvent((%p): %u). Terminated. Reason: '%s'. [%p]",
+	    Debug(this,DebugCall,"handleEvent((%p): %u). Terminated. Reason: '%s'. [%p]",
 		event,event->type(),m_reason.c_str(),this);
 	    break;
 	case JGEvent::Error:
@@ -1615,20 +1613,31 @@ void YJGConnection::handleJingle(JGEvent* event)
 		    m_transport->updateTransport(event->transport());
 		DDebug(this,DebugInfo,"handleJingle. Transport-info. %s. [%p]",
 		    accept?"Accepted":"Not accepted",this);
-		if (accept && isOutgoing())
-		    m_session->acceptTransport(0);
+		if (!accept) {
+		    XMPPError::ErrorType errType = XMPPError::TypeCancel;
+		    if (!m_transport->transportReady())
+			errType = XMPPError::TypeModify;
+		    m_session->sendError(event->releaseXML(),
+			XMPPError::SNotAcceptable,errType);
+		}
+		else {
+		    m_session->sendResult(event->id());
+		    if (isOutgoing())
+			m_session->acceptTransport(0);
+		}
 	    }
 	    m_transport->start();
 	    break;
 	case JGSession::ActTransportAccept:
-	    DDebug(this,DebugNote,"handleJingle. Transport-accept. [%p]",this);
+	    Debug(this,DebugInfo,"handleJingle. Transport-accept. [%p]",this);
 	    break;
 	case JGSession::ActAccept:
 	    if (isAnswered())
 		break;
 	    // Update media
-	    Debug(this,DebugCall,"handleJingle. Accepted. [%p]",this);
-	    m_transport->updateMedia(event->audio(),true);
+	    Debug(this,DebugCall,"handleJingle. Accept. [%p]",this);
+	    m_transport->updateMedia(event->audio());
+	    m_transport->start();
 	    // Notify engine
 	    maxcall(0);
 	    status("answered");
@@ -1658,11 +1667,11 @@ bool YJGConnection::processPresence(bool available, const char* error)
     if (!(error || available))
 	error = "offline";
     if (error) {
-	DDebug(this,DebugCall,"processPresence. Hangup (%s). [%p]",error,this);
+	Debug(this,DebugCall,"processPresence. Hangup (%s). [%p]",error,this);
 	hangup(false,error);
 	return true;
     }
-    // Check if we are in pending state and remote peer is presence
+    // Check if we are in pending state and remote peer is present
     if (!(m_state == Pending && available))
 	return false;
     // Make the call

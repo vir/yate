@@ -429,7 +429,7 @@ JGEvent* JGSession::processStatePending(JBEvent* jbev, JGEvent* event)
 	    return badRequest(event);
 	default: ;
     }
-    confirmIq(event->element());
+    confirmIqSelect(event);
     return event;
 }
 
@@ -438,7 +438,7 @@ JGEvent* JGSession::processStateActive(JBEvent* jbev, JGEvent* event)
     XDebug(m_engine,DebugAll,"Session::processStateActive. [%p]",this);
     if (event->type() == JGEvent::Terminated)
 	m_state = Destroy;
-    confirmIq(event->element());
+    confirmIqSelect(event);
     return event;
 }
 
@@ -667,6 +667,17 @@ void JGSession::confirmIq(XMLElement* element)
 	return;
     String id = element->getAttribute("id");
     sendResult(id);
+}
+
+void JGSession::confirmIqSelect(JGEvent* event)
+{
+    if (!event)
+	return;
+    // Skip transport-info
+    if (event->type() == JGEvent::Jingle &&
+	event->action() == JGSession::ActTransportInfo)
+	return;
+    confirmIq(event->element());
 }
 
 void JGSession::eventTerminated(JGEvent* event)

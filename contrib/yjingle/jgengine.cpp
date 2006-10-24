@@ -74,25 +74,34 @@ bool JGEngine::receive()
 {
     Lock lock(this);
     JBEvent* event = m_engine->getEvent(Time::msecNow());
-    if (event) {
-	// Check for new incoming session
-	if (event->type() == JBEvent::IqJingleSet) {
-	    const char* type = event->child()->getAttribute("type");
-	    JGSession::Action action = JGSession::action(type);
-	    if (action == JGSession::ActInitiate) {
-		m_sessions.append(new JGSession(this,event));
-		return true;
-	    }
+    if (!event)
+	return false;
+    bool checkSession = true; 
+    // Check for new incoming session
+    if (event->type() == JBEvent::IqJingleSet && event->child()) {
+	const char* type = event->child()->getAttribute("type");
+	JGSession::Action action = JGSession::action(type);
+	if (action == JGSession::ActInitiate) {
+	    m_sessions.append(new JGSession(this,event));
+	    return true;
 	}
-	// Add event to the appropriate session
+    }
+    // Check if it's a message from a user with resource
+    else if (event->type() == JBEvent::Message) {
+	JabberID from(event->from());
+	checkSession = from.resource();
+    }
+    // Add event to the appropriate session
+    if (checkSession) {
 	ObjList* obj = m_sessions.skipNull();
 	for (; obj; obj = obj->skipNext()) {
 	    JGSession* session = static_cast<JGSession*>(obj->get());
 	    if (session->receive(event))
 		return true;
 	}
-	m_engine->returnEvent(event);
     }
+    // Return unhandled event to the jabber engine
+    m_engine->returnEvent(event);
     return false;
 }
 

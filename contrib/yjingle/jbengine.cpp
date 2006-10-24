@@ -252,8 +252,10 @@ void JBEngine::returnEvent(JBEvent* event)
 {
     if (!event)
 	return;
+    if (event->type() == JBEvent::Message && processMessage(event))
+	return;
     DDebug(this,DebugAll,
-	"returnEvent. Event: (%p). Type: %u.",event,event->type());
+	"returnEvent. Delete event((%p): %u).",event,event->type());
     event->deref();
 }
 
@@ -429,6 +431,18 @@ JBServerInfo* JBEngine::getServer(const char* token, bool domain)
 		return server;
 	}
     return 0;
+}
+
+bool JBEngine::processMessage(JBEvent* event)
+{
+    if (debugAt(DebugInfo) && event->element()) {
+	XMLElement* body = event->element()->findFirstChild(XMLElement::Body);
+	const char* text = body ? body->getText() : "";
+	DDebug(this,DebugInfo,
+	    "processMessage. Message: '%s'. From: '%s'. To: '%s'.",
+	    text,event->from().c_str(),event->to().c_str());
+    }
+    return false;
 }
 
 bool JBEngine::getServerPassword(String& destination,

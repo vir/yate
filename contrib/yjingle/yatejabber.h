@@ -802,6 +802,13 @@ protected:
     inline void clearServerList()
 	{ Lock lock(m_serverMutex); m_server.clear(); }
 
+    /**
+     * Process a message event.
+     * @param event The event to process. Always a valid message event.
+     * @return True if the event was processed (kept). False to destroy it.
+     */
+    virtual bool processMessage(JBEvent* event);
+
 private:
     void processEventNew(JBEvent* event);
     void processEventAuth(JBEvent* event);

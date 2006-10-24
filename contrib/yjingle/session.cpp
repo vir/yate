@@ -273,39 +273,39 @@ bool JGSession::receive(JBEvent* event)
     // Check stream
     if (!(event && event->stream() && m_stream == event->stream()))
 	return false;
-    // Check destination
     DDebug(m_engine,DebugAll,
 	"Session. Check event ((%p): %u) from Jabber. [%p]",
 	event,event->type(),this);
+    bool accepted = false;
+    bool retVal = false;
     switch (event->type()) {
-	// Incoming data is accepted if 'to' is this session
+	case JBEvent::Message:
+	    accepted = receiveMessage(event,retVal);
+	    break;
 	case JBEvent::IqResult:
+	case JBEvent::IqError:
+	    accepted = receiveResult(event,retVal);
+	    break;
 	case JBEvent::IqJingleGet:
 	case JBEvent::IqJingleSet:
-	case JBEvent::IqError:
-	    if (!event->to().startsWith(m_localJID))
-		return false;
+	    accepted = receiveJingle(event,retVal);
 	    break;
-	// Notification events are identified by the 'id'
+	// WriteFail is identified by the local SID set when posting elements in stream
 	case JBEvent::WriteFail:
 	    if (event->id() != m_localSid)
 		return false;
+	    accepted = true;
 	    break;
-	// Stream terminated: Terminate session
 	case JBEvent::Destroy:
-	    lock();
-	    // Ignore: session is already ending or destroying
-	    if (state() != Ending && state() != Destroy) {
-		DDebug(m_engine,DebugAll,
-		    "Session. Terminate on stream destroy. [%p]",this);
-		m_state = Destroy;
-		m_lastEvent = new JGEvent(JGEvent::Terminated,this);
-		m_lastEvent->m_reason = "noconn";
-	    }
-	    unlock();
-	    return false;
+	    accepted = receiveDestroy(event,retVal);
+	    break;
 	default:
 	    return false;
+    }
+    if (!accepted) {
+	if (retVal)
+	    event->deref();
+	return retVal;
     }
     // This session is the destination !
     // Delete event if in terminating state
@@ -516,6 +516,16 @@ bool JGSession::decodeJingle(JGEvent* event)
     return true;
 }
 
+JGEvent* JGSession::decodeMessage(JGEvent* event)
+{
+    event->element()->getAttribute("id",event->m_id);
+    XMLElement* child = event->element()->findFirstChild(XMLElement::Body);
+    if (child)
+	event->m_text = child->getText();
+    event->m_type = JGEvent::Message;
+    return event;
+}
+
 bool JGSession::decodeError(JGEvent* event)
 {
     event->element()->getAttribute("id",event->m_id);
@@ -567,6 +577,8 @@ JGEvent* JGSession::createEvent(JBEvent* jbev)
 	    if (decodeError(event))
 		return event;
 	    break;
+	case JBEvent::Message:
+	    return decodeMessage(event);
 	case JBEvent::WriteFail:
 	    sent = isResponse(jbev);
 	    if (sent)
@@ -733,6 +745,57 @@ void JGSession::appendSent(XMLElement* element)
     String id = element->getAttribute("id");
     if (id)
 	m_sentStanza.append(new JGSentStanza(id));
+}
+
+bool JGSession::receiveMessage(const JBEvent* event, bool& retValue)
+{
+    if (!(event->to() == local() && event->from() == remote()))
+	return false;
+    //TODO: Make a copy of message: return false
+    retValue = true;
+    return true;
+}
+
+bool JGSession::receiveResult(const JBEvent* event, bool& retValue)
+{
+    if (!(event->to() == local() && event->from() == remote()))
+	return false;
+    Lock lock(this);
+    JGSentStanza* sent = isResponse(event);
+    if (!sent)
+	return false;
+    // Keep the event if:  state is Ending: Will raise a Terminated event
+    //                     is IqError: Will be sent upstairs
+    if (state() == Ending || event->type() == JBEvent::IqError)
+	return true;
+    // Event is a result. Consume it
+    m_sentStanza.remove(sent,true);
+    retValue = true;
+    return false;
+}
+
+bool JGSession::receiveJingle(const JBEvent* event, bool& retValue)
+{
+    // Jingle stanzas must match source, destination and session id
+    if (!(event->to() == local() && event->from() == remote() &&
+	event->child() && event->child()->hasAttribute("id",m_sid)))
+	return false;
+    return true;
+}
+
+bool JGSession::receiveDestroy(const JBEvent* event, bool& retValue)
+{
+    Lock lock(this);
+    // Ignore if session is already ending or destroying
+    if (state() != Ending && state() != Destroy) {
+	DDebug(m_engine,DebugAll,
+	    "Session. Terminate on stream destroy. [%p]",this);
+	m_state = Destroy;
+	m_lastEvent = new JGEvent(JGEvent::Terminated,this);
+	m_lastEvent->m_reason = "noconn";
+    }
+    retValue = false;
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

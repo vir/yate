@@ -461,6 +461,13 @@ protected:
     bool decodeJingle(JGEvent* event);
 
     /**
+     * Set the message text of the the given event.
+     * @param event The event to process.
+     * @return The event parameter.
+     */
+    JGEvent* decodeMessage(JGEvent* event);
+
+    /**
      * Check if a given event is a valid Error one. Send an error if not.
      * Set the event's data on success.
      * @param event The event to check.
@@ -571,6 +578,13 @@ protected:
 private:
     JGSession() {}                       // Don't use it
     void appendSent(XMLElement* element);
+    // Accept the appropriate events. Called in receive()
+    // @param retValue The value receive() will return if the message was not accepted
+    // @return True if the message is accepted. False if not
+    bool receiveMessage(const JBEvent* event, bool& retValue);
+    bool receiveResult(const JBEvent* event, bool& retValue);
+    bool receiveJingle(const JBEvent* event, bool& retValue);
+    bool receiveDestroy(const JBEvent* event, bool& retValue);
 
     // State info
     State m_state;                       // Session state
@@ -604,6 +618,7 @@ class YJINGLE_API JGEvent
 public:
     enum Type {
 	Jingle,                          // Action: All, except ActReject, ActTerminate
+	Message,                         // m_text is the message body
 	Error,
 	Unexpected,                      // Unexpected or invalid element
 	// Final

@@ -303,6 +303,7 @@ public:
     virtual void disconnected(bool final, const char* reason);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgUpdate(Message& msg);
+    virtual bool msgText(Message& msg, const char* text);
     bool route();
     void handleEvent(JGEvent* event);
     void hangup(bool reject, const char* reason = 0);
@@ -1540,7 +1541,8 @@ bool YJGConnection::callRouted(Message& msg)
 
 void YJGConnection::disconnected(bool final, const char* reason)
 {
-    DDebug(this,DebugCall,"disconnected. [%p]",this);
+    DDebug(this,DebugCall,"disconnected. Final: %u. Reason: '%s'. [%p]",
+	final,reason,this);
     Channel::disconnected(final,reason?reason:m_reason.c_str());
 }
 
@@ -1554,6 +1556,16 @@ bool YJGConnection::msgUpdate(Message& msg)
 {
     DDebug(this,DebugCall,"msgUpdate. [%p]",this);
     return true;
+}
+
+bool YJGConnection::msgText(Message& msg, const char* text)
+{
+    DDebug(this,DebugCall,"msgText. [%p]",this);
+    if (m_session) {
+	m_session->sendMessage(text);
+	return true;
+    }
+    return false;
 }
 
 void YJGConnection::hangup(bool reject, const char* reason)
@@ -1597,6 +1609,15 @@ void YJGConnection::handleEvent(JGEvent* event)
 		"handleEvent((%p): %u). Error. Id: '%s'. Reason: '%s'. Text: '%s'. [%p]",
 		event,event->type(),event->id().c_str(),event->reason().c_str(),
 		event->text().c_str(),this);
+	    break;
+	case JGEvent::Message: {
+	    DDebug(this,DebugCall,
+		"handleEvent((%p): %u). Message text: '%s'. [%p]",
+		event,event->type(),event->text().c_str(),this);
+	    Message* m = message("chan.text");
+	    m->addParam("text",event->text());
+            Engine::enqueue(m);
+	    }
 	    break;
 	default:
 	    DDebug(this,DebugCall,"handleEvent((%p): %u). [%p]",

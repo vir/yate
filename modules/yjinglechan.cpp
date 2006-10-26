@@ -75,6 +75,8 @@ static TokenDict dict_payloads[] = {
 
 #define JINGLE_AUTHSTRINGLEN         16  // Username/Password length for transport
 
+#define JINGLE_CONN_TIMEOUT       10000  // Timeout value to override "maxcall" in call.execute
+
 /**
  * YJBEngine
  */
@@ -287,7 +289,7 @@ public:
 	Active,
 	Terminated,
     };
-    YJGConnection(YJGEngine* jgEngine, Message* msg, const char* caller,
+    YJGConnection(YJGEngine* jgEngine, Message& msg, const char* caller,
 	const char* called, bool available);
     YJGConnection(YJGEngine* jgEngine, JGEvent* event);
     virtual ~YJGConnection();
@@ -336,6 +338,8 @@ private:
     // Termination
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
+    // Timeouts
+    u_int32_t m_timeout;                 // Timeout for not answered outgoing connections
 };
 
 /**
@@ -384,6 +388,8 @@ public:
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
     virtual bool received(Message& msg, int id);
+    inline u_int32_t pendingTimeout()
+	{ return m_pendingTimeout; }
     bool getParts(NamedList& dest, const char* src, const char sep, bool nameFirst);
     void createAuthRandomString(String& dest);
     void processPresence(const JabberID& local, const JabberID& remote,
@@ -402,6 +408,7 @@ public:
     ObjList m_usedCodecs;                // List of used codecs (JGAudio)
 private:
     bool m_init;
+    u_int32_t m_pendingTimeout;
 };
 
 /**
@@ -1422,7 +1429,7 @@ void YJGTransport::createMediaString(String& dest)
  * YJGConnection
  */
 // Outgoing call
-YJGConnection::YJGConnection(YJGEngine* jgEngine, Message* msg, const char* caller,
+YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* caller,
 	const char* called, bool available)
     : Channel(&iplugin,0,true),
       m_state(Pending),
@@ -1431,23 +1438,32 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message* msg, const char* call
       m_local(caller),
       m_remote(called),
       m_transport(0),
-      m_hangup(false)
+      m_hangup(false),
+      m_timeout(0)
 {
     XDebug(this,DebugInfo,"YJGConnection. Outgoing. [%p]",this);
-    if (msg)
-	m_callerPrompt = msg->getValue("callerprompt");
+    m_callerPrompt = msg.getValue("callerprompt");
     // Init transport
-    m_transport = new YJGTransport(this,msg);
+    m_transport = new YJGTransport(this,&msg);
     // Set timeout
-    setMaxcall(msg);
+    m_timeout = msg.getIntValue("maxcall",0);
+    if (m_timeout && iplugin.pendingTimeout() >= m_timeout) {
+	maxcall(m_timeout);
+	m_timeout = 1;
+    }
+    else {
+	maxcall(iplugin.pendingTimeout());
+	if (m_timeout)
+	    m_timeout -= iplugin.pendingTimeout();
+    }
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());
     if (msg) {
-	m_targetid = msg->getValue("id");
-	m->setParam("caller",msg->getValue("caller"));
-	m->setParam("called",msg->getValue("called"));
-	m->setParam("billid",msg->getValue("billid"));
+	m_targetid = msg.getValue("id");
+	m->setParam("caller",msg.getValue("caller"));
+	m->setParam("called",msg.getValue("called"));
+	m->setParam("billid",msg.getValue("billid"));
     }
     Engine::enqueue(m);
     // Make the call
@@ -1464,7 +1480,8 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
       m_local(event->session()->local()),
       m_remote(event->session()->remote()),
       m_transport(0),
-      m_hangup(false)
+      m_hangup(false),
+      m_timeout(0)
 {
     XDebug(this,DebugInfo,"YJGConnection. Incoming. [%p]",this);
     // Set session
@@ -1543,7 +1560,9 @@ void YJGConnection::disconnected(bool final, const char* reason)
 {
     DDebug(this,DebugCall,"disconnected. Final: %u. Reason: '%s'. [%p]",
 	final,reason,this);
-    Channel::disconnected(final,reason?reason:m_reason.c_str());
+    if (!m_reason && reason)
+	m_reason = reason;
+    Channel::disconnected(final,m_reason);
 }
 
 bool YJGConnection::msgAnswered(Message& msg)
@@ -1707,6 +1726,8 @@ bool YJGConnection::processPresence(bool available, const char* error)
 	hangup(false,"create session failed");
 	return true;
     }
+    // Adjust timeout
+    maxcall(m_timeout);
     // Send prompt
     Engine::enqueue(message("call.ringing",false,true));
     m_session->jingleConn(this);
@@ -1783,7 +1804,8 @@ bool UserNotifyHandler::received(Message &msg)
  * YJGDriver
  */
 YJGDriver::YJGDriver()
-    : Driver("jingle","varchans"), m_jb(0), m_presence(0), m_jg(0), m_init(false)
+    : Driver("jingle","varchans"),
+      m_jb(0), m_presence(0), m_jg(0), m_init(false), m_pendingTimeout(0)
 {
     Output("Loaded module YJingle");
 }
@@ -1817,6 +1839,8 @@ void YJGDriver::initialize()
 	Debug(this,DebugAll,"Local address set to '%s'.",s_localAddress.c_str());
     else
 	Debug(this,DebugNote,"No local address set.");
+    m_pendingTimeout = sect->getIntValue("pending_timeout",JINGLE_CONN_TIMEOUT);
+    Debug(this,DebugAll,"Timeout for pending outgoing connections set to %u ms.",m_pendingTimeout);
     // Initialize
     lock();
     initCodecLists();                 // Init codec list
@@ -1996,7 +2020,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     // Parameters OK. Create connection and init channel
-    YJGConnection* conn = new YJGConnection(m_jg,&msg,caller,called,available);
+    YJGConnection* conn = new YJGConnection(m_jg,msg,caller,called,available);
     Channel* ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {
 	msg.setParam("peerid",conn->id());
@@ -2030,20 +2054,43 @@ void YJGDriver::createAuthRandomString(String& dest)
 void YJGDriver::processPresence(const JabberID& local, const JabberID& remote,
 	bool available, const char* error)
 {
-    lock();
+    // Check if it is a brodcast and remote user has a resource
+    bool broadcast = local.null();
+    bool remoteRes = !remote.resource().null();
     DDebug(this,DebugAll,"Presence (%s). Local: '%s'. Remote: '%s'.",
 	available?"available":"unavailable",local.c_str(),remote.c_str());
-    ObjList* obj = channels().skipNull();
-    bool broadcast = local.null();
-    for (; obj; obj = obj->skipNext()) {
-	YJGConnection* conn = static_cast<YJGConnection*>(obj->get());
-	bool isLocal = (broadcast || local.bare() == conn->local().bare());
-	if (isLocal && remote.bare() == conn->remote().bare()) {
-	    if (conn->state() == YJGConnection::Pending)
-		conn->updateResource(remote.resource());
-	    if (conn->processPresence(available,error))
+    // If a remote user became available notify only pending connections
+    //   that match local bare jid and remote bare jid
+    // No need to notify if remote user has no resource: this should never happen
+    if (available) {
+	if (!remoteRes)
+	    return;
+	lock();
+	ObjList* obj = channels().skipNull();
+	for (; obj; obj = obj->skipNext()) {
+	    YJGConnection* conn = static_cast<YJGConnection*>(obj->get());
+	    if (conn->state() != YJGConnection::Pending ||
+		(!broadcast && local.bare() != conn->local().bare()) ||
+		remote.bare() != conn->remote().bare())
+		continue;
+	    conn->updateResource(remote.resource());
+	    if (conn->processPresence(true))
 		conn->disconnect();
 	}
+	unlock();
+	return;
+    }
+    // Remote user is unavailable: notify all connections
+    // Remote has no resource: match connections by bare jid
+    lock();
+    ObjList* obj = channels().skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	YJGConnection* conn = static_cast<YJGConnection*>(obj->get());
+	if ((!broadcast && local.bare() != conn->local().bare()) ||
+	    !conn->remote().match(remote))
+	    continue;
+	if (conn->processPresence(false,error))
+	    conn->disconnect();
     }
     unlock();
 }

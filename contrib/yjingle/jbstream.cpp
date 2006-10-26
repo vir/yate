@@ -82,7 +82,9 @@ JBComponentStream::~JBComponentStream()
 	    "Stream. Incoming data:[%p]\r\nParser buffer: '%s'.\r\nParsed elements: %s",
 	    this,buffer.c_str(),element?element.c_str():"None.");
     }
+    Lock2 lock(*this,m_receiveMutex);
     cleanup(false,0);
+    lock.drop();
     m_engine->removeStream(this,false);
 }
 
@@ -313,8 +315,13 @@ void JBComponentStream::cleanup(bool endStream, XMLElement* e)
     //   No need to do that if partial data was sent:
     //   the remote XML parser will fail anyway
     if (!partialData && endStream) {
-	sendStreamXML(new XMLElement(XMLElement::StreamEnd),m_state,e);
-	e = 0;
+	if (state() != WaitToConnect) {
+	    sendStreamXML(new XMLElement(XMLElement::StreamEnd),m_state,e);
+	    e = 0;
+	}
+	else
+	    DDebug(m_engine,DebugAll,
+		"Stream::cleanup. No end tag sent: stream is waiting to connect. [%p]",this);
     }
     if (e)
 	delete e;
@@ -498,6 +505,7 @@ bool JBComponentStream::processStateStarted(XMLElement* e)
     if (!e->hasAttribute("xmlns",s_ns[XMPPNamespace::ComponentAccept]))
 	return invalidElement(e,XMPPError::InvalidNamespace);
     if (!e->hasAttribute("from",m_localName))
+//    if (!(e->hasAttribute("from",m_localName) || e->hasAttribute("from",m_remoteName)))
 	return invalidElement(e,XMPPError::HostUnknown);
     m_id = e->getAttribute("id");
     if (!m_id.length() || m_engine->remoteIdExists(this))

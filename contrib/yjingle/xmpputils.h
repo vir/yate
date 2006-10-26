@@ -277,6 +277,53 @@ private:
 };
 
 /**
+ * This class holds an identity list for a JID as described in XEP-0030.
+ * @short JID identity.
+ */
+class YJINGLE_API JIDIdentity : public RefObject
+{
+public:
+    enum Category {
+	Account = 1,                     // account
+	Client = 2,                      // client
+	Component = 3,                   // component
+	Gateway = 4,                     // gateway
+	Count = 5,
+    };
+
+    enum Type {
+	AccountRegistered = Count,       // registered
+	ClientPhone,                     // phone
+	ComponentGeneric,                // generic
+	ComponentPresence,               // presence
+	GatewayGeneric,                  // generic
+    };
+
+
+    inline JIDIdentity(Category c, Type t, const char* name = 0)
+	: m_category(c), m_type(t), m_name(name)
+	{}
+
+    virtual ~JIDIdentity()
+	{}
+
+    XMLElement* toXML();
+
+    bool fromXML(const XMLElement* element);
+
+    static const char* categoryText(Category c);
+
+    static const char* typeText(Category c);
+
+private:
+    static TokenDict m_strings;
+
+    Category m_category;                 // Category
+    Type m_type;                         // Type
+    String m_name;                       // Name
+};
+
+/**
  * This class holds a features list for a JID.
  * @short JID features.
  */

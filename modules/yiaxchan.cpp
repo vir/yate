@@ -815,7 +815,8 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data, u_in
     if (transaction)
 	if (transaction->getUserData())
 	    if ((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource())
-		(static_cast<YIAXSource*>((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource()))->Forward(data,tStamp);
+		// Multiply tStamp with 8 to keep the consumer satisfied
+		(static_cast<YIAXSource*>((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource()))->Forward(data,tStamp * 8);
 	    else {
 		XDebug(this,DebugAll,"YIAXEngine - processMedia. No media source");
 	    }
@@ -863,14 +864,25 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     ieList.appendString(IAXInfoElement::CALLING_NAME,params.getValue("callername"));
     ieList.appendString(IAXInfoElement::CALLED_NUMBER,params.getValue("called"));
     ieList.appendString(IAXInfoElement::CALLED_CONTEXT,params.getValue("iaxcontext"));
-    ieList.appendNumeric(IAXInfoElement::FORMAT,iplugin.defaultCodec(),4);
-    // Set capabilities
+    // Set format and capabilities
     u_int32_t codecs = iplugin.codecs();
     if (!iplugin.updateCodecsFromRoute(codecs,params.getValue("formats"))) {
 	DDebug(this,DebugAll,"Outgoing call failed: No codecs.");
 	params.setParam("error","nomedia");
 	return 0;
     }
+    u_int32_t format = iplugin.defaultCodec();
+    if (!(format & codecs)) {
+	for (format = 1; format < 0x10000; format = format << 1)
+	    if (format & codecs)
+		break;
+	if (format >= 0x10000) {
+	    DDebug(this,DebugAll,"Outgoing call failed: No preffered format.");
+	    params.setParam("error","nomedia");
+	    return 0;
+	}
+    }
+    ieList.appendNumeric(IAXInfoElement::FORMAT,format,4);
     ieList.appendNumeric(IAXInfoElement::CAPABILITY,codecs,4);
     return startLocalTransaction(IAXTransaction::New,addr,ieList);
 }

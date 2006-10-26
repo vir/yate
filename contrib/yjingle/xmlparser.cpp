@@ -315,4 +315,12 @@ XMLElement* XMLParser::extract()
     return 0;
 }
 
+void XMLParser::reset()
+{
+    Lock lock(this);
+    TiXmlDocument::Clear();
+    m_buffer.clear();
+    m_findstart = true;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

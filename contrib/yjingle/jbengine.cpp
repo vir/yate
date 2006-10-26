@@ -103,15 +103,16 @@ void JBEngine::setComponentServer(const char* domain)
 	m_componentDomain.c_str(),m_componentAddr.c_str());
 }
 
-JBComponentStream* JBEngine::getStream(const char* domain)
+JBComponentStream* JBEngine::getStream(const char* domain, bool create)
 {
     Lock lock(this);
     if (!domain)
 	domain = m_componentDomain;
     JBComponentStream* stream = findStream(domain);
     XDebug(this,DebugAll,
-	"getStream. Remote: '%s'. Stream exists: %s (%p)",domain,stream?"YES":"NO",stream);
-    if (!stream) {
+	"getStream. Remote: '%s'. Stream exists: %s (%p). Create: %s.",
+	domain,stream?"YES":"NO",stream,create?"YES":"NO");
+    if (!stream && create) {
 	SocketAddr addr(PF_INET);
 	addr.host(domain);
 	addr.port(getPort(addr.host()));

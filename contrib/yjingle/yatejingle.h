@@ -599,6 +599,7 @@ private:
     // Session data
     ObjList m_events;                    // Incoming events from Jabber engine
     JGEvent* m_lastEvent;                // Last generated event
+    JGEvent* m_terminateEvent;           // Terminate event
     void* m_private;                     // Arbitrary user data
     // Sent stanzas id generation
     String m_localSid;                   // Local session id (used to generate element's id)

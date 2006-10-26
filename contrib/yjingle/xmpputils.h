@@ -49,6 +49,7 @@
 namespace TelEngine {
 
 class XMPPNamespace;
+class XMPPErrorCode;
 class XMPPError;
 class JabberID;
 class JIDFeatures;

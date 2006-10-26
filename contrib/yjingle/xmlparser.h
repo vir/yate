@@ -374,10 +374,9 @@ public:
 	{ dest = m_buffer; }
 
     /**
-     * Clear the parser's input buffer. Reset data.
+     * Clear the parser's input buffer and already parsed elements. Reset data.
      */
-    inline void reset()
-	{ m_buffer.clear(); m_findstart = true; }
+    void reset();
 
     /**
      * The maximum allowed buffer length.

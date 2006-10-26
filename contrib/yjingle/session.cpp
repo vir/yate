@@ -140,6 +140,7 @@ JGSession::JGSession(JGEngine* engine, JBComponentStream* stream,
       m_stream(stream),
       m_incoming(false),
       m_lastEvent(0),
+      m_terminateEvent(0),
       m_private(0),
       m_stanzaId(1),
       m_timeout(0)
@@ -159,6 +160,7 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event)
       m_stream(0),
       m_incoming(true),
       m_lastEvent(0),
+      m_terminateEvent(0),
       m_private(0),
       m_stanzaId(1),
       m_timeout(0)
@@ -192,8 +194,12 @@ JGSession::~JGSession()
 	hangup();
 	m_stream->deref();
     }
+    lock();
     m_events.clear();
     m_engine->removeSession(this);
+    if (m_terminateEvent)
+	delete m_terminateEvent;
+    unlock();
     DDebug(m_engine,DebugAll,"~Session. [%p]",this);
 }
 
@@ -333,6 +339,11 @@ JGEvent* JGSession::getEvent(u_int64_t time)
     // Check last event, State 
     if (m_lastEvent)
 	return 0;
+    if (m_terminateEvent) {
+	JGEvent* event = m_terminateEvent;
+	m_terminateEvent = 0;
+	return raiseEvent(event);
+    }
     if (state() == Destroy)
 	return 0;
     ListIterator iter(m_events);
@@ -787,12 +798,12 @@ bool JGSession::receiveDestroy(const JBEvent* event, bool& retValue)
 {
     Lock lock(this);
     // Ignore if session is already ending or destroying
-    if (state() != Ending && state() != Destroy) {
+    if (state() != Ending && state() != Destroy && !m_terminateEvent) {
 	DDebug(m_engine,DebugAll,
 	    "Session. Terminate on stream destroy. [%p]",this);
 	m_state = Destroy;
-	m_lastEvent = new JGEvent(JGEvent::Terminated,this);
-	m_lastEvent->m_reason = "noconn";
+	m_terminateEvent = new JGEvent(JGEvent::Terminated,this);
+	m_terminateEvent->m_reason = "noconn";
     }
     retValue = false;
     return false;

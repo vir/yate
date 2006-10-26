@@ -652,9 +652,10 @@ public:
      * If the stream doesn't exists creates it.
      * This method is thread safe.
      * @param domain The domain name to check. 0 to use the default server.
+     * @param create True to create a stream to the specified domain if none exists.
      * @return Pointer to a JBComponentStream or 0.
      */
-    JBComponentStream* getStream(const char* domain = 0);
+    JBComponentStream* getStream(const char* domain = 0, bool create = true);
 
     /**
      * Keep calling receive() for each stream until no data is received.

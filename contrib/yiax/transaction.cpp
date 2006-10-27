@@ -347,6 +347,7 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     GenObject* obj;
     bool delFrame;
 
+    Lock lock(this);
     if (state() == Terminated)
 	return 0;
     // Send ack for received frames
@@ -354,7 +355,6 @@ IAXEvent* IAXTransaction::getEvent(u_int64_t time)
     // Do we have a generated event ?
     if (m_currentEvent)
 	return 0;
-    Lock lock(this);
     // Waiting on remote cleanup ?
     if (state() == Terminating && !m_localReqEnd)
 	return getEventTerminating(time);

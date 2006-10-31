@@ -32,6 +32,7 @@ using namespace TelEngine;
 // Default values
 #define JB_STREAM_PARTIALRESTART       2
 #define JB_STREAM_TOTALRESTART        -1
+#define JB_STREAM_WAITRESTART       5000
 
 // Sleep time for threads
 #define SLEEP_READSOCKET               2 // Read socket
@@ -63,14 +64,24 @@ void JBEngine::initialize(const NamedList& params)
     // Stream restart attempts
     m_partialStreamRestart =
 	params.getIntValue("stream_partialrestart",JB_STREAM_PARTIALRESTART);
-    // sanity check to avoid perpetual retries
+    // Sanity check to avoid perpetual retries
     if (m_partialStreamRestart < 1)
 	m_partialStreamRestart = 1;
     m_totalStreamRestart =
 	params.getIntValue("stream_totalrestart",JB_STREAM_TOTALRESTART);
+    m_waitStreamRestart =
+	params.getIntValue("stream_waitrestart",JB_STREAM_WAITRESTART);
     // XML parser max receive buffer
     XMLParser::s_maxDataBuffer =
 	params.getIntValue("xmlparser_maxbuffer",XMLPARSER_MAXDATABUFFER);
+    if (debugAt(DebugAll)) {
+	String s;
+	s << "\r\nstream_partialrestart=" << m_partialStreamRestart;
+	s << "\r\nstream_totalrestart=" << m_totalStreamRestart;
+	s << "\r\nstream_waitrestart=" << m_waitStreamRestart;
+	s << "\r\nxmlparser_maxbuffer=" << XMLParser::s_maxDataBuffer;
+	Debug(this,DebugAll,"Initialized:%s",s.c_str());
+    }
 }
 
 void JBEngine::cleanup()
@@ -530,7 +541,7 @@ JBEvent::~JBEvent()
     }
     if (m_element)
 	delete m_element;
-    XDebug(DebugAll,"JBEvent::~JBEvent [%p].",this);
+    XDebug(DebugAll,"JBEvent::~JBEvent. [%p]",this);
 }
 
 void JBEvent::releaseStream()
@@ -543,14 +554,15 @@ void JBEvent::releaseStream()
 
 bool JBEvent::init(JBComponentStream* stream, XMLElement* element)
 {
-    XDebug(DebugAll,"JBEvent::JBEvent [%p]. Element: (%p).",
-	this,m_element);
+    bool bRet = true;
     if (stream && stream->ref())
 	m_stream = stream;
     else
-	return false;
+	bRet = false;
     m_element = element;
-    return true;
+    XDebug(DebugAll,"JBEvent::JBEvent. Type: %u. Stream (%p). Element: (%p). [%p]",
+	m_type,m_stream,m_element,this);
+    return bRet;
 }
 
 /**
@@ -592,7 +604,7 @@ JBPresence::JBPresence(JBEngine* engine)
       Mutex(true)
 {
     debugName("jbpresence");
-    XDebug(this,DebugAll,"JBPresence [%p].",this);
+    XDebug(this,DebugAll,"JBPresence. [%p]",this);
     if (m_engine)
 	m_engine->setPresenceServer(this);
 }
@@ -602,7 +614,7 @@ JBPresence::~JBPresence()
     if (m_engine)
 	m_engine->unsetPresenceServer(this);
     m_events.clear();
-    XDebug(this,DebugAll,"~JBPresence [%p].",this);
+    XDebug(this,DebugAll,"~JBPresence. [%p]",this);
 }
 
 bool JBPresence::receive(JBEvent* event)

@@ -62,7 +62,7 @@ JBComponentStream::JBComponentStream(JBEngine* engine, const String& remoteName,
     m_totalRestart = m_engine->totalStreamRestartAttempts();
     m_engine->getServerIdentity(m_localName,remoteName);
     // Start
-    connect();
+    m_engine->connect(this);
 }
 
 JBComponentStream::~JBComponentStream()
@@ -91,8 +91,11 @@ JBComponentStream::~JBComponentStream()
 void JBComponentStream::connect()
 {
     Lock2 lock(*this,m_receiveMutex);
-    if (m_state != Terminated)
+    if (m_state != Terminated) {
+	Debug(m_engine,DebugNote,
+	    "Stream::connect. Attempt to connect in non Terminated state. [%p]",this);
 	return;
+    }
     m_state = WaitToConnect;
     // Check restart counters: If both of them are 0 destroy the stream
     Debug(m_engine,DebugAll,
@@ -102,10 +105,6 @@ void JBComponentStream::connect()
 	terminate(true,false,0,false);
 	return;
     }
-    // Update restart counters
-    if (m_partialRestart > 0)
-	m_partialRestart--;
-    m_waitBeforeConnect = (m_partialRestart == 0);
     // Reset data
     m_id = "";
     m_parser.reset();
@@ -116,6 +115,21 @@ void JBComponentStream::connect()
     bool res = m_socket->connect(m_remoteAddr);
     // Lock again to update stream
     lock.lock(*this,m_receiveMutex);
+    // Update restart counters
+    m_waitBeforeConnect = false;
+    if (res)
+	m_partialRestart = m_engine->partialStreamRestartAttempts();
+    else {
+	if (m_partialRestart > 0)
+	    m_partialRestart--;
+	if (!m_partialRestart && m_totalRestart > 0)
+	    m_totalRestart--;
+	if (!m_partialRestart && m_totalRestart) {
+	    m_waitBeforeConnect = true;
+	    m_partialRestart = m_engine->partialStreamRestartAttempts();
+	}
+    }
+    // Check connect result
     if (!res) {
 	Debug(m_engine,DebugWarn,
 	    "Stream::connect. Failed to connect socket to '%s:%d'. Error: '%s' (%d). [%p]",
@@ -126,12 +140,6 @@ void JBComponentStream::connect()
     }
     Debug(m_engine,DebugAll,"Stream::connect. Connected to '%s:%d'. [%p]",
 	m_remoteAddr.host().c_str(),m_remoteAddr.port(),this);
-    // Update restart data
-    if (m_partialRestart != -1)
-	m_partialRestart = m_engine->partialStreamRestartAttempts();
-    if (m_totalRestart > 0)
-	m_totalRestart--;
-    m_waitBeforeConnect = false;
     // Connected
     m_socket->setBlocking(false);
     lock.drop();
@@ -218,27 +226,30 @@ JBEvent* JBComponentStream::getEvent(u_int64_t time)
 	    m_state == Destroy || m_state == Terminated) {
 	    if (m_lastEvent)
 		return 0;
-	    if (m_terminateEvent) {
-		m_lastEvent = m_terminateEvent;
-		m_terminateEvent = 0;
-	    }
-	    return m_lastEvent;
+	    break;
 	}
 	// Send pending elements.
 	// If not terminated check received elements
 	// Again, if not terminated, get event from queue
 	sendXML();
 	if (m_terminateEvent)
-	    continue;
+	    break;
 	processIncomingXML();
 	if (m_terminateEvent)
-	    continue;
+	    break;
 	// Get first event from queue
 	ObjList* obj = m_events.skipNull();
 	if (!obj)
 	    break;
 	m_lastEvent = static_cast<JBEvent*>(obj->get());
 	m_events.remove(m_lastEvent,false);
+	break;
+    }
+    if (m_lastEvent || m_terminateEvent) {
+	if (!m_lastEvent) {
+	    m_lastEvent = m_terminateEvent;
+	    m_terminateEvent = 0;
+	}
 	DDebug(m_engine,DebugAll,
 	    "Stream::getEvent. Raise event (%p): %u. [%p]",
 	    m_lastEvent,m_lastEvent->type(),this);

@@ -648,6 +648,13 @@ public:
 	{ return m_totalStreamRestart; }
 
     /**
+     * Get the time to wait after m_partialStreamRestart reaches 0.
+     * @return time to wait after m_partialStreamRestart reaches 0.
+     */
+    inline u_int32_t waitStreamRestart() const
+	{ return m_waitStreamRestart; }
+
+    /**
      * Check if a stream to the given server exists.
      * If the stream doesn't exists creates it.
      * This method is thread safe.
@@ -828,6 +835,7 @@ private:
     ObjList m_features;                  // Remote peers' features
     int m_partialStreamRestart;          // Partial outgoing stream restart attempts counter
     int m_totalStreamRestart;            // Total outgoing stream restart attempts counter
+    u_int32_t m_waitStreamRestart;       // How much time to wait after m_partialStreamRestart reaches 0
     // ID generation data
     u_int64_t m_streamID;                // Stream id counter
     // Server list

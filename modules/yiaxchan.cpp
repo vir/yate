@@ -37,6 +37,21 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+TokenDict dict_payloads[] = {
+    {"gsm",    IAXFormat::GSM},
+    {"ilbc30", IAXFormat::ILBC},
+    {"speex",  IAXFormat::SPEEX},
+    {"lpc10",  IAXFormat::LPC10},
+    {"mulaw",  IAXFormat::ULAW},
+    {"alaw",   IAXFormat::ALAW},
+    {"g723",   IAXFormat::G723_1},
+    {"g729",   IAXFormat::G729A},
+    {"adpcm",  IAXFormat::ADPCM},
+    {"mp3",    IAXFormat::MP3},
+    {"slin",   IAXFormat::SLIN},
+    {0, 0}
+};
+
 static TokenDict dict_tos[] = {
     { "lowdelay", Socket::LowDelay },
     { "throughput", Socket::MaxThroughput },
@@ -1058,15 +1073,15 @@ void YIAXDriver::initialize()
     u_int32_t fallback = 0;
     String preferred = s_cfg.getValue("formats","preferred");
     bool def = s_cfg.getBoolValue("formats","default",true);
-    for (int i = 0; IAXFormat::audioData[i].token; i++) {
-	if (s_cfg.getBoolValue("formats",IAXFormat::audioData[i].token,
-	    def && DataTranslator::canConvert(IAXFormat::audioData[i].token))) {
+    for (int i = 0; dict_payloads[i].token; i++) {
+	if (s_cfg.getBoolValue("formats",dict_payloads[i].token,
+	    def && DataTranslator::canConvert(dict_payloads[i].token))) {
 	    XDebug(this,DebugAll,"Adding supported codec %u: '%s'.",
-		IAXFormat::audioData[i].value,IAXFormat::audioData[i].token);
-	    m_codecs |= IAXFormat::audioData[i].value;
-	    fallback = IAXFormat::audioData[i].value;
+		dict_payloads[i].value,dict_payloads[i].token);
+	    m_codecs |= dict_payloads[i].value;
+	    fallback = dict_payloads[i].value;
 	    // Set default (desired) codec
-	    if (preferred == IAXFormat::audioData[i].token)
+	    if (preferred == dict_payloads[i].token)
 		m_defaultCodec = fallback;
 	}
     }
@@ -1214,9 +1229,9 @@ bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
 	    String tmp(formats + start,i - start);
 	    // Get format from IAXFormat::audioData
 	    u_int32_t format = 0;
-	    for (u_int32_t j = 0; IAXFormat::audioData[j].value; j++)
-		if (tmp == IAXFormat::audioData[j].token) {
-		    format = IAXFormat::audioData[j].value;
+	    for (u_int32_t j = 0; dict_payloads[j].value; j++)
+		if (tmp == dict_payloads[j].token) {
+		    format = dict_payloads[j].value;
 		    break;
 		}
 	    if (format)

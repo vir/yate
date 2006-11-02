@@ -364,6 +364,9 @@ public:
     // @return False if formtas is not 0 and the result is 0 (no intersection)
     bool updateCodecsFromRoute(u_int32_t& codecs, const char* formats);
 
+    // Create a format list from codecs
+    void createFormatList(String& dest, u_int32_t codecs);
+
     // Dispatch user.auth
     // @tr The IAX transaction
     // @param response True if it is a response.
@@ -1243,6 +1246,20 @@ bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
     return codecs != 0;
 }
 
+void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
+{
+    bool first = true;
+    for (u_int32_t i = 0; dict_payloads[i].token; i++) {
+	if (!(codecs & dict_payloads[i].value))
+	    continue;
+	if (!first)
+	    first = true;
+	else
+	    dest << ',';
+	dest << dict_payloads[i].token;
+    }
+}
+
 bool YIAXDriver::userAuth(IAXTransaction* tr, bool response, bool& requestAuth,
 	bool& invalidAuth)
 {
@@ -1595,7 +1612,7 @@ bool YIAXConnection::route(bool authenticated)
 	    m->addParam("authname",m_transaction->username());
 	// Set 'formats' parameter
 	String formats;
-	IAXFormat::formatList(formats,m_transaction->capability(),',');
+	iplugin.createFormatList(formats,m_transaction->capability());
 	m->addParam("formats",formats);
     }
     m->addParam("called",m_transaction->calledNo());
@@ -1616,7 +1633,7 @@ void YIAXConnection::startAudioIn()
     if (m_transaction)
 	format = m_transaction->formatIn();
     m_mutexTrans.unlock();
-    const char* formatText = IAXFormat::audioText(format);
+    const char* formatText = lookup(format,dict_payloads);
     setSource(new YIAXSource(this,format,formatText));
     getSource()->deref();
     DDebug(this,DebugAll,"startAudioIn. Format %u: '%s'",format,formatText);
@@ -1632,7 +1649,7 @@ void YIAXConnection::startAudioOut()
     if (m_transaction)
 	format = m_transaction->formatOut();
     m_mutexTrans.unlock();
-    const char* formatText = (char*)IAXFormat::audioText(format);
+    const char* formatText = lookup(format,dict_payloads);
     setConsumer(new YIAXConsumer(this,format,formatText));
     getConsumer()->deref();
     DDebug(this,DebugAll,"startAudioOut. Format %u: '%s'",format,formatText);

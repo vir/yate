@@ -41,8 +41,8 @@ static int s_answers = 0;
 
 static int s_numcalls = 0;
 
-static const char s_help[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}"
-    "\r\nCommands to control the Call Generator";
+static const char s_mini[] = "callgen {start|stop|drop|pause|resume|single|info|reset|load|save|set paramname[=value]}";
+static const char s_help[] = "Commands to control the Call Generator";
 
 class GenConnection : public CallEndpoint
 {
@@ -482,7 +482,7 @@ bool CmdHandler::doCommand(String& line, String& rval)
 	s_mutex.unlock();
     }
     else if (line.null() || (line == "help") || (line == "?"))
-	rval << "Usage: " << s_help;
+	rval << "Usage: " << s_mini << "\r\n" << s_help;
     else
 	return false;
     rval << "\r\n";
@@ -529,9 +529,11 @@ bool CmdHandler::received(Message &msg, int id)
 	case Help:
 	    tmp = msg.getValue("line");
 	    if (tmp.null() || (tmp == "callgen")) {
-		msg.retValue() << "  " << s_help << "\r\n";
-		if (tmp)
+		msg.retValue() << "  " << s_mini << "\r\n";
+		if (tmp) {
+		    msg.retValue() << s_help << "\r\n";
 		    return true;
+		}
 	    }
 	    break;
     }

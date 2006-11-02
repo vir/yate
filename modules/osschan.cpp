@@ -167,7 +167,7 @@ bool OssSource::init()
     m_brate = 16000;
     m_total = 0;
     if (m_device->setInputMode(false) < 0) {
-	Debug(DebugWarn, "Unable to set input mode\n");
+	Debug(DebugWarn, "Unable to set input mode");
 	return false;
     }
     start("OssSource");
@@ -327,7 +327,7 @@ OssDevice::OssDevice(const String& dev)
     Debug(DebugAll,"OssDevice::OssDevice('%s') [%p]",dev.c_str(),this);
     m_fd = ::open(m_dev, O_RDWR|O_NONBLOCK);
     if (m_fd < 0) {
-	Debug(DebugWarn, "Unable to open %s: %s\n", m_dev.c_str(), ::strerror(errno));
+	Debug(DebugWarn, "Unable to open %s: %s", m_dev.c_str(), ::strerror(errno));
 	return;
     }
     m_lastTime = Time::now() + MIN_SWITCH_TIME;
@@ -404,7 +404,7 @@ bool OssDevice::reOpen(int iomode)
     ::close(fdesc);
     fdesc = ::open(m_dev.c_str(), iomode | O_NONBLOCK);
     if (fdesc < 0) {
-	Debug(DebugWarn, "Unable to re-open DSP device: %s\n", ::strerror(errno));
+	Debug(DebugWarn, "Unable to re-open DSP device: %s", ::strerror(errno));
 	return false;
     }
     m_fd = fdesc;
@@ -542,7 +542,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"oss"))
 	return false;
-    msg.retValue() << "name=oss,type=misc;osschan=" << (s_chan != 0 ) << "\n";
+    msg.retValue() << "name=oss,type=misc;osschan=" << (s_chan != 0 ) << "\r\n";
     return false;
 }
 

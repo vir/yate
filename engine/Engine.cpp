@@ -199,7 +199,7 @@ bool EngineStatusHandler::received(Message &msg)
     msg.retValue() << ",workers=" << EnginePrivate::count;
     msg.retValue() << ",mutexes=" << Mutex::count();
     msg.retValue() << ",locks=" << Mutex::locks();
-    msg.retValue() << "\n";
+    msg.retValue() << "\r\n";
     return false;
 }
 
@@ -300,7 +300,7 @@ static void serviceMain(DWORD argc, LPTSTR* argv)
     s_status.dwWaitHint = 0;
     s_handler = ::RegisterServiceCtrlHandler("yate",serviceHandler);
     if (!s_handler) {
-	Debug(DebugFail,"Could not register service control handler \"yate\", code %u\n",::GetLastError());
+	Debug(DebugFail,"Could not register service control handler \"yate\", code %u",::GetLastError());
 	return;
     }
     setStatus(SERVICE_START_PENDING);

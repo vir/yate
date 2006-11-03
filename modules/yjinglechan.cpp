@@ -79,6 +79,8 @@ static TokenDict dict_payloads[] = {
 
 #define JINGLE_CONN_TIMEOUT       10000  // Timeout value to override "maxcall" in call.execute
 
+#define JINGLE_ANONYMOUS_CALLER "anonymous"
+
 static const String MODULE_NAME("jingle");
 #define MODULE_PROTOCOL          "xmpp"
 
@@ -151,9 +153,6 @@ public:
     // Start thread members
     // @param process Event processor thread count.
     void startThreads(u_int16_t process);
-    // Find a user pair by full JIDs
-    // @return YUserPresence referenced pointer or 0
-    YUserPresence* find(const JabberID& local, const JabberID& remote);
     // Find a user pair by JIDs (is remote has a resource the ). If none, create one
     // @param newPresence Set to true on exit if a new element was created
     // @param audio True to request an audio resource
@@ -171,6 +170,7 @@ protected:
     void processBroadcast(JBEvent* event, bool available);
     void processDirected(JBEvent* event, bool available);
     void processSubscribe(JBEvent* event, JBPresence::Presence type);
+    int getSubscription(const JabberID& local, const JabberID& remote);
     // Add/remove a user pair to the list. Used by YUserPresence constructor
     void addPresence(YUserPresence* yup);
     void removePresence(YUserPresence* yup);
@@ -255,12 +255,9 @@ public:
     // Process presence
     void processError(JBEvent* event);
     void processProbe(JBEvent* event);
-    void processSubscribe(JBEvent* event);
-    void processSubscribed(JBEvent* event);
-    void processUnsubscribe(JBEvent* event);
-    void processUnsubscribed(JBEvent* event);
     void processUnavailable(JBEvent* event);
     void processUnknown(JBEvent* event);
+    void updateSubscription(bool from, bool value);
     static inline const char* stateText(int value)
 	{ return lookup(value,s_state); }
     static inline int stateType(const char* value)
@@ -271,7 +268,6 @@ public:
 	{ return lookup(value,s_subscription,SubNone); }
 protected:
     void updateResource(XMLElement* element);
-    void updateSubscription(bool from, bool value);
     void updateState(bool available);
     bool getStream(JBComponentStream*& stream, bool& release);
     inline bool sendStanza(JBComponentStream* stream, XMLElement* xml) {
@@ -464,6 +460,8 @@ public:
     virtual bool received(Message& msg, int id);
     inline u_int32_t pendingTimeout()
 	{ return m_pendingTimeout; }
+    inline const String& anonymousCaller() const
+	{ return m_anonymousCaller; }
     bool getParts(NamedList& dest, const char* src, const char sep, bool nameFirst);
     void createAuthRandomString(String& dest);
     void processPresence(const JabberID& local, const JabberID& remote,
@@ -485,6 +483,7 @@ public:
 private:
     bool m_init;
     u_int32_t m_pendingTimeout;
+    String m_anonymousCaller;
 };
 
 /**
@@ -576,8 +575,8 @@ void YJBPresence::processDisco(JBEvent* event)
 	return;
     DDebug(this,DebugInfo,"Adding new user presence on info request.");
     // Add just the bare jids: we know nothing about remote user's capabilities
-    YUserPresence* yup = new YUserPresence(this,local.bare(),remote.bare(),YUserPresence::SubFrom,
-	YUserPresence::Unknown);
+    YUserPresence* yup = new YUserPresence(this,local.bare(),remote.bare(),
+	(YUserPresence::Subscription)getSubscription(local,remote),YUserPresence::Unknown);
     if (info)
 	yup->sendInfo(event->id(),event->stream());
     else
@@ -619,7 +618,7 @@ void YJBPresence::processProbe(JBEvent* event)
     ObjList* obj = m_userpair.skipNull();
     for(; obj; obj = obj->skipNext()) {
 	YUserPresence* yup = static_cast<YUserPresence*>(obj->get());
-	if (!(yup->local().match(local) && remote == yup->remote()))
+	if (!(yup->local().match(local) && yup->remote().match(remote)))
 	    continue;
 	found = true;
 	XDebug(this,DebugAll,"processProbe. Sending presence from existing %p.",yup);
@@ -651,9 +650,10 @@ void YJBPresence::processProbe(JBEvent* event)
 	    "processProbe. Received probe for non-local domain: %s",local.c_str());
 	return;
     }
-    DDebug(this,DebugAll,"Adding new local user on probe request.");
+    DDebug(this,DebugInfo,"Adding new local user on probe request.");
     // Add just the bare jids: we know nothing about remote user's capabilities
-    new YUserPresence(this,local.bare(),remote.bare(),YUserPresence::SubFrom,YUserPresence::Unknown);
+    new YUserPresence(this,local.bare(),remote.bare(),
+	(YUserPresence::Subscription)getSubscription(local,remote),YUserPresence::Unknown);
 }
 
 void YJBPresence::processSubscribe(JBEvent* event)
@@ -791,8 +791,8 @@ void YJBPresence::processDirected(JBEvent* event, bool available)
     }
     if (found)
 	return;
-    // Remote has a resource: check if we have a pair whose remote user has no resource
-    // Ignore unavailable from a resource.
+    // Check if remote has a resource, is available and we have
+    //   some pair without remote resource
     if (remote.resource() && available) {
 	iter.reset();
 	for(;;) {
@@ -815,56 +815,111 @@ void YJBPresence::processDirected(JBEvent* event, bool available)
     String identity;
     if (!m_engine->getFullServerIdentity(identity) || identity != local.domain())
 	return;
-    DDebug(this,DebugAll,"Adding new local user on presence message.");
-    new YUserPresence(this,local,remote,YUserPresence::SubFrom,YUserPresence::Unknown);
-}
-
-inline void callSubscribe(YUserPresence* yup, JBEvent* event,
-	JBPresence::Presence type)
-{
-    switch (type) {
-	case JBPresence::Subscribe:
-	    yup->processSubscribe(event);
-	    break;
-	case JBPresence::Subscribed:
-	    yup->processSubscribed(event);
-	    break;
-	case JBPresence::Unsubscribe:
-	    yup->processUnsubscribe(event);
-	    break;
-	case JBPresence::Unsubscribed:
-	    yup->processUnsubscribed(event);
-	    break;
-	default: ;
-    }
+    DDebug(this,DebugInfo,"Adding new local user on presence message.");
+    new YUserPresence(this,local,remote,
+	(YUserPresence::Subscription)getSubscription(local,remote),
+	YUserPresence::Unknown);
 }
 
 void YJBPresence::processSubscribe(JBEvent* event, JBPresence::Presence type)
 {
     JabberID local(event->to());
     JabberID remote(event->from());
+    XDebug(m_engine,DebugAll,"processSubscribe. Local '%s'. Remote '%s'.",
+	local.c_str(),remote.c_str());
     Lock lock(m_mutexUserpair);
-    bool found = false;
     ObjList* obj = m_userpair.skipNull();
-    // Comapare local/remote bare jid: subscription are made by bare jid
+    YUserPresence* yup = 0;
+    // Check if we already have an user
+    for(; obj; obj = obj->skipNext()) {
+	yup = static_cast<YUserPresence*>(obj->get());
+	if (local.bare() == yup->local().bare() &&
+	    remote.bare() == yup->remote().bare())
+	    break;
+	yup = 0;
+    }
+    // Not found: add one if it's a subscribe request for an user in our domain
+    if (!yup && type == JBPresence::Subscribe) {
+	String identity;
+	if (!m_engine->getFullServerIdentity(identity) ||
+	    identity != local.domain())
+	    return;
+	DDebug(this,DebugAll,"Adding new local user on subscription request.");
+	yup = new YUserPresence(this,local.bare(),remote.bare(),
+	    YUserPresence::SubNone,YUserPresence::Unknown);
+    }
+    if (!yup)
+	return;
+    // Confirm
+    bool from,value;
+    switch (type) {
+	case JBPresence::Subscribe:
+	    // Already subscribed to us: Confirm subscription
+	    if (yup->subscribedFrom()) {
+		yup->send(JBPresence::Subscribed);
+		return;
+	    }
+	    // Approve if auto subscribing
+	    if ((autoSubscribe() & YUserPresence::SubFrom) &&
+		!yup->send(JBPresence::Subscribed))
+		return;
+	    from = true;
+	    value = true;
+	    DDebug(m_engine,DebugAll,"processSubscribe. Subscribing.");
+	    break;
+	case JBPresence::Subscribed:
+	    // Already subscribed to remote user: do nothing
+	    if (yup->subscribedTo())
+		return;
+	    from = false;
+	    value = true;
+	    break;
+	case JBPresence::Unsubscribe:
+	    // Already unsubscribed from us: confirm it
+	    if (!yup->subscribedFrom()) {
+		yup->send(JBPresence::Unsubscribed);
+		return;
+	    }
+	    // Approve if auto subscribing
+	    if ((autoSubscribe() & YUserPresence::SubFrom) &&
+		!yup->send(JBPresence::Unsubscribed))
+		return;
+	    from = true;
+	    value = false;
+	    DDebug(m_engine,DebugAll,"processSubscribe. Unsubscribing.");
+	    break;
+	case JBPresence::Unsubscribed:
+	    // If not subscribed to remote user ignore the unsubscribed confirmation
+	    if (!yup->subscribedTo())
+		return;
+	    from = false;
+	    value = false;
+	    break;
+	default:
+	    return;
+    }
+    // Update subscription
+    for (obj = m_userpair.skipNull(); obj; obj = obj->skipNext()) {
+	YUserPresence* tmp = static_cast<YUserPresence*>(obj->get());
+	if (local.bare() == tmp->local().bare() &&
+	    remote.bare() == tmp->remote().bare())
+	    tmp->updateSubscription(from,value);
+    }
+    // Notify engine
+    subscribe(yup,type); 
+}
+
+int YJBPresence::getSubscription(const JabberID& local, const JabberID& remote)
+{
+    Lock lock(m_mutexUserpair);
+    ObjList* obj = m_userpair.skipNull();
     for(; obj; obj = obj->skipNext()) {
 	YUserPresence* yup = static_cast<YUserPresence*>(obj->get());
-	if (local.bare() != yup->local().bare() ||
-	    remote.bare() != yup->remote().bare())
-	    continue;
-	found = true;
-	callSubscribe(yup,event,type);
+	if (local.bare() == yup->local().bare() &&
+	    remote.bare() == yup->remote().bare())
+	    return yup->subscription();
     }
-    if (found)
-	return;
-    // Not found: add one if it's in our domain
-    String identity;
-    if (!m_engine->getFullServerIdentity(identity) || identity != local.domain())
-	return;
-    DDebug(this,DebugAll,"Adding new local user on subscription message.");
-    YUserPresence* yup = new YUserPresence(this,local.bare(),remote.bare(),
-	YUserPresence::SubNone,YUserPresence::Unknown);
-    callSubscribe(yup,event,type);
+    return (int)(YUserPresence::SubFrom);
 }
 
 void YJBPresence::startThreads(u_int16_t process)
@@ -1228,64 +1283,11 @@ void YUserPresence::processError(JBEvent* event)
     m_engine->notify(this,error);
 }
 
-void YUserPresence::processSubscribe(JBEvent* event)
-{
-    XDebug(m_engine,DebugAll,"YUserPresence::processSubscribe. [%p]",this);
-    // Already subscribed to us: Confirm subscription
-    if (subscribedFrom()) {
-	send(JBPresence::Subscribed);
-	return;
-    }
-    DDebug(m_engine,DebugNote,"YUserPresence::processSubscribe - subscribing. [%p]",this);
-    // Approve if auto subscribing
-    if ((m_engine->autoSubscribe() & SubFrom) &&
-	!send(JBPresence::Subscribed))
-	return;
-    m_engine->subscribe(this,JBPresence::Subscribe);
-}
-
-void YUserPresence::processSubscribed(JBEvent* event)
-{
-    XDebug(m_engine,DebugAll,"YUserPresence::processSubscribed. [%p]",this);
-    // Already subscribed to remote user: do nothing
-    if (subscribedTo())
-	return;
-    updateSubscription(false,true);
-    m_engine->subscribe(this,JBPresence::Subscribed);
-}
-
-void YUserPresence::processUnsubscribe(JBEvent* event)
-{
-    XDebug(m_engine,DebugAll,"YUserPresence::processUnsubscribe. [%p]",this);
-    // Already subscribed to us: request unsubscribe from engine
-    if (!subscribedFrom()) {
-	send(JBPresence::Unsubscribed);
-	return;
-    }
-    //TODO: Not subscribed: enqueue
-    DDebug(m_engine,DebugNote,"YUserPresence::processUnsubscribe - unsubscribing. [%p]",this);
-    // Approve if auto subscribing
-    if ((m_engine->autoSubscribe() & SubFrom) &&
-	!send(JBPresence::Unsubscribed))
-	return;
-    m_engine->subscribe(this,JBPresence::Unsubscribed);
-}
-
-void YUserPresence::processUnsubscribed(JBEvent* event)
-{
-    XDebug(m_engine,DebugAll,"YUserPresence::processUnsubscribed. [%p]",this);
-    // If not subscribed to remote user ignore the unsubscribed confirmation
-    if (!subscribedTo())
-	return;
-    updateSubscription(false,false);
-    m_engine->subscribe(this,JBPresence::Unsubscribed);
-}
-
 void YUserPresence::processUnavailable(JBEvent* event)
 {
     Lock lock(this);
     // Return if we already know that remote user is unavailable
-    if (!available())
+    if (m_remoteState == Unavailable)
 	return;
     JabberID jid(event->from());
     // Remote has no resource: broadcast unavailable
@@ -1354,9 +1356,6 @@ void YUserPresence::updateSubscription(bool from, bool value)
 
 void YUserPresence::updateState(bool available)
 {
-    // Don't update if nothing changed
-    if (available == this->available())
-	return;
     // Update
     m_remoteState = (available ? Available : Unavailable);
     DDebug(m_engine,DebugNote,
@@ -2086,6 +2085,7 @@ void YJGDriver::initialize()
     }
     m_init = true;
     s_localAddress = sect->getValue("localip");
+    m_anonymousCaller = sect->getValue("anonymous_caller",JINGLE_ANONYMOUS_CALLER);
     m_pendingTimeout = sect->getIntValue("pending_timeout",JINGLE_CONN_TIMEOUT);
     lock();
     initCodecLists();                 // Init codec list
@@ -2093,6 +2093,7 @@ void YJGDriver::initialize()
 	String s;
 	s << "\r\nlocalip=" << s_localAddress;
 	s << "\r\npending_timeout=" << m_pendingTimeout;
+	s << "\r\nanonymous_caller=" << m_anonymousCaller;
 	String media;
 	createMediaString(media,m_usedCodecs,' ');
 	s << "\r\ncodecs=" << media;
@@ -2142,19 +2143,19 @@ void YJGDriver::initCodecLists()
     // Init all supported codecs if not already done
     if (!m_allCodecs.skipNull()) {
 	m_allCodecs.append(new JGAudio("0",  "PCMU",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("8",  "PCMA",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("3",  "GSM",     "8000",  ""));
-	m_allCodecs.append(new JGAudio("7",  "LPC",     "8000",  ""));
-	m_allCodecs.append(new JGAudio("11", "L16",     "8000",  ""));
 	m_allCodecs.append(new JGAudio("2",  "G726-32", "8000",  ""));
-	m_allCodecs.append(new JGAudio("9",  "G722",    "8000",  ""));
+	m_allCodecs.append(new JGAudio("3",  "GSM",     "8000",  ""));
 	m_allCodecs.append(new JGAudio("4",  "G723",    "8000",  ""));
+	m_allCodecs.append(new JGAudio("7",  "LPC",     "8000",  ""));
+	m_allCodecs.append(new JGAudio("8",  "PCMA",    "8000",  ""));
+	m_allCodecs.append(new JGAudio("9",  "G722",    "8000",  ""));
+	m_allCodecs.append(new JGAudio("11", "L16",     "8000",  ""));
 	m_allCodecs.append(new JGAudio("15", "G728",    "8000",  ""));
 	m_allCodecs.append(new JGAudio("18", "G729",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("98", "iLBC",    "8000",  ""));
 	m_allCodecs.append(new JGAudio("31", "H261",    "90000", ""));
-	m_allCodecs.append(new JGAudio("34", "H263",    "90000", ""));
 	m_allCodecs.append(new JGAudio("32", "MPV",     "90000", ""));
+	m_allCodecs.append(new JGAudio("34", "H263",    "90000", ""));
+	m_allCodecs.append(new JGAudio("98", "iLBC",    "8000",  ""));
     }
     // Init codecs in use
     m_usedCodecs.clear();
@@ -2275,7 +2276,10 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","failure");
 	return false;
     }
-    JabberID caller(msg.getValue("caller"),identity,JINGLE_RESOURCE);
+    const char* c = msg.getValue("caller");
+    if (!c)
+	c = iplugin.anonymousCaller();
+    JabberID caller(c,identity,JINGLE_RESOURCE);
     JabberID called(dest);
     DDebug(this,DebugAll,"msgExecute. Caller: '%s'. Called: '%s'.",
 	caller.c_str(),called.c_str());

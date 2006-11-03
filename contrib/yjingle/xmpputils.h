@@ -285,21 +285,21 @@ class YJINGLE_API JIDIdentity : public RefObject
 {
 public:
     enum Category {
-	Account = 1,                     // account
-	Client = 2,                      // client
-	Component = 3,                   // component
-	Gateway = 4,                     // gateway
-	Count = 5,
+	Account,                         // account
+	Client,                          // client
+	Component,                       // component
+	Gateway,                         // gateway
+	CategoryUnknown
     };
 
     enum Type {
-	AccountRegistered = Count,       // registered
+	AccountRegistered,               // registered
 	ClientPhone,                     // phone
 	ComponentGeneric,                // generic
 	ComponentPresence,               // presence
 	GatewayGeneric,                  // generic
+	TypeUnknown
     };
-
 
     inline JIDIdentity(Category c, Type t, const char* name = 0)
 	: m_category(c), m_type(t), m_name(name)
@@ -312,12 +312,21 @@ public:
 
     bool fromXML(const XMLElement* element);
 
-    static const char* categoryText(Category c);
+    static inline const char* categoryText(Category c)
+	{ return lookup(c,s_category); }
 
-    static const char* typeText(Category c);
+    static inline Category categoryValue(const char* c)
+	{ return (Category)lookup(c,s_category,CategoryUnknown); }
+
+    static inline const char* typeText(Type t)
+	{ return lookup(t,s_type); }
+
+    static inline Type typeValue(const char* t)
+	{ return (Type)lookup(t,s_category,TypeUnknown); }
 
 private:
-    static TokenDict m_strings;
+    static TokenDict s_category[];
+    static TokenDict s_type[];
 
     Category m_category;                 // Category
     Type m_type;                         // Type
@@ -532,10 +541,10 @@ class YJINGLE_API XMPPUser : public RefObject, public Mutex
 {
 public:
     enum Subscription {
-	SubNone = 0,
-	SubTo   = 1,
-	SubFrom = 2,
-	SubBoth = 3,
+	None = 0,
+	To   = 1,
+	From = 2,
+	Both = 3,
     };
 
     XMPPUser(const char* node, const char* domain, Subscription sub);
@@ -549,10 +558,10 @@ public:
 	{ return m_resource; }
 
     inline bool subscribedTo() const
-	{ return (m_subscription & SubTo); }
+	{ return (m_subscription & To); }
 
     inline bool subscribedFrom() const
-	{ return (m_subscription & SubFrom); }
+	{ return (m_subscription & From); }
 
 private:
     JabberID m_jid;                      // User's JID

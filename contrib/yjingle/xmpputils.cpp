@@ -173,6 +173,31 @@ void JabberID::parse()
 }
 
 /**
+ * JIDIdentity
+ */
+TokenDict JIDIdentity::s_category[] = {
+	{"account",   Account},
+	{"client",    Client},
+	{"component", Component},
+	{"gateway",   Gateway},
+	{0,0},
+	};
+
+TokenDict JIDIdentity::s_type[] = {
+	{"registered", AccountRegistered},
+	{"phone",      ClientPhone},
+	{"generic",    ComponentGeneric},
+	{"presence",   ComponentPresence},
+	{"generic",    GatewayGeneric},
+	{0,0},
+	};
+
+XMLElement* JIDIdentity::toXML()
+{
+    return XMPPUtils::createIdentity(categoryText(m_category),typeText(m_type),m_name);
+}
+
+/**
  * JIDFeatures
  */
 bool JIDFeatures::create(XMLElement* element)

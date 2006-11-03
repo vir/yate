@@ -98,7 +98,7 @@ void JBComponentStream::connect()
     }
     m_state = WaitToConnect;
     // Check restart counters: If both of them are 0 destroy the stream
-    Debug(m_engine,DebugAll,
+    Debug(m_engine,DebugInfo,
 	"Stream::connect. Remaining attempts: Partial: %d. Total: %d. [%p]",
 	m_partialRestart,m_totalRestart,this);
     if (!(m_partialRestart && m_totalRestart)) {
@@ -144,7 +144,7 @@ void JBComponentStream::connect()
     m_socket->setBlocking(false);
     lock.drop();
     // Start
-    DDebug(m_engine,DebugAll,"Stream::connect. Starting stream. [%p]",this);
+    DDebug(m_engine,DebugInfo,"Stream::connect. Starting stream. [%p]",this);
     XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
 	XMPPNamespace::ComponentAccept);
     start->setAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]);
@@ -181,7 +181,7 @@ void JBComponentStream::terminate(bool destroy, bool sendEnd,
 	addEvent(JBEvent::Terminated,eventError);
 	m_state = Terminated;
     }
-    Debug(m_engine,DebugAll,"Stream. %s. [%p]",destroy?"Destroy":"Terminate",this);
+    Debug(m_engine,DebugInfo,"Stream. %s. [%p]",destroy?"Destroy":"Terminate",this);
 }
 
 bool JBComponentStream::receive()
@@ -265,7 +265,9 @@ void JBComponentStream::cancelPending(bool raise, const String* id)
     // Cancel elements with id. Raise event if requested
     // Don't cancel the first element if partial data was sent:
     //   The remote parser will fail
-    if (id && *id) {
+    if (id) {
+	XDebug(m_engine,DebugAll,
+	    "Stream. Cancel pending elements with id '%s'. [%p]",id->c_str(),this);
 	ListIterator iter(m_outXML);
 	GenObject* obj;
 	bool first = true;
@@ -286,6 +288,7 @@ void JBComponentStream::cancelPending(bool raise, const String* id)
 	return;
     }
     // Cancel all pending elements without id
+    XDebug(m_engine,DebugAll,"Stream. Cancel pending elements without id. [%p]",this);
     ListIterator iter(m_outXML);
     GenObject* obj;
     for (; (obj = iter.get());) {
@@ -312,7 +315,7 @@ void JBComponentStream::cleanup(bool endStream, XMLElement* e)
 	    delete e;
 	return;
     }
-    DDebug(m_engine,DebugAll,"Stream::cleanup(%s, %p) [%p]",
+    DDebug(m_engine,DebugAll,"Stream::cleanup(%s, %p). [%p]",
 	String::boolText(endStream),e,this);
     bool partialData = false;
     // Remove first element from queue if partial data was sent
@@ -354,7 +357,7 @@ JBComponentStream::Error JBComponentStream::postXML(XMLElementOut* element)
 	element->deref();
 	return ErrorContext;
     }
-    DDebug(m_engine,DebugAll,"Stream::postXML((%p): '%s'). [%p]",
+    DDebug(m_engine,DebugInfo,"Stream::postXML((%p): '%s'). [%p]",
 	element->element(),element->element()->name(),this);
     // List not empty: the return value will be ErrorPending
     // Else: element will be sent
@@ -377,11 +380,11 @@ JBComponentStream::Error JBComponentStream::sendXML()
     if (m_engine->debugAt(DebugAll)) {
 	String eStr;
 	XMPPUtils::print(eStr,e->element());
-	Debug(m_engine,DebugAll,"Stream::sendXML(%p). [%p]%s",
+	Debug(m_engine,DebugInfo,"Stream::sendXML(%p). [%p]%s",
 	    e->element(),this,eStr.c_str());
     }
     else
-	Debug(m_engine,DebugAll,"Stream::sendXML((%p): '%s'). [%p]",
+	Debug(m_engine,DebugInfo,"Stream::sendXML((%p): '%s'). [%p]",
 	    e->element(),e->element()->name(),this);
     // Prepare & send
     u_int32_t len;
@@ -413,11 +416,11 @@ bool JBComponentStream::sendStreamXML(XMLElement* element, State newState,
 	if (before)
 	    XMPPUtils::print(eStr,before);
 	XMPPUtils::print(eStr,element);
-	Debug(m_engine,DebugAll,"Stream::sendStreamXML. [%p]%s",
+	Debug(m_engine,DebugInfo,"Stream::sendStreamXML. [%p]%s",
 	    this,eStr.c_str());
     }
     else
-	Debug(m_engine,DebugAll,"Stream::sendStreamXML('%s'). [%p]",
+	Debug(m_engine,DebugInfo,"Stream::sendStreamXML('%s'). [%p]",
 	    element->name(),this);
     String tmp, buff;
     switch (element->type()) {
@@ -476,11 +479,11 @@ bool JBComponentStream::processIncomingXML()
 	if (m_engine->debugAt(DebugAll)) {
 	    String eStr;
 	    XMPPUtils::print(eStr,element);
-	    Debug(m_engine,DebugAll,"Stream::processIncomingXML(%p) [%p]. %s",
+	    Debug(m_engine,DebugInfo,"Stream::processIncomingXML(%p) [%p]. %s",
 	        element,this,eStr.c_str());
 	}
 	else
-	    Debug(m_engine,DebugAll,"Stream::processIncomingXML((%p): '%s'). [%p].",
+	    Debug(m_engine,DebugInfo,"Stream::processIncomingXML((%p): '%s'). [%p].",
 		element,element->name(),this);
 	// Check if we received a stream end or stream error
 	if (isStreamEnd(element))
@@ -516,7 +519,8 @@ bool JBComponentStream::processStateStarted(XMLElement* e)
     if (!e->hasAttribute("xmlns",s_ns[XMPPNamespace::ComponentAccept]))
 	return invalidElement(e,XMPPError::InvalidNamespace);
     if (!e->hasAttribute("from",m_localName))
-//    if (!(e->hasAttribute("from",m_localName) || e->hasAttribute("from",m_remoteName)))
+    //TODO: Possible ejabberd support: check if we received remoteName
+    // if (!(e->hasAttribute("from",m_localName) || e->hasAttribute("from",m_remoteName)))
 	return invalidElement(e,XMPPError::HostUnknown);
     m_id = e->getAttribute("id");
     if (!m_id.length() || m_engine->remoteIdExists(this))

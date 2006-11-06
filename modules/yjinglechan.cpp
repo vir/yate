@@ -2092,7 +2092,7 @@ void YJGDriver::initialize()
     if (debugAt(DebugAll)) {
 	String s;
 	s << "\r\nlocalip=" << s_localAddress;
-	s << "\r\npending_timeout=" << m_pendingTimeout;
+	s << "\r\npending_timeout=" << (unsigned int)m_pendingTimeout;
 	s << "\r\nanonymous_caller=" << m_anonymousCaller;
 	String media;
 	createMediaString(media,m_usedCodecs,' ');

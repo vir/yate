@@ -78,8 +78,8 @@ void JBEngine::initialize(const NamedList& params)
 	String s;
 	s << "\r\nstream_partialrestart=" << m_partialStreamRestart;
 	s << "\r\nstream_totalrestart=" << m_totalStreamRestart;
-	s << "\r\nstream_waitrestart=" << m_waitStreamRestart;
-	s << "\r\nxmlparser_maxbuffer=" << XMLParser::s_maxDataBuffer;
+	s << "\r\nstream_waitrestart=" << (unsigned int)m_waitStreamRestart;
+	s << "\r\nxmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
 	Debug(this,DebugAll,"Initialized:%s",s.c_str());
     }
 }

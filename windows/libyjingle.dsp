@@ -123,6 +123,10 @@ SOURCE=..\contrib\yjingle\xmpputils.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\contrib\yjingle\yatejabber.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\contrib\yjingle\yatejingle.h
 # End Source File
 # End Group

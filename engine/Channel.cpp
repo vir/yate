@@ -1025,6 +1025,9 @@ bool Driver::received(Message &msg, int id)
 	    break;
 	default:
 	    dest = msg.getValue("targetid");
+	    // if this channel is not the target try to match it as peer
+	    if (!dest.startsWith(m_prefix))
+		dest = msg.getValue("peerid");
 	    break;
     }
     XDebug(DebugAll,"id=%d prefix='%s' dest='%s'",id,m_prefix.c_str(),dest.c_str());

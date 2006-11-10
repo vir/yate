@@ -1248,15 +1248,10 @@ bool YIAXDriver::updateCodecsFromRoute(u_int32_t& codecs, const char* formats)
 
 void YIAXDriver::createFormatList(String& dest, u_int32_t codecs)
 {
-    bool first = true;
     for (u_int32_t i = 0; dict_payloads[i].token; i++) {
 	if (!(codecs & dict_payloads[i].value))
 	    continue;
-	if (!first)
-	    first = true;
-	else
-	    dest << ',';
-	dest << dict_payloads[i].token;
+	dest.append(dict_payloads[i].token,",");
     }
 }
 

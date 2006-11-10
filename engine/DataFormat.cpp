@@ -199,7 +199,8 @@ public:
 		    int div = m_sRate / m_dRate;
 		    // average an integer number of samples
 		    delta /= div;
-		    oblock.assign(0,2*n/div);
+		    n /= div;
+		    oblock.assign(0,2*n);
 		    unsigned short* d = (unsigned short*) oblock.data();
 		    while (n--) {
 			// TODO: interpolate

@@ -186,7 +186,7 @@ public:
 		    int mul = m_dRate / m_sRate;
 		    // repeat the sample an integer number of times
 		    delta *= mul;
-		    oblock.assign(0,n*mul);
+		    oblock.assign(0,2*n*mul);
 		    unsigned short* d = (unsigned short*) oblock.data();
 		    while (n--) {
 			// TODO: smooth the data a little
@@ -199,7 +199,7 @@ public:
 		    int div = m_sRate / m_dRate;
 		    // average an integer number of samples
 		    delta /= div;
-		    oblock.assign(0,n/div);
+		    oblock.assign(0,2*n/div);
 		    unsigned short* d = (unsigned short*) oblock.data();
 		    while (n--) {
 			// TODO: interpolate

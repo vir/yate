@@ -871,8 +871,18 @@ void PriChan::gotDigits(const char *digits, bool overlapped)
 
 void PriChan::sendDigit(char digit)
 {
-    if (m_call)
-	::pri_information(m_span->pri(),m_call,digit);
+    if (!m_call)
+	return;
+#ifdef PRI_KEYPAD_FACILITY_TX
+    if (isAnswered()) {
+	char buf[2];
+	buf[0] = digit;
+	buf[1] = '\0';
+	::pri_keypad_facility(m_span->pri(),m_call,buf);
+	return;
+    }
+#endif
+    ::pri_information(m_span->pri(),m_call,digit);
 }
 
 bool PriChan::call(Message &msg, const char *called)

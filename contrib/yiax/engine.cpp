@@ -176,6 +176,13 @@ IAXTransaction* IAXEngine::addFrame(const SocketAddr& addr, const unsigned char*
     IAXFrame* frame = IAXFrame::parse(buf,len,this,&addr);
     if (!frame)
 	return 0;
+    if (frame->fullFrame() && debugAt(DebugAll)) {
+	String s;
+	SocketAddr local;
+	m_socket.getSockName(local);
+	frame->fullFrame()->toString(s,local,addr,true);
+	Debug(this,DebugInfo,"Received frame.%s",s.c_str());
+    }
     IAXTransaction* tr = addFrame(addr,frame);
     if (!tr)
 	frame->deref();
@@ -218,8 +225,15 @@ void IAXEngine::readSocket(SocketAddr& addr)
     }
 }
 
-bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr)
+bool IAXEngine::writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame)
 {
+    if (frame && debugAt(DebugAll)) {
+	String s;
+	SocketAddr local;
+	m_socket.getSockName(local);
+	frame->toString(s,local,addr,false);
+	Debug(this,DebugInfo,"Sending frame.%s",s.c_str());
+    }
     len = m_socket.sendTo(buf,len,addr);
     if (len == Socket::socketError()) {
 	if (!m_socket.canRetry())
@@ -280,8 +294,13 @@ u_int32_t IAXEngine::transactionCount()
 
 void IAXEngine::keepAlive(SocketAddr& addr)
 {
+#if 0
     unsigned char buf[12] = {0x80,0,0,0,0,0,0,0,0,0,IAXFrame::IAX,IAXControl::Inval};
     writeSocket(buf,sizeof(buf),addr);
+#endif
+    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,0,0,0,0,0);
+    writeSocket(f->data().data(),f->data().length(),addr,f);
+    f->deref();
 }
 
 bool IAXEngine::processTrunkFrames(u_int32_t time)

@@ -25,76 +25,94 @@
 #include <yateiax.h>
 
 #include <string.h>  // For memcpy()
+#include <stdio.h>   // For sprintf()
 
 using namespace TelEngine;
+
+inline void setStringFromInteger(String& dest, u_int32_t value, u_int8_t length)
+{
+    char tmp[11];
+    switch (length) {
+	case 1:
+	    sprintf(tmp,"%0#4x",(u_int8_t)value);
+	    break;
+	case 2:
+	    sprintf(tmp,"%0#6x",(u_int16_t)value);
+	    break;
+	default:
+	    sprintf(tmp,"%0#10x",value);
+	    break;
+    }
+    dest = tmp;
+}
 
 /*
  * IAXInfoElement
  */
-static TokenDict s_ieData[] = {
-    {"CALLED_NUMBER",     IAXInfoElement::CALLED_NUMBER},
-    {"CALLING_NUMBER",    IAXInfoElement::CALLING_NUMBER},
-    {"CALLING_ANI",       IAXInfoElement::CALLING_ANI},
-    {"CALLING_NAME",      IAXInfoElement::CALLING_NAME},
-    {"CALLED_CONTEXT",    IAXInfoElement::CALLED_CONTEXT},
-    {"USERNAME",          IAXInfoElement::USERNAME},
-    {"PASSWORD",          IAXInfoElement::PASSWORD},
-    {"CAPABILITY",        IAXInfoElement::CAPABILITY},
-    {"FORMAT",            IAXInfoElement::FORMAT},
-    {"LANGUAGE",          IAXInfoElement::LANGUAGE},
-    {"VERSION",           IAXInfoElement::VERSION},
-    {"ADSICPE",           IAXInfoElement::ADSICPE},
-    {"DNID",              IAXInfoElement::DNID},
-    {"AUTHMETHODS",       IAXInfoElement::AUTHMETHODS},
-    {"CHALLENGE",         IAXInfoElement::CHALLENGE},
-    {"MD5_RESULT",        IAXInfoElement::MD5_RESULT},
-    {"RSA_RESULT",        IAXInfoElement::RSA_RESULT},
-    {"APPARENT_ADDR",     IAXInfoElement::APPARENT_ADDR},
-    {"REFRESH",           IAXInfoElement::REFRESH},
-    {"DPSTATUS",          IAXInfoElement::DPSTATUS},
-    {"CALLNO",            IAXInfoElement::CALLNO},
-    {"CAUSE",             IAXInfoElement::CAUSE},
-    {"IAX_UNKNOWN",       IAXInfoElement::IAX_UNKNOWN},
-    {"MSGCOUNT",          IAXInfoElement::MSGCOUNT},
-    {"AUTOANSWER",        IAXInfoElement::AUTOANSWER},
-    {"MUSICONHOLD",       IAXInfoElement::MUSICONHOLD},
-    {"TRANSFERID",        IAXInfoElement::TRANSFERID},
-    {"RDNIS",             IAXInfoElement::RDNIS},
-    {"PROVISIONING",      IAXInfoElement::PROVISIONING},
-    {"AESPROVISIONING",   IAXInfoElement::AESPROVISIONING},
-    {"DATETIME",          IAXInfoElement::DATETIME},
-    {"DEVICETYPE",        IAXInfoElement::DEVICETYPE},
-    {"SERVICEIDENT",      IAXInfoElement::SERVICEIDENT},
-    {"FIRMWAREVER",       IAXInfoElement::FIRMWAREVER},
-    {"FWBLOCKDESC",       IAXInfoElement::FWBLOCKDESC},
-    {"FWBLOCKDATA",       IAXInfoElement::FWBLOCKDATA},
-    {"PROVVER",           IAXInfoElement::PROVVER},
-    {"CALLINGPRES",       IAXInfoElement::CALLINGPRES},
-    {"CALLINGTON",        IAXInfoElement::CALLINGTON},
-    {"CALLINGTNS",        IAXInfoElement::CALLINGTNS},
-    {"SAMPLINGRATE",      IAXInfoElement::SAMPLINGRATE},
-    {"CAUSECODE",         IAXInfoElement::CAUSECODE},
-    {"ENCRYPTION",        IAXInfoElement::ENCRYPTION},
-    {"ENKEY",             IAXInfoElement::ENKEY},
-    {"CODEC_PREFS",       IAXInfoElement::CODEC_PREFS},
-    {"RR_JITTER",         IAXInfoElement::RR_JITTER},
-    {"RR_LOSS",           IAXInfoElement::RR_LOSS},
-    {"RR_PKTS",           IAXInfoElement::RR_PKTS},
-    {"RR_DELAY",          IAXInfoElement::RR_DELAY},
-    {"RR_DROPPED",        IAXInfoElement::RR_DROPPED},
-    {"RR_OOO",            IAXInfoElement::RR_OOO},
-    {0, 0}
+TokenDict IAXInfoElement::s_ieData[] = {
+    {"CALLED_NUMBER",     CALLED_NUMBER},
+    {"CALLING_NUMBER",    CALLING_NUMBER},
+    {"CALLING_ANI",       CALLING_ANI},
+    {"CALLING_NAME",      CALLING_NAME},
+    {"CALLED_CONTEXT",    CALLED_CONTEXT},
+    {"USERNAME",          USERNAME},
+    {"PASSWORD",          PASSWORD},
+    {"CAPABILITY",        CAPABILITY},
+    {"FORMAT",            FORMAT},
+    {"LANGUAGE",          LANGUAGE},
+    {"VERSION",           VERSION},
+    {"ADSICPE",           ADSICPE},
+    {"DNID",              DNID},
+    {"AUTHMETHODS",       AUTHMETHODS},
+    {"CHALLENGE",         CHALLENGE},
+    {"MD5_RESULT",        MD5_RESULT},
+    {"RSA_RESULT",        RSA_RESULT},
+    {"APPARENT_ADDR",     APPARENT_ADDR},
+    {"REFRESH",           REFRESH},
+    {"DPSTATUS",          DPSTATUS},
+    {"CALLNO",            CALLNO},
+    {"CAUSE",             CAUSE},
+    {"IAX_UNKNOWN",       IAX_UNKNOWN},
+    {"MSGCOUNT",          MSGCOUNT},
+    {"AUTOANSWER",        AUTOANSWER},
+    {"MUSICONHOLD",       MUSICONHOLD},
+    {"TRANSFERID",        TRANSFERID},
+    {"RDNIS",             RDNIS},
+    {"PROVISIONING",      PROVISIONING},
+    {"AESPROVISIONING",   AESPROVISIONING},
+    {"DATETIME",          DATETIME},
+    {"DEVICETYPE",        DEVICETYPE},
+    {"SERVICEIDENT",      SERVICEIDENT},
+    {"FIRMWAREVER",       FIRMWAREVER},
+    {"FWBLOCKDESC",       FWBLOCKDESC},
+    {"FWBLOCKDATA",       FWBLOCKDATA},
+    {"PROVVER",           PROVVER},
+    {"CALLINGPRES",       CALLINGPRES},
+    {"CALLINGTON",        CALLINGTON},
+    {"CALLINGTNS",        CALLINGTNS},
+    {"SAMPLINGRATE",      SAMPLINGRATE},
+    {"CAUSECODE",         CAUSECODE},
+    {"ENCRYPTION",        ENCRYPTION},
+    {"ENKEY",             ENKEY},
+    {"CODEC_PREFS",       CODEC_PREFS},
+    {"RR_JITTER",         RR_JITTER},
+    {"RR_LOSS",           RR_LOSS},
+    {"RR_PKTS",           RR_PKTS},
+    {"RR_DELAY",          RR_DELAY},
+    {"RR_DROPPED",        RR_DROPPED},
+    {"RR_OOO",            RR_OOO},
+    {0,0}
 };
-
-const char* IAXInfoElement::ieText(u_int8_t ieCode)
-{
-    return lookup(ieCode,s_ieData);
-}
 
 void IAXInfoElement::toBuffer(DataBlock& buf)
 {
     unsigned char d[2] = {m_type,0};
     buf.assign(d,sizeof(d));
+}
+
+void IAXInfoElement::toString(String& buf)
+{
+    buf << "";
 }
 
 /*
@@ -149,6 +167,13 @@ void IAXInfoElementNumeric::toBuffer(DataBlock& buf)
     buf.assign(d,2 + m_length);
 }
 
+void IAXInfoElementNumeric::toString(String& buf)
+{
+    String tmp;
+    setStringFromInteger(tmp,m_numericData,m_length);
+    buf << tmp;
+}
+
 /*
  * IAXInfoElementBinary
  */
@@ -157,6 +182,11 @@ void IAXInfoElementBinary::toBuffer(DataBlock& buf)
     unsigned char d[2] = {type(),m_data.length()};
     buf.assign(d,sizeof(d));
     buf += m_data;
+}
+
+void IAXInfoElementBinary::toString(String& buf)
+{
+    buf << "Binary data";
 }
 
 IAXInfoElementBinary* IAXInfoElementBinary::packIP(const SocketAddr& addr)
@@ -182,14 +212,21 @@ void IAXIEList::insertVersion()
 	m_list.insert(new IAXInfoElementNumeric(IAXInfoElement::VERSION,IAX_PROTOCOL_VERSION,2));
 }
 
-bool IAXIEList::createFromFrame(const IAXFullFrame* frame)
+bool IAXIEList::createFromFrame(const IAXFullFrame* frame, bool incoming)
 {
     m_invalidIEList = false;
     m_list.clear();
     if (!frame)
 	return true;
+    if (frame->type() == IAXFrame::Voice)
+	return true;
     unsigned char* data = (unsigned char*)(((IAXFullFrame*)frame)->data().data());
     unsigned int len = ((IAXFullFrame*)frame)->data().length();
+    // Skip header for outgoing frames
+    if (!incoming) {
+	data += 12;
+	len -= 12;
+    }
     u_int16_t i;       // Current index of IE buffer
     u_int32_t value;
     if (frame->type() == IAXFrame::Text)
@@ -338,12 +375,140 @@ void IAXIEList::toBuffer(DataBlock& buf)
 {
     DataBlock data;
     buf.clear();
-    for (ObjList* l = m_list.skipNull(); l; l = l->next()) {
-	IAXInfoElement* ie = static_cast<IAXInfoElement*>(l->get());
-	if (!ie)
-	    continue;
+    ObjList* obj = m_list.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	IAXInfoElement* ie = static_cast<IAXInfoElement*>(obj->get());
 	ie->toBuffer(data);
 	buf.append(data);
+    }
+}
+
+void IAXIEList::toString(String& dest, const char* indent)
+{
+    ObjList* obj = m_list.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	IAXInfoElement* ie = static_cast<IAXInfoElement*>(obj->get());
+	dest << indent;
+	if (ie->type() == IAXInfoElement::textframe) {
+	    ie->toString(dest);
+	    continue;
+	}
+	dest << IAXInfoElement::ieText(ie->type());
+	if (ie->type() != IAXInfoElement::AUTOANSWER)
+	    dest << ": ";
+	switch (ie->type()) {
+	    // Text
+	    case IAXInfoElement::CALLED_NUMBER:
+	    case IAXInfoElement::CALLING_NUMBER:
+	    case IAXInfoElement::CALLING_ANI:
+	    case IAXInfoElement::CALLING_NAME:
+	    case IAXInfoElement::CALLED_CONTEXT:
+	    case IAXInfoElement::USERNAME:
+	    case IAXInfoElement::PASSWORD:
+	    case IAXInfoElement::LANGUAGE:
+	    case IAXInfoElement::DNID:
+	    case IAXInfoElement::CHALLENGE:
+	    case IAXInfoElement::MD5_RESULT:
+	    case IAXInfoElement::RSA_RESULT:
+	    case IAXInfoElement::CAUSE:
+	    case IAXInfoElement::MUSICONHOLD:
+	    case IAXInfoElement::RDNIS:
+	    case IAXInfoElement::DEVICETYPE:
+		ie->toString(dest);
+		break;
+	    case IAXInfoElement::CODEC_PREFS:		//TODO: LIST of strings ?
+		{
+		const char* tmp = (const char*)((static_cast<IAXInfoElementBinary*>(ie))->data().data());
+		String s(tmp,(static_cast<IAXInfoElementBinary*>(ie))->length());
+		dest << s;
+		}
+		break;
+	    // Binary
+	    case IAXInfoElement::APPARENT_ADDR:
+		{
+		SocketAddr addr;
+		IAXInfoElementBinary::unpackIP(addr,static_cast<IAXInfoElementBinary*>(ie));
+		dest << addr.host() << ":" << addr.port();
+		}
+		break;
+	    case IAXInfoElement::PROVISIONING:
+	    case IAXInfoElement::AESPROVISIONING:
+	    case IAXInfoElement::SERVICEIDENT:
+	    case IAXInfoElement::FWBLOCKDATA:
+	    case IAXInfoElement::ENKEY:
+		ie->toString(dest);
+		break;
+	    // 4 bytes
+	    case IAXInfoElement::CAPABILITY:
+	    case IAXInfoElement::FORMAT:
+	    case IAXInfoElement::AUTHMETHODS:
+		{
+		ie->toString(dest);
+		u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		String tmp;
+		if (ie->type() == IAXInfoElement::AUTHMETHODS)
+		    IAXAuthMethod::authList(tmp,val,',');
+		else
+		    IAXFormat::formatList(tmp,val,',');
+		dest << " (" << tmp << ')';
+		}
+		break;
+	    case IAXInfoElement::DATETIME:		//TODO: print more data
+		ie->toString(dest);
+		break;
+	    case IAXInfoElement::SAMPLINGRATE:
+		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data() << " Hz";
+		break;
+	    case IAXInfoElement::RR_LOSS:
+		{
+		u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		dest << (val & 0xFF000000) << "% (" << (val & 0x00FFFFFF) << ')';
+		}
+		break;
+	    case IAXInfoElement::RR_JITTER:
+	    case IAXInfoElement::RR_PKTS:
+	    case IAXInfoElement::RR_DROPPED:
+	    case IAXInfoElement::RR_OOO:
+	    case IAXInfoElement::RR_DELAY:
+		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		break;
+	    case IAXInfoElement::TRANSFERID:
+	    case IAXInfoElement::PROVVER:
+	    case IAXInfoElement::FWBLOCKDESC:
+		ie->toString(dest);
+		break;
+	    // 2 bytes
+	    case IAXInfoElement::REFRESH:
+		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		dest << " second(s)";
+		break;
+	    case IAXInfoElement::ADSICPE:
+	    case IAXInfoElement::DPSTATUS:		//TODO: print more data
+	    case IAXInfoElement::CALLNO:
+	    case IAXInfoElement::CALLINGTNS:		//TODO: print more data
+	    case IAXInfoElement::FIRMWAREVER:
+	    case IAXInfoElement::VERSION:
+		ie->toString(dest);
+		break;
+	    // 1 byte
+	    case IAXInfoElement::IAX_UNKNOWN:
+	    case IAXInfoElement::CALLINGPRES:		//TODO: print more data
+	    case IAXInfoElement::CALLINGTON:		//TODO: print more data
+	    case IAXInfoElement::CAUSECODE:		//TODO: print more data
+	    case IAXInfoElement::ENCRYPTION:		//TODO: print more data
+		ie->toString(dest);
+		break;
+	    case IAXInfoElement::MSGCOUNT:
+		{
+		u_int16_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		dest << (int)((u_int8_t)val) << "new. " << (int)(val >> 8) << "old";
+		}
+		break;
+	    // None
+	    case IAXInfoElement::AUTOANSWER:
+		break;
+	    default: ;
+	}
     }
 }
 
@@ -387,59 +552,131 @@ bool IAXIEList::getBinary(IAXInfoElement::Type type, DataBlock& dest)
 }
 
 /*
- * IAXFormat
+ * IAXAuthMethod
  */
-TokenDict IAXFormat::audioData[] = {
-    {"gsm", IAXFormat::GSM},
-    {"ilbc30", IAXFormat::ILBC},
-    {"speex", IAXFormat::SPEEX},
-    {"lpc10", IAXFormat::LPC10},
-    {"mulaw", IAXFormat::ULAW},
-    {"alaw", IAXFormat::ALAW},
-    {"g723", IAXFormat::G723_1},
-    {"g729", IAXFormat::G729A},
-    {"adpcm", IAXFormat::ADPCM},
-    {"mp3", IAXFormat::MP3},
-    {"slin", IAXFormat::SLIN},
-    {0, 0}
+TokenDict IAXAuthMethod::s_texts[] = {
+    {"Text", Text},
+    {"MD5",  MD5},
+    {"RSA",  RSA},
+    {0,0}
 };
 
-TokenDict IAXFormat::videoData[] = {
-    {"jpeg", IAXFormat::JPEG},
-    {"png", IAXFormat::PNG},
-    {"h261", IAXFormat::H261},
-    {"h263", IAXFormat::H263},
-    {0, 0}
-};
-
-void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
+void IAXAuthMethod::authList(String& dest, u_int16_t auth, char sep)
 {
     dest = "";
     bool first = true;
-    for (u_int32_t i = 0; audioData[i].value; i++) {
-	if (0 == (audioData[i].value & formats))
+    for (u_int16_t i = 0; s_texts[i].value; i++) {
+	if (0 == (s_texts[i].value & auth))
 	    continue;
 	if (first)
 	    first = false;
 	else
 	    dest += sep;
-	dest += audioData[i].token;
+	dest += s_texts[i].token;
     }
 }
 
-const char* IAXFormat::audioText(u_int32_t audio)
+/*
+ * IAXFormat
+ */
+TokenDict IAXFormat::audioData[] = {
+    {"G.723.1",      G723_1},
+    {"GSM",          GSM},
+    {"G.711 mu-law", ULAW},
+    {"G.711 a-law",  ALAW},
+    {"G.726",        MP3},
+    {"IMA ADPCM",    ADPCM},
+    {"SLIN",         SLIN},
+    {"LPC10",        LPC10},
+    {"G729",         G729A},
+    {"SPEEX",        SPEEX},
+    {"ILBC",         ILBC},
+    {0,0}
+};
+
+TokenDict IAXFormat::videoData[] = {
+    {"JPEG", IAXFormat::JPEG},
+    {"PNG",  IAXFormat::PNG},
+    {"H261", IAXFormat::H261},
+    {"H263", IAXFormat::H263},
+    {0,0}
+};
+
+void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
 {
-    return lookup(audio,audioData);
+    String s = sep;
+    for (u_int32_t i = 0; audioData[i].value; i++) {
+	if (0 == (audioData[i].value & formats))
+	    continue;
+	dest.append(audioData[i].token,s);
+    }
+    for (u_int32_t i = 0; videoData[i].value; i++) {
+	if (0 == (videoData[i].value & formats))
+	    continue;
+	dest.append(videoData[i].token,s);
+    }
 }
 
-const char* IAXFormat::videoText(u_int32_t video)
-{
-    return lookup(video,videoData);
-}
+/*
+* IAXControl
+*/
+TokenDict IAXControl::s_types[] = {
+        {"NEW",        New},
+        {"PING",       Ping},
+        {"PONG",       Pong},
+        {"ACK",        Ack},
+        {"HANGUP",     Hangup},
+        {"REJECT",     Reject},
+        {"ACCEPT",     Accept},
+        {"AUTHREQ",    AuthReq},
+        {"AUTHREP",    AuthRep},
+        {"INVAL",      Inval},
+        {"LAGRQ",      LagRq},
+        {"LAGRP",      LagRp},
+        {"REGREQ",     RegReq},
+        {"REGAUTH",    RegAuth},
+        {"REGACK",     RegAck},
+        {"REGREJ",     RegRej},
+        {"REGREL",     RegRel},
+        {"VNAK",       VNAK},
+        {"DPREQ",      DpReq},
+        {"DPREP",      DpRep},
+        {"DIAL",       Dial},
+        {"TXREQ",      TxReq},
+        {"TXCNT",      TxCnt},
+        {"TXACC",      TxAcc},
+        {"TXREADY",    TxReady},
+        {"TXREL",      TxRel},
+        {"TXREJ",      TxRej},
+        {"QUELCH",     Quelch},
+        {"UNQUELCH",   Unquelch},
+        {"POKE",       Poke},
+        {"MWI",        MWI},
+        {"UNSUPPORT",  Unsupport},
+        {"TRANSFER",   Transfer},
+        {"PROVISION",  Provision},
+        {"FWDOWNL",    FwDownl},
+        {"FWDATA",     FwData},
+        {0,0}
+	};
 
 /*
 * IAXFrame
 */
+TokenDict IAXFrame::s_types[] = {
+        {"DTMF",    DTMF},
+        {"VOICE",   Voice},
+        {"VIDEO",   Video},
+        {"CONTROL", Control},
+        {"NULL",    Null},
+        {"IAX",     IAX},
+        {"TEXT",    Text},
+        {"IMAGE",   Image},
+        {"HTML",    HTML},
+        {"NOISE",   Noise},
+        {0,0}
+	};
+
 IAXFrame::IAXFrame(Type type, u_int16_t sCallNo, u_int32_t tStamp, bool retrans,
 		   const unsigned char* buf, unsigned int len)
     : m_data((char*)buf,len,true), m_retrans(retrans), m_type(type),
@@ -586,6 +823,25 @@ const IAXFullFrame* IAXFrame::fullFrame() const
 /*
  * IAXFullFrame
  */
+TokenDict IAXFullFrame::s_controlTypes[] = {
+        {"HANGUP",      Hangup},
+//        {"RING",        Ring},
+        {"RINGING",     Ringing},
+        {"ANSWER",      Answer},
+        {"BUSY",        Busy},
+        {"CONGESTION",  Congestion},
+        {"FLASHHOOK",   FlashHook},
+        {"OPTION",      Option},
+        {"KEYRADIO",    KeyRadio},
+        {"UNKEYRADIO",  UnkeyRadio},
+        {"PROGRESSING", Progressing},
+        {"PROCEEDING",  Proceeding},
+        {"HOLD",        Hold},
+        {"UNHOLD",      Unhold},
+        {"VIDUPDATE",   VidUpdate},
+        {0,0}
+	};
+
 IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_int16_t dCallNo,
 	unsigned char oSeqNo, unsigned char iSeqNo,
 	u_int32_t tStamp, bool retrans,
@@ -634,6 +890,99 @@ IAXFullFrame::IAXFullFrame(Type type, u_int32_t subclass, u_int16_t sCallNo, u_i
 	ie.assign((void*)buf,(unsigned int)len);
 	m_data += ie;
     }
+}
+
+void IAXFullFrame::toString(String& dest, const SocketAddr& local,
+	const SocketAddr& remote, bool incoming) const
+{
+#define STARTLINE(indent) "\r\n" << indent
+#define TMP_TEXT (tmp ? tmp : unk)
+    const char* enclose = "\r\n-----";
+    const char* unk = "???";
+    const char* tmp = 0;
+    dest << enclose;
+    String stmp;
+    setStringFromInteger(stmp,type(),1);
+    tmp = typeText(type());
+    dest << STARTLINE("") << TMP_TEXT << " (" << stmp << ")";
+    // Subclass
+    String subc;
+    switch (type()) {
+	case IAXFrame::IAX:
+	case IAXFrame::Control:
+	    tmp = (type() == IAXFrame::IAX ? IAXControl::typeText(subclass()) :
+		controlTypeText(subclass()));
+	    subc = TMP_TEXT;
+	    break;
+	case IAXFrame::DTMF:
+	    subc << (char)subclass();
+	    break;
+	case IAXFrame::Voice:
+	case IAXFrame::Video:
+	case IAXFrame::Image:
+	    tmp = (type() == IAXFrame::Voice ? IAXFormat::audioText(subclass()) :
+		IAXFormat::videoText(subclass()));
+	    subc = TMP_TEXT;
+	    break;
+	case IAXFrame::Null:
+	    subc = "Subclass: ";
+	    break;
+	case IAXFrame::Text:
+	    subc = "Subclass: ";
+	    break;
+	case IAXFrame::HTML:
+	    subc = "Subclass: ";
+	    break;
+	case IAXFrame::Noise:
+	    subc << subclass() << " -dBov";
+	    break;
+	default:
+	    subc = unk;
+
+    }
+    setStringFromInteger(stmp,subclass(),4);
+    dest << " - " << subc << " (" << stmp << ")";
+    // Addresses
+    if (incoming)
+	dest << STARTLINE("  ") << "Incoming from ";
+    else
+	dest << STARTLINE("  ") << "Outgoing to ";
+    dest << remote.host() << ':' << remote.port();
+    dest << " (Local address: ";
+    dest << local.host() << ':' << local.port() << ')';
+    // Transaction numbers
+    dest << STARTLINE("  ") << "Call (Local:Remote): ";
+    if (incoming)
+	dest << destCallNo();
+    else
+	dest << sourceCallNo();
+    dest << ':';
+    if (incoming)
+	dest << sourceCallNo();
+    else
+	dest << destCallNo();
+    // Info
+    dest << ". Timestamp: " << timeStamp();
+    dest << ". Retrans: " << String::boolText(retrans());
+    dest << ". Sequence numbers: Out: " << oSeqNo() << " In: " << iSeqNo();
+    // IEs
+    IAXIEList ieList;
+    bool hasIE = ieList.createFromFrame(this,incoming);
+    if (hasIE) {
+	String aux;
+	aux << STARTLINE("  ");
+	ieList.toString(dest,aux);
+    }
+    if (!hasIE) {
+	dest << STARTLINE("  ");
+	if (ieList.invalidIEList())
+	    dest << "Error parsing Information Element(s)";
+	else
+	    dest << "No Information Element(s)";
+    }
+    dest << enclose;
+#undef TMP_TEXT
+#undef STARTLINE
 }
 
 IAXFullFrame::~IAXFullFrame()

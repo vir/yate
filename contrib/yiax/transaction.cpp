@@ -140,12 +140,12 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_capability(0),
     m_trunkFrame(0)
 {
-    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing [%p]",
+    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. [%p]",
 	localCallNo(),remoteCallNo(),this);
     // Init data members
     if (!m_addr.port()) {
 	XDebug(m_engine,DebugAll,
-	    "IAXTransaction::IAXTransaction(%u,%u) [%p]. No remote port. Set to default. ",
+	    "IAXTransaction::IAXTransaction(%u,%u). No remote port. Set to default. [%p]",
 	    localCallNo(),remoteCallNo(),this);
 	m_addr.port(4569);
     }
@@ -178,16 +178,16 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
 	    frametype = IAXControl::Poke;
 	    break;
 	default:
-	    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing [%p]. Unsupported type: %u",
-		localCallNo(),remoteCallNo(),this,m_type);
+	    XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u) outgoing. Unsupported type: %u. [%p]",
+		localCallNo(),remoteCallNo(),m_type,this);
 	    m_type = Incorrect;
 	    return;
     }
     DataBlock d;
     ieList.toBuffer(d);
     if (d.length() > (unsigned int)m_engine->maxFullFrameDataLen()) {
-	XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u)[%p]. Buffer too long (%u > %u)",
-		localCallNo(),remoteCallNo(),this,d.length(),(unsigned int)m_engine->maxFullFrameDataLen());
+	XDebug(m_engine,DebugAll,"IAXTransaction::IAXTransaction(%u,%u). Buffer too long (%u > %u). [%p]",
+		localCallNo(),remoteCallNo(),d.length(),(unsigned int)m_engine->maxFullFrameDataLen(),this);
 	d.clear();
     }
     postFrame(IAXFrame::IAX,frametype,(void*)(d.data()),d.length());
@@ -203,6 +203,8 @@ IAXTransaction::~IAXTransaction()
 	m_trunkFrame->deref();
     if (state() != Terminating && state() != Terminated)
 	sendReject("Server shutdown");
+    XDebug(m_engine,DebugAll,"IAXTransaction::~IAXTransaction(%u,%u). [%p]",
+	localCallNo(),remoteCallNo(),this);
 }
 
 IAXTransaction* IAXTransaction::factoryIn(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno, 
@@ -260,8 +262,13 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	return 0;
     incrementSeqNo(frame->fullFrame(),true);
     // Voice full frame: process voice data & format
-    if (frame->type() == IAXFrame::Voice && type() == New)
-	return processVoiceFrame(frame->fullFrame());
+    if (frame->type() == IAXFrame::Voice && type() == New) {
+	if (!processVoiceFrame(frame->fullFrame()))
+	    return 0;
+	// Frame accepted: process voice data
+	lock.drop();
+	return processMedia(frame->data(),frame->timeStamp(),true);
+    }
     // Process incoming Ping
     if (frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ping) {
 	DDebug(m_engine,DebugAll,"Transaction(%u,%u) received Ping iseq=%u oseq=%u stamp=%u [%p]",
@@ -475,8 +482,6 @@ bool IAXTransaction::sendAccept()
     else {
 	IAXIEList ieList;
 	ieList.appendString(IAXInfoElement::USERNAME,m_username);
-	ieList.appendString(IAXInfoElement::CALLING_NUMBER,m_callingNo);
-	ieList.appendString(IAXInfoElement::CALLING_NAME,m_callingName);
 	ieList.appendNumeric(IAXInfoElement::REFRESH,m_expire,2);
 	ieList.appendIE(IAXInfoElementBinary::packIP(remoteAddr()));
 	DataBlock data;
@@ -674,26 +679,22 @@ bool IAXTransaction::enableTrunking(IAXMetaTrunkFrame* trunkFrame)
 
 void IAXTransaction::print()
 {
-    Debug(m_engine,DebugInfo,"Transaction - START PRINT [%p]",this);
-    Output("Local call no:    %u\nRemote call no:   %u\nType:             %u\nState:            %u\nTimestamp:        " FMT64U,
-	localCallNo(),remoteCallNo(),type(),state(),(u_int64_t)timeStamp());
-    Output("Queues:\nOutgoing:         %u",m_outFrames.count());
+    static SocketAddr addr;
     ObjList* l;
-    int i;
-    for(i = 0, l = m_outFrames.skipNull(); l; l = l->next(), i++) {
+    String frames;
+    frames << "\r\nOutgoing frames: " << m_outFrames.count();
+    for(l = m_outFrames.skipNull(); l; l = l->skipNext()) {
 	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
-	if (frame)
-	    Output("     %5u  Type: %-3u Subclass: %-3u Out: %-5u In: %-5u Timestamp: %-5u Ack: %u AckOnly: %u",
-		i+1,frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo(), frame->timeStamp(),frame->ack(),frame->ackOnly());
+	frame->toString(frames,addr,remoteAddr(),false);
     }
-    Output("Incoming:         %u",m_inFrames.count());
-    for(i = 0, l = m_inFrames.skipNull(); l; l = l->next(), i++) {
-	IAXFullFrame* frame = static_cast<IAXFrameOut*>(l->get());
-	if (frame)
-	    Output("     %5u  Type: %-3u Subclass: %-3u Out: %-5u In: %-5u Timestamp: %-5u",
-		i+1,frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo(), frame->timeStamp());
+    frames << "\r\nIncoming frames: " << m_inFrames.count();
+    for(l = m_inFrames.skipNull(); l; l = l->skipNext()) {
+	IAXFrameOut* frame = static_cast<IAXFrameOut*>(l->get());
+	frame->toString(frames,addr,remoteAddr(),true);
     }
-    Debug(m_engine,DebugInfo,"Transaction - END PRINT [%p]",this);
+    Debug(m_engine,DebugInfo,"Transaction(%u,%u). Remote address: %s:%u. Type: %u. State: %u. Timestamp: " FMT64U " [%p]%s",
+	localCallNo(),remoteCallNo(),remoteAddr().host().c_str(),remoteAddr().port(),
+	type(),state(),(u_int64_t)timeStamp(),this,frames.c_str());
 }
 
 void IAXTransaction::init(IAXIEList& ieList)
@@ -836,7 +837,7 @@ bool IAXTransaction::sendFrame(IAXFrameOut* frame, bool vnak)
 {
     if (!frame)
 	return false;
-    bool b = m_engine->writeSocket(frame->data().data(),frame->data().length(),remoteAddr());
+    bool b = m_engine->writeSocket(frame->data().data(),frame->data().length(),remoteAddr(),frame);
     // Don't modify timeout if transmitted as a response to a VNAK
     if (!vnak) {
 	if (frame->retrans())     // Retransmission
@@ -1251,30 +1252,28 @@ void IAXTransaction::sendAck(const IAXFullFrame* frame)
 {
     if (!frame)
 	return;
-    unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
-			     frame->timeStamp() >> 24,frame->timeStamp() >> 16,frame->timeStamp() >> 8,frame->timeStamp(),
-			     frame->iSeqNo(),m_iSeqNo,IAXFrame::IAX,IAXControl::Ack};
+    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Ack,localCallNo(),
+	remoteCallNo(),frame->iSeqNo(),m_iSeqNo,frame->timeStamp());
     DDebug(m_engine,DebugInfo,"Transaction(%u,%u). Send ACK for Frame(%u,%u) oseq: %u iseq: %u",
 	    localCallNo(),remoteCallNo(),frame->type(),frame->subclass(),frame->oSeqNo(),frame->iSeqNo());
-    m_engine->writeSocket(buf,sizeof(buf),remoteAddr());
+    m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
+    f->deref();
 }
 
 void IAXTransaction::sendInval()
 {
-    u_int32_t ts = (u_int32_t)timeStamp();
-    unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
-			     ts >> 24,ts >> 16,ts >> 8,ts,
-			     m_oSeqNo++,m_iSeqNo,IAXFrame::IAX,IAXControl::Inval};
-    m_engine->writeSocket(buf,sizeof(buf),remoteAddr());
+    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::Inval,localCallNo(),
+	remoteCallNo(),m_oSeqNo++,m_iSeqNo,(u_int32_t)timeStamp());
+    m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
+    f->deref();
 }
 
 void IAXTransaction::sendVNAK()
 {
-    u_int32_t ts = (u_int32_t)timeStamp();
-    unsigned char buf[12] = {0x80 | localCallNo() >> 8,localCallNo(),remoteCallNo() >> 8,remoteCallNo(),
-			     ts >> 24,ts >> 16,ts >> 8,ts,
-			     m_oSeqNo,m_iSeqNo,IAXFrame::IAX,IAXControl::VNAK};
-    m_engine->writeSocket(buf,sizeof(buf),remoteAddr());
+    IAXFullFrame* f = new IAXFullFrame(IAXFrame::IAX,IAXControl::VNAK,localCallNo(),
+	remoteCallNo(),m_oSeqNo,m_iSeqNo,(u_int32_t)timeStamp());
+    m_engine->writeSocket(f->data().data(),f->data().length(),remoteAddr(),f);
+    f->deref();
 }
 
 void IAXTransaction::sendUnsupport(u_int32_t subclass)
@@ -1454,9 +1453,7 @@ IAXTransaction* IAXTransaction::processVoiceFrame(const IAXFullFrame* frame)
 	    return 0;
 	}
     }
-    // Process voice data
-    processMedia(((IAXFullFrame*)frame)->data(),frame->timeStamp(),true);
-    return 0;
+    return this;
 }
 
 IAXTransaction* IAXTransaction::retransmitOnVNAK(u_int16_t seqNo)
@@ -1489,6 +1486,16 @@ IAXEvent* IAXTransaction::internalReject(String& reason)
     event->getList().appendString(IAXInfoElement::CAUSE,reason);
     m_localReqEnd = true;
     return event;
+}
+
+void IAXTransaction::eventTerminated(IAXEvent* event)
+{
+    Lock lock(this);
+    if (event && event == m_currentEvent) {
+	XDebug(m_engine,DebugAll,"Transaction(%u,%u). Event (%p) terminated. [%p]",
+	    localCallNo(),remoteCallNo(),event,this);
+	m_currentEvent = 0;
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

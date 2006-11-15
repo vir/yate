@@ -150,13 +150,22 @@ public:
     virtual void toBuffer(DataBlock& buf);
 
     /**
+     * Add this element to a string
+     * @param buf Destination string
+     */
+    virtual void toString(String& buf);
+
+    /**
      * Get the text associated with an IE type value
      * @param ieCode Numeric code of the IE
      * @return Pointer to the IE text or 0 if it doesn't exist
      */
-    static const char* ieText(u_int8_t ieCode);
+    static inline const char* ieText(u_int8_t ieCode)
+	{ return lookup(ieCode,s_ieData); }
+
 
 private:
+    static TokenDict s_ieData[];// Association between IE type and text
     Type m_type;		// Type of this IE
 };
 
@@ -201,6 +210,13 @@ public:
      */
     virtual void toBuffer(DataBlock& buf);
 
+    /**
+     * Add this element to a string
+     * @param buf Destination string
+     */
+    virtual void toString(String& buf)
+	{ buf << m_strData; }
+
 private:
     String m_strData;		// IE text data
 };
@@ -244,6 +260,12 @@ public:
      * @param buf Destination buffer
      */
     virtual void toBuffer(DataBlock& buf);
+
+    /**
+     * Add this element to a string
+     * @param buf Destination string
+     */
+    virtual void toString(String& buf);
 
 private:
     u_int8_t m_length;		// IE data length
@@ -306,6 +328,12 @@ public:
      */
     static bool unpackIP(SocketAddr& addr, IAXInfoElementBinary* ie);
 
+    /**
+     * Add this element to a string
+     * @param buf Destination string
+     */
+    virtual void toString(String& buf);
+
 private:
     DataBlock m_data;		// IE binary data
 };
@@ -326,9 +354,10 @@ public:
     /**
      * Constructor. Construct the list from an IAXFullFrame object
      * @param frame Source object
+     * @param incoming True if it is an incoming frame
      */
-    inline IAXIEList(const IAXFullFrame* frame) : m_invalidIEList(false)
-	{ createFromFrame(frame); }
+    inline IAXIEList(const IAXFullFrame* frame, bool incoming = true) : m_invalidIEList(false)
+	{ createFromFrame(frame,incoming); }
 
     /**
      * Destructor
@@ -417,15 +446,23 @@ public:
      * Construct the list from an IAXFullFrame object.
      *  On exit m_invalidIEList will contain the opposite of the returned value
      * @param frame Source object
+     * @param incoming True if it is an incoming frame
      * @return False if the frame contains invalid IEs
      */
-    bool createFromFrame(const IAXFullFrame* frame);
+    bool createFromFrame(const IAXFullFrame* frame, bool incoming = true);
 
     /**
      * Construct a buffer from this list
      * @param buf Destination buffer
      */
     void toBuffer(DataBlock& buf);
+
+    /**
+     * Add this list to a string
+     * @param dest Destination string
+     * @param indent Optional indent for each element
+     */
+    void toString(String& dest, const char* indent = 0);
 
     /**
      * Get an IAXInfoElement from the list
@@ -478,6 +515,16 @@ public:
         MD5  = 2,
         RSA  = 4,
     };
+
+    /**
+     * Create a string list from authentication methods
+     * @param dest The destination
+     * @param formats The authentication methods
+     * @param sep The separator to use
+    */
+    static void authList(String& dest, u_int16_t auth, char sep);
+
+    static TokenDict s_texts[];
 };
 
 /**
@@ -527,14 +574,16 @@ public:
      * @param audio The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist
     */
-    static const char* audioText(u_int32_t audio);
+    static inline const char* audioText(u_int32_t audio)
+	{ return lookup(audio,audioData); }
 
     /**
      * Get the text associated with a video format
      * @param video The desired format
      * @return A pointer to the text associated with the format or 0 if the format doesn't exist
     */
-    static const char* videoText(u_int32_t video);
+    static inline const char* videoText(u_int32_t video)
+	{ return lookup(video,videoData); }
 
     /**
      * Keep the texts associated with the audio formats
@@ -596,6 +645,17 @@ public:
         FwDownl   = 0x24,
         FwData    = 0x25,
     };
+
+    /**
+     * Get the string associated with the given IAX control type
+     * @param type The requested type
+     * @return The text if type is valid or 0
+     */
+    static inline const char* typeText(int type)
+	{ return lookup(type,s_types,0); }
+
+private:
+    static TokenDict s_types[]; // Keep the association between IAX control codes and their name
 };
 
 /**
@@ -703,6 +763,14 @@ public:
      */
     static u_int32_t unpackSubclass(u_int8_t value);
 
+    /**
+     * Get the string associated with the given IAX frame type
+     * @param type The requested type
+     * @return The text if type is valid or 0
+     */
+    static inline const char* typeText(int type)
+	{ return lookup(type,s_types,0); }
+
 protected:
     /**
      * Contains the frame's IE list for an incoming frame or the whole frame for an outgoing one
@@ -715,6 +783,7 @@ protected:
     bool m_retrans;
 
 private:
+    static TokenDict s_types[]; // Keep the association between IAX frame types and their names
     Type m_type;		// Frame type
     u_int16_t m_sCallNo;	// Source call number
     u_int32_t m_tStamp;		// Frame timestamp
@@ -822,7 +891,26 @@ public:
      */
     virtual const IAXFullFrame* fullFrame() const;
 
+    /**
+     * Fill a string with this frame
+     * @param dest The string to fill
+     * @param local The local address
+     * @param remote The remote address
+     * @param incoming True if it is an incoming frame
+     */
+    void toString(String& dest, const SocketAddr& local, const SocketAddr& remote,
+	bool incoming) const;
+
+    /**
+     * Get the string associated with the given IAX control type
+     * @param type The requested control type
+     * @return The text if type is valid or 0
+     */
+    static inline const char* controlTypeText(int type)
+	{ return lookup(type,s_controlTypes,0); }
+
 private:
+    static TokenDict s_controlTypes[]; // Keep the association between control types and their names
     u_int16_t m_dCallNo;	// Destination call number
     unsigned char m_oSeqNo;	// Out sequence number
     unsigned char m_iSeqNo;	// In sequence number
@@ -1709,11 +1797,7 @@ protected:
      * This method is thread safe
      * @param event The event notifying termination
      */
-    inline void eventTerminated(IAXEvent* event) {
-	Lock lock(this);
-	if (event == m_currentEvent)
-	    m_currentEvent = 0;
-    }
+    void eventTerminated(IAXEvent* event);
 
     /**
      * Set the current event
@@ -2055,9 +2139,10 @@ public:
      * @param buf Data to write
      * @param len Data length
      * @param addr Socket to write to
+     * @param frame Optional frame to be printed if debug is DebugAll
      * @return True on success
      */
-    bool writeSocket(const void* buf, int len, const SocketAddr& addr);
+    bool writeSocket(const void* buf, int len, const SocketAddr& addr, IAXFullFrame* frame = 0);
 
     /**
      * Read events

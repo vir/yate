@@ -428,7 +428,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 		{
 		SocketAddr addr;
 		IAXInfoElementBinary::unpackIP(addr,static_cast<IAXInfoElementBinary*>(ie));
-		dest << addr.host() << ":" << addr.port();
+		dest << addr.host() << ':' << addr.port();
 		}
 		break;
 	    case IAXInfoElement::PROVISIONING:
@@ -457,12 +457,14 @@ void IAXIEList::toString(String& dest, const char* indent)
 		ie->toString(dest);
 		break;
 	    case IAXInfoElement::SAMPLINGRATE:
-		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data() << " Hz";
+		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data()) << " Hz";
 		break;
 	    case IAXInfoElement::RR_LOSS:
 		{
 		u_int32_t val = (static_cast<IAXInfoElementNumeric*>(ie))->data();
-		dest << (val & 0xFF000000) << "% (" << (val & 0x00FFFFFF) << ')';
+		unsigned int percent = (unsigned int)(val & 0xFF000000);
+		unsigned int count = (unsigned int)(val & 0x00FFFFFF);
+		dest << count << " (" << percent << "%)";
 		}
 		break;
 	    case IAXInfoElement::RR_JITTER:
@@ -470,7 +472,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 	    case IAXInfoElement::RR_DROPPED:
 	    case IAXInfoElement::RR_OOO:
 	    case IAXInfoElement::RR_DELAY:
-		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data());
 		break;
 	    case IAXInfoElement::TRANSFERID:
 	    case IAXInfoElement::PROVVER:
@@ -479,7 +481,7 @@ void IAXIEList::toString(String& dest, const char* indent)
 		break;
 	    // 2 bytes
 	    case IAXInfoElement::REFRESH:
-		dest << (static_cast<IAXInfoElementNumeric*>(ie))->data();
+		dest << (unsigned int)((static_cast<IAXInfoElementNumeric*>(ie))->data());
 		dest << " second(s)";
 		break;
 	    case IAXInfoElement::ADSICPE:
@@ -605,12 +607,13 @@ TokenDict IAXFormat::videoData[] = {
 void IAXFormat::formatList(String& dest, u_int32_t formats, char sep)
 {
     String s = sep;
-    for (u_int32_t i = 0; audioData[i].value; i++) {
+    u_int32_t i;
+    for (i = 0; audioData[i].value; i++) {
 	if (0 == (audioData[i].value & formats))
 	    continue;
 	dest.append(audioData[i].token,s);
     }
-    for (u_int32_t i = 0; videoData[i].value; i++) {
+    for (i = 0; videoData[i].value; i++) {
 	if (0 == (videoData[i].value & formats))
 	    continue;
 	dest.append(videoData[i].token,s);
@@ -934,7 +937,7 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
 	    subc = "Subclass: ";
 	    break;
 	case IAXFrame::Noise:
-	    subc << subclass() << " -dBov";
+	    subc << (unsigned int)(subclass()) << " -dBov";
 	    break;
 	default:
 	    subc = unk;
@@ -962,7 +965,7 @@ void IAXFullFrame::toString(String& dest, const SocketAddr& local,
     else
 	dest << destCallNo();
     // Info
-    dest << ". Timestamp: " << timeStamp();
+    dest << ". Timestamp: " << (unsigned int)(timeStamp());
     dest << ". Retrans: " << String::boolText(retrans());
     dest << ". Sequence numbers: Out: " << oSeqNo() << " In: " << iSeqNo();
     // IEs

@@ -39,9 +39,10 @@ class JGEvent;
 class JGEngine;
 class JGSentStanza;
 
-// Defines
-#define JGSESSION_ENDTIMEOUT          2  // Time to wait before destroing a session after hangup
-#define JGSESSION_STANZATIMEOUT      10  // Time to wait for a response
+// Time to wait before destroing a session after hangup
+#define JGSESSION_ENDTIMEOUT         2000
+// Time to wait for a response
+#define JGSESSION_STANZATIMEOUT      10000
 
 /**
  * This class holds a Jingle audio payload description.
@@ -224,9 +225,22 @@ public:
 	ActRedirect,                     // redirect
 	ActReject,                       // reject
 	ActTerminate,                    // terminate
+	ActTransport,                    // Used to set/get transport info
 	ActTransportInfo,                // transport-info
+	ActTransportCandidates,          // candidates
 	ActTransportAccept,              // transport-accept
+	ActContentInfo,                  // content-info
+	ActDtmf,                         // Used to set/get dtmf content-info element
+	ActDtmfMethod,                   // Used to set/get dtmf method content-info element
 	ActCount,
+    };
+
+    /**
+     * Jingle client type.
+     */
+    enum TransportType {
+	TransportInfo,                  // transport-info
+	TransportCandidates,            // candidates
     };
 
     /**
@@ -312,6 +326,31 @@ public:
     bool sendResult(const char* id);
 
     /**
+     * Send a dtmf character to remote peer.
+     * This method is thread safe.
+     * @param dtmf The dtmf character.
+     * @param buttonUp True to send button-up action. False to send button-down.
+     * @return False if send failed.
+     */
+    bool sendDtmf(char dtmf, bool buttonUp = true);
+
+    /**
+     * Send a dtmf method to remote peer.
+     * This method is thread safe.
+     * @param method The method to send.
+     * @return False if send failed.
+     */
+    bool sendDtmfMethod(const char* method);
+
+    /**
+     * Deny a dtmf method request from remote peer.
+     * This method is thread safe.
+     * @param element The received 'iq' element with the method.
+     * @return False if send failed.
+     */
+    bool denyDtmfMethod(XMLElement* element);
+
+    /**
      * Create and sent an 'error' element.
      * This method is thread safe.
      * @param element The element to respond to.
@@ -331,7 +370,7 @@ public:
      * @return False if send failed.
      */
     inline bool requestTransport(JGTransport* transport)
-	{ return sendTransport(transport,ActTransportInfo); }
+	{ return sendTransport(transport,ActTransport); }
 
     /**
      * Send a 'transport-accept' element to the remote peer.
@@ -392,6 +431,19 @@ public:
      */
     static inline const char* actionText(Action action)
 	{ return lookup(action,s_actions); }
+
+    /**
+     * Check if the given parameter is a valid dtmf character.
+     * @param dtmf Character to check.
+     * @return True if the given parameter is a valid dtmf character.
+     */
+    static inline bool isDtmf(char dtmf)
+	{ return -1 != s_dtmf.find(dtmf); }
+
+    /**
+     * Keeps the dtmf chars.
+     */
+    static String s_dtmf;
 
 protected:
     /**
@@ -459,6 +511,28 @@ protected:
      * @return True on success.
      */
     bool decodeJingle(JGEvent* event);
+
+    /**
+     * Process a content-info jingle element.
+     * Set the event's data on success.
+     * @param event The event to check.
+     * @return True on success.
+     */
+    bool JGSession::processContentInfo(JGEvent* event);
+
+    /**
+     * Update media payloads from a Jingle event.
+     * @param event The event to process.
+     * @return True on success.
+     */
+    bool updateMedia(JGEvent* event);
+
+    /**
+     * Update transport candidates from a Jingle event.
+     * @param event The event to process.
+     * @return True on success.
+     */
+    bool updateTransport(JGEvent* event);
 
     /**
      * Set the message text of the the given event.
@@ -532,12 +606,12 @@ protected:
     /**
      * Create an 'iq' of type 'set' or 'get' with a 'jingle' child.
      * @param action The action of the Jingle stanza.
-     * @param media Media description element.
-     * @param transport Transport description element.
+     * @param element1 Optional child element.
+     * @param element2 Optional child element.
      * @return Valid XMLElement pointer.
      */
     XMLElement* createJingleSet(Action action,
-	XMLElement* media = 0, XMLElement* transport = 0);
+	XMLElement* element1 = 0, XMLElement* element2 = 0);
 
     /**
      * Confirm the given element if has to.
@@ -588,6 +662,7 @@ private:
 
     // State info
     State m_state;                       // Session state
+    TransportType m_transportType;       // Remote client type
     // Links
     JGEngine* m_engine;                  // The engine that owns this session
     JBComponentStream* m_stream;         // The stream this session is bound to
@@ -618,7 +693,20 @@ class YJINGLE_API JGEvent
     friend class JGSession;
 public:
     enum Type {
-	Jingle,                          // Action: All, except ActReject, ActTerminate
+	Jingle,                          // Actions:
+	                                 //  ActAccept
+	                                 //  ActInitiate
+	                                 //  ActModify
+	                                 //  ActRedirect
+	                                 //  ActReject               Never: See Terminated event
+	                                 //  ActTerminate            Never: See Terminated event
+	                                 //  ActTransport            Transport candidade(s)
+	                                 //  ActTransportInfo        Never
+	                                 //  ActTransportCandidates  Never
+	                                 //  ActTransportAccept
+	                                 //  ActContentInfo          Never
+	                                 //  ActDtmf                 m_reason is button-up/button-down. m_text is the dtmf
+	                                 //  ActDtmfMethod           m_text is the dtmf method: rtp/xmpp
 	Message,                         // m_text is the message body
 	Error,
 	Unexpected,                      // Unexpected or invalid element
@@ -734,7 +822,7 @@ private:
     ObjList m_transport;                 // The received transport data
     String m_id;                         // The element's id attribute
     String m_reason;                     // The reason if type is Error or Terminated 
-    String m_text;                       // The text if type is Error
+    String m_text;                       // The text if type is Error or any other text
 };
 
 /**
@@ -859,7 +947,7 @@ public:
      * @param time The sent time.
      */
     JGSentStanza(const char* id, u_int64_t time = Time::msecNow())
-	: m_id(id), m_time(time + JGSESSION_STANZATIMEOUT * 1000)
+	: m_id(id), m_time(time + JGSESSION_STANZATIMEOUT)
 	{}
 
     /**

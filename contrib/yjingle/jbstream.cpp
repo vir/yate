@@ -98,7 +98,7 @@ void JBComponentStream::connect()
     }
     m_state = WaitToConnect;
     // Check restart counters: If both of them are 0 destroy the stream
-    Debug(m_engine,DebugInfo,
+    DDebug(m_engine,DebugInfo,
 	"Stream::connect. Remaining attempts: Partial: %d. Total: %d. [%p]",
 	m_partialRestart,m_totalRestart,this);
     if (!(m_partialRestart && m_totalRestart)) {
@@ -144,7 +144,6 @@ void JBComponentStream::connect()
     m_socket->setBlocking(false);
     lock.drop();
     // Start
-    DDebug(m_engine,DebugInfo,"Stream::connect. Starting stream. [%p]",this);
     XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
 	XMPPNamespace::ComponentAccept);
     start->setAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]);
@@ -380,11 +379,11 @@ JBComponentStream::Error JBComponentStream::sendXML()
     if (m_engine->debugAt(DebugAll)) {
 	String eStr;
 	XMPPUtils::print(eStr,e->element());
-	Debug(m_engine,DebugInfo,"Stream::sendXML(%p). [%p]%s",
-	    e->element(),this,eStr.c_str());
+	Debug(m_engine,DebugInfo,"Stream. Send XML. [%p]%s",
+	    this,eStr.c_str());
     }
     else
-	Debug(m_engine,DebugInfo,"Stream::sendXML((%p): '%s'). [%p]",
+	DDebug(m_engine,DebugInfo,"Stream::sendXML((%p): '%s'). [%p]",
 	    e->element(),e->element()->name(),this);
     // Prepare & send
     u_int32_t len;
@@ -416,11 +415,11 @@ bool JBComponentStream::sendStreamXML(XMLElement* element, State newState,
 	if (before)
 	    XMPPUtils::print(eStr,before);
 	XMPPUtils::print(eStr,element);
-	Debug(m_engine,DebugInfo,"Stream::sendStreamXML. [%p]%s",
+	Debug(m_engine,DebugInfo,"Stream. Send XML. [%p]%s",
 	    this,eStr.c_str());
     }
     else
-	Debug(m_engine,DebugInfo,"Stream::sendStreamXML('%s'). [%p]",
+	DDebug(m_engine,DebugInfo,"Stream::sendStreamXML('%s'). [%p]",
 	    element->name(),this);
     String tmp, buff;
     switch (element->type()) {
@@ -479,11 +478,11 @@ bool JBComponentStream::processIncomingXML()
 	if (m_engine->debugAt(DebugAll)) {
 	    String eStr;
 	    XMPPUtils::print(eStr,element);
-	    Debug(m_engine,DebugInfo,"Stream::processIncomingXML(%p) [%p]. %s",
-	        element,this,eStr.c_str());
+	    Debug(m_engine,DebugInfo,"Stream. Received XML [%p]. %s",
+	        this,eStr.c_str());
 	}
 	else
-	    Debug(m_engine,DebugInfo,"Stream::processIncomingXML((%p): '%s'). [%p].",
+	    DDebug(m_engine,DebugInfo,"Stream::processIncomingXML((%p): '%s'). [%p].",
 		element,element->name(),this);
 	// Check if we received a stream end or stream error
 	if (isStreamEnd(element))
@@ -536,7 +535,7 @@ bool JBComponentStream::processStateStarted(XMLElement* e)
 	return true;
     }
     // Send auth
-    Debug(m_engine,DebugAll,
+    Debug(m_engine,DebugInfo,
 	"Stream::processStateStarted(%p). Accepted. Send auth. [%p]",e,this);
     String handshake;
     m_engine->createSHA1(handshake,m_id,m_password);
@@ -554,7 +553,7 @@ bool JBComponentStream::processStateAuth(XMLElement* e)
     if (e->type() != XMLElement::Handshake)
 	return unexpectedElement(e);
     delete e;
-    Debug(m_engine,DebugAll,
+    Debug(m_engine,DebugInfo,
 	"Stream::processStateAuth(%p). Authenticated. [%p]",e,this);
     m_state = Running;
     return false;
@@ -683,12 +682,12 @@ JBEvent* JBComponentStream::addEvent(JBEvent::Type type,
 {
     Lock2 lock(*this,m_receiveMutex);
     JBEvent* ev = new JBEvent(type,this,element,child);
-    Debug(m_engine,DebugAll,"Stream::addEvent((%p): %u). [%p]",ev,ev->type(),this);
+    DDebug(m_engine,DebugAll,"Stream::addEvent((%p): %u). [%p]",ev,ev->type(),this);
     // Append event
     // If we already have a terminated event, ignore the new one
     if (type == JBEvent::Destroy || type == JBEvent::Terminated) {
 	if (m_terminateEvent) {
-	    Debug(m_engine,DebugAll,
+	    DDebug(m_engine,DebugAll,
 		"Stream::addEvent. Ignoring terminating event ((%p): %u). Already set. [%p]",
 		ev,ev->type(),this);
 	    delete ev;
@@ -710,7 +709,7 @@ bool JBComponentStream::addEventNotify(JBEvent::Type type,
     if (raise) {
 	e = element->release();
 	JBEvent* ev = new JBEvent(type,this,e,&(element->id()));
-	Debug(m_engine,DebugAll,
+	DDebug(m_engine,DebugAll,
 	    "Stream::addEventNotify((%p): %u). [%p]",ev,ev->type(),this);
 	m_events.append(ev);
     }
@@ -727,7 +726,7 @@ bool JBComponentStream::addEventNotify(JBEvent::Type type,
 bool JBComponentStream::invalidElement(XMLElement* e, XMPPError::Type type,
 	const char* text)
 {
-    Debug(m_engine,DebugAll,
+    Debug(m_engine,DebugNote,
 	"Stream. Received invalid element ((%p): '%s') in state %u. Error: '%s'. [%p]",
 	e,e->name(),state(),s_err[type],this);
     delete e;
@@ -737,7 +736,7 @@ bool JBComponentStream::invalidElement(XMLElement* e, XMPPError::Type type,
 
 bool JBComponentStream::unexpectedElement(XMLElement* e)
 {
-    Debug(m_engine,DebugInfo,
+    Debug(m_engine,DebugNote,
 	"Stream. Ignoring unexpected element ((%p): '%s') in state %u. [%p]",
 	e,e->name(),state(),this);
     delete e;
@@ -751,7 +750,7 @@ bool JBComponentStream::isStreamEnd(XMLElement* e)
     bool end = (e->type() == XMLElement::StreamEnd);
     bool error = (e->type() == XMLElement::StreamError);
     if (end || error) {
-	Debug(m_engine,DebugAll,"Stream. Received stream  %s in state %u. [%p]",
+	DDebug(m_engine,DebugAll,"Stream. Received stream  %s in state %u. [%p]",
 	    end?"end":"error",state(),this);
 	terminate(false,true,e,false);
 	return true;

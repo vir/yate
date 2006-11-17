@@ -89,6 +89,8 @@ public:
 	Bind,                            // bind
 	Resource,                        // resource
 	// Miscellanous
+	Dtmf,                            // dtmf
+	DtmfMethod,                      // dtmf-method
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };

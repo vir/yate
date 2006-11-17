@@ -38,6 +38,10 @@ class JBServerInfo;
 class JBEngine;
 class JBClient;
 class JBPresence;
+class JIDResource;
+class JIDResourceList;
+class XMPPUser;
+class XMPPUserRoster;
 
 /**
  * This class holds a Jabber Component stream event.
@@ -388,6 +392,7 @@ protected:
      */
     Error sendIqError(XMLElement* stanza, XMPPError::ErrorType eType,
 	XMPPError::Type eCond, const char* eText = 0);
+
     /**
      * Cleanup stream.
      * Remove the first element from the outgoing list if partially sent.
@@ -736,6 +741,13 @@ public:
     virtual int getPort(const String& remoteAddr);
 
     /**
+     * Check if the process is terminating.
+     * @return True if the process is terminating.
+     */
+    virtual bool exiting()
+	{ return false; }
+
+    /**
      * Append a servr info element to the list.
      * @param server The object to add.
      * @param open True to open the stream.
@@ -831,8 +843,8 @@ private:
     Mutex m_clientsMutex;                // Lock clients list
     ObjList m_clients;                   // XMPP clients list
     JBPresence* m_presence;              // The presence server
-    Mutex m_featuresMutex;               // Lock m_feature
-    ObjList m_features;                  // Remote peers' features
+    JIDIdentity* m_identity;             // Engine's identity
+    JIDFeatureList m_features;           // Engine's features
     int m_partialStreamRestart;          // Partial outgoing stream restart attempts counter
     int m_totalStreamRestart;            // Total outgoing stream restart attempts counter
     u_int32_t m_waitStreamRestart;       // How much time to wait after m_partialStreamRestart reaches 0
@@ -884,6 +896,7 @@ private:
  */
 class YJINGLE_API JBPresence : public DebugEnabler, public JBClient, public Mutex
 {
+    friend class XMPPUserRoster;
 public:
     /**
      * Presence enumeration.
@@ -903,13 +916,48 @@ public:
      * Constructor.
      * Constructs an Jabber Component presence server.
      * @param engine The Jabber Component engine.
+     * @param params Engine's parameters.
      */
-    JBPresence(JBEngine* engine);
+    JBPresence(JBEngine* engine, const NamedList& params);
 
     /**
      * Destructor.
      */
     virtual ~JBPresence();
+
+    /**
+     * Get the auto subscribe parameter.
+     * @return The auto subscribe parameter.
+     */
+    inline int autoSubscribe() const
+	{ return m_autoSubscribe; }
+
+    /**
+     * Check if the unavailable resources must be deleted.
+     * @return The delete unavailable parameter.
+     */
+    inline bool delUnavailable() const
+	{ return m_delUnavailable; }
+
+    /**
+     * Get the probe interval. Time to send a probe if nothing was received from that user.
+     * @return The probe interval.
+     */
+    inline u_int32_t probeInterval()
+	{ return m_probeInterval; }
+
+    /**
+     * Get the expire after probe interval.
+     * @return The expire after probe interval.
+     */
+    inline u_int32_t expireInterval()
+	{ return m_expireInterval; }
+
+    /**
+     * Initialize the engine.
+     * @param params Engine's parameters.
+     */
+    void initialize(const NamedList& params);
 
     /**
      * Add an event to the list.
@@ -934,56 +982,194 @@ public:
     /**
      * Process disco info elements.
      * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processDisco(JBEvent* event);
+    virtual void processDisco(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
 
     /**
      * Process a presence error element.
      * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processError(JBEvent* event);
+    virtual void processError(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
 
     /**
      * Process a presence probe element.
      * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processProbe(JBEvent* event);
+    virtual void processProbe(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
 
     /**
      * Process a presence subscribe element.
      * @param event The event with the element.
+     * @param presence Presence type: Subscribe,Subscribed,Unsubscribe,Unsubscribed.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processSubscribe(JBEvent* event);
-
-    /**
-     * Process a presence subscribed element.
-     * @param event The event with the element.
-     */
-    virtual void processSubscribed(JBEvent* event);
-
-    /**
-     * Process a presence unsubscribe element.
-     * @param event The event with the element.
-     */
-    virtual void processUnsubscribe(JBEvent* event);
-
-    /**
-     * Process a presence unsubscribed element.
-     * @param event The event with the element.
-     */
-    virtual void processUnsubscribed(JBEvent* event);
+    virtual void processSubscribe(JBEvent* event, Presence presence,
+	const JabberID& local, const JabberID& remote);
 
     /**
      * Process a presence unavailable element.
      * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processUnavailable(JBEvent* event);
+    virtual void processUnavailable(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
 
     /**
      * Process a presence element.
      * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
      */
-    virtual void processUnknown(JBEvent* event);
+    virtual void processPresence(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
+
+    /**
+     * Notify on probe request with users we don't know about.
+     * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
+     * @return False to send item-not-found error.
+     */
+    virtual bool notifyProbe(JBEvent* event, const JabberID& local,
+	const JabberID& remote);
+
+    /**
+     * Notify on subscribe event with users we don't know about.
+     * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
+     * @param presence Presence type: Subscribe,Subscribed,Unsubscribe,Unsubscribed.
+     * @return False to send item-not-found error.
+     */
+    virtual bool notifySubscribe(JBEvent* event,
+	const JabberID& local, const JabberID& remote, Presence presence);
+
+    /**
+     * Notify on subscribe event.
+     * @param user The user that received the event.
+     * @param presence Presence type: Subscribe,Subscribed,Unsubscribe,Unsubscribed.
+     */
+    virtual void notifySubscribe(XMPPUser* user, Presence presence);
+
+    /**
+     * Notify on presence event with users we don't know about or presence unavailable
+     *  received without resource (the remote user is entirely unavailable).
+     * @param event The event with the element.
+     * @param local The local (destination) user.
+     * @param remote The remote (source) user.
+     * @param available The availability of the remote user.
+     * @return False to send item-not-found error.
+     */
+    virtual bool notifyPresence(JBEvent* event, const JabberID& local,
+	const JabberID& remote, bool available);
+
+    /**
+     * Notify on state/capabilities change.
+     * @param user The user that received the event.
+     * @param resource The resource that changet its state or capabilities.
+     */
+    virtual void notifyPresence(XMPPUser* user, JIDResource* resource);
+
+    /**
+     * Notify when a new user is added.
+     * Used basically to add a local resource.
+     * @param user The new user.
+     */
+    virtual void notifyNewUser(XMPPUser* user);
+
+    /**
+     * Get a roster. Add a new one if requested.
+     * This method is thread safe.
+     * @param jid The user's jid.
+     * @param add True to add the user if doesn't exists.
+     * @param added Optional parameter to be set if a new user was added.
+     * @return Referenced pointer or 0 if none.
+     */
+    XMPPUserRoster* getRoster(const JabberID& jid, bool add, bool* added);
+
+    /**
+     * Get a remote peer of a local one. Add a new one if requested.
+     * This method is thread safe.
+     * @param local The local peer.
+     * @param remote The remote peer.
+     * @param addLocal True to add the local user if doesn't exists.
+     * @param addedLocal Optional parameter to be set if a new local user was added.
+     * @param addRemote True to add the remote user if doesn't exists.
+     * @param addedRemote Optional parameter to be set if a new remote user was added.
+     * @return Referenced pointer or 0 if none.
+     */
+    XMPPUser* getRemoteUser(const JabberID& local, const JabberID& remote,
+	bool addLocal, bool* addedLocal, bool addRemote, bool* addedRemote);
+
+    /**
+     * Remove a remote peer of a local one.
+     * This method is thread safe.
+     * @param local The local peer.
+     * @param remote The remote peer.
+     */
+    void removeRemoteUser(const JabberID& local, const JabberID& remote);
+
+    /**
+     * Check if the given domain is a valid (known) one.
+     * @param domain The domain name to check.
+     * @return True if the given domain is a valid one.
+     */
+    bool validDomain(const String& domain);
+
+    /**
+     * Try to get a stream from Jabber engine if stream parameter is 0.
+     * @param stream Stream to check.
+     * @param release Set to true on exit if the caller must deref the stream.
+     * @return True if stream is valid.
+     */
+    bool getStream(JBComponentStream*& stream, bool& release);
+
+    /**
+     * Send an element through the given stream.
+     * If the stream is 0 try to get one from the engine.
+     * In any case the element is consumed (deleted).
+     * @param element Element to send.
+     * @param stream The stream to send through.
+     * @return The result of send operation. False if element is 0.
+     */
+    bool sendStanza(XMLElement* element, JBComponentStream* stream);
+
+    /**
+     * Send an error. Error type is 'modify'.
+     * If id is 0 sent element will be of type 'presence'. Otherwise: 'iq'.
+     * @param type The error.
+     * @param from The from attribute.
+     * @param to The to attribute.
+     * @param element The element that generated the error.
+     * @param stream Optional stream to use.
+     * @param id Optional id. If present (even if empty) the error element will be of type 'iq'.
+     * @return The result of send operation.
+     */
+    bool sendError(XMPPError::Type type, const String& from, const String& to,
+	XMLElement* element, JBComponentStream* stream = 0, const String* id = 0);
+
+    /**
+     * Check timeout.
+     * This method is thread safe.
+     * @param time Current time.
+     */
+    void checkTimeout(u_int64_t time);
+
+    /**
+     * Keep calling checkTimeout().
+     */
+    void runCheckTimeout();
 
     /**
      * Create an 'presence' element.
@@ -1013,6 +1199,7 @@ public:
      */
     static inline Presence presenceType(const char* txt)
 	{ return (Presence)lookup(txt,s_presence,None); }
+
     /**
      * Get the text from a presence type.
      * @param presence The presence type.
@@ -1021,9 +1208,613 @@ public:
     static inline const char* presenceText(Presence presence)
 	{ return lookup(presence,s_presence,0); }
 
+    /**
+     * Cleanup rosters.
+     */
+    void cleanup();
+
 protected:
-    ObjList m_events;                    // Incoming events from Jabber engine
+    /**
+     * Check if the given jid has a valid domain. Send error if not.
+     * @param event The event with element.
+     * @param domain The destination jid.
+     * @return True if jid has a valid domain.
+     */
+    bool checkDestination(JBEvent* event, const JabberID& jid);
+
     static TokenDict s_presence[];       // Keep the types of 'presence'
+    int m_autoSubscribe;                 // Auto subscribe state 
+    bool m_delUnavailable;               // Delete unavailable user or resource
+    bool m_addOnSubscribe;               // Add new user on subscribe request
+    bool m_addOnProbe;                   // Add new user on probe request
+    bool m_addOnPresence;                // Add new user on presence
+    u_int32_t m_probeInterval;           // Interval to probe a remote user
+    u_int32_t m_expireInterval;          // Expire interval after probe
+    ObjList m_events;                    // Incoming events from Jabber engine
+    ObjList m_rosters;                   // The rosters
+
+private:
+    void addRoster(XMPPUserRoster* ur);
+    void removeRoster(XMPPUserRoster* ur);
+};
+
+/**
+ * This class holds a JID resource (name,presence,capabilities).
+ * @short A JID resource.
+ */
+class YJINGLE_API JIDResource : public RefObject
+{
+public:
+    /**
+     * Resource capabilities enumeration.
+     */
+    enum Capability {
+	CapChat                = 1,      // Chat capability
+	CapAudio               = 2,      // Jingle capability
+    };
+
+    /**
+     * Resource presence enumeration.
+     */
+    enum Presence {
+	Unknown                = 0,      // unknown
+	Available              = 1,      // available
+	Unavailable            = 2,      // unavailable
+    };
+
+    /**
+     * Values of the 'show' child of a presence element.
+     */
+    enum Show {
+	ShowAway,                        // away : Temporarily away
+	ShowChat,                        // chat : Actively interested in chatting
+	ShowDND,                         // dnd  : Busy
+	ShowXA,                          // xa   : Extended away
+	ShowNone,                        //      : Missing or no text
+    };
+
+    /**
+     * Constructor. Set data members.
+     * @param name The resource name.
+     * @param presence The resource presence.
+     * @param capability The resource capability.
+     */
+    inline JIDResource(const char* name, Presence presence = Unknown,
+	u_int32_t capability = CapChat)
+	: m_name(name), m_presence(presence),
+	  m_capability(capability), m_show(ShowNone)
+	{}
+
+    /**
+     * Destructor.
+     */
+    inline virtual ~JIDResource()
+	{}
+
+    /**
+     * Get the resource name.
+     * @return The resource name.
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
+     * Get the presence attribute.
+     * @return The presence attribute.
+     */
+    inline Presence presence() const
+	{ return m_presence; }
+
+    /**
+     * Check if the resource is available.
+     * @return True if the resource is available.
+     */
+    inline bool available() const
+	{ return (m_presence == Available); }
+
+    /**
+     * Get the show attribute as enumeration.
+     * @return The show attribute as enumeration.
+     */
+    inline Show show() const
+	{ return m_show; }
+
+    /**
+     * Set the show attribute.
+     * @param s The new show attribute.
+     */
+    inline void show(Show s)
+	{ m_show = s; }
+
+    /**
+     * Get the status of this resource.
+     * @return The status of this resource.
+     */
+    inline const String& status() const
+	{ return m_status; }
+
+    /**
+     * Set the status of this resource.
+     * @param s The new status of this resource.
+     */
+    inline void status(const char* s)
+	{ m_status = s; }
+
+    /**
+     * Set the presence information.
+     * @param value True if available, False if not.
+     * @return True if presence changed.
+     */
+    bool setPresence(bool value);
+
+    /**
+     * Check if the resource has the required capability.
+     * @param capability The required capability.
+     * @return True if the resource has the required capability.
+     */
+    inline bool hasCap(Capability capability) const
+	{ return (m_capability & capability); }
+
+    /**
+     * Update resource from a presence element.
+     * @param element A presence element.
+     * @return True if presence or capability changed changed.
+     */
+    bool fromXML(XMLElement* element);
+
+    /**
+     * Add capabilities to a presence element.
+     * @param element The target presence element.
+     */
+    void addTo(XMLElement* element);
+
+    /**
+     * Get the 'show' child of a presence element.
+     * @param element The XML element.
+     * @return The text or 0.
+     */
+    static const char* getShow(XMLElement* element);
+
+    /**
+     * Get the 'show' child of a presence element.
+     * @param element The XML element.
+     * @return The text or 0.
+     */
+    static const char* getStatus(XMLElement* element);
+
+    /**
+     * Get the type of a 'show' element as enumeration.
+     * @param text The text to check.
+     * @return Show type as enumeration.
+     */
+    static inline Show showType(const char* txt)
+	{ return (Show)lookup(txt,s_show,ShowNone); }
+
+    /**
+     * Get the text from a show type.
+     * @param show The type to get text for.
+     * @return The associated text or 0.
+     */
+    static inline const char* showText(Show show)
+	{ return lookup(show,s_show,0); }
+
+protected:
+    static TokenDict s_show[];           // Show texts
+
+private:
+    String m_name;                       // Resource name
+    Presence m_presence;                 // Resorce presence
+    u_int32_t m_capability;              // Resource capabilities
+    Show m_show;                         // Show attribute
+    String m_status;                     // Status attribute
+};
+
+/**
+ * This class holds a resource list.
+ * @short A resource list.
+ */
+class YJINGLE_API JIDResourceList : public Mutex
+{
+    friend class XMPPUser;
+public:
+    /**
+     * Constructor.
+     */
+    inline JIDResourceList()
+	: Mutex(true)
+	{}
+
+    /**
+     * Add a resource to the list if a resource with the given name
+     *  doesn't exists.
+     * @param name The resource name.
+     * @return False if the the resource already exists in the list.
+     */
+    bool add(const String& name);
+
+    /**
+     * Add a resource to the list if a resource with the same doesn't already
+     *  exists. Destroy the received resource if not added.
+     * @param resource The resource to add.
+     * @return False if the the resource already exists in the list.
+     */
+    bool add(JIDResource* resource);
+
+    /**
+     * Remove a resource from the list.
+     * @param resource The resource to remove.
+     * @param del True to delete the resource.
+     */
+    inline void remove(JIDResource* resource, bool del = true)
+	{ m_resources.remove(resource,del); }
+
+    /**
+     * Clear the list.
+     */
+    inline void clear()
+	{ m_resources.clear(); }
+
+    /**
+     * Get a resource with the given name.
+     * @param name The resource name.
+     * @return A pointer to the resource or 0.
+     */
+    JIDResource* get(const String& name);
+
+    /**
+     * Get the first resource from the list.
+     * @return A pointer to the resource or 0.
+     */
+    inline JIDResource* getFirst() {
+	    ObjList* obj = m_resources.skipNull();
+	    return obj ? static_cast<JIDResource*>(obj->get()) : 0;
+	}
+
+    /**
+     * Get the first resource with audio capability.
+     * @param availableOnly True to get only if available.
+     * @return A pointer to the resource or 0.
+     */
+    JIDResource* getAudio(bool availableOnly = true);
+
+private:
+    ObjList m_resources;                 // The resources list
+};
+
+/**
+ * This class holds a remote XMPP user along with his resources and subscribe state.
+ * @short An XMPP remote user.
+ */
+class YJINGLE_API XMPPUser : public RefObject, public Mutex
+{
+    friend class XMPPUserRoster;
+public:
+    enum Subscription {
+	None = 0,
+	To   = 1,
+	From = 2,
+	Both = 3,
+    };
+
+    /**
+     * Create a remote user.
+     * @param local The local (owner) user peer.
+     * @param node The node (username) of the remote peer.
+     * @param domain The domain of the remote peer.
+     * @param sub The subscription state.
+     * @param subTo True to force a subscribe request to remote peer if not subscribed.
+     * @param sendProbe True to probe the new user.
+     */
+    XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
+	Subscription sub, bool subTo = true, bool sendProbe = true);
+
+    /**
+     * Destructor.
+     * Send unavailable if not already done.
+     */
+    virtual ~XMPPUser();
+
+    /**
+     * Get the jid of this user.
+     * @return The jid of this user.
+     */
+    const JabberID& jid() const
+	{ return m_jid; }
+
+    /**
+     * Get the roster this user belongs to.
+     * @return Pointer to the roster this user belongs to.
+     */
+    inline XMPPUserRoster* local() const
+	{ return m_local; }
+
+    /**
+     * Add a local resource to the list.
+     * Send presence if the remote peer is subscribed to the local one.
+     * This method is thread safe.
+     * @param resource The resource to add.
+     * @return False if the the resource already exists in the list.
+     */
+    bool addLocalRes(JIDResource* resource);
+
+    /**
+     * Remove a local resource from the list.
+     * Send unavailable if the remote peer is subscribed to the local one.
+     * This method is thread safe.
+     * @param resource The resource to remove.
+     */
+    void removeLocalRes(JIDResource* resource);
+
+    /**
+     * Remove all local resources.
+     * Send unavailable if the remote peer is subscribed to the local one.
+     * This method is thread safe.
+     */
+    void clearLocalRes();
+
+    /**
+     * Get the first remote resource with audio capability.
+     * @param local True to request a local resource, false for a remote one.
+     * @param availableOnly True to get only if available.
+     * @return A pointer to the resource or 0.
+     */
+    inline JIDResource* getAudio(bool local, bool availableOnly = true) {
+	    return local ? m_localRes.getAudio(availableOnly) :
+		m_remoteRes.getAudio(availableOnly);
+	}
+
+    /**
+     * Check if the local user is subscribed to the remote one.
+     * @return True if the local user is subscribed to the remote one.
+     */
+    inline bool subscribedTo() const
+	{ return (m_subscription & To); }
+
+    /**
+     * Check if the remote user is subscribed to the local one.
+     * @return True if the remote user is subscribed to the local one.
+     */
+    inline bool subscribedFrom() const
+	{ return (m_subscription & From); }
+
+    /**
+     * Process received disco info/result.
+     * This method is thread safe.
+     * @param event The event with the request.
+     */
+    void processDisco(JBEvent* event);
+
+    /**
+     * Process received error elements.
+     * This method is thread safe.
+     * @param event The event with the element.
+     */
+    void processError(JBEvent* event);
+
+    /**
+     * Process received probe from remote peer.
+     * This method is thread safe.
+     * @param event The event with the element.
+     * @param resName The probed resource if any.
+     */
+    void processProbe(JBEvent* event, const String* resName = 0);
+
+    /**
+     * Process received presence from remote peer.
+     * This method is thread safe.
+     * @param event The event with the element.
+     * @param available The availability of the user.
+     * @param from The sender's jid.
+     * @return False if remote user has no more resources available.
+     */
+    bool processPresence(JBEvent* event, bool available, const JabberID& from);
+
+    /**
+     * Process received subscription from remote peer.
+     * This method is thread safe.
+     * @param event The event with the element.
+     * @param type The subscription type: subscribe/unsubscribe/subscribed/unsubscribed.
+     */
+    void processSubscribe(JBEvent* event, JBPresence::Presence type);
+
+    /**
+     * Probe the remote user.
+     * This method is thread safe.
+     * @param stream Optional stream to use to send the request.
+     * @param time Probe time.
+     * @return True if send succeedded.
+     */
+    bool probe(JBComponentStream* stream, u_int64_t time = Time::msecNow());
+
+    /**
+     * Send subscription to remote peer.
+     * This method is thread safe.
+     * @param type The subscription type: subscribe/unsubscribe/subscribed/unsubscribed.
+     * @param stream Optional stream to use to send the data.
+     * @return True if send succeedded.
+     */
+    bool sendSubscribe(JBPresence::Presence type, JBComponentStream* stream);
+
+    /**
+     * Send unavailable to remote peer.
+     * This method is thread safe.
+     * @param stream Optional stream to use to send the data.
+     * @return True if send succeedded.
+     */
+    bool sendUnavailable(JBComponentStream* stream);
+
+    /**
+     * Send presence to remote peer.
+     * This method is thread safe.
+     * @param resource The resource to send from.
+     * @param stream Optional stream to use to send the data.
+     * @param force True to send even if we've already sent presence from this resource.
+     * @return True if send succeedded.
+     */
+    bool sendPresence(JIDResource* resource, JBComponentStream* stream = 0, bool force = false);
+
+    /**
+     * Check if this user sent us any presence data for a given interval.
+     * This method is thread safe.
+     * @param time Current time.
+     * @return True if the user timed out.
+     */
+    bool timeout(u_int64_t time);
+
+    /**
+     * Notify the state of a resource.
+     * This method is thread safe.
+     * @param remote True for a remote resource: notify the presence engine.
+     *  False for a local resource: send presence to remote user.
+     * @param name Resource name.
+     * @param stream Optional stream to use to send the data if remote is false.
+     * @param force True to send even if we've already sent presence from this resource.
+     */
+    void notifyResource(bool remote, const String& name,
+	JBComponentStream* stream = 0, bool force = false);
+
+    /**
+     * Notify the state of all resources.
+     * This method is thread safe.
+     * @param remote True for remote resources: notify the presence engine.
+     *  False for local resources: send presence to remote user.
+     * @param stream Optional stream to use to send the data if remote is false.
+     * @param force True to send even if we've already sent presence from a resource.
+     */
+    void notifyResources(bool remote, JBComponentStream* stream = 0, bool force = false);
+
+    /**
+     * Get the string associated with a subscription enumeration value.
+     * @param value The subscription enumeration to get string for.
+     * @return Pointer to the string associated with the given subscription enumeration or 0 if none.
+     */
+    static inline const char* subscribeText(int value)
+	{ return lookup(value,s_subscription); }
+
+    /**
+     * Get the subscription enumeration value associated with the given string.
+     * @param value The subscription string.
+     * @return the subscription as enumeration.
+     */
+    static inline int subscribeType(const char* value)
+	{ return lookup(value,s_subscription,None); }
+
+protected:
+    /**
+     * Update subscription state.
+     * @param from True for subscription from remote user. False for subscription to the remote user.
+     * @param value True if subscribed. False is unsubscribed.
+     * @param stream Optional stream to use to send presence if subscription from remote user changed to true.
+     */
+    void updateSubscription(bool from, bool value, JBComponentStream* stream);
+
+    /**
+     * Update user timeout data.
+     * @param from True if the update is made on incoming data. False if timeout is made on outgoing probe.
+     * @param time Current time.
+     */
+    void updateTimeout(bool from, u_int64_t time = Time::msecNow());
+
+    /**
+     * Keep the association between subscription enumeration and strings.
+     */
+    static TokenDict s_subscription[];
+
+private:
+    XMPPUserRoster* m_local;             // Local user
+    JabberID m_jid;                      // User's JID
+    u_int8_t m_subscription;             // Subscription state
+    JIDResourceList m_localRes;          // Local user's resources
+    JIDResourceList m_remoteRes;         // Remote user's resources
+    u_int64_t m_nextProbe;               // Time to probe
+    u_int64_t m_expire;                  // Expire time
+};
+
+/**
+ * This class holds the roster for a local user.
+ * @short The roster of a local user.
+ */
+class YJINGLE_API XMPPUserRoster : public RefObject, public Mutex
+{
+    friend class JBPresence;
+    friend class XMPPUser;
+public:
+    /**
+     * Destructor.
+     * Remove this roster from engine's queue.
+     */
+    virtual ~XMPPUserRoster();
+
+    /**
+     * Get the local user's jid.
+     * @return The local user's jid.
+     */
+    const JabberID& jid() const
+	{ return m_jid; }
+
+    /**
+     * Get the presence engine this user belongs to.
+     * @return Pointer to the presence engine this user belongs to.
+     */
+    JBPresence* engine()
+	{ return m_engine; }
+
+    /**
+     * Get a remote user.
+     * This method is thread safe.
+     * @param jid User's jid.
+     * @param add True to add if not found.
+     * @param added Optional flag to set if added a new user.
+     * @return Referenced pointer to the user or 0.
+     */
+    XMPPUser* getUser(const JabberID& jid, bool add = false, bool* added = 0);
+
+    /**
+     * Remove a remote user.
+     * This method is thread safe.
+     * @param remote The user to remove.
+     * @return False if no more users.
+     */
+    bool removeUser(const JabberID& remote);
+
+    /**
+     * Clear remote user list.
+     */
+    inline void cleanup() {
+	    Lock lock(this);
+	    m_remote.clear();
+	}
+
+    /**
+     * Check timeout.
+     * This method is thread safe.
+     * @param time Current time.
+     * @return True to remove the roster.
+     */
+    bool timeout(u_int64_t time);
+
+protected:
+    /**
+     * Constructor.
+     * @param engine Pointer to the presence engine this user belongs to.
+     * @param node User's name.
+     * @param domain User's domain.
+     */
+    XMPPUserRoster(JBPresence* engine, const char* node, const char* domain);
+
+private:
+    inline void addUser(XMPPUser* u) {
+	    Lock lock(this);
+	    m_remote.append(u);
+	}
+    void removeUser(XMPPUser* u) {
+	    Lock lock(this);
+	    m_remote.remove(u,false);
+	}
+
+    JabberID m_jid;                      // User's bare JID
+    ObjList m_remote;                    // Remote users
+    JBPresence* m_engine;                // Presence engine
 };
 
 };

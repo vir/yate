@@ -33,17 +33,19 @@ static XMPPError s_err;
  * XMPPNamespace
  */
 TokenDict XMPPNamespace::s_value[] = {
-	{"http://etherx.jabber.org/streams",       Stream},
-	{"jabber:component:accept",                ComponentAccept},
-	{"jabber:component:connect",               ComponentConnect},
-	{"urn:ietf:params:xml:ns:xmpp-streams",    StreamError},
-	{"urn:ietf:params:xml:ns:xmpp-stanzas",    StanzaError},
-	{"urn:ietf:params:xml:ns:xmpp-bind",       Bind},
-	{"http://jabber.org/protocol/disco#info",  DiscoInfo},
-	{"http://jabber.org/protocol/disco#items", DiscoItems},
-	{"http://www.google.com/session",          Jingle},
-	{"http://www.google.com/session/phone",    JingleAudio},
-	{"http://www.google.com/transport/p2p",    JingleTransport},
+	{"http://etherx.jabber.org/streams",                   Stream},
+	{"jabber:component:accept",                            ComponentAccept},
+	{"jabber:component:connect",                           ComponentConnect},
+	{"urn:ietf:params:xml:ns:xmpp-streams",                StreamError},
+	{"urn:ietf:params:xml:ns:xmpp-stanzas",                StanzaError},
+	{"urn:ietf:params:xml:ns:xmpp-bind",                   Bind},
+	{"http://jabber.org/protocol/disco#info",              DiscoInfo},
+	{"http://jabber.org/protocol/disco#items",             DiscoItems},
+	{"http://www.google.com/session",                      Jingle},
+	{"http://www.google.com/session/phone",                JingleAudio},
+	{"http://www.google.com/transport/p2p",                JingleTransport},
+	{"http://jabber.org/protocol/jingle/info/dtmf",        Dtmf},
+	{"http://jabber.org/protocol/jingle/info/dtmf#errors", DtmfError},
 	{0,0}
 	};
 
@@ -109,6 +111,7 @@ TokenDict XMPPError::s_value[] = {
 	{"subscription-required",    SSubscription},
 	{"undefined-condition",      SUndefinedCondition},
 	{"unexpected-request",       SRequest},
+	{"unsupported-dtmf-method",  DtmfNoMethod},
 	{0,0}
 	};
 
@@ -145,6 +148,19 @@ void JabberID::set(const char* node, const char* domain, const char* resource)
     if (m_node.length() && m_resource.length())
 	*this << "/" << m_resource;
 }
+
+bool JabberID::valid(const String& value)
+{
+    if (value.null())
+	return true;
+    return s_regExpValid.matches(value);
+}
+
+Regexp JabberID::s_regExpValid("^\\([[:alnum:]]*\\)");
+
+#if 0
+~`!#$%^*_-+=()[]{}|\;?.
+#endif
 
 void JabberID::parse()
 {
@@ -194,154 +210,48 @@ TokenDict JIDIdentity::s_type[] = {
 
 XMLElement* JIDIdentity::toXML()
 {
-    return XMPPUtils::createIdentity(categoryText(m_category),typeText(m_type),m_name);
+    return XMPPUtils::createIdentity(categoryText(m_category),typeText(m_type),*this);
 }
 
-/**
- * JIDFeatures
- */
-bool JIDFeatures::create(XMLElement* element)
+bool JIDIdentity::fromXML(const XMLElement* element)
 {
-    release();
-    if (!(element && element->type() == XMLElement::Query &&
-	  element->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]) &&
-	  element->hasAttribute("type","result")))
+    if (!element)
 	return false;
-    // Count children
-    XMLElement* f = element->findFirstChild("feature");
-    u_int32_t c = 0;
-    for (; f; f = element->findNextChild(f,"feature"))
-	c++;
-    if (!c)
-	return true;
-    // Create list
-    m_features = new XMPPNamespace::Type[c];
-    f = element->findFirstChild("feature");
-    for (; f; f = element->findNextChild(f,"feature")) {
-	XMPPNamespace::Type ns = s_ns.type(f->getAttribute("var"));
-	if (ns != XMPPNamespace::Count)
-	    m_features[m_count++] = ns;
-    }
+    XMLElement* id = ((XMLElement*)element)->findFirstChild("identity");
+    if (!id)
+	return false;
+    m_category = categoryValue(id->getAttribute("category"));
+    m_type = typeValue(id->getAttribute("type"));
+    id->getAttribute("name",*this);
     return true;
 }
 
-void JIDFeatures::create(XMPPNamespace::Type* features, u_int32_t count, bool copy)
+/**
+ * JIDFeatureList
+ */
+JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
 {
-    release();
-    if (!copy) {
-	m_features = features;
-	m_count = count;
-	return;
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
+	if (*f == feature)
+	    return f;
     }
-    if (!(features && count))
-	return;
-    m_features = new XMPPNamespace::Type[count];
-    for (; m_count < count; m_count++)
-	m_features[m_count] = features[m_count];
+    return 0;
 }
 
-XMLElement* JIDFeatures::addTo(XMLElement* element)
+XMLElement* JIDFeatureList::addTo(XMLElement* element)
 {
     if (!element)
 	return 0;
-    for (u_int32_t i = 0; i < m_count; i++) {
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
 	XMLElement* feature = new XMLElement(XMLElement::Feature);
-	feature->setAttribute("var",s_ns[m_features[i]]);
+	feature->setAttribute("var",s_ns[*f]);
 	element->addChild(feature);
     }
     return element;
-}
-
-XMLElement* JIDFeatures::query()
-
-{
-    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,
-	XMPPNamespace::DiscoInfo);
-    return addTo(query);
-}
-
-XMLElement* JIDFeatures::iq(const char* from, const char* to, const char* id,
-	bool get)
-{
-    XMLElement* iq = XMPPUtils::createIq(
-	get?XMPPUtils::IqGet:XMPPUtils::IqResult,from,to,id);
-    iq->addChild(query());
-    return iq;
-}
-
-/**
- * JIDResource
- */
-bool JIDResource::setPresence(bool value)
-{
-    if (value && !available()) {
-	m_presence = Available;
-	return true;
-    }
-    if (!value && available()) {
-	m_presence = Unavailable;
-	return true;
-    }
-    return false;
-}
-
-/**
- * JIDResourceList
- */
-bool JIDResourceList::add(const String& name, JIDResource::Presence presence,
-	u_int32_t caps)
-{
-    Lock lock(this);
-    JIDResource* res = get(name);
-    if (!res) {
-	m_resource.append(new JIDResource(name,presence,caps));
-	return false;
-    }
-    bool result = (presence == JIDResource::Available);
-    result = res->setPresence(result);
-    res->deref();
-    return result;
-}
-
-void JIDResourceList::remove(const String& name, bool del)
-{
-    JIDResource* res = get(name);
-    if (!res)
-	return;
-    res->deref();
-    Lock lock(this);
-    m_resource.remove(res,del);
-}
-
-void JIDResourceList::clear()
-{
-    Lock lock(this);
-    m_resource.clear();
-}
-
-JIDResource* JIDResourceList::get(const String& name)
-{
-    Lock lock(this);
-    ObjList* obj = m_resource.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDResource* res = static_cast<JIDResource*>(obj->get());
-	if (res->name() == name)
-	    return (res->ref() ? res : 0);
-    }
-    return 0;
-}
-
-JIDResource* JIDResourceList::getAudio()
-{
-    Lock lock(this);
-    ObjList* obj = m_resource.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDResource* res = static_cast<JIDResource*>(obj->get());
-	// If ref() fails find another one
-	if (res->hasCap(JIDResource::CapAudio) && res->ref())
-	    return res;
-    }
-    return 0;
 }
 
 /**
@@ -516,6 +426,30 @@ void XMPPUtils::print(String& xmlStr, XMLElement* element, const char* indent)
     if (root)
 	xmlStr << STARTLINE(indent) << enclose;
 #undef STARTLINE
+}
+
+bool XMPPUtils::split(NamedList& dest, const char* src, const char sep,
+	bool nameFirst)
+{
+    if (!src)
+	return false;
+    u_int32_t index = 1;
+    for (u_int32_t i = 0; src[i];) {
+	// Skip separator(s)
+	for (; src[i] && src[i] == sep; i++) ;
+	// Find first separator
+	u_int32_t start = i;
+	for (; src[i] && src[i] != sep; i++) ;
+	// Get part
+	if (start != i) {
+	    String tmp(src + start,i - start);
+	    if (nameFirst)
+		dest.addParam(tmp,String((int)index++));
+	    else
+		dest.addParam(String((int)index++),tmp);
+	}
+    }
+    return true;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

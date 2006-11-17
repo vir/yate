@@ -26,7 +26,7 @@
 using namespace TelEngine;
 
 static XMPPNamespace s_ns;
-//static XMPPError s_err;
+static XMPPError s_err;
 
 /**
  * JGAudio
@@ -120,6 +120,8 @@ void JGTransport::fromXML(XMLElement* element)
 /**
  * JGSession
  */
+String JGSession::s_dtmf = "0123456789#*ABCD";
+
 TokenDict JGSession::s_actions[] = {
 	{"accept",           ActAccept},
 	{"initiate",         ActInitiate},
@@ -127,8 +129,10 @@ TokenDict JGSession::s_actions[] = {
 	{"redirect",         ActRedirect},
 	{"reject",           ActReject},
 	{"terminate",        ActTerminate},
+	{"candidates",       ActTransportCandidates},
 	{"transport-info",   ActTransportInfo},
 	{"transport-accept", ActTransportAccept},
+	{"content-info",     ActContentInfo},
 	{0,0}
 	};
 
@@ -136,6 +140,7 @@ JGSession::JGSession(JGEngine* engine, JBComponentStream* stream,
 	const String& callerJID, const String& calledJID)
     : Mutex(true),
       m_state(Idle),
+      m_transportType(TransportInfo),
       m_engine(engine),
       m_stream(stream),
       m_incoming(false),
@@ -156,6 +161,7 @@ JGSession::JGSession(JGEngine* engine, JBComponentStream* stream,
 JGSession::JGSession(JGEngine* engine, JBEvent* event)
     : Mutex(true),
       m_state(Idle),
+      m_transportType(TransportInfo),
       m_engine(engine),
       m_stream(0),
       m_incoming(true),
@@ -223,21 +229,38 @@ bool JGSession::hangup(bool reject, const char* message)
     // Clear sent stanzas list. We will wait for this element to be confirmed
     m_sentStanza.clear();
     m_state = Ending;
-    m_timeout = Time::msecNow() + JGSESSION_ENDTIMEOUT * 1000;
+    m_timeout = Time::msecNow() + JGSESSION_ENDTIMEOUT;
     return sendXML(xml);
 }
 
 bool JGSession::sendTransport(JGTransport* transport, Action act)
 {
-    if (act != ActTransportInfo && act != ActTransportAccept)
+    if (act != ActTransport && act != ActTransportAccept)
 	return false;
-    XMLElement* child = JGTransport::createTransport();
-    if (transport) {
-	transport->addTo(child);
-	transport->deref();
+    // Create transport
+    // For transport-info: A 'transport' child element
+    // For candidates: The 'session' element
+    if (act == ActTransportAccept) {
+	if (transport)
+	    transport->deref();
+	// No need to send transport-accept if type is candidates
+	if (m_transportType == TransportCandidates)
+	    return true;
+	XMLElement* child = JGTransport::createTransport();
+	return sendXML(createJingleSet(act,0,child));
     }
-    XMLElement* jingle = createJingleSet(act,0,child);
-    return sendXML(jingle);
+    if (!transport)
+	return false;
+    // transport-info: send both transport types
+    if (m_transportType == TransportInfo) {
+	XMLElement* child = JGTransport::createTransport();
+	transport->addTo(child);
+	if (!sendXML(createJingleSet(ActTransportInfo,0,child)))
+	    return false;
+    }
+    XMLElement* child = transport->toXML();
+    transport->deref();
+    return sendXML(createJingleSet(ActTransportCandidates,0,child));
 }
 
 bool JGSession::accept(XMLElement* description)
@@ -250,14 +273,55 @@ bool JGSession::accept(XMLElement* description)
 	m_state = Active;
 	return true;
     }
-    return false;	
+    return false;
 }
 
 bool JGSession::sendResult(const char* id)
 {
+    String tmp = id;
+    // Don't send if no id.
+    // It's useless: the remote peer can't match a response without id
+    if (tmp.null())
+	return true;
     XMLElement* result = XMPPUtils::createIq(XMPPUtils::IqResult,
-	m_localJID,m_remoteJID,id);
+	m_localJID,m_remoteJID,tmp);
     return sendXML(result,false);
+}
+
+bool JGSession::sendDtmf(char dtmf, bool buttonUp)
+{
+    if (!isDtmf(dtmf))
+	return false;
+    String tmp = dtmf;
+    XMLElement* xml = XMPPUtils::createElement(XMLElement::Dtmf,
+	XMPPNamespace::Dtmf);
+    xml->setAttribute("action",buttonUp?"button-up":"button-down");
+    xml->setAttribute("code",tmp);
+    return sendXML(createJingleSet(ActContentInfo,xml));
+}
+
+bool JGSession::sendDtmfMethod(const char* method)
+{
+    XMLElement* xml = XMPPUtils::createElement(XMLElement::DtmfMethod,
+	XMPPNamespace::Dtmf);
+    xml->setAttribute("method",method);
+    return sendXML(createJingleSet(ActContentInfo,xml));
+}
+
+bool JGSession::denyDtmfMethod(XMLElement* element)
+{
+    if (!element)
+	return false;
+    String id = element->getAttribute("id");
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqError,
+	m_localJID,m_remoteJID,id);
+    iq->addChild(element);
+    XMLElement* err = XMPPUtils::createError(XMPPError::TypeCancel,
+	XMPPError::SFeatureNotImpl);
+    err->addChild(XMPPUtils::createElement(s_err[XMPPError::DtmfNoMethod],
+	XMPPNamespace::DtmfError));
+    iq->addChild(err);
+    return sendXML(iq,false);
 }
 
 bool JGSession::sendError(XMLElement* element, XMPPError::Type error,
@@ -355,11 +419,6 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    "Session. Process Jabber event ((%p): %u). [%p]",
 	    jbev,jbev->type(),this);
 	JGEvent* event = processEvent(jbev,time);
-	// No event: check timeout
-	if (!event && timeout(time)) {
-	    event = new JGEvent(JGEvent::Terminated,this);
-	    event->m_reason = "timeout";
-	}
 	// Remove jabber event
 	DDebug(m_engine,DebugAll,
 	    "Session. Remove Jabber event ((%p): %u) from queue. [%p]",
@@ -372,6 +431,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    m_events.clear();
 	    break;
 	}
+    }
+    // No event: check timeout
+    if (timeout(time)) {
+	JGEvent* event = new JGEvent(JGEvent::Terminated,this);
+	event->m_reason = "timeout";
+	return raiseEvent(event);
     }
     return 0;
 }
@@ -485,16 +550,68 @@ bool JGSession::decodeJingle(JGEvent* event)
 	sendEBadRequest(event->releaseXML());
 	return false;
     }
-    // Check termination
-    if (event->m_action == ActTerminate || event->m_action == ActReject) {
-	event->m_type = JGEvent::Terminated;
-	if (event->m_action == ActTerminate)
-	    event->m_reason = "hangup";
-	else
-	    event->m_reason = "rejected";
+    switch (event->m_action) {
+	// Check termination
+	case ActTerminate:
+	case ActReject:
+	    event->m_type = JGEvent::Terminated;
+	    if (event->m_action == ActTerminate)
+		event->m_reason = "hangup";
+	    else
+		event->m_reason = "rejected";
+	    return true;
+	case ActContentInfo:
+	    return processContentInfo(event);
+	default: ;
+    }
+    // Update media & transport
+    if (!updateMedia(event))
+	return false;
+    if (!updateTransport(event))
+	return false;
+    // OK !
+    event->m_type = JGEvent::Jingle;
+    return true;
+}
+
+bool JGSession::processContentInfo(JGEvent* event)
+{
+    // Check dtmf
+    XMLElement* child = event->element()->findFirstChild(XMLElement::Dtmf);
+    if (child) {
+	event->m_reason = child->getAttribute("action");
+	event->m_text = child->getAttribute("code");
+	bool checked = true;
+	for (int i = 0; event->m_text[i]; i++)
+	    if (!isDtmf(event->m_text[i])) {
+		checked = false;
+		break;
+	    }
+	if ((event->m_reason != "button-up" && event->m_reason != "button-down") ||
+	    event->m_text.null() || !checked) {
+	    sendEBadRequest(event->releaseXML());
+	    return false;
+	}
+	event->m_action = ActDtmf;
 	return true;
     }
-    // Update media
+    // Check dtmf method
+    child = event->element()->findFirstChild(XMLElement::DtmfMethod);
+    if (child) {
+	event->m_text = child->getAttribute("method");
+	if (event->m_text != "rtp" && event->m_reason != "xmpp") {
+	    sendEBadRequest(event->releaseXML());
+	    return false;
+	}
+	event->m_action = ActDtmfMethod;
+	return true;
+    }
+    return true;
+}
+
+bool JGSession::updateMedia(JGEvent* event)
+{
+    XMLElement* child = event->element()->findFirstChild();
     XMLElement* descr = child->findFirstChild(XMLElement::Description);
     if (descr) {
 	// Check namespace
@@ -509,22 +626,53 @@ bool JGSession::decodeJingle(JGEvent* event)
 	    event->m_audio.append(a);
 	}
     }
-    // Update transport
-    XMLElement* trans = child->findFirstChild(XMLElement::Transport);
-    if (trans) {
-	// Check namespace
-	if (!trans->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleTransport])) {
+    return true;
+}
+
+bool JGSession::updateTransport(JGEvent* event)
+{
+    // Detect transport type
+    if (event->m_action == ActTransportCandidates) {
+	m_transportType = TransportCandidates;
+	event->m_action = ActTransport;
+	DDebug(m_engine,DebugAll,
+	    "Session. Set transport type: 'candidates'. [%p]",this);
+    }
+    else if (event->m_action == ActTransportInfo ||
+	     event->m_action == ActTransportAccept) {
+	m_transportType = TransportInfo;
+	// Don't set action for transport-accept
+	// Use it only to get transport info if any
+	if (event->m_action == ActTransportInfo)
+	    event->m_action = ActTransport;
+	DDebug(m_engine,DebugAll,
+	    "Session. Set transport type: 'transport-info'. [%p]",this);
+    }
+    else
+	return true;
+
+    // Get candidates parent:
+    // For transport-info: A 'transport' child element
+    // For candidates: The 'session' element
+    XMLElement* candidates = event->element()->findFirstChild();
+    if (m_transportType == TransportInfo) {
+	candidates = candidates->findFirstChild(XMLElement::Transport);
+	if (candidates &&
+	    !candidates->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleTransport])) {
 	    sendEServiceUnavailable(event->releaseXML());
 	    return false;
 	}
-	// Get transports
-	XMLElement* t = trans->findFirstChild(XMLElement::Candidate);
-	for (; t; t = trans->findNextChild(t,XMLElement::Candidate)) {
-	    JGTransport* tr = new JGTransport(t);
-	    event->m_transport.append(tr);
-	}
     }
-    event->m_type = JGEvent::Jingle;
+    if (!candidates) {
+	sendEBadRequest(event->releaseXML());
+	return false;
+    }
+    // Get transports
+    XMLElement* t = candidates->findFirstChild(XMLElement::Candidate);
+    for (; t; t = candidates->findNextChild(t,XMLElement::Candidate)) {
+	JGTransport* tr = new JGTransport(t);
+	event->m_transport.append(tr);
+    }
     return true;
 }
 
@@ -652,8 +800,7 @@ bool JGSession::sendXML(XMLElement* e, bool addId)
 	e->setAttribute("id",id);
 	appendSent(e);
     }
-    // Send
-    // If it fails leave it in the sent items to timeout
+    // Send. If it fails leave it in the sent items to timeout
     JBComponentStream::Error res = m_stream->sendStanza(e,m_localSid);
     if (res == JBComponentStream::ErrorNoSocket ||
 	res == JBComponentStream::ErrorContext)
@@ -662,7 +809,7 @@ bool JGSession::sendXML(XMLElement* e, bool addId)
 }
 
 XMLElement* JGSession::createJingleSet(Action action,
-	XMLElement* media, XMLElement* transport)
+	XMLElement* element1, XMLElement* element2)
 {
     // Create 'iq' and 'jingle'
     XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,
@@ -674,10 +821,8 @@ XMLElement* JGSession::createJingleSet(Action action,
     jingle->setAttribute("initiator",initiator());
 //    jingle->setAttribute("responder",incoming()?m_localJID:m_remoteJID);
     jingle->setAttribute("id",m_sid);
-    if (media)
-	jingle->addChild(media);
-    if (transport)
-	jingle->addChild(transport);
+    jingle->addChild(element1);
+    jingle->addChild(element2);
     iq->addChild(jingle);
     return iq;
 }
@@ -697,10 +842,16 @@ void JGSession::confirmIqSelect(JGEvent* event)
 {
     if (!event)
 	return;
-    // Skip transport-info
-    if (event->type() == JGEvent::Jingle &&
-	event->action() == JGSession::ActTransportInfo)
-	return;
+    // Skip transport
+    if (event->type() == JGEvent::Jingle)
+	switch (event->action()) {
+	    case ActTransport:
+	    case ActTransportInfo:
+	    case ActTransportCandidates:
+	    case ActDtmfMethod:
+		return;
+	    default: ;
+	}
     confirmIq(event->element());
 }
 
@@ -777,7 +928,7 @@ bool JGSession::receiveResult(const JBEvent* event, bool& retValue)
     if (!sent)
 	return false;
     // Keep the event if:  state is Ending: Will raise a Terminated event
-    //                     is IqError: Will be sent upstairs
+    //                     event is IqError: Will be sent to the upper layer
     if (state() == Ending || event->type() == JBEvent::IqError)
 	return true;
     // Event is a result. Consume it

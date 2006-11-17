@@ -48,6 +48,8 @@ TokenDict XMLElement::s_names[] = {
 	{"feature",         Feature},
 	{"bind",            Bind},
 	{"resource",        Resource},
+	{"dtmf",            Dtmf},
+	{"dtmf-method",     DtmfMethod},
 	{0,0}
 	};
 

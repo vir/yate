@@ -131,6 +131,7 @@ private:
     bool m_swap;
     unsigned char m_rdError;
     unsigned char m_wrError;
+    unsigned char m_oobError;
 };
 
 class WpDriver : public PriDriver
@@ -439,7 +440,8 @@ static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
 
 WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
     : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE),
-      m_buffer(0), m_chans(0), m_samples(50), m_swap(true), m_rdError(0), m_wrError(0)
+      m_buffer(0), m_chans(0), m_samples(50), m_swap(true),
+      m_rdError(0), m_wrError(0), m_oobError(0)
 {
     Debug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",
 	span,card,device,this);
@@ -505,18 +507,25 @@ void WpData::run()
 	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
 	    XDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
 	    if (r < 0) {
+		if (!m_oobError) {
 #ifdef SIOC_WANPIPE_SOCK_STATE
-		r = ::ioctl(m_fd,SIOC_WANPIPE_SOCK_STATE,0);
-		Debug(&__plugin,DebugNote,"Socket for span %d is %s",
-		    m_span->span(),
-		    (r == 0) ? "connected" : ((r == 1) ? "disconnected" : "connecting"));
+		    r = ::ioctl(m_fd,SIOC_WANPIPE_SOCK_STATE,0);
+		    Debug(&__plugin,DebugNote,"Socket for span %d is %s",
+			m_span->span(),
+			(r == 0) ? "connected" : ((r == 1) ? "disconnected" : "connecting"));
 #else
-		Debug(&__plugin,DebugNote,"Failed to read OOB on span %d",
-		    m_span->span());
+		    Debug(&__plugin,DebugNote,"Failed to read OOB on span %d",
+			m_span->span());
 #endif
+		}
+		if (m_oobError < MAX_DATA_ERRORS)
+		    m_oobError++;
 	    }
-	    else if (r >= WP_HEADER)
-		decodeEvent(ev);
+	    else {
+		m_oobError = 0;
+		if (r >= WP_HEADER)
+		    decodeEvent(ev);
+	    }
 	}
 
 	if (rd) {

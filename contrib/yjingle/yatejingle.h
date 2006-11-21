@@ -518,7 +518,7 @@ protected:
      * @param event The event to check.
      * @return True on success.
      */
-    bool JGSession::processContentInfo(JGEvent* event);
+    bool processContentInfo(JGEvent* event);
 
     /**
      * Update media payloads from a Jingle event.

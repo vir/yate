@@ -1192,11 +1192,17 @@ IAXFullFrame* IAXTransaction::findInFrame(IAXFrame::Type type, u_int32_t subclas
 bool IAXTransaction::findInFrameTimestamp(const IAXFullFrame* frameOut, IAXFrame::Type type, u_int32_t subclass)
 {
     IAXFullFrame* frame = 0;
-    for (ObjList* l = m_inFrames.skipNull(); l; l = l->next()) {
+    // Loose timestamp check for Ping/Pong
+    // Received timestamp can be greater then the sent one
+    bool looseTimestamp = type == IAXFrame::IAX && subclass == IAXControl::Pong;
+    for (ObjList* l = m_inFrames.skipNull(); l; l = l->skipNext()) {
 	frame = static_cast<IAXFullFrame*>(l->get());
-	if (frame && frame->type() == type && frame->subclass() == subclass && frame->timeStamp() == frameOut->timeStamp())
-	    break;
-	frame = 0;
+	if (frame->type() == type && frame->subclass() == subclass) {
+	    bool match = looseTimestamp ? frame->timeStamp() >= frameOut->timeStamp() :
+		frame->timeStamp() == frameOut->timeStamp();
+	    if (match)
+		break;
+	}
     }
     if (frame) {
 	m_inFrames.remove(frame,true);

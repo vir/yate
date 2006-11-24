@@ -1475,8 +1475,10 @@ DataTranslator* ChainedFactory::create(const DataFormat& sFormat, const DataForm
     if (trans2) {
 	XDebug(DebugInfo,"Chaining translators: '%s' %p --(%s)-> %p '%s' [%p]",
 	    sFormat.c_str(),trans,m_format.c_str(),trans2,dFormat.c_str(),this);
-	trans->getTransSource()->attach(trans2);
-	trans2->deref();
+	// trans2 may be a chain itself so find the first translator
+	DataTranslator* trans1 = trans2->getFirstTranslator();
+	trans->getTransSource()->attach(trans1);
+	trans1->deref();
     }
     else
 	trans->destruct();

@@ -178,16 +178,17 @@ public:
 	    if (!n || (n & 1) || !m_sRate || !m_dRate || !ref())
 		return;
 	    n /= 2;
-	    if (getTransSource()) {
+	    DataSource* src = getTransSource();
+	    if (src) {
 		long delta = tStamp - m_timestamp;
-		unsigned short* s = (unsigned short*) data.data();
+		short* s = (short*) data.data();
 		DataBlock oblock;
 		if (m_dRate > m_sRate) {
 		    int mul = m_dRate / m_sRate;
 		    // repeat the sample an integer number of times
 		    delta *= mul;
 		    oblock.assign(0,2*n*mul);
-		    unsigned short* d = (unsigned short*) oblock.data();
+		    short* d = (short*) oblock.data();
 		    while (n--) {
 			// TODO: smooth the data a little
 			short v = *s++;
@@ -201,7 +202,7 @@ public:
 		    delta /= div;
 		    n /= div;
 		    oblock.assign(0,2*n);
-		    unsigned short* d = (unsigned short*) oblock.data();
+		    short* d = (short*) oblock.data();
 		    while (n--) {
 			// TODO: interpolate
 			int v = 0;
@@ -216,7 +217,9 @@ public:
 			*d++ = v;
 		    }
 		}
-		getTransSource()->Forward(oblock, m_timestamp + delta);
+		if (src->timeStamp() != invalidStamp())
+		    delta += src->timeStamp();
+		src->Forward(oblock, delta);
 	    }
 	    deref();
 	}

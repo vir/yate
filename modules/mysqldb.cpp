@@ -165,8 +165,14 @@ bool DbConn::initDb()
 #ifdef MYSQL_OPT_WRITE_TIMEOUT
     mysql_options(m_conn,MYSQL_OPT_WRITE_TIMEOUT,(const char*)&m_timeout);
 #endif
-    if (mysql_real_connect(m_conn,m_host,m_user,m_pass,m_db,m_port,m_unix,CLIENT_MULTI_STATEMENTS))
+    if (mysql_real_connect(m_conn,m_host,m_user,m_pass,m_db,m_port,m_unix,CLIENT_MULTI_STATEMENTS)) {
+#ifdef MYSQL_OPT_RECONNECT
+	// this option must be set after connect - bug in mysql client library
+	my_bool reconn = 1;
+	mysql_options(m_conn,MYSQL_OPT_RECONNECT,(const char*)&reconn);
+#endif
 	return true;
+    }
     Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),mysql_error(m_conn));
     return false;
 }

@@ -87,13 +87,17 @@ NamedList& NamedList::setParam(const char* name, const char* value)
     return *this;
 }
 
-NamedList& NamedList::clearParam(const String& name)
+NamedList& NamedList::clearParam(const String& name, char childSep)
 {
-    XDebug(DebugInfo,"NamedList::clearParam(\"%s\")",name.c_str());
+    XDebug(DebugInfo,"NamedList::clearParam(\"%s\",'%1s')",
+	name.c_str(),&childSep);
+    String tmp;
+    if (childSep)
+	tmp << name << childSep;
     ObjList *p = &m_params;
     while (p) {
         NamedString *s = static_cast<NamedString *>(p->get());
-        if (s && (s->name() == name))
+        if (s && ((s->name() == name) || s->name().startsWith(tmp)))
             p->remove();
 	else
 	    p = p->next();
@@ -101,11 +105,55 @@ NamedList& NamedList::clearParam(const String& name)
     return *this;
 }
 
+NamedList& NamedList::copyParam(const NamedList& original, const String& name, char childSep)
+{
+    XDebug(DebugInfo,"NamedList::copyParam(%p,\"%s\",'%1s')",
+	&original,name.c_str(),&childSep);
+    if (!childSep) {
+	// faster and simpler - used in most cases
+	const NamedString* s = original.getParam(name);
+	return s ? setParam(name,*s) : clearParam(name);
+    }
+    clearParam(name,childSep);
+    String tmp;
+    tmp << name << childSep;
+    unsigned int n = original.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* s = original.getParam(i);
+        if (s && ((s->name() == name) || s->name().startsWith(tmp)))
+	    addParam(s->name(),*s);
+    }
+    return *this;
+}
+
+int NamedList::getIndex(const NamedString* param) const
+{
+    if (!param)
+	return -1;
+    const ObjList *p = &m_params;
+    for (int i=0; p; p=p->next(),i++) {
+        if (static_cast<const NamedString *>(p->get()) == param)
+            return i;
+    }
+    return -1;
+}
+
+int NamedList::getIndex(const String& name) const
+{
+    const ObjList *p = &m_params;
+    for (int i=0; p; p=p->next(),i++) {
+        NamedString *s = static_cast<NamedString *>(p->get());
+        if (s && (s->name() == name))
+            return i;
+    }
+    return -1;
+}
+
 NamedString* NamedList::getParam(const String& name) const
 {
     XDebug(DebugInfo,"NamedList::getParam(\"%s\")",name.c_str());
     const ObjList *p = m_params.skipNull();
-    for (;p;p=p->skipNext()) {
+    for (; p; p=p->skipNext()) {
         NamedString *s = static_cast<NamedString *>(p->get());
         if (s->name() == name)
             return s;

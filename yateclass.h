@@ -2757,10 +2757,33 @@ public:
     NamedList& setParam(const char* name, const char* value);
 
     /**
-     * Clars all instances of a named string in the parameter list.
+     * Clears all instances of a named string in the parameter list.
      * @param name Name of the string to remove
+     * @param childSep If set clears all child parameters in format name+childSep+anything
      */
-    NamedList& clearParam(const String& name);
+    NamedList& clearParam(const String& name, char childSep = 0);
+
+    /**
+     * Copy a parameter from another NamedList, clears it if not present there
+     * @param original NamedList to copy the parameter from
+     * @param name Name of the string to copy or clear
+     * @param childSep If set copies all child parameters in format name+childSep+anything
+     */
+    NamedList& copyParam(const NamedList& original, const String& name, char childSep = 0);
+
+    /**
+     * Get the index of a named string in the parameter list.
+     * @param param Pointer to the parameter to locate
+     * @return Index of the named string or -1 if not found
+     */
+    int getIndex(const NamedString* param) const;
+
+    /**
+     * Get the index of first matching named string in the parameter list.
+     * @param name Name of parameter to locate
+     * @return Index of the first matching named string or -1 if not found
+     */
+    int getIndex(const String& name) const;
 
     /**
      * Locate a named string in the parameter list.

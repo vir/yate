@@ -3096,6 +3096,15 @@ void YateSIPLine::login()
     }
     DDebug(&plugin,DebugInfo,"YateSIPLine '%s' logging in [%p]",c_str(),this);
     clearTransaction();
+    // prepare a sane resend interval, just in case something goes wrong
+    int interval = m_interval / 2;
+    if (interval) {
+	if (interval < 30)
+	    interval = 30;
+	else if (interval > 600)
+	    interval = 600;
+	m_resend = interval*(int64_t)1000000 + Time::now();
+    }
 
     SIPMessage* m = buildRegister(m_interval);
     if (!m) {
@@ -3140,8 +3149,8 @@ bool YateSIPLine::process(SIPEvent* ev)
     if (ev->getState() == SIPTransaction::Cleared) {
 	clearTransaction();
 	setValid(false,"timeout");
-	m_resend = m_interval*(int64_t)1000000 + Time::now();
 	m_keepalive = 0;
+	Debug(&plugin,DebugWarn,"SIP line '%s' logon timeout",c_str());
 	return false;
     }
     const SIPMessage* msg = ev->getMessage();
@@ -3229,7 +3238,7 @@ void YateSIPLine::timer(const Time& when)
 	    keepalive();
 	return;
     }
-    m_resend = m_interval*(int64_t)1000000 + when;
+    m_resend = 0;
     login();
 }
 

@@ -412,6 +412,39 @@ fi
 AC_SUBST(HAVE_ILBC)
 AC_SUBST(ILBC_INC)
 
+
+HAVE_SPEEX=no
+SPEEX_INC=""
+AC_ARG_WITH(libspeex,AC_HELP_STRING([--with-libspeex],[use Speex codec if available (default)]),[ac_cv_use_libspeex=$withval],[ac_cv_use_libspeex=yes])
+if [[ "x$ac_cv_use_libspeex" = "xyes" ]]; then
+for i in /usr/include /usr/include/speex /usr/local/include /usr/local/include/speex; do
+    ac_cv_use_libspeex="$i"
+    test -f "$ac_cv_use_libspeex/speex.h" && break
+done
+fi
+if [[ "x$ac_cv_use_libspeex" != "xno" ]]; then
+AC_MSG_CHECKING([for speex.h in $ac_cv_use_libspeex])
+if [[ -f "$ac_cv_use_libspeex/speex.h" ]]; then
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror -I$ac_cv_use_libspeex"
+AC_TRY_COMPILE([
+#include <speex.h>
+],[
+int i = SPEEX_MODEID_UWB;
+speex_lib_ctl(SPEEX_LIB_GET_MAJOR_VERSION, &i);
+],
+HAVE_SPEEX=yes
+)
+CFLAGS="$SAVE_CFLAGS"
+if [[ "x$HAVE_SPEEX" = "xyes" ]]; then
+    SPEEX_INC="-I$ac_cv_use_libspeex"
+fi
+fi
+AC_MSG_RESULT([$HAVE_SPEEX])
+fi
+AC_SUBST(HAVE_SPEEX)
+AC_SUBST(SPEEX_INC)
+
 HAVE_SPANDSP=no
 SPANDSP_INC=""
 AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp],[use spandsp library if available (default)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=yes])

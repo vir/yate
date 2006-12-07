@@ -77,6 +77,10 @@ ifneq (@HAVE_ILBC@,no)
 PROGS := $(PROGS) ilbccodec.yate
 endif
 
+ifneq (@HAVE_SPEEX@,no)
+PROGS := $(PROGS) speexcodec.yate
+endif
+
 ifeq (@HAVE_GTK2@_@HAVE_GMOZ@,yes_yes)
 PROGS := $(PROGS) gtk2/gtk2mozilla.yate
 endif
@@ -212,6 +216,9 @@ ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
 gsmcodec.yate: LOCALFLAGS = @GSM_INC@
+
+speexcodec.yate: LOCALLIBS = -lspeex
+speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
 
 faxchan.yate: LOCALLIBS = -lspandsp
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@

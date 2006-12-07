@@ -42,6 +42,9 @@
 // How long (in usec) before we force I/O direction change
 #define MIN_SWITCH_TIME 600000
 
+// Buffer size in bytes - match the preferred 20ms
+#define OSS_BUFFER_SIZE 320
+
 using namespace TelEngine;
 namespace { // anonymous
 
@@ -59,6 +62,7 @@ private:
     OssDevice* m_device;
     unsigned m_brate;
     unsigned m_total;
+    DataBlock m_data;
 };
 
 class OssConsumer : public DataConsumer
@@ -175,7 +179,7 @@ bool OssSource::init()
 }
 
 OssSource::OssSource(OssDevice* dev)
-    : m_device(0)
+    : m_device(0), m_data(0,OSS_BUFFER_SIZE)
 {
     Debug(DebugAll,"OssSource::OssSource(%p) [%p]",dev,this);
     dev->ref();
@@ -191,6 +195,7 @@ OssSource::~OssSource()
 void OssSource::run()
 {
     int r = 0;
+    int len = 0;
     u_int64_t tpos = Time::now();
     do {
 	if (m_device->closed()) {
@@ -198,8 +203,8 @@ void OssSource::run()
 	    r = 1;
 	    continue;
 	}
-	DataBlock data(0,480);
-	r = ::read(m_device->fd(), data.data(), data.length());
+	unsigned char* ptr = (unsigned char*)m_data.data() + len;
+	r = ::read(m_device->fd(), ptr, m_data.length() - len);
 	if (r < 0) {
 	    if (errno == EINTR || errno == EAGAIN) {
 		Thread::yield();
@@ -213,16 +218,21 @@ void OssSource::run()
 	    r = 1;
 	    continue;
 	}
-	if (r < (int)data.length())
-	    data.assign(data.data(),r);
+	len += r;
+	if (len < (int)m_data.length()) {
+	    Thread::yield();
+	    continue;
+	}
+
 	int64_t dly = tpos - Time::now();
 	if (dly > 0) {
 	    XDebug("OssSource",DebugAll,"Sleeping for " FMT64 " usec",dly);
 	    Thread::usleep((unsigned long)dly);
 	}
-	Forward(data);
-	m_total += r;
-	tpos += (r*1000000ULL/m_brate);
+	Forward(m_data);
+	m_total += len;
+	tpos += (len*1000000ULL/m_brate);
+	len = 0;
     } while (r > 0);
     Debug(DebugAll,"OssSource [%p] end of data",this);
 }

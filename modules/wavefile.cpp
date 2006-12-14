@@ -36,7 +36,7 @@ namespace { // anonymous
 class WaveSource : public ThreadedSource
 {
 public:
-    WaveSource(const String& file, CallEndpoint* chan, bool autoclose = true);
+    WaveSource(const String& file, CallEndpoint* chan, bool autoclose = true, bool autorepeat = false);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
@@ -52,6 +52,7 @@ private:
     int m_fd;
     bool m_swap;
     unsigned m_brate;
+    long m_repeatPos;
     unsigned m_total;
     u_int64_t m_time;
     String m_id;
@@ -80,7 +81,7 @@ private:
 class WaveChan : public Channel
 {
 public:
-    WaveChan(const String& file, bool record, unsigned maxlen = 0);
+    WaveChan(const String& file, bool record, unsigned maxlen = 0, bool autorepeat = false);
     ~WaveChan();
 };
 
@@ -124,8 +125,8 @@ private:
 
 INIT_PLUGIN(WaveFileDriver);
 
-WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
-    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0),
+WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose, bool autorepeat)
+    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
       m_nodata(false)
 {
@@ -162,8 +163,11 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose)
 	detectIlbcFormat();
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for file '%s', assuming signed linear",file.c_str());
-    if (computeDataRate())
+    if (computeDataRate()) {
+	if (autorepeat)
+	    m_repeatPos = ::lseek(m_fd,0,SEEK_CUR);
 	start("WaveSource");
+    }
     else {
 	Debug(DebugWarn,"Unable to compute data rate for file '%s'",file.c_str());
 	notify(this,"error");
@@ -221,12 +225,10 @@ void WaveSource::detectAuFormat()
 	default:
 	    Debug(DebugMild,"Unknown .au format 0x%0X, assuming signed linear",ntohl(header.form));
     }
-#if 0
     if (samp != 8000)
-	m_format = String(samp) + "/" + m_format;
-    if (chan != 1)
+	m_format << "/" << samp;
+    if (chan > 1)
 	m_format = String(chan) + "*" + m_format;
-#endif
 }
 
 void WaveSource::detectWavFormat()
@@ -276,8 +278,9 @@ void WaveSource::run()
 	if (!alive())
 	    return;
     }
+    unsigned int blen = (m_brate*20)/1000;
     DDebug(&__plugin,DebugAll,"Consumer found, starting to play data with rate %d [%p]",m_brate,this);
-    m_data.assign(0,(m_brate*20)/1000);
+    m_data.assign(0,blen);
     // start counting time from now
     u_int64_t tpos = Time::now();
     m_time = tpos;
@@ -285,6 +288,17 @@ void WaveSource::run()
 	r = (m_fd >= 0) ? ::read(m_fd,m_data.data(),m_data.length()) : m_data.length();
 	if (r < 0) {
 	    if (errno == EINTR) {
+		r = 1;
+		continue;
+	    }
+	    break;
+	}
+	if (!r) {
+	    if (m_repeatPos >= 0) {
+		DDebug(&__plugin,DebugAll,"Autorepeating from offset %ld [%p]",
+		    m_repeatPos,this);
+		::lseek(m_fd,m_repeatPos,SEEK_SET);
+		m_data.assign(0,blen);
 		r = 1;
 		continue;
 	    }
@@ -468,7 +482,7 @@ void Disconnector::run()
     }
 }
 
-WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
+WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat)
     : Channel(__plugin)
 {
     Debug(this,DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
@@ -477,7 +491,7 @@ WaveChan::WaveChan(const String& file, bool record, unsigned maxlen)
 	getConsumer()->deref();
     }
     else {
-	setSource(new WaveSource(file,this));
+	setSource(new WaveSource(file,this,true,autorepeat));
 	getSource()->deref();
     }
 }
@@ -570,7 +584,7 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!src.null()) {
-	WaveSource* s = new WaveSource(src,ch,false);
+	WaveSource* s = new WaveSource(src,ch,false,msg.getBoolValue("autorepeat"));
 	ch->setSource(s);
 	s->setNotify(msg.getValue("notify"));
 	s->deref();
@@ -592,7 +606,7 @@ bool AttachHandler::received(Message &msg)
 	    ret = false;
 	    break;
 	}
-	WaveSource* s = new WaveSource(ovr,0,false);
+	WaveSource* s = new WaveSource(ovr,0,false,msg.getBoolValue("autorepeat"));
 	s->setNotify(msg.getValue("notify"));
 	if (DataTranslator::attachChain(s,c,true))
 	    msg.clearParam("override");
@@ -710,7 +724,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"));
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    msg.setParam("peerid",c->id());
 	    c->deref();
@@ -744,7 +758,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     }
     m = "call.execute";
     m.addParam("callto",callto);
-    WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen);
+    WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"));
     m.setParam("id",c->id());
     m.userData(c);
     if (Engine::dispatch(m)) {

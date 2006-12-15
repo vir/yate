@@ -463,6 +463,7 @@ public:
     YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
 private:
+    void initAudioCodecs();
     YateSIPEndPoint *m_endpoint;
 };
 
@@ -470,6 +471,7 @@ static SIPDriver plugin;
 static ObjList s_lines;
 static Configuration s_cfg;
 static String s_realm = "Yate";
+static String s_audio = "alaw,mulaw";
 static int s_maxForwards = 20;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
@@ -2148,10 +2150,10 @@ SDPBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
 	// check if media is supported, default only for audio
 	if (!p->toBoolean(audio))
 	    continue;
-	const char* fmts = msg.getValue("formats"+tmp);
-	if (audio && !fmts)
-	    fmts = "alaw,mulaw";
-	if (!fmts)
+	String fmts = msg.getValue("formats"+tmp);
+	if (audio && fmts.null())
+	    fmts = s_audio;
+	if (fmts.null())
 	    continue;
 	String trans = msg.getValue("transport"+tmp,"RTP/AVP");
 	if (audio)
@@ -2176,7 +2178,7 @@ SDPBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& msg)
 
     if (defaults && !lst) {
 	lst = new ObjList;
-	lst->append(new NetMedia("audio","RTP/AVP",msg.getValue("formats","alaw,mulaw")));
+	lst->append(new NetMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
     }
 
     setMedia(lst);
@@ -3551,6 +3553,27 @@ SIPDriver::~SIPDriver()
     Output("Unloading module SIP Channel");
 }
 
+void SIPDriver::initAudioCodecs()
+{
+    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+    String tmp;
+    String audio = "audio";
+    for (const TokenDict* dict = dict_payloads; dict->token; dict++) {
+	DataFormat fmt(dict->token);
+	const FormatInfo* info = fmt.getInfo();
+	if (info && (audio == info->type)) {
+	    if (s_cfg.getBoolValue("codecs",fmt,defcodecs && DataTranslator::canConvert(fmt)))
+		tmp.append(fmt,",");
+	}
+    }
+    if (tmp.null()) {
+	Debug(this,DebugWarn,"No default audio codecs, using defaults");
+	tmp = "alaw,mulaw";
+    }
+    s_audio = tmp;
+    DDebug(this,DebugNote,"Default audio codecs: %s",s_audio.c_str());
+}
+
 void SIPDriver::initialize()
 {
     Output("Initializing module SIP Channel");
@@ -3567,6 +3590,7 @@ void SIPDriver::initialize()
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
     s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
+    initAudioCodecs();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
 	if (!(m_endpoint->Init())) {

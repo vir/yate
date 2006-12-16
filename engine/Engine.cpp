@@ -932,7 +932,8 @@ static void usage(bool client, FILE* f)
 "     w            Delay creation of 1st worker thread\n"
 "     o            Colorize output using ANSI codes\n"
 "     s            Abort on bugs even during shutdown\n"
-"     t            Timestamp debugging messages\n"
+"     t            Timestamp debugging messages relative to program start\n"
+"     e            Timestamp debugging messages based on EPOCH (1-1-1970)\n"
     ,client ? "" :
 #ifdef _WINDOWS
 "   --service      Run as Windows service\n"
@@ -975,6 +976,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 #endif
     bool client = (mode == Client);
     bool tstamp = false;
+    bool abstamp = false;
     bool colorize = false;
     const char* pidfile = 0;
     const char* workdir = 0;
@@ -1135,6 +1137,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				case 'o':
 				    colorize = true;
 				    break;
+				case 'e':
+				    abstamp = true;
+				    // fall through
 				case 't':
 				    tstamp = true;
 				    break;
@@ -1311,7 +1316,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 #endif
 
     if (tstamp)
-	setDebugTimestamp();
+	setDebugTimestamp(abstamp);
 
 #ifdef _WINDOWS
     if (service)

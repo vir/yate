@@ -207,8 +207,9 @@ YATE_API bool abortOnBug(bool doAbort);
 
 /**
  * Enable timestamping of output messages and set the time start reference
+ * @param absolute Timestamps are absolute from EPOCH, not from program start
  */
-YATE_API void setDebugTimestamp();
+YATE_API void setDebugTimestamp(bool absolute = false);
 
 /**
  * Standard debugging levels.

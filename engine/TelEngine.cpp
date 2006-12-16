@@ -56,7 +56,7 @@ static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
-static u_int64_t s_timestamp = 0;
+static int64_t s_timestamp = -1;
 static u_int64_t s_startTime = 0;
 
 static const char* const s_colors[11] = {
@@ -142,7 +142,7 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
 	return;
     char buf[OUT_BUFFER_SIZE];
     unsigned int n = 0;
-    if (s_timestamp) {
+    if (s_timestamp >= 0) {
 	u_int64_t t = Time::now() - s_timestamp;
 	unsigned int s = (unsigned int)(t / 1000000);
 	unsigned int u = (unsigned int)(t % 1000000);
@@ -290,9 +290,9 @@ const char* debugColor(int level)
     return s_colors[level];
 }
 
-void setDebugTimestamp()
+void setDebugTimestamp(bool absolute)
 {
-    s_timestamp = (Time::now() / 1000000) * 1000000;
+    s_timestamp = absolute ? 0 : (Time::now() / 1000000) * 1000000;
 }
 
 int DebugEnabler::debugLevel(int level)

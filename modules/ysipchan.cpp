@@ -2879,12 +2879,18 @@ bool YateSIPConnection::msgUpdate(Message& msg)
 	return false;
     }
     if (*oper == "notify") {
+	bool rtpSave = m_rtpForward;
+	m_rtpForward = msg.getBoolValue("rtp_forward",m_rtpForward);
 	SDPBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
+	    m_rtpForward = rtpSave;
 	    m_tr2->setResponse(500,"Server failed to build the SDP");
 	    detachTransaction2();
 	    return false;
 	}
+	if (m_rtpForward != rtpSave)
+	    Debug(this,DebugInfo,"RTP forwarding changed: %s -> %s",
+		String::boolText(rtpSave),String::boolText(m_rtpForward));
 	SIPMessage* m = new SIPMessage(m_tr2->initialMessage(), 200);
 	m->setBody(sdp);
 	m_tr2->setResponse(m);

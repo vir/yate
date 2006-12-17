@@ -129,6 +129,10 @@ void JBComponentStream::connect()
 	    m_partialRestart = m_engine->partialStreamRestartAttempts();
 	}
     }
+    if (!m_socket) {
+	Debug(m_engine,DebugMild,"Stream::connect. Socket deleted. [%p]",this);
+	return;
+    }
     // Check connect result
     if (!res) {
 	Debug(m_engine,DebugWarn,
@@ -142,7 +146,6 @@ void JBComponentStream::connect()
 	m_remoteAddr.host().c_str(),m_remoteAddr.port(),this);
     // Connected
     m_socket->setBlocking(false);
-    lock.drop();
     // Start
     XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
 	XMPPNamespace::ComponentAccept);
@@ -341,10 +344,15 @@ void JBComponentStream::cleanup(bool endStream, XMLElement* e)
     // Cancel outgoing elements without id
     cancelPending(false,0);
     // Destroy socket. Close in background
-    m_socket->setLinger(-1);
-    m_socket->terminate();
-    delete m_socket;
+    Socket* tmp = m_socket;
     m_socket = 0;
+    if (!tmp) {
+	Debug(m_engine,DebugWarn,"Stream::cleanup. Socket deleted. [%p]",this);
+	return;
+    }
+    tmp->setLinger(-1);
+    tmp->terminate();
+    delete tmp;
 }
 
 JBComponentStream::Error JBComponentStream::postXML(XMLElementOut* element)

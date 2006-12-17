@@ -80,13 +80,13 @@ static TokenDict dict_payloads[] = {
 // Messages
 /* MODULE_MSG_NOTIFY
 	protocol	MODULE_NAME
-	subscription	true/false
+	subscription	true/false: subscription state 'to' --> 'from'
 	status		online/offline/subscribed/unsubscribed or any other string
 	from		node@domain
 	to		node@domain
 */
 #define MODULE_MSG_NOTIFY      "resource.notify"
-/* MODULE_MSG_NOTIFY
+/* MODULE_MSG_SUBSCRIBE
 	protocol	MODULE_NAME
 	operation	probe/subscribe/unsubscribe
 	from		node@domain

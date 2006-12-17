@@ -50,6 +50,7 @@ TokenDict XMLElement::s_names[] = {
 	{"resource",        Resource},
 	{"dtmf",            Dtmf},
 	{"dtmf-method",     DtmfMethod},
+	{"command",         Command},
 	{0,0}
 	};
 

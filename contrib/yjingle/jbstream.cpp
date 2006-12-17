@@ -662,6 +662,29 @@ bool JBComponentStream::processIncomingIq(XMLElement* e)
 		}	
 		break;
 	    }
+	    // Command
+	    if (child->type() == XMLElement::Command) {
+		// Check namespace
+		if (!(child->hasAttribute("xmlns",s_ns[XMPPNamespace::Command]))) {
+		    // Send error
+		    sendIqError(e,XMPPError::TypeModify,XMPPError::SFeatureNotImpl);
+		    return false;
+		}
+		// Add event
+		switch (iq) {
+		     case XMPPUtils::IqGet:
+			event = addEvent(JBEvent::IqCommandGet,e,child);
+			break;
+		     case XMPPUtils::IqSet:
+			event = addEvent(JBEvent::IqCommandSet,e,child);
+			break;
+		     case XMPPUtils::IqResult:
+			event = addEvent(JBEvent::IqCommandRes,e,child);
+			break;
+		     default: ;
+		}	
+		break;
+	    }
 	    // Unknown child
 	    event = addEvent(JBEvent::Iq,e,child);
 	    break;

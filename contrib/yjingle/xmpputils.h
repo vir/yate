@@ -78,6 +78,7 @@ public:
 	JingleTransport,                 // http://www.google.com/transport/p2p
 	Dtmf,                            // http://jabber.org/protocol/jingle/info/dtmf
 	DtmfError,                       // http://jabber.org/protocol/jingle/info/dtmf#errors
+	Command,                         // http://jabber.org/protocol/admin#packets_notification
 	Count,
     };
 
@@ -449,6 +450,26 @@ public:
     };
 
     /**
+     * Command action enumeration.
+     */
+    enum CommandAction {
+	CommExecute,
+	CommCancel,
+	CommPrev,
+	CommNext,
+	CommComplete,
+    };
+
+    /**
+     * Command status enumeration.
+     */
+    enum CommandStatus {
+	CommExecuting,
+	CommCompleted,
+	CommCancelled,
+    };
+
+    /**
      * Create an XML element with an 'xmlns' attribute.
      * @param name Element's name.
      * @param ns 'xmlns' attribute.
@@ -501,6 +522,16 @@ public:
      */
     static XMLElement* createIqBind(const char* from,
 	const char* to, const char* id, const ObjList& resources);
+
+    /**
+     * Create a 'command' element
+     * @param action The command action.
+     * @param node The command.
+     * @param sessionId Optional session ID for the command.
+     * @return A valid XMLElement pointer.
+     */
+    static XMLElement* createCommand(CommandAction action, const char* node,
+	const char* sessionId = 0);
 
     /**
      * Create an 'identity' element.
@@ -579,6 +610,16 @@ public:
      * Keep the types of 'message' stanzas.
      */
     static TokenDict s_msg[];
+
+    /**
+     * Keep the command actions
+     */
+    static TokenDict s_commandAction[];
+
+    /**
+     * Keep the command status
+     */
+    static TokenDict s_commandStatus[];
 };
 
 };

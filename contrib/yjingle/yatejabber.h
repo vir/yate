@@ -76,6 +76,15 @@ public:
 	IqDiscoRes              = 62,    // m_element is an 'iq' result
 	                                 //  m_child is a 'query' element qualified by
 	                                 //  XMPPNamespace::DiscoInfo namespace
+	IqCommandGet            = 70,    // m_element is an 'iq' of type get
+	                                 //  m_child is a 'command' element qualified by
+	                                 //  XMPPNamespace::Command namespace
+	IqCommandSet            = 71,    // m_element is an 'iq' of type set
+	                                 //  m_child is a 'command' element qualified by
+	                                 //  XMPPNamespace::Command namespace
+	IqCommandRes            = 72,    // m_element is an 'iq' result
+	                                 //  m_child is a 'command' element qualified by
+	                                 //  XMPPNamespace::Command namespace
 	IqJingleGet             = 100,   // m_element is an 'iq' get
 	                                 //  m_child is a 'jingle' element
 	IqJingleSet             = 101,   // m_element is an 'iq' set
@@ -781,6 +790,13 @@ protected:
      * @return True if processed.
      */
     bool processDiscoInfo(JBEvent* event);
+
+    /**
+     * Process a Command event.
+     * @param event The received event.
+     * @return True if processed.
+     */
+    bool processCommand(JBEvent* event);
 
     /**
      * Check if a stream with a given remote address exists.

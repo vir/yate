@@ -91,6 +91,7 @@ public:
 	// Miscellanous
 	Dtmf,                            // dtmf
 	DtmfMethod,                      // dtmf-method
+	Command,                         // command
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };

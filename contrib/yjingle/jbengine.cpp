@@ -61,6 +61,7 @@ JBEngine::JBEngine()
     debugName("jbengine");
     m_identity = new JIDIdentity(JIDIdentity::Gateway,JIDIdentity::GatewayGeneric);
     //m_features.add(XMPPNamespace::DiscoInfo);
+    //m_features.add(XMPPNamespace::Command);
     m_features.add(XMPPNamespace::Jingle);
     m_features.add(XMPPNamespace::JingleAudio);
     m_features.add(XMPPNamespace::Dtmf);
@@ -215,6 +216,14 @@ JBEvent* JBEngine::getEvent(u_int64_t time)
 			break;
 		    }
 		    if (!processDiscoInfo(event))
+			return event;
+		    break;
+		    }
+		case JBEvent::IqCommandGet:
+		case JBEvent::IqCommandSet:
+		case JBEvent::IqCommandRes: {
+		    JabberID jid(event->to());
+		    if (!jid.node() && !jid.resource() && !processCommand(event))
 			return event;
 		    break;
 		    }
@@ -404,6 +413,36 @@ bool JBEngine::processDiscoInfo(JBEvent* event)
     // Release event
     event->deref();
     return true;
+}
+
+bool JBEngine::processCommand(JBEvent* event)
+{
+    JBComponentStream* stream = event->stream();
+    // Check if we have a stream and this engine is the destination
+    if (!(stream && event->element() && event->child()))
+	return false;
+    //TODO: Check if the engine is the destination.
+    //      The destination might be a user
+    switch (event->type()) {
+	case JBEvent::IqCommandGet:
+	case JBEvent::IqCommandSet:
+	    DDebug(this,DebugAll,"processCommand. From '%s' to '%s'.",
+		event->from().c_str(),event->to().c_str());
+		stream->sendIqError(event->releaseXML(),XMPPError::TypeCancel,
+		    XMPPError::SFeatureNotImpl);
+	    break;
+	case JBEvent::IqDiscoRes:
+	    DDebug(this,DebugAll,"processCommand. Result. From '%s' to '%s'.",
+		event->from().c_str(),event->to().c_str());
+	    break;
+	default:
+	    Debug(this,DebugNote,"processCommand. From '%s' to '%s'. Unhandled.",
+		event->from().c_str(),event->to().c_str());
+    }
+    // Release event
+    event->deref();
+    return true;
+
 }
 
 JBComponentStream* JBEngine::findStream(const String& remoteName)

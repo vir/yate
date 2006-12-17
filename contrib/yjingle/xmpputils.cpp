@@ -46,6 +46,7 @@ TokenDict XMPPNamespace::s_value[] = {
 	{"http://www.google.com/transport/p2p",                JingleTransport},
 	{"http://jabber.org/protocol/jingle/info/dtmf",        Dtmf},
 	{"http://jabber.org/protocol/jingle/info/dtmf#errors", DtmfError},
+	{"http://jabber.org/protocol/commands",                Command},
 	{0,0}
 	};
 
@@ -270,6 +271,22 @@ TokenDict XMPPUtils::s_msg[] = {
 	{0,0}
 	};
 
+TokenDict XMPPUtils::s_commandAction[] = {
+	{"execute",  CommExecute},
+	{"cancel",   CommCancel},
+	{"prev",     CommPrev},
+	{"next",     CommNext},
+	{"complete", CommComplete},
+	{0,0}
+	};
+
+TokenDict XMPPUtils::s_commandStatus[] = {
+	{"executing", CommExecuting},
+	{"completed", CommCompleted},
+	{"cancelled", CommCancelled},
+	{0,0}
+	};
+
 XMLElement* XMPPUtils::createElement(const char* name, XMPPNamespace::Type ns,
 	const char* text)
 {
@@ -325,6 +342,17 @@ XMLElement* XMPPUtils::createIqBind( const char* from,
     }
     iq->addChild(bind);
     return iq;
+}
+
+XMLElement* XMPPUtils::createCommand(CommandAction action, const char* node,
+	const char* sessionId)
+{
+    XMLElement* command = createElement(XMLElement::Command,XMPPNamespace::Command);
+    if (sessionId)
+	command->setAttribute("sessionid",sessionId);
+    command->setAttribute("node",node);
+    command->setAttribute("action",lookup(action,s_commandAction));
+    return command;
 }
 
 XMLElement* XMPPUtils::createIdentity(const char* category, const char* type,

@@ -1,3 +1,6 @@
+Thu Dec 07 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added the Speex codec module by Olaf Conradi and Mikael Magnusson
+
 Thu Mar 30 2006 Paul Chitescu <paulc-devel@null.ro>
 - Changed external module to allow to listen on sockets
 - Added the watch concept designed by Maciek Kaminski

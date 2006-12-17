@@ -21,10 +21,13 @@ Building YATE Software
 YATE have been tested on Linux. Please report bugs at bugs@voip.null.ro
 
 To build Yate the quick way is:
-'./configure'
-'make'
-'make install'
+  ./configure
+  make
+  make install
 
+If you are lacking both doxygen and kdoc you will need to install without the
+API documentation:
+  make install-noapi
 
 1. Building the engine
 
@@ -43,7 +46,8 @@ directory to make links from test modules into modules directory.
 
 4. Building the classes API documentation
 
-Run 'make apidocs' in the main directory. You will need to have kdoc installed.
+Run 'make apidocs' in the main directory. You will need to have kdoc or
+doxygen installed.
 
 
 Alternatively you can just 'make everything' in the main directory which will
@@ -65,6 +69,8 @@ possible options. There is also a manual page - "man yate" and read.
 While running the following signals and keys are trapped and used:
   - SIGTERM and SIGINT (Ctrl-C) will cleanly stop the engine
   - SIGHUP and SIGQUIT (Ctrl-\) will reinitialize the modules
+  - SIGUSR1 will gracefully restart a supervised engine
+  - SIGUSR2 will forcefully restart a supervised engine
 
 
 Configuring YATE

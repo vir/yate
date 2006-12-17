@@ -18,7 +18,8 @@
 Building YATE Software
 ----------------------
 
-YATE have been tested on Linux. Please report bugs at bugs@voip.null.ro
+YATE have been tested on Linux and Windows and was ported to FreeBSD.
+Please report bugs at bugs@voip.null.ro
 
 To build Yate the quick way is:
   ./configure
@@ -59,8 +60,10 @@ Running YATE
 
 You can run YATE directly from the build directory - just use 'run' script
 from the main directory.
+  ./run -vvv
 
 You can also install YATE - then you can run it from anywhere.
+  yate -vvv
 
 On the command line you can use '-v' to increase the verbosity level. If in
 doubt run "run --help" (or "yate --help" if installed) to get a list of

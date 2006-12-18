@@ -1250,13 +1250,9 @@ void YJGLibThread::run()
 	    break;
 	case JBConnect:
 	    if (m_stream) {
-		u_int32_t wait = m_stream->waitBeforeConnect() ?
-		    iplugin.m_jb->waitStreamRestart() : 0;
 		DDebug(iplugin.m_jb,DebugAll,
-		    "%s started. Stream (%p). Remote: '%s'. Waiting: %u ms.",
-		    name(),m_stream,m_stream->remoteName().c_str(),wait);
-		if (wait)
-		    Thread::msleep(wait,true);
+		    "%s started. Stream (%p). Remote: '%s'.",
+		    name(),m_stream,m_stream->remoteName().c_str());
 		m_stream->connect();
 		m_stream->deref();
 		m_stream = 0;
@@ -1618,15 +1614,17 @@ void YJGDriver::initJB(const NamedList& sect)
 	const char* password = comp->getValue("password");
 	const char* identity = comp->getValue("identity","yate");
 	bool startup = comp->getBoolValue("startup");
+	u_int32_t restartCount = m_jb->restartCount();
 	if (!(address && port && identity))
 	    continue;
 	if (defComponent.null() || comp->getBoolValue("default"))
 	    defComponent = name;
 	JBServerInfo* server = new JBServerInfo(name,address,port,
-	    password,identity);
-	XDebug(this,DebugAll,"Add server '%s' addr=%s port=%d pass=%s ident=%s startup=%s.",
+	    password,identity,startup,restartCount);
+	XDebug(this,DebugAll,
+	    "Add server '%s' addr=%s port=%d pass=%s ident=%s startup=%s restartcount=%u.",
 	    name.c_str(),address,port,password,identity,
-	    String::boolText(startup));
+	    String::boolText(startup),restartCount);
 	m_jb->appendServer(server,startup);
     }
     // Set default server
@@ -1748,14 +1746,17 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 
 bool YJGDriver::received(Message& msg, int id)
 {
-    if (id == Halt) {
-	dropAll(msg);
-	lock();
-	channels().clear();
-	unlock();
-	m_presence->cleanup();
-	m_jb->cleanup();
-    }
+    if (id == Timer)
+	m_jb->timerTick(msg.msgTime().msec());
+    else
+	if (id == Halt) {
+	    dropAll(msg);
+	    lock();
+	    channels().clear();
+	    unlock();
+	    m_presence->cleanup();
+	    m_jb->cleanup();
+	}
     return Driver::received(msg,id);
 }
 

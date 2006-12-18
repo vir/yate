@@ -32,9 +32,13 @@ using namespace TelEngine;
 static XMPPNamespace s_ns;
 
 // Default values
-#define JB_STREAM_PARTIALRESTART       2
-#define JB_STREAM_TOTALRESTART        -1
-#define JB_STREAM_WAITRESTART       5000
+#define JB_STREAM_RESTART_COUNT        2 // Stream restart counter default value
+#define JB_STREAM_RESTART_COUNT_MIN    1
+#define JB_STREAM_RESTART_COUNT_MAX   10
+
+#define JB_STREAM_RESTART_UPDATE   15000 // Stream restart counter update interval
+#define JB_STREAM_RESTART_UPDATE_MIN 5000
+#define JB_STREAM_RESTART_UPDATE_MAX 300000
 
 // Sleep time for threads
 #define SLEEP_READSOCKET               2 // Read socket
@@ -53,8 +57,9 @@ JBEngine::JBEngine()
       m_clientsMutex(true),
       m_presence(0),
       m_identity(0),
-      m_partialStreamRestart(JB_STREAM_PARTIALRESTART),
-      m_totalStreamRestart(JB_STREAM_TOTALRESTART),
+      m_restartUpdateTime(0),
+      m_restartUpdateInterval(JB_STREAM_RESTART_UPDATE),
+      m_restartCount(JB_STREAM_RESTART_COUNT),
       m_streamID(0),
       m_serverMutex(true)
 {
@@ -79,24 +84,29 @@ JBEngine::~JBEngine()
 void JBEngine::initialize(const NamedList& params)
 {
     clearServerList();
-    // Stream restart attempts
-    m_partialStreamRestart =
-	params.getIntValue("stream_partialrestart",JB_STREAM_PARTIALRESTART);
-    // Sanity check to avoid perpetual retries
-    if (m_partialStreamRestart < 1)
-	m_partialStreamRestart = 1;
-    m_totalStreamRestart =
-	params.getIntValue("stream_totalrestart",JB_STREAM_TOTALRESTART);
-    m_waitStreamRestart =
-	params.getIntValue("stream_waitrestart",JB_STREAM_WAITRESTART);
+    // Stream restart update interval
+    m_restartUpdateInterval =
+	params.getIntValue("stream_restartupdateinterval",JB_STREAM_RESTART_UPDATE);
+    if (m_restartUpdateInterval < JB_STREAM_RESTART_UPDATE_MIN)
+	m_restartUpdateInterval = JB_STREAM_RESTART_UPDATE_MIN;
+    else
+	if (m_restartUpdateInterval > JB_STREAM_RESTART_UPDATE_MAX)
+	    m_restartUpdateInterval = JB_STREAM_RESTART_UPDATE_MAX;
+    // Stream restart count
+    m_restartCount = 
+	params.getIntValue("stream_restartcount",JB_STREAM_RESTART_COUNT);
+    if (m_restartCount < JB_STREAM_RESTART_COUNT_MIN)
+	m_restartCount = JB_STREAM_RESTART_COUNT_MIN;
+    else
+	if (m_restartCount > JB_STREAM_RESTART_COUNT_MAX)
+	    m_restartCount = JB_STREAM_RESTART_COUNT_MAX;
     // XML parser max receive buffer
     XMLParser::s_maxDataBuffer =
 	params.getIntValue("xmlparser_maxbuffer",XMLPARSER_MAXDATABUFFER);
     if (debugAt(DebugAll)) {
 	String s;
-	s << "\r\nstream_partialrestart=" << m_partialStreamRestart;
-	s << "\r\nstream_totalrestart=" << m_totalStreamRestart;
-	s << "\r\nstream_waitrestart=" << (unsigned int)m_waitStreamRestart;
+	s << "\r\nstream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
+	s << "\r\nstream_restartcount=" << (unsigned int)m_restartCount;
 	s << "\r\nxmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
 	Debug(this,DebugAll,"Initialized:%s",s.c_str());
     }
@@ -286,6 +296,32 @@ bool JBEngine::checkSHA1(const String& sha, const String& id,
     return tmp == sha;
 }
 
+void JBEngine::timerTick(u_int64_t time)
+{
+    if (m_restartUpdateTime > time)
+	return;
+    // Update server streams counters
+    Lock lock(m_serverMutex);
+    ObjList* obj = m_server.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JBServerInfo* server = static_cast<JBServerInfo*>(obj->get());
+	if (server->restartCount() < m_restartCount) {
+	    server->incRestart();
+	    DDebug(this,DebugAll,
+		"Increased stream restart counter (%u) for '%s'.",
+		server->restartCount(),server->name().c_str());
+	}
+	// Check if stream should be restarted (created)
+	if (server->autoRestart()) {
+	    JBComponentStream* stream = getStream(server->name(),true);
+	    if (stream)
+		stream->deref();
+	}
+    }
+    // Update next update time
+    m_restartUpdateTime = time + m_restartUpdateInterval;
+}
+
 bool JBEngine::connect(JBComponentStream* stream)
 {
     if (!stream)
@@ -366,6 +402,18 @@ bool JBEngine::getFullServerIdentity(String& destination, const char* token,
     // Component server
     destination = "";
     destination << server->identity() << "." << server->name();
+    return true;
+}
+
+bool JBEngine::getStreamRestart(const char* token, bool domain)
+{
+    Lock lock(m_serverMutex);
+    JBServerInfo* server = getServer(token,domain);
+    if (!(server && server->getRestart()))
+	return false;
+    DDebug(this,DebugAll,
+	"Decreased stream restart counter (%u) for '%s'.",
+	server->restartCount(),server->name().c_str());
     return true;
 }
 

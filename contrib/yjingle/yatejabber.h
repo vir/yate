@@ -300,13 +300,6 @@ public:
 	{ return m_engine; }
 
     /**
-     * Check if the caller of connect() should wait before.
-     * @return True to wait.
-     */
-    inline bool waitBeforeConnect() const
-	{ return m_waitBeforeConnect; }
-
-    /**
      * Connect the stream to the server.
      */
     void connect();
@@ -545,9 +538,6 @@ private:
     ObjList m_events;                    // Event queue
     JBEvent* m_lastEvent;                // Last generated event
     JBEvent* m_terminateEvent;           // Destroy/Terminate event
-    int m_partialRestart;                // Partial outgoing stream restart attempts counter
-    int m_totalRestart;                  // Total outgoing stream restart attempts counter
-    bool m_waitBeforeConnect;            // Wait before trying to connect
 };
 
 /**
@@ -558,9 +548,11 @@ class YJINGLE_API JBServerInfo : public RefObject
 {
 public:
     inline JBServerInfo(const char* name, const char* address, int port,
-	const char* password, const char* identity)
+	const char* password, const char* identity, bool autoRestart,
+	u_int32_t restartCount)
 	: m_name(name), m_address(address),
-	m_port(port), m_password(password), m_identity(identity)
+	m_port(port), m_password(password), m_identity(identity),
+	m_autoRestart(autoRestart), m_restartCount(restartCount)
 	{}
     virtual ~JBServerInfo() {}
     inline const String& address() const
@@ -573,12 +565,26 @@ public:
 	{ return m_password; }
     inline const String& identity() const
 	{ return m_identity; }
+    inline bool autoRestart() const
+	{ return m_autoRestart; }
+    inline u_int32_t restartCount() const
+	{ return m_restartCount; }
+    inline void incRestart()
+	{ m_restartCount++; }
+    inline bool getRestart() {
+	    if (!restartCount())
+		return false;
+	    m_restartCount--;
+	    return true;
+	}
 private:
     String m_name;                       // Domain name
     String m_address;                    // IP address
     int m_port;                          // Port
     String m_password;                   // Authentication data
     String m_identity;                   // Identity. Used for Jabber Component protocol
+    bool m_autoRestart;                  // Automatically restart stream
+    u_int32_t m_restartCount;            // Restart counter
 };
 
 /**
@@ -620,8 +626,8 @@ public:
     /**
      * Initialize the engine's parameters.
      * Parameters:
-     * 	stream_partialrestart : int Partial stream restart counter for outgoing streams. Defaults to 3.
-     * 	stream_totalrestart : int Total stream restart counter for outgoing streams. Defaults to -1 (no limit).
+     * 	stream_restartupdateinterval : int Interval to update (increase) the stream restart counter. Defaults to 15000.
+     * 	stream_restartcount : int Max stream restart counter. Defaults to 4.
      * 	xmlparser_maxbuffer : int The maximum allowed xml buffer length. Defaults to 8192.
      * @param params Engine's parameters.
      */
@@ -648,25 +654,11 @@ public:
 	{ return m_componentDomain; }
 
     /**
-     * Get the partial stream restart attempts counter.
-     * @return The partial stream restart attempts counter.
+     * Get the default stream restart count.
+     * @return The default stream restart count.
      */
-    inline int partialStreamRestartAttempts() const
-	{ return m_partialStreamRestart; }
-
-    /**
-     * Get the total stream restart attempts counter.
-     * @return The total stream restart attempts counter.
-     */
-    inline int totalStreamRestartAttempts() const
-	{ return m_totalStreamRestart; }
-
-    /**
-     * Get the time to wait after m_partialStreamRestart reaches 0.
-     * @return time to wait after m_partialStreamRestart reaches 0.
-     */
-    inline u_int32_t waitStreamRestart() const
-	{ return m_waitStreamRestart; }
+    inline u_int32_t restartCount() const
+	{ return m_restartCount; }
 
     /**
      * Check if a stream to the given server exists.
@@ -720,6 +712,12 @@ public:
      * @return True if equal.
      */
     bool checkSHA1(const String& sha, const String& id, const String& password);
+
+    /**
+     * Called to update time dependent values
+     * @param time Current time.
+     */
+    virtual void timerTick(u_int64_t time);
 
     /**
      * Call the connect method of the given stream.
@@ -782,6 +780,15 @@ public:
      */
     bool getFullServerIdentity(String& destination, const char* token = 0,
 	bool domain = true);
+
+    /**
+     * Check if a stream to a remote server can be restarted.
+     * If true is returned, the stream restart counter has been decreased.
+     * @param token The remote server name or address.
+     * @param domain True to find by domain name. False to find by address.
+     * @return False if server doesn't exists.
+     */
+    bool getStreamRestart(const char* token, bool domain = true);
 
 protected:
     /**
@@ -861,9 +868,9 @@ private:
     JBPresence* m_presence;              // The presence server
     JIDIdentity* m_identity;             // Engine's identity
     JIDFeatureList m_features;           // Engine's features
-    int m_partialStreamRestart;          // Partial outgoing stream restart attempts counter
-    int m_totalStreamRestart;            // Total outgoing stream restart attempts counter
-    u_int32_t m_waitStreamRestart;       // How much time to wait after m_partialStreamRestart reaches 0
+    u_int64_t m_restartUpdateTime;       // Time to update the restart counter of all streams
+    u_int32_t m_restartUpdateInterval;   // Update interval for restart counter of all streams
+    u_int32_t m_restartCount;            // The default restart counter value
     // ID generation data
     u_int64_t m_streamID;                // Stream id counter
     // Server list

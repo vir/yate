@@ -49,17 +49,12 @@ JBComponentStream::JBComponentStream(JBEngine* engine, const String& remoteName,
       m_socket(0),
       m_receiveMutex(true),
       m_lastEvent(0),
-      m_terminateEvent(0),
-      m_partialRestart(2),
-      m_totalRestart(-1),
-      m_waitBeforeConnect(false)
+      m_terminateEvent(0)
 {
     Debug(m_engine,DebugAll,"JBComponentStream. [%p]",this);
     if (!engine)
 	return;
     // Init data
-    m_partialRestart = m_engine->partialStreamRestartAttempts();
-    m_totalRestart = m_engine->totalStreamRestartAttempts();
     m_engine->getServerIdentity(m_localName,remoteName);
     // Start
     m_engine->connect(this);
@@ -97,11 +92,10 @@ void JBComponentStream::connect()
 	return;
     }
     m_state = WaitToConnect;
-    // Check restart counters: If both of them are 0 destroy the stream
-    DDebug(m_engine,DebugInfo,
-	"Stream::connect. Remaining attempts: Partial: %d. Total: %d. [%p]",
-	m_partialRestart,m_totalRestart,this);
-    if (!(m_partialRestart && m_totalRestart)) {
+    // Check if we can restart
+    if (!m_engine->getStreamRestart(m_remoteName)) {
+	DDebug(m_engine,DebugNote,
+	    "Stream::connect. Stream can't restart (restart counter is 0). [%p]",this);
 	terminate(true,false,0,false);
 	return;
     }
@@ -116,19 +110,6 @@ void JBComponentStream::connect()
     // Lock again to update stream
     lock.lock(*this,m_receiveMutex);
     // Update restart counters
-    m_waitBeforeConnect = false;
-    if (res)
-	m_partialRestart = m_engine->partialStreamRestartAttempts();
-    else {
-	if (m_partialRestart > 0)
-	    m_partialRestart--;
-	if (!m_partialRestart && m_totalRestart > 0)
-	    m_totalRestart--;
-	if (!m_partialRestart && m_totalRestart) {
-	    m_waitBeforeConnect = true;
-	    m_partialRestart = m_engine->partialStreamRestartAttempts();
-	}
-    }
     if (!m_socket) {
 	Debug(m_engine,DebugMild,"Stream::connect. Socket deleted. [%p]",this);
 	return;
@@ -781,7 +762,7 @@ bool JBComponentStream::isStreamEnd(XMLElement* e)
     bool end = (e->type() == XMLElement::StreamEnd);
     bool error = (e->type() == XMLElement::StreamError);
     if (end || error) {
-	DDebug(m_engine,DebugAll,"Stream. Received stream  %s in state %u. [%p]",
+	DDebug(m_engine,DebugAll,"Stream. Received stream %s in state %u. [%p]",
 	    end?"end":"error",state(),this);
 	terminate(false,true,e,false);
 	return true;

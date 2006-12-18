@@ -11,16 +11,39 @@
 ; xmlparser_maxbuffer: integer: Maximum length of text we ever parse as XML
 ;xmlparser_maxbuffer=8192
 
-; stream_partialrestart: integer: Number of quick Jabber stream connect attempts
-;stream_partialrestart=2
+; stream_restartupdateinterval: integer: Interval (in miliseconds) to update (increase)
+;  the stream restart counter. Defaults to 15000. Takes values between 5000 and 300000
+;stream_restartupdateinterval=15000
 
-; stream_partialrestart: integer: Number of failures between 2 successfull Jabber
-;  stream connect attempts, -1 to keep trying
-;stream_partialrestart=-1
+; stream_restartcount: integer: Maximum value for stream restart counter
+;  Defaults to 2. Takes values between 1 and 10
+;stream_restartcount=2
 
-; stream_totalrestart: integer: How many times stream_partialrestart will reach 0.
-;  If the the value is -1 the engine will try to connect until stopped.
-;stream_totalrestart=-1
+; auto_subscribe: string: Presence: Set the behaviour of processing the subscribe/unsubscribe requests
+; Allowed values:
+;    none: All subscription are processed as a result of messages
+;    from: Automatically accept subscribe/unsubscribe requests
+;    to:   Automatically subscribe/unsubscribe to/from remote user
+;    both: The combination of 'from' and 'to'
+;auto_subscribe=none
+
+; add_unavailable: bool: Presence: Automatically delete an user or a resource when unavailable
+;delete_unavailable=enable
+
+; add_onsubscribe: bool: Presence: Automatically add a new user when receiving a subscribe request
+;add_onsubscribe=enable
+
+; add_onprobe: bool: Presence: Automatically add a new user when receiving a probe request
+;add_onprobe=enable
+
+; add_onpresence: bool: Presence: Automatically add a new user when receiving a presence from it
+;add_onpresence=enable
+
+; probe_interval: integer: Presence: Interval to probe a remote user if no data was received
+;probe_interval=1800000
+
+; expire_interval: integer: Presence: Timeout after probe
+;probe_interval=300000
 
 
 [codecs]

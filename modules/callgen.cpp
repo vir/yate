@@ -501,17 +501,20 @@ bool CmdHandler::received(Message &msg, int id)
 		    << ";total=" << s_total
 		    << ",ring=" << s_ringing
 		    << ",answered=" << s_answers
-		    << ",chans=" << s_current << ";";
-		ObjList *l = &s_calls;
-		bool first = true;
-		for (; l; l=l->next()) {
-		    GenConnection *c = static_cast<GenConnection *>(l->get());
-		    if (c) {
-			if (first)
-			    first = false;
-			else
-			    msg.retValue() << ",";
-			msg.retValue() << c->id() << "=" << c->status() << "|" << c->party();
+		    << ",chans=" << s_current;
+		if (msg.getBoolValue("details",true)) {
+		    msg.retValue() << ";";
+		    ObjList *l = &s_calls;
+		    bool first = true;
+		    for (; l; l=l->next()) {
+			GenConnection *c = static_cast<GenConnection *>(l->get());
+			if (c) {
+			    if (first)
+				first = false;
+			    else
+				msg.retValue() << ",";
+			    msg.retValue() << c->id() << "=" << c->status() << "|" << c->party();
+			}
 		    }
 		}
 		msg.retValue() << "\r\n";

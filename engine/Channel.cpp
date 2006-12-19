@@ -265,14 +265,18 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
 
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0), m_answered(false)
+      m_driver(driver), m_outgoing(outgoing),
+      m_timeout(0), m_maxcall(0),
+      m_sequence(0), m_answered(false)
 {
     init();
 }
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(&driver), m_outgoing(outgoing), m_timeout(0), m_maxcall(0), m_answered(false)
+      m_driver(&driver), m_outgoing(outgoing),
+      m_timeout(0), m_maxcall(0),
+      m_sequence(0), m_answered(false)
 {
     init();
 }
@@ -409,6 +413,11 @@ void Channel::complete(Message& msg, bool minimal) const
     msg.setParam("id",id());
     if (m_driver)
 	msg.setParam("module",m_driver->name());
+    if ((msg == "chan.dtmf") && !msg.getParam("sequence")) {
+	// need to add sequence number used to detect reorders
+	Lock lock(mutex());
+	msg.addParam("sequence",String(m_sequence++));
+    }
 
     if (minimal)
 	return;
@@ -505,6 +514,26 @@ bool Channel::msgTransfer(Message& msg)
 
 bool Channel::msgUpdate(Message& msg)
 {
+    return false;
+}
+
+bool Channel::msgMasquerade(Message& msg)
+{
+    if (m_billid.null())
+	m_billid = msg.getValue("billid");
+    if (msg == "call.answered") {
+	Debug(this,DebugInfo,"Masquerading answer operation [%p]",this);
+	m_maxcall = 0;
+	status("answered");
+    }
+    else if (msg == "call.progress") {
+	Debug(this,DebugInfo,"Masquerading progress operation [%p]",this);
+	status("progressing");
+    }
+    else if (msg == "call.ringing") {
+	Debug(this,DebugInfo,"Masquerading ringing operation [%p]",this);
+	status("ringing");
+    }
     return false;
 }
 
@@ -1084,7 +1113,7 @@ bool Driver::received(Message &msg, int id)
 	    msg.clearParam("message");
 	    msg.userData(chan);
 	    chan->complete(msg);
-	    return false;
+	    return chan->msgMasquerade(msg);
 	case Locate:
 	    msg.userData(chan);
 	    return true;

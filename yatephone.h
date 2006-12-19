@@ -1391,6 +1391,7 @@ private:
     bool m_outgoing;
     u_int64_t m_timeout;
     u_int64_t m_maxcall;
+    mutable unsigned int m_sequence;
 
 protected:
     String m_status;
@@ -1486,6 +1487,13 @@ public:
      * @return True to stop processing the message, false to let it flow
      */
     virtual bool msgUpdate(Message& msg);
+
+    /**
+     * Notification on message masquerade as channel request
+     * @param msg Message already modified to masquerade as this channel
+     * @return True to stop processing the message, false to masquerade it
+     */
+    virtual bool msgMasquerade(Message& msg);
 
     /**
      * Status message handler that is invoked only for messages to this channel

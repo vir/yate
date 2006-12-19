@@ -948,7 +948,7 @@ bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, voi
 {
     if (!newThread) {
 	PString token;
-	return ep->MakeCallLocked(remoteParty,token,userData) != 0;
+	return ep->MakeCall(remoteParty,token,userData) != 0;
     }
     int status = 0;
     YateCallThread* call = new YateCallThread(ep,remoteParty,userData,status);
@@ -963,11 +963,8 @@ bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, voi
 void YateCallThread::Main()
 {
     PString token;
-    YateH323Connection* conn = static_cast<YateH323Connection*>(m_ep->MakeCallLocked(m_remoteParty,token,m_userData));
-    if (conn) {
-	conn->Unlock();
+    if (m_ep->MakeCall(m_remoteParty,token,m_userData))
 	m_status = 1;
-    }
     else
 	m_status = -1;
 }

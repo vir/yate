@@ -46,6 +46,8 @@ public:
     };
     ~DumbChannel();
     virtual void disconnected(bool final, const char *reason);
+    inline void setTargetid(const char* targetid)
+	{ m_targetid = targetid; }
 };
 
 void DumbChannel::disconnected(bool final, const char *reason)
@@ -68,6 +70,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	if (dd->connect(c)) {
 	    msg.setParam("peerid", c->id());
 	    msg.setParam("targetid", c->id());
+	    c->setTargetid(dd->id());
 	    // autoring unless parameter is already set in message
 	    if (!msg.getParam("autoring"))
 		msg.addParam("autoring","true");
@@ -111,10 +114,14 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	m.setParam("id", c->id());
 	m.userData(c);
 	if (Engine::dispatch(m)) {
-	    c->deref();
 	    msg.setParam("id", m.getValue("id"));
-	    msg.setParam("targetid", m.getValue("targetid"));
 	    msg.setParam("peerid", m.getValue("peerid"));
+	    const char* targetid = m.getValue("targetid");
+	    if (targetid) {
+		msg.setParam("targetid",targetid);
+		c->setTargetid(targetid);
+	    }
+	    c->deref();
 	    return true;
 	}
 	else if (m.getParam("reason"))

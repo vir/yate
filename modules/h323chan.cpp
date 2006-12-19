@@ -88,6 +88,7 @@ namespace { // anonymous
 static bool s_externalRtp;
 static bool s_fallbackRtp;
 static bool s_passtrough;
+static bool s_pwlibThread;
 static int s_maxCleaning = 0;
 
 static Configuration s_cfg;
@@ -223,7 +224,7 @@ class H323Process : public PProcess
 	    s_cfg.getValue("general","product","YATE"),
 	    (unsigned short)s_cfg.getIntValue("general","major",YATE_MAJOR),
 	    (unsigned short)s_cfg.getIntValue("general","minor",YATE_MINOR),
-	    (PProcess::CodeStatus)s_cfg.getIntValue("general","status",dict_str2code,PProcess::AlphaCode),
+	    (PProcess::CodeStatus)s_cfg.getIntValue("general","status",dict_str2code,PProcess::ReleaseCode),
 	    (unsigned short)s_cfg.getIntValue("general","build",YATE_BUILD)
 	    )
 	{ Resume(); }
@@ -487,6 +488,22 @@ protected:
     int m_mode;
     int m_retry;
     PString m_name;
+};
+
+class YateCallThread : public PThread
+{
+    PCLASSINFO(YateCallThread, PThread);
+public:
+    YateCallThread(YateH323EndPoint* ep, const char* remoteParty, void* userData, int& status)
+	: PThread(10000), m_ep(ep), m_userData(userData), m_remoteParty(remoteParty), m_status(status)
+	{ }
+    virtual void Main();
+    static bool makeCall(YateH323EndPoint* ep, const char* remoteParty, void* userData, bool newThread = false);
+protected:
+    YateH323EndPoint* m_ep;
+    void* m_userData;
+    PString m_remoteParty;
+    int& m_status;
 };
 
 class UserHandler : public MessageHandler
@@ -923,6 +940,36 @@ void YateH323EndPoint::checkGkClient()
 {
     if (!m_thread)
 	internalGkNotify(IsRegisteredWithGatekeeper());
+}
+
+
+// make a call either normally or in a proxy PWlib thread
+bool YateCallThread::makeCall(YateH323EndPoint* ep, const char* remoteParty, void* userData, bool newThread)
+{
+    if (!newThread) {
+	PString token;
+	return ep->MakeCallLocked(remoteParty,token,userData) != 0;
+    }
+    int status = 0;
+    YateCallThread* call = new YateCallThread(ep,remoteParty,userData,status);
+    call->SetAutoDelete();
+    call->Resume();
+    while (!status)
+	Thread::yield();
+    return status > 0;
+}
+
+// the actual method that does the job in the proxy thread
+void YateCallThread::Main()
+{
+    PString token;
+    YateH323Connection* conn = static_cast<YateH323Connection*>(m_ep->MakeCallLocked(m_remoteParty,token,m_userData));
+    if (conn) {
+	conn->Unlock();
+	m_status = 1;
+    }
+    else
+	m_status = -1;
 }
 
 
@@ -2218,15 +2265,10 @@ bool H323Driver::msgExecute(Message& msg, String& dest)
     }
     Debug(this,DebugInfo,"Found call to H.323 target='%s'",
 	dest.c_str());
-    PString p;
     YateH323EndPoint* ep = hplugin.findEndpoint(msg.getValue("line"));
     if (ep) {
-	YateH323Connection* conn = static_cast<YateH323Connection*>(
-	    ep->MakeCallLocked(dest.c_str(),p,&msg));
-	if (conn) {
-	    conn->Unlock();
+	if (YateCallThread::makeCall(ep,dest.c_str(),&msg,msg.getBoolValue("pwlibthread",s_pwlibThread)))
 	    return true;
-	}
 	// the only reason a YateH323Connection is not created is congestion
 	msg.setParam("error","congestion");
 	return false;
@@ -2262,6 +2304,7 @@ void H323Driver::initialize()
     // mantain compatibility with old config files
     s_passtrough = s_cfg.getBoolValue("general","passtrough_rtp",s_passtrough);
     s_maxCleaning = s_cfg.getIntValue("general","maxcleaning",100);
+    s_pwlibThread = s_cfg.getBoolValue("general","pwlibthread");
     maxRoute(s_cfg.getIntValue("incoming","maxqueue",5));
     maxChans(s_cfg.getIntValue("ep","maxconns",0));
     if (!s_process) {

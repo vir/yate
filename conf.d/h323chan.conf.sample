@@ -23,7 +23,7 @@
 ;build=0
 
 ; status: keyword: Code status: alpha, beta or release
-;status=alpha
+;status=release
 
 ; needmedia: bool: Drop calls for which no common media could be negotiated
 ;needmedia=yes
@@ -51,6 +51,9 @@
 ;  in the cleanup queue. Set the limit to zero to disable this check.
 ; maxcleaning: int: default: 100
 ;maxcleaning=100
+
+; pwlibthread: bool: Make new calls in a PWlib thread, required for LRQ calls
+;pwlibthread=no
 
 
 [codecs]

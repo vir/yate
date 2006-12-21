@@ -80,6 +80,7 @@ public:
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
+    virtual void statusParams(String& str);
     bool msgExecute(Message& msg);
     bool msgToMaster(Message& msg, bool answer);
 };
@@ -134,6 +135,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->setParam("callto",dest);
     m_exec->setParam("rtp_forward",String::boolText(m_rtpForward));
     m_exec->userData(slave);
+    m_exec->msgTime() = Time::now();
     const char* error = "failure";
     if (Engine::dispatch(m_exec)) {
 	ok = true;
@@ -169,6 +171,7 @@ bool ForkMaster::startCalling(Message& msg)
     m_exec = new Message(msg);
     m_failures = msg.getValue("stoperror");
     m_exec->clearParam("stoperror");
+    m_exec->setParam("forkmaster",id());
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_rtpStrict = msg.getBoolValue("rtpstrict");
     if (!callContinue()) {
@@ -341,6 +344,13 @@ void ForkModule::initialize()
     installRelay(Answered,20);
     installRelay(Ringing,20);
     installRelay(Progress,20);
+}
+
+void ForkModule::statusParams(String& str)
+{
+    s_mutex.lock();
+    str.append("total=",",") << s_current << ",forks=" << s_calls.count();
+    s_mutex.unlock();
 }
 
 bool ForkModule::msgExecute(Message& msg)

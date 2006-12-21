@@ -257,7 +257,7 @@ SIPMessage::SIPMessage(const SIPMessage& original)
 }
 
 SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _version)
-    : version(_version), method(_method), uri(_uri),
+    : version(_version), method(_method), uri(_uri), code(0),
       body(0), m_ep(0), m_valid(true),
       m_answer(false), m_outgoing(true), m_ack(false), m_cseq(-1)
 {
@@ -266,7 +266,8 @@ SIPMessage::SIPMessage(const char* _method, const char* _uri, const char* _versi
 }
 
 SIPMessage::SIPMessage(SIPParty* ep, const char* buf, int len)
-    : body(0), m_ep(ep), m_valid(false), m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
+    : code(0), body(0), m_ep(ep), m_valid(false),
+      m_answer(false), m_outgoing(false), m_ack(false), m_cseq(-1)
 {
     DDebug(DebugInfo,"SIPMessage::SIPMessage(%p,%d) [%p]\n------\n%s------",
 	buf,len,this,buf);
@@ -309,7 +310,7 @@ SIPMessage::SIPMessage(const SIPMessage* message, int _code, const char* _reason
 }
 
 SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
-    : method("ACK"),
+    : method("ACK"), code(0),
       body(0), m_ep(0), m_valid(false),
       m_answer(false), m_outgoing(true), m_ack(true), m_cseq(-1)
 {

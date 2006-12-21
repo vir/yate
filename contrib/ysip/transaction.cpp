@@ -477,9 +477,9 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 	    message,message->method.c_str(),this);
 	return NoMatch;
     }
-    DDebug(getEngine(),DebugAll,"SIPTransaction processing %s %p '%s' in [%p]",
+    DDebug(getEngine(),DebugAll,"SIPTransaction processing %s %p '%s' %d in [%p]",
 	message->isAnswer() ? "answer" : "request",
-	message,message->method.c_str(),this);
+	message,message->method.c_str(),message->code,this);
 
     if (message->isAnswer()) {
 	const NamedString* ns = message->getParam("To","tag");

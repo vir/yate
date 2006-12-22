@@ -512,6 +512,7 @@ SIPTransaction::Processed SIPTransaction::processMessage(SIPMessage* message, co
 
 void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 {
+    bool final = message->code >= 200;
     switch (state) {
 	case Trying:
 	    setTimeout(m_engine->getTimer(isInvite() ? 'B' : 'F'));
@@ -529,8 +530,8 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		// use the human interaction timeout in INVITEs
 		setTimeout(m_engine->getUserTimeout());
 	    m_response = message->code;
-	    setPendingEvent(new SIPEvent(message,this));
-	    if (m_response >= 200) {
+	    setPendingEvent(new SIPEvent(message,this),final);
+	    if (final) {
 		setTimeout();
 		if (isInvite()) {
 		    // build the ACK
@@ -545,7 +546,7 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	    }
 	    break;
 	case Finish:
-	    if (m_lastMessage && m_lastMessage->isACK() && (message->code >= 200))
+	    if (m_lastMessage && m_lastMessage->isACK() && final)
 		setTransmit();
 	    break;
     }

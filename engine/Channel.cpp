@@ -216,6 +216,21 @@ DataEndpoint* CallEndpoint::setEndpoint(const char* type)
     return dat;
 }
 
+void CallEndpoint::setEndpoint(DataEndpoint* endPoint)
+{
+    if (!(endPoint && endPoint->ref()))
+	return;
+    if (m_data.find(endPoint)) {
+	endPoint->deref();
+	return;
+    }
+    clearEndpoint(endPoint->toString());
+    endPoint->disconnect();
+    m_data.append(endPoint);
+    if (m_peer)
+	endPoint->connect(m_peer->getEndpoint(endPoint->toString()));
+}
+
 void CallEndpoint::clearEndpoint(const char* type)
 {
     if (null(type)) {

@@ -1131,6 +1131,12 @@ protected:
     void setPeer(CallEndpoint* peer, const char* reason = 0, bool notify = true);
 
     /**
+     * Set a foreign data endpoint in this object
+     * @param endPoint Data endpoint to set, will replace one with same type
+     */
+    void setEndpoint(DataEndpoint* endPoint);
+
+    /**
      * Set a new ID for this call endpoint
      * @param newId New ID to set to this call
      */

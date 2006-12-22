@@ -2352,10 +2352,19 @@ bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const 
 // Process SIP events belonging to this connection
 bool YateSIPConnection::process(SIPEvent* ev)
 {
-    DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s [%p]",
-	ev,SIPTransaction::stateName(ev->getState()),this);
     const SIPMessage* msg = ev->getMessage();
     int code = ev->getTransaction()->getResponseCode();
+    DDebug(this,DebugInfo,"YateSIPConnection::process(%p) %s %s code=%d [%p]",
+	ev,ev->isActive() ? "active" : "inactive",
+	SIPTransaction::stateName(ev->getState()),code,this);
+#ifdef XDEBUG
+    if (msg)
+	Debug(this,DebugInfo,"Message %p '%s' %s %s code=%d body=%p",
+	    msg,msg->method.c_str(),
+	    msg->isOutgoing() ? "outgoing" : "incoming",
+	    msg->isAnswer() ? "answer" : "request",
+	    msg->code,msg->body);
+#endif
     if (ev->getTransaction() == m_tr2) {
 	// reINVITE transaction
 	if (ev->getState() == SIPTransaction::Cleared) {

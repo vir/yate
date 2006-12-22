@@ -130,6 +130,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("reason");
     m_exec->clearParam("peerid");
     m_exec->clearParam("targetid");
+    m_exec->clearParam("forkringer");
     m_exec->setParam("cdrtrack",String::boolText(false));
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
@@ -139,6 +140,8 @@ bool ForkMaster::forkSlave(const char* dest)
     const char* error = "failure";
     if (Engine::dispatch(m_exec)) {
 	ok = true;
+	if (m_ringing.null() && m_exec->getBoolValue("forkringer"))
+	    m_ringing = tmp;
 	if (m_rtpForward) {
 	    String rtp(m_exec->getValue("rtp_forward"));
 	    if (rtp != "accepted") {
@@ -216,8 +219,11 @@ bool ForkMaster::callContinue()
 void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 {
     Lock lock(s_mutex);
-    if (m_ringing == slave->id())
+    bool ringing = m_ringing == slave->id();
+    if (ringing) {
 	m_ringing.clear();
+	clearEndpoint();
+    }
     m_slaves.remove(slave,false);
     unsigned int slaves = m_slaves.count();
     if (m_answered)
@@ -227,8 +233,9 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 	    getPeerId().c_str(),reason);
     }
     else {
-	Debug(&__plugin,DebugNote,"Call '%s' lost slave '%s' reason '%s' remaining %u",
-	    getPeerId().c_str(),slave->id().c_str(),reason,slaves);
+	Debug(&__plugin,DebugNote,"Call '%s' lost%s slave '%s' reason '%s' remaining %u",
+	    getPeerId().c_str(),ringing ? " ringing" : "",
+	    slave->id().c_str(),reason,slaves);
 	if (slaves || callContinue())
 	    return;
 	Debug(&__plugin,DebugCall,"Call '%s' failed by '%s' after %d attempts with reason '%s'",
@@ -259,6 +266,7 @@ void ForkMaster::msgAnswered(Message& msg, const String& dest)
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
     lock.drop();
+    clearEndpoint();
     call->connect(peer);
 }
 
@@ -274,10 +282,20 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
 	return;
+    DataEndpoint* dataEp = getEndpoint();
     if (m_ringing.null())
 	m_ringing = dest;
-    Debug(&__plugin,DebugNote,"Call '%s' going on '%s' to '%s'",
-	peer->id().c_str(),dest.c_str(),msg.getValue("id"));
+    if (!dataEp) {
+	const CallEndpoint* call = static_cast<const CallEndpoint*>(msg.userObject("CallEndpoint"));
+	if (call) {
+	    dataEp = call->getEndpoint();
+	    if (dataEp)
+		setEndpoint(dataEp);
+	}
+    }
+    Debug(&__plugin,DebugNote,"Call '%s' going on '%s' to '%s'%s",
+	peer->id().c_str(),dest.c_str(),msg.getValue("id"),
+	dataEp ? " with audio data" : "");
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
 }

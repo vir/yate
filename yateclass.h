@@ -206,12 +206,6 @@ YATE_API void abortOnBug();
 YATE_API bool abortOnBug(bool doAbort);
 
 /**
- * Enable timestamping of output messages and set the time start reference
- * @param absolute Timestamps are absolute from EPOCH, not from program start
- */
-YATE_API void setDebugTimestamp(bool absolute = false);
-
-/**
  * Standard debugging levels.
  * The DebugFail level is special - it is always displayed and may abort
  *  the program if @ref abortOnBug() is set.
@@ -497,6 +491,16 @@ class YATE_API Debugger
 {
 public:
     /**
+     * Timestamp formatting
+     */
+    enum Formatting {
+	None = 0,
+	Relative,  // from program start
+	Absolute,  // from EPOCH (1-1-1970)
+	Textual,   // absolute GMT in YYYYMMDDhhmmss.uuuuuu format
+    };
+
+    /**
      * The constructor prints the method entry message and indents.
      * @param name Name of the function or block entered, must be static
      * @param format printf() style format string
@@ -534,6 +538,12 @@ public:
      * @param colorize Enable ANSI colorization of output
      */
     static void enableOutput(bool enable = true, bool colorize = false);
+
+    /**
+     * Set the format of timestamps on output messages and set the time start reference
+     * @param format Desired timestamp formatting
+     */
+    static void setFormatting(Formatting format);
 
 private:
     const char* m_name;

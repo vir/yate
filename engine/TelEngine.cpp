@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 
 #ifdef _WINDOWS
@@ -56,8 +57,9 @@ static int s_debug = DebugWarn;
 static int s_indent = 0;
 static bool s_debugging = true;
 static bool s_abort = false;
-static int64_t s_timestamp = -1;
 static u_int64_t s_startTime = 0;
+static u_int64_t s_timestamp = 0;
+static Debugger::Formatting s_fmtstamp = Debugger::None;
 
 static const char* const s_colors[11] = {
     "\033[5;41;1;33m\033[K",// DebugFail - blinking yellow on red
@@ -142,11 +144,26 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
 	return;
     char buf[OUT_BUFFER_SIZE];
     unsigned int n = 0;
-    if (s_timestamp >= 0) {
-	u_int64_t t = Time::now() - s_timestamp;
+    if (s_fmtstamp != Debugger::None) {
+	u_int64_t t = Time::now();
+	if (s_fmtstamp == Debugger::Relative)
+	    t -= s_timestamp;
 	unsigned int s = (unsigned int)(t / 1000000);
 	unsigned int u = (unsigned int)(t % 1000000);
-	::sprintf(buf,"%07u.%06u ",s,u);
+	if (s_fmtstamp == Debugger::Textual) {
+	    time_t sec = (time_t)s;
+	    struct tm tmp;
+#ifdef _WINDOWS
+	    _gmtime_s(&tmp,&sec);
+#else
+	    gmtime_r(&sec,&tmp);
+#endif
+	    ::sprintf(buf,"%04d%02d%02d%02d%02d%02d.%06u ",
+		tmp.tm_year+1900,tmp.tm_mon+1,tmp.tm_mday,
+		tmp.tm_hour,tmp.tm_min,tmp.tm_sec,u);
+	}
+	else
+	    ::sprintf(buf,"%07u.%06u ",s,u);
 	n = ::strlen(buf);
     }
     unsigned int l = s_indent*2;
@@ -290,11 +307,6 @@ const char* debugColor(int level)
     return s_colors[level];
 }
 
-void setDebugTimestamp(bool absolute)
-{
-    s_timestamp = absolute ? 0 : (Time::now() / 1000000) * 1000000;
-}
-
 int DebugEnabler::debugLevel(int level)
 {
     if (level < DebugMin)
@@ -403,6 +415,14 @@ void Debugger::enableOutput(bool enable, bool colorize)
     if (colorize)
 	setOutput(dbg_colorize_func);
 }
+
+void Debugger::setFormatting(Formatting format)
+{
+    // start stamp will be rounded to full second
+    s_timestamp = (Time::now() / 1000000) * 1000000;
+    s_fmtstamp = format;
+}
+
 
 
 u_int64_t Time::now()

@@ -933,7 +933,8 @@ static void usage(bool client, FILE* f)
 "     o            Colorize output using ANSI codes\n"
 "     s            Abort on bugs even during shutdown\n"
 "     t            Timestamp debugging messages relative to program start\n"
-"     e            Timestamp debugging messages based on EPOCH (1-1-1970)\n"
+"     e            Timestamp debugging messages based on EPOCH (1-1-1970 GMT)\n"
+"     f            Timestamp debugging in GMT format YYYYMMDDhhmmss.uuuuuu\n"
     ,client ? "" :
 #ifdef _WINDOWS
 "   --service      Run as Windows service\n"
@@ -975,8 +976,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool supervised = false;
 #endif
     bool client = (mode == Client);
-    bool tstamp = false;
-    bool abstamp = false;
+    Debugger::Formatting tstamp = Debugger::None;
     bool colorize = false;
     const char* pidfile = 0;
     const char* workdir = 0;
@@ -1138,10 +1138,13 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				    colorize = true;
 				    break;
 				case 'e':
-				    abstamp = true;
-				    // fall through
+				    tstamp = Debugger::Absolute;
+				    break;
 				case 't':
-				    tstamp = true;
+				    tstamp = Debugger::Relative;
+				    break;
+				case 'f':
+				    tstamp = Debugger::Textual;
 				    break;
 				default:
 				    badopt(client,*pc,argv[i]);
@@ -1315,8 +1318,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	return retcode;
 #endif
 
-    if (tstamp)
-	setDebugTimestamp(abstamp);
+    Debugger::setFormatting(tstamp);
 
 #ifdef _WINDOWS
     if (service)

@@ -58,6 +58,7 @@ protected:
     bool m_rtpStrict;
     ObjList* m_targets;
     Message* m_exec;
+    String m_reason;
 };
 
 class ForkSlave : public CallEndpoint
@@ -90,7 +91,7 @@ INIT_PLUGIN(ForkModule);
 
 ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
-      m_targets(targets), m_exec(0)
+      m_targets(targets), m_exec(0), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     s_mutex.lock();
@@ -130,7 +131,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("reason");
     m_exec->clearParam("peerid");
     m_exec->clearParam("targetid");
-    m_exec->clearParam("forkringer");
+    m_exec->clearParam("fork.ringer");
     m_exec->setParam("cdrtrack",String::boolText(false));
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
@@ -140,7 +141,7 @@ bool ForkMaster::forkSlave(const char* dest)
     const char* error = "failure";
     if (Engine::dispatch(m_exec)) {
 	ok = true;
-	if (m_ringing.null() && m_exec->getBoolValue("forkringer"))
+	if (m_ringing.null() && m_exec->getBoolValue("fork.ringer"))
 	    m_ringing = tmp;
 	if (m_rtpForward) {
 	    String rtp(m_exec->getValue("rtp_forward"));
@@ -172,9 +173,12 @@ bool ForkMaster::forkSlave(const char* dest)
 bool ForkMaster::startCalling(Message& msg)
 {
     m_exec = new Message(msg);
-    m_failures = msg.getValue("stoperror");
+    // stoperror is OBSOLETE
+    m_failures = msg.getValue("fork.stop",msg.getValue("stoperror"));
     m_exec->clearParam("stoperror");
-    m_exec->setParam("forkmaster",id());
+    m_exec->clearParam("fork.stop");
+    m_exec->setParam("fork.master",id());
+    m_exec->setParam("fork.origid",getPeerId());
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_rtpStrict = msg.getBoolValue("rtpstrict");
     if (!callContinue()) {
@@ -261,6 +265,7 @@ void ForkMaster::msgAnswered(Message& msg, const String& dest)
     if (!call)
 	return;
     m_answered = true;
+    m_reason = msg.getValue("reason","pickup");
     Debug(&__plugin,DebugCall,"Call '%s' answered on '%s' by '%s'",
 	peer->id().c_str(),dest.c_str(),call->id().c_str());
     msg.setParam("peerid",peer->id());
@@ -308,7 +313,7 @@ void ForkMaster::clear()
     while (slave = static_cast<ForkSlave*>(iter.get())) {
 	m_slaves.remove(slave,false);
 	s_mutex.unlock();
-	slave->lostMaster("hangup");
+	slave->lostMaster(m_reason);
 	s_mutex.lock();
 	slave = 0;
     }

@@ -2227,6 +2227,8 @@ bool ClientChannel::msgProgress(Message& msg)
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgProgress() [%p]",this);
     Client::self()->setStatusLocked("Call progressing");
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    if (!ch)
+	ch = getPeer();
     if (ch && ch->getSource())
 	openMedia();
     bool ret = Channel::msgProgress(msg);
@@ -2239,6 +2241,8 @@ bool ClientChannel::msgRinging(Message& msg)
     Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgRinging() [%p]",this);
     Client::self()->setStatusLocked("Call ringing");
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    if (!ch)
+	ch = getPeer();
     if (ch && ch->getSource())
 	openMedia();
     bool ret = Channel::msgRinging(msg);

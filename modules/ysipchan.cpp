@@ -305,6 +305,11 @@ public:
 	MediaStarted,
 	MediaMuted
     };
+    enum {
+	ReinviteNone,
+	ReinvitePending,
+	ReinviteRequest,
+    };
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
     ~YateSIPConnection();
@@ -352,6 +357,8 @@ private:
     void setMedia(ObjList* media);
     void clearTransaction();
     void detachTransaction2();
+    void startPendingUpdate();
+    bool processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code);
     SIPMessage* createDlgMsg(const char* method, const char* uri = 0);
     bool emitPRACK(const SIPMessage* msg);
     bool dispatchRtp(NetMedia* media, const char* addr, bool start, bool pick);
@@ -363,6 +370,7 @@ private:
     bool startRtp();
     bool addSdpParams(Message& msg, const SIPBody* body);
     bool addRtpParams(Message& msg, const String& natAddr, const SIPBody* body);
+    bool startClientReInvite(Message& msg);
     bool initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer, const SIPHeaderLine* refHdr);
 
     SIPTransaction* m_tr;
@@ -409,6 +417,8 @@ private:
     bool m_info;
     // REFER already running
     bool m_referring;
+    // reINVITE requested or in progress
+    int m_reInviting;
 };
 
 class YateSIPGenerate : public GenObject
@@ -1576,7 +1586,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false)
+      m_referring(false), m_reInviting(ReinviteNone)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1690,7 +1700,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false)
+      m_referring(false), m_reInviting(ReinviteNone)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -1870,7 +1880,10 @@ void YateSIPConnection::detachTransaction2()
 	m_tr2->setUserData(0);
 	m_tr2->deref();
 	m_tr2 = 0;
+	if (m_reInviting == ReinviteRequest)
+	    m_reInviting = ReinviteNone;
     }
+    startPendingUpdate();
 }
 
 void YateSIPConnection::hangup()
@@ -2365,49 +2378,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    msg->isAnswer() ? "answer" : "request",
 	    msg->code,msg->body);
 #endif
-    if (ev->getTransaction() == m_tr2) {
-	// reINVITE transaction
-	if (ev->getState() == SIPTransaction::Cleared) {
-	    detachTransaction2();
-	    Message* m = message("call.update");
-	    m->addParam("operation","reject");
-	    m->addParam("error","timeout");
-	    Engine::enqueue(m);
-	    return false;
-	}
-	if (!msg || msg->isOutgoing() || !msg->isAnswer())
-	    return false;
-	if (code < 200)
-	    return false;
-	Message* m = message("call.update");
-	if (code < 300) {
-	    m->addParam("operation","notify");
-	    String natAddr;
-	    if (msg->body && msg->body->isSDP()) {
-		DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
-		setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
-		// guess if the call comes from behind a NAT
-		if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
-		    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
-			m_rtpAddr.c_str(),m_host.c_str());
-		    natAddr = m_rtpAddr;
-		    m_rtpAddr = m_host;
-		}
-		DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
-	    }
-	    if (!addRtpParams(*m,natAddr,msg->body))
-		addSdpParams(*m,msg->body);
-	    Engine::enqueue(m);
-	}
-	else {
-	    m->addParam("operation","reject");
-	    m->addParam("error",lookup(code,dict_errors,"failure"));
-	    m->addParam("reason",msg->reason);
-	}
-	detachTransaction2();
-	Engine::enqueue(m);
-	return false;
-    }
+
+    if (ev->getTransaction() == m_tr2)
+	return processTransaction2(ev,msg,code);
+
     m_dialog = *ev->getTransaction()->recentMessage();
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	m_cancel = false;
@@ -2426,6 +2400,8 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	}
 	if (m_state != Established)
 	    hangup();
+	else
+	    startPendingUpdate();
 	return false;
     }
     if (!msg || msg->isOutgoing())
@@ -2470,6 +2446,11 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    // accept any URI change caused by a Contact: header in the 2xx
 	    m_uri = ack->uri;
 	    m_uri.parse();
+	    DDebug(this,DebugInfo,"YateSIPConnection clearing answered transaction %p [%p]",
+		m_tr,this);
+	    m_tr->setUserData(0);
+	    m_tr->deref();
+	    m_tr = 0;
 	}
 	lock.drop();
 	setReason("",0);
@@ -2478,6 +2459,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Message *m = message("call.answered");
 	addRtpParams(*m,natAddr,msg->body);
 	Engine::enqueue(m);
+	startPendingUpdate();
     }
     if ((m_state < Ringing) && msg->isAnswer()) {
 	if (msg->code == 180) {
@@ -2503,6 +2485,104 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);
 	startRtp();
     }
+    return false;
+}
+
+// Process secondary transaction (reINVITE)  belonging to this connection
+bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg, int code)
+{
+    if (ev->getState() == SIPTransaction::Cleared) {
+	detachTransaction2();
+	Message* m = message("call.update");
+	m->addParam("operation","reject");
+	m->addParam("error","timeout");
+	Engine::enqueue(m);
+	return false;
+    }
+    if (!msg || msg->isOutgoing() || !msg->isAnswer())
+	return false;
+    if (code < 200)
+	return false;
+
+    if (m_reInviting == ReinviteRequest) {
+	// we emitted a client reINVITE, now we are forced to deal with it
+	if (code < 300) {
+	    while (msg->body && msg->body->isSDP()) {
+		String addr;
+		ObjList* lst = parseSDP(static_cast<SDPBody*>(msg->body),addr);
+		if (!lst)
+		    break;
+		if ((addr == m_rtpAddr) || isNatBetween(addr,m_host)) {
+		    ObjList* l = m_rtpMedia;
+		    for (; l; l = l->next()) {
+			NetMedia* m = static_cast<NetMedia*>(l->get());
+			if (!m)
+			    continue;
+			NetMedia* m2 = static_cast<NetMedia*>((*lst)[*m]);
+			if (!m2)
+			    continue;
+			// both old and new media exist, compare ports
+			if (m->remotePort() != m2->remotePort()) {
+			    DDebug(this,DebugWarn,"Port for '%s' changed: '%s' -> '%s' [%p]",
+				m->c_str(),m->remotePort().c_str(),
+				m2->remotePort().c_str(),this);
+			    lst->destruct();
+			    lst = 0;
+			    break;
+			}
+		    }
+		    if (lst) {
+			setMedia(lst);
+			return false;
+		    }
+		}
+		if (lst)
+		    lst->destruct();
+		setReason("Media information changed during reINVITE",415);
+		hangup();
+		return false;
+	    }
+	    setReason("Missing media information",415);
+	}
+	else
+	    setReason(msg->reason,code);
+	hangup();
+	return false;
+    }
+
+    Message* m = message("call.update");
+    if (code < 300) {
+	m->addParam("operation","notify");
+	String natAddr;
+	if (msg->body && msg->body->isSDP()) {
+	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
+	    setMedia(parseSDP(static_cast<SDPBody*>(msg->body),m_rtpAddr,m_rtpMedia));
+	    // guess if the call comes from behind a NAT
+	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
+		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
+		    m_rtpAddr.c_str(),m_host.c_str());
+		natAddr = m_rtpAddr;
+		m_rtpAddr = m_host;
+	    }
+	    DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
+	    if (m_rtpForward) {
+		// drop any local RTP we might have before
+		m_mediaStatus = m_rtpAddr.null() ? MediaMuted : MediaMissing;
+		m_rtpLocalAddr.clear();
+		clearEndpoint();
+	    }
+	}
+	if (!addRtpParams(*m,natAddr,msg->body))
+	    addSdpParams(*m,msg->body);
+	Engine::enqueue(m);
+    }
+    else {
+	m->addParam("operation","reject");
+	m->addParam("error",lookup(code,dict_errors,"failure"));
+	m->addParam("reason",msg->reason);
+    }
+    detachTransaction2();
+    Engine::enqueue(m);
     return false;
 }
 
@@ -2855,30 +2935,33 @@ bool YateSIPConnection::msgUpdate(Message& msg)
     Lock lock(driver());
     if (*oper == "request") {
 	if (m_tr || m_tr2) {
+	    DDebug(this,DebugWarn,"Update request rejected, pending:%s%s [%p]",
+		m_tr ? " invite" : "",m_tr2 ? " reinvite" : "",this);
 	    msg.setParam("error","pending");
 	    msg.setParam("reason","Another INVITE Pending");
 	    return false;
 	}
-	SDPBody* sdp = createPasstroughSDP(msg,false);
-	if (!sdp) {
-	    msg.setParam("error","failure");
-	    msg.setParam("reason","Could not build the SDP");
+	return startClientReInvite(msg);
+    }
+    if (*oper == "initiate") {
+	if (m_reInviting != ReinviteNone) {
+	    msg.setParam("error","pending");
+	    msg.setParam("reason","Another INVITE Pending");
 	    return false;
 	}
-	SIPMessage* m = createDlgMsg("INVITE");
-	copySipHeaders(*m,msg,"osip_");
-	if (s_privacy)
-	    copyPrivacy(*m,msg);
-	m->setBody(sdp);
-	m_tr2 = plugin.ep()->engine()->addMessage(m);
-	if (m_tr2) {
-	    m_tr2->ref();
-	    m_tr2->setUserData(this);
-	}
-	m->deref();
+	m_reInviting = ReinvitePending;
+	startPendingUpdate();
 	return true;
     }
     if (!m_tr2) {
+	if ((m_reInviting == ReinviteRequest) && (*oper == "notify")) {
+	    if (startClientReInvite(msg))
+		return true;
+	    Debug(this,DebugMild,"Failed to start reINVITE, %s: %s [%p]",
+		msg.getValue("error","unknown"),
+		msg.getValue("reason","No reason"),this);
+	    return false;
+	}
 	msg.setParam("error","nocall");
 	return false;
     }
@@ -2979,6 +3062,79 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	    m_tr->setResponse(code,reason);
     }
     setReason(reason,code);
+}
+
+// Start a client reINVITE transaction
+bool YateSIPConnection::startClientReInvite(Message& msg)
+{
+    bool hadRtp = !m_rtpForward;
+    bool rtpFwd = msg.getBoolValue("rtp_forward",m_rtpForward);
+    if (!rtpFwd) {
+	msg.setParam("error","failure");
+	msg.setParam("reason","RTP forwarding is not enabled");
+	return false;
+    }
+    m_rtpForward = true;
+    // this is the point of no return
+    if (hadRtp)
+	clearEndpoint();
+    SDPBody* sdp = createPasstroughSDP(msg,false);
+    if (!sdp) {
+	msg.setParam("error","failure");
+	msg.setParam("reason","Could not build the SDP");
+	if (hadRtp) {
+	    Debug(this,DebugWarn,"Could not build SDP for reINVITE, hanging up [%p]",this);
+	    disconnect("nomedia");
+	}
+	return false;
+    }
+    Debug(this,DebugNote,"Initiating reINVITE (%s RTP before) [%p]",
+	hadRtp ? "had" : "no",this);
+    SIPMessage* m = createDlgMsg("INVITE");
+    copySipHeaders(*m,msg,"osip_");
+    if (s_privacy)
+	copyPrivacy(*m,msg);
+    m->setBody(sdp);
+    m_tr2 = plugin.ep()->engine()->addMessage(m);
+    if (m_tr2) {
+	m_tr2->ref();
+	m_tr2->setUserData(this);
+    }
+    m->deref();
+    return true;
+}
+
+// Emit pending update if possible, method is called with driver mutex hold
+void YateSIPConnection::startPendingUpdate()
+{
+    if (m_tr || m_tr2 || (m_reInviting != ReinvitePending))
+	return;
+    if (m_rtpAddr.null()) {
+	Debug(this,DebugWarn,"Cannot start update, remote RTP address unknown [%p]",this);
+	m_reInviting = ReinviteNone;
+	return;
+    }
+    if (!m_rtpMedia) {
+	Debug(this,DebugWarn,"Cannot start update, remote media unknown [%p]",this);
+	m_reInviting = ReinviteNone;
+	return;
+    }
+
+    Message msg("call.update");
+    complete(msg);
+    msg.addParam("operation","request");
+    msg.addParam("rtp_forward","yes");
+    msg.addParam("rtp_addr",m_rtpAddr);
+    putMedia(msg,m_rtpMedia);
+    m_reInviting = ReinviteRequest;
+    // if peer doesn't support updates fail the reINVITE
+    if (!Engine::dispatch(msg)) {
+	Debug(this,DebugWarn,"Cannot start update by '%s', %s: %s [%p]",
+	    getPeerId().c_str(),
+	    msg.getValue("error","not supported"),
+	    msg.getValue("reason","No reason provided"),this);
+	m_reInviting = ReinviteNone;
+    }
 }
 
 // msg: 'call.route' message to create & fill

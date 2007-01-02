@@ -28,9 +28,14 @@
 ;  $(mul,VAL1,VAL2[,LEN]) = VAL1*VAL2 left filled to LEN or length of VAL1
 ;  $(div,VAL1,VAL2[,LEN]) = VAL1/VAL2 left filled to LEN or length of VAL1
 ;  $(mod,VAL1,VAL2[,LEN]) = VAL1%VAL2 left filled to LEN or length of VAL1
+;  $(lt,VAL1,VAL2) = "true" if VAL1 < VAL2, "false" otherwise
+;  $(gt,VAL1,VAL2) = "true" if VAL1 > VAL2, "false" otherwise
+;  $(le,VAL1,VAL2) = "true" if VAL1 <= VAL2, "false" otherwise
+;  $(ge,VAL1,VAL2) = "true" if VAL1 >= VAL2, "false" otherwise
 ;  $(random,STRING) = STRING with each ? character replaced with a random digit
 ;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
+;  $(runid) = the current Engine run identifier
 ; Note that functions ++, --, index and rotate will automatically update N
 ;  if it is a variable in the $varname format.
 

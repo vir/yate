@@ -56,11 +56,17 @@ static String& vars(String& s, String* vName = 0)
     return s;
 }
 
-#define OPER_ADD 1
-#define OPER_SUB 2
-#define OPER_MUL 3
-#define OPER_DIV 4
-#define OPER_MOD 5
+enum {
+    OPER_ADD,
+    OPER_SUB,
+    OPER_MUL,
+    OPER_DIV,
+    OPER_MOD,
+    OPER_GT,
+    OPER_LT,
+    OPER_GE,
+    OPER_LE,
+};
 
 static void mathOper(String& str, String& par, int sep, int oper)
 {
@@ -91,6 +97,18 @@ static void mathOper(String& str, String& par, int sep, int oper)
 	case OPER_MOD:
 	    str = p2 ? p1%p2 : 0;
 	    break;
+	case OPER_GT:
+	    str = (p1 > p2);
+	    return;
+	case OPER_LT:
+	    str = (p1 < p2);
+	    return;
+	case OPER_GE:
+	    str = (p1 >= p2);
+	    return;
+	case OPER_LE:
+	    str = (p1 <= p2);
+	    return;
     }
     // TODO: deal with negative results
     while (len > (int)str.length())
@@ -137,6 +155,14 @@ static void evalFunc(String& str)
 	    mathOper(str,par,sep,OPER_DIV);
 	else if ((sep > 0) && ((str == "mod") || (str == "%")))
 	    mathOper(str,par,sep,OPER_MOD);
+	else if ((sep > 0) && ((str == "gt") || (str == ">")))
+	    mathOper(str,par,sep,OPER_GT);
+	else if ((sep > 0) && ((str == "lt") || (str == "<")))
+	    mathOper(str,par,sep,OPER_LT);
+	else if ((sep > 0) && ((str == "ge") || (str == ">=")))
+	    mathOper(str,par,sep,OPER_GE);
+	else if ((sep > 0) && ((str == "le") || (str == "<=")))
+	    mathOper(str,par,sep,OPER_LE);
 	else if (str == "random") {
 	    str.clear();
 	    vars(par);
@@ -182,6 +208,10 @@ static void evalFunc(String& str)
 		}
 	    }
 	    lst->destruct();
+	}
+	else if (str == "runid") {
+	    str.clear();
+	    str << Engine::runId();
 	}
 	else if ((sep < 0) && str.trimBlanks())
 	    str = s_vars.getValue(str);

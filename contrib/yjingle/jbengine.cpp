@@ -1379,8 +1379,8 @@ void JBPresence::initialize(const NamedList& params)
 	s << "\r\nadd_onsubscribe=" << String::boolText(m_addOnSubscribe);
 	s << "\r\nadd_onprobe=" << String::boolText(m_addOnProbe);
 	s << "\r\nadd_onpresence=" << String::boolText(m_addOnPresence);
-	s << "\r\nprobe_interval=" << m_probeInterval;
-	s << "\r\nexpire_interval=" << m_expireInterval;
+	s << "\r\nprobe_interval=" << (unsigned int)m_probeInterval;
+	s << "\r\nexpire_interval=" << (unsigned int)m_expireInterval;
 	Debug(this,DebugAll,"Initialized:%s",s.c_str());
     }
 }

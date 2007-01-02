@@ -41,6 +41,33 @@ void srandom(unsigned int seed)
 { s_randSeed = seed % RAND_MAX; }
 
 }
+
+#ifndef HAVE_GMTIME_S
+#include <errno.h>
+
+int _gmtime_s(struct tm* _tm, const time_t* time)
+{
+    static TelEngine::Mutex m;
+    struct tm* tmp;
+    if (!_tm)
+	return EINVAL;
+    _tm->tm_isdst = _tm->tm_yday = _tm->tm_wday = _tm->tm_year = _tm->tm_mon = _tm->tm_mday =
+	_tm->tm_hour = _tm->tm_min = _tm->tm_sec = -1;
+    if (!time)
+	return EINVAL;
+    m.lock();
+    tmp = gmtime(time);
+    if (!tmp) {
+	m.unlock();
+	return EINVAL;
+    }
+    *_tm = *tmp;
+    m.unlock();
+    return 0;
+}
+
+#endif
+
 #else
 #include <sys/resource.h>
 #endif

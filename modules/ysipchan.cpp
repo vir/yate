@@ -488,6 +488,7 @@ static bool s_auto_nat = true;
 static bool s_inband = false;
 static bool s_info = false;
 static bool s_forward_sdp = false;
+static bool s_start_rtp = false;
 static bool s_auth_register = true;
 
 static int s_expires_min = EXPIRES_MIN;
@@ -2858,8 +2859,8 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	SDPBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
-	    // don't start RTP yet, only when we get the ACK
-	    sdp = createRtpSDP(false);
+	    // normally don't start RTP yet, only when we get the ACK
+	    sdp = createRtpSDP(msg.getBoolValue("rtp_start",s_start_rtp));
 	}
 	m->setBody(sdp);
 
@@ -3757,6 +3758,7 @@ void SIPDriver::initialize()
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
+    s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);

@@ -55,6 +55,9 @@
 ; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
 ;forward_sdp=disable
 
+; rtp_start: bool: Start RTP when sending 200 on incoming instead of receiving ACK
+;rtp_start=disable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

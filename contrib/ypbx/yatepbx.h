@@ -159,6 +159,12 @@ public:
     virtual void msgHangup(Message& msg);
 
     /**
+     * Process the call.execute message, copy any parameters needed later
+     * @param msg Call execute message
+     */
+    virtual void msgExecute(Message& msg);
+
+    /**
      * Process the channel disconnect message, may connect to something else
      * @param msg The chan.disconnected message
      * @param reason The disconnection reason

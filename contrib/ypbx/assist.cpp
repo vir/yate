@@ -53,12 +53,15 @@ bool ChanAssistList::received(Message& msg, int id)
 	    }
 	    return false;
 	case Execute:
-	    if (ca)
+	    if (ca) {
+		ca->msgExecute(msg);
 		return false;
+	    }
 	    ca = create(msg,*chanId);
 	    if (ca) {
 		m_calls.append(ca);
 		ca->msgStartup(msg);
+		ca->msgExecute(msg);
 	    }
 	    return false;
 	case Disconnected:
@@ -115,6 +118,11 @@ void ChanAssist::msgStartup(Message& msg)
 void ChanAssist::msgHangup(Message& msg)
 {
     Debug(list(),DebugInfo,"Assistant for '%s' hangup",id().c_str());
+}
+
+void ChanAssist::msgExecute(Message& msg)
+{
+    Debug(list(),DebugInfo,"Assistant for '%s' execute",id().c_str());
 }
 
 bool ChanAssist::msgDisconnect(Message& msg, const String& reason)

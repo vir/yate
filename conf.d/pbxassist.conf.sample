@@ -45,13 +45,27 @@
 ; pbxstates: regexp: Expression matching states allowing operation, default all
 ;pbxstates=
 
+; pbxprompt: string: Resource to overlay on audio channel, * for error beep
+;pbxprompt=
+
+; pastekeys: string: Keys to fill in buffer instead of clearing it
+;pastekeys=
+
 ; All other parameters are copied in the generated message after having
 ;  the \0 .. \9 placeholders replaced with matches from the trigger
+
+
+; Example: flush the key buffer with *#, play the error beep
+;[flush]
+;trigger=\*#$
+;operation=
+;pbxprompt=*
 
 
 ; Example: enter DTMF pass-through mode with 3 successive asterisks
 ;[passthrough]
 ;trigger=\*\*\*
+;pbxprompt=tone/probe/1
 
 
 ; Example: enter conference named conf/dyn-N with key sequence #N# where N=0..9

@@ -1661,6 +1661,15 @@ bool Client::callStart(const String& target, const String& line,
 	m->setParam("protocol",proto);
     if (account)
 	m->setParam("account",account);
+    String tmp;
+    if (getText("def_username",tmp) && tmp)
+	m->setParam("caller",tmp);
+    tmp.clear();
+    if (getText("def_callerid",tmp) && tmp)
+	m->setParam("callername",tmp);
+    tmp.clear();
+    if (getText("def_domain",tmp) && tmp)
+	m->setParam("domain",tmp);
     return cc->startRouter(m);
 }
 

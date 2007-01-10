@@ -151,3 +151,20 @@
 ^99991005$=tone/congestion
 ^99991006$=tone/outoforder
 ^99991007$=tone/milliwatt
+
+; Example of handling call authorization by caller authentication or ip address
+; If the user is not authenticated call the subsection check_addr_auth
+;${username}^$=call check_addr_auth
+; Optionally, force caller id to authenticated username (if any)
+;${username}.=;caller=${username}
+;
+;[check_addr_auth]
+; Here we check for trusted gateways or networks by the "address" parameter
+;  that for VoIP protocols is in the format: ip.ad.dr.ess:port
+;
+; allow trusted gateway 10.0.1.2
+;${address}^10\.0\.1\.2:=return
+; also trust callers from network 192.168.0.*
+;${address}^192\.168\.0\.=return
+; all others should be challenged (SIP,IAX) or rejected (other protocols)
+;.*=-;error=noauth

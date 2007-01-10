@@ -954,7 +954,8 @@ IAXEvent* IAXTransaction::getEventResponse_New(IAXFrameOut* frame, bool& delFram
 	    if (!(frame->type() == IAXFrame::IAX && frame->subclass() == IAXControl::AuthReq))
 		break;
 	    // Frame is AUTHREQ: AUTHREP, REJECT, HANGUP ?
-	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::New,IAXEvent::AuthRep,false,NewRemoteInvite_RepRecv)))
+	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::AuthRep,
+		IAXEvent::AuthRep,false,NewRemoteInvite_RepRecv)))
 		return processAuthRep(ev);
 	    if (0 != (ev = createResponse(frame,IAXFrame::IAX,IAXControl::Reject,IAXEvent::Reject,false,Terminating)))
 		return ev;

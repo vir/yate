@@ -157,6 +157,13 @@ public:
     void regTerminate(IAXEvent* event);
 
     /*
+     * Process an authentication request for a Register/Unregister operation
+     * This method is thread safe
+     * @param event The event (AuthReq)
+     */
+    void regAuthReq(IAXEvent* event);
+
+    /*
      * Timer notification
      * This method is thread safe
      * @param time Time
@@ -455,6 +462,7 @@ protected:
     void startAudioIn();
     void startAudioOut();
     void evAuthRep(IAXEvent* event);
+    void evAuthReq(IAXEvent* event);
     // Safe deref the connection if the reference counter was increased during registration
     void safeDeref();
     bool safeRefIncrease();
@@ -610,6 +618,28 @@ void YIAXLineContainer::regTerminate(IAXEvent* event)
     line->m_state = YIAXLine::Idle;
 }
 
+// Handle registration related authentication
+void YIAXLineContainer::regAuthReq(IAXEvent* event)
+{
+    Lock lock(this);
+    if (!event || event->type() != IAXEvent::AuthReq)
+	return;
+    IAXTransaction* trans = event->getTransaction();
+    if (!trans)
+	return;
+    YIAXLine* line = findLine(static_cast<YIAXLine*>(trans->getUserData()));
+    if (!line) {
+	Debug(&iplugin,DebugAll,"Lines: NO LINE");
+	return;
+    }
+    // Send auth reply
+    String response;
+    if (!iplugin.getEngine())
+	return;
+    iplugin.getEngine()->getMD5FromChallenge(response,trans->challenge(),line->password());
+    trans->sendAuthReply(response);
+}
+
 // Handle registration related events
 void YIAXLineContainer::handleEvent(IAXEvent* event)
 {
@@ -618,6 +648,9 @@ void YIAXLineContainer::handleEvent(IAXEvent* event)
 	case IAXEvent::Reject:
 	case IAXEvent::Timeout:
 	    regTerminate(event);
+	    break;
+	case IAXEvent::AuthReq:
+	    regAuthReq(event);
 	    break;
 	default:
 	    iplugin.getEngine()->defaultEventHandler(event);
@@ -1547,6 +1580,9 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	case IAXEvent::AuthRep:
 	    evAuthRep(event);
 	    break;
+	case IAXEvent::AuthReq:
+	    evAuthReq(event);
+	    break;
 	default:
 	    iplugin.getEngine()->defaultEventHandler(event);
 	    if (!m_transaction)
@@ -1659,9 +1695,19 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 	route(true);
 	return;
     }
-    const char* reason = invalidAuth ? IAXTransaction::s_iax_modInvalidAuth : "not authenticated";
+    const char* reason = IAXTransaction::s_iax_modInvalidAuth.c_str();
     DDebug(this,DebugAll,"Not authenticated. Reason: '%s'. Reject.",reason);
     hangup(event,reason,true);
+}
+
+void YIAXConnection::evAuthReq(IAXEvent* event)
+{
+    DDebug(this,DebugAll,"YIAXConnection - AUTHREQ");
+    String response;
+    if (m_iaxEngine && m_transaction) {
+	m_iaxEngine->getMD5FromChallenge(response,m_transaction->challenge(),m_password);
+	m_transaction->sendAuthReply(response);
+    }
 }
 
 // Get rid of the extra reference

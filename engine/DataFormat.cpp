@@ -912,6 +912,8 @@ void DataEndpoint::clearSniffers()
 
 ThreadedSource::~ThreadedSource()
 {
+    if (m_asyncDelete && m_thread)
+	Debug(DebugFail,"ThreadedSource destroyed holding thread %p [%p]",m_thread,this);
     stop();
 }
 
@@ -945,11 +947,26 @@ void ThreadedSource::stop()
 
 void ThreadedSource::cleanup()
 {
+    if (m_asyncDelete && !alive())
+	delete this;
+}
+
+void ThreadedSource::zeroRefs()
+{
+    // let the data thread destroy us if possible
+    if (m_asyncDelete && m_thread && m_thread->running())
+	return;
+    DataSource::zeroRefs();
 }
 
 Thread* ThreadedSource::thread() const
 {
     return m_thread;
+}
+
+bool ThreadedSource::running() const
+{
+    return m_thread && m_thread->running();
 }
 
 

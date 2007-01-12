@@ -545,13 +545,33 @@ public:
      */
     Thread* thread() const;
 
+    /**
+     * Check if the data thread is running
+     * @return True if the data thread was started and is running
+     */
+    bool running() const;
+
+    /**
+     * Get the current status of the asynchronous deletion flag
+     */
+    inline bool asyncDelete() const
+	{ return m_asyncDelete; }
+
 protected:
     /**
      * Threaded Source constructor
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline ThreadedSource(const char* format = "slin")
-	: DataSource(format), m_thread(0) { }
+	: DataSource(format), m_thread(0), m_asyncDelete(false)
+	{ }
+
+    /**
+     * Derived classes should call this method to let the source to be
+     *  destroyed asynchronously in the data thread
+     */
+    inline void asyncDelete(bool async)
+	{ m_asyncDelete = async; }
 
     /**
      * The worker method. You have to reimplement it as you need
@@ -559,12 +579,20 @@ protected:
     virtual void run() = 0;
 
     /**
-     * The cleanup after thread method
+     * The cleanup after thread method, deletes the source if already
+     *  dereferenced and set for asynchronous deletion
      */
     virtual void cleanup();
 
+    /**
+     * Override so destruction can be delayed after all references were lost
+     *  to let the data pumping thread end normally
+     */
+    virtual void zeroRefs();
+
 private:
     ThreadedSourcePrivate* m_thread;
+    bool m_asyncDelete;
 };
 
 /**

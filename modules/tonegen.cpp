@@ -101,6 +101,7 @@ public:
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
+    virtual void zeroRefs();
     String m_name;
     const Tone* m_tone;
     int m_repeat;
@@ -258,6 +259,7 @@ static const ToneDesc s_desc[] = {
     { 0, 0, 0 }
 };
 
+
 ToneData::ToneData(const char* desc)
     : m_f1(0), m_f2(0), m_mod(false), m_data(0)
 {
@@ -383,6 +385,7 @@ ToneData* ToneData::getData(const char* desc)
     return d;
 }
 
+
 ToneSource::ToneSource(const ToneDesc* tone)
     : m_tone(0), m_repeat(tone == 0),
       m_data(0,320), m_brate(16000), m_total(0), m_time(0)
@@ -393,13 +396,13 @@ ToneSource::ToneSource(const ToneDesc* tone)
     }
     Debug(&__plugin,DebugAll,"ToneSource::ToneSource(%p) '%s' [%p]",
 	tone,m_name.c_str(),this);
+    asyncDelete(true);
 }
 
 ToneSource::~ToneSource()
 {
     Lock lock(__plugin);
     Debug(&__plugin,DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
-    tones.remove(this,false);
     stop();
     if (m_time) {
 	m_time = Time::now() - m_time;
@@ -408,6 +411,14 @@ ToneSource::~ToneSource()
 	    Debug(&__plugin,DebugInfo,"ToneSource rate=" FMT64U " b/s",m_time);
 	}
     }
+}
+
+void ToneSource::zeroRefs()
+{
+    __plugin.lock();
+    tones.remove(this,false);
+    __plugin.unlock();
+    ThreadedSource::zeroRefs();
 }
 
 bool ToneSource::startup()
@@ -553,6 +564,7 @@ void ToneSource::run()
     m_time = 0;
 }
 
+
 TempSource::TempSource(String& desc)
     : m_single(0)
 {
@@ -604,6 +616,7 @@ void TempSource::cleanup()
     deref();
 }
 
+
 ToneChan::ToneChan(String& tone)
     : Channel(__plugin)
 {
@@ -626,58 +639,6 @@ ToneChan::~ToneChan()
     Debug(this,DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
-bool ToneGenDriver::msgExecute(Message& msg, String& dest)
-{
-    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
-    if (ch) {
-	ToneChan *tc = new ToneChan(dest);
-	if (ch->connect(tc,msg.getValue("reason"))) {
-	    msg.setParam("peerid",tc->id());
-	    tc->deref();
-	}
-	else {
-	    tc->destruct();
-	    return false;
-	}
-    }
-    else {
-	Message m("call.route");
-	m.addParam("module",name());
-	String callto(msg.getValue("direct"));
-	if (callto.null()) {
-	    const char *targ = msg.getValue("target");
-	    if (!targ) {
-		Debug(DebugWarn,"Tone outgoing call with no target!");
-		return false;
-	    }
-	    callto = msg.getValue("caller");
-	    if (callto.null())
-		callto << prefix() << dest;
-	    m.addParam("called",targ);
-	    m.addParam("caller",callto);
-	    if (!Engine::dispatch(m)) {
-		Debug(DebugWarn,"Tone outgoing call but no route!");
-		return false;
-	    }
-	    callto = m.retValue();
-	    m.retValue().clear();
-	}
-	m = "call.execute";
-	m.addParam("callto",callto);
-	ToneChan *tc = new ToneChan(dest);
-	m.setParam("id",tc->id());
-	m.userData(tc);
-	if (Engine::dispatch(m)) {
-	    msg.setParam("id",tc->id());
-	    tc->deref();
-	    return true;
-	}
-	Debug(DebugWarn,"Tone outgoing call not accepted!");
-	tc->destruct();
-	return false;
-    }
-    return true;
-}
 
 bool AttachHandler::received(Message& msg)
 {
@@ -735,6 +696,60 @@ bool AttachHandler::received(Message& msg)
 	}
     }
     return ret;
+}
+
+
+bool ToneGenDriver::msgExecute(Message& msg, String& dest)
+{
+    CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
+    if (ch) {
+	ToneChan *tc = new ToneChan(dest);
+	if (ch->connect(tc,msg.getValue("reason"))) {
+	    msg.setParam("peerid",tc->id());
+	    tc->deref();
+	}
+	else {
+	    tc->destruct();
+	    return false;
+	}
+    }
+    else {
+	Message m("call.route");
+	m.addParam("module",name());
+	String callto(msg.getValue("direct"));
+	if (callto.null()) {
+	    const char *targ = msg.getValue("target");
+	    if (!targ) {
+		Debug(DebugWarn,"Tone outgoing call with no target!");
+		return false;
+	    }
+	    callto = msg.getValue("caller");
+	    if (callto.null())
+		callto << prefix() << dest;
+	    m.addParam("called",targ);
+	    m.addParam("caller",callto);
+	    if (!Engine::dispatch(m)) {
+		Debug(DebugWarn,"Tone outgoing call but no route!");
+		return false;
+	    }
+	    callto = m.retValue();
+	    m.retValue().clear();
+	}
+	m = "call.execute";
+	m.addParam("callto",callto);
+	ToneChan *tc = new ToneChan(dest);
+	m.setParam("id",tc->id());
+	m.userData(tc);
+	if (Engine::dispatch(m)) {
+	    msg.setParam("id",tc->id());
+	    tc->deref();
+	    return true;
+	}
+	Debug(DebugWarn,"Tone outgoing call not accepted!");
+	tc->destruct();
+	return false;
+    }
+    return true;
 }
 
 void ToneGenDriver::statusModule(String& str)

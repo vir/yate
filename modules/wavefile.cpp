@@ -125,6 +125,7 @@ private:
 
 INIT_PLUGIN(WaveFileDriver);
 
+
 WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose, bool autorepeat)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
@@ -166,6 +167,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose, b
     if (computeDataRate()) {
 	if (autorepeat)
 	    m_repeatPos = ::lseek(m_fd,0,SEEK_CUR);
+	asyncDelete(true);
 	start("WaveSource");
     }
     else {
@@ -335,13 +337,16 @@ void WaveSource::run()
 
 void WaveSource::cleanup()
 {
-    Debug(&__plugin,DebugAll,"WaveSource [%p] cleanup, total=%u",this,m_total);
+    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u [%p]",m_total,this);
     if (m_autoclean) {
+	asyncDelete(false);
 	if (m_chan && (m_chan->getSource() == this))
 	    m_chan->setSource();
 	else
 	    deref();
+	return;
     }
+    ThreadedSource::cleanup();
 }
 
 void WaveSource::setNotify(const String& id)
@@ -361,6 +366,7 @@ bool WaveSource::notify(DataSource* source, const char* reason)
     }
     return false;
 }
+
 
 WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen)
     : m_chan(chan), m_fd(-1), m_total(0), m_maxlen(maxlen), m_time(0)
@@ -426,6 +432,7 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
     }
 }
 
+
 Disconnector::Disconnector(CallEndpoint* chan, const String& id, DataSource* source, bool disc, const char* reason)
     : m_chan(chan), m_msg(0), m_source(source), m_disc(disc)
 {
@@ -482,6 +489,7 @@ void Disconnector::run()
     }
 }
 
+
 WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat)
     : Channel(__plugin)
 {
@@ -500,6 +508,7 @@ WaveChan::~WaveChan()
 {
     Debug(this,DebugAll,"WaveChan::~WaveChan() %s [%p]",id().c_str(),this);
 }
+
 
 bool AttachHandler::received(Message &msg)
 {
@@ -622,6 +631,7 @@ bool AttachHandler::received(Message &msg)
     return ret && !more;
 }
 
+
 bool RecordHandler::received(Message &msg)
 {
     int more = 2;
@@ -702,6 +712,7 @@ bool RecordHandler::received(Message &msg)
     // Stop dispatching if we handled all requested
     return !more;
 }
+
 
 bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 {

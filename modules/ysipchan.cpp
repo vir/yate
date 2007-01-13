@@ -1200,6 +1200,10 @@ void YateSIPEndPoint::addMessage(const char* buf, int len, const SocketAddr& add
 	    host = line->getLocalAddr();
 	    port = line->getLocalPort();
 	}
+	if (!host)
+	    host = m_local;
+	if (port <= 0)
+	    port = m_port;
 	YateUDPParty* party = new YateUDPParty(m_sock,addr,port,host);
 	msg->setParty(party);
 	party->deref();

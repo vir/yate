@@ -69,8 +69,6 @@ static TokenDict dict_payloads[] = {
     {      0,    0 },
 };
 
-// Default resource name for local party
-#define JINGLE_RESOURCE          "Talk"
 // Username/Password length for transport
 #define JINGLE_AUTHSTRINGLEN         16
 // Timeout value to override "maxcall" in call.execute
@@ -310,6 +308,7 @@ public:
     virtual bool received(Message& msg);
     static void process(const JabberID& from, const JabberID& to,
 	const String& status, bool subFrom);
+    static void sendPresence(JabberID& from, const JabberID& to, const String& status);
 };
 
 /**
@@ -493,7 +492,7 @@ void YJBPresence::notifyNewUser(XMPPUser* user)
     DDebug(this,DebugInfo,"Added new user '%s' for '%s'.",
 	user->jid().c_str(),user->local()->jid().c_str());
     // Add local resource
-    user->addLocalRes(new JIDResource(JINGLE_RESOURCE,JIDResource::Available,
+    user->addLocalRes(new JIDResource(iplugin.m_jb->defaultResource(),JIDResource::Available,
 	JIDResource::CapAudio));
 }
 
@@ -1284,24 +1283,39 @@ void YJGLibThread::run()
 bool ResNotifyHandler::received(Message& msg)
 {
     JabberID from,to;
-    // Ignore message if we are not the destination
-    if (MODULE_NAME != msg.getValue("protocol"))
-	return false;
-    // *** Check from/to
-    if (!iplugin.decodeJid(from,msg,"from",true))
-	return true;
-    if (!iplugin.decodeJid(to,msg,"to"))
-	return true;
+    // Check for registering/unregistering user messages
+    String username = msg.getValue("username");
+    if (!username.null()) {
+	String domain;
+	iplugin.m_jb->getFullServerIdentity(domain);
+	from.set(username,domain,iplugin.m_jb->defaultResource());
+    }
+    else {
+	// Ignore message if we are not the destination
+	if (MODULE_NAME != msg.getValue("protocol"))
+	    return false;
+	// *** Check from/to
+	if (!iplugin.decodeJid(from,msg,"from",true))
+	    return true;
+	if (!iplugin.decodeJid(to,msg,"to"))
+	    return true;
+    }
     // *** Check status
     String status = msg.getValue("status");
     if (status.null()) {
 	Debug(&iplugin,DebugNote,
-	    "Received '%s' with missing 'status' parameter.",MODULE_MSG_NOTIFY);
+	    "Received '%s' from '%s' with missing 'status' parameter.",
+	    MODULE_MSG_NOTIFY,from.c_str());
 	return true;
     }
     // *** Everything is OK. Process the message
-    XDebug(&iplugin,DebugAll,"Accepted '%s'.",MODULE_MSG_NOTIFY);
-    process(from,to,status,msg.getBoolValue("subscription",false));
+    XDebug(&iplugin,DebugAll,
+	"Received '%s' from '%s' with status '%s'.",
+	MODULE_MSG_NOTIFY,from.c_str(),status.c_str());
+    if (iplugin.m_presence->addOnPresence())
+	process(from,to,status,msg.getBoolValue("subscription",false));
+    else
+	sendPresence(from,to,status);
     return true;
 }
 
@@ -1364,6 +1378,38 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
     }
     user->unlock();
     user->deref();
+}
+
+void ResNotifyHandler::sendPresence(JabberID& from, const JabberID& to,
+	const String& status)
+{
+    JIDResource::Presence resPresence;
+    JBPresence::Presence jbPresence;
+    if (status == "online") {
+	resPresence = JIDResource::Available;
+	jbPresence = JBPresence::None;
+    }
+    else if (status == "offline") {
+	resPresence = JIDResource::Unavailable;
+	jbPresence = JBPresence::Unavailable;
+    }
+    else
+	return;
+    // Check if we can get a stream
+    JBComponentStream* stream = iplugin.m_jb->getStream();
+    if (!stream)
+	return;
+    // Create resource and XML element to be sent
+    XMLElement* presence = JBPresence::createPresence(from,to,jbPresence);
+    if (resPresence == JIDResource::Available) {
+	JIDResource* resource = new JIDResource(from.resource(),resPresence,
+	    JIDResource::CapAudio);
+	resource->addTo(presence);
+	resource->deref();
+    }
+    // Send & cleanup
+    stream->sendStanza(presence);
+    stream->deref();
 }
 
 /**
@@ -1613,6 +1659,9 @@ void YJGDriver::initJB(const NamedList& sect)
 	int port = comp->getIntValue("port",0);
 	const char* password = comp->getValue("password");
 	const char* identity = comp->getValue("identity","yate");
+	String fullId = comp->getValue("fullidentity");
+	if (fullId.null())
+	    fullId << identity << '.' << name;
 	bool startup = comp->getBoolValue("startup");
 	u_int32_t restartCount = m_jb->restartCount();
 	if (!(address && port && identity))
@@ -1620,10 +1669,10 @@ void YJGDriver::initJB(const NamedList& sect)
 	if (defComponent.null() || comp->getBoolValue("default"))
 	    defComponent = name;
 	JBServerInfo* server = new JBServerInfo(name,address,port,
-	    password,identity,startup,restartCount);
+	    password,identity,fullId,startup,restartCount);
 	XDebug(this,DebugAll,
-	    "Add server '%s' addr=%s port=%d pass=%s ident=%s startup=%s restartcount=%u.",
-	    name.c_str(),address,port,password,identity,
+	    "Add server '%s' addr=%s port=%d pass=%s ident=%s full-ident=%s startup=%s restartcount=%u.",
+	    name.c_str(),address,port,password,identity,fullId.c_str(),
 	    String::boolText(startup),restartCount);
 	m_jb->appendServer(server,startup);
     }

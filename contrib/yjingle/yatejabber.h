@@ -548,11 +548,11 @@ class YJINGLE_API JBServerInfo : public RefObject
 {
 public:
     inline JBServerInfo(const char* name, const char* address, int port,
-	const char* password, const char* identity, bool autoRestart,
-	u_int32_t restartCount)
-	: m_name(name), m_address(address),
-	m_port(port), m_password(password), m_identity(identity),
-	m_autoRestart(autoRestart), m_restartCount(restartCount)
+	const char* password, const char* identity, const char* fullidentity,
+	bool autoRestart, u_int32_t restartCount)
+	: m_name(name), m_address(address), m_port(port), m_password(password),
+	m_identity(identity), m_fullIdentity(fullidentity), m_autoRestart(autoRestart),
+	m_restartCount(restartCount)
 	{}
     virtual ~JBServerInfo() {}
     inline const String& address() const
@@ -565,6 +565,8 @@ public:
 	{ return m_password; }
     inline const String& identity() const
 	{ return m_identity; }
+    inline const String& fullIdentity() const
+	{ return m_fullIdentity; }
     inline bool autoRestart() const
 	{ return m_autoRestart; }
     inline u_int32_t restartCount() const
@@ -583,6 +585,7 @@ private:
     int m_port;                          // Port
     String m_password;                   // Authentication data
     String m_identity;                   // Identity. Used for Jabber Component protocol
+    String m_fullIdentity;               // Full identity for this server
     bool m_autoRestart;                  // Automatically restart stream
     u_int32_t m_restartCount;            // Restart counter
 };
@@ -659,6 +662,13 @@ public:
      */
     inline u_int32_t restartCount() const
 	{ return m_restartCount; }
+
+    /**
+     * Get the default resource name.
+     * @return The default resource name.
+     */
+    inline const String& defaultResource() const
+	{ return m_defaultResource; }
 
     /**
      * Check if a stream to the given server exists.
@@ -878,6 +888,8 @@ private:
     String m_componentAddr;              // Default server address
     ObjList m_server;                    // Server list
     Mutex m_serverMutex;                 // Lock server list
+    // Misc
+    String m_defaultResource;            // Default name for missing resources
 };
 
 /**
@@ -961,6 +973,13 @@ public:
      */
     inline bool delUnavailable() const
 	{ return m_delUnavailable; }
+
+    /**
+     * Check if this server should add new users when receiving presence.
+     * @return True if should add a new user
+     */
+    inline bool addOnPresence() const
+	{ return m_addOnPresence; }
 
     /**
      * Get the probe interval. Time to send a probe if nothing was received from that user.

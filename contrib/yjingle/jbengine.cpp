@@ -103,8 +103,11 @@ void JBEngine::initialize(const NamedList& params)
     // XML parser max receive buffer
     XMLParser::s_maxDataBuffer =
 	params.getIntValue("xmlparser_maxbuffer",XMLPARSER_MAXDATABUFFER);
+    // Default resource
+    m_defaultResource = params.getValue("default_resource","yate");
     if (debugAt(DebugAll)) {
 	String s;
+	s << "\r\ndefault_resource=" << m_defaultResource;
 	s << "\r\nstream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
 	s << "\r\nstream_restartcount=" << (unsigned int)m_restartCount;
 	s << "\r\nxmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
@@ -399,9 +402,7 @@ bool JBEngine::getFullServerIdentity(String& destination, const char* token,
     JBServerInfo* server = getServer(token,domain);
     if (!server)
 	return false;
-    // Component server
-    destination = "";
-    destination << server->identity() << "." << server->name();
+    destination = server->fullIdentity();
     return true;
 }
 

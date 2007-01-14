@@ -45,6 +45,9 @@
 ; expire_interval: integer: Presence: Timeout after probe
 ;probe_interval=300000
 
+; default_resource: string: Default resource name when missing from local users' JIDs
+;default_resource=yate
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -96,6 +99,9 @@ g729=default
 
 ; identity: string: The subdomain used by the component (required)
 ;identity=yate
+
+; fullidentity: string: The fully qualified identity, default: identity.server
+;fullidentity=
 
 ; startup: boolean: True to open the stream when initializing the driver
 ;startup=true

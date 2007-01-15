@@ -1280,12 +1280,67 @@ void YJGLibThread::run()
 /**
  * resource.notify message handler
  */
+void sendPresenceCommand(String& username, const char* status)
+{
+    // Get availability
+    bool available;
+    String s = status;
+    if (s == "online")
+	available = true;
+    else if (s == "offline")
+	available = false;
+    else
+	return;
+    // Check if we have a stream to send data
+    JBComponentStream* stream = iplugin.m_jb->getStream();
+    if (!stream)
+	return;
+    // Create element to send
+    String domain;
+    iplugin.m_jb->getFullServerIdentity(domain);
+    JabberID from(username,domain);
+    String to = iplugin.m_jb->componentServer();
+    // Create 'x' child
+    XMLElement* x = new XMLElement("x");
+    x->setAttribute("xmlns","jabber:x:data");
+    x->setAttribute("type","submit");
+    // Field children of 'x' element
+    XMLElement* field = new XMLElement("field");
+    field->setAttribute("var","sm");
+    field->setAttribute("label","jid");
+    field->setAttribute("type","jid-single");
+    JabberID valueText("kobit",domain,"home");
+    XMLElement* value = new XMLElement("value",0,valueText.c_str());
+    field->addChild(value);
+    x->addChild(field);
+    field = new XMLElement("field");
+    field->setAttribute("var","sm");
+    field->setAttribute("label","available");
+    field->setAttribute("type","boolean");
+    value = new XMLElement("value",0,available ? "true" : "false");
+    field->addChild(value);
+    x->addChild(field);
+    // 
+    XMLElement* command = XMPPUtils::createElement(XMLElement::Command,XMPPNamespace::Command);
+    command->setAttribute("node","sm");
+    command->addChild(x);
+    //
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from.bare(),to,"123456");
+    iq->addChild(command);
+    // Send
+    stream->sendStanza(iq);
+    stream->deref();
+}
+
 bool ResNotifyHandler::received(Message& msg)
 {
     JabberID from,to;
     // Check for registering/unregistering user messages
     String username = msg.getValue("username");
     if (!username.null()) {
+	sendPresenceCommand(username,msg.getValue("status"));
+	return true;
+
 	String domain;
 	iplugin.m_jb->getFullServerIdentity(domain);
 	from.set(username,domain,iplugin.m_jb->defaultResource());
@@ -1450,6 +1505,18 @@ bool ResSubscribeHandler::received(Message& msg)
 void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	JBPresence::Presence presence)
 {
+    // Don't automatically add
+    if ((presence == JBPresence::Probe && !iplugin.m_presence->addOnProbe()) ||
+	((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
+	!iplugin.m_presence->addOnSubscribe())) {
+	JBComponentStream* stream = iplugin.m_jb->getStream();
+	if (!stream)
+	    return;
+	stream->sendStanza(JBPresence::createPresence(from,to,presence));
+	stream->deref();
+	return;
+    }
+    // Add roster/user
     XMPPUserRoster* roster = iplugin.m_presence->getRoster(from,true,0);
     XMPPUser* user = roster->getUser(to,false,0);
     // Add new user and local resource

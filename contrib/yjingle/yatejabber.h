@@ -975,6 +975,20 @@ public:
 	{ return m_delUnavailable; }
 
     /**
+     * Check if this server should add new users when receiving subscribe stanzas.
+     * @return True if should add a new user.
+     */
+    inline bool addOnSubscribe() const
+	{ return m_addOnSubscribe; }
+
+    /**
+     * Check if this server should add new users when receiving presence probes.
+     * @return True if should add a new user.
+     */
+    inline bool addOnProbe() const
+	{ return m_addOnProbe; }
+
+    /**
      * Check if this server should add new users when receiving presence.
      * @return True if should add a new user
      */

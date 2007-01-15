@@ -1603,20 +1603,10 @@ void JBPresence::processUnavailable(JBEvent* event, const JabberID& local,
 	DDebug(this,DebugNote,
 	    "Received 'unavailable' for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
-	if (!notifyPresence(event,local,remote,false)) {
+	if (!notifyPresence(event,local,remote,false))
 	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
 		event->stream());
-	    return;
-	}
-	// Don't add if delUnavailable is true
-	if (m_delUnavailable)
-	    return;
-	// New user confirmed. Add
-	newUser = false;
-	user = getRemoteUser(local,remote,true,0,true,&newUser);
-	// This shouldn't happen !!!
-	if (!user)
-	    return;
+	return;
     }
     if (newUser)
 	notifyNewUser(user);
@@ -1657,17 +1647,10 @@ void JBPresence::processPresence(JBEvent* event, const JabberID& local,
 	DDebug(this,DebugNote,
 	    "Received presence for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
-	if (!notifyPresence(event,local,remote,true)) {
+	if (!notifyPresence(event,local,remote,true))
 	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
 		event->stream());
-	    return;
-	}
-	// New user confirmed. Add
-	newUser = false;
-	user = getRemoteUser(local,remote,true,0,true,&newUser);
-	// This shouldn't happen !!!
-	if (!user)
-	    return;
+	return;
     }
     if (newUser)
 	notifyNewUser(user);

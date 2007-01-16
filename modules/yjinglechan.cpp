@@ -308,7 +308,7 @@ public:
     virtual bool received(Message& msg);
     static void process(const JabberID& from, const JabberID& to,
 	const String& status, bool subFrom);
-    static void sendPresence(JabberID& from, const JabberID& to, const String& status);
+    static void sendPresence(JabberID& from, JabberID& to, const String& status);
 };
 
 /**
@@ -342,11 +342,19 @@ public:
     // Puts the parts as names in dest if nameFirst is true
     // Puts the parts as values in dest if nameFirst is false
     bool getParts(NamedList& dest, const char* src, const char sep, bool nameFirst);
+    // Try to create a JID from a message.
+    // First try to get the 'username' parameter of the message. Then the 'from' parmeter
+    // @param checkDomain True to check if jid's domain is valid
+    // Return false if node or domain are 0 or domain is invalid
+    bool getJidFrom(JabberID& jid, Message& msg, bool checkDomain = false);
     // Assign param value to jid.
     // @param checkDomain True to check if jid's domain is valid
     // Return false if node or domain are 0 or domain is invalid
     bool decodeJid(JabberID& jid, Message& msg, const char* param,
 	bool checkDomain = false);
+    // Create the presence notification command.
+    XMLElement* getPresenceCommand(const JabberID& from, const JabberID& to,
+	bool available);
     // Create a random string of JINGLE_AUTHSTRINGLEN length
     void createAuthRandomString(String& dest);
     // Process presence. Notify connections
@@ -366,6 +374,7 @@ public:
     YJGEngine* m_jg;                     // Jingle engine
     ObjList m_allCodecs;                 // List of all codecs (JGAudio)
     ObjList m_usedCodecs;                // List of used codecs (JGAudio)
+    bool m_sendCommandOnNotify;          // resource.notify: Send command if true. Send presence if false
 private:
     bool m_init;
     u_int32_t m_pendingTimeout;
@@ -1280,81 +1289,16 @@ void YJGLibThread::run()
 /**
  * resource.notify message handler
  */
-void sendPresenceCommand(String& username, const char* status)
-{
-    // Get availability
-    bool available;
-    String s = status;
-    if (s == "online")
-	available = true;
-    else if (s == "offline")
-	available = false;
-    else
-	return;
-    // Check if we have a stream to send data
-    JBComponentStream* stream = iplugin.m_jb->getStream();
-    if (!stream)
-	return;
-    // Create element to send
-    String domain;
-    iplugin.m_jb->getFullServerIdentity(domain);
-    JabberID from(username,domain);
-    String to = iplugin.m_jb->componentServer();
-    // Create 'x' child
-    XMLElement* x = new XMLElement("x");
-    x->setAttribute("xmlns","jabber:x:data");
-    x->setAttribute("type","submit");
-    // Field children of 'x' element
-    XMLElement* field = new XMLElement("field");
-    field->setAttribute("var","sm");
-    field->setAttribute("label","jid");
-    field->setAttribute("type","jid-single");
-    JabberID valueText("kobit",domain,"home");
-    XMLElement* value = new XMLElement("value",0,valueText.c_str());
-    field->addChild(value);
-    x->addChild(field);
-    field = new XMLElement("field");
-    field->setAttribute("var","sm");
-    field->setAttribute("label","available");
-    field->setAttribute("type","boolean");
-    value = new XMLElement("value",0,available ? "true" : "false");
-    field->addChild(value);
-    x->addChild(field);
-    // 
-    XMLElement* command = XMPPUtils::createElement(XMLElement::Command,XMPPNamespace::Command);
-    command->setAttribute("node","sm");
-    command->addChild(x);
-    //
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from.bare(),to,"123456");
-    iq->addChild(command);
-    // Send
-    stream->sendStanza(iq);
-    stream->deref();
-}
-
 bool ResNotifyHandler::received(Message& msg)
 {
     JabberID from,to;
-    // Check for registering/unregistering user messages
-    String username = msg.getValue("username");
-    if (!username.null()) {
-	sendPresenceCommand(username,msg.getValue("status"));
+    // *** Check from/to
+    if (!iplugin.getJidFrom(from,msg,true))
 	return true;
-
-	String domain;
-	iplugin.m_jb->getFullServerIdentity(domain);
-	from.set(username,domain,iplugin.m_jb->defaultResource());
-    }
-    else {
-	// Ignore message if we are not the destination
-	if (MODULE_NAME != msg.getValue("protocol"))
-	    return false;
-	// *** Check from/to
-	if (!iplugin.decodeJid(from,msg,"from",true))
-	    return true;
-	if (!iplugin.decodeJid(to,msg,"to"))
-	    return true;
-    }
+    if (iplugin.m_sendCommandOnNotify)
+	to = msg.getValue("to");
+    else if (!iplugin.decodeJid(to,msg,"to"))
+	return true;
     // *** Check status
     String status = msg.getValue("status");
     if (status.null()) {
@@ -1364,10 +1308,9 @@ bool ResNotifyHandler::received(Message& msg)
 	return true;
     }
     // *** Everything is OK. Process the message
-    XDebug(&iplugin,DebugAll,
-	"Received '%s' from '%s' with status '%s'.",
+    XDebug(&iplugin,DebugAll,"Received '%s' from '%s' with status '%s'.",
 	MODULE_MSG_NOTIFY,from.c_str(),status.c_str());
-    if (iplugin.m_presence->addOnPresence())
+    if (!iplugin.m_sendCommandOnNotify && iplugin.m_presence->addOnPresence())
 	process(from,to,status,msg.getBoolValue("subscription",false));
     else
 	sendPresence(from,to,status);
@@ -1435,35 +1378,53 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
     user->deref();
 }
 
-void ResNotifyHandler::sendPresence(JabberID& from, const JabberID& to,
+void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	const String& status)
 {
-    JIDResource::Presence resPresence;
     JBPresence::Presence jbPresence;
-    if (status == "online") {
-	resPresence = JIDResource::Available;
+    // Get presence type from status
+    if (status == "online")
 	jbPresence = JBPresence::None;
-    }
-    else if (status == "offline") {
-	resPresence = JIDResource::Unavailable;
+    else if (status == "offline")
 	jbPresence = JBPresence::Unavailable;
+    else {
+	if (iplugin.m_sendCommandOnNotify) {
+	    XDebug(&iplugin,DebugNote,"Can't send command for status='%s'.",status.c_str());
+	    return;
+	}
+	if (status == "subscribed")
+	    jbPresence = JBPresence::Subscribed;
+	else if (status == "unsubscribed") 
+	    jbPresence = JBPresence::Unsubscribed;
+	else {
+	    XDebug(&iplugin,DebugNote,"Can't send presence for status='%s'.",status.c_str());
+	    return;
+	}
     }
-    else
-	return;
     // Check if we can get a stream
     JBComponentStream* stream = iplugin.m_jb->getStream();
     if (!stream)
 	return;
-    // Create resource and XML element to be sent
-    XMLElement* presence = JBPresence::createPresence(from,to,jbPresence);
-    if (resPresence == JIDResource::Available) {
-	JIDResource* resource = new JIDResource(from.resource(),resPresence,
-	    JIDResource::CapAudio);
-	resource->addTo(presence);
-	resource->deref();
+    // Create XML element to be sent
+    bool available = (jbPresence == JBPresence::None);
+    XMLElement* stanza;
+    if (iplugin.m_sendCommandOnNotify) {
+	if (to.domain().null())
+	    to.domain(iplugin.m_jb->componentServer().c_str());
+	stanza = iplugin.getPresenceCommand(from,to,available);
     }
-    // Send & cleanup
-    stream->sendStanza(presence);
+    else {
+	stanza = JBPresence::createPresence(from,to,jbPresence);
+	// Create resource info if available
+	if (available) {
+	    JIDResource* resource = new JIDResource(from.resource(),JIDResource::Available,
+		JIDResource::CapAudio);
+	    resource->addTo(stanza);
+	    resource->deref();
+	}
+    }
+    // Send
+    stream->sendStanza(stanza);
     stream->deref();
 }
 
@@ -1473,9 +1434,6 @@ void ResNotifyHandler::sendPresence(JabberID& from, const JabberID& to,
 bool ResSubscribeHandler::received(Message& msg)
 {
     JabberID from,to;
-    // Ignore message if we are not the destination
-    if (MODULE_NAME != msg.getValue("protocol"))
-	return false;
     // *** Check from/to
     if (!iplugin.decodeJid(from,msg,"from",true))
 	return true;
@@ -1574,7 +1532,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
  */
 YJGDriver::YJGDriver()
     : Driver(MODULE_NAME,"varchans"),
-      m_jb(0), m_presence(0), m_jg(0), m_init(false), m_pendingTimeout(0)
+      m_jb(0), m_presence(0), m_jg(0), m_sendCommandOnNotify(true), m_init(false), m_pendingTimeout(0)
 {
     Output("Loaded module YJingle");
 }
@@ -1876,6 +1834,17 @@ bool YJGDriver::received(Message& msg, int id)
     return Driver::received(msg,id);
 }
 
+bool YJGDriver::getJidFrom(JabberID& jid, Message& msg, bool checkDomain)
+{
+    String username = msg.getValue("username");
+    if (username.null())
+	return decodeJid(jid,msg,"from",checkDomain);
+    String domain;
+    iplugin.m_jb->getFullServerIdentity(domain);
+    jid.set(username,domain,iplugin.m_jb->defaultResource());
+    return true;
+}
+
 bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 	bool checkDomain)
 {
@@ -1885,12 +1854,43 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }
-    if (!m_presence->validDomain(jid.domain())) {
+    if (checkDomain && !m_presence->validDomain(jid.domain())) {
 	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' has invalid (unknown) domain.",
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }
     return true;
+}
+
+XMLElement* YJGDriver::getPresenceCommand(const JabberID& from, const JabberID& to,
+	bool available)
+{
+    // Create 'x' child
+    XMLElement* x = new XMLElement("x");
+    x->setAttribute("xmlns","jabber:x:data");
+    x->setAttribute("type","submit");
+    // Field children of 'x' element
+    XMLElement* field = new XMLElement("field");
+    field->setAttribute("var","sm");
+    field->setAttribute("label","jid");
+    field->setAttribute("type","jid-single");
+    XMLElement* value = new XMLElement("value",0,from.c_str());
+    field->addChild(value);
+    x->addChild(field);
+    field = new XMLElement("field");
+    field->setAttribute("var","sm");
+    field->setAttribute("label","available");
+    field->setAttribute("type","boolean");
+    value = new XMLElement("value",0,available ? "true" : "false");
+    field->addChild(value);
+    x->addChild(field);
+    // 
+    XMLElement* command = XMPPUtils::createCommand(XMPPUtils::CommExecute,"sm");
+    command->addChild(x);
+    //
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,0,to.domain().c_str(),0);
+    iq->addChild(command);
+    return iq;
 }
 
 void YJGDriver::createAuthRandomString(String& dest)

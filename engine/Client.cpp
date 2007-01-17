@@ -2110,7 +2110,7 @@ ClientChannel::~ClientChannel()
     String tmp("Hung up:");
     tmp << " " << (address() ? address() : id());
     if (m_reason)
-	tmp << " (" << m_reason << ")";
+	tmp << " reason: " << m_reason;
     if (Client::self()) {
 	Client::self()->delChannel(this);
 	Client::self()->setStatusLocked(tmp);

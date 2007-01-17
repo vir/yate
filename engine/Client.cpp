@@ -2109,11 +2109,20 @@ ClientChannel::~ClientChannel()
     closeMedia();
     String tmp("Hung up:");
     tmp << " " << (address() ? address() : id());
+    if (m_reason)
+	tmp << " (" << m_reason << ")";
     if (Client::self()) {
 	Client::self()->delChannel(this);
 	Client::self()->setStatusLocked(tmp);
     }
     Engine::enqueue(message("chan.hangup"));
+}
+
+void ClientChannel::disconnected(bool final, const char* reason)
+{
+    Channel::disconnected(final,reason);
+    if (!final)
+	m_reason = reason;
 }
 
 bool ClientChannel::openMedia(bool replace)
@@ -2267,6 +2276,7 @@ bool ClientChannel::msgAnswered(Message& msg)
     m_canAnswer = false;
     m_canConference = true;
     m_canTransfer = true;
+    m_reason.clear();
     Client::self()->setStatusLocked("Call answered");
     openMedia();
     bool ret = Channel::msgAnswered(msg);
@@ -2282,6 +2292,7 @@ void ClientChannel::callAnswer()
     m_canAnswer = false;
     m_canConference = true;
     m_canTransfer = true;
+    m_reason.clear();
     status("answered");
     Client::self()->setStatus("Call answered");
     openMedia();

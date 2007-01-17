@@ -410,9 +410,11 @@ public:
 	{ return m_line; }
     void line(int newLine);
 protected:
+    virtual void disconnected(bool final, const char* reason);
     void update(bool client = true);
     String m_party;
     String m_desc;
+    String m_reason;
     u_int64_t m_time;
     int m_line;
     bool m_flashing;

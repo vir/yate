@@ -53,6 +53,7 @@ public:
     void ringing();
     void answered();
     void makeSource();
+    void makeConsumer();
     inline const String& status() const
 	{ return m_status; }
     inline const String& party() const
@@ -71,6 +72,13 @@ private:
     String m_callto;
     String m_target;
     u_int64_t m_finish;
+};
+
+class DummyConsumer : public DataConsumer
+{
+public:
+    virtual void Consume(const DataBlock& data, unsigned long tStamp)
+	{ }
 };
 
 class GenThread : public Thread
@@ -261,8 +269,10 @@ void GenConnection::ringing()
     ++s_ringing;
     bool media =s_cfg.getBoolValue("parameters","earlymedia",true);
     s_mutex.unlock();
-    if (media)
+    if (media) {
 	makeSource();
+	makeConsumer();
+    }
 }
 
 void GenConnection::answered()
@@ -273,6 +283,7 @@ void GenConnection::answered()
     ++s_answers;
     s_mutex.unlock();
     makeSource();
+    makeConsumer();
 }
 
 void GenConnection::makeSource()
@@ -286,8 +297,33 @@ void GenConnection::makeSource()
 	Message m("chan.attach");
 	m.addParam("id",id());
 	m.addParam("source",src);
+	m.addParam("single",String::boolText(true));
 	m.userData(this);
 	Engine::dispatch(m);
+    }
+}
+
+void GenConnection::makeConsumer()
+{
+    if (getConsumer())
+	return;
+    s_mutex.lock();
+    String cons(s_cfg.getValue("parameters","consumer"));
+    s_mutex.unlock();
+    if (cons) {
+	if ((cons == "dummy") || (cons == "*")) {
+	    DummyConsumer* dummy = new DummyConsumer;
+	    setConsumer(dummy);
+	    dummy->deref();
+	}
+	else {
+	    Message m("chan.attach");
+	    m.addParam("id",id());
+	    m.addParam("consumer",cons);
+	    m.addParam("single",String::boolText(true));
+	    m.userData(this);
+	    Engine::dispatch(m);
+	}
     }
 }
 

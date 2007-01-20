@@ -1,7 +1,7 @@
 #! /bin/sh
 
 ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
-                   [--ldflags] [--libs] [--ld-all]
+                   [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
 		   [--config] [--modules] [--scripts] [--skins]
 		   [--version]'
 if [ "$#" = 0 ]; then
@@ -14,8 +14,9 @@ moddir="@libdir@/yate"
 confdir="@sysconfdir@/yate"
 s1="@MODULE_CPPFLAGS@"
 s2="-I@includedir@/yate"
-s3="@MODULE_LDFLAGS@ @MODULE_SYMBOLS@"
-s4="-lyate"
+s3="@MODULE_LDFLAGS@"
+s4="@MODULE_SYMBOLS@"
+s5="-lyate"
 
 while [ "$#" != 0 ]; do
     case "$1" in
@@ -32,13 +33,19 @@ while [ "$#" != 0 ]; do
 	    echo "$s1 $s2"
 	    ;;
 	--ldflags)
-	    echo "$s3"
+	    echo "$s3 $s4"
 	    ;;
 	--libs)
-	    echo "$s4"
+	    echo "$s5"
 	    ;;
 	--ld-all)
-	    echo "$s3 $s4"
+	    echo "$s3 $s4 $s5"
+	    ;;
+	--ld-nostrip)
+	    echo "$s3 $s5"
+	    ;;
+	--ld-strip)
+	    echo "$s4"
 	    ;;
 	--config)
 	    echo "$confdir"

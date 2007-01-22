@@ -311,7 +311,10 @@ public:
     virtual void removed(const TranslatorFactory* factory);
     virtual DataTranslator* create(const DataFormat& sFormat, const DataFormat& dFormat);
     virtual const TranslatorCaps* getCapabilities() const
-	{ return m_capabilities; }
+	{
+	    return (m_factory1 && m_factory1->getCapabilities() &&
+		m_factory2 && m_factory2->getCapabilities()) ? m_capabilities : 0;
+	}
     virtual unsigned int length() const
 	{ return m_length; }
     virtual const FormatInfo* intermediate() const;

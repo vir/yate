@@ -1940,7 +1940,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
     Debug(this,DebugAll,"YateH323Chan::YateH323Chan(%p,%s) %s [%p]",
 	conn,addr,direction(),this);
     setMaxcall(msg);
-    Message* s = message("chan.startup");
+    Message* s = message("chan.startup",msg);
     if (msg) {
 	s->setParam("caller",msg->getValue("caller"));
 	s->setParam("called",msg->getValue("called"));

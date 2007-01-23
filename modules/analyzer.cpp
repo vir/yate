@@ -625,7 +625,7 @@ void AnalyzerChan::checkTimers(Message& msg, const Time& tmr)
 
 void AnalyzerChan::startChannel(NamedList& params)
 {
-    Message* m = message("chan.startup");
+    Message* m = message("chan.startup",params);
     const char* tmp = params.getValue("caller");
     if (tmp)
 	m->addParam("caller",tmp);

@@ -951,7 +951,7 @@ bool PriChan::call(Message &msg, const char *called)
     setTimeout(30000000);
     status(chanStatus());
     setMaxcall(msg);
-    Message *m = message("chan.startup");
+    Message* m = message("chan.startup",msg);
     m->setParam("caller",msg.getValue("caller"));
     m->setParam("called",msg.getValue("called"));
     m->setParam("billid",msg.getValue("billid"));
@@ -983,7 +983,7 @@ void PriChan::ring(pri_event_ring &ev)
     // we signal ringing without media if the library doesn't know any better
     ::pri_acknowledge(m_span->pri(),m_call,m_chan,0);
 #endif
-    Message *m = message("chan.startup");
+    Message* m = message("chan.startup");
     m->addParam("span",String(m_span->span()));
     m->addParam("channel",String(m_chan));
     m->addParam("direction","incoming");

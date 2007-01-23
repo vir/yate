@@ -533,7 +533,7 @@ FaxChan::FaxChan(bool outgoing, const char *file, bool sender, Message& msg)
     m_caller = msg.getBoolValue("faxcaller",!outgoing);
     m_ecm = msg.getBoolValue("faxecm");
     m_address = file;
-    Engine::enqueue(message("chan.startup"));
+    Engine::enqueue(message("chan.startup",msg));
 }
 
 // Destructor - clears all (audio, image) endpoints early

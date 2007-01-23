@@ -459,6 +459,30 @@ Message* Channel::message(const char* name, bool minimal, bool data)
     return msg;
 }
 
+Message* Channel::message(const char* name, const NamedList* original, const char* params, bool minimal, bool data)
+{
+    Message* msg = message(name,minimal,data);
+    if (original) {
+	if (!params)
+	    params = original->getValue("copyparams");
+	if (!null(params)) {
+	    String tmp(params);
+	    ObjList* lst = tmp.split(',',false);
+	    for (ObjList* l = lst; l; l = l->next()) {
+		const String* s = static_cast<const String*>(l->get());
+		if (!s)
+		    continue;
+		tmp = *s;
+		tmp.trimBlanks();
+		if (tmp)
+		    msg->copyParam(*original,tmp);
+	    }
+	    delete lst;
+	}
+    }
+    return msg;
+}
+
 bool Channel::startRouter(Message* msg)
 {
     if (!msg)

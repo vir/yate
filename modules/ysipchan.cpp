@@ -1806,7 +1806,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     m->deref();
     setMaxcall(msg);
-    Message* s = message("chan.startup");
+    Message* s = message("chan.startup",msg);
     s->setParam("caller",caller);
     s->setParam("called",msg.getValue("called"));
     s->setParam("billid",msg.getValue("billid"));

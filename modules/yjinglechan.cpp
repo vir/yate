@@ -923,14 +923,12 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* call
 	"YJGConnection. Time: " FMT64 ". Maxcall set to " FMT64 " us. [%p]",
 	Time::now(),maxcall(),this);
     // Startup
-    Message* m = message("chan.startup");
+    Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
-    if (msg) {
-	m_targetid = msg.getValue("id");
-	m->setParam("caller",msg.getValue("caller"));
-	m->setParam("called",msg.getValue("called"));
-	m->setParam("billid",msg.getValue("billid"));
-    }
+    m_targetid = msg.getValue("id");
+    m->setParam("caller",msg.getValue("caller"));
+    m->setParam("called",msg.getValue("called"));
+    m->setParam("billid",msg.getValue("billid"));
     Engine::enqueue(m);
     // Make the call
     if (available)

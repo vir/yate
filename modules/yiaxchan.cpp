@@ -1375,7 +1375,7 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
 {
     DDebug(this,DebugAll,"YIAXConnection::YIAXConnection [%p]",this);
     setMaxcall(msg);
-    Message* m = message("chan.startup");
+    Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
     if (transaction)
 	m_address << transaction->remoteAddr().host() << ":" << transaction->remoteAddr().port();

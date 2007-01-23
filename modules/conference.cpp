@@ -626,7 +626,7 @@ ConfChan::ConfChan(const String& name, const NamedList& params)
 	m_room->deref();
     }
     if (m_billing) {
-	Message* s = message("chan.startup");
+	Message* s = message("chan.startup",params);
 	s->setParam("caller",params.getValue("caller"));
 	s->setParam("called",params.getValue("called"));
 	s->setParam("billid",params.getValue("billid"));

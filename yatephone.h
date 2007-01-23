@@ -1464,6 +1464,31 @@ public:
     Message* message(const char* name, bool minimal = false, bool data = false);
 
     /**
+     * Create a filled notification message, copy some parameters from another message
+     * @param name Name of the message to create
+     * @param original Parameters to copy from, can be NULL
+     * @param params Comma separated list of parameters to copy,
+     *  if NULL will be taken from the "copyparams" parameter of original
+     * @param minimal Set to true to fill in only a minimum of parameters
+     * @param data Set the channel as message data
+     * @return A new allocated and parameter filled message
+     */
+    Message* message(const char* name, const NamedList* original, const char* params = 0, bool minimal = false, bool data = false);
+
+    /**
+     * Create a filled notification message, copy some parameters from another message
+     * @param name Name of the message to create
+     * @param original Parameters to copy from
+     * @param params Comma separated list of parameters to copy,
+     *  if NULL will be taken from the "copyparams" parameter of original
+     * @param minimal Set to true to fill in only a minimum of parameters
+     * @param data Set the channel as message data
+     * @return A new allocated and parameter filled message
+     */
+    inline Message* message(const char* name, const NamedList& original, const char* params = 0, bool minimal = false, bool data = false)
+	{ return message(name,&original,params,minimal,data); }
+
+    /**
      * Notification on remote call making some progress, not enabled by default
      * @param msg Notification message
      * @return True to stop processing the message, false to let it flow

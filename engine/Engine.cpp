@@ -1271,19 +1271,6 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 	}
     }
 
-    if (s_logfile) {
-	int fd = ::open(s_logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
-	if (fd >= 0) {
-	    // Redirect stdout and stderr to the new file
-	    ::fflush(stdout);
-	    ::dup2(fd,1);
-	    ::fflush(stderr);
-	    ::dup2(fd,2);
-	    ::close(fd);
-	    Debugger::enableOutput(true);
-	}
-    }
-
 #ifdef _WINDOWS
     if (!service)
 #endif

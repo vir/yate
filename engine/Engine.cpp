@@ -96,6 +96,7 @@ using namespace TelEngine;
 
 #define MAX_SANITY 5
 #define INIT_SANITY 10
+#define MAX_LOGBUFF 4096
 
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
@@ -318,12 +319,21 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 #define setStatus(s)
 #define checkPoint()
 
+static bool s_logrotator = false;
 static bool s_runagain = true;
 static pid_t s_childpid = -1;
+static pid_t s_superpid = -1;
 
 static void superhandler(int signal)
 {
     switch (signal) {
+	case SIGHUP:
+	    if (s_logrotator) {
+		::fprintf(stderr,"Supervisor (%d) closing the log file\n",s_superpid);
+		logFileOpen();
+		::fprintf(stderr,"Supervisor (%d) reopening the log file\n",s_superpid);
+	    }
+	    break;
 	case SIGINT:
 	case SIGTERM:
 	case SIGABRT:
@@ -333,9 +343,21 @@ static void superhandler(int signal)
 	::kill(s_childpid,signal);
 }
 
+static void copystream(int dest, int src)
+{
+    for (;;) {
+	char buf[MAX_LOGBUFF];
+	int rd = ::read(src,buf,sizeof(buf));
+	if (rd <= 0)
+	    break;
+	::write(dest,buf,rd);
+    }
+}
+
 static int supervise(void)
 {
-    ::fprintf(stderr,"Supervisor (%u) is starting\n",::getpid());
+    s_superpid = ::getpid();
+    ::fprintf(stderr,"Supervisor (%u) is starting\n",s_superpid);
     ::signal(SIGINT,superhandler);
     ::signal(SIGTERM,superhandler);
     ::signal(SIGHUP,superhandler);
@@ -348,11 +370,20 @@ static int supervise(void)
 	int wdogfd[2];
 	if (::pipe(wdogfd)) {
 	    int err = errno;
-	    ::fprintf(stderr,"Supervisor: pipe failed: %s (%d)\n",::strerror(err),err);
+	    ::fprintf(stderr,"Supervisor: watchdog pipe failed: %s (%d)\n",::strerror(err),err);
 	    return err;
 	}
 	::fcntl(wdogfd[0],F_SETFL,O_NONBLOCK);
 	::fcntl(wdogfd[1],F_SETFL,O_NONBLOCK);
+	int logfd[2] = { -1, -1 };
+	if (s_logrotator) {
+	    if (::pipe(logfd)) {
+		int err = errno;
+		::fprintf(stderr,"Supervisor: log pipe failed: %s (%d)\n",::strerror(err),err);
+		return err;
+	    }
+	    ::fcntl(logfd[0],F_SETFL,O_NONBLOCK);
+	}
 	s_childpid = ::fork();
 	if (s_childpid < 0) {
 	    int err = errno;
@@ -362,6 +393,15 @@ static int supervise(void)
 	if (s_childpid == 0) {
 	    s_super_handle = wdogfd[1];
 	    ::close(wdogfd[0]);
+	    if (s_logrotator) {
+		::close(logfd[0]);
+		// Redirect stdout and stderr to the new file
+		::fflush(stdout);
+		::dup2(logfd[1],1);
+		::fflush(stderr);
+		::dup2(logfd[1],2);
+		::close(logfd[1]);
+	    }
 	    ::signal(SIGINT,SIG_DFL);
 	    ::signal(SIGTERM,SIG_DFL);
 	    ::signal(SIGHUP,SIG_DFL);
@@ -370,6 +410,8 @@ static int supervise(void)
 	    return -1;
 	}
 	::close(wdogfd[1]);
+	if (s_logrotator)
+	    ::close(logfd[1]);
 	// Wait for the child to die or block
 	for (int sanity = INIT_SANITY; sanity > 0; sanity--) {
 	    int status = -1;
@@ -402,7 +444,10 @@ static int supervise(void)
 	    else if ((errno != EINTR) && (errno != EAGAIN))
 		break;
 	    // Consume sanity points slightly slower than added
-	    ::usleep(1200000);
+	    for (int i = 0; i < 10; i++) {
+		copystream(2,logfd[0]);
+		::usleep(120000);
+	    }
 	}
 	::close(wdogfd[0]);
 	if (s_childpid > 0) {
@@ -418,10 +463,14 @@ static int supervise(void)
 	    ::waitpid(s_childpid,0,WNOHANG);
 	    s_childpid = -1;
 	}
+	if (s_logrotator) {
+	    copystream(2,logfd[0]);
+	    ::close(logfd[0]);
+	}
 	if (s_runagain)
 	    ::usleep(1000000);
     }
-    ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",::getpid(),retcode);
+    ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",s_superpid,retcode);
     return retcode;
 }
 #endif /* _WINDOWS */
@@ -943,6 +992,7 @@ static void usage(bool client, FILE* f)
 #else
 "   -d             Daemonify, suppress output unless logged\n"
 "   -s             Supervised, restart if crashes or locks up\n"
+"   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
     ,s_cfgfile.safe());
 }
@@ -1047,6 +1097,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			break;
 		    case 's':
 			supervised = true;
+			break;
+		    case 'r':
+			s_logrotator = true;
 			break;
 #endif
 		    case 'p':
@@ -1246,6 +1299,10 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     }
     if (colorize && s_logfile) {
 	::fprintf(stderr,"Option -Do not supported when logging to file\n");
+	return EINVAL;
+    }
+    if (s_logrotator && !(supervised && s_logfile)) {
+	::fprintf(stderr,"Option -r needs supervisor and logging to file\n");
 	return EINVAL;
     }
     Debugger::enableOutput(true,colorize);

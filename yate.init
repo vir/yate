@@ -2,7 +2,7 @@
 #
 # yate:	Starts the Yet Another Telephony Engine
 #
-# chkconfig: 345 95 15
+# chkconfig: 345 95 10
 # description: Starts and stops YATE used as Telephony Server
 #
 # processname: yate
@@ -10,7 +10,7 @@
 #
 
 # Extra Yate command line options
-OPTS="-s -vvvvv -l /var/log/yate"
+OPTS="-rs -vvv -l /var/log/yate"
 
 # Source function library.
 . /etc/rc.d/init.d/functions

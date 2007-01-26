@@ -1,0 +1,11 @@
+# Have to rotate the log file before it reaches 2GB in size
+
+/var/log/yate {
+    size=1000M
+    rotate 5
+    missingok
+    notifempty
+    postrotate
+	/bin/kill -HUP `/bin/cat /var/run/yate.pid`
+    endscript
+}

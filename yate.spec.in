@@ -33,6 +33,7 @@ for small to large scale projects.
 /usr/bin/yate
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
+/etc/logrotate.d/yate
 %dir /usr/lib/yate
 %dir /usr/lib/yate/modules
 %dir /etc/yate
@@ -82,6 +83,7 @@ for small to large scale projects.
 %config /etc/yate/yradius.conf
 %config /etc/yate/yrtpchan.conf
 %config /etc/yate/ysipchan.conf
+%config /etc/logrotate.d/yate
 
 %post
 ldconfig
@@ -304,6 +306,7 @@ make strip
 make install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}/etc/rc.d/init.d
 cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
+cp -p %{_builddir}/%{name}/yate.logrotate %{buildroot}/etc/logrotate.d/yate
 
 %clean
 # make clean
@@ -311,6 +314,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Jan 26 2007 Paul Chitescu <paulc@voip.null.ro>
+- Added log rotator configuration
+
 * Mon Sep 18 2006 Paul Chitescu <paulc@voip.null.ro>
 - Version 1.1.0-1
 

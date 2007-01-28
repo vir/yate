@@ -396,7 +396,7 @@ public:
     void setCallerID(const char* number, const char* name);
     void rtpExecuted(Message& msg);
     void rtpForward(Message& msg, bool init = false);
-    void answerCall(AnswerCallResponse response);
+    void answerCall(AnswerCallResponse response, bool autoEarly = false);
     static BOOL decodeCapability(const H323Capability& capability, const char** dataFormat, int* payload = 0, String* capabName = 0);
     inline bool hasRemoteAddress() const
 	{ return m_passtrough && (m_remotePort > 0); }
@@ -1159,14 +1159,14 @@ void YateH323Connection::rtpForward(Message& msg, bool init)
     }
 }
 
-void YateH323Connection::answerCall(AnswerCallResponse response)
+void YateH323Connection::answerCall(AnswerCallResponse response, bool autoEarly)
 {
     bool media = false;
     if (hasRemoteAddress() && m_rtpPort)
 	media = true;
-    else {
+    else if (autoEarly) {
 	TelEngine::Lock lock(m_mutex);
-	if (m_chan && m_chan->alive() && m_chan->getConsumer() && m_chan->getConsumer()->getConnSource())
+	if (m_chan && m_chan->alive() && m_chan->getPeer() && m_chan->getPeer()->getSource())
 	    media = true;
     }
     // modify responses to indicate we have early media (remote ringing)
@@ -2124,7 +2124,7 @@ bool YateH323Chan::msgProgress(Message& msg)
 	return false;
     if (msg.getParam("rtp_forward"))
 	m_conn->rtpForward(msg);
-    m_conn->answerCall(H323Connection::AnswerCallDeferred);
+    m_conn->answerCall(H323Connection::AnswerCallDeferred,msg.getBoolValue("earlymedia",true));
     return true;
 }
 
@@ -2135,7 +2135,7 @@ bool YateH323Chan::msgRinging(Message& msg)
 	return false;
     if (msg.getParam("rtp_forward"))
 	m_conn->rtpForward(msg);
-    m_conn->answerCall(H323Connection::AnswerCallPending);
+    m_conn->answerCall(H323Connection::AnswerCallPending,msg.getBoolValue("earlymedia",true));
     return true;
 }
 

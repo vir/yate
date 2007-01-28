@@ -2132,6 +2132,7 @@ bool ClientChannel::openMedia(bool replace)
 	return false;
     if ((!replace) && getSource() && getConsumer())
 	return true;
+    Debug(this,DebugAll,"Opening media channels [%p]",this);
     Message m("chan.attach");
     complete(m,true);
     m.setParam("source",dev);
@@ -2187,7 +2188,7 @@ void ClientChannel::update(bool client)
     }
     desc << " " << id();
     m_desc = desc;
-    XDebug(ClientDriver::self(),DebugAll,"update %d '%s'",client,desc.c_str());
+    XDebug(this,DebugAll,"update %d '%s'",client,desc.c_str());
     if (client && Client::self())
 	Client::self()->setChannel(this);
 }
@@ -2216,7 +2217,7 @@ bool ClientChannel::callRouted(Message& msg)
 
 void ClientChannel::callAccept(Message& msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAccept() [%p]",this);
+    Debug(this,DebugAll,"ClientChannel::callAccept() [%p]",this);
     Client::self()->setStatusLocked("Calling target");
     Channel::callAccept(msg);
     update();
@@ -2242,11 +2243,11 @@ void ClientChannel::callRejected(const char* error, const char* reason, const Me
 
 bool ClientChannel::msgProgress(Message& msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgProgress() [%p]",this);
+    Debug(this,DebugAll,"ClientChannel::msgProgress() [%p]",this);
     Client::self()->setStatusLocked("Call progressing");
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    CallEndpoint* ch = getPeer();
     if (!ch)
-	ch = getPeer();
+	ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch && ch->getSource())
 	openMedia();
     bool ret = Channel::msgProgress(msg);
@@ -2256,11 +2257,11 @@ bool ClientChannel::msgProgress(Message& msg)
 
 bool ClientChannel::msgRinging(Message& msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgRinging() [%p]",this);
+    Debug(this,DebugAll,"ClientChannel::msgRinging() [%p]",this);
     Client::self()->setStatusLocked("Call ringing");
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
+    CallEndpoint* ch = getPeer();
     if (!ch)
-	ch = getPeer();
+	ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     if (ch && ch->getSource())
 	openMedia();
     bool ret = Channel::msgRinging(msg);
@@ -2270,7 +2271,7 @@ bool ClientChannel::msgRinging(Message& msg)
 
 bool ClientChannel::msgAnswered(Message& msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::msgAnswered() [%p]",this);
+    Debug(this,DebugAll,"ClientChannel::msgAnswered() [%p]",this);
     m_time = Time::now();
     m_flashing = true;
     m_canAnswer = false;
@@ -2286,7 +2287,7 @@ bool ClientChannel::msgAnswered(Message& msg)
 
 void ClientChannel::callAnswer()
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callAnswer() [%p]",this);
+    Debug(this,DebugAll,"ClientChannel::callAnswer() [%p]",this);
     m_time = Time::now();
     m_flashing = false;
     m_canAnswer = false;

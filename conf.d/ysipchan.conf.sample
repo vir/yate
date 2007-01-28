@@ -58,6 +58,9 @@
 ; rtp_start: bool: Start RTP when sending 200 on incoming instead of receiving ACK
 ;rtp_start=disable
 
+; multi_ringing: bool: Accept provisional (1xx) messages even after 180 Ringing
+;multi_ringing=disable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

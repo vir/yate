@@ -490,6 +490,7 @@ static bool s_info = false;
 static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_auth_register = true;
+static bool s_multi_ringing = false;
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -2466,25 +2467,39 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Engine::enqueue(m);
 	startPendingUpdate();
     }
-    if ((m_state < Ringing) && msg->isAnswer()) {
-	if (msg->code == 180) {
-	    setStatus("ringing",Ringing);
-	    Message *m = message("call.ringing");
-	    addRtpParams(*m,natAddr,msg->body);
-	    if (m_rtpAddr.null())
-		m->addParam("earlymedia","false");
-	    Engine::enqueue(m);
+    if (msg->isAnswer() && (msg->code > 100) && (msg->code < 200)) {
+	if (s_multi_ringing || (m_state < Ringing)) {
+	    const char* name = "call.progress";
+	    const char* reason = 0;
+	    switch (msg->code) {
+		case 180:
+		    name = "call.ringing";
+		    setStatus("ringing",Ringing);
+		    break;
+		case 181:
+		    reason = "forwarded";
+		    setStatus("progressing");
+		    break;
+		case 182:
+		    reason = "queued";
+		    setStatus("progressing");
+		    break;
+		case 183:
+		    setStatus("progressing");
+		    break;
+		// for all others emit a call.progress but don't change status
+	    }
+	    if (name) {
+		Message* m = message(name);
+		if (reason)
+		    m->addParam("reason",reason);
+		addRtpParams(*m,natAddr,msg->body);
+		if (m_rtpAddr.null())
+		    m->addParam("earlymedia","false");
+		Engine::enqueue(m);
+	    }
 	}
-	if (msg->code == 183) {
-	    setStatus("progressing");
-	    Message *m = message("call.progress");
-	    addRtpParams(*m,natAddr,msg->body);
-	    if (m_rtpAddr.null())
-		m->addParam("earlymedia","false");
-	    Engine::enqueue(m);
-	}
-	if ((msg->code > 100) && (msg->code < 200))
-	    emitPRACK(msg);
+	emitPRACK(msg);
     }
     if (msg->isACK()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);
@@ -2830,9 +2845,18 @@ void YateSIPConnection::disconnected(bool final, const char *reason)
 bool YateSIPConnection::msgProgress(Message& msg)
 {
     Channel::msgProgress(msg);
+    int code = 183;
+    const NamedString* reason = msg.getParam("reason");
+    if (reason) {
+	// handle the special progress types that have provisional codes
+	if (*reason == "forwarded")
+	    code = 181;
+	else if (*reason == "queued")
+	    code = 182;
+    }
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
-	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 183);
+	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), code);
 	m->setBody(createProvisionalSDP(msg));
 	m_tr->setResponse(m);
 	m->deref();
@@ -3763,6 +3787,7 @@ void SIPDriver::initialize()
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
+    s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);

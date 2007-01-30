@@ -259,6 +259,17 @@ static const ToneDesc s_desc[] = {
     { 0, 0, 0 }
 };
 
+// This function is here mainly to avoid 64bit gcc b0rking optimizations
+static unsigned int byteRate(u_int64_t time, unsigned int bytes)
+{
+    if (!(time && bytes))
+	return 0;
+    time = Time::now() - time;
+    if (!time)
+	return 0;
+    return (unsigned int)((bytes*(u_int64_t)1000000 + time/2) / time);
+}
+
 
 ToneData::ToneData(const char* desc)
     : m_f1(0), m_f2(0), m_mod(false), m_data(0)
@@ -404,13 +415,8 @@ ToneSource::~ToneSource()
     Lock lock(__plugin);
     Debug(&__plugin,DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
     stop();
-    if (m_time) {
-	m_time = Time::now() - m_time;
-	if (m_time) {
-	    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-	    Debug(&__plugin,DebugInfo,"ToneSource rate=" FMT64U " b/s",m_time);
-	}
-    }
+    if (m_time)
+	Debug(&__plugin,DebugInfo,"ToneSource rate=%u b/s",byteRate(m_time,m_total));
 }
 
 void ToneSource::zeroRefs()
@@ -558,9 +564,8 @@ void ToneSource::run()
 	m_total += m_data.length();
 	tpos += (m_data.length()*(u_int64_t)1000000/m_brate);
     }
-    m_time = Time::now() - m_time;
-    m_time = (m_total*(u_int64_t)1000000 + m_time/2) / m_time;
-    Debug(&__plugin,DebugAll,"ToneSource [%p] end, total=%u (" FMT64U " b/s)",this,m_total,m_time);
+    Debug(&__plugin,DebugAll,"ToneSource [%p] end, total=%u (%u b/s)",
+	this,m_total,byteRate(m_time,m_total));
     m_time = 0;
 }
 

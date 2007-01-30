@@ -104,8 +104,7 @@ static int dn_string(const unsigned char* end, const unsigned char* src, char *d
 
 
 static String s_prefix;
-static String s_domain;
-static String s_backup;
+static String s_domains;
 static unsigned int s_minlen;
 static int s_timeout;
 static int s_retries;
@@ -259,13 +258,13 @@ bool NAPTR::replace(String& str)
 
 bool EnumHandler::received(Message& msg)
 {
-    if (s_domain.null() && s_backup.null())
+    if (s_domains.null())
 	return false;
     // give preference to full (e164) called number if exists
     String called(msg.getValue("calledfull"));
     if (called.null())
 	called = msg.getValue("called");
-    if (called.null() && msg.getBoolValue("enumroute",true))
+    if (called.null() || !msg.getBoolValue("enumroute",true))
 	return false;
     // check if the called starts with international prefix, remove it
     if (!(called.startSkip("+",false) ||
@@ -276,6 +275,11 @@ bool EnumHandler::received(Message& msg)
     // perform per-thread initialization of resolver and timeout settings
     if (!resolvInit())
 	return false;
+    s_mutex.lock();
+    ObjList* domains = s_domains.split(',',false);
+    s_mutex.unlock();
+    if (!domains)
+	return false;
     bool rval = false;
     // put the standard international prefix in front
     called = "+" + called;
@@ -284,15 +288,20 @@ bool EnumHandler::received(Message& msg)
 	tmp << called.at(i) << ".";
     u_int64_t dt = Time::now();
     ObjList* res = 0;
-    if (s_domain)
-	res = naptrQuery(tmp + s_domain);
-    if (s_backup && !res)
-	res = naptrQuery(tmp + s_backup);
+    for (ObjList* l = domains; l; l = l->next()) {
+	const String* s = static_cast<const String*>(l->get());
+	if (!s || s->null())
+	    continue;
+	res = naptrQuery(tmp + *s);
+	if (res)
+	    break;
+    }
     dt = Time::now() - dt;
     Debug(&emodule,DebugInfo,"Returned %d NAPTR records in %u.%06u s",
 	res ? res->count() : 0,
 	(unsigned int)(dt / 1000000),
 	(unsigned int)(dt % 1000000));
+    domains->destruct();
     bool reroute = false;
     bool unassigned = false;
     if (res) {
@@ -377,11 +386,18 @@ void EnumModule::initialize()
     if ((prio <= 0) && !m_init)
 	return;
     Output("Initializing ENUM routing");
+    s_mutex.lock();
     // in most of the world this default international prefix should work
     s_prefix = cfg.getValue("general","prefix","00");
+    s_domains = cfg.getValue("general","domains");
+    if (s_domains.null()) {
+	// old style, just for compatibility
+	s_domains = cfg.getValue("general","domain","e164.arpa");
+	s_domains.append(cfg.getValue("general","backup","e164.org"),",");
+    }
+    s_mutex.unlock();
+    DDebug(&emodule,DebugInfo,"Domain list: %s",s_domains.c_str());
     s_minlen = cfg.getIntValue("general","minlen",ENUM_DEF_MINLEN);
-    s_domain = cfg.getValue("general","domain","e164.arpa");
-    s_backup = cfg.getValue("general","backup","e164.org");
     int tmp = cfg.getIntValue("general","timeout",ENUM_DEF_TIMEOUT);
     // limit between 1 and 10 seconds
     if (tmp < 1)

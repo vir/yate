@@ -11,10 +11,15 @@
 ; minlen: int: Minimum length of a number (prefix removed) to try to resolve
 ;minlen=8
 
+; domains: string: Comma separated list of domain suffixes to use for ENUM
+;domains=e164.arpa,e164.org
+
 ; domain: string: Domain to use as suffix for ENUM
+; NOTE: Obsolete!
 ;domain=e164.arpa
 
 ; backup: string: Secondary domain to use as suffix for ENUM
+; NONE: Obsolete!
 ;backup=e164.org
 
 ; timeout: int: Timeout of each resolver attempt in seconds

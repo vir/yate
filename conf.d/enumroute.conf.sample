@@ -31,6 +31,17 @@
 ; redirect: bool: Attempt to redirect the incoming call to found address
 ;redirect=false
 
+; autofork: bool: Create a fallback route from ordered NAPTR records
+;autofork=false
+
+; forkstop: string: Regular expression matching the names of the errors
+;  that will terminate the entire call, not just one route
+;forkstop=busy
+
+; maxcall: int: Milliseconds to call each route when forking the call
+;  this parameter is constrained between 2000 and 120000
+;maxcall=30000
+
 
 [protocols]
 ; Enable or disable individual protocols
@@ -43,6 +54,9 @@
 
 ; h323: bool: Enable the H.323 protocol (E2U+H323)
 ;h323=yes
+
+; jingle: bool Enable the Jingle protocol (E2U+XMPP)
+;jingle=yes
 
 ; void: bool: Enable declaring unallocated numbers (E2U+VOID)
 ;void=yes

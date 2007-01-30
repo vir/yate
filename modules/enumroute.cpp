@@ -35,6 +35,7 @@ namespace { // anonymous
 #define ENUM_DEF_TIMEOUT 3
 #define ENUM_DEF_RETRIES 2
 #define ENUM_DEF_MINLEN  8
+#define ENUM_DEF_MAXCALL 30000
 
 class NAPTR : public GenObject
 {
@@ -67,6 +68,8 @@ public:
 	: MessageHandler("call.route",prio)
 	{ }
     virtual bool received(Message& msg);
+private:
+    static void addRoute(String& dest,const String& src);
 };
 
 class EnumModule : public Module
@@ -104,15 +107,19 @@ static int dn_string(const unsigned char* end, const unsigned char* src, char *d
 
 
 static String s_prefix;
+static String s_forkStop;
 static String s_domains;
 static unsigned int s_minlen;
 static int s_timeout;
 static int s_retries;
+static int s_maxcall;
 
 static bool s_redirect;
+static bool s_autoFork;
 static bool s_sipUsed;
 static bool s_iaxUsed;
 static bool s_h323Used;
+static bool s_xmppUsed;
 static bool s_telUsed;
 static bool s_voidUsed;
 
@@ -225,6 +232,7 @@ static ObjList* naptrQuery(const char* dname)
     return lst;
 }
 
+
 NAPTR::NAPTR(int ord, int pref, const char* flags, const char* serv, const char* regexp, const char* replace)
     : m_order(ord), m_pref(pref), m_flags(flags), m_service(serv), m_replace(replace)
 {
@@ -305,6 +313,8 @@ bool EnumHandler::received(Message& msg)
     bool reroute = false;
     bool unassigned = false;
     if (res) {
+	msg.retValue().clear();
+	bool autoFork = msg.getBoolValue("autofork",s_autoFork);
 	ObjList* cur = res;
 	for (; cur; cur = cur->next()) {
 	    NAPTR* ptr = static_cast<NAPTR*>(cur->get());
@@ -314,43 +324,68 @@ bool EnumHandler::received(Message& msg)
 		ptr->order(),ptr->pref(),ptr->serv().c_str());
 	    String serv = ptr->serv();
 	    serv.toUpper();
-	    if (s_sipUsed && (serv == "E2U+SIP") && ptr->replace(called)) {
-		msg.retValue() = "sip/" + called;
+	    String callto = called;
+	    if (s_sipUsed && (serv == "E2U+SIP") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"sip/" + callto);
 		rval = true;
+		if (autoFork)
+		    continue;
 		break;
 	    }
-	    if (s_iaxUsed && (serv == "E2U+IAX2") && ptr->replace(called)) {
-		msg.retValue() = "iax/" + called;
+	    if (s_iaxUsed && (serv == "E2U+IAX2") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"iax/" + callto);
 		rval = true;
+		if (autoFork)
+		    continue;
 		break;
 	    }
-	    if (s_h323Used && (serv == "E2U+H323") && ptr->replace(called)) {
-		msg.retValue() = "h323/" + called;
+	    if (s_h323Used && (serv == "E2U+H323") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"h323/" + callto);
 		rval = true;
+		if (autoFork)
+		    continue;
 		break;
 	    }
-	    if (s_telUsed && (serv == "E2U+TEL") && ptr->replace(called)) {
-		if (called.startSkip("tel:",false) ||
-		    called.startSkip("TEL:",false) ||
-		    called.startSkip("e164:",false) ||
-		    called.startSkip("E164:",false))
+	    if (s_xmppUsed && (serv == "E2U+XMPP") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"jingle/" + callto);
+		rval = true;
+		if (autoFork)
+		    continue;
+		break;
+	    }
+	    if (s_telUsed && (serv == "E2U+TEL") && ptr->replace(callto)) {
+		if (callto.startSkip("tel:",false) ||
+		    callto.startSkip("TEL:",false) ||
+		    callto.startSkip("e164:",false) ||
+		    callto.startSkip("E164:",false))
 		{
 		    reroute = true;
-		    msg.setParam("called",called);
+		    msg.setParam("called",callto);
 		    msg.clearParam("calledfull");
+		    if (msg.retValue()) {
+			Debug(&emodule,DebugMild,"Dropping collected route: %s",
+			    msg.retValue().c_str());
+			msg.retValue().clear();
+		    }
 		    break;
 		}
 	    }
-	    if (s_voidUsed && serv.startsWith("E2U+VOID") && ptr->replace(called)) {
+	    if (s_voidUsed && serv.startsWith("E2U+VOID") && ptr->replace(callto)) {
 		// remember it's unassigned but still continue scanning
 		unassigned = true;
 	    }
 	}
 	res->destruct();
     }
-    if (rval && s_redirect)
-	msg.setParam("redirect",String::boolText(true));
     s_mutex.lock();
+    if (rval) {
+	if (msg.retValue().startsWith("fork",true)) {
+	    msg.setParam("maxcall",String(s_maxcall));
+	    msg.setParam("fork.stop",s_forkStop);
+	}
+        else if (s_redirect)
+	    msg.setParam("redirect",String::boolText(true));
+    }
     s_queries++;
     if (rval)
 	s_routed++;
@@ -365,6 +400,18 @@ bool EnumHandler::received(Message& msg)
     }
     return rval;
 }
+
+void EnumHandler::addRoute(String& dest,const String& src)
+{
+    if (dest.null())
+	dest = src;
+    else {
+	if (!dest.startsWith("fork",true))
+	    dest = "fork " + dest;
+	dest << " | " << src;
+    }
+}
+
 
 void EnumModule::statusParams(String& str)
 {
@@ -395,6 +442,7 @@ void EnumModule::initialize()
 	s_domains = cfg.getValue("general","domain","e164.arpa");
 	s_domains.append(cfg.getValue("general","backup","e164.org"),",");
     }
+    s_forkStop = cfg.getValue("general","forkstop","busy");
     s_mutex.unlock();
     DDebug(&emodule,DebugInfo,"Domain list: %s",s_domains.c_str());
     s_minlen = cfg.getIntValue("general","minlen",ENUM_DEF_MINLEN);
@@ -414,10 +462,20 @@ void EnumModule::initialize()
     s_retries = tmp;
     // overall a resolve attempt will take at most 50s per domain
 
+    tmp = cfg.getIntValue("general","maxcall",ENUM_DEF_MAXCALL);
+    // limit between 2 and 120 seconds
+    if (tmp < 2000)
+	tmp = 2000;
+    if (tmp > 120000)
+	tmp = 120000;
+    s_maxcall = tmp;
+
     s_redirect = cfg.getBoolValue("general","redirect");
+    s_autoFork = cfg.getBoolValue("general","autofork");
     s_sipUsed = cfg.getBoolValue("protocols","sip",true);
     s_iaxUsed = cfg.getBoolValue("protocols","iax",true);
     s_h323Used = cfg.getBoolValue("protocols","h323",true);
+    s_xmppUsed = cfg.getBoolValue("protocols","jingle",true);
     s_voidUsed = cfg.getBoolValue("protocols","void",true);
     // by default don't support the number rerouting
     s_telUsed = cfg.getBoolValue("protocols","tel",false);

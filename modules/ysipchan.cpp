@@ -1399,7 +1399,8 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 		    message->getParty()->getPartyAddr().c_str(),
 		    message->getParty()->getPartyPort());
 	String tmp(addr.getHost());
-	tmp << ":" << addr.getPort();
+	if (addr.getPort())
+	    tmp << ":" << addr.getPort();
 	msg.addParam("reg_nat_addr",tmp);
 	int pos = data.find(tmp);
 	if (pos >= 0) {

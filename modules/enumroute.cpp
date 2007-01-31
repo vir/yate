@@ -69,6 +69,7 @@ public:
 	{ }
     virtual bool received(Message& msg);
 private:
+    static bool resolve(Message& msg,bool canRedirect);
     static void addRoute(String& dest,const String& src);
 };
 
@@ -264,24 +265,31 @@ bool NAPTR::replace(String& str)
 }
 
 
+// Routing message handler, performs checks and calls resolve method
 bool EnumHandler::received(Message& msg)
 {
-    if (s_domains.null())
+    if (s_domains.null() || !msg.getBoolValue("enumroute",true))
 	return false;
+    // perform per-thread initialization of resolver and timeout settings
+    if (!resolvInit())
+	return false;
+    return resolve(msg,s_telUsed);
+}
+
+// Resolver function, may call itself recursively at most once
+bool EnumHandler::resolve(Message& msg,bool canRedirect)
+{
     // give preference to full (e164) called number if exists
     String called(msg.getValue("calledfull"));
     if (called.null())
 	called = msg.getValue("called");
-    if (called.null() || !msg.getBoolValue("enumroute",true))
+    if (called.null())
 	return false;
     // check if the called starts with international prefix, remove it
     if (!(called.startSkip("+",false) ||
 	 (s_prefix && called.startSkip(s_prefix,false))))
 	return false;
     if (called.length() < s_minlen)
-	return false;
-    // perform per-thread initialization of resolver and timeout settings
-    if (!resolvInit())
 	return false;
     s_mutex.lock();
     ObjList* domains = s_domains.split(',',false);
@@ -353,22 +361,24 @@ bool EnumHandler::received(Message& msg)
 		    continue;
 		break;
 	    }
-	    if (s_telUsed && (serv == "E2U+TEL") && ptr->replace(callto)) {
+	    if (canRedirect && (serv == "E2U+TEL") && ptr->replace(callto)) {
 		if (callto.startSkip("tel:",false) ||
 		    callto.startSkip("TEL:",false) ||
 		    callto.startSkip("e164:",false) ||
 		    callto.startSkip("E164:",false))
 		{
 		    reroute = true;
+		    rval = false;
 		    msg.setParam("called",callto);
 		    msg.clearParam("calledfull");
 		    if (msg.retValue()) {
-			Debug(&emodule,DebugMild,"Dropping collected route: %s",
+			Debug(&emodule,DebugMild,"Redirect drops collected route: %s",
 			    msg.retValue().c_str());
 			msg.retValue().clear();
 		    }
 		    break;
 		}
+		continue;
 	    }
 	    if (s_voidUsed && serv.startsWith("E2U+VOID") && ptr->replace(callto)) {
 		// remember it's unassigned but still continue scanning
@@ -393,6 +403,8 @@ bool EnumHandler::received(Message& msg)
 	s_reroute++;
     emodule.changed();
     s_mutex.unlock();
+    if (reroute)
+	return resolve(msg,false);
     if (unassigned && !rval) {
 	rval = true;
 	msg.retValue() = "-";
@@ -401,6 +413,7 @@ bool EnumHandler::received(Message& msg)
     return rval;
 }
 
+// Add one route to the result, take care of forking
 void EnumHandler::addRoute(String& dest,const String& src)
 {
     if (dest.null())

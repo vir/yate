@@ -61,5 +61,11 @@
 ; void: bool: Enable declaring unallocated numbers (E2U+VOID)
 ;void=yes
 
+; pstn: bool: Enable routes to PSTN gateways (E2U+PSTN)
+;pstn=no
+
+; pstn: bool: Enable routes to Voice terminals (E2U+VOICE)
+;voice=no
+
 ; tel: bool: Enable the TEL rerouting (E2U+TEL)
 ;tel=no

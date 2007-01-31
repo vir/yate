@@ -122,6 +122,8 @@ static bool s_iaxUsed;
 static bool s_h323Used;
 static bool s_xmppUsed;
 static bool s_telUsed;
+static bool s_voiceUsed;
+static bool s_pstnUsed;
 static bool s_voidUsed;
 
 static Mutex s_mutex;
@@ -361,6 +363,20 @@ bool EnumHandler::resolve(Message& msg,bool canRedirect)
 		    continue;
 		break;
 	    }
+	    if (s_pstnUsed && serv.startsWith("E2U+PSTN") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"pstn/" + callto);
+		rval = true;
+		if (autoFork)
+		    continue;
+		break;
+	    }
+	    if (s_voiceUsed && serv.startsWith("E2U+VOICE") && ptr->replace(callto)) {
+		addRoute(msg.retValue(),"voice/" + callto);
+		rval = true;
+		if (autoFork)
+		    continue;
+		break;
+	    }
 	    if (canRedirect && (serv == "E2U+TEL") && ptr->replace(callto)) {
 		if (callto.startSkip("tel:",false) ||
 		    callto.startSkip("TEL:",false) ||
@@ -485,13 +501,16 @@ void EnumModule::initialize()
 
     s_redirect = cfg.getBoolValue("general","redirect");
     s_autoFork = cfg.getBoolValue("general","autofork");
-    s_sipUsed = cfg.getBoolValue("protocols","sip",true);
-    s_iaxUsed = cfg.getBoolValue("protocols","iax",true);
+    s_sipUsed  = cfg.getBoolValue("protocols","sip",true);
+    s_iaxUsed  = cfg.getBoolValue("protocols","iax",true);
     s_h323Used = cfg.getBoolValue("protocols","h323",true);
     s_xmppUsed = cfg.getBoolValue("protocols","jingle",true);
     s_voidUsed = cfg.getBoolValue("protocols","void",true);
     // by default don't support the number rerouting
-    s_telUsed = cfg.getBoolValue("protocols","tel",false);
+    s_telUsed  = cfg.getBoolValue("protocols","tel",false);
+    // also don't enable gateways by default as more setup is needed
+    s_pstnUsed = cfg.getBoolValue("protocols","pstn",false);
+    s_voiceUsed= cfg.getBoolValue("protocols","voice",false);
     if (m_init || (prio <= 0))
 	return;
     m_init = true;

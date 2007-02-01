@@ -80,6 +80,7 @@ static String s_tos;
 static bool s_autoaddr = true;
 static bool s_anyssrc = false;
 static bool s_rtcp = true;
+static bool s_drill = false;
 
 static int s_sleep = 5;
 static int s_minjitter = 0;
@@ -432,6 +433,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
+    if (msg.getBoolValue("drillhole",s_drill))
+	m_rtp->drillHole();
 //    if (maxJitter > 0)
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
@@ -842,6 +845,7 @@ void YRTPPlugin::initialize()
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
+    s_drill = cfg.getBoolValue("general","drillhole",false);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     setup();

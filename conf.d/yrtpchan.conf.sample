@@ -23,6 +23,9 @@
 ; rtcp: bool: Allocate socket for the RTCP protocol by default
 ;rtcp=enabled
 
+; drillhole: bool: Attempt to drill a hole through a firewall or NAT
+;drillhole=disabled
+
 ; defsleep: int: Default in-loop sleep time for new RTP sessions in milliseconds
 ;defsleep=5
 

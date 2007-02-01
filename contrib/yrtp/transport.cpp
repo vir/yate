@@ -143,6 +143,7 @@ void RTPGroup::setMinSleep(int msec)
     s_sleep = msec;
 }
 
+
 RTPProcessor::RTPProcessor()
     : m_group(0)
 {
@@ -327,6 +328,19 @@ bool RTPTransport::remoteAddr(SocketAddr& addr, bool sniff)
 	m_remoteRTCP = addr;
 	m_remoteRTCP.port(addr.port()+1);
 	return true;
+    }
+    return false;
+}
+
+bool RTPTransport::drillHole()
+{
+    if (m_rtpSock.valid() && m_remoteAddr.valid()) {
+	static const char buf[4] = { 0, 0, 0, 0 };
+	if (m_rtpSock.sendTo(buf,sizeof(buf),m_remoteAddr) == sizeof(buf)) {
+	    if (m_rtcpSock.valid() && m_remoteRTCP.valid())
+		m_rtcpSock.sendTo(buf,sizeof(buf),m_remoteRTCP);
+	    return true;
+	}
     }
     return false;
 }

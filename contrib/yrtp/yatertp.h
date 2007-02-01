@@ -254,6 +254,12 @@ public:
     inline Socket* rtpSock()
 	{ return &m_rtpSock; }
 
+    /**
+     * Drill a hole in a firewall or NAT for the RTP and RTCP sockets
+     * @return True if at least a packet was sent for the RTP socket
+     */
+    bool drillHole();
+
 protected:
     /**
      * Method called periodically to read data out of sockets
@@ -921,6 +927,13 @@ public:
      */
     inline Socket* rtpSock()
 	{ return m_transport ? m_transport->rtpSock() : 0; }
+
+    /**
+     * Drill a hole in a firewall or NAT for the RTP and RTCP sockets
+     * @return True if at least a packet was sent for the RTP socket
+     */
+    inline bool drillHole()
+	{ return m_transport && m_transport->drillHole(); }
 
 protected:
     /**

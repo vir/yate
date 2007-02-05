@@ -342,8 +342,12 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	    if (uri.matches(r))
 		uri = uri.matchString(1);
 	}
-	if (!original->getHeader("Route"))
-	    copyAllHeaders(answer,"Record-Route","Route");
+	// new transaction - get/apply routeset unless INVITE already knew it
+	if (!original->getHeader("Route")) {
+	    ObjList* routeset = answer->getRoutes();
+	    addRoutes(routeset);
+	    delete routeset;
+	}
     }
     copyAllHeaders(original,"Route");
     copyHeader(original,"From");
@@ -859,11 +863,11 @@ ObjList* SIPMessage::getRoutes() const
 		if (!list)
 		    list = new ObjList;
 		if (isAnswer())
-		    // route set learned from an answer, preserve order
-		    list->append(line);
-		else
-		    // route set learned from a request, reverse order
+		    // route set learned from an answer, reverse order
 		    list->insert(line);
+		else
+		    // route set learned from a request, preserve order
+		    list->append(line);
 	    }
 	}
     }

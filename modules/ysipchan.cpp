@@ -1391,7 +1391,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     msg.setParam("username",user);
     msg.setParam("number",addr.getUser());
     msg.setParam("driver","sip");
-    String data("sip/" + addr);
+    String data(addr);
     bool nat = isNatBetween(addr.getHost(),message->getParty()->getPartyAddr());
     if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
 	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
@@ -1411,12 +1411,14 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	    data = tmp;
 	}
     }
-    msg.setParam("data",data);
+    msg.setParam("data","sip/" + data);
     msg.setParam("ip_host",message->getParty()->getPartyAddr());
     msg.setParam("ip_port",String(message->getParty()->getPartyPort()));
 
     bool dereg = false;
     String tmp(message->getHeader("Expires"));
+    if (tmp.null())
+	tmp = hl->getParam("expires");
     int expires = tmp.toInteger(-1);
     if (expires < 0)
 	expires = s_expires_def;
@@ -1451,6 +1453,9 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 		tmp = expires;
 	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
+	    SIPHeaderLine* contact = new SIPHeaderLine("Contact","<" + data + ">");
+	    contact->setParam("expires",tmp);
+	    r->addHeader(contact);
 	    t->setResponse(r);
 	    r->deref();
 	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s",

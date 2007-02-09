@@ -483,6 +483,7 @@ static Configuration s_cfg;
 static String s_realm = "Yate";
 static String s_audio = "alaw,mulaw";
 static int s_maxForwards = 20;
+static int s_nat_refresh = 25;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
 static bool s_inband = false;
@@ -1393,6 +1394,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
     msg.setParam("driver","sip");
     String data(addr);
     bool nat = isNatBetween(addr.getHost(),message->getParty()->getPartyAddr());
+    bool natChanged = false;
     if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
 	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",
 		    addr.getHost().c_str(),addr.getPort(),
@@ -1409,6 +1411,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	    tmp << data.substr(0,pos) << message->getParty()->getPartyAddr()
 		<< ":" << message->getParty()->getPartyPort() << data.substr(pos + len);
 	    data = tmp;
+	    natChanged = true;
 	}
     }
     msg.setParam("data","sip/" + data);
@@ -1438,6 +1441,8 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	msg = "user.unregister";
 	dereg = true;
     }
+    else
+	msg.setParam("sip_to",addr);
     hl = message->getHeader("User-Agent");
     if (hl)
 	msg.setParam("device",*hl);
@@ -1453,13 +1458,18 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 		tmp = expires;
 	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
-	    SIPHeaderLine* contact = new SIPHeaderLine("Contact","<" + data + ">");
+	    SIPHeaderLine* contact = new SIPHeaderLine("Contact","<" + addr + ">");
 	    contact->setParam("expires",tmp);
 	    r->addHeader(contact);
+	    if (natChanged) {
+		if (s_nat_refresh > 0)
+		    r->addHeader("P-NAT-Refresh",String(s_nat_refresh));
+		r->addHeader("X-Real-Contact",data);
+	    }
 	    t->setResponse(r);
 	    r->deref();
-	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s",
-		user.c_str(),tmp.c_str());
+	    Debug(&plugin,DebugNote,"Registered user '%s' expires in %s s%s",
+		user.c_str(),tmp.c_str(),natChanged ? " (NAT)" : "");
 	}
     }
     else
@@ -3798,6 +3808,7 @@ void SIPDriver::initialize()
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
     s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
+    s_nat_refresh = s_cfg.getIntValue("registrar","nat_refresh",25);
     initAudioCodecs();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();

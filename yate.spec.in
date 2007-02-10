@@ -306,6 +306,7 @@ make strip
 make install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}/etc/rc.d/init.d
 cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
+mkdir -p %{buildroot}/etc/logrotate.d
 cp -p %{_builddir}/%{name}/yate.logrotate %{buildroot}/etc/logrotate.d/yate
 
 %clean
@@ -314,6 +315,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Sun Feb 11 2007 Paul Chitescu <paulc@voip.null.ro>
+- Properly create the logrotate directory
+
 * Fri Jan 26 2007 Paul Chitescu <paulc@voip.null.ro>
 - Added log rotator configuration
 

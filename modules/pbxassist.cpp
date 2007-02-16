@@ -496,6 +496,7 @@ bool PBXAssist::operSecondCall(Message& msg)
 {
     Message* m = new Message("call.preroute");
     m->addParam("id",id());
+    m->copyParam(m_keep,"billid");
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);

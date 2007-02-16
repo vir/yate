@@ -206,6 +206,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	    m->addParam("id",id());
 	    m->addParam("reason",reason);
 	    m->addParam("pbxstate",m_state);
+	    m->copyParam(m_keep,"billid");
 	    m->copyParam(m_keep,"caller");
 	    if (isE164(called)) {
 		// divert target is a number so we have to route it
@@ -220,6 +221,10 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 		called = m->retValue();
 		m->retValue().clear();
 		m->msgTime() = Time::now();
+	    }
+	    else {
+		// diverting to resource, add old called for reference
+		m->copyParam(m_keep,"called");
 	    }
 	    Debug(list(),DebugCall,"Chan '%s' divert on '%s' to '%s'",
 		id().c_str(),reason.c_str(),called.c_str());
@@ -659,6 +664,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     }
     Message* m = new Message("call.preroute");
     m->addParam("id",id());
+    m->copyParam(m_keep,"billid");
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
@@ -696,6 +702,7 @@ void PBXAssist::msgHangup(Message& msg)
 void PBXAssist::msgStartup(Message& msg)
 {
     DDebug(list(),DebugNote,"Copying startup parameters for '%s'",id().c_str());
+    m_keep.setParam("billid",msg.getValue("billid"));
     NamedString* status = msg.getParam("status");
     if (status && (*status == "outgoing")) {
 	// switch them over so we have them right for later operations
@@ -713,6 +720,7 @@ void PBXAssist::msgExecute(Message& msg)
 {
     DDebug(list(),DebugNote,"Copying execute parameters for '%s'",id().c_str());
     // this gets only called on incoming call legs
+    m_keep.setParam("billid",msg.getValue("billid"));
     m_keep.setParam("called",msg.getValue("called"));
     m_keep.setParam("caller",msg.getValue("caller"));
     m_keep.copyParam(msg,"divert",'_');

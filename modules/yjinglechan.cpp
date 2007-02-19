@@ -449,6 +449,18 @@ bool YJBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
     XDebug(this,DebugAll,
 	"notifySubscribe(%s). Local: '%s'. Remote: '%s'.",
 	presenceText(presence),local.c_str(),remote.c_str());
+    // Respond if auto subscribe
+    if ((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
+	(autoSubscribe() & XMPPUser::From)) {
+	if (presence == JBPresence::Subscribe)
+	    presence = JBPresence::Subscribed;
+	else
+	    presence = JBPresence::Unsubscribed;
+	XMLElement* xml = createPresence(local.bare(),remote.bare(),presence);
+	if (event->stream())
+	    event->stream()->sendStanza(xml);
+	return true;
+    }
     // Enqueue message
     return message(presence,remote.bare(),local.bare(),0);
 }

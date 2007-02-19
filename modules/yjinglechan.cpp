@@ -469,10 +469,13 @@ bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
     XDebug(this,DebugAll,
 	"notifyPresence(%s). Local: '%s'. Remote: '%s'.",
 	available?"available":"unavailable",local.c_str(),remote.c_str());
-    // Notify plugin only if unavailable
-    // Since it's a new presence, connections are interested only if unavailable
-    if (!available)
-	iplugin.processPresence(local,remote,false,false);
+    // Check audio properties for received resource
+    JIDResource* res = new JIDResource(remote.resource());
+    if (res->fromXML(event->element()))
+	iplugin.processPresence(local,remote,res->available(),res->hasCap(JIDResource::CapAudio));
+    else
+	iplugin.processPresence(local,remote,available,false);
+    res->deref();
     // Enqueue message
     return message(available ? JBPresence::None : JBPresence::Unavailable,
 	remote.bare(),local.bare(),0);
@@ -1772,43 +1775,68 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     }
     JabberID caller(c,identity);
     JabberID called(dest);
-    // Get remote user
-    bool newPresence = false;
-    XMPPUser* remote = iplugin.m_presence->getRemoteUser(caller,called,true,0,
-	true,&newPresence);
-    // Get a resource for the caller
-    JIDResource* res = remote->getAudio(true,true);
-    if (!res) {
-	iplugin.m_presence->notifyNewUser(remote);
-	res = remote->getAudio(true,true);
-	// This should never happen !!!
+    // Get an available resource for the remote user if we keep the roster
+    bool available = true;
+    if (iplugin.m_presence->addOnSubscribe() ||
+	iplugin.m_presence->addOnProbe() ||
+	iplugin.m_presence->addOnPresence()) {
+	// Get remote user
+	bool newPresence = false;
+	XMPPUser* remote = iplugin.m_presence->getRemoteUser(caller,called,true,0,
+	    true,&newPresence);
+	// Get a resource for the caller
+	JIDResource* res = remote->getAudio(true,true);
 	if (!res) {
-	    remote->deref();
-	    Debug(this,DebugNote,
-		"Jingle call failed. Unable to get a resource for the caller.");
+	    iplugin.m_presence->notifyNewUser(remote);
+	    res = remote->getAudio(true,true);
+	    // This should never happen !!!
+	    if (!res) {
+		remote->deref();
+		Debug(this,DebugNote,
+		    "Jingle call failed. Unable to get a resource for the caller.");
+		msg.setParam("error","failure");
+		return false;
+	    }
+	}
+	caller.resource(res->name());
+	// Get a resource for the called
+	res = remote->getAudio(false,true);
+	available = (res != 0);
+	if (!(newPresence || available)) {
+	    if (!iplugin.m_jg->requestSubscribe()) {
+		remote->deref();
+		Debug(this,DebugNote,"Jingle call failed. Remote peer is unavailable.");
+		msg.setParam("error","offline");
+		return false;
+	    }
+	    remote->sendSubscribe(JBPresence::Subscribe,0);
+	}
+	if (available)
+	    called.resource(res->name());
+	else
+	    if (!newPresence)
+		remote->probe(0);
+	remote->deref();
+    }
+    else {
+	available = false;
+	// Get stream for default component
+	JBComponentStream* stream = m_jb->getStream();
+	if (!stream) {
+	    Debug(this,DebugNote,"Jingle call failed. No stream for called=%s.",called.c_str());
 	    msg.setParam("error","failure");
 	    return false;
 	}
+	// Send subscribe request and probe
+	XMLElement* xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe);
+	stream->sendStanza(xml);
+	xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Probe);
+	stream->sendStanza(xml);
+	stream->deref();
     }
-    caller.resource(res->name());
-    // Get a resource for the called
-    res = remote->getAudio(false,true);
-    bool available = (res != 0);
-    if (!(newPresence || available)) {
-	if (!iplugin.m_jg->requestSubscribe()) {
-	    remote->deref();
-	    Debug(this,DebugNote,"Jingle call failed. Remote peer is unavailable.");
-	    msg.setParam("error","offline");
-	    return false;
-	}
-	remote->sendSubscribe(JBPresence::Subscribe,0);
-    }
-    if (available)
-	called.resource(res->name());
-    else
-	if (!newPresence)
-	    remote->probe(0);
-    remote->deref();
+    // Set a resource for caller
+    if (caller.resource().null())
+	caller.resource(iplugin.m_jb->defaultResource());
     // Parameters OK. Create connection and init channel
     DDebug(this,DebugAll,"msgExecute. Caller: '%s'. Called: '%s'.",
 	caller.c_str(),called.c_str());

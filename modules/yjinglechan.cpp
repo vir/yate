@@ -1289,6 +1289,9 @@ void YJGLibThread::run()
  */
 bool ResNotifyHandler::received(Message& msg)
 {
+    // Avoid loopback message (if the same module: it's a message sent by this module)
+    if (MODULE_NAME == msg.getValue("module"))
+	return false;
     JabberID from,to;
     // *** Check from/to
     if (!iplugin.getJidFrom(from,msg,true))
@@ -1431,6 +1434,9 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
  */
 bool ResSubscribeHandler::received(Message& msg)
 {
+    // Avoid loopback message (if the same module: it's a message sent by this module)
+    if (MODULE_NAME == msg.getValue("module"))
+	return false;
     JabberID from,to;
     // *** Check from/to
     if (!iplugin.decodeJid(from,msg,"from",true))

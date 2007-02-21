@@ -78,7 +78,7 @@ public:
 	JingleTransport,                 // http://www.google.com/transport/p2p
 	Dtmf,                            // http://jabber.org/protocol/jingle/info/dtmf
 	DtmfError,                       // http://jabber.org/protocol/jingle/info/dtmf#errors
-	Command,                         // http://jabber.org/protocol/admin#packets_notification
+	Command,                         // http://jabber.org/protocol/command
 	Count,
     };
 

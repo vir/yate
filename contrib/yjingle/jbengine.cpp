@@ -236,7 +236,7 @@ JBEvent* JBEngine::getEvent(u_int64_t time)
 		case JBEvent::IqCommandSet:
 		case JBEvent::IqCommandRes: {
 		    JabberID jid(event->to());
-		    if (!jid.node() && !jid.resource() && !processCommand(event))
+		    if (!processCommand(event))
 			return event;
 		    break;
 		    }
@@ -467,9 +467,10 @@ bool JBEngine::processDiscoInfo(JBEvent* event)
 bool JBEngine::processCommand(JBEvent* event)
 {
     JBComponentStream* stream = event->stream();
-    // Check if we have a stream and this engine is the destination
-    if (!(stream && event->element() && event->child()))
-	return false;
+    if (!(event && event->element() && event->child())) {
+	event->deref();
+	return true;
+    }
     //TODO: Check if the engine is the destination.
     //      The destination might be a user
     switch (event->type()) {
@@ -491,7 +492,6 @@ bool JBEngine::processCommand(JBEvent* event)
     // Release event
     event->deref();
     return true;
-
 }
 
 JBComponentStream* JBEngine::findStream(const String& remoteName)

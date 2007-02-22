@@ -123,6 +123,8 @@ private:
     AttachHandler* m_handler;
 };
 
+bool s_asyncDelete = true;
+
 INIT_PLUGIN(WaveFileDriver);
 
 
@@ -167,7 +169,7 @@ WaveSource::WaveSource(const String& file, CallEndpoint* chan, bool autoclose, b
     if (computeDataRate()) {
 	if (autorepeat)
 	    m_repeatPos = ::lseek(m_fd,0,SEEK_CUR);
-	asyncDelete(true);
+	asyncDelete(s_asyncDelete);
 	start("WaveSource");
     }
     else {
@@ -792,6 +794,7 @@ void WaveFileDriver::initialize()
 {
     Output("Initializing module WaveFile");
     setup();
+    s_asyncDelete = Engine::config().getBoolValue("hacks","asyncdelete",true);
     if (!m_handler) {
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);

@@ -165,22 +165,6 @@ private:
 
 static RegistModule module;
 
-// handle ${paramname} replacements
-static void replaceParams(String& str, const Message &msg)
-{
-    int p1;
-    while ((p1 = str.find("${")) >= 0) {
-	int p2 = str.find('}',p1+2);
-	if (p2 > 0) {
-	    String v = str.substr(p1+2,p2-p1-2);
-	    v.trimBlanks();
-	    DDebug(&module,DebugAll,"Replacing parameter '%s'",v.c_str());
-	    String tmp = String::sqlEscape(msg.getValue(v));
-	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
-	}
-    }
-}
-
 // copy parameters from SQL result to a Message	
 
 static void copyParams2(Message &msg, Array* a, int row = 0)
@@ -295,7 +279,9 @@ bool AAAHandler::received(Message& msg)
     if (m_query.null() || m_account.null())
 	return false;
     String query(m_query);
-    replaceParams(query,msg);
+    String account(m_account);
+    msg.replaceParams(query,true);
+    msg.replaceParams(account,true);
     switch (m_type)
     {
 	case Regist:
@@ -303,7 +289,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",m_account);
+	    m.addParam("account",account);
 	    m.addParam("query",query);
 	    m.addParam("results","false");
 	    if (Engine::dispatch(m))
@@ -315,7 +301,7 @@ bool AAAHandler::received(Message& msg)
 	case Auth:
 	{
 	    Message m("database");
-	    m.addParam("account",m_account);
+	    m.addParam("account",account);
 	    m.addParam("query",query);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
@@ -332,7 +318,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",m_account);
+	    m.addParam("account",account);
 	    m.addParam("query",query);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
@@ -348,7 +334,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",m_account);
+	    m.addParam("account",account);
 	    m.addParam("query",query);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
@@ -374,7 +360,7 @@ bool AAAHandler::received(Message& msg)
 	{
 	    // no error check - we return false
 	    Message m("database");
-	    m.addParam("account",m_account);
+	    m.addParam("account",account);
 	    m.addParam("query",query);
 	    m.addParam("results","false");
 	    Engine::dispatch(m);
@@ -390,7 +376,7 @@ bool AAAHandler::received(Message& msg)
 		return false;
 	    // no error check at all - we enqueue the query and return false
 	    Message* m = new Message("database");
-	    m->addParam("account",m_account);
+	    m->addParam("account",account);
 	    m->addParam("query",query);
 	    m->addParam("results","false");
 	    Engine::enqueue(m);
@@ -440,10 +426,12 @@ bool CDRHandler::received(Message& msg)
 	return false;
     if (query.null())
 	return false;
-    replaceParams(query,msg);
+    String account(m_account);
+    msg.replaceParams(query,true);
+    msg.replaceParams(account,true);
     // failure while accounting is critical
     Message m("database");
-    m.addParam("account",m_account);
+    m.addParam("account",account);
     m.addParam("query",query);
     bool error = !Engine::dispatch(m) || m.getParam("error");
     if (m_critical && (s_critical != error)) {
@@ -631,11 +619,13 @@ bool AccountsModule::received(Message &msg, int id)
     if (id == Notify) {
 	String name(msg.getValue("account"));
 	if (name.null())
-		return false;
+	    return false;
 	name << "(" << msg.getValue("protocol") << ")";
 	s_statusaccounts.setParam(name,msg.getValue("registered"));
 	Message *m = new Message("database");
-	m->addParam("account",m_account);
+	String account(m_account);
+	msg.replaceParams(account,true);
+	m->addParam("account",account);
 	String query(m_updateStatus);
 	String status;
 	if (msg.getBoolValue("registered"))
@@ -644,7 +634,7 @@ bool AccountsModule::received(Message &msg, int id)
 	    status="offline";
 	m->addParam("status",status);
 	m->addParam("internalaccount",msg.getValue("account"));
-	replaceParams(query,*m);
+	m->replaceParams(query,true);
 	m->addParam("query",query);
 	Engine::enqueue(m);
 	return false;
@@ -669,7 +659,9 @@ bool AccountsModule::received(Message &msg, int id)
 	if (query.null())
 	    return false;
 	Message m("database");
-	m.addParam("account",m_account);
+	String account(m_account);
+	msg.replaceParams(account,true);
+	m.addParam("account",account);
 	m.addParam("query",query);
 	if (Engine::dispatch(m)) {
 	    int rows = m.getIntValue("rows");

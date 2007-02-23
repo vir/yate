@@ -282,7 +282,9 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
 	return;
     if (m_ringing && (m_ringing != dest))
 	return;
-    if (!m_slaves.find(dest))
+    
+    ForkSlave* slave = static_cast<ForkSlave*>(m_slaves[dest]);
+    if (!slave)
 	return;
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
@@ -291,7 +293,9 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
     if (m_ringing.null())
 	m_ringing = dest;
     if (!dataEp) {
-	const CallEndpoint* call = static_cast<const CallEndpoint*>(msg.userObject("CallEndpoint"));
+	const CallEndpoint* call = slave->getPeer();
+	if (!call)
+	    call = static_cast<const CallEndpoint*>(msg.userObject("CallEndpoint"));
 	if (call) {
 	    dataEp = call->getEndpoint();
 	    if (dataEp)

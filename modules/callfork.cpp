@@ -132,6 +132,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("peerid");
     m_exec->clearParam("targetid");
     m_exec->clearParam("fork.ringer");
+    m_exec->clearParam("fork.autoring");
     m_exec->setParam("cdrtrack",String::boolText(false));
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
@@ -139,10 +140,14 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->userData(slave);
     m_exec->msgTime() = Time::now();
     const char* error = "failure";
+    bool autoring = false;
     if (Engine::dispatch(m_exec)) {
 	ok = true;
-	if (m_ringing.null() && m_exec->getBoolValue("fork.ringer"))
+	autoring = m_exec->getBoolValue("fork.autoring");
+	if (m_ringing.null() && (autoring || m_exec->getBoolValue("fork.ringer")))
 	    m_ringing = tmp;
+	else
+	    autoring = false;
 	if (m_rtpForward) {
 	    String rtp(m_exec->getValue("rtp_forward"));
 	    if (rtp != "accepted") {
@@ -163,6 +168,13 @@ bool ForkMaster::forkSlave(const char* dest)
 	Debug(&__plugin,DebugCall,"Call '%s' calling on '%s' target '%s'",
 	    getPeerId().c_str(),tmp.c_str(),dest);
 	m_slaves.append(slave);
+	if (autoring) {
+	    Message* ring = new Message(m_exec->getValue("fork.automessage","call.ringing"));
+	    ring->addParam("id",slave->getPeerId());
+	    ring->addParam("peerid",tmp);
+	    ring->addParam("targetid",tmp);
+	    Engine::enqueue(ring);
+	}
     }
     else
 	slave->lostMaster(error);

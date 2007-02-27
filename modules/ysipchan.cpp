@@ -3093,6 +3093,13 @@ void YateSIPConnection::callAccept(Message& msg)
 	    m_rtpForward = false;
     }
     Channel::callAccept(msg);
+
+    if ((m_reInviting == ReinviteNone) && !m_rtpForward && !isAnswered() && 
+	msg.getBoolValue("autoreinvite",false)) {
+	// remember we want to switch to RTP forwarding when party answers
+	m_reInviting = ReinvitePending;
+	startPendingUpdate();
+    }
 }
 
 void YateSIPConnection::callRejected(const char* error, const char* reason, const Message* msg)

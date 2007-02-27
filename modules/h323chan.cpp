@@ -1111,6 +1111,10 @@ H323Connection::AnswerCallResponse YateH323Connection::OnAnswerCall(const PStrin
 	m->addParam("rtp_addr",m_remoteAddr);
 	m->addParam("rtp_port",String(m_remotePort));
     }
+    else if (m_passtrough) {
+	Debug(this,DebugNote,"Disabling RTP forward because of slow start mode [%p]",this);
+	m_passtrough = false;
+    }
     if (m_remoteFormats)
 	m->addParam("formats",m_remoteFormats);
 

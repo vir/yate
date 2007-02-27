@@ -45,7 +45,7 @@ public:
     void msgAnswered(Message& msg, const String& dest);
     void msgProgress(Message& msg, const String& dest);
 protected:
-    void clear();
+    void clear(bool softly);
     String* getNextDest();
     bool forkSlave(const char* dest);
     bool callContinue();
@@ -64,13 +64,23 @@ protected:
 class ForkSlave : public CallEndpoint
 {
 public:
+    enum Type {
+	Regular = 0,
+	Auxiliar,
+	Persistent
+    };
     ForkSlave(ForkMaster* master, const char* id);
     virtual ~ForkSlave();
     virtual void disconnected(bool final, const char* reason);
     inline void lostMaster(const char* reason)
 	{ m_master = 0; disconnect(reason); }
+    inline Type type() const
+	{ return m_type; }
+    inline void setType(Type type)
+	{ m_type = type; }
 protected:
     ForkMaster* m_master;
+    Type m_type;
 };
 
 class ForkModule : public Module
@@ -84,6 +94,13 @@ protected:
     virtual void statusParams(String& str);
     bool msgExecute(Message& msg);
     bool msgToMaster(Message& msg, bool answer);
+};
+
+static TokenDict s_calltypes[] = {
+    { "regular",    ForkSlave::Regular    },
+    { "auxiliar",   ForkSlave::Auxiliar   },
+    { "persistent", ForkSlave::Persistent },
+    { 0, 0 }
 };
 
 INIT_PLUGIN(ForkModule);
@@ -108,7 +125,7 @@ ForkMaster::~ForkMaster()
     s_mutex.lock();
     s_calls.remove(this,false);
     s_mutex.unlock();
-    clear();
+    clear(false);
 }
 
 String* ForkMaster::getNextDest()
@@ -133,6 +150,7 @@ bool ForkMaster::forkSlave(const char* dest)
     m_exec->clearParam("targetid");
     m_exec->clearParam("fork.ringer");
     m_exec->clearParam("fork.autoring");
+    m_exec->clearParam("fork.calltype");
     m_exec->setParam("cdrtrack",String::boolText(false));
     m_exec->setParam("id",tmp);
     m_exec->setParam("callto",dest);
@@ -165,8 +183,10 @@ bool ForkMaster::forkSlave(const char* dest)
     else
 	error = m_exec->getValue("error",error);
     if (ok) {
-	Debug(&__plugin,DebugCall,"Call '%s' calling on '%s' target '%s'",
-	    getPeerId().c_str(),tmp.c_str(),dest);
+	ForkSlave::Type type = static_cast<ForkSlave::Type>(m_exec->getIntValue("fork.calltype",s_calltypes,ForkSlave::Regular));
+	Debug(&__plugin,DebugCall,"Call '%s' calling on %s '%s' target '%s'",
+	    getPeerId().c_str(),lookup(type,s_calltypes),tmp.c_str(),dest);
+	slave->setType(type);
 	m_slaves.append(slave);
 	if (autoring) {
 	    Message* ring = new Message(m_exec->getValue("fork.automessage","call.ringing"));
@@ -241,7 +261,6 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 	clearEndpoint();
     }
     m_slaves.remove(slave,false);
-    unsigned int slaves = m_slaves.count();
     if (m_answered)
 	return;
     if (reason && m_failures && m_failures.matches(reason)) {
@@ -249,10 +268,31 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
 	    getPeerId().c_str(),reason);
     }
     else {
-	Debug(&__plugin,DebugNote,"Call '%s' lost%s slave '%s' reason '%s' remaining %u",
+	unsigned int regulars = 0;
+	unsigned int auxiliars = 0;
+	unsigned int persistents = 0;
+	for (ObjList* l = m_slaves.skipNull(); l; l = l->skipNext()) {
+	    switch (static_cast<const ForkSlave*>(l->get())->type()) {
+		case ForkSlave::Auxiliar:
+		    auxiliars++;
+		    break;
+		case ForkSlave::Persistent:
+		    persistents++;
+		    break;
+		default:
+		    regulars++;
+		    break;
+	    }
+	}
+	Debug(&__plugin,DebugNote,"Call '%s' lost%s slave '%s' reason '%s' remaining %u regulars, %u auxiliars, %u persistent",
 	    getPeerId().c_str(),ringing ? " ringing" : "",
-	    slave->id().c_str(),reason,slaves);
-	if (slaves || callContinue())
+	    slave->id().c_str(),reason,
+	    regulars,auxiliars,persistents);
+	if (auxiliars && !regulars) {
+	    Debug(&__plugin,DebugNote,"Dropping remaining %u auxiliars",auxiliars);
+	    clear(true);
+	}
+	if (regulars || callContinue())
 	    return;
 	Debug(&__plugin,DebugCall,"Call '%s' failed by '%s' after %d attempts with reason '%s'",
 	    getPeerId().c_str(),id().c_str(),m_index,reason);
@@ -321,17 +361,23 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
     msg.setParam("targetid",peer->id());
 }
 
-void ForkMaster::clear()
+void ForkMaster::clear(bool softly)
 {
     RefPointer<ForkSlave> slave;
     s_mutex.lock();
     ListIterator iter(m_slaves);
     while (slave = static_cast<ForkSlave*>(iter.get())) {
+	if (softly && (slave->type() == ForkSlave::Persistent))
+	    continue;
 	m_slaves.remove(slave,false);
 	s_mutex.unlock();
 	slave->lostMaster(m_reason);
 	s_mutex.lock();
 	slave = 0;
+    }
+    if (softly) {
+	s_mutex.unlock();
+	return;
     }
     if (m_exec) {
 	m_exec->destruct();
@@ -346,7 +392,7 @@ void ForkMaster::clear()
 
 
 ForkSlave::ForkSlave(ForkMaster* master, const char* id)
-    : CallEndpoint(id), m_master(master)
+    : CallEndpoint(id), m_master(master), m_type(Regular)
 {
     DDebug(&__plugin,DebugAll,"ForkSlave::ForkSlave(%s,'%s')",master->id().c_str(),id);
 }

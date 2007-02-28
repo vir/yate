@@ -248,8 +248,10 @@ public:
 		    oblock.assign(0,n*4);
 		    unsigned short* d = (unsigned short*) oblock.data();
 		    // duplicate the sample for each channel
-		    while (n--)
-			*d++ = *d++ = *s++; // valid - in case you wonder
+		    while (n--) {
+			unsigned short v = *d++ = *s++;
+			*d++ = v;
+		    }
 		}
 		else if ((m_sChans == 2) && (m_dChans == 1)) {
 		    oblock.assign(0,n);

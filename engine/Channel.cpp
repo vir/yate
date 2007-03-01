@@ -469,13 +469,12 @@ Message* Channel::message(const char* name, const NamedList* original, const cha
 	    String tmp(params);
 	    ObjList* lst = tmp.split(',',false);
 	    for (ObjList* l = lst; l; l = l->next()) {
-		const String* s = static_cast<const String*>(l->get());
+		String* s = static_cast<const String*>(l->get());
 		if (!s)
 		    continue;
-		tmp = *s;
-		tmp.trimBlanks();
-		if (tmp)
-		    msg->copyParam(*original,tmp);
+		s->trimBlanks();
+		if (*s)
+		    msg->copyParam(*original,*s);
 	    }
 	    delete lst;
 	}

@@ -38,11 +38,11 @@ INIT_PLUGIN(DumbDriver);
 class DumbChannel :  public Channel
 {
 public:
-    DumbChannel(const char* addr = 0, bool outgoing = false) : 
-      Channel(__plugin, 0, outgoing) 
+    DumbChannel(const char* addr = 0, const NamedList* exeMsg = 0) :
+      Channel(__plugin, 0, (exeMsg != 0))
     {
 	m_address = addr;
-	Engine::enqueue(message("chan.startup"));
+	Engine::enqueue(message("chan.startup",exeMsg));
     };
     ~DumbChannel();
     virtual void disconnected(bool final, const char *reason);
@@ -66,7 +66,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 {
     CallEndpoint *dd = static_cast<CallEndpoint *>(msg.userData());
     if (dd) {
-	DumbChannel *c = new DumbChannel(dest,true);
+	DumbChannel *c = new DumbChannel(dest,&msg);
 	if (dd->connect(c)) {
 	    msg.setParam("peerid", c->id());
 	    msg.setParam("targetid", c->id());
@@ -94,28 +94,39 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     String caller = msg.getValue("caller");
     if (caller.null())
 	caller << prefix() << dest;
-    String callername = msg.getValue("callername");
 
     Message m("call.route");
     m.addParam("driver","dumb");
     m.addParam("id", c->id());
     m.addParam("caller",caller);
     m.addParam("called",targ);
+    m.copyParam(msg,"callername");
+    m.copyParam(msg,"maxcall");
+    m.copyParam(msg,"timeout");
 
-    if (!callername.null())
-	m.addParam("callername",callername);
+    String params = msg.getValue("copyparams");
+    if (params) {
+	ObjList* lst = params.split(',',false);
+	for (ObjList* l = lst; l; l = l->next()) {
+	    String* s = static_cast<const String*>(l->get());
+	    if (!s)
+		continue;
+	    s->trimBlanks();
+	    if (*s)
+		m.copyParam(msg,*s);
+	}
+	delete lst;
+    }
 
     if (Engine::dispatch(m)) {
 	m = "call.execute";
 	m.addParam("callto",m.retValue());
-	if (msg.getParam("maxcall"))
-	    m.setParam("maxcall", msg.getValue("maxcall"));
 	m.retValue().clear();
 	m.setParam("id", c->id());
 	m.userData(c);
 	if (Engine::dispatch(m)) {
-	    msg.setParam("id", m.getValue("id"));
-	    msg.setParam("peerid", m.getValue("peerid"));
+	    msg.copyParam(m,"id");
+	    msg.copyParam(m,"peerid");
 	    const char* targetid = m.getValue("targetid");
 	    if (targetid) {
 		msg.setParam("targetid",targetid);
@@ -124,8 +135,10 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	    c->deref();
 	    return true;
 	}
-	else if (m.getParam("reason"))
-	    msg.setParam("reason", m.getValue("reason"));
+	else {
+	    msg.copyParam(m,"error");
+	    msg.copyParam(m,"reason");
+	}
 	Debug(this,DebugWarn,"Outgoing call not accepted!");
     }
     else

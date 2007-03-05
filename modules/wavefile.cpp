@@ -324,6 +324,8 @@ void WaveSource::run()
 	}
 	if (!alive()) {
 	    m_autoclose = false;
+	    // if this is a zombie it surely has no owner anymore
+	    m_chan = 0;
 	    notify(0,"replaced");
 	    return;
 	}
@@ -339,7 +341,8 @@ void WaveSource::run()
 
 void WaveSource::cleanup()
 {
-    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u [%p]",m_total,this);
+    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, alive=%s, autoclean=%s [%p]",
+	m_total,String::boolText(alive()),String::boolText(m_autoclean),this);
     if (m_autoclean) {
 	asyncDelete(false);
 	if (m_chan && (m_chan->getSource() == this))

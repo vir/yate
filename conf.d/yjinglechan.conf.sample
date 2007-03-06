@@ -43,11 +43,13 @@
 ;probe_interval=1800000
 
 ; expire_interval: integer: Presence: Timeout after probe
-;probe_interval=300000
+;expire_interval=300000
 
 ; default_resource: string: Default resource name when missing from local users' JIDs
 ;default_resource=yate
 
+; auto_probe: boolean: Automatically respond to probe requests when we know nothing about the user presence
+;auto_probe=enable
 
 [codecs]
 ; This section allows to individually enable or disable the codecs

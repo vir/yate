@@ -657,6 +657,13 @@ public:
 	{ return m_componentDomain; }
 
     /**
+     * Set the alternate domain name
+     * @param domain Name of an acceptable alternate domain
+     */
+    inline void setAlternateDomain(const char* domain = 0)
+	{ m_alternateDomain = domain; }
+
+    /**
      * Get the default stream restart count.
      * @return The default stream restart count.
      */
@@ -792,6 +799,13 @@ public:
 	bool domain = true);
 
     /**
+     * Get the name of the alternate domain - if any
+     * @return Alternate domain name, empty string if not set
+     */
+    inline const String& getAlternateDomain() const
+	{ return m_alternateDomain; }
+
+    /**
      * Check if a stream to a remote server can be restarted.
      * If true is returned, the stream restart counter has been decreased.
      * @param token The remote server name or address.
@@ -888,6 +902,7 @@ private:
     String m_componentAddr;              // Default server address
     ObjList m_server;                    // Server list
     Mutex m_serverMutex;                 // Lock server list
+    String m_alternateDomain;            // Alternate acceptable domain
     // Misc
     String m_defaultResource;            // Default name for missing resources
 };
@@ -1284,6 +1299,7 @@ protected:
     bool m_addOnSubscribe;               // Add new user on subscribe request
     bool m_addOnProbe;                   // Add new user on probe request
     bool m_addOnPresence;                // Add new user on presence
+    bool m_autoProbe;                    // Automatically respond to probe requests
     u_int32_t m_probeInterval;           // Interval to probe a remote user
     u_int32_t m_expireInterval;          // Expire interval after probe
     ObjList m_events;                    // Incoming events from Jabber engine

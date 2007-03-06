@@ -84,6 +84,8 @@ JBEngine::~JBEngine()
 void JBEngine::initialize(const NamedList& params)
 {
     clearServerList();
+    // Alternate domain names
+    m_alternateDomain = params.getValue("extra_domain");
     // Stream restart update interval
     m_restartUpdateInterval =
 	params.getIntValue("stream_restartupdateinterval",JB_STREAM_RESTART_UPDATE);
@@ -478,7 +480,7 @@ bool JBEngine::processCommand(JBEvent* event)
 	case JBEvent::IqCommandSet:
 	    DDebug(this,DebugAll,"processCommand. From '%s' to '%s'.",
 		event->from().c_str(),event->to().c_str());
-		stream->sendIqError(event->releaseXML(),XMPPError::TypeCancel,
+	    stream->sendIqError(event->releaseXML(),XMPPError::TypeCancel,
 		    XMPPError::SFeatureNotImpl);
 	    break;
 	case JBEvent::IqDiscoRes:
@@ -1345,6 +1347,7 @@ JBPresence::JBPresence(JBEngine* engine, const NamedList& params)
       m_addOnSubscribe(true),
       m_addOnProbe(true),
       m_addOnPresence(true),
+      m_autoProbe(true),
       m_probeInterval(0),
       m_expireInterval(0)
 {
@@ -1371,6 +1374,7 @@ void JBPresence::initialize(const NamedList& params)
     m_addOnSubscribe = params.getBoolValue("add_onsubscribe",true);
     m_addOnProbe = params.getBoolValue("add_onprobe",true);
     m_addOnPresence = params.getBoolValue("add_onpresence",true);
+    m_autoProbe = params.getBoolValue("auto_probe",true);
     m_probeInterval = params.getIntValue("probe_interval",PRESENCE_PROBE_INTERVAL);
     m_expireInterval = params.getIntValue("expire_interval",PRESENCE_EXPIRE_INTERVAL);
     if (debugAt(DebugAll)) {
@@ -1380,6 +1384,7 @@ void JBPresence::initialize(const NamedList& params)
 	s << "\r\nadd_onsubscribe=" << String::boolText(m_addOnSubscribe);
 	s << "\r\nadd_onprobe=" << String::boolText(m_addOnProbe);
 	s << "\r\nadd_onpresence=" << String::boolText(m_addOnPresence);
+	s << "\r\nauto_probe=" << String::boolText(m_autoProbe);
 	s << "\r\nprobe_interval=" << (unsigned int)m_probeInterval;
 	s << "\r\nexpire_interval=" << (unsigned int)m_expireInterval;
 	Debug(this,DebugAll,"Initialized:%s",s.c_str());
@@ -1529,7 +1534,18 @@ void JBPresence::processProbe(JBEvent* event, const JabberID& local,
 	DDebug(this,DebugNote,
 	    "Received 'probe' for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
-	if (!notifyProbe(event,local,remote))
+	if (m_autoProbe) {
+	    XMLElement* stanza = createPresence(local.bare(),remote);
+	    JIDResource* resource = new JIDResource(m_engine->defaultResource(),JIDResource::Available,
+		JIDResource::CapAudio);
+	    resource->addTo(stanza);
+	    resource->deref();
+	    if (event->stream())
+		event->stream()->sendStanza(stanza);
+	    else
+		delete stanza;
+	}
+	else if (!notifyProbe(event,local,remote))
 	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
 		event->stream());
 	return;
@@ -1754,6 +1770,8 @@ void JBPresence::removeRemoteUser(const JabberID& local, const JabberID& remote)
 
 bool JBPresence::validDomain(const String& domain)
 {
+    if (m_engine->getAlternateDomain() && (domain == m_engine->getAlternateDomain()))
+	return true;
     String identity;
     if (!m_engine->getFullServerIdentity(identity) || identity != domain)
 	return false;

@@ -108,7 +108,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     if (params) {
 	ObjList* lst = params.split(',',false);
 	for (ObjList* l = lst; l; l = l->next()) {
-	    String* s = static_cast<const String*>(l->get());
+	    String* s = static_cast<String*>(l->get());
 	    if (!s)
 		continue;
 	    s->trimBlanks();

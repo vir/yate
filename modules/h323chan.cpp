@@ -402,6 +402,8 @@ public:
 	{ return m_passtrough && (m_remotePort > 0); }
     inline bool nativeRtp() const
 	{ return m_nativeRtp; }
+    inline void rtpLocal()
+	{ m_passtrough = false; }
 private:
     String m_chanId;
     YateH323Chan* m_chan;
@@ -2092,6 +2094,9 @@ bool YateH323Chan::callRouted(Message& msg)
 {
     Channel::callRouted(msg);
     if (m_conn) {
+	// try to disable RTP forwarding earliest possible
+	if (!msg.getBoolValue("rtp_forward"))
+	    m_conn->rtpLocal();
         String s(msg.retValue());
         if (s.startSkip("h323/",false) && s && msg.getBoolValue("redirect") && m_conn->Lock()) {
             Debug(this,DebugAll,"YateH323Chan redirecting to '%s' [%p]",s.c_str(),this);

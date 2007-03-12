@@ -3057,6 +3057,9 @@ void YateSIPConnection::statusParams(String& str)
 
 bool YateSIPConnection::callRouted(Message& msg)
 {
+    // try to disable RTP forwarding earliest possible
+    if (m_rtpForward && !msg.getBoolValue("rtp_forward"))
+	m_rtpForward = false;
     Channel::callRouted(msg);
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {

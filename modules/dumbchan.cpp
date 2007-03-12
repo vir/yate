@@ -124,7 +124,8 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	m.retValue().clear();
 	m.setParam("id", c->id());
 	m.userData(c);
-	if (Engine::dispatch(m)) {
+	if (Engine::dispatch(m) && c->callRouted(m)) {
+	    c->callAccept(m);
 	    msg.copyParam(m,"id");
 	    msg.copyParam(m,"peerid");
 	    const char* targetid = m.getValue("targetid");

@@ -1063,10 +1063,6 @@ bool Driver::received(Message &msg, int id)
 		    if (!c)
 			break;
 		    c->checkTimers(msg,t);
-		    if (c->timeout() && (c->timeout() < t))
-			c->msgDrop(msg,"timeout");
-		    else if (c->maxcall() && (c->maxcall() < t))
-			c->msgDrop(msg,"noanswer");
 		    lock();
 		}
 	    }

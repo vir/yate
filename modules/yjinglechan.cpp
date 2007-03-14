@@ -481,13 +481,18 @@ bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
     XDebug(this,DebugAll,
 	"notifyPresence(%s). Local: '%s'. Remote: '%s'.",
 	available?"available":"unavailable",local.c_str(),remote.c_str());
-    // Check audio properties for received resource
-    JIDResource* res = new JIDResource(remote.resource());
-    if (res->fromXML(event->element()))
-	iplugin.processPresence(local,remote,res->available(),res->hasCap(JIDResource::CapAudio));
-    else
-	iplugin.processPresence(local,remote,available,false);
-    res->deref();
+    // Check audio properties and availability for received resource
+    bool capAudio = false;
+    if (event && event->element()) {
+	JIDResource* res = new JIDResource(remote.resource());
+	if (res->fromXML(event->element())) {
+	    capAudio = res->hasCap(JIDResource::CapAudio);
+	    available = res->available();
+	}
+	res->deref();
+    }
+    // Notify presence to module
+    iplugin.processPresence(local,remote,available,capAudio);
     // Enqueue message
     return message(available ? JBPresence::None : JBPresence::Unavailable,
 	remote.bare(),local.bare(),0);
@@ -1427,6 +1432,8 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
     if (iplugin.m_sendCommandOnNotify) {
 	if (to.domain().null())
 	    to.domain(iplugin.m_jb->componentServer().c_str());
+	DDebug(&iplugin,DebugNote,"Sending presence %s from: %s to: %s",
+	    String::boolText(available),from.c_str(),to.c_str());
 	stanza = iplugin.getPresenceCommand(from,to,available);
     }
     else {
@@ -1909,30 +1916,35 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 XMLElement* YJGDriver::getPresenceCommand(const JabberID& from, const JabberID& to,
 	bool available)
 {
+    // Used only for debug purposes
+    static int idCrt = 1;
     // Create 'x' child
     XMLElement* x = new XMLElement("x");
     x->setAttribute("xmlns","jabber:x:data");
     x->setAttribute("type","submit");
     // Field children of 'x' element
     XMLElement* field = new XMLElement("field");
-    field->setAttribute("var","sm");
-    field->setAttribute("label","jid");
-    field->setAttribute("type","jid-single");
-    XMLElement* value = new XMLElement("value",0,from.c_str());
+    field->setAttribute("var","jid");
+    //XMLElement* value = new XMLElement("value",0,from.c_str());
+XMLElement* value= new XMLElement("value",0,"125@kramer.null.ro/yate");
     field->addChild(value);
     x->addChild(field);
     field = new XMLElement("field");
-    field->setAttribute("var","sm");
-    field->setAttribute("label","available");
-    field->setAttribute("type","boolean");
+    field->setAttribute("var","available");
     value = new XMLElement("value",0,available ? "true" : "false");
     field->addChild(value);
     x->addChild(field);
-    // 
-    XMLElement* command = XMPPUtils::createCommand(XMPPUtils::CommExecute,"sm");
+    // 'command' stanza
+    XMLElement* command = XMPPUtils::createElement(XMLElement::Command,XMPPNamespace::Command);
+    command->setAttribute("node","USER_STATUS");
     command->addChild(x);
-    //
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,0,to.domain().c_str(),0);
+    // 'iq' stanza
+    String s;
+//    String s = "session_1@ahefczyc";
+    s = "kramer.null.ro";
+//    s << "session_1@" << to.domain();
+    String id = idCrt++;
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,"125@yate.kramer.null.ro/yate",s.c_str(),id);
     iq->addChild(command);
     return iq;
 }

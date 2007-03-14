@@ -1,3 +1,6 @@
+; !!! NOTE !!!
+; This file is used when yate is registering itself to a remote server
+;
 ; Warning: all strings are case sensitive
 ;
 ; sections with an empty username or with enabled=no are ignored

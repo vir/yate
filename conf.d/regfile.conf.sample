@@ -1,3 +1,6 @@
+; !!! NOTE !!!
+; This file is used when yate is the registrar server for a remote client
+;
 ; you have to put username as a category and password into key password
 ;[username]
 ;password=something

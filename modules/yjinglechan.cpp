@@ -265,6 +265,7 @@ private:
     JabberID m_remote;
     String m_callerPrompt;
     YJGTransport* m_transport;           // Transport
+    Mutex m_connMutex;                   // Lock transport and session
     // Termination
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
@@ -716,9 +717,9 @@ YJGTransport::~YJGTransport()
 
 bool YJGTransport::initLocal()
 {
+    Lock lock(this);
     if (!m_connection)
 	return false;
-    Lock lock(this);
     // Set data
     Message m("chan.rtp");
     m.userData(static_cast<CallEndpoint*>(m_connection));
@@ -918,6 +919,7 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* call
       m_local(caller),
       m_remote(called),
       m_transport(0),
+      m_connMutex(true),
       m_hangup(false),
       m_timeout(0)
 {
@@ -964,6 +966,7 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
       m_local(event->session()->local()),
       m_remote(event->session()->remote()),
       m_transport(0),
+      m_connMutex(true),
       m_hangup(false),
       m_timeout(0)
 {
@@ -988,10 +991,15 @@ YJGConnection::~YJGConnection()
 {
     hangup(false);
     disconnected(true,m_reason);
-    if (m_session)
+    Lock lock(m_connMutex);
+    if (m_session) {
 	m_session->deref();
-    if (m_transport)
+	m_session = 0;
+    }
+    if (m_transport) {
 	m_transport->deref();
+	m_transport = 0;
+    }
     Debug(this,DebugCall,"Terminated. [%p]",this);
 }
 
@@ -1002,10 +1010,12 @@ bool YJGConnection::route()
     m->addParam("called",m_local.node());
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
-    if (m_transport->remote()) {
+    m_connMutex.lock();
+    if (m_transport && m_transport->remote()) {
 	m->addParam("ip_host",m_transport->remote()->m_address);
 	m->addParam("ip_port",m_transport->remote()->m_port);
     }
+    m_connMutex.unlock();
     return startRouter(m);
 }
 
@@ -1016,10 +1026,14 @@ void YJGConnection::callAccept(Message& msg)
     // Request transport
     // Try to start transport
     Debug(this,DebugCall,"callAccept. [%p]",this);
-    m_transport->initLocal();
-    m_session->accept(m_transport->createDescription());
-    m_session->acceptTransport(0);
-    m_transport->send(m_session);
+    m_connMutex.lock();
+    if (m_transport && m_session) {
+	m_transport->initLocal();
+	m_session->accept(m_transport->createDescription());
+	m_session->acceptTransport(0);
+	m_transport->send(m_session);
+    }
+    m_connMutex.unlock();
     Channel::callAccept(msg);
 }
 
@@ -1045,7 +1059,8 @@ void YJGConnection::disconnected(bool final, const char* reason)
 {
     Debug(this,DebugCall,"disconnected. Final: %u. Reason: '%s'. [%p]",
 	final,reason,this);
-    if (!m_reason && reason)
+    Lock lock(m_connMutex);
+    if (m_reason.null() && reason)
 	m_reason = reason;
     Channel::disconnected(final,m_reason);
 }
@@ -1065,6 +1080,7 @@ bool YJGConnection::msgUpdate(Message& msg)
 bool YJGConnection::msgText(Message& msg, const char* text)
 {
     DDebug(this,DebugCall,"msgText. '%s'. [%p]",text,this);
+    Lock lock(m_connMutex);
     if (m_session) {
 	m_session->sendMessage(text);
 	return true;
@@ -1075,13 +1091,16 @@ bool YJGConnection::msgText(Message& msg, const char* text)
 bool YJGConnection::msgTone(Message& msg, const char* tone)
 {
     DDebug(this,DebugCall,"msgTone. '%s'. [%p]",tone,this);
-    while (tone && *tone)
-	m_session->sendDtmf(*tone++);
+    Lock lock(m_connMutex);
+    if (m_session)
+	while (tone && *tone)
+	    m_session->sendDtmf(*tone++);
     return true;
 }
 
 void YJGConnection::hangup(bool reject, const char* reason)
 {
+    Lock lock(m_connMutex);
     if (m_hangup)     // Already hung up
 	return;
     m_hangup = true;
@@ -1107,6 +1126,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 {
     if (!event)
 	return;
+    Lock lock(m_connMutex);
     switch (event->type()) {
 	case JGEvent::Jingle:
 	    handleJingle(event);
@@ -1211,6 +1231,7 @@ void YJGConnection::handleError(JGEvent* event)
 
 bool YJGConnection::processPresence(bool available, const char* error)
 {
+    Lock lock(m_connMutex);
     if (m_state == Terminated) {
 	DDebug(this,DebugInfo,
 	    "processPresence. Received presence in Terminated state. [%p]",this);

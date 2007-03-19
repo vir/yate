@@ -653,7 +653,10 @@ bool AttachHandler::received(Message& msg)
     String ovr(msg.getValue("override"));
     if (!ovr.startSkip("tone/",false))
 	ovr.clear();
-    if (src.null() && ovr.null())
+    String repl(msg.getValue("replace"));
+    if (!repl.startSkip("tone/",false))
+	repl.clear();
+    if (src.null() && ovr.null() && repl.null())
 	return false;
 
     DataEndpoint* de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
@@ -697,6 +700,22 @@ bool AttachHandler::received(Message& msg)
 	}
 	else {
 	    Debug(DebugWarn,"Requested override '%s' to missing consumer of %p",ovr.c_str(),de);
+	    ret = false;
+	}
+    }
+    if (repl) {
+	DataConsumer* c = de->getConsumer();
+	if (c) {
+	    TempSource* t = new TempSource(repl);
+	    if (DataTranslator::attachChain(t,c,false) && t->startup())
+		msg.clearParam("replace");
+	    else {
+		Debug(DebugWarn,"Replacement source tone '%s' failed to start [%p]",repl.c_str(),t);
+		ret = false;
+	    }
+	}
+	else {
+	    Debug(DebugWarn,"Requested replacement '%s' to missing consumer of %p",repl.c_str(),de);
 	    ret = false;
 	}
     }

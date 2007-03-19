@@ -208,9 +208,22 @@ MessageHandler::MessageHandler(const char* name, unsigned priority)
 MessageHandler::~MessageHandler()
 {
     XDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
-    if (m_dispatcher)
+    cleanup();
+}
+
+void MessageHandler::cleanup()
+{
+    if (m_dispatcher) {
 	m_dispatcher->uninstall(this);
+	m_dispatcher = 0;
+    }
     clearFilter();
+}
+
+void MessageHandler::destruct()
+{
+    cleanup();
+    String::destruct();
 }
 
 void MessageHandler::setFilter(NamedString* filter)

@@ -389,6 +389,11 @@ public:
     virtual ~MessageHandler();
 
     /**
+     * Destroys the object, performs cleanup first
+     */
+    virtual void destruct();
+
+    /**
      * This method is called whenever the registered name matches the message.
      * @param msg The received message
      * @return True to stop processing, false to try other handlers
@@ -429,6 +434,7 @@ public:
     void clearFilter();
 
 private:
+    void cleanup();
     unsigned m_priority;
     MessageDispatcher* m_dispatcher;
     NamedString* m_filter;

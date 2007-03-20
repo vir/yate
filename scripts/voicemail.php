@@ -13,9 +13,8 @@ require_once("libvoicemail.php");
 /* Always the first action to do */
 Yate::Init();
 
-/* Install handlers for the wave end and dtmf notify messages */
-Yate::Install("chan.dtmf");
-Yate::Install("chan.notify");
+/* Uncomment next line to get debugging messages */
+//Yate::Debug(true);
 
 $ourcallid = "voicemail/" . uniqid(rand(),1);
 $partycallid = "";
@@ -209,13 +208,15 @@ function checkAuth($pass)
 }
 
 /* Handle EOF of wave files */
-function gotNotify()
+function gotNotify($reason)
 {
     global $ourcallid;
     global $partycallid;
     global $state;
 
-    Yate::Debug("gotNotify() state: $state");
+    Yate::Debug("gotNotify('$reason') state: $state");
+    if ($reason == "replaced")
+	return;
 
     switch ($state) {
 	case "goodbye":
@@ -320,6 +321,10 @@ function gotDTMF($text)
     navigate($text);
 }
 
+/* Install filtered handlers for the wave end and dtmf notify messages */
+Yate::Install("chan.dtmf","targetid",$ourcallid);
+Yate::Install("chan.notify","targetid",$ourcallid);
+
 /* The main loop. We pick events and handle them */
 while ($state != "") {
     $ev=Yate::GetEvent();
@@ -357,19 +362,15 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			gotNotify();
-			$ev->handled = true;
-		    }
+		    gotNotify($ev->GetValue("reason"));
+		    $ev->handled = true;
 		    break;
 
 		case "chan.dtmf":
-		    if ($ev->GetValue("targetid") == $ourcallid ) {
-			$text = $ev->GetValue("text");
-			for ($i = 0; $i < strlen($text); $i++)
-			    gotDTMF($text[$i]);
-			$ev->handled = true;
-		    }   
+		    $text = $ev->GetValue("text");
+		    for ($i = 0; $i < strlen($text); $i++)
+			gotDTMF($text[$i]);
+		    $ev->handled = true;
 		    break;
 	    }
 	    /* This is extremely important.

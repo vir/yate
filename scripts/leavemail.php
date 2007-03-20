@@ -11,8 +11,8 @@ require_once("libvoicemail.php");
 /* Always the first action to do */
 Yate::Init();
 
-/* Install handler for the wave end notify messages */
-Yate::Install("chan.notify");
+/* Uncomment next line to get debugging messages */
+//Yate::Debug(true);
 
 $ourcallid = "leavemail/" . uniqid(rand(),1);
 $partycallid = "";
@@ -51,7 +51,7 @@ function setState($newstate)
     if ($state == "")
 	return;
 
-    Yate::Output("setState('$newstate') state: $state");
+    Yate::Debug("setState('$newstate') state: $state");
 
     if ($newstate == $state)
 	return;
@@ -103,11 +103,13 @@ function setState($newstate)
 }
 
 /* Handle EOF of wave files */
-function gotNotify()
+function gotNotify($reason)
 {
     global $state;
 
-    Yate::Output("gotNotify() state: $state");
+    Yate::Debug("gotNotify('$reason') state: $state");
+    if ($reason == "replaced")
+	return;
 
     switch ($state) {
 	case "goodbye":
@@ -124,6 +126,9 @@ function gotNotify()
 	    break;
     }
 }
+
+/* Install filtered handler for the wave end notify messages */
+Yate::Install("chan.notify","targetid",$ourcallid);
 
 /* The main loop. We pick events and handle them */
 while ($state != "") {
@@ -162,10 +167,8 @@ while ($state != "") {
 		    break;
 
 		case "chan.notify":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			gotNotify();
-			$ev->handled = true;
-		    }
+		    gotNotify($ev->GetValue("reason"));
+		    $ev->handled = true;
 		    break;
 	    }
 	    /* This is extremely important.

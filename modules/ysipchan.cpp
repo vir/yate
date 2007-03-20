@@ -123,6 +123,10 @@ public:
 	{ return m_rPort; }
     inline const String& localPort() const
 	{ return m_lPort; }
+    inline const String& mappings() const
+	{ return m_mappings; }
+    inline void mappings(const char* newMap)
+	{ if (newMap) m_mappings = newMap; }
     const char* fmtList() const;
     bool update(const char* formats, int rport = -1, int lport = -1);
     void update(const Message& msg, bool pickFormat);
@@ -142,6 +146,8 @@ private:
     String m_rPort;
     // local media port
     String m_lPort;
+    // mappings of RTP payloads
+    String m_mappings;
 };
 
 class YateUDPParty : public SIPParty
@@ -542,12 +548,14 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 	    continue;
 	}
 	String fmt;
+	String mappings;
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
 	int ptime = 0;
 	while (tmp[0] == ' ') {
 	    int var = -1;
 	    tmp >> " " >> var;
 	    int mode = 0;
+	    int defmap = -1;
 	    String payload(lookup(var,dict_payloads));
 
 	    const ObjList* l = sdp->lines().find(c);
@@ -564,14 +572,15 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 		    int num = -1;
 		    line >> num >> " ";
 		    if (num == var) {
+			const char* pload = 0;
 			for (const TokenDict* map = dict_rtpmap; map->token; map++) {
 			    if (line.startsWith(map->token,false,true)) {
-				const char* pload = lookup(map->value,dict_payloads);
-				if (pload)
-				    payload = pload;
+				defmap = map->value;
+				pload = lookup(defmap,dict_payloads);
 				break;
 			    }
 			}
+			payload = pload;
 		    }
 		}
 		else if (line.startSkip("fmtp:",false)) {
@@ -598,8 +607,14 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 		if (fmt)
 		    fmt << ",";
 		fmt << payload;
+		if (var != defmap) {
+		    if (mappings)
+			mappings << ",";
+		    mappings << payload << "=" << var;
+		}
 	    }
 	}
+	DDebug(&plugin,DebugAll,"Formats '%s' mappings '%s'",fmt.c_str(),mappings.c_str());
 	NetMedia* net = 0;
 	// try to take the media descriptor from the old list
 	if (oldMedia) {
@@ -611,6 +626,7 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 	    net->update(fmt,port);
 	else
 	    net = new NetMedia(type,trans,fmt,port);
+	net->mappings(mappings);
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(net);
@@ -632,6 +648,8 @@ static void putMedia(Message& msg, ObjList* lst, bool putPort = true)
 	msg.addParam("media"+m->suffix(),"yes");
 	msg.addParam("formats"+m->suffix(),m->formats());
 	msg.addParam("transport"+m->suffix(),m->transport());
+	if (m->mappings())
+	    msg.addParam("rtp_mapping"+m->suffix(),m->mappings());
 	if (putPort)
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
     }
@@ -2112,6 +2130,7 @@ SDPBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	    rtp->update(fmts,-1,port);
 	else
 	    rtp = new NetMedia(tmp,trans,fmts,-1,port);
+	rtp->mappings(msg.getValue("rtp_mapping"+tmp));
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(rtp);
@@ -2149,6 +2168,21 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
     if (start) {
 	m.addParam("remoteport",media->remotePort());
 	m.addParam("format",media->format());
+	String tmp = media->format();
+	tmp << "=";
+	ObjList* mappings = media->mappings().split(',',false);
+	for (ObjList* pl = mappings; pl; pl = pl->next()) {
+	    String* mapping = static_cast<String*>(pl->get());
+	    if (!mapping)
+		continue;
+	    if (mapping->startsWith(tmp)) {
+		tmp = *mapping;
+		tmp >> "=";
+		m.addParam("payload",tmp);
+		break;
+	    }
+	}
+	delete mappings;
     }
     if (!Engine::dispatch(m))
 	return false;
@@ -2296,6 +2330,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	ObjList* l = frm.split(',',false);
 	frm = *m;
 	frm << " " << (m->localPort() ? m->localPort().c_str() : "0") << " " << m->transport();
+	ObjList* map = m->mappings().split(',',false);
 	ObjList rtpmap;
 	int ptime = 0;
 	ObjList* f = l;
@@ -2308,8 +2343,25 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 		else if (*s == "ilbc30")
 		    ptime = mode = 30;
 		int payload = s->toInteger(dict_payloads,-1);
+		int defcode = payload;
+		String tmp = *s;
+		tmp << "=";
+		for (ObjList* pl = map; pl; pl = pl->next()) {
+		    String* mapping = static_cast<String*>(pl->get());
+		    if (!mapping)
+			continue;
+		    if (mapping->startsWith(tmp)) {
+			payload = -1;
+			tmp = *mapping;
+			tmp >> "=" >> payload;
+			XDebug(this,DebugAll,"RTP mapped payload %d for '%s'",payload,s->c_str());
+			break;
+		    }
+		}
 		if (payload >= 0) {
-		    const char* map = lookup(payload,dict_rtpmap);
+		    if (defcode < 0)
+			defcode = payload;
+		    const char* map = lookup(defcode,dict_rtpmap);
 		    if (map && s_cfg.getBoolValue("codecs",*s,defcodecs && DataTranslator::canConvert(*s))) {
 			frm << " " << payload;
 			String* temp = new String("rtpmap:");
@@ -2325,6 +2377,7 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	    }
 	}
 	delete l;
+	delete map;
 
 	if (*m == "audio") {
 	    // always claim to support telephone events

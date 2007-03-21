@@ -594,7 +594,10 @@ static ObjList* parseSDP(const SDPBody* sdp, String& addr, ObjList* oldMedia = 0
 	    }
 
 	    if (payload == "ilbc") {
-		if ((mode == 20) || (ptime == 20))
+		const char* forced = s_cfg.getValue("hacks","ilbc_forced");
+		if (forced)
+		    payload = forced;
+		else if ((mode == 20) || (ptime == 20))
 		    payload = "ilbc20";
 		else if ((mode == 30) || (ptime == 30))
 		    payload = "ilbc30";

@@ -123,3 +123,13 @@
 ; You must use lower case method names. The boolean value defaults to
 ;  true and allows automatically challenging the requests for authentication
 
+
+[hacks]
+; This section holds the dirty stuff required to work with some broken
+;  implementations
+;
+; ilbc_forced: string: Format to force as iLBC, can be: ilbc20 or ilbc30
+;ilbc_forced=
+;
+; ilbc_default: string: Format to use for iLBC when packetization is unknown
+;ilbc_default=ilbc30

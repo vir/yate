@@ -213,7 +213,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 		m->addParam("called",called);
 		Engine::dispatch(m);
 		*m = "call.route";
-		if (!Engine::dispatch(m) || m->retValue().null()) {
+		if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 		    // routing failed
 		    delete m;
 		    return errorBeep();
@@ -503,7 +503,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
-    if (!(Engine::dispatch(m) && m->retValue())) {
+    if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	delete m;
 	return errorBeep();
     }
@@ -615,7 +615,7 @@ bool PBXAssist::operTransfer(Message& msg)
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
-    if (!(Engine::dispatch(m) && m->retValue())) {
+    if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	delete m;
 	return errorBeep();
     }
@@ -672,7 +672,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
-    if (!(Engine::dispatch(m) && m->retValue())) {
+    if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	delete m;
 	return errorBeep();
     }

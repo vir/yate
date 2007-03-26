@@ -31,6 +31,10 @@ Mutex lmutex;
 
 static Configuration s_cfg(Engine::configFile("regfile"));
 
+static const String s_general = "general";
+static bool s_create = false;
+
+
 class AuthHandler : public MessageHandler
 {
 public:
@@ -81,14 +85,18 @@ private:
     AuthHandler *m_authhandler;
 };
 
+
 bool AuthHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
-    if (username.null() || username == "general")
+    if (username.null() || username == s_general)
 	return false;
     const NamedList* sect = s_cfg.getSection(username);
     if (sect) {
-	msg.retValue() = sect->getValue("password");
+	const String* pass = sect->getParam("password");
+	if (!pass)
+	    return false;
+	msg.retValue() = *pass;
 	return true;
     }
     return false;
@@ -98,7 +106,7 @@ bool AuthHandler::received(Message &msg)
 bool RegistHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
-    if (username.null() || username == "general")
+    if (username.null() || username == s_general)
 	return false;
 
     const char *driver = msg.getValue("driver");
@@ -108,6 +116,11 @@ bool RegistHandler::received(Message &msg)
 
     Lock lock(lmutex);
     NamedList* sect = s_cfg.getSection(username);
+    if (s_create && !sect) {
+	Debug("RegFile",DebugNote,"Auto creating new user '%s'",username.c_str());
+	s_cfg.createSection(username);
+	sect = s_cfg.getSection(username);
+    }
     if (sect) {
 	Debug("RegFile",DebugInfo,"Registered '%s' via '%s'",username.c_str(),data);
         sect->setParam("driver",driver);
@@ -120,7 +133,7 @@ bool RegistHandler::received(Message &msg)
 bool UnRegistHandler::received(Message &msg)
 {
     String username(msg.getValue("username"));
-    if (username.null() || username == "general")
+    if (username.null() || username == s_general)
 	return false;
     
     Lock lock(lmutex);
@@ -135,7 +148,7 @@ bool UnRegistHandler::received(Message &msg)
 bool RouteHandler::received(Message &msg)
 {
     String username(msg.getValue("called"));
-    if (username.null() || username == "general")
+    if (username.null() || username == s_general)
 	return false;
     
     Lock lock(lmutex);
@@ -163,13 +176,13 @@ bool StatusHandler::received(Message &msg)
     unsigned int n = s_cfg.sections();
     if (!s_cfg.getSection(0))
 	--n;
-    msg.retValue() << "name=regfile,type=misc;users=" << n;
+    msg.retValue() << "name=regfile,type=misc;users=" << n << ",create=" << s_create;
     if (msg.getBoolValue("details",true)) {
     msg.retValue() << ";";
 	bool first = true;
 	for (unsigned int i=0;i<s_cfg.sections();i++) {
 	    NamedList *user = s_cfg.getSection(i);
-	    if (!user || (*user == "general"))
+	    if (!user || (*user == s_general))
 		continue;
 	    const char* data = s_cfg.getValue(*user,"data");
 	    if (first)
@@ -194,6 +207,7 @@ void RegfilePlugin::initialize()
     Output("Initializing module Register for file");
     if (!m_authhandler) {
 	s_cfg.load();
+	s_create = s_cfg.getBoolValue("general","autocreate");
 	Engine::install(m_authhandler = new AuthHandler("user.auth",s_cfg.getIntValue("general","auth",100)));
 	Engine::install(new RegistHandler("user.register",s_cfg.getIntValue("general","register",100)));
 	Engine::install(new UnRegistHandler("user.unregister",s_cfg.getIntValue("general","register",100)));

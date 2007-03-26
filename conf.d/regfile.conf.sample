@@ -1,6 +1,24 @@
 ; !!! NOTE !!!
 ; This file is used when yate is the registrar server for a remote client
+
+
+[general]
+; This section is special - holds settings common to all users
 ;
+; autocreate: bool: Automatically create entries for registering users
+;autocreate=no
+;
+; auth: int: Priority of the user.auth handler
+;auth=100
+;
+; register: int: Priority of user.register and user.unregister handlers
+;register=100
+;
+; route: int: Priority of the call.route handler
+;route=100
+
+
 ; you have to put username as a category and password into key password
+; if password is missing the module will only register but not authenticate
 ;[username]
 ;password=something

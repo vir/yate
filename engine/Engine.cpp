@@ -437,16 +437,18 @@ static int supervise(void)
 	    tmp = ::read(wdogfd[0],buf,sizeof(buf));
 	    if (tmp >= 0) {
 		// Timer messages add one sanity point every second
-		sanity += tmp;
-		if (sanity > MAX_SANITY)
-		    sanity = MAX_SANITY;
+		tmp += sanity;
+		if (tmp > MAX_SANITY)
+		    tmp = MAX_SANITY;
+		if (sanity < tmp)
+		    sanity = tmp;
 	    }
 	    else if ((errno != EINTR) && (errno != EAGAIN))
 		break;
 	    // Consume sanity points slightly slower than added
-	    for (int i = 0; i < 10; i++) {
+	    for (int i = 0; i < 12; i++) {
 		copystream(2,logfd[0]);
-		::usleep(120000);
+		::usleep(100000);
 	    }
 	}
 	::close(wdogfd[0]);
@@ -456,7 +458,7 @@ static int supervise(void)
 	    // If -Da was specified try to get a corefile
 	    if (s_sigabrt) {
 		::kill(s_childpid,SIGABRT);
-		::usleep(250000);
+		::usleep(500000);
 	    }
 	    ::kill(s_childpid,SIGKILL);
 	    ::usleep(10000);

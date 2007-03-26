@@ -1656,11 +1656,11 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     if (hl) {
 	const NamedString* type = hl->getParam("purpose");
 	if (!type || *type == "info")
-	    m->addParam("caller_info_uri",*type);
+	    m->addParam("caller_info_uri",*hl);
 	else if (*type == "icon")
-	    m->addParam("caller_icon_uri",*type);
+	    m->addParam("caller_icon_uri",*hl);
 	else if (*type == "card")
-	    m->addParam("caller_card_uri",*type);
+	    m->addParam("caller_card_uri",*hl);
     }
 
     if (line) {

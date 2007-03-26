@@ -67,6 +67,7 @@
 #endif
 
 #define MAX_SOCKLEN 1024
+#define MAX_RESWAIT 5000000
 
 using namespace TelEngine;
 
@@ -184,11 +185,14 @@ bool SocketAddr::host(const String& name)
 	    {
 		in_addr_t a = inet_addr(name);
 		if (a == INADDR_NONE) {
-		    s_mutex.lock();
-		    struct hostent* he = gethostbyname(name);
-		    if (he && (he->h_addrtype == AF_INET))
-			a = *((in_addr_t*)(he->h_addr_list[0]));
-		    s_mutex.unlock();
+		    if (s_mutex.lock(MAX_RESWAIT)) {
+			struct hostent* he = gethostbyname(name);
+			if (he && (he->h_addrtype == AF_INET))
+			    a = *((in_addr_t*)(he->h_addr_list[0]));
+			s_mutex.unlock();
+		    }
+		    else
+			Debug(DebugGoOn,"Resolver was busy, failing '%s'",name.c_str());
 		}
 		if (a != INADDR_NONE) {
 		    ((struct sockaddr_in*)m_address)->sin_addr.s_addr = a;

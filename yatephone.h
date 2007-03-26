@@ -671,6 +671,26 @@ public:
     static ObjList* destFormats(const DataFormat& sFormat = "slin", int maxCost = -1, unsigned int maxLen = 0, ObjList* lst = 0);
 
     /**
+     * Get a list of formats supported by transcoding for a given format list
+     * @param formats List of data format names
+     * @param existing Also return formats already existing in the initial list
+     * @param sameRate Only return formats with same sampling rate
+     * @param sameChans Only return formats with same number of channels
+     * @return List of format names, must be freed by the caller
+     */
+    static ObjList* allFormats(const ObjList* formats, bool existing = true, bool sameRate = true, bool sameChans = true);
+
+    /**
+     * Get a list of formats supported by transcoding for a given format list
+     * @param formats Data format names as comma separated list
+     * @param existing Also return formats already existing in the initial list
+     * @param sameRate Only return formats with same sampling rate
+     * @param sameChans Only return formats with same number of channels
+     * @return List of format names, must be freed by the caller
+     */
+    static ObjList* allFormats(const String& formats, bool existing = true, bool sameRate = true, bool sameChans = true);
+
+    /**
      * Check if bidirectional conversion can be performed by installed translators
      * @param fmt1 Name of the first data format
      * @param fmt2 Name of the second data format

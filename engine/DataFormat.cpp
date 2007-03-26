@@ -1217,6 +1217,82 @@ ObjList* DataTranslator::destFormats(const DataFormat& sFormat, int maxCost, uns
     return lst;
 }
 
+// helper function to avoid duplicating large amounts of code
+static void mergeOne(ObjList*& lst, const ObjList* formats, const DataFormat& fmt, const FormatInfo* fi, bool sameRate, bool sameChans)
+{
+    if (!fi)
+	return;
+    const DataFormat fmti(fi);
+    if (lst && lst->find(fmti))
+	return;
+    if (formats->find(fmti))
+	return;
+    const FormatInfo* fo = fmt.getInfo();
+    if (fo == fi)
+	return;
+    if (sameRate && (fo->sampleRate != fi->sampleRate))
+	return;
+    if (sameChans && (fo->numChannels != fi->numChannels))
+	return;
+    if (DataTranslator::canConvert(fmt,fmti)) {
+	if (!lst)
+	    lst = new ObjList;
+	lst->append(new String(fmti));
+    }
+}
+
+ObjList* DataTranslator::allFormats(const ObjList* formats, bool existing, bool sameRate, bool sameChans)
+{
+    if (!formats)
+	return 0;
+    ObjList* lst = 0;
+    s_mutex.lock();
+    compose();
+    const ObjList* fmts;
+    if (existing) {
+	// put existing formats first
+	for (fmts = formats; fmts; fmts = fmts->next()) {
+	    const String* fmt = static_cast<const String*>(fmts->get());
+	    if (!(fmt && *fmt))
+		continue;
+	    const FormatInfo* fo = FormatRepository::getFormat(*fmt);
+	    if (fo) {
+		if (!lst)
+		    lst = new ObjList;
+		lst->append(new String(fo->name));
+	    }
+	}
+    }
+    for (fmts = formats; fmts; fmts = fmts->next()) {
+	const String* fmt = static_cast<const String*>(fmts->get());
+	if (!(fmt && *fmt))
+	    continue;
+	const FormatInfo* fo = FormatRepository::getFormat(*fmt);
+	if (!fo)
+	    continue;
+	const DataFormat fmto(fo);
+
+	// search in the static list first
+	for (unsigned int i = 0; i < (sizeof(s_formats)/sizeof(FormatInfo)); i++)
+	    mergeOne(lst,formats,fmto,s_formats+i,sameRate,sameChans);
+	// then try the installed formats
+	for (flist* l = s_flist; l; l = l->next)
+	    mergeOne(lst,formats,fmto,l->info,sameRate,sameChans);
+    }
+    s_mutex.unlock();
+    return lst;
+}
+
+ObjList* DataTranslator::allFormats(const String& formats, bool existing, bool sameRate, bool sameChans)
+{
+    ObjList* fmts = formats.split(',',false);
+    if (!fmts)
+	return 0;
+    ObjList* lst = allFormats(fmts,existing,sameRate,sameChans);
+    delete fmts;
+    return lst;
+}
+
 bool DataTranslator::canConvert(const DataFormat& fmt1, const DataFormat& fmt2)
 {
     if (fmt1 == fmt2)

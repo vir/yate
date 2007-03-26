@@ -661,6 +661,16 @@ String& String::append(const char* value, const char* separator, bool force)
     return *this;
 }
 
+String& String::append(const ObjList* list, const char* separator, bool force)
+{
+    for (; list; list = list->next()) {
+	const GenObject* obj = list->get();
+	if (obj)
+	    append(obj->toString().c_str(),separator,force);
+    }
+    return *this;
+}
+
 String& String::append(double value, unsigned int decimals)
 {
     if (decimals > 12)

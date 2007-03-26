@@ -1552,6 +1552,23 @@ public:
     String& append(const char* value, const char* separator = 0, bool force = false);
 
     /**
+     * List members appending with a separator
+     * @param list Pointer to ObjList whose @ref GenObject::toString() of the items will be appended
+     * @param separator Separator to insert before each item in list
+     * @param force True to allow appending empty strings
+     */
+    String& append(const ObjList* list, const char* separator = 0, bool force = false);
+
+    /**
+     * List members appending with a separator
+     * @param list Reference of ObjList whose @ref GenObject::toString() of the items will be appended
+     * @param separator Separator to insert before each item in list
+     * @param force True to allow appending empty strings
+     */
+    inline String& append(const ObjList& list, const char* separator = 0, bool force = false)
+	{ return append(&list,separator,force); }
+
+    /**
      * Explicit double append
      * @param value Value to append
      * @param decimals Number of decimals

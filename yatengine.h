@@ -693,9 +693,10 @@ public:
      * Running modes - run the engine as Console, Client or Server.
      */
     enum RunMode {
-	Console = 0,
-	Client = 1,
-	Server = 2
+	Stopped = 0,
+	Console = 1,
+	Client = 2,
+	Server = 3,
     };
 
     /**
@@ -728,6 +729,20 @@ public:
      * @return A pointer to the singleton instance of the engine
      */
     static Engine* self();
+
+    /**
+     * Get the running mode of the engine
+     * @return Engine's run mode as enumerated value
+     */
+    static RunMode mode()
+	{ return s_mode; }
+
+    /**
+     * Check if the engine is running as telephony client
+     * @return True if the engine is running in client mode
+     */
+    inline static bool clientMode()
+	{ return s_mode == Client; }
 
     /**
      * Register or unregister a plugin to the engine.
@@ -949,6 +964,7 @@ private:
     static String s_extramod;
     static String s_modsuffix;
     static int s_haltcode;
+    static RunMode s_mode;
 };
 
 }; // namespace TelEngine

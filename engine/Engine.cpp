@@ -139,6 +139,7 @@ String Engine::s_modpath(MOD_PATH);
 String Engine::s_extramod;
 String Engine::s_modsuffix(DLL_SUFFIX);
 
+Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
@@ -556,6 +557,7 @@ Engine::~Engine()
     m_dispatcher.clear();
     plugins.clear();
     m_libs.clear();
+    s_mode = Stopped;
     s_self = 0;
 }
 
@@ -1226,6 +1228,8 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
     if (fail)
 	return EINVAL;
+
+    s_mode = mode;
 
     s_cfgfile = cfgfile;
     if (s_cfgfile.endsWith(".exe") || s_cfgfile.endsWith(".EXE"))

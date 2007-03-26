@@ -22,6 +22,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include <yatephone.h>
 #include <yatess7.h>
 
 #ifdef _WINDOWS
@@ -63,79 +64,473 @@ extern "C" {
 
 #define MAX_PACKET 1200
 
+#define MAX_READ_ERRORS 250              // WpData::run(): Display read error message
+#define WPSOCKET_SELECT_TIMEOUT 125      // Value used in WpSocket::select() to timeout
+
 using namespace TelEngine;
 namespace { // anonymous
 
-class WpSigThread;
+class Fifo;                              // Circular queue for data consumer
+class WpSocket;                          // I/O for D and B channels
+class WpInterface;                       // Wanpipe D-channel (SignallingInterface)
+class WpSigThread;                       // D-channel read data
+class WpSource;                          // Data source
+class WpConsumer;                        // Data consumer
+class WpCircuit;                         // Single Wanpipe B-channel (SignallingCircuit)
+class WpData;                            // Wanpipe span B-channel group
+class WpDataThread;                      // B-channel group read/write data
+class WpConfig;                          // Configuration file
 
+// Implements a circular queue for data consumer
+class Fifo
+{
+public:
+    inline Fifo(unsigned int buflen)
+	: m_mutex(true), m_buffer(0,buflen), m_head(0), m_tail(1)
+	{}
+    inline void clear() {
+	    m_head = 0;
+	    m_tail = 1;
+	}
+    // Put a byte in fifo, overwrite last byte if full
+    // Return false on buffer overrun
+    bool put(unsigned char value);
+    // Put data buffer in fifo, one byte at a time
+    // Return the number of overwritten bytes
+    unsigned int put(const unsigned char* buf, unsigned int length);
+    // Get a byte from fifo, return last read if empty
+    unsigned char get();
+protected:
+    unsigned char& operator[](unsigned int index)
+	{ return ((unsigned char*)m_buffer.data())[index]; }
+private:
+    Mutex m_mutex;
+    DataBlock m_buffer;
+    unsigned int m_head;
+    unsigned int m_tail;
+};
+
+// I/O socket for WpInterface and WpData
+class WpSocket
+{
+public:
+    inline WpSocket(DebugEnabler* dbg, const char* card = 0, const char* device = 0)
+	: m_dbg(dbg), m_card(card), m_device(device),
+	m_canRead(false), m_event(false),
+	m_readError(false), m_writeError(false), m_selectError(false)
+	{}
+    inline ~WpSocket()
+	{ close(); }
+    inline bool valid() const
+	{ return m_socket.valid(); }
+    inline const String& card() const
+	{ return m_card; }
+    inline const String& device() const
+	{ return m_device; }
+    inline void card(const char* name)
+	{ m_card = name; }
+    inline void device(const char* name)
+	{ m_device = name; }
+    inline bool canRead() const
+	{ return m_canRead; }
+    inline bool event() const
+	{ return m_event; }
+    // Open socket. Return false on failure
+    bool open(bool blocking);
+    // Close socket
+    void close();
+    // Read data. Return -1 on failure
+    int recv(void* buffer, int len, int flags = 0);
+    // Send data. Return -1 on failure
+    int send(const void* buffer, int len, int flags = 0);
+    // Check socket. Set flags to the appropriate values on success
+    // Return false on failure
+    bool select(unsigned int multiplier);
+protected:
+    inline void showError(const char* action, const char* info = 0) {
+	    Debug(m_dbg,DebugWarn,"WpSocket(%s/%s). %s failed%s. %d: %s [%p]",
+		m_card.c_str(),m_device.c_str(),action,c_safe(info),
+		m_socket.error(),::strerror(m_socket.error()),this);
+	}
+private:
+    DebugEnabler* m_dbg;                 // Debug enabler owning this socket
+    Socket m_socket;                     // 
+    String m_card;                       // Card name used to open socket
+    String m_device;                     // Device name used to open socket
+    bool m_canRead;                      // Set by select(). Can read from socket
+    bool m_event;                        // Set by select(). An event occurred
+    bool m_readError;                    // Flag used to print read errors
+    bool m_writeError;                   // Flag used to print write errors
+    bool m_selectError;                  // Flag used to print select errors
+};
+
+// Wanpipe D-channel
 class WpInterface : public SignallingInterface
 {
     friend class WpSigThread;
 public:
+    // Create an instance of WpInterface or WpData
     static void* create(const String& type, const NamedList& name);
-    WpInterface(const char* card, const char* device);
+    WpInterface(const NamedList& params);
     virtual ~WpInterface();
+    // Initialize interface. Return false on failure
+    bool init(NamedList& params);
+    // Send signalling packet
     virtual bool transmitPacket(const DataBlock& packet, bool repeat, PacketType type);
+    // Interface control
     virtual bool control(Operation oper, NamedList* params);
 protected:
     virtual void timerTick(const Time& when);
+    // Read data from socket
     bool receiveAttempt();
 private:
-    bool openSocket();
-    Socket m_socket;
-    String m_card;
-    String m_device;
-    WpSigThread* m_thread;
-    bool m_received;
-    int m_overRead;
+    WpSocket m_socket;
+    WpSigThread* m_thread;               // Thread used to read data from socket
+    bool m_received;                     // Received data flag
+    int m_overRead;                      // 
 };
 
+// Read signalling data for WpInterface
 class WpSigThread : public Thread
 {
+    friend class WpInterface;
 public:
-    inline WpSigThread(WpInterface* iface)
-	: Thread("WpSignal"), m_interface(iface)
-	{ }
+    inline WpSigThread(WpInterface* iface, Priority prio = Normal)
+	: Thread("WpSignal",prio), m_interface(iface)
+	{}
     virtual ~WpSigThread();
     virtual void run();
 private:
     WpInterface* m_interface;
 };
 
+// Wanpipe data source
+class WpSource : public DataSource
+{
+    friend class WpCircuit;
+public:
+    WpSource(WpCircuit* owner, const char* format, unsigned int bufsize);
+    virtual ~WpSource();
+    inline void changeFormat(const char* format)
+	{ m_format = format; }
+    // Add a byte to the source buffer
+    void put(unsigned char c);
+protected:
+    WpCircuit* m_owner;                  // B-channel owning this source
+    DataBlock m_buffer;                  // Data buffer
+    unsigned int m_bufpos;               // First free byte's index
+    unsigned int m_total;
+};
+
+// Wanpipe data consumer
+class WpConsumer : public DataConsumer, public Fifo
+{
+    friend class WpCircuit;
+public:
+    WpConsumer(WpCircuit* owner, const char* format, unsigned int bufsize);
+    virtual ~WpConsumer();
+    inline void changeFormat(const char* format)
+	{ m_format = format; }
+    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+protected:
+    WpCircuit* m_owner;                  // B-channel owning this consumer
+    u_int32_t m_errorCount;              // The number of times the fifo was full
+    u_int32_t m_errorBytes;              // The number of overwritten bytes in one session
+    unsigned int m_total;
+};
+
+// Single Wanpipe B-channel
+class WpCircuit : public SignallingCircuit
+{
+public:
+    WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data, unsigned int buflen);
+    virtual ~WpCircuit();
+    virtual bool status(Status newStat, bool sync = false);
+    virtual bool updateFormat(const char* format, int direction);
+    virtual void* getObject(const String& name) const;
+    inline WpSource* source()
+	{ return m_sourceValid; }
+    inline WpConsumer* consumer()
+	{ return m_consumerValid; }
+private:
+    Mutex m_mutex;
+    WpSource* m_sourceValid;             // Circuit's source if reserved, otherwise: 0
+    WpConsumer* m_consumerValid;         // Circuit's consumer if reserved, otherwise: 0
+    WpSource* m_source;
+    WpConsumer* m_consumer;
+};
+
+// Wanpipe B-channel group
+class WpData : public SignallingCircuitSpan
+{
+    friend class WpDataThread;
+public:
+    WpData(const NamedList& params);
+    virtual ~WpData();
+    // Initialize data channel span. Return false on failure
+    bool init(NamedList& params);
+    // Swap data if necessary
+    inline unsigned char swap(unsigned char c)
+	{ return m_swap ? s_bitswap[c] : c; }
+    // Data processor
+    // Read events and data from socket. Send data when succesfully read
+    // Received data is splitted for each circuit
+    // Sent data from each circuit is merged into one data block
+    void run();
+protected:
+    // Process a list of circuits to create. Update m_count
+    // Validate each circuit number to be positive and lesser or equal to m_chans
+    // Return the codes of the circuits or 0 on error
+    unsigned int* processCicList(const String& cicList);
+    // Create circuits (all or nothing)
+    // delta: number to add to each circuit code
+    // cicList: Circuits to create
+    bool createCircuits(unsigned int delta, const String& cicList);
+    // Check for received event (including in-band events)
+    bool readEvent();
+    // Read data from socket. Check for errors or in-band events
+    // Return -1 on error
+    int readData();
+    // Decode received event
+    bool decodeEvent();
+    // Swapped bits table
+    static unsigned char s_bitswap[256];
+private:
+    WpSocket m_socket;
+    WpDataThread* m_thread;
+    bool m_swap;                         // Swap bits flag
+    unsigned int m_chans;                // Total number of circuits for this span
+    unsigned int m_count;                // Circuit count
+    unsigned int m_first;                // First circuit code
+    unsigned int m_samples;              // Sample count
+    unsigned char m_noData;              // Value to send when no data
+    unsigned int m_buflen;               // Buffer length for sources/consumers
+    // Used for data processing
+    WpCircuit** m_circuits;              // The circuits belonging to this span
+    unsigned int m_readErrors;           // Count data read errors
+    unsigned char* m_buffer;             // I/O data buffer
+    unsigned int m_bufferLen;            // I/O data buffer length
+};
+
+// B-channel group read/write data
+class WpDataThread : public Thread
+{
+    friend class WpData;
+public:
+    inline WpDataThread(WpData* data, Priority prio = Normal)
+	: Thread("WpData",prio), m_data(data)
+	{}
+    virtual ~WpDataThread();
+    virtual void run();
+private:
+    WpData* m_data;
+};
+
+class WpConfig : public Configuration
+{
+public:
+    inline WpConfig() : Configuration(Engine::configFile("wpcard"))
+	{ load(); }
+};
+
 YSIGFACTORY2(WpInterface,SignallingInterface);
 
-//class WpSigFactory : public SignallingFactory
+/**
+ * Fifo
+ */
+bool Fifo::put(unsigned char value)
+{
+    (*this)[m_tail] = value;
+    bool full = (m_head == m_tail);
+    m_tail++;
+    if (m_tail >= m_buffer.length())
+	m_tail = 0;
+    if (full)
+	m_head = m_tail;
+    return full;
+}
 
+unsigned int Fifo::put(const unsigned char* buf, unsigned int length)
+{
+    Lock lock(m_mutex);
+    unsigned int errors = 0;
+    while (length--)
+	if (put(*buf++))
+	    errors++;
+    return errors;
+}
+
+unsigned char Fifo::get()
+{
+    Lock lock(m_mutex);
+    unsigned char tmp = (*this)[m_head];
+    unsigned int nh = m_head + 1;
+    if (nh >= m_buffer.length())
+	nh = 0;
+    if (nh != m_tail)
+	m_head = nh;
+    return tmp;
+}
+
+/**
+ * WpSocket
+ */
+// Open socket
+bool WpSocket::open(bool blocking)
+{
+    DDebug(m_dbg,DebugAll,
+	"WpSocket::open(). Card: '%s'. Device: '%s'. Blocking: %s [%p]",
+	m_card.c_str(),m_device.c_str(),String::boolText(blocking),this);
+    if (!m_socket.create(AF_WANPIPE,SOCK_RAW)) {
+	showError("Create");
+	return false;
+    }
+    // Bind to the card/interface
+    struct wan_sockaddr_ll sa;
+    memset(&sa,0,sizeof(struct wan_sockaddr_ll));
+    ::strncpy((char*)sa.sll_card,m_card.safe(),sizeof(sa.sll_card));
+    ::strncpy((char*)sa.sll_device,m_device.safe(),sizeof(sa.sll_device));
+    sa.sll_protocol = htons(PVC_PROT);
+    sa.sll_family = AF_WANPIPE;
+    if (!m_socket.bind((struct sockaddr *)&sa, sizeof(sa))) {
+	showError("Bind");
+	close();
+	return false;
+    }
+    if (!m_socket.setBlocking(blocking)) {
+	showError("Set blocking");
+	close();
+	return false;
+    }
+    return true;
+}
+
+// Close socket
+void WpSocket::close()
+{
+    if (!m_socket.valid())
+	return;
+    DDebug(m_dbg,DebugAll,"WpSocket::close(). Card: '%s'. Device: '%s' [%p]",
+	m_card.c_str(),m_device.c_str(),this);
+    m_socket.setLinger(-1);
+    m_socket.terminate();
+}
+
+// Read data from socket
+int WpSocket::recv(void* buffer, int len, int flags)
+{
+    int r = m_socket.recv(buffer,len,flags);
+    if (r != Socket::socketError()) {
+	m_readError = false;
+	return r;
+    }
+    if (!(m_socket.canRetry() && m_readError))
+	showError("Read");
+    m_readError = true;
+    return -1;
+}
+
+// Write data to socket
+int WpSocket::send(const void* buffer, int len, int flags)
+{
+    int w = m_socket.send(buffer,len,flags);
+    if (w != Socket::socketError() && w == len) {
+	m_writeError = false;
+	return w;
+    }
+    if (m_writeError)
+	return -1;
+    if (w == Socket::socketError())
+	w = 0;
+    String info;
+    info << " (Sent " << w << " instead of " << len << ')';
+    showError("Send",info);
+    m_writeError = true;
+    return -1;
+}
+
+// Check socket state
+bool WpSocket::select(unsigned int multiplier)
+{
+    m_canRead  = m_event = false;
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = multiplier * WPSOCKET_SELECT_TIMEOUT;
+    if (m_socket.select(&m_canRead,0,&m_event,&tv)) {
+	m_selectError = false;
+	return true;
+    }
+    if (m_selectError)
+	return false;
+    showError("Select");
+    m_selectError = true;
+    return false;
+}
+
+/**
+ * WpInterface
+ */
+// Create WpInterface or WpData
 void* WpInterface::create(const String& type, const NamedList& name)
 {
-    if (type == "WpInterface") {
-	WpInterface* iface = new WpInterface(name.getValue("card"),name.getValue("device"));
-	iface->setName(name.getValue("name",type));
-	return iface;
+    if (type == "sig") {
+	WpInterface* iface = new WpInterface(name);
+	if (iface->init((NamedList&)name))
+	    return iface;
+	delete iface;
+	return 0;
+    }
+    if (type == "voice") {
+	WpData* data = new WpData(name);
+	if (data->init((NamedList&)name))
+	    return data;
+	delete data;
+	return 0;
     }
     return 0;
 }
 
-WpInterface::WpInterface(const char* card, const char* device)
-    : m_card(card), m_device(device), m_thread(0), m_received(false),
-      m_overRead(3)
+WpInterface::WpInterface(const NamedList& params)
+    : m_socket(this),
+    m_thread(0), m_received(false), m_overRead(0)
 {
-    Debug(this,DebugAll,"WpInterface::WpInterface('%s','%s') [%p]",
-	card,device,this);
+    setName(params.getValue("debugname","WpInterface"));
+    DDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
 }
 
 WpInterface::~WpInterface()
 {
-    Debug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
-    if (m_thread) {
-	m_thread->cancel();
-	while (m_thread)
-	    Thread::yield();
-//	m_thread = 0;
-    }
-    m_socket.terminate();
+    control(Disable,0);
+    DDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
 }
 
+bool WpInterface::init(NamedList& params)
+{
+    WpConfig cfg;
+    const char* sectName = params.getValue("sig");
+    NamedList* sect = cfg.getSection(sectName);
+    if (!sect) {
+	Debug(this,DebugNote,"Missing section '%s' in configuration",c_safe(sectName));
+	return false;
+    }
+    // Set socket card / device
+    m_socket.card(sectName);
+    const char* sig = params.getValue("siggroup",sect->getValue("siggroup"));
+    if (!sig) {
+	Debug(this,DebugNote,"Missing or invalid signalling group '%s' in configuration",sig);
+	return false;
+    }
+    m_socket.device(sig);
+    if (debugAt(DebugInfo)) {
+	String s;
+	s << "\r\nCard:   " << m_socket.card();
+	s << "\r\nDevice: " << m_socket.device();
+	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
+    }
+    return true;
+}
+
+// Send signalling packet
 bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketType type)
 {
     if (!m_socket.valid())
@@ -149,7 +544,6 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     }
 #endif
 
-    int sz = WP_HEADER + packet.length();
     DataBlock data(0,WP_HEADER);
     data += packet;
     unsigned char* d = static_cast<unsigned char*>(data.data());
@@ -165,39 +559,28 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
 	default:
 	    break;
     }
-    int w = m_socket.send(data.data(),data.length());
-    if (Socket::socketError() == w) {
-	DDebug(this,DebugWarn,"Error on sending packet of %u bytes: %d: %s [%p]",
-	    packet.length(),m_socket.error(),::strerror(m_socket.error()),this);
-	return false;
-    }
-    if (w != sz) {
-	DDebug(this,DebugWarn,"Sent %d instead of %d bytes [%p]",w,sz,this);
-	return false;
-    }
-//    w -= WP_HEADER;
-//    XDebug(toString(),DebugAll,"Successfully sent %d bytes packet [%p]",w,this);
-    return true;
+    return -1 != m_socket.send(data.data(),data.length(),0);
 }
 
+// Receive signalling packet
 bool WpInterface::receiveAttempt()
 {
     if (!m_socket.valid())
 	return false;
-    unsigned char buf[WP_HEADER + MAX_PACKET];
-    int r = m_socket.recv(buf,sizeof(buf));
-    if (Socket::socketError() == r) {
-	if (m_socket.canRetry())
-	    return false;
-	DDebug(this,DebugWarn,"Error on reading packet: %d: %s [%p]",
-	    m_socket.error(),::strerror(m_socket.error()),this);
+    if (!m_socket.select(5))
 	return false;
-    }
+    if (!m_socket.canRead())
+	return false;
+    unsigned char buf[WP_HEADER + MAX_PACKET];
+    int r = m_socket.recv(buf,sizeof(buf),MSG_NOSIGNAL);
+    if (r == -1)
+	return false;
     if (r > (WP_HEADER + m_overRead)) {
+	XDebug(this,DebugAll,"Received %d bytes packet. Header length is %u [%p]",
+	    r,WP_HEADER + m_overRead,this);
 	r -= (WP_HEADER + m_overRead);
-//	XDebug(toString(),DebugAll,"Received %d bytes packet [%p]",r,this);
 	if (buf[WP_RD_ERROR]) {
-	    DDebug(toString(),DebugWarn,"Packet got error: %u [%p]",
+	    DDebug(this,DebugWarn,"Packet got error: %u [%p]",
 		buf[WP_RD_ERROR],this);
 	    if (buf[WP_RD_ERROR] & WP_ERR_FIFO)
 		notify(RxOverflow);
@@ -224,50 +607,47 @@ bool WpInterface::receiveAttempt()
     return true;
 }
 
-bool WpInterface::openSocket()
-{
-    Debug(this,DebugAll,"WpInterface::openSocket() [%p]",this);
-    if (!m_socket.create(AF_WANPIPE,SOCK_RAW)) {
-	Debug(this,DebugGoOn,"Wanpipe failed to create socket, error %d: %s",
-	    m_socket.error(),::strerror(m_socket.error()));
-	return false;
-    }
-    // Bind to the card/interface
-    struct wan_sockaddr_ll sa;
-    memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-    ::strncpy((char*)sa.sll_device,m_device.safe(),sizeof(sa.sll_device));
-    ::strncpy((char*)sa.sll_card,m_card.safe(),sizeof(sa.sll_card));
-    sa.sll_protocol = htons(PVC_PROT);
-    sa.sll_family=AF_WANPIPE;
-    if (!m_socket.bind((struct sockaddr *)&sa, sizeof(sa))) {
-	Debug(this,DebugGoOn,"Wanpipe failed to bind socket, error %d: %s",
-	    m_socket.error(),::strerror(m_socket.error()));
-	m_socket.terminate();
-	return false;
-    }
-    if (!m_socket.setBlocking(false)) {
-	Debug(this,DebugGoOn,"Wanpipe failed to set socket non-blocking, error %d: %s",
-	    m_socket.error(),::strerror(m_socket.error()));
-	m_socket.terminate();
-	return false;
-    }
-    return true;
-}
-
+// Interface control
+// Enable: Open thread and create thread if not already created
+// Disable: Cancel thread. Close socket
 bool WpInterface::control(Operation oper, NamedList* params)
 {
     switch (oper) {
 	case Enable:
-	    if (!(m_socket.valid() || openSocket()))
-		return false;
-	    if (!m_thread)
-		m_thread = new WpSigThread(this);
-	    return m_thread->startup();
+	case Disable:
+	    break;
 	case Query:
 	    return m_socket.valid() && m_thread && m_thread->running();
 	default:
 	    return SignallingInterface::control(oper,params);
     }
+    if (oper == Enable) {
+	bool ok = false;
+	if (m_socket.valid() || m_socket.open(true)) {
+	    if (!m_thread)
+		m_thread = new WpSigThread(this);
+	    if (m_thread->running())
+		ok = true;
+	    else
+		ok = m_thread->startup();
+	}
+	if (ok)
+	    DDebug(this,DebugAll,"Enabled [%p]",this);
+	else {
+	    Debug(this,DebugWarn,"Enable failed [%p]",this);
+	    control(Disable,0);
+	}
+	return ok;
+    }
+    // oper is Disable
+    if (m_thread) {
+	m_thread->cancel();
+	while (m_thread)
+	    Thread::yield();
+    }
+    m_socket.close();
+    DDebug(this,DebugAll,"Disabled [%p]",this);
+    return true;
 }
 
 void WpInterface::timerTick(const Time& when)
@@ -275,11 +655,13 @@ void WpInterface::timerTick(const Time& when)
     if (m_received)
 	m_received = false;
     else {
-	XDebug(this,DebugAll,"Not received any packets in the last tick [%p]",this);
+//	XDebug(this,DebugAll,"Not received any packets in the last tick [%p]",this);
     }
 }
 
-
+/**
+ * WpSigThread
+ */
 WpSigThread::~WpSigThread()
 {
     DDebug(m_interface,DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
@@ -297,454 +679,582 @@ void WpSigThread::run()
     }
 }
 
-#if 0
-class WpChan;
-
-class WpSpan : public PriSpan, public Thread
+/**
+ * WpSource
+ */
+WpSource::WpSource(WpCircuit* owner, const char* format, unsigned int bufsize)
+    : DataSource(format),
+    m_owner(owner),
+    m_buffer(0,bufsize),
+    m_bufpos(0),
+    m_total(0)
 {
-    friend class WpData;
-    friend class WpDriver;
-public:
-    virtual ~WpSpan();
-    virtual void run();
-    inline int overRead() const
-	{ return m_overRead; }
-
-private:
-    WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd);
-    HANDLE m_fd;
-    WpData *m_data;
-    int m_overRead;
-};
-
-class WpChan : public PriChan
-{
-    friend class WpSource;
-    friend class WpConsumer;
-    friend class WpData;
-public:
-    WpChan(const PriSpan *parent, int chan, unsigned int bufsize);
-    virtual ~WpChan();
-    virtual bool openData(const char* format, int echoTaps);
-
-private:
-    WpSource* m_wp_s;
-    WpConsumer* m_wp_c;
-};
-
-class WpData : public Thread
-{
-public:
-    WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect);
-    ~WpData();
-    virtual void run();
-private:
-    WpSpan* m_span;
-    HANDLE m_fd;
-    unsigned char* m_buffer;
-    WpChan **m_chans;
-    int m_samples;
-    bool m_swap;
-    unsigned char m_rdError;
-    unsigned char m_wrError;
-};
-
-#define MAX_DATA_ERRORS 250
-
-static int wp_recv(HANDLE fd, void *buf, int buflen, int flags = 0)
-{
-    int r = ::recv(fd,buf,buflen,flags);
-    return r;
-}
-
-static int wp_send(HANDLE fd, void *buf, int buflen, int flags = 0)
-{
-    int w = ::send(fd,buf,buflen,flags);
-    return w;
-}
-
-static int wp_read(struct pri *pri, void *buf, int buflen)
-{
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    XDebug("wp_read",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int r = wp_recv((HANDLE)::pri_fd(pri),tmp,sz,MSG_NOSIGNAL);
-    XDebug("wp_read",DebugAll,"post r=%d",r);
-    if (r > 0) {
-	r -= WP_HEADER;
-	if ((r > 0) && (r <= buflen)) {
-	    WpSpan* span = (WpSpan*)::pri_get_userdata(pri);
-	    if (span)
-		r -= span->overRead();
-	    DDebug("wp_read",DebugAll,"Transferring %d for %p",r,pri);
-	    ::memcpy(buf,tmp+WP_HEADER,r);
-	    r += 2;
-	}
-    }
-    ::free(tmp);
-    return r;
-}
-
-static int wp_write(struct pri *pri, void *buf, int buflen)
-{
-    buflen -= 2;
-    int sz = buflen+WP_HEADER;
-    char *tmp = (char*)::calloc(sz,1);
-    ::memcpy(tmp+WP_HEADER,buf,buflen);
-    XDebug("wp_write",DebugAll,"pre buf=%p len=%d tmp=%p sz=%d",buf,buflen,tmp,sz);
-    int w = wp_send((HANDLE)::pri_fd(pri),tmp,sz,0);
-    XDebug("wp_write",DebugAll,"post w=%d",w);
-    if (w > 0) {
-	w -= WP_HEADER;
-	DDebug("wp_write",DebugAll,"Transferred %d for %p",w,pri);
-	w += 2;
-    }
-    ::free(tmp);
-    return w;
-}
-
-
-
-static bool wp_select(HANDLE fd,int samp,bool* errp = 0)
-{
-    fd_set rdfds;
-    fd_set errfds;
-    FD_ZERO(&rdfds);
-    FD_SET(fd,&rdfds);
-    FD_ZERO(&errfds);
-    FD_SET(fd,&errfds);
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = samp*125;
-    int sel = ::select(fd+1, &rdfds, NULL, errp ? &errfds : NULL, &tv);
-    if (sel < 0)
-	Debug(DebugWarn,"Wanpipe select failed on %d: error %d: %s",
-	    fd,errno,::strerror(errno));
-    if (errp)
-	*errp = FD_ISSET(fd,&errfds);
-    return FD_ISSET(fd,&rdfds);
-}
-
-void wp_close(HANDLE fd)
-{
-    if (fd == INVALID_HANDLE_VALUE)
-	return;
-    ::close(fd);
-}
-
-static HANDLE wp_open(const char* card, const char* device)
-{
-    DDebug(DebugAll,"wp_open('%s','%s')",card,device);
-    if (null(card) || null(device))
-	return INVALID_HANDLE_VALUE;
-    HANDLE fd = ::socket(AF_WANPIPE, SOCK_RAW, 0);
-    if (fd == INVALID_HANDLE_VALUE) {
-	Debug(DebugGoOn,"Wanpipe failed to create socket: error %d: %s",
-	    errno,::strerror(errno));
-	return fd;
-    }
-    // Bind to the card/interface
-    struct wan_sockaddr_ll sa;
-    memset(&sa,0,sizeof(struct wan_sockaddr_ll));
-    ::strncpy((char*)sa.sll_device,device,sizeof(sa.sll_device));
-    ::strncpy((char*)sa.sll_card,card,sizeof(sa.sll_card));
-    sa.sll_protocol = htons(PVC_PROT);
-    sa.sll_family=AF_WANPIPE;
-    if (::bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-	Debug(DebugGoOn,"Wanpipe failed to bind %d: error %d: %s",
-	    fd,errno,::strerror(errno));
-	wp_close(fd);
-	fd = INVALID_HANDLE_VALUE;
-    }
-    return fd;
-}
-
-static struct pri* wp_create(const char* card, const char* device, int nettype, int swtype)
-{
-    DDebug(DebugAll,"wp_create('%s','%s',%d,%d)",card,device,nettype,swtype);
-    HANDLE fd = wp_open(card,device);
-    if (fd == INVALID_HANDLE_VALUE)
-	return 0;
-    struct pri* p = ::pri_new_cb((int)fd, nettype, swtype, wp_read, wp_write, 0);
-    if (!p)
-	wp_close(fd);
-    return p;
-}
-
-WpSpan::WpSpan(struct pri *_pri, PriDriver* driver, int span, int first, int chans, int dchan, Configuration& cfg, const String& sect, HANDLE fd)
-    : PriSpan(_pri,driver,span,first,chans,dchan,cfg,sect), Thread("WpSpan"),
-      m_fd(fd), m_data(0), m_overRead(0)
-{
-    Debug(&__plugin,DebugAll,"WpSpan::WpSpan() [%p]",this);
-    m_overRead = cfg.getIntValue(sect,"overread",cfg.getIntValue("general","overread",0));
-}
-
-WpSpan::~WpSpan()
-{
-    Debug(&__plugin,DebugAll,"WpSpan::~WpSpan() [%p]",this);
-    m_ok = false;
-    delete m_data;
-    wp_close(m_fd);
-    m_fd = INVALID_HANDLE_VALUE;
-}
-
-void WpSpan::run()
-{
-    Debug(&__plugin,DebugAll,"WpSpan::run() [%p]",this);
-    for (;;) {
-	bool rd = wp_select(m_fd,5); // 5 bytes per smallest q921 frame
-	Thread::check();
-	runEvent(!rd);
-    }
-}
-
-WpSource::WpSource(WpChan *owner, const char* format, unsigned int bufsize)
-    : PriSource(owner,format,bufsize),
-      m_bufpos(0)
-{
-    Debug(m_owner,DebugAll,"WpSource::WpSource(%p) [%p]",owner,this);
-    static_cast<WpChan*>(m_owner)->m_wp_s = this;
+    XDebug(DebugAll,"WpSource::WpSource(%p,%u,'%s') [%p]",
+	owner,bufsize,format,this);
 }
 
 WpSource::~WpSource()
 {
-    Debug(m_owner,DebugAll,"WpSource::~WpSource() [%p]",this);
-    static_cast<WpChan*>(m_owner)->m_wp_s = 0;
+    XDebug(DebugAll,"WpSource::~WpSource() [%p]",this);
 }
 
-void WpSource::put(unsigned char val)
+// Put a byte in buffer. Forward data when full
+void WpSource::put(unsigned char c)
 {
-    ((char*)m_buffer.data())[m_bufpos] = val;
-    if (++m_bufpos >= m_buffer.length()) {
+    ((char*)m_buffer.data())[m_bufpos] = c;
+    if (++m_bufpos == m_buffer.length()) {
 	m_bufpos = 0;
 	Forward(m_buffer);
+	m_total += m_buffer.length();
     }
 }
 
-WpConsumer::WpConsumer(WpChan *owner, const char* format, unsigned int bufsize)
-    : PriConsumer(owner,format,bufsize), Fifo(2*bufsize)
+/**
+ * WpConsumer
+ */
+WpConsumer::WpConsumer(WpCircuit* owner, const char* format, unsigned int bufsize)
+    : DataConsumer(format),
+    Fifo(2 * bufsize),
+    m_owner(owner),
+    m_errorCount(0),
+    m_errorBytes(0),
+    m_total(0)
+
 {
-    Debug(m_owner,DebugAll,"WpConsumer::WpConsumer(%p) [%p]",owner,this);
-    static_cast<WpChan*>(m_owner)->m_wp_c = this;
+    XDebug(DebugAll,"WpConsumer::WpConsumer(%p,%u,'%s') [%p]",
+	owner,bufsize,format,this);
 }
 
 WpConsumer::~WpConsumer()
 {
-    Debug(m_owner,DebugAll,"WpConsumer::~WpConsumer() [%p]",this);
-    static_cast<WpChan*>(m_owner)->m_wp_c = 0;
-    if (m_overruns.events())
-	Debug(m_owner,DebugMild,"Consumer had %u overruns (%lu bytes)",
-	    m_overruns.events(),m_overruns.bytes());
+    XDebug(DebugAll,"WpConsumer::~WpConsumer. [%p]",this);
 }
 
-void WpConsumer::Consume(const DataBlock &data, unsigned long tStamp)
+// Put data in fifo buffer
+void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 {
     unsigned int err = put((const unsigned char*)data.data(),data.length());
-    if (err)
-	m_overruns.update(err);
-}
-
-static Thread::Priority cfgPriority(Configuration& cfg, const String& sect)
-{
-    String tmp(cfg.getValue(sect,"thread"));
-    if (tmp.null())
-	tmp = cfg.getValue("general","thread");
-    return Thread::priority(tmp);
-}
-
-WpData::WpData(WpSpan* span, const char* card, const char* device, Configuration& cfg, const String& sect)
-    : Thread("WpData",cfgPriority(cfg,sect)), m_span(span), m_fd(INVALID_HANDLE_VALUE),
-      m_buffer(0), m_chans(0), m_samples(50), m_swap(true), m_rdError(0), m_wrError(0)
-{
-    Debug(&__plugin,DebugAll,"WpData::WpData(%p,'%s','%s') [%p]",
-	span,card,device,this);
-    HANDLE fd = wp_open(card,device);
-    if (fd != INVALID_HANDLE_VALUE) {
-	m_fd = fd;
-	m_span->m_data = this;
+    if (err) {
+	m_errorCount++;
+	m_errorBytes += err;
     }
-
-    if (m_span->chans() == 24)
-	// for T1 we typically have 23 B channels so we adjust the number
-	//  of samples to get multiple of 32 bit and also reduce overhead
-	m_samples = 64;
-
-    m_samples = cfg.getIntValue("general","samples",m_samples);
-    m_samples = cfg.getIntValue(sect,"samples",m_samples);
-    m_swap = cfg.getBoolValue("general","bitswap",m_swap);
-    m_swap = cfg.getBoolValue(sect,"bitswap",m_swap);
+    m_total += data.length();
 }
 
-WpData::~WpData()
+/**
+ * WpCircuit
+ */
+WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data,
+	unsigned int buflen)
+    : SignallingCircuit(TDM,code,Idle,group,data),
+    m_mutex(true),
+    m_sourceValid(0),
+    m_consumerValid(0),
+    m_source(0),
+    m_consumer(0)
 {
-    Debug(&__plugin,DebugAll,"WpData::~WpData() [%p]",this);
-    m_span->m_data = 0;
-    wp_close(m_fd);
-    m_fd = INVALID_HANDLE_VALUE;
-    if (m_buffer)
-	::free(m_buffer);
-    if (m_chans)
-	delete[] m_chans;
-}
-
-void WpData::run()
-{
-    Debug(&__plugin,DebugAll,"WpData::run() [%p]",this);
-    int bchans = m_span->bchans();
-    int buflen = m_samples*bchans;
-    int sz = buflen+WP_HEADER;
-    m_buffer = (unsigned char*)::malloc(sz);
-    // Build a compacted list of allocated B channels
-    m_chans = new WpChan* [bchans];
-    int b = 0;
-    for (int n = 0; n < bchans; n++) {
-	while (!m_span->m_chans[b])
-	    b++;
-	m_chans[n] = static_cast<WpChan*>(m_span->m_chans[b++]);
-	DDebug(&__plugin,DebugInfo,"wpdata ch[%d]=%d (%p)",n,m_chans[n]->chan(),m_chans[n]);
+    if (buflen) {
+	m_source = new WpSource(this,"alaw",buflen);
+	m_consumer = new WpConsumer(this,"alaw",buflen);
+	XDebug(group,DebugAll,"WpCircuit %u. Source (%p). Consumer (%p) [%p]",
+	    code,m_source,m_consumer,this);
     }
-    while (m_span && (m_fd >= 0)) {
-	Thread::check();
-	bool oob = false;
-	bool rd = wp_select(m_fd,m_samples,&oob);
-	if (oob) {
-	    XDebug("wpdata_recv_oob",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = wp_recv(m_fd,m_buffer,sz,MSG_OOB);
-	    XDebug("wpdata_recv_oob",DebugAll,"post r=%d",r);
-	    if (r > 0)
-		Debug(&__plugin,DebugInfo,"Read %d bytes of OOB data on span %d [%p]",
-		    r,m_span->span(),this);
-	}
+    else
+	Debug(group,DebugNote,
+	    "WpCircuit %u. No source and consumer. Buffer length is 0 [%p]",
+	    code,this);
+}
 
-	if (rd) {
-	    m_buffer[0] = 0;
-	    XDebug("wpdata_recv",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,buflen,sz);
-	    int r = wp_recv(m_fd,m_buffer,sz,0/*MSG_NOSIGNAL*/);
-	    XDebug("wpdata_recv",DebugAll,"post r=%d",r);
-	    r -= WP_HEADER;
-	    if (m_buffer[0]) {
-		if (!m_rdError)
-		    Debug(&__plugin,DebugWarn,"Read data error 0x%02X on span %d [%p]",
-			m_buffer[0],m_span->span(),this);
-		if (m_rdError < MAX_DATA_ERRORS)
-		    m_rdError++;
-	    }
-	    else
-		m_rdError = 0;
-	    // We should have read N bytes for each B channel
-	    if ((r > 0) && ((r % bchans) == 0)) {
-		r /= bchans;
-		const unsigned char* dat = m_buffer + WP_HEADER;
-		m_span->lock();
-		for (int n = r; n > 0; n--)
-		    for (b = 0; b < bchans; b++) {
-			WpSource *s = m_chans[b]->m_wp_s;
-			if (s)
-			    s->put(m_swap ? PriDriver::bitswap(*dat) : *dat);
-			dat++;
-		    }
-		m_span->unlock();
-	    }
-	    int wr = m_samples;
-	    ::memset(m_buffer,0,WP_HEADER);
-	    unsigned char* dat = m_buffer + WP_HEADER;
-	    m_span->lock();
-	    for (int n = wr; n > 0; n--) {
-		for (b = 0; b < bchans; b++) {
-		    WpConsumer *c = m_chans[b]->m_wp_c;
-		    unsigned char d = c ? c->get() : 0xff;
-		    *dat++ = m_swap ? PriDriver::bitswap(d) : d;
-		}
-	    }
-	    m_span->unlock();
-	    wr = (wr * bchans) + WP_HEADER;
-	    XDebug("wpdata_send",DebugAll,"pre buf=%p len=%d sz=%d",m_buffer,wr,sz);
-	    int w = wp_send(m_fd,m_buffer,wr,MSG_DONTWAIT);
-	    XDebug("wpdata_send",DebugAll,"post w=%d",w);
-	    if (w != wr) {
-		if (!m_wrError)
-		    Debug(&__plugin,DebugWarn,"Wrote %d data bytes instead of %d on span %d [%p]",
-			w,wr,m_span->span(),this);
-		if (m_wrError < MAX_DATA_ERRORS)
-		    m_wrError++;
-	    }
-	    else
-		m_wrError = 0;
-	}
+WpCircuit::~WpCircuit()
+{
+    Lock lock(m_mutex);
+    status(Missing);
+    if (m_source)
+	m_source->deref();
+    if (m_consumer)
+	m_consumer->deref();
+    XDebug(group(),DebugAll,"WpCircuit::~WpCircuit(%u) [%p]",code(),this);
+}
+
+// Change circuit status. Clear events on succesfully changes status
+// Connected: Set valid source and consumer
+// Otherwise: Invalidate and reset source and consumer
+bool WpCircuit::status(Status newStat, bool sync)
+{
+    Lock lock(m_mutex);
+    if (SignallingCircuit::status() == newStat)
+	return true;
+    // Allow status change for the following values
+    switch (newStat) {
+	case Missing:
+	case Disabled:
+	case Idle:
+	case Reserved:
+	case Connected:
+	    break;
+	default: ;
+	    Debug(group(),DebugNote,
+		"WpCircuit %u. Can't change status to unhandled value %u [%p]",
+		code(),newStat,this);
+	    return false;
     }
-}
-
-WpChan::WpChan(const PriSpan *parent, int chan, unsigned int bufsize)
-    : PriChan(parent,chan,bufsize), m_wp_s(0), m_wp_c(0)
-{
-}
-
-WpChan::~WpChan()
-{
-    closeData();
-}
-
-bool WpChan::openData(const char* format, int echoTaps)
-{
-    if (echoTaps)
-	Debug(DebugWarn,"Echo cancellation requested but not available in wanpipe");
-    m_span->lock();
-    setSource(new WpSource(this,format,m_bufsize));
-    getSource()->deref();
-    setConsumer(new WpConsumer(this,format,m_bufsize));
-    getConsumer()->deref();
-    m_span->unlock();
+    if (SignallingCircuit::status() == Missing) {
+	Debug(group(),DebugNote,
+	    "WpCircuit %u. Can't change status to '%u'. Circuit is missing [%p]",
+	    code(),newStat,this);
+	return false;
+    }
+    // Change status
+    if (!SignallingCircuit::status(newStat,sync))
+	return false;
+    // Enable/disable data transfer
+    clearEvents();
+    bool enableData = false;
+    if (SignallingCircuit::status() == Connected)
+	enableData = true;
+    DDebug(group(),DebugAll,
+	"WpCircuit %u. Changed status to '%u'. %s data transfer [%p]",
+	code(),newStat,enableData ? "Enable" : "Disable",this);
+    if (enableData) {
+	m_sourceValid = m_source;
+	m_consumerValid = m_consumer;
+	return true;
+    }
+    // Disable data if not already disabled
+    if (m_consumerValid) {
+	m_consumerValid = 0;
+	XDebug(group(),DebugAll,"WpCircuit %u. Consumer transferred %u byte(s) [%p]",
+	    code(),m_consumer->m_total,this);
+	if (m_consumer->m_errorCount)
+	    DDebug(group(),DebugMild,
+	        "WpCircuit %u. Consumer errors: %u. Lost: %u/%u [%p]",
+		code(),m_consumer->m_errorCount,m_consumer->m_errorBytes,
+		m_consumer->m_total,this);
+	m_consumer->clear();
+	m_consumer->m_errorCount = m_consumer->m_errorBytes = 0;
+	m_consumer->m_total = 0;
+    }
+    if (m_sourceValid) {
+	m_sourceValid = 0;
+	XDebug(group(),DebugAll,"WpCircuit %u. Source transferred %u byte(s) [%p]",
+	    code(),m_source->m_total,this);
+	m_source->m_total = 0;
+    }
     return true;
 }
 
-PriSpan* WpDriver::createSpan(PriDriver* driver, int span, int first, int chans, Configuration& cfg, const String& sect)
+// Update source/consumer data format
+bool WpCircuit::updateFormat(const char* format, int direction)
 {
-    Debug(this,DebugAll,"WpDriver::createSpan(%p,%d,%d,%d) [%p]",driver,span,first,chans,this);
-    int netType = -1;
-    int swType = -1;
-    int dchan = -1;
-    netParams(cfg,sect,chans,&netType,&swType,&dchan);
-    String card;
-    card << "wanpipe" << span;
-    card = cfg.getValue(sect,"card",card);
-    String dev;
-    dev << "w" << span << "g1";
-    pri* p = wp_create(card,cfg.getValue(sect,"dgroup",dev),netType,swType);
-    if (!p)
+    if (!(format && *format))
+	return false;
+    bool consumerChanged = true;
+    bool sourceChanged = true;
+    Lock lock(m_mutex);
+    if (direction == -1 || direction == 0) {
+	if (m_consumer && m_consumer->getFormat() != format) {
+	    m_consumer->changeFormat(format);
+	    DDebug(group(),DebugAll,"WpCircuit %u. Consumer format set to '%s' [%p]",
+		code(),format,this);
+	}
+	else
+	    consumerChanged = false;
+    }
+    if (direction == 1 || direction == 0) {
+	if (m_source && m_source->getFormat() != format) {
+	    m_source->changeFormat(format);
+	    DDebug(group(),DebugAll,"WpCircuit %u. Source format set to '%s' [%p]",
+		code(),format,this);
+	}
+	else
+	    sourceChanged = false;
+    }
+    return consumerChanged && sourceChanged;
+}
+
+// Get source or consumer
+void* WpCircuit::getObject(const String& name) const
+{
+    if (!group())
 	return 0;
-    WpSpan *ps = new WpSpan(p,driver,span,first,chans,dchan,cfg,sect,(HANDLE)::pri_fd(p));
-    ps->startup();
-    dev.clear();
-    dev << "w" << span << "g2";
-    WpData* dat = new WpData(ps,card,cfg.getValue(sect,"bgroup",dev),cfg,sect);
-    dat->startup();
-    return ps;
+    if (name == "DataSource")
+	return m_source;
+    if (name == "DataConsumer")
+	return m_consumer;
+    return 0;
 }
 
-PriChan* WpDriver::createChan(const PriSpan* span, int chan, unsigned int bufsize)
+/**
+ * WpData
+ */
+unsigned char WpData::s_bitswap[256] = {
+	0x00,0x80,0x40,0xc0,0x20,0xa0,0x60,0xe0,0x10,0x90,0x50,0xd0,0x30,0xb0,0x70,0xf0,0x08,0x88,0x48,0xc8,
+	0x28,0xa8,0x68,0xe8,0x18,0x98,0x58,0xd8,0x38,0xb8,0x78,0xf8,0x04,0x84,0x44,0xc4,0x24,0xa4,0x64,0xe4,
+	0x14,0x94,0x54,0xd4,0x34,0xb4,0x74,0xf4,0x0c,0x8c,0x4c,0xcc,0x2c,0xac,0x6c,0xec,0x1c,0x9c,0x5c,0xdc,
+	0x3c,0xbc,0x7c,0xfc,0x02,0x82,0x42,0xc2,0x22,0xa2,0x62,0xe2,0x12,0x92,0x52,0xd2,0x32,0xb2,0x72,0xf2,
+	0x0a,0x8a,0x4a,0xca,0x2a,0xaa,0x6a,0xea,0x1a,0x9a,0x5a,0xda,0x3a,0xba,0x7a,0xfa,0x06,0x86,0x46,0xc6,
+	0x26,0xa6,0x66,0xe6,0x16,0x96,0x56,0xd6,0x36,0xb6,0x76,0xf6,0x0e,0x8e,0x4e,0xce,0x2e,0xae,0x6e,0xee,
+	0x1e,0x9e,0x5e,0xde,0x3e,0xbe,0x7e,0xfe,0x01,0x81,0x41,0xc1,0x21,0xa1,0x61,0xe1,0x11,0x91,0x51,0xd1,
+	0x31,0xb1,0x71,0xf1,0x09,0x89,0x49,0xc9,0x29,0xa9,0x69,0xe9,0x19,0x99,0x59,0xd9,0x39,0xb9,0x79,0xf9,
+	0x05,0x85,0x45,0xc5,0x25,0xa5,0x65,0xe5,0x15,0x95,0x55,0xd5,0x35,0xb5,0x75,0xf5,0x0d,0x8d,0x4d,0xcd,
+	0x2d,0xad,0x6d,0xed,0x1d,0x9d,0x5d,0xdd,0x3d,0xbd,0x7d,0xfd,0x03,0x83,0x43,0xc3,0x23,0xa3,0x63,0xe3,
+	0x13,0x93,0x53,0xd3,0x33,0xb3,0x73,0xf3,0x0b,0x8b,0x4b,0xcb,0x2b,0xab,0x6b,0xeb,0x1b,0x9b,0x5b,0xdb,
+	0x3b,0xbb,0x7b,0xfb,0x07,0x87,0x47,0xc7,0x27,0xa7,0x67,0xe7,0x17,0x97,0x57,0xd7,0x37,0xb7,0x77,0xf7,
+	0x0f,0x8f,0x4f,0xcf,0x2f,0xaf,0x6f,0xef,0x1f,0x9f,0x5f,0xdf,0x3f,0xbf,0x7f,0xff
+	};
+
+// Initialize B-channel group
+// Create circuits. Start worker thread
+WpData::WpData(const NamedList& params)
+    : SignallingCircuitSpan(params.getValue("debugname"),
+	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
+    m_socket(m_group),
+    m_thread(0),
+    m_swap(false),
+    m_chans(0),
+    m_count(0),
+    m_first(0),
+    m_samples(0),
+    m_noData(0),
+    m_buflen(0),
+    m_circuits(0),
+    m_readErrors(0),
+    m_buffer(0),
+    m_bufferLen(0)
 {
-    Debug(this,DebugAll,"WpDriver::createChan(%p,%d,%u) [%p]",span,chan,bufsize,this);
-    return new WpChan(span,chan,bufsize);
+    XDebug(m_group,DebugAll,"WpData::WpData(). Name '%s' [%p]",id().safe(),this);
 }
 
-WpDriver::WpDriver()
-    : PriDriver("wp")
+// Terminate worker thread
+// Close socket. Clear circuit list
+WpData::~WpData()
 {
-    Output("Loaded module Wanpipe");
+    if (m_thread) {
+	m_thread->cancel();
+	while (m_thread)
+	    Thread::yield();
+    }
+    m_socket.close();
+    if (m_circuits)
+	delete[] m_circuits;
+    if (m_buffer)
+	delete[] m_buffer;
+    XDebug(m_group,DebugAll,"WpData::~WpData() [%p]",this);
 }
 
-WpDriver::~WpDriver()
+// Initialize
+bool WpData::init(NamedList& params)
 {
-    Output("Unloading module Wanpipe");
+    DDebug(m_group,DebugAll,"WpData('%s'). Initializing [%p]",id().safe(),this);
+    if (!m_group) {
+	Debug(DebugNote,"WpData('%s'). Circuit group is missing [%p]",
+	    id().safe(),this);
+	return false;
+    }
+    WpConfig cfg;
+    const char* sectName = params.getValue("voice");
+    NamedList* sect = cfg.getSection(sectName);
+    if (!sect) {
+	Debug(m_group,DebugNote,"WpData('%s'). No section '%s' in configuration [%p]",
+	    id().safe(),c_safe(sectName),this);
+	return false;
+    }
+    // Set socket card / device
+    m_socket.card(sectName);
+    const char* voice = params.getValue("voicegroup",sect->getValue("voicegroup"));
+    if (!voice) {
+	Debug(m_group,DebugNote,"WpData('%s'). Missing or invalid voice group [%p]",
+	    id().safe(),this);
+	return false;
+    }
+    m_socket.device(voice);
+    // Type depending data: channel count, samples, circuit list
+    String type = sect->getValue("type");
+    String cics = sect->getValue("voicechans");
+    m_samples = params.getIntValue("samples",sect->getIntValue("samples"));
+    if (type.null())
+	type = "E1";
+    if (type == "E1") {
+	m_chans = 31;
+	if (cics.null())
+	    cics = "1-15,17-31";
+	if (!m_samples)
+	    m_samples = 50;
+    }
+    else {
+	Debug(m_group,DebugNote,"WpData('%s'). Invalid voice group type '%s' [%p]",
+	    id().safe(),type.safe(),this);
+	return false;
+    }
+    params.setParam("chans",String(m_chans));
+    // Other data
+    m_swap = cfg.getBoolValue("general","bitswap",true);
+    m_noData = cfg.getIntValue("general","idlevalue",0xff);
+    m_buflen = cfg.getIntValue("general","buflen",160);
+    m_swap = params.getBoolValue("bitswap",sect->getBoolValue("bitswap",m_swap));
+    m_noData = params.getIntValue("idlevalue",sect->getIntValue("idlevalue",m_noData));
+    m_buflen = params.getIntValue("buflen",sect->getIntValue("buflen",m_buflen));
+    // Buffer length can't be 0
+    if (!m_buflen)
+	m_buflen = 160;
+    // Channels
+    if (!createCircuits(params.getIntValue("start"),cics)) {
+	Debug(m_group,DebugNote,
+	    "WpData('%s'). Failed to create voice chans (voicechans=%s) [%p]",
+	    id().safe(),cics.safe(),this);
+	return false;
+    }
+    // Start processing data
+    m_thread = new WpDataThread(this);
+    if (!m_thread->startup()) {
+	Debug(m_group,DebugNote,"WpData('%s'). Failed to start worker thread [%p]",
+	    id().safe(),this);
+	return false;
+    }
+    if (debugAt(DebugInfo)) {
+	String s;
+	s << "\r\nType:           " << type;
+	s << "\r\nGroup:          " << m_group->debugName();
+	s << "\r\nCard:           " << m_socket.card();
+	s << "\r\nDevice:         " << m_socket.device();
+	s << "\r\nSamples:        " << m_samples;
+	s << "\r\nBit swap:       " << String::boolText(m_swap);
+	s << "\r\nNo data value:  " << (unsigned int)m_noData;
+	s << "\r\nBuffer length:  " << (unsigned int)m_buflen;
+	s << "\r\nUsed channels:  " << m_count;
+	Debug(m_group,DebugInfo,"WpData('%s'). Initialized: [%p]%s",
+	    id().safe(),this,s.c_str());
+    }
+    return true;
 }
 
-void WpDriver::initialize()
+// Process a list of circuits to create. Update m_count
+// Validate each circuit number to be positive and lesser or equal to m_chans
+// Return the codes of the circuits or 0 on error
+// List may be separated by '.' or ',' and may contain code intervals
+unsigned int* WpData::processCicList(const String& cicList)
 {
-    Output("Initializing module Wanpipe");
-    init("wpchan");
+    ObjList* listSplit = 0;
+    char separator = (-1 != cicList.find(',')) ? ',' : '.';
+    listSplit = cicList.split(separator,false);
+    if (!(listSplit || listSplit->count()))
+	return 0;
+    // Split the intervals into single code elements
+    unsigned int* cicCodes = new unsigned int[m_chans];
+    bool ok = true;
+    ObjList* o = listSplit->skipNull();
+    for (; o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (s->null())
+	    continue;
+	// Check for interval
+	int sep = s->find('-');
+	int first = -1, last = -2;
+	if (sep == -1)
+	    first = last = s->toInteger(-1);
+	else {
+	    String tmp = s->substr(0,sep);
+	    first = tmp.toInteger(-1);
+	    tmp = s->substr(sep + 1);
+	    last = tmp.toInteger(-2);
+	}
+	// Check for valid interval and codes
+	// The interval must be [1..m_chans]
+	if (first <= 0 || last <= 0 || last < first || (unsigned int)last > m_chans) {
+	    ok = false;
+	    break;
+	}
+	// Add to circuit code list
+	for (; first <= last; first++) {
+	    if (m_count == m_chans) {
+		ok = false;
+		break;
+	    }
+	    cicCodes[m_count++] = (unsigned int)first;
+	}
+	if (!ok)
+	    break;
+    }
+    delete listSplit;
+    if (ok && m_count)
+	return cicCodes;
+    delete cicCodes;
+    m_count = 0;
+    return 0;
 }
-#endif // 0
+
+// Create circuits (all or nothing)
+// delta: number to add to each circuit code
+// cicList: Circuits to create
+bool WpData::createCircuits(unsigned int delta, const String& cicList)
+{
+    if (!m_group)
+	return false;
+    // Get list. Count them
+    unsigned int* cicCodes = processCicList(cicList);
+    if (!cicCodes)
+	return false;
+    if (m_circuits)
+	delete[] m_circuits;
+    m_circuits = new WpCircuit*[m_count];
+    bool ok = true;
+    for (unsigned int i = 0; i < m_count; i++) {
+	m_circuits[i] = new WpCircuit(delta + cicCodes[i],m_group,this,m_buflen);
+	if (m_group->insert(m_circuits[i]))
+	    continue;
+	// Failure
+	Debug(m_group,DebugNote,
+	    "WpData('%s'). Failed to create/insert circuit %u. Rollback [%p]",
+	    id().safe(),cicCodes[i],this);
+	m_group->removeSpan(this,true,false);
+	delete[] m_circuits;
+	m_circuits = 0;
+	ok = false;
+	break;
+    }
+    delete cicCodes;
+    return ok;
+}
+
+// Read events and data from socket. Send data when succesfully read
+// Received data is splitted for each circuit
+// Sent data from each circuit is merged into one data block
+void WpData::run()
+{
+    if (!m_socket.open(true))
+	return;
+    if (!m_buffer) {
+	m_bufferLen = WP_HEADER + m_samples * m_count;
+	m_buffer = new unsigned char[m_bufferLen];
+    }
+    while (true) {
+	if (Thread::check(true))
+	    break;
+	if (!m_socket.select(m_samples))
+	    continue;
+	if (m_socket.event())
+	    readEvent();
+	if (!m_socket.canRead())
+	    continue;
+	int r = readData();
+	if (r == -1)
+	    continue;
+	r -= WP_HEADER;
+	// Calculate received samples. Check if we received valid data
+	unsigned int samples = 0; 
+	if ((r > 0) && ((r % m_count) == 0))
+	    samples = (unsigned int)r / m_count;
+	if (!samples) {
+	    Debug(m_group,DebugNote,
+		"WpData('%s'). Received data %d is not a multiple of circuit number %u [%p]",
+		id().safe(),r,m_count,this);
+	    continue;
+	}
+	if (samples != m_samples)
+	    Debug(m_group,DebugInfo,
+		"WpData('%s'). Received %u samples. Expected %u [%p]",
+		id().safe(),samples,m_samples,this);
+	unsigned char* dat = m_buffer + WP_HEADER;
+	// Read each byte from buffer. Prepare buffer for sending
+	for (int n = samples; n > 0; n--)
+	    for (unsigned int i = 0; i < m_count; i++) {
+		if (m_circuits[i]->source())
+		    m_circuits[i]->source()->put(swap(*dat));
+		if (m_circuits[i]->consumer())
+		    *dat = swap(m_circuits[i]->consumer()->get());
+		else
+		    *dat = swap(m_noData);
+		dat++;
+	    }
+	::memset(m_buffer,0,WP_HEADER);
+	m_socket.send(m_buffer,WP_HEADER + samples * m_count,MSG_DONTWAIT);
+    }
+}
+
+// Check for received event (including in-band events)
+bool WpData::readEvent()
+{
+    DDebug(m_group,DebugInfo,"WpData('%s'). Got event. Checking OOB [%p]",
+	id().safe(),this);
+    int r = m_socket.recv(m_buffer,m_bufferLen,MSG_OOB);
+    if (r >= WP_HEADER)
+	decodeEvent();
+    return true;
+}
+
+// Read data from socket. Check for errors or in-band events
+// Return -1 on error
+int WpData::readData()
+{
+    m_buffer[WP_RD_ERROR] = 0;
+    int r = m_socket.recv(m_buffer,m_bufferLen);
+    // Check errors
+    if (r == -1)
+	return -1;
+    if (r < WP_HEADER) {
+	Debug(m_group,DebugGoOn,"WpData('%s'). Short read %u byte(s) [%p]",
+	    id().safe(),r,this);
+	return -1;
+    }
+    if (m_buffer[WP_RD_ERROR]) {
+	m_readErrors++;
+	if (m_readErrors == MAX_READ_ERRORS) {
+	    Debug(m_group,DebugGoOn,"WpData('%s'). Read error %u [%p]",
+		id().safe(),m_buffer[WP_RD_ERROR],this);
+	    m_readErrors = 0;
+	}
+    }
+    else
+	m_readErrors = 0;
+    // Check events
+    decodeEvent();
+    return r;
+}
+
+bool WpData::decodeEvent()
+{
+    return false;
+#if 0
+    if (!m_circuits)
+	return false;
+    SignallingCircuitEvent* event = 0;
+    int code = 0xffffffff;
+    // TODO: Decode event here. Set circuit code
+    if (!event)
+	return false;
+    for (int i = 0; i < m_count; i++)
+	if (m_circuits[i]->code() == code) {
+	    cic->addEvent(event);
+	    return true;
+	}
+    delete event;
+    return true;
+#endif
+}
+
+/**
+ * WpDataThread
+ */
+WpDataThread::~WpDataThread()
+{
+    if (m_data) {
+	DDebug(m_data->group(),DebugAll,"WpDataThread::~WpDataThread() [%p]",this);
+	m_data->m_thread = 0;
+    }
+    else
+	DDebug(DebugAll,"WpDataThread::~WpDataThread() [%p]",this);
+}
+
+void WpDataThread::run()
+{
+    if (m_data) {
+	DDebug(m_data->group(),DebugAll,"WpDataThread::run() for (%p): '%s' [%p]",
+	    m_data,m_data->id().safe(),this);
+	m_data->run();
+    }
+    else
+	DDebug(DebugAll,"WpDataThread::run(). No client object [%p]",this);
+}
 
 }; // anonymous namespace
 

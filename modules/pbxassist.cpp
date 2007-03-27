@@ -346,9 +346,11 @@ bool PBXAssist::msgTone(Message& msg)
 		    (s->name() == "pbxprompt") ||
 		    (s->name() == "message"))
 		    continue;
-		m->addParam(s->name(),m_tones.replaceMatches(*s));
+		String val = m_tones.replaceMatches(*s);
+		msg.replaceParams(val);
+		m->setParam(s->name(),val);
 	    }
-	    m->addParam("pbxstate",m_state);
+	    m->setParam("pbxstate",m_state);
 	    Engine::enqueue(m);
 	}
 	// we may paste a string instead of just clearing the key buffer

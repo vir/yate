@@ -83,6 +83,9 @@ public:
 // assist all channels by default?
 static bool s_assist = true;
 
+// by default create assistant on chan.startup of incoming calls?
+static bool s_incoming = true;
+
 // filter for channel names to enable assistance
 static Regexp s_filter;
 
@@ -115,8 +118,14 @@ ChanAssist* PBXList::create(Message& msg, const String& id)
 	// if a filter is set try to match it
 	if (s_filter && !s_filter.matches(id))
 	    return 0;
+	bool def = s_assist;
+	if (def && !s_incoming) {
+	    const NamedString* status = msg.getParam("status");
+	    if (status && (*status == "incoming"))
+		def = false;
+	}
 	// allow routing to enable/disable assistance
-	if (msg.getBoolValue("pbxassist",s_assist)) {
+	if (msg.getBoolValue("pbxassist",def)) {
 	    Debug(this,DebugCall,"Creating assistant for '%s'",id.c_str());
 	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass));
 	}
@@ -139,6 +148,7 @@ void PBXList::initialize()
     s_cfg = Engine::configFile(name());
     s_cfg.load();
     s_assist = s_cfg.getBoolValue("general","default",true);
+    s_incoming = s_cfg.getBoolValue("general","incoming",true);
     s_filter = s_cfg.getValue("general","filter");
     s_pass = s_cfg.getBoolValue("general","dtmfpass",false);
     s_minlen = s_cfg.getIntValue("general","minlen",2);

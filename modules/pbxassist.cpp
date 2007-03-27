@@ -32,9 +32,10 @@ namespace { //anonymous
 class YPBX_API PBXAssist : public ChanAssist
 {
 public:
-    inline PBXAssist(ChanAssistList* list, const String& id, bool pass)
-	: ChanAssist(list,id), m_last(0), m_pass(pass), m_state("new"), m_keep("")
-	{ Debug(list,DebugCall,"Created assistant for '%s'",id.c_str()); }
+    inline PBXAssist(ChanAssistList* list, const String& id, bool pass, bool guest)
+	: ChanAssist(list,id), m_last(0), m_pass(pass), m_guest(guest),
+	  m_state("new"), m_keep("")
+	{ Debug(list,DebugCall,"Created%s assistant for '%s'",guest ? " guest" : "",id.c_str()); }
     virtual void msgStartup(Message& msg);
     virtual void msgHangup(Message& msg);
     virtual void msgExecute(Message& msg);
@@ -43,8 +44,10 @@ public:
     virtual bool msgOperation(Message& msg, const String& operation);
 protected:
     bool errorBeep(const char* source = 0);
+    void setGuest(const Message& msg);
     u_int64_t m_last;
     bool m_pass;
+    bool m_guest;
     String m_tones;
     String m_peer1;
     String m_room;
@@ -118,16 +121,16 @@ ChanAssist* PBXList::create(Message& msg, const String& id)
 	// if a filter is set try to match it
 	if (s_filter && !s_filter.matches(id))
 	    return 0;
-	bool def = s_assist;
-	if (def && !s_incoming) {
-	    const NamedString* status = msg.getParam("status");
-	    if (status && (*status == "incoming"))
-		def = false;
-	}
 	// allow routing to enable/disable assistance
-	if (msg.getBoolValue("pbxassist",def)) {
-	    Debug(this,DebugCall,"Creating assistant for '%s'",id.c_str());
-	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass));
+	if (msg.getBoolValue("pbxassist",s_assist)) {
+	    DDebug(this,DebugCall,"Creating assistant for '%s'",id.c_str());
+	    bool guest = false;
+	    if (!s_incoming) {
+		const NamedString* status = msg.getParam("status");
+		if (status && (*status == "incoming"))
+		    guest = true;
+	    }
+	    return new PBXAssist(this,id,msg.getBoolValue("dtmfpass",s_pass),msg.getBoolValue("pbxguest",guest));
 	}
     }
     return 0;
@@ -267,6 +270,8 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 // Handler for channel's DTMF
 bool PBXAssist::msgTone(Message& msg)
 {
+    if (m_guest)
+	return false;
     const char* tone = msg.getValue("text");
     if (null(tone))
 	return false;
@@ -370,6 +375,16 @@ bool PBXAssist::errorBeep(const char* source)
     return false;
 }
 
+// Change the guest status according to message parameters
+void PBXAssist::setGuest(const Message& msg)
+{
+    bool guest = msg.getBoolValue("pbxguest",m_guest);
+    if (guest != m_guest) {
+	Debug(list(),DebugNote,"Chan '%s' %s guest mode",id().c_str(),guest ? "entering" : "leaving");
+	m_guest = guest;
+    }
+}
+
 // Operation message handler - calls one of the operation handlers
 bool PBXAssist::msgOperation(Message& msg, const String& operation)
 {
@@ -414,6 +429,7 @@ bool PBXAssist::operSetState(Message& msg)
 {
     m_state = msg.getValue("state",m_state);
     m_room = msg.getValue("room",m_room);
+    setGuest(msg);
     return true;
 }
 
@@ -713,6 +729,7 @@ void PBXAssist::msgHangup(Message& msg)
 void PBXAssist::msgStartup(Message& msg)
 {
     DDebug(list(),DebugNote,"Copying startup parameters for '%s'",id().c_str());
+    setGuest(msg);
     m_keep.setParam("billid",msg.getValue("billid"));
     NamedString* status = msg.getParam("status");
     if (status && (*status == "outgoing")) {
@@ -731,6 +748,7 @@ void PBXAssist::msgExecute(Message& msg)
 {
     DDebug(list(),DebugNote,"Copying execute parameters for '%s'",id().c_str());
     // this gets only called on incoming call legs
+    setGuest(msg);
     m_keep.setParam("billid",msg.getValue("billid"));
     m_keep.setParam("called",msg.getValue("called"));
     m_keep.setParam("caller",msg.getValue("caller"));

@@ -815,6 +815,8 @@ void PriChan::hangup(int cause)
     if (inUse())
 	Debug(this,DebugInfo,"Hanging up %s (%s) in state %s: %s (%d)",
 	    id().c_str(),address().c_str(),chanStatus(),reason,cause);
+    timeout(0);
+    maxcall(0);
     m_timeout = 0;
     m_targetid.clear();
     disconnect(lookup(cause,dict_str2cause,reason));
@@ -830,6 +832,7 @@ void PriChan::hangup(int cause)
 	m->addParam("reason",pri_cause2str(cause));
 	Engine::enqueue(m);
     }
+    m_answered = false;
     m_billid.clear();
     status(chanStatus());
 }

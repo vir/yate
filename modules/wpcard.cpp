@@ -495,13 +495,13 @@ WpInterface::WpInterface(const NamedList& params)
     m_thread(0), m_received(false), m_overRead(0)
 {
     setName(params.getValue("debugname","WpInterface"));
-    DDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
+    XDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
 }
 
 WpInterface::~WpInterface()
 {
     control(Disable,0);
-    DDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
+    XDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
 }
 
 bool WpInterface::init(NamedList& params)
@@ -812,6 +812,7 @@ bool WpCircuit::status(Status newStat, bool sync)
     bool enableData = false;
     if (SignallingCircuit::status() == Connected)
 	enableData = true;
+    // Don't put this message for final states
     DDebug(group(),DebugAll,
 	"WpCircuit %u. Changed status to '%u'. %s data transfer [%p]",
 	code(),newStat,enableData ? "Enable" : "Disable",this);
@@ -835,6 +836,8 @@ bool WpCircuit::status(Status newStat, bool sync)
 	m_consumer->m_total = 0;
     }
     if (m_sourceValid) {
+	// Remove consumer
+	m_source->attach(0,true);
 	m_sourceValid = 0;
 	XDebug(group(),DebugAll,"WpCircuit %u. Source transferred %u byte(s) [%p]",
 	    code(),m_source->m_total,this);
@@ -878,9 +881,9 @@ void* WpCircuit::getObject(const String& name) const
     if (!group())
 	return 0;
     if (name == "DataSource")
-	return m_source;
+	return m_sourceValid;
     if (name == "DataConsumer")
-	return m_consumer;
+	return m_consumerValid;
     return 0;
 }
 
@@ -945,7 +948,7 @@ WpData::~WpData()
 // Initialize
 bool WpData::init(NamedList& params)
 {
-    DDebug(m_group,DebugAll,"WpData('%s'). Initializing [%p]",id().safe(),this);
+    XDebug(m_group,DebugAll,"WpData('%s'). Initializing [%p]",id().safe(),this);
     if (!m_group) {
 	Debug(DebugNote,"WpData('%s'). Circuit group is missing [%p]",
 	    id().safe(),this);
@@ -980,6 +983,13 @@ bool WpData::init(NamedList& params)
 	    cics = "1-15,17-31";
 	if (!m_samples)
 	    m_samples = 50;
+    }
+    else if (type == "T1") {
+	m_chans = 23;
+	if (cics.null())
+	    cics = "1-23";
+	if (!m_samples)
+	    m_samples = 64;
     }
     else {
 	Debug(m_group,DebugNote,"WpData('%s'). Invalid voice group type '%s' [%p]",

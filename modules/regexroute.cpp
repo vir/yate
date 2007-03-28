@@ -22,7 +22,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <yatengine.h>
+#include <yatephone.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -212,6 +212,17 @@ static void evalFunc(String& str)
 	else if (str == "runid") {
 	    str.clear();
 	    str << Engine::runId();
+	}
+	else if ((sep >= 0) && (str == "transcode")) {
+	    str = par.substr(0,sep);
+	    par = par.substr(sep+1).trimBlanks();
+	    ObjList* fmts = DataTranslator::allFormats(par,
+		(str.find('e') < 0),
+		(str.find('r') < 0),
+		(str.find('c') < 0));
+	    str.clear();
+	    str.append(fmts,",");
+	    delete fmts;
 	}
 	else if ((sep < 0) && str.trimBlanks())
 	    str = s_vars.getValue(str);

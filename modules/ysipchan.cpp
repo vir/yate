@@ -3135,6 +3135,28 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    setStatus("redirected");
 	    return false;
 	}
+
+	if (m_rtpMedia) {
+	    // update formats lists
+	    unsigned int n = msg.length();
+	    for (unsigned int i = 0; i < n; i++) {
+		const NamedString* p = msg.getParam(i);
+		if (!p)
+		    continue;
+		// search for formats_MEDIANAME parameters
+		String tmp = p->name();
+		if (!tmp.startSkip("formats",false))
+		    continue;
+		if (tmp && (tmp[0] != '_'))
+		    continue;
+		if (tmp.null())
+		    tmp = "audio";
+		NetMedia* rtp = static_cast<NetMedia*>(m_rtpMedia->operator[](tmp));
+		if (rtp && rtp->update(*p))
+		    Debug(this,DebugNote,"Formats for '%s' changed to '%s'",tmp.c_str(),p->c_str());
+	    }
+	}
+
 	if (msg.getBoolValue("progress",s_cfg.getBoolValue("general","progress",false)))
 	    m_tr->setResponse(183);
     }

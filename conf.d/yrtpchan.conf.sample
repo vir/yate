@@ -15,16 +15,16 @@
 ;buffer=240
 
 ; autoaddr: bool: Auto change outgoing RTP address:port to match incoming
-;autoaddr=enabled
+;autoaddr=enable
 
 ; anyssrc: bool: Accept any incoming SSRC, even if it changes frequently
-;anyssrc=disabled
+;anyssrc=disable
 
 ; rtcp: bool: Allocate socket for the RTCP protocol by default
 ;rtcp=enabled
 
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
-;drillhole=disabled
+;drillhole=disable in server mode, enable in client mode
 
 ; defsleep: int: Default in-loop sleep time for new RTP sessions in milliseconds
 ;defsleep=5

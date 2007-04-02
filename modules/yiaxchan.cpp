@@ -1154,9 +1154,15 @@ void YIAXDriver::initialize()
 		Debug(this,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
 	}
     }
-    int readThreadCount = 3;
-    int eventThreadCount = 3;
-    int trunkingThreadCount = 1;
+    int readThreadCount = s_cfg.getIntValue("general","read_threads",Engine::clientMode() ? 1 : 3);
+    if (readThreadCount < 1)
+	readThreadCount = 1;
+    int eventThreadCount = s_cfg.getIntValue("general","event_threads",Engine::clientMode() ? 1 : 3);
+    if (eventThreadCount < 1)
+	eventThreadCount = 1;
+    int trunkingThreadCount = s_cfg.getIntValue("general","trunk_threads",1);
+    if (trunkingThreadCount < 1)
+	trunkingThreadCount = 1;
     m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
 }
 

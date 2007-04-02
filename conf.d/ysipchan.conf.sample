@@ -14,10 +14,10 @@
 ;realm=Yate
 
 ; transfer: bool: Allow handling the REFER message to perform transfers
-;transfer=enable
+;transfer=enable in server mode, disable in client mode
 
 ; registrar: bool: Allow the SIP module to receive registration requests
-;registrar=enable
+;registrar=enable in server mode, disable in client mode
 
 ; options: bool: Build and send a default 200 answer to OPTIONS requests
 ;options=enable

@@ -845,7 +845,7 @@ void YRTPPlugin::initialize()
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
-    s_drill = cfg.getBoolValue("general","drillhole",false);
+    s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     setup();

@@ -492,6 +492,7 @@ static int s_maxForwards = 20;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
 static bool s_auto_nat = true;
+static bool s_progress = false;
 static bool s_inband = false;
 static bool s_info = false;
 static bool s_forward_sdp = false;
@@ -959,9 +960,9 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     addAllowed("INVITE");
     addAllowed("BYE");
     addAllowed("CANCEL");
-    if (s_cfg.getBoolValue("general","registrar",true))
+    if (s_cfg.getBoolValue("general","registrar",!Engine::clientMode()))
 	addAllowed("REGISTER");
-    if (s_cfg.getBoolValue("general","transfer",true))
+    if (s_cfg.getBoolValue("general","transfer",!Engine::clientMode()))
 	addAllowed("REFER");
     if (s_cfg.getBoolValue("general","options",true))
 	addAllowed("OPTIONS");
@@ -3157,7 +3158,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    }
 	}
 
-	if (msg.getBoolValue("progress",s_cfg.getBoolValue("general","progress",false)))
+	if (msg.getBoolValue("progress",s_progress))
 	    m_tr->setResponse(183);
     }
     return true;
@@ -3887,6 +3888,7 @@ void SIPDriver::initialize()
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
+    s_progress = s_cfg.getBoolValue("general","progress",false);
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);

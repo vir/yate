@@ -11,6 +11,15 @@
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0
 
+; read_threads: int: Number of threads that read packets from socket
+;read_threads=1 in client mode, 3 in server mode
+
+; event_threads: int: Number of threads that process events
+;event_threads=1 in client mode, 3 in server mode
+
+; trunk_threads: int: Number of threads that service trunked voice packets
+;trunk_threads=1
+
 
 [formats]
 ; This section allows to individually enable or disable the codecs

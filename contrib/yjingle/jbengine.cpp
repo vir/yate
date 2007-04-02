@@ -1344,9 +1344,9 @@ JBPresence::JBPresence(JBEngine* engine, const NamedList& params)
       Mutex(true),
       m_autoSubscribe((int)XMPPUser::None),
       m_delUnavailable(false),
-      m_addOnSubscribe(true),
-      m_addOnProbe(true),
-      m_addOnPresence(true),
+      m_addOnSubscribe(false),
+      m_addOnProbe(false),
+      m_addOnPresence(false),
       m_autoProbe(true),
       m_probeInterval(0),
       m_expireInterval(0)
@@ -1371,10 +1371,13 @@ void JBPresence::initialize(const NamedList& params)
 {
     m_autoSubscribe = XMPPUser::subscribeType(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
-    m_addOnSubscribe = params.getBoolValue("add_onsubscribe",true);
-    m_addOnProbe = params.getBoolValue("add_onprobe",true);
-    m_addOnPresence = params.getBoolValue("add_onpresence",true);
     m_autoProbe = params.getBoolValue("auto_probe",true);
+    if (m_engine) {
+	String domain = m_engine->componentServer();
+	String id = m_engine->getServerIdentity(domain);
+	if (domain == id)
+	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = true;
+    }
     m_probeInterval = params.getIntValue("probe_interval",PRESENCE_PROBE_INTERVAL);
     m_expireInterval = params.getIntValue("expire_interval",PRESENCE_EXPIRE_INTERVAL);
     if (debugAt(DebugAll)) {

@@ -74,7 +74,7 @@ static TokenDict dict_payloads[] = {
 // Timeout value to override "maxcall" in call.execute
 #define JINGLE_CONN_TIMEOUT       10000
 // Default caller if none for outgoing calls
-#define JINGLE_ANONYMOUS_CALLER "unknown_caller"
+#define JINGLE_ANONYMOUS_CALLER "unk_caller"
 // Messages
 /* MODULE_MSG_NOTIFY
 	protocol	MODULE_NAME
@@ -1729,11 +1729,37 @@ void YJGDriver::initJB(const NamedList& sect)
 	    continue;
 	const char* address = comp->getValue("address");
 	int port = comp->getIntValue("port",0);
+	if (!(address && port)) {
+	    Debug(this,DebugNote,"Missing address or port in configuration for %s",
+		name.c_str());
+	    continue;
+	}
 	const char* password = comp->getValue("password");
-	const char* identity = comp->getValue("identity","yate");
-	String fullId = comp->getValue("fullidentity");
-	if (fullId.null())
-	    fullId << identity << '.' << name;
+	// Check identity
+	String identity = comp->getValue("identity");
+	if (!identity) {
+	    Debug(this,DebugNote,"Missing identity in configuration for %s",
+		name.c_str());
+	    continue;
+	}
+	String fullId;
+	if (identity == name)
+	    fullId = identity;
+	else {
+	    fullId << '.' << name;
+	    if (identity.endsWith(fullId)) {
+		if (identity.length() == fullId.length()) {
+		    Debug(this,DebugNote,"Invalid identity=%s in configuration for %s",
+			identity.c_str(),name.c_str());
+		    continue;
+		}
+		fullId = identity;
+	    }
+	    else {
+		fullId = identity;
+		fullId << '.' << name;
+	    }
+	}
 	bool startup = comp->getBoolValue("startup");
 	u_int32_t restartCount = m_jb->restartCount();
 	if (!(address && port && identity))
@@ -1744,7 +1770,7 @@ void YJGDriver::initJB(const NamedList& sect)
 	    password,identity,fullId,startup,restartCount);
 	XDebug(this,DebugAll,
 	    "Add server '%s' addr=%s port=%d pass=%s ident=%s full-ident=%s startup=%s restartcount=%u.",
-	    name.c_str(),address,port,password,identity,fullId.c_str(),
+	    name.c_str(),address,port,password,identity.c_str(),fullId.c_str(),
 	    String::boolText(startup),restartCount);
 	m_jb->appendServer(server,startup);
     }
@@ -1868,8 +1894,11 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    return false;
 	}
 	// Send subscribe request and probe
-	XMLElement* xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe);
-	stream->sendStanza(xml);
+	XMLElement* xml = 0;
+	if (iplugin.m_jg->requestSubscribe()) {
+	    xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe);
+	    stream->sendStanza(xml);
+	}
 	xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Probe);
 	stream->sendStanza(xml);
 	stream->deref();
@@ -1946,8 +1975,7 @@ XMLElement* YJGDriver::getPresenceCommand(const JabberID& from, const JabberID& 
     // Field children of 'x' element
     XMLElement* field = new XMLElement("field");
     field->setAttribute("var","jid");
-    //XMLElement* value = new XMLElement("value",0,from.c_str());
-XMLElement* value= new XMLElement("value",0,"125@kramer.null.ro/yate");
+    XMLElement* value = new XMLElement("value",0,from);
     field->addChild(value);
     x->addChild(field);
     field = new XMLElement("field");
@@ -1960,12 +1988,8 @@ XMLElement* value= new XMLElement("value",0,"125@kramer.null.ro/yate");
     command->setAttribute("node","USER_STATUS");
     command->addChild(x);
     // 'iq' stanza
-    String s;
-//    String s = "session_1@ahefczyc";
-    s = "kramer.null.ro";
-//    s << "session_1@" << to.domain();
     String id = idCrt++;
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,"125@yate.kramer.null.ro/yate",s.c_str(),id);
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,from,to,id);
     iq->addChild(command);
     return iq;
 }

@@ -4,52 +4,69 @@
 ; localip: string: Set this machine's IP address. If missing, we will try to guess one
 ;localip=
 
+; anonymous_caller: string: Set the caller name if none for outgoing calls
+; Defaults to unk_caller
+;anonymous_caller=unk_caller
+
 ; request_subscribe: boolean: Always request to subscribe before making a Jingle call
 ; If disabled and we already know that the remote user is unavailable the call will fail
+; Defaults to enable
 ;request_subscribe=enable
 
+; pending_timeout: integer: How much an outgoing call will stay in pending state
+; Defaults to 10000
+;pending_timeout=10000
+
 ; xmlparser_maxbuffer: integer: Maximum length of text we ever parse as XML
+; Defaults to 8192
 ;xmlparser_maxbuffer=8192
 
 ; stream_restartupdateinterval: integer: Interval (in miliseconds) to update (increase)
-;  the stream restart counter. Defaults to 15000. Takes values between 5000 and 300000
+;  the stream restart counter. Defaults to 15000. Take values between 5000 and 300000
+; Defaults to 15000
 ;stream_restartupdateinterval=15000
 
 ; stream_restartcount: integer: Maximum value for stream restart counter
-;  Defaults to 2. Takes values between 1 and 10
+;  Defaults to 2. Take values between 1 and 10
 ;stream_restartcount=2
 
-; auto_subscribe: string: Presence: Set the behaviour of processing the subscribe/unsubscribe requests
+; auto_subscribe: string: Presence. Set the behaviour of processing the subscribe/unsubscribe requests
 ; Allowed values:
 ;    none: All subscription are processed as a result of messages
 ;    from: Automatically accept subscribe/unsubscribe requests
 ;    to:   Automatically subscribe/unsubscribe to/from remote user
 ;    both: The combination of 'from' and 'to'
+; Defaults to none
 ;auto_subscribe=none
 
-; add_unavailable: bool: Presence: Automatically delete an user or a resource when unavailable
+; delete_unavailable: bool: Presence. Automatically delete an user or a resource when unavailable
+; This setting apply only when we keep the roster
+; Defaults to enable
 ;delete_unavailable=enable
 
-; add_onsubscribe: bool: Presence: Automatically add a new user when receiving a subscribe request
-;add_onsubscribe=enable
+; auto_probe: boolean: Presence. Automatically respond to probe requests for users in our domain when
+;  we know nothing about the user presence
+; Defaults to enable
+;auto_probe=enable
 
-; add_onprobe: bool: Presence: Automatically add a new user when receiving a probe request
-;add_onprobe=enable
-
-; add_onpresence: bool: Presence: Automatically add a new user when receiving a presence from it
-;add_onpresence=enable
-
-; probe_interval: integer: Presence: Interval to probe a remote user if no data was received
+; probe_interval: integer: Presence. Interval to probe a remote user if no data was received
+; This setting apply only when we keep the roster
+; Defaults to 1800000
 ;probe_interval=1800000
 
-; expire_interval: integer: Presence: Timeout after probe
+; expire_interval: integer: Presence: Interval to wait a response to a probe request sent as a result
+;  of interval (set in probe_interval) ellapsing
+; This setting apply only when we keep the roster
+; Defaults to 300000
 ;expire_interval=300000
 
 ; default_resource: string: Default resource name when missing from local users' JIDs
+; Defaults to yate
 ;default_resource=yate
 
-; auto_probe: boolean: Automatically respond to probe requests when we know nothing about the user presence
-;auto_probe=enable
+; extra_domain: string: Extra domain served by us
+;extra_domain=
+
 
 [codecs]
 ; This section allows to individually enable or disable the codecs
@@ -99,11 +116,19 @@ g729=default
 ; password: string: The password used by Yate to authenticate with the server
 ;password=
 
-; identity: string: The subdomain used by the component (required)
+; identity: string: The (sub)domain used by the component (required)
+; This setting controls the roster storing and will be used to generate the domain name of local users
+; If identity is equal to jabber.domain (section name) the roster will be kept locally and this
+;  value will be the domain part of JIDs
+; If identity is not equal to section name:
+;  If terminated in '.jabber.domain' it will be left untouched, otherwise the suffix '.jabber.domain' will be added
+;  In this case, the roster will be kept by the component server
+; Examples:
+;  Section name: null.ro
+;  identity=null.ro       The roster is kept locally. Domain part of the JIDs is null.ro
+;  identity=yate          The roster is kept by the component server. Domain part of the JIDs is yate.null.ro
+;  identity=yate.null.ro  The roster is kept by the component server. Domain part of the JIDs is yate.null.ro
 ;identity=yate
-
-; fullidentity: string: The fully qualified identity, default: identity.server
-;fullidentity=
 
 ; startup: boolean: True to open the stream when initializing the driver
 ;startup=true

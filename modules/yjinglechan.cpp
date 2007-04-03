@@ -363,6 +363,8 @@ public:
 	bool available, bool audio);
     // Create a media string from a list
     void createMediaString(String& dest, ObjList& formats, char sep);
+    // Find a connection by local and remote jid, optionally ignore local resource (always ignore if local has no resource)
+    YJGConnection* find(const JabberID& local, const JabberID& remote, bool anyResource = false);
 
 protected:
     void initCodecLists();
@@ -417,9 +419,15 @@ bool YJBEngine::processMessage(JBEvent* event)
 	if (body)
 	    text = body->getText();
     }
+    YJGConnection* conn = iplugin.find(event->to().c_str(),event->from().c_str());
     DDebug(this,DebugInfo,
-	"Message '%s' from: '%s' to: '%s'.",
-	text,event->from().c_str(),event->to().c_str());
+	"Message '%s' from: '%s' to: '%s' conn=%p",
+	text,event->from().c_str(),event->to().c_str(),conn);
+    if (conn) {
+	Message* m = conn->message("chan.text");
+	m->addParam("text",text);
+	Engine::enqueue(m);
+    }
     return false;
 }
 
@@ -1449,13 +1457,13 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	return;
     // Create XML element to be sent
     bool available = (jbPresence == JBPresence::None);
-    XMLElement* stanza;
+    XMLElement* stanza = 0;
     if (iplugin.m_sendCommandOnNotify) {
 	if (to.domain().null())
 	    to.domain(iplugin.m_jb->componentServer().c_str());
 	DDebug(&iplugin,DebugNote,"Sending presence %s from: %s to: %s",
 	    String::boolText(available),from.c_str(),to.c_str());
-	stanza = iplugin.getPresenceCommand(from,to,available);
+//	stanza = iplugin.getPresenceCommand(from,to,available);
     }
     else {
 	stanza = JBPresence::createPresence(from,to,jbPresence);
@@ -2059,6 +2067,28 @@ void YJGDriver::createMediaString(String& dest, ObjList& formats, char sep)
 	dest.append(payload,s);
     }
 }
+
+YJGConnection* YJGDriver::find(const JabberID& local, const JabberID& remote, bool anyResource)
+{
+    String bareJID = local.bare();
+    if (bareJID == local)
+	anyResource = true;
+    Lock lock(this);
+    ObjList* obj = channels().skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	YJGConnection* conn = static_cast<YJGConnection*>(obj->get());
+	if (!conn->remote().match(remote))
+	    continue;
+	if (anyResource) {
+	    if (bareJID == conn->local().bare())
+		return conn;
+	}
+	else if (conn->local().match(local))
+	    return conn;
+    }
+    return 0;
+}
+
 
 }; // anonymous namespace
 

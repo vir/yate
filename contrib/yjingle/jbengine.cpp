@@ -1374,9 +1374,11 @@ void JBPresence::initialize(const NamedList& params)
     m_autoProbe = params.getBoolValue("auto_probe",true);
     if (m_engine) {
 	String domain = m_engine->componentServer();
-	String id = m_engine->getServerIdentity(domain);
-	if (domain == id)
+	String ident;
+	// If we are running our own subdomain automatically add local users
+	if (m_engine->getServerIdentity(ident,domain) && (domain != ident))
 	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = true;
+	DDebug(this,DebugAll,"domain=%s identity=%s",domain.c_str(),ident.c_str());
     }
     m_probeInterval = params.getIntValue("probe_interval",PRESENCE_PROBE_INTERVAL);
     m_expireInterval = params.getIntValue("expire_interval",PRESENCE_EXPIRE_INTERVAL);

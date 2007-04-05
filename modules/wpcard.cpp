@@ -187,7 +187,7 @@ private:
     WpSocket m_socket;
     WpSigThread* m_thread;               // Thread used to read data from socket
     bool m_received;                     // Received data flag
-    int m_overRead;                      // 
+    int m_overRead;                      // Header extension
 };
 
 // Read signalling data for WpInterface
@@ -424,9 +424,16 @@ int WpSocket::recv(void* buffer, int len, int flags)
 	m_readError = false;
 	return r;
     }
-    if (!(m_socket.canRetry() && m_readError))
-	showError("Read");
-    m_readError = true;
+    if (!(m_socket.canRetry() || m_readError)) {
+	const char* info = 0;
+#ifdef SIOC_WANPIPE_SOCK_STATE
+	r == ::ioctl(m_socket.handle(),SIOC_WANPIPE_SOCK_STATE,0);
+	if (r == -1)
+	    info = " (IOCTL failed: data link may be disconnected)";
+#endif
+	showError("Read",info);
+	m_readError = true;
+    }
     return -1;
 }
 
@@ -449,10 +456,10 @@ int WpSocket::send(const void* buffer, int len, int flags)
     return -1;
 }
 
-// Check socket state
+// Check events and socket availability
 bool WpSocket::select(unsigned int multiplier)
 {
-    m_canRead  = m_event = false;
+    m_canRead = m_event = false;
     struct timeval tv;
     tv.tv_sec = 0;
     tv.tv_usec = multiplier * WPSOCKET_SELECT_TIMEOUT;
@@ -813,9 +820,10 @@ bool WpCircuit::status(Status newStat, bool sync)
     if (SignallingCircuit::status() == Connected)
 	enableData = true;
     // Don't put this message for final states
-    DDebug(group(),DebugAll,
-	"WpCircuit %u. Changed status to '%u'. %s data transfer [%p]",
-	code(),newStat,enableData ? "Enable" : "Disable",this);
+    if (!Engine::exiting())
+	DDebug(group(),DebugAll,
+	    "WpCircuit %u. Changed status to '%u'. %s data transfer [%p]",
+	    code(),newStat,enableData ? "Enable" : "Disable",this);
     if (enableData) {
 	m_sourceValid = m_source;
 	m_consumerValid = m_consumer;
@@ -985,7 +993,7 @@ bool WpData::init(NamedList& params)
 	    m_samples = 50;
     }
     else if (type == "T1") {
-	m_chans = 23;
+	m_chans = 24;
 	if (cics.null())
 	    cics = "1-23";
 	if (!m_samples)
@@ -1137,6 +1145,9 @@ void WpData::run()
 	m_bufferLen = WP_HEADER + m_samples * m_count;
 	m_buffer = new unsigned char[m_bufferLen];
     }
+    XDebug(m_group,DebugInfo,
+	"WpData('%s'). Running: circuits=%u, buffer=%u, samples=%u [%p]",
+	id().safe(),m_count,m_bufferLen,m_samples,this);
     while (true) {
 	if (Thread::check(true))
 	    break;
@@ -1184,7 +1195,7 @@ void WpData::run()
 // Check for received event (including in-band events)
 bool WpData::readEvent()
 {
-    DDebug(m_group,DebugInfo,"WpData('%s'). Got event. Checking OOB [%p]",
+    XDebug(m_group,DebugInfo,"WpData('%s'). Got event. Checking OOB [%p]",
 	id().safe(),this);
     int r = m_socket.recv(m_buffer,m_bufferLen,MSG_OOB);
     if (r >= WP_HEADER)

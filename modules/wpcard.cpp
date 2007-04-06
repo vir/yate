@@ -531,8 +531,7 @@ bool WpInterface::init(NamedList& params)
     m_socket.device(sig);
 
     int i = params.getIntValue("errormask",sect->getIntValue("errormask",255));
-    if (i < 0 || i > 255)
-	m_errorMask = 255;
+    m_errorMask = ((i >= 0 && i < 256) ? i : 255);
 
     if (debugAt(DebugInfo)) {
 	String s;

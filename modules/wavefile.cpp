@@ -515,7 +515,7 @@ bool WaveConsumer::setFormat(const DataFormat& format)
 		ok = true;
 	    break;
 	case Au:
-	    if ((format == "mulaw") || (format == "alaw"))
+	    if ((format.find("mulaw") >= 0) || (format.find("alaw") >= 0) || (format.find("slin") >= 0))
 		ok = true;
 	    break;
 	default:

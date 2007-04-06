@@ -188,6 +188,7 @@ private:
     WpSigThread* m_thread;               // Thread used to read data from socket
     bool m_received;                     // Received data flag
     int m_overRead;                      // Header extension
+    unsigned char m_errorMask;           // Error mask to filter received errors
 };
 
 // Read signalling data for WpInterface
@@ -528,10 +529,16 @@ bool WpInterface::init(NamedList& params)
 	return false;
     }
     m_socket.device(sig);
+
+    int i = params.getIntValue("errormask",sect->getIntValue("errormask",255));
+    if (i < 0 || i > 255)
+	m_errorMask = 255;
+
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nCard:   " << m_socket.card();
-	s << "\r\nDevice: " << m_socket.device();
+	s << "\r\nCard:       " << m_socket.card();
+	s << "\r\nDevice:     " << m_socket.device();
+	s << "\r\nError mask: " << (unsigned int)m_errorMask;
 	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
     }
     return true;
@@ -586,14 +593,15 @@ bool WpInterface::receiveAttempt()
 	XDebug(this,DebugAll,"Received %d bytes packet. Header length is %u [%p]",
 	    r,WP_HEADER + m_overRead,this);
 	r -= (WP_HEADER + m_overRead);
-	if (buf[WP_RD_ERROR]) {
+	unsigned char err = buf[WP_RD_ERROR] & m_errorMask;
+	if (err) {
 	    DDebug(this,DebugWarn,"Packet got error: %u [%p]",
 		buf[WP_RD_ERROR],this);
-	    if (buf[WP_RD_ERROR] & WP_ERR_FIFO)
+	    if (err & WP_ERR_FIFO)
 		notify(RxOverflow);
-	    if (buf[WP_RD_ERROR] & WP_ERR_CRC)
+	    if (err & WP_ERR_CRC)
 		notify(CksumError);
-	    if (buf[WP_RD_ERROR] & WP_ERR_ABORT)
+	    if (err & WP_ERR_ABORT)
 		notify(AlignError);
 	    return true;
 	}

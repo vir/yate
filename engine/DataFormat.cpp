@@ -40,6 +40,8 @@ static const FormatInfo s_formats[] = {
     FormatInfo("2*slin", 320, 10000, "audio", 8000, 2),
     FormatInfo("2*slin/16000", 640, 10000, "audio", 16000, 2),
     FormatInfo("2*slin/32000", 1280, 10000, "audio", 32000, 2),
+    FormatInfo("2*alaw", 160, 10000, "audio", 8000, 2),
+    FormatInfo("2*mulaw", 160, 10000, "audio", 8000, 2),
     FormatInfo("gsm", 33, 20000),
     FormatInfo("ilbc20", 38, 20000),
     FormatInfo("ilbc30", 50, 30000),
@@ -58,6 +60,12 @@ static TranslatorCaps s_simpleCaps[] = {
     { s_formats+1, s_formats+2, 1 },
     { s_formats+2, s_formats+0, 1 },
     { s_formats+2, s_formats+1, 1 },
+    { s_formats+9, s_formats+12, 1 },
+    { s_formats+9, s_formats+13, 1 },
+    { s_formats+12, s_formats+9, 1 },
+    { s_formats+13, s_formats+9, 1 },
+    { s_formats+12, s_formats+13, 1 },
+    { s_formats+13, s_formats+12, 1 },
     { 0, 0, 0 }
 };
 
@@ -145,9 +153,19 @@ public:
 	{
 	    if (!ref())
 		return;
-	    if (getTransSource()) {
+	    while (getTransSource()) {
+		int nchan = m_format.numChannels();
+		if (nchan != getTransSource()->getFormat().numChannels())
+		    break;
+		String sFmt = m_format;
+		String dFmt = getTransSource()->getFormat();
+		if (nchan != 1) {
+		    // get rid of the channel prefix
+		    sFmt >> "*";
+		    dFmt >> "*";
+		}
 		DataBlock oblock;
-		if (oblock.convert(data, m_format, getTransSource()->getFormat())) {
+		if (oblock.convert(data, sFmt, dFmt)) {
 		    if (tStamp == (unsigned long)-1) {
 			unsigned int delta = data.length();
 			if (delta > oblock.length())
@@ -157,6 +175,7 @@ public:
 		    m_timestamp = tStamp;
 		    getTransSource()->Forward(oblock, tStamp);
 		}
+		break;
 	    }
 	    deref();
 	}

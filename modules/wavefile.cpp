@@ -473,13 +473,24 @@ void WaveConsumer::writeIlbcHeader() const
 void WaveConsumer::writeAuHeader()
 {
     AuHeader header;
-    if (m_format == "slin") {
+    String fmt = m_format;
+    int chans = 1;
+    int rate = 8000;
+    int sep = fmt.find('*');
+    if (sep > 0)
+	fmt >> chans >> "*";
+    sep = fmt.find('/');
+    if (sep > 0) {
+	rate = fmt.substr(sep+1).toInteger(rate);
+	fmt.assign(fmt,sep);
+    }
+    if (fmt == "slin") {
 	m_swap = true;
 	header.form = ntohl(3);
     }
-    else if (m_format == "mulaw")
+    else if (fmt == "mulaw")
 	header.form = ntohl(1);
-    else if (m_format == "alaw")
+    else if (fmt == "alaw")
 	header.form = ntohl(27);
     else {
 	Debug(DebugMild,"Invalid au format '%s', not writing header",m_format.c_str());
@@ -487,8 +498,8 @@ void WaveConsumer::writeAuHeader()
     }
     header.sign = htonl(0x2E736E64);
     header.offs = htonl(sizeof(header));
-    header.freq = ntohl(8000);
-    header.chan = ntohl(1);
+    header.freq = ntohl(rate);
+    header.chan = ntohl(chans);
     header.len = 0;
     ::write(m_fd,&header,sizeof(header));
 }

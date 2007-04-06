@@ -845,7 +845,7 @@ bool WpCircuit::status(Status newStat, bool sync)
     }
     if (m_sourceValid) {
 	// Remove consumer
-	m_source->attach(0,true);
+	m_source->clear();
 	m_sourceValid = 0;
 	XDebug(group(),DebugAll,"WpCircuit %u. Source transferred %u byte(s) [%p]",
 	    code(),m_source->m_total,this);

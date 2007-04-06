@@ -248,6 +248,7 @@ private:
 // Q.931 call control monitor over HDLC interface
 class SigIsdnMonitor : public SigLink
 {
+    friend class SigIsdnCallRecord;
 public:
     SigIsdnMonitor(const char* name);
     virtual ~SigIsdnMonitor();
@@ -256,8 +257,10 @@ public:
 	{ return m_chanBuffer; }
     unsigned char idleValue() const
 	{ return m_idleValue; }
+    const String& peerId(bool network) const
+	{ return network ? m_netId : m_cpeId; }
     // Remove a call and it's call monitor
-    void removeCall(SigIsdnCallRecord* call, ISDNQ931CallMonitor* mon);
+    void removeCall(SigIsdnCallRecord* call);
 protected:
     virtual bool create(NamedList& params);
     virtual bool reload(NamedList& params);
@@ -266,13 +269,15 @@ protected:
 	{ return static_cast<ISDNQ931Monitor*>(m_controller); }
     // Build component debug name
     inline void buildName(String& dest, const char* name, bool net)
-	{ dest = ""; dest << this->name() << '/' << name << (net ? "/Net" : "/CPE"); }
+	{ dest = ""; dest << (net ? m_netId : m_cpeId) << '/' << name; }
 private:
     Mutex m_monitorMutex;                // Lock monitor list operations
     ObjList m_monitors;                  // Monitor list
     unsigned int m_id;                   // ID generator
     unsigned int m_chanBuffer;           // The buffer length of one channel of a data source multiplexer
     unsigned char m_idleValue;           // Idle value for source multiplexer to fill when no data
+    String m_netId;                      // The id of the network side of the data link
+    String m_cpeId;                      // The id of the user side of the data link
     // Components
     ISDNQ921Pasive* m_q921Net;
     ISDNQ921Pasive* m_q921Cpe;
@@ -308,6 +313,8 @@ public:
     // @param chanBuffer The length of a channel buffer (will be rounded up to a multiple of sample length)
     SigSourceMux(const char* format, unsigned char idleValue, unsigned int chanBuffer);
     virtual ~SigSourceMux();
+    inline unsigned int sampleLen() const
+	{ return m_sampleLen; }
     bool hasSource(bool first)
 	{ return first ? (m_firstSrc != 0) : (m_secondSrc != 0); }
     // Replace the consumer of the given source. Remove current consumer's source before
@@ -321,13 +328,7 @@ public:
 protected:
     // Forward the buffer if at least one channel is filled. Reset data
     // If one channel is empty or incomplete, fill it with idle value
-    inline void forwardBuffer() {
-	    if (!(firstFull() || secondFull()))
-		return;
-	    fillBuffer(!firstFull());
-	    m_samplesFirst = m_samplesSecond = 0;
-	    Forward(m_buffer);
-	}
+    void forwardBuffer();
     // Fill (interlaced samples) buffer with samples of received data
     // If no data, fill the free space with idle value
     void fillBuffer(bool first, unsigned char* data = 0, unsigned int samples = 0);
@@ -354,14 +355,26 @@ private:
 class SigIsdnCallRecord : public CallEndpoint
 {
 public:
-    SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id, ISDNQ931CallMonitor* mon);
+    SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id, SignallingEvent* event);
     virtual ~SigIsdnCallRecord();
-    bool init(SignallingEvent* event);
     bool update(SignallingEvent* event);
+    bool close(const char* reason);
+    bool disconnect(const char* reason);
+    // Process Info events. Send chan.dtmf
+    void evInfo(SignallingEvent* event);
+protected:
+    virtual void disconnected(bool final, const char *reason);
+    // Send chan.startup
+    void chanStartup();
+    // Send call.route and call.execute (if call.route succeedded)
+    bool callRouteAndExec(const char* format);
 private:
     Mutex m_lock;
-    String m_caller;
-    String m_called;
+    String m_caller;                     // The caller
+    String m_called;                     // The called
+    bool m_netInit;                      // The caller is from the network (true) or user (false) side of the link
+    String m_reason;                     // Termination reason
+    String m_status;                     // Call status
     SigIsdnMonitor* m_monitor;           // The owner of this recorder
     ISDNQ931CallMonitor* m_call;         // The call monitor
 };
@@ -455,7 +468,7 @@ SigChannel::SigChannel(Message& msg, String& caller, String& called, SigLink* li
     sigMsg->params().addParam("caller",caller);
     sigMsg->params().addParam("called",called);
     sigMsg->params().addParam("callername",msg.getValue("callername"));
-    sigMsg->params().addParam("format",msg.getValue("format"));
+    sigMsg->params().copyParam(msg,"format");
     sigMsg->params().copyParam(msg,"callernumtype");
     sigMsg->params().copyParam(msg,"callernumplan");
     sigMsg->params().copyParam(msg,"callerpres");
@@ -1409,6 +1422,9 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 
     if (rec) {
 	switch (event->type()) {
+	    case SignallingEvent::Info:
+		rec->evInfo(event);
+		break;
 	    case SignallingEvent::Accept:
 	    case SignallingEvent::Ringing:
 	    case SignallingEvent::Answer:
@@ -1416,8 +1432,7 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 		    break;
 		// Fall through to release if update failed
 	    case SignallingEvent::Release:
-		mon->userdata(0);
-		m_monitors.remove(rec,true);
+		rec->disconnect(event->message() ? event->message()->params().getValue("reason") : "normal");
 		break;
 	    default:
 		DDebug(&plugin,DebugStub,
@@ -1429,16 +1444,15 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 
     if (event->type() == SignallingEvent::NewCall) {
 	String id;
-	id << name() << "/rec/" << ++m_id;
-	rec = new SigIsdnCallRecord(this,id,mon);
-	if (rec->init(event)) {
+	id << name() << "/" << ++m_id;
+	rec = new SigIsdnCallRecord(this,id,event);
+	if (rec->update(event)) {
 	    mon->userdata(rec);
 	    m_monitors.append(rec);
-	}
-	else {
-	    mon->userdata(0);
 	    rec->deref();
 	}
+	else
+	    rec->disconnect(0);
     }
     else
 	XDebug(&plugin,DebugNote,
@@ -1446,10 +1460,8 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	    name().c_str(),event,mon->userdata(),this);
 }
 
-void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call, ISDNQ931CallMonitor* mon)
+void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
 {
-    if (mon)
-	q931()->terminateMonitor(mon,0);
     Lock lock(m_monitorMutex);
     m_monitors.remove(call,false);
 }
@@ -1469,7 +1481,11 @@ bool SigIsdnMonitor::create(NamedList& params)
 	m_chanBuffer = params.getIntValue("muxchanbuffer",160);
 	if (!m_chanBuffer)
 	    m_chanBuffer = 160;
-	m_idleValue =  params.getIntValue("idlevalue");
+	unsigned int ui = params.getIntValue("idlevalue",255);
+	m_idleValue = (ui <= 255 ? ui : 255);
+
+	m_netId = name() + "/Net";
+	m_cpeId = name() + "/Cpe";
 
 	// Signalling interfaces
 	buildName(compName,"D",true);
@@ -1493,6 +1509,13 @@ bool SigIsdnMonitor::create(NamedList& params)
 	m_groupCpe = buildCircuits(device,compName,error);
 	if (!m_groupCpe)
 	    break;
+	String sNet, sCpe;
+	m_groupNet->getCicList(sNet);
+	m_groupCpe->getCicList(sCpe);
+	if (sNet != sCpe)
+	    Debug(&plugin,DebugWarn,
+		"SigIsdnMonitor('%s'). Circuit groups are not equal [%p]",
+		name().c_str(),this);
 
 	// Q921
 	params.setParam("t203",params.getValue("idletimeout"));
@@ -1566,7 +1589,12 @@ bool SigIsdnMonitor::reload(NamedList& params)
 void SigIsdnMonitor::release()
 {
     m_monitorMutex.lock();
-    m_monitors.clear();
+    ListIterator iter(m_monitors);
+    GenObject* o = 0;
+    for (; (o = iter.get()); ) {
+	CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	c->disconnect();
+    }
     m_monitorMutex.unlock();
     // *** Cleanup / Disable components
     if (q931())
@@ -1630,26 +1658,36 @@ SigSourceMux::SigSourceMux(const char* format, unsigned char idleValue, unsigned
     m_firstChan(0),
     m_secondChan(0),
     m_idleValue(idleValue),
-    m_sampleLen(1),
+    m_sampleLen(0),
     m_maxSamples(0),
     m_samplesFirst(0),
     m_samplesSecond(0),
     m_error(0)
 {
-    if (getFormat() == "mulaw")
+    if (getFormat() == "2*slin")
 	m_sampleLen = 2;
+    else if (getFormat() == "2*mulaw")
+	m_sampleLen = 1;
+    else if (getFormat() == "2*alaw")
+	m_sampleLen = 1;
+    else {
+	Debug(&plugin,DebugNote,
+	    "SigSourceMux::SigSourceMux(). Unsupported format %s [%p]",
+	    format,this);
+	return;
+    }
     // Adjust channel buffer to be multiple of sample length and not lesser then it
     if (chanBuffer < m_sampleLen)
 	chanBuffer = m_sampleLen;
-    if (0 != (chanBuffer % m_sampleLen))
-	chanBuffer = chanBuffer / m_sampleLen + m_sampleLen;
     m_maxSamples = chanBuffer / m_sampleLen;
-    m_buffer.assign(0,2 * chanBuffer,false);
-    m_firstChan = new SigConsumerMux(this,true,format);
-    m_secondChan = new SigConsumerMux(this,false,format);
+    chanBuffer = m_maxSamples * m_sampleLen;
+    m_buffer.assign(0,2 * chanBuffer);
+    // +2 to skip ofer the "2*"
+    m_firstChan = new SigConsumerMux(this,true,format+2);
+    m_secondChan = new SigConsumerMux(this,false,format+2);
     XDebug(&plugin,DebugAll,
-	"SigSourceMux::SigSourceMux(). Max samples=%u, sample=%u [%p]",
-	m_maxSamples,m_sampleLen,this);
+	"SigSourceMux::SigSourceMux(). Max samples=%u, sample=%u, buffer=%u [%p]",
+	m_maxSamples,m_sampleLen,m_buffer.length(),this);
 }
 
 SigSourceMux::~SigSourceMux()
@@ -1664,6 +1702,8 @@ SigSourceMux::~SigSourceMux()
     XDebug(&plugin,DebugAll,"SigSourceMux::~SigSourceMux() [%p]",this);
 }
 
+#define MUX_CHAN (first ? '1' : '2')
+
 // Replace the consumer of the given source. Remove current consumer's source before
 // @param first True to replace with the first channel, false for the second
 // Return false if source is 0 or has invalid format (other then ours)
@@ -1671,7 +1711,7 @@ bool SigSourceMux::attach(bool first, DataSource* source)
 {
     Lock lock(m_lock);
     removeSource(first);
-    if (!(source && source->getFormat() == getFormat() && source->ref()))
+    if (!(source && source->ref()))
 	return false;
     if (first) {
 	m_firstSrc = source;
@@ -1698,16 +1738,19 @@ void SigSourceMux::consume(bool first, const DataBlock& data, unsigned long tSta
     unsigned int samples = data.length() / m_sampleLen;
     if (!m_error && (data.length() % m_sampleLen)) {
 	Debug(&plugin,DebugWarn,
-	    "SigSourceMux. Wrong sample (data length %u) from %s channel [%p]",
-	    data.length(),first ? "first" : "second",this);
+	    "SigSourceMux. Wrong sample (received %u bytes) on channel %c [%p]",
+	    data.length(),MUX_CHAN,this);
 	m_error++;
     }
     if (!samples)
 	return;
 
     // Forward buffer if already filled for this channel
-    if ((first && firstFull()) || (!first && secondFull()))
+    if ((first && firstFull()) || (!first && secondFull())) {
+	DDebug(&plugin,DebugMild,"SigSourceMux. Buffer overrun on channel %c [%p]",
+	    MUX_CHAN,this);
 	forwardBuffer();
+    }
 
     unsigned int freeSamples = m_maxSamples - (first ? m_samplesFirst: m_samplesSecond);
     unsigned char* buf = (unsigned char*)data.data();
@@ -1719,6 +1762,9 @@ void SigSourceMux::consume(bool first, const DataBlock& data, unsigned long tSta
 	return;
     }
 
+    DDebug(&plugin,DebugMild,"SigSourceMux. Partial buffer overrun on channel %c [%p]",
+	MUX_CHAN,this);
+
     // Received more samples that free space in buffer
     fillBuffer(first,buf,freeSamples);
     forwardBuffer();
@@ -1727,137 +1773,199 @@ void SigSourceMux::consume(bool first, const DataBlock& data, unsigned long tSta
     consume(first,rest,tStamp);
 }
 
+// Forward the buffer if at least one channel is filled. Reset data
+// If one channel is empty or incomplete, fill it with idle value
+void SigSourceMux::forwardBuffer()
+{
+    if (!(firstFull() || secondFull()))
+	return;
+    if (!(firstFull() && secondFull()))
+	fillBuffer(!firstFull());
+    m_samplesFirst = m_samplesSecond = 0;
+    Forward(m_buffer);
+}
+
 // Fill interlaced samples buffer with samples of received data
 // If no data, fill the free space with idle value
 void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samples)
 {
     unsigned int* count = (first ? &m_samplesFirst : &m_samplesSecond);
     unsigned char* buf = (unsigned char*)m_buffer.data() + *count * m_sampleLen * 2;
+    if (!first)
+	buf += m_sampleLen;
     // Fill received data
     if (data) {
 	if (samples > m_maxSamples - *count)
 	    samples = m_maxSamples - *count;
+	XDebug(&plugin,DebugMild,"SigSourceMux. Filling %u samples on channel %c [%p]",
+	    samples,MUX_CHAN,this);
 	*count += samples;
-	if (m_sampleLen == 1)
-	    for (; samples; samples--, buf += 2, data++)
-		*buf = *data;
-	else if (m_sampleLen == 2)
-	    for (; samples; samples--, buf += 4, data += 2) {
-		*buf = *data;
-		*(buf + 1) = *(data + 1);
+	switch (m_sampleLen) {
+	    case 1:
+		for (; samples; samples--, buf += 2)
+		    *buf = *data++;
+		break;
+	    case 2:
+		for (; samples; samples--, buf += 4) {
+		    buf[0] = *data++;
+		    buf[1] = *data++;
+		}
+		break;
+	    case 0:
+		samples = 0;
+	    default: {
+		unsigned int delta = 2 * m_sampleLen;
+		for (; samples; samples--, buf += delta, data += m_sampleLen)
+		    ::memcpy(buf,data,m_sampleLen);
 	    }
+	}
 	return;
     }
     // Fill with idle value
     samples = m_maxSamples - *count;
     *count = m_maxSamples;
-    if (m_sampleLen == 1)
-	for (; samples; samples--, buf += 2)
-	   *buf = m_idleValue;
-    else if (m_sampleLen == 2)
-	for (; samples; samples--, buf += 4)
-	    *buf = *(buf + 1) = m_idleValue;
+    XDebug(&plugin,DebugMild,"SigSourceMux. Filling idle value on channel %c [%p]",
+	MUX_CHAN,this);
+    switch (m_sampleLen) {
+	case 1:
+	    for (; samples; samples--, buf += 2)
+		*buf = m_idleValue;
+	    break;
+	case 2:
+	    for (; samples; samples--, buf += 4)
+		buf[0] = buf[1] = m_idleValue;
+	    break;
+	case 0:
+	    samples = 0;
+	default: {
+	    unsigned int delta = 2 * m_sampleLen;
+	    for (; samples; samples--, buf += delta, data += m_sampleLen)
+		::memset(buf,m_idleValue,m_sampleLen);
+	}
+    }
 }
 
 // Remove the source for the appropriate consumer
 void SigSourceMux::removeSource(bool first)
 {
     if (first && m_firstSrc) {
-	m_firstSrc->attach(0,true);
+	m_firstSrc->clear();
 	m_firstSrc->deref();
 	m_firstSrc = 0;
     }
     if (!first && m_secondSrc) {
-	m_secondSrc->attach(0,true);
+	m_secondSrc->clear();
 	m_secondSrc->deref();
 	m_secondSrc = 0;
     }
 }
 
+#undef MUX_CHAN
+
 /**
  * SigIsdnCallRecord
  */
 SigIsdnCallRecord::SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id,
-	ISDNQ931CallMonitor* mon)
+	SignallingEvent* event)
     : CallEndpoint(id),
     m_lock(true),
+    m_netInit(false),
     m_monitor(monitor),
-    m_call(mon)
+    m_call(0)
 {
+    m_status = "startup";
+    // This parameters should be checked by the monitor
+    if (!(monitor && event && event->message() && event->call())) {
+	m_reason = "Invalid initiating event";
+	return;
+    }
+    m_call = static_cast<ISDNQ931CallMonitor*>(event->call());
+    if (!m_call->ref()) {
+	m_reason = "failure";
+	return;
+    }
+    m_netInit = m_call->netInit();
+    SignallingMessage* msg = event->message();
+    m_caller = msg->params().getValue("caller");
+    m_called = msg->params().getValue("called");
+    Debug(this->id(),DebugCall,
+	"Initialized. Caller: '%s'. Called: '%s' [%p]",
+	m_caller.c_str(),m_called.c_str(),this);
 }
 
 SigIsdnCallRecord::~SigIsdnCallRecord()
 {
+    close(0);
     if (m_monitor)
-	m_monitor->removeCall(this,m_call);
+	m_monitor->removeCall(this);
+    Message* m = new Message("chan.hangup");
+    m->addParam("id",id());
+    m->addParam("status",m_status);
+    m->addParam("reason",m_reason);
+    Engine::enqueue(m);
+    Debug(id(),DebugCall,"Destroyed. Reason: '%s' [%p]",m_reason.safe(),this);
 }
 
-bool SigIsdnCallRecord::init(SignallingEvent* event)
-{
-    if (!(event && event->message()))
-	return false;
-    Lock lock(m_lock);
-    SignallingMessage* msg = event->message();
-    m_caller = msg->params().getValue("caller");
-    m_called = msg->params().getValue("called");
-    return update(event);
-}
-
+// Update call endpoint status. Send chan.startup, call.route, call.execute
 // Create the multiplexer if missing
 // Update sources for the multiplexer. Change them if circuit changed
 // Start recording if the multiplexer has at least one source
 bool SigIsdnCallRecord::update(SignallingEvent* event)
 {
     Lock lock(m_lock);
-    if (!(event && event->call() && event->message()))
-	return true;
-    SignallingCall* call = event->call();
+    if (!(m_call && m_monitor && event && event->message()))
+	return false;
+    switch (event->type()) {
+	case SignallingEvent::NewCall: chanStartup(); break;
+	case SignallingEvent::Ringing: m_status = "ringing"; break;
+	case SignallingEvent::Answer:  m_status = "answered"; break;
+	case SignallingEvent::Accept:  break;
+	default: ;
+    }
     SignallingMessage* msg = event->message();
     bool chg = msg->params().getValue("circuit-change");
-    const char* format = msg->params().getValue("format");
+    String format = msg->params().getValue("format");
+    format = "2*" + format;
     SigSourceMux* source = static_cast<SigSourceMux*>(getSource());
-    if (!source) {
+    m_reason = "";
+    while (!source) {
 	if (!format)
 	    return true;
-	source = new SigSourceMux(format,
-	    m_monitor ? m_monitor->idleValue() : 255,
-	    m_monitor ? m_monitor->chanBuffer() : 160);
+	source = new SigSourceMux(format,m_monitor->idleValue(),m_monitor->chanBuffer());
+	if (!source->sampleLen()) {
+	    source->deref();
+	    m_reason = "Unsupported audio format";
+	    break;
+	}
 	setSource(source);
 	source->deref();
 	if (!getSource()) {
-	    Debug(id(),DebugWarn,"No data source. Terminate [%p]",this);
-	    return false;
+	    m_reason = "Failed to set data source";
+	    break;
 	}
 	// Start recording
-	Message m("call.execute");
-	m.userData(this);
-	m.addParam("caller",m_caller);
-	m.addParam("called",m_called);
-	m.addParam("maxlen","60000");
-	m.addParam("target","record/home/marian/Desktop/test.wav");
-	if (!Engine::dispatch(m)) {
-	    Debug(id(),DebugWarn,"Failed to start recording. Terminate [%p]",this);
-	    return false;
-	}
+	if (!callRouteAndExec(format))
+	    break;
+	DDebug(id(),DebugCall,"Start recording. Format: %s [%p]",format.c_str(),this);
     }
-    if (format && source->getFormat() != format) {
-	Debug(id(),DebugWarn,"Data format changed. Terminate [%p]",this);
-	setSource();
-	return false;
-    }
+    if (m_reason.null() && format && source->getFormat() != format)
+	m_reason = "Data format changed";
+    if (!m_reason.null())
+	return close(0);
     if (chg) {
 	source->removeSource(true);
 	source->removeSource(false);
     }
+    // Set sources if missing
     bool first = true;
     while (true) {
 	if (!source->hasSource(first)) {
-	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(call->getObject(
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(m_call->getObject(
 		first ? "SignallingCircuitCaller" : "SignallingCircuitCalled"));
 	    DataSource* src = cic ? static_cast<DataSource*>(cic->getObject("DataSource")) : 0;
 	    if (src) {
 		source->attach(first,src);
-		DDebug(id(),DebugAll,"Data source for channel %c set to (%p) [%p]",
+		DDebug(id(),DebugAll,"Data source on channel %c set to (%p) [%p]",
 		    first ? '1' : '2',src,this);
 	    }
 	}
@@ -1866,6 +1974,91 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
 	first = false;
     }
     return true;
+}
+
+// Close
+bool SigIsdnCallRecord::close(const char* reason)
+{
+    Lock lock(m_lock);
+    m_status = "hangup";
+    if (!m_call)
+	return false;
+    if (m_reason.null())
+	m_reason = reason;
+    if (m_reason.null())
+	m_reason = Engine::exiting() ? "net-out-of-order" : "unknown";
+    m_call->userdata(0);
+    if (m_monitor)
+	m_monitor->q931()->terminateMonitor(m_call,m_reason);
+    m_call->deref();
+    m_call = 0;
+    setSource();
+    Debug(id(),DebugCall,"Closed. Reason: '%s' [%p]",m_reason.c_str(),this);
+    return false;
+}
+
+bool SigIsdnCallRecord::disconnect(const char* reason)
+{
+    close(reason);
+    XDebug(id(),DebugCall,"Disconnecting. Reason: '%s' [%p]",m_reason.c_safe,this);
+    return CallEndpoint::disconnect(m_reason);
+}
+
+void SigIsdnCallRecord::disconnected(bool final, const char* reason)
+{
+    DDebug(id(),DebugCall,"Disconnected. Final: %s. Reason: '%s' [%p]",
+	String::boolText(final),reason,this);
+    if (m_reason.null())
+	m_reason = reason;
+    CallEndpoint::disconnected(final,m_reason);
+}
+
+void SigIsdnCallRecord::chanStartup()
+{
+    Message* m = new Message("chan.startup");
+    m->addParam("id",id());
+    m->setParam("caller",m_caller);
+    m->setParam("called",m_called);
+    Engine::enqueue(m);
+}
+
+bool SigIsdnCallRecord::callRouteAndExec(const char* format)
+{
+    Message m("call.route");
+    m.userData(this);
+    m.addParam("id",id());
+    m.addParam("type","record");
+    m.addParam("caller",m_caller);
+    m.addParam("called",m_called);
+    m.addParam("format",format);
+    m.addParam("callsource",m_netInit ? "net" : "cpe");
+    if (!Engine::dispatch(m) || m.retValue().null()) {
+	m_reason = "noroute";
+	return false;
+    }
+    m = "call.execute";
+    m.setParam("callto",m.retValue());
+    m.retValue().clear();
+    if (!Engine::dispatch(m)) {
+	m_reason = "noconn";
+	return false;
+    }
+    return true;
+}
+
+void SigIsdnCallRecord::evInfo(SignallingEvent* event)
+{
+    if (!(event && event->message()))
+	return;
+    String tmp = event->message()->params().getValue("tone");
+    bool fromCaller = event->message()->params().getValue("fromcaller",false);
+    if (!tmp.null()) {
+	Message* m = new Message("chan.dtmf");
+	m->addParam("id",id());
+	m->addParam("text",tmp);
+	m->addParam("from",fromCaller ? m_caller : m_called);
+	Engine::enqueue(m);
+    }
 }
 
 /**

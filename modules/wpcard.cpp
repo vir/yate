@@ -1044,7 +1044,7 @@ bool WpData::init(NamedList& params)
 	s << "\r\nDevice:         " << m_socket.device();
 	s << "\r\nSamples:        " << m_samples;
 	s << "\r\nBit swap:       " << String::boolText(m_swap);
-	s << "\r\nNo data value:  " << (unsigned int)m_noData;
+	s << "\r\nIdle value:     " << (unsigned int)m_noData;
 	s << "\r\nBuffer length:  " << (unsigned int)m_buflen;
 	s << "\r\nUsed channels:  " << m_count;
 	Debug(m_group,DebugInfo,"WpData('%s'). Initialized: [%p]%s",

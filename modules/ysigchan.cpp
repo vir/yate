@@ -364,8 +364,10 @@ public:
     void evInfo(SignallingEvent* event);
 protected:
     virtual void disconnected(bool final, const char *reason);
-    // Send chan.startup
-    void chanStartup();
+    // Create a message to be enqueued/dispatched to the engine
+    // @param peers True to caller and called parameters
+    // @param userdata True to add this call endpoint as user data
+    Message* message(const char* name, bool peers = true, bool userdata = false);
     // Send call.route and call.execute (if call.route succeedded)
     bool callRouteAndExec(const char* format);
 private:
@@ -1355,8 +1357,10 @@ void SigIsdn::release()
 	q931()->cleanup();
     if (m_q921)
 	m_q921->cleanup();
-    if (m_iface)
+    if (m_iface) {
 	m_iface->control(SignallingInterface::Disable);
+	m_iface->attach(0);
+    }
     // *** Remove links between components
     plugin.engine()->remove(q931());
     plugin.engine()->remove(m_q921);
@@ -1487,6 +1491,9 @@ bool SigIsdnMonitor::create(NamedList& params)
 	m_netId = name() + "/Net";
 	m_cpeId = name() + "/Cpe";
 
+	// Set auto detection for Layer 2 (Q.921) type side of the link
+	params.setParam("detect",String::boolText(true));
+
 	// Signalling interfaces
 	buildName(compName,"D",true);
 	m_ifaceNet = buildInterface(params.getValue("sig-net"),compName,error);
@@ -1603,10 +1610,14 @@ void SigIsdnMonitor::release()
 	m_q921Net->cleanup();
     if (m_q921Cpe)
 	m_q921Cpe->cleanup();
-    if (m_ifaceNet)
+    if (m_ifaceNet) {
 	m_ifaceNet->control(SignallingInterface::Disable);
-    if (m_ifaceCpe)
+	m_ifaceNet->attach(0);
+    }
+    if (m_ifaceCpe) {
 	m_ifaceCpe->control(SignallingInterface::Disable);
+	m_ifaceCpe->attach(0);
+    }
     // *** Remove links between components
     plugin.engine()->remove(q931());
     plugin.engine()->remove(m_q921Net);
@@ -1686,8 +1697,8 @@ SigSourceMux::SigSourceMux(const char* format, unsigned char idleValue, unsigned
     m_firstChan = new SigConsumerMux(this,true,format+2);
     m_secondChan = new SigConsumerMux(this,false,format+2);
     XDebug(&plugin,DebugAll,
-	"SigSourceMux::SigSourceMux(). Max samples=%u, sample=%u, buffer=%u [%p]",
-	m_maxSamples,m_sampleLen,m_buffer.length(),this);
+	"SigSourceMux::SigSourceMux(). Format: %s, sample=%u, buffer=%u [%p]",
+	getFormat().c_str(),m_sampleLen,m_buffer.length(),this);
 }
 
 SigSourceMux::~SigSourceMux()
@@ -1762,9 +1773,6 @@ void SigSourceMux::consume(bool first, const DataBlock& data, unsigned long tSta
 	return;
     }
 
-    DDebug(&plugin,DebugMild,"SigSourceMux. Partial buffer overrun on channel %c [%p]",
-	MUX_CHAN,this);
-
     // Received more samples that free space in buffer
     fillBuffer(first,buf,freeSamples);
     forwardBuffer();
@@ -1797,8 +1805,6 @@ void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samp
     if (data) {
 	if (samples > m_maxSamples - *count)
 	    samples = m_maxSamples - *count;
-	XDebug(&plugin,DebugMild,"SigSourceMux. Filling %u samples on channel %c [%p]",
-	    samples,MUX_CHAN,this);
 	*count += samples;
 	switch (m_sampleLen) {
 	    case 1:
@@ -1824,8 +1830,6 @@ void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samp
     // Fill with idle value
     samples = m_maxSamples - *count;
     *count = m_maxSamples;
-    XDebug(&plugin,DebugMild,"SigSourceMux. Filling idle value on channel %c [%p]",
-	MUX_CHAN,this);
     switch (m_sampleLen) {
 	case 1:
 	    for (; samples; samples--, buf += 2)
@@ -1848,15 +1852,11 @@ void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samp
 // Remove the source for the appropriate consumer
 void SigSourceMux::removeSource(bool first)
 {
-    if (first && m_firstSrc) {
-	m_firstSrc->clear();
-	m_firstSrc->deref();
-	m_firstSrc = 0;
-    }
-    if (!first && m_secondSrc) {
-	m_secondSrc->clear();
-	m_secondSrc->deref();
-	m_secondSrc = 0;
+    DataSource** src = first ? &m_firstSrc : &m_secondSrc;
+    if (*src) {
+	(*src)->clear();
+	(*src)->deref();
+	*src = 0;
     }
 }
 
@@ -1875,21 +1875,16 @@ SigIsdnCallRecord::SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id,
 {
     m_status = "startup";
     // This parameters should be checked by the monitor
-    if (!(monitor && event && event->message() && event->call())) {
+    if (!(monitor && event && event->message() && event->call() && event->call()->ref())) {
 	m_reason = "Invalid initiating event";
 	return;
     }
     m_call = static_cast<ISDNQ931CallMonitor*>(event->call());
-    if (!m_call->ref()) {
-	m_reason = "failure";
-	return;
-    }
     m_netInit = m_call->netInit();
     SignallingMessage* msg = event->message();
     m_caller = msg->params().getValue("caller");
     m_called = msg->params().getValue("called");
-    Debug(this->id(),DebugCall,
-	"Initialized. Caller: '%s'. Called: '%s' [%p]",
+    Debug(this->id(),DebugCall,"Initialized. Caller: '%s'. Called: '%s' [%p]",
 	m_caller.c_str(),m_called.c_str(),this);
 }
 
@@ -1898,8 +1893,7 @@ SigIsdnCallRecord::~SigIsdnCallRecord()
     close(0);
     if (m_monitor)
 	m_monitor->removeCall(this);
-    Message* m = new Message("chan.hangup");
-    m->addParam("id",id());
+    Message* m = message("chan.hangup",false);
     m->addParam("status",m_status);
     m->addParam("reason",m_reason);
     Engine::enqueue(m);
@@ -1916,7 +1910,7 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
     if (!(m_call && m_monitor && event && event->message()))
 	return false;
     switch (event->type()) {
-	case SignallingEvent::NewCall: chanStartup(); break;
+	case SignallingEvent::NewCall: Engine::enqueue(message("chan.startup")); break;
 	case SignallingEvent::Ringing: m_status = "ringing"; break;
 	case SignallingEvent::Answer:  m_status = "answered"; break;
 	case SignallingEvent::Accept:  break;
@@ -2000,7 +1994,7 @@ bool SigIsdnCallRecord::close(const char* reason)
 bool SigIsdnCallRecord::disconnect(const char* reason)
 {
     close(reason);
-    XDebug(id(),DebugCall,"Disconnecting. Reason: '%s' [%p]",m_reason.c_safe,this);
+    XDebug(id(),DebugCall,"Disconnecting. Reason: '%s' [%p]",m_reason.safe(),this);
     return CallEndpoint::disconnect(m_reason);
 }
 
@@ -2013,37 +2007,44 @@ void SigIsdnCallRecord::disconnected(bool final, const char* reason)
     CallEndpoint::disconnected(final,m_reason);
 }
 
-void SigIsdnCallRecord::chanStartup()
+Message* SigIsdnCallRecord::message(const char* name, bool peers, bool userdata)
 {
-    Message* m = new Message("chan.startup");
+    Message* m = new Message(name);
     m->addParam("id",id());
-    m->setParam("caller",m_caller);
-    m->setParam("called",m_called);
-    Engine::enqueue(m);
+    if (peers) {
+	m->addParam("caller",m_caller);
+	m->addParam("called",m_called);
+    }
+    if (userdata)
+	m->userData(this);
+    return m;
 }
 
 bool SigIsdnCallRecord::callRouteAndExec(const char* format)
 {
-    Message m("call.route");
-    m.userData(this);
-    m.addParam("id",id());
-    m.addParam("type","record");
-    m.addParam("caller",m_caller);
-    m.addParam("called",m_called);
-    m.addParam("format",format);
-    m.addParam("callsource",m_netInit ? "net" : "cpe");
-    if (!Engine::dispatch(m) || m.retValue().null()) {
-	m_reason = "noroute";
-	return false;
+    Message* m = message("call.route");
+    bool ok = false;
+    while (true) {
+	m->addParam("type","record");
+	m->addParam("format",format);
+	m->addParam("callsource",m_netInit ? "net" : "cpe");
+	if (!Engine::dispatch(m) || m->retValue().null()) {
+	    m_reason = "noroute";
+	    break;
+	}
+	*m = "call.execute";
+	m->userData(this);
+	m->setParam("callto",m->retValue());
+	m->retValue().clear();
+	if (!Engine::dispatch(m)) {
+	    m_reason = "noconn";
+	    break;
+	}
+	ok = true;
+	break;
     }
-    m = "call.execute";
-    m.setParam("callto",m.retValue());
-    m.retValue().clear();
-    if (!Engine::dispatch(m)) {
-	m_reason = "noconn";
-	return false;
-    }
-    return true;
+    delete m;
+    return ok;
 }
 
 void SigIsdnCallRecord::evInfo(SignallingEvent* event)
@@ -2051,12 +2052,11 @@ void SigIsdnCallRecord::evInfo(SignallingEvent* event)
     if (!(event && event->message()))
 	return;
     String tmp = event->message()->params().getValue("tone");
-    bool fromCaller = event->message()->params().getValue("fromcaller",false);
     if (!tmp.null()) {
-	Message* m = new Message("chan.dtmf");
-	m->addParam("id",id());
+	Message* m = message("chan.dtmf",false);
 	m->addParam("text",tmp);
-	m->addParam("from",fromCaller ? m_caller : m_called);
+	bool fromCaller = event->message()->params().getValue("fromcaller",false);
+	m->addParam("sender",fromCaller ? m_caller : m_called);
 	Engine::enqueue(m);
     }
 }

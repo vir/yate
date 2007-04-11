@@ -186,9 +186,11 @@ protected:
 private:
     WpSocket m_socket;
     WpSigThread* m_thread;               // Thread used to read data from socket
+    bool m_readOnly;                     // Readonly interface
     bool m_received;                     // Received data flag
     int m_overRead;                      // Header extension
     unsigned char m_errorMask;           // Error mask to filter received errors
+    bool m_sendReadOnly;                 // Print send attempt on readonly interface error
 };
 
 // Read signalling data for WpInterface
@@ -244,7 +246,8 @@ protected:
 class WpCircuit : public SignallingCircuit
 {
 public:
-    WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data, unsigned int buflen);
+    WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data,
+	unsigned int buflen);
     virtual ~WpCircuit();
     virtual bool status(Status newStat, bool sync = false);
     virtual bool updateFormat(const char* format, int direction);
@@ -299,6 +302,7 @@ protected:
 private:
     WpSocket m_socket;
     WpDataThread* m_thread;
+    bool m_canSend;                      // Can send data (not a readonly span)
     bool m_swap;                         // Swap bits flag
     unsigned int m_chans;                // Total number of circuits for this span
     unsigned int m_count;                // Circuit count
@@ -500,7 +504,11 @@ void* WpInterface::create(const String& type, const NamedList& name)
 
 WpInterface::WpInterface(const NamedList& params)
     : m_socket(this),
-    m_thread(0), m_received(false), m_overRead(0)
+    m_thread(0),
+    m_readOnly(false),
+    m_received(false),
+    m_overRead(0),
+    m_sendReadOnly(false)
 {
     setName(params.getValue("debugname","WpInterface"));
     XDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
@@ -530,6 +538,8 @@ bool WpInterface::init(NamedList& params)
     }
     m_socket.device(sig);
 
+    m_readOnly = sect->getBoolValue("readonly",false);
+
     int i = params.getIntValue("errormask",sect->getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
 
@@ -538,6 +548,7 @@ bool WpInterface::init(NamedList& params)
 	s << "\r\nCard:       " << m_socket.card();
 	s << "\r\nDevice:     " << m_socket.device();
 	s << "\r\nError mask: " << (unsigned int)m_errorMask;
+	s << "\r\nRead only:  " << String::boolText(m_readOnly);
 	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
     }
     return true;
@@ -546,6 +557,13 @@ bool WpInterface::init(NamedList& params)
 // Send signalling packet
 bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketType type)
 {
+    if (m_readOnly) {
+	if (!m_sendReadOnly)
+	    Debug(this,DebugWarn,"Attempt to send data on read only interface");
+	m_sendReadOnly = true;
+	return false;
+    }
+
     if (!m_socket.valid())
 	return false;
 
@@ -928,6 +946,7 @@ WpData::WpData(const NamedList& params)
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
     m_socket(m_group),
     m_thread(0),
+    m_canSend(true),
     m_swap(false),
     m_chans(0),
     m_count(0),
@@ -986,6 +1005,7 @@ bool WpData::init(NamedList& params)
 	return false;
     }
     m_socket.device(voice);
+    m_canSend = !sect->getBoolValue("readonly",false);
     // Type depending data: channel count, samples, circuit list
     String type = sect->getValue("type");
     String cics = sect->getValue("voicechans");
@@ -1047,6 +1067,7 @@ bool WpData::init(NamedList& params)
 	s << "\r\nIdle value:     " << (unsigned int)m_noData;
 	s << "\r\nBuffer length:  " << (unsigned int)m_buflen;
 	s << "\r\nUsed channels:  " << m_count;
+	s << "\r\nRead only:      " << String::boolText(!m_canSend);
 	Debug(m_group,DebugInfo,"WpData('%s'). Initialized: [%p]%s",
 	    id().safe(),this,s.c_str());
     }
@@ -1183,19 +1204,26 @@ void WpData::run()
 		"WpData('%s'). Received %u samples. Expected %u [%p]",
 		id().safe(),samples,m_samples,this);
 	unsigned char* dat = m_buffer + WP_HEADER;
-	// Read each byte from buffer. Prepare buffer for sending
-	for (int n = samples; n > 0; n--)
-	    for (unsigned int i = 0; i < m_count; i++) {
-		if (m_circuits[i]->source())
-		    m_circuits[i]->source()->put(swap(*dat));
-		if (m_circuits[i]->consumer())
-		    *dat = swap(m_circuits[i]->consumer()->get());
-		else
-		    *dat = swap(m_noData);
-		dat++;
-	    }
-	::memset(m_buffer,0,WP_HEADER);
-	m_socket.send(m_buffer,WP_HEADER + samples * m_count,MSG_DONTWAIT);
+	if (m_canSend) {
+	    // Read each byte from buffer. Prepare buffer for sending
+	    for (int n = samples; n > 0; n--)
+		for (unsigned int i = 0; i < m_count; i++) {
+		    if (m_circuits[i]->source())
+			m_circuits[i]->source()->put(swap(*dat));
+		    if (m_circuits[i]->consumer())
+			*dat = swap(m_circuits[i]->consumer()->get());
+		    else
+			*dat = swap(m_noData);
+		    dat++;
+		}
+	    ::memset(m_buffer,0,WP_HEADER);
+	    m_socket.send(m_buffer,WP_HEADER + samples * m_count,MSG_DONTWAIT);
+	}
+	else
+	    for (int n = samples; n > 0; n--)
+		for (unsigned int i = 0; i < m_count; i++)
+		    if (m_circuits[i]->source())
+			m_circuits[i]->source()->put(swap(*dat++));
     }
 }
 

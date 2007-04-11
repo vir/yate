@@ -1894,7 +1894,6 @@ SigIsdnCallRecord::~SigIsdnCallRecord()
     if (m_monitor)
 	m_monitor->removeCall(this);
     Message* m = message("chan.hangup",false);
-    m->addParam("status",m_status);
     m->addParam("reason",m_reason);
     Engine::enqueue(m);
     Debug(id(),DebugCall,"Destroyed. Reason: '%s' [%p]",m_reason.safe(),this);
@@ -1910,10 +1909,21 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
     if (!(m_call && m_monitor && event && event->message()))
 	return false;
     switch (event->type()) {
-	case SignallingEvent::NewCall: Engine::enqueue(message("chan.startup")); break;
-	case SignallingEvent::Ringing: m_status = "ringing"; break;
-	case SignallingEvent::Answer:  m_status = "answered"; break;
-	case SignallingEvent::Accept:  break;
+	case SignallingEvent::NewCall:
+	    Engine::enqueue(message("chan.startup"));
+	    break;
+	case SignallingEvent::Ringing:
+	    if (m_status == "ringing")
+		break;
+	    m_status = "ringing";
+	    Engine::enqueue(message("call.ringing"));
+	    break;
+	case SignallingEvent::Answer:
+	    m_status = "answered";
+	    Engine::enqueue(message("call.answered"));
+	    break;
+	case SignallingEvent::Accept:
+	    break;
 	default: ;
     }
     SignallingMessage* msg = event->message();
@@ -2011,6 +2021,7 @@ Message* SigIsdnCallRecord::message(const char* name, bool peers, bool userdata)
 {
     Message* m = new Message(name);
     m->addParam("id",id());
+    m->addParam("status",m_status);
     if (peers) {
 	m->addParam("caller",m_caller);
 	m->addParam("called",m_called);

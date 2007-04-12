@@ -1539,7 +1539,7 @@ void JBPresence::processDisco(JBEvent* event, const JabberID& local,
 	JabberID from(event->to());
 	if (from.resource().null() && m_engine)
 	    from.resource(m_engine->defaultResource());
-	XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,from,event->from(),event->id());
+	XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->from(),event->id());
 	XMLElement* query = XMPPUtils::createElement(XMLElement::Query,type);
 	JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
 	query->addChild(identity->toXML());
@@ -1563,7 +1563,7 @@ void JBPresence::processError(JBEvent* event, const JabberID& local,
 	event,event->type(),local.c_str(),remote.c_str());
     XMPPUser* user = getRemoteUser(local,remote,false,0,false,0);
     if (!user) {
-	DDebug(this,DebugNote,
+	DDebug(this,DebugAll,
 	    "Received 'error' for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
 	return;
@@ -1581,7 +1581,7 @@ void JBPresence::processProbe(JBEvent* event, const JabberID& local,
     bool newUser = false;
     XMPPUser* user = getRemoteUser(local,remote,m_addOnProbe,0,m_addOnProbe,&newUser);
     if (!user) {
-	DDebug(this,DebugNote,
+	DDebug(this,DebugAll,
 	    "Received 'probe' for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
 	if (m_autoProbe) {
@@ -1620,7 +1620,7 @@ void JBPresence::processSubscribe(JBEvent* event, Presence presence,
     bool newUser = false;
     XMPPUser* user = getRemoteUser(local,remote,addLocal,0,addLocal,&newUser);
     if (!user) {
-	DDebug(this,DebugNote,
+	DDebug(this,DebugAll,
 	    "Received '%s' for non user. Local: '%s'. Remote: '%s'.",
 	    presenceText(presence),local.c_str(),remote.c_str());
 	if (!notifySubscribe(event,local,remote,presence) &&
@@ -1666,7 +1666,7 @@ void JBPresence::processUnavailable(JBEvent* event, const JabberID& local,
     bool newUser = false;
     XMPPUser* user = getRemoteUser(local,remote,addLocal,0,addLocal,&newUser);
     if (!user) {
-	DDebug(this,DebugNote,
+	DDebug(this,DebugAll,
 	    "Received 'unavailable' for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
 	if (!notifyPresence(event,local,remote,false))
@@ -1710,7 +1710,7 @@ void JBPresence::processPresence(JBEvent* event, const JabberID& local,
     XMPPUser* user = getRemoteUser(local,remote,m_addOnPresence,0,m_addOnPresence,
 	&newUser);
     if (!user) {
-	DDebug(this,DebugNote,
+	DDebug(this,DebugAll,
 	    "Received presence for non user. Local: '%s'. Remote: '%s'.",
 	    local.c_str(),remote.c_str());
 	if (!notifyPresence(event,local,remote,true))

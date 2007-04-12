@@ -60,6 +60,7 @@ JBEngine::JBEngine()
       m_restartUpdateTime(0),
       m_restartUpdateInterval(JB_STREAM_RESTART_UPDATE),
       m_restartCount(JB_STREAM_RESTART_COUNT),
+      m_printXml(false),
       m_streamID(0),
       m_serverMutex(true)
 {
@@ -84,6 +85,7 @@ JBEngine::~JBEngine()
 void JBEngine::initialize(const NamedList& params)
 {
     clearServerList();
+    m_printXml = params.getBoolValue("printxml",false);
     // Alternate domain names
     m_alternateDomain = params.getValue("extra_domain");
     // Stream restart update interval
@@ -113,6 +115,7 @@ void JBEngine::initialize(const NamedList& params)
 	s << "\r\nstream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
 	s << "\r\nstream_restartcount=" << (unsigned int)m_restartCount;
 	s << "\r\nxmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
+	s << "\r\nprintxml=" << String::boolText(m_printXml);
 	Debug(this,DebugAll,"Initialized:%s",s.c_str());
     }
 }

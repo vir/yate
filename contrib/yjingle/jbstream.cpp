@@ -64,7 +64,7 @@ JBComponentStream::~JBComponentStream()
 {
     Debug(m_engine,DebugAll,"~JBComponentStream. [%p]",this);
 #ifdef XDEBUG
-    if (m_engine->debugAt(DebugAll)) {
+    if (m_engine->printXml() && m_engine->debugAt(DebugAll)) {
 	String buffer, element;
 	for (; true; ) {
 	    XMLElement* e = m_parser.extract();
@@ -367,7 +367,7 @@ JBComponentStream::Error JBComponentStream::sendXML()
 	return ErrorNone;
     if (state() != Running)
 	return ErrorPending;
-    if (m_engine->debugAt(DebugAll)) {
+    if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
 	String eStr;
 	XMPPUtils::print(eStr,e->element());
 	Debug(m_engine,DebugInfo,"Stream. Send XML. [%p]%s",
@@ -401,7 +401,7 @@ bool JBComponentStream::sendStreamXML(XMLElement* element, State newState,
 	    delete before;
 	return false;
     }
-    if (m_engine->debugAt(DebugAll)) {
+    if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
 	String eStr;
 	if (before)
 	    XMPPUtils::print(eStr,before);
@@ -466,7 +466,7 @@ bool JBComponentStream::processIncomingXML()
 	XMLElement* element = m_parser.extract();
 	if (!element)
 	    return false;
-	if (m_engine->debugAt(DebugAll)) {
+	if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
 	    String eStr;
 	    XMPPUtils::print(eStr,element);
 	    Debug(m_engine,DebugInfo,"Stream. Received XML [%p]. %s",

@@ -681,6 +681,20 @@ public:
 	{ return m_defaultResource; }
 
     /**
+     * Check if a sender or receiver of XML elements should print them to output.
+     * @return True to print XML element to output.
+     */
+    inline bool printXml() const
+	{ return m_printXml; }
+
+    /**
+     * Set/reset print XML elements to output permission.
+     * @param print True to allow XML elements printing to output.
+     */
+    inline void printXml(bool print)
+	{ m_printXml = print; }
+
+    /**
      * Check if a stream to the given server exists.
      * If the stream doesn't exists creates it.
      * This method is thread safe.
@@ -898,6 +912,7 @@ private:
     u_int64_t m_restartUpdateTime;       // Time to update the restart counter of all streams
     u_int32_t m_restartUpdateInterval;   // Update interval for restart counter of all streams
     u_int32_t m_restartCount;            // The default restart counter value
+    bool m_printXml;                     // Print XML data to output
     // ID generation data
     u_int64_t m_streamID;                // Stream id counter
     // Server list

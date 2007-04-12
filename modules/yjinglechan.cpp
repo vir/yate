@@ -354,8 +354,7 @@ public:
     bool decodeJid(JabberID& jid, Message& msg, const char* param,
 	bool checkDomain = false);
     // Create the presence notification command.
-    XMLElement* getPresenceCommand(const JabberID& from, const JabberID& to,
-	bool available);
+    XMLElement* getPresenceCommand(JabberID& from, JabberID& to, bool available);
     // Create a random string of JINGLE_AUTHSTRINGLEN length
     void createAuthRandomString(String& dest);
     // Process presence. Notify connections
@@ -1463,7 +1462,7 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	    to.domain(iplugin.m_jb->componentServer().c_str());
 	DDebug(&iplugin,DebugNote,"Sending presence %s from: %s to: %s",
 	    String::boolText(available),from.c_str(),to.c_str());
-//	stanza = iplugin.getPresenceCommand(from,to,available);
+	stanza = iplugin.getPresenceCommand(from,to,available);
     }
     else {
 	stanza = JBPresence::createPresence(from,to,jbPresence);
@@ -1608,8 +1607,11 @@ void YJGDriver::initialize()
     Output("Initializing module YJingle");
     s_cfg = Engine::configFile("yjinglechan");
     s_cfg.load();
-    if (m_init)
+    if (m_init) {
+	if (m_jb)
+	    m_jb->printXml(s_cfg.getBoolValue("general","printxml",false));
 	return;
+    }
     NamedList* sect = s_cfg.getSection("general");
     if (!sect) {
 	Debug(this,DebugNote,"Section [general] missing - no initialization.");
@@ -1745,15 +1747,19 @@ void YJGDriver::initJB(const NamedList& sect)
 	const char* password = comp->getValue("password");
 	// Check identity
 	String identity = comp->getValue("identity");
-	if (!identity) {
-	    Debug(this,DebugNote,"Missing identity in configuration for %s",
-		name.c_str());
-	    continue;
-	}
+	if (identity.null())
+	    identity = name;
 	String fullId;
-	if (identity == name)
-	    fullId = identity;
+	bool keepRoster = false;
+	if (identity == name) {
+	    String subdomain = comp->getValue("subdomain",s_cfg.getValue(
+		"general","default_resource",m_jb->defaultResource()));
+	    identity = subdomain;
+	    identity << '.' << name;
+	    fullId = name;
+	}
 	else {
+	    keepRoster = true;
 	    fullId << '.' << name;
 	    if (identity.endsWith(fullId)) {
 		if (identity.length() == fullId.length()) {
@@ -1767,19 +1773,20 @@ void YJGDriver::initJB(const NamedList& sect)
 		fullId = identity;
 		fullId << '.' << name;
 	    }
+	    identity = fullId;
 	}
 	bool startup = comp->getBoolValue("startup");
 	u_int32_t restartCount = m_jb->restartCount();
-	if (!(address && port && identity))
+	if (!(address && port && !identity.null()))
 	    continue;
 	if (defComponent.null() || comp->getBoolValue("default"))
 	    defComponent = name;
 	JBServerInfo* server = new JBServerInfo(name,address,port,
-	    password,identity,fullId,startup,restartCount);
-	XDebug(this,DebugAll,
-	    "Add server '%s' addr=%s port=%d pass=%s ident=%s full-ident=%s startup=%s restartcount=%u.",
+	    password,identity,fullId,keepRoster,startup,restartCount);
+	DDebug(this,DebugAll,
+	    "Add server '%s' addr=%s port=%d pass=%s ident=%s full-ident=%s roster=%s startup=%s restartcount=%u.",
 	    name.c_str(),address,port,password,identity.c_str(),fullId.c_str(),
-	    String::boolText(startup),restartCount);
+	    String::boolText(keepRoster),String::boolText(startup),restartCount);
 	m_jb->appendServer(server,startup);
     }
     // Set default server
@@ -1801,6 +1808,8 @@ void YJGDriver::initPresence(const NamedList& sect)
 	int process = 1;
 	int timeout = 1;
 	m_presence->startThreads(process,timeout);
+	m_sendCommandOnNotify = !(m_presence->addOnSubscribe() &&
+	    m_presence->addOnProbe() && m_presence->addOnPresence());
     }
 }
 
@@ -1971,7 +1980,7 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
     return true;
 }
 
-XMLElement* YJGDriver::getPresenceCommand(const JabberID& from, const JabberID& to,
+XMLElement* YJGDriver::getPresenceCommand(JabberID& from, JabberID& to,
 	bool available)
 {
     // Used only for debug purposes
@@ -1997,6 +2006,9 @@ XMLElement* YJGDriver::getPresenceCommand(const JabberID& from, const JabberID& 
     command->addChild(x);
     // 'iq' stanza
     String id = idCrt++;
+    String domain;
+    if (iplugin.m_jb->getServerIdentity(domain))
+	from.domain(domain);
     XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,from,to,id);
     iq->addChild(command);
     return iq;

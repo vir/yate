@@ -357,7 +357,7 @@ protected:
     /**
      * Constructor.
      * Constructs an outgoing stream.
-     * @param connection The engine that owns this stream.
+     * @param engine The engine that owns this stream.
      * @param remoteName The remote domain name.
      * @param remoteAddr The remote address to connect.
      */
@@ -370,7 +370,7 @@ protected:
      * This method is thread safe.
      * @param element The XML element to send.
      * @param newState The new state if the operation succeeds.
-     * @param newState Optional XML element to send before element.
+     * @param before Optional XML element to send before element.
      * @return False if the write operation fails.
      */
     bool sendStreamXML(XMLElement* element, State newState,
@@ -549,10 +549,10 @@ class YJINGLE_API JBServerInfo : public RefObject
 public:
     inline JBServerInfo(const char* name, const char* address, int port,
 	const char* password, const char* identity, const char* fullidentity,
-	bool autoRestart, u_int32_t restartCount)
+	bool roster, bool autoRestart, u_int32_t restartCount)
 	: m_name(name), m_address(address), m_port(port), m_password(password),
-	m_identity(identity), m_fullIdentity(fullidentity), m_autoRestart(autoRestart),
-	m_restartCount(restartCount)
+	m_identity(identity), m_fullIdentity(fullidentity), m_roster(roster),
+	m_autoRestart(autoRestart), m_restartCount(restartCount)
 	{}
     virtual ~JBServerInfo() {}
     inline const String& address() const
@@ -567,6 +567,8 @@ public:
 	{ return m_identity; }
     inline const String& fullIdentity() const
 	{ return m_fullIdentity; }
+    inline bool roster() const
+	{ return m_roster; }
     inline bool autoRestart() const
 	{ return m_autoRestart; }
     inline u_int32_t restartCount() const
@@ -586,6 +588,7 @@ private:
     String m_password;                   // Authentication data
     String m_identity;                   // Identity. Used for Jabber Component protocol
     String m_fullIdentity;               // Full identity for this server
+    bool m_roster;                       // Keep roster for this server
     bool m_autoRestart;                  // Automatically restart stream
     u_int32_t m_restartCount;            // Restart counter
 };
@@ -708,7 +711,7 @@ public:
 
     /**
      * Check if an outgoing stream exists with the same id and remote peer.
-     * @param connection The calling stream.
+     * @param stream The calling stream.
      * @return True if found.
      */
     bool remoteIdExists(const JBComponentStream* stream);
@@ -777,6 +780,14 @@ public:
      * @param open True to open the stream.
      */
     void appendServer(JBServerInfo* server, bool open);
+
+    /**
+     * Find server info object.
+     * @param token The search string. If 0 the default server will be used.
+     * @param domain True to find by domain name. False to find by address.
+     * @return Referenced JBServerInfo pointer or 0.
+     */
+    JBServerInfo* getServer(const char* token = 0, bool domain = true);
 
     /**
      * Get the identity of the given server for a component server.
@@ -854,14 +865,6 @@ protected:
      * @param client The client to remove.
      */
     void removeClient(JBClient* client);
-
-    /**
-     * Find server info object.
-     * @param token The search string. If 0 the default server will be used.
-     * @param domain True to find by domain name. False to find by address.
-     * @return JBServerInfo pointer or 0.
-     */
-    JBServerInfo* getServer(const char* token = 0, bool domain = true);
 
     /**
      * Clear the server list.
@@ -1268,8 +1271,8 @@ public:
      * @param text The text to check.
      * @return Presence type as enumeration.
      */
-    static inline Presence presenceType(const char* txt)
-	{ return (Presence)lookup(txt,s_presence,None); }
+    static inline Presence presenceType(const char* text)
+	{ return (Presence)lookup(text,s_presence,None); }
 
     /**
      * Get the text from a presence type.
@@ -1288,7 +1291,7 @@ protected:
     /**
      * Check if the given jid has a valid domain. Send error if not.
      * @param event The event with element.
-     * @param domain The destination jid.
+     * @param jid The destination jid.
      * @return True if jid has a valid domain.
      */
     bool checkDestination(JBEvent* event, const JabberID& jid);
@@ -1459,8 +1462,8 @@ public:
      * @param text The text to check.
      * @return Show type as enumeration.
      */
-    static inline Show showType(const char* txt)
-	{ return (Show)lookup(txt,s_show,ShowNone); }
+    static inline Show showType(const char* text)
+	{ return (Show)lookup(text,s_show,ShowNone); }
 
     /**
      * Get the text from a show type.

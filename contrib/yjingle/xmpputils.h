@@ -79,6 +79,7 @@ public:
 	Dtmf,                            // http://jabber.org/protocol/jingle/info/dtmf
 	DtmfError,                       // http://jabber.org/protocol/jingle/info/dtmf#errors
 	Command,                         // http://jabber.org/protocol/command
+	CapVoiceV1,                      // http://www.google.com/xmpp/protocol/voice/v1
 	Count,
     };
 
@@ -179,7 +180,7 @@ private:
 };
 
 /**
- * This class holds a Jabber ID in form 'node@domain/resource' or 'node@domain'.
+ * This class holds a Jabber ID in form "node@domain/resource" or "node@domain".
  * @short A Jabber ID.
  */
 class YJINGLE_API JabberID : public String
@@ -216,7 +217,7 @@ public:
 	{ return m_node; }
 
     /**
-     * Get the bare JID (node@domain).
+     * Get the bare JID: "node@domain".
      * @return The bare JID.
      */
     inline const String& bare() const
@@ -254,10 +255,10 @@ public:
 
     /**
      * Set the resource part of the JID.
-     * @param d The new resource part of the JID.
+     * @param res The new resource part of the JID.
      */
-    inline void resource(const char* r)
-	{ set(m_node.c_str(),m_domain.c_str(),r); }
+    inline void resource(const char* res)
+	{ set(m_node.c_str(),m_domain.c_str(),res); }
 
     /**
      * Set the data.
@@ -587,7 +588,7 @@ public:
      * @param dest The destination NamedList.
      * @param src Pointer to the string.
      * @param sep The delimiter.
-     * @param indent True to add the parts as name and index as value.
+     * @param nameFirst True to add the parts as name and index as value.
      *  False to do the other way.
      */
     static bool split(NamedList& dest, const char* src, const char sep,
@@ -598,8 +599,8 @@ public:
      * @param text The text to check.
      * @return Iq type as enumeration.
      */
-    static inline IqType iqType(const char* txt)
-	{ return (IqType)lookup(txt,s_iq,IqCount); }
+    static inline IqType iqType(const char* text)
+	{ return (IqType)lookup(text,s_iq,IqCount); }
 
     /**
      * Keep the types of 'iq' stanzas.

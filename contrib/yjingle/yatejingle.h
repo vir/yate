@@ -56,7 +56,7 @@ public:
      * Fill this object from the given attributes.
      * @param id The 'id' attribute.
      * @param name The 'name' attribute.
-     * @param clocrate The 'clockrate' attribute.
+     * @param clockrate The 'clockrate' attribute.
      * @param bitrate The 'bitrate' attribute.
      */
     inline JGAudio(const char* id, const char* name, const char* clockrate,
@@ -112,7 +112,7 @@ public:
      * Set the data.
      * @param id The 'id' attribute.
      * @param name The 'name' attribute.
-     * @param clocrate The 'clockrate' attribute.
+     * @param clockrate The 'clockrate' attribute.
      * @param bitrate The 'bitrate' attribute.
      */
     void set(const char* id, const char* name, const char* clockrate,
@@ -177,7 +177,7 @@ public:
 
     /**
      * Create and add a 'candidate' child to the given element.
-     * @param description The element.
+     * @param transport The element.
      */
     inline void addTo(XMLElement* transport)
 	{ if (transport) transport->addChild(toXML()); }
@@ -621,7 +621,7 @@ protected:
 
     /**
      * Selectively confirm an 'iq' (skip confirmation for transport-info).
-     * @param element The event containing the element to confirm.
+     * @param event The event containing the element to confirm.
      */
     void confirmIqSelect(JGEvent* event);
 

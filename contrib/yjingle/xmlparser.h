@@ -107,7 +107,7 @@ public:
      * Constructs an XML element with a TiXmlElement element with the given name.
      * Used for outgoing elements.
      * @param name The element's name.
-     * @param atributes Optional list of attributes.
+     * @param attributes Optional list of attributes.
      * @param text Optional text for the XML element.
      */
     XMLElement(const char* name, NamedList* attributes = 0, const char* text = 0);
@@ -116,8 +116,8 @@ public:
      * Constructor.
      * Constructs an XML element with a TiXmlElement element with the given type's name.
      * Used for outgoing elements.
-     * @param tyte The element's type.
-     * @param atributes Optional list of attributes.
+     * @param type The element's type.
+     * @param attributes Optional list of attributes.
      * @param text Optional text for the XML element.
      */
     XMLElement(Type type, NamedList* attributes = 0, const char* text = 0);

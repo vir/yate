@@ -65,11 +65,11 @@ JBEngine::JBEngine()
 {
     debugName("jbengine");
     m_identity = new JIDIdentity(JIDIdentity::Gateway,JIDIdentity::GatewayGeneric);
-    //m_features.add(XMPPNamespace::DiscoInfo);
     //m_features.add(XMPPNamespace::Command);
     m_features.add(XMPPNamespace::Jingle);
     m_features.add(XMPPNamespace::JingleAudio);
     m_features.add(XMPPNamespace::Dtmf);
+    m_features.add(XMPPNamespace::DiscoInfo);
     XDebug(this,DebugAll,"JBEngine. [%p]",this);
 }
 
@@ -137,6 +137,8 @@ void JBEngine::setComponentServer(const char* domain)
 	ObjList* obj = m_server.skipNull();
 	p = obj ? static_cast<JBServerInfo*>(obj->get()) : 0;
     }
+    else
+	p->deref();
     if (!p) {
 	Debug(this,DebugNote,"No default component server.");
 	return;
@@ -376,8 +378,10 @@ void JBEngine::appendServer(JBServerInfo* server, bool open)
 	m_server.append(server);
 	m_serverMutex.unlock();
     }
-    else
+    else {
 	server->deref();
+	p->deref();
+    }
     // Open stream
     if (open) {
 	JBComponentStream* stream = getStream(server->name());
@@ -394,6 +398,7 @@ bool JBEngine::getServerIdentity(String& destination,
     if (!server)
 	return false;
     destination = server->identity();
+    server->deref();
     return true;
 }
 
@@ -405,6 +410,7 @@ bool JBEngine::getFullServerIdentity(String& destination, const char* token,
     if (!server)
 	return false;
     destination = server->fullIdentity();
+    server->deref();
     return true;
 }
 
@@ -412,12 +418,14 @@ bool JBEngine::getStreamRestart(const char* token, bool domain)
 {
     Lock lock(m_serverMutex);
     JBServerInfo* server = getServer(token,domain);
-    if (!(server && server->getRestart()))
+    if (!server)
 	return false;
-    DDebug(this,DebugAll,
-	"Decreased stream restart counter (%u) for '%s'.",
-	server->restartCount(),server->name().c_str());
-    return true;
+    bool restart = server->getRestart();
+    if (restart)
+	DDebug(this,DebugAll,"Decreased stream restart counter (%u) for '%s'.",
+	    server->restartCount(),server->name().c_str());
+    server->deref();
+    return restart;
 }
 
 bool JBEngine::processDiscoInfo(JBEvent* event)
@@ -541,19 +549,22 @@ JBServerInfo* JBEngine::getServer(const char* token, bool domain)
     if (!token)
 	return 0;
     ObjList* obj = m_server.skipNull();
+    JBServerInfo* server = 0;
     if (domain)
 	for (; obj; obj = obj->skipNext()) {
-	    JBServerInfo* server = static_cast<JBServerInfo*>(obj->get());
+	    server = static_cast<JBServerInfo*>(obj->get());
 	    if (server->name() == token)
-		return server;
+		break;
+	    server = 0;
 	}
     else
 	for (; obj; obj = obj->skipNext()) {
-	    JBServerInfo* server = static_cast<JBServerInfo*>(obj->get());
+	    server = static_cast<JBServerInfo*>(obj->get());
 	    if (server->address() == token)
-		return server;
+		break;
+	    server = 0;
 	}
-    return 0;
+    return (server && server->ref()) ? server : 0;
 }
 
 bool JBEngine::processMessage(JBEvent* event)
@@ -572,6 +583,7 @@ bool JBEngine::getServerPassword(String& destination,
     if (!server)
 	return false;
     destination = server->password();
+    server->deref();
     return true;
 }
 
@@ -583,6 +595,7 @@ bool JBEngine::getServerPort(int& destination,
     if (!server)
 	return false;
     destination = server->port();
+    server->deref();
     return true;
 }
 
@@ -1373,12 +1386,11 @@ void JBPresence::initialize(const NamedList& params)
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
     m_autoProbe = params.getBoolValue("auto_probe",true);
     if (m_engine) {
-	String domain = m_engine->componentServer();
-	String ident;
-	// If we are running our own subdomain automatically add local users
-	if (m_engine->getServerIdentity(ident,domain) && (domain != ident))
-	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = true;
-	DDebug(this,DebugAll,"domain=%s identity=%s",domain.c_str(),ident.c_str());
+	JBServerInfo* info = m_engine->getServer();
+	if (info) {
+	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = info->roster();
+	    info->deref();
+	}
     }
     m_probeInterval = params.getIntValue("probe_interval",PRESENCE_PROBE_INTERVAL);
     m_expireInterval = params.getIntValue("expire_interval",PRESENCE_EXPIRE_INTERVAL);
@@ -1497,13 +1509,43 @@ void JBPresence::processDisco(JBEvent* event, const JabberID& local,
 	event,event->type(),local.c_str(),remote.c_str());
     XMPPUser* user = getRemoteUser(local,remote,false,0,false,0);
     if (!user) {
-	DDebug(this,DebugNote,
-	    "Received 'disco' for non user. Local: '%s'. Remote: '%s'.",
-	    local.c_str(),remote.c_str());
-	// Don't send error if it is a response
-	if (event->type() != JBEvent::IqDiscoRes)
-	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
-		event->stream());
+	if (event->type() == JBEvent::IqDiscoRes || !event->stream())
+	    return;
+	bool error = true;
+	XMPPNamespace::Type type;
+	// Check error and query type
+	while (true) {
+	    if (!event->child())
+		break;
+	    if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
+		type = XMPPNamespace::DiscoInfo;
+	    else if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
+		type = XMPPNamespace::DiscoItems;
+	    else
+		break;
+	    error = false;
+	    break;
+	}
+	if (error) {
+	    DDebug(this,DebugNote,"Received unacceptable 'disco' query");
+	    const String* id = &(event->id());
+	    sendError(XMPPError::SFeatureNotImpl,local,remote,event->releaseXML(),
+		event->stream(),id);
+	    return;
+	}
+	JabberID from(event->to());
+	if (from.resource().null() && m_engine)
+	    from.resource(m_engine->defaultResource());
+	XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,from,event->from(),event->id());
+	XMLElement* query = XMPPUtils::createElement(XMLElement::Query,type);
+	JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
+	query->addChild(identity->toXML());
+	identity->deref();
+	JIDFeatureList fl;
+	fl.add(XMPPNamespace::CapVoiceV1);
+	fl.addTo(query);
+	iq->addChild(query);
+	event->stream()->sendStanza(iq);
 	return;
     }
     user->processDisco(event);
@@ -1777,10 +1819,12 @@ bool JBPresence::validDomain(const String& domain)
 {
     if (m_engine->getAlternateDomain() && (domain == m_engine->getAlternateDomain()))
 	return true;
-    String identity;
-    if (!m_engine->getFullServerIdentity(identity) || identity != domain)
+    JBServerInfo* server = m_engine->getServer();
+    if (!server)
 	return false;
-    return true;
+    bool ok = (domain == server->identity() || domain == server->fullIdentity());
+    server->deref();
+    return ok;
 }
 
 bool JBPresence::getStream(JBComponentStream*& stream, bool& release)
@@ -1821,10 +1865,11 @@ bool JBPresence::sendError(XMPPError::Type type,
 	XMLElement* element, JBComponentStream* stream, const String* id)
 {
     XMLElement* xml = 0;
-    if (!id)
-	xml = createPresence(from,to,Error);
+    XMLElement::Type t = element ? element->type() : XMLElement::Invalid;
+    if (t == XMLElement::Iq)
+	xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,id ? id->c_str() : element->getAttribute("id"));
     else
-	xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,*id);
+	xml = createPresence(from,to,Error);
     xml->addChild(element);
     xml->addChild(XMPPUtils::createError(XMPPError::TypeModify,type));
     return sendStanza(xml,stream);
@@ -1896,19 +1941,26 @@ bool JBPresence::checkDestination(JBEvent* event, const JabberID& jid)
 {
     if (!event || validDomain(jid.domain()))
 	return true;
-    Debug(this,DebugNote,"Received element with invalid domain '%s'.",
-	jid.domain().c_str());
-    const String* id = 0;
+    bool respond = true;
     switch (event->type()) {
 	case JBEvent::IqDiscoGet:
 	case JBEvent::IqDiscoSet:
-	case JBEvent::IqDiscoRes:
-	    id = &(event->id());
 	    break;
-	default: ;
+	case JBEvent::IqDiscoRes:
+	    respond = false;
+	    break;
+	default: 
+	    // Never respond to responses: type error or result
+	    if (event->stanzaType() == "error" || event->stanzaType() == "result")
+		respond = false;
     }
-    sendError(XMPPError::SNoRemote,event->to(),event->from(),
-	event->releaseXML(),event->stream(),id);
+    Debug(this,DebugNote,"Received element with invalid domain '%s'. Send error: %s",
+	jid.domain().c_str(),String::boolText(respond));
+    if (respond) {
+	const String* id = event->id().null() ? 0 : &(event->id());
+	sendError(XMPPError::SNoRemote,event->to(),event->from(),
+	    event->releaseXML(),event->stream(),id);
+    }
     return false;
 }
 

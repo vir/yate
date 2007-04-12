@@ -347,7 +347,7 @@ JBComponentStream::Error JBComponentStream::postXML(XMLElementOut* element)
 	element->deref();
 	return ErrorContext;
     }
-    DDebug(m_engine,DebugInfo,"Stream::postXML((%p): '%s'). [%p]",
+    DDebug(m_engine,DebugAll,"Stream::postXML((%p): '%s'). [%p]",
 	element->element(),element->element()->name(),this);
     // List not empty: the return value will be ErrorPending
     // Else: element will be sent
@@ -704,7 +704,7 @@ JBEvent* JBComponentStream::addEvent(JBEvent::Type type,
 	    DDebug(m_engine,DebugAll,
 		"Stream::addEvent. Ignoring terminating event ((%p): %u). Already set. [%p]",
 		ev,ev->type(),this);
-	    delete ev;
+	    ev->destruct();
 	}
 	else
 	    m_terminateEvent = ev;

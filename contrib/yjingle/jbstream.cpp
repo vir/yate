@@ -63,6 +63,7 @@ JBComponentStream::JBComponentStream(JBEngine* engine, const String& remoteName,
 JBComponentStream::~JBComponentStream()
 {
     Debug(m_engine,DebugAll,"~JBComponentStream. [%p]",this);
+#ifdef XDEBUG
     if (m_engine->debugAt(DebugAll)) {
 	String buffer, element;
 	for (; true; ) {
@@ -77,6 +78,7 @@ JBComponentStream::~JBComponentStream()
 	    "Stream. Incoming data:[%p]\r\nParser buffer: '%s'.\r\nParsed elements: %s",
 	    this,buffer.c_str(),element?element.c_str():"None.");
     }
+#endif
     Lock2 lock(*this,m_receiveMutex);
     cleanup(false,0);
     lock.drop();

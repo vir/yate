@@ -1460,7 +1460,7 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
     if (iplugin.m_sendCommandOnNotify) {
 	if (to.domain().null())
 	    to.domain(iplugin.m_jb->componentServer().c_str());
-	DDebug(&iplugin,DebugNote,"Sending presence %s from: %s to: %s",
+	DDebug(&iplugin,DebugAll,"Sending presence %s from: %s to: %s",
 	    String::boolText(available),from.c_str(),to.c_str());
 	stanza = iplugin.getPresenceCommand(from,to,available);
     }

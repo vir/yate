@@ -47,6 +47,8 @@ TokenDict XMPPNamespace::s_value[] = {
 	{"http://jabber.org/protocol/jingle/info/dtmf",        Dtmf},
 	{"http://jabber.org/protocol/jingle/info/dtmf#errors", DtmfError},
 	{"http://jabber.org/protocol/commands",                Command},
+	{"http://www.google.com/xmpp/protocol/voice/v1",       CapVoiceV1},
+
 	{0,0}
 	};
 

@@ -283,7 +283,7 @@ snapshot tarball: check-topdir clean tables windows apidocs
 	rm $$wd/tar-exclude
 
 rpm: check-root tarball
-	rpmbuild -tb tarballs/yate-@PACKAGE_VERSION@@PACKAGE_RELEASE@.tar.gz
+	rpmbuild -tb tarballs/yate-@PACKAGE_VERSION@-@PACKAGE_RELEASE@.tar.gz
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<

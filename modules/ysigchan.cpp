@@ -2066,7 +2066,7 @@ void SigIsdnCallRecord::evInfo(SignallingEvent* event)
     if (!tmp.null()) {
 	Message* m = message("chan.dtmf",false);
 	m->addParam("text",tmp);
-	bool fromCaller = event->message()->params().getValue("fromcaller",false);
+	bool fromCaller = event->message()->params().getBoolValue("fromcaller",false);
 	m->addParam("sender",fromCaller ? m_caller : m_called);
 	Engine::enqueue(m);
     }

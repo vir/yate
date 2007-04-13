@@ -1,5 +1,86 @@
+Fri Apr 06 2007 Paul Chitescu <paulc-devel@null.ro>
+- Support for stereo a-law and mu-law
+- Headers are written to .au files for all alaw, mulaw and slin formats
+
+Wed Mar 28 2007 Paul Chitescu <paulc-devel@null.ro>
+- Fixed "answered" not cleared bug in ISDN (wpchan, zapchan)
+- Added transcoding information function in regexroute
+
+Tue Mar 27 2007 Paul Chitescu <paulc-devel@null.ro>
+- Implemented guest PBX mode
+- Added ${param} replacement capability in PBX operation parameters
+
+Mon Mar 26 2007 Paul Chitescu <paulc-devel@null.ro>
+- Engine's running mode can be read from modules
+- The defaults of several modules depend if running in client mode
+- Fixed SIP Call-Info parsing bug found by Yuri Gushin
+- Added non-authenticable accounts and ad-hoc registration in regfile
+- Added method that computes all transcodings possible from a list
+- Relaxed timings of supervisor sanity checks on startup
+
+Tue Mar 20 2007 Paul Chitescu <paulc-devel@null.ro>
+- Non-default RTP payload mappings are forwarded using call messages
+- Message handlers are removed from dispatcher before being destroyed
+- Sample scripts now use the more efficient filtered handlers
+
+Mon Mar 12 2007 Paul Chitescu <paulc-devel@null.ro>
+- Detect that RTP forwarding is not desired just after routing finished
+- Removed extra channel timeout checks
+
+Tue Feb 27 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added capability to request a RTP forward reINVITE from routing
+- Disable RTP forward gracefully if the H.323 caller does not support it
+- Implemented "auxiliar" and "persistent" classes of fork call legs
+
+Fri Feb 16 2007 Paul Chitescu <paulc-devel@null.ro>
+- Copy several missing parameters in PBX
+
+Mon Feb 05 2007 Paul Chitescu <paulc-devel@null.ro>
+- Fixed reversed order of SIP routes and ACK to 2xx for RFC 2543 proxies
+
+Thu Feb 01 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added support for drilling a RTP hole through a firewall or NAT
+
+Wed Jan 31 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added preliminary ENUM support for E2U+PSTN and E2U+VOICE
+- Added support for Jingle (E2U+XMPP)
+- Reorganized code to allow recursive handling of "E2U+tel" records
+- Added forking capability so NAPTR can be used for fallback
+- Replaced the primary and secondary domains with an arbitrary long list
+
+Thu Jan 25 2007 Paul Chitescu <paulc-devel@null.ro>
+- New option -r enables rotation of log file when running through supervisor
+- Added a log rotator configuration and activated support at startup
+
+Tue Jan 23 2007 Paul Chitescu <paulc-devel@null.ro>
+- Capability to copy parameters from call.execute to outgoing chan.startup
+
+Wed Jan 10 2007 Marian Podgoreanu <marian@null.ro>
+- Fixed IAX authentication bug
+
+Wed Jan 03 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added option to start RTP when sending the 200 SIP answer
+
+Wed Dec 27 2006 Paul Chitescu <paulc-devel@null.ro>
+- Renamed some call fork related parameters
+
+Fri Dec 22 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added formatted timestamping option
+- Final SIP answer events take priority over any provisional ones
+
 Thu Dec 07 2006 Paul Chitescu <paulc-devel@null.ro>
 - Added the Speex codec module by Olaf Conradi and Mikael Magnusson
+
+Thu Nov 02 2006 Paul Chitescu <paulc-devel@null.ro>
+- Added DTMF detection and CED tone detection
+- Uniformized the help in call generator
+
+Thu Oct 19 2006 Marian Podgoreanu <marian@null.ro>
+- Added Jingle and STUN modules
+- The RTP socket is accessible from session so STUN can be attached
+
+Tue Oct 17 2006 Paul Chitescu <paulc-devel@null.ro>
+- Interactive remote manager, supports TAB line completion
 
 Thu Mar 30 2006 Paul Chitescu <paulc-devel@null.ro>
 - Changed external module to allow to listen on sockets

@@ -932,35 +932,6 @@ void XMPPUser::clearLocalRes()
 	sendUnavailable(0);
 }
 
-void XMPPUser::processDisco(JBEvent* event)
-{
-    if (event->type() == JBEvent::IqDiscoRes)
-	return;
-    const String* id = 0;
-    if (event->id())
-	id = &(event->id());
-    // Check query
-    if (!event->child()) {
-	m_local->engine()->sendError(XMPPError::SFeatureNotImpl,event->to(),
-	    event->from(),event->releaseXML(),event->stream(),id);
-	return;
-    }
-    XMPPNamespace::Type type;
-    if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
-	type = XMPPNamespace::DiscoInfo;
-    else if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
-	type = XMPPNamespace::DiscoItems;
-    else {
-	m_local->engine()->sendError(XMPPError::SFeatureNotImpl,event->to(),
-	    event->from(),event->releaseXML(),event->stream(),id);
-	return;
-    }
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,event->to(),
-	event->from(),event->id());
-    iq->addChild(XMPPUtils::createElement(XMLElement::Query,type));
-    m_local->engine()->sendStanza(iq,event->stream());
-}
-
 void XMPPUser::processError(JBEvent* event)
 {
     String code, type, error;
@@ -1515,49 +1486,43 @@ void JBPresence::processDisco(JBEvent* event, const JabberID& local,
     XDebug(this,DebugAll,
 	"processDisco. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
 	event,event->type(),local.c_str(),remote.c_str());
-    XMPPUser* user = getRemoteUser(local,remote,false,0,false,0);
-    if (!user) {
-	if (event->type() == JBEvent::IqDiscoRes || !event->stream())
-	    return;
-	bool error = true;
-	XMPPNamespace::Type type;
-	// Check error and query type
-	while (true) {
-	    if (!event->child())
-		break;
-	    if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
-		type = XMPPNamespace::DiscoInfo;
-	    else if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
-		type = XMPPNamespace::DiscoItems;
-	    else
-		break;
-	    error = false;
+    if (event->type() == JBEvent::IqDiscoRes || !event->stream())
+	return;
+    bool error = true;
+    XMPPNamespace::Type type;
+    // Check error and query type
+    while (true) {
+	if (!event->child())
 	    break;
-	}
-	if (error) {
-	    DDebug(this,DebugNote,"Received unacceptable 'disco' query");
-	    const String* id = &(event->id());
-	    sendError(XMPPError::SFeatureNotImpl,local,remote,event->releaseXML(),
-		event->stream(),id);
-	    return;
-	}
-	JabberID from(event->to());
-	if (from.resource().null() && m_engine)
-	    from.resource(m_engine->defaultResource());
-	XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->from(),event->id());
-	XMLElement* query = XMPPUtils::createElement(XMLElement::Query,type);
-	JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
-	query->addChild(identity->toXML());
-	identity->deref();
-	JIDFeatureList fl;
-	fl.add(XMPPNamespace::CapVoiceV1);
-	fl.addTo(query);
-	iq->addChild(query);
-	event->stream()->sendStanza(iq);
+	if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
+	    type = XMPPNamespace::DiscoInfo;
+	else if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
+	    type = XMPPNamespace::DiscoItems;
+	else
+	    break;
+	error = false;
+	break;
+    }
+    if (error) {
+	DDebug(this,DebugNote,"Received unacceptable 'disco' query");
+	sendError(XMPPError::SFeatureNotImpl,local,remote,event->releaseXML(),
+	    event->stream(),&(event->id()));
 	return;
     }
-    user->processDisco(event);
-    user->deref();
+    JabberID from(event->to());
+    if (from.resource().null() && m_engine)
+	from.resource(m_engine->defaultResource());
+    // Create response: add identity and features
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->from(),event->id());
+    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,type);
+    JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
+    query->addChild(identity->toXML());
+    identity->deref();
+    JIDFeatureList fl;
+    fl.add(XMPPNamespace::CapVoiceV1);
+    fl.addTo(query);
+    iq->addChild(query);
+    sendStanza(iq,event->stream());
 }
 
 void JBPresence::processError(JBEvent* event, const JabberID& local,

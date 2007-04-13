@@ -1668,13 +1668,6 @@ public:
 	{ return (m_subscription & From); }
 
     /**
-     * Process received disco info/result.
-     * This method is thread safe.
-     * @param event The event with the request.
-     */
-    void processDisco(JBEvent* event);
-
-    /**
      * Process received error elements.
      * This method is thread safe.
      * @param event The event with the element.

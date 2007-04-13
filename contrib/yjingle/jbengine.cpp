@@ -1392,6 +1392,11 @@ void JBPresence::initialize(const NamedList& params)
 	JBServerInfo* info = m_engine->getServer();
 	if (info) {
 	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = info->roster();
+	    // Automatically process (un)subscribe and probe requests if no roster
+	    if (!info->roster()) {
+		m_autoProbe = true;
+		m_autoSubscribe = XMPPUser::From;
+	    }
 	    info->deref();
 	}
     }

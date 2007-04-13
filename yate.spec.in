@@ -33,7 +33,6 @@ for small to large scale projects.
 /usr/bin/yate
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
-/etc/logrotate.d/yate
 %dir /usr/lib/yate
 %dir /usr/lib/yate/modules
 %dir /etc/yate

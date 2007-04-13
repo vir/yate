@@ -35,7 +35,7 @@ Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client serve
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\h323\run"; Description: "OpenH323 library"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
-Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full client server
+Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full server
 Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
 Name: "database"; Description: "Database drivers"; Types: full server
 Name: "database\my"; Description: "MySQL database driver"; Types: full server

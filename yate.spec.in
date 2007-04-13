@@ -61,7 +61,9 @@ for small to large scale projects.
 /usr/lib/yate/modules/yradius.yate
 /usr/lib/yate/modules/ysipchan.yate
 /usr/lib/yate/modules/yrtpchan.yate
+/usr/lib/yate/modules/ystunchan.yate
 /usr/lib/yate/modules/yiaxchan.yate
+/usr/lib/yate/modules/yjinglechan.yate
 /usr/lib/yate/modules/enumroute.yate
 /usr/lib/yate/modules/osschan.yate
 /usr/lib/yate/modules/ilbccodec.yate
@@ -82,7 +84,9 @@ for small to large scale projects.
 %config /etc/yate/yiaxchan.conf
 %config /etc/yate/yradius.conf
 %config /etc/yate/yrtpchan.conf
+%config /etc/yate/ystunchan.conf
 %config /etc/yate/ysipchan.conf
+%config /etc/yate/yjinglechan.conf
 %config /etc/logrotate.d/yate
 
 %post
@@ -262,11 +266,11 @@ Requires:	%{name}-pgsql = %{version}
 Requires:	%{name}-gtk2 = %{version}
 Requires:	%{name}-mozilla = %{version}
 Requires:	%{name}-scripts = %{version}
-Requires:	%{name}-devel = %{version}
 
 %description all
 Metapackage for Yate allowing to fetch and install all components at once.
 It contains no files, just dependencies to all other packages.
+The devel package must still be installed separately.
 
 %files all
 %defattr(-,root,root)
@@ -299,7 +303,7 @@ chmod +x %{local_find_requires} %{local_find_provides}
 %endif
 
 %build
-./configure --prefix=%{prefix} --sysconfdir=/etc --mandir=%{prefix}/share/man
+./configure --prefix=%{prefix} --sysconfdir=/etc --mandir=%{prefix}/share/man --without-libspeex --without-spandsp --without-coredumper
 make strip
 
 %install
@@ -315,6 +319,10 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Sat Apr 14 2007 Paul Chitescu <paulc@voip.null.ro>
+- Version 1.2.0-1
+- Disabled detection of speex, fax and coredumper
+
 * Sun Feb 11 2007 Paul Chitescu <paulc@voip.null.ro>
 - Properly create the logrotate directory
 

@@ -869,12 +869,12 @@ void YIAXEngine::processMedia(IAXTransaction* transaction, DataBlock& data, u_in
 		// Multiply tStamp with 8 to keep the consumer satisfied
 		(static_cast<YIAXSource*>((static_cast<YIAXConnection*>(transaction->getUserData()))->getSource()))->Forward(data,tStamp * 8);
 	    else {
-		XDebug(this,DebugAll,"YIAXEngine - processMedia. No media source");
+		XDebug(this,DebugAll,"processMedia. No media source");
 	    }
 	else
-	    Debug(this,DebugAll,"YIAXEngine - processMedia. Transaction doesn't have a connection");
+	    Debug(this,DebugAll,"processMedia. Transaction doesn't have a connection");
     else
-	Debug(this,DebugAll,"YIAXEngine - processMedia. No transaction");
+	Debug(this,DebugAll,"processMedia. No transaction");
 }
 
 // Create a new registration transaction for a line
@@ -885,7 +885,8 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
     SocketAddr addr(AF_INET);
     addr.host(line->remoteAddr());
     addr.port(line->remotePort());
-    Debug(this,DebugAll,"Outgoing Registration[%s]:\nUsername: %s\nHost: %s\nPort: %d\nTime(sec): %u",
+    Debug(this,DebugAll,
+	"Outgoing Registration[%s]:\nUsername: %s\nHost: %s\nPort: %d\nTime(sec): %u",
 	line->c_str(),line->username().c_str(),addr.host().c_str(),addr.port(),Time::secNow());
     // Create IE list
     IAXIEList ieList;
@@ -905,8 +906,10 @@ IAXTransaction* YIAXEngine::reg(YIAXLine* line, bool regreq)
 // Create a new call transaction from target address and message params
 IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 {
-    Debug(this,DebugAll,"Outgoing Call:\nUsername: %s\nHost: %s\nPort: %d\nCalled number: %s\nCalled context: %s",
-	params.getValue("username"),addr.host().c_str(),addr.port(),params.getValue("called"),params.getValue("calledname"));
+    Debug(this,DebugAll,
+	"Outgoing Call:\nUsername: %s\nHost: %s\nPort: %d\nCalled number: %s\nCalled context: %s",
+	params.getValue("username"),addr.host().c_str(),addr.port(),
+	params.getValue("called"),params.getValue("calledname"));
     // Create IE list
     IAXIEList ieList;
     ieList.appendString(IAXInfoElement::USERNAME,params.getValue("username"));
@@ -918,7 +921,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
     // Set format and capabilities
     u_int32_t codecs = iplugin.codecs();
     if (!iplugin.updateCodecsFromRoute(codecs,params.getValue("formats"))) {
-	DDebug(this,DebugAll,"Outgoing call failed: No codecs.");
+	DDebug(this,DebugAll,"Outgoing call failed: No codecs");
 	params.setParam("error","nomedia");
 	return 0;
     }
@@ -928,7 +931,7 @@ IAXTransaction* YIAXEngine::call(SocketAddr& addr, NamedList& params)
 	    if (format & codecs)
 		break;
 	if (format >= 0x10000) {
-	    DDebug(this,DebugAll,"Outgoing call failed: No preffered format.");
+	    DDebug(this,DebugAll,"Outgoing call failed: No preffered format");
 	    params.setParam("error","nomedia");
 	    return 0;
 	}
@@ -951,11 +954,11 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, 
     if (m_threadsCreated)
 	return;
     if (!listenThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No reading socket threads(s)!.");
+	Debug(this,DebugWarn,"YIAXEngine. No reading socket threads(s)!");
     if (!eventThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No reading event threads(s)!.");
+	Debug(this,DebugWarn,"YIAXEngine. No reading event threads(s)!");
     if (!trunkThreadCount)
-	Debug(this,DebugWarn,"YIAXEngine. No trunking threads(s)!.");
+	Debug(this,DebugWarn,"YIAXEngine. No trunking threads(s)!");
     for (; listenThreadCount; listenThreadCount--)
 	(new YIAXListener(this,"YIAXListener thread"))->startup();
     for (; eventThreadCount; eventThreadCount--)
@@ -977,7 +980,7 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		connection->handleEvent(event);
 		if (event->final()) {
 		    // Final event: disconnect
-		    Debug(this,DebugAll,"YIAXEngine::processEvent - Disconnect connection [%p]",connection);
+		    Debug(this,DebugAll,"processEvent. Disconnecting (%p)",connection);
 		    connection->disconnect();
 		}
 	    }
@@ -1122,7 +1125,7 @@ void YIAXDriver::initialize()
 	}
     }
     if (!m_codecs)
-	Debug(DebugWarn,"YIAXDriver - initialize. No audio format(s) available.");
+	Debug(this,DebugWarn,"No audio format(s) available.");
     // If desired codec is disabled fall back to last in list
     if (!m_defaultCodec)
 	m_defaultCodec = fallback;
@@ -1379,7 +1382,7 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
       m_iaxEngine(iaxEngine), m_transaction(transaction), m_mutedIn(false), m_mutedOut(false),
       m_hangup(true), m_mutexTrans(true), m_mutexRefIncreased(true), m_refIncreased(false)
 {
-    DDebug(this,DebugAll,"YIAXConnection::YIAXConnection [%p]",this);
+    Debug(this,DebugAll,"Created %s [%p]",isOutgoing()?"outgoing":"incoming",this);
     setMaxcall(msg);
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
@@ -1397,17 +1400,17 @@ YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transactio
 
 YIAXConnection::~YIAXConnection()
 {
-    DDebug(this,DebugAll,"YIAXConnection::~YIAXConnection [%p]",this);
     status("destroyed");
     setConsumer();
     setSource();
     hangup();
+    Debug(this,DebugAll,"Destroyed with reason '%s' [%p]",m_reason.safe(),this);
 }
 
 // Incoming call accepted, possibly set trunking on this connection
 void YIAXConnection::callAccept(Message& msg)
 {
-    DDebug(this,DebugAll,"callAccept [%p]",this);
+    DDebug(this,DebugCall,"callAccept [%p]",this);
     m_mutexTrans.lock();
     if (m_transaction) {
 	m_transaction->sendAccept();
@@ -1423,20 +1426,20 @@ void YIAXConnection::callAccept(Message& msg)
 void YIAXConnection::callRejected(const char* error, const char* reason, const Message* msg)
 {
     Channel::callRejected(error,reason,msg);
-    if (!reason)
-	reason = m_reason;
-    m_reason = error;
-    if (!reason)
-	reason = error;
-    DDebug(this,DebugInfo,"callRejected [%p]. Error: '%s'",this,error);
+    if (!error)
+	error = reason;
     String s(error);
     Lock lock(m_mutexTrans);
-    if (m_transaction && (s == "noauth") && safeRefIncrease()) {
-	Debug(this,DebugAll,"callRejected [%p]. Request authentication",this);
-	m_transaction->sendAuth();
-	return;
-    }
+    if (m_transaction && s == "noauth")
+	if (safeRefIncrease()) {
+	    Debug(this,DebugInfo,"callRejected. Requesting authentication [%p]",this);
+	    m_transaction->sendAuth();
+	    return;
+	}
+	else
+	    error = "temporary-failure";
     lock.drop();
+    Debug(this,DebugCall,"callRejected. Reason: '%s' [%p]",error,this);
     hangup(reason,true);
 }
 
@@ -1444,7 +1447,7 @@ bool YIAXConnection::callRouted(Message& msg)
 {
     // check if the caller did abort the call while routing
     if (!m_transaction) {
-	Debug(this,DebugMild,"callRouted [%p]. No transaction: ABORT",this);
+	Debug(this,DebugMild,"callRouted. No transaction: ABORT [%p]",this);
 	return false;
     }
     DDebug(this,DebugAll,"callRouted [%p]",this);
@@ -1499,7 +1502,8 @@ bool YIAXConnection::msgText(Message& msg, const char* text)
 
 void YIAXConnection::disconnected(bool final, const char* reason)
 {
-    DDebug(this,DebugAll,"disconnected [%p]",this);
+    DDebug(this,DebugAll,"Disconnected. Final: %s [%p]",String::boolText(final),this);
+    hangup(reason);
     Channel::disconnected(final,reason);
     safeDeref();
 }
@@ -1508,7 +1512,7 @@ bool YIAXConnection::callPrerouted(Message& msg, bool handled)
 {
     // check if the caller did abort the call while prerouting
     if (!m_transaction) {
-	Debug(this,DebugMild,"callPrerouted [%p]. No transaction: ABORT",this);
+	Debug(this,DebugMild,"callPrerouted. No transaction: ABORT [%p]",this);
 	return false;
     }
     DDebug(this,DebugAll,"callPrerouted [%p]",this);
@@ -1519,69 +1523,71 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 {
     switch(event->type()) {
 	case IAXEvent::Text: {
-	    Debug(this,DebugAll,"YIAXConnection - TEXT");
 	    String text;
 	    event->getList().getString(IAXInfoElement::textframe,text);
+	    DDebug(this,DebugInfo,"TEXT: '%s' [%p]",text.safe(),this);
 	    Message* m = message("chan.text");
 	    m->addParam("text",text);
             Engine::enqueue(m);
 	    }
 	    break;
 	case IAXEvent::Dtmf: {
-	    Debug(this,DebugAll,"YIAXConnection - DTMF: %c",(char)event->subclass());
 	    String dtmf((char)event->subclass());
 	    dtmf.toUpper();
+	    DDebug(this,DebugCall,"DTMF: %s [%p]",dtmf.safe(),this);
 	    Message* m = message("chan.dtmf");
 	    m->addParam("text",dtmf);
 	    Engine::enqueue(m);
 	    }
 	    break;
 	case IAXEvent::Noise:
-	    Debug(this,DebugAll,"YIAXConnection - NOISE: %u",event->subclass());
+	    DDebug(this,DebugInfo,"NOISE: %u [%p]",event->subclass(),this);
 	    break;
 	case IAXEvent::Progressing:
-	    Debug(this,DebugAll,"YIAXConnection - CALL PROGRESSING");
+	    DDebug(this,DebugInfo,"CALL PROGRESSING [%p]",this);
 	    break;
 	case IAXEvent::Accept:
-	    Debug(this,DebugAll,"YIAXConnection - ACCEPT");
+	    DDebug(this,DebugCall,"ACCEPT [%p]",this);
 	    startAudioIn();
 	    break;
 	case IAXEvent::Answer:
 	    if (isAnswered())
 		break;
-	    Debug(this,DebugAll,"YIAXConnection - ANSWER");
+	    DDebug(this,DebugCall,"ANSWER [%p]",this);
 	    status("answered");
 	    startAudioIn();
 	    startAudioOut();
 	    Engine::enqueue(message("call.answered",false,true));
 	    break; 
 	case IAXEvent::Quelch:
-	    Debug(this,DebugAll,"YIAXConnection - QUELCH");
+	    DDebug(this,DebugCall,"QUELCH [%p]",this);
 	    m_mutedOut = true;
 	    break;
 	case IAXEvent::Unquelch:
-	    Debug(this,DebugAll,"YIAXConnection - UNQUELCH");
+	    DDebug(this,DebugCall,"UNQUELCH [%p]",this);
 	    m_mutedOut = false;
 	    break;
 	case IAXEvent::Ringing:
-	    Debug(this,DebugAll,"YIAXConnection - RINGING");
+	    DDebug(this,DebugInfo,"RINGING [%p]",this);
 	    startAudioIn();
 	    Engine::enqueue(message("call.ringing",false,true));
 	    break; 
 	case IAXEvent::Hangup:
 	case IAXEvent::Reject:
 	    event->getList().getString(IAXInfoElement::CAUSE,m_reason);
-	    Debug(this,DebugAll,"YIAXConnection - REJECT/HANGUP: '%s'",m_reason.c_str());
+	    DDebug(this,DebugCall,"REJECT/HANGUP: '%s'",m_reason.c_str());
 	    break;
 	case IAXEvent::Timeout:
-	    DDebug(this,DebugNote,"YIAXConnection - TIMEOUT. Transaction: %u,%u, Frame: %u,%u ",
+	    DDebug(this,DebugNote,"TIMEOUT. Transaction: %u,%u, Frame: %u,%u [%p]",
 		event->getTransaction()->localCallNo(),event->getTransaction()->remoteCallNo(),
-		event->frameType(),event->subclass());
-	    m_reason = "Timeout";
+		event->frameType(),event->subclass(),this);
+	    if (event->final())
+		m_reason = "offline";
 	    break;
 	case IAXEvent::Busy:
-	    Debug(this,DebugAll,"YIAXConnection - BUSY");
-	    m_reason = "Busy";
+	    DDebug(this,DebugCall,"BUSY [%p]",this);
+	    if (event->final())
+		m_reason = "busy";
 	    break;
 	case IAXEvent::AuthRep:
 	    evAuthRep(event);
@@ -1603,28 +1609,27 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 void YIAXConnection::hangup(const char* reason, bool reject)
 {
     if (!m_hangup)
-	// Already done
 	return;
     m_hangup = false;
-    if (!reason)
-	reason = m_reason;
-    if (!reason)
-	reason = Engine::exiting() ? "Server shutdown" : "Unexpected problem";
+    if (m_reason.null())
+	m_reason = reason;
+    if (m_reason.null())
+	m_reason = Engine::exiting() ? "shutdown" : "unknown";
     m_mutexTrans.lock();
     if (m_transaction) {
 	m_transaction->setUserData(0);
 	if (reject)
-	    m_transaction->sendReject(reason);
+	    m_transaction->sendReject(m_reason);
 	else
-	    m_transaction->sendHangup(reason);
+	    m_transaction->sendHangup(m_reason);
         m_transaction = 0;
     }
     m_mutexTrans.unlock();
     Message* m = message("chan.hangup",true);
     m->setParam("status","hangup");
-    m->setParam("reason",reason);
+    m->setParam("reason",m_reason);
     Engine::enqueue(m);
-    Debug(this,DebugCall,"YIAXConnection::hangup ('%s') [%p]",reason,this);
+    Debug(this,DebugCall,"Hangup. Reason: %s [%p]",m_reason.safe(),this);
 }
 
 bool YIAXConnection::route(bool authenticated)
@@ -1634,12 +1639,12 @@ bool YIAXConnection::route(bool authenticated)
     Message* m = message("call.preroute",false,true);
     Lock lock(&m_mutexTrans);
     if (authenticated) {
-	DDebug(this,DebugAll,"Route pass 2: Password accepted.");
+	DDebug(this,DebugAll,"Route pass 2: Password accepted [%p]",this);
 	m_refIncreased = false;
 	m->addParam("username",m_transaction->username());
     }
     else {
-	DDebug(this,DebugAll,"Route pass 1: No username.");
+	DDebug(this,DebugAll,"Route pass 1: No username [%p]",this);
 	if (!iplugin.getEngine()->acceptFormatAndCapability(m_transaction)) {
 	    hangup(IAXTransaction::s_iax_modNoMediaFormat,true);
 	    return false;
@@ -1673,7 +1678,7 @@ void YIAXConnection::startAudioIn()
     const char* formatText = lookup(format,dict_payloads);
     setSource(new YIAXSource(this,format,formatText));
     getSource()->deref();
-    DDebug(this,DebugAll,"startAudioIn. Format %u: '%s'",format,formatText);
+    DDebug(this,DebugAll,"startAudioIn. Format %u: '%s' [%p]",format,formatText,this);
 }
 
 // Create audio consumer with the proper format
@@ -1689,12 +1694,12 @@ void YIAXConnection::startAudioOut()
     const char* formatText = lookup(format,dict_payloads);
     setConsumer(new YIAXConsumer(this,format,formatText));
     getConsumer()->deref();
-    DDebug(this,DebugAll,"startAudioOut. Format %u: '%s'",format,formatText);
+    DDebug(this,DebugAll,"startAudioOut. Format %u: '%s' [%p]",format,formatText,this);
 }
 
 void YIAXConnection::evAuthRep(IAXEvent* event)
 {
-    DDebug(this,DebugAll,"YIAXConnection - AUTHREP");
+    DDebug(this,DebugAll,"AUTHREP [%p]",this);
     bool requestAuth, invalidAuth;
     if (iplugin.userAuth(event->getTransaction(),true,requestAuth,invalidAuth)) {
 	// Authenticated. Route the user.
@@ -1702,13 +1707,13 @@ void YIAXConnection::evAuthRep(IAXEvent* event)
 	return;
     }
     const char* reason = IAXTransaction::s_iax_modInvalidAuth.c_str();
-    DDebug(this,DebugAll,"Not authenticated. Reason: '%s'. Reject.",reason);
+    DDebug(this,DebugCall,"Not authenticated. Rejecting [%p]",this);
     hangup(event,reason,true);
 }
 
 void YIAXConnection::evAuthReq(IAXEvent* event)
 {
-    DDebug(this,DebugAll,"YIAXConnection - AUTHREQ");
+    DDebug(this,DebugAll,"AUTHREQ [%p]",this);
     String response;
     if (m_iaxEngine && m_transaction) {
 	m_iaxEngine->getMD5FromChallenge(response,m_transaction->challenge(),m_password);

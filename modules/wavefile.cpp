@@ -579,7 +579,8 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 
 
 Disconnector::Disconnector(CallEndpoint* chan, const String& id, DataSource* source, bool disc, const char* reason)
-    : m_chan(chan), m_msg(0), m_source(source), m_disc(disc)
+    : Thread("WaveDisconnector"),
+      m_chan(chan), m_msg(0), m_source(source), m_disc(disc)
 {
     if (id) {
 	Message* m = new Message("chan.notify");

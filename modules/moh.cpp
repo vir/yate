@@ -120,7 +120,8 @@ private:
 };
 
 MOHSource::MOHSource(const String &name, const String &command_line)
-    :   ThreadedSource("slin"), m_name(name), m_command_line(command_line), m_swap(false), m_brate(16000)
+    : ThreadedSource("slin"),
+      m_name(name), m_command_line(command_line), m_swap(false), m_brate(16000)
 {
     Debug(DebugAll,"MOHSource::MOHSource(\"%s\", \"%s\") [%p]", name.c_str(), command_line.c_str(), this);
 }
@@ -153,7 +154,7 @@ MOHSource *MOHSource::getSource(const String &name)
     cmd = s_cfg.getValue("mohs", name);
     if (cmd) {
 	MOHSource *s = new MOHSource(name, cmd);
-	if(s->start()) {
+	if (s->start("MOHSource")) {
 	    sources.append(s);
 	    return s;
 	} else

@@ -938,7 +938,9 @@ ThreadedSource::~ThreadedSource()
 {
     if (m_asyncDelete && m_thread)
 	Debug(DebugFail,"ThreadedSource destroyed holding thread %p [%p]",m_thread,this);
-    stop();
+    m_asyncDelete = false;
+    if (m_thread)
+	stop();
 }
 
 bool ThreadedSource::start(const char* name, Thread::Priority prio)

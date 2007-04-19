@@ -440,6 +440,9 @@ public:
     virtual bool msgText(Message& msg, const char* text);
     virtual void disconnected(bool final, const char* reason);
 
+    inline bool disconnect()
+	{ return Channel::disconnect(m_reason); }
+
     inline IAXTransaction* transaction() const
         { return m_transaction; }
 
@@ -980,7 +983,8 @@ void YIAXEngine::processEvent(IAXEvent* event)
 		connection->handleEvent(event);
 		if (event->final()) {
 		    // Final event: disconnect
-		    Debug(this,DebugAll,"processEvent. Disconnecting (%p)",connection);
+		    Debug(this,DebugAll,"processEvent. Disconnecting (%p): '%s'",
+			connection,connection->id().c_str());
 		    connection->disconnect();
 		}
 	    }
@@ -1502,7 +1506,8 @@ bool YIAXConnection::msgText(Message& msg, const char* text)
 
 void YIAXConnection::disconnected(bool final, const char* reason)
 {
-    DDebug(this,DebugAll,"Disconnected. Final: %s [%p]",String::boolText(final),this);
+    DDebug(this,DebugAll,"Disconnected. Final: %s . Reason: '%s' [%p]",
+	String::boolText(final),reason,this);
     hangup(reason);
     Channel::disconnected(final,reason);
     safeDeref();

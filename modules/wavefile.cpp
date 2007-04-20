@@ -62,7 +62,7 @@ private:
     bool m_autoclose;
     bool m_autoclean;
     bool m_nodata;
-    bool m_derefOk;
+    volatile bool m_derefOk;
 };
 
 class WaveConsumer : public DataConsumer
@@ -365,8 +365,10 @@ void WaveSource::run()
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",m_id.c_str(),m_total,m_chan,this);
+    // prevent disconnector thread from succeeding before notify returns
+    m_derefOk = false;
     // at cleanup time deref the data source if we start no disconnector thread
-    m_autoclean = m_derefOk = !notify(this,"eof");
+    m_derefOk = m_autoclean = !notify(this,"eof");
 }
 
 void WaveSource::cleanup()

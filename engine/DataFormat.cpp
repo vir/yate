@@ -961,6 +961,8 @@ bool ThreadedSource::start(const char* name, Thread::Priority prio)
 void ThreadedSource::stop()
 {
     Lock lock(mutex());
+    if (!m_thread)
+	return;
     s_sourceMutex.lock();
     ThreadedSourcePrivate* tmp = m_thread;
     m_thread = 0;

@@ -41,6 +41,7 @@ public:
     virtual void run();
     virtual void cleanup();
     void setNotify(const String& id);
+    bool derefReady();
 private:
     WaveSource(const char* file, CallEndpoint* chan, bool autoclose);
     void init(const String& file, bool autorepeat);
@@ -48,7 +49,7 @@ private:
     void detectWavFormat();
     void detectIlbcFormat();
     bool computeDataRate();
-    bool notify(DataSource* source, const char* reason = 0);
+    bool notify(WaveSource* source, const char* reason = 0);
     CallEndpoint* m_chan;
     DataBlock m_data;
     int m_fd;
@@ -61,6 +62,7 @@ private:
     bool m_autoclose;
     bool m_autoclean;
     bool m_nodata;
+    bool m_derefOk;
 };
 
 class WaveConsumer : public DataConsumer
@@ -101,14 +103,14 @@ public:
 class Disconnector : public Thread
 {
 public:
-    Disconnector(CallEndpoint* chan, const String& id, DataSource* source, bool disc, const char* reason = 0);
+    Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, bool disc, const char* reason = 0);
     virtual ~Disconnector();
     virtual void run();
     bool init();
 private:
     RefPointer<CallEndpoint> m_chan;
     Message* m_msg;
-    DataSource* m_source;
+    WaveSource* m_source;
     bool m_disc;
 };
 
@@ -209,7 +211,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
-      m_nodata(false)
+      m_nodata(false), m_derefOk(true)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file,chan,this);
 }
@@ -364,7 +366,7 @@ void WaveSource::run()
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",m_id.c_str(),m_total,m_chan,this);
     // at cleanup time deref the data source if we start no disconnector thread
-    m_autoclean = !notify(this,"eof");
+    m_autoclean = m_derefOk = !notify(this,"eof");
 }
 
 void WaveSource::cleanup()
@@ -379,7 +381,10 @@ void WaveSource::cleanup()
 	    deref();
 	return;
     }
-    ThreadedSource::cleanup();
+    if (m_derefOk)
+	ThreadedSource::cleanup();
+    else
+	m_derefOk = true;
 }
 
 void WaveSource::setNotify(const String& id)
@@ -389,7 +394,19 @@ void WaveSource::setNotify(const String& id)
 	notify(this);
 }
 
-bool WaveSource::notify(DataSource* source, const char* reason)
+bool WaveSource::derefReady()
+{
+    for (int i = 0; i < 10; i++) {
+	if (m_derefOk)
+	    return true;
+	Thread::yield();
+    }
+    Debug(&__plugin,DebugWarn,"Source not deref ready, waiting more... [%p]",this);
+    Thread::msleep(10);
+    return m_derefOk;
+}
+
+bool WaveSource::notify(WaveSource* source, const char* reason)
 {
     if (!m_chan) {
 	if (m_id) {
@@ -578,9 +595,9 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 }
 
 
-Disconnector::Disconnector(CallEndpoint* chan, const String& id, DataSource* source, bool disc, const char* reason)
+Disconnector::Disconnector(CallEndpoint* chan, const String& id, WaveSource* source, bool disc, const char* reason)
     : Thread("WaveDisconnector"),
-      m_chan(chan), m_msg(0), m_source(source), m_disc(disc)
+      m_chan(chan), m_msg(0), m_source(0), m_disc(disc)
 {
     if (id) {
 	Message* m = new Message("chan.notify");
@@ -591,6 +608,14 @@ Disconnector::Disconnector(CallEndpoint* chan, const String& id, DataSource* sou
 	    m->addParam("reason",reason);
 	m->userData(chan);
 	m_msg = m;
+    }
+    if (source) {
+	if (source->ref())
+	    m_source = source;
+	else {
+	    Debug(&__plugin,DebugGoOn,"Disconnecting dead source %p",source);
+	    m_chan = 0;
+	}
     }
 }
 
@@ -605,7 +630,7 @@ Disconnector::~Disconnector()
 bool Disconnector::init()
 {
     if (error()) {
-	Debug(DebugFail,"Error creating disconnector thread %p",this);
+	Debug(&__plugin,DebugGoOn,"Error creating disconnector thread %p",this);
 	delete this;
 	return false;
     }
@@ -624,6 +649,9 @@ void Disconnector::run()
 	else
 	    Debug(&__plugin,DebugMild,"Source %p in channel %p was replaced with %p",
 		m_source,(void*)m_chan,m_chan->getSource());
+	if (!m_source->derefReady())
+	    Debug(&__plugin,DebugGoOn,"Source %p is not deref ready, crash may occur",m_source);
+	m_source->deref();
 	if (m_disc)
 	    m_chan->disconnect("eof");
     }

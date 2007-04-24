@@ -328,7 +328,7 @@ class Yate
     {
 	global $yate_stdin, $yate_socket;
 	if ($yate_socket) {
-	    $line = @socket_read($yate_socket,8192);
+	    $line = @socket_read($yate_socket,8192,PHP_NORMAL_READ);
 	    // check for error
 	    if ($line == false)
 		return false;

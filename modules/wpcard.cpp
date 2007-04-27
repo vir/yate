@@ -187,10 +187,11 @@ private:
     WpSocket m_socket;
     WpSigThread* m_thread;               // Thread used to read data from socket
     bool m_readOnly;                     // Readonly interface
-    bool m_received;                     // Received data flag
+    int m_notify;                        // Upper layer notification on received data (0: success. 1: not notified. 2: notified)
     int m_overRead;                      // Header extension
     unsigned char m_errorMask;           // Error mask to filter received errors
     bool m_sendReadOnly;                 // Print send attempt on readonly interface error
+    SignallingTimer m_timerRxUnder;      // RX underrun notification
 };
 
 // Read signalling data for WpInterface
@@ -199,7 +200,7 @@ class WpSigThread : public Thread
     friend class WpInterface;
 public:
     inline WpSigThread(WpInterface* iface, Priority prio = Normal)
-	: Thread("WpSignal",prio), m_interface(iface)
+	: Thread("WpInterfaceThread",prio), m_interface(iface)
 	{}
     virtual ~WpSigThread();
     virtual void run();
@@ -323,7 +324,7 @@ class WpDataThread : public Thread
     friend class WpData;
 public:
     inline WpDataThread(WpData* data, Priority prio = Normal)
-	: Thread("WpData",prio), m_data(data)
+	: Thread("WpDataThread",prio), m_data(data)
 	{}
     virtual ~WpDataThread();
     virtual void run();
@@ -339,6 +340,8 @@ public:
 };
 
 YSIGFACTORY2(WpInterface,SignallingInterface);
+
+static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
 
 /**
  * Fifo
@@ -506,9 +509,10 @@ WpInterface::WpInterface(const NamedList& params)
     : m_socket(this),
     m_thread(0),
     m_readOnly(false),
-    m_received(false),
+    m_notify(0),
     m_overRead(0),
-    m_sendReadOnly(false)
+    m_sendReadOnly(false),
+    m_timerRxUnder(0)
 {
     setName(params.getValue("debugname","WpInterface"));
     XDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
@@ -543,12 +547,17 @@ bool WpInterface::init(NamedList& params)
     int i = params.getIntValue("errormask",sect->getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
 
+    int rx = params.getIntValue("rxunderruninterval");
+    if (rx > 0)
+	m_timerRxUnder.interval(rx);
+
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nCard:       " << m_socket.card();
-	s << "\r\nDevice:     " << m_socket.device();
-	s << "\r\nError mask: " << (unsigned int)m_errorMask;
-	s << "\r\nRead only:  " << String::boolText(m_readOnly);
+	s << "\r\nCard:                  " << m_socket.card();
+	s << "\r\nDevice:                " << m_socket.device();
+	s << "\r\nError mask:            " << (unsigned int)m_errorMask;
+	s << "\r\nRead only:             " << String::boolText(m_readOnly);
+	s << "\r\nRX underrun interval:  " << (unsigned int)m_timerRxUnder.interval() << " ms";
 	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
     }
     return true;
@@ -593,6 +602,21 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     return -1 != m_socket.send(data.data(),data.length(),0);
 }
 
+static inline const char* error(unsigned char err)
+{
+    static String s;
+    s.clear();
+    if (err & WP_ERR_CRC)
+	s.append("CRC");
+    if (err & WP_ERR_FIFO)
+	s.append("RxOver"," ");
+    if (err & WP_ERR_ABORT)
+	s.append("Align"," ");
+    if (s.null())
+	s << (int)err;
+    return s.safe();
+}
+
 // Receive signalling packet
 bool WpInterface::receiveAttempt()
 {
@@ -612,8 +636,8 @@ bool WpInterface::receiveAttempt()
 	r -= (WP_HEADER + m_overRead);
 	unsigned char err = buf[WP_RD_ERROR] & m_errorMask;
 	if (err) {
-	    DDebug(this,DebugWarn,"Packet got error: %u [%p]",
-		buf[WP_RD_ERROR],this);
+	    DDebug(this,DebugWarn,"Packet got error: %u (%s) [%p]",
+		buf[WP_RD_ERROR],error(buf[WP_RD_ERROR]),this);
 	    if (err & WP_ERR_FIFO)
 		notify(RxOverflow);
 	    if (err & WP_ERR_CRC)
@@ -623,15 +647,18 @@ bool WpInterface::receiveAttempt()
 	    return true;
 	}
 
+	s_ifaceNotify.lock();
+	m_notify = 0;
+	s_ifaceNotify.unlock();
+
 #ifdef XDEBUG
-    if (debugAt(DebugAll)) {
-	String str;
-	str.hexify(buf+WP_HEADER,r,' ');
-	Debug(this,DebugAll,"Received %d bytes: %s",r,str.c_str());
-    }
+	if (debugAt(DebugAll)) {
+	    String str;
+	    str.hexify(buf+WP_HEADER,r,' ');
+	    Debug(this,DebugAll,"Received %d bytes: %s",r,str.c_str());
+	}
 #endif
 
-	m_received = true;
 	DataBlock data(buf+WP_HEADER,r);
 	receivedPacket(data);
 	data.clear(false);
@@ -663,8 +690,10 @@ bool WpInterface::control(Operation oper, NamedList* params)
 	    else
 		ok = m_thread->startup();
 	}
-	if (ok)
+	if (ok) {
 	    DDebug(this,DebugAll,"Enabled [%p]",this);
+	    m_timerRxUnder.start();
+	}
 	else {
 	    Debug(this,DebugWarn,"Enable failed [%p]",this);
 	    control(Disable,0);
@@ -672,6 +701,7 @@ bool WpInterface::control(Operation oper, NamedList* params)
 	return ok;
     }
     // oper is Disable
+    m_timerRxUnder.stop();
     if (m_thread) {
 	m_thread->cancel();
 	while (m_thread)
@@ -684,11 +714,21 @@ bool WpInterface::control(Operation oper, NamedList* params)
 
 void WpInterface::timerTick(const Time& when)
 {
-    if (m_received)
-	m_received = false;
-    else {
-//	XDebug(this,DebugAll,"Not received any packets in the last tick [%p]",this);
+    if (!m_timerRxUnder.timeout(when.msec()))
+	return;
+    s_ifaceNotify.lock();
+    if (m_notify) {
+	if (m_notify == 1) {
+	    DDebug(this,DebugWarn,"Not received any data for " FMT64 " ms [%p]",
+		m_timerRxUnder.interval(),this);
+	    notify(RxUnderrun);
+	    m_notify = 2;
+	}
     }
+    else
+	m_notify = 1;
+    s_ifaceNotify.unlock();
+    m_timerRxUnder.start(when.msec());
 }
 
 /**
@@ -703,7 +743,7 @@ WpSigThread::~WpSigThread()
 
 void WpSigThread::run()
 {
-    DDebug(m_interface,DebugAll,"WpSigThread::run() [%p]",this);
+    DDebug(m_interface,DebugAll,"%s start running [%p]",name(),this);
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())
@@ -788,12 +828,12 @@ WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* d
     if (buflen) {
 	m_source = new WpSource(this,"alaw",buflen);
 	m_consumer = new WpConsumer(this,"alaw",buflen);
-	XDebug(group,DebugAll,"WpCircuit %u. Source (%p). Consumer (%p) [%p]",
+	XDebug(group,DebugAll,"WpCircuit(%u). Source (%p). Consumer (%p) [%p]",
 	    code,m_source,m_consumer,this);
     }
     else
 	Debug(group,DebugNote,
-	    "WpCircuit %u. No source and consumer. Buffer length is 0 [%p]",
+	    "WpCircuit(%u). No source and consumer. Buffer length is 0 [%p]",
 	    code,this);
 }
 
@@ -826,16 +866,17 @@ bool WpCircuit::status(Status newStat, bool sync)
 	    break;
 	default: ;
 	    Debug(group(),DebugNote,
-		"WpCircuit %u. Can't change status to unhandled value %u [%p]",
+		"WpCircuit(%u). Can't change status to unhandled value %u [%p]",
 		code(),newStat,this);
 	    return false;
     }
     if (SignallingCircuit::status() == Missing) {
 	Debug(group(),DebugNote,
-	    "WpCircuit %u. Can't change status to '%u'. Circuit is missing [%p]",
+	    "WpCircuit(%u). Can't change status to '%u'. Circuit is missing [%p]",
 	    code(),newStat,this);
 	return false;
     }
+    Status oldStat = SignallingCircuit::status();
     // Change status
     if (!SignallingCircuit::status(newStat,sync))
 	return false;
@@ -846,9 +887,8 @@ bool WpCircuit::status(Status newStat, bool sync)
 	enableData = true;
     // Don't put this message for final states
     if (!Engine::exiting())
-	DDebug(group(),DebugAll,
-	    "WpCircuit %u. Changed status to '%u'. %s data transfer [%p]",
-	    code(),newStat,enableData ? "Enable" : "Disable",this);
+	DDebug(group(),DebugAll,"WpCircuit(%u). Changed status to %u [%p]",
+	    code(),newStat,this);
     if (enableData) {
 	m_sourceValid = m_source;
 	m_consumerValid = m_consumer;
@@ -856,24 +896,25 @@ bool WpCircuit::status(Status newStat, bool sync)
     }
     // Disable data if not already disabled
     if (m_consumerValid) {
-	m_consumerValid = 0;
-	XDebug(group(),DebugAll,"WpCircuit %u. Consumer transferred %u byte(s) [%p]",
-	    code(),m_consumer->m_total,this);
-	if (m_consumer->m_errorCount)
-	    DDebug(group(),DebugMild,
-	        "WpCircuit %u. Consumer errors: %u. Lost: %u/%u [%p]",
-		code(),m_consumer->m_errorCount,m_consumer->m_errorBytes,
-		m_consumer->m_total,this);
+	if (oldStat == Connected) {
+	    XDebug(group(),DebugAll,"WpCircuit(%u). Consumer transferred %u byte(s) [%p]",
+		code(),m_consumer->m_total,this);
+	    if (m_consumer->m_errorCount)
+		DDebug(group(),DebugMild,"WpCircuit(%u). Consumer errors: %u. Lost: %u/%u [%p]",
+		    code(),m_consumer->m_errorCount,m_consumer->m_errorBytes,
+		    m_consumer->m_total,this);
+	}
 	m_consumer->clear();
+	m_consumerValid = 0;
 	m_consumer->m_errorCount = m_consumer->m_errorBytes = 0;
 	m_consumer->m_total = 0;
     }
     if (m_sourceValid) {
-	// Remove consumer
+	if (oldStat == Connected)
+	    XDebug(group(),DebugAll,"WpCircuit(%u). Source transferred %u byte(s) [%p]",
+		code(),m_source->m_total,this);
 	m_source->clear();
 	m_sourceValid = 0;
-	XDebug(group(),DebugAll,"WpCircuit %u. Source transferred %u byte(s) [%p]",
-	    code(),m_source->m_total,this);
 	m_source->m_total = 0;
     }
     return true;
@@ -890,7 +931,7 @@ bool WpCircuit::updateFormat(const char* format, int direction)
     if (direction == -1 || direction == 0) {
 	if (m_consumer && m_consumer->getFormat() != format) {
 	    m_consumer->changeFormat(format);
-	    DDebug(group(),DebugAll,"WpCircuit %u. Consumer format set to '%s' [%p]",
+	    DDebug(group(),DebugAll,"WpCircuit(%u). Consumer format set to '%s' [%p]",
 		code(),format,this);
 	}
 	else
@@ -899,7 +940,7 @@ bool WpCircuit::updateFormat(const char* format, int direction)
     if (direction == 1 || direction == 0) {
 	if (m_source && m_source->getFormat() != format) {
 	    m_source->changeFormat(format);
-	    DDebug(group(),DebugAll,"WpCircuit %u. Source format set to '%s' [%p]",
+	    DDebug(group(),DebugAll,"WpCircuit(%u). Source format set to '%s' [%p]",
 		code(),format,this);
 	}
 	else
@@ -1304,8 +1345,8 @@ WpDataThread::~WpDataThread()
 void WpDataThread::run()
 {
     if (m_data) {
-	DDebug(m_data->group(),DebugAll,"WpDataThread::run() for (%p): '%s' [%p]",
-	    m_data,m_data->id().safe(),this);
+	DDebug(m_data->group(),DebugAll,"%s start running for (%p): '%s' [%p]",
+	    name(),m_data,m_data->id().safe(),this);
 	m_data->run();
     }
     else

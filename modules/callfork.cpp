@@ -56,9 +56,11 @@ protected:
     bool m_answered;
     bool m_rtpForward;
     bool m_rtpStrict;
+    bool m_fake;
     ObjList* m_targets;
     Message* m_exec;
     String m_reason;
+    String m_media;
 };
 
 class ForkSlave : public CallEndpoint
@@ -108,7 +110,7 @@ INIT_PLUGIN(ForkModule);
 
 ForkMaster::ForkMaster(ObjList* targets)
     : m_index(0), m_answered(false), m_rtpForward(false), m_rtpStrict(false),
-      m_targets(targets), m_exec(0), m_reason("hangup")
+      m_fake(false), m_targets(targets), m_exec(0), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
     s_mutex.lock();
@@ -236,6 +238,8 @@ bool ForkMaster::callContinue()
 {
     int forks = 0;
     while (m_exec && !m_answered) {
+	// get the fake media source at start of each group
+	m_media = m_exec->getValue("fork.fake");
 	String* dest = getNextDest();
 	if (!dest)
 	    break;
@@ -257,6 +261,7 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
     Lock lock(s_mutex);
     bool ringing = m_ringing == slave->id();
     if (ringing) {
+	m_fake = false;
 	m_ringing.clear();
 	clearEndpoint();
     }
@@ -316,6 +321,8 @@ void ForkMaster::msgAnswered(Message& msg, const String& dest)
     RefPointer<CallEndpoint> call = slave->getPeer();
     if (!call)
 	return;
+    m_media.clear();
+    m_fake = false;
     m_answered = true;
     m_reason = msg.getValue("reason","pickup");
     Debug(&__plugin,DebugCall,"Call '%s' answered on '%s' by '%s'",
@@ -344,21 +351,50 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
     DataEndpoint* dataEp = getEndpoint();
     if (m_ringing.null())
 	m_ringing = dest;
-    if (!dataEp) {
+    if (m_fake || !dataEp) {
 	const CallEndpoint* call = slave->getPeer();
 	if (!call)
 	    call = static_cast<const CallEndpoint*>(msg.userObject("CallEndpoint"));
 	if (call) {
 	    dataEp = call->getEndpoint();
-	    if (dataEp)
-		setEndpoint(dataEp);
+	    if (dataEp) {
+		// don't use the media if it has no format and fake is possible
+		if ((m_fake || m_media) &&
+		    !(dataEp->getSource() && dataEp->getSource()->getFormat()))
+		    dataEp = 0;
+		else {
+		    m_fake = false;
+		    setEndpoint(dataEp);
+		    m_media.clear();
+		}
+	    }
 	}
     }
-    Debug(&__plugin,DebugNote,"Call '%s' going on '%s' to '%s'%s",
-	peer->id().c_str(),dest.c_str(),msg.getValue("id"),
-	dataEp ? " with audio data" : "");
     msg.setParam("peerid",peer->id());
     msg.setParam("targetid",peer->id());
+    if (m_media) {
+	Debug(&__plugin,DebugInfo,"Call '%s' faking media '%s'",
+	    peer->id().c_str(),m_media.c_str());
+	String newMsg;
+	if (m_exec)
+	    newMsg = m_exec->getValue("fork.fakemessage");
+	Message m("chan.attach");
+	m.userData(this);
+	m.addParam("id",id());
+	m.addParam("source",m_media);
+	m.addParam("single",String::boolText(true));
+	m_media.clear();
+	lock.drop();
+	if (Engine::dispatch(m)) {
+	    m_fake = true;
+	    if (newMsg)
+		msg = newMsg;
+	}
+    }
+    Debug(&__plugin,DebugNote,"Call '%s' going on '%s' to '%s'%s%s",
+	peer->id().c_str(),dest.c_str(),msg.getValue("id"),
+	(dataEp || m_fake) ? " with audio data" : "",
+	m_fake ? " (fake)" : "");
 }
 
 void ForkMaster::clear(bool softly)

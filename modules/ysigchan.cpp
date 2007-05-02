@@ -2191,7 +2191,8 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
     SignallingMessage* msg = event->message();
     bool chg = msg->params().getValue("circuit-change");
     String format = msg->params().getValue("format");
-    format = "2*" + format;
+    if (format)
+	format = "2*" + format;
     SigSourceMux* source = static_cast<SigSourceMux*>(getSource());
     m_reason = "";
     while (!source) {

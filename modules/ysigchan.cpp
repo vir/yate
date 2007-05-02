@@ -36,6 +36,7 @@ class SigParams;                         // Named list containing creator data (
                                          // Used to pass parameters to objects that need to obtain some pointers
 class SigCircuitGroup;                   // Used to create a signalling circuit group descendant to set the debug name
 class SigLink;                           // Keep a signalling link
+class SigSS7Isup;                        // SS7 ISDN User Part call controller
 class SigIsdn;                           // ISDN (Q.931 over HDLC interface) call control
 class SigIsdnMonitor;                    // ISDN (Q.931 over HDLC interface) call control monitor
 class SigConsumerMux;                    // Consumer used to push data to SigSourceMux
@@ -50,10 +51,14 @@ public:
     // Incoming
     SigChannel(SignallingEvent* event);
     // Outgoing
-    SigChannel(Message& msg, String& caller, String& called, SigLink* link);
+    SigChannel(Message& msg, const char* caller, const char* called, SigLink* link);
     virtual ~SigChannel();
     inline SignallingCall* call() const
         { return m_call; }
+    inline SigLink* link() const
+        { return m_link; }
+    inline bool hungup() const
+	{ return m_hungup; }
     // Overloaded methods
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -68,11 +73,14 @@ public:
     virtual void callRejected(const char* error, const char* reason = 0,
 	const Message* msg = 0);
     virtual void disconnected(bool final, const char* reason);
+    bool disconnect()
+	{ return Channel::disconnect(m_reason); }
     void handleEvent(SignallingEvent* event);
-    bool route(SignallingEvent* event);
-    void hangup(const char* reason = 0, bool reject = true);
+    void hangup(const char* reason = 0);
 private:
     virtual void statusParams(String& str);
+    // Set call status. Print debug message
+    void setState(const char* state, bool updateStatus = true, bool showReason = false);
     // Event handlers
     void evInfo(SignallingEvent* event);
     void evProgress(SignallingEvent* event);
@@ -93,7 +101,10 @@ private:
 	}
 private:
     Mutex m_callMutex;                   // Call operation lock
+    String m_caller;
+    String m_called;
     SignallingCall* m_call;              // The signalling call this channel is using
+    SigLink* m_link;                     // The link owning the signalling call
     bool m_hungup;                       // Hang up flag
     String m_reason;                     // Hangup reason
     bool m_inband;                       // True to try to send in-band tones
@@ -110,13 +121,17 @@ public:
     virtual bool msgExecute(Message& msg, String& dest);
     inline SignallingEngine* engine() const
 	{ return m_engine; }
+    SS7Router* router() const
+	{ return m_router; }
     void handleEvent(SignallingEvent* event);
     bool received(Message& msg, int id);
     // Find a link by name
-    // If callCtrl is true, match only link with call controller
+    // If callCtrl is true, match only links with call controller
     SigLink* findLink(const char* name, bool callCtrl);
     // Find a link by call controller
     SigLink* findLink(const SignallingCallControl* ctrl);
+    // Disconnect channels. If link is not 0, disconnect only channels belonging to that link
+    void disconnectChannels(SigLink* link = 0);
 private:
     // Delete the given link if found
     // Clear link list if name is 0
@@ -128,8 +143,9 @@ private:
     void removeLink(SigLink* link);
 
     SignallingEngine* m_engine;          // The signalling engine
+    SS7Router* m_router;                 // The SS7 router
     ObjList m_links;                     // Link list
-    Mutex m_linksMutex;                  // Link list operations
+    Mutex m_linksMutex;                  // Lock link list operations
 };
 
 // Named list containing creator data (pointers)
@@ -165,6 +181,7 @@ class SigLink : public RefObject
     friend class SigLinkThread;         // The thread must set m_thread to 0 on terminate
 public:
     enum Type {
+	SS7Isup,
 	IsdnPriNet,
 	IsdnPriCpe,
 	IsdnPriMon,
@@ -184,33 +201,35 @@ public:
 	{ return m_inband; }
     // Set exiting flag for call controller and timeout for the thread
     void setExiting(unsigned int msec);
-    // Initialize the link. Return false on failure
-    inline bool initialize(NamedList& params) {
-	    if (m_init)
-		return reload(params);
-	    m_init = true;
-	    return create(params);
-	}
+    // Initialize (create or reload) the link. Process the debuglayer parameter.
+    // Fix some type depending parameters
+    // Return false on failure
+    bool initialize(NamedList& params);
     // Handle events received from call controller
     // Default action: calls the driver's handleEvent()
     virtual void handleEvent(SignallingEvent* event);
-    // Cancel thread if any. Call release
+    // Clear channels with calls belonging to this link. Cancel thread if any. Call release
     void cleanup();
     // Type names
     static TokenDict s_type[];
 protected:
     // Create/Reload/Release data
-    virtual bool create(NamedList& params) { return false; }
+    virtual bool create(NamedList& params, String& error) { return false; }
     virtual bool reload(NamedList& params) { return false; }
     virtual void release() {}
-    // Start worker thread
-    bool startThread();
+    // Get debug enabler to set debug for it
+    virtual DebugEnabler* getDbgEnabler(int id) { return 0; }
+    // Start worker thread. Set error on failure
+    bool startThread(String& error);
     // Build the signalling interface and insert it in the engine
-    static SignallingInterface* buildInterface(const String& device,
+    static SignallingInterface* buildInterface(NamedList& params, const String& device,
 	const String& debugName, String& error);
     // Build a signalling circuit group and insert it in the engine
-    static SigCircuitGroup* buildCircuits(const String& device,
+    static SigCircuitGroup* buildCircuits(NamedList& params, const String& device,
 	const String& debugName, String& error);
+    // Build component debug name
+    inline void buildName(String& dest, const char* name)
+	{ dest = ""; dest << this->name() << '/' << name; }
     SignallingCallControl* m_controller; // Call controller, if any
     bool m_init;                         // True if already initialized
     bool m_inband;                       // True to send in-band tones through this link
@@ -220,25 +239,42 @@ private:
     SigLinkThread* m_thread;             // Event thread for call controller
 };
 
+// SS7 ISDN User Part call controller
+class SigSS7Isup : public SigLink
+{
+public:
+    SigSS7Isup(const char* name);
+    virtual ~SigSS7Isup();
+protected:
+    virtual bool create(NamedList& params, String& error);
+    virtual bool reload(NamedList& params);
+    virtual void release();
+    virtual DebugEnabler* getDbgEnabler(int id);
+    // Add point codes from a given configuration section
+    // @return The number of point codes added
+    unsigned int setPointCode(const NamedList& sect);
+    inline SS7ISUP* isup()
+	{ return static_cast<SS7ISUP*>(m_controller); }
+private:
+    SS7MTP3* m_network;
+    SS7MTP2* m_link;
+    SignallingInterface* m_iface;
+    SigCircuitGroup* m_group;
+};
+
 // Q.931 call control over HDLC interface
 class SigIsdn : public SigLink
 {
 public:
-    inline SigIsdn(const char* name, bool net)
-	: SigLink(name,net ? IsdnPriNet : IsdnPriCpe),
-	m_q921(0), m_iface(0), m_group(0)
-	{}
-    virtual ~SigIsdn()
-	{ release(); }
+    SigIsdn(const char* name, bool net);
+    virtual ~SigIsdn();
 protected:
-    virtual bool create(NamedList& params);
+    virtual bool create(NamedList& params, String& error);
     virtual bool reload(NamedList& params);
     virtual void release();
+    virtual DebugEnabler* getDbgEnabler(int id);
     inline ISDNQ931* q931()
 	{ return static_cast<ISDNQ931*>(m_controller); }
-    // Build component debug name
-    inline void buildName(String& dest, const char* name)
-	{ dest = ""; dest << this->name() << '/' << name; }
 private:
     ISDNQ921* m_q921;
     SignallingInterface* m_iface;
@@ -262,7 +298,7 @@ public:
     // Remove a call and it's call monitor
     void removeCall(SigIsdnCallRecord* call);
 protected:
-    virtual bool create(NamedList& params);
+    virtual bool create(NamedList& params, String& error);
     virtual bool reload(NamedList& params);
     virtual void release();
     inline ISDNQ931Monitor* q931()
@@ -387,7 +423,7 @@ class SigLinkThread : public Thread
     friend class SigLink;                // SigLink will set m_timeout when needded
 public:
     inline SigLinkThread(SigLink* link)
-	: Thread("SigLink thread"), m_link(link), m_timeout(0)
+	: Thread("SigLinkThread"), m_link(link), m_timeout(0)
 	{}
     virtual ~SigLinkThread() {
 	    if (m_link)
@@ -409,50 +445,62 @@ static Configuration s_cfg;
 SigChannel::SigChannel(SignallingEvent* event)
     : Channel(&plugin,0,false),
     m_callMutex(true),
-    m_call(0),
+    m_call(event->call()),
+    m_link(0),
     m_hungup(false),
     m_inband(false)
 {
-    Message* m = message("chan.startup");
+    if (!(m_call && m_call->ref()))
+	m_call = 0;
     SignallingMessage* msg = event->message();
-    m_call = event->call();
-    if (!(msg && m_call && m_call->ref())) {
-	Debug(this,DebugCall,
-	    "Incoming. Invalid initiating event. No call or no message [%p]",this);
-	Engine::enqueue(m);
-	return;
-    }
-    Debug(this,DebugCall,
-	"Incoming. Caller: '%s'. Called: '%s'. [%p]",
-	msg->params().getValue("caller"),msg->params().getValue("called"),this);
+    m_caller = msg ? msg->params().getValue("caller") : 0;
+    m_called = msg ? msg->params().getValue("called") : 0;
     m_call->userdata(this);
-    SigLink* link = plugin.findLink(m_call->controller());
-    if (link)
-	m_inband = link->inband();
+    m_link = plugin.findLink(m_call->controller());
+    if (m_link)
+	m_inband = m_link->inband();
     // Startup
+    setState(0);
+    Message* m = message("chan.startup");
     m->setParam("direction",status());
-    m->setParam("caller",msg->params().getValue("caller"));
-    m->setParam("called",msg->params().getValue("called"));
-    m->setParam("callername",msg->params().getValue("callername"));
+    m->addParam("caller",m_caller);
+    m->addParam("called",m_called);
+    m->copyParam(msg->params(),"callername");
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
+    // Route the call
+    m = message("call.preroute",false,true);
+    if (msg) {
+	m->addParam("caller",m_caller);
+	m->addParam("called",m_called);
+	m->copyParam(msg->params(),"callername");
+	m->copyParam(msg->params(),"format");
+	m->copyParam(msg->params(),"formats");
+	m->copyParam(msg->params(),"callernumtype");
+	m->copyParam(msg->params(),"callernumplan");
+	m->copyParam(msg->params(),"callerpres");
+	m->copyParam(msg->params(),"callerscreening");
+	m->copyParam(msg->params(),"callednumtype");
+	m->copyParam(msg->params(),"callednumplan");
+    }
+    // TODO: Add call control parameter ?
+    if (!startRouter(m))
+	hangup("temporary-failure");
 }
 
 // Construct an outgoing channel
-SigChannel::SigChannel(Message& msg, String& caller, String& called, SigLink* link)
+SigChannel::SigChannel(Message& msg, const char* caller, const char* called, SigLink* link)
     : Channel(&plugin,0,true),
     m_callMutex(true),
+    m_caller(caller),
+    m_called(called),
     m_call(0),
+    m_link(link),
     m_hungup(false),
     m_inband(false)
 {
-    if (!link)
-	return;
-    Debug(this,DebugCall,"Outgoing. Caller: '%s'. Called: '%s' [%p]",
-	caller.c_str(),called.c_str(),this);
-    // Data
-    m_inband = link->inband();
-    // Notify engine
+    // Startup
+    setState(0);
     Message* m = message("chan.startup",msg);
     m->setParam("direction",status());
     m_targetid = msg.getValue("id");
@@ -461,10 +509,12 @@ SigChannel::SigChannel(Message& msg, String& caller, String& called, SigLink* li
     m->setParam("billid",msg.getValue("billid"));
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
-    if (!link->controller()) {
+    if (!(m_link && m_link->controller())) {
 	msg.setParam("error","noroute");
 	return;
     }
+    // Data
+    m_inband = link->inband();
     // Make the call
     SignallingMessage* sigMsg = new SignallingMessage;
     sigMsg->params().addParam("caller",caller);
@@ -477,6 +527,7 @@ SigChannel::SigChannel(Message& msg, String& caller, String& called, SigLink* li
     sigMsg->params().copyParam(msg,"callerscreening");
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");
+    sigMsg->params().copyParam(msg,"calledpointcode");
     m_call = link->controller()->call(sigMsg,m_reason);
     if (m_call)
 	m_call->userdata(this);
@@ -486,15 +537,15 @@ SigChannel::SigChannel(Message& msg, String& caller, String& called, SigLink* li
 
 SigChannel::~SigChannel()
 {
-    hangup(0,false);
-    status("destroyed");
-    DDebug(this,DebugCall,"Destroyed with reason '%s' [%p]",m_reason.c_str(),this);
+    hangup();
+    setState("destroyed",true,true);
 }
 
 void SigChannel::handleEvent(SignallingEvent* event)
 {
     if (!event)
 	return;
+    XDebug(this,DebugAll,"Got event (%p,'%s') [%p]",event,event->name(),this);
     switch (event->type()) {
 	case SignallingEvent::Info:      evInfo(event);     break;
 	case SignallingEvent::Progress:  evProgress(event); break;
@@ -508,32 +559,10 @@ void SigChannel::handleEvent(SignallingEvent* event)
     }
 }
 
-bool SigChannel::route(SignallingEvent* event)
-{
-    Message* m = message("call.preroute",false,true);
-    SignallingMessage* msg = (event ? event->message() : 0);
-    if (msg) {
-	m->setParam("caller",msg->params().getValue("caller"));
-	m->setParam("called",msg->params().getValue("called"));
-	m->setParam("callername",msg->params().getValue("callername"));
-	m->setParam("format",msg->params().getValue("format"));
-	m->copyParam(msg->params(),"formats");
-	m->copyParam(msg->params(),"callernumtype");
-	m->copyParam(msg->params(),"callernumplan");
-	m->copyParam(msg->params(),"callerpres");
-	m->copyParam(msg->params(),"callerscreening");
-	m->copyParam(msg->params(),"callednumtype");
-	m->copyParam(msg->params(),"callednumplan");
-    }
-    // TODO: Add call control parameter ?
-    return startRouter(m);
-}
-
 bool SigChannel::msgProgress(Message& msg)
 {
-    status("progressing");
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"msgProgress %s[%p]",(m_call ? "" : ". No call "),this);
+    setState("progressing");
     if (!m_call)
 	return true;
     bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
@@ -554,9 +583,8 @@ bool SigChannel::msgProgress(Message& msg)
 
 bool SigChannel::msgRinging(Message& msg)
 {
-    status("ringing");
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"msgRinging %s[%p]",(m_call ? "" : ". No call "),this);
+    setState("ringing");
     if (!m_call)
 	return true;
     bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
@@ -575,9 +603,8 @@ bool SigChannel::msgRinging(Message& msg)
 
 bool SigChannel::msgAnswered(Message& msg)
 {
-    status("answered");
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"msgAnswered %s[%p]",(m_call ? "" : ". No call "),this);
+    setState("answered");
     if (!m_call)
 	return true;
     updateSource(0,false);
@@ -597,8 +624,7 @@ bool SigChannel::msgAnswered(Message& msg)
 bool SigChannel::msgTone(Message& msg, const char* tone)
 {
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"msgTone. Tone: '%s' %s[%p]",
-	tone,(m_call ? "" : ". No call "),this);
+    DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
     if (m_inband && dtmfInband(tone))
 	return true;
     // If we failed try to send as signalling anyway
@@ -615,8 +641,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 bool SigChannel::msgText(Message& msg, const char* text)
 {
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"msgText. Text: '%s' %s[%p]",
-	text,(m_call ? "" : ". No call "),this);
+    DDebug(this,DebugCall,"Text. '%s' %s[%p]",text,(m_call ? "" : ". No call "),this);
     if (!m_call)
 	return true;
     SignallingMessage* sm = new SignallingMessage;
@@ -629,9 +654,7 @@ bool SigChannel::msgText(Message& msg, const char* text)
 
 bool SigChannel::msgDrop(Message& msg, const char* reason)
 {
-    DDebug(this,DebugCall,"msgDrop. Reason: '%s' %s[%p]",
-	reason,(m_call ? "" : ". No call "),this);
-    hangup(reason,false);
+    hangup(reason ? reason : "dropped");
     return true;
 }
 
@@ -648,29 +671,20 @@ bool SigChannel::msgTransfer(Message& msg)
 bool SigChannel::callPrerouted(Message& msg, bool handled)
 {
     Lock lock(m_callMutex);
-    if (!m_call) {
-	Debug(this,DebugCall,"callPrerouted [%p]. No call. Abort",this);
-	return false;
-    }
-    DDebug(this,DebugAll,"callPrerouted. [%p]",this);
-    return true;
+    setState("prerouted",false);
+    return m_call != 0;
 }
 
 bool SigChannel::callRouted(Message& msg)
 {
     Lock lock(m_callMutex);
-    if (!m_call) {
-	Debug(this,DebugCall,"callRouted [%p]. No call. Abort",this);
-	return false;
-    }
-    DDebug(this,DebugAll,"callRouted. [%p]",this);
-    return true;
+    setState("routed",false);
+    return m_call != 0;
 }
 
 void SigChannel::callAccept(Message& msg)
 {
     Lock lock(m_callMutex);
-    DDebug(this,DebugCall,"callAccept %s[%p]",(m_call ? "" : ". No call "),this);
     if (m_call) {
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
@@ -684,25 +698,28 @@ void SigChannel::callAccept(Message& msg)
 	    sm->deref();
 	m_call->sendEvent(event);
     }
+    setState("accepted",false);
     Channel::callAccept(msg);
 }
 
 void SigChannel::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    DDebug(this,DebugCall,"callRejected. Error: '%s'. Reason: '%s' [%p]",
-	error,reason,this);
-    m_reason = error ? error : (reason ? reason : "unknown");
+    if (m_reason.null())
+	m_reason = error ? error : reason;
+    setState("rejected",false,true);
     hangup();
 }
 
 void SigChannel::disconnected(bool final, const char* reason)
 {
-    DDebug(this,DebugAll,"disconnected. Final: %s. Reason: '%s' [%p]",
-	String::boolText(final),reason,this);
-    Channel::disconnected(final,reason);
+    if (m_reason.null())
+	m_reason = reason;
+    setState("disconnected",false,true);
+    hangup();
+    Channel::disconnected(final,m_reason);
 }
 
-void SigChannel::hangup(const char* reason, bool reject)
+void SigChannel::hangup(const char* reason)
 {
     Lock lock(m_callMutex);
     if (m_hungup)
@@ -710,16 +727,14 @@ void SigChannel::hangup(const char* reason, bool reject)
     setSource();
     setConsumer();
     m_hungup = true;
-    if (reason)
-	m_reason = reason;
     if (m_reason.null())
-	m_reason = Engine::exiting() ? "net-out-of-order" : "normal";
+	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal");
+    setState("hangup",true,true);
     if (m_call) {
 	m_call->userdata(0);
 	SignallingMessage* msg = new SignallingMessage;
 	msg->params().addParam("reason",m_reason);
-	SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,
-	    msg,m_call);
+	SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,m_call);
 	msg->deref();
 	m_call->sendEvent(event);
 	m_call->deref();
@@ -727,15 +742,40 @@ void SigChannel::hangup(const char* reason, bool reject)
     }
     lock.drop();
     Message* m = message("chan.hangup",true);
-    m->setParam("status","hangup");
+    m->setParam("status",status());
     m->setParam("reason",m_reason);
     Engine::enqueue(m);
-    Debug(this,DebugCall,"Hung up. Reason: '%s' [%p]",m_reason.c_str(),this);
 }
 
 void SigChannel::statusParams(String& str)
 {
     Channel::statusParams(str);
+}
+
+void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
+{
+    if (updateStatus && state)
+	status(state);
+#ifdef DEBUG
+    if (!debugAt(DebugCall))
+	return;
+    if (!state) {
+	Debug(this,DebugCall,"%s call from '%s' to '%s' (Link: %s) [%p]",
+	    isOutgoing()?"Outgoing":"Incoming",m_caller.safe(),m_called.safe(),
+	    m_link ? m_link->name().c_str() : "no link",this);
+	return;
+    }
+    String show;
+    show << "Call " << state;
+    if (showReason)
+	show << ". Reason: '" << m_reason << "'";
+    if (!m_call)
+        show << ". No signalling call ";
+    if (updateStatus)
+	Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
+    else
+	DDebug(this,DebugCall,"%s [%p]",show.c_str(),this);
+#endif
 }
 
 void SigChannel::evInfo(SignallingEvent* event)
@@ -757,24 +797,21 @@ void SigChannel::evInfo(SignallingEvent* event)
 
 void SigChannel::evProgress(SignallingEvent* event)
 {
-    DDebug(this,DebugCall,"Event: '%s' [%p]",event->name(),this);
-    status("progressing");
+    setState("progressing");
     Engine::enqueue(message("call.progress"));
 }
 
 void SigChannel::evRelease(SignallingEvent* event)
 {
+    const char* reason = 0;
     if (event->message())
-	m_reason = event->message()->params().getValue("reason");
-    else
-	m_reason = "";
-    Debug(this,DebugCall,"Event: '%s'. Reason: '%s' [%p]",
-	event->name(),m_reason.c_str(),this);
+	reason = event->message()->params().getValue("reason");
+    hangup(reason);
 }
 
 void SigChannel::evAccept(SignallingEvent* event)
 {
-    DDebug(this,DebugCall,"Event: '%s' [%p]",event->name(),this);
+    setState("accepted",false,false);
     const char* format = 0;
     bool cicChange = false;
     if (event->message()) {
@@ -787,8 +824,7 @@ void SigChannel::evAccept(SignallingEvent* event)
 
 void SigChannel::evAnswer(SignallingEvent* event)
 {
-    DDebug(this,DebugCall,"Event: '%s' [%p]",event->name(),this);
-    status("answered");
+    setState("answered");
     const char* format = 0;
     bool cicChange = false;
     if (event->message()) {
@@ -802,8 +838,7 @@ void SigChannel::evAnswer(SignallingEvent* event)
 
 void SigChannel::evRinging(SignallingEvent* event)
 {
-    DDebug(this,DebugCall,"Event: '%s' [%p]",event->name(),this);
-    status("ringing");
+    setState("ringing");
     const char* format = 0;
     bool cicChange = false;
     if (event->message()) {
@@ -862,6 +897,7 @@ bool SigChannel::updateSource(const char* format, bool force)
 SigDriver::SigDriver()
     : Driver("sig","fixchans"),
     m_engine(0),
+    m_router(0),
     m_linksMutex(true)
 {
     Output("Loaded module Signalling Channel");
@@ -871,20 +907,23 @@ SigDriver::~SigDriver()
 {
     Output("Unloading module Signalling Channel");
     clearLink();
+    if (m_router) {
+	if (m_engine)
+	    m_engine->remove(m_router);
+	delete m_router;
+    }
     if (m_engine)
 	delete m_engine;
 }
 
 bool SigDriver::msgExecute(Message& msg, String& dest)
 {
-    if (!msg.userData()) {
+    Channel* peer = static_cast<Channel*>(msg.userData());
+    if (!peer) {
 	Debug(this,DebugNote,"Signalling call failed. No data channel");
 	msg.setParam("error","failure");
 	return false;
     }
-    // Get caller/called
-    String caller = msg.getValue("caller");
-    String called = dest;
     // Identify the call controller before create channel
     const char* tmp = msg.getValue("link");
     SigLink* link = findLink(tmp,true);
@@ -895,23 +934,18 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     // Create channel
-    DDebug(this,DebugAll,
-	"msgExecute. Caller: '%s'. Called: '%s'. Call controller: '%s'",
-	caller.c_str(),called.c_str(),link->name().c_str());
-    bool ok = true;
-    SigChannel* sigCh = new SigChannel(msg,caller,called,link);
-    if (sigCh->call()) {
-	Channel* ch = static_cast<Channel*>(msg.userData());
-	if (ch && sigCh->connect(ch,msg.getValue("reason"))) {
+    SigChannel* sigCh = new SigChannel(msg,msg.getValue("caller"),dest,link);
+    bool ok = sigCh->call();
+    if (ok) {
+	if (sigCh->connect(peer,msg.getValue("reason"))) {
 	    msg.setParam("peerid",sigCh->id());
 	    msg.setParam("targetid",sigCh->id());
         }
     }
     else {
-	Debug(this,DebugNote,"Signalling call failed. No call");
 	if (!msg.getValue("error"))
 	    msg.setParam("error","failure");
-	ok = false;
+	Debug(this,DebugNote,"Signalling call failed with reason '%s'",msg.getValue("error"));
     }
     sigCh->deref();
     return ok;
@@ -920,12 +954,6 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 bool SigDriver::received(Message& msg, int id)
 {
     if (id == Halt) {
-	ListIterator iter(channels());
-	GenObject* o = 0;
-	for (; (o = iter.get()); ) {
-	    SigChannel* c = static_cast<SigChannel*>(o);
-	    c->disconnect();
-	}
 	clearLink();
 	if (m_engine)
 	    m_engine->stop();
@@ -946,8 +974,8 @@ void SigDriver::handleEvent(SignallingEvent* event)
 		    break;
 	    default:
 		DDebug(this,DebugGoOn,
-		    "Received event (%p): %u without call. Controller: (%p)",
-		    event,event->type(),event->controller());
+		    "Received event (%p,'%s') without call. Controller: (%p)",
+		    event,event->name(),event->controller());
 		return;
 	}
 	// Remove link
@@ -959,7 +987,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	return;
     }
     if (!event->message()) {
-	Debug(this,DebugGoOn,"Received event (%p) without message",event);
+	Debug(this,DebugGoOn,"Received event (%p,'%s') without message",event,event->name());
 	return;
     }
     // Ok. Send the message to the channel if we have one
@@ -973,17 +1001,16 @@ void SigDriver::handleEvent(SignallingEvent* event)
     // No channel
     if (event->type() == SignallingEvent::NewCall) {
 	ch = new SigChannel(event);
-	if (!ch->route(event)) {
-	    ch->hangup("temporary-failure");
+	if (ch->hungup())
 	    ch->disconnect();
-	}
     }
     else
-	XDebug(this,DebugNote,"Received event (%p) from call without user data",event);
+	XDebug(this,DebugNote,"Received event (%p,'%s') from call without user data",
+	    event,event->name());
 }
 
 // Find a link by name
-// If callCtrl is true, match only link with call controller
+// If callCtrl is true, match only links with call controller
 SigLink* SigDriver::findLink(const char* name, bool callCtrl)
 {
     if (!name)
@@ -1014,13 +1041,31 @@ SigLink* SigDriver::findLink(const SignallingCallControl* ctrl)
     return 0;
 }
 
+// Disconnect channels. If link is not 0, disconnect only channels belonging to that link
+void SigDriver::disconnectChannels(SigLink* link)
+{
+    ListIterator iter(channels());
+    GenObject* o = 0;
+    if (link)
+	for (; (o = iter.get()); ) {
+	    SigChannel* c = static_cast<SigChannel*>(o);
+	    if (link == c->link())
+		c->disconnect();
+	}
+    else
+	for (; (o = iter.get()); ) {
+	    SigChannel* c = static_cast<SigChannel*>(o);
+	    c->disconnect();
+	}
+}
+
 // Append a link to the list. Duplicate names are not allowed
 bool SigDriver::appendLink(SigLink* link)
 {
     if (!link || link->name().null())
 	return false;
     if (findLink(link->name(),false)) {
-	Debug(this,DebugNote,"Can't append link (%p): '%s'. Duplicate name",
+	Debug(this,DebugWarn,"Can't append link (%p): '%s'. Duplicate name",
 	    link,link->name().c_str());
 	return false;
     }
@@ -1048,6 +1093,7 @@ void SigDriver::clearLink(const char* name, bool waitCallEnd, unsigned int howLo
     Lock lock(m_linksMutex);
     if (!name) {
 	DDebug(this,DebugAll,"Clearing all links");
+	disconnectChannels();
 	ObjList* obj = m_links.skipNull();
 	for (; obj; obj = obj->skipNext()) {
 	    SigLink* link = static_cast<SigLink*>(obj->get());
@@ -1073,6 +1119,9 @@ void SigDriver::clearLink(const char* name, bool waitCallEnd, unsigned int howLo
 void SigDriver::initialize()
 {
     Output("Initializing module Signalling Channel");
+    s_cfg = Engine::configFile("ysigchan");
+    s_cfg.load();
+    // Startup
     if (!m_engine) {
 	setup();
 	installRelay(Halt);
@@ -1082,29 +1131,23 @@ void SigDriver::initialize()
 	m_engine = new SignallingEngine;
 	m_engine->debugChain(this);
 	m_engine->start();
+	// SS7
+	m_router = new SS7Router;
+	m_engine->insert(m_router);
     }
-    // Get stacks
-    s_cfg = Engine::configFile("ysigchan");
-    s_cfg.load();
     // Build/initialize links
     Lock lock(m_linksMutex);
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_cfg.getSection(i);
-	if (!sect || sect->null())
+	if (!sect || sect->null() || *sect == "general")
 	    continue;
 	const char* stype = sect->getValue("type");
 	int type = lookup(stype,SigLink::s_type,SigLink::Unknown);
 	// Check for valid type
-	switch (type) {
-	    case SigLink::IsdnPriNet:
-	    case SigLink::IsdnPriCpe:
-	    case SigLink::IsdnPriMon:
-		break;
-	    default:
-		if (stype)
-		    Debug(this,DebugNote,"Link '%s'. Unknown type '%s'",sect->c_str(),stype);
-		continue;
+	if (type == SigLink::Unknown) {
+	    Debug(this,DebugNote,"Link '%s'. Unknown/missing type '%s'",sect->c_str(),stype);
+	    continue;
 	}
 	// Disable ?
 	if (!sect->getBoolValue("enable",true)) {
@@ -1115,27 +1158,27 @@ void SigDriver::initialize()
 	DDebug(this,DebugAll,"Initializing link '%s' of type '%s'",sect->c_str(),stype);
 	SigLink* link = findLink(sect->c_str(),false);
 	bool create = (link == 0);
-	switch (type) {
-	    case SigLink::IsdnPriNet:
-	    case SigLink::IsdnPriCpe:
-		if (!link)
+	if (create)
+	    switch (type) {
+		case SigLink::SS7Isup:
+		    link = new SigSS7Isup(*sect);
+		    break;
+		case SigLink::IsdnPriNet:
+		case SigLink::IsdnPriCpe:
 		    link = new SigIsdn(*sect,type == SigLink::IsdnPriNet);
-	    case SigLink::IsdnPriMon:
-		if (!link)
+		    break;
+		case SigLink::IsdnPriMon:
 		    link = new SigIsdnMonitor(*sect);
-		break;
-	    default:
-		continue;
-	}
+		    break;
+		default:
+		    continue;
+	    }
 	if (!link->initialize(*sect)) {
 	    Debug(this,DebugWarn,"Failed to initialize link '%s' of type '%s'",
 		sect->c_str(),stype);
 	    if (create)
 		clearLink(*sect);
 	}
-	else
-	    DDebug(this,DebugAll,"Successfully initialized link '%s' of type '%s'",
-		sect->c_str(),stype);
     }
 }
 
@@ -1153,6 +1196,7 @@ void* SigParams::getObject(const String& name) const
  * SigLink
  */
 TokenDict SigLink::s_type[] = {
+	{"ss7-isup",     SS7Isup},
 	{"isdn-pri-net", IsdnPriNet},
 	{"isdn-pri-cpe", IsdnPriCpe},
 	{"isdn-pri-mon", IsdnPriMon},
@@ -1187,13 +1231,81 @@ void SigLink::setExiting(unsigned int msec)
 	m_thread->m_timeout = Time::msecNow() + msec;
 }
 
+// Initialize (create or reload) the link. Set debug levels for contained objects
+// Fix some type depending parameters:
+//   Force 'readonly' to true for ISDN monitors
+//   Check the value of 'rxunderruninterval' for SS7 and non monitor ISDN links
+bool SigLink::initialize(NamedList& params)
+{
+    // Check error:
+    //  No need to initialize if no signalling engine or not in plugin's list
+    //  For SS7 links check the router
+    String error;
+    while (true) {
+#define SIGLINK_INIT_BREAK(s) {error=s;break;}
+	if (!(plugin.engine() && plugin.findLink(name(),false)))
+	    SIGLINK_INIT_BREAK("No engine or not in module's list")
+	if (type() == SS7Isup && !plugin.router())
+	    SIGLINK_INIT_BREAK("No SS7 router for this link")
+#undef SIGLINK_INIT_BREAK
+	// Fix type depending parameters
+	int minRxUnder = 0;
+	switch (m_type) {
+	    case SigLink::SS7Isup:
+		minRxUnder = 5;
+		break;
+	    case SigLink::IsdnPriNet:
+	    case SigLink::IsdnPriCpe:
+		minRxUnder = 1500;
+		break;
+	    case SigLink::IsdnPriMon:
+		minRxUnder = 1500;
+		params.setParam("readonly","true");
+		break;
+	    default: ;
+	}
+	if (minRxUnder && minRxUnder > params.getIntValue("rxunderruninterval"))
+	    params.setParam("rxunderruninterval",String(minRxUnder));
+	// Create/reload
+	bool ok = m_init ? reload(params) : create(params,error);
+	m_init = true;
+	// Apply 'debuglayer'
+	if (ok) {
+	    String dbgLevel = params.getValue("debuglayer");
+	    DDebug(&plugin,DebugAll,"SigLink('%s'). Set debug '%s' [%p]",
+		name().c_str(),dbgLevel.safe(),this);
+	    ObjList* levelList = dbgLevel.split(',',true);
+	    int i = 0;
+	    for (ObjList* o = levelList->skipNull(); o; o = o->skipNext(), i++) {
+		int level = (static_cast<String*>(o->get()))->toInteger(-1);
+		if (level == -1)
+		    continue;
+		DebugEnabler* dbg = getDbgEnabler(i);
+		if (dbg) {
+		    dbg->debugEnabled(level);
+		    if (level)
+			dbg->debugLevel(level);
+		}
+	    }
+	    delete levelList;
+	    return true;
+	}
+	break;
+    }
+    Debug(&plugin,DebugNote,"Link('%s'). %s failure: %s [%p]",
+	name().c_str(),m_init?"Reload":"Create",error.safe(),this);
+    return false;
+}
+
 void SigLink::handleEvent(SignallingEvent* event)
 {
     plugin.handleEvent(event);
 }
 
+// Clear channels with calls belonging to this link. Cancel thread if any. Call release
 void SigLink::cleanup()
 {
+    plugin.disconnectChannels(this);
     if (m_thread) {
 	m_thread->cancel();
 	while(m_thread)
@@ -1202,27 +1314,32 @@ void SigLink::cleanup()
     release();
 }
 
-bool SigLink::startThread()
+bool SigLink::startThread(String& error)
 {
-    if (!m_thread && m_controller)
-	m_thread = new SigLinkThread(this);
-    if (!m_thread)
+    if (!m_thread) {
+	if (m_controller)
+	    m_thread = new SigLinkThread(this);
+	else {
+	    Debug(&plugin,DebugNote,
+		"Link('%s'). No worker thread for link without call controller [%p]",
+		name().c_str(),this);
+	    return true;
+	}
+    }
+    if (!(m_thread->running() || m_thread->startup())) {
+	error = "Failed to start worker thread";
 	return false;
-    bool ok = m_thread->running();
-    if (!ok)
-	ok = m_thread->startup();
-    return ok;
+    }
+    return true;
 }
 
 // Build a signalling interface for this link
-SignallingInterface* SigLink::buildInterface(const String& device,
+SignallingInterface* SigLink::buildInterface(NamedList& params, const String& device,
 	const String& debugName, String& error)
 {
-    NamedList ifaceDefs("sig");
-    ifaceDefs.addParam("debugname",debugName);
-    ifaceDefs.addParam("sig",device);
+    params.setParam("debugname",debugName);
     SignallingInterface* iface = static_cast<SignallingInterface*>
-	(SignallingFactory::build(ifaceDefs,&ifaceDefs));
+	(SignallingFactory::build("sig",&params));
     if (iface) {
 	plugin.engine()->insert(iface);
 	return iface;
@@ -1233,7 +1350,7 @@ SignallingInterface* SigLink::buildInterface(const String& device,
 }
 
 // Build a signalling circuit for this link
-SigCircuitGroup* SigLink::buildCircuits(const String& device,
+SigCircuitGroup* SigLink::buildCircuits(NamedList& params, const String& device,
 	const String& debugName, String& error)
 {
     ObjList* voice = device.split(',',false);
@@ -1272,75 +1389,227 @@ SigCircuitGroup* SigLink::buildCircuits(const String& device,
 }
 
 /**
- * SigIsdn
+ * SigSS7Isup
  */
-bool SigIsdn::create(NamedList& params)
+SigSS7Isup::SigSS7Isup(const char* name)
+    : SigLink(name,SS7Isup),
+    m_network(0),
+    m_link(0),
+    m_iface(0),
+    m_group(0)
+{
+}
+
+SigSS7Isup::~SigSS7Isup()
 {
     release();
-    String error;                        // Error string
-    String compName;                     // Component name
-    while (true) {
-	// No need to create if no signalling engine or not in plugin's list
-	if (!(plugin.engine() && plugin.findLink(name(),false))) {
-	    error = "No signalling engine or not in module's list";
-	    break;
-	}
+}
 
-	m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
+bool SigSS7Isup::create(NamedList& params, String& error)
+{
+    release();
 
-	// Signalling interface
-	buildName(compName,"D");
-	m_iface = buildInterface(params.getValue("sig"),compName,error);
-	if (!m_iface)
-	    break;
-
-	// Voice transfer: circuit group, spans, circuits
-	// Use the same span as the signalling channel if missing
-	buildName(compName,"B");
-	const char* device = params.getValue("voice",params.getValue("sig"));
-	m_group = buildCircuits(device,compName,error);
-	if (!m_group)
-	    break;
-
-	// Q921
-	buildName(compName,"Q921");
-	params.setParam("network",String::boolText(IsdnPriNet == type()));
-	params.setParam("print-frames",params.getValue("print-layer2PDU"));
-	m_q921 = new ISDNQ921(params,compName);
-	plugin.engine()->insert(m_q921);
-
-	// Q931
-	buildName(compName,"Q931");
-	params.setParam("print-messages",params.getValue("print-layer3PDU"));
-	m_controller = new ISDNQ931(params,compName);
-	plugin.engine()->insert(q931());
-
-	// Create links between components and enable them
-	m_q921->SignallingReceiver::attach(m_iface);
-	m_iface->control(SignallingInterface::Enable);
-	q931()->attach(m_group);
-	m_q921->ISDNLayer2::attach(q931());
-	q931()->attach(m_q921);
-	m_q921->multipleFrame(true,false);
-
-	// Start thread
-	if (!startThread())
-	    error = "Failed to start worker thread";
-
-	break;
+    if (!plugin.router()) {
+	error = "No SS7 router";
+	return false;
     }
-    if (error.null())
-	return true;
-    Debug(&plugin,DebugNote,"SigIsdn('%s'). Create failure. %s [%p]",
-	name().c_str(),error.c_str(),this);
-    return false;
+
+    String compName;                     // Component name
+
+    // Signalling interface
+    buildName(compName,"L1");
+    m_iface = buildInterface(params,params.getValue("sig"),compName,error);
+    if (!m_iface)
+	return false;
+
+    // Voice transfer: circuit group, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"L1/Data");
+    m_group = buildCircuits(params,params.getValue("voice",params.getValue("sig")),compName,error);
+    if (!m_group)
+	return false;
+
+    // Layer 2
+    buildName(compName,"mtp2");
+    params.setParam("debugname",compName);
+    m_link = new SS7MTP2(params);
+
+    // Layer 3
+    buildName(compName,"mtp3");
+    params.setParam("debugname",compName);
+    m_network = new SS7MTP3(params);
+
+    // ISUP
+    buildName(compName,"isup");
+    params.setParam("debugname",compName);
+    m_controller = new SS7ISUP(params);
+    if (!setPointCode(params)) {
+	error = "No point codes";
+	return false;
+    }
+
+    // Create links between components and enable them
+    m_link->SignallingReceiver::attach(m_iface);
+    m_iface->control(SignallingInterface::Enable);
+    m_network->attach(m_link);
+    controller()->attach(m_group);
+    plugin.router()->attach(m_network);
+    plugin.router()->attach(isup());
+    m_link->control(SS7Layer2::Align,&params);
+
+    // Start thread
+    if (!startThread(error))
+	return false;
+
+    return true;
+}
+
+bool SigSS7Isup::reload(NamedList& params)
+{
+    setPointCode(params);
+    return true;
+}
+
+void SigSS7Isup::release()
+{
+    // *** Cleanup
+    if (isup())
+	isup()->cleanup();
+    // *** Disable/detach components
+    if (controller())
+	controller()->attach(0);
+    if (m_network)
+	m_network->attach(0);
+    if (m_link) {
+	m_link->control(SS7Layer2::Pause);
+	m_link->SignallingReceiver::attach(0);
+    }
+    if (m_iface) {
+	m_iface->control(SignallingInterface::Disable);
+	m_iface->attach(0);
+    }
+    // *** Release memory
+    if (isup())
+	delete isup();
+    if (m_network)
+	delete m_network;
+    if (m_link)
+	delete m_link;
+    if (m_group)
+	delete m_group;
+    if (m_iface)
+	delete m_iface;
+    // *** Reset component pointers
+    m_controller = 0;
+    m_network = 0;
+    m_link = 0;
+    m_iface = 0;
+    m_group = 0;
+    XDebug(&plugin,DebugAll,"SigSS7Isup('%s'). Released [%p]",name().c_str(),this);
+}
+
+DebugEnabler* SigSS7Isup::getDbgEnabler(int id)
+{
+    switch (id) {
+	case 0: return m_iface;
+	case 1: return m_group;
+	case 2: return m_link;
+	case 3: return m_network;
+	case 4: return isup();
+    }
+    return 0;
+}
+
+unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
+{
+    if (!isup())
+	return 0;
+    unsigned int count = 0;
+    unsigned int n = sect.length();
+    for (unsigned int i= 0; i < n; i++) {
+	NamedString* ns = sect.getParam(i);
+	if (!ns)
+	    continue;
+	bool def = (ns->name() == "defaultpointcode");
+	if (!def && ns->name() != "pointcode")
+	    continue;
+	SS7PointCode* pc = new SS7PointCode(0,0,0);
+	if (pc->assign(*ns) && isup()->setPointCode(pc,def))
+	    count++;
+	else {
+	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
+		ns->name().c_str(),ns->safe(),sect.safe());
+	    delete(pc);
+	}
+    }
+    return count;
+}
+
+/**
+ * SigIsdn
+ */
+SigIsdn::SigIsdn(const char* name, bool net)
+    : SigLink(name,net ? IsdnPriNet : IsdnPriCpe),
+    m_q921(0),
+    m_iface(0),
+    m_group(0)
+{
+}
+
+SigIsdn::~SigIsdn()
+{
+    release();
+}
+
+bool SigIsdn::create(NamedList& params, String& error)
+{
+    release();
+    m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
+    String compName;                     // Component name
+
+    // Signalling interface
+    buildName(compName,"D");
+    m_iface = buildInterface(params,params.getValue("sig"),compName,error);
+    if (!m_iface)
+	return false;
+
+    // Voice transfer: circuit group, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"B");
+    m_group = buildCircuits(params,params.getValue("voice",params.getValue("sig")),compName,error);
+    if (!m_group)
+	return false;
+
+    // Q921
+    buildName(compName,"Q921");
+    params.setParam("network",String::boolText(IsdnPriNet == type()));
+    params.setParam("print-frames",params.getValue("print-layer2PDU"));
+    m_q921 = new ISDNQ921(params,compName);
+    plugin.engine()->insert(m_q921);
+
+    // Q931
+    buildName(compName,"Q931");
+    params.setParam("print-messages",params.getValue("print-layer3PDU"));
+    m_controller = new ISDNQ931(params,compName);
+    plugin.engine()->insert(q931());
+
+    // Create links between components and enable them
+    m_q921->SignallingReceiver::attach(m_iface);
+    m_iface->control(SignallingInterface::Enable);
+    controller()->attach(m_group);
+    m_q921->ISDNLayer2::attach(q931());
+    q931()->attach(m_q921);
+    m_q921->multipleFrame(true,false);
+
+    // Start thread
+    if (!startThread(error))
+	return false;
+
+    return true;
 }
 
 bool SigIsdn::reload(NamedList& params)
 {
-    if (!m_init)
-	return false;
-    DDebug(&plugin,DebugAll,"SigIsdn('%s'). Reloading [%p]",name().c_str(),this);
     if (q931())
 	q931()->setDebug(params.getBoolValue("print-layer3PDU",false),
 	    params.getBoolValue("extended-debug",false));
@@ -1383,6 +1652,17 @@ void SigIsdn::release()
     XDebug(&plugin,DebugAll,"SigIsdn('%s'). Released [%p]",name().c_str(),this);
 }
 
+DebugEnabler* SigIsdn::getDbgEnabler(int id)
+{
+    switch (id) {
+	case 0: return m_iface;
+	case 1: return m_group;
+	case 2: return m_q921;
+	case 3: return q931();
+    }
+    return 0;
+}
+
 /**
  * SigIsdnMonitor
  */
@@ -1407,7 +1687,7 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	return;
     if (!event->call()) {
 	XDebug(&plugin,DebugNote,
-	    "SigIsdnMonitor('%s'). Received event (%p): '%s' without call [%p]",
+	    "SigIsdnMonitor('%s'). Received event (%p,'%s') without call [%p]",
 	    name().c_str(),event,event->name(),this);
 	return;
     }
@@ -1460,8 +1740,8 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
     }
     else
 	XDebug(&plugin,DebugNote,
-	    "SigIsdnMonitor('%s'). Received event (%p) with invalid user data (%p) [%p]",
-	    name().c_str(),event,mon->userdata(),this);
+	    "SigIsdnMonitor('%s'). Received event (%p,'%s') with invalid user data (%p) [%p]",
+	    name().c_str(),event,event->name(),mon->userdata(),this);
 }
 
 void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
@@ -1470,117 +1750,99 @@ void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
     m_monitors.remove(call,false);
 }
 
-bool SigIsdnMonitor::create(NamedList& params)
+bool SigIsdnMonitor::create(NamedList& params, String& error)
 {
     release();
-    String error;                        // Error string
     String compName;                     // Component name
-    while (true) {
-	// No need to create if no signalling engine or not in plugin's list
-	if (!(plugin.engine() && plugin.findLink(name(),false))) {
-	    error = "No signalling engine or not in module's list";
-	    break;
-	}
+    m_chanBuffer = params.getIntValue("muxchanbuffer",160);
+    if (!m_chanBuffer)
+	m_chanBuffer = 160;
+    unsigned int ui = params.getIntValue("idlevalue",255);
+    m_idleValue = (ui <= 255 ? ui : 255);
 
-	m_chanBuffer = params.getIntValue("muxchanbuffer",160);
-	if (!m_chanBuffer)
-	    m_chanBuffer = 160;
-	unsigned int ui = params.getIntValue("idlevalue",255);
-	m_idleValue = (ui <= 255 ? ui : 255);
+    m_netId = name() + "/Net";
+    m_cpeId = name() + "/Cpe";
 
-	m_netId = name() + "/Net";
-	m_cpeId = name() + "/Cpe";
+    // Set auto detection for Layer 2 (Q.921) type side of the link
+    params.setParam("detect",String::boolText(true));
 
-	// Set auto detection for Layer 2 (Q.921) type side of the link
-	params.setParam("detect",String::boolText(true));
-
-	// Signalling interfaces
-	buildName(compName,"D",true);
-	m_ifaceNet = buildInterface(params.getValue("sig-net"),compName,error);
-	if (!m_ifaceNet)
-	    break;
-	buildName(compName,"D",false);
-	m_ifaceCpe = buildInterface(params.getValue("sig-cpe"),compName,error);
-	if (!m_ifaceCpe)
-	    break;
+    // Signalling interfaces
+    buildName(compName,"D",true);
+    m_ifaceNet = buildInterface(params,params.getValue("sig-net"),compName,error);
+    if (!m_ifaceNet)
+	return false;
+    buildName(compName,"D",false);
+    m_ifaceCpe = buildInterface(params,params.getValue("sig-cpe"),compName,error);
+    if (!m_ifaceCpe)
+	return false;
 	
-	// Voice transfer: circuit groups, spans, circuits
-	// Use the same span as the signalling channel if missing
-	buildName(compName,"B",true);
-	const char* device = params.getValue("voice-net",params.getValue("sig-net"));
-	m_groupNet = buildCircuits(device,compName,error);
-	if (!m_groupNet)
-	    break;
-	buildName(compName,"B",false);
-	device = params.getValue("voice-cpe",params.getValue("sig-cpe"));
-	m_groupCpe = buildCircuits(device,compName,error);
-	if (!m_groupCpe)
-	    break;
-	String sNet, sCpe;
-	m_groupNet->getCicList(sNet);
-	m_groupCpe->getCicList(sCpe);
-	if (sNet != sCpe)
-	    Debug(&plugin,DebugWarn,
-		"SigIsdnMonitor('%s'). Circuit groups are not equal [%p]",
-		name().c_str(),this);
+    // Voice transfer: circuit groups, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"B",true);
+    const char* device = params.getValue("voice-net",params.getValue("sig-net"));
+    m_groupNet = buildCircuits(params,device,compName,error);
+    if (!m_groupNet)
+	return false;
+    buildName(compName,"B",false);
+    device = params.getValue("voice-cpe",params.getValue("sig-cpe"));
+    m_groupCpe = buildCircuits(params,device,compName,error);
+    if (!m_groupCpe)
+	return false;
+    String sNet, sCpe;
+    m_groupNet->getCicList(sNet);
+    m_groupCpe->getCicList(sCpe);
+    if (sNet != sCpe)
+	Debug(&plugin,DebugWarn,
+	    "SigIsdnMonitor('%s'). Circuit groups are not equal [%p]",
+	    name().c_str(),this);
 
-	// Q921
-	params.setParam("t203",params.getValue("idletimeout"));
-	buildName(compName,"Q921",true);
-	params.setParam("network",String::boolText(true));
-	params.setParam("print-frames",params.getValue("print-layer2PDU"));
-	m_q921Net = new ISDNQ921Pasive(params,compName);
-	plugin.engine()->insert(m_q921Net);
-	buildName(compName,"Q921",false);
-	params.setParam("network",String::boolText(false));
-	m_q921Cpe = new ISDNQ921Pasive(params,compName);
-	plugin.engine()->insert(m_q921Cpe);
+    // Q921
+    params.setParam("t203",params.getValue("idletimeout"));
+    buildName(compName,"Q921",true);
+    params.setParam("network",String::boolText(true));
+    params.setParam("print-frames",params.getValue("print-layer2PDU"));
+    m_q921Net = new ISDNQ921Pasive(params,compName);
+    plugin.engine()->insert(m_q921Net);
+    buildName(compName,"Q921",false);
+    params.setParam("network",String::boolText(false));
+    m_q921Cpe = new ISDNQ921Pasive(params,compName);
+    plugin.engine()->insert(m_q921Cpe);
 
-	// Q931
-	compName = "";
-	compName << name() << '/' << "Q931";
-	params.setParam("print-messages",params.getValue("print-layer3PDU"));
-	m_controller = new ISDNQ931Monitor(params,compName);
-	plugin.engine()->insert(q931());
+    // Q931
+    compName = "";
+    compName << name() << '/' << "Q931";
+    params.setParam("print-messages",params.getValue("print-layer3PDU"));
+    m_controller = new ISDNQ931Monitor(params,compName);
+    plugin.engine()->insert(q931());
 
-	// Create links between components and enable them
-	q931()->attach(m_groupNet,true);
-	q931()->attach(m_groupCpe,false);
-	m_q921Net->SignallingReceiver::attach(m_ifaceNet);
-	m_q921Cpe->SignallingReceiver::attach(m_ifaceCpe);
-	m_ifaceNet->control(SignallingInterface::Enable);
-	m_ifaceCpe->control(SignallingInterface::Enable);
-	m_q921Net->ISDNLayer2::attach(q931());
-	m_q921Cpe->ISDNLayer2::attach(q931());
-	q931()->attach(m_q921Net,true);
-	q931()->attach(m_q921Cpe,false);
+    // Create links between components and enable them
+    q931()->attach(m_groupNet,true);
+    q931()->attach(m_groupCpe,false);
+    m_q921Net->SignallingReceiver::attach(m_ifaceNet);
+    m_q921Cpe->SignallingReceiver::attach(m_ifaceCpe);
+    m_ifaceNet->control(SignallingInterface::Enable);
+    m_ifaceCpe->control(SignallingInterface::Enable);
+    m_q921Net->ISDNLayer2::attach(q931());
+    m_q921Cpe->ISDNLayer2::attach(q931());
+    q931()->attach(m_q921Net,true);
+    q931()->attach(m_q921Cpe,false);
 
-	// Start thread
-	if (!startThread())
-	    error = "Failed to start worker thread";
+    // Start thread
+    if (!startThread(error))
+	return false;
 
-	break;
+    if (debugAt(DebugInfo)) {
+	String tmp;
+	tmp << "\r\nChannel buffer: " << m_chanBuffer;
+	tmp << "\r\nIdle value:     " << (int)m_idleValue;
+	Debug(&plugin,DebugInfo,"SigIsdnMonitor('%s'). Initialized: [%p]%s",
+	    name().c_str(),this,tmp.c_str());
     }
-    if (error.null()) {
-	if (debugAt(DebugInfo)) {
-	    String tmp;
-	    tmp << "\r\nChannel buffer: " << m_chanBuffer;
-	    tmp << "\r\nIdle value:     " << (int)m_idleValue;
-	    Debug(&plugin,DebugInfo,"SigIsdnMonitor('%s'). Initialized: [%p]%s",
-		name().c_str(),this,tmp.c_str());
-	}
-	return true;
-    }
-    Debug(&plugin,DebugNote,"SigIsdnMonitor('%s'). Create failure. %s [%p]",
-	name().c_str(),error.c_str(),this);
-    return false;
+    return true;
 }
 
 bool SigIsdnMonitor::reload(NamedList& params)
 {
-    if (!m_init)
-	return false;
-    DDebug(&plugin,DebugAll,"SigIsdnMonitor('%s'). Reloading [%p]",name().c_str(),this);
     if (q931())
 	q931()->setDebug(params.getBoolValue("print-layer3PDU",false),
 	    params.getBoolValue("extended-debug",false));
@@ -2079,8 +2341,8 @@ void SigLinkThread::run()
 {
     if (!(m_link && m_link->controller()))
 	return;
-    DDebug(&plugin,DebugAll,"SigLinkThread::run(). Link: '%s' [%p]",
-	m_link->name().c_str(),this);
+    DDebug(&plugin,DebugAll,"%s is running for link '%s' [%p]",
+	name(),m_link->name().c_str(),this);
     SignallingEvent* event = 0;
     while (true) {
 	if (!event)
@@ -2090,6 +2352,8 @@ void SigLinkThread::run()
 	Time time;
 	event = m_link->controller()->getEvent(time);
 	if (event) {
+	    XDebug(&plugin,DebugAll,"Link('%s'). Got event (%p,'%s',%p,%u)",
+		m_link->name().c_str(),event,event->name(),event->call(),event->call()?event->call()->refcount():0);
 	    m_link->handleEvent(event);
 	    delete event;
 	}
@@ -2099,7 +2363,6 @@ void SigLinkThread::run()
 		"SigLinkThread::run(). Link '%s' timed out [%p]",
 		m_link->name().c_str(),this);
 	    String name = m_link->name();
-	    // Break the link between link and worker thread
 	    m_link->m_thread = 0;
 	    m_link = 0;
 	    plugin.clearLink(name);

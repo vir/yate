@@ -1180,6 +1180,25 @@ bool YateSIPEndPoint::Init()
 	Debug(&plugin,DebugGoOn,"Unable to allocate UDP socket");
 	return false;
     }
+
+#ifdef SO_RCVBUF
+    int reqlen = s_cfg.getIntValue("general","buffer");
+    if (reqlen > 0) {
+	int buflen = reqlen;
+	if (buflen < 4096)
+	    buflen = 4096;
+	if (m_sock->setOption(SOL_SOCKET,SO_RCVBUF,&buflen,sizeof(buflen))) {
+	    buflen = 0;
+	    socklen_t sz = sizeof(buflen);
+	    if (m_sock->getOption(SOL_SOCKET,SO_RCVBUF,&buflen,&sz))
+		Debug(&plugin,DebugNote,"UDP buffer size is %d (requested %d)",buflen,reqlen);
+	    else
+		Debug(&plugin,DebugWarn,"Could not get UDP buffer size (requested %d)",reqlen);
+	}
+	else
+	    Debug(&plugin,DebugWarn,"Could not set UDP buffer size %d",buflen);
+    }
+#endif
     
     SocketAddr addr(AF_INET);
     addr.port(s_cfg.getIntValue("general","port",5060));

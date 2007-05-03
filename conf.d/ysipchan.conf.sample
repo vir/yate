@@ -7,8 +7,11 @@
 ; addr: ipaddress: IP address to bind to
 ;addr=0.0.0.0
 
+; buffer: int: Requested size of socket's receive buffer, 0 to use default
+;buffer=0
+
 ; useragent: string: String to set in User-Agent or Server headers
-;useragent=YATE/1.1.0
+;useragent=YATE/1.2.0
 
 ; realm: string: Authentication realm to offer in authentication requests
 ;realm=Yate

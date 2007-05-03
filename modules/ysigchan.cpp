@@ -461,6 +461,9 @@ SigChannel::SigChannel(SignallingEvent* event)
 	m_inband = m_link->inband();
     // Startup
     setState(0);
+    SignallingCircuit* cic = getCircuit();
+    if (m_link && cic)
+	m_address << m_link->name() << "/" << cic->code();
     Message* m = message("chan.startup");
     m->setParam("direction",status());
     m->addParam("caller",m_caller);
@@ -501,16 +504,9 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 {
     // Startup
     setState(0);
-    Message* m = message("chan.startup",msg);
-    m->setParam("direction",status());
-    m_targetid = msg.getValue("id");
-    m->setParam("caller",msg.getValue("caller"));
-    m->setParam("called",msg.getValue("called"));
-    m->setParam("billid",msg.getValue("billid"));
-    // TODO: Add call control parameter ?
-    Engine::enqueue(m);
     if (!(m_link && m_link->controller())) {
-	msg.setParam("error","noroute");
+	msg.setParam("error","noconn");
+	m_hungup = true;
 	return;
     }
     // Data
@@ -529,10 +525,23 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
     sigMsg->params().copyParam(msg,"callednumplan");
     sigMsg->params().copyParam(msg,"calledpointcode");
     m_call = link->controller()->call(sigMsg,m_reason);
-    if (m_call)
+    if (m_call) {
 	m_call->userdata(this);
+	SignallingCircuit* cic = getCircuit();
+	if (cic)
+	    m_address << m_link->name() << "/" << cic->code();
+	setMaxcall(msg);
+    }
     else
 	msg.setParam("error",m_reason);
+    Message* m = message("chan.startup",msg);
+    m->setParam("direction",status());
+    m_targetid = msg.getValue("id");
+    m->setParam("caller",caller);
+    m->setParam("called",called);
+    m->setParam("billid",msg.getValue("billid"));
+    // TODO: Add call control parameter ?
+    Engine::enqueue(m);
 }
 
 SigChannel::~SigChannel()

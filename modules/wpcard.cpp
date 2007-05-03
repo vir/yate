@@ -719,7 +719,7 @@ void WpInterface::timerTick(const Time& when)
     s_ifaceNotify.lock();
     if (m_notify) {
 	if (m_notify == 1) {
-	    DDebug(this,DebugWarn,"Not received any data for " FMT64 " ms [%p]",
+	    DDebug(this,DebugMild,"Not received any data for " FMT64 " ms [%p]",
 		m_timerRxUnder.interval(),this);
 	    notify(RxUnderrun);
 	    m_notify = 2;

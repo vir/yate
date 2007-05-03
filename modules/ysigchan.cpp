@@ -1261,14 +1261,14 @@ bool SigLink::initialize(NamedList& params)
 	int minRxUnder = 0;
 	switch (m_type) {
 	    case SigLink::SS7Isup:
-		minRxUnder = 5;
+		minRxUnder = 25;
 		break;
 	    case SigLink::IsdnPriNet:
 	    case SigLink::IsdnPriCpe:
-		minRxUnder = 1500;
+		minRxUnder = 2500;
 		break;
 	    case SigLink::IsdnPriMon:
-		minRxUnder = 1500;
+		minRxUnder = 2500;
 		params.setParam("readonly","true");
 		break;
 	    default: ;

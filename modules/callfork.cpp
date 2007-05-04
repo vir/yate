@@ -383,6 +383,8 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
 	m.addParam("id",id());
 	m.addParam("source",m_media);
 	m.addParam("single",String::boolText(true));
+	if (m_exec)
+	    m.copyParam(*m_exec,"autorepeat");
 	m_media.clear();
 	lock.drop();
 	if (Engine::dispatch(m)) {

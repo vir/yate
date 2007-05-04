@@ -208,6 +208,11 @@ public:
     // Handle events received from call controller
     // Default action: calls the driver's handleEvent()
     virtual void handleEvent(SignallingEvent* event);
+    // Handle chan.masquerade. Return true if handled
+    // @param id Channel id
+    // @param msg Received message
+    virtual bool masquerade(String& id, Message& msg)
+	{ return false; }
     // Clear channels with calls belonging to this link. Cancel thread if any. Call release
     void cleanup();
     // Type names
@@ -289,6 +294,7 @@ public:
     SigIsdnMonitor(const char* name);
     virtual ~SigIsdnMonitor();
     virtual void handleEvent(SignallingEvent* event);
+    virtual bool masquerade(String& id, Message& msg);
     unsigned int chanBuffer() const
 	{ return m_chanBuffer; }
     unsigned char idleValue() const
@@ -962,10 +968,25 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 
 bool SigDriver::received(Message& msg, int id)
 {
-    if (id == Halt) {
-	clearLink();
-	if (m_engine)
-	    m_engine->stop();
+    switch (id) {
+	case Masquerade: {
+	    String s = msg.getValue("id");
+	    if (s.startsWith(name()))
+		break;
+	    // Check for a link that would handle the message
+	    int found = s.find('/');
+	    if (found < 1)
+		break;
+	    SigLink* link = findLink(s.substr(0,found),false);
+	    if (link && link->masquerade(s,msg))
+		return false;
+	    }
+	    break;
+	case Halt:
+	    clearLink();
+	    if (m_engine)
+		m_engine->stop();
+	    break;
     }
     return Driver::received(msg,id);
 }
@@ -1133,6 +1154,7 @@ void SigDriver::initialize()
     // Startup
     if (!m_engine) {
 	setup();
+	installRelay(Masquerade);
 	installRelay(Halt);
 	installRelay(Progress);
 	installRelay(Update);
@@ -1753,6 +1775,19 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	    name().c_str(),event,event->name(),mon->userdata(),this);
 }
 
+bool SigIsdnMonitor::masquerade(String& id, Message& msg)
+{
+    for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
+	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
+	if (id == rec->id()) {
+	    msg = msg.getValue("message");
+	    msg.clearParam("message");
+	    msg.userData(rec);
+	}
+    }
+    return true;
+}
+
 void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
 {
     Lock lock(m_monitorMutex);
@@ -2123,11 +2158,11 @@ void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samp
 // Remove the source for the appropriate consumer
 void SigSourceMux::removeSource(bool first)
 {
-    DataSource** src = first ? &m_firstSrc : &m_secondSrc;
-    if (*src) {
-	(*src)->clear();
-	(*src)->deref();
-	*src = 0;
+    DataSource*& src = first ? m_firstSrc : m_secondSrc;
+    if (src) {
+	src->clear();
+	src->deref();
+	src = 0;
     }
 }
 

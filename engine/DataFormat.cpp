@@ -261,20 +261,20 @@ public:
 		return;
 	    n /= 2;
 	    if (getTransSource()) {
-		unsigned short* s = (unsigned short*) data.data();
+		short* s = (short*) data.data();
 		DataBlock oblock;
 		if ((m_sChans == 1) && (m_dChans == 2)) {
 		    oblock.assign(0,n*4);
-		    unsigned short* d = (unsigned short*) oblock.data();
+		    short* d = (short*) oblock.data();
 		    // duplicate the sample for each channel
 		    while (n--) {
-			unsigned short v = *d++ = *s++;
+			short v = *d++ = *s++;
 			*d++ = v;
 		    }
 		}
 		else if ((m_sChans == 2) && (m_dChans == 1)) {
-		    oblock.assign(0,n);
-		    unsigned short* d = (unsigned short*) oblock.data();
+		    oblock.assign(0,2*n);
+		    short* d = (short*) oblock.data();
 		    // average the channels
 		    while (n--) {
 			int v = *s++;

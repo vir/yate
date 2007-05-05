@@ -273,6 +273,7 @@ public:
 		    }
 		}
 		else if ((m_sChans == 2) && (m_dChans == 1)) {
+		    n /= 2;
 		    oblock.assign(0,2*n);
 		    short* d = (short*) oblock.data();
 		    // average the channels

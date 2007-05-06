@@ -1369,10 +1369,13 @@ SignallingInterface* SigLink::buildInterface(NamedList& params, const String& de
 	const String& debugName, String& error)
 {
     params.setParam("debugname",debugName);
-    if (!params.getParam("sig"))
+    bool needSig = !params.getParam("sig");
+    if (needSig)
 	params.addParam("sig",device);
     SignallingInterface* iface = static_cast<SignallingInterface*>
 	(SignallingFactory::build("sig",&params));
+    if (needSig)
+	params.clearParam("sig");
     if (iface) {
 	plugin.engine()->insert(iface);
 	return iface;

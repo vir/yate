@@ -30,12 +30,18 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
+// remember the values below are squares, we compute in power, not amplitude
+
 // minimum square of signal energy to even consider detecting
-#define THRESHOLD2_ABS 5e+06
+#define THRESHOLD2_ABS     1e+06
 // relative square of spectral power from total signal power
-#define THRESHOLD2_REL_FAX 0.85
-#define THRESHOLD2_REL_ALL 0.75
-#define THRESHOLD2_REL_DTMF 0.2
+#define THRESHOLD2_REL_FAX  0.85
+// sum of tones (low+high) from total
+#define THRESHOLD2_REL_ALL  0.60
+// each tone from threshold from total
+#define THRESHOLD2_REL_DTMF 0.33
+// hysteresis after tone detection
+#define THRESHOLD2_REL_HIST 0.90
 
 // minimum DTMF detect time
 #define DETECT_DTMF_MSEC 32
@@ -80,6 +86,12 @@ class ToneConsumer : public DataConsumer
 {
     YCLASS(ToneConsumer,DataConsumer)
 public:
+    enum Mode {
+	Mono = 0,
+	Left,
+	Right,
+	Mixed
+    };
     ToneConsumer(const String& id, const String& name);
     virtual ~ToneConsumer(); 
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
@@ -97,6 +109,7 @@ private:
     String m_divert;
     String m_caller;
     String m_called;
+    Mode m_mode;
     bool m_detFax;
     bool m_detDtmf;
     char m_dtmfTone;
@@ -190,7 +203,7 @@ void Tone2PoleFilter::update(double xd)
 
 
 ToneConsumer::ToneConsumer(const String& id, const String& name)
-    : m_id(id), m_name(name), m_detFax(true), m_detDtmf(true),
+    : m_id(id), m_name(name), m_mode(Mono), m_detFax(true), m_detDtmf(true),
       m_fax(s_paramsCNG)
 { 
     Debug(&plugin,DebugAll,"ToneConsumer::ToneConsumer(%s,'%s') [%p]",
@@ -201,8 +214,16 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
     }
     init();
     String tmp = name;
-    if (tmp.find('/') >= 0)
-	tmp >> "/";
+    tmp.startSkip("tone/",false);
+    if (tmp.startSkip("mixed/",false))
+	m_mode = Mixed;
+    else if (tmp.startSkip("left/",false))
+	m_mode = Left;
+    else if (tmp.startSkip("right/",false))
+	m_mode = Right;
+    else tmp.startSkip("mono/",false);
+    if (m_mode != Mono)
+	m_format = "2*slin";
     if (tmp && (tmp != "*")) {
 	// individual detection requested
 	m_detFax = m_detDtmf = false;
@@ -262,8 +283,6 @@ void ToneConsumer::checkDtmf()
 	    l = i;
 	}
     }
-    if (maxL < m_pwr*THRESHOLD2_REL_DTMF)
-	return;
     int h = 0;
     double maxH = m_dtmfH[0].value();
     for (i = 1; i < 4; i++) {
@@ -272,15 +291,25 @@ void ToneConsumer::checkDtmf()
 	    h = i;
 	}
     }
-    if (maxH < m_pwr*THRESHOLD2_REL_DTMF)
+    double limitAll = m_pwr*THRESHOLD2_REL_ALL;
+    if (c)
+	limitAll *= THRESHOLD2_REL_HIST;
+    double limitOne = limitAll*THRESHOLD2_REL_DTMF;
+    if ((maxL < limitOne) ||
+	(maxH < limitOne) ||
+	((maxL+maxH) < limitAll)) {
+#ifdef DEBUG
+	if (c)
+	    Debug(&plugin,DebugAll,"Giving up DTMF '%c' lo=%f, hi=%f, total=%f",
+		c,maxL,maxH,m_pwr);
+#endif
 	return;
-    if ((maxL+maxH) < m_pwr*THRESHOLD2_REL_ALL)
-	return;
+    }
     char buf[2];
     buf[0] = s_tableDtmf[l][h];
     buf[1] = '\0';
     if (buf[0] != c) {
-	XDebug(&plugin,DebugInfo,"DTMF '%s' new candidate on %s, lo=%f, hi=%f, total=%f",
+	DDebug(&plugin,DebugAll,"DTMF '%s' new candidate on %s, lo=%f, hi=%f, total=%f",
 	    buf,m_id.c_str(),maxL,maxH,m_pwr);
 	m_dtmfTone = buf[0];
 	m_dtmfCount = 1;
@@ -327,12 +356,35 @@ void ToneConsumer::checkFax()
 // Feed samples to the filter(s)
 void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 {
+    unsigned int samp = data.length() / 2;
+    if (m_mode != Mono)
+	samp /= 2;
+    if (!samp)
+	return;
     const int16_t* s = (const int16_t*)data.data();
     if (!s)
 	return;
-    for (unsigned int i=0; i<data.length(); i+=2) {
+    while (samp--) {
 	m_xv[0] = m_xv[1]; m_xv[1] = m_xv[2];
-	m_xv[2] = *s++;
+	switch (m_mode) {
+	    case Left:
+		// use 1st sample, skip 2nd
+		m_xv[2] = *s++;
+		s++;
+		break;
+	    case Right:
+		// skip 1st sample, use 2nd
+		s++;
+		m_xv[2] = *s++;
+		break;
+	    case Mixed:
+		// add together samples
+		m_xv[2] = s[0]+(int)s[1];
+		s+=2;
+		break;
+	    default:
+		m_xv[2] = *s++;
+	}
 	double dx = m_xv[2] - m_xv[0];
 	updatePwr(m_pwr,m_xv[2]);
 
@@ -345,8 +397,8 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 		m_dtmfH[j].update(dx);
 	    }
 	}
-	// only do checks evey millisecond
-	if (i % 8)
+	// only do checks every millisecond
+	if (samp % 8)
 	    continue;
 	// is it enough total power to accept a signal?
 	if (m_pwr >= THRESHOLD2_ABS) {

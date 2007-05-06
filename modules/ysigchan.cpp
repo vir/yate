@@ -971,7 +971,7 @@ bool SigDriver::received(Message& msg, int id)
     switch (id) {
 	case Masquerade: {
 	    String s = msg.getValue("id");
-	    if (s.startsWith(name()))
+	    if (s.startsWith(prefix()))
 		break;
 	    // Check for a link that would handle the message
 	    int found = s.find('/');

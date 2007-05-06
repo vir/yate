@@ -184,6 +184,12 @@ void WaveSource::init(const String& file, bool autorepeat)
 	m_format = "alaw";
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	m_format = "mulaw";
+    else if (file.endsWith(".2slin"))
+	m_format = "2*slin";
+    else if (file.endsWith(".2alaw"))
+	m_format = "2*alaw";
+    else if (file.endsWith(".2mulaw"))
+	m_format = "2*mulaw";
     else if (file.endsWith(".ilbc20"))
 	m_format = "ilbc20";
     else if (file.endsWith(".ilbc30"))
@@ -195,7 +201,7 @@ void WaveSource::init(const String& file, bool autorepeat)
     else if (file.endsWith(".lbc"))
 	detectIlbcFormat();
     else if (!file.endsWith(".slin"))
-	Debug(DebugMild,"Unknown format for file '%s', assuming signed linear",file.c_str());
+	Debug(DebugMild,"Unknown format for playback file '%s', assuming signed linear",file.c_str());
     if (computeDataRate()) {
 	if (autorepeat)
 	    m_repeatPos = ::lseek(m_fd,0,SEEK_CUR);
@@ -262,8 +268,10 @@ void WaveSource::detectAuFormat()
     }
     if (samp != 8000)
 	m_format << "/" << samp;
-    if (chan > 1)
+    if (chan > 1) {
 	m_format = String(chan) + "*" + m_format;
+	m_brate *= chan;
+    }
 }
 
 void WaveSource::detectWavFormat()
@@ -449,6 +457,12 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_format = "alaw";
     else if (file.endsWith(".mulaw") || file.endsWith(".u"))
 	m_format = "mulaw";
+    else if (file.endsWith(".2slin"))
+	m_format = "2*slin";
+    else if (file.endsWith(".2alaw"))
+	m_format = "2*alaw";
+    else if (file.endsWith(".2mulaw"))
+	m_format = "2*mulaw";
     else if (file.endsWith(".ilbc20"))
 	m_format = "ilbc20";
     else if (file.endsWith(".ilbc30"))
@@ -457,6 +471,8 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_header=Ilbc;
     else if (file.endsWith(".au"))
 	m_header=Au;
+    else if (!file.endsWith(".slin"))
+	Debug(DebugMild,"Unknown format for recorded file '%s', assuming signed linear",file.c_str());
     m_fd = ::open(file.safe(),O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_BINARY,S_IRUSR|S_IWUSR);
     if (m_fd < 0)
 	Debug(DebugWarn,"Creating '%s': error %d: %s",

@@ -1369,6 +1369,8 @@ SignallingInterface* SigLink::buildInterface(NamedList& params, const String& de
 	const String& debugName, String& error)
 {
     params.setParam("debugname",debugName);
+    if (!params.getParam("sig"))
+	params.addParam("sig",device);
     SignallingInterface* iface = static_cast<SignallingInterface*>
 	(SignallingFactory::build("sig",&params));
     if (iface) {

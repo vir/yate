@@ -416,6 +416,7 @@ private:
     Mutex m_lock;
     String m_caller;                     // The caller
     String m_called;                     // The called
+    String m_address;                    // Address including circuit number
     bool m_netInit;                      // The caller is from the network (true) or user (false) side of the link
     String m_reason;                     // Termination reason
     String m_status;                     // Call status
@@ -2198,6 +2199,11 @@ SigIsdnCallRecord::SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id,
     SignallingMessage* msg = event->message();
     m_caller = msg->params().getValue("caller");
     m_called = msg->params().getValue("called");
+    SignallingCircuit* cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuitCaller"));
+    if (!cic)
+	cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuitCalled"));
+    if (cic)
+	m_address << monitor->name() << "/" << cic->code();
     Debug(this->id(),DebugCall,"Initialized. Caller: '%s'. Called: '%s' [%p]",
 	m_caller.c_str(),m_called.c_str(),this);
 }
@@ -2337,6 +2343,8 @@ Message* SigIsdnCallRecord::message(const char* name, bool peers, bool userdata)
     Message* m = new Message(name);
     m->addParam("id",id());
     m->addParam("status",m_status);
+    if (m_address)
+	m->addParam("address",m_address);
     if (peers) {
 	m->addParam("caller",m_caller);
 	m->addParam("called",m_called);

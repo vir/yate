@@ -1295,8 +1295,11 @@ bool SigLink::initialize(NamedList& params)
 		break;
 	    default: ;
 	}
-	if (minRxUnder && minRxUnder > params.getIntValue("rxunderruninterval"))
-	    params.setParam("rxunderruninterval",String(minRxUnder));
+	if (minRxUnder) {
+	    int rx = params.getIntValue("rxunderruninterval",0);
+	    if (rx && minRxUnder > rx)
+		params.setParam("rxunderruninterval",String(minRxUnder));
+	}
 	// Create/reload
 	bool ok = m_init ? reload(params) : create(params,error);
 	m_init = true;

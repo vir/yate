@@ -1057,6 +1057,8 @@ bool YateSIPEngine::checkUser(const String& username, const String& realm, const
 	    addr << ":" << message->getParty()->getPartyPort();
 	    m.addParam("address",addr);
 	}
+	// a dialogless INVITE could create a new call
+	m.addParam("newcall",String::boolText((message->method == "INVITE") && !message->getParam("To","tag")));
     }
 
     if (params) {

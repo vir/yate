@@ -10,6 +10,9 @@
 ;  * matches preceeding expression any number of times (including zero)
 ;  \+ matches preceeding expression at least one time
 ;  \? matches preceeding expression zero or one time
+;  \{N\} matches preceeding expression exactly N times
+;  \{N,\} matches preceeding expression N or more times
+;  \{N,M\} matches preceeding expression between N and M times
 ;  \( \) captures the contained subexpression
 ; Remember matches are greedy, they will match as much as possible
 ; You must escape ^ $ . * [ and \ with \ whenever you want them to be normal
@@ -28,10 +31,14 @@
 ;  $(mul,VAL1,VAL2[,LEN]) = VAL1*VAL2 left filled to LEN or length of VAL1
 ;  $(div,VAL1,VAL2[,LEN]) = VAL1/VAL2 left filled to LEN or length of VAL1
 ;  $(mod,VAL1,VAL2[,LEN]) = VAL1%VAL2 left filled to LEN or length of VAL1
+;  $(eq,VAL1,VAL2) = "true" if VAL1 = VAL2 (numerically), "false" otherwise
+;  $(ne,VAL1,VAL2) = "true" if VAL1 != VAL2 (numerically), "false" otherwise
 ;  $(lt,VAL1,VAL2) = "true" if VAL1 < VAL2, "false" otherwise
 ;  $(gt,VAL1,VAL2) = "true" if VAL1 > VAL2, "false" otherwise
 ;  $(le,VAL1,VAL2) = "true" if VAL1 <= VAL2, "false" otherwise
 ;  $(ge,VAL1,VAL2) = "true" if VAL1 >= VAL2, "false" otherwise
+;  $(streq,VAL1,VAL2) = "true" if VAL1 = VAL2 (string), "false" otherwise
+;  $(strne,VAL1,VAL2) = "true" if VAL1 != VAL2 (string), "false" otherwise
 ;  $(random,STRING) = STRING with each ? character replaced with a random digit
 ;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
@@ -100,6 +107,8 @@
 ;   regexp=target
 ; To match a message parameter you can use the format:
 ;   ${paramname}regexp=target
+; To match a function possibly containing parameters you can use the format:
+;   $(function,param...)regexp=target
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the target using \1, \2, \3, ...
 ; Message parameters can be inserted in the target using ${paramname}
@@ -111,6 +120,9 @@
 ;   context did not return successfully
 ; jump - jumps another context, does not return to this context
 ; match - modify the matched string instead of specifying a target
+; rename - changes the name of the message
+; enqueue - puts a new message in the engine, parameters are taken from the
+;   old message but placed in the new one
 ; echo - displays that line after making substitutions
 ;
 ; It is possible to set message parameters by appending them as name=value

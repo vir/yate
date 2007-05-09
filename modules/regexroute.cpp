@@ -62,6 +62,8 @@ enum {
     OPER_MUL,
     OPER_DIV,
     OPER_MOD,
+    OPER_EQ,
+    OPER_NE,
     OPER_GT,
     OPER_LT,
     OPER_GE,
@@ -97,17 +99,29 @@ static void mathOper(String& str, String& par, int sep, int oper)
 	case OPER_MOD:
 	    str = p2 ? p1%p2 : 0;
 	    break;
+	case OPER_EQ:
+	    str = (p1 == p2);
+	    len = 0;
+	    return;
+	case OPER_NE:
+	    str = (p1 != p2);
+	    len = 0;
+	    return;
 	case OPER_GT:
 	    str = (p1 > p2);
+	    len = 0;
 	    return;
 	case OPER_LT:
 	    str = (p1 < p2);
+	    len = 0;
 	    return;
 	case OPER_GE:
 	    str = (p1 >= p2);
+	    len = 0;
 	    return;
 	case OPER_LE:
 	    str = (p1 <= p2);
+	    len = 0;
 	    return;
     }
     // TODO: deal with negative results
@@ -145,6 +159,15 @@ static void evalFunc(String& str)
 	    str = vars(par).toUpper();
 	else if (str == "lower")
 	    str = vars(par).toLower();
+	else if ((sep > 0) && ((str == "streq") || (str == "strne"))) {
+	    bool ret = (str == "strne");
+	    str = par.substr(sep+1);
+	    par = par.substr(0,sep);
+	    vars(str);
+	    vars(par);
+	    ret ^= (str == par);
+	    str = ret;
+	}
 	else if ((sep > 0) && ((str == "add") || (str == "+")))
 	    mathOper(str,par,sep,OPER_ADD);
 	else if ((sep > 0) && ((str == "sub") || (str == "-")))
@@ -155,13 +178,17 @@ static void evalFunc(String& str)
 	    mathOper(str,par,sep,OPER_DIV);
 	else if ((sep > 0) && ((str == "mod") || (str == "%")))
 	    mathOper(str,par,sep,OPER_MOD);
+	else if ((sep > 0) && (str == "eq"))
+	    mathOper(str,par,sep,OPER_EQ);
+	else if ((sep > 0) && (str == "ne"))
+	    mathOper(str,par,sep,OPER_NE);
 	else if ((sep > 0) && ((str == "gt") || (str == ">")))
 	    mathOper(str,par,sep,OPER_GT);
 	else if ((sep > 0) && ((str == "lt") || (str == "<")))
 	    mathOper(str,par,sep,OPER_LT);
-	else if ((sep > 0) && ((str == "ge") || (str == ">=")))
+	else if ((sep > 0) && (str == "ge"))
 	    mathOper(str,par,sep,OPER_GE);
-	else if ((sep > 0) && ((str == "le") || (str == "<=")))
+	else if ((sep > 0) && (str == "le"))
 	    mathOper(str,par,sep,OPER_LE);
 	else if (str == "random") {
 	    str.clear();
@@ -251,8 +278,10 @@ static void replaceFuncs(String &str)
 }
 
 // handle ;paramname[=value] assignments
-static void setMessage(Message &msg, String &line)
+static void setMessage(Message& msg, String& line, Message* target = 0)
 {
+    if (!target)
+	target = &msg;
     ObjList *strs = line.split(';');
     bool first = true;
     for (ObjList *p = strs; p; p=p->next()) {
@@ -277,14 +306,14 @@ static void setMessage(Message &msg, String &line)
 		if (n.startSkip("$",false))
 		    s_vars.setParam(n,v);
 		else
-		    msg.setParam(n,v);
+		    target->setParam(n,v);
 	    }
 	    else {
 		DDebug("RegexRoute",DebugAll,"Clearing parameter '%s'",s->c_str());
 		if (s->startSkip("$",false))
 		    s_vars.clearParam(*s);
 		else
-		    msg.clearParam(*s);
+		    target->clearParam(*s);
 	    }
 	}
     }
@@ -329,6 +358,27 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			val.c_str());
 		    val = msg.getValue(val);
 		}
+		else if (r.startsWith("$(")) {
+		    // handle special matching by param $(function)regexp
+		    int p = r.find(')');
+		    if (p < 3) {
+			Debug("RegexRoute",DebugWarn,"Invalid function match '%s' in rule #%u in context '%s'",
+			    r.c_str(),i+1,context.c_str());
+			continue;
+		    }
+		    val = r.substr(0,p+1);
+		    r = r.substr(p+1);
+		    r.trimBlanks();
+		    if (r.null()) {
+			Debug("RegexRoute",DebugWarn,"Missing rule in rule #%u in context '%s'",
+			    i+1,context.c_str());
+			continue;
+		    }
+		    DDebug("RegexRoute",DebugAll,"Using function '%s'",
+			val.c_str());
+		    msg.replaceParams(val);
+		    replaceFuncs(val);
+		}
 		else
 		    val = str;
 		val.trimBlanks();
@@ -340,6 +390,25 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			msg.replaceParams(val);
 			replaceFuncs(val);
 			Output("%s",val.safe());
+			continue;
+		    }
+		    else if (val.startSkip("enqueue")) {
+			// special case: enqueue a new message
+			if (val && (val[0] != ';')) {
+			    Message* m = new Message("");
+			    // parameters are set in the new message
+			    setMessage(msg,val,m);
+			    val.trimBlanks();
+			    if (val) {
+				*m = val;
+				m->userData(msg.userData());
+				NDebug("RegexRoute",DebugAll,"Enqueueing new message '%s' by rule #%u '%s' in context '%s'",
+				    val.c_str(),i+1,n->name().c_str(),context.c_str());
+				Engine::enqueue(m);
+			    }
+			    else
+				m->destruct();
+			}
 			continue;
 		    }
 		    setMessage(msg,val);
@@ -370,6 +439,13 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    NDebug("RegexRoute",DebugAll,"Setting match string '%s' by rule #%u '%s' in context '%s'",
 				val.c_str(),i+1,n->name().c_str(),context.c_str());
 			    str = val;
+			}
+		    }
+		    else if (val.startSkip("rename")) {
+			if (!val.null()) {
+			    NDebug("RegexRoute",DebugAll,"Renaming message '%s' to '%s' by rule #%u '%s' in context '%s'",
+				msg.c_str(),val.c_str(),i+1,n->name().c_str(),context.c_str());
+			    msg = val;
 			}
 		    }
 		    else {

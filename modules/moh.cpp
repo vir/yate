@@ -310,32 +310,41 @@ bool MOHHandler::received(Message &msg)
 	}
     }
     else {
-	const char *targ = msg.getValue("target");
-	if (!targ) {
-	    Debug(DebugWarn,"MOH outgoing call with no target!");
-	    return false;
-	}
-	Message m("call.route");
-	m.addParam("id",dest);
-	m.addParam("caller",dest);
-	m.addParam("called",targ);
-	if (Engine::dispatch(m)) {
-	    m = "call.execute";
-	    m.addParam("callto",m.retValue());
-	    m.retValue() = 0;
-	    MOHChan *mc = new MOHChan(dest.matchString(1).c_str());
-	    m.setParam("id",mc->id());
-	    m.userData(mc);
-	    if (Engine::dispatch(m)) {
-		msg.setParam("id",mc->id());
-		mc->deref();
-		return true;
+	String callto(msg.getValue("direct"));
+	Message m(msg);
+	m.retValue().clear();
+	m.clearParam("callto");
+	m.setParam("id",dest);
+	m.setParam("caller",dest);
+	if (callto.null()) {
+	    m = "call.route";
+	    const char *targ = msg.getValue("target");
+	    if (!targ)
+		targ = msg.getValue("called");
+	    if (!targ) {
+		Debug(DebugWarn,"MOH outgoing call with no target!");
+		return false;
 	    }
-	    Debug(DebugWarn,"MOH outgoing call not accepted!");
-	    mc->destruct();
+	    m.setParam("called",targ);
+	    if (!Engine::dispatch(m))
+		return false;
+	    callto = m.retValue();
+	    if (callto.null() || (callto == "-"))
+		return false;
+	    m.retValue().clear();
 	}
-	else
-	    Debug(DebugWarn,"MOH outgoing call but no route!");
+	m = "call.execute";
+	m.addParam("callto",callto);
+	MOHChan *mc = new MOHChan(dest.matchString(1).c_str());
+	m.setParam("id",mc->id());
+	m.userData(mc);
+	if (Engine::dispatch(m)) {
+	    msg.setParam("id",mc->id());
+	    mc->deref();
+	    return true;
+	}
+	Debug(DebugWarn,"MOH outgoing call not accepted!");
+	mc->destruct();
 	return false;
     }
     return true;

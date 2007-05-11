@@ -10,6 +10,10 @@ if [ "$1" = "--executable" ]; then
     yate="$1"
     shift
 fi
+if [ "$1" = "--there" ]; then
+    shift
+    cd `dirname "$0"`
+fi
 if [ "$1" = "--gdb" ]; then
     shift
     yate="gdb --args $yate"

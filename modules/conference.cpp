@@ -97,7 +97,7 @@ public:
     inline ConfChan* recorder() const
 	{ return m_record; }
     void mix(ConfConsumer* cons = 0);
-    void addChannel(ConfChan* chan);
+    void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
     bool setRecording(const NamedList& params);
 private:
@@ -105,6 +105,7 @@ private:
     String m_name;
     ObjList m_chans;
     String m_notify;
+    String m_playerId;
     bool m_lonely;
     ConfChan* m_record;
     int m_rate;
@@ -280,20 +281,25 @@ ConfRoom::~ConfRoom()
 }
 
 // Add one channel to the room
-void ConfRoom::addChannel(ConfChan* chan)
+void ConfRoom::addChannel(ConfChan* chan, bool player)
 {
     if (!chan)
 	return;
     m_chans.append(chan);
+    if (player)
+	m_playerId = chan->id();
     if (!chan->isUtility()) {
 	m_users++;
 	if (m_notify) {
 	    String tmp(m_users);
 	    Message* m = new Message("chan.notify");
+	    m->addParam("id",chan->id());
 	    m->addParam("targetid",m_notify);
 	    m->addParam("event","joined");
 	    m->addParam("room",m_name);
 	    m->addParam("users",tmp);
+	    if (m_playerId)
+		m->addParam("player",m_playerId);
 	    Engine::enqueue(m);
 	}
     }
@@ -306,18 +312,24 @@ void ConfRoom::delChannel(ConfChan* chan)
 	return;
     if (chan == m_record)
 	m_record = 0;
+    if (m_playerId && (chan->id() == m_playerId))
+	m_playerId.clear();
     if (m_chans.remove(chan,false) && !chan->isUtility()) {
 	m_users--;
 	bool alone = (m_users == 1);
 	if (m_notify) {
 	    String tmp(m_users);
 	    Message* m = new Message("chan.notify");
+	    m->addParam("id",chan->id());
 	    m->addParam("targetid",m_notify);
 	    m->addParam("event","left");
 	    m->addParam("room",m_name);
 	    m->addParam("users",tmp);
-	    // easy to check parameter indicating one user was left alone
-	    m->addParam("lonely",String::boolText(alone));
+	    // easy to check parameter indicating one user will be left alone
+	    if (m_lonely)
+		m->addParam("lonely",String::boolText(alone));
+	    if (m_playerId)
+		m->addParam("player",m_playerId);
 	    Engine::enqueue(m);
 	}
 
@@ -608,7 +620,7 @@ ConfChan::ConfChan(const String& name, const NamedList& params)
     m_room = ConfRoom::get(name,&params);
     if (m_room) {
 	m_address = name;
-	m_room->addChannel(this);
+	m_room->addChannel(this,params.getBoolValue("player",false));
 	RefPointer<ConfConsumer> cons;
 	if (voice) {
 	    cons = new ConfConsumer(m_room,smart);

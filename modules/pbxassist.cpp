@@ -116,7 +116,7 @@ static String s_error;
 static Configuration s_cfg;
 
 // Utility function - copy parameters requested in "copyparams" parameter
-static void copyParams(NamedList& dest, NamedList& original)
+static void copyParams(NamedList& dest, const NamedList& original)
 {
     const String* params = original.getParam("copyparams");
     if (params && *params)

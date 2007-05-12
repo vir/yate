@@ -465,19 +465,8 @@ Message* Channel::message(const char* name, const NamedList* original, const cha
     if (original) {
 	if (!params)
 	    params = original->getValue("copyparams");
-	if (!null(params)) {
-	    String tmp(params);
-	    ObjList* lst = tmp.split(',',false);
-	    for (ObjList* l = lst; l; l = l->next()) {
-		String* s = static_cast<String*>(l->get());
-		if (!s)
-		    continue;
-		s->trimBlanks();
-		if (*s)
-		    msg->copyParam(*original,*s);
-	    }
-	    delete lst;
-	}
+	if (!null(params))
+	    msg->copyParams(*original,params);
     }
     return msg;
 }

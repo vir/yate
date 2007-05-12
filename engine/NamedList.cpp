@@ -126,6 +126,34 @@ NamedList& NamedList::copyParam(const NamedList& original, const String& name, c
     return *this;
 }
 
+NamedList& NamedList::copyParams(const NamedList& original, ObjList* list, char childSep)
+{
+    XDebug(DebugInfo,"NamedList::copyParams(%p,%p,'%1s')",
+	&original,list,&childSep);
+    for (; list; list = list->next()) {
+	GenObject* obj = list->get();
+	if (!obj)
+	    continue;
+	String name = obj->toString();
+	name.trimBlanks();
+	if (name)
+	    copyParam(original,name,childSep);
+    }
+    return *this;
+}
+
+NamedList& NamedList::copyParams(const NamedList& original, const String& list, char childSep)
+{
+    XDebug(DebugInfo,"NamedList::copyParams(%p,\"%s\",'%1s')",
+	&original,list.c_str(),&childSep);
+    ObjList* l = list.split(',',false);
+    if (l) {
+	copyParams(original,l,childSep);
+	l->destruct();
+    }
+    return *this;
+}
+
 int NamedList::getIndex(const NamedString* param) const
 {
     if (!param)

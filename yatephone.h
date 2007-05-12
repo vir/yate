@@ -2018,12 +2018,6 @@ protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 
     /**
-     * Status message handler that is invoked only for matching messages.
-     * @param msg Status message
-     */
-    virtual void msgStatus(Message& msg);
-
-    /**
      * Build the module identification part of the status answer
      * @param str String variable to fill up
      */

@@ -1192,22 +1192,6 @@ void Driver::genUpdate(Message& msg)
     msg.addParam("chans",String(m_chans.count()));
 }
 
-void Driver::msgStatus(Message& msg)
-{
-    String mod, par, det;
-    bool details = msg.getBoolValue("details",true);
-    lock();
-    statusModule(mod);
-    statusParams(par);
-    if (details)
-	statusDetail(det);
-    unlock();
-    msg.retValue() << mod << ";" << par;
-    if (details)
-	msg.retValue() << ";" << det;
-    msg.retValue() << "\r\n";
-}
-
 void Driver::statusModule(String& str)
 {
     Module::statusModule(str);

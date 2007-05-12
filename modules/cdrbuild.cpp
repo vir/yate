@@ -64,7 +64,7 @@ public:
     CdrBuilder(const char *name);
     virtual ~CdrBuilder();
     void update(int type, u_int64_t val);
-    void update(const Message& msg, int type, u_int64_t val);
+    bool update(const Message& msg, int type, u_int64_t val);
     void emit(const char *operation = 0);
     String getStatus() const;
     static CdrBuilder* find(String &id);
@@ -169,6 +169,8 @@ CdrBuilder::~CdrBuilder()
 
 void CdrBuilder::emit(const char *operation)
 {
+    if (null())
+	return;
     u_int64_t t_hangup = m_hangup ? m_hangup : Time::now();
 
     u_int64_t
@@ -252,8 +254,17 @@ void CdrBuilder::update(int type, u_int64_t val)
     }
 }
 
-void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
+bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 {
+    if (type == CdrDrop) {
+	Debug("cdrbuild",DebugNote,"%s CDR for '%s'",
+	    (m_first ? "Dropping" : "Closing"),c_str());
+	// if we didn't generate an initialize generate no finalize
+	if (m_first)
+	    clear();
+	s_cdrs.remove(this);
+	return true;
+    }
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* s = msg.getParam(i);
@@ -290,9 +301,10 @@ void CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 
     if (type == CdrHangup) {
 	s_cdrs.remove(this);
-	return;
+	return false;
     }
     emit();
+    return false;
 }
 
 CdrBuilder* CdrBuilder::find(String &id)
@@ -311,6 +323,10 @@ bool CdrHandler::received(Message &msg)
     if (!msg.getBoolValue("cdrtrack",true))
 	return false;
     String id(msg.getValue("id"));
+    if (m_type == CdrDrop) {
+	if (!id.startSkip("cdrbuild/",false))
+	    return false;
+    }
     if (id.null()) {
 	id = msg.getValue("module");
 	id += "/";
@@ -320,13 +336,14 @@ bool CdrHandler::received(Message &msg)
 	if (id == "//")
 	    return false;
     }
+    bool rval = false;
     CdrBuilder *b = CdrBuilder::find(id);
     if (!b && ((m_type == CdrStart) || (m_type == CdrCall))) {
 	b = new CdrBuilder(id);
 	s_cdrs.append(b);
     }
     if (b)
-	b->update(msg,m_type,msg.msgTime().usec());
+	rval = b->update(msg,m_type,msg.msgTime().usec());
     else
 	Debug("CdrBuilder",DebugInfo,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
@@ -337,7 +354,7 @@ bool CdrHandler::received(Message &msg)
 	    b->emit();
 	}
     }
-    return false;
+    return rval;
 };
 		    
 bool StatusHandler::received(Message &msg)
@@ -423,7 +440,7 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CdrHandler("call.ringing",CdrRinging));
 	Engine::install(new CdrHandler("call.answered",CdrAnswer));
 	Engine::install(new CdrHandler("chan.hangup",CdrHangup));
-	Engine::install(new CdrHandler("call.dropcdr",CdrDrop));
+	Engine::install(new CdrHandler("call.drop",CdrDrop));
 	Engine::install(new CdrHandler("engine.halt",EngHalt,150));
 	Engine::install(new StatusHandler);
     }

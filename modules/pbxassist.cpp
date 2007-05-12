@@ -115,6 +115,15 @@ static String s_error;
 
 static Configuration s_cfg;
 
+// Utility function - copy parameters requested in "copyparams" parameter
+static void copyParams(NamedList& dest, NamedList& original)
+{
+    const String* params = original.getParam("copyparams");
+    if (params && *params)
+	dest.copyParams(original,*params);
+}
+
+
 ChanAssist* PBXList::create(Message& msg, const String& id)
 {
     if (msg == "chan.startup" || msg.userObject("Channel")) {
@@ -469,6 +478,7 @@ bool PBXAssist::operConference(Message& msg)
 	if (room)
 	    m.addParam("room",room);
 	m.addParam("pbxstate",m_state);
+	copyParams(m,msg);
 
 	if (Engine::dispatch(m) && m.userData()) {
 	    m_room = m.getParam("room");
@@ -478,6 +488,7 @@ bool PBXAssist::operConference(Message& msg)
 		m2->addParam("id",m_peer1);
 		m2->addParam("message","call.execute");
 		m2->addParam("callto",m_room);
+		copyParams(*m2,msg);
 		Engine::enqueue(m2);
 		// also set held peer's PBX state if it has one
 		m2 = new Message("chan.operation");
@@ -502,6 +513,7 @@ bool PBXAssist::operConference(Message& msg)
 	Message* m = c->message("call.execute",false,true);
 	m->addParam("callto",room);
 	m->addParam("pbxstate",m_state);
+	copyParams(*m,msg);
 	Engine::enqueue(m);
     }
 
@@ -528,6 +540,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
+    copyParams(*m,msg);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
@@ -575,6 +588,7 @@ bool PBXAssist::operOnHold(Message& msg)
 	m->addParam("callto","tone/dial");
 	m->addParam("message","call.execute");
 	m->addParam("reason","hold");
+	copyParams(*m,msg);
 	m_state = "dial";
     }
     m->addParam("pbxstate",m_state);
@@ -607,6 +621,7 @@ bool PBXAssist::operReturnConf(Message& msg)
     Message* m = c->message("call.execute",false,true);
     m->addParam("callto",m_room);
     m->addParam("pbxstate",m_state);
+    copyParams(*m,msg);
     Engine::enqueue(m);
     return true;
 }
@@ -620,6 +635,7 @@ bool PBXAssist::operReturnTone(Message& msg)
     m->addParam("callto","tone/dial");
     m->addParam("message","call.execute");
     m->addParam("pbxstate",m_state);
+    copyParams(*m,msg);
     Engine::enqueue(m);
     return true;
 }
@@ -640,6 +656,7 @@ bool PBXAssist::operTransfer(Message& msg)
     m->addParam("caller",m_keep.getValue("called"));
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
+    copyParams(*m,msg);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
@@ -697,6 +714,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
+    copyParams(*m,msg);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";

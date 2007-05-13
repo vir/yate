@@ -128,7 +128,7 @@ function gotNotify($reason)
 }
 
 /* Install filtered handler for the wave end notify messages */
-Yate::Install("chan.notify","targetid",$ourcallid);
+Yate::Install("chan.notify",100,"targetid",$ourcallid);
 
 /* The main loop. We pick events and handle them */
 while ($state != "") {

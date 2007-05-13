@@ -322,8 +322,8 @@ function gotDTMF($text)
 }
 
 /* Install filtered handlers for the wave end and dtmf notify messages */
-Yate::Install("chan.dtmf","targetid",$ourcallid);
-Yate::Install("chan.notify","targetid",$ourcallid);
+Yate::Install("chan.dtmf",100,"targetid",$ourcallid);
+Yate::Install("chan.notify",100,"targetid",$ourcallid);
 
 /* The main loop. We pick events and handle them */
 while ($state != "") {

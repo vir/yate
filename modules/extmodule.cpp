@@ -1136,7 +1136,14 @@ bool ExtModReceiver::processLine(const char* line)
 	    m_relays.append(r);
 	    Engine::install(r);
 	}
-	Debug("ExtModReceiver",DebugAll,"Install '%s', prio %d %s", id.c_str(),prio,ok ? "ok" : "failed");
+	if (debugAt(DebugAll) {
+	    String tmp;
+	    if (fname)
+		tmp << "filter: '" << fname << "'='" << fvalue << "' ";
+	    tmp << (ok ? "ok" : "failed");
+	    Debug("ExtModReceiver",DebugAll,"Install '%s', prio %d %s",
+		id.c_str(),prio,tmp.c_str());
+	}
 	String out("%%<install:");
 	out << prio << ":" << id << ":" << ok;
 	outputLine(out);

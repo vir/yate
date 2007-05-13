@@ -1136,7 +1136,7 @@ bool ExtModReceiver::processLine(const char* line)
 	    m_relays.append(r);
 	    Engine::install(r);
 	}
-	if (debugAt(DebugAll) {
+	if (debugAt(DebugAll)) {
 	    String tmp;
 	    if (fname)
 		tmp << "filter: '" << fname << "'='" << fvalue << "' ";

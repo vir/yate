@@ -3004,7 +3004,24 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 
 bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 {
-    if (m_info) {
+    bool info = m_info;
+    bool inband = m_inband;
+    const String* method = msg.getParam("method");
+    if (method) {
+	if (*method == "info") {
+	    info = true;
+	    inband = false;
+	}
+	else if (*method == "rfc2833") {
+	    info = false;
+	    inband = false;
+	}
+	else if (*method == "inband") {
+	    info = false;
+	    inband = true;
+	}
+    }
+    if (info) {
 	for (; tone && *tone; tone++) {
 	    char c = *tone;
 	    for (int i = 0; i <= 16; i++) {
@@ -3027,7 +3044,7 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 	ObjList* l = m_rtpMedia->find("audio");
 	const NetMedia* m = static_cast<const NetMedia*>(l ? l->get() : 0);
 	if (m) {
-	    if (m_inband && dtmfInband(tone))
+	    if (inband && dtmfInband(tone))
 		return true;
 	    msg.setParam("targetid",m->id());
 	    return false;

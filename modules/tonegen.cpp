@@ -740,9 +740,14 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     else {
 	Message m("call.route");
 	m.addParam("module",name());
+	m.copyParam(msg,"called");
+	m.copyParam(msg,"caller");
+	m.copyParam(msg,"callername");
 	String callto(msg.getValue("direct"));
 	if (callto.null()) {
 	    const char *targ = msg.getValue("target");
+	    if (!targ)
+		targ = msg.getValue("called");
 	    if (!targ) {
 		Debug(DebugWarn,"Tone outgoing call with no target!");
 		return false;
@@ -750,9 +755,9 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	    callto = msg.getValue("caller");
 	    if (callto.null())
 		callto << prefix() << dest;
-	    m.addParam("called",targ);
-	    m.addParam("caller",callto);
-	    if (!Engine::dispatch(m)) {
+	    m.setParam("called",targ);
+	    m.setParam("caller",callto);
+	    if ((!Engine::dispatch(m)) || m.retValue().null() || (m.retValue() == "-")) {
 		Debug(DebugWarn,"Tone outgoing call but no route!");
 		return false;
 	    }
@@ -760,7 +765,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
 	    m.retValue().clear();
 	}
 	m = "call.execute";
-	m.addParam("callto",callto);
+	m.setParam("callto",callto);
 	ToneChan *tc = new ToneChan(dest);
 	m.setParam("id",tc->id());
 	m.userData(tc);

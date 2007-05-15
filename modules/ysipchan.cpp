@@ -473,8 +473,8 @@ public:
     virtual bool received(Message& msg, int id);
     inline YateSIPEndPoint* ep() const
 	{ return m_endpoint; }
-    YateSIPConnection* findCall(const String& callid);
-    YateSIPConnection* findDialog(const SIPDialog& dialog);
+    YateSIPConnection* findCall(const String& callid, bool incRef = false);
+    YateSIPConnection* findDialog(const SIPDialog& dialog, bool incRef = false);
     YateSIPLine* findLine(const String& line);
     YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
@@ -1341,23 +1341,29 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
     if (t->isInvite())
 	invite(e,t);
     else if (t->getMethod() == "BYE") {
-	YateSIPConnection* conn = plugin.findCall(t->getCallID());
-	if (conn)
+	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
+	if (conn) {
 	    conn->doBye(t);
+	    conn->deref();
+	}
 	else
 	    t->setResponse(481);
     }
     else if (t->getMethod() == "CANCEL") {
-	YateSIPConnection* conn = plugin.findCall(t->getCallID());
-	if (conn)
+	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
+	if (conn) {
 	    conn->doCancel(t);
+	    conn->deref();
+	}
 	else
 	    t->setResponse(481);
     }
     else if (t->getMethod() == "INFO") {
-	YateSIPConnection* conn = plugin.findCall(t->getCallID());
-	if (conn)
+	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
+	if (conn) {
 	    conn->doInfo(t);
+	    conn->deref();
+	}
 	else
 	    t->setResponse(481);
     }
@@ -1366,9 +1372,11 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
     else if (t->getMethod() == "OPTIONS")
 	options(e,t);
     else if (t->getMethod() == "REFER") {
-	YateSIPConnection* conn = plugin.findCall(t->getCallID());
-	if (conn)
+	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
+	if (conn) {
 	    conn->doRefer(t);
+	    conn->deref();
+	}
 	else
 	    t->setResponse(481);
     }
@@ -1387,9 +1395,11 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 
     if (e->getMessage()->getParam("To","tag")) {
 	SIPDialog dlg(*e->getMessage());
-	YateSIPConnection* conn = plugin.findDialog(dlg);
-	if (conn)
+	YateSIPConnection* conn = plugin.findDialog(dlg,true);
+	if (conn) {
 	    conn->reInvite(t);
+	    conn->deref();
+	}
 	else {
 	    Debug(&plugin,DebugWarn,"Got re-INVITE for missing dialog");
 	    t->setResponse(481);
@@ -1549,10 +1559,11 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     Message m("sip." + meth);
     if (message->getParam("To","tag")) {
 	SIPDialog dlg(*message);
-	YateSIPConnection* conn = plugin.findDialog(dlg);
+	YateSIPConnection* conn = plugin.findDialog(dlg,true);
 	if (conn) {
 	    m.userData(conn);
 	    conn->complete(m);
+	    conn->deref();
 	}
     }
     if (user)
@@ -3765,7 +3776,7 @@ bool SipHandler::received(Message &msg)
     return true;
 }
 
-YateSIPConnection* SIPDriver::findCall(const String& callid)
+YateSIPConnection* SIPDriver::findCall(const String& callid, bool incRef)
 {
     XDebug(this,DebugAll,"SIPDriver finding call '%s'",callid.c_str());
     Lock mylock(this);
@@ -3773,12 +3784,12 @@ YateSIPConnection* SIPDriver::findCall(const String& callid)
     for (; l; l = l->skipNext()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
 	if (c->callid() == callid)
-	    return c;
+	    return (incRef ? c->ref() : c->alive()) ? c : 0;
     }
     return 0;
 }
 
-YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
+YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog, bool incRef)
 {
     XDebug(this,DebugAll,"SIPDriver finding dialog '%s'",dialog.c_str());
     Lock mylock(this);
@@ -3786,7 +3797,7 @@ YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog)
     for (; l; l = l->skipNext()) {
 	YateSIPConnection* c = static_cast<YateSIPConnection*>(l->get());
 	if (c->dialog() == dialog)
-	    return c;
+	    return (incRef ? c->ref() : c->alive()) ? c : 0;
     }
     return 0;
 }

@@ -64,8 +64,17 @@ confdir = @sysconfdir@/yate
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all
+.PHONY: all debug ddebug xdebug
 all: ../$(YLIB)
+
+debug:
+	$(MAKE) all DEBUG=-g3                                                                                
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG'
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG'
 
 .PHONY: clean
 clean:

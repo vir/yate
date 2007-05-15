@@ -628,6 +628,14 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
+
+protected:
+    /**
+     * Pre-destruction notification, called just before the object is deleted.
+     * Unlike in the destructor it is safe to call virtual methods here.
+     * Reimplementing this method allows to perform any object cleanups.
+     */
+    virtual void destroyed();
 };
 
 /**

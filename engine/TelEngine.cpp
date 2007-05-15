@@ -511,8 +511,14 @@ bool GenObject::alive() const
 
 void GenObject::destruct()
 {
+    destroyed();
     delete this;
 }
+
+void GenObject::destroyed()
+{
+}
+
 
 static Mutex s_refmutex;
 
@@ -558,6 +564,7 @@ bool RefObject::deref()
 
 void RefObject::zeroRefs()
 {
+    destroyed();
     delete this;
 }
 

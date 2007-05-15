@@ -115,7 +115,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
 	    if (*s)
 		m.copyParam(msg,*s);
 	}
-	delete lst;
+	TelEngine::destruct(lst);
     }
 
     if (Engine::dispatch(m)) {

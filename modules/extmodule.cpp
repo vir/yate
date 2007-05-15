@@ -726,10 +726,7 @@ bool ExtModReceiver::start()
 
 bool ExtModReceiver::flush()
 {
-    if (m_watcher) {
-	m_watcher->destruct();
-	m_watcher = 0;
-    }
+    TelEngine::destruct(m_watcher);
     // Make sure we release all pending messages and not accept new ones
     if (!Engine::exiting())
 	m_relays.clear();

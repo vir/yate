@@ -1958,7 +1958,7 @@ void GTKWindow::menu(int x, int y)
 	g_signal_connect(G_OBJECT(item),"toggled",G_CALLBACK(widgetCbToggle),this);
 	gtk_menu_shell_append((GtkMenuShell*)mnu,item);
     }
-    delete wnds;
+    TelEngine::destruct(wnds);
     if (!mnu)
 	return;
     gtk_widget_show_all(mnu);

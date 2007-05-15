@@ -977,7 +977,7 @@ void ThreadedSource::stop()
 void ThreadedSource::cleanup()
 {
     if (m_asyncDelete && !alive())
-	delete this;
+	DataSource::zeroRefs();
 }
 
 void ThreadedSource::zeroRefs()
@@ -1313,7 +1313,7 @@ ObjList* DataTranslator::allFormats(const String& formats, bool existing, bool s
     if (!fmts)
 	return 0;
     ObjList* lst = allFormats(fmts,existing,sameRate,sameChans);
-    delete fmts;
+    TelEngine::destruct(fmts);
     return lst;
 }
 

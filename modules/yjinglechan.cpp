@@ -791,7 +791,7 @@ bool YJGTransport::start()
     if (!Engine::dispatch(m)) {
 	Debug(m_connection,DebugCall,"Transport. Start RTP failed. [%p]",
 	    m_connection);
-	delete m;
+	m->destruct();
 	return false;
     }
     // Start STUN
@@ -802,7 +802,7 @@ bool YJGTransport::start()
     msg->addParam("remoteip",m_remote->m_address);
     msg->addParam("remoteport",m_remote->m_port);
     msg->addParam("userid",m->getValue("rtpid"));
-    delete m;
+    m->destruct();
     Engine::enqueue(msg);
     m_started = true;
     return true;

@@ -482,7 +482,7 @@ bool Channel::startRouter(Message* msg)
 	delete r;
     }
     else
-	delete msg;
+	TelEngine::destruct(msg);
     callRejected("failure","Internal server error");
     // dereference and die if the channel is dynamic
     if (m_driver && m_driver->varchan())
@@ -1385,7 +1385,7 @@ bool Router::route()
 
 void Router::cleanup()
 {
-    delete m_msg;
+    destruct(m_msg);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

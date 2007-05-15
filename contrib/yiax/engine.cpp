@@ -77,7 +77,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
 IAXEngine::~IAXEngine()
 {
     for (int i = 0; i < m_transListCount; i++)
-	delete m_transList[i];
+	TelEngine::destruct(m_transList[i]);
     delete[] m_transList;
 }
 

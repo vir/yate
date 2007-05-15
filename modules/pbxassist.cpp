@@ -237,7 +237,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 		*m = "call.route";
 		if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 		    // routing failed
-		    delete m;
+		    TelEngine::destruct(m);
 		    return errorBeep();
 		}
 		called = m->retValue();
@@ -545,7 +545,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     Engine::dispatch(m);
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
-	delete m;
+	TelEngine::destruct(m);
 	return errorBeep();
     }
     m_state = "call";
@@ -661,7 +661,7 @@ bool PBXAssist::operTransfer(Message& msg)
     Engine::dispatch(m);
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
-	delete m;
+	TelEngine::destruct(m);
 	return errorBeep();
     }
     m_state = "dial";
@@ -719,7 +719,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     Engine::dispatch(m);
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
-	delete m;
+	TelEngine::destruct(m);
 	return errorBeep();
     }
     m_state = "fortransfer";

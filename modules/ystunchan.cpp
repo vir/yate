@@ -1192,7 +1192,7 @@ bool StunHandler::received(Message& msg)
     }
     YStunSocketFilter* filter = new YStunSocketFilter();
     if (!filter->install(socket,&msg))
-	delete filter;
+	filter->destruct();
     return true;
 }
 

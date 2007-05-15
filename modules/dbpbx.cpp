@@ -210,10 +210,8 @@ void DbPbxPlugin::initialize()
 	    m_router->initQuery();
 	    m_router->setup(s_cfg.getIntValue("priorities","router"));
 	}
-	else {
-	    m_router->destruct();
-	    m_router = 0;
-	}
+	else
+	    TelEngine::destruct(m_router);
     }
 }
 

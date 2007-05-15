@@ -346,7 +346,7 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
 	if (!original->getHeader("Route")) {
 	    ObjList* routeset = answer->getRoutes();
 	    addRoutes(routeset);
-	    delete routeset;
+	    TelEngine::destruct(routeset);
 	}
     }
     copyAllHeaders(original,"Route");
@@ -567,8 +567,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	if (!line->null())
 	    break;
 	// Skip any initial empty lines
-	line->destruct();
-	line = 0;
+	TelEngine::destruct(line);
     }
     if (!line)
 	return false;
@@ -772,8 +771,7 @@ void SIPMessage::setBody(SIPBody* newbody)
 {
     if (newbody == body)
 	return;
-    if (body)
-	delete body;
+    TelEngine::destruct(body);
     body = newbody;
 }
 

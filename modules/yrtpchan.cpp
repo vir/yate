@@ -263,13 +263,11 @@ YRTPWrapper::~YRTPWrapper()
     }
     if (m_source) {
 	Debug(&splugin,DebugGoOn,"There is still a RTP source %p [%p]",m_source,this);
-	m_source->destruct();
-	m_source = 0;
+	TelEngine::destruct(m_source);
     }
     if (m_consumer) {
 	Debug(&splugin,DebugGoOn,"There is still a RTP consumer %p [%p]",m_consumer,this);
-	m_consumer->destruct();
-	m_consumer = 0;
+	TelEngine::destruct(m_consumer);
     }
     s_mutex.unlock();
 }

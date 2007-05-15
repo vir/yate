@@ -43,8 +43,7 @@ ObjList::~ObjList()
 	    tmp->destruct();
 	}
     }
-    if (m_next)
-	m_next->destruct();
+    TelEngine::destruct(m_next);
 }
 
 void* ObjList::getObject(const String& name) const
@@ -211,8 +210,7 @@ GenObject* ObjList::remove(bool delobj)
 
     if (delobj && tmp) {
 	XDebug(DebugInfo,"ObjList::remove() deleting %p",tmp);
-	tmp->destruct();
-	tmp = 0;
+	TelEngine::destruct(tmp);
     }
     return tmp;
 }
@@ -232,8 +230,7 @@ void ObjList::clear()
 	remove(m_delete);
     ObjList *n = m_next;
     m_next = 0;
-    if (n)
-	n->destruct();
+    TelEngine::destruct(n);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

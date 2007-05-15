@@ -203,8 +203,8 @@ iLBCPlugin::iLBCPlugin()
 iLBCPlugin::~iLBCPlugin()
 {
     Output("Unloading module iLBC with %d codecs still in use",s_count);
-    delete m_ilbc20;
-    delete m_ilbc30;
+    TelEngine::destruct(m_ilbc20);
+    TelEngine::destruct(m_ilbc30);
 }
 
 bool iLBCPlugin::isBusy() const

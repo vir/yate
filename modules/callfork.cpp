@@ -417,14 +417,8 @@ void ForkMaster::clear(bool softly)
 	s_mutex.unlock();
 	return;
     }
-    if (m_exec) {
-	m_exec->destruct();
-	m_exec = 0;
-    }
-    if (m_targets) {
-	m_targets->destruct();
-	m_targets = 0;
-    }
+    TelEngine::destruct(m_exec);
+    TelEngine::destruct(m_targets);
     s_mutex.unlock();
 }
 

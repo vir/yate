@@ -240,7 +240,7 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
 		m_detFax = true;
 	    }
 	}
-	delete k;
+	TelEngine::destruct(k);
     }
     s_mutex.lock();
     s_count++;

@@ -105,10 +105,7 @@ void HashList::clear()
 {
     XDebug(DebugAll,"HashList::clear() [%p]",this);
     for (unsigned int i = 0; i < m_size; i++)
-	if (m_lists[i]) {
-	    m_lists[i]->destruct();
-	    m_lists[i] = 0;
-	}
+	TelEngine::destruct(m_lists[i]);
 }
 
 bool HashList::resync(GenObject* obj)

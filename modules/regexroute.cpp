@@ -249,7 +249,7 @@ static void evalFunc(String& str)
 		(str.find('c') < 0));
 	    str.clear();
 	    str.append(fmts,",");
-	    delete fmts;
+	    TelEngine::destruct(fmts);
 	}
 	else if ((sep < 0) && str.trimBlanks())
 	    str = s_vars.getValue(str);
@@ -571,14 +571,8 @@ void RegexRoutePlugin::initialize()
     s_cfg.load();
     s_extended = s_cfg.getBoolValue("priorities","extended",false);
     s_insensitive = s_cfg.getBoolValue("priorities","insensitive",false);
-    if (m_preroute) {
-	delete m_preroute;
-	m_preroute = 0;
-    }
-    if (m_route) {
-	delete m_route;
-	m_route = 0;
-    }
+    TelEngine::destruct(m_preroute);
+    TelEngine::destruct(m_route);
     s_extra.clear();
     unsigned priority = s_cfg.getIntValue("priorities","preroute",100);
     if (priority) {

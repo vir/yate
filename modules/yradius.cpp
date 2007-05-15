@@ -551,7 +551,7 @@ bool RadAttrib::decode(void* buf, unsigned int len, ObjList& list)
 	    char* ptr = (char*)attr->data().data();
 	    if ((len2 < 4) || !ptr) {
 		DDebug(&__plugin,DebugMild,"Invalid vendor attribute %u len=%u",attr->code(),len2);
-		delete attr;
+		attr->destruct();
 		return false;
 	    }
 	    void* buf2 = ptr + 4;
@@ -562,14 +562,14 @@ bool RadAttrib::decode(void* buf, unsigned int len, ObjList& list)
 		if (!attr2) {
 		    if (!buf2) {
 			DDebug(&__plugin,DebugMild,"Invalid vendor %u attribute",vendor);
-			delete attr;
+			attr->destruct();
 			return false;
 		    }
 		    continue;
 		}
 		list.append(attr2);
 	    }
-	    delete attr;
+	    attr->destruct();
 	}
 	else
 	    list.append(attr);

@@ -622,8 +622,7 @@ int Engine::run()
 		else
 		    Debug(DebugWarn,"Unrecognized command '%s'",s->c_str());
 	    }
-	    s_cmds->destruct();
-	    s_cmds = 0;
+	    destruct(s_cmds);
 	}
 
 	if (s_init) {

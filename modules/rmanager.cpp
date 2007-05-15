@@ -236,7 +236,7 @@ Connection *Connection::checkCreate(Socket* sock, const char* addr)
     // should check IP address here
     Connection *conn = new Connection(sock,addr);
     if (conn->error()) {
-	delete conn;
+	conn->destruct();
 	return 0;
     }
     conn->startup();
@@ -698,7 +698,7 @@ bool Connection::autoComplete()
 	    }
 	}
     }
-    delete l;
+    TelEngine::destruct(l);
     m_buffer += maxMatch.substr(partWord.length());
     writeStr("\r\n");
     writeStr(m_buffer);

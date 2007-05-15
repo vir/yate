@@ -205,7 +205,7 @@ static void copyParams(Message &msg,Array *a,const char* resultName=0,int row=0)
 	if (j>1) {
 	    if (m->retValue().null()) {
 		Debug(&module,DebugWarn,"Skipping void route #%d",j);
-		delete m;
+		m->destruct();
 		continue;
 	    }
 	    if (!fallback)
@@ -223,7 +223,7 @@ static void copyParams(Message &msg,Array *a,const char* resultName=0,int row=0)
 	if (static_cast<CallEndpoint*>(Engine::dispatch(mlocate) ? mlocate.userData() : 0))
 	    s_fallbacklist.append(fallback);
 	else
-	    delete fallback;
+	    fallback->destruct();
     }
 }
 
@@ -452,7 +452,7 @@ RegistModule::RegistModule()
 
 RegistModule::~RegistModule()
 {
-    delete m_accountsmodule;
+    TelEngine::destruct(m_accountsmodule);
     Output("Unloading module Register for database");
 }
 

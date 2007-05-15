@@ -1652,7 +1652,7 @@ bool YateSIPRefer::route()
 
 void YateSIPRefer::cleanup()
 {
-    delete m_msg;
+    TelEngine::destruct(m_msg);
 }
 
 // Incoming call constructor - just before starting the routing thread
@@ -1806,7 +1806,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     plugin.ep()->buildParty(m,msg.getValue("host"),msg.getIntValue("port"),line);
     if (!m->getParty()) {
 	Debug(this,DebugWarn,"Could not create party for '%s' [%p]",m_uri.c_str(),this);
-	m->destruct();
+	TelEngine::destruct(m);
 	tmp = "Invalid address: ";
 	tmp << m_uri;
 	msg.setParam("reason",tmp);
@@ -1892,14 +1892,8 @@ YateSIPConnection::~YateSIPConnection()
     hangup();
     clearTransaction();
     setMedia(0);
-    if (m_route) {
-	delete m_route;
-	m_route = 0;
-    }
-    if (m_routes) {
-	delete m_routes;
-	m_routes = 0;
-    }
+    TelEngine::destruct(m_route);
+    TelEngine::destruct(m_routes);
 }
 
 void YateSIPConnection::setMedia(ObjList* media)
@@ -2218,7 +2212,7 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 		break;
 	    }
 	}
-	delete mappings;
+	TelEngine::destruct(mappings);
     }
     if (!Engine::dispatch(m))
 	return false;
@@ -2412,8 +2406,8 @@ SDPBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 		}
 	    }
 	}
-	delete l;
-	delete map;
+	TelEngine::destruct(l);
+	TelEngine::destruct(map);
 
 	if (*m == "audio") {
 	    // always claim to support telephone events
@@ -2651,8 +2645,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 			    DDebug(this,DebugWarn,"Port for '%s' changed: '%s' -> '%s' [%p]",
 				m->c_str(),m->remotePort().c_str(),
 				m2->remotePort().c_str(),this);
-			    lst->destruct();
-			    lst = 0;
+			    TelEngine::destruct(lst);
 			    break;
 			}
 		    }
@@ -2661,8 +2654,7 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 			return false;
 		    }
 		}
-		if (lst)
-		    lst->destruct();
+		TelEngine::destruct(lst);
 		setReason("Media information changed during reINVITE",415);
 		hangup();
 		return false;
@@ -3362,10 +3354,8 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     plugin.ep()->buildParty(sipNotify);
     if (!sipNotify->getParty()) {
 	DDebug(&plugin,DebugAll,"YateSIPConnection::initUnattendedTransfer. Could not create party to send NOTIFY");
-	sipNotify->destruct();
-	sipNotify = 0;
-	delete msg;
-	msg = 0;
+	TelEngine::destruct(sipNotify);
+	TelEngine::destruct(msg);
 	return false;
     }
     sipNotify->complete(plugin.ep()->engine());

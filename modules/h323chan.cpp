@@ -1992,7 +1992,7 @@ void YateH323Chan::finish()
     DDebug(this,DebugAll,"YateH323Chan::finish() [%p]",this);
     m_conn = 0;
     if (m_hungup)
-	delete this;
+	Channel::zeroRefs();
     else {
 	hangup();
 	disconnect();

@@ -759,7 +759,7 @@ protected:
 /**
  * @short Templated smart pointer class
  */
-template <class Obj = RefObject> class YATE_API RefPointer : public RefPointerBase
+template <class Obj = RefObject> class RefPointer : public RefPointerBase
 {
 protected:
     /**
@@ -838,7 +838,7 @@ public:
 /**
  * @short Templated pointer that can be inserted in a list
  */
-template <class Obj = GenObject> class YATE_API GenPointer : public GenObject
+template <class Obj = GenObject> class GenPointer : public GenObject
 {
 private:
     /**

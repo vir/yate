@@ -511,12 +511,7 @@ bool GenObject::alive() const
 
 void GenObject::destruct()
 {
-    destroyed();
     delete this;
-}
-
-void GenObject::destroyed()
-{
 }
 
 
@@ -576,6 +571,10 @@ bool RefObject::resurrect()
 	m_refcount = 1;
     s_refmutex.unlock();
     return ret;
+}
+
+void RefObject::destroyed()
+{
 }
 
 

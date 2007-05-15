@@ -628,15 +628,24 @@ public:
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
     virtual void* getObject(const String& name) const;
-
-protected:
-    /**
-     * Pre-destruction notification, called just before the object is deleted.
-     * Unlike in the destructor it is safe to call virtual methods here.
-     * Reimplementing this method allows to perform any object cleanups.
-     */
-    virtual void destroyed();
 };
+
+/**
+ * Helper function that destroys a GenObject only if the pointer is non-NULL.
+ * Use it instead of the delete operator.
+ * @param obj Pointer (rvalue) to the object to destroy
+ */
+inline void destruct(GenObject* obj)
+    { if (obj) obj->destruct(); }
+
+/**
+ * Helper template function that destroys a GenObject descendant if the pointer
+ *  is non-NULL and also zeros out the pointer.
+ * Use it instead of the delete operator.
+ * @param obj Reference to pointer (lvalue) to the object to destroy
+ */
+template <class Obj> void destruct(Obj*& obj)
+    { if (obj) { obj->destruct(); obj = 0; } }
 
 /**
  * A reference counted object.
@@ -707,6 +716,13 @@ protected:
      * @return True if the object was resurrected - its name may be Lazarus ;-)
      */
     bool resurrect();
+
+    /**
+     * Pre-destruction notification, called just before the object is deleted.
+     * Unlike in the destructor it is safe to call virtual methods here.
+     * Reimplementing this method allows to perform any object cleanups.
+     */
+    virtual void destroyed();
 
 private:
     int m_refcount;

@@ -492,14 +492,14 @@ void* WpInterface::create(const String& type, const NamedList& name)
 	WpInterface* iface = new WpInterface(name);
 	if (iface->init((NamedList&)name))
 	    return iface;
-	delete iface;
+	TelEngine::destruct(iface);
 	return 0;
     }
     if (type == "voice") {
 	WpData* data = new WpData(name);
 	if (data->init((NamedList&)name))
 	    return data;
-	delete data;
+	TelEngine::destruct(data);
 	return 0;
     }
     return 0;
@@ -1162,10 +1162,10 @@ unsigned int* WpData::processCicList(const String& cicList)
 	if (!ok)
 	    break;
     }
-    delete listSplit;
+    TelEngine::destruct(listSplit);
     if (ok && m_count)
 	return cicCodes;
-    delete cicCodes;
+    delete[] cicCodes;
     m_count = 0;
     return 0;
 }

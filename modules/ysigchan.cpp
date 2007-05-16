@@ -457,8 +457,11 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_hungup(false),
     m_inband(false)
 {
-    if (!(m_call && m_call->ref()))
+    if (!(m_call && m_call->ref())) {
+	Debug(this,DebugCall,"No signalling call for this incoming call");
 	m_call = 0;
+	return;
+    }
     SignallingMessage* msg = event->message();
     m_caller = msg ? msg->params().getValue("caller") : 0;
     m_called = msg ? msg->params().getValue("called") : 0;
@@ -926,7 +929,7 @@ SigDriver::~SigDriver()
     if (m_router) {
 	if (m_engine)
 	    m_engine->remove(m_router);
-	delete m_router;
+	TelEngine::destruct(m_router);
     }
     if (m_engine)
 	delete m_engine;
@@ -1322,7 +1325,7 @@ bool SigLink::initialize(NamedList& params)
 			dbg->debugLevel(level);
 		}
 	    }
-	    delete levelList;
+	    TelEngine::destruct(levelList);
 	    return true;
 	}
 	break;
@@ -1419,12 +1422,12 @@ SigCircuitGroup* SigLink::buildCircuits(NamedList& params, const String& device,
 	int chans = spanParams.getIntValue("chans");
 	start += chans;
     }
-    delete voice;
+    TelEngine::destruct(voice);
     if (error.null()) {
 	plugin.engine()->insert(group);
 	return group;
     }
-    delete group;
+    TelEngine::destruct(group);
     return 0;
 }
 
@@ -1529,16 +1532,11 @@ void SigSS7Isup::release()
 	m_iface->attach(0);
     }
     // *** Release memory
-    if (isup())
-	delete isup();
-    if (m_network)
-	delete m_network;
-    if (m_link)
-	delete m_link;
-    if (m_group)
-	delete m_group;
-    if (m_iface)
-	delete m_iface;
+    TelEngine::destruct(isup());
+    TelEngine::destruct(m_network);
+    TelEngine::destruct(m_link);
+    TelEngine::destruct(m_group);
+    TelEngine::destruct(m_iface);
     // *** Reset component pointers
     m_controller = 0;
     m_network = 0;
@@ -1579,7 +1577,7 @@ unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
 	else {
 	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
 		ns->name().c_str(),ns->safe(),sect.safe());
-	    delete(pc);
+	    TelEngine::destruct(pc);
 	}
     }
     return count;
@@ -1676,14 +1674,10 @@ void SigIsdn::release()
     plugin.engine()->remove(m_group);
     plugin.engine()->remove(m_iface);
     // *** Release memory
-    if (q931())
-	delete q931();
-    if (m_q921)
-	delete m_q921;
-    if (m_group)
-	delete m_group;
-    if (m_iface)
-	delete m_iface;
+    TelEngine::destruct(q931());
+    TelEngine::destruct(m_q921);
+    TelEngine::destruct(m_group);
+    TelEngine::destruct(m_iface);
     // *** Reset component pointers
     m_controller = 0;
     m_q921 = 0;
@@ -1942,20 +1936,13 @@ void SigIsdnMonitor::release()
     plugin.engine()->remove(m_ifaceNet);
     plugin.engine()->remove(m_ifaceCpe);
     // *** Release memory
-    if (q931())
-	delete q931();
-    if (m_q921Net)
-	delete m_q921Net;
-    if (m_q921Cpe)
-	delete m_q921Cpe;
-    if (m_groupNet)
-	delete m_groupNet;
-    if (m_groupCpe)
-	delete m_groupCpe;
-    if (m_ifaceNet)
-	delete m_ifaceNet;
-    if (m_ifaceCpe)
-	delete m_ifaceCpe;
+    TelEngine::destruct(q931());
+    TelEngine::destruct(m_q921Net);
+    TelEngine::destruct(m_q921Cpe);
+    TelEngine::destruct(m_groupNet);
+    TelEngine::destruct(m_groupCpe);
+    TelEngine::destruct(m_ifaceNet);
+    TelEngine::destruct(m_ifaceCpe);
     // *** Reset component pointers
     m_controller = 0;
     m_q921Net = m_q921Cpe = 0;
@@ -2377,7 +2364,7 @@ bool SigIsdnCallRecord::callRouteAndExec(const char* format)
 	ok = true;
 	break;
     }
-    delete m;
+    TelEngine::destruct(m);
     return ok;
 }
 

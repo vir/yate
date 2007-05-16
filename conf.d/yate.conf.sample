@@ -25,6 +25,11 @@
 ;  of zero disables such warnings
 ;warntime=0
 
+; wintimer: int: Requested timer resolution in milliseconds (Windows only, does
+;  not work on 9x and ME). The default resolution depends on hardware, Windows
+;  version and currently running programs
+;wintimer=0
+
 ; msgsniff: bool: Activate message sniffer module (if loaded) at engine init time
 ;msgsniff=disable
 

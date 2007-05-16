@@ -575,10 +575,33 @@ int Engine::run()
 #else
     ::signal(SIGPIPE,SIG_IGN);
 #endif
-    SysUsage::init();
-    s_runid = Time::secNow();
     s_cfg = configFile(s_cfgfile);
     s_cfg.load();
+#ifdef _WINDOWS
+    int winTimerRes = s_cfg.getIntValue("general","wintimer");
+    if ((winTimerRes > 0) && (winTimerRes < 100)) {
+	typedef ULONG (__stdcall *NTSTR)(ULONG,BOOLEAN,PULONG);
+	String err;
+	HMODULE ntDll = GetModuleHandle("NTDLL.DLL");
+	if (ntDll) {
+	    NTSTR ntSTR = (NTSTR)GetProcAddress(ntDll,"NtSetTimerResolution");
+	    if (ntSTR) {
+		ULONG res = 0;
+		unsigned int ntstatus = ntSTR(10000*winTimerRes,true,&res);
+		if (ntstatus)
+		    err << "NTSTATUS " << ntstatus;
+	    }
+	    else
+		err = "NtSetTimerResolution not found";
+	}
+	else
+	    err = "NTDLL not found (Windows 9x or ME?)";
+	if (err)
+	    Debug(DebugWarn,"Timer resolution not set: %s",err.c_str());
+    }
+#endif
+    SysUsage::init();
+    s_runid = Time::secNow();
     Debug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();

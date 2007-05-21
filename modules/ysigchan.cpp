@@ -213,6 +213,11 @@ public:
     // @param msg Received message
     virtual bool masquerade(String& id, Message& msg)
 	{ return false; }
+    // Handle chan.drop. Return true if handled
+    // @param id Channel id
+    // @param msg Received message
+    virtual bool drop(String& id, Message& msg)
+	{ return false; }
     // Clear channels with calls belonging to this link. Cancel thread if any. Call release
     void cleanup();
     // Type names
@@ -295,6 +300,7 @@ public:
     virtual ~SigIsdnMonitor();
     virtual void handleEvent(SignallingEvent* event);
     virtual bool masquerade(String& id, Message& msg);
+    virtual bool drop(String& id, Message& msg);
     unsigned int chanBuffer() const
 	{ return m_chanBuffer; }
     unsigned char idleValue() const
@@ -984,6 +990,15 @@ bool SigDriver::received(Message& msg, int id)
 	    SigLink* link = findLink(s.substr(0,found),false);
 	    if (link && link->masquerade(s,msg))
 		return false;
+	    }
+	    break;
+	case Drop: {
+	    String s = msg.getValue("id");
+	    if (s.startsWith(prefix()))
+		break;
+	    // Check for a link that would handle the message
+	    SigLink* link = findLink(s.substr(0,s.find('/')),false);
+	    return link && link->drop(s,msg);
 	    }
 	    break;
 	case Halt:
@@ -1789,6 +1804,30 @@ bool SigIsdnMonitor::masquerade(String& id, Message& msg)
 	}
     }
     return true;
+}
+
+bool SigIsdnMonitor::drop(String& id, Message& msg)
+{
+    const char* reason = msg.getValue("reason","dropped");
+    if (id == name()) {
+	m_monitorMutex.lock();
+	ListIterator iter(m_monitors);
+	GenObject* o = 0;
+	for (; (o = iter.get()); ) {
+	    CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	    c->disconnect(reason);
+	}
+	m_monitorMutex.unlock();
+	return true;
+    }
+    for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
+	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
+	if (id == rec->id()) {
+	    rec->disconnect(reason);
+	    return true;
+	}
+    }
+    return false;
 }
 
 void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)

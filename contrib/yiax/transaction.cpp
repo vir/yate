@@ -302,17 +302,12 @@ IAXTransaction* IAXTransaction::processMedia(DataBlock& data, u_int32_t tStamp, 
 	}
     }
     int32_t interval = (int32_t)tStamp - m_lastMiniFrameIn;
-    if (interval)
-	if (interval < 32767)
-	    m_lastMiniFrameIn = tStamp; // New frame is newer then the last one
-	else
-	    return 0;                   // Out of order
-    else {
-	// Reset timestamp
-	m_lastMiniFrameIn = 0;
+    if (interval <= 0)
 	return 0;
+    if (voice || interval < 32767) {
+	m_lastMiniFrameIn = tStamp; // New frame is newer then the last one
+	m_engine->processMedia(this,data,tStamp);
     }
-    m_engine->processMedia(this,data,tStamp);
     return 0;
 }
 
@@ -321,6 +316,9 @@ IAXTransaction* IAXTransaction::sendMedia(const DataBlock& data, u_int32_t forma
     if (!data.length())
 	return 0;
     u_int32_t ts = (u_int32_t)timeStamp();
+    // Avoid to send the same timestamp twice
+    if ((u_int16_t)ts == m_lastMiniFrameOut)
+	ts++;
     // Format changed or timestamp wrapped around? Send Voice full frame
     if ((u_int16_t)ts < m_lastMiniFrameOut || m_formatOut != format ) {
 	if (m_formatOut != format) {

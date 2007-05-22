@@ -1183,6 +1183,8 @@ void SigDriver::initialize()
 	m_engine->start();
 	// SS7
 	m_router = new SS7Router;
+	m_router->attach(new SS7Management);
+	m_router->attach(new SS7Maintenance);
 	m_engine->insert(m_router);
     }
     // Build/initialize links
@@ -1546,18 +1548,23 @@ void SigSS7Isup::release()
 	m_iface->control(SignallingInterface::Disable);
 	m_iface->attach(0);
     }
+    // Remove from engine
+    if (plugin.engine()) {
+	plugin.engine()->remove(isup());
+	plugin.engine()->remove(m_network);
+	plugin.engine()->remove(m_link);
+	plugin.engine()->remove(m_group);
+	plugin.engine()->remove(m_iface);
+    }
     // *** Release memory
-    TelEngine::destruct(isup());
+    if (isup()) {
+	isup()->destruct();
+	m_controller = 0;
+    }
     TelEngine::destruct(m_network);
     TelEngine::destruct(m_link);
     TelEngine::destruct(m_group);
     TelEngine::destruct(m_iface);
-    // *** Reset component pointers
-    m_controller = 0;
-    m_network = 0;
-    m_link = 0;
-    m_iface = 0;
-    m_group = 0;
     XDebug(&plugin,DebugAll,"SigSS7Isup('%s'). Released [%p]",name().c_str(),this);
 }
 
@@ -1674,7 +1681,7 @@ bool SigIsdn::reload(NamedList& params)
 
 void SigIsdn::release()
 {
-    // *** Cleanup / Disable components
+    // *** Cleanup / Disable components / Remove links between them
     if (q931())
 	q931()->cleanup();
     if (m_q921)
@@ -1683,21 +1690,21 @@ void SigIsdn::release()
 	m_iface->control(SignallingInterface::Disable);
 	m_iface->attach(0);
     }
-    // *** Remove links between components
-    plugin.engine()->remove(q931());
-    plugin.engine()->remove(m_q921);
-    plugin.engine()->remove(m_group);
-    plugin.engine()->remove(m_iface);
+    // *** Remove from engine
+    if (plugin.engine()) {
+	plugin.engine()->remove(q931());
+	plugin.engine()->remove(m_q921);
+	plugin.engine()->remove(m_group);
+	plugin.engine()->remove(m_iface);
+    }
     // *** Release memory
-    TelEngine::destruct(q931());
+    if (q931()) {
+	q931()->destruct();
+	m_controller = 0;
+    }
     TelEngine::destruct(m_q921);
     TelEngine::destruct(m_group);
     TelEngine::destruct(m_iface);
-    // *** Reset component pointers
-    m_controller = 0;
-    m_q921 = 0;
-    m_iface = 0;
-    m_group = 0;
     XDebug(&plugin,DebugAll,"SigIsdn('%s'). Released [%p]",name().c_str(),this);
 }
 
@@ -1951,7 +1958,7 @@ void SigIsdnMonitor::release()
 	c->disconnect();
     }
     m_monitorMutex.unlock();
-    // *** Cleanup / Disable components
+    // *** Cleanup / Disable components / Remove links between them
     if (q931())
 	q931()->cleanup();
     if (m_q921Net)
@@ -1966,27 +1973,27 @@ void SigIsdnMonitor::release()
 	m_ifaceCpe->control(SignallingInterface::Disable);
 	m_ifaceCpe->attach(0);
     }
-    // *** Remove links between components
-    plugin.engine()->remove(q931());
-    plugin.engine()->remove(m_q921Net);
-    plugin.engine()->remove(m_q921Cpe);
-    plugin.engine()->remove(m_groupNet);
-    plugin.engine()->remove(m_groupCpe);
-    plugin.engine()->remove(m_ifaceNet);
-    plugin.engine()->remove(m_ifaceCpe);
+    // *** Remove components from engine
+    if (plugin.engine()) {
+	plugin.engine()->remove(q931());
+	plugin.engine()->remove(m_q921Net);
+	plugin.engine()->remove(m_q921Cpe);
+	plugin.engine()->remove(m_groupNet);
+	plugin.engine()->remove(m_groupCpe);
+	plugin.engine()->remove(m_ifaceNet);
+	plugin.engine()->remove(m_ifaceCpe);
+    }
     // *** Release memory
-    TelEngine::destruct(q931());
+    if (q931()) {
+	q931()->destruct();
+	m_controller = 0;
+    }
     TelEngine::destruct(m_q921Net);
     TelEngine::destruct(m_q921Cpe);
     TelEngine::destruct(m_groupNet);
     TelEngine::destruct(m_groupCpe);
     TelEngine::destruct(m_ifaceNet);
     TelEngine::destruct(m_ifaceCpe);
-    // *** Reset component pointers
-    m_controller = 0;
-    m_q921Net = m_q921Cpe = 0;
-    m_ifaceNet = m_ifaceCpe = 0;
-    m_groupNet = m_groupCpe = 0;
     XDebug(&plugin,DebugAll,"SigIsdnMonitor('%s'). Released [%p]",name().c_str(),this);
 }
 

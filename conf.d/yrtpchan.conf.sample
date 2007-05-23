@@ -26,6 +26,11 @@
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
 ;drillhole=disable in server mode, enable in client mode
 
+; thread: keyword: Default priority of the data service threads
+; Can be one of: lowest, low, normal, high, highest
+; It is a bad idea to set a low priority for anything but testing
+;thread=normal
+
 ; defsleep: int: Default in-loop sleep time for new RTP sessions in milliseconds
 ;defsleep=5
 

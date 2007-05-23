@@ -82,6 +82,7 @@ static bool s_anyssrc = false;
 static bool s_rtcp = true;
 static bool s_drill = false;
 
+static Thread::Priority s_priority = Thread::Normal;
 static int s_sleep = 5;
 static int s_minjitter = 0;
 static int s_maxjitter = 0;
@@ -426,7 +427,8 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 	    m_consumer->deref();
 	}
     }
-    if (!(m_rtp->initGroup(msec) && m_rtp->direction(m_dir)))
+    if (!(m_rtp->initGroup(msec,Thread::priority(msg.getValue("thread"),s_priority)) &&
+	 m_rtp->direction(m_dir)))
 	return false;
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
@@ -846,6 +848,7 @@ void YRTPPlugin::initialize()
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
+    s_priority = Thread::priority(cfg.getValue("general","thread"));
     setup();
     if (m_first) {
 	m_first = false;

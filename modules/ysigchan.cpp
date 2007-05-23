@@ -451,6 +451,15 @@ private:
 static SigDriver plugin;
 static Configuration s_cfg;
 
+inline void applyDebugLevel(DebugEnabler* dbg, int level)
+{
+    if (!dbg)
+	return;
+    dbg->debugEnabled(level);
+    if (level)
+	dbg->debugLevel(level);
+}
+
 /**
  * SigChannel
  */
@@ -1187,6 +1196,36 @@ void SigDriver::initialize()
 	m_router->attach(new SS7Maintenance);
 	m_engine->insert(m_router);
     }
+    // Apply debug levels to driver
+    String dbgLevel = s_cfg.getValue("general","debuglevel");
+    DDebug(this,DebugAll,"Set debug '%s' [%p]",dbgLevel.safe(),this);
+    ObjList* levelList = dbgLevel.split(',',true);
+    int i = 0;
+    for (ObjList* o = levelList->skipNull(); o; o = o->skipNext(), i++) {
+	int level = (static_cast<String*>(o->get()))->toInteger(-1);
+	if (level == -1)
+	    continue;
+	switch (i) {
+	    case 0:
+		applyDebugLevel(this,level);
+		continue;
+	    case 1:
+		applyDebugLevel(m_engine,level);
+		continue;
+	    case 2:
+		applyDebugLevel(m_router,level);
+		continue;
+	    case 3:
+		if (m_engine)
+		    applyDebugLevel(m_engine->find("ss7snm"),level);
+		continue;
+	    case 4:
+		if (m_engine)
+		    applyDebugLevel(m_engine->find("ss7mtn"),level);
+		continue;
+	}
+    }
+    TelEngine::destruct(levelList);
     // Build/initialize links
     Lock lock(m_linksMutex);
     unsigned int n = s_cfg.sections();
@@ -1324,9 +1363,9 @@ bool SigLink::initialize(NamedList& params)
 	// Create/reload
 	bool ok = m_init ? reload(params) : create(params,error);
 	m_init = true;
-	// Apply 'debuglayer'
+	// Apply 'debuglevel'
 	if (ok) {
-	    String dbgLevel = params.getValue("debuglayer");
+	    String dbgLevel = params.getValue("debuglevel");
 	    DDebug(&plugin,DebugAll,"SigLink('%s'). Set debug '%s' [%p]",
 		name().c_str(),dbgLevel.safe(),this);
 	    ObjList* levelList = dbgLevel.split(',',true);
@@ -1335,12 +1374,7 @@ bool SigLink::initialize(NamedList& params)
 		int level = (static_cast<String*>(o->get()))->toInteger(-1);
 		if (level == -1)
 		    continue;
-		DebugEnabler* dbg = getDbgEnabler(i);
-		if (dbg) {
-		    dbg->debugEnabled(level);
-		    if (level)
-			dbg->debugLevel(level);
-		}
+		applyDebugLevel(getDbgEnabler(i),level);
 	    }
 	    TelEngine::destruct(levelList);
 	    return true;

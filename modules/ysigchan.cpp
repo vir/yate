@@ -1192,9 +1192,9 @@ void SigDriver::initialize()
 	m_engine->start();
 	// SS7
 	m_router = new SS7Router;
+	m_engine->insert(m_router);
 	m_router->attach(new SS7Management);
 	m_router->attach(new SS7Maintenance);
-	m_engine->insert(m_router);
     }
     // Apply debug levels to driver
     String dbgLevel = s_cfg.getValue("general","debuglevel");

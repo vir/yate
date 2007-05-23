@@ -20,6 +20,11 @@
 ; trunk_threads: int: Number of threads that service trunked voice packets
 ;trunk_threads=1
 
+; thread: keyword: Default priority of the data service threads (socket listener and data trunking)
+; Can be one of: lowest, low, normal, high, highest
+; It is a bad idea to set a low priority for anything but testing
+;thread=normal
+
 
 [formats]
 ; This section allows to individually enable or disable the codecs

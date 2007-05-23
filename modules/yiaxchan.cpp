@@ -524,6 +524,8 @@ private:
 static Configuration s_cfg; 		// Configuration file
 static YIAXDriver iplugin;		// Init the driver
 static YIAXLineContainer s_lines;	// Lines
+static Thread::Priority s_priority = Thread::Normal;  // Threads priority
+
 
 /*
  * Class definitions
@@ -835,7 +837,7 @@ void YIAXListener::run()
     m_engine->readSocket(addr);
 }
 
-// Run the event retriving thread
+// Run the event retreiving thread
 void YIAXGetEvent::run()
 {
     DDebug(m_engine,DebugAll,"%s started",currentName());
@@ -963,11 +965,11 @@ void YIAXEngine::start(u_int16_t listenThreadCount, u_int16_t eventThreadCount, 
     if (!trunkThreadCount)
 	Debug(this,DebugWarn,"YIAXEngine. No trunking threads(s)!");
     for (; listenThreadCount; listenThreadCount--)
-	(new YIAXListener(this,"YIAXListener thread"))->startup();
+	(new YIAXListener(this,"YIAXListener thread",s_priority))->startup();
     for (; eventThreadCount; eventThreadCount--)
 	(new YIAXGetEvent(this,"YIAXGetEvent thread"))->startup();
     for (; trunkThreadCount; trunkThreadCount--)
-	(new YIAXTrunking(this,"YIAXTrunking thread"))->startup();
+	(new YIAXTrunking(this,"YIAXTrunking thread",s_priority))->startup();
     m_threadsCreated = true;
 }
 
@@ -1133,10 +1135,12 @@ void YIAXDriver::initialize()
     // If desired codec is disabled fall back to last in list
     if (!m_defaultCodec)
 	m_defaultCodec = fallback;
-    // Port and interface
+    // Other options
     m_port = s_cfg.getIntValue("general","port",4569);
     String iface = s_cfg.getValue("general","addr");
     bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
+    s_priority = Thread::priority(s_cfg.getValue("general","thread"),s_priority);
+    DDebug(this,DebugInfo,"Default thread priority set to '%s'",Thread::priority(s_priority));
     unlock();
     setup();
     // We need channels to be dropped on shutdown

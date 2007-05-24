@@ -87,6 +87,8 @@ function onExecute($id,$ev)
 	return;
     if (strpos($id,"fax/") === 0)
 	return;
+    if (strpos($ev->GetValue("callto"),"fax/") === 0)
+	return;
     $num = $ev->GetValue("billid") . "_" .$ev->GetValue("caller") . "-" . $ev->GetValue("called");
     $m = new Yate("chan.masquerade");
     $m->id = ""; // don't notify about message result

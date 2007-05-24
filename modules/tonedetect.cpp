@@ -32,10 +32,12 @@ namespace { // anonymous
 
 // remember the values below are squares, we compute in power, not amplitude
 
+// how much we keep from old value when averaging, must be below 1
+#define MOVING_AVG_KEEP     0.97
 // minimum square of signal energy to even consider detecting
 #define THRESHOLD2_ABS     1e+06
 // relative square of spectral power from total signal power
-#define THRESHOLD2_REL_FAX  0.85
+#define THRESHOLD2_REL_FAX  0.95
 // sum of tones (low+high) from total
 #define THRESHOLD2_REL_ALL  0.60
 // each tone from threshold from total
@@ -188,7 +190,7 @@ static char s_tableDtmf[][5] = {
 // Update a moving average with square of value (so we end with ~ power)
 static void updatePwr(double& avg, double val)
 {
-    avg = 0.95*avg + 0.05*val*val;
+    avg = MOVING_AVG_KEEP*avg + (1-MOVING_AVG_KEEP)*val*val;
 }
 
 

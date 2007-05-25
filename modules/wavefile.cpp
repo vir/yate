@@ -139,6 +139,7 @@ private:
 };
 
 bool s_asyncDelete = true;
+bool s_dataPadding = true;
 
 INIT_PLUGIN(WaveFileDriver);
 
@@ -346,8 +347,17 @@ void WaveSource::run()
 	    }
 	    break;
 	}
-	if (r < (int)m_data.length())
-	    m_data.assign(m_data.data(),r);
+	if (r < (int)m_data.length()) {
+	    // if desired and possible extend last byte to fill buffer
+	    if (s_dataPadding && ((m_format == "mulaw") || (m_format == "alaw"))) {
+		unsigned char* d = (unsigned char*)m_data.data();
+		unsigned char last = d[r-1];
+		while (r < (int)m_data.length())
+		    d[r++] = last;
+	    }
+	    else
+		m_data.assign(m_data.data(),r);
+	}
 	if (m_swap) {
 	    uint16_t* p = (uint16_t*)m_data.data();
 	    for (int i = 0; i < r; i+= 2) {
@@ -1024,6 +1034,7 @@ void WaveFileDriver::initialize()
     Output("Initializing module WaveFile");
     setup();
     s_asyncDelete = Engine::config().getBoolValue("hacks","asyncdelete",true);
+    s_dataPadding = Engine::config().getBoolValue("hacks","datapadding",true);
     if (!m_handler) {
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);

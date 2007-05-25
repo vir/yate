@@ -389,6 +389,8 @@ static Configuration s_contacts;
 static Configuration s_providers;
 static Configuration s_history;
 static unsigned int s_eventLen = 0;
+static Mutex s_debugMutex;
+static String* s_debugLog = 0;
 
 // Parameters that are stored with account
 static const char* s_accParams[] = {
@@ -408,6 +410,17 @@ static const char* s_provParams[] = {
     0
 };
 
+static void dbg_client_func(const char *buf, int level)
+{
+    if (!buf)
+	return;
+    s_debugMutex.lock();
+    if (s_debugLog)
+	*s_debugLog += buf;
+    else
+	s_debugLog = new String(buf);
+    s_debugMutex.unlock();
+}
 
 Client::Client(const char *name)
     : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
@@ -1013,9 +1026,13 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
 
 bool Client::addToLog(const String& text, Window* wnd)
 {
+    if (text.null())
+	return true;
     String tmp;
     if (getText("log_events",tmp,wnd)) {
-	tmp.append(text,"\n");
+	if (tmp && tmp.at(tmp.length()-1) != '\n')
+	    tmp += "\n";
+	tmp += text;
 	while (s_eventLen && (tmp.length() > s_eventLen)) {
 	    int pos = tmp.find('\n');
 	    if (pos < 0)
@@ -1156,6 +1173,24 @@ bool Client::action(Window* wnd, const String& name)
 		setFocus(wid,false,win);
 		return true;
 	    }
+	}
+    }
+    else if (name.startsWith("command:") && name.at(8)) {
+	// generic engine commands
+	Message* m = new Message("engine.command");
+	m->addParam("line",name.c_str()+8);
+	Engine::enqueue(m);
+	return true;
+    }
+    else if (name.startsWith("debug:")) {
+	// module debugging control commands
+	int sep = name.find(':',6);
+	if (sep > 0) {
+	    Message* m = new Message("engine.debug");
+	    m->addParam("module",name.substr(6,sep-6));
+	    m->addParam("line",name.substr(sep+1));
+	    Engine::enqueue(m);
+	    return true;
 	}
     }
     // accounts window actions
@@ -1512,6 +1547,25 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 	if (setShow(name.substr(8),active,wnd))
 	    return true;
     }
+    else if (name.startsWith("debug:")) {
+	// module debugging control commands
+	int sep = name.find(':',6);
+	if (sep > 0) {
+	    String line = name.substr(sep+1);
+	    int sep2 = line.find(':');
+	    if (sep2 > 0)
+		line = active ? line.substr(0,sep2) : line.substr(sep2+1);
+	    else if (!active)
+		return true;
+	    if (line) {
+		Message* m = new Message("engine.debug");
+		m->addParam("module",name.substr(6,sep-6));
+		m->addParam("line",line);
+		Engine::enqueue(m);
+	    }
+	    return true;
+	}
+    }
     // keep the toggle in sync in all windows
     setCheck(name,active,0,wnd);
     if (name == "autoanswer") {
@@ -1520,6 +1574,19 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
     }
     if (name == "multilines") {
 	m_multiLines = active;
+	return true;
+    }
+    if (name == "log_events_debug") {
+	Debug(ClientDriver::self(),DebugNote,"Debug to window: %s",String::boolText(active));
+	setShow("log_events_control",active,wnd);
+	if (active) {
+	    ClientDriver::self()->debugEnabled(false);
+	    Debugger::setOutput(dbg_client_func);
+	}
+	else {
+	    Debugger::setOutput(0);
+	    ClientDriver::self()->debugEnabled(true);
+	}
 	return true;
     }
 
@@ -1882,6 +1949,14 @@ void Client::enableAction(const ClientChannel* chan, const String& action)
 
 void Client::idleActions()
 {
+    s_debugMutex.lock();
+    String* log = s_debugLog;
+    s_debugLog = 0;
+    s_debugMutex.unlock();
+    if (log) {
+	addToLog(*log);
+	log->destruct();
+    }
     // arbitrary limit to let other threads run too
     for (int i = 0; i < 4; i++) {
 	if (!s_busy)

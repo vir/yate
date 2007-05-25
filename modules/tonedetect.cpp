@@ -336,6 +336,12 @@ void ToneConsumer::checkFax()
 {
     if (m_fax.value() < m_pwr*THRESHOLD2_REL_FAX)
 	return;
+    if (m_fax.value() > m_pwr) {
+	DDebug(&plugin,DebugNote,"Overshoot on %s, signal=%f, total=%f",
+	    m_id.c_str(),m_fax.value(),m_pwr);
+	init();
+	return;
+    }
     DDebug(&plugin,DebugInfo,"Fax detected on %s, signal=%f, total=%f",
 	m_id.c_str(),m_fax.value(),m_pwr);
     // prepare for new detection

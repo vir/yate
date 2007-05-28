@@ -1191,7 +1191,9 @@ void SigDriver::initialize()
 	m_engine->debugChain(this);
 	m_engine->start();
 	// SS7
-	m_router = new SS7Router;
+	NamedList* p = s_cfg.getSection("general");
+	NamedList dummy("");
+	m_router = new SS7Router(p ? *p : dummy);
 	m_engine->insert(m_router);
 	m_router->attach(new SS7Management);
 	m_router->attach(new SS7Maintenance);
@@ -1271,6 +1273,7 @@ void SigDriver::initialize()
 		clearLink(*sect);
 	}
     }
+    m_router->printRoutes();
 }
 
 /**

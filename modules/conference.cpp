@@ -310,6 +310,7 @@ void ConfRoom::delChannel(ConfChan* chan)
 {
     if (!chan)
 	return;
+    Lock lock(mutex());
     if (chan == m_record)
 	m_record = 0;
     if (m_playerId && (chan->id() == m_playerId))
@@ -317,6 +318,7 @@ void ConfRoom::delChannel(ConfChan* chan)
     if (m_chans.remove(chan,false) && !chan->isUtility()) {
 	m_users--;
 	bool alone = (m_users == 1);
+	lock.drop();
 	if (m_notify) {
 	    String tmp(m_users);
 	    Message* m = new Message("chan.notify");
@@ -671,12 +673,13 @@ ConfChan::~ConfChan()
 {
     DDebug(this,DebugAll,"ConfChan::~ConfChan() %s [%p]",id().c_str(),this);
     Lock lock(&__plugin);
-    // first make sure we don't pump any more data
-    setConsumer();
-    setSource();
-    // then remove ourselves from the room
-    if (m_room)
-	m_room->delChannel(this);
+    // keep the room referenced until we are done
+    RefPointer<ConfRoom> room = m_room;
+    // remove ourselves from the room's mixer
+    if (room)
+	room->delChannel(this);
+    // now we can safely remove the data streams
+    clearEndpoint();
     if (m_billing)
 	Engine::enqueue(message("chan.hangup"));
 }

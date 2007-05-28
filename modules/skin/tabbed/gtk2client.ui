@@ -234,29 +234,24 @@ tooltip=Show/hide Channels window
 [browser]
 enabled=no
 visible=no
-title=Browser
+decorated=yes
+title=Yate Info Browser
 master=yes
 layout=framed
 vbox=>
-    hbox=,,0,-1
-	label=1,1,,,title,
-	property:int:xpad=4
-	property:align:yalign=50
-	button_icon=,,20,20,decoration,
-	button_max=,,20,20,decoration,
-	button_hide=,,20,20,decoration,
-    leave=<
-    mozilla=1,1,300,400,browser,about:blank
+    mozilla=2,1,300,400,caller_info,about:blank
     editor=,1,200,22,callto,
+    tooltip=Phone number or VoIP address to call
     hbox=,,0,-1
 	button=1,,100,30,call,Call
+	tooltip=Make new call
+	button=1,,100,30,accept,Accept
+	tooltip=Accept incoming call
 	button=1,,100,30,hangup,Hangup
-	button=1,,100,30,mumu,Mumu
+	tooltip=Hang up current call
     leave=<
     label=,,,,status,Initializing...
 leave=<
-x=688
-y=40
 
 [incoming]
 enabled=no

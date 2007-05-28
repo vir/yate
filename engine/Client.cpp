@@ -1636,10 +1636,17 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 	if (!sect)
 	    return false;
 	setSelect("acc_protocol",sect->getValue("protocol"));
+	String acc = item;
+	// make sure we offer an unique account name
+	for (unsigned int i = 1; s_accounts.getSection(acc); i++) {
+	    acc = item;
+	    acc << "_" << i;
+	}
+	setText("acc_account",acc,wnd);
 	for (const char** par = s_provParams; *par; par++) {
 	    String name;
 	    name << "acc_" << *par;
-	    setText(name,sect->getValue(*par));
+	    setText(name,sect->getValue(*par),wnd);
 	}
 	return true;
     }

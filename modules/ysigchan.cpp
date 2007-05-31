@@ -1659,6 +1659,7 @@ bool SigIsdn::create(NamedList& params, String& error)
 
     // Q921
     buildName(compName,"Q921");
+    params.setParam("debugname",compName);
     params.setParam("network",String::boolText(IsdnPriNet == type()));
     params.setParam("print-frames",params.getValue("print-layer2PDU"));
     m_q921 = new ISDNQ921(params,compName);
@@ -1666,6 +1667,7 @@ bool SigIsdn::create(NamedList& params, String& error)
 
     // Q931
     buildName(compName,"Q931");
+    params.setParam("debugname",compName);
     params.setParam("print-messages",params.getValue("print-layer3PDU"));
     m_controller = new ISDNQ931(params,compName);
     plugin.engine()->insert(q931());
@@ -1895,11 +1897,13 @@ bool SigIsdnMonitor::create(NamedList& params, String& error)
     // Q921
     params.setParam("t203",params.getValue("idletimeout"));
     buildName(compName,"Q921",true);
+    params.setParam("debugname",compName);
     params.setParam("network",String::boolText(true));
     params.setParam("print-frames",params.getValue("print-layer2PDU"));
     m_q921Net = new ISDNQ921Pasive(params,compName);
     plugin.engine()->insert(m_q921Net);
     buildName(compName,"Q921",false);
+    params.setParam("debugname",compName);
     params.setParam("network",String::boolText(false));
     m_q921Cpe = new ISDNQ921Pasive(params,compName);
     plugin.engine()->insert(m_q921Cpe);
@@ -1907,6 +1911,7 @@ bool SigIsdnMonitor::create(NamedList& params, String& error)
     // Q931
     compName = "";
     compName << name() << '/' << "Q931";
+    params.setParam("debugname",compName);
     params.setParam("print-messages",params.getValue("print-layer3PDU"));
     m_controller = new ISDNQ931Monitor(params,compName);
     plugin.engine()->insert(q931());

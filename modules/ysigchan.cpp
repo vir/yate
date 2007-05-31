@@ -1569,31 +1569,11 @@ bool SigSS7Isup::reload(NamedList& params)
 
 void SigSS7Isup::release()
 {
-    // *** Cleanup
-    if (isup())
-	isup()->cleanup();
-    // *** Disable/detach components
-    if (controller())
-	controller()->attach(0);
-    if (m_network)
-	m_network->attach(0);
-    if (m_link) {
+    if (m_link)
 	m_link->control(SS7Layer2::Pause);
-	m_link->SignallingReceiver::attach(0);
-    }
-    if (m_iface) {
+    if (m_iface)
 	m_iface->control(SignallingInterface::Disable);
-	m_iface->attach(0);
-    }
-    // Remove from engine
-    if (plugin.engine()) {
-	plugin.engine()->remove(isup());
-	plugin.engine()->remove(m_network);
-	plugin.engine()->remove(m_link);
-	plugin.engine()->remove(m_group);
-	plugin.engine()->remove(m_iface);
-    }
-    // *** Release memory
+
     if (isup()) {
 	isup()->destruct();
 	m_controller = 0;
@@ -1718,23 +1698,9 @@ bool SigIsdn::reload(NamedList& params)
 
 void SigIsdn::release()
 {
-    // *** Cleanup / Disable components / Remove links between them
-    if (q931())
-	q931()->cleanup();
-    if (m_q921)
-	m_q921->cleanup();
-    if (m_iface) {
+    if (m_iface)
 	m_iface->control(SignallingInterface::Disable);
-	m_iface->attach(0);
-    }
-    // *** Remove from engine
-    if (plugin.engine()) {
-	plugin.engine()->remove(q931());
-	plugin.engine()->remove(m_q921);
-	plugin.engine()->remove(m_group);
-	plugin.engine()->remove(m_iface);
-    }
-    // *** Release memory
+
     if (q931()) {
 	q931()->destruct();
 	m_controller = 0;
@@ -1995,32 +1961,12 @@ void SigIsdnMonitor::release()
 	c->disconnect();
     }
     m_monitorMutex.unlock();
-    // *** Cleanup / Disable components / Remove links between them
-    if (q931())
-	q931()->cleanup();
-    if (m_q921Net)
-	m_q921Net->cleanup();
-    if (m_q921Cpe)
-	m_q921Cpe->cleanup();
-    if (m_ifaceNet) {
+
+    if (m_ifaceNet)
 	m_ifaceNet->control(SignallingInterface::Disable);
-	m_ifaceNet->attach(0);
-    }
-    if (m_ifaceCpe) {
+    if (m_ifaceCpe)
 	m_ifaceCpe->control(SignallingInterface::Disable);
-	m_ifaceCpe->attach(0);
-    }
-    // *** Remove components from engine
-    if (plugin.engine()) {
-	plugin.engine()->remove(q931());
-	plugin.engine()->remove(m_q921Net);
-	plugin.engine()->remove(m_q921Cpe);
-	plugin.engine()->remove(m_groupNet);
-	plugin.engine()->remove(m_groupCpe);
-	plugin.engine()->remove(m_ifaceNet);
-	plugin.engine()->remove(m_ifaceCpe);
-    }
-    // *** Release memory
+
     if (q931()) {
 	q931()->destruct();
 	m_controller = 0;

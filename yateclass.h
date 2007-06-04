@@ -566,6 +566,7 @@ struct TokenDict {
 };
 
 class String;
+class Mutex;
 
 #if 0 /* for documentation generator */
 /**
@@ -703,12 +704,29 @@ public:
      */
     virtual void destruct();
 
+    /**
+     * Retrieve the mutex that protects ref() and deref() for all objects
+     * @return Reference to the global mutex used for all counter operations
+     */
+    static Mutex& refMutex();
+
 protected:
     /**
-     * This method is called when the reference count reaches zero.
+     * This method is called when the reference count reaches zero after
+     *  unlocking the mutex if the call to zeroRefsTest() returned true.
      * The default behaviour is to delete the object.
      */
     virtual void zeroRefs();
+
+    /**
+     * This method is called when the reference count reaches zero just before
+     *  calling zeroRefs() with the non-recursive mutex still locked.
+     * Extra care must be taken to prevent deadlocks, normally the code should
+     *  only change some variables and return.
+     * The default implementation just returns true.
+     * @return True to call zeroRefs() after releasing the mutex
+     */
+    virtual bool zeroRefsTest();
 
     /**
      * Bring the object back alive by setting the reference counter to one.

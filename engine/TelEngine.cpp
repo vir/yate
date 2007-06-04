@@ -545,12 +545,15 @@ bool RefObject::ref()
 
 bool RefObject::deref()
 {
+    bool zeroCall = false;
     s_refmutex.lock();
     int i = m_refcount;
     if (i > 0)
 	--m_refcount;
-    s_refmutex.unlock();
     if (i == 1)
+	zeroCall = zeroRefsTest();
+    s_refmutex.unlock();
+    if (zeroCall)
 	zeroRefs();
     else if (i <= 0)
 	Debug(DebugFail,"RefObject::deref() called with count=%d [%p]",i,this);
@@ -561,6 +564,11 @@ void RefObject::zeroRefs()
 {
     destroyed();
     delete this;
+}
+
+bool RefObject::zeroRefsTest()
+{
+    return true;
 }
 
 bool RefObject::resurrect()
@@ -577,6 +585,10 @@ void RefObject::destroyed()
 {
 }
 
+Mutex& RefObject::refMutex()
+{
+    return s_refmutex;
+}
 
 void RefPointerBase::assign(RefObject* oldptr, RefObject* newptr, void* pointer)
 {

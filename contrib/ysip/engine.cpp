@@ -58,6 +58,7 @@ static TokenDict sip_responses[] = {
     { "Conflict", 409 },
     { "Gone", 410 },
     { "Length Required", 411 },
+    { "Conditional Request Failed", 412 },
     { "Request Entity Too Large", 413 },
     { "Request-URI Too Long", 414 },
     { "Unsupported Media Type", 415 },

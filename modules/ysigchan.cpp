@@ -1335,6 +1335,7 @@ bool SigLink::initialize(NamedList& params)
     //  No need to initialize if no signalling engine or not in plugin's list
     //  For SS7 links check the router
     String error;
+    bool init = true;
     while (true) {
 #define SIGLINK_INIT_BREAK(s) {error=s;break;}
 	if (!(plugin.engine() && plugin.findLink(name(),false)))
@@ -1365,6 +1366,7 @@ bool SigLink::initialize(NamedList& params)
 	}
 	// Create/reload
 	bool ok = m_init ? reload(params) : create(params,error);
+	init = m_init;
 	m_init = true;
 	// Apply 'debuglevel'
 	if (ok) {
@@ -1385,7 +1387,7 @@ bool SigLink::initialize(NamedList& params)
 	break;
     }
     Debug(&plugin,DebugNote,"Link('%s'). %s failure: %s [%p]",
-	name().c_str(),m_init?"Reload":"Create",error.safe(),this);
+	name().c_str(),init?"Reload":"Create",error.safe(),this);
     return false;
 }
 
@@ -1702,7 +1704,6 @@ void SigIsdn::release()
 {
     if (m_iface)
 	m_iface->control(SignallingInterface::Disable);
-
     if (q931()) {
 	q931()->destruct();
 	m_controller = 0;

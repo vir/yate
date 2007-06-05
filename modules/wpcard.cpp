@@ -676,10 +676,19 @@ bool WpInterface::receiveAttempt()
 // Disable: Cancel thread. Close socket
 bool WpInterface::control(Operation oper, NamedList* params)
 {
+    DDebug(this,DebugAll,"Control with oper=%u [%p]",oper,this);
     switch (oper) {
 	case Enable:
 	case Disable:
 	    break;
+	case EnableTx:
+	case DisableTx:
+	    if (m_readOnly == (oper == DisableTx))
+		return true;
+	    m_readOnly = (oper == DisableTx);
+	    m_sendReadOnly = false;
+	    Debug(this,DebugInfo,"Tx is %sabled [%p]",m_readOnly?"dis":"en",this);
+	    return true;
 	case Query:
 	    return m_socket.valid() && m_thread && m_thread->running();
 	default:

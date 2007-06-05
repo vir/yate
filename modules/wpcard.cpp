@@ -1129,8 +1129,10 @@ unsigned int* WpData::processCicList(const String& cicList)
     ObjList* listSplit = 0;
     char separator = (-1 != cicList.find(',')) ? ',' : '.';
     listSplit = cicList.split(separator,false);
-    if (!(listSplit || listSplit->count()))
+    if (!listSplit->count()) {
+	TelEngine::destruct(listSplit);
 	return 0;
+    }
     // Split the intervals into single code elements
     unsigned int* cicCodes = new unsigned int[m_chans];
     bool ok = true;

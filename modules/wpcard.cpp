@@ -79,7 +79,8 @@ class WpConsumer;                        // Data consumer
 class WpCircuit;                         // Single Wanpipe B-channel (SignallingCircuit)
 class WpData;                            // Wanpipe span B-channel group
 class WpDataThread;                      // B-channel group read/write data
-class WpConfig;                          // Configuration file
+
+static const char* s_driverName = "Wanpipe";
 
 // Implements a circular queue for data consumer
 class Fifo
@@ -174,7 +175,7 @@ public:
     WpInterface(const NamedList& params);
     virtual ~WpInterface();
     // Initialize interface. Return false on failure
-    bool init(NamedList& params);
+    bool init(const NamedList& config, NamedList& params);
     // Send signalling packet
     virtual bool transmitPacket(const DataBlock& packet, bool repeat, PacketType type);
     // Interface control
@@ -273,7 +274,7 @@ public:
     WpData(const NamedList& params);
     virtual ~WpData();
     // Initialize data channel span. Return false on failure
-    bool init(NamedList& params);
+    bool init(const NamedList& config, const NamedList& defaults, NamedList& params);
     // Swap data if necessary
     inline unsigned char swap(unsigned char c)
 	{ return m_swap ? s_bitswap[c] : c; }
@@ -332,12 +333,6 @@ private:
     WpData* m_data;
 };
 
-class WpConfig : public Configuration
-{
-public:
-    inline WpConfig() : Configuration(Engine::configFile("wpcard"))
-	{ load(); }
-};
 
 YSIGFACTORY2(WpInterface,SignallingInterface);
 
@@ -488,20 +483,37 @@ bool WpSocket::select(unsigned int multiplier)
 // Create WpInterface or WpData
 void* WpInterface::create(const String& type, const NamedList& name)
 {
-    if (type == "sig") {
+    bool interface = false;
+    if (type == "sig")
+	interface = true;
+    else  if (type == "voice")
+	;
+    else
+	return 0;
+
+    Configuration cfg(Engine::configFile("wpcard"));
+    cfg.load();
+    const char* sectName = name.getValue(type);
+    DDebug(s_driverName,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    NamedList* config = cfg.getSection(sectName);
+    if (!config) {
+	DDebug(s_driverName,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+	return 0;
+    }
+
+    if (interface) {
 	WpInterface* iface = new WpInterface(name);
-	if (iface->init((NamedList&)name))
+	if (iface->init(*config,(NamedList&)name))
 	    return iface;
 	TelEngine::destruct(iface);
 	return 0;
     }
-    if (type == "voice") {
-	WpData* data = new WpData(name);
-	if (data->init((NamedList&)name))
-	    return data;
-	TelEngine::destruct(data);
-	return 0;
-    }
+    NamedList* general = cfg.getSection("general");
+    NamedList dummy("general");
+    WpData* data = new WpData(name);
+    if (data->init(*config,general?*general:dummy,(NamedList&)name))
+	return data;
+    TelEngine::destruct(data);
     return 0;
 }
 
@@ -524,27 +536,20 @@ WpInterface::~WpInterface()
     XDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
 }
 
-bool WpInterface::init(NamedList& params)
+bool WpInterface::init(const NamedList& config, NamedList& params)
 {
-    WpConfig cfg;
-    const char* sectName = params.getValue("sig");
-    NamedList* sect = cfg.getSection(sectName);
-    if (!sect) {
-	Debug(this,DebugNote,"Missing section '%s' in configuration",c_safe(sectName));
-	return false;
-    }
     // Set socket card / device
-    m_socket.card(sectName);
-    const char* sig = params.getValue("siggroup",sect->getValue("siggroup"));
+    m_socket.card(config);
+    const char* sig = params.getValue("siggroup",config.getValue("siggroup"));
     if (!sig) {
 	Debug(this,DebugNote,"Missing or invalid signalling group '%s' in configuration",sig);
 	return false;
     }
     m_socket.device(sig);
 
-    m_readOnly = sect->getBoolValue("readonly",false);
+    m_readOnly = config.getBoolValue("readonly",false);
 
-    int i = params.getIntValue("errormask",sect->getIntValue("errormask",255));
+    int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
 
     int rx = params.getIntValue("rxunderruninterval");
@@ -1021,36 +1026,27 @@ WpData::~WpData()
 }
 
 // Initialize
-bool WpData::init(NamedList& params)
+bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList& params)
 {
-    XDebug(m_group,DebugAll,"WpData('%s'). Initializing [%p]",id().safe(),this);
     if (!m_group) {
 	Debug(DebugNote,"WpData('%s'). Circuit group is missing [%p]",
 	    id().safe(),this);
 	return false;
     }
-    WpConfig cfg;
-    const char* sectName = params.getValue("voice");
-    NamedList* sect = cfg.getSection(sectName);
-    if (!sect) {
-	Debug(m_group,DebugNote,"WpData('%s'). No section '%s' in configuration [%p]",
-	    id().safe(),c_safe(sectName),this);
-	return false;
-    }
     // Set socket card / device
-    m_socket.card(sectName);
-    const char* voice = params.getValue("voicegroup",sect->getValue("voicegroup"));
+    m_socket.card(config);
+    const char* voice = params.getValue("voicegroup",config.getValue("voicegroup"));
     if (!voice) {
 	Debug(m_group,DebugNote,"WpData('%s'). Missing or invalid voice group [%p]",
 	    id().safe(),this);
 	return false;
     }
     m_socket.device(voice);
-    m_canSend = !sect->getBoolValue("readonly",false);
+    m_canSend = !config.getBoolValue("readonly",false);
     // Type depending data: channel count, samples, circuit list
-    String type = sect->getValue("type");
-    String cics = sect->getValue("voicechans");
-    m_samples = params.getIntValue("samples",sect->getIntValue("samples"));
+    String type = config.getValue("type");
+    String cics = config.getValue("voicechans");
+    m_samples = params.getIntValue("samples",config.getIntValue("samples"));
     if (type.null())
 	type = "E1";
     if (type == "E1") {
@@ -1074,12 +1070,12 @@ bool WpData::init(NamedList& params)
     }
     params.setParam("chans",String(m_chans));
     // Other data
-    m_swap = cfg.getBoolValue("general","bitswap",true);
-    m_noData = cfg.getIntValue("general","idlevalue",0xff);
-    m_buflen = cfg.getIntValue("general","buflen",160);
-    m_swap = params.getBoolValue("bitswap",sect->getBoolValue("bitswap",m_swap));
-    m_noData = params.getIntValue("idlevalue",sect->getIntValue("idlevalue",m_noData));
-    m_buflen = params.getIntValue("buflen",sect->getIntValue("buflen",m_buflen));
+    m_swap = defaults.getBoolValue("bitswap",true);
+    m_noData = defaults.getIntValue("idlevalue",0xff);
+    m_buflen = defaults.getIntValue("buflen",160);
+    m_swap = params.getBoolValue("bitswap",config.getBoolValue("bitswap",m_swap));
+    m_noData = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_noData));
+    m_buflen = params.getIntValue("buflen",config.getIntValue("buflen",m_buflen));
     // Buffer length can't be 0
     if (!m_buflen)
 	m_buflen = 160;

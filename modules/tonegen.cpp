@@ -156,8 +156,8 @@ INIT_PLUGIN(ToneGenDriver);
 // 421.052Hz (19 samples @ 8kHz) sine wave, pretty close to standard 425Hz
 static const short tone421hz[] = {
     19,
-    3246,6142,8371,9694,9965,9157,7357,4759,1645,
-    -1645,-4759,-7357,-9157,-9965,-9694,-8371,-6142,-3246,
+    3246, 6142, 8371, 9694, 9965, 9157, 7357, 4759, 1645,
+    -1645, -4759, -7357, -9157, -9965, -9694, -8371, -6142, -3246,
     0 };
 
 // 1000Hz (8 samples @ 8kHz) standard digital milliwatt
@@ -166,6 +166,27 @@ static const short tone1000hz[] = {
     8828, 20860, 20860, 8828,
     -8828, -20860, -20860, -8828
     };
+
+// 941.176Hz (2*8.5 samples @ 8kHz) sine wave, approximates 950Hz
+static const short tone941hz[] = {
+    17,
+    6736, 9957, 7980, 1838, -5623, -9617, -8952, -3614,
+    3614, 8952, 9617, 5623, -1838, -7980, -9957, -6736,
+    0 };
+
+// 1454.545Hz (2*5.5 samples @ 8kHz) sine wave, approximates 1400Hz
+static const short tone1454hz[] = {
+    11,
+    9096, 7557, -2816, -9898, -5407,
+    5407, 9898, 2816, -7557, -9096,
+    0 };
+
+// 1777.777Hz (2*4.5 samples @ 8kHz) sine wave, approximates 1800Hz
+static const short tone1777hz[] = {
+    9,
+    9848, 3420, -8659, -6429,
+    6429, 8659, -3420, -9848,
+    0 };
 
 static const Tone t_dial[] = { { 8000, tone421hz }, { 0, 0 } };
 
@@ -182,6 +203,12 @@ static const Tone t_outoforder[] = {
     { 800, tone421hz }, { 800, 0 },
     { 800, tone421hz }, { 800, 0 },
     { 1600, tone421hz }, { 1600, 0 },
+    { 0, 0 } };
+
+static const Tone t_info[] = {
+    { 2640, tone941hz }, { 240, 0 },
+    { 2640, tone1454hz }, { 240, 0 },
+    { 2640, tone1777hz }, { 8000, 0 },
     { 0, 0 } };
 
 static const Tone t_mwatt[] = { { 8000, tone1000hz }, { 0, 0 } };
@@ -234,6 +261,7 @@ static const ToneDesc s_desc[] = {
     { t_specdial, "specdial", "sd" },
     { t_congestion, "congestion", "cg" },
     { t_outoforder, "outoforder", "oo" },
+    { t_info, "info", "in" },
     { t_mwatt, "milliwatt", "mw" },
     { t_silence, "silence", 0 },
     { t_noise, "noise", "cn" },

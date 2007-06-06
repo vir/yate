@@ -176,6 +176,9 @@ public:
     virtual ~WpInterface();
     // Initialize interface. Return false on failure
     bool init(const NamedList& config, NamedList& params);
+    // Remove links. Dispose memory
+    virtual void destruct()
+	{ cleanup(true); }
     // Send signalling packet
     virtual bool transmitPacket(const DataBlock& packet, bool repeat, PacketType type);
     // Interface control
@@ -185,6 +188,12 @@ protected:
     // Read data from socket
     bool receiveAttempt();
 private:
+    inline void cleanup(bool release) {
+	    control(Disable,0);
+	    attach(0);
+	    if (release)
+		GenObject::destruct();
+	}
     WpSocket m_socket;
     WpSigThread* m_thread;               // Thread used to read data from socket
     bool m_readOnly;                     // Readonly interface
@@ -532,7 +541,7 @@ WpInterface::WpInterface(const NamedList& params)
 
 WpInterface::~WpInterface()
 {
-    control(Disable,0);
+    cleanup(false);
     XDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
 }
 
@@ -542,7 +551,9 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
     m_socket.card(config);
     const char* sig = params.getValue("siggroup",config.getValue("siggroup"));
     if (!sig) {
-	Debug(this,DebugNote,"Missing or invalid signalling group '%s' in configuration",sig);
+	Debug(this,DebugWarn,
+	    "Missing or invalid siggroup='%s' in configuration [%p]",
+	    c_safe(sig),this);
 	return false;
     }
     m_socket.device(sig);

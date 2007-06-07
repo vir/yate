@@ -533,14 +533,19 @@ void RefObject::destruct()
     deref();
 }
 
+bool RefObject::refInternal()
+{
+    if (m_refcount > 0) {
+	++m_refcount;
+	return true;
+    }
+    return false;
+}
+
 bool RefObject::ref()
 {
-    s_refmutex.lock();
-    bool ret = (m_refcount > 0);
-    if (ret)
-	++m_refcount;
-    s_refmutex.unlock();
-    return ret;
+    Lock lock(s_refmutex);
+    return refInternal();
 }
 
 bool RefObject::deref()

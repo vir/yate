@@ -729,6 +729,13 @@ protected:
     virtual bool zeroRefsTest();
 
     /**
+     * Increments the reference counter if not already zero without locking
+     *  the mutex. The caller must make sure to hold the refMutex() locked.
+     * @return True if the object was successfully referenced
+     */
+    bool refInternal();
+
+    /**
      * Bring the object back alive by setting the reference counter to one.
      * Note that it works only if the counter was zero previously
      * @return True if the object was resurrected - its name may be Lazarus ;-)

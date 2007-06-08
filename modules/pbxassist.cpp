@@ -341,6 +341,18 @@ bool PBXAssist::msgTone(Message& msg)
 	if (tmp) {
 	    Debug(list(),DebugNote,"Chan '%s' triggered operation '%s' in state '%s' holding '%s'",
 		id().c_str(),tmp,m_state.c_str(),m_peer1.c_str());
+	    // we need special handling for transparent passing of keys
+	    if (String(tmp) == "transparent") {
+		String keys = sect->getValue("text");
+		if (keys) {
+		    keys = m_tones.replaceMatches(keys);
+		    msg.replaceParams(keys);
+		    msg.setParam("text",keys);
+		}
+		m_tones = sect->getValue("pastekeys");
+		// let the DTMF message pass through
+		return false;
+	    }
 	    Message* m = new Message("chan.masquerade");
 	    m->addParam("id",id());
 	    m->addParam("message",sect->getValue("message","chan.operation"));

@@ -82,7 +82,7 @@ static int s_roomAlloc = 0;
 class ConfRoom : public DataSource
 {
 public:
-    virtual ~ConfRoom();
+    virtual void destroyed();
     static ConfRoom* get(const String& name, const NamedList* params = 0);
     virtual const String& toString() const
 	{ return m_name; }
@@ -228,9 +228,9 @@ ConfRoom* ConfRoom::get(const String& name, const NamedList* params)
     Lock lock(&__plugin);
     ObjList* l = s_rooms.find(name);
     ConfRoom* room = l ? static_cast<ConfRoom*>(l->get()) : 0;
-    if (room)
-	room->ref();
-    else if (params)
+    if (room && !room->ref())
+	room = 0;
+    if (params && !room)
 	room = new ConfRoom(name,*params);
     return room;
 }
@@ -264,9 +264,9 @@ ConfRoom::ConfRoom(const String& name, const NamedList& params)
     }
 }
 
-ConfRoom::~ConfRoom()
+void ConfRoom::destroyed()
 {
-    DDebug(&__plugin,DebugAll,"ConfRoom::~ConfRoom() '%s' [%p]",m_name.c_str(),this);
+    DDebug(&__plugin,DebugAll,"ConfRoom::destroyed() '%s' [%p]",m_name.c_str(),this);
     // plugin must be locked as the destructor is called when room is dereferenced
     Lock lock(&__plugin);
     s_rooms.remove(this,false);
@@ -278,6 +278,7 @@ ConfRoom::~ConfRoom()
 	m->addParam("room",m_name);
 	Engine::enqueue(m);
     }
+    
 }
 
 // Add one channel to the room

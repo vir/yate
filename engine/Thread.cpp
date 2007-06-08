@@ -481,6 +481,7 @@ bool Thread::error() const
 
 bool Thread::running() const
 {
+    Lock lock(s_tmutex);
     return m_private ? m_private->m_started : false;
 }
 

@@ -278,7 +278,7 @@ void ConfRoom::destroyed()
 	m->addParam("room",m_name);
 	Engine::enqueue(m);
     }
-    
+    DataSource::destroyed();
 }
 
 // Add one channel to the room

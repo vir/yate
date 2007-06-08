@@ -110,7 +110,6 @@ static TranslatorCaps s_stereoCaps[] = {
 };
 
 static Mutex s_dataMutex(true);
-static Mutex s_sourceMutex(true);
 
 class ThreadedSourcePrivate : public Thread
 {
@@ -123,20 +122,18 @@ protected:
     virtual void run()
 	{
 	    m_source->run();
-	    s_sourceMutex.lock();
-	    ThreadedSource* source = m_source;
-	    m_source = 0;
-	    if (source) {
-		source->m_thread = 0;
-		source->cleanup();
-	    }
-	    s_sourceMutex.unlock();
+	    // execute cleanup from this thread if possible
+	    cleanup();
 	}
 
     virtual void cleanup()
 	{
-	    if (m_source)
-		m_source->cleanup();
+	    RefObject::refMutex().lock();
+	    ThreadedSource* source = m_source;
+	    m_source = 0;
+	    RefObject::refMutex().unlock();
+	    if (source)
+		source->cleanup();
 	}
 
 private:
@@ -435,7 +432,7 @@ const FormatInfo* DataFormat::getInfo() const
 }
 
 
-DataConsumer::~DataConsumer()
+void DataConsumer::destroyed()
 {
     if (m_source || m_override) {
 	// this should not happen - but scream bloody murder if so
@@ -446,6 +443,7 @@ DataConsumer::~DataConsumer()
 	m_source->detach(this);
     if (m_override)
 	m_override->detach(this);
+    DataNode::destroyed();
 }
 
 void* DataConsumer::getObject(const String& name) const
@@ -597,9 +595,10 @@ bool DataSource::detachInternal(DataConsumer* consumer)
     return false;
 }
 
-DataSource::~DataSource()
+void DataSource::destroyed()
 {
     clear();
+    DataNode::destroyed();
 }
 
 void DataSource::clear()
@@ -645,9 +644,9 @@ DataEndpoint::DataEndpoint(CallEndpoint* call, const char* name)
 	m_call->m_data.append(this);
 }
 
-DataEndpoint::~DataEndpoint()
+void DataEndpoint::destroyed()
 {
-    DDebug(DebugAll,"DataEndpoint::~DataEndpoint() '%s' call=%p [%p]",
+    DDebug(DebugAll,"DataEndpoint::destroyed() '%s' call=%p [%p]",
 	m_name.c_str(),m_call,this);
     if (m_call)
 	m_call->m_data.remove(this,false);
@@ -657,6 +656,7 @@ DataEndpoint::~DataEndpoint()
     clearSniffers();
     setSource();
     setConsumer();
+    RefObject::destroyed();
 }
 
 void* DataEndpoint::getObject(const String& name) const
@@ -935,13 +935,14 @@ void DataEndpoint::clearSniffers()
 }
 
 
-ThreadedSource::~ThreadedSource()
+void ThreadedSource::destroyed()
 {
     if (m_asyncDelete && m_thread)
 	Debug(DebugFail,"ThreadedSource destroyed holding thread %p [%p]",m_thread,this);
     m_asyncDelete = false;
     if (m_thread)
 	stop();
+    DataSource::destroyed();
 }
 
 bool ThreadedSource::start(const char* name, Thread::Priority prio)
@@ -964,28 +965,40 @@ void ThreadedSource::stop()
     Lock lock(mutex());
     if (!m_thread)
 	return;
-    s_sourceMutex.lock();
+    RefObject::refMutex().lock();
     ThreadedSourcePrivate* tmp = m_thread;
     m_thread = 0;
     if (tmp) {
-	tmp->m_source = 0;
-	delete tmp;
+	if (tmp->m_source == this)
+	    tmp->m_source = 0;
+	else
+	    tmp = 0;
     }
-    s_sourceMutex.unlock();
+    RefObject::refMutex().unlock();
+    if (tmp)
+	delete tmp;
 }
 
 void ThreadedSource::cleanup()
 {
-    if (m_asyncDelete && !alive())
-	DataSource::zeroRefs();
+    Lock lock(RefObject::refMutex());
+    m_thread = 0;
+    if (m_asyncDelete && !alive()) {
+	lock.drop();
+	zeroRefs();
+    }
 }
 
-void ThreadedSource::zeroRefs()
+bool ThreadedSource::zeroRefsTest()
 {
     // let the data thread destroy us if possible
-    if (m_asyncDelete && m_thread && m_thread->running())
-	return;
-    DataSource::zeroRefs();
+    if (m_asyncDelete && m_thread && m_thread->running()) {
+	m_thread = 0;
+	return false;
+    }
+    // if async not possible make sure we are set up for synchronous destruction
+    m_asyncDelete = false;
+    return DataSource::zeroRefsTest();
 }
 
 Thread* ThreadedSource::thread() const
@@ -995,6 +1008,7 @@ Thread* ThreadedSource::thread() const
 
 bool ThreadedSource::running() const
 {
+    Lock lock(RefObject::refMutex());
     return m_thread && m_thread->running();
 }
 

@@ -90,7 +90,7 @@ private:
 class ToneSource : public ThreadedSource
 {
 public:
-    virtual ~ToneSource();
+    virtual void destroyed();
     virtual void run();
     inline const String& name()
 	{ return m_name; }
@@ -438,17 +438,18 @@ ToneSource::ToneSource(const ToneDesc* tone)
     asyncDelete(true);
 }
 
-ToneSource::~ToneSource()
+void ToneSource::destroyed()
 {
-    Lock lock(__plugin);
-    Debug(&__plugin,DebugAll,"ToneSource::~ToneSource() [%p] total=%u stamp=%lu",this,m_total,timeStamp());
-    stop();
+    Debug(&__plugin,DebugAll,"ToneSource::destroyed() '%s' [%p] total=%u stamp=%lu",
+	m_name.c_str(),this,m_total,timeStamp());
+    ThreadedSource::destroyed();
     if (m_time)
 	Debug(&__plugin,DebugInfo,"ToneSource rate=%u b/s",byteRate(m_time,m_total));
 }
 
 void ToneSource::zeroRefs()
 {
+    Debug(&__plugin,DebugAll,"ToneSource::zeroRefs() '%s' [%p]",m_name.c_str(),this);
     __plugin.lock();
     tones.remove(this,false);
     __plugin.unlock();
@@ -530,10 +531,8 @@ ToneSource* ToneSource::getTone(String& tone)
     ObjList* l = &tones;
     for (; l; l = l->next()) {
 	ToneSource* t = static_cast<ToneSource*>(l->get());
-	if (t && (t->name() == tone)) {
-	    t->ref();
+	if (t && (t->name() == tone) && t->ref())
 	    return t;
-	}
     }
     ToneSource* t = new ToneSource(td);
     tones.append(t);

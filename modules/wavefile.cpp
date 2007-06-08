@@ -40,6 +40,7 @@ public:
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
+    virtual bool zeroRefsTest();
     void setNotify(const String& id);
     bool derefReady();
 private:
@@ -62,6 +63,7 @@ private:
     bool m_autoclose;
     bool m_autoclean;
     bool m_nodata;
+    bool m_insert;
     volatile bool m_derefOk;
 };
 
@@ -218,9 +220,11 @@ void WaveSource::init(const String& file, bool autorepeat)
 WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
     : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
-      m_nodata(false), m_derefOk(true)
+      m_nodata(false), m_insert(false), m_derefOk(true)
 {
     Debug(&__plugin,DebugAll,"WaveSource::WaveSource(\"%s\",%p) [%p]",file,chan,this);
+    if (m_chan)
+	m_insert = true;
 }
 
 WaveSource::~WaveSource()
@@ -371,9 +375,6 @@ void WaveSource::run()
 	    Thread::usleep((unsigned long)dly);
 	}
 	if (!alive()) {
-	    m_autoclose = false;
-	    // if this is a zombie it surely has no owner anymore
-	    m_chan = 0;
 	    notify(0,"replaced");
 	    return;
 	}
@@ -383,20 +384,30 @@ void WaveSource::run()
 	tpos += (r*(u_int64_t)1000000/m_brate);
     } while (r > 0);
     Debug(&__plugin,DebugAll,"WaveSource '%s' end of data (%u played) chan=%p [%p]",m_id.c_str(),m_total,m_chan,this);
+    if (!ref()) {
+	notify(0,"replaced");
+	return;
+    }
     // prevent disconnector thread from succeeding before notify returns
     m_derefOk = false;
     // at cleanup time deref the data source if we start no disconnector thread
-    m_derefOk = m_autoclean = !notify(this,"eof");
+    m_autoclean = !notify(this,"eof");
+    if (!deref())
+	m_derefOk = m_autoclean;
 }
 
 void WaveSource::cleanup()
 {
-    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, alive=%s, autoclean=%s [%p]",
-	m_total,String::boolText(alive()),String::boolText(m_autoclean),this);
+    Lock lock(DataEndpoint::commonMutex());
+    Debug(&__plugin,DebugAll,"WaveSource cleanup, total=%u, alive=%s, autoclean=%s chan=%p [%p]",
+	m_total,String::boolText(alive()),String::boolText(m_autoclean),m_chan,this);
+    clearThread();
     if (m_autoclean) {
 	asyncDelete(false);
-	if (m_chan && (m_chan->getSource() == this))
-	    m_chan->setSource();
+	if (m_insert) {
+	    if (m_chan && (m_chan->getSource() == this))
+		m_chan->setSource();
+	}
 	else
 	    deref();
 	return;
@@ -405,6 +416,21 @@ void WaveSource::cleanup()
 	ThreadedSource::cleanup();
     else
 	m_derefOk = true;
+}
+
+bool WaveSource::zeroRefsTest()
+{
+    DDebug(&__plugin,DebugAll,"WaveSource::zeroRefsTest() chan=%p%s%s%s [%p]",
+	m_chan,
+	(thread() ? " thread" : ""),
+	(m_autoclose ? " close" : ""),
+	(m_autoclean ? " clean" : ""),
+	this);
+    // since this is a zombie it has no owner anymore and needs no removal
+    m_chan = 0;
+    m_autoclose = false;
+    m_autoclean = false;
+    return ThreadedSource::zeroRefsTest();
 }
 
 void WaveSource::setNotify(const String& id)
@@ -440,8 +466,8 @@ bool WaveSource::notify(WaveSource* source, const char* reason)
 	return false;
     }
     if (m_id || m_autoclose) {
-	DDebug(&__plugin,DebugInfo,"Preparing '%s' disconnector for '%s' chan '%s' source=%p [%p]",
-	    reason,m_id.c_str(),(m_chan ? m_chan->id().c_str() : ""),source,this);
+	DDebug(&__plugin,DebugInfo,"Preparing '%s' disconnector for '%s' chan %p '%s' source=%p [%p]",
+	    reason,m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),source,this);
 	Disconnector *disc = new Disconnector(m_chan,m_id,source,m_autoclose,reason);
 	return disc->init();
     }
@@ -612,8 +638,8 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 		m_fd = -1;
 	    }
 	    if (m_chan) {
-		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan '%s' in consumer [%p]",
-		    m_id.c_str(),(m_chan ? m_chan->id().c_str() : ""),this);
+		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",
+		    m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),this);
 		Disconnector *disc = new Disconnector(m_chan,m_id,0,false,"maxlen");
 		m_chan = 0;
 		disc->init();
@@ -629,19 +655,20 @@ Disconnector::Disconnector(CallEndpoint* chan, const String& id, WaveSource* sou
 {
     if (id) {
 	Message* m = new Message("chan.notify");
-	if (chan)
-	    m->addParam("id",chan->id());
+	if (m_chan)
+	    m->addParam("id",m_chan->id());
 	m->addParam("targetid",id);
 	if (reason)
 	    m->addParam("reason",reason);
-	m->userData(chan);
+	m->userData(m_chan);
 	m_msg = m;
     }
     if (source) {
 	if (source->ref())
 	    m_source = source;
 	else {
-	    Debug(&__plugin,DebugGoOn,"Disconnecting dead source %p",source);
+	    Debug(&__plugin,DebugGoOn,"Disconnecting dead source %p, reason: '%s'",
+		source,reason);
 	    m_chan = 0;
 	}
     }
@@ -667,8 +694,8 @@ bool Disconnector::init()
 
 void Disconnector::run()
 {
-    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p source=%s disc=%s [%p]",
-	(void*)m_chan,m_msg,String::boolText(m_source),String::boolText(m_disc),this);
+    DDebug(&__plugin,DebugAll,"Disconnector::run() chan=%p msg=%p source=%p disc=%s [%p]",
+	(void*)m_chan,m_msg,m_source,String::boolText(m_disc),this);
     if (!m_chan)
 	return;
     if (m_source) {

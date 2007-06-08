@@ -73,7 +73,7 @@ CallEndpoint::CallEndpoint(const char* id)
 {
 }
 
-CallEndpoint::~CallEndpoint()
+void CallEndpoint::destroyed()
 {
 #ifdef DEBUG
     ObjList* l = m_data.skipNull();

@@ -366,9 +366,9 @@ public:
 	{ }
 
     /**
-     * Consumer's destructor - complains loudly if still attached to a source
+     * Destruct notification - complains loudly if still attached to a source
      */
-    virtual ~DataConsumer();
+    virtual void destroyed();
 
     /**
      * Get a pointer to a derived class given that class name
@@ -438,9 +438,9 @@ public:
 	: DataNode(format), m_nextStamp(invalidStamp()), m_translator(0) { }
 
     /**
-     * Source's destructor - detaches all consumers
+     * Source's destruct notification - detaches all consumers
      */
-    virtual ~DataSource();
+    virtual void destroyed();
 
     /**
      * Get a pointer to a derived class given that class name
@@ -522,9 +522,9 @@ class YATE_API ThreadedSource : public DataSource
     friend class ThreadedSourcePrivate;
 public:
     /**
-     * The destructor, stops the thread
+     * The destruction notification, stops the thread
      */
-    virtual ~ThreadedSource();
+    virtual void destroyed();
 
     /**
      * Starts the worker thread
@@ -574,6 +574,12 @@ protected:
 	{ m_asyncDelete = async; }
 
     /**
+     * Clear the worker thread pointer
+     */
+    inline void clearThread()
+	{ m_thread = 0; }
+
+    /**
      * The worker method. You have to reimplement it as you need
      */
     virtual void run() = 0;
@@ -587,8 +593,9 @@ protected:
     /**
      * Override so destruction can be delayed after all references were lost
      *  to let the data pumping thread end normally
+     * @return True to delete the source right away, false to defer
      */
-    virtual void zeroRefs();
+    virtual bool zeroRefsTest();
 
 private:
     ThreadedSourcePrivate* m_thread;
@@ -851,9 +858,9 @@ public:
     DataEndpoint(CallEndpoint* call = 0, const char* name = "audio");
 
     /**
-     * Destroys the endpoint, source and consumer
+     * Endpoint destruct notification, clears source and consumer
      */
-    ~DataEndpoint();
+    virtual void destroyed();
 
     /**
      * Get a pointer to a derived class given that class name
@@ -1033,9 +1040,9 @@ protected:
 
 public:
     /**
-     * Destructor
+     * Destruct notification, performs cleanups
      */
-    virtual ~CallEndpoint();
+    virtual void destroyed();
 
     /**
      * Get a pointer to a derived class given that class name

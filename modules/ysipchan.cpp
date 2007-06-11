@@ -1359,6 +1359,8 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	    t->setResponse(481);
     }
     else if (t->getMethod() == "INFO") {
+	if (!t->initialMessage()->body)
+	    return generic(e,t);
 	YateSIPConnection* conn = plugin.findCall(t->getCallID(),true);
 	if (conn) {
 	    conn->doInfo(t);
@@ -1546,7 +1548,10 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     String meth(t->getMethod());
     meth.toLower();
     String user;
-    if (s_cfg.getBoolValue("methods",meth,true)) {
+    const String* auth = s_cfg.getKey("methods",meth);
+    if (!auth)
+	return false;
+    if (auth->toBoolean(true)) {
 	int age = t->authUser(user);
 	DDebug(&plugin,DebugAll,"User '%s' age %d",user.c_str(),age);
 	if ((age < 0) || (age > 10)) {
@@ -1577,8 +1582,20 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*message);
 
+    int code = 0;
     if (Engine::dispatch(m)) {
-	t->setResponse(m.getIntValue("code",200));
+	const String* ret = m.getParam("code");
+	if (!ret)
+	    ret = &m.retValue();
+	code = ret->toInteger(200);
+    }
+    else {
+	code = m.getIntValue("code",0);
+	if (code < 300)
+	    code = 0;
+    }
+    if ((code >= 200) && (code < 700)) {
+	t->setResponse(code);
 	return true;
     }
     return false;

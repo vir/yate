@@ -553,8 +553,14 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
     if (m_call) {
 	m_call->userdata(this);
 	SignallingCircuit* cic = getCircuit();
-	if (cic)
+	if (cic) {
 	    m_address << m_link->name() << "/" << cic->code();
+	    // Set echo cancel for Zaptel circuits
+	    if (cic->getObject("ZapCircuit") && msg.getBoolValue("cancelecho")) {
+		String value = 1;
+		cic->setParam("echotaps",value);
+	    }
+	}
 	setMaxcall(msg);
     }
     else
@@ -642,6 +648,12 @@ bool SigChannel::msgAnswered(Message& msg)
     if (!m_call)
 	return true;
     updateSource(0,false);
+    // Start echo training for Zaptel circuits
+    SignallingCircuit* cic = getCircuit();
+    if (cic && cic->getObject("ZapCircuit")) {
+	String value;
+	cic->setParam("echotrain",value);
+    }
     const char* format = msg.getValue("format");
     SignallingMessage* sm = 0;
     if (updateConsumer(format,false) && format) {

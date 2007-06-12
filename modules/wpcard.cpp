@@ -293,10 +293,6 @@ public:
     // Sent data from each circuit is merged into one data block
     void run();
 protected:
-    // Process a list of circuits to create. Update m_count
-    // Validate each circuit number to be positive and lesser or equal to m_chans
-    // Return the codes of the circuits or 0 on error
-    unsigned int* processCicList(const String& cicList);
     // Create circuits (all or nothing)
     // delta: number to add to each circuit code
     // cicList: Circuits to create
@@ -1131,72 +1127,12 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
     return true;
 }
 
-// Process a list of circuits to create. Update m_count
-// Validate each circuit number to be positive and lesser or equal to m_chans
-// Return the codes of the circuits or 0 on error
-// List may be separated by '.' or ',' and may contain code intervals
-unsigned int* WpData::processCicList(const String& cicList)
-{
-    ObjList* listSplit = 0;
-    char separator = (-1 != cicList.find(',')) ? ',' : '.';
-    listSplit = cicList.split(separator,false);
-    if (!listSplit->count()) {
-	TelEngine::destruct(listSplit);
-	return 0;
-    }
-    // Split the intervals into single code elements
-    unsigned int* cicCodes = new unsigned int[m_chans];
-    bool ok = true;
-    ObjList* o = listSplit->skipNull();
-    for (; o; o = o->skipNext()) {
-	String* s = static_cast<String*>(o->get());
-	if (s->null())
-	    continue;
-	// Check for interval
-	int sep = s->find('-');
-	int first = -1, last = -2;
-	if (sep == -1)
-	    first = last = s->toInteger(-1);
-	else {
-	    String tmp = s->substr(0,sep);
-	    first = tmp.toInteger(-1);
-	    tmp = s->substr(sep + 1);
-	    last = tmp.toInteger(-2);
-	}
-	// Check for valid interval and codes
-	// The interval must be [1..m_chans]
-	if (first <= 0 || last <= 0 || last < first || (unsigned int)last > m_chans) {
-	    ok = false;
-	    break;
-	}
-	// Add to circuit code list
-	for (; first <= last; first++) {
-	    if (m_count == m_chans) {
-		ok = false;
-		break;
-	    }
-	    cicCodes[m_count++] = (unsigned int)first;
-	}
-	if (!ok)
-	    break;
-    }
-    TelEngine::destruct(listSplit);
-    if (ok && m_count)
-	return cicCodes;
-    delete[] cicCodes;
-    m_count = 0;
-    return 0;
-}
-
 // Create circuits (all or nothing)
 // delta: number to add to each circuit code
 // cicList: Circuits to create
 bool WpData::createCircuits(unsigned int delta, const String& cicList)
 {
-    if (!m_group)
-	return false;
-    // Get list. Count them
-    unsigned int* cicCodes = processCicList(cicList);
+    unsigned int* cicCodes = SignallingUtils::parseUIntArray(cicList,1,m_chans,m_count,true);
     if (!cicCodes)
 	return false;
     if (m_circuits)

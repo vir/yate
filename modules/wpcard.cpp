@@ -64,7 +64,7 @@ extern "C" {
 
 #define MAX_PACKET 1200
 
-#define MAX_READ_ERRORS 250              // WpData::run(): Display read error message
+#define MAX_READ_ERRORS 250              // WpSpan::run(): Display read error message
 #define WPSOCKET_SELECT_TIMEOUT 125      // Value used in WpSocket::select() to timeout
 
 using namespace TelEngine;
@@ -77,8 +77,8 @@ class WpSigThread;                       // D-channel read data
 class WpSource;                          // Data source
 class WpConsumer;                        // Data consumer
 class WpCircuit;                         // Single Wanpipe B-channel (SignallingCircuit)
-class WpData;                            // Wanpipe span B-channel group
-class WpDataThread;                      // B-channel group read/write data
+class WpSpan;                            // Wanpipe span B-channel group
+class WpSpanThread;                      // B-channel group read/write data
 
 static const char* s_driverName = "Wanpipe";
 
@@ -111,7 +111,7 @@ private:
     unsigned int m_tail;
 };
 
-// I/O socket for WpInterface and WpData
+// I/O socket for WpInterface and WpSpan
 class WpSocket
 {
 public:
@@ -170,7 +170,7 @@ class WpInterface : public SignallingInterface
 {
     friend class WpSigThread;
 public:
-    // Create an instance of WpInterface or WpData
+    // Create an instance of WpInterface or WpSpan
     static void* create(const String& type, const NamedList& name);
     WpInterface(const NamedList& params);
     virtual ~WpInterface();
@@ -257,7 +257,7 @@ protected:
 class WpCircuit : public SignallingCircuit
 {
 public:
-    WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data,
+    WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
 	unsigned int buflen);
     virtual ~WpCircuit();
     virtual bool status(Status newStat, bool sync = false);
@@ -276,12 +276,12 @@ private:
 };
 
 // Wanpipe B-channel group
-class WpData : public SignallingCircuitSpan
+class WpSpan : public SignallingCircuitSpan
 {
-    friend class WpDataThread;
+    friend class WpSpanThread;
 public:
-    WpData(const NamedList& params);
-    virtual ~WpData();
+    WpSpan(const NamedList& params);
+    virtual ~WpSpan();
     // Initialize data channel span. Return false on failure
     bool init(const NamedList& config, const NamedList& defaults, NamedList& params);
     // Swap data if necessary
@@ -308,7 +308,7 @@ protected:
     static unsigned char s_bitswap[256];
 private:
     WpSocket m_socket;
-    WpDataThread* m_thread;
+    WpSpanThread* m_thread;
     bool m_canSend;                      // Can send data (not a readonly span)
     bool m_swap;                         // Swap bits flag
     unsigned int m_chans;                // Total number of circuits for this span
@@ -325,17 +325,17 @@ private:
 };
 
 // B-channel group read/write data
-class WpDataThread : public Thread
+class WpSpanThread : public Thread
 {
-    friend class WpData;
+    friend class WpSpan;
 public:
-    inline WpDataThread(WpData* data, Priority prio = Normal)
-	: Thread("WpDataThread",prio), m_data(data)
+    inline WpSpanThread(WpSpan* data, Priority prio = Normal)
+	: Thread("WpSpanThread",prio), m_data(data)
 	{}
-    virtual ~WpDataThread();
+    virtual ~WpSpanThread();
     virtual void run();
 private:
-    WpData* m_data;
+    WpSpan* m_data;
 };
 
 
@@ -485,7 +485,7 @@ bool WpSocket::select(unsigned int multiplier)
 /**
  * WpInterface
  */
-// Create WpInterface or WpData
+// Create WpInterface or WpSpan
 void* WpInterface::create(const String& type, const NamedList& name)
 {
     bool interface = false;
@@ -515,7 +515,7 @@ void* WpInterface::create(const String& type, const NamedList& name)
     }
     NamedList* general = cfg.getSection("general");
     NamedList dummy("general");
-    WpData* data = new WpData(name);
+    WpSpan* data = new WpSpan(name);
     if (data->init(*config,general?*general:dummy,(NamedList&)name))
 	return data;
     TelEngine::destruct(data);
@@ -837,7 +837,7 @@ void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 /**
  * WpCircuit
  */
-WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpData* data,
+WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
 	unsigned int buflen)
     : SignallingCircuit(TDM,code,Idle,group,data),
     m_mutex(true),
@@ -983,9 +983,9 @@ void* WpCircuit::getObject(const String& name) const
 }
 
 /**
- * WpData
+ * WpSpan
  */
-unsigned char WpData::s_bitswap[256] = {
+unsigned char WpSpan::s_bitswap[256] = {
 	0x00,0x80,0x40,0xc0,0x20,0xa0,0x60,0xe0,0x10,0x90,0x50,0xd0,0x30,0xb0,0x70,0xf0,0x08,0x88,0x48,0xc8,
 	0x28,0xa8,0x68,0xe8,0x18,0x98,0x58,0xd8,0x38,0xb8,0x78,0xf8,0x04,0x84,0x44,0xc4,0x24,0xa4,0x64,0xe4,
 	0x14,0x94,0x54,0xd4,0x34,0xb4,0x74,0xf4,0x0c,0x8c,0x4c,0xcc,0x2c,0xac,0x6c,0xec,0x1c,0x9c,0x5c,0xdc,
@@ -1003,7 +1003,7 @@ unsigned char WpData::s_bitswap[256] = {
 
 // Initialize B-channel group
 // Create circuits. Start worker thread
-WpData::WpData(const NamedList& params)
+WpSpan::WpSpan(const NamedList& params)
     : SignallingCircuitSpan(params.getValue("debugname"),
 	static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
     m_socket(m_group),
@@ -1021,12 +1021,12 @@ WpData::WpData(const NamedList& params)
     m_buffer(0),
     m_bufferLen(0)
 {
-    XDebug(m_group,DebugAll,"WpData::WpData(). Name '%s' [%p]",id().safe(),this);
+    XDebug(m_group,DebugAll,"WpSpan::WpSpan(). Name '%s' [%p]",id().safe(),this);
 }
 
 // Terminate worker thread
 // Close socket. Clear circuit list
-WpData::~WpData()
+WpSpan::~WpSpan()
 {
     if (m_thread) {
 	m_thread->cancel();
@@ -1038,14 +1038,14 @@ WpData::~WpData()
 	delete[] m_circuits;
     if (m_buffer)
 	delete[] m_buffer;
-    XDebug(m_group,DebugAll,"WpData::~WpData() [%p]",this);
+    XDebug(m_group,DebugAll,"WpSpan::~WpSpan() [%p]",this);
 }
 
 // Initialize
-bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList& params)
+bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList& params)
 {
     if (!m_group) {
-	Debug(DebugNote,"WpData('%s'). Circuit group is missing [%p]",
+	Debug(DebugNote,"WpSpan('%s'). Circuit group is missing [%p]",
 	    id().safe(),this);
 	return false;
     }
@@ -1053,7 +1053,7 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
     m_socket.card(config);
     const char* voice = params.getValue("voicegroup",config.getValue("voicegroup"));
     if (!voice) {
-	Debug(m_group,DebugNote,"WpData('%s'). Missing or invalid voice group [%p]",
+	Debug(m_group,DebugNote,"WpSpan('%s'). Missing or invalid voice group [%p]",
 	    id().safe(),this);
 	return false;
     }
@@ -1080,7 +1080,7 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
 	    m_samples = 64;
     }
     else {
-	Debug(m_group,DebugNote,"WpData('%s'). Invalid voice group type '%s' [%p]",
+	Debug(m_group,DebugNote,"WpSpan('%s'). Invalid voice group type '%s' [%p]",
 	    id().safe(),type.safe(),this);
 	return false;
     }
@@ -1098,14 +1098,14 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
     // Channels
     if (!createCircuits(params.getIntValue("start"),cics)) {
 	Debug(m_group,DebugNote,
-	    "WpData('%s'). Failed to create voice chans (voicechans=%s) [%p]",
+	    "WpSpan('%s'). Failed to create voice chans (voicechans=%s) [%p]",
 	    id().safe(),cics.safe(),this);
 	return false;
     }
     // Start processing data
-    m_thread = new WpDataThread(this);
+    m_thread = new WpSpanThread(this);
     if (!m_thread->startup()) {
-	Debug(m_group,DebugNote,"WpData('%s'). Failed to start worker thread [%p]",
+	Debug(m_group,DebugNote,"WpSpan('%s'). Failed to start worker thread [%p]",
 	    id().safe(),this);
 	return false;
     }
@@ -1121,7 +1121,7 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
 	s << "\r\nBuffer length:  " << (unsigned int)m_buflen;
 	s << "\r\nUsed channels:  " << m_count;
 	s << "\r\nRead only:      " << String::boolText(!m_canSend);
-	Debug(m_group,DebugInfo,"WpData('%s'). Initialized: [%p]%s",
+	Debug(m_group,DebugInfo,"WpSpan('%s'). Initialized: [%p]%s",
 	    id().safe(),this,s.c_str());
     }
     return true;
@@ -1130,7 +1130,7 @@ bool WpData::init(const NamedList& config, const NamedList& defaults, NamedList&
 // Create circuits (all or nothing)
 // delta: number to add to each circuit code
 // cicList: Circuits to create
-bool WpData::createCircuits(unsigned int delta, const String& cicList)
+bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
 {
     unsigned int* cicCodes = SignallingUtils::parseUIntArray(cicList,1,m_chans,m_count,true);
     if (!cicCodes)
@@ -1145,7 +1145,7 @@ bool WpData::createCircuits(unsigned int delta, const String& cicList)
 	    continue;
 	// Failure
 	Debug(m_group,DebugNote,
-	    "WpData('%s'). Failed to create/insert circuit %u. Rollback [%p]",
+	    "WpSpan('%s'). Failed to create/insert circuit %u. Rollback [%p]",
 	    id().safe(),cicCodes[i],this);
 	m_group->removeSpan(this,true,false);
 	delete[] m_circuits;
@@ -1160,7 +1160,7 @@ bool WpData::createCircuits(unsigned int delta, const String& cicList)
 // Read events and data from socket. Send data when succesfully read
 // Received data is splitted for each circuit
 // Sent data from each circuit is merged into one data block
-void WpData::run()
+void WpSpan::run()
 {
     if (!m_socket.open(true))
 	return;
@@ -1169,7 +1169,7 @@ void WpData::run()
 	m_buffer = new unsigned char[m_bufferLen];
     }
     XDebug(m_group,DebugInfo,
-	"WpData('%s'). Running: circuits=%u, buffer=%u, samples=%u [%p]",
+	"WpSpan('%s'). Running: circuits=%u, buffer=%u, samples=%u [%p]",
 	id().safe(),m_count,m_bufferLen,m_samples,this);
     while (true) {
 	if (Thread::check(true))
@@ -1190,13 +1190,13 @@ void WpData::run()
 	    samples = (unsigned int)r / m_count;
 	if (!samples) {
 	    Debug(m_group,DebugNote,
-		"WpData('%s'). Received data %d is not a multiple of circuit number %u [%p]",
+		"WpSpan('%s'). Received data %d is not a multiple of circuit number %u [%p]",
 		id().safe(),r,m_count,this);
 	    continue;
 	}
 	if (samples != m_samples)
 	    Debug(m_group,DebugInfo,
-		"WpData('%s'). Received %u samples. Expected %u [%p]",
+		"WpSpan('%s'). Received %u samples. Expected %u [%p]",
 		id().safe(),samples,m_samples,this);
 	unsigned char* dat = m_buffer + WP_HEADER;
 	if (m_canSend) {
@@ -1223,9 +1223,9 @@ void WpData::run()
 }
 
 // Check for received event (including in-band events)
-bool WpData::readEvent()
+bool WpSpan::readEvent()
 {
-    XDebug(m_group,DebugInfo,"WpData('%s'). Got event. Checking OOB [%p]",
+    XDebug(m_group,DebugInfo,"WpSpan('%s'). Got event. Checking OOB [%p]",
 	id().safe(),this);
     int r = m_socket.recv(m_buffer,m_bufferLen,MSG_OOB);
     if (r >= WP_HEADER)
@@ -1235,7 +1235,7 @@ bool WpData::readEvent()
 
 // Read data from socket. Check for errors or in-band events
 // Return -1 on error
-int WpData::readData()
+int WpSpan::readData()
 {
     m_buffer[WP_RD_ERROR] = 0;
     int r = m_socket.recv(m_buffer,m_bufferLen);
@@ -1243,14 +1243,14 @@ int WpData::readData()
     if (r == -1)
 	return -1;
     if (r < WP_HEADER) {
-	Debug(m_group,DebugGoOn,"WpData('%s'). Short read %u byte(s) [%p]",
+	Debug(m_group,DebugGoOn,"WpSpan('%s'). Short read %u byte(s) [%p]",
 	    id().safe(),r,this);
 	return -1;
     }
     if (m_buffer[WP_RD_ERROR]) {
 	m_readErrors++;
 	if (m_readErrors == MAX_READ_ERRORS) {
-	    Debug(m_group,DebugGoOn,"WpData('%s'). Read error %u [%p]",
+	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error %u [%p]",
 		id().safe(),m_buffer[WP_RD_ERROR],this);
 	    m_readErrors = 0;
 	}
@@ -1262,7 +1262,7 @@ int WpData::readData()
     return r;
 }
 
-bool WpData::decodeEvent()
+bool WpSpan::decodeEvent()
 {
     return false;
 #if 0
@@ -1284,19 +1284,19 @@ bool WpData::decodeEvent()
 }
 
 /**
- * WpDataThread
+ * WpSpanThread
  */
-WpDataThread::~WpDataThread()
+WpSpanThread::~WpSpanThread()
 {
     if (m_data) {
-	DDebug(m_data->group(),DebugAll,"WpDataThread::~WpDataThread() [%p]",this);
+	DDebug(m_data->group(),DebugAll,"WpSpanThread::~WpSpanThread() [%p]",this);
 	m_data->m_thread = 0;
     }
     else
-	DDebug(DebugAll,"WpDataThread::~WpDataThread() [%p]",this);
+	DDebug(DebugAll,"WpSpanThread::~WpSpanThread() [%p]",this);
 }
 
-void WpDataThread::run()
+void WpSpanThread::run()
 {
     if (m_data) {
 	DDebug(m_data->group(),DebugAll,"%s start running for (%p): '%s' [%p]",
@@ -1304,7 +1304,7 @@ void WpDataThread::run()
 	m_data->run();
     }
     else
-	DDebug(DebugAll,"WpDataThread::run(). No client object [%p]",this);
+	DDebug(DebugAll,"WpSpanThread::run(). No client object [%p]",this);
 }
 
 }; // anonymous namespace

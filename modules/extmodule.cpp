@@ -250,7 +250,7 @@ private:
 class ExtModHandler : public MessageHandler
 {
 public:
-    ExtModHandler(const char *name) : MessageHandler(name) { }
+    ExtModHandler(const char *name, unsigned prio) : MessageHandler(name,prio) { }
     virtual bool received(Message &msg);
 };
 
@@ -1502,7 +1502,7 @@ void ExtModulePlugin::initialize()
     s_timeout = s_cfg.getIntValue("general","timeout",MSG_TIMEOUT);
     s_timebomb = s_cfg.getBoolValue("general","timebomb",false);
     if (!m_handler) {
-	m_handler = new ExtModHandler("call.execute");
+	m_handler = new ExtModHandler("call.execute",s_cfg.getIntValue("general","priority",100));
 	Engine::install(m_handler);
 	Engine::install(new ExtModCommand("engine.command"));
 	NamedList *sect = 0;

@@ -7,6 +7,9 @@
 ; Uncomment the following line when running in the sources directory
 ;scripts_dir=scripts/
 
+; priority: int: Priority of the call.execute handler
+;priority=100
+
 ; timeout: int: How many milliseconds to wait for a module to answer
 ;timeout=10000
 

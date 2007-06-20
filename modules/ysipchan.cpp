@@ -679,15 +679,20 @@ static bool isNatBetween(const String& embAddr, const String& netAddr)
     return isPrivateAddr(embAddr) && !isPrivateAddr(netAddr);
 }
 
-// List of critical headers we don't want to handle generically
-static const char* rejectHeaders[] = {
+// List of headers we may not want to handle generically
+static const char* s_filterHeaders[] = {
+    "from",
+    "to",
+    0
+};
+
+// List of critical headers we surely don't want to handle generically
+static const char* s_rejectHeaders[] = {
     "via",
     "route",
     "record-route",
     "call-id",
     "cseq",
-    "from",
-    "to",
     "max-forwards",
     "content-length",
     "www-authenticate",
@@ -697,19 +702,26 @@ static const char* rejectHeaders[] = {
     0
 };
 
+// Check if a string matches one member of a static list
+static bool matchAny(const String& name, const char** strs)
+{
+    for (; *strs; strs++)
+	if (name == *strs)
+	    return true;
+    return false;
+}
+
 // Copy headers from SIP message to Yate message
-static void copySipHeaders(Message& msg, const SIPMessage& sip)
+static void copySipHeaders(Message& msg, const SIPMessage& sip, bool filter = true)
 {
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
 	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
 	String name(t->name());
 	name.toLower();
-	const char** hdr = rejectHeaders;
-	for (; *hdr; hdr++)
-	    if (name == *hdr)
-		break;
-	if (*hdr)
+	if (matchAny(name,s_rejectHeaders))
+	    continue;
+	if (filter && matchAny(name,s_filterHeaders))
 	    continue;
 	String tmp(*t);
 	const ObjList* p = t->params().skipNull();
@@ -1580,17 +1592,17 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     // establish the dialog here so user code will have the dialog tag handy
     t->setDialogTag();
     m.addParam("xsip_dlgtag",t->getDialogTag());
-    copySipHeaders(m,*message);
+    copySipHeaders(m,*message,false);
 
     int code = 0;
     if (Engine::dispatch(m)) {
 	const String* ret = m.getParam("code");
 	if (!ret)
 	    ret = &m.retValue();
-	code = ret->toInteger(200);
+	code = ret->toInteger(m.getIntValue("reason",dict_errors,200));
     }
     else {
-	code = m.getIntValue("code",0);
+	code = m.getIntValue("code",m.getIntValue("reason",dict_errors,0));
 	if (code < 300)
 	    code = 0;
     }

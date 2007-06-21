@@ -105,7 +105,7 @@ int Message::decode(const char* str, String& id)
 	return sep-str;
     id.assign(str+s.length(),(sep-str)-s.length());
     int err = -1;
-    id = id.msgUnescape(&err,':');
+    id = id.msgUnescape(&err);
     if (err >= 0)
 	return err+s.length();
     String t(sep+1,sep2-sep-1);
@@ -154,7 +154,7 @@ int Message::commonDecode(const char* str, int offs)
 	return offs;
     String chunk(str,sep-str);
     int err = -1;
-    chunk = chunk.msgUnescape(&err,':');
+    chunk = chunk.msgUnescape(&err);
     if (err >= 0)
 	return offs+err;
     if (!chunk.null())
@@ -167,7 +167,7 @@ int Message::commonDecode(const char* str, int offs)
 	chunk.assign(str,sep-str);
     else
 	chunk.assign(str);
-    chunk = chunk.msgUnescape(&err,':');
+    chunk = chunk.msgUnescape(&err);
     if (err >= 0)
 	return offs+err;
     m_return = chunk;
@@ -182,7 +182,7 @@ int Message::commonDecode(const char* str, int offs)
 	    chunk.assign(str);
 	if (chunk.null())
 	    continue;
-	chunk = chunk.msgUnescape(&err,':');
+	chunk = chunk.msgUnescape(&err);
 	if (err >= 0)
 	    return offs+err;
 	int pos = chunk.find('=');

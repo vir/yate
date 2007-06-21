@@ -910,7 +910,7 @@ String String::msgUnescape(const char* str, int* errptr, char extraEsc)
 	}
 	else if (c == '%') {
 	    c=*pos++;
-	    if ((c > '@' && c <= '_') || c == extraEsc)
+	    if ((c > '@' && c <= '_') || c == 'z' || c == extraEsc)
 		c -= '@';
 	    else if (c != '%') {
 		if (errptr)

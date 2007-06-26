@@ -6,7 +6,7 @@
    To test add in extmodule.conf
 
    [scripts]
-   sippbx.php=
+   sipfeatures.php=
 */
 require_once("libyate.php");
 require_once("libvoicemail.php");
@@ -187,6 +187,8 @@ class DialogSub extends Subscription {
 		    case "answered":
 			$st = "confirmed";
 			break;
+		    case "incoming":
+		    case "outgoing":
 		    case "calling":
 		    case "ringing":
 		    case "progressing":
@@ -219,8 +221,12 @@ class DialogSub extends Subscription {
 	$this->body = "<?xml version=\"1.0\"?>\r\n";
 	$this->body .= "<dialog-info xmlns=\"urn:ietf:params:xml:ns:dialog-info\" version=\"" . $this->version . "\" entity=\"" . $this->uri . "\" notify-state=\"full\">\r\n";
 	if ($id) {
-	    $this->body .= "  <dialog id=\"$id\"$dir>\r\n";
+	    $uri = ereg_replace("^.*<([^<>]+)>.*\$","\\1",$this->uri);
+	    $tag = $this->match;
+	    $tag = " call-id=\"$id\" local-tag=\"$tag\" remote-tag=\"$tag\"";
+	    $this->body .= "  <dialog id=\"$id\"$tag$dir>\r\n";
 	    $this->body .= "    <state>$st</state>\r\n";
+	    $this->body .= "    <remote><target uri=\"$uri\"/></remote>\r\n";
 	    $this->body .= "  </dialog>\r\n";
 	}
 	$this->body .= "</dialog-info>\r\n";

@@ -1607,7 +1607,10 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 	    code = 0;
     }
     if ((code >= 200) && (code < 700)) {
-	t->setResponse(code);
+	SIPMessage* resp = new SIPMessage(message,code);
+	copySipHeaders(*resp,m,"osip_");
+	t->setResponse(resp);
+	resp->deref();
 	return true;
     }
     return false;
@@ -2024,6 +2027,12 @@ void YateSIPConnection::hangup()
 		    String tmp;
 		    tmp << i->getCSeq() << " CANCEL";
 		    m->addHeader("CSeq",tmp);
+		    if (m_reason == "pickup") {
+			SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
+			hl->setParam("cause","200");
+			hl->setParam("text","\"Call completed elsewhere\"");
+			m->addHeader(hl);
+		    }
 		    plugin.ep()->engine()->addMessage(m);
 		}
 		m->deref();

@@ -78,6 +78,7 @@ private:
     String m_dir;
     String m_status;
     bool m_first;
+    bool m_write;
 };
 
 class Param : public String
@@ -133,6 +134,7 @@ static const char* const s_forbidden[] = {
     "duration",
     "billtime",
     "ringtime",
+    "cdrwrite",
     0
 };
 
@@ -157,7 +159,8 @@ static const char* printTime(char* buf,u_int64_t usec)
 }
 
 CdrBuilder::CdrBuilder(const char *name)
-    : NamedList(name), m_dir("unknown"), m_status("unknown"), m_first(true)
+    : NamedList(name), m_dir("unknown"), m_status("unknown"),
+      m_first(true), m_write(true)
 {
     m_start = m_call = m_ringing = m_answer = m_hangup = 0;
 }
@@ -213,6 +216,7 @@ void CdrBuilder::emit(const char *operation)
 	if (ext)
 	    m->setParam("external",ext);
     }
+    m->addParam("cdrwrite",String::boolText(m_write));
     unsigned int n = length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* s = getParam(i);
@@ -265,6 +269,9 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	s_cdrs.remove(this);
 	return true;
     }
+    // cdrwrite must be consistent over all emitted messages so we read it once
+    if (m_first)
+	m_write = msg.getBoolValue("cdrwrite",true);
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* s = msg.getParam(i);

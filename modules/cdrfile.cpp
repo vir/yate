@@ -70,6 +70,8 @@ bool CdrFileHandler::received(Message &msg)
     String op(msg.getValue("operation"));
     if (op != "finalize")
 	return false;
+    if (!msg.getBoolValue("cdrwrite",true))
+        return false;
 
     Lock lock(m_lock);
     if (m_file && m_format) {

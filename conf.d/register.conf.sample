@@ -142,3 +142,20 @@ querytimer=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts
 
 ; update account status after receiving an user.notify
 querystatus=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'
+
+
+[resource.subscribe]
+; Queries used for event subscribe and event state changes notification
+
+; query executed on subscribe requests to check authorisation and refresh a subscription
+subscribe_subscribe=SELECT * FROM subscriptions_subscribe('${notifier}','${event}','${subscriber}','${data}','${notifyto}',INTERVAL '${expires} s') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+
+; query executed on unsubscribe requests to check authorisation and remove a subscription
+subscribe_unsubscribe=SELECT * FROM subscriptions_unsubscribe('${notifier}','${event}','${subscriber}')
+
+; query executed when nedded to get all subscribers for a specified notifier's event
+subscribe_notify=SELECT * FROM subscriptions_notify('${notifier}','${event}') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+
+; query used to expire subscriptions
+subscribe_expire=SELECT * FROM subscriptions_expires() AS t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+

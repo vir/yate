@@ -58,7 +58,10 @@ URI::URI(const char* proto, const char* user, const char* host, int port, const 
     *this << m_proto << ":";
     if (user)
 	*this << m_user << "@";
-    *this << m_host;
+    if (m_host.find(':') >= 0)
+	*this << "[" << m_host < "]";
+    else
+	*this << m_host;
     if (m_port > 0)
 	*this << ":" << m_port;
     if (desc)
@@ -108,13 +111,15 @@ void URI::parse() const
     // We parse:
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
-    r = "^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\)\\(:[0-9]\\+\\)\\?";
+    r = "^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?";
     if (tmp.matches(r)) {
 	m_proto = tmp.matchString(1).toLower();
 	m_proto = m_proto.substr(0,m_proto.length()-1);
 	m_user = tmp.matchString(2);
 	m_user = m_user.substr(0,m_user.length()-1).uriUnescape();
 	m_host = tmp.matchString(3).uriUnescape().toLower();
+	if (m_host[0] == '[')
+	    m_host = m_host.substr(1,m_host.length()-2);
 	tmp = tmp.matchString(4);
 	tmp >> ":" >> m_port;
 	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",

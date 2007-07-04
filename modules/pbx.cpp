@@ -27,24 +27,38 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+// chan.connect handler used to connect two channels
 class ConnHandler : public MessageHandler
 {
 public:
-    ConnHandler()
-	: MessageHandler("chan.connect",90)
+    ConnHandler(int prio = 90)
+	: MessageHandler("chan.connect",prio)
 	{ }
     virtual bool received(Message &msg);
 };
-			
 
-class PbxPlugin : public Plugin
+// call.execute handler used to 'steal' a channel
+class ChanPickup : public MessageHandler
 {
 public:
-    PbxPlugin();
-    virtual ~PbxPlugin();
+    ChanPickup(int prio = 100)
+	: MessageHandler("call.execute",prio)
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class PbxModule : public Module
+{
+public:
+    PbxModule();
+    virtual ~PbxModule();
     virtual void initialize();
     bool m_first;
 };
+
+
+static PbxModule s_module;
+
 
 // Utility function to get a pointer to a call endpoint (or its peer) by id
 static CallEndpoint* locateChan(const String& id, bool peer = false)
@@ -72,26 +86,70 @@ bool ConnHandler::received(Message &msg)
 }
 
 
-PbxPlugin::PbxPlugin()
-    : Plugin("PBX"), m_first(true)
+// call.execute handler used to 'steal' a channel
+bool ChanPickup::received(Message& msg)
+{
+    String callto = msg.getValue("callto");
+    if (!(callto.startSkip("pickup/",false) && callto))
+	return false;
+
+    // It's ours. Get the channels
+    RefPointer<CallEndpoint> caller(static_cast<CallEndpoint*>(msg.userData()));
+    RefPointer<CallEndpoint> called(locateChan(callto,true));
+
+    if (!caller) {
+	Debug(&s_module,DebugNote,"No channel to pick up: callto='%s'",
+	    msg.getValue("callto"));
+	msg.setParam("error","failure");
+	return false;
+    }
+    if (!called) {
+	Debug(&s_module,DebugInfo,
+	    "Can't locate the peer for channel '%s' to pick up",callto.c_str());
+	msg.setParam("error","nocall");
+	return false;
+    }
+
+    // Connect parties and answer them
+    if (!called->connect(caller,msg.getValue("reason","pickup"))) {
+	Debug(&s_module,DebugNote,"Pick up failed to connect '%s' to '%s'",
+	    caller->id().c_str(),called->id().c_str());
+	return false;
+    }
+
+    Message* m = new Message("chan.masquerade");
+    m->addParam("id",caller->id());
+    m->addParam("message","call.answered");
+    Engine::enqueue(m);
+    m = new Message("chan.masquerade");
+    m->addParam("id",called->id());
+    m->addParam("message","call.answered");
+    Engine::enqueue(m);
+    return true;
+}
+
+
+PbxModule::PbxModule()
+    : Module("pbx","misc"), m_first(true)
 {
     Output("Loaded module PBX");
 }
 
-PbxPlugin::~PbxPlugin()
+PbxModule::~PbxModule()
 {
     Output("Unloading module PBX");
 }
 
-void PbxPlugin::initialize()
+void PbxModule::initialize()
 {
+    Output("Initializing module PBX");
     if (m_first) {
+	setup();
 	m_first = false;
 	Engine::install(new ConnHandler);
+	Engine::install(new ChanPickup);
     }
 }
-
-INIT_PLUGIN(PbxPlugin);
 
 }; // anonymous namespace
 

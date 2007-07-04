@@ -49,7 +49,11 @@ public:
 	Route,
 	Cdr,
 	Timer,
-	Init
+	Init,
+	DialogNotify,
+	MWINotify,
+	Subscribe,
+	SubscribeTimer	
     };
     AAAHandler(const char* hname, int type, int prio = 50);
     virtual ~AAAHandler();
@@ -81,6 +85,84 @@ protected:
     bool m_critical;
 };
 
+// Base class for event notification handlers
+class EventNotify : public AAAHandler
+{
+public:
+    EventNotify(const char* hname, int type, const char* event, int prio = 50);
+    virtual ~EventNotify() {}
+    virtual const String& name() const;
+    virtual bool loadQuery();
+protected:
+    // Fill account/query and dispatch the message
+    // Return the data array if valid or 0 if message dispatch fails or no data
+    Array* queryDatabase(Message& msg, const String& notifier, unsigned int& rows);
+    // Create a notify message, fill it with notifier, event, subscription data
+    // and additional parameters
+    Message* message(const String& notifier, Array& subscriptions,
+	unsigned int row, NamedList& params);
+    // Notify all subscribers returned from a database message
+    inline void notifyAll(const String& notifier, Array& subscriptions,
+	unsigned int rows, NamedList& params) {
+	    for (unsigned int row = 1; row <= rows; row++)
+		Engine::enqueue(message(notifier,subscriptions,row,params));
+	}
+
+    String m_name;                       // Section name for this handler
+    String m_event;                      // Event to notify
+    String m_querySubs;                  // Query used to get subscriptions
+};
+
+// call.cdr. Notify subscribers to 'dialog' event on call state changes
+class DialogNotify : public EventNotify
+{
+public:
+    inline DialogNotify(const char* hname, int prio = 50)
+	: EventNotify(hname,AAAHandler::DialogNotify,"dialog",prio)
+	{}
+    virtual bool received(Message& msg);
+};
+
+// user.notify. Notify subscribers to 'message-summary' event on user message status
+class MWINotify : public EventNotify
+{
+public:
+    inline MWINotify(const char* hname, int prio = 50)
+	: EventNotify(hname,AAAHandler::MWINotify,"message-summary",prio)
+	{}
+    virtual bool received(Message& msg);
+};
+
+class SubscribeHandler : public AAAHandler
+{
+public:
+    SubscribeHandler(const char* hname, int type, int prio = 50);
+    virtual ~SubscribeHandler();
+    virtual const String& name() const;
+    virtual bool received(Message& msg);
+    virtual bool loadQuery();
+
+protected:
+    String m_name;
+    String m_querySubscribe;
+    String m_queryUnsubscribe;
+};
+
+class SubscribeTimerHandler : public AAAHandler
+{
+public:
+    SubscribeTimerHandler(const char* hname, int type, int prio = 50);
+    virtual ~SubscribeTimerHandler();
+    virtual const String& name() const;
+    virtual bool received(Message& msg);
+    virtual bool loadQuery();
+protected:
+    String m_name;
+    int m_expireTime;
+    u_int32_t m_nextTime;
+    String m_queryExpire;
+};
+
 class AccountsModule;
 class FallBackHandler;
 class RegistModule : public Module
@@ -100,7 +182,6 @@ private:
     bool m_init;
     AccountsModule *m_accountsmodule;
 };
-
 
 class FallBackRoute : public String
 {
@@ -415,6 +496,9 @@ bool CDRHandler::received(Message& msg)
 {
     if (m_account.null())
 	return false;
+    // Don't update CDR if told so
+    if (!msg.getBoolValue("cdrwrite",true))
+	return false;
     String query(msg.getValue("operation"));
     if (query == "initialize")
 	query = m_queryInitialize;
@@ -424,6 +508,7 @@ bool CDRHandler::received(Message& msg)
 	query = m_query;
     else
 	return false;
+
     if (query.null())
 	return false;
     String account(m_account);
@@ -440,6 +525,313 @@ bool CDRHandler::received(Message& msg)
     }
     if (error)
 	failure(&msg);
+    return false;
+}
+
+
+// EventNotify
+EventNotify::EventNotify(const char* hname, int type, const char* event, int prio)
+    : AAAHandler(hname,type,prio), m_name("resource.subscribe"), m_event(event)
+{
+    m_account = s_cfg.getValue(m_name,"account",s_cfg.getValue("default","account"));
+    if (!m_account)
+	Debug(&module,DebugNote,"Notify(%s). Unable to set account (database)",event);
+}
+
+const String& EventNotify::name() const
+{
+    return m_name;
+}
+
+bool EventNotify::loadQuery()
+{
+    m_querySubs = s_cfg.getValue(m_name,"subscribe_notify");
+    if (!m_querySubs)
+	Debug(&module,DebugNote,
+	    "Notify(%s). Invalid 'subscribe_notify' in section '%s'",
+	    m_event.c_str(),m_name.c_str());
+    return m_querySubs;
+}
+
+// Fill account/query and dispatch the message
+// Return false if message dispatch fails or no data is returned
+Array* EventNotify::queryDatabase(Message& msg, const String& notifier,
+	unsigned int& rows)
+{
+    NamedList nl("");
+    nl.addParam("notifier",notifier);
+    nl.addParam("event",m_event);
+    String query = m_querySubs;
+    String account = m_account;
+    nl.replaceParams(query,true);
+    nl.replaceParams(account,true);
+    msg.addParam("account",account);
+    msg.addParam("query",query);
+    if (!Engine::dispatch(msg))
+	return 0;
+    rows = msg.getIntValue("rows",0);
+    Array* subscriptions = static_cast<Array*>(msg.userObject("Array"));
+    if (!(subscriptions && rows))
+	return 0;
+    DDebug(&module,DebugAll,
+	"Notify(%s). Found %u subscriber(s) for '%s' notifier",
+	m_event.c_str(),rows,notifier.c_str());
+    return subscriptions;
+}
+
+// Create a notify message, fill it with notifier, event, subscription data
+// and additional parameters
+Message* EventNotify::message(const String& notifier, Array& subscriptions,
+	unsigned int row, NamedList& params)
+{
+    Message* notify = new Message("resource.notify");
+    notify->addParam("notifier",notifier);
+    notify->addParam("event",m_event);
+    copyParams2(*notify,&subscriptions,row);
+    unsigned int n = params.count();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = params.getParam(i);
+	if (ns)
+	   notify->addParam(ns->name(),*ns);
+    }
+    return notify;
+}
+
+
+// call.cdr handler: Notifications on dialog state changes
+bool DialogNotify::received(Message& msg)
+{
+    if(!(m_account && m_querySubs))
+	return false;
+
+    XDebug(&module,DebugAll,
+	"Notify(dialog). operation=%s external=%s status=%s chan=%s",
+	msg.getValue("operation"),msg.getValue("external"),
+	msg.getValue("status"),msg.getValue("chan"));
+
+    // Get call id and state to be notified
+    String callState;
+    String operation(msg.getValue("operation"));
+    if (operation == "update") {
+	String status = msg.getValue("status");
+	if (!status)
+	    return false;
+	if (status == "connected" || status == "answered")
+	    callState = "confirmed";
+	else if (status == "calling" || status == "ringing" || status == "progressing" ||
+	    status == "incoming" || status == "outgoing")
+	    callState = "early";
+	else if (status == "redirected")
+	    callState = "rejected";
+	else if (status == "destroyed")
+	    callState = "terminated";
+    }
+    else if (operation == "initialize")
+	callState = "trying";
+    else if (operation == "finalize")
+	callState = "terminated";
+    if (!callState)
+	return false;
+    String id = msg.getValue("chan");
+    if (!id)
+	return false;
+
+    // Get notifier from message and its subscriptions from database
+    String notifier = msg.getValue("external");
+    Message m("database");
+    unsigned int rows;
+    Array* subscriptions = queryDatabase(m,notifier,rows);
+    // Notify
+    if (subscriptions) {
+	NamedList nl("");
+	nl.addParam("dialog.id",id);
+	nl.addParam("dialog.direction",notifier == msg.getValue("called") ? "incoming" : "outgoing");
+	nl.addParam("dialog.state",callState);
+	notifyAll(notifier,*subscriptions,rows,nl);
+    }
+    return false;
+}
+
+
+// user.notify handler: Notifications on message(s) state changes
+bool MWINotify::received(Message& msg)
+{
+    if(!(m_account && m_querySubs))
+	return false;
+    const char* v = msg.getValue("voicemail");
+    if (!v)
+	return false;
+
+    // TODO: change debug
+    Debug(&module,DebugNote,"Notify(message-summary). username=%s",msg.getValue("username"));
+
+    String notifier = msg.getValue("username");
+    if (!notifier)
+	return false;
+
+    Message m("database");
+    unsigned int rows;
+    Array* subscriptions = queryDatabase(m,notifier,rows);
+    if (subscriptions) {
+	NamedList nl("");
+	nl.addParam("message-summary.voicenew",msg.getValue("voicenew"));
+	nl.addParam("message-summary.voiceold",msg.getValue("voiceold"));
+	notifyAll(notifier,*subscriptions,rows,nl);
+    }
+    return false;
+}
+
+
+SubscribeHandler::SubscribeHandler(const char* hname, int type, int prio)
+	: AAAHandler(hname,Subscribe, prio), m_name(hname)
+{
+}
+
+SubscribeHandler::~SubscribeHandler()
+{
+}
+
+const String& SubscribeHandler::name() const
+{
+    return m_name;
+}
+
+bool SubscribeHandler::loadQuery()
+{
+    m_querySubscribe = s_cfg.getValue(name(),"subscribe_subscribe");
+    if (!m_querySubscribe)
+	Debug(&module,DebugNote,
+	    "Invalid 'subscribe_subscribe' in section '%s'",m_name.c_str());
+    m_queryUnsubscribe = s_cfg.getValue(name(),"subscribe_unsubscribe");
+    if (!m_queryUnsubscribe)
+	Debug(&module,DebugNote,
+	    "Invalid 'subscribe_unsubscribe' in section '%s'",m_name.c_str());
+    return m_querySubscribe || m_queryUnsubscribe;
+}
+
+bool SubscribeHandler::received(Message& msg)
+{
+    if (!m_account)
+	return false;
+
+    DDebug(&module,DebugAll,
+	"Subscribe. operation=%s notifier=%s subscriber=%s event=%s notifyto=%s",
+	msg.getValue("operation"),msg.getValue("notifier"),
+	msg.getValue("subscriber"),msg.getValue("event"),msg.getValue("notifyto"));
+
+    String query = msg.getValue("operation");
+    bool subscribe = true;
+    if(query == "subscribe")
+	query = m_querySubscribe;
+    else if (query == "unsubscribe") {
+	subscribe = false;
+	query = m_queryUnsubscribe;
+    }
+    else
+	query = "";
+
+    if (!query)
+	return false;
+
+    String account = m_account;
+    msg.replaceParams(query,true);
+    msg.replaceParams(account,true);
+    Message m("database");
+    m.addParam("query",query);
+    m.addParam("account",account);
+    int rows = 0;
+    if(!Engine::dispatch(m) || 1 != (rows = m.getIntValue("rows",0))) {
+	msg.setParam("error","forbidden");
+	return false;
+    }
+
+    Message* notify = new Message("resource.notify");
+    Array* a = static_cast<Array*>(m.userObject("Array"));
+    if (subscribe) {
+	copyParams2(*notify,a,1);
+	notify->addParam("subscriptionstate","active");
+    }
+    else {
+	String* s = YOBJECT(String, a ? a->get(0,0) : 0);
+	int count = s ? s->toInteger() : 0;
+	if(count != 1) {
+	    msg.setParam("error","forbidden");
+	    TelEngine::destruct(notify);
+	    return false;
+	}
+	notify->copyParams(msg,"subscriber,notifier,notifyto,event,data");
+	notify->addParam("subscriptionstate","terminated");
+    }
+    Engine::enqueue(notify);
+    return true;
+}
+
+
+SubscribeTimerHandler::SubscribeTimerHandler(const char* hname, int type, int prio)
+	: AAAHandler("engine.timer", type, prio), m_name("resource.subscribe")
+{
+    m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
+    if (!m_account)
+	Debug(&module,DebugNote,"Unable to set account (database) for subscription expiring");
+    m_expireTime = s_cfg.getIntValue(m_name,"expires",s_cfg.getIntValue("general","expires",30));
+    m_nextTime = 0;
+}
+
+SubscribeTimerHandler::~SubscribeTimerHandler()
+{
+}
+
+const String& SubscribeTimerHandler::name() const
+{
+    return m_name;
+}
+
+bool SubscribeTimerHandler::loadQuery()
+{
+    m_queryExpire = s_cfg.getValue(name(), "subscribe_expire");
+    if (!m_queryExpire)
+	Debug(&module,DebugNote,
+	    "Invalid 'subscribe_expire' in section '%s'",name().safe());
+    return m_queryExpire;
+}
+
+bool SubscribeTimerHandler::received(Message& msg)
+{
+    if(!(m_account && m_queryExpire))
+	return false;
+
+    u_int32_t t = msg.msgTime().sec();
+    if( t >= m_nextTime)
+	m_nextTime = t + m_expireTime;
+    else
+	return false;
+	
+    if(!m_queryExpire)
+	return false;
+
+    Message m("database");
+    String account = m_account;
+    String query = m_queryExpire;
+    msg.replaceParams(query,true);
+    msg.replaceParams(account,true);
+    m.addParam("account",account);
+    m.addParam("query",query);
+    if(!Engine::dispatch(m))
+	return false;
+
+    int rows = m.getIntValue("rows",0);
+    Array* a = static_cast<Array*>(m.userObject("Array"));
+    if(!a || rows < 1)
+	return false;
+    for(int i = 1; i <= rows; i++) {
+	Message* notify = new Message("resource.notify");
+	copyParams2(*notify,a,i);
+	notify->addParam("subscriptionstate","terminated");
+	notify->addParam("terminatereason","timeout");
+	DDebug(&module,DebugNote,"Subscription expired: notifier=%s subscriber=%s event=%s",
+	    notify->getValue("notifier"),notify->getValue("subscriber"),notify->getValue("event"));
+	Engine::enqueue(notify);
+    }
     return false;
 }
 
@@ -522,6 +914,14 @@ void RegistModule::addHandler(const char *name, int type)
 	    addHandler(new FallBackHandler(name,type,prio));
 	if (type == AAAHandler::Cdr)
 	    addHandler(new CDRHandler(name,prio));
+	else if (type == AAAHandler::DialogNotify)
+	    addHandler(new DialogNotify(name,prio));
+	else if (type == AAAHandler::MWINotify)
+	    addHandler(new MWINotify(name,prio));
+	if (type == AAAHandler::Subscribe)
+	    addHandler(new SubscribeHandler(name, type, prio));
+	if(type == AAAHandler::SubscribeTimer)
+	    addHandler(new SubscribeTimerHandler(name, type, prio));
 	else
 	    addHandler(new AAAHandler(name,type,prio));
     }
@@ -550,6 +950,12 @@ void RegistModule::initialize()
     addHandler("chan.disconnected",FallBackHandler::Disconnect);
     addHandler("chan.hangup",FallBackHandler::Hangup);
     addHandler("call.answered",FallBackHandler::Answered);
+
+    addHandler("call.cdr",AAAHandler::DialogNotify);
+    addHandler("user.notify",AAAHandler::MWINotify);
+
+    addHandler("resource.subscribe", AAAHandler::Subscribe);
+    addHandler("engine.timer", AAAHandler::SubscribeTimer);
 }
 
 bool FallBackHandler::received(Message &msg)

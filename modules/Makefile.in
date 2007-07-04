@@ -27,11 +27,13 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
 	conference.yate moh.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
-	pbx.yate dbpbx.yate pbxassist.yate \
+	pbx.yate dbpbx.yate pbxassist.yate park.yate \
 	dumbchan.yate callfork.yate queues.yate \
 	extmodule.yate yradius.yate \
 	yrtpchan.yate ystunchan.yate \
-	ysipchan.yate yiaxchan.yate yjinglechan.yate
+	ysipchan.yate sipfeatures.yate \
+	yiaxchan.yate \
+	yjinglechan.yate
 LIBS :=
 
 ifneq (@HAVE_PGSQL@,no)
@@ -178,9 +180,9 @@ zapchan.yate: LOCALFLAGS = libypri.o -lpri
 wpchan.yate: libypri.o
 wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@ libypri.o -lpri
 
-ysigchan.yate wpcard.yate: ../libyatess7.so
-ysigchan.yate wpcard.yate: LOCALFLAGS = -I../contrib/yss7
-ysigchan.yate wpcard.yate: LOCALLIBS = -lyatess7
+ysigchan.yate wpcard.yate zapcard.yate: ../libyatess7.so
+ysigchan.yate wpcard.yate zapcard.yate: LOCALFLAGS = -I../contrib/yss7
+ysigchan.yate wpcard.yate zapcard.yate: LOCALLIBS = -lyatess7
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@

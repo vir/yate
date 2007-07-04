@@ -1,0 +1,27 @@
+; This file configures the SIP feature module
+
+[general]
+; General 
+
+; expires_min: int: Minimum allowed expiring time in seconds
+;expires_min=60
+
+; expires_def: int: Default expiring time if not present in requests
+;expires_def=600
+
+; expires_max: int: Value used to limit the expiring time to something sane
+;expires_max=3600
+
+
+[allow_events]
+; Restrict/allow subscriptions to individual events
+; If an event is disabled, no subscriptions to it will be allowed
+
+; default: boolean: Default value if an event is not listed here
+;default=enable
+
+; dialog: boolean: Enable/disable subscriptions to dialog state events
+;dialog=enable
+
+; dialog: boolean: Enable/disable subscriptions to message waiting events
+;message-summary=enable

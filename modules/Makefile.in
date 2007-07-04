@@ -27,7 +27,8 @@ PROGS := cdrbuild.yate cdrfile.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
 	conference.yate moh.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
-	pbx.yate dbpbx.yate pbxassist.yate dumbchan.yate callfork.yate \
+	pbx.yate dbpbx.yate pbxassist.yate \
+	dumbchan.yate callfork.yate queues.yate \
 	extmodule.yate yradius.yate \
 	yrtpchan.yate ystunchan.yate \
 	ysipchan.yate yiaxchan.yate yjinglechan.yate

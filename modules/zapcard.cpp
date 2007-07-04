@@ -350,7 +350,6 @@ private:
     DataBlock m_consBuffer;              // Data consumer buffer
     unsigned int m_buflen;               // Data block length
     unsigned int m_consBufMax;           // Max consumer buffer length
-    unsigned int m_sourceTotal;          // Source. Total number of bytes transferred
     unsigned int m_consErrors;           // Consumer. Total number of send failures
     unsigned int m_consErrorBytes;       // Consumer. Total number of lost bytes
     unsigned int m_consTotal;            // Consumer. Total number of bytes transferred
@@ -1010,9 +1009,9 @@ void ZapInterface::timerTick(const Time& when)
 	return;
     s_ifaceNotify.lock();
     if (m_notify) {
-	DDebug(this,DebugMild,"Not received any data for " FMT64 " ms [%p]",
-	    m_timerRxUnder.interval(),this);
 	if (m_notify == 1) {
+	    DDebug(this,DebugMild,"RX idle for " FMT64 "ms. Notifying receiver [%p]",
+		m_timerRxUnder.interval(),this);
 	    notify(RxUnderrun);
 	    m_notify = 2;
 	}
@@ -1164,7 +1163,6 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_consumer(0),
     m_buflen(0),
     m_consBufMax(0),
-    m_sourceTotal(0),
     m_consErrors(0),
     m_consErrorBytes(0),
     m_consTotal(0)
@@ -1386,8 +1384,6 @@ void ZapCircuit::cleanup(bool release, Status stat)
     ZapWorkerClient::stop();
     m_device.close();
     if (m_consumer) {
-	XDebug(group(),DebugAll,"ZapCircuit(%u). Consumer transferred %u byte(s) [%p]",
-	    code(),m_consTotal,this);
 	if (m_consErrors)
 	    DDebug(group(),DebugMild,"ZapCircuit(%u). Consumer errors: %u. Lost: %u/%u [%p]",
 		code(),m_consErrors,m_consErrorBytes,m_consTotal,this);
@@ -1396,15 +1392,12 @@ void ZapCircuit::cleanup(bool release, Status stat)
     }
     if (m_source) {
 	m_source->clear();
-	XDebug(group(),DebugAll,"ZapCircuit(%u). Source transferred %u byte(s) [%p]",
-	    code(),m_sourceTotal,this);
 	m_source->deref();
 	m_source = 0;
     }
     m_sourceBuffer.clear();
     m_consBuffer.clear();
     m_consErrors = m_consErrorBytes = m_consTotal = 0;
-    m_sourceTotal = 0;
     m_echoTaps = 0;
     m_train = false;
     status(stat);

@@ -59,7 +59,7 @@ URI::URI(const char* proto, const char* user, const char* host, int port, const 
     if (user)
 	*this << m_user << "@";
     if (m_host.find(':') >= 0)
-	*this << "[" << m_host < "]";
+	*this << "[" << m_host << "]";
     else
 	*this << m_host;
     if (m_port > 0)

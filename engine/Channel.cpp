@@ -1076,10 +1076,10 @@ bool Driver::received(Message &msg, int id)
 	    dest = msg.getValue("id");
 	    break;
 	default:
-	    dest = msg.getValue("targetid");
-	    // if this channel is not the target try to match it as peer
+	    dest = msg.getValue("peerid");
+	    // if this channel is not the peer, try to match it as target
 	    if (!dest.startsWith(m_prefix))
-		dest = msg.getValue("peerid");
+		dest = msg.getValue("targetid");
 	    break;
     }
     XDebug(DebugAll,"id=%d prefix='%s' dest='%s'",id,m_prefix.c_str(),dest.c_str());
@@ -1135,8 +1135,10 @@ bool Driver::received(Message &msg, int id)
 	    msg = msg.getValue("message");
 	    msg.clearParam("message");
 	    msg.userData(chan);
+	    if (chan->msgMasquerade(msg))
+		return true;
 	    chan->complete(msg);
-	    return chan->msgMasquerade(msg);
+	    return false;
 	case Locate:
 	    msg.userData(chan);
 	    return true;

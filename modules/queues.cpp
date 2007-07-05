@@ -275,6 +275,8 @@ void QueuesModule::statusParams(String& str)
 
 void QueuesModule::onQueued(Message& msg, String qname)
 {
+    if (qname.null() || (qname.find('/') >= 0))
+	return;
     if (s_account.null() || s_pbxchan.null())
 	return;
     String query("SELECT length,greeting,onhold FROM groups WHERE ugroup=");
@@ -325,6 +327,8 @@ void QueuesModule::onQueued(Message& msg, String qname)
 
 void QueuesModule::onPickup(Message& msg, String qname)
 {
+    if (qname.null() || (qname.find('/') >= 0))
+	return;
     CallsQueue* queue = findQueue(qname);
     if (queue) {
 	QueuedCall* call = queue->topCall();

@@ -95,7 +95,7 @@ bool ChanPickup::received(Message& msg)
 
     // It's ours. Get the channels
     RefPointer<CallEndpoint> caller(static_cast<CallEndpoint*>(msg.userData()));
-    RefPointer<CallEndpoint> called(locateChan(callto,true));
+    RefPointer<CallEndpoint> called(locateChan(callto,msg.getBoolValue("pickup_peer",true)));
 
     if (!caller) {
 	Debug(&s_module,DebugNote,"No channel to pick up: callto='%s'",

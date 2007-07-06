@@ -740,8 +740,13 @@ bool SubscribeHandler::received(Message& msg)
     m.addParam("query",query);
     m.addParam("account",account);
     int rows = 0;
-    if(!Engine::dispatch(m) || 1 != (rows = m.getIntValue("rows",0))) {
-	msg.setParam("error","forbidden");
+    if(!Engine::dispatch(m)) {
+	msg.setParam("reason","failure");
+	return false;
+    }
+
+    if(1 != (rows = m.getIntValue("rows",0))) {
+	msg.setParam("reason","forbidden");
 	return false;
     }
 
@@ -755,7 +760,7 @@ bool SubscribeHandler::received(Message& msg)
 	String* s = YOBJECT(String, a ? a->get(0,0) : 0);
 	int count = s ? s->toInteger() : 0;
 	if(count != 1) {
-	    msg.setParam("error","forbidden");
+	    msg.setParam("reason","forbidden");
 	    TelEngine::destruct(notify);
 	    return false;
 	}

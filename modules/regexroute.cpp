@@ -383,7 +383,13 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    val = str;
 		val.trimBlanks();
 
-		if (val.matches(r)) {
+		bool doMatch = true;
+		if (r.endsWith("^")) {
+		    // reverse match on final ^ (makes no sense in a regexp)
+		    doMatch = false;
+		    r = r.substr(0,r.length()-1);
+		}
+		if (val.matches(r) == doMatch) {
 		    val = val.replaceMatches(*n);
 		    if (val.startSkip("echo") || val.startSkip("output")) {
 			// special case: display the line but don't set params

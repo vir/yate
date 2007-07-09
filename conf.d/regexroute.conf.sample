@@ -109,6 +109,9 @@
 ;   ${paramname}regexp=target
 ; To match a function possibly containing parameters you can use the format:
 ;   $(function,param...)regexp=target
+; To act on non-matching expressions add a ^ at end of the regexp. In this
+;  case the \0 ... \9 replacements will always be empty
+;   regexp^=target
 ; Strings captured with the regular expression construct \(...\) can be
 ;  inserted in the target using \1, \2, \3, ...
 ; Message parameters can be inserted in the target using ${paramname}

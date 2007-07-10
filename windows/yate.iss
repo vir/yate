@@ -84,6 +84,9 @@ Source: "Release\register.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\dbpbx.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\pbxassist.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\park.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\queues.yate"; DestDir: "{app}\modules"; Components: server
+Source: "Release\sipfeatures.yate"; DestDir: "{app}\modules"; Components: server
 
 Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323 driver\jingle

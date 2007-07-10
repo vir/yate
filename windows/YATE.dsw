@@ -224,6 +224,15 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name _ystunchan
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _park
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _queues
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name _sipfeatures
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -531,6 +540,21 @@ Package=<4>
 
 ###############################################################################
 
+Project: "_park"=.\_park.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "_pbx"=.\_pbx.dsp - Package Owner=<4>
 
 Package=<5>
@@ -565,6 +589,21 @@ Package=<4>
 ###############################################################################
 
 Project: "_pgsqldb"=.\_pgsqldb.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_queues"=.\_queues.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -625,6 +664,21 @@ Package=<4>
 ###############################################################################
 
 Project: "_rmanager"=.\_rmanager.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name Libyate
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "_sipfeatures"=.\_sipfeatures.dsp - Package Owner=<4>
 
 Package=<5>
 {{{

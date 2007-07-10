@@ -218,8 +218,10 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
     // draft-ietf-sipping-dialog-package-06.txt The Event header for 'dialog' event
     //   may contain dialog identifier(s). Reject them
     if (!(tmp && *tmp && event != -1)) {
-	Debug(&s_module,DebugNote,"SUBSCRIBE. Can't handle event='%s'%s",
-	    evName.c_str(),!tmp?". Event header is missing":"");
+	if (!tmp)
+	    Debug(&s_module,DebugNote,
+		"SUBSCRIBE. Can't handle event='%s'. Event header is missing",
+		evName.c_str());
 	msg.setParam("code",tmp?"489":"400");     // Bad event or request
 	return false;
     }

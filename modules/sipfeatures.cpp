@@ -132,6 +132,24 @@ inline void forceParam(Message& msg, const char* param, const char* value)
 /**
  * YSipSubscribeHandler
  */
+// resource.subscribe parameters:
+// event
+//   Keyword indicating the event: dialog (subscription to call state events),
+//   message-summary (message waiting subscription)
+// operation
+//   Keyword indicating the request: subscribe (request a subscription),
+//   unsubscribe (request to unsubscribe from event)
+// expires
+//   Integer indicating the subscription duration (if operation is subscribe).
+//   If 0, the subscription won't expire
+// subscriber
+//   The requestor
+// notifier
+//   The resource (user) to subscribe to
+// notifyto
+//   The URI used as destination when notifying
+// data
+//   Data used by protocol
 bool YSipSubscribeHandler::received(Message &msg)
 {
     // Check received data
@@ -261,6 +279,47 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
 /**
  * YSipNotifyHandler
  */
+// resource.notify parameters
+// event
+//   Keyword indicating the event: dialog (subscription to call state events),
+//   message-summary (message waiting subscription)
+// expires
+//   Optional integer indicating the remaining time of the subscription
+// subscriber
+//   The entity that requested the subscription
+// notifier
+//   The resource (user) making the notification
+// notifyto
+//   URI used as destination for the notification
+// data
+//   Data used by protocol
+// notifyseq
+//   Integer indicating the sequence number of the notification within the subscription
+//   given by notifier and event
+// subscriptionstate
+//   Keyword indicating the subscription state: pending/active/terminated
+// terminatereason
+//   Optional subscription termination reason if subscriptionstate is terminated
+//
+// Event specific parameters are prefixed by the event name:
+// dialog.id
+//   The id of the dialog if any 
+// dialog.callid
+//   The dialog identifier 
+// dialog.localtag
+//   The local tag component of the dialog identifier 
+// dialog.remotetag
+//   The remote tag component of the dialog identifier 
+// dialog.direction
+//   Keyword indicating the call direction from the notifier's point of view: incoming/outgoing 
+// dialog.remoteuri
+//   The notifier dialog peer's URI 
+// dialog.state
+//   Keyword indicating the call state: trying/confirmed/early/rejected/terminated 
+// message-summary.voicenew
+//   Optional integer specifying the number of unread (new) voice messages 
+// message-summary.voiceold
+//   Optional integer specifying the number of read (old) voice messages 
 bool YSipNotifyHandler::received(Message &msg)
 {
     String notifyto = msg.getValue("notifyto");

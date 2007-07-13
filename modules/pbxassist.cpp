@@ -45,6 +45,7 @@ public:
 protected:
     bool errorBeep(const char* source = 0);
     void setGuest(const Message& msg);
+    void setParams(const Message& msg);
     u_int64_t m_last;
     bool m_pass;
     bool m_guest;
@@ -116,11 +117,16 @@ static String s_error;
 static Configuration s_cfg;
 
 // Utility function - copy parameters requested in "copyparams" parameter
-static void copyParams(NamedList& dest, const NamedList& original)
+static void copyParams(NamedList& dest, const NamedList& original, const NamedList* pbxkeep = 0)
 {
     const String* params = original.getParam("copyparams");
     if (params && *params)
 	dest.copyParams(original,*params);
+    if (pbxkeep) {
+	params = original.getParam("pbxparams");
+	if (params && *params)
+	    dest.copyParams(*pbxkeep,*params);
+    }
 }
 
 
@@ -230,6 +236,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	    m->addParam("pbxstate",m_state);
 	    m->copyParam(m_keep,"billid");
 	    m->copyParam(m_keep,"caller");
+	    copyParams(*m,msg,&m_keep);
 	    if (isE164(called)) {
 		// divert target is a number so we have to route it
 		m->addParam("called",called);
@@ -408,6 +415,14 @@ void PBXAssist::setGuest(const Message& msg)
     }
 }
 
+// Copy extra PBX parameters from message
+void PBXAssist::setParams(const Message& msg)
+{
+    const String* params = msg.getParam("pbxparams");
+    if (params && *params)
+	m_keep.copyParams(msg,*params);
+}
+
 // Operation message handler - calls one of the operation handlers
 bool PBXAssist::msgOperation(Message& msg, const String& operation)
 {
@@ -453,6 +468,7 @@ bool PBXAssist::operSetState(Message& msg)
     m_state = msg.getValue("state",m_state);
     m_room = msg.getValue("room",m_room);
     setGuest(msg);
+    setParams(msg);
     return true;
 }
 
@@ -552,7 +568,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
-    copyParams(*m,msg);
+    copyParams(*m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
@@ -668,7 +684,7 @@ bool PBXAssist::operTransfer(Message& msg)
     m->addParam("caller",m_keep.getValue("called"));
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
-    copyParams(*m,msg);
+    copyParams(*m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
@@ -726,7 +742,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     m->copyParam(m_keep,"caller");
     m->addParam("called",msg.getValue("target"));
     m->addParam("pbxstate",m_state);
-    copyParams(*m,msg);
+    copyParams(*m,msg,&m_keep);
     // no error check as handling preroute is optional
     Engine::dispatch(m);
     *m = "call.route";
@@ -762,6 +778,7 @@ void PBXAssist::msgStartup(Message& msg)
 {
     DDebug(list(),DebugNote,"Copying startup parameters for '%s'",id().c_str());
     setGuest(msg);
+    setParams(msg);
     m_keep.setParam("billid",msg.getValue("billid"));
     NamedString* status = msg.getParam("status");
     if (status && (*status == "outgoing")) {
@@ -781,6 +798,7 @@ void PBXAssist::msgExecute(Message& msg)
     DDebug(list(),DebugNote,"Copying execute parameters for '%s'",id().c_str());
     // this gets only called on incoming call legs
     setGuest(msg);
+    setParams(msg);
     m_keep.setParam("billid",msg.getValue("billid"));
     m_keep.setParam("called",msg.getValue("called"));
     m_keep.setParam("caller",msg.getValue("caller"));

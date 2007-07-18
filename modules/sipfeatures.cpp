@@ -311,7 +311,7 @@ bool YSipSubscribeHandler::getEventData(Message& msg, int& event, String& evName
 // dialog.remotetag
 //   The remote tag component of the dialog identifier 
 // dialog.direction
-//   Keyword indicating the call direction from the notifier's point of view: incoming/outgoing 
+//   Keyword indicating the call direction from Yate's point of view: incoming/outgoing 
 // dialog.remoteuri
 //   The notifier dialog peer's URI 
 // dialog.state
@@ -442,9 +442,9 @@ void YSipNotifyHandler::createDialogBody(String& dest, const Message& src,
 	addAttr(dest,"remote-tag",src.getValue("dialog.remotetag"));
 	String dir = src.getValue("dialog.direction");
 	if (dir == "incoming")
-	    dir = "recipient";
-	else if (dir == "outgoing")
 	    dir = "initiator";
+	else if (dir == "outgoing")
+	    dir = "recipient";
 	else
 	    dir = "";
 	addAttr(dest,"direction",dir);

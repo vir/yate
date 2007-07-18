@@ -58,6 +58,7 @@ public:
     AAAHandler(const char* hname, int type, int prio = 50);
     virtual ~AAAHandler();
     void loadAccount();
+    void indirectQuery(String& query);
     virtual const String& name() const;
     virtual bool received(Message& msg);
     virtual bool loadQuery();
@@ -336,14 +337,41 @@ const String& AAAHandler::name() const
 bool AAAHandler::loadQuery()
 {
     m_query = s_cfg.getValue(name(),"query");
-    return m_query != 0;
+    indirectQuery(m_query);
+    return m_query;
 }
 
+// replace a "@query" with the result of that query
+void AAAHandler::indirectQuery(String& query)
+{
+    if (m_account.null())
+	return;
+    if (!query.startSkip("@",false))
+	return;
+    query.trimBlanks();
+    if (query.null())
+	return;
+    Message m("database");
+    m.addParam("account",m_account);
+    m.addParam("query",query);
+    query.clear();
+    // query must return exactly one row, one column
+    if (!Engine::dispatch(m) || (m.getIntValue("rows") != 1) || (m.getIntValue("columns") != 1))
+	return;
+    Array* a = static_cast<Array*>(m.userObject("Array"));
+    if (!a)
+	return;
+    query = YOBJECT(String,a->get(0,1));
+    Debug(&module,DebugInfo,"For '%s' fetched query '%s'",name().c_str(),query.c_str());
+}
+
+// run the initialization query
 void AAAHandler::initQuery()
 {
     if (m_account.null())
 	return;
     String query = s_cfg.getValue(name(),"initquery");
+    indirectQuery(query);
     if (query.null())
 	return;
     // no error check at all - we enqueue the query and we're out
@@ -496,6 +524,9 @@ bool CDRHandler::loadQuery()
     m_query = s_cfg.getValue(name(),"cdr_finalize");
     if (m_query.null())
 	m_query = s_cfg.getValue(name(),"query");
+    indirectQuery(m_queryInitialize);
+    indirectQuery(m_queryUpdate);
+    indirectQuery(m_query);
     return m_queryInitialize || m_queryUpdate || m_query;
 }
 
@@ -550,6 +581,7 @@ const String& EventNotify::name() const
 bool EventNotify::loadQuery()
 {
     m_querySubs = s_cfg.getValue(m_name,"subscribe_notify");
+    indirectQuery(m_querySubs);
     if (!m_querySubs)
 	Debug(&module,DebugNote,
 	    "Notify(%s). Invalid 'subscribe_notify' in section '%s'",
@@ -703,10 +735,12 @@ const String& SubscribeHandler::name() const
 bool SubscribeHandler::loadQuery()
 {
     m_querySubscribe = s_cfg.getValue(name(),"subscribe_subscribe");
+    indirectQuery(m_querySubscribe);
     if (!m_querySubscribe)
 	Debug(&module,DebugNote,
 	    "Invalid 'subscribe_subscribe' in section '%s'",m_name.c_str());
     m_queryUnsubscribe = s_cfg.getValue(name(),"subscribe_unsubscribe");
+    indirectQuery(m_queryUnsubscribe);
     if (!m_queryUnsubscribe)
 	Debug(&module,DebugNote,
 	    "Invalid 'subscribe_unsubscribe' in section '%s'",m_name.c_str());
@@ -795,6 +829,7 @@ const String& SubscribeTimerHandler::name() const
 bool SubscribeTimerHandler::loadQuery()
 {
     m_queryExpire = s_cfg.getValue(name(), "subscribe_expire");
+    indirectQuery(m_queryExpire);
     if (!m_queryExpire)
 	Debug(&module,DebugNote,
 	    "Invalid 'subscribe_expire' in section '%s'",name().safe());

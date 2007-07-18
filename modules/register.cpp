@@ -57,6 +57,7 @@ public:
     };
     AAAHandler(const char* hname, int type, int prio = 50);
     virtual ~AAAHandler();
+    void loadAccount();
     virtual const String& name() const;
     virtual bool received(Message& msg);
     virtual bool loadQuery();
@@ -312,13 +313,19 @@ static void copyParams(Message &msg,Array *a,const char* resultName=0,int row=0)
 AAAHandler::AAAHandler(const char* hname, int type, int prio)
     : MessageHandler(hname,prio),m_type(type)
 {
-     m_result = s_cfg.getValue(name(),"result");
-     m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
 }
 
 AAAHandler::~AAAHandler()
 {
     s_handlers.remove(this,false);
+}
+
+void AAAHandler::loadAccount()
+{
+    m_result = s_cfg.getValue(name(),"result");
+    m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
+    if (m_account.null())
+	Debug(&module,DebugMild,"Missing database account for '%s'",name().c_str());
 }
 
 const String& AAAHandler::name() const
@@ -533,9 +540,6 @@ bool CDRHandler::received(Message& msg)
 EventNotify::EventNotify(const char* hname, int type, const char* event, int prio)
     : AAAHandler(hname,type,prio), m_name("resource.subscribe"), m_event(event)
 {
-    m_account = s_cfg.getValue(m_name,"account",s_cfg.getValue("default","account"));
-    if (!m_account)
-	Debug(&module,DebugNote,"Notify(%s). Unable to set account (database)",event);
 }
 
 const String& EventNotify::name() const
@@ -775,9 +779,6 @@ bool SubscribeHandler::received(Message& msg)
 SubscribeTimerHandler::SubscribeTimerHandler(const char* hname, int type, int prio)
 	: AAAHandler("engine.timer", type, prio), m_name("resource.subscribe")
 {
-    m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
-    if (!m_account)
-	Debug(&module,DebugNote,"Unable to set account (database) for subscription expiring");
     m_expireTime = s_cfg.getIntValue(m_name,"expires",s_cfg.getIntValue("general","expires",30));
     m_nextTime = 0;
 }
@@ -899,6 +900,7 @@ int RegistModule::getPriority(const char *name)
 
 void RegistModule::addHandler(AAAHandler* handler)
 {
+    handler->loadAccount();
     s_handlers.append(handler);
     handler->loadQuery();
     Engine::install(handler);

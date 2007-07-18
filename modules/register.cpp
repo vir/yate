@@ -645,7 +645,7 @@ bool DialogNotify::received(Message& msg)
     if (subscriptions) {
 	NamedList nl("");
 	nl.addParam("dialog.id",id);
-	nl.addParam("dialog.direction",notifier == msg.getValue("called") ? "incoming" : "outgoing");
+	nl.addParam("dialog.direction", msg.getValue("direction"));
 	nl.addParam("dialog.state",callState);
 	notifyAll(notifier,*subscriptions,rows,nl);
     }

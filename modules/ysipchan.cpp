@@ -3360,6 +3360,9 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     // call.route
     msg = new Message("call.route");
     msg->addParam("id",getPeer()->id());
+    if (m_billid)
+	msg->addParam("billid",m_billid);
+
     const SIPHeaderLine* sh = sipRefer->getHeader("To");                   // caller
     if (sh) {
 	URI uriCaller(*sh);
@@ -3367,10 +3370,12 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
 	msg->addParam("caller",uriCaller.getUser());
 	msg->addParam("callername",uriCaller.getDescription());
     }
+
     URI referTo(*refHdr);                                                  // called
     referTo.parse();
     msg->addParam("called",referTo.getUser());
     msg->addParam("calledname",referTo.getDescription());
+
     sh = sipRefer->getHeader("Referred-By");                               // diverter
     if (sh) {
 	URI referBy(*sh);
@@ -3378,6 +3383,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
 	msg->addParam("diverter",referBy.getUser());
 	msg->addParam("divertername",referBy.getDescription());
     }
+
     msg->addParam("reason","transfer");                                    // reason
     // NOTIFY
     String tmp;

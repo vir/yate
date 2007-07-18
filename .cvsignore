@@ -1,6 +1,7 @@
 *.cache
 Makefile
 YateLocal.mak
+YateLocal.ac
 configure
 config.*
 *-stamp

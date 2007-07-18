@@ -733,6 +733,7 @@ AC_MSG_RESULT([$ac_cv_use_kdoc])
 fi
 AC_SUBST(KDOC_BIN)
 
+m4_sinclude(./YateLocal.ac)
 
 AC_CONFIG_FILES([yate.spec
                  yate.pc

@@ -62,14 +62,7 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = yatecbase.h \
-                         yateclass.h \
-                         yatengine.h \
-                         yatephone.h \
-                         contrib/ypbx/yatepbx.h
-#                         contrib/ysip/yatesip.h \
-#                         contrib/yrtp/yatertp.h \
-#                         contrib/yss7/yatess7.h \
+INPUT                  = yatecbase.h yateclass.h yatengine.h yatephone.h
 FILE_PATTERNS          = 
 RECURSIVE              = NO
 EXCLUDE                = 

@@ -31,19 +31,7 @@ CLEANS = $(PROGS) $(SLIBS) $(LIBS) $(OBJS) yatepaths.h core
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CFLAGS)
 LINK = $(CXX) $(LDFLAGS)
 
-DOCGEN :=
-DOCGEN_K :=
-DOCGEN_D :=
-ifneq (_@KDOC_BIN@,_)
-DOCGEN_K := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(INCS) \
-    contrib/ypbx/yatepbx.h
-#    contrib/ysip/yatesip.h contrib/yrtp/yatertp.h contrib/yss7/yatess7.h
-DOCGEN := $(DOCGEN_K)
-endif
-ifneq (_@DOXYGEN_BIN@,_)
-DOCGEN_D := @DOXYGEN_BIN@ Doxyfile
-DOCGEN := $(DOCGEN_D)
-endif
+DOCGEN_F := $(INCS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -61,6 +49,18 @@ scrdir = $(basedir)/scripts
 
 # include optional local make rules
 -include YateLocal.mak
+
+DOCGEN :=
+DOCGEN_K :=
+DOCGEN_D :=
+ifneq (_@KDOC_BIN@,_)
+DOCGEN_K := @KDOC_BIN@ -C ./kdoc-filter.sh -d docs/api/ $(DOCGEN_F)
+DOCGEN := $(DOCGEN_K)
+endif
+ifneq (_@DOXYGEN_BIN@,_)
+DOCGEN_D := (cat Doxyfile; echo 'INPUT = $(DOCGEN_F)') | @DOXYGEN_BIN@ -
+DOCGEN := $(DOCGEN_D)
+endif
 
 .PHONY: all everything debug ddebug xdebug ndebug
 all: engine modules clients
@@ -140,11 +140,7 @@ apidocs: @srcdir@/docs/api/index.html
 
 @srcdir@/docs/api/index.html: Doxyfile \
     @srcdir@/yateclass.h @srcdir@/yatengine.h \
-    @srcdir@/yatephone.h @srcdir@/yatecbase.h \
-    @srcdir@/contrib/ypbx/yatepbx.h
-#    @srcdir@/contrib/ysip/yatesip.h \
-#    @srcdir@/contrib/yrtp/yatertp.h \
-#    @srcdir@/contrib/yss7/yatess7.h
+    @srcdir@/yatephone.h @srcdir@/yatecbase.h
 	$(MAKE) apidocs-build
 
 .PHONY: strip sex love war

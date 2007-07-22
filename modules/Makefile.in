@@ -175,10 +175,12 @@ lib%.so: %.o
 # Take special care of the modules that depend on optional libs
 
 zapchan.yate: libypri.o
-zapchan.yate: LOCALFLAGS = libypri.o -lpri
+zapchan.yate: LOCALFLAGS = @ZAP_FLAGS@
+zapchan.yate: LOCALLIBS = libypri.o -lpri
 
 wpchan.yate: libypri.o
-wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@ libypri.o -lpri
+wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@
+wpchan.yate: LOCALLIBS = libypri.o -lpri
 
 ysigchan.yate wpcard.yate zapcard.yate: ../libyatess7.so
 ysigchan.yate wpcard.yate zapcard.yate: LOCALFLAGS = -I../contrib/yss7

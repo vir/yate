@@ -292,6 +292,16 @@ AC_SUBST(MYSQL_LIB)
 AC_SUBST(MYSQL_VER)
 
 HAVE_ZAP=no
+ZAP_FLAGS=""
+AC_MSG_CHECKING([for Zaptel generic headers])
+AC_TRY_COMPILE([
+#include <zaptel/zaptel.h>
+],[],
+HAVE_ZAP="yes"
+ZAP_FLAGS="-DNEW_ZAPTEL_LOCATION"
+)
+AC_MSG_RESULT([$HAVE_ZAP])
+if [[ "x$HAVE_ZAP" = "xno" ]]; then
 AC_MSG_CHECKING([for Zaptel linux headers])
 AC_TRY_COMPILE([
 #include <linux/zaptel.h>
@@ -299,7 +309,9 @@ AC_TRY_COMPILE([
 HAVE_ZAP="yes"
 )
 AC_MSG_RESULT([$HAVE_ZAP])
+fi
 AC_SUBST(HAVE_ZAP)
+AC_SUBST(ZAP_FLAGS)
 
 HAVE_WANPIPE=no
 AC_MSG_CHECKING([for Wanpipe linux headers])

@@ -30,6 +30,7 @@
 
 extern "C" {
 #ifdef NEW_ZAPTEL_LOCATION
+#define __LINUX__
 #include <zaptel/zaptel.h>
 #else
 #include <linux/zaptel.h>

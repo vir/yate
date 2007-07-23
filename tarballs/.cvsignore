@@ -1,5 +1,9 @@
 core*
 *.tar.gz
+*.tar.bz2
+*.tgz
+*.rpm
+*.deb
 *.orig
 *~
 .*.swp

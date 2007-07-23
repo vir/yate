@@ -3461,9 +3461,10 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
 	m->destruct();
 	return 0;
     }
-    tmp = "\"";
-    tmp << (m_display.null() ? m_username : m_display);
-    tmp << "\" <sip:";
+    tmp.clear();
+    if (m_display)
+	tmp << "\"" << m_display << "\" ";
+    tmp << "<sip:";
     tmp << m_username << "@";
     tmp << m->getParty()->getLocalAddr() << ":";
     tmp << m->getParty()->getLocalPort() << ">";

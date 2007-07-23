@@ -37,7 +37,7 @@ extern "C" int main(int argc, const char** argv, const char** envp)
     bool fail = !gtk_init_check(&argc,(char ***)&argv);
     if (fail)
 	g_warning("Cannot open display: '%s'",gdk_get_display());
-    TelEngine::Engine::extraPath() = "gtk2";
+    TelEngine::Engine::extraPath("gtk2");
     return TelEngine::Engine::main(argc,argv,envp,TelEngine::Engine::Client,fail);
 }
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -136,8 +136,8 @@ static void sighandler(int signal)
 String Engine::s_cfgpath(CFG_PATH);
 String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
-String Engine::s_extramod;
 String Engine::s_modsuffix(DLL_SUFFIX);
+ObjList Engine::s_extramod;
 
 Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine* Engine::s_self = 0;
@@ -863,9 +863,7 @@ void Engine::loadPlugins()
     const char *name = s_cfg.getValue("general","modpath");
     if (name)
 	s_modpath = name;
-    name = s_cfg.getValue("general","extrapath");
-    if (name)
-	s_extramod = name;
+    extraPath(s_cfg.getValue("general","extrapath"));
     s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
     s_restarts = s_cfg.getIntValue("general","restarts");
     m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
@@ -879,8 +877,10 @@ void Engine::loadPlugins()
 	}
     }
     loadPluginDir(String::empty());
-    if (s_extramod)
-	loadPluginDir(s_extramod);
+    while (GenObject* extra = s_extramod.remove(false)) {
+	loadPluginDir(extra->toString());
+	extra->destruct();
+    }
     l = s_cfg.getSection("postload");
     if (l) {
         unsigned int len = l->length();
@@ -914,6 +914,13 @@ int Engine::usedPlugins()
 	    used++;
     }
     return used;
+}
+
+void Engine::extraPath(const String& path)
+{
+    if (path.null() || s_extramod.find(path))
+	return;
+    s_extramod.append(new String(path));
 }
 
 void Engine::halt(unsigned int code)
@@ -990,6 +997,7 @@ static void usage(bool client, FILE* f)
 "   -n configname  Use specified configuration name (%s)\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
+"   -x relpath     Relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
 #ifdef RLIMIT_CORE
 "   -C             Enable core dumps if possible\n"
@@ -1175,6 +1183,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			workdir = argv[++i];
+			break;
+		    case 'x':
+			if (i+1 >= argc) {
+			    noarg(client,argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			extraPath(argv[++i]);
 			break;
 #ifdef RLIMIT_CORE
 		    case 'C':

@@ -781,11 +781,11 @@ public:
 	{ return s_modpath; }
 
     /**
-     * The relative extra module loading path. This is empty by default but
-     *  can be set by a main program to a value before calling @ref main()
+     * Add a relative extra module loading path. The list is empty by default
+     *  but can be filled by a main program before calling @ref main()
+     * @param path Relative path to extra modules to be loaded
      */
-    inline static String& extraPath()
-	{ return s_extramod; }
+    static void extraPath(const String& path);
 
     /**
      * Get the module filename suffix
@@ -961,8 +961,8 @@ private:
     static String s_cfgpath;
     static String s_cfgsuffix;
     static String s_modpath;
-    static String s_extramod;
     static String s_modsuffix;
+    static ObjList s_extramod;
     static int s_haltcode;
     static RunMode s_mode;
 };

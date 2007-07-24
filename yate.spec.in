@@ -54,6 +54,8 @@ for small to large scale projects.
 /usr/lib/yate/modules/pbx.yate
 /usr/lib/yate/modules/dbpbx.yate
 /usr/lib/yate/modules/pbxassist.yate
+/usr/lib/yate/modules/park.yate
+/usr/lib/yate/modules/queues.yate
 /usr/lib/yate/modules/dumbchan.yate
 /usr/lib/yate/modules/callfork.yate
 /usr/lib/yate/modules/extmodule.yate
@@ -64,6 +66,7 @@ for small to large scale projects.
 /usr/lib/yate/modules/yiaxchan.yate
 /usr/lib/yate/modules/yjinglechan.yate
 /usr/lib/yate/modules/enumroute.yate
+/usr/lib/yate/modules/sipfeatures.yate
 /usr/lib/yate/modules/osschan.yate
 /usr/lib/yate/modules/ilbccodec.yate
 %config /etc/yate/accfile.conf
@@ -72,6 +75,7 @@ for small to large scale projects.
 %config /etc/yate/dbpbx.conf
 %config /etc/yate/dsoundchan.conf
 %config /etc/yate/enumroute.conf
+%config /etc/yate/sipfeatures.conf
 %config /etc/yate/extmodule.conf
 %config /etc/yate/moh.conf
 %config /etc/yate/pbxassist.conf
@@ -318,6 +322,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Sun Jul 22 2007 Paul Chitescu <paulc@voip.null.ro>
+- Added new modules and config files
+
 * Sat Apr 14 2007 Paul Chitescu <paulc@voip.null.ro>
 - Version 1.2.0-1
 - Disabled detection of speex, fax and coredumper

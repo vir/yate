@@ -577,6 +577,13 @@ class Mutex;
 void YCLASS(class type,class base);
 
 /**
+ * Macro to implement @ref GenObject::getObject in a derived class
+ * @param type Class that is declared
+ * @param base Base class that is inherited
+ */
+void YCLASSIMP(class type,class base);
+
+/**
  * Macro to retrive a typed pointer to an interface from an object
  * @param type Class we want to return
  * @param pntr Pointer to the object we want to get the interface from
@@ -587,6 +594,10 @@ class* YOBJECT(class type,GenObject* pntr);
 
 #define YCLASS(type,base) \
 public: virtual void* getObject(const String& name) const \
+{ return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
+
+#define YCLASSIMP(type,base) \
+void* type::getObject(const String& name) const \
 { return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
 
 #define YOBJECT(type,pntr) (static_cast<type*>((pntr) ? (pntr)->getObject(#type) : 0))

@@ -13,7 +13,7 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatesip.h @srcdir@/util.h
 
 PROGS=
 LIBS = libyatesip.a
-OBJS = util.o engine.o body.o message.o transaction.o
+OBJS = util.o engine.o message.o transaction.o
 
 LOCALFLAGS =
 LOCALLIBS =

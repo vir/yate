@@ -563,7 +563,7 @@ bool SIPMessage::parse(const char* buf, int len)
     DDebug(DebugAll,"SIPMessage::parse(%p,%d) [%p]",buf,len,this);
     String* line = 0;
     while (len > 0) {
-	line = getUnfoldedLine(&buf,&len);
+	line = MimeBody::getUnfoldedLine(buf,len);
 	if (!line->null())
 	    break;
 	// Skip any initial empty lines
@@ -579,7 +579,7 @@ bool SIPMessage::parse(const char* buf, int len)
     String content;
     int clen = -1;
     while (len > 0) {
-	line = getUnfoldedLine(&buf,&len);
+	line = MimeBody::getUnfoldedLine(buf,len);
 	if (line->null()) {
 	    // Found end of headers
 	    line->destruct();
@@ -633,7 +633,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	    len = clen;
 	}
     }
-    body = SIPBody::build(buf,len,content);
+    body = MimeBody::build(buf,len,content);
     DDebug(DebugAll,"SIPMessage::parse %d header lines, body %p",
 	header.count(),body);
     return true;
@@ -767,7 +767,7 @@ const DataBlock& SIPMessage::getBuffer() const
     return m_data;
 }
 
-void SIPMessage::setBody(SIPBody* newbody)
+void SIPMessage::setBody(MimeBody* newbody)
 {
     if (newbody == body)
 	return;

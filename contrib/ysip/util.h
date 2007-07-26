@@ -25,12 +25,6 @@
 
 namespace TelEngine {
 
-// Utility function, checks if a character is a line continuation blank
-bool isContinuationBlank(char c);
-
-// Utility function, returns an unfolded line and advances the pointer
-String* getUnfoldedLine(const char** buf, int* len);
-
 // Utility function, returns an uncompacted header name
 const char* uncompactForm(const char* header);
 

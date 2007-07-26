@@ -25,6 +25,7 @@
 #define __YATESIP_H
 
 #include <yateclass.h>
+#include <yatemime.h>
 
 #ifdef _WINDOWS
 
@@ -81,91 +82,6 @@ protected:
     String m_party;
     int m_localPort;
     int m_partyPort;
-};
-
-class YSIP_API SIPBody : public GenObject
-{
-    YCLASS(SIPBody,GenObject)
-public:
-    SIPBody(const String& type);
-    virtual ~SIPBody();
-    inline const String& getType() const
-	{ return m_type; }
-    static SIPBody* build(const char* buf, int len, const String& type);
-    const DataBlock& getBody() const;
-    virtual bool isSDP() const
-	{ return false; }
-    virtual SIPBody* clone() const = 0;
-protected:
-    virtual void buildBody() const = 0;
-    String m_type;
-    mutable DataBlock m_body;
-};
-
-class YSIP_API SDPBody : public SIPBody
-{
-    YCLASS(SDPBody,SIPBody)
-public:
-    SDPBody();
-    SDPBody(const String& type, const char* buf, int len);
-    virtual ~SDPBody();
-    virtual bool isSDP() const
-	{ return true; }
-    virtual SIPBody* clone() const;
-    inline const ObjList& lines() const
-	{ return m_lines; }
-    inline void addLine(const char* name, const char* value = 0)
-	{ m_lines.append(new NamedString(name,value)); }
-    const NamedString* getLine(const char* name) const;
-    const NamedString* getNextLine(const NamedString* line) const;
-protected:
-    SDPBody(const SDPBody& original);
-    virtual void buildBody() const;
-    ObjList m_lines;
-};
-
-class YSIP_API SIPBinaryBody : public SIPBody
-{
-    YCLASS(SIPBinaryBody,SIPBody)
-public:
-    SIPBinaryBody(const String& type, const char* buf, int len);
-    virtual ~SIPBinaryBody();
-    virtual SIPBody* clone() const;
-protected:
-    SIPBinaryBody(const SIPBinaryBody& original);
-    virtual void buildBody() const;
-};
-
-class YSIP_API SIPStringBody : public SIPBody
-{
-    YCLASS(SIPStringBody,SIPBody)
-public:
-    SIPStringBody(const String& type, const char* buf, int len = -1);
-    virtual ~SIPStringBody();
-    virtual SIPBody* clone() const;
-    inline const String& text() const
-	{ return m_text; }
-protected:
-    SIPStringBody(const SIPStringBody& original);
-    virtual void buildBody() const;
-    String m_text;
-};
-
-class YSIP_API SIPLinesBody : public SIPBody
-{
-    YCLASS(SIPLinesBody,SIPBody)
-public:
-    SIPLinesBody(const String& type, const char* buf, int len);
-    virtual ~SIPLinesBody();
-    virtual SIPBody* clone() const;
-    inline const ObjList& lines() const
-	{ return m_lines; }
-    inline void addLine(const char* line)
-	{ m_lines.append(new String(line)); }
-protected:
-    SIPLinesBody(const SIPLinesBody& original);
-    virtual void buildBody() const;
-    ObjList m_lines;
 };
 
 class YSIP_API SIPHeaderLine : public NamedString
@@ -457,7 +373,7 @@ public:
     /**
      * Set a new body for this message
      */
-    void setBody(SIPBody* newbody = 0);
+    void setBody(MimeBody* newbody = 0);
 
     /**
      * Sip Version
@@ -493,7 +409,7 @@ public:
      * All the body related things should be here, including the entire body and
      * the parsed body.
      */
-    SIPBody* body;
+    MimeBody* body;
 
 protected:
     bool parse(const char* buf, int len);

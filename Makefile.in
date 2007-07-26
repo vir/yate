@@ -20,7 +20,7 @@ MKDEPS := ./config.status
 PROGS:= yate
 YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so
-INCS := yateclass.h yatengine.h yatephone.h yatecbase.h
+INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h
 GENS := yateversn.h
 LIBS :=
 MAN8 := yate.8 yate-config.8
@@ -139,7 +139,7 @@ apidocs-build: check-topdir
 apidocs: @srcdir@/docs/api/index.html
 
 @srcdir@/docs/api/index.html: Doxyfile \
-    @srcdir@/yateclass.h @srcdir@/yatengine.h \
+    @srcdir@/yateclass.h @srcdir@/yatemime.h @srcdir@/yatengine.h \
     @srcdir@/yatephone.h @srcdir@/yatecbase.h
 	$(MAKE) apidocs-build
 

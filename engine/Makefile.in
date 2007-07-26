@@ -18,13 +18,13 @@ LDCONFIG:=true
 
 MKDEPS := ../config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
-CINC := @top_srcdir@/yateclass.h
+CINC := @top_srcdir@/yateclass.h @top_srcdir@/yatemime.h
 EINC := $(CINC) @top_srcdir@/yatengine.h
 PINC := $(EINC) @top_srcdir@/yatephone.h
 CLINC:= $(PINC) @top_srcdir@/yatecbase.h
 LIBS :=
 CLSOBJS := TelEngine.o ObjList.o HashList.o String.o DataBlock.o NamedList.o \
-	URI.o Array.o Iterator.o YMD5.o YSHA1.o Mutex.o Thread.o Socket.o
+	URI.o Mime.o Array.o Iterator.o YMD5.o YSHA1.o Mutex.o Thread.o Socket.o
 ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
 TELOBJS := DataFormat.o Channel.o
 CLIOBJS := Client.o

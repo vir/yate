@@ -136,6 +136,10 @@ SOURCE=..\engine\Message.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\engine\Mime.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\engine\Mutex.cpp
 # End Source File
 # Begin Source File
@@ -189,6 +193,10 @@ SOURCE=..\yatecbase.h
 # Begin Source File
 
 SOURCE=..\yateclass.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\yatemime.h
 # End Source File
 # Begin Source File
 

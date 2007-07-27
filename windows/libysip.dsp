@@ -87,10 +87,6 @@ LIB32=link.exe -lib
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=..\contrib\ysip\body.cpp
-# End Source File
-# Begin Source File
-
 SOURCE=..\contrib\ysip\engine.cpp
 # End Source File
 # Begin Source File

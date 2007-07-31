@@ -712,6 +712,7 @@ int Engine::run()
     s_haltcode &= 0xff;
     Output("Yate engine is shutting down with code %d",s_haltcode);
     setStatus(SERVICE_STOP_PENDING);
+    ::signal(SIGINT,SIG_DFL);
     dispatch("engine.halt");
     checkPoint();
     Thread::msleep(200);
@@ -722,7 +723,6 @@ int Engine::run()
     Thread::killall();
     checkPoint();
     m_dispatcher.dequeue();
-    ::signal(SIGINT,SIG_DFL);
     ::signal(SIGTERM,SIG_DFL);
 #ifndef _WINDOWS
     ::signal(SIGHUP,SIG_DFL);

@@ -58,6 +58,9 @@
 ; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
 ;forward_sdp=disable
 
+; rtp_localip: ipaddress: IP address to bind local RTP to, empty to guess best
+;rtp_localip=
+
 ; rtp_start: bool: Start RTP when sending 200 on incoming instead of receiving ACK
 ;rtp_start=disable
 

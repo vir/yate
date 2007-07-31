@@ -488,6 +488,7 @@ static ObjList s_lines;
 static Configuration s_cfg;
 static String s_realm = "Yate";
 static String s_audio = "alaw,mulaw";
+static String s_rtpip;
 static int s_maxForwards = 20;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
@@ -1767,6 +1768,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_callid",m_callid);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
     copySipHeaders(*m,*ev->getMessage());
+    m_rtpLocalAddr = s_rtpip;
     if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
 	setMedia(parseSDP(static_cast<MimeSdpBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpMedia));
 	if (m_rtpMedia) {
@@ -1897,6 +1899,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	m->addHeader(hl);
     }
 
+    m_rtpLocalAddr = s_rtpip;
     MimeSdpBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
@@ -2816,8 +2819,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 
 	m_mediaStatus = MediaMissing;
-	// let RTP guess again the local interface
-	m_rtpLocalAddr.clear();
+	// let RTP guess again the local interface or use the enforced address
+	m_rtpLocalAddr = s_rtpip;
 	// clear all data endpoints - createRtpSDP will build new ones
 	clearEndpoint();
 
@@ -3976,6 +3979,7 @@ void SIPDriver::initialize()
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
+    s_rtpip = s_cfg.getValue("general","rtp_localip");
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);

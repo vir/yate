@@ -28,6 +28,9 @@
 ; needmedia: bool: Drop calls for which no common media could be negotiated
 ;needmedia=yes
 
+; dtmfinband: bool: Send keypad events as inband DTMF
+;dtmfinband=no
+
 ; Use an external RTP module instead of the native OpenH323 RTP stack, which is
 ;  very cpu intensive. If no external RTP can be found it will fallback to the
 ;  native stack. The only external RTP now is yrtp (see the yrtpchan module).

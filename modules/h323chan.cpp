@@ -85,6 +85,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+static bool s_inband;
 static bool s_externalRtp;
 static bool s_fallbackRtp;
 static bool s_passtrough;
@@ -474,6 +475,7 @@ public:
 private:
     YateH323Connection* m_conn;
     bool m_hungup;
+    bool m_inband;
 };
 
 class YateGkRegThread : public PThread
@@ -774,7 +776,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
     }
 
     AddAllUserInputCapabilities(0,1);
-    DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband")));
+    DisableDetectInBandDTMF(!(params && params->getBoolValue("dtmfinband",s_inband)));
     DisableFastStart(!(params && params->getBoolValue("faststart")));
     DisableH245Tunneling(!(params && params->getBoolValue("h245tunneling")));
     DisableH245inSetup(!(params && params->getBoolValue("h245insetup")));
@@ -1937,7 +1939,7 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 }
 
 YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
-    : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false)
+    : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false), m_inband(s_inband)
 {
     s_mutex.lock();
     s_chanCount++;
@@ -1948,6 +1950,7 @@ YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* add
     setMaxcall(msg);
     Message* s = message("chan.startup",msg);
     if (msg) {
+	m_inband = msg->getBoolValue("dtmfinband",s_inband);
 	s->setParam("caller",msg->getValue("caller"));
 	s->setParam("called",msg->getValue("called"));
 	s->setParam("billid",msg->getValue("billid"));
@@ -2159,7 +2162,11 @@ bool YateH323Chan::msgAnswered(Message& msg)
 
 bool YateH323Chan::msgTone(Message& msg, const char* tone)
 {
-    return tone && m_conn && m_conn->sendTone(msg,tone);
+    if (!(tone && m_conn))
+	return false;
+    if (m_inband && dtmfInband(tone))
+	return true;
+    return m_conn->sendTone(msg,tone);
 }
 
 bool YateH323Chan::msgText(Message& msg, const char* text)
@@ -2304,6 +2311,7 @@ void H323Driver::initialize()
     s_cfg = Engine::configFile("h323chan");
     s_cfg.load();
     setup();
+    s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_externalRtp = s_cfg.getBoolValue("general","external_rtp",true);
     s_passtrough = s_cfg.getBoolValue("general","forward_rtp",false);
     s_fallbackRtp = s_cfg.getBoolValue("general","fallback_rtp",true);

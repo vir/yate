@@ -2397,12 +2397,13 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
     for (ObjList* ml = mediaList->skipNull(); ml; ml = ml->skipNext()) {
 	NetMedia* m = static_cast<NetMedia*>(ml->get());
 
-	String frm(m->fmtList());
-	ObjList* l = frm.split(',',false);
-	frm = *m;
-	frm << " " << (m->localPort() ? m->localPort().c_str() : "0") << " " << m->transport();
+	String mline(m->fmtList());
+	ObjList* l = mline.split(',',false);
+	mline = *m;
+	mline << " " << (m->localPort() ? m->localPort().c_str() : "0") << " " << m->transport();
 	ObjList* map = m->mappings().split(',',false);
 	ObjList rtpmap;
+	String frm;
 	int ptime = 0;
 	ObjList* f = l;
 	for (; f; f = f->next()) {
@@ -2450,10 +2451,16 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	TelEngine::destruct(l);
 	TelEngine::destruct(map);
 
-	if (*m == "audio") {
+	if (frm && m->isAudio()) {
 	    // always claim to support telephone events
 	    frm << " 101";
 	    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+	}
+
+	if (frm.null()) {
+	    Debug(this,DebugMild,"No formats for '%s', excluding from SDP [%p]",
+		m->c_str(),this);
+	    continue;
 	}
 
 	if (ptime) {
@@ -2462,7 +2469,7 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	    rtpmap.append(temp);
 	}
 
-	sdp->addLine("m",frm);
+	sdp->addLine("m",mline + frm);
 	for (f = rtpmap.skipNull(); f; f = f->skipNext()) {
 	    String* s = static_cast<String*>(f->get());
 	    if (s)

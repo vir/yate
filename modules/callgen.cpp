@@ -54,6 +54,7 @@ public:
     void answered();
     void makeSource();
     void makeConsumer();
+    void drop(const char *reason);
     inline const String& status() const
 	{ return m_status; }
     inline const String& party() const
@@ -163,7 +164,7 @@ GenConnection::GenConnection(unsigned int lifetime, const String& callto)
 GenConnection::~GenConnection()
 {
     if (!Engine::exiting())
-	Output("Ending %s generated call %s to: %s",
+	Output("Ended %s %s to: %s",
 	    m_status.c_str(),id().c_str(),m_callto.c_str());
     Message* m = new Message("chan.hangup");
     m->addParam("module","callgen");
@@ -246,7 +247,7 @@ int GenConnection::dropAll(bool resume)
 	s_mutex.unlock();
 	if (!c)
 	    break;
-	c->disconnect();
+	c->drop("dropped");
 	c = 0;
 	s_mutex.lock();
 	++dropped;
@@ -258,7 +259,16 @@ int GenConnection::dropAll(bool resume)
 void GenConnection::disconnected(bool final, const char *reason)
 {
     Debug("CallGen",DebugInfo,"Disconnected '%s' reason '%s' [%p]",id().c_str(),reason,this);
-    m_status = "disconnected";
+    if (reason)
+	m_status << " (" << reason << ")";
+}
+
+void GenConnection::drop(const char *reason)
+{
+    Debug("CallGen",DebugInfo,"Dropping '%s' reason '%s' [%p]",id().c_str(),reason,this);
+    disconnect(reason);
+    if (reason)
+	m_status << " (" << reason << ")";
 }
 
 void GenConnection::ringing()
@@ -388,7 +398,7 @@ void CleanThread::run()
 	    if (!c)
 		break;
 	    if (c->oldAge(t))
-		c->disconnect();
+		c->drop("finished");
 	    c = 0;
 	    s_mutex.lock();
 	}

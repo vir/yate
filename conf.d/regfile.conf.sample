@@ -20,5 +20,6 @@
 
 ; you have to put username as a category and password into key password
 ; if password is missing the module will only register but not authenticate
+; if password exists and is empty will blindly authenticate anybody
 ;[username]
 ;password=something

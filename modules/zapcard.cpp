@@ -56,6 +56,7 @@ class ZapDevice;                         // Zaptel I/O device. Implements the in
 class ZapInterface;                      // D-channel signalling interface
 class ZapSpan;                           // Signalling span used to create voice circuits
 class ZapCircuit;                        // A voice circuit
+class ZapAnalogCircuit;                  // A analog circuit
 class ZapSource;                         // Data source
 class ZapConsumer;                       // Data consumer
 
@@ -121,7 +122,7 @@ public:
 	None = ZT_EVENT_NONE,
 	OnHook = ZT_EVENT_ONHOOK,
 	OffHookRing = ZT_EVENT_RINGOFFHOOK,
-	Wink = ZT_EVENT_WINKFLASH,
+	WinkFlash = ZT_EVENT_WINKFLASH,
 	Alarm = ZT_EVENT_ALARM,
 	NoAlarm = ZT_EVENT_NOALARM,
 	HdlcAbort = ZT_EVENT_ABORT,
@@ -142,6 +143,14 @@ public:
 	DtmfDown = ZT_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
 	DtmfUp = ZT_EVENT_DTMFUP,            // Ditto for DTMF key up event
 	DTMFEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
+    };
+
+    // List of hook to send events
+    enum HookEvent {
+	HookOn    = ZT_ONHOOK,
+	HookOff   = ZT_OFFHOOK,
+	HookWink  = ZT_WINK,
+	HookFlash = ZT_FLASH
     };
 
     // List of valid IOCTL requests
@@ -175,6 +184,8 @@ public:
     enum Type {
 	E1,
 	T1,
+	FXO,
+	FXS
     };
 
     ZapDevice(SignallingComponent* dbg, unsigned int chan, unsigned int circuit, bool interface);
@@ -206,6 +217,10 @@ public:
     // Update echo canceller
     // Set train to true on succesfully set echo canceller with non 0 echo taps
     bool setEchoTaps(unsigned int echoTaps, bool& train);
+    // Send hook events
+    bool sendHook(HookEvent event, bool hookState);
+    // Send DTMFs events
+    bool sendDtmf(const char* tone);
     // Start echo canceller training for a given period of time (in miliseconds)
     bool startEchoTrain(unsigned int period);
     // Get an event. Return 0 if no events. Set dtmf if the event is a DTMF
@@ -219,11 +234,11 @@ public:
     int recv(void* buffer, int len);
     // Send data. Return -1 on error or the number of bytes written
     int send(const void* buffer, int len);
-    // Make IOCTL requests on this device
-    bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
 protected:
     inline bool canRetry()
 	{ return errno == EAGAIN || errno == EINTR; }
+    // Make IOCTL requests on this device
+    bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
 private:
     SignallingComponent* m_owner;        // Signalling component owning this device
     bool m_interface;                    // True if this is a D-channel
@@ -334,11 +349,14 @@ public:
     virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
     // Consume data sent by the consumer
     void consume(const DataBlock& data);
-private:
+protected:
     // Close device. Stop worker. Remove source consumer. Change status. Release memory if requested
     void cleanup(bool release, Status stat = Missing);
-    // Get and process events
+    // Get and process some events
     void checkEvents();
+    // Process additional events. Return false if not processed
+    virtual bool processEvent(int event)
+	{ return false; }
 
     ZapDevice m_device;                  // The device
     ZapDevice::Type m_type;              // Circuit type
@@ -359,6 +377,33 @@ private:
     unsigned int m_consErrors;           // Consumer. Total number of send failures
     unsigned int m_consErrorBytes;       // Consumer. Total number of lost bytes
     unsigned int m_consTotal;            // Consumer. Total number of bytes transferred
+};
+
+// An analog circuit
+class ZapAnalogCircuit : public ZapCircuit
+{
+public:
+    inline ZapAnalogCircuit(ZapDevice::Type type, unsigned int code, unsigned int channel,
+	ZapSpan* span, const NamedList& config, const NamedList& defaults,
+	const NamedList& params)
+	: ZapCircuit(type,code,channel,span,config,defaults,params),
+	m_hook(true)
+	{}
+    virtual ~ZapAnalogCircuit()
+	{}
+    // Get circuit data
+    virtual bool getParam(const String& param, String& value);
+    // Send an event
+    virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
+protected:
+    // Process additional events. Return false if not processed
+    virtual bool processEvent(int event);
+    // Receive hook events. Check device type and hook state
+    bool recvHook(int event);
+    // Change hook state if different
+    void changeHook(bool hook);
+
+    bool m_hook;                         // The hook status
 };
 
 // Data source
@@ -469,7 +514,7 @@ static TokenDict s_events[] = {
     MAKE_NAME(None),
     MAKE_NAME(OnHook),
     MAKE_NAME(OffHookRing),
-    MAKE_NAME(Wink),
+    MAKE_NAME(WinkFlash),
     MAKE_NAME(Alarm),
     MAKE_NAME(NoAlarm),
     MAKE_NAME(HdlcAbort),
@@ -512,6 +557,8 @@ static TokenDict s_ioctl_request[] = {
 static TokenDict s_types[] = {
     MAKE_NAME(E1),
     MAKE_NAME(T1),
+    MAKE_NAME(FXO),
+    MAKE_NAME(FXS),
     {0,0}
 };
 #undef MAKE_NAME
@@ -652,6 +699,54 @@ bool ZapDevice::setEchoTaps(unsigned int echoTaps, bool& train)
 	m_name.safe(),echoTaps,m_channel,m_owner);
     train = echoTaps;
     return true;
+}
+
+// Send hook events
+bool ZapDevice::sendHook(HookEvent event, bool hookState)
+{
+    int val = event;
+    switch (event) {
+	case HookOn:
+	case HookOff:
+	    // Avoid sending duplicate hook state
+	    if (hookState != (event == HookOn))
+		break;
+	    DDebug(m_owner,DebugAll,"%sAlready %s hook [%p]",
+		m_name.safe(),hookState?"on":"off",this);
+	    return false;
+	case HookWink:
+	case HookFlash:
+	    // Avoid sending wink while hook is on or flash while hook is off
+	    if (hookState == (event == HookWink))
+		break;
+	    Debug(m_owner,DebugNote,"%sRequest to send hook %s while hook is %s [%p]",
+		m_name.safe(),event==HookWink?"wink":"flash",hookState?"on":"off",this);
+	    return false;
+	default:
+	    XDebug(m_owner,DebugStub,"%sRequest to send unhandled hook event %u [%p]",
+		m_name.safe(),event,this);
+	    return false;
+    }
+    return ioctl(SetHook,&val);
+}
+
+// Send DTMFs events
+bool ZapDevice::sendDtmf(const char* tone)
+{
+    if (!(tone && *tone))
+	return false;
+    int len = strlen(tone);
+    if (len > ZT_MAX_DTMF_BUF - 2) {
+	Debug(m_owner,DebugNote,"%sCan't send dtmf '%s' (len %d > %u) [%p]",
+	    m_name.safe(),tone,len,ZT_MAX_DTMF_BUF-2,this);
+	return false;
+    }
+    DDebug(m_owner,DebugAll,"%sSending dtmf '%s' [%p]",m_name.safe(),tone,this);
+    ZT_DIAL_OPERATION dop;
+    dop.op = ZT_DIAL_OP_APPEND;
+    dop.dialstr[0] = 'T';
+    strncpy(dop.dialstr+1,tone,len);
+    return ioctl(ZapDevice::SetDial,&dop,DebugMild);
 }
 
 // Start echo training
@@ -1360,24 +1455,8 @@ bool ZapCircuit::process()
 // Send an event through the circuit
 bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 {
-    if (type == SignallingCircuitEvent::Dtmf) {
-	const char* t = params ? params->getValue("tone") : 0;
-	if (!(t && *t))
-	    return false;
-	// Get the dial string operation
-	ZT_DIAL_OPERATION dop;
-	dop.op = ZT_DIAL_OP_APPEND;
-	int len = strlen(t);
-	if (len > ZT_MAX_DTMF_BUF - 1) {
-	    DDebug(group(),DebugNote,
-		"ZapCircuit(%u). Can't send dtmf '%s' (len %d > %u) [%p]",
-		code(),t,len,ZT_MAX_DTMF_BUF-1,this);
-	    return false;
-	}
-	DDebug(group(),DebugAll,"ZapCircuit(%u). Sending dtmf '%s' [%p]",code(),t,this);
-	strncpy(dop.dialstr,t,len);
-	return m_device.ioctl(ZapDevice::SetDial,&dop,DebugMild);
-    }
+    if (type == SignallingCircuitEvent::Dtmf)
+	return m_device.sendDtmf(params ? params->getValue("tone") : 0);
 
     Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send event %u [%p]",
 	code(),type,this);
@@ -1489,11 +1568,150 @@ void ZapCircuit::checkEvents()
 	default:
 	    level = DebugStub;
     }
+    if (processEvent(event))
+	return;
     SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Unknown);
     addEvent(e);
     DDebug(group(),level,"ZapCircuit(%u). Got event %d ('%s') [%p]",
 	code(),event,e->c_str(),this);
 #undef CREATE_EVENT
+}
+
+
+/**
+ * ZapAnalogCircuit
+ */
+// Get circuit data
+bool ZapAnalogCircuit::getParam(const String& param, String& value)
+{
+    if (param == "hook") {
+	value = String::boolText(m_hook);
+	return true;
+    }
+    return ZapCircuit::getParam(param,value);
+}
+
+// Send an event
+bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
+{
+    switch (type) {
+	case SignallingCircuitEvent::Dtmf:
+	    return ZapCircuit::sendEvent(type,params);
+	case SignallingCircuitEvent::OnHook:
+	case SignallingCircuitEvent::OffHook:
+	case SignallingCircuitEvent::Wink:
+	case SignallingCircuitEvent::Flash:
+	    if (m_type != ZapDevice::FXS) {
+		Debug(group(),DebugNote,
+		    "ZapCircuit(%u). Request to send hook event %u on %s device [%p]",
+		    code(),type,lookup(m_type,s_types),this);
+		return false;
+	    }
+	    switch (type) {
+		case SignallingCircuitEvent::OnHook:
+		    if (!m_device.sendHook(ZapDevice::HookOn,m_hook))
+			return false;
+		    changeHook(true);
+		    return true;
+		case SignallingCircuitEvent::OffHook:
+		    if (!m_device.sendHook(ZapDevice::HookOff,m_hook))
+			return false;
+		    changeHook(false);
+		    return true;
+		case SignallingCircuitEvent::Wink:
+		    return m_device.sendHook(ZapDevice::HookWink,m_hook);
+		case SignallingCircuitEvent::Flash:
+		    return m_device.sendHook(ZapDevice::HookFlash,m_hook);
+		default: ;
+	    }
+	    return false;
+	default: ;
+    }
+    return ZapCircuit::sendEvent(type,params);
+}
+
+// Process additional events. Return false if not processed
+bool ZapAnalogCircuit::processEvent(int event)
+{
+#define CREATE_EVENT(sce) new SignallingCircuitEvent(sce,lookup(event,s_events))
+    switch (event) {
+#if 0
+// Unhandled
+	DialComplete
+	RingerOn
+	RingerOff
+	HookChanged
+	BitsChanged
+	PulseStart
+	Timeout
+	TimerPing
+	RingBegin
+	Polarity
+#endif
+	case ZapDevice::OnHook:
+	    if (!recvHook(event))
+		break;
+	    changeHook(true);
+	    addEvent(CREATE_EVENT(SignallingCircuitEvent::OnHook));
+	    break;
+	case ZapDevice::OffHookRing:
+	    if (!recvHook(event))
+		break;
+	    changeHook(false);
+	    addEvent(CREATE_EVENT(SignallingCircuitEvent::OffHook));
+	    break;
+	case ZapDevice::WinkFlash:
+	    if (!recvHook(event))
+		break;
+	    if (m_hook)
+		addEvent(CREATE_EVENT(SignallingCircuitEvent::Flash));
+	    else
+		addEvent(CREATE_EVENT(SignallingCircuitEvent::Wink));
+	    break;
+	default:
+	    return false;
+    }
+#undef CREATE_EVENT
+    return true;
+}
+
+// Received hook events. Check device type and hook state
+bool ZapAnalogCircuit::recvHook(int event)
+{
+    if (m_type != ZapDevice::FXO) {
+	Debug(group(),DebugNote,
+	    "ZapCircuit(%u). Received hook event '%s' on %s device [%p]",
+	    code(),lookup(event,s_events),lookup(m_type,s_types),this);
+	return false;
+    }
+
+    switch (event) {
+	case ZapDevice::OnHook:
+	    if (m_hook)
+		break;
+	    return true;
+	case ZapDevice::OffHookRing:
+	    if (!m_hook)
+		break;
+	    return true;
+	case ZapDevice::WinkFlash:
+	    return true;
+	default:
+	    return false;
+    }
+    DDebug(group(),DebugMild,"ZapCircuit(%u). Received '%s' while %s hook [%p]",
+	code(),lookup(event,s_events),m_hook?"on":"off",this);
+    return false;
+}
+
+// Change hook state if different
+void ZapAnalogCircuit::changeHook(bool hook)
+{
+    if (m_hook == hook)
+	return;
+    DDebug(group(),DebugInfo,"ZapCircuit(%u). Hook changed to %s [%p]",
+	code(),hook?"on":"off",this);
+    m_hook = hook;
 }
 
 }; // anonymous namespace

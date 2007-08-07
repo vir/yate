@@ -152,6 +152,8 @@ public:
 	SetFormat      = ZT_SETLAW,          // Set format
 	SetAudioMode   = ZT_AUDIOMODE,       // Set audio mode
 	SetEchoCancel  = ZT_ECHOCANCEL,      // Set echo cancel
+	SetDial        = ZT_DIAL,            // Append, replace, or cancel a dial string
+	SetHook        = ZT_HOOK,            // Set Hookswitch Status
 #ifdef ZT_TONEDETECT
 	SetToneDetect  = ZT_TONEDETECT,      // Set tone detection
 #endif
@@ -172,7 +174,7 @@ public:
     // Circuit type used to create circuits and interface
     enum Type {
 	E1,
-	T1
+	T1,
     };
 
     ZapDevice(SignallingComponent* dbg, unsigned int chan, unsigned int circuit, bool interface);
@@ -217,11 +219,11 @@ public:
     int recv(void* buffer, int len);
     // Send data. Return -1 on error or the number of bytes written
     int send(const void* buffer, int len);
+    // Make IOCTL requests on this device
+    bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
 protected:
     inline bool canRetry()
 	{ return errno == EAGAIN || errno == EINTR; }
-    // Make IOCTL requests on this device
-    bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
 private:
     SignallingComponent* m_owner;        // Signalling component owning this device
     bool m_interface;                    // True if this is a D-channel
@@ -328,6 +330,8 @@ public:
     virtual void* getObject(const String& name) const;
     // Process incoming data
     virtual bool process();
+    // Send an event
+    virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
     // Consume data sent by the consumer
     void consume(const DataBlock& data);
 private:
@@ -450,17 +454,17 @@ void ZapWorkerThread::run()
 /**
  * ZapDevice
  */
-#define MAKE_NAME(x) { #x, ZapDevice::x }
 static TokenDict s_alarms[] = {
-    MAKE_NAME(Recover),
-    MAKE_NAME(Loopback),
-    MAKE_NAME(Yellow),
-    MAKE_NAME(Red),
-    MAKE_NAME(Blue),
-    MAKE_NAME(NotOpen),
+    {"recover",  ZapDevice::Recover},
+    {"loopback", ZapDevice::Loopback},
+    {"yellow",   ZapDevice::Yellow},
+    {"red",      ZapDevice::Red},
+    {"blue",     ZapDevice::Blue},
+    {"not-open", ZapDevice::NotOpen},
     {0,0}
 };
 
+#define MAKE_NAME(x) { #x, ZapDevice::x }
 static TokenDict s_events[] = {
     MAKE_NAME(None),
     MAKE_NAME(OnHook),
@@ -493,7 +497,8 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(SetBuffers),
     MAKE_NAME(SetFormat),
     MAKE_NAME(SetAudioMode),
-    MAKE_NAME(SetEchoCancel),
+    MAKE_NAME(SetDial),
+    MAKE_NAME(SetHook),
 #ifdef ZT_TONEDETECT
     MAKE_NAME(SetToneDetect),
 #endif
@@ -1352,6 +1357,33 @@ bool ZapCircuit::process()
     return false;
 }
 
+// Send an event through the circuit
+bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
+{
+    if (type == SignallingCircuitEvent::Dtmf) {
+	const char* t = params ? params->getValue("tone") : 0;
+	if (!(t && *t))
+	    return false;
+	// Get the dial string operation
+	ZT_DIAL_OPERATION dop;
+	dop.op = ZT_DIAL_OP_APPEND;
+	int len = strlen(t);
+	if (len > ZT_MAX_DTMF_BUF - 1) {
+	    DDebug(group(),DebugNote,
+		"ZapCircuit(%u). Can't send dtmf '%s' (len %d > %u) [%p]",
+		code(),t,len,ZT_MAX_DTMF_BUF-1,this);
+	    return false;
+	}
+	DDebug(group(),DebugAll,"ZapCircuit(%u). Sending dtmf '%s' [%p]",code(),t,this);
+	strncpy(dop.dialstr,t,len);
+	return m_device.ioctl(ZapDevice::SetDial,&dop,DebugMild);
+    }
+
+    Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send event %u [%p]",
+	code(),type,this);
+    return false;
+}
+
 // Consume data sent by the consumer
 void ZapCircuit::consume(const DataBlock& data)
 {
@@ -1407,6 +1439,7 @@ void ZapCircuit::cleanup(bool release, Status stat)
 	SignallingCircuit::destroyed();
 }
 
+// Get events
 void ZapCircuit::checkEvents()
 {
     char c = 0;
@@ -1414,6 +1447,7 @@ void ZapCircuit::checkEvents()
     if (!event)
 	return;
     int level = DebugWarn;
+#define CREATE_EVENT(sce) new SignallingCircuitEvent(sce,lookup(event,s_events))
     switch (event) {
 	case ZapDevice::PulseDigit:
 	case ZapDevice::DtmfDown:
@@ -1422,7 +1456,7 @@ void ZapCircuit::checkEvents()
 		code(),lookup(event,s_events,""),c,this);
 	    // Ignore DTMF UP event
 	    if (event != ZapDevice::DtmfUp) {
-		SignallingCircuitEvent* e = new SignallingCircuitEvent(SignallingCircuitEvent::Dtmf);
+		SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Dtmf);
 		char tone[2] = {c,0};
 		e->addParam("tone",tone);
 		addEvent(e);
@@ -1432,15 +1466,20 @@ void ZapCircuit::checkEvents()
 	case ZapDevice::NoAlarm:
 	    if (event == ZapDevice::Alarm) {
 		String s;
-		if (m_device.getAlarms(&s))
-		    Debug(group(),DebugNote,
+		if (m_device.getAlarms(&s)) {
+		    DDebug(group(),DebugNote,
 			"ZapCircuit(%u). Alarms changed. %d: '%s' [%p]",
 			code(),m_device.alarms(),s.safe(),this);
+		    SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Alarm);
+		    e->addParam("alarms",s);
+		    addEvent(e);
+		}
 	    }
 	    else {
 		m_device.resetAlarms();
-		Debug(group(),DebugNote,
+		DDebug(group(),DebugNote,
 		    "ZapCircuit(%u). No more alarms [%p]",code(),this);
+		addEvent(CREATE_EVENT(SignallingCircuitEvent::NoAlarm));
 	    }
 	    return;
 	// Keep the debug level
@@ -1450,8 +1489,11 @@ void ZapCircuit::checkEvents()
 	default:
 	    level = DebugStub;
     }
+    SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Unknown);
+    addEvent(e);
     DDebug(group(),level,"ZapCircuit(%u). Got event %d ('%s') [%p]",
-	code(),event,lookup(event,s_events,""),this);
+	code(),event,e->c_str(),this);
+#undef CREATE_EVENT
 }
 
 }; // anonymous namespace

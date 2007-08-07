@@ -669,12 +669,21 @@ bool SigChannel::msgAnswered(Message& msg)
 
 bool SigChannel::msgTone(Message& msg, const char* tone)
 {
+    if (!(tone && *tone))
+	return true;
     Lock lock(m_callMutex);
     DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
+    // Try to send: through the circuit, in band or through the signalling protocol
+    SignallingCircuit* cic = getCircuit();
+    if (cic) {
+	NamedList params("");
+	params.addParam("tone",tone);
+	if (cic->sendEvent(SignallingCircuitEvent::Dtmf,&params))
+	    return true;
+    }
     if (m_inband && dtmfInband(tone))
 	return true;
-    // If we failed try to send as signalling anyway
-    if (!m_call || !(tone && *tone))
+    if (!m_call)
 	return true;
     SignallingMessage* sm = new SignallingMessage;
     sm->params().addParam("tone",tone);

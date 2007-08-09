@@ -95,7 +95,7 @@ using namespace TelEngine;
 #define CFG_SUFFIX ".conf"
 
 #define MAX_SANITY 5
-#define INIT_SANITY 10
+#define INIT_SANITY 30
 #define MAX_LOGBUFF 4096
 
 static u_int64_t s_nextinit = 0;
@@ -385,6 +385,8 @@ static int supervise(void)
 	    }
 	    ::fcntl(logfd[0],F_SETFL,O_NONBLOCK);
 	}
+	// reap any children we may have before spawning a new one
+	::waitpid(-1,0,WNOHANG);
 	s_childpid = ::fork();
 	if (s_childpid < 0) {
 	    int err = errno;
@@ -462,8 +464,6 @@ static int supervise(void)
 		::usleep(500000);
 	    }
 	    ::kill(s_childpid,SIGKILL);
-	    ::usleep(10000);
-	    ::waitpid(s_childpid,0,WNOHANG);
 	    s_childpid = -1;
 	}
 	if (s_logrotator) {
@@ -602,7 +602,7 @@ int Engine::run()
 #endif
     SysUsage::init();
     s_runid = Time::secNow();
-    Debug(DebugAll,"Engine::run()");
+    DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());

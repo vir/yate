@@ -386,7 +386,8 @@ static int supervise(void)
 	    ::fcntl(logfd[0],F_SETFL,O_NONBLOCK);
 	}
 	// reap any children we may have before spawning a new one
-	::waitpid(-1,0,WNOHANG);
+	while (::waitpid(-1,0,WNOHANG) > 0)
+	    ;
 	s_childpid = ::fork();
 	if (s_childpid < 0) {
 	    int err = errno;

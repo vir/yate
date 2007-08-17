@@ -142,6 +142,13 @@ private:
 
 bool s_asyncDelete = true;
 bool s_dataPadding = true;
+bool s_pubReadable = false;
+
+#if defined (S_IRGRP) && defined(S_IROTH)
+#define CREATE_MODE (S_IRUSR|S_IWUSR|(s_pubReadable?(S_IRGRP|S_IROTH):0))
+#else
+#define CREATE_MODE (S_IRUSR|S_IWUSR)
+#endif
 
 INIT_PLUGIN(WaveFileDriver);
 
@@ -509,7 +516,7 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_header=Au;
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for recorded file '%s', assuming signed linear",file.c_str());
-    m_fd = ::open(file.safe(),O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_BINARY,S_IRUSR|S_IWUSR);
+    m_fd = ::open(file.safe(),O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_BINARY,CREATE_MODE);
     if (m_fd < 0)
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
 	    file.c_str(), errno, ::strerror(errno));
@@ -1062,6 +1069,7 @@ void WaveFileDriver::initialize()
     setup();
     s_asyncDelete = Engine::config().getBoolValue("hacks","asyncdelete",true);
     s_dataPadding = Engine::config().getBoolValue("hacks","datapadding",true);
+    s_pubReadable = Engine::config().getBoolValue("hacks","wavepubread",false);
     if (!m_handler) {
 	m_handler = new AttachHandler;
 	Engine::install(m_handler);

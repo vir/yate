@@ -62,6 +62,11 @@ extern "C" {
 #define WP_ERR_CRC   0x02
 #define WP_ERR_ABORT 0x04
 
+#define WP_RPT_REPEAT 0                  // Repeat flag in header
+#define WP_RPT_LEN 1                     // Repeated data length
+#define WP_RPT_DATA 2                    // Repeated data offset in header
+#define WP_RPT_MAXDATA 8                 // Max repeated data length
+
 #define MAX_PACKET 1200
 
 #define MAX_READ_ERRORS 250              // WpSpan::run(): Display read error message
@@ -79,8 +84,7 @@ class WpConsumer;                        // Data consumer
 class WpCircuit;                         // Single Wanpipe B-channel (SignallingCircuit)
 class WpSpan;                            // Wanpipe span B-channel group
 class WpSpanThread;                      // B-channel group read/write data
-
-static const char* s_driverName = "Wanpipe";
+class WpModule;                          // The driver
 
 // Implements a circular queue for data consumer
 class Fifo
@@ -338,7 +342,16 @@ private:
     WpSpan* m_data;
 };
 
+// The driver
+class WpModule : public DebugEnabler
+{
+public:
+    WpModule();
+    ~WpModule();
+};
 
+
+static WpModule driver;
 YSIGFACTORY2(WpInterface,SignallingInterface);
 
 static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
@@ -499,10 +512,10 @@ void* WpInterface::create(const String& type, const NamedList& name)
     Configuration cfg(Engine::configFile("wpcard"));
     cfg.load();
     const char* sectName = name.getValue(type);
-    DDebug(s_driverName,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    DDebug(&driver,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
-	DDebug(s_driverName,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
 
@@ -596,21 +609,25 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     }
 #endif
 
+#ifdef wp_api_tx_hdr_hdlc_rpt_data
+    // Repeat supported and data not too big
+    if (repeat)
+	if (packet.length() <= WP_RPT_MAXDATA) {
+	    unsigned char hdr[WP_HEADER];
+	    ::memset(hdr,0,WP_HEADER);
+	    hdr[WP_RPT_REPEAT] = 1;
+	    hdr[WP_RPT_LEN] = packet.length();
+	    ::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
+	    return -1 != m_socket.send(hdr,WP_HEADER,0);
+	}
+	else
+	    Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
+		type,packet.length());
+#endif
+
     DataBlock data(0,WP_HEADER);
     data += packet;
-    unsigned char* d = static_cast<unsigned char*>(data.data());
-    if (repeat)
-	d[WP_WR_FORCE] = 1;
-    switch (type) {
-	case SS7Fisu:
-	    d[WP_WR_TYPE] = WANOPT_SS7_FISU;
-	    break;
-	case SS7Lssu:
-	    d[WP_WR_TYPE] = WANOPT_SS7_LSSU;
-	    break;
-	default:
-	    break;
-    }
+
     return -1 != m_socket.send(data.data(),data.length(),0);
 }
 
@@ -1305,6 +1322,26 @@ void WpSpanThread::run()
     }
     else
 	DDebug(DebugAll,"WpSpanThread::run(). No client object [%p]",this);
+}
+
+/**
+ * WpModule
+ */
+WpModule::WpModule()
+{
+    debugName("Wanpipe");
+    Output("Loaded module %s",debugName());
+    Configuration cfg(Engine::configFile("wpcard"));
+    cfg.load();
+
+    int level = cfg.getIntValue("general","debuglevel");
+    if (level > 0)
+	debugLevel(level);
+}
+
+WpModule::~WpModule()
+{
+    Output("Unloading module %s",debugName());
 }
 
 }; // anonymous namespace

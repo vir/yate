@@ -144,6 +144,14 @@ static void (*s_intout)(const char*,int) = 0;
 
 static Mutex out_mux;
 static Mutex ind_mux;
+static Thread* s_thr = 0;
+
+static bool reentered()
+{
+    if (!s_thr)
+	return false;
+    return (Thread::current() == s_thr);
+}
 
 static void common_output(int level,char* buf)
 {
@@ -158,10 +166,13 @@ static void common_output(int level,char* buf)
     buf[n+1] = '\0';
     // serialize the output strings
     out_mux.lock();
+    // TODO: detect reentrant calls from foreign threads and main thread
+    s_thr = Thread::current();
     if (s_output)
 	s_output(buf,level);
     if (s_intout)
 	s_intout(buf,level);
+    s_thr = 0;
     out_mux.unlock();
 }
 
@@ -215,6 +226,8 @@ void Output(const char* format, ...)
     char buf[OUT_BUFFER_SIZE];
     if (!((s_output || s_intout) && format && *format))
 	return;
+    if (reentered())
+	return;
     va_list va;
     va_start(va,format);
     ::vsnprintf(buf,sizeof(buf)-2,format,va);
@@ -227,6 +240,8 @@ void Debug(int level, const char* format, ...)
     if (!s_debugging)
 	return;
     if (level > s_debug)
+	return;
+    if (reentered())
 	return;
     if (!format)
 	format = "";
@@ -247,6 +262,8 @@ void Debug(const char* facility, int level, const char* format, ...)
     if (!s_debugging)
 	return;
     if (level > s_debug)
+	return;
+    if (reentered())
 	return;
     if (!format)
 	format = "";
@@ -276,6 +293,8 @@ void Debug(const DebugEnabler* local, int level, const char* format, ...)
 	    return;
 	facility = local->debugName();
     }
+    if (reentered())
+	return;
     if (!format)
 	format = "";
     char buf[64];
@@ -367,7 +386,7 @@ void DebugEnabler::debugCopy(const DebugEnabler* original)
 Debugger::Debugger(const char* name, const char* format, ...)
     : m_name(name)
 {
-    if (s_debugging && m_name && (s_debug >= DebugAll)) {
+    if (s_debugging && m_name && (s_debug >= DebugAll) && !reentered()) {
 	char buf[64];
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
@@ -385,7 +404,7 @@ Debugger::Debugger(const char* name, const char* format, ...)
 Debugger::Debugger(int level, const char* name, const char* format, ...)
     : m_name(name)
 {
-    if (s_debugging && m_name && (s_debug >= level)) {
+    if (s_debugging && m_name && (s_debug >= level) && !reentered()) {
 	char buf[64];
 	::snprintf(buf,sizeof(buf),">>> %s",m_name);
 	va_list va;
@@ -413,11 +432,8 @@ Debugger::~Debugger()
     if (m_name) {
 	ind_mux.lock();
 	s_indent--;
-	if (s_debugging) {
-	    char buf[64];
-	    ::snprintf(buf,sizeof(buf),"<<< %s",m_name);
-	    dbg_dist_helper(buf,0);
-	}
+	if (s_debugging)
+	    dbg_dist_helper("<<< ","%s",m_name);
 	ind_mux.unlock();
     }
 }

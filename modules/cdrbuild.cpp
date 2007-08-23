@@ -77,6 +77,7 @@ private:
 	m_hangup;
     String m_dir;
     String m_status;
+    String m_cdrId;
     bool m_first;
     bool m_write;
 };
@@ -100,6 +101,8 @@ static ObjList s_cdrs;
 static Mutex s_mutex;
 static ObjList s_params;
 static int s_res = 1;
+static int s_seq = 0;
+static String s_runId;
 
 // Time resolutions
 static TokenDict const s_timeRes[] = {
@@ -135,6 +138,8 @@ static const char* const s_forbidden[] = {
     "billtime",
     "ringtime",
     "cdrwrite",
+    "cdrid",
+    "runid",
     0
 };
 
@@ -163,6 +168,7 @@ CdrBuilder::CdrBuilder(const char *name)
       m_first(true), m_write(true)
 {
     m_start = m_call = m_ringing = m_answer = m_hangup = 0;
+    m_cdrId = ++s_seq;
 }
 
 CdrBuilder::~CdrBuilder()
@@ -200,6 +206,8 @@ void CdrBuilder::emit(const char *operation)
     Message *m = new Message("call.cdr");
     m->addParam("time",printTime(buf,m_start));
     m->addParam("chan",c_str());
+    m->addParam("cdrid",m_cdrId);
+    m->addParam("runid",s_runId);
     m->addParam("operation",operation);
     m->addParam("direction",m_dir);
     m->addParam("duration",printTime(buf,t_hangup - m_start));
@@ -253,7 +261,9 @@ void CdrBuilder::update(int type, u_int64_t val)
 	    break;
 	case CdrHangup:
 	    m_hangup = val;
+	    s_mutex.lock();
 	    s_cdrs.remove(this);
+	    s_mutex.unlock();
 	    return;
     }
 }
@@ -344,11 +354,13 @@ bool CdrHandler::received(Message &msg)
 	    return false;
     }
     bool rval = false;
+    s_mutex.lock();
     CdrBuilder *b = CdrBuilder::find(id);
     if (!b && ((m_type == CdrStart) || (m_type == CdrCall))) {
 	b = new CdrBuilder(id);
 	s_cdrs.append(b);
     }
+    s_mutex.unlock();
     if (b)
 	rval = b->update(msg,m_type,msg.msgTime().usec());
     else
@@ -441,6 +453,7 @@ void CdrBuildPlugin::initialize()
     s_mutex.unlock();
     if (m_first) {
 	m_first = false;
+	s_runId = Engine::runId();
 	Engine::install(new CdrHandler("chan.startup",CdrStart));
 	Engine::install(new CdrHandler("call.route",CdrRoute));
 	Engine::install(new CdrHandler("call.execute",CdrCall));

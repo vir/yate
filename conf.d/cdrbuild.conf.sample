@@ -21,5 +21,5 @@
 ;username=false
 
 ; The following parameters are handled internally and cannot be changed:
-;  time, chan, operation, cdrwrite,
+;  time, chan, operation, cdrwrite, cdrid, runid,
 ;  direction, status, duration, billtime, ringtime

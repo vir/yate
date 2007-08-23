@@ -20,7 +20,7 @@ all:
 
 .PHONY: install
 install:
-	@mkdir -p "$(DESTDIR)$(scrdir)/" && \
+	@cd @srcdir@ && mkdir -p "$(DESTDIR)$(scrdir)/" && \
 	install -m 0644 $(SCRLIBS) "$(DESTDIR)$(scrdir)/" && \
 	test -z "$(SCRIPTS)" || \
 	install $(SCRIPTS) "$(DESTDIR)$(scrdir)/"

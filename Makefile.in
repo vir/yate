@@ -129,16 +129,16 @@ apidocs-doxygen: check-topdir
 	    echo "Executable doxygen is not installed!" ; exit 1 ; \
 	fi
 
-apidocs-build: check-topdir
+apidocs-build:
 	@if [ -n "$(DOCGEN)" ]; then \
-	    $(DOCGEN) ; \
+	    cd @srcdir@ ; $(DOCGEN) ; \
 	else \
 	    echo "Neither kdoc or doxygen is installed!" ; exit 1 ; \
 	fi
 
 apidocs: @srcdir@/docs/api/index.html
 
-@srcdir@/docs/api/index.html: Doxyfile \
+@srcdir@/docs/api/index.html: @srcdir@/Doxyfile \
     @srcdir@/yateclass.h @srcdir@/yatemime.h @srcdir@/yatengine.h \
     @srcdir@/yatephone.h @srcdir@/yatecbase.h
 	$(MAKE) apidocs-build

@@ -267,7 +267,7 @@ bool HaltHandler::received(Message& msg)
     ListIterator iter(s_chans);
     for (GenObject* o = 0; (o = iter.get());)
 	(static_cast<ParkEndpoint*>(o))->disconnect("shutdown");
-    return true;
+    return false;
 }
 
 // chan.locate

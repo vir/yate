@@ -177,12 +177,11 @@ void CdrBuilder::emit(const char *operation)
     u_int64_t t_hangup = m_hangup ? m_hangup : Time::now();
 
     u_int64_t
-	t_start = m_start, t_call = m_call,
-	t_ringing = m_ringing, t_answer = m_answer;
-    if (!t_start)
-	t_start = t_call;
+	t_call = m_call, t_ringing = m_ringing, t_answer = m_answer;
+    if (!m_start)
+	m_start = t_call;
     if (!t_call)
-	t_call = t_start;
+	t_call = m_start;
     if (!t_ringing)
 	t_ringing = t_call;
     if (!t_answer)
@@ -199,11 +198,11 @@ void CdrBuilder::emit(const char *operation)
 
     char buf[64];
     Message *m = new Message("call.cdr");
-    m->addParam("time",printTime(buf,t_start));
+    m->addParam("time",printTime(buf,m_start));
     m->addParam("chan",c_str());
     m->addParam("operation",operation);
     m->addParam("direction",m_dir);
-    m->addParam("duration",printTime(buf,t_hangup - t_start));
+    m->addParam("duration",printTime(buf,t_hangup - m_start));
     m->addParam("billtime",printTime(buf,t_hangup - t_answer));
     m->addParam("ringtime",printTime(buf,t_answer - t_ringing));
     m->addParam("status",m_status);
@@ -238,7 +237,8 @@ void CdrBuilder::update(int type, u_int64_t val)
 {
     switch (type) {
 	case CdrStart:
-	    m_start = val;
+	    if (!m_start)
+		m_start = val;
 	    break;
 	case CdrCall:
 	    m_call = val;

@@ -445,14 +445,16 @@ void Client::run()
     loadWindows();
     Message msg("ui.event");
     msg.setParam("event","load");
-    Engine::dispatch(msg);
+    if (Engine::dispatch(msg))
+	Debug(DebugGoOn,"Message %s was unexpectedly handled!",msg.c_str());
     initWindows();
     initClient();
     updateFrom(0);
     setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " - " YATE_RELEASE));
     m_initialized = true;
     msg.setParam("event","init");
-    Engine::dispatch(msg);
+    if (Engine::dispatch(msg))
+	Debug(DebugGoOn,"Message %s was unexpectedly handled!",msg.c_str());
     main();
     exitClient();
 }

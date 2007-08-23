@@ -621,7 +621,8 @@ int Engine::run()
     ::signal(SIGINT,sighandler);
     ::signal(SIGTERM,sighandler);
     Debug(DebugAll,"Engine dispatching start message");
-    dispatch("engine.start");
+    if (dispatch("engine.start"))
+	Debug(DebugGoOn,"Message engine.start was unexpectedly handled!");
     setStatus(SERVICE_RUNNING);
     long corr = 0;
 #ifndef _WINDOWS
@@ -714,7 +715,8 @@ int Engine::run()
     Output("Yate engine is shutting down with code %d",s_haltcode);
     setStatus(SERVICE_STOP_PENDING);
     ::signal(SIGINT,SIG_DFL);
-    dispatch("engine.halt");
+    if (dispatch("engine.halt"))
+	Debug(DebugGoOn,"Message engine.halt was unexpectedly handled!");
     checkPoint();
     Thread::msleep(200);
     m_dispatcher.dequeue();
@@ -896,7 +898,8 @@ void Engine::loadPlugins()
 void Engine::initPlugins()
 {
     Output("Initializing plugins");
-    dispatch("engine.init");
+    if (dispatch("engine.init"))
+	Debug(DebugGoOn,"Message engine.init was unexpectedly handled!");
     ObjList *l = plugins.skipNull();
     for (; l; l = l->skipNext()) {
 	Plugin *p = static_cast<Plugin *>(l->get());

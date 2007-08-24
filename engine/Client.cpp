@@ -514,7 +514,7 @@ void Client::initWindows()
 
 void Client::initClient()
 {
-    s_eventLen = Engine::config().getIntValue("client","eventlen",4096);
+    s_eventLen = Engine::config().getIntValue("client","eventlen",10240);
     if (s_eventLen > 65535)
 	s_eventLen = 65535;
     else if (s_eventLen && (s_eventLen < 1024))

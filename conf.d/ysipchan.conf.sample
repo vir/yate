@@ -67,6 +67,9 @@
 ; multi_ringing: bool: Accept provisional (1xx) messages even after 180 Ringing
 ;multi_ringing=disable
 
+; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
+;refresh_nosdp=enable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

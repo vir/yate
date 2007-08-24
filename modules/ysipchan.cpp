@@ -500,6 +500,7 @@ static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_auth_register = true;
 static bool s_multi_ringing = false;
+static bool s_refresh_nosdp = true;
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -2844,6 +2845,26 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	Engine::enqueue(msg);
 	return;
     }
+    if (s_refresh_nosdp && !t->initialMessage()->body) {
+	// be permissive, accept session refresh with no SDP
+	SIPMessage* m = new SIPMessage(t->initialMessage(),200);
+	if (!m_rtpForward) {
+	    // if possible provide our own media offer
+	    switch (m_mediaStatus) {
+		case MediaStarted:
+		    m->setBody(createSDP(getRtpAddr()));
+		    break;
+		case MediaMuted:
+		    m->setBody(createSDP(0));
+		    break;
+		default:
+		    break;
+	    }
+	}
+	t->setResponse(m);
+	m->deref();
+	return;
+    }
     t->setResponse(488);
 }
 
@@ -3989,6 +4010,7 @@ void SIPDriver::initialize()
     s_rtpip = s_cfg.getValue("general","rtp_localip");
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
+    s_refresh_nosdp = s_cfg.getBoolValue("general","refresh_nosdp",true);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);

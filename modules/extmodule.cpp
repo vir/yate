@@ -1351,26 +1351,30 @@ bool ExtModCommand::received(Message& msg)
 	return true;
     }
     int blank = line.find(' ');
-    if (blank <= 0) {
-	if (line == "stop")
-	    return false;
-	ExtModReceiver *r = ExtModReceiver::build(line,(const char*)0);
-	msg.retValue() = r ? "External start attempt\r\n" : "External command failed!\r\n";
-	return true;
-    }
-    if (line.startSkip("stop")) {
+    bool start = line.startSkip("start");
+    bool restart = start || line.startSkip("restart");
+    if (restart || line.startSkip("stop")) {
 	if (line.null())
 	    return false;
-	ExtModReceiver *r = ExtModReceiver::find(line);
+	blank = line.find(' ');
+	ExtModReceiver *r = ExtModReceiver::find(line.substr(0,blank));
 	if (r) {
-	    r->die();
-	    msg.retValue() = "External command stopped\r\n";
+	    if (start) {
+		msg.retValue() = "External already running\r\n";
+		return true;
+	    }
+	    else {
+		r->die();
+		msg.retValue() = "External command stopped\r\n";
+	    }
 	}
 	else
 	    msg.retValue() = "External not running\r\n";
-	return true;
+	if (!restart)
+	    return true;
     }
-    ExtModReceiver *r = ExtModReceiver::build(line.substr(0,blank),line.substr(blank+1));
+    ExtModReceiver *r = ExtModReceiver::build(line.substr(0,blank),
+	(blank >= 0) ? line.substr(blank+1).c_str() : (const char*)0);
     msg.retValue() = r ? "External start attempt\r\n" : "External command failed\r\n";
     return true;
 }

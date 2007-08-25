@@ -425,6 +425,8 @@ private:
     bool m_referring;
     // reINVITE requested or in progress
     int m_reInviting;
+    // sequence number of last transmitted PRACK
+    int m_lastRseq;
 };
 
 class YateSIPGenerate : public GenObject
@@ -1696,7 +1698,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false), m_reInviting(ReinviteNone)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1811,7 +1813,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false), m_reInviting(ReinviteNone)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -2101,17 +2103,26 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     return m;
 }
 
-// Emit a PRovisional ACK if enabled in the engine
+// Emit a PRovisional ACK if enabled in the engine, return true to handle them
 bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 {
-    if (!plugin.ep()->engine()->prack())
-	return false;
     if (!(msg && msg->isAnswer() && (msg->code > 100) && (msg->code < 200)))
 	return false;
+    if (!plugin.ep()->engine()->prack())
+	return true;
     const SIPHeaderLine* rs = msg->getHeader("RSeq");
     const SIPHeaderLine* cs = msg->getHeader("CSeq");
     if (!(rs && cs))
+	return true;
+    int seq = rs->toInteger(0,10);
+    // return false only if we already seen this provisional response
+    if (seq == m_lastRseq)
 	return false;
+    if (seq < m_lastRseq) {
+	Debug(this,DebugMild,"Not sending PRACK for RSeq %d < %d [%p]",
+	    seq,m_lastRseq,this);
+	return false;
+    }
     String tmp;
     const SIPHeaderLine* co = msg->getHeader("Contact");
     if (co) {
@@ -2122,7 +2133,8 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
     }
     SIPMessage* m = createDlgMsg("PRACK",tmp);
     if (!m)
-	return false;
+	return true;
+    m_lastRseq = seq;
     tmp = *rs;
     tmp << " " << *cs;
     m->addHeader("RAck",tmp);
@@ -2615,7 +2627,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	Engine::enqueue(m);
 	startPendingUpdate();
     }
-    if (msg->isAnswer() && (msg->code > 100) && (msg->code < 200)) {
+    if (emitPRACK(msg)) {
 	if (s_multi_ringing || (m_state < Ringing)) {
 	    const char* name = "call.progress";
 	    const char* reason = 0;
@@ -2647,7 +2659,6 @@ bool YateSIPConnection::process(SIPEvent* ev)
 		Engine::enqueue(m);
 	    }
 	}
-	emitPRACK(msg);
     }
     if (msg->isACK()) {
 	DDebug(this,DebugInfo,"YateSIPConnection got ACK [%p]",this);

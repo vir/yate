@@ -1,3 +1,125 @@
+Mon Aug 27 2007 Paul Chitescu <paulc-devel@null.ro>
+- Released version 1.3.0
+- The GTK2 client now properly handles combobox operations
+- Added heartbeatdrop and registeredonly settings for H.323 gatekeeper
+
+Mon Aug 27 2007 Ioana Stanciu <oana@null.ro>
+- Populate the callto combo if we succeed to start a new call
+
+Sat Aug 25 2007 Paul Chitescu <paulc-devel@null.ro>
+- Ignore SIP provisional message retransmissions detected when PRACK is used
+
+Fri Aug 24 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added "start" and "restart" commands in extmodule, simplified parsing
+- Allow answering to SIP session refreshes without a SDP offer
+- Increased client default event text limit to 10k to accomodate debugging
+
+Thu Aug 23 2007 Paul Chitescu <paulc-devel@null.ro>
+- Fixed reentrancy problems when debug is captured to client window
+- Warn about handling messages that are expected to be broadcasted
+- CDR builder fixes (call time) and new parameters cdrid and runid
+
+Fri Aug 17 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added setting to make the written wave files world readable
+
+Thu Aug 09 2007 Paul Chitescu <paulc-devel@null.ro>
+- Supervisor waits up to 30 seconds for child to start
+- All child processes are reaped before starting a new one
+
+Fri Aug 03 2007 Paul Chitescu <paulc-devel@null.ro>
+- Improved call generator messages, added disconnect reason if available
+- Added code and setting to emit inband DTMFs on H.323
+- In SIP exclude from SDP media with no supported formats
+
+Tue Jul 31 2007 Paul Chitescu <paulc-devel@null.ro>
+- New setting for enforcing the local address included in the chan.rtp message
+- A hung console process can be killed from keyboard by pressing ^C twice
+
+Thu Jul 26 2007 Paul Chitescu <paulc-devel@null.ro>
+- Moved MIME related classes from SIP to engine
+
+Tue Jul 24 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added new sipfeatures, park and queues modules
+
+Mon Jul 23 2007 Paul Chitescu <paulc-devel@null.ro>
+- Support for multiple module directories, can be specified from command line
+- Provide description in SIP REGISTER Contact only if explicitely configured
+- If possible include zaptel/zaptel.h instead of linux/zaptel.h
+
+Wed Jul 18 2007 Paul Chitescu <paulc-devel@null.ro>
+- Load register account and result information from the proper config section
+- Added capability of loading @queries indirectly from database
+
+Wed Jul 18 2007 Marian Podgoreanu <marian@null.ro>
+- Fixed call direction attribute for SIP notifications
+
+Fri Jul 13 2007 Paul Chitescu <paulc-devel@null.ro>
+- New "pbxparams" lists parameters to be copied to/from the internal PBX keep
+
+Mon Jul 09 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added action on non-matching regexp capability
+
+Fri Jul 06 2007 Marian Podgoreanu <marian@null.ro>
+- Added the possibility to pick up a channel or its peer
+- Fixed resource.subscribe handler: set reason parameter instead of error
+
+Wed Jul 04 2007 Paul Chitescu <paulc-devel@null.ro>
+- Support for [ip.add.re.ss] style URI, also used by IPv6 addresses
+- The "peerid" takes precedence over "targetid" in channels
+- Masquerading rules are applied before the message is completed
+
+Wed Jul 04 2007 Marian Podgoreanu <marian@null.ro>
+- Added call pickup feature
+- Handle SIP subscribe requests and send event state notifications
+
+Wed Jun 27 2007 Paul Chitescu <paulc-devel@null.ro>
+- Generic SIP handlers can alter the answer, not only the return code
+- The CANCEL for a "pickup" reason will carry a SIP Reason cause 200
+- New parameters "cdrwrite" allows skipping writing of CDR records
+
+Thu Jun 21 2007 Paul Chitescu <paulc-devel@null.ro>
+- Fixed escaping of messages which broke some external modules
+
+Mon Jun 11 2007 Paul Chitescu <paulc-devel@null.ro>
+- Bodyless SIP INFO messages can be handled generically
+- Return code of generic SIP transactions can be picked from Yate message
+
+Fri Jun 08 2007 Paul Chitescu <paulc-devel@null.ro>
+- Perform cleanups in destroyed() method wherever possible
+- Changed the unlocking order to prevent some race conditions
+- Lock the list of thread objects while querying running() status
+- Added info tone - 3 increasing frequencies with 30ms gaps
+- Avoid attempting to reuse a conference that was just dereferenced
+- Implemented a special PBX "transparent" operation that lets the DTMF pass
+
+Fri May 25 2007 Paul Chitescu <paulc-devel@null.ro>
+- Tweaked parameters to reduce false positives, especially on fax detection
+- Reset detection on fax level over average power, it indicates resonance
+- Client debugging can be redirected to the event window
+
+Wed May 23 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added RTP thread priority - config file setting and message parameter "thread"
+
+Tue May 15 2007 Paul Chitescu <paulc-devel@null.ro>
+- API changes: Added pre-destruction notification method
+- Added inline helper destruct functions
+- Fixed crashes on SIP messages during hangups caused by other channels
+
+Wed May 09 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added regexroute features: matching by function, message renaming, new message
+
+Sat May 05 2007 Paul Chitescu <paulc-devel@null.ro>
+- Fixed several bugs related to stereo->mono conversions
+- Added support for play/record raw stereo PCM and G.711 files
+- Added support for detection on stereo input tones (DTMF, Fax)
+
+Thu May 03 2007 Paul Chitescu <paulc-devel@null.ro>
+- Added setting to limit the SIP socket receiver buffer size
+
+Sat Apr 14 2007 Paul Chitescu <paulc-devel@null.ro>
+- Released version 1.2.0
+- Disabled detection of speex, fax and coredumper
+
 Fri Apr 06 2007 Paul Chitescu <paulc-devel@null.ro>
 - Support for stereo a-law and mu-law
 - Headers are written to .au files for all alaw, mulaw and slin formats

@@ -1103,7 +1103,11 @@ bool Client::action(Window* wnd, const String& name)
 	getText("account",account,wnd);
 	account.trimBlanks();
 	fixDashes(account);
-	return callStart(target,line,proto,account);
+	if (!callStart(target,line,proto,account))
+	    return false;
+	delOption("callto",target,wnd);
+	addOption("callto",target,true,target,wnd);
+	return true;
     }
     else if (name.startsWith("callto:"))
 	return callStart(name.substr(7));

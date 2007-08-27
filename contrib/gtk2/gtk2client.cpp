@@ -316,6 +316,8 @@ static gboolean widgetCbAction(GtkWidget* wid, gpointer dat)
     Debug(GTKDriver::self(),DebugAll,"widgetCbAction(%p,%p)",wid,dat);
     if (GTKClient::changing())
 	return FALSE;
+    if (dat)
+	wid = (GtkWidget*)dat;
     GTKWindow* wnd = getWidgetWindow(wid);
     return wnd && wnd->action(wid);
 }
@@ -540,9 +542,11 @@ static GtkWidget* gtkComboNewWithText(const gchar* text)
 {
     GtkWidget* combo = gtk_combo_new();
     if (combo) {
+	gtk_combo_disable_activate(GTK_COMBO(combo));
 	GtkWidget* ent = GTK_COMBO(combo)->entry;
 	if (ent) {
 	    gtk_entry_set_text((GtkEntry*)ent,text);
+	    g_signal_connect(G_OBJECT(ent),"activate",G_CALLBACK(widgetCbAction),combo);
 	    attachDebug(ent);
 	}
 	attachDebug(GTK_COMBO(combo)->list);
@@ -691,7 +695,6 @@ static WidgetMaker s_widgetMakers[] = {
     { "vscale", gtkVscaleNew, "value-changed", G_CALLBACK(widgetCbChanged) },
     { 0, 0, 0, 0 },
 };
-//    { "", gtk__new, "", },
 
 static gboolean windowCbState(GtkWidget* wid, GdkEventWindowState* evt, gpointer dat)
 {
@@ -1451,6 +1454,8 @@ bool GTKWindow::setSelect(GtkWidget* wid, const String& item)
 	}
 	return false;
     }
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->list;
     if (GTK_IS_LIST(wid)) {
 	GtkList* lst = GTK_LIST(wid);
 	GtkWidget* it = getListItem(lst,item);
@@ -1495,6 +1500,8 @@ bool GTKWindow::hasOption(GtkWidget* wid, const String& item)
 	GtkWidget* it = getOptionItem(opt,item);
 	return (it != 0);
     }
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->list;
     if (GTK_IS_LIST(wid)) {
 	GtkList* lst = GTK_LIST(wid);
 	GtkWidget* it = getListItem(lst,item);
@@ -1532,6 +1539,8 @@ bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart, cons
 	}
 	return false;
     }
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->list;
     if (GTK_IS_LIST(wid)) {
 	GtkWidget* li = gtkListItemNew(item,text);
 	if (!li)
@@ -1571,6 +1580,8 @@ bool GTKWindow::delOption(GtkWidget* wid, const String& item)
 	}
 	return false;
     }
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->list;
     if (GTK_IS_LIST(wid)) {
 	GtkList* lst = GTK_LIST(wid);
 	GtkWidget* sel = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
@@ -1897,6 +1908,8 @@ bool GTKWindow::getSelect(GtkWidget* wid, String& item)
 	GtkOptionMenu* opt = GTK_OPTION_MENU(wid);
 	return getOptionText(opt,gtk_option_menu_get_history(opt),item);
     }
+    if (GTK_IS_COMBO(wid))
+	wid = GTK_COMBO(wid)->list;
     if (GTK_IS_LIST(wid)) {
 	GtkWidget* it = (GtkWidget*)g_object_get_data((GObject*)wid,"Yate::ListItem");
 	if (it) {

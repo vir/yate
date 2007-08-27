@@ -1551,6 +1551,7 @@ bool GTKWindow::addOption(GtkWidget* wid, const String& item, bool atStart, cons
 		gtk_list_prepend_items(GTK_LIST(wid),list);
 	    else
 		gtk_list_append_items(GTK_LIST(wid),list);
+	    gtk_list_select_child(GTK_LIST(wid),li);
 	    gtk_widget_show_all(li);
 	    return true;
 	}

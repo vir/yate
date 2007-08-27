@@ -678,6 +678,8 @@ BOOL YateGatekeeperServer::Init()
 	    i = 86400;
 	SetTimeToLive(i);
     }
+    disengageOnHearbeatFail = s_cfg.getBoolValue("gk","heartbeatdrop",true);
+    canOnlyAnswerRegisteredEP = canOnlyCallRegisteredEP = s_cfg.getBoolValue("gk","registeredonly",false);
     return TRUE;	
 }
 

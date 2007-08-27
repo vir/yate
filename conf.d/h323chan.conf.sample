@@ -200,6 +200,12 @@ gkclient = false
 ; ttl: int: Registrations time to live in seconds, 0 to disable
 ;ttl = 600
 
+; heartbeatdrop: bool: Drop calls for which the heartbeat timed out
+;heartbeatdrop=true
+
+; registeredonly: bool: Allow calls only with registered endpoints
+;registeredonly=false
+
 
 [incoming]
 ; This section sets defaults for the incoming H.323 calls

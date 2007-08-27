@@ -25,8 +25,17 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all clean
+.PHONY: all debug ddebug xdebug clean
 all: $(PROJECT)
+
+debug:
+	$(MAKE) all DEBUG=-g3
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG'
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG'
 
 clean:
 	@-$(RM) $(PROJECT) $(OBJECTS) 

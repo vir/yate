@@ -59,8 +59,8 @@ class ZapCircuit;                        // A voice circuit
 class ZapAnalogCircuit;                  // A analog circuit
 class ZapSource;                         // Data source
 class ZapConsumer;                       // Data consumer
+class ZapModule;                         // The driver
 
-static const char* s_driverName = "Zaptel";
 static const char* s_zapDevName = "//dev/zap/channel";
 static const char* s_threadName = "ZapWorkerThread";
 
@@ -81,7 +81,7 @@ public:
 protected:
     inline ZapWorkerClient() : m_thread(0) {}
     // Start thread if not started
-    bool start(Thread::Priority prio, DebugEnabler* dbg, unsigned int code);
+    bool start(Thread::Priority prio, DebugEnabler* dbg, const String& addr);
     // Stop thread if started
     void stop();
 private:
@@ -92,15 +92,15 @@ private:
 class ZapWorkerThread : public Thread
 {
 public:
-    inline ZapWorkerThread(ZapWorkerClient* client, unsigned int channel, Priority prio = Normal)
-	: Thread(s_threadName,prio), m_client(client), m_channel(channel)
+    inline ZapWorkerThread(ZapWorkerClient* client, const String& addr, Priority prio = Normal)
+	: Thread(s_threadName,prio), m_client(client), m_address(addr)
 	{}
     virtual ~ZapWorkerThread();
     // Call client's process() in a loop
     virtual void run();
 private:
     ZapWorkerClient* m_client;
-    unsigned int m_channel;
+    String m_address;
 };
 
 // I/O device
@@ -131,7 +131,7 @@ public:
 	DialComplete = ZT_EVENT_DIALCOMPLETE,
 	RingerOn = ZT_EVENT_RINGERON,
 	RingerOff = ZT_EVENT_RINGEROFF,
-	HookChanged = ZT_EVENT_HOOKCOMPLETE,
+	HookComplete = ZT_EVENT_HOOKCOMPLETE,
 	BitsChanged = ZT_EVENT_BITSCHANGED,  // Bits changing on a CAS/User channel
 	PulseStart = ZT_EVENT_PULSE_START,   // Beginning of a pulse coming on its way
 	Timeout = ZT_EVENT_TIMER_EXPIRED,
@@ -142,34 +142,41 @@ public:
 	PulseDigit = ZT_EVENT_PULSEDIGIT,    // This is OR'd with the digit received
 	DtmfDown = ZT_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
 	DtmfUp = ZT_EVENT_DTMFUP,            // Ditto for DTMF key up event
-	DTMFEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
+	DtmfEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
     };
 
     // List of hook to send events
     enum HookEvent {
-	HookOn    = ZT_ONHOOK,
-	HookOff   = ZT_OFFHOOK,
-	HookWink  = ZT_WINK,
-	HookFlash = ZT_FLASH
+	HookOn      = ZT_ONHOOK,
+	HookOff     = ZT_OFFHOOK,
+	HookWink    = ZT_WINK,
+	HookFlash   = ZT_FLASH,
+	HookStart   = ZT_START,
+	HookRing    = ZT_RING,
+	HookRingOff = ZT_RINGOFF
     };
 
     // List of valid IOCTL requests
     enum IoctlRequest {
-	SetChannel     = ZT_SPECIFY,         // Specify a channel number for an opened device
-	SetBlkSize     = ZT_SET_BLOCKSIZE,   // Set data I/O block size
-	SetBuffers     = ZT_SET_BUFINFO,     // Set buffers
-	SetFormat      = ZT_SETLAW,          // Set format
-	SetAudioMode   = ZT_AUDIOMODE,       // Set audio mode
-	SetEchoCancel  = ZT_ECHOCANCEL,      // Set echo cancel
-	SetDial        = ZT_DIAL,            // Append, replace, or cancel a dial string
-	SetHook        = ZT_HOOK,            // Set Hookswitch Status
+	SetChannel     = 0,              // Specify a channel number for an opened device
+	SetBlkSize     = 1,              // Set data I/O block size
+	SetBuffers     = 2,              // Set buffers
+	SetFormat      = 3,              // Set format
+	SetAudioMode   = 4,              // Set audio mode
+	SetEchoCancel  = 5,              // Set echo cancel
+	SetDial        = 6,              // Append, replace, or cancel a dial string
+	SetHook        = 7,              // Set Hookswitch Status
 #ifdef ZT_TONEDETECT
-	SetToneDetect  = ZT_TONEDETECT,      // Set tone detection
+	SetToneDetect  = 8,              // Set tone detection
+#else
+	SetToneDetect  = -1,
 #endif
-	GetParams      = ZT_GET_PARAMS,      // Get device parameters
-	GetEvent       = ZT_GETEVENT,        // Get events from device
-	GetInfo        = ZT_SPANSTAT,        // Get device status
-	StartEchoTrain = ZT_ECHOTRAIN,       // Start echo training
+	SetLinear      = 9,              // Temporarily set the channel to operate in linear mode
+	GetParams      = 10,             // Get device parameters
+	GetEvent       = 11,             // Get events from device
+	GetInfo        = 12,             // Get device status
+	StartEchoTrain = 13,             // Start echo training
+	FlushBuffers   = 14,             // Flush read/write buffers
     };
 
     // Zaptel formats
@@ -210,15 +217,17 @@ public:
     bool open(unsigned int numbufs, unsigned int bufsize);
     // Close device. Reset handle
     void close();
-    // Set data format. Update echo cancellation. Set tone detection
+    // Set data format. Update echo cancellation
     // Set train to true on succesfully set echo canceller with non 0 echo taps
     // Fails if called for an interface or on data format set failure
-    bool setFormat(Format format, bool toneDetect, unsigned int echoTaps, bool& train);
+    bool setFormat(Format format, unsigned int echoTaps, bool& train);
+    // Set/unset tone detection
+    bool setDtmfDetect(bool detect);
     // Update echo canceller
     // Set train to true on succesfully set echo canceller with non 0 echo taps
     bool setEchoTaps(unsigned int echoTaps, bool& train);
     // Send hook events
-    bool sendHook(HookEvent event, bool hookState);
+    bool sendHook(HookEvent event);
     // Send DTMFs events
     bool sendDtmf(const char* tone);
     // Start echo canceller training for a given period of time (in miliseconds)
@@ -227,6 +236,11 @@ public:
     int getEvent(char& dtmf);
     // Get alarms from this device. Return true if alarms changed
     bool getAlarms(String* alarms);
+    // 
+    inline bool setLinear(int val, int level = DebugWarn)
+	{ return ioctl(SetLinear,&val,level); }
+    // Flush read and write buffers
+    bool flushBuffers();
     // Check if received data. Wait usec microseconds before returning
     bool select(unsigned int usec);
     // Receive data. Return -1 on error or the number of bytes read
@@ -341,6 +355,8 @@ public:
     virtual bool updateFormat(const char* format, int direction);
     // Setup echo canceller or start echo canceller training
     virtual bool setParam(const String& param, const String& value);
+    // Get circuit data
+    virtual bool getParam(const String& param, String& value) const;
     // Get this circuit or source/consumer
     virtual void* getObject(const String& name) const;
     // Process incoming data
@@ -351,12 +367,19 @@ public:
     void consume(const DataBlock& data);
 protected:
     // Close device. Stop worker. Remove source consumer. Change status. Release memory if requested
-    void cleanup(bool release, Status stat = Missing);
+    void cleanup(bool release, Status stat = Missing, bool stop = true);
     // Get and process some events
     void checkEvents();
     // Process additional events. Return false if not processed
-    virtual bool processEvent(int event)
+    virtual bool processEvent(int event, char c = 0)
 	{ return false; }
+    // Create source buffer and data source and consumer
+    void createData();
+    // Enqueue received events
+    bool enqueueEvent(SignallingCircuitEvent* event);
+    bool enqueueEvent(int event, SignallingCircuitEvent::Type type);
+    // Enqueue received digits
+    bool enqueueDigit(bool tone, char digit);
 
     ZapDevice m_device;                  // The device
     ZapDevice::Type m_type;              // Circuit type
@@ -365,6 +388,7 @@ protected:
     bool m_train;                        // True to train echo canceller
     unsigned int m_echoTrainTime;        // Echo canceller's train period in miliseconds
     bool m_dtmfDetect;                   // Dtmf detection flag
+    bool m_dtmfHWDetect;                 // Hardware dtmf detection supported
     bool m_canSend;                      // Not a read only circuit
     unsigned char m_idleValue;           // Value used to fill incomplete source buffer
     Thread::Priority m_priority;         // Worker thread priority
@@ -391,31 +415,36 @@ public:
 	{}
     virtual ~ZapAnalogCircuit()
 	{}
+    // Change circuit status. Clear events on status change
+    // Reserved: Open device and start worker if old status is not Connected
+    // Connect: Create source/consumer
+    // Cleanup on disconnect
+    virtual bool status(Status newStat, bool sync);
     // Get circuit data
-    virtual bool getParam(const String& param, String& value);
+    virtual bool getParam(const String& param, String& value) const;
     // Send an event
     virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
+    // Process incoming data
+    virtual bool process();
 protected:
     // Process additional events. Return false if not processed
-    virtual bool processEvent(int event);
-    // Receive hook events. Check device type and hook state
-    bool recvHook(int event);
+    virtual bool processEvent(int event, char c = 0);
     // Change hook state if different
     void changeHook(bool hook);
 
-    bool m_hook;                         // The hook status
+    bool m_hook;                         // The remote end's hook status
 };
 
 // Data source
 class ZapSource : public DataSource
 {
 public:
-    inline ZapSource(const char* format) : DataSource(format)
-	{}
-    virtual ~ZapSource()
-	{}
+    ZapSource(ZapCircuit* circuit, const char* format);
+    virtual ~ZapSource();
     inline void changeFormat(const char* format)
 	{ m_format = format; }
+private:
+    String m_address;
 };
 
 // Data consumer
@@ -423,19 +452,27 @@ class ZapConsumer : public DataConsumer
 {
     friend class ZapCircuit;
 public:
-    inline ZapConsumer(ZapCircuit* circuit, const char* format)
-	: DataConsumer(format), m_circuit(circuit)
-	{}
-    virtual ~ZapConsumer()
-	{}
+    ZapConsumer(ZapCircuit* circuit, const char* format);
+    virtual ~ZapConsumer();
     inline void changeFormat(const char* format)
 	{ m_format = format; }
     virtual void Consume(const DataBlock& data, unsigned long tStamp)
 	{ if (m_circuit) m_circuit->consume(data); }
 private:
     ZapCircuit* m_circuit;
+    String m_address;
 };
 
+// The driver
+class ZapModule : public DebugEnabler
+{
+public:
+    ZapModule();
+    ~ZapModule();
+};
+
+
+static ZapModule driver;
 YSIGFACTORY2(ZapInterface,SignallingInterface);  // Factory used to create zaptel interfaces and spans
 
 
@@ -447,17 +484,17 @@ bool ZapWorkerClient::running() const
     return m_thread && m_thread->running();
 }
 
-bool ZapWorkerClient::start(Thread::Priority prio, DebugEnabler* dbg, unsigned int code)
+bool ZapWorkerClient::start(Thread::Priority prio, DebugEnabler* dbg, const String& addr)
 {
     if (!m_thread)
-	m_thread = new ZapWorkerThread(this,code,prio);
+	m_thread = new ZapWorkerThread(this,addr,prio);
     if (m_thread->running())
 	return true;
     if (m_thread->startup())
 	return true;
     m_thread->cancel(true);
     m_thread = 0;
-    Debug(dbg,DebugWarn,"Failed to start %s for chan %u [%p]",s_threadName,code,dbg);
+    Debug(dbg,DebugWarn,"Failed to start %s for %s [%p]",s_threadName,addr.c_str(),dbg);
     return false;
 }
 
@@ -475,8 +512,8 @@ void ZapWorkerClient::stop()
  */
 ZapWorkerThread::~ZapWorkerThread()
 {
-    DDebug(s_driverName,DebugAll,
-	"%s is terminated for client (%p), chan=%u",s_threadName,m_client,m_channel);
+    DDebug(&driver,DebugAll,"%s is terminated for client (%p): %s",
+	s_threadName,m_client,m_address.c_str());
     if (m_client)
 	m_client->m_thread = 0;
 }
@@ -485,8 +522,8 @@ void ZapWorkerThread::run()
 {
     if (!m_client)
 	return;
-    DDebug(s_driverName,DebugAll,
-	"%s is running for client (%p), chan=%u",s_threadName,m_client,m_channel);
+    DDebug(&driver,DebugAll,"%s is running for client (%p): %s",
+	s_threadName,m_client,m_address.c_str());
     while (true) {
 	if (m_client->process())
 	    Thread::check(true);
@@ -523,7 +560,7 @@ static TokenDict s_events[] = {
     MAKE_NAME(DialComplete),
     MAKE_NAME(RingerOn),
     MAKE_NAME(RingerOff),
-    MAKE_NAME(HookChanged),
+    MAKE_NAME(HookComplete),
     MAKE_NAME(BitsChanged),
     MAKE_NAME(PulseStart),
     MAKE_NAME(Timeout),
@@ -533,6 +570,18 @@ static TokenDict s_events[] = {
     MAKE_NAME(PulseDigit),
     MAKE_NAME(DtmfDown),
     MAKE_NAME(DtmfUp),
+    MAKE_NAME(DtmfEvent),
+    {0,0}
+};
+
+static TokenDict s_hookEvents[] = {
+    MAKE_NAME(HookOn),
+    MAKE_NAME(HookOff),
+    MAKE_NAME(HookWink),
+    MAKE_NAME(HookFlash),
+    MAKE_NAME(HookStart),
+    MAKE_NAME(HookRing),
+    MAKE_NAME(HookRingOff),
     {0,0}
 };
 
@@ -544,13 +593,13 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(SetAudioMode),
     MAKE_NAME(SetDial),
     MAKE_NAME(SetHook),
-#ifdef ZT_TONEDETECT
     MAKE_NAME(SetToneDetect),
-#endif
+    MAKE_NAME(SetLinear),
     MAKE_NAME(GetParams),
     MAKE_NAME(GetEvent),
     MAKE_NAME(GetInfo),
     MAKE_NAME(StartEchoTrain),
+    MAKE_NAME(FlushBuffers),
     {0,0}
 };
 
@@ -656,26 +705,36 @@ void ZapDevice::close()
     m_handle = -1;
 }
 
-// Set data format. Update echo cancellation. Set tone detection
+// Set data format. Update echo cancellation
 // Set train to true on succesfully set echo cancellation with non 0 echo taps
 // Fails if called for an interface or on data format set failure
-bool ZapDevice::setFormat(Format format, bool toneDetect, unsigned int echoTaps, bool& train)
+bool ZapDevice::setFormat(Format format, unsigned int echoTaps, bool& train)
 {
     if (m_interface)
 	return false;
     // Set format
-    if (!ioctl(SetFormat,&format,DebugMild))
+    if (!ioctl(SetFormat,&format,DebugMild)) {
+	Debug(m_owner,DebugNote,"%sFailed to set format '%s' on channel %u [%p]",
+	    m_name.safe(),lookup(format,s_formats),m_channel,m_owner);
 	return false;
+    }
     DDebug(m_owner,DebugAll,"%sFormat set to '%s' on channel %u [%p]",
 	m_name.safe(),lookup(format,s_formats),m_channel,m_owner);
-#ifdef ZT_TONEDETECT
-    // Set DTMF detection
-    int tmp = toneDetect ? ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE : 0;
-    ioctl(SetToneDetect,&tmp,tmp?DebugMild:DebugAll);
-#endif
     // Configure echo canceller
     setEchoTaps(echoTaps,train);
     return true;
+}
+
+// Set/unset tone detection
+bool ZapDevice::setDtmfDetect(bool detect)
+{
+#ifdef ZT_TONEDETECT
+    setLinear(0);
+    int tmp = detect ? ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE : 0;
+    return ioctl(SetToneDetect,&tmp,tmp?DebugMild:DebugAll);
+#else
+    return !detect;
+#endif
 }
 
 // Update echo canceller
@@ -702,32 +761,18 @@ bool ZapDevice::setEchoTaps(unsigned int echoTaps, bool& train)
 }
 
 // Send hook events
-bool ZapDevice::sendHook(HookEvent event, bool hookState)
+bool ZapDevice::sendHook(HookEvent event)
 {
-    int val = event;
-    switch (event) {
-	case HookOn:
-	case HookOff:
-	    // Avoid sending duplicate hook state
-	    if (hookState != (event == HookOn))
-		break;
-	    DDebug(m_owner,DebugAll,"%sAlready %s hook [%p]",
-		m_name.safe(),hookState?"on":"off",this);
-	    return false;
-	case HookWink:
-	case HookFlash:
-	    // Avoid sending wink while hook is on or flash while hook is off
-	    if (hookState == (event == HookWink))
-		break;
-	    Debug(m_owner,DebugNote,"%sRequest to send hook %s while hook is %s [%p]",
-		m_name.safe(),event==HookWink?"wink":"flash",hookState?"on":"off",this);
-	    return false;
-	default:
-	    XDebug(m_owner,DebugStub,"%sRequest to send unhandled hook event %u [%p]",
-		m_name.safe(),event,this);
-	    return false;
+    const char* name = lookup(event,s_hookEvents);
+    if (!name) {
+	Debug(m_owner,DebugStub,"%sRequest to send unhandled hook event %u [%p]",
+	    m_name.safe(),event,this);
+	return false;
     }
-    return ioctl(SetHook,&val);
+
+    DDebug(m_owner,DebugAll,"%sSending hook event '%s' on channel %u [%p]",
+	m_name.safe(),name,m_channel,m_owner);
+    return ioctl(SetHook,&event);
 }
 
 // Send DTMFs events
@@ -741,11 +786,23 @@ bool ZapDevice::sendDtmf(const char* tone)
 	    m_name.safe(),tone,len,ZT_MAX_DTMF_BUF-2,this);
 	return false;
     }
-    DDebug(m_owner,DebugAll,"%sSending dtmf '%s' [%p]",m_name.safe(),tone,this);
     ZT_DIAL_OPERATION dop;
     dop.op = ZT_DIAL_OP_APPEND;
     dop.dialstr[0] = 'T';
+	
+//	dop.dialstr[2] = 0;
+//	for (; *tone; tone++) {
+//	    dop.dialstr[1] = *tone;
+//	    DDebug(m_owner,DebugAll,"%sSending DTMF '%c' on channel %u [%p]",
+//		m_name.safe(),*tone,m_channel,this);
+//	    if (!ioctl(ZapDevice::SetDial,&dop,DebugMild))
+//		return false;
+//	}
+//	return true;
+
     strncpy(dop.dialstr+1,tone,len);
+    DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
+	m_name.safe(),tone,m_channel,this);
     return ioctl(ZapDevice::SetDial,&dop,DebugMild);
 }
 
@@ -767,10 +824,15 @@ int ZapDevice::getEvent(char& dtmf)
     int event = 0;
     if (!ioctl(GetEvent,&event,DebugMild))
 	return 0;
-    if (event & DTMFEvent) {
+    if (event & DtmfEvent) {
 	dtmf = (char)event;
-	event &= DTMFEvent;
+	event &= DtmfEvent;
     }
+#ifdef XDEBUG
+    if (event)
+	Debug(m_owner,DebugAll,"%sGot event %d on channel %u [%p]",
+	    m_name.safe(),event,m_channel,m_owner);
+#endif
     return event;
 }
 
@@ -790,6 +852,17 @@ bool ZapDevice::getAlarms(String* alarms)
 	    if (m_alarms & s_alarms[i].value)
 		alarms->append(s_alarms[i].token,",");
     return true;
+}
+
+// Flush read/write buffers
+bool ZapDevice::flushBuffers()
+{
+    int x = ZT_FLUSH_READ | ZT_FLUSH_WRITE;
+    bool ok = ioctl(FlushBuffers,&x);
+    if (ok)
+	DDebug(m_owner,DebugAll,"%sFlushed I/O buffers on channel %u [%p]",
+	    m_name.safe(),m_channel,m_owner);
+    return ok;
 }
 
 // Check if received data. Wait usec microseconds before returning
@@ -853,9 +926,67 @@ int ZapDevice::send(const void* buffer, int len)
 // Make IOCTL requests on this device
 bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 {
-    int ret = ::ioctl(m_handle,request,param);
-    if (ret >= 0)
+    int ret = -1;
+    switch (request) {
+	case SetChannel:
+	    ret = ::ioctl(m_handle,ZT_SPECIFY,param);
+	    break;
+	case SetBlkSize:
+	    ret = ::ioctl(m_handle,ZT_SET_BLOCKSIZE,param);
+	    break;
+	case SetBuffers:
+	    ret = ::ioctl(m_handle,ZT_SET_BUFINFO,param);
+	    break;
+	case SetFormat:
+	    ret = ::ioctl(m_handle,ZT_SETLAW,param);
+	    break;
+	case SetAudioMode:
+	    ret = ::ioctl(m_handle,ZT_AUDIOMODE,param);
+	    break;
+	case SetEchoCancel:
+	    ret = ::ioctl(m_handle,ZT_ECHOCANCEL,param);
+	    break;
+	case SetDial:
+	    ret = ::ioctl(m_handle,ZT_DIAL,param);
+	    break;
+	case SetHook:
+	    ret = ::ioctl(m_handle,ZT_HOOK,param);
+	    break;
+	case SetToneDetect:
+#ifdef ZT_TONEDETECT
+	    ret = ::ioctl(m_handle,ZT_TONEDETECT,param);
+	    break;
+#else
+	    Debug(m_owner,level,"%sIOCTL(%s) failed: unsupported request [%p]",
+		m_name.safe(),lookup(SetToneDetect,s_ioctl_request),m_owner);
+	    return false;
+#endif
+	case SetLinear:
+	    ret = ::ioctl(m_handle,ZT_SETLINEAR,param);
+	    break;
+	case GetParams:
+	    ret = ::ioctl(m_handle,ZT_GET_PARAMS,param);
+	    break;
+	case GetEvent:
+	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
+	    break;
+	case GetInfo:
+	    ret = ::ioctl(m_handle,ZT_SPANSTAT,param);
+	    break;
+	case StartEchoTrain:
+	    ret = ::ioctl(m_handle,ZT_ECHOTRAIN,param);
+	    break;
+	case FlushBuffers:
+	    ret = ::ioctl(m_handle,ZT_FLUSH,param);
+	    break;
+    }
+    if (ret >= 0 || errno == EINPROGRESS) {
+	if (errno == EINPROGRESS)
+	    DDebug(m_owner,DebugAll,"%sIOCTL(%s) in progress on channel %u (param=%d) [%p]",
+		m_name.safe(),lookup(request,s_ioctl_request),
+		m_channel,*(unsigned int*)param,m_owner);
 	return true;
+    }
     Debug(m_owner,level,"%sIOCTL(%s) failed on channel %u (param=%d). %d: %s [%p]",
 	m_name.safe(),lookup(request,s_ioctl_request),
 	m_channel,*(unsigned int*)param,errno,::strerror(errno),m_owner);
@@ -905,10 +1036,10 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     cfg.load();
 
     const char* sectName = name.getValue(type);
-    DDebug(s_driverName,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    DDebug(&driver,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
-	DDebug(s_driverName,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
 
@@ -923,7 +1054,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     String sOffset = config->getValue("offset");
     unsigned int offset = (unsigned int)sOffset.toInteger(-1);
     if (offset == (unsigned int)-1) {
-	Debug(s_driverName,DebugWarn,"Section '%s'. Invalid offset='%s'",
+	Debug(&driver,DebugWarn,"Section '%s'. Invalid offset='%s'",
 	    config->c_str(),sOffset.safe());
 	return 0;
     }
@@ -934,7 +1065,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 	if (span->group())
 	    ok = span->init(devType,offset,*config,*general,name);
 	else
-	    Debug(s_driverName,DebugWarn,"Can't create span '%s'. Group is missing",
+	    Debug(&driver,DebugWarn,"Can't create span '%s'. Group is missing",
 		span->id().safe());
 	if (ok)
 	    return span;
@@ -944,7 +1075,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 
     // Check span type
     if (devType != ZapDevice::E1 && devType != ZapDevice::T1) {
-	Debug(s_driverName,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
+	Debug(&driver,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
 	    config->c_str(),sDevType.c_str());
 	return 0;
     }
@@ -955,7 +1086,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 	sig = (devType == ZapDevice::E1 ? 16 : 24);
     unsigned int code = (unsigned int)sig.toInteger(0);
     if (!(sig && code && code <= count)) {
-	Debug(s_driverName,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
+	Debug(&driver,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
 	    config->c_str(),sig.safe(),sDevType.c_str());
 	return false;
     }
@@ -1083,7 +1214,7 @@ bool ZapInterface::control(Operation oper, NamedList* params)
 	    return true;
 	bool ok = m_device.valid() || m_device.open(m_numbufs,m_bufsize);
 	if (ok)
-	    ok = ZapWorkerClient::start(m_priority,this,m_device.channel());
+	    ok = ZapWorkerClient::start(m_priority,this,debugName());
 	if (ok) {
 	    DDebug(this,DebugAll,"Enabled [%p]",this);
 	    m_timerRxUnder.start();
@@ -1174,6 +1305,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 {
     String voice = config.getValue("voicechans");
     unsigned int chans = 0;
+    bool digital = true;
     switch (type) {
 	case ZapDevice::E1:
 	    if (!voice)
@@ -1184,6 +1316,13 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	    if (!voice)
 		voice = "1-23";
 	    chans = 24;
+	    break;
+	case ZapDevice::FXO:
+	case ZapDevice::FXS:
+	    digital = false;
+	    if (!voice)
+		voice = "1";
+	    chans = (unsigned int)-1;
 	    break;
 	default:
 	    Debug(m_group,DebugStub,
@@ -1200,6 +1339,8 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	return false;
     }
 
+    if (!digital)
+	chans = count;
     ((NamedList*)&params)->setParam("chans",String(chans));
     unsigned int start = params.getIntValue("start",0);
 
@@ -1208,7 +1349,11 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
     for (unsigned int i = 0; i < count; i++) {
 	unsigned int code = start + cics[i];
 	unsigned int channel = offset + cics[i];
-	ZapCircuit* cic = new ZapCircuit(type,code,channel,this,config,defaults,params);
+	ZapCircuit* cic = 0;
+	if (digital)
+	    cic = new ZapCircuit(type,code,channel,this,config,defaults,params);
+	else
+	    cic = new ZapAnalogCircuit(type,code,channel,this,config,defaults,params);
 	if (m_group->insert(cic)) {
 	    added++;
 	    continue;
@@ -1225,7 +1370,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	return false;
     }
 
-    if (debugAt(DebugInfo)) {
+    if (m_group && m_group->debugAt(DebugInfo)) {
 	String s;
 	s << "\r\nType:     " << lookup(type,s_types);
 	s << "\r\nGroup:    " << m_group->debugName();
@@ -1258,6 +1403,7 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_train(false),
     m_echoTrainTime(400),
     m_dtmfDetect(false),
+    m_dtmfHWDetect(false),
     m_canSend(true),
     m_idleValue(255),
     m_priority(Thread::Normal),
@@ -1271,13 +1417,13 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
 {
     m_echoTrainTime = (unsigned int)config.getIntValue("echotrain",defaults.getIntValue("echotrain",400));
     m_dtmfDetect = config.getBoolValue("dtmfdetect",defaults.getBoolValue("dtmfdetect",false));
-#ifndef ZT_TONEDETECT
-    if (m_dtmfDetect)
-	Debug(group(),DebugNote,
-	    "ZapCircuit(%u). DTMF detection disabled (not defined at compile time) [%p]",
+    if (m_dtmfDetect && ZapDevice::SetToneDetect < 0) {
+	Debug(group(),DebugWarn,
+	    "ZapCircuit(%u). DTMF detection is not supported by hardware [%p]",
 	    code,this);
-    m_dtmfDetect = false;
-#endif
+	m_dtmfDetect = false;
+    }
+    m_dtmfHWDetect = m_dtmfDetect;
     m_canSend = config.getBoolValue("readonly",true);
     m_buflen = (unsigned int)config.getIntValue("buflen",defaults.getIntValue("buflen",160));
     if (!m_buflen)
@@ -1287,10 +1433,17 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_idleValue = defaults.getIntValue("idlevalue",0xff);
     m_idleValue = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_idleValue));
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
+
     if (type == ZapDevice::E1)
 	m_format = ZapDevice::Alaw;
     else if (type == ZapDevice::T1)
 	m_format = ZapDevice::Mulaw;
+    else if (type == ZapDevice::FXO || type == ZapDevice::FXS) {
+	const char* f = config.getValue("format",defaults.getValue("format"));
+	m_format = (ZapDevice::Format)lookup(f,s_formats,ZapDevice::Mulaw);
+	if (m_format != ZapDevice::Alaw && m_format != ZapDevice::Mulaw)
+	    m_format = ZapDevice::Mulaw;
+    }
     else
 	Debug(group(),DebugStub,"ZapCircuit(%u). Unhandled circuit type=%d [%p]",
 	    code,type,this);
@@ -1338,11 +1491,16 @@ bool ZapCircuit::status(Status newStat, bool sync)
     while (true) {
 	if (!m_device.open(0,m_buflen))
 	    break;
-	m_device.setFormat(m_format,m_dtmfDetect,m_echoTaps,m_train);
-	const char* format = lookup(m_format,s_formats,"alaw");
-	m_source = new ZapSource(format);
-	m_consumer = new ZapConsumer(this,format);
-	if (!ZapWorkerClient::start(m_priority,group(),m_device.channel()))
+	m_device.flushBuffers();
+	m_device.setFormat(m_format,m_echoTaps,m_train);
+	if (m_dtmfDetect)
+	    m_dtmfHWDetect = m_device.setDtmfDetect(true);
+	createData();
+	String addr;
+	if (group())
+	    addr << group()->debugName() << "/";
+	addr << code();
+	if (!ZapWorkerClient::start(m_priority,group(),addr))
 	    break;
 	return true;
     }
@@ -1365,6 +1523,8 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
     switch (m_type) {
 	case ZapDevice::E1:
 	case ZapDevice::T1:
+	case ZapDevice::FXS:
+	case ZapDevice::FXO:
 	    if (f == ZapDevice::Alaw || f == ZapDevice::Mulaw)
 		break;
 	    // Fallthrough to deny format change
@@ -1375,7 +1535,9 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 	    return false;
     }
     // Update the format for Zaptel device
-    if (m_device.setFormat((ZapDevice::Format)f,m_dtmfDetect,m_echoTaps,m_train)) {
+    if (m_device.setFormat((ZapDevice::Format)f,m_echoTaps,m_train)) {
+	if (m_dtmfDetect)
+	    m_dtmfHWDetect = m_device.setDtmfDetect(true);
 	m_source->changeFormat(format);
 	m_consumer->changeFormat(format);
 	return true;
@@ -1407,6 +1569,23 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 	// Update echo canceller if already opened
 	if (m_device.valid())
 	    m_device.setEchoTaps(m_echoTaps,m_train);
+	return true;
+    }
+    return false;
+}
+
+// Get circuit data
+bool ZapCircuit::getParam(const String& param, String& value) const
+{
+    if (param == "dtmfdetect") {
+	value = String::boolText(m_dtmfHWDetect);
+	return true;
+    }
+    if (param == "channel") {
+	if (m_device.valid())
+	    value = m_device.channel();
+	else
+	    value = -1;
 	return true;
     }
     return false;
@@ -1458,7 +1637,7 @@ bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
     if (type == SignallingCircuitEvent::Dtmf)
 	return m_device.sendDtmf(params ? params->getValue("tone") : 0);
 
-    Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send event %u [%p]",
+    Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send unknown event %u [%p]",
 	code(),type,this);
     return false;
 }
@@ -1492,10 +1671,12 @@ void ZapCircuit::consume(const DataBlock& data)
 }
 
 // Close device. Stop worker. Remove source consumer. Change status. Release memory if requested
-void ZapCircuit::cleanup(bool release, Status stat)
+void ZapCircuit::cleanup(bool release, Status stat, bool stop)
 {
-    ZapWorkerClient::stop();
-    m_device.close();
+    if (stop || release) {
+	ZapWorkerClient::stop();
+	m_device.close();
+    }
     if (m_consumer) {
 	if (m_consErrors)
 	    DDebug(group(),DebugMild,"ZapCircuit(%u). Consumer errors: %u. Lost: %u/%u [%p]",
@@ -1525,64 +1706,167 @@ void ZapCircuit::checkEvents()
     int event = m_device.getEvent(c);
     if (!event)
 	return;
-    int level = DebugWarn;
-#define CREATE_EVENT(sce) new SignallingCircuitEvent(sce,lookup(event,s_events))
     switch (event) {
-	case ZapDevice::PulseDigit:
 	case ZapDevice::DtmfDown:
 	case ZapDevice::DtmfUp:
-	    DDebug(group(),DebugAll,"ZapCircuit(%u). Got DTMF '%s'=%c [%p]",
-		code(),lookup(event,s_events,""),c,this);
-	    // Ignore DTMF UP event
-	    if (event != ZapDevice::DtmfUp) {
-		SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Dtmf);
-		char tone[2] = {c,0};
-		e->addParam("tone",tone);
-		addEvent(e);
+	    if (!m_dtmfHWDetect) {
+		DDebug(group(),DebugAll,"ZapCircuit(%u). Ignoring DTMF '%s'=%c [%p]",
+		    code(),lookup(event,s_events,""),c,this);
+		return;
 	    }
+	    if (event == ZapDevice::DtmfUp)
+		enqueueDigit(true,c);
+	    else
+		DDebug(group(),DebugAll,"ZapCircuit(%u). Ignoring '%s'=%c [%p]",
+		    code(),lookup(event,s_events,""),c,this);
 	    return;
 	case ZapDevice::Alarm:
 	case ZapDevice::NoAlarm:
 	    if (event == ZapDevice::Alarm) {
 		String s;
-		if (m_device.getAlarms(&s)) {
-		    DDebug(group(),DebugNote,
-			"ZapCircuit(%u). Alarms changed. %d: '%s' [%p]",
-			code(),m_device.alarms(),s.safe(),this);
-		    SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Alarm);
+		m_device.getAlarms(&s);
+		Debug(group(),DebugNote,
+		    "ZapCircuit(%u). Alarms changed. %d: '%s' [%p]",
+		    code(),m_device.alarms(),s.safe(),this);
+		SignallingCircuitEvent* e = new SignallingCircuitEvent(this,
+		    SignallingCircuitEvent::Alarm,lookup(event,s_events));
+		if (s)
 		    e->addParam("alarms",s);
-		    addEvent(e);
-		}
+		enqueueEvent(e);
 	    }
 	    else {
 		m_device.resetAlarms();
-		DDebug(group(),DebugNote,
-		    "ZapCircuit(%u). No more alarms [%p]",code(),this);
-		addEvent(CREATE_EVENT(SignallingCircuitEvent::NoAlarm));
+		Debug(group(),DebugNote,"ZapCircuit(%u). No more alarms [%p]",code(),this);
+		enqueueEvent(event,SignallingCircuitEvent::NoAlarm);
 	    }
 	    return;
-	// Keep the debug level
-	case ZapDevice::HdlcAbort:
-	case ZapDevice::HdlcOverrun:
-	    break;
-	default:
-	    level = DebugStub;
+	default: ;
     }
-    if (processEvent(event))
+    if (processEvent(event,c))
 	return;
-    SignallingCircuitEvent* e = CREATE_EVENT(SignallingCircuitEvent::Unknown);
-    addEvent(e);
-    DDebug(group(),level,"ZapCircuit(%u). Got event %d ('%s') [%p]",
-	code(),event,e->c_str(),this);
-#undef CREATE_EVENT
+    enqueueEvent(event,SignallingCircuitEvent::Unknown);
 }
+
+// Create source buffer and data source and consumer
+void ZapCircuit::createData()
+{
+    m_sourceBuffer.assign(0,m_buflen);
+    const char* format = lookup(m_format,s_formats,"alaw");
+    m_source = new ZapSource(this,format);
+    m_consumer = new ZapConsumer(this,format);
+}
+
+// Enqueue received events
+inline bool ZapCircuit::enqueueEvent(SignallingCircuitEvent* e)
+{
+    if (e) {
+	addEvent(e);
+	DDebug(group(),e->type()!=SignallingCircuitEvent::Unknown?DebugAll:DebugStub,
+	    "ZapCircuit(%u). Enqueued event '%s' [%p]",code(),e->c_str(),this);
+    }
+    return true;
+}
+
+// Enqueue received events
+inline bool ZapCircuit::enqueueEvent(int event, SignallingCircuitEvent::Type type)
+{
+    return enqueueEvent(new SignallingCircuitEvent(this,type,lookup(event,s_events)));
+}
+
+// Enqueue received digits
+bool ZapCircuit::enqueueDigit(bool tone, char digit)
+{
+    char digits[2] = {digit,0};
+    SignallingCircuitEvent* e = 0;
+
+    if (tone) {
+	e = new SignallingCircuitEvent(this,SignallingCircuitEvent::Dtmf,
+	    lookup(ZapDevice::DtmfUp,s_events));
+	e->addParam("tone",digits);
+    }
+    else {
+	e = new SignallingCircuitEvent(this,SignallingCircuitEvent::PulseDigit,
+	    lookup(ZapDevice::PulseDigit,s_events));
+	e->addParam("pulse",digits);
+    }
+    return enqueueEvent(e);
+}
+
 
 
 /**
  * ZapAnalogCircuit
  */
+// Change circuit status. Clear events on status change
+// New status is Reserved: Open device and start worker if old status is not Connected
+// New status is Connect: Create source/consumer
+// Cleanup on disconnect
+bool ZapAnalogCircuit::status(Status newStat, bool sync)
+{
+    if (SignallingCircuit::status() == newStat)
+	return true;
+    if (SignallingCircuit::status() == Missing) {
+	Debug(group(),DebugNote,
+	    "ZapCircuit(%u). Can't change status to '%u'. Circuit is missing [%p]",
+	    code(),newStat,this);
+	return false;
+    }
+    // Allow status change for the following values
+    switch (newStat) {
+	case Missing:
+	case Disabled:
+	case Idle:
+	case Reserved:
+	case Connected:
+	    break;
+	default: ;
+	    Debug(group(),DebugStub,
+		"ZapCircuit(%u). Can't change status to unhandled value %u [%p]",
+		code(),newStat,this);
+	    return false;
+    }
+
+    Status oldStat = SignallingCircuit::status();
+    if (!SignallingCircuit::status(newStat,sync))
+	return false;
+    clearEvents();
+    if (!Engine::exiting())
+	DDebug(group(),DebugAll,"ZapCircuit(%u). Changed status to %u [%p]",
+	    code(),newStat,this);
+
+    if (newStat == Reserved) {
+	// Just cleanup if old status was Connected and the device is already valid
+	// Otherwise: open device and start worker
+	if (oldStat == Connected && m_device.valid())
+	    cleanup(false,Reserved,false);
+	else {
+	    String addr;
+	    if (group())
+		addr << group()->debugName() << "/";
+	    addr << code();
+	    if (m_device.open(0,m_buflen) && ZapWorkerClient::start(m_priority,group(),addr)) {
+		m_device.flushBuffers();
+		m_device.setFormat(m_format,m_echoTaps,m_train);
+		if (m_dtmfDetect)
+		    m_dtmfHWDetect = m_device.setDtmfDetect(true);
+	    }
+	    else
+		cleanup(false,Idle,true);
+	}
+	return SignallingCircuit::status() == Reserved;
+    }
+    else if (newStat == Connected) {
+	if (m_device.valid())
+	    createData();
+	else
+	    cleanup(false,Idle,true);
+	return SignallingCircuit::status() == Connected;
+    }
+    return true;
+}
+
 // Get circuit data
-bool ZapAnalogCircuit::getParam(const String& param, String& value)
+bool ZapAnalogCircuit::getParam(const String& param, String& value) const
 {
     if (param == "hook") {
 	value = String::boolText(m_hook);
@@ -1594,113 +1878,104 @@ bool ZapAnalogCircuit::getParam(const String& param, String& value)
 // Send an event
 bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 {
+    if (type == SignallingCircuitEvent::Dtmf)
+	return ZapCircuit::sendEvent(type,params);
+
     switch (type) {
-	case SignallingCircuitEvent::Dtmf:
-	    return ZapCircuit::sendEvent(type,params);
 	case SignallingCircuitEvent::OnHook:
-	case SignallingCircuitEvent::OffHook:
-	case SignallingCircuitEvent::Wink:
-	case SignallingCircuitEvent::Flash:
-	    if (m_type != ZapDevice::FXS) {
-		Debug(group(),DebugNote,
-		    "ZapCircuit(%u). Request to send hook event %u on %s device [%p]",
-		    code(),type,lookup(m_type,s_types),this);
+	    if (!m_device.sendHook(ZapDevice::HookOn))
 		return false;
-	    }
-	    switch (type) {
-		case SignallingCircuitEvent::OnHook:
-		    if (!m_device.sendHook(ZapDevice::HookOn,m_hook))
-			return false;
-		    changeHook(true);
-		    return true;
-		case SignallingCircuitEvent::OffHook:
-		    if (!m_device.sendHook(ZapDevice::HookOff,m_hook))
-			return false;
-		    changeHook(false);
-		    return true;
-		case SignallingCircuitEvent::Wink:
-		    return m_device.sendHook(ZapDevice::HookWink,m_hook);
-		case SignallingCircuitEvent::Flash:
-		    return m_device.sendHook(ZapDevice::HookFlash,m_hook);
-		default: ;
-	    }
-	    return false;
+	    changeHook(true);
+	    return true;
+	case SignallingCircuitEvent::OffHook:
+	    if (!m_device.sendHook(ZapDevice::HookOff))
+		return false;
+	    changeHook(false);
+	    return true;
+	case SignallingCircuitEvent::Wink:
+	    return m_device.sendHook(ZapDevice::HookWink);
+	case SignallingCircuitEvent::Flash:
+	    return m_device.sendHook(ZapDevice::HookFlash);
+	case SignallingCircuitEvent::RingBegin:
+	    return m_device.sendHook(ZapDevice::HookRing);
+	case SignallingCircuitEvent::RingEnd:
+	    return m_device.sendHook(ZapDevice::HookRingOff);
+	case SignallingCircuitEvent::StartLine:
+	    return m_device.sendHook(ZapDevice::HookStart);
 	default: ;
     }
     return ZapCircuit::sendEvent(type,params);
 }
 
 // Process additional events. Return false if not processed
-bool ZapAnalogCircuit::processEvent(int event)
+bool ZapAnalogCircuit::processEvent(int event, char c)
 {
-#define CREATE_EVENT(sce) new SignallingCircuitEvent(sce,lookup(event,s_events))
     switch (event) {
 #if 0
-// Unhandled
-	DialComplete
-	RingerOn
-	RingerOff
-	HookChanged
+Unhandled:
 	BitsChanged
 	PulseStart
 	Timeout
 	TimerPing
-	RingBegin
-	Polarity
 #endif
+	case ZapDevice::RingerOn:
+	    return enqueueEvent(event,SignallingCircuitEvent::RingerOn);
+	case ZapDevice::RingerOff:
+	    return enqueueEvent(event,SignallingCircuitEvent::RingerOff);
 	case ZapDevice::OnHook:
-	    if (!recvHook(event))
-		break;
 	    changeHook(true);
-	    addEvent(CREATE_EVENT(SignallingCircuitEvent::OnHook));
-	    break;
+	    return enqueueEvent(event,SignallingCircuitEvent::OnHook);
+	case ZapDevice::RingBegin:
+	    return enqueueEvent(event,SignallingCircuitEvent::RingBegin);
 	case ZapDevice::OffHookRing:
-	    if (!recvHook(event))
-		break;
-	    changeHook(false);
-	    addEvent(CREATE_EVENT(SignallingCircuitEvent::OffHook));
-	    break;
+	    if (m_type == ZapDevice::FXS) {
+		changeHook(false);
+		return enqueueEvent(event,SignallingCircuitEvent::OffHook);
+	    }
+	    return enqueueEvent(event,SignallingCircuitEvent::RingerOn);
+	case ZapDevice::Polarity:
+	    return enqueueEvent(event,SignallingCircuitEvent::Polarity);
 	case ZapDevice::WinkFlash:
-	    if (!recvHook(event))
-		break;
 	    if (m_hook)
-		addEvent(CREATE_EVENT(SignallingCircuitEvent::Flash));
-	    else
-		addEvent(CREATE_EVENT(SignallingCircuitEvent::Wink));
-	    break;
-	default:
-	    return false;
+		return enqueueEvent(event,SignallingCircuitEvent::Wink);
+	    return enqueueEvent(event,SignallingCircuitEvent::Flash);
+	case ZapDevice::HookComplete:
+	    return enqueueEvent(event,SignallingCircuitEvent::LineStarted);
+	case ZapDevice::DialComplete:
+	    return enqueueEvent(event,SignallingCircuitEvent::DialComplete);
+	case ZapDevice::PulseDigit:
+	    return enqueueDigit(false,c);
+	default: ;
     }
-#undef CREATE_EVENT
-    return true;
+    return false;
 }
 
-// Received hook events. Check device type and hook state
-bool ZapAnalogCircuit::recvHook(int event)
+// Process incoming data
+bool ZapAnalogCircuit::process()
 {
-    if (m_type != ZapDevice::FXO) {
+    if (!m_device.valid()) {
 	Debug(group(),DebugNote,
-	    "ZapCircuit(%u). Received hook event '%s' on %s device [%p]",
-	    code(),lookup(event,s_events),lookup(m_type,s_types),this);
+	    "ZapCircuit(%u). Can't process: device is invalid [%p]",code(),this);
 	return false;
     }
 
-    switch (event) {
-	case ZapDevice::OnHook:
-	    if (m_hook)
-		break;
-	    return true;
-	case ZapDevice::OffHookRing:
-	    if (!m_hook)
-		break;
-	    return true;
-	case ZapDevice::WinkFlash:
-	    return true;
-	default:
-	    return false;
+    checkEvents();
+
+    if (!(m_source && m_device.select(10) && m_device.canRead()))
+	return false;
+
+    int r = m_device.recv(m_sourceBuffer.data(),m_sourceBuffer.length());
+    if (m_device.event())
+	checkEvents();
+    if (r > 0) {
+	if ((unsigned int)r != m_sourceBuffer.length())
+	    ::memset((unsigned char*)m_sourceBuffer.data() + r,m_idleValue,m_sourceBuffer.length() - r);
+	XDebug(group(),DebugAll,"ZapCircuit(%u). Forwarding %u bytes [%p]",
+	    code(),m_sourceBuffer.length(),this);
+	m_source->Forward(m_sourceBuffer);
+	return true;
     }
-    DDebug(group(),DebugMild,"ZapCircuit(%u). Received '%s' while %s hook [%p]",
-	code(),lookup(event,s_events),m_hook?"on":"off",this);
+
     return false;
 }
 
@@ -1709,9 +1984,79 @@ void ZapAnalogCircuit::changeHook(bool hook)
 {
     if (m_hook == hook)
 	return;
-    DDebug(group(),DebugInfo,"ZapCircuit(%u). Hook changed to %s [%p]",
-	code(),hook?"on":"off",this);
+    DDebug(group(),DebugInfo,"ZapCircuit(%u). Hook state changed to %s [%p]",
+	code(),hook?"ON":"OFF",this);
     m_hook = hook;
+}
+
+
+/**
+ * ZapSource
+ */
+inline void setAddr(String& addr, ZapCircuit* cic)
+{
+    if (cic) {
+	if (cic->group())
+	    addr << cic->group()->debugName() << "/";
+	addr << cic->code();
+    }
+    else
+	addr = -1;
+}
+
+ZapSource::ZapSource(ZapCircuit* circuit, const char* format)
+    : DataSource(format)
+{
+#ifdef XDEBUG
+    setAddr(m_address,circuit);
+    Debug(&driver,DebugAll,"ZapSource::ZapSource() cic=%s [%p]",m_address.c_str(),this);
+#endif
+}
+
+ZapSource::~ZapSource()
+{
+    XDebug(&driver,DebugAll,"ZapSource::~ZapSource() cic=%s [%p]",m_address.c_str(),this);
+}
+
+
+/**
+ * ZapConsumer
+ */
+ZapConsumer::ZapConsumer(ZapCircuit* circuit, const char* format)
+    : DataConsumer(format),
+    m_circuit(circuit)
+{
+#ifdef XDEBUG
+    setAddr(m_address,circuit);
+    Debug(&driver,DebugAll,"ZapConsumer::ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
+#endif
+}
+
+ZapConsumer::~ZapConsumer()
+{
+    XDebug(&driver,DebugAll,"ZapConsumer::~ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
+}
+
+
+/**
+ * ZapModule
+ */
+ZapModule::ZapModule()
+{
+    debugName("Zaptel");
+    Output("Loaded module %s",debugName());
+    Configuration cfg(Engine::configFile("zapcard"));
+    cfg.load();
+
+    int level = cfg.getIntValue("general","debuglevel");
+
+    if (level > 0)
+	debugLevel(level);
+}
+
+ZapModule::~ZapModule()
+{
+    Output("Unloading module %s",debugName());
 }
 
 }; // anonymous namespace

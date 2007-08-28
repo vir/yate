@@ -217,21 +217,18 @@ public:
     bool open(unsigned int numbufs, unsigned int bufsize);
     // Close device. Reset handle
     void close();
-    // Set data format. Update echo cancellation
-    // Set train to true on succesfully set echo canceller with non 0 echo taps
-    // Fails if called for an interface or on data format set failure
-    bool setFormat(Format format, unsigned int echoTaps, bool& train);
+    // Set data format. Fails if called for an interface
+    bool setFormat(Format format);
     // Set/unset tone detection
     bool setDtmfDetect(bool detect);
-    // Update echo canceller
-    // Set train to true on succesfully set echo canceller with non 0 echo taps
-    bool setEchoTaps(unsigned int echoTaps, bool& train);
+    // Update echo canceller (disable if taps is 0)
+    bool setEchoCancel(bool enable, unsigned int taps);
+    // Start echo canceller training for a given period of time (in miliseconds)
+    bool startEchoTrain(unsigned int period);
     // Send hook events
     bool sendHook(HookEvent event);
     // Send DTMFs events
     bool sendDtmf(const char* tone);
-    // Start echo canceller training for a given period of time (in miliseconds)
-    bool startEchoTrain(unsigned int period);
     // Get an event. Return 0 if no events. Set dtmf if the event is a DTMF
     int getEvent(char& dtmf);
     // Get alarms from this device. Return true if alarms changed
@@ -367,7 +364,10 @@ public:
     void consume(const DataBlock& data);
 protected:
     // Close device. Stop worker. Remove source consumer. Change status. Release memory if requested
+    // Reset echo canceller and tone detector if the device is not closed
     void cleanup(bool release, Status stat = Missing, bool stop = true);
+    // Update format, echo canceller, dtmf detection
+    bool setFormat(ZapDevice::Format format);
     // Get and process some events
     void checkEvents();
     // Process additional events. Return false if not processed
@@ -384,11 +384,12 @@ protected:
     ZapDevice m_device;                  // The device
     ZapDevice::Type m_type;              // Circuit type
     ZapDevice::Format m_format;          // The data format
+    bool m_echoCancel;                   // Echo canceller state
+    bool m_crtEchoCancel;                // Current echo canceller state
     unsigned int m_echoTaps;             // Echo cancel taps
-    bool m_train;                        // True to train echo canceller
-    unsigned int m_echoTrainTime;        // Echo canceller's train period in miliseconds
+    unsigned int m_echoTrain;            // Echo canceller's train period in miliseconds
     bool m_dtmfDetect;                   // Dtmf detection flag
-    bool m_dtmfHWDetect;                 // Hardware dtmf detection supported
+    bool m_crtDtmfDetect;                // Current dtmf detection state
     bool m_canSend;                      // Not a read only circuit
     unsigned char m_idleValue;           // Value used to fill incomplete source buffer
     Thread::Priority m_priority;         // Worker thread priority
@@ -705,58 +706,68 @@ void ZapDevice::close()
     m_handle = -1;
 }
 
-// Set data format. Update echo cancellation
-// Set train to true on succesfully set echo cancellation with non 0 echo taps
-// Fails if called for an interface or on data format set failure
-bool ZapDevice::setFormat(Format format, unsigned int echoTaps, bool& train)
+// Set data format. Fails if called for an interface
+bool ZapDevice::setFormat(Format format)
 {
     if (m_interface)
 	return false;
-    // Set format
-    if (!ioctl(SetFormat,&format,DebugMild)) {
+    if (!ioctl(SetFormat,&format,0)) {
 	Debug(m_owner,DebugNote,"%sFailed to set format '%s' on channel %u [%p]",
-	    m_name.safe(),lookup(format,s_formats),m_channel,m_owner);
+	    m_name.safe(),lookup(format,s_formats,String((int)format)),
+	    m_channel,m_owner);
 	return false;
     }
     DDebug(m_owner,DebugAll,"%sFormat set to '%s' on channel %u [%p]",
 	m_name.safe(),lookup(format,s_formats),m_channel,m_owner);
-    // Configure echo canceller
-    setEchoTaps(echoTaps,train);
     return true;
 }
 
 // Set/unset tone detection
 bool ZapDevice::setDtmfDetect(bool detect)
 {
+    int tmp = 0;
 #ifdef ZT_TONEDETECT
     setLinear(0);
-    int tmp = detect ? ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE : 0;
-    return ioctl(SetToneDetect,&tmp,tmp?DebugMild:DebugAll);
-#else
-    return !detect;
+    if (detect)
+	tmp = ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE;
 #endif
+    if (!ioctl(SetToneDetect,&tmp,DebugNote))
+	return false;
+    DDebug(m_owner,DebugAll,"%sTone detector %s on channel %u [%p]",
+	m_name.safe(),detect?"started":"stopped",m_channel,m_owner);
+    return true;
 }
 
-// Update echo canceller
-// Set train to true on succesfully set echo canceller with echoTaps != 0
-bool ZapDevice::setEchoTaps(unsigned int echoTaps, bool& train)
+// Update echo canceller (0: disable)
+bool ZapDevice::setEchoCancel(bool enable, unsigned int taps)
 {
-    train = false;
+    enable = enable && taps;
     int tmp = 1;
-#if 0
-    if (echoTaps && !ioctl(SetAudioMode,&tmp,DebugMild))
+    if (enable && !ioctl(SetAudioMode,&tmp,DebugMild))
 	return false;
-#else
-    if (!echoTaps)
+    if (!enable)
+	taps = 0;
+    if (!ioctl(SetEchoCancel,&taps,DebugMild))
+	return false;
+    if (taps)
+	Debug(m_owner,DebugAll,
+	    "%sEcho canceller enabled on channel %u (taps=%u) [%p]",
+	    m_name.safe(),m_channel,taps,m_owner);
+    else
+	Debug(m_owner,DebugAll,"%sEcho canceller disabled on channel %u [%p]",
+	    m_name.safe(),m_channel,m_owner);
+    return true;
+}
+
+// Start echo training
+bool ZapDevice::startEchoTrain(unsigned int period)
+{
+    if (!period)
 	return true;
-    if (!ioctl(SetAudioMode,&tmp,DebugMild))
+    if (!ioctl(StartEchoTrain,&period,DebugNote))
 	return false;
-#endif
-    if (!ioctl(SetEchoCancel,&echoTaps,DebugMild))
-	return false;
-    DDebug(m_owner,DebugAll,"%sEcho taps set to %u on channel %u [%p]",
-	m_name.safe(),echoTaps,m_channel,m_owner);
-    train = echoTaps;
+    DDebug(m_owner,DebugAll,"%sEcho train started for %u ms on channel %u [%p]",
+	m_name.safe(),period,m_channel,m_owner);
     return true;
 }
 
@@ -806,18 +817,6 @@ bool ZapDevice::sendDtmf(const char* tone)
     return ioctl(ZapDevice::SetDial,&dop,DebugMild);
 }
 
-// Start echo training
-bool ZapDevice::startEchoTrain(unsigned int period)
-{
-    if (!period)
-	return true;
-    if (!ioctl(StartEchoTrain,&period))
-	return false;
-    DDebug(m_owner,DebugAll,"%sEcho train started for %u ms on channel %u [%p]",
-	m_name.safe(),period,m_channel,m_owner);
-    return true;
-}
-
 // Get an event. Return 0 if no events. Set dtmf if the event is a DTMF
 int ZapDevice::getEvent(char& dtmf)
 {
@@ -858,7 +857,7 @@ bool ZapDevice::getAlarms(String* alarms)
 bool ZapDevice::flushBuffers()
 {
     int x = ZT_FLUSH_READ | ZT_FLUSH_WRITE;
-    bool ok = ioctl(FlushBuffers,&x);
+    bool ok = ioctl(FlushBuffers,&x,DebugNote);
     if (ok)
 	DDebug(m_owner,DebugAll,"%sFlushed I/O buffers on channel %u [%p]",
 	    m_name.safe(),m_channel,m_owner);
@@ -957,8 +956,10 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    ret = ::ioctl(m_handle,ZT_TONEDETECT,param);
 	    break;
 #else
-	    Debug(m_owner,level,"%sIOCTL(%s) failed: unsupported request [%p]",
-		m_name.safe(),lookup(SetToneDetect,s_ioctl_request),m_owner);
+	    // Show message only if requested to set tone detection
+	    if (param && *param)
+		Debug(m_owner,level,"%sIOCTL(%s) failed: unsupported request [%p]",
+		    m_name.safe(),lookup(SetToneDetect,s_ioctl_request),m_owner);
 	    return false;
 #endif
 	case SetLinear:
@@ -1399,11 +1400,12 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_device(span->group(),channel,code,false),
     m_type(type),
     m_format(ZapDevice::Alaw),
+    m_echoCancel(false),
+    m_crtEchoCancel(false),
     m_echoTaps(0),
-    m_train(false),
-    m_echoTrainTime(400),
+    m_echoTrain(400),
     m_dtmfDetect(false),
-    m_dtmfHWDetect(false),
+    m_crtDtmfDetect(false),
     m_canSend(true),
     m_idleValue(255),
     m_priority(Thread::Normal),
@@ -1415,7 +1417,6 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_consErrorBytes(0),
     m_consTotal(0)
 {
-    m_echoTrainTime = (unsigned int)config.getIntValue("echotrain",defaults.getIntValue("echotrain",400));
     m_dtmfDetect = config.getBoolValue("dtmfdetect",defaults.getBoolValue("dtmfdetect",false));
     if (m_dtmfDetect && ZapDevice::SetToneDetect < 0) {
 	Debug(group(),DebugWarn,
@@ -1423,7 +1424,10 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
 	    code,this);
 	m_dtmfDetect = false;
     }
-    m_dtmfHWDetect = m_dtmfDetect;
+    m_crtDtmfDetect = m_dtmfDetect;
+    m_echoTaps = (unsigned int)config.getIntValue("echotaps",defaults.getIntValue("echotaps",0));
+    m_crtEchoCancel = m_echoCancel = m_echoTaps;
+    m_echoTrain = (unsigned int)config.getIntValue("echotrain",defaults.getIntValue("echotrain",400));
     m_canSend = config.getBoolValue("readonly",true);
     m_buflen = (unsigned int)config.getIntValue("buflen",defaults.getIntValue("buflen",160));
     if (!m_buflen)
@@ -1492,9 +1496,7 @@ bool ZapCircuit::status(Status newStat, bool sync)
 	if (!m_device.open(0,m_buflen))
 	    break;
 	m_device.flushBuffers();
-	m_device.setFormat(m_format,m_echoTaps,m_train);
-	if (m_dtmfDetect)
-	    m_dtmfHWDetect = m_device.setDtmfDetect(true);
+	setFormat(m_format);
 	createData();
 	String addr;
 	if (group())
@@ -1535,9 +1537,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 	    return false;
     }
     // Update the format for Zaptel device
-    if (m_device.setFormat((ZapDevice::Format)f,m_echoTaps,m_train)) {
-	if (m_dtmfDetect)
-	    m_dtmfHWDetect = m_device.setDtmfDetect(true);
+    if (setFormat((ZapDevice::Format)f)) {
 	m_source->changeFormat(format);
 	m_consumer->changeFormat(format);
 	return true;
@@ -1552,24 +1552,43 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 bool ZapCircuit::setParam(const String& param, const String& value)
 {
     if (param == "echotrain") {
-	if (!(m_device.valid() && m_train && m_device.startEchoTrain(m_echoTrainTime)))
+	int tmp = value.toInteger();
+	if (tmp > 0)
+	    m_echoTrain = (unsigned int)tmp;
+	return m_device.valid() && m_crtEchoCancel && m_device.startEchoTrain(m_echoTrain);
+    }
+    if (param == "echocancel") {
+	bool tmp = value.toBoolean();
+	if (tmp == m_crtEchoCancel)
+	    return true;
+	if (m_echoTaps)
+	    m_crtEchoCancel = tmp;
+	else if (tmp)
 	    return false;
-	Debug(group(),DebugCall,
-	    "ZapCircuit(%u). Started echo canceller training for %u ms [%p]",
-	    code(),m_echoTrainTime,this);
-	return true;
+	else
+	    m_crtEchoCancel = false;
+	if (!m_device.valid())
+	    return false;
+	bool ok = m_device.setEchoCancel(m_crtEchoCancel,m_echoTaps);
+	if (m_crtEchoCancel)
+	    m_crtEchoCancel = ok;
+	return ok; 
     }
     if (param == "echotaps") {
-	unsigned int taps = (unsigned int)value.toInteger(0);
-	if (m_echoTaps == taps)
-	    return true;
-	m_echoTaps = taps;
-	DDebug(group(),DebugInfo,"ZapCircuit(%u). Set echotaps=%u%s [%p]",
-	    code(),m_echoTaps,m_device.valid()?" (updating echo canceller)":"",this);
-	// Update echo canceller if already opened
-	if (m_device.valid())
-	    m_device.setEchoTaps(m_echoTaps,m_train);
+	m_echoTaps = (unsigned int)value.toInteger();
 	return true;
+    }
+    if (param == "tonedetect") {
+	bool tmp = value.toBoolean();
+	if (tmp == m_crtDtmfDetect)
+	    return true;
+	m_crtDtmfDetect = tmp;
+	if (!m_device.valid())
+	    return true;
+	bool ok = m_device.setDtmfDetect(m_crtDtmfDetect);
+	if (m_crtDtmfDetect)
+	    m_crtDtmfDetect = ok;
+	return ok;
     }
     return false;
 }
@@ -1577,18 +1596,17 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 // Get circuit data
 bool ZapCircuit::getParam(const String& param, String& value) const
 {
-    if (param == "dtmfdetect") {
-	value = String::boolText(m_dtmfHWDetect);
-	return true;
-    }
-    if (param == "channel") {
-	if (m_device.valid())
-	    value = m_device.channel();
-	else
-	    value = -1;
-	return true;
-    }
-    return false;
+    if (param == "tonedetect")
+	value = String::boolText(m_crtDtmfDetect);
+    else if (param == "channel")
+	value = m_device.channel();
+    else if (param == "echocancel")
+	value = String::boolText(m_crtEchoCancel);
+    else if (param == "echotaps")
+	value = m_echoTaps;
+    else
+	return false;
+    return true;
 }
 
 // Get source or consumer
@@ -1671,6 +1689,7 @@ void ZapCircuit::consume(const DataBlock& data)
 }
 
 // Close device. Stop worker. Remove source consumer. Change status. Release memory if requested
+// Reset echo canceller and tone detector if the device is not closed
 void ZapCircuit::cleanup(bool release, Status stat, bool stop)
 {
     if (stop || release) {
@@ -1689,14 +1708,36 @@ void ZapCircuit::cleanup(bool release, Status stat, bool stop)
 	m_source->deref();
 	m_source = 0;
     }
+    if (release) {
+	SignallingCircuit::destroyed();
+	return;
+    }
+    status(stat);
     m_sourceBuffer.clear();
     m_consBuffer.clear();
     m_consErrors = m_consErrorBytes = m_consTotal = 0;
-    m_echoTaps = 0;
-    m_train = false;
-    status(stat);
-    if (release)
-	SignallingCircuit::destroyed();
+    // Reset echo canceller and tone detector
+    if (m_device.valid() && (m_crtEchoCancel != m_echoCancel))
+	m_device.setEchoCancel(m_echoCancel,m_echoTaps);
+    m_crtEchoCancel = m_echoCancel;
+    if (m_device.valid() && (m_crtDtmfDetect != m_dtmfDetect))
+	m_device.setDtmfDetect(m_dtmfDetect);
+    m_crtDtmfDetect = m_dtmfDetect;
+}
+
+// Update format, echo canceller, dtmf detection
+bool ZapCircuit::setFormat(ZapDevice::Format format)
+{
+    m_device.flushBuffers();
+    if (!m_device.setFormat(format))
+	return false;
+    if (m_crtEchoCancel)
+	m_crtEchoCancel = m_device.setEchoCancel(m_crtEchoCancel,m_echoTaps);
+    if (m_crtDtmfDetect)
+	m_crtDtmfDetect = m_device.setDtmfDetect(true);
+    else
+	m_device.setDtmfDetect(false);
+    return true;
 }
 
 // Get events
@@ -1709,7 +1750,7 @@ void ZapCircuit::checkEvents()
     switch (event) {
 	case ZapDevice::DtmfDown:
 	case ZapDevice::DtmfUp:
-	    if (!m_dtmfHWDetect) {
+	    if (!m_crtDtmfDetect) {
 		DDebug(group(),DebugAll,"ZapCircuit(%u). Ignoring DTMF '%s'=%c [%p]",
 		    code(),lookup(event,s_events,""),c,this);
 		return;
@@ -1793,7 +1834,6 @@ bool ZapCircuit::enqueueDigit(bool tone, char digit)
 }
 
 
-
 /**
  * ZapAnalogCircuit
  */
@@ -1844,12 +1884,8 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	    if (group())
 		addr << group()->debugName() << "/";
 	    addr << code();
-	    if (m_device.open(0,m_buflen) && ZapWorkerClient::start(m_priority,group(),addr)) {
-		m_device.flushBuffers();
-		m_device.setFormat(m_format,m_echoTaps,m_train);
-		if (m_dtmfDetect)
-		    m_dtmfHWDetect = m_device.setDtmfDetect(true);
-	    }
+	    if (m_device.open(0,m_buflen) && ZapWorkerClient::start(m_priority,group(),addr))
+		setFormat(m_format);
 	    else
 		cleanup(false,Idle,true);
 	}

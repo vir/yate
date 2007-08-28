@@ -187,17 +187,21 @@ public:
 	Alaw    = ZT_LAW_ALAW
     };
 
-    // Circuit type used to create circuits and interface
+    // D-channel or circuit type used to create circuits and interface
     enum Type {
+	DChan,
 	E1,
 	T1,
 	FXO,
 	FXS
     };
 
-    ZapDevice(SignallingComponent* dbg, unsigned int chan, unsigned int circuit, bool interface);
+    ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
+	unsigned int circuit);
     inline ~ZapDevice()
 	{ close(); }
+    inline Type type() const
+	{ return m_type; }
     inline bool valid() const
 	{ return m_handle >= 0; }
     inline unsigned int channel() const
@@ -251,8 +255,8 @@ protected:
     // Make IOCTL requests on this device
     bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
 private:
+    Type m_type;                         // Device type
     SignallingComponent* m_owner;        // Signalling component owning this device
-    bool m_interface;                    // True if this is a D-channel
     String m_name;                       // Additional debug name for circuits
     int m_handle;                        // The handler
     unsigned int m_channel;              // The channel this file is used for
@@ -605,6 +609,7 @@ static TokenDict s_ioctl_request[] = {
 };
 
 static TokenDict s_types[] = {
+    MAKE_NAME(DChan),
     MAKE_NAME(E1),
     MAKE_NAME(T1),
     MAKE_NAME(FXO),
@@ -621,9 +626,10 @@ static TokenDict s_formats[] = {
     {0,0}
     };
 
-ZapDevice::ZapDevice(SignallingComponent* dbg, unsigned int chan, unsigned int circuit, bool interface)
-    : m_owner(dbg),
-    m_interface(interface),
+ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
+	unsigned int circuit)
+    : m_type(t),
+    m_owner(dbg),
     m_handle(-1),
     m_channel(chan),
     m_alarms(0),
@@ -639,7 +645,7 @@ ZapDevice::ZapDevice(SignallingComponent* dbg, unsigned int chan, unsigned int c
 void ZapDevice::channel(unsigned int chan, unsigned int circuit)
 {
     m_channel = chan;
-    if (!m_interface)
+    if (m_type != DChan)
 	m_name << "ZapCircuit(" << circuit << "). ";
 }
 
@@ -650,7 +656,7 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 {
     close();
 
-    if (m_interface)
+    if (m_type == DChan)
 	m_handle = ::open(s_zapDevName,O_RDWR,0600);
     else
 	m_handle = ::open(s_zapDevName,O_RDWR|O_NONBLOCK);
@@ -665,7 +671,7 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 	if (!ioctl(SetChannel,&m_channel))
 	    break;
 
-	if (!m_interface) {
+	if (m_type != DChan) {
 	    if (bufsize && !ioctl(SetBlkSize,&bufsize))
 		break;
 	    DDebug(m_owner,DebugAll,"%sBlock size set to %u on channel %u [%p]",
@@ -709,7 +715,7 @@ void ZapDevice::close()
 // Set data format. Fails if called for an interface
 bool ZapDevice::setFormat(Format format)
 {
-    if (m_interface)
+    if (m_type == DChan)
 	return false;
     if (!ioctl(SetFormat,&format,0)) {
 	Debug(m_owner,DebugNote,"%sFailed to set format '%s' on channel %u [%p]",
@@ -743,7 +749,8 @@ bool ZapDevice::setEchoCancel(bool enable, unsigned int taps)
 {
     enable = enable && taps;
     int tmp = 1;
-    if (enable && !ioctl(SetAudioMode,&tmp,DebugMild))
+    if (enable && (type() == E1 || type() == T1) &&
+	!ioctl(SetAudioMode,&tmp,DebugMild))
 	return false;
     if (!enable)
 	taps = 0;
@@ -999,7 +1006,7 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
  * ZapInterface
  */
 ZapInterface::ZapInterface(const NamedList& params)
-    : m_device(this,0,0,true),
+    : m_device(ZapDevice::DChan,this,0,0),
     m_priority(Thread::Normal),
     m_errorMask(255),
     m_numbufs(16),
@@ -1397,8 +1404,7 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
 	ZapSpan* span, const NamedList& config, const NamedList& defaults,
 	const NamedList& params)
     : SignallingCircuit(TDM,code,Idle,span->group(),span),
-    m_device(span->group(),channel,code,false),
-    m_type(type),
+    m_device(type,span->group(),channel,code),
     m_format(ZapDevice::Alaw),
     m_echoCancel(false),
     m_crtEchoCancel(false),
@@ -1522,7 +1528,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
     // Check format
     // T1,E1: allow alaw or mulaw
     int f = lookup(format,s_formats,-2);
-    switch (m_type) {
+    switch (m_device.type()) {
 	case ZapDevice::E1:
 	case ZapDevice::T1:
 	case ZapDevice::FXS:
@@ -1533,7 +1539,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 	default:
 	    Debug(group(),DebugNote,
 		"ZapCircuit(%u). Can't set format to '%s' for type=%s [%p]",
-		code(),format,lookup(m_type,s_types),this);
+		code(),format,lookup(m_device.type(),s_types),this);
 	    return false;
     }
     // Update the format for Zaptel device
@@ -1964,7 +1970,7 @@ Unhandled:
 	case ZapDevice::RingBegin:
 	    return enqueueEvent(event,SignallingCircuitEvent::RingBegin);
 	case ZapDevice::OffHookRing:
-	    if (m_type == ZapDevice::FXS) {
+	    if (m_device.type() == ZapDevice::FXS) {
 		changeHook(false);
 		return enqueueEvent(event,SignallingCircuitEvent::OffHook);
 	    }

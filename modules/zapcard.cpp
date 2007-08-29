@@ -179,6 +179,14 @@ public:
 	FlushBuffers   = 14,             // Flush read/write buffers
     };
 
+    enum FlushTarget {
+	FlushRead  = ZT_FLUSH_READ,
+	FlushWrite = ZT_FLUSH_WRITE,
+	FlushRdWr  = ZT_FLUSH_BOTH,
+	FlushEvent = ZT_FLUSH_EVENT,
+	FlushAll   = ZT_FLUSH_ALL,
+    };
+
     // Zaptel formats
     enum Format {
 	Slin    = -1,
@@ -241,7 +249,7 @@ public:
     inline bool setLinear(int val, int level = DebugWarn)
 	{ return ioctl(SetLinear,&val,level); }
     // Flush read and write buffers
-    bool flushBuffers();
+    bool flushBuffers(FlushTarget target = FlushAll);
     // Check if received data. Wait usec microseconds before returning
     bool select(unsigned int usec);
     // Receive data. Return -1 on error or the number of bytes read
@@ -861,14 +869,22 @@ bool ZapDevice::getAlarms(String* alarms)
 }
 
 // Flush read/write buffers
-bool ZapDevice::flushBuffers()
+bool ZapDevice::flushBuffers(FlushTarget target)
 {
-    int x = ZT_FLUSH_READ | ZT_FLUSH_WRITE;
-    bool ok = ioctl(FlushBuffers,&x,DebugNote);
-    if (ok)
-	DDebug(m_owner,DebugAll,"%sFlushed I/O buffers on channel %u [%p]",
-	    m_name.safe(),m_channel,m_owner);
-    return ok;
+    if (!ioctl(FlushBuffers,&target,DebugNote))
+	return false;
+#ifdef DEBUG
+    String tmp;
+    if (target & FlushRead)
+	tmp.append("read","/");
+    if (target & FlushWrite)
+	tmp.append("write","/");
+    if (target & FlushEvent)
+	tmp.append("events","/");
+    DDebug(m_owner,DebugAll,"%sFlushed buffers (%s) on channel %u [%p]",
+	m_name.safe(),tmp.c_str(),m_channel,m_owner);
+#endif
+    return true;
 }
 
 // Check if received data. Wait usec microseconds before returning
@@ -1995,11 +2011,8 @@ Unhandled:
 // Process incoming data
 bool ZapAnalogCircuit::process()
 {
-    if (!m_device.valid()) {
-	Debug(group(),DebugNote,
-	    "ZapCircuit(%u). Can't process: device is invalid [%p]",code(),this);
+    if (!(m_device.valid() && SignallingCircuit::status() != SignallingCircuit::Disabled))
 	return false;
-    }
 
     checkEvents();
 

@@ -425,8 +425,8 @@ double String::toDouble(double defvalue) const
     return val;
 }
 
-static const char* str_false[] = { "false", "no", "off", "disable", 0 };
-static const char* str_true[] = { "true", "yes", "on", "enable", 0 };
+static const char* str_false[] = { "false", "no", "off", "disable", "f", 0 };
+static const char* str_true[] = { "true", "yes", "on", "enable", "t", 0 };
 
 bool String::toBoolean(bool defvalue) const
 {

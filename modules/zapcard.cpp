@@ -59,12 +59,7 @@ class ZapCircuit;                        // A voice circuit
 class ZapAnalogCircuit;                  // A analog circuit
 class ZapSource;                         // Data source
 class ZapConsumer;                       // Data consumer
-class ZapModule;                         // The driver
-
-static const char* s_zapDevName = "//dev/zap/channel";
-static const char* s_threadName = "ZapWorkerThread";
-
-static Mutex s_ifaceNotify(true);        // ZapInterface: lock recv data notification counter
+class ZapModule;                         // The module
 
 #define ZAP_CRC_LEN 2                    // The length of the CRC field in signalling packets
 
@@ -98,13 +93,14 @@ public:
     virtual ~ZapWorkerThread();
     // Call client's process() in a loop
     virtual void run();
+    static const char* s_threadName;
 private:
     ZapWorkerClient* m_client;
     String m_address;
 };
 
 // I/O device
-class ZapDevice
+class ZapDevice : public GenObject
 {
 public:
     // Flags to check alarms
@@ -142,7 +138,7 @@ public:
 	PulseDigit = ZT_EVENT_PULSEDIGIT,    // This is OR'd with the digit received
 	DtmfDown = ZT_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
 	DtmfUp = ZT_EVENT_DTMFUP,            // Ditto for DTMF key up event
-	DtmfEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
+	DigitEvent = ZT_EVENT_PULSEDIGIT | ZT_EVENT_DTMFDOWN | ZT_EVENT_DTMFUP
     };
 
     // List of hook to send events
@@ -206,19 +202,30 @@ public:
 
     ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit);
-    inline ~ZapDevice()
-	{ close(); }
+    ~ZapDevice();
     inline Type type() const
 	{ return m_type; }
+    inline const SignallingComponent* owner() const
+	{ return m_owner; }
+    inline const String& address() const
+	{ return m_address; }
+    inline const String spanName() const
+	{ return m_spanName; }
+    inline const String spanDesc() const
+	{ return m_spanDesc; }
     inline bool valid() const
 	{ return m_handle >= 0; }
     inline unsigned int channel() const
 	{ return m_channel; }
+    inline int span() const
+	{ return m_span; }
+    inline int spanPos() const
+	{ return m_spanPos; }
     void channel(unsigned int chan, unsigned int circuit);
     inline int alarms() const
 	{ return m_alarms; }
-    inline void resetAlarms()
-	{ m_alarms = 0; }
+    inline const String& alarmsText() const
+	{ return m_alarmsText; }
     inline bool canRead() const
 	{ return m_canRead; }
     inline bool event() const
@@ -241,10 +248,12 @@ public:
     bool sendHook(HookEvent event);
     // Send DTMFs events
     bool sendDtmf(const char* tone);
-    // Get an event. Return 0 if no events. Set dtmf if the event is a DTMF
-    int getEvent(char& dtmf);
-    // Get alarms from this device. Return true if alarms changed
-    bool getAlarms(String* alarms);
+    // Get an event. Return 0 if no events. Set digit if the event is a DTMF/PULSE
+    int getEvent(char& digit);
+    // Check alarms from this device. Return true if alarms changed
+    bool checkAlarms();
+    // Reset alarms
+    void resetAlarms();
     // 
     inline bool setLinear(int val, int level = DebugWarn)
 	{ return ioctl(SetLinear,&val,level); }
@@ -257,18 +266,28 @@ public:
     int recv(void* buffer, int len);
     // Send data. Return -1 on error or the number of bytes written
     int send(const void* buffer, int len);
+    // Zaptel device name
+    static const char* s_zapDevName;
 protected:
     inline bool canRetry()
 	{ return errno == EAGAIN || errno == EINTR; }
     // Make IOCTL requests on this device
     bool ioctl(IoctlRequest request, void* param, int level = DebugWarn);
+    // Try to detect the span owning this channel
+    void detectSpan();
 private:
     Type m_type;                         // Device type
     SignallingComponent* m_owner;        // Signalling component owning this device
     String m_name;                       // Additional debug name for circuits
+    String m_address;                    // User address (interface or circuit)
     int m_handle;                        // The handler
     unsigned int m_channel;              // The channel this file is used for
+    int m_span;                          // Span this device's channel belongs to
+    int m_spanPos;                       // Physical channel inside span
+    String m_spanName;                   // Span name
+    String m_spanDesc;                   // Span description
     int m_alarms;                        // Device alarms flag
+    String m_alarmsText;                 // Alarms text
     bool m_canRead;                      // True if there is data to read
     bool m_event;                        // True if an event occurred when recv/select
     bool m_readError;                    // Flag used to print read errors
@@ -352,8 +371,8 @@ public:
 	const NamedList& params);
     virtual ~ZapCircuit()
 	{ cleanup(false); }
-    inline unsigned int channel() const
-	{ return m_device.channel(); }
+    inline const ZapDevice device() const
+	{ return m_device; }
     virtual void destroyed()
 	{ cleanup(true); }
     // Change circuit status. Clear events on status change
@@ -476,17 +495,26 @@ private:
     String m_address;
 };
 
-// The driver
-class ZapModule : public DebugEnabler
+// The Zaptel module
+class ZapModule : public Module
 {
 public:
     ZapModule();
     ~ZapModule();
+    virtual void initialize();
+protected:
+    virtual bool received(Message& msg, int id);
+    virtual void statusParams(String& str);
+private:
+    bool m_init;                         // Already initialized flag
 };
 
 
-static ZapModule driver;
+static ZapModule plugin;
 YSIGFACTORY2(ZapInterface,SignallingInterface);  // Factory used to create zaptel interfaces and spans
+static Mutex s_ifaceNotifyMutex(true);           // ZapInterface: lock recv data notification counter
+static ObjList s_devices;
+static Mutex s_devMutex(true);                   // Lock device list
 
 
 /**
@@ -507,7 +535,8 @@ bool ZapWorkerClient::start(Thread::Priority prio, DebugEnabler* dbg, const Stri
 	return true;
     m_thread->cancel(true);
     m_thread = 0;
-    Debug(dbg,DebugWarn,"Failed to start %s for %s [%p]",s_threadName,addr.c_str(),dbg);
+    Debug(dbg,DebugWarn,"Failed to start %s for %s [%p]",
+	ZapWorkerThread::s_threadName,addr.c_str(),dbg);
     return false;
 }
 
@@ -523,9 +552,11 @@ void ZapWorkerClient::stop()
 /**
  * ZapWorkerThread
  */
+const char* ZapWorkerThread::s_threadName = "ZapWorkerThread";
+
 ZapWorkerThread::~ZapWorkerThread()
 {
-    DDebug(&driver,DebugAll,"%s is terminated for client (%p): %s",
+    DDebug(&plugin,DebugAll,"%s is terminated for client (%p): %s",
 	s_threadName,m_client,m_address.c_str());
     if (m_client)
 	m_client->m_thread = 0;
@@ -535,7 +566,7 @@ void ZapWorkerThread::run()
 {
     if (!m_client)
 	return;
-    DDebug(&driver,DebugAll,"%s is running for client (%p): %s",
+    DDebug(&plugin,DebugAll,"%s is running for client (%p): %s",
 	s_threadName,m_client,m_address.c_str());
     while (true) {
 	if (m_client->process())
@@ -583,7 +614,7 @@ static TokenDict s_events[] = {
     MAKE_NAME(PulseDigit),
     MAKE_NAME(DtmfDown),
     MAKE_NAME(DtmfUp),
-    MAKE_NAME(DtmfEvent),
+    MAKE_NAME(DigitEvent),
     {0,0}
 };
 
@@ -604,6 +635,7 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(SetBuffers),
     MAKE_NAME(SetFormat),
     MAKE_NAME(SetAudioMode),
+    MAKE_NAME(SetEchoCancel),
     MAKE_NAME(SetDial),
     MAKE_NAME(SetHook),
     MAKE_NAME(SetToneDetect),
@@ -634,13 +666,17 @@ static TokenDict s_formats[] = {
     {0,0}
     };
 
+const char* ZapDevice::s_zapDevName = "//dev/zap/channel";
+
 ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit)
     : m_type(t),
     m_owner(dbg),
     m_handle(-1),
     m_channel(chan),
-    m_alarms(0),
+    m_span(-1),
+    m_spanPos(-1),
+    m_alarms(NotOpen),
     m_canRead(false),
     m_event(false),
     m_readError(false),
@@ -648,13 +684,27 @@ ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
     m_selectError(false)
 {
     this->channel(chan,circuit);
+    s_devMutex.lock();
+    s_devices.append(this);
+    s_devMutex.unlock();
+}
+
+ZapDevice::~ZapDevice()
+{
+    s_devMutex.lock();
+    s_devices.remove(this,false);
+    s_devMutex.unlock();
+    close();
 }
 
 void ZapDevice::channel(unsigned int chan, unsigned int circuit)
 {
     m_channel = chan;
-    if (m_type != DChan)
+    m_address << (m_owner ? m_owner->debugName() : "");
+    if (m_type != DChan) {
 	m_name << "ZapCircuit(" << circuit << "). ";
+	m_address << "/" << circuit;
+    }
 }
 
 // Open the device. Specify channel to use.
@@ -674,10 +724,29 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 	return false;
     }
 
+    m_alarms = 0;
+    m_alarmsText = "";
     while (true) {
 	// Specify the channel to use
 	if (!ioctl(SetChannel,&m_channel))
 	    break;
+
+	ZT_PARAMS par;
+	if (!ioctl(GetParams,&par))
+	    break;
+
+	m_span = par.spanno;
+	m_spanPos = par.chanpos;
+
+	ZT_SPANINFO info;
+	memset(&info,0,sizeof(info));
+	info.spanno = m_span;
+	if (ioctl(GetInfo,&info,DebugAll)) {
+	    m_spanName = info.name;
+	    m_spanDesc = info.desc;
+	}
+
+	checkAlarms();
 
 	if (m_type != DChan) {
 	    if (bufsize && !ioctl(SetBlkSize,&bufsize))
@@ -689,9 +758,6 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 
 	// Open for an interface
 	// Check channel mode
-	ZT_PARAMS par;
-	if (!ioctl(GetParams,&par))
-	    break;
 	if (par.sigtype != ZT_SIG_HDLCFCS) {
 	    Debug(m_owner,DebugWarn,"Channel %u is not in HDLC/FCS mode [%p]",m_channel,m_owner);
 	    break;
@@ -714,6 +780,8 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 // Close device. Reset handle
 void ZapDevice::close()
 {
+    m_alarms = NotOpen;
+    m_alarmsText = lookup(NotOpen,s_alarms);
     if (!valid())
 	return;
     ::close(m_handle);
@@ -832,18 +900,20 @@ bool ZapDevice::sendDtmf(const char* tone)
     return ioctl(ZapDevice::SetDial,&dop,DebugMild);
 }
 
-// Get an event. Return 0 if no events. Set dtmf if the event is a DTMF
-int ZapDevice::getEvent(char& dtmf)
+// Get an event. Return 0 if no events. Set digit if the event is a DTMF/PULSE digit
+int ZapDevice::getEvent(char& digit)
 {
     int event = 0;
     if (!ioctl(GetEvent,&event,DebugMild))
 	return 0;
-    if (event & DtmfEvent) {
-	dtmf = (char)event;
-	event &= DtmfEvent;
+    if (event & DigitEvent) {
+	digit = (char)event;
+	event &= DigitEvent;
+	XDebug(m_owner	,DebugAll,"%sGot digit event %d '%s'=%c on channel %u [%p]",
+	    m_name.safe(),event,lookup(event,s_events),digit,m_channel,m_owner);
     }
 #ifdef XDEBUG
-    if (event)
+    else if (event)
 	Debug(m_owner,DebugAll,"%sGot event %d on channel %u [%p]",
 	    m_name.safe(),event,m_channel,m_owner);
 #endif
@@ -851,21 +921,34 @@ int ZapDevice::getEvent(char& dtmf)
 }
 
 // Get alarms from this device. Return true if alarms changed
-bool ZapDevice::getAlarms(String* alarms)
+bool ZapDevice::checkAlarms()
 {
     ZT_SPANINFO info;
     memset(&info,0,sizeof(info));
-    info.spanno = m_channel;
+    info.spanno = m_span;
     if (!(ioctl(GetInfo,&info,DebugAll)))
 	return false;
     if (m_alarms == info.alarms)
 	return false;
     m_alarms = info.alarms;
-    if (alarms)
+    m_alarmsText = "";
+    if (m_alarms) {
 	for(int i = 0; s_alarms[i].token; i++)
 	    if (m_alarms & s_alarms[i].value)
-		alarms->append(s_alarms[i].token,",");
+		m_alarmsText.append(s_alarms[i].token,",");
+	Debug(m_owner,DebugNote,"%sAlarms changed (%d,'%s') on channel %u [%p]",
+	    m_name.safe(),m_alarms,m_alarmsText.safe(),m_channel,m_owner);
+    }
     return true;
+}
+
+// Reset device's alarms
+void ZapDevice::resetAlarms()
+{
+    m_alarms = 0;
+    m_alarmsText = ""; 
+    Debug(m_owner,DebugInfo,"%sNo more alarms on channel %u [%p]",
+	m_name.safe(),m_channel,m_owner);
 }
 
 // Flush read/write buffers
@@ -950,6 +1033,9 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 {
     int ret = -1;
     switch (request) {
+	case GetEvent:
+	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
+	    break;
 	case SetChannel:
 	    ret = ::ioctl(m_handle,ZT_SPECIFY,param);
 	    break;
@@ -990,9 +1076,6 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    break;
 	case GetParams:
 	    ret = ::ioctl(m_handle,ZT_GET_PARAMS,param);
-	    break;
-	case GetEvent:
-	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
 	    break;
 	case GetInfo:
 	    ret = ::ioctl(m_handle,ZT_SPANSTAT,param);
@@ -1060,10 +1143,10 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     cfg.load();
 
     const char* sectName = name.getValue(type);
-    DDebug(&driver,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
+    DDebug(&plugin,DebugAll,"Factory trying to create %s='%s'",type.c_str(),sectName);
     NamedList* config = cfg.getSection(sectName);
     if (!config) {
-	DDebug(&driver,DebugAll,"No section '%s' in configuration",c_safe(sectName));
+	DDebug(&plugin,DebugAll,"No section '%s' in configuration",c_safe(sectName));
 	return 0;
     }
 
@@ -1078,7 +1161,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     String sOffset = config->getValue("offset");
     unsigned int offset = (unsigned int)sOffset.toInteger(-1);
     if (offset == (unsigned int)-1) {
-	Debug(&driver,DebugWarn,"Section '%s'. Invalid offset='%s'",
+	Debug(&plugin,DebugWarn,"Section '%s'. Invalid offset='%s'",
 	    config->c_str(),sOffset.safe());
 	return 0;
     }
@@ -1089,7 +1172,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 	if (span->group())
 	    ok = span->init(devType,offset,*config,*general,name);
 	else
-	    Debug(&driver,DebugWarn,"Can't create span '%s'. Group is missing",
+	    Debug(&plugin,DebugWarn,"Can't create span '%s'. Group is missing",
 		span->id().safe());
 	if (ok)
 	    return span;
@@ -1099,7 +1182,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 
     // Check span type
     if (devType != ZapDevice::E1 && devType != ZapDevice::T1) {
-	Debug(&driver,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
+	Debug(&plugin,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
 	    config->c_str(),sDevType.c_str());
 	return 0;
     }
@@ -1110,7 +1193,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
 	sig = (devType == ZapDevice::E1 ? 16 : 24);
     unsigned int code = (unsigned int)sig.toInteger(0);
     if (!(sig && code && code <= count)) {
-	Debug(&driver,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
+	Debug(&plugin,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
 	    config->c_str(),sig.safe(),sDevType.c_str());
 	return false;
     }
@@ -1168,9 +1251,9 @@ bool ZapInterface::process()
 	return false;
     }
 
-    s_ifaceNotify.lock();
+    s_ifaceNotifyMutex.lock();
     m_notify = 0;
-    s_ifaceNotify.unlock();
+    s_ifaceNotifyMutex.unlock();
     DataBlock packet(m_buffer,r - ZAP_CRC_LEN);
 #ifdef XDEBUG
     String hex;
@@ -1264,7 +1347,7 @@ void ZapInterface::timerTick(const Time& when)
 {
     if (!m_timerRxUnder.timeout(when.msec()))
 	return;
-    s_ifaceNotify.lock();
+    s_ifaceNotifyMutex.lock();
     if (m_notify) {
 	if (m_notify == 1) {
 	    DDebug(this,DebugMild,"RX idle for " FMT64 "ms. Notifying receiver [%p]",
@@ -1275,7 +1358,7 @@ void ZapInterface::timerTick(const Time& when)
     }
     else
 	m_notify = 1;
-    s_ifaceNotify.unlock();
+    s_ifaceNotifyMutex.unlock();
     m_timerRxUnder.start(when.msec());
 }
 
@@ -1289,15 +1372,10 @@ void ZapInterface::checkEvents()
     switch (event) {
 	case ZapDevice::Alarm:
 	case ZapDevice::NoAlarm:
-	    if (event == ZapDevice::Alarm) {
-		String s;
-		if (m_device.getAlarms(&s))
-		    Debug(this,DebugNote,"Alarms changed. %d: '%s' [%p]",m_device.alarms(),s.safe(),this);
-	    }
-	    else {
+	    if (event == ZapDevice::Alarm)
+		m_device.checkAlarms();
+	    else
 		m_device.resetAlarms();
-		Debug(this,DebugNote,"No more alarms [%p]",this);
-	    }
 	    return;
 	case ZapDevice::HdlcAbort:
 	    if (m_errorMask & ZAP_ERR_ABORT)
@@ -1580,6 +1658,8 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 	return m_device.valid() && m_crtEchoCancel && m_device.startEchoTrain(m_echoTrain);
     }
     if (param == "echocancel") {
+	if (!value.isBoolean())
+	    return false;
 	bool tmp = value.toBoolean();
 	if (tmp == m_crtEchoCancel)
 	    return true;
@@ -1626,6 +1706,10 @@ bool ZapCircuit::getParam(const String& param, String& value) const
 	value = String::boolText(m_crtEchoCancel);
     else if (param == "echotaps")
 	value = m_echoTaps;
+    else if (param == "alarms")
+	value = m_device.alarmsText();
+    else if (param == "driver")
+	value = plugin.debugName();
     else
 	return false;
     return true;
@@ -1786,20 +1870,15 @@ void ZapCircuit::checkEvents()
 	case ZapDevice::Alarm:
 	case ZapDevice::NoAlarm:
 	    if (event == ZapDevice::Alarm) {
-		String s;
-		m_device.getAlarms(&s);
-		Debug(group(),DebugNote,
-		    "ZapCircuit(%u). Alarms changed. %d: '%s' [%p]",
-		    code(),m_device.alarms(),s.safe(),this);
+		if (!m_device.checkAlarms())
+		    return;
 		SignallingCircuitEvent* e = new SignallingCircuitEvent(this,
 		    SignallingCircuitEvent::Alarm,lookup(event,s_events));
-		if (s)
-		    e->addParam("alarms",s);
+		e->addParam("alarms",m_device.alarmsText());
 		enqueueEvent(e);
 	    }
 	    else {
 		m_device.resetAlarms();
-		Debug(group(),DebugNote,"ZapCircuit(%u). No more alarms [%p]",code(),this);
 		enqueueEvent(event,SignallingCircuitEvent::NoAlarm);
 	    }
 	    return;
@@ -1896,10 +1975,13 @@ bool ZapAnalogCircuit::status(Status newStat, bool sync)
 	DDebug(group(),DebugAll,"ZapCircuit(%u). Changed status to %u [%p]",
 	    code(),newStat,this);
 
+    if (newStat != Connected && m_device.valid())
+	m_device.flushBuffers();
+
     if (newStat == Reserved) {
-	// Just cleanup if old status was Connected and the device is already valid
+	// Just cleanup if old status was Connected or the device is already valid
 	// Otherwise: open device and start worker
-	if (oldStat == Connected && m_device.valid())
+	if (oldStat == Connected || m_device.valid())
 	    cleanup(false,Reserved,false);
 	else {
 	    String addr;
@@ -1972,7 +2054,6 @@ bool ZapAnalogCircuit::processEvent(int event, char c)
 #if 0
 Unhandled:
 	BitsChanged
-	PulseStart
 	Timeout
 	TimerPing
 #endif
@@ -2003,6 +2084,8 @@ Unhandled:
 	    return enqueueEvent(event,SignallingCircuitEvent::DialComplete);
 	case ZapDevice::PulseDigit:
 	    return enqueueDigit(false,c);
+	case ZapDevice::PulseStart:
+	    return enqueueEvent(event,SignallingCircuitEvent::PulseStart);
 	default: ;
     }
     return false;
@@ -2064,13 +2147,13 @@ ZapSource::ZapSource(ZapCircuit* circuit, const char* format)
 {
 #ifdef XDEBUG
     setAddr(m_address,circuit);
-    Debug(&driver,DebugAll,"ZapSource::ZapSource() cic=%s [%p]",m_address.c_str(),this);
+    Debug(&plugin,DebugAll,"ZapSource::ZapSource() cic=%s [%p]",m_address.c_str(),this);
 #endif
 }
 
 ZapSource::~ZapSource()
 {
-    XDebug(&driver,DebugAll,"ZapSource::~ZapSource() cic=%s [%p]",m_address.c_str(),this);
+    XDebug(&plugin,DebugAll,"ZapSource::~ZapSource() cic=%s [%p]",m_address.c_str(),this);
 }
 
 
@@ -2083,13 +2166,13 @@ ZapConsumer::ZapConsumer(ZapCircuit* circuit, const char* format)
 {
 #ifdef XDEBUG
     setAddr(m_address,circuit);
-    Debug(&driver,DebugAll,"ZapConsumer::ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
+    Debug(&plugin,DebugAll,"ZapConsumer::ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
 #endif
 }
 
 ZapConsumer::~ZapConsumer()
 {
-    XDebug(&driver,DebugAll,"ZapConsumer::~ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
+    XDebug(&plugin,DebugAll,"ZapConsumer::~ZapConsumer() cic=%s [%p]",m_address.c_str(),this);
 }
 
 
@@ -2097,21 +2180,85 @@ ZapConsumer::~ZapConsumer()
  * ZapModule
  */
 ZapModule::ZapModule()
+    : Module("Zaptel","misc"),
+    m_init(false)
 {
-    debugName("Zaptel");
     Output("Loaded module %s",debugName());
-    Configuration cfg(Engine::configFile("zapcard"));
-    cfg.load();
-
-    int level = cfg.getIntValue("general","debuglevel");
-
-    if (level > 0)
-	debugLevel(level);
+    s_devices.setDelete(false);
 }
 
 ZapModule::~ZapModule()
 {
     Output("Unloading module %s",debugName());
+}
+
+void ZapModule::initialize()
+{
+    Output("Initializing module %s",debugName());
+
+    Configuration cfg(Engine::configFile("zapcard"));
+    cfg.load();
+
+    if (!m_init) {
+	setup();
+	installRelay(Command);
+    }
+    m_init = true;
+}
+
+bool ZapModule::received(Message& msg, int id)
+{
+    if (id == Status) {
+	String dest = msg.getValue("module");
+	if (dest.startsWith(debugName())) {
+	    int pos = dest.find("/");
+	    if (pos < 1)
+		return Module::received(msg,id);
+	    unsigned int chan = (unsigned int)(dest.substr(pos+1).trimBlanks().toInteger());
+	    msg.retValue().clear();
+	    Lock lock(s_devMutex);
+	    for (ObjList* o = s_devices.skipNull(); o; o = o->skipNext()) {
+		ZapDevice* dev = static_cast<ZapDevice*>(o->get());
+		if (dev->channel() != chan)
+		    continue;
+		msg.retValue() << "module=" << debugName() << ";";
+		msg.retValue() << "chan=" << chan;
+		msg.retValue() << ",type=" << lookup(dev->type(),s_types);
+		msg.retValue() << ",span=" << dev->span();
+		msg.retValue() << ",spanname=" << dev->spanName();
+		msg.retValue() << ",spandesc=" << dev->spanDesc();
+		msg.retValue() << ",pos=" << dev->spanPos();
+		msg.retValue() << ",alarms=" << dev->alarmsText();
+		if (dev->type() != ZapDevice::DChan)
+		    msg.retValue() << ",circuit=" << dev->address();
+		else
+		    msg.retValue() << ",iface=" << dev->address();
+	    }
+	    if (!msg.retValue())
+		msg.retValue() << "module=" << debugName() << "; Channel " << dest << " not configured";
+	    msg.retValue() << "\r\n";
+	    return true;
+	}
+    }
+    return Module::received(msg,id);
+}
+
+void ZapModule::statusParams(String& str)
+{
+    Module::statusParams(str);
+    s_devMutex.lock();
+    str << "channels=" << s_devices.count();
+    str << ",format=Type|Span|Pos|Alarms";
+    for (ObjList* o = s_devices.skipNull(); o; o = o->skipNext()) {
+	ZapDevice* dev = static_cast<ZapDevice*>(o->get());
+	str << ";" << dev->channel() << "=" << lookup(dev->type(),s_types) << "|";
+	str << dev->span() << "|" << dev->spanPos() << "|";
+	if (dev->alarmsText())
+	    str << dev->alarmsText();
+	else
+	    str << "OK";
+    }
+    s_devMutex.unlock();
 }
 
 }; // anonymous namespace

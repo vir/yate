@@ -2225,9 +2225,9 @@ bool ZapModule::received(Message& msg, int id)
 		msg.retValue() << "chan=" << chan;
 		msg.retValue() << ",type=" << lookup(dev->type(),s_types);
 		msg.retValue() << ",span=" << dev->span();
-		msg.retValue() << ",spanname=" << dev->spanName();
-		msg.retValue() << ",spandesc=" << dev->spanDesc();
-		msg.retValue() << ",pos=" << dev->spanPos();
+		msg.retValue() << " (name=" << dev->spanName();
+		msg.retValue() << ",desc=" << dev->spanDesc();
+		msg.retValue() << "),pos=" << dev->spanPos();
 		msg.retValue() << ",alarms=" << dev->alarmsText();
 		if (dev->type() != ZapDevice::DChan)
 		    msg.retValue() << ",circuit=" << dev->address();

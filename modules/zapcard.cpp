@@ -809,11 +809,11 @@ bool ZapDevice::setDtmfDetect(bool detect)
 {
     int tmp = 0;
 #ifdef ZT_TONEDETECT
-    setLinear(0);
+    setLinear(0,DebugNote);
     if (detect)
 	tmp = ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE;
 #endif
-    if (!ioctl(SetToneDetect,&tmp,DebugNote))
+    if (!ioctl(SetToneDetect,&tmp,detect?DebugNote:DebugAll))
 	return false;
     DDebug(m_owner,DebugAll,"%sTone detector %s on channel %u [%p]",
 	m_name.safe(),detect?"started":"stopped",m_channel,m_owner);

@@ -1664,12 +1664,14 @@ bool YateSIPRefer::route()
     }
     m_msg->userData(chan);
     if (ok) {
-	DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. Call succesfully routed.",name(),m_transferredID.c_str(),this);
+	ok = false;
 	if ((m_msg->retValue() == "-") || (m_msg->retValue() == "error"))
 	    m_msg->setParam("reason","unknown");
 	else if (m_msg->getIntValue("antiloop",1) <= 0)
 	    m_msg->setParam("reason","Call is looping");
 	else {
+	    DDebug(&plugin,DebugAll,"%s thread ('%s') [%p]. Call succesfully routed.",
+		name(),m_transferredID.c_str(),this);
 	    *m_msg = "call.execute";
 	    m_msg->setParam("callto",m_msg->retValue());
 	    m_msg->clearParam("error");
@@ -1822,6 +1824,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_info = msg.getBoolValue("dtmfinfo",s_info);
     m_rtpForward = msg.getBoolValue("rtp_forward");
+    m_user = msg.getValue("user");
     m_line = msg.getValue("line");
     String tmp;
     YateSIPLine* line = 0;
@@ -3404,6 +3407,8 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     msg->addParam("id",getPeer()->id());
     if (m_billid)
 	msg->addParam("billid",m_billid);
+    if (m_user)
+	msg->addParam("username",m_user);
 
     const SIPHeaderLine* sh = sipRefer->getHeader("To");                   // caller
     if (sh) {

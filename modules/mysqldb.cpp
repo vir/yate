@@ -29,7 +29,7 @@
 
 #ifndef CLIENT_MULTI_STATEMENTS
 #define CLIENT_MULTI_STATEMENTS 0
-#define mysql_more_results(x) (0)
+#define mysql_next_result(x) (-1)
 #endif
 
 #if (MYSQL_VERSION_ID > 41000)
@@ -248,7 +248,7 @@ int DbConn::queryDbInternal()
 	    }
 	    mysql_free_result(res);
 	}
-    } while (mysql_more_results(m_conn));
+    } while (!mysql_next_result(m_conn));
 
     if (m_msg) {
 	m_msg->setParam("affected",String(affected));

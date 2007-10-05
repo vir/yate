@@ -1,7 +1,6 @@
 ; This file configures the SIP feature module
 
 [general]
-; General 
 
 ; expires_min: int: Minimum allowed expiring time in seconds
 ;expires_min=60
@@ -12,6 +11,11 @@
 ; expires_max: int: Value used to limit the expiring time to something sane
 ;expires_max=3600
 
+; forcedialogdata: boolean: Force (fill if missing) some parameters (dialog.callid,
+;  dialog.localtag, dialog.remotetag, dialog.remoteuri) in dialog state notification,
+;  if made for a valid dialog (dialog.id is not empty)
+; Defaults to enable
+;forcedialogdata=enable
 
 [allow_events]
 ; Restrict/allow subscriptions to individual events

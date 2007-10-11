@@ -1359,6 +1359,14 @@ public:
 	{ return sendConnected(IAXFullFrame::Ringing); }
 
     /**
+     * Send a PROCEEDING frame to remote peer
+     * This method is thread safe
+     * @return False if the current transaction state is not Connected
+     */
+    inline bool sendProgress()
+	{ return sendConnected(IAXFullFrame::Proceeding); }
+
+    /**
      * Send an ACCEPT/REGACK frame to remote peer
      * This method is thread safe
      * @return False if the transaction type is not New and state is NewRemoteInvite or NewRemoteInvite_AuthRep or

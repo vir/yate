@@ -434,6 +434,7 @@ public:
     virtual void callRejected(const char* error, const char* reason = 0, const Message* msg = 0);
     virtual bool callPrerouted(Message& msg, bool handled);
     virtual bool callRouted(Message& msg);
+    virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
@@ -1135,17 +1136,15 @@ void YIAXDriver::initialize()
     // If desired codec is disabled fall back to last in list
     if (!m_defaultCodec)
 	m_defaultCodec = fallback;
-    // Other options
-    m_port = s_cfg.getIntValue("general","port",4569);
-    String iface = s_cfg.getValue("general","addr");
-    bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
-    s_priority = Thread::priority(s_cfg.getValue("general","thread"),s_priority);
-    DDebug(this,DebugInfo,"Default thread priority set to '%s'",Thread::priority(s_priority));
     unlock();
+    // Setup driver if this is the first call
+    if (m_iaxEngine)
+	return;
     setup();
-    // We need channels to be dropped on shutdown
     installRelay(Halt);
     installRelay(Route);
+    installRelay(Progress);
+    Engine::install(new YIAXRegDataHandler);
     // Init IAX engine
     u_int16_t transListCount = 64;
     u_int16_t retransCount = 5;
@@ -1154,17 +1153,17 @@ void YIAXDriver::initialize()
     u_int16_t transTimeout = 10;
     u_int16_t maxFullFrameDataLen = 1400;
     u_int32_t trunkSendInterval = 10;
-    if (!m_iaxEngine) {
-	Engine::install(new YIAXRegDataHandler);
-	m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
-		transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq);
-	m_iaxEngine->debugChain(this);
-	int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
-	if (tos) {
-	    if (!m_iaxEngine->socket().setTOS(tos))
-		Debug(this,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
-	}
-    }
+    m_port = s_cfg.getIntValue("general","port",4569);
+    String iface = s_cfg.getValue("general","addr");
+    bool authReq = s_cfg.getBoolValue("registrar","auth_required",true);
+    m_iaxEngine = new YIAXEngine(iface,m_port,transListCount,retransCount,retransInterval,authTimeout,
+	transTimeout,maxFullFrameDataLen,trunkSendInterval,authReq);
+    m_iaxEngine->debugChain(this);
+    int tos = s_cfg.getIntValue("general","tos",dict_tos,0);
+    if (tos && !m_iaxEngine->socket().setTOS(tos))
+	Debug(this,DebugWarn,"Could not set IP TOS to 0x%02x",tos);
+    s_priority = Thread::priority(s_cfg.getValue("general","thread"),s_priority);
+    DDebug(this,DebugInfo,"Default thread priority set to '%s'",Thread::priority(s_priority));
     int readThreadCount = s_cfg.getIntValue("general","read_threads",Engine::clientMode() ? 1 : 3);
     if (readThreadCount < 1)
 	readThreadCount = 1;
@@ -1462,6 +1461,18 @@ bool YIAXConnection::callRouted(Message& msg)
     return true;
 }
 
+bool YIAXConnection::msgProgress(Message& msg)
+{
+    Lock lock(&m_mutexTrans);
+    if (m_transaction) {
+	m_transaction->sendProgress();
+	// only start audio output for early media
+	startAudioOut();
+	return Channel::msgProgress(msg);
+    }
+    return false;
+}
+
 bool YIAXConnection::msgRinging(Message& msg)
 {
     Lock lock(&m_mutexTrans);
@@ -1554,6 +1565,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    break;
 	case IAXEvent::Progressing:
 	    DDebug(this,DebugInfo,"CALL PROGRESSING [%p]",this);
+	    Engine::enqueue(message("call.progress",false,true));
 	    break;
 	case IAXEvent::Accept:
 	    DDebug(this,DebugCall,"ACCEPT [%p]",this);

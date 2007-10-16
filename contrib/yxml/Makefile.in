@@ -1,5 +1,5 @@
 # Makefile
-# This file holds the make rules for the libyatejingle
+# This file holds the make rules for the libyatexml
 
 DEBUG :=
 

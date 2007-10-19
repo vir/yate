@@ -344,6 +344,12 @@ bool PBXAssist::msgTone(Message& msg)
 	    errorBeep(tmp);
 	}
 
+	// we may paste a string instead of just clearing the key buffer
+	String newTones = sect->getValue("pastekeys");
+	if (newTones) {
+	    newTones = m_tones.replaceMatches(newTones);
+	    msg.replaceParams(newTones);
+	}
 	tmp = sect->getValue("operation",*sect);
 	if (tmp) {
 	    Debug(list(),DebugNote,"Chan '%s' triggered operation '%s' in state '%s' holding '%s'",
@@ -356,7 +362,7 @@ bool PBXAssist::msgTone(Message& msg)
 		    msg.replaceParams(keys);
 		    msg.setParam("text",keys);
 		}
-		m_tones = sect->getValue("pastekeys");
+		m_tones = newTones;
 		// let the DTMF message pass through
 		return false;
 	    }
@@ -381,8 +387,7 @@ bool PBXAssist::msgTone(Message& msg)
 	    m->setParam("pbxstate",m_state);
 	    Engine::enqueue(m);
 	}
-	// we may paste a string instead of just clearing the key buffer
-	m_tones = sect->getValue("pastekeys");
+	m_tones = newTones;
     }
     // swallow the tone
     return true;

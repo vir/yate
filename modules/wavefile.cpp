@@ -335,8 +335,7 @@ void WaveSource::run()
     unsigned int blen = (m_brate*20)/1000;
     DDebug(&__plugin,DebugAll,"Consumer found, starting to play data with rate %d [%p]",m_brate,this);
     m_data.assign(0,blen);
-    // start counting time from now
-    u_int64_t tpos = Time::now();
+    u_int64_t tpos = 0;
     m_time = tpos;
     do {
 	r = (m_fd >= 0) ? ::read(m_fd,m_data.data(),m_data.length()) : m_data.length();
@@ -347,6 +346,9 @@ void WaveSource::run()
 	    }
 	    break;
 	}
+	// start counting time after the first successful read
+	if (!tpos)
+	    m_time = tpos = Time::now();
 	if (!r) {
 	    if (m_repeatPos >= 0) {
 		DDebug(&__plugin,DebugAll,"Autorepeating from offset %ld [%p]",

@@ -299,7 +299,8 @@ bool PBXAssist::msgTone(Message& msg)
     m_tones += tone;
     if ((int)m_tones.length() > s_maxlen)
 	m_tones = m_tones.substr(-s_maxlen);
-    Debug(list(),DebugInfo,"Chan '%s' got tone '%s' collected '%s'",id().c_str(),tone,m_tones.c_str());
+    Debug(list(),DebugInfo,"Chan '%s' got tone '%s' collected '%s' in state '%s'",
+	id().c_str(),tone,m_tones.c_str(),m_state.c_str());
     if (m_pass) {
 	if (m_tones.endsWith(s_retake)) {
 	    Debug(list(),DebugCall,"Chan '%s' back in command hunt mode",id().c_str());

@@ -112,25 +112,32 @@ void URI::parse() const
     // [proto:][//][user@]hostname[:port][/path][;params][?params][&params]
 
     r = "^\\([[:alpha:]]\\+:\\)\\?/\\?/\\?\\([^[:space:][:cntrl:]@]\\+@\\)\\?\\([[:alnum:]._-]\\+\\|[[][[:xdigit:].:]\\+[]]\\)\\(:[0-9]\\+\\)\\?";
-    if (tmp.matches(r)) {
+    // hack: use while only so we could break out of it
+    while (tmp.matches(r)) {
+	int errptr = -1;
 	m_proto = tmp.matchString(1).toLower();
 	m_proto = m_proto.substr(0,m_proto.length()-1);
 	m_user = tmp.matchString(2);
-	m_user = m_user.substr(0,m_user.length()-1).uriUnescape();
-	m_host = tmp.matchString(3).uriUnescape().toLower();
+	m_user = m_user.substr(0,m_user.length()-1).uriUnescape(&errptr);
+	if (errptr >= 0)
+	    break;
+	m_host = tmp.matchString(3).uriUnescape(&errptr).toLower();
+	if (errptr >= 0)
+	    break;
 	if (m_host[0] == '[')
 	    m_host = m_host.substr(1,m_host.length()-2);
 	tmp = tmp.matchString(4);
 	tmp >> ":" >> m_port;
 	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",
 	    m_desc.c_str(), m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
+	m_parsed = true;
+	return;
     }
-    else {
-	m_desc.clear();
-	m_proto.clear();
-	m_user.clear();
-	m_host.clear();
-    }
+    // parsing failed - clear all fields but still mark as parsed
+    m_desc.clear();
+    m_proto.clear();
+    m_user.clear();
+    m_host.clear();
     m_parsed = true;
 }
 

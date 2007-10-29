@@ -22,12 +22,35 @@
 
 #include "yateclass.h"
 
+#include <limits.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <regex.h>
 
 namespace TelEngine {
+
+// String to regular integer conversion, takes into account overflows
+static int strtoi(const char* nptr, char** endptr, int base)
+{
+    errno = 0;
+    long int val = ::strtol(nptr,endptr,base);
+#if INT_MAX != LONG_MAX
+    if (val >= INT_MAX) {
+	errno = ERANGE;
+	val = INT_MAX;
+    }
+    else if (val <= INT_MIN) {
+	errno = ERANGE;
+	val = INT_MIN;
+    }
+#endif
+    // on overflow/underflow mark the entire string as unreadable
+    if ((errno == ERANGE) && endptr)
+	*endptr = (char*) nptr;
+    return (int) val;
+}
 
 String operator+(const String& s1, const String& s2)
 {
@@ -60,7 +83,7 @@ int lookup(const char* str, const TokenDict* tokens, int defvalue, int base)
 		return tokens->value;
     }
     char *eptr = 0;
-    long int val= ::strtol(str,&eptr,base);
+    int val = strtoi(str,&eptr,base);
     if (!eptr || *eptr)
 	return defvalue;
     return val;
@@ -117,6 +140,7 @@ static inline char hexEncode(char nib)
     return hex[nib & 0x0f];
 }
 
+
 StringMatchPrivate::StringMatchPrivate()
 {
     XDebug(DebugAll,"StringMatchPrivate::StringMatchPrivate() [%p]",this);
@@ -156,6 +180,7 @@ void StringMatchPrivate::fixup()
     }
     count = c;
 }
+
 
 static String s_empty;
 
@@ -396,7 +421,7 @@ int String::toInteger(int defvalue, int base) const
     if (!m_string)
 	return defvalue;
     char *eptr = 0;
-    long int val= ::strtol(m_string,&eptr,base);
+    int val = strtoi(m_string,&eptr,base);
     if (!eptr || *eptr)
 	return defvalue;
     return val;
@@ -602,7 +627,7 @@ String& String::operator>>(int& store)
 {
     if (m_string) {
 	char *end = 0;
-	long int l = ::strtol(m_string,&end,0);
+	int l = strtoi(m_string,&end,0);
 	if (end && (m_string != end)) {
 	    store = l;
 	    assign(end);
@@ -615,8 +640,15 @@ String& String::operator>>(unsigned int& store)
 {
     if (m_string) {
 	char *end = 0;
+	errno = 0;
 	unsigned long int l = ::strtoul(m_string,&end,0);
-	if (end && (m_string != end)) {
+#if UINT_MAX != ULONG_MAX
+	if (l > UINT_MAX) {
+	    l = UINT_MAX;
+	    errno = ERANGE;
+	}
+#endif
+	if (!errno && end && (m_string != end)) {
 	    store = l;
 	    assign(end);
 	}

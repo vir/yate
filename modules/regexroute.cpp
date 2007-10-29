@@ -124,9 +124,15 @@ static void mathOper(String& str, String& par, int sep, int oper)
 	    len = 0;
 	    return;
     }
-    // TODO: deal with negative results
-    while (len > (int)str.length())
-	str = "0" + str;
+    len -= (int)str.length();
+    if (len > 0) {
+	// left pad the result to the desired length
+	String tmp('0',len);
+	if (str[0] == '-')
+	    str = "-" + tmp + str.substr(1);
+	else
+	    str = tmp + str;
+    }
 }
 
 static void evalFunc(String& str)

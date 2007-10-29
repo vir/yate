@@ -266,7 +266,7 @@ static void copyParams2(Message &msg, Array* a, int row = 0)
     }
 }
 
-static void copyParams(Message &msg,Array *a,const char* resultName=0,int row=0) {
+static void copyParams(Message &msg,Array *a,const char* resultName=0) {
     if (!a)
 	return;
     FallBackRoute* fallback = 0;
@@ -374,7 +374,7 @@ void AAAHandler::initQuery()
     indirectQuery(query);
     if (query.null())
 	return;
-    // no error check at all - we enqueue the query and we're out
+    // no error check needed as we can't fix - enqueue the query and we're out
     Message* m = new Message("database");
     m->addParam("account",m_account);
     m->addParam("query",query);
@@ -474,7 +474,7 @@ bool AAAHandler::received(Message& msg)
 	break;
 	case UnRegist:
 	{
-	    // no error check - we return false
+	    // no error check needed on unregister - we return false
 	    Message m("database");
 	    m.addParam("account",account);
 	    m.addParam("query",query);
@@ -490,7 +490,7 @@ bool AAAHandler::received(Message& msg)
 		s_nextTime = t + s_expire;
 	    else
 		return false;
-	    // no error check at all - we enqueue the query and return false
+	    // no error check needed - we enqueue the query and return false
 	    Message* m = new Message("database");
 	    m->addParam("account",account);
 	    m->addParam("query",query);

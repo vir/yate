@@ -93,6 +93,7 @@ static const CommandInfo s_cmdInfo[] =
     { "help", "[command]", 0, "Provide help on all or given command" },
     { "status", "[overview] [modulename]", s_oview, "Shows status of all or selected modules or channels" },
     { "uptime", 0, 0, "Show information on how long Yate has run" },
+    { "echo", "[on|off]", s_bools, "Show or turn remote echo on or off" },
     { "machine", "[on|off]", s_bools, "Show or turn machine output mode on or off" },
     { "output", "[on|off]", s_bools, "Show or turn local output on or off" },
     { "color", "[on|off]", s_bools, "Show status or turn local colorization on or off" },
@@ -438,11 +439,12 @@ bool Connection::processChar(unsigned char c)
 	case 0x1B: // ESC
 	    m_escmode = c;
 	    return false;
-	case '\r':
 	case '\n':
 	    m_escmode = 0;
 	    if (m_buffer.null())
 		return false;
+	case '\r':
+	    m_escmode = 0;
 	    if (m_echoing)
 		writeStr("\r\n");
 	    if (processLine(m_buffer))
@@ -711,6 +713,8 @@ bool Connection::processLine(const char *line)
     DDebug("RManager",DebugInfo,"processLine = '%s'",line);
     String str(line);
     str.trimBlanks();
+    if (str.null())
+	return false;
 
     m_lastcmd = str;
 
@@ -728,6 +732,14 @@ bool Connection::processLine(const char *line)
 	Engine::dispatch(m);
 	str = "%%+status" + str + "\r\n";
 	str << m.retValue() << "%%-status\r\n";
+	writeStr(str);
+	return false;
+    }
+    else if (str.startSkip("echo"))
+    {
+	str >> m_echoing;
+	str = "Remote echo: ";
+	str += (m_echoing ? "on\r\n" : "off\r\n");
 	writeStr(str);
 	return false;
     }

@@ -114,12 +114,22 @@ public:
 	{ return m_disconn; }
     inline void setId(const String& id)
 	{ CallEndpoint::setId(id); }
+    inline const Message* waitMsg() const
+	{ return m_waitRet; }
+    inline void waitMsg(const Message* msg)
+	{ m_waitRet = msg; }
+    inline bool waiting() const
+	{ return m_waiting; }
+    inline void waiting(bool wait)
+	{ m_waiting = wait; }
 private:
     ExtModChan(const char* file, const char* args, int type);
     ExtModReceiver *m_recv;
+    const Message* m_waitRet;
     int m_type;
     bool m_running;
     bool m_disconn;
+    bool m_waiting;
 };
 
 // Great idea - thanks, Maciek!
@@ -151,6 +161,8 @@ public:
     bool m_ret;
     String m_id;
     bool decode(const char *s);
+    inline const Message* msg() const
+	{ return &m_msg; }
 };
 
 // Yet Another of Maciek's ideas
@@ -421,7 +433,8 @@ ExtModChan* ExtModChan::build(const char* file, const char* args, int type)
 }
 
 ExtModChan::ExtModChan(const char* file, const char* args, int type)
-    : CallEndpoint("ExtModule"), m_recv(0), m_type(type), m_disconn(false)
+    : CallEndpoint("ExtModule"),
+      m_recv(0), m_waitRet(0), m_type(type), m_disconn(false), m_waiting(false)
 {
     Debug(DebugAll,"ExtModChan::ExtModChan(%d) [%p]",type,this);
     File* reader = 0;
@@ -736,7 +749,8 @@ bool ExtModReceiver::flush()
 	    p->setDelete(false);
     }
     if (m_waiting.get()) {
-	DDebug(DebugAll,"ExtModReceiver releasing pending messages [%p]",this);
+	DDebug(DebugAll,"ExtModReceiver releasing %u pending messages [%p]",
+	    m_waiting.count(),this);
 	m_waiting.clear();
 	Thread::yield();
 	return true;
@@ -1103,7 +1117,12 @@ bool ExtModReceiver::processLine(const char* line)
 	for (; p; p=p->next()) {
 	    MsgHolder *msg = static_cast<MsgHolder *>(p->get());
 	    if (msg && msg->decode(line)) {
-		DDebug("ExtModReceiver",DebugInfo,"Matched message");
+		DDebug("ExtModReceiver",DebugInfo,"Matched message %p [%p]",msg->msg(),this);
+		if (m_chan && (m_chan->waitMsg() == msg->msg())) {
+		    DDebug("ExtModReceiver",DebugNote,"Entering wait mode on channel %p [%p]",m_chan,this);
+		    m_chan->waitMsg(0);
+		    m_chan->waiting(true);
+		}
 		p->remove(false);
 		return false;
 	    }
@@ -1245,6 +1264,17 @@ bool ExtModReceiver::processLine(const char* line)
 	if (m->decode(line) == -2) {
 	    DDebug("ExtModReceiver",DebugAll,"Created message %p '%s' [%p]",m,m->c_str(),this);
 	    lock();
+	    bool note = true;
+	    while (m_chan && m_chan->waiting()) {
+		if (note) {
+		    note = false;
+		    Debug("ExtModReceiver",DebugNote,"Waiting before enqueueing new message %p '%s' [%p]",
+			m,m->c_str(),this);
+		}
+		unlock();
+		Thread::yield();
+		lock();
+	    }
 	    ExtModChan* chan = 0;
 	    if ((m_role == RoleChannel) && !m_chan && (*m == "call.execute")) {
 		// we delayed channel creation as there was nothing to ref() it
@@ -1317,16 +1347,24 @@ bool ExtModHandler::received(Message& msg)
 	Debug(DebugGoOn,"Failed to create ExtMod for '%s'",dest.matchString(2).c_str());
 	return false;
     }
+    // new messages must be blocked until connect() returns (if applicable)
+    if (ch)
+	em->waitMsg(&msg);
     if (!(em->receiver() && em->receiver()->received(msg,1))) {
+	em->waitMsg(0);
 	int level = DebugWarn;
 	if (msg.getValue("error") || msg.getValue("reason"))
 	    level = DebugNote;
 	Debug(level,"ExtMod '%s' did not handle call message",dest.matchString(2).c_str());
+	em->waiting(false);
 	em->deref();
 	return false;
     }
-    if (ch)
+    if (ch) {
+	em->waitMsg(0);
 	ch->connect(em);
+	em->waiting(false);
+    }
     em->deref();
     return true;
 }

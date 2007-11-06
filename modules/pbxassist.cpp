@@ -43,7 +43,8 @@ public:
     virtual bool msgTone(Message& msg);
     virtual bool msgOperation(Message& msg, const String& operation);
 protected:
-    bool errorBeep(const char* source = 0);
+    void putPrompt(const char* source = 0);
+    bool errorBeep(const char* reason = 0);
     void setGuest(const Message& msg);
     void setParams(const Message& msg);
     u_int64_t m_last;
@@ -245,7 +246,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 		if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 		    // routing failed
 		    TelEngine::destruct(m);
-		    return errorBeep();
+		    return errorBeep("no route");
 		}
 		called = m->retValue();
 		m->retValue().clear();
@@ -306,7 +307,7 @@ bool PBXAssist::msgTone(Message& msg)
 	    Debug(list(),DebugCall,"Chan '%s' back in command hunt mode",id().c_str());
 	    m_pass = false;
 	    m_tones.clear();
-	    errorBeep();
+	    putPrompt();
 	    // we just preserve the last state we were in
 	    return true;
 	}
@@ -342,7 +343,7 @@ bool PBXAssist::msgTone(Message& msg)
 	    // * -> default error beep
 	    if (tmp[0] == '*')
 		tmp = 0;
-	    errorBeep(tmp);
+	    putPrompt(tmp);
 	}
 
 	// we may paste a string instead of just clearing the key buffer
@@ -394,13 +395,13 @@ bool PBXAssist::msgTone(Message& msg)
     return true;
 }
 
-// Start an error beep and return false so we can "return errorBeep()"
-bool PBXAssist::errorBeep(const char* source)
+// Start an override prompt to the PBX user
+void PBXAssist::putPrompt(const char* source)
 {
     if (null(source))
 	source = s_error;
     if (!source)
-	return false;
+	return;
     Message* m = new Message("chan.masquerade");
     m->addParam("message","chan.attach");
     m->addParam("id",id());
@@ -408,6 +409,14 @@ bool PBXAssist::errorBeep(const char* source)
     m->addParam("override",source);
     m->addParam("single","yes");
     Engine::enqueue(m);
+}
+
+// Start an error beep and return false so we can "return errorBeep()"
+bool PBXAssist::errorBeep(const char* reason)
+{
+    if (reason)
+	Debug(list(),DebugMild,"Chan '%s' operation failed: %s",id().c_str(),reason);
+    putPrompt();
     return false;
 }
 
@@ -483,7 +492,7 @@ bool PBXAssist::operPassThrough(Message& msg)
 {
     if (s_retake.null()) {
 	Debug(list(),DebugWarn,"Chan '%s' refusing pass-through, retake string is not set!",id().c_str());
-	errorBeep();
+	errorBeep("no retake string");
 	return true;
     }
     Debug(list(),DebugCall,"Chan '%s' entering tone pass-through mode",id().c_str());
@@ -497,10 +506,10 @@ bool PBXAssist::operPassThrough(Message& msg)
 bool PBXAssist::operConference(Message& msg)
 {
     if (m_state == "conference")
-	return errorBeep();
+	return errorBeep("conference in conference");
     RefPointer<CallEndpoint> c = locate();
     if (!c)
-	return errorBeep();
+	return errorBeep("no channel");
     String peer = c->getPeerId();
     const char* room = msg.getValue("room",m_room);
 
@@ -540,9 +549,9 @@ bool PBXAssist::operConference(Message& msg)
     else {
 	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	if (!c)
-	    return errorBeep();
+	    return errorBeep("no channel");
 	if (!room)
-	    return errorBeep();
+	    return errorBeep("no conference room");
 	m_room = room;
 	Message* m = c->message("call.execute",false,true);
 	m->addParam("callto",room);
@@ -580,7 +589,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	TelEngine::destruct(m);
-	return errorBeep();
+	return errorBeep("no route");
     }
     m_state = "call";
     *m = "chan.masquerade";
@@ -596,10 +605,10 @@ bool PBXAssist::operSecondCall(Message& msg)
 bool PBXAssist::operOnHold(Message& msg)
 {
     if (m_state == "conference")
-	return errorBeep();
+	return errorBeep("hold in conference");
     RefPointer<CallEndpoint> c = locate();
     if (!c)
-	return errorBeep();
+	return errorBeep("no channel");
     RefPointer<CallEndpoint> c2 = locate(m_peer1);
     // no need to check old m_peer1
     if (m_state == "dial")
@@ -636,7 +645,7 @@ bool PBXAssist::operReturnHold(Message& msg)
     RefPointer<CallEndpoint> c1 = locate(id());
     RefPointer<CallEndpoint> c2 = locate(m_peer1);
     if (!(c1 && c2))
-	return errorBeep();
+	return errorBeep("no held channel");
     m_peer1.clear();
     m_state = "call";
     c1->connect(c2);
@@ -647,10 +656,10 @@ bool PBXAssist::operReturnHold(Message& msg)
 bool PBXAssist::operReturnConf(Message& msg)
 {
     if ((m_state == "conference") || (m_state == "new") || m_room.null())
-	return errorBeep();
+	return errorBeep("cannot return to conference");
     Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
     if (!c)
-	return errorBeep();
+	return errorBeep("no channel");
     m_state = "conference";
     Message* m = c->message("call.execute",false,true);
     m->addParam("callto",m_room);
@@ -678,10 +687,10 @@ bool PBXAssist::operReturnTone(Message& msg)
 bool PBXAssist::operTransfer(Message& msg)
 {
     if ((m_state == "conference") || (m_state == "dial"))
-	return errorBeep();
+	return errorBeep("cannot transfer blind");
     RefPointer<CallEndpoint> c = locate();
     if (!c)
-	return errorBeep();
+	return errorBeep("no channel");
     String peer = c->getPeerId();
 
     Message* m = new Message("call.preroute");
@@ -696,7 +705,7 @@ bool PBXAssist::operTransfer(Message& msg)
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	TelEngine::destruct(m);
-	return errorBeep();
+	return errorBeep("no route");
     }
     m_state = "dial";
     *m = "chan.masquerade";
@@ -711,14 +720,14 @@ bool PBXAssist::operTransfer(Message& msg)
 bool PBXAssist::operDoTransfer(Message& msg)
 {
     if (m_peer1.null() || ((m_state != "call") && (m_state != "fortransfer")))
-	return errorBeep();
+	return errorBeep("cannot transfer assisted");
     RefPointer<CallEndpoint> c1 = locate();
     if (!c1)
-	return errorBeep();
+	return errorBeep("no channel");
     c1 = locate(c1->getPeerId());
     RefPointer<CallEndpoint>c2 = locate(m_peer1);
     if (!(c1 && c2))
-	return errorBeep();
+	return errorBeep("no held channel");
     m_state=msg.getValue("state","hangup");
     m_peer1.clear();
     c1->connect(c2);
@@ -729,17 +738,17 @@ bool PBXAssist::operDoTransfer(Message& msg)
 bool PBXAssist::operForTransfer(Message& msg)
 {
     if (m_state == "conference")
-	return errorBeep();
+	return errorBeep("cannot transfer in conference");
     RefPointer<CallEndpoint> c = locate();
     if (!c)
-	return errorBeep();
+	return errorBeep("no channel");
     String peer;
     if (m_state != "dial")
 	peer = c->getPeerId();
     if (peer) {
 	// check if we already have another party on hold
 	if (m_peer1 && (m_peer1 != peer))
-	    return errorBeep();
+	    return errorBeep("having another party on hold");
 	m_peer1 = peer;
     }
     Message* m = new Message("call.preroute");
@@ -754,7 +763,7 @@ bool PBXAssist::operForTransfer(Message& msg)
     *m = "call.route";
     if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
 	TelEngine::destruct(m);
-	return errorBeep();
+	return errorBeep("no route");
     }
     m_state = "fortransfer";
     *m = "chan.masquerade";

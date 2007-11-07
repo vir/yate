@@ -3947,7 +3947,7 @@ bool SIPDriver::received(Message& msg, int id)
 bool SIPDriver::msgRoute(Message& msg)
 {
     String called = msg.getValue("called");
-    if (called.null() || (called.find('@') >= 0))
+    if (called.null())
 	return false;
     String line = msg.getValue("line");
     if (line.null())

@@ -749,7 +749,6 @@ bool PBXAssist::operForTransfer(Message& msg)
 	// check if we already have another party on hold
 	if (m_peer1 && (m_peer1 != peer))
 	    return errorBeep("having another party on hold");
-	m_peer1 = peer;
     }
     Message* m = new Message("call.preroute");
     m->addParam("id",id());
@@ -766,6 +765,8 @@ bool PBXAssist::operForTransfer(Message& msg)
 	return errorBeep("no route");
     }
     m_state = "fortransfer";
+    if (peer)
+	m_peer1 = peer;
     *m = "chan.masquerade";
     m->setParam("message","call.execute");
     m->setParam("reason","hold");

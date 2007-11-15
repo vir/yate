@@ -1,5 +1,0 @@
-debian/tmp/usr/include/*
-debian/tmp/usr/lib/lib*.so
-debian/tmp/usr/lib/pkgconfig/yate.pc
-debian/tmp/usr/bin/yate-config
-debian/tmp/usr/share/man/man8/yate-config.*

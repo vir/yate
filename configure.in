@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT(Yate, 1.3.0)
+AC_INIT(Yate, 2.0.0)
 AC_CONFIG_SRCDIR([README])
 AC_PREREQ(2.52)
 
@@ -285,13 +285,13 @@ HAVE_MYSQL=yes
 fi
 fi
 AC_MSG_RESULT([$HAVE_MYSQL $MYSQL_VER])
-if [[ "x$HAVE_MYSQL" = "xyes" ]]; then
+if test "$HAVE_MYSQL" = "yes"; then
     save_CPPFLAGS=$CPPFLAGS
     CPPFLAGS="$CPPFLAGS $MYSQL_INC"
     AC_CHECK_DECLS([MYSQL_OPT_RECONNECT],[MYSQL_INC="$MYSQL_INC -DMYSQL_OPT_RECONNECT=MYSQL_OPT_RECONNECT"],,[#include<mysql.h>])
     AC_CHECK_DECLS([MYSQL_OPT_READ_TIMEOUT],[MYSQL_INC="$MYSQL_INC -DMYSQL_OPT_READ_TIMEOUT=MYSQL_OPT_READ_TIMEOUT"],,[#include<mysql.h>])
     AC_CHECK_DECLS([MYSQL_OPT_WRITE_TIMEOUT],[MYSQL_INC="$MYSQL_INC -DMYSQL_OPT_WRITE_TIMEOUT=MYSQL_OPT_WRITE_TIMEOUT"],,[#include<mysql.h>])
-    CPPFLAGS="$save_CPPFLAGS"
+    CPPFLAGS=$save_CPPFLAGS
 fi
 fi
 AC_SUBST(HAVE_MYSQL)
@@ -759,29 +759,32 @@ AC_SUBST(KDOC_BIN)
 
 m4_sinclude(./YateLocal.ac)
 
-AC_CONFIG_FILES([yate.spec
+AC_CONFIG_FILES([packing/rpm/yate.spec
                  yate.pc
 		 yateversn.h
 		 yateiss.inc
                  Makefile
                  engine/Makefile
                  modules/Makefile
-                 modules/skin/Makefile
-                 modules/help/Makefile
+                 modules/test/Makefile
                  clients/Makefile
-                 scripts/Makefile
-                 conf.d/Makefile
-                 contrib/ilbc/Makefile
-                 contrib/ysip/Makefile
-                 contrib/yrtp/Makefile
-		 contrib/yiax/Makefile
-		 contrib/yxml/Makefile
-		 contrib/yjingle/Makefile
-                 contrib/ypbx/Makefile
-                 contrib/gtk2/Makefile
-                 test/Makefile])
+                 clients/gtk2/Makefile
+                 libs/ilbc/Makefile
+                 libs/ysip/Makefile
+                 libs/yrtp/Makefile
+		 libs/yiax/Makefile
+		 libs/yxml/Makefile
+		 libs/yjingle/Makefile
+		 libs/ymgcp/Makefile
+		 libs/ysig/Makefile
+                 libs/ypbx/Makefile
+                 share/Makefile
+                 share/scripts/Makefile
+                 share/skins/Makefile
+                 share/help/Makefile
+                 conf.d/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])
 AC_CONFIG_FILES([run],[chmod +x run])
-CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's/yate\.spec *//'`
+CONFIGURE_FILES=`echo "$ac_config_files config.status config.log" | sed 's,packing/yate\.spec *,,'`
 AC_SUBST(CONFIGURE_FILES)
 AC_OUTPUT

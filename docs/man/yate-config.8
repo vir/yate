@@ -16,7 +16,7 @@
 .\" Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 .\"
 .\"
-.TH YATE-CONFIG 8 "March 2004" "YATE" "Telephony Engine"
+.TH YATE-CONFIG 8 "September 2007" "YATE" "Telephony Engine"
 .SH NAME
 \fByate-config\fP \- retrieve metainformation about the YATE telephony engine
 .SH SYNOPSIS
@@ -44,6 +44,15 @@ Returns the configuration files directory
 .TP
 .B \-\-modules
 Returns the modules directory
+.TP
+.B \-\-share
+Returns the base shared directory
+.TP
+.B \-\-scripts
+Returns the scripts directory
+.TP
+.B \-\-skins
+Returns the base skins directory
 .SS Compiler flags
 .TP
 .B \-\-cflags
@@ -67,7 +76,7 @@ All linker options \- the above two concatenated
 .SH AUTHORS
 Paul Chitescu <paulc@voip.null.ro>
 .br
-Diana Cionoiu <diana@diana.null.ro>
+Diana Cionoiu <diana@voip.null.ro>
 .SH SEE ALSO
 .BR yate (8),
 .BR pkg-config (1)

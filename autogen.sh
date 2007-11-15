@@ -2,7 +2,7 @@
 
 # Run this to generate a new configure script
 
-if [ -s tables/a2s.h ]; then
+if [ -s engine/tables/a2s.h ]; then
     echo "Good! Tables are generated so we don't need sox."
 else
     if [ -z `which sox 2>/dev/null` ]; then

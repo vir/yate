@@ -1986,7 +1986,7 @@ GTKClient::GTKClient()
     m_oneThread = Engine::config().getBoolValue("client","onethread",ONE_THREAD);
     s_skinPath = Engine::config().getValue("client","skinbase");
     if (s_skinPath.null())
-	s_skinPath << Engine::modulePath() << Engine::pathSeparator() << "skin";
+	s_skinPath << Engine::sharedPath() << Engine::pathSeparator() << "skins";
     if (!s_skinPath.endsWith(Engine::pathSeparator()))
 	s_skinPath << Engine::pathSeparator();
     String skin(Engine::config().getValue("client","skin","default"));

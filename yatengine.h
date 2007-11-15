@@ -753,6 +753,13 @@ public:
     static bool Register(const Plugin* plugin, bool reg = true);
 
     /**
+     * Get the application's shared directory path
+     * @return The base path for shared files and directories
+     */
+    inline static String& sharedPath()
+	{ return s_shrpath; }
+
+    /**
      * Get the filename for a specific configuration
      * @param name Name of the configuration requested
      * @param user True to build a user settings path
@@ -958,6 +965,7 @@ private:
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
     static Engine* s_self;
+    static String s_shrpath;
     static String s_cfgpath;
     static String s_cfgsuffix;
     static String s_modpath;

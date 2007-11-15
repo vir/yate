@@ -17,7 +17,7 @@ all:
 .PHONY: install
 install:
 	@mkdir -p "$(DESTDIR)$(confdir)/" && \
-	lst="`ls -1 @srcdir@/*.conf @srcdir@/*.sample @srcdir@/*.default @srcdir@/*.sql | sed 's/\.sample//g; s/\.default//g; s/[^ ]*\*\.[^ ]*//g' | sort | uniq`" ; \
+	lst="`ls -1 @srcdir@/*.conf @srcdir@/*.sample @srcdir@/*.default | sed 's/\.sample//g; s/\.default//g; s/[^ ]*\*\.[^ ]*//g' | sort | uniq`" ; \
 	for s in $$lst; do \
 	    d="$(DESTDIR)$(confdir)/`echo $$s | sed 's,.*/,,'`" ; \
 	    if [ -f "$$d" ]; then \
@@ -35,5 +35,5 @@ install:
 uninstall:
 	@-rmdir "$(DESTDIR)$(confdir)" || echo "Remove conf files by hand if you want so"
 
-Makefile: @srcdir@/Makefile.in ../config.status
-	cd .. && ./config.status
+Makefile: @srcdir@/Makefile.in @top_builddir@/config.status
+	cd @top_builddir@ && ./config.status

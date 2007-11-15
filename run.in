@@ -5,6 +5,7 @@
 yate="./yate"
 set_conf="-c ./conf.d"
 set_mods="-m ./modules"
+set_share="-e ./share"
 if [ "$1" = "--executable" ]; then
     shift
     yate="$1"
@@ -38,7 +39,10 @@ for opt in $@; do
 	-m)
 	    set_mods=
 	    ;;
+	-e)
+	    set_share=
+	    ;;
     esac
 done
 						
-LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH exec $yate $set_conf $set_mods "$@"
+LD_LIBRARY_PATH=.@H323_RUN@:$LD_LIBRARY_PATH exec $yate $set_conf $set_mods $set_share "$@"

@@ -26,7 +26,7 @@
 #include <stdlib.h>
 
 extern "C" {
-#include "tables/all.h"
+#include "all.h"
 }
 
 using namespace TelEngine;

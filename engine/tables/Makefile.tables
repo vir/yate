@@ -20,6 +20,3 @@ strip: all
 install:
 
 uninstall:
-
-Makefile: ./Makefile.in ../config.status
-	cd .. && ./config.status

@@ -5,7 +5,7 @@
 ;  scripts if no full path is specified
 ; Note that a trailing path separator should be added
 ; Uncomment the following line when running in the sources directory
-;scripts_dir=scripts/
+;scripts_dir=share/scripts/
 
 ; priority: int: Priority of the call.execute handler
 ;priority=100

@@ -16,7 +16,7 @@ CPPFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
 
-MKDEPS := ../config.status
+MKDEPS := @top_builddir@/config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
 CINC := @top_srcdir@/yateclass.h @top_srcdir@/yatemime.h
 EINC := $(CINC) @top_srcdir@/yatengine.h
@@ -43,7 +43,7 @@ ifneq (@HAVE_SCTP_NETINET@,no)
 SCTPOPTS := $(SCTPOPTS) -DHAVE_SCTP_NETINET
 endif
 ifeq (@INTERNAL_REGEX@,yes)
-REGEX_INC:= -I@top_srcdir@/contrib/regex
+REGEX_INC:= -I@top_srcdir@/engine/regex
 LIBOBJS := $(LIBOBJS) regex.o
 else
 REGEX_INC:=
@@ -55,11 +55,7 @@ exec_prefix = @exec_prefix@
 bindir = @bindir@
 libdir = @libdir@
 incdir = @includedir@/yate
-mandir = @mandir@
-docdir = $(prefix)/share/doc/yate-@PACKAGE_VERSION@
-vardir = @localstatedir@/lib/yate
 moddir = @libdir@/yate
-confdir = @sysconfdir@/yate
 
 # include optional local make rules
 -include YateLocal.mak
@@ -68,7 +64,7 @@ confdir = @sysconfdir@/yate
 all: ../$(YLIB)
 
 debug:
-	$(MAKE) all DEBUG=-g3                                                                                
+	$(MAKE) all DEBUG=-g3                                                                              
 
 ddebug:
 	$(MAKE) all DEBUG='-g3 -DDEBUG'
@@ -90,6 +86,9 @@ Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
 Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
+DataBlock.o: @srcdir@/DataBlock.cpp $(MKDEPS) $(EINC)
+	$(COMPILE) -I@top_srcdir@/engine/tables -c $<
+
 DataFormat.o: @srcdir@/DataFormat.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<
 
@@ -108,14 +107,14 @@ Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
 String.o: @srcdir@/String.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) $(REGEX_INC) -c $<
 
-regex.o: @top_srcdir@/contrib/regex/regex.c $(MKDEPS)
+regex.o: @top_srcdir@/engine/regex/regex.c $(MKDEPS)
 	$(CCOMPILE) -DSTDC_HEADERS $(REGEX_INC) -c $<
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(EINC)
 	$(COMPILE) -c $<
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd .. && ./config.status
+	cd @top_builddir@ && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
 	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $(LIBTHR) $^ $(LIBAUX)

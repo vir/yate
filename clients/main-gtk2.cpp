@@ -24,7 +24,7 @@
 
 #include <yatephone.h>
 #include <gtk/gtk.h>
-#include "../contrib/gtk2/gtk2client.h"
+#include "gtk2/gtk2client.h"
 
 using namespace TelEngine;
 

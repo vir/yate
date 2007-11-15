@@ -866,7 +866,9 @@ bool ExtModReceiver::create(const char *script, const char *args)
     HANDLE yate2ext[2];
     int x;
     if (script[0] != '/') {
-	tmp = s_cfg.getValue("general","scripts_dir",SCR_PATH);
+	tmp = Engine::sharedPath();
+	tmp << Engine::pathSeparator() << "scripts";
+	tmp = s_cfg.getValue("general","scripts_dir",tmp);
 	if (!tmp.endsWith(Engine::pathSeparator()))
 	    tmp += Engine::pathSeparator();
 	tmp += script;

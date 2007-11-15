@@ -22,7 +22,7 @@ for i in ?2?; do
 	    ./gen b "$i" <"$i" >"$i.h"
 	    ;;
     esac
-    echo "#include \"tables/$i.h\""
+    echo "#include \"$i.h\""
 done >all.h
 
 rm *.raw ?2? gen

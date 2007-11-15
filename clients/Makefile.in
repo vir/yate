@@ -17,18 +17,19 @@ LDFLAGS:= -L.. -lyate
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
 SUBDIRS :=
-MKDEPS  := ../config.status
+MKDEPS  := @top_builddir@/config.status
 PROGS :=
 LIBS :=
 MENUFILES :=
 DESKFILES :=
 
-GTKCLIENT := ../contrib/gtk2/libgtk2client.a
+GTKCLIENT := gtk2/libgtk2client.a
 
 ifneq (@HAVE_GTK2@,no)
 PROGS := $(PROGS) yate-gtk2
 MENUFILES := $(MENUFILES) yate-gtk2.menu
 DESKFILES := $(DESKFILES) yate-gtk2.desktop
+ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png
 endif
 
 LOCALFLAGS =
@@ -38,10 +39,14 @@ LINK = $(CXX) $(LDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+
 bindir = @bindir@
-moddir = @libdir@/yate
 menudir= @libdir@/menu
-deskdir= $(prefix)/share/applications
+shrdir = $(datadir)/yate
+deskdir= $(datadir)/applications
+icondir= $(datadir)/pixmaps
 
 # include optional local make rules
 -include YateLocal.mak
@@ -66,6 +71,12 @@ install: all do-install
 	@mkdir -p "$(DESTDIR)$(menudir)/" && \
 	for i in $(MENUFILES) ; do \
 	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(menudir)/$$i" ; \
+	done \
+	)
+	$(if $(ICONFILES),\
+	@mkdir -p "$(DESTDIR)$(icondir)/" && \
+	for i in $(ICONFILES) ; do \
+	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$i" ; \
 	done \
 	)
 	$(if $(DESKFILES),\
@@ -93,6 +104,12 @@ uninstall: do-uninstall
 	done ; \
 	rmdir "$(DESTDIR)$(deskdir)" \
 	)
+	$(if $(ICONFILES),\
+	@-for i in $(ICONFILES) ; do \
+	    rm "$(DESTDIR)$(icondir)/$$i" ; \
+	done ; \
+	rmdir "$(DESTDIR)$(icondir)" \
+	)
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
@@ -108,7 +125,7 @@ do-all do-strip do-clean do-install do-uninstall:
 	)
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd .. && ./config.status
+	cd @top_builddir@ && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
 	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)
@@ -119,4 +136,4 @@ yate-gtk2: LOCALFLAGS = @GTK2_INC@
 yate-gtk2: LOCALLIBS = @GTK2_LIB@
 
 $(GTKCLIENT):
-	$(MAKE) -C ../contrib/gtk2
+	$(MAKE) -C gtk2

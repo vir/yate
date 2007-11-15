@@ -1,10 +1,8 @@
 Makefile
-YateLocal*
+YateLocal.mak
 core*
-yate-*
 *.o
 *.a
-*.so
 *.orig
 *~
 .*.swp

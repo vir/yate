@@ -133,6 +133,7 @@ static void sighandler(int signal)
     }
 }
 
+String Engine::s_shrpath(SHR_PATH);
 String Engine::s_cfgpath(CFG_PATH);
 String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
@@ -605,6 +606,7 @@ int Engine::run()
     s_runid = Time::secNow();
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
+    extraPath(clientMode() ? "client" : "server");
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());
     if (s_super_handle >= 0) {
@@ -632,7 +634,7 @@ int Engine::run()
     ::signal(SIGUSR1,sighandler);
     ::signal(SIGUSR2,sighandler);
 #endif
-    Output("Yate engine is initialized and starting up");
+    Output("Yate%s engine is initialized and starting up",clientMode() ? " client" : "");
     while (s_haltcode == -1) {
 	if (s_cmds) {
 	    Output("Executing initial commands");
@@ -999,6 +1001,7 @@ static void usage(bool client, FILE* f)
 "   -p filename    Write PID to file\n"
 "   -l filename    Log to file\n"
 "   -n configname  Use specified configuration name (%s)\n"
+"   -e pathname    Path to shared files directory (" SHR_PATH ")\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -x relpath     Relative path to extra modules directory (can be repeated)\n"
@@ -1163,6 +1166,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			cfgfile=argv[++i];
+			break;
+		    case 'e':
+			if (i+1 >= argc) {
+			    noarg(client,argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			s_shrpath=argv[++i];
 			break;
 		    case 'c':
 			if (i+1 >= argc) {

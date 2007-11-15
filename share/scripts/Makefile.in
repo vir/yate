@@ -1,5 +1,5 @@
 # Makefile
-# This file holds the make rules for the Telephony Engine script files
+# This file holds the make rules for Yate script files
 
 # override DESTDIR at install time to prefix the install directory
 DESTDIR :=
@@ -7,10 +7,12 @@ DESTDIR :=
 SCRIPTS := leavemail.php voicemail.php route.php
 SCRLIBS := libyate.php libyatechan.php libvoicemail.php libyate.py Yate.pm
 
-basedir = @libdir@/yate
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-scrdir = $(basedir)/scripts
+datarootdir = @datarootdir@
+datadir = @datadir@
+shrdir = $(datadir)/yate
+scrdir = $(shrdir)/scripts
 
 # include optional local make rules
 -include YateLocal.mak
@@ -31,7 +33,7 @@ uninstall:
 	    rm "$(DESTDIR)$(scrdir)/$$i" ; \
 	done;
 	@-rmdir "$(DESTDIR)$(scrdir)"
-	@-rmdir "$(DESTDIR)$(basedir)"
+	@-rmdir "$(DESTDIR)$(shrdir)"
 
-Makefile: @srcdir@/Makefile.in ../config.status
-	cd .. && ./config.status
+Makefile: @srcdir@/Makefile.in @top_builddir@/config.status
+	cd @top_builddir@ && ./config.status

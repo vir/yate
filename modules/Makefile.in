@@ -20,28 +20,30 @@ MODRELAX:= @MODULE_LDRELAX@
 MODSTRIP:= @MODULE_SYMBOLS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
-SUBDIRS := skin help gtk2
-MKDEPS  := ../config.status
-PROGS := cdrbuild.yate cdrfile.yate \
-	regexroute.yate regfile.yate accfile.yate register.yate \
+SUBDIRS :=
+MKDEPS  := @top_builddir@/config.status
+PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
-	conference.yate moh.yate \
-	callgen.yate analyzer.yate rmanager.yate msgsniff.yate \
-	pbx.yate dbpbx.yate pbxassist.yate park.yate \
-	dumbchan.yate callfork.yate queues.yate \
-	extmodule.yate yradius.yate \
+	extmodule.yate conference.yate moh.yate pbx.yate \
+	dumbchan.yate callfork.yate \
 	yrtpchan.yate ystunchan.yate \
-	ysipchan.yate sipfeatures.yate \
+	ysipchan.yate \
 	yiaxchan.yate \
-	yjinglechan.yate
+	yjinglechan.yate \
+	server/pbxassist.yate server/dbpbx.yate \
+	server/park.yate server/queues.yate \
+	server/regfile.yate server/accfile.yate server/register.yate \
+	server/yradius.yate \
+	server/sipfeatures.yate \
+	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
 
 ifneq (@HAVE_PGSQL@,no)
-PROGS := $(PROGS) pgsqldb.yate
+PROGS := $(PROGS) server/pgsqldb.yate
 endif
 
 ifneq (@HAVE_MYSQL@,no)
-PROGS := $(PROGS) mysqldb.yate
+PROGS := $(PROGS) server/mysqldb.yate
 endif
 
 ifneq (@HAVE_RESOLV@,no)
@@ -49,11 +51,11 @@ PROGS := $(PROGS) enumroute.yate
 endif
 
 ifneq (@HAVE_SOUNDCARD@,no)
-PROGS := $(PROGS) osschan.yate
+PROGS := $(PROGS) client/osschan.yate
 endif
 
 ifneq (@HAVE_ALSA@,no)
-PROGS := $(PROGS) alsachan.yate
+PROGS := $(PROGS) client/alsachan.yate
 endif
 
 ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
@@ -163,7 +165,7 @@ do-all do-strip do-clean do-install do-uninstall:
 	)
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd .. && ./config.status
+	cd @top_builddir@ && ./config.status
 
 lib%.so: %.o
 	$(LINK) -shared -o $@ $^
@@ -183,40 +185,36 @@ wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@
 wpchan.yate: LOCALLIBS = libypri.o -lpri
 
 ysigchan.yate wpcard.yate zapcard.yate: ../libyatess7.so
-ysigchan.yate wpcard.yate zapcard.yate: LOCALFLAGS = -I../contrib/yss7
+ysigchan.yate wpcard.yate zapcard.yate: LOCALFLAGS = -I../libs/yss7
 ysigchan.yate wpcard.yate zapcard.yate: LOCALLIBS = -lyatess7
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
 
-pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
-pgsqldb.yate: LOCALLIBS = -lpq
+server/pgsqldb.yate: LOCALFLAGS = @PGSQL_INC@
+server/pgsqldb.yate: LOCALLIBS = -lpq
 
-mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
-mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
+server/mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
+server/mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
 
 enumroute.yate: LOCALLIBS = -lresolv
 
-alsachan.yate: LOCALLIBS = -lasound
+client/alsachan.yate: LOCALLIBS = -lasound
 
-yiaxchan.yate: ../contrib/yiax/libyateiax.a
-yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yiax
-yiaxchan.yate: LOCALLIBS = -L../contrib/yiax -lyateiax
+yiaxchan.yate: ../libs/yiax/libyateiax.a
+yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
+yiaxchan.yate: LOCALLIBS = -L../libs/yiax -lyateiax
 
-yjinglechan.yate: ../contrib/yxml/libyatexml.a ../contrib/yjingle/libyatejingle.a
-yjinglechan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yxml -I@top_srcdir@/contrib/yjingle
-yjinglechan.yate: LOCALLIBS = -L../contrib/yjingle -L../contrib/yxml -lyatejingle -lyatexml
+yjinglechan.yate: ../libs/yxml/libyatexml.a ../libs/yjingle/libyatejingle.a
+yjinglechan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjingle
+yjinglechan.yate: LOCALLIBS = -L../libs/yjingle -L../libs/yxml -lyatejingle -lyatexml
 
-dbpbx.yate: ../contrib/ypbx/libyatepbx.a
-dbpbx.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ypbx
-dbpbx.yate: LOCALLIBS = ../contrib/ypbx/libyatepbx.a
+server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
+server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
+server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = ../libs/ypbx/libyatepbx.a
 
-pbxassist.yate: ../contrib/ypbx/libyatepbx.a
-pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ypbx
-pbxassist.yate: LOCALLIBS = ../contrib/ypbx/libyatepbx.a
-
-ilbccodec.yate: ../contrib/ilbc/libilbc.a
-ilbccodec.yate: LOCALLIBS = ../contrib/ilbc/libilbc.a
+ilbccodec.yate: ../libs/ilbc/libilbc.a
+ilbccodec.yate: LOCALLIBS = ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALFLAGS = @ILBC_INC@
 
 gsmcodec.yate: LOCALLIBS = -lgsm
@@ -228,16 +226,16 @@ speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
 faxchan.yate: LOCALLIBS = -lspandsp
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@
 
-ysipchan.yate: ../contrib/ysip/libyatesip.a
-ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/ysip
-ysipchan.yate: LOCALLIBS = ../contrib/ysip/libyatesip.a
+ysipchan.yate: ../libs/ysip/libyatesip.a
+ysipchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysip
+ysipchan.yate: LOCALLIBS = ../libs/ysip/libyatesip.a
 
-yrtpchan.yate: ../contrib/yrtp/libyatertp.a
-yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/contrib/yrtp
-yrtpchan.yate: LOCALLIBS = ../contrib/yrtp/libyatertp.a
+yrtpchan.yate: ../libs/yrtp/libyatertp.a
+yrtpchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yrtp
+yrtpchan.yate: LOCALLIBS = ../libs/yrtp/libyatertp.a
 
-gtk2/gtk2mozilla.yate: @top_srcdir@/contrib/gtk2/gtk2client.h
-gtk2/gtk2mozilla.yate: LOCALFLAGS = @GTK2_INC@ @GMOZ_INC@ -I@top_srcdir@/contrib/gtk2
+gtk2/gtk2mozilla.yate: @top_srcdir@/clients/gtk2/gtk2client.h
+gtk2/gtk2mozilla.yate: LOCALFLAGS = @GTK2_INC@ @GMOZ_INC@ -I@top_srcdir@/clients/gtk2
 gtk2/gtk2mozilla.yate: LOCALLIBS = @GMOZ_LIB@
 gtk2/gtk2mozilla.yate: MODFLAGS = $(MODRELAX)
 
@@ -245,27 +243,27 @@ rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 ../libyatess7.so:
-	$(MAKE) -C ../contrib/yss7
-../contrib/yss7/libyatess7.a:
-	$(MAKE) -C ../contrib/yss7
+	$(MAKE) -C ../libs/yss7
+../libs/yss7/libyatess7.a:
+	$(MAKE) -C ../libs/yss7
 
-../contrib/ilbc/libilbc.a:
-	$(MAKE) -C ../contrib/ilbc
+../libs/ilbc/libilbc.a:
+	$(MAKE) -C ../libs/ilbc
 	
-../contrib/ysip/libyatesip.a:
-	$(MAKE) -C ../contrib/ysip
+../libs/ysip/libyatesip.a:
+	$(MAKE) -C ../libs/ysip
 
-../contrib/yrtp/libyatertp.a:
-	$(MAKE) -C ../contrib/yrtp
+../libs/yrtp/libyatertp.a:
+	$(MAKE) -C ../libs/yrtp
 
-../contrib/yiax/libyateiax.a:
-	$(MAKE) -C ../contrib/yiax
+../libs/yiax/libyateiax.a:
+	$(MAKE) -C ../libs/yiax
 
-../contrib/yxml/libyatexml.a:
-	$(MAKE) -C ../contrib/yxml
+../libs/yxml/libyatexml.a:
+	$(MAKE) -C ../libs/yxml
 
-../contrib/yjingle/libyatejingle.a:
-	$(MAKE) -C ../contrib/yjingle
+../libs/yjingle/libyatejingle.a:
+	$(MAKE) -C ../libs/yjingle
 
-../contrib/ypbx/libyatepbx.a:
-	$(MAKE) -C ../contrib/ypbx
+../libs/ypbx/libyatepbx.a:
+	$(MAKE) -C ../libs/ypbx

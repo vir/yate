@@ -1,0 +1,29 @@
+# Makefile
+# This file holds the make rules for the Telephony Engine modules
+
+# override DESTDIR at install time to prefix the install directory
+DESTDIR :=
+
+SUBDIRS := help skins scripts
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+shrdir = $(datadir)/yate
+
+# include optional local make rules
+-include YateLocal.mak
+
+PHONY: all clean install uninstall
+all clean install uninstall:
+	$(if $(SUBDIRS),\
+	@for i in $(SUBDIRS) ; do \
+	    if test -f ./$$i/Makefile ; then \
+		$(MAKE) -C ./$$i $@ || exit 1;\
+	    fi; \
+	done \
+	)
+
+Makefile: @srcdir@/Makefile.in @top_builddir@/config.status
+	cd @top_builddir@ && ./config.status

@@ -1,5 +1,5 @@
 Makefile
-YateLocal.mak
+YateLocal*
 core*
 *.conf
 *.orig

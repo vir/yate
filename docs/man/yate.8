@@ -16,7 +16,7 @@
 .\" Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 .\"
 .\"
-.TH YATE 8 "September 2005" "YATE" "Telephony Engine"
+.TH YATE 8 "September 2007" "YATE" "Telephony Engine"
 .SH NAME
 \fByate\fP \- launch the YATE telephony engine
 .SH SYNOPSIS
@@ -64,6 +64,9 @@ Path to conf files directory, overrides compiled-in value
 .TP
 .B \-m \fIpathname\fR
 Path to modules directory, overrides compiled-in value
+.TP
+.B \-e \fIpathname\fR
+Path to shared directory, overrides compiled-in value
 .TP
 .B \-x \fIrelpath\fR
 Relative path to extra modules directory (can be repeated)
@@ -145,6 +148,6 @@ when the thread terminates.
 .SH AUTHORS
 Paul Chitescu <paulc@voip.null.ro>
 .br
-Diana Cionoiu <diana@diana.null.ro>
+Diana Cionoiu <diana@voip.null.ro>
 .SH SEE ALSO
 .BR yate-config (8)

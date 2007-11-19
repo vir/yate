@@ -148,7 +148,7 @@ public:
 
     /**
      * Process the chan.startup message
-     * @param msg First channel message
+     * @param msg First channel message, may be received after call.execute
      */
     virtual void msgStartup(Message& msg);
 
@@ -160,7 +160,7 @@ public:
 
     /**
      * Process the call.execute message, copy any parameters needed later
-     * @param msg Call execute message
+     * @param msg Call execute message, may be received before chan.startup
      */
     virtual void msgExecute(Message& msg);
 

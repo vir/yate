@@ -799,12 +799,20 @@ void PBXAssist::msgStartup(Message& msg)
     NamedString* status = msg.getParam("status");
     if (status && (*status == "outgoing")) {
 	// switch them over so we have them right for later operations
-	m_keep.setParam("caller",msg.getValue("called"));
-	m_keep.setParam("called",msg.getValue("caller"));
+	const char* tmp = msg.getValue("called");
+	if (tmp)
+	    m_keep.setParam("caller",tmp);
+	tmp = msg.getValue("caller");
+	if (tmp)
+	    m_keep.setParam("called",tmp);
     }
     else {
-	m_keep.setParam("called",msg.getValue("called"));
-	m_keep.setParam("caller",msg.getValue("caller"));
+	const char* tmp = msg.getValue("called");
+	if (tmp)
+	    m_keep.setParam("called",tmp);
+	tmp = msg.getValue("caller");
+	if (tmp)
+	    m_keep.setParam("caller",tmp);
     }
 }
 

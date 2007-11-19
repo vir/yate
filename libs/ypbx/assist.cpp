@@ -37,7 +37,8 @@ bool ChanAssistList::received(Message& msg, int id)
     switch (id) {
 	case Startup:
 	    if (ca) {
-		Debug(this,DebugMild,"Channel '%s' already assisted!",chanId->c_str());
+		Debug(this,DebugNote,"Channel '%s' already assisted!",chanId->c_str());
+		ca->msgStartup(msg);
 		return false;
 	    }
 	    ca = create(msg,*chanId);

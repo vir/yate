@@ -346,6 +346,10 @@ bool PBXAssist::msgTone(Message& msg)
 	    putPrompt(tmp);
 	}
 
+	// if we're greedy prepare to exit the loop and skip all other sections
+	if (sect->getBoolValue("pbxgreedy"))
+	    i = n;
+
 	// we may paste a string instead of just clearing the key buffer
 	String newTones = sect->getValue("pastekeys");
 	if (newTones) {
@@ -380,6 +384,7 @@ bool PBXAssist::msgTone(Message& msg)
 		    (s->name() == "pbxstates") ||
 		    (s->name() == "operation") ||
 		    (s->name() == "pbxprompt") ||
+		    (s->name() == "pbxgreedy") ||
 		    (s->name() == "message"))
 		    continue;
 		String val = m_tones.replaceMatches(*s);

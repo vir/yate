@@ -511,9 +511,11 @@ bool PBXAssist::operConference(Message& msg)
     if (!c)
 	return errorBeep("no channel");
     String peer = c->getPeerId();
+    if (peer.startsWith("tone"))
+	peer.clear();
     const char* room = msg.getValue("room",m_room);
 
-    if (peer && !peer.startsWith("tone")) {
+    if (peer) {
 	Message m("call.conference");
 	m.addParam("id",id());
 	m.userData(c);
@@ -613,8 +615,11 @@ bool PBXAssist::operOnHold(Message& msg)
     // no need to check old m_peer1
     if (m_state == "dial")
 	m_peer1.clear();
-    else
+    else {
 	m_peer1 = c->getPeerId();
+	if (m_peer1.startsWith("tone"))
+	    m_peer1.clear();
+    }
 
     Message* m;
     if (c2) {
@@ -743,8 +748,11 @@ bool PBXAssist::operForTransfer(Message& msg)
     if (!c)
 	return errorBeep("no channel");
     String peer;
-    if (m_state != "dial")
+    if (m_state != "dial") {
 	peer = c->getPeerId();
+	if (peer.startsWith("tone"))
+	    peer.clear();
+    }
     if (peer) {
 	// check if we already have another party on hold
 	if (m_peer1 && (m_peer1 != peer))

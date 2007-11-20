@@ -319,9 +319,19 @@ bool RTPSender::rtpSendEvent(int event, int duration, int volume, unsigned int t
     if (eventPayload() < 0)
 	return false;
     if ((duration <= 50) || (duration > 10000))
-	duration = 4000;
+	duration = 1600;
     if (!timestamp)
 	timestamp = m_tsLast;
+    if (m_evTs) {
+	Debug(DebugNote,"RFC 2833 overlapped in RTP event %d, session %p, fixing.",
+	    event,m_session);
+	// the timestamp must always advance to avoid misdetections
+	if (timestamp == m_evTs)
+	    m_tsLast = timestamp = timestamp + 2;
+	// make sure we send an event end packet
+	m_evTime = 0;
+	sendEventData(timestamp);
+    }
     m_evTs = timestamp;
     m_evNum = event;
     m_evVol = volume;
@@ -362,12 +372,18 @@ bool RTPSender::sendEventData(unsigned int timestamp)
 	buf[1] = m_evVol & 0x7f;
 	buf[2] = duration >> 8;
 	buf[3] = duration & 0xff;
-	timestamp = m_evTs;
+	unsigned int tstamp = m_evTs;
 	if (duration >= m_evTime) {
 	    buf[1] |= 0x80;
 	    m_evTs = 0;
+	    // repeat the event end packet to increase chances it gets seen
+	    if (rtpSend(!duration,eventPayload(),tstamp,buf,sizeof(buf)))
+		m_seq--;
 	}
-	return rtpSend(!duration,eventPayload(),timestamp,buf,sizeof(buf));
+	bool ok = rtpSend(!duration,eventPayload(),tstamp,buf,sizeof(buf));
+	// have to update last timestamp since we sent the event start stamp
+	m_tsLast = timestamp;
+	return ok;
     }
     return false;
 }

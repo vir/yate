@@ -403,7 +403,6 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 	return;
     }
 
-    const char* luser = user ? user : "anonymous";
     if (!domain)
 	domain = getParty()->getLocalAddr();
 
@@ -430,8 +429,10 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!isAnswer()) {
 	hl = const_cast<SIPHeaderLine*>(getHeader("From"));
 	if (!hl) {
-	    String tmp;
-	    tmp << "<sip:" << luser << "@" << domain << ">";
+	    String tmp = "<sip:";
+	    if (user)
+		tmp << user << "@";
+	    tmp << domain << ">";
 	    hl = new SIPHeaderLine("From",tmp);
 	    header.append(hl);
 	}

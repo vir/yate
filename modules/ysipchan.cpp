@@ -800,9 +800,10 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	sip.setHeader("Anonymity","ipaddr");
     if (screen || privname || privuri) {
 	const char* caller = msg.getValue("caller","anonymous");
-	String tmp;
-	tmp << "\"" << msg.getValue("callername",caller) << "\"";
-	tmp << " <" << caller << "@" << msg.getValue("domain","domain") << ">";
+	String tmp = msg.getValue("callername",caller);
+	if (tmp)
+	    tmp = "\"" + tmp + "\" ";
+	tmp << "<sip:" << caller << "@" << msg.getValue("domain","domain") << ">";
 	SIPHeaderLine* hl = new SIPHeaderLine("Remote-Party-ID",tmp);
 	if (screen)
 	    hl->setParam("screen","yes");
@@ -1865,10 +1866,17 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*m,msg,"osip_");
-    String caller = msg.getValue("caller",(line ? line->getUserName().c_str() : (const char*)0));
+    const String* callerId = msg.getParam("caller");
+    String caller;
+    if (callerId)
+	caller = *callerId;
+    else if (line) {
+	caller = line->getUserName();
+	callerId = &caller;
+    }
     String display = msg.getValue("callername",(line ? line->getFullName().c_str() : (const char*)0));
     m->complete(plugin.ep()->engine(),
-	caller,
+	callerId ? (callerId->null() ? "anonymous" : callerId->c_str()) : (const char*)0,
 	msg.getValue("domain",(line ? line->domain().c_str() : (const char*)0)));
     if (display) {
 	String desc;

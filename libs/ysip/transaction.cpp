@@ -606,7 +606,7 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
     SIPEvent *e = 0;
     switch (state) {
 	case Initial:
-	    if (!( (m_firstMessage->getCSeq() > 0) &&
+	    if (!( (m_firstMessage->getCSeq() >= 0) &&
 		m_firstMessage->getHeader("Call-ID") &&
 		m_firstMessage->getHeader("From") &&
 		m_firstMessage->getHeader("To") ))

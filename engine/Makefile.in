@@ -16,7 +16,7 @@ CPPFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
 
-MKDEPS := @top_builddir@/config.status
+MKDEPS := ../config.status
 YLIB:= libyate.so.@PACKAGE_VERSION@
 CINC := @top_srcdir@/yateclass.h @top_srcdir@/yatemime.h
 EINC := $(CINC) @top_srcdir@/yatengine.h
@@ -114,7 +114,7 @@ regex.o: @top_srcdir@/engine/regex/regex.c $(MKDEPS)
 	$(COMPILE) -c $<
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd @top_builddir@ && ./config.status
+	cd .. && ./config.status
 
 ../$(YLIB): $(LIBOBJS) $(LIBS)
 	$(LINK) -shared -o $@ -Wl,--soname=$(YLIB) $(LIBTHR) $^ $(LIBAUX)

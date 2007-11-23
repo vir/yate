@@ -21,7 +21,7 @@ MODSTRIP:= @MODULE_SYMBOLS@
 INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
 SUBDIRS :=
-MKDEPS  := @top_builddir@/config.status
+MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
 	extmodule.yate conference.yate moh.yate pbx.yate \
@@ -165,7 +165,7 @@ do-all do-strip do-clean do-install do-uninstall:
 	)
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd @top_builddir@ && ./config.status
+	cd .. && ./config.status
 
 lib%.so: %.o
 	$(LINK) -shared -o $@ $^

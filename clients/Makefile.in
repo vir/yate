@@ -17,7 +17,7 @@ LDFLAGS:= -L.. -lyate
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
 SUBDIRS :=
-MKDEPS  := @top_builddir@/config.status
+MKDEPS  := ../config.status
 PROGS :=
 LIBS :=
 MENUFILES :=
@@ -125,7 +125,7 @@ do-all do-strip do-clean do-install do-uninstall:
 	)
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd @top_builddir@ && ./config.status
+	cd .. && ./config.status
 
 yate-%: @srcdir@/main-%.cpp $(MKDEPS) ../libyate.so $(INCFILES)
 	$(COMPILE) -o $@ $(LOCALFLAGS) $< $(LIBTHR) $(LDFLAGS) $(LOCALLIBS)

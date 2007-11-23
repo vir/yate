@@ -10,7 +10,7 @@ LDFLAGS:= -L../.. -lyate
 MODFLAGS:= @MODULE_LDFLAGS@
 MODSTRIP:= @MODULE_SYMBOLS@
 
-MKDEPS  := @top_builddir@/config.status
+MKDEPS  := ../../config.status
 PROGS = randcall.yate
 LIBS =
 OBJS =
@@ -43,7 +43,7 @@ clean:
 	$(COMPILE) -c $<
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	cd @top_builddir@ && ./config.status
+	cd ../.. && ./config.status
 
 lib%.so: %.o
 	$(LINK) -shared -o $@ $^

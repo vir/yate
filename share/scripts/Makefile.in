@@ -35,5 +35,5 @@ uninstall:
 	@-rmdir "$(DESTDIR)$(scrdir)"
 	@-rmdir "$(DESTDIR)$(shrdir)"
 
-Makefile: @srcdir@/Makefile.in @top_builddir@/config.status
-	cd @top_builddir@ && ./config.status
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status

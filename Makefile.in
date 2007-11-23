@@ -16,7 +16,7 @@ CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:=
 LDCONFIG:=true
 
-MKDEPS := @top_builddir@/config.status
+MKDEPS := ./config.status
 PROGS:= yate
 YLIB := libyate.so.@PACKAGE_VERSION@
 SLIBS:= $(YLIB) libyate.so
@@ -296,7 +296,7 @@ config.status: @srcdir@/configure
 	./config.status --recheck
 
 Makefile: @srcdir@/Makefile.in $(MKDEPS)
-	@top_builddir@/config.status
+	./config.status
 
 yate: libyate.so $(OBJS) $(LIBS)
 	$(LINK) -o $@ $(LIBTHR) $^

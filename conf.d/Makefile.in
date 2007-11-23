@@ -35,5 +35,5 @@ install:
 uninstall:
 	@-rmdir "$(DESTDIR)$(confdir)" || echo "Remove conf files by hand if you want so"
 
-Makefile: @srcdir@/Makefile.in @top_builddir@/config.status
-	cd @top_builddir@ && ./config.status
+Makefile: @srcdir@/Makefile.in ../config.status
+	cd .. && ./config.status

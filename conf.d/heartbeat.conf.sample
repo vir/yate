@@ -1,0 +1,43 @@
+[general]
+; This section sets global variables of the implementation
+
+; enabled: bool: Enable operation of this module
+;enabled=true
+
+; node: string: Name of this cluster node, must be set to enable module
+;node=
+
+; host: ipaddress: IP address to send heartbeat packets to, must be set
+;host=
+
+; port: int: UDP destination port number to send heartbeat packets
+;port=694
+
+; broadcast: bool: Attempt to enable broadcast packet delivery
+;broadcast=true
+
+; ttl: int: TTL included in heartbeat packets
+;ttl=2
+
+
+[authentication]
+; Control on how we authenticate to other Linux-HA daemons
+
+; index: int: Index of authentication key in the remote authkeys file
+;index=
+
+; method: keyword: Authentication method, one of: crc, md5, sha1
+;method=
+
+; key: string: Authentication key (secret) for md5 and sha1 methods
+;key=
+
+
+[priorities]
+; Entries in this section set the priority of each handler in engine's chain
+
+: engine.timer: int: Priority of "engine.timer" handler
+;engine.timer=150
+
+: engine.halt: int: Priority of "engine.halt" handler
+;engine.halt=50

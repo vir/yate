@@ -1,0 +1,47 @@
+[general]
+; This section sets global variables of the MGCP Call Agent module
+
+; priority: int: Priority of the chan.rtp message handler
+;priority=80
+
+
+[engine]
+; These parameters are used to initialize the MGCP Engine
+
+; enabled: bool: Enable the MGCP engine
+;enabled=yes
+
+; address: ipaddress: Local IP address to bind to, default all interfaces
+;address=0.0.0.0
+
+; UDP port to bind, set to zero to use default MGCP CA port (2727)
+;port=
+
+
+[endpoint]
+; Settings for the local endpoint
+
+; user: string: The user part of the local endpoint
+;user=yate
+
+; host: string: The host part of the local endpoint, default engine's address
+;host=
+
+; port: int: Declared local port, defaults to engine's port
+;port=
+
+
+[gw PUT_NAME_HERE]
+; One fw ... section is required for each gateway we control
+
+; user: string: Remote MGCP resource name
+;user=
+
+; host: ipaddress: IP address of the gateway, mandatory
+;host=
+
+; port: int: Remote port to send packets to
+;port=2427
+
+; default: bool: This is the default gateway to send commands to
+;default=no

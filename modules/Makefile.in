@@ -35,6 +35,9 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/regfile.yate server/accfile.yate server/register.yate \
 	server/yradius.yate \
 	server/sipfeatures.yate \
+	server/heartbeat.yate \
+	server/mgcpgw.yate server/mgcpca.yate \
+	server/mrcpspeech.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
 
@@ -58,12 +61,12 @@ ifneq (@HAVE_ALSA@,no)
 PROGS := $(PROGS) client/alsachan.yate
 endif
 
-ifeq (@HAVE_PRI@_@HAVE_ZAP@,yes_yes)
-PROGS := $(PROGS) zapchan.yate
+ifneq (@HAVE_ZAP@,no)
+#PROGS := $(PROGS) server/zapcard.yate
 endif
 
-ifeq (@HAVE_PRI_CB@_@HAVE_WANPIPE@,yes_yes)
-PROGS := $(PROGS) wpchan.yate
+ifeq (@HAVE_WANPIPE@,no)
+#PROGS := $(PROGS) server/wpcard.yate
 endif
 
 ifneq (@HAVE_SPANDSP@,no)
@@ -176,17 +179,9 @@ lib%.so: %.o
 
 # Take special care of the modules that depend on optional libs
 
-zapchan.yate: libypri.o
-zapchan.yate: LOCALFLAGS = @ZAP_FLAGS@
-zapchan.yate: LOCALLIBS = libypri.o -lpri
-
-wpchan.yate: libypri.o
-wpchan.yate: LOCALFLAGS = @WANPIPE_HWEC_INC@
-wpchan.yate: LOCALLIBS = libypri.o -lpri
-
-ysigchan.yate wpcard.yate zapcard.yate: ../libyatess7.so
-ysigchan.yate wpcard.yate zapcard.yate: LOCALFLAGS = -I../libs/yss7
-ysigchan.yate wpcard.yate zapcard.yate: LOCALLIBS = -lyatess7
+server/ysigchan.yate server/wpcard.yate server/zapcard.yate: ../libyatesig.so
+server/ysigchan.yate server/wpcard.yate server/zapcard.yate: LOCALFLAGS = -I../libs/ysig
+server/ysigchan.yate server/wpcard.yate server/zapcard.yate: LOCALLIBS = -lyatesig
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
@@ -212,6 +207,10 @@ yjinglechan.yate: LOCALLIBS = -L../libs/yjingle -L../libs/yxml -lyatejingle -lya
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
 server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = ../libs/ypbx/libyatepbx.a
+
+server/mgcpgw.yate server/mgcpca.yate: ../libs/ymgcp/libyatemgcp.a
+server/mgcpgw.yate server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
+server/mgcpgw.yate server/mgcpca.yate: LOCALLIBS = ../libs/ymgcp/libyatemgcp.a
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = ../libs/ilbc/libilbc.a
@@ -242,10 +241,10 @@ gtk2/gtk2mozilla.yate: MODFLAGS = $(MODRELAX)
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
-../libyatess7.so:
-	$(MAKE) -C ../libs/yss7
-../libs/yss7/libyatess7.a:
-	$(MAKE) -C ../libs/yss7
+../libyatesig.so:
+	$(MAKE) -C ../libs/ysig
+../libs/ysig/libyatesig.a:
+	$(MAKE) -C ../libs/ysig
 
 ../libs/ilbc/libilbc.a:
 	$(MAKE) -C ../libs/ilbc
@@ -258,6 +257,9 @@ rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 ../libs/yiax/libyateiax.a:
 	$(MAKE) -C ../libs/yiax
+
+../libs/ymgcp/libyatemgcp.a:
+	$(MAKE) -C ../libs/ymgcp
 
 ../libs/yxml/libyatexml.a:
 	$(MAKE) -C ../libs/yxml

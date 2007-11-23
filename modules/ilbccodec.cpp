@@ -28,8 +28,8 @@
 #include <stdlib.h>
 
 extern "C" {
-#include "../contrib/ilbc/iLBC_encode.h"
-#include "../contrib/ilbc/iLBC_decode.h"
+#include "../libs/ilbc/iLBC_encode.h"
+#include "../libs/ilbc/iLBC_decode.h"
 }
 
 using namespace TelEngine;

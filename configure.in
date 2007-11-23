@@ -214,21 +214,6 @@ esac
 AC_MSG_RESULT([$INTERNAL_REGEX])
 AC_SUBST(INTERNAL_REGEX)
 
-HAVE_PRI=no
-HAVE_PRI_CB=no
-AC_ARG_WITH(libpri,AC_HELP_STRING([--with-libpri],[use ISDN PRI if available (default)]),[ac_cv_use_libpri=$withval],[ac_cv_use_libpri=yes])
-if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
-AC_CHECK_HEADER(libpri.h, , [ac_cv_use_libpri=no])
-fi
-if [[ "x$ac_cv_use_libpri" != "xno" ]]; then
-AC_CHECK_LIB([pri], [pri_new], [HAVE_PRI=yes])
-if [[ "x$HAVE_PRI" = "xyes" ]]; then
-AC_CHECK_LIB([pri], [pri_new_cb], [HAVE_PRI_CB=yes])
-fi
-fi
-AC_SUBST(HAVE_PRI)
-AC_SUBST(HAVE_PRI_CB)
-
 HAVE_PGSQL=no
 PGSQL_INC=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
@@ -419,9 +404,9 @@ HAVE_ILBC=no
 ILBC_INC=""
 AC_ARG_ENABLE(ilbc,AC_HELP_STRING([--enable-ilbc],[Enable iLBC codec (default: yes)]),want_ilbc=$enableval,want_ilbc=yes)
 if [[ "x$want_ilbc" = "xyes" ]]; then
-AC_MSG_CHECKING([for iLBC in contrib])
+AC_MSG_CHECKING([for iLBC in libs])
 	basedir=`cd "$srcdir" && pwd`
-	incilbc="contrib/ilbc"
+	incilbc="libs/ilbc"
         if [[ -f "$basedir/$incilbc/iLBC_encode.h" ]]; then
 		HAVE_ILBC=yes
 		ILBC_INC="-I$basedir/$incilbc"

@@ -1,0 +1,38 @@
+[general]
+; This section sets global variables of the MGCP Gateway module
+
+; standby: bool: Enter standby mode initially
+;standby=no
+
+
+[engine]
+; These parameters are used to initialize the MGCP Engine
+
+; enabled: bool: Enable the MGCP engine
+;enabled=yes
+
+; address: ipaddress: Local IP address to bind to, default all interfaces
+;address=0.0.0.0
+
+; UDP port to bind, set to zero to use default MGCP GW port (2427)
+;port=
+
+
+[ep PUT_NAME_HERE]
+; One ep ... section is required for each of our endpoints
+; Each endpoint can be associated with at most one Call Agent
+
+; local_user: string: The user part of the local endpoint, default endpoint name
+;local_user=
+
+; local_host: string: The host part of the local endpoint, default engine's address
+;local_host=
+
+; local_port: int: Declared local port, defaults to engine's port
+;local_port=
+
+; remote_host: string: The host part of the remote endpoint, required
+;remote_host=
+
+; remote_port: int: Declared remote port, use MGCP default if not set or zero
+;remote_port=

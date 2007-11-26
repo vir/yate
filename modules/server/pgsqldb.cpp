@@ -337,7 +337,7 @@ bool PgHandler::received(Message& msg)
 }
 
 PgModule::PgModule()
-    : Module ("pgsqldb","database"),m_init(false)
+    : Module ("pgsqldb","database",true),m_init(false)
 {
     Output("Loaded module PostgreSQL");
 }

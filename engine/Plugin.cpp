@@ -25,14 +25,16 @@
 using namespace TelEngine;
 
 Plugin::Plugin()
+    : m_early(false)
 {
     Debug(DebugAll,"Plugin::Plugin() [%p]",this);
     Engine::Register(this);
 }
 
-Plugin::Plugin(const char* name)
+Plugin::Plugin(const char* name, bool earlyInit)
+    : m_early(earlyInit)
 {
-    Debug(DebugAll,"Plugin::Plugin(\"%s\") [%p]",name,this);
+    Debug(DebugAll,"Plugin::Plugin(\"%s\",%s) [%p]",name,String::boolText(earlyInit),this);
     Engine::Register(this);
 }
 

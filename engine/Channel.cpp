@@ -762,8 +762,8 @@ const char* Module::messageName(int id)
     return lookup(id,s_messages);
 }
 
-Module::Module(const char* name, const char* type)
-    : Plugin(name), Mutex(true),
+Module::Module(const char* name, const char* type, bool earlyInit)
+    : Plugin(name,earlyInit), Mutex(true),
       m_init(false), m_relays(0), m_name(name), m_type(type), m_changed(0)
 {
     debugName(m_name);

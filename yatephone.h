@@ -1315,8 +1315,9 @@ protected:
      * Constructor
      * @param name Plugin name of this driver
      * @param type Type of the driver: "misc", "route", etc.
+     * @param earlyInit True to attempt to initialize module before others
      */
-    Module(const char* name, const char* type = 0);
+    Module(const char* name, const char* type = 0, bool earlyInit = false);
 
     /**
      * Destructor

@@ -633,8 +633,9 @@ public:
     /**
      * Creates a new Plugin container.
      * @param name the undecorated name of the library that contains the plugin
+     * @param earlyInit True to initialize the plugin early
      */
-    Plugin(const char* name);
+    Plugin(const char* name, bool earlyInit = false);
 
     /**
      * Creates a new Plugin container.
@@ -667,6 +668,16 @@ public:
      */
     virtual bool isBusy() const
 	{ return false; }
+
+    /**
+     * Check if the module is to be initialized early
+     * @return True if the module should be initialized before regular ones
+     */
+    bool earlyInit() const
+	{ return m_early; }
+
+private:
+    bool m_early;
 };
 
 #if 0 /* for documentation generator */
@@ -697,6 +708,18 @@ public:
 	Console = 1,
 	Client = 2,
 	Server = 3,
+    };
+
+    /**
+     * Plugin load and initialization modes.
+     * Default is LoadLate that initailizes the plugin after others.
+     * LoadEarly will move the plugin to the front of the init order.
+     * LoadFail causes the plugin to be unloaded.
+     */
+    enum PluginMode {
+	LoadFail = 0,
+	LoadLate,
+	LoadEarly
     };
 
     /**
@@ -934,6 +957,12 @@ public:
      * @return True if the directory could at least be opened
      */
     bool loadPluginDir(const String& relPath);
+
+    /**
+     * Set the load and init mode of the currently loading @ref Plugin
+     * @param mode Load and init mode, default LoadLate
+     */
+    static void pluginMode(PluginMode mode);
 
 protected:
     /**

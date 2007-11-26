@@ -149,6 +149,7 @@ int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
 static bool s_init = false;
 static bool s_dynplugin = false;
+static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
 
@@ -167,10 +168,12 @@ class SLib : public GenObject
 public:
     virtual ~SLib();
     static SLib* load(const char* file, bool local);
+    inline const String& file() const
+	{ return m_file; }
 private:
     SLib(HMODULE handle, const char* file);
-    const char* m_file;
     HMODULE m_handle;
+    String m_file;
 };
 
 class EngineSuperHandler : public MessageHandler
@@ -483,8 +486,9 @@ static int supervise(void)
 }
 #endif /* _WINDOWS */
 
+
 SLib::SLib(HMODULE handle, const char* file)
-    : m_handle(handle)
+    : m_handle(handle), m_file(file)
 {
     DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
     checkPoint();
@@ -547,6 +551,7 @@ SLib* SLib::load(const char* file, bool local)
 #endif    
     return 0;
 }
+
 
 Engine::Engine()
 {
@@ -795,7 +800,12 @@ bool Engine::Register(const Plugin* plugin, bool reg)
     if (reg) {
 	if (p)
 	    return false;
-	p = plugins.append(plugin);
+	if (plugin->earlyInit()) {
+	    s_loadMode = LoadEarly;
+	    p = plugins.insert(plugin);
+	}
+	else
+	    p = plugins.append(plugin);
 	p->setDelete(s_dynplugin);
     }
     else if (p)
@@ -806,13 +816,30 @@ bool Engine::Register(const Plugin* plugin, bool reg)
 bool Engine::loadPlugin(const char* file, bool local)
 {
     s_dynplugin = false;
+    s_loadMode = Engine::LoadLate;
     SLib *lib = SLib::load(file,local);
     s_dynplugin = true;
     if (lib) {
-	m_libs.append(lib);
+	switch (s_loadMode) {
+	    case LoadFail:
+		delete lib;
+		return false;
+	    case LoadEarly:
+		// load early - unload late
+		m_libs.append(lib);
+		break;
+	    default:
+		m_libs.insert(lib);
+		break;
+	}
 	return true;
     }
     return false;
+}
+
+void Engine::pluginMode(PluginMode mode)
+{
+    s_loadMode = mode;
 }
 
 bool Engine::loadPluginDir(const String& relPath)

@@ -338,15 +338,15 @@ bool MyHandler::received(Message& msg)
 }
 
 MyModule::MyModule()
-    : Module ("mysqldb","database"),m_init(false)
+    : Module ("mysqldb","database",true),m_init(false)
 {
     Output("Loaded module MySQL based on %s",mysql_get_client_info());
 }
 
 MyModule::~MyModule()
 {
+    Output("Unloading module MySQL");
     s_conns.clear();
-    Output("Unloaded module MySQL");
 }
 
 void MyModule::statusParams(String& str)

@@ -88,15 +88,22 @@ class CdrFilePlugin : public Plugin
 {
 public:
     CdrFilePlugin();
+    ~CdrFilePlugin();
     virtual void initialize();
 private:
     CdrFileHandler *m_handler;
 };
 
 CdrFilePlugin::CdrFilePlugin()
-    : m_handler(0)
+    : Plugin("cdrfile",true),
+      m_handler(0)
 {
     Output("Loaded module CdrFile");
+}
+
+CdrFilePlugin::~CdrFilePlugin()
+{
+    Output("Unloading module CdrFile");
 }
 
 void CdrFilePlugin::initialize()

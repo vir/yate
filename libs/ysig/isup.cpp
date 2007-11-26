@@ -1979,8 +1979,8 @@ bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
     SS7PointCode* p = hasPointCode(*pc);
     if (def)
 	m_defPoint = p ? p : pc;
-#ifdef DEBUG
     String tmp;
+#ifdef DEBUG
     tmp << (def ? *m_defPoint : *pc);
 #endif
     if (!p) {

@@ -1,7 +1,8 @@
 /**
  * address.cpp
- * Yet Another SS7 Stack
  * This file is part of the YATE Project http://YATE.null.ro 
+ *
+ * Yet Another Signalling Stack - implements the support for SS7, ISDN and PSTN
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team

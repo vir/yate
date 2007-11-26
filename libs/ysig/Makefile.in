@@ -1,5 +1,5 @@
 # Makefile
-# This file holds the make rules for the libyatess7
+# This file holds the make rules for the libyatesig
 
 DEBUG :=
 
@@ -10,16 +10,16 @@ LIBTHR := -lpthread
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L../.. -lyate
-INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatess7.h
+INCFILES := @top_srcdir@/yateclass.h @srcdir@/yatesig.h
 
 PROGS= yate-ss7test
-LIBS = libyatess7.a
+LIBS = libyatesig.a
 OBJS = engine.o address.o sigcall.o sigtran.o \
 	interface.o layer2.o layer3.o \
 	router.o sccp.o tcap.o \
 	q921.o q931.o
-LIBD_VER:= libyatess7.so.@PACKAGE_VERSION@
-LIBD_DEV:= libyatess7.so
+LIBD_VER:= libyatesig.so.@PACKAGE_VERSION@
+LIBD_DEV:= libyatesig.so
 LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
 DOCS = classes.png
 
@@ -74,7 +74,7 @@ yate-%: @srcdir@/main-%.cpp $(MKDEPS) $(LIBS) ../../libyate.so $(INCFILES)
 $(LIBS): $(OBJS)
 	$(AR) rcs $@ $^
 
-yate-ss7test: LOCALLIBS += -L. -lyatess7
+yate-ss7test: LOCALLIBS += -L. -lyatesig
 
 %.png: @srcdir@/%.dia
 	dia --export-to-format=png --export=$@ $<

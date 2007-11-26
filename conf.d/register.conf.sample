@@ -135,13 +135,13 @@ cdr_finalize=UPDATE users SET inuse=(CASE WHEN inuse>0 THEN inuse-1 ELSE 0 END) 
 ; Queries for registering as client to other servers
 
 ; query executed only once to create client registrations at startup
-queryinit=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
+initquery=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
 
 ; poll on timer to update registrations if database was changed externally
-querytimer=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
+timerquery=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
 
 ; update account status after receiving an user.notify
-querystatus=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'
+statusquery=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'
 
 
 [resource.subscribe]

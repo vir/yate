@@ -1243,7 +1243,7 @@ static const TokenDict s_names[] = {
     MAKE_NAME(CMR),
     MAKE_NAME(CMC),
     MAKE_NAME(CMRJ),
-    MAKE_NAME(FAR),
+    MAKE_NAME(FACR),
     MAKE_NAME(FAA),
     MAKE_NAME(FRJ),
     MAKE_NAME(FAD),

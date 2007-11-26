@@ -332,24 +332,24 @@ class YSIG_API SignallingCounter
 public:
     /**
      * Constructor
-     * @param max The maximum value for the counter
+     * @param maxVal The maximum value for the counter
      */
-    inline SignallingCounter(u_int32_t max)
-	: m_max(max), m_count(0)
+    inline SignallingCounter(u_int32_t maxVal)
+	: m_max(maxVal), m_count(0)
 	{}
 
     /**
      * Set the maximum value for the counter
      * @param value The new maximum value for the counter
      */
-    inline void max(u_int32_t value)
+    inline void maxVal(u_int32_t value)
 	{ m_max = value; }
 
     /**
      * Get the maximum value for the counter
      * @return The maximum value for the counter
      */
-    inline u_int32_t max() const
+    inline u_int32_t maxVal() const
 	{ return m_max; }
 
     /**
@@ -361,7 +361,7 @@ public:
 
     /**
      * Reset the counter's value
-     * @param down True to reset to 0, false to reset to max()
+     * @param down True to reset to 0, false to reset to maxVal()
      */
     inline void reset(bool down = true)
 	{ m_count = down ? 0 : m_max; }
@@ -400,7 +400,7 @@ public:
      * @return True if the counter is full
      */
     inline bool full() const
-	{ return m_count == max(); }
+	{ return m_count == maxVal(); }
 
 private:
     u_int32_t m_max;                     // Maximum counter value
@@ -1982,14 +1982,14 @@ public:
      *  must be separated by a '.' or ',' character. Interval margins must be separated
      *  by a '-' character. Empty elements are ignored
      * @param source The string to parse
-     * @param min The minimum value for each element in the array
-     * @param max The maximum value for each element in the array
+     * @param minVal The minimum value for each element in the array
+     * @param maxVal The maximum value for each element in the array
      * @param count On exit will contain the length of the returned array (0 on failure)
      * @param discardDup True to discard duplicate values
      * @return Pointer to an array of unsigned integers on success (the caller must delete it after use).
      *  0 on failure (source is empty or has invalid format or an invalid value was found)
      */
-    static unsigned int* parseUIntArray(const String& source, unsigned int min, unsigned int max,
+    static unsigned int* parseUIntArray(const String& source, unsigned int minVal, unsigned int maxVal,
 	unsigned int& count, bool discardDup);
 
 private:
@@ -4339,7 +4339,7 @@ public:
 	CMR  = 0x1c, // Call Modification Request (ANSI only)
 	CMC  = 0x1d, // Call Modification Completed (ANSI only)
 	CMRJ = 0x1e, // Call Modification Rejected (ANSI only)
-	FAR  = 0x1f, // Facility Request
+	FACR = 0x1f, // Facility Request
 	FAA  = 0x20, // Facility Accepted
 	FRJ  = 0x21, // Facility Reject
 	FAD  = 0x22, // Facility Deactivated (ANSI only)
@@ -5696,7 +5696,7 @@ public:
      * @return The timeout of a data frame
      */
     inline u_int32_t dataTimeout() const
-	{ return m_retransTimer.interval() * m_n200.max(); }
+	{ return m_retransTimer.interval() * m_n200.maxVal(); }
 
     /**
      * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives

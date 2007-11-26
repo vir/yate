@@ -75,7 +75,7 @@ public:
 
     // Get the lower margin of an interval given by it's higher margin and length
     // The interval length is assumed non 0
-    // @param max The higher margin of the interval
+    // @param high The higher margin of the interval
     // @param len The interval length
     static inline u_int8_t getLow(u_int8_t high, u_int8_t len)
 	{ return ((high >= len) ? high - len + 1 : 128 - (len - high)); }
@@ -127,9 +127,9 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
     m_idleTimer.interval(params,"t203",2000,10000,false);
     // Adjust idle timeout to data link side
     m_idleTimer.interval(m_idleTimer.interval() + (network() ? -500 : 500));
-    m_window.max(params.getIntValue("maxpendingframes",7));
-    if (!m_window.max())
-	m_window.max(7);
+    m_window.maxVal(params.getIntValue("maxpendingframes",7));
+    if (!m_window.maxVal())
+	m_window.maxVal(7);
     setDebug(params.getBoolValue("print-frames",false),
 	params.getBoolValue("extended-debug",false));
     if (debugAt(DebugInfo)) {
@@ -139,7 +139,7 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
 	tmp << "\r\nAllow unaknoledged data:  " << String::boolText(allowUnack());
 	tmp << "\r\nAuto restart: " << String::boolText(autoRestart());
 	tmp << "\r\nMax data length: " << (unsigned int)maxUserData();
-	tmp << "\r\nMax pending data frames: " << (unsigned int)m_window.max();
+	tmp << "\r\nMax pending data frames: " << (unsigned int)m_window.maxVal();
 	if (debugAt(DebugAll))
 	    tmp << "\r\nTimers: retrans/idle = " << (unsigned int)m_retransTimer.interval()  << "/"
 		<< (unsigned int)m_idleTimer.interval();

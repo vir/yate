@@ -4873,8 +4873,8 @@ regexec (preg, string, nmatch, pmatch, eflags)
    from either regcomp or regexec.   We don't use PREG here.  */
 
 size_t
-regerror (errcode, preg, errbuf, errbuf_size)
-    int errcode;
+regerror (err_code, preg, errbuf, errbuf_size)
+    int err_code;
     const regex_t *preg;
     char *errbuf;
     size_t errbuf_size;
@@ -4882,15 +4882,15 @@ regerror (errcode, preg, errbuf, errbuf_size)
   const char *msg;
   size_t msg_size;
 
-  if (errcode < 0
-      || errcode >= (sizeof (re_error_msg) / sizeof (re_error_msg[0])))
+  if (err_code < 0
+      || err_code >= (sizeof (re_error_msg) / sizeof (re_error_msg[0])))
     /* Only error codes returned by the rest of the code should be passed 
        to this routine.  If we are given anything else, or if other regex
        code generates an invalid error code, then the program has a bug.
        Dump core so we can fix it.  */
     abort ();
 
-  msg = re_error_msg[errcode];
+  msg = re_error_msg[err_code];
 
   /* POSIX doesn't require that we do anything in this case, but why
      not be nice.  */

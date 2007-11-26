@@ -88,6 +88,9 @@ using namespace TelEngine;
 #ifndef MOD_PATH
 #define MOD_PATH "." PATH_SEP "modules"
 #endif
+#ifndef SHR_PATH
+#define SHR_PATH "." PATH_SEP "share"
+#endif
 #ifndef CFG_PATH
 #define CFG_PATH "." PATH_SEP "conf.d"
 #endif

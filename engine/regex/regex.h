@@ -479,7 +479,7 @@ extern int regexec
   _RE_ARGS ((const regex_t *preg, const char *string, size_t nmatch,
              regmatch_t pmatch[], int eflags));
 extern size_t regerror
-  _RE_ARGS ((int errcode, const regex_t *preg, char *errbuf,
+  _RE_ARGS ((int err_code, const regex_t *preg, char *errbuf,
              size_t errbuf_size));
 extern void regfree _RE_ARGS ((regex_t *preg));
 

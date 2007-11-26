@@ -170,7 +170,9 @@ ObjList* ObjList::insert(const GenObject* obj, bool compact)
 	ObjList *n = new ObjList();
 	n->set(m_obj);
 	set(obj,false);
+	n->m_delete = m_delete;
 	n->m_next = m_next;
+	m_delete = true;
 	m_next = n;
     }
     else
@@ -188,6 +190,8 @@ ObjList* ObjList::append(const GenObject* obj, bool compact)
 	n->m_next = new ObjList();
 	n = n->m_next;
     }
+    else
+	n->m_delete = true;
     n->set(obj);
     return n;
 }

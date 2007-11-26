@@ -23,13 +23,11 @@
  */
 
 #include <yatephone.h>
-#include <yatess7.h>
+#include <yatesig.h>
 
 #ifdef _WINDOWS
 #error This module is not for Windows
 #else
-
-#define NEW_ZAPTEL_LOCATION
 
 extern "C" {
 #ifdef NEW_ZAPTEL_LOCATION

@@ -23,7 +23,7 @@
  */
 
 #include <yatephone.h>
-#include <yatess7.h>
+#include <yatesig.h>
 
 #ifdef _WINDOWS
 #error This module is not for Windows

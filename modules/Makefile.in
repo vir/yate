@@ -38,6 +38,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/heartbeat.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
 	server/mrcpspeech.yate \
+	server/ysigchan.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
 

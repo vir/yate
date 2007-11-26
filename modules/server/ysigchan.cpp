@@ -30,2104 +30,2382 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-class ModuleLine;                        // Module's interface to an analog line or recorder
-                                         // Manages the call setup detector and sends call setup info
-class ModuleGroup;                       // Module's interface to a group of lines
-class AnalogParams;                      // Named list containing creator data (pointers)
-                                         // Used to pass parameters to objects that need to obtain some
-                                         // pointers from the creator
-class AnalogChannel;                     // Channel associated with an analog line
-class AnalogCallRec;                     // Recorder call endpoint associated with an analog line monitor
-class AnalogDriver;                      // Analog driver
-class AnalogWorkerThread;                // Worker thread to get events from a group
-class ChanNotifyHandler;                 // chan.notify handler (notify lines on detector events)
-class EngineStartHandler;                // engine.start handler (start detectors on lines expectind data before ring)
+class SigChannel;                        // Signalling channel
+class SigDriver;                         // Signalling driver
+class SigParams;                         // Named list containing creator data (pointers)
+                                         // Used to pass parameters to objects that need to obtain some pointers
+class SigCircuitGroup;                   // Used to create a signalling circuit group descendant to set the debug name
+class SigLink;                           // Keep a signalling link
+class SigSS7Isup;                        // SS7 ISDN User Part call controller
+class SigIsdn;                           // ISDN (Q.931 over HDLC interface) call control
+class SigIsdnMonitor;                    // ISDN (Q.931 over HDLC interface) call control monitor
+class SigConsumerMux;                    // Consumer used to push data to SigSourceMux
+class SigSourceMux;                      // A data source multiplexer with 2 channels
+class SigIsdnCallRecord;                 // Record an ISDN call monitor
+class SigLinkThread;                     // Get events and check timeout for links that have a call controller
 
-// Module's interface to an analog line or monitor
-class ModuleLine : public AnalogLine
+// The signalling channel
+class SigChannel : public Channel
 {
 public:
-    ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params);
-    // Get the module group representation of this line's owner
-    ModuleGroup* moduleGroup();
-    inline const String& caller() const
-	{ return m_caller; }
-    inline const String& callerName() const
-	{ return m_callerName; }
-    inline String& called()
-	{ return m_called; }
-    // Send call setup data
-    void sendCallSetup();
-    // Set call setup detector
-    void setCallSetupDetector();
-    // Remove call setup detector
-    void removeCallSetupDetector();
-    // Process notifications from detector
-    void processNotify(Message& msg);
-    // Set the caller, callername and called parameters
-    inline void setCall(const char* caller = 0, const char* callername = 0,
-	const char* called = 0)
-	{ m_caller = caller; m_callerName = callername; m_called = called; }
-    // Set the caller, callername and called parameters
-    inline void copyCall(Message& dest) {
-	    if (m_caller)
-		dest.addParam("caller",m_caller);
-	    if (m_callerName)
-		dest.addParam("callername",m_callerName);
-	    if (m_called)
-		dest.addParam("called",m_called);
+    // Incoming
+    SigChannel(SignallingEvent* event);
+    // Outgoing
+    SigChannel(Message& msg, const char* caller, const char* called, SigLink* link);
+    virtual ~SigChannel();
+    inline SignallingCall* call() const
+        { return m_call; }
+    inline SigLink* link() const
+        { return m_link; }
+    inline bool hungup() const
+	{ return m_hungup; }
+    // Overloaded methods
+    virtual bool msgProgress(Message& msg);
+    virtual bool msgRinging(Message& msg);
+    virtual bool msgAnswered(Message& msg);
+    virtual bool msgTone(Message& msg, const char* tone);
+    virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgDrop(Message& msg, const char* reason);
+    virtual bool msgTransfer(Message& msg);
+    virtual bool callPrerouted(Message& msg, bool handled);
+    virtual bool callRouted(Message& msg);
+    virtual void callAccept(Message& msg);
+    virtual void callRejected(const char* error, const char* reason = 0,
+	const Message* msg = 0);
+    virtual void disconnected(bool final, const char* reason);
+    bool disconnect()
+	{ return Channel::disconnect(m_reason); }
+    void handleEvent(SignallingEvent* event);
+    void hangup(const char* reason = 0);
+private:
+    virtual void statusParams(String& str);
+    // Set call status. Print debug message
+    void setState(const char* state, bool updateStatus = true, bool showReason = false);
+    // Event handlers
+    void evInfo(SignallingEvent* event);
+    void evProgress(SignallingEvent* event);
+    void evRelease(SignallingEvent* event);
+    void evAccept(SignallingEvent* event);
+    void evAnswer(SignallingEvent* event);
+    void evRinging(SignallingEvent* event);
+    // Open or update format source/consumer
+    // Set force to true to change source/consumer pointer/format
+    bool updateConsumer(const char* format, bool force);
+    bool updateSource(const char* format, bool force);
+    // Get the circuit reserved for the call
+    inline SignallingCircuit* getCircuit() {
+	    SignallingCircuit* cic = 0;
+	    if (m_call)
+		cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuit"));
+	    return cic;
 	}
-    // Fill a string with line status parameters
-    void statusParams(String& str);
-    // Fill a string with line status detail parameters
-    void statusDetail(String& str);
-protected:
-    virtual void checkTimeouts(const Time& when);
-    // Remove detector. Call parent's destructor
-    virtual void destroyed() {
-	    removeCallSetupDetector();
-	    AnalogLine::destroyed();
-	}
-    // Set the FXO line. Start detector if waiting call setup before first ring
-    void setFXO(AnalogLine* fxo);
-
-    String m_called;                     // Called's extension
-    // Call setup (caller id)
-    String m_caller;                     // Caller's extension
-    String m_callerName;                 // Caller's name
-    DataConsumer* m_callSetupDetector;   // The call setup detector
-    SignallingTimer m_callSetupTimer;    // Timeout of call setup data received before the first ring
-                                         // Stop detector if started and timeout
+private:
+    Mutex m_callMutex;                   // Call operation lock
+    String m_caller;
+    String m_called;
+    SignallingCall* m_call;              // The signalling call this channel is using
+    SigLink* m_link;                     // The link owning the signalling call
+    bool m_hungup;                       // Hang up flag
+    String m_reason;                     // Hangup reason
+    bool m_inband;                       // True to try to send in-band tones
 };
 
-// Module's interface to a group of lines
-class ModuleGroup : public AnalogLineGroup
+class SigDriver : public Driver
 {
-    friend class AnalogWorkerThread;     // Set worker thread variable
+    friend class SigLink;                // Needded for appendLink() / removeLink()
+    friend class SigLinkThread;          // Needded for clearLink()
 public:
-    // Create an FXS/FXO group of analog lines
-    inline ModuleGroup(AnalogLine::Type type, const char* name)
-	: AnalogLineGroup(type,name), m_init(false), m_thread(0), m_callEndedPlayTime(0)
-	{ m_prefix << name << "/"; }
-    // Create a group of analog lines used to record
-    inline ModuleGroup(const char* name, ModuleGroup* fxo)
-	: AnalogLineGroup(name,fxo), m_init(false), m_thread(0), m_callEndedPlayTime(0)
-	{ m_prefix << name << "/"; }
-    // Create an FXO group of analog lines to be attached to a group of recorders
-    inline ModuleGroup(const char* name)
-	: AnalogLineGroup(AnalogLine::FXO,name), m_init(false), m_thread(0), m_callEndedPlayTime(0)
-	{ m_prefix << name << "/"; }
-    virtual ~ModuleGroup()
-	{}
-    inline ModuleGroup* fxoRec()
-	{ return static_cast<ModuleGroup*>(fxo()); }
-    inline const String& prefix()
-	{ return m_prefix; }
-    // Remove all channels associated with this group and stop worker thread
-    virtual void destruct();
-    // Process an event geberated by a line
-    void handleEvent(ModuleLine& line, SignallingCircuitEvent& event);
-    // Process an event generated by a monitor
-    void handleRecEvent(ModuleLine& line, SignallingCircuitEvent& event);
-    // Apply debug level. Call create and create worker thread on first init
-    // Re(load) lines and calls specific group reload
-    // Return false on failure
-    bool initialize(const NamedList& params, const NamedList& defaults, String& error);
-    // Copy some data to a module's channel
-    void copyData(AnalogChannel* chan);
-    // Append/remove endpoints from list
-    void setEndpoint(CallEndpoint* ep, bool add);
-    // Find a recorder by its line
-    AnalogCallRec* findRecorder(ModuleLine* line);
-    // Check timers for endpoints owned by this group
-    void checkTimers(Time& when);
-    // Fill a string with group status parameters
-    void statusParams(String& str);
-    // Fill a string with group status detail parameters
-    void statusDetail(String& str);
-protected:
-    // Disconnect all group's endpoints
-    void clearEndpoints(const char* reason = 0);
+    SigDriver();
+    ~SigDriver();
+    virtual void initialize();
+    virtual bool msgExecute(Message& msg, String& dest);
+    inline SignallingEngine* engine() const
+	{ return m_engine; }
+    SS7Router* router() const
+	{ return m_router; }
+    void handleEvent(SignallingEvent* event);
+    bool received(Message& msg, int id);
+    // Find a link by name
+    // If callCtrl is true, match only links with call controller
+    SigLink* findLink(const char* name, bool callCtrl);
+    // Find a link by call controller
+    SigLink* findLink(const SignallingCallControl* ctrl);
+    // Disconnect channels. If link is not 0, disconnect only channels belonging to that link
+    void disconnectChannels(SigLink* link = 0);
 private:
-    // Create FXS/FXO group data: called by initialize() on first init
-    bool create(const NamedList& params, const NamedList& defaults,
-	String& error);
-    // Reload FXS/FXO data: called by initialize() (not called on first init if create failed)
-    bool reload(const NamedList& params, const NamedList& defaults,
-	String& error);
-    // Create recorder group data: called by initialize() on first init
-    bool createRecorder(const NamedList& params, const NamedList& defaults,
-	String& error);
-    // Reload recorder data: called by initialize() (not called on first init if create failed)
-    bool reloadRecorder(const NamedList& params, const NamedList& defaults,
-	String& error);
-    // Reload existing line's parameters
-    void reloadLine(ModuleLine* line, const NamedList& params);
-    // Build the group of circuits (spans)
-    void buildGroup(ModuleGroup* group, ObjList& spanList, String& error);
-    // Complete missing line parameters from other list of parameters
-    inline void completeLineParams(NamedList& dest, const NamedList& src, const NamedList& defaults) {
-	    for (unsigned int i = 0; lineParams[i]; i++)
-		if (!dest.getParam(lineParams[i]))
-		    dest.addParam(lineParams[i],src.getValue(lineParams[i],
-			defaults.getValue(lineParams[i])));
-	}
-    // Line parameters that can be overridden
-    static const char* lineParams[];
+    // Delete the given link if found
+    // Clear link list if name is 0
+    // Clear all stacks without waiting for call termination if name is 0
+    void clearLink(const char* name = 0, bool waitCallEnd = false, unsigned int howLong = 0);
+    // Append a link to the list. Duplicate names are not allowed
+    bool appendLink(SigLink* link);
+    // Remove a link from list without deleting it
+    void removeLink(SigLink* link);
 
-    bool m_init;                         // Init flag
-    String m_prefix;                     // Line prefix used to complete commands
-    AnalogWorkerThread* m_thread;        // The worker thread
-    // FXS/FXO group data
-    String m_callEndedTarget;            // callto when an FXS line was disconnected
-    String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
-    u_int64_t m_callEndedPlayTime;       // Time to play call ended prompt
-    // Recorder group data
-    ObjList m_endpoints;                 // Record data endpoints
+    SignallingEngine* m_engine;          // The signalling engine
+    SS7Router* m_router;                 // The SS7 router
+    ObjList m_links;                     // Link list
+    Mutex m_linksMutex;                  // Lock link list operations
 };
 
 // Named list containing creator data (pointers)
 // Used to pass parameters to objects that need to obtain some pointers
-class AnalogParams : public NamedList
+class SigParams : public NamedList
 {
 public:
-    inline AnalogParams(const char* name, SignallingCircuitGroup* group)
+    inline SigParams(const char* name, SignallingCircuitGroup* group)
 	: NamedList(name), m_cicGroup(group)
 	{}
-    virtual void* getObject(const String& name) const {
-	    if (name == "SignallingCircuitGroup")
-		return m_cicGroup;
-	    return NamedList::getObject(name);
-	}
+    virtual void* getObject(const String& name) const;
 private:
     SignallingCircuitGroup* m_cicGroup;
 };
 
-// Channel associated with an analog line
-class AnalogChannel : public Channel
+// Used to create a signalling circuit group descendant to set the debug name
+class SigCircuitGroup : public SignallingCircuitGroup
 {
-    friend class ModuleGroup;            // Copy data
 public:
-    AnalogChannel(ModuleLine* line, Message* msg);
-    virtual ~AnalogChannel();
-    inline ModuleLine* line() const
-        { return m_line; }
-    // Start outgoing media and echo train if earlymedia or got peer with data source
-    virtual bool msgProgress(Message& msg);
-    // Start outgoing media and echo train if earlymedia or got peer with data source
-    virtual bool msgRinging(Message& msg);
-    // Terminate ringing on line. Start echo train. Open audio streams
-    virtual bool msgAnswered(Message& msg);
-    // Send tones or flash
-    virtual bool msgTone(Message& msg, const char* tone);
-    // Hangup line
-    virtual bool msgDrop(Message& msg, const char* reason);
-    // Update echo canceller and/or start echo training
-    virtual bool msgUpdate(Message& msg);
-    // Set tone detector
-    virtual bool callRouted(Message& msg);
-    // Open media if not answered
-    virtual void callAccept(Message& msg);
-    // Hangup
-    virtual void callRejected(const char* error, const char* reason = 0,
-	const Message* msg = 0);
-    // Disconnected notification
-    virtual void disconnected(bool final, const char* reason);
-    // Hangup
-    bool disconnect(const char* reason = 0);
-    // Hangup call
-    // Keep call alive to play announcements on FXS line not set on hook by the remote FXO
-    void hangup(bool local, const char* status = 0, const char* reason = 0);
-    // Enqueue chan.dtmf message
-    void evDigits(const char* text, bool tone);
-    // Line got off hook. Terminate ringing
-    // Outgoing: answer it (call outCallAnswered()). Incoming: start echo train
-    void evOffHook();
-    // Line ring on/off notification. Ring off is ignored
-    // Outgoing: enqueue call.ringing
-    // Incoming: FXO: Route the call if delayed. Remove line's detector and start ring timer
-    void evRing(bool on);
-    // Line started (initialized) notification
-    // Answer outgoing FXO calls on lines not expecting polarity changes to answer
-    // Send called number if any
-    void evLineStarted();
-    // Dial complete notification. Enqueue call.progress
-    // Answer outgoing FXO calls on lines not expecting polarity changes to answer
-    void evDialComplete();
-    // Line polarity change notification
-    // Terminate call if:
-    //   - no line or line is not FXO, 
-    //   - Outgoing: don't answer on polarity or already answered and should hangup on polarity change
-    //   - Incoming: don't answer on polarity or polarity already changed and should hangup on polarity change
-    // Outgoing: don't answer on polarity or already answered: call outCallAnswered()
-    void evPolarity();
-    // Line ok: stop alarm timer
-    // Terminate channel if not answered; otherwise: start timer if not already started
-    void evAlarm(bool alarm, const char* alarms);
-    // Check timers. Return false to terminate
-    bool checkTimeouts(const Time& when);
+    inline SigCircuitGroup(const char* name, unsigned int base = 0, int strategy = Increment)
+	: SignallingCircuitGroup(base,strategy,name)
+	{}
+    virtual ~SigCircuitGroup()
+	{}
 protected:
-    // Set reason if not already set
-    inline void setReason(const char* reason)
-	{ if (!m_reason) m_reason = reason; }
-    // Route incoming. If first is false the router is started on second ring
-    void startRouter(bool first);
-    // Set data source and consumer
-    bool setAudio(bool in);
-    // Set call status. Return true
-    bool setStatus(const char* newStat = 0);
-    // Set tones to the remote end of the line
-    bool setAnnouncement(const char* status, const char* callto);
-    // Outgoing call answered: set call state, start echo train, open data source/consumer
-    void outCallAnswered();
-    // Hangup. Release memory
-    virtual void destroyed();
-    // Detach the line from this channel and reset it
-    void detachLine();
-    // Send tones (DTMF or dial number)
-    bool sendTones(const char* tone);
-private:
-    ModuleLine* m_line;                  // The analog line associated with this channel
-    bool m_hungup;                       // Hang up flag
-    bool m_routeOnSecondRing;            // Delay router if waiting callerid
-    String m_reason;                     // Hangup reason
-    SignallingTimer m_callEndedTimer;    // Call ended notification to the FXO
-    SignallingTimer m_noRingTimer;       // No more rings on incoming not answered FXO line
-    SignallingTimer m_alarmTimer;        // How much time a channel may stay with its line in alarm
-    SignallingTimer m_dialTimer;         // FXO: delay dialing the number
-    String m_callEndedTarget;            // callto when an FXS line was disconnected
-    String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
-    unsigned int m_polarityCount;        // The number of polarity changes received
+    virtual void timerTick(const Time& when)
+	{}
 };
 
-// Recorder call endpoint associated with an analog line monitor
-class AnalogCallRec : public CallEndpoint, public DebugEnabler
+// Signalling link
+class SigLink : public RefObject
+{
+    friend class SigLinkThread;         // The thread must set m_thread to 0 on terminate
+public:
+    enum Type {
+	SS7Isup,
+	IsdnPriNet,
+	IsdnPriCpe,
+	IsdnPriMon,
+	Unknown
+    };
+    // Set link name and type. Append to plugin list
+    SigLink(const char* name, Type type);
+    // Cancel thread. Cleanup. Remove from plugin list
+    virtual ~SigLink();
+    inline int type() const
+	{ return m_type; }
+    inline SignallingCallControl* controller() const
+	{ return m_controller; }
+    inline const String& name() const
+	{ return m_name; }
+    inline bool inband() const
+	{ return m_inband; }
+    // Set exiting flag for call controller and timeout for the thread
+    void setExiting(unsigned int msec);
+    // Initialize (create or reload) the link. Process the debuglayer parameter.
+    // Fix some type depending parameters
+    // Return false on failure
+    bool initialize(NamedList& params);
+    // Handle events received from call controller
+    // Default action: calls the driver's handleEvent()
+    virtual void handleEvent(SignallingEvent* event);
+    // Handle chan.masquerade. Return true if handled
+    // @param id Channel id
+    // @param msg Received message
+    virtual bool masquerade(String& id, Message& msg)
+	{ return false; }
+    // Handle chan.drop. Return true if handled
+    // @param id Channel id
+    // @param msg Received message
+    virtual bool drop(String& id, Message& msg)
+	{ return false; }
+    // Clear channels with calls belonging to this link. Cancel thread if any. Call release
+    void cleanup();
+    // Type names
+    static TokenDict s_type[];
+protected:
+    // Create/Reload/Release data
+    virtual bool create(NamedList& params, String& error) { return false; }
+    virtual bool reload(NamedList& params) { return false; }
+    virtual void release() {}
+    // Get debug enabler to set debug for it
+    virtual DebugEnabler* getDbgEnabler(int id) { return 0; }
+    // Start worker thread. Set error on failure
+    bool startThread(String& error);
+    // Build the signalling interface and insert it in the engine
+    static SignallingInterface* buildInterface(NamedList& params, const String& device,
+	const String& debugName, String& error);
+    // Build a signalling circuit group and insert it in the engine
+    static SigCircuitGroup* buildCircuits(NamedList& params, const String& device,
+	const String& debugName, String& error);
+    // Build component debug name
+    inline void buildName(String& dest, const char* name)
+	{ dest = ""; dest << this->name() << '/' << name; }
+    SignallingCallControl* m_controller; // Call controller, if any
+    bool m_init;                         // True if already initialized
+    bool m_inband;                       // True to send in-band tones through this link
+private:
+    int m_type;                          // Link type
+    String m_name;                       // Link name
+    SigLinkThread* m_thread;             // Event thread for call controller
+};
+
+// SS7 ISDN User Part call controller
+class SigSS7Isup : public SigLink
 {
 public:
-    // Append to driver's list
-    AnalogCallRec(ModuleLine* m_line, bool fxsCaller, const char* id);
-    inline ModuleLine* line()
-	{ return m_line; }
-    inline ModuleLine* fxo()
-	{ return m_line ? static_cast<ModuleLine*>(m_line->getPeer()) : 0; }
-    inline ModuleLine* fxo() const
-	{ return m_line ? static_cast<ModuleLine*>(m_line->getPeer()) : 0; }
-    inline bool startOnSecondRing()
-	{ return m_startOnSecondRing; }
-    void hangup(const char* reason = "normal");
-    bool disconnect(const char* reason);
-    virtual void* getObject(const String& name) const;
-    inline const char* reason()
-	{ return m_reason; }
-    // Create data source. Route and execute
-    // Return false to hangup
-    bool startRecording();
-    // Call answered: start recording
-    bool answered();
-    // Process rings: start recording if delayed
-    // Return false to hangup
-    bool ringing(bool fxsEvent);
-    // Enqueue chan.dtmf
-    void evDigits(bool fxsEvent, const char* text, bool tone);
-    // Process line polarity changes. Return false to hangup
-    bool evPolarity(bool fxsEvent);
-    // Line alarms changed
-    bool evAlarm(bool fxsEvent, bool alarm, const char* alarms);
-    // Check timers. Return false to terminate
-    bool checkTimeouts(const Time& when);
-    // Fill a string with recorder status parameters
-    void statusParams(String& str);
-    // Fill a string with recorder status detail parameters
-    void statusDetail(String& str);
+    SigSS7Isup(const char* name);
+    virtual ~SigSS7Isup();
 protected:
-    // Remove from driver's list
-    virtual void destroyed();
+    virtual bool create(NamedList& params, String& error);
+    virtual bool reload(NamedList& params);
+    virtual void release();
+    virtual DebugEnabler* getDbgEnabler(int id);
+    // Add point codes from a given configuration section
+    // @return The number of point codes added
+    unsigned int setPointCode(const NamedList& sect);
+    inline SS7ISUP* isup()
+	{ return static_cast<SS7ISUP*>(m_controller); }
+private:
+    SS7MTP3* m_network;
+    SS7MTP2* m_link;
+    SignallingInterface* m_iface;
+    SigCircuitGroup* m_group;
+};
+
+// Q.931 call control over HDLC interface
+class SigIsdn : public SigLink
+{
+public:
+    SigIsdn(const char* name, bool net);
+    virtual ~SigIsdn();
+protected:
+    virtual bool create(NamedList& params, String& error);
+    virtual bool reload(NamedList& params);
+    virtual void release();
+    virtual DebugEnabler* getDbgEnabler(int id);
+    inline ISDNQ931* q931()
+	{ return static_cast<ISDNQ931*>(m_controller); }
+private:
+    ISDNQ921* m_q921;
+    SignallingInterface* m_iface;
+    SigCircuitGroup* m_group;
+};
+
+// Q.931 call control monitor over HDLC interface
+class SigIsdnMonitor : public SigLink
+{
+    friend class SigIsdnCallRecord;
+public:
+    SigIsdnMonitor(const char* name);
+    virtual ~SigIsdnMonitor();
+    virtual void handleEvent(SignallingEvent* event);
+    virtual bool masquerade(String& id, Message& msg);
+    virtual bool drop(String& id, Message& msg);
+    unsigned int chanBuffer() const
+	{ return m_chanBuffer; }
+    unsigned char idleValue() const
+	{ return m_idleValue; }
+    const String& peerId(bool network) const
+	{ return network ? m_netId : m_cpeId; }
+    // Remove a call and it's call monitor
+    void removeCall(SigIsdnCallRecord* call);
+protected:
+    virtual bool create(NamedList& params, String& error);
+    virtual bool reload(NamedList& params);
+    virtual void release();
+    inline ISDNQ931Monitor* q931()
+	{ return static_cast<ISDNQ931Monitor*>(m_controller); }
+    // Build component debug name
+    inline void buildName(String& dest, const char* name, bool net)
+	{ dest = ""; dest << (net ? m_netId : m_cpeId) << '/' << name; }
+private:
+    Mutex m_monitorMutex;                // Lock monitor list operations
+    ObjList m_monitors;                  // Monitor list
+    unsigned int m_id;                   // ID generator
+    unsigned int m_chanBuffer;           // The buffer length of one channel of a data source multiplexer
+    unsigned char m_idleValue;           // Idle value for source multiplexer to fill when no data
+    String m_netId;                      // The id of the network side of the data link
+    String m_cpeId;                      // The id of the user side of the data link
+    // Components
+    ISDNQ921Pasive* m_q921Net;
+    ISDNQ921Pasive* m_q921Cpe;
+    SignallingInterface* m_ifaceNet;
+    SignallingInterface* m_ifaceCpe;
+    SigCircuitGroup* m_groupNet;
+    SigCircuitGroup* m_groupCpe;
+};
+
+// Consumer used to push data to SigSourceMux
+class SigConsumerMux : public DataConsumer
+{
+    friend class SigSourceMux;
+public:
+    virtual ~SigConsumerMux()
+	{}
+    virtual void Consume(const DataBlock& data, unsigned long tStamp);
+protected:
+    inline SigConsumerMux(SigSourceMux* owner, bool first, const char* format)
+	: DataConsumer(format), m_owner(owner), m_first(first)
+	{}
+private:
+    SigSourceMux* m_owner;               // The owner of this consumer
+    bool m_first;                        // The channel allocated by the owner
+};
+
+// A data source multiplexer with 2 channels
+class SigSourceMux : public DataSource
+{
+public:
+    // Create consumers
+    // @param idleValue Value to fill missing data when forwarded
+    // @param chanBuffer The length of a channel buffer (will be rounded up to a multiple of sample length)
+    SigSourceMux(const char* format, unsigned char idleValue, unsigned int chanBuffer);
+    virtual ~SigSourceMux();
+    inline unsigned int sampleLen() const
+	{ return m_sampleLen; }
+    bool hasSource(bool first)
+	{ return first ? (m_firstSrc != 0) : (m_secondSrc != 0); }
+    // Replace the consumer of the given source. Remove current consumer's source before
+    // @param first True to replace with the first channel, false for the second
+    // Return false if source is 0 or has invalid format (other then ours)
+    bool attach(bool first, DataSource* source);
+    // Multiplex received data from consumers and forward it
+    void consume(bool first, const DataBlock& data, unsigned long tStamp);
+    // Remove the source for the appropriate consumer
+    void removeSource(bool first);
+protected:
+    // Forward the buffer if at least one channel is filled. Reset data
+    // If one channel is empty or incomplete, fill it with idle value
+    void forwardBuffer();
+    // Fill (interlaced samples) buffer with samples of received data
+    // If no data, fill the free space with idle value
+    void fillBuffer(bool first, unsigned char* data = 0, unsigned int samples = 0);
+    inline bool firstFull() const
+	{ return m_samplesFirst == m_maxSamples; }
+    inline bool secondFull() const
+	{ return m_samplesSecond == m_maxSamples; }
+private:
+    Mutex m_lock;                        // Lock consumers changes and data processing
+    DataSource* m_firstSrc;              // First consumer's source
+    DataSource* m_secondSrc;             // Second consumer's source
+    SigConsumerMux* m_firstChan;         // First channel
+    SigConsumerMux* m_secondChan;        // Second channel
+    unsigned char m_idleValue;           // Filling value for missing data
+    unsigned int m_sampleLen;            // The format sample length
+    unsigned int m_maxSamples;           // Maximum samples in a channel buffer
+    unsigned int m_samplesFirst;         // The number of samples in first channel's buffer
+    unsigned int m_samplesSecond;        // The number of samples in second channel's buffer
+    DataBlock m_buffer;                  // Multiplex buffer
+    unsigned int m_error;                // Flag to show data length violation error
+};
+
+// Record an ISDN call monitor
+class SigIsdnCallRecord : public CallEndpoint
+{
+public:
+    SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id, SignallingEvent* event);
+    virtual ~SigIsdnCallRecord();
+    bool update(SignallingEvent* event);
+    bool close(const char* reason);
+    bool disconnect(const char* reason);
+    // Process Info events. Send chan.dtmf
+    void evInfo(SignallingEvent* event);
+protected:
     virtual void disconnected(bool final, const char *reason);
     // Create a message to be enqueued/dispatched to the engine
-    // @param peers True to add caller and called parameters
+    // @param peers True to caller and called parameters
     // @param userdata True to add this call endpoint as user data
     Message* message(const char* name, bool peers = true, bool userdata = false);
+    // Send call.route and call.execute (if call.route succeedded)
+    bool callRouteAndExec(const char* format);
 private:
-    ModuleLine* m_line;                  // The monitored lines
-    bool m_fxsCaller;                    // True if the call originated from the FXS
-    bool m_answered;                     // True if answered
-    bool m_hungup;                       // Already hungup flag
-    unsigned int m_polarityCount;        // The number of polarity changes received
-    bool m_startOnSecondRing;            // Start recording on second ring if waiting callerid
-    SignallingTimer m_noRingTimer;       // No more rings on detected on unanswered line
-    String m_reason;                     // Hangup reason
+    Mutex m_lock;
+    String m_caller;                     // The caller
+    String m_called;                     // The called
+    String m_address;                    // Address including circuit number
+    bool m_netInit;                      // The caller is from the network (true) or user (false) side of the link
+    String m_reason;                     // Termination reason
     String m_status;                     // Call status
-    String m_address;                    // Call enspoint's address
+    SigIsdnMonitor* m_monitor;           // The owner of this recorder
+    ISDNQ931CallMonitor* m_call;         // The call monitor
 };
 
-// The driver
-class AnalogDriver : public Driver
+// Get events from call controller. Check timeouts
+class SigLinkThread : public Thread
 {
+    friend class SigLink;                // SigLink will set m_timeout when needded
 public:
-    // Additional driver commands
-    enum Commands {
-	CmdCount = 0
-    };
-    // Additional driver status commands
-    enum StatusCommands {
-	Groups         = 0,              // Show all groups
-	Lines          = 1,              // Show all lines
-	Recorders      = 2,              // Show all active recorders
-	StatusCmdCount = 3
-    };
-    AnalogDriver();
-    ~AnalogDriver();
-    inline const String& recPrefix()
-	{ return m_recPrefix; }
-    virtual void initialize();
-    virtual bool msgExecute(Message& msg, String& dest);
-    virtual void dropAll(Message& msg);
-    // Check timers for recorders owned by the given group
-    void checkTimers(Time& when, ModuleGroup* recGrp);
-    // Notification of line service state change or removal
-    // Return true if a channel or recorder was found
-    bool lineUnavailable(ModuleLine* line);
-    // Disconnect or deref a channel
-    void terminateChan(AnalogChannel* ch, const char* reason = "normal");
-    // Destroy a monitor endpoint
-    void terminateChan(AnalogCallRec* ch, const char* reason = "normal");
-    // Attach detectors after engine started
-    void engineStart(Message& msg);
-    // Notify lines on detector events
-    bool chanNotify(Message& msg);
-    // Get an id for a recorder
-    inline unsigned int nextRecId() {
-	    Lock lock(this);
-	    return ++m_recId;
+    inline SigLinkThread(SigLink* link)
+	: Thread("SigLinkThread"), m_link(link), m_timeout(0)
+	{}
+    virtual ~SigLinkThread() {
+	    if (m_link)
+		m_link->m_thread = 0;
 	}
-    // Append/remove recorders from list
-    void setRecorder(AnalogCallRec* rec, bool add);
-    // Find a group by its name
-    inline ModuleGroup* findGroup(const String& name) {
-	    Lock lock(this);
-	    ObjList* obj = m_groups.find(name);
-	    return obj ? static_cast<ModuleGroup*>(obj->get()) : 0;
-	}
-    // Find a recorder by its id
-    inline AnalogCallRec* findRecorder(const String& name) {
-	    Lock lock(this);
-	    ObjList* obj = m_recorders.find(name);
-	    return obj ? static_cast<AnalogCallRec*>(obj->get()) : 0;
-	}
-    // Additional driver commands
-    static String s_cmd[CmdCount];
-    // Additional driver status commands
-    static String s_statusCmd[StatusCmdCount];
-protected:
-    virtual bool received(Message& msg, int id);
-    // Handle command complete requests
-    virtual bool commandComplete(Message& msg, const String& partLine,
-	const String& partWord);
-    // Execute commands
-    virtual bool commandExecute(String& retVal, const String& line);
-    // Complete channels/recorders IDs from partial command word
-    inline void completeChanRec(String& dest, const String& partWord,
-	bool chans, bool all) {
-	    ObjList* o = (chans ? channels().skipNull() : m_recorders.skipNull());
-	    for (; o; o = o->skipNext()) {
-		CallEndpoint* c = static_cast<CallEndpoint*>(o->get());
-		if (all || c->id().startsWith(partWord))
-		    dest.append(c->id(),"\t");
-	    }
-	}
-    // Complete group names from partial command word
-    void completeGroups(String& dest, const String& partWord);
-    // Complete line names from partial command word
-    void completeLines(String& dest, const String& partWord);
-    // Remove a group from list
-    void removeGroup(ModuleGroup* group);
-    // Find a group or recorder by its name
-    // Set useFxo to true to find a recorder by its fxo's name
-    ModuleGroup* findGroup(const char* name, bool useFxo);
-private:
-    bool m_init;                         // Init flag
-    String m_recPrefix;                  // Prefix used for recorders
-    unsigned int m_recId;                // Next recorder id
-    ObjList m_groups;                    // Analog line groups
-    ObjList m_recorders;                 // Recorders created by monitor groups
-    String m_statusCmd;                  // Prefix for status commands
-};
-
-// Get events from a group. Check timers for lines
-class AnalogWorkerThread : public Thread
-{
-public:
-    AnalogWorkerThread(ModuleGroup* group);
-    virtual ~AnalogWorkerThread();
     virtual void run();
 private:
-    ModuleGroup* m_client;               // The module's group client
-    String m_groupName;                  // Group's name (saved to be printed in destructor)
+    SigLink* m_link;
+    u_int64_t m_timeout;
 };
 
-// engine.start handler (start detectors on lines expectind data before ring)
-class EngineStartHandler : public MessageHandler
-{
-public:
-    inline EngineStartHandler()
-	: MessageHandler("engine.start",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
-// chan.notify handler (notify lines on detector events)
-class ChanNotifyHandler : public MessageHandler
-{
-public:
-    inline ChanNotifyHandler()
-	: MessageHandler("chan.notify",100)
-	{}
-    virtual bool received(Message& msg);
-};
-
-
-/**
- * Module data and functions
- */
-static AnalogDriver plugin;
+static SigDriver plugin;
 static Configuration s_cfg;
-static bool s_engineStarted = false;               // Received engine.start message
-static const char* s_lineSectPrefix = "line ";     // Prefix for line sections in config
-static const char* s_unk = "unknown";              // Used to set caller
-// Status detail formats
-static const char* s_lineStatusDetail = "format=State|UsedBy";
-static const char* s_groupStatusDetail = "format=Type|Lines";
-static const char* s_recStatusDetail = "format=Status|Address|Peer";
 
-
-// Decode a line address into group name and circuit code
-// Set first to decode group name until first '/'
-// Return:
-//   -1 if src is the name of the group
-//   -2 if src contains invalid circuit code
-//   Otherwise: The integer part of the circuit code
-inline int decodeAddr(const String& src, String& group, bool first)
+inline void applyDebugLevel(DebugEnabler* dbg, int level)
 {
-    int pos = first ? src.find("/") : src.rfind('/');
-    if (pos == -1) {
-	group = src;
-	return -1;
-    }
-    group = src.substr(0,pos);
-    return src.substr(pos+1).toInteger(-2);
+    if (!dbg)
+	return;
+    dbg->debugEnabled(level);
+    if (level)
+	dbg->debugLevel(level);
 }
-
-// Get FXS/FXO type string
-inline const char* callertype(bool fxs)
-{
-    return fxs ? "fxs" : "fxo";
-}
-
 
 /**
- * ModuleLine
+ * SigChannel
  */
-ModuleLine::ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params)
-    : AnalogLine(grp,cic,params),
-    m_callSetupDetector(0),
-    m_callSetupTimer(callSetupTimeout())
+// Construct an incoming channel
+SigChannel::SigChannel(SignallingEvent* event)
+    : Channel(&plugin,0,false),
+    m_callMutex(true),
+    m_call(event->call()),
+    m_link(0),
+    m_hungup(false),
+    m_inband(false)
 {
-    if (type() == AnalogLine::FXO && callSetup() == AnalogLine::Before && s_engineStarted)
-	setCallSetupDetector();
+    if (!(m_call && m_call->ref())) {
+	Debug(this,DebugCall,"No signalling call for this incoming call");
+	m_call = 0;
+	return;
+    }
+    SignallingMessage* msg = event->message();
+    m_caller = msg ? msg->params().getValue("caller") : 0;
+    m_called = msg ? msg->params().getValue("called") : 0;
+    m_call->userdata(this);
+    m_link = plugin.findLink(m_call->controller());
+    if (m_link)
+	m_inband = m_link->inband();
+    // Startup
+    setState(0);
+    SignallingCircuit* cic = getCircuit();
+    if (m_link && cic)
+	m_address << m_link->name() << "/" << cic->code();
+    Message* m = message("chan.startup");
+    m->setParam("direction",status());
+    m->addParam("caller",m_caller);
+    m->addParam("called",m_called);
+    m->copyParam(msg->params(),"callername");
+    // TODO: Add call control parameter ?
+    Engine::enqueue(m);
+    // Route the call
+    m = message("call.preroute",false,true);
+    if (msg) {
+	m->addParam("caller",m_caller);
+	m->addParam("called",m_called);
+	m->copyParam(msg->params(),"callername");
+	m->copyParam(msg->params(),"format");
+	m->copyParam(msg->params(),"formats");
+	m->copyParam(msg->params(),"callernumtype");
+	m->copyParam(msg->params(),"callernumplan");
+	m->copyParam(msg->params(),"callerpres");
+	m->copyParam(msg->params(),"callerscreening");
+	m->copyParam(msg->params(),"callednumtype");
+	m->copyParam(msg->params(),"callednumplan");
+    }
+    // TODO: Add call control parameter ?
+    if (!startRouter(m))
+	hangup("temporary-failure");
 }
 
-inline ModuleGroup* ModuleLine::moduleGroup()
+// Construct an outgoing channel
+SigChannel::SigChannel(Message& msg, const char* caller, const char* called, SigLink* link)
+    : Channel(&plugin,0,true),
+    m_callMutex(true),
+    m_caller(caller),
+    m_called(called),
+    m_call(0),
+    m_link(link),
+    m_hungup(false),
+    m_inband(false)
 {
-    return static_cast<ModuleGroup*>(group());
-}
-
-// Send call setup data through the FXS line
-void ModuleLine::sendCallSetup()
-{
-    if (type() != AnalogLine::FXS)
+    // Startup
+    setState(0);
+    if (!(m_link && m_link->controller())) {
+	msg.setParam("error","noconn");
+	m_hungup = true;
 	return;
-    Lock lock(this);
-    if (callSetup() == AnalogLine::NoCallSetup)
-	return;
-
-    DataConsumer* cons = 0;
-    if (circuit())
-	cons = static_cast<DataConsumer*>(circuit()->getObject("DataConsumer"));
-    Message msg("chan.attach");
-    msg.userData(cons);
-    msg.addParam("source","analogdetect/callsetup");
-    String tmp;
-    tmp << plugin.prefix() << address();
-    msg.addParam("notify",tmp);
-    copyCall(msg);
-
-    if (Engine::dispatch(msg))
-	return;
-    Debug(group(),DebugNote,"%s: failed to send call setup reason='%s' [%p]",
-	address(),msg.getValue("reason"),this);
-}
-
-// Set the call setup detector
-void ModuleLine::setCallSetupDetector()
-{
-    removeCallSetupDetector();
-    m_callerName = "";
-
-    Lock lock(this);
-    if (callSetup() == AnalogLine::NoCallSetup)
-	return;
-
-    // Dispatch message
-    DataSource* src = 0;
-    if (circuit())
-	src = static_cast<DataSource*>(circuit()->getObject("DataSource"));
-    Message msg("chan.attach");
-    msg.userData(src);
-    msg.addParam("consumer","analogdetect/callsetup");
-    String tmp;
-    tmp << plugin.prefix() << address();
-    msg.addParam("notify",tmp);
-
-    const char* error = 0;
-    while (true) {
-	if (!Engine::dispatch(msg)) {
-	    error = msg.getValue("reason");
-	    if (!error)
-		error = "chan.attach failed";
-	    break;
+    }
+    // Data
+    m_inband = link->inband();
+    // Make the call
+    SignallingMessage* sigMsg = new SignallingMessage;
+    sigMsg->params().addParam("caller",caller);
+    sigMsg->params().addParam("called",called);
+    sigMsg->params().addParam("callername",msg.getValue("callername"));
+    sigMsg->params().copyParam(msg,"format");
+    sigMsg->params().copyParam(msg,"callernumtype");
+    sigMsg->params().copyParam(msg,"callernumplan");
+    sigMsg->params().copyParam(msg,"callerpres");
+    sigMsg->params().copyParam(msg,"callerscreening");
+    sigMsg->params().copyParam(msg,"callednumtype");
+    sigMsg->params().copyParam(msg,"callednumplan");
+    sigMsg->params().copyParam(msg,"calledpointcode");
+    m_call = link->controller()->call(sigMsg,m_reason);
+    if (m_call) {
+	m_call->userdata(this);
+	SignallingCircuit* cic = getCircuit();
+	if (cic) {
+	    m_address << m_link->name() << "/" << cic->code();
+	    // Set echo cancel for Zaptel circuits
+	    if (cic->getObject("ZapCircuit") && msg.getBoolValue("cancelecho")) {
+		String value = 1;
+		cic->setParam("echotaps",value);
+	    }
 	}
-	DataConsumer* cons = 0;
-	if (msg.userData())
-	    cons = static_cast<DataConsumer*>(msg.userData()->getObject("DataConsumer"));
-	if (cons && cons->ref())
-	    m_callSetupDetector = cons;
-	else
-	    error = "chan.attach returned without consumer";
-	break;
+	setMaxcall(msg);
     }
-
-    if (!error)
-	DDebug(group(),DebugAll,"%s: attached detector (%p) [%p]",
-	    address(),m_callSetupDetector,this);
     else
-	Debug(group(),DebugNote,"%s: failed to attach detector error='%s' [%p]",
-	    address(),error,this);
+	msg.setParam("error",m_reason);
+    Message* m = message("chan.startup",msg);
+    m->setParam("direction",status());
+    m_targetid = msg.getValue("id");
+    m->setParam("caller",caller);
+    m->setParam("called",called);
+    m->setParam("billid",msg.getValue("billid"));
+    // TODO: Add call control parameter ?
+    Engine::enqueue(m);
 }
 
-// Remove the call setup detector from FXO line
-void ModuleLine::removeCallSetupDetector()
+SigChannel::~SigChannel()
 {
-    Lock lock(this);
-    if (!m_callSetupDetector)
+    hangup();
+    setState("destroyed",true,true);
+}
+
+void SigChannel::handleEvent(SignallingEvent* event)
+{
+    if (!event)
 	return;
-
-    m_callSetupTimer.stop();
-    DataSource* src = m_callSetupDetector->getConnSource();
-    if (src)
-	src->detach(m_callSetupDetector);
-    DDebug(group(),DebugAll,"%s: removed detector (%p) [%p]",
-	address(),m_callSetupDetector,this);
-    TelEngine::destruct(m_callSetupDetector);
+    XDebug(this,DebugAll,"Got event (%p,'%s') [%p]",event,event->name(),this);
+    switch (event->type()) {
+	case SignallingEvent::Info:      evInfo(event);     break;
+	case SignallingEvent::Progress:  evProgress(event); break;
+	case SignallingEvent::Accept:    evAccept(event);   break;
+	case SignallingEvent::Answer:    evAnswer(event);   break;
+	case SignallingEvent::Release:   evRelease(event);  break;
+	case SignallingEvent::Ringing:   evRinging(event);  break;
+	default:
+	    DDebug(this,DebugStub,"No handler for event '%s' [%p]",
+		event->name(),this);
+    }
 }
 
-// Process notifications from detector
-void ModuleLine::processNotify(Message& msg)
+bool SigChannel::msgProgress(Message& msg)
 {
-    String operation = msg.getValue("operation");
+    Lock lock(m_callMutex);
+    setState("progressing");
+    if (!m_call)
+	return true;
+    bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
+    const char* format = msg.getValue("format");
+    SignallingMessage* sm = 0;
+    if (media && updateConsumer(format,false)) {
+	sm = new SignallingMessage;
+	sm->params().addParam("media",String::boolText(true));
+	if (format)
+	    sm->params().addParam("format",format);
+    }
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
+    if (sm)
+	sm->deref();
+    m_call->sendEvent(event);
+    return true;
+}
 
-    Lock lock(this);
+bool SigChannel::msgRinging(Message& msg)
+{
+    Lock lock(m_callMutex);
+    setState("ringing");
+    if (!m_call)
+	return true;
+    bool media = msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource());
+    const char* format = msg.getValue("format");
+    SignallingMessage* sm = 0;
+    if (media && updateConsumer(format,false) && format) {
+	sm = new SignallingMessage;
+	sm->params().addParam("format",format);
+    }
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
+    if (sm)
+	sm->deref();
+    m_call->sendEvent(event);
+    return true;
+}
 
-    if (operation == "setup") {
-	DDebug(group(),DebugAll,
-	    "%s: received setup info detector=%p caller=%s callername=%s [%p]",
-	    address(),m_callSetupDetector,
-	    msg.getValue("caller"),msg.getValue("callername"),this);
-	if (!m_callSetupDetector)
-	    return;
-	m_caller = msg.getValue("caller");
-	m_callerName = msg.getValue("callername");
+bool SigChannel::msgAnswered(Message& msg)
+{
+    Lock lock(m_callMutex);
+    setState("answered");
+    if (!m_call)
+	return true;
+    updateSource(0,false);
+    // Start echo training for Zaptel circuits
+    SignallingCircuit* cic = getCircuit();
+    if (cic && cic->getObject("ZapCircuit")) {
+	String value;
+	cic->setParam("echotrain",value);
     }
-    else if (operation == "terminate") {
-	DDebug(group(),DebugAll,"%s: detector (%p) terminated reason=%s [%p]",
-	    address(),m_callSetupDetector,msg.getValue("reason"),this);
-	removeCallSetupDetector();
+    const char* format = msg.getValue("format");
+    SignallingMessage* sm = 0;
+    if (updateConsumer(format,false) && format) {
+	sm = new SignallingMessage;
+	sm->params().addParam("format",format);
     }
-    else if (operation == "start") {
-	DDebug(group(),DebugAll,"%s: detector (%p) started [%p]",
-	    address(),m_callSetupDetector,this);
-	if (callSetup() == AnalogLine::Before && m_callSetupDetector)
-	    m_callSetupTimer.start();
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
+    if (sm)
+	sm->deref();
+    m_call->sendEvent(event);
+    return true;
+}
+
+bool SigChannel::msgTone(Message& msg, const char* tone)
+{
+    if (!(tone && *tone))
+	return true;
+    Lock lock(m_callMutex);
+    DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
+    // Try to send: through the circuit, in band or through the signalling protocol
+    SignallingCircuit* cic = getCircuit();
+    if (cic) {
+	NamedList params("");
+	params.addParam("tone",tone);
+	if (cic->sendEvent(SignallingCircuitEvent::Dtmf,&params))
+	    return true;
     }
+    if (m_inband && dtmfInband(tone))
+	return true;
+    if (!m_call)
+	return true;
+    SignallingMessage* sm = new SignallingMessage;
+    sm->params().addParam("tone",tone);
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
+    sm->deref();
+    m_call->sendEvent(event);
+    return true;
+}
+
+bool SigChannel::msgText(Message& msg, const char* text)
+{
+    Lock lock(m_callMutex);
+    DDebug(this,DebugCall,"Text. '%s' %s[%p]",text,(m_call ? "" : ". No call "),this);
+    if (!m_call)
+	return true;
+    SignallingMessage* sm = new SignallingMessage;
+    sm->params().addParam("text",text);
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Message,sm,m_call);
+    sm->deref();
+    m_call->sendEvent(event);
+    return true;
+}
+
+bool SigChannel::msgDrop(Message& msg, const char* reason)
+{
+    hangup(reason ? reason : "dropped");
+    return true;
+}
+
+bool SigChannel::msgTransfer(Message& msg)
+{
+    Lock lock(m_callMutex);
+    DDebug(this,DebugCall,"msgTransfer %s[%p]",(m_call ? "" : ". No call "),this);
+    if (!m_call)
+	return true;
+    SignallingEvent* event = new SignallingEvent(SignallingEvent::Transfer,0,m_call);
+    return m_call->sendEvent(event);
+}
+
+bool SigChannel::callPrerouted(Message& msg, bool handled)
+{
+    Lock lock(m_callMutex);
+    setState("prerouted",false);
+    return m_call != 0;
+}
+
+bool SigChannel::callRouted(Message& msg)
+{
+    Lock lock(m_callMutex);
+    setState("routed",false);
+    return m_call != 0;
+}
+
+void SigChannel::callAccept(Message& msg)
+{
+    Lock lock(m_callMutex);
+    if (m_call) {
+	const char* format = msg.getValue("format");
+	updateConsumer(format,false);
+	SignallingMessage* sm = 0;
+	if (format) {
+	    sm = new SignallingMessage;
+	    sm->params().addParam("format",format);
+	}
+	SignallingEvent* event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
+	if (sm)
+	    sm->deref();
+	m_call->sendEvent(event);
+    }
+    setState("accepted",false);
+    Channel::callAccept(msg);
+}
+
+void SigChannel::callRejected(const char* error, const char* reason, const Message* msg)
+{
+    if (m_reason.null())
+	m_reason = error ? error : reason;
+    setState("rejected",false,true);
+    hangup();
+}
+
+void SigChannel::disconnected(bool final, const char* reason)
+{
+    if (m_reason.null())
+	m_reason = reason;
+    setState("disconnected",false,true);
+    hangup();
+    Channel::disconnected(final,m_reason);
+}
+
+void SigChannel::hangup(const char* reason)
+{
+    Lock lock(m_callMutex);
+    if (m_hungup)
+	return;
+    setSource();
+    setConsumer();
+    m_hungup = true;
+    if (m_reason.null())
+	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal");
+    setState("hangup",true,true);
+    if (m_call) {
+	m_call->userdata(0);
+	SignallingMessage* msg = new SignallingMessage;
+	msg->params().addParam("reason",m_reason);
+	SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,m_call);
+	msg->deref();
+	m_call->sendEvent(event);
+	m_call->deref();
+	m_call = 0;
+    }
+    lock.drop();
+    Message* m = message("chan.hangup",true);
+    m->setParam("status",status());
+    m->setParam("reason",m_reason);
+    Engine::enqueue(m);
+}
+
+void SigChannel::statusParams(String& str)
+{
+    Channel::statusParams(str);
+}
+
+void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
+{
+    if (updateStatus && state)
+	status(state);
+#ifdef DEBUG
+    if (!debugAt(DebugCall))
+	return;
+    if (!state) {
+	Debug(this,DebugCall,"%s call from '%s' to '%s' (Link: %s) [%p]",
+	    isOutgoing()?"Outgoing":"Incoming",m_caller.safe(),m_called.safe(),
+	    m_link ? m_link->name().c_str() : "no link",this);
+	return;
+    }
+    String show;
+    show << "Call " << state;
+    if (showReason)
+	show << ". Reason: '" << m_reason << "'";
+    if (!m_call)
+        show << ". No signalling call ";
+    if (updateStatus)
+	Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
     else
-	DDebug(group(),DebugStub,
-	    "%s: received notification with operation=%s [%p]",
-	    address(),operation.c_str(),this);
+	DDebug(this,DebugCall,"%s [%p]",show.c_str(),this);
+#endif
 }
 
-// Fill a string with line status parameters
-void ModuleLine::statusParams(String& str)
+void SigChannel::evInfo(SignallingEvent* event)
 {
-    str.append("module=",";") << plugin.name();
-    str << ",address=" << address();
-    str << ",type=" << lookup(type(),s_typeName);
-    str << ",state=" << lookup(state(),s_stateName);
-    str  << ",usedby=";
-    if (userdata())
-	str << (static_cast<CallEndpoint*>(userdata()))->id();
-    if (type() == AnalogLine::FXO) {
-	str << ",answer-on-polarity=" << answerOnPolarity();
-	str << ",hangup-on-polarity=" << hangupOnPolarity();
+    SignallingMessage* msg = event->message();
+    if (!msg)
+	return;
+    // Check DTMF
+    String tmp = msg->params().getValue("tone");
+    if (!tmp.null()) {
+	bool inband = msg->params().getBoolValue("inband");
+	DDebug(this,DebugCall,"Event: '%s'. DTMF: '%s'. In band: %s [%p]",
+	    event->name(),tmp.c_str(),String::boolText(inband),this);
+	Message* m = message("chan.dtmf");
+	m->addParam("text",tmp);
+	Engine::enqueue(m);
     }
-    else
-	str << ",answer-on-polarity=not-defined,hangup-on-polarity=not-defined";
-    str << ",callsetup=" << lookup(callSetup(),AnalogLine::s_csName);
-    // Lines with peer are used in recorders (don't send DTMFs)
-    if (!getPeer())
-	str << ",dtmf=" << (outbandDtmf() ? "outband" : "inband");
-    else
-	str << ",dtmf=not-defined";
-
-    // Fill peer status
-    bool master = (type() == AnalogLine::FXS && getPeer());
-    if (master)
-	(static_cast<ModuleLine*>(getPeer()))->statusParams(str);
 }
 
-// Fill a string with line status detail parameters
-void ModuleLine::statusDetail(String& str)
+void SigChannel::evProgress(SignallingEvent* event)
 {
-    // format=State|UsedBy
-    Lock lock(this);
-    str.append(address(),";") << "=";
-    str << lookup(state(),AnalogLine::s_stateName) << "|";
-    if (userdata())
-	str << (static_cast<CallEndpoint*>(userdata()))->id();
+    setState("progressing");
+    Engine::enqueue(message("call.progress"));
 }
 
-// Check detector timeout. Calls line's timeout check method
-void ModuleLine::checkTimeouts(const Time& when)
+void SigChannel::evRelease(SignallingEvent* event)
 {
-    if (m_callSetupTimer.timeout(when.msec())) {
-	m_callSetupTimer.stop();
-	DDebug(group(),DebugNote,"%s: call setup timed out [%p]",address(),this);
-	// Reset detector
-	setCallSetupDetector();
+    const char* reason = 0;
+    if (event->message())
+	reason = event->message()->params().getValue("reason");
+    hangup(reason);
+}
+
+void SigChannel::evAccept(SignallingEvent* event)
+{
+    setState("accepted",false,false);
+    const char* format = 0;
+    bool cicChange = false;
+    if (event->message()) {
+	format = event->message()->params().getValue("format");
+	cicChange = event->message()->params().getBoolValue("circuit-change",false);
     }
-    AnalogLine::checkTimeouts(when);
+    updateSource(format,cicChange);
+    updateConsumer(0,cicChange);
 }
 
+void SigChannel::evAnswer(SignallingEvent* event)
+{
+    setState("answered");
+    const char* format = 0;
+    bool cicChange = false;
+    if (event->message()) {
+	format = event->message()->params().getValue("format");
+	cicChange = event->message()->params().getBoolValue("circuit-change",false);
+    }
+    updateSource(format,cicChange);
+    updateConsumer(0,cicChange);
+    Engine::enqueue(message("call.answered",false,true));
+}
+
+void SigChannel::evRinging(SignallingEvent* event)
+{
+    setState("ringing");
+    const char* format = 0;
+    bool cicChange = false;
+    if (event->message()) {
+	format = event->message()->params().getValue("format");
+	cicChange = event->message()->params().getBoolValue("circuit-change",false);
+    }
+    updateSource(format,cicChange);
+    Engine::enqueue(message("call.ringing",false,true));
+}
+
+bool SigChannel::updateConsumer(const char* format, bool force)
+{
+    DataConsumer* consumer = getConsumer();
+    SignallingCircuit* cic = getCircuit();
+    if (!cic)
+	return false;
+    if (consumer && !cic->updateFormat(format,-1) && !force)
+	return true;
+    // Set consumer
+    setConsumer();
+    setConsumer(static_cast<DataConsumer*>(cic->getObject("DataConsumer")));
+    consumer = getConsumer();
+    if (consumer) {
+	DDebug(this,DebugAll,"Data consumer set to (%p): '%s' [%p]",
+	    consumer,consumer->getFormat().c_str(),this);
+	return true;
+    }
+    Debug(this,DebugNote,"Failed to set data consumer [%p]",this);
+    return false;
+}
+
+bool SigChannel::updateSource(const char* format, bool force)
+{
+    DataSource* source = getSource();
+    SignallingCircuit* cic = getCircuit();
+    if (!cic)
+	return false;
+    if (source && !cic->updateFormat(format,1) && !force)
+	return true;
+    // Set source
+    setSource();
+    setSource(static_cast<DataSource*>(cic->getObject("DataSource")));
+    source = getSource();
+    if (source) {
+	DDebug(this,DebugAll,"Data source set to (%p): '%s' [%p]",
+	    source,source->getFormat().c_str(),this);
+	return true;
+    }
+    Debug(this,DebugNote,"Failed to set data source [%p]",this);
+    return false;
+}
 
 /**
- * ModuleGroup
+ * SigDriver
  */
-// Line parameters that can be overridden
-const char* ModuleGroup::lineParams[] = {"echocancel","dtmfinband","answer-on-polarity",
-    "hangup-on-polarity","ring-timeout","callsetup","alarm-timeout","delaydial",0};
-
-// Remove all channels associated with this group and stop worker thread
-void ModuleGroup::destruct()
+SigDriver::SigDriver()
+    : Driver("sig","fixchans"),
+    m_engine(0),
+    m_router(0),
+    m_linksMutex(true)
 {
-    clearEndpoints(Engine::exiting()?"shutdown":"out-of-service");
-    if (m_thread) {
-	XDebug(this,DebugInfo,"Terminating worker thread [%p]",this);
-	m_thread->cancel(false);
-	while (m_thread)
-	    Thread::yield(true);
-	Debug(this,DebugInfo,"Worker thread terminated [%p]",this);
-    }
-    AnalogLineGroup::destruct();
+    Output("Loaded module Signalling Channel");
 }
 
-// Process an event generated by a line
-void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
+SigDriver::~SigDriver()
 {
-    Lock lock(&plugin);
-    AnalogChannel* ch = static_cast<AnalogChannel*>(line.userdata());
-    DDebug(this,DebugInfo,"Processing event %u '%s' line=%s channel=%s",
-	event.type(),event.c_str(),line.address(),ch?ch->id().c_str():"");
-    if (ch) {
-	switch (event.type()) {
-	    case SignallingCircuitEvent::Dtmf:
-		ch->evDigits(event.getValue("tone"),true);
-		break;
-	    case SignallingCircuitEvent::PulseDigit:
-		ch->evDigits(event.getValue("pulse"),false);
-		break;
-	    case SignallingCircuitEvent::OnHook:
-		ch->hangup(false);
-		plugin.terminateChan(ch);
-		break;
-	    case SignallingCircuitEvent::OffHook:
-		ch->evOffHook();
-		break;
-	    case SignallingCircuitEvent::RingBegin:
-	    case SignallingCircuitEvent::RingerOn:
-		ch->evRing(true);
-		break;
-	    case SignallingCircuitEvent::RingEnd:
-	    case SignallingCircuitEvent::RingerOff:
-		ch->evRing(false);
-		break;
-	    case SignallingCircuitEvent::LineStarted:
-		ch->evLineStarted();
-		break;
-	    case SignallingCircuitEvent::DialComplete:
-		ch->evDialComplete();
-		break;
-	    case SignallingCircuitEvent::Polarity:
-		ch->evPolarity();
-		break;
-	    case SignallingCircuitEvent::Flash:
-		ch->evDigits("F",true);
-		break;
-	    case SignallingCircuitEvent::PulseStart:
-		DDebug(ch,DebugAll,"Pulse dialing started [%p]",ch);
-		break;
-	    case SignallingCircuitEvent::Alarm:
-	    case SignallingCircuitEvent::NoAlarm:
-		ch->evAlarm(event.type() == SignallingCircuitEvent::Alarm,event.getValue("alarms"));
-		break;
-	    default:
-		Debug(this,DebugStub,"handleEvent(%u,'%s') not implemented [%p]",
-		    event.type(),event.c_str(),this);
-	}
+    Output("Unloading module Signalling Channel");
+    clearLink();
+    if (m_router) {
+	if (m_engine)
+	    m_engine->remove(m_router);
+	TelEngine::destruct(m_router);
     }
-    else
-	if ((line.type() == AnalogLine::FXS &&
-		event.type() == SignallingCircuitEvent::OffHook) ||
-	    (line.type() == AnalogLine::FXO &&
-		event.type() == SignallingCircuitEvent::RingBegin)) {
-	    if (!line.ref()) {
-		Debug(this,DebugWarn,"Incoming call on line '%s' failed [%p]",
-		    line.address(),this);
-		return;
-	    }
-	    ch = new AnalogChannel(&line,0);
-	    if (!ch->line())
-		plugin.terminateChan(ch);
-	}
-	else
-	    DDebug(this,DebugNote,
-		"Event (%p,%u,%s) from line (%p,%s) without channel [%p]",
-		&event,event.type(),event.c_str(),&line,line.address(),this);
+    if (m_engine)
+	delete m_engine;
 }
 
-// Process an event generated by a recorder
-void ModuleGroup::handleRecEvent(ModuleLine& line, SignallingCircuitEvent& event)
+bool SigDriver::msgExecute(Message& msg, String& dest)
 {
-    Lock lock(&plugin);
-    AnalogCallRec* rec = static_cast<AnalogCallRec*>(line.userdata());
-    DDebug(this,DebugInfo,"Processing event %u '%s' line=%s recorder=%s",
-	event.type(),event.c_str(),line.address(),rec?rec->id().c_str():"");
-    if (rec) {
-	// FXS event: our FXO receiver is watching the FXS end of the monitored line
-	bool fxsEvent = (line.type() == AnalogLine::FXO);
-	bool terminate = false;
-	switch (event.type()) {
-	    case SignallingCircuitEvent::Dtmf:
-		rec->evDigits(fxsEvent,event.getValue("tone"),true);
-		break;
-	    case SignallingCircuitEvent::PulseDigit:
-		rec->evDigits(fxsEvent,event.getValue("pulse"),false);
-		break;
-	    case SignallingCircuitEvent::OnHook:
-		terminate = true;
-		break;
-	    case SignallingCircuitEvent::OffHook:
-		terminate = !rec->answered();
-		return;
-	    case SignallingCircuitEvent::RingBegin:
-	    case SignallingCircuitEvent::RingerOn:
-		terminate = !rec->ringing(fxsEvent);
-		break;
-	    case SignallingCircuitEvent::Polarity:
-		terminate = !rec->evPolarity(fxsEvent);
-		break;
-	    case SignallingCircuitEvent::Flash:
-		rec->evDigits(fxsEvent,"F",true);
-		break;
-	    case SignallingCircuitEvent::Alarm:
-	    case SignallingCircuitEvent::NoAlarm:
-		terminate = !rec->evAlarm(fxsEvent,event.type() == SignallingCircuitEvent::Alarm,
-		    event.getValue("alarms"));
-		break;
-	    case SignallingCircuitEvent::RingEnd:
-	    case SignallingCircuitEvent::RingerOff:
-	    case SignallingCircuitEvent::PulseStart:
-	    case SignallingCircuitEvent::LineStarted:
-	    case SignallingCircuitEvent::DialComplete:
-		DDebug(rec,DebugAll,"Ignoring '%s' event [%p]",event.c_str(),rec);
-		break;
-	    default:
-		Debug(this,DebugStub,"handleRecEvent(%u,'%s') not implemented [%p]",
-		    event.type(),event.c_str(),this);
-	}
-	if (terminate) {
-	    rec->hangup();
-	    plugin.terminateChan(rec);
-	}
-	return;
+    Channel* peer = static_cast<Channel*>(msg.userData());
+    if (!peer) {
+	Debug(this,DebugNote,"Signalling call failed. No data channel");
+	msg.setParam("error","failure");
+	return false;
     }
-
-    // Check for new call
-    bool fxsCaller = (line.type() == AnalogLine::FXO && event.type() == SignallingCircuitEvent::RingBegin);
-    bool fxoCaller = (line.type() == AnalogLine::FXS && event.type() == SignallingCircuitEvent::OffHook);
-
-    if (!(fxsCaller || fxoCaller)) {
-	DDebug(this,DebugNote,
-	    "Event (%p,%u,%s) from line (%p,%s) without recorder [%p]",
-	    &event,event.type(),event.c_str(),&line,line.address(),this);
-	return;
+    // Identify the call controller before create channel
+    const char* tmp = msg.getValue("link");
+    SigLink* link = findLink(tmp,true);
+    if (!link) {
+	Debug(this,DebugNote,
+	    "Signalling call failed. No call controller named '%s'",tmp);
+	msg.setParam("error","noroute");
+	return false;
     }
-
-    String id;
-    id << plugin.recPrefix() << plugin.nextRecId();
-    ModuleLine* fxs = (line.type() == AnalogLine::FXS ? &line : static_cast<ModuleLine*>(line.getPeer()));
-    rec = new AnalogCallRec(fxs,fxsCaller,id);
-    if (!(rec->line() && rec->fxo())) {
-	plugin.terminateChan(rec,rec->reason());
-	return;
+    // Create channel
+    SigChannel* sigCh = new SigChannel(msg,msg.getValue("caller"),dest,link);
+    bool ok = sigCh->call();
+    if (ok) {
+	if (sigCh->connect(peer,msg.getValue("reason"))) {
+	    msg.setParam("peerid",sigCh->id());
+	    msg.setParam("targetid",sigCh->id());
+        }
     }
-    if (rec->startOnSecondRing()) {
-	DDebug(rec,DebugAll,"Delaying start until next ring [%p]",rec);
-	return;
+    else {
+	if (!msg.getValue("error"))
+	    msg.setParam("error","failure");
+	Debug(this,DebugNote,"Signalling call failed with reason '%s'",msg.getValue("error"));
     }
-    bool ok = true;
-    if (fxsCaller || rec->fxo()->answerOnPolarity())
-	ok = rec->startRecording();
-    else
-	ok = rec->answered();
-    if (!ok) {
-	rec->hangup();
-	plugin.terminateChan(rec,rec->reason());
-    }
-}
-
-// Apply debug level. Call create and create worker thread on first init
-// Re(load) lines and calls specific group reload
-bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
-	String& error)
-{
-    if (!m_init)
-	debugChain(&plugin);
-
-    int level = params.getIntValue("debuglevel",m_init ? debugLevel() : plugin.debugLevel());
-    if (level >= 0) {
-	debugEnabled(level);
-	debugLevel(level);
-    }
-
-    Lock2 lock(this,fxoRec());
-    bool ok = true;
-    if (!m_init) {
-	m_init = true;
-	if (!fxoRec())
-	    ok = create(params,defaults,error);
-	else
-	    ok = createRecorder(params,defaults,error);
-	if (!ok)
-	    return false;
-	m_thread = new AnalogWorkerThread(this);
-	if (!m_thread->startup()) {
-	    error = "Failed to start worker thread";
-	    return false;
-	}
-    }
-
-    // (Re)load analog lines
-    bool all = params.getBoolValue("useallcircuits",true);
-
-    for (ObjList* o = circuits().skipNull(); o; o = o->skipNext()) {
-	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-
-	// Setup line parameter list
-	NamedList dummy("");
-	String sectName = s_lineSectPrefix + toString() + "/" + String(cic->code());
-	NamedList* lineParams = s_cfg.getSection(sectName);
-	if (!lineParams)
-	    lineParams = &dummy;
-	bool remove = !lineParams->getBoolValue("enable",true);
-
-	ModuleLine* line = static_cast<ModuleLine*>(findLine(cic->code()));
-
-	// Remove existing line if required
-	if (remove) {
-	    if (line) {
-		XDebug(this,DebugAll,"Removing line=%s [%p]",line->address(),this);
-		plugin.lineUnavailable(line);
-		TelEngine::destruct(line);
-	    }
-	    continue;
-	}
-
-	// Reload line if already created. Notify plugin if service state changed
-	completeLineParams(*lineParams,params,defaults);
-	if (line) {
-	    bool inService = (line->state() != AnalogLine::OutOfService);
-	    reloadLine(line,*lineParams);
-	    if (inService != (line->state() != AnalogLine::OutOfService))
-		plugin.lineUnavailable(line);
-	    continue;
-	}
-
-	// Don't create the line if useallcircuits is false and no section in config
-	if (!all && lineParams == &dummy)
-	    continue;
-
-	DDebug(this,DebugAll,"Creating line for cic=%u [%p]",cic->code(),this);
-	// Create a new line (create its peer if this is a monitor)
-	line = new ModuleLine(this,cic->code(),*lineParams);
-	while (fxoRec() && line->type() != AnalogLine::Unknown) {
-	    SignallingCircuit* fxoCic = fxoRec()->find(cic->code());
-	    if (!fxoCic) {
-		Debug(this,DebugNote,"FXO circuit is missing for %s/%u [%p]",
-		    debugName(),cic->code(),this);
-		TelEngine::destruct(line);
-		break;
-	    }
-
-	    NamedList dummyFxo("");
-	    String fxoName = s_lineSectPrefix + fxoRec()->toString() + "/" + String(fxoCic->code());
-	    NamedList* fxoParams = s_cfg.getSection(fxoName);
-	    if (!fxoParams)
-		fxoParams = &dummyFxo;
-
-	    completeLineParams(*fxoParams,params,defaults);
-
-	    ModuleLine* fxoLine = new ModuleLine(fxoRec(),fxoCic->code(),*fxoParams);
-	    if (fxoLine->type() == AnalogLine::Unknown) {
-		TelEngine::destruct(fxoLine);
-		TelEngine::destruct(line);
-		break;
-	    }
-	    fxoRec()->appendLine(fxoLine);
-	    line->setPeer(fxoLine);
-	    break;
-	}
-
-	// Append line to group: constructor may fail
-	if (line && line->type() != AnalogLine::Unknown) {
-	    appendLine(line);
-	    // Disconnect the line if not expecting call setup
-	    if (line->callSetup() != AnalogLine::Before)
-		line->disconnect(true);
-	}
-	else {
-	    Debug(this,DebugNote,"Failed to create line %s/%u [%p]",
-		debugName(),cic->code(),this);
-	    TelEngine::destruct(line);
-	}
-    }
-
-    if (!fxoRec())
-	ok = reload(params,defaults,error);
-    else
-	ok = reloadRecorder(params,defaults,error);
+    sigCh->deref();
     return ok;
 }
 
-// Copy some data to a channel
-void ModuleGroup::copyData(AnalogChannel* chan)
+bool SigDriver::received(Message& msg, int id)
 {
-    if (!chan || fxoRec())
-	return;
-    chan->m_callEndedTarget = m_callEndedTarget;
-    chan->m_oooTarget = m_oooTarget;
-    chan->m_callEndedTimer.interval(m_callEndedPlayTime);
+    switch (id) {
+	case Masquerade: {
+	    String s = msg.getValue("id");
+	    if (s.startsWith(prefix()))
+		break;
+	    // Check for a link that would handle the message
+	    int found = s.find('/');
+	    if (found < 1)
+		break;
+	    SigLink* link = findLink(s.substr(0,found),false);
+	    if (link && link->masquerade(s,msg))
+		return false;
+	    }
+	    break;
+	case Drop: {
+	    String s = msg.getValue("id");
+	    if (s.startsWith(prefix()))
+		break;
+	    // Check for a link that would handle the message
+	    SigLink* link = findLink(s.substr(0,s.find('/')),false);
+	    return link && link->drop(s,msg);
+	    }
+	    break;
+	case Halt:
+	    clearLink();
+	    if (m_engine)
+		m_engine->stop();
+	    break;
+    }
+    return Driver::received(msg,id);
 }
 
-// Append/remove endpoints from list
-void ModuleGroup::setEndpoint(CallEndpoint* ep, bool add)
+void SigDriver::handleEvent(SignallingEvent* event)
 {
-    if (!ep)
+    if (!event)
 	return;
-    Lock lock(this);
-    if (add)
-	m_endpoints.append(ep);
+    // Check if we have a call and a message
+    if (!event->call()) {
+	switch (event->type()) {
+	    case SignallingEvent::Disable:
+		// Fall through if no call controller
+		if (event->controller())
+		    break;
+	    default:
+		DDebug(this,DebugGoOn,
+		    "Received event (%p,'%s') without call. Controller: (%p)",
+		    event,event->name(),event->controller());
+		return;
+	}
+	// Remove link
+	Lock lock(m_linksMutex);
+	SigLink* link = findLink(event->controller());
+	if (!link)
+	    return;
+	clearLink(link->name(),false,0);
+	return;
+    }
+    if (!event->message()) {
+	Debug(this,DebugGoOn,"Received event (%p,'%s') without message",event,event->name());
+	return;
+    }
+    // Ok. Send the message to the channel if we have one
+    SigChannel* ch = static_cast<SigChannel*>(event->call()->userdata());
+    if (ch) {
+	ch->handleEvent(event);
+	if (event->type() == SignallingEvent::Release)
+	    ch->disconnect();
+	return;
+    }
+    // No channel
+    if (event->type() == SignallingEvent::NewCall) {
+	ch = new SigChannel(event);
+	if (ch->hungup())
+	    ch->disconnect();
+    }
     else
-	m_endpoints.remove(ep,false);
+	XDebug(this,DebugNote,"Received event (%p,'%s') from call without user data",
+	    event,event->name());
 }
 
-// Find a recorder by its line
-AnalogCallRec* ModuleGroup::findRecorder(ModuleLine* line)
+// Find a link by name
+// If callCtrl is true, match only links with call controller
+SigLink* SigDriver::findLink(const char* name, bool callCtrl)
 {
-    if (!fxoRec())
+    if (!name)
 	return 0;
-    Lock lock(this);
-    for (ObjList* o = m_endpoints.skipNull(); o; o = o->skipNull()) {
-	AnalogCallRec* rec = static_cast<AnalogCallRec*>(o->get());
-	if (rec->line() == line)
-	    return rec;
+    Lock lock(m_linksMutex);
+    for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
+	SigLink* link = static_cast<SigLink*>(o->get());
+	if (link->name() == name) {
+	    if (callCtrl && !link->controller())
+		return 0;
+	    return link;
+	}
     }
     return 0;
 }
 
-// Fill a string with group status parameters
-void ModuleGroup::statusParams(String& str)
+// Find a link by call controller
+SigLink* SigDriver::findLink(const SignallingCallControl* ctrl)
 {
-    str.append("module=",";") << plugin.name();
-    str << ",name=" << toString();
-    str << ",type=" << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::s_typeName);
-    str << ",lines=" << lines().count();
-    str << "," << s_lineStatusDetail;
-    for (ObjList* o = lines().skipNull(); o; o = o->skipNext())
-	(static_cast<ModuleLine*>(o->get()))->statusDetail(str);
-}
-
-// Fill a string with group status detail parameters
-void ModuleGroup::statusDetail(String& str)
-{
-    // format=Type|Lines
-    Lock lock(this);
-    str.append(toString(),";") << "=";
-    str << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::s_typeName);
-    str << "|" << lines().count();
-}
-
-// Disconnect all group's endpoints
-void ModuleGroup::clearEndpoints(const char* reason)
-{
-    if (!reason)
-	reason = "shutdown";
-
-    DDebug(this,DebugAll,"Clearing endpoints with reason=%s [%p]",reason,this);
-    bool chans = !fxoRec();
-    lock();
-    ListIterator iter(m_endpoints);
-    for (;;) {
-	RefPointer<CallEndpoint> c = static_cast<CallEndpoint*>(iter.get());
-	unlock();
-	if (!c)
-	    break;
-	if (chans)
-	    plugin.terminateChan(static_cast<AnalogChannel*>((CallEndpoint*)c),reason);
-	else
-	    plugin.terminateChan(static_cast<AnalogCallRec*>((CallEndpoint*)c),reason);
-	c = 0;
-	lock();
+    if (!ctrl)
+	return 0;
+    Lock lock(m_linksMutex);
+    for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
+	SigLink* link = static_cast<SigLink*>(o->get());
+	if (link->controller() == ctrl)
+	    return link;
     }
+    return 0;
 }
 
-// Check timers for recorders owned by this group
-void ModuleGroup::checkTimers(Time& when)
+// Disconnect channels. If link is not 0, disconnect only channels belonging to that link
+void SigDriver::disconnectChannels(SigLink* link)
 {
-    bool chans = !fxoRec();
-    lock();
-    ListIterator iter(m_endpoints);
-    for (;;) {
-	RefPointer<CallEndpoint> c = static_cast<CallEndpoint*>(iter.get());
-	unlock();
-	if (!c)
-	    break;
-	if (chans) {
-	    AnalogChannel* ch = static_cast<AnalogChannel*>((CallEndpoint*)c);
-	    if (!ch->checkTimeouts(when))
-		plugin.terminateChan(ch,"timeout");
+    ListIterator iter(channels());
+    GenObject* o = 0;
+    if (link)
+	for (; (o = iter.get()); ) {
+	    SigChannel* c = static_cast<SigChannel*>(o);
+	    if (link == c->link())
+		c->disconnect();
 	}
-	else {
-	    AnalogCallRec* ch = static_cast<AnalogCallRec*>((CallEndpoint*)c);
-	    if (!ch->checkTimeouts(when))
-		plugin.terminateChan(ch,"timeout");
-	}
-	c = 0;
-	lock();
-    }
-}
-
-// Create FXS/FXO group data: called by initialize() on first init
-bool ModuleGroup::create(const NamedList& params, const NamedList& defaults,
-	String& error)
-{
-    String device = params.getValue("spans");
-    ObjList* voice = device.split(',',false);
-    if (voice && voice->count())
-	buildGroup(this,*voice,error);
     else
-	error << "Missing or invalid spans=" << device;
-    TelEngine::destruct(voice);
-    if (error)
+	for (; (o = iter.get()); ) {
+	    SigChannel* c = static_cast<SigChannel*>(o);
+	    c->disconnect();
+	}
+}
+
+// Append a link to the list. Duplicate names are not allowed
+bool SigDriver::appendLink(SigLink* link)
+{
+    if (!link || link->name().null())
 	return false;
-    return true;
-}
-
-// Reload FXS/FXO data: called by initialize() (not called on first init if create failed)
-bool ModuleGroup::reload(const NamedList& params, const NamedList& defaults,
-	String& error)
-{
-    // (Re)load tone targets
-    if (type() == AnalogLine::FXS) {
-	int tmp = params.getIntValue("call-ended-playtime",
-	    defaults.getIntValue("call-ended-playtime",5));
-	if (tmp < 0)
-	    tmp = 5;
-	m_callEndedPlayTime = 1000 * (unsigned int)tmp;
-	m_callEndedTarget = params.getValue("call-ended-target",
-	    defaults.getValue("call-ended-target"));
-	if (!m_callEndedTarget)
-	    m_callEndedTarget = "tone/busy";
-	m_oooTarget = params.getValue("outoforder-target",
-	    defaults.getValue("outoforder-target"));
-	if (!m_oooTarget)
-	    m_oooTarget = "tone/outoforder";
-	XDebug(this,DebugAll,"Targets: call-ended='%s' outoforder='%s' [%p]",
-	    m_callEndedTarget.c_str(),m_oooTarget.c_str(),this);
+    if (findLink(link->name(),false)) {
+	Debug(this,DebugWarn,"Can't append link (%p): '%s'. Duplicate name",
+	    link,link->name().c_str());
+	return false;
     }
+    Lock lock(m_linksMutex);
+    m_links.append(link);
+    DDebug(this,DebugAll,"Link (%p): '%s' added",link,link->name().c_str());
     return true;
 }
 
-// Create recorder group data: called by initialize() on first init
-bool ModuleGroup::createRecorder(const NamedList& params, const NamedList& defaults,
-	String& error)
+// Remove a link from list without deleting it
+void SigDriver::removeLink(SigLink* link)
 {
-    for (unsigned int i = 0; i < 2; i++) {
-	String device = params.getValue(callertype(i));
-	ObjList* voice = device.split(',',false);
-	if (voice && voice->count())
-	    if (i)
-		buildGroup(this,*voice,error);
-	    else
-		buildGroup(fxoRec(),*voice,error);
-	else
-	    error << "Missing or invalid " << callertype(i) << " spans=" << device;
-	TelEngine::destruct(voice);
-	if (error)
-	    return false;
+    if (!link)
+	return;
+    Lock lock(m_linksMutex);
+    m_links.remove(link,false);
+    DDebug(this,DebugAll,"Link (%p): '%s' removed",link,link->name().c_str());
+}
+
+// Delete the given link if found
+// Clear link list if name is 0
+// Clear all stacks without waiting for call termination if name is 0
+void SigDriver::clearLink(const char* name, bool waitCallEnd, unsigned int howLong)
+{
+    Lock lock(m_linksMutex);
+    if (!name) {
+	DDebug(this,DebugAll,"Clearing all links");
+	disconnectChannels();
+	ObjList* obj = m_links.skipNull();
+	for (; obj; obj = obj->skipNext()) {
+	    SigLink* link = static_cast<SigLink*>(obj->get());
+	    link->cleanup();
+	}
+	m_links.clear();
+	return;
     }
-    return true;
+    SigLink* link = findLink(name,false);
+    if (!link)
+	return;
+    DDebug(this,DebugAll,"Clearing link '%s'%s",link->name().c_str(),
+	waitCallEnd ? ". Waiting for active calls to end" : "");
+    // Delay clearing if link has a call controller
+    if (waitCallEnd && link->controller()) {
+	link->setExiting(howLong);
+	return;
+    }
+    link->cleanup();
+    m_links.remove(link,true);
 }
 
-// Reload recorder data: called by initialize() (not called on first init if create failed)
-bool ModuleGroup::reloadRecorder(const NamedList& params, const NamedList& defaults,
-	String& error)
+void SigDriver::initialize()
 {
-    return true;
-}
-
-// Reload existing line's parameters
-void ModuleGroup::reloadLine(ModuleLine* line, const NamedList& params)
-{
-    if (!line)
-	return;
-    bool inService = !params.getBoolValue("out-of-service",false);
-    if (inService == (line->state() != AnalogLine::OutOfService))
-	return;
-    Lock lock(line);
-    Debug(this,DebugAll,"Reloading line %s in-service=%s [%p]",line->address(),String::boolText(inService),this);
-    line->ref();
-    line->enable(inService,true);
-    line->deref();
-}
-
-// Build the circuit list for a given group
-void ModuleGroup::buildGroup(ModuleGroup* group, ObjList& spanList, String& error)
-{
-    if (!group)
-	return;
-    int start = 0;
-    for (ObjList* o = spanList.skipNull(); o; o = o->skipNext()) {
-	String* s = static_cast<String*>(o->get());
-	if (!s)
+    Output("Initializing module Signalling Channel");
+    s_cfg = Engine::configFile("ysigchan");
+    s_cfg.load();
+    // Startup
+    if (!m_engine) {
+	setup();
+	installRelay(Masquerade);
+	installRelay(Halt);
+	installRelay(Progress);
+	installRelay(Update);
+	installRelay(Route);
+	m_engine = new SignallingEngine;
+	m_engine->debugChain(this);
+	m_engine->start();
+	// SS7
+	NamedList* p = s_cfg.getSection("general");
+	NamedList dummy("");
+	m_router = new SS7Router(p ? *p : dummy);
+	m_engine->insert(m_router);
+	m_router->attach(new SS7Management);
+	m_router->attach(new SS7Maintenance);
+    }
+    // Apply debug levels to driver
+    String dbgLevel = s_cfg.getValue("general","debuglevel");
+    DDebug(this,DebugAll,"Set debug '%s' [%p]",dbgLevel.safe(),this);
+    ObjList* levelList = dbgLevel.split(',',true);
+    int i = 0;
+    for (ObjList* o = levelList->skipNull(); o; o = o->skipNext(), i++) {
+	int level = (static_cast<String*>(o->get()))->toInteger(-1);
+	if (level == -1)
 	    continue;
-	AnalogParams spanParams("voice",group);
-	String tmp;
-	tmp << group->debugName() << "/" << *s;
+	switch (i) {
+	    case 0:
+		applyDebugLevel(this,level);
+		continue;
+	    case 1:
+		applyDebugLevel(m_engine,level);
+		continue;
+	    case 2:
+		applyDebugLevel(m_router,level);
+		continue;
+	    case 3:
+		if (m_engine)
+		    applyDebugLevel(m_engine->find("ss7snm"),level);
+		continue;
+	    case 4:
+		if (m_engine)
+		    applyDebugLevel(m_engine->find("ss7mtn"),level);
+		continue;
+	}
+    }
+    TelEngine::destruct(levelList);
+    // Build/initialize links
+    Lock lock(m_linksMutex);
+    unsigned int n = s_cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* sect = s_cfg.getSection(i);
+	if (!sect || sect->null() || *sect == "general")
+	    continue;
+	const char* stype = sect->getValue("type");
+	int type = lookup(stype,SigLink::s_type,SigLink::Unknown);
+	// Check for valid type
+	if (type == SigLink::Unknown) {
+	    Debug(this,DebugNote,"Link '%s'. Unknown/missing type '%s'",sect->c_str(),stype);
+	    continue;
+	}
+	// Disable ?
+	if (!sect->getBoolValue("enable",true)) {
+	    clearLink(*sect,false);
+	    continue;
+	}
+	// Create or initialize
+	DDebug(this,DebugAll,"Initializing link '%s' of type '%s'",sect->c_str(),stype);
+	SigLink* link = findLink(sect->c_str(),false);
+	bool create = (link == 0);
+	if (create)
+	    switch (type) {
+		case SigLink::SS7Isup:
+		    link = new SigSS7Isup(*sect);
+		    break;
+		case SigLink::IsdnPriNet:
+		case SigLink::IsdnPriCpe:
+		    link = new SigIsdn(*sect,type == SigLink::IsdnPriNet);
+		    break;
+		case SigLink::IsdnPriMon:
+		    link = new SigIsdnMonitor(*sect);
+		    break;
+		default:
+		    continue;
+	    }
+	if (!link->initialize(*sect)) {
+	    Debug(this,DebugWarn,"Failed to initialize link '%s' of type '%s'",
+		sect->c_str(),stype);
+	    if (create)
+		clearLink(*sect);
+	}
+    }
+    m_router->printRoutes();
+}
+
+/**
+ * SigParams
+ */
+void* SigParams::getObject(const String& name) const
+{
+    if (name == "SignallingCircuitGroup")
+	return m_cicGroup;
+    return NamedList::getObject(name);
+}
+
+/**
+ * SigLink
+ */
+TokenDict SigLink::s_type[] = {
+	{"ss7-isup",     SS7Isup},
+	{"isdn-pri-net", IsdnPriNet},
+	{"isdn-pri-cpe", IsdnPriCpe},
+	{"isdn-pri-mon", IsdnPriMon},
+	{0,0}
+	};
+
+SigLink::SigLink(const char* name, Type type)
+    : m_controller(0),
+    m_init(false),
+    m_inband(false),
+    m_type(type),
+    m_name(name),
+    m_thread(0)
+{
+    plugin.appendLink(this);
+    XDebug(&plugin,DebugAll,"SigLink::SigLink('%s') [%p]",name,this);
+}
+
+SigLink::~SigLink()
+{
+    cleanup();
+    plugin.removeLink(this);
+    XDebug(&plugin,DebugAll,"SigLink::~SigLink [%p]",this);
+}
+
+// Set exiting flag for call controller and timeout for the thread
+void SigLink::setExiting(unsigned int msec)
+{
+    if (m_controller)
+	m_controller->setExiting();
+    if (m_thread)
+	m_thread->m_timeout = Time::msecNow() + msec;
+}
+
+// Initialize (create or reload) the link. Set debug levels for contained objects
+// Fix some type depending parameters:
+//   Force 'readonly' to true for ISDN monitors
+//   Check the value of 'rxunderruninterval' for SS7 and non monitor ISDN links
+bool SigLink::initialize(NamedList& params)
+{
+    // Check error:
+    //  No need to initialize if no signalling engine or not in plugin's list
+    //  For SS7 links check the router
+    String error;
+    bool init = true;
+    while (true) {
+#define SIGLINK_INIT_BREAK(s) {error=s;break;}
+	if (!(plugin.engine() && plugin.findLink(name(),false)))
+	    SIGLINK_INIT_BREAK("No engine or not in module's list")
+	if (type() == SS7Isup && !plugin.router())
+	    SIGLINK_INIT_BREAK("No SS7 router for this link")
+#undef SIGLINK_INIT_BREAK
+	// Fix type depending parameters
+	int minRxUnder = 0;
+	switch (m_type) {
+	    case SigLink::SS7Isup:
+		minRxUnder = 25;
+		break;
+	    case SigLink::IsdnPriNet:
+	    case SigLink::IsdnPriCpe:
+		minRxUnder = 2500;
+		break;
+	    case SigLink::IsdnPriMon:
+		minRxUnder = 2500;
+		params.setParam("readonly","true");
+		break;
+	    default: ;
+	}
+	if (minRxUnder) {
+	    int rx = params.getIntValue("rxunderruninterval",0);
+	    if (rx && minRxUnder > rx)
+		params.setParam("rxunderruninterval",String(minRxUnder));
+	}
+	// Create/reload
+	bool ok = m_init ? reload(params) : create(params,error);
+	init = m_init;
+	m_init = true;
+	// Apply 'debuglevel'
+	if (ok) {
+	    String dbgLevel = params.getValue("debuglevel");
+	    DDebug(&plugin,DebugAll,"SigLink('%s'). Set debug '%s' [%p]",
+		name().c_str(),dbgLevel.safe(),this);
+	    ObjList* levelList = dbgLevel.split(',',true);
+	    int i = 0;
+	    for (ObjList* o = levelList->skipNull(); o; o = o->skipNext(), i++) {
+		int level = (static_cast<String*>(o->get()))->toInteger(-1);
+		if (level == -1)
+		    continue;
+		applyDebugLevel(getDbgEnabler(i),level);
+	    }
+	    TelEngine::destruct(levelList);
+	    return true;
+	}
+	break;
+    }
+    Debug(&plugin,DebugNote,"Link('%s'). %s failure: %s [%p]",
+	name().c_str(),init?"Reload":"Create",error.safe(),this);
+    return false;
+}
+
+void SigLink::handleEvent(SignallingEvent* event)
+{
+    plugin.handleEvent(event);
+}
+
+// Clear channels with calls belonging to this link. Cancel thread if any. Call release
+void SigLink::cleanup()
+{
+    plugin.disconnectChannels(this);
+    if (m_thread) {
+	m_thread->cancel();
+	while(m_thread)
+	    Thread::yield();
+    }
+    release();
+}
+
+bool SigLink::startThread(String& error)
+{
+    if (!m_thread) {
+	if (m_controller)
+	    m_thread = new SigLinkThread(this);
+	else {
+	    Debug(&plugin,DebugNote,
+		"Link('%s'). No worker thread for link without call controller [%p]",
+		name().c_str(),this);
+	    return true;
+	}
+    }
+    if (!(m_thread->running() || m_thread->startup())) {
+	error = "Failed to start worker thread";
+	return false;
+    }
+    return true;
+}
+
+// Build a signalling interface for this link
+SignallingInterface* SigLink::buildInterface(NamedList& params, const String& device,
+	const String& debugName, String& error)
+{
+    params.setParam("debugname",debugName);
+    bool needSig = !params.getParam("sig");
+    if (needSig)
+	params.addParam("sig",device);
+    SignallingInterface* iface = static_cast<SignallingInterface*>
+	(SignallingFactory::build("sig",&params));
+    if (needSig)
+	params.clearParam("sig");
+    if (iface) {
+	plugin.engine()->insert(iface);
+	return iface;
+    }
+    error = "";
+    error << "Failed to create signalling interface '" << device << "'";
+    return 0;
+}
+
+// Build a signalling circuit for this link
+SigCircuitGroup* SigLink::buildCircuits(NamedList& params, const String& device,
+	const String& debugName, String& error)
+{
+    ObjList* voice = device.split(',',false);
+    if (!voice) {
+	error = "Missing or invalid voice parameter";
+	return 0;
+    }
+    SigCircuitGroup* group = new SigCircuitGroup(debugName);
+    int start = 0;
+    for (ObjList* o = voice->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (s->null())
+	    continue;
+	String tmp = debugName + "/" + *s;
+	SigParams spanParams("voice",group);
 	spanParams.addParam("debugname",tmp);
 	spanParams.addParam("voice",*s);
 	if (start)
 	    spanParams.addParam("start",String(start));
 	SignallingCircuitSpan* span = static_cast<SignallingCircuitSpan*>(
-	    SignallingFactory::build(spanParams,&spanParams));
+		SignallingFactory::build(spanParams,&spanParams));
 	if (!span) {
-	    error << "Failed to build span '" << *s << "'";
+	    error << "Failed to build voice span '" << *s << "'";
 	    break;
 	}
 	int chans = spanParams.getIntValue("chans");
 	start += chans;
     }
+    TelEngine::destruct(voice);
+    if (error.null()) {
+	plugin.engine()->insert(group);
+	return group;
+    }
+    TelEngine::destruct(group);
+    return 0;
 }
-
 
 /**
- * AnalogChannel
+ * SigSS7Isup
  */
-// Incoming: msg=0. Outgoing: msg is the call execute message
-AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
-    : Channel(&plugin,0,msg),
-    m_line(line),
-    m_hungup(false),
-    m_routeOnSecondRing(false),
-    m_callEndedTimer(0),
-    m_noRingTimer(0),
-    m_alarmTimer(line ? line->alarmTimeout() : 0),
-    m_dialTimer(0),
-    m_polarityCount(0)
+SigSS7Isup::SigSS7Isup(const char* name)
+    : SigLink(name,SS7Isup),
+    m_network(0),
+    m_link(0),
+    m_iface(0),
+    m_group(0)
 {
-    m_line->userdata(this);
-    m_line->moduleGroup()->setEndpoint(this,true);
-
-    // Set caller/called from line
-    if (isOutgoing())
-	m_line->setCall(msg->getValue("caller"),msg->getValue("callername"),msg->getValue("called"));
-    else
-	if (m_line->type() == AnalogLine::FXS)
-	    m_line->setCall("","","off-hook");
-	else
-	    m_line->setCall();
-
-    Debug(this,DebugCall,"%sing call on line %s caller=%s called=%s [%p]",
-	isOutgoing()?"Outgo":"Incom",m_line->address(),
-	m_line->caller().c_str(),m_line->called().c_str(),this);
-
-    m_line->connect(false);
-    m_line->acceptPulseDigit(isIncoming());
-
-    // Incoming on FXO:
-    // Caller id after first ring: delay router until the second ring and
-    //  set/remove call setup detector
-    if (isIncoming() && m_line->type() == AnalogLine::FXO) {
-	m_routeOnSecondRing = (m_line->callSetup() == AnalogLine::After);
-	if (m_routeOnSecondRing)
-	    m_line->setCallSetupDetector();
-	else
-	    m_line->removeCallSetupDetector();
-    }
-
-    m_address = m_line->address();
-    if (m_line->type() == AnalogLine::FXS && m_line->moduleGroup())
-	m_line->moduleGroup()->copyData(this);
-
-    // Startup
-    Message* m = message("chan.startup");
-    m->setParam("direction",status());
-    m_line->copyCall(*m);
-    if (isOutgoing()) {
-	m_targetid = msg->getValue("id");
-	m->addParam("billid",msg->getValue("billid"));
-    }
-    Engine::enqueue(m);
-
-    // Init call
-    setAudio(isIncoming());
-    if (isOutgoing()) {
-	// Check for parameters override
-	m_dialTimer.interval(msg->getIntValue("delaydial",0));
-	// FXO: send start line event
-	// FXS: start ring and send call setup (caller id)
-	// Return if failed to send events
-	switch (line->type()) {
-	    case AnalogLine::FXO:
-		m_line->sendEvent(SignallingCircuitEvent::StartLine,AnalogLine::Dialing);
-		break;
-	    case AnalogLine::FXS:
-		if (m_line->callSetup() == AnalogLine::Before)
-		    m_line->sendCallSetup();
-		m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing);
-		if (m_line->callSetup() == AnalogLine::After && m_line->state() != AnalogLine::Idle)
-		    m_line->sendCallSetup();
-		break;
-	    default: ;
-	}
-	if (line->state() == AnalogLine::Idle) {
-	    setReason("failure");
-	    msg->setParam("error",m_reason);
-	    return;
-	}
-    }
-    else {
-	m_line->changeState(AnalogLine::Dialing);
-
-	// FXO: start ring timer (check if the caller hangs up before answer)
-	// FXS: do nothing
-	switch (line->type()) {
-	    case AnalogLine::FXO:
-		m_noRingTimer.interval(m_line->noRingTimeout());
-		DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
-		    m_noRingTimer.interval(),this);
-		m_noRingTimer.start();
-		break;
-	    case AnalogLine::FXS:
-		break;
-	    default: ;
-	}
-	if (!m_routeOnSecondRing)
-	    startRouter(true);
-	else
-	    DDebug(this,DebugInfo,"Delaying route until next ring [%p]",this);
-    }
 }
 
-AnalogChannel::~AnalogChannel()
+SigSS7Isup::~SigSS7Isup()
 {
-    XDebug(this,DebugCall,"AnalogChannel::~AnalogChannel() [%p]",this);
+    release();
 }
 
-// Start outgoing media and echo train if earlymedia or got peer with data source
-bool AnalogChannel::msgProgress(Message& msg)
+bool SigSS7Isup::create(NamedList& params, String& error)
 {
-    Lock lock(m_mutex);
-    if (isAnswered())
-	return true;
+    release();
 
-    Channel::msgProgress(msg);
-    setStatus();
-    if (m_line && m_line->type() != AnalogLine::FXS)
-	m_line->acceptPulseDigit(false);
-    if (msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource())) {
-	setAudio(false);
-	if (m_line)
-	    m_line->setCircuitParam("echotrain",msg.getValue("echotrain"));
-    }
-    return true;
-}
-
-// Start outgoing media and echo train if earlymedia or got peer with data source
-bool AnalogChannel::msgRinging(Message& msg)
-{
-    Lock lock(m_mutex);
-    if (isAnswered())
-	return true;
-
-    Channel::msgRinging(msg);
-    setStatus();
-    if (m_line) {
-	if (m_line->type() != AnalogLine::FXS)
-	    m_line->acceptPulseDigit(false);
-	m_line->changeState(AnalogLine::Ringing);
-    }
-    if (msg.getBoolValue("earlymedia",getPeer() && getPeer()->getSource())) {
-	setAudio(false);
-	if (m_line)
-	    m_line->setCircuitParam("echotrain",msg.getValue("echotrain"));
-    }
-    return true;
-}
-
-// Terminate ringing on line. Start echo train. Open audio streams
-bool AnalogChannel::msgAnswered(Message& msg)
-{
-    Lock lock(m_mutex);
-    m_noRingTimer.stop();
-    if (m_line) {
-	m_line->removeCallSetupDetector();
-	if (m_line->type() == AnalogLine::FXS)
-	    m_line->sendEvent(SignallingCircuitEvent::RingEnd);
-	else {
-	    m_line->acceptPulseDigit(false);
-	    m_line->sendEvent(SignallingCircuitEvent::OffHook);
-	}
-	m_line->changeState(AnalogLine::Answered);
-	m_line->setCircuitParam("echotrain",msg.getValue("echotrain"));
-    }
-    setAudio(true);
-    setAudio(false);
-    Channel::msgAnswered(msg);
-    setStatus();
-    return true;
-}
-
-// Send tones or flash
-bool AnalogChannel::msgTone(Message& msg, const char* tone)
-{
-    Lock lock(m_mutex);
-    if (!(tone && *tone && m_line))
+    if (!plugin.router()) {
+	error = "No SS7 router";
 	return false;
-    if (*tone != 'F') {
-	if (m_dialTimer.started()) {
-	    Debug(this,DebugAll,"msgTone(%s). Adding to called number [%p]",tone,this);
-	    m_line->called().append(tone);
+    }
+
+    String compName;                     // Component name
+
+    // Signalling interface
+    buildName(compName,"L1");
+    m_iface = buildInterface(params,params.getValue("sig"),compName,error);
+    if (!m_iface)
+	return false;
+
+    // Voice transfer: circuit group, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"L1/Data");
+    m_group = buildCircuits(params,params.getValue("voice",params.getValue("sig")),compName,error);
+    if (!m_group)
+	return false;
+
+    // Layer 2
+    buildName(compName,"mtp2");
+    params.setParam("debugname",compName);
+    m_link = new SS7MTP2(params);
+
+    // Layer 3
+    buildName(compName,"mtp3");
+    params.setParam("debugname",compName);
+    m_network = new SS7MTP3(params);
+
+    // ISUP
+    buildName(compName,"isup");
+    params.setParam("debugname",compName);
+    m_controller = new SS7ISUP(params);
+    if (!setPointCode(params)) {
+	error = "No point codes";
+	return false;
+    }
+
+    // Create links between components and enable them
+    m_link->SignallingReceiver::attach(m_iface);
+    m_iface->control(SignallingInterface::Enable);
+    m_network->attach(m_link);
+    controller()->attach(m_group);
+    plugin.router()->attach(m_network);
+    plugin.router()->attach(isup());
+    m_link->control(SS7Layer2::Align,&params);
+
+    // Start thread
+    if (!startThread(error))
+	return false;
+
+    return true;
+}
+
+bool SigSS7Isup::reload(NamedList& params)
+{
+    setPointCode(params);
+    return true;
+}
+
+void SigSS7Isup::release()
+{
+    if (m_link)
+	m_link->control(SS7Layer2::Pause);
+    if (m_iface)
+	m_iface->control(SignallingInterface::Disable);
+
+    if (isup()) {
+	isup()->destruct();
+	m_controller = 0;
+    }
+    TelEngine::destruct(m_network);
+    TelEngine::destruct(m_link);
+    TelEngine::destruct(m_group);
+    TelEngine::destruct(m_iface);
+    XDebug(&plugin,DebugAll,"SigSS7Isup('%s'). Released [%p]",name().c_str(),this);
+}
+
+DebugEnabler* SigSS7Isup::getDbgEnabler(int id)
+{
+    switch (id) {
+	case 0: return m_iface;
+	case 1: return m_group;
+	case 2: return m_link;
+	case 3: return m_network;
+	case 4: return isup();
+    }
+    return 0;
+}
+
+unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
+{
+    if (!isup())
+	return 0;
+    unsigned int count = 0;
+    unsigned int n = sect.length();
+    for (unsigned int i= 0; i < n; i++) {
+	NamedString* ns = sect.getParam(i);
+	if (!ns)
+	    continue;
+	bool def = (ns->name() == "defaultpointcode");
+	if (!def && ns->name() != "pointcode")
+	    continue;
+	SS7PointCode* pc = new SS7PointCode(0,0,0);
+	if (pc->assign(*ns) && isup()->setPointCode(pc,def))
+	    count++;
+	else {
+	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
+		ns->name().c_str(),ns->safe(),sect.safe());
+	    TelEngine::destruct(pc);
+	}
+    }
+    return count;
+}
+
+/**
+ * SigIsdn
+ */
+SigIsdn::SigIsdn(const char* name, bool net)
+    : SigLink(name,net ? IsdnPriNet : IsdnPriCpe),
+    m_q921(0),
+    m_iface(0),
+    m_group(0)
+{
+}
+
+SigIsdn::~SigIsdn()
+{
+    release();
+}
+
+bool SigIsdn::create(NamedList& params, String& error)
+{
+    release();
+    m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
+    String compName;                     // Component name
+
+    // Signalling interface
+    buildName(compName,"D");
+    m_iface = buildInterface(params,params.getValue("sig"),compName,error);
+    if (!m_iface)
+	return false;
+
+    // Voice transfer: circuit group, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"B");
+    m_group = buildCircuits(params,params.getValue("voice",params.getValue("sig")),compName,error);
+    if (!m_group)
+	return false;
+
+    // Q921
+    buildName(compName,"Q921");
+    params.setParam("debugname",compName);
+    params.setParam("network",String::boolText(IsdnPriNet == type()));
+    params.setParam("print-frames",params.getValue("print-layer2PDU"));
+    m_q921 = new ISDNQ921(params,compName);
+    plugin.engine()->insert(m_q921);
+
+    // Q931
+    buildName(compName,"Q931");
+    params.setParam("debugname",compName);
+    params.setParam("print-messages",params.getValue("print-layer3PDU"));
+    m_controller = new ISDNQ931(params,compName);
+    plugin.engine()->insert(q931());
+
+    // Create links between components and enable them
+    m_q921->SignallingReceiver::attach(m_iface);
+    m_iface->control(SignallingInterface::Enable);
+    controller()->attach(m_group);
+    m_q921->ISDNLayer2::attach(q931());
+    q931()->attach(m_q921);
+    m_q921->multipleFrame(true,false);
+
+    // Start thread
+    if (!startThread(error))
+	return false;
+
+    return true;
+}
+
+bool SigIsdn::reload(NamedList& params)
+{
+    if (q931())
+	q931()->setDebug(params.getBoolValue("print-layer3PDU",false),
+	    params.getBoolValue("extended-debug",false));
+    if (m_q921)
+	m_q921->setDebug(params.getBoolValue("print-layer2PDU",false),
+	    params.getBoolValue("extended-debug",false));
+    return true;
+}
+
+void SigIsdn::release()
+{
+    if (m_iface)
+	m_iface->control(SignallingInterface::Disable);
+    if (q931()) {
+	q931()->destruct();
+	m_controller = 0;
+    }
+    TelEngine::destruct(m_q921);
+    TelEngine::destruct(m_group);
+    TelEngine::destruct(m_iface);
+    XDebug(&plugin,DebugAll,"SigIsdn('%s'). Released [%p]",name().c_str(),this);
+}
+
+DebugEnabler* SigIsdn::getDbgEnabler(int id)
+{
+    switch (id) {
+	case 0: return m_iface;
+	case 1: return m_group;
+	case 2: return m_q921;
+	case 3: return q931();
+    }
+    return 0;
+}
+
+/**
+ * SigIsdnMonitor
+ */
+SigIsdnMonitor::SigIsdnMonitor(const char* name)
+    : SigLink(name,IsdnPriMon),
+    m_monitorMutex(true),
+    m_id(0),
+    m_chanBuffer(160),
+    m_idleValue(255),
+    m_q921Net(0), m_q921Cpe(0), m_ifaceNet(0), m_ifaceCpe(0), m_groupNet(0), m_groupCpe(0)
+{
+}
+
+SigIsdnMonitor::~SigIsdnMonitor()
+{
+    release();
+}
+
+void SigIsdnMonitor::handleEvent(SignallingEvent* event)
+{
+    if (!event)
+	return;
+    if (!event->call()) {
+	XDebug(&plugin,DebugNote,
+	    "SigIsdnMonitor('%s'). Received event (%p,'%s') without call [%p]",
+	    name().c_str(),event,event->name(),this);
+	return;
+    }
+
+    Lock lock(m_monitorMutex);
+    SigIsdnCallRecord* rec = 0;
+    ISDNQ931CallMonitor* mon = static_cast<ISDNQ931CallMonitor*>(event->call());
+
+    // Find monitor
+    for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
+	rec = static_cast<SigIsdnCallRecord*>(o->get());
+	if (rec == mon->userdata())
+	    break;
+	rec = 0;
+    }
+
+    if (rec) {
+	switch (event->type()) {
+	    case SignallingEvent::Info:
+		rec->evInfo(event);
+		break;
+	    case SignallingEvent::Accept:
+	    case SignallingEvent::Ringing:
+	    case SignallingEvent::Answer:
+		if (rec->update(event))
+		    break;
+		// Fall through to release if update failed
+	    case SignallingEvent::Release:
+		rec->disconnect(event->message() ? event->message()->params().getValue("reason") : "normal");
+		break;
+	    default:
+		DDebug(&plugin,DebugStub,
+		    "SigIsdnMonitor('%s'). No handler for event '%s' [%p]",
+		    name().c_str(),event->name(),this);
+	}
+	return;
+    }
+
+    if (event->type() == SignallingEvent::NewCall) {
+	String id;
+	id << name() << "/" << ++m_id;
+	rec = new SigIsdnCallRecord(this,id,event);
+	if (rec->update(event)) {
+	    mon->userdata(rec);
+	    m_monitors.append(rec);
+	    rec->deref();
+	}
+	else
+	    rec->disconnect(0);
+    }
+    else
+	XDebug(&plugin,DebugNote,
+	    "SigIsdnMonitor('%s'). Received event (%p,'%s') with invalid user data (%p) [%p]",
+	    name().c_str(),event,event->name(),mon->userdata(),this);
+}
+
+bool SigIsdnMonitor::masquerade(String& id, Message& msg)
+{
+    for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
+	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
+	if (id == rec->id()) {
+	    msg = msg.getValue("message");
+	    msg.clearParam("message");
+	    msg.userData(rec);
+	}
+    }
+    return true;
+}
+
+bool SigIsdnMonitor::drop(String& id, Message& msg)
+{
+    const char* reason = msg.getValue("reason","dropped");
+    if (id == name()) {
+	m_monitorMutex.lock();
+	ListIterator iter(m_monitors);
+	GenObject* o = 0;
+	for (; (o = iter.get()); ) {
+	    CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	    c->disconnect(reason);
+	}
+	m_monitorMutex.unlock();
+	return true;
+    }
+    for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
+	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
+	if (id == rec->id()) {
+	    rec->disconnect(reason);
 	    return true;
 	}
-	return sendTones(tone);
     }
-    // Flash event: don't send if not FXO
-    if (m_line->type() != AnalogLine::FXO) {
-	Debug(this,DebugInfo,"Can't send line flash on non-FXO line (tones='%s') [%p]",tone,this);
+    return false;
+}
+
+void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
+{
+    Lock lock(m_monitorMutex);
+    m_monitors.remove(call,false);
+}
+
+bool SigIsdnMonitor::create(NamedList& params, String& error)
+{
+    release();
+    String compName;                     // Component name
+    m_chanBuffer = params.getIntValue("muxchanbuffer",160);
+    if (!m_chanBuffer)
+	m_chanBuffer = 160;
+    unsigned int ui = params.getIntValue("idlevalue",255);
+    m_idleValue = (ui <= 255 ? ui : 255);
+
+    m_netId = name() + "/Net";
+    m_cpeId = name() + "/Cpe";
+
+    // Set auto detection for Layer 2 (Q.921) type side of the link
+    params.setParam("detect",String::boolText(true));
+
+    // Signalling interfaces
+    buildName(compName,"D",true);
+    m_ifaceNet = buildInterface(params,params.getValue("sig-net"),compName,error);
+    if (!m_ifaceNet)
 	return false;
-    }
-    Debug(this,DebugAll,"Sending line flash (tones='%s') [%p]",tone,this);
-    return m_line->sendEvent(SignallingCircuitEvent::Flash);
-}
-
-// Hangup
-bool AnalogChannel::msgDrop(Message& msg, const char* reason)
-{
-    Lock lock(m_mutex);
-    setReason(reason ? reason : "dropped");
-    if (Engine::exiting() || !m_line || m_line->type() != AnalogLine::FXS)
-	Channel::msgDrop(msg,m_reason);
-    hangup(true);
-    return true;
-}
-
-// Update echo canceller and/or start echo training
-bool AnalogChannel::msgUpdate(Message& msg)
-{
-    String tmp = msg.getValue("echocancel");
-    Lock lock(m_mutex);
-    if (!(tmp.isBoolean() && m_line))
+    buildName(compName,"D",false);
+    m_ifaceCpe = buildInterface(params,params.getValue("sig-cpe"),compName,error);
+    if (!m_ifaceCpe)
 	return false;
-    bool ok = m_line->setCircuitParam("echocancel",tmp);
-    if (tmp.toBoolean())
-	m_line->setCircuitParam("echotrain",msg.getValue("echotrain"));
-    return ok;
-}
-
-// Call routed: set tone detector
-bool AnalogChannel::callRouted(Message& msg)
-{
-    Channel::callRouted(msg);
-    setStatus();
-    Lock lock(m_mutex);
-    // Check if the circuit supports HW tone detection
-    // Don't set tone detector if no circuit or the circuit doesn't recognize the parameter
-    if (m_line->circuit()) {
-	String value;
-	if (m_line->circuit()->getParam("tonedetect",value) && !value.toBoolean(true)) {
-	    setAudio(false);
-	    if (!toneDetect()) {
-		setConsumer();
-		DDebug(this,DebugNote,"Failed to set tone detector [%p]",this);
-	    }
-	}
-    }
-    return true;
-}
-
-// Call accepted: set line and open audio
-void AnalogChannel::callAccept(Message& msg)
-{
-    Lock lock(m_mutex);
-    if (isAnswered())
-	return;
-    if (m_line) {
-	if (m_line->type() != AnalogLine::FXS)
-	    m_line->acceptPulseDigit(false);
-	m_line->changeState(AnalogLine::DialComplete);
-    }
-    setAudio(false);
-    setAudio(true);
-    Channel::callAccept(msg);
-}
-
-// Call rejected: hangup
-void AnalogChannel::callRejected(const char* error, const char* reason,
-	const Message* msg)
-{
-    setReason(error ? error : reason);
-    Channel::callRejected(error,m_reason,msg);
-    setStatus();
-    hangup(true);
-}
-
-void AnalogChannel::disconnected(bool final, const char* reason)
-{
-    Lock lock(m_mutex);
-    Channel::disconnected(final,m_reason);
-    hangup(!final,"disconnected",reason);
-}
-
-// Disconnect the channel
-bool AnalogChannel::disconnect(const char* reason)
-{
-    Lock lock(m_mutex);
-    if (!m_hungup) {
-	setReason(reason);
-	setStatus("disconnecting");
-    }
-    return Channel::disconnect(m_reason);
-}
-
-// Hangup call
-// Keep call alive to play announcements on FXS line not set on hook by the remote FXO
-void AnalogChannel::hangup(bool local, const char* status, const char* reason)
-{
-    Lock lock(m_mutex);
-
-    m_noRingTimer.stop();
-    if (m_hungup)
-	return;
-    m_hungup = true;
-    setReason(reason ? reason : (Engine::exiting() ? "shutdown" : "normal"));
-    if (status)
-	setStatus(status);
-    setSource();
-    setConsumer();
-
-    Message* m = message("chan.hangup",true);
-    m->setParam("status",this->status());
-    m->setParam("reason",m_reason);
-    Engine::enqueue(m);
-
-    setStatus("hangup");
-
-    // Check some conditions to keep the channel
-    if (!m_line || m_line->type() != AnalogLine::FXS ||
-	!local || Engine::exiting() ||
-	(isOutgoing() && m_line->state() < AnalogLine::Answered) ||
-	(isIncoming() && m_line->state() == AnalogLine::Idle))
-	return;
-
-
-    Debug(this,DebugAll,"Call ended. Keep channel alive [%p]",this);
-
-    if (m_callEndedTimer.interval()) {
-	m_callEndedTimer.start();
-	m_line->changeState(AnalogLine::CallEnded);
-	if (!setAnnouncement("call-ended",m_callEndedTarget))
-	    ref();
-    }
-    else {
-	m_line->changeState(AnalogLine::OutOfOrder);
-	if (!setAnnouncement("out-of-order",m_oooTarget))
-	    ref();
-    }
-}
-
-// Process incoming or outgoing digits
-void AnalogChannel::evDigits(const char* text, bool tone)
-{
-    if (!(text && *text))
-	return;
-    Debug(this,DebugAll,"Got %s digits=%s [%p]",tone?"tone":"pulse",text,this);
-    Message* m = message("chan.dtmf",false,true);
-    m->addParam("text",text);
-    if (!tone)
-	m->addParam("pulse",String::boolText(true));
-    Engine::enqueue(m);
-}
-
-// Line got off hook. Terminate ringing
-// Outgoing: answer it (call outCallAnswered())
-// Incoming: start echo train
-void AnalogChannel::evOffHook()
-{
-    Lock lock(m_mutex);
-    if (isOutgoing()) {
-	outCallAnswered();
-	if (m_line)
-	    m_line->sendEvent(SignallingCircuitEvent::RingEnd,AnalogLine::Answered);
-    }
-    else if (m_line) {
-	m_line->sendEvent(SignallingCircuitEvent::RingEnd,m_line->state());
-	m_line->setCircuitParam("echotrain");
-    }
-}
-
-// Line ring on/off notification. Ring off is ignored
-// Outgoing: enqueue call.ringing
-// Incoming: FXO: Route the call if delayed. Remove line's detector and start ring timer
-void AnalogChannel::evRing(bool on)
-{
-    Lock lock(m_mutex);
-    if (!on)
-	return;
-
-    // Outgoing: remote party is ringing
-    if (isOutgoing()) {
-	Engine::enqueue(message("call.ringing",false,true));
-	if (m_line)
-	    m_line->changeState(AnalogLine::Ringing);
-	return;
-    }
-    // Incoming: start ringing (restart FXO timer to check remote hangup)
-    // Start router if delayed
-    if (!m_line)
-	return;
-    if (m_line->type() == AnalogLine::FXO) {
-	if (m_routeOnSecondRing) {
-	    m_routeOnSecondRing = false;
-	    startRouter(false);
-	}
-	m_line->removeCallSetupDetector();
-	if (m_noRingTimer.interval()) {
-	    DDebug(this,DebugAll,"Restarting ring timer for " FMT64 "ms [%p]",
-		m_noRingTimer.interval(),this);
-	    m_noRingTimer.start();
-	}
-    }
-}
-
-// Line started (initialized) notification
-// Answer outgoing FXO calls on lines not expecting polarity changes to answer
-// Send called number if any
-void AnalogChannel::evLineStarted()
-{
-    Lock lock(m_mutex);
-    if (!m_line)
-	return;
-    // Send number: delay it if interval is not 0
-    if (m_line->called())
-	if (m_line->delayDial() || m_dialTimer.interval())
-	    if (!m_dialTimer.started()) {
-		if (!m_dialTimer.interval())
-		    m_dialTimer.interval(m_line->delayDial());
-		m_dialTimer.start();
-	    }
-	else
-	    sendTones(m_line->called());
-    // Answer now outgoing FXO calls on lines not expecting polarity changes to answer
-    if (isOutgoing() && m_line && m_line->type() == AnalogLine::FXO &&
-	!m_line->answerOnPolarity())
-	outCallAnswered();
-}
-
-// Dial complete notification. Enqueue call.progress
-// Answer outgoing FXO calls on lines not expecting polarity changes to answer
-void AnalogChannel::evDialComplete()
-{
-    DDebug(this,DebugAll,"Dial completed [%p]",this);
-    Lock lock(m_mutex);
-    if (m_line)
-	m_line->changeState(AnalogLine::DialComplete);
-    Engine::enqueue(message("call.progress",true,true));
-    // Answer now outgoing FXO calls on lines not expecting polarity changes to answer
-    if (isOutgoing() && m_line && m_line->type() == AnalogLine::FXO &&
-	!m_line->answerOnPolarity())
-	outCallAnswered();
-}
-
-// Line polarity change notification
-// Terminate call if:
-//   - no line or line is not FXO, 
-//   - Outgoing: don't answer on polarity or already answered and should hangup on polarity change
-//   - Incoming: don't answer on polarity or polarity already changed and should hangup on polarity change
-void AnalogChannel::evPolarity()
-{
-    Lock lock(m_mutex);
-    m_polarityCount++;
-    DDebug(this,DebugAll,"Line polarity changed %u time(s) [%p]",m_polarityCount,this);
-    bool terminate = (!m_line || m_line->type() != AnalogLine::FXO);
-    if (!terminate)
-	if (isOutgoing())
-	    if (!m_line->answerOnPolarity() || isAnswered())
-		terminate = m_line->hangupOnPolarity();
-	    else
-		outCallAnswered();
-	else if (!m_line->answerOnPolarity() || m_polarityCount > 1)
-	    terminate = m_line->hangupOnPolarity();
-
-    if (terminate) {
-	DDebug(this,DebugAll,"Terminating on polarity change [%p]",this);
-	hangup(false);
-	plugin.terminateChan(this);
-    }
-}
-
-// Line ok: stop alarm timer
-// Terminate channel if not answered; otherwise: start timer if not already started
-void AnalogChannel::evAlarm(bool alarm, const char* alarms)
-{
-    Lock lock(m_mutex);
-    if (!alarm) {
-	Debug(this,DebugInfo,"No more alarms on line [%p]",this);
-	if (m_line)
-	    m_line->setCircuitParam("echotrain");
-	m_alarmTimer.stop();
-	return;
-    }
-    // Terminate now if not answered
-    if (!isAnswered()) {
-	Debug(this,DebugNote,"Line is out of order alarms=%s. Terminating now [%p]",
-	    alarms,this);
-	hangup(false,0,"net-out-of-order");
-	plugin.terminateChan(this);
-	return;
-    }
-    // Wait if answered
-    if (!m_alarmTimer.started()) {
-	Debug(this,DebugNote,
-	    "Line is out of order alarms=%s. Starting timer for " FMT64 " ms [%p]",
-	    alarms,m_alarmTimer.interval(),this);
-	m_alarmTimer.start();
-    }
-}
-
-// Check timers. Return false to terminate
-bool AnalogChannel::checkTimeouts(const Time& when)
-{
-    Lock lock(m_mutex);
-    if (m_alarmTimer.timeout(when.msecNow())) {
-	m_alarmTimer.stop();
-	DDebug(this,DebugInfo,"Line was in alarm for " FMT64 " ms [%p]",
-	    m_alarmTimer.interval(),this);
-	setReason("net-out-of-order");
-	hangup(false);
+	
+    // Voice transfer: circuit groups, spans, circuits
+    // Use the same span as the signalling channel if missing
+    buildName(compName,"B",true);
+    const char* device = params.getValue("voice-net",params.getValue("sig-net"));
+    m_groupNet = buildCircuits(params,device,compName,error);
+    if (!m_groupNet)
 	return false;
-    }
-    if (m_callEndedTimer.timeout(when.msecNow())) {
-	m_callEndedTimer.stop();
-	m_line->changeState(AnalogLine::OutOfOrder);
-	disconnect();
-	if (!setAnnouncement("out-of-order",m_oooTarget))
-	    ref();
-	return true;
-    }
-    if (m_noRingTimer.timeout(when.msecNow())) {
-	DDebug(this,DebugInfo,"No ring for " FMT64 " ms. Terminating [%p]",
-	    m_noRingTimer.interval(),this);
-	setReason("cancelled");
-	hangup(false);
+    buildName(compName,"B",false);
+    device = params.getValue("voice-cpe",params.getValue("sig-cpe"));
+    m_groupCpe = buildCircuits(params,device,compName,error);
+    if (!m_groupCpe)
 	return false;
-    }
-    if (m_dialTimer.timeout(when.msecNow())) {
-	m_dialTimer.stop();
-	if (m_line)
-	    sendTones(m_line->called());
-	return true;
+    String sNet, sCpe;
+    m_groupNet->getCicList(sNet);
+    m_groupCpe->getCicList(sCpe);
+    if (sNet != sCpe)
+	Debug(&plugin,DebugWarn,
+	    "SigIsdnMonitor('%s'). Circuit groups are not equal [%p]",
+	    name().c_str(),this);
+
+    // Q921
+    params.setParam("t203",params.getValue("idletimeout"));
+    buildName(compName,"Q921",true);
+    params.setParam("debugname",compName);
+    params.setParam("network",String::boolText(true));
+    params.setParam("print-frames",params.getValue("print-layer2PDU"));
+    m_q921Net = new ISDNQ921Pasive(params,compName);
+    plugin.engine()->insert(m_q921Net);
+    buildName(compName,"Q921",false);
+    params.setParam("debugname",compName);
+    params.setParam("network",String::boolText(false));
+    m_q921Cpe = new ISDNQ921Pasive(params,compName);
+    plugin.engine()->insert(m_q921Cpe);
+
+    // Q931
+    compName = "";
+    compName << name() << '/' << "Q931";
+    params.setParam("debugname",compName);
+    params.setParam("print-messages",params.getValue("print-layer3PDU"));
+    m_controller = new ISDNQ931Monitor(params,compName);
+    plugin.engine()->insert(q931());
+
+    // Create links between components and enable them
+    q931()->attach(m_groupNet,true);
+    q931()->attach(m_groupCpe,false);
+    m_q921Net->SignallingReceiver::attach(m_ifaceNet);
+    m_q921Cpe->SignallingReceiver::attach(m_ifaceCpe);
+    m_ifaceNet->control(SignallingInterface::Enable);
+    m_ifaceCpe->control(SignallingInterface::Enable);
+    m_q921Net->ISDNLayer2::attach(q931());
+    m_q921Cpe->ISDNLayer2::attach(q931());
+    q931()->attach(m_q921Net,true);
+    q931()->attach(m_q921Cpe,false);
+
+    // Start thread
+    if (!startThread(error))
+	return false;
+
+    if (debugAt(DebugInfo)) {
+	String tmp;
+	tmp << "\r\nChannel buffer: " << m_chanBuffer;
+	tmp << "\r\nIdle value:     " << (int)m_idleValue;
+	Debug(&plugin,DebugInfo,"SigIsdnMonitor('%s'). Initialized: [%p]%s",
+	    name().c_str(),this,tmp.c_str());
     }
     return true;
 }
 
-// Route incoming
-void AnalogChannel::startRouter(bool first)
+bool SigIsdnMonitor::reload(NamedList& params)
 {
-    m_routeOnSecondRing = false;
-    Message* m = message("call.preroute",false,true);
-    if (m_line) {
-	m_line->copyCall(*m);
-	const char* caller = m->getValue("caller");
-	if (!(caller && *caller))
-	    m->setParam("caller",s_unk);
-	switch (m_line->type()) {
-	    case AnalogLine::FXO:
-		if (getSource())
-		    m->addParam("format",getSource()->getFormat());
-		break;
-	    case AnalogLine::FXS:
-		m->addParam("overlapped","true");
-		break;
-	    default: ;
-	}
-    }
-    DDebug(this,DebugInfo,"Starting router %scaller=%s callername=%s [%p]",
-	first?"":"(delayed) ",
-	m->getValue("caller"),m->getValue("callername"),this);
-    Channel::startRouter(m);
-}
-
-// Set data source and consumer
-bool AnalogChannel::setAudio(bool in)
-{
-    if ((in && getSource()) || (!in && getConsumer()))
-	return true;
-
-    SignallingCircuit* cic = m_line ? m_line->circuit() : 0;
-    if (cic)
-	if (in)
-	    setSource(static_cast<DataSource*>(cic->getObject("DataSource")));
-	else
-	    setConsumer(static_cast<DataConsumer*>(cic->getObject("DataConsumer")));
-
-    DataNode* res = in ? (DataNode*)getSource() : (DataNode*)getConsumer();
-    if (res)
-	DDebug(this,DebugAll,"Data %s set to (%p): '%s' [%p]",
-	    in?"source":"consumer",res,res->getFormat().c_str(),this);
-    else
-	Debug(this,DebugNote,"Failed to set data %s%s [%p]",
-	    in?"source":"consumer",cic?"":". Circuit is missing",this);
-    return (bool)res;
-}
-
-// Set call status
-bool AnalogChannel::setStatus(const char* newStat)
-{
-    if (newStat)
-	status(newStat);
-    if (m_reason)
-	Debug(this,DebugCall,"status=%s reason=%s [%p]",
-	    status().c_str(),m_reason.c_str(),this);
-    else
-	Debug(this,DebugCall,"status=%s [%p]",status().c_str(),this);
+    if (q931())
+	q931()->setDebug(params.getBoolValue("print-layer3PDU",false),
+	    params.getBoolValue("extended-debug",false));
+    if (m_q921Net)
+	m_q921Net->setDebug(params.getBoolValue("print-layer2PDU",false),
+	    params.getBoolValue("extended-debug",false));
+    if (m_q921Cpe)
+	m_q921Cpe->setDebug(params.getBoolValue("print-layer2PDU",false),
+	    params.getBoolValue("extended-debug",false));
     return true;
 }
 
-// Set tones to the remote end of the line
-bool AnalogChannel::setAnnouncement(const char* status, const char* callto)
+void SigIsdnMonitor::release()
 {
-    setStatus(status);
-    // Don't set announcements for FXO
-    if (!m_line || m_line->type() == AnalogLine::FXO)
-	return false;
-    Message* m = message("call.execute",false,true);
-    m->addParam("callto",callto);
-    bool ok = Engine::dispatch(*m);
-    TelEngine::destruct(m);
-    if (ok) {
-	setAudio(false);
-	Debug(this,DebugAll,"Announcement set to %s",callto);
+    m_monitorMutex.lock();
+    ListIterator iter(m_monitors);
+    GenObject* o = 0;
+    for (; (o = iter.get()); ) {
+	CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	c->disconnect();
     }
-    else
-	Debug(this,DebugMild,"Set announcement=%s failed",callto);
-    return ok;
-}
+    m_monitorMutex.unlock();
 
-// Outgoing call answered: set call state, start echo train, open data source/consumer
-void AnalogChannel::outCallAnswered()
-{
-    if (isAnswered())
-	return;
+    if (m_ifaceNet)
+	m_ifaceNet->control(SignallingInterface::Disable);
+    if (m_ifaceCpe)
+	m_ifaceCpe->control(SignallingInterface::Disable);
 
-    m_dialTimer.stop();
-    m_answered = true;
-    setStatus("answered");
-    if (m_line) {
-	m_line->changeState(AnalogLine::Answered);
-	m_line->setCircuitParam("echotrain");
+    if (q931()) {
+	q931()->destruct();
+	m_controller = 0;
     }
-    setAudio(true);
-    setAudio(false);
-    Engine::enqueue(message("call.answered",false,true));
+    TelEngine::destruct(m_q921Net);
+    TelEngine::destruct(m_q921Cpe);
+    TelEngine::destruct(m_groupNet);
+    TelEngine::destruct(m_groupCpe);
+    TelEngine::destruct(m_ifaceNet);
+    TelEngine::destruct(m_ifaceCpe);
+    XDebug(&plugin,DebugAll,"SigIsdnMonitor('%s'). Released [%p]",name().c_str(),this);
 }
-
-// Hangup. Release memory
-void AnalogChannel::destroyed()
-{
-    detachLine();
-    if (!m_hungup)
-	hangup(true);
-    else {
-	setConsumer();
-	setSource();
-    }
-    setStatus("destroyed");
-    Channel::destroyed();
-}
-
-// Detach the line from this channel
-void AnalogChannel::detachLine()
-{
-    Lock lock(m_mutex);
-    if (!m_line)
-	return;
-
-    m_line->moduleGroup()->setEndpoint(this,false);
-    m_line->userdata(0);
-    m_line->acceptPulseDigit(true);
-    if (m_line->state() != AnalogLine::Idle) {
-	m_line->sendEvent(SignallingCircuitEvent::RingEnd);
-	m_line->sendEvent(SignallingCircuitEvent::OnHook);
-	m_line->changeState(AnalogLine::Idle);
-    }
-    m_line->removeCallSetupDetector();
-    m_line->setCall();
-    // Don't disconnect the line if waiting for call setup (need auudio)
-    if (m_line->type() == AnalogLine::FXO && m_line->callSetup() == AnalogLine::Before)
-	m_line->setCallSetupDetector();
-    else
-	m_line->disconnect(false);
-    TelEngine::destruct(m_line);
-}
-
-// Send tones (DTMF or dial number)
-bool AnalogChannel::sendTones(const char* tone)
-{
-    if (!(m_line && tone && *tone))
-	return false;
-    DDebug(this,DebugInfo,"Sending tones='%s' [%p]",tone,this);
-    bool ok = false;
-    if (m_line->outbandDtmf()) {
-	NamedList p("");
-	p.addParam("tone",tone);
-	ok = m_line->sendEvent(SignallingCircuitEvent::Dtmf,&p);
-    }
-    if (!ok)
-	ok = dtmfInband(tone);
-    return ok;
-}
-
 
 /**
- * AnalogCallRec
+ * SigConsumerMux
  */
-// Append to driver's list
-AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
+void SigConsumerMux::Consume(const DataBlock& data, unsigned long tStamp)
+{
+    if (m_owner)
+	m_owner->consume(m_first,data,tStamp);
+}
+
+/**
+ * SigSourceMux
+ */
+SigSourceMux::SigSourceMux(const char* format, unsigned char idleValue, unsigned int chanBuffer)
+    : DataSource(format),
+    m_lock(true),
+    m_firstSrc(0),
+    m_secondSrc(0),
+    m_firstChan(0),
+    m_secondChan(0),
+    m_idleValue(idleValue),
+    m_sampleLen(0),
+    m_maxSamples(0),
+    m_samplesFirst(0),
+    m_samplesSecond(0),
+    m_error(0)
+{
+    if (getFormat() == "2*slin")
+	m_sampleLen = 2;
+    else if (getFormat() == "2*mulaw")
+	m_sampleLen = 1;
+    else if (getFormat() == "2*alaw")
+	m_sampleLen = 1;
+    else {
+	Debug(&plugin,DebugNote,
+	    "SigSourceMux::SigSourceMux(). Unsupported format %s [%p]",
+	    format,this);
+	return;
+    }
+    // Adjust channel buffer to be multiple of sample length and not lesser then it
+    if (chanBuffer < m_sampleLen)
+	chanBuffer = m_sampleLen;
+    m_maxSamples = chanBuffer / m_sampleLen;
+    chanBuffer = m_maxSamples * m_sampleLen;
+    m_buffer.assign(0,2 * chanBuffer);
+    // +2 to skip ofer the "2*"
+    m_firstChan = new SigConsumerMux(this,true,format+2);
+    m_secondChan = new SigConsumerMux(this,false,format+2);
+    XDebug(&plugin,DebugAll,
+	"SigSourceMux::SigSourceMux(). Format: %s, sample=%u, buffer=%u [%p]",
+	getFormat().c_str(),m_sampleLen,m_buffer.length(),this);
+}
+
+SigSourceMux::~SigSourceMux()
+{
+    Lock lock(m_lock);
+    removeSource(true);
+    removeSource(false);
+    if (m_firstChan)
+	m_firstChan->deref();
+    if (m_secondChan)
+	m_secondChan->deref();
+    XDebug(&plugin,DebugAll,"SigSourceMux::~SigSourceMux() [%p]",this);
+}
+
+#define MUX_CHAN (first ? '1' : '2')
+
+// Replace the consumer of the given source. Remove current consumer's source before
+// @param first True to replace with the first channel, false for the second
+// Return false if source is 0 or has invalid format (other then ours)
+bool SigSourceMux::attach(bool first, DataSource* source)
+{
+    Lock lock(m_lock);
+    removeSource(first);
+    if (!(source && source->ref()))
+	return false;
+    if (first) {
+	m_firstSrc = source;
+	source->attach(m_firstChan);
+    }
+    else {
+	m_secondSrc = source;
+	source->attach(m_secondChan);
+    }
+    return true;
+}
+
+// Multiplex received data from consumers and forward it
+// Forward multiplexed buffer if chan already filled
+// If received data is not greater then free space:
+//     Fill chan buffer with data
+//     If both channels are filled, forward the multiplexed buffer
+// Otherwise:
+//     Fill free chan buffer
+//     Forward buffer and consume the rest
+void SigSourceMux::consume(bool first, const DataBlock& data, unsigned long tStamp)
+{
+    Lock lock(m_lock);
+    unsigned int samples = data.length() / m_sampleLen;
+    if (!m_error && (data.length() % m_sampleLen)) {
+	Debug(&plugin,DebugWarn,
+	    "SigSourceMux. Wrong sample (received %u bytes) on channel %c [%p]",
+	    data.length(),MUX_CHAN,this);
+	m_error++;
+    }
+    if (!samples)
+	return;
+
+    // Forward buffer if already filled for this channel
+    if ((first && firstFull()) || (!first && secondFull())) {
+	DDebug(&plugin,DebugMild,"SigSourceMux. Buffer overrun on channel %c [%p]",
+	    MUX_CHAN,this);
+	forwardBuffer();
+    }
+
+    unsigned int freeSamples = m_maxSamples - (first ? m_samplesFirst: m_samplesSecond);
+    unsigned char* buf = (unsigned char*)data.data();
+
+    if (samples <= freeSamples) {
+	fillBuffer(first,buf,samples);
+	if (firstFull() && secondFull())
+	    forwardBuffer();
+	return;
+    }
+
+    // Received more samples that free space in buffer
+    fillBuffer(first,buf,freeSamples);
+    forwardBuffer();
+    unsigned int consumed = freeSamples * m_sampleLen;
+    DataBlock rest(buf + consumed,data.length() - consumed);
+    consume(first,rest,tStamp);
+}
+
+// Forward the buffer if at least one channel is filled. Reset data
+// If one channel is empty or incomplete, fill it with idle value
+void SigSourceMux::forwardBuffer()
+{
+    if (!(firstFull() || secondFull()))
+	return;
+    if (!(firstFull() && secondFull()))
+	fillBuffer(!firstFull());
+    m_samplesFirst = m_samplesSecond = 0;
+    Forward(m_buffer);
+}
+
+// Fill interlaced samples buffer with samples of received data
+// If no data, fill the free space with idle value
+void SigSourceMux::fillBuffer(bool first, unsigned char* data, unsigned int samples)
+{
+    unsigned int* count = (first ? &m_samplesFirst : &m_samplesSecond);
+    unsigned char* buf = (unsigned char*)m_buffer.data() + *count * m_sampleLen * 2;
+    if (!first)
+	buf += m_sampleLen;
+    // Fill received data
+    if (data) {
+	if (samples > m_maxSamples - *count)
+	    samples = m_maxSamples - *count;
+	*count += samples;
+	switch (m_sampleLen) {
+	    case 1:
+		for (; samples; samples--, buf += 2)
+		    *buf = *data++;
+		break;
+	    case 2:
+		for (; samples; samples--, buf += 4) {
+		    buf[0] = *data++;
+		    buf[1] = *data++;
+		}
+		break;
+	    case 0:
+		samples = 0;
+	    default: {
+		unsigned int delta = 2 * m_sampleLen;
+		for (; samples; samples--, buf += delta, data += m_sampleLen)
+		    ::memcpy(buf,data,m_sampleLen);
+	    }
+	}
+	return;
+    }
+    // Fill with idle value
+    samples = m_maxSamples - *count;
+    *count = m_maxSamples;
+    switch (m_sampleLen) {
+	case 1:
+	    for (; samples; samples--, buf += 2)
+		*buf = m_idleValue;
+	    break;
+	case 2:
+	    for (; samples; samples--, buf += 4)
+		buf[0] = buf[1] = m_idleValue;
+	    break;
+	case 0:
+	    samples = 0;
+	default: {
+	    unsigned int delta = 2 * m_sampleLen;
+	    for (; samples; samples--, buf += delta, data += m_sampleLen)
+		::memset(buf,m_idleValue,m_sampleLen);
+	}
+    }
+}
+
+// Remove the source for the appropriate consumer
+void SigSourceMux::removeSource(bool first)
+{
+    DataSource*& src = first ? m_firstSrc : m_secondSrc;
+    if (src) {
+	src->clear();
+	src->deref();
+	src = 0;
+    }
+}
+
+#undef MUX_CHAN
+
+/**
+ * SigIsdnCallRecord
+ */
+SigIsdnCallRecord::SigIsdnCallRecord(SigIsdnMonitor* monitor, const char* id,
+	SignallingEvent* event)
     : CallEndpoint(id),
-    m_line(line),
-    m_fxsCaller(fxsCaller),
-    m_answered(false),
-    m_hungup(false),
-    m_polarityCount(0),
-    m_startOnSecondRing(false),
-    m_noRingTimer(0),
-    m_status("startup")
+    m_lock(true),
+    m_netInit(false),
+    m_monitor(monitor),
+    m_call(0)
 {
-    debugName(CallEndpoint::id());
-    debugChain(&plugin);
-
-    ModuleLine* fxo = this->fxo();
-    if (!(fxo && m_line->ref())) {
-	m_line = 0;
-	m_reason = "invalid-line";
+    m_status = "startup";
+    // This parameters should be checked by the monitor
+    if (!(monitor && event && event->message() && event->call() && event->call()->ref())) {
+	m_reason = "Invalid initiating event";
 	return;
     }
-
-    plugin.setRecorder(this,true);
-    if (m_line->moduleGroup())
-	m_line->moduleGroup()->setEndpoint(this,true);
-    m_line->userdata(this);
-
-    m_line->connect(true);
-    m_line->changeState(AnalogLine::Dialing,true);
-    m_line->acceptPulseDigit(fxsCaller);
-    fxo->acceptPulseDigit(!fxsCaller);
-
-    // FXS caller:
-    // Caller id after first ring: delay router until the second ring and
-    //  set/remove call setup detector
-    if (fxsCaller) {
-	m_startOnSecondRing = (fxo->callSetup() == AnalogLine::After);
-	if (m_startOnSecondRing)
-	    fxo->setCallSetupDetector();
-	else
-	    fxo->removeCallSetupDetector();
-    }
-
-    m_address = m_line->address();
-
-    // Set caller/called
-    ModuleLine* info = m_line;
-    if (fxsCaller) {
-	if (m_startOnSecondRing && fxo->callSetup() == AnalogLine::Before)
-	    fxo->setCall(fxo->caller(),"",m_line->called());
-	else
-	    fxo->setCall(s_unk,"",m_line->called());
-	info = fxo;
-    }
-    else
-	m_line->setCall(s_unk,"",fxo->called());
-
-    Debug(this,DebugCall,"Created addr=%s initiator=%s [%p]",
-	m_line->address(),callertype(fxsCaller),this);
-
-    Engine::enqueue(message("chan.startup"));
-
-    if (fxsCaller) {
-	m_noRingTimer.interval(fxo->noRingTimeout());
-	DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
-	    m_noRingTimer.interval(),this);
-	m_noRingTimer.start();
-    }
+    m_call = static_cast<ISDNQ931CallMonitor*>(event->call());
+    m_netInit = m_call->netInit();
+    SignallingMessage* msg = event->message();
+    m_caller = msg->params().getValue("caller");
+    m_called = msg->params().getValue("called");
+    SignallingCircuit* cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuitCaller"));
+    if (!cic)
+	cic = static_cast<SignallingCircuit*>(m_call->getObject("SignallingCircuitCalled"));
+    if (cic)
+	m_address << monitor->name() << "/" << cic->code();
+    Debug(this->id(),DebugCall,"Initialized. Caller: '%s'. Called: '%s' [%p]",
+	m_caller.c_str(),m_called.c_str(),this);
 }
 
-// Close recorder. Disconnect the line
-void AnalogCallRec::hangup(const char* reason)
+SigIsdnCallRecord::~SigIsdnCallRecord()
 {
-    Lock lock(m_mutex);
-    if (m_hungup)
-	return;
+    close(0);
+    if (m_monitor)
+	m_monitor->removeCall(this);
+    Message* m = message("chan.hangup",false);
+    m->addParam("reason",m_reason);
+    Engine::enqueue(m);
+    Debug(id(),DebugCall,"Destroyed. Reason: '%s' [%p]",m_reason.safe(),this);
+}
 
-    m_hungup = true;
+// Update call endpoint status. Send chan.startup, call.route, call.execute
+// Create the multiplexer if missing
+// Update sources for the multiplexer. Change them if circuit changed
+// Start recording if the multiplexer has at least one source
+bool SigIsdnCallRecord::update(SignallingEvent* event)
+{
+    Lock lock(m_lock);
+    if (!(m_call && m_monitor && event && event->message()))
+	return false;
+    switch (event->type()) {
+	case SignallingEvent::NewCall:
+	    Engine::enqueue(message("chan.startup"));
+	    break;
+	case SignallingEvent::Ringing:
+	    if (m_status == "ringing")
+		break;
+	    m_status = "ringing";
+	    Engine::enqueue(message("call.ringing"));
+	    break;
+	case SignallingEvent::Answer:
+	    m_status = "answered";
+	    Engine::enqueue(message("call.answered"));
+	    break;
+	case SignallingEvent::Accept:
+	    break;
+	default: ;
+    }
+    SignallingMessage* msg = event->message();
+    bool chg = msg->params().getValue("circuit-change");
+    String format = msg->params().getValue("format");
+    if (format)
+	format = "2*" + format;
+    SigSourceMux* source = static_cast<SigSourceMux*>(getSource());
+    m_reason = "";
+    while (!source) {
+	if (!format)
+	    return true;
+	source = new SigSourceMux(format,m_monitor->idleValue(),m_monitor->chanBuffer());
+	if (!source->sampleLen()) {
+	    source->deref();
+	    m_reason = "Unsupported audio format";
+	    break;
+	}
+	setSource(source);
+	source->deref();
+	if (!getSource()) {
+	    m_reason = "Failed to set data source";
+	    break;
+	}
+	// Start recording
+	if (!callRouteAndExec(format))
+	    break;
+	DDebug(id(),DebugCall,"Start recording. Format: %s [%p]",format.c_str(),this);
+    }
+    if (m_reason.null() && format && source->getFormat() != format)
+	m_reason = "Data format changed";
+    if (!m_reason.null())
+	return close(0);
+    if (chg) {
+	source->removeSource(true);
+	source->removeSource(false);
+    }
+    // Set sources if missing
+    bool first = true;
+    while (true) {
+	if (!source->hasSource(first)) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(m_call->getObject(
+		first ? "SignallingCircuitCaller" : "SignallingCircuitCalled"));
+	    DataSource* src = cic ? static_cast<DataSource*>(cic->getObject("DataSource")) : 0;
+	    if (src) {
+		source->attach(first,src);
+		DDebug(id(),DebugAll,"Data source on channel %c set to (%p) [%p]",
+		    first ? '1' : '2',src,this);
+	    }
+	}
+	if (!first)
+	    break;
+	first = false;
+    }
+    return true;
+}
+
+// Close
+bool SigIsdnCallRecord::close(const char* reason)
+{
+    Lock lock(m_lock);
     m_status = "hangup";
-    if (!m_reason)
+    if (!m_call)
+	return false;
+    if (m_reason.null())
 	m_reason = reason;
-    if (!m_reason)
-	m_reason = Engine::exiting() ? "shutdown" : "unknown";
-
-    Debug(this,DebugCall,"Hangup reason='%s' [%p]",m_reason.c_str(),this);
+    if (m_reason.null())
+	m_reason = Engine::exiting() ? "net-out-of-order" : "unknown";
+    m_call->userdata(0);
+    if (m_monitor)
+	m_monitor->q931()->terminateMonitor(m_call,m_reason);
+    m_call->deref();
+    m_call = 0;
     setSource();
-    Engine::enqueue(message("chan.hangup",false));
-
-    // Disconnect lines
-    if (!m_line)
-	return;
-
-    ModuleLine* peer = fxo();
-    bool sync = !(peer && peer->callSetup() == AnalogLine::Before);
-
-    m_line->changeState(AnalogLine::Idle,true);
-    m_line->disconnect(sync);
-    m_line->acceptPulseDigit(true);
-    m_line->setCall();
-
-    if (peer) {
-	if (!sync)
-	    peer->setCallSetupDetector();
-	peer->acceptPulseDigit(true);
-	peer->setCall();
-    }
+    Debug(id(),DebugCall,"Closed. Reason: '%s' [%p]",m_reason.c_str(),this);
+    return false;
 }
 
-bool AnalogCallRec::disconnect(const char* reason)
+bool SigIsdnCallRecord::disconnect(const char* reason)
 {
-    Debug(this,DebugCall,"Disconnecting reason='%s' [%p]",reason,this);
-    hangup(reason);
+    close(reason);
+    XDebug(id(),DebugCall,"Disconnecting. Reason: '%s' [%p]",m_reason.safe(),this);
     return CallEndpoint::disconnect(m_reason);
 }
 
-// Get source(s) and other objects
-// DataSource0: caller's source
-// DataSource1: called's source
-void* AnalogCallRec::getObject(const String& name) const
+void SigIsdnCallRecord::disconnected(bool final, const char* reason)
 {
-    int who = (name == "DataSource0") ? 0 : (name == "DataSource1" ? 1 : -1);
-    if (who == -1)
-	return CallEndpoint::getObject(name);
-
-    ModuleLine* target = 0;
-    if (who)
-	 target = m_fxsCaller ? m_line : fxo();
-    else
-	 target = m_fxsCaller ? fxo() : m_line;
-    return (target && target->circuit()) ? target->circuit()->getObject("DataSource") : 0;
+    DDebug(id(),DebugCall,"Disconnected. Final: %s. Reason: '%s' [%p]",
+	String::boolText(final),reason,this);
+    if (m_reason.null())
+	m_reason = reason;
+    CallEndpoint::disconnected(final,m_reason);
 }
 
-// Create data source. Route and execute
-bool AnalogCallRec::startRecording()
+Message* SigIsdnCallRecord::message(const char* name, bool peers, bool userdata)
 {
-    m_line->setCircuitParam("echotrain");
-    if (getSource())
-	return true;
-
-    Debug(this,DebugCall,"Start recording [%p]",this);
-
-    Lock lock (m_mutex);
-    String format = "2*";
-    DataSource* src = 0;
-    String buflen;
-    if (m_line && m_line->circuit()) {
-	src = static_cast<DataSource*>(m_line->circuit()->getObject("DataSource"));
-	m_line->circuit()->getParam("buflen",buflen);
+    Message* m = new Message(name);
+    m->addParam("id",id());
+    m->addParam("status",m_status);
+    if (m_address)
+	m->addParam("address",m_address);
+    if (peers) {
+	m->addParam("caller",m_caller);
+	m->addParam("called",m_called);
     }
-    if (src)
-	format << src->getFormat();
+    if (userdata)
+	m->userData(this);
+    return m;
+}
 
-    // Create source
-    Message* m = message("chan.attach",false,true);
-    m->addParam("source","mux/");
-    m->addParam("notify",id());
-    if (buflen)
-	m->addParam("chanbuffer",buflen);
-    m->addParam("format",format);
-    m->addParam("fail","true");
-    m->addParam("failempty","true");
-    if (!Engine::dispatch(m))
-	Debug(this,DebugNote,"Error attaching data mux '%s' [%p]",m->getValue("error"),this);
-    else if (m->userData())
-	setSource(static_cast<DataSource*>(m->userData()->getObject("DataSource")));
-    TelEngine::destruct(m);
-    if (!getSource()) {
-	m_reason = "nodata";
-	return false;
-    }
-
-    // Route and execute
-    m = message("call.preroute");
-    m->addParam("callsource",callertype(m_fxsCaller));
-    const char* caller = m->getValue("caller");
-    if (!(caller && *caller))
-	m->setParam("caller",s_unk);
+bool SigIsdnCallRecord::callRouteAndExec(const char* format)
+{
+    Message* m = message("call.route");
     bool ok = false;
     while (true) {
-	if (!(Engine::dispatch(m)) &&
-	    (m->retValue() == "-" || m->retValue() == "error")) {
-	    m_reason = m->getValue("reason",m->getValue("error","failure"));
-	    break;
-	}
-	*m = "call.route";
 	m->addParam("type","record");
 	m->addParam("format",format);
-	m->setParam("callsource",callertype(m_fxsCaller));
-	if (!(Engine::dispatch(m) && m->retValue())) {
+	m->addParam("callsource",m_netInit ? "net" : "cpe");
+	if (!Engine::dispatch(m) || m->retValue().null()) {
 	    m_reason = "noroute";
 	    break;
 	}
@@ -2143,864 +2421,58 @@ bool AnalogCallRec::startRecording()
 	break;
     }
     TelEngine::destruct(m);
-    if (getPeer()) {
-	XDebug(this,DebugInfo,"Got connected: deref() [%p]",this);
-	deref();
-    }
-    else
-	setSource();
     return ok;
 }
 
-// Call answered: start recording
-bool AnalogCallRec::answered()
+void SigIsdnCallRecord::evInfo(SignallingEvent* event)
 {
-    Lock lock(m_mutex);
-    m_noRingTimer.stop();
-    m_startOnSecondRing = false;
-    if (!(m_line && startRecording()))
-	return false;
-    if (m_answered)
-	return true;
-    Debug(this,DebugCall,"Answered [%p]",this);
-    m_answered = true;
-    m_status = "answered";
-    m_line->changeState(AnalogLine::Answered,true);
-    Engine::enqueue(message("call.answered"));
-    return true;
-}
-
-// Process rings: start recording if delayed
-bool AnalogCallRec::ringing(bool fxsEvent)
-{
-    Lock lock(m_mutex);
-
-    if (m_line)
-	m_line->changeState(AnalogLine::Ringing,true);
-
-    // Ignore rings from on caller party
-    if (m_fxsCaller != fxsEvent) {
-	DDebug(this,DebugAll,"Ignoring ring from caller [%p]",this);
-	return true;
-    }
-
-    if (!m_answered) {
-	m_status = "ringing";
-	Engine::enqueue(message("call.ringing",false,true));
-    }
-
-    bool ok = true;
-    if (m_fxsCaller) {
-	if (m_startOnSecondRing) {
-	    m_startOnSecondRing = false;
-	    ok = startRecording();
-	}
-	if (m_line->getPeer())
-	    fxo()->removeCallSetupDetector();
-	if (ok && !m_answered) {
-	    DDebug(this,DebugAll,"Restarting ring timer for " FMT64 "ms [%p]",
-		m_noRingTimer.interval(),this);
-	    m_noRingTimer.start();
-	}
-    }
-    return ok;
-}
-
-// Enqueue chan.dtmf
-void AnalogCallRec::evDigits(bool fxsEvent, const char* text, bool tone)
-{
-    if (!(text && *text))
+    if (!(event && event->message()))
 	return;
-    DDebug(this,DebugAll,"Got %s digits=%s from %s [%p]",
-	tone?"tone":"pulse",text,callertype(fxsEvent),this);
-    Message* m = message("chan.dtmf",false,true);
-    m->addParam("text",text);
-    if (!tone)
-	m->addParam("pulse",String::boolText(true));
-    m->addParam("sender",callertype(fxsEvent));
-    Engine::enqueue(m);
-}
-
-// Process line polarity changes
-bool AnalogCallRec::evPolarity(bool fxsEvent)
-{
-    if (fxsEvent)
-	return true;
-
-    Lock lock(m_mutex);
-    m_polarityCount++;
-    DDebug(this,DebugAll,"Line polarity changed %u time(s) [%p]",m_polarityCount,this);
-
-    ModuleLine* fxo = this->fxo();
-    if (!fxo)
-	return false;
-
-    if (m_fxsCaller) {
-	if (!fxo->answerOnPolarity() || m_polarityCount > 1)
-	    return !fxo->hangupOnPolarity();
-	return true;
+    String tmp = event->message()->params().getValue("tone");
+    if (!tmp.null()) {
+	Message* m = message("chan.dtmf",false);
+	m->addParam("text",tmp);
+	bool fromCaller = event->message()->params().getBoolValue("fromcaller",false);
+	m->addParam("sender",fromCaller ? m_caller : m_called);
+	Engine::enqueue(m);
     }
-    if (!fxo->answerOnPolarity() || m_answered)
-	return !fxo->hangupOnPolarity();
-    return answered();
 }
-
-// Line alarms changed
-bool AnalogCallRec::evAlarm(bool fxsEvent, bool alarm, const char* alarms)
-{
-    Lock lock(m_mutex);
-    if (alarm) {
-	Debug(this,DebugNote,"%s line is out of order alarms=%s. Terminating now [%p]",
-	    callertype(!fxsEvent),alarms,this);
-	if (!m_reason) {
-	    m_reason = callertype(!fxsEvent);
-	    m_reason << "-out-of-order";
-	}
-	return false;
-    }
-    else {
-	if (m_line)
-	    m_line->setCircuitParam("echotrain");
-	Debug(this,DebugInfo,"No more alarms on %s line [%p]",callertype(!fxsEvent),this);
-    }
-    return true;
-}
-
-// Check timers. Return false to terminate
-bool AnalogCallRec::checkTimeouts(const Time& when)
-{
-    Lock lock(m_mutex);
-    if (!m_noRingTimer.timeout(when.msecNow()))
-	return true;
-    DDebug(this,DebugInfo,"Ring timer expired [%p]",this);
-    m_noRingTimer.stop();
-    hangup("cancelled");
-    return false;
-}
-
-// Fill a string with recorder status parameters
-void AnalogCallRec::statusParams(String& str)
-{
-    str.append("module=",",") << plugin.name();
-    str << ",peerid=";
-    if (getPeer())
-	 str << getPeer()->id();
-    str << ",status=" << m_status;
-    str << ",initiator=" << callertype(m_fxsCaller);
-    str << ",answered=" << m_answered;
-    str << ",address=" << m_address;
-}
-
-// Fill a string with recorder status detail parameters
-void AnalogCallRec::statusDetail(String& str)
-{
-    // format=Status|Address|Peer
-    Lock lock(m_mutex);
-    str.append(id(),";") << "=" << m_status;
-    str << "|" << m_address << "|";
-    if (getPeer())
-	 str << getPeer()->id();
-}
-
-// Remove from driver's list
-void AnalogCallRec::destroyed()
-{
-    plugin.setRecorder(this,false);
-    hangup();
-    // Reset line
-    if (m_line) {
-	m_line->userdata(0,true);
-	if (m_line->moduleGroup())
-	    m_line->moduleGroup()->setEndpoint(this,false);
-	TelEngine::destruct(m_line);
-    }
-    Debug(this,DebugCall,"Destroyed reason='%s' [%p]",m_reason.c_str(),this);
-    CallEndpoint::destroyed();
-}
-
-void AnalogCallRec::disconnected(bool final, const char *reason)
-{
-    DDebug(this,DebugCall,"Disconnected final=%s reason='%s' [%p]",
-	String::boolText(final),reason,this);
-    hangup(reason);
-    CallEndpoint::disconnected(final,m_reason);
-}
-
-Message* AnalogCallRec::message(const char* name, bool peers, bool userdata)
-{
-    Message* m = new Message(name);
-    m->addParam("id",id());
-    m->addParam("status",m_status);
-    if (m_address)
-	m->addParam("address",m_address);
-    ModuleLine* fxo = peers ? this->fxo() : 0;
-    if (fxo) {
-	if (m_fxsCaller) {
-	    m->addParam("caller",fxo->caller());
-	    m->addParam("called",fxo->called());
-	}
-	else {
-	    m->addParam("caller",m_line->caller());
-	    m->addParam("called",m_line->called());
-	}
-    }
-    if (m_reason)
-	m->addParam("reason",m_reason);
-    if (userdata)
-	m->userData(this);
-    return m;
-}
-
 
 /**
- * AnalogDriver
+ * SigLinkThread
  */
-String AnalogDriver::s_statusCmd[StatusCmdCount] = {"groups","lines","recorders"};
-
-AnalogDriver::AnalogDriver()
-    : Driver("analog","varchans"),
-    m_init(false),
-    m_recId(0)
+void SigLinkThread::run()
 {
-    Output("Loaded module Analog Channel");
-    m_statusCmd << "status " << name();
-    m_recPrefix << prefix() << "rec/";
-}
-
-AnalogDriver::~AnalogDriver()
-{
-    Output("Unloading module Analog Channel");
-    m_groups.clear();
-}
-
-void AnalogDriver::initialize()
-{
-    Output("Initializing module Analog Channel");
-    s_cfg = Engine::configFile("analog");
-    s_cfg.load();
-
-    NamedList dummy("");
-    NamedList* general = s_cfg.getSection("general");
-    if (!general) {
-	Debug(this,DebugMild,"Section 'general' is missing in configuration");
-	general = &dummy;
-    }
-
-    // Startup
-    if (!m_init) {
-	m_init = true;
-	setup();
-	installRelay(Halt);
-	installRelay(Progress);
-	installRelay(Update);
-	installRelay(Route);
-	Engine::install(new EngineStartHandler);
-	Engine::install(new ChanNotifyHandler);
-    }
-
-    // Build/initialize groups
-    String tmpRec = m_recPrefix.substr(0,m_recPrefix.length()-1);
-    unsigned int n = s_cfg.sections();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedList* sect = s_cfg.getSection(i);
-	if (!sect || sect->null() || *sect == "general" ||
-	    sect->startsWith(s_lineSectPrefix))
-	    continue;
-
-	// Check section name
-	bool valid = true;
-	if (*sect == name() || *sect == tmpRec)
-	    valid = false;
-	else
-	    for (unsigned int i = 0; i < StatusCmdCount; i++)
-		if (*sect == s_statusCmd[i]) {
-		    valid = false;
-		    break;
-		}
-	if (!valid) {
-	    Debug(this,DebugWarn,"Invalid use of reserved word in section name '%s'",sect->c_str());
-	    continue;
-	}
-
-	ModuleGroup* group = findGroup(*sect);
-	if (!sect->getBoolValue("enable",true)) {
-	    if (group)
-		removeGroup(group);
-	    continue;
-	}
-
-	// Create and/or initialize. Check for valid type if creating
-	const char* stype = sect->getValue("type");
-	int type = lookup(stype,AnalogLine::s_typeName,AnalogLine::Unknown);
-	switch (type) {
-	    case AnalogLine::FXO:
-	    case AnalogLine::FXS:
-	    case AnalogLine::Monitor:
-		break;
-	    default:
-		Debug(this,DebugWarn,"Unknown type '%s' for group '%s'",stype,sect->c_str());
-		continue;
-	}
-
-	bool create = (group == 0);
-	Debug(this,DebugAll,"%sing group '%s' of type '%s'",create?"Creat":"Reload",sect->c_str(),stype);
-
-	if (create) {
-	    if (type != AnalogLine::Monitor)
-		group = new ModuleGroup((AnalogLine::Type)type,*sect);
-	    else {
-		String tmp = *sect;
-		tmp << "/fxo";
-		ModuleGroup* fxo = new ModuleGroup(tmp);
-		group = new ModuleGroup(*sect,fxo);
-	    }
-	    lock();
-	    m_groups.append(group);
-	    unlock();
-	    XDebug(this,DebugAll,"Added group (%p,'%s')",group,group->debugName());
-	}
-
-	String error;
-	if (!group->initialize(*sect,*general,error)) {
-	    Debug(this,DebugWarn,"Failed to %s group '%s'. Error: '%s'",
-		create?"create":"reload",sect->c_str(),error.safe());
-	    if (create)
-		removeGroup(group);
-	}
-    }
-}
-
-bool AnalogDriver::msgExecute(Message& msg, String& dest)
-{
-    Channel* peer = static_cast<Channel*>(msg.userData());
-    ModuleLine* line = 0;
-    String cause;
-    const char* error = "failure";
-
-    // Check message parameters: peer channel, group, circuit, line
+    if (!(m_link && m_link->controller()))
+	return;
+    DDebug(&plugin,DebugAll,"%s is running for link '%s' [%p]",
+	name(),m_link->name().c_str(),this);
+    SignallingEvent* event = 0;
     while (true) {
-	if (!peer) {
-	    cause = "No data channel";
-	    break;
-	}
-	String tmp;
-	int cic = decodeAddr(dest,tmp,true);
-	ModuleGroup* group = findGroup(tmp);
-	if (group && !group->fxoRec())
-	    if (cic >= 0)
-		line = static_cast<ModuleLine*>(group->findLine(cic));
-	    else if (cic == -1) {
-		Lock lock(group);
-		// Destination is a group: find the first free idle line
-		for (ObjList* o = group->lines().skipNull(); o; o = o->skipNext()) {
-		    line = static_cast<ModuleLine*>(o->get());
-		    Lock lockLine(line);
-		    if (!line->userdata() && line->state() == AnalogLine::Idle)
-			break;
-		    line = 0;
-		}
-	    }
-
-	if (!line) {
-	    cause << "No line with address '" << dest << "'";
-	    error = "noroute";
-	    break;
-	}
-	if (line->type() == AnalogLine::Unknown) {
-	    cause << "Line '" << line->address() << "' has unknown type";
-	    break;
-	}
-	if (line->userdata()) {
-	    cause << "Line '" << line->address() << "' is busy";
-	    error = "busy";
-	    break;
-	}
-	if (line->state() == AnalogLine::OutOfService) {
-	    cause << "Line '" << line->address() << "' is out of service";
-	    error = "noroute";
-	    break;
-	}
-	if (!line->ref())
-	    cause = "ref() failed";
-	break;
-    }
-
-    if (!line || cause) {
-	Debug(this,DebugNote,"Analog call failed. %s",cause.c_str());
-	msg.setParam("error",error);
-	return false;
-    }
-
-    Debug(this,DebugAll,"Executing call. caller=%s called=%s line=%s",
-	msg.getValue("caller"),msg.getValue("called"),line->address());
-
-    msg.clearParam("error");
-    // Create channel
-    AnalogChannel* analogCh = new AnalogChannel(line,&msg);
-    error = msg.getValue("error");
-    if (!error) {
-	if (analogCh->connect(peer,msg.getValue("reason"))) {
-	    msg.setParam("peerid",analogCh->id());
-	    msg.setParam("targetid",analogCh->id());
-        }
-    }
-    else
-	Debug(this,DebugNote,"Analog call failed with reason '%s'",error);
-    analogCh->deref();
-    return !error;
-}
-
-void AnalogDriver::dropAll(Message& msg)
-{
-    const char* reason = msg.getValue("reason");
-    if (!(reason && *reason))
-	reason = "dropped";
-    DDebug(this,DebugInfo,"dropAll('%s')",reason);
-    Driver::dropAll(msg);
-    // Drop recorders
-    lock();
-    ListIterator iter(m_recorders);
-    for (;;) {
-	RefPointer<AnalogCallRec> c = static_cast<AnalogCallRec*>(iter.get());
-	unlock();
-	if (!c)
-	    break;
-	terminateChan(c,reason);
-	c = 0;
-	lock();
-    }
-}
-
-bool AnalogDriver::received(Message& msg, int id)
-{
-    String target;
-
-    switch (id) {
-	case Status:
-	case Drop:
-	    target = msg.getValue("module");
-	    // Target is the driver or channel
-	    if (!target || target == name() || target.startsWith(prefix()))
-		return Driver::received(msg,id);
-	    // Check if requested a recorder
-	    if (target.startsWith(recPrefix())) {
-		Lock lock(this);
-		AnalogCallRec* rec = findRecorder(target);
-		if (!rec)
-		    return false;
-		if (id == Status) {
-		    msg.retValue().clear();
-		    rec->statusParams(msg.retValue());
-		    msg.retValue() << "\r\n";
-		}
-		else
-		    terminateChan(rec,"dropped");
-		return true;
-	    }
-	    // Done if the command is drop
-	    if (id == Drop)
-		return Driver::received(msg,id);
-	    break;
-	case Halt:
-	    lock();
-	    m_groups.clear();
-	    unlock();
-	    return Driver::received(msg,id);
-	default:
-	    return Driver::received(msg,id);
-    }
-
-    // Check for additional status commands or a specific group or line
-    if (!target.startSkip(name(),false))
-	return false;
-    target.trimBlanks();
-    int cmd = 0;
-    for (; cmd < StatusCmdCount; cmd++)
-	if (s_statusCmd[cmd] == target)
-	    break;
-
-    Lock lock(this);
-    DDebug(this,DebugInfo,"Processing '%s' target=%s",msg.c_str(),target.c_str());
-    // Specific group or line
-    if (cmd == StatusCmdCount) {
-	String group;
-	int cic = decodeAddr(target,group,false);
-	ModuleGroup* grp = findGroup(group);
-	bool ok = true;
-	while (grp) {
-	    Lock lock(grp);
-	    if (target == grp->toString()) {
-		msg.retValue().clear();
-		grp->statusParams(msg.retValue());
-		break;
-	    }
-	    ModuleLine* line = static_cast<ModuleLine*>(grp->findLine(cic));
-	    if (!line) {
-		ok = false;
-		break;
-	    }
-	    msg.retValue().clear();
-	    Lock lockLine(line);
-	    line->statusParams(msg.retValue());
-	    break;
-	}
-	if (ok)
-	    msg.retValue() << "\r\n";
-	return ok;
-    }
-
-    // Additional command
-    String detail;
-    const char* format = 0;
-    int count = 0;
-    switch (cmd) {
-	case Groups:
-	    format = s_groupStatusDetail;
-	    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-		count++;
-		(static_cast<ModuleGroup*>(o->get()))->statusDetail(detail);
-	    }
-	    break;
-	case Lines:
-	    format = s_lineStatusDetail;
-	    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-		ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-		Lock lockGrp(grp);
-		for (ObjList* ol = grp->lines().skipNull(); ol; ol = ol->skipNext()) {
-		    count++;
-		    (static_cast<ModuleLine*>(ol->get()))->statusDetail(detail);
-		}
-	    }
-	    break;
-	case Recorders:
-	    format = s_recStatusDetail;
-	    for (ObjList* o = m_recorders.skipNull(); o; o = o->skipNext()) {
-		count++;
-		(static_cast<AnalogCallRec*>(o->get()))->statusDetail(detail);
-	    }
-	    break;
-	default:
-	    count = -1;
-    }
-    // Just in case we've missed something
-    if (count == -1)
-	return false;
-
-    msg.retValue().clear();
-    msg.retValue() << "module=" << name();
-    msg.retValue() << "," << s_statusCmd[cmd] << "=" << count;
-    msg.retValue() << "," << format;
-    if (detail)
-	msg.retValue() << ";" << detail;
-    msg.retValue() << "\r\n";
-    return true;
-}
-
-// Handle command complete requests
-bool AnalogDriver::commandComplete(Message& msg, const String& partLine,
-	const String& partWord)
-{
-    bool status = partLine.startsWith("status");
-    bool drop = !status && partLine.startsWith("drop");
-    if (!(status || drop))
-	return Driver::commandComplete(msg,partLine,partWord);
-
-    // 'status' command
-    Lock lock(this);
-    // line='status analog': add additional commands, groups and lines
-    if (partLine == m_statusCmd) {
-	DDebug(this,DebugInfo,"Processing '%s' partWord=%s",partLine.c_str(),partWord.c_str());
-	for (unsigned int i = 0; i < StatusCmdCount; i++)
-	    if (!partWord || s_statusCmd[i].startsWith(partWord))
-		msg.retValue().append(s_statusCmd[i],"\t");
-	completeGroups(msg.retValue(),partWord);
-	completeLines(msg.retValue(),partWord);
-	return true;
-    }
-
-    if (partLine != "status" && partLine != "drop")
-	return false;
-
-    // Empty partial word or name start with it: add name, prefix and recorder prefix
-    if (!partWord || name().startsWith(partWord)) {
-	msg.retValue().append(name(),"\t");
-	if (channels().skipNull())
-	    msg.retValue().append(prefix(),"\t");
-	return false;
-    }
-    // Non empty partial word greater then module name: check if we have a prefix
-    if (!partWord.startsWith(prefix()))
-	return false;
-    // Partial word is not empty and starts with module's prefix
-    // Recorder prefix (greater then any channel ID): complete recorders
-    // Between module and recorder prefix: complete recorder prefix and channels
-    if (partWord.startsWith(recPrefix())) {
-	bool all = (partWord == recPrefix());
-	completeChanRec(msg.retValue(),partWord,false,all);
-    }
-    else {
-	bool all = (partWord == prefix());
-	completeChanRec(msg.retValue(),partWord,true,all);
-	completeChanRec(msg.retValue(),partWord,false,all);
-    }
-    return true;
-}
-
-// Execute commands
-bool AnalogDriver::commandExecute(String& retVal, const String& line)
-{
-    DDebug(this,DebugInfo,"commandExecute(%s)",line.c_str());
-    return false;
-}
-
-// Complete group names from partial command word
-void AnalogDriver::completeGroups(String& dest, const String& partWord)
-{
-    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-	if (!partWord || grp->toString().startsWith(partWord))
-	    dest.append(grp->toString(),"\t");
-    }
-}
-
-// Complete line names from partial command word
-void AnalogDriver::completeLines(String& dest, const String& partWord)
-{
-    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-	Lock lock(grp);
-	bool all = (!partWord || partWord == grp->prefix());
-	for (ObjList* ol = grp->lines().skipNull(); ol; ol = ol->skipNext()) {
-	    ModuleLine* line = static_cast<ModuleLine*>(ol->get());
-	    if (all || line->toString().startsWith(partWord))
-		dest.append(line->toString(),"\t");
-	}
-    }
-}
-
-// Notification of line service state change or removal
-// Return true if a channel or recorder was found
-bool AnalogDriver::lineUnavailable(ModuleLine* line)
-{
-    if (!line)
-	return false;
-
-    const char* reason = (line->state() == AnalogLine::OutOfService) ? "line-out-of-service" : "line-shutdown";
-    Lock lock(this);
-    for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
-	AnalogChannel* ch = static_cast<AnalogChannel*>(o->get());
-	if (ch->line() != line)
-	    continue;
-	terminateChan(ch,reason);
-	return true;
-    }
-
-    // Check for recorders
-    if (!line->getPeer())
-	return false;
-    ModuleGroup* grp = line->moduleGroup();
-    AnalogCallRec* rec = 0;
-    if (grp && 0 != (rec = grp->findRecorder(line))) {
-	terminateChan(rec,reason);
-	return true;
-    }
-    return false;
-}
-
-// Destroy a channel
-void AnalogDriver::terminateChan(AnalogChannel* ch, const char* reason)
-{
-    if (!ch)
-	return;
-    DDebug(this,DebugAll,"Terminating channel %s peer=%p reason=%s",
-	ch->id().c_str(),ch->getPeer(),reason);
-    if (ch->getPeer())
-	ch->disconnect(reason);
-    else
-	ch->deref();
-}
-
-// Destroy a monitor endpoint
-void AnalogDriver::terminateChan(AnalogCallRec* ch, const char* reason)
-{
-    if (!ch)
-	return;
-    DDebug(this,DebugAll,"Terminating recorder %s peer=%p reason=%s",
-	ch->id().c_str(),ch->getPeer(),reason);
-    if (ch->getPeer())
-	ch->disconnect(reason);
-    else
-	ch->deref();
-}
-
-// Attach detectors after engine started
-void AnalogDriver::engineStart(Message& msg)
-{
-    s_engineStarted = true;
-    Lock lock(this);
-    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-	if (grp->type() != AnalogLine::FXO) {
-	    grp = grp->fxoRec();
-	    if (!grp || grp->type() != AnalogLine::FXO)
-		grp = 0;
-	}
-	if (!grp)
-	    continue;
-	Lock lock(grp);
-	for (ObjList* ol = grp->lines().skipNull(); ol; ol = ol->skipNext()) {
-	    ModuleLine* line = static_cast<ModuleLine*>(ol->get());
-	    if (line->callSetup() == AnalogLine::Before)
-	        line->setCallSetupDetector();
-	}
-    }
-}
-
-// Notify lines on detector events or channels
-bool AnalogDriver::chanNotify(Message& msg)
-{
-    String target = msg.getValue("targetid");
-    if (!target.startSkip(plugin.prefix(),false))
-	return false;
-
-    // Check if the notification is for a channel
-    if (-1 != target.toInteger(-1)) {
-	Debug(this,DebugStub,"Ignoring chan.notify with target=%s",msg.getValue("targetid"));
-	return true;
-    }
-
-    // Notify lines
-    String name;
-    int cic = decodeAddr(target,name,false);
-    ModuleLine* line = 0;
-    Lock lockDrv(this);
-    ModuleGroup* grp = findGroup(name);
-    if (grp)
-	line = static_cast<ModuleLine*>(grp->findLine(cic));
-    else {
-	// Find by recorder's fxo
-	grp = findGroup(name,true);
-	if (grp && grp->fxoRec())
-	    line = static_cast<ModuleLine*>(grp->fxoRec()->findLine(cic));
-    }
-
-    Lock lockLine(line);
-    if (!(line && line->ref())) {
-	Debug(this,DebugNote,"Received chan.notify for unknown target=%s",target.c_str());
-	return true;
-    }
-    lockDrv.drop();
-    line->processNotify(msg);
-    line->deref();
-    return true;
-}
-
-// Append/remove recorders from list
-void AnalogDriver::setRecorder(AnalogCallRec* rec, bool add)
-{
-    if (!rec)
-	return;
-    Lock lock(this);
-    if (add)
-	m_recorders.append(rec);
-    else
-	m_recorders.remove(rec,false);
-}
-
-// Remove a group from list
-void AnalogDriver::removeGroup(ModuleGroup* group)
-{
-    if (!group)
-	return;
-    Lock lock(this);
-    Debug(this,DebugAll,"Removing group (%p,'%s')",group,group->debugName());
-    m_groups.remove(group);
-}
-
-// Find a group or recorder by its name
-// Set useFxo to true to find a recorder by its fxo's name
-ModuleGroup* AnalogDriver::findGroup(const char* name, bool useFxo)
-{
-    if (!useFxo)
-	return findGroup(name);
-    if (!(name && *name))
-	return 0;
-    Lock lock(this);
-    String tmp = name;
-    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-	if (grp->fxoRec() && grp->fxoRec()->toString() == tmp)
-	    return grp;
-    }
-    return 0;
-}
-
-
-/**
- * AnalogWorkerThread
- */
-AnalogWorkerThread::AnalogWorkerThread(ModuleGroup* group)
-    : Thread("AnalogWorkerThread"),
-    m_client(group),
-    m_groupName(group ? group->debugName() : "")
-{
-}
-
-AnalogWorkerThread::~AnalogWorkerThread()
-{
-    DDebug(&plugin,DebugAll,"AnalogWorkerThread(%p,'%s') terminated [%p]",
-	m_client,m_groupName.c_str(),this);
-    if (m_client)
-	m_client->m_thread = 0;
-}
-
-void AnalogWorkerThread::run()
-{
-    Debug(&plugin,DebugAll,"AnalogWorkerThread(%p,'%s') start running [%p]",
-	m_client,m_groupName.c_str(),this);
-    if (!m_client)
-	return;
-    while (true) {
-	Time t = Time();
-	AnalogLineEvent* event = m_client->getEvent(t);
-	if (!event) {
-	    m_client->checkTimers(t);
+	if (!event)
 	    Thread::yield(true);
-	    continue;
-	}
-	ModuleLine* line = static_cast<ModuleLine*>(event->line());
-	SignallingCircuitEvent* cicEv = event->event();
-	if (line && cicEv)
-	    if (!m_client->fxoRec())
-		m_client->handleEvent(*line,*cicEv);
-	    else
-		m_client->handleRecEvent(*line,*cicEv);
-	else
-	    Debug(m_client,DebugInfo,"Invalid event (%p) line=%p cic event=%p",
-		event,line,event->event());
-	TelEngine::destruct(event);
-	if (Thread::check(true))
+	else if (Thread::check(true))
 	    break;
+	Time time;
+	event = m_link->controller()->getEvent(time);
+	if (event) {
+	    XDebug(&plugin,DebugAll,"Link('%s'). Got event (%p,'%s',%p,%u)",
+		m_link->name().c_str(),event,event->name(),event->call(),event->call()?event->call()->refcount():0);
+	    m_link->handleEvent(event);
+	    delete event;
+	}
+	// Check timeout if waiting to terminate
+	if (m_timeout && time.msec() > m_timeout) {
+	    DDebug(&plugin,DebugInfo,
+		"SigLinkThread::run(). Link '%s' timed out [%p]",
+		m_link->name().c_str(),this);
+	    String name = m_link->name();
+	    m_link->m_thread = 0;
+	    m_link = 0;
+	    plugin.clearLink(name);
+	    break;
+	}
     }
-}
-
-
-/**
- * EngineStartHandler
- */
-bool EngineStartHandler::received(Message& msg)
-{
-    plugin.engineStart(msg);
-    return false;
-}
-
-
-/**
- * ChanNotifyHandler
- */
-bool ChanNotifyHandler::received(Message& msg)
-{
-    return plugin.chanNotify(msg);
 }
 
 }; // anonymous namespace

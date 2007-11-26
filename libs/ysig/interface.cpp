@@ -27,61 +27,107 @@
 
 using namespace TelEngine;
 
+// SignallingInterface notification texts used to print debug
+TokenDict SignallingInterface::s_notifName[] = {
+	{"LinkUp",     LinkUp},
+	{"LinkDown",   LinkDown},
+	{"HWError",    HardwareError},
+	{"TxClock",    TxClockError},
+	{"RxClock",    RxClockError},
+	{"Align",      AlignError},
+	{"CRC",        CksumError},
+	{"TxOversize", TxOversize},
+	{"RxOversize", RxOversize},
+	{"TxOverflow", TxOverflow},
+	{"RxOverflow", RxOverflow},
+	{"TxUnder",    TxUnderrun},
+	{"RxUnder",    RxUnderrun},
+	{0,0}
+	};
+
 SignallingInterface::~SignallingInterface()
 {
-    Debug(engine(),DebugStub,"Please implement SignallingInterface::~");
+    if (m_receiver)
+	Debug(this,DebugGoOn,"Destroyed with receiver (%p) attached",m_receiver);
 }
 
 void SignallingInterface::attach(SignallingReceiver* receiver)
 {
+    Lock lock(m_recvMutex);
     if (m_receiver == receiver)
 	return;
-    Debug(engine(),DebugStub,"Please implement SignallingInterface::attach()");
+    SignallingReceiver* tmp = m_receiver;
     m_receiver = receiver;
+    lock.drop();
+    if (tmp) {
+	const char* name = 0;
+	if (engine() && engine()->find(tmp)) {
+	    name = tmp->toString().safe();
+	    tmp->attach(0);
+	}
+	Debug(this,DebugAll,"Detached receiver (%p,'%s') [%p]",tmp,name,this);
+    }
     if (!receiver)
 	return;
+    Debug(this,DebugAll,"Attached receiver (%p,'%s') [%p]",
+	receiver,receiver->toString().safe(),this);
     insert(receiver);
     receiver->attach(this);
 }
 
 bool SignallingInterface::control(Operation oper, NamedList* params)
 {
-    DDebug(engine(),DebugInfo,"Unhandled SignallingInterface::control(%d,%p) [%p]",
+    DDebug(this,DebugInfo,"Unhandled SignallingInterface::control(%d,%p) [%p]",
 	oper,params,this);
     return false;
 }
 
 bool SignallingInterface::receivedPacket(const DataBlock& packet)
 {
+    Lock lock(m_recvMutex);
     return m_receiver && m_receiver->receivedPacket(packet);
 }
 
 bool SignallingInterface::notify(Notification event)
 {
+    Lock lock(m_recvMutex);
     return m_receiver && m_receiver->notify(event);
 }
 
 
 SignallingReceiver::~SignallingReceiver()
 {
-    Debug(engine(),DebugStub,"Please implement SignallingReceiver::~");
+    if (m_interface)
+	Debug(this,DebugGoOn,"Destroyed with interface (%p) attached",m_interface);
 }
 
 void SignallingReceiver::attach(SignallingInterface* iface)
 {
+    Lock lock(m_ifaceMutex);
     if (m_interface == iface)
 	return;
-    Debug(engine(),DebugStub,"Please implement SignallingReceiver::attach()");
+    SignallingInterface* tmp = m_interface;
     m_interface = iface;
+    lock.drop();
+    if (tmp) {
+	const char* name = 0;
+	if (engine() && engine()->find(tmp)) {
+	    name = tmp->toString().safe();
+	    tmp->attach(0);
+	}
+	Debug(this,DebugAll,"Detached interface (%p,'%s') [%p]",tmp,name,this);
+    }
     if (!iface)
 	return;
+    Debug(this,DebugAll,"Attached interface (%p,'%s') [%p]",
+	iface,iface->toString().safe(),this);
     insert(iface);
     iface->attach(this);
 }
 
 bool SignallingReceiver::notify(SignallingInterface::Notification event)
 {
-    DDebug(DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
+    DDebug(this,DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
     return false;
 }
 

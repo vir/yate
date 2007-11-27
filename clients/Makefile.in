@@ -16,7 +16,7 @@ CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
-SUBDIRS :=
+SUBDIRS := gtk2
 MKDEPS  := ../config.status
 PROGS :=
 LIBS :=

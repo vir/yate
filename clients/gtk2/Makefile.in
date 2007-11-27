@@ -25,7 +25,7 @@ exec_prefix = @exec_prefix@
 # include optional local make rules
 -include YateLocal.mak
 
-.PHONY: all debug ddebug xdebug clean
+.PHONY: all debug ddebug xdebug clean install uninstall
 all: $(PROJECT)
 
 debug:

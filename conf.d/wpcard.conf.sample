@@ -1,0 +1,69 @@
+; This file keeps the configuration of cards using the wanpipe driver
+; Each section except for 'general' configures a group (span) of wanpipe channels
+
+
+[general]
+; This section is used to configure the module and set default values for
+;  span parameters
+
+; bitswap: boolean: Specify if sent/received data has each byte rotated (swapped)
+; If missing, enable is assumed
+; This parameter can be overridden in group sections
+;bitswap=enable
+
+; idlevalue: integer: The value to send for unused voice data channel
+; Interval: 0..255. Default value: 255
+; This parameter can be overridden in group sections
+;idlevalue=255
+
+; buflen: integer: The length of the buffers used by the data sources and consumers
+; Data consumers' buffers will be twice this value
+; This value can't be 0. Defaults to 160
+; This parameter can be overridden in group sections
+;buflen=160
+
+
+;[wanpipe1]
+;The section's name is the card name defined in wanpipe driver
+;E.g. wanpipe1
+
+; type: string: Specify the span type
+; Allowed values:
+;   E1, T1
+; Defaults to E1
+;type=E1
+
+; readonly: boolean: Specifies if this is a read only span (signalling and audio data)
+; If enabled, no data will be sent through this span
+; Defaults to no
+;readonly=no
+
+; siggroup: string: The name of the device containing the signalling channel(s)
+; E.g. w1g1
+; This parameter is required when creating a signalling interface (D-channel)
+;siggroup=w1g1
+
+; voicegroup: string: The name of the device containing the voice (data) channel(s)
+; This parameter is required when creating a voice group
+; E.g. w1g2
+;voicegroup=w1g2
+
+; voicechans: string: The range of channels used for voice (data) transfer
+; Channel intervals may be specified by separating the margins using the '-' character
+; Individual channels or channel intervals may be separated by '.'
+; Duplicate, not strict positive channel numbers, or channel numbers greater then channel
+;   count (channel count defaults to 31 for E1 and to 24 for T1) are not allowed
+; E.g. 1-15.17-31 or 1-23 or 1.2.3-15.17.18-30.31
+; If missing, will be computed from type (E1: 1-15.17-31, T1: 1-23)
+;voicechans=1-15.17-31
+
+; samples: integer: Specify the number of data samples expected to be received
+; If missing or 0, it will be computed from type (E1: 50, T1: 64)
+;samples=50
+
+; errormask: integer: Value to AND with the received error byte
+; The errors controlled by this mask are 1: RX overrun, 2: CRC, 4: Align
+; Maximum value 255
+; Defaults to 255 if missing or invalid
+;errormask=255
+

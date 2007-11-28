@@ -1,0 +1,124 @@
+; This file keeps the configuration of cards using the zaptel driver
+; Each section except for 'general' configures a group (span) of zaptel channels
+; For now on in this file's terminology a span means a group of circuits mapped
+;  to zaptel channels that may belong to different zaptel spans
+;
+; NOTES:
+;  - It is not mandatory to match a group of circuits to a zaptel span
+;  - The circuits are not created on load: they are created on demand
+;  - It is not possible to mix FXS/FXO circuits in the same group
+;  - All circuits belonging to the same group share its settings
+
+
+[general]
+; This section keeps general settings for zaptel module and groups
+
+; format: string: Default data format for analog (FXS/FXO) circuits
+; Allowed values are alaw (G711 a-law) or mulaw (G711 mu-law). Defaults to mulaw
+; This option can be overriden in span sections
+; NOTE: The data format for digital circuits defaults to alaw for E1 and mulaw
+;  for T1 and it's negociated by other protocols
+;format=mulaw
+
+; idlevalue: integer: The value to fill whenever voice data is missing
+; E.g. on incomplete read (less the buffer length) the circuit will fill the rest
+;  of the buffer with the value given by this parameter before forwarding it
+; Interval: 0..255. Defaults to 255
+; This option can be overriden in span sections
+;idlevalue=255
+
+; buflen: integer: The length of the buffers used by the data source and consumer
+;   created by the circuits
+; For data sources this is the length of the buffer used to read data from devices
+; Data consumers will use this value multiplied by 4 as a limit of send buffer. Any
+;  data exceeding the buffer length will be dropped. The purpose is to avoid driver
+;  buffer overrun
+; This value can't be 0. Defaults to 160
+; This option can be overriden in span sections
+;buflen=160
+
+; errormask: integer: Value to AND with the received error byte on E1/T1 interface
+; The errors controlled by this mask are 1: RX buffer overrun 2: HDLC Align error
+; Maximum value 255
+; Defaults to 255 if missing or invalid
+; Ignored if type is not E1 or T1
+; This option can be overriden in span sections
+;errormask=255
+
+; priority: keyword: Default priority of the data service threads (read data and
+;  events from Zaptel devices)
+; Allowed values: lowest, low, normal, high, highest
+; NOTE:
+;  - It is a bad idea to set a low priority for anything but testing
+;  - Interface (D-channel) circuits' threads are created when the interface is
+;    enabled and stopped when disabled/destroyed
+;  - Digital voice (E1/T1) circuits' threads are created when the circuit is
+;    connected (prepared to be used in an active call) and destroyed when
+;    disconnected/destroyed
+;  - Analog (FXS/FXO) circuits' threads are created when the circuit is reserved
+;    (used) and destroyed when idle(unused)/destroyed
+; Defaults to normal
+;priority=normal
+
+
+;[zaptel1]
+;This section configures a span (group of circuits) named zaptel1
+
+; type: string: Specify the span signalling type (required)
+; Allowed values:
+;  E1, T1:  E1/T1 signalling. Circuits belonging to this span can be
+;           configured as voice circuits or signalling only (SS7, ISDN etc) circuits
+;  FXO:     This group's circuits are telephone sets linked to telephone exchanges
+;  FXS:     This group's circuits are telephone exchanges linked to telephone sets
+; Defaults to E1 if missing or invalid
+; NOTE: Unlike Zaptel terminology, in this file FXO/FXS indicates the signalling of the
+;  local end of the line, not the remote's one
+;type=E1
+
+; offset: integer: Value to add to each circuit (voice or signalling) number (required)
+; This is the offset in the zaptel circuits set of the circuits belonging to this span
+; For example, if the span have 2 logical circuits: 1 and 3 and offset is 24 the
+;  circuit 1 will use the zaptel channel 25 and circuit 3 will use zaptel channel 27
+; There is no default value for this option: circuit/interface creation will be denied
+;  if this value is invalid (not an integer or less then 0)
+;offset=
+
+; sigchan: integer: The circuit used for signalling (D-channel)
+; Numbers greater then circuit count (circuit count defaults to 31 for E1 and
+;  to 24 for T1) are not allowed
+; Defaults to 16 for E1 and to 24 for T1
+; Ignored if type is FXS/FXO
+;sigchan=16
+
+; voicechans: string: The range of circuits used for voice (data) transfer or
+;  voice and signalling if the type is FXS/FXO
+; Circuit intervals may be specified by separating the margins using the '-' character
+; Individual circuits or circuit intervals may be separated by '.'
+; Duplicate, not strict positive circuit numbers, or circuit numbers greater
+;   then circuit count are not allowed. Circuit count defaults to 31 for E1
+;   and to 24 for T1. For FXS/FXO spans the channel count is detected from the list)
+; E.g. 1-15.17-31 or 1-23 or 1.2.3-15.17.18-30.31
+; If missing, will be computed from type (E1: 1-15.17-31, T1: 1-23, FXO/FXS: 1)
+;voicechans=1-15.17-31
+
+; dtmfdetect: boolean: Set/reset DTMF detection on each zaptel channel used by
+;  a circuit belonging to this span
+; If enabled and DTMF detection is not supported by the zaptel driver it will be disabled
+; Defaults to enable
+;dtmfdetect=enable
+
+; echotaps: integer: The number of taps in the echo canceller used by the circuits
+;  belonging to this span
+; Set to 0 to disable the echo canceller
+; Defaults to 0 if missing or invalid
+;echotaps=0
+
+; echotrain: integer: The amount of time (in miliseconds) used to train the echo canceller
+; Ignored if echo canceller is disabled
+; Defaults to 400
+;echotrain=400
+
+; readonly: boolean: Specifies if this is a read only span (signalling and audio data)
+; Defaults to no
+;readonly=no
+

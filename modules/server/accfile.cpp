@@ -30,6 +30,9 @@ namespace { // anonymous
 static Mutex s_mutex;
 static Configuration s_cfg(Engine::configFile("accfile"));
 
+static char s_helpOpt[] = "  accounts [reload|{login|logout|...} [account]]\r\n";
+static char s_helpMsg[] = "Controls client accounts (to other servers) operations\r\n";
+
 class AccHandler : public MessageHandler
 {
 public:
@@ -44,6 +47,15 @@ class CmdHandler : public MessageHandler
 public:
     CmdHandler()
 	: MessageHandler("engine.command")
+	{ }
+    virtual bool received(Message &msg);
+};
+
+class HelpHandler : public MessageHandler
+{
+public:
+    HelpHandler()
+	: MessageHandler("engine.help")
 	{ }
     virtual bool received(Message &msg);
 };
@@ -85,21 +97,63 @@ static void copyParams(NamedList& dest, const NamedList& src)
     }
 }
 
-static void emitAccounts(const char* operation = 0)
+static bool emitAccounts(const char* operation, const String& account = String::empty())
 {
+    bool ok = account.null();
     Lock lock(s_mutex);
     for (unsigned int i=0;i<s_cfg.sections();i++) {
 	NamedList* acc = s_cfg.getSection(i);
 	if (!(acc && acc->getValue("username") && acc->getBoolValue("enabled",true)))
+	    continue;
+	if (account && (account != *acc))
 	    continue;
 	Message* m = new Message("user.login");
 	copyParams(*m,*acc);
 	m->setParam("account",*acc);
 	if (operation)
 	    m->setParam("operation",operation);
-	Engine::enqueue(m);
+	ok = Engine::enqueue(m);
+    }
+    return ok;
+}
+
+static bool operAccounts(const String& operation, const String& account = String::empty())
+{
+    if (operation == "reload") {
+	Lock lock(s_mutex);
+	s_cfg.load();
+	return true;
+    }
+    return emitAccounts(operation,account);
+}
+
+// perform one completion only if match still possible
+static void completeOne(String& ret, const String& str, const char* part)
+{
+    if (part && !str.startsWith(part))
+	return;
+    ret.append(str,"\t");
+}
+
+// perform command line completion
+static void doCompletion(Message &msg, const String& partLine, const String& partWord)
+{
+    if (partLine.null() || (partLine == "help") || (partLine == "status"))
+	completeOne(msg.retValue(),"accounts",partWord);
+    else if (partLine == "accounts") {
+	completeOne(msg.retValue(),"reload",partWord);
+	completeOne(msg.retValue(),"login",partWord);
+	completeOne(msg.retValue(),"logout",partWord);
+    }
+    else if ((partLine == "accounts login") || (partLine == "accounts logout")) {
+	for (unsigned int i=0;i<s_cfg.sections();i++) {
+	    NamedList* acc = s_cfg.getSection(i);
+	    if (acc && acc->getValue("username") && acc->getBoolValue("enabled",true))
+		completeOne(msg.retValue(),*acc,partWord);
+	}
     }
 }
+
 
 bool AccHandler::received(Message &msg)
 {
@@ -127,24 +181,48 @@ bool AccHandler::received(Message &msg)
     return false;
 }
 
+
 bool CmdHandler::received(Message &msg)
 {
     String line = msg.getValue("line");
+    if (line.null()) {
+	doCompletion(msg,msg.getValue("partline"),msg.getValue("partword"));
+	return false;
+    }
     if (!line.startSkip("accounts"))
 	return false;
-    if (line == "reload") {
-	Lock lock(s_mutex);
-	s_cfg.load();
-    }
+
+    bool ok = false;
+    int sep = line.find(' ');
+    if (sep > 0)
+	ok = operAccounts(line.substr(0,sep).trimBlanks(),line.substr(sep+1).trimBlanks());
     else
-	emitAccounts(line);
+	ok = operAccounts(line);
+    if (!ok)
+	msg.retValue() = "Accounts operation failed: " + line + "\r\n";
     return true;
 }
+
+
+bool HelpHandler::received(Message &msg)
+{
+    String line = msg.getValue("line");
+    if (line.null()) {
+	msg.retValue() << s_helpOpt;
+	return false;
+    }
+    if (line != "accounts")
+	return false;
+    msg.retValue() << s_helpOpt << s_helpMsg;
+    return true;
+}
+
 
 bool StatusHandler::received(Message &msg)
 {
     String dest(msg.getValue("module"));
-    if (dest && (dest != "accfile") && (dest != "misc"))
+    bool exact = (dest == "accfile");
+    if (dest && !exact && (dest != "accounts") && (dest != "misc"))
 	return false;
     Lock lock(s_mutex);
     unsigned int n = s_cfg.sections();
@@ -167,14 +245,16 @@ bool StatusHandler::received(Message &msg)
 	}
     }
     msg.retValue() << "\r\n";
-    return false;
+    return exact;
 }
+
 
 bool StartHandler::received(Message &msg)
 {
     emitAccounts("login");
     return false;
 };
+
 
 AccFilePlugin::AccFilePlugin()
     : m_first(true)
@@ -192,6 +272,7 @@ void AccFilePlugin::initialize()
 	Engine::install(new StatusHandler);
 	Engine::install(new StartHandler);
 	Engine::install(new CmdHandler);
+	Engine::install(new HelpHandler);
     }
 }
 

@@ -1333,10 +1333,6 @@ WpModule::WpModule()
     Output("Loaded module %s",debugName());
     Configuration cfg(Engine::configFile("wpcard"));
     cfg.load();
-
-    int level = cfg.getIntValue("general","debuglevel");
-    if (level > 0)
-	debugLevel(level);
 }
 
 WpModule::~WpModule()

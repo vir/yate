@@ -1506,7 +1506,7 @@ bool Client::action(Window* wnd, const String& name)
 	    page = 0;
 	String helpFile = Engine::config().getValue("client","helpbase");
 	if (helpFile.null())
-	    helpFile << Engine::sharedPath() << Engine::pathSeparator() << "help";
+	    helpFile << Engine::modulePath() << Engine::pathSeparator() << "help";
 	if (!helpFile.endsWith(Engine::pathSeparator()))
 	    helpFile << Engine::pathSeparator();
 	helpFile << page << ".yhlp";
@@ -2428,12 +2428,14 @@ void ClientDriver::msgTimer(Message& msg)
     Driver::msgTimer(msg);
     if (Client::self()) {
 	Client::self()->lockOther();
-	ObjList* l = &channels();
-	for (; l; l = l->next()) {
-	    ClientChannel* cc = static_cast<ClientChannel*>(l->get());
-	    if (cc) {
+	ListIterator iter(channels());
+	while (ClientChannel* cc = static_cast<ClientChannel*>(iter.get())) {
+	    if (cc->ref()) {
+		unlock();
 		cc->update(false);
 		Client::self()->setChannelInternal(cc);
+		cc->deref();
+		lock();
 	    }
 	}
 	Client::self()->unlockOther();

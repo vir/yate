@@ -260,7 +260,18 @@ SIPEvent* SIPEngine::getEvent()
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
 	if (t) {
-	    SIPEvent* e = t->getEvent();
+	    SIPEvent* e = t->getEvent(true);
+	    if (e) {
+		DDebug(this,DebugInfo,"Got pending event %p (state %s) from transaction %p [%p]",
+		    e,SIPTransaction::stateName(e->getState()),t,this);
+		return e;
+	    }
+	}
+    }
+    for (l = &TransList; l; l = l->next()) {
+	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
+	if (t) {
+	    SIPEvent* e = t->getEvent(false);
 	    if (e) {
 		DDebug(this,DebugInfo,"Got event %p (state %s) from transaction %p [%p]",
 		    e,SIPTransaction::stateName(e->getState()),t,this);

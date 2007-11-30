@@ -242,7 +242,7 @@ void SIPTransaction::setTimeout(u_int64_t delay, unsigned int count)
 #endif
 }
 
-SIPEvent* SIPTransaction::getEvent()
+SIPEvent* SIPTransaction::getEvent(bool pendingOnly)
 {
     SIPEvent *e = 0;
 
@@ -256,6 +256,9 @@ SIPEvent* SIPTransaction::getEvent()
 	m_transmit = false;
 	return new SIPEvent(m_lastMessage ? m_lastMessage : m_firstMessage,this);
     }
+
+    if (pendingOnly)
+	return 0;
 
     int timeout = -1;
     if (m_timeout && (Time::now() >= m_timeout)) {

@@ -673,9 +673,10 @@ public:
      * It provides default handling for invalid states, otherwise calls
      *  the more specific protected version.
      * You may override this method if you need processing of invalid states.
+     * @param pendingOnly True to only return outgoing and pending events
      * @return A newly allocated event or NULL if none is needed
      */
-    virtual SIPEvent* getEvent();
+    virtual SIPEvent* getEvent(bool pendingOnly = false);
 
     /**
      * Creates and transmits a final response message

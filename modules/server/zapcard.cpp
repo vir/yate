@@ -1827,8 +1827,9 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
 bool ZapCircuit::setParam(const String& param, const String& value)
 {
     if (param == "echotrain") {
-	int tmp = value.toInteger();
-	m_echoTrain = tmp >= 0 ? tmp : 0;
+	int tmp = value.toInteger(-1);
+	if (tmp != -1)
+	    m_echoTrain = tmp;
 	return m_device.valid() && m_crtEchoCancel && m_device.startEchoTrain(m_echoTrain);
     }
     if (param == "echocancel") {

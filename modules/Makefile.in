@@ -64,11 +64,11 @@ PROGS := $(PROGS) client/alsachan.yate
 endif
 
 ifneq (@HAVE_ZAP@,no)
-#PROGS := $(PROGS) server/zapcard.yate
+PROGS := $(PROGS) server/zapcard.yate
 endif
 
-ifeq (@HAVE_WANPIPE@,no)
-#PROGS := $(PROGS) server/wpcard.yate
+ifneq (@HAVE_WANPIPE@,no)
+PROGS := $(PROGS) server/wpcard.yate
 endif
 
 ifneq (@HAVE_SPANDSP@,no)
@@ -182,7 +182,8 @@ lib%.so: %.o
 # Take special care of the modules that depend on optional libs
 
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
-server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALFLAGS = -I../libs/ysig
+server/ysigchan.yate server/wpcard.yate server/analog.yate: LOCALFLAGS = -I../libs/ysig
+server/zapcard.yate: LOCALFLAGS = -I../libs/ysig @ZAP_FLAGS@
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@

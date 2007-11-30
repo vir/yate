@@ -532,7 +532,7 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 	return;
     }
     // Data
-    m_inband = link->inband();
+    m_inband = msg.getBoolValue("dtmfinband",link->inband());
     // Make the call
     SignallingMessage* sigMsg = new SignallingMessage;
     sigMsg->params().addParam("caller",caller);
@@ -552,10 +552,12 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 	SignallingCircuit* cic = getCircuit();
 	if (cic) {
 	    m_address << m_link->name() << "/" << cic->code();
-	    // Set echo cancel for Zaptel circuits
-	    if (cic->getObject("ZapCircuit") && msg.getBoolValue("cancelecho")) {
-		String value = 1;
+	    // Set echo cancel
+	    const char* echo = msg.getValue("cancelecho");
+	    if (echo) {
+		String value = echo;
 		cic->setParam("echotaps",value);
+		cic->setParam("echocancel",String::boolText(value.toInteger()));
 	    }
 	}
 	setMaxcall(msg);

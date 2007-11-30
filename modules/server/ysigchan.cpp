@@ -100,7 +100,6 @@ private:
 	    return cic;
 	}
 private:
-    Mutex m_callMutex;                   // Call operation lock
     String m_caller;
     String m_called;
     SignallingCall* m_call;              // The signalling call this channel is using
@@ -466,7 +465,6 @@ inline void applyDebugLevel(DebugEnabler* dbg, int level)
 // Construct an incoming channel
 SigChannel::SigChannel(SignallingEvent* event)
     : Channel(&plugin,0,false),
-    m_callMutex(true),
     m_call(event->call()),
     m_link(0),
     m_hungup(false),
@@ -519,7 +517,6 @@ SigChannel::SigChannel(SignallingEvent* event)
 // Construct an outgoing channel
 SigChannel::SigChannel(Message& msg, const char* caller, const char* called, SigLink* link)
     : Channel(&plugin,0,true),
-    m_callMutex(true),
     m_caller(caller),
     m_called(called),
     m_call(0),
@@ -601,7 +598,7 @@ void SigChannel::handleEvent(SignallingEvent* event)
 
 bool SigChannel::msgProgress(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     setState("progressing");
     if (!m_call)
 	return true;
@@ -623,7 +620,7 @@ bool SigChannel::msgProgress(Message& msg)
 
 bool SigChannel::msgRinging(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     setState("ringing");
     if (!m_call)
 	return true;
@@ -643,7 +640,7 @@ bool SigChannel::msgRinging(Message& msg)
 
 bool SigChannel::msgAnswered(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     setState("answered");
     if (!m_call)
 	return true;
@@ -671,7 +668,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 {
     if (!(tone && *tone))
 	return true;
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     DDebug(this,DebugCall,"Tone. '%s' %s[%p]",tone,(m_call ? "" : ". No call "),this);
     // Try to send: through the circuit, in band or through the signalling protocol
     SignallingCircuit* cic = getCircuit();
@@ -695,7 +692,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
 
 bool SigChannel::msgText(Message& msg, const char* text)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     DDebug(this,DebugCall,"Text. '%s' %s[%p]",text,(m_call ? "" : ". No call "),this);
     if (!m_call)
 	return true;
@@ -715,7 +712,7 @@ bool SigChannel::msgDrop(Message& msg, const char* reason)
 
 bool SigChannel::msgTransfer(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     DDebug(this,DebugCall,"msgTransfer %s[%p]",(m_call ? "" : ". No call "),this);
     if (!m_call)
 	return true;
@@ -725,21 +722,21 @@ bool SigChannel::msgTransfer(Message& msg)
 
 bool SigChannel::callPrerouted(Message& msg, bool handled)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     setState("prerouted",false);
     return m_call != 0;
 }
 
 bool SigChannel::callRouted(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     setState("routed",false);
     return m_call != 0;
 }
 
 void SigChannel::callAccept(Message& msg)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     if (m_call) {
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
@@ -776,7 +773,7 @@ void SigChannel::disconnected(bool final, const char* reason)
 
 void SigChannel::hangup(const char* reason)
 {
-    Lock lock(m_callMutex);
+    Lock lock(m_mutex);
     if (m_hungup)
 	return;
     setSource();

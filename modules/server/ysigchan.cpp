@@ -840,9 +840,9 @@ void SigChannel::evInfo(SignallingEvent* event)
     // Check DTMF
     String tmp = msg->params().getValue("tone");
     if (!tmp.null()) {
-	bool inband = msg->params().getBoolValue("inband");
 	DDebug(this,DebugCall,"Event: '%s'. DTMF: '%s'. In band: %s [%p]",
-	    event->name(),tmp.c_str(),String::boolText(inband),this);
+	    event->name(),tmp.c_str(),
+	    String::boolText(msg->params().getBoolValue("inband")),this);
 	Message* m = message("chan.dtmf");
 	m->addParam("text",tmp);
 	Engine::enqueue(m);

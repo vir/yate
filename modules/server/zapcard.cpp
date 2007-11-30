@@ -1828,7 +1828,7 @@ bool ZapCircuit::setParam(const String& param, const String& value)
 {
     if (param == "echotrain") {
 	int tmp = value.toInteger(-1);
-	if (tmp != -1)
+	if (tmp >= 0)
 	    m_echoTrain = tmp;
 	return m_device.valid() && m_crtEchoCancel && m_device.startEchoTrain(m_echoTrain);
     }

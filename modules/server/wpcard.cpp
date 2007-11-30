@@ -35,9 +35,14 @@ extern "C" {
 #define __LINUX__
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
-#include <linux/wanpipe.h>
+#include <linux/wanpipe_defines.h>
 #include <linux/wanpipe_cfg.h>
-#include <linux/sdla_bitstrm.h>
+#include <linux/wanpipe.h>
+#include <linux/sdla_aft_te1.h>
+
+#ifdef HAVE_WANPIPE_HWEC
+#include <wanec_iface.h>
+#endif
 
 };
 
@@ -119,11 +124,7 @@ private:
 class WpSocket
 {
 public:
-    inline WpSocket(DebugEnabler* dbg, const char* card = 0, const char* device = 0)
-	: m_dbg(dbg), m_card(card), m_device(device),
-	m_canRead(false), m_event(false),
-	m_readError(false), m_writeError(false), m_selectError(false)
-	{}
+    WpSocket(DebugEnabler* dbg, const char* card = 0, const char* device = 0);
     inline ~WpSocket()
 	{ close(); }
     inline bool valid() const
@@ -136,6 +137,14 @@ public:
 	{ m_card = name; }
     inline void device(const char* name)
 	{ m_device = name; }
+    // Get/Set echo canceller availability
+    inline bool echoCanAvail() const
+	{ return m_echoCanAvail; }
+    void echoCanAvail(bool val);
+    // Set echo canceller and tone detection if available
+    bool echoCancel(bool enable, unsigned long chanmap);
+    // Set tone detection if available
+    bool dtmfDetect(bool enable);
     inline bool canRead() const
 	{ return m_canRead; }
     inline bool event() const
@@ -159,9 +168,10 @@ protected:
 	}
 private:
     DebugEnabler* m_dbg;                 // Debug enabler owning this socket
-    Socket m_socket;                     // 
+    Socket m_socket;                     // The socket
     String m_card;                       // Card name used to open socket
     String m_device;                     // Device name used to open socket
+    bool m_echoCanAvail;                 // Echo canceller is available or not
     bool m_canRead;                      // Set by select(). Can read from socket
     bool m_event;                        // Set by select(). An event occurred
     bool m_readError;                    // Flag used to print read errors
@@ -262,7 +272,10 @@ class WpCircuit : public SignallingCircuit
 {
 public:
     WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
-	unsigned int buflen);
+	unsigned int buflen, unsigned int channel);
+    // Get circuit channel number inside its span
+    unsigned int channel() const
+	{ return m_channel; }
     virtual ~WpCircuit();
     virtual bool status(Status newStat, bool sync = false);
     virtual bool updateFormat(const char* format, int direction);
@@ -273,6 +286,7 @@ public:
 	{ return m_consumerValid; }
 private:
     Mutex m_mutex;
+    unsigned int m_channel;              // Channel number inside span
     WpSource* m_sourceValid;             // Circuit's source if reserved, otherwise: 0
     WpConsumer* m_consumerValid;         // Circuit's consumer if reserved, otherwise: 0
     WpSource* m_source;
@@ -296,6 +310,8 @@ public:
     // Received data is splitted for each circuit
     // Sent data from each circuit is merged into one data block
     void run();
+    // Find a circuit by channel
+    WpCircuit* find(unsigned int channel);
 protected:
     // Create circuits (all or nothing)
     // delta: number to add to each circuit code
@@ -315,6 +331,9 @@ private:
     WpSpanThread* m_thread;
     bool m_canSend;                      // Can send data (not a readonly span)
     bool m_swap;                         // Swap bits flag
+    unsigned long m_chanMap;             // Channel map used to set tone detector
+    bool m_echoCancel;                   // Enable/disable echo canceller
+    bool m_dtmfDetect;                   // Enable/disable tone detector
     unsigned int m_chans;                // Total number of circuits for this span
     unsigned int m_count;                // Circuit count
     unsigned int m_first;                // First circuit code
@@ -396,6 +415,118 @@ unsigned char Fifo::get()
 /**
  * WpSocket
  */
+WpSocket::WpSocket(DebugEnabler* dbg, const char* card, const char* device)
+    : m_dbg(dbg),
+    m_card(card),
+    m_device(device),
+#ifdef HAVE_WANPIPE_HWEC
+    m_echoCanAvail(true),
+#else
+    m_echoCanAvail(false),
+#endif
+    m_canRead(false),
+    m_event(false),
+    m_readError(false),
+    m_writeError(false),
+    m_selectError(false)
+{
+}
+
+// Set echo canceller availability
+void WpSocket::echoCanAvail(bool val)
+{
+#ifdef HAVE_WANPIPE_HWEC
+    m_echoCancelAvail = val;
+#endif
+}
+
+// Set echo canceller and tone detection if available
+bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
+{
+    if (!m_echoCanAvail) {
+	Debug(m_dbg,DebugNote,
+	    "WpSocket(%s/%s). Echo canceller is unavailable. Can't %s it [%p]",
+	    m_card.c_str(),m_device.c_str(),enable?"enable":"disable",this);
+	return false;
+    }
+
+    bool ok = false;
+
+#ifdef HAVE_WANPIPE_HWEC
+    wan_ec_api_t ecapi;
+    ::memset(&ecapi,0,sizeof(ecapi));
+    ::strncpy((char*)ecapi.devname,m_card,sizeof(ecapi.devname));
+    //::strncpy((char*)ecapi.if_name,device,sizeof(ecapi.if_name));
+    ecapi.channel_map = chanmap;
+    if (enable) {
+	ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
+	ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
+	// event on start of tone, before echo canceller
+	ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
+	ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
+    }
+    else
+	ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;
+
+    int fd = -1;
+    for (int i = 0; i < 5; i++) {
+	fd = open(WANEC_DEV_DIR WANEC_DEV_NAME, O_RDONLY);
+	if (fd >= 0)
+	    break;
+	Thread::msleep(200);
+    }
+    const char* operation = 0;
+    if (fd >= 0) {
+	ecapi->err = WAN_EC_API_RC_OK;
+	if (::ioctl(fd,ecapi->cmd,ecapi))
+	    operation = "IOCTL";
+    }
+    else
+	operation = "Open";
+    ok = !operation;
+    if (!ok && m_dbg && m_dbg->debugAt(DebugNote)) {
+	String info;
+	info << ". Can't " << (enable?"enable":"disable") << " echo canceller";
+	showError(operation,info,DebugNote);
+    }
+    ::close(fd);
+#endif
+
+    if (ok)
+	DDebug(m_dbg,DebugInfo,
+	    "WpSocket(%s/%s). %sabled echo canceller [%p]",
+	    m_card.c_str(),m_device.c_str(),enable?"En":"Dis",this);
+    return ok;
+}
+
+// Set tone detection if available
+bool WpSocket::dtmfDetect(bool enable)
+{
+    bool ok = false;
+
+#ifdef HAVE_WANPIPE_HWEC
+    api_tx_hdr_t a;
+    ::memset(&a,0,sizeof(api_tx_hdr_t));
+    a.u.event.type = WP_API_EVENT_DTMF;
+    a.u.event.mode = enable ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
+    ok = (::ioctl(m_socket.handle(),SIOC_WANPIPE_API,&a) >= 0);
+#else
+    // pretend enabling fails, disabling succeeds
+    if (!enable)
+	ok = true;
+    else
+	errno = ENOSYS;
+#endif
+
+    if (ok)
+	DDebug(m_dbg,DebugInfo,
+	    "WpSocket(%s/%s). %sabled tone detector [%p]",
+	     m_card.c_str(),m_device.c_str(),enable?"En":"Dis",this);
+    else
+	showError("dtmfDetect");
+    return ok;
+}
+
 // Open socket
 bool WpSocket::open(bool blocking)
 {
@@ -495,6 +626,7 @@ bool WpSocket::select(unsigned int multiplier)
     return false;
 }
 
+
 /**
  * WpInterface
  */
@@ -558,8 +690,8 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 {
     // Set socket card / device
     m_socket.card(config);
-    const char* sig = params.getValue("siggroup",config.getValue("siggroup"));
-    if (!sig) {
+    const char* sig = config.getValue("siggroup");
+    if (!(sig && *sig)) {
 	Debug(this,DebugWarn,
 	    "Missing or invalid siggroup='%s' in configuration [%p]",
 	    c_safe(sig),this);
@@ -567,7 +699,7 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
     }
     m_socket.device(sig);
 
-    m_readOnly = config.getBoolValue("readonly",false);
+    m_readOnly = params.getBoolValue("readonly",config.getBoolValue("readonly",false));
 
     int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
@@ -855,9 +987,10 @@ void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
  * WpCircuit
  */
 WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
-	unsigned int buflen)
+	unsigned int buflen, unsigned int channel)
     : SignallingCircuit(TDM,code,Idle,group,data),
     m_mutex(true),
+    m_channel(channel),
     m_sourceValid(0),
     m_consumerValid(0),
     m_source(0),
@@ -1027,6 +1160,9 @@ WpSpan::WpSpan(const NamedList& params)
     m_thread(0),
     m_canSend(true),
     m_swap(false),
+    m_chanMap(0),
+    m_echoCancel(false),
+    m_dtmfDetect(false),
     m_chans(0),
     m_count(0),
     m_first(0),
@@ -1075,7 +1211,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	return false;
     }
     m_socket.device(voice);
-    m_canSend = !config.getBoolValue("readonly",false);
+    m_canSend = !params.getBoolValue("readonly",config.getBoolValue("readonly",false));
     // Type depending data: channel count, samples, circuit list
     String type = config.getValue("type");
     String cics = config.getValue("voicechans");
@@ -1109,6 +1245,9 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     m_swap = params.getBoolValue("bitswap",config.getBoolValue("bitswap",m_swap));
     m_noData = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_noData));
     m_buflen = params.getIntValue("buflen",config.getIntValue("buflen",m_buflen));
+    m_echoCancel = params.getBoolValue("echocancel",config.getBoolValue("echocancel",false));
+    m_dtmfDetect = params.getBoolValue("dtmfdetect",config.getBoolValue("dtmfdetect",false));
+
     // Buffer length can't be 0
     if (!m_buflen)
 	m_buflen = 160;
@@ -1156,10 +1295,14 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
 	delete[] m_circuits;
     m_circuits = new WpCircuit*[m_count];
     bool ok = true;
+    m_chanMap = 0;
     for (unsigned int i = 0; i < m_count; i++) {
-	m_circuits[i] = new WpCircuit(delta + cicCodes[i],m_group,this,m_buflen);
-	if (m_group->insert(m_circuits[i]))
+	m_circuits[i] = new WpCircuit(delta + cicCodes[i],m_group,this,m_buflen,cicCodes[i]);
+	if (m_group->insert(m_circuits[i])) {
 	    continue;
+	    if (m_circuits[i]->channel())
+		m_chanMap |= ((unsigned long)1 << (m_circuits[i]->channel() - 1));
+	}
 	// Failure
 	Debug(m_group,DebugNote,
 	    "WpSpan('%s'). Failed to create/insert circuit %u. Rollback [%p]",
@@ -1181,6 +1324,9 @@ void WpSpan::run()
 {
     if (!m_socket.open(true))
 	return;
+    // Set echo canceller / tone detector
+    if (m_echoCancel && m_socket.echoCancel(m_echoCancel,m_chanMap))
+	m_socket.dtmfDetect(m_dtmfDetect);
     if (!m_buffer) {
 	m_bufferLen = WP_HEADER + m_samples * m_count;
 	m_buffer = new unsigned char[m_bufferLen];
@@ -1239,6 +1385,17 @@ void WpSpan::run()
     }
 }
 
+// Find a circuit by channel
+WpCircuit* WpSpan::find(unsigned int channel)
+{
+    if (!m_circuits)
+	return 0;
+    for (unsigned int i = 0; i < m_count; i++)
+	if (m_circuits[i] && m_circuits[i]->channel() == channel)
+	    return m_circuits[i];
+    return 0;
+}
+
 // Check for received event (including in-band events)
 bool WpSpan::readEvent()
 {
@@ -1281,22 +1438,44 @@ int WpSpan::readData()
 
 bool WpSpan::decodeEvent()
 {
-    return false;
-#if 0
-    if (!m_circuits)
-	return false;
-    SignallingCircuitEvent* event = 0;
-    int code = 0xffffffff;
-    // TODO: Decode event here. Set circuit code
-    if (!event)
-	return false;
-    for (int i = 0; i < m_count; i++)
-	if (m_circuits[i]->code() == code) {
-	    cic->addEvent(event);
-	    return true;
-	}
-    delete event;
+    api_rx_hdr_t* ev = (api_rx_hdr_t*)m_buffer;
+
+    SignallingCircuitEvent* e = 0;
+    WpCircuit* circuit = 0;
+
+#ifdef WAN_EC_TONE_PRESENT
+    switch (ev->event_type) {
+	case WP_API_EVENT_NONE:
+	    return false;
+	case WP_API_EVENT_DTMF:
+	    if (ev->hdr_u.wp_api_event.u_event.dtmf.type == WAN_EC_TONE_PRESENT) {
+		String tone((char)ev->hdr_u.wp_api_event.u_event.dtmf.digit);
+		tone.toUpper();
+		int chan = ev->hdr_u.wp_api_event.channel;
+		circuit = find(chan);
+		if (circuit) {
+		    e = new SignallingCircuitEvent(circuit,SignallingCircuitEvent::Dtmf,"DTMF");
+		    e->addParam("tone",tone);
+		}
+		else
+		    Debug(m_group,DebugMild,
+			"WpSpan('%s'). Detected DTMF '%s' for invalid channel %d [%p]",
+			id().safe(),tone.c_str(),chan,this);
+	    }
+	    break;
+	default:
+	    Debug(m_group,DebugMild,"WpSpan('%s'). Unhandled event %u [%p]",
+		id().safe(),ev->event_type,this);
+    }
+    if (circuit && e) {
+	circuit->addEvent(e);
+	DDebug(m_group,DebugAll,
+	    "WpSpan('%s'). Enqueued event (%p,'%s') in circuit %u [%p]",
+	    id().safe(),e->c_str(),circuit->code(),this);
+    }
     return true;
+#else
+    return false;
 #endif
 }
 

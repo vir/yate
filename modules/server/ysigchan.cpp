@@ -647,9 +647,9 @@ bool SigChannel::msgAnswered(Message& msg)
     if (!m_call)
 	return true;
     updateSource(0,false);
-    // Start echo training for Zaptel circuits
+    // Start echo training
     SignallingCircuit* cic = getCircuit();
-    if (cic && cic->getObject("ZapCircuit")) {
+    if (cic) {
 	String value;
 	cic->setParam("echotrain",value);
     }
@@ -887,6 +887,12 @@ void SigChannel::evAnswer(SignallingEvent* event)
     }
     updateSource(format,cicChange);
     updateConsumer(0,cicChange);
+    // Start echo training
+    SignallingCircuit* cic = getCircuit();
+    if (cic) {
+	String value;
+	cic->setParam("echotrain",value);
+    }
     Engine::enqueue(message("call.answered",false,true));
 }
 

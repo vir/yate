@@ -1357,6 +1357,9 @@ void SigLink::setExiting(unsigned int msec)
 //   Check the value of 'rxunderruninterval' for SS7 and non monitor ISDN links
 bool SigLink::initialize(NamedList& params)
 {
+    // Reload common parameters
+    m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
+
     // Check error:
     //  No need to initialize if no signalling engine or not in plugin's list
     //  For SS7 links check the router
@@ -1669,7 +1672,6 @@ SigIsdn::~SigIsdn()
 bool SigIsdn::create(NamedList& params, String& error)
 {
     release();
-    m_inband = params.getBoolValue("dtmfinband",s_cfg.getBoolValue("general","dtmfinband",false));
     String compName;                     // Component name
 
     // Signalling interface

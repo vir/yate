@@ -16,8 +16,8 @@ CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
 LDFLAGS:= -L.. -lyate
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
-SUBDIRS := gtk2
 MKDEPS  := ../config.status
+SUBDIRS :=
 PROGS :=
 LIBS :=
 MENUFILES :=
@@ -26,6 +26,7 @@ DESKFILES :=
 GTKCLIENT := gtk2/libgtk2client.a
 
 ifneq (@HAVE_GTK2@,no)
+SUBDIRS := $(SUBDIRS) gtk2
 PROGS := $(PROGS) yate-gtk2
 MENUFILES := $(MENUFILES) yate-gtk2.menu
 DESKFILES := $(DESKFILES) yate-gtk2.desktop

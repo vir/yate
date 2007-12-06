@@ -29,7 +29,7 @@ ifneq (@HAVE_GTK2@,no)
 PROGS := $(PROGS) yate-gtk2
 MENUFILES := $(MENUFILES) yate-gtk2.menu
 DESKFILES := $(DESKFILES) yate-gtk2.desktop
-ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png
+ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
 endif
 
 LOCALFLAGS =

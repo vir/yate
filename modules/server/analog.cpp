@@ -277,7 +277,7 @@ protected:
     // Set tones to the remote end of the line
     bool setAnnouncement(const char* status, const char* callto);
     // Outgoing call answered: set call state, start echo train, open data source/consumer
-    void outCallAnswered();
+    void outCallAnswered(bool stopDial = true);
     // Hangup. Release memory
     virtual void destroyed();
     // Detach the line from this channel and reset it
@@ -1476,17 +1476,19 @@ bool AnalogChannel::callRouted(Message& msg)
     Channel::callRouted(msg);
     setStatus();
     Lock lock(m_mutex);
-    // Check if the circuit supports HW tone detection
-    // Don't set tone detector if no circuit or the circuit doesn't recognize the parameter
-    if (m_line->circuit()) {
-	String value;
-	if (m_line->circuit()->getParam("tonedetect",value) && !value.toBoolean(true)) {
-	    setAudio(false);
-	    if (!toneDetect()) {
-		setConsumer();
-		DDebug(this,DebugNote,"Failed to set tone detector [%p]",this);
-	    }
-	}
+    // Check if the circuit supports tone detection
+    if (!m_line->circuit())
+	return true;
+    String value;
+    if (m_line->circuit()->getParam("tonedetect",value) && value.toBoolean())
+	return true;
+    // Set tone detector
+    setAudio(false);
+    if (toneDetect())
+	DDebug(this,DebugAll,"Loaded tone detector [%p]",this);
+    else {
+	setConsumer();
+	DDebug(this,DebugNote,"Failed to set tone detector [%p]",this);
     }
     return true;
 }
@@ -1654,19 +1656,25 @@ void AnalogChannel::evLineStarted()
     if (!m_line)
 	return;
     // Send number: delay it if interval is not 0
+    bool stopDial = true;
     if (m_line->called())
-	if (m_line->delayDial() || m_dialTimer.interval())
+	if (m_line->delayDial() || m_dialTimer.interval()) {
 	    if (!m_dialTimer.started()) {
 		if (!m_dialTimer.interval())
 		    m_dialTimer.interval(m_line->delayDial());
+		DDebug(this,DebugAll,"Delaying dial for " FMT64 "ms [%p]",
+		    m_dialTimer.interval(),this);
 		m_dialTimer.start();
 	    }
+	    stopDial = false;
+	}
 	else
 	    sendTones(m_line->called());
+
     // Answer now outgoing FXO calls on lines not expecting polarity changes to answer
     if (isOutgoing() && m_line && m_line->type() == AnalogLine::FXO &&
 	!m_line->answerOnPolarity())
-	outCallAnswered();
+	outCallAnswered(stopDial);
 }
 
 // Dial complete notification. Enqueue call.progress
@@ -1769,6 +1777,8 @@ bool AnalogChannel::checkTimeouts(const Time& when)
     }
     if (m_dialTimer.timeout(when.msecNow())) {
 	m_dialTimer.stop();
+	DDebug(this,DebugInfo,"Dial timer expired. %s [%p]",
+	    m_line?"Sending number":"Line is missing",this);
 	if (m_line)
 	    sendTones(m_line->called());
 	return true;
@@ -1860,12 +1870,13 @@ bool AnalogChannel::setAnnouncement(const char* status, const char* callto)
 }
 
 // Outgoing call answered: set call state, start echo train, open data source/consumer
-void AnalogChannel::outCallAnswered()
+void AnalogChannel::outCallAnswered(bool stopDial)
 {
     if (isAnswered())
 	return;
 
-    m_dialTimer.stop();
+    if (stopDial)
+	m_dialTimer.stop();
     m_answered = true;
     setStatus("answered");
     if (m_line) {

@@ -2369,7 +2369,7 @@ ZapConsumer::~ZapConsumer()
 String ZapModule::s_statusCmd[StatusCmdCount] = {"spans","channels","all"};
 
 ZapModule::ZapModule()
-    : Module("Zaptel","misc"),
+    : Module("zaptel","misc"),
     m_init(false),
     m_count(0),
     m_active(0)

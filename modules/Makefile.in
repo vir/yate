@@ -117,7 +117,7 @@ moddir = $(basedir)/modules
 -include YateLocal.mak
 
 .PHONY: all debug ddebug xdebug
-all: do-all $(LIBS) $(PROGS)
+all: subdirs do-all $(LIBS) $(PROGS)
 
 debug:
 	$(MAKE) all DEBUG=-g3 MODSTRIP=
@@ -156,6 +156,10 @@ uninstall: do-uninstall
 	@-rmdir "$(DESTDIR)$(moddir)"
 	@-rmdir "$(DESTDIR)$(basedir)"
 
+.PHONY: subdirs
+subdirs:
+	@mkdir -p client server gtk2
+
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<
 
@@ -178,12 +182,20 @@ lib%.so: %.o
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
 
+server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+
+client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
+
+gtk2/%.yate: @srcdir@/gtk2/%.cpp $(MKDEPS) $(INCFILES)
+	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
 
 # Take special care of the modules that depend on optional libs
 
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
-server/ysigchan.yate server/wpcard.yate server/analog.yate: LOCALFLAGS = -I../libs/ysig
-server/zapcard.yate: LOCALFLAGS = -I../libs/ysig @ZAP_FLAGS@
+server/ysigchan.yate server/wpcard.yate server/analog.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
+server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
 
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
@@ -251,7 +263,7 @@ rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 ../libs/ilbc/libilbc.a:
 	$(MAKE) -C ../libs/ilbc
-	
+
 ../libs/ysip/libyatesip.a:
 	$(MAKE) -C ../libs/ysip
 

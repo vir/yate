@@ -1471,7 +1471,7 @@ bool WpSpan::decodeEvent()
 	circuit->addEvent(e);
 	DDebug(m_group,DebugAll,
 	    "WpSpan('%s'). Enqueued event (%p,'%s') in circuit %u [%p]",
-	    id().safe(),e->c_str(),circuit->code(),this);
+	    id().safe(),e,e->c_str(),circuit->code(),this);
     }
     return true;
 #else

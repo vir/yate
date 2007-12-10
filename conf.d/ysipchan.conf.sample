@@ -52,6 +52,9 @@
 ; dtmfinfo: bool: Generate INFO messages to send keypad tones
 ;dtmfinfo=no
 
+; rfc2833: bool: Offer RFC2833 telephone-event by default
+;rfc2833=yes
+
 ; privacy: bool: Process and generate privacy related SIP headers
 ;privacy=disable
 

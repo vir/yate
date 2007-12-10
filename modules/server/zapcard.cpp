@@ -165,7 +165,7 @@ public:
 #ifdef ZT_TONEDETECT
 	SetToneDetect  = 8,              // Set tone detection
 #else
-	SetToneDetect  = -1,
+	SetToneDetect  = 101,
 #endif
 	SetLinear      = 9,              // Temporarily set the channel to operate in linear mode
 	GetParams      = 10,             // Get device parameters
@@ -174,6 +174,11 @@ public:
 	GetVersion     = 13,             // Get version
 	StartEchoTrain = 14,             // Start echo training
 	FlushBuffers   = 15,             // Flush read/write buffers
+#ifdef ZT_SENDTONE
+	SendTone       = 16,             // Send tone
+#else
+	SendTone       = 102,
+#endif
     };
 
     enum FlushTarget {
@@ -727,6 +732,7 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(GetInfo),
     MAKE_NAME(StartEchoTrain),
     MAKE_NAME(FlushBuffers),
+    MAKE_NAME(SendTone),
     {0,0}
 };
 
@@ -989,21 +995,39 @@ bool ZapDevice::sendHook(HookEvent event)
     return ioctl(SetHook,&event);
 }
 
+
+static inline int getZapDtmf(char tone)
+{
+    if (tone >= '0' && tone <= '9')
+	return ZT_TONE_DTMF_BASE + (tone - '0');
+    if (tone >= 'A' && tone <= 'D')
+	return ZT_TONE_DTMF_A + (tone - 'A');
+    if (tone >= 'a' && tone <= 'd')
+	return ZT_TONE_DTMF_A + (tone - 'a');
+    if (tone == '*')
+	return ZT_TONE_DTMF_s;
+    if (tone == '#')
+	return ZT_TONE_DTMF_p;
+    return -1;
+}
+
+
 // Send DTMFs events
 bool ZapDevice::sendDtmf(const char* tone)
 {
     if (!(tone && *tone))
 	return false;
+
     int len = strlen(tone);
     if (len > ZT_MAX_DTMF_BUF - 2) {
-	Debug(m_owner,DebugNote,"%sCan't send dtmf '%s' (len %d > %u) [%p]",
+	Debug(m_owner,DebugNote,"%sCan't send DTMF '%s' (len %d > %u) [%p]",
 	    m_name.safe(),tone,len,ZT_MAX_DTMF_BUF-2,this);
 	return false;
     }
     ZT_DIAL_OPERATION dop;
     dop.op = ZT_DIAL_OP_APPEND;
     dop.dialstr[0] = 'T';
-	
+
 //	dop.dialstr[2] = 0;
 //	for (; *tone; tone++) {
 //	    dop.dialstr[1] = *tone;
@@ -1016,7 +1040,7 @@ bool ZapDevice::sendDtmf(const char* tone)
 
     strncpy(dop.dialstr+1,tone,len);
     DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
-	m_name.safe(),tone,m_channel,this);
+	m_name.safe(),dop.dialstr,m_channel,this);
     return ioctl(ZapDevice::SetDial,&dop,DebugMild);
 }
 
@@ -1188,6 +1212,15 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 {
     int ret = -1;
     switch (request) {
+	case SendTone:
+#ifdef ZT_SENDTONE
+	    ret = ::ioctl(m_handle,ZT_SENDTONE,param);
+	    break;
+#else
+	    Debug(m_owner,level,"%sIOCTL(%s) failed: unsupported request [%p]",
+		m_name.safe(),lookup(SendTone,s_ioctl_request),m_owner);
+	    return false;
+#endif
 	case GetEvent:
 	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
 	    break;
@@ -1250,9 +1283,9 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    DDebug(m_owner,DebugAll,"%sIOCTL(%s) in progress on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
 		m_channel,*(unsigned int*)param,m_owner);
-#ifdef XDEBUG
+#ifdef DEBUG
 	else if (request != GetEvent)
-	    XDebug(m_owner,DebugAll,"%sIOCTL(%s) succedded on channel %u (param=%d) [%p]",
+	    Debug(m_owner,DebugAll,"%sIOCTL(%s) succedded on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
 		m_channel,*(unsigned int*)param,m_owner);
 #endif
@@ -1689,7 +1722,7 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_consTotal(0)
 {
     m_dtmfDetect = config.getBoolValue("dtmfdetect",true);
-    if (m_dtmfDetect && ZapDevice::SetToneDetect < 0) {
+    if (m_dtmfDetect && ZapDevice::SetToneDetect > 100) {
 	Debug(group(),DebugWarn,
 	    "ZapCircuit(%u). DTMF detection is not supported by hardware [%p]",
 	    code,this);

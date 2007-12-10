@@ -427,6 +427,8 @@ private:
     int m_reInviting;
     // sequence number of last transmitted PRACK
     int m_lastRseq;
+    // should we offer RFC 2833? note that we will handle it anyway
+    bool m_rfc2833;
 };
 
 class YateSIPGenerate : public GenObject
@@ -498,6 +500,7 @@ static bool s_auto_nat = true;
 static bool s_progress = false;
 static bool s_inband = false;
 static bool s_info = false;
+static bool s_rfc2833 = true;
 static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_auth_register = true;
@@ -1710,7 +1713,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
     setReason();
@@ -1825,7 +1828,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
       m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
-      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0)
+      m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
 	&msg,uri.c_str(),this);
@@ -1833,6 +1836,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     setReason();
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_info = msg.getBoolValue("dtmfinfo",s_info);
+    m_rfc2833 = msg.getBoolValue("rfc2833",s_rfc2833);
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_user = msg.getValue("user");
     m_line = msg.getValue("line");
@@ -2484,8 +2488,8 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	TelEngine::destruct(l);
 	TelEngine::destruct(map);
 
-	if (frm && m->isAudio()) {
-	    // always claim to support telephone events
+	if (m_rfc2833 && frm && m->isAudio()) {
+	    // claim to support telephone events
 	    frm << " 101";
 	    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
 	}
@@ -3258,6 +3262,7 @@ bool YateSIPConnection::callRouted(Message& msg)
     // try to disable RTP forwarding earliest possible
     if (m_rtpForward && !msg.getBoolValue("rtp_forward"))
 	m_rtpForward = false;
+    m_rfc2833 = msg.getBoolValue("rfc2833",m_rfc2833);
     Channel::callRouted(msg);
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
@@ -4039,6 +4044,7 @@ void SIPDriver::initialize()
     s_progress = s_cfg.getBoolValue("general","progress",false);
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
+    s_rfc2833 = s_cfg.getBoolValue("general","rfc2833",true);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_rtpip = s_cfg.getValue("general","rtp_localip");
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);

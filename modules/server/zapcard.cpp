@@ -2407,7 +2407,7 @@ ZapModule::ZapModule()
     m_count(0),
     m_active(0)
 {
-    Output("Loaded module %s",debugName());
+    Output("Loaded module Zaptel");
     m_prefix << name() << "/";
     m_statusCmd << "status " << name();
     m_devices.setDelete(false);
@@ -2415,7 +2415,7 @@ ZapModule::ZapModule()
 
 ZapModule::~ZapModule()
 {
-    Output("Unloading module %s",debugName());
+    Output("Unloading module Zaptel");
 }
 
 void ZapModule::append(ZapDevice* dev)
@@ -2438,7 +2438,7 @@ void ZapModule::remove(ZapDevice* dev)
 
 void ZapModule::initialize()
 {
-    Output("Initializing module %s",debugName());
+    Output("Initializing module Zaptel");
 
     Configuration cfg(Engine::configFile("zapcard"));
     cfg.load();

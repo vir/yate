@@ -2123,6 +2123,13 @@ public:
 	{ return m_hangupOnPolarity; }
 
     /**
+     * Check if the line polarity change should be used
+     * @return True if the line polarity change should be used
+     */
+    inline bool polarityControl() const
+	{ return m_polarityControl; }
+
+    /**
      * Check if the line is processing (send/receive) the setup info (such as caller id) and when it does it
      * @return Call setup info processing as enumeration
      */
@@ -2317,6 +2324,7 @@ private:
     bool m_acceptPulseDigit;                   // Accept incoming pulse digits
     bool m_answerOnPolarity;                   // Answer on line polarity change
     bool m_hangupOnPolarity;                   // Hangup on line polarity change
+    bool m_polarityControl;                    // Set line polarity flag
     CallSetupInfo m_callSetup;                 // Call setup management
     u_int64_t m_callSetupTimeout;              // FXO: timeout period for received call setup data before first ring
     u_int64_t m_noRingTimeout;                 // FXO: timeout period with no ring received on incoming calls

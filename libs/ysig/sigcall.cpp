@@ -786,6 +786,7 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     m_acceptPulseDigit(true),
     m_answerOnPolarity(false),
     m_hangupOnPolarity(false),
+    m_polarityControl(false),
     m_callSetup(NoCallSetup),
     m_callSetupTimeout(0),
     m_noRingTimeout(0),
@@ -823,6 +824,7 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
 	m_echocancel = tmp.toBoolean() ? 1 : -1;
     m_answerOnPolarity = params.getBoolValue("answer-on-polarity",false);
     m_hangupOnPolarity = params.getBoolValue("hangup-on-polarity",false);
+    m_polarityControl = params.getBoolValue("polaritycontrol",false);
 
     m_callSetup = (CallSetupInfo)lookup(params.getValue("callsetup"),s_csName,After);
 
@@ -1090,7 +1092,7 @@ bool AnalogLineGroup::appendLine(AnalogLine* line, bool destructOnFail)
     }
     Lock lock(this);
     m_lines.append(line);
-    Debug(this,DebugAll,"Added line (%p) %s [%p]",line,line->address(),this);
+    DDebug(this,DebugAll,"Added line (%p) %s [%p]",line,line->address(),this);
     return true;
 }
 
@@ -1112,7 +1114,7 @@ void AnalogLineGroup::removeLine(AnalogLine* line)
 	return;
     Lock lock(this);
     if (m_lines.remove(line,false))
-	Debug(this,DebugAll,"Removed line %p %s [%p]",line,line->address(),this);
+	DDebug(this,DebugAll,"Removed line %p %s [%p]",line,line->address(),this);
 }
 
 // Find a line by its circuit

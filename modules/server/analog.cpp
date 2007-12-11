@@ -284,6 +284,14 @@ protected:
     void detachLine();
     // Send tones (DTMF or dial number)
     bool sendTones(const char* tone);
+    // Set line polarity
+    inline void polarityControl(bool state) {
+	    if (!(m_line && m_line->type() == AnalogLine::FXS &&
+		m_line->polarityControl() && state != m_polarity))
+		return;
+	    m_polarity = state;
+	    m_line->setCircuitParam("polarity",String::boolText(m_polarity));
+	}
 private:
     ModuleLine* m_line;                  // The analog line associated with this channel
     bool m_hungup;                       // Hang up flag
@@ -296,6 +304,7 @@ private:
     String m_callEndedTarget;            // callto when an FXS line was disconnected
     String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
     unsigned int m_polarityCount;        // The number of polarity changes received
+    bool m_polarity;                     // The last value we've set for the line polarity
 };
 
 // Recorder call endpoint associated with an analog line monitor
@@ -720,7 +729,8 @@ void ModuleLine::checkTimeouts(const Time& when)
  */
 // Line parameters that can be overridden
 const char* ModuleGroup::lineParams[] = {"echocancel","dtmfinband","answer-on-polarity",
-    "hangup-on-polarity","ring-timeout","callsetup","alarm-timeout","delaydial",0};
+    "hangup-on-polarity","ring-timeout","callsetup","alarm-timeout","delaydial",
+    "polaritycontrol",0};
 
 // Remove all channels associated with this group and stop worker thread
 void ModuleGroup::destruct()
@@ -1258,7 +1268,8 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     m_noRingTimer(0),
     m_alarmTimer(line ? line->alarmTimeout() : 0),
     m_dialTimer(0),
-    m_polarityCount(0)
+    m_polarityCount(0),
+    m_polarity(false)
 {
     m_line->userdata(this);
     m_line->moduleGroup()->setEndpoint(this,true);
@@ -1407,8 +1418,10 @@ bool AnalogChannel::msgAnswered(Message& msg)
     m_noRingTimer.stop();
     if (m_line) {
 	m_line->removeCallSetupDetector();
-	if (m_line->type() == AnalogLine::FXS)
+	if (m_line->type() == AnalogLine::FXS) {
 	    m_line->sendEvent(SignallingCircuitEvent::RingEnd);
+	    polarityControl(true);
+	}
 	else {
 	    m_line->acceptPulseDigit(false);
 	    m_line->sendEvent(SignallingCircuitEvent::OffHook);
@@ -1559,6 +1572,7 @@ void AnalogChannel::hangup(bool local, const char* status, const char* reason)
     Engine::enqueue(m);
 
     setStatus("hangup");
+    polarityControl(false);
 
     // Check some conditions to keep the channel
     if (!m_line || m_line->type() != AnalogLine::FXS ||
@@ -1881,6 +1895,7 @@ void AnalogChannel::outCallAnswered(bool stopDial)
     setStatus("answered");
     if (m_line) {
 	m_line->changeState(AnalogLine::Answered);
+	polarityControl(true);
 	m_line->setCircuitParam("echotrain");
     }
     setAudio(true);
@@ -1919,7 +1934,9 @@ void AnalogChannel::detachLine()
     }
     m_line->removeCallSetupDetector();
     m_line->setCall();
-    // Don't disconnect the line if waiting for call setup (need auudio)
+    polarityControl(false);
+
+    // Don't disconnect the line if waiting for call setup (need audio)
     if (m_line->type() == AnalogLine::FXO && m_line->callSetup() == AnalogLine::Before)
 	m_line->setCallSetupDetector();
     else
@@ -2187,7 +2204,7 @@ bool AnalogCallRec::ringing(bool fxsEvent)
     if (m_line)
 	m_line->changeState(AnalogLine::Ringing,true);
 
-    // Ignore rings from on caller party
+    // Ignore rings from caller party
     if (m_fxsCaller != fxsEvent) {
 	DDebug(this,DebugAll,"Ignoring ring from caller [%p]",this);
 	return true;

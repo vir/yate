@@ -167,15 +167,16 @@ public:
 #else
 	SetToneDetect  = 101,
 #endif
-	SetLinear      = 9,              // Temporarily set the channel to operate in linear mode
-	GetParams      = 10,             // Get device parameters
-	GetEvent       = 11,             // Get events from device
-	GetInfo        = 12,             // Get device status
-	GetVersion     = 13,             // Get version
-	StartEchoTrain = 14,             // Start echo training
-	FlushBuffers   = 15,             // Flush read/write buffers
+	SetPolarity    = 10,             // Set line polarity
+	SetLinear      = 11,              // Temporarily set the channel to operate in linear mode
+	GetParams      = 20,             // Get device parameters
+	GetEvent       = 21,             // Get events from device
+	GetInfo        = 22,             // Get device status
+	GetVersion     = 23,             // Get version
+	StartEchoTrain = 24,             // Start echo training
+	FlushBuffers   = 25,             // Flush read/write buffers
 #ifdef ZT_SENDTONE
-	SendTone       = 16,             // Send tone
+	SendTone       = 30,             // Send tone
 #else
 	SendTone       = 102,
 #endif
@@ -268,9 +269,12 @@ public:
     bool checkAlarms();
     // Reset alarms
     void resetAlarms();
-    // SEt clear channel
+    // Set clear channel
     inline bool setLinear(int val, int level = DebugWarn)
 	{ return ioctl(SetLinear,&val,level); }
+    // Set line polarity
+    inline bool setPolarity(int val, int level = DebugWarn)
+	{ return ioctl(SetPolarity,&val,level); }
     // Flush read and write buffers
     bool flushBuffers(FlushTarget target = FlushAll);
     // Check if received data. Wait usec microseconds before returning
@@ -471,6 +475,8 @@ public:
     virtual bool status(Status newStat, bool sync);
     // Get circuit data
     virtual bool getParam(const String& param, String& value) const;
+    // Set line polarity
+    virtual bool setParam(const String& param, const String& value);
     // Send an event
     virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
     // Process incoming data
@@ -726,6 +732,7 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(SetDial),
     MAKE_NAME(SetHook),
     MAKE_NAME(SetToneDetect),
+    MAKE_NAME(SetPolarity),
     MAKE_NAME(SetLinear),
     MAKE_NAME(GetParams),
     MAKE_NAME(GetEvent),
@@ -756,8 +763,8 @@ static TokenDict s_formats[] = {
     {0,0}
     };
 
-const char* ZapDevice::s_zapCtlName = "//dev/zap/ctl";
-const char* ZapDevice::s_zapDevName = "//dev/zap/channel";
+const char* ZapDevice::s_zapCtlName = "/dev/zap/ctl";
+const char* ZapDevice::s_zapDevName = "/dev/zap/channel";
 
 ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit)
@@ -995,23 +1002,6 @@ bool ZapDevice::sendHook(HookEvent event)
     return ioctl(SetHook,&event);
 }
 
-
-static inline int getZapDtmf(char tone)
-{
-    if (tone >= '0' && tone <= '9')
-	return ZT_TONE_DTMF_BASE + (tone - '0');
-    if (tone >= 'A' && tone <= 'D')
-	return ZT_TONE_DTMF_A + (tone - 'A');
-    if (tone >= 'a' && tone <= 'd')
-	return ZT_TONE_DTMF_A + (tone - 'a');
-    if (tone == '*')
-	return ZT_TONE_DTMF_s;
-    if (tone == '#')
-	return ZT_TONE_DTMF_p;
-    return -1;
-}
-
-
 // Send DTMFs events
 bool ZapDevice::sendDtmf(const char* tone)
 {
@@ -1038,7 +1028,7 @@ bool ZapDevice::sendDtmf(const char* tone)
 //	}
 //	return true;
 
-    strncpy(dop.dialstr+1,tone,len);
+    strcpy(dop.dialstr+1,tone);
     DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
 	m_name.safe(),dop.dialstr,m_channel,this);
     return ioctl(ZapDevice::SetDial,&dop,DebugMild);
@@ -1210,6 +1200,11 @@ bool ZapDevice::getSpanInfo(int span, NamedList& dest, int* spans)
 // Make IOCTL requests on this device
 bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 {
+    if (!param) {
+	Debug(&plugin,DebugStub,"ZapDevice::ioctl(). 'param' is missing");
+	return false;
+    }
+
     int ret = -1;
     switch (request) {
 	case SendTone:
@@ -1259,6 +1254,9 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 		    m_name.safe(),lookup(SetToneDetect,s_ioctl_request),m_owner);
 	    return false;
 #endif
+	case SetPolarity:
+	    ret = ::ioctl(m_handle,ZT_SETPOLARITY,param);
+	    break;
 	case SetLinear:
 	    ret = ::ioctl(m_handle,ZT_SETLINEAR,param);
 	    break;
@@ -1282,18 +1280,18 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	if (errno == EINPROGRESS)
 	    DDebug(m_owner,DebugAll,"%sIOCTL(%s) in progress on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
-		m_channel,*(unsigned int*)param,m_owner);
+		m_channel,*(int*)param,m_owner);
 #ifdef DEBUG
 	else if (request != GetEvent)
 	    Debug(m_owner,DebugAll,"%sIOCTL(%s) succedded on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
-		m_channel,*(unsigned int*)param,m_owner);
+		m_channel,*(int*)param,m_owner);
 #endif
 	return true;
     }
     Debug(m_owner,level,"%sIOCTL(%s) failed on channel %u (param=%d). %d: %s [%p]",
 	m_name.safe(),lookup(request,s_ioctl_request),
-	m_channel,*(unsigned int*)param,errno,::strerror(errno),m_owner);
+	m_channel,*(int*)param,errno,::strerror(errno),m_owner);
     return false;
 }
 
@@ -1974,7 +1972,6 @@ bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 
     if (type == SignallingCircuitEvent::Dtmf)
 	return m_device.sendDtmf(params ? params->getValue("tone") : 0);
-
     Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send unknown event %u [%p]",
 	code(),type,this);
     return false;
@@ -2230,6 +2227,18 @@ bool ZapAnalogCircuit::getParam(const String& param, String& value) const
     return ZapCircuit::getParam(param,value);
 }
 
+// Set line polarity
+bool ZapAnalogCircuit::setParam(const String& param, const String& value)
+{
+    if (param == "polarity") {
+	if (!(m_device.valid() && value.isBoolean()))
+	    return false;
+	int state = value.toBoolean() ? 1 : 0;
+	return m_device.setPolarity(state,DebugNote);
+    }
+    return ZapCircuit::setParam(param,value);
+}
+
 // Send an event
 bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 {
@@ -2250,6 +2259,10 @@ bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* p
 		return false;
 	    changeHook(false);
 	    return true;
+	case SignallingCircuitEvent::Polarity:
+	    if (!params)
+		return false;
+	    return setParam("polarity",params->getValue("polarity"));
 	case SignallingCircuitEvent::Wink:
 	    return m_device.sendHook(ZapDevice::HookWink);
 	case SignallingCircuitEvent::Flash:

@@ -168,18 +168,16 @@ public:
 	SetToneDetect  = 101,
 #endif
 	SetPolarity    = 10,             // Set line polarity
-	SetLinear      = 11,              // Temporarily set the channel to operate in linear mode
+	SetLinear      = 11,             // Temporarily set the channel to operate in linear mode
+	SetDialParams  = 12,             // Set dialing parameters
 	GetParams      = 20,             // Get device parameters
 	GetEvent       = 21,             // Get events from device
 	GetInfo        = 22,             // Get device status
 	GetVersion     = 23,             // Get version
-	StartEchoTrain = 24,             // Start echo training
-	FlushBuffers   = 25,             // Flush read/write buffers
-#ifdef ZT_SENDTONE
-	SendTone       = 30,             // Send tone
-#else
-	SendTone       = 102,
-#endif
+	GetDialParams  = 24,             // Get dialing parameters
+	StartEchoTrain = 30,             // Start echo training
+	FlushBuffers   = 31,             // Flush read/write buffers
+	SendTone       = 32,             // Send tone
     };
 
     enum FlushTarget {
@@ -269,10 +267,11 @@ public:
     // Send hook events
     bool sendHook(HookEvent event);
     // Send DTMFs events using dialing or tone structure
+    // dtmf: true - send DTMF (tone dialing), false - send MF (pulse dialing)
     // op: The dial operation to use
     // allDigits: true to send all digits at once
-    // Use tone structure to send tones. Ignored if allDigits is true
-    bool sendDtmf(const char* tone, DialOperation op = DialAppend,
+    // useTone: Used only if 'allDigits' is false and 'dtmf' is true
+    bool sendDtmf(const char* tone, bool dtmf = true, DialOperation op = DialAppend,
 	bool allDigits = true, bool useTone = false);
     // Send DTMF event using tone structure
     bool sendDtmf(char tone);
@@ -301,6 +300,8 @@ public:
     bool getVersion(NamedList& dest);
     // Get driver version and echo canceller
     bool getSpanInfo(int span, NamedList& dest, int* spans = 0);
+    // Set/get dial parameters (DTMF/MF length)
+    bool dialParams(bool set, int& toneLen, int& mfLen);
     // Zaptel device names and headers for status
     static const char* s_zapCtlName;
     static const char* s_zapDevName;
@@ -747,9 +748,11 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(SetToneDetect),
     MAKE_NAME(SetPolarity),
     MAKE_NAME(SetLinear),
+    MAKE_NAME(SetDialParams),
     MAKE_NAME(GetParams),
     MAKE_NAME(GetEvent),
     MAKE_NAME(GetInfo),
+    MAKE_NAME(GetDialParams),
     MAKE_NAME(StartEchoTrain),
     MAKE_NAME(FlushBuffers),
     MAKE_NAME(SendTone),
@@ -1016,14 +1019,19 @@ bool ZapDevice::sendHook(HookEvent event)
 }
 
 // Send DTMFs events using dialing or tone structure
-bool ZapDevice::sendDtmf(const char* tone, DialOperation op, bool allDigits, bool useTone)
+// dtmf: true - send DTMF (tone dialing), false - send MF (pulse dialing)
+// op: The dial operation to use
+// allDigits: true to send all digits at once
+// useTone: Used only if 'allDigits' is false and 'dtmf' is true
+bool ZapDevice::sendDtmf(const char* tone, bool dtmf, DialOperation op,
+    bool allDigits, bool useTone)
 {
     if (!(tone && *tone))
 	return false;
 
     ZT_DIAL_OPERATION dop;
     dop.op = op;
-    dop.dialstr[0] = 'T';
+    dop.dialstr[0] = dtmf ? 'T' : 'P';
 
     if (allDigits) {
 	int len = strlen(tone);
@@ -1040,7 +1048,11 @@ bool ZapDevice::sendDtmf(const char* tone, DialOperation op, bool allDigits, boo
 	return ioctl(ZapDevice::SetDial,&dop,DebugMild);
     }
 
-    if (!useTone) {
+    if (useTone && dtmf)
+	for (; *tone; tone++)
+	    if (!sendDtmf(*tone))
+		return false;
+    else {
 	dop.dialstr[2] = 0;
 	for (; *tone; tone++) {
 	    dop.dialstr[1] = *tone;
@@ -1050,10 +1062,6 @@ bool ZapDevice::sendDtmf(const char* tone, DialOperation op, bool allDigits, boo
 		return false;
 	}
     }
-    else
-	for (; *tone; tone++)
-	    if (!sendDtmf(*tone))
-		return false;
     return true;
 }
 
@@ -1066,14 +1074,6 @@ bool ZapDevice::sendDtmf(char tone)
 	ZT_TONE_DTMF_4,ZT_TONE_DTMF_5,ZT_TONE_DTMF_6,ZT_TONE_DTMF_7,ZT_TONE_DTMF_8,ZT_TONE_DTMF_9,
 	ZT_TONE_DTMF_s,ZT_TONE_DTMF_p,ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D,
 	ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D};
-
-    // Check ZT_SENDTONE first
-    if (ZapDevice::SendTone > 100) {
-	Debug(m_owner,DebugNote,
-	    "%sCan't send DTMF '%c': unsupported by hardware [%p]",
-	    m_name.safe(),tone,this);
-	return false;
-    }
 
     // Get zaptel tone
     int zapTone = 0;
@@ -1254,6 +1254,25 @@ bool ZapDevice::getSpanInfo(int span, NamedList& dest, int* spans)
     return true;
 }
 
+// Set/get dial parameters (DTMF/MF length)
+bool ZapDevice::dialParams(bool set, int& toneLen, int& mfLen)
+{
+    ZT_DIAL_PARAMS dp;
+    ::memset(&dp,0,sizeof(ZT_DIAL_PARAMS));
+
+    if (!set) {
+	if (!ioctl(GetDialParams,&dp,DebugMild))
+	    return false;
+	toneLen = dp.dtmf_tonelen;
+	mfLen = dp.mfv1_tonelen;
+	return true;
+    }
+
+    dp.dtmf_tonelen = toneLen;
+    dp.mfv1_tonelen = mfLen;
+    return ioctl(SetDialParams,&dp,DebugNote);
+}
+
 // Make IOCTL requests on this device
 bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 {
@@ -1264,15 +1283,6 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 
     int ret = -1;
     switch (request) {
-	case SendTone:
-#ifdef ZT_SENDTONE
-	    ret = ::ioctl(m_handle,ZT_SENDTONE,param);
-	    break;
-#else
-	    Debug(m_owner,level,"%sIOCTL(%s) failed: unsupported request [%p]",
-		m_name.safe(),lookup(SendTone,s_ioctl_request),m_owner);
-	    return false;
-#endif
 	case GetEvent:
 	    ret = ::ioctl(m_handle,ZT_GETEVENT,param);
 	    break;
@@ -1317,17 +1327,26 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	case SetLinear:
 	    ret = ::ioctl(m_handle,ZT_SETLINEAR,param);
 	    break;
+	case SetDialParams:
+	    ret = ::ioctl(m_handle,ZT_SET_DIALPARAMS,param);
+	    break;
 	case GetParams:
 	    ret = ::ioctl(m_handle,ZT_GET_PARAMS,param);
 	    break;
 	case GetInfo:
 	    ret = ::ioctl(m_handle,ZT_SPANSTAT,param);
 	    break;
+	case GetDialParams:
+	    ret = ::ioctl(m_handle,ZT_GET_DIALPARAMS,param);
+	    break;
 	case StartEchoTrain:
 	    ret = ::ioctl(m_handle,ZT_ECHOTRAIN,param);
 	    break;
 	case FlushBuffers:
 	    ret = ::ioctl(m_handle,ZT_FLUSH,param);
+	    break;
+	case SendTone:
+	    ret = ::ioctl(m_handle,ZT_SENDTONE,param);
 	    break;
 	case GetVersion:
 	    ret = ::ioctl(m_handle,ZT_GETVERSION,param);
@@ -2027,8 +2046,15 @@ bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
     if (!m_canSend)
 	return false;
 
-    if (type == SignallingCircuitEvent::Dtmf)
-	return m_device.sendDtmf(params ? params->getValue("tone") : 0);
+    if (type == SignallingCircuitEvent::Dtmf) {
+	const char* tones = 0;
+	bool dtmf = true;
+	if (params) {
+	    tones = params->getValue("tone");
+	    dtmf = !params->getBoolValue("pulse",false);
+	}
+	return m_device.sendDtmf(tones,dtmf);
+    }
     Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send unknown event %u [%p]",
 	code(),type,this);
     return false;
@@ -2513,11 +2539,28 @@ void ZapModule::initialize()
     Configuration cfg(Engine::configFile("zapcard"));
     cfg.load();
 
+    NamedList dummy("");
+    NamedList* general = cfg.getSection("general");
+    if (!general)
+	general = &dummy;
+
+    ZapDevice dev(0,false,true);
+    int dtmf = 0, mf = 0;
+
     if (!m_init) {
 	setup();
 	installRelay(Command);
+	// Set DTMF/MF length
+	if (dev.dialParams(false,dtmf,mf)) {
+	    dtmf = general->getIntValue("dtmflength",dtmf);
+	    mf = general->getIntValue("mflength",mf);
+	    dev.dialParams(true,dtmf,mf);
+	}
     }
     m_init = true;
+
+    if (debugAt(DebugAll) && dev.dialParams(false,dtmf,mf))
+	Debug(this,DebugAll,"Digit lengths in samples: DTMF=%d MF=%d",dtmf,mf);
 }
 
 

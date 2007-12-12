@@ -572,7 +572,10 @@ bool FSKModem::demodulate(const DataBlock& data)
 	    m_terminated = !m_uart->fskStarted();
 	    if (m_terminated)
 		break;
-	    m_bits->accumulate(false);
+#ifdef YMODEM_BUFFER_BITS
+	    if (m_bits)
+		m_bits->accumulate(false);
+#endif
 	    m_terminated = !m_uart->recvBit(false);
 	}
 
@@ -580,7 +583,10 @@ bool FSKModem::demodulate(const DataBlock& data)
 	for (int bit = 1; bit >= 0 && !m_terminated; ) {
 	    bit = m_filter->getBit(samples,count);
 	    if (bit >= 0) {
-		m_bits->accumulate(bit);
+#ifdef YMODEM_BUFFER_BITS
+		if (m_bits)
+		    m_bits->accumulate(bit);
+#endif
 		m_terminated = !m_uart->recvBit(bit);
 	    }
 	}

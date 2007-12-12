@@ -39,7 +39,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/mgcpgw.yate server/mgcpca.yate \
 	server/mrcpspeech.yate \
 	server/ysigchan.yate \
-	server/analog.yate \
+	server/analog.yate server/analogdetect.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
 
@@ -198,6 +198,10 @@ server/ysigchan.yate server/wpcard.yate server/analog.yate: LOCALFLAGS = -I@top_
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
 
+server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
+server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem
+server/analogdetect.yate: LOCALLIBS = -L../libs/ymodem -lyatemodem
+
 h323chan.yate: LOCALFLAGS = -DPHAS_TEMPLATES -D_REENTRANT -DP_HAS_SEMAPHORES @H323_INC@
 h323chan.yate: LOCALLIBS = @H323_LIB@
 
@@ -256,9 +260,7 @@ gtk2/gtk2mozilla.yate: MODFLAGS = $(MODRELAX)
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
-../libyatesig.so:
-	$(MAKE) -C ../libs/ysig
-../libs/ysig/libyatesig.a:
+../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig
 
 ../libs/ilbc/libilbc.a:
@@ -275,6 +277,9 @@ rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
 
 ../libs/ymgcp/libyatemgcp.a:
 	$(MAKE) -C ../libs/ymgcp
+
+../libs/ymodem/libyatemodem.a:
+	$(MAKE) -C ../libs/ymodem
 
 ../libs/yxml/libyatexml.a:
 	$(MAKE) -C ../libs/yxml

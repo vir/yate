@@ -209,6 +209,13 @@ public:
 	TypeUnknown
     };
 
+    // Dial operations
+    enum DialOperation {
+	DialAppend  = ZT_DIAL_OP_APPEND,
+	DialReplace = ZT_DIAL_OP_REPLACE,
+	DialCancel  = ZT_DIAL_OP_CANCEL
+    };
+
     // Create a device used to query the driver (chan=0) or a zaptel channel
     // Open it if requested
     ZapDevice(unsigned int chan, bool disableDbg = true, bool open = true);
@@ -261,8 +268,14 @@ public:
     bool startEchoTrain(unsigned int period);
     // Send hook events
     bool sendHook(HookEvent event);
-    // Send DTMFs events
-    bool sendDtmf(const char* tone);
+    // Send DTMFs events using dialing or tone structure
+    // op: The dial operation to use
+    // allDigits: true to send all digits at once
+    // Use tone structure to send tones. Ignored if allDigits is true
+    bool sendDtmf(const char* tone, DialOperation op = DialAppend,
+	bool allDigits = true, bool useTone = false);
+    // Send DTMF event using tone structure
+    bool sendDtmf(char tone);
     // Get an event. Return 0 if no events. Set digit if the event is a DTMF/PULSE
     int getEvent(char& digit);
     // Check alarms from this device. Return true if alarms changed
@@ -1002,36 +1015,80 @@ bool ZapDevice::sendHook(HookEvent event)
     return ioctl(SetHook,&event);
 }
 
-// Send DTMFs events
-bool ZapDevice::sendDtmf(const char* tone)
+// Send DTMFs events using dialing or tone structure
+bool ZapDevice::sendDtmf(const char* tone, DialOperation op, bool allDigits, bool useTone)
 {
     if (!(tone && *tone))
 	return false;
 
-    int len = strlen(tone);
-    if (len > ZT_MAX_DTMF_BUF - 2) {
-	Debug(m_owner,DebugNote,"%sCan't send DTMF '%s' (len %d > %u) [%p]",
-	    m_name.safe(),tone,len,ZT_MAX_DTMF_BUF-2,this);
-	return false;
-    }
     ZT_DIAL_OPERATION dop;
-    dop.op = ZT_DIAL_OP_APPEND;
+    dop.op = op;
     dop.dialstr[0] = 'T';
 
-//	dop.dialstr[2] = 0;
-//	for (; *tone; tone++) {
-//	    dop.dialstr[1] = *tone;
-//	    DDebug(m_owner,DebugAll,"%sSending DTMF '%c' on channel %u [%p]",
-//		m_name.safe(),*tone,m_channel,this);
-//	    if (!ioctl(ZapDevice::SetDial,&dop,DebugMild))
-//		return false;
-//	}
-//	return true;
+    if (allDigits) {
+	int len = strlen(tone);
+	int maxLen = ZT_MAX_DTMF_BUF - 2;
+	if (len > maxLen) {
+	    Debug(m_owner,DebugNote,
+		"%sCan't send DTMF '%s' (len %d greater then max len %d) [%p]",
+		m_name.safe(),tone,len,maxLen,this);
+	    return false;
+	}
+	strcpy(dop.dialstr+1,tone);
+	DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
+	    m_name.safe(),dop.dialstr,m_channel,this);
+	return ioctl(ZapDevice::SetDial,&dop,DebugMild);
+    }
 
-    strcpy(dop.dialstr+1,tone);
-    DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
-	m_name.safe(),dop.dialstr,m_channel,this);
-    return ioctl(ZapDevice::SetDial,&dop,DebugMild);
+    if (!useTone) {
+	dop.dialstr[2] = 0;
+	for (; *tone; tone++) {
+	    dop.dialstr[1] = *tone;
+	    DDebug(m_owner,DebugAll,"%sSending DTMF '%s' on channel %u [%p]",
+		m_name.safe(),dop.dialstr,m_channel,this);
+	    if (!ioctl(ZapDevice::SetDial,&dop,DebugMild))
+		return false;
+	}
+    }
+    else
+	for (; *tone; tone++)
+	    if (!sendDtmf(*tone))
+		return false;
+    return true;
+}
+
+// Send DTMF event using tone structure
+bool ZapDevice::sendDtmf(char tone)
+{
+#define YZAP_TONES 20
+    static char tones[YZAP_TONES+1] = "0123456789*#ABCDabcd";
+    static int zapTones[YZAP_TONES] = {ZT_TONE_DTMF_0,ZT_TONE_DTMF_1,ZT_TONE_DTMF_2,ZT_TONE_DTMF_3,
+	ZT_TONE_DTMF_4,ZT_TONE_DTMF_5,ZT_TONE_DTMF_6,ZT_TONE_DTMF_7,ZT_TONE_DTMF_8,ZT_TONE_DTMF_9,
+	ZT_TONE_DTMF_s,ZT_TONE_DTMF_p,ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D,
+	ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D};
+
+    // Check ZT_SENDTONE first
+    if (ZapDevice::SendTone > 100) {
+	Debug(m_owner,DebugNote,
+	    "%sCan't send DTMF '%c': unsupported by hardware [%p]",
+	    m_name.safe(),tone,this);
+	return false;
+    }
+
+    // Get zaptel tone
+    int zapTone = 0;
+    for (; zapTone < YZAP_TONES; zapTone++)
+	if (tone == tones[zapTone])
+	    break;
+    if (zapTone == YZAP_TONES) {
+	Debug(m_owner,DebugNote,"%sCan't send invalid DTMF '%c' on channel %u [%p]",
+	    m_name.safe(),tone,m_channel,this);
+	return false;
+    }
+    DDebug(m_owner,DebugAll,"%sSending DTMF '%c' (%d) on channel %u [%p]",
+	m_name.safe(),tone,zapTones[zapTone],m_channel,this);
+    return ioctl(ZapDevice::SendTone,&zapTones[zapTone],DebugMild);
+#undef YZAP_TONES
 }
 
 // Get an event. Return 0 if no events. Set digit if the event is a DTMF/PULSE digit

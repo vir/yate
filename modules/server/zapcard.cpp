@@ -219,7 +219,7 @@ public:
     ZapDevice(unsigned int chan, bool disableDbg = true, bool open = true);
     ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
 	unsigned int circuit);
-    ~ZapDevice();
+    virtual ~ZapDevice();
     inline Type type() const
 	{ return m_type; }
     inline int zapsig() const
@@ -296,6 +296,9 @@ public:
     int recv(void* buffer, int len);
     // Send data. Return -1 on error or the number of bytes written
     int send(const void* buffer, int len);
+    // Send data. Return -1 on error or the number of bytes written
+    inline int write(const void* buffer, int len)
+	{ return ::write(m_handle,buffer,len); }
     // Get driver version and echo canceller
     bool getVersion(NamedList& dest);
     // Get driver version and echo canceller
@@ -468,6 +471,7 @@ protected:
     unsigned int m_consErrors;           // Consumer. Total number of send failures
     unsigned int m_consErrorBytes;       // Consumer. Total number of lost bytes
     unsigned int m_consTotal;            // Consumer. Total number of bytes transferred
+    int m_errno;                         // Last write error
 };
 
 // An analog circuit
@@ -798,6 +802,8 @@ ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
     m_writeError(false),
     m_selectError(false)
 {
+    XDebug(&plugin,DebugNote,"ZapDevice type=%s chan=%u owner=%s cic=%u [%p]",
+	lookup(t,s_types),chan,dbg?dbg->debugName():"",circuit,this);
     close();
     this->channel(chan,circuit);
     if (m_type == Control || m_type == TypeUnknown) {
@@ -823,6 +829,8 @@ ZapDevice::ZapDevice(unsigned int chan, bool disableDbg, bool open)
     m_writeError(false),
     m_selectError(false)
 {
+    XDebug(&plugin,DebugNote,"ZapDevice(ZaptelQuery) type=%s chan=%u [%p]",
+	lookup(m_type,s_types),chan,this);
     close();
     channel(chan,0);
     m_owner = new SignallingCircuitGroup(0,0,"ZaptelQuery");
@@ -834,10 +842,11 @@ ZapDevice::ZapDevice(unsigned int chan, bool disableDbg, bool open)
 
 ZapDevice::~ZapDevice()
 {
-    if (m_type != Control || m_type == TypeUnknown)
-	plugin.remove(this);
-    else
+    XDebug(&plugin,DebugNote,"ZapDevice destruct type=%s chan=%u owner=%s [%p]",
+	lookup(m_type,s_types),m_channel,m_owner?m_owner->debugName():"",this);
+    if (m_type == Control || m_type == TypeUnknown)
 	TelEngine::destruct(m_owner);
+    plugin.remove(this);
     close();
 }
 
@@ -869,9 +878,11 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 	return false;
     }
 
+    // Done if opening the main zaptel device
     if (m_type == Control)
 	return true;
 
+    // Notify plugin if opened for normal (not for query properties) use
     if (m_type != TypeUnknown)
 	plugin.openClose(true);
 
@@ -1793,7 +1804,8 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_consBufMax(0),
     m_consErrors(0),
     m_consErrorBytes(0),
-    m_consTotal(0)
+    m_consTotal(0),
+    m_errno(0)
 {
     m_dtmfDetect = config.getBoolValue("dtmfdetect",true);
     if (m_dtmfDetect && ZapDevice::SetToneDetect > 100) {
@@ -2065,26 +2077,33 @@ void ZapCircuit::consume(const DataBlock& data)
 {
     if (!(SignallingCircuit::status() == Connected && m_canSend && data.length()))
 	return;
+
+    // Copy data in buffer
+    // Throw old data on buffer overrun
     m_consTotal += data.length();
-    XDebug(group(),DebugAll,"ZapCircuit(%u). Consuming %u bytes. Buffer=%u [%p]",
-	code(),data.length(),m_consBuffer.length(),this);
     if (m_consBuffer.length() + data.length() <= m_consBufMax)
 	m_consBuffer += data;
     else {
+	Debug(group(),DebugWarn,
+	    "ZapCircuit(%u). Buffer overrun old=%u channel=%u (%d: %s) [%p]",
+	    code(),m_consBuffer.length(),m_device.channel(),m_errno,
+	    ::strerror(m_errno),this);
 	m_consErrors++;
-	m_consErrorBytes += data.length();
-	XDebug(group(),DebugMild,"ZapCircuit(%u). Buffer overrun %u bytes [%p]",
-	    code(),data.length(),this);
+	m_consErrorBytes += m_consBuffer.length();
+	m_consBuffer = data;
     }
+
+    // Send buffer. Stop on error
     while (m_consBuffer.length() >= m_buflen) {
-	int w = m_device.send(m_consBuffer.data(),m_buflen);
-	if (w > 0) {
-	    m_consBuffer.cut(-w);
-	    XDebug(group(),DebugAll,"ZapCircuit(%u). Sent %d bytes. Remaining: %u [%p]",
-		code(),w,m_consBuffer.length(),this);
-	}
-	else
+	int w = m_device.write(m_consBuffer.data(),m_buflen);
+	if (w <= 0) {
+	    m_errno = errno;
 	    break;
+	}
+	m_errno = 0;
+	m_consBuffer.cut(-w);
+	XDebug(group(),DebugAll,"ZapCircuit(%u). Sent %d bytes. Remaining: %u [%p]",
+	    code(),w,m_consBuffer.length(),this);
     }
 }
 

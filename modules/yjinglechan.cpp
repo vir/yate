@@ -2041,8 +2041,8 @@ void YJGDriver::processPresence(const JabberID& local, const JabberID& remote,
 	for (; obj; obj = obj->skipNext()) {
 	    YJGConnection* conn = static_cast<YJGConnection*>(obj->get());
 	    if (conn->state() != YJGConnection::Pending ||
-		(!broadcast && local.bare() != conn->local().bare()) ||
-		remote.bare() != conn->remote().bare())
+		(!broadcast && (local.bare() |= conn->local().bare())) ||
+		(remote.bare() |= conn->remote().bare()))
 		continue;
 	    conn->updateResource(remote.resource());
 	    if (conn->processPresence(true))
@@ -2092,7 +2092,7 @@ YJGConnection* YJGDriver::find(const JabberID& local, const JabberID& remote, bo
 	if (!conn->remote().match(remote))
 	    continue;
 	if (anyResource) {
-	    if (bareJID == conn->local().bare())
+	    if (bareJID &= conn->local().bare())
 		return conn;
 	}
 	else if (conn->local().match(local))

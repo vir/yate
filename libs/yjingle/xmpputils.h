@@ -245,13 +245,13 @@ public:
 	{ return m_resource; }
 
     /**
-     * Try to match another JID to this one. If src has a resource compare with
-     *  the full JID. Otherwise compare the bare JID.
+     * Try to match another JID to this one. If src has a resource compare it too
+     *  (case sensitive). Otherwise compare just the bare JID (case insensitive).
      * @param src The JID to match.
      * @return True if matched.
      */
     inline bool match(const JabberID& src) const
-	{ return (src.resource() ? src == *this : bare() == src.bare()); }
+	{ return (src.resource().null() || (resource() == src.resource())) && (bare() &= src.bare()); }
 
     /**
      * Set the resource part of the JID.

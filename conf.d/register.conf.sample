@@ -42,6 +42,9 @@
 ; accounts: bool: Activate client registrations on "user.notify" and "engine.timer"
 ;accounts=no
 
+; subscriptions: bool: Activate resource subscriptions support
+;subscriptions=no
+
 
 [default]
 ; This section holds default settings for each of the following message handlers
@@ -74,27 +77,27 @@
 [user.register]
 ; Query for the user.register message
 
-query=UPDATE users SET location='${data},expires=CURRENT_TIMESTAMP + INTERVAL '${expires} s' WHERE username='${username}'
+;query=UPDATE users SET location='${data},expires=CURRENT_TIMESTAMP + INTERVAL '${expires} s' WHERE username='${username}'
 
 
 [user.unregister]
 ; Query for the user.unregister message
 
-query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND username='${username}'
+;query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND username='${username}'
 
 
 [engine.timer]
 ; Query for the timer message that expires registrations
 ; Also look at the expires setting in section [general]
 
-query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP
+;query=UPDATE users SET location=NULL,expires=NULL WHERE expires IS NOT NULL AND expires<=CURRENT_TIMESTAMP
 
 
 [call.preroute]
 ; Query and result name for the prerouting message
 
-query=
-priority=120
+;query=
+;priority=120
 
 
 [call.route]
@@ -103,9 +106,9 @@ priority=120
 ; offlineauto: boolean: Set the "offline" error for queries that return records but no route
 ;offlineauto=yes
 
-query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
-result=location
-priority=120
+;query=SELECT location,(CASE WHEN location IS NULL THEN 'offline' ELSE NULL END) AS error FROM users WHERE username='${called}'
+;result=location
+;priority=120
 
 
 [call.cdr]
@@ -114,10 +117,10 @@ priority=120
 ; critical: boolean: Reject all registrations and routing if query fails
 ;critical=yes
 
-initquery=UPDATE cdr SET ended=true WHERE ended IS NULL OR NOT ended
-cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}','${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
-cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
-cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}',ended=true WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+;initquery=UPDATE cdr SET ended=true WHERE ended IS NULL OR NOT ended
+;cdr_initialize=INSERT INTO cdr VALUES(TIMESTAMP 'EPOCH' + INTERVAL '${time} s','${chan}','${address}','${direction}','${billid}','${caller}','${called}',INTERVAL '${duration} s',INTERVAL '${billtime} s',INTERVAL '${ringtime} s','${status}','${reason}',false)
+;cdr_update=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}' WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
+;cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid='${billid}',caller='${caller}',called='${called}',duration=INTERVAL '${duration} s',billtime=INTERVAL '${billtime} s',ringtime=INTERVAL '${ringtime} s',status='${status}',reason='${reason}',ended=true WHERE chan='${chan}' AND time=TIMESTAMP 'EPOCH' + INTERVAL '${time} s'
 
 
 [linetracker]
@@ -126,36 +129,36 @@ cdr_finalize=UPDATE cdr SET address='${address}',direction='${direction}',billid
 ; critical: boolean: Reject all registrations and routing if query fails
 ;critical=no
 
-initquery=UPDATE users SET inuse=0
-cdr_initialize=UPDATE users SET inuse=inuse+1 WHERE username='${external}'
-cdr_finalize=UPDATE users SET inuse=(CASE WHEN inuse>0 THEN inuse-1 ELSE 0 END) WHERE username='${external}'
+;initquery=UPDATE users SET inuse=0
+;cdr_initialize=UPDATE users SET inuse=inuse+1 WHERE username='${external}'
+;cdr_finalize=UPDATE users SET inuse=(CASE WHEN inuse>0 THEN inuse-1 ELSE 0 END) WHERE username='${external}'
 
 
 [accounts]
 ; Queries for registering as client to other servers
 
 ; query executed only once to create client registrations at startup
-initquery=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
+;initquery=SELECT enabled,protocol,username,password,server FROM accounts WHERE enabled IS TRUE
 
 ; poll on timer to update registrations if database was changed externally
-timerquery=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
+;timerquery=BEGIN; SELECT enabled,protocol,username,password,server FROM accounts WHERE modified IS TRUE; UPDATE accounts SET modified=FALSE; COMMIT
 
 ; update account status after receiving an user.notify
-statusquery=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'
+;statusquery=UPDATE accounts SET status='${status}' WHERE account='${internalaccount}'
 
 
 [resource.subscribe]
 ; Queries used for event subscribe and event state changes notification
 
 ; query executed on subscribe requests to check authorisation and refresh a subscription
-subscribe_subscribe=SELECT * FROM subscriptions_subscribe('${notifier}','${event}','${subscriber}','${data}','${notifyto}',INTERVAL '${expires} s') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+;subscribe_subscribe=SELECT * FROM subscriptions_subscribe('${notifier}','${event}','${subscriber}','${data}','${notifyto}',INTERVAL '${expires} s') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
 
 ; query executed on unsubscribe requests to check authorisation and remove a subscription
-subscribe_unsubscribe=SELECT * FROM subscriptions_unsubscribe('${notifier}','${event}','${subscriber}')
+;subscribe_unsubscribe=SELECT * FROM subscriptions_unsubscribe('${notifier}','${event}','${subscriber}')
 
 ; query executed when nedded to get all subscribers for a specified notifier's event
-subscribe_notify=SELECT * FROM subscriptions_notify('${notifier}','${event}') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+;subscribe_notify=SELECT * FROM subscriptions_notify('${notifier}','${event}') as t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
 
 ; query used to expire subscriptions
-subscribe_expire=SELECT * FROM subscriptions_expires() AS t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
+;subscribe_expire=SELECT * FROM subscriptions_expires() AS t(notifier text,data text,subscriber text,event text,notifyto text,notifyseq int8)
 

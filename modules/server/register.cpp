@@ -63,6 +63,7 @@ public:
     virtual bool received(Message& msg);
     virtual bool loadQuery();
     virtual void initQuery();
+    virtual void chkConfig();
 
 protected:
     int m_type;
@@ -325,8 +326,6 @@ void AAAHandler::loadAccount()
 {
     m_result = s_cfg.getValue(name(),"result");
     m_account = s_cfg.getValue(name(),"account",s_cfg.getValue("default","account"));
-    if (m_account.null())
-	Debug(&module,DebugMild,"Missing database account for '%s'",name().c_str());
 }
 
 const String& AAAHandler::name() const
@@ -380,6 +379,12 @@ void AAAHandler::initQuery()
     m->addParam("query",query);
     m->addParam("results","false");
     Engine::enqueue(m);
+}
+
+void AAAHandler::chkConfig()
+{
+    if (m_query && m_account.null())
+	Debug(&module,DebugMild,"Missing database account for '%s'",name().c_str());
 }
 
 // little helper function to make code cleaner
@@ -938,6 +943,7 @@ void RegistModule::addHandler(AAAHandler* handler)
     handler->loadAccount();
     s_handlers.append(handler);
     handler->loadQuery();
+    handler->chkConfig();
     Engine::install(handler);
 }
 
@@ -993,11 +999,12 @@ void RegistModule::initialize()
     addHandler("chan.hangup",FallBackHandler::Hangup);
     addHandler("call.answered",FallBackHandler::Answered);
 
-    addHandler("call.cdr",AAAHandler::DialogNotify);
-    addHandler("user.notify",AAAHandler::MWINotify);
-
-    addHandler("resource.subscribe", AAAHandler::Subscribe);
-    addHandler("engine.timer", AAAHandler::SubscribeTimer);
+    if (s_cfg.getBoolValue("general","subscriptions",false)) {
+	addHandler("call.cdr",AAAHandler::DialogNotify);
+	addHandler("user.notify",AAAHandler::MWINotify);
+	addHandler("resource.subscribe", AAAHandler::Subscribe);
+	addHandler("engine.timer", AAAHandler::SubscribeTimer);
+    }
 }
 
 bool FallBackHandler::received(Message &msg)

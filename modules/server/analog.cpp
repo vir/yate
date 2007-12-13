@@ -283,7 +283,7 @@ protected:
     // Detach the line from this channel and reset it
     void detachLine();
     // Send tones (DTMF or dial number)
-    bool sendTones(const char* tone);
+    bool sendTones(const char* tone, bool dial = true);
     // Set line polarity
     inline void polarityControl(bool state) {
 	    if (!(m_line && m_line->type() == AnalogLine::FXS &&
@@ -681,6 +681,7 @@ void ModuleLine::statusParams(String& str)
     str  << ",usedby=";
     if (userdata())
 	str << (static_cast<CallEndpoint*>(userdata()))->id();
+    str << ",polaritycontrol=" << polarityControl();
     if (type() == AnalogLine::FXO) {
 	str << ",answer-on-polarity=" << answerOnPolarity();
 	str << ",hangup-on-polarity=" << hangupOnPolarity();
@@ -1448,7 +1449,7 @@ bool AnalogChannel::msgTone(Message& msg, const char* tone)
 	    m_line->called().append(tone);
 	    return true;
 	}
-	return sendTones(tone);
+	return sendTones(tone,false);
     }
     // Flash event: don't send if not FXO
     if (m_line->type() != AnalogLine::FXO) {
@@ -1945,15 +1946,17 @@ void AnalogChannel::detachLine()
 }
 
 // Send tones (DTMF or dial number)
-bool AnalogChannel::sendTones(const char* tone)
+bool AnalogChannel::sendTones(const char* tone, bool dial)
 {
     if (!(m_line && tone && *tone))
 	return false;
-    DDebug(this,DebugInfo,"Sending tones='%s' [%p]",tone,this);
+    DDebug(this,DebugInfo,"Sending %sband tones='%s' dial=%u [%p]",
+	m_line->outbandDtmf()?"out":"in",tone,dial,this);
     bool ok = false;
     if (m_line->outbandDtmf()) {
 	NamedList p("");
 	p.addParam("tone",tone);
+	p.addParam("dial",String::boolText(dial));
 	ok = m_line->sendEvent(SignallingCircuitEvent::Dtmf,&p);
     }
     if (!ok)
@@ -2407,10 +2410,8 @@ void AnalogDriver::initialize()
 
     NamedList dummy("");
     NamedList* general = s_cfg.getSection("general");
-    if (!general) {
-	Debug(this,DebugMild,"Section 'general' is missing in configuration");
+    if (!general)
 	general = &dummy;
-    }
 
     // Startup
     if (!m_init) {

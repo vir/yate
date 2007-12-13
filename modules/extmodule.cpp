@@ -216,6 +216,8 @@ public:
 	{ return m_args; }
     inline bool selfWatch() const
 	{ return m_selfWatch; }
+    inline void setRestart(bool restart)
+	{ m_restart = restart; }
 
 private:
     ExtModReceiver(const char* script, const char* args,
@@ -239,6 +241,7 @@ private:
     bool m_reenter;
     int m_timeout;
     bool m_timebomb;
+    bool m_restart;
     String m_script, m_args;
     ObjList m_waiting;
     ObjList m_relays;
@@ -644,7 +647,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
       m_role(RoleUnknown), m_dead(false), m_use(0), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
-      m_timeout(s_timeout), m_timebomb(s_timebomb),
+      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(script), m_args(args)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",\"%s\") [%p]",script,args,this);
@@ -661,7 +664,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
       m_role(role), m_dead(false), m_use(0), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
-      m_timeout(s_timeout), m_timebomb(s_timebomb),
+      m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(name)
 {
     Debug(DebugAll,"ExtModReceiver::ExtModReceiver(\"%s\",%p,%p) [%p]",name,io,chan,this);
@@ -686,6 +689,10 @@ ExtModReceiver::~ExtModReceiver()
     if (m_pid > 1)
 	Debug(DebugWarn,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
     closeAudio();
+    if (m_restart && !Engine::exiting()) {
+	Debug(DebugMild,"Restarting external '%s' '%s'",m_script.safe(),m_args.safe());
+	ExtModReceiver::build(m_script,m_args);
+    }
 }
 
 void ExtModReceiver::closeIn()
@@ -1239,6 +1246,11 @@ bool ExtModReceiver::processLine(const char* line)
 		val = m_timebomb;
 		ok = true;
 	    }
+	    else if (id == "restart") {
+		m_restart = (RoleGlobal == m_role) && val.toBoolean(m_restart);
+		val = m_restart;
+		ok = true;
+	    }
 	    else if (id == "reenter") {
 		m_reenter = val.toBoolean(m_reenter);
 		val = m_reenter;
@@ -1404,6 +1416,7 @@ bool ExtModCommand::received(Message& msg)
 		return true;
 	    }
 	    else {
+		r->setRestart(false);
 		r->die();
 		msg.retValue() = "External command stopped\r\n";
 	    }

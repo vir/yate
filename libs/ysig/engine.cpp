@@ -420,7 +420,7 @@ static TokenDict s_dict_transferRateCCITT[] = {
 
 // Q.931 4.5.5. User information Layer 1 protocol: Bits 0-4
 // Defined for CCITT coding standard
-TokenDict s_dict_formatCCITT[] = {
+static TokenDict s_dict_formatCCITT[] = {
 	{"v110",          0x01},         // Recomendation V.110 and X.30
 	{"mulaw",         0x02},         // Recomendation G.711 mu-law
 	{"alaw",          0x03},         // Recomendation G.711 A-law 
@@ -432,7 +432,7 @@ TokenDict s_dict_formatCCITT[] = {
 	{0,0}
 	};
 
-TokenDict* SignallingUtils::m_dictCCITT[5] = {
+TokenDict* SignallingUtils::s_dictCCITT[5] = {
 	s_dict_causeCCITT,
 	s_dict_formatCCITT,
 	s_dict_transferCapCCITT,

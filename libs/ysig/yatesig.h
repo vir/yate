@@ -1853,7 +1853,7 @@ public:
     static inline const TokenDict* dict(unsigned int index, unsigned char coding = 0) {
 	    if (index > 4)
 		return 0;
-	    return (!coding ? m_dictCCITT[index] : 0);
+	    return (!coding ? s_dictCCITT[index] : 0);
 	}
 
     /**
@@ -1993,7 +1993,7 @@ public:
 	unsigned int& count, bool discardDup);
 
 private:
-    static TokenDict* m_dictCCITT[5];
+    static TokenDict* s_dictCCITT[5];
 };
 
 /**

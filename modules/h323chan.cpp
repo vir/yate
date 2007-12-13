@@ -2016,17 +2016,19 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
     if (clearCall && tmp) {
 	const char* err = 0;
 	const char* txt = "Normal cleanup";
-	int reason = tmp->GetCallEndReason();
+	H323Connection::CallEndReason reason = tmp->GetCallEndReason();
 	if (reason != H323Connection::NumCallEndReasons) {
 	    err = lookup(reason,dict_errors);
 	    txt = CallEndReasonText(reason);
 	}
+	else
+	    reason = H323Connection::EndedByLocalUser;
 	if (err)
 	    m->setParam("error",err);
 	if (txt)
 	    m->setParam("reason",txt);
 	tmp->cleanups(false,dropChan);
-	tmp->ClearCall();
+	tmp->ClearCall(reason);
     }
     Engine::enqueue(m);
 }

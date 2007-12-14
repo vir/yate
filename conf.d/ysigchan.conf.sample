@@ -1,0 +1,219 @@
+; This file keep signalling channel configuration
+; Each section (except for 'general' section) configure a link
+; For call controllers, the name of the section will be used to route outgoing calls
+
+
+[general]
+; This section keep general settings for the signalling module:
+; - Default values for missing or invalid parameters in link sections
+
+; debuglevel: string: Comma separated list of debug levels for module and SS7 components
+; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
+; Keep in mind that all objects are chained in module, so any subsequent changes in
+;  module's debug level is propagated to the SS7 objects
+; The order is: Module, Signalling engine, SS7 router, SS7 management, SS7 maintenance
+; This parameter is applied on reload
+;debuglevel=
+
+
+;Example of an 'isdn-pri-net' link
+;[link1]
+
+; type: string: Specify the link type 
+; Allowed values:
+;  ss7-isup:      SS7 ISDN User Part over synchronous (HDLC) interface(s)
+;  isdn-pri-net:  ISDN network side of a data link over one or more primary HDLC interface(s)
+;  isdn-pri-cpe:  ISDN CPE (user) side of a data link over one or more primary HDLC interface(s)
+;  isdn-pri-mon:  ISDN monitor of one or more primary HDLC interface(s)
+; NOTE: isdn-pri-net and isdn-pri-cpe are identical, except for the side of the link
+;type=isdn-pri-net
+
+; enable: boolean: Enable or disable this call controller
+; yes:  Create this call controller. If already exists, apply settings (the settings
+;       that can be changed on reload are explicitely specified in place)
+; no:   Remove call controller if already created
+; Defaults to yes
+;enable=yes
+
+; sig: string: Specify the span(s) containing the signalling channel(s)
+; For example wanpipe1 or any other section specified in any of the telephony
+;   modules like wpcard or zapcard
+; Ignored if type is not isdn-pri-net or isdn-pri-cpe
+;sig=wanpipe1
+
+; voice: string: Specify the span(s) containing the voice channel(s)
+; Multiple cards may be specified by simply separating them with a comma (',') character
+; Defaults to the span specified in the sig parameter
+; Ignored if type is not isdn-pri-net or isdn-pri-cpe
+;voice=
+
+; dtmfinband: boolean: Enable to try to send the DTMF data in band when an audio channel is available
+; If disabled or no audio channel available, the DTMF will be sent through the signalling channel if any
+; Defaults to disable
+;dtmfinband = disable
+
+; strategy: string: The strategy used to allocate voice channels for outgoing calls
+; Allowed values:
+;  - increment  Do an incremental search for an idle channel starting with the last allocated channel
+;  - decrement  Do an decremental search for an idle channel starting with the last allocated channel
+;  - lowest     Do an incremental search for an idle channel starting with the first channel in group
+;  - highest    Do an decremental search for an idle channel starting with the last channel in group
+;  - random     Randomly choose an idle channel
+; Defaults to increment
+;strategy=increment
+
+; strategy-restrict: string: Define channel allocation restrictions and behaviour
+; This option is ignored when strategy is random
+; Allowed values:
+;    even           Allocate only even channels
+;    odd            Allocate only odd channels
+;    even-fallback  Allocate even channels. Fallback to odd channels when no more even channels
+;    odd-fallback   Allocate odd channels. Fallback to even channels when no more odd channels
+;strategy-restrict=
+
+; channelsync: integer: The interval (in seconds) at which the call controller
+;  will try to re-sync idle channels
+; The call controller will notify the other side of the link of idle channels
+; Set to 0 to disable
+; Defaults to minimum value if missing or invalid
+;channelsync=1000
+
+; numplan: string: Default numbering plan for outgoing calls
+; Values: unknown, isdn, data, telex, national, private
+; Defaults to unknown if missing or incorrect
+; This parameter refers only to ISDN
+;numplan=unknown
+
+; numtype: string:  Default number type for outgoing calls
+; Values: unknown,international,national,net-specific,subscriber,abbreviated,reserved
+; Defaults to unknown if missing or incorrect
+;numtype=unknown
+
+; presentation: string: Default number presentation for outgoing calls
+; Values: allowed, restricted, unavailable
+; Defaults to allowed if missing or incorrect
+;presentation=allowed
+
+; screening: string:  Default number screening for outgoing calls
+; Values: user-provided, user-provided-passed, user-provided-failed, network-provided
+; Defaults to user-provided if missing or incorrect
+;screening=user-provided
+
+; format: string:  Default data format for outgoing calls. Values: alaw, mulaw, g721
+; Defaults to alaw if missing or incorrect
+; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
+;format=alaw
+
+; display-charset: integer: Charset value to send with display (callername) data. Interval 0..127
+; Set to an invalid value to disable. This will also disable charset reading for incoming display data
+; Defaults to 255 (disabled)
+; This parameter refers only to ISDN
+;display-charset=255
+
+; print-layer2PDU: boolean: Print layer 2 (Q.921) protocol data units to output
+; For ISDN this option is applied on reload
+; Defaults to no
+;print-layer2PDU=no
+
+; print-layer3PDU: boolean: Print layer 3 (Q.931) protocol data units to output
+; For ISDN this option is applied on reload
+; Defaults to no
+;print-layer3PDU=no
+
+; extended-debug: boolean: Print extented debug data (such as raw hex data) to output
+; For ISDN this parameter is used in conjuction with print-layer2PDU and print-layer3PDU and
+;   is ignored if it's pair is not enabled
+; For ISDN this option is applied on reload
+; Defaults to no
+;extended-debug=no
+
+
+
+
+
+; sig-net: string: Specify the span(s) containing the signalling channel(s) for the network side of the monitored link
+; For example wanpipe1 or any other section specified in any of the telephony
+;   modules like wpcard or zapcard
+; Ignored if type is not isdn-pri-mon
+;sig-net=
+
+; sig-cpe: string: Specify the span(s) containing the signalling channel(s) for the user side of the monitored link
+; For example wanpipe1 or any other section specified in any of the telephony
+;   modules like wpcard or zapcard
+; Ignored if type is not isdn-pri-mon
+;sig-cpe=
+
+; voice-net: string: Specify the span(s) containing the voice channel(s) for the network side of the monitored link
+; Multiple cards may be specified by simply separating them with a comma (',') character
+; Defaults to the span specified in the sig-net parameter
+; Ignored if type is not isdn-pri-mon
+;voice-net=
+
+; voice-cpe: string: Specify the span(s) containing the voice channel(s) for the user side of the monitored link
+; Multiple cards may be specified by simply separating them with a comma (',') character
+; Defaults to the span specified in the sig-cpe parameter
+; Ignored if type is not isdn-pri-mon
+;voice-cpe=
+
+; detect: boolean: Change the side of the link on each captured request for watched signalling span(s)
+; If disabled and the side of the link is not correct, the monitor will not be notified on
+;   data link state change. This may lead to malfunction
+; Defaults to enable
+; Ignored if type is not isdn-pri-mon
+;detect=enable
+
+; muxchanbuffer: integer: The buffer size for one channel of the audio multiplexer
+; Defaults to 160 if 0 or missing
+; Ignored if type is not isdn-pri-mon
+;muxchanbuffer=160
+
+; idlevalue: integer: The value used by the audio multiplexer to fill missing data
+; This value is used to fill the free space when the multiplexer has to forward the received
+;   data but one channel buffer is not full
+; Interval: 0..255. Defaults to 255 if missing or invalid
+; Ignored if type is not isdn-pri-mon
+;idlevalue=255
+
+; idletimeout: integer: HDLC data link idle timeout
+; The minimum allowed value is 4000. Defaults to 30000 if missing or invalid
+; Ignored if type is not isdn-pri-mon
+;idletimeout=30000
+
+; emergency: boolean: Emergency align SS7 MTP2 layer at startup
+; Defaults to no
+;emergency=yes
+
+; rxunderruninterval: integer: The interval (in miliseconds) allowed between 2 packets received
+;  on the signalling channel (required)
+; Minimum value is 5 for SS7 links and 3000 for ISDN links
+;rxunderruninterval=10
+
+; pointcodetype: string: SS7 link point code type (required)
+; Allowed values:
+;  ITU    ITU-T Q.704
+;  ANSI   ANSI T1.111.4
+;  ANSI8  8-bit SLS
+;  China  GF 001-9001
+;  Japan  T-Q704, NTT-Q704
+;  Japan5 5-bit SLS
+;pointcodetype=
+
+; pointcode: string: Point code serviced by this link
+; defaultpointcode: string: Default point code for outgoing calls
+; If missing or invalid, the default point code is set to the first point code added
+; If no point codes are added no calls can be made (incoming or outgoing) through this link
+; The format is network-cluster-member
+; Parameter pointcode may be repeated
+;pointcode=
+;defaultpointcode=
+
+; remotepointcode: string: Default destination point code used for outgoing calls and maintenance messages
+; If missing or invalid, no maintenance message will be sent
+; The format is network-cluster-member
+;remotepointcode=
+
+; debuglevel: string: Comma separated list of debug levels for link layers
+; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
+; ss7-isup: Interface,Circuit group, MTP2, MTP3, ISUP
+; isdn-pri-net,isdn-pri-cpe: Interface,Circuit group, Q921, Q931
+;debuglevel=

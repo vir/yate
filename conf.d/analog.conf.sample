@@ -1,0 +1,204 @@
+; This file keep the analog channel configuration
+; Each section except for 'general' configures a group of lines or an individual line
+; Each section named 'line group-name/circuit-code' or
+; 'line group-name/fxo/circuit-code' configure a line belonging to group
+; <group-name> or <group-name/fxo> and using the circuit with code
+; <circuit-code> in that group. The 'fxo' part means that the line is the FXO
+; listening the FXS end of a monitored line (<group-name>'s type must be monitor)
+; For each [group-name] section the configuration file is searched for
+; [line group-name/circuit-code] or [line group-name/fxo/circuit-code] sections
+;
+; NOTES:
+;
+; - Avoid use of the slash ('/') character in group names
+; - Lines belonging to the same group always have the same type
+; - For recorders (monitor groups), 2 lines must be configured: an FXO line listening
+;   the FXS end of monitored line and an FXS one listening the FXO end of the
+;   monitored line.
+; - When recording, the first channel is the caller and the second one is the called
+;
+; ROUTING:
+;
+; Calls can be routed by setting the group name or line address as destination
+; ^123$=analog/office-fxs/3
+; ^012$=analog/office-fxs
+; ^13\(*.)$=analog/office-fxo/\1
+; ^013$=analog/office-fxo;
+; When routing, the recorders will set the type, format and callsource parameters
+; The 'type' parameter will have the value 'record', the 'format' parameter is the
+; format of the data source (usually alaw or mulaw) and 'callsource' parameter
+; will have the value 'fxs' or 'fxo' which indicates the call initiator (this is
+; the end of the monitored line, not he recorder's one)
+;
+; [default]
+; ${type}^record$=goto record
+;
+; [record]
+; .*=wave/record//tmp/${caller}_${called}_$(++$recidx).${format}
+;
+; [$once]
+; recidx=0
+;
+; In this example, a recorder is routed to wavefile to be recorded in a file name given
+; by caller, called, incremented value of the 'recidx' variable and the data format
+
+[general]
+; This section keep general settings for the analog module
+
+; echocancel: boolean: Automatically enable or disable individual line echo
+; canceller on call begin/end
+; If missing or invalid, no automatic echo canceller operation will be done
+; This parameter can be overridden in group and line sections
+; The hardware driver must support this feature
+;echocancel=
+
+; call-ended-target: string: Target to play when an FXS line is disconnected and
+; the FXO is still off hook
+; This option is used to set an announcement to the FXO to tell it that the call
+; was ended by its peer
+; This parameter is applied on reload and can be overridden in group sections
+; Defaults to tone/busy
+;call-ended-target=tone/busy
+
+; outoforder-target: string: Target to play when an FXS line is disconnected and
+; the FXO is off hook for a long period of time
+; This tone is played after the call ended tone
+; This parameter is applied on reload and can be overridden in group sections
+; Defaults to tone/outoforder
+;outoforder-target=tone/outoforder
+
+; call-ended-playtime: integer: The time to play the call-ended-target prompt on an FXS line
+; After that, the outoforder-target will be played until the user closes (set on hook) the line
+; This parameter can be overridden in group sections
+; Defaults to 2000
+;call-ended-playtime=
+
+; ring-timeout: integer: The time allowed to ellapse between rings on incoming calls on FXO lines
+; This timer can be used when there is no way to know when the remote FXS closes an unaswered
+; call (no line polarity changes)
+; This timer can also be used to configure the FXO lines belonging to recorder (monitor) groups
+; If used, incoming unaswered calls or recorders will be terminated when this time ellapsed
+; This parameter can be overridden in group and line sections
+; Set to 0 to disable this timer. Defaults to 10000
+;ring-timeout=
+
+; alarm-timeout: integer: The time allowed for an active call to remain alive with its line
+; in alarm (out of order)
+; A T1 line can detect link failures and notify the upper layer
+; When notified on line failure, active unanswered calls are terminated immediately.
+; Answered calls are allowed to persist for the given period
+; Set to 0 to disable this timer. Defaults to 30000
+;alarm-timeout=30000
+
+;[group-name]
+; This section is used to configure a group of analog lines
+
+; enable: boolean: This option is used to create or remove a group of analog lines
+; Applied on reload
+; Defaults to yes
+;enable=yes
+
+; type: string: Group type. This is the type of the local end of all analog lines
+; belonging to this group
+; Allowed values:
+; FXO: The line is a telephone set linked to a telephone exchange
+; FXS: The line is a telephone exchange linked to a telephone set
+; monitor: This group contains line monitors (recorders)
+; This option is required on creation
+;type=
+
+; spans: string: Specify the span(s) containing the analog channel(s)
+; The value of this option must be a section name specified in a telephony module
+; Multiple spans may be specified by simply separating them with a comma (',') character
+; This option is required on creation if group's type is not monitor
+;spans=
+
+; fxs,fxo: string: Specify the span(s) containing the analog channel(s) used by
+; the FXS and FXO lines belonging to monitors
+; The value of this option must be a section name specified in a telephony module
+; Multiple spans may be specified by simply separating them with a comma (',') character
+; This option is required on creation if group's type is monitor
+;fxs=
+;fxo=
+
+; useallcircuits: boolean: Create lines for all circuits belonging to this group
+; This parameter is processed only when creating lines
+; If disabled, only lines declared in existing sections with will be created
+; Use line sections to override group parameters
+; Defaults to enable
+;useallcircuits=enable
+
+; delaydial: integer: Delay sending number on FXO lines
+; This option is used to delay sending the called number (if any)
+; Defaults to 2000 if missing or invalid
+; Set to 0 to send number just after receiving the confirmation of hook off
+; operation completion
+; This parameter can be overridden in line sections and in the routing process
+; Ignored if type is not FXO
+;delaydial=2000
+
+; dtmfinband: boolean: Enable to send the DTMF data in band on analog lines belonging
+; to this group
+; If disabled, the DTMF will be sent through the line's hardware if possible
+; This parameter just set the order to try sending the DTMFs: if disabled and the line
+; fails to send the DTMF through the hardware, it will send it in band
+; This parameter can be overridden in line sections
+; Defaults to disable
+;dtmfinband=disable
+
+; answer-on-polarity: boolean: This parameter is used by an FXO line to wait for line
+; polarity change as a signal that an outgoing call was answered by the remote end
+; If disabled, the call will be considerred answered as soon as the destination
+; number is sent (even if the number is empty)
+; Care must be taken when setting this option to yes: the telephone exchange (FXS) might
+; not be able to change line polarity on answer or the hardware might not be able to
+; detect such an event: the outgoing calls will never be answered
+; This parameter can be overridden in line sections
+; Defaults to no
+;answer-on-polarity=no
+
+; hangup-on-polarity: boolean: This parameter is used by an FXO line to handle line
+; polarity change as a signal that a call was terminated by the remote end (on hook)
+; For outgoing calls on lines with answer-on-polarity enabled the first polarity change
+; will be treated as an off hook (answer) event and a second one will be considerred
+; an on hook (hang up) event
+; For outgoing calls on lines with answer-on-polarity disabled or for incoming calls,
+; if this parameter is enabled the line polarity change will be treated as an
+; on hook (hang up) event
+; This parameter can be overridden in line sections
+; Defaults to no
+;hangup-on-polarity=no
+
+; callsetup: string: This parameter is used to detect (FXO) or send (FXS) line
+; setup data (such as caller id)
+; Allowed values:
+; after: send/detect call setup after the first ring and before the second one
+; before: send/detect call setup before the first ring
+; none: No call setup detect or send
+; This parameter can be overridden in line sections
+; Defaults to after if missing or invalid
+;callsetup=after
+
+; debuglevel: integer: The debug level of this group
+; Applied on reload
+; Defaults to the current debug level if missing or invalid
+; NOTE: If 0, no debug messages will be printed out from this group or lines belonging to it
+;debuglevel=
+
+;[line group-name/circuit-code] or
+;[line group-name/fxo/circuit-code]
+; This section is used to configure an analog line belonging to a group of lines
+; The line address (group-name/circuit-code) will be used to route a call to it
+
+; enable: boolean: This option is used to create or remove an analog line
+; When removed, any active call on this line will remain (the line will be destroyed on termination)
+; Applied on reload
+; Defaults to yes
+;enable=yes
+
+; out-of-service: boolean: This option is used to put a line in out of service or in service state
+; When out of service, no calls can be done through the line and any active call
+; on this line will be terminated
+; Applied on reload
+; Defaults to no
+;out-of-service=no

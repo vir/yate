@@ -34,41 +34,47 @@ for small to large scale projects.
 /usr/share/man/*/yate.*
 /etc/rc.d/init.d/yate
 %dir /usr/lib/yate
-%dir /usr/lib/yate/modules
+/usr/lib/yate/cdrbuild.yate
+/usr/lib/yate/cdrfile.yate
+/usr/lib/yate/regexroute.yate
+/usr/lib/yate/server/regfile.yate
+/usr/lib/yate/server/accfile.yate
+/usr/lib/yate/server/register.yate
+/usr/lib/yate/tonegen.yate
+/usr/lib/yate/tonedetect.yate
+/usr/lib/yate/wavefile.yate
+/usr/lib/yate/conference.yate
+/usr/lib/yate/moh.yate
+/usr/lib/yate/callgen.yate
+/usr/lib/yate/analyzer.yate
+/usr/lib/yate/rmanager.yate
+/usr/lib/yate/msgsniff.yate
+/usr/lib/yate/pbx.yate
+/usr/lib/yate/server/dbpbx.yate
+/usr/lib/yate/server/pbxassist.yate
+/usr/lib/yate/server/park.yate
+/usr/lib/yate/server/queues.yate
+/usr/lib/yate/dumbchan.yate
+/usr/lib/yate/callfork.yate
+/usr/lib/yate/extmodule.yate
+/usr/lib/yate/server/yradius.yate
+/usr/lib/yate/ysipchan.yate
+/usr/lib/yate/yrtpchan.yate
+/usr/lib/yate/ystunchan.yate
+/usr/lib/yate/yiaxchan.yate
+/usr/lib/yate/yjinglechan.yate
+/usr/lib/yate/enumroute.yate
+/usr/lib/yate/server/sipfeatures.yate
+/usr/lib/yate/client/osschan.yate
+/usr/lib/yate/ilbccodec.yate
+/usr/lib/yate/server/heartbeat.yate
+/usr/lib/yate/server/mgcpca.yate
+/usr/lib/yate/server/mgcpgw.yate
+/usr/lib/yate/server/mrcpspeech.yate
+/usr/lib/yate/server/ysigchan.yate
+/usr/lib/yate/server/analog.yate
+/usr/lib/yate/server/analogdetect.yate
 %dir /etc/yate
-/usr/lib/yate/modules/cdrbuild.yate
-/usr/lib/yate/modules/cdrfile.yate
-/usr/lib/yate/modules/regexroute.yate
-/usr/lib/yate/modules/regfile.yate
-/usr/lib/yate/modules/accfile.yate
-/usr/lib/yate/modules/register.yate
-/usr/lib/yate/modules/tonegen.yate
-/usr/lib/yate/modules/tonedetect.yate
-/usr/lib/yate/modules/wavefile.yate
-/usr/lib/yate/modules/conference.yate
-/usr/lib/yate/modules/moh.yate
-/usr/lib/yate/modules/callgen.yate
-/usr/lib/yate/modules/analyzer.yate
-/usr/lib/yate/modules/rmanager.yate
-/usr/lib/yate/modules/msgsniff.yate
-/usr/lib/yate/modules/pbx.yate
-/usr/lib/yate/modules/dbpbx.yate
-/usr/lib/yate/modules/pbxassist.yate
-/usr/lib/yate/modules/park.yate
-/usr/lib/yate/modules/queues.yate
-/usr/lib/yate/modules/dumbchan.yate
-/usr/lib/yate/modules/callfork.yate
-/usr/lib/yate/modules/extmodule.yate
-/usr/lib/yate/modules/yradius.yate
-/usr/lib/yate/modules/ysipchan.yate
-/usr/lib/yate/modules/yrtpchan.yate
-/usr/lib/yate/modules/ystunchan.yate
-/usr/lib/yate/modules/yiaxchan.yate
-/usr/lib/yate/modules/yjinglechan.yate
-/usr/lib/yate/modules/enumroute.yate
-/usr/lib/yate/modules/sipfeatures.yate
-/usr/lib/yate/modules/osschan.yate
-/usr/lib/yate/modules/ilbccodec.yate
 %config /etc/yate/accfile.conf
 %config /etc/yate/cdrbuild.conf
 %config /etc/yate/cdrfile.conf
@@ -90,6 +96,9 @@ for small to large scale projects.
 %config /etc/yate/ystunchan.conf
 %config /etc/yate/ysipchan.conf
 %config /etc/yate/yjinglechan.conf
+%config /etc/yate/heartbeat.conf
+%config /etc/yate/mgcpca.conf
+%config /etc/yate/mgcpgw.conf
 %config /etc/logrotate.d/yate
 
 %post
@@ -109,7 +118,7 @@ Advanced Linux Sound Architecture audio driver for Yate. This is the recommended
 audio interface for using the client under Linux.
 
 %files alsa
-/usr/lib/yate/modules/alsachan.yate
+/usr/lib/yate/client/alsachan.yate
 
 
 %package gsm
@@ -121,7 +130,7 @@ European GSM 06.10 audio codec for Yate. This is a low CPU usage codec that
 provides moderate compression and good voice quality.
 
 %files gsm
-/usr/lib/yate/modules/gsmcodec.yate
+/usr/lib/yate/gsmcodec.yate
 
 
 %package h323
@@ -132,7 +141,7 @@ Group:		Applications/Communication
 Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 
 %files h323
-/usr/lib/yate/modules/h323chan.yate
+/usr/lib/yate/h323chan.yate
 %config /etc/yate/h323chan.conf
 
 
@@ -146,10 +155,10 @@ Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe kernel
 interfaces.
 
 %files isdn
-/usr/lib/yate/modules/wpchan.yate
-/usr/lib/yate/modules/zapchan.yate
-%config /etc/yate/wpchan.conf
-%config /etc/yate/zapchan.conf
+/usr/lib/yate/wpcard.yate
+/usr/lib/yate/zapcard.yate
+%config /etc/yate/wpcard.conf
+%config /etc/yate/zapcard.conf
 
 
 %package pgsql
@@ -162,7 +171,7 @@ This package allows Yate to connect to a PostgreSQL database server. All
 modules that support database access will be able to use PostgreSQL.
 
 %files pgsql
-/usr/lib/yate/modules/pgsqldb.yate
+/usr/lib/yate/server/pgsqldb.yate
 %config /etc/yate/pgsqldb.conf
 
 
@@ -176,7 +185,7 @@ This package allows Yate to connect to a MySQL database server. All modules
 that support database access will be able to use MySQL.
 
 %files mysql
-/usr/lib/yate/modules/mysqldb.yate
+/usr/lib/yate/server/mysqldb.yate
 %config /etc/yate/mysqldb.conf
 
 
@@ -194,10 +203,10 @@ with a Gtk2 graphical interface.
 /usr/bin/yate-gtk2
 /usr/lib/menu/yate-gtk2.menu
 /usr/share/applications/yate-gtk2.desktop
-%dir /usr/lib/yate/modules/skin
-/usr/lib/yate/modules/skin/*
-%dir /usr/lib/yate/modules/help
-/usr/lib/yate/modules/help/*
+%dir /usr/share/yate/skins
+/usr/share/yate/skins/*
+%dir /usr/share/yate/help
+/usr/share/yate/help/*
 %config /etc/yate/yate-gtk2.conf
 %config /etc/yate/providers.conf
 
@@ -219,8 +228,8 @@ This package adds a Mozilla widget that can be embedded in a Yate client window.
 
 %files mozilla
 %defattr(-, root, root)
-%dir /usr/lib/yate/modules/gtk2
-/usr/lib/yate/modules/gtk2/*
+%dir /usr/lib/yate/gtk2
+/usr/lib/yate/gtk2/*
 
 
 %package scripts
@@ -232,8 +241,8 @@ Requires:	%{name}
 The yate-scripts package includes libraries for using external scripts with Yate.
 
 %files scripts
-%dir /usr/lib/yate/scripts
-/usr/lib/yate/scripts/*.*
+%dir /usr/share/yate/scripts
+/usr/share/yate/scripts/*.*
 
 
 %package devel
@@ -312,9 +321,9 @@ make strip
 %install
 make install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}/etc/rc.d/init.d
-cp -p %{_builddir}/%{name}/yate.init %{buildroot}/etc/rc.d/init.d/yate
+cp -p %{_builddir}/%{name}/packing/yate.init %{buildroot}/etc/rc.d/init.d/yate
 mkdir -p %{buildroot}/etc/logrotate.d
-cp -p %{_builddir}/%{name}/yate.logrotate %{buildroot}/etc/logrotate.d/yate
+cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}/etc/logrotate.d/yate
 
 %clean
 # make clean
@@ -322,6 +331,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Dec 14 2007 Paul Chitescu <paulc@voip.null.ro>
+- Modified for Yate 2
+
 * Sun Jul 22 2007 Paul Chitescu <paulc@voip.null.ro>
 - Added new modules and config files
 

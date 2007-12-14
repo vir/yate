@@ -54,7 +54,7 @@ while [ "$#" != 0 ]; do
 	    echo "$confdir"
 	    ;;
 	--modules)
-	    echo "$moddir/modules"
+	    echo "$moddir"
 	    ;;
 	--share)
 	    echo "$shrdir"

@@ -38,7 +38,6 @@ exec_prefix = @exec_prefix@
 datarootdir = @datarootdir@
 
 datadir = @datadir@
-basedir = @libdir@/yate
 confdir = @sysconfdir@/yate
 bindir = @bindir@
 libdir = @libdir@
@@ -46,7 +45,7 @@ incdir = @includedir@/yate
 mandir = @mandir@
 docdir = @datarootdir@/doc/yate-@PACKAGE_VERSION@
 vardir = @localstatedir@/lib/yate
-moddir = $(basedir)/modules
+moddir = @libdir@/yate
 shrdir = $(datadir)/yate
 
 # include optional local make rules
@@ -172,9 +171,9 @@ tables: @srcdir@/engine/tables/all.h
 	$(MAKE) -C @srcdir@/engine/tables -f Makefile.tables all
 
 yatepaths.h: $(MKDEPS)
-	@echo '#define CFG_PATH "$(DESTDIR)$(confdir)"' > $@
-	@echo '#define MOD_PATH "$(DESTDIR)$(moddir)"' >> $@
-	@echo '#define SHR_PATH "$(DESTDIR)$(shrdir)"' >> $@
+	@echo '#define CFG_PATH "$(confdir)"' > $@
+	@echo '#define MOD_PATH "$(moddir)"' >> $@
+	@echo '#define SHR_PATH "$(shrdir)"' >> $@
 
 windows: check-topdir
 	@cmp -s yateversn.h $@/yateversn.h || cp -p yateversn.h $@/yateversn.h
@@ -242,9 +241,8 @@ uninstall uninstall-root:
 	done
 	@rm -rf "$(DESTDIR)$(docdir)/"
 	$(MAKE) -C ./modules uninstall
-	$(MAKE) -C ./scripts uninstall
+	$(MAKE) -C ./share uninstall
 	$(MAKE) -C ./conf.d uninstall
-	@-rmdir "$(DESTDIR)$(basedir)"
 
 install-root uninstall-root: LDCONFIG:=ldconfig
 
@@ -267,7 +265,7 @@ snapshot tarball: check-topdir clean tables windows apidocs
 	else \
 	    echo "$$wd/packing/rpm/yate.spec" >>$$wd/tar-exclude; \
 	fi ; \
-	tar czf $$wd/packing/tarballs/$$wd-$$ver.tar.gz \
+	tar czf $$wd/packing/tarballs/@PACKAGE_TARNAME@-$$ver.tar.gz \
 	--exclude $$wd/packing/tarballs \
 	--exclude $$wd/config.status \
 	--exclude $$wd/config.log \
@@ -281,10 +279,10 @@ snapshot tarball: check-topdir clean tables windows apidocs
 	rm $$wd/tar-exclude
 
 rpm: check-root tarball
-	rpmbuild -tb packing/tarballs/yate-@PACKAGE_VERSION@-@PACKAGE_RELEASE@.tar.gz
+	rpmbuild -tb packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_RELEASE@.tar.gz
 
 srpm: check-root tarball
-	rpmbuild -ta packing/tarballs/yate-@PACKAGE_VERSION@-@PACKAGE_RELEASE@.tar.gz
+	rpmbuild -ta packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_RELEASE@.tar.gz
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<

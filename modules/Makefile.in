@@ -42,6 +42,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/analog.yate server/analogdetect.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
+DIRS := client server gtk2
 
 ifneq (@HAVE_PGSQL@,no)
 PROGS := $(PROGS) server/pgsqldb.yate
@@ -108,10 +109,9 @@ LINK = $(CXX) $(LDFLAGS)
 MODLINK = $(CXX) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 MODCOMP = $(COMPILE) $(MODFLAGS) $(MODSTRIP) $(LDFLAGS)
 
-basedir = @libdir@/yate
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-moddir = $(basedir)/modules
+moddir = @libdir@/yate
 
 # include optional local make rules
 -include YateLocal.mak
@@ -139,6 +139,9 @@ clean: do-clean
 .PHONY: install
 install: all do-install
 	@mkdir -p "$(DESTDIR)$(moddir)/" && \
+	for i in $(DIRS) ; do \
+	    mkdir -p "$(DESTDIR)$(moddir)/$$i" ; \
+	done; \
 	for i in $(PROGS) ; do \
 	    install -D "$$i" "$(DESTDIR)$(moddir)/$$i" ; \
 	done;
@@ -148,17 +151,14 @@ uninstall: do-uninstall
 	@-for i in $(PROGS) ; do \
 	    rm "$(DESTDIR)$(moddir)/$$i" ; \
 	done; \
-	$(if $(SUBDIRS),\
-	for i in $(SUBDIRS) ; do \
+	for i in $(DIRS) $(SUBDIRS) ; do \
 	    rmdir "$(DESTDIR)$(moddir)/$$i" ; \
-	done; \
-	)
+	done;
 	@-rmdir "$(DESTDIR)$(moddir)"
-	@-rmdir "$(DESTDIR)$(basedir)"
 
 .PHONY: subdirs
 subdirs:
-	@mkdir -p client server gtk2
+	@mkdir -p $(DIRS)
 
 %.o: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(COMPILE) -c $<

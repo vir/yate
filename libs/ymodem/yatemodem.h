@@ -183,11 +183,11 @@ public:
      * Create a buffer containing the modulated representation of a message
      * @param dest Destination buffer
      * @param data Message data (each byte will be enclosed in start/stop/parity bits)
-     * @param header Optional bit pattern to be used as message header
-     * @param useDefHeader Use default message header if none specified
+     * @param header Optional bit pattern to be used as message header. This is the
+     *  bit representation of the header, not modulated data. A default one will be
+     *  added if header is missing
      */
-    void modulate(DataBlock& dest, const DataBlock& data, const DataBlock* header = 0,
-	bool useDefHeader = true);
+    void modulate(DataBlock& dest, const DataBlock& data, const DataBlock* header = 0);
 
     /**
      * Keep the modem type names. Useful to configure the modem
@@ -199,7 +199,7 @@ private:
     bool m_terminated;                   // Terminated flag (need reset if true)
     FSKFilter* m_filter;                 // Internal filter used to demodulate received data
     UART* m_uart;                        // The UART using this modem's services
-    DataBlock m_buffer;                  // Partial input buffer when used to demodulate or modulated data
+    DataBlock m_buffer;                  // Partial input buffer when used to demodulate or modulate data
     BitBuffer* m_bits;                   // Bit buffer used when debugging
 };
 

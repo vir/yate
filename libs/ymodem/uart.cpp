@@ -31,11 +31,21 @@ using namespace TelEngine;
 #define ETSI_CHANNEL_SEIZURE_1 0x55            // 01010101
 #define ETSI_CHANNEL_SEIZURE_2 0xaa            // 10101010
 
+
 // Convert a buffer to a short
 inline short net2short(unsigned char* buffer)
 {
     return (buffer[0] << 8) | buffer[1];
 }
+
+// Append a buffer to a data block
+inline void appendData(DataBlock& dest, void* buf, unsigned int len)
+{
+    DataBlock tmp(buf,len,false);
+    dest += tmp;
+    tmp.clear(false);
+}
+
 
 // ETSI EN 300 659-3 5.4.4 Reason of caller absence
 static TokenDict s_dict_callerAbsence[] = {
@@ -128,35 +138,34 @@ TokenDict ETSIModem::s_msg[] = {
 
 #define MAKE_NAME(x) { #x, ETSIModem::x }
 TokenDict ETSIModem::s_msgParams[] = {
-    MAKE_NAME(DateTime),
-    MAKE_NAME(CallerId),
-    MAKE_NAME(CalledId),
-    MAKE_NAME(CallerIdReason),
-    MAKE_NAME(CallerName),
-    MAKE_NAME(CallerNameReason),
-    MAKE_NAME(VisualIndicator),
-    MAKE_NAME(MessageId),
-    MAKE_NAME(LastMsgCLI),
-    MAKE_NAME(CompDateTime),
-    MAKE_NAME(CompCallerId),
-    MAKE_NAME(CallType),
-    MAKE_NAME(FirstCalledId),
-    MAKE_NAME(MWICount),
-    MAKE_NAME(FwdCallType),
-    MAKE_NAME(CallerType),
-    MAKE_NAME(RedirNumber),
-    MAKE_NAME(Charge),
-    MAKE_NAME(AdditionalCharge),
-    MAKE_NAME(Duration),
-    MAKE_NAME(NetworkID),
-    MAKE_NAME(CarrierId),
-    MAKE_NAME(Display),
-    MAKE_NAME(ServiceInfo),
-    MAKE_NAME(Extension),
-    MAKE_NAME(SelectFunction),
+    {"datetime",              DateTime},
+    {"caller",                CallerId},
+    {"called",                CalledId},
+    {"callerpres",            CallerIdReason},
+    {"callername",            CallerName},
+    {"callernamepres",        CallerNameReason},
+    {"visualindicator",       VisualIndicator},
+    {"message_status",        MessageId},
+    {"message_caller",        LastMsgCLI},
+    {"service_datetime",      CompDateTime},
+    {"networkprovidedcaller", CompCallerId},
+    {"calltype",              CallType},
+    {"fwd_first",             FirstCalledId},
+    {"message_count",         MWICount},
+    {"fwd_calltype",          FwdCallType},
+    {"callertype",            CallerType},
+    {"fwd_last",              RedirNumber},
+    {"charge",                Charge},
+    {"additionalcharge",      AdditionalCharge},
+    {"callduration",          Duration},
+    {"netid",                 NetworkID},
+    {"carrierid",             CarrierId},
+    {"display",               Display},
+    {"serviceinfo",           ServiceInfo},
+    {"extension",             Extension},
+    {"selectfunction",        SelectFunction},
     {0,0}
 };
-#undef MAKE_NAME
 
 ETSIModem::ETSIModem(const NamedList& params, const char* name)
     : UART(UART::Idle,params,name),
@@ -466,16 +475,9 @@ bool ETSIModem::decode(MsgType msg, const DataBlock& buffer)
     return UART::error(EStopped);
 }
 
-// Append a buffer to a data block
-inline void addData(DataBlock& dest, void* buf, unsigned int len)
-{
-    DataBlock tmp(buf,len,false);
-    dest += tmp;
-    tmp.clear(false);
-}
-
 // Append a parameter to a buffer
 // Truncate it or set error if fail is true and parameter length exceeds maxLen
+// Return 0 if the parameter is missing
 int appendParam(ObjList& msg, NamedList& params, const char* name,
 	unsigned char value, unsigned char maxLen, bool fail)
 {
@@ -489,8 +491,8 @@ int appendParam(ObjList& msg, NamedList& params, const char* name,
     }
     DataBlock* data = new DataBlock;
     unsigned char a[2] = {value,len};
-    addData(*data,a,sizeof(a));
-    addData(*data,(void*)tmp.c_str(),len);
+    appendData(*data,a,sizeof(a));
+    appendData(*data,(void*)tmp.c_str(),len);
     msg.append(data);
     return 1;
 }
@@ -527,7 +529,8 @@ bool ETSIModem::createMsg(NamedList& params, DataBlock& data, DataBlock*& header
 
     bool datetime = params.getBoolValue("datetime",true);
     if (datetime) {
-	// TODO: set date and time
+	// TODO: set date and time. Len: 8
+	// "%.2d%.2d%.2d%.2d month:day:hour:minute
     }
 
     // ETSI EN 300 659-3 - 5.4.2: Max caller id 20
@@ -574,7 +577,7 @@ bool ETSIModem::createMsg(NamedList& params, DataBlock& data, DataBlock*& header
     for (unsigned int i = 0; i < data.length(); i++)
 	m_chksum += buf[i];
     unsigned char crcVal = 256 - (m_chksum & 0xff);
-    addData(data,&crcVal,1);
+    appendData(data,&crcVal,1);
     return true;
 }
 

@@ -99,6 +99,9 @@ for small to large scale projects.
 %config /etc/yate/heartbeat.conf
 %config /etc/yate/mgcpca.conf
 %config /etc/yate/mgcpgw.conf
+%config /etc/yate/analog.conf
+%config /etc/yate/ysigchan.conf
+      
 %config /etc/logrotate.d/yate
 
 %post
@@ -155,8 +158,8 @@ Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe kernel
 interfaces.
 
 %files isdn
-/usr/lib/yate/wpcard.yate
-/usr/lib/yate/zapcard.yate
+/usr/lib/yate/server/wpcard.yate
+/usr/lib/yate/server/zapcard.yate
 %config /etc/yate/wpcard.conf
 %config /etc/yate/zapcard.conf
 
@@ -203,6 +206,7 @@ with a Gtk2 graphical interface.
 /usr/bin/yate-gtk2
 /usr/lib/menu/yate-gtk2.menu
 /usr/share/applications/yate-gtk2.desktop
+/usr/share/pixmaps/null_team-*.png
 %dir /usr/share/yate/skins
 /usr/share/yate/skins/*
 %dir /usr/share/yate/help

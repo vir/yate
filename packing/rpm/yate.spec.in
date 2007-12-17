@@ -1,8 +1,28 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
+# to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
+# to disable the GUI client run rpmbuild --define 'nogui 1'
 
 %{!?dist:%define dist %{nil}}
 %{?nodeps:%define no_auto_deps 1}
+%{?nopstn:%define no_pstn 1}
+%{?nogui:%define no_gui 1}
+
+%if "%{dist}" == ""
+%define dist %(test -f /etc/mandriva-release && echo mdv)
+%endif
+%if "%{dist}" == ""
+%define dist %(test -f /etc/mandrake-release && echo mdk)
+%endif
+%if "%{dist}" == ""
+%define dist %(test -f /etc/fedora-release && echo fc)
+%endif
+%if "%{dist}" == ""
+%define dist %(test -f /etc/redhat-release && echo rh)
+%endif
+%if "%{dist}" == ""
+%define dist %(test -f /etc/SuSE-release && echo suse)
+%endif
 
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@
@@ -25,84 +45,84 @@ for small to large scale projects.
 
 %files
 %defattr(-, root, root)
-%dir /usr/share/doc/yate-%{version}
-%doc /usr/share/doc/yate-%{version}/README
-%doc /usr/share/doc/yate-%{version}/COPYING
-%doc /usr/share/doc/yate-%{version}/ChangeLog
-/usr/lib/lib*.so.*
-/usr/bin/yate
-/usr/share/man/*/yate.*
-/etc/rc.d/init.d/yate
-%dir /usr/lib/yate
-/usr/lib/yate/cdrbuild.yate
-/usr/lib/yate/cdrfile.yate
-/usr/lib/yate/regexroute.yate
-/usr/lib/yate/server/regfile.yate
-/usr/lib/yate/server/accfile.yate
-/usr/lib/yate/server/register.yate
-/usr/lib/yate/tonegen.yate
-/usr/lib/yate/tonedetect.yate
-/usr/lib/yate/wavefile.yate
-/usr/lib/yate/conference.yate
-/usr/lib/yate/moh.yate
-/usr/lib/yate/callgen.yate
-/usr/lib/yate/analyzer.yate
-/usr/lib/yate/rmanager.yate
-/usr/lib/yate/msgsniff.yate
-/usr/lib/yate/pbx.yate
-/usr/lib/yate/server/dbpbx.yate
-/usr/lib/yate/server/pbxassist.yate
-/usr/lib/yate/server/park.yate
-/usr/lib/yate/server/queues.yate
-/usr/lib/yate/dumbchan.yate
-/usr/lib/yate/callfork.yate
-/usr/lib/yate/extmodule.yate
-/usr/lib/yate/server/yradius.yate
-/usr/lib/yate/ysipchan.yate
-/usr/lib/yate/yrtpchan.yate
-/usr/lib/yate/ystunchan.yate
-/usr/lib/yate/yiaxchan.yate
-/usr/lib/yate/yjinglechan.yate
-/usr/lib/yate/enumroute.yate
-/usr/lib/yate/server/sipfeatures.yate
-/usr/lib/yate/client/osschan.yate
-/usr/lib/yate/ilbccodec.yate
-/usr/lib/yate/server/heartbeat.yate
-/usr/lib/yate/server/mgcpca.yate
-/usr/lib/yate/server/mgcpgw.yate
-/usr/lib/yate/server/mrcpspeech.yate
-/usr/lib/yate/server/ysigchan.yate
-/usr/lib/yate/server/analog.yate
-/usr/lib/yate/server/analogdetect.yate
-%dir /etc/yate
-%config /etc/yate/accfile.conf
-%config /etc/yate/cdrbuild.conf
-%config /etc/yate/cdrfile.conf
-%config /etc/yate/dbpbx.conf
-%config /etc/yate/dsoundchan.conf
-%config /etc/yate/enumroute.conf
-%config /etc/yate/sipfeatures.conf
-%config /etc/yate/extmodule.conf
-%config /etc/yate/moh.conf
-%config /etc/yate/pbxassist.conf
-%config /etc/yate/regexroute.conf
-%config /etc/yate/regfile.conf
-%config /etc/yate/register.conf
-%config /etc/yate/rmanager.conf
-%config /etc/yate/yate.conf
-%config /etc/yate/yiaxchan.conf
-%config /etc/yate/yradius.conf
-%config /etc/yate/yrtpchan.conf
-%config /etc/yate/ystunchan.conf
-%config /etc/yate/ysipchan.conf
-%config /etc/yate/yjinglechan.conf
-%config /etc/yate/heartbeat.conf
-%config /etc/yate/mgcpca.conf
-%config /etc/yate/mgcpgw.conf
-%config /etc/yate/analog.conf
-%config /etc/yate/ysigchan.conf
+%dir %{_defaultdocdir}/yate-%{version}
+%doc %{_defaultdocdir}/yate-%{version}/README
+%doc %{_defaultdocdir}/yate-%{version}/COPYING
+%doc %{_defaultdocdir}/yate-%{version}/ChangeLog
+%{_libdir}/lib*.so.*
+%{_bindir}/yate
+%{_mandir}/*/yate.*
+%{_initrddir}/yate
+%dir %{_libdir}/yate
+%{_libdir}/yate/cdrbuild.yate
+%{_libdir}/yate/cdrfile.yate
+%{_libdir}/yate/regexroute.yate
+%{_libdir}/yate/server/regfile.yate
+%{_libdir}/yate/server/accfile.yate
+%{_libdir}/yate/server/register.yate
+%{_libdir}/yate/tonegen.yate
+%{_libdir}/yate/tonedetect.yate
+%{_libdir}/yate/wavefile.yate
+%{_libdir}/yate/conference.yate
+%{_libdir}/yate/moh.yate
+%{_libdir}/yate/callgen.yate
+%{_libdir}/yate/analyzer.yate
+%{_libdir}/yate/rmanager.yate
+%{_libdir}/yate/msgsniff.yate
+%{_libdir}/yate/pbx.yate
+%{_libdir}/yate/server/dbpbx.yate
+%{_libdir}/yate/server/pbxassist.yate
+%{_libdir}/yate/server/park.yate
+%{_libdir}/yate/server/queues.yate
+%{_libdir}/yate/dumbchan.yate
+%{_libdir}/yate/callfork.yate
+%{_libdir}/yate/extmodule.yate
+%{_libdir}/yate/server/yradius.yate
+%{_libdir}/yate/ysipchan.yate
+%{_libdir}/yate/yrtpchan.yate
+%{_libdir}/yate/ystunchan.yate
+%{_libdir}/yate/yiaxchan.yate
+%{_libdir}/yate/yjinglechan.yate
+%{_libdir}/yate/enumroute.yate
+%{_libdir}/yate/server/sipfeatures.yate
+%{_libdir}/yate/client/osschan.yate
+%{_libdir}/yate/ilbccodec.yate
+%{_libdir}/yate/server/heartbeat.yate
+%{_libdir}/yate/server/mgcpca.yate
+%{_libdir}/yate/server/mgcpgw.yate
+%{_libdir}/yate/server/mrcpspeech.yate
+%{_libdir}/yate/server/ysigchan.yate
+%{_libdir}/yate/server/analog.yate
+%{_libdir}/yate/server/analogdetect.yate
+%dir %{_sysconfdir}/yate
+%config(noreplace) %{_sysconfdir}/yate/accfile.conf
+%config(noreplace) %{_sysconfdir}/yate/cdrbuild.conf
+%config(noreplace) %{_sysconfdir}/yate/cdrfile.conf
+%config(noreplace) %{_sysconfdir}/yate/dbpbx.conf
+%config(noreplace) %{_sysconfdir}/yate/dsoundchan.conf
+%config(noreplace) %{_sysconfdir}/yate/enumroute.conf
+%config(noreplace) %{_sysconfdir}/yate/sipfeatures.conf
+%config(noreplace) %{_sysconfdir}/yate/extmodule.conf
+%config(noreplace) %{_sysconfdir}/yate/moh.conf
+%config(noreplace) %{_sysconfdir}/yate/pbxassist.conf
+%config(noreplace) %{_sysconfdir}/yate/regexroute.conf
+%config(noreplace) %{_sysconfdir}/yate/regfile.conf
+%config(noreplace) %{_sysconfdir}/yate/register.conf
+%config(noreplace) %{_sysconfdir}/yate/rmanager.conf
+%config(noreplace) %{_sysconfdir}/yate/yate.conf
+%config(noreplace) %{_sysconfdir}/yate/yiaxchan.conf
+%config(noreplace) %{_sysconfdir}/yate/yradius.conf
+%config(noreplace) %{_sysconfdir}/yate/yrtpchan.conf
+%config(noreplace) %{_sysconfdir}/yate/ystunchan.conf
+%config(noreplace) %{_sysconfdir}/yate/ysipchan.conf
+%config(noreplace) %{_sysconfdir}/yate/yjinglechan.conf
+%config(noreplace) %{_sysconfdir}/yate/heartbeat.conf
+%config(noreplace) %{_sysconfdir}/yate/mgcpca.conf
+%config(noreplace) %{_sysconfdir}/yate/mgcpgw.conf
+%config(noreplace) %{_sysconfdir}/yate/analog.conf
+%config(noreplace) %{_sysconfdir}/yate/ysigchan.conf
       
-%config /etc/logrotate.d/yate
+%config %{_sysconfdir}/logrotate.d/yate
 
 %post
 ldconfig
@@ -115,13 +135,14 @@ ldconfig
 Summary:	ALSA sound driver for Yate
 Group:		Applications/Communication
 ExclusiveOS:	linux
+Provides:	yate-audiodevice
 
 %description alsa
 Advanced Linux Sound Architecture audio driver for Yate. This is the recommended
 audio interface for using the client under Linux.
 
 %files alsa
-/usr/lib/yate/client/alsachan.yate
+%{_libdir}/yate/client/alsachan.yate
 
 
 %package gsm
@@ -133,7 +154,7 @@ European GSM 06.10 audio codec for Yate. This is a low CPU usage codec that
 provides moderate compression and good voice quality.
 
 %files gsm
-/usr/lib/yate/gsmcodec.yate
+%{_libdir}/yate/gsmcodec.yate
 
 
 %package h323
@@ -144,9 +165,11 @@ Group:		Applications/Communication
 Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 
 %files h323
-/usr/lib/yate/h323chan.yate
-%config /etc/yate/h323chan.conf
+%{_libdir}/yate/h323chan.yate
+%config(noreplace) %{_sysconfdir}/yate/h323chan.conf
 
+
+%if "%{no_pstn}" != "1"
 
 %package isdn
 Summary:	ISDN PRI card and protocol drivers for Yate
@@ -158,10 +181,12 @@ Yate drivers for ISDN PRI cards supported by the Zaptel or Wanpipe kernel
 interfaces.
 
 %files isdn
-/usr/lib/yate/server/wpcard.yate
-/usr/lib/yate/server/zapcard.yate
-%config /etc/yate/wpcard.conf
-%config /etc/yate/zapcard.conf
+%{_libdir}/yate/server/wpcard.yate
+%{_libdir}/yate/server/zapcard.yate
+%config(noreplace) %{_sysconfdir}/yate/wpcard.conf
+%config(noreplace) %{_sysconfdir}/yate/zapcard.conf
+
+%endif
 
 
 %package pgsql
@@ -174,8 +199,8 @@ This package allows Yate to connect to a PostgreSQL database server. All
 modules that support database access will be able to use PostgreSQL.
 
 %files pgsql
-/usr/lib/yate/server/pgsqldb.yate
-%config /etc/yate/pgsqldb.conf
+%{_libdir}/yate/server/pgsqldb.yate
+%config(noreplace) %{_sysconfdir}/yate/pgsqldb.conf
 
 
 %package mysql
@@ -188,9 +213,11 @@ This package allows Yate to connect to a MySQL database server. All modules
 that support database access will be able to use MySQL.
 
 %files mysql
-/usr/lib/yate/server/mysqldb.yate
-%config /etc/yate/mysqldb.conf
+%{_libdir}/yate/server/mysqldb.yate
+%config(noreplace) %{_sysconfdir}/yate/mysqldb.conf
 
+
+%if "%{no_gui}" != "1"
 
 %package gtk2
 Summary:	Gtk2 client package for Yate
@@ -203,16 +230,16 @@ with a Gtk2 graphical interface.
 
 %files gtk2
 %defattr(-, root, root)
-/usr/bin/yate-gtk2
-/usr/lib/menu/yate-gtk2.menu
-/usr/share/applications/yate-gtk2.desktop
-/usr/share/pixmaps/null_team-*.png
-%dir /usr/share/yate/skins
-/usr/share/yate/skins/*
-%dir /usr/share/yate/help
-/usr/share/yate/help/*
-%config /etc/yate/yate-gtk2.conf
-%config /etc/yate/providers.conf
+%{_bindir}/yate-gtk2
+%{_menudir}/yate-gtk2.menu
+%{_datadir}/applications/yate-gtk2.desktop
+%{_datadir}/pixmaps/null_team-*.png
+%dir %{_datadir}/yate/skins
+%{_datadir}/yate/skins/*
+%dir %{_datadir}/yate/help
+%{_datadir}/yate/help/*
+%config(noreplace) %{_sysconfdir}/yate/yate-gtk2.conf
+%config(noreplace) %{_sysconfdir}/yate/providers.conf
 
 %post gtk2
 test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
@@ -224,7 +251,7 @@ test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 %package mozilla
 Summary:	Mozilla embedding in Yate
 Group:		Applications/Communication
-Requires:	yate-gtk2 = %{version}
+Requires:	yate-gtk2 = %{version}-%{release}
 Provides:	yate-browser
 
 %description mozilla
@@ -232,8 +259,10 @@ This package adds a Mozilla widget that can be embedded in a Yate client window.
 
 %files mozilla
 %defattr(-, root, root)
-%dir /usr/lib/yate/gtk2
-/usr/lib/yate/gtk2/*
+%dir %{_libdir}/yate/gtk2
+%{_libdir}/yate/gtk2/*
+
+%endif
 
 
 %package scripts
@@ -245,14 +274,14 @@ Requires:	%{name}
 The yate-scripts package includes libraries for using external scripts with Yate.
 
 %files scripts
-%dir /usr/share/yate/scripts
-/usr/share/yate/scripts/*.*
+%dir %{_datadir}/yate/scripts
+%{_datadir}/yate/scripts/*.*
 
 
 %package devel
 Summary:	Development package for Yate
 Group:		Development/Libraries
-Requires:	%{name} = %{version}
+Requires:	%{name} = %{version}-%{release}
 
 %description devel
 The yate-devel package includes the libraries and header files for Yate that
@@ -260,28 +289,34 @@ can be used to build and install new modules.
 
 %files devel
 %defattr(-, root, root)
-%doc /usr/share/doc/yate-%{version}/*.html
-%doc /usr/share/doc/yate-%{version}/api/*
+%doc %{_datadir}/doc/yate-%{version}/*.html
+%doc %{_datadir}/doc/yate-%{version}/api/*
 /usr/include/*
-/usr/lib/lib*.so
-/usr/bin/yate-config
-/usr/share/man/*/yate-config.*
-/usr/lib/pkgconfig/yate.pc
+%{_libdir}/lib*.so
+%{_bindir}/yate-config
+%{_mandir}/*/yate-config.*
+%{_libdir}/pkgconfig/yate.pc
 
 
 %package all
 Summary:	Metapackage for Yate
 Group:		Applications/Communication
-Requires:	%{name} = %{version}
-Requires:	%{name}-alsa = %{version}
-Requires:	%{name}-gsm = %{version}
-Requires:	%{name}-h323 = %{version}
-Requires:	%{name}-isdn = %{version}
-Requires:	%{name}-mysql = %{version}
-Requires:	%{name}-pgsql = %{version}
-Requires:	%{name}-gtk2 = %{version}
-Requires:	%{name}-mozilla = %{version}
-Requires:	%{name}-scripts = %{version}
+Requires:	%{name} = %{version}-%{release}
+%ifos Linux
+Requires:	%{name}-alsa = %{version}-%{release}
+%endif
+Requires:	%{name}-gsm = %{version}-%{release}
+Requires:	%{name}-h323 = %{version}-%{release}
+%if "%{no_pstn}" != "1"
+Requires:	%{name}-isdn = %{version}-%{release}
+%endif
+Requires:	%{name}-mysql = %{version}-%{release}
+Requires:	%{name}-pgsql = %{version}-%{release}
+%if "%{no_gui}" != "1"
+Requires:	%{name}-gtk2 = %{version}-%{release}
+Requires:	%{name}-mozilla = %{version}-%{release}
+%endif
+Requires:	%{name}-scripts = %{version}-%{release}
 
 %description all
 Metapackage for Yate allowing to fetch and install all components at once.
@@ -291,6 +326,17 @@ The devel package must still be installed separately.
 %files all
 %defattr(-,root,root)
 
+
+# disable unpackaged files check if we know we are going to skip some
+%if "%{no_pstn}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
+%if "%{no_gui}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
+%ifnos Linux
+%define _unpackaged_files_terminate_build 0
+%endif
 
 %prep
 %setup -q -n %{name}
@@ -319,15 +365,15 @@ chmod +x %{local_find_requires} %{local_find_provides}
 %endif
 
 %build
-./configure --prefix=%{prefix} --sysconfdir=/etc --mandir=%{prefix}/share/man --without-libspeex --without-spandsp --without-coredumper
+./configure --prefix=%{prefix} --sysconfdir=%{_sysconfdir} --datadir=%{_datadir} --includedir=%{_includedir} --libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} --without-libspeex --without-spandsp --without-coredumper
 make strip
 
 %install
 make install DESTDIR=%{buildroot}
-mkdir -p %{buildroot}/etc/rc.d/init.d
-cp -p %{_builddir}/%{name}/packing/yate.init %{buildroot}/etc/rc.d/init.d/yate
-mkdir -p %{buildroot}/etc/logrotate.d
-cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}/etc/logrotate.d/yate
+mkdir -p %{buildroot}%{_initrddir}
+cp -p %{_builddir}/%{name}/packing/yate.init %{buildroot}%{_initrddir}/yate
+mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d
+cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/yate
 
 %clean
 # make clean

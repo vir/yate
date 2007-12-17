@@ -44,7 +44,7 @@ datarootdir = @datarootdir@
 datadir = @datadir@
 
 bindir = @bindir@
-menudir= @libdir@/menu
+menudir= $(prefix)/lib/menu
 shrdir = $(datadir)/yate
 deskdir= $(datadir)/applications
 icondir= $(datadir)/pixmaps

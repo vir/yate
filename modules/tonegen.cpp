@@ -101,6 +101,8 @@ public:
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
+    // Build a source used to send raw linear data. Clears 'data'
+    ToneSource(void* data, unsigned int len, const char* name = 0);
     virtual void zeroRefs();
     String m_name;
     const Tone* m_tone;
@@ -115,12 +117,13 @@ private:
 class TempSource : public ToneSource
 {
 public:
-    TempSource(String& desc);
+    TempSource(String& desc, DataBlock* rawdata);
     virtual ~TempSource();
 protected:
     virtual void cleanup();
 private:
     Tone* m_single;
+    DataBlock* m_rawdata;                // Raw linear data to be sent
 };
 
 class ToneChan : public Channel
@@ -458,6 +461,7 @@ void ToneSource::zeroRefs()
 
 bool ToneSource::startup()
 {
+    Debug(&__plugin,DebugAll,"ToneSource::startup(\"%s\") tone=%p",m_name.c_str(),m_tone);
     return m_tone && start("ToneSource");
 }
 
@@ -597,14 +601,30 @@ void ToneSource::run()
 }
 
 
-TempSource::TempSource(String& desc)
-    : m_single(0)
+TempSource::TempSource(String& desc, DataBlock* rawdata)
+    : m_single(0), m_rawdata(rawdata)
 {
     Debug(&__plugin,DebugAll,"TempSource::TempSource(\"%s\") [%p]",desc.c_str(),this);
     if (desc.null())
 	return;
     if (desc.startSkip("*",false))
 	m_repeat = 0;
+    // Build a source used to send raw linear data
+    if (desc == "rawdata") {
+	if (!(m_rawdata && m_rawdata->length() >= sizeof(short))) {
+	    Debug(&__plugin,DebugNote,
+		"TempSource::TempSource(\"%s\") invalid data size=%u [%p]",
+		desc.c_str(),m_rawdata?m_rawdata->length():0,this);
+	    return;
+	}
+	m_name = "rawdata";
+	m_tone = m_single = (Tone*)::malloc(2*sizeof(Tone));
+	m_single[0].nsamples = m_rawdata->length() / sizeof(short);
+	m_single[0].data = (short*)m_rawdata->data();
+	m_single[1].nsamples = 0;
+	m_single[1].data = 0;
+	return;
+    }
     // try first the named tones
     const ToneDesc* tde = getBlock(desc);
     if (tde) {
@@ -640,6 +660,8 @@ TempSource::~TempSource()
 	::free(m_single);
 	m_single = 0;
     }
+    if (m_rawdata)
+	delete m_rawdata;
 }
 
 void TempSource::cleanup()
@@ -717,7 +739,7 @@ bool AttachHandler::received(Message& msg)
     if (ovr) {
 	DataConsumer* c = de->getConsumer();
 	if (c) {
-	    TempSource* t = new TempSource(ovr);
+	    TempSource* t = new TempSource(ovr,static_cast<DataBlock*>(msg.userObject("rawdata")));
 	    if (DataTranslator::attachChain(t,c,true) && t->startup())
 		msg.clearParam("override");
 	    else {
@@ -733,7 +755,7 @@ bool AttachHandler::received(Message& msg)
     if (repl) {
 	DataConsumer* c = de->getConsumer();
 	if (c) {
-	    TempSource* t = new TempSource(repl);
+	    TempSource* t = new TempSource(repl,static_cast<DataBlock*>(msg.userObject("rawdata")));
 	    if (DataTranslator::attachChain(t,c,false) && t->startup())
 		msg.clearParam("replace");
 	    else {

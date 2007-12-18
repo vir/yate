@@ -170,13 +170,13 @@ public:
 	SetPolarity    = 10,             // Set line polarity
 	SetLinear      = 11,             // Temporarily set the channel to operate in linear mode
 	SetDialParams  = 12,             // Set dialing parameters
-	GetParams      = 20,             // Get device parameters
+	GetParams      = 20,             // Get device (channel) parameters
 	GetEvent       = 21,             // Get events from device
 	GetInfo        = 22,             // Get device status
 	GetVersion     = 23,             // Get version
 	GetDialParams  = 24,             // Get dialing parameters
 	StartEchoTrain = 30,             // Start echo training
-	FlushBuffers   = 31,             // Flush read/write buffers
+	FlushBuffers   = 31,             // Flush buffer(s) and stop I/O
 	SendTone       = 32,             // Send tone
     };
 
@@ -303,6 +303,8 @@ public:
     bool getVersion(NamedList& dest);
     // Get driver version and echo canceller
     bool getSpanInfo(int span, NamedList& dest, int* spans = 0);
+    // Get channel parameters
+    bool getChanParams(NamedList& dest);
     // Set/get dial parameters (DTMF/MF length)
     bool dialParams(bool set, int& toneLen, int& mfLen);
     // Zaptel device names and headers for status
@@ -1037,6 +1039,8 @@ bool ZapDevice::sendHook(HookEvent event)
 bool ZapDevice::sendDtmf(const char* tone, bool dtmf, DialOperation op,
     bool allDigits, bool useTone)
 {
+    XDebug(m_owner,DebugAll,"%ssendDtmf('%s',%u,%u,%u,%u) [%p]",
+	m_name.safe(),tone,dtmf,op,allDigits,useTone,this);
     if (!(tone && *tone))
 	return false;
 
@@ -1060,9 +1064,10 @@ bool ZapDevice::sendDtmf(const char* tone, bool dtmf, DialOperation op,
     }
 
     if (useTone && dtmf)
-	for (; *tone; tone++)
+	for (; *tone; tone++) {
 	    if (!sendDtmf(*tone))
 		return false;
+	}
     else {
 	dop.dialstr[2] = 0;
 	for (; *tone; tone++) {
@@ -1079,12 +1084,16 @@ bool ZapDevice::sendDtmf(const char* tone, bool dtmf, DialOperation op,
 // Send DTMF event using tone structure
 bool ZapDevice::sendDtmf(char tone)
 {
+    XDebug(m_owner,DebugAll,"%ssendDtmf('%c') [%p]",m_name.safe(),tone,this);
 #define YZAP_TONES 20
     static char tones[YZAP_TONES+1] = "0123456789*#ABCDabcd";
-    static int zapTones[YZAP_TONES] = {ZT_TONE_DTMF_0,ZT_TONE_DTMF_1,ZT_TONE_DTMF_2,ZT_TONE_DTMF_3,
-	ZT_TONE_DTMF_4,ZT_TONE_DTMF_5,ZT_TONE_DTMF_6,ZT_TONE_DTMF_7,ZT_TONE_DTMF_8,ZT_TONE_DTMF_9,
-	ZT_TONE_DTMF_s,ZT_TONE_DTMF_p,ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D,
-	ZT_TONE_DTMF_A,ZT_TONE_DTMF_B,ZT_TONE_DTMF_C,ZT_TONE_DTMF_D};
+    static int zapTones[YZAP_TONES] = {
+	ZT_TONE_DTMF_0, ZT_TONE_DTMF_1, ZT_TONE_DTMF_2, ZT_TONE_DTMF_3,
+	ZT_TONE_DTMF_4, ZT_TONE_DTMF_5, ZT_TONE_DTMF_6, ZT_TONE_DTMF_7,
+	ZT_TONE_DTMF_8, ZT_TONE_DTMF_9, ZT_TONE_DTMF_s, ZT_TONE_DTMF_p,
+	ZT_TONE_DTMF_A, ZT_TONE_DTMF_B, ZT_TONE_DTMF_C, ZT_TONE_DTMF_D,
+	ZT_TONE_DTMF_A, ZT_TONE_DTMF_B, ZT_TONE_DTMF_C, ZT_TONE_DTMF_D
+	};
 
     // Get zaptel tone
     int zapTone = 0;
@@ -1206,6 +1215,8 @@ int ZapDevice::recv(void* buffer, int len)
     }
     // The caller should check for events if the error is ELAST
     m_event = (errno == ELAST);
+    if (m_event)
+	return -1;
     if (!(canRetry() || m_readError)) {
 	Debug(m_owner,DebugWarn,"%sRead failed on channel %u. %d: %s [%p]",
 	    m_name.safe(),m_channel,errno,::strerror(errno),m_owner);
@@ -1262,6 +1273,27 @@ bool ZapDevice::getSpanInfo(int span, NamedList& dest, int* spans)
     dest.addParam("total-chans",String(info.totalchans));
     if (spans)
 	*spans = info.totalspans;
+    return true;
+}
+
+// Get channel parameters
+bool ZapDevice::getChanParams(NamedList& dest)
+{
+    ZT_PARAMS par;
+    if (!ioctl(GetParams,&par))
+	return false;
+    dest.addParam("format",lookup(par.curlaw,s_formats));
+    dest.addParam("prewinktime",String(par.prewinktime));
+    dest.addParam("preflashtime",String(par.preflashtime));
+    dest.addParam("winktime",String(par.winktime));
+    dest.addParam("flashtime",String(par.flashtime));
+    dest.addParam("starttime",String(par.starttime));
+    dest.addParam("rxwinktime",String(par.rxwinktime));
+    dest.addParam("rxflashtime",String(par.rxflashtime));
+    dest.addParam("debouncetime",String(par.debouncetime));
+    dest.addParam("pulsebreaktime",String(par.pulsebreaktime));
+    dest.addParam("pulsemaketime",String(par.pulsemaketime));
+    dest.addParam("pulseaftertime",String(par.pulseaftertime));
     return true;
 }
 
@@ -1363,7 +1395,7 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    ret = ::ioctl(m_handle,ZT_GETVERSION,param);
 	    break;
     }
-    if (ret >= 0 || errno == EINPROGRESS) {
+    if (!ret || errno == EINPROGRESS) {
 	if (errno == EINPROGRESS)
 	    DDebug(m_owner,DebugAll,"%sIOCTL(%s) in progress on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
@@ -1830,7 +1862,6 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_idleValue = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_idleValue));
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
 
-
     if (type == ZapDevice::E1)
 	m_format = ZapDevice::Alaw;
     else if (type == ZapDevice::T1)
@@ -2055,18 +2086,24 @@ bool ZapCircuit::process()
 // Send an event through the circuit
 bool ZapCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* params)
 {
+    XDebug(group(),DebugAll,"ZapCircuit(%u). sendEvent(%u) [%p]",code(),type,this);
     if (!m_canSend)
 	return false;
 
     if (type == SignallingCircuitEvent::Dtmf) {
 	const char* tones = 0;
 	bool dtmf = true;
+	bool dial = true;
 	if (params) {
 	    tones = params->getValue("tone");
 	    dtmf = !params->getBoolValue("pulse",false);
+	    dial = params->getBoolValue("dial",true);
 	}
-	return m_device.sendDtmf(tones,dtmf);
+	if (dial)
+	    return m_device.sendDtmf(tones,dtmf,ZapDevice::DialReplace,true,false);
+	return m_device.sendDtmf(tones,dtmf,ZapDevice::DialAppend,false,true);
     }
+
     Debug(group(),DebugNote,"ZapCircuit(%u). Unable to send unknown event %u [%p]",
 	code(),type,this);
     return false;
@@ -2350,6 +2387,7 @@ bool ZapAnalogCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* p
     if (type == SignallingCircuitEvent::Dtmf)
 	return ZapCircuit::sendEvent(type,params);
 
+    XDebug(group(),DebugAll,"ZapAnalogCircuit(%u). sendEvent(%u) [%p]",code(),type,this);
     switch (type) {
 	case SignallingCircuitEvent::OnHook:
 	    if (!m_device.sendHook(ZapDevice::HookOn))
@@ -2564,22 +2602,32 @@ void ZapModule::initialize()
 	general = &dummy;
 
     ZapDevice dev(0,false,true);
-    int dtmf = 0, mf = 0;
+    int dtmfLen = 0;
 
     if (!m_init) {
 	setup();
 	installRelay(Command);
 	// Set DTMF/MF length
-	if (dev.dialParams(false,dtmf,mf)) {
-	    dtmf = general->getIntValue("dtmflength",dtmf);
-	    mf = general->getIntValue("mflength",mf);
-	    dev.dialParams(true,dtmf,mf);
+	if (dev.dialParams(false,dtmfLen,dtmfLen)) {
+	    dtmfLen = general->getIntValue("tonelength",dtmfLen);
+	    dev.dialParams(true,dtmfLen,dtmfLen);
 	}
     }
     m_init = true;
 
-    if (debugAt(DebugAll) && dev.dialParams(false,dtmf,mf))
-	Debug(this,DebugAll,"Digit lengths in samples: DTMF=%d MF=%d",dtmf,mf);
+#ifdef DEBUG
+    if (!debugAt(DebugAll))
+	return;
+    String tmp;
+    NamedList nl("");
+    dev.getVersion(nl);
+    tmp << "\r\nversion: " << nl.getValue("version");
+    tmp << "\r\nechocanceller: " << nl.getValue("echocanceller");
+    dtmfLen = 0;
+    dev.dialParams(false,dtmfLen,dtmfLen);
+    tmp << "\r\ntonelength (samples): " << dtmfLen;
+    Debug(this,DebugAll,"Initialized:%s",tmp.c_str());
+#endif
 }
 
 

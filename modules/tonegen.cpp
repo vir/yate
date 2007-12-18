@@ -101,8 +101,6 @@ public:
     static Tone* buildDtmf(const String& dtmf, int len = DTMF_LEN, int gap = DTMF_GAP);
 protected:
     ToneSource(const ToneDesc* tone = 0);
-    // Build a source used to send raw linear data. Clears 'data'
-    ToneSource(void* data, unsigned int len, const char* name = 0);
     virtual void zeroRefs();
     String m_name;
     const Tone* m_tone;
@@ -461,7 +459,7 @@ void ToneSource::zeroRefs()
 
 bool ToneSource::startup()
 {
-    Debug(&__plugin,DebugAll,"ToneSource::startup(\"%s\") tone=%p",m_name.c_str(),m_tone);
+    DDebug(&__plugin,DebugAll,"ToneSource::startup(\"%s\") tone=%p",m_name.c_str(),m_tone);
     return m_tone && start("ToneSource");
 }
 
@@ -660,8 +658,7 @@ TempSource::~TempSource()
 	::free(m_single);
 	m_single = 0;
     }
-    if (m_rawdata)
-	delete m_rawdata;
+    TelEngine::destruct(m_rawdata);
 }
 
 void TempSource::cleanup()

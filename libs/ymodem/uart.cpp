@@ -24,6 +24,8 @@
 
 #include "yatemodem.h"
 
+#include <string.h>
+
 using namespace TelEngine;
 
 // ETSI EN 300 659-1: 5.2
@@ -33,17 +35,36 @@ using namespace TelEngine;
 
 
 // Convert a buffer to a short
-inline short net2short(unsigned char* buffer)
+static inline short net2short(unsigned char* buffer)
 {
     return (buffer[0] << 8) | buffer[1];
 }
 
-// Append a buffer to a data block
-inline void appendData(DataBlock& dest, void* buf, unsigned int len)
+// Get date and time from system of received param
+// dt: month,day,hour,minute;
+// Return false if invalid
+static bool getDateTime(unsigned char dt[4], String* src = 0, char sep = ':')
 {
-    DataBlock tmp(buf,len,false);
-    dest += tmp;
-    tmp.clear(false);
+    static int minDt[4] = {1,1,0,0};
+    static int maxDt[4] = {12,31,23,59};
+
+    if (!src) {
+	// TODO: implement from system time
+	return false;
+    }
+
+    ObjList* list = src->split(sep);
+    int i = 0;
+    for (; i < 4; i++) {
+	String* s = static_cast<String*>((*list)[i]);
+	int tmp = s ? s->toInteger(-1) : -1;
+	if (tmp >= minDt[i] && tmp <= maxDt[i])
+	    dt[i] = (unsigned char)tmp;
+	else
+	    i = 5;
+    }
+    delete list;
+    return (i == 4);
 }
 
 
@@ -477,38 +498,44 @@ bool ETSIModem::decode(MsgType msg, const DataBlock& buffer)
 
 // Append a parameter to a buffer
 // Truncate it or set error if fail is true and parameter length exceeds maxLen
-// Return 0 if the parameter is missing
-int appendParam(ObjList& msg, NamedList& params, const char* name,
-	unsigned char value, unsigned char maxLen, bool fail)
+// Return: 0 if the parameter is missing
+//         -1 if the parameter is too long
+//         1 on success
+int appendParam(ObjList& msg, NamedList& params, unsigned char value,
+	unsigned char maxLen, bool fail)
 {
-    String tmp = params.getValue(name);
-    if (!tmp)
+    NamedString* ns = params.getParam(lookup(value,ETSIModem::s_msgParams));
+    if (!ns)
 	return 0;
-    unsigned char len = tmp.length() <= maxLen ? tmp.length() : maxLen;
-    if (len != tmp.length() && fail) {
-	params.setParam("error",String(name) + String("-too-long"));
-	return -1;
+    unsigned char len = ns->length();
+    if (len > maxLen) {
+	if (fail) {
+	    params.setParam("error",ns->name() + "-too-long");
+	    return -1;
+	}
+	len = maxLen;
     }
     DataBlock* data = new DataBlock;
     unsigned char a[2] = {value,len};
-    appendData(*data,a,sizeof(a));
-    appendData(*data,(void*)tmp.c_str(),len);
+    FSKModem::addRaw(*data,a,sizeof(a));
+    FSKModem::addRaw(*data,(void*)ns->c_str(),len);
     msg.append(data);
     return 1;
 }
 
 // Append a parameter to a buffer from a list or dictionary
-void appendParam(ObjList& msg, NamedList& params, const char* name,
-	unsigned char value, TokenDict* dict, unsigned char defValue)
+void appendParam(ObjList& msg, NamedList& params, unsigned char value,
+	TokenDict* dict, unsigned char defValue)
 {
     unsigned char a[3] = {value,1};
+    const char* name = lookup(value,ETSIModem::s_msgParams);
     a[2] = lookup(params.getValue(name),dict,defValue);
     msg.append(new DataBlock(a,sizeof(a)));
 }
 
 // Create a buffer containing the byte representation of a message to be sent
 //  and another one with the header
-bool ETSIModem::createMsg(NamedList& params, DataBlock& data, DataBlock*& header)
+bool ETSIModem::createMsg(NamedList& params, DataBlock& data)
 {
     int type = lookup(params,s_msg);
     switch (type) {
@@ -517,55 +544,79 @@ bool ETSIModem::createMsg(NamedList& params, DataBlock& data, DataBlock*& header
 	case MsgMWI:
 	case MsgCharge:
 	case MsgSMS:
-	    Debug(this,DebugStub,"Create message '%s' not implemented [%p]",params.c_str(),this);
+	    Debug(this,DebugStub,"Create message '%s' not implemented [%p]",
+		params.c_str(),this);
 	    return false;
 	default:
-	    Debug(this,DebugNote,"Can't create unknown message '%s' [%p]",params.c_str(),this);
+	    Debug(this,DebugNote,"Can't create unknown message '%s' [%p]",
+		params.c_str(),this);
 	    return false;
     }
 
     ObjList msg;
     bool fail = !params.getBoolValue("force-send",true);
 
-    bool datetime = params.getBoolValue("datetime",true);
-    if (datetime) {
-	// TODO: set date and time. Len: 8
-	// "%.2d%.2d%.2d%.2d month:day:hour:minute
+    // DateTime - ETSI EN 300 659-3 - 5.4.1
+    String datetime = params.getValue("datetime");
+    unsigned char dt[4];
+    bool ok = false;
+    if (datetime.isBoolean())
+	if (datetime.toBoolean())
+	    ok = getDateTime(dt);
+	else ;
+    else
+	ok = getDateTime(dt,&datetime);
+    if (ok) {
+	DataBlock* dtParam = new DataBlock(0,10);
+	unsigned char* d = (unsigned char*)dtParam->data();
+	d[0] = DateTime;
+	d[1] = 8;
+	// Set date and time: %.2d%.2d%.2d%.2d month:day:hour:minute
+	for (int i = 0, j = 2; i < 4; i++, j += 2) {
+	    d[j] = '0' + dt[i] / 10;
+	    d[j+1] = '0' + dt[i] % 10;
+	}
+	msg.append(dtParam);
     }
+    else
+	DDebug(this,DebugInfo,"Can't set datetime parameter from '%s' [%p]",
+	    datetime.c_str(),this);
 
-    // ETSI EN 300 659-3 - 5.4.2: Max caller id 20
-    int res = appendParam(msg,params,"caller",CallerId,20,fail);
-    if (res == -1)
-	return false;
-    // Default caller absence: 0x4f: unavailable
-    if (!res)
-	appendParam(msg,params,"callerpres",CallerIdReason,s_dict_callerAbsence,0x4f);
-
-    // ETSI EN 300 659-3 - 5.4.5: Max caller name 50
-    res = appendParam(msg,params,"callername",CallerName,50,fail);
+    // CallerId/CallerIdReason - ETSI EN 300 659-3 - 5.4.2: Max caller id 20
+    // Parameter is missing: append reason (default caller absence: 0x4f: unavailable)
+    int res = appendParam(msg,params,CallerId,20,fail);
     if (res == -1)
 	return false;
     if (!res)
-	appendParam(msg,params,"callerpres",CallerNameReason,s_dict_callerAbsence,0x4f);
+	appendParam(msg,params,CallerIdReason,s_dict_callerAbsence,0x4f);
+
+    // CallerName/CallerNameReason - ETSI EN 300 659-3 - 5.4.5: Max caller name 50
+    // Parameter is missing: append reason (default callername absence: 0x4f: unavailable)
+    res = appendParam(msg,params,CallerName,50,fail);
+    if (res == -1)
+	return false;
+    if (!res)
+	appendParam(msg,params,CallerNameReason,s_dict_callerAbsence,0x4f);
 
     // Build message
     unsigned char len = 0;
-
     unsigned char hdr[2] = {type};
     data.assign(&hdr,sizeof(hdr));
 
     for (ObjList* o = msg.skipNull(); o; o = o->skipNext()) {
 	DataBlock* msgParam = static_cast<DataBlock*>(o->get());
 	if (len + msgParam->length() > 255) {
-	    if (!fail)
+	    if (!fail) {
+		Debug(this,DebugNote,"Trucating %s message length to %u bytes [%p]",
+		    params.c_str(),data.length(),this);
 		break;
+	    }
 	    params.setParam("error","message-too-long");
 	    return false;
 	}
 	len += msgParam->length();
 	data += *msgParam;
     }
-
     if (!len) {
 	params.setParam("error","empty-message");
 	return false;
@@ -577,7 +628,7 @@ bool ETSIModem::createMsg(NamedList& params, DataBlock& data, DataBlock*& header
     for (unsigned int i = 0; i < data.length(); i++)
 	m_chksum += buf[i];
     unsigned char crcVal = 256 - (m_chksum & 0xff);
-    appendData(data,&crcVal,1);
+    FSKModem::addRaw(data,&crcVal,1);
     return true;
 }
 

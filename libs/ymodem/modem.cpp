@@ -29,12 +29,15 @@
 
 using namespace TelEngine;
 
-// Amplitudes for the sine generator (mark and space)
+// Amplitudes for the sine generator (mark and space) used to modulate data
 #define MARK_AMPLITUDE  6300
 #define SPACE_AMPLITUDE 6300
 
+// Pattern length in ms to add after a modulated message
+#define PATTERN_AFTER   2
+
 // Uncomment this to view the bits decoded by the modem
-#define YMODEM_BUFFER_BITS
+//#define YMODEM_BUFFER_BITS
 
 // Constant values used by the FSK filter to modulate/demodulate data
 class FilterConst
@@ -54,10 +57,11 @@ public:
 	    return tmp;
 	}
 
+    // Signal properties
     float markFreq;                      // Mark frequency
     float spaceFreq;                     // Space frequency
     float sampleRate;                    // Sampling rate
-    float baudRate;                      // Transmission baud rate
+    float baudRate;                      // Transmission baud rate (bps)
     // Data used to demodulate signals
     unsigned int spb;                    // The number of samples per bit (also the length of all buffers)
     unsigned int halfSpb;                // Half of the spb value (used to filter data)
@@ -70,11 +74,15 @@ public:
     float* space;
     float* lowband;
     // Data used to modulate signals
-    unsigned int* bitSamples;            // Array of bit samples nedded for to maintain the modulation timing
+    double accSin;                       // Accumulate sine radians during modulation
+                                         // This value is updated after the header is modulated
+                                         // and used as start value for each message data
+    unsigned int* bitSamples;            // Array of bit samples nedded to maintain the modulation timing
     unsigned int bitSamplesLen;          // The length of the bitSamples array
     double markCoef;                     // Mark coefficient for modulation
     double spaceCoef;                    // Space coefficient for modulation
-    DataBlock header;                    // Message header if any (e.g. ETSI: channel seizure pattern + marks)
+    DataBlock header;                    // Start pattern + message header
+                                         // e.g. ETSI: channel seizure pattern + marks
 };
 
 struct FilterData
@@ -172,7 +180,8 @@ public:
 	}
     // Modulate data to a buffer. Reset the destination's length
     // dataBits must not be 0 or greater then 8
-    void addBuffer(DataBlock& dest, const DataBlock& src, unsigned char dataBits, bool full);
+    // Returns the current sine accumulator value
+    double addBuffer(DataBlock& dest, const DataBlock& src, unsigned char dataBits, bool full);
 private:
     // Apply mark, space and low band filter
     float filter(short*& samples, unsigned int& len);
@@ -229,6 +238,7 @@ FilterConst::FilterConst(FSKModem::Type type)
     spaceFreq = 2200.0;
     sampleRate = 8000.0;
     baudRate = 1200.0;
+
     spb = 7;
     halfSpb = spb / 2;
     bitLen = sampleRate / baudRate;
@@ -246,7 +256,7 @@ FilterConst::FilterConst(FSKModem::Type type)
 	lowband[i] = l[i];
     }
 
-    // Build the array of bit samples nedded for to maintain the modulation timing
+    // Build the array of bit samples nedded to maintain the modulation timing
     bitSamplesLen = 3;
     bitSamples = new unsigned int[bitSamplesLen];
     bitSamples[0] = bitSamples[2] = 7;
@@ -256,7 +266,8 @@ FilterConst::FilterConst(FSKModem::Type type)
     markCoef = 2 * M_PI * markFreq / sampleRate;
     spaceCoef = 2 * M_PI * spaceFreq / sampleRate;
 
-    // Build header
+    accSin = 0;
+    // Build message header
     // ETSI channel seizure signal + Mark (stop bits) signal
     // 300 continuous bits of alternating 0 and 1 + 180 of 1 (mark) bits
     // 480 bits: 60 bytes. Byte 38: 01010000
@@ -265,10 +276,11 @@ FilterConst::FilterConst(FSKModem::Type type)
     ::memset(hdr,0x55,37);
     ::memset(&hdr[37],0x50,1);
     ::memset(&hdr[38],0xff,22);
-    DataBlock src(hdr,60,false);
+    DataBlock src;
+    FSKModem::addRaw(src,hdr,60);
     FSKFilter filter(type);
-    filter.addBuffer(header,src,8,false);
-    src.clear(false);
+    // Keep the sine accumulator to be used when modulating data
+    accSin = filter.addBuffer(header,src,8,false);
 
     Debug(s_libName,DebugInfo,"Initialized filter tables for type '%s' headerlen=%u",
 	lookup(FSKModem::ETSI,FSKModem::s_typeName),header.length());
@@ -349,6 +361,8 @@ FSKFilter::FSKFilter(int type)
 
     m_index = 0;
     m_const = s_filterConst + type;
+    // Update the sine accumulator from constants (current value after created the header)
+    m_accSin = m_const->accSin;
     m_mark.init(m_const->spb);
     m_space.init(m_const->spb);
     m_lowband.init(m_const->spb);
@@ -435,7 +449,8 @@ inline void FSKFilter::addBit(short* samples, unsigned int& index, bool bit)
 
 // Modulate data to a buffer
 // dataBits must not be 0 or greater then 8
-void FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
+// full=true: add data bytes (start bit + data + stop bit)
+double FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
 	unsigned char dataBits, bool full)
 {
     // Calculate the destination length. Add 2 more bits if full
@@ -447,7 +462,7 @@ void FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
     else
 	dest.clear();
     if (!dest.length())
-	return;
+	return m_accSin;
 
     // Build modulated buffer
     unsigned char* srcData = (unsigned char*)(src.data());
@@ -459,6 +474,7 @@ void FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
     else
 	for (unsigned int i = 0; i < src.length(); i++)
 	    addByte(destData,index,srcData[i],dataBits);
+    return m_accSin;
 }
 
 // Apply mark/space and low band filter
@@ -649,7 +665,7 @@ bool FSKModem::demodulate(const DataBlock& data)
 }
 
 // Create a buffer containing the modulated representation of a message
-void FSKModem::modulate(DataBlock& dest, const DataBlock& data, const DataBlock* header)
+void FSKModem::modulate(DataBlock& dest, const DataBlock& data)
 {
 #ifdef DEBUG
     String tmp;
@@ -659,20 +675,20 @@ void FSKModem::modulate(DataBlock& dest, const DataBlock& data, const DataBlock*
 
     if (!(data.length() && m_filter && m_filter->constants()))
 	return;
+
     DataBlock tmpData;
     m_filter->addBuffer(tmpData,data,m_uart->accumulator().dataBits(),true);
-    DDebug(m_uart,DebugAll,"Created %u modulated data buffer [%p]",
-	tmpData.length(),m_uart);
-    if (tmpData.length()) {
-	if (!header) {
-	    dest = m_filter->constants()->header;
-	    DDebug(m_uart,DebugAll,"Added %u default modulated header buffer [%p]",
-		dest.length(),m_uart);
-	}
-	else
-	    m_filter->addBuffer(dest,data,m_uart->accumulator().dataBits(),false);
-	dest += tmpData;
-    }
+    dest += m_filter->constants()->header;
+    dest += tmpData;
+    // Build pattern after
+    unsigned int nbits = (unsigned int)(m_filter->constants()->baudRate / 1000 * PATTERN_AFTER);
+    DataBlock p(0,(nbits+7)/8);
+    DataBlock tmpAfter;
+    m_filter->addBuffer(tmpAfter,p,m_uart->accumulator().dataBits(),false);
+    dest += tmpAfter;
+    DDebug(m_uart,DebugAll,"Modulated header=%u data=%u pattern=%u [%p]",
+	m_filter->constants()->header.length(),
+	tmpData.length(),tmpAfter.length(),m_uart);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

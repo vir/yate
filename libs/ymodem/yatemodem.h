@@ -180,14 +180,26 @@ public:
     bool demodulate(const DataBlock& data);
 
     /**
-     * Create a buffer containing the modulated representation of a message
+     * Create a buffer containing the modulated representation of a message.
+     * A data pattern (depending on modem's type) will be added before the message.
+     * A mark pattern (2ms long) will be added after the message.
+     * Reset the modem before each request to modulate
      * @param dest Destination buffer
      * @param data Message data (each byte will be enclosed in start/stop/parity bits)
-     * @param header Optional bit pattern to be used as message header. This is the
-     *  bit representation of the header, not modulated data. A default one will be
-     *  added if header is missing
      */
-    void modulate(DataBlock& dest, const DataBlock& data, const DataBlock* header = 0);
+    void modulate(DataBlock& dest, const DataBlock& data);
+
+    /**
+     * Append a raw buffer to a data block
+     * @param dest Destination buffer
+     * @param buf Buffer to append to destination
+     * @param len the number of bytes to append starting with buf
+     */
+    static inline void addRaw(DataBlock& dest, void* buf, unsigned int len) {
+	    DataBlock tmp(buf,len,false);
+	    dest += tmp;
+	    tmp.clear(false);
+	}
 
     /**
      * Keep the modem type names. Useful to configure the modem
@@ -293,10 +305,9 @@ public:
      */
     inline bool modulate(DataBlock& dest, NamedList& params) {
 	    DataBlock data;
-	    DataBlock* header = 0;
-	    if (!createMsg(params,data,header))
+	    if (!createMsg(params,data))
 		return false;
-	    m_modem.modulate(dest,data,header);
+	    m_modem.modulate(dest,data);
 	    return true;
 	}
 
@@ -348,10 +359,9 @@ protected:
      * Create a buffer containing the byte representation of a message to be sent
      * @param params The list containing message parameters
      * @param data Destination message data buffer
-     * @param header Destination message header buffer
      * @return False on failure
      */
-    virtual bool createMsg(NamedList& params, DataBlock& data, DataBlock*& header)
+    virtual bool createMsg(NamedList& params, DataBlock& data)
 	{ return false; }
 
     /**
@@ -569,10 +579,9 @@ protected:
      * @param params The list containing message parameters.
      *  The name of the list must be a valid (known) message
      * @param data Destination message data buffer
-     * @param header Destination message header buffer
      * @return False on failure (an 'error' parameter will be set in params)
      */
-    virtual bool createMsg(NamedList& params, DataBlock& data, DataBlock*& header);
+    virtual bool createMsg(NamedList& params, DataBlock& data);
 
 private:
     // Change decoder's state

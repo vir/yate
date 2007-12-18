@@ -55,7 +55,7 @@ public:
     inline String& called()
 	{ return m_called; }
     // Send call setup data
-    void sendCallSetup();
+    void sendCallSetup(bool privacy);
     // Set call setup detector
     void setCallSetupDetector();
     // Remove call setup detector
@@ -67,14 +67,7 @@ public:
 	const char* called = 0)
 	{ m_caller = caller; m_callerName = callername; m_called = called; }
     // Set the caller, callername and called parameters
-    inline void copyCall(Message& dest) {
-	    if (m_caller)
-		dest.addParam("caller",m_caller);
-	    if (m_callerName)
-		dest.addParam("callername",m_callerName);
-	    if (m_called)
-		dest.addParam("called",m_called);
-	}
+    void copyCall(Message& dest, bool privacy = false);
     // Fill a string with line status parameters
     void statusParams(String& str);
     // Fill a string with line status detail parameters
@@ -301,10 +294,13 @@ private:
     SignallingTimer m_noRingTimer;       // No more rings on incoming not answered FXO line
     SignallingTimer m_alarmTimer;        // How much time a channel may stay with its line in alarm
     SignallingTimer m_dialTimer;         // FXO: delay dialing the number
+                                         // FXS: send call setup after first ring
     String m_callEndedTarget;            // callto when an FXS line was disconnected
     String m_oooTarget;                  // callto when out-of-order (hook is off for a long time after call ended)
     unsigned int m_polarityCount;        // The number of polarity changes received
     bool m_polarity;                     // The last value we've set for the line polarity
+    bool m_privacy;                      // Send caller identity
+    int m_callsetup;                     // Send callsetup before/after first ring
 };
 
 // Recorder call endpoint associated with an analog line monitor
@@ -530,6 +526,18 @@ inline const char* callertype(bool fxs)
     return fxs ? "fxs" : "fxo";
 }
 
+// Get privacy from message
+// Return true if caller's identity is private (screened)
+static inline bool getPrivacy(const Message& msg)
+{
+    String tmp = msg.getValue("privacy");
+    if (!tmp)
+	return false;
+    if (!tmp.isBoolean())
+	return true;
+    return tmp.toBoolean();
+}
+
 
 /**
  * ModuleLine
@@ -549,7 +557,7 @@ inline ModuleGroup* ModuleLine::moduleGroup()
 }
 
 // Send call setup data through the FXS line
-void ModuleLine::sendCallSetup()
+void ModuleLine::sendCallSetup(bool privacy)
 {
     if (type() != AnalogLine::FXS)
 	return;
@@ -557,16 +565,18 @@ void ModuleLine::sendCallSetup()
     if (callSetup() == AnalogLine::NoCallSetup)
 	return;
 
-    DataConsumer* cons = 0;
-    if (circuit())
-	cons = static_cast<DataConsumer*>(circuit()->getObject("DataConsumer"));
     Message msg("chan.attach");
-    msg.userData(cons);
+    if (userdata())
+	msg.userData(static_cast<RefObject*>(userdata()));
     msg.addParam("source","analogdetect/callsetup");
     String tmp;
     tmp << plugin.prefix() << address();
     msg.addParam("notify",tmp);
-    copyCall(msg);
+    copyCall(msg,privacy);
+
+
+//    msg.addParam("datetime","12:18:11:55");
+    //msg.addParam("datetime","11:11:11:11");
 
     if (Engine::dispatch(msg))
 	return;
@@ -669,6 +679,21 @@ void ModuleLine::processNotify(Message& msg)
 	DDebug(group(),DebugStub,
 	    "%s: received notification with operation=%s [%p]",
 	    address(),operation.c_str(),this);
+}
+
+// Set the caller, callername and called parameters
+void ModuleLine::copyCall(Message& dest, bool privacy)
+{
+    if (privacy)
+	dest.addParam("callerpres","restricted");
+    else {
+	if (m_caller)
+	    dest.addParam("caller",m_caller);
+	if (m_callerName)
+	    dest.addParam("callername",m_callerName);
+    }
+    if (m_called)
+	dest.addParam("called",m_called);
 }
 
 // Fill a string with line status parameters
@@ -1270,7 +1295,9 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     m_alarmTimer(line ? line->alarmTimeout() : 0),
     m_dialTimer(0),
     m_polarityCount(0),
-    m_polarity(false)
+    m_polarity(false),
+    m_privacy(false),
+    m_callsetup(AnalogLine::NoCallSetup)
 {
     m_line->userdata(this);
     m_line->moduleGroup()->setEndpoint(this,true);
@@ -1329,11 +1356,19 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
 		m_line->sendEvent(SignallingCircuitEvent::StartLine,AnalogLine::Dialing);
 		break;
 	    case AnalogLine::FXS:
-		if (m_line->callSetup() == AnalogLine::Before)
-		    m_line->sendCallSetup();
+		m_callsetup = m_line->callSetup();
+		// Check call setup override
+		{
+		    NamedString* ns = msg->getParam("callsetup");
+		    if (ns)
+			m_callsetup = lookup(*ns,AnalogLine::s_csName,AnalogLine::NoCallSetup);
+		}
+		m_privacy = getPrivacy(*msg);
+		if (m_callsetup == AnalogLine::Before)
+		    m_line->sendCallSetup(m_privacy);
 		m_line->sendEvent(SignallingCircuitEvent::RingBegin,AnalogLine::Dialing);
-		if (m_line->callSetup() == AnalogLine::After && m_line->state() != AnalogLine::Idle)
-		    m_line->sendCallSetup();
+		if (m_callsetup == AnalogLine::After)
+		    m_dialTimer.interval(500);
 		break;
 	    default: ;
 	}
@@ -1555,6 +1590,10 @@ bool AnalogChannel::disconnect(const char* reason)
 // Keep call alive to play announcements on FXS line not set on hook by the remote FXO
 void AnalogChannel::hangup(bool local, const char* status, const char* reason)
 {
+    // Sanity: reset dial timer and call setup flag if FXS
+    m_dialTimer.stop();
+    m_callsetup = AnalogLine::NoCallSetup;
+
     Lock lock(m_mutex);
 
     m_noRingTimer.stop();
@@ -1573,6 +1612,8 @@ void AnalogChannel::hangup(bool local, const char* status, const char* reason)
     Engine::enqueue(m);
 
     setStatus("hangup");
+    if (m_line && m_line->state() != AnalogLine::Idle)
+	m_line->sendEvent(SignallingCircuitEvent::RingEnd);
     polarityControl(false);
 
     // Check some conditions to keep the channel
@@ -1582,9 +1623,7 @@ void AnalogChannel::hangup(bool local, const char* status, const char* reason)
 	(isIncoming() && m_line->state() == AnalogLine::Idle))
 	return;
 
-
     Debug(this,DebugAll,"Call ended. Keep channel alive [%p]",this);
-
     if (m_callEndedTimer.interval()) {
 	m_callEndedTimer.start();
 	m_line->changeState(AnalogLine::CallEnded);
@@ -1634,6 +1673,15 @@ void AnalogChannel::evOffHook()
 void AnalogChannel::evRing(bool on)
 {
     Lock lock(m_mutex);
+
+    // Check call setup
+    if (m_callsetup == AnalogLine::After)
+	if (on)
+	    m_dialTimer.stop();
+	else
+	    m_dialTimer.start();
+
+    // Done if ringer is off
     if (!on)
 	return;
 
@@ -1792,10 +1840,15 @@ bool AnalogChannel::checkTimeouts(const Time& when)
     }
     if (m_dialTimer.timeout(when.msecNow())) {
 	m_dialTimer.stop();
+	m_callsetup = AnalogLine::NoCallSetup;
 	DDebug(this,DebugInfo,"Dial timer expired. %s [%p]",
-	    m_line?"Sending number":"Line is missing",this);
-	if (m_line)
+	    m_line?"Sending number/callsetup":"Line is missing",this);
+	if (!m_line)
+	    return true;
+	if (m_line->type() == AnalogLine::FXO)
 	    sendTones(m_line->called());
+	else if (m_line->type() == AnalogLine::FXS)
+	    m_line->sendCallSetup(m_privacy);
 	return true;
     }
     return true;
@@ -1887,6 +1940,12 @@ bool AnalogChannel::setAnnouncement(const char* status, const char* callto)
 // Outgoing call answered: set call state, start echo train, open data source/consumer
 void AnalogChannel::outCallAnswered(bool stopDial)
 {
+    // Sanity: reset dial timer and call setup flag if FXS
+    if (m_line && m_line->type() == AnalogLine::FXS) {
+	m_dialTimer.stop();
+	m_callsetup = AnalogLine::NoCallSetup;
+    }
+
     if (isAnswered())
 	return;
 

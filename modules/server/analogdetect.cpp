@@ -31,6 +31,7 @@ namespace { // anonymous
 class ADConsumer;                        // Base class for all module's consumers (UART)
 class ETSIConsumer;                      // Data consumer for an ETSIModem
 class ADModule;                          // The module
+class ADProxy;                           // Proxy class used to forward modulated data to other module
 class ChanAttachHandler;                 // chan.attach handler
 
 // Base class for all module's consumers
@@ -95,17 +96,38 @@ public:
     inline const String& prefix()
 	{ return m_prefix; }
     virtual void initialize();
-    // Process a request to attach a data consumer
-    bool attachConsumer(Message& msg, DataSource* src, String& type, const char* notify);
-    // Process a request to attach a data source
-    bool attachSource(Message& msg, DataConsumer* cons, String& type, const char* notify);
+    // chan.attach handler
+    bool chanAttach(Message& msg);
+    // Get next consumer's id
+    inline unsigned int nextId() {
+	    Lock lock(this);
+	    return m_id++;
+	}
 protected:
     virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
+    // Process a request to attach an ETSI detector (src is a valid pointer) or generator (src is 0)
+    bool attachETSI(Message& msg, DataSource* src, String& type, const char* notify);
 private:
     unsigned int m_id;                   // Next consumer's id
     bool m_init;                         // Already initialized flag
     String m_prefix;                     // Module's prefix
+};
+
+// Proxy class used to forward modulated data to other module
+class ADProxy : public RefObject
+{
+public:
+    ADProxy(RefObject* ep, DataBlock* data);
+    virtual ~ADProxy();
+    // Get endpoint and data
+    virtual void* getObject(const String& name) const;
+protected:
+    // Deref endpoint. Remove data if still owned
+    virtual void destroyed();
+private:
+    RefObject* m_ep;                     // The endpoint used to send modulated data
+    mutable DataBlock* m_data;           // The modulated data
 };
 
 // chan.attach handler
@@ -118,14 +140,12 @@ public:
     virtual bool received(Message& msg);
 };
 
-
 /**
  * Module's data
  */
 static ADModule plugin;
 static ObjList s_consumers;              // Consumers list
 static unsigned int s_count = 0;         // The number of active consumers
-static Mutex s_mutex(true);              // Lock module
 
 
 /**
@@ -139,7 +159,7 @@ ADConsumer::ADConsumer(const String& id, const char* notify)
 {
     DDebug(&plugin,DebugAll,"Created %s targetid=%s [%p]",
 	m_id.c_str(),m_targetid.c_str(),this);
-    Lock lock(s_mutex);
+    Lock lock(plugin);
     s_consumers.append(this);
     s_count++;
 }
@@ -160,7 +180,7 @@ void ADConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 // Remove from module's consumer list
 void ADConsumer::destroyed()
 {
-    Lock lock(s_mutex);
+    Lock lock(plugin);
     s_consumers.remove(this,false);
     s_count--;
     DDebug(&plugin,DebugAll,"Destroyed %s targetid=%s [%p]",
@@ -248,11 +268,13 @@ ADModule::~ADModule()
     Output("Unloading module Analog Detector");
 }
 
-//TODO: remove after test
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+// Used to test the library
+// Undef to test
+//#define TEST_MODEM_LIBRARY
+
+#if defined(TEST_MODEM_LIBRARY)
+void testModemLibrary(Configuration& cfg);
+#endif
 
 void ADModule::initialize()
 {
@@ -269,132 +291,163 @@ void ADModule::initialize()
     }
     m_init = true;
 
-    if (!cfg.getBoolValue("general","testing",false))
-	return;
+#if defined(TEST_MODEM_LIBRARY)
+    testModemLibrary(cfg);
+#endif
+}
 
-    String filename = "//home/marian/callerid.raw.";
-    String type[3] = {"etsi","bell","etsi-ets"};
-    unsigned int len[3] = {27200,22400,49280};
+// chan.attach handler
+bool ADModule::chanAttach(Message& msg)
+{
+    int detect = -1;
+    DataSource* src= 0;
+    RefObject* sender = msg.userData();
 
-    debugLevel(10);
-    unsigned int test = cfg.getIntValue("general","test",0);
-    if (test > 2)
-	test = 2;
-    unsigned int chunk = cfg.getIntValue("general","chunk",0);
-    if (!chunk)
-	chunk = 160;
-
-    filename << type[test];
-    int handler = open(filename,O_RDONLY);
-    if (handler == -1) {
-	Debug(this,DebugWarn,"Error opening %s",filename.c_str());
-	return;
+    // Check if requested a detector or a generator
+    String type = msg.getValue("consumer");
+    if (type.startSkip(plugin.prefix(),false)) {
+	if (sender)
+	    src = static_cast<DataSource*>(sender->getObject("DataSource"));
+	if (src)
+	    detect = 1;
+	else
+	    msg.setParam("reason","nodata");
     }
-
-    NamedList p("");
-    String id;
-    id << "test/" << type[test];
-    ETSIConsumer* cons = new ETSIConsumer(id,"TEST",p);
-
-    unsigned char buf[len[test]];
-    read(handler,buf,len[test]);
-    unsigned int n = len[test]/chunk;
-    for (unsigned char* p = buf; n; n--, p += chunk) {
-	DataBlock tmp(p,chunk,false);
-	cons->demodulate(tmp);
-	tmp.clear(false);
+    else {
+	type = msg.getValue("source");
+	if (type.startSkip(plugin.prefix(),false))
+	    detect = 0;
     }
-    cons->deref();
+    if (detect == -1)
+	return false;
+
+    const char* notify = msg.getValue("notify");
+    const char* defModem = lookup(FSKModem::ETSI,FSKModem::s_typeName);
+    const char* modemType = msg.getValue("modemtype",defModem);
+    int mType = lookup(modemType,FSKModem::s_typeName);
+    XDebug(this,DebugAll,"Request to create '%s' %s for '%s' modemtype=",
+	type.c_str(),detect?"detector":"generator",notify,modemType);
+
+    if (mType == FSKModem::ETSI)
+	return attachETSI(msg,src,type,notify);
+
+    msg.setParam("reason","unknown-modem-type");
+    return false;
 }
 
 bool ADModule::received(Message& msg, int id)
 {
     if (id == Halt) {
-	s_mutex.lock();
+	lock();
 	s_consumers.clear();
-	s_mutex.unlock();
+	unlock();
 	return Module::received(msg,id);
     }
     return Module::received(msg,id);
 }
 
-// Process a request to attach data consumer
-bool ADModule::attachConsumer(Message& msg, DataSource* src, String& type, const char* notify)
-{
-    XDebug(this,DebugAll,"Attaching consumer '%s' for '%s'",type.c_str(),notify);
-
-    String id;
-    DataConsumer* cons = 0;
-    if (type == "callsetup") {
-	s_mutex.lock();
-	id << m_prefix << m_id++;
-	s_mutex.unlock();
-	cons = new ETSIConsumer(id,notify,msg);
-    }
-    else {
-	msg.setParam("reason","unknown-detector-type");
-	return false;
-    }
-    DataTranslator::attachChain(src,cons);
-    bool ok = cons->getConnSource();
-    if (ok)
-	msg.userData(cons);
-    else
-	msg.setParam("reason","attach-failure");
-    TelEngine::destruct(cons);
-    return ok;
-}
-
-// Process a request to attach data source
-bool ADModule::attachSource(Message& msg, DataConsumer* cons, String& type, const char* notify)
-{
-    // TODO: remove it after testing
-    msg.setParam("reason","not-implemented");
-    return false;
-
-    DDebug(this,DebugAll,"Attaching source '%s' for '%s'",type.c_str(),notify);
-
-    if (type != "callsetup") {
-	msg.setParam("reason","unknown-message-type");
-	return false;
-    }
-
-    String id = prefix();
-    id << "callsetup/" << notify;
-    ETSIModem* modem = new ETSIModem(msg,id);
-    modem->debugChain(this);
-
-    NamedList params(lookup(ETSIModem::MsgCallSetup,ETSIModem::s_msg));
-    params.copyParams(msg,"datetime,caller,callername");
-
-    DataBlock buffer;
-    bool ok = modem->modulate(buffer,params);
-    delete modem;
-    if (!ok) {
-	msg.setParam("reason",params.getValue("error","invalid-message"));
-	return false;
-    }
-
-    DDebug(this,DebugAll,"Sending %u buffer for %s",buffer.length(),notify);
-    DataSource* src = new DataSource("slin");
-    ok = src->attach(cons);
-    if (ok)
-	src->Forward(buffer);
-    else
-	msg.setParam("reason","attach-failure");
-    TelEngine::destruct(src);
-    return ok;
-}
-
 void ADModule::statusParams(String& str)
 {
     Module::statusParams(str);
-    Lock lock(s_mutex);
+    Lock lock(this);
     str << "count=" << s_count;
     for (ObjList* o = s_consumers.skipNull(); o; o = o->skipNext()) {
 	ADConsumer* c = static_cast<ADConsumer*>(o->get());
 	str << "," << c->m_id << "=" << c->m_targetid;
     }
+}
+
+// Process a request to attach an ETSI detector (src is a valid pointer) or generator (src is 0)
+bool ADModule::attachETSI(Message& msg, DataSource* src, String& type, const char* notify)
+{
+    int t = 0xffffffff;
+
+    // Check type
+    if (type == "callsetup")
+	t = ETSIModem::MsgCallSetup;
+
+    if (t == (int)0xffffffff) {
+	if (src)
+	    msg.setParam("reason","unknown-detector-type");
+	else
+	    msg.setParam("reason","unknown-generator-type");
+	return false;
+    }
+
+    String id = prefix();
+
+    // Detector
+    if (src) {
+	id << nextId();
+	DataConsumer* cons = new ETSIConsumer(id,notify,msg);;
+	DataTranslator::attachChain(src,cons);
+	bool ok = cons->getConnSource();
+	if (ok)
+	    msg.userData(cons);
+	else
+	    msg.setParam("reason","attach-failure");
+	TelEngine::destruct(cons);
+	return ok;
+    }
+
+    // Generator
+    id << "callsetup/" << notify;
+    ETSIModem modem(msg,id);
+    modem.debugChain(this);
+    NamedList params(lookup(t,ETSIModem::s_msg));
+    for (int i = 0; ETSIModem::s_msgParams[i].token; i++) {
+	NamedString* p = msg.getParam(ETSIModem::s_msgParams[i].token);
+	if (p)
+	    params.addParam(p->name(),*p);
+    }
+
+    DataBlock* buffer = new DataBlock;
+    if (!modem.modulate(*buffer,params)) {
+	TelEngine::destruct(buffer);
+	msg.setParam("reason",params.getValue("error","invalid-message"));
+	return false;
+    }
+
+    Message send("chan.attach");
+    ADProxy* proxy = new ADProxy(msg.userData(),buffer);
+    send.userData(proxy);
+    TelEngine::destruct(proxy);
+    send.addParam("override","tone/rawdata");
+    send.addParam("single",String::boolText(true));
+    return Engine::dispatch(send);
+}
+
+
+/**
+ * ADProxy
+ */
+ADProxy::ADProxy(RefObject* ep, DataBlock* data)
+    : m_ep(0),
+    m_data(data)
+{
+    if (ep && ep->ref())
+	m_ep = ep;
+}
+
+ADProxy::~ADProxy()
+{
+}
+
+void* ADProxy::getObject(const String& name) const
+{
+    if (name == "rawdata") {
+	DataBlock* tmp = m_data;
+	m_data = 0;
+	return tmp;
+    }
+    return m_ep ? m_ep->getObject(name) : 0;
+}
+
+// Deref endpoint. Remove data if still owned
+void ADProxy::destroyed()
+{
+    TelEngine::destruct(m_ep);
+    TelEngine::destruct(m_data);
 }
 
 
@@ -403,42 +456,71 @@ void ADModule::statusParams(String& str)
  */
 bool ChanAttachHandler::received(Message& msg)
 {
-    DataSource* src = 0;
-    DataConsumer* cons = 0;
-
-    String type = msg.getValue("consumer");
-    if (!type.startSkip(plugin.prefix(),false)) {
-	type = msg.getValue("source");
-	if (!type.startSkip(plugin.prefix(),false))
-	    return false;
-	if (msg.userData())
-	    cons = static_cast<DataConsumer*>(msg.userData()->getObject("DataConsumer"));
-    }
-    else if (msg.userData())
-	src = static_cast<DataSource*>(msg.userData()->getObject("DataSource"));
-
-    if (!(src || cons)) {
-	msg.setParam("reason","nodata");
-	return false;
-    }
-
-    const char* modemtype = msg.getValue("modemtype");
-    if (modemtype && *modemtype) {
-	int mtype = lookup(modemtype,FSKModem::s_typeName);
-	switch (mtype) {
-	    case FSKModem::ETSI:
-		break;
-	    default:
-		msg.setParam("reason","unknown-modem-type");
-		return false;
-	}
-    }
-
-    const char* notify = msg.getValue("notify");
-    if (src)
-	return plugin.attachConsumer(msg,src,type,notify);
-    return plugin.attachSource(msg,cons,type,notify);
+    return plugin.chanAttach(msg);
 }
+
+
+#if defined(TEST_MODEM_LIBRARY)
+
+#include <fcntl.h>
+
+void testModemLibrary(Configuration& cfg)
+{
+    NamedList dummy("");
+    NamedList* test = cfg.getSection("test");
+    if (!test)
+	test = &dummy;
+
+    const char* caller = test->getValue("caller","caller");
+    const char* callername = test->getValue("callername","callername");
+    Output("Testing libyatemodem caller=%s callername=%s",caller,callername);
+
+    NamedList modemParams("");
+    modemParams.addParam("bufferbits","true");
+    ETSIModem* modem = new ETSIModem(modemParams,"TEST");
+    modem->debugLevel(DebugAll);
+
+    DataBlock buffer;
+
+    NamedList params(lookup(ETSIModem::MsgCallSetup,ETSIModem::s_msg));
+    params.addParam("caller",caller);
+    params.addParam("callername",callername);
+    if (modem->modulate(buffer,params))
+	modem->demodulate(buffer);
+
+    delete modem;
+    modem = new ETSIModem(modemParams,"TEST");
+    modem->debugLevel(DebugAll);
+
+    const char* filename = test->getValue("filename");
+    unsigned int len = (unsigned int)test->getIntValue("length");
+    int chunk = test->getIntValue("chunk",0);
+    if (chunk == 0)
+	chunk = len ? len : 1;
+    else if (chunk < 0)
+	chunk = 160;
+    unsigned char buf[len];
+    Output("Testing libyatemodem filename=%s len=%u chunk=%d",filename,len,chunk);
+    if (filename) {
+	int handler = open(filename,O_RDONLY);
+	if (handler != -1)
+	    read(handler,buf,len);
+	else
+	    Debug(modem,DebugWarn,"Error opening %s",filename);
+	close(handler);
+    }
+    unsigned int n = len / chunk;
+    for (unsigned char* p = buf; n; n--, p += chunk) {
+	DataBlock tmp(p,chunk,false);
+	modem->demodulate(tmp);
+	tmp.clear(false);
+    }
+
+    delete modem;
+
+    Output("libyatemodem test terminated");
+}
+#endif // TEST_MODEM_LIBRARY
 
 }; // anonymous namespace
 

@@ -30,6 +30,8 @@ using namespace TelEngine;
 
 // ETSI EN 300 659-1: 5.2
 // Channel seizure signal: block of 300 continuous bits of alternating 0 and 1
+// Use both values to detect the begining of an ETSI defined message:
+//  the modem might loose the first bits
 #define ETSI_CHANNEL_SEIZURE_1 0x55            // 01010101
 #define ETSI_CHANNEL_SEIZURE_2 0xaa            // 10101010
 

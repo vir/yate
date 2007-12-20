@@ -62,6 +62,9 @@ public:
     float spaceFreq;                     // Space frequency
     float sampleRate;                    // Sampling rate
     float baudRate;                      // Transmission baud rate (bps)
+    // Modulation/demodulation data
+    double markCoef;                     // Mark coefficient
+    double spaceCoef;                    // Space coefficient
     // Data used to demodulate signals
     unsigned int spb;                    // The number of samples per bit (also the length of all buffers)
     unsigned int halfSpb;                // Half of the spb value (used to filter data)
@@ -79,9 +82,7 @@ public:
                                          // and used as start value for each message data
     unsigned int* bitSamples;            // Array of bit samples nedded to maintain the modulation timing
     unsigned int bitSamplesLen;          // The length of the bitSamples array
-    double markCoef;                     // Mark coefficient for modulation
-    double spaceCoef;                    // Space coefficient for modulation
-    DataBlock header;                    // Start pattern + message header
+    DataBlock header;                    // Modulated message header
                                          // e.g. ETSI: channel seizure pattern + marks
 };
 
@@ -234,10 +235,16 @@ FilterConst::FilterConst(FSKModem::Type type)
     }
 
     // ETSI
+
+    // Signal properties
     markFreq = 1200.0;
     spaceFreq = 2200.0;
     sampleRate = 8000.0;
     baudRate = 1200.0;
+
+    // Mark/space coefficients for modulation/demodulation
+    markCoef = 2 * M_PI * markFreq / sampleRate;
+    spaceCoef = 2 * M_PI * spaceFreq / sampleRate;
 
     spb = 7;
     halfSpb = spb / 2;
@@ -261,10 +268,6 @@ FilterConst::FilterConst(FSKModem::Type type)
     bitSamples = new unsigned int[bitSamplesLen];
     bitSamples[0] = bitSamples[2] = 7;
     bitSamples[1] = 6;
-
-    // Mark/space coefficients for modulation
-    markCoef = 2 * M_PI * markFreq / sampleRate;
-    spaceCoef = 2 * M_PI * spaceFreq / sampleRate;
 
     accSin = 0;
     // Build message header

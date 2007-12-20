@@ -168,6 +168,13 @@ public:
 	{ return m_terminated; }
 
     /**
+     * Get the type of this modem
+     * @return The modem type
+     */
+    inline int type() const
+	{ return m_type; }
+
+    /**
      * Reset modem to its initial state
      */
     void reset();
@@ -275,6 +282,13 @@ public:
      */
     inline Error error() const
 	{ return m_error; }
+
+    /**
+     * Get the type of this UART's modem
+     * @return The type of this UART's modem
+     */
+    inline int modemType() const
+	{ return m_modem.type(); }
 
     /**
      * Get the data bit accumulator used by this UART

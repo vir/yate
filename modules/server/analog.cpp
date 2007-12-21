@@ -971,8 +971,11 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
     // (Re)load analog lines
     bool all = params.getBoolValue("useallcircuits",true);
 
-    for (ObjList* o = circuits().skipNull(); o; o = o->skipNext()) {
-	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+    unsigned int n = circuits().length();
+    for (unsigned int i = 0; i < n; i++) {
+	SignallingCircuit* cic = static_cast<SignallingCircuit*>(circuits()[i]);
+	if (!cic)
+	    continue;
 
 	// Setup line parameter list
 	NamedList dummy("");
@@ -1012,7 +1015,7 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
 	// Create a new line (create its peer if this is a monitor)
 	line = new ModuleLine(this,cic->code(),*lineParams);
 	while (fxoRec() && line->type() != AnalogLine::Unknown) {
-	    SignallingCircuit* fxoCic = fxoRec()->find(cic->code());
+	    SignallingCircuit* fxoCic = static_cast<SignallingCircuit*>(fxoRec()->circuits()[i]);
 	    if (!fxoCic) {
 		Debug(this,DebugNote,"FXO circuit is missing for %s/%u [%p]",
 		    debugName(),cic->code(),this);

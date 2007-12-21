@@ -2070,7 +2070,10 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
 	    fxo->removeCallSetupDetector();
     }
 
-    m_address = m_line->address();
+    if (fxsCaller)
+	m_address = m_line->address();
+    else if (m_line->getPeer())
+	m_address = m_line->getPeer()->address();
 
     // Set caller/called
     ModuleLine* info = m_line;
@@ -2584,6 +2587,12 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
 		    if (!line->userdata() && line->state() == AnalogLine::Idle)
 			break;
 		    line = 0;
+		}
+		lock.drop();
+		if (!line) {
+		    cause << "All lines in group '" << dest << "' are busy";
+		    error = "busy";
+		    break;
 		}
 	    }
 

@@ -484,7 +484,7 @@ double FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
 inline float FSKFilter::filter(short*& samples, unsigned int& len)
 {
 #define SPB m_const->spb
-#define MOD(val) ((val) & SPB)
+#define MOD(val) ((val) % SPB)
 
     short sample = *samples++;
     len--;

@@ -413,7 +413,7 @@ void MuxSource::destroyed()
 	m_consumers[i]->m_owner = 0;
 	TelEngine::destruct(m_consumers[i]);
     }
-    delete m_consumers;
+    delete[] m_consumers;
     m_consumers = 0;
     lock.drop();
     if (!m_error)

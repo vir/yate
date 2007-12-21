@@ -325,7 +325,7 @@ bool ADModule::chanAttach(Message& msg)
     const char* defModem = lookup(FSKModem::ETSI,FSKModem::s_typeName);
     const char* modemType = msg.getValue("modemtype",defModem);
     int mType = lookup(modemType,FSKModem::s_typeName);
-    XDebug(this,DebugAll,"Request to create '%s' %s for '%s' modemtype=",
+    XDebug(this,DebugAll,"Request to create '%s' %s for '%s' modemtype=%s",
 	type.c_str(),detect?"detector":"generator",notify,modemType);
 
     if (mType == FSKModem::ETSI)

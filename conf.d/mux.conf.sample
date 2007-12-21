@@ -1,0 +1,17 @@
+[general]
+; This section keep general settings for mux module
+
+; format: string:  Default data format when missing
+; Allowed values: alaw, mulaw, slin
+; Defaults to alaw if missing or incorrect
+;format=alaw
+
+; chanbuffer: integer: The buffer size for one channel of an audio multiplexer
+; Defaults to 160 if 0 or missing
+;chanbuffer=160
+
+; idlevalue: integer: The value used by the audio multiplexer to fill missing data
+; This value is used to fill the free space when the multiplexer has to forward
+;  the received data but not all channel buffers are full
+; Interval: 0..255. Defaults to 255 if missing or invalid
+;idlevalue=255

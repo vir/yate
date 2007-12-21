@@ -130,7 +130,6 @@ public:
 	    m_sources.remove(src,false);
 	}
 protected:
-    virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
 private:
     bool m_first;                        // First init flag
@@ -499,15 +498,15 @@ void MuxSource::fillBuffer(unsigned int channel, unsigned int& filled,
 
 /**
  * MuxModule
+ * Early init, late cleanup since we provide services to other modules
  */
 MuxModule::MuxModule()
-    : Module("mux","misc"),
+    : Module("mux","misc",true),
     m_first(true),
     m_id(1)
 {
     Output("Loaded module MUX");
     m_prefix << debugName() << "/";
-    m_sources.setDelete(false);
 }
 
 MuxModule::~MuxModule()
@@ -524,7 +523,6 @@ void MuxModule::initialize()
     // Startup
     if (m_first) {
 	setup();
-	installRelay(Halt);
 	Engine::install(new ChanAttachHandler);
     }
 
@@ -548,7 +546,7 @@ bool MuxModule::chanAttach(Message& msg)
 {
     String id = msg.getValue("source");
 
-    if (!id.startSkip(m_prefix,false))
+    if (Engine::exiting() || !id.startSkip(m_prefix,false))
 	return false;
 
     GenObject* sender = msg.userData();
@@ -625,17 +623,6 @@ bool MuxModule::chanAttach(Message& msg)
     }
     TelEngine::destruct(src);
     return !error;
-}
-
-bool MuxModule::received(Message& msg, int id)
-{
-    if (id == Halt) {
-	lock();
-	m_sources.clear();
-	unlock();
-	return Module::received(msg,id);
-    }
-    return Module::received(msg,id);
 }
 
 void MuxModule::statusParams(String& str)

@@ -72,6 +72,7 @@ for small to large scale projects.
 %{_libdir}/yate/analyzer.yate
 %{_libdir}/yate/rmanager.yate
 %{_libdir}/yate/msgsniff.yate
+%{_libdir}/yate/mux.yate
 %{_libdir}/yate/pbx.yate
 %{_libdir}/yate/server/dbpbx.yate
 %{_libdir}/yate/server/pbxassist.yate
@@ -107,6 +108,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/sipfeatures.conf
 %config(noreplace) %{_sysconfdir}/yate/extmodule.conf
 %config(noreplace) %{_sysconfdir}/yate/moh.conf
+%config(noreplace) %{_sysconfdir}/yate/mux.conf
 %config(noreplace) %{_sysconfdir}/yate/pbxassist.conf
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf

@@ -25,7 +25,7 @@ MKDEPS  := ../config.status
 PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	tonegen.yate tonedetect.yate wavefile.yate \
 	extmodule.yate conference.yate moh.yate pbx.yate \
-	dumbchan.yate callfork.yate \
+	dumbchan.yate callfork.yate mux.yate \
 	yrtpchan.yate ystunchan.yate \
 	ysipchan.yate \
 	yiaxchan.yate \

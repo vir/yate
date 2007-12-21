@@ -323,6 +323,8 @@ bool MuxSource::setSource(unsigned int channel, DataSource* source)
 	return false;
 
     DataSource* old = m_consumers[channel]->getConnSource();
+    if (old == source)
+	return true;
     if (old) {
 	old->detach(m_consumers[channel]);
 	if (!m_consumers[channel]) {
@@ -353,7 +355,11 @@ void MuxSource::consume(MuxConsumer& consumer, const DataBlock& data, unsigned l
 {
     if (!data.length() || consumer.m_owner != this)
 	return;
-    Lock lock(m_lock);
+    Lock lock(m_lock,100000);
+    if (!(lock.mutex() && alive())) {
+	Debug(this,DebugMild,"Locking failed, dropping %u bytes [%p]",data.length(),this);
+	return;
+    }
     XDebug(this,DebugAll,"Consuming %u bytes on channel %u [%p]",
 	   data.length(),consumer.m_channel,this);
     if ((data.length() % m_sampleLen) && !m_error) {

@@ -23,6 +23,9 @@
 %if "%{dist}" == ""
 %define dist %(test -f /etc/SuSE-release && echo suse)
 %endif
+%if "%{dist}" == "none"
+%define dist %{nil}
+%endif
 
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@

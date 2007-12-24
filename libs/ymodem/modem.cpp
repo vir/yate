@@ -253,9 +253,9 @@ FilterConst::FilterConst(FSKModem::Type type)
     markGain = 9.8539686961e-02;
     spaceGain = 9.8531161839e-02;
     lowbandGain = 3.1262119724e-03;
-    mark = new float[spb];
-    space = new float[spb];
-    lowband = new float[spb];
+    mark = new float[spb+1];
+    space = new float[spb+1];
+    lowband = new float[spb+1];
 
     for (unsigned int i = 0; i < spb; i++) {
 	mark[i] = m[i];
@@ -484,7 +484,7 @@ double FSKFilter::addBuffer(DataBlock& dest, const DataBlock& src,
 inline float FSKFilter::filter(short*& samples, unsigned int& len)
 {
 #define SPB m_const->spb
-#define MOD(val) ((val) % SPB)
+#define MOD(val) ((val) & SPB)
 
     short sample = *samples++;
     len--;
@@ -508,7 +508,7 @@ inline float FSKFilter::filter(short*& samples, unsigned int& len)
     // Low band filter
     float result = mark * mark - space * space;
     m_lowband.xbuf[MOD(m_index+6)] = result * m_const->lowbandGain;
-    result =    (m_lowband.xbuf[m_index]    +     m_lowband.xbuf[MOD(m_index+6)])
+    result =    (m_lowband.xbuf[m_index]        + m_lowband.xbuf[MOD(m_index+6)])
 	 + 6  * (m_lowband.xbuf[MOD(m_index+1)] + m_lowband.xbuf[MOD(m_index+5)])
 	 + 15 * (m_lowband.xbuf[MOD(m_index+2)] + m_lowband.xbuf[MOD(m_index+4)])
 	 + 20 *  m_lowband.xbuf[MOD(m_index+3)];
@@ -517,7 +517,7 @@ inline float FSKFilter::filter(short*& samples, unsigned int& len)
     m_lowband.ybuf[MOD(m_index+6)] = result;
 
     // Increase index
-    m_index = MOD(++m_index);
+    m_index = MOD(m_index+1);
 
 #undef SPB
 #undef MOD

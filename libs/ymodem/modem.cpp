@@ -366,9 +366,9 @@ FSKFilter::FSKFilter(int type)
     m_const = s_filterConst + type;
     // Update the sine accumulator from constants (current value after created the header)
     m_accSin = m_const->accSin;
-    m_mark.init(m_const->spb);
-    m_space.init(m_const->spb);
-    m_lowband.init(m_const->spb);
+    m_mark.init(1+m_const->spb);
+    m_space.init(1+m_const->spb);
+    m_lowband.init(1+m_const->spb);
 }
 
 // Process data to demodulate a bit

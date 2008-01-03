@@ -328,9 +328,11 @@ void WaveSource::run()
 	m_mutex.lock();
 	r = m_consumers.count();
 	m_mutex.unlock();
-	Thread::yield(true);
-	if (!alive())
+	Thread::yield();
+	if (!alive()) {
+	    notify(0,"replaced");
 	    return;
+	}
     }
     unsigned int blen = (m_brate*20)/1000;
     DDebug(&__plugin,DebugAll,"Consumer found, starting to play data with rate %d [%p]",m_brate,this);

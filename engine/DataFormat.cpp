@@ -1422,8 +1422,14 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, boo
 {
     XDebug(DebugInfo,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s'",
 	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str());
-    if (!source || !consumer || !source->getFormat() || !consumer->getFormat())
+    if (!source || !consumer)
 	return false;
+    if (!source->getFormat() || !consumer->getFormat()) {
+	Debug(DebugInfo,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s' not possible",
+	source,(source->getFormat() ? source->getFormat().c_str() : ""),
+	consumer,(consumer->getFormat() ? consumer->getFormat().c_str() : ""));
+	return false;
+    }
 
     bool retv = false;
     // first attempt to connect directly, changing format if possible

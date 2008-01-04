@@ -1426,8 +1426,8 @@ bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, boo
 	return false;
     if (!source->getFormat() || !consumer->getFormat()) {
 	Debug(DebugInfo,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s' not possible",
-	source,(source->getFormat() ? source->getFormat().c_str() : ""),
-	consumer,(consumer->getFormat() ? consumer->getFormat().c_str() : ""));
+	source,source->getFormat().c_str(),
+	consumer,consumer->getFormat().c_str());
 	return false;
     }
 

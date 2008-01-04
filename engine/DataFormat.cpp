@@ -1421,7 +1421,8 @@ DataTranslator* DataTranslator::create(const DataFormat& sFormat, const DataForm
 bool DataTranslator::attachChain(DataSource* source, DataConsumer* consumer, bool override)
 {
     XDebug(DebugInfo,"DataTranslator::attachChain [%p] '%s' -> [%p] '%s'",
-	source,source->getFormat().c_str(),consumer,consumer->getFormat().c_str());
+	source,(source ? source->getFormat().c_str() : ""),
+	consumer,(consumer ? consumer->getFormat().c_str() : ""));
     if (!source || !consumer)
 	return false;
     if (!source->getFormat() || !consumer->getFormat()) {

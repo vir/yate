@@ -24,12 +24,23 @@ MENUFILES :=
 DESKFILES :=
 
 GTKCLIENT := gtk2/libgtk2client.a
+QTCLIENT := qt4/libqt4client.a
 
 ifneq (@HAVE_GTK2@,no)
 SUBDIRS := $(SUBDIRS) gtk2
 PROGS := $(PROGS) yate-gtk2
 MENUFILES := $(MENUFILES) yate-gtk2.menu
 DESKFILES := $(DESKFILES) yate-gtk2.desktop
+endif
+
+ifneq (@HAVE_QT4@,no)
+SUBDIRS := $(SUBDIRS) qt4
+PROGS := $(PROGS) yate-qt4
+MENUFILES := $(MENUFILES) yate-qt4.menu
+DESKFILES := $(DESKFILES) yate-qt4.desktop
+endif
+
+ifneq (@HAVE_GTK2@_@HAVE_QT4@,no_no)
 ICONFILES := $(ICONFILES) null_team-16.png null_team-32.png null_team-48.png
 endif
 
@@ -138,3 +149,11 @@ yate-gtk2: LOCALLIBS = @GTK2_LIB@
 
 $(GTKCLIENT):
 	$(MAKE) -C gtk2
+
+yate-qt4: $(QTCLIENT)
+yate-qt4: LDFLAGS := $(QTCLIENT) $(LDFLAGS)
+yate-qt4: LOCALFLAGS = @QT4_INC@
+yate-qt4: LOCALLIBS = @QT4_LIB@
+
+$(QTCLIENT):
+	$(MAKE) -C qt4

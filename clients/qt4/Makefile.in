@@ -1,0 +1,57 @@
+# Makefile
+# This file holds the make rules for the Gtk2 client support
+
+# override DEBUG at compile time to enable full debug or remove it all
+DEBUG :=
+
+CXX := @CXX@ -Wall
+AR  := ar
+MOC := moc
+DEFS:=
+
+INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @QT4_INC@
+CXXFLAGS:=$(CXXFLAGS) @MODULE_CPPFLAGS@ @INLINE_FLAGS@
+LDFLAGS:= -L../.. -lyate
+INCFILES := @top_srcdir@/yateclass.h @top_srcdir@/yatecbase.h @srcdir@/qt4client.h
+
+PROJECT = libqt4client.a
+SOURCES = qt4client.cpp
+OBJECTS = $(SOURCES:.cpp=.o) qt4client.moc.o
+
+COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CXXFLAGS)
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+# include optional local make rules
+-include YateLocal.mak
+
+.PHONY: all debug ddebug xdebug clean install uninstall
+all: $(PROJECT)
+
+debug:
+	$(MAKE) all DEBUG=-g3
+
+ddebug:
+	$(MAKE) all DEBUG='-g3 -DDEBUG'
+
+xdebug:
+	$(MAKE) all DEBUG='-g3 -DXDEBUG'
+
+clean:
+	@-$(RM) $(PROJECT) $(OBJECTS) 
+
+$(PROJECT): $(OBJECTS)
+	$(AR) rcs $@ $^
+
+%.o: @srcdir@/%.cpp $(INCFILES)
+	$(COMPILE) -c $<
+
+%.moc.o: %.moc $(INCFILES)
+	$(COMPILE) -o $@ -c -x c++ $<
+
+%.moc: @srcdir@/%.h
+	$(MOC) $(DEFS) $(INCLUDES) -o $@ $<
+
+Makefile: @srcdir@/Makefile.in ../../config.status
+	cd ../.. && ./config.status

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Yate
+Name[ro]=Yate
+GenericName=VoIP Phone
+GenericName[ro]=Telefon VoIP
+Comment=Place phone calls over the Internet
+Comment[ro]=Apeluri telefonice peste Internet
+Exec=yate-qt4
+TryExec=yate-qt4
+StartupNotify=true
+Terminal=false
+Type=Application
+Categories=Application;Network;Qt

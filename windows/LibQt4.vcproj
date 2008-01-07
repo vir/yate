@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="LibGtk2"
-	ProjectGUID="{ECEB56ED-84C3-4136-8314-16C0EBAA945C}"
-	RootNamespace="LibGtk2"
+	Name="LibQt4"
+	ProjectGUID="{E98D46ED-71CD-7146-5CD8-16C08BC0A45C}"
+	RootNamespace="LibQt4"
 	>
 	<Platforms>
 		<Platform
@@ -42,18 +42,18 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Debug/LibGtk2.tlb"
+				TypeLibraryName=".\Debug/LibQt4.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,../clients/gtk2"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBYGTK2_EXPORTS"
+				AdditionalIncludeDirectories=".,..,../clients/qt4"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBYQT4_EXPORTS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug/LibGtk2.pch"
+				PrecompiledHeaderFile=".\Debug/LibQt4.pch"
 				AssemblerListingLocation=".\Debug/"
 				ObjectFile=".\Debug/"
 				ProgramDataBaseFileName=".\Debug/"
@@ -75,12 +75,12 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="gtk-win32-2.0.lib gdk-win32-2.0.lib gobject-2.0.lib glib-2.0.lib"
-				OutputFile="Debug/Libygtk2.dll"
+				OutputFile="Debug/Libyqt4.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/Libygtk2.pdb"
-				ImportLibrary=".\Debug/Libygtk2.lib"
+				ProgramDatabaseFile=".\Debug/Libyqt4.pdb"
+				ImportLibrary=".\Debug/Libyqt4.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -95,7 +95,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/LibGtk2.bsc"
+				OutputFile=".\Debug/LibQt4.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -138,19 +138,19 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Release/LibGtk2.tlb"
+				TypeLibraryName=".\Release/LibQt4.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,../clients/gtk2"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;LIBYGTK2_EXPORTS"
+				AdditionalIncludeDirectories=".,..,../clients/qt4"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;LIBYQT4_EXPORTS"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release/LibGtk2.pch"
+				PrecompiledHeaderFile=".\Release/LibQt4.pch"
 				AssemblerListingLocation=".\Release/"
 				ObjectFile=".\Release/"
 				ProgramDataBaseFileName=".\Release/"
@@ -171,11 +171,11 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="gtk-win32-2.0.lib gdk-win32-2.0.lib gobject-2.0.lib glib-2.0.lib"
-				OutputFile="Release/Libygtk2.dll"
+				OutputFile="Release/Libyqt4.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ProgramDatabaseFile=".\Release/Libygtk2.pdb"
-				ImportLibrary=".\Release/Libygtk2.lib"
+				ProgramDatabaseFile=".\Release/Libyqt4.pdb"
+				ImportLibrary=".\Release/Libyqt4.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -190,7 +190,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/LibGtk2.bsc"
+				OutputFile=".\Release/LibQt4.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -214,7 +214,7 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\clients\gtk2\gtk2client.cpp"
+				RelativePath="..\clients\qt4\qt4client.cpp"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -241,7 +241,7 @@
 			Filter="h;hpp;hxx;hm;inl"
 			>
 			<File
-				RelativePath="..\clients\gtk2\gtk2client.h"
+				RelativePath="..\clients\qt4\qt4client.h"
 				>
 			</File>
 		</Filter>

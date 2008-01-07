@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Script to run the Qt4 client from the build directory
+
+if [ -x yate-qt4 -a -x ../run ]; then
+    # Need to put the path to extra Qt/KDE libraries here
+    # export LD_LIBRARY_PATH=
+    cd ..; exec ./run --executable clients/yate-qt4 "$@"
+else
+    echo "Could not find client executable or run script" >&2
+fi

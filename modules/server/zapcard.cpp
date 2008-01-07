@@ -1769,10 +1769,16 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 
     // Create and insert circuits
     unsigned int added = 0;
+    DDebug(m_group,DebugAll,
+	"ZapSpan('%s'). Creating circuits starting with %u [%p]",
+	id().safe(),start,this);
     for (unsigned int i = 0; i < count; i++) {
 	unsigned int code = start + cics[i];
 	unsigned int channel = offset + cics[i];
 	ZapCircuit* cic = 0;
+	DDebug(m_group,DebugAll,
+	    "ZapSpan('%s'). Creating circuit code=%u channel=%u [%p]",
+	    id().safe(),code,channel,this);
 	if (digital)
 	    cic = new ZapCircuit(type,code,channel,this,config,defaults,params);
 	else

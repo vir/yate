@@ -623,6 +623,11 @@ bool ISDNQ931State::checkStateSend(int type)
 	    if (state() != Active)
 		break;
 	    return true;
+	case ISDNQ931Message::Progress:
+	    if (state() != CallPresent && state() != CallReceived &&
+		state() != IncomingProceeding)
+		break;
+	    return true;
 	default:
 	    if (state() == Null)
 		break;
@@ -1385,7 +1390,7 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
 // IE: BearerCaps, Cause, Progress (mandatory), Display, HiLayerCompat
 bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
 {
-    MSG_CHECK_SEND(ISDNQ931Message::Disconnect)
+    MSG_CHECK_SEND(ISDNQ931Message::Progress)
     if (sigMsg) {
 	m_data.m_progress = sigMsg->params().getValue("progress");
 	if (sigMsg->params().getBoolValue("media",false) &&
@@ -1411,7 +1416,6 @@ bool ISDNQ931Call::sendRelease(const char* reason, SignallingMessage* sigMsg)
     m_terminate = true;
     changeState(ReleaseReq);
     m_relTimer.start();
-    q931()->releaseCircuit(m_circuit);
     return q931()->sendRelease(this,true,m_data.m_reason);
 }
 

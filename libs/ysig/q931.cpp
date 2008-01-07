@@ -620,9 +620,18 @@ bool ISDNQ931State::checkStateSend(int type)
 		break;
 	    return true;
 	case ISDNQ931Message::Disconnect:
-	    if (state() != Active)
-		break;
-	    return true;
+	    switch (state()) {
+		case OutgoingProceeding:
+		case CallDelivered:
+		case CallPresent:
+		case CallReceived:
+		case ConnectReq:
+		case IncomingProceeding:
+		case Active:
+		    return true;
+		default: ;
+	    }
+	    break;
 	case ISDNQ931Message::Progress:
 	    if (state() != CallPresent && state() != CallReceived &&
 		state() != IncomingProceeding)
@@ -724,15 +733,25 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 	    break;
 	case SignallingEvent::Release:
 	    switch (state()) {
-		case DisconnectReq: case DisconnectIndication:
-		case Null: case ReleaseReq: case CallAbort:
+		case DisconnectIndication:
+		    retVal = sendRelease(0,event->message());
+		    break;
+		case OutgoingProceeding:
+		case CallDelivered:
+		case CallPresent:
+		case CallReceived:
+		case ConnectReq:
+		case IncomingProceeding:
+		case Active:
+		    retVal = sendDisconnect(event->message());
+		    break;
+		case Null:
+		case ReleaseReq:
+		case CallAbort:
 		    // Schedule destroy
 		    m_terminate = m_destroy = true;
 		    delete event;
 		    return false;
-		case Active:
-		    retVal = sendDisconnect(event->message());
-		    break;
 		default:
 		    m_terminate = m_destroy = true;
 		    retVal = sendReleaseComplete(event->message() ?
@@ -938,7 +957,7 @@ bool ISDNQ931Call::checkMsgRecv(ISDNQ931Message* msg, bool status)
 	    "Call(%u,%u). Dropping '%s' retransmission in state '%s' [%p]",
 	    Q931_CALL_ID,msg->name(),stateName(state()),this);
     else {
-	DDebug(q931(),DebugNote,
+	Debug(q931(),DebugNote,
 	    "Call(%u,%u). Received '%s'. Invalid in state '%s'. Drop [%p]",
 	    Q931_CALL_ID,msg->name(),stateName(state()),this);
 	if (status && state() != Null)

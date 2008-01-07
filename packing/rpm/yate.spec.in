@@ -1,7 +1,7 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
 # to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
-# to disable the GUI client run rpmbuild --define 'nogui 1'
+# to disable the GUI clients run rpmbuild --define 'nogui 1'
 
 %{!?dist:%define dist %{nil}}
 %{?nodeps:%define no_auto_deps 1}
@@ -30,10 +30,10 @@
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@
 Version: 	@PACKAGE_VERSION@
-Release:	@PACKAGE_RELEASE@%{dist}
+Release:	@PACKAGE_STATUS@@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc@voip.null.ro>
-Source:		http://yate.null.ro/%{name}-%{version}-@PACKAGE_RELEASE@.tar.gz
+Source:		http://yate.null.ro/%{name}-%{version}-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
 Group:		Applications/Communications
 BuildRoot:	%{_tmppath}/%{name}-%{version}-%{release}-root
 URL:		http://yate.null.ro/
@@ -140,7 +140,7 @@ ldconfig
 Summary:	ALSA sound driver for Yate
 Group:		Applications/Communication
 ExclusiveOS:	linux
-Provides:	yate-audiodevice
+Provides:	%{name}-audiodevice
 
 %description alsa
 Advanced Linux Sound Architecture audio driver for Yate. This is the recommended
@@ -197,7 +197,7 @@ interfaces.
 %package pgsql
 Summary:	PostgreSQL database driver for Yate
 Group:		Applications/Communication
-Provides:	yate-database
+Provides:	%{name}-database
 
 %description pgsql
 This package allows Yate to connect to a PostgreSQL database server. All
@@ -211,7 +211,7 @@ modules that support database access will be able to use PostgreSQL.
 %package mysql
 Summary:	MySQL database driver for Yate
 Group:		Applications/Communication
-Provides:	yate-database
+Provides:	%{name}-database
 
 %description mysql
 This package allows Yate to connect to a MySQL database server. All modules
@@ -224,10 +224,28 @@ that support database access will be able to use MySQL.
 
 %if "%{no_gui}" != "1"
 
+%package client-common
+Summary:	Common files for all Yate clients
+Group:		Applications/Communication
+
+%description client-common
+This package includes the common files needed to use Yate as a VoIP client.
+
+%files client-common
+%defattr(-, root, root)
+%{_datadir}/pixmaps/null_team-*.png
+%dir %{_datadir}/yate/skins
+%{_datadir}/yate/skins/*
+%dir %{_datadir}/yate/help
+%{_datadir}/yate/help/*
+%config(noreplace) %{_sysconfdir}/yate/providers.conf
+
+
 %package gtk2
 Summary:	Gtk2 client package for Yate
 Group:		Applications/Communication
-Provides:	yate-client
+Provides:	%{name}-client
+Requires:	%{name}-client-common = %{version}-%{release}
 
 %description gtk2
 The yate-gtk2 package includes the files needed to use Yate as a VoIP client
@@ -238,13 +256,7 @@ with a Gtk2 graphical interface.
 %{_bindir}/yate-gtk2
 %{_menudir}/yate-gtk2.menu
 %{_datadir}/applications/yate-gtk2.desktop
-%{_datadir}/pixmaps/null_team-*.png
-%dir %{_datadir}/yate/skins
-%{_datadir}/yate/skins/*
-%dir %{_datadir}/yate/help
-%{_datadir}/yate/help/*
 %config(noreplace) %{_sysconfdir}/yate/yate-gtk2.conf
-%config(noreplace) %{_sysconfdir}/yate/providers.conf
 
 %post gtk2
 test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
@@ -256,8 +268,8 @@ test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 %package mozilla
 Summary:	Mozilla embedding in Yate
 Group:		Applications/Communication
-Requires:	yate-gtk2 = %{version}-%{release}
-Provides:	yate-browser
+Requires:	%{name}-gtk2 = %{version}-%{release}
+Provides:	%{name}-browser
 
 %description mozilla
 This package adds a Mozilla widget that can be embedded in a Yate client window.
@@ -266,6 +278,30 @@ This package adds a Mozilla widget that can be embedded in a Yate client window.
 %defattr(-, root, root)
 %dir %{_libdir}/yate/gtk2
 %{_libdir}/yate/gtk2/*
+
+
+%package qt4
+Summary:	Qt-4 client package for Yate
+Group:		Applications/Communication
+Provides:	%{name}-client
+Requires:	%{name}-client-common = %{version}-%{release}
+
+%description qt4
+The yate-qt4 package includes the files needed to use Yate as a VoIP client
+with a Qt version 4 graphical interface.
+
+%files qt4
+%defattr(-, root, root)
+%{_bindir}/yate-qt4
+%{_menudir}/yate-qt4.menu
+%{_datadir}/applications/yate-qt4.desktop
+%config(noreplace) %{_sysconfdir}/yate/yate-qt4.conf
+
+%post qt4
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
+
+%postun qt4
+test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
 
 %endif
 
@@ -320,6 +356,7 @@ Requires:	%{name}-pgsql = %{version}-%{release}
 %if "%{no_gui}" != "1"
 Requires:	%{name}-gtk2 = %{version}-%{release}
 Requires:	%{name}-mozilla = %{version}-%{release}
+Requires:	%{name}-qt4 = %{version}-%{release}
 %endif
 Requires:	%{name}-scripts = %{version}-%{release}
 
@@ -386,6 +423,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Mon Jan 07 2008 Paul Chitescu <paulc@voip.null.ro>
+- Added Qt client
+
 * Fri Dec 14 2007 Paul Chitescu <paulc@voip.null.ro>
 - Modified for Yate 2
 

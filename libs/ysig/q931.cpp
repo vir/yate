@@ -1411,6 +1411,7 @@ bool ISDNQ931Call::sendRelease(const char* reason, SignallingMessage* sigMsg)
     m_terminate = true;
     changeState(ReleaseReq);
     m_relTimer.start();
+    q931()->releaseCircuit(m_circuit);
     return q931()->sendRelease(this,true,m_data.m_reason);
 }
 
@@ -1425,6 +1426,7 @@ bool ISDNQ931Call::sendReleaseComplete(const char* reason)
 	m_data.m_reason = reason;
     m_terminate = m_destroy = true;
     changeState(Null);
+    q931()->releaseCircuit(m_circuit);
     return q931()->sendRelease(this,false,m_data.m_reason);
 }
 

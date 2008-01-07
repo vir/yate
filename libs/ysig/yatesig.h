@@ -6427,21 +6427,21 @@ public:
 	// Common state
 	Null                    = 0x00,  // Null
 	// Call states
-	CallInitiated           = 0x01,  // Call initiated
+	CallInitiated           = 0x01,  // Call initiated: sent SETUP
 	OverlapSend             = 0x02,  // Overlap sending
-	OutgoingProceeding      = 0x03,  // Outgoing call proceeding
-	CallDelivered           = 0x04,  // Call delivered
-	CallPresent             = 0x06,  // Call present
-	CallReceived            = 0x07,  // Call received
-	ConnectReq              = 0x08,  // Connect request
-	IncomingProceeding      = 0x09,  // Incoming call proceeding
-	Active                  = 0x0a,  // Active
-	DisconnectReq           = 0x0b,  // Disconnect request
-	DisconnectIndication    = 0x0c,  // Disconnect indication
+	OutgoingProceeding      = 0x03,  // Outgoing call proceeding: received valid CALL PROCEEDING
+	CallDelivered           = 0x04,  // Call delivered: received valid ALERTING
+	CallPresent             = 0x06,  // Call present: received valid SETUP or recover from STATUS
+	CallReceived            = 0x07,  // Call received: sent ALERTING or recover from STATUS
+	ConnectReq              = 0x08,  // Connect request: sent/received valid CONNECT or recover from STATUS
+	IncomingProceeding      = 0x09,  // Incoming call proceeding: sent CALL PROCEEDING or recover from STATUS
+	Active                  = 0x0a,  // Active: sent/received valid CONNECT ACK
+	DisconnectReq           = 0x0b,  // Disconnect request: sent DISCONNECT
+	DisconnectIndication    = 0x0c,  // Disconnect indication: received valid DISCONNECT
 	SuspendReq              = 0x0f,  // Suspend request
-	ResumeReq               = 0x11,  // Resume request
-	ReleaseReq              = 0x13,  // Release request
-	CallAbort               = 0x16,  // Call abort
+	ResumeReq               = 0x11,  // Resume reques
+	ReleaseReq              = 0x13,  // Release request: sent/received valid RELEASE
+	CallAbort               = 0x16,  // Call abort: received STATUS in Null state with remote not in Null state
 	OverlapRecv             = 0x19,  // Overlap receiving
 	// Call controller states
 	RestartReq              = 0x3d,  // Restart request

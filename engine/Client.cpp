@@ -1506,7 +1506,7 @@ bool Client::action(Window* wnd, const String& name)
 	    page = 0;
 	String helpFile = Engine::config().getValue("client","helpbase");
 	if (helpFile.null())
-	    helpFile << Engine::modulePath() << Engine::pathSeparator() << "help";
+	    helpFile << Engine::sharedPath() << Engine::pathSeparator() << "help";
 	if (!helpFile.endsWith(Engine::pathSeparator()))
 	    helpFile << Engine::pathSeparator();
 	helpFile << page << ".yhlp";

@@ -115,6 +115,7 @@ bool SignallingCallControl::releaseCircuit(SignallingCircuit*& cic, bool sync)
     if (!cic)
 	return false;
     bool ok = cic->status(SignallingCircuit::Idle,sync);
+    DDebug(DebugAll,"SignallingCallControl. Released circuit %u [%p]",cic->code(),this);
     cic->deref();
     cic = 0;
     return ok;

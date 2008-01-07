@@ -22,8 +22,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <yatecbase.h>
-#include <qt4client.h>
+#include "qt4client.h"
 #include <QtUiTools>
 
 #ifdef _WINDOWS
@@ -46,7 +45,7 @@ QtWindow::QtWindow()
 }
 
 QtWindow::QtWindow(const char* name, const char* description)
-	: Window(name), m_description(description), m_keysVisible(true)
+    : Window(name), m_description(description), m_keysVisible(true)
 {
     m_ringtone = new QSound("ring.wav", this);
 }
@@ -1286,14 +1285,14 @@ void QtWindow::menu(int x, int y)
 
 
 QtClient::QtClient()
-	: Client("QtClient")
+    : Client("QtClient")
 {
     m_oneThread = Engine::config().getBoolValue("client","onethread",true);
 
     s_skinPath = Engine::config().getValue("client","skinbase");
     if (s_skinPath.null())
-	s_skinPath << Engine::modulePath() << Engine::pathSeparator() << "skin";
-	s_skinPath << Engine::pathSeparator();
+	s_skinPath << Engine::sharedPath() << Engine::pathSeparator() << "skins";
+    s_skinPath << Engine::pathSeparator();
     String skin(Engine::config().getValue("client","skin","default")); 
 
     if (skin)

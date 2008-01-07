@@ -260,21 +260,22 @@ void DSoundPlay::run()
     if (m_owner)
 	m_owner->m_dsound = this;
     DWORD writeOffs = 0;
+    DWORD margin = s_chunk/4;
     bool first = true;
     Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
     while (m_owner) {
 	msleep(1,true);
 	if (first) {
-	    if (m_buf.length() < s_minsize)
+	    if ((m_buf.length() < s_minsize) || !m_dsb)
 		continue;
 	    first = false;
 	    m_dsb->GetCurrentPosition(NULL,&writeOffs);
-	    writeOffs = (s_chunk/4 + writeOffs) % m_buffSize;
+	    writeOffs = (margin + writeOffs) % m_buffSize;
 	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
 		m_buf.length(),writeOffs);
 	    m_start = Time::now();
 	}
-	while (m_dsb && (m_buf.length() >= s_chunk)) {
+	while (m_dsb) {
 	    DWORD playPos = 0;
 	    DWORD writePos = 0;
 	    bool adjust = false;
@@ -288,10 +289,16 @@ void DSoundPlay::run()
 		    adjust = (writeOffs < writePos) || (playPos <= writeOffs) ;
 	    }
 	    if (adjust) {
-		DWORD adjOffs = (s_chunk/4 + writePos) % m_buffSize;
-		Debug(&__plugin,DebugInfo,"Slip detected, changing write offs from %u to %u, p=%u w=%u",
+		DWORD adjOffs = (margin + writePos) % m_buffSize;
+		Debug(&__plugin,DebugNote,"Slip detected, changing write offs from %u to %u, p=%u w=%u",
 		    writeOffs,adjOffs,playPos,writePos);
 		writeOffs = adjOffs;
+	    }
+	    bool hasData = (m_buf.length() >= s_chunk);
+	    if (!(adjust || hasData)) {
+		// don't fill the buffer if we still have at least one chunk until underflow
+		if ((m_buffSize + writeOffs - writePos) % m_buffSize >= s_chunk)
+		    break;
 	    }
 	    void* buf = 0;
 	    void* buf2 = 0;
@@ -316,16 +323,28 @@ void DSoundPlay::run()
 		continue;
 	    }
 	    lock();
-	    ::memcpy(buf,m_buf.data(),len);
-	    if (buf2)
-		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
+	    if (hasData) {
+		::memcpy(buf,m_buf.data(),len);
+		if (buf2)
+		    ::memcpy(buf2,((const char*)m_buf.data())+len,len2);
+	    }
+	    else {
+		::memset(buf,0,len);
+		if (buf2)
+		    ::memset(buf2,0,len2);
+	    }
 	    m_dsb->Unlock(buf,len,buf2,len2);
-	    writeOffs += s_chunk;
-	    if (writeOffs >= m_buffSize)
-		writeOffs -= m_buffSize;
 	    m_total += s_chunk;
 	    m_buf.cut(-(int)s_chunk);
 	    unlock();
+#ifdef DEBUG
+	    if (!hasData)
+		Debug(&__plugin,DebugInfo,"Underflow, filled %u bytes at %u, p=%u w=%u",
+		    s_chunk,writeOffs,playPos,writePos);
+#endif
+	    writeOffs += s_chunk;
+	    if (writeOffs >= m_buffSize)
+		writeOffs -= m_buffSize;
 	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
 	}
     }

@@ -25,7 +25,7 @@
 #include <yatecbase.h>
 
 #ifdef _WINDOWS
-                                                                                
+
 #ifdef LIBYQT4_EXPORTS
 #define YQT4_API __declspec(dllexport)
 #else
@@ -33,9 +33,9 @@
 #define YQT4_API __declspec(dllimport)
 #endif
 #endif
-                                                                                
+
 #endif /* _WINDOWS */
-                                                                                
+                                          
 #ifndef YQT4_API
 #define YQT4_API
 #endif
@@ -48,6 +48,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#define QT_NO_DEBUG
+#define QT_DLL
+#define QT_GUI_LIB
+#define QT_CORE_LIB
+#define QT_THREAD_SUPPORT
 
 #include <QtGui>
 #include <QSound>

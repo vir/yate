@@ -435,9 +435,17 @@ Client::Client(const char *name)
 
 Client::~Client()
 {
+    Engine::halt(0);
+}
+
+void Client::cleanup()
+{
     m_windows.clear();
     s_client = 0;
-    Engine::halt(0);
+    m_oneThread = false;
+    do
+	idleActions();
+    while (ClientDriver::self() && !ClientDriver::self()->check(100000));
 }
 
 void Client::run()

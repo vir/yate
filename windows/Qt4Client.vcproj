@@ -50,7 +50,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories=".,..,../clients/qt4"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;UNICODE"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -74,7 +74,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="gtk-win32-2.0.lib gdk-win32-2.0.lib glib-2.0.lib gthread-2.0.lib"
 				OutputFile="Release/yate-qt4.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -145,7 +144,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".,..,../clients/qt4"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;UNICODE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -170,7 +169,6 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="gtk-win32-2.0.lib gdk-win32-2.0.lib glib-2.0.lib gthread-2.0.lib"
 				OutputFile="Debug/yate-qt4.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

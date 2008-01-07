@@ -280,6 +280,7 @@ public:
     Client(const char *name = 0);
     virtual ~Client();
     virtual void run();
+    virtual void cleanup();
     virtual void main() = 0;
     virtual void lock() = 0;
     virtual void unlock() = 0;

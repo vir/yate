@@ -583,9 +583,19 @@ bool ISDNQ931State::checkStateRecv(int type, bool* retrans)
 	    return true;
 	case ISDNQ931Message::Disconnect:
 	    STATE_CHECK_RETRANS(DisconnectIndication)
-	    if (state() != Active)
-		break;
-	    return true;
+	    switch (state()) {
+		case CallInitiated:
+		case OutgoingProceeding:
+		case CallDelivered:
+		case CallPresent:
+		case CallReceived:
+		case ConnectReq:
+		case IncomingProceeding:
+		case Active:
+		    return true;
+		default: ;
+	    }
+	    break;
 	default:
 	    if (state() == Null)
 		break;

@@ -37,7 +37,7 @@ using namespace TelEngine;
 #define PATTERN_AFTER   2
 
 // Uncomment this to view the bits decoded by the modem
-//#define YMODEM_BUFFER_BITS
+#define YMODEM_BUFFER_BITS
 
 // Constant values used by the FSK filter to modulate/demodulate data
 class FilterConst
@@ -273,11 +273,11 @@ FilterConst::FilterConst(FSKModem::Type type)
     // Build message header
     // ETSI channel seizure signal + Mark (stop bits) signal
     // 300 continuous bits of alternating 0 and 1 + 180 of 1 (mark) bits
-    // 480 bits: 60 bytes. Byte 38: 01010000
+    // 480 bits: 60 bytes. Byte 38: 01011111
     // This is the data header to be sent with ETSI messages
     unsigned char* hdr = new unsigned char[60];
     ::memset(hdr,0x55,37);
-    ::memset(&hdr[37],0x50,1);
+    hdr[37] = 0xf5;
     ::memset(&hdr[38],0xff,22);
     DataBlock src;
     FSKModem::addRaw(src,hdr,60);

@@ -20,6 +20,10 @@ OBJECTS = $(SOURCES:.cpp=.o) qt4client.moc.o
 
 COMPILE = $(CXX) $(DEFS) $(DEBUG) $(INCLUDES) $(CXXFLAGS)
 
+ifneq (x@QT4_VER@,x)
+DEFS := $(DEFS) -DQT4_VER=@QT4_VER@
+endif
+
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 

@@ -18,6 +18,9 @@ AC_SUBST(PACKAGE_VERSION_RELEASE)
 AC_SUBST(PACKAGE_RELEASE)
 AC_SUBST(PACKAGE_STATUS)
 
+# sed expression to convert version into something comparable lexicographically
+vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
+
 # We may need the host OS type but avoid the overhead of AC_CANONICAL_SYSTEM
 AC_MSG_CHECKING([for local operating system type])
 uname_os=`uname -s`
@@ -544,8 +547,6 @@ prtti=`$ac_cv_use_pwlib/bin/ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
 libpw="$ac_cv_use_pwlib/$ARCHLIB/libpt.so"
 PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
-# convert version into something comparable lexicographically
-vsed='s/\(^\|\.\)\([[0-9]]\)\($\|\.\)/\10\2\3/g'
 vpw=`echo "$verpw" | sed "$vsed" | sed "$vsed"`
 if [[ "$vpw" '<' "01.06.00" ]]; then
     PWLIB_INC="$PWLIB_INC/unix/ptlib $PWLIB_INC/unix $PWLIB_INC"
@@ -679,6 +680,7 @@ AC_SUBST(GMOZ_LIB)
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""
+QT4_VER=""
 AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients (default)]),[ac_cv_use_libqt4=$withval],[ac_cv_use_libqt4=yes])
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_CHECKING([for Qt4 using pkg-config])
@@ -689,6 +691,7 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	HAVE_QT4=yes
 	QT4_INC="$incqt"
 	QT4_LIB="$libqt"
+	QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
 	ac_cv_use_libqt="no"
     else
 	verqt="no"
@@ -698,6 +701,7 @@ fi
 AC_SUBST(HAVE_QT4)
 AC_SUBST(QT4_INC)
 AC_SUBST(QT4_LIB)
+AC_SUBST(QT4_VER)
 
 AC_ARG_WITH(libgtk2,AC_HELP_STRING([--with-libgtk2],[use Gtk for graphical clients (default)]),[ac_cv_use_libgtk2=$withval],[ac_cv_use_libgtk2=yes])
 HAVE_COREDUMPER=no

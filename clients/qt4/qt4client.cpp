@@ -938,7 +938,11 @@ void QtWindow::populate()
 
     QVBoxLayout *layout = new QVBoxLayout;
     layout->setSpacing(0);
-    //layout->setContentsMargins(0,0,0,0);
+#if defined(QT4_VER) && (QT4_VER < 040300)
+    layout->setMargin(0);
+#else
+    layout->setContentsMargins(0,0,0,0);
+#endif
     layout->addWidget(formWidget);
     setLayout(layout);
     setWindowTitle(formWidget->windowTitle());

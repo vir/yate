@@ -268,20 +268,9 @@ ADModule::~ADModule()
     Output("Unloading module Analog Detector");
 }
 
-// Used to test the library
-// Undef to test
-//#define TEST_MODEM_LIBRARY
-
-#if defined(TEST_MODEM_LIBRARY)
-void testModemLibrary(Configuration& cfg);
-#endif
-
 void ADModule::initialize()
 {
     Output("Initializing module Analog Detector");
-
-    Configuration cfg(Engine::configFile("analogdetect"));
-    cfg.load();
 
     if (!m_init) {
 	setup();
@@ -290,10 +279,6 @@ void ADModule::initialize()
 	Engine::install(new ChanAttachHandler);
     }
     m_init = true;
-
-#if defined(TEST_MODEM_LIBRARY)
-    testModemLibrary(cfg);
-#endif
 }
 
 // chan.attach handler
@@ -458,69 +443,6 @@ bool ChanAttachHandler::received(Message& msg)
 {
     return plugin.chanAttach(msg);
 }
-
-
-#if defined(TEST_MODEM_LIBRARY)
-
-#include <fcntl.h>
-
-void testModemLibrary(Configuration& cfg)
-{
-    NamedList dummy("");
-    NamedList* test = cfg.getSection("test");
-    if (!test)
-	test = &dummy;
-
-    const char* caller = test->getValue("caller","caller");
-    const char* callername = test->getValue("callername","callername");
-    Output("Testing libyatemodem caller=%s callername=%s",caller,callername);
-
-    NamedList modemParams("");
-    modemParams.addParam("bufferbits","true");
-    ETSIModem* modem = new ETSIModem(modemParams,"TEST");
-    modem->debugLevel(DebugAll);
-
-    DataBlock buffer;
-
-    NamedList params(lookup(ETSIModem::MsgCallSetup,ETSIModem::s_msg));
-    params.addParam("caller",caller);
-    params.addParam("callername",callername);
-    if (modem->modulate(buffer,params))
-	modem->demodulate(buffer);
-
-    delete modem;
-    modem = new ETSIModem(modemParams,"TEST");
-    modem->debugLevel(DebugAll);
-
-    const char* filename = test->getValue("filename");
-    unsigned int len = (unsigned int)test->getIntValue("length");
-    int chunk = test->getIntValue("chunk",0);
-    if (chunk == 0)
-	chunk = len ? len : 1;
-    else if (chunk < 0)
-	chunk = 160;
-    unsigned char buf[len];
-    Output("Testing libyatemodem filename=%s len=%u chunk=%d",filename,len,chunk);
-    if (filename) {
-	int handler = open(filename,O_RDONLY);
-	if (handler != -1)
-	    read(handler,buf,len);
-	else
-	    Debug(modem,DebugWarn,"Error opening %s",filename);
-	close(handler);
-    }
-    unsigned int n = len / chunk;
-    for (unsigned char* p = buf; n; n--, p += chunk) {
-	DataBlock tmp(p,chunk,false);
-	modem->demodulate(tmp);
-	tmp.clear(false);
-    }
-
-    delete modem;
-
-    Output("libyatemodem test terminated");
-}
-#endif // TEST_MODEM_LIBRARY
 
 }; // anonymous namespace
 

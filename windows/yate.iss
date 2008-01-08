@@ -130,18 +130,18 @@ Source: "..\packing\yate.url"; DestDir: "{app}"
 Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 
-Source: "..\share\help\*.yhlp"; DestDir: "{app}\help"; Components: client
+Source: "..\share\help\*.yhlp"; DestDir: "{app}\share\help"; Components: client
 Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir: "{app}\conf.d"; Components: client
-Source: "..\share\skins\default\qt4client.??"; DestDir: "{app}\skins\default"; Components: client\qt
-Source: "..\share\skins\default\gtk2client.??"; DestDir: "{app}\skins\default"; Components: client\gtk
-Source: "..\share\skins\default\*.png"; DestDir: "{app}\skins\default"; Components: client
+Source: "..\share\skins\default\qt4client.??"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\gtk2client.??"; DestDir: "{app}\share\skins\default"; Components: client\gtk
+Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
 
-Source: "..\share\skins\skinned\gtk2client.??"; DestDir: "{app}\skins\skinned"; Components: client\gtk\skinned
-Source: "..\share\skins\skinned\*.png"; DestDir: "{app}\skins\skinned"; Components: client\gtk\skinned
+Source: "..\share\skins\skinned\gtk2client.??"; DestDir: "{app}\share\skins\skinned"; Components: client\gtk\skinned
+Source: "..\share\skins\skinned\*.png"; DestDir: "{app}\share\skins\skinned"; Components: client\gtk\skinned
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist
 Source: "..\conf.d\yate-gtk2.conf.default"; DestName: "yate-gtk2.conf"; DestDir: "{app}\conf.d"; Components: client\gtk\skinned; Flags: skipifsourcedoesntexist
 
-Source: "..\share\scripts\*.php"; DestDir: "{app}\scripts"; Components: external\php
+Source: "..\share\scripts\*.php"; DestDir: "{app}\share\scripts"; Components: external\php
 
 Source: "Release\libyate.lib"; DestDir: "{app}\devel"; Components: devel
 Source: "..\yate*.h"; DestDir: "{app}\devel"; Components: devel

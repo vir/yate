@@ -995,7 +995,7 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
     }
     // Create channel
     SigChannel* sigCh = new SigChannel(msg,msg.getValue("caller"),dest,link);
-    bool ok = sigCh->call();
+    bool ok = sigCh->call() != 0;
     if (ok) {
 	if (sigCh->connect(peer,msg.getValue("reason"))) {
 	    msg.setParam("peerid",sigCh->id());
@@ -2297,7 +2297,7 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
 	default: ;
     }
     SignallingMessage* msg = event->message();
-    bool chg = msg->params().getValue("circuit-change");
+    bool chg = (msg->params().getValue("circuit-change") != 0);
     String format = msg->params().getValue("format");
     if (format)
 	format = "2*" + format;

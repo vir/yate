@@ -338,7 +338,7 @@ IAXTransaction* IAXTransaction::sendMedia(const DataBlock& data, u_int32_t forma
     if (m_trunkFrame)
 	m_trunkFrame->add(localCallNo(),data,m_lastMiniFrameOut);
     else {
-	unsigned char b[4] = {localCallNo() >> 8,localCallNo(),m_lastMiniFrameOut >> 8,m_lastMiniFrameOut};
+	unsigned char b[4] = {localCallNo() >> 8,localCallNo() & 0xff,m_lastMiniFrameOut >> 8,m_lastMiniFrameOut & 0xff};
 	DataBlock buf(b,4);
 	buf += data;
 	m_engine->writeSocket(buf.data(),buf.length(),remoteAddr());

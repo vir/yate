@@ -111,7 +111,7 @@ public:
 	    return tmp;
 	}
     inline bool addBoolParam(NamedList* dest, u_int8_t data, bool toggle) const {
-	    bool result = (bool)(toggle ? !(data & mask) : data & mask);
+	    bool result = (bool)toggle ? !(data & mask) : (data & mask);
 	    dest->addParam(name,String::boolText(result));
 	    return result;
 	}
@@ -3478,7 +3478,7 @@ ISDNQ931Message* ISDNQ931Message::parse(ISDNQ931ParserData& parserData,
 #define Q931_MSG_PROTOQ931 0x08          // Q.931 protocol discriminator
 // Get bit 7 to check if the current byte is extended to the next one
 // Used to parse message IE
-#define Q931_EXT_FINAL(val) ((bool)(val & 0x80))
+#define Q931_EXT_FINAL(val) ((val & 0x80) != 0)
 
 // Max values for some IEs
 #define Q931_MAX_BEARERCAPS_LEN    12
@@ -4310,7 +4310,7 @@ bool Q931Parser::createMessage(u_int8_t* data, u_int32_t len)
 	// Call id length: bits 0-3 of the 2nd byte
 	callRefLen = data[1] & 0x0f;
 	// Initiator flag: bit 7 of the 3rd byte - 0: From initiator. 1: To initiator
-	initiator = !(bool)(data[2] & 0x80);
+	initiator = (data[2] & 0x80) == 0;
 	// We should have at least (callRefLen + 3) bytes:
 	//   1 for protocol discriminator, 1 for call reference length,
 	//   1 for message type and the call reference
@@ -4651,7 +4651,7 @@ ISDNQ931IE* Q931Parser::decodeChannelID(ISDNQ931IE* ie, const u_int8_t* data,
 	s_ie_ieChannelID[4].addParam(ie,data[0]);                           // Channel select for PRI interface
     // Optional Byte 1: Interface identifier if present
     u_int8_t crt = 1;
-    bool interfaceIDExplicit = (bool)(data[0] & 0x40);
+    bool interfaceIDExplicit = (data[0] & 0x40) != 0;
     if (interfaceIDExplicit) {
 	if (len == 1)
 	    return errorParseIE(ie,s_errorWrongData,0,0);

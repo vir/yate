@@ -454,7 +454,7 @@ JGEvent* JGSession::processEvent(JBEvent* jbev, u_int64_t time)
     JGEvent* event = 0;
     // Process state Ending
     if (state() == Ending) {
-	bool response = isResponse(jbev);
+	bool response = isResponse(jbev) != 0;
 	if (response || time > m_timeout) {
 	    DDebug(m_engine,DebugAll,
 		"Session. Terminated in state Ending. Reason: '%s'. [%p]",

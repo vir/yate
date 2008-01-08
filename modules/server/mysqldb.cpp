@@ -216,10 +216,10 @@ int DbConn::queryDbInternal()
     do {
 	MYSQL_RES* res = mysql_store_result(m_conn);
 	warns += mysql_warning_count(m_conn);
-	affected += mysql_affected_rows(m_conn);
+	affected += (unsigned int)mysql_affected_rows(m_conn);
 	if (res) {
 	    unsigned int cols = mysql_num_fields(res);
-	    unsigned int rows = mysql_num_rows(res);
+	    unsigned int rows = (unsigned int)mysql_num_rows(res);
 	    Debug(&module,DebugAll,"Got result set %p rows=%u cols=%u",res,rows,cols);
 	    total += rows;
 	    if (m_msg) {

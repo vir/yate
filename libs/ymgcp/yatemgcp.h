@@ -828,7 +828,7 @@ public:
      * @return True if the given command is known by this engine
      */
     inline bool knownCommand(const char* cmd)
-	{ Lock lock(this); return m_knownCommands.find(cmd); }
+	{ Lock lock(this); return (m_knownCommands.find(cmd) != 0); }
 
     /**
      * Add a command to the list of known commands

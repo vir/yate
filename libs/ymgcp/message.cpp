@@ -178,7 +178,7 @@ static inline bool skipBlanks(const char*& buffer, unsigned int& len)
 {
     for (; len && isBlank(*buffer); buffer++, len--)
 	;
-    return len;
+    return (len != 0);
 }
 
 // Get a line from a buffer until the first valid end-of-line or end of buffer was reached,

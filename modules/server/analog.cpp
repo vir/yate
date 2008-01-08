@@ -1289,7 +1289,7 @@ void ModuleGroup::buildGroup(ModuleGroup* group, ObjList& spanList, String& erro
  */
 // Incoming: msg=0. Outgoing: msg is the call execute message
 AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
-    : Channel(&plugin,0,msg),
+    : Channel(&plugin,0,(msg != 0)),
     m_line(line),
     m_hungup(false),
     m_routeOnSecondRing(false),
@@ -1904,7 +1904,7 @@ bool AnalogChannel::setAudio(bool in)
     else
 	Debug(this,DebugNote,"Failed to set data %s%s [%p]",
 	    in?"source":"consumer",cic?"":". Circuit is missing",this);
-    return (bool)res;
+    return res != 0;
 }
 
 // Set call status

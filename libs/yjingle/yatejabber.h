@@ -1443,7 +1443,7 @@ public:
      * @return True if the resource has the required capability.
      */
     inline bool hasCap(Capability capability) const
-	{ return (m_capability & capability); }
+	{ return (m_capability & capability) != 0; }
 
     /**
      * Update resource from a presence element.
@@ -1658,14 +1658,14 @@ public:
      * @return True if the local user is subscribed to the remote one.
      */
     inline bool subscribedTo() const
-	{ return (m_subscription & To); }
+	{ return (m_subscription & To) != 0; }
 
     /**
      * Check if the remote user is subscribed to the local one.
      * @return True if the remote user is subscribed to the local one.
      */
     inline bool subscribedFrom() const
-	{ return (m_subscription & From); }
+	{ return (m_subscription & From) != 0; }
 
     /**
      * Process received error elements.

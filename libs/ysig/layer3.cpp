@@ -302,7 +302,7 @@ void SS7Layer3::removeRoutes(SS7Layer3* network)
 void SS7Layer3::printRoutes()
 {
     String s;
-    bool router = getObject("SS7Router");
+    bool router = getObject("SS7Router") != 0;
     for (unsigned int i = 0; i < YSS7_PCTYPE_COUNT; i++) {
 	ObjList* o = m_route[i].skipNull();
 	if (!o)

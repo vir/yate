@@ -172,7 +172,7 @@ bool SignallingEngine::find(const SignallingComponent* component)
     if (!component)
 	return false;
     Lock lock(this);
-    return m_components.find(component);
+    return m_components.find(component) != 0;
 }
 
 void SignallingEngine::insert(SignallingComponent* component)
@@ -445,7 +445,7 @@ bool SignallingUtils::hasFlag(const NamedList& list, const char* param, const ch
 {
     String s = list.getValue(param);
     ObjList* obj = list.split(',',false);
-    bool found = obj->find(flag);
+    bool found = (obj->find(flag) != 0);
     TelEngine::destruct(obj);
     return found;
 }

@@ -719,7 +719,7 @@ bool JBComponentStream::addEventNotify(JBEvent::Type type,
 {
     Lock lock(this);
     XMLElement* e = 0;
-    bool raise = (element->id());
+    bool raise = !element->id().null();
     if (raise) {
 	e = element->release();
 	JBEvent* ev = new JBEvent(type,this,e,&(element->id()));

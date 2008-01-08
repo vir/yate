@@ -37,6 +37,176 @@
 namespace TelEngine {
 
 /**
+ * A MIME header line.
+ * The NamedString's value contain the first parameter after the header name
+ * @short MIME header line
+ */
+class YATE_API MimeHeaderLine : public NamedString
+{
+public:
+    /**
+     * Constructor.
+     * Builds a MIME header line from a string buffer.
+     * Splits the value into header parameters
+     * @param name The header name
+     * @param value The header value
+     * @param sep Optional parameter separator. If 0, the default ';' will be used
+     */
+    MimeHeaderLine(const char* name, const String& value, char sep = 0);
+
+    /**
+     * Constructor.
+     * Builds this MIME header line from another one
+     * @param original Original header line to build from.
+     * @param newName Optional new header name. If 0, the original name will be used
+     */
+    MimeHeaderLine(const MimeHeaderLine& original, const char* newName = 0);
+
+    /**
+     * Destructor.
+     */
+    virtual ~MimeHeaderLine();
+
+    /**
+     * RTTI method, get a pointer to a derived class given the class name.
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Duplicate this MIME header line.
+     * @param newName Optional new header name. If 0, this header's name will be used
+     * @return Copy of this MIME header line
+     */
+    virtual MimeHeaderLine* clone(const char* newName = 0) const;
+
+    /**
+     * Build a string line from this MIME header without adding a line separator
+     * @param line Destination string
+     */
+    virtual void buildLine(String& line) const;
+
+    /**
+     * Assignement operator. Set the header's value
+     * @param value The new headr value
+     */
+    inline MimeHeaderLine& operator=(const char* value)
+        { NamedString::operator=(value); return *this; }
+
+    /**
+     * Get the header's parameters
+     * @return This header's list of parameters
+     */
+    inline const ObjList& params() const
+	{ return m_params; }
+
+    /**
+     * Get the character used as separator in header line
+     * @return This header's separator
+     */
+    inline char separator() const
+	{ return m_separator; }
+
+    /**
+     * Replace the value of an existing parameter or add a new one
+     * @param name Parameter's name
+     * @param value Parameter's value
+     */
+    void setParam(const char* name, const char* value = 0);
+
+    /**
+     * Remove a parameter from list
+     * @param name Parameter's name
+     */
+    void delParam(const char* name);
+
+    /**
+     * Get a header parameter
+     * @param name Parameter's name
+     * @return Pointer to the desired parameter or 0 if not found
+     */
+    const NamedString* getParam(const char* name) const;
+
+    /**
+     * Utility function, puts quotes around a string.
+     * @param str String to put quotes around.
+     */
+    static void addQuotes(String& str);
+
+    /**
+     * Utility function, removes quotes around a string.
+     * @param str String to remove quotes.
+     */
+    static void delQuotes(String& str);
+
+    /**
+     * Utility function, puts quotes around a string.
+     * @param str String to put quotes around.
+     * @return The input string enclosed in quotes.
+     */
+    static String quote(const String& str);
+
+    /**
+     * Utility function to find a separator not in "quotes" or inside <uri>.
+     * @param str Input string used to find the separator.
+     * @param sep The separator to find.
+     * @param offs Starting offset in input string.
+     * @return The position of the separator in input string or -1 if not found.
+     */
+    static int findSep(const char* str, char sep, int offs = 0);
+
+protected:
+    ObjList m_params;                    // Header list of parameters
+    char m_separator;                    // Parameter separator
+};
+
+/**
+ * A MIME header line containing authentication data.
+ * @short MIME authentication line
+ */
+class YATE_API MimeAuthLine : public MimeHeaderLine
+{
+public:
+    /**
+     * Constructor.
+     * Builds a MIME authentication header line from a string buffer.
+     * Splits the value into header parameters
+     * @param name The header name
+     * @param value The header value
+     */
+    MimeAuthLine(const char* name, const String& value);
+
+    /**
+     * Constructor.
+     * Builds this MIME authentication header line from another one
+     * @param original Original header line to build from.
+     * @param newName Optional new header name. If 0, the original name will be used
+     */
+    MimeAuthLine(const MimeAuthLine& original, const char* newName = 0);
+
+    /**
+     * RTTI method, get a pointer to a derived class given the class name.
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Duplicate this MIME header line.
+     * @param newName Optional new header name. If 0, this header's name will be used
+     * @return Copy of this MIME header line
+     */
+    virtual MimeHeaderLine* clone(const char* newName = 0) const;
+
+    /**
+     * Build a string line from this MIME header without adding a line separator
+     * @param line Destination string
+     */
+    virtual void buildLine(String& line) const;
+};
+
+/**
  * Abstract base class for holding Multipurpose Internet Mail Extensions data
  * @short Abstract MIME data holder
  */
@@ -49,7 +219,7 @@ public:
     virtual ~MimeBody();
 
     /**
-     * RTTI method, get a pointer to a derived class given that class name
+     * RTTI method, get a pointer to a derived class given the class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
@@ -59,7 +229,7 @@ public:
      * Retrive the MIME type of this body
      * @return Name of the MIME type/subtype
      */
-    inline const String& getType() const
+    inline const MimeHeaderLine& getType() const
 	{ return m_type; }
 
     /**
@@ -92,7 +262,8 @@ public:
      * Method to build a MIME body from a type and data buffer
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the MIME type/subtype, must be lower case
+     * @param type Name of the MIME type/subtype, must be lower case.
+     *  This is the whole content type line, including the parameters
      * @return Newly allocated MIME body or NULL if type is unknown
      */
     static MimeBody* build(const char* buf, int len, const String& type);
@@ -123,7 +294,7 @@ protected:
     mutable DataBlock m_body;
 
 private:
-    String m_type;
+    MimeHeaderLine m_type;               // Content type header line
 };
 
 /**
@@ -140,9 +311,9 @@ public:
 
     /**
      * Constructor from block of data
+     * @param type Name of the MIME type/subtype, should be "application/sdp"
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the MIME type/subtype, should be "application/sdp"
      */
     MimeSdpBody(const String& type, const char* buf, int len);
 
@@ -152,7 +323,7 @@ public:
     virtual ~MimeSdpBody();
 
     /**
-     * RTTI method, get a pointer to a derived class given that class name
+     * RTTI method, get a pointer to a derived class given the class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
@@ -236,7 +407,7 @@ public:
     virtual ~MimeBinaryBody();
 
     /**
-     * RTTI method, get a pointer to a derived class given that class name
+     * RTTI method, get a pointer to a derived class given the class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
@@ -281,7 +452,7 @@ public:
     virtual ~MimeStringBody();
 
     /**
-     * RTTI method, get a pointer to a derived class given that class name
+     * RTTI method, get a pointer to a derived class given the class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */
@@ -336,7 +507,7 @@ public:
     virtual ~MimeLinesBody();
 
     /**
-     * RTTI method, get a pointer to a derived class given that class name
+     * RTTI method, get a pointer to a derived class given the class name
      * @param name Name of the class we are asking for
      * @return Pointer to the requested class or NULL if this object doesn't implement it
      */

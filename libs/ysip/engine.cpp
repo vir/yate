@@ -192,7 +192,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     if (message->isOutgoing())
 	message->complete(this);
     // locate the branch parameter of last Via header - added by the UA
-    const SIPHeaderLine* hl = message->getLastHeader("Via");
+    const MimeHeaderLine* hl = message->getLastHeader("Via");
     if (!hl)
 #ifdef SIP_STRICT
 	return 0;
@@ -465,10 +465,10 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
     const ObjList* l = &message->header;
     for (; l; l = l->next()) {
 	const GenObject* o = l->get();
-	const SIPHeaderLine* t = o ? static_cast<const SIPHeaderLine*>(o->getObject("SIPHeaderLine")) : 0;
+	const MimeHeaderLine* t = o ? static_cast<const MimeHeaderLine*>(o->getObject("MimeHeaderLine")) : 0;
 	if (t && (t->name() &= hdr) && (*t &= "Digest")) {
 	    String usr(t->getParam("username"));
-	    delQuotes(usr);
+	    MimeHeaderLine::delQuotes(usr);
 	    if (usr.null())
 		continue;
 	    XDebug(this,DebugAll,"authUser found user '%s'",usr.c_str());
@@ -476,7 +476,7 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	    if (user && (usr != user))
 		continue;
 	    String nonce(t->getParam("nonce"));
-	    delQuotes(nonce);
+	    MimeHeaderLine::delQuotes(nonce);
 	    // TODO: implement a nonce cache for the stupid clients that don't send it back
 	    if (nonce.null())
 		continue;
@@ -487,15 +487,15 @@ int SIPEngine::authUser(const SIPMessage* message, String& user, bool proxy, Gen
 	    noUser = false;
 	    XDebug(this,DebugAll,"authUser nonce age is %ld",age);
 	    String res(t->getParam("response"));
-	    delQuotes(res);
+	    MimeHeaderLine::delQuotes(res);
 	    if (res.null())
 		continue;
 	    String uri(t->getParam("uri"));
-	    delQuotes(uri);
+	    MimeHeaderLine::delQuotes(uri);
 	    if (uri.null())
 		uri = message->uri;
 	    String realm(t->getParam("realm"));
-	    delQuotes(realm);
+	    MimeHeaderLine::delQuotes(realm);
 
 	    if (!checkUser(usr,realm,nonce,message->method,uri,res,message,userData))
 		continue;

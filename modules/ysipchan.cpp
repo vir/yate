@@ -377,7 +377,7 @@ private:
     bool addSdpParams(Message& msg, const MimeBody* body);
     bool addRtpParams(Message& msg, const String& natAddr, const MimeBody* body);
     bool startClientReInvite(Message& msg);
-    bool initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer, const SIPHeaderLine* refHdr);
+    bool initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify, const SIPMessage* sipRefer, const MimeHeaderLine* refHdr);
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -723,7 +723,7 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip, bool filter = tr
 {
     const ObjList* l = sip.header.skipNull();
     for (; l; l = l->skipNext()) {
-	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(l->get());
 	String name(t->name());
 	name.toLower();
 	if (matchAny(name,s_rejectHeaders))
@@ -763,7 +763,7 @@ static void copySipHeaders(SIPMessage& sip, const Message& msg, const char* pref
 static void copyPrivacy(Message& msg, const SIPMessage& sip)
 {
     bool anonip = (sip.getHeaderValue("Anonymity") &= "ipaddr");
-    const SIPHeaderLine* hl = sip.getHeader("Remote-Party-ID");
+    const MimeHeaderLine* hl = sip.getHeader("Remote-Party-ID");
     if (!(anonip || hl))
 	return;
     const NamedString* p = hl ? hl->getParam("screen") : 0;
@@ -807,7 +807,7 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	if (tmp)
 	    tmp = "\"" + tmp + "\" ";
 	tmp << "<sip:" << caller << "@" << msg.getValue("domain","domain") << ">";
-	SIPHeaderLine* hl = new SIPHeaderLine("Remote-Party-ID",tmp);
+	MimeHeaderLine* hl = new MimeHeaderLine("Remote-Party-ID",tmp);
 	if (screen)
 	    hl->setParam("screen","yes");
 	if (privname && privuri)
@@ -1451,7 +1451,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 	return;
     }
     const SIPMessage* message = e->getMessage();
-    const SIPHeaderLine* hl = message->getHeader("Contact");
+    const MimeHeaderLine* hl = message->getHeader("Contact");
     if (!hl) {
 	t->setResponse(400);
 	return;
@@ -1542,7 +1542,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 		tmp = expires;
 	    SIPMessage* r = new SIPMessage(t->initialMessage(),200);
 	    r->addHeader("Expires",tmp);
-	    SIPHeaderLine* contact = new SIPHeaderLine("Contact","<" + addr + ">");
+	    MimeHeaderLine* contact = new MimeHeaderLine("Contact","<" + addr + ">");
 	    contact->setParam("expires",tmp);
 	    r->addHeader(contact);
 	    if (natChanged) {
@@ -1562,7 +1562,7 @@ void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
 
 void YateSIPEndPoint::options(SIPEvent* e, SIPTransaction* t)
 {
-    const SIPHeaderLine* acpt = e->getMessage()->getHeader("Accept");
+    const MimeHeaderLine* acpt = e->getMessage()->getHeader("Accept");
     if (acpt) {
 	if (*acpt != "application/sdp") {
 	    t->setResponse(415);
@@ -1736,7 +1736,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("called",uri.getUser());
     if (m_uri.getDescription())
 	m->addParam("callername",m_uri.getDescription());
-    const SIPHeaderLine* hl = m_tr->initialMessage()->getHeader("Call-Info");
+    const MimeHeaderLine* hl = m_tr->initialMessage()->getHeader("Call-Info");
     if (hl) {
 	const NamedString* type = hl->getParam("purpose");
 	if (!type || *type == "info")
@@ -1885,14 +1885,14 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     if (display) {
 	String desc;
 	desc << "\"" << display << "\" ";
-	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(m->getHeader("From"));
+	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
 	if (hl)
 	    *hl = desc + *hl;
     }
     if (msg.getParam("calledname")) {
 	String desc;
 	desc << "\"" << msg.getValue("calledname") << "\" ";
-	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(m->getHeader("To"));
+	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("To"));
 	if (hl)
 	    *hl = desc + *hl;
     }
@@ -1909,19 +1909,19 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     // add some Call-Info headers
     const char* info = msg.getValue("caller_info_uri");
     if (info) {
-	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","info");
 	m->addHeader(hl);
     }
     info = msg.getValue("caller_icon_uri");
     if (info) {
-	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","icon");
 	m->addHeader(hl);
     }
     info = msg.getValue("caller_card_uri");
     if (info) {
-	SIPHeaderLine* hl = new SIPHeaderLine("Call-Info",info);
+	MimeHeaderLine* hl = new MimeHeaderLine("Call-Info",info);
 	hl->setParam("purpose","card");
 	m->addHeader(hl);
     }
@@ -2058,7 +2058,7 @@ void YateSIPConnection::hangup()
 		    tmp << i->getCSeq() << " CANCEL";
 		    m->addHeader("CSeq",tmp);
 		    if (m_reason == "pickup") {
-			SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
+			MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 			hl->setParam("cause","200");
 			hl->setParam("text","\"Call completed elsewhere\"");
 			m->addHeader(hl);
@@ -2078,7 +2078,7 @@ void YateSIPConnection::hangup()
 	if (m) {
 	    if (m_reason) {
 		// FIXME: add SIP and Q.850 cause codes, set the proper reason
-		SIPHeaderLine* hl = new SIPHeaderLine("Reason","SIP");
+		MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 		hl->setParam("text","\"" + m_reason + "\"");
 		m->addHeader(hl);
 	    }
@@ -2108,7 +2108,7 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     m->addHeader("Call-ID",m_callid);
     String tmp;
     tmp << "<" << m_dialog.localURI << ">";
-    SIPHeaderLine* hl = new SIPHeaderLine("From",tmp);
+    MimeHeaderLine* hl = new MimeHeaderLine("From",tmp);
     tmp = m_dialog.localTag;
     if (tmp.null() && m_tr)
 	tmp = m_tr->getDialogTag();
@@ -2117,7 +2117,7 @@ SIPMessage* YateSIPConnection::createDlgMsg(const char* method, const char* uri)
     m->addHeader(hl);
     tmp.clear();
     tmp << "<" << m_dialog.remoteURI << ">";
-    hl = new SIPHeaderLine("To",tmp);
+    hl = new MimeHeaderLine("To",tmp);
     tmp = m_dialog.remoteTag;
     if (tmp.null() && m_tr)
 	tmp = m_tr->getDialogTag();
@@ -2134,8 +2134,8 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 	return false;
     if (!plugin.ep()->engine()->prack())
 	return true;
-    const SIPHeaderLine* rs = msg->getHeader("RSeq");
-    const SIPHeaderLine* cs = msg->getHeader("CSeq");
+    const MimeHeaderLine* rs = msg->getHeader("RSeq");
+    const MimeHeaderLine* cs = msg->getHeader("CSeq");
     if (!(rs && cs))
 	return true;
     int seq = rs->toInteger(0,10);
@@ -2148,7 +2148,7 @@ bool YateSIPConnection::emitPRACK(const SIPMessage* msg)
 	return false;
     }
     String tmp;
-    const SIPHeaderLine* co = msg->getHeader("Contact");
+    const MimeHeaderLine* co = msg->getHeader("Contact");
     if (co) {
 	tmp = *co;
 	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
@@ -2616,7 +2616,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	// see if we should detect our external address
 	const YateSIPLine* line = plugin.findLine(m_line);
 	if (line && line->localDetect()) {
-	    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
+	    MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(msg->getHeader("Via"));
 	    if (hl) {
 		const NamedString* par = hl->getParam("received");
 		if (par && *par) {
@@ -2922,7 +2922,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     if (m_authBye && !checkUser(t))
 	return;
     DDebug(this,DebugAll,"YateSIPConnection::doBye(%p) [%p]",t,this);
-    const SIPHeaderLine* hl = t->initialMessage()->getHeader("Reason");
+    const MimeHeaderLine* hl = t->initialMessage()->getHeader("Reason");
     if (hl) {
 	const NamedString* text = hl->getParam("text");
 	if (text)
@@ -3001,7 +3001,7 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
 	return;
     }
     m_referring = true;
-    const SIPHeaderLine* refHdr = t->initialMessage()->getHeader("Refer-To");
+    const MimeHeaderLine* refHdr = t->initialMessage()->getHeader("Refer-To");
     if (!(refHdr && refHdr->length())) {
 	DDebug(this,DebugAll,"YateSIPConnection::doRefer(%p) [%p]. Empty or missing 'Refer-To' header.",t,this);
 	t->setResponse(400);           // Bad request
@@ -3093,7 +3093,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	}
 	m->setBody(sdp);
 
-	const SIPHeaderLine* co = m_tr->initialMessage()->getHeader("Contact");
+	const MimeHeaderLine* co = m_tr->initialMessage()->getHeader("Contact");
 	if (co) {
 	    // INVITE had a Contact: header - time to change remote URI
 	    m_uri = *co;
@@ -3422,7 +3422,7 @@ void YateSIPConnection::startPendingUpdate()
 // sipRefer: received REFER message, refHdr: 'Refer-To' header
 // If return false, msg and sipNotify are 0
 bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNotify,
-    const SIPMessage* sipRefer, const SIPHeaderLine* refHdr)
+    const SIPMessage* sipRefer, const MimeHeaderLine* refHdr)
 {
     // call.route
     msg = new Message("call.route");
@@ -3432,7 +3432,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     if (m_user)
 	msg->addParam("username",m_user);
 
-    const SIPHeaderLine* sh = sipRefer->getHeader("To");                   // caller
+    const MimeHeaderLine* sh = sipRefer->getHeader("To");                   // caller
     if (sh) {
 	URI uriCaller(*sh);
 	uriCaller.parse();
@@ -3456,7 +3456,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
     msg->addParam("reason","transfer");                                    // reason
     // NOTIFY
     String tmp;
-    const SIPHeaderLine* co = sipRefer->getHeader("Contact");
+    const MimeHeaderLine* co = sipRefer->getHeader("Contact");
     if (co) {
 	tmp = *co;
 	Regexp r("^[^<]*<\\([^>]*\\)>.*$");
@@ -3651,7 +3651,7 @@ void YateSIPLine::detectLocal(const SIPMessage* msg)
 	return;
     String laddr = m_localAddr;
     int lport = m_localPort;
-    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(msg->getHeader("Via"));
+    MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(msg->getHeader("Via"));
     if (hl) {
 	const NamedString* par = hl->getParam("received");
 	if (par && *par)

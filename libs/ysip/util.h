@@ -31,18 +31,6 @@ const char* uncompactForm(const char* header);
 // Utility function, returns a compacted header name
 const char* compactForm(const char* header);
 
-// Utility function, puts quotes around a string
-void addQuotes(String& str);
-
-// Utility function, removes quotes around a string
-void delQuotes(String& str);
-
-// Utility function, puts quotes around a string
-String quote(const String& str);
-
-// Utility function to find a separator not in "quotes" or inside <uri>
-int findSep(const char* str, char sep, int offs = 0);
-
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -84,39 +84,6 @@ protected:
     int m_partyPort;
 };
 
-class YSIP_API SIPHeaderLine : public NamedString
-{
-public:
-    SIPHeaderLine(const char* name, const String& value, char sep = 0);
-    SIPHeaderLine(const SIPHeaderLine& original, const char* newName = 0);
-    virtual ~SIPHeaderLine();
-    virtual void* getObject(const String& name) const;
-    virtual SIPHeaderLine* clone(const char* newName = 0) const;
-    virtual void buildLine(String& line) const;
-    inline SIPHeaderLine& operator=(const char* value)
-        { NamedString::operator=(value); return *this; }
-    inline const ObjList& params() const
-	{ return m_params; }
-    inline char separator() const
-	{ return m_separator; }
-    void setParam(const char* name, const char* value = 0);
-    void delParam(const char* name);
-    const NamedString* getParam(const char* name) const;
-protected:
-    ObjList m_params;
-    char m_separator;
-};
-
-class YSIP_API SIPAuthLine : public SIPHeaderLine
-{
-public:
-    SIPAuthLine(const char* name, const String& value);
-    SIPAuthLine(const SIPAuthLine& original, const char* newName = 0);
-    virtual void* getObject(const String& name) const;
-    virtual SIPHeaderLine* clone(const char* newName = 0) const;
-    virtual void buildLine(String& line) const;
-};
-
 /**
  * An object that holds the sip message parsed into this library model.
  * This class can be used to parse a sip message from a text buffer, or it
@@ -241,14 +208,14 @@ public:
      * @param name Name of the header to locate
      * @return A pointer to the first matching header line or 0 if not found
      */
-    const SIPHeaderLine* getHeader(const char* name) const;
+    const MimeHeaderLine* getHeader(const char* name) const;
 
     /**
      * Find the last header line that matches a given name name
      * @param name Name of the header to locate
      * @return A pointer to the last matching header line or 0 if not found
      */
-    const SIPHeaderLine* getLastHeader(const char* name) const;
+    const MimeHeaderLine* getLastHeader(const char* name) const;
 
     /**
      * Count the header lines matching a specific name
@@ -286,13 +253,13 @@ public:
      * @param value Content of the new header line
      */
     inline void addHeader(const char* name, const char* value = 0)
-	{ header.append(new SIPHeaderLine(name,value)); }
+	{ header.append(new MimeHeaderLine(name,value)); }
 
     /**
      * Append an already constructed header line
      * @param line Header line to add
      */
-    inline void addHeader(SIPHeaderLine* line)
+    inline void addHeader(MimeHeaderLine* line)
 	{ header.append(line); }
 
     /**
@@ -316,7 +283,7 @@ public:
      * @param proxy Set to true to authenticate to a proxy, false to a server
      * @return A new authorization line to be used in a new transaction
      */
-    SIPAuthLine* buildAuth(const String& username, const String& password,
+    MimeAuthLine* buildAuth(const String& username, const String& password,
 	const String& meth, const String& uri, bool proxy = false) const;
 
     /**
@@ -324,7 +291,7 @@ public:
      * @param original Origianl outgoing message
      * @return A new authorization line to be used in a new transaction
      */
-    SIPAuthLine* buildAuth(const SIPMessage& original) const;
+    MimeAuthLine* buildAuth(const SIPMessage& original) const;
 
     /**
      * Prepare the message for automatic client transaction authentication.
@@ -350,13 +317,13 @@ public:
 
     /**
      * Extract routes from Record-Route: headers
-     * @return A list of SIPHeaderLine representing SIP routes
+     * @return A list of MimeHeaderLine representing SIP routes
      */
     ObjList* getRoutes() const;
 
     /**
      * Add Route: headers to an outgoing message
-     * @param routes List of SIPHeaderLine representing SIP routes
+     * @param routes List of MimeHeaderLine representing SIP routes
      */
     void addRoutes(const ObjList* routes);
 

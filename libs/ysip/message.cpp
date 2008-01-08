@@ -30,200 +30,6 @@
 
 using namespace TelEngine;
 
-SIPHeaderLine::SIPHeaderLine(const char* name, const String& value, char sep)
-    : NamedString(name), m_separator(sep ? sep : ';')
-{
-    if (value.null())
-	return;
-    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
-    int sp = findSep(value,m_separator);
-    if (sp < 0) {
-	assign(value);
-	return;
-    }
-    assign(value,sp);
-    trimBlanks();
-    while (sp < (int)value.length()) {
-	int ep = findSep(value,m_separator,sp+1);
-	if (ep <= sp)
-	    ep = value.length();
-	int eq = value.find('=',sp+1);
-	if ((eq > 0) && (eq < ep)) {
-	    String pname(value.substr(sp+1,eq-sp-1));
-	    String pvalue(value.substr(eq+1,ep-eq-1));
-	    pname.trimBlanks();
-	    pvalue.trimBlanks();
-	    if (!pname.null()) {
-		XDebug(DebugAll,"hdr param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
-		m_params.append(new NamedString(pname,pvalue));
-	    }
-	}
-	else {
-	    String pname(value.substr(sp+1,ep-sp-1));
-	    pname.trimBlanks();
-	    if (!pname.null()) {
-		XDebug(DebugAll,"hdr param name='%s' (no value)",pname.c_str());
-		m_params.append(new NamedString(pname));
-	    }
-	}
-	sp = ep;
-    }
-}
-
-SIPHeaderLine::SIPHeaderLine(const SIPHeaderLine& original, const char* newName)
-    : NamedString(newName ? newName : original.name().c_str(),original),
-      m_separator(original.separator())
-{
-    XDebug(DebugAll,"SIPHeaderLine::SIPHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
-    const ObjList* l = &original.params();
-    for (; l; l = l->next()) {
-	const NamedString* t = static_cast<const NamedString*>(l->get());
-	if (t)
-	    m_params.append(new NamedString(t->name(),*t));
-    }
-}
-
-SIPHeaderLine::~SIPHeaderLine()
-{
-    XDebug(DebugAll,"SIPHeaderLine::~SIPHeaderLine() [%p]",this);
-}
-
-void* SIPHeaderLine::getObject(const String& name) const
-{
-    if (name == "SIPHeaderLine")
-	return const_cast<SIPHeaderLine*>(this);
-    return NamedString::getObject(name);
-}
-
-SIPHeaderLine* SIPHeaderLine::clone(const char* newName) const
-{
-    return new SIPHeaderLine(*this,newName);
-}
-
-void SIPHeaderLine::buildLine(String& line) const
-{
-    line << name() << ": " << *this;
-    const ObjList* p = &m_params;
-    for (; p; p = p->next()) {
-	NamedString* s = static_cast<NamedString*>(p->get());
-	if (s) {
-	    line << separator() << s->name();
-	    if (!s->null())
-		line << "=" << *s;
-	}
-    }
-}
-
-const NamedString* SIPHeaderLine::getParam(const char* name) const
-{
-    if (!(name && *name))
-	return 0;
-    const ObjList* l = &m_params;
-    for (; l; l = l->next()) {
-	const NamedString* t = static_cast<const NamedString*>(l->get());
-	if (t && (t->name() &= name))
-	    return t;
-    }
-    return 0;
-}
-
-void SIPHeaderLine::setParam(const char* name, const char* value)
-{
-    ObjList* p = m_params.find(name);
-    if (p)
-	*static_cast<NamedString*>(p->get()) = value;
-    else
-	m_params.append(new NamedString(name,value));
-}
-
-void SIPHeaderLine::delParam(const char* name)
-{
-    ObjList* p = m_params.find(name);
-    if (p)
-	p->remove();
-}
-
-SIPAuthLine::SIPAuthLine(const char* name, const String& value)
-    : SIPHeaderLine(name,String::empty(),',')
-{
-    XDebug(DebugAll,"SIPAuthLine::SIPAuthLine('%s','%s') [%p]",name,value.c_str(),this);
-    if (value.null())
-	return;
-    int sp = value.find(' ');
-    if (sp < 0) {
-	assign(value);
-	return;
-    }
-    assign(value,sp);
-    trimBlanks();
-    while (sp < (int)value.length()) {
-	int ep = value.find(m_separator,sp+1);
-	int quot = value.find('"',sp+1);
-	if ((quot > sp) && (quot < ep)) {
-	    quot = value.find('"',quot+1);
-	    if (quot > sp)
-		ep = value.find(m_separator,quot+1);
-	}
-	if (ep <= sp)
-	    ep = value.length();
-	int eq = value.find('=',sp+1);
-	if ((eq > 0) && (eq < ep)) {
-	    String pname(value.substr(sp+1,eq-sp-1));
-	    String pvalue(value.substr(eq+1,ep-eq-1));
-	    pname.trimBlanks();
-	    pvalue.trimBlanks();
-	    if (!pname.null()) {
-		XDebug(DebugAll,"auth param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
-		m_params.append(new NamedString(pname,pvalue));
-	    }
-	}
-	else {
-	    String pname(value.substr(sp+1,ep-sp-1));
-	    pname.trimBlanks();
-	    if (!pname.null()) {
-		XDebug(DebugAll,"auth param name='%s' (no value)",pname.c_str());
-		m_params.append(new NamedString(pname));
-	    }
-	}
-	sp = ep;
-    }
-}
-
-SIPAuthLine::SIPAuthLine(const SIPAuthLine& original, const char* newName)
-    : SIPHeaderLine(original,newName)
-{
-}
-
-void* SIPAuthLine::getObject(const String& name) const
-{
-    if (name == "SIPAuthLine")
-	return const_cast<SIPAuthLine*>(this);
-    return SIPHeaderLine::getObject(name);
-}
-
-SIPHeaderLine* SIPAuthLine::clone(const char* newName) const
-{
-    return new SIPAuthLine(*this,newName);
-}
-
-void SIPAuthLine::buildLine(String& line) const
-{
-    line << name() << ": " << *this;
-    const ObjList* p = &m_params;
-    for (bool first = true; p; p = p->next()) {
-	NamedString* s = static_cast<NamedString*>(p->get());
-	if (s) {
-	    if (first)
-		first = false;
-	    else
-		line << separator();
-	    line << " " << s->name();
-	    if (!s->null())
-		line << "=" << *s;
-	}
-    }
-}
-
 SIPMessage::SIPMessage(const SIPMessage& original)
     : version(original.version), method(original.method), uri(original.uri),
       code(original.code), reason(original.reason),
@@ -240,13 +46,13 @@ SIPMessage::SIPMessage(const SIPMessage& original)
     bool via1 = true;
     const ObjList* l = &original.header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* hl = static_cast<SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* hl = static_cast<MimeHeaderLine*>(l->get());
 	if (!hl)
 	    continue;
 	// CSeq must not be copied, a new one will be built by complete()
 	if (hl->name() &= "CSeq")
 	    continue;
-	SIPHeaderLine* nl = hl->clone();
+	MimeHeaderLine* nl = hl->clone();
 	// this is a new transaction so let complete() add randomness
 	if (via1 && (nl->name() &= "Via")) {
 	    via1 = false;
@@ -323,19 +129,19 @@ SIPMessage::SIPMessage(const SIPMessage* original, const SIPMessage* answer)
     version = original->version;
     uri = original->uri;
     copyAllHeaders(original,"Via");
-    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("Via"));
+    MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
-	hl = new SIPHeaderLine("Via",tmp);
+	hl = new MimeHeaderLine("Via",tmp);
 	header.append(hl);
     }
     if (answer && (answer->code == 200) && (original->method &= "INVITE")) {
 	String tmp("z9hG4bK");
 	tmp << (int)::random();
 	hl->setParam("branch",tmp);
-	const SIPHeaderLine* co = answer->getHeader("Contact");
+	const MimeHeaderLine* co = answer->getHeader("Contact");
 	if (co) {
 	    uri = *co;
 	    Regexp r("^[^<]*<\\([^>]*\\)>.*$");
@@ -397,7 +203,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
     // only set the dialog tag on ACK
     if (isACK()) {
-	SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("To"));
+	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(getHeader("To"));
 	if (dlgTag && hl && !hl->getParam("tag"))
 	    hl->setParam("tag",dlgTag);
 	return;
@@ -406,12 +212,12 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     if (!domain)
 	domain = getParty()->getLocalAddr();
 
-    SIPHeaderLine* hl = const_cast<SIPHeaderLine*>(getHeader("Via"));
+    MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(getHeader("Via"));
     if (!hl) {
 	String tmp;
 	tmp << version << "/" << getParty()->getProtoName();
 	tmp << " " << getParty()->getLocalAddr() << ":" << getParty()->getLocalPort();
-	hl = new SIPHeaderLine("Via",tmp);
+	hl = new MimeHeaderLine("Via",tmp);
 	if (!(isAnswer() || isACK()))
 	    hl->setParam("rport");
 	header.append(hl);
@@ -427,24 +233,24 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
     }
 
     if (!isAnswer()) {
-	hl = const_cast<SIPHeaderLine*>(getHeader("From"));
+	hl = const_cast<MimeHeaderLine*>(getHeader("From"));
 	if (!hl) {
 	    String tmp = "<sip:";
 	    if (user)
 		tmp << user << "@";
 	    tmp << domain << ">";
-	    hl = new SIPHeaderLine("From",tmp);
+	    hl = new MimeHeaderLine("From",tmp);
 	    header.append(hl);
 	}
 	if (!hl->getParam("tag"))
 	    hl->setParam("tag",String((int)::random()));
     }
 
-    hl = const_cast<SIPHeaderLine*>(getHeader("To"));
+    hl = const_cast<MimeHeaderLine*>(getHeader("To"));
     if (!(isAnswer() || hl)) {
 	String tmp;
 	tmp << "<" << uri << ">";
-	hl = new SIPHeaderLine("To",tmp);
+	hl = new MimeHeaderLine("To",tmp);
 	header.append(hl);
     }
     if (hl && dlgTag && !hl->getParam("tag"))
@@ -499,7 +305,7 @@ void SIPMessage::complete(SIPEngine* engine, const char* user, const char* domai
 
 bool SIPMessage::copyHeader(const SIPMessage* message, const char* name, const char* newName)
 {
-    const SIPHeaderLine* hl = message ? message->getHeader(name) : 0;
+    const MimeHeaderLine* hl = message ? message->getHeader(name) : 0;
     if (hl) {
 	header.append(hl->clone(newName));
 	return true;
@@ -514,7 +320,7 @@ int SIPMessage::copyAllHeaders(const SIPMessage* message, const char* name, cons
     int c = 0;
     const ObjList* l = &message->header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* hl = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* hl = static_cast<const MimeHeaderLine*>(l->get());
 	if (hl && (hl->name() &= name)) {
 	    ++c;
 	    header.append(hl->clone(newName));
@@ -606,9 +412,9 @@ bool SIPMessage::parse(const char* buf, int len)
 	    (name &= "Proxy-Authenticate") ||
 	    (name &= "Authorization") ||
 	    (name &= "Proxy-Authorization"))
-	    header.append(new SIPAuthLine(name,*line));
+	    header.append(new MimeAuthLine(name,*line));
 	else
-	    header.append(new SIPHeaderLine(name,*line));
+	    header.append(new MimeHeaderLine(name,*line));
 
 	if (content.null() && (name &= "Content-Type")) {
 	    content = *line;
@@ -650,27 +456,27 @@ SIPMessage* SIPMessage::fromParsing(SIPParty* ep, const char* buf, int len)
     return 0;
 }
 
-const SIPHeaderLine* SIPMessage::getHeader(const char* name) const
+const MimeHeaderLine* SIPMessage::getHeader(const char* name) const
 {
     if (!(name && *name))
 	return 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    return t;
     }
     return 0;
 }
 
-const SIPHeaderLine* SIPMessage::getLastHeader(const char* name) const
+const MimeHeaderLine* SIPMessage::getLastHeader(const char* name) const
 {
     if (!(name && *name))
 	return 0;
-    const SIPHeaderLine* res = 0;
+    const MimeHeaderLine* res = 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    res = t;
     }
@@ -683,7 +489,7 @@ void SIPMessage::clearHeaders(const char* name)
 	return;
     ObjList* l = &header;
     while (l) {
-	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    l->remove();
 	else
@@ -698,7 +504,7 @@ int SIPMessage::countHeaders(const char* name) const
     int res = 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* t = static_cast<const SIPHeaderLine*>(l->get());
+	const MimeHeaderLine* t = static_cast<const MimeHeaderLine*>(l->get());
 	if (t && (t->name() &= name))
 	    ++res;
     }
@@ -707,13 +513,13 @@ int SIPMessage::countHeaders(const char* name) const
 
 const NamedString* SIPMessage::getParam(const char* name, const char* param) const
 {
-    const SIPHeaderLine* hl = getHeader(name);
+    const MimeHeaderLine* hl = getHeader(name);
     return hl ? hl->getParam(param) : 0;
 }
 
 const String& SIPMessage::getHeaderValue(const char* name) const
 {
-    const SIPHeaderLine* hl = getHeader(name);
+    const MimeHeaderLine* hl = getHeader(name);
     return hl ? *static_cast<const String*>(hl) : String::empty();
 }
 
@@ -733,7 +539,7 @@ const String& SIPMessage::getHeaders() const
 
 	const ObjList* l = &header;
 	for (; l; l = l->next()) {
-	    SIPHeaderLine* t = static_cast<SIPHeaderLine*>(l->get());
+	    MimeHeaderLine* t = static_cast<MimeHeaderLine*>(l->get());
 	    if (t) {
 		t->buildLine(m_string);
 		m_string << "\r\n";
@@ -749,8 +555,8 @@ const DataBlock& SIPMessage::getBuffer() const
 	m_data.assign((void*)(getHeaders().c_str()),getHeaders().length());
 	if (body) {
 	    String s;
-	    s << "Content-Type: " << body->getType() << "\r\n";
-	    s << "Content-Length: " << body->getBody().length() << "\r\n\r\n";
+	    body->getType().buildLine(s);
+	    s << "\r\nContent-Length: " << body->getBody().length() << "\r\n\r\n";
 	    m_data += s;
 	}
 	else
@@ -787,30 +593,30 @@ void SIPMessage::setParty(SIPParty* ep)
 	m_ep->ref();
 }
 
-SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& password,
+MimeAuthLine* SIPMessage::buildAuth(const String& username, const String& password,
     const String& meth, const String& uri, bool proxy) const
 {
     const char* hdr = proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const SIPAuthLine* t = YOBJECT(SIPAuthLine,l->get());
+	const MimeAuthLine* t = YOBJECT(MimeAuthLine,l->get());
 	if (t && (t->name() &= hdr) && (*t &= "Digest")) {
 	    String nonce(t->getParam("nonce"));
-	    delQuotes(nonce);
+	    MimeHeaderLine::delQuotes(nonce);
 	    if (nonce.null())
 		continue;
 	    String realm(t->getParam("realm"));
-	    delQuotes(realm);
+	    MimeHeaderLine::delQuotes(realm);
 	    int par = uri.find(';');
 	    String msguri = uri.substr(0,par);
 	    String response;
 	    SIPEngine::buildAuth(username,realm,password,nonce,meth,msguri,response);
-	    SIPAuthLine* auth = new SIPAuthLine(proxy ? "Proxy-Authorization" : "Authorization","Digest");
-	    auth->setParam("username",quote(username));
-	    auth->setParam("realm",quote(realm));
-	    auth->setParam("nonce",quote(nonce));
-	    auth->setParam("uri",quote(msguri));
-	    auth->setParam("response",quote(response));
+	    MimeAuthLine* auth = new MimeAuthLine(proxy ? "Proxy-Authorization" : "Authorization","Digest");
+	    auth->setParam("username",MimeHeaderLine::quote(username));
+	    auth->setParam("realm",MimeHeaderLine::quote(realm));
+	    auth->setParam("nonce",MimeHeaderLine::quote(nonce));
+	    auth->setParam("uri",MimeHeaderLine::quote(msguri));
+	    auth->setParam("response",MimeHeaderLine::quote(response));
 	    auth->setParam("algorithm","MD5");
 	    // copy opaque data as-is, only if present
 	    const NamedString* opaque = t->getParam("opaque");
@@ -822,7 +628,7 @@ SIPAuthLine* SIPMessage::buildAuth(const String& username, const String& passwor
     return 0;
 }
 
-SIPAuthLine* SIPMessage::buildAuth(const SIPMessage& original) const
+MimeAuthLine* SIPMessage::buildAuth(const SIPMessage& original) const
 {
     if (original.getAuthUsername().null())
 	return 0;
@@ -835,18 +641,18 @@ ObjList* SIPMessage::getRoutes() const
     ObjList* list = 0;
     const ObjList* l = &header;
     for (; l; l = l->next()) {
-	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,l->get());
+	const MimeHeaderLine* h = YOBJECT(MimeHeaderLine,l->get());
 	if (h && (h->name() &= "Record-Route")) {
 	    int p = 0;
 	    while (p >= 0) {
-		SIPHeaderLine* line = 0;
-		int s = findSep(*h,',',p);
+		MimeHeaderLine* line = 0;
+		int s = MimeHeaderLine::findSep(*h,',',p);
 		String tmp;
 		if (s < 0) {
 		    if (p)
 			tmp = h->substr(p);
 		    else
-			line = new SIPHeaderLine(*h,"Route");
+			line = new MimeHeaderLine(*h,"Route");
 		    p = -1;
 		}
 		else {
@@ -856,7 +662,7 @@ ObjList* SIPMessage::getRoutes() const
 		}
 		tmp.trimBlanks();
 		if (tmp)
-		    line = new SIPHeaderLine("Route",tmp);
+		    line = new MimeHeaderLine("Route",tmp);
 		if (!line)
 		    continue;
 		if (!list)
@@ -877,7 +683,7 @@ void SIPMessage::addRoutes(const ObjList* routes)
 {
     if (isAnswer() || !routes)
 	return;
-    SIPHeaderLine* hl = YOBJECT(SIPHeaderLine,routes->get());
+    MimeHeaderLine* hl = YOBJECT(MimeHeaderLine,routes->get());
     if (hl) {
 	// check if first route is to a RFC 2543 proxy
 	String tmp = *hl;
@@ -886,7 +692,7 @@ void SIPMessage::addRoutes(const ObjList* routes)
 	    tmp = tmp.matchString(1);
 	if (tmp.find(";lr") < 0) {
 	    // prepare a new final route
-	    hl = new SIPHeaderLine("Route","<" + uri + ">");
+	    hl = new MimeHeaderLine("Route","<" + uri + ">");
 	    // set the first route as Request-URI and then skip it
 	    uri = tmp;
 	    routes = routes->next();
@@ -897,7 +703,7 @@ void SIPMessage::addRoutes(const ObjList* routes)
 
     // add (remaining) routes
     for (; routes; routes = routes->next()) {
-	const SIPHeaderLine* h = YOBJECT(SIPHeaderLine,routes->get());
+	const MimeHeaderLine* h = YOBJECT(MimeHeaderLine,routes->get());
 	if (h)
 	    addHeader(h->clone());
     }
@@ -949,7 +755,7 @@ SIPDialog::SIPDialog(const SIPMessage& message)
 {
     Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
-    const SIPHeaderLine* hl = message.getHeader(local ? "From" : "To");
+    const MimeHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
     if (localURI.matches(r))
         localURI = localURI.matchString(1);
@@ -972,7 +778,7 @@ SIPDialog& SIPDialog::operator=(const SIPMessage& message)
 	String::operator=(cid);
     Regexp r("<\\([^>]\\+\\)>");
     bool local = message.isOutgoing() ^ message.isAnswer();
-    const SIPHeaderLine* hl = message.getHeader(local ? "From" : "To");
+    const MimeHeaderLine* hl = message.getHeader(local ? "From" : "To");
     localURI = hl;
     if (localURI.matches(r))
         localURI = localURI.matchString(1);

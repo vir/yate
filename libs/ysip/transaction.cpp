@@ -48,7 +48,7 @@ SIPTransaction::SIPTransaction(SIPMessage* message, SIPEngine* engine, bool outg
 	if (ns)
 	    m_tag = *ns;
 
-	const SIPHeaderLine* hl = message->getHeader("Call-ID");
+	const MimeHeaderLine* hl = message->getHeader("Call-ID");
 	if (hl)
 	    m_callid = *hl;
 
@@ -83,7 +83,7 @@ SIPTransaction::SIPTransaction(SIPTransaction& original, SIPMessage* answer)
 	&original,answer,this);
 
     SIPMessage* msg = new SIPMessage(*original.m_firstMessage);
-    SIPAuthLine* auth = answer->buildAuth(*original.m_firstMessage);
+    MimeAuthLine* auth = answer->buildAuth(*original.m_firstMessage);
     m_firstMessage->setAutoAuth();
     msg->complete(m_engine);
     msg->addHeader(auth);
@@ -370,7 +370,7 @@ void SIPTransaction::requestAuth(const String& realm, const String& domain, bool
     if (realm) {
 	String tmp;
 	tmp << "Digest realm=\"" << realm << "\"";
-	SIPHeaderLine* line = new SIPHeaderLine(hdr,tmp,',');
+	MimeHeaderLine* line = new MimeHeaderLine(hdr,tmp,',');
 	if (domain)
 	    line->setParam(" domain","\"" + domain + "\"");
 	m_engine->nonceGet(tmp);

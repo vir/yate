@@ -75,68 +75,6 @@ const char* compactForm(const char* header)
     return header;
 }
 
-// Utility function, puts quotes around a string
-void addQuotes(String& str)
-{
-    str.trimBlanks();
-    int l = str.length();
-    if ((l < 2) || (str[0] != '"') || (str[l-1] != '"'))
-	str = "\"" + str + "\"";
-}
-
-// Utility function, removes quotes around a string
-void delQuotes(String& str)
-{
-    str.trimBlanks();
-    int l = str.length();
-    if ((l >= 2) && (str[0] == '"') && (str[l-1] == '"')) {
-	str = str.substr(1,l-2);
-	str.trimBlanks();
-    }
-}
-
-// Utility function, puts quotes around a string
-String quote(const String& str)
-{
-    String tmp(str);
-    addQuotes(tmp);
-    return tmp;
-}
-
-// Utility function to find a separator not in "quotes" or inside <uri>
-int findSep(const char* str, char sep, int offs)
-{
-    if (!(str && sep))
-	return -1;
-    str += offs;
-    bool inQ = false;
-    bool inU = false;
-    char c;
-    for (; (c = *str++) ; offs++) {
-	if (inQ) {
-	    if (c == '"')
-		inQ = false;
-	    continue;
-	}
-	if (inU) {
-	    if (c == '>')
-		inU = false;
-	    continue;
-	}
-	if (c == sep)
-	    return offs;
-	switch (c) {
-	    case '"':
-		inQ = true;
-		break;
-	    case '<':
-		inU = true;
-		break;
-	}
-    }
-    return -1;
-}
-
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

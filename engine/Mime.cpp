@@ -30,10 +30,277 @@ static bool isContinuationBlank(char c)
     return ((c == ' ') || (c == '\t'));
 }
 
+/**
+ * MimeHeaderLine
+ */
+MimeHeaderLine::MimeHeaderLine(const char* name, const String& value, char sep)
+    : NamedString(name), m_separator(sep ? sep : ';')
+{
+    if (value.null())
+	return;
+    XDebug(DebugAll,"MimeHeaderLine::MimeHeaderLine('%s','%s') [%p]",name,value.c_str(),this);
+    int sp = findSep(value,m_separator);
+    if (sp < 0) {
+	assign(value);
+	return;
+    }
+    assign(value,sp);
+    trimBlanks();
+    while (sp < (int)value.length()) {
+	int ep = findSep(value,m_separator,sp+1);
+	if (ep <= sp)
+	    ep = value.length();
+	int eq = value.find('=',sp+1);
+	if ((eq > 0) && (eq < ep)) {
+	    String pname(value.substr(sp+1,eq-sp-1));
+	    String pvalue(value.substr(eq+1,ep-eq-1));
+	    pname.trimBlanks();
+	    pvalue.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"hdr param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		m_params.append(new NamedString(pname,pvalue));
+	    }
+	}
+	else {
+	    String pname(value.substr(sp+1,ep-sp-1));
+	    pname.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"hdr param name='%s' (no value)",pname.c_str());
+		m_params.append(new NamedString(pname));
+	    }
+	}
+	sp = ep;
+    }
+}
+
+MimeHeaderLine::MimeHeaderLine(const MimeHeaderLine& original, const char* newName)
+    : NamedString(newName ? newName : original.name().c_str(),original),
+      m_separator(original.separator())
+{
+    XDebug(DebugAll,"MimeHeaderLine::MimeHeaderLine(%p '%s') [%p]",&original,name().c_str(),this);
+    const ObjList* l = &original.params();
+    for (; l; l = l->next()) {
+	const NamedString* t = static_cast<const NamedString*>(l->get());
+	if (t)
+	    m_params.append(new NamedString(t->name(),*t));
+    }
+}
+
+MimeHeaderLine::~MimeHeaderLine()
+{
+    XDebug(DebugAll,"MimeHeaderLine::~MimeHeaderLine() [%p]",this);
+}
+
+void* MimeHeaderLine::getObject(const String& name) const
+{
+    if (name == "MimeHeaderLine")
+	return const_cast<MimeHeaderLine*>(this);
+    return NamedString::getObject(name);
+}
+
+MimeHeaderLine* MimeHeaderLine::clone(const char* newName) const
+{
+    return new MimeHeaderLine(*this,newName);
+}
+
+void MimeHeaderLine::buildLine(String& line) const
+{
+    line << name() << ": " << *this;
+    const ObjList* p = &m_params;
+    for (; p; p = p->next()) {
+	NamedString* s = static_cast<NamedString*>(p->get());
+	if (s) {
+	    line << separator() << s->name();
+	    if (!s->null())
+		line << "=" << *s;
+	}
+    }
+}
+
+const NamedString* MimeHeaderLine::getParam(const char* name) const
+{
+    if (!(name && *name))
+	return 0;
+    const ObjList* l = &m_params;
+    for (; l; l = l->next()) {
+	const NamedString* t = static_cast<const NamedString*>(l->get());
+	if (t && (t->name() &= name))
+	    return t;
+    }
+    return 0;
+}
+
+void MimeHeaderLine::setParam(const char* name, const char* value)
+{
+    ObjList* p = m_params.find(name);
+    if (p)
+	*static_cast<NamedString*>(p->get()) = value;
+    else
+	m_params.append(new NamedString(name,value));
+}
+
+void MimeHeaderLine::delParam(const char* name)
+{
+    ObjList* p = m_params.find(name);
+    if (p)
+	p->remove();
+}
+
+// Utility function, puts quotes around a string
+void MimeHeaderLine::addQuotes(String& str)
+{
+    str.trimBlanks();
+    int l = str.length();
+    if ((l < 2) || (str[0] != '"') || (str[l-1] != '"'))
+	str = "\"" + str + "\"";
+}
+
+// Utility function, removes quotes around a string
+void MimeHeaderLine::delQuotes(String& str)
+{
+    str.trimBlanks();
+    int l = str.length();
+    if ((l >= 2) && (str[0] == '"') && (str[l-1] == '"')) {
+	str = str.substr(1,l-2);
+	str.trimBlanks();
+    }
+}
+
+// Utility function, puts quotes around a string
+String MimeHeaderLine::quote(const String& str)
+{
+    String tmp(str);
+    addQuotes(tmp);
+    return tmp;
+}
+
+// Utility function to find a separator not in "quotes" or inside <uri>
+int MimeHeaderLine::findSep(const char* str, char sep, int offs)
+{
+    if (!(str && sep))
+	return -1;
+    str += offs;
+    bool inQ = false;
+    bool inU = false;
+    char c;
+    for (; (c = *str++) ; offs++) {
+	if (inQ) {
+	    if (c == '"')
+		inQ = false;
+	    continue;
+	}
+	if (inU) {
+	    if (c == '>')
+		inU = false;
+	    continue;
+	}
+	if (c == sep)
+	    return offs;
+	switch (c) {
+	    case '"':
+		inQ = true;
+		break;
+	    case '<':
+		inU = true;
+		break;
+	}
+    }
+    return -1;
+}
+
+
+/**
+ * MimeAuthLine
+ */
+MimeAuthLine::MimeAuthLine(const char* name, const String& value)
+    : MimeHeaderLine(name,String::empty(),',')
+{
+    XDebug(DebugAll,"MimeAuthLine::MimeAuthLine('%s','%s') [%p]",name,value.c_str(),this);
+    if (value.null())
+	return;
+    int sp = value.find(' ');
+    if (sp < 0) {
+	assign(value);
+	return;
+    }
+    assign(value,sp);
+    trimBlanks();
+    while (sp < (int)value.length()) {
+	int ep = value.find(m_separator,sp+1);
+	int quot = value.find('"',sp+1);
+	if ((quot > sp) && (quot < ep)) {
+	    quot = value.find('"',quot+1);
+	    if (quot > sp)
+		ep = value.find(m_separator,quot+1);
+	}
+	if (ep <= sp)
+	    ep = value.length();
+	int eq = value.find('=',sp+1);
+	if ((eq > 0) && (eq < ep)) {
+	    String pname(value.substr(sp+1,eq-sp-1));
+	    String pvalue(value.substr(eq+1,ep-eq-1));
+	    pname.trimBlanks();
+	    pvalue.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"auth param name='%s' value='%s'",pname.c_str(),pvalue.c_str());
+		m_params.append(new NamedString(pname,pvalue));
+	    }
+	}
+	else {
+	    String pname(value.substr(sp+1,ep-sp-1));
+	    pname.trimBlanks();
+	    if (!pname.null()) {
+		XDebug(DebugAll,"auth param name='%s' (no value)",pname.c_str());
+		m_params.append(new NamedString(pname));
+	    }
+	}
+	sp = ep;
+    }
+}
+
+MimeAuthLine::MimeAuthLine(const MimeAuthLine& original, const char* newName)
+    : MimeHeaderLine(original,newName)
+{
+}
+
+void* MimeAuthLine::getObject(const String& name) const
+{
+    if (name == "MimeAuthLine")
+	return const_cast<MimeAuthLine*>(this);
+    return MimeHeaderLine::getObject(name);
+}
+
+MimeHeaderLine* MimeAuthLine::clone(const char* newName) const
+{
+    return new MimeAuthLine(*this,newName);
+}
+
+void MimeAuthLine::buildLine(String& line) const
+{
+    line << name() << ": " << *this;
+    const ObjList* p = &m_params;
+    for (bool first = true; p; p = p->next()) {
+	NamedString* s = static_cast<NamedString*>(p->get());
+	if (s) {
+	    if (first)
+		first = false;
+	    else
+		line << separator();
+	    line << " " << s->name();
+	    if (!s->null())
+		line << "=" << *s;
+	}
+    }
+}
+
+
+/**
+ * MimeBody
+ */
 YCLASSIMP(MimeBody,GenObject)
 
 MimeBody::MimeBody(const String& type)
-    : m_type(type)
+    : m_type("Content-Type",type)
 {
     DDebug(DebugAll,"MimeBody::MimeBody('%s') [%p]",m_type.c_str(),this);
 }

@@ -111,7 +111,7 @@ public:
 	    return tmp;
 	}
     inline bool addBoolParam(NamedList* dest, u_int8_t data, bool toggle) const {
-	    bool result = (bool)toggle ? !(data & mask) : (data & mask);
+	    bool result = toggle ^ ((data & mask) != 0);
 	    dest->addParam(name,String::boolText(result));
 	    return result;
 	}

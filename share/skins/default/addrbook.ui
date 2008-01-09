@@ -142,7 +142,7 @@
         <string/>
        </property>
        <property name="icon" >
-        <iconset>modules/skin/tabbed/quest.png</iconset>
+        <iconset>quest.png</iconset>
        </property>
        <property name="checkable" >
         <bool>true</bool>

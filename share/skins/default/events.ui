@@ -197,6 +197,28 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="debug_h323" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="accessibleName" >
+        <string>debug:h323:level 9:level 5</string>
+       </property>
+       <property name="text" >
+        <string>H.323</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QCheckBox" name="debug_iax" >
        <property name="minimumSize" >
         <size>

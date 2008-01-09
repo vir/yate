@@ -257,6 +257,42 @@ public:
 	{ if (hdr) m_headers.remove(hdr); }
 
     /**
+     * Find an additional header line by its name. The names are compared case insensitive
+     * @param name The name of the header to find
+     * @param start The starting point in the list. 0 to start from the beginning
+     * @return Pointer to MimeHeaderLine or 0 if not found
+     */
+    MimeHeaderLine* findHdr(const char* name, const MimeHeaderLine* start = 0) const;
+
+    /**
+     * Replace the value of an existing parameter or add a new one
+     * @param name Parameter's name
+     * @param value Parameter's value
+     * @param header Header whose parameter will be changed.
+     *  Set to 0 to use the body's content type header
+     * @return False if the header doesn't exist
+     */
+    bool setParam(const char* name, const char* value = 0, const char* header = 0);
+
+    /**
+     * Remove a header parameter
+     * @param name Parameter's name
+     * @param header Header whose parameter will be removed.
+     *  Set to 0 to use the body's content type header
+     * @return False if the header doesn't exist
+     */
+    bool delParam(const char* name, const char* header = 0);
+
+    /**
+     * Get a header parameter
+     * @param name Parameter's name
+     * @param header Header whose parameter will be retrived.
+     *  Set to 0 to use the body's content type header
+     * @return Pointer to the desired parameter or 0 if not found
+     */
+    const NamedString* getParam(const char* name, const char* header = 0) const;
+
+    /**
      * Retrive the binary encoding of this MIME body
      * @return Block of binary data
      */

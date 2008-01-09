@@ -321,6 +321,53 @@ MimeBody::~MimeBody()
     DDebug(DebugAll,"MimeBody::~MimeBody() '%s' [%p]",m_type.c_str(),this);
 }
 
+// Find an additional header line by its name
+MimeHeaderLine* MimeBody::findHdr(const char* name, const MimeHeaderLine* start) const
+{
+    ObjList* o = m_headers.skipNull();
+    if (!o)
+	return 0;
+    // Find start point
+    if (start)
+	for (; o; o = o->skipNext())
+	    if (start == o->get()) {
+		o = o->skipNext();
+		break;
+	    }
+    // Find the header
+    for (; o; o = o->skipNext()) {
+	MimeHeaderLine* hdr = static_cast<MimeHeaderLine*>(o->get());
+	if (hdr->name() &= name)
+	    return hdr;
+    }
+    return 0;
+}
+
+// Replace the value of an existing parameter or add a new one
+bool MimeBody::setParam(const char* name, const char* value, const char* header)
+{
+    MimeHeaderLine* hdr = (!(header && *header)) ? &m_type : findHdr(header);
+    if (hdr)
+	hdr->setParam(name,value);
+    return (hdr != 0);
+}
+
+// Remove a header parameter
+bool MimeBody::delParam(const char* name, const char* header)
+{
+    MimeHeaderLine* hdr = (!(header && *header)) ? &m_type : findHdr(header);
+    if (hdr)
+	hdr->delParam(name);
+    return (hdr != 0);
+}
+
+// Get a header parameter
+const NamedString* MimeBody::getParam(const char* name, const char* header) const
+{
+    const MimeHeaderLine* hdr = (!(header && *header)) ? &m_type : findHdr(header);
+    return hdr ? hdr->getParam(name) : 0;
+}
+
 const DataBlock& MimeBody::getBody() const
 {
     if (m_body.null())

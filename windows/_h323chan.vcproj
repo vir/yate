@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8,00"
+	Version="8.00"
 	Name="_h323chan"
 	ProjectGUID="{DC897705-0065-4FA0-B1C2-5A3E75240A95}"
 	>
@@ -74,7 +74,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="PTLibs.lib ptclib.lib OpenH323s.lib"
+				AdditionalDependencies="PTLibs.lib ptclib.lib OpenH323s.lib ADVAPI32.LIB SHELL32.LIB COMDLG32.LIB USER32.LIB GDI32.LIB KERNEL32.LIB"
 				OutputFile="Release/h323chan.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="PTLibsd.lib ptclibd.lib OpenH323sd.lib"
+				AdditionalDependencies="PTLibsd.lib ptclibd.lib OpenH323sd.lib ADVAPI32.LIB SHELL32.LIB COMDLG32.LIB USER32.LIB GDI32.LIB KERNEL32.LIB"
 				OutputFile="Debug/h323chan.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

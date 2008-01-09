@@ -36,7 +36,6 @@ Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
-Name: "driver\h323\run"; Description: "OpenH323 library"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
 Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full server
 ;Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
@@ -104,9 +103,7 @@ Source: "Release\server\mgcpgw.yate"; DestDir: "{app}\modules\server"; Component
 ;Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
 Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323 driver\jingle
 Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
-;Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
-;Source: "Runtimes\ptlib.dll"; DestDir: "{app}"; Components: driver\h323\run
-;Source: "Runtimes\openh323.dll"; DestDir: "{app}"; Components: driver\h323\run
+Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
 Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
 Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
 Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
@@ -163,24 +160,24 @@ Source: "Runtimes\vcredist_x86.exe"; DestDir: "{app}"; Flags: skipifsourcedoesnt
 Source: "Runtimes\gtk+-2.6.9-setup.exe"; DestDir: "{app}"; Components: client; Flags: skipifsourcedoesntexist dontcopy nocompression
 
 [Icons]
-Name: "{group}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk
-Name: "{group}\Yate Client"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt
+Name: "{group}\Yate Client (Qt)"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt
+Name: "{group}\Yate Client (Gtk)"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk
 Name: "{group}\Yate Console"; Filename: "{app}\yate-console.exe"; Parameters: "-n yate-console -w ""{app}"""; Components: debug
 Name: "{group}\Register Service"; Filename: "{app}\yate-service.exe"; Parameters: "--install -w ""{app}"""; Components: server
 Name: "{group}\Unregister Service"; Filename: "{app}\yate-service.exe"; Parameters: "--remove"; Components: server
 Name: "{group}\Uninstall"; Filename: "{uninstallexe}"
 Name: "{group}\Yate Web Site"; Filename: "{app}\yate.url"
 Name: "{group}\Developer docs"; Filename: "{app}\devel\docs\index.html"; Components: devel\doc
-Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk; Tasks: qlaunch
-Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk; Tasks: desktop
-Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt; Tasks: qlaunch
-Name: "{userdesktop}\Yate Client"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt; Tasks: desktop
+Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client (Qt)"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt; Tasks: qlaunch
+Name: "{userdesktop}\Yate Client (Qt)"; Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Components: client\qt; Tasks: desktop
+Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Yate Client (Gtk)"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk; Tasks: qlaunch
+Name: "{userdesktop}\Yate Client (Gtk)"; Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Components: client\gtk; Tasks: desktop
 
 [Run]
 Filename: "{app}\yate-service.exe"; Description: "Register service"; Parameters: "--install -w ""{app}"""; Components: server
 Filename: "net.exe"; Description: "Start service"; Components: server; Parameters: "start yate"; Flags: postinstall skipifsilent unchecked
-Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Description: "Launch client"; Components: client\gtk; Flags: postinstall nowait skipifsilent unchecked
-Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Description: "Launch client"; Components: client\qt; Flags: postinstall nowait skipifsilent unchecked
+Filename: "{app}\yate-qt4.exe"; Parameters: "-n yate-qt4 -w ""{app}"""; Description: "Launch Qt client"; Components: client\qt; Flags: postinstall nowait skipifsilent unchecked
+Filename: "{app}\yate-gtk2.exe"; Parameters: "-n yate-gtk2 -w ""{app}"""; Description: "Launch Gtk client"; Components: client\gtk; Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallRun]
 Filename: "net.exe"; Parameters: "stop yate"; Components: server

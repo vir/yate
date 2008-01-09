@@ -2464,6 +2464,17 @@ public:
     /**
      * Append data to the current block
      * @param value Data to append
+     * @param len Length of data
+     */
+    inline void append(void* value, unsigned int len) {
+	    DataBlock tmp(value,len,false);
+	    append(tmp);
+	    tmp.clear(false);
+	}
+
+    /**
+     * Append data to the current block
+     * @param value Data to append
      */
     void append(const DataBlock& value);
 

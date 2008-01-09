@@ -489,6 +489,59 @@ protected:
 };
 
 /**
+ * An object holding a binary block of an ISUP message
+ * @short MIME for application/isup
+ */
+class YATE_API MimeIsupBody : public MimeBinaryBody
+{
+public:
+    /**
+     * Constructor
+     */
+    MimeIsupBody();
+
+    /**
+     * Constructor from block of data
+     * @param type The line containing the Content-Type header value
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeIsupBody(const String& type, const char* buf, int len);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeIsupBody(const MimeHeaderLine& type, const char* buf, int len);
+
+    /**
+     * Destructor
+     */
+    virtual ~MimeIsupBody();
+
+    /**
+     * RTTI method, get a pointer to a derived class given the class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Duplicate this MIME body
+     * @return Copy of this MIME body - a new MimeIsupBody
+     */
+    virtual MimeBody* clone() const;
+
+protected:
+    /**
+     * Copy constructor
+     */
+    MimeIsupBody(const MimeIsupBody& original);
+};
+
+/**
  * An object holding MIME data as just one text string
  * @short MIME for one text string
  */

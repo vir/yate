@@ -342,6 +342,8 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 	return new MimeLinesBody(type,buf,len);
     if (what.startsWith("text/") || (what == "application/dtmf"))
 	return new MimeStringBody(type,buf,len);
+    if (what == "application/isup")
+	return new MimeIsupBody(type,buf,len);
     return new MimeBinaryBody(type,buf,len);
 }
 
@@ -412,6 +414,9 @@ String* MimeBody::getUnfoldedLine(const char*& buf, int& len)
 }
 
 
+/**
+ * MimeSdpBody
+ */
 YCLASSIMP(MimeSdpBody,MimeBody)
 
 MimeSdpBody::MimeSdpBody()
@@ -507,6 +512,9 @@ void MimeSdpBody::buildLines(const char* buf, int len)
 }
 
 
+/**
+ * MimeBinaryBody
+ */
 YCLASSIMP(MimeBinaryBody,MimeBody)
 
 MimeBinaryBody::MimeBinaryBody(const String& type, const char* buf, int len)
@@ -543,6 +551,44 @@ MimeBody* MimeBinaryBody::clone() const
 }
 
 
+/**
+ * MimeIsupBody
+ */
+YCLASSIMP(MimeIsupBody,MimeBinaryBody)
+
+MimeIsupBody::MimeIsupBody()
+    : MimeBinaryBody(String("application/isup"),0,0)
+{
+}
+
+MimeIsupBody::MimeIsupBody(const String& type, const char* buf, int len)
+    : MimeBinaryBody(type,buf,len)
+{
+}
+
+MimeIsupBody::MimeIsupBody(const MimeHeaderLine& type, const char* buf, int len)
+    : MimeBinaryBody(type,buf,len)
+{
+}
+
+MimeIsupBody::MimeIsupBody(const MimeIsupBody& original)
+     : MimeBinaryBody(original)
+{
+}
+
+MimeIsupBody::~MimeIsupBody()
+{
+}
+
+MimeBody* MimeIsupBody::clone() const
+{
+    return new MimeIsupBody(*this);
+}
+
+
+/**
+ * MimeStringBody
+ */
 YCLASSIMP(MimeStringBody,MimeBody)
 
 MimeStringBody::MimeStringBody(const String& type, const char* buf, int len)
@@ -576,6 +622,9 @@ MimeBody* MimeStringBody::clone() const
 }
 
 
+/**
+ * MimeLinesBody
+ */
 YCLASSIMP(MimeLinesBody,MimeBody)
 
 MimeLinesBody::MimeLinesBody(const String& type, const char* buf, int len)

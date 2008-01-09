@@ -302,7 +302,18 @@ YCLASSIMP(MimeBody,GenObject)
 MimeBody::MimeBody(const String& type)
     : m_type("Content-Type",type)
 {
+    m_type.toLower();
     DDebug(DebugAll,"MimeBody::MimeBody('%s') [%p]",m_type.c_str(),this);
+}
+
+// Build from header line
+// Make sure the name of the header line is correct
+MimeBody::MimeBody(const MimeHeaderLine& type)
+    : m_type(type,"Content-Type")
+{
+    m_type.toLower();
+    DDebug(DebugAll,"MimeBody::MimeBody('%s','%s') [%p]",
+	m_type.name().c_str(),m_type.c_str(),this);
 }
 
 MimeBody::~MimeBody()
@@ -317,16 +328,19 @@ const DataBlock& MimeBody::getBody() const
     return m_body;
 }
 
-MimeBody* MimeBody::build(const char* buf, int len, const String& type)
+// Method to build a MIME body from a type and data buffer
+MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 {
     DDebug(DebugAll,"MimeBody::build(%p,%d,'%s')",buf,len,type.c_str());
     if ((len <= 0) || !buf)
 	return 0;
-    if (type == "application/sdp")
+    String what = type;
+    what.toLower();
+    if (what == "application/sdp")
 	return new MimeSdpBody(type,buf,len);
-    if (type == "application/dtmf-relay")
+    if (what == "application/dtmf-relay")
 	return new MimeLinesBody(type,buf,len);
-    if (type.startsWith("text/") || (type == "application/dtmf"))
+    if (what.startsWith("text/") || (what == "application/dtmf"))
 	return new MimeStringBody(type,buf,len);
     return new MimeBinaryBody(type,buf,len);
 }
@@ -408,13 +422,13 @@ MimeSdpBody::MimeSdpBody()
 MimeSdpBody::MimeSdpBody(const String& type, const char* buf, int len)
     : MimeBody(type)
 {
-    while (len > 0) {
-        String* line = getUnfoldedLine(buf,len);
-	int eq = line->find('=');
-	if (eq > 0)
-	    m_lines.append(new NamedString(line->substr(0,eq),line->substr(eq+1)));
-	line->destruct();
-    }
+    buildLines(buf,len);
+}
+
+MimeSdpBody::MimeSdpBody(const MimeHeaderLine& type, const char* buf, int len)
+    : MimeBody(type)
+{
+    buildLines(buf,len);
 }
 
 MimeSdpBody::MimeSdpBody(const MimeSdpBody& original)
@@ -480,10 +494,28 @@ const NamedString* MimeSdpBody::getNextLine(const NamedString* line) const
     return 0;
 }
 
+// Build the lines from a data buffer
+void MimeSdpBody::buildLines(const char* buf, int len)
+{
+    while (len > 0) {
+        String* line = getUnfoldedLine(buf,len);
+	int eq = line->find('=');
+	if (eq > 0)
+	    m_lines.append(new NamedString(line->substr(0,eq),line->substr(eq+1)));
+	line->destruct();
+    }
+}
+
 
 YCLASSIMP(MimeBinaryBody,MimeBody)
 
 MimeBinaryBody::MimeBinaryBody(const String& type, const char* buf, int len)
+    : MimeBody(type)
+{
+    m_body.assign((void*)buf,len);
+}
+
+MimeBinaryBody::MimeBinaryBody(const MimeHeaderLine& type, const char* buf, int len)
     : MimeBody(type)
 {
     m_body.assign((void*)buf,len);
@@ -518,6 +550,11 @@ MimeStringBody::MimeStringBody(const String& type, const char* buf, int len)
 {
 }
 
+MimeStringBody::MimeStringBody(const MimeHeaderLine& type, const char* buf, int len)
+    : MimeBody(type), m_text(buf,len)
+{
+}
+
 MimeStringBody::MimeStringBody(const MimeStringBody& original)
     : MimeBody(original.getType()), m_text(original.m_text)
 {
@@ -542,6 +579,13 @@ MimeBody* MimeStringBody::clone() const
 YCLASSIMP(MimeLinesBody,MimeBody)
 
 MimeLinesBody::MimeLinesBody(const String& type, const char* buf, int len)
+    : MimeBody(type)
+{
+    while (len > 0)
+        m_lines.append(getUnfoldedLine(buf,len));
+}
+
+MimeLinesBody::MimeLinesBody(const MimeHeaderLine& type, const char* buf, int len)
     : MimeBody(type)
 {
     while (len > 0)

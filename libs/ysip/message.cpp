@@ -383,7 +383,6 @@ bool SIPMessage::parse(const char* buf, int len)
 	return false;
     }
     line->destruct();
-    String content;
     int clen = -1;
     while (len > 0) {
 	line = MimeBody::getUnfoldedLine(buf,len);
@@ -416,11 +415,7 @@ bool SIPMessage::parse(const char* buf, int len)
 	else
 	    header.append(new MimeHeaderLine(name,*line));
 
-	if (content.null() && (name &= "Content-Type")) {
-	    content = *line;
-	    content.toLower();
-	}
-	else if ((clen < 0) && (name &= "Content-Length"))
+	if ((clen < 0) && (name &= "Content-Length"))
 	    clen = line->toInteger(-1,10);
 	else if ((m_cseq < 0) && (name &= "CSeq")) {
 	    String seq = *line;
@@ -440,7 +435,23 @@ bool SIPMessage::parse(const char* buf, int len)
 	    len = clen;
 	}
     }
-    body = MimeBody::build(buf,len,content);
+    const MimeHeaderLine* cType = getHeader("Content-Type");
+    if (cType)
+	body = MimeBody::build(buf,len,*cType);
+    // Move extra Content- header lines to body
+    if (body) {
+	ListIterator iter(header);
+	for (GenObject* o = 0; (o = iter.get());) {
+	    MimeHeaderLine* line = static_cast<MimeHeaderLine*>(o);
+	    if (!line->startsWith("Content-",false,true) || (*line &= "Content-Length"))
+		continue;
+	    // Delete Content-Type and move all other lines to body
+	    bool delobj = (line == cType);
+	    header.remove(o,delobj);
+	    if (!delobj)
+		body->appendHdr(line);
+	}
+    }
     DDebug(DebugAll,"SIPMessage::parse %d header lines, body %p",
 	header.count(),body);
     return true;

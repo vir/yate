@@ -207,7 +207,10 @@ public:
 };
 
 /**
- * Abstract base class for holding Multipurpose Internet Mail Extensions data
+ * Abstract base class for holding Multipurpose Internet Mail Extensions data.
+ * Keeps a Content-Type header line with body type and parameters and
+ *  any additional header lines the body may have.
+ * The body type contains lower case characters.
  * @short Abstract MIME data holder
  */
 class YATE_API MimeBody : public GenObject
@@ -233,13 +236,34 @@ public:
 	{ return m_type; }
 
     /**
+     * Retrive the additional headers of this MIME body (other then Content-Type)
+     * @return The list of header lines of this MIME body
+     */
+    inline const ObjList& headers() const
+	{ return m_headers; }
+
+    /**
+     * Append an additional header line to this body
+     * @param hdr The header line to append
+     */
+    inline void appendHdr(MimeHeaderLine* hdr)
+	{ if (hdr) m_headers.append(hdr); }
+
+    /**
+     * Remove an additional header line from this body
+     * @param hdr The header line to remove
+     */
+    inline void removeHdr(MimeHeaderLine* hdr)
+	{ if (hdr) m_headers.remove(hdr); }
+
+    /**
      * Retrive the binary encoding of this MIME body
      * @return Block of binary data
      */
     const DataBlock& getBody() const;
 
     /**
-     * Check if this body is an Session Description Protocol
+     * Check if this body is a Session Description Protocol
      * @return True if this body holds a SDP
      */
     virtual bool isSDP() const
@@ -262,11 +286,11 @@ public:
      * Method to build a MIME body from a type and data buffer
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the MIME type/subtype, must be lower case.
-     *  This is the whole content type line, including the parameters
+     * @param type The header line declaring the body's content.
+     *  Usually this is a Content-Type header line
      * @return Newly allocated MIME body or NULL if type is unknown
      */
-    static MimeBody* build(const char* buf, int len, const String& type);
+    static MimeBody* build(const char* buf, int len, const MimeHeaderLine& type);
 
     /**
      * Utility method, returns an unfolded line and advances the pointer
@@ -278,10 +302,19 @@ public:
 
 protected:
     /**
-     * Constructor to be used only by derived classes
-     * @param type Name of the MIME type/subtype, must be lower case
+     * Constructor to be used only by derived classes.
+     * Converts the MIME type string to lower case
+     * @param type The value of the Content-Type header line
      */
     MimeBody(const String& type);
+
+    /**
+     * Constructor to be used only by derived classes.
+     * Builds this body from a header line.
+     * Converts the MIME type string to lower case
+     * @param type The content type header line
+     */
+    MimeBody(const MimeHeaderLine& type);
 
     /**
      * Method that is called internally to build the binary encoded body
@@ -292,6 +325,11 @@ protected:
      * Block of binary data that @ref buildBody() must fill
      */
     mutable DataBlock m_body;
+
+    /**
+     * Additional body headers (other then Content-Type)
+     */
+    ObjList m_headers;
 
 private:
     MimeHeaderLine m_type;               // Content type header line
@@ -316,6 +354,14 @@ public:
      * @param len Length of data in buffer
      */
     MimeSdpBody(const String& type, const char* buf, int len);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeSdpBody(const MimeHeaderLine& type, const char* buf, int len);
 
     /**
      * Destructor
@@ -383,6 +429,9 @@ protected:
     virtual void buildBody() const;
 
 private:
+    // Build the lines from a data buffer
+    void buildLines(const char* buf, int len);
+
     ObjList m_lines;
 };
 
@@ -395,11 +444,19 @@ class YATE_API MimeBinaryBody : public MimeBody
 public:
     /**
      * Constructor from block of data
+     * @param type Name of the specific MIME type/subtype
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the specific MIME type/subtype
      */
     MimeBinaryBody(const String& type, const char* buf, int len);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeBinaryBody(const MimeHeaderLine& type, const char* buf, int len);
 
     /**
      * Destructor
@@ -440,11 +497,19 @@ class YATE_API MimeStringBody : public MimeBody
 public:
     /**
      * Constructor from block of data
+     * @param type Name of the specific MIME type/subtype
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the specific MIME type/subtype
      */
     MimeStringBody(const String& type, const char* buf, int len = -1);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeStringBody(const MimeHeaderLine& type, const char* buf, int len = -1);
 
     /**
      * Destructor
@@ -495,11 +560,19 @@ class YATE_API MimeLinesBody : public MimeBody
 public:
     /**
      * Constructor from block of data
+     * @param type Name of the specific MIME type/subtype
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
-     * @param type Name of the specific MIME type/subtype
      */
     MimeLinesBody(const String& type, const char* buf, int len);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeLinesBody(const MimeHeaderLine& type, const char* buf, int len);
 
     /**
      * Destructor

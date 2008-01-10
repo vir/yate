@@ -1,1 +1,1 @@
-?package(yate-client):	needs=X11	section="Internet"	title="Yate"	longtitle="VoIP soft phone"	command="/usr/bin/yate-gtk2"	icon="yate.png"
+?package(yate-client):	needs=X11	section="Internet"	title="Yate (Gtk)"	longtitle="VoIP soft phone based on Gtk"	command="/usr/bin/yate-gtk2"	icon="yate.png"

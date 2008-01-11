@@ -4896,6 +4896,18 @@ public:
      */
     virtual void destruct();
 
+    /**
+     * Decode an ISUP message buffer to a list of parameters
+     * @param msg Destination list of parameters
+     * @param msgType The message type
+     * @param pcType The point code type (message version)
+     * @param paramPtr Pointer to the Parameter area (just after the message type)
+     * @param paramLen Length of the Parameter area
+     * @return True if the mesage was succesfully parsed
+     */
+    bool decodeMessage(NamedList& msg, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
+	const unsigned char* paramPtr, unsigned int paramLen);
+
 protected:
     /**
      * Send CGU if not already done. Check timeouts

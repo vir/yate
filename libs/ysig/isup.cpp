@@ -2293,6 +2293,115 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
     return msu;
 }
 
+// Decode a buffer to a list of parameters
+bool SS7ISUP::decodeMessage(NamedList& msg,
+    SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
+    const unsigned char* paramPtr, unsigned int paramLen)
+{
+    // see what parameters we expect for this message
+    const MsgParams* params = getIsupParams(pcType,msgType);
+    if (!params) {
+	Debug(this,DebugGoOn,"Invalid point code or message type [%p]",this);
+	return false;
+    }
+    const SS7MsgISUP::Parameters* plist = params->params;
+    SS7MsgISUP::Parameters ptype;
+    // first decode any mandatory fixed parameters the message should have
+    while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
+	const IsupParam* param = getParamDesc(ptype);
+	if (!param) {
+	    // this is fatal as we don't know the length
+	    Debug(this,DebugGoOn,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
+	    return false;
+	}
+	if (!param->size) {
+	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed ISUP parameter %s [%p]",param->name,this);
+	    return false;
+	}
+	if (paramLen < param->size) {
+	    Debug(this,DebugWarn,"Truncated ISUP message! [%p]",this);
+	    return false;
+	}
+	if (!decodeParam(this,msg,param,paramPtr,param->size))
+	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
+	paramPtr += param->size;
+	paramLen -= param->size;
+    } // while ((ptype = *plist++)...
+    // next decode any mandatory variable parameters the message should have
+    while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
+	const IsupParam* param = getParamDesc(ptype);
+	if (!param) {
+	    // we could skip over unknown mandatory variable length but it's still bad
+	    Debug(this,DebugGoOn,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
+	    return false;
+	}
+	if (param->size)
+	    Debug(this,DebugMild,"Invalid (fixed) description of variable ISUP parameter %s [%p]",param->name,this);
+	unsigned int offs = paramPtr[0];
+	if ((offs < 1) || (offs >= paramLen)) {
+	    Debug(this,DebugWarn,"Invalid offset %u (len=%u) ISUP parameter %s [%p]",
+		offs,paramLen,param->name,this);
+	    return false;
+	}
+	unsigned int size = paramPtr[offs];
+	if ((size < 1) || (offs+size >= paramLen)) {
+	    Debug(this,DebugWarn,"Invalid size %u (ofs=%u, len=%u) ISUP parameter %s [%p]",
+		size,offs,paramLen,param->name,this);
+	    return false;
+	}
+	if (!decodeParam(this,msg,param,paramPtr+offs+1,size))
+	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
+		param->name,size,this);
+	paramPtr++;
+	paramLen--;
+    } // while ((ptype = *plist++)...
+    // now decode the optional parameters if the message supports them
+    if (params->optional) {
+	unsigned int offs = paramPtr[0];
+	if (offs >= paramLen) {
+	    Debug(this,DebugWarn,"Invalid ISUP optional offset %u (len=%u) [%p]",
+		offs,paramLen,this);
+	    return false;
+	}
+	else if (offs) {
+	    // advance pointer past mandatory parameters
+	    paramPtr += offs;
+	    paramLen -= offs;
+	    while (paramLen) {
+		ptype = (SS7MsgISUP::Parameters)(*paramPtr++);
+		paramLen--;
+		if (ptype == SS7MsgISUP::EndOfParameters)
+		    break;
+		if (paramLen < 2) {
+		    Debug(this,DebugWarn,"Only %u octets while decoding optional ISUP parameter 0x%02x [%p]",
+			paramLen,ptype,this);
+		    return false;
+		}
+		unsigned int size = *paramPtr++;
+		paramLen--;
+		if ((size < 1) || (size >= paramLen)) {
+		    Debug(this,DebugWarn,"Invalid size %u (len=%u) ISUP optional parameter 0x%02x [%p]",
+			size,paramLen,ptype,this);
+		    return false;
+		}
+		const IsupParam* param = getParamDesc(ptype);
+		if (!param)
+		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
+		else if (!decodeParam(this,msg,param,paramPtr,size))
+		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
+		paramPtr += size;
+		paramLen -= size;
+	    } // while (paramLen)
+	} // else if (offs)
+	else
+	    paramLen = 0;
+    }
+    if (paramLen)
+	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
+	    paramLen,msgType,this);
+    return true;
+}
+
 bool SS7ISUP::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3* network, int sls)
 {
     if (msu.getSIF() != SS7MSU::ISUP || !hasPointCode(label.dpc())) {
@@ -2330,115 +2439,12 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 {
     XDebug(this,DebugAll,"SS7ISUP::processMSU(%u,%u,%p,%u,%p,%p,%d) [%p]",
 	type,cic,paramPtr,paramLen,&label,network,sls,this);
-    // see what parameters we expect for this message
-    const MsgParams* params = getIsupParams(label.type(),type);
-    if (!params)
-	return false;
+
     SS7MsgISUP* msg = new SS7MsgISUP(type,cic);
-    const SS7MsgISUP::Parameters* plist = params->params;
-    SS7MsgISUP::Parameters ptype;
-    // first decode any mandatory fixed parameters the message should have
-    while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
-	const IsupParam* param = getParamDesc(ptype);
-	if (!param) {
-	    // this is fatal as we don't know the length
-	    Debug(this,DebugGoOn,"Missing description of fixed ISUP parameter 0x%02x [%p]",ptype,this);
-	    msg->destruct();
-	    return false;
-	}
-	if (!param->size) {
-	    Debug(this,DebugGoOn,"Invalid (variable) description of fixed ISUP parameter %s [%p]",param->name,this);
-	    msg->destruct();
-	    return false;
-	}
-	if (paramLen < param->size) {
-	    Debug(this,DebugWarn,"Truncated ISUP message! [%p]",this);
-	    msg->destruct();
-	    return false;
-	}
-	if (!decodeParam(this,msg->params(),param,paramPtr,param->size))
-	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
-	paramPtr += param->size;
-	paramLen -= param->size;
-    } // while ((ptype = *plist++)...
-    // next decode any mandatory variable parameters the message should have
-    while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
-	const IsupParam* param = getParamDesc(ptype);
-	if (!param) {
-	    // we could skip over unknown mandatory variable length but it's still bad
-	    Debug(this,DebugGoOn,"Missing description of variable ISUP parameter 0x%02x [%p]",ptype,this);
-	    msg->destruct();
-	    return false;
-	}
-	if (param->size)
-	    Debug(this,DebugMild,"Invalid (fixed) description of variable ISUP parameter %s [%p]",param->name,this);
-	unsigned int offs = paramPtr[0];
-	if ((offs < 1) || (offs >= paramLen)) {
-	    Debug(this,DebugWarn,"Invalid offset %u (len=%u) ISUP parameter %s [%p]",
-		offs,paramLen,param->name,this);
-	    msg->destruct();
-	    return false;
-	}
-	unsigned int size = paramPtr[offs];
-	if ((size < 1) || (offs+size >= paramLen)) {
-	    Debug(this,DebugWarn,"Invalid size %u (ofs=%u, len=%u) ISUP parameter %s [%p]",
-		size,offs,paramLen,param->name,this);
-	    msg->destruct();
-	    return false;
-	}
-	if (!decodeParam(this,msg->params(),param,paramPtr+offs+1,size))
-	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
-		param->name,size,this);
-	paramPtr++;
-	paramLen--;
-    } // while ((ptype = *plist++)...
-    // now decode the optional parameters if the message supports them
-    if (params->optional) {
-	unsigned int offs = paramPtr[0];
-	if (offs >= paramLen) {
-	    Debug(this,DebugWarn,"Invalid ISUP optional offset %u (len=%u) [%p]",
-		offs,paramLen,this);
-	    msg->destruct();
-	    return false;
-	}
-	else if (offs) {
-	    // advance pointer past mandatory parameters
-	    paramPtr += offs;
-	    paramLen -= offs;
-	    while (paramLen) {
-		ptype = (SS7MsgISUP::Parameters)(*paramPtr++);
-		paramLen--;
-		if (ptype == SS7MsgISUP::EndOfParameters)
-		    break;
-		if (paramLen < 2) {
-		    Debug(this,DebugWarn,"Only %u octets while decoding optional ISUP parameter 0x%02x [%p]",
-			paramLen,ptype,this);
-		    msg->destruct();
-		    return false;
-		}
-		unsigned int size = *paramPtr++;
-		paramLen--;
-		if ((size < 1) || (size >= paramLen)) {
-		    Debug(this,DebugWarn,"Invalid size %u (len=%u) ISUP optional parameter 0x%02x [%p]",
-			size,paramLen,ptype,this);
-		    msg->destruct();
-		    return false;
-		}
-		const IsupParam* param = getParamDesc(ptype);
-		if (!param)
-		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
-		else if (!decodeParam(this,msg->params(),param,paramPtr,size))
-		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
-		paramPtr += size;
-		paramLen -= size;
-	    } // while (paramLen)
-	} // else if (offs)
-	else
-	    paramLen = 0;
+    if (!decodeMessage(msg->params(),type,label.type(),paramPtr,paramLen)) {
+	TelEngine::destruct(msg);
+	return false;
     }
-    if (paramLen)
-	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
-	    paramLen,type,this);
 
     if (debugAt(DebugInfo)) {
 	String tmp;

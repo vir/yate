@@ -566,8 +566,11 @@ const DataBlock& SIPMessage::getBuffer() const
 	m_data.assign((void*)(getHeaders().c_str()),getHeaders().length());
 	if (body) {
 	    String s;
-	    body->getType().buildLine(s);
-	    s << "\r\nContent-Length: " << body->getBody().length() << "\r\n\r\n";
+	    body->buildHeaders(s);
+	    s << "Content-Length: " << body->getBody().length() << "\r\n";
+	    // The multipart will add an empty line anyway
+	    if (!body->isMultipart())
+		s << "\r\n";
 	    m_data += s;
 	}
 	else

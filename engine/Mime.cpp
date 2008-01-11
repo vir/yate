@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include <stdlib.h>
 #include "yatemime.h"
 
 using namespace TelEngine;
@@ -208,6 +209,17 @@ int MimeHeaderLine::findSep(const char* str, char sep, int offs)
     return -1;
 }
 
+// Build a string from a list of MIME header lines
+void MimeHeaderLine::buildHeaders(String& buf, const ObjList& headers)
+{
+    for (ObjList* o = headers.skipNull(); o; o = o->skipNext()) {
+	MimeHeaderLine* hdr = static_cast<MimeHeaderLine*>(o->get());
+	String line;
+	hdr->buildLine(line);
+	buf << line << "\r\n";
+    }
+}
+
 
 /**
  * MimeAuthLine
@@ -322,7 +334,7 @@ MimeBody::~MimeBody()
 }
 
 // Find an additional header line by its name
-MimeHeaderLine* MimeBody::findHdr(const char* name, const MimeHeaderLine* start) const
+MimeHeaderLine* MimeBody::findHdr(const String& name, const MimeHeaderLine* start) const
 {
     ObjList* o = m_headers.skipNull();
     if (!o)
@@ -389,8 +401,8 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 	return new MimeLinesBody(type,buf,len);
     if (what.startsWith("text/") || (what == "application/dtmf"))
 	return new MimeStringBody(type,buf,len);
-    if (what == "application/isup")
-	return new MimeIsupBody(type,buf,len);
+    if (what.startsWith("multipart/"))
+	return new MimeMultipartBody(type,buf,len);
     return new MimeBinaryBody(type,buf,len);
 }
 
@@ -458,6 +470,269 @@ String* MimeBody::getUnfoldedLine(const char*& buf, int& len)
     }
     res->trimBlanks();
     return res;
+}
+
+
+/**
+ * MimeMultipartBody
+ */
+YCLASSIMP(MimeMultipartBody,MimeBody)
+
+// Constructor to build an empty multipart body
+MimeMultipartBody::MimeMultipartBody(const char* subtype, const char* boundary)
+    : MimeBody((subtype && *subtype) ? (String("multipart/") + subtype) : "multipart/mixed")
+{
+    String b = boundary; 
+    if (b.null())
+	b << (int)::random() << "_" << (unsigned int)Time::now();
+    if (b.length() > 70)
+	b = b.substr(0,70);
+    setParam("boundary",b);
+}
+
+// Constructor from block of data
+MimeMultipartBody::MimeMultipartBody(const String& type, const char* buf, int len)
+    : MimeBody(type)
+{
+    parse(buf,len);
+}
+
+// Constructor from block of data
+MimeMultipartBody::MimeMultipartBody(const MimeHeaderLine& type, const char* buf, int len)
+    : MimeBody(type)
+{
+    parse(buf,len);
+}
+
+MimeMultipartBody::~MimeMultipartBody()
+{
+}
+
+// Copy constructor
+MimeMultipartBody::MimeMultipartBody(const MimeMultipartBody& original)
+    : MimeBody(original.getType())
+{
+    for (ObjList* o = original.m_bodies.skipNull(); o; o = o->skipNext()) {
+	MimeBody* body = static_cast<MimeBody*>(o->get());
+	m_bodies.append(body->clone());
+    }
+}
+
+// Find a body. Enclosed multiparts are also searched for the requested body
+MimeBody* MimeMultipartBody::findBody(const String& content, MimeBody** start) const
+{
+    MimeBody* localStart = start ? *start : 0;
+    Debug(DebugNote,"MimeMultipartBody::findBody(%s,%p) [%p]",
+	content.c_str(),localStart,this);
+    for (ObjList* o = m_bodies.skipNull(); o; o = o->skipNext()) {
+	MimeBody* body = static_cast<MimeBody*>(o->get());
+	// Start point was found
+	if (!localStart) {
+	    if (content == body->getType())
+		return body;
+	    if (body->isMultipart()) {
+		body = (static_cast<MimeMultipartBody*>(body))->findBody(content);
+		if (body)
+		    return body;
+	    }
+	    continue;
+	}
+	// Reset starting point if found
+	if (body == localStart)
+	    localStart = 0;
+	// Check inside multiparts for starting point or requested body
+	if (body->isMultipart()) {
+	    body = (static_cast<MimeMultipartBody*>(body))->findBody(content,&localStart);
+	    if (body)
+		return body;
+	}
+    }
+    if (start)
+	*start = localStart;
+    Debug(DebugNote,"MimeMultipartBody::findBody(). Not found%s  [%p]",
+	localStart?"":". Found start point",this);
+    return 0;
+}
+
+// Duplicate this MIME body
+MimeBody* MimeMultipartBody::clone() const
+{
+    return new MimeMultipartBody(*this);
+}
+
+// Method that is called internally to build the binary encoded body
+void MimeMultipartBody::buildBody() const
+{
+    const NamedString* b = getParam("boundary");
+    String boundary = "\r\n--";
+    if (b)
+	boundary << *b;
+
+    ObjList* o = m_bodies.skipNull();
+    if (o)
+	for (; o; o = o->skipNext()) {
+	    MimeBody* body = static_cast<MimeBody*>(o->get());
+	    String hdr = "\r\n";
+	    body->buildHeaders(hdr);
+	    // Build it
+	    m_body += boundary;
+	    m_body += hdr;
+	    m_body += body->getBody();
+	}
+    else
+	m_body += boundary;
+    // Add termination boundary
+    boundary << "--\r\n";
+    m_body += boundary;
+}
+
+// Parse a data buffer and append any valid body to this multipart
+// Ignore prolog, epilog and invalid bodies
+void MimeMultipartBody::parse(const char* buf, int len)
+{
+    DDebug(DebugAll,"MimeMultipartBody::parse(%p,%d,'%s') [%p]",
+	buf,len,getType().c_str(),this);
+    if (!buf || len <= 0)
+	return;
+
+    const NamedString* b = getParam("boundary");
+    String boundary = "\r\n--";
+    if (b)
+	boundary << *b;
+    // RFC 2046 pg. 22: Remove trailing blanks from boundary
+    unsigned int i = boundary.length() - 1;
+    for (const char* d = boundary.c_str(); i > 3; i--)
+	if (d[i] != ' ' && d[i] != '\t')
+	    break;
+    if (i != boundary.length() - 1)
+	boundary.assign(boundary.c_str(),i + 1);
+    if (boundary.length() < 5)
+	DDebug(DebugMild,"MimeMultipartBody::parse(). Boundary is empty [%p]",this);
+
+    bool endData;
+    // Find first boundary: ignore the data before it
+    // The first boundary might not contain the CRLF at beginning
+    findBoundary(buf,len,boundary.c_str() + 2,boundary.length()-2,endData);
+
+    XDebug(DebugAll,"Searching for bodies len=%d [%p]",len,this);
+
+    // Parse for bodies
+    while (!endData) {
+	const char* start = buf;
+	int l = findBoundary(buf,len,boundary.c_str(),boundary.length(),endData);
+	if (l <= 0)
+	    continue;
+	XDebug(DebugInfo,"Found %d body data [%p]",l,this);
+	// Get body headers
+	ObjList hdr;
+	MimeHeaderLine* cType = 0;
+	while (l) {
+	    String* line = MimeBody::getUnfoldedLine(start,l);
+	    // Found end of headers
+	    if (line->null()) {
+		TelEngine::destruct(line);
+		break;
+	    }
+	    int col = line->find(':');
+	    // Check if this is a valid header line
+	    if (col <= 0) {
+		TelEngine::destruct(line);
+		continue;
+	    }
+	    String name = line->substr(0,col);
+	    name.trimBlanks();
+	    if (!name) {
+		TelEngine::destruct(line);
+		continue;
+	    }
+	    *line >> ":";
+	    line->trimBlanks();
+	    DDebug(DebugAll,"MimeMultipartBody::parse() header='%s' value='%s'",
+		name.c_str(),line->c_str());
+	    MimeHeaderLine* ct = new MimeHeaderLine(name,*line);
+	    hdr.append(ct);
+	    if (name &= "Content-Type")
+		cType = ct;
+	    TelEngine::destruct(line);
+	}
+	// Append body to list and move extra headers to it
+	MimeBody* body = cType ? MimeBody::build(buf,len,*cType) : 0;
+	if (!body) {
+	    XDebug(DebugNote,"Failed to build body%s [%p]",
+		cType?"":": Content-Type header is missing",this);
+	    continue;
+	}
+	m_bodies.append(body);
+	XDebug(DebugInfo,"Body '%s' created. Adding %u additional headers [%p]",
+	    cType->c_str(),hdr.count() - 1,this);
+	ListIterator iter(hdr);
+	for (GenObject* o = 0; (o = iter.get());) {
+	    MimeHeaderLine* line = static_cast<MimeHeaderLine*>(o);
+	    if (line == cType)
+		continue;
+	    hdr.remove(o,false);
+	    body->appendHdr(line);
+	}
+    }
+}
+
+// Parse input buffer for first body boundary or data end
+// Advance buffer pass the boundary line and decrease the buffer length
+// Set endData to true if a final boundary was found or the end of the
+//  buffer was reached
+// Return the length of data before the found boundary
+int MimeMultipartBody::findBoundary(const char*& buf, int& len,
+	const char* boundary, unsigned int bLen, bool& endData)
+{
+    if (len <= 0) {
+	endData = true;
+	return 0;
+    }
+
+    endData = false;
+    unsigned int l = len;
+    int bodyLen = 0;
+
+    while (l) {
+	// Skip until the first char of boundary
+	for (; l >= bLen && *buf != boundary[0]; l--, buf++)
+	    bodyLen++;
+	// Check if we have enough data for boundary
+	if (l < bLen) {
+	    bodyLen += l;
+	    buf += l;
+	    l = 0;
+	    break;
+	}
+	// Check boundary
+	unsigned int n = 0;
+	for(; n < bLen && *buf == boundary[n]; n++, buf++, l--)
+	    ;
+	// Not found
+	if (n < bLen) {
+	    bodyLen += n;
+	    continue;
+	}
+	// Check end of data
+	if (l > 2 && buf[0] == '-' && buf[1] == '-') {
+	    buf += 2;
+	    len -= 2;
+	    endData = true;
+	}
+	// Skip until the end of line or data
+	for (; l > 1; buf++, l--)
+	    if (buf[0] == '\r' && buf[1] == '\n') {
+		buf += 2;
+		len -= 2;
+		break;
+	    }
+	break;
+    }
+
+    len = l;
+    if (!len)
+	endData = true;
+    return bodyLen;
 }
 
 
@@ -595,41 +870,6 @@ void MimeBinaryBody::buildBody() const
 MimeBody* MimeBinaryBody::clone() const
 {
     return new MimeBinaryBody(*this);
-}
-
-
-/**
- * MimeIsupBody
- */
-YCLASSIMP(MimeIsupBody,MimeBinaryBody)
-
-MimeIsupBody::MimeIsupBody()
-    : MimeBinaryBody(String("application/isup"),0,0)
-{
-}
-
-MimeIsupBody::MimeIsupBody(const String& type, const char* buf, int len)
-    : MimeBinaryBody(type,buf,len)
-{
-}
-
-MimeIsupBody::MimeIsupBody(const MimeHeaderLine& type, const char* buf, int len)
-    : MimeBinaryBody(type,buf,len)
-{
-}
-
-MimeIsupBody::MimeIsupBody(const MimeIsupBody& original)
-     : MimeBinaryBody(original)
-{
-}
-
-MimeIsupBody::~MimeIsupBody()
-{
-}
-
-MimeBody* MimeIsupBody::clone() const
-{
-    return new MimeIsupBody(*this);
 }
 
 

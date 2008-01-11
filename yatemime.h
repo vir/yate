@@ -148,13 +148,22 @@ public:
     static String quote(const String& str);
 
     /**
-     * Utility function to find a separator not in "quotes" or inside <uri>.
+     * Utility function to find a separator not in "quotes" or inside \<uri\>.
      * @param str Input string used to find the separator.
      * @param sep The separator to find.
      * @param offs Starting offset in input string.
      * @return The position of the separator in input string or -1 if not found.
      */
     static int findSep(const char* str, char sep, int offs = 0);
+
+    /**
+     * Build a string from a list of MIME header lines.
+     * Add a CR/LF terminator after each line
+     * @param buf Destination string
+     * @param headers The list with the header lines
+     * @param eoln Header line separator
+     */
+    static void buildHeaders(String& buf, const ObjList& headers);
 
 protected:
     ObjList m_params;                    // Header list of parameters
@@ -252,9 +261,10 @@ public:
     /**
      * Remove an additional header line from this body
      * @param hdr The header line to remove
+     * @param delobj True to delete the header, false to remove from list without deleting it
      */
-    inline void removeHdr(MimeHeaderLine* hdr)
-	{ if (hdr) m_headers.remove(hdr); }
+    inline void removeHdr(MimeHeaderLine* hdr, bool delobj = true)
+	{ if (hdr) m_headers.remove(hdr,delobj); }
 
     /**
      * Find an additional header line by its name. The names are compared case insensitive
@@ -262,7 +272,18 @@ public:
      * @param start The starting point in the list. 0 to start from the beginning
      * @return Pointer to MimeHeaderLine or 0 if not found
      */
-    MimeHeaderLine* findHdr(const char* name, const MimeHeaderLine* start = 0) const;
+    MimeHeaderLine* findHdr(const String& name, const MimeHeaderLine* start = 0) const;
+
+    /**
+     * Build a string with this body's header lines
+     * @param buf Destination string
+     * @param eoln Header line separator
+     */
+    inline void buildHeaders(String& buf) {
+	    m_type.buildLine(buf);
+	    buf << "\r\n";
+	    MimeHeaderLine::buildHeaders(buf,m_headers);
+	}
 
     /**
      * Replace the value of an existing parameter or add a new one
@@ -293,7 +314,8 @@ public:
     const NamedString* getParam(const char* name, const char* header = 0) const;
 
     /**
-     * Retrive the binary encoding of this MIME body
+     * Retrive the binary encoding of this MIME body. Build the body if empty.
+     * The body doesn't contain the Content-Type header or the additional headers
      * @return Block of binary data
      */
     const DataBlock& getBody() const;
@@ -372,6 +394,126 @@ private:
 };
 
 /**
+ * An object holding the bodies of a multipart MIME
+ * @short MIME multipart container
+ */
+class YATE_API MimeMultipartBody : public MimeBody
+{
+public:
+    /**
+     * Constructor to build an empty multipart body
+     * @param subtype The multipart subtype
+     * @param boundary The string used as separator for enclosed bodies.
+     *  A random one will be created if missing. The length will be truncated
+     *  to 70 if this value is exceeded
+     */
+    MimeMultipartBody(const char* subtype = "mixed", const char* boundary = 0);
+
+    /**
+     * Constructor from block of data
+     * @param type The value of the Content-Type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeMultipartBody(const String& type, const char* buf, int len);
+
+    /**
+     * Constructor from block of data
+     * @param type The content type header line
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    MimeMultipartBody(const MimeHeaderLine& type, const char* buf, int len);
+
+    /**
+     * Destructor
+     */
+    virtual ~MimeMultipartBody();
+
+    /**
+     * Get the list of bodies enclosed contained in this multipart
+     * @return The list of bodies enclosed contained in this multipart
+     */
+    inline const ObjList& bodies() const
+	{ return m_bodies; }
+
+    /**
+     * Append a body to this multipart
+     * @param body The body to append
+     */
+    inline void appendBody(MimeBody* body)
+	{ if (body) m_bodies.append(body); }
+
+    /**
+     * Remove a body from this multipart
+     * @param body The body to remove
+     * @param delobj True to delete the body, false to remove from list without deleting it
+     */
+    inline void removeBody(MimeBody* body, bool delobj = true)
+	{ if (body) m_bodies.remove(body,delobj); }
+
+    /**
+     * Find a body. Enclosed multiparts are also searched for the requested body
+     * @param name The value of the body to find. Must be lower case
+     * @param start The starting point in the list. 0 to start from the beginning.
+     *  Be aware that this parameter is used internally to search within enclosed
+     *  multipart bodies and set to 0 when the starting point is found
+     * @return Pointer to MimeBody or 0 if not found
+     */
+    MimeBody* findBody(const String& content, MimeBody** start = 0) const;
+
+    /**
+     * RTTI method, get a pointer to a derived class given the class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Check if this body is multipart (can hold other MIME bodies)
+     * @return True if this body is multipart
+     */
+    virtual bool isMultipart() const
+	{ return true; }
+
+    /**
+     * Duplicate this MIME body
+     * @return Copy of this MIME body
+     */
+    virtual MimeBody* clone() const;
+
+protected:
+    /**
+     * Copy constructor
+     */
+    MimeMultipartBody(const MimeMultipartBody& original);
+
+    /**
+     * Method that is called internally to build the binary encoded body
+     */
+    virtual void buildBody() const;
+
+    /**
+     * Parse a data buffer and append any valid body to this multipart
+     * Ignore prolog, epilog and invalid bodies
+     * @param buf Pointer to buffer of data
+     * @param len Length of data in buffer
+     */
+    void parse(const char* buf, int len);
+
+private:
+    // Parse input buffer for first body boundary or data end
+    // Advance buffer pass the boundary line and decrease the buffer length
+    // Set endData to true if a final boundary was found or the end of the
+    //  buffer was reached
+    // Return the length of data before the found boundary
+    int findBoundary(const char*& buf, int& len,
+	const char* boundary, unsigned int bLen, bool& endData);
+
+    ObjList m_bodies;                    // The list of bodies contained in this multipart
+};
+
+/**
  * An object holding the lines of an application/sdp MIME type
  * @short MIME for application/sdp
  */
@@ -385,7 +527,7 @@ public:
 
     /**
      * Constructor from block of data
-     * @param type Name of the MIME type/subtype, should be "application/sdp"
+     * @param type The value of the Content-Type header line
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
      */
@@ -480,7 +622,7 @@ class YATE_API MimeBinaryBody : public MimeBody
 public:
     /**
      * Constructor from block of data
-     * @param type Name of the specific MIME type/subtype
+     * @param type The value of the Content-Type header line
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
      */
@@ -525,59 +667,6 @@ protected:
 };
 
 /**
- * An object holding a binary block of an ISUP message
- * @short MIME for application/isup
- */
-class YATE_API MimeIsupBody : public MimeBinaryBody
-{
-public:
-    /**
-     * Constructor
-     */
-    MimeIsupBody();
-
-    /**
-     * Constructor from block of data
-     * @param type The line containing the Content-Type header value
-     * @param buf Pointer to buffer of data
-     * @param len Length of data in buffer
-     */
-    MimeIsupBody(const String& type, const char* buf, int len);
-
-    /**
-     * Constructor from block of data
-     * @param type The content type header line
-     * @param buf Pointer to buffer of data
-     * @param len Length of data in buffer
-     */
-    MimeIsupBody(const MimeHeaderLine& type, const char* buf, int len);
-
-    /**
-     * Destructor
-     */
-    virtual ~MimeIsupBody();
-
-    /**
-     * RTTI method, get a pointer to a derived class given the class name
-     * @param name Name of the class we are asking for
-     * @return Pointer to the requested class or NULL if this object doesn't implement it
-     */
-    virtual void* getObject(const String& name) const;
-
-    /**
-     * Duplicate this MIME body
-     * @return Copy of this MIME body - a new MimeIsupBody
-     */
-    virtual MimeBody* clone() const;
-
-protected:
-    /**
-     * Copy constructor
-     */
-    MimeIsupBody(const MimeIsupBody& original);
-};
-
-/**
  * An object holding MIME data as just one text string
  * @short MIME for one text string
  */
@@ -586,7 +675,7 @@ class YATE_API MimeStringBody : public MimeBody
 public:
     /**
      * Constructor from block of data
-     * @param type Name of the specific MIME type/subtype
+     * @param type The value of the Content-Type header line
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
      */
@@ -649,7 +738,7 @@ class YATE_API MimeLinesBody : public MimeBody
 public:
     /**
      * Constructor from block of data
-     * @param type Name of the specific MIME type/subtype
+     * @param type The value of the Content-Type header line
      * @param buf Pointer to buffer of data
      * @param len Length of data in buffer
      */

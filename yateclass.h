@@ -3265,7 +3265,7 @@ public:
      */
     inline Lock2(Mutex& mx1, Mutex& mx2, long maxwait = -1)
 	: m_mx1(0), m_mx2(0)
-	{ lock(&mx1,&mx2); }
+	{ lock(&mx1,&mx2,maxwait); }
 
     /**
      * Destroy the lock, unlock the mutex if it was locked

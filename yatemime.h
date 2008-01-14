@@ -521,7 +521,7 @@ private:
     // Remove quotes if present. Trim blanks
     // Insert CRLF and boundary marks ('--') before parameter
     // @param boundary Destination string
-    // @return False if the parameter is missing
+    // @return False if the parameter is missing or the boundary is empty
     bool getBoundary(String& boundary) const;
 
 

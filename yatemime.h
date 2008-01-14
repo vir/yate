@@ -513,9 +513,10 @@ protected:
 private:
     // Parse input buffer for first body boundary or data end
     // Advance buffer pass the boundary line and decrease the buffer length
+    // Set endBody to true if the last boundary was found
     // Return the length of data before the found boundary
     int findBoundary(const char*& buf, int& len,
-	const char* boundary, unsigned int bLen);
+	const char* boundary, unsigned int bLen, bool& endBody);
     // Build a boundary string to be used when parsing or building body
     // Remove quotes if present. Remove trailing blanks
     // Insert CRLF and boundary marks ('--') before parameter

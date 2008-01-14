@@ -601,17 +601,20 @@ void MimeMultipartBody::parse(const char* buf, int len)
     if (!(buf && len > 0 && getBoundary(boundary)))
 	return;
 
+    bool endBody;
     // Find first boundary: ignore the data before it
-    findBoundary(buf,len,boundary.c_str(),boundary.length());
+    findBoundary(buf,len,boundary.c_str(),boundary.length(),endBody);
 
     // Parse for bodies
     XDebug(DebugInfo,"Start parsing boundary=%s len=%d [%p]",
 	boundary.c_str() + 4,len,this);
     while (len > 0) {
+	if (endBody)
+	    break;
 	// Find next boundary. Get the length of data before it
 	// 'start' will point to the beginning of an enclosed body
 	const char* start = buf;
-	int l = findBoundary(buf,len,boundary.c_str(),boundary.length());
+	int l = findBoundary(buf,len,boundary.c_str(),boundary.length(),endBody);
 	XDebug(DebugInfo,"Found %d length body (remain=%d) [%p]",l,len,this);
 	if (l <= 0)
 	    continue;
@@ -671,7 +674,8 @@ void MimeMultipartBody::parse(const char* buf, int len)
 	XDebug(DebugInfo,"Added ('%s',%p) with %u additional headers [%p]",
 	    cType->c_str(),body,body->headers().count(),this);
     }
-    XDebug(DebugInfo,"End parsing boundary=%s [%p]",boundary.c_str() + 4,this);
+    XDebug(DebugInfo,"End parsing boundary=%s%s [%p]",boundary.c_str() + 4,
+	(endBody && len > 0)?" .Found garbage after body":"",this);
 }
 
 // Parse input buffer for first body boundary or data end
@@ -680,11 +684,14 @@ void MimeMultipartBody::parse(const char* buf, int len)
 //  buffer was reached
 // Return the length of data before the found boundary
 int MimeMultipartBody::findBoundary(const char*& buf, int& len,
-	const char* boundary, unsigned int bLen)
+	const char* boundary, unsigned int bLen, bool& endBody)
 {
-    if (len <= 0)
+    if (len <= 0) {
+	endBody = true;
 	return 0;
+    }
 
+    endBody = false;
     unsigned int l = len;
     int bodyLen = 0;
 
@@ -713,6 +720,7 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
 	if (l > 2 && buf[0] == '-' && buf[1] == '-') {
 	    buf += 2;
 	    l -= 2;
+	    endBody = true;
 	}
 	// Skip until the end of line or data
 	for (; l; buf++, l--)
@@ -725,6 +733,8 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
     }
 
     len = l;
+    if (!len)
+	endBody = true;
     return bodyLen;
 }
 

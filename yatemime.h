@@ -518,7 +518,7 @@ private:
     int findBoundary(const char*& buf, int& len,
 	const char* boundary, unsigned int bLen, bool& endBody);
     // Build a boundary string to be used when parsing or building body
-    // Remove quotes if present. Remove trailing blanks
+    // Remove quotes if present. Trim blanks
     // Insert CRLF and boundary marks ('--') before parameter
     // @param boundary Destination string
     // @return False if the parameter is missing

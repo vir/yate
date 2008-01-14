@@ -822,6 +822,21 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     }
 }
 
+// Check if the given body is a SDP one or find an enclosed SDP body
+//  if it is a multipart
+static inline MimeSdpBody* getSdpBody(MimeBody* body)
+{
+    if (!body)
+	return 0;
+    if (body->isSDP())
+	return static_cast<MimeSdpBody*>(body);
+    if (body->isMultipart()) {
+	MimeMultipartBody* multi = static_cast<MimeMultipartBody*>(body);
+	return static_cast<MimeSdpBody*>(multi->findBody("application/sdp"));
+    }
+    return 0;
+}
+
 NetMedia::NetMedia(const char* media, const char* transport, const char* formats, int rport, int lport)
     : String(media), m_audio(true), m_transport(transport), m_formats(formats)
 {
@@ -1787,8 +1802,9 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
     copySipHeaders(*m,*ev->getMessage());
     m_rtpLocalAddr = s_rtpip;
-    if (ev->getMessage()->body && ev->getMessage()->body->isSDP()) {
-	setMedia(parseSDP(static_cast<MimeSdpBody*>(ev->getMessage()->body),m_rtpAddr,m_rtpMedia));
+    MimeSdpBody* sdp = getSdpBody(ev->getMessage()->body);
+    if (sdp) {
+	setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
 	if (m_rtpMedia) {
 	    m_rtpForward = true;
 	    // guess if the call comes from behind a NAT
@@ -1803,7 +1819,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    putMedia(*m,m_rtpMedia);
 	}
 	if (s_forward_sdp) {
-	    const DataBlock& raw = ev->getMessage()->body->getBody();
+	    const DataBlock& raw = sdp->getBody();
 	    String tmp((const char*)raw.data(),raw.length());
 	    m->addParam("sdp_raw",tmp);
 	    m_rtpForward = true;
@@ -2520,14 +2536,16 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 // Add raw SDP forwarding parameter to a message
 bool YateSIPConnection::addSdpParams(Message& msg, const MimeBody* body)
 {
-    if (m_sdpForward && body && body->isSDP()) {
-	const DataBlock& raw = body->getBody();
-	String tmp((const char*)raw.data(),raw.length());
-	msg.setParam("rtp_forward","yes");
-	msg.addParam("sdp_raw",tmp);
-	return true;
-    }
-    return false;
+    if (!m_sdpForward)
+	return false;
+    MimeSdpBody* sdp = getSdpBody((MimeBody*)body);
+    if (!sdp)
+	return false;
+    const DataBlock& raw = sdp->getBody();
+    String tmp((const char*)raw.data(),raw.length());
+    msg.setParam("rtp_forward","yes");
+    msg.addParam("sdp_raw",tmp);
+    return true;
 }
 
 // Add RTP forwarding parameters to a message
@@ -2597,9 +2615,10 @@ bool YateSIPConnection::process(SIPEvent* ev)
     if (!msg || msg->isOutgoing())
 	return false;
     String natAddr;
-    if (msg->body && msg->body->isSDP()) {
+    MimeSdpBody* sdp = getSdpBody(msg->body);
+    if (sdp) {
 	DDebug(this,DebugInfo,"YateSIPConnection got SDP [%p]",this);
-	setMedia(parseSDP(static_cast<MimeSdpBody*>(msg->body),m_rtpAddr,m_rtpMedia));
+	setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
 	// guess if the call comes from behind a NAT
 	if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 	    Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -2710,9 +2729,10 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
     if (m_reInviting == ReinviteRequest) {
 	// we emitted a client reINVITE, now we are forced to deal with it
 	if (code < 300) {
-	    while (msg->body && msg->body->isSDP()) {
+	    MimeSdpBody* sdp = getSdpBody(msg->body);
+	    while (sdp) {
 		String addr;
-		ObjList* lst = parseSDP(static_cast<MimeSdpBody*>(msg->body),addr);
+		ObjList* lst = parseSDP(sdp,addr);
 		if (!lst)
 		    break;
 		if ((addr == m_rtpAddr) || isNatBetween(addr,m_host)) {
@@ -2755,9 +2775,10 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
     if (code < 300) {
 	m->addParam("operation","notify");
 	String natAddr;
-	if (msg->body && msg->body->isSDP()) {
+	MimeSdpBody* sdp = getSdpBody(msg->body);
+	if (sdp) {
 	    DDebug(this,DebugInfo,"YateSIPConnection got reINVITE SDP [%p]",this);
-	    setMedia(parseSDP(static_cast<MimeSdpBody*>(msg->body),m_rtpAddr,m_rtpMedia));
+	    setMedia(parseSDP(sdp,m_rtpAddr,m_rtpMedia));
 	    // guess if the call comes from behind a NAT
 	    if (s_auto_nat && isNatBetween(m_rtpAddr,m_host)) {
 		Debug(this,DebugInfo,"RTP NAT detected: private '%s' public '%s'",
@@ -2773,8 +2794,8 @@ bool YateSIPConnection::processTransaction2(SIPEvent* ev, const SIPMessage* msg,
 		clearEndpoint();
 	    }
 	}
-	if (!addRtpParams(*m,natAddr,msg->body))
-	    addSdpParams(*m,msg->body);
+	if (!addRtpParams(*m,natAddr,sdp))
+	    addSdpParams(*m,sdp);
 	Engine::enqueue(m);
     }
     else {
@@ -2798,12 +2819,13 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	return;
     }
     // hack: use a while instead of if so we can return or break out of it
-    while (t->initialMessage()->body && t->initialMessage()->body->isSDP()) {
+    MimeSdpBody* sdp = getSdpBody(t->initialMessage()->body);
+    while (sdp) {
 	// for pass-trough RTP we need support from our peer
 	if (m_rtpForward) {
 	    String addr;
 	    String natAddr;
-	    ObjList* lst = parseSDP(static_cast<MimeSdpBody*>(t->initialMessage()->body),addr);
+	    ObjList* lst = parseSDP(sdp,addr);
 	    if (!lst)
 		break;
 	    // guess if the call comes from behind a NAT
@@ -2825,7 +2847,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 		msg.addParam("rtp_nat_addr",natAddr);
 	    putMedia(msg,lst);
 	    if (m_sdpForward) {
-		const DataBlock& raw = t->initialMessage()->body->getBody();
+		const DataBlock& raw = sdp->getBody();
 		String tmp((const char*)raw.data(),raw.length());
 		msg.addParam("sdp_raw",tmp);
 	    }
@@ -2844,7 +2866,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	if (m_mediaStatus == MediaMissing)
 	    break;
 	String addr;
-	ObjList* lst = parseSDP(static_cast<MimeSdpBody*>(t->initialMessage()->body),addr);
+	ObjList* lst = parseSDP(sdp,addr);
 	if (!lst)
 	    break;
 	// guess if the call comes from behind a NAT
@@ -2868,8 +2890,8 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	clearEndpoint();
 
 	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
-	MimeSdpBody* sdp = createRtpSDP(true);
-	m->setBody(sdp);
+	MimeSdpBody* sdpNew = createRtpSDP(true);
+	m->setBody(sdpNew);
 	t->setResponse(m);
 	m->deref();
 	Message* msg = message("call.update");
@@ -2880,7 +2902,7 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	Engine::enqueue(msg);
 	return;
     }
-    if (s_refresh_nosdp && !t->initialMessage()->body) {
+    if (s_refresh_nosdp && !sdp) {
 	// be permissive, accept session refresh with no SDP
 	SIPMessage* m = new SIPMessage(t->initialMessage(),200);
 	if (!m_rtpForward) {

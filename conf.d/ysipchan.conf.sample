@@ -73,6 +73,11 @@
 ; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
 ;refresh_nosdp=enable
 
+; isup_decode: bool: Decode incoming application/isup bodies and add the
+;  result to the message dispatched or enqueued by the receiving channel
+; Defaults to disable
+;isup_decode=disable
+
 
 [registrar]
 ; Controls the behaviour when acting as registrar

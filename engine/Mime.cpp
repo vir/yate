@@ -739,7 +739,7 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
 }
 
 // Build a boundary string to be used when parsing or building body
-// Remove quotes if present. Remove trailing blanks
+// Remove quotes if present. Trim blanks
 // Insert CRLF and boundary marks ('--') before parameter
 bool MimeMultipartBody::getBoundary(String& boundary) const
 {
@@ -749,15 +749,8 @@ bool MimeMultipartBody::getBoundary(String& boundary) const
 	String tmp = *b;
 	MimeHeaderLine::delQuotes(tmp);
 	// RFC 2046 pg. 22: Trailing blanks are not part of the boundary
-	const char* start = tmp.c_str();
-	if (start) {
-	    const char* e = start;
-	    for (const char* p = e; *p; p++)
-		if (*p != ' ' && *p != '\t')
-		    e = p + 1;
-	    if (*e)
-		tmp.assign(start,e - start);
-	}
+	// Trim leading blanks also
+	tmp.trimBlanks();
 	if (!tmp.null()) {
 	    boundary = "\r\n--";
 	    boundary << tmp;
@@ -766,7 +759,7 @@ bool MimeMultipartBody::getBoundary(String& boundary) const
     if (boundary.null())
 	Debug(DebugMild,"MimeMultipartBody::getBoundary() Parameter is %s [%p]",
 	    b?"empty":"missing",this);
-    return b != 0;
+    return !boundary.null();
 }
 
 

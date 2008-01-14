@@ -403,6 +403,13 @@ MimeBody* MimeBody::build(const char* buf, int len, const MimeHeaderLine& type)
 	return new MimeStringBody(type,buf,len);
     if (what.startsWith("multipart/"))
 	return new MimeMultipartBody(type,buf,len);
+    // Build a binary body. Remove leading CRLF
+    if (len >= 2 && buf[0] == '\r' && buf[1] == '\n') {
+	len -= 2;
+	if (!len)
+	    return 0;
+	buf += 2;
+    }
     return new MimeBinaryBody(type,buf,len);
 }
 
@@ -482,7 +489,8 @@ YCLASSIMP(MimeMultipartBody,MimeBody)
 MimeMultipartBody::MimeMultipartBody(const char* subtype, const char* boundary)
     : MimeBody((subtype && *subtype) ? (String("multipart/") + subtype) : "multipart/mixed")
 {
-    String b = boundary; 
+    String b = boundary;
+    b.trimBlanks();
     if (b.null())
 	b << (int)::random() << "_" << (unsigned int)Time::now();
     if (b.length() > 70)
@@ -522,36 +530,28 @@ MimeMultipartBody::MimeMultipartBody(const MimeMultipartBody& original)
 MimeBody* MimeMultipartBody::findBody(const String& content, MimeBody** start) const
 {
     MimeBody* localStart = start ? *start : 0;
-    Debug(DebugNote,"MimeMultipartBody::findBody(%s,%p) [%p]",
+    MimeBody* body = 0;
+    XDebug(DebugAll,"MimeMultipartBody::findBody(%s,%p) [%p]",
 	content.c_str(),localStart,this);
-    for (ObjList* o = m_bodies.skipNull(); o; o = o->skipNext()) {
-	MimeBody* body = static_cast<MimeBody*>(o->get());
-	// Start point was found
+    for (ObjList* o = m_bodies.skipNull(); !body && o; o = o->skipNext()) {
+	body = static_cast<MimeBody*>(o->get());
 	if (!localStart) {
 	    if (content == body->getType())
-		return body;
-	    if (body->isMultipart()) {
-		body = (static_cast<MimeMultipartBody*>(body))->findBody(content);
-		if (body)
-		    return body;
-	    }
-	    continue;
+		break;
 	}
-	// Reset starting point if found
-	if (body == localStart)
+	else if (body == localStart)
 	    localStart = 0;
 	// Check inside multiparts for starting point or requested body
-	if (body->isMultipart()) {
+	if (body->isMultipart())
 	    body = (static_cast<MimeMultipartBody*>(body))->findBody(content,&localStart);
-	    if (body)
-		return body;
-	}
+	else
+	    body = 0;
     }
+    XDebug(DebugInfo,"MimeMultipartBody::findBody() body=%p start=%p [%p]",
+	body,localStart,this);
     if (start)
 	*start = localStart;
-    Debug(DebugNote,"MimeMultipartBody::findBody(). Not found%s  [%p]",
-	localStart?"":". Found start point",this);
-    return 0;
+    return body;
 }
 
 // Duplicate this MIME body
@@ -563,27 +563,31 @@ MimeBody* MimeMultipartBody::clone() const
 // Method that is called internally to build the binary encoded body
 void MimeMultipartBody::buildBody() const
 {
-    const NamedString* b = getParam("boundary");
-    String boundary = "\r\n--";
-    if (b)
-	boundary << *b;
+    String boundary;
+    if (!getBoundary(boundary))
+	return;
 
+    String crlf = "\r\n";
+    String boundaryLast = boundary + "--" + crlf;
+    boundary << crlf;
+
+    // Build this body. Add a boundary before each component
     ObjList* o = m_bodies.skipNull();
     if (o)
 	for (; o; o = o->skipNext()) {
 	    MimeBody* body = static_cast<MimeBody*>(o->get());
-	    String hdr = "\r\n";
+	    String hdr;
 	    body->buildHeaders(hdr);
-	    // Build it
 	    m_body += boundary;
 	    m_body += hdr;
+	    m_body += crlf;
 	    m_body += body->getBody();
 	}
     else
 	m_body += boundary;
+
     // Add termination boundary
-    boundary << "--\r\n";
-    m_body += boundary;
+    m_body += boundaryLast;
 }
 
 // Parse a data buffer and append any valid body to this multipart
@@ -592,47 +596,40 @@ void MimeMultipartBody::parse(const char* buf, int len)
 {
     DDebug(DebugAll,"MimeMultipartBody::parse(%p,%d,'%s') [%p]",
 	buf,len,getType().c_str(),this);
-    if (!buf || len <= 0)
+
+    String boundary;
+    if (!(buf && len > 0 && getBoundary(boundary)))
 	return;
 
-    const NamedString* b = getParam("boundary");
-    String boundary = "\r\n--";
-    if (b)
-	boundary << *b;
-    // RFC 2046 pg. 22: Remove trailing blanks from boundary
-    unsigned int i = boundary.length() - 1;
-    for (const char* d = boundary.c_str(); i > 3; i--)
-	if (d[i] != ' ' && d[i] != '\t')
-	    break;
-    if (i != boundary.length() - 1)
-	boundary.assign(boundary.c_str(),i + 1);
-    if (boundary.length() < 5)
-	DDebug(DebugMild,"MimeMultipartBody::parse(). Boundary is empty [%p]",this);
-
-    bool endData;
     // Find first boundary: ignore the data before it
-    // The first boundary might not contain the CRLF at beginning
-    findBoundary(buf,len,boundary.c_str() + 2,boundary.length()-2,endData);
-
-    XDebug(DebugAll,"Searching for bodies len=%d [%p]",len,this);
+    findBoundary(buf,len,boundary.c_str(),boundary.length());
 
     // Parse for bodies
-    while (!endData) {
+    XDebug(DebugInfo,"Start parsing boundary=%s len=%d [%p]",
+	boundary.c_str() + 4,len,this);
+    while (len > 0) {
+	// Find next boundary. Get the length of data before it
+	// 'start' will point to the beginning of an enclosed body
 	const char* start = buf;
-	int l = findBoundary(buf,len,boundary.c_str(),boundary.length(),endData);
+	int l = findBoundary(buf,len,boundary.c_str(),boundary.length());
+	XDebug(DebugInfo,"Found %d length body (remain=%d) [%p]",l,len,this);
 	if (l <= 0)
 	    continue;
-	XDebug(DebugInfo,"Found %d body data [%p]",l,this);
-	// Get body headers
+	// Parse 'start' for body headers
 	ObjList hdr;
 	MimeHeaderLine* cType = 0;
 	while (l) {
+	    int tmpLen = l;
+	    const char* s = start;
 	    String* line = MimeBody::getUnfoldedLine(start,l);
 	    // Found end of headers
 	    if (line->null()) {
+		l = tmpLen;
+		start = s;
 		TelEngine::destruct(line);
 		break;
 	    }
+	    DDebug(DebugAll,"Found line '%s' [%p]",line->c_str(),this);
 	    int col = line->find(':');
 	    // Check if this is a valid header line
 	    if (col <= 0) {
@@ -647,24 +644,22 @@ void MimeMultipartBody::parse(const char* buf, int len)
 	    }
 	    *line >> ":";
 	    line->trimBlanks();
-	    DDebug(DebugAll,"MimeMultipartBody::parse() header='%s' value='%s'",
-		name.c_str(),line->c_str());
 	    MimeHeaderLine* ct = new MimeHeaderLine(name,*line);
 	    hdr.append(ct);
 	    if (name &= "Content-Type")
 		cType = ct;
 	    TelEngine::destruct(line);
 	}
+	// 'start' is now pointing to the enclosed body's content
 	// Append body to list and move extra headers to it
-	MimeBody* body = cType ? MimeBody::build(buf,len,*cType) : 0;
+	MimeBody* body = cType ? MimeBody::build(start,l,*cType) : 0;
 	if (!body) {
-	    XDebug(DebugNote,"Failed to build body%s [%p]",
-		cType?"":": Content-Type header is missing",this);
+	    DDebug(DebugNote,
+		"Failed to build enclosed body (length=%d)%s [%p]",
+		l,cType?"":": Content-Type header is missing",this);
 	    continue;
 	}
 	m_bodies.append(body);
-	XDebug(DebugInfo,"Body '%s' created. Adding %u additional headers [%p]",
-	    cType->c_str(),hdr.count() - 1,this);
 	ListIterator iter(hdr);
 	for (GenObject* o = 0; (o = iter.get());) {
 	    MimeHeaderLine* line = static_cast<MimeHeaderLine*>(o);
@@ -673,7 +668,10 @@ void MimeMultipartBody::parse(const char* buf, int len)
 	    hdr.remove(o,false);
 	    body->appendHdr(line);
 	}
+	XDebug(DebugInfo,"Added ('%s',%p) with %u additional headers [%p]",
+	    cType->c_str(),body,body->headers().count(),this);
     }
+    XDebug(DebugInfo,"End parsing boundary=%s [%p]",boundary.c_str() + 4,this);
 }
 
 // Parse input buffer for first body boundary or data end
@@ -682,14 +680,11 @@ void MimeMultipartBody::parse(const char* buf, int len)
 //  buffer was reached
 // Return the length of data before the found boundary
 int MimeMultipartBody::findBoundary(const char*& buf, int& len,
-	const char* boundary, unsigned int bLen, bool& endData)
+	const char* boundary, unsigned int bLen)
 {
-    if (len <= 0) {
-	endData = true;
+    if (len <= 0)
 	return 0;
-    }
 
-    endData = false;
     unsigned int l = len;
     int bodyLen = 0;
 
@@ -697,6 +692,7 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
 	// Skip until the first char of boundary
 	for (; l >= bLen && *buf != boundary[0]; l--, buf++)
 	    bodyLen++;
+	// Current char is the first char of the boundary
 	// Check if we have enough data for boundary
 	if (l < bLen) {
 	    bodyLen += l;
@@ -716,23 +712,51 @@ int MimeMultipartBody::findBoundary(const char*& buf, int& len,
 	// Check end of data
 	if (l > 2 && buf[0] == '-' && buf[1] == '-') {
 	    buf += 2;
-	    len -= 2;
-	    endData = true;
+	    l -= 2;
 	}
 	// Skip until the end of line or data
-	for (; l > 1; buf++, l--)
-	    if (buf[0] == '\r' && buf[1] == '\n') {
-		buf += 2;
-		len -= 2;
+	for (; l; buf++, l--)
+	    if (*buf == '\n') {
+		buf++;
+		l--;
 		break;
 	    }
 	break;
     }
 
     len = l;
-    if (!len)
-	endData = true;
     return bodyLen;
+}
+
+// Build a boundary string to be used when parsing or building body
+// Remove quotes if present. Remove trailing blanks
+// Insert CRLF and boundary marks ('--') before parameter
+bool MimeMultipartBody::getBoundary(String& boundary) const
+{
+    boundary = "";
+    const NamedString* b = getParam("boundary");
+    if (b) {
+	String tmp = *b;
+	MimeHeaderLine::delQuotes(tmp);
+	// RFC 2046 pg. 22: Trailing blanks are not part of the boundary
+	const char* start = tmp.c_str();
+	if (start) {
+	    const char* e = start;
+	    for (const char* p = e; *p; p++)
+		if (*p != ' ' && *p != '\t')
+		    e = p + 1;
+	    if (*e)
+		tmp.assign(start,e - start);
+	}
+	if (!tmp.null()) {
+	    boundary = "\r\n--";
+	    boundary << tmp;
+	}
+    }
+    if (boundary.null())
+	Debug(DebugMild,"MimeMultipartBody::getBoundary() Parameter is %s [%p]",
+	    b?"empty":"missing",this);
+    return b != 0;
 }
 
 

@@ -321,6 +321,13 @@ public:
     const DataBlock& getBody() const;
 
     /**
+     * Get the binary data of this MIME body without building it.
+     * @return Block of binary data
+     */
+    inline const DataBlock& body() const
+	{ return m_body; }
+
+    /**
      * Check if this body is a Session Description Protocol
      * @return True if this body holds a SDP
      */
@@ -341,12 +348,14 @@ public:
     virtual MimeBody* clone() const = 0;
 
     /**
-     * Method to build a MIME body from a type and data buffer
-     * @param buf Pointer to buffer of data
+     * Method to build a MIME body from a type and data buffer.
+     * Unknown body types are built into a binary body. Exactly 1 leading CRLF
+     * is removed from the beginning of the buffer if found before building it
+     * @param buf Pointer to buffer of data just after the body headers
      * @param len Length of data in buffer
      * @param type The header line declaring the body's content.
      *  Usually this is a Content-Type header line
-     * @return Newly allocated MIME body or NULL if type is unknown
+     * @return Newly allocated MIME body or NULL if the buffer is empty
      */
     static MimeBody* build(const char* buf, int len, const MimeHeaderLine& type);
 
@@ -504,11 +513,16 @@ protected:
 private:
     // Parse input buffer for first body boundary or data end
     // Advance buffer pass the boundary line and decrease the buffer length
-    // Set endData to true if a final boundary was found or the end of the
-    //  buffer was reached
     // Return the length of data before the found boundary
     int findBoundary(const char*& buf, int& len,
-	const char* boundary, unsigned int bLen, bool& endData);
+	const char* boundary, unsigned int bLen);
+    // Build a boundary string to be used when parsing or building body
+    // Remove quotes if present. Remove trailing blanks
+    // Insert CRLF and boundary marks ('--') before parameter
+    // @param boundary Destination string
+    // @return False if the parameter is missing
+    bool getBoundary(String& boundary) const;
+
 
     ObjList m_bodies;                    // The list of bodies contained in this multipart
 };

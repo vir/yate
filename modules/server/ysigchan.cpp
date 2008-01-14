@@ -43,6 +43,8 @@ class SigConsumerMux;                    // Consumer used to push data to SigSou
 class SigSourceMux;                      // A data source multiplexer with 2 channels
 class SigIsdnCallRecord;                 // Record an ISDN call monitor
 class SigLinkThread;                     // Get events and check timeout for links that have a call controller
+class DecodeIsupHandler;                 // Handler for "decode.isup" message
+
 
 // The signalling channel
 class SigChannel : public Channel
@@ -445,6 +447,19 @@ public:
 private:
     SigLink* m_link;
     u_int64_t m_timeout;
+};
+
+
+// decode.isup handler (decode an usup message)
+class DecodeIsupHandler : public MessageHandler
+{
+public:
+    // Init the ISUP component
+    DecodeIsupHandler();
+    virtual void destruct();
+    virtual bool received(Message& msg);
+private:
+    SS7ISUP* m_isup;
 };
 
 static SigDriver plugin;
@@ -1213,6 +1228,7 @@ void SigDriver::initialize()
 	installRelay(Progress);
 	installRelay(Update);
 	installRelay(Route);
+	Engine::install(new DecodeIsupHandler);
 	m_engine = new SignallingEngine;
 	m_engine->debugChain(this);
 	m_engine->start();
@@ -2480,6 +2496,70 @@ void SigLinkThread::run()
 	    break;
 	}
     }
+}
+
+/**
+ * DecodeIsupHandler
+ */
+    // Init the ISUP component
+DecodeIsupHandler::DecodeIsupHandler()
+    : MessageHandler("isup.decode",100)
+{
+    NamedList params("");
+    String dname = plugin.prefix() + *this;
+    params.addParam("debugname",dname);
+    // Avoid some useless debug messages
+    params.addParam("pointcodetype",SS7PointCode::lookup(SS7PointCode::ITU));
+    params.addParam("remotepointcode","1-1-1");
+    m_isup = new SS7ISUP(params);
+    m_isup->debugChain(&plugin);
+}
+
+void DecodeIsupHandler::destruct()
+{
+    TelEngine::destruct(m_isup);
+}
+
+bool DecodeIsupHandler::received(Message& msg)
+{
+    if (!msg.userData())
+	return false;
+    DataBlock* data = (DataBlock*)msg.userData()->getObject("DataBlock");
+    if (!data || data->length() < 2) {
+	DDebug(&plugin,DebugNote,"%s. Invalid data len %u",c_str(),data->length());
+	return false;
+    }
+
+    const unsigned char* paramPtr = (const unsigned char*)data->data();
+    SS7MsgISUP::Type msgType = (SS7MsgISUP::Type)(*paramPtr++);
+    DDebug(&plugin,DebugAll,"%s msg=%s type=%s basetype=%s [%p]",
+	msg.c_str(),SS7MsgISUP::lookup(msgType),
+	msg.getValue("protocol-type"),msg.getValue("protocol-basetype"),this);
+
+    SS7PointCode::Type pcType = SS7PointCode::Other;
+    String proto = msg.getValue("protocol-type");
+    if (proto == "itu-t")
+	pcType = SS7PointCode::ITU;
+    else if (proto == "ansi")
+	pcType = SS7PointCode::ANSI;
+    else {
+	String baseProto = msg.getValue("protocol-basetype");
+	if (baseProto.startsWith("itu-t"))
+	    pcType = SS7PointCode::ITU;
+	else if (baseProto.startsWith("ansi"))
+	    pcType = SS7PointCode::ANSI;
+	else {
+	    msg.setParam("error","Unknown protocol-type");
+	    return false;
+	}
+    }
+
+    msg.setParam("message-type",SS7MsgISUP::lookup(msgType));
+    if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1))
+	return true;
+    msg.clearParam("message-type");
+    msg.setParam("error","Parser failure");
+    return false;
 }
 
 }; // anonymous namespace

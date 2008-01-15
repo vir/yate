@@ -178,7 +178,7 @@ protected:
     virtual void statusParams(String& str);
     virtual bool received(Message& msg, int id);
 private:
-    static int getPriority(const char *name);
+    static int getPriority(const String& name);
     static void addHandler(const char *name, int type);
     static void addHandler(AAAHandler* handler);
     static void addHandler(FallBackHandler* handler);
@@ -921,21 +921,18 @@ bool RegistModule::received(Message& msg, int id)
     return Module::received(msg,id);
 }
 
-int RegistModule::getPriority(const char *name)
+int RegistModule::getPriority(const String& name)
 {
-    String num;		
-    if (!s_cfg.getBoolValue("general",name,true)) {
-	if ((name == "chan.disconnected") || (name == "call.answered") || (name == "chan.hangup")) {
-	    if (!s_cfg.getBoolValue("general","fallback"))
-		return -1;
-	    num = "fallback";
-	}	
-	else
+    bool fb = (name == "chan.disconnected") || (name == "call.answered") || (name == "chan.hangup");
+    // allow to default enable all fallback related messages in a single place
+    if (!s_cfg.getBoolValue("general",name,fb && s_cfg.getBoolValue("general","fallback")))
 	    return -1;
-    }
-    num = name;
+
     int prio = s_cfg.getIntValue("default","priority",50);
-    return s_cfg.getIntValue(num,"priority",prio);
+    // also allow a 2nd default priority for fallback messages
+    if (fb)
+	prio = s_cfg.getIntValue("fallback","priority",prio);
+    return s_cfg.getIntValue(name,"priority",prio);
 }
 
 void RegistModule::addHandler(AAAHandler* handler)

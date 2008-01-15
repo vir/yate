@@ -10,6 +10,12 @@
 ; buffer: int: Requested size of socket's receive buffer, 0 to use default
 ;buffer=0
 
+; floodevents: int: How many SIP events retrived in a row trigger flood warning
+;floodevents=20
+
+; maxforwards: int: Default Max-Forwards header, used to avoid looping calls
+;maxforwards=20
+
 ; useragent: string: String to set in User-Agent or Server headers
 ;useragent=YATE/1.2.0
 

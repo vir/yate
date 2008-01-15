@@ -517,6 +517,7 @@ static Configuration s_cfg;
 static String s_realm = "Yate";
 static String s_audio = "alaw,mulaw";
 static String s_rtpip;
+static int s_floodEvents = 20;
 static int s_maxForwards = 20;
 static int s_nat_refresh = 25;
 static bool s_privacy = false;
@@ -1350,14 +1351,26 @@ void YateSIPEndPoint::run()
 {
     struct timeval tv;
     char buf[1500];
-    /* Watch stdin (fd 0) to see when it has input. */
+    int evCount = 0;
+
     for (;;)
     {
-	/* Wait up to 5000 microseconds. */
-	tv.tv_sec = 0;
-	tv.tv_usec = 5000;
 	bool ok = false;
-	m_sock->select(&ok,0,0,&tv);
+	if ((s_floodEvents <= 1) || (evCount < s_floodEvents))
+	    ok = true;
+	else if (evCount == s_floodEvents)
+	    Debug(&plugin,DebugMild,"Flood detected: %d handled events",evCount);
+	else if ((evCount % s_floodEvents) == 0)
+	    Debug(&plugin,DebugWarn,"Severe flood detected: %d events",evCount);
+	// in any case, try to read a packet now and then to keep up
+	ok = ok || ((evCount & 3) == 0);
+	if (ok) {
+	    // wait up to 5000 microseconds if we had no events in last run
+	    tv.tv_sec = 0;
+	    tv.tv_usec = (evCount <= 0) ? 5000 : 0;
+	    ok = false;
+	    m_sock->select(&ok,0,0,&tv);
+	}
 	if (ok)
 	{
 	    // we can read the data
@@ -1387,6 +1400,10 @@ void YateSIPEndPoint::run()
 	else
 	    Thread::check();
 	SIPEvent* e = m_engine->getEvent();
+	if (e)
+	    evCount++;
+	else
+	    evCount = 0;
 	// hack: use a loop so we can use break and continue
 	for (; e; m_engine->processEvent(e),e = 0) {
 	    if (!e->getTransaction())
@@ -4150,6 +4167,7 @@ void SIPDriver::initialize()
     s_cfg.load();
     s_realm = s_cfg.getValue("general","realm","Yate");
     s_maxForwards = s_cfg.getIntValue("general","maxforwards",20);
+    s_floodEvents = s_cfg.getIntValue("general","floodevents",20);
     s_privacy = s_cfg.getBoolValue("general","privacy");
     s_auto_nat = s_cfg.getBoolValue("general","nat",true);
     s_progress = s_cfg.getBoolValue("general","progress",false);

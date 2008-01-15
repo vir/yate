@@ -126,7 +126,13 @@ SIPTransaction::SIPTransaction(const SIPTransaction& original, const String& tag
     if (m_firstMessage)
 	m_firstMessage->ref();
 
+#ifdef SIP_PRESERVE_TRANSACTION_ORDER
+    // new transactions at the end, preserve "natural" order
     m_engine->TransList.append(this);
+#else
+    // put new transactions first - faster to match new messages
+    m_engine->TransList.insert(this);
+#endif
 }
 
 SIPTransaction::~SIPTransaction()

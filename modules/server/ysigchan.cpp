@@ -2423,9 +2423,14 @@ Message* SigIsdnCallRecord::message(const char* name, bool peers, bool userdata)
 
 bool SigIsdnCallRecord::callRouteAndExec(const char* format)
 {
-    Message* m = message("call.route");
+    Message* m = message("call.preroute");
     bool ok = false;
     while (true) {
+	if (Engine::dispatch(m) && (m->retValue() == "-" || m->retValue() == "error")) {
+	    m_reason = m->getValue("reason",m->getValue("error","failure"));
+	    break;
+	}
+	*m = "call.route";
 	m->addParam("type","record");
 	m->addParam("format",format);
 	m->addParam("callsource",m_netInit ? "net" : "cpe");

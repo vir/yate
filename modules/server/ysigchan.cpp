@@ -1854,11 +1854,12 @@ bool SigIsdnMonitor::masquerade(String& id, Message& msg)
 {
     for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
 	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
-	if (id == rec->id()) {
-	    msg = msg.getValue("message");
-	    msg.clearParam("message");
-	    msg.userData(rec);
-	}
+	if (id != rec->id())
+	    continue;
+	msg = msg.getValue("message");
+	msg.clearParam("message");
+	msg.userData(rec);
+	break;
     }
     return true;
 }

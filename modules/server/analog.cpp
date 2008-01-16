@@ -2482,6 +2482,7 @@ void AnalogDriver::initialize()
     if (!m_init) {
 	m_init = true;
 	setup();
+	installRelay(Masquerade);
 	installRelay(Halt);
 	installRelay(Progress);
 	installRelay(Update);
@@ -2674,6 +2675,20 @@ bool AnalogDriver::received(Message& msg, int id)
     String target;
 
     switch (id) {
+	case Masquerade:
+	    // Masquerade a recorder message
+	    target = msg.getValue("id");
+	    if (target.startsWith(recPrefix())) {
+		Lock lock(this);
+		AnalogCallRec* rec = findRecorder(target);
+		if (rec) {
+		    msg = msg.getValue("message");
+		    msg.clearParam("message");
+		    msg.userData(rec);
+		    return false;
+		}
+	    }
+	    break;
 	case Status:
 	case Drop:
 	    target = msg.getValue("module");

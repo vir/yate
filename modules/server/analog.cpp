@@ -2232,8 +2232,7 @@ bool AnalogCallRec::startRecording()
 	m->setParam("caller",s_unk);
     bool ok = false;
     while (true) {
-	if (!(Engine::dispatch(m)) &&
-	    (m->retValue() == "-" || m->retValue() == "error")) {
+	if (Engine::dispatch(m) && (m->retValue() == "-" || m->retValue() == "error")) {
 	    m_reason = m->getValue("reason",m->getValue("error","failure"));
 	    break;
 	}

@@ -581,10 +581,6 @@ void ModuleLine::sendCallSetup(bool privacy)
     msg.addParam("notify",tmp);
     copyCall(msg,privacy);
 
-
-//    msg.addParam("datetime","12:18:11:55");
-    //msg.addParam("datetime","11:11:11:11");
-
     if (Engine::dispatch(msg))
 	return;
     Debug(group(),DebugNote,"%s: failed to send call setup reason='%s' [%p]",

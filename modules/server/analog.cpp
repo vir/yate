@@ -2718,7 +2718,7 @@ bool AnalogDriver::received(Message& msg, int id)
 		    return false;
 		}
 	    }
-	    break;
+	    return Driver::received(msg,id);
 	case Status:
 	case Drop:
 	    target = msg.getValue("module");

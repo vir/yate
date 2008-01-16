@@ -41,6 +41,11 @@ class AnalogWorkerThread;                // Worker thread to get events from a g
 class ChanNotifyHandler;                 // chan.notify handler (notify lines on detector events)
 class EngineStartHandler;                // engine.start handler (start detectors on lines expectind data before ring)
 
+// Value for m_ringTimer interval. The timer is used to ignore some ring events
+// Some ring patterns might raise multiple ring events for the same logical ring
+// e.g. ring-ring....ring-ring...
+#define RING_PATTERN_TIME 750
+
 // Module's interface to an analog line or monitor
 class ModuleLine : public AnalogLine
 {
@@ -291,6 +296,7 @@ private:
     bool m_routeOnSecondRing;            // Delay router if waiting callerid
     String m_reason;                     // Hangup reason
     SignallingTimer m_callEndedTimer;    // Call ended notification to the FXO
+    SignallingTimer m_ringTimer;         // Timer used to fix some ring patterns
     SignallingTimer m_noRingTimer;       // No more rings on incoming not answered FXO line
     SignallingTimer m_alarmTimer;        // How much time a channel may stay with its line in alarm
     SignallingTimer m_dialTimer;         // FXO: delay dialing the number
@@ -357,6 +363,7 @@ private:
     bool m_hungup;                       // Already hungup flag
     unsigned int m_polarityCount;        // The number of polarity changes received
     bool m_startOnSecondRing;            // Start recording on second ring if waiting callerid
+    SignallingTimer m_ringTimer;         // Timer used to fix some ring patterns
     SignallingTimer m_noRingTimer;       // No more rings on detected on unanswered line
     String m_reason;                     // Hangup reason
     String m_status;                     // Call status
@@ -1294,6 +1301,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     m_hungup(false),
     m_routeOnSecondRing(false),
     m_callEndedTimer(0),
+    m_ringTimer(RING_PATTERN_TIME),
     m_noRingTimer(0),
     m_alarmTimer(line ? line->alarmTimeout() : 0),
     m_dialTimer(0),
@@ -1677,6 +1685,14 @@ void AnalogChannel::evRing(bool on)
 {
     Lock lock(m_mutex);
 
+    // Re(start) ring timer. Ignore ring events if timer was already started
+    if (on) {
+	bool ignore = m_ringTimer.started();
+	m_ringTimer.start();
+	if (ignore)
+	    return;
+    }
+
     // Check call setup
     if (m_callsetup == AnalogLine::After)
 	if (on)
@@ -1818,6 +1834,9 @@ void AnalogChannel::evAlarm(bool alarm, const char* alarms)
 bool AnalogChannel::checkTimeouts(const Time& when)
 {
     Lock lock(m_mutex);
+    // Stop ring timer: we didn't received a ring event in the last interval
+    if (m_ringTimer.timeout(when.msecNow()))
+	m_ringTimer.stop();
     if (m_alarmTimer.timeout(when.msecNow())) {
 	m_alarmTimer.stop();
 	DDebug(this,DebugInfo,"Line was in alarm for " FMT64 " ms [%p]",
@@ -2039,6 +2058,7 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
     m_hungup(false),
     m_polarityCount(0),
     m_startOnSecondRing(false),
+    m_ringTimer(RING_PATTERN_TIME),
     m_noRingTimer(0),
     m_status("startup")
 {
@@ -2269,6 +2289,12 @@ bool AnalogCallRec::ringing(bool fxsEvent)
 {
     Lock lock(m_mutex);
 
+    // Re(start) ring timer. Ignore ring events if timer was already started
+    bool ignore = m_ringTimer.started();
+    m_ringTimer.start();
+    if (ignore)
+	return true;
+
     if (m_line)
 	m_line->changeState(AnalogLine::Ringing,true);
 
@@ -2364,6 +2390,10 @@ bool AnalogCallRec::evAlarm(bool fxsEvent, bool alarm, const char* alarms)
 bool AnalogCallRec::checkTimeouts(const Time& when)
 {
     Lock lock(m_mutex);
+
+    if (m_ringTimer.timeout(when.msecNow()))
+	m_ringTimer.stop();
+
     if (!m_noRingTimer.timeout(when.msecNow()))
 	return true;
     DDebug(this,DebugInfo,"Ring timer expired [%p]",this);

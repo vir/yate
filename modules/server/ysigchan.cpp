@@ -2557,7 +2557,6 @@ bool DecodeIsupHandler::received(Message& msg)
     msg.setParam("message-type",SS7MsgISUP::lookup(msgType));
     if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1))
 	return true;
-    msg.clearParam("message-type");
     msg.setParam("error","Parser failure");
     return false;
 }

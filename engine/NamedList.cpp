@@ -66,11 +66,11 @@ NamedList& NamedList::setParam(NamedString* param)
 {
     XDebug(DebugInfo,"NamedList::setParam(%p) [\"%s\",\"%s\"]",
         param,param->name().c_str(),param->c_str());
-    NamedString *s = getParam(param->name());
-    if (s) {
-	*s = param->c_str();
-	param->destruct();
-    }
+    if (!param)
+	return *this;
+    ObjList* p = m_params.find(param->name());
+    if (p)
+	p->set(param);
     else
 	m_params.append(param);
     return *this;

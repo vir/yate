@@ -1039,6 +1039,19 @@ unsigned int String::hash(const char* value)
     return h;
 }
 
+void* String::getObject(const String& name) const
+{
+    if (name == "String")
+	return const_cast<String*>(this);
+    return GenObject::getObject(name);
+}
+
+const String& String::toString() const
+{
+    return *this;
+}
+
+
 Regexp::Regexp()
     : m_regexp(0), m_flags(0)
 {
@@ -1138,11 +1151,71 @@ bool Regexp::isCaseInsensitive() const
     return (m_flags & REG_ICASE) != 0;
 }
 
+
 NamedString::NamedString(const char* name, const char* value)
     : String(value), m_name(name)
 {
     XDebug(DebugAll,"NamedString::NamedString(\"%s\",\"%s\") [%p]",name,value,this);
 }
+
+const String& NamedString::toString() const
+{
+    return m_name;
+}
+
+void* NamedString::getObject(const String& name) const
+{
+    if (name == "NamedString")
+	return (void*)this;
+    return String::getObject(name);
+}
+
+
+NamedPointer::NamedPointer(const char* name, GenObject* data, const char* value)
+    : NamedString(name,value),
+    m_data(0)
+{
+    userData(data);
+}
+
+NamedPointer::~NamedPointer()
+{
+    userData(0);
+}
+
+// Set obscure data carried by this object.
+void NamedPointer::userData(GenObject* data)
+{
+    TelEngine::destruct(m_data);
+    m_data = data;
+}
+
+// Retrive the pointer carried by this object and release ownership
+GenObject* NamedPointer::takeData()
+{
+    GenObject* tmp = m_data;
+    m_data = 0;
+    return tmp;
+}
+
+void* NamedPointer::getObject(const String& name) const
+{
+    if (name == "NamedPointer")
+	return (void*)this;
+    void* p = NamedString::getObject(name);
+    if (p)
+	return p;
+    if (m_data)
+	return m_data->getObject(name);
+    return 0;
+}
+
+// Called whenever the string value changed. Release the pointer
+void NamedPointer::changed()
+{
+    userData(0);
+}
+
 
 void* GenObject::getObject(const String& name) const
 {
@@ -1152,23 +1225,6 @@ void* GenObject::getObject(const String& name) const
 const String& GenObject::toString() const
 {
     return String::empty();
-}
-
-void* String::getObject(const String& name) const
-{
-    if (name == "String")
-	return const_cast<String*>(this);
-    return GenObject::getObject(name);
-}
-
-const String& String::toString() const
-{
-    return *this;
-}
-
-const String& NamedString::toString() const
-{
-    return m_name;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

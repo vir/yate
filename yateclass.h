@@ -2009,7 +2009,7 @@ public:
     /**
      * Creates a new named string.
      * @param name Name of this string
-     * @param value Initial value of the string.
+     * @param value Initial value of the string
      */
     NamedString(const char* name, const char* value = 0);
 
@@ -2027,6 +2027,13 @@ public:
     virtual const String& toString() const;
 
     /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Value assignment operator
      */
     inline NamedString& operator=(const char* value)
@@ -2035,6 +2042,81 @@ public:
 private:
     NamedString(); // no default constructor please
     String m_name;
+};
+
+/**
+ * A named string holding a pointer to arbitrary data.
+ * The pointer is owned by the object: it will be released when the object is
+ *  destroyed or the string value changed
+ * @short A named pointer class.
+ */
+class YATE_API NamedPointer : public NamedString
+{
+public:
+    /**
+     * Creates a new named pointer
+     * @param name Name of this pointer
+     * @param data Initial pointer value. The pointer will be owned by this object
+     * @param value Initial string value
+     */
+    NamedPointer(const char* name, GenObject* data = 0, const char* value = 0);
+
+    /**
+     * Destructor. Release the pointer
+     */
+    virtual ~NamedPointer();
+
+    /**
+     * Retrive the pointer carried by this object
+     * @return Pointer to arbitrary user GenObject
+     */
+    inline GenObject* userData() const
+	{ return m_data; }
+
+    /**
+     * Retrive the pointer carried by this object and release ownership.
+     * The caller will own the returned pointer
+     * @return Pointer to arbitrary user GenObject
+     */
+    GenObject* takeData();
+
+    /**
+     * Set obscure data carried by this object.
+     * Note that a RefObject's reference counter should be increased before adding it to this named pointer
+     * @param data Pointer to arbitrary user data
+     */
+    void userData(GenObject* data);
+
+    /**
+     * Get a pointer to a derived class of user data given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if user object id NULL or doesn't implement it
+     */
+    inline void* userObject(const String& name) const
+	{ return m_data ? m_data->getObject(name) : 0; }
+
+    /**
+     * String value assignment operator
+     */
+    inline NamedPointer& operator=(const char* value)
+	{ NamedString::operator=(value); return *this; }
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+protected:
+    /**
+     * Called whenever the string value changed. Release the pointer
+     */
+    virtual void changed();
+
+private:
+    NamedPointer(); // no default constructor please
+    GenObject* m_data;
 };
 
 /**

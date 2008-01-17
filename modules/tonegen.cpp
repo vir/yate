@@ -690,6 +690,20 @@ ToneChan::~ToneChan()
     Debug(this,DebugAll,"ToneChan::~ToneChan() %s [%p]",id().c_str(),this);
 }
 
+// Get a data block from a binary parameter of msg
+DataBlock* getRawData(Message& msg)
+{
+    NamedString* data = msg.getParam("rawdata");
+    if (!data)
+	return 0;
+    NamedPointer* p = static_cast<NamedPointer*>(data->getObject("NamedPointer"));
+    if (!p)
+	return 0;
+    GenObject* gen = p->userData();
+    if (!(gen && gen->getObject("DataBlock")))
+	return 0;
+    return static_cast<DataBlock*>(p->takeData());
+}
 
 bool AttachHandler::received(Message& msg)
 {
@@ -736,7 +750,7 @@ bool AttachHandler::received(Message& msg)
     if (ovr) {
 	DataConsumer* c = de->getConsumer();
 	if (c) {
-	    TempSource* t = new TempSource(ovr,static_cast<DataBlock*>(msg.userObject("rawdata")));
+	    TempSource* t = new TempSource(ovr,getRawData(msg));
 	    if (DataTranslator::attachChain(t,c,true) && t->startup())
 		msg.clearParam("override");
 	    else {
@@ -752,7 +766,7 @@ bool AttachHandler::received(Message& msg)
     if (repl) {
 	DataConsumer* c = de->getConsumer();
 	if (c) {
-	    TempSource* t = new TempSource(repl,static_cast<DataBlock*>(msg.userObject("rawdata")));
+	    TempSource* t = new TempSource(repl,getRawData(msg));
 	    if (DataTranslator::attachChain(t,c,false) && t->startup())
 		msg.clearParam("replace");
 	    else {

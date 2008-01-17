@@ -2530,7 +2530,14 @@ bool DecodeIsupHandler::received(Message& msg)
 {
     if (!msg.userData())
 	return false;
-    DataBlock* data = (DataBlock*)msg.userData()->getObject("DataBlock");
+
+    NamedString* ns = msg.getParam("rawdata");
+    DataBlock* data = 0;
+    if (ns) {
+	NamedPointer* p = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+	if (p && p->userObject("DataBlock"))
+	    data = static_cast<DataBlock*>(p->userData());
+    }
     if (!data || data->length() < 2) {
 	DDebug(&plugin,DebugNote,"%s. Invalid data len %u",c_str(),data->length());
 	return false;

@@ -31,7 +31,6 @@ namespace { // anonymous
 class ADConsumer;                        // Base class for all module's consumers (UART)
 class ETSIConsumer;                      // Data consumer for an ETSIModem
 class ADModule;                          // The module
-class ADProxy;                           // Proxy class used to forward modulated data to other module
 class ChanAttachHandler;                 // chan.attach handler
 
 // Base class for all module's consumers
@@ -112,22 +111,6 @@ private:
     unsigned int m_id;                   // Next consumer's id
     bool m_init;                         // Already initialized flag
     String m_prefix;                     // Module's prefix
-};
-
-// Proxy class used to forward modulated data to other module
-class ADProxy : public RefObject
-{
-public:
-    ADProxy(RefObject* ep, DataBlock* data);
-    virtual ~ADProxy();
-    // Get endpoint and data
-    virtual void* getObject(const String& name) const;
-protected:
-    // Deref endpoint. Remove data if still owned
-    virtual void destroyed();
-private:
-    RefObject* m_ep;                     // The endpoint used to send modulated data
-    mutable DataBlock* m_data;           // The modulated data
 };
 
 // chan.attach handler
@@ -394,45 +377,11 @@ bool ADModule::attachETSI(Message& msg, DataSource* src, String& type, const cha
     }
 
     Message send("chan.attach");
-    ADProxy* proxy = new ADProxy(msg.userData(),buffer);
-    send.userData(proxy);
-    TelEngine::destruct(proxy);
+    send.userData(msg.userData());
     send.addParam("override","tone/rawdata");
     send.addParam("single",String::boolText(true));
+    send.addParam(new NamedPointer("rawdata",buffer));
     return Engine::dispatch(send);
-}
-
-
-/**
- * ADProxy
- */
-ADProxy::ADProxy(RefObject* ep, DataBlock* data)
-    : m_ep(0),
-    m_data(data)
-{
-    if (ep && ep->ref())
-	m_ep = ep;
-}
-
-ADProxy::~ADProxy()
-{
-}
-
-void* ADProxy::getObject(const String& name) const
-{
-    if (name == "rawdata") {
-	DataBlock* tmp = m_data;
-	m_data = 0;
-	return tmp;
-    }
-    return m_ep ? m_ep->getObject(name) : 0;
-}
-
-// Deref endpoint. Remove data if still owned
-void ADProxy::destroyed()
-{
-    TelEngine::destruct(m_ep);
-    TelEngine::destruct(m_data);
 }
 
 

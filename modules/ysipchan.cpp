@@ -3590,7 +3590,7 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
     msg = "isup.decode";
     addBodyParam(msg,"protocol-type",isup,"version");
     addBodyParam(msg,"protocol-basetype",isup,"base");
-    msg.userData(new DataBlockProxy((DataBlock*)&(isup->body())));
+    msg.addParam(new NamedPointer("rawdata",new DataBlock(isup->body())));
     bool ok = Engine::dispatch(msg);
     // Clear added params and restore message
     if (!ok) {
@@ -3600,6 +3600,7 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
     }
     msg.clearParam("protocol-type");
     msg.clearParam("protocol-basetype");
+    msg.clearParam("rawdata");
     msg = name;
     msg.userData(userdata);
     TelEngine::destruct(userdata);

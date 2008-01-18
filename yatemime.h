@@ -161,7 +161,6 @@ public:
      * Add a CR/LF terminator after each line
      * @param buf Destination string
      * @param headers The list with the header lines
-     * @param eoln Header line separator
      */
     static void buildHeaders(String& buf, const ObjList& headers);
 
@@ -277,7 +276,6 @@ public:
     /**
      * Build a string with this body's header lines
      * @param buf Destination string
-     * @param eoln Header line separator
      */
     inline void buildHeaders(String& buf) {
 	    m_type.buildLine(buf);
@@ -463,7 +461,7 @@ public:
 
     /**
      * Find a body. Enclosed multiparts are also searched for the requested body
-     * @param name The value of the body to find. Must be lower case
+     * @param content The value of the body to find. Must be lower case
      * @param start The starting point in the list. 0 to start from the beginning.
      *  Be aware that this parameter is used internally to search within enclosed
      *  multipart bodies and set to 0 when the starting point is found

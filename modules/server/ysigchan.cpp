@@ -43,7 +43,8 @@ class SigConsumerMux;                    // Consumer used to push data to SigSou
 class SigSourceMux;                      // A data source multiplexer with 2 channels
 class SigIsdnCallRecord;                 // Record an ISDN call monitor
 class SigLinkThread;                     // Get events and check timeout for links that have a call controller
-class DecodeIsupHandler;                 // Handler for "decode.isup" message
+class IsupDecodeHandler;                 // Handler for "isup.decode" message
+class IsupEncodeHandler;                 // Handler for "isup.encode" message
 
 
 // The signalling channel
@@ -450,16 +451,30 @@ private:
 };
 
 
-// decode.isup handler (decode an usup message)
-class DecodeIsupHandler : public MessageHandler
+// isup.decode handler (decode an isup message)
+class IsupDecodeHandler : public MessageHandler
+{
+public:
+    // Init the ISUP component and the mesage name
+    IsupDecodeHandler(bool decode = true);
+    virtual void destruct();
+    virtual bool received(Message& msg);
+protected:
+    // Get point code type (protocol version) from message
+    // Return SS7PointCode::Other if unknown
+    SS7PointCode::Type getPCType(Message& msg);
+    SS7ISUP* m_isup;
+};
+
+// isup.encode handler (encode an isup message)
+class IsupEncodeHandler : public IsupDecodeHandler
 {
 public:
     // Init the ISUP component
-    DecodeIsupHandler();
-    virtual void destruct();
+    inline IsupEncodeHandler()
+	: IsupDecodeHandler(false)
+	{}
     virtual bool received(Message& msg);
-private:
-    SS7ISUP* m_isup;
 };
 
 static SigDriver plugin;
@@ -1228,7 +1243,8 @@ void SigDriver::initialize()
 	installRelay(Progress);
 	installRelay(Update);
 	installRelay(Route);
-	Engine::install(new DecodeIsupHandler);
+	Engine::install(new IsupDecodeHandler);
+	Engine::install(new IsupEncodeHandler);
 	m_engine = new SignallingEngine;
 	m_engine->debugChain(this);
 	m_engine->start();
@@ -2505,11 +2521,11 @@ void SigLinkThread::run()
 }
 
 /**
- * DecodeIsupHandler
+ * IsupDecodeHandler
  */
 // Init the ISUP component
-DecodeIsupHandler::DecodeIsupHandler()
-    : MessageHandler("isup.decode",100)
+IsupDecodeHandler::IsupDecodeHandler(bool decode)
+    : MessageHandler(decode ? "isup.decode" : "isup.encode",100)
 {
     NamedList params("");
     String dname = plugin.prefix() + *this;
@@ -2521,12 +2537,12 @@ DecodeIsupHandler::DecodeIsupHandler()
     m_isup->debugChain(&plugin);
 }
 
-void DecodeIsupHandler::destruct()
+void IsupDecodeHandler::destruct()
 {
     TelEngine::destruct(m_isup);
 }
 
-bool DecodeIsupHandler::received(Message& msg)
+bool IsupDecodeHandler::received(Message& msg)
 {
     NamedString* ns = msg.getParam("rawdata");
     DataBlock* data = 0;
@@ -2546,28 +2562,61 @@ bool DecodeIsupHandler::received(Message& msg)
 	msg.c_str(),SS7MsgISUP::lookup(msgType),
 	msg.getValue("protocol-type"),msg.getValue("protocol-basetype"),this);
 
-    SS7PointCode::Type pcType = SS7PointCode::Other;
-    String proto = msg.getValue("protocol-type");
-    if (proto == "itu-t")
-	pcType = SS7PointCode::ITU;
-    else if (proto == "ansi")
-	pcType = SS7PointCode::ANSI;
-    else {
-	String baseProto = msg.getValue("protocol-basetype");
-	if (baseProto.startsWith("itu-t"))
-	    pcType = SS7PointCode::ITU;
-	else if (baseProto.startsWith("ansi"))
-	    pcType = SS7PointCode::ANSI;
-	else {
-	    msg.setParam("error","Unknown protocol-type");
-	    return false;
-	}
-    }
+    SS7PointCode::Type pcType = getPCType(msg);
+    if (pcType == SS7PointCode::Other)
+	return false;
 
     msg.setParam("message-type",SS7MsgISUP::lookup(msgType));
     if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1))
 	return true;
     msg.setParam("error","Parser failure");
+    return false;
+}
+
+// Get point code type (protocol version) from message
+SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg)
+{
+    String proto = msg.getValue("protocol-type");
+    if (proto == "itu-t")
+	return SS7PointCode::ITU;
+    else if (proto == "ansi")
+	return SS7PointCode::ANSI;
+    else {
+	proto = msg.getValue("protocol-basetype");
+	if (proto.startsWith("itu-t"))
+	    return SS7PointCode::ITU;
+	else if (proto.startsWith("ansi"))
+	    return SS7PointCode::ANSI;
+	msg.setParam("error","Unknown protocol-type");
+    }
+    return SS7PointCode::Other;
+}
+
+/**
+ * IsupEncodeHandler
+ */
+bool IsupEncodeHandler::received(Message& msg)
+{
+    DDebug(&plugin,DebugAll,"%s msg=%s type=%s basetype=%s [%p]",
+	msg.c_str(),msg.getValue("message-type"),
+	msg.getValue("protocol-type"),msg.getValue("protocol-basetype"),this);
+
+    SS7MsgISUP::Type msgType = (SS7MsgISUP::Type)SS7MsgISUP::lookup(msg.getValue("message-type"));
+    if (msgType == SS7MsgISUP::Unknown) {
+	msg.setParam("error","Unknown message-type");
+	return false;
+    }
+    SS7PointCode::Type pcType = getPCType(msg);
+    if (pcType == SS7PointCode::Other)
+	return false;
+
+    DataBlock* data = new DataBlock;
+    if (m_isup->encodeMessage(*data,msgType,pcType,msg)) {
+	msg.addParam(new NamedPointer("rawdata",data,"isup"));
+	return true;
+    }
+    TelEngine::destruct(data);
+    msg.setParam("error","Encoder failure");
     return false;
 }
 

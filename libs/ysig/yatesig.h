@@ -4908,6 +4908,18 @@ public:
     bool decodeMessage(NamedList& msg, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
 	const unsigned char* paramPtr, unsigned int paramLen);
 
+    /**
+     * Encode an ISUP list of parameters to a buffer
+     * @param buf Destination buffer
+     * @param msgType The message type
+     * @param pcType The point code type (message version)
+     * @param params Message list of parameters
+     * @param cic Optional cic to be added before mesage
+     * @return True if the mesage was succesfully encoded
+     */
+    bool encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
+	const NamedList& params, unsigned int* cic = 0);
+
 protected:
     /**
      * Send CGU if not already done. Check timeouts

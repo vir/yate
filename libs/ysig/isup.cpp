@@ -2298,12 +2298,16 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
     const unsigned char* paramPtr, unsigned int paramLen)
 {
+    DDebug(this,DebugAll,"Decoding msg=%s len=%u [%p]",
+	SS7MsgISUP::lookup(msgType),paramLen,this);
+
     // see what parameters we expect for this message
     const MsgParams* params = getIsupParams(pcType,msgType);
     if (!params) {
 	Debug(this,DebugGoOn,"Invalid point code or message type [%p]",this);
 	return false;
     }
+
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
     // first decode any mandatory fixed parameters the message should have
@@ -2399,6 +2403,22 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     if (paramLen)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
+    return true;
+}
+
+// Encode an ISUP list of parameters to a buffer
+bool SS7ISUP::encodeMessage(DataBlock& buf, SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
+    const NamedList& params, unsigned int* cic)
+{
+    unsigned int circuit = cic ? *cic : 0;
+    SS7Label label(pcType,1,1,1);
+
+    SS7MSU* msu = buildMSU(msgType,1,label,circuit,&params);
+    if (!msu)
+	return false;
+    unsigned int start = 1 + label.length() + (cic ? 0 : m_cicLen);
+    buf.assign(((char*)msu->data()) + start,msu->length() - start);
+    TelEngine::destruct(msu);
     return true;
 }
 

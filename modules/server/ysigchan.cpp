@@ -2507,7 +2507,7 @@ void SigLinkThread::run()
 /**
  * DecodeIsupHandler
  */
-    // Init the ISUP component
+// Init the ISUP component
 DecodeIsupHandler::DecodeIsupHandler()
     : MessageHandler("isup.decode",100)
 {
@@ -2528,9 +2528,6 @@ void DecodeIsupHandler::destruct()
 
 bool DecodeIsupHandler::received(Message& msg)
 {
-    if (!msg.userData())
-	return false;
-
     NamedString* ns = msg.getParam("rawdata");
     DataBlock* data = 0;
     if (ns) {

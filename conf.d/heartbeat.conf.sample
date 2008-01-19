@@ -4,7 +4,7 @@
 ; enabled: bool: Enable operation of this module
 ;enabled=true
 
-; node: string: Name of this cluster node, must be set to enable module
+; node: string: Name of this cluster node, default to engine's node name
 ;node=
 
 ; host: ipaddress: IP address to send heartbeat packets to, must be set

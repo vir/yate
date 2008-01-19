@@ -16,6 +16,9 @@
 ; Note that you MUST NOT add a path separator at the end
 ;extrapath=
 
+; nodename: string: Name of this node in a cluster
+;nodename=
+
 ; maxworkers: int: Maximum number of worker threads the engine can create
 ;maxworkers=10
 

@@ -246,6 +246,8 @@ static void evalFunc(String& str)
 	    str.clear();
 	    str << Engine::runId();
 	}
+	else if (str == "nodename")
+	    str = Engine::nodeName();
 	else if ((sep >= 0) && (str == "transcode")) {
 	    str = par.substr(0,sep);
 	    par = par.substr(sep+1).trimBlanks();

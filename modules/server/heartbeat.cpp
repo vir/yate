@@ -149,6 +149,7 @@ void HBeatPlugin::sendHeartbeat(const Time& tStamp, bool goDown)
     if (m_socket.valid()) {
 	char hex[16];
 	String buf;
+	// Linux-HA relies on the fields order so don't change it. Thanks.
 	buf << "t=status\n";
 	if (goDown)
 	    buf << "st=dead\n";
@@ -286,7 +287,7 @@ void HBeatPlugin::initialize()
     if (!m_socket.valid()) {
 	if (!cfg.getBoolValue("general","enabled",true))
 	    return;
-	m_node = cfg.getValue("general","node");
+	m_node = cfg.getValue("general","node",Engine::nodeName());
 	if (m_node.null())
 	    return;
 	SocketAddr addr(AF_INET);

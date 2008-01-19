@@ -776,10 +776,17 @@ public:
     static bool Register(const Plugin* plugin, bool reg = true);
 
     /**
+     * Get the server node name, should be unique in a cluster
+     * @return Node identifier string, defaults to host name
+     */
+    inline static const String& nodeName()
+	{ return s_node; }
+
+    /**
      * Get the application's shared directory path
      * @return The base path for shared files and directories
      */
-    inline static String& sharedPath()
+    inline static const String& sharedPath()
 	{ return s_shrpath; }
 
     /**
@@ -794,20 +801,20 @@ public:
      * Get the system configuration directory path
      * @return The directory path for system configuration files
      */
-    inline static String& configPath()
+    inline static const String& configPath()
 	{ return s_cfgpath; }
 
     /**
      * Get the configuration file suffix
      * @return The suffix for configuration files
      */
-    inline static String& configSuffix()
+    inline static const String& configSuffix()
 	{ return s_cfgsuffix; }
 
     /**
      * The module loading path
      */
-    inline static String& modulePath()
+    inline static const String& modulePath()
 	{ return s_modpath; }
 
     /**
@@ -821,7 +828,7 @@ public:
      * Get the module filename suffix
      * @return The suffix for module files
      */
-    inline static String& moduleSuffix()
+    inline static const String& moduleSuffix()
 	{ return s_modsuffix; }
 
     /**
@@ -994,6 +1001,7 @@ private:
     ObjList m_libs;
     MessageDispatcher m_dispatcher;
     static Engine* s_self;
+    static String s_node;
     static String s_shrpath;
     static String s_cfgpath;
     static String s_cfgsuffix;

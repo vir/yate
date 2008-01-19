@@ -101,6 +101,10 @@ using namespace TelEngine;
 #define INIT_SANITY 30
 #define MAX_LOGBUFF 4096
 
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
+
 static u_int64_t s_nextinit = 0;
 static u_int64_t s_restarts = 0;
 static bool s_makeworker = true;
@@ -136,6 +140,7 @@ static void sighandler(int signal)
     }
 }
 
+String Engine::s_node;
 String Engine::s_shrpath(SHR_PATH);
 String Engine::s_cfgpath(CFG_PATH);
 String Engine::s_cfgsuffix(CFG_SUFFIX);
@@ -612,6 +617,13 @@ int Engine::run()
 #endif
     SysUsage::init();
     s_runid = Time::secNow();
+    if (s_node.trimBlanks().null()) {
+	char hostName[HOST_NAME_MAX+1];
+	if (::gethostname(hostName,sizeof(hostName)))
+	    hostName[0] = '\0';
+	s_node = s_cfg.getValue("general","nodename",hostName);
+	s_node.trimBlanks();
+    }
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     extraPath(clientMode() ? "client" : "server");
@@ -642,7 +654,8 @@ int Engine::run()
     ::signal(SIGUSR1,sighandler);
     ::signal(SIGUSR2,sighandler);
 #endif
-    Output("Yate%s engine is initialized and starting up",clientMode() ? " client" : "");
+    Output("Yate%s engine is initialized and starting up%s%s",
+	clientMode() ? " client" : "",s_node.null() ? "" : " on " ,s_node.safe());
     while (s_haltcode == -1) {
 	if (s_cmds) {
 	    Output("Executing initial commands");
@@ -1036,6 +1049,7 @@ static void usage(bool client, FILE* f)
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -x relpath     Relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
+"   -N nodename    Set the name of this node in a cluster\n"
 #ifdef RLIMIT_CORE
 "   -C             Enable core dumps if possible\n"
 #endif
@@ -1236,6 +1250,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			extraPath(argv[++i]);
+			break;
+		    case 'N':
+			if (i+1 >= argc) {
+			    noarg(client,argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			s_node=argv[++i];
 			break;
 #ifdef RLIMIT_CORE
 		    case 'C':

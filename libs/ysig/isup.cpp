@@ -23,7 +23,7 @@
  */
 
 #include "yatesig.h"
-
+#include "string.h"
 
 using namespace TelEngine;
 
@@ -365,6 +365,34 @@ static bool decodeCause(const SS7ISUP* isup, NamedList& list, const IsupParam* p
     const unsigned char* buf, unsigned int len)
 {
     return SignallingUtils::decodeCause(isup,list,buf,len,param->name,true);
+}
+
+// Default encoder, get hexified octets
+static unsigned char encodeRaw(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
+    const IsupParam* param, const NamedString* val, const NamedList*)
+{
+    if (!(param && val))
+	return 0;
+    DDebug(isup,DebugInfo,"encodeRaw encoding %s=%s",param->name,val->c_str());
+    DataBlock raw;
+    if (!raw.unHexify(val->c_str(),val->length(),' ')) {
+	DDebug(isup,DebugMild,"encodeRaw failed: invalid string");
+	return 0;
+    }
+    if (!raw.length() || raw.length() > 254 ||
+	(param->size && param->size != raw.length())) {
+	DDebug(isup,DebugMild,"encodeRaw failed: param size=%u data length=%u",
+	    param->size,raw.length());
+	return 0;
+    }
+    if (buf) {
+	::memcpy(buf,raw.data(),raw.length());
+	return raw.length();
+    }
+    unsigned char size = param->size ? (unsigned char)param->size : (unsigned char)raw.length();
+    msu.append(&size,1);
+    msu += raw;
+    return raw.length() + size;
 }
 
 // Encoder for fixed length ISUP indicators (flags)
@@ -1139,22 +1167,23 @@ static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu, const IsupPar
 	exclude.append(val)->setDelete(false);
     if (param->encoder)
 	return param->encoder(isup,msu,buf,param,val,params);
-    return 0;
+    return encodeRaw(isup,msu,buf,param,val,params);
 }
 
 // Generic encode helper for a single optional parameter
 static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu, const IsupParam* param,
     const NamedString* val, const NamedList* extra)
 {
-    if (!param->encoder)
-	return 0;
     // add the parameter type now but remember the old length
     unsigned int len = msu.length();
     unsigned char tmp = param->type;
-    DataBlock buf(&tmp,1,false);
-    msu += buf;
-    buf.clear(false);
-    unsigned char size = param->encoder(isup,msu,0,param,val,extra);
+    msu.append(&tmp,1);
+
+    unsigned char size = 0;
+    if (param->encoder)
+	size = param->encoder(isup,msu,0,param,val,extra);
+    else
+	size = encodeRaw(isup,msu,0,param,val,extra);
     if (!size) {
 	Debug(isup,DebugMild,"Unwinding type storage for failed parameter %s",param->name);
 	msu.truncate(len);

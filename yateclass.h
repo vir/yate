@@ -2612,6 +2612,18 @@ public:
     bool convert(const DataBlock& src, const String& sFormat,
 	const String& dFormat, unsigned maxlen = 0);
 
+    /**
+     * Build this data block from a hexadecimal string representation.
+     * Each octet must be represented in the input string with 2 hexadecimal characters.
+     * If a separator is specified, the octets in input string must be separated using
+     *  exactly 1 separator. Only 1 leading or 1 trailing separators are allowed
+     * @param data Input character string
+     * @param len Length of the input string
+     * @param sep Separator character used between octets. 0 if no separator is expected 
+     * @return True if the input string was succesfully parsed, false otherwise
+     */
+    bool unHexify(const char* data, unsigned int len, char sep = 0);
+
 private:
     void* m_data;
     unsigned int m_length;

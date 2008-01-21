@@ -271,4 +271,65 @@ bool DataBlock::convert(const DataBlock& src, const String& sFormat,
     return true;
 }
 
+// Decode a single nibble, return -1 on error
+inline char hexDecode(char c)
+{
+    if (('0' <= c) && (c <= '9'))
+	return c - '0';
+    if (('A' <= c) && (c <= 'F'))
+	return c - 'A' + 10;
+    if (('a' <= c) && (c <= 'f'))
+	return c - 'a' + 10;
+    return -1;
+}
+
+// Build this data block from a hexadecimal string representation.
+// Each octet must be represented in the input string with 2 hexadecimal characters.
+// If a separator is specified, the octets in input string must be separated using
+//  exactly 1 separator. Only 1 leading or 1 trailing separators are allowed
+bool DataBlock::unHexify(const char* data, unsigned int len, char sep)
+{
+    clear();
+    if (!(data && len))
+	return true;
+
+    // Calculate the destination buffer length
+    unsigned int n = 0;
+    if (!sep) {
+	if (0 != (len % 2))
+	    return false;
+	n = len / 2;
+    }
+    else {
+	// Remove leading and trailing separators
+	if (data[0] == sep) {
+	    data++;
+	    len--;
+	}
+	if (len && data[len-1] == sep)
+	    len--;
+	// No more leading and trailing separators allowed
+	if (2 != (len % 3))
+	    return (bool)(len == 0);
+	n = (len + 1) / 3;
+    }
+    if (!n)
+	return true;
+
+    char* buf = (char*)::malloc(n);
+    unsigned int iBuf = 0;
+    for (unsigned int i = 0; i < len; i += (sep ? 3 : 2)) {
+	char c1 = hexDecode(data[i]);
+	char c2 = hexDecode(data[i+1]);
+	if (c1 == -1 || c2 == -1 || (sep && (iBuf != n - 1) && (sep != data[i+2])))
+	    break;
+	buf[iBuf++] = (c1 << 4) | c2;
+    }
+    if (iBuf >= n)
+	assign(buf,n,false);
+    else
+	::free(buf);
+    return (iBuf >= n);
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

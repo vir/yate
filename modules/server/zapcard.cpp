@@ -971,7 +971,7 @@ bool ZapDevice::setDtmfDetect(bool detect)
 {
     int tmp = 0;
 #ifdef ZT_TONEDETECT
-    setLinear(0,DebugNote);
+    setLinear(0,DebugAll);
     if (detect)
 	tmp = ZT_TONEDETECT_ON | ZT_TONEDETECT_MUTE;
 #endif
@@ -2436,7 +2436,7 @@ bool ZapAnalogCircuit::processEvent(int event, char c)
 	    changeHook(true);
 	    return enqueueEvent(event,SignallingCircuitEvent::OnHook);
 	case ZapDevice::RingBegin:
-	    m_device.setLinear(0,DebugNote);
+	    m_device.setLinear(0,DebugAll);
 	    return enqueueEvent(event,SignallingCircuitEvent::RingBegin);
 	case ZapDevice::OffHookRing:
 	    if (m_device.type() == ZapDevice::FXS) {

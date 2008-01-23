@@ -4452,7 +4452,7 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	m_msg->setUnknownMandatory();
     }
     ISDNQ931IE* ie = new ISDNQ931IE(type);
-    SignallingUtils::dumpData(0,*ie,"Unknown mandatory IE",ieData,len);
+    SignallingUtils::dumpData(0,*ie,"dumped-data",ieData,ieLen);
     return ie;
 }
 

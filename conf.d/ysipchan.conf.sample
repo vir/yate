@@ -79,11 +79,6 @@
 ; refresh_nosdp: bool: Accept session refresh reINVITEs that lack a SDP offer
 ;refresh_nosdp=enable
 
-; isup_decode: bool: Decode incoming application/isup bodies and add the
-;  result to the message dispatched or enqueued by the receiving channel
-; Defaults to disable
-;isup_decode=disable
-
 
 [registrar]
 ; Controls the behaviour when acting as registrar
@@ -102,6 +97,18 @@
 
 ; nat_refresh: int: Proposed client NAT refresh interval in seconds
 ;nat_refresh=25
+
+
+[sip-t]
+; Controls the SIP-T parameter handling
+
+; isup: bool: Build outgoing or decode incoming application/isup bodies
+; If enabled an incoming application/isup body will be decoded and added to
+;  the engine message issued by the receiving channel
+; If the channel needs to add more then one body to an outgoing message, a
+;  multipart/mixed body will be attached to the message
+; Defaults to disable
+;isup=disable
 
 
 [codecs]

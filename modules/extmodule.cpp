@@ -1045,10 +1045,31 @@ bool ExtModReceiver::outputLine(const char* line)
 	(m_out ? "" : "failing "), line);
     if (!m_out)
 	return false;
-    m_out->writeData(line);
+    // since m_out can be non-blocking (the socket) we have to loop
+    int len = ::strlen(line);
+    while (m_out && (len > 0)) {
+	int w = m_out->writeData(line,len);
+	if (w < 0) {
+	    if (!m_out->canRetry())
+		return false;
+	}
+	else {
+	    line += w;
+	    len -= w;
+	}
+	if (len > 0)
+	    Thread::yield();
+    }
     char nl = '\n';
-    m_out->writeData(&nl,sizeof(nl));
-    return true;
+    while (m_out) {
+	int w = m_out->writeData(&nl,1);
+	if ((w < 0) && !m_out->canRetry())
+	    return false;
+	if (w > 0)
+	    return true;
+	Thread::yield();
+    }
+    return false;
 }
 
 void ExtModReceiver::reportError(const char* line)

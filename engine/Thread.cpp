@@ -305,10 +305,12 @@ bool ThreadPrivate::cancel(bool hard)
 	    }
 	    m_running = false;
 #ifdef _WINDOWS
-	    Debug(DebugGoOn,"ThreadPrivate terminating win32 thread %lu [%p]",thread,this);
+	    Debug(DebugGoOn,"ThreadPrivate '%s' terminating win32 thread %lu [%p]",
+		m_name,thread,this);
 	    ret = ::TerminateThread(reinterpret_cast<HANDLE>(thread),0) != 0;
 #else
-	    Debug(critical ? DebugInfo : DebugWarn,"ThreadPrivate terminating pthread %p [%p]",&thread,this);
+	    Debug(critical ? DebugInfo : DebugWarn,"ThreadPrivate '%s' terminating pthread %p [%p]",
+		m_name,&thread,this);
 	    ret = !::pthread_cancel(thread);
 #endif
 	    if (ret) {

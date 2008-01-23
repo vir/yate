@@ -2337,6 +2337,18 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	return false;
     }
 
+    // Add protocol type
+    switch (pcType) {
+	case SS7PointCode::ITU:
+	    msg.addParam("protocol-type","itu-t");
+	    break;
+	case SS7PointCode::ANSI:
+	case SS7PointCode::ANSI8:
+	    msg.addParam("protocol-type","ansi");
+	    break;
+	default: ;
+    }
+
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
     // first decode any mandatory fixed parameters the message should have

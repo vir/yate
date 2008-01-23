@@ -382,6 +382,10 @@ private:
     // The message's name and user data are restored before exiting, regardless the result
     // Return true if an ISUP message was succesfully decoded
     bool decodeIsupBody(Message& msg, MimeBody* body);
+    // Build the body of a SIP message from an engine message
+    // Encode an ISUP message from parameters received in msg if enabled to process them
+    // Build a multipart/mixed body if more then one body is going to be sent
+    MimeBody* buildSIPBody(Message& msg, MimeSdpBody* sdp = 0);
 
     SIPTransaction* m_tr;
     SIPTransaction* m_tr2;
@@ -531,7 +535,7 @@ static bool s_start_rtp = false;
 static bool s_auth_register = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
-static bool s_isup_decode = false;
+static bool s_sipt_isup = false;         // Control the application/isup body processing
 
 static int s_expires_min = EXPIRES_MIN;
 static int s_expires_def = EXPIRES_DEF;
@@ -2014,7 +2018,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     MimeSdpBody* sdp = createPasstroughSDP(msg);
     if (!sdp)
 	sdp = createRtpSDP(m_host,msg);
-    m->setBody(sdp);
+    m->setBody(buildSIPBody(msg,sdp));
     m_tr = plugin.ep()->engine()->addMessage(m);
     if (m_tr) {
 	m_tr->ref();
@@ -3151,7 +3155,7 @@ bool YateSIPConnection::msgProgress(Message& msg)
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), code);
-	m->setBody(createProvisionalSDP(msg));
+	m->setBody(buildSIPBody(msg,createProvisionalSDP(msg)));
 	m_tr->setResponse(m);
 	m->deref();
     }
@@ -3165,7 +3169,7 @@ bool YateSIPConnection::msgRinging(Message& msg)
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180);
-	m->setBody(createProvisionalSDP(msg));
+	m->setBody(buildSIPBody(msg,createProvisionalSDP(msg)));
 	m_tr->setResponse(m);
 	m->deref();
     }
@@ -3184,7 +3188,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	    // normally don't start RTP yet, only when we get the ACK
 	    sdp = createRtpSDP(msg.getBoolValue("rtp_start",s_start_rtp));
 	}
-	m->setBody(sdp);
+	m->setBody(buildSIPBody(msg,sdp));
 
 	const MimeHeaderLine* co = m_tr->initialMessage()->getHeader("Contact");
 	if (co) {
@@ -3576,7 +3580,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
 // Return true if an ISUP message was succesfully decoded
 bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 {
-    if (!s_isup_decode)
+    if (!s_sipt_isup)
 	return false;
     // Get a valid application/isup body
     MimeBinaryBody* isup = static_cast<MimeBinaryBody*>(getOneBody(body,"application/isup"));
@@ -3606,6 +3610,65 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
     TelEngine::destruct(userdata);
     return ok;
 }
+
+// Build the body of a SIP message from an engine message
+// Encode an ISUP message from parameters received in msg if enabled to process them
+// Build a multipart/mixed body if more then one body is going to be sent
+MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
+{
+    MimeBinaryBody* isup = 0;
+
+    // Build isup
+    if (s_sipt_isup) {
+	// Remember the message's name and user data
+	String name = msg;
+	RefObject* userdata = msg.userData();
+	if (userdata)
+	    userdata->ref();
+
+	DataBlock* data = 0;
+	msg = "isup.encode";
+	if (Engine::dispatch(msg)) {
+	    NamedString* ns = msg.getParam("rawdata");
+	    if (ns) {
+		NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+		if (np)
+		    data = static_cast<DataBlock*>(np->userObject("DataBlock"));
+	    }
+	}
+	if (data && data->length()) {
+	    isup = new MimeBinaryBody("application/isup",(const char*)data->data(),data->length());
+	    isup->setParam("version",msg.getValue("protocol-type"));
+	    const char* s = msg.getValue("protocol-basetype");
+	    if (s)
+		isup->setParam("base",s);
+	    MimeHeaderLine* line = new MimeHeaderLine("Content-Disposition","signal");
+	    line->setParam("handling","optional");
+	    isup->appendHdr(line);
+	}
+	else {
+	    Debug(this,DebugMild,"%s failed error='%s' [%p]",
+		msg.c_str(),msg.getValue("error"),this);
+	    msg.clearParam("error");
+	}
+
+	// Restore message
+	msg = name;
+	msg.userData(userdata);
+	TelEngine::destruct(userdata);
+    }
+
+    if (!isup)
+	return sdp;
+    if (!sdp)
+	return isup;
+    // Build multipart
+    MimeMultipartBody* body = new MimeMultipartBody;
+    body->appendBody(sdp);
+    body->appendBody(isup);
+    return body;
+}
+
 
 YateSIPLine::YateSIPLine(const String& name)
     : String(name), m_resend(0), m_keepalive(0), m_interval(0), m_alive(0),
@@ -4180,7 +4243,7 @@ void SIPDriver::initialize()
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);
     s_multi_ringing = s_cfg.getBoolValue("general","multi_ringing",false);
     s_refresh_nosdp = s_cfg.getBoolValue("general","refresh_nosdp",true);
-    s_isup_decode = s_cfg.getBoolValue("general","isup_decode",false);
+    s_sipt_isup = s_cfg.getBoolValue("sip-t","isup",false);
     s_expires_min = s_cfg.getIntValue("registrar","expires_min",EXPIRES_MIN);
     s_expires_def = s_cfg.getIntValue("registrar","expires_def",EXPIRES_DEF);
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
@@ -4209,3 +4272,4 @@ void SIPDriver::initialize()
 }; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */
+

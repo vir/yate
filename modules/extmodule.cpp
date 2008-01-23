@@ -1282,6 +1282,14 @@ bool ExtModReceiver::processLine(const char* line)
 		val = m_selfWatch;
 		ok = true;
 	    }
+	    else if (id == "nodename") {
+		ok = val.null();
+		val = Engine::nodeName();
+	    }
+	    else if (id == "runid") {
+		ok = val.null();
+		val = Engine::runId();
+	    }
 	    DDebug("ExtModReceiver",DebugAll,"Set '%s'='%s' %s",
 		id.c_str(),val.c_str(),ok ? "ok" : "failed");
 	    String out("%%<setlocal:");

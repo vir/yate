@@ -92,6 +92,7 @@ for small to large scale projects.
 %{_libdir}/yate/client/osschan.yate
 %{_libdir}/yate/ilbccodec.yate
 %{_libdir}/yate/server/heartbeat.yate
+%{_libdir}/yate/server/clustering.yate
 %{_libdir}/yate/server/mgcpca.yate
 %{_libdir}/yate/server/mgcpgw.yate
 %{_libdir}/yate/server/mrcpspeech.yate
@@ -122,6 +123,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/ysipchan.conf
 %config(noreplace) %{_sysconfdir}/yate/yjinglechan.conf
 %config(noreplace) %{_sysconfdir}/yate/heartbeat.conf
+%config(noreplace) %{_sysconfdir}/yate/clustering.conf
 %config(noreplace) %{_sysconfdir}/yate/mgcpca.conf
 %config(noreplace) %{_sysconfdir}/yate/mgcpgw.conf
 %config(noreplace) %{_sysconfdir}/yate/analog.conf

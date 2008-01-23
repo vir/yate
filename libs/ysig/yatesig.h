@@ -6043,7 +6043,7 @@ class YSIG_API ISDNQ931IE : public NamedList
     friend class ISDNQ931Message;
 public:
     /**
-     * Keep IE type enumerations. See Q.921 4.5
+     * Keep IE type enumerations. See Q.931 4.5
      */
     enum Type {
 	// Fixed (1 byte) length information element
@@ -6066,6 +6066,7 @@ public:
 	DateTime = 0x29,                 // Date/time
 	Keypad = 0x2c,                   // Keypad facility
 	Signal = 0x34,                   // Signal
+	ConnectedNo = 0x4c,              // Connected number (Q.951)
 	CallingNo = 0x6c,                // Calling party number
 	CallingSubAddr = 0x6d,           // Calling party subaddress
 	CalledNo = 0x70,                 // Called party number

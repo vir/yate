@@ -281,6 +281,9 @@ private:
     ISDNQ931IE* decodeLoLayerCompat(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeHiLayerCompat(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeUserUser(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
+    // It seems that the Connectet number has the same layout as the Calling number IE
+    inline ISDNQ931IE* decodeConnectedNo(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len)
+	{ return decodeCallingNo(ie,data,len); }
     // Encode the corresponding variable IE
     bool encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeCause(ISDNQ931IE* ie, DataBlock& buffer);
@@ -3230,6 +3233,7 @@ TokenDict ISDNQ931IE::s_type[] = {
 	{"Date/time",                   DateTime},
 	{"Keypad facility",             Keypad},
 	{"Signal",                      Signal},
+	{"Connected number",            ConnectedNo},
 	{"Calling number",              CallingNo},
 	{"Calling party subaddress",    CallingSubAddr},
 	{"Called number",               CalledNo},
@@ -4397,7 +4401,7 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
     if (!(data && len))
 	return 0;
     // Check if this is a fixed (1 byte length) or variable length IE
-    // Fixed: Bit 7 is 1. See Q.921 4.5.1
+    // Fixed: Bit 7 is 1. See Q.931 4.5.1
     if ((data[0] >> 7)) {
 	consumed = 1;
 	return getFixedIE(data[0]);
@@ -4433,6 +4437,7 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	CASE_DECODE_IE(ISDNQ931IE::DateTime,decodeDateTime)
 	CASE_DECODE_IE(ISDNQ931IE::Keypad,decodeKeypad)
 	CASE_DECODE_IE(ISDNQ931IE::Signal,decodeSignal)
+	CASE_DECODE_IE(ISDNQ931IE::ConnectedNo,decodeConnectedNo)
 	CASE_DECODE_IE(ISDNQ931IE::CallingSubAddr,decodeCallingSubAddr)
 	CASE_DECODE_IE(ISDNQ931IE::CalledSubAddr,decodeCalledSubAddr)
 	CASE_DECODE_IE(ISDNQ931IE::Restart,decodeRestart)
@@ -4445,7 +4450,7 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	default: ;
     }
     // Unknown or unhandled IE
-    // Check bits 4-7: If 0: the value MUST be a known one (See Q.921, Table 4-3, Note 5)
+    // Check bits 4-7: If 0: the value MUST be a known one (See Q.931, Table 4-3, Note 5)
     if ((data[0] >> 4) == 0) {
 	Debug(m_settings->m_dbg,DebugMild,
 	    "Found unknown mandatory IE: %u [%p]",type,m_msg);

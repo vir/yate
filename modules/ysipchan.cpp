@@ -1360,7 +1360,7 @@ void YateSIPEndPoint::run()
     for (;;)
     {
 	bool ok = false;
-	if ((s_floodEvents <= 1) || (evCount < s_floodEvents))
+	if ((s_floodEvents <= 1) || (evCount < s_floodEvents) || Engine::exiting())
 	    ok = true;
 	else if (evCount == s_floodEvents)
 	    Debug(&plugin,DebugMild,"Flood detected: %d handled events",evCount);

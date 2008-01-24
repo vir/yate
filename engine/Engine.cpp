@@ -270,6 +270,8 @@ void completeModule(String& ret, const String& part, const String& rpath = Strin
 	return;
     do {
 	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
+	if (entry.cFileName[0] == '.')
+	    continue;
 	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0)
 	    continue;
 	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {

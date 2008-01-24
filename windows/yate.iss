@@ -97,6 +97,7 @@ Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Component
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Components: server
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
+Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
 Source: "Release\server\mgcpca.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
 Source: "Release\server\mgcpgw.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
 

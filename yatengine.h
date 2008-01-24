@@ -696,7 +696,11 @@ bool UNLOAD_PLUGIN(bool unloadNow);
 #endif
 
 #define INIT_PLUGIN(pclass) static pclass __plugin
+#ifdef _WINDOWS
+#define UNLOAD_PLUGIN(arg) extern "C" __declspec(dllexport) bool _unload(bool arg)
+#else
 #define UNLOAD_PLUGIN(arg) extern "C" bool _unload(bool arg)
+#endif
 
 /**
  * This class holds global information about the engine.

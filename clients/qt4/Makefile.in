@@ -6,7 +6,7 @@ DEBUG :=
 
 CXX := @CXX@ -Wall
 AR  := ar
-MOC := moc
+MOC := @QT4_MOC@
 DEFS:=
 
 INCLUDES:=-I. -I@srcdir@ -I@top_srcdir@ @QT4_INC@

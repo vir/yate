@@ -686,9 +686,17 @@ private:
  * @param pclass Class of the plugin to create
  */
 void INIT_PLUGIN(class pclass);
+
+/**
+ * Macro to create the unloading function
+ * @param unloadNow True if asked to unload immediately, false if just checking
+ * @return True if the plugin can be unloaded, false if not
+ */
+bool UNLOAD_PLUGIN(bool unloadNow);
 #endif
 
 #define INIT_PLUGIN(pclass) static pclass __plugin
+#define UNLOAD_PLUGIN(arg) extern "C" bool _unload(bool arg)
 
 /**
  * This class holds global information about the engine.
@@ -699,6 +707,7 @@ void INIT_PLUGIN(class pclass);
 class YATE_API Engine
 {
     friend class EnginePrivate;
+    friend class EngineCommand;
 public:
     /**
      * Running modes - run the engine as Console, Client or Server.

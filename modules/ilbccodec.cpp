@@ -233,6 +233,13 @@ DataTranslator* iLBCFactory::create(const DataFormat& sFormat, const DataFormat&
 
 INIT_PLUGIN(iLBCPlugin);
 
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow)
+	return !__plugin.isBusy();
+    return true;
+}
+
 }; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

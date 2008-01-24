@@ -30,6 +30,7 @@
 #define RTLD_NOW 0
 #define dlopen(name,flags) LoadLibrary(name)
 #define dlclose !FreeLibrary
+#define dlsym GetProcAddress
 #define dlerror() "LoadLibrary error"
 #define YSERV_RUN 1
 #define YSERV_INS 2
@@ -79,6 +80,14 @@ public:
 	{ count--; }
     virtual void run();
     static int count;
+};
+
+class EngineCommand : public MessageHandler
+{
+public:
+    EngineCommand() : MessageHandler("engine.command") { }
+    virtual bool received(Message &msg);
+    static void doCompletion(Message &msg, const String& partLine, const String& partWord);
 };
 
 };
@@ -169,17 +178,15 @@ static ObjList plugins;
 static ObjList* s_cmds = 0;
 static unsigned int s_runid = 0;
 
-class SLib : public GenObject
+class SLib : public String
 {
 public:
     virtual ~SLib();
     static SLib* load(const char* file, bool local);
-    inline const String& file() const
-	{ return m_file; }
+    bool unload(bool doNow);
 private:
     SLib(HMODULE handle, const char* file);
     HMODULE m_handle;
-    String m_file;
 };
 
 class EngineSuperHandler : public MessageHandler
@@ -197,6 +204,14 @@ public:
     EngineStatusHandler() : MessageHandler("engine.status",0) { }
     virtual bool received(Message &msg);
 };
+
+class EngineHelp : public MessageHandler
+{
+public:
+    EngineHelp() : MessageHandler("engine.help") { }
+    virtual bool received(Message &msg);
+};
+
 
 bool EngineStatusHandler::received(Message &msg)
 {
@@ -218,6 +233,175 @@ bool EngineStatusHandler::received(Message &msg)
     return false;
 }
 
+static char s_cmdsOpt[] = "  module {load modulefile|unload modulename|list}\r\n";
+static char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
+
+// perform one completion only if match still possible
+static void completeOne(String& ret, const String& str, const char* part)
+{
+    if (part && !str.startsWith(part))
+	return;
+    ret.append(str,"\t");
+}
+
+// complete a module filename from filesystem
+void completeModule(String& ret, const String& part, const String& rpath = String::empty())
+{
+    if (part[0] == '.')
+	return;
+    String path = Engine::modulePath();
+    String rdir = rpath;
+    int sep = part.rfind(PATH_SEP[0]);
+    if (sep >= 0)
+	rdir += part.substr(0,sep+1);
+    if (rdir) {
+	if (!path.endsWith(PATH_SEP))
+	    path += PATH_SEP;
+	path += rdir;
+    }
+    if (path.endsWith(PATH_SEP))
+	path = path.substr(0,path.length()-1);
+
+    DDebug(DebugInfo,"completeModule path='%s' rdir='%s'",path.c_str(),rdir.c_str());
+#ifdef _WINDOWS
+    WIN32_FIND_DATA entry;
+    HANDLE hf = ::FindFirstFile(path + PATH_SEP "*",&entry);
+    if (hf == INVALID_HANDLE_VALUE)
+	return;
+    do {
+	XDebug(DebugInfo,"Found dir entry %s",entry.cFileName);
+	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0)
+	    continue;
+	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+	    completeModule(ret,part,rdir + entry.cFileName + PATH_SEP);
+	    continue;
+	}
+	int n = ::strlen(entry.cFileName) - Engine::moduleSuffix().length();
+	if ((n > 0) && !::strcmp(entry.cFileName+n,Engine::moduleSuffix()))
+	    completeOne(ret,rdir + entry.cFileName,part);
+    } while (::FindNextFile(hf,&entry));
+    ::FindClose(hf);
+#else
+    DIR *dir = ::opendir(path);
+    if (!dir)
+	return;
+    struct dirent* entry;
+    while ((entry = ::readdir(dir)) != 0) {
+	XDebug(DebugInfo,"Found dir entry %s",entry->d_name);
+	if (entry->d_name[0] == '.')
+	    continue;
+	struct stat stat_buf;
+	if (::stat(path + PATH_SEP + entry->d_name,&stat_buf))
+	    continue;
+	if (S_ISDIR(stat_buf.st_mode)) {
+	    completeModule(ret,part,rdir + entry->d_name + PATH_SEP);
+	    continue;
+	}
+	int n = ::strlen(entry->d_name) - Engine::moduleSuffix().length();
+	if ((n > 0) && !::strcmp(entry->d_name+n,Engine::moduleSuffix()))
+	    completeOne(ret,rdir + entry->d_name,part);
+    }
+    ::closedir(dir);
+#endif
+}
+
+// perform command line completion
+void EngineCommand::doCompletion(Message &msg, const String& partLine, const String& partWord)
+{
+    if (partLine.null() || (partLine == "help") || (partLine == "status"))
+	completeOne(msg.retValue(),"module",partWord);
+    else if (partLine == "module") {
+	completeOne(msg.retValue(),"load",partWord);
+	completeOne(msg.retValue(),"unload",partWord);
+	completeOne(msg.retValue(),"list",partWord);
+    }
+    else if (partLine == "module load")
+	completeModule(msg.retValue(),partWord);
+    else if (partLine == "module unload") {
+	for (ObjList* l = Engine::self()->m_libs.skipNull();l;l = l->skipNext()) {
+	    SLib* s = static_cast<SLib*>(l->get());
+	    if (s->unload(false))
+		completeOne(msg.retValue(),*s,partWord);
+	}
+    }
+}
+
+bool EngineCommand::received(Message &msg)
+{
+    String line = msg.getValue("line");
+    if (line.null()) {
+	doCompletion(msg,msg.getValue("partline"),msg.getValue("partword"));
+	return false;
+    }
+    if (!line.startSkip("module"))
+	return false;
+
+    bool ok = false;
+    int sep = line.find(' ');
+    if (sep > 0) {
+	String cmd = line.substr(0,sep).trimBlanks();
+	String arg = line.substr(sep+1).trimBlanks();
+	if (cmd == "load") {
+	    sep = arg.rfind(PATH_SEP[0]);
+	    if (sep >= 0)
+		cmd = arg.substr(sep+1);
+	    else
+		cmd = arg;
+	    if (cmd.endsWith(Engine::moduleSuffix()))
+		cmd.assign(cmd,cmd.length() - Engine::moduleSuffix().length());
+	    if (Engine::self()->m_libs[cmd]) {
+		msg.retValue() = "Module is already loaded: " + cmd + "\r\n";
+		ok = true;
+	    }
+	    else {
+		ok = Engine::self()->loadPlugin(Engine::modulePath() + PATH_SEP + arg);
+		// if we loaded it successfully we must initialize
+		if (ok)
+		    Engine::self()->initPlugins();
+	    }
+	}
+	else if (cmd == "unload") {
+	    SLib* s = static_cast<SLib*>(Engine::self()->m_libs[arg]);
+	    if (!s)
+		msg.retValue() = "Module not loaded: " + arg + "\r\n";
+	    else if (s->unload(true)) {
+		Engine::self()->m_libs.remove(s);
+		msg.retValue() = "Unloaded module: " + arg + "\r\n";
+	    }
+	    else
+		msg.retValue() = "Could not unload module: " + arg + "\r\n";
+	    ok = true;
+	}
+    }
+    else if (line == "list") {
+	msg.retValue().clear();
+	for (ObjList* l = Engine::self()->m_libs.skipNull();l;l = l->skipNext()) {
+	    SLib* s = static_cast<SLib*>(l->get());
+	    msg.retValue().append(*s,"\t");
+	}
+	msg.retValue() << "\r\n";
+	ok = true;
+    }
+    if (!ok)
+	msg.retValue() = "Module operation failed: " + line + "\r\n";
+    return true;
+}
+
+
+bool EngineHelp::received(Message &msg)
+{
+    String line = msg.getValue("line");
+    if (line.null()) {
+	msg.retValue() << s_cmdsOpt;
+	return false;
+    }
+    if (line != "engine")
+	return false;
+    msg.retValue() << s_cmdsOpt << s_cmdsMsg;
+    return true;
+}
+
+
 void EnginePrivate::run()
 {
     for (;;) {
@@ -226,6 +410,7 @@ void EnginePrivate::run()
 	msleep(5,true);
     }
 }
+
 
 static bool logFileOpen()
 {
@@ -494,9 +679,14 @@ static int supervise(void)
 
 
 SLib::SLib(HMODULE handle, const char* file)
-    : m_handle(handle), m_file(file)
+    : String(file), m_handle(handle)
 {
     DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
+    int sep = rfind(PATH_SEP[0]);
+    if (sep >= 0)
+	assign(file+sep+1);
+    if (endsWith(Engine::moduleSuffix()))
+	assign(*this,length() - Engine::moduleSuffix().length());
     checkPoint();
 }
 
@@ -558,6 +748,13 @@ SLib* SLib::load(const char* file, bool local)
     return 0;
 }
 
+bool SLib::unload(bool unloadNow)
+{
+    typedef bool (*pUnload)(bool);
+    pUnload unl = (pUnload)dlsym(m_handle,"_unload");
+    return (unl != 0) && unl(unloadNow);
+}
+
 
 Engine::Engine()
 {
@@ -617,6 +814,7 @@ int Engine::run()
     }
 #endif
     SysUsage::init();
+
     s_runid = Time::secNow();
     if (s_node.trimBlanks().null()) {
 	char hostName[HOST_NAME_MAX+1];
@@ -625,6 +823,15 @@ int Engine::run()
 	s_node = s_cfg.getValue("general","nodename",hostName);
 	s_node.trimBlanks();
     }
+    const char *modPath = s_cfg.getValue("general","modpath");
+    if (modPath)
+	s_modpath = modPath;
+    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
+    s_restarts = s_cfg.getIntValue("general","restarts");
+    m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
+    extraPath(clientMode() ? "client" : "server");
+    extraPath(s_cfg.getValue("general","extrapath"));
+
     s_params.addParam("version",YATE_VERSION);
     s_params.addParam("release",YATE_STATUS YATE_RELEASE);
     s_params.addParam("nodename",s_node);
@@ -641,7 +848,8 @@ int Engine::run()
     s_params.addParam("maxworkers",String(s_maxworkers));
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
-    extraPath(clientMode() ? "client" : "server");
+    install(new EngineCommand);
+    install(new EngineHelp);
     loadPlugins();
     Debug(DebugAll,"Loaded %d plugins",plugins.count());
     if (s_super_handle >= 0) {
@@ -923,13 +1131,6 @@ bool Engine::loadPluginDir(const String& relPath)
 
 void Engine::loadPlugins()
 {
-    const char *name = s_cfg.getValue("general","modpath");
-    if (name)
-	s_modpath = name;
-    extraPath(s_cfg.getValue("general","extrapath"));
-    s_maxworkers = s_cfg.getIntValue("general","maxworkers",s_maxworkers);
-    s_restarts = s_cfg.getIntValue("general","restarts");
-    m_dispatcher.warnTime(1000*(u_int64_t)s_cfg.getIntValue("general","warntime"));
     NamedList *l = s_cfg.getSection("preload");
     if (l) {
         unsigned int len = l->length();

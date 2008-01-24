@@ -853,6 +853,13 @@ public:
     static unsigned int runId();
 
     /**
+     * Get the engine parameters specific to this run.
+     * @return A reference to the list of run specific parameters
+     */
+    inline static const NamedList& runParams()
+	{ return s_params; }
+
+    /**
      * Reinitialize the plugins
      */
     static void init();
@@ -1008,6 +1015,7 @@ private:
     static String s_modpath;
     static String s_modsuffix;
     static ObjList s_extramod;
+    static NamedList s_params;
     static int s_haltcode;
     static RunMode s_mode;
 };

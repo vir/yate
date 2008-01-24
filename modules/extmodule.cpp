@@ -1282,9 +1282,11 @@ bool ExtModReceiver::processLine(const char* line)
 		val = m_selfWatch;
 		ok = true;
 	    }
-	    else if (id == "nodename") {
-		ok = val.null();
-		val = Engine::nodeName();
+	    else if (id.startsWith("engine.")) {
+		// keep the index in substr in sync with length of "engine."
+		const NamedString* param = Engine::runParams().getParam(id.substr(7));
+		ok = val.null() && param;
+		val = param;
 	    }
 	    else if (id == "runid") {
 		ok = val.null();

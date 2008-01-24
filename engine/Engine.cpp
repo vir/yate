@@ -147,6 +147,7 @@ String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
 String Engine::s_modsuffix(DLL_SUFFIX);
 ObjList Engine::s_extramod;
+NamedList Engine::s_params("");
 
 Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine* Engine::s_self = 0;
@@ -624,6 +625,20 @@ int Engine::run()
 	s_node = s_cfg.getValue("general","nodename",hostName);
 	s_node.trimBlanks();
     }
+    s_params.addParam("version",YATE_VERSION);
+    s_params.addParam("release",YATE_STATUS YATE_RELEASE);
+    s_params.addParam("nodename",s_node);
+    s_params.addParam("runid",String(s_runid));
+    s_params.addParam("configname",s_cfgfile);
+    s_params.addParam("sharedpath",s_shrpath);
+    s_params.addParam("configpath",s_cfgpath);
+    s_params.addParam("cfgsuffix",s_cfgsuffix);
+    s_params.addParam("modulepath",s_modpath);
+    s_params.addParam("modsuffix",s_modsuffix);
+    s_params.addParam("logfile",s_logfile);
+    s_params.addParam("clientmode",String::boolText(clientMode()));
+    s_params.addParam("supervised",String::boolText(s_super_handle >= 0));
+    s_params.addParam("maxworkers",String(s_maxworkers));
     DDebug(DebugAll,"Engine::run()");
     install(new EngineStatusHandler);
     extraPath(clientMode() ? "client" : "server");

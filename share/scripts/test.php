@@ -20,6 +20,11 @@ $m->params["param1"]="val1";
 $m->retval="ret_value";
 $m->Dispatch();
 
+Yate::SetLocal("engine.version","");
+Yate::SetLocal("engine.nodename","");
+Yate::SetLocal("engine.nosuch","");
+Yate::SetLocal("engine.nodename","error because is readonly");
+
 /* The main loop. We pick events and handle them */
 for (;;) {
     $ev=Yate::GetEvent();
@@ -48,6 +53,9 @@ for (;;) {
 	    break;
 	case "uninstalled":
 	    Yate::Output("PHP Uninstalled: " . $ev->name);
+	    break;
+	case "setlocal":
+	    Yate::Output("PHP Parameter: ". $ev->name . "=" . $ev->retval . ($ev->handled ? " (OK)" : " (error)"));
 	    break;
 	default:
 	    Yate::Output("PHP Event: " . $ev->type);

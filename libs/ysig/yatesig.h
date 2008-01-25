@@ -651,8 +651,10 @@ public:
     /**
      * Constructor
      * @param params Call controller's parameters
+     * @param msgPrefix Optional prefix to be added before a decoded message's
+     *  parameters or retrive message parameters from a list
      */
-    SignallingCallControl(const NamedList& params);
+    SignallingCallControl(const NamedList& params, const char* msgPrefix = 0);
 
     /**
      * Destructor
@@ -671,6 +673,14 @@ public:
      */
     inline bool exiting() const
 	{ return m_exiting; }
+
+    /**
+     * Get the prefix used by this call controller when decoding message parameters or
+     *  retrive message parameters from a list
+     * @return Message parameters prefix used by this call controller
+     */
+    inline const String& msgPrefix() const
+	{ return m_msgPrefix; }
 
     /**
      * Get the number of circuits in the attached group
@@ -805,6 +815,12 @@ protected:
      * List of active calls
      */
     ObjList m_calls;
+
+    /**
+     * Prefix to be added to decoded message parameters or
+     *  retrive message parameters from a list
+     */
+    String m_msgPrefix;
 
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
@@ -1901,15 +1917,6 @@ public:
      */
     static unsigned int dumpDataExt(const SignallingComponent* comp, NamedList& list, const char* param,
 	const unsigned char* buf, unsigned int len, char sep = ' ');
-
-    /**
-     * Fill a data block with previously dumped data. Each element must be in 0..255 range
-     * @param dest The destination buffer
-     * @param src The source string
-     * @param sep The separator between elements
-     * @return False if fails to convert all elements from received string
-     */
-    static bool dumpedStr2Data(DataBlock& dest, const String& src, char sep = ' ');
 
     /**
      * Decode a received buffer to a comma separated list of flags and add it to a list of parameters
@@ -4909,7 +4916,8 @@ public:
 	const unsigned char* paramPtr, unsigned int paramLen);
 
     /**
-     * Encode an ISUP list of parameters to a buffer
+     * Encode an ISUP list of parameters to a buffer.
+     * The input list may contain a 'message-prefix' parameter to override this controller's prefix
      * @param buf Destination buffer
      * @param msgType The message type
      * @param pcType The point code type (message version)

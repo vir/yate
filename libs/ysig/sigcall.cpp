@@ -32,7 +32,8 @@ using namespace TelEngine;
 /**
  * SignallingCallControl
  */
-SignallingCallControl::SignallingCallControl(const NamedList& params)
+SignallingCallControl::SignallingCallControl(const NamedList& params,
+	const char* msgPrefix)
     : Mutex(true),
     m_circuits(0),
     m_strategy(SignallingCircuitGroup::Increment),
@@ -54,6 +55,9 @@ SignallingCallControl::SignallingCallControl(const NamedList& params)
 	    m_strategy |= SignallingCircuitGroup::OnlyOdd | SignallingCircuitGroup::Fallback;
 	else if (restrict == "even-fallback")
 	    m_strategy |= SignallingCircuitGroup::OnlyEven | SignallingCircuitGroup::Fallback;
+
+    // Message prefix
+    m_msgPrefix = params.getValue("message-prefix",msgPrefix);
 }
 
 SignallingCallControl::~SignallingCallControl()

@@ -487,27 +487,6 @@ unsigned int SignallingUtils::dumpDataExt(const SignallingComponent* comp, Named
     return count;
 }
 
-// Fill a data block with previously dumped data
-// Return false if fails to convert all elements from received string
-bool SignallingUtils::dumpedStr2Data(DataBlock& dest, const String& src, char sep)
-{
-    ObjList* list = src.split(sep,false);
-    if (!list) {
-	dest.clear();
-	return true;
-    }
-    dest.assign(0,list->count());
-    unsigned int i = 0;
-    for (ObjList* obj = list->skipNull(); obj; obj = obj->skipNext()) {
-	int value = (static_cast<String*>(obj->get()))->toInteger(256);
-	if (value > 255 || value < 0)
-	    break;
-	((u_int8_t*)dest.data())[i++] = (u_int8_t)value;
-    }
-    TelEngine::destruct(list);
-    return i != dest.length();
-}
-
 // Decode a received buffer to a comma separated list of flags
 bool SignallingUtils::decodeFlags(const SignallingComponent* comp, NamedList& list, const char* param,
 	const SignallingFlags* flags, const unsigned char* buf, unsigned int len)
@@ -652,12 +631,13 @@ bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& bu
     data[data[0]] |= (val & 0x7f);
     // Diagnostic
     DataBlock diagnostic;
-    String tmp = params.getValue(causeName + ".diagnostic");
-    dumpedStr2Data(diagnostic,tmp);
+    const char* tmp = params.getValue(causeName + ".diagnostic");
+    if (tmp)
+	diagnostic.unHexify(tmp,strlen(tmp),' ');
     // Set data
     if (!isup && diagnostic.length() + data[0] + 1 > 32) {
-	if (fail)
-	Debug(comp,fail?DebugMild:DebugNote,"SignallingUtils::encodeCause. Cause length %u > 32. %s",
+	Debug(comp,fail?DebugNote:DebugMild,
+	    "Utils::encodeCause. Cause length %u > 32. %s",
 	    diagnostic.length() + data[0] + 1,fail?"Fail":"Skipping diagnostic");
 	if (fail)
 	    return false;

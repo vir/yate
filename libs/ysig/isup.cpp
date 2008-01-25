@@ -39,9 +39,11 @@ struct IsupParam {
     // SS7 name of the parameter
     const char* name;
     // decoder callback function
-    bool (*decoder)(const SS7ISUP*,NamedList&,const IsupParam*,const unsigned char*,unsigned int);
+    bool (*decoder)(const SS7ISUP*,NamedList&,const IsupParam*,
+	const unsigned char*,unsigned int,const String&);
     // encoder callback function
-    unsigned char (*encoder)(const SS7ISUP*,SS7MSU&,unsigned char*,const IsupParam*,const NamedString*,const NamedList*);
+    unsigned char (*encoder)(const SS7ISUP*,SS7MSU&,unsigned char*,
+	const IsupParam*,const NamedString*,const NamedList*,const String&);
     // table data to be used by the callback
     const void* data;
 };
@@ -128,20 +130,20 @@ static const SignallingFlags s_flags_paramcompat[] = {
 
 // Default decoder, dumps raw octets
 static bool decodeRaw(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (len < 1)
 	return false;
     String raw;
     raw.hexify((void*)buf,len,' ');
     DDebug(isup,DebugInfo,"decodeRaw decoded %s=%s",param->name,raw.c_str());
-    list.addParam(param->name,raw);
+    list.addParam(prefix+param->name,raw);
     return true;
 }
 
 // Integer decoder, interprets data as little endian integer
 static bool decodeInt(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     unsigned int val = 0;
     int shift = 0;
@@ -150,18 +152,18 @@ static bool decodeInt(const SS7ISUP* isup, NamedList& list, const IsupParam* par
 	shift += 8;
     }
     DDebug(isup,DebugAll,"decodeInt decoded %s=%s (%u)",param->name,lookup(val,(const TokenDict*)param->data),val);
-    SignallingUtils::addKeyword(list,param->name,(const TokenDict*)param->data,val);
+    SignallingUtils::addKeyword(list,prefix+param->name,(const TokenDict*)param->data,val);
     return true;
 }
 
 // Decoder for ISUP indicators (flags)
 static bool decodeFlags(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     const SignallingFlags* flags = (const SignallingFlags*)param->data;
     if (!flags)
 	return false;
-    return SignallingUtils::decodeFlags(isup,list,param->name,flags,buf,len);
+    return SignallingUtils::decodeFlags(isup,list,prefix+param->name,flags,buf,len);
 }
 
 // Utility function - extract just ISUP digits from a parameter
@@ -182,13 +184,13 @@ const char* getIsupParamName(unsigned char type);
 // Decoder for message or parameter compatibility
 // Q.763 3.33/3.41
 static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (!len)
 	return false;
     switch (param->type) {
 	case SS7MsgISUP::MessageCompatInformation:
-	    SignallingUtils::decodeFlags(isup,list,param->name,s_flags_msgcompat,buf,1);
+	    SignallingUtils::decodeFlags(isup,list,prefix+param->name,s_flags_msgcompat,buf,1);
 	    if (buf[0] & 0x80) {
 		if (len == 1)
 		    return true;
@@ -196,7 +198,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 		    "decodeCompat invalid len=%u for %s with first byte having ext bit set",len,param->name);
 		break;
 	    }
-	    return SignallingUtils::dumpDataExt(isup,list,String(param->name)+".more",buf+1,len-1);
+	    return SignallingUtils::dumpDataExt(isup,list,prefix+param->name+".more",buf+1,len-1);
 	case SS7MsgISUP::ParameterCompatInformation:
 	    for (unsigned int i = 0; i < len;) {
 		unsigned char val = buf[i++];
@@ -205,7 +207,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 		    return false;
 		}
 		const char* paramName = getIsupParamName(val);
-		String name = param->name;
+		String name = prefix + param->name;
 		if (paramName)
 		    name << "." << paramName;
 		else {
@@ -229,7 +231,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 
 // Decoder for various ISUP digit sequences (phone numbers)
 static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (len < 2)
 	return false;
@@ -241,19 +243,20 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
     getDigits(tmp,buf[0],buf+2,len-2);
     DDebug(isup,DebugAll,"decodeDigits decoded %s='%s' inn/ni=%u nai=%u plan=%u pres=%u scrn=%u",
 	param->name,tmp.c_str(),buf[1] >> 7,nai,plan,pres,scrn);
-    list.addParam(param->name,tmp);
-    SignallingUtils::addKeyword(list,String(param->name)+".nature",s_dict_nai,nai);
-    SignallingUtils::addKeyword(list,String(param->name)+".plan",s_dict_numPlan,plan);
+    String preName(prefix + param->name);
+    list.addParam(preName,tmp);
+    SignallingUtils::addKeyword(list,preName+".nature",s_dict_nai,nai);
+    SignallingUtils::addKeyword(list,preName+".plan",s_dict_numPlan,plan);
     switch (param->type) {
 	case SS7MsgISUP::CalledPartyNumber:
 	case SS7MsgISUP::RedirectionNumber:
 	case SS7MsgISUP::LocationNumber:
 	    tmp = ((buf[1] & 0x80) == 0);
-	    list.addParam(String(param->name)+".inn",tmp);
+	    list.addParam(preName+".inn",tmp);
 	    break;
 	case SS7MsgISUP::CallingPartyNumber:
 	    tmp = ((buf[1] & 0x80) == 0);
-	    list.addParam(String(param->name)+".complete",tmp);
+	    list.addParam(preName+".complete",tmp);
 	    break;
 	default:
 	    break;
@@ -264,7 +267,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::OriginalCalledNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
-	    SignallingUtils::addKeyword(list,String(param->name)+".restrict",s_dict_presentation,pres);
+	    SignallingUtils::addKeyword(list,preName+".restrict",s_dict_presentation,pres);
 	default:
 	    break;
     }
@@ -272,7 +275,7 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 	case SS7MsgISUP::CallingPartyNumber:
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
-	    SignallingUtils::addKeyword(list,String(param->name)+".screened",s_dict_screening,scrn);
+	    SignallingUtils::addKeyword(list,preName+".screened",s_dict_screening,scrn);
 	default:
 	    break;
     }
@@ -281,23 +284,24 @@ static bool decodeDigits(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 
 // Special decoder for subsequent number
 static bool decodeSubseq(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (len < 1)
 	return false;
     String tmp;
     getDigits(tmp,buf[0],buf+1,len-1);
     DDebug(isup,DebugAll,"decodeSubseq decoded %s='%s'",param->name,tmp.c_str());
-    list.addParam(param->name,tmp);
+    list.addParam(prefix+param->name,tmp);
     return true;
 }
 
 // Decoder for circuit group range and status (Q.763 3.43)
 static bool decodeRangeSt(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (len < 1)
 	return false;
+    String preName(prefix + param->name);
     // 1st octet is the range code (range - 1)
     len--;
     unsigned int range = 1 + *buf++;
@@ -307,7 +311,7 @@ static bool decodeRangeSt(const SS7ISUP* isup, NamedList& list, const IsupParam*
 	    Debug(isup,DebugMild,"decodeRangeSt truncating range of %u bits to %u octets!",range,len);
 	octets = len;
     }
-    list.addParam(param->name,String(range));
+    list.addParam(preName,String(range));
 
     String map;
     if (len) {
@@ -322,7 +326,7 @@ static bool decodeRangeSt(const SS7ISUP* isup, NamedList& list, const IsupParam*
 		mask = 1;
 	    }
 	}
-	list.addParam(String(param->name)+".map",map);
+	list.addParam(preName+".map",map);
     }
 
     DDebug(isup,DebugAll,"decodeRangeSt decoded %s=%u '%s'",param->name,range,map.c_str());
@@ -331,7 +335,7 @@ static bool decodeRangeSt(const SS7ISUP* isup, NamedList& list, const IsupParam*
 
 // Decoder for generic notification indicators (Q.763 3.25)
 static bool decodeNotif(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     if (len < 1)
 	return false;
@@ -349,27 +353,28 @@ static bool decodeNotif(const SS7ISUP* isup, NamedList& list, const IsupParam* p
 	}
     }
     DDebug(isup,DebugAll,"decodeNotif decoded %s='%s'",param->name,flg.c_str());
-    list.addParam(param->name,flg);
+    list.addParam(prefix+param->name,flg);
     return true;
 }
 
 // Decoder for User Service Information
 static bool decodeUSI(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
-    return SignallingUtils::decodeCaps(isup,list,buf,len,param->name,true);
+    return SignallingUtils::decodeCaps(isup,list,buf,len,prefix+param->name,true);
 }
 
 // Decoder for cause indicators
 static bool decodeCause(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
-    return SignallingUtils::decodeCause(isup,list,buf,len,param->name,true);
+    return SignallingUtils::decodeCause(isup,list,buf,len,prefix+param->name,true);
 }
 
 // Default encoder, get hexified octets
-static unsigned char encodeRaw(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList*)
+static unsigned char encodeRaw(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList*, const String&)
 {
     if (!(param && val))
 	return 0;
@@ -397,8 +402,10 @@ static unsigned char encodeRaw(const SS7ISUP* isup, SS7MSU& msu, unsigned char* 
 
 // Encoder for fixed length ISUP indicators (flags)
 static unsigned char encodeFlags(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList*)
+    const IsupParam* param, const NamedString* val, const NamedList*, const String&)
 {
+    if (!param)
+	return 0;
     unsigned int n = param->size;
     if (!(n && param->data))
 	return 0;
@@ -446,8 +453,10 @@ static unsigned char encodeFlags(const SS7ISUP* isup, SS7MSU& msu, unsigned char
 
 // Encoder for fixed length little-endian integer values
 static unsigned char encodeInt(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList*)
+    const IsupParam* param, const NamedString* val, const NamedList*, const String&)
 {
+    if (!param)
+	return 0;
     unsigned int n = param->size;
     if (!n)
 	return 0;
@@ -515,27 +524,29 @@ static unsigned char setDigits(SS7MSU& msu, const char* val, unsigned char nai, 
 }
 
 // Encoder for variable length digit sequences
-static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList* extra)
+static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
-    if (buf || param->size)
+    if (!param || buf || param->size)
 	return 0;
     unsigned char nai = 2;
     unsigned char plan = 1;
+    String preName(prefix + param->name);
     if (val && extra) {
-	nai = extra->getIntValue(val->name()+".nature",s_dict_nai,nai);
-	plan = extra->getIntValue(val->name()+".plan",s_dict_numPlan,plan);
+	nai = extra->getIntValue(preName+".nature",s_dict_nai,nai);
+	plan = extra->getIntValue(preName+".plan",s_dict_numPlan,plan);
     }
     unsigned char b2 = (plan & 7) << 4;
     switch (param->type) {
 	case SS7MsgISUP::CalledPartyNumber:
 	case SS7MsgISUP::RedirectionNumber:
 	case SS7MsgISUP::LocationNumber:
-	    if (val && extra && !extra->getBoolValue(val->name()+".inn",true))
+	    if (val && extra && !extra->getBoolValue(preName+".inn",true))
 		b2 |= 0x80;
 	    break;
 	case SS7MsgISUP::CallingPartyNumber:
-	    if (val && extra && !extra->getBoolValue(val->name()+".complete",true))
+	    if (val && extra && !extra->getBoolValue(preName+".complete",true))
 		b2 |= 0x80;
 	    break;
 	default:
@@ -548,7 +559,7 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu, unsigned cha
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	    if (val && extra)
-		b2 |= (extra->getIntValue(val->name()+".restrict",s_dict_presentation) & 3) << 2;
+		b2 |= (extra->getIntValue(preName+".restrict",s_dict_presentation) & 3) << 2;
 	default:
 	    break;
     }
@@ -557,7 +568,7 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu, unsigned cha
 	case SS7MsgISUP::LocationNumber:
 	case SS7MsgISUP::ConnectedNumber:
 	    if (val && extra)
-		b2 |= extra->getIntValue(val->name()+".screened",s_dict_screening) & 3;
+		b2 |= extra->getIntValue(preName+".screened",s_dict_screening) & 3;
 	default:
 	    break;
     }
@@ -565,9 +576,12 @@ static unsigned char encodeDigits(const SS7ISUP* isup, SS7MSU& msu, unsigned cha
 }
 
 // Encoder for circuit group range and status (Q.763 3.43)
-static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList* extra)
+static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
+    if (!(param && val))
+	return 0;
     unsigned char data[34] = {1};
     // 1st octet is the range code (range - 1)
     unsigned int range = val->toInteger(0);
@@ -577,7 +591,7 @@ static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu, unsigned ch
     }
     data[1] = range;
     // Next octets: status bits for the circuits given by range
-    NamedString* map = extra->getParam(String(param->name) + ".map");
+    NamedString* map = extra->getParam(prefix+param->name+".map");
     if (map && *map) {
 	// Max status bits is 256. Relevant status bits: range + 1
 	range++;
@@ -606,10 +620,11 @@ static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu, unsigned ch
 }
 
 // Encoder for generic notification indicators (Q.763 3.25)
-static unsigned char encodeNotif(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList* extra)
+static unsigned char encodeNotif(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
-    if (buf || param->size || !val)
+    if (!(param && val) || buf || param->size)
 	return 0;
     unsigned char notif[32];
     unsigned int len = 0;
@@ -637,11 +652,14 @@ static unsigned char encodeNotif(const SS7ISUP* isup, SS7MSU& msu, unsigned char
 }
 
 // Encoder for User Service Information (Q.763 3.57, Q.931)
-static unsigned char encodeUSI(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList* extra)
+static unsigned char encodeUSI(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
+    if (!param)
+	return 0;
     DataBlock tmp;
-    SignallingUtils::encodeCaps(isup,tmp,*extra,param->name,true);
+    SignallingUtils::encodeCaps(isup,tmp,*extra,prefix+param->name,true);
     DDebug(isup,DebugAll,"encodeUSI encoding %s on %u octets",param->name,tmp.length());
     if (tmp.length() < 1)
 	return 0;
@@ -650,11 +668,14 @@ static unsigned char encodeUSI(const SS7ISUP* isup, SS7MSU& msu, unsigned char* 
 }
 
 // Encoder for cause indicators
-static unsigned char encodeCause(const SS7ISUP* isup, SS7MSU& msu, unsigned char* buf,
-    const IsupParam* param, const NamedString* val, const NamedList* extra)
+static unsigned char encodeCause(const SS7ISUP* isup, SS7MSU& msu,
+    unsigned char* buf, const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
+    if (!param)
+	return 0;
     DataBlock tmp;
-    SignallingUtils::encodeCause(isup,tmp,*extra,param->name,true);
+    SignallingUtils::encodeCause(isup,tmp,*extra,prefix+param->name,true);
     DDebug(isup,DebugAll,"encodeCause encoding %s on %u octets",param->name,tmp.length());
     if (tmp.length() < 1)
 	return 0;
@@ -1144,35 +1165,37 @@ static const MsgParams s_ansi_params[] = {
 
 // Generic decode helper function for a single parameter
 static bool decodeParam(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
-    const unsigned char* buf, unsigned int len)
+    const unsigned char* buf, unsigned int len, const String& prefix)
 {
     DDebug(isup,DebugAll,"decodeParam(%p,%p,%p,%u) type=0x%02x, size=%u, name='%s'",
 	&list,param,buf,len,param->type,param->size,param->name);
     if (param->size && (param->size != len))
 	return false;
     if (param->decoder)
-	return param->decoder(isup,list,param,buf,len);
-    return decodeRaw(isup,list,param,buf,len);
+	return param->decoder(isup,list,param,buf,len,prefix);
+    return decodeRaw(isup,list,param,buf,len,prefix);
 }
 
 // Generic encode helper function for a single mandatory parameter
-static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu, const IsupParam* param,
-    const NamedList* params, ObjList& exclude, unsigned char* buf = 0)
+static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu,
+    const IsupParam* param, const NamedList* params, ObjList& exclude,
+    const String& prefix, unsigned char* buf = 0)
 {
     // variable length must not receive fixed buffer
     if (buf && !param->size)
 	return 0;
-    NamedString* val = params ? params->getParam(param->name) : 0;
+    NamedString* val = params ? params->getParam(prefix+param->name) : 0;
     if (val)
 	exclude.append(val)->setDelete(false);
     if (param->encoder)
-	return param->encoder(isup,msu,buf,param,val,params);
-    return encodeRaw(isup,msu,buf,param,val,params);
+	return param->encoder(isup,msu,buf,param,val,params,prefix);
+    return encodeRaw(isup,msu,buf,param,val,params,prefix);
 }
 
 // Generic encode helper for a single optional parameter
-static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu, const IsupParam* param,
-    const NamedString* val, const NamedList* extra)
+static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu,
+    const IsupParam* param, const NamedString* val,
+    const NamedList* extra, const String& prefix)
 {
     // add the parameter type now but remember the old length
     unsigned int len = msu.length();
@@ -1181,9 +1204,9 @@ static unsigned char encodeParam(const SS7ISUP* isup, SS7MSU& msu, const IsupPar
 
     unsigned char size = 0;
     if (param->encoder)
-	size = param->encoder(isup,msu,0,param,val,extra);
+	size = param->encoder(isup,msu,0,param,val,extra,prefix);
     else
-	size = encodeRaw(isup,msu,0,param,val,extra);
+	size = encodeRaw(isup,msu,0,param,val,extra,prefix);
     if (!size) {
 	Debug(isup,DebugMild,"Unwinding type storage for failed parameter %s",param->name);
 	msu.truncate(len);
@@ -1913,7 +1936,7 @@ SS7ISUP* SS7ISUPCall::isup()
  * SS7ISUP
  */
 SS7ISUP::SS7ISUP(const NamedList& params)
-    : SignallingCallControl(params),
+    : SignallingCallControl(params,"isup."),
     m_cicLen(2),
     m_type(SS7PointCode::Other),
     m_defPoint(0),
@@ -2250,6 +2273,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
     *d++ = type;
     ObjList exclude;
     plist = msgParams->params;
+    String prefix = params->getValue("message-prefix");
     // first populate with mandatory fixed parameters
     while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
 	const IsupParam* param = getParamDesc(ptype);
@@ -2261,7 +2285,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	    Debug(this,DebugFail,"Stage 2: Invalid (variable) description of fixed ISUP parameter %s [%p]",param->name,this);
 	    continue;
 	}
-	if (!encodeParam(this,*msu,param,params,exclude,d))
+	if (!encodeParam(this,*msu,param,params,exclude,prefix,d))
 	    Debug(this,DebugGoOn,"Could not encode fixed ISUP parameter %s [%p]",param->name,this);
 	d += param->size;
     }
@@ -2278,7 +2302,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	}
 	// remember the offset this parameter will actually get stored
 	len = msu->length();
-	unsigned char size = encodeParam(this,*msu,param,params,exclude);
+	unsigned char size = encodeParam(this,*msu,param,params,exclude,prefix);
 	d = msu->getData(0,len+1);
 	if (!(size && d)) {
 	    Debug(this,DebugGoOn,"Could not encode variable ISUP parameter %s [%p]",param->name,this);
@@ -2304,7 +2328,7 @@ SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
 	    const IsupParam* param = getParamDesc(ns->name());
 	    if (!param)
 		continue;
-	    unsigned char size = encodeParam(this,*msu,param,ns,params);
+	    unsigned char size = encodeParam(this,*msu,param,ns,params,prefix);
 	    if (!size)
 		continue;
 	    if (len) {
@@ -2337,17 +2361,21 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	return false;
     }
 
-    // Add protocol type
+    // Get parameter prefix
+    String prefix = msg.getValue("message-prefix");
+
+    // Add protocol and message type
     switch (pcType) {
 	case SS7PointCode::ITU:
-	    msg.addParam("protocol-type","itu-t");
+	    msg.addParam(prefix+"protocol-type","itu-t");
 	    break;
 	case SS7PointCode::ANSI:
 	case SS7PointCode::ANSI8:
-	    msg.addParam("protocol-type","ansi");
+	    msg.addParam(prefix+"protocol-type","ansi");
 	    break;
 	default: ;
     }
+    msg.addParam(prefix+"message-type",SS7MsgISUP::lookup(msgType));
 
     const SS7MsgISUP::Parameters* plist = params->params;
     SS7MsgISUP::Parameters ptype;
@@ -2367,7 +2395,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    Debug(this,DebugWarn,"Truncated ISUP message! [%p]",this);
 	    return false;
 	}
-	if (!decodeParam(this,msg,param,paramPtr,param->size))
+	if (!decodeParam(this,msg,param,paramPtr,param->size,prefix))
 	    Debug(this,DebugWarn,"Could not decode fixed ISUP parameter %s [%p]",param->name,this);
 	paramPtr += param->size;
 	paramLen -= param->size;
@@ -2394,7 +2422,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		size,offs,paramLen,param->name,this);
 	    return false;
 	}
-	if (!decodeParam(this,msg,param,paramPtr+offs+1,size))
+	if (!decodeParam(this,msg,param,paramPtr+offs+1,size,prefix))
 	    Debug(this,DebugWarn,"Could not decode variable ISUP parameter %s (size=%u) [%p]",
 		param->name,size,this);
 	paramPtr++;
@@ -2432,7 +2460,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 		const IsupParam* param = getParamDesc(ptype);
 		if (!param)
 		    Debug(this,DebugMild,"Unknown optional ISUP parameter 0x%02x (size=%u) [%p]",ptype,size,this);
-		else if (!decodeParam(this,msg,param,paramPtr,size))
+		else if (!decodeParam(this,msg,param,paramPtr,size,prefix))
 		    Debug(this,DebugWarn,"Could not decode optional ISUP parameter %s (size=%u) [%p]",param->name,size,this);
 		paramPtr += size;
 		paramLen -= size;

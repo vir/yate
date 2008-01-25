@@ -2062,7 +2062,7 @@ ISDNQ931ParserData::ISDNQ931ParserData(DebugEnabler* dbg, const NamedList& param
  * ISDNQ931
  */
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
-    : SignallingCallControl(params),
+    : SignallingCallControl(params,"isdn."),
     ISDNLayer3(name),
     m_layer(true),
     m_q921(0),
@@ -2896,7 +2896,7 @@ bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
  * ISDNQ931Monitor
  */
 ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
-    : SignallingCallControl(params),
+    : SignallingCallControl(params,"isdn."),
     ISDNLayer3(name),
     m_layer(true),
     m_q921Net(0),
@@ -5209,12 +5209,12 @@ bool Q931Parser::encodeCause(ISDNQ931IE* ie, DataBlock& buffer)
     data[3] |= (u_int8_t)s_ie_ieCause[1].getValue(ie,true,0x1f);
     // Diagnostic
     DataBlock diagnostic;
-    String tmp = ie->getValue(s_ie_ieCause[2].name);
-    if (!tmp.null()) {
-	if (!SignallingUtils::dumpedStr2Data(diagnostic,tmp))
+    const char* tmp = ie->getValue(s_ie_ieCause[2].name);
+    if (tmp) {
+	if (!diagnostic.unHexify(tmp,strlen(tmp),' '))
 	    Debug(m_settings->m_dbg,DebugMild,
 		"Error encoding '%s' IE. Field %s=%s is incorrect [%p]",
-		ie->c_str(),s_ie_ieCause[3].name,tmp.c_str(),m_msg);
+		ie->c_str(),s_ie_ieCause[3].name,tmp,m_msg);
 	data[1] += (u_int8_t)diagnostic.length();
     }
     CHECK_IE_LENGTH(diagnostic.length() + sizeof(data),Q931_MAX_CAUSE_LEN)

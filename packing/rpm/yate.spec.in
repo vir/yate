@@ -78,6 +78,7 @@ for small to large scale projects.
 %{_libdir}/yate/server/pbxassist.yate
 %{_libdir}/yate/server/park.yate
 %{_libdir}/yate/server/queues.yate
+%{_libdir}/yate/server/lateroute.yate
 %{_libdir}/yate/dumbchan.yate
 %{_libdir}/yate/callfork.yate
 %{_libdir}/yate/extmodule.yate
@@ -111,6 +112,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/moh.conf
 %config(noreplace) %{_sysconfdir}/yate/mux.conf
 %config(noreplace) %{_sysconfdir}/yate/pbxassist.conf
+%config(noreplace) %{_sysconfdir}/yate/lateroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf
 %config(noreplace) %{_sysconfdir}/yate/register.conf

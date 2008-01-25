@@ -915,8 +915,10 @@ bool ZapDevice::open(unsigned int numbufs, unsigned int bufsize)
 
 	// Open for an interface
 	// Check channel mode
-	if (par.sigtype != ZT_SIG_HDLCFCS) {
-	    Debug(m_owner,DebugWarn,"Channel %u is not in HDLC/FCS mode [%p]",m_channel,m_owner);
+	if (par.sigtype != ZT_SIG_HDLCFCS && par.sigtype != ZT_SIG_HARDHDLC) {
+	    Debug(m_owner,DebugWarn,"Channel %u is not in '%s' or '%s' mode [%p]",
+		m_channel,lookup(ZT_SIG_HDLCFCS,s_zaptelSig),
+		lookup(ZT_SIG_HARDHDLC,s_zaptelSig),m_owner);
 	    break;
 	}
 	// Set buffers

@@ -3619,7 +3619,11 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
     MimeBinaryBody* isup = 0;
 
     // Build isup
-    if (s_sipt_isup) {
+    while (s_sipt_isup) {
+	String prefix = msg.getValue("message-prefix");
+	if (!msg.getParam(prefix + "message-type"))
+	    break;
+
 	// Remember the message's name and user data
 	String name = msg;
 	RefObject* userdata = msg.userData();
@@ -3638,8 +3642,8 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 	}
 	if (data && data->length()) {
 	    isup = new MimeBinaryBody("application/isup",(const char*)data->data(),data->length());
-	    isup->setParam("version",msg.getValue("protocol-type"));
-	    const char* s = msg.getValue("protocol-basetype");
+	    isup->setParam("version",msg.getValue(prefix + "protocol-type"));
+	    const char* s = msg.getValue(prefix + "protocol-basetype");
 	    if (s)
 		isup->setParam("base",s);
 	    MimeHeaderLine* line = new MimeHeaderLine("Content-Disposition","signal");
@@ -3656,6 +3660,7 @@ MimeBody* YateSIPConnection::buildSIPBody(Message& msg, MimeSdpBody* sdp)
 	msg = name;
 	msg.userData(userdata);
 	TelEngine::destruct(userdata);
+	break;
     }
 
     if (!isup)

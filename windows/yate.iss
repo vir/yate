@@ -94,6 +94,7 @@ Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Components: server
 Source: "Release\server\pbxassist.yate"; DestDir: "{app}\modules\server"; Components: server
 Source: "Release\server\park.yate"; DestDir: "{app}\modules\server"; Components: server
 Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Components: server
+Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Components: server
 Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Components: server
 
 Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Components: server\cluster

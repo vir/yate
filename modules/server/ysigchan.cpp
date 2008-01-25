@@ -79,7 +79,7 @@ public:
     bool disconnect()
 	{ return Channel::disconnect(m_reason); }
     void handleEvent(SignallingEvent* event);
-    void hangup(const char* reason = 0);
+    void hangup(const char* reason = 0, SignallingEvent* event = 0);
 private:
     virtual void statusParams(String& str);
     // Set call status. Print debug message
@@ -134,6 +134,12 @@ public:
     SigLink* findLink(const SignallingCallControl* ctrl);
     // Disconnect channels. If link is not 0, disconnect only channels belonging to that link
     void disconnectChannels(SigLink* link = 0);
+    // Copy incoming message parameters to another list of parameters
+    // The pointers of NamedPointer parameters are 'stolen' from 'sig' when copying
+    // If 'params' is not 0, the contained parameters will not be prefixed with
+    //  event call controller's prefix
+    void copySigMsgParams(NamedList& dest, SignallingEvent* event,
+	const String* params = 0);
 private:
     // Delete the given link if found
     // Clear link list if name is 0
@@ -462,7 +468,7 @@ public:
 protected:
     // Get point code type (protocol version) from message
     // Return SS7PointCode::Other if unknown
-    SS7PointCode::Type getPCType(Message& msg);
+    SS7PointCode::Type getPCType(Message& msg, const String& prefix);
     SS7ISUP* m_isup;
 };
 
@@ -500,6 +506,8 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_hungup(false),
     m_inband(false)
 {
+    // Parameters to be copied to call.preroute
+    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn";
     if (!(m_call && m_call->ref())) {
 	Debug(this,DebugCall,"No signalling call for this incoming call");
 	m_call = 0;
@@ -521,24 +529,13 @@ SigChannel::SigChannel(SignallingEvent* event)
     m->setParam("direction",status());
     m->addParam("caller",m_caller);
     m->addParam("called",m_called);
-    m->copyParam(msg->params(),"callername");
+    if (msg)
+	m->copyParam(msg->params(),"callername");
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
     // Route the call
     m = message("call.preroute",false,true);
-    if (msg) {
-	m->addParam("caller",m_caller);
-	m->addParam("called",m_called);
-	m->copyParam(msg->params(),"callername");
-	m->copyParam(msg->params(),"format");
-	m->copyParam(msg->params(),"formats");
-	m->copyParam(msg->params(),"callernumtype");
-	m->copyParam(msg->params(),"callernumplan");
-	m->copyParam(msg->params(),"callerpres");
-	m->copyParam(msg->params(),"callerscreening");
-	m->copyParam(msg->params(),"callednumtype");
-	m->copyParam(msg->params(),"callednumplan");
-    }
+    plugin.copySigMsgParams(*m,event,&params);
     // TODO: Add call control parameter ?
     if (!startRouter(m))
 	hangup("temporary-failure");
@@ -803,8 +800,9 @@ void SigChannel::disconnected(bool final, const char* reason)
     Channel::disconnected(final,m_reason);
 }
 
-void SigChannel::hangup(const char* reason)
+void SigChannel::hangup(const char* reason, SignallingEvent* event)
 {
+    static String params = "reason";
     Lock lock(m_mutex);
     if (m_hungup)
 	return;
@@ -828,6 +826,7 @@ void SigChannel::hangup(const char* reason)
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
     m->setParam("reason",m_reason);
+    plugin.copySigMsgParams(*m,event,&params);
     Engine::enqueue(m);
 }
 
@@ -882,15 +881,18 @@ void SigChannel::evInfo(SignallingEvent* event)
 void SigChannel::evProgress(SignallingEvent* event)
 {
     setState("progressing");
-    Engine::enqueue(message("call.progress"));
+    Message* msg = message("call.progress");
+    plugin.copySigMsgParams(*msg,event);
+    Engine::enqueue(msg);
 }
 
 void SigChannel::evRelease(SignallingEvent* event)
 {
     const char* reason = 0;
-    if (event->message())
-	reason = event->message()->params().getValue("reason");
-    hangup(reason);
+    SignallingMessage* sig = (event ? event->message() : 0);
+    if (sig)
+	reason = sig->params().getValue("reason");
+    hangup(reason,event);
 }
 
 void SigChannel::evAccept(SignallingEvent* event)
@@ -908,6 +910,7 @@ void SigChannel::evAccept(SignallingEvent* event)
 
 void SigChannel::evAnswer(SignallingEvent* event)
 {
+    static String params = "format";
     setState("answered");
     const char* format = 0;
     bool cicChange = false;
@@ -923,11 +926,14 @@ void SigChannel::evAnswer(SignallingEvent* event)
 	String value;
 	cic->setParam("echotrain",value);
     }
-    Engine::enqueue(message("call.answered",false,true));
+    Message* msg = message("call.answered",false,true);
+    plugin.copySigMsgParams(*msg,event,&params);
+    Engine::enqueue(msg);
 }
 
 void SigChannel::evRinging(SignallingEvent* event)
 {
+    static String params = "format";
     setState("ringing");
     const char* format = 0;
     bool cicChange = false;
@@ -936,7 +942,9 @@ void SigChannel::evRinging(SignallingEvent* event)
 	cicChange = event->message()->params().getBoolValue("circuit-change",false);
     }
     updateSource(format,cicChange);
-    Engine::enqueue(message("call.ringing",false,true));
+    Message* msg = message("call.ringing",false,true);
+    plugin.copySigMsgParams(*msg,event,&params);
+    Engine::enqueue(msg);
 }
 
 bool SigChannel::updateConsumer(const char* format, bool force)
@@ -1171,6 +1179,47 @@ void SigDriver::disconnectChannels(SigLink* link)
 	    SigChannel* c = static_cast<SigChannel*>(o);
 	    c->disconnect();
 	}
+}
+
+// Copy incoming message parameters to another list of parameters
+// The pointers of NamedPointer parameters are 'stolen' from 'sig' when copying
+// If 'params' is not 0, the contained parameters will not be prefixed with
+//  event call controller's prefix
+void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
+    const String* params)
+{
+    SignallingMessage* sig = event ? event->message() : 0;
+    if (!sig)
+	return;
+
+    ObjList exclude;
+    // Copy 'params'
+    if (params) {
+	ObjList* p = params->split(',',false);
+	for (ObjList* o = p->skipNull(); o; o = o->skipNext()) {
+	    NamedString* ns = sig->params().getParam(static_cast<String*>(o->get())->c_str());
+	    if (!ns)
+		continue;
+	    dest.addParam(ns->name(),*ns);
+	    exclude.append(ns)->setDelete(false);
+	}
+	TelEngine::destruct(p);
+    }
+    // Copy all other parameters
+    String prefix = (event->controller() ? event->controller()->msgPrefix() : String::empty());
+    if (!prefix.null())
+	dest.addParam("message-prefix",prefix);
+    unsigned int n = sig->params().length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = sig->params().getParam(i);
+	if (!param || exclude.find(param->name()))
+	    continue;
+	NamedPointer* np = static_cast<NamedPointer*>(param->getObject("NamedPointer"));
+	if (!np)
+	    dest.addParam(prefix+param->name(),*param);
+	else
+	    dest.addParam(new NamedPointer(prefix+param->name(),np->takeData(),*param));
+    }
 }
 
 // Append a link to the list. Duplicate names are not allowed
@@ -2556,17 +2605,18 @@ bool IsupDecodeHandler::received(Message& msg)
 	return false;
     }
 
+    String prefix = msg.getValue("message-prefix");
     const unsigned char* paramPtr = (const unsigned char*)data->data();
     SS7MsgISUP::Type msgType = (SS7MsgISUP::Type)(*paramPtr++);
     DDebug(&plugin,DebugAll,"%s msg=%s type=%s basetype=%s [%p]",
 	msg.c_str(),SS7MsgISUP::lookup(msgType),
-	msg.getValue("protocol-type"),msg.getValue("protocol-basetype"),this);
+	msg.getValue(prefix+"protocol-type"),
+	msg.getValue(prefix+"protocol-basetype"),this);
 
-    SS7PointCode::Type pcType = getPCType(msg);
+    SS7PointCode::Type pcType = getPCType(msg,prefix);
     if (pcType == SS7PointCode::Other)
 	return false;
 
-    msg.setParam("message-type",SS7MsgISUP::lookup(msgType));
     if (m_isup->decodeMessage(msg,msgType,pcType,paramPtr,data->length()-1))
 	return true;
     msg.setParam("error","Parser failure");
@@ -2574,15 +2624,15 @@ bool IsupDecodeHandler::received(Message& msg)
 }
 
 // Get point code type (protocol version) from message
-SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg)
+SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg, const String& prefix)
 {
-    String proto = msg.getValue("protocol-type");
+    String proto = msg.getValue(prefix+"protocol-type");
     if (proto == "itu-t")
 	return SS7PointCode::ITU;
     else if (proto == "ansi")
 	return SS7PointCode::ANSI;
     else {
-	proto = msg.getValue("protocol-basetype");
+	proto = msg.getValue(prefix+"protocol-basetype");
 	if (proto.startsWith("itu-t"))
 	    return SS7PointCode::ITU;
 	else if (proto.startsWith("ansi"))
@@ -2597,16 +2647,19 @@ SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg)
  */
 bool IsupEncodeHandler::received(Message& msg)
 {
-    DDebug(&plugin,DebugAll,"%s msg=%s type=%s basetype=%s [%p]",
-	msg.c_str(),msg.getValue("message-type"),
-	msg.getValue("protocol-type"),msg.getValue("protocol-basetype"),this);
+    String prefix = msg.getValue("message-prefix");
 
-    SS7MsgISUP::Type msgType = (SS7MsgISUP::Type)SS7MsgISUP::lookup(msg.getValue("message-type"));
+    DDebug(&plugin,DebugAll,"%s msg=%s type=%s basetype=%s [%p]",
+	msg.c_str(),msg.getValue(prefix+"message-type"),
+	msg.getValue(prefix+"protocol-type"),
+	msg.getValue(prefix+"protocol-basetype"),this);
+
+    SS7MsgISUP::Type msgType = (SS7MsgISUP::Type)SS7MsgISUP::lookup(msg.getValue(prefix+"message-type"));
     if (msgType == SS7MsgISUP::Unknown) {
 	msg.setParam("error","Unknown message-type");
 	return false;
     }
-    SS7PointCode::Type pcType = getPCType(msg);
+    SS7PointCode::Type pcType = getPCType(msg,prefix);
     if (pcType == SS7PointCode::Other)
 	return false;
 

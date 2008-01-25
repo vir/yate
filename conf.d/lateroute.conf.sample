@@ -1,0 +1,14 @@
+[general]
+; Global settings of the late routing module
+
+; enabled: boolean: Enable late routing module operation
+;enabled=true if regexp and called are set, false if any is empty
+
+; priority: int: Priority of call.execute handler
+;priority=75
+
+; regexp: string: Regular expression describing callto match rules
+;regexp=
+
+; called: string: Template for creating calling number from regexp match
+;called=\0

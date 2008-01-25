@@ -906,14 +906,21 @@ void WpInterface::timerTick(const Time& when)
  */
 WpSigThread::~WpSigThread()
 {
-    DDebug(m_interface,DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
-    if (m_interface)
+    if (m_interface) {
+	Debug(m_interface,DebugAll,"Worker thread stopped [%p]",this);
 	m_interface->m_thread = 0;
+    }
+    else
+	Debug(DebugAll,"WpSigThread::~WpSigThread() [%p]",this);
 }
 
 void WpSigThread::run()
 {
-    DDebug(m_interface,DebugAll,"%s start running [%p]",name(),this);
+    if (!m_interface) {
+	Debug(DebugWarn,"WpSigThread::run(). No client object [%p]",this);
+	return;
+    }
+    Debug(m_interface,DebugAll,"Worker thread started [%p]",this);
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())
@@ -1331,8 +1338,8 @@ void WpSpan::run()
 	m_bufferLen = WP_HEADER + m_samples * m_count;
 	m_buffer = new unsigned char[m_bufferLen];
     }
-    XDebug(m_group,DebugInfo,
-	"WpSpan('%s'). Running: circuits=%u, buffer=%u, samples=%u [%p]",
+    DDebug(m_group,DebugInfo,
+	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
 	id().safe(),m_count,m_bufferLen,m_samples,this);
     while (true) {
 	if (Thread::check(true))
@@ -1485,22 +1492,23 @@ bool WpSpan::decodeEvent()
 WpSpanThread::~WpSpanThread()
 {
     if (m_data) {
-	DDebug(m_data->group(),DebugAll,"WpSpanThread::~WpSpanThread() [%p]",this);
+	Debug(m_data->group(),DebugAll,"WpSpan('%s'). Worker thread stopped [%p]",
+	    m_data->id().safe(),this);
 	m_data->m_thread = 0;
     }
     else
-	DDebug(DebugAll,"WpSpanThread::~WpSpanThread() [%p]",this);
+	Debug(DebugAll,"WpSpanThread::~WpSpanThread() [%p]",this);
 }
 
 void WpSpanThread::run()
 {
     if (m_data) {
-	DDebug(m_data->group(),DebugAll,"%s start running for (%p): '%s' [%p]",
-	    name(),m_data,m_data->id().safe(),this);
+	Debug(m_data->group(),DebugAll,"WpSpan('%s'). Worker thread started [%p]",
+	    m_data->id().safe(),this);
 	m_data->run();
     }
     else
-	DDebug(DebugAll,"WpSpanThread::run(). No client object [%p]",this);
+	Debug(DebugWarn,"WpSpanThread::run(). No client object [%p]",this);
 }
 
 /**

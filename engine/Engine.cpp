@@ -310,8 +310,10 @@ void completeModule(String& ret, const String& part, const String& rpath = Strin
 // perform command line completion
 void EngineCommand::doCompletion(Message &msg, const String& partLine, const String& partWord)
 {
-    if (partLine.null() || (partLine == "help") || (partLine == "status"))
+    if (partLine.null() || (partLine == "help"))
 	completeOne(msg.retValue(),"module",partWord);
+    else if (partLine == "status")
+	completeOne(msg.retValue(),"engine",partWord);
     else if (partLine == "module") {
 	completeOne(msg.retValue(),"load",partWord);
 	completeOne(msg.retValue(),"unload",partWord);
@@ -397,7 +399,7 @@ bool EngineHelp::received(Message &msg)
 	msg.retValue() << s_cmdsOpt;
 	return false;
     }
-    if (line != "engine")
+    if (line != "module")
 	return false;
     msg.retValue() << s_cmdsOpt << s_cmdsMsg;
     return true;

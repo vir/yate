@@ -481,6 +481,13 @@ public:
     virtual bool received(Message& msg)
 	{ return m_receiver ? m_receiver->received(msg,m_id) : false; }
 
+    /**
+     * Get the ID of this message relay
+     * @return Numeric identifier passed to receiver
+     */
+    inline int id() const
+	{ return m_id; }
+
 private:
     MessageReceiver* m_receiver;
     int m_id;

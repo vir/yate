@@ -791,7 +791,9 @@ bool Module::installRelay(const char* name, int id, unsigned priority)
 	return true;
     m_relays |= id;
 
-    Engine::install(new MessageRelay(name,this,id,priority));
+    MessageRelay* relay = new MessageRelay(name,this,id,priority);
+    m_relayList.append(relay)->setDelete(false);
+    Engine::install(relay);
     return true;
 }
 
@@ -803,6 +805,26 @@ bool Module::installRelay(int id, unsigned priority)
 bool Module::installRelay(const char* name, unsigned priority)
 {
     return installRelay(name,lookup(name,s_messages),priority);
+}
+
+bool Module::installRelay(MessageRelay* relay)
+{
+    if (!relay || ((relay->id() & m_relays) != 0) || m_relayList.find(relay))
+	return false;
+    m_relays |= relay->id();
+    m_relayList.append(relay)->setDelete(false);
+    Engine::install(relay);
+    return true;
+}
+
+bool Module::uninstallRelays()
+{
+    while (MessageRelay* relay = static_cast<MessageRelay*>(m_relayList.remove(false))) {
+	Engine::uninstall(relay);
+	m_relays &= ~relay->id();
+	relay->destruct();
+    }
+    return (0 == m_relays);
 }
 
 void Module::initialize()

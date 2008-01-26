@@ -415,6 +415,8 @@ bool EngineCommand::received(Message &msg)
 	for (ObjList* l = Engine::self()->m_libs.skipNull();l;l = l->skipNext()) {
 	    SLib* s = static_cast<SLib*>(l->get());
 	    msg.retValue().append(*s,"\t");
+	    if (s->unload(false))
+		msg.retValue() += "*";
 	}
 	msg.retValue() << "\r\n";
 	ok = true;

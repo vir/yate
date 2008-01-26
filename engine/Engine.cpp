@@ -233,8 +233,21 @@ bool EngineStatusHandler::received(Message &msg)
     return false;
 }
 
-static char s_cmdsOpt[] = "  module {load modulefile|unload modulename|list}\r\n";
+static char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modulename|list}\r\n";
 static char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
+
+static String moduleBase(const String& fname)
+{
+    int sep = fname.rfind(PATH_SEP[0]);
+    if (sep >= 0)
+	sep++;
+    else
+	sep = 0;
+    int len = fname.length() - sep;
+    if (fname.endsWith(Engine::moduleSuffix()))
+	len -= Engine::moduleSuffix().length();
+    return fname.substr(sep,len);
+}
 
 // perform one completion only if match still possible
 static void completeOne(String& ret, const String& str, const char* part)
@@ -244,8 +257,20 @@ static void completeOne(String& ret, const String& str, const char* part)
     ret.append(str,"\t");
 }
 
+static void completeOneModule(String& ret, const String& str, const char* part, ObjList& mods, bool reload)
+{
+    SLib* s = static_cast<SLib*>(mods[moduleBase(str)]);
+    if (s) {
+	if (!(reload && s->unload(false)))
+	    return;
+    }
+    else if (reload)
+	return;
+    completeOne(ret,str,part);
+}
+
 // complete a module filename from filesystem
-void completeModule(String& ret, const String& part, const String& rpath = String::empty())
+void completeModule(String& ret, const String& part, ObjList& mods, bool reload, const String& rpath = String::empty())
 {
     if (part[0] == '.')
 	return;
@@ -275,12 +300,12 @@ void completeModule(String& ret, const String& part, const String& rpath = Strin
 	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0)
 	    continue;
 	if ((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-	    completeModule(ret,part,rdir + entry.cFileName + PATH_SEP);
+	    completeModule(ret,part,mods,reload,rdir + entry.cFileName + PATH_SEP);
 	    continue;
 	}
 	int n = ::strlen(entry.cFileName) - Engine::moduleSuffix().length();
 	if ((n > 0) && !::strcmp(entry.cFileName+n,Engine::moduleSuffix()))
-	    completeOne(ret,rdir + entry.cFileName,part);
+	    completeOneModule(ret,rdir + entry.cFileName,part,mods,reload);
     } while (::FindNextFile(hf,&entry));
     ::FindClose(hf);
 #else
@@ -296,12 +321,12 @@ void completeModule(String& ret, const String& part, const String& rpath = Strin
 	if (::stat(path + PATH_SEP + entry->d_name,&stat_buf))
 	    continue;
 	if (S_ISDIR(stat_buf.st_mode)) {
-	    completeModule(ret,part,rdir + entry->d_name + PATH_SEP);
+	    completeModule(ret,part,mods,reload,rdir + entry->d_name + PATH_SEP);
 	    continue;
 	}
 	int n = ::strlen(entry->d_name) - Engine::moduleSuffix().length();
 	if ((n > 0) && !::strcmp(entry->d_name+n,Engine::moduleSuffix()))
-	    completeOne(ret,rdir + entry->d_name,part);
+	    completeOneModule(ret,rdir + entry->d_name,part,mods,reload);
     }
     ::closedir(dir);
 #endif
@@ -317,10 +342,13 @@ void EngineCommand::doCompletion(Message &msg, const String& partLine, const Str
     else if (partLine == "module") {
 	completeOne(msg.retValue(),"load",partWord);
 	completeOne(msg.retValue(),"unload",partWord);
+	completeOne(msg.retValue(),"reload",partWord);
 	completeOne(msg.retValue(),"list",partWord);
     }
     else if (partLine == "module load")
-	completeModule(msg.retValue(),partWord);
+	completeModule(msg.retValue(),partWord,Engine::self()->m_libs,false);
+    else if (partLine == "module reload")
+	completeModule(msg.retValue(),partWord,Engine::self()->m_libs,true);
     else if (partLine == "module unload") {
 	for (ObjList* l = Engine::self()->m_libs.skipNull();l;l = l->skipNext()) {
 	    SLib* s = static_cast<SLib*>(l->get());
@@ -345,19 +373,24 @@ bool EngineCommand::received(Message &msg)
     if (sep > 0) {
 	String cmd = line.substr(0,sep).trimBlanks();
 	String arg = line.substr(sep+1).trimBlanks();
-	if (cmd == "load") {
-	    sep = arg.rfind(PATH_SEP[0]);
-	    if (sep >= 0)
-		cmd = arg.substr(sep+1);
-	    else
-		cmd = arg;
-	    if (cmd.endsWith(Engine::moduleSuffix()))
-		cmd.assign(cmd,cmd.length() - Engine::moduleSuffix().length());
-	    if (Engine::self()->m_libs[cmd]) {
-		msg.retValue() = "Module is already loaded: " + cmd + "\r\n";
+	if ((cmd == "load") || (cmd == "reload")) {
+	    bool reload = (cmd == "reload");
+	    cmd = moduleBase(arg);
+	    SLib* s = static_cast<SLib*>(Engine::self()->m_libs[cmd]);
+	    if (s) {
 		ok = true;
+		if (reload) {
+		    if (s->unload(true)) {
+			Engine::self()->m_libs.remove(s);
+			ok = false;
+		    }
+		    else
+			msg.retValue() = "Module not unloaded: " + arg + "\r\n";
+		}
+		else
+		    msg.retValue() = "Module is already loaded: " + cmd + "\r\n";
 	    }
-	    else {
+	    if (!ok) {
 		ok = Engine::self()->loadPlugin(Engine::modulePath() + PATH_SEP + arg);
 		// if we loaded it successfully we must initialize
 		if (ok)
@@ -683,14 +716,9 @@ static int supervise(void)
 
 
 SLib::SLib(HMODULE handle, const char* file)
-    : String(file), m_handle(handle)
+    : String(moduleBase(file)), m_handle(handle)
 {
     DDebug(DebugAll,"SLib::SLib(%p,'%s') [%p]",handle,file,this);
-    int sep = rfind(PATH_SEP[0]);
-    if (sep >= 0)
-	assign(file+sep+1);
-    if (endsWith(Engine::moduleSuffix()))
-	assign(*this,length() - Engine::moduleSuffix().length());
     checkPoint();
 }
 

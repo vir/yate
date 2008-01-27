@@ -1358,6 +1358,22 @@ protected:
     bool installRelay(MessageRelay* relay);
 
     /**
+     * Uninstall a message relay
+     * @param relay Pointer to message relay
+     * @param delRelay True to delete the relay after removing it
+     * @return True if uninstalled, false if if was not present
+     */
+    bool uninstallRelay(MessageRelay* relay, bool delRelay = true);
+
+    /**
+     * Uninstall a message relay
+     * @param id RelayID to uninstall, relay will be deleted
+     * @param delRelay True to delete the relay after removing it
+     * @return True if uninstalled, false if if was not present
+     */
+    bool uninstallRelay(int id, bool delRelay = true);
+
+    /**
      * Uninstall all installed relays in preparation for unloading
      * @return True if all relays were uninstalled, false if something wrong
      */

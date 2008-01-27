@@ -817,6 +817,34 @@ bool Module::installRelay(MessageRelay* relay)
     return true;
 }
 
+bool Module::uninstallRelay(MessageRelay* relay, bool delRelay)
+{
+    if (!relay || ((relay->id() & m_relays) == 0) || !m_relayList.remove(relay,false))
+	return false;
+    Engine::uninstall(relay);
+    m_relays &= ~relay->id();
+    if (delRelay)
+	TelEngine::destruct(relay);
+    return true;
+}
+
+bool Module::uninstallRelay(int id, bool delRelay)
+{
+    if ((id & m_relays) == 0)
+	return false;
+    for (ObjList* l = m_relayList.skipNull(); l; l = l->skipNext()) {
+	MessageRelay* r = static_cast<MessageRelay*>(l->get());
+	if (r->id() != id)
+	    continue;
+	Engine::uninstall(r);
+	m_relays &= ~id;
+	if (delRelay)
+	    TelEngine::destruct(r);
+    }
+    return false;
+}
+
+
 bool Module::uninstallRelays()
 {
     while (MessageRelay* relay = static_cast<MessageRelay*>(m_relayList.remove(false))) {
@@ -824,7 +852,7 @@ bool Module::uninstallRelays()
 	m_relays &= ~relay->id();
 	relay->destruct();
     }
-    return (0 == m_relays);
+    return (0 == m_relays) && (0 == m_relayList.count());
 }
 
 void Module::initialize()

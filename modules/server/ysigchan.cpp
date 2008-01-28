@@ -488,10 +488,7 @@ static Configuration s_cfg;
 
 inline void applyDebugLevel(DebugEnabler* dbg, int level)
 {
-    if (!dbg)
-	return;
-    dbg->debugEnabled(level);
-    if (level)
+    if (dbg)
 	dbg->debugLevel(level);
 }
 

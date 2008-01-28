@@ -2334,7 +2334,7 @@ void ISDNQ931::attach(ISDNLayer2* q921)
 	// Add 1000 ms to minimum value to allow the lower layer to re-establish
         //   the data link before we make a retransmission
 	if (q) {
-	    u_int32_t min = q->dataTimeout();
+	    u_int64_t min = q->dataTimeout();
 	    if (m_callDiscTimer.interval() <= min)
 		m_callDiscTimer.interval(min + 1000);
 	    if (m_callRelTimer.interval() <= min)

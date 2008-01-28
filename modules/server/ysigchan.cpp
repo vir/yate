@@ -1210,16 +1210,20 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
     if (!prefix.null())
 	dest.addParam("message-prefix",prefix);
     unsigned int n = sig->params().length();
+    bool noParams = true;
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* param = sig->params().getParam(i);
 	if (!param || exclude.find(param->name()))
 	    continue;
+	noParams = false;
 	NamedPointer* np = static_cast<NamedPointer*>(param->getObject("NamedPointer"));
 	if (!np)
 	    dest.addParam(prefix+param->name(),*param);
 	else
 	    dest.addParam(new NamedPointer(prefix+param->name(),np->takeData(),*param));
     }
+    if (!prefix.null() && noParams)
+	dest.clearParam("message-prefix");
 }
 
 // Append a link to the list. Duplicate names are not allowed

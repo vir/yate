@@ -270,7 +270,7 @@ private:
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
     // Timeouts
-    u_int32_t m_timeout;                 // Timeout for not answered outgoing connections
+    u_int64_t m_timeout;                 // Timeout for not answered outgoing connections
 };
 
 /**
@@ -1568,7 +1568,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	// Respond if user has a resource with audio capabilities
 	JIDResource* res = user->getAudio(false,true);
 	if (res) {
-	    user->notifyResource(true,res);
+	    user->notifyResource(true,res->name());
 	    break;
 	}
 	// No audio resource for remote user: send probe

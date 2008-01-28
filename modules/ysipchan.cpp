@@ -3592,8 +3592,9 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
     if (userdata)
 	userdata->ref();
     msg = "isup.decode";
-    addBodyParam(msg,"protocol-type",isup,"version");
-    addBodyParam(msg,"protocol-basetype",isup,"base");
+    msg.addParam("message-prefix","isup.");
+    addBodyParam(msg,"isup.protocol-type",isup,"version");
+    addBodyParam(msg,"isup.protocol-basetype",isup,"base");
     msg.addParam(new NamedPointer("rawdata",new DataBlock(isup->body())));
     bool ok = Engine::dispatch(msg);
     // Clear added params and restore message
@@ -3602,8 +3603,6 @@ bool YateSIPConnection::decodeIsupBody(Message& msg, MimeBody* body)
 	    msg.c_str(),msg.getValue("error"),this);
 	msg.clearParam("error");
     }
-    msg.clearParam("protocol-type");
-    msg.clearParam("protocol-basetype");
     msg.clearParam("rawdata");
     msg = name;
     msg.userData(userdata);

@@ -710,12 +710,15 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nCard:                  " << m_socket.card();
-	s << "\r\nDevice:                " << m_socket.device();
-	s << "\r\nError mask:            " << (unsigned int)m_errorMask;
-	s << "\r\nRead only:             " << String::boolText(m_readOnly);
-	s << "\r\nRX underrun interval:  " << (unsigned int)m_timerRxUnder.interval() << " ms";
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
+	s << "driver=" << driver.debugName();
+	s << " section=" << config.c_str();
+	s << " type=" << config.getValue("type","T1");
+	s << " card=" << m_socket.card();
+	s << " device=" << m_socket.device();
+	s << " errormask=" << (unsigned int)m_errorMask;
+	s << " readonly=" << String::boolText(m_readOnly);
+	s << " rxunderruninterval=" << (unsigned int)m_timerRxUnder.interval() << "ms";
+	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
     }
     return true;
 }
@@ -1050,8 +1053,8 @@ bool WpCircuit::status(Status newStat, bool sync)
     }
     if (SignallingCircuit::status() == Missing) {
 	Debug(group(),DebugNote,
-	    "WpCircuit(%u). Can't change status to '%u'. Circuit is missing [%p]",
-	    code(),newStat,this);
+	    "WpCircuit(%u). Can't change status to '%s'. Circuit is missing [%p]",
+	    code(),lookupStatus(newStat),this);
 	return false;
     }
     Status oldStat = SignallingCircuit::status();
@@ -1065,8 +1068,8 @@ bool WpCircuit::status(Status newStat, bool sync)
 	enableData = true;
     // Don't put this message for final states
     if (!Engine::exiting())
-	DDebug(group(),DebugAll,"WpCircuit(%u). Changed status to %u [%p]",
-	    code(),newStat,this);
+	DDebug(group(),DebugAll,"WpCircuit(%u). Changed status to '%s' [%p]",
+	    code(),lookupStatus(newStat),this);
     if (enableData) {
 	m_sourceValid = m_source;
 	m_consumerValid = m_consumer;
@@ -1274,18 +1277,18 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     }
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nType:           " << type;
-	s << "\r\nGroup:          " << m_group->debugName();
-	s << "\r\nCard:           " << m_socket.card();
-	s << "\r\nDevice:         " << m_socket.device();
-	s << "\r\nSamples:        " << m_samples;
-	s << "\r\nBit swap:       " << String::boolText(m_swap);
-	s << "\r\nIdle value:     " << (unsigned int)m_noData;
-	s << "\r\nBuffer length:  " << (unsigned int)m_buflen;
-	s << "\r\nUsed channels:  " << m_count;
-	s << "\r\nRead only:      " << String::boolText(!m_canSend);
-	Debug(m_group,DebugInfo,"WpSpan('%s'). Initialized: [%p]%s",
-	    id().safe(),this,s.c_str());
+	s << "driver=" << driver.debugName();
+	s << " section=" << config.c_str();
+	s << " type=" << type;
+	s << " card=" << m_socket.card();
+	s << " device=" << m_socket.device();
+	s << " channels=" << cics << " (" << m_count << ")";
+	s << " samples=" << m_samples;
+	s << " bitswap=" << String::boolText(m_swap);
+	s << " idlevalue=" << (unsigned int)m_noData;
+	s << " buflen=" << (unsigned int)m_buflen;
+	s << " readonly=" << String::boolText(!m_canSend);
+	Debug(m_group,DebugInfo,"WpSpan('%s') %s [%p]",id().safe(),s.safe(),this);
     }
     return true;
 }

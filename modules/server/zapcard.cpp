@@ -1533,7 +1533,8 @@ bool ZapInterface::init(ZapDevice::Type type, unsigned int code, unsigned int ch
     m_errorMask = ((i >= 0 && i < 256) ? i : 255);
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nType:                 " << lookup(type,s_types);
+	s << "driver=" << plugin.debugName();
+	s << " type:                 " << lookup(type,s_types);
 	s << "\r\nD-channel:            " << (unsigned int)m_device.channel();
 	s << "\r\nError mask:           " << (unsigned int)m_errorMask;
 	s << "\r\nRead only:            " << String::boolText(m_readOnly);
@@ -1894,8 +1895,8 @@ bool ZapCircuit::status(Status newStat, bool sync)
 	return true;
     if (SignallingCircuit::status() == Missing) {
 	Debug(group(),DebugNote,
-	    "ZapCircuit(%u). Can't change status to '%u'. Circuit is missing [%p]",
-	    code(),newStat,this);
+	    "ZapCircuit(%u). Can't change status to '%s'. Circuit is missing [%p]",
+	    code(),lookupStatus(newStat),this);
 	return false;
     }
     Status oldStat = SignallingCircuit::status();
@@ -1910,8 +1911,8 @@ bool ZapCircuit::status(Status newStat, bool sync)
 		return false;
 	    clearEvents();
 	    if (!Engine::exiting())
-		DDebug(group(),DebugAll,"ZapCircuit(%u). Changed status to %u [%p]",
-		    code(),newStat,this);
+		DDebug(group(),DebugAll,"ZapCircuit(%u). Changed status to '%s' [%p]",
+		    code(),lookupStatus(newStat),this);
 	    if (newStat == Connected)
 		break;
 	    if (oldStat == Connected)

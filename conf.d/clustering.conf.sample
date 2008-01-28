@@ -22,3 +22,6 @@
 
 ; call.execute: int: Priority of execute message handler (on source node)
 ;call.execute=50
+
+; user.register: int: Priority of registration message handler (on registrar)
+;user.register=50

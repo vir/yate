@@ -30,12 +30,17 @@ namespace { // anonymous
 class ClusterModule : public Module
 {
 public:
+    enum {
+	Register = Private,
+    };
     ClusterModule();
     ~ClusterModule();
+    bool unload();
     virtual void initialize();
     virtual bool received(Message& msg, int id);
     virtual bool msgRoute(Message& msg);
     virtual bool msgExecute(Message& msg);
+    virtual bool msgRegister(Message& msg);
 private:
     String m_prefix;
     String m_callto;
@@ -45,6 +50,22 @@ private:
 
 INIT_PLUGIN(ClusterModule);
 
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow && !__plugin.unload())
+	return false;
+    return true;
+}
+
+
+bool ClusterModule::unload()
+{
+    if (!lock(500000))
+	return false;
+    uninstallRelays();
+    unlock();
+    return true;
+}
 
 bool ClusterModule::msgRoute(Message& msg)
 {
@@ -104,9 +125,28 @@ bool ClusterModule::msgExecute(Message& msg)
     return false;
 }
 
+bool ClusterModule::msgRegister(Message& msg)
+{
+    String data = msg.getValue("data");
+    if (data.null())
+	return false;
+    Lock lock(this);
+    if (data.startsWith(m_prefix))
+	return false;
+    msg.setParam("data",m_prefix + Engine::nodeName() + "/" + data);
+    return false;
+}
+
 bool ClusterModule::received(Message& msg, int id)
 {
-    return (Execute == id) ? msgExecute(msg) : Module::received(msg,id);
+    switch (id) {
+	case Execute:
+	    return msgExecute(msg);
+	case Register:
+	    return msgRegister(msg);
+	default:
+	    return Module::received(msg,id);
+    }
 }
 
 ClusterModule::ClusterModule()
@@ -123,6 +163,10 @@ ClusterModule::~ClusterModule()
 
 void ClusterModule::initialize()
 {
+    if (Engine::nodeName().null()) {
+	Debug(&__plugin,DebugNote,"Node name is empty, clustering disabled.");
+	return;
+    }
     Output("Initializing module Clustering");
     Configuration cfg(Engine::configFile("clustering"));
     lock();
@@ -136,6 +180,7 @@ void ClusterModule::initialize()
 	setup();
 	installRelay(Route,cfg.getIntValue("priorities","call.route",50));
 	installRelay(Execute,cfg.getIntValue("priorities","call.execute",50));
+	installRelay(Register,"user.register",cfg.getIntValue("priorities","user.register",50));
 	m_init = true;
     }
 }

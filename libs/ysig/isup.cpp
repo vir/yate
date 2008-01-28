@@ -198,7 +198,7 @@ static bool decodeCompat(const SS7ISUP* isup, NamedList& list, const IsupParam* 
 		    "decodeCompat invalid len=%u for %s with first byte having ext bit set",len,param->name);
 		break;
 	    }
-	    return SignallingUtils::dumpDataExt(isup,list,prefix+param->name+".more",buf+1,len-1);
+	    return 0 != SignallingUtils::dumpDataExt(isup,list,prefix+param->name+".more",buf+1,len-1);
 	case SS7MsgISUP::ParameterCompatInformation:
 	    for (unsigned int i = 0; i < len;) {
 		unsigned char val = buf[i++];
@@ -1431,7 +1431,7 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	Debug(isup(),DebugWarn,
 	    "SS7ISUPCall(%u). No call controller or circuit. Terminate [%p]",
 	    id(),this);
-	setTerminate(m_circuit ? "temporary-failure" : "congestion");
+	setTerminate(true,m_circuit ? "temporary-failure" : "congestion");
 	return;
     }
     isup()->setLabel(m_label,local,remote,sls);
@@ -2149,7 +2149,7 @@ void SS7ISUP::cleanup(const char* reason)
     lock();
     for (ObjList* o = m_calls.skipNull(); o; o = o->skipNext()) {
 	SS7ISUPCall* call = static_cast<SS7ISUPCall*>(o->get());
-	call->setTerminate(reason);
+	call->setTerminate(true,reason);
     }
     releaseCircuit(m_rscCic);
     m_rscTimer.stop();
@@ -2741,7 +2741,7 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote)
 	return false;
     int flag = remote ? SignallingCircuit::LockRemote : SignallingCircuit::LockLocal;
     // Already blocked/unblocked ?
-    if (block == (bool)circuit->locked(flag))
+    if (block == (0 != circuit->locked(flag)))
 	return true;
     Debug(this,DebugNote,"%slocking %s side of the circuit %u",block?"B":"Unb",remote?"remote":"local",cic);
     // Replace circuit for call (Q.764 2.8.2.1)

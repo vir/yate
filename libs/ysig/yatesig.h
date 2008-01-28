@@ -5749,7 +5749,7 @@ public:
      * Get the timeout of a data frame. After that, a higher layer may retransmit data
      * @return The timeout of a data frame
      */
-    inline u_int32_t dataTimeout() const
+    inline u_int64_t dataTimeout() const
 	{ return m_retransTimer.interval() * m_n200.maxVal(); }
 
     /**
@@ -6119,7 +6119,7 @@ public:
      * @return The type of this IE
      */
     inline u_int8_t type() const
-	{ return m_type; }
+	{ return (u_int8_t)m_type; }
 
     /**
      * Put this message into a string for debug purposes

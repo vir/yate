@@ -1534,14 +1534,16 @@ bool ZapInterface::init(ZapDevice::Type type, unsigned int code, unsigned int ch
     if (debugAt(DebugInfo)) {
 	String s;
 	s << "driver=" << plugin.debugName();
-	s << " type:                 " << lookup(type,s_types);
-	s << "\r\nD-channel:            " << (unsigned int)m_device.channel();
-	s << "\r\nError mask:           " << (unsigned int)m_errorMask;
-	s << "\r\nRead only:            " << String::boolText(m_readOnly);
-	s << "\r\nRX underrun interval: " << (unsigned int)m_timerRxUnder.interval() << " ms";
-	s << "\r\nBuffers (count/size): " << (unsigned int)m_numbufs << "/" << (unsigned int)m_bufsize;
-	s << "\r\nWorker priority:      " << Thread::priority(m_priority);
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
+	s << " section=" << config.c_str();
+	s << " type=" << lookup(type,s_types);
+	s << " channel=" << channel;
+	s << " errormask=" << (unsigned int)m_errorMask;
+	s << " readonly=" << String::boolText(m_readOnly);
+	s << " rxunderruninterval=" << (unsigned int)m_timerRxUnder.interval() << " ms";
+	s << " numbufs=" << (unsigned int)m_numbufs;
+	s << " bufsize=" << (unsigned int)m_bufsize;
+	s << " priority=" << Thread::priority(m_priority);
+	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
     }
     return true;
 }
@@ -1804,17 +1806,17 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 
     if (m_group && m_group->debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nType:     " << lookup(type,s_types);
-	s << "\r\nGroup:    " << m_group->debugName();
+	s << "driver=" << plugin.debugName();
+	s << " section=" << config.c_str();
+	s << " type=" << lookup(type,s_types);
 	String c,ch;
 	for (unsigned int i = 0; i < count; i++) {
-	    c.append(String(start+cics[i])," ");
-	    ch.append(String(offset+cics[i])," ");
+	    c.append(String(start+cics[i]),",");
+	    ch.append(String(offset+cics[i]),",");
 	}
-	s << "\r\nCircuits: " << c;
-	s << "\r\nChannels: " << ch;
-	Debug(m_group,DebugInfo,"ZapSpan('%s'). Initialized: [%p]%s",
-	    id().safe(),this,s.c_str());
+	s << " channels=" << ch;
+	s << " circuits: " << c;
+	Debug(m_group,DebugInfo,"ZapSpan('%s') %s [%p]",id().safe(),s.c_str(),this);
     }
     delete[] cics;
     return true;
@@ -1884,6 +1886,22 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     else
 	Debug(group(),DebugStub,"ZapCircuit(%u). Unhandled circuit type=%d [%p]",
 	    code,type,this);
+
+    if (group() && group()->debugAt(DebugAll)) {
+	String s;
+	s << "driver=" << plugin.debugName();
+	s << " type=" << lookup(type,s_types);
+	s << " channel=" << channel;
+	s << " cic=" << code;
+	s << " dtmfdetect=" << String::boolText(m_dtmfDetect);
+	s << " echotaps=" << m_echoTaps;
+	s << " echotrain=" << m_echoTrain;
+	s << " buflen=" << m_buflen;
+	s << " readonly=" << String::boolText(!m_canSend);
+	s << " idlevalue=" << (unsigned int)m_idleValue;
+	s << " priority=" << Thread::priority(m_priority);
+	Debug(group(),DebugAll,"ZapCircuit %s [%p]",s.c_str(),this);
+    }
 }
 
 // Change circuit status. Clear events on status change

@@ -89,7 +89,7 @@ bool JGEngine::receive()
     // Check if it's a message from a user with resource
     else if (event->type() == JBEvent::Message) {
 	JabberID from(event->from());
-	checkSession = from.resource();
+	checkSession = !from.resource().null();
     }
     // Add event to the appropriate session
     if (checkSession) {

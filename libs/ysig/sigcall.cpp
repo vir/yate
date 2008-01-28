@@ -336,6 +336,26 @@ SignallingCircuitEvent::~SignallingCircuitEvent()
 /**
  * SignallingCircuit
  */
+static TokenDict s_cicTypeDict[] = {
+    {"TDM",     SignallingCircuit::TDM},
+    {"RTP",     SignallingCircuit::RTP},
+    {"IAX",     SignallingCircuit::IAX},
+    {"Unknown", SignallingCircuit::Unknown},
+    {"Local",   SignallingCircuit::Local},
+    {0,0}
+};
+
+static TokenDict s_cicStatusDict[] = {
+    {"Missing",   SignallingCircuit::Missing},
+    {"Disabled",  SignallingCircuit::Disabled},
+    {"Idle",      SignallingCircuit::Idle},
+    {"Reserved",  SignallingCircuit::Reserved},
+    {"Starting",  SignallingCircuit::Starting},
+    {"Stopping",  SignallingCircuit::Stopping},
+    {"Connected", SignallingCircuit::Connected},
+    {0,0}
+};
+
 SignallingCircuit::SignallingCircuit(Type type, unsigned int code,
 	SignallingCircuitGroup* group, SignallingCircuitSpan* span)
     : m_mutex(true),
@@ -414,6 +434,18 @@ void SignallingCircuit::eventTerminated(SignallingCircuitEvent* event)
 	    event,event->c_str(),code(),this);
 	m_lastEvent = 0;
     }
+}
+
+// Get the text associated with a circuit type
+const char* SignallingCircuit::lookupType(int type)
+{
+    return lookup(type,s_cicTypeDict);
+}
+
+// Get the text associated with a circuit status
+const char* SignallingCircuit::lookupStatus(int status)
+{
+    return lookup(status,s_cicStatusDict);
 }
 
 

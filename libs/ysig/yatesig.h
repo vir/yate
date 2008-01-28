@@ -1326,6 +1326,20 @@ public:
      */
     virtual bool sendEvent(SignallingCircuitEvent::Type type, NamedList* params = 0);
 
+    /**
+     * Get the text associated with a circuit type
+     * @param type Circuit type used to retrive the text
+     * @return Pointer to the string associated with the given circuit type
+     */
+    static const char* lookupType(int type);
+
+    /**
+     * Get the text associated with a circuit status
+     * @param status Circuit status used to retrive the text
+     * @return Pointer to the string associated with the given circuit status
+     */
+    static const char* lookupStatus(int status);
+
 protected:
     /**
      * Constructor

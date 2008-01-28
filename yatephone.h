@@ -1352,6 +1352,15 @@ protected:
 
     /**
      * Install a custom message relay
+     * @param id RelayID of the new relay to create
+     * @param name Name of the custom relay to create
+     * @param priority Priority of the handler, 0 = top
+     * @return True if installed or already was one installed
+     */
+    bool installRelay(int id, const char* name, unsigned priority = 100);
+
+    /**
+     * Install a custom message relay
      * @param relay Custom message relay
      * @return True if installed, false if there was already one with same ID
      */
@@ -1466,7 +1475,6 @@ private:
     Module(); // no default constructor please
     static TokenDict s_messages[];
     ObjList m_relayList;
-    bool installRelay(const char* name, int id, unsigned priority);
 };
 
 /**

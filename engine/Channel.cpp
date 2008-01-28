@@ -781,7 +781,7 @@ void* Module::getObject(const String& name) const
     return Plugin::getObject(name);
 }
 
-bool Module::installRelay(const char* name, int id, unsigned priority)
+bool Module::installRelay(int id, const char* name, unsigned priority)
 {
     if (!(id && name))
 	return false;
@@ -799,12 +799,12 @@ bool Module::installRelay(const char* name, int id, unsigned priority)
 
 bool Module::installRelay(int id, unsigned priority)
 {
-    return installRelay(messageName(id),id,priority);
+    return installRelay(id,messageName(id),priority);
 }
 
 bool Module::installRelay(const char* name, unsigned priority)
 {
-    return installRelay(name,lookup(name,s_messages),priority);
+    return installRelay(lookup(name,s_messages),name,priority);
 }
 
 bool Module::installRelay(MessageRelay* relay)

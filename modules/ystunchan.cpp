@@ -100,9 +100,9 @@ class YStunPlugin;                       // The plugin
 inline void setHeader(u_int8_t* buffer, u_int16_t type, u_int16_t len)
 {
     buffer[0] = type >> 8;
-    buffer[1] = type;
+    buffer[1] = (u_int8_t)type;
     buffer[2] = len >> 8;
-    buffer[3] = len;
+    buffer[3] = (u_int8_t)len;
 }
 
 // Get message header values (type+length)
@@ -573,7 +573,7 @@ bool YStunAttributeAddr::fromBuffer(u_int8_t* buffer, u_int16_t len)
 void YStunAttributeAddr::toBuffer(DataBlock& buffer)
 {
     u_int8_t header[12] = {0,0,0,0,
-		0,STUN_ATTR_ADDR_IPV4,m_port >> 8,m_port,
+		0,STUN_ATTR_ADDR_IPV4,m_port >> 8,(u_int8_t)m_port,
 		0,0,0,0};
     setHeader(header,type(),8);
     for (int start = 0, i = 8; i < 12; i++) {

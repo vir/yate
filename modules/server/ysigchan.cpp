@@ -581,7 +581,7 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 	    if (echo) {
 		String value = echo;
 		cic->setParam("echotaps",value);
-		cic->setParam("echocancel",String::boolText(value.toInteger()));
+		cic->setParam("echocancel",String::boolText(0 != value.toInteger()));
 	    }
 	}
 	setMaxcall(msg);

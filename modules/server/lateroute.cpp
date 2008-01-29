@@ -79,7 +79,6 @@ bool LateHandler::received(Message& msg)
     String called = msg.getValue("called");
     msg.clearParam("callto");
     msg.setParam("called",dest);
-    msg.setParam("lateroute",String::boolText(false));
     msg = "call.route";
     bool ok = Engine::dispatch(msg);
     dest = msg.retValue();
@@ -94,7 +93,6 @@ bool LateHandler::received(Message& msg)
 	// restore most of what we changed and let it pass through
 	msg.setParam("called",called);
 	msg.setParam("callto",callto);
-	msg.clearParam("lateroute");
 	return false;
     }
     Debug(DebugInfo,"Late routing call to '%s' via '%s'",callto.c_str(),dest.c_str());

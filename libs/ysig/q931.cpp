@@ -327,8 +327,11 @@ bool ISDNQ931IEData::processBearerCaps(ISDNQ931Message* msg, bool add)
 	ie->addParam("transfer-mode",m_transferMode);
 	ie->addParam("transfer-rate",m_transferRate);
 	ie->addParam("layer1-protocol",m_format);
-	ie->addParam("layer2-protocol","q921");
-	ie->addParam("layer3-protocol","q931");
+	// Q.931 Table 4.6: Send Layer 2/3 only in 'packet switching' (0x40) mode
+	if (m_transferMode == lookup(0x40,Q931Parser::s_dict_bearerTransMode)) {
+	    ie->addParam("layer2-protocol","q921");
+	    ie->addParam("layer3-protocol","q931");
+	}
 	msg->appendSafe(ie);
 	return true;
     }

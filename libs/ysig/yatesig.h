@@ -6700,6 +6700,7 @@ private:
     SignallingCircuit* m_circuit;        // Circuit reserved for this call
     bool m_circuitChange;                // True if circuit changed
     bool m_channelIDSent;                // Incoming calls: ChannelID IE already sent
+    bool m_rspBearerCaps;                // Incoming calls: Send BearerCaps IE in the first response
     ISDNQ931IEData m_data;               // Data to process IEs
     ObjList m_inMsg;                     // Incoming message queue
     // Timers

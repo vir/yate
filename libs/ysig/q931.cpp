@@ -671,6 +671,7 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     m_circuit(0),
     m_circuitChange(false),
     m_channelIDSent(false),
+    m_rspBearerCaps(false),
     m_discTimer(0),
     m_relTimer(0),
     m_conTimer(0),
@@ -1143,6 +1144,10 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     // *** BearerCaps. Mandatory
     if (!m_data.processBearerCaps(msg,false))
 	return errorNoIE(msg,ISDNQ931IE::BearerCaps,true);
+    // Check for multiple BearerCaps
+    ISDNQ931IE* bc = msg->getIE(ISDNQ931IE::BearerCaps);
+    if (bc && msg->getIE(ISDNQ931IE::BearerCaps,bc))
+	m_rspBearerCaps = true;
     // Check if transfer mode is 'circuit'
     if (m_data.m_transferMode != "circuit") {
 	Debug(q931(),DebugWarn,
@@ -1330,7 +1335,10 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
     // Change state, send message
     changeState(CallReceived);
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Alerting,this);
-    m_data.processBearerCaps(msg,true);
+    if (m_rspBearerCaps) {
+	m_data.processBearerCaps(msg,true);
+	m_rspBearerCaps = false;
+    }
     if (!m_channelIDSent) {
 	m_data.processChannelID(msg,true);
 	m_channelIDSent = true;
@@ -1346,7 +1354,10 @@ bool ISDNQ931Call::sendCallProceeding(SignallingMessage* sigMsg)
     // Change state, send message
     changeState(IncomingProceeding);
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Proceeding,this);
-    m_data.processBearerCaps(msg,true);
+    if (m_rspBearerCaps) {
+	m_data.processBearerCaps(msg,true);
+	m_rspBearerCaps = false;
+    }
     if (!m_channelIDSent) {
 	m_data.processChannelID(msg,true);
 	m_channelIDSent = true;
@@ -1362,7 +1373,10 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
     // Change state, start timer, send message
     changeState(ConnectReq);
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Connect,this);
-    m_data.processBearerCaps(msg,true);
+    if (m_rspBearerCaps) {
+	m_data.processBearerCaps(msg,true);
+	m_rspBearerCaps = false;
+    }
     if (!m_channelIDSent) {
 	m_data.processChannelID(msg,true);
 	m_channelIDSent = true;

@@ -287,14 +287,10 @@ void CallsQueue::startACD()
     Array* res = static_cast<Array*>(msg.userObject("Array"));
     if (!res || (msg.getIntValue("rows") < 1))
 	return;
-    int timeout = getIntValue("timeout");
-    String prompt = getValue("prompt");
-    if (prompt && (prompt.find('/') < 0))
-	prompt = "wave/play/sounds/" + prompt;
     for (int i = 1; i < res->getRows(); i++) {
 	NamedList params("");
 	copyArrayParams(params,res,i);
-	const char* callto = params.getValue("callto");
+	const char* callto = params.getValue("location");
 	const char* user = params.getValue("username");
 	if (!(callto && user))
 	    continue;
@@ -312,10 +308,12 @@ void CallsQueue::startACD()
 	ex->addParam("callto",s_chanOutgoing);
 	ex->addParam("notify",*call);
 	ex->addParam("queue",c_str());
-	if (timeout > 0)
-	    ex->addParam("maxcall",String(timeout*1000));
-	if (prompt)
-	    msg.setParam("prompt",prompt);
+	const char* tmp = params.getValue("maxcall",getValue("maxcall"));
+	if (tmp)
+	    ex->addParam("maxcall",tmp);
+	tmp = params.getValue("prompt",getValue("prompt"));
+	if (tmp)
+	    ex->addParam("prompt",tmp);
 	Engine::enqueue(ex);
     }
 }

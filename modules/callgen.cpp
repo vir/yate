@@ -422,6 +422,8 @@ static const char* s_cmds[] = {
 
 bool CmdHandler::doComplete(const String& partLine, const String& partWord, String& rval)
 {
+    if (partLine.null() && partWord.null())
+	return false;
     if (partLine.null() || (partLine == "help")) {
 	if (partWord.null() || String("callgen").startsWith(partWord))
 	    rval.append("callgen","\t");

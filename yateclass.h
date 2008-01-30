@@ -3009,6 +3009,13 @@ public:
     NamedString* getParam(unsigned int index) const;
 
     /**
+     * Parameter access operator
+     * @param name Name of the parameter to return
+     * @return String value of the parameter, @ref String::empty() if missing
+     */
+    const String& operator[](const String& name) const;
+
+    /**
      * Retrive the value of a named parameter.
      * @param name Name of parameter to locate
      * @param defvalue Default value to return if not found

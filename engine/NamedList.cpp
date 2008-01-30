@@ -195,6 +195,12 @@ NamedString* NamedList::getParam(unsigned int index) const
     return static_cast<NamedString *>(m_params[index]);
 }
 
+const String& NamedList::operator[](const String& name) const
+{
+    const String* s = getParam(name);
+    return s ? *s : String::empty();
+}
+
 const char* NamedList::getValue(const String& name, const char* defvalue) const
 {
     XDebug(DebugInfo,"NamedList::getValue(\"%s\",\"%s\")",name.c_str(),defvalue);

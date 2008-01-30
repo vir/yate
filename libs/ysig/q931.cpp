@@ -147,7 +147,7 @@ class Q931Parser
 {
 public:
     inline Q931Parser(ISDNQ931ParserData& data)
-	: m_settings(&data), m_msg(0), m_codeset(0), m_activeCodeset(0)
+	: m_settings(&data), m_msg(0), m_codeset(0), m_activeCodeset(0), m_skip(false)
 	{}
 
     // Decode received data.
@@ -281,7 +281,7 @@ private:
     ISDNQ931IE* decodeLoLayerCompat(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeHiLayerCompat(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeUserUser(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
-    // It seems that the Connectet number has the same layout as the Calling number IE
+    // It seems that the Connected number has the same layout as the Calling number IE
     inline ISDNQ931IE* decodeConnectedNo(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len)
 	{ return decodeCallingNo(ie,data,len); }
     // Encode the corresponding variable IE
@@ -303,6 +303,7 @@ private:
     ISDNQ931Message* m_msg;              // Current encoded/decoded message
     u_int8_t m_codeset;                  // Current codeset
     u_int8_t m_activeCodeset;            // Active codeset
+    bool m_skip;                         // Skip current IE
 };
 
 
@@ -310,14 +311,14 @@ private:
  * ISDNQ931IEData
  */
 ISDNQ931IEData::ISDNQ931IEData()
-    : m_charsetDisplay(255),
-    m_bri(false),
+    : m_bri(false),
     m_channelMandatory(true),
     m_channelByNumber(true)
 {
 }
 
-bool ISDNQ931IEData::processBearerCaps(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processBearerCaps(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -349,7 +350,8 @@ bool ISDNQ931IEData::processBearerCaps(ISDNQ931Message* msg, bool add)
     return true;
 }
 
-bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -387,23 +389,33 @@ bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add)
     return true;
 }
 
-bool ISDNQ931IEData::processProgress(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processProgress(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
     if (add) {
-	// TODO: Add more IEs if repeated
-	msg->appendIEValue(ISDNQ931IE::Progress,"description",m_progress);
-	return true;
+	// Remove non-isdn-source/non-isdn-destination
+	if (data) {
+	    if (!data->flag(ISDNQ931::SendNonIsdnSource))
+		SignallingUtils::removeFlag(m_progress,"non-isdn-source");
+	    if (data->flag(ISDNQ931::IgnoreNonIsdnDest))
+		SignallingUtils::removeFlag(m_progress,"non-isdn-destination");
+	}
+	if (!m_progress.null())
+	    msg->appendIEValue(ISDNQ931IE::Progress,"description",m_progress);
     }
-    // Progress may repeat
-    ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::Progress);
-    for (; ie; ie = msg->getIE(ISDNQ931IE::Progress,ie))
-	m_progress.append(ie->getValue("description"),",");
+    else {
+	// Progress may repeat
+	ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::Progress);
+	for (; ie; ie = msg->getIE(ISDNQ931IE::Progress,ie))
+	    m_progress.append(ie->getValue("description"),",");
+    }
     return !m_progress.null();
 }
 
-bool ISDNQ931IEData::processRestart(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processRestart(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -415,7 +427,8 @@ bool ISDNQ931IEData::processRestart(ISDNQ931Message* msg, bool add)
     return !m_restart.null();
 }
 
-bool ISDNQ931IEData::processNotification(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processNotification(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -427,7 +440,8 @@ bool ISDNQ931IEData::processNotification(ISDNQ931Message* msg, bool add)
     return !m_notification.null();
 }
 
-bool ISDNQ931IEData::processCalledNo(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processCalledNo(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -452,7 +466,8 @@ bool ISDNQ931IEData::processCalledNo(ISDNQ931Message* msg, bool add)
     return true;
 }
 
-bool ISDNQ931IEData::processCallingNo(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processCallingNo(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -481,7 +496,8 @@ bool ISDNQ931IEData::processCallingNo(ISDNQ931Message* msg, bool add)
     return true;
 }
 
-bool ISDNQ931IEData::processCause(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processCause(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -493,23 +509,23 @@ bool ISDNQ931IEData::processCause(ISDNQ931Message* msg, bool add)
     return !m_reason.null();
 }
 
-bool ISDNQ931IEData::processDisplay(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processDisplay(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
     if (add) {
-	if (m_display.null())
+	if (m_display.null() || !data || data->flag(ISDNQ931::NoDisplayIE))
 	    return false;
-	ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Display,"display",m_display);
-	if (m_charsetDisplay <= 127)
-	    ie->addParam("charset",String(m_charsetDisplay));
+	msg->appendIEValue(ISDNQ931IE::Display,"display",m_display);
 	return true;
     }
     m_display = msg->getIEValue(ISDNQ931IE::Display,"display");
     return !m_display.null();
 }
 
-bool ISDNQ931IEData::processKeypad(ISDNQ931Message* msg, bool add)
+bool ISDNQ931IEData::processKeypad(ISDNQ931Message* msg, bool add,
+	ISDNQ931ParserData* data)
 {
     if (!msg)
 	return false;
@@ -681,7 +697,7 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     m_terminate(false),
     m_destroy(false)
 {
-    DDebug(q931(),DebugAll,"Call(%u,%u). Created %s [%p]",
+    Debug(q931(),DebugAll,"Call(%u,%u). direction=%s [%p]",
 	Q931_CALL_ID,(outgoing ? "outgoing" : "incoming"),this);
     if (!controller) {
 	Debug(DebugWarn,"ISDNQ931Call(%u,%u). No call controller. Terminate [%p]",
@@ -690,7 +706,6 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
 	m_data.m_reason = "temporary-failure";
 	return;
     }
-    m_data.m_charsetDisplay = q931()->parserData().m_charsetDisplay;
     // Init timers
     q931()->setInterval(m_discTimer,305);
     q931()->setInterval(m_relTimer,308);
@@ -1050,6 +1065,10 @@ SignallingEvent* ISDNQ931Call::processMsgConnect(ISDNQ931Message* msg)
 SignallingEvent* ISDNQ931Call::processMsgConnectAck(ISDNQ931Message* msg)
 {
     m_conTimer.stop();
+    // Check if we've changed state to Active when sent Connect
+    bool yes = q931() && !q931()->parserData().flag(ISDNQ931::NoActiveOnConnect);
+    if (yes && state() == Active)
+	return 0;
     if (!checkMsgRecv(msg,false))
 	return 0;
     changeState(Active);
@@ -1217,7 +1236,7 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
     if (!m_data.processCause(msg,false))
 	m_data.m_reason = "unknown";
     DDebug(q931(),DebugInfo,
-	"Call(%u,%u). Received '%s'. Our state: '%s'. Peer state: '%s'. Cause: '%s' [%p]",
+	"Call(%u,%u). Received '%s' state='%s' peer-state='%s' cause='%s' [%p]",
 	Q931_CALL_ID,msg->name(),
 	stateName(state()),s,m_data.m_reason.c_str(),this);
     u_int8_t peerState = (u_int8_t)lookup(s,s_states,255);
@@ -1319,11 +1338,12 @@ SignallingEvent* ISDNQ931Call::processMsgStatusEnquiry(ISDNQ931Message* msg)
 
 // Check if the state allows to send a message
 #define MSG_CHECK_SEND(type) \
-	if (!checkStateSend(type)) { \
+	if (!(q931() && checkStateSend(type))) { \
 	    DDebug(q931(),DebugNote, \
-		"Call(%u,%u). Denying request to send '%s' in invalid state '%s'. [%p]", \
+		"Call(%u,%u). Can't send msg='%s' in state='%s'. %s [%p]", \
 		Q931_CALL_ID,ISDNQ931Message::typeName(type), \
-		stateName(state()),this); \
+		stateName(state()),(q931()?"Invalid state":"No call controller"),\
+		this); \
 	    return false; \
 	}
 
@@ -1369,21 +1389,28 @@ bool ISDNQ931Call::sendCallProceeding(SignallingMessage* sigMsg)
 }
 
 // Send CONNECT. See Q.931 3.1.3
-// IE: BearerCaps, ChannelID, Progress, Display, DateTime, Signal, LoLayerCompat, HiLayerCompat
+// IE: BearerCaps, ChannelID, Progress, Display, DateTime, Signal,
+//     LoLayerCompat, HiLayerCompat
 bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
 {
     MSG_CHECK_SEND(ISDNQ931Message::Connect)
     // Change state, start timer, send message
-    changeState(ConnectReq);
+    if (q931()->parserData().flag(ISDNQ931::NoActiveOnConnect))
+	changeState(ConnectReq);
+    else
+	changeState(Active);
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Connect,this);
     if (m_rspBearerCaps) {
-	m_data.processBearerCaps(msg,true);
+	m_data.processBearerCaps(msg,true,&q931()->parserData());
 	m_rspBearerCaps = false;
     }
     if (!m_channelIDSent) {
-	m_data.processChannelID(msg,true);
+	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
     }
+    // Progress indicator
+    m_data.m_progress = sigMsg->params().getValue("call-progress");
+    m_data.processProgress(msg,true,&q931()->parserData());
     m_conTimer.start();
     return q931()->sendMessage(msg);
 }
@@ -1396,6 +1423,13 @@ bool ISDNQ931Call::sendConnectAck(SignallingMessage* sigMsg)
     // Change state, send message
     changeState(Active);
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::ConnectAck,this);
+    // Progress indicator
+    if (sigMsg) {
+	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.processProgress(msg,true,&q931()->parserData());
+    }
+    else
+	m_data.m_progress = "";
     return q931()->sendMessage(msg);
 }
 
@@ -1426,8 +1460,7 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
     if (sigMsg->params().getBoolValue("complete"))
 	msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
     m_data.m_display = sigMsg->params().getValue("display");
-    if (!m_data.m_display.null())
-	m_data.processDisplay(msg,true);
+    m_data.processDisplay(msg,true,&q931()->parserData());
     // Check tones or ringing
     const char* tone = sigMsg->params().getValue("tone");
     if (tone)
@@ -1470,7 +1503,7 @@ bool ISDNQ931Call::sendRelease(const char* reason, SignallingMessage* sigMsg)
 
 // Send RELEASE COMPLETE. See Q.931 3.1.10
 // IE: Cause, Display, Signal
-bool ISDNQ931Call::sendReleaseComplete(const char* reason)
+bool ISDNQ931Call::sendReleaseComplete(const char* reason, const char* diag)
 {
     m_relTimer.stop();
     if (state() == Null)
@@ -1480,7 +1513,7 @@ bool ISDNQ931Call::sendReleaseComplete(const char* reason)
     m_terminate = m_destroy = true;
     changeState(Null);
     q931()->releaseCircuit(m_circuit);
-    return q931()->sendRelease(this,false,m_data.m_reason);
+    return q931()->sendRelease(this,false,m_data.m_reason,diag);
 }
 
 // Send SETUP. See Q.931 3.1.14
@@ -1494,6 +1527,9 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
     MSG_CHECK_SEND(ISDNQ931Message::Setup)
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Setup,this);
     while (true) {
+	// TODO: fix it (don't send?) if overlapp dialing is used
+	if (q931()->parserData().flag(ISDNQ931::ForceSendComplete))
+	    msg->appendSafe(new ISDNQ931IE(ISDNQ931IE::SendComplete));
 	// BearerCaps
 	m_data.m_transferCapability = "speech";
 	m_data.m_transferMode = "circuit";
@@ -1513,9 +1549,12 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.m_channelSelect = "present";
 	m_data.m_channels = m_circuit->code();
 	m_data.processChannelID(msg,true);
+	// Progress indicator
+	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.processProgress(msg,true,&q931()->parserData());
 	// Display
 	m_data.m_display = sigMsg->params().getValue("callername");
-	m_data.processDisplay(msg,true);
+	m_data.processDisplay(msg,true,&q931()->parserData());
 	// CallingNo
 	m_data.m_callerType = sigMsg->params().getValue("callernumtype",q931()->numType());
 	m_data.m_callerPlan = sigMsg->params().getValue("callernumplan",q931()->numPlan());
@@ -1552,7 +1591,7 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
     return q931()->sendMessage(msg);
 }
 
-SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason)
+SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* diag)
 {
     Lock lock(m_callMutex);
     if (reason)
@@ -1560,7 +1599,7 @@ SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason)
     DDebug(q931(),DebugInfo,
 	"Call(%u,%u). Call release in state '%s'. Reason: '%s' [%p]",
 	Q931_CALL_ID,stateName(state()),m_data.m_reason.c_str(),this);
-    sendReleaseComplete(reason);
+    sendReleaseComplete(reason,diag);
     // Cleanup
     q931()->releaseCircuit(m_circuit);
     changeState(Null);
@@ -1653,8 +1692,12 @@ SignallingEvent* ISDNQ931Call::errorNoIE(ISDNQ931Message* msg,
     Debug(q931(),DebugNote,
 	"Call(%u,%u). Received '%s' without mandatory IE '%s' [%p]",
 	Q931_CALL_ID,msg->name(),ISDNQ931IE::typeName(type),this);
-    if (release)
-	return releaseComplete("missing-mandatory-ie");
+    if (release) {
+	unsigned char c = (unsigned char)type;
+	String tmp;
+	tmp.hexify(&c,1);
+	return releaseComplete("missing-mandatory-ie",tmp);
+    }
     return 0;
 }
 
@@ -1666,8 +1709,12 @@ SignallingEvent* ISDNQ931Call::errorWrongIE(ISDNQ931Message* msg,
     Debug(q931(),DebugNote,
 	"Call(%u,%u). Received '%s' containing IE '%s' with wrong data [%p]",
 	Q931_CALL_ID,msg->name(),ISDNQ931IE::typeName(type),this);
-    if (release)
-	return releaseComplete("invalid-ie");
+    if (release) {
+	unsigned char c = (unsigned char)type;
+	String tmp;
+	tmp.hexify(&c,1);
+	return releaseComplete("invalid-ie",tmp);
+    }
     return 0;
 }
 
@@ -1676,9 +1723,13 @@ void ISDNQ931Call::changeState(State newState)
 {
     if (state() == newState)
 	return;
-    DDebug(q931(),DebugInfo,
-	"Call(%u,%u). Changing state from '%s' to '%s' [%p]",
+#ifdef DEBUG
+    Debug(q931(),DebugAll,"Call(%u,%u). Changing state '%s' --> '%s' [%p]",
 	Q931_CALL_ID,stateName(state()),stateName(newState),this);
+#else
+    Debug(q931(),DebugAll,"Call(%u,%u). Changing state %u --> %u [%p]",
+	Q931_CALL_ID,state(),newState,this);
+#endif
     m_state = newState;
 }
 
@@ -1705,7 +1756,8 @@ ISDNQ931CallMonitor::ISDNQ931CallMonitor(ISDNQ931Monitor* controller, u_int32_t 
     m_terminate(false),
     m_terminator("engine")
 {
-    DDebug(q931(),DebugAll,"Monitor(%u). Created [%p]",m_callRef,this);
+    Debug(q931(),DebugAll,"Monitor(%u) netInit=%s  [%p]",
+	m_callRef,String::boolText(netInit),this);
     if (!controller) {
 	Debug(DebugWarn,"Monitor(%u). No monitor controller. Terminate [%p]",
 	    m_callRef,this);
@@ -1713,7 +1765,6 @@ ISDNQ931CallMonitor::ISDNQ931CallMonitor(ISDNQ931Monitor* controller, u_int32_t 
 	m_data.m_reason = "temporary-failure";
 	return;
     }
-    m_data.m_charsetDisplay = q931()->m_parserData.m_charsetDisplay;
 }
 
 ISDNQ931CallMonitor::~ISDNQ931CallMonitor()
@@ -2062,22 +2113,62 @@ ISDNQ931Monitor* ISDNQ931CallMonitor::q931()
 /**
  * ISDNQ931ParserData
  */
-ISDNQ931ParserData::ISDNQ931ParserData(DebugEnabler* dbg, const NamedList& params)
+ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* dbg)
     : m_dbg(dbg),
     m_maxMsgLen(0)
 {
     m_allowSegment = params.getBoolValue("allowsegmentation",false);
     m_maxSegments = params.getIntValue("maxsegments",8);
-    m_charsetDisplay = params.getIntValue("display-charset",255);
     m_maxDisplay = params.getIntValue("max-display",34);
     if (m_maxDisplay != 34 && m_maxDisplay != 82)
 	m_maxDisplay = 34;
     m_extendedDebug = params.getBoolValue("extended-debug",false);
+    // Set flags
+    String flags = params.getValue("switchtype");
+    m_flagsOrig = lookup(flags,ISDNQ931::s_swType);
+    // Check if the parameter is a list of flags
+    if (!m_flagsOrig) {
+	ObjList* list = flags.split(',',false);
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	    String* s = static_cast<String*>(o->get());
+	    m_flagsOrig |= lookup(*s,ISDNQ931::s_flags);
+	}
+	TelEngine::destruct(list);
+    }
+    m_flags = m_flagsOrig;
 }
 
 /**
  * ISDNQ931
  */
+TokenDict ISDNQ931::s_flags[] = {
+	{"sendnonisdnsource",    SendNonIsdnSource},
+	{"ignorenonisdndest",    IgnoreNonIsdnDest},
+	{"setpresnetprov",       SetPresNetProv},
+	{"translate31kaudio",    Translate31kAudio},
+	{"urditransfercapsonly", URDITransferCapsOnly},
+	{"nolayer1caps",         NoLayer1Caps},
+	{"ignorenonlockedie",    IgnoreNonLockedIE},
+	{"nodisplay",            NoDisplayIE},
+	{"nodisplaycharset",     NoDisplayCharset},
+	{"forcesendcomplete",    ForceSendComplete},
+	{"checknotifyind",       CheckNotifyInd},
+	{"noactiveonconnect",    NoActiveOnConnect},
+	{0,0},
+	};
+
+TokenDict ISDNQ931::s_swType[] = {
+	{"euro-isdn-e1",   EuroIsdnE1},
+	{"euro-isdn-t1",   EuroIsdnT1},
+	{"national-isdn",  NationalIsdn},
+	{"dms100",         Dms100},
+	{"lucent5e",       Lucent5e},
+	{"att4ess",        Att4ess},
+	{"qsig",           QSIG},
+	{"unknown",        Unknown},
+	{0,0}
+	};
+
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     : SignallingCallControl(params,"isdn."),
     ISDNLayer3(name),
@@ -2089,7 +2180,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_callRef(1),
     m_callRefLen(2),
     m_callRefMask(0),
-    m_parserData(this,params),
+    m_parserData(params),
     m_l2DownTimer(0),
     m_recvSgmTimer(0),
     m_syncCicTimer(0),
@@ -2108,6 +2199,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_flagQ921Invalid(false)
 {
     setName(params.getValue("debugname",name));
+    m_parserData.m_dbg = this;
     //m_primaryRate = params.getBoolValue("pri",true);
     m_callRefLen = params.getIntValue("callreflen",2);
     if (m_callRefLen < 1 || m_callRefLen > 4)
@@ -2140,26 +2232,31 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     // Debug
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));
+#ifdef DEBUG
     if (debugAt(DebugInfo)) {
 	String s;
 	s << "\r\nType: " << (m_primaryRate ? "pri" : "bri");
 	s << "\r\nCall reference length: " << (unsigned int)m_callRefLen;
-	s << "\r\nNumber plan/type/pres/screen: " << m_numPlan << "/" << m_numType << "/"
-	    << m_numPresentation << "/" << m_numScreening;
+	s << "\r\nNumber plan/type/pres/screen: " << m_numPlan << "/" <<
+	    m_numType << "/" << m_numPresentation << "/" << m_numScreening;
 	s << "\r\nFormat: " << m_format;
-	s << "\r\nDisplay charset: " << (unsigned int)m_parserData.m_charsetDisplay;
 	s << "\r\nMax Display length: " << (unsigned int)m_parserData.m_maxDisplay;
-	s << "\r\nAllow segmentation: " << String::boolText(m_parserData.m_allowSegment);
-	s << "\r\nMax segments: " << (unsigned int)m_parserData.m_maxSegments;
-	s << "\r\nCIC allocation strategy: " << strategy();
-	if (debugAt(DebugAll))
-	    s << "\r\nTimers: channelsync/l2Down/recvSgm/syncCic = " << (unsigned int)m_syncGroupTimer.interval() << "/"
-		<< (unsigned int)m_l2DownTimer.interval() << "/" << (unsigned int)m_recvSgmTimer.interval() << "/"
-		<< (unsigned int)m_syncCicTimer.interval();
+	s << "\r\nAllocation strategy: " <<
+	    lookup(strategy(),SignallingCircuitGroup::s_strategy);
+	s << "\r\nTimers: channelsync/l2Down/recvSgm/syncCic = " <<
+	    (unsigned int)m_syncGroupTimer.interval() << "/" <<
+	    (unsigned int)m_l2DownTimer.interval() << "/" <<
+	    (unsigned int)m_recvSgmTimer.interval() << "/" <<
+	    (unsigned int)m_syncCicTimer.interval();
 	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
+	s << "\r\nAllow segmentation: " <<
+	    String::boolText(m_parserData.m_allowSegment);
+	s << "\r\nMax segments: " << (unsigned int)m_parserData.m_maxSegments;
     }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
+#else
+    Debug(this,DebugAll,"ISDN call controller type=%s format=%s [%p]",
+	(m_primaryRate?"pri":"bri"),m_format.c_str(),this);
+#endif
     m_syncGroupTimer.start();
 }
 
@@ -2363,11 +2460,22 @@ void ISDNQ931::attach(ISDNLayer2* q921)
 	    if (m_syncCicTimer.interval() <= min)
 		m_syncCicTimer.interval(min + 1000);
 	}
-	// Adjust message length limit
+	// Adjust parser data message length limit
 	m_parserData.m_maxMsgLen = m_q921->maxUserData();
+	// Adjust some parser flags if the switch type is not a custom one
+	bool notCustom = (0 != lookup(m_parserData.m_flagsOrig,s_swType));
+	if (notCustom) {
+	    if (m_parserData.m_flagsOrig == EuroIsdnE1 && !q->network())
+		m_parserData.m_flags |= NoDisplayIE;
+	    if (m_parserData.m_flagsOrig != QSIG && !q->network())
+		m_parserData.m_flags |= NoActiveOnConnect;
+	}
     }
-    else
+    else {
+	// Reset parser data if no layer 2
 	m_parserData.m_maxMsgLen = 0;
+	m_parserData.m_flags = m_parserData.m_flagsOrig;
+    }
     lock.drop();
     if (tmp) {
 	const char* name = 0;
@@ -2379,7 +2487,8 @@ void ISDNQ931::attach(ISDNLayer2* q921)
     }
     if (!q921)
 	return;
-    Debug(this,DebugAll,"Attached L2 (%p,'%s') [%p]",q921,q921->toString().safe(),this);
+    Debug(this,DebugAll,"Attached L2 '%s' (%p,'%s') [%p]",
+	(q921->network()?"NET":"CPE"),q921,q921->toString().safe(),this);
     insert(q921);
     q921->attach(this);
 }
@@ -2895,13 +3004,16 @@ bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t call
 // Send RELEASE (See Q.931 3.1.9) or RELEASE COMPLETE (See Q.931 3.1.10)
 // IE: Cause, Display, Signal
 bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, const char* cause, const char* display, const char* signal)
+	bool initiator, const char* cause, const char* diag,
+	const char* display, const char* signal)
 {
     // Create message
     ISDNQ931Message::Type t = release ? ISDNQ931Message::Release : ISDNQ931Message::ReleaseComplete;
     ISDNQ931Message* msg = new ISDNQ931Message(t,initiator,callRef,callRefLen);
     // Add IEs
-    msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    if (diag)
+	ie->addParam("diagnostic",diag);
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
     if (signal)
@@ -2920,24 +3032,18 @@ ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
     m_q921Cpe(0),
     m_cicNet(0),
     m_cicCpe(0),
-    m_parserData(this,params),
+    m_parserData(params),
     m_printMsg(true),
     m_extendedDebug(false)
 {
     setName(params.getValue("debugname",name));
-    // Accept maximum data length
+    // Set parser data. Accept maximum data length
     m_parserData.m_maxMsgLen = 0xffffffff;
+    m_parserData.m_dbg = this;
     // Debug
     setDebug(params.getBoolValue("print-messages",true),
 	params.getBoolValue("extended-debug",false));
-    if (debugAt(DebugInfo)) {
-	String s;
-	s << "\r\nDisplay charset: " << (unsigned int)m_parserData.m_charsetDisplay;
-	s << "\r\nMax Display length: " << (unsigned int)m_parserData.m_maxDisplay;
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
-    }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
+    Debug(this,DebugAll,"ISDN monitor created [%p]",this);
 }
 
 ISDNQ931Monitor::~ISDNQ931Monitor()
@@ -2955,6 +3061,7 @@ ISDNQ931Monitor::~ISDNQ931Monitor()
 void ISDNQ931Monitor::dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
 {
     Lock lock(m_layer);
+#ifdef DEBUG
     if (debugAt(DebugInfo)) {
 	String tmp;
 	if (cmd)
@@ -2964,6 +3071,7 @@ void ISDNQ931Monitor::dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
 	DDebug(this,DebugInfo,"Captured %s from '%s'. Clearing monitors",
 	    tmp.c_str(),layer2->debugName());
     }
+#endif
     terminateMonitor(0,"net-out-of-order");
 }
 
@@ -4033,8 +4141,22 @@ ISDNQ931Message* Q931Parser::decode(const DataBlock& buffer, DataBlock* segData)
     for (;;) {
 	// Append IE if any
 	if (ie) {
-	    XDebug(m_settings->m_dbg,DebugAll,
-		"Adding IE '%s'. %u bytes consumed [%p]",ie->c_str(),consumed,m_msg);
+	    // Skip non-locked IEs if told to do so
+	    if (m_settings->flag(ISDNQ931::IgnoreNonLockedIE)) {
+		bool ignore = false;
+		if (ie->type() == ISDNQ931IE::Shift)
+		    ignore = m_skip = !ie->getBoolValue("lock",false);
+		else if (m_skip) {
+		    ignore = true;
+		    m_skip = false;
+		}
+		if (ignore) {
+		    String* s = static_cast<String*>(ie);
+		    *s = String("ignored-") + *s;
+		}
+	    }
+	    XDebug(m_settings->m_dbg,DebugAll,"Adding IE '%s'. %u bytes consumed [%p]",
+		ie->c_str(),consumed,m_msg);
 	    if (m_settings->m_extendedDebug)
 		ie->m_buffer.assign(data,consumed);
 	    m_msg->append(ie);
@@ -4551,9 +4673,15 @@ ISDNQ931IE* Q931Parser::decodeBearerCaps(ISDNQ931IE* ie, const u_int8_t* data,
 #define CHECK_INDEX(idx) {if (idx >= len) return errorParseIE(ie,len ? s_errorWrongData : s_errorNoData,0,0);}
     CHECK_INDEX(0)
     // Byte 0: Coding standard (bit 5,6), Information transfer capability (bit 0-4)
+    // Translate transfer cap 0x08 to 0x10
     if (!checkCoding(data[0],0,ie))                       // Check coding standard (CCITT: 0)
 	return errorParseIE(ie,s_errorUnsuppCoding,data,len);
-    s_ie_ieBearerCaps[0].addIntParam(ie,data[0]);         // Information transfer capability
+    s_ie_ieBearerCaps[0].addIntParam(ie,data[0]);
+    if (m_settings->flag(ISDNQ931::Translate31kAudio)) {
+	NamedString* ns = ie->getParam(s_ie_ieBearerCaps[0].name);
+	if (ns && *ns == lookup(0x08,s_ie_ieBearerCaps[0].values))
+	    *ns = lookup(0x10,s_ie_ieBearerCaps[0].values);
+    }
     // End of data ?
     CHECK_INDEX(1)
     // Byte 1: Transfer mode (bit 5,6), Transfer rate (bit 0-4)
@@ -4658,11 +4786,11 @@ ISDNQ931IE* Q931Parser::decodeChannelID(ISDNQ931IE* ie, const u_int8_t* data,
     if (!len)
 	return errorParseIE(ie,s_errorNoData,0,0);
     // Byte 0
-    // Bit 6 - Interface identifier		0: implicit 1: identified by the next byte(s)
-    // Bit 5 - Interface type			0: basic 1: other (e.g. primary rate)
-    // Bit 3 - Preferred/exclusive channel	0: indicated channel is preferred 1: only indicated channel is acceptable
+    // Bit 6 - Interface identifier	   0: implicit 1: identified by the next byte(s)
+    // Bit 5 - Interface type		   0: basic 1: other (e.g. primary rate)
+    // Bit 3 - Preferred/exclusive channel 0: indicated channel is preferred 1: only indicated channel is acceptable
     // Bit 2 - Identified channel is a D-channel or not
-    // Bit 0,1	- Channel selection
+    // Bit 0,1 - Channel selection
     bool briInterface = s_ie_ieChannelID[0].addBoolParam(ie,data[0],true);  // Interface type
     s_ie_ieChannelID[1].addBoolParam(ie,data[0],false);                     // Preferred/Exclusive B channel
     s_ie_ieChannelID[2].addBoolParam(ie,data[0],false);                     // D-channel flag
@@ -4818,7 +4946,7 @@ ISDNQ931IE* Q931Parser::decodeDisplay(ISDNQ931IE* ie, const u_int8_t* data,
     if (!len)
 	return errorParseIE(ie,s_errorNoData,0,0);
     // Check charset
-    if (m_settings->m_charsetDisplay <= 127 && (data[0] & 0x80)) {
+    if (0 != (data[0] & 0x80)) {
 	s_ie_ieDisplay[0].addIntParam(ie,data[0]);
 	data++;
 	len--;
@@ -5178,40 +5306,44 @@ void Q931Parser::decodeLayer3(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t le
 bool Q931Parser::encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer)
 {
     u_int8_t data[8] = {(u_int8_t)ie->type(),2,0x80,0x80};
-    // 2: Coding standard (bit 5,6) 0:CCITT, Information transfer capability (bit 0-4)
+    // 2: Coding standard (bit 5,6) 0:CCITT, Transfer capability (bit 0-4)
+    // Translate '3.1khz-audio' (0x10) to 0x08
     data[2] |= s_ie_ieBearerCaps[0].getValue(ie);
+    u_int8_t transCap = data[2] & 0x1f;
+    if (m_settings->flag(ISDNQ931::Translate31kAudio) && (0x10 == transCap)) {
+	transCap = 0x08;
+	data[2] = (data[2] & 0xd0) | 0x08;
+    }
     // 3: Transfer mode (bit 5,6), Transfer rate (bit 0-4)
     data[3] |= s_ie_ieBearerCaps[1].getValue(ie);
-    // Figure 4.11 Note 1: Next byte is the rate multiplier if the transfer rate is 'multirate' (0x18)
+    // Figure 4.11 Note 1: Next byte is the rate multiplier if the transfer
+    //  rate is 'multirate' (0x18)
     u_int8_t transRate = s_ie_ieBearerCaps[2].getValue(ie);
     data[3] |= transRate;
     if (transRate == 0x18) {
 	data[1] = 3;
 	data[4] = 0x80 | s_ie_ieBearerCaps[3].getValue(ie);
     }
+    // Check if this all data we'll send with Bearer Capability
+    unsigned int layer = 1;
+    if (m_settings->flag(ISDNQ931::NoLayer1Caps) ||
+	(m_settings->flag(ISDNQ931::URDITransferCapsOnly) &&
+	(transCap == 0x08 || transCap == 0x09)))
+	layer = 4;
     // User information layer data
     // Bit 7 = 1, Bits 5,6 = layer, Bits 0-4: the value
-    int layer = 0;
-    while (true) {
-	int tmp;
-#define Q931_ENC_SETLAYER(l,idx) \
-	layer = l; \
-	tmp = s_ie_ieBearerCaps[idx].getValue(ie,false,-1); \
-	if (tmp == -1) \
-	    break; \
-	data[1]++; \
-	data[data[1] + 1] = 0x80 | ((u_int8_t)layer << 5) | ((u_int8_t)tmp & s_ie_ieBearerCaps[idx].mask);
-	Q931_ENC_SETLAYER(1,4)
-	Q931_ENC_SETLAYER(2,6)
-	Q931_ENC_SETLAYER(3,7)
-#undef Q931_ENC_SETLAYER
-	layer = 4;
-	break;
+    for (unsigned int idx = 0; layer < 4; layer++, idx++) {
+	int tmp = s_ie_ieBearerCaps[idx].getValue(ie,false,-1);
+	if (tmp == -1) {
+	    DDebug(m_settings->m_dbg,DebugAll,
+		"Stop encoding '%s' IE. No user information layer %d protocol [%p]",
+		ie->c_str(),layer,m_msg);
+	    break;
+	}
+	data[1]++;
+	data[data[1] + 1] = 0x80 | ((u_int8_t)layer << 5) |
+	    ((u_int8_t)tmp & s_ie_ieBearerCaps[idx].mask);
     }
-    if (layer < 4)
-	DDebug(m_settings->m_dbg,DebugAll,
-	    "Stop encoding '%s' IE. No user information layer %d protocol [%p]",
-	    ie->c_str(),layer,m_msg);
     CHECK_IE_LENGTH(data[1] + 2,Q931_MAX_BEARERCAPS_LEN)
     buffer.assign(data,data[1] + 2);
     return true;
@@ -5345,20 +5477,20 @@ bool Q931Parser::encodeDisplay(ISDNQ931IE* ie, DataBlock& buffer)
     u_int8_t header[3] = {(u_int8_t)ie->type(),0,0x80};
     u_int8_t headerLen = 2;
     // Check charset
-    if (m_settings->m_charsetDisplay <= 127) {
+    if (!m_settings->flag(ISDNQ931::NoDisplayCharset)) {
 	headerLen++;
 	header[1] = 1;
-	header[2] |= m_settings->m_charsetDisplay;
+	header[2] |= 0x31;
     }
     // Process display
     String display = ie->getValue(s_ie_ieDisplay[1].name);
-    // Check size
-    if (display.length() > (unsigned int)(m_settings->m_maxDisplay - headerLen)) {
+    // Check size (the charset will steel a char from display)
+    unsigned int maxlen = m_settings->m_maxDisplay - headerLen;
+    if (display.length() > maxlen) {
 	Debug(m_settings->m_dbg,DebugMild,
 	    "Truncating '%s' IE. Size %u greater then %u [%p]",
-	    ie->c_str(),display.length(),
-	    (unsigned int)(m_settings->m_maxDisplay - sizeof(header)),m_msg);
-	display = display.substr(0,m_settings->m_maxDisplay - headerLen);
+	    ie->c_str(),display.length(),maxlen,m_msg);
+	display = display.substr(0,maxlen);
     }
     header[1] += display.length();
     clearBit7(display.c_str(),display.length());

@@ -444,10 +444,25 @@ TokenDict* SignallingUtils::s_dictCCITT[5] = {
 bool SignallingUtils::hasFlag(const NamedList& list, const char* param, const char* flag)
 {
     String s = list.getValue(param);
-    ObjList* obj = list.split(',',false);
+    ObjList* obj = s.split(',',false);
     bool found = (obj->find(flag) != 0);
     TelEngine::destruct(obj);
     return found;
+}
+
+// Remove a flag from a comma separated list of flags
+bool SignallingUtils::removeFlag(String& flags, const char* flag)
+{
+    ObjList* obj = flags.split(',',false);
+    ObjList* found = obj->find(flag);
+    if (found) {
+	obj->remove(found,true);
+	flags = "";
+	for (ObjList* o = obj->skipNull(); o; o = o->skipNext())
+	    flags.append(*static_cast<String*>(o->get()),",");
+    }
+    TelEngine::destruct(obj);
+    return (found != 0);
 }
 
 // Add string (keyword) if found or integer parameter to a named list

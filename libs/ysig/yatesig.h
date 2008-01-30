@@ -1557,17 +1557,17 @@ public:
     static int str2strategy(const char* name, int def = Increment)
 	{ return lookup(name,s_strategy,def); }
 
+    /**
+     * Keep the strategy names
+     */
+    static TokenDict s_strategy[];
+
 protected:
     /**
      * Get the circuit list
      */
     inline ObjList& circuits()
 	{ return m_circuits; }
-
-    /**
-     * Keep the strategy names
-     */
-    static TokenDict s_strategy[];
 
 private:
     unsigned int advance(unsigned int n, int strategy);
@@ -1894,6 +1894,14 @@ public:
      * @return True if the given flag is found
      */
     static bool hasFlag(const NamedList& list, const char* param, const char* flag);
+
+    /**
+     * Remove a flag from a comma separated list of flags
+     * @param flags The list of flags
+     * @param flag The flag to remove
+     * @return True if the given flag was found and removed
+     */
+    static bool removeFlag(String& flags, const char* flag);
 
     /**
      * Add string (keyword) if found in a dictionary or integer parameter to a named list
@@ -6420,20 +6428,19 @@ private:
     // Process received IEs
     // If add is true, append an IE to the message
     // If add is false, extract data from message. Set data to default values if IE is missing
-    // @return False if the IE is missing when decoding. True on success
-    bool processBearerCaps(ISDNQ931Message* msg, bool add);
-    bool processCause(ISDNQ931Message* msg, bool add);
-    bool processDisplay(ISDNQ931Message* msg, bool add);
-    bool processKeypad(ISDNQ931Message* msg, bool add);
-    bool processChannelID(ISDNQ931Message* msg, bool add);
-    bool processProgress(ISDNQ931Message* msg, bool add);
-    bool processRestart(ISDNQ931Message* msg, bool add);
-    bool processNotification(ISDNQ931Message* msg, bool add);
-    bool processCalledNo(ISDNQ931Message* msg, bool add);
-    bool processCallingNo(ISDNQ931Message* msg, bool add);
+    // @return False if the IE is missing when decoding or the IE wasn't added
+    bool processBearerCaps(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processCause(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processDisplay(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processKeypad(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processChannelID(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processProgress(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processRestart(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processNotification(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processCalledNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
+    bool processCallingNo(ISDNQ931Message* msg, bool add, ISDNQ931ParserData* data = 0);
 
     // IE parameters
-    u_int8_t m_charsetDisplay;           // Display: The charset
     String m_display;                    // Display: The data
     String m_callerNo;                   // CallingNo: Number
     String m_callerType;                 // CallingNo: Number type
@@ -6632,9 +6639,10 @@ protected:
      * Clear all call data.
      * Remove from controller's queue. Decrease the object's refence count
      * @param reason Optional release reason. If missing, the last reason is used
+     * @param diag Optional hexified string for the cause diagnostic
      * @return Pointer to an SignallingEvent of type Release, with no message
      */
-    SignallingEvent* releaseComplete(const char* reason = 0);
+    SignallingEvent* releaseComplete(const char* reason = 0, const char* diag = 0);
 
     /**
      * Get an event from the circuit reserved for this call
@@ -6679,7 +6687,7 @@ private:
     bool sendInfo(SignallingMessage* sigMsg);
     bool sendProgress(SignallingMessage* sigMsg);
     bool sendRelease(const char* reason = 0, SignallingMessage* sigMsg = 0);
-    bool sendReleaseComplete(const char* reason = 0);
+    bool sendReleaseComplete(const char* reason = 0, const char* diag = 0);
     bool sendSetup(SignallingMessage* sigMsg);
     bool sendSuspendRej(const char* reason = 0, SignallingMessage* sigMsg = 0);
     // Errors on processing received messages
@@ -6815,14 +6823,23 @@ class YSIG_API ISDNQ931ParserData
 public:
     /**
      * Constructor
-     * @param dbg The debug enabler owning this object
      * @param params Parser settings
+     * @param dbg The debug enabler used for output
      */
-    ISDNQ931ParserData(DebugEnabler* dbg, const NamedList& params);
+    ISDNQ931ParserData(const NamedList& params, DebugEnabler* dbg = 0);
 
-    DebugEnabler* m_dbg;                 // The owner of this parser
+    /**
+     * Check the state of a flag
+     * @param mask The flag to check
+     * @return True if the given flag is set
+     */
+    inline bool flag(int mask)
+	{ return (0 != (m_flags & mask)); }
+
+    DebugEnabler* m_dbg;                 // The debug enabler used for output
     u_int32_t m_maxMsgLen;               // Maximum length of outgoing messages (or message segments)
-    u_int8_t m_charsetDisplay;           // Charset for Display IE
+    int m_flags;                         // The current behaviour flags
+    int m_flagsOrig;                     // The original behaviour flags
     u_int8_t m_maxDisplay;               // Max Display IE size
     bool m_allowSegment;                 // True if message segmentation is allowed
     u_int8_t m_maxSegments;              // Maximum allowed segments for outgoing messages
@@ -6837,6 +6854,70 @@ class YSIG_API ISDNQ931 : public SignallingCallControl, public ISDNLayer3
 {
     friend class ISDNQ931Call;
 public:
+    /**
+     * Enumeration flags defining the behaviour of the ISDN call controller and
+     *  any active calls managed by it
+     */
+    enum BehaviourFlags {
+	// Append the progress indicator 'non-isdn-source' if present when sending SETUP
+	// If this flag is not set, the indicator will be removed from the message
+	SendNonIsdnSource = 0x00000001,
+	// Ignore (don't send) the progress indicator 'non-isdn-destination' if present
+	// when sending SETUP ACKNOWLEDGE or CONNECT
+	IgnoreNonIsdnDest = 0x00000002,
+	// Set presentation='allowed' and screening='network-provided' if presentation
+	//  is not 'allowed' or screening is not 'network-provided' when sending SETUP
+	// Used for Calling Party Number and Redirecting Number IEs
+	// This is done only if the calling number or redirecting number are not empty
+	SetPresNetProv = 0x00000004,
+	// Translate '3.1khz-audio' transfer capability code 0x10 to/from 0x08
+	Translate31kAudio = 0x00000008,
+	// Send only tranfer mode and rate when sending the Bearer Capability IE
+	// with transfer capability 'udi' or 'rdi' (unrestricted/restricted
+	// digital information)
+	URDITransferCapsOnly = 0x00000010,
+	// Don't send Layer 1 capabilities (data format) with the
+	// Bearer Capability IE when in circuit switch mode
+	NoLayer1Caps = 0x00000020,
+	// Don't parse incoming IEs found after a temporary (non-locking) shift
+	IgnoreNonLockedIE = 0x00000040,
+	// Don't send the Display IE
+	// This flag is internally set for EuroIsdnE1 type when the call
+	// controller is the CPE side of the link
+	NoDisplayIE = 0x00000080,
+	// Don't append a charset byte 0xb1 before Display data
+	NoDisplayCharset = 0x00000100,
+	// Send a Sending Complete IE even if no overlap dialing
+	ForceSendComplete = 0x00000200,
+	// Check the validity of the notification indicator when sending a NOTIFY message
+	CheckNotifyInd = 0x00000400,
+	// Don't change call state to Active instead of ConnectRequest after sending CONNECT
+	// This flag is internally set when the call controller is the CPE side of the data link
+	NoActiveOnConnect = 0x00000800,
+    };
+
+    /**
+     * Call controller switch type. Each value is a mask of behaviour flags
+     */
+    enum SwitchType {
+	Unknown      = 0,
+	// Standard Euro ISDN (CTR4, ETSI 300-102)
+	EuroIsdnE1   = ForceSendComplete|CheckNotifyInd|NoDisplayCharset|URDITransferCapsOnly,
+	// T1 Euro ISDN variant (ETSI 300-102)
+	EuroIsdnT1   = ForceSendComplete|CheckNotifyInd,
+	// National ISDN
+	NationalIsdn = SendNonIsdnSource,
+	// DMS 100
+	Dms100       = SetPresNetProv|IgnoreNonIsdnDest,
+	// Lucent 5E
+	Lucent5e     = IgnoreNonLockedIE,
+	// AT&T 4ESS
+	Att4ess      = SetPresNetProv|IgnoreNonLockedIE|Translate31kAudio|NoLayer1Caps,
+	// QSIG Switch
+	QSIG         = NoActiveOnConnect|NoDisplayIE|NoDisplayCharset
+    };
+
+
     /**
      * Constructor
      * Initialize this object and the component
@@ -6990,16 +7071,17 @@ public:
      * @param call The call requesting the operation
      * @param release True to send RELEASE, false to send RELEASE COMPLETE
      * @param cause Value for Cause IE
+     * @param diag Optional hexified string for cause dignostic
      * @param display Optional value for Display IE 
      * @param signal Optional value for Signal IE 
      * @return The result of the operation (true if succesfully sent)
      */
     inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause,
-	const char* display = 0, const char* signal = 0) {
+	const char* diag = 0, const char* display = 0, const char* signal = 0) {
 	    if (!call)
 		return false;
 	    return sendRelease(release,call->callRefLen(),call->callRef(),
-		call->outgoing(),cause,display,signal);
+		call->outgoing(),cause,diag,display,signal);
 	}
 
     /**
@@ -7043,6 +7125,16 @@ public:
 	    m_extendedDebug = m_printMsg && extendedDebug;
 	    m_parserData.m_extendedDebug = m_extendedDebug;
 	}
+
+    /**
+     * The list of behaviour flag names
+     */
+    static TokenDict s_flags[];
+
+    /**
+     * The list of switch type names
+     */
+    static TokenDict s_swType[];
 
 protected:
     /**
@@ -7155,14 +7247,14 @@ protected:
      * @param callRef The call reference
      * @param initiator The call initiator flag
      * @param cause Value for Cause IE
+     * @param diag Optional hexified string for cause dignostic
      * @param display Optional value for Display IE 
      * @param signal Optional value for Signal IE 
      * @return The result of the operation (true if succesfully sent)
      */
     bool sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, const char* cause, const char* display = 0,
-	const char* signal = 0);
-
+	bool initiator, const char* cause, const char* diag = 0,
+	const char* display = 0, const char* signal = 0);
 private:
     Mutex m_layer;                       // Lock layer operation
     ISDNLayer2* m_q921;                  // The attached layer 2

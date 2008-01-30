@@ -15,9 +15,25 @@
 ; SQL queries that get data about the queue and operators
 
 ; queue: string: Query to pick queue parameters, returns zero or one row
+; Relevant substitutions:
+;  ${queue}: string: Name of the queue as obtained from routing
+; Relevant returned params:
+;  length: int: Maximum queue length, will declare congestion if grows larger
+;  greeting: string: Resource to be played initially as greeting
+;  onhold: string: Resource to be played while waiting in queue
 ;queue=
 
 ; avail: string: Query to fetch operators to which calls can be distributed
+; Relevant substitutions:
+;  ${queue}: string: Name of this queue
+;  ${required}: int: Number of operators required to handle incoming calls
+;  ${waiting}: int: Total number of calls waiting in this queue
+; Relevant returned params:
+;  callto: string: Resource where the operator is located
+;  username: string: User name of the operator
+; Relevant returned params:
+;  timeout: int: How much to call the operator, in seconds
+;  prompt: string: Resource to play to the operator when it answers
 ;avail=
 
 

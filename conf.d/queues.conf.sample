@@ -1,0 +1,31 @@
+[general]
+; General settings of the queues module
+
+; account: string: Name of the database account used in queries
+;account=
+
+; priority: int: Priority of message handlers
+;priority=50
+
+; rescan: int: Period of polling for available operators, in seconds
+;rescan=5
+
+
+[queries]
+; SQL queries that get data about the queue and operators
+
+; queue: string: Query to pick queue parameters, returns zero or one row
+;queue=
+
+; avail: string: Query to fetch operators to which calls can be distributed
+;avail=
+
+
+[channels]
+; Resources that will be used to handle incoming and outgoing calls
+
+; incoming: string: Target that will handle incoming calls while queued
+;incoming=
+
+; outgoing: string: Target that will be called to make calls to operators
+;outgoing=

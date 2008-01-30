@@ -53,30 +53,29 @@ protected:
     u_int64_t m_last;
 };
 
-class CallsQueue : public String
+class CallsQueue : public NamedList
 {
 public:
-    CallsQueue(const char* name);
+    static CallsQueue* create(const char* name, const NamedList& params);
     ~CallsQueue();
     inline int countCalls() const
 	{ return m_calls.count(); }
     inline QueuedCall* findCall(const String& id) const
 	{ return static_cast<QueuedCall*>(m_calls[id]); }
-    void addCall(QueuedCall* call)
-	{ m_calls.append(call); }
-    inline void addCall(const String& id, const char* caller)
-	{ addCall(new QueuedCall(id,caller)); }
+    bool addCall(Message& msg);
     inline bool removeCall(const String& id)
 	{ return removeCall(findCall(id)); }
     bool removeCall(QueuedCall* call);
     QueuedCall* markCall(const char* mark);
     bool unmarkCall(const String& id);
-    bool hasUnmarkedCalls() const;
+    unsigned int unmarkedCalls() const;
     QueuedCall* topCall() const;
     void listCalls(String& retval);
     void startACD();
 protected:
     ObjList m_calls;
+private:
+    CallsQueue(const char* name);
 };
 
 class QueuesModule : public Module
@@ -84,6 +83,7 @@ class QueuesModule : public Module
 public:
     QueuesModule();
     ~QueuesModule();
+    bool unload();
     inline static CallsQueue* findQueue(const String& name)
 	{ return static_cast<CallsQueue*>(s_queues[name]); }
     static CallsQueue* findCallQueue(const String& id);
@@ -92,36 +92,110 @@ protected:
     virtual void statusParams(String& str);
     virtual bool received(Message& msg, int id);
     virtual void msgTimer(Message& msg);
+    virtual bool commandExecute(String& retVal, const String& line);
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     void onExecute(Message& msg, String callto);
     void onAnswered(Message& msg, String targetid, String reason);
     void onHangup(Message& msg, String id);
     void onQueued(Message& msg, String qname);
     void onPickup(Message& msg, String qname);
-    bool onCommand(String line, String& retval);
 private:
     bool m_init;
 };
 
 
-static QueuesModule module;
+INIT_PLUGIN(QueuesModule);
+
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow && !__plugin.unload())
+	return false;
+    return true;
+}
+
 static String s_account;
-static String s_pbxcall;
-static String s_pbxchan;
+static String s_chanOutgoing;
+static String s_chanIncoming;
+static String s_queryQueue;
+static String s_queryAvail;
 static u_int32_t s_nextTime = 0;
 static int s_rescan = 5;
 
+static void copyArrayParams(NamedList& params, Array* a, int row)
+{
+    if ((!a) || (!row))
+	return;
+    for (int i = 0; i < a->getColumns(); i++) {
+	String* name = YOBJECT(String,a->get(i,0));
+	if (!(name && *name))
+	    continue;
+	String* value = YOBJECT(String,a->get(i,row));
+	if (!value)
+	    continue;
+	params.setParam(*name,*value);
+    }
+}
+
 
 CallsQueue::CallsQueue(const char* name)
-    : String(name)
+    : NamedList(name)
 {
-    Debug(&module,DebugInfo,"Creating queue '%s'",name);
+    Debug(&__plugin,DebugInfo,"Creating queue '%s'",name);
+    setParam("queue",name);
     s_queues.append(this);
 }
 
 CallsQueue::~CallsQueue()
 {
-    Debug(&module,DebugInfo,"Deleting queue '%s'",c_str());
+    Debug(&__plugin,DebugInfo,"Deleting queue '%s'",c_str());
     s_queues.remove(this,false);
+}
+
+CallsQueue* CallsQueue::create(const char* name, const NamedList& params)
+{
+    String query = s_queryQueue;
+    params.replaceParams(query,true);
+    Message m("database");
+    m.addParam("account",s_account);
+    m.addParam("query",query);
+    if (!Engine::dispatch(m)) {
+	Debug(&__plugin,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
+	return 0;
+    }
+    Array* res = static_cast<Array*>(m.userObject("Array"));
+    if (!res || (m.getIntValue("rows") != 1)) {
+	Debug(&__plugin,DebugWarn,"Missing queue '%s'",name);
+	return 0;
+    }
+    CallsQueue* queue = new CallsQueue(name);
+    copyArrayParams(*queue,res,1);
+    return queue;
+}
+
+bool CallsQueue::addCall(Message& msg)
+{
+    int maxlen = getIntValue("length");
+    if ((maxlen > 0) && (countCalls() >= maxlen)) {
+	Debug(&__plugin,DebugWarn,"Queue '%s' is full",c_str());
+	return false;
+    }
+    String tmp = getValue("greeting");
+    if (tmp) {
+	if (tmp.find('/') < 0)
+	    tmp = "wave/play/sounds/" + tmp;
+	msg.setParam("greeting",tmp);
+    }
+    tmp = getValue("onhold");
+    if (tmp.find('/') < 0) {
+	if (tmp)
+	    tmp = "moh/" + tmp;
+	else
+	    tmp = "tone/ring";
+    }
+    msg.setParam("source",tmp);
+    msg.setParam("callto",s_chanIncoming);
+    m_calls.append(new QueuedCall(msg.getValue("id"),msg.getValue("caller")));
+    return true;
 }
 
 bool CallsQueue::removeCall(QueuedCall* call)
@@ -156,14 +230,15 @@ bool CallsQueue::unmarkCall(const String& id)
     return true;
 }
 
-bool CallsQueue::hasUnmarkedCalls() const
+unsigned int CallsQueue::unmarkedCalls() const
 {
+    unsigned int c = 0;
     ObjList* l = m_calls.skipNull();
     for (; l; l=l->skipNext()) {
 	if (static_cast<QueuedCall*>(l->get())->getMarked().null())
-	    return true;
+	    c++;
     }
-    return false;
+    return c;
 }
 
 QueuedCall* CallsQueue::topCall() const
@@ -190,72 +265,61 @@ void CallsQueue::listCalls(String& retval)
 
 void CallsQueue::startACD()
 {
-    if (s_account.null() || s_pbxcall.null() || !hasUnmarkedCalls())
+    if (s_account.null() || s_chanOutgoing.null())
 	return;
-    String query("SELECT algorithm,timeout,prompt FROM groups WHERE ugroup=");
-    query << "'" << sqlEscape() << "'";
-    Message m("database");
-    m.addParam("account",s_account);
-    m.addParam("query",query);
-    if (!Engine::dispatch(m)) {
-	Debug(&module,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
+    unsigned int cnt = unmarkedCalls();
+    if (!cnt)
 	return;
-    }
-    Array* res = static_cast<Array*>(m.userObject("Array"));
-    if (!res || (m.getIntValue("rows") != 1)) {
-	Debug(&module,DebugWarn,"Missing data for group '%s'",c_str());
-	return;
-    }
-    String algorithm = YOBJECT(String,res->get(0,1));
-    String timeout = YOBJECT(String,res->get(1,1));
-    String prompt = YOBJECT(String,res->get(2,1));
 
-    query = "SELECT username,reg_location FROM users WHERE inuse_count=0";
-    query << " AND users.uid IN (SELECT appflags.uid FROM appflags,applications WHERE appflags.appid=applications.appid AND applications.name='Line' AND appflags.name='operator_available' AND appflags.value='true')";
-    query << " AND uid IN (SELECT appflags.uid FROM appflags,applications WHERE appflags.appid=applications.appid AND applications.name='Groups' AND appflags.name='group' AND value=";
-    query << "'" << sqlEscape() << "')";
-    query << " ORDER BY COALESCE(inuse_last,TIMESTAMP 'EPOCH')";
+    // how many operators are required to handle calls in queue
+    setParam("required",String(cnt));
+    // how many total calls are waiting in queue
+    setParam("waiting",String(m_calls.count()));
+    String query = s_queryAvail;
+    replaceParams(query,true);
     Message msg("database");
     msg.addParam("account",s_account);
     msg.addParam("query",query);
     if (!Engine::dispatch(msg)) {
-	Debug(&module,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
+	Debug(&__plugin,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
 	return;
     }
-    res = static_cast<Array*>(msg.userObject("Array"));
+    Array* res = static_cast<Array*>(msg.userObject("Array"));
     if (!res || (msg.getIntValue("rows") < 1))
 	return;
+    int timeout = getIntValue("timeout");
+    String prompt = getValue("prompt");
+    if (prompt && (prompt.find('/') < 0))
+	prompt = "wave/play/sounds/" + prompt;
     for (int i = 1; i < res->getRows(); i++) {
-	String callto = YOBJECT(String,res->get(1,i));
-	String user = YOBJECT(String,res->get(0,i));
-	if (callto.null() || user.null())
+	NamedList params("");
+	copyArrayParams(params,res,i);
+	const char* callto = params.getValue("callto");
+	const char* user = params.getValue("username");
+	if (!(callto && user))
 	    continue;
 	QueuedCall* call = markCall(user);
 	// if we failed to pick a waiting call we are done
 	if (!call)
 	    break;
-	Debug(&module,DebugInfo,"Distributing call '%s' to '%s' in group '%s'",
-	    call->c_str(),user.c_str(),c_str());
+	Debug(&__plugin,DebugInfo,"Distributing call '%s' to '%s' in group '%s'",
+	    call->c_str(),user,c_str());
 	Message* ex = new Message("call.execute");
 	ex->addParam("direct",callto);
 	ex->addParam("target",user);
 	ex->addParam("caller",call->getCaller());
 	ex->addParam("called",user);
-	ex->addParam("callto",s_pbxcall);
+	ex->addParam("callto",s_chanOutgoing);
 	ex->addParam("notify",*call);
 	ex->addParam("queue",c_str());
-	if (timeout.toInteger() > 0) {
-	    timeout += "000";
-	    ex->addParam("maxcall",timeout);
-	}
-	if (prompt) {
-	    if (prompt.find('/') < 0)
-		prompt = "wave/play/sounds/" + prompt;
+	if (timeout > 0)
+	    ex->addParam("maxcall",String(timeout*1000));
+	if (prompt)
 	    msg.setParam("prompt",prompt);
-	}
 	Engine::enqueue(ex);
     }
 }
+
 
 QueuesModule::QueuesModule()
     : Module("queues","misc"), m_init(false)
@@ -268,6 +332,16 @@ QueuesModule::~QueuesModule()
     Output("Unloading module Queues");
 }
 
+bool QueuesModule::unload()
+{
+    if (!lock(500000))
+	return false;
+    uninstallRelays();
+    unlock();
+    s_queues.clear();
+    return true;
+}
+
 void QueuesModule::statusParams(String& str)
 {
     str.append("queues=",",") << s_queues.count();
@@ -277,52 +351,23 @@ void QueuesModule::onQueued(Message& msg, String qname)
 {
     if (qname.null() || (qname.find('/') >= 0))
 	return;
-    if (s_account.null() || s_pbxchan.null())
+    if (s_account.null() || s_chanIncoming.null())
 	return;
-    String query("SELECT length,greeting,onhold FROM groups WHERE ugroup=");
-    query << "'" << qname.sqlEscape() << "'";
-    Message m("database");
-    m.addParam("account",s_account);
-    m.addParam("query",query);
-    if (!Engine::dispatch(m)) {
-	Debug(this,DebugWarn,"Query on '%s' failed: '%s'",s_account.c_str(),query.c_str());
-	return;
-    }
-    Array* res = static_cast<Array*>(m.userObject("Array"));
-    if (!res || (m.getIntValue("rows") != 1)) {
-	Debug(this,DebugWarn,"Missing queue '%s'",qname.c_str());
+    msg.setParam("queue",qname);
+    CallsQueue* queue = findQueue(qname);
+    if (!queue)
+	queue = CallsQueue::create(qname,msg);
+    if (!queue) {
 	msg.setParam("error","noroute");
 	msg.setParam("reason","Queue does not exist");
 	return;
     }
-    String tmp = YOBJECT(String,res->get(0,1));
-    int maxlen = tmp.toInteger();
-    CallsQueue* queue = findQueue(qname);
-    if (!queue)
-	queue = new CallsQueue(qname);
-    if (maxlen && (queue->countCalls() >= maxlen)) {
-	Debug(this,DebugWarn,"Queue '%s' is full",qname.c_str());
+    if (queue->addCall(msg))
+	queue->startACD();
+    else {
 	msg.setParam("error","congestion");
 	msg.setParam("reason","Queue is full");
-	return;
     }
-    tmp = YOBJECT(String,res->get(1,1));
-    if (tmp) {
-	if (tmp.find('/') < 0)
-	    tmp = "wave/play/sounds/" + tmp;
-	msg.setParam("greeting",tmp);
-    }
-    tmp = YOBJECT(String,res->get(2,1));
-    if (tmp.find('/') < 0) {
-	if (tmp)
-	    tmp = "moh/" + tmp;
-	else
-	    tmp = "tone/ring";
-    }
-    msg.setParam("source",tmp);
-    msg.setParam("callto",s_pbxchan);
-    queue->addCall(msg.getValue("id"),msg.getValue("caller"));
-    queue->startACD();
 }
 
 void QueuesModule::onPickup(Message& msg, String qname)
@@ -397,16 +442,23 @@ void QueuesModule::onHangup(Message& msg, String id)
     queue->removeCall(id);
 }
 
-bool QueuesModule::onCommand(String line, String& retval)
+bool QueuesModule::commandExecute(String& retVal, const String& line)
 {
-    if (line.startSkip("queues")) {
-	if (line == "list") {
-	    ObjList* l = s_queues.skipNull();
-	    for (; l; l=l->skipNext())
-		static_cast<CallsQueue*>(l->get())->listCalls(retval);
-	    return true;
-	}
+    if (line == "queues") {
+	lock();
+	ObjList* l = s_queues.skipNull();
+	for (; l; l=l->skipNext())
+	    static_cast<CallsQueue*>(l->get())->listCalls(retVal);
+	unlock();
+	return true;
     }
+    return false;
+}
+
+bool QueuesModule::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    if ((partLine.null() || (partLine == "status") || (partLine == "debug")) && name().startsWith(partWord))
+	msg.retValue().append(name(),"\t");
     return false;
 }
 
@@ -414,9 +466,6 @@ bool QueuesModule::received(Message& msg, int id)
 {
     Lock lock(this);
     switch (id) {
-	case Command:
-	    return onCommand(msg.getValue("line"),msg.retValue());
-	    break;
 	case Execute:
 	    onExecute(msg,msg.getValue("callto"));
 	    break;
@@ -459,23 +508,26 @@ CallsQueue* QueuesModule::findCallQueue(const String& id)
 
 void QueuesModule::initialize()
 {
+    Output("Initializing module Queues for database");
     Configuration cfg(Engine::configFile("queues"));
     lock();
     s_rescan = cfg.getIntValue("general","rescan",5);
+    if (s_rescan < 2)
+	s_rescan = 2;
     s_account = cfg.getValue("general","account");
-    s_pbxcall = cfg.getValue("pbx","call");
-    s_pbxchan = cfg.getValue("pbx","chan");
-    int priority = cfg.getIntValue("general","priority",50);
+    s_chanOutgoing = cfg.getValue("channels","outgoing");
+    s_chanIncoming = cfg.getValue("channels","incoming");
+    s_queryQueue = cfg.getValue("queries","queue");
+    s_queryAvail = cfg.getValue("queries","avail");
     unlock();
     if (m_init)
 	return;
     m_init = true;
     setup();
-    Output("Initializing module Queues for database");
-    installRelay(Command);
+    int priority = cfg.getIntValue("general","priority",50);
     installRelay(Execute,priority);
     installRelay(Answered,priority);
-    Engine::install(new MessageRelay("chan.hangup",this,Private,priority));
+    installRelay(Private,"chan.hangup",priority);
 }
 
 }; // anonymous namespace

@@ -1435,12 +1435,12 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
 	return;
     }
     isup()->setLabel(m_label,local,remote,sls);
-#ifdef DEBUG
-    String tmp;
-    tmp << m_label;
-    DDebug(isup(),DebugAll,"Call(%u). Created %s. Routing label: %s [%p]",
-	id(),(outgoing ? "outgoing" : "incoming"),tmp.c_str(),this);
-#endif
+    if (isup()->debugAt(DebugAll)) {
+	String tmp;
+	tmp << m_label;
+	Debug(isup(),DebugAll,"Call(%u) direction=%s routing-label=%s [%p]",
+	    id(),(outgoing ? "outgoing" : "incoming"),tmp.c_str(),this);
+    }
 }
 
 SS7ISUPCall::~SS7ISUPCall()
@@ -1448,13 +1448,14 @@ SS7ISUPCall::~SS7ISUPCall()
     if (m_iamMsg)
 	m_iamMsg->deref();
     releaseComplete(true);
-    DDebug(isup(),DebugAll,"Call(%u). Destroyed with reason '%s' [%p]",
+    Debug(isup(),DebugAll,"Call(%u) destroyed with reason='%s' [%p]",
 	id(),m_reason.safe(),this);
     if (controller())
 	controller()->releaseCircuit(m_circuit);
 }
 
-// Stop waiting for a SGM (Segmentation) message when another message is received by the controller
+// Stop waiting for a SGM (Segmentation) message when another message is
+//  received by the controller
 void SS7ISUPCall::stopWaitSegment(bool discard)
 {
     Lock lock(m_callMutex);
@@ -1468,7 +1469,8 @@ void SS7ISUPCall::stopWaitSegment(bool discard)
 }
 
 // Helper functions called in getEvent
-inline bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer, const Time& when, const char* req)
+inline bool timeout(SS7ISUP* isup, SS7ISUPCall* call, SignallingTimer& timer,
+	const Time& when, const char* req)
 {
     if (!timer.timeout(when.msec()))
 	return false;
@@ -1579,7 +1581,8 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::NewCall:
 	    if (validMsgState(true,SS7MsgISUP::IAM)) {
 		if (!event->message()) {
-		    DDebug(isup(),DebugNote,"Call(%u). No parameters for outgoing call [%p]",id(),this);
+		    DDebug(isup(),DebugNote,
+			"Call(%u). No parameters for outgoing call [%p]",id(),this);
 		    setTerminate("temporary-failure");
 		    break;
 		}
@@ -1592,7 +1595,8 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Ringing:
 	    if (validMsgState(true,SS7MsgISUP::CPR)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CPR,id());
-		m->params().addParam("EventInformation",event->type() == SignallingEvent::Ringing ? "ringing": "progress");
+		m->params().addParam("EventInformation",
+		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
 		m_state = Ringing;
 		result = transmitMessage(m);
 	    }
@@ -1601,7 +1605,8 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
 		if (event->message())
-		    m->params().addParam("BackwardCallIndicators",event->message()->params().getValue("BackwardCallIndicators"));
+		    m->params().addParam("BackwardCallIndicators",
+			event->message()->params().getValue("BackwardCallIndicators"));
 		m_state = Accepted;
 		result = transmitMessage(m);
 	    }
@@ -1706,7 +1711,8 @@ SignallingEvent* SS7ISUPCall::releaseComplete(bool final, SS7MsgISUP* msg, const
 }
 
 // Helper function to copy parameters
-inline void param(NamedList& dest, NamedList& src, const char* param, const char* srcParam, const char* defVal)
+inline void param(NamedList& dest, NamedList& src, const char* param,
+	const char* srcParam, const char* defVal)
 {
     dest.addParam(param,src.getValue(srcParam,src.getValue(param,defVal)));
 }
@@ -1825,12 +1831,15 @@ bool SS7ISUPCall::validMsgState(bool send, SS7MsgISUP::Type type)
 	default:
 	    handled = false;
     }
-    Debug(isup(),handled?DebugNote:DebugStub,"Call(%u). Can't %s %smessage '%s' in state %u [%p]",
-	id(),send?"send":"accept",handled?"":"unhandled ",SS7MsgISUP::lookup(type,""),m_state,this);
+    Debug(isup(),handled?DebugNote:DebugStub,
+	"Call(%u). Can't %s %smessage '%s' in state %u [%p]",
+	id(),send?"send":"accept",handled?"":"unhandled ",
+	SS7MsgISUP::lookup(type,""),m_state,this);
     return false;
 }
 
-// Connect the reserved circuit. Return false if it fails. Return true if this call is a signalling only one
+// Connect the reserved circuit. Return false if it fails.
+// Return true if this call is a signalling only one
 bool SS7ISUPCall::connectCircuit()
 {
     if (signalOnly())
@@ -1856,13 +1865,15 @@ bool SS7ISUPCall::transmitIAM()
     return transmitMessage(m_iamMsg);
 }
 
-// Stop waiting for a SGM (Segmentation) message. Copy parameters to the pending segmented message if sgm is valid.
+// Stop waiting for a SGM (Segmentation) message. Copy parameters to
+// the pending segmented message if sgm is valid.
 // Change call state and set m_lastEvent
 SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 {
     if (sgm)
 	if (sgm->type() == SS7MsgISUP::SGM) {
-	    // Copy parameters from SGM as defined in Q.763 - Table 49 (Segmentation message) and Q.764 - 2.1.12 (re-assembly)
+	    // Copy parameters from SGM as defined in Q.763 - Table 49
+	    // (Segmentation message) and Q.764 - 2.1.12 (re-assembly)
 	    #define COPY_PARAM(param) \
 		m_sgmMsg->params().copyParam(sgm->params(),param); \
 		m_sgmMsg->params().copyParam(sgm->params(),param,'.');
@@ -1963,7 +1974,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     const char* rpc = params.getValue("remotepointcode");
     m_remotePoint = new SS7PointCode(0,0,0);
     if (!(m_remotePoint->assign(rpc) && m_remotePoint->pack(m_type))) {
-	Debug(this,DebugNote,"Invalid remotepointcode='%s'",rpc);
+	Debug(this,DebugMild,"Invalid remotepointcode='%s'",rpc);
 	TelEngine::destruct(m_remotePoint);
     }
 
@@ -1991,21 +2002,19 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nPoint code type: " << stype;
-	s << "\r\nNumber plan/type/pres/screen: " << m_numPlan << "/" << m_numType << "/"
+	s << "pointcode-type=" << stype;
+	s << " format=" << m_format;
+	s << " plan/type/pres/screen=" << m_numPlan << "/" << m_numType << "/"
 	    << m_numPresentation << "/" << m_numScreening;
-	s << "\r\nCaller category: " << m_callerCat;
-	s << "\r\nFormat: " << m_format;
-	s << "\r\nRemote point code: ";
+	s << " caller-category=" << m_callerCat;
+	s << " remote-pointcode=";
 	if (m_remotePoint)
 	    s << *m_remotePoint;
 	else
 	    s << "missing";
-	s << "\r\nPriority+SSF: " << (unsigned int)m_priossf;
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
+	s << " priority+SSF=" << (unsigned int)m_priossf;
+	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
 }
 
 SS7ISUP::~SS7ISUP()
@@ -2013,7 +2022,7 @@ SS7ISUP::~SS7ISUP()
     cleanup();
     if (m_remotePoint)
 	m_remotePoint->destruct();
-    DDebug(this,DebugAll,"Destroyed [%p]",this);
+    Debug(this,DebugInfo,"ISUP Call Controller destroyed [%p]",this);
 }
 
 // Append a point code to the list of point codes serviced by this controller
@@ -2032,9 +2041,7 @@ bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
     if (def)
 	m_defPoint = p ? p : pc;
     String tmp;
-#ifdef DEBUG
     tmp << (def ? *m_defPoint : *pc);
-#endif
     if (!p) {
 	m_pointCodes.append(pc);
 	DDebug(this,DebugAll,"Added new point code '%s'%s",tmp.safe(),def?". Set to default":"");
@@ -2042,7 +2049,7 @@ bool SS7ISUP::setPointCode(SS7PointCode* pc, bool def)
     else {
 	TelEngine::destruct(pc);
 	if (def)
-	    DDebug(this,DebugAll,"Set default point code '%s'",tmp.safe());
+	    Debug(this,DebugAll,"Set default point code '%s'",tmp.safe());
     }
     return true;
 }
@@ -2078,21 +2085,22 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     // Check
     while (true) {
 	if (!m_defPoint) {
- 	    DDebug(this,DebugAll,"No default point code for outgoing call");
+ 	    Debug(this,DebugNote,"Source point code is missing");
 	    reason = "noconn";
 	    break;
 	}
 	String pc = msg->params().getValue("calledpointcode");
 	if (!(dest.assign(pc) && dest.pack(m_type))) {
 	    if (!m_remotePoint) {
-		DDebug(this,DebugAll,"No remote point code and invalid calledpointcode=%s for outgoing call",pc.safe());
+		Debug(this,DebugNote,
+		    "Destination point code is missing (calledpointcode=%s)",pc.safe());
 		reason = "noconn";
 		break;
 	    }
 	    dest = *m_remotePoint;
 	}
 	if (!reserveCircuit(cic)) {
-	    DDebug(this,DebugAll,"Can't reserve circuit for outgoing call");
+	    Debug(this,DebugNote,"Can't reserve circuit");
 	    reason = "congestion";
 	    break;
 	}
@@ -2778,11 +2786,13 @@ SS7BICC::SS7BICC(const NamedList& params)
 {
     setName(params.getValue("debugname","bicc"));
     m_cicLen = 4;
+    Debug(this,DebugInfo,"BICC Call Controller [%p]",this);
 }
 
 SS7BICC::~SS7BICC()
 {
     cleanup();
+    Debug(this,DebugInfo,"BICC Call Controller destroyed [%p]",this);
 }
 
 SS7MSU* SS7BICC::createMSU(SS7MsgISUP::Type type, unsigned char ssf,

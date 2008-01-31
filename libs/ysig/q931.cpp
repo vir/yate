@@ -710,7 +710,7 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     m_terminate(false),
     m_destroy(false)
 {
-    Debug(q931(),DebugAll,"Call(%u,%u). direction=%s [%p]",
+    Debug(q931(),DebugAll,"Call(%u,%u) direction=%s [%p]",
 	Q931_CALL_ID,(outgoing ? "outgoing" : "incoming"),this);
     if (!controller) {
 	Debug(DebugWarn,"ISDNQ931Call(%u,%u). No call controller. Terminate [%p]",
@@ -730,7 +730,7 @@ ISDNQ931Call::~ISDNQ931Call()
     q931()->releaseCircuit(m_circuit);
     if (state() != Null)
 	sendReleaseComplete("temporary-failure");
-    DDebug(q931(),DebugAll,"Call(%u,%u). Destroyed with reason '%s' [%p]",
+    Debug(q931(),DebugAll,"Call(%u,%u) destroyed with reason '%s' [%p]",
 	Q931_CALL_ID,m_data.m_reason.c_str(),this);
 }
 

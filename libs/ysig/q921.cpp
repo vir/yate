@@ -26,6 +26,7 @@
 
 
 using namespace TelEngine;
+
 /**
  * DEFINEs controlling Q.921 implementation
  * Q921_PASIVE_NOCHECK_PF
@@ -36,8 +37,8 @@ using namespace TelEngine;
     #define Q921_PASIVE_NOCHECK_PF
 #endif
 
-static const char* s_linkSideNet = "Network";
-static const char* s_linkSideCpe = "User (CPE)";
+static const char* s_linkSideNet = "NET";
+static const char* s_linkSideCpe = "CPE";
 
 inline const char* linkSide(bool net)
 {

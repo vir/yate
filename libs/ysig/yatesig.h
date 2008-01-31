@@ -1981,6 +1981,18 @@ public:
 	unsigned int len, const char* prefix, bool isup);
 
     /**
+     * Encode a comma separated list of flags. Flags can be prefixed with the '-'
+     *  character to be reset if previously set
+     * @param comp Signalling component requesting the service. Used to print debug messages
+     * @param dest Destination flak mask
+     * @param flags The flag list
+     * @param dict Dictionary used to retrive the flag names and values
+     * @return The OR'd value of found flags
+     */
+    static void encodeFlags(const SignallingComponent* comp, int& dest, const String& flags,
+	TokenDict* dict);
+
+    /**
      * Encode cause parameters as defined in Q.850. Create with normal clearing value if parameter is missing.
      * Don't encode diagnostic if total length exceeds 32 bytes for Q.931 requestor
      * @param comp Signalling component requesting the service. Used to print debug messages
@@ -6859,17 +6871,16 @@ public:
      *  any active calls managed by it
      */
     enum BehaviourFlags {
-	// Append the progress indicator 'non-isdn-source' if present when sending SETUP
-	// If this flag is not set, the indicator will be removed from the message
+	// Append the progress indicator 'non-isdn-source' if present when
+	// sending SETUP. If this flag is not set, the indicator will be
+	// removed from the message
 	SendNonIsdnSource = 0x00000001,
-	// Ignore (don't send) the progress indicator 'non-isdn-destination' if present
-	// when sending SETUP ACKNOWLEDGE or CONNECT
+	// Ignore (don't send) the progress indicator 'non-isdn-destination'
+	// if present when sending SETUP ACKNOWLEDGE or CONNECT
 	IgnoreNonIsdnDest = 0x00000002,
-	// Set presentation='allowed' and screening='network-provided' if presentation
-	//  is not 'allowed' or screening is not 'network-provided' when sending SETUP
-	// Used for Calling Party Number and Redirecting Number IEs
-	// This is done only if the calling number or redirecting number are not empty
-	SetPresNetProv = 0x00000004,
+	// Always set presentation='allowed' and screening='network-provided'
+	// for Calling Party Number IE
+	ForcePresNetProv = 0x00000004,
 	// Translate '3.1khz-audio' transfer capability code 0x10 to/from 0x08
 	Translate31kAudio = 0x00000008,
 	// Send only tranfer mode and rate when sending the Bearer Capability IE
@@ -6889,11 +6900,12 @@ public:
 	NoDisplayCharset = 0x00000100,
 	// Send a Sending Complete IE even if no overlap dialing
 	ForceSendComplete = 0x00000200,
+	// Don't change call state to Active instead of ConnectRequest after
+	// sending CONNECT. This flag is internally set when the call
+	// controller is the CPE side of the data link
+	NoActiveOnConnect = 0x00000400,
 	// Check the validity of the notification indicator when sending a NOTIFY message
-	CheckNotifyInd = 0x00000400,
-	// Don't change call state to Active instead of ConnectRequest after sending CONNECT
-	// This flag is internally set when the call controller is the CPE side of the data link
-	NoActiveOnConnect = 0x00000800,
+	CheckNotifyInd = 0x00000800,
     };
 
     /**
@@ -6908,11 +6920,11 @@ public:
 	// National ISDN
 	NationalIsdn = SendNonIsdnSource,
 	// DMS 100
-	Dms100       = SetPresNetProv|IgnoreNonIsdnDest,
+	Dms100       = ForcePresNetProv|IgnoreNonIsdnDest,
 	// Lucent 5E
 	Lucent5e     = IgnoreNonLockedIE,
 	// AT&T 4ESS
-	Att4ess      = SetPresNetProv|IgnoreNonLockedIE|Translate31kAudio|NoLayer1Caps,
+	Att4ess      = ForcePresNetProv|IgnoreNonLockedIE|Translate31kAudio|NoLayer1Caps,
 	// QSIG Switch
 	QSIG         = NoActiveOnConnect|NoDisplayIE|NoDisplayCharset
     };
@@ -7131,7 +7143,7 @@ public:
      */
     static TokenDict s_flags[];
 
-    /**
+     /**
      * The list of switch type names
      */
     static TokenDict s_swType[];

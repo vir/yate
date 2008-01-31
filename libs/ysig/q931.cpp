@@ -433,6 +433,11 @@ bool ISDNQ931IEData::processNotification(ISDNQ931Message* msg, bool add,
     if (!msg)
 	return false;
     if (add) {
+	if (data && data->flag(ISDNQ931::CheckNotifyInd)) {
+	    int val = lookup(m_notification,Q931Parser::s_dict_notification,-1);
+	    if (val < 0 && val > 2)
+		return false;
+	}
 	msg->appendIEValue(ISDNQ931IE::Notification,"notification",m_notification);
 	return true;
     }
@@ -472,14 +477,22 @@ bool ISDNQ931IEData::processCallingNo(ISDNQ931Message* msg, bool add,
     if (!msg)
 	return false;
     if (add) {
+	if (!m_callerNo)
+	    return false;
 	ISDNQ931IE* ie = new ISDNQ931IE(ISDNQ931IE::CallingNo);
 	ie->addParam("number",m_callerNo);
 	if (!m_callerType.null())
 	    ie->addParam("type",m_callerType);
 	if (!m_callerPlan.null())
 	    ie->addParam("plan",m_callerPlan);
-	ie->addParam("presentation",m_callerPres);
-	ie->addParam("screening",m_callerScreening);
+	if (data && data->flag(ISDNQ931::ForcePresNetProv)) {
+	    ie->addParam("presentation",lookup(0x00,Q931Parser::s_dict_presentation));
+	    ie->addParam("screening",lookup(0x03,Q931Parser::s_dict_screening));
+	}
+	else {
+	    ie->addParam("presentation",m_callerPres);
+	    ie->addParam("screening",m_callerScreening);
+	}
 	msg->appendSafe(ie);
 	return true;
     }
@@ -2115,7 +2128,9 @@ ISDNQ931Monitor* ISDNQ931CallMonitor::q931()
  */
 ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* dbg)
     : m_dbg(dbg),
-    m_maxMsgLen(0)
+    m_maxMsgLen(0),
+    m_flags(0),
+    m_flagsOrig(0)
 {
     m_allowSegment = params.getBoolValue("allowsegmentation",false);
     m_maxSegments = params.getIntValue("maxsegments",8);
@@ -2125,16 +2140,8 @@ ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* db
     m_extendedDebug = params.getBoolValue("extended-debug",false);
     // Set flags
     String flags = params.getValue("switchtype");
-    m_flagsOrig = lookup(flags,ISDNQ931::s_swType);
-    // Check if the parameter is a list of flags
-    if (!m_flagsOrig) {
-	ObjList* list = flags.split(',',false);
-	for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
-	    String* s = static_cast<String*>(o->get());
-	    m_flagsOrig |= lookup(*s,ISDNQ931::s_flags);
-	}
-	TelEngine::destruct(list);
-    }
+    SignallingUtils::encodeFlags(0,m_flagsOrig,flags,ISDNQ931::s_swType);
+    SignallingUtils::encodeFlags(0,m_flagsOrig,flags,ISDNQ931::s_flags);
     m_flags = m_flagsOrig;
 }
 
@@ -2144,7 +2151,7 @@ ISDNQ931ParserData::ISDNQ931ParserData(const NamedList& params, DebugEnabler* db
 TokenDict ISDNQ931::s_flags[] = {
 	{"sendnonisdnsource",    SendNonIsdnSource},
 	{"ignorenonisdndest",    IgnoreNonIsdnDest},
-	{"setpresnetprov",       SetPresNetProv},
+	{"forcepresnetprov",     ForcePresNetProv},
 	{"translate31kaudio",    Translate31kAudio},
 	{"urditransfercapsonly", URDITransferCapsOnly},
 	{"nolayer1caps",         NoLayer1Caps},
@@ -2152,8 +2159,8 @@ TokenDict ISDNQ931::s_flags[] = {
 	{"nodisplay",            NoDisplayIE},
 	{"nodisplaycharset",     NoDisplayCharset},
 	{"forcesendcomplete",    ForceSendComplete},
-	{"checknotifyind",       CheckNotifyInd},
 	{"noactiveonconnect",    NoActiveOnConnect},
+	{"checknotifyind",       CheckNotifyInd},
 	{0,0},
 	};
 
@@ -2232,31 +2239,37 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     // Debug
     setDebug(params.getBoolValue("print-messages",false),
 	params.getBoolValue("extended-debug",false));
-#ifdef DEBUG
     if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nType: " << (m_primaryRate ? "pri" : "bri");
-	s << "\r\nCall reference length: " << (unsigned int)m_callRefLen;
-	s << "\r\nNumber plan/type/pres/screen: " << m_numPlan << "/" <<
+#ifdef DEBUG
+	s << "type=" << lookup(m_parserData.m_flags,s_swType,"Custom");
+	String t;
+	for (TokenDict* p = s_flags; p->token; p++)
+	    if (m_parserData.flag(p->value))
+		t.append(p->token,",");
+	if (!t.null())
+	    s << " (" << t << ")";
+	s << " pri=" << String::boolText(m_primaryRate);
+	s << " format=" << m_format;
+	s << " callref-len=" << (unsigned int)m_callRefLen;
+	s << " plan/type/pres/screen=" << m_numPlan << "/" <<
 	    m_numType << "/" << m_numPresentation << "/" << m_numScreening;
-	s << "\r\nFormat: " << m_format;
-	s << "\r\nMax Display length: " << (unsigned int)m_parserData.m_maxDisplay;
-	s << "\r\nAllocation strategy: " <<
-	    lookup(strategy(),SignallingCircuitGroup::s_strategy);
-	s << "\r\nTimers: channelsync/l2Down/recvSgm/syncCic = " <<
+	s << " strategy=" << lookup(strategy(),SignallingCircuitGroup::s_strategy);
+	s << " channelsync/l2Down/recvSgm/syncCic=" <<
 	    (unsigned int)m_syncGroupTimer.interval() << "/" <<
 	    (unsigned int)m_l2DownTimer.interval() << "/" <<
 	    (unsigned int)m_recvSgmTimer.interval() << "/" <<
 	    (unsigned int)m_syncCicTimer.interval();
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,s.c_str());
-	s << "\r\nAllow segmentation: " <<
-	    String::boolText(m_parserData.m_allowSegment);
-	s << "\r\nMax segments: " << (unsigned int)m_parserData.m_maxSegments;
-    }
+	s << " segmentation=" << String::boolText(m_parserData.m_allowSegment);
+	s << " max-segments=" << (unsigned int)m_parserData.m_maxSegments;
 #else
-    Debug(this,DebugAll,"ISDN call controller type=%s format=%s [%p]",
-	(m_primaryRate?"pri":"bri"),m_format.c_str(),this);
+	s << "type=" << params.getValue("switchtype");
+	s << " pri=" << String::boolText(m_primaryRate);
+	s << " format=" << m_format;
+	s << " channelsync=" << String::boolText(0 != m_syncGroupTimer.interval());
 #endif
+	Debug(this,DebugInfo,"ISDN call controller %s [%p]",s.c_str(),this);
+    }
     m_syncGroupTimer.start();
 }
 
@@ -2462,14 +2475,11 @@ void ISDNQ931::attach(ISDNLayer2* q921)
 	}
 	// Adjust parser data message length limit
 	m_parserData.m_maxMsgLen = m_q921->maxUserData();
-	// Adjust some parser flags if the switch type is not a custom one
-	bool notCustom = (0 != lookup(m_parserData.m_flagsOrig,s_swType));
-	if (notCustom) {
-	    if (m_parserData.m_flagsOrig == EuroIsdnE1 && !q->network())
-		m_parserData.m_flags |= NoDisplayIE;
-	    if (m_parserData.m_flagsOrig != QSIG && !q->network())
-		m_parserData.m_flags |= NoActiveOnConnect;
-	}
+	// Adjust some parser flags
+	if (m_parserData.m_flagsOrig == EuroIsdnE1 && !q->network())
+	    m_parserData.m_flags |= NoDisplayIE;
+	if (m_parserData.m_flagsOrig != QSIG && !q->network())
+	    m_parserData.m_flags |= NoActiveOnConnect;
     }
     else {
 	// Reset parser data if no layer 2

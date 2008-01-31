@@ -621,6 +621,34 @@ bool SignallingUtils::decodeCaps(const SignallingComponent* comp, NamedList& lis
     return true;
 }
 
+// Encode a comma separated list of flags. Flags can be prefixed with the '-'
+//  character to be reset if previously set
+void SignallingUtils::encodeFlags(const SignallingComponent* comp,
+	int& dest, const String& flags, TokenDict* dict)
+{
+    if (flags.null() || !dict)
+	return;
+    ObjList* list = flags.split(',',false);
+    DDebug(comp,DebugAll,"Utils::encodeFlags '%s' dest=0x%x",flags.c_str(),dest);
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	bool set = !s->startSkip("-",false);
+	TokenDict* p = dict;
+	for (; p->token && *s != p->token; p++) ;
+	if (!p->token) {
+	    DDebug(comp,DebugAll,"Utils::encodeFlags '%s' not found",s->c_str());
+	    continue;
+	}
+	DDebug(comp,DebugAll,"Utils::encodeFlags %sset %s=0x%x",
+	    set?"":"re",p->token,p->value);
+	if (set)
+	    dest |= p->value;
+	else
+	    dest &= ~p->value;
+    }
+    TelEngine::destruct(list);
+}
+
 // Q.850 2.1
 bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& buf,
 	const NamedList& params, const char* prefix, bool isup, bool fail)

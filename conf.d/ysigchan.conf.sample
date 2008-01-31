@@ -47,6 +47,13 @@
 ; Ignored if type is not isdn-pri-net or isdn-pri-cpe
 ;voice=
 
+; switchtype: string: The switch type of this group
+; This parameter refers only to ISDN. It defines a set of flags modifying the
+;  call controller's behaviour
+; Allowed values: euro-isdn-e1, euro-isdn-t1, national-isdn, dms100, lucent5e, att4ess, qsig, unknown
+; Defaults to unknown
+;switchtype=
+
 ; dtmfinband: boolean: Enable to try to send the DTMF data in band when an audio channel is available
 ; If disabled or no audio channel available, the DTMF will be sent through the signalling channel if any
 ; Defaults to disable
@@ -104,12 +111,6 @@
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
 ;format=alaw
 
-; display-charset: integer: Charset value to send with display (callername) data. Interval 0..127
-; Set to an invalid value to disable. This will also disable charset reading for incoming display data
-; Defaults to 255 (disabled)
-; This parameter refers only to ISDN
-;display-charset=255
-
 ; print-layer2PDU: boolean: Print layer 2 (Q.921) protocol data units to output
 ; For ISDN this option is applied on reload
 ; Defaults to no
@@ -126,10 +127,6 @@
 ; For ISDN this option is applied on reload
 ; Defaults to no
 ;extended-debug=no
-
-
-
-
 
 ; sig-net: string: Specify the span(s) containing the signalling channel(s) for the network side of the monitored link
 ; For example wanpipe1 or any other section specified in any of the telephony

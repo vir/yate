@@ -1815,7 +1815,7 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 	    ch.append(String(offset+cics[i]),",");
 	}
 	s << " channels=" << ch;
-	s << " circuits: " << c;
+	s << " circuits=" << c;
 	Debug(m_group,DebugInfo,"ZapSpan('%s') %s [%p]",id().safe(),s.c_str(),this);
     }
     delete[] cics;

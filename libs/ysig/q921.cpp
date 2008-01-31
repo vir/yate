@@ -134,19 +134,18 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
 	params.getBoolValue("extended-debug",false));
     if (debugAt(DebugInfo)) {
 	String tmp;
-	tmp << "\r\nType (side of the link): " << linkSide(network());
-	tmp << "\r\nSAPI/TEI: " << (unsigned int)sapi() << "/" << (unsigned int)tei();
-	tmp << "\r\nAllow unaknoledged data:  " << String::boolText(allowUnack());
-	tmp << "\r\nAuto restart: " << String::boolText(autoRestart());
-	tmp << "\r\nMax data length: " << (unsigned int)maxUserData();
-	tmp << "\r\nMax pending data frames: " << (unsigned int)m_window.maxVal();
-	if (debugAt(DebugAll))
-	    tmp << "\r\nTimers: retrans/idle = " << (unsigned int)m_retransTimer.interval()  << "/"
+#ifdef DEBUG
+	tmp << " SAPI/TEI=" << (unsigned int)sapi() << "/" << (unsigned int)tei();
+	tmp << " auto-restart=" << String::boolText(autoRestart());
+	tmp << " max-user-data=" << (unsigned int)maxUserData();
+	tmp << " max-pending-frames: " << (unsigned int)m_window.maxVal();
+	tmp << " retrans/idle=" << (unsigned int)m_retransTimer.interval()  << "/"
 		<< (unsigned int)m_idleTimer.interval();
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,tmp.c_str());
+	tmp << " allow-unack-data=" << String::boolText(allowUnack());
+#endif
+	Debug(this,DebugInfo,"ISDN Data Link type=%s%s [%p]",
+	    linkSide(network()),tmp.safe(),this);
     }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
 }
 
 // Destructor
@@ -156,18 +155,12 @@ ISDNQ921::~ISDNQ921()
     ISDNLayer2::attach(0);
     SignallingReceiver::attach(0);
     cleanup();
-    if (debugAt(DebugAll) && m_extendedDebug) {
-	String tmp;
-	tmp << "\r\nTransmitted frames:    " << (unsigned int)m_txFrames;
-	tmp << "\r\nFailed to send frames: " << (unsigned int)m_txFailFrames;
-	tmp << "\r\nReceived frames:       " << (unsigned int)m_rxFrames;
-	tmp << "\r\nRejected frames:       " << (unsigned int)m_rxRejectedFrames;
-	tmp << "\r\nDropped frames:        " << (unsigned int)m_rxDroppedFrames;
-	tmp << "\r\nHardware errors:       " << (unsigned int)m_hwErrors;
-	Debug(this,DebugInfo,"Destroyed: [%p]%s",this,tmp.c_str());
-    }
-    else
-	DDebug(this,DebugAll,"Destroyed [%p]",this);
+    if (debugAt(DebugAll))
+	Debug(this,DebugAll,
+	    "ISDN Data Link destroyed. Frames: sent=%u (failed=%u) recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
+	    (unsigned int)m_txFrames,(unsigned int)m_txFailFrames,
+	    (unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
+	    (unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
 // Set or release 'multiple frame acknoledged' mode
@@ -990,15 +983,10 @@ ISDNQ921Pasive::ISDNQ921Pasive(const NamedList& params, const char* name)
     m_checkLinkSide = detectType();
     setDebug(params.getBoolValue("print-frames",false),
 	params.getBoolValue("extended-debug",false));
-    if (debugAt(DebugInfo)) {
-	String tmp;
-	tmp << "\r\nType (side of the link): " << linkSide(network()) << (detectType() ? " (Auto)" : "");
-	tmp << "\r\nSAPI/TEI: " << (unsigned int)sapi() << '/' << (unsigned int)tei();
-	tmp << "\r\nIdle timeout: " << (unsigned int)m_idleTimer.interval() << " ms";
-	Debug(this,DebugInfo,"Initialized: [%p]%s",this,tmp.c_str());
-    }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
+    Debug(this,DebugInfo,
+	"ISDN Passive Data Link type=%s autodetect=%s idle-timeout=%u [%p]",
+	linkSide(network()),String::boolText(detectType()),
+	(unsigned int)m_idleTimer.interval(),this);
     m_idleTimer.start();
 }
 
@@ -1009,16 +997,11 @@ ISDNQ921Pasive::~ISDNQ921Pasive()
     ISDNLayer2::attach(0);
     SignallingReceiver::attach(0);
     cleanup();
-    if (debugAt(DebugAll) && m_extendedDebug) {
-	String tmp;
-	tmp << "\r\nReceived frames: " << (unsigned int)m_rxFrames;
-	tmp << "\r\nRejected frames: " << (unsigned int)m_rxRejectedFrames;
-	tmp << "\r\nDropped frames:  " << (unsigned int)m_rxDroppedFrames;
-	tmp << "\r\nHardware errors: " << (unsigned int)m_hwErrors;
-	Debug(this,DebugInfo,"Destroyed: [%p]%s",this,tmp.c_str());
-    }
-    else
-	DDebug(this,DebugAll,"Initialized [%p]",this);
+    if (debugAt(DebugAll))
+	Debug(this,DebugAll,
+	    "ISDN Passive Data Link destroyed. Frames: recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
+	    (unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
+	    (unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
 // Reset data

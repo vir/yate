@@ -2268,7 +2268,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 	s << " format=" << m_format;
 	s << " channelsync=" << String::boolText(0 != m_syncGroupTimer.interval());
 #endif
-	Debug(this,DebugInfo,"ISDN call controller %s [%p]",s.c_str(),this);
+	Debug(this,DebugInfo,"ISDN Call Controller %s [%p]",s.c_str(),this);
     }
     m_syncGroupTimer.start();
 }
@@ -2280,7 +2280,7 @@ ISDNQ931::~ISDNQ931()
 	m_calls.clear();
     }
     attach((ISDNLayer2*)0);
-    DDebug(this,DebugAll,"Destroyed [%p]",this);
+    DDebug(this,DebugAll,"ISDN Call Controller destroyed [%p]",this);
 }
 
 // Send a message to layer 2
@@ -3053,7 +3053,7 @@ ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
     // Debug
     setDebug(params.getBoolValue("print-messages",true),
 	params.getBoolValue("extended-debug",false));
-    Debug(this,DebugAll,"ISDN monitor created [%p]",this);
+    Debug(this,DebugAll,"ISDN Monitor created [%p]",this);
 }
 
 ISDNQ931Monitor::~ISDNQ931Monitor()
@@ -3064,7 +3064,7 @@ ISDNQ931Monitor::~ISDNQ931Monitor()
     attach((SignallingCircuitGroup*)0,true);
     attach((SignallingCircuitGroup*)0,false);
     m_calls.clear();
-    DDebug(this,DebugAll,"Destroyed [%p]",this);
+    DDebug(this,DebugAll,"ISDN Monitor destroyed [%p]",this);
 }
 
 // Notification from layer 2 of data link set/release command or response

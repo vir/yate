@@ -4,7 +4,7 @@ ustr='Usage: yate-config [--cflags] [--includes] [--c-all]
                    [--ldflags] [--libs] [--ld-all] [--ld-nostrip] [--ld-strip]
 		   [--config] [--modules] [--share]
 		   [--helpdir] [--scripts] [--skins]
-		   [--version]'
+		   [--version] [--release]'
 if [ "$#" = 0 ]; then
     echo "$ustr"
     exit 0
@@ -25,6 +25,9 @@ while [ "$#" != 0 ]; do
     case "$1" in
 	--version)
 	    echo "@PACKAGE_VERSION@"
+	    ;;
+	--release)
+	    echo "@PACKAGE_STATUS@@PACKAGE_RELEASE@"
 	    ;;
 	--cflags)
 	    echo "$s1"

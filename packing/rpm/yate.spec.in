@@ -112,6 +112,7 @@ for small to large scale projects.
 %config(noreplace) %{_sysconfdir}/yate/moh.conf
 %config(noreplace) %{_sysconfdir}/yate/mux.conf
 %config(noreplace) %{_sysconfdir}/yate/pbxassist.conf
+%config(noreplace) %{_sysconfdir}/yate/queues.conf
 %config(noreplace) %{_sysconfdir}/yate/lateroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regexroute.conf
 %config(noreplace) %{_sysconfdir}/yate/regfile.conf

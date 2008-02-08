@@ -513,6 +513,8 @@ MuxModule::MuxModule()
 {
     Output("Loaded module MUX");
     m_prefix << debugName() << "/";
+    // This is an utility module: load early, unload late
+    Engine::pluginMode(Engine::LoadEarly);
 }
 
 MuxModule::~MuxModule()

@@ -244,6 +244,8 @@ ADModule::ADModule()
 {
     Output("Loaded module Analog Detector");
     m_prefix << debugName() << "/";
+    // This is an utility module: load early, unload late
+    Engine::pluginMode(Engine::LoadEarly);
 }
 
 ADModule::~ADModule()

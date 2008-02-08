@@ -143,7 +143,7 @@ ADConsumer::ADConsumer(const String& id, const char* notify)
     DDebug(&plugin,DebugAll,"Created %s targetid=%s [%p]",
 	m_id.c_str(),m_targetid.c_str(),this);
     Lock lock(plugin);
-    s_consumers.append(this);
+    s_consumers.append(this)->setDelete(false);
     s_count++;
 }
 

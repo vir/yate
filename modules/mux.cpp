@@ -122,7 +122,7 @@ public:
 	    if (!src)
 		return;
 	    Lock lock(this);
-	    m_sources.append(src);
+	    m_sources.append(src)->setDelete(false);
 	}
     // Remove source
     inline void remove(MuxSource* src) {
@@ -152,11 +152,11 @@ public:
 /**
  * Module data and function
  */
-static MuxModule plugin;
 static Configuration s_cfg;              // Configuration file
 static unsigned int s_chanBuffer;        // The buffer length of one channel of a data source multiplexer
 static unsigned char s_idleValue;        // Idle value for source multiplexer to fill when no data
 static String s_defFormat;               // Default format for MuxSource
+static MuxModule plugin;
 
 // Dictionary containig the supported formats and sample lengths
 static TokenDict s_dictSampleLen[] = {

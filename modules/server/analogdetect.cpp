@@ -103,7 +103,6 @@ public:
 	    return m_id++;
 	}
 protected:
-    virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     // Process a request to attach an ETSI detector (src is a valid pointer) or generator (src is 0)
     bool attachETSI(Message& msg, DataSource* src, String& type, const char* notify);
@@ -238,14 +237,12 @@ bool ETSIConsumer::recvParams(MsgType msg, const NamedList& params)
  * ADModule
  */
 ADModule::ADModule()
-    : Module("analogdetect","misc"),
+    : Module("analogdetect","misc",true),
     m_id(1),
     m_init(false)
 {
     Output("Loaded module Analog Detector");
     m_prefix << debugName() << "/";
-    // This is an utility module: load early, unload late
-    Engine::pluginMode(Engine::LoadEarly);
 }
 
 ADModule::~ADModule()
@@ -303,17 +300,6 @@ bool ADModule::chanAttach(Message& msg)
 
     msg.setParam("reason","unknown-modem-type");
     return false;
-}
-
-bool ADModule::received(Message& msg, int id)
-{
-    if (id == Halt) {
-	lock();
-	s_consumers.clear();
-	unlock();
-	return Module::received(msg,id);
-    }
-    return Module::received(msg,id);
 }
 
 void ADModule::statusParams(String& str)

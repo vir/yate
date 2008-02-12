@@ -48,18 +48,113 @@
  */
 namespace TelEngine {
 
-class XMPPNamespace;
-class XMPPErrorCode;
-class XMPPError;
-class JabberID;
-class JIDIdentity;
-class JIDFeature;
-class JIDFeatureList;
-class XMPPUtils;
+class XMPPServerInfo;                    // Server info class
+class XMPPNamespace;                     // XMPP namespaces
+class XMPPError;                         // XMPP errors
+class JabberID;                          // A Jabber ID (JID)
+class JIDIdentity;                       // A JID's identity
+class JIDFeature;                        // A JID's feature
+class JIDFeatureList;                    // Feature list
+class XMPPUtils;                         // Utilities
+
 
 /**
- * This class holds the XMPP/JabberComponent/Jingle namespace enumerations and the associated strings.
- * @short XMPP namespaces.
+ * This class holds informations about a server
+ * @short Server info class
+ */
+class YJINGLE_API XMPPServerInfo : public RefObject
+{
+public:
+    /**
+     * Constructor. Construct a full server info object
+     * @param name Server domain name
+     * @param address IP address
+     * @param port IP port
+     * @param password  Component only: Password used for authentication
+     * @param identity Component only: the stream identity used when connecting
+     * @param fullidentity Component only: the user identity
+     * @param roster Component only: Keep the user roster
+     * @param autoRestart Component only: Auto restart stream when connection is down
+     */
+    inline XMPPServerInfo(const char* name, const char* address, int port,
+	const char* password, const char* identity, const char* fullidentity,
+	bool roster, bool autoRestart)
+	: m_name(name), m_address(address), m_port(port), m_password(password),
+	m_identity(identity), m_fullIdentity(fullidentity), m_roster(roster)
+	{}
+
+    /**
+     * Constructor. Construct a partial server info object
+     * @param name Server domain name
+     * @param port IP port
+     */
+    inline XMPPServerInfo(const char* name, int port)
+	: m_name(name), m_port(port), m_roster(false)
+	{}
+
+    /**
+     * Get the server's address
+     * @return The server's address
+     */
+    inline const String& address() const
+	{ return m_address; }
+
+    /**
+     * Get the server's domain name
+     * @return The server's domain name
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
+     * Get the server's port used to connect to
+     * @return The server's port used to connect to
+     */
+    inline const int port() const
+	{ return m_port; }
+
+    /**
+     * Get the server's port used to connect to
+     * @return The server's port used to connect to
+     */
+    inline const String& password() const
+	{ return m_password; }
+
+    /**
+     * Get the server's identity
+     * @return The server's identity
+     */
+    inline const String& identity() const
+	{ return m_identity; }
+
+    /**
+     * Get the server's full identity
+     * @return The server's full identity
+     */
+    inline const String& fullIdentity() const
+	{ return m_fullIdentity; }
+
+    /**
+     * Check if someone should keep the roster for this server
+     * @return True if someone should keep the roster for this server
+     */
+    inline bool roster() const
+	{ return m_roster; }
+
+private:
+    String m_name;                       // Domain name
+    String m_address;                    // IP address
+    int m_port;                          // Port
+    String m_password;                   // Authentication data
+    String m_identity;                   // Identity. Used for Jabber Component protocol
+    String m_fullIdentity;               // Full identity for this server
+    bool m_roster;                       // Keep roster for this server
+};
+
+
+/**
+ * This class holds the XMPP/JabberComponent/Jingle namespace enumerations and the associated strings
+ * @short XMPP namespaces
  */
 class YJINGLE_API XMPPNamespace
 {
@@ -83,11 +178,20 @@ public:
 	Count,
     };
 
+    /**
+     * Get the string representation of a namespace value
+     */
     inline const char* operator[](Type index)
 	{ return lookup(index,s_value); }
 
+    /**
+     * Check if a text is a known namespace
+     */
     static bool isText(Type index, const char* txt);
 
+    /**
+     * Get the type associated with a given namespace text
+     */
     static inline Type type(const char* txt) {
 	    int tmp = lookup(txt,s_value,Count);
 	    return tmp ? (Type)tmp : Count;
@@ -97,6 +201,7 @@ private:
     static TokenDict s_value[];          // Namespace list
 };
 
+
 /**
  * This class holds the XMPP error type, error enumerations and associated strings
  * @short XMPP errors.
@@ -104,19 +209,13 @@ private:
 class YJINGLE_API XMPPError
 {
 public:
-    // Error type
-    enum ErrorType {
-	TypeCancel = 0,                  // do not retry (the error is unrecoverable)
-	TypeContinue,                    // proceed (the condition was only a warning)
-	TypeModify,                      // retry after changing the data sent
-	TypeAuth,                        // retry after providing credentials
-	TypeWait,                        // retry after waiting (the error is temporary)
-	TypeCount,
-    };
-
+    /**
+     * Error condition enumeration
+     */
     enum Type {
+	NoError = 0,
 	// Stream errors
-	BadFormat = TypeCount + 1,       // bad-format
+	BadFormat,                       // bad-format
 	BadNamespace,                    // bad-namespace-prefix
 	ConnTimeout,                     // connection-timeout
 	HostGone,                        // host-gone
@@ -167,11 +266,32 @@ public:
 	Count,
     };
 
+    /**
+     * Error type enumeration
+     */
+    enum ErrorType {
+	TypeCancel = 1000,               // do not retry (the error is unrecoverable)
+	TypeContinue,                    // proceed (the condition was only a warning)
+	TypeModify,                      // retry after changing the data sent
+	TypeAuth,                        // retry after providing credentials
+	TypeWait,                        // retry after waiting (the error is temporary)
+	TypeCount,
+    };
+
+    /**
+     * Get the text representation of a given error value
+     */
     inline const char* operator[](int index)
 	{ return lookup(index,s_value); }
 
+    /**
+     * Check if a given text is a valid error
+     */
     static bool isText(int index, const char* txt);
 
+    /**
+     * Get the type associated with a given error text
+     */
     static inline int type(const char* txt)
 	{ return lookup(txt,s_value,Count); }
 
@@ -179,53 +299,52 @@ private:
     static TokenDict s_value[];          // Error list
 };
 
+
 /**
- * This class holds a Jabber ID in form "node@domain/resource" or "node@domain".
- * @short A Jabber ID.
+ * This class holds a Jabber ID in form "node@domain/resource" or "node@domain"
+ * @short A Jabber ID
  */
 class YJINGLE_API JabberID : public String
 {
 public:
     /**
-     * Constructor.
+     * Constructor
      */
     inline JabberID() {}
 
     /**
-     * Constructor.
-     * Constructs a JID from a given string.
-     * @param jid The JID string.
+     * Constructor. Constructs a JID from a given string
+     * @param jid The JID string
      */
     inline JabberID(const char* jid)
 	{ set(jid); }
 
     /**
-     * Constructor.
-     * Constructs a JID from user, domain, resource.
-     * @param node The node.
-     * @param domain The domain.
-     * @param resource The resource.
+     * Constructor. Constructs a JID from user, domain, resource
+     * @param node The node
+     * @param domain The domain
+     * @param resource The resource
      */
     JabberID(const char* node, const char* domain, const char* resource = 0)
 	{ set(node,domain,resource); }
 
     /**
-     * Get the node part of the JID.
-     * @return The node part of the JID.
+     * Get the node part of the JID
+     * @return The node part of the JID
      */
     inline const String& node() const
 	{ return m_node; }
 
     /**
-     * Get the bare JID: "node@domain".
-     * @return The bare JID.
+     * Get the bare JID: "node@domain"
+     * @return The bare JID
      */
     inline const String& bare() const
 	{ return m_bare; }
 
     /**
-     * Get the domain part of the JID.
-     * @return The domain part of the JID.
+     * Get the domain part of the JID
+     * @return The domain part of the JID
      */
     inline const String& domain() const
 	{ return m_domain; }
@@ -238,51 +357,90 @@ public:
 	{ set(m_node.c_str(),d,m_resource.c_str()); }
 
     /**
-     * Get the resource part of the JID.
-     * @return The resource part of the JID.
+     * Get the resource part of the JID
+     * @return The resource part of the JID
      */
     inline const String& resource() const
 	{ return m_resource; }
 
     /**
+     * Check if this is a full JID
+     * @return True if this is a full JID
+     */
+    inline bool isFull() const
+	{ return m_node && m_domain && m_resource; }
+
+    /**
      * Try to match another JID to this one. If src has a resource compare it too
-     *  (case sensitive). Otherwise compare just the bare JID (case insensitive).
-     * @param src The JID to match.
-     * @return True if matched.
+     * (case sensitive). Otherwise compare just the bare JID (case insensitive)
+     * @param src The JID to match
+     * @return True if matched
      */
     inline bool match(const JabberID& src) const
 	{ return (src.resource().null() || (resource() == src.resource())) && (bare() &= src.bare()); }
 
     /**
-     * Set the resource part of the JID.
-     * @param res The new resource part of the JID.
+     * Equality operator. Do a case senitive resource comparison and a case insensitive bare jid comparison
+     * @param src The JID to compare with
+     * @return True if equal
+     */
+    inline bool operator==(const JabberID& src) const
+	{ return (resource() == src.resource()) && (bare() &= src.bare()); }
+
+    /**
+     * Equality operator. Build a temporary JID and compare with it
+     * @param src The string to compare with
+     * @return True if equal
+     */
+    inline bool operator==(const String& src) const
+	{ JabberID tmp(src); return operator==(tmp); }
+
+    /**
+     * Inequality operator
+     * @param src The JID to compare with
+     * @return True if not equal
+     */
+    inline bool operator!=(const JabberID& src) const
+	{ return !operator==(src); }
+
+    /**
+     * Inequality operator
+     * @param src The string to compare with
+     * @return True if not equal
+     */
+    inline bool operator!=(const String& src) const
+	{ return !operator==(src); }
+
+    /**
+     * Set the resource part of the JID
+     * @param res The new resource part of the JID
      */
     inline void resource(const char* res)
 	{ set(m_node.c_str(),m_domain.c_str(),res); }
 
     /**
-     * Set the data.
-     * @param jid The JID string to assign.
+     * Set the data
+     * @param jid The JID string to assign
      */
     void set(const char* jid);
 
     /**
-     * Set the data.
-     * @param node The node.
-     * @param domain The domain.
-     * @param resource The resource.
+     * Set the data
+     * @param node The node
+     * @param domain The domain
+     * @param resource The resource
      */
     void set(const char* node, const char* domain, const char* resource = 0);
 
     /**
-     * Check if the given string contains valid characters.
-     * @param value The string to check.
-     * @return True if value is valid or 0. False if value is a non empty invalid string.
+     * Check if the given string contains valid characters
+     * @param value The string to check
+     * @return True if value is valid or 0. False if value is a non empty invalid string
      */
     static bool valid(const String& value);
 
     /**
-     * Keep the regexp used to check the validity of a string.
+     * Keep the regexp used to check the validity of a string
      */
     static Regexp s_regExpValid;
 
@@ -295,13 +453,17 @@ private:
     String m_bare;                       // The bare JID: node@domain
 };
 
+
 /**
- * This class holds an identity for a JID.
- * @short JID identity.
+ * This class holds an identity for a JID
+ * @short A JID identity
  */
-class YJINGLE_API JIDIdentity : public String, public RefObject
+class YJINGLE_API JIDIdentity : public RefObject, virtual public String
 {
 public:
+    /**
+     * JID category enumeration
+     */
     enum Category {
 	Account,                         // account
 	Client,                          // client
@@ -310,6 +472,9 @@ public:
 	CategoryUnknown
     };
 
+    /**
+     * JID type enumeration
+     */
     enum Type {
 	AccountRegistered,               // registered
 	ClientPhone,                     // phone
@@ -319,26 +484,59 @@ public:
 	TypeUnknown
     };
 
+    /**
+     * Constructor. Build a JID identity
+     * @param c The JID's category
+     * @param t The JID's type
+     * @param name The name of this identity
+     */
     inline JIDIdentity(Category c, Type t, const char* name = 0)
 	: String(name), m_category(c), m_type(t)
 	{}
 
+    /**
+     * Destructor
+     */
     virtual ~JIDIdentity()
 	{}
 
+    /**
+     * Build an XML element from this identity
+     * @return A valid XML element
+     */
     XMLElement* toXML();
 
+    /**
+     * Build this identity from an XML element
+     * @return True on succes
+     */
     bool fromXML(const XMLElement* element);
 
+    /**
+     * Lookup for a text associated with a given category
+     * @return The category's name
+     */
     static inline const char* categoryText(Category c)
 	{ return lookup(c,s_category); }
 
+    /**
+     * Lookup for a value associated with a given category name
+     * @return The category's value
+     */
     static inline Category categoryValue(const char* c)
 	{ return (Category)lookup(c,s_category,CategoryUnknown); }
 
+    /**
+     * Lookup for a text associated with a given category type
+     * @return The category's type name
+     */
     static inline const char* typeText(Type t)
 	{ return lookup(t,s_type); }
 
+    /**
+     * Lookup for a value associated with a given category type
+     * @return The category's type value
+     */
     static inline Type typeValue(const char* t)
 	{ return (Type)lookup(t,s_category,TypeUnknown); }
 
@@ -350,28 +548,29 @@ private:
     Type m_type;                         // Type
 };
 
+
 /**
- * This class holds a JID feature.
- * @short JID feature.
+ * This class holds a JID feature
+ * @short JID feature
  */
 class YJINGLE_API JIDFeature : public RefObject
 {
 public:
     /**
-     * Constructor.
+     * Constructor
      */
     inline JIDFeature(XMPPNamespace::Type feature)
 	: m_feature(feature)
 	{}
 
     /**
-     * Destructor.
+     * Destructor
      */
     virtual ~JIDFeature()
 	{}
 
     /**
-     * XMPPNamespace::Type conversion operator.
+     * XMPPNamespace::Type conversion operator
      */
     inline operator XMPPNamespace::Type()
 	{ return m_feature; }
@@ -380,17 +579,18 @@ private:
     XMPPNamespace::Type m_feature;       // The feature
 };
 
+
 /**
- * This class holds a list of features.
- * @short Feature list.
+ * This class holds a list of features
+ * @short Feature list
  */
 class YJINGLE_API JIDFeatureList
 {
 public:
     /**
-     * Add a feature to the list.
-     * @param feature The feature to add.
-     * @return False if the given feature already exists.
+     * Add a feature to the list
+     * @param feature The feature to add
+     * @return False if the given feature already exists
      */
     inline bool add(XMPPNamespace::Type feature) {
 	    if (get(feature))
@@ -400,23 +600,23 @@ public:
 	}
 
     /**
-     * Remove a feature from the list.
-     * @param feature The feature to remove.
+     * Remove a feature from the list
+     * @param feature The feature to remove
      */
     inline void remove(XMPPNamespace::Type feature)
 	{ m_features.remove(get(feature),true); }
 
     /**
-     * Get a feature from the list.
-     * @param feature The feature to get.
-     * @return Pointer to the feature or 0 if it doesn't exists.
+     * Get a feature from the list
+     * @param feature The feature to get
+     * @return Pointer to the feature or 0 if it doesn't exists
      */
     JIDFeature* get(XMPPNamespace::Type feature);
 
     /**
-     * Add 'feature' children to the given element.
-     * @param element The target XMLElement.
-     * @return The given element.
+     * Add 'feature' children to the given element
+     * @param element The target XMLElement
+     * @return The given element
      */
     XMLElement* addTo(XMLElement* element);
 
@@ -425,14 +625,14 @@ private:
 };
 
 /**
- * This class is a general XMPP utilities.
- * @short General XMPP utilities.
+ * This class is a general XMPP utilities
+ * @short General XMPP utilities
  */
 class YJINGLE_API XMPPUtils
 {
 public:
     /**
-     * Iq type enumeration.
+     * Iq type enumeration
      */
     enum IqType {
 	IqSet,                           // set
@@ -443,7 +643,7 @@ public:
     };
 
     /**
-     * Message type enumeration.
+     * Message type enumeration
      */
     enum MsgType {
 	MsgChat,                         // chat
@@ -451,7 +651,7 @@ public:
     };
 
     /**
-     * Command action enumeration.
+     * Command action enumeration
      */
     enum CommandAction {
 	CommExecute,
@@ -462,7 +662,7 @@ public:
     };
 
     /**
-     * Command status enumeration.
+     * Command status enumeration
      */
     enum CommandStatus {
 	CommExecuting,
@@ -471,144 +671,152 @@ public:
     };
 
     /**
-     * Create an XML element with an 'xmlns' attribute.
-     * @param name Element's name.
-     * @param ns 'xmlns' attribute.
-     * @param text Optional text for the element.
-     * @return A valid XMLElement pointer.
+     * Create an XML element with an 'xmlns' attribute
+     * @param name Element's name
+     * @param ns 'xmlns' attribute
+     * @param text Optional text for the element
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createElement(const char* name, XMPPNamespace::Type ns,
 	const char* text = 0);
 
     /**
-     * Create an XML element with an 'xmlns' attribute.
-     * @param type Element's type.
-     * @param ns 'xmlns' attribute.
-     * @param text Optional text for the element.
-     * @return A valid XMLElement pointer.
+     * Create an XML element with an 'xmlns' attribute
+     * @param type Element's type
+     * @param ns 'xmlns' attribute
+     * @param text Optional text for the element
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createElement(XMLElement::Type type, XMPPNamespace::Type ns,
 	const char* text = 0);
 
     /**
-     * Create a 'message' element.
+     * Create a 'message' element
      * @param type Message type as enumeration
-     * @param from The 'from' attribute.
-     * @param to The 'to' attribute.
-     * @param id The 'id' attribute.
-     * @param message The message body.
-     * @return A valid XMLElement pointer.
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param message The message body
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createMessage(MsgType type, const char* from,
 	const char* to, const char* id, const char* message);
 
     /**
-     * Create an 'iq' element.
+     * Create an 'iq' element
      * @param type Iq type as enumeration
-     * @param from The 'from' attribute.
-     * @param to The 'to' attribute.
-     * @param id The 'id' attribute.
-     * @return A valid XMLElement pointer.
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createIq(IqType type, const char* from,
 	const char* to, const char* id);
 
     /**
-     * Create an 'iq' element with a 'bind' child containing the resources.
-     * @param from The 'from' attribute.
-     * @param to The 'to' attribute.
-     * @param id The 'id' attribute.
-     * @param resources The resources to bind (strings).
-     * @return A valid XMLElement pointer.
+     * Create an 'iq' element with a 'bind' child containing the resources
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param resources The resources to bind (strings)
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createIqBind(const char* from,
 	const char* to, const char* id, const ObjList& resources);
 
     /**
      * Create a 'command' element
-     * @param action The command action.
-     * @param node The command.
-     * @param sessionId Optional session ID for the command.
-     * @return A valid XMLElement pointer.
+     * @param action The command action
+     * @param node The command
+     * @param sessionId Optional session ID for the command
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createCommand(CommandAction action, const char* node,
 	const char* sessionId = 0);
 
     /**
-     * Create an 'identity' element.
-     * @param category The 'category' attribute.
-     * @param type The 'type' attribute.
-     * @param name The 'name' attribute.
-     * @return A valid XMLElement pointer.
+     * Create an 'identity' element
+     * @param category The 'category' attribute
+     * @param type The 'type' attribute
+     * @param name The 'name' attribute
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createIdentity(const char* category,
 	const char* type, const char* name);
 
     /**
-     * Create an 'iq' of type 'get' element with a 'query' child.
-     * @param from The 'from' attribute.
-     * @param to The 'to' attribute.
-     * @param id The 'id' attribute.
-     * @param info True to create a query info request. False to create a query items request.
-     * @return A valid XMLElement pointer.
+     * Create an 'iq' of type 'get' element with a 'query' child
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param info True to create a query info request. False to create a query items request
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createIqDisco(const char* from, const char* to,
 	const char* id, bool info = true);
 
     /**
-     * Create a 'error' element.
-     * @param type Error type.
-     * @param error The error.
-     * @param text Optional text to add to the error element.
-     * @return A valid XMLElement pointer.
+     * Create a 'error' element
+     * @param type Error type
+     * @param error The error
+     * @param text Optional text to add to the error element
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createError(XMPPError::ErrorType type,
 	XMPPError::Type error, const char* text = 0);
 
     /**
-     * Create a 'stream:error' element.
-     * @param error The XMPP defined condition.
-     * @param text Optional text to add to the error.
-     * @return A valid XMLElement pointer.
+     * Create a 'stream:error' element
+     * @param error The XMPP defined condition
+     * @param text Optional text to add to the error
+     * @return A valid XMLElement pointer
      */
     static XMLElement* createStreamError(XMPPError::Type error,
 	const char* text = 0);
 
     /**
-     * Print an XMLElement to a string.
-     * @param xmlStr The destination string.
-     * @param element The element to print.
-     * @param indent The indent. 0 if it is the root element.
+     * Decode a received stream error or stanza error
+     * @param element The received element
+     * @param error The error condition
+     * @param text The stanza's error or error text
+     */
+    static void decodeError(XMLElement* element, String& error, String& text);
+
+    /**
+     * Print an XMLElement to a string
+     * @param xmlStr The destination string
+     * @param element The element to print
+     * @param indent The indent. 0 if it is the root element
      */
     static void print(String& xmlStr, XMLElement* element, const char* indent = 0);
 
     /**
-     * Split a string at a delimiter character and fills a named list with its parts.
-     * Skip empty parts.
-     * @param dest The destination NamedList.
-     * @param src Pointer to the string.
-     * @param sep The delimiter.
+     * Split a string at a delimiter character and fills a named list with its parts
+     * Skip empty parts
+     * @param dest The destination NamedList
+     * @param src Pointer to the string
+     * @param sep The delimiter
      * @param nameFirst True to add the parts as name and index as value.
-     *  False to do the other way.
+     *  False to do the other way
      */
     static bool split(NamedList& dest, const char* src, const char sep,
 	bool nameFirst);
 
     /**
-     * Get the type of an 'iq' stanza as enumeration.
-     * @param text The text to check.
-     * @return Iq type as enumeration.
+     * Get the type of an 'iq' stanza as enumeration
+     * @param text The text to check
+     * @return Iq type as enumeration
      */
     static inline IqType iqType(const char* text)
 	{ return (IqType)lookup(text,s_iq,IqCount); }
 
     /**
-     * Keep the types of 'iq' stanzas.
+     * Keep the types of 'iq' stanzas
      */
     static TokenDict s_iq[];
 
     /**
-     * Keep the types of 'message' stanzas.
+     * Keep the types of 'message' stanzas
      */
     static TokenDict s_msg[];
 

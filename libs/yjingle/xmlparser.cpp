@@ -61,6 +61,16 @@ XMLElement::XMLElement()
 //    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
 }
 
+XMLElement::XMLElement(const XMLElement& src)
+    : m_type(Invalid), m_owner(true), m_element(0)
+{
+    TiXmlElement* e = src.get();
+    if (!e)
+	return;
+    m_element = new TiXmlElement(*e);
+    setType();
+}
+
 XMLElement::XMLElement(const char* name, NamedList* attributes,
     const char* text)
     : m_type(Unknown), m_owner(true), m_element(0)
@@ -164,6 +174,8 @@ void XMLElement::addChild(XMLElement* element)
 	if (tiElement)
 	    m_element->LinkEndChild(tiElement);
     }
+    if (element)
+	delete element;
 }
 
 XMLElement* XMLElement::findFirstChild(const char* name)

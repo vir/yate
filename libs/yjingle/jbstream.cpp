@@ -28,45 +28,162 @@ using namespace TelEngine;
 static XMPPNamespace s_ns;
 static XMPPError s_err;
 
-static const char* s_declaration = "<?xml version='1.0' encoding='UTF-8'?>";
+static TokenDict s_streamState[] = {
+    {"Idle",       JBStream::Idle},
+    {"Connecting", JBStream::Connecting},
+    {"Started",    JBStream::Started},
+    {"Securing",   JBStream::Securing},
+    {"Auth",       JBStream::Auth},
+    {"Running",    JBStream::Running},
+    {"Destroy",    JBStream::Destroy},
+    {0,0},
+};
 
-// Just a shorter code
-inline XMLElement* errorHostGone()
-{
-    return XMPPUtils::createStreamError(XMPPError::HostGone);
-}
 
 /**
- * JBComponentStream
+ * JBSocket
  */
-JBComponentStream::JBComponentStream(JBEngine* engine, const String& remoteName,
-	const SocketAddr& remoteAddr)
-    : Mutex(true),
-      m_state(Terminated),
-      m_remoteName(remoteName),
-      m_remoteAddr(remoteAddr),
-      m_engine(engine),
-      m_socket(0),
-      m_receiveMutex(true),
-      m_lastEvent(0),
-      m_terminateEvent(0)
+bool JBSocket::connect(const SocketAddr& addr, bool& terminated)
 {
-    Debug(m_engine,DebugAll,"JBComponentStream. [%p]",this);
-    if (!engine)
-	return;
-    // Init data
-    m_engine->getServerIdentity(m_localName,remoteName);
-    // Start
-    m_engine->connect(this);
+    terminate();
+    Lock2 lck1(m_streamMutex,m_receiveMutex);
+    m_socket = new Socket(PF_INET,SOCK_STREAM);
+    lck1.drop();
+    terminated = false;
+    bool res = m_socket->connect(addr);
+    // Lock again to update data
+    Lock2 lck2(m_streamMutex,m_receiveMutex);
+    bool ok = false;
+    while (true) {
+	if (!m_socket) {
+	    Debug(m_engine,DebugMild,
+		"Stream. Socket deleted while connecting [%p]",m_stream);
+	    terminated = true;
+	    break;
+	}
+	// Check connect result
+	if (!res) {
+	    Debug(m_engine,DebugWarn,
+		"Stream. Failed to connect socket to '%s:%d'. %d: '%s' [%p]",
+		addr.host().c_str(),addr.port(),
+		m_socket->error(),::strerror(m_socket->error()),m_stream);
+	    break;
+	}
+	// Connected
+	ok = true;
+	m_socket->setBlocking(false);
+	DDebug(m_engine,DebugAll,"Stream. Connected to '%s:%d'. [%p]",
+	    addr.host().c_str(),addr.port(),m_stream);
+	break;
+    }
+    lck2.drop();
+    if (!ok)
+	terminate();
+    return ok;
 }
 
-JBComponentStream::~JBComponentStream()
+void JBSocket::terminate()
 {
-    Debug(m_engine,DebugAll,"~JBComponentStream. [%p]",this);
+    Lock2 lck(m_streamMutex,m_receiveMutex);
+    Socket* tmp = m_socket;
+    m_socket = 0;
+    if (tmp) {
+	tmp->setLinger(-1);
+	tmp->terminate();
+	delete tmp;
+    }
+}
+
+bool JBSocket::recv(char* buffer, unsigned int& len)
+{
+    if (!valid())
+	return false;
+
+    int read = m_socket->recv(buffer,len);
+    if (read != Socket::socketError()) {
 #ifdef XDEBUG
-    if (m_engine->printXml() && m_engine->debugAt(DebugAll)) {
+	if (read) {
+	    String s(buffer,read);
+	    XDebug(m_engine,DebugAll,"Stream recv [%p]\r\n%s",
+		m_stream,s.c_str());
+	}
+#endif
+	len = read;
+	return true;
+    }
+
+    len = 0;
+    if (!m_socket->canRetry()) {
+	Debug(m_engine,DebugWarn,
+	    "Stream. Socket read error: %d: '%s' [%p]",
+	    m_socket->error(),::strerror(m_socket->error()),m_stream);
+	return false;
+    }
+    return true;
+}
+
+bool JBSocket::send(const char* buffer, unsigned int& len)
+{
+    if (!valid())
+	return false;
+
+    XDebug(m_engine,DebugAll,"Stream sending [%p]\r\n%s",m_stream,buffer);
+    int c = m_socket->send(buffer,len);
+    if (c != Socket::socketError()) {
+	len = c;
+	return true;
+    }
+    if (!m_socket->canRetry()) {
+	Debug(m_engine,DebugWarn,"Stream. Socket send error: %d: '%s' [%p]",
+	    m_socket->error(),::strerror(m_socket->error()),m_stream);
+	return false;
+    }
+    len = 0;
+    DDebug(m_engine,DebugMild,
+	"Stream. Socket temporary unavailable to send: %d: '%s' [%p]",
+	m_socket->error(),::strerror(m_socket->error()),m_stream);
+    return true;
+}
+
+
+/**
+ * JBStream
+ */
+JBStream::JBStream(JBEngine* engine,
+	const JabberID& localJid, const JabberID& remoteJid,
+	const String& password, const SocketAddr& address,
+	bool autoRestart, unsigned int maxRestart,
+	u_int64_t incRestartInterval, bool outgoing, int type)
+    : m_password(password),
+    m_type(type),
+    m_state(Idle),
+    m_outgoing(outgoing),
+    m_autoRestart(autoRestart),
+    m_restart(maxRestart),
+    m_restartMax(maxRestart),
+    m_timeToFillRestart(Time::msecNow() + incRestartInterval),
+    m_fillRestartInterval(incRestartInterval),
+    m_local(localJid.node(),localJid.domain(),localJid.resource()),
+    m_remote(remoteJid.node(),remoteJid.domain(),remoteJid.resource()),
+    m_engine(engine),
+    m_socket(engine,this),
+    m_address(address),
+    m_lastEvent(0),
+    m_terminateEvent(0),
+    m_startEvent(0)
+{
+    if (m_type == -1 && engine)
+	m_type = engine->protocol();
+    DDebug(m_engine,DebugAll,"Stream created type=%s local=%s remote=%s [%p]",
+	JBEngine::lookupProto(m_type),m_local.safe(),m_remote.safe(),this);
+}
+
+JBStream::~JBStream()
+{
+#ifdef XDEBUG
+    if (m_engine && m_engine->printXml() && m_engine->debugAt(DebugAll)) {
 	String buffer, element;
-	for (; true; ) {
+	while (true) {
 	    XMLElement* e = m_parser.extract();
 	    if (!e)
 		break;
@@ -74,763 +191,812 @@ JBComponentStream::~JBComponentStream()
 	    delete e;
 	}
 	m_parser.getBuffer(buffer);
-	Debug(m_engine,DebugAll,
-	    "Stream. Incoming data:[%p]\r\nParser buffer: '%s'.\r\nParsed elements: %s",
-	    this,buffer.c_str(),element?element.c_str():"None.");
+	if (buffer || element)
+	    Debug(m_engine,DebugAll,
+		"~Stream [%p]\r\nUnparsed data: '%s'.\r\nParsed elements: %s",
+		this,buffer.c_str(),element?element.c_str():"None.");
     }
 #endif
-    Lock2 lock(*this,m_receiveMutex);
-    cleanup(false,0);
-    lock.drop();
-    m_engine->removeStream(this,false);
+    XDebug(m_engine,DebugAll,"JBStream::~JBStream() [%p]",this);
 }
 
-void JBComponentStream::connect()
+// Close the stream. Release memory
+void JBStream::destroyed()
 {
-    Lock2 lock(*this,m_receiveMutex);
-    if (m_state != Terminated) {
+    if (m_engine) {
+	Lock lock(m_engine);
+	m_engine->m_streams.remove(this,false);
+    }
+    terminate(false,0,XMPPError::NoError,0,false,true);
+    // m_terminateEvent shouldn't be valid:
+    //  do that to print a DebugFail output for the stream inside the event
+    TelEngine::destruct(m_terminateEvent);
+    TelEngine::destruct(m_startEvent);
+    DDebug(m_engine,DebugAll,"Stream destroyed local=%s remote=%s [%p]",
+	m_local.safe(),m_remote.safe(),this);
+    RefObject::destroyed();
+}
+
+// Connect the stream
+void JBStream::connect()
+{
+    Lock2 lck(m_socket.m_streamMutex,m_socket.m_receiveMutex);
+    if (state() != Idle) {
 	Debug(m_engine,DebugNote,
-	    "Stream::connect. Attempt to connect in non Terminated state. [%p]",this);
+	    "Stream. Attempt to connect when not idle [%p]",this);
 	return;
     }
-    m_state = WaitToConnect;
+    DDebug(m_engine,DebugInfo,
+	"Stream. Attempt to connect local=%s remote=%s addr=%s:%d count=%u [%p]",
+	m_local.safe(),m_remote.safe(),m_address.host().safe(),m_address.port(),
+	m_restart,this);
+    changeState(Connecting);
     // Check if we can restart
-    if (!m_engine->getStreamRestart(m_remoteName)) {
-	DDebug(m_engine,DebugNote,
-	    "Stream::connect. Stream can't restart (restart counter is 0). [%p]",this);
-	terminate(true,false,0,false);
+    if (!m_restart) {
+	terminate(true,0,XMPPError::NoError,"restart counter is 0",false);
 	return;
     }
+    m_restart--;
     // Reset data
     m_id = "";
     m_parser.reset();
-    // Re-create socket
-    m_socket = new Socket(PF_INET,SOCK_STREAM);
-    lock.drop();
-    // Connect
-    bool res = m_socket->connect(m_remoteAddr);
-    // Lock again to update stream
-    lock.lock(*this,m_receiveMutex);
-    // Update restart counters
-    if (!m_socket) {
-	Debug(m_engine,DebugMild,"Stream::connect. Socket deleted. [%p]",this);
+    lck.drop();
+    // Re-connect socket
+    bool terminated = false;
+    if (!m_socket.connect(m_address,terminated)) {
+	if (!terminated)
+	    terminate(false,0,XMPPError::NoError,"connection failed",false);
 	return;
     }
-    // Check connect result
-    if (!res) {
-	Debug(m_engine,DebugWarn,
-	    "Stream::connect. Failed to connect socket to '%s:%d'. Error: '%s' (%d). [%p]",
-	    m_remoteAddr.host().c_str(),m_remoteAddr.port(),
-	    ::strerror(m_socket->error()),m_socket->error(),this);
-	terminate(false,false,0,false);
+
+    Debug(m_engine,DebugAll,"Stream. local=%s remote=%s connected to %s:%d [%p]",
+	m_local.safe(),m_remote.safe(),m_address.host().safe(),m_address.port(),this);
+
+    // Send declaration
+    static String declaration = "<?xml version='1.0' encoding='UTF-8'?>";
+    if (m_engine->printXml() && m_engine->debugAt(DebugInfo))
+	Debug(m_engine,DebugInfo,"Stream. Sending XML declaration %s [%p]",
+	    declaration.c_str(),this);
+    unsigned int len = declaration.length();
+    if (!m_socket.send(declaration.c_str(),len) || len != declaration.length()) {
+	terminate(false,0,XMPPError::Internal,"send declaration failed",false);
 	return;
     }
-    Debug(m_engine,DebugAll,"Stream::connect. Connected to '%s:%d'. [%p]",
-	m_remoteAddr.host().c_str(),m_remoteAddr.port(),this);
-    // Connected
-    m_socket->setBlocking(false);
-    // Start
-    XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
-	XMPPNamespace::ComponentAccept);
-    start->setAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]);
-    start->setAttribute("to",m_localName);
-    m_state = Started;
-    sendStreamXML(start,Started);
+
+    sendStreamXML(getStreamStart(),Started,false);
 }
 
-void JBComponentStream::terminate(bool destroy, bool sendEnd,
-	XMLElement* error, bool sendError)
+// Read data from socket and pass it to the parser
+// Terminate stream on parser or socket error
+bool JBStream::receive()
 {
-    Lock2 lock(*this,m_receiveMutex);
-    if (m_state == Destroy || m_state == Terminated)
-	return;
-    DDebug(m_engine,DebugAll,"JBComponentStream::terminate(%s, %s, %p, %s) [%p]",
-	String::boolText(destroy),String::boolText(sendEnd),error,String::boolText(sendError),this);
-    // Error is sent only if end stream is sent
-    XMLElement* eventError = 0;
-    if (sendEnd && sendError) {
-	//TODO: Make a copy of error element to be attached to the event
-    }
-    else {
-	eventError = error;
-	error = 0;
-    }
-    cleanup(sendEnd,error);
-    // Add event. Change state
-    if (destroy) {
-	addEvent(JBEvent::Destroy,eventError);
-	m_state = Destroy;
-	deref();
-    }
-    else {
-	addEvent(JBEvent::Terminated,eventError);
-	m_state = Terminated;
-    }
-    Debug(m_engine,DebugInfo,"Stream. %s. [%p]",destroy?"Destroy":"Terminate",this);
-}
-
-bool JBComponentStream::receive()
-{
-    char buf[1024];
-    if (m_state == Destroy || m_state == Terminated ||
-	m_state == WaitToConnect)
+    static char buf[1024];
+    if (state() == Destroy || state() == Idle || state() == Connecting)
 	return false;
-    u_int32_t len = sizeof(buf);
+
+    XMPPError::Type error = XMPPError::NoError;
+    bool send = false;
     // Lock between start read and end consume to serialize input
-    m_receiveMutex.lock();
-    bool read = (readSocket(buf,len) && len);
-    // Parse if received any data and no error
-    if (read && !m_parser.consume(buf,len)) {
-	Debug(m_engine,DebugNote,
-	    "Stream::receive. Error parsing data: '%s'. [%p]",
-	    m_parser.ErrorDesc(),this);
-	XDebug(m_engine,DebugAll,"Parser buffer: %s",buf);
-	XMLElement* e = XMPPUtils::createStreamError(XMPPError::Xml,m_parser.ErrorDesc());
-	terminate(false,true,e,true);
+    m_socket.m_receiveMutex.lock();
+    const char* text = 0;
+    unsigned int len = sizeof(buf);
+    if (m_socket.recv(buf,len)) {
+	if (len && !m_parser.consume(buf,len)) {
+	    error = XMPPError::Xml;
+	    text = m_parser.ErrorDesc();
+	    Debug(m_engine,DebugNote,"Stream. Parser error: '%s' [%p]",text,this);
+	    send = true;
+	}
     }
-    m_receiveMutex.unlock();
+    else {
+	error = XMPPError::HostGone;
+	text = "remote server not found";
+    }
+    m_socket.m_receiveMutex.unlock();
+    if (error != XMPPError::NoError)
+	terminate(false,0,error,text,send);
     return len != 0;
 }
 
-JBComponentStream::Error JBComponentStream::sendStanza(XMLElement* stanza,
-	const char* senderId)
+// Send a stanza
+JBStream::Error JBStream::sendStanza(XMLElement* stanza, const char* senderId)
 {
     if (!stanza)
 	return ErrorContext;
-    DDebug(m_engine,DebugAll,"Stream::sendStanza((%p): '%s'). Sender id: '%s'. [%p]",
-	stanza,stanza->name(),senderId,this);
-    XMLElementOut* e = new XMLElementOut(stanza,senderId);
-    return postXML(e);
-}
-
-JBEvent* JBComponentStream::getEvent(u_int64_t time)
-{
-    Lock lock(this);
-    for (;;) {
-	if (m_lastEvent || m_terminateEvent ||
-	    m_state == Destroy || m_state == Terminated) {
-	    if (m_lastEvent)
-		return 0;
-	    break;
-	}
-	// Send pending elements.
-	// If not terminated check received elements
-	// Again, if not terminated, get event from queue
-	sendXML();
-	if (m_terminateEvent)
-	    break;
-	processIncomingXML();
-	if (m_terminateEvent)
-	    break;
-	// Get first event from queue
-	ObjList* obj = m_events.skipNull();
-	if (!obj)
-	    break;
-	m_lastEvent = static_cast<JBEvent*>(obj->get());
-	m_events.remove(m_lastEvent,false);
-	break;
-    }
-    if (m_lastEvent || m_terminateEvent) {
-	if (!m_lastEvent) {
-	    m_lastEvent = m_terminateEvent;
-	    m_terminateEvent = 0;
-	}
-	DDebug(m_engine,DebugAll,
-	    "Stream::getEvent. Raise event (%p): %u. [%p]",
-	    m_lastEvent,m_lastEvent->type(),this);
-	return m_lastEvent;
-    }
-    //TODO: Keep alive ?
-    return 0;
-}
-
-void JBComponentStream::cancelPending(bool raise, const String* id)
-{
-    Lock lock(this);
-    // Cancel elements with id. Raise event if requested
-    // Don't cancel the first element if partial data was sent:
-    //   The remote parser will fail
-    if (id) {
-	XDebug(m_engine,DebugAll,
-	    "Stream. Cancel pending elements with id '%s'. [%p]",id->c_str(),this);
-	ListIterator iter(m_outXML);
-	GenObject* obj;
-	bool first = true;
-	for (; (obj = iter.get());) {
-	    XMLElementOut* e = static_cast<XMLElementOut*>(obj);
-	    if (first) {
-		first = false;
-		if (e->dataCount())
-		    continue;
-	    }
-	    if (!e->id() || *id != e->id())
-		continue;
-	    if (raise)
-		addEventNotify(JBEvent::WriteFail,e);
-	    else
-		m_outXML.remove(e,true);
-	}
-	return;
-    }
-    // Cancel all pending elements without id
-    XDebug(m_engine,DebugAll,"Stream. Cancel pending elements without id. [%p]",this);
-    ListIterator iter(m_outXML);
-    GenObject* obj;
-    for (; (obj = iter.get());) {
-	XMLElementOut* e = static_cast<XMLElementOut*>(obj);
-	if (!e->id())
-	    m_outXML.remove(e,true);
-    }
-}
-
-void JBComponentStream::eventTerminated(const JBEvent* event)
-{
-    if (event && event == m_lastEvent) {
-	m_lastEvent = 0;
-	DDebug(m_engine,DebugAll,
-	    "Stream::eventTerminated. Event: (%p): %u. [%p]",
-	    event,event->type(),this);
-    }
-}
-
-void JBComponentStream::cleanup(bool endStream, XMLElement* e)
-{
-    if (!m_socket) {
-	if (e)
-	    delete e;
-	return;
-    }
-    DDebug(m_engine,DebugAll,"Stream::cleanup(%s, %p). [%p]",
-	String::boolText(endStream),e,this);
-    bool partialData = false;
-    // Remove first element from queue if partial data was sent
-    ObjList* obj = m_outXML.skipNull();
-    XMLElementOut* first = obj ? static_cast<XMLElementOut*>(obj->get()) : 0;
-    if (first && first->dataCount()) {
-	addEventNotify(JBEvent::WriteFail,first);
-	partialData = true;
-    }
-    // Send stream terminate
-    //   No need to do that if partial data was sent:
-    //   the remote XML parser will fail anyway
-    if (!partialData && endStream) {
-	if (state() != WaitToConnect) {
-	    sendStreamXML(new XMLElement(XMLElement::StreamEnd),m_state,e);
-	    e = 0;
-	}
-	else
-	    DDebug(m_engine,DebugAll,
-		"Stream::cleanup. No end tag sent: stream is waiting to connect. [%p]",this);
-    }
-    if (e)
-	delete e;
-    // Cancel outgoing elements without id
-    cancelPending(false,0);
-    // Destroy socket. Close in background
-    Socket* tmp = m_socket;
-    m_socket = 0;
-    if (!tmp) {
-	Debug(m_engine,DebugWarn,"Stream::cleanup. Socket deleted. [%p]",this);
-	return;
-    }
-    tmp->setLinger(-1);
-    tmp->terminate();
-    delete tmp;
-}
-
-JBComponentStream::Error JBComponentStream::postXML(XMLElementOut* element)
-{
-    Lock lock(this);
-    if (!element)
-	return ErrorNone;
+    Lock lock(m_socket.m_streamMutex);
     if (state() == Destroy) {
-	element->deref();
+	delete stanza;
 	return ErrorContext;
     }
-    DDebug(m_engine,DebugAll,"Stream::postXML((%p): '%s'). [%p]",
-	element->element(),element->element()->name(),this);
+    DDebug(m_engine,DebugAll,"Stream. Posting stanza (%p,%s) id='%s' [%p]",
+	stanza,stanza->name(),senderId,this);
+    XMLElementOut* e = new XMLElementOut(stanza,senderId);
     // List not empty: the return value will be ErrorPending
     // Else: element will be sent
     bool pending = (0 != m_outXML.skipNull());
-    m_outXML.append(element);
+    m_outXML.append(e);
     // Send first element
-    Error result = sendXML();
+    Error result = sendPending();
     return pending ? ErrorPending : result;
 }
 
-JBComponentStream::Error JBComponentStream::sendXML()
+// Extract an element from parser and construct an event
+JBEvent* JBStream::getEvent(u_int64_t time)
 {
-    // Get the first element from list
-    ObjList* obj = m_outXML.skipNull();
-    XMLElementOut* e = obj ? static_cast<XMLElementOut*>(obj->get()) : 0;
-    if (!e)
-	return ErrorNone;
-    if (state() != Running)
-	return ErrorPending;
-    if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
-	String eStr;
-	XMPPUtils::print(eStr,e->element());
-	Debug(m_engine,DebugInfo,"Stream. Send XML. [%p]%s",
-	    this,eStr.c_str());
-    }
-    else
-	DDebug(m_engine,DebugInfo,"Stream::sendXML((%p): '%s'). [%p]",
-	    e->element(),e->element()->name(),this);
-    // Prepare & send
-    u_int32_t len;
-    const char* data = e->getData(len);
-    if (!writeSocket(data,len)) {
-	// Write failed. Try to raise event. Remove from list
-	addEventNotify(JBEvent::WriteFail,e);
-	return ErrorNoSocket;
-    }
-    e->dataSent(len);
-    // Partial data sent ?
-    if (e->dataCount())
-	return ErrorPending;
-    // All data was sent. Remove
-    m_outXML.remove(e,true);
-    return ErrorNone;
-}
+    Lock lock(m_socket.m_streamMutex);
 
-bool JBComponentStream::sendStreamXML(XMLElement* element, State newState,
-	XMLElement* before)
-{
-    if (!element) {
-	if (before)
-	    delete before;
-	return false;
+    // Do nothing if destroying or connecting
+    if (state() == Destroy || state() == Connecting)
+	return 0;
+
+    // Increase stream restart counter if it's time to
+    if (m_timeToFillRestart < time) {
+	if (m_restart < m_restartMax)
+	    m_restart++;
+	m_timeToFillRestart = time + m_fillRestartInterval;
     }
-    if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
-	String eStr;
-	if (before)
-	    XMPPUtils::print(eStr,before);
-	XMPPUtils::print(eStr,element);
-	Debug(m_engine,DebugInfo,"Stream. Send XML. [%p]%s",
-	    this,eStr.c_str());
+
+    if (state() == Idle) {
+	if (m_autoRestart && m_restart)
+	    m_engine->connect(this);
+	return 0;
     }
-    else
-	DDebug(m_engine,DebugInfo,"Stream::sendStreamXML('%s'). [%p]",
-	    element->name(),this);
-    String tmp, buff;
-    switch (element->type()) {
-	case XMLElement::StreamStart:
-	    // Send declaration and the start tag
-	    element->toString(buff,true);
-	    tmp << s_declaration << buff;
+
+    if (m_lastEvent)
+	return 0;
+
+    while (true) {
+	if (m_terminateEvent)
 	    break;
-	case XMLElement::StreamEnd:
-	    // Send 'before' and the end tag
-	    if (before)
-		before->toString(tmp);
-	    element->toString(buff,true);
-	    tmp += buff;
+
+	// Send pending elements and process the received ones
+	sendPending();
+	if (m_terminateEvent)
 	    break;
-	default:
-	    element->toString(tmp,false);
-    }
-    delete element;
-    if (before)
-	delete before;
-    u_int32_t len = tmp.length();
-    bool result = (writeSocket(tmp,len) && len == tmp.length());
-    if (result)
-	m_state = newState;
-    else
-	terminate(false);
-    return result;
-}
 
-JBComponentStream::Error JBComponentStream::sendIqError(XMLElement* stanza,
-	XMPPError::ErrorType eType, XMPPError::Type eCond, const char* eText)
-{
-    if (!stanza)
-	return ErrorContext;
-    String to = stanza->getAttribute("from");
-    String from = stanza->getAttribute("to");
-    String id = stanza->getAttribute("id");
-    // Create 'iq' and add stanza
-    XMLElement* xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,id);
-    xml->addChild(stanza);
-    // Add 'error'
-    xml->addChild(XMPPUtils::createError(eType,eCond,eText));
-    return sendStanza(xml);
-}
+	// Process the received XML
+	XMLElement* xml = m_parser.extract();
+	if (!xml)
+	    break;
 
-bool JBComponentStream::processIncomingXML()
-{
-    if (state() == Destroy || state() == Terminated
-	|| state() == WaitToConnect)
-	return false;
-    for (bool noEvent = true; noEvent;) {
-	XMLElement* element = m_parser.extract();
-	if (!element)
-	    return false;
+	// Print it
 	if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
-	    String eStr;
-	    XMPPUtils::print(eStr,element);
-	    Debug(m_engine,DebugInfo,"Stream. Received XML [%p]. %s",
-	        this,eStr.c_str());
+	    String s;
+	    XMPPUtils::print(s,xml);
+	    Debug(m_engine,DebugInfo,"Stream. Received [%p]%s",this,s.c_str());
 	}
 	else
-	    DDebug(m_engine,DebugInfo,"Stream::processIncomingXML((%p): '%s'). [%p].",
-		element,element->name(),this);
-	// Check if we received a stream end or stream error
-	if (isStreamEnd(element))
+	    DDebug(m_engine,DebugInfo,"Stream. Received (%p,%s) [%p]",xml,xml->name(),this);
+
+	// Check destination
+	if (!checkDestination(xml)) {
+	    // TODO Respond if state is Started ?
+	    if (state() == Started)
+		dropXML(xml);
+	    else
+		invalidStreamXML(xml,XMPPError::BadAddressing,"unknown destination");
 	    break;
-	// Process received element
+	}
+
+	// Check if stream end was received (end tag or error)
+	if (xml->type() == XMLElement::StreamEnd ||
+	    xml->type() == XMLElement::StreamError) {
+	    Debug(m_engine,DebugAll,"Stream. Remote closed in state %s [%p]",
+		lookupState(state()),this);
+	    terminate(false,xml,XMPPError::NoError,xml->getText(),true);
+	    break;
+	}
+
+	XDebug(m_engine,DebugAll,"Stream. Processing (%p,%s) in state %s [%p]",
+	    xml,xml->name(),lookupState(state()),this);
+
 	switch (state()) {
 	    case Running:
-		noEvent = !processStateRunning(element);
-		break;
-	    case Started:
-		noEvent = !processStateStarted(element);
+		processRunning(xml);
 		break;
 	    case Auth:
-		noEvent = !processStateAuth(element);
+		processAuth(xml);
 		break;
-	    default:
-		delete element;
+	    case Securing:
+		processSecuring(xml);
+		break;
+	    case Started:
+		// Set stream id if not already set
+		if (!m_id) {
+		    if (xml->type() != XMLElement::StreamStart) {
+			dropXML(xml);
+			break;
+		    }
+		    m_id = xml->getAttribute("id");
+		    if (!m_id || m_engine->checkDupId(this)) {
+			invalidStreamXML(xml,XMPPError::InvalidId,"invalid stream id");
+			break;
+		    }
+		}
+		processStarted(xml);
+		break;
+	    default: 
+		Debug(m_engine,DebugStub,"Unhandled stream state %u '%s' [%p]",
+		    state(),lookupState(state()),this);
+		delete xml;
 	}
+	break;
     }
-    return true;
-}
 
-bool JBComponentStream::processStateStarted(XMLElement* e)
-{
-    XDebug(m_engine,DebugAll,"Stream::processStateStarted(%p) [%p].",e,this);
-    // Expect stream start tag
-    // Check if received element other then 'stream'
-    if (e->type() != XMLElement::StreamStart)
-	return unexpectedElement(e);
-    // Check attributes: namespaces, from, id
-    if (!e->hasAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]))
-	return invalidElement(e,XMPPError::InvalidNamespace);
-    if (!e->hasAttribute("xmlns",s_ns[XMPPNamespace::ComponentAccept]))
-	return invalidElement(e,XMPPError::InvalidNamespace);
-    if (!e->hasAttribute("from",m_localName))
-    //TODO: Possible ejabberd support: check if we received remoteName
-    // if (!(e->hasAttribute("from",m_localName) || e->hasAttribute("from",m_remoteName)))
-	return invalidElement(e,XMPPError::HostUnknown);
-    m_id = e->getAttribute("id");
-    if (!m_id.length() || m_engine->remoteIdExists(this))
-	return invalidElement(e,XMPPError::InvalidId);
-    // Everything is OK: Reply
-    delete e;
-    // Get password from engine. Destroy if not accepted
-    if (!m_engine->acceptOutgoing(m_remoteAddr.host(),m_password)) {
-	Debug(m_engine,DebugNote,
-	    "Stream::processStateStarted(%p). Not accepted. [%p]",e,this);
-	terminate(true,true,XMPPUtils::createStreamError(XMPPError::NotAuth),
-	    true);
-	return true;
+    // Return terminate event if set
+    // Get events from queue if not set to terminate
+    if (m_terminateEvent) {
+	m_lastEvent = m_terminateEvent;
+	m_terminateEvent = 0;
     }
-    // Send auth
-    Debug(m_engine,DebugInfo,
-	"Stream::processStateStarted(%p). Accepted. Send auth. [%p]",e,this);
-    String handshake;
-    m_engine->createSHA1(handshake,m_id,m_password);
-    XMLElement* xml = new XMLElement(XMLElement::Handshake,0,handshake);
-    if (!sendStreamXML(xml,Auth))
-	return true;
-    m_state = Auth;
-    return false;
+    else if (m_startEvent) {
+	m_lastEvent = m_startEvent;
+	m_startEvent = 0;
+    }
+    else {
+	ObjList* obj = m_events.skipNull();
+	m_lastEvent = obj ? static_cast<JBEvent*>(obj->get()) : 0;
+	if (m_lastEvent)
+	    m_events.remove(m_lastEvent,false);
+    }
+
+    if (m_lastEvent)
+	DDebug(m_engine,DebugAll,"Stream. Raising event (%p,%s) [%p]",
+	    m_lastEvent,m_lastEvent->name(),this);
+    return m_lastEvent;
 }
 
-bool JBComponentStream::processStateAuth(XMLElement* e)
+// Terminate stream. Send stream end tag or error. Remove pending stanzas without id
+// Deref stream if destroying
+void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type error,
+	const char* reason, bool send, bool final)
 {
-    XDebug(m_engine,DebugAll,"Stream::processStateAuth(%p). [%p]",e,this);
-    // Expect handshake
-    if (e->type() != XMLElement::Handshake)
-	return unexpectedElement(e);
-    delete e;
-    Debug(m_engine,DebugInfo,
-	"Stream::processStateAuth(%p). Authenticated. [%p]",e,this);
-    m_state = Running;
-    return false;
-}
+    Lock2 lock(m_socket.m_streamMutex,m_socket.m_receiveMutex);
+    if (state() == Destroy || state() == Idle) {
+	if (recvStanza)
+	    delete recvStanza;
+	return;
+    }
+    if (error == XMPPError::NoError && m_engine->exiting()) {
+	error = XMPPError::Shutdown;
+	reason = 0;
+    }
 
-bool JBComponentStream::processStateRunning(XMLElement* e)
-{
-    XDebug(m_engine,DebugAll,"Stream::processStateRunning(%p) [%p].",e,this);
-    switch (e->type()) {
-	case XMLElement::Iq:
-	    return processIncomingIq(e);
-	case XMLElement::Presence:
-	case XMLElement::Message:
-	    {
-		JBEvent::Type evType;
-		if (e->type() == XMLElement::Presence)
-		    evType = JBEvent::Presence;
+    Debug(m_engine,DebugAll,
+	"Stream. Terminate state=%s destroy=%u error=%s reason=%s final=%u [%p]",
+	lookupState(state()),destroy,s_err[error],reason,final,this);
+
+    // Send ending stream element
+    if (send && state() != Connecting) {
+	XMLElement* e;
+	if (error == XMPPError::NoError)
+	    e = new XMLElement(XMLElement::StreamEnd);
+	else {
+	    e = XMPPUtils::createStreamError(error,reason);
+	    XMLElement* child = recvStanza;
+	    // Preserve received element if an event will be generated
+	    if (recvStanza)
+		if (final || m_terminateEvent)
+		    recvStanza = 0;
 		else
-		    evType = JBEvent::Message;
-		// Create event
-		JBEvent* event = addEvent(evType,e);
-		event->m_stanzaType = e->getAttribute("type");
-		event->m_from = e->getAttribute("from");
-		event->m_to = e->getAttribute("to");
-		event->m_id = e->getAttribute("id");
-	    }
-	    return true;
-	default: ;
+		    recvStanza = new XMLElement(*child);
+	    e->addChild(child);
+	}
+	sendStreamXML(e,m_state,true);
     }
-    addEvent(JBEvent::Unhandled,e);
-    return true;
+    m_socket.terminate();
+
+    // Done if called from destructor
+    if (final) {
+	changeState(Destroy);
+	if (recvStanza)
+	    delete recvStanza;
+	return;
+    }
+
+    // Cancel all outgoing elements without id
+    removePending(false,0,true);
+    // Always set termination event, except when exiting
+    TelEngine::destruct(m_startEvent);
+    if (!m_terminateEvent) {
+	if (!recvStanza && error != XMPPError::NoError)
+	    recvStanza = XMPPUtils::createStreamError(error,reason);
+	if (error != XMPPError::Shutdown)
+	    m_terminateEvent = new JBEvent(destroy?JBEvent::Destroy:JBEvent::Terminated,
+		this,recvStanza);
+    }
+    else if (recvStanza)
+	delete recvStanza;
+
+    // Change state
+    if (destroy) {
+	changeState(Destroy);
+	deref();
+    }
+    else
+	changeState(Idle);
 }
 
-bool JBComponentStream::processIncomingIq(XMLElement* e)
+// Get the name of a stream state
+const char* JBStream::lookupState(int state)
 {
+    return lookup(state,s_streamState);
+}
+
+// Process received data while running
+void JBStream::processRunning(XMLElement* xml)
+{
+    switch (xml->type()) {
+	case XMLElement::Message:
+	    m_events.append(new JBEvent(JBEvent::Message,this,xml));
+	    return;
+	case XMLElement::Presence:
+	    m_events.append(new JBEvent(JBEvent::Presence,this,xml));
+	    return;
+	case XMLElement::Iq:
+	    break;
+	default:
+	    m_events.append(new JBEvent(JBEvent::Unhandled,this,xml));
+	    return;
+    }
+
+    XMPPError::Type error = XMPPError::NoError;
+    int iq = XMPPUtils::iqType(xml->getAttribute("type"));
+    JBEvent* ev = getIqEvent(xml,iq,error);
+    if (ev) {
+	m_events.append(ev);
+	return;
+    }
+    if (error == XMPPError::NoError) {
+	m_events.append(new JBEvent(JBEvent::Unhandled,this,xml));
+	return;
+    }
+
+    // Don't respond to error or result
+    if (iq == XMPPUtils::IqError || iq == XMPPUtils::IqResult) {
+	dropXML(xml);
+	return;
+    }
+
+    // Send error
+    String to = xml->getAttribute("from");
+    String from = xml->getAttribute("to");
+    String id = xml->getAttribute("id");
+    XMLElement* err = XMPPUtils::createIq(XMPPUtils::IqError,from,to,id);
+    err->addChild(xml);
+    err->addChild(XMPPUtils::createError(XMPPError::TypeModify,error));
+    sendStanza(err);
+}
+
+// Helper function to make the code simpler
+inline bool checkChild(XMLElement* e, XMPPNamespace::Type ns, XMPPError::Type& error)
+{
+    if (!e) {
+	error = XMPPError::SBadRequest;
+	return false;
+    }
+    if (e->hasAttribute("xmlns",s_ns[ns]))
+	return true;
+    error = XMPPError::SFeatureNotImpl;
+    return false;
+}
+
+// Create an iq event from a received iq stanza
+JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& error)
+{
+    // Filter iq stanzas to generate an appropriate event
     // Get iq type : set/get, error, result
     //   result:  MAY have a first child with a response
     //   set/get: MUST have a first child
     //   error:   MAY have a first child with the sent stanza
     //            MUST have an 'error' child
     // Check type and the first child's namespace
-    DDebug(m_engine,DebugAll,"Stream::processIncomingIq(%p). [%p]",e,this);
-    XMPPUtils::IqType iq = XMPPUtils::iqType(e->getAttribute("type"));
-    JBEvent* event = 0;
-    // Get first child
-    XMLElement* child = e->findFirstChild();
+    XMLElement* child = xml->findFirstChild();
     // Create event
-    switch (iq) {
-	case XMPPUtils::IqResult:
-	    // No child: This is a confirmation to a sent stanza
-	    if (!child) {
-		event = addEvent(JBEvent::IqResult,e);
+    if (iqType == XMPPUtils::IqResult || iqType == XMPPUtils::IqSet ||
+	iqType == XMPPUtils::IqGet) {
+	if (!child) {
+	    if (iqType == XMPPUtils::IqResult)
+		return new JBEvent(JBEvent::IqResult,this,xml);
+	    return new JBEvent(JBEvent::Iq,this,xml);
+	}
+	switch (child->type()) {
+	    case XMLElement::Jingle:
+		if (!checkChild(child,XMPPNamespace::Jingle,error))
+		    return 0;
+		switch (iqType) {
+		    case XMPPUtils::IqGet:
+			return new JBEvent(JBEvent::IqJingleGet,this,xml,child);
+		    case XMPPUtils::IqSet:
+			return new JBEvent(JBEvent::IqJingleSet,this,xml,child);
+		    case XMPPUtils::IqResult:
+			return new JBEvent(JBEvent::IqJingleRes,this,xml,child);
+		}
 		break;
-	    }
-	    // Child non 0: Fall through to check the child
-	case XMPPUtils::IqSet:
-	case XMPPUtils::IqGet:
-	    // Jingle ?
-	    if (child->type() == XMLElement::Jingle) {
-		// Jingle stanza's type is never 'result'
-		if (iq == XMPPUtils::IqResult) {
-		    sendIqError(e,XMPPError::TypeModify,XMPPError::SBadRequest);
-		    return false;
+	    case XMLElement::Query:
+		if (checkChild(child,XMPPNamespace::DiscoInfo,error))
+		    switch (iqType) {
+			case XMPPUtils::IqGet:
+			    return new JBEvent(JBEvent::IqDiscoInfoGet,this,xml,child);
+			case XMPPUtils::IqSet:
+			    return new JBEvent(JBEvent::IqDiscoInfoSet,this,xml,child);
+			case XMPPUtils::IqResult:
+			    return new JBEvent(JBEvent::IqDiscoInfoRes,this,xml,child);
+		    }
+		else if (checkChild(child,XMPPNamespace::DiscoItems,error))
+		    switch (iqType) {
+			case XMPPUtils::IqGet:
+			    return new JBEvent(JBEvent::IqDiscoItemsGet,this,xml,child);
+			case XMPPUtils::IqSet:
+			    return new JBEvent(JBEvent::IqDiscoItemsSet,this,xml,child);
+			case XMPPUtils::IqResult:
+			    return new JBEvent(JBEvent::IqDiscoItemsRes,this,xml,child);
+		    }
+		return 0;
+	    case XMLElement::Command:
+		if (!checkChild(child,XMPPNamespace::Command,error))
+		    return 0;
+		switch (iqType) {
+		    case XMPPUtils::IqGet:
+			return new JBEvent(JBEvent::IqCommandGet,this,xml,child);
+		    case XMPPUtils::IqSet:
+			return new JBEvent(JBEvent::IqCommandSet,this,xml,child);
+		    case XMPPUtils::IqResult:
+			return new JBEvent(JBEvent::IqCommandRes,this,xml,child);
 		}
-		// Check namespace
-		if (!child->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle])) {
-		    sendIqError(e,XMPPError::TypeModify,XMPPError::SFeatureNotImpl);
-		    return false;
-		}
-		// Add event
-		if (iq == XMPPUtils::IqSet)
-		    event = addEvent(JBEvent::IqJingleSet,e,child);
-		else
-		    event = addEvent(JBEvent::IqJingleGet,e,child);
-		break;	
-	    }
-	    // Query ?
-	    if (child->type() == XMLElement::Query) {
-		// Check namespace
-		if (!(child->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]) || 
-		      child->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))) {
-		    // Send error
-		    sendIqError(e,XMPPError::TypeModify,XMPPError::SFeatureNotImpl);
-		    return false;
-		}
-		// Add event
-		switch (iq) {
-		     case XMPPUtils::IqGet:
-			event = addEvent(JBEvent::IqDiscoGet,e,child);
-			break;
-		     case XMPPUtils::IqSet:
-			event = addEvent(JBEvent::IqDiscoSet,e,child);
-			break;
-		     case XMPPUtils::IqResult:
-			event = addEvent(JBEvent::IqDiscoRes,e,child);
-			break;
-		     default: ;
-		}	
-		break;
-	    }
-	    // Command
-	    if (child->type() == XMLElement::Command) {
-		// Check namespace
-		if (!(child->hasAttribute("xmlns",s_ns[XMPPNamespace::Command]))) {
-		    // Send error
-		    sendIqError(e,XMPPError::TypeModify,XMPPError::SFeatureNotImpl);
-		    return false;
-		}
-		// Add event
-		switch (iq) {
-		     case XMPPUtils::IqGet:
-			event = addEvent(JBEvent::IqCommandGet,e,child);
-			break;
-		     case XMPPUtils::IqSet:
-			event = addEvent(JBEvent::IqCommandSet,e,child);
-			break;
-		     case XMPPUtils::IqResult:
-			event = addEvent(JBEvent::IqCommandRes,e,child);
-			break;
-		     default: ;
-		}	
-		break;
-	    }
-	    // Unknown child
-	    event = addEvent(JBEvent::Iq,e,child);
-	    break;
-	case XMPPUtils::IqError:
-	    // First child may be a sent stanza
-	    if (child && child->type() != XMLElement::Error)
-		child = e->findNextChild(child);
-	    // Check child type
-	    if (!(child && child->type() == XMLElement::Error))
-		child = 0;
-	    event = addEvent(JBEvent::IqError,e,child);
-	    break;
-	default:
-	    event = addEvent(JBEvent::Iq,e,child);
+	    default: ;
+	}
+	// Unhandled child
+	if (iqType != XMPPUtils::IqResult)
+	    return new JBEvent(JBEvent::Iq,this,xml,child);
+	return new JBEvent(JBEvent::IqResult,this,xml,child);
     }
-    // Set event data from type, from, to and id attributes
-    event->m_stanzaType = e->getAttribute("type");
-    event->m_from = e->getAttribute("from");
-    event->m_to = e->getAttribute("to");
-    event->m_id = e->getAttribute("id");
-    return true;
+    else if (iqType == XMPPUtils::IqError) {
+	JBEvent::Type evType = JBEvent::IqError;
+	// First child may be a sent stanza
+	if (child && child->type() != XMLElement::Error) {
+	    switch (child->type()) {
+		case XMLElement::Jingle:
+		    evType = JBEvent::IqJingleErr;
+		    break;
+		case XMLElement::Query:
+		    if (xml->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
+			evType = JBEvent::IqDiscoInfoErr;
+		    else if (xml->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
+			evType = JBEvent::IqDiscoItemsErr;
+		    break;
+		case XMLElement::Command:
+		    evType = JBEvent::IqCommandErr;
+		    break;
+		default: ;
+	    }
+	    child = xml->findNextChild(child);
+	}
+	if (!(child && child->type() == XMLElement::Error))
+	    child = 0;
+	return new JBEvent(evType,this,xml,child);
+    }
+    error = XMPPError::SBadRequest;
+    return 0;
 }
 
-JBEvent* JBComponentStream::addEvent(JBEvent::Type type,
-	XMLElement* element, XMLElement* child)
+// Send stream XML elements through the socket
+bool JBStream::sendStreamXML(XMLElement* e, State newState, bool streamEnd)
 {
-    Lock2 lock(*this,m_receiveMutex);
-    JBEvent* ev = new JBEvent(type,this,element,child);
-    DDebug(m_engine,DebugAll,"Stream::addEvent((%p): %u). [%p]",ev,ev->type(),this);
-    // Append event
-    // If we already have a terminated event, ignore the new one
-    if (type == JBEvent::Destroy || type == JBEvent::Terminated) {
-	if (m_terminateEvent) {
-	    DDebug(m_engine,DebugAll,
-		"Stream::addEvent. Ignoring terminating event ((%p): %u). Already set. [%p]",
-		ev,ev->type(),this);
-	    ev->destruct();
+    bool result = false;
+    Lock lock(m_socket.m_streamMutex);
+    while (e) {
+	if (state() == Idle || state() == Destroy)
+	    break;
+	String tmp;
+	e->toString(tmp,true);
+	unsigned int len = tmp.length();
+	result = (ErrorNone == sendXML(e,tmp.c_str(),len,true,streamEnd));
+	break;
+    }
+    if (!result)
+	Debug(m_engine,DebugNote,
+	    "Stream. Failed to send stream XML (%p,%s) in state=%s [%p]",
+	    e,e?e->name():"",lookupState(state()),this);
+    if (e)
+	delete e;
+    if (result)
+	changeState(newState);
+    return result;
+}
+
+// Terminate stream on receiving invalid elements
+void JBStream::invalidStreamXML(XMLElement* xml, XMPPError::Type error, const char* reason)
+{
+    if (!xml)
+	return;
+    Debug(m_engine,DebugNote,
+	"Stream. Invalid XML (%p,%s) state=%s error='%s' reason='%s' [%p]",
+	xml,xml->name(),lookupState(state()),s_err[error],reason,this);
+    terminate(false,xml,error,reason,true);
+}
+
+// Drop an unexpected or unhandled element
+void JBStream::dropXML(XMLElement* xml, bool unexpected)
+{
+    if (!xml)
+	return;
+    Debug(m_engine,unexpected?DebugNote:DebugInfo,
+	"Stream. Dropping %s element (%p,%s) in state %s [%p]",
+	unexpected?"unexpected":"unhandled",xml,xml->name(),
+	lookupState(state()),this);
+    delete xml;
+}
+
+// Change stream state
+void JBStream::changeState(State newState)
+{
+    if (m_state == newState)
+	return;
+    Debug(m_engine,DebugInfo,"Stream. Changing state from %s to %s [%p]",
+	lookupState(m_state),lookupState(newState),this);
+    m_state = newState;
+    if (newState == Running && !m_startEvent)
+	m_startEvent = new JBEvent(JBEvent::Running,this,0);
+}
+
+// Event termination notification
+void JBStream::eventTerminated(const JBEvent* event)
+{
+    if (event && event == m_lastEvent) {
+	m_lastEvent = 0;
+	DDebug(m_engine,DebugAll,
+	    "Stream. Event (%p,%s) terminated [%p]",event,event->name(),this);
+    }
+}
+
+// Actually send XML elements through the socket
+JBStream::Error JBStream::sendXML(XMLElement* e, const char* buffer, unsigned int& len,
+	bool stream, bool streamEnd)
+{
+    if (!(e && buffer && len))
+	return ErrorNone;
+
+    if (!stream && state() != Running)
+	return ErrorPending;
+
+    Error ret = ErrorNone;
+    XMPPError::Type error = XMPPError::NoError;
+
+    while (true) {
+	// Try to send any partial data remaining from the last sent stanza
+        // Don't send stream element on failure: remote XML parser will fail anyway
+	if (stream) {
+	    ObjList* obj = m_outXML.skipNull();
+	    XMLElementOut* eout = obj ? static_cast<XMLElementOut*>(obj->get()) : 0;
+	    if (eout && eout->dataCount())
+		ret = sendPending();
+	    if (ret != ErrorNone) {
+		if (!streamEnd)
+		    error = XMPPError::UndefinedCondition;
+		// Ignore partial data sent error: terminate stream
+		ret = ErrorNoSocket;
+		break;
+	    }
+	}
+
+	if (m_engine->printXml() && m_engine->debugAt(DebugInfo)) {
+	    String s;
+	    XMPPUtils::print(s,e);
+	    Debug(m_engine,DebugInfo,"Stream. Sending [%p]%s",this,s.c_str());
 	}
 	else
-	    m_terminateEvent = ev;
-	return 0;
-    }
-    m_events.append(ev);
-    return ev;
-}
+	    DDebug(m_engine,DebugInfo,"Stream. Sending (%p,%s) [%p]",e,e->name(),this);
 
-bool JBComponentStream::addEventNotify(JBEvent::Type type,
-	XMLElementOut* element)
-{
-    Lock lock(this);
-    XMLElement* e = 0;
-    bool raise = !element->id().null();
-    if (raise) {
-	e = element->release();
-	JBEvent* ev = new JBEvent(type,this,e,&(element->id()));
-	DDebug(m_engine,DebugAll,
-	    "Stream::addEventNotify((%p): %u). [%p]",ev,ev->type(),this);
-	m_events.append(ev);
-    }
-    else
-	e = element->element();
-    // Remove element
-    DDebug(m_engine,DebugAll,
-	"Stream::addEventNotify. Remove (%p): '%s' from outgoing queue. [%p]",
-	e,e ? e->name() : "",this);
-    m_outXML.remove(element,true);
-    return raise;
-}
-
-bool JBComponentStream::invalidElement(XMLElement* e, XMPPError::Type type,
-	const char* text)
-{
-    Debug(m_engine,DebugNote,
-	"Stream. Received invalid element ((%p): '%s') in state %u. Error: '%s'. [%p]",
-	e,e->name(),state(),s_err[type],this);
-    delete e;
-    terminate(false,true,XMPPUtils::createStreamError(type,text),true);
-    return true;
-}
-
-bool JBComponentStream::unexpectedElement(XMLElement* e)
-{
-    Debug(m_engine,DebugNote,
-	"Stream. Ignoring unexpected element ((%p): '%s') in state %u. [%p]",
-	e,e->name(),state(),this);
-    delete e;
-    return false;
-}
-
-bool JBComponentStream::isStreamEnd(XMLElement* e)
-{
-    if (!e)
-	return false;
-    bool end = (e->type() == XMLElement::StreamEnd);
-    bool error = (e->type() == XMLElement::StreamError);
-    if (end || error) {
-	DDebug(m_engine,DebugAll,"Stream. Received stream %s in state %u. [%p]",
-	    end?"end":"error",state(),this);
-	terminate(false,true,e,false);
-	return true;
-    }
-    return false;
-}
-
-bool JBComponentStream::readSocket(char* data, u_int32_t& len)
-{
-    if (state() == Destroy)
-	return false;
-    // Check socket
-    if (!(m_socket && m_socket->valid())) {
-	terminate(false,false,errorHostGone(),false);
-	return false;
-    }
-    // Read socket
-    int read = m_socket->recv(data,len);
-    if (read == Socket::socketError()) {
-	len = 0;
-	if (!m_socket->canRetry()) {
-	    Debug(m_engine,DebugWarn,
-		"Stream::readSocket. Socket error: %d: '%s'. [%p]",
-		m_socket->error(),::strerror(m_socket->error()),this);
-	    terminate(false,false,errorHostGone(),false);
-	    return false;
+	unsigned int tmp = len;
+	if (m_socket.send(buffer,len)) {
+	    if (len != tmp) {
+		ret = !stream ? ErrorPending : ErrorNoSocket;
+		error = XMPPError::Internal;
+	    }
+	    break;
 	}
+	ret = ErrorNoSocket;
+	error = XMPPError::HostGone;
+	break;
     }
-    else
-	len = read;
-#ifdef XDEBUG
-    if (len) {
-	String s(data,len);
-	XDebug(m_engine,DebugAll,"Stream::readSocket [%p] Data:\r\n%s",this,s.c_str());
-    }
-#endif //XDEBUG
-    return true;
+
+    if (stream && ret != ErrorNone && !streamEnd)
+	terminate(false,0,error,0,false);
+    return ret;
 }
 
-bool JBComponentStream::writeSocket(const char* data, u_int32_t& len)
+// Try to send the first element in pending outgoing stanzas list
+// Terminate stream on socket error
+JBStream::Error JBStream::sendPending()
 {
-    if (state() == Destroy)
-	return false;
-    // Check socket
-    if (!(m_socket && m_socket->valid())) {
-	terminate(false,false,errorHostGone(),false);
-	return false;
+    ObjList* obj = m_outXML.skipNull();
+    XMLElementOut* eout = obj ? static_cast<XMLElementOut*>(obj->get()) : 0;
+
+    if (!eout)
+	return ErrorNone;
+    if (!eout->element()) {
+	m_outXML.remove(eout,true);
+	return ErrorNone;
     }
-    // Write data
-    XDebug(m_engine,DebugAll,"Stream::writeSocket [%p] Data:\r\n%s",this,data);
-    int c = m_socket->send(data,len);
-    if (c == Socket::socketError()) {
-	c = 0;
-	if (!m_socket->canRetry()) {
-	    Debug(m_engine,DebugWarn,
-		"Stream::writeSocket. Socket error: %d: '%s'. [%p]",
-		m_socket->error(),::strerror(m_socket->error()),this);
-	    terminate(false,false,errorHostGone(),false);
-	    return false;
+    if (state() != Running)
+	return ErrorPending;
+
+    u_int32_t len;
+    const char* data = eout->getData(len);
+    Error ret = sendXML(eout->element(),data,len);
+    bool notify = false;
+    switch (ret) {
+	case ErrorNoSocket:
+	    notify = true;
+	case ErrorNone:
+	    break;
+	case ErrorPending:
+	    eout->dataSent(len);
+	    return ErrorPending;
+	default: ;
+	    ret = ErrorContext;
+    }
+
+#ifdef DEBUG
+    if (eout->element())
+	DDebug(m_engine,notify?DebugNote:DebugAll,
+	    "Stream. Remove pending stanza (%p,%s) with id='%s'%s [%p]",
+	    eout->element(),eout->element()->name(),eout->id().c_str(),
+	    notify?". Failed to send":"",this);
+#endif
+
+    if (notify) {
+	if (eout->id()) {
+	    JBEvent* ev = new JBEvent(JBEvent::WriteFail,this,
+		eout->release(),&(eout->id()));
+	    m_events.append(ev);
 	}
-	DDebug(m_engine,DebugMild,
-	    "Stream::writeSocket. Socket temporary unavailable: %d: '%s'. [%p]",
-	    m_socket->error(),::strerror(m_socket->error()),this);
+	terminate(false,0,XMPPError::HostGone,0,false);
     }
-    len = (u_int32_t)c;
-    return true;
+    m_outXML.remove(eout,true);
+    return ret;
+}
+
+// Remove:
+//   Pending elements with id if id is not 0
+//   All elements without id if id is 0
+void JBStream::removePending(bool notify, const String* id, bool force)
+{
+    ListIterator iter(m_outXML);
+    bool first = true;
+    for (GenObject* o = 0; (o = iter.get());) {
+	XMLElementOut* eout = static_cast<XMLElementOut*>(o);
+	// Check if the first element will be removed if partially sent
+	if (first) {
+	    first = false;
+	    if (eout->dataCount() && !force)
+		continue;
+	}
+	if (id) {
+	    if (*id != eout->id())
+		continue;
+	}
+	else if (eout->id())
+	    continue;
+	if (notify)
+	    m_events.append(new JBEvent(JBEvent::WriteFail,this,eout->release(),id));
+	m_outXML.remove(eout,true);
+    }
+}
+
+
+/**
+ * JBClientStream
+ */
+JBClientStream::JBClientStream(JBEngine* engine, const JabberID& jid,
+	const String& password, const SocketAddr& address,
+	unsigned int maxRestart, u_int64_t incRestartInterval, bool outgoing)
+    : JBStream(engine,jid,JabberID(0,jid.domain(),0),password,address,
+	true,maxRestart,incRestartInterval,outgoing,JBEngine::Client)
+{
+}
+
+// Get the starting stream element to be sent after stream connected
+XMLElement* JBClientStream::getStreamStart()
+{
+    Debug(engine(),DebugStub,"Please implement JBComponentStream::getStreamStart()");
+    return 0;
+}
+
+// Process a received element in Securing state
+void JBClientStream::processSecuring(XMLElement* xml)
+{
+    Debug(engine(),DebugStub,"Please implement JBComponentStream::processSecuring()");
+    dropXML(xml);
+}
+
+// Process a received element in Auth state
+void JBClientStream::processAuth(XMLElement* xml)
+{
+    Debug(engine(),DebugStub,"Please implement JBComponentStream::processAuth()");
+    dropXML(xml);
+}
+
+// Process a received element in Started state
+void JBClientStream::processStarted(XMLElement* xml)
+{
+    Debug(engine(),DebugStub,"Please implement JBComponentStream::processStarted()");
+    dropXML(xml);
+}
+
+
+/**
+ * JBComponentStream
+ */
+JBComponentStream::JBComponentStream(JBEngine* engine,
+	const JabberID& localJid, const JabberID& remoteJid,
+	const String& password, const SocketAddr& address,
+	bool autoRestart, unsigned int maxRestart,
+	u_int64_t incRestartInterval, bool outgoing)
+    : JBStream(engine,localJid,remoteJid,password,address,
+	autoRestart,maxRestart,incRestartInterval,outgoing,JBEngine::Component),
+    m_shaAuth(true)
+{
+}
+
+// Create stream start element
+XMLElement* JBComponentStream::getStreamStart()
+{
+    XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
+	XMPPNamespace::ComponentAccept);
+    start->setAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]);
+    start->setAttribute("to",local());
+    return start;
+}
+
+// Process a received element in Started state
+void JBComponentStream::processStarted(XMLElement* xml)
+{
+    // Expect stream start tag
+    // Check if received element other then 'stream'
+    if (xml->type() != XMLElement::StreamStart) {
+	dropXML(xml);
+	return;
+    }
+    // Check attributes: namespaces, from
+    if (!(xml->hasAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]) &&
+	xml->hasAttribute("xmlns",s_ns[XMPPNamespace::ComponentAccept]))) {
+	invalidStreamXML(xml,XMPPError::InvalidNamespace,0);
+	return;
+    }
+    // Check the from attribute
+    if (!engine()->checkComponentFrom(this,xml->getAttribute("from"))) {
+	invalidStreamXML(xml,XMPPError::HostUnknown,0);
+	return;
+    }
+    delete xml;
+
+    String handshake;
+    if (m_shaAuth) {
+	SHA1 auth;
+	auth << id() << m_password;
+	handshake = auth.hexDigest();
+    }
+    else {
+	MD5 auth;
+	auth << id() << m_password;
+	handshake = auth.hexDigest();
+    }
+    xml = new XMLElement(XMLElement::Handshake,0,handshake);
+    sendStreamXML(xml,Auth,false);
+}
+
+// Process a received element in Auth state
+void JBComponentStream::processAuth(XMLElement* xml)
+{
+    // Expect handshake
+    if (xml->type() != XMLElement::Handshake) {
+	dropXML(xml);
+	return;
+    }
+    delete xml;
+    changeState(Running);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

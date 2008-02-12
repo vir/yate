@@ -22,171 +22,497 @@
  */
 
 #include <yatejabber.h>
+#include <yatejingle.h>
 
 using namespace TelEngine;
+
+TokenDict JBEvent::s_type[] = {
+    {"Terminated",       Terminated},
+    {"Destroy",          Destroy},
+    {"Running",          Running},
+    {"WriteFail",        WriteFail},
+    {"Presence",         Presence},
+    {"Message",          Message},
+    {"Iq",               Iq},
+    {"IqError",          IqError},
+    {"IqResult",         IqResult},
+    {"IqDiscoInfoGet",   IqDiscoInfoGet},
+    {"IqDiscoInfoSet",   IqDiscoInfoSet},
+    {"IqDiscoInfoRes",   IqDiscoInfoRes},
+    {"IqDiscoInfoErr",   IqDiscoInfoErr},
+    {"IqDiscoItemsGet",  IqDiscoItemsGet},
+    {"IqDiscoItemsSet",  IqDiscoItemsSet},
+    {"IqDiscoItemsRes",  IqDiscoItemsRes},
+    {"IqDiscoItemsErr",  IqDiscoItemsErr},
+    {"IqCommandGet",     IqCommandGet},
+    {"IqCommandSet",     IqCommandSet},
+    {"IqCommandRes",     IqCommandRes},
+    {"IqCommandErr",     IqCommandErr},
+    {"IqJingleGet",      IqJingleGet},
+    {"IqJingleSet",      IqJingleSet},
+    {"IqJingleRes",      IqJingleRes},
+    {"IqJingleErr",      IqJingleErr},
+    {"Unhandled",        Unhandled},
+    {"Invalid",          Invalid},
+    {0,0}
+};
+
+TokenDict XMPPUser::s_subscription[] = {
+    {"none", None},
+    {"to",   To},
+    {"from", From},
+    {"both", Both},
+    {0,0},
+};
+
+TokenDict JBEngine::s_protoName[] = {
+    {"component",    Component},
+    {"client",       Client},
+    {0,0}
+};
+
+static TokenDict s_serviceType[] = {
+    {"jingle",       JBEngine::ServiceJingle},
+    {"iq",           JBEngine::ServiceIq},
+    {"message",      JBEngine::ServiceMessage},
+    {"presence",     JBEngine::ServicePresence},
+    {"command",      JBEngine::ServiceCommand},
+    {"disco",        JBEngine::ServiceDisco},
+    {"stream",       JBEngine::ServiceStream},
+    {"write-fail",   JBEngine::ServiceWriteFail},
+    {0,0}
+};
+
+static TokenDict s_threadNames[] = {
+    {"Jabber stream connect", JBThread::StreamConnect},
+    {"Engine receive",        JBThread::EngineReceive},
+    {"Engine process",        JBThread::EngineProcess},
+    {"Presence",              JBThread::Presence},
+    {"Jingle",                JBThread::Jingle},
+    {"Message",               JBThread::Message},
+    {0,0}
+};
+
+TokenDict JIDResource::s_show[] = {
+    {"away",   ShowAway},
+    {"chat",   ShowChat},
+    {"dnd",    ShowDND},
+    {"xa",     ShowXA},
+    {0,0},
+};
+
+TokenDict JBPresence::s_presence[] = {
+    {"error",         Error},
+    {"probe",         Probe},
+    {"subscribe",     Subscribe},
+    {"subscribed",    Subscribed},
+    {"unavailable",   Unavailable},
+    {"unsubscribe",   Unsubscribe},
+    {"unsubscribed",  Unsubscribed},
+    {0,0}
+};
+
+// Private thread class
+class JBPrivateThread : public Thread, public JBThread
+{
+public:
+    inline JBPrivateThread(Type type, JBThreadList* list, void* client,
+	int sleep, int prio)
+	: Thread(lookup(type,s_threadNames),Thread::priority((Priority)prio)),
+	JBThread(type,list,client,sleep)
+	{}
+    virtual void cancelThread(bool hard = false)
+	{ Thread::cancel(hard); }
+    virtual void run()
+	{ JBThread::runClient(); }
+};
+
+/**
+ * JBThread
+ */
+// Constructor. Append itself to the list
+JBThread::JBThread(Type type, JBThreadList* list, void* client, int sleep)
+    : m_type(type),
+    m_owner(list),
+    m_client(client),
+    m_sleep(sleep)
+{
+    if (!m_owner)
+	return;
+    Lock lock(m_owner->m_mutex);
+    m_owner->m_threads.append(this)->setDelete(false);
+}
+
+// Destructor. Remove itself from the list
+JBThread::~JBThread()
+{
+    Debug("jabber",DebugAll,"'%s' private thread terminated client=(%p) [%p]",
+	lookup(m_type,s_threadNames),m_client,this);
+    if (!m_owner)
+	return;
+    Lock lock(m_owner->m_mutex);
+    m_owner->m_threads.remove(this,false);
+}
+
+// Create and start a private thread
+bool JBThread::start(Type type, JBThreadList* list, void* client,
+	int sleep, int prio)
+{
+    Lock lock(list->m_mutex);
+    const char* error = 0;
+    bool ok = !list->m_cancelling;
+    if (ok)
+	ok = (new JBPrivateThread(type,list,client,sleep,prio))->startup();
+    else
+	error = ". Owner's threads are beeing cancelled";
+    if (!ok)
+	Debug("jabber",DebugNote,"'%s' private thread failed to start client=(%p)%s",
+	    lookup(type,s_threadNames),client,error?error:"");
+    return ok;
+}
+
+// Process the client
+void JBThread::runClient()
+{
+    if (!m_client)
+	return;
+    Debug("jabber",DebugAll,"'%s' private thread is running client=(%p) [%p]",
+	lookup(m_type,s_threadNames),m_client,this);
+    switch (m_type) {
+	case StreamConnect:
+	    ((JBStream*)m_client)->connect();
+	    break;
+	case EngineProcess:
+	    while (true)
+		if (!((JBEngine*)m_client)->process(Time::msecNow()))
+		    Thread::msleep(m_sleep,true);
+		else
+		    Thread::check(true);
+	    break;
+	case EngineReceive:
+	    while (true)
+		if (!((JBEngine*)m_client)->receive())
+		    Thread::msleep(m_sleep,true);
+		else
+		    Thread::check(true);
+	    break;
+	case Presence:
+	    while (true)
+		if (!((JBPresence*)m_client)->process())
+		    Thread::msleep(m_sleep,true);
+		else
+		    Thread::check(true);
+	    break;
+	case Jingle:
+	    while (true) {
+		bool ok = false;
+		while (true) {
+		    if (Thread::check(false))
+			break;
+		    JGEvent* event = ((JGEngine*)m_client)->getEvent(Time::msecNow());
+		    if (!event)
+			break;
+		    ok = true;
+		    ((JGEngine*)m_client)->processEvent(event);
+		}
+		if (!ok)
+		    Thread::msleep(m_sleep,true);
+		else
+		    Thread::check(true);
+	    }
+	    break;
+	case Message:
+	    while (true) {
+		JBEvent* event = ((JBMessage*)m_client)->getMessage();
+		if (event) {
+		    ((JBMessage*)m_client)->processMessage(event);
+		    Thread::check(true);
+		}
+		else
+		    Thread::yield(true);
+	    }
+	    break;
+	default:
+	    Debug(DebugStub,"JBThread::run() unhandled type %u",m_type);
+    }
+}
+
+
+/**
+ * JBThreadList
+ */
+void JBThreadList::cancelThreads(bool wait, bool hard)
+{
+    // Destroy private threads
+    m_mutex.lock();
+    for (ObjList* o = m_threads.skipNull(); o; o = o->skipNext()) {
+	JBThread* p = static_cast<JBThread*>(o->get());
+	p->cancelThread(hard);
+    }
+    m_cancelling = true;
+    m_mutex.unlock();
+    // Wait to terminate
+    if (!hard && wait)
+	while (m_threads.skipNull())
+	    Thread::yield();
+    m_cancelling = false;
+}
+
+
+static XMPPNamespace s_ns;               // Used to shorten the code (call static methods)
+
+// Default values
+#define JB_RESTART_COUNT               2 // Stream restart counter default value
+#define JB_RESTART_COUNT_MIN           1
+#define JB_RESTART_COUNT_MAX          10
+
+#define JB_RESTART_UPDATE          15000 // Stream restart counter update interval
+#define JB_RESTART_UPDATE_MIN       5000
+#define JB_RESTART_UPDATE_MAX     300000
+
+// Presence values
+#define JINGLE_VERSION            "1.0"  // Version capability
+#define JINGLE_VOICE         "voice-v1"  // Voice capability for Google Talk
 
 /**
  * JBEngine
  */
 
-static XMPPNamespace s_ns;
-
-// Default values
-#define JB_STREAM_RESTART_COUNT        2 // Stream restart counter default value
-#define JB_STREAM_RESTART_COUNT_MIN    1
-#define JB_STREAM_RESTART_COUNT_MAX   10
-
-#define JB_STREAM_RESTART_UPDATE   15000 // Stream restart counter update interval
-#define JB_STREAM_RESTART_UPDATE_MIN 5000
-#define JB_STREAM_RESTART_UPDATE_MAX 300000
-
-// Sleep time for threads
-#define SLEEP_READSOCKET               2 // Read socket
-#define SLEEP_PROCESSPRESENCE          2 // Process presence events
-#define SLEEP_PROCESSTIMEOUT          10 // Process presence timeout 
-
-// Presence values
-#define PRESENCE_PROBE_INTERVAL  1800000
-#define PRESENCE_EXPIRE_INTERVAL  300000
-
-#define JINGLE_VERSION            "1.0"  // Version capability
-#define JINGLE_VOICE         "voice-v1"  // Voice capability for Google Talk
-
-JBEngine::JBEngine()
+JBEngine::JBEngine(Protocol proto)
     : Mutex(true),
-      m_clientsMutex(true),
-      m_presence(0),
-      m_identity(0),
-      m_restartUpdateTime(0),
-      m_restartUpdateInterval(JB_STREAM_RESTART_UPDATE),
-      m_restartCount(JB_STREAM_RESTART_COUNT),
-      m_printXml(false),
-      m_streamID(0),
-      m_serverMutex(true)
+    m_protocol(proto),
+    m_restartUpdateInterval(JB_RESTART_UPDATE),
+    m_restartCount(JB_RESTART_COUNT),
+    m_printXml(false),
+    m_identity(0),
+    m_componentCheckFrom(1),
+    m_serverMutex(true),
+    m_servicesMutex(true),
+    m_initialized(false)
 {
+    for (int i = 0; i < ServiceCount; i++)
+	 m_services[i].setDelete(false);
     debugName("jbengine");
-    m_identity = new JIDIdentity(JIDIdentity::Gateway,JIDIdentity::GatewayGeneric);
-    //m_features.add(XMPPNamespace::Command);
-    m_features.add(XMPPNamespace::Jingle);
-    m_features.add(XMPPNamespace::JingleAudio);
-    m_features.add(XMPPNamespace::Dtmf);
-    m_features.add(XMPPNamespace::DiscoInfo);
-    XDebug(this,DebugAll,"JBEngine. [%p]",this);
+    XDebug(this,DebugAll,"JBEngine [%p]",this);
 }
 
 JBEngine::~JBEngine()
 {
     cleanup();
-    if (m_identity)
-	m_identity->deref();
-    XDebug(this,DebugAll,"~JBEngine. [%p]",this);
+    cancelThreads();
+    // Remove streams if alive
+    if (m_streams.skipNull()) {
+	Debug(this,DebugNote,"Engine destroyed while still owning streams [%p]",this);
+	ListIterator iter(m_streams);
+	for (GenObject* o = 0; 0 != (o = iter.get());)
+	    TelEngine::destruct(static_cast<JBStream*>(o));
+    }
+    TelEngine::destruct((RefObject*)m_identity);
+    XDebug(this,DebugAll,"~JBEngine [%p]",this);
 }
 
+// Cleanup streams. Stop all threads owned by this engine. Release memory
+void JBEngine::destruct()
+{
+    cleanup();
+    cancelThreads();
+    GenObject::destruct();
+}
+
+// Initialize the engine's parameters
 void JBEngine::initialize(const NamedList& params)
 {
-    clearServerList();
+    debugLevel(params.getIntValue("debug_level",debugLevel()));
+
+    int recv = -1, proc = -1;
+
+    if (!m_initialized) {
+	// Build engine Jabber identity and features
+	if (m_protocol == Component)
+	    m_identity = new JIDIdentity(JIDIdentity::Gateway,JIDIdentity::GatewayGeneric);
+	else
+	    m_identity = new JIDIdentity(JIDIdentity::Account,JIDIdentity::AccountRegistered);
+	m_features.add(XMPPNamespace::Jingle);
+	m_features.add(XMPPNamespace::JingleAudio);
+	m_features.add(XMPPNamespace::Dtmf);
+	m_features.add(XMPPNamespace::DiscoInfo);
+
+	recv = params.getIntValue("private_receive_threads",1);
+	for (int i = 0; i < recv; i++)
+	    JBThread::start(JBThread::EngineReceive,this,this,2,Thread::Normal);
+	proc = params.getIntValue("private_process_threads",1);
+	for (int i = 0; i < proc; i++)
+	    JBThread::start(JBThread::EngineProcess,this,this,2,Thread::Normal);
+    }
+
+    m_serverMutex.lock();
+    m_server.clear();
+    m_serverMutex.unlock();
+
     m_printXml = params.getBoolValue("printxml",false);
     // Alternate domain names
-    m_alternateDomain = params.getValue("extra_domain");
+    m_alternateDomain.set(0,params.getValue("extra_domain"));
     // Stream restart update interval
     m_restartUpdateInterval =
-	params.getIntValue("stream_restartupdateinterval",JB_STREAM_RESTART_UPDATE);
-    if (m_restartUpdateInterval < JB_STREAM_RESTART_UPDATE_MIN)
-	m_restartUpdateInterval = JB_STREAM_RESTART_UPDATE_MIN;
+	params.getIntValue("stream_restartupdateinterval",JB_RESTART_UPDATE);
+    if (m_restartUpdateInterval < JB_RESTART_UPDATE_MIN)
+	m_restartUpdateInterval = JB_RESTART_UPDATE_MIN;
     else
-	if (m_restartUpdateInterval > JB_STREAM_RESTART_UPDATE_MAX)
-	    m_restartUpdateInterval = JB_STREAM_RESTART_UPDATE_MAX;
+	if (m_restartUpdateInterval > JB_RESTART_UPDATE_MAX)
+	    m_restartUpdateInterval = JB_RESTART_UPDATE_MAX;
     // Stream restart count
     m_restartCount = 
-	params.getIntValue("stream_restartcount",JB_STREAM_RESTART_COUNT);
-    if (m_restartCount < JB_STREAM_RESTART_COUNT_MIN)
-	m_restartCount = JB_STREAM_RESTART_COUNT_MIN;
+	params.getIntValue("stream_restartcount",JB_RESTART_COUNT);
+    if (m_restartCount < JB_RESTART_COUNT_MIN)
+	m_restartCount = JB_RESTART_COUNT_MIN;
     else
-	if (m_restartCount > JB_STREAM_RESTART_COUNT_MAX)
-	    m_restartCount = JB_STREAM_RESTART_COUNT_MAX;
+	if (m_restartCount > JB_RESTART_COUNT_MAX)
+	    m_restartCount = JB_RESTART_COUNT_MAX;
     // XML parser max receive buffer
     XMLParser::s_maxDataBuffer =
 	params.getIntValue("xmlparser_maxbuffer",XMLPARSER_MAXDATABUFFER);
     // Default resource
     m_defaultResource = params.getValue("default_resource","yate");
-    if (debugAt(DebugAll)) {
+    // Check 'from' attribute for component streams
+    String chk = params.getValue("component_checkfrom");
+    if (chk == "none")
+	m_componentCheckFrom = 0;
+    else if (chk == "remote")
+	m_componentCheckFrom = 2;
+    else
+	m_componentCheckFrom = 1;
+
+    if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\ndefault_resource=" << m_defaultResource;
-	s << "\r\nstream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
-	s << "\r\nstream_restartcount=" << (unsigned int)m_restartCount;
-	s << "\r\nxmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
-	s << "\r\nprintxml=" << String::boolText(m_printXml);
-	Debug(this,DebugAll,"Initialized:%s",s.c_str());
+	s << " protocol=" << lookup(m_protocol,s_protoName);
+	s << " default_resource=" << m_defaultResource;
+	s << " component_checkfrom=" << m_componentCheckFrom;
+	s << " stream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
+	s << " stream_restartcount=" << (unsigned int)m_restartCount;
+	s << " xmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
+	s << " printxml=" << m_printXml;
+	if (recv > -1)
+	    s << " private_receive_threads=" << recv;
+	if (proc > -1)
+	    s << " private_process_threads=" << proc;
+	Debug(this,DebugInfo,"Jabber engine initialized:%s [%p]",s.c_str(),this);
     }
+
+    m_initialized = true;
 }
 
+// Terminate all streams
 void JBEngine::cleanup()
 {
     Lock lock(this);
-    DDebug(this,DebugAll,"Cleanup.");
-    ObjList* obj = m_streams.skipNull();
-    for (; obj; obj = m_streams.skipNext()) {
-	JBComponentStream* s = static_cast<JBComponentStream*>(obj->get());
-	s->terminate(true,true,XMPPUtils::createStreamError(XMPPError::Shutdown),true);
+    for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
+	JBStream* s = static_cast<JBStream*>(o->get());
+	s->terminate(true,0,XMPPError::Shutdown,0,true);
     }
 }
 
+// Set the default component server to use
 void JBEngine::setComponentServer(const char* domain)
 {
+    if (m_protocol != Component)
+	return;
     Lock lock(m_serverMutex);
-    JBServerInfo* p = getServer(domain,true);
+    XMPPServerInfo* p = findServerInfo(domain,true);
     // If doesn't exists try to get the first one from the list
     if (!p) {
 	ObjList* obj = m_server.skipNull();
-	p = obj ? static_cast<JBServerInfo*>(obj->get()) : 0;
+	p = obj ? static_cast<XMPPServerInfo*>(obj->get()) : 0;
     }
-    else
-	p->deref();
     if (!p) {
-	Debug(this,DebugNote,"No default component server.");
+	Debug(this,DebugNote,"No default component server [%p]",this);
 	return;
     }
-    m_componentDomain = p->name();
+    m_componentDomain.set(0,p->name());
     m_componentAddr = p->address();
-    DDebug(this,DebugAll,"Default component server set to '%s' (%s).",
-	m_componentDomain.c_str(),m_componentAddr.c_str());
+    DDebug(this,DebugAll,"Default component server set to '%s' (%s) [%p]",
+	m_componentDomain.c_str(),m_componentAddr.c_str(),this);
 }
 
-JBComponentStream* JBEngine::getStream(const char* domain, bool create)
+// Get a stream. Create it not found and requested
+// For the component protocol, the jid parameter may contain the domain to find,
+//  otherwise, the default component will be used
+// For the client protocol, the jid parameter must contain the full
+//  user's jid (including the resource)
+JBStream* JBEngine::getStream(const JabberID* jid, bool create, const char* pwd)
 {
     Lock lock(this);
-    if (!domain)
-	domain = m_componentDomain;
-    JBComponentStream* stream = findStream(domain);
-    XDebug(this,DebugAll,
-	"getStream. Remote: '%s'. Stream exists: %s (%p). Create: %s.",
-	domain,stream?"YES":"NO",stream,create?"YES":"NO");
+    if (exiting())
+	return 0;
+    const JabberID* remote = jid;
+    // Set remote to be a valid pointer
+    if (!remote)
+	if (m_protocol == Component)
+	    remote = &m_componentDomain;
+	else
+	    return 0;
+    // Find the stream
+    JBStream* stream = 0;
+    for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
+	stream = static_cast<JBStream*>(o->get());
+	if (stream->remote() == *remote)
+	    break;
+	stream = 0;
+    }
+
     if (!stream && create) {
+	XMPPServerInfo* info = findServerInfo(remote->domain(),true);
+	if (!info) {
+	    Debug(this,DebugNote,"No server info to create stream to '%s' [%p]",
+		remote->c_str(),this);
+	    return 0;
+	}
 	SocketAddr addr(PF_INET);
-	addr.host(domain);
-	addr.port(getPort(addr.host()));
-	stream = new JBComponentStream(this,domain,addr);
+	addr.host(info->address());
+	addr.port(info->port());
+	if (m_protocol == Component)
+	    stream = new JBComponentStream(this,JabberID(0,info->identity(),0),
+		*remote,info->password(),addr,
+		true,m_restartCount,m_restartUpdateInterval);
+	else
+	    stream = new JBClientStream(this,*jid,pwd,addr,m_restartCount,m_restartUpdateInterval);
 	m_streams.append(stream);
     }
     return ((stream && stream->ref()) ? stream : 0);
 }
 
+// Try to get a stream if stream parameter is 0
+bool JBEngine::getStream(JBStream*& stream, bool& release, const char* pwd)
+{
+    release = false;
+    if (stream)
+	return true;
+    stream = getStream(0,true,pwd);
+    if (stream) {
+	release = true;
+	return true;
+    }
+    return false;
+}
+
+// Keep calling receive() for each stream until no data is received or the thread is terminated
 bool JBEngine::receive()
 {
     bool ok = false;
     lock();
     ListIterator iter(m_streams);
     for (;;) {
-	JBComponentStream* stream = static_cast<JBComponentStream*>(iter.get());
+	JBStream* stream = static_cast<JBStream*>(iter.get());
         // End of iteration?
 	if (!stream)
 	    break;
 	// Get a reference
-	RefPointer<JBComponentStream> sref = stream;
+	RefPointer<JBStream> sref = stream;
 	if (!sref)
 	    continue;
 	// Read socket
 	unlock();
+	if (Thread::check(false))
+	    return false;
 	if (sref->receive())
 	    ok = true;
 	lock();
@@ -195,444 +521,378 @@ bool JBEngine::receive()
     return ok;
 }
 
-void JBEngine::runReceive()
-{
-    while (1) {
-	if (!receive())
-	    Thread::msleep(SLEEP_READSOCKET,true);
-    }
-}
-
-JBEvent* JBEngine::getEvent(u_int64_t time)
+// Get events from the streams owned by this engine
+bool JBEngine::process(u_int64_t time)
 {
     lock();
     ListIterator iter(m_streams);
     for (;;) {
-	JBComponentStream* stream = static_cast<JBComponentStream*>(iter.get());
+	if (Thread::check(false))
+	    break;
+	JBStream* stream = static_cast<JBStream*>(iter.get());
         // End of iteration?
 	if (!stream)
 	    break;
 	// Get a reference
-	RefPointer<JBComponentStream> sref = stream;
+	RefPointer<JBStream> sref = stream;
 	if (!sref)
 	    continue;
 	// Get event
 	unlock();
 	JBEvent* event = sref->getEvent(time);
-	if (event)
-	    // Check if the engine should process these events
-	    switch (event->type()) {
-		case JBEvent::Presence:
-		    if (!(m_presence && m_presence->receive(event)))
-			return event;
-		    break;
-		case JBEvent::IqDiscoGet:
-		case JBEvent::IqDiscoSet:
-		case JBEvent::IqDiscoRes: {
-		    JabberID jid(event->to());
-		    if (jid.node()) {
-			if (!(m_presence && m_presence->receive(event)))
-			    return event;
-			break;
-		    }
-		    if (!processDiscoInfo(event))
-			return event;
-		    break;
-		    }
-		case JBEvent::IqCommandGet:
-		case JBEvent::IqCommandSet:
-		case JBEvent::IqCommandRes: {
-		    JabberID jid(event->to());
-		    if (!processCommand(event))
-			return event;
-		    break;
-		    }
-		case JBEvent::Invalid:
-		    event->deref();
-		    break;
-		case JBEvent::Terminated:
-		    // Restart stream
-		    connect(event->stream());
-		    event->deref();
-		    break;
-		// Unhandled 'iq' element
-		case JBEvent::Iq:
-		    DDebug(this,DebugInfo,
-			"getEvent. Event((%p): %u). Unhandled 'iq' element.",event,event->type());
-		    stream->sendIqError(event->releaseXML(),XMPPError::TypeCancel,
-			XMPPError::SFeatureNotImpl);
-		    event->deref();
-		    break;
-		default:
-		    return event;
-	    }
+	if (!event)
+	    return false;
+
+	Lock serviceLock(m_servicesMutex);
+	// Send events to the registered services
+	switch (event->type()) {
+	    case JBEvent::Message:
+		if (received(ServiceMessage,event))
+		    return true;
+		break;
+	    case JBEvent::IqJingleGet:
+	    case JBEvent::IqJingleSet:
+	    case JBEvent::IqJingleRes:
+	    case JBEvent::IqJingleErr:
+		if (received(ServiceJingle,event))
+		    return true;
+		break;
+	    case JBEvent::Iq:
+	    case JBEvent::IqError:
+	    case JBEvent::IqResult:
+		if (received(ServiceIq,event))
+		    return true;
+		break;
+	    case JBEvent::Presence:
+		if (received(ServicePresence,event))
+		    return true;
+		break;
+	    case JBEvent::IqDiscoInfoGet:
+	    case JBEvent::IqDiscoInfoSet:
+	    case JBEvent::IqDiscoInfoRes:
+	    case JBEvent::IqDiscoInfoErr:
+	    case JBEvent::IqDiscoItemsGet:
+	    case JBEvent::IqDiscoItemsSet:
+	    case JBEvent::IqDiscoItemsRes:
+	    case JBEvent::IqDiscoItemsErr:
+		if (received(ServiceDisco,event))
+		    return true;
+		if (processDisco(event))
+		    event = 0;
+		break;
+	    case JBEvent::IqCommandGet:
+	    case JBEvent::IqCommandSet:
+	    case JBEvent::IqCommandRes:
+	    case JBEvent::IqCommandErr:
+		if (received(ServiceCommand,event))
+		    return true;
+		if (processCommand(event))
+		    event = 0;
+		break;
+	    case JBEvent::WriteFail:
+		if (received(ServiceWriteFail,event))
+		    return true;
+		break;
+	    case JBEvent::Terminated:
+	    case JBEvent::Destroy:
+	    case JBEvent::Running:
+		if (received(ServiceStream,event))
+		    return true;
+		break;
+	    default: ;
+	}
+	serviceLock.drop();
+	if (event) {
+	    Debug(this,DebugAll,"Delete unhandled event (%p,%s) [%p]",
+		event,event->name(),this);
+	    TelEngine::destruct(event);
+	}
 	lock();
     }
     unlock();
-    return 0;
+    return false;
 }
 
-bool JBEngine::remoteIdExists(const JBComponentStream* stream)
+// Check for duplicate stream id at a remote server
+bool JBEngine::checkDupId(const JBStream* stream)
 {
-    // IDs for incoming streams are generated by this engine
-    // Check the stream source and ID
-    if (!stream)
+    if (!(stream && stream->outgoing()))
 	return false;
     Lock lock(this);
-    ObjList* obj = m_streams.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JBComponentStream* s = static_cast<JBComponentStream*>(obj->get());
-	if (s != stream &&
-	    s->remoteName() == stream->remoteName() &&
-	    s->id() == stream->id())
+    for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
+	JBStream* s = static_cast<JBStream*>(o->get());
+	if (s != stream && s->outgoing() &&
+	    s->remote() == stream->remote() && s->id() == stream->id())
 	    return true;
     }
     return false;
 }
 
-void JBEngine::createSHA1(String& sha, const String& id,
-	const String& password)
-{
-    SHA1 sha1;
-    sha1 << id << password;
-    sha = sha1.hexDigest();
-}
-
-bool JBEngine::checkSHA1(const String& sha, const String& id,
-	const String& password)
-{
-    String tmp;
-    createSHA1(tmp,id,password);
-    return tmp == sha;
-}
-
-void JBEngine::timerTick(u_int64_t time)
-{
-    if (m_restartUpdateTime > time)
-	return;
-    // Update server streams counters
-    Lock lock(m_serverMutex);
-    ObjList* obj = m_server.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JBServerInfo* server = static_cast<JBServerInfo*>(obj->get());
-	if (server->restartCount() < m_restartCount) {
-	    server->incRestart();
-	    DDebug(this,DebugAll,
-		"Increased stream restart counter (%u) for '%s'.",
-		server->restartCount(),server->name().c_str());
-	}
-	// Check if stream should be restarted (created)
-	if (server->autoRestart()) {
-	    JBComponentStream* stream = getStream(server->name(),true);
-	    if (stream)
-		stream->deref();
-	}
-    }
-    // Update next update time
-    m_restartUpdateTime = time + m_restartUpdateInterval;
-}
-
-bool JBEngine::connect(JBComponentStream* stream)
+// Check the 'from' attribute received by a Component stream at startup
+// 0: no check 1: local identity 2: remote identity
+bool JBEngine::checkComponentFrom(JBComponentStream* stream, const char* from)
 {
     if (!stream)
 	return false;
-    stream->connect();
-    return true;
+    JabberID tmp(from);
+    switch (m_componentCheckFrom) {
+	case 1:
+	    return stream->local() == tmp;
+	case 2:
+	    return stream->remote() == tmp;
+	case 0:
+	    return true;
+    }
+    return false;
 }
 
-void JBEngine::returnEvent(JBEvent* event)
+// Asynchronously call the connect method of the given stream if the stream is idle
+void JBEngine::connect(JBStream* stream)
 {
-    if (!event)
-	return;
-    if (event->type() == JBEvent::Message && processMessage(event))
-	return;
-    DDebug(this,DebugAll,
-	"returnEvent. Delete event((%p): %u).",event,event->type());
-    event->deref();
+    if (stream && stream->state() == JBStream::Idle)
+	JBThread::start(JBThread::StreamConnect,this,stream,2,Thread::Normal);
 }
 
-bool JBEngine::acceptOutgoing(const String& remoteAddr,
-	String& password)
-{
-    bool b = getServerPassword(password,remoteAddr,false);
-    XDebug(this,DebugAll,
-	"acceptOutgoing. To: '%s'. %s.",remoteAddr.c_str(),
-	b ? "Accepted" : "Not accepted");
-    return b;
-}
-
-int JBEngine::getPort(const String& remoteAddr)
-{
-    int port = 0;
-    getServerPort(port,remoteAddr,false);
-    XDebug(this,DebugAll,
-	"getPort. For: '%s'. Port: %d",remoteAddr.c_str(),port);
-    return port;
-}
-
-void JBEngine::appendServer(JBServerInfo* server, bool open)
+// Append server info the list
+void JBEngine::appendServer(XMPPServerInfo* server, bool open)
 {
     if (!server)
 	return;
     // Add if doesn't exists. Delete if already in the list
-    JBServerInfo* p = getServer(server->name(),true);
+    XMPPServerInfo* p = findServerInfo(server->name(),true);
     if (!p) {
 	m_serverMutex.lock();
 	m_server.append(server);
+	Debug(this,DebugAll,"Added server '%s' port=%d [%p]",
+	    server->name().c_str(),server->port(),this);
 	m_serverMutex.unlock();
     }
-    else {
-	server->deref();
-	p->deref();
-    }
+    else
+	TelEngine::destruct(server);
     // Open stream
-    if (open) {
-	JBComponentStream* stream = getStream(server->name());
+    if (open && m_protocol == Component) {
+	JabberID jid(0,server->name(),0);
+	JBStream* stream = getStream(&jid);
 	if (stream)
-	    stream->deref();
+	    TelEngine::destruct(stream);
     }
 }
 
-bool JBEngine::getServerIdentity(String& destination,
+// Get the identity of the given server
+bool JBEngine::getServerIdentity(String& destination, bool full,
 	const char* token, bool domain)
 {
     Lock lock(m_serverMutex);
-    JBServerInfo* server = getServer(token,domain);
+    XMPPServerInfo* server = findServerInfo(token,domain);
     if (!server)
 	return false;
-    destination = server->identity();
-    server->deref();
+    destination = full ? server->fullIdentity() : server->identity();
     return true;
 }
 
-bool JBEngine::getFullServerIdentity(String& destination, const char* token,
-	bool domain)
-{
-    Lock lock(m_serverMutex);
-    JBServerInfo* server = getServer(token,domain);
-    if (!server)
-	return false;
-    destination = server->fullIdentity();
-    server->deref();
-    return true;
-}
-
-bool JBEngine::getStreamRestart(const char* token, bool domain)
-{
-    Lock lock(m_serverMutex);
-    JBServerInfo* server = getServer(token,domain);
-    if (!server)
-	return false;
-    bool restart = server->getRestart();
-    if (restart)
-	DDebug(this,DebugAll,"Decreased stream restart counter (%u) for '%s'.",
-	    server->restartCount(),server->name().c_str());
-    server->deref();
-    return restart;
-}
-
-bool JBEngine::processDiscoInfo(JBEvent* event)
-{
-    JBComponentStream* stream = event->stream();
-    // Check if we have a stream and this engine is the destination
-    if (!(stream && event->element()))
-	return false;
-    //TODO: Check if the engine is the destination.
-    //      The destination might be a user
-    switch (event->type()) {
-	case JBEvent::IqDiscoGet:
-	    {
-	    DDebug(this,DebugAll,"processDiscoInfo. Get. From '%s' to '%s'.",
-		event->from().c_str(),event->to().c_str());
-	    // Create response
-	    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,
-		XMPPNamespace::DiscoInfo);
-	    // Set the identity & features
-	    if (m_identity) {
-		*(String*)(m_identity) = stream->localName();
-		query->addChild(m_identity->toXML());
-	    }
-	    m_features.addTo(query);
-	    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,event->to(),
-		event->from(),event->id());
-	    iq->addChild(query);
-	    // Send response
-	    stream->sendStanza(iq);
-	    }
-	    break;
-	case JBEvent::IqDiscoRes:
-	    DDebug(this,DebugAll,"processDiscoInfo. Result.  From '%s' to '%s'.",
-		event->from().c_str(),event->to().c_str());
-	    break;
-	case JBEvent::IqDiscoSet:
-	    DDebug(this,DebugAll,"processDiscoInfo. Set. From '%s' to '%s'.",
-		event->from().c_str(),event->to().c_str());
-	    break;
-	default:
-	    Debug(this,DebugNote,"processDiscoInfo. From '%s' to '%s'. Unhandled.",
-		event->from().c_str(),event->to().c_str());
-    }
-    // Release event
-    event->deref();
-    return true;
-}
-
-bool JBEngine::processCommand(JBEvent* event)
-{
-    JBComponentStream* stream = event->stream();
-    if (!(event && event->element() && event->child())) {
-	event->deref();
-	return true;
-    }
-    //TODO: Check if the engine is the destination.
-    //      The destination might be a user
-    switch (event->type()) {
-	case JBEvent::IqCommandGet:
-	case JBEvent::IqCommandSet:
-	    DDebug(this,DebugAll,"processCommand. From '%s' to '%s'.",
-		event->from().c_str(),event->to().c_str());
-	    stream->sendIqError(event->releaseXML(),XMPPError::TypeCancel,
-		    XMPPError::SFeatureNotImpl);
-	    break;
-	case JBEvent::IqDiscoRes:
-	    DDebug(this,DebugAll,"processCommand. Result. From '%s' to '%s'.",
-		event->from().c_str(),event->to().c_str());
-	    break;
-	default:
-	    Debug(this,DebugNote,"processCommand. From '%s' to '%s'. Unhandled.",
-		event->from().c_str(),event->to().c_str());
-    }
-    // Release event
-    event->deref();
-    return true;
-}
-
-JBComponentStream* JBEngine::findStream(const String& remoteName)
-{
-    ObjList* obj = m_streams.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JBComponentStream* stream = static_cast<JBComponentStream*>(obj->get());
-	if (stream->remoteName() == remoteName)
-	    return stream;
-    }
-    return 0;
-}
-
-void JBEngine::removeStream(JBComponentStream* stream, bool del)
-{
-    if (!m_streams.remove(stream,del))
-	return;
-    DDebug(this,DebugAll,
-	"removeStream (%p). Deleted: %s.",stream,del?"YES":"NO");
-}
-
-void JBEngine::addClient(JBClient* client)
-{
-    if (!client)
-	return;
-    // Check existence
-    Lock lock(m_clientsMutex);
-    if (m_clients.find(client))
-	return;
-    m_clients.append(client);
-}
-
-void JBEngine::removeClient(JBClient* client)
-{
-    if (!client)
-	return;
-    Lock lock(m_clientsMutex);
-    m_clients.remove(client,false);
-}
-
-JBServerInfo* JBEngine::getServer(const char* token, bool domain)
+// Find a server info object
+XMPPServerInfo* JBEngine::findServerInfo(const char* token, bool domain)
 {
     if (!token)
 	token = domain ? m_componentDomain : m_componentAddr;
     if (!token)
 	return 0;
-    ObjList* obj = m_server.skipNull();
-    JBServerInfo* server = 0;
     if (domain)
-	for (; obj; obj = obj->skipNext()) {
-	    server = static_cast<JBServerInfo*>(obj->get());
-	    if (server->name() == token)
-		break;
-	    server = 0;
+	for (ObjList* o = m_server.skipNull(); o; o = o->skipNext()) {
+	    XMPPServerInfo* server = static_cast<XMPPServerInfo*>(o->get());
+	    if (server->name() &= token)
+		return server;
 	}
     else
-	for (; obj; obj = obj->skipNext()) {
-	    server = static_cast<JBServerInfo*>(obj->get());
+	for (ObjList* o = m_server.skipNull(); o; o = o->skipNext()) {
+	    XMPPServerInfo* server = static_cast<XMPPServerInfo*>(o->get());
 	    if (server->address() == token)
-		break;
-	    server = 0;
+		return server;
 	}
-    return (server && server->ref()) ? server : 0;
+    return 0;
 }
 
-bool JBEngine::processMessage(JBEvent* event)
+// Attach a service to this engine
+void JBEngine::attachService(JBService* service, Service type, int prio)
 {
-    DDebug(this,DebugInfo,
-	"JBEngine::processMessage. From: '%s'. To: '%s'.",
-	event->from().c_str(),event->to().c_str());
+    if (!service)
+	return;
+    Lock lock(m_servicesMutex);
+    if (m_services[type].find(service))
+	return;
+    if (prio == -1)
+	prio = service->priority();
+    ObjList* insert = m_services[type].skipNull();
+    for (; insert; insert = insert->skipNext()) {
+	JBService* tmp = static_cast<JBService*>(insert->get());
+	if (prio <= tmp->priority()) {
+	    insert->insert(service);
+	    break;
+	}
+    }
+    if (!insert)
+	m_services[type].append(service);
+    Debug(this,DebugInfo,"Attached service (%p) '%s' type=%s priority=%d [%p]",
+	service,service->debugName(),lookup(type,s_serviceType),prio,this);
+}
+
+// Remove a service from all event handlers of this engine.
+void JBEngine::detachService(JBService* service)
+{
+    if (!service)
+	return;
+    Lock lock(m_servicesMutex);
+    for (int i = 0; i < ServiceCount; i++) {
+	GenObject* o = m_services[i].find(service);
+	if (!o)
+	    continue;
+	m_services[i].remove(service,false);
+	Debug(this,DebugInfo,"Removed service (%p) '%s' type=%s [%p]",
+	    service,service->debugName(),lookup(i,s_serviceType),this);
+    }
+}
+
+// Process disco info events
+bool JBEngine::processDisco(JBEvent* event)
+{
+    JBStream* stream = event->stream();
+    XMLElement* child = event->child();
+
+    // Check if we sould or can respond to it
+    if (!(event->type() == JBEvent::IqDiscoInfoGet && stream && child))
+	return false;
+
+    // Create response
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,event->to(),event->from(),event->id());
+    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
+    m_features.addTo(query);
+    if (m_identity) {
+	*(String*)(m_identity) = stream->local();
+	query->addChild(m_identity->toXML());
+    }
+    iq->addChild(query);
+    stream->sendStanza(iq);
+    TelEngine::destruct(event);
+    return true;
+}
+
+// Process commands
+bool JBEngine::processCommand(JBEvent* event)
+{
+    JBStream* stream = event->stream();
+    if (!stream ||
+	(event->type() != JBEvent::IqCommandGet && event->type() != JBEvent::IqCommandSet))
+	return false;
+
+    // Send error
+    XMLElement* err = XMPPUtils::createIq(XMPPUtils::IqError,event->to(),event->from(),event->id());
+    err->addChild(event->releaseXML());
+    err->addChild(XMPPUtils::createError(XMPPError::TypeCancel,XMPPError::SFeatureNotImpl));
+    stream->sendStanza(err);
+    TelEngine::destruct(event);
+    return true;
+}
+
+// Find a service to process a received event
+bool JBEngine::received(Service service, JBEvent* event)
+{
+    if (!event)
+	return false;
+    for (ObjList* o = m_services[service].skipNull(); o; o = o->skipNext()) {
+	JBService* service = static_cast<JBService*>(o->get());
+	XDebug(this,DebugAll,"Sending event (%p,%s) to service '%s' [%p]",
+	    event,event->name(),service->debugName(),this);
+	if (service->received(event))
+	    return true;
+    }
     return false;
 }
 
-bool JBEngine::getServerPassword(String& destination,
-	const char* token, bool domain)
+
+/**
+ * JBService
+ */
+JBService::JBService(JBEngine* engine, const char* name,
+	const NamedList* params, int prio)
+    : Mutex(true),
+    m_initialized(false),
+    m_engine(engine),
+    m_priority(prio)
 {
-    Lock lock(m_serverMutex);
-    JBServerInfo* server = getServer(token,domain);
-    if (!server)
+    debugName(name);
+    XDebug(this,DebugAll,"Jabber service created [%p]",this);
+    if (params)
+	initialize(*params);
+}
+
+JBService::~JBService()
+{
+    XDebug(this,DebugAll,"JBService::~JBService() [%p]",this);
+}
+
+// Remove from engine. Release memory
+void JBService::destruct()
+{
+    if (m_engine)
+	m_engine->detachService(this);
+    Debug(this,DebugAll,"Jabber service destroyed [%p]",this);
+    GenObject::destruct();
+}
+
+// Accept an event from the engine
+bool JBService::accept(JBEvent* event, bool& processed, bool& insert)
+{
+    Debug(this,DebugStub,"JBService::accept(%p)",event);
+    return false;
+}
+
+// Receive an event from engine
+bool JBService::received(JBEvent* event)
+{
+    if (!event)
 	return false;
-    destination = server->password();
-    server->deref();
+    bool insert = false;
+    bool processed = false;
+    Lock lock(this);
+    XDebug(this,DebugAll,"Receiving (%p,%s) [%p]",event,event->name(),this);
+    if (!accept(event,processed,insert)) {
+	DDebug(this,DebugAll,"Event (%p,%s) not accepted [%p]",
+	    event,event->name(),this);
+	return false;
+    }
+    if (processed) {
+	DDebug(this,DebugAll,"Event (%p,%s) processed [%p]",
+	    event,event->name(),this);
+	return true;
+    }
+    Debug(this,DebugAll,"%s event (%p,%s) [%p]",
+	insert?"Inserting":"Appending",event,event->name(),this);
+    event->releaseStream();
+    if (insert)
+	m_events.insert(event);
+    else
+	m_events.append(event);
     return true;
 }
 
-bool JBEngine::getServerPort(int& destination,
-	const char* token, bool domain)
-{
-    Lock lock(m_serverMutex);
-    JBServerInfo* server = getServer(token,domain);
-    if (!server)
-	return false;
-    destination = server->port();
-    server->deref();
-    return true;
-}
-
-void JBEngine::setPresenceServer(JBPresence* presence)
-{
-    if (m_presence)
-	return;
-    Lock lock(this);
-    if (presence)
-	m_presence = presence;
-}
-
-void JBEngine::unsetPresenceServer(JBPresence* presence)
+// Get an event from queue
+JBEvent* JBService::deque()
 {
     Lock lock(this);
-    if (m_presence == presence)
-	m_presence = 0;
+    ObjList* obj = m_events.skipNull();
+    if (!obj)
+	return 0;
+    JBEvent* event = static_cast<JBEvent*>(obj->remove(false));
+    DDebug(this,DebugAll,"Dequeued event (%p,%s) [%p]",
+	event,event->name(),this);
+    return event;
 }
+
 
 /**
  * JBEvent
  */
-JBEvent::JBEvent(Type type, JBComponentStream* stream)
-    : m_type(type),
-      m_stream(0),
-      m_link(true),
-      m_element(0),
-      m_child(0)
-{
-    init(stream,0);
-}
-
-JBEvent::JBEvent(Type type, JBComponentStream* stream,
-	XMLElement* element, XMLElement* child)
+JBEvent::JBEvent(Type type, JBStream* stream, XMLElement* element, XMLElement* child)
     : m_type(type),
       m_stream(0),
       m_link(true),
@@ -643,8 +903,7 @@ JBEvent::JBEvent(Type type, JBComponentStream* stream,
 	m_type = Invalid;
 }
 
-JBEvent::JBEvent(Type type, JBComponentStream* stream,
-	XMLElement* element, const String& senderID)
+JBEvent::JBEvent(Type type, JBStream* stream, XMLElement* element, const String& senderID)
     : m_type(type),
       m_stream(0),
       m_link(true),
@@ -660,11 +919,11 @@ JBEvent::~JBEvent()
 {
     if (m_stream) {
 	releaseStream();
-	m_stream->deref();
+	TelEngine::destruct(m_stream);
     }
     if (m_element)
 	delete m_element;
-    XDebug(DebugAll,"JBEvent::~JBEvent. [%p]",this);
+    XDebug(DebugAll,"JBEvent::~JBEvent [%p]",this);
 }
 
 void JBEvent::releaseStream()
@@ -675,7 +934,7 @@ void JBEvent::releaseStream()
     }
 }
 
-bool JBEvent::init(JBComponentStream* stream, XMLElement* element)
+bool JBEvent::init(JBStream* stream, XMLElement* element)
 {
     bool bRet = true;
     if (stream && stream->ref())
@@ -683,42 +942,77 @@ bool JBEvent::init(JBComponentStream* stream, XMLElement* element)
     else
 	bRet = false;
     m_element = element;
-    XDebug(DebugAll,"JBEvent::JBEvent. Type: %u. Stream (%p). Element: (%p). [%p]",
-	m_type,m_stream,m_element,this);
+    XDebug(DebugAll,"JBEvent::init type=%s stream=(%p) xml=(%p) [%p]",
+	name(),m_stream,m_element,this);
+    if (!m_element)
+	return bRet;
+
+    // Decode some data
+    if (m_type == Message) {
+	XMLElement* body = m_element->findFirstChild("body");
+	if (body)
+	    m_text = body->getText();
+    }
+    else
+	XMPPUtils::decodeError(m_element,m_text,m_text);
+    // Most elements have these parameters:
+    m_stanzaType = m_element->getAttribute("type");
+    m_from = m_element->getAttribute("from");
+    m_to = m_element->getAttribute("to");
+    m_id = m_element->getAttribute("id");
     return bRet;
 }
 
+
 /**
- * JBClient
+ * JBMessage
  */
-JBClient::JBClient(JBEngine* engine)
-    : m_engine(0)
+// Initialize service. Create private threads
+void JBMessage::initialize(const NamedList& params)
 {
-    if (engine && engine->ref()) {
-	m_engine = engine;
-	m_engine->addClient(this);
+    debugLevel(params.getIntValue("debug_level",debugLevel()));
+
+    if (m_initialized)
+	return;
+    m_initialized = true;
+    m_syncProcess = params.getBoolValue("sync_process",m_syncProcess);
+    if (debugAt(DebugInfo)) {
+	String s;
+	s << " synchronous_process=" << m_syncProcess;
+	Debug(this,DebugInfo,"Jabber Message service initialized:%s [%p]",
+	    s.c_str(),this);
+    }
+    if (!m_syncProcess) {
+	int c = params.getIntValue("private_process_threads",1);
+	for (int i = 0; i < c; i++)
+	    JBThread::start(JBThread::Message,this,this,2,Thread::Normal);
     }
 }
 
-JBClient::~JBClient()
+// Message processor
+void JBMessage::processMessage(JBEvent* event)
 {
-    if (m_engine) {
-	m_engine->removeClient(this);
-	m_engine->deref();
-    }
+    Debug(this,DebugStub,"Default message processing. Deleting (%p)",event);
+    TelEngine::destruct(event);
 }
+
+// Accept an event from the engine and process it if configured to do that
+bool JBMessage::accept(JBEvent* event, bool& processed, bool& insert)
+{
+    if (event->type() != JBEvent::Message)
+	return false;
+    if (m_syncProcess) {
+	processed = true;
+	processMessage(event);
+    }
+    return true;
+}
+
 
 /**
  * JIDResource
  */
-TokenDict JIDResource::s_show[] = {
-	{"away",   ShowAway},
-	{"chat",   ShowChat},
-	{"dnd",    ShowDND},
-	{"xa",     ShowXA},
-	{0,0},
-	};
-
+// Set the presence for this resource
 bool JIDResource::setPresence(bool value)
 {
     Presence p = value ? Available : Unavailable;
@@ -728,6 +1022,7 @@ bool JIDResource::setPresence(bool value)
     return true;
 }
 
+// Change this resource from received element
 bool JIDResource::fromXML(XMLElement* element)
 {
     if (!(element && element->type() == XMLElement::Presence))
@@ -764,6 +1059,7 @@ bool JIDResource::fromXML(XMLElement* element)
     return capsChanged || presenceChanged;
 }
 
+// Append this resource's capabilities to a given element
 void JIDResource::addTo(XMLElement* element)
 {
     if (!element)
@@ -784,31 +1080,38 @@ void JIDResource::addTo(XMLElement* element)
     element->addChild(c);
 }
 
+
 /**
  * JIDResourceList
  */
+// Add a resource to the list
 bool JIDResourceList::add(const String& name)
 {
+    Lock lock(this);
     if (get(name))
 	return false;
     m_resources.append(new JIDResource(name));
     return true;
 }
 
+// Add a resource to the list
 bool JIDResourceList::add(JIDResource* resource)
 {
     if (!resource)
 	return false;
+    Lock lock(this);
     if (get(resource->name())) {
-	resource->deref();
+	TelEngine::destruct(resource);
 	return false;
     }
     m_resources.append(resource);
     return true;
 }
 
+// Get a resource from list
 JIDResource* JIDResourceList::get(const String& name)
 {
+    Lock lock(this);
     ObjList* obj = m_resources.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	JIDResource* res = static_cast<JIDResource*>(obj->get());
@@ -818,8 +1121,10 @@ JIDResource* JIDResourceList::get(const String& name)
     return 0;
 }
 
+// Get the first resource with audio capabilities
 JIDResource* JIDResourceList::getAudio(bool availableOnly)
 {
+    Lock lock(this);
     ObjList* obj = m_resources.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	JIDResource* res = static_cast<JIDResource*>(obj->get());
@@ -831,16 +1136,40 @@ JIDResource* JIDResourceList::getAudio(bool availableOnly)
 }
 
 /**
+ * JIDFeatureList
+ */
+// Find a specific feature
+JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
+{
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
+	if (*f == feature)
+	    return f;
+    }
+    return 0;
+}
+
+// Build an XML element and add it to the destination
+XMLElement* JIDFeatureList::addTo(XMLElement* element)
+{
+    if (!element)
+	return 0;
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
+	XMLElement* feature = new XMLElement(XMLElement::Feature);
+	feature->setAttribute("var",s_ns[*f]);
+	element->addChild(feature);
+    }
+    return element;
+}
+
+
+/**
  * XMPPUser
  */
-TokenDict XMPPUser::s_subscription[] = {
-	{"none", None},
-	{"to",   To},
-	{"from", From},
-	{"both", Both},
-	{0,0},
-	};
-
+// Constructor
 XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
 	Subscription sub, bool subTo, bool sendProbe)
     : Mutex(true),
@@ -852,14 +1181,13 @@ XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
 {
     if (local && local->ref())
 	m_local = local;
-    if (!m_local)
-	Debug(m_local->engine(),DebugFail,
-	    "XMPPUser. No local user for '%s'. [%p]",m_jid.c_str(),this);
-    else
-	DDebug(m_local->engine(),DebugNote,
-	    "XMPPUser. Local: (%p): %s. Remote: %s. [%p]",
-	    m_local,m_local->jid().c_str(),m_jid.c_str(),this);
+    else {
+	Debug(DebugFail,"XMPPUser. No local user for remote=%s [%p]",m_jid.c_str(),this);
+	return;
+    }
     m_local->addUser(this);
+    DDebug(m_local->engine(),DebugInfo,"User(%s). Added remote=%s [%p]",
+	m_local->jid().c_str(),m_jid.c_str(),this);
     // Update subscription
     switch (sub) {
 	case None:
@@ -885,14 +1213,17 @@ XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
 
 XMPPUser::~XMPPUser()
 {
-    DDebug(m_local->engine(),DebugNote, "~XMPPUser. Local: %s. Remote: %s. [%p]",
+    if (!m_local)
+	return;
+    DDebug(m_local->engine(),DebugInfo, "~XMPPUser() local=%s remote=%s [%p]",
 	m_local->jid().c_str(),m_jid.c_str(),this);
     // Remove all local resources: this will make us unavailable
     clearLocalRes();
     m_local->removeUser(this);
-    m_local->deref();
+    TelEngine::destruct(m_local);
 }
 
+// Add a resource for the user
 bool XMPPUser::addLocalRes(JIDResource* resource)
 {
     if (!resource)
@@ -901,15 +1232,16 @@ bool XMPPUser::addLocalRes(JIDResource* resource)
     if (!m_localRes.add(resource))
 	return false;
     DDebug(m_local->engine(),DebugAll,
-	"XMPPUser. Added local resource '%s'. Audio: %s. [%p]",
-	resource->name().c_str(),
-	resource->hasCap(JIDResource::CapAudio)?"YES":"NO",this);
+	"User(%s). Added resource name=%s audio=%s [%p]",
+	m_local->jid().c_str(),resource->name().c_str(),
+	String::boolText(resource->hasCap(JIDResource::CapAudio)),this);
     resource->setPresence(true);
     if (subscribedFrom())
 	sendPresence(resource,0,true);
     return true;
 }
 
+// Remove a resource of the user
 void XMPPUser::removeLocalRes(JIDResource* resource)
 {
     if (!(resource && m_localRes.get(resource->name())))
@@ -919,11 +1251,11 @@ void XMPPUser::removeLocalRes(JIDResource* resource)
     if (subscribedFrom())
 	sendPresence(resource,0);
     m_localRes.remove(resource);
-    DDebug(m_local->engine(),DebugAll,
-	"XMPPUser. Removed local resource '%s'. [%p]",
-	resource->name().c_str(),this);
+    DDebug(m_local->engine(),DebugAll,"User(%s). Removed resource name=%s [%p]",
+	m_local->jid().c_str(),resource->name().c_str(),this);
 }
 
+// Remove all user's resources
 void XMPPUser::clearLocalRes()
 {
     Lock lock(this);
@@ -932,24 +1264,28 @@ void XMPPUser::clearLocalRes()
 	sendUnavailable(0);
 }
 
+// Process an error stanza
 void XMPPUser::processError(JBEvent* event)
 {
     String code, type, error;
     JBPresence::decodeError(event->element(),code,type,error);
-    DDebug(m_local->engine(),DebugAll,"XMPPUser. Error. '%s'. Code: '%s'. [%p]",
-	error.c_str(),code.c_str(),this);
+    DDebug(m_local->engine(),DebugAll,"User(%s). Received error=%s code=%s [%p]",
+	m_local->jid().c_str(),error.c_str(),code.c_str(),this);
 }
 
+// Process presence probe
 void XMPPUser::processProbe(JBEvent* event, const String* resName)
 {
     updateTimeout(true);
-    XDebug(m_local->engine(),DebugAll,"XMPPUser. Process probe. [%p]",this);
+    XDebug(m_local->engine(),DebugAll,"User(%s). Received probe [%p]",
+	m_local->jid().c_str(),this);
     if (resName)
 	notifyResource(false,*resName,event->stream(),true);
     else
 	notifyResources(false,event->stream(),true);
 }
 
+// Process presence stanzas
 bool XMPPUser::processPresence(JBEvent* event, bool available, const JabberID& from)
 {
     updateTimeout(true);
@@ -967,10 +1303,11 @@ bool XMPPUser::processPresence(JBEvent* event, bool available, const JabberID& f
 	for (; (obj = iter.get());) {
 	    JIDResource* res = static_cast<JIDResource*>(obj);
 	    if (res->setPresence(false)) {
-		DDebug(m_local->engine(),DebugNote,
-		    "XMPPUser. Local user (%p). Resource (%s) changed state: %s. Audio: %s. [%p]",
-		    m_local,res->name().c_str(),res->available()?"available":"unavailable",
-		    res->hasCap(JIDResource::CapAudio)?"YES":"NO",this);
+		DDebug(m_local->engine(),DebugInfo,
+		    "User(%s). Resource %s state=%s audio=%s [%p]",
+		    m_local->jid().c_str(),res->name().c_str(),
+		    res->available()?"available":"unavailable",
+		    String::boolText(res->hasCap(JIDResource::CapAudio)),this);
 		notify = false;
 		m_local->engine()->notifyPresence(this,res);
 	    }
@@ -1001,16 +1338,17 @@ bool XMPPUser::processPresence(JBEvent* event, bool available, const JabberID& f
     if (!res) {
 	res = new JIDResource(from.resource());
 	m_remoteRes.add(res);
-	DDebug(m_local->engine(),DebugNote,
-	    "XMPPUser. Local user (%p). Added new remote resource (%s). [%p]",
-	    m_local,res->name().c_str(),this);
+	DDebug(m_local->engine(),DebugInfo,
+	    "User(%s). remote=%s added resource '%s' [%p]",
+	    m_local->jid().c_str(),from.bare().c_str(),res->name().c_str(),this);
     }
     // Changed: notify
     if (res->fromXML(event->element())) {
-	DDebug(m_local->engine(),DebugNote,
-	    "XMPPUser. Local user (%p). Resource (%s) changed state: %s. Audio: %s. [%p]",
-	    m_local,res->name().c_str(),res->available()?"available":"unavailable",
-	    res->hasCap(JIDResource::CapAudio)?"YES":"NO",this);
+	DDebug(m_local->engine(),DebugInfo,
+	    "User(%s). remote=%s resource %s state=%s audio=%s [%p]",
+	    m_local->jid().c_str(),from.bare().c_str(),res->name().c_str(),
+	    res->available()?"available":"unavailable",
+	    String::boolText(res->hasCap(JIDResource::CapAudio)),this);
 	m_local->engine()->notifyPresence(this,res);
     }
     if (!available && m_local->engine()->delUnavailable()) {
@@ -1025,6 +1363,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available, const JabberID& f
     return true;
 }
 
+// Process subscribe requests
 void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
 {
     Lock lock(this);
@@ -1038,16 +1377,12 @@ void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
 	    // Approve if auto subscribing
 	    if ((m_local->engine()->autoSubscribe() & From))
 		sendSubscribe(JBPresence::Subscribed,event->stream());
-	    DDebug(m_local->engine(),DebugAll,
-		"XMPPUser. processSubscribe. Subscribing. [%p]",this);
 	    break;
 	case JBPresence::Subscribed:
 	    // Already subscribed to remote user: do nothing
 	    if (subscribedTo())
 		return;
 	    updateSubscription(false,true,event->stream());
-	    DDebug(m_local->engine(),DebugAll,
-		"XMPPUser. processSubscribe. Subscribed. [%p]",this);
 	    break;
 	case JBPresence::Unsubscribe:
 	    // Already unsubscribed from us: confirm it
@@ -1058,16 +1393,12 @@ void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
 	    // Approve if auto subscribing
 	    if ((m_local->engine()->autoSubscribe() & From))
 		sendSubscribe(JBPresence::Unsubscribed,event->stream());
-	    DDebug(m_local->engine(),DebugAll,
-		"XMPPUser. processSubscribe. Unsubscribing. [%p]",this);
 	    break;
 	case JBPresence::Unsubscribed:
 	    // If not subscribed to remote user ignore the unsubscribed confirmation
 	    if (!subscribedTo())
 		return;
 	    updateSubscription(false,false,event->stream());
-	    DDebug(m_local->engine(),DebugAll,
-		"XMPPUser. processSubscribe. Unsubscribed. [%p]",this);
 	    break;
 	default:
 	    return;
@@ -1076,18 +1407,20 @@ void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
     m_local->engine()->notifySubscribe(this,type);
 }
 
-bool XMPPUser::probe(JBComponentStream* stream, u_int64_t time)
+// Probe a remote user
+bool XMPPUser::probe(JBStream* stream, u_int64_t time)
 {
     Lock lock(this);
     updateTimeout(false,time);
-    XDebug(m_local->engine(),DebugAll,"XMPPUser. Sending '%s'. [%p]",
-	JBPresence::presenceText(JBPresence::Probe),this);
+    XDebug(m_local->engine(),DebugAll,"User(%s). Sending probe [%p]",
+	m_local->jid().c_str(),this);
     XMLElement* xml = JBPresence::createPresence(m_local->jid().bare(),m_jid.bare(),
 	JBPresence::Probe);
     return m_local->engine()->sendStanza(xml,stream);
 }
 
-bool XMPPUser::sendSubscribe(JBPresence::Presence type, JBComponentStream* stream)
+// Send a subscribe request
+bool XMPPUser::sendSubscribe(JBPresence::Presence type, JBStream* stream)
 {
     Lock lock(this);
     bool from = false;
@@ -1106,8 +1439,9 @@ bool XMPPUser::sendSubscribe(JBPresence::Presence type, JBComponentStream* strea
 	default:
 	    return false;
     }
-    XDebug(m_local->engine(),DebugAll,"XMPPUser. Sending '%s'. [%p]",
-	JBPresence::presenceText(type),this);
+    XDebug(m_local->engine(),DebugAll,"User(%s). Sending '%s' to %s [%p]",
+	m_local->jid().c_str(),JBPresence::presenceText(type),
+	m_jid.bare().c_str(),this);
     XMLElement* xml = JBPresence::createPresence(m_local->jid().bare(),m_jid.bare(),type);
     bool result = m_local->engine()->sendStanza(xml,stream);
     // Set subscribe data. Not for subscribe/unsubscribe
@@ -1116,6 +1450,7 @@ bool XMPPUser::sendSubscribe(JBPresence::Presence type, JBComponentStream* strea
     return result;
 }
 
+// Check timeouts
 bool XMPPUser::timeout(u_int64_t time)
 {
     Lock lock(this);
@@ -1128,13 +1463,15 @@ bool XMPPUser::timeout(u_int64_t time)
 	return false;
     // Timeout. Clear resources & Notify
     Debug(m_local->engine(),DebugNote,
-	"XMPPUser. Local user (%p). Timeout. [%p]",m_local,this);
+	"User(%s). Remote %s expired. Set unavailable [%p]",
+	m_local->jid().c_str(),m_jid.bare().c_str(),this);
     m_remoteRes.clear();
     m_local->engine()->notifyPresence(0,m_jid,m_local->jid(),false);
     return true;
 }
 
-bool XMPPUser::sendPresence(JIDResource* resource, JBComponentStream* stream,
+// Send presence notifications for all resources
+bool XMPPUser::sendPresence(JIDResource* resource, JBStream* stream,
 	bool force)
 {
     Lock lock(this);
@@ -1166,8 +1503,9 @@ bool XMPPUser::sendPresence(JIDResource* resource, JBComponentStream* stream,
     return m_local->engine()->sendStanza(xml,stream);
 }
 
+// Notify the presence of a given resource
 void XMPPUser::notifyResource(bool remote, const String& name,
-	JBComponentStream* stream, bool force)
+	JBStream* stream, bool force)
 {
     if (remote) {
 	Lock lock(&m_remoteRes);
@@ -1182,7 +1520,8 @@ void XMPPUser::notifyResource(bool remote, const String& name,
 	sendPresence(res,stream,force);
 }
 
-void XMPPUser::notifyResources(bool remote, JBComponentStream* stream, bool force)
+// Notify the presence for all resources
+void XMPPUser::notifyResources(bool remote, JBStream* stream, bool force)
 {
     if (remote) {
 	Lock lock(&m_remoteRes);
@@ -1201,15 +1540,18 @@ void XMPPUser::notifyResources(bool remote, JBComponentStream* stream, bool forc
     }
 }
 
-bool XMPPUser::sendUnavailable(JBComponentStream* stream)
+// Send unavailable
+bool XMPPUser::sendUnavailable(JBStream* stream)
 {
-    XDebug(m_local->engine(),DebugAll,"XMPPUser. Sending 'unavailable'. [%p]",this);
+    XDebug(m_local->engine(),DebugAll,"User(%s). Sending 'unavailable' to %s [%p]",
+	m_local->jid().c_str(),m_jid.bare().c_str(),this);
     XMLElement* xml = JBPresence::createPresence(m_local->jid().bare(),m_jid.bare(),
 	JBPresence::Unavailable);
     return m_local->engine()->sendStanza(xml,stream);
 }
 
-void XMPPUser::updateSubscription(bool from, bool value, JBComponentStream* stream)
+// Update the subscription state for a remote user
+void XMPPUser::updateSubscription(bool from, bool value, JBStream* stream)
 {
     Lock lock(this);
     // Don't update if nothing changed
@@ -1222,9 +1564,9 @@ void XMPPUser::updateSubscription(bool from, bool value, JBComponentStream* stre
 	m_subscription |= s;
     else
 	m_subscription &= ~s;
-    DDebug(m_local->engine(),DebugNote,
-	"XMPPUser. Local user (%p). Subscription updated. State '%s'. [%p]",
-	m_local,subscribeText(m_subscription),this);
+    DDebug(m_local->engine(),DebugInfo,"User(%s). remote=%s subscription=%s [%p]",
+	m_local->jid().c_str(),m_jid.bare().c_str(),
+	subscribeText(m_subscription),this);
     // Send presence if remote user is subscribed to us
     if (from && subscribedFrom()) {
 	sendUnavailable(stream);
@@ -1232,6 +1574,7 @@ void XMPPUser::updateSubscription(bool from, bool value, JBComponentStream* stre
     }
 }
 
+// Update some timeout values
 void XMPPUser::updateTimeout(bool from, u_int64_t time)
 {
     Lock lock(this);
@@ -1252,7 +1595,7 @@ XMPPUserRoster::XMPPUserRoster(JBPresence* engine, const char* node,
       m_engine(engine)
 {
     m_engine->addRoster(this);
-    DDebug(m_engine,DebugNote, "XMPPUserRoster. %s. [%p]",m_jid.c_str(),this);
+    DDebug(m_engine,DebugInfo, "XMPPUserRoster. %s [%p]",m_jid.c_str(),this);
 }
 
 XMPPUserRoster::~XMPPUserRoster()
@@ -1261,9 +1604,11 @@ XMPPUserRoster::~XMPPUserRoster()
     lock();
     m_remote.clear();
     unlock();
-    DDebug(m_engine,DebugNote, "~XMPPUserRoster. %s. [%p]",m_jid.c_str(),this);
+    DDebug(m_engine,DebugInfo, "~XMPPUserRoster. %s [%p]",m_jid.c_str(),this);
 }
 
+// Get a remote user from roster
+// Add a new one if requested
 XMPPUser* XMPPUserRoster::getUser(const JabberID& jid, bool add, bool* added)
 {
     Lock lock(this);
@@ -1271,7 +1616,7 @@ XMPPUser* XMPPUserRoster::getUser(const JabberID& jid, bool add, bool* added)
     XMPPUser* u = 0;
     for (; obj; obj = obj->skipNext()) {
 	u = static_cast<XMPPUser*>(obj->get());
-	if (jid.bare() == u->jid().bare())
+	if (jid.bare() &= u->jid().bare())
 	    break;
 	u = 0;
     }
@@ -1281,17 +1626,22 @@ XMPPUser* XMPPUserRoster::getUser(const JabberID& jid, bool add, bool* added)
 	u = new XMPPUser(this,jid.node(),jid.domain(),XMPPUser::From);
 	if (added)
 	    *added = true;
+	Debug(m_engine,DebugAll,"User(%s) added remote=%s [%p]",
+	    m_jid.c_str(),u->jid().bare().c_str(),this);
     }
     return u->ref() ? u : 0;
 }
 
+// Remove an user from roster
 bool XMPPUserRoster::removeUser(const JabberID& remote)
 {
     Lock lock(this);
     ObjList* obj = m_remote.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	XMPPUser* u = static_cast<XMPPUser*>(obj->get());
-	if (remote.bare() == u->jid().bare()) {
+	if (remote.bare() &= u->jid().bare()) {
+	    Debug(m_engine,DebugAll,"User(%s) removed remote=%s [%p]",
+		m_jid.c_str(),u->jid().bare().c_str(),this);
 	    m_remote.remove(u,true);
 	    break;
 	}
@@ -1299,6 +1649,7 @@ bool XMPPUserRoster::removeUser(const JabberID& remote)
     return (0 != m_remote.skipNull());
 }
 
+// Check the presence timeout for all remote users
 bool XMPPUserRoster::timeout(u_int64_t time)
 {
     Lock lock(this);
@@ -1315,52 +1666,45 @@ bool XMPPUserRoster::timeout(u_int64_t time)
 /**
  * JBPresence
  */
-TokenDict JBPresence::s_presence[] = {
-	{"error",         Error},
-	{"probe",         Probe},
-	{"subscribe",     Subscribe},
-	{"subscribed",    Subscribed},
-	{"unavailable",   Unavailable},
-	{"unsubscribe",   Unsubscribe},
-	{"unsubscribed",  Unsubscribed},
-	{0,0}
-	};
 
-JBPresence::JBPresence(JBEngine* engine, const NamedList& params)
-    : JBClient(engine),
-      Mutex(true),
-      m_autoSubscribe((int)XMPPUser::None),
-      m_delUnavailable(false),
-      m_addOnSubscribe(false),
-      m_addOnProbe(false),
-      m_addOnPresence(false),
-      m_autoProbe(true),
-      m_probeInterval(0),
-      m_expireInterval(0)
+// Build the service
+JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
+    : JBService(engine,"jbpresence",params,prio),
+    m_autoSubscribe((int)XMPPUser::None),
+    m_delUnavailable(false),
+    m_autoRoster(false),
+    m_addOnSubscribe(false),
+    m_addOnProbe(false),
+    m_addOnPresence(false),
+    m_autoProbe(true),
+    m_probeInterval(1800000),
+    m_expireInterval(300000)
 {
-    debugName("jbpresence");
-    XDebug(this,DebugAll,"JBPresence. [%p]",this);
-    if (m_engine)
-	m_engine->setPresenceServer(this);
-    initialize(params);
 }
 
 JBPresence::~JBPresence()
 {
-    cleanup();
-    if (m_engine)
-	m_engine->unsetPresenceServer(this);
-    m_events.clear();
-    XDebug(this,DebugAll,"~JBPresence. [%p]",this);
+    cancelThreads();
+    Lock lock(this);
+    ListIterator iter(m_rosters);
+    GenObject* obj;
+    for (; (obj = iter.get());) {
+	XMPPUserRoster* ur = static_cast<XMPPUserRoster*>(obj);
+	ur->cleanup();
+	m_rosters.remove(ur,true);
+    }
 }
 
+// Initialize the service
 void JBPresence::initialize(const NamedList& params)
 {
+    debugLevel(params.getIntValue("debug_level",debugLevel()));
+
     m_autoSubscribe = XMPPUser::subscribeType(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
     m_autoProbe = params.getBoolValue("auto_probe",true);
-    if (m_engine) {
-	JBServerInfo* info = m_engine->getServer();
+    if (engine()) {
+	XMPPServerInfo* info = engine()->findServerInfo(engine()->componentServer(),true);
 	if (info) {
 	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence = info->roster();
 	    // Automatically process (un)subscribe and probe requests if no roster
@@ -1368,491 +1712,166 @@ void JBPresence::initialize(const NamedList& params)
 		m_autoProbe = true;
 		m_autoSubscribe = XMPPUser::From;
 	    }
-	    info->deref();
 	}
     }
-    m_probeInterval = params.getIntValue("probe_interval",PRESENCE_PROBE_INTERVAL);
-    m_expireInterval = params.getIntValue("expire_interval",PRESENCE_EXPIRE_INTERVAL);
-    if (debugAt(DebugAll)) {
+
+    m_probeInterval = 1000 * params.getIntValue("probe_interval",m_probeInterval/1000);
+    m_expireInterval = 1000 * params.getIntValue("expire_interval",m_expireInterval/1000);
+
+    m_autoRoster = m_addOnSubscribe || m_addOnProbe || m_addOnPresence;
+
+    if (debugAt(DebugInfo)) {
 	String s;
-	s << "\r\nauto_subscribe=" << XMPPUser::subscribeText(m_autoSubscribe);
-	s << "\r\ndelete_unavailable=" << String::boolText(m_delUnavailable);
-	s << "\r\nadd_onsubscribe=" << String::boolText(m_addOnSubscribe);
-	s << "\r\nadd_onprobe=" << String::boolText(m_addOnProbe);
-	s << "\r\nadd_onpresence=" << String::boolText(m_addOnPresence);
-	s << "\r\nauto_probe=" << String::boolText(m_autoProbe);
-	s << "\r\nprobe_interval=" << (unsigned int)m_probeInterval;
-	s << "\r\nexpire_interval=" << (unsigned int)m_expireInterval;
-	Debug(this,DebugAll,"Initialized:%s",s.c_str());
+	s << " auto_subscribe=" << XMPPUser::subscribeText(m_autoSubscribe);
+	s << " delete_unavailable=" << String::boolText(m_delUnavailable);
+	s << " add_onsubscribe=" << String::boolText(m_addOnSubscribe);
+	s << " add_onprobe=" << String::boolText(m_addOnProbe);
+	s << " add_onpresence=" << String::boolText(m_addOnPresence);
+	s << " auto_probe=" << String::boolText(m_autoProbe);
+	s << " probe_interval=" << (unsigned int)m_probeInterval;
+	s << " expire_interval=" << (unsigned int)m_expireInterval;
+	Debug(this,DebugInfo,"Jabber Presence service initialized:%s [%p]",
+	    s.c_str(),this);
+    }
+
+    if (!m_initialized) {
+	m_initialized = true;
+	int c = params.getIntValue("private_process_threads",1);
+	for (int i = 0; i < c; i++)
+	     JBThread::start(JBThread::Presence,this,this,2,Thread::Normal);
     }
 }
 
-bool JBPresence::receive(JBEvent* event)
+// Accept an event from the engine
+bool JBPresence::accept(JBEvent* event, bool& processed, bool& insert)
 {
     if (!event)
 	return false;
+    bool disco = false;
     switch (event->type()) {
+	case JBEvent::IqDiscoInfoGet:
+	case JBEvent::IqDiscoInfoSet:
+	case JBEvent::IqDiscoInfoRes:
+	case JBEvent::IqDiscoInfoErr:
+	case JBEvent::IqDiscoItemsGet:
+	case JBEvent::IqDiscoItemsSet:
+	case JBEvent::IqDiscoItemsRes:
+	case JBEvent::IqDiscoItemsErr:
+	    disco = true;
 	case JBEvent::Presence:
-	case JBEvent::IqDiscoGet:
-	case JBEvent::IqDiscoSet:
-	case JBEvent::IqDiscoRes:
+	    insert = false;
 	    break;
 	default:
 	    return false;
     }
-    XDebug(this,DebugAll,"Received event.");
-    Lock lock(this);
-    event->releaseStream();
-    m_events.append(event);
+
+    JabberID jid(event->to());
+    // Check destination.
+    // Don't accept disco stanzas without node (reroute them to the engine)
+    // Presence stanzas might be a brodcast (no 'to' attribute)
+    if (disco) {
+	if (!jid.node())
+	    return false;
+	if (validDomain(jid.domain()))
+	    return true;
+    }
+    else if (!event->to() || validDomain(jid.domain()))
+	return true;
+
+    Debug(this,DebugNote,"Received element with invalid domain '%s' [%p]",
+	jid.domain().c_str(),this);
+    // Respond only if stanza is not a response
+    if (event->stanzaType() != "error" && event->stanzaType() != "result") {
+	const String* id = event->id().null() ? 0 : &(event->id());
+	sendError(XMPPError::SNoRemote,event->to(),event->from(),
+	    event->releaseXML(),event->stream(),id);
+    }
+    processed = true;
+    TelEngine::destruct(event);
     return true;
 }
 
+// Process received events
 bool JBPresence::process()
 {
-    Lock lock(this);
-    ObjList* obj = m_events.skipNull();
-    if (!obj)
+    if (Thread::check(false))
 	return false;
-    JBEvent* event = static_cast<JBEvent*>(obj->get());
-    m_events.remove(event,false);
+    Lock lock(this);
+    JBEvent* event = deque();
+    if (!event)
+	return false;
     JabberID local(event->to());
     JabberID remote(event->from());
     switch (event->type()) {
-	case JBEvent::IqDiscoGet:
-	case JBEvent::IqDiscoSet:
-	case JBEvent::IqDiscoRes:
-	    if (checkDestination(event,local))
-		processDisco(event,local,remote);
-	    event->deref();
+	case JBEvent::IqDiscoInfoGet:
+	case JBEvent::IqDiscoInfoSet:
+	case JBEvent::IqDiscoInfoRes:
+	case JBEvent::IqDiscoInfoErr:
+	case JBEvent::IqDiscoItemsGet:
+	case JBEvent::IqDiscoItemsSet:
+	case JBEvent::IqDiscoItemsRes:
+	case JBEvent::IqDiscoItemsErr:
+	    processDisco(event,local,remote);
+	    TelEngine::destruct(event);
 	    return true;
 	default: ;
     }
-    XDebug(this,DebugAll,"Process presence: '%s'.",event->stanzaType().c_str());
+    DDebug(this,DebugAll,"Process presence: '%s' [%p]",event->stanzaType().c_str(),this);
     Presence p = presenceType(event->stanzaType());
     switch (p) {
 	case JBPresence::Error:
-	    if (checkDestination(event,local))
-		processError(event,local,remote);
+	    processError(event,local,remote);
 	    break;
 	case JBPresence::Probe:
-	    if (checkDestination(event,local))
-		processProbe(event,local,remote);
+	    processProbe(event,local,remote);
 	    break;
 	case JBPresence::Subscribe:
 	case JBPresence::Subscribed:
 	case JBPresence::Unsubscribe:
 	case JBPresence::Unsubscribed:
-	    if (checkDestination(event,local))
-		processSubscribe(event,p,local,remote);
+	    processSubscribe(event,p,local,remote);
 	    break;
 	case JBPresence::Unavailable:
 	    // Check destination only if we have one. No destination: broadcast
+//TODO: Fix it
+#if 0
 	    if (local && !checkDestination(event,local))
 		break;
+#endif
 	    processUnavailable(event,local,remote);
 	    break;
 	default:
 	    // Check destination only if we have one. No destination: broadcast
+//TODO: Fix it
+#if 0
 	    if (local && !checkDestination(event,local))
 		break;
 	    if (!event->element())
 		break;
+#endif
 	    // Simple presence shouldn't have a type
 	    if (event->element()->getAttribute("type")) {
 		Debug(this,DebugNote,
-		    "Received unexpected presence type '%s' from '%s' to '%s'.",
-		    event->element()->getAttribute("type"),remote.c_str(),local.c_str());
+		    "Received unexpected presence type=%s from=%s to=%s [%p]",
+		    event->element()->getAttribute("type"),remote.c_str(),local.c_str(),this);
 		sendError(XMPPError::SFeatureNotImpl,local,remote,
 		    event->releaseXML(),event->stream());
 		break;
 	    }
 	    processPresence(event,local,remote);
     }
-    event->deref();
+    TelEngine::destruct(event);
     return true;
 }
 
-void JBPresence::runProcess()
-{
-    while(1) {
-	if (!process())
-	    Thread::msleep(SLEEP_PROCESSPRESENCE,true);
-    }
-}
-
-void JBPresence::processDisco(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"processDisco. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	event,event->type(),local.c_str(),remote.c_str());
-    if (event->type() == JBEvent::IqDiscoRes || !event->stream())
-	return;
-    bool error = true;
-    XMPPNamespace::Type type;
-    // Check error and query type
-    while (true) {
-	if (!event->child())
-	    break;
-	if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoInfo]))
-	    type = XMPPNamespace::DiscoInfo;
-	else if (event->child()->hasAttribute("xmlns",s_ns[XMPPNamespace::DiscoItems]))
-	    type = XMPPNamespace::DiscoItems;
-	else
-	    break;
-	error = false;
-	break;
-    }
-    if (error) {
-	DDebug(this,DebugNote,"Received unacceptable 'disco' query");
-	sendError(XMPPError::SFeatureNotImpl,local,remote,event->releaseXML(),
-	    event->stream(),&(event->id()));
-	return;
-    }
-    JabberID from(event->to());
-    if (from.resource().null() && m_engine)
-	from.resource(m_engine->defaultResource());
-    // Create response: add identity and features
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->from(),event->id());
-    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,type);
-    JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
-    query->addChild(identity->toXML());
-    identity->deref();
-    JIDFeatureList fl;
-    fl.add(XMPPNamespace::CapVoiceV1);
-    fl.addTo(query);
-    iq->addChild(query);
-    sendStanza(iq,event->stream());
-}
-
-void JBPresence::processError(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"processError. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	event,event->type(),local.c_str(),remote.c_str());
-    XMPPUser* user = getRemoteUser(local,remote,false,0,false,0);
-    if (!user) {
-	DDebug(this,DebugAll,
-	    "Received 'error' for non user. Local: '%s'. Remote: '%s'.",
-	    local.c_str(),remote.c_str());
-	return;
-    }
-    user->processError(event);
-    user->deref();
-}
-
-void JBPresence::processProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"processProbe. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	event,event->type(),local.c_str(),remote.c_str());
-    bool newUser = false;
-    XMPPUser* user = getRemoteUser(local,remote,m_addOnProbe,0,m_addOnProbe,&newUser);
-    if (!user) {
-	DDebug(this,DebugAll,
-	    "Received 'probe' for non user. Local: '%s'. Remote: '%s'.",
-	    local.c_str(),remote.c_str());
-	if (m_autoProbe) {
-	    XMLElement* stanza = createPresence(local.bare(),remote);
-	    JIDResource* resource = new JIDResource(m_engine->defaultResource(),JIDResource::Available,
-		JIDResource::CapAudio);
-	    resource->addTo(stanza);
-	    resource->deref();
-	    if (event->stream())
-		event->stream()->sendStanza(stanza);
-	    else
-		delete stanza;
-	}
-	else if (!notifyProbe(event,local,remote))
-	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
-		event->stream());
-	return;
-    }
-    if (newUser)
-	notifyNewUser(user);
-    String resName = local.resource();
-    if (resName.null())
-	user->processProbe(event);
-    else
-	user->processProbe(event,&resName);
-    user->deref();
-}
-
-void JBPresence::processSubscribe(JBEvent* event, Presence presence,
-	const JabberID& local, const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"Process '%s'. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	presenceText(presence),event,event->type(),local.c_str(),remote.c_str());
-    bool addLocal = (presence == Subscribe) ? m_addOnSubscribe : false;
-    bool newUser = false;
-    XMPPUser* user = getRemoteUser(local,remote,addLocal,0,addLocal,&newUser);
-    if (!user) {
-	DDebug(this,DebugAll,
-	    "Received '%s' for non user. Local: '%s'. Remote: '%s'.",
-	    presenceText(presence),local.c_str(),remote.c_str());
-	if (!notifySubscribe(event,local,remote,presence) &&
-	    (presence != Subscribed && presence != Unsubscribed))
-	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
-		event->stream());
-	return;
-    }
-    if (newUser)
-	notifyNewUser(user);
-    user->processSubscribe(event,presence);
-    user->deref();
-}
-
-void JBPresence::processUnavailable(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"processUnavailable. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	event,event->type(),local.c_str(),remote.c_str());
-    // Don't add if delUnavailable is true
-    bool addLocal = m_addOnPresence && !m_delUnavailable;
-    // Check if broadcast
-    if (local.null()) {
-	Lock lock(this);
-	ObjList* obj = m_rosters.skipNull();
-	for (; obj; obj = obj->skipNext()) {
-	    XMPPUserRoster* roster = static_cast<XMPPUserRoster*>(obj->get());
-	    bool newUser = false;
-	    XMPPUser* user = getRemoteUser(roster->jid(),remote,addLocal,0,
-		addLocal,&newUser);
-	    if (!user)
-		continue;
-	    if (newUser)
-		notifyNewUser(user);
-	    if (!user->processPresence(event,false,remote))
-		removeRemoteUser(local,remote);
-	    user->deref();
-	}
-	return;
-    }
-    // Not broadcast: find user
-    bool newUser = false;
-    XMPPUser* user = getRemoteUser(local,remote,addLocal,0,addLocal,&newUser);
-    if (!user) {
-	DDebug(this,DebugAll,
-	    "Received 'unavailable' for non user. Local: '%s'. Remote: '%s'.",
-	    local.c_str(),remote.c_str());
-	if (!notifyPresence(event,local,remote,false))
-	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
-		event->stream());
-	return;
-    }
-    if (newUser)
-	notifyNewUser(user);
-    if (!user->processPresence(event,false,remote))
-	removeRemoteUser(local,remote);
-    user->deref();
-}
-
-void JBPresence::processPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"processPresence. Event: ((%p): %u). Local: '%s'. Remote: '%s'.",
-	event,event->type(),local.c_str(),remote.c_str());
-    // Check if broadcast
-    if (local.null()) {
-	Lock lock(this);
-	ObjList* obj = m_rosters.skipNull();
-	for (; obj; obj = obj->skipNext()) {
-	    XMPPUserRoster* roster = static_cast<XMPPUserRoster*>(obj->get());
-	    bool newUser = false;
-	    XMPPUser* user = getRemoteUser(roster->jid(),remote,
-		m_addOnPresence,0,m_addOnPresence,&newUser);
-	    if (!user)
-		continue;
-	    if (newUser)
-		notifyNewUser(user);
-	    user->processPresence(event,true,remote);
-	    user->deref();
-	}
-	return;
-    }
-    // Not broadcast: find user
-    bool newUser = false;
-    XMPPUser* user = getRemoteUser(local,remote,m_addOnPresence,0,m_addOnPresence,
-	&newUser);
-    if (!user) {
-	DDebug(this,DebugAll,
-	    "Received presence for non user. Local: '%s'. Remote: '%s'.",
-	    local.c_str(),remote.c_str());
-	if (!notifyPresence(event,local,remote,true))
-	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
-		event->stream());
-	return;
-    }
-    if (newUser)
-	notifyNewUser(user);
-    user->processPresence(event,true,remote);
-    user->deref();
-}
-
-bool JBPresence::notifyProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
-{
-    XDebug(this,DebugAll,
-	"JBPresence::notifyProbe. Local: '%s'. Remote: '%s'.",
-	local.c_str(),remote.c_str());
-    return false;
-}
-
-bool JBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
-	const JabberID& remote, Presence presence)
-{
-    XDebug(this,DebugAll,
-	"JBPresence::notifySubscribe(%s). Local: '%s'. Remote: '%s'.",
-	presenceText(presence),local.c_str(),remote.c_str());
-    return false;
-}
-
-void JBPresence::notifySubscribe(XMPPUser* user, Presence presence)
-{
-    XDebug(this,DebugAll,
-	"JBPresence::notifySubscribe(%s). User: (%p).",
-	presenceText(presence),user);
-}
-
-bool JBPresence::notifyPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote, bool available)
-{
-    XDebug(this,DebugAll,
-	"JBPresence::notifyPresence(%s). Local: '%s'. Remote: '%s'.",
-	available?"available":"unavailable",local.c_str(),remote.c_str());
-    return false;
-}
-
-void JBPresence::notifyPresence(XMPPUser* user, JIDResource* resource)
-{
-    XDebug(this,DebugAll,
-	"JBPresence::notifyPresence. User: (%p). Resource: (%p).",
-	user,resource);
-}
-
-void JBPresence::notifyNewUser(XMPPUser* user)
-{
-    XDebug(this,DebugAll,"JBPresence::notifyNewUser. User: (%p).",user);
-}
-
-XMPPUserRoster* JBPresence::getRoster(const JabberID& jid, bool add, bool* added)
-{
-    if (jid.node().null() || jid.domain().null())
-	return 0;
-    Lock lock(this);
-    ObjList* obj = m_rosters.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	XMPPUserRoster* ur = static_cast<XMPPUserRoster*>(obj->get());
-	if (jid.bare() == ur->jid().bare())
-	    return ur->ref() ? ur : 0;
-    }
-    if (!add)
-	return 0;
-    if (added)
-	*added = true;
-    XMPPUserRoster* ur = new XMPPUserRoster(this,jid.node(),jid.domain());
-    return ur->ref() ? ur : 0;
-}
-
-XMPPUser* JBPresence::getRemoteUser(const JabberID& local, const JabberID& remote,
-	bool addLocal, bool* addedLocal, bool addRemote, bool* addedRemote)
-{
-    XMPPUserRoster* ur = getRoster(local,addLocal,addedLocal);
-    if (!ur)
-	return 0;
-    XMPPUser* user = ur->getUser(remote,addRemote,addedRemote);
-    ur->deref();
-    return user;
-}
-
-void JBPresence::removeRemoteUser(const JabberID& local, const JabberID& remote)
-{
-    Lock lock(this);
-    ObjList* obj = m_rosters.skipNull();
-    XMPPUserRoster* ur = 0;
-    for (; obj; obj = obj->skipNext()) {
-	ur = static_cast<XMPPUserRoster*>(obj->get());
-	if (local.bare() == ur->jid().bare()) {
-	    if (ur->removeUser(remote))
-		ur = 0;
-	    break;
-	}
-	ur = 0;
-    }
-    if (ur)
-	m_rosters.remove(ur,true);
-}
-
-bool JBPresence::validDomain(const String& domain)
-{
-    if (m_engine->getAlternateDomain() && (domain == m_engine->getAlternateDomain()))
-	return true;
-    JBServerInfo* server = m_engine->getServer();
-    if (!server)
-	return false;
-    bool ok = (domain == server->identity() || domain == server->fullIdentity());
-    server->deref();
-    return ok;
-}
-
-bool JBPresence::getStream(JBComponentStream*& stream, bool& release)
-{
-    release = false;
-    if (stream)
-	return true;
-    stream = m_engine->getStream(0,!m_engine->exiting());
-    if (stream) {
-	release = true;
-	return true;
-    }
-    if (!m_engine->exiting())
-	DDebug(m_engine,DebugGoOn,"No stream to send data.");
-    return false;
-}
-
-bool JBPresence::sendStanza(XMLElement* element, JBComponentStream* stream)
-{
-    if (!element)
-	return true;
-    bool release = false;
-    if (!getStream(stream,release)) {
-	delete element;
-	return false;
-    }
-    JBComponentStream::Error res = stream->sendStanza(element);
-    if (release)
-	stream->deref();
-    if (res == JBComponentStream::ErrorContext ||
-	res == JBComponentStream::ErrorNoSocket)
-	return false;
-    return true;
-}
-
-bool JBPresence::sendError(XMPPError::Type type,
-	const String& from, const String& to,
-	XMLElement* element, JBComponentStream* stream, const String* id)
-{
-    XMLElement* xml = 0;
-    XMLElement::Type t = element ? element->type() : XMLElement::Invalid;
-    if (t == XMLElement::Iq)
-	xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,id ? id->c_str() : element->getAttribute("id"));
-    else
-	xml = createPresence(from,to,Error);
-    xml->addChild(element);
-    xml->addChild(XMPPUtils::createError(XMPPError::TypeModify,type));
-    return sendStanza(xml,stream);
-}
-
+// Check timeouts for all users' roster
 void JBPresence::checkTimeout(u_int64_t time)
 {
     lock();
     ListIterator iter(m_rosters);
     for (;;) {
+	if (Thread::check(false))
+	    break;
 	XMPPUserRoster* ur = static_cast<XMPPUserRoster*>(iter.get());
         // End of iteration?
 	if (!ur)
@@ -1873,14 +1892,324 @@ void JBPresence::checkTimeout(u_int64_t time)
     unlock();
 }
 
-void JBPresence::runCheckTimeout()
+// Process received disco 
+void JBPresence::processDisco(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
 {
-    while (1) {
-	checkTimeout(Time::msecNow());
-	Thread::msleep(SLEEP_PROCESSTIMEOUT,true);
-    }
+    XDebug(this,DebugAll,"processDisco event=(%p,%s) local=%s remote=%s [%p]",
+	event,event->name(),local.c_str(),remote.c_str(),this);
+    if (event->type() != JBEvent::IqDiscoInfoGet || !event->stream())
+	return;
+    JabberID from(event->to());
+    if (from.resource().null() && engine())
+	from.resource(engine()->defaultResource());
+    // Create response: add identity and features
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->from(),event->id());
+    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
+    JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
+    query->addChild(identity->toXML());
+    identity->deref();
+    JIDFeatureList fl;
+    fl.add(XMPPNamespace::CapVoiceV1);
+    fl.addTo(query);
+    iq->addChild(query);
+    sendStanza(iq,event->stream());
 }
 
+void JBPresence::processError(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
+{
+    XDebug(this,DebugAll,"processError event=(%p,%s) local=%s remote=%s [%p]",
+	event,event->name(),local.c_str(),remote.c_str(),this);
+    XMPPUser* user = recvGetRemoteUser("error",local,remote);
+    if (user)
+	user->processError(event);
+    TelEngine::destruct(user);
+}
+
+void JBPresence::processProbe(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
+{
+    XDebug(this,DebugAll,"processProbe event=(%p,%s) local=%s remote=%s [%p]",
+	event,event->name(),local.c_str(),remote.c_str(),this);
+    bool newUser = false;
+    XMPPUser* user = recvGetRemoteUser("probe",local,remote,m_addOnProbe,0,
+	m_addOnProbe,&newUser);
+    if (!user) {
+	if (m_autoProbe) {
+	    XMLElement* stanza = createPresence(local.bare(),remote);
+	    JIDResource* resource = new JIDResource(engine()->defaultResource(),
+		JIDResource::Available,JIDResource::CapAudio);
+	    resource->addTo(stanza);
+	    TelEngine::destruct(resource);
+	    if (event->stream())
+		event->stream()->sendStanza(stanza);
+	    else
+		delete stanza;
+	}
+	else if (!notifyProbe(event,local,remote))
+	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
+		event->stream());
+	return;
+    }
+    if (newUser)
+	notifyNewUser(user);
+    String resName = local.resource();
+    if (resName.null())
+	user->processProbe(event);
+    else
+	user->processProbe(event,&resName);
+    TelEngine::destruct(user);
+}
+
+void JBPresence::processSubscribe(JBEvent* event, Presence presence,
+	const JabberID& local, const JabberID& remote)
+{
+    XDebug(this,DebugAll,
+	"processSubscribe '%s' event=(%p,%s) local=%s remote=%s [%p]",
+	presenceText(presence),event,event->name(),local.c_str(),remote.c_str(),this);
+    bool addLocal = (presence == Subscribe) ? m_addOnSubscribe : false;
+    bool newUser = false;
+    XMPPUser* user = recvGetRemoteUser(presenceText(presence),local,remote,
+	addLocal,0,addLocal,&newUser);
+    if (!user) {
+	if (!notifySubscribe(event,local,remote,presence) &&
+	    (presence != Subscribed && presence != Unsubscribed))
+	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
+		event->stream());
+	return;
+    }
+    if (newUser)
+	notifyNewUser(user);
+    user->processSubscribe(event,presence);
+    TelEngine::destruct(user);
+}
+
+void JBPresence::processUnavailable(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
+{
+    XDebug(this,DebugAll,"processUnavailable event=(%p,%s) local=%s remote=%s [%p]",
+	event,event->name(),local.c_str(),remote.c_str(),this);
+    // Don't add if delUnavailable is true
+    bool addLocal = m_addOnPresence && !m_delUnavailable;
+    // Check if broadcast
+    if (local.null()) {
+	Lock lock(this);
+	ObjList* obj = m_rosters.skipNull();
+	for (; obj; obj = obj->skipNext()) {
+	    XMPPUserRoster* roster = static_cast<XMPPUserRoster*>(obj->get());
+	    bool newUser = false;
+	    XMPPUser* user = getRemoteUser(roster->jid(),remote,addLocal,0,
+		addLocal,&newUser);
+	    if (!user)
+		continue;
+	    if (newUser)
+		notifyNewUser(user);
+	    if (!user->processPresence(event,false,remote))
+		removeRemoteUser(local,remote);
+	    TelEngine::destruct(user);
+	}
+	return;
+    }
+    // Not broadcast: find user
+    bool newUser = false;
+    XMPPUser* user = recvGetRemoteUser("unavailable",local,remote,
+	addLocal,0,addLocal,&newUser);
+    if (!user) {
+	if (!notifyPresence(event,local,remote,false))
+	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
+		event->stream());
+	return;
+    }
+    if (newUser)
+	notifyNewUser(user);
+    if (!user->processPresence(event,false,remote))
+	removeRemoteUser(local,remote);
+    TelEngine::destruct(user);
+}
+
+void JBPresence::processPresence(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
+{
+    XDebug(this,DebugAll,"processPresence event=(%p,%s) local=%s remote=%s [%p]",
+	event,event->name(),local.c_str(),remote.c_str(),this);
+    // Check if broadcast
+    if (local.null()) {
+	Lock lock(this);
+	ObjList* obj = m_rosters.skipNull();
+	for (; obj; obj = obj->skipNext()) {
+	    XMPPUserRoster* roster = static_cast<XMPPUserRoster*>(obj->get());
+	    bool newUser = false;
+	    XMPPUser* user = getRemoteUser(roster->jid(),remote,
+		m_addOnPresence,0,m_addOnPresence,&newUser);
+	    if (!user)
+		continue;
+	    if (newUser)
+		notifyNewUser(user);
+	    user->processPresence(event,true,remote);
+	    TelEngine::destruct(user);
+	}
+	return;
+    }
+    // Not broadcast: find user
+    bool newUser = false;
+    XMPPUser* user = recvGetRemoteUser("",local,remote,
+	m_addOnPresence,0,m_addOnPresence,&newUser);
+    if (!user) {
+	if (!notifyPresence(event,local,remote,true))
+	    sendError(XMPPError::SItemNotFound,local,remote,event->releaseXML(),
+		event->stream());
+	return;
+    }
+    if (newUser)
+	notifyNewUser(user);
+    user->processPresence(event,true,remote);
+    TelEngine::destruct(user);
+}
+
+bool JBPresence::notifyProbe(JBEvent* event, const JabberID& local,
+	const JabberID& remote)
+{
+    DDebug(this,DebugStub,"notifyProbe local=%s remote=%s [%p]",
+	local.c_str(),remote.c_str(),this);
+    return false;
+}
+
+bool JBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
+	const JabberID& remote, Presence presence)
+{
+    DDebug(this,DebugStub,"notifySubscribe local=%s remote=%s [%p]",
+	local.c_str(),remote.c_str(),this);
+    return false;
+}
+
+void JBPresence::notifySubscribe(XMPPUser* user, Presence presence)
+{
+    DDebug(this,DebugStub,"notifySubscribe user=%p [%p]",user,this);
+}
+
+bool JBPresence::notifyPresence(JBEvent* event, const JabberID& local,
+	const JabberID& remote, bool available)
+{
+    DDebug(this,DebugStub,"notifyPresence local=%s remote=%s [%p]",
+	local.c_str(),remote.c_str(),this);
+    return false;
+}
+
+void JBPresence::notifyPresence(XMPPUser* user, JIDResource* resource)
+{
+    DDebug(this,DebugStub,"notifyPresence user=%p [%p]",user,this);
+}
+
+void JBPresence::notifyNewUser(XMPPUser* user)
+{
+    DDebug(this,DebugStub,"notifyNewUser user=%p [%p]",user,this);
+}
+
+// Get a user's roster. Add a new one if requested
+XMPPUserRoster* JBPresence::getRoster(const JabberID& jid, bool add, bool* added)
+{
+    if (jid.node().null() || jid.domain().null())
+	return 0;
+    Lock lock(this);
+    ObjList* obj = m_rosters.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	XMPPUserRoster* ur = static_cast<XMPPUserRoster*>(obj->get());
+	if (jid.bare() &= ur->jid().bare())
+	    return ur->ref() ? ur : 0;
+    }
+    if (!add)
+	return 0;
+    if (added)
+	*added = true;
+    XMPPUserRoster* ur = new XMPPUserRoster(this,jid.node(),jid.domain());
+    DDebug(this,DebugAll,"Added roster for %s [%p]",jid.bare().c_str(),this);
+    return ur->ref() ? ur : 0;
+}
+
+// Get a remote user's roster
+XMPPUser* JBPresence::getRemoteUser(const JabberID& local, const JabberID& remote,
+	bool addLocal, bool* addedLocal, bool addRemote, bool* addedRemote)
+{
+    DDebug(this,DebugAll,"getRemoteUser local=%s add=%s remote=%s add=%s [%p]",
+	local.bare().c_str(),String::boolText(addLocal),
+	remote.bare().c_str(),String::boolText(addRemote),this);
+    XMPPUserRoster* ur = getRoster(local,addLocal,addedLocal);
+    if (!ur)
+	return 0;
+    XMPPUser* user = ur->getUser(remote,addRemote,addedRemote);
+    TelEngine::destruct(ur);
+    return user;
+}
+
+void JBPresence::removeRemoteUser(const JabberID& local, const JabberID& remote)
+{
+    Lock lock(this);
+    ObjList* obj = m_rosters.skipNull();
+    XMPPUserRoster* ur = 0;
+    for (; obj; obj = obj->skipNext()) {
+	ur = static_cast<XMPPUserRoster*>(obj->get());
+	if (local.bare() &= ur->jid().bare()) {
+	    if (ur->removeUser(remote))
+		ur = 0;
+	    break;
+	}
+	ur = 0;
+    }
+    if (ur)
+	m_rosters.remove(ur,true);
+}
+
+// Check if a ddestination domain is a valid one
+bool JBPresence::validDomain(const String& domain)
+{
+    if (engine()->getAlternateDomain() &&
+	(engine()->getAlternateDomain().domain() &= domain))
+	return true;
+    XMPPServerInfo* server = engine()->findServerInfo(engine()->componentServer(),true);
+    if (!server)
+	return false;
+    bool ok = ((domain &= server->identity()) || (domain &= server->fullIdentity()));
+    return ok;
+}
+
+// Send a stanza
+bool JBPresence::sendStanza(XMLElement* element, JBStream* stream)
+{
+    if (!element)
+	return true;
+    bool release = false;
+    if (!engine()->getStream(stream,release)) {
+	delete element;
+	return false;
+    }
+    JBStream::Error res = stream->sendStanza(element);
+    if (release)
+	TelEngine::destruct(stream);
+    if (res == JBStream::ErrorContext ||
+	res == JBStream::ErrorNoSocket)
+	return false;
+    return true;
+}
+
+// Send an error stanza
+bool JBPresence::sendError(XMPPError::Type type,
+	const String& from, const String& to,
+	XMLElement* element, JBStream* stream, const String* id)
+{
+    XMLElement* xml = 0;
+    XMLElement::Type t = element ? element->type() : XMLElement::Invalid;
+    if (t == XMLElement::Iq)
+	xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,
+	    id ? id->c_str() : element->getAttribute("id"));
+    else
+	xml = createPresence(from,to,Error);
+    xml->addChild(element);
+    xml->addChild(XMPPUtils::createError(XMPPError::TypeModify,type));
+    return sendStanza(xml,stream);
+}
+
+// Create a presence stanza
 XMLElement* JBPresence::createPresence(const char* from,
 	const char* to, Presence type)
 {
@@ -1891,6 +2220,7 @@ XMLElement* JBPresence::createPresence(const char* from,
     return presence;
 }
 
+// Decode a presence error stanza
 bool JBPresence::decodeError(const XMLElement* element,
 	String& code, String& type, String& error)
 {
@@ -1910,37 +2240,10 @@ bool JBPresence::decodeError(const XMLElement* element,
     return true;
 }
 
-bool JBPresence::checkDestination(JBEvent* event, const JabberID& jid)
-{
-    if (!event || validDomain(jid.domain()))
-	return true;
-    bool respond = true;
-    switch (event->type()) {
-	case JBEvent::IqDiscoGet:
-	case JBEvent::IqDiscoSet:
-	    break;
-	case JBEvent::IqDiscoRes:
-	    respond = false;
-	    break;
-	default: 
-	    // Never respond to responses: type error or result
-	    if (event->stanzaType() == "error" || event->stanzaType() == "result")
-		respond = false;
-    }
-    Debug(this,DebugNote,"Received element with invalid domain '%s'. Send error: %s",
-	jid.domain().c_str(),String::boolText(respond));
-    if (respond) {
-	const String* id = event->id().null() ? 0 : &(event->id());
-	sendError(XMPPError::SNoRemote,event->to(),event->from(),
-	    event->releaseXML(),event->stream(),id);
-    }
-    return false;
-}
-
 void JBPresence::cleanup()
 {
     Lock lock(this);
-    DDebug(this,DebugAll,"Cleanup.");
+    DDebug(this,DebugAll,"Cleanup [%p]",this);
     ListIterator iter(m_rosters);
     GenObject* obj;
     for (; (obj = iter.get());) {
@@ -1948,6 +2251,18 @@ void JBPresence::cleanup()
 	ur->cleanup();
 	m_rosters.remove(ur,true);
     }
+}
+
+inline XMPPUser* JBPresence::recvGetRemoteUser(const char* type,
+    const JabberID& local, const JabberID& remote,
+    bool addLocal, bool* addedLocal, bool addRemote, bool* addedRemote)
+{
+    XMPPUser* user = getRemoteUser(local,remote,addLocal,addedLocal,addRemote,addedRemote);
+    if (!user)
+	Debug(this,DebugAll,
+	    "No destination for received presence type=%s local=%s remote=%s [%p]",
+	    type,local.c_str(),remote.c_str(),this);
+    return user;
 }
 
 void JBPresence::addRoster(XMPPUserRoster* ur)

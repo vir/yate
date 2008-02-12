@@ -48,7 +48,6 @@ TokenDict XMPPNamespace::s_value[] = {
 	{"http://jabber.org/protocol/jingle/info/dtmf#errors", DtmfError},
 	{"http://jabber.org/protocol/commands",                Command},
 	{"http://www.google.com/xmpp/protocol/voice/v1",       CapVoiceV1},
-
 	{0,0}
 	};
 
@@ -144,11 +143,11 @@ void JabberID::set(const char* node, const char* domain, const char* resource)
     if (resource != m_resource.c_str())
 	m_resource = resource;
     clear();
-    if (m_node.length())
+    if (m_node)
 	*this << m_node << "@";
     *this << m_domain;
     m_bare = *this;
-    if (m_node.length() && m_resource.length())
+    if (m_node && m_resource)
 	*this << "/" << m_resource;
 }
 
@@ -186,7 +185,7 @@ void JabberID::parse()
     }
     // Set bare JID
     m_bare = "";
-    if (m_node.length())
+    if (m_node)
 	m_bare << m_node << "@";
     m_bare << m_domain;
 }
@@ -229,33 +228,6 @@ bool JIDIdentity::fromXML(const XMLElement* element)
     return true;
 }
 
-/**
- * JIDFeatureList
- */
-JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
-{
-    ObjList* obj = m_features.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
-	if (*f == feature)
-	    return f;
-    }
-    return 0;
-}
-
-XMLElement* JIDFeatureList::addTo(XMLElement* element)
-{
-    if (!element)
-	return 0;
-    ObjList* obj = m_features.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
-	XMLElement* feature = new XMLElement(XMLElement::Feature);
-	feature->setAttribute("var",s_ns[*f]);
-	element->addChild(feature);
-    }
-    return element;
-}
 
 /**
  * XMPPUtils
@@ -402,6 +374,29 @@ XMLElement* XMPPUtils::createStreamError(XMPPError::Type error, const char* text
     return element;
 }
 
+void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
+{
+    if (!element)
+	return;
+    if (element->type() != XMLElement::StreamError && element->type() != XMLElement::Error)
+	return;
+
+    error = "";
+    text = "";
+
+    element = element->findFirstChild("error");
+    if (!element)
+	return;
+    XMLElement* child = element->findFirstChild();
+    if (!child)
+	return;
+    error = child->name();
+    child = element->findFirstChild("text");
+    const char* t = child ? child->getText() : 0;
+    if (t)
+	text = t;
+}
+
 void XMPPUtils::print(String& xmlStr, XMLElement* element, const char* indent)
 {
 #define STARTLINE(indent) "\r\n" << indent
@@ -463,22 +458,17 @@ bool XMPPUtils::split(NamedList& dest, const char* src, const char sep,
 {
     if (!src)
 	return false;
-    u_int32_t index = 1;
-    for (u_int32_t i = 0; src[i];) {
-	// Skip separator(s)
-	for (; src[i] && src[i] == sep; i++) ;
-	// Find first separator
-	u_int32_t start = i;
-	for (; src[i] && src[i] != sep; i++) ;
-	// Get part
-	if (start != i) {
-	    String tmp(src + start,i - start);
-	    if (nameFirst)
-		dest.addParam(tmp,String((int)index++));
-	    else
-		dest.addParam(String((int)index++),tmp);
-	}
+    unsigned int index = 1;
+    String s = src;
+    ObjList* obj = s.split(sep,false);
+    for (ObjList* o = obj->skipNull(); o; o = o->skipNext(), index++) {
+	String* tmp = static_cast<String*>(o->get());
+	if (nameFirst)
+	    dest.addParam(*tmp,String(index));
+	else
+	    dest.addParam(String(index),*tmp);
     }
+    TelEngine::destruct(obj);
     return true;
 }
 

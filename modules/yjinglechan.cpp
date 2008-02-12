@@ -38,46 +38,26 @@ using namespace TelEngine;
 
 namespace { // anonymous
 
-class YJBEngine;                         // Jabber engine
-class YJBPresence;                       // Jabber presence engine
-class YJGEngine;                         // Jingle engine
-class YJGTransport;                      // Handle the transport for a connection
+class YJBEngine;                         // Jabber engine. Initiate protocol from Yate run mode
+class YJGEngine;                         // Jingle service
+class YJBMessage;                        // Message service
+class YJBStreamService;                  // Stream start/stop event service
+class YJBPresence;                       // Presence service
+class YJGData;                           // Handle the transport and formats for a connection
 class YJGConnection;                     // Jingle channel
-class YJGLibThread;                      // Library thread
 class ResNotifyHandler;                  // resource.notify handler
 class ResSubscribeHandler;               // resource.subscribe handler
 class YJGDriver;                         // The driver
 
-// Yate Payloads
-static TokenDict dict_payloads[] = {
-    { "mulaw",   0 },
-    { "alaw",    8 },
-    { "gsm",     3 },
-    { "lpc10",   7 },
-    { "slin",   11 },
-    { "g726",    2 },
-    { "g722",    9 },
-    { "g723",    4 },
-    { "g728",   15 },
-    { "g729",   18 },
-    { "ilbc",   98 },
-    { "ilbc20", 98 },
-    { "ilbc30", 98 },
-    { "h261",   31 },
-    { "h263",   34 },
-    { "mpv",    32 },
-    {      0,    0 },
-};
+// TODO:
+//  Negotiate DTMF method. Accept remote peer's method;
+
 
 // Username/Password length for transport
 #define JINGLE_AUTHSTRINGLEN         16
-// Timeout value to override "maxcall" in call.execute
-#define JINGLE_CONN_TIMEOUT       10000
-// Default caller if none for outgoing calls
-#define JINGLE_ANONYMOUS_CALLER "unk_caller"
 // Messages
 /* MODULE_MSG_NOTIFY
-	protocol	MODULE_NAME
+	protocol	s_name
 	subscription	true/false: subscription state 'to' --> 'from'
 	status		online/offline/subscribed/unsubscribed or any other string
 	from		node@domain
@@ -85,14 +65,12 @@ static TokenDict dict_payloads[] = {
 */
 #define MODULE_MSG_NOTIFY      "resource.notify"
 /* MODULE_MSG_SUBSCRIBE
-	protocol	MODULE_NAME
+	protocol	s_name
 	operation	probe/subscribe/unsubscribe
 	from		node@domain
 	to		node@domain
 */
 #define MODULE_MSG_SUBSCRIBE   "resource.subscribe"
-// Module name
-static const String MODULE_NAME("jingle");
 
 /**
  * YJBEngine
@@ -100,19 +78,58 @@ static const String MODULE_NAME("jingle");
 class YJBEngine : public JBEngine
 {
 public:
-    inline YJBEngine() {}
-    virtual ~YJBEngine() {}
-    // Overloaded methods
-    virtual bool connect(JBComponentStream* stream);
+    inline YJBEngine(Protocol proto) : JBEngine(proto)
+	{}
     virtual bool exiting()
 	{ return Engine::exiting(); }
-    // Start thread members
-    // @param read Reading socket thread count.
-    void startThreads(u_int16_t read);
-    // Process a message event.
-    // @param event The event to process. Always a valid message event.
-    // @return True if the event was processed (kept). False to destroy it.
-    virtual bool processMessage(JBEvent* event);
+    void initialize();
+};
+
+/**
+ * YJGEngine
+ */
+class YJGEngine : public JGEngine
+{
+public:
+    inline YJGEngine(YJBEngine* engine, int prio)
+	: JGEngine(engine,0,prio), m_requestSubscribe(true)
+	{}
+    inline bool requestSubscribe() const
+	{ return m_requestSubscribe; }
+    void initialize();
+    virtual void processEvent(JGEvent* event);
+private:
+    bool m_requestSubscribe;             // Request subscribe before making a call
+};
+
+/**
+ * YJBMessage
+ */
+class YJBMessage : public JBMessage
+{
+public:
+    inline YJBMessage(YJBEngine* engine, int prio)
+	: JBMessage(engine,0,prio)
+	{}
+    void initialize();
+    virtual void processMessage(JBEvent* event);
+};
+
+/**
+ * YJBStreamService
+ */
+class YJBStreamService : public JBService
+{
+public:
+    YJBStreamService(JBEngine* engine, int prio)
+	: JBService(engine,"jabberstreamservice",0,prio)
+	{}
+    virtual ~YJBStreamService()
+	{}
+    void initialize();
+protected:
+    // Process stream termination events
+    virtual bool accept(JBEvent* event, bool& processed, bool& insert);
 };
 
 /**
@@ -122,8 +139,10 @@ class YJBPresence : public JBPresence
 {
     friend class YUserPresence;
 public:
-    YJBPresence(JBEngine* engine, const NamedList& params);
-    virtual ~YJBPresence();
+    inline YJBPresence(JBEngine* engine, int prio)
+	: JBPresence(engine,0,prio)
+	{}
+    void initialize();
     // Overloaded methods
     virtual bool notifyProbe(JBEvent* event, const JabberID& local,
 	const JabberID& remote);
@@ -134,10 +153,6 @@ public:
 	const JabberID& remote, bool available);
     virtual void notifyPresence(XMPPUser* user, JIDResource* resource);
     virtual void notifyNewUser(XMPPUser* user);
-    // Start thread members
-    // @param process Event processor thread count.
-    // @param timeout Check user timeout.
-    void startThreads(u_int16_t process, u_int16_t timeout);
 protected:
     // Create & enqueue a message from received presence parameter.
     // Add status/operation/subscription parameters
@@ -146,63 +161,33 @@ protected:
 };
 
 /**
- * YJGEngine
+ * YJGData
  */
-class YJGEngine : public JGEngine
+class YJGData : public JGTransport, virtual public JGAudioList
 {
+    friend class YJGConnection;
 public:
-    inline YJGEngine(YJBEngine* jb, const NamedList& jgParams)
-	: JGEngine(jb,jgParams), m_requestSubscribe(true) {}
-    virtual ~YJGEngine() {}
-    virtual void processEvent(JGEvent* event);
-    void requestSubscribe(bool value)
-	{ m_requestSubscribe = value; }
-    bool requestSubscribe()
-	{ return m_requestSubscribe; }
-    // Start thread members
-    // @param read Reading events from the Jabber engine thread count.
-    // @param process Event processor thread count.
-    void startThreads(u_int16_t read, u_int16_t process);
-private:
-    bool m_requestSubscribe;
-};
-
-/**
- * YJGTransport
- */
-class YJGTransport : public JGTransport, public Mutex
-{
-public:
-    YJGTransport(YJGConnection* connection, Message* msg = 0);
-    virtual ~YJGTransport();
-    inline const JGTransport* remote() const
-	{ return m_remote; }
-    inline bool transportReady() const
-	{ return m_transportReady; }
-    // Init local address/port
-    bool initLocal();
-    // Update media
-    bool updateMedia(ObjList& media);
-    // Update transport
+    // Init data and format list
+    YJGData(YJGConnection* conn, Message* msg = 0);
+    // Release remote transport info
+    virtual ~YJGData();
+    // Create media description XML element
+    inline XMLElement* mediaXML()
+	{ return JGAudioList::toXML(); }
+    // Reserve RTP address and port or start the RTP session
+    bool rtp(bool start);
+    // Update media from received data. Return false if already updated media or failed to negotiate a format
+    // Hangup the connection if failed to negotiate audio formats
+    bool updateMedia(JGAudioList& media);
+    // Check received transports and try to accept one if not already negotiated one
+    // Return true if accepted
     bool updateTransport(ObjList& transport);
-    // Start RTP
-    bool start();
-    // Send transport through the given session
-    inline bool send(JGSession* session)
-	{ return session->requestTransport(new JGTransport(*this)); }
-    // Create a media description element
-    XMLElement* createDescription();
-    // Create a media string from the list
-    void createMediaString(String& dest);
 protected:
+    YJGConnection* m_conn;               // Connection owning this object
     bool m_mediaReady;                   // Media ready (updated) flag
     bool m_transportReady;               // Transport ready (both parties) flag
     bool m_started;                      // True if chan.stun already sent
     JGTransport* m_remote;               // The remote transport info
-    ObjList m_formats;                   // The media formats
-    YJGConnection* m_connection;         // The connection
-    RefObject* m_rtpData;
-    String m_rtpId;
 };
 
 /**
@@ -217,9 +202,10 @@ public:
 	Active,
 	Terminated,
     };
-    YJGConnection(YJGEngine* jgEngine, Message& msg, const char* caller,
-	const char* called, bool available);
-    YJGConnection(YJGEngine* jgEngine, JGEvent* event);
+    // Outgoing constructor
+    YJGConnection(Message& msg, const char* caller, const char* called, bool available);
+    // Incoming contructor
+    YJGConnection(JGEvent* event);
     virtual ~YJGConnection();
     inline State state()
 	{ return m_state; }
@@ -227,6 +213,7 @@ public:
 	{ return m_local; }
     inline const JabberID& remote() const
 	{ return m_remote; }
+    // Overloaded methods from Channel
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
     virtual bool callRouted(Message& msg);
@@ -235,68 +222,49 @@ public:
     virtual bool msgUpdate(Message& msg);
     virtual bool msgText(Message& msg, const char* text);
     virtual bool msgTone(Message& msg, const char* tone);
+    inline bool disconnect(const char* reason) {
+	    setReason(reason);
+	    return Channel::disconnect(m_reason);
+	}
+    // Route an incoming call
     bool route();
+    // Process Jingle and Terminated events
     void handleEvent(JGEvent* event);
     void hangup(bool reject, const char* reason = 0);
-    // Process presence info
-    //@return True to disconnect
-    bool processPresence(bool available, const char* error = 0);
+    // Process remote user's presence changes.
+    // Make the call if outgoing and in Pending (waiting for presence information) state
+    // Hangup if the remote user is unavailbale
+    // Return true to disconnect
+    bool presenceChanged(bool available);
+
     inline void updateResource(const String& resource) {
 	    if (!m_remote.resource() && resource)
 		m_remote.resource(resource);
 	}
+
     inline void getRemoteAddr(String& dest) {
 	if (m_session && m_session->stream())
-	    dest = m_session->stream()->remoteAddr().host();
+	    dest = m_session->stream()->addr().host();
     }
-    inline bool disconnect()
-	{ return Channel::disconnect(m_reason); }
 
-protected:
-    void handleJingle(JGEvent* event);
-    void handleError(JGEvent* event);
-    void handleTransport(JGEvent* event);
-    bool call();
+    inline void setReason(const char* reason) {
+	    if (!m_reason)
+		m_reason = reason;
+	}
+
 private:
+    Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
-    YJGEngine* m_jgEngine;               // Jingle engine
-    JGSession* m_session;                // Jingle session for this connection
-    JabberID m_local;
-    JabberID m_remote;
-    String m_callerPrompt;
-    YJGTransport* m_transport;           // Transport
-    Mutex m_connMutex;                   // Lock transport and session
+    JGSession* m_session;                // Jingle session attached to this connection
+    JabberID m_local;                    // Local user's JID
+    JabberID m_remote;                   // Remote user's JID
+    String m_callerPrompt;               // Text to be sent to called before calling it
+    YJGData* m_data;                     // Transport and data format(s)
     // Termination
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
     // Timeouts
     u_int64_t m_timeout;                 // Timeout for not answered outgoing connections
-};
-
-/**
- * YJGLibThread
- * Thread class for library asynchronous operations
- */
-class YJGLibThread : public Thread
-{
-public:
-    // Action to run
-    enum Action {
-	JBReader,                        // m_jb->runReceive()
-	JBConnect,                       // m_jb->connect(m_stream)
-	JGReader,                        // m_jg->runReceive()
-	JGProcess,                       // m_jg->runProcess()
-	JBPresence,                      // m_presence->runProcess()
-	JBPresenceTimeout,               // m_presence->runCheckTimeout()
-    };
-    YJGLibThread(Action action, const char* name = 0,
-	Priority prio = Normal);
-    YJGLibThread(JBComponentStream* stream, const char* name = 0,
-	Priority prio = Normal);
-    virtual void run();
-protected:
-    Action m_action;                     // Action
-    JBComponentStream* m_stream;         // The stream if action is JBConnect
 };
 
 /**
@@ -330,19 +298,17 @@ public:
 class YJGDriver : public Driver
 {
 public:
+    // Additional driver status commands
+    enum StatusCommands {
+	StatusStreams  = 0,              // Show all streams
+	StatusCmdCount = 1
+    };
     YJGDriver();
     virtual ~YJGDriver();
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    // Message handler: Disconnect channels, destroy streams, clear rosters
     virtual bool received(Message& msg, int id);
-    inline u_int32_t pendingTimeout()
-	{ return m_pendingTimeout; }
-    inline const String& anonymousCaller() const
-	{ return m_anonymousCaller; }
-    // Split 'src' into parts separated by 'sep'.
-    // Puts the parts as names in dest if nameFirst is true
-    // Puts the parts as values in dest if nameFirst is false
-    bool getParts(NamedList& dest, const char* src, const char sep, bool nameFirst);
     // Try to create a JID from a message.
     // First try to get the 'username' parameter of the message. Then the 'from' parmeter
     // @param checkDomain True to check if jid's domain is valid
@@ -353,7 +319,7 @@ public:
     // Return false if node or domain are 0 or domain is invalid
     bool decodeJid(JabberID& jid, Message& msg, const char* param,
 	bool checkDomain = false);
-    // Create the presence notification command.
+    // Create the presence notification command
     XMLElement* getPresenceCommand(JabberID& from, JabberID& to, bool available);
     // Create a random string of JINGLE_AUTHSTRINGLEN length
     void createAuthRandomString(String& dest);
@@ -364,89 +330,288 @@ public:
     void createMediaString(String& dest, ObjList& formats, char sep);
     // Find a connection by local and remote jid, optionally ignore local resource (always ignore if local has no resource)
     YJGConnection* find(const JabberID& local, const JabberID& remote, bool anyResource = false);
-
 protected:
-    void initCodecLists();
-    void initJB(const NamedList& sect);
-    void initPresence(const NamedList& sect);
-    void initJG(const NamedList& sect);
-public:
-    YJBEngine* m_jb;                     // Jabber component engine
-    YJBPresence* m_presence;             // Jabber component presence server
-    YJGEngine* m_jg;                     // Jingle engine
-    ObjList m_allCodecs;                 // List of all codecs (JGAudio)
-    ObjList m_usedCodecs;                // List of used codecs (JGAudio)
-    bool m_sendCommandOnNotify;          // resource.notify: Send command if true. Send presence if false
+    // Handle command complete requests
+    virtual bool commandComplete(Message& msg, const String& partLine,
+	const String& partWord);
+    // Additional driver status commands
+    static String s_statusCmd[StatusCmdCount];
 private:
+    // Check and build caller and called for Component run mode
+    // Caller: Set user if missing. Get default server identity for Yate Component
+    // Try to get an available resource for the called party
+    bool setComponentCall(JabberID& caller, JabberID& called, const char* cr,
+	const char* cd, bool& available, String& error);
+
     bool m_init;
-    u_int32_t m_pendingTimeout;
-    String m_anonymousCaller;
+    String m_statusCmd;                  // status jingle
 };
+
 
 /**
  * Local data
  */
-static Configuration s_cfg;              // The configuration: yjinglechan.conf
-static YJGDriver iplugin;                // The driver
-static String s_localAddress;            // The local machine's address
+static Configuration s_cfg;                       // The configuration file
+static const String s_name = "jingle";            // Module's name
+static JGAudioList s_knownCodecs;                 // List of all known codecs (JGAudio)
+static JGAudioList s_usedCodecs;                  // List of used codecs (JGAudio)
+static String s_localAddress;                     // The local machine's address
+static unsigned int s_pendingTimeout = 10000;     // Outgoing call pending timeout
+static String s_anonymousCaller = "unk_caller";   // Caller name when missing
+static YJBEngine* s_jabber = 0;
+static YJGEngine* s_jingle = 0;
+static YJBMessage* s_message = 0;
+static YJBPresence* s_presence = 0;
+static YJBStreamService* s_stream = 0;
+static YJGDriver plugin;                          // The driver
+
+
+// Get the number of private threads of a given type
+// Force to 1 for client run mode
+// Force at least 1 otherwise
+inline int threadCount(const NamedList& params, const char* param)
+{
+    if (s_jabber->protocol() == JBEngine::Client)
+	return 1;
+    int t = params.getIntValue(param);
+    return t < 1 ? 1 : t;
+}
+
 
 /**
  * YJBEngine
  */
-bool YJBEngine::connect(JBComponentStream* stream)
+void YJBEngine::initialize()
 {
-    if (!stream)
-	return false;
-    (new YJGLibThread(stream,"JBConnect thread"))->startup();
-    return true;
-}
+    debugChain(&plugin);
+    NamedList dummy("");
+    NamedList* sect = s_cfg.getSection("general");
+    if (!sect)
+	sect = &dummy;
+    // Force private processing. Force 1 thread for client run mode
+    sect->setParam("private_process_threads",String(threadCount(*sect,"private_process_threads")));
+    sect->setParam("private_receive_threads",String(threadCount(*sect,"private_receive_threads")));
+    JBEngine::initialize(*sect);
 
-void YJBEngine::startThreads(u_int16_t read)
-{
-    // Reader(s)
-    if (!read)
-	Debug(this,DebugWarn,"No reading socket threads(s)!");
-    for (; read; read--)
-	(new YJGLibThread(YJGLibThread::JBReader,"JBReader thread"))->startup();
-}
+    String defComponent;
+    // Set server list
+    unsigned int count = s_cfg.sections();
+    for (unsigned int i = 0; i < count; i++) {
+	const NamedList* comp = s_cfg.getSection(i);
+	String name = comp ? comp->c_str() : "";
+	if (!name || name == "general" || name == "codecs")
+	    continue;
 
-bool YJBEngine::processMessage(JBEvent* event)
-{
-    const char* text = 0;
-    if (event->element()) {
-	XMLElement* body = event->element()->findFirstChild(XMLElement::Body);
-	if (body)
-	    text = body->getText();
+	// Process server list for client mode
+	if (protocol() == Client) {
+	    int port = comp->getIntValue("port",0);
+	    if (port <= 0)
+		port = 5222;
+	    appendServer(new XMPPServerInfo(name,port),false);
+	    continue;
+	}
+
+	// Process server list for component mode
+	const char* address = comp->getValue("address");
+	String tmp = comp->getValue("port");
+	int port = tmp.toInteger(0);
+	if (!(address && port)) {
+	    Debug(this,DebugNote,
+		"Invalid address=%s or port=%s in configuration for %s",
+		address,tmp.c_str(),name.c_str());
+	    continue;
+	}
+	const char* password = comp->getValue("password");
+	// Check identity. Construct the full identity
+	String identity = comp->getValue("identity");
+	if (!identity)
+	    identity = name;
+	String fullId;
+	bool keepRoster = false;
+	if (identity == name) {
+	    String subdomain = comp->getValue("subdomain",s_cfg.getValue(
+		"general","default_resource",defaultResource()));
+	    identity = subdomain;
+	    identity << '.' << name;
+	    fullId = name;
+	}
+	else {
+	    keepRoster = true;
+	    fullId << '.' << name;
+	    if (identity.endsWith(fullId)) {
+		if (identity.length() == fullId.length()) {
+		    Debug(this,DebugNote,"Invalid identity=%s in configuration for %s",
+			identity.c_str(),name.c_str());
+		    continue;
+		}
+		fullId = identity;
+	    }
+	    else {
+		fullId = identity;
+		fullId << '.' << name;
+	    }
+	    identity = fullId;
+	}
+	if (!identity)
+	    continue;
+	bool startup = comp->getBoolValue("startup");
+	bool restart = comp->getBoolValue("auto_restart",true);
+	if (!defComponent || comp->getBoolValue("default"))
+	    defComponent = name;
+	XMPPServerInfo* server = new XMPPServerInfo(name,address,port,
+	    password,identity,fullId,keepRoster,restart);
+	DDebug(this,DebugAll,
+	    "Add server '%s' addr=%s port=%d ident=%s full-ident=%s roster=%s restart=%s startup=%s",
+	    name.c_str(),address,port,identity.c_str(),fullId.c_str(),
+	    String::boolText(keepRoster),String::boolText(restart),String::boolText(startup));
+	appendServer(server,startup);
     }
-    YJGConnection* conn = iplugin.find(event->to().c_str(),event->from().c_str());
-    DDebug(this,DebugInfo,
-	"Message '%s' from: '%s' to: '%s' conn=%p",
-	text,event->from().c_str(),event->to().c_str(),conn);
+    // Set default component server
+    if (protocol() != Client)
+	setComponentServer(defComponent);
+}
+
+
+/**
+ * YJGEngine
+ */
+void YJGEngine::initialize()
+{
+    debugChain(&plugin);
+    NamedList dummy("");
+    NamedList* sect = s_cfg.getSection("general");
+    if (!sect)
+	sect = &dummy;
+    // Force private processing
+    sect->setParam("private_process_threads",String(threadCount(*sect,"private_process_threads")));
+    JGEngine::initialize(*sect);
+    // Init data
+    m_requestSubscribe = sect->getBoolValue("request_subscribe",true);
+}
+
+// Process jingle events
+void YJGEngine::processEvent(JGEvent* event)
+{
+    if (!event)
+	return;
+    JGSession* session = event->session();
+    // This should never happen !!!
+    if (!session) {
+	Debug(this,DebugWarn,"Received event without session");
+	delete event;
+	return;
+    }
+    YJGConnection* conn = static_cast<YJGConnection*>(session->userData());
+    if (conn) {
+	conn->handleEvent(event);
+	if (event->final())
+	    conn->disconnect(event->reason());
+    }
+    else {
+	if (event->type() == JGEvent::Jingle &&
+	    event->action() == JGSession::ActInitiate) {
+	    if (event->session()->ref()) {
+		conn = new YJGConnection(event);
+		// Constructor failed ?
+		if (conn->state() == YJGConnection::Pending)
+		    conn->deref();
+		else if (!conn->route())
+		    event->session()->userData(0);
+	    }
+	    else {
+		Debug(this,DebugWarn,"Session ref failed for new connection");
+		event->session()->hangup(false,"failure");
+	    }
+        }
+	else
+	    DDebug(this,DebugAll,"Invalid (non initiate) event for new session");
+    }
+    delete event;
+}
+
+
+/**
+ * YJBMessage
+ */
+void YJBMessage::initialize()
+{
+    debugChain(&plugin);
+    NamedList dummy("");
+    NamedList* sect = s_cfg.getSection("general");
+    if (!sect)
+	sect = &dummy;
+    // Force sync (not enqueued) message processing
+    sect->setParam("sync_process","true");
+    JBMessage::initialize(*sect);
+}
+
+// Process a Jabber message
+void YJBMessage::processMessage(JBEvent* event)
+{
+    if (!(event && event->text()))
+	return;
+
+    if (engine()->protocol() == JBEngine::Client) {
+	//TODO: Enqueue message in Yate
+	Debug(this,DebugStub,"Please implement YJBMessage::processMessage() for Client protocol");
+	delete event;
+	return;
+    }
+
+    YJGConnection* conn = plugin.find(event->to().c_str(),event->from().c_str());
+    DDebug(this,DebugInfo,"Message from=%s to=%s conn=%p '%s' [%p]",
+	event->from().c_str(),event->to().c_str(),conn,event->text().c_str(),this);
     if (conn) {
 	Message* m = conn->message("chan.text");
-	m->addParam("text",text);
+	m->addParam("text",event->text());
 	Engine::enqueue(m);
     }
+    delete event;
+}
+
+
+/**
+ * YJBStreamService
+ */
+void YJBStreamService::initialize()
+{
+    debugChain(&plugin);
+}
+
+// Process stream termination events
+bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
+{
+    if (event->type() != JBEvent::Terminated &&
+	event->type() != JBEvent::Running &&
+	event->type() != JBEvent::Destroy)
+	return false;
+
+    //TODO: Enqueue message in Yate. Notify user unavailable
+    Debug(this,DebugStub,"Please implement YJBStreamService::accept() for Client protocol");
     return false;
 }
+
 
 /**
  * YJBPresence
  */
-YJBPresence::YJBPresence(JBEngine* engine, const NamedList& params)
-    : JBPresence(engine,params)
+void YJBPresence::initialize()
 {
-}
-
-YJBPresence::~YJBPresence()
-{
+    debugChain(&plugin);
+    NamedList dummy("");
+    NamedList* sect = s_cfg.getSection("general");
+    if (!sect)
+	sect = &dummy;
+    // Force private processing
+    sect->setParam("private_process_threads",String(threadCount(*sect,"private_process_threads")));
+    JBPresence::initialize(*sect);
 }
 
 bool YJBPresence::notifyProbe(JBEvent* event, const JabberID& local,
 	const JabberID& remote)
 {
-    XDebug(this,DebugAll,
-	"notifyProbe. Local: '%s'. Remote: '%s'.",local.c_str(),remote.c_str());
+    XDebug(this,DebugAll,"notifyProbe local=%s remote=%s [%p]",
+	local.c_str(),remote.c_str(),this);
     // Enqueue message
     return message(JBPresence::Probe,remote.bare(),local.bare(),0);
 }
@@ -454,19 +619,17 @@ bool YJBPresence::notifyProbe(JBEvent* event, const JabberID& local,
 bool YJBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
 	const JabberID& remote, Presence presence)
 {
-    XDebug(this,DebugAll,
-	"notifySubscribe(%s). Local: '%s'. Remote: '%s'.",
-	presenceText(presence),local.c_str(),remote.c_str());
+    XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
+	presenceText(presence),local.c_str(),remote.c_str(),this);
     // Respond if auto subscribe
-    if ((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
-	(autoSubscribe() & XMPPUser::From)) {
+    if (event->stream() && 0 != (autoSubscribe() & XMPPUser::From) &&
+	(presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe)) {
 	if (presence == JBPresence::Subscribe)
 	    presence = JBPresence::Subscribed;
 	else
 	    presence = JBPresence::Unsubscribed;
 	XMLElement* xml = createPresence(local.bare(),remote.bare(),presence);
-	if (event->stream())
-	    event->stream()->sendStanza(xml);
+	event->stream()->sendStanza(xml);
 	return true;
     }
     // Enqueue message
@@ -477,8 +640,9 @@ void YJBPresence::notifySubscribe(XMPPUser* user, Presence presence)
 {
     if (!user)
 	return;
-    XDebug(this,DebugAll,
-	"notifySubscribe(%s). User: (%p).",presenceText(presence),user);
+    XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
+	presenceText(presence),user->local()->jid().bare().c_str(),
+	user->jid().bare().c_str(),this);
     // Enqueue message
     message(presence,user->jid().bare(),user->local()->jid().bare(),0);
 }
@@ -486,9 +650,6 @@ void YJBPresence::notifySubscribe(XMPPUser* user, Presence presence)
 bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
 	const JabberID& remote, bool available)
 {
-    XDebug(this,DebugAll,
-	"notifyPresence(%s). Local: '%s'. Remote: '%s'.",
-	available?"available":"unavailable",local.c_str(),remote.c_str());
     // Check audio properties and availability for received resource
     bool capAudio = false;
     if (event && event->element()) {
@@ -497,26 +658,27 @@ bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
 	    capAudio = res->hasCap(JIDResource::CapAudio);
 	    available = res->available();
 	}
-	res->deref();
+	TelEngine::destruct(res);
     }
-    // Notify presence to module
-    iplugin.processPresence(local,remote,available,capAudio);
-    // Enqueue message
+    Debug(this,DebugAll,"notifyPresence local=%s remote=%s available=%s [%p]",
+	local.c_str(),remote.c_str(),String::boolText(available),this);
+    // Notify presence to module and enqueue message in engine
+    plugin.processPresence(local,remote,available,capAudio);
     return message(available ? JBPresence::None : JBPresence::Unavailable,
 	remote.bare(),local.bare(),0);
 }
 
+// Notify plugin and enqueue message in engine
 void YJBPresence::notifyPresence(XMPPUser* user, JIDResource* resource)
 {
     if (!(user && resource))
 	return;
-    XDebug(this,DebugAll,"notifyPresence. User: (%p). Resource: (%p).",
-	user,resource);
-    // Notify plugin
     JabberID remote(user->jid().node(),user->jid().domain(),resource->name());
-    iplugin.processPresence(user->local()->jid(),remote,resource->available(),
+    Debug(this,DebugAll,"notifyPresence local=%s remote=%s available=%s [%p]",
+	user->local()->jid().c_str(),remote.c_str(),
+	String::boolText(resource->available()),this);
+    plugin.processPresence(user->local()->jid(),remote,resource->available(),
 	resource->hasCap(JIDResource::CapAudio));
-    // Enqueue message
     message(resource->available() ? JBPresence::None : JBPresence::Unavailable,
 	user->jid().bare(),user->local()->jid().bare(),
 	String::boolText(user->subscribedTo()));
@@ -526,25 +688,11 @@ void YJBPresence::notifyNewUser(XMPPUser* user)
 {
     if (!user)
 	return;
-    DDebug(this,DebugInfo,"Added new user '%s' for '%s'.",
-	user->jid().c_str(),user->local()->jid().c_str());
+    DDebug(this,DebugAll,"notifyNewUser local=%s remote=%s. Adding default resource [%p]",
+	user->local()->jid().bare().c_str(),user->jid().bare().c_str(),this);
     // Add local resource
-    user->addLocalRes(new JIDResource(iplugin.m_jb->defaultResource(),JIDResource::Available,
+    user->addLocalRes(new JIDResource(s_jabber->defaultResource(),JIDResource::Available,
 	JIDResource::CapAudio));
-}
-
-void YJBPresence::startThreads(u_int16_t process, u_int16_t timeout)
-{
-    // Process the received events
-    if (!process)
-	Debug(m_engine,DebugWarn,"No threads(s) to process events!");
-    for (; process; process--)
-	(new YJGLibThread(YJGLibThread::JBPresence,"JBPresence thread"))->startup();
-    // Process timeout
-    if (!timeout)
-	Debug(m_engine,DebugWarn,"No threads(s) to check user timeout!");
-    for (; timeout; timeout--)
-	(new YJGLibThread(YJGLibThread::JBPresenceTimeout,"JBPresenceTimeout thread"))->startup();
 }
 
 bool YJBPresence::message(Presence presence, const char* from, const char* to,
@@ -587,7 +735,7 @@ bool YJBPresence::message(Presence presence, const char* from, const char* to,
 	    return 0;
     }
     m = new Message(type);
-    m->addParam("module",MODULE_NAME);
+    m->addParam("module",s_name);
     if (operation)
 	m->addParam("operation",operation);
     if (subscription)
@@ -599,345 +747,230 @@ bool YJBPresence::message(Presence presence, const char* from, const char* to,
     return Engine::enqueue(m);
 }
 
-/**
- * YJGEngine
- */
-void YJGEngine::processEvent(JGEvent* event)
-{
-    if (!event)
-	return;
-    JGSession* session = event->session();
-    // This should never happen !!!
-    if (!session) {
-	Debug(this,DebugWarn,"processEvent. Received event without session.");
-	delete event;
-	return;
-    }
-    YJGConnection* connection = 0;
-    if (session->jingleConn()) {
-	connection = static_cast<YJGConnection*>(session->jingleConn());
-	connection->handleEvent(event);
-	// Disconnect if final
-	if (event->final())
-	    connection->disconnect();
-    }
-    else {
-	if (event->type() == JGEvent::Jingle &&
-	    event->action() == JGSession::ActInitiate) {
-	    if (event->session()->ref()) {
-		connection = new YJGConnection(this,event);
-		// Constructor failed ?
-		if (connection->state() == YJGConnection::Pending)
-		    connection->deref();
-		else if (!connection->route())
-		    event->session()->jingleConn(0);
-	    }
-	    else {
-		Debug(this,DebugWarn,
-		    "processEvent. Session ref failed for new connection.");
-		event->session()->hangup(false,"failure");
-	    }
-        }
-	else
-	    DDebug(this,DebugAll,
-		"processEvent. Invalid (non initiate) event for new session.");
-
-    }
-    delete event;
-}
-
-void YJGEngine::startThreads(u_int16_t read, u_int16_t process)
-{
-    // Read events from Jabber engine
-    if (!read)
-	Debug(this,DebugWarn,"No threads(s) to get events from JBEngine!");
-    for (; read; read--)
-	(new YJGLibThread(YJGLibThread::JGReader,"JGReader thread"))->startup();
-    // Process the received events
-    if (!process)
-	Debug(this,DebugWarn,"No threads(s) to process events!");
-    for (; process; process--)
-	(new YJGLibThread(YJGLibThread::JGProcess,"JGProcess thread"))->startup();
-}
 
 /**
- * YJGTransport
+ * YJGData
  */
-YJGTransport::YJGTransport(YJGConnection* connection, Message* msg)
-    : Mutex(true),
-      m_mediaReady(false),
-      m_transportReady(false),
-      m_started(false),
-      m_remote(0),
-      m_connection(connection),
-      m_rtpData(0)
+// Init data and format list
+YJGData::YJGData(YJGConnection* conn, Message* msg)
+    : m_conn(conn),
+    m_mediaReady(false),
+    m_transportReady(false),
+    m_started(false),
+    m_remote(0)
 {
-    Lock lock(this);
-    if (!m_connection)
-	return;
     // Set data members
-    m_name = "rtp";
-    m_protocol = "udp";
-    m_type = "local";
-    m_network = "0";
-    m_preference = "1";
-    m_generation = "0";
-    iplugin.createAuthRandomString(m_username);
-    iplugin.createAuthRandomString(m_password);
-    // *** MEDIA
-    // Get formats from message. Fill with all supported if none received
-    NamedList nl("");
-    const char* formats = msg ? msg->getValue("formats") : 0;
-    if (formats) {
-	// 'formats' parameter is empty ? Add 'alaw','mulaw'
-	if (!iplugin.getParts(nl,formats,',',true)) {
-	    nl.setParam("alaw","1");
-	    nl.setParam("mulaw","2");
-	}
+    name = "rtp";
+    protocol = "udp";
+    type = "local";
+    network = "0";
+    preference = "1";
+    generation = "0";
+    plugin.createAuthRandomString(username);
+    plugin.createAuthRandomString(password);
+    // Get formats from message. Fill with all supported if none
+    String f = msg ? msg->getValue("formats") : 0;
+    if (!f)
+	s_usedCodecs.createList(f,true);
+    ObjList* formats = f.split(',');
+    // Create the formats list. Validate formats against the used codecs list
+    for (ObjList* o = formats->skipNull(); o; o = o->skipNext()) {
+	String* format = static_cast<String*>(o->get());
+	JGAudio* a = s_usedCodecs.findSynonym(*format);
+	if (a)
+	    ObjList::append(new JGAudio(*a));
     }
-    else
-	for (int i = 0; dict_payloads[i].token; i++)
-	    nl.addParam(dict_payloads[i].token,String(i+1));
-    // Parse the used codecs list
-    // If the current element is in the received list, keep it
-    ObjList* obj = iplugin.m_usedCodecs.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JGAudio* a = static_cast<JGAudio*>(obj->get());
-	// Get name for this id
-	const char* payload = lookup(a->m_id.toInteger(),dict_payloads);
-	// Append if received a format
-	if (nl.getValue(payload))
-	    m_formats.append(new JGAudio(*a));
-    }
+    TelEngine::destruct(formats);
     // Not outgoing: Ready
-    if (m_connection->isIncoming())
+    if (m_conn->isIncoming())
 	return;
-    // *** TRANSPORT
-    //TODO: Transport from message if RTP forward
+    //TODO: Get transport data from message if RTP forward
 }
 
-YJGTransport::~YJGTransport()
+YJGData::~YJGData()
 {
-    if (m_remote)
-	m_remote->deref();
+    TelEngine::destruct(m_remote);
 }
 
-bool YJGTransport::initLocal()
+// Reserve RTP address and port or start the RTP session
+bool YJGData::rtp(bool start)
 {
-    Lock lock(this);
-    if (!m_connection)
+    if (start) {
+	if (m_started || !(m_mediaReady && m_transportReady))
+	    return false;
+    }
+    else if (m_started)
 	return false;
-    // Set data
+
+    Debug(m_conn,DebugInfo,"%s RTP local='%s:%s' remote='%s:%s' [%p]",
+	start ? "Starting" : "Initializing",address.c_str(),port.c_str(),
+	m_remote?m_remote->address.c_str():"",m_remote?m_remote->port.c_str():"",
+	m_conn);
+
     Message m("chan.rtp");
-    m.userData(static_cast<CallEndpoint*>(m_connection));
-    m_connection->complete(m);
+    m.userData(static_cast<CallEndpoint*>(m_conn));
+    m_conn->complete(m);
     m.addParam("direction","bidir");
     m.addParam("media","audio");
-    m.addParam("anyssrc","true");
     m.addParam("getsession","true");
-    m_address = s_localAddress;
-    if (m_address)
-	m.setParam("localip",m_address);
+    if (start) {
+	ObjList* obj = JGAudioList::skipNull();
+	if (obj)
+	    m.addParam("format",(static_cast<JGAudio*>(obj->get()))->synonym);
+	m.addParam("localip",address);
+	m.addParam("localport",port);
+	m.addParam("remoteip",m_remote->address);
+	m.addParam("remoteport",m_remote->port);
+	//m.addParam("autoaddr","false");
+	m.addParam("rtcp","false");
+    }
     else {
-	String s;
-	if (m_connection)
-	    m_connection->getRemoteAddr(s);
-	m.setParam("remoteip",s);
+	m.addParam("anyssrc","true");
+	if (s_localAddress)
+	    address = s_localAddress;
+	else
+	    m_conn->getRemoteAddr(address);
+	if (address)
+	    m.addParam("localip",address);
     }
+
     if (!Engine::dispatch(m)) {
-	DDebug(m_connection,DebugAll,"Transport. Init RTP failed. [%p]",
-	    m_connection);
+	Debug(m_conn,DebugNote,"Failed to %s RTP [%p]",
+	    start?"start":"initialize",m_conn);
 	return false;
     }
-    m_address = m.getValue("localip",m_address);
-    m_port = m.getValue("localport","-1");
+
+    if (start) {
+	// Start STUN
+	Message* msg = new Message("chan.stun");
+	msg->userData(m.userData());
+	msg->addParam("localusername",m_remote->username + username);
+	msg->addParam("remoteusername",username + m_remote->username);
+	msg->addParam("remoteip",m_remote->address);
+	msg->addParam("remoteport",m_remote->port);
+	msg->addParam("userid",m.getValue("rtpid"));
+	Engine::enqueue(msg);
+	m_started = true;
+    }
+    else {
+	address = m.getValue("localip",address);
+	port = m.getValue("localport","-1");
+    }
     return true;
 }
 
-bool YJGTransport::start()
+// Update media from received data. Return false if already updated media or failed to negotiate a format
+// Hangup the connection if failed to negotiate audio formats
+bool YJGData::updateMedia(JGAudioList& media)
 {
-    Lock lock(this);
-    if (m_started || !(m_connection && m_mediaReady && m_transportReady))
-	return false;
-    Debug(m_connection,DebugCall,
-	"Transport. Start. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
-	m_address.c_str(),m_port.c_str(),
-	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
-    // Start RTP
-    Message* m = new Message("chan.rtp");
-    m->userData(static_cast<CallEndpoint*>(m_connection));
-    m_connection->complete(*m);
-    m->addParam("direction","bidir");
-    m->addParam("media","audio");
-#if 0
-    String formats;
-    createMediaString(formats);
-    m->addParam("formats",formats);
-#endif
-    const char* format = 0;
-    ObjList* obj = m_formats.skipNull();
-    if (obj) {
-	JGAudio* audio = static_cast<JGAudio*>(obj->get());
-	format = lookup(audio->m_id.toInteger(),dict_payloads);
-    }
-    m->addParam("format",format);
-    m->addParam("localip",m_address);
-    m->addParam("localport",m_port);
-    m->addParam("remoteip",m_remote->m_address);
-    m->addParam("remoteport",m_remote->m_port);
-    //m.addParam("autoaddr","false");
-    m->addParam("rtcp","false");
-    m->addParam("getsession","true");
-    if (!Engine::dispatch(m)) {
-	Debug(m_connection,DebugCall,"Transport. Start RTP failed. [%p]",
-	    m_connection);
-	m->destruct();
-	return false;
-    }
-    // Start STUN
-    Message* msg = new Message("chan.stun");
-    msg->userData(m->userData());
-    msg->addParam("localusername",m_remote->m_username + m_username);
-    msg->addParam("remoteusername",m_username + m_remote->m_username);
-    msg->addParam("remoteip",m_remote->m_address);
-    msg->addParam("remoteport",m_remote->m_port);
-    msg->addParam("userid",m->getValue("rtpid"));
-    m->destruct();
-    Engine::enqueue(msg);
-    m_started = true;
-    return true;
-}
-
-bool YJGTransport::updateMedia(ObjList& media)
-{
-    Lock lock(this);
-    if (m_mediaReady || !m_connection)
+    if (m_mediaReady)
 	return false;
     // Check if we received any media
-    if (0 == media.skipNull()) {
-	Debug(m_connection,DebugWarn,
-	    "Transport. The remote party has no media. [%p]",m_connection);
-	m_connection->hangup(false,"nomedia");
+    if (!media.skipNull()) {
+	Debug(m_conn,DebugNote,"Remote party has no media [%p]",m_conn);
+	m_conn->hangup(false,"nomedia");
 	return false;
     }
-    ListIterator iter_local(m_formats);
-    for (GenObject* go; (go = iter_local.get());) {
+
+    // Fill a string with our capabilities for debug purposes
+    String caps;
+    if (m_conn->debugAt(DebugNote))
+	JGAudioList::createList(caps,false);
+
+    ListIterator iter(*(JGAudioList*)this);
+    for (GenObject* go; (go = iter.get());) {
 	JGAudio* local = static_cast<JGAudio*>(go);
 	// Check if incoming media contains local media (compare 'id' and 'name')
-	ObjList* obj = media.skipNull();
-	for (; obj; obj = obj->skipNext()) {
-	    JGAudio* remote = static_cast<JGAudio*>(obj->get());
-	    if (local->m_id == remote->m_id && local->m_name == remote->m_name)
+	ObjList* o = media.skipNull();
+	for (; o; o = o->skipNext()) {
+	    JGAudio* remote = static_cast<JGAudio*>(o->get());
+	    if (local->id == remote->id && local->name == remote->name)
 		break;
 	}
 	// obj is 0. Current element from m_formats is not in received media. Remove it
-	if (!obj)
-	    m_formats.remove(local,true);
+	if (!o)
+	    JGAudioList::remove(local,true);
     }
+
     // Check if both parties have common media
-    if (0 == m_formats.skipNull()) {
-	String recvFormat;
-	iplugin.createMediaString(recvFormat,media,',');
-	Debug(m_connection,DebugWarn,
-	    "Transport. Unable to negotiate media (no common formats). Received: '%s'. [%p]",
-	    recvFormat.c_str(),m_connection);
-	m_connection->hangup(false,"nomedia");
+    if (!skipNull()) {
+	if (m_conn->debugAt(DebugNote)) {
+	    String recvCaps;
+	    media.createList(recvCaps,false);
+	    Debug(m_conn,DebugNote,"No common format(s) local=%s remote=%s [%p]",
+		caps.c_str(),recvCaps.c_str(),m_conn);
+	}
+	m_conn->hangup(false,"nomedia");
 	return false;
     }
     m_mediaReady = true;
-    if (iplugin.debugAt(DebugCall)) {
-	String s;
-	createMediaString(s);
-	Debug(m_connection,DebugCall,"Transport. Media is ready ('%s'). [%p]",
-	    s.c_str(),m_connection);
+    if (m_conn->debugAt(DebugAll)) {
+	createList(caps,true);
+	Debug(m_conn,DebugAll,"Media is ready: %s [%p]",caps.c_str(),m_conn);
     }
     return true;
 }
 
-bool YJGTransport::updateTransport(ObjList& transport)
+// Check received transports and try to accept one if not already negotiated one
+bool YJGData::updateTransport(ObjList& transport)
 {
-    Lock lock(this);
-    if (m_transportReady || !m_connection)
+    if (m_transportReady)
 	return false;
     JGTransport* remote = 0;
     // Find a transport we'd love to use
-    ObjList* obj = transport.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	remote = static_cast<JGTransport*>(obj->get());
+    for (ObjList* o = transport.skipNull(); o; o = o->skipNext()) {
+	remote = static_cast<JGTransport*>(o->get());
 	// Check: generation, name, protocol, type, network
-	if (m_generation == remote->m_generation &&
-	    m_name == remote->m_name &&
-	    m_protocol == remote->m_protocol &&
-	    m_type == remote->m_type)
+	if (generation == remote->generation &&
+	    name == remote->name &&
+	    protocol == remote->protocol &&
+	    type == remote->type)
 	    break;
 	// We hate it: reset and skip
-	DDebug(m_connection,DebugInfo,
-	    "Transport. Unacceptable transport. Name: '%s'. Protocol: '%s. Type: '%s'. Generation: '%s'. [%p]",
-	    m_remote->m_name.c_str(),m_remote->m_protocol.c_str(),
-	    m_remote->m_type.c_str(),m_remote->m_generation.c_str(),
-	    m_connection);
+	DDebug(m_conn,DebugInfo,
+	    "Skipping transport name=%s protocol=%s type=%s generation=%s [%p]",
+	    remote->name.c_str(),remote->protocol.c_str(),
+	    remote->type.c_str(),remote->generation.c_str(),m_conn);
 	remote = 0;
     }
     if (!remote)
 	return false;
     // Ok: keep it !
-    if (m_remote)
-	m_remote->deref();
-    m_remote = new JGTransport(*remote);
+    TelEngine::destruct(m_remote);
+    transport.remove(remote,false);
+    m_remote = remote;
     m_transportReady = true;
-    Debug(m_connection,DebugCall,
-	"Transport. Transport is ready. Local: '%s:%s'. Remote: '%s:%s'. [%p]",
-	m_address.c_str(),m_port.c_str(),
-	m_remote->m_address.c_str(),m_remote->m_port.c_str(),m_connection);
+    Debug(m_conn,DebugAll,"Transport is ready: local='%s:%s' remote='%s:%s' [%p]",
+	address.c_str(),port.c_str(),m_remote->address.c_str(),
+	m_remote->port.c_str(),m_conn);
     return true;
 }
 
-XMLElement* YJGTransport::createDescription()
-{
-    Lock lock(this);
-    XMLElement* descr = JGAudio::createDescription();
-    ObjList* obj = m_formats.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JGAudio* a = static_cast<JGAudio*>(obj->get());
-	a->addTo(descr);
-    }
-    JGAudio* te = new JGAudio("106","telephone-event","8000","");
-    te->addTo(descr);
-    te->deref();
-    return descr;
-}
-
-void YJGTransport::createMediaString(String& dest)
-{
-    Lock lock(this);
-    iplugin.createMediaString(dest,m_formats,',');
-}
 
 /**
  * YJGConnection
  */
 // Outgoing call
-YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* caller,
-	const char* called, bool available)
-    : Channel(&iplugin,0,true),
-      m_state(Pending),
-      m_jgEngine(jgEngine),
-      m_session(0),
-      m_local(caller),
-      m_remote(called),
-      m_transport(0),
-      m_connMutex(true),
-      m_hangup(false),
-      m_timeout(0)
+YJGConnection::YJGConnection(Message& msg, const char* caller, const char* called,
+	bool available)
+    : Channel(&plugin,0,true),
+    m_mutex(true),
+    m_state(Pending),
+    m_session(0),
+    m_local(caller),
+    m_remote(called),
+    m_callerPrompt(msg.getValue("callerprompt")),
+    m_data(0),
+    m_hangup(false),
+    m_timeout(0)
 {
-    Debug(this,DebugCall,"Outgoing. Caller: '%s'. Called: '%s'. [%p]",
-	caller,called,this);
-    m_callerPrompt = msg.getValue("callerprompt");
+    Debug(this,DebugCall,"Outgoing. caller='%s' called='%s' [%p]",caller,called,this);
     // Init transport
-    m_transport = new YJGTransport(this,&msg);
+    m_data = new YJGData(this,&msg);
     // Set timeout
+    //TODO: Do that only if not available
     m_timeout = msg.getIntValue("maxcall",0) * (u_int64_t)1000;
-    u_int64_t pendingTimeout = iplugin.pendingTimeout() * (u_int64_t)1000;
+    u_int64_t pendingTimeout = s_pendingTimeout * (u_int64_t)1000;
     u_int64_t timenow = Time::now();
     if (m_timeout && pendingTimeout >= m_timeout) {
 	maxcall(timenow + m_timeout);
@@ -948,8 +981,7 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* call
 	if (m_timeout)
 	    m_timeout += timenow - pendingTimeout;
     }
-    XDebug(this,DebugInfo,
-	"YJGConnection. Time: " FMT64 ". Maxcall set to " FMT64 " us. [%p]",
+    XDebug(this,DebugInfo,"Time: " FMT64 ". Maxcall set to " FMT64 " us. [%p]",
 	Time::now(),maxcall(),this);
     // Startup
     Message* m = message("chan.startup",msg);
@@ -961,31 +993,30 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, Message& msg, const char* call
     Engine::enqueue(m);
     // Make the call
     if (available)
-	processPresence(true);
+	presenceChanged(true);
 }
 
 // Incoming call
-YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
-    : Channel(&iplugin,0,false),
-      m_state(Active),
-      m_jgEngine(jgEngine),
-      m_session(event->session()),
-      m_local(event->session()->local()),
-      m_remote(event->session()->remote()),
-      m_transport(0),
-      m_connMutex(true),
-      m_hangup(false),
-      m_timeout(0)
+YJGConnection::YJGConnection(JGEvent* event)
+    : Channel(&plugin,0,false),
+    m_mutex(true),
+    m_state(Active),
+    m_session(event->session()),
+    m_local(event->session()->local()),
+    m_remote(event->session()->remote()),
+    m_data(0),
+    m_hangup(false),
+    m_timeout(0)
 {
-    Debug(this,DebugCall,"Incoming. Caller: '%s'. Called: '%s'. [%p]",
+    Debug(this,DebugCall,"Incoming. caller='%s' called='%s' [%p]",
 	m_remote.c_str(),m_local.c_str(),this);
     // Set session
-    m_session->jingleConn(this);
+    m_session->userData(this);
     // Init transport
-    m_transport = new YJGTransport(this);
-    if (!m_transport->updateMedia(event->audio()))
+    m_data = new YJGData(this);
+    if (!m_data->updateMedia(event->audio()))
 	m_state = Pending;
-    m_transport->updateTransport(event->transport());
+    m_data->updateTransport(event->transport());
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());
@@ -994,22 +1025,16 @@ YJGConnection::YJGConnection(YJGEngine* jgEngine, JGEvent* event)
     Engine::enqueue(m);
 }
 
+// Release data
 YJGConnection::~YJGConnection()
 {
     hangup(false);
     disconnected(true,m_reason);
-    Lock lock(m_connMutex);
-    if (m_session) {
-	m_session->deref();
-	m_session = 0;
-    }
-    if (m_transport) {
-	m_transport->deref();
-	m_transport = 0;
-    }
-    Debug(this,DebugCall,"Terminated. [%p]",this);
+    TelEngine::destruct((RefObject*)m_data);
+    Debug(this,DebugCall,"Destroyed [%p]",this);
 }
 
+// Route an incoming call
 bool YJGConnection::route()
 {
     Message* m = message("call.preroute",false,true);
@@ -1017,77 +1042,70 @@ bool YJGConnection::route()
     m->addParam("called",m_local.node());
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
-    m_connMutex.lock();
-    if (m_transport && m_transport->remote()) {
-	m->addParam("ip_host",m_transport->remote()->m_address);
-	m->addParam("ip_port",m_transport->remote()->m_port);
+    m_mutex.lock();
+    if (m_data->m_remote) {
+	m->addParam("ip_host",m_data->m_remote->address);
+	m->addParam("ip_port",m_data->m_remote->port);
     }
-    m_connMutex.unlock();
+    m_mutex.unlock();
     return startRouter(m);
 }
 
+// Call accepted
+// Init RTP. Accept session and transport. Send transport
 void YJGConnection::callAccept(Message& msg)
 {
-    // Init local transport
-    // Accept session and transport
-    // Request transport
-    // Try to start transport
-    Debug(this,DebugCall,"callAccept. [%p]",this);
-    m_connMutex.lock();
-    if (m_transport && m_session) {
-	m_transport->initLocal();
-	m_session->accept(m_transport->createDescription());
-	m_session->acceptTransport(0);
-	m_transport->send(m_session);
+    Debug(this,DebugCall,"callAccept [%p]",this);
+    m_mutex.lock();
+    if (m_session) {
+	m_data->rtp(false);
+	m_session->accept(m_data->JGAudioList::toXML());
+	m_session->acceptTransport();
+	m_session->sendTransport(new JGTransport(*m_data));
     }
-    m_connMutex.unlock();
+    m_mutex.unlock();
     Channel::callAccept(msg);
 }
 
 void YJGConnection::callRejected(const char* error, const char* reason,
 	const Message* msg)
 {
+    Debug(this,DebugCall,"callRejected. error=%s reason=%s [%p]",error,reason,this);
+    hangup(false,error?error:reason);
     Channel::callRejected(error,reason,msg);
-    if (error)
-	m_reason = error;
-    else
-	m_reason = reason;
-    Debug(this,DebugCall,"callRejected. Reason: '%s'. [%p]",m_reason.c_str(),this);
-    hangup(false);
 }
 
 bool YJGConnection::callRouted(Message& msg)
 {
-    DDebug(this,DebugCall,"callRouted. [%p]",this);
+    DDebug(this,DebugCall,"callRouted [%p]",this);
     return true;
 }
 
 void YJGConnection::disconnected(bool final, const char* reason)
 {
-    Debug(this,DebugCall,"disconnected. Final: %u. Reason: '%s'. [%p]",
+    Debug(this,DebugCall,"disconnected. final=%u reason=%s [%p]",
 	final,reason,this);
-    Lock lock(m_connMutex);
-    if (m_reason.null() && reason)
-	m_reason = reason;
+    setReason(reason);
     Channel::disconnected(final,m_reason);
 }
 
 bool YJGConnection::msgAnswered(Message& msg)
 {
-    DDebug(this,DebugCall,"msgAnswered. [%p]",this);
+    DDebug(this,DebugCall,"msgAnswered [%p]",this);
     return true;
 }
 
 bool YJGConnection::msgUpdate(Message& msg)
 {
-    DDebug(this,DebugCall,"msgUpdate. [%p]",this);
+    DDebug(this,DebugCall,"msgUpdate [%p]",this);
     return true;
 }
 
+// Send message to remote peer
 bool YJGConnection::msgText(Message& msg, const char* text)
 {
-    DDebug(this,DebugCall,"msgText. '%s'. [%p]",text,this);
-    Lock lock(m_connMutex);
+    DDebug(this,DebugCall,"msgText. '%s' [%p]",text,this);
+    Lock lock(m_mutex);
     if (m_session) {
 	m_session->sendMessage(text);
 	return true;
@@ -1095,241 +1113,156 @@ bool YJGConnection::msgText(Message& msg, const char* text)
     return false;
 }
 
+// Send tones to remote peer
 bool YJGConnection::msgTone(Message& msg, const char* tone)
 {
-    DDebug(this,DebugCall,"msgTone. '%s'. [%p]",tone,this);
-    Lock lock(m_connMutex);
+    DDebug(this,DebugCall,"msgTone. '%s' [%p]",tone,this);
+    Lock lock(m_mutex);
     if (m_session)
 	while (tone && *tone)
 	    m_session->sendDtmf(*tone++);
     return true;
 }
 
+// Hangup the call. Send session terminate if not already done
 void YJGConnection::hangup(bool reject, const char* reason)
 {
-    Lock lock(m_connMutex);
-    if (m_hangup)     // Already hung up
+    Lock lock(m_mutex);
+    if (m_hangup)
 	return;
     m_hangup = true;
     m_state = Terminated;
-    if (!m_reason) {
-	if (reason)
-	    m_reason = reason;
-	else
-	    m_reason = Engine::exiting() ? "Server shutdown" : "Hangup";
-    }
+    setReason(reason?reason:(Engine::exiting()?"shutdown":"hangup"));
     Message* m = message("chan.hangup",true);
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
     Engine::enqueue(m);
     if (m_session) {
-	m_session->jingleConn(0);
+	m_session->userData(0);
 	m_session->hangup(reject,m_reason);
+	TelEngine::destruct(m_session);
     }
-    Debug(this,DebugCall,"hangup. Reason: '%s'. [%p]",m_reason.c_str(),this);
+    Debug(this,DebugCall,"Hangup. reason=%s [%p]",m_reason.c_str(),this);
 }
 
+// Handle Jingle events
 void YJGConnection::handleEvent(JGEvent* event)
 {
     if (!event)
 	return;
-    Lock lock(m_connMutex);
-    switch (event->type()) {
-	case JGEvent::Jingle:
-	    handleJingle(event);
-	    break;
-	case JGEvent::Terminated:
-	    m_reason = event->reason();
-	    Debug(this,DebugCall,"handleEvent((%p): %u). Terminated. Reason: '%s'. [%p]",
-		event,event->type(),m_reason.c_str(),this);
-	    break;
-	case JGEvent::Error:
-	    handleError(event);
-	    break;
-	case JGEvent::Message: {
-	    DDebug(this,DebugCall,
-		"handleEvent((%p): %u). Message: '%s'. [%p]",
-		event,event->type(),event->text().c_str(),this);
-	    Message* m = message("chan.text");
-	    m->addParam("text",event->text());
-            Engine::enqueue(m);
-	    }
-	    break;
-	default:
-	    Debug(this,DebugNote,"handleEvent((%p): %u). Unexpected. [%p]",
-		event,event->type(),event);
+    Lock lock(m_mutex);
+    if (m_hangup) {
+	Debug(this,DebugInfo,"Ignoring event (%p,%u). Already hung up [%p]",
+	    event,event->type(),this);
+	return;
     }
-}
 
-void YJGConnection::handleJingle(JGEvent* event)
-{
+    if (event->type() == JGEvent::Terminated) {
+	Debug(this,DebugInfo,"Remote terminated with reason='%s' [%p]",
+	    event->reason().c_str(),this);
+	setReason(event->reason());
+	return;
+    }
+
+    if (event->type() != JGEvent::Jingle) {
+	Debug(this,DebugNote,"Received unexpected event (%p,%u) [%p]",
+	    event,event->type(),this);
+	return;
+    }
+
+    // Process jingle events
     switch (event->action()) {
 	case JGSession::ActDtmf:
-	    Debug(this,DebugInfo,"handleJingle. Dtmf(%s): '%s'. [%p]",
+	    Debug(this,DebugInfo,"Received dtmf(%s) '%s' [%p]",
 		event->reason().c_str(),event->text().c_str(),this);
-	    if (event->reason() == "button-up") {
+	    if (event->reason() == "button-up" && event->text()) {
 		Message* m = message("chan.dtmf");
 		m->addParam("text",event->text());
 		Engine::enqueue(m);
 	    }
 	    break;
 	case JGSession::ActDtmfMethod:
-	    Debug(this,DebugInfo,"handleJingle. Dtmf method: '%s'. [%p]",
+	    Debug(this,DebugAll,"Received dtmf method='%s' [%p]",
 		event->text().c_str(),this);
-	    // TODO: method can be 'rtp' or 'xmpp'
-	    m_session->sendResult(event->id());
+	    // Method can be 'rtp' or 'xmpp': accept both
+	    m_session->confirm(event->element());
 	    break;
 	case JGSession::ActTransport:
-	    {
-		bool accept = !m_transport->transportReady() &&
-		    m_transport->updateTransport(event->transport());
-		DDebug(this,DebugInfo,"handleJingle. Transport-info. %s. [%p]",
-		    accept?"Accepted":"Not accepted",this);
-		if (!accept) {
-		    XMPPError::ErrorType errType = XMPPError::TypeCancel;
-		    if (!m_transport->transportReady())
-			errType = XMPPError::TypeModify;
-		    m_session->sendError(event->releaseXML(),
-			XMPPError::SNotAcceptable,errType);
-		}
-		else {
-		    m_session->sendResult(event->id());
-		    if (isOutgoing())
-			m_session->acceptTransport(0);
-		}
+	    if (m_data->m_transportReady) {
+		DDebug(this,DebugAll,"Received transport while ready [%p]",this);
+		m_session->confirm(event->releaseXML(),XMPPError::SNotAcceptable,
+		    0,XMPPError::TypeCancel);
+		break;
 	    }
-	    m_transport->start();
+	    m_data->updateTransport(event->transport());
+	    if (m_data->m_transportReady) {
+		m_session->confirm(event->element());
+		if (isOutgoing())
+		    m_session->acceptTransport();
+		m_data->rtp(true);
+	    }
+	    else
+		m_session->confirm(event->releaseXML(),XMPPError::SNotAcceptable);
 	    break;
 	case JGSession::ActTransportAccept:
-	    Debug(this,DebugInfo,"handleJingle. Transport-accept. [%p]",this);
+	    Debug(this,DebugAll,"Remote peer accepted transport [%p]",this);
 	    break;
 	case JGSession::ActAccept:
 	    if (isAnswered())
 		break;
 	    // Update media
-	    Debug(this,DebugCall,"handleJingle. Accept. [%p]",this);
-	    m_transport->updateMedia(event->audio());
-	    m_transport->start();
-	    // Notify engine
+	    Debug(this,DebugCall,"Remote peer answered the call [%p]",this);
+	    m_state = Active;
+	    m_data->updateMedia(event->audio());
+	    m_data->rtp(true);
 	    maxcall(0);
 	    status("answered");
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;
-	case JGSession::ActModify:
-	    Debug(this,DebugWarn,"handleJingle. Modify: not implemented. [%p]",this);
-	    break;
-	case JGSession::ActRedirect:
-	    Debug(this,DebugWarn,"handleJingle. Redirect: not implemented. [%p]",this);
-	    break;
-	default: ;
-	    DDebug(this,DebugWarn,
-		"handleJingle. Event (%p). Action: %u. Unexpected. [%p]",
+	default:
+	    Debug(this,DebugNote,
+		"Received unexpected Jingle event (%p) with action=%u [%p]",
 		event,event->action(),this);
     }
 }
 
-void YJGConnection::handleError(JGEvent* event)
+// Process remote user's presence notifications
+// Make the call if outgoing and in Pending (waiting for presence information) state
+// Hangup if the remote user is unavailbale
+// Return true to disconnect
+bool YJGConnection::presenceChanged(bool available)
 {
-    DDebug(this,DebugCall,
-	"handleError. Error. Id: '%s'. Reason: '%s'. Text: '%s'. [%p]",
-	event->id().c_str(),event->reason().c_str(),
-	event->text().c_str(),this);
-}
-
-bool YJGConnection::processPresence(bool available, const char* error)
-{
-    Lock lock(m_connMutex);
-    if (m_state == Terminated) {
-	DDebug(this,DebugInfo,
-	    "processPresence. Received presence in Terminated state. [%p]",this);
+    Lock lock(m_mutex);
+    if (m_state == Terminated)
 	return false;
-    }
-    // Check if error or unavailable in any other state
-    if (!(error || available))
-	error = "offline";
-    if (error) {
-	Debug(this,DebugCall,"processPresence. Hangup (%s). [%p]",error,this);
-	hangup(false,error);
+    // Check if unavailable in any other states
+    if (!available) {
+	if (!m_hangup) {
+	    DDebug(this,DebugCall,"Remote user is unavailable [%p]",this);
+	    hangup(false,"offline");
+	}
 	return true;
     }
     // Check if we are in pending state and remote peer is present
-    if (!(m_state == Pending && available))
+    if (!(isOutgoing() && m_state == Pending && available))
 	return false;
     // Make the call
-    m_state = Active;
-    Debug(this,DebugCall,"call. Caller: '%s'. Called: '%s'. [%p]",
+    Debug(this,DebugCall,"Calling. caller=%s called=%s [%p]",
 	m_local.c_str(),m_remote.c_str(),this);
-    // Make the call
-    m_session = iplugin.m_jg->call(m_local,m_remote,
-	m_transport->createDescription(),
+    m_state = Active;
+    m_session = s_jingle->call(m_local,m_remote,m_data->JGAudioList::toXML(),
 	JGTransport::createTransport(),m_callerPrompt);
     if (!m_session) {
-	hangup(false,"create session failed");
+	hangup(false,"noconn");
 	return true;
     }
-    // Adjust timeout
+    m_session->userData(this);
     maxcall(m_timeout);
-    XDebug(this,DebugInfo,"processPresence. Maxcall set to " FMT64 " us. [%p]",maxcall(),this);
-    // Send prompt
     Engine::enqueue(message("call.ringing",false,true));
-    m_session->jingleConn(this);
-    // Send transport
-    m_transport->initLocal();
-    m_transport->send(m_session);
+    // Init & send transport
+    m_data->rtp(false);
+    m_session->sendTransport(new JGTransport(*m_data));
     return false;
-}
-
-/**
- * YJGLibThread
- */
-YJGLibThread::YJGLibThread(Action action, const char* name, Priority prio)
-    : Thread(name,prio), m_action(action), m_stream(0)
-{
-}
-
-YJGLibThread::YJGLibThread(JBComponentStream* stream, const char* name,
-	Priority prio)
-    : Thread(name,prio), m_action(JBConnect), m_stream(0)
-{
-    if (stream && stream->ref())
-	m_stream = stream;
-}
-
-void YJGLibThread::run()
-{
-    switch (m_action) {
-	case JBReader:
-	    DDebug(iplugin.m_jb,DebugAll,"%s started.",name());
-	    iplugin.m_jb->runReceive();
-	    break;
-	case JBConnect:
-	    if (m_stream) {
-		DDebug(iplugin.m_jb,DebugAll,
-		    "%s started. Stream (%p). Remote: '%s'.",
-		    name(),m_stream,m_stream->remoteName().c_str());
-		m_stream->connect();
-		m_stream->deref();
-		m_stream = 0;
-	    }
-	    break;
-	case JGReader:
-	    DDebug(iplugin.m_jg,DebugAll,"%s started.",name());
-	    iplugin.m_jg->runReceive();
-	    break;
-	case JGProcess:
-	    DDebug(iplugin.m_jg,DebugAll,"%s started.",name());
-	    iplugin.m_jg->runProcess();
-	    break;
-	case JBPresence:
-	    DDebug(iplugin.m_jb,DebugAll,"%s started.",name());
-	    iplugin.m_presence->runProcess();
-	    break;
-	case JBPresenceTimeout:
-	    DDebug(iplugin.m_jb,DebugAll,"%s started.",name());
-	    iplugin.m_presence->runCheckTimeout();
-	    break;
-    }
-    DDebug(iplugin.m_jb,DebugAll,"%s end of run.",name());
 }
 
 /**
@@ -1338,28 +1271,28 @@ void YJGLibThread::run()
 bool ResNotifyHandler::received(Message& msg)
 {
     // Avoid loopback message (if the same module: it's a message sent by this module)
-    if (MODULE_NAME == msg.getValue("module"))
+    if (s_name == msg.getValue("module"))
 	return false;
     JabberID from,to;
     // *** Check from/to
-    if (!iplugin.getJidFrom(from,msg,true))
+    if (!plugin.getJidFrom(from,msg,true))
 	return true;
-    if (iplugin.m_sendCommandOnNotify)
+    if (s_presence && !s_presence->autoRoster())
 	to = msg.getValue("to");
-    else if (!iplugin.decodeJid(to,msg,"to"))
+    else if (!plugin.decodeJid(to,msg,"to"))
 	return true;
     // *** Check status
     String status = msg.getValue("status");
     if (status.null()) {
-	Debug(&iplugin,DebugNote,
-	    "Received '%s' from '%s' with missing 'status' parameter.",
+	Debug(&plugin,DebugNote,
+	    "Received '%s' from '%s' with missing 'status' parameter",
 	    MODULE_MSG_NOTIFY,from.c_str());
 	return true;
     }
     // *** Everything is OK. Process the message
-    XDebug(&iplugin,DebugAll,"Received '%s' from '%s' with status '%s'.",
+    XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	MODULE_MSG_NOTIFY,from.c_str(),status.c_str());
-    if (!iplugin.m_sendCommandOnNotify && iplugin.m_presence->addOnPresence())
+    if (s_presence->addOnPresence())
 	process(from,to,status,msg.getBoolValue("subscription",false));
     else
 	sendPresence(from,to,status);
@@ -1369,13 +1302,13 @@ bool ResNotifyHandler::received(Message& msg)
 void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 	const String& status, bool subFrom)
 {
-    XMPPUserRoster* roster = iplugin.m_presence->getRoster(from,true,0);
+    XMPPUserRoster* roster = s_presence->getRoster(from,true,0);
     XMPPUser* user = roster->getUser(to,false,0);
     // Add new user and local resource
     if (!user) {
 	user = new XMPPUser(roster,to.node(),to.domain(),
 	    subFrom ? XMPPUser::From : XMPPUser::None,false,false);
-	iplugin.m_presence->notifyNewUser(user);
+	s_presence->notifyNewUser(user);
 	if (!user->ref()) {
 	    roster->deref();
 	    return;
@@ -1437,8 +1370,8 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
     else if (status == "offline")
 	jbPresence = JBPresence::Unavailable;
     else {
-	if (iplugin.m_sendCommandOnNotify) {
-	    XDebug(&iplugin,DebugNote,"Can't send command for status='%s'.",status.c_str());
+	if (!s_presence->autoRoster()) {
+	    XDebug(&plugin,DebugNote,"Can't send command for status='%s'",status.c_str());
 	    return;
 	}
 	if (status == "subscribed")
@@ -1446,23 +1379,23 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	else if (status == "unsubscribed") 
 	    jbPresence = JBPresence::Unsubscribed;
 	else {
-	    XDebug(&iplugin,DebugNote,"Can't send presence for status='%s'.",status.c_str());
+	    XDebug(&plugin,DebugNote,"Can't send presence for status='%s'",status.c_str());
 	    return;
 	}
     }
     // Check if we can get a stream
-    JBComponentStream* stream = iplugin.m_jb->getStream();
+    JBStream* stream = s_jabber->getStream();
     if (!stream)
 	return;
     // Create XML element to be sent
     bool available = (jbPresence == JBPresence::None);
     XMLElement* stanza = 0;
-    if (iplugin.m_sendCommandOnNotify) {
+    if (!s_presence->autoRoster()) {
 	if (to.domain().null())
-	    to.domain(iplugin.m_jb->componentServer().c_str());
-	DDebug(&iplugin,DebugAll,"Sending presence %s from: %s to: %s",
+	    to.domain(s_jabber->componentServer().c_str());
+	DDebug(&plugin,DebugAll,"Sending presence %s from: %s to: %s",
 	    String::boolText(available),from.c_str(),to.c_str());
-	stanza = iplugin.getPresenceCommand(from,to,available);
+	stanza = plugin.getPresenceCommand(from,to,available);
     }
     else {
 	stanza = JBPresence::createPresence(from,to,jbPresence);
@@ -1485,13 +1418,13 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 bool ResSubscribeHandler::received(Message& msg)
 {
     // Avoid loopback message (if the same module: it's a message sent by this module)
-    if (MODULE_NAME == msg.getValue("module"))
+    if (s_name == msg.getValue("module"))
 	return false;
     JabberID from,to;
     // *** Check from/to
-    if (!iplugin.decodeJid(from,msg,"from",true))
+    if (!plugin.decodeJid(from,msg,"from",true))
 	return true;
-    if (!iplugin.decodeJid(to,msg,"to"))
+    if (!plugin.decodeJid(to,msg,"to"))
 	return true;
     // *** Check operation
     String tmpParam = msg.getValue("operation");
@@ -1503,13 +1436,13 @@ bool ResSubscribeHandler::received(Message& msg)
     else if (tmpParam == "unsubscribe")
 	presence = JBPresence::Unsubscribe;
     else {
-	Debug(&iplugin,DebugNote,
-	    "Received '%s' with missing or unknown parameter: operation=%s.",
+	Debug(&plugin,DebugNote,
+	    "Received '%s' with missing or unknown parameter: operation=%s",
 	    MODULE_MSG_SUBSCRIBE,msg.getValue("operation"));
 	return true;
     }
     // *** Everything is OK. Process the message
-    XDebug(&iplugin,DebugAll,"Accepted '%s'.",MODULE_MSG_SUBSCRIBE);
+    XDebug(&plugin,DebugAll,"Accepted '%s'.",MODULE_MSG_SUBSCRIBE);
     process(from,to,presence);
     return true;
 }
@@ -1518,10 +1451,10 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	JBPresence::Presence presence)
 {
     // Don't automatically add
-    if ((presence == JBPresence::Probe && !iplugin.m_presence->addOnProbe()) ||
+    if ((presence == JBPresence::Probe && !s_presence->addOnProbe()) ||
 	((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
-	!iplugin.m_presence->addOnSubscribe())) {
-	JBComponentStream* stream = iplugin.m_jb->getStream();
+	!s_presence->addOnSubscribe())) {
+	JBStream* stream = s_jabber->getStream();
 	if (!stream)
 	    return;
 	stream->sendStanza(JBPresence::createPresence(from,to,presence));
@@ -1529,13 +1462,13 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	return;
     }
     // Add roster/user
-    XMPPUserRoster* roster = iplugin.m_presence->getRoster(from,true,0);
+    XMPPUserRoster* roster = s_presence->getRoster(from,true,0);
     XMPPUser* user = roster->getUser(to,false,0);
     // Add new user and local resource
     if (!user) {
 	user = new XMPPUser(roster,to.node(),to.domain(),XMPPUser::From,
 	    false,false);
-	iplugin.m_presence->notifyNewUser(user);
+	s_presence->notifyNewUser(user);
 	if (!user->ref()) {
 	    roster->deref();
 	    return;
@@ -1548,7 +1481,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	if (presence == JBPresence::Subscribe) {
 	    // Already subscribed: notify. NO: send request
 	    if (user->subscribedTo())
-		iplugin.m_presence->notifySubscribe(user,JBPresence::Subscribed);
+		s_presence->notifySubscribe(user,JBPresence::Subscribed);
 	    else {
 		user->sendSubscribe(JBPresence::Subscribe,0);
 		user->probe(0);
@@ -1558,7 +1491,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	if (presence == JBPresence::Unsubscribe) {
 	    // Already unsubscribed: notify. NO: send request
 	    if (!user->subscribedTo())
-		iplugin.m_presence->notifySubscribe(user,JBPresence::Unsubscribed);
+		s_presence->notifySubscribe(user,JBPresence::Unsubscribed);
 	    else {
 		user->sendSubscribe(JBPresence::Unsubscribe,0);
 		user->probe(0);
@@ -1574,7 +1507,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	// No audio resource for remote user: send probe
 	// Send probe fails: Assume remote user unavailable
 	if (!user->probe(0))
-	    iplugin.m_presence->notifyPresence(0,to,from,false);
+	    s_presence->notifyPresence(0,to,from,false);
 	break;
     }
     user->unlock();
@@ -1584,22 +1517,24 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 /**
  * YJGDriver
  */
+String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
+
 YJGDriver::YJGDriver()
-    : Driver(MODULE_NAME,"varchans"),
-      m_jb(0), m_presence(0), m_jg(0), m_sendCommandOnNotify(true), m_init(false), m_pendingTimeout(0)
+    : Driver(s_name,"varchans"),
+    m_init(false)
 {
     Output("Loaded module YJingle");
+    m_statusCmd << "status " << s_name;
 }
 
 YJGDriver::~YJGDriver()
 {
     Output("Unloading module YJingle");
-    if (m_presence)
-	m_presence->deref();
-    if (m_jg)
-	m_jg->deref();
-    if (m_jb)
-	m_jb->deref();
+    TelEngine::destruct(s_jingle);
+    TelEngine::destruct(s_message);
+    TelEngine::destruct(s_presence);
+    TelEngine::destruct(s_stream);
+    TelEngine::destruct(s_jabber);
 }
 
 void YJGDriver::initialize()
@@ -1607,277 +1542,236 @@ void YJGDriver::initialize()
     Output("Initializing module YJingle");
     s_cfg = Engine::configFile("yjinglechan");
     s_cfg.load();
-    if (m_init) {
-	if (m_jb)
-	    m_jb->printXml(s_cfg.getBoolValue("general","printxml",false));
-	return;
-    }
+    NamedList dummy("");
     NamedList* sect = s_cfg.getSection("general");
-    if (!sect) {
-	Debug(this,DebugNote,"Section [general] missing - no initialization.");
-	return;
+    if (!sect)
+	sect = &dummy;
+
+    if (!m_init) {
+	m_init = true;
+
+	// Init all known codecs
+	s_knownCodecs.add("0",  "PCMU",    "8000",  "", "mulaw");
+	s_knownCodecs.add("2",  "G726-32", "8000",  "", "g726");
+	s_knownCodecs.add("3",  "GSM",     "8000",  "", "gsm");
+	s_knownCodecs.add("4",  "G723",    "8000",  "", "g723");
+	s_knownCodecs.add("7",  "LPC",     "8000",  "", "lpc10");
+	s_knownCodecs.add("8",  "PCMA",    "8000",  "", "alaw");
+	s_knownCodecs.add("9",  "G722",    "8000",  "", "g722");
+	s_knownCodecs.add("11", "L16",     "8000",  "", "slin");
+	s_knownCodecs.add("15", "G728",    "8000",  "", "g728");
+	s_knownCodecs.add("18", "G729",    "8000",  "", "g729");
+	s_knownCodecs.add("31", "H261",    "90000", "", "h261");
+	s_knownCodecs.add("32", "MPV",     "90000", "", "mpv");
+	s_knownCodecs.add("34", "H263",    "90000", "", "h263");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "", "ilbc");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "", "ilbc20");
+	s_knownCodecs.add("98", "iLBC",    "8000",  "", "ilbc30");
+
+	// Create Jabber engine and services
+	int p = JBEngine::lookupProto(sect->getValue("protocol"),-1);
+	JBEngine::Protocol proto;
+	if (p == -1)
+	    if (Engine::mode() == Engine::Client)
+		proto = JBEngine::Client;
+	    else
+		proto = JBEngine::Component;
+	else
+	    proto = (JBEngine::Protocol)p;
+	s_jabber = new YJBEngine(proto);
+	s_jingle = new YJGEngine(s_jabber,0);
+	s_message = new YJBMessage(s_jabber,1);
+	s_presence = new YJBPresence(s_jabber,0);
+	// We don't need stream notifications for Component protocol
+	if (s_jabber->protocol() != JBEngine::Component)
+	    s_stream = new YJBStreamService(s_jabber,1);
+
+	// Attach services to the engine
+	s_jabber->attachService(s_jingle,JBEngine::ServiceJingle);
+	s_jabber->attachService(s_jingle,JBEngine::ServiceWriteFail);
+	s_jabber->attachService(s_jingle,JBEngine::ServiceIq);
+	s_jabber->attachService(s_jingle,JBEngine::ServiceStream);
+	s_jabber->attachService(s_message,JBEngine::ServiceMessage);
+	s_jabber->attachService(s_presence,JBEngine::ServicePresence);
+	s_jabber->attachService(s_presence,JBEngine::ServiceDisco);
+	if (s_stream)
+	    s_jabber->attachService(s_stream,JBEngine::ServiceStream);
+
+	// Driver setup
+	installRelay(Halt);
+	Engine::install(new ResNotifyHandler);
+	Engine::install(new ResSubscribeHandler);
+	setup();
     }
-    m_init = true;
-    s_localAddress = sect->getValue("localip");
-    m_anonymousCaller = sect->getValue("anonymous_caller",JINGLE_ANONYMOUS_CALLER);
-    m_pendingTimeout = sect->getIntValue("pending_timeout",JINGLE_CONN_TIMEOUT);
+
     lock();
-    initCodecLists();                 // Init codec list
-    if (debugAt(DebugAll)) {
-	String s;
-	s << "\r\nlocalip=" << s_localAddress;
-	s << "\r\npending_timeout=" << (unsigned int)m_pendingTimeout;
-	s << "\r\nanonymous_caller=" << m_anonymousCaller;
-	String media;
-	createMediaString(media,m_usedCodecs,' ');
-	s << "\r\ncodecs=" << media;
-	Debug(this,DebugAll,"Initialized:%s",s.c_str());
+
+    // Initialize Jabber engine and services
+    s_jabber->initialize();
+    s_jingle->initialize();
+    s_message->initialize();
+    s_presence->initialize();
+    if (s_stream)
+	s_stream->initialize();
+
+    s_localAddress = sect->getValue("localip");
+    s_anonymousCaller = sect->getValue("anonymous_caller","unk_caller");
+    s_pendingTimeout = sect->getIntValue("pending_timeout",10000);
+    // Init codecs in use. Check each codec in known codecs list against the configuration
+    s_usedCodecs.clear();
+    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+    for (ObjList* o = s_knownCodecs.skipNull(); o; o = o->skipNext()) {
+	JGAudio* crt = static_cast<JGAudio*>(o->get());
+	bool enable = defcodecs && DataTranslator::canConvert(crt->synonym);
+	if (s_cfg.getBoolValue("codecs",crt->synonym,enable))
+	    s_usedCodecs.append(new JGAudio(*crt));
     }
-    if (s_localAddress.null())
-	Debug(this,DebugNote,"No local address set.");
-    // Initialize
-    initJB(*sect);                    // Init Jabber Component engine
-    initPresence(*sect);              // Init Jabber Component presence
-    initJG(*sect);                    // Init Jingle engine
+
+    int dbg = DebugInfo;
+    if (!s_localAddress)
+	dbg = DebugNote;
+    if (!s_usedCodecs.count())
+	dbg = DebugWarn;
+
+    if (debugAt(dbg)) {
+	String s;
+	s << " localip=" << s_localAddress ? s_localAddress.c_str() : "MISSING";
+	s << " pending_timeout=" << s_pendingTimeout;
+	s << " anonymous_caller=" << s_anonymousCaller;
+	String media;
+	if (!s_usedCodecs.createList(media,true))
+	    media = "MISSING";
+	s << " codecs=" << media;
+	Debug(this,dbg,"Module initialized:%s",s.c_str());
+    }
+
     unlock();
-    // Driver setup
-    installRelay(Halt);
-    Engine::install(new ResNotifyHandler);
-    Engine::install(new ResSubscribeHandler);
-    setup();
 }
 
-bool YJGDriver::getParts(NamedList& dest, const char* src, const char sep,
-	bool nameFirst)
+// Make an outgoing calls
+// Build peers' JIDs and check if the destination is available
+bool YJGDriver::msgExecute(Message& msg, String& dest)
 {
-    if (!src)
-	return false;
-    u_int32_t index = 1;
-    for (u_int32_t i = 0; src[i];) {
-	// Skip separator(s)
-	for (; src[i] && src[i] == sep; i++) ;
-	// Find first separator
-	u_int32_t start = i;
-	for (; src[i] && src[i] != sep; i++) ;
-	// Get part
-	if (start != i) {
-	    String tmp(src + start,i - start);
-	    if (nameFirst)
-		dest.setParam(tmp,String((int)index++));
-	    else
-		dest.setParam(String((int)index++),tmp);
+    // Construct JIDs
+    JabberID caller;
+    JabberID called;
+    bool available = true;
+    String error;
+    while (true) {
+	if (!msg.userData()) {
+	    error = "No data channel";
+	    break;
 	}
+	// Component: prepare caller/called. check availability
+	// Client: just check if caller/called are full JIDs
+	if (s_jabber->protocol() == JBEngine::Component)
+	    setComponentCall(caller,called,msg.getValue("caller"),dest,available,error);
+	else if (!(caller.isFull() && called.isFull()))
+	    error << "Incomplete caller=" << caller << " or called=" << called;
+	break;
     }
+    if (error) {
+	Debug(this,DebugNote,"Jingle call failed. %s",error.c_str());
+	msg.setParam("error","failure");
+	return false;
+    }
+    // Parameters OK. Create connection and init channel
+    Debug(this,DebugAll,"msgExecute. caller='%s' called='%s' available=%u",
+	caller.c_str(),called.c_str(),available);
+    YJGConnection* conn = new YJGConnection(msg,caller,called,available);
+    Channel* ch = static_cast<Channel*>(msg.userData());
+    if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	msg.setParam("peerid",conn->id());
+	msg.setParam("targetid",conn->id());
+    }
+    conn->deref();
     return true;
 }
 
-void YJGDriver::initCodecLists()
+// Handle command complete requests
+bool YJGDriver::commandComplete(Message& msg, const String& partLine,
+	const String& partWord)
 {
-    // Init all supported codecs if not already done
-    if (!m_allCodecs.skipNull()) {
-	m_allCodecs.append(new JGAudio("0",  "PCMU",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("2",  "G726-32", "8000",  ""));
-	m_allCodecs.append(new JGAudio("3",  "GSM",     "8000",  ""));
-	m_allCodecs.append(new JGAudio("4",  "G723",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("7",  "LPC",     "8000",  ""));
-	m_allCodecs.append(new JGAudio("8",  "PCMA",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("9",  "G722",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("11", "L16",     "8000",  ""));
-	m_allCodecs.append(new JGAudio("15", "G728",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("18", "G729",    "8000",  ""));
-	m_allCodecs.append(new JGAudio("31", "H261",    "90000", ""));
-	m_allCodecs.append(new JGAudio("32", "MPV",     "90000", ""));
-	m_allCodecs.append(new JGAudio("34", "H263",    "90000", ""));
-	m_allCodecs.append(new JGAudio("98", "iLBC",    "8000",  ""));
-    }
-    // Init codecs in use
-    m_usedCodecs.clear();
-    bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
-    for (int i = 0; dict_payloads[i].token; i++) {
-	// Skip if duplicate id
-	// TODO: Enforce checking: Equal IDs may not be neighbours
-	if (dict_payloads[i].value == dict_payloads[i+1].value)
-	    continue;
-	const char* payload = dict_payloads[i].token;
-	bool enable = defcodecs && DataTranslator::canConvert(payload);
-	// If enabled, add the codec to the used codecs list
-	if (s_cfg.getBoolValue("codecs",payload,enable)) {
-	    // Use codec if exists in m_allCodecs
-	    ObjList* obj = m_allCodecs.skipNull();
-	    for (; obj; obj = obj->skipNext()) {
-		JGAudio* a = static_cast<JGAudio*>(obj->get());
-		if (a->m_id == dict_payloads[i].value) {
-		    XDebug(this,DebugAll,"Add '%s' to used codecs",payload);
-		    m_usedCodecs.append(new JGAudio(*a));
-		    break;
-		}
-	    }
-	}
-    }
-    if (!m_usedCodecs.skipNull())
-	Debug(this,DebugWarn,"No audio format(s) available.");
-}
+    bool status = partLine.startsWith("status");
+    bool drop = !status && partLine.startsWith("drop");
+    if (!(status || drop))
+	return Driver::commandComplete(msg,partLine,partWord);
 
-void YJGDriver::initJB(const NamedList& sect)
-{
-    if (m_jb)
-	return;
-    // Create the engine
-    m_jb = new YJBEngine();
-    m_jb->debugChain(this);
-    // Initialize
-    m_jb->initialize(sect);
-    String defComponent;
-    // Set server list
-    unsigned int count = s_cfg.sections();
-    for (unsigned int i = 0; i < count; i++) {
-	const NamedList* comp = s_cfg.getSection(i);
-	if (!comp)
-	    continue;
-	String name = *comp;
-	if (name.null() || (name == "general") || (name == "codecs"))
-	    continue;
-	const char* address = comp->getValue("address");
-	int port = comp->getIntValue("port",0);
-	if (!(address && port)) {
-	    Debug(this,DebugNote,"Missing address or port in configuration for %s",
-		name.c_str());
-	    continue;
-	}
-	const char* password = comp->getValue("password");
-	// Check identity
-	String identity = comp->getValue("identity");
-	if (identity.null())
-	    identity = name;
-	String fullId;
-	bool keepRoster = false;
-	if (identity == name) {
-	    String subdomain = comp->getValue("subdomain",s_cfg.getValue(
-		"general","default_resource",m_jb->defaultResource()));
-	    identity = subdomain;
-	    identity << '.' << name;
-	    fullId = name;
-	}
-	else {
-	    keepRoster = true;
-	    fullId << '.' << name;
-	    if (identity.endsWith(fullId)) {
-		if (identity.length() == fullId.length()) {
-		    Debug(this,DebugNote,"Invalid identity=%s in configuration for %s",
-			identity.c_str(),name.c_str());
-		    continue;
-		}
-		fullId = identity;
-	    }
-	    else {
-		fullId = identity;
-		fullId << '.' << name;
-	    }
-	    identity = fullId;
-	}
-	bool startup = comp->getBoolValue("startup");
-	u_int32_t restartCount = m_jb->restartCount();
-	if (!(address && port && !identity.null()))
-	    continue;
-	if (defComponent.null() || comp->getBoolValue("default"))
-	    defComponent = name;
-	JBServerInfo* server = new JBServerInfo(name,address,port,
-	    password,identity,fullId,keepRoster,startup,restartCount);
-	DDebug(this,DebugAll,
-	    "Add server '%s' addr=%s port=%d pass=%s ident=%s full-ident=%s roster=%s startup=%s restartcount=%u.",
-	    name.c_str(),address,port,password,identity.c_str(),fullId.c_str(),
-	    String::boolText(keepRoster),String::boolText(startup),restartCount);
-	m_jb->appendServer(server,startup);
+    // 'status' command
+    Lock lock(this);
+    // line='status jingle': add additional commands
+    if (partLine == m_statusCmd) {
+	for (unsigned int i = 0; i < StatusCmdCount; i++)
+	    if (!partWord || s_statusCmd[i].startsWith(partWord))
+		msg.retValue().append(s_statusCmd[i],"\t");
+	return true;
     }
-    // Set default server
-    m_jb->setComponentServer(defComponent);
-    // Init threads
-    int read = 1;
-    m_jb->startThreads(read);
-}
 
-void YJGDriver::initPresence(const NamedList& sect)
-{
-    // Already initialized ?
-    if (m_presence)
-	m_presence->initialize(sect);
-    else {
-	m_presence = new YJBPresence(m_jb,sect);
-	m_presence->debugChain(this);
-	// Init threads
-	int process = 1;
-	int timeout = 1;
-	m_presence->startThreads(process,timeout);
-	m_sendCommandOnNotify = !(m_presence->addOnSubscribe() &&
-	    m_presence->addOnProbe() && m_presence->addOnPresence());
-    }
-}
+    if (partLine != "status" && partLine != "drop")
+	return false;
 
-void YJGDriver::initJG(const NamedList& sect)
-{
-    if (m_jg)
-	m_jg->initialize(sect);
-    else {
-	m_jg = new YJGEngine(m_jb,sect);
-	m_jg->debugChain(this);
-	// Init threads
-	int read = 1;
-	int process = 1;
-	m_jg->startThreads(read,process);
-    }
-    m_jg->requestSubscribe(sect.getBoolValue("request_subscribe",true));
-    if (debugAt(DebugAll)) {
-	String s;
-	s << "\r\nrequest_subscribe=" << String::boolText(m_jg->requestSubscribe());
-	Debug(m_jg,DebugAll,"Initialized:%s",s.c_str());
-    }
-}
-
-bool YJGDriver::msgExecute(Message& msg, String& dest)
-{
-    if (!msg.userData()) {
-	Debug(this,DebugNote,"Jingle call failed. No data channel.");
-	msg.setParam("error","failure");
+    // Empty partial word or name start with it: add name and prefix
+    if (!partWord || name().startsWith(partWord)) {
+	msg.retValue().append(name(),"\t");
+	if (channels().skipNull())
+	    msg.retValue().append(prefix(),"\t");
 	return false;
     }
-    // Assume Jabber Component !!!
+
+    // Partial word starts with module prefix: add channels
+    if (partWord.startsWith(prefix())) {
+	for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
+	    CallEndpoint* c = static_cast<CallEndpoint*>(o->get());
+	    if (c->id().startsWith(partWord))
+		msg.retValue().append(c->id(),"\t");
+	}
+	return true;
+    }
+    return false;
+}
+
+// Check and build caller and called for Component run mode
+// Caller: Set user if missing. Get default server identity for Yate Component
+// Try to get an available resource for the called party
+bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
+	const char* cr, const char* cd, bool& available, String& error)
+{
     // Get identity for default server
-    String identity;
-    if (!iplugin.m_jb->getFullServerIdentity(identity)) {
-	Debug(this,DebugNote,"Jingle call failed. No default server.");
-	msg.setParam("error","failure");
+    String domain;
+    if (!s_jabber->getServerIdentity(domain,true)) {
+	error = "No default server";
 	return false;
     }
-    String c = msg.getValue("caller");
-    if (!c)
-	c = iplugin.anonymousCaller();
-    if (!(c && JabberID::valid(c))) {
-	Debug(this,DebugNote,"Jingle call failed. Missing or invalid caller name.");
-	msg.setParam("error","failure");
+    if (!cr)
+	cr = s_anonymousCaller;
+    // Validate caller's JID
+    if (!(cr && JabberID::valid(cr))) {
+	error << "Invalid caller=" << cr;
 	return false;
     }
-    JabberID caller(c,identity);
-    JabberID called(dest);
+    caller.set(cr,domain);
+    called.set(cd);
+
     // Get an available resource for the remote user if we keep the roster
-    bool available = true;
-    if (iplugin.m_presence->addOnSubscribe() ||
-	iplugin.m_presence->addOnProbe() ||
-	iplugin.m_presence->addOnPresence()) {
+    // Send subscribe and probe if not
+    if (s_presence->autoRoster()) {
 	// Get remote user
 	bool newPresence = false;
-	XMPPUser* remote = iplugin.m_presence->getRemoteUser(caller,called,true,0,
+	XMPPUser* remote = s_presence->getRemoteUser(caller,called,true,0,
 	    true,&newPresence);
+	if (!remote) {
+	    error = "Remote user is unavailable";
+	    return false;
+	}
 	// Get a resource for the caller
 	JIDResource* res = remote->getAudio(true,true);
 	if (!res) {
-	    iplugin.m_presence->notifyNewUser(remote);
+	    s_presence->notifyNewUser(remote);
 	    res = remote->getAudio(true,true);
 	    // This should never happen !!!
 	    if (!res) {
 		remote->deref();
-		Debug(this,DebugNote,
-		    "Jingle call failed. Unable to get a resource for the caller.");
-		msg.setParam("error","failure");
+		error = "Unable to get a resource for the caller";
 		return false;
 	    }
 	}
@@ -1886,10 +1780,9 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	res = remote->getAudio(false,true);
 	available = (res != 0);
 	if (!(newPresence || available)) {
-	    if (!iplugin.m_jg->requestSubscribe()) {
+	    if (!s_jingle->requestSubscribe()) {
 		remote->deref();
-		Debug(this,DebugNote,"Jingle call failed. Remote peer is unavailable.");
-		msg.setParam("error","offline");
+		error = "Remote peer is unavailable";
 		return false;
 	    }
 	    remote->sendSubscribe(JBPresence::Subscribe,0);
@@ -1904,15 +1797,14 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     else {
 	available = false;
 	// Get stream for default component
-	JBComponentStream* stream = m_jb->getStream();
+	JBStream* stream = s_jabber->getStream();
 	if (!stream) {
-	    Debug(this,DebugNote,"Jingle call failed. No stream for called=%s.",called.c_str());
-	    msg.setParam("error","failure");
+	    error << "No stream for called=" << called;
 	    return false;
 	}
 	// Send subscribe request and probe
 	XMLElement* xml = 0;
-	if (iplugin.m_jg->requestSubscribe()) {
+	if (s_jingle->requestSubscribe()) {
 	    xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe);
 	    stream->sendStanza(xml);
 	}
@@ -1920,35 +1812,62 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	stream->sendStanza(xml);
 	stream->deref();
     }
-    // Set a resource for caller
-    if (caller.resource().null())
-	caller.resource(iplugin.m_jb->defaultResource());
-    // Parameters OK. Create connection and init channel
-    DDebug(this,DebugAll,"msgExecute. Caller: '%s'. Called: '%s'.",
-	caller.c_str(),called.c_str());
-    YJGConnection* conn = new YJGConnection(m_jg,msg,caller,called,available);
-    Channel* ch = static_cast<Channel*>(msg.userData());
-    if (ch && conn->connect(ch,msg.getValue("reason"))) {
-	msg.setParam("peerid",conn->id());
-	msg.setParam("targetid",conn->id());
-    }
-    conn->deref();
     return true;
 }
 
+// Message handler: Disconnect channels, destroy streams, clear rosters
 bool YJGDriver::received(Message& msg, int id)
 {
-    if (id == Timer)
-	m_jb->timerTick(msg.msgTime().msec());
-    else
-	if (id == Halt) {
-	    dropAll(msg);
-	    lock();
-	    channels().clear();
-	    unlock();
-	    m_presence->cleanup();
-	    m_jb->cleanup();
+    if (id == Status) {
+	String target = msg.getValue("module");
+	// Target is the driver or channel
+	if (!target || target == name() || target.startsWith(prefix()))
+	    return Driver::received(msg,id);
+
+	// Check additional commands
+	if (!target.startSkip(name(),false))
+	    return false;
+	target.trimBlanks();
+	int cmd = 0;
+	for (; cmd < StatusCmdCount; cmd++)
+	    if (s_statusCmd[cmd] == target)
+		break;
+
+	// Show streams
+	if (cmd == StatusStreams && s_jabber) {
+	    msg.retValue().clear();
+	    msg.retValue() << "name=" << name();
+	    msg.retValue() << ",type=" << type();
+	    msg.retValue() << ",format=Type|State|Local|Remote";
+	    s_jabber->lock();
+	    msg.retValue() << ";count=" << s_jabber->streams().count();
+	    for (ObjList* o = s_jabber->streams().skipNull(); o; o = o->skipNext()) {
+		JBStream* stream = static_cast<JBStream*>(o->get());
+		msg.retValue() << ";" << JBEngine::lookupProto(stream->type());
+		msg.retValue() << "|" << JBStream::lookupState(stream->state());
+		msg.retValue() << "|" << stream->local();
+		msg.retValue() << "|" << stream->remote();
+	    }
+	    s_jabber->unlock();
+	    msg.retValue() << "\r\n";
+	    return true;
 	}
+    }
+    else if (id == Halt) {
+	dropAll(msg);
+	lock();
+	channels().clear();
+	unlock();
+	s_presence->cleanup();
+	s_jabber->cleanup();
+	s_jabber->cancelThreads();
+	s_jingle->cancelThreads();
+	s_presence->cancelThreads();
+	s_jabber->detachService(s_presence);
+	s_jabber->detachService(s_jingle);
+	s_jabber->detachService(s_message);
+	s_jabber->detachService(s_stream);
+    }
     return Driver::received(msg,id);
 }
 
@@ -1958,8 +1877,8 @@ bool YJGDriver::getJidFrom(JabberID& jid, Message& msg, bool checkDomain)
     if (username.null())
 	return decodeJid(jid,msg,"from",checkDomain);
     String domain;
-    iplugin.m_jb->getFullServerIdentity(domain);
-    jid.set(username,domain,iplugin.m_jb->defaultResource());
+    s_jabber->getServerIdentity(domain,true);
+    jid.set(username,domain,s_jabber->defaultResource());
     return true;
 }
 
@@ -1972,7 +1891,7 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }
-    if (checkDomain && !m_presence->validDomain(jid.domain())) {
+    if (checkDomain && !s_presence->validDomain(jid.domain())) {
 	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' has invalid (unknown) domain.",
 	    msg.c_str(),param,jid.c_str());
 	return false;
@@ -2007,7 +1926,7 @@ XMLElement* YJGDriver::getPresenceCommand(JabberID& from, JabberID& to,
     // 'iq' stanza
     String id = idCrt++;
     String domain;
-    if (iplugin.m_jb->getServerIdentity(domain))
+    if (s_jabber->getServerIdentity(domain,false))
 	from.domain(domain);
     XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,from,to,id);
     iq->addChild(command);
@@ -2045,8 +1964,8 @@ void YJGDriver::processPresence(const JabberID& local, const JabberID& remote,
 		(remote.bare() |= conn->remote().bare()))
 		continue;
 	    conn->updateResource(remote.resource());
-	    if (conn->processPresence(true))
-		conn->disconnect();
+	    if (conn->presenceChanged(true))
+		conn->disconnect(0);
 	}
 	unlock();
 	return;
@@ -2060,24 +1979,10 @@ void YJGDriver::processPresence(const JabberID& local, const JabberID& remote,
 	if ((!broadcast && local.bare() != conn->local().bare()) ||
 	    !conn->remote().match(remote))
 	    continue;
-	if (conn->processPresence(false))
-	    conn->disconnect();
+	if (conn->presenceChanged(false))
+	    conn->disconnect(0);
     }
     unlock();
-}
-
-void YJGDriver::createMediaString(String& dest, ObjList& formats, char sep)
-{
-    dest = "";
-    String s = sep;
-    ObjList* obj = formats.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JGAudio* a = static_cast<JGAudio*>(obj->get());
-	const char* payload = lookup(a->m_id.toInteger(),dict_payloads);
-	if (!payload)
-	    continue;
-	dest.append(payload,s);
-    }
 }
 
 YJGConnection* YJGDriver::find(const JabberID& local, const JabberID& remote, bool anyResource)

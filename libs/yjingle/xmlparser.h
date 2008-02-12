@@ -55,13 +55,16 @@ class XMLParser;
 class XMLElementOut;
 
 /**
- * This class holds an XML element.
- * @short An XML element.
+ * This class holds an XML element
+ * @short An XML element
  */
 class YJINGLE_API XMLElement
 {
     friend class XMLParser;
 public:
+    /**
+     * Element type as enumeration
+     */
     enum Type {
 	// *** Stream related elements
 	StreamStart,                     // stream:stream
@@ -98,82 +101,87 @@ public:
 
     /**
      * Constructor.
-     * Constructs an StreamEnd element.
+     * Constructs a StreamEnd element
      */
     XMLElement();
 
     /**
+     * Copy constructor
+     */
+    XMLElement(const XMLElement& src);
+
+    /**
      * Constructor.
      * Constructs an XML element with a TiXmlElement element with the given name.
-     * Used for outgoing elements.
-     * @param name The element's name.
-     * @param attributes Optional list of attributes.
-     * @param text Optional text for the XML element.
+     * Used for outgoing elements
+     * @param name The element's name
+     * @param attributes Optional list of attributes
+     * @param text Optional text for the XML element
      */
     XMLElement(const char* name, NamedList* attributes = 0, const char* text = 0);
 
     /**
      * Constructor.
      * Constructs an XML element with a TiXmlElement element with the given type's name.
-     * Used for outgoing elements.
-     * @param type The element's type.
-     * @param attributes Optional list of attributes.
-     * @param text Optional text for the XML element.
+     * Used for outgoing elements
+     * @param type The element's type
+     * @param attributes Optional list of attributes
+     * @param text Optional text for the XML element
      */
     XMLElement(Type type, NamedList* attributes = 0, const char* text = 0);
 
     /**
-     * Destructor. Deletes the underlying TiXmlElement if owned.
+     * Destructor. Deletes the underlying TiXmlElement if owned
      */
     virtual ~XMLElement();
 
     /**
-     * Get the type of this object.
-     * @return The type of this object as enumeration.
+     * Get the type of this object
+     * @return The type of this object as enumeration
      */
     inline Type type() const
 	{ return m_type; }
 
     /**
-     * Get the TiXmlElement's name.
-     * @return The name of the TiXmlElement object or 0.
+     * Get the TiXmlElement's name
+     * @return The name of the TiXmlElement object or 0
      */
     inline const char* name() const
 	{ return valid() ? m_element->Value() : 0; }
 
     /**
-     * Check if the TiXmlElement's name is the given text.
-     * @param text Text to compare with.
-     * @return False if text is 0 or not equal to name.
+     * Check if the TiXmlElement's name is the given text
+     * @param text Text to compare with
+     * @return False if text is 0 or not equal to name
      */
     inline bool nameIs(const char* text) const
 	{ return (text && name() && (0 == ::strcmp(name(),text))); }
 
     /**
-     * Get the validity of this object.
-     * @return True if m_element is non null.
+     * Get the validity of this object
+     * @return True if m_element is non null
      */
     inline bool valid() const
 	{ return m_element != 0; }
 
     /**
-     * Put the element in a buffer.
-     * @param dest Destination string.
-     * @param unclose True to leave the tag unclosed.
+     * Put the element in a buffer
+     * @param dest Destination string
+     * @param unclose True to leave the tag unclosed
      */
     void toString(String& dest, bool unclose = false) const;
 
     /**
-     * Set the value of an existing attribute or adds a new one.
-     * @param name Attribute's name.
-     * @param value Attribute's value.
+     * Set the value of an existing attribute or adds a new one
+     * @param name Attribute's name
+     * @param value Attribute's value
      */
     void setAttribute(const char* name, const char* value);
 
     /**
-     * Set the value of an existing attribute or adds a new one if the value's length is not 0.
-     * @param name Attribute's name.
-     * @param value Attribute's value.
+     * Set the value of an existing attribute or adds a new one if the value's length is not 0
+     * @param name Attribute's name
+     * @param value Attribute's value
      */
     inline void setAttributeValid(const char* name, const String& value) {
 	    if (value)
@@ -181,9 +189,9 @@ public:
 	}
 
     /**
-     * Set the value of an existing attribute or adds a new one from an integer.
-     * @param name Attribute's name.
-     * @param value Attribute's value.
+     * Set the value of an existing attribute or adds a new one from an integer
+     * @param name Attribute's name
+     * @param value Attribute's value
      */
     inline void setAttribute(const char* name, int value) {
 	    String s(value);
@@ -191,17 +199,17 @@ public:
 	}
 
     /**
-     * Get the value of an attribute.
-     * @param name Attribute's name.
-     * @return Attribute's value. May be 0 if doesn't exists or empty.
+     * Get the value of an attribute
+     * @param name Attribute's name
+     * @return Attribute's value. May be 0 if doesn't exists or empty
      */
     const char* getAttribute(const char* name);
 
     /**
-     * Get the value of an attribute.
-     * @param name Attribute's name.
-     * @param value Destination string.
-     * @return True if attribute with the given name exists and is not empty.
+     * Get the value of an attribute
+     * @param name Attribute's name
+     * @param value Destination string
+     * @return True if attribute with the given name exists and is not empty
      */
     inline bool getAttribute(const char* name, String& value) {
 	    value = getAttribute(name);
@@ -209,79 +217,77 @@ public:
 	}
 
     /**
-     * Check if an attribute with the given name and value exists.
-     * @param name Attribute's name.
-     * @param value Attribute's value.
-     * @return True/False.
+     * Check if an attribute with the given name and value exists
+     * @param name Attribute's name
+     * @param value Attribute's value
+     * @return True/False
      */
     bool hasAttribute(const char* name, const char* value);
 
     /**
-     * Get the text of this XML element.
-     * @return Pointer to the text of this XML element or 0.
+     * Get the text of this XML element
+     * @return Pointer to the text of this XML element or 0
      */
     const char* getText();
 
     /**
-     * Add a child to this object. Release the received element.
-     *  On exit 'element' will be invalid if the operation succeedded.
-     *  To succeed, 'element' MUST own his 'm_element'.
-     * @param element XMLElement to add.
+     * Add a child to this object. Release the received element
+     * @param element XMLElement to add
      */
     void addChild(XMLElement* element);
 
     /**
-     * Find the first child element.
-     * @param name Optional name of the child.
-     * @return Pointer to an XMLElement or 0 if not found.
+     * Find the first child element
+     * @param name Optional name of the child
+     * @return Pointer to an XMLElement or 0 if not found
      */
     XMLElement* findFirstChild(const char* name = 0);
 
     /**
-     * Find the first child element of the given type.
-     * @param type Child's type to find.
-     * @return Pointer to an XMLElement or 0 if not found.
+     * Find the first child element of the given type
+     * @param type Child's type to find
+     * @return Pointer to an XMLElement or 0 if not found
      */
     inline XMLElement* findFirstChild(Type type)
 	{ return findFirstChild(typeName(type)); }
 
     /**
-     * Find the next child element.
-     * @param element Starting XMLElement. O to find from the beginning.
-     * @param name Optional name of the child.
-     * @return Pointer to an XMLElement or 0 if not found.
+     * Find the next child element
+     * @param element Starting XMLElement. O to find from the beginning
+     * @param name Optional name of the child
+     * @return Pointer to an XMLElement or 0 if not found
      */
     XMLElement* findNextChild(const XMLElement* element, const char* name = 0);
 
     /**
-     * Find the next child element of the given type.
-     * @param element Starting XMLElement. O to find from the beginning.
-     * @param type Child's type to find.
-     * @return Pointer to an XMLElement or 0 if not found.
+     * Find the next child element of the given type
+     * @param element Starting XMLElement. O to find from the beginning
+     * @param type Child's type to find
+     * @return Pointer to an XMLElement or 0 if not found
      */
     inline XMLElement* findNextChild(const XMLElement* element, Type type)
 	{ return findNextChild(element,typeName(type)); }
 
     /**
-     * Find the first attribute.
-     * @return Pointer to the first attribute or 0.
+     * Find the first attribute
+     * @return Pointer to the first attribute or 0
      */
     inline const TiXmlAttribute* firstAttribute() const
 	{ return valid() ? m_element->FirstAttribute() : 0; }
 
     /**
-     * Get the name associated with the given type.
-     * @param type Element type as enumeration.
-     * @return Pointer to the name or 0.
+     * Get the name associated with the given type
+     * @param type Element type as enumeration
+     * @return Pointer to the name or 0
      */
     static inline const char* typeName(Type type)
 	{ return lookup(type,s_names); }
 
     /**
-     * check if the given text is equal to the one associated with the given type.
-     * @param txt Text to compare.
-     * @param type Element type as enumeration.
-     * @return True if txt equals the text associated with the given type.
+     * check if the given text is equal to the one associated with the given type
+     * @param txt Text to compare
+     * @param type Element type as enumeration
+     * @return True if txt equals the text associated with the given type
      */
     static inline bool isType(const char* txt, Type type) {
 	    const char* s = typeName(type);
@@ -294,28 +300,28 @@ protected:
      * Constructs an XML element from a TiXmlElement.
      * Used to extract elements from parser and access the children.
      * When extracting elements from parser the object will own the TiXmlElement.
-     * When accessing the children, the object will not own the TiXmlElement.
-     * @param element Pointer to a valid TiXmlElement.
-     * @param owner Owner flag.
+     * When accessing the children, the object will not own the TiXmlElement
+     * @param element Pointer to a valid TiXmlElement
+     * @param owner Owner flag
      */
     XMLElement(TiXmlElement* element, bool owner);
 
     /**
-     * Get the underlying TiXmlElement.
-     * @return The underlying TiXmlElement object or 0.
+     * Get the underlying TiXmlElement
+     * @return The underlying TiXmlElement object or 0
      */
     inline TiXmlElement* get() const
 	{ return m_element; }
 
     /**
-     * Release the ownership of the underlying TiXmlElement 
-     *  and returns it if the object owns it.
-     * @return The underlying TiXmlElement object or 0 if not owned or 0.
+     * Release the ownership of the underlying TiXmlElement
+     *  and returns it if the object owns it
+     * @return The underlying TiXmlElement object or 0 if not owned or 0
      */
     TiXmlElement* releaseOwnership();
 
     /**
-     * Associations between XML element name and type.
+     * Associations between XML element name and type
      */
     static TokenDict s_names[];
 
@@ -331,22 +337,22 @@ private:
 
 /**
  * This class is responsable of parsing incoming data.
- * Keeps the resulting XML elements and the input buffer.
- * @short An XML parser.
+ * Keeps the resulting XML elements and the input buffer
+ * @short An XML parser
  */
 class YJINGLE_API XMLParser : public TiXmlDocument, public Mutex
 {
 public:
     /**
      * Constructor.
-     * Constructs an XML parser.
+     * Constructs an XML parser
      */
     inline XMLParser()
 	: TiXmlDocument(), Mutex(true), m_findstart(true)
 	{}
 
     /**
-     * Destructor.
+     * Destructor
      */
     virtual ~XMLParser()
 	{}
@@ -354,40 +360,40 @@ public:
     /**
      * Add data to buffer. Parse the buffer.
      * On success, the already parsed data is removed from buffer.
-     * This method is thread safe.
-     * @param data Pointer to the data to consume.
-     * @param len Data length.
-     * @return True on successfully parsed.
+     * This method is thread safe
+     * @param data Pointer to the data to consume
+     * @param len Data length
+     * @return True on successfully parsed
      */
     bool consume(const char* data, u_int32_t len);
 
     /**
      * Extract the first XML element from document.
      * Remove non-element children of the document (e.g. declaration).
-     * This method is thread safe.
-     * @return Pointer to an XMLElement or 0 if the document is empty.
+     * This method is thread safe
+     * @return Pointer to an XMLElement or 0 if the document is empty
      */
     XMLElement* extract();
 
     /**
-     * Get a copy of the parser's buffer.
-     * @param dest Destination string.
+     * Get a copy of the parser's buffer
+     * @param dest Destination string
      */
     inline void getBuffer(String& dest) const
 	{ dest = m_buffer; }
 
     /**
-     * Clear the parser's input buffer and already parsed elements. Reset data.
+     * Clear the parser's input buffer and already parsed elements. Reset data
      */
     void reset();
 
     /**
-     * The maximum allowed buffer length.
+     * The maximum allowed buffer length
      */
     static u_int32_t s_maxDataBuffer;
 
     /**
-     * The XML encoding.
+     * The XML encoding
      */
     static TiXmlEncoding s_xmlEncoding;
 
@@ -397,24 +403,24 @@ private:
 };
 
 /**
- * This class holds an XML element to be sent through a stream.
- * @short An outgoing XML element.
+ * This class holds an XML element to be sent through a stream
+ * @short An outgoing XML element
  */
 class YJINGLE_API XMLElementOut : public RefObject
 {
 public:
     /**
-     * Constructor.
-     * @param element The XML element.
-     * @param senderID Optional sender id.
+     * Constructor
+     * @param element The XML element
+     * @param senderID Optional sender id
      */
     inline XMLElementOut(XMLElement* element, const char* senderID = 0)
 	: m_element(element), m_offset(0), m_id(senderID)
 	{}
 
     /**
-     * Destructor.
-     * Delete m_element if not 0.
+     * Destructor
+     * Delete m_element if not 0
      */
     virtual ~XMLElementOut() {
 	    if (m_element)
@@ -422,37 +428,37 @@ public:
 	}
 
     /**
-     * Get the underlying element.
-     * @return The underlying element.
+     * Get the underlying element
+     * @return The underlying element
      */
     inline XMLElement* element() const
 	{ return m_element; }
 
     /**
-     * Get the data buffer.
-     * @return The data buffer.
+     * Get the data buffer
+     * @return The data buffer
      */
     inline String& buffer()
 	{ return m_buffer; }
 
     /**
-     * Get the id member.
-     * @return The id member.
+     * Get the id member
+     * @return The id member
      */
     inline const String& id() const
 	{ return m_id; }
 
     /**
-     * Get the remainig byte count to send.
-     * @return The unsent number of bytes.
+     * Get the remainig byte count to send
+     * @return The unsent number of bytes
      */
     inline u_int32_t dataCount()
 	{ return m_buffer.length() - m_offset; }
 
     /**
-     * Get the remainig data to send. Set the buffer if not already set.
-     * @param nCount The number of unsent bytes.
-     * @return Pointer to the remaining data or 0.
+     * Get the remainig data to send. Set the buffer if not already set
+     * @param nCount The number of unsent bytes
+     * @return Pointer to the remaining data or 0
      */
     inline const char* getData(u_int32_t& nCount) {
 	    if (!m_buffer)
@@ -462,8 +468,8 @@ public:
 	}
 
     /**
-     * Increase the offset with nCount bytes.
-     * @param nCount The number of bytes sent.
+     * Increase the offset with nCount bytes
+     * @param nCount The number of bytes sent
      */
     inline void dataSent(u_int32_t nCount) {
 	    m_offset += nCount;
@@ -472,9 +478,9 @@ public:
 	}
 
     /**
-     * Release the ownership of m_element.
-     * The caller is responsable of returned pointer.
-     * @return XMLElement pointer or 0.
+     * Release the ownership of m_element
+     * The caller is responsable of returned pointer
+     * @return XMLElement pointer or 0
      */
     inline XMLElement* release() {
 	    XMLElement* e = m_element;
@@ -483,14 +489,14 @@ public:
 	}
 
     /**
-     * Fill a buffer with the XML element to send.
-     * @param buffer The buffer to fill.
+     * Fill a buffer with the XML element to send
+     * @param buffer The buffer to fill
      */
     inline void toBuffer(String& buffer)
 	{ if (m_element) m_element->toString(buffer); }
 
     /**
-     * Fill the buffer with the XML element to send.
+     * Fill the buffer with the XML element to send
      */
     inline void prepareToSend()
 	{ toBuffer(m_buffer); }

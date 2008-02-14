@@ -54,6 +54,7 @@ class XMPPError;                         // XMPP errors
 class JabberID;                          // A Jabber ID (JID)
 class JIDIdentity;                       // A JID's identity
 class JIDFeature;                        // A JID's feature
+class JIDFeatureSasl;                    // A JID's SASL feature
 class JIDFeatureList;                    // Feature list
 class XMPPUtils;                         // Utilities
 
@@ -565,16 +566,19 @@ private:
 
 /**
  * This class holds a JID feature
- * @short JID feature
+ * @short A JID feature
  */
 class YJINGLE_API JIDFeature : public RefObject
 {
 public:
     /**
      * Constructor
+     * @param feature The feature to add
+     * @param required True if this feature is required
      */
-    inline JIDFeature(XMPPNamespace::Type feature)
-	: m_feature(feature)
+    inline JIDFeature(XMPPNamespace::Type feature, bool required = false)
+	: m_feature(feature),
+	m_required(required)
 	{}
 
     /**
@@ -584,6 +588,13 @@ public:
 	{}
 
     /**
+     * Check if this feature is a required one
+     * @return True if this feature is a required one
+     */
+    inline bool required() const
+	{ return m_required; }
+
+    /**
      * XMPPNamespace::Type conversion operator
      */
     inline operator XMPPNamespace::Type()
@@ -591,12 +602,64 @@ public:
 
 private:
     XMPPNamespace::Type m_feature;       // The feature
+    bool m_required;                     // Required flag
 };
 
 
 /**
- * This class holds a list of features
- * @short Feature list
+ * This class holds a JID SASL feature (authentication methods)
+ * @short A JID's SASL feature
+ */
+class YJINGLE_API JIDFeatureSasl : public JIDFeature
+{
+public:
+    /**
+     * Mechanisms used to authenticate a stream
+     */
+    enum Mechanism {
+	MechMD5      = 0x01,             // MD5 digest
+	MechSHA1     = 0x02,             // SHA1 digest
+	MechPlain    = 0x04,             // Plain text password
+    };
+
+    /**
+     * Constructor
+     * @param mech Authentication mechanisms used by the JID
+     * @param required Required flag
+     */
+    inline JIDFeatureSasl(int mech, bool required = false)
+	: JIDFeature(XMPPNamespace::Sasl,required),
+	m_mechanism(mech)
+	{}
+
+    /**
+     * Get the authentication mechanisms used by the JID
+     * @return The authentication mechanisms used by the JID
+     */
+    inline int mechanism() const
+	{ return m_mechanism; }
+
+    /**
+     * Check if a given mechanism is allowed
+     * @return True if the given mechanism is allowed
+     */
+    inline bool mechanism(Mechanism mech) const
+	{ return 0 != (m_mechanism & mech); }
+
+    /**
+     * XMPPNamespace::Type conversion operator
+     */
+    inline operator XMPPNamespace::Type()
+	{ return JIDFeature::operator XMPPNamespace::Type(); }
+
+private:
+    int m_mechanism;                     // Authentication mechanisms
+};
+
+
+/**
+ * This class holds a list of JID features
+ * @short JID feature list
  */
 class YJINGLE_API JIDFeatureList
 {
@@ -604,12 +667,27 @@ public:
     /**
      * Add a feature to the list
      * @param feature The feature to add
+     * @param required True if this feature is required
      * @return False if the given feature already exists
      */
-    inline bool add(XMPPNamespace::Type feature) {
+    inline bool add(XMPPNamespace::Type feature, bool required = false) {
 	    if (get(feature))
 		return false;
-	    m_features.append(new JIDFeature(feature));
+	    m_features.append(new JIDFeature(feature,required));
+	    return true;
+	}
+
+    /**
+     * Add a feature to the list. Destroy the received parameter if already in the list
+     * @param feature The feature to add
+     * @return False if the given feature already exists
+     */
+    inline bool add(JIDFeature* feature) {
+	    if (!feature || get(*feature)) {
+		TelEngine::destruct(feature);
+		return false;
+	    }
+	    m_features.append(feature);
 	    return true;
 	}
 

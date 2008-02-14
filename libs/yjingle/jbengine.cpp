@@ -258,9 +258,6 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
     m_cancelling = false;
 }
 
-
-static XMPPNamespace s_ns;               // Used to shorten the code (call static methods)
-
 // Default values
 #define JB_RESTART_COUNT               2 // Stream restart counter default value
 #define JB_RESTART_COUNT_MIN           1
@@ -1128,36 +1125,6 @@ JIDResource* JIDResourceList::getAudio(bool availableOnly)
 	    return res;
     }
     return 0;
-}
-
-/**
- * JIDFeatureList
- */
-// Find a specific feature
-JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
-{
-    ObjList* obj = m_features.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
-	if (*f == feature)
-	    return f;
-    }
-    return 0;
-}
-
-// Build an XML element and add it to the destination
-XMLElement* JIDFeatureList::addTo(XMLElement* element)
-{
-    if (!element)
-	return 0;
-    ObjList* obj = m_features.skipNull();
-    for (; obj; obj = obj->skipNext()) {
-	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
-	XMLElement* feature = new XMLElement(XMLElement::Feature);
-	feature->setAttribute("var",s_ns[*f]);
-	element->addChild(feature);
-    }
-    return element;
 }
 
 

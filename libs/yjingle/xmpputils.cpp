@@ -235,6 +235,37 @@ bool JIDIdentity::fromXML(const XMLElement* element)
 
 
 /**
+ * JIDFeatureList
+ */
+// Find a specific feature
+JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
+{
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
+	if (*f == feature)
+	    return f;
+    }
+    return 0;
+}
+
+// Build an XML element and add it to the destination
+XMLElement* JIDFeatureList::addTo(XMLElement* element)
+{
+    if (!element)
+	return 0;
+    ObjList* obj = m_features.skipNull();
+    for (; obj; obj = obj->skipNext()) {
+	JIDFeature* f = static_cast<JIDFeature*>(obj->get());
+	XMLElement* feature = new XMLElement(XMLElement::Feature);
+	feature->setAttribute("var",s_ns[*f]);
+	element->addChild(feature);
+    }
+    return element;
+}
+
+
+/**
  * XMPPUtils
  */
 TokenDict XMPPUtils::s_iq[] = {

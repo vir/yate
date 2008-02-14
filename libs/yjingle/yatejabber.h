@@ -592,6 +592,16 @@ protected:
      */
     String m_password;
 
+    /**
+     * Local party feature list
+     */
+    JIDFeatureList m_localFeatures;
+
+    /**
+     * Remote party feature list
+     */
+    JIDFeatureList m_remoteFeatures;
+
 private:
     // Event termination notification
     // @param event The notifier. Ignored if it's not m_lastEvent
@@ -689,8 +699,6 @@ protected:
 private:
     // Default constructor is private to avoid unwanted use
     JBComponentStream() {}
-
-    bool m_shaAuth;                      // Use SHA1/MD5 digest authentication
 };
 
 /**

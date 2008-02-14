@@ -922,9 +922,11 @@ JBComponentStream::JBComponentStream(JBEngine* engine,
 	bool autoRestart, unsigned int maxRestart,
 	u_int64_t incRestartInterval, bool outgoing)
     : JBStream(engine,localJid,remoteJid,password,address,
-	autoRestart,maxRestart,incRestartInterval,outgoing,JBEngine::Component),
-    m_shaAuth(true)
+	autoRestart,maxRestart,incRestartInterval,outgoing,JBEngine::Component)
 {
+    JIDFeatureSasl* sasl = new JIDFeatureSasl(JIDFeatureSasl::MechMD5 |
+	JIDFeatureSasl::MechSHA1);
+    m_remoteFeatures.add(sasl);
 }
 
 // Create stream start element
@@ -959,17 +961,21 @@ void JBComponentStream::processStarted(XMLElement* xml)
     }
     delete xml;
 
+    // Send auth
     String handshake;
-    if (m_shaAuth) {
-	SHA1 auth;
-	auth << id() << m_password;
-	handshake = auth.hexDigest();
-    }
-    else {
-	MD5 auth;
-	auth << id() << m_password;
-	handshake = auth.hexDigest();
-    }
+    JIDFeatureSasl* sasl = static_cast<JIDFeatureSasl*>(
+	m_remoteFeatures.get(XMPPNamespace::Sasl));
+    if (sasl)
+	if (sasl->mechanism(JIDFeatureSasl::MechSHA1)) {
+	    SHA1 auth;
+	    auth << id() << m_password;
+	    handshake = auth.hexDigest();
+	}
+	else if (sasl->mechanism(JIDFeatureSasl::MechMD5)) {
+	    MD5 auth;
+	    auth << id() << m_password;
+	    handshake = auth.hexDigest();
+	}
     xml = new XMLElement(XMLElement::Handshake,0,handshake);
     sendStreamXML(xml,Auth,false);
 }

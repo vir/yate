@@ -474,6 +474,7 @@ public:
 	{ m_targetid = targetid; }
 private:
     YateH323Connection* m_conn;
+    H323Connection::CallEndReason m_reason;
     bool m_hungup;
     bool m_inband;
 };
@@ -1941,7 +1942,9 @@ void YateH323Connection::setCallerID(const char* number, const char* name)
 }
 
 YateH323Chan::YateH323Chan(YateH323Connection* conn,Message* msg,const char* addr)
-    : Channel(hplugin,0,(msg != 0)), m_conn(conn), m_hungup(false), m_inband(s_inband)
+    : Channel(hplugin,0,(msg != 0)),
+      m_conn(conn), m_reason(H323Connection::EndedByLocalUser),
+      m_hungup(false), m_inband(s_inband)
 {
     s_mutex.lock();
     s_chanCount++;
@@ -2014,15 +2017,11 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
     YateH323Connection* tmp = m_conn;
     m_conn = 0;
     if (clearCall && tmp) {
-	const char* err = 0;
-	const char* txt = "Normal cleanup";
 	H323Connection::CallEndReason reason = tmp->GetCallEndReason();
-	if (reason != H323Connection::NumCallEndReasons) {
-	    err = lookup(reason,dict_errors);
-	    txt = CallEndReasonText(reason);
-	}
-	else
-	    reason = H323Connection::EndedByLocalUser;
+	if (reason == H323Connection::NumCallEndReasons)
+	    reason = m_reason;
+	const char* err = lookup(reason,dict_errors);
+	const char* txt = CallEndReasonText(reason);
 	if (err)
 	    m->setParam("error",err);
 	if (txt)
@@ -2036,13 +2035,13 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
 void YateH323Chan::disconnected(bool final, const char *reason)
 {
     Debugger debug("YateH323Chan::disconnected()"," '%s' [%p]",reason,this);
-    if (!final) {
-	Channel::disconnected(final,reason);
+    Channel::disconnected(final,reason);
+    m_reason = (H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser);
+    if (!final)
 	return;
-    }
     stopDataLinks();
     if (m_conn)
-	m_conn->ClearCall((H323Connection::CallEndReason)lookup(reason,dict_errors,H323Connection::EndedByLocalUser));
+	m_conn->ClearCall(m_reason);
 }
 
 // Set the signalling address

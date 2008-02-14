@@ -100,6 +100,16 @@ static TokenDict dict_errors[] = {
 
 static const char s_dtmfs[] = "0123456789*#ABCDF";
 
+static TokenDict info_signals[] = {
+    { "*", 10 },
+    { "#", 11 },
+    { "A", 12 },
+    { "B", 13 },
+    { "C", 14 },
+    { "D", 15 },
+    {  0,   0 },
+};
+
 // Network media description
 class NetMedia : public String
 {
@@ -3063,15 +3073,15 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	const ObjList* l = lb->lines().skipNull();
 	for (; l; l = l->skipNext()) {
 	    String tmp = static_cast<String*>(l->get());
-	    tmp.toLower();
-	    if (tmp.startSkip("signal=",false)) {
-		sig = tmp.toInteger(-1);
+	    tmp.toUpper();
+	    if (tmp.startSkip("SIGNAL=",false)) {
+		sig = tmp.toInteger(info_signals,-1);
 		break;
 	    }
 	}
     }
     else if (sb)
-	sig = sb->text().toInteger(-1);
+	sig = sb->text().toInteger(info_signals,-1);
     else {
 	t->setResponse(415);
 	return;

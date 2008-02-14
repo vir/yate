@@ -3075,7 +3075,7 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	    String tmp = static_cast<String*>(l->get());
 	    tmp.toUpper();
 	    if (tmp.startSkip("SIGNAL=",false)) {
-		sig = tmp.toInteger(info_signals,-1);
+		sig = tmp.trimBlanks().toInteger(info_signals,-1);
 		break;
 	    }
 	}

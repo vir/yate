@@ -80,7 +80,7 @@ class YJBEngine : public JBEngine
 public:
     inline YJBEngine(Protocol proto) : JBEngine(proto)
 	{}
-    virtual bool exiting()
+    virtual bool exiting() const
 	{ return Engine::exiting(); }
     void initialize();
 };
@@ -402,16 +402,6 @@ void YJBEngine::initialize()
 	if (!name || name == "general" || name == "codecs")
 	    continue;
 
-	// Process server list for client mode
-	if (protocol() == Client) {
-	    int port = comp->getIntValue("port",0);
-	    if (port <= 0)
-		port = 5222;
-	    appendServer(new XMPPServerInfo(name,port),false);
-	    continue;
-	}
-
-	// Process server list for component mode
 	const char* address = comp->getValue("address");
 	String tmp = comp->getValue("port");
 	int port = tmp.toInteger(0);

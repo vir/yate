@@ -476,17 +476,6 @@ public:
 	}
 
     /**
-     * Cleanup the stream before destroying
-     * This method is thread safe
-     */
-    inline void cleanup() {
-	    Lock lock(m_socket.m_streamMutex);
-	    m_events.clear();
-	    TelEngine::destruct(m_terminateEvent);
-	    TelEngine::destruct(m_startEvent);
-	}
-
-    /**
      * Get the name of a stream state
      * @param state The requested state number
      * @return The name of the requested state

@@ -475,6 +475,7 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
 	const char* reason, bool send, bool final)
 {
     Lock2 lock(m_socket.m_streamMutex,m_socket.m_receiveMutex);
+    TelEngine::destruct(m_startEvent);
     if (state() == Destroy) {
 	if (recvStanza)
 	    delete recvStanza;
@@ -520,7 +521,6 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
     // Cancel all outgoing elements without id
     removePending(false,0,true);
     // Always set termination event, except when exiting
-    TelEngine::destruct(m_startEvent);
     if (!(m_terminateEvent || m_engine->exiting())) {
 	if (!recvStanza && error != XMPPError::NoError)
 	    recvStanza = XMPPUtils::createStreamError(error,reason);

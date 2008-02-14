@@ -402,10 +402,11 @@ void JBEngine::initialize(const NamedList& params)
 void JBEngine::cleanup()
 {
     Lock lock(this);
-    for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
-	JBStream* s = static_cast<JBStream*>(o->get());
+    // Use an iterator: the stream might be destroyed when terminating
+    ListIterator iter(m_streams);
+    for (GenObject* o = 0; 0 != (o = iter.get());) {
+	JBStream* s = static_cast<JBStream*>(o);
 	s->terminate(true,0,XMPPError::Shutdown,0,true);
-	s->cleanup();
     }
 }
 

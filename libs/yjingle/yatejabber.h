@@ -35,7 +35,6 @@ namespace TelEngine {
 class JBEvent;                           // A Jabber event
 class JBStream;                          // A Jabber stream
 class JBComponentStream;                 // A Jabber Component stream
-class JBClientStream;                    // A Jabber client to server stream
 class JBThread;                          // Base class for private threads
 class JBThreadList;                      // A list of threads
 class JBEngine;                          // A Jabber engine
@@ -477,6 +476,17 @@ public:
 	}
 
     /**
+     * Cleanup the stream before destroying
+     * This method is thread safe
+     */
+    inline void cleanup() {
+	    Lock lock(m_socket.m_streamMutex);
+	    m_events.clear();
+	    TelEngine::destruct(m_terminateEvent);
+	    TelEngine::destruct(m_startEvent);
+	}
+
+    /**
      * Get the name of a stream state
      * @param state The requested state number
      * @return The name of the requested state
@@ -682,66 +692,6 @@ private:
 
     bool m_shaAuth;                      // Use SHA1/MD5 digest authentication
 };
-
-/**
- * This class holds a Jabber client stream used to connect an user to its server
- * @short A Jabber client to server stream
- */
-class YJINGLE_API JBClientStream : public JBStream
-{
-    friend class JBEngine;
-public:
-    /**
-     * Destructor
-     */
-    virtual ~JBClientStream()
-	{}
-
-protected:
-    /**
-     * Constructor
-     * @param engine The engine that owns this stream
-     * @param jid User's JID
-     * @param password Password used for authentication
-     * @param address The remote address to connect to
-     * @param maxRestart The maximum restart attempts allowed
-     * @param incRestartInterval The interval to increase the restart counter
-     * @param outgoing Stream direction
-     */
-    JBClientStream(JBEngine* engine, const JabberID& jid,
-	const String& password, const SocketAddr& address,
-	unsigned int maxRestart, u_int64_t incRestartInterval,
-	bool outgoing = true);
-
-    /**
-     * Get the starting stream element to be sent after stream connected
-     * @return XMLElement pointer
-     */
-    virtual XMLElement* getStreamStart();
-
-    /**
-     * Process a received element in Securing state
-     * @param xml Valid XMLElement pointer
-     */
-    virtual void processSecuring(XMLElement* xml);
-
-    /**
-     * Process a received element in Auth state
-     * @param xml Valid XMLElement pointer
-     */
-    virtual void processAuth(XMLElement* xml);
-
-    /**
-     * Process a received element in Started state
-     * @param xml Valid XMLElement pointer
-     */
-    virtual void processStarted(XMLElement* xml);
-
-private:
-    // Default constructor is private to avoid unwanted use
-    JBClientStream() {}
-};
-
 
 /**
  * This class holds encapsulates a private library thread

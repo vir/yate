@@ -408,6 +408,7 @@ void JBEngine::cleanup()
     for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
 	JBStream* s = static_cast<JBStream*>(o->get());
 	s->terminate(true,0,XMPPError::Shutdown,0,true);
+	s->cleanup();
     }
 }
 
@@ -446,10 +447,7 @@ JBStream* JBEngine::getStream(const JabberID* jid, bool create, const char* pwd)
     const JabberID* remote = jid;
     // Set remote to be a valid pointer
     if (!remote)
-	if (m_protocol == Component)
-	    remote = &m_componentDomain;
-	else
-	    return 0;
+	remote = &m_componentDomain;
     // Find the stream
     JBStream* stream = 0;
     for (ObjList* o = m_streams.skipNull(); o; o = o->skipNext()) {
@@ -469,12 +467,9 @@ JBStream* JBEngine::getStream(const JabberID* jid, bool create, const char* pwd)
 	SocketAddr addr(PF_INET);
 	addr.host(info->address());
 	addr.port(info->port());
-	if (m_protocol == Component)
-	    stream = new JBComponentStream(this,JabberID(0,info->identity(),0),
-		*remote,info->password(),addr,
-		true,m_restartCount,m_restartUpdateInterval);
-	else
-	    stream = new JBClientStream(this,*jid,pwd,addr,m_restartCount,m_restartUpdateInterval);
+	stream = new JBComponentStream(this,JabberID(0,info->identity(),0),
+	    *remote,info->password(),addr,
+	    info->autoRestart(),m_restartCount,m_restartUpdateInterval);
 	m_streams.append(stream);
     }
     return ((stream && stream->ref()) ? stream : 0);

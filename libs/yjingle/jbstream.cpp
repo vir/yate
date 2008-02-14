@@ -25,7 +25,7 @@
 
 using namespace TelEngine;
 
-static XMPPNamespace s_ns;
+static XMPPNamespace s_ns;               // Just use the operators
 static XMPPError s_err;
 
 static TokenDict s_streamState[] = {
@@ -39,10 +39,13 @@ static TokenDict s_streamState[] = {
     {0,0},
 };
 
+static String s_version = "1.0";         // Protocol version
+
 
 /**
  * JBSocket
  */
+// Connect the socket
 bool JBSocket::connect(const SocketAddr& addr, bool& terminated)
 {
     terminate();
@@ -82,6 +85,7 @@ bool JBSocket::connect(const SocketAddr& addr, bool& terminated)
     return ok;
 }
 
+// Close the socket
 void JBSocket::terminate()
 {
     Lock2 lck(m_streamMutex,m_receiveMutex);
@@ -94,6 +98,7 @@ void JBSocket::terminate()
     }
 }
 
+// Read data from socket
 bool JBSocket::recv(char* buffer, unsigned int& len)
 {
     if (!valid())
@@ -122,6 +127,7 @@ bool JBSocket::recv(char* buffer, unsigned int& len)
     return true;
 }
 
+// Write data to socket
 bool JBSocket::send(const char* buffer, unsigned int& len)
 {
     if (!valid())
@@ -230,22 +236,21 @@ void JBStream::connect()
 	"Stream. Attempt to connect local=%s remote=%s addr=%s:%d count=%u [%p]",
 	m_local.safe(),m_remote.safe(),m_address.host().safe(),m_address.port(),
 	m_restart,this);
-    changeState(Connecting);
-    // Check if we can restart
-    if (!m_restart) {
-	terminate(true,0,XMPPError::NoError,"restart counter is 0",false);
+    // Check if we can restart. Destroy the stream if not auto restarting
+    if (m_restart)
+	m_restart--;
+    else
 	return;
-    }
-    m_restart--;
     // Reset data
     m_id = "";
     m_parser.reset();
     lck.drop();
     // Re-connect socket
     bool terminated = false;
+    changeState(Connecting);
     if (!m_socket.connect(m_address,terminated)) {
 	if (!terminated)
-	    terminate(false,0,XMPPError::NoError,"connection failed",false);
+	    terminate(false,0,XMPPError::NoError,"connection-failed",false);
 	return;
     }
 
@@ -253,7 +258,8 @@ void JBStream::connect()
 	m_local.safe(),m_remote.safe(),m_address.host().safe(),m_address.port(),this);
 
     // Send declaration
-    static String declaration = "<?xml version='1.0' encoding='UTF-8'?>";
+    String declaration;
+    declaration << "<?xml version='" << s_version << "' encoding='UTF-8'?>";
     if (m_engine->printXml() && m_engine->debugAt(DebugInfo))
 	Debug(m_engine,DebugInfo,"Stream. Sending XML declaration %s [%p]",
 	    declaration.c_str(),this);
@@ -325,25 +331,42 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 {
     Lock lock(m_socket.m_streamMutex);
 
-    // Do nothing if destroying or connecting
-    if (state() == Destroy || state() == Connecting)
-	return 0;
-
     // Increase stream restart counter if it's time to
     if (m_timeToFillRestart < time) {
-	if (m_restart < m_restartMax)
+	if (m_restart < m_restartMax) {
 	    m_restart++;
+	    Debug(m_engine,DebugAll,"Stream. restart count=%u max=%u [%p]",
+		m_restart,m_restartMax,this);
+	}
 	m_timeToFillRestart = time + m_fillRestartInterval;
-    }
-
-    if (state() == Idle) {
-	if (m_autoRestart && m_restart)
-	    m_engine->connect(this);
-	return 0;
     }
 
     if (m_lastEvent)
 	return 0;
+
+    // Do nothing if destroying or connecting
+    // Just check Terminated or Running events
+    // Idle: check if we can restart. Destroy the stream if not auto restarting
+    if (state() == Idle || state() == Destroy || state() == Connecting) {
+	if (state() == Idle) {
+	    if (m_restart && m_autoRestart) {
+		lock.drop();
+		m_engine->connect(this);
+		return 0;
+	    }
+	    if (!m_autoRestart)
+		terminate(true,0,XMPPError::NoError,"connection-failed",false);
+	}
+	if (m_terminateEvent) {
+	    m_lastEvent = m_terminateEvent;
+	    m_terminateEvent = 0;
+	}
+	else if (m_startEvent) {
+	    m_lastEvent = m_startEvent;
+	    m_startEvent = 0;
+	}
+	return m_lastEvent;
+    }
 
     while (true) {
 	if (m_terminateEvent)
@@ -452,7 +475,7 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
 	const char* reason, bool send, bool final)
 {
     Lock2 lock(m_socket.m_streamMutex,m_socket.m_receiveMutex);
-    if (state() == Destroy || state() == Idle) {
+    if (state() == Destroy) {
 	if (recvStanza)
 	    delete recvStanza;
 	return;
@@ -463,11 +486,11 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
     }
 
     Debug(m_engine,DebugAll,
-	"Stream. Terminate state=%s destroy=%u error=%s reason=%s final=%u [%p]",
+	"Stream. Terminate state=%s destroy=%u error=%s reason='%s' final=%u [%p]",
 	lookupState(state()),destroy,s_err[error],reason,final,this);
 
     // Send ending stream element
-    if (send && state() != Connecting) {
+    if (send && state() != Connecting && state() != Idle) {
 	XMLElement* e;
 	if (error == XMPPError::NoError)
 	    e = new XMLElement(XMLElement::StreamEnd);
@@ -498,14 +521,18 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
     removePending(false,0,true);
     // Always set termination event, except when exiting
     TelEngine::destruct(m_startEvent);
-    if (!m_terminateEvent) {
+    if (!(m_terminateEvent || m_engine->exiting())) {
 	if (!recvStanza && error != XMPPError::NoError)
 	    recvStanza = XMPPUtils::createStreamError(error,reason);
-	if (error != XMPPError::Shutdown)
-	    m_terminateEvent = new JBEvent(destroy?JBEvent::Destroy:JBEvent::Terminated,
-		this,recvStanza);
+	Debug(m_engine,DebugAll,"Stream. Set terminate error=%s reason=%s [%p]",
+	    s_err[error],reason,this);
+	m_terminateEvent = new JBEvent(destroy?JBEvent::Destroy:JBEvent::Terminated,
+	    this,recvStanza);
+	if (!recvStanza)
+	    m_terminateEvent->m_text = reason;
+	recvStanza = 0;
     }
-    else if (recvStanza)
+    if (recvStanza)
 	delete recvStanza;
 
     // Change state
@@ -883,46 +910,6 @@ void JBStream::removePending(bool notify, const String* id, bool force)
 	    m_events.append(new JBEvent(JBEvent::WriteFail,this,eout->release(),id));
 	m_outXML.remove(eout,true);
     }
-}
-
-
-/**
- * JBClientStream
- */
-JBClientStream::JBClientStream(JBEngine* engine, const JabberID& jid,
-	const String& password, const SocketAddr& address,
-	unsigned int maxRestart, u_int64_t incRestartInterval, bool outgoing)
-    : JBStream(engine,jid,JabberID(0,jid.domain(),0),password,address,
-	true,maxRestart,incRestartInterval,outgoing,JBEngine::Client)
-{
-}
-
-// Get the starting stream element to be sent after stream connected
-XMLElement* JBClientStream::getStreamStart()
-{
-    Debug(engine(),DebugStub,"Please implement JBComponentStream::getStreamStart()");
-    return 0;
-}
-
-// Process a received element in Securing state
-void JBClientStream::processSecuring(XMLElement* xml)
-{
-    Debug(engine(),DebugStub,"Please implement JBComponentStream::processSecuring()");
-    dropXML(xml);
-}
-
-// Process a received element in Auth state
-void JBClientStream::processAuth(XMLElement* xml)
-{
-    Debug(engine(),DebugStub,"Please implement JBComponentStream::processAuth()");
-    dropXML(xml);
-}
-
-// Process a received element in Started state
-void JBClientStream::processStarted(XMLElement* xml)
-{
-    Debug(engine(),DebugStub,"Please implement JBComponentStream::processStarted()");
-    dropXML(xml);
 }
 
 

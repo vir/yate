@@ -71,16 +71,17 @@ public:
      * @param address IP address
      * @param port IP port
      * @param password  Component only: Password used for authentication
-     * @param identity Component only: the stream identity used when connecting
-     * @param fullidentity Component only: the user identity
+     * @param identity Component only: The stream identity used when connecting
+     * @param fullidentity Component only: The user identity
      * @param roster Component only: Keep the user roster
-     * @param autoRestart Component only: Auto restart stream when connection is down
+     * @param autoRestart Auto restart stream when connection is down
      */
     inline XMPPServerInfo(const char* name, const char* address, int port,
 	const char* password, const char* identity, const char* fullidentity,
 	bool roster, bool autoRestart)
 	: m_name(name), m_address(address), m_port(port), m_password(password),
-	m_identity(identity), m_fullIdentity(fullidentity), m_roster(roster)
+	m_identity(identity), m_fullIdentity(fullidentity),
+	m_roster(roster), m_autoRestart(autoRestart)
 	{}
 
     /**
@@ -141,6 +142,13 @@ public:
     inline bool roster() const
 	{ return m_roster; }
 
+    /**
+     * Check if the stream should restart when down
+     * @return True if the stream should restart when down
+     */
+    inline bool autoRestart() const
+	{ return m_autoRestart; }
+
 private:
     String m_name;                       // Domain name
     String m_address;                    // IP address
@@ -149,6 +157,7 @@ private:
     String m_identity;                   // Identity. Used for Jabber Component protocol
     String m_fullIdentity;               // Full identity for this server
     bool m_roster;                       // Keep roster for this server
+    bool m_autoRestart;                  // Auto restart stream when down
 };
 
 
@@ -161,10 +170,15 @@ class YJINGLE_API XMPPNamespace
 public:
     enum Type {
 	Stream,                          // http://etherx.jabber.org/streams
+	Client,                          // jabber:client
+	Server,                          // jabber:server
 	ComponentAccept,                 // jabber:component:accept
 	ComponentConnect,                // jabber:component:connect
 	StreamError,                     // urn:ietf:params:xml:ns:xmpp-streams
 	StanzaError,                     // urn:ietf:params:xml:ns:xmpp-stanzas
+	Starttls,                        // urn:ietf:params:xml:ns:xmpp-tls
+	Sasl,                            // urn:ietf:params:xml:ns:xmpp-sasl
+	Session,                         // urn:ietf:params:xml:ns:xmpp-session
 	Bind,                            // urn:ietf:params:xml:ns:xmpp-bind
 	DiscoInfo,                       // http://jabber.org/protocol/disco#info
 	DiscoItems,                      // http://jabber.org/protocol/disco#items

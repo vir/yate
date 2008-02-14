@@ -70,7 +70,19 @@ public:
 	StreamStart,                     // stream:stream
 	StreamEnd,                       // /stream:stream
 	StreamError,                     // stream::error
+	StreamFeatures,                  // stream::features
+	Starttls,                        // starttls
 	Handshake,                       // handshake
+	Auth,                            // auth
+	Challenge,                       // challenge	
+	Abort,                           // abort
+	Aborted,                         // aborted
+	Response,                        // response
+	Success,                         // success
+	Failure,                         // failure 
+	Mechanisms,                      // mechanisms
+	Mechanism,                       // mechanism
+	Session,                         // session
 	// *** Stanzas
 	Iq,                              // iq
 	Message,                         // message
@@ -92,6 +104,7 @@ public:
 	Bind,                            // bind
 	Resource,                        // resource
 	// Miscellanous
+	Required,                        // required
 	Dtmf,                            // dtmf
 	DtmfMethod,                      // dtmf-method
 	Command,                         // command

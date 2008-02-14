@@ -574,8 +574,6 @@ protected:
     virtual void statusDetail(String& str);
     virtual bool commandComplete(Message& msg, const String& partLine,
 	const String& partWord);
-    // Process status commands except for module status
-    void processStatus(const String& cmd);
 private:
     bool m_init;                         // Already initialized flag
     String m_prefix;                     // Module prefix
@@ -758,6 +756,7 @@ static TokenDict s_ioctl_request[] = {
     MAKE_NAME(GetParams),
     MAKE_NAME(GetEvent),
     MAKE_NAME(GetInfo),
+    MAKE_NAME(GetVersion),
     MAKE_NAME(GetDialParams),
     MAKE_NAME(StartEchoTrain),
     MAKE_NAME(FlushBuffers),
@@ -2582,7 +2581,7 @@ ZapConsumer::~ZapConsumer()
 String ZapModule::s_statusCmd[StatusCmdCount] = {"spans","channels","all"};
 
 ZapModule::ZapModule()
-    : Module("zaptel","misc"),
+    : Module("zaptel","misc",true),
     m_init(false),
     m_count(0),
     m_active(0)
@@ -2629,32 +2628,28 @@ void ZapModule::initialize()
 	general = &dummy;
 
     ZapDevice dev(0,false,true);
-    int dtmfLen = 0;
+    if (!dev.valid())
+	Debug(this,DebugNote,"Failed to open zaptel device: driver might not be loaded");
 
+    int dtmfLen = 0;
     if (!m_init) {
+	m_init = true;
 	setup();
 	installRelay(Command);
 	// Set DTMF/MF length
-	if (dev.dialParams(false,dtmfLen,dtmfLen)) {
+	if (dev.valid() && dev.dialParams(false,dtmfLen,dtmfLen)) {
 	    dtmfLen = general->getIntValue("tonelength",dtmfLen);
 	    dev.dialParams(true,dtmfLen,dtmfLen);
 	}
     }
-    m_init = true;
-
-#ifdef DEBUG
-    if (!debugAt(DebugAll))
-	return;
-    String tmp;
-    NamedList nl("");
-    dev.getVersion(nl);
-    tmp << "\r\nversion: " << nl.getValue("version");
-    tmp << "\r\nechocanceller: " << nl.getValue("echocanceller");
-    dtmfLen = 0;
-    dev.dialParams(false,dtmfLen,dtmfLen);
-    tmp << "\r\ntonelength (samples): " << dtmfLen;
-    Debug(this,DebugAll,"Initialized:%s",tmp.c_str());
-#endif
+    if (dev.valid() && debugAt(DebugAll)) {
+	NamedList nl("");
+	dev.getVersion(nl);
+	dtmfLen = 0;
+	dev.dialParams(false,dtmfLen,dtmfLen);
+	Debug(this,DebugAll,"version=%s echocanceller=%s tonelength=%d samples",
+	    nl.getValue("version"),nl.getValue("echocanceller"),dtmfLen);
+    }
 }
 
 
@@ -2676,7 +2671,7 @@ bool ZapModule::received(Message& msg, int id)
 	String dest = msg.getValue("module");
 
 	// Module status
-	if (dest == name()) {
+	if (!dest || dest == name()) {
 	    Module::msgStatus(msg);
 	    return true;
 	}

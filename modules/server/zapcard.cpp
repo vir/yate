@@ -2147,7 +2147,7 @@ void ZapCircuit::consume(const DataBlock& data)
     if (m_consBuffer.length() + data.length() <= m_consBufMax)
 	m_consBuffer += data;
     else {
-	Debug(group(),DebugWarn,
+	Debug(group(),DebugAll,
 	    "ZapCircuit(%u). Buffer overrun old=%u channel=%u (%d: %s) [%p]",
 	    code(),m_consBuffer.length(),m_device.channel(),m_errno,
 	    ::strerror(m_errno),this);

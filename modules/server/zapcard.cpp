@@ -2180,15 +2180,14 @@ void ZapCircuit::cleanup(bool release, Status stat, bool stop)
     }
     if (m_consumer) {
 	if (m_consErrors)
-	    DDebug(group(),DebugMild,"ZapCircuit(%u). Consumer errors: %u. Lost: %u/%u [%p]",
+	    Debug(group(),DebugNote,
+		"ZapCircuit(%u). Consumer errors: %u. Lost: %u/%u [%p]",
 		code(),m_consErrors,m_consErrorBytes,m_consTotal,this);
-	m_consumer->deref();
-	m_consumer = 0;
+	TelEngine::destruct(m_consumer);
     }
     if (m_source) {
 	m_source->clear();
-	m_source->deref();
-	m_source = 0;
+	TelEngine::destruct(m_source);
     }
     if (release) {
 	SignallingCircuit::destroyed();

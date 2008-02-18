@@ -158,7 +158,7 @@ public:
     virtual bool rtpRecvEvent(int event, char key, int duration,
 	int volume, unsigned int timestamp);
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
-    virtual void rtpNewSSRC(u_int32_t newSsrc);
+    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
     inline void resync()
 	{ m_resync = true; }
     inline void anySSRC(bool acceptAny = true)
@@ -552,7 +552,7 @@ void YRTPSession::rtpNewPayload(int payload, unsigned int timestamp)
     }
 }
 
-void YRTPSession::rtpNewSSRC(u_int32_t newSsrc)
+void YRTPSession::rtpNewSSRC(u_int32_t newSsrc, bool marker)
 {
     if ((m_anyssrc || m_resync) && receiver()) {
 	m_resync = false;

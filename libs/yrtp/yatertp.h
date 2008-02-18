@@ -533,8 +533,9 @@ public:
     *  just before processing further. This is a good opportunity to
     *  change the SSRC and continue
     * @param newSsrc SSRC received in packet
+    * @param marker True if marker bit is set in the RTP packet
     */
-    virtual void rtpNewSSRC(u_int32_t newSsrc);
+    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
 
 protected:
     /**
@@ -709,8 +710,9 @@ public:
     *  just before processing further. This is a good opportunity to
     *  change the SSRC and continue
     * @param newSsrc SSRC received in packet
+    * @param marker True if marker bit is set in the RTP packet
     */
-    virtual void rtpNewSSRC(u_int32_t newSsrc);
+    virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
 
     /**
      * Create a new RTP sender for this session.

@@ -112,16 +112,21 @@ void RTPReceiver::rtpData(const void* data, int len)
 	m_warn = true;
     }
 
-    if (ss != m_ssrc)
-	rtpNewSSRC(ss);
-    // check if the SSRC is still unchanged
     if (ss != m_ssrc) {
-	if (m_warn) {
-	    m_warn = false;
-	    Debug(DebugWarn,"RTP Received SSRC %08X but expecting %08X [%p]",
-		ss,m_ssrc,this);
+	rtpNewSSRC(ss,marker);
+	// check if the SSRC is still unchanged
+	if (ss != m_ssrc) {
+	    if (m_warn) {
+		m_warn = false;
+		Debug(DebugWarn,"RTP Received SSRC %08X but expecting %08X [%p]",
+		    ss,m_ssrc,this);
+	    }
+	    return;
 	}
-	return;
+	// SSRC accepted, sync sequence but drop this packet as duplicate
+	m_seq = seq;
+	// resync the timestamps, next packet will come in correctly
+	m_ts = ts - m_tsLast;
     }
 
     // substraction with overflow
@@ -194,10 +199,10 @@ void RTPReceiver::rtpNewPayload(int payload, unsigned int timestamp)
 	m_session->rtpNewPayload(payload,timestamp);
 }
 
-void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc)
+void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc, bool marker)
 {
     if (m_session)
-	m_session->rtpNewSSRC(newSsrc);
+	m_session->rtpNewSSRC(newSsrc,marker);
 }
 
 bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
@@ -451,10 +456,10 @@ void RTPSession::rtpNewPayload(int payload, unsigned int timestamp)
 	payload,timestamp,this);
 }
 
-void RTPSession::rtpNewSSRC(u_int32_t newSsrc)
+void RTPSession::rtpNewSSRC(u_int32_t newSsrc,bool marker)
 {
-    XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X) [%p]",
-	newSsrc,this);
+    XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X,%s) [%p]",
+	newSsrc,String::boolText(marker),this);
 }
 
 RTPSender* RTPSession::createSender()

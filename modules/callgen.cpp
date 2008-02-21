@@ -611,7 +611,7 @@ void CallGenPlugin::initialize()
 {
     Output("Initializing module Call Generator");
     s_mutex.lock();
-    s_cfg = Engine::configFile("callgen");
+    s_cfg = Engine::configFile("callgen",Engine::clientMode());
     s_cfg.load();
     s_mutex.unlock();
     if (m_first) {

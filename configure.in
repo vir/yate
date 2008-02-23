@@ -248,7 +248,12 @@ PGSQL_INC=""
 AC_ARG_WITH(libpq,AC_HELP_STRING([--with-libpq=DIR],[use Postgress SQL from DIR (default /usr)]),[ac_cv_use_libpq=$withval],[ac_cv_use_libpq=/usr])
 if [[ "x$ac_cv_use_libpq" != "xno" ]]; then
 AC_MSG_CHECKING([for Postgress SQL in $ac_cv_use_libpq])
+local_lib="$ARCHLIB"
 libpq="$ac_cv_use_libpq/$ARCHLIB/libpq.so"
+if [[ "x$local_lib" != "xlib" -a ! -f "$libpq" ]]; then
+    local_lib="lib"
+    libpq="$ac_cv_use_libpq/$ARCHLIB/libpq.so"
+fi
 for i in include include/pgsql pgsql/include include/postgresql; do
     incpq="$ac_cv_use_libpq/$i"
     test -f "$incpq/libpq-fe.h" && break
@@ -279,6 +284,9 @@ MYSQL_VER=`mysql_config --version 2>/dev/null`
 if [[ x`echo "$MYSQL_INC $MYSQL_LIB $MYSQL_VER" | wc -l | sed 's/^ *//g'` != "x1" ]]; then
 MYSQL_INC=""
 fi
+if [[ ! -f `echo "$MYSQL_INC" | sed 's,^-I\(.*\)$,\1/mysql.h,'` ]]; then
+MYSQL_INC=""
+fi
 if [[ "x$MYSQL_INC" != "x" -a "x$MYSQL_LIB" != "x" -a "x$MYSQL_VER" != "x" ]]; then
 HAVE_MYSQL=yes
 else
@@ -288,9 +296,13 @@ MYSQL_VER=""
 fi
 else
 AC_MSG_CHECKING([for MySQL in $ac_cv_use_mysql])
-if [[ -f "$ac_cv_use_mysql/include/mysql/mysql.h" -a -d "$ac_cv_use_mysql/$ARCHLIB/mysql" ]]; then
+local_lib="$ARCHLIB"
+if [[ "x$local_lib" != "xlib" -a ! -d "$ac_cv_use_mysql/$local_lib/mysql" ]]; then
+    local_lib="lib"
+fi
+if [[ -f "$ac_cv_use_mysql/include/mysql/mysql.h" -a -d "$ac_cv_use_mysql/$local_lib/mysql" ]]; then
 MYSQL_INC="-I$ac_cv_use_mysql/include/mysql"
-MYSQL_LIB="-L$ac_cv_use_mysql/$ARCHLIB/mysql -lmysqlclient_r -lpthread -lz -lcrypt -lnsl -lm"
+MYSQL_LIB="-L$ac_cv_use_mysql/$local_lib/mysql -lmysqlclient_r -lpthread -lz -lcrypt -lnsl -lm"
 MYSQL_VER=`sed -n 's/^.*MYSQL_SERVER_VERSION[[^"]]*"\([[^"]]*\).*$/\1/p' "$ac_cv_use_mysql/include/mysql/mysql_version.h"`
 HAVE_MYSQL=yes
 fi
@@ -541,11 +553,16 @@ AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default
 
 if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
+local_lib="$ARCHLIB"
 verpw=`$ac_cv_use_pwlib/bin/ptlib-config --version 2>/dev/null`
 prtti=`$ac_cv_use_pwlib/bin/ptlib-config --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
 # try first installed directory
 incpw="$ac_cv_use_pwlib/include/ptlib.h"
-libpw="$ac_cv_use_pwlib/$ARCHLIB/libpt.so"
+libpw="$ac_cv_use_pwlib/$local_lib/libpt.so"
+if [[ "x$local_lib" != "xlib" -a ! -f "$libpw" ]]; then
+    local_lib="lib"
+    libpw="$ac_cv_use_pwlib/$local_lib/libpt.so"
+fi
 PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
 vpw=`echo "$verpw" | sed "$vsed" | sed "$vsed"`
 if [[ "$vpw" '<' "01.06.00" ]]; then
@@ -553,7 +570,7 @@ if [[ "$vpw" '<' "01.06.00" ]]; then
 fi
 if [[ -f "$incpw" -a -f "$libpw" ]]; then
     HAVE_PWLIB=installed
-    PWLIB_LIB="-L$ac_cv_use_pwlib/$ARCHLIB -lpt"
+    PWLIB_LIB="-L$ac_cv_use_pwlib/$local_lib -lpt"
     case "x$prtti" in
 	x-frtti)
 	    PWLIB_RTTI=yes
@@ -591,13 +608,18 @@ AC_ARG_WITH(openh323,AC_HELP_STRING([--with-openh323=DIR],[use OpenH323 from DIR
 
 if [[ "x$HAVE_PWLIB" != "xno" -a "x$ac_cv_use_openh323" != "xno" ]]; then
 AC_MSG_CHECKING([for OpenH323 in $ac_cv_use_openh323])
+local_lib="$ARCHLIB"
 # try first installed directory
 inc323="$ac_cv_use_openh323/include/openh323/h323.h"
-lib323="$ac_cv_use_openh323/$ARCHLIB/libopenh323.so"
+lib323="$ac_cv_use_openh323/$local_lib/libopenh323.so"
+if [[ "x$local_lib" != "xlib" -a ! -f "$lib323" ]]; then
+    local_lib="lib"
+    lib323="$ac_cv_use_openh323/$local_lib/libopenh323.so"
+fi
 if [[ -f "$inc323" -a -f "$lib323" ]]; then
     HAVE_H323=installed
     H323_INC="-I$ac_cv_use_openh323/include/openh323"
-    H323_LIB="-L$ac_cv_use_openh323/$ARCHLIB -lopenh323"
+    H323_LIB="-L$ac_cv_use_openh323/$local_lib -lopenh323"
 else
 # try source directory style
     inc323="$ac_cv_use_openh323/include/h323.h"

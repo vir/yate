@@ -552,7 +552,7 @@ PWLIB_RUN=""
 AC_ARG_WITH(pwlib,AC_HELP_STRING([--with-pwlib=DIR],[use Pwlib from DIR (default /usr)]),[ac_cv_use_pwlib=$withval],[ac_cv_use_pwlib=/usr])
 
 if [[ "x$ac_cv_use_pwlib" != "xno" ]]; then
-if [[ "x$ac_cv_use_pwlib" = "/usr" -a ! -f "$ac_cv_use_pwlib/include/ptlib.h" ]]; then
+if [[ "x$ac_cv_use_pwlib" = "x/usr" -a ! -f "$ac_cv_use_pwlib/include/ptlib.h" ]]; then
     ac_cv_use_pwlib="$ac_cv_use_pwlib/local"
 fi
 AC_MSG_CHECKING([for Pwlib in $ac_cv_use_pwlib])
@@ -610,7 +610,7 @@ H323_RUN=""
 AC_ARG_WITH(openh323,AC_HELP_STRING([--with-openh323=DIR],[use OpenH323 from DIR (default /usr)]),[ac_cv_use_openh323=$withval],[ac_cv_use_openh323=/usr])
 
 if [[ "x$HAVE_PWLIB" != "xno" -a "x$ac_cv_use_openh323" != "xno" ]]; then
-if [[ "x$ac_cv_use_openh323" = "/usr" -a ! -f "$ac_cv_use_openh323/include/openh323/h323.h" ]]; then
+if [[ "x$ac_cv_use_openh323" = "x/usr" -a ! -f "$ac_cv_use_openh323/include/openh323/h323.h" ]]; then
     ac_cv_use_openh323="$ac_cv_use_openh323/local"
 fi
 AC_MSG_CHECKING([for OpenH323 in $ac_cv_use_openh323])

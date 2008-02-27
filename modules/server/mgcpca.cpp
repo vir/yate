@@ -504,30 +504,35 @@ void MGCPPlugin::initialize()
     Output("Initializing module MGCP Call Agent");
     Configuration cfg(Engine::configFile("mgcpca"));
     setup();
-    NamedList* sect = cfg.getSection("engine");
-    if (s_engine && sect)
-	s_engine->initialize(*sect);
+    NamedList* engSect = cfg.getSection("engine");
+    if (s_engine && engSect)
+	s_engine->initialize(*engSect);
     while (!s_engine) {
-	if (!(sect && sect->getBoolValue("enabled",true)))
+	if (!(engSect && engSect->getBoolValue("enabled",true)))
 	    break;
-	s_engine = new YMGCPEngine(sect);
-	s_engine->debugChain(this);
-	s_endpoint = new MGCPEndpoint(
-	    s_engine,
-	    cfg.getValue("endpoint","user","yate"),
-	    cfg.getValue("endpoint","host",s_engine->address().host()),
-	    cfg.getIntValue("endpoint","port")
-	);
 	int n = cfg.sections();
 	for (int i = 0; i < n; i++) {
-	    sect = cfg.getSection(i);
+	    NamedList* sect = cfg.getSection(i);
 	    if (!sect)
 		continue;
 	    String name(*sect);
 	    if (name.startSkip("gw") && name) {
+		const char* host = sect->getValue("host");
+		if (!host)
+		    continue;
+		if (!s_engine) {
+		    s_engine = new YMGCPEngine(engSect);
+		    s_engine->debugChain(this);
+		    s_endpoint = new MGCPEndpoint(
+			s_engine,
+			cfg.getValue("endpoint","user","yate"),
+			cfg.getValue("endpoint","host",s_engine->address().host()),
+			cfg.getIntValue("endpoint","port")
+		    );
+		}
 		MGCPEpInfo* ep = s_endpoint->append(
 		    sect->getValue("user",name),
-		    sect->getValue("host"),
+		    host,
 		    sect->getIntValue("port",0)
 		);
 		if (ep) {
@@ -538,6 +543,10 @@ void MGCPPlugin::initialize()
 		    Debug(this,DebugWarn,"Could not set endpoint for gateway '%s'",
 			name.c_str());
 	    }
+	}
+	if (!s_engine) {
+	    Debug(this,DebugAll,"No gateways defined so module not initialized.");
+	    break;
 	}
 	Debug(this,DebugNote,"Default remote endpoint: '%s'",s_defaultEp.c_str());
 	Engine::install(new RtpHandler(cfg.getIntValue("general","priority",80)));

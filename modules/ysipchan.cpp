@@ -2475,13 +2475,22 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(bool start)
 	return createSDP(0);
     }
 
+    bool ok = false;
     ObjList* l = m_rtpMedia->skipNull();
-    for (; l; l = l->skipNext()) {
+    while (l) {
 	NetMedia* m = static_cast<NetMedia*>(l->get());
-	if (!dispatchRtp(m,m_rtpAddr,start,true))
-	    return 0;
+	if (dispatchRtp(m,m_rtpAddr,start,true))
+	    ok = true;
+	else {
+	    Debug(this,DebugMild,"Removing failed media '%s' format '%s' from offer [%p]",
+		m->c_str(),m->format().safe(),this);
+	    l->remove();
+	    l = l->skipNull();
+	    continue;
+	}
+	l = l->skipNext();
     }
-    return createSDP(getRtpAddr());
+    return ok ? createSDP(getRtpAddr()) : 0;
 }
 
 // Starts an already created set of external RTP channels

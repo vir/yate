@@ -597,6 +597,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	    continue;
 	}
 	String fmt;
+	String aux;
 	String mappings;
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
 	int ptime = 0;
@@ -604,6 +605,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	    int var = -1;
 	    tmp >> " " >> var;
 	    int mode = 0;
+	    bool annexB = s_cfg.getBoolValue("codecs","g729_annexb",false);
 	    int defmap = -1;
 	    String payload(lookup(var,dict_payloads));
 
@@ -621,6 +623,12 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		    int num = -1;
 		    line >> num >> " ";
 		    if (num == var) {
+			line.trimBlanks().toUpper();
+			if (line.startsWith("G729B/")) {
+			    // some devices add a second map for same payload
+			    annexB = true;
+			    continue;
+			}
 			const char* pload = 0;
 			for (const TokenDict* map = dict_rtpmap; map->token; map++) {
 			    if (line.startsWith(map->token,false,true)) {
@@ -638,6 +646,8 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		    if (num == var) {
 			if (line.startSkip("mode=",false))
 			    line >> mode;
+			else if (line.startSkip("annexb=",false))
+			    line >> annexB;
 		    }
 		}
 	    }
@@ -664,8 +674,11 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 			mappings << ",";
 		    mappings << payload << "=" << var;
 		}
+		if ((payload == "g729") && s_cfg.getBoolValue("hacks","g729_annexb",annexB))
+		    aux << ",g729b";
 	    }
 	}
+	fmt += aux;
 	DDebug(&plugin,DebugAll,"Formats '%s' mappings '%s'",fmt.c_str(),mappings.c_str());
 	NetMedia* net = 0;
 	// try to take the media descriptor from the old list
@@ -2559,6 +2572,8 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 		    ptime = mode = 20;
 		else if (*s == "ilbc30")
 		    ptime = mode = 30;
+		else if (*s == "g729b")
+		    continue;
 		int payload = s->toInteger(dict_payloads,-1);
 		int defcode = payload;
 		String tmp = *s;
@@ -2587,6 +2602,12 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 			if (mode) {
 			    temp = new String("fmtp:");
 			    *temp << payload << " mode=" << mode;
+			    rtpmap.append(temp);
+			}
+			if (*s == "g729") {
+			    temp = new String("fmtp:");
+			    *temp << payload << " annexb=" <<
+				(0 != l->find("g729b")) ? "yes" : "no";
 			    rtpmap.append(temp);
 			}
 		    }

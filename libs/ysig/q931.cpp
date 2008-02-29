@@ -4760,7 +4760,7 @@ ISDNQ931IE* Q931Parser::decodeCause(ISDNQ931IE* ie, const u_int8_t* data,
     // Rest of data: diagnostic
     crt++;
     if (crt < len)
-	s_ie_ieCause[2].dumpDataBit7(ie,data + crt,len - crt,true);
+	s_ie_ieCause[2].dumpData(ie,data + crt,len - crt);
     return ie;
 }
 
@@ -5342,7 +5342,10 @@ bool Q931Parser::encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer)
 	layer = 4;
     // User information layer data
     // Bit 7 = 1, Bits 5,6 = layer, Bits 0-4: the value
-    for (unsigned int idx = 0; layer < 4; layer++, idx++) {
+    // Layer 1 data is at index 4 in s_ie_ieBearerCaps
+    // Layer 2 data is at index 6 in s_ie_ieBearerCaps
+    // Layer 3 data is at index 7 in s_ie_ieBearerCaps
+    for (unsigned int idx = 4; layer < 4; idx++) {
 	int tmp = s_ie_ieBearerCaps[idx].getValue(ie,false,-1);
 	if (tmp == -1) {
 	    DDebug(m_settings->m_dbg,DebugAll,
@@ -5353,6 +5356,10 @@ bool Q931Parser::encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer)
 	data[1]++;
 	data[data[1] + 1] = 0x80 | ((u_int8_t)layer << 5) |
 	    ((u_int8_t)tmp & s_ie_ieBearerCaps[idx].mask);
+	if (layer == 1)
+	    layer += 2;
+	else
+	    layer++;
     }
     CHECK_IE_LENGTH(data[1] + 2,Q931_MAX_BEARERCAPS_LEN)
     buffer.assign(data,data[1] + 2);

@@ -2607,7 +2607,7 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 			if (*s == "g729") {
 			    temp = new String("fmtp:");
 			    *temp << payload << " annexb=" <<
-				(0 != l->find("g729b")) ? "yes" : "no";
+				((0 != l->find("g729b")) ? "yes" : "no");
 			    rtpmap.append(temp);
 			}
 		    }

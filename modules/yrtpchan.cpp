@@ -334,7 +334,7 @@ void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
 	addr.port(lport);
 	if (m_rtp->localAddr(addr,rtcp)) {
 	    m_port = lport;
-	    Debug(&splugin,DebugAll,"Session %p bound to %s:%u [%p]",m_rtp,localip,m_port,this);
+	    Debug(&splugin,DebugInfo,"Session %p bound to %s:%u [%p]",m_rtp,localip,m_port,this);
 	    return;
 	}
     }
@@ -398,7 +398,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 	return false;
     }
 
-    Debug(&splugin,DebugAll,"RTP format '%s' payload %d",format,payload);
+    Debug(&splugin,DebugInfo,"RTP starting format '%s' payload %d [%p]",format,payload,this);
     int minJitter = msg.getIntValue("minjitter",s_minjitter);
     int maxJitter = msg.getIntValue("maxjitter",s_maxjitter);
 
@@ -469,12 +469,12 @@ void YRTPWrapper::guessLocal(const char* remoteip, String& localip)
     localip.clear();
     SocketAddr r(AF_INET);
     if (!r.host(remoteip)) {
-	Debug(&splugin,DebugInfo,"Guess - Could not parse remote '%s'",remoteip);
+	Debug(&splugin,DebugNote,"Guess - Could not parse remote '%s'",remoteip);
 	return;
     }
     SocketAddr l;
     if (!l.local(r)) {
-	Debug(&splugin,DebugInfo,"Guess - Could not guess local for remote '%s'",remoteip);
+	Debug(&splugin,DebugNote,"Guess - Could not guess local for remote '%s'",remoteip);
 	return;
     }
     localip = l.host();

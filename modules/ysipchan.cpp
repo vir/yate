@@ -383,6 +383,7 @@ private:
     MimeSdpBody* createPasstroughSDP(Message& msg, bool update = true);
     MimeSdpBody* createRtpSDP(const char* addr, const Message& msg);
     MimeSdpBody* createRtpSDP(bool start = false);
+    void updateFormats(const Message& msg);
     bool startRtp();
     bool addSdpParams(Message& msg, const MimeBody* body);
     bool addRtpParams(Message& msg, const String& natAddr, const MimeBody* body);
@@ -3200,6 +3201,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 {
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
+	updateFormats(msg);
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
@@ -3399,27 +3401,7 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    return false;
 	}
 
-	if (m_rtpMedia) {
-	    // update formats lists
-	    unsigned int n = msg.length();
-	    for (unsigned int i = 0; i < n; i++) {
-		const NamedString* p = msg.getParam(i);
-		if (!p)
-		    continue;
-		// search for formats_MEDIANAME parameters
-		String tmp = p->name();
-		if (!tmp.startSkip("formats",false))
-		    continue;
-		if (tmp && (tmp[0] != '_'))
-		    continue;
-		if (tmp.null())
-		    tmp = "audio";
-		NetMedia* rtp = static_cast<NetMedia*>(m_rtpMedia->operator[](tmp));
-		if (rtp && rtp->update(*p))
-		    Debug(this,DebugNote,"Formats for '%s' changed to '%s'",tmp.c_str(),p->c_str());
-	    }
-	}
-
+	updateFormats(msg);
 	if (msg.getBoolValue("progress",s_progress))
 	    m_tr->setResponse(183);
     }
@@ -3458,6 +3440,33 @@ void YateSIPConnection::callRejected(const char* error, const char* reason, cons
 	    m_tr->setResponse(code,reason);
     }
     setReason(reason,code);
+}
+
+// Update media format lists from a message
+void YateSIPConnection::updateFormats(const Message& msg)
+{
+    if (!m_rtpMedia)
+	return;
+
+    unsigned int n = msg.length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* p = msg.getParam(i);
+	if (!p)
+	    continue;
+	// search for formats_MEDIANAME parameters
+	String tmp = p->name();
+	if (!tmp.startSkip("formats",false))
+	    continue;
+	if (tmp && (tmp[0] != '_'))
+	    continue;
+	if (tmp.null())
+	    tmp = "audio";
+	else
+	    tmp = tmp.substr(1);
+	NetMedia* rtp = static_cast<NetMedia*>(m_rtpMedia->operator[](tmp));
+	if (rtp && rtp->update(*p))
+	    Debug(this,DebugNote,"Formats for '%s' changed to '%s'",tmp.c_str(),p->c_str());
+    }
 }
 
 // Start a client reINVITE transaction

@@ -2632,14 +2632,16 @@ SS7PointCode::Type IsupDecodeHandler::getPCType(Message& msg, const String& pref
 	return SS7PointCode::ITU;
     else if (proto == "ansi")
 	return SS7PointCode::ANSI;
-    else {
-	proto = msg.getValue(prefix+"protocol-basetype");
-	if (proto.startsWith("itu-t"))
-	    return SS7PointCode::ITU;
-	else if (proto.startsWith("ansi"))
-	    return SS7PointCode::ANSI;
-	msg.setParam("error","Unknown protocol-type");
-    }
+    // Check if protocol-basetype starts with known values
+    // Use the protocol-type if base is missing
+    const char* base = msg.getValue(prefix+"protocol-basetype");
+    if (base)
+	proto = base;
+    if (proto.startsWith("itu-t"))
+	return SS7PointCode::ITU;
+    else if (proto.startsWith("ansi"))
+	return SS7PointCode::ANSI;
+    msg.setParam("error","Unknown protocol-type");
     return SS7PointCode::Other;
 }
 

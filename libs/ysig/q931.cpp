@@ -1422,8 +1422,10 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
 	m_channelIDSent = true;
     }
     // Progress indicator
-    m_data.m_progress = sigMsg->params().getValue("call-progress");
-    m_data.processProgress(msg,true,&q931()->parserData());
+    if (sigMsg) {
+	m_data.m_progress = sigMsg->params().getValue("call-progress");
+	m_data.processProgress(msg,true,&q931()->parserData());
+    }
     m_conTimer.start();
     return q931()->sendMessage(msg);
 }

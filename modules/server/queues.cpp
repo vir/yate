@@ -63,9 +63,9 @@ public:
     inline QueuedCall* findCall(const String& id) const
 	{ return static_cast<QueuedCall*>(m_calls[id]); }
     bool addCall(Message& msg);
-    inline bool removeCall(const String& id)
-	{ return removeCall(findCall(id)); }
-    bool removeCall(QueuedCall* call);
+    inline bool removeCall(const String& id, const char* reason)
+	{ return removeCall(findCall(id),reason); }
+    bool removeCall(QueuedCall* call, const char* reason);
     QueuedCall* markCall(const char* mark);
     bool unmarkCall(const String& id);
     unsigned int unmarkedCalls() const;
@@ -73,9 +73,15 @@ public:
     void listCalls(String& retval);
     void startACD();
 protected:
+    void notify(const char* event, const QueuedCall* call = 0);
     ObjList m_calls;
+    u_int64_t m_time;
+    u_int64_t m_rate;
 private:
     CallsQueue(const char* name);
+    CallsQueue(const NamedList& params, const char* name);
+    void init();
+    const char* m_notify;
 };
 
 class QueuesModule : public Module
@@ -113,6 +119,7 @@ UNLOAD_PLUGIN(unloadNow)
     return true;
 }
 
+static Configuration s_cfg;
 static String s_account;
 static String s_chanOutgoing;
 static String s_chanIncoming;
@@ -120,7 +127,9 @@ static String s_queryQueue;
 static String s_queryAvail;
 static u_int32_t s_nextTime = 0;
 static int s_rescan = 5;
+static int s_mintime = 500;
 
+// Utility function, copy all columns to parameters with same name
 static void copyArrayParams(NamedList& params, Array* a, int row)
 {
     if ((!a) || (!row))
@@ -137,22 +146,47 @@ static void copyArrayParams(NamedList& params, Array* a, int row)
 }
 
 
+// Constructor from database query, parameters are populated later
 CallsQueue::CallsQueue(const char* name)
-    : NamedList(name)
+    : NamedList(name),
+      m_time(0), m_rate(0), m_notify(0)
 {
-    Debug(&__plugin,DebugInfo,"Creating queue '%s'",name);
+    Debug(&__plugin,DebugInfo,"Creating queue '%s' from database",name);
     setParam("queue",name);
     s_queues.append(this);
 }
 
+// Constructor from config file section, copy parameters from it
+CallsQueue::CallsQueue(const NamedList& params, const char* name)
+    : NamedList(params),
+      m_time(0), m_rate(0), m_notify(0)
+{
+    Debug(&__plugin,DebugInfo,"Creating queue '%s' from config file",name);
+    String::operator=(name);
+    setParam("queue",name);
+    s_queues.append(this);
+}
+
+// Destructor, forget about this queue
 CallsQueue::~CallsQueue()
 {
     Debug(&__plugin,DebugInfo,"Deleting queue '%s'",c_str());
     s_queues.remove(this,false);
+    notify("destroyed");
 }
 
+// Create a queue, either from database or from config file
 CallsQueue* CallsQueue::create(const char* name, const NamedList& params)
 {
+    if (s_account.null() || s_queryQueue.null()) {
+	// account or query not set - use config file instead
+	NamedList* sect = s_cfg.getSection("queue " + String(name));
+	if (!sect)
+	    return 0;
+	CallsQueue* queue = new CallsQueue(*sect,name);
+	queue->init();
+	return queue;
+    }
     String query = s_queryQueue;
     params.replaceParams(query,true);
     Message m("database");
@@ -169,9 +203,21 @@ CallsQueue* CallsQueue::create(const char* name, const NamedList& params)
     }
     CallsQueue* queue = new CallsQueue(name);
     copyArrayParams(*queue,res,1);
+    queue->init();
     return queue;
 }
 
+// Initialize the queue variables from its parameters
+void CallsQueue::init()
+{
+    int rate = getIntValue("mintime",s_mintime);
+    if (rate > 0)
+	m_rate = rate * (u_int64_t)1000;
+    m_notify = getValue("notify");
+    notify("created");
+}
+
+// Attempt to add a new call to the tail of the queue
 bool CallsQueue::addCall(Message& msg)
 {
     int maxlen = getIntValue("length");
@@ -194,20 +240,29 @@ bool CallsQueue::addCall(Message& msg)
     }
     msg.setParam("source",tmp);
     msg.setParam("callto",s_chanIncoming);
-    m_calls.append(new QueuedCall(msg.getValue("id"),msg.getValue("caller")));
+    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"));
+    // high priority calls will go in queue's head instead of tail
+    if (msg.getBoolValue("priority"))
+	m_calls.insert(call);
+    else
+	m_calls.append(call);
+    notify("queued",call);
     return true;
 }
 
-bool CallsQueue::removeCall(QueuedCall* call)
+// Remove and destroy call from the queue, destroy the queue if it becomes empty
+bool CallsQueue::removeCall(QueuedCall* call, const char* reason)
 {
     if (!call)
 	return false;
+    notify(reason,call);
     m_calls.remove(call);
     if (!m_calls.count())
 	destruct();
     return true;
 }
 
+// Mark a call as being routed to an operator
 QueuedCall* CallsQueue::markCall(const char* mark)
 {
     ObjList* l = m_calls.skipNull();
@@ -221,6 +276,7 @@ QueuedCall* CallsQueue::markCall(const char* mark)
     return 0;
 }
 
+// Unmark a call when the operator call failed
 bool CallsQueue::unmarkCall(const String& id)
 {
     QueuedCall* call = findCall(id);
@@ -230,6 +286,7 @@ bool CallsQueue::unmarkCall(const String& id)
     return true;
 }
 
+// Count the number of calls not routed to an operator
 unsigned int CallsQueue::unmarkedCalls() const
 {
     unsigned int c = 0;
@@ -241,12 +298,14 @@ unsigned int CallsQueue::unmarkedCalls() const
     return c;
 }
 
+// Retrive the call from the head of the queue
 QueuedCall* CallsQueue::topCall() const
 {
     ObjList* l = m_calls.skipNull();
     return l ? static_cast<QueuedCall*>(l->get()) : 0;
 }
 
+// List the calls currently in the queue
 void CallsQueue::listCalls(String& retval)
 {
     retval.append("Queue ","\r\n") << c_str() << " " << countCalls();
@@ -263,10 +322,18 @@ void CallsQueue::listCalls(String& retval)
     retval << "\r\n";
 }
 
+// Start the call distribution for this queue if required
 void CallsQueue::startACD()
 {
-    if (s_account.null() || s_chanOutgoing.null())
+    if (s_account.null() || s_queryAvail.null() || s_chanOutgoing.null())
 	return;
+    u_int64_t when = 0;
+    if (m_time) {
+	when = Time::now();
+	if (when < m_time)
+	    return;
+	m_time = m_rate ? when + m_rate : 0;
+    }
     unsigned int cnt = unmarkedCalls();
     if (!cnt)
 	return;
@@ -318,6 +385,23 @@ void CallsQueue::startACD()
     }
 }
 
+// Emit a queue related notification message
+void CallsQueue::notify(const char* event, const QueuedCall* call)
+{
+    if (!m_notify)
+	return;
+    Message* m = new Message("chan.notify");
+    if (call) {
+	m->addParam("id",*call);
+	if (call->getCaller())
+	    m->addParam("caller",call->getCaller());
+    }
+    m->addParam("targetid",m_notify);
+    m->addParam("event",event);
+    m->addParam("queue",c_str());
+    Engine::enqueue(m);
+}
+
 
 QueuesModule::QueuesModule()
     : Module("queues","misc"), m_init(false)
@@ -330,6 +414,7 @@ QueuesModule::~QueuesModule()
     Output("Unloading module Queues");
 }
 
+// Prepare module for unload
 bool QueuesModule::unload()
 {
     if (!lock(500000))
@@ -340,16 +425,19 @@ bool QueuesModule::unload()
     return true;
 }
 
+// Add status report parameters
 void QueuesModule::statusParams(String& str)
 {
     str.append("queues=",",") << s_queues.count();
 }
 
+// Put a call in a queue, create queue if required
 void QueuesModule::onQueued(Message& msg, String qname)
 {
+    qname.trimBlanks();
     if (qname.null() || (qname.find('/') >= 0))
 	return;
-    if (s_account.null() || s_chanIncoming.null())
+    if (s_chanIncoming.null())
 	return;
     msg.setParam("queue",qname);
     CallsQueue* queue = findQueue(qname);
@@ -368,17 +456,25 @@ void QueuesModule::onQueued(Message& msg, String qname)
     }
 }
 
+// Pick up the call from the head of a queue
 void QueuesModule::onPickup(Message& msg, String qname)
 {
-    if (qname.null() || (qname.find('/') >= 0))
+    if (qname.null())
 	return;
+    String id;
+    int sep = qname.find('/');
+    if (sep >= 0) {
+	id = qname.substr(sep+1);
+	qname = qname.substr(0,sep);
+    }
     CallsQueue* queue = findQueue(qname);
     if (queue) {
-	QueuedCall* call = queue->topCall();
+	QueuedCall* call = id ? queue->findCall(id) : queue->topCall();
 	if (call) {
-	    String id = *call;
+	    id = *call;
 	    String pid = msg.getValue("id");
-	    queue->removeCall(call);
+	    queue->removeCall(call,"pickup");
+	    // convert message and let it connect to the queued call
 	    msg = "chan.connect";
 	    msg.setParam("targetid",id);
 	    // a little late... but answer to the queued call
@@ -398,6 +494,7 @@ void QueuesModule::onPickup(Message& msg, String qname)
     msg.setParam("reason","There are no calls in queue");
 }
 
+// Handle call.execute messages that put or pick up calls in a queue
 void QueuesModule::onExecute(Message& msg, String callto)
 {
     if (callto.startSkip("queue/",false))
@@ -406,6 +503,7 @@ void QueuesModule::onExecute(Message& msg, String callto)
 	onPickup(msg,callto);
 }
 
+// Handle call.answered coming from operators of a queue
 void QueuesModule::onAnswered(Message& msg, String targetid, String reason)
 {
     if (reason == "queued")
@@ -415,9 +513,10 @@ void QueuesModule::onAnswered(Message& msg, String targetid, String reason)
 	return;
     Debug(this,DebugCall,"Answered call '%s' in queue '%s'",
 	targetid.c_str(),queue->c_str());
-    queue->removeCall(targetid);
+    queue->removeCall(targetid,"answered");
 }
 
+// Handle hangups on either caller or operator
 void QueuesModule::onHangup(Message& msg, String id)
 {
     String notify = msg.getValue("notify");
@@ -425,6 +524,7 @@ void QueuesModule::onHangup(Message& msg, String id)
     if (notify && qname) {
 	CallsQueue* queue = findQueue(qname);
 	if (queue) {
+	    // operator (outgoing) call failed for any reason
 	    Debug(this,DebugCall,"Hung up outgoing call '%s' serving '%s' in '%s'",
 		id.c_str(),notify.c_str(),qname.c_str());
 	    if (queue->unmarkCall(notify)) {
@@ -436,10 +536,12 @@ void QueuesModule::onHangup(Message& msg, String id)
     CallsQueue* queue = findCallQueue(id);
     if (!queue)
 	return;
+    // caller (incoming) did hung up
     Debug(this,DebugCall,"Hung up call '%s' in '%s'",id.c_str(),queue->c_str());
-    queue->removeCall(id);
+    queue->removeCall(id,"hangup");
 }
 
+// Command line execute handler
 bool QueuesModule::commandExecute(String& retVal, const String& line)
 {
     if (line == "queues") {
@@ -453,6 +555,7 @@ bool QueuesModule::commandExecute(String& retVal, const String& line)
     return false;
 }
 
+// Command line completion handler
 bool QueuesModule::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
     if ((partLine.null() || (partLine == "status") || (partLine == "debug")) && name().startsWith(partWord))
@@ -460,6 +563,7 @@ bool QueuesModule::commandComplete(Message& msg, const String& partLine, const S
     return false;
 }
 
+// Common message relay handler
 bool QueuesModule::received(Message& msg, int id)
 {
     Lock lock(this);
@@ -480,6 +584,7 @@ bool QueuesModule::received(Message& msg, int id)
     return false;
 }
 
+// Timer message handler, rescan queues
 void QueuesModule::msgTimer(Message& msg)
 {
     u_int32_t t = msg.msgTime().sec();
@@ -493,6 +598,7 @@ void QueuesModule::msgTimer(Message& msg)
     Module::msgTimer(msg);
 }
 
+// Find the queue in which a call waits
 CallsQueue* QueuesModule::findCallQueue(const String& id)
 {
     ObjList* l = s_queues.skipNull();
@@ -504,25 +610,28 @@ CallsQueue* QueuesModule::findCallQueue(const String& id)
     return 0;
 }
 
+// (Re)Initialize the module
 void QueuesModule::initialize()
 {
     Output("Initializing module Queues for database");
-    Configuration cfg(Engine::configFile("queues"));
     lock();
-    s_rescan = cfg.getIntValue("general","rescan",5);
+    s_cfg = Engine::configFile("queues");
+    s_cfg.load();
+    s_mintime = s_cfg.getIntValue("general","mintime",500);
+    s_rescan = s_cfg.getIntValue("general","rescan",5);
     if (s_rescan < 2)
 	s_rescan = 2;
-    s_account = cfg.getValue("general","account");
-    s_chanOutgoing = cfg.getValue("channels","outgoing");
-    s_chanIncoming = cfg.getValue("channels","incoming");
-    s_queryQueue = cfg.getValue("queries","queue");
-    s_queryAvail = cfg.getValue("queries","avail");
+    s_account = s_cfg.getValue("general","account");
+    s_chanOutgoing = s_cfg.getValue("channels","outgoing");
+    s_chanIncoming = s_cfg.getValue("channels","incoming");
+    s_queryQueue = s_cfg.getValue("queries","queue");
+    s_queryAvail = s_cfg.getValue("queries","avail");
     unlock();
     if (m_init)
 	return;
     m_init = true;
     setup();
-    int priority = cfg.getIntValue("general","priority",50);
+    int priority = s_cfg.getIntValue("general","priority",50);
     installRelay(Execute,priority);
     installRelay(Answered,priority);
     installRelay(Private,"chan.hangup",priority);

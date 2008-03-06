@@ -10,6 +10,9 @@
 ; rescan: int: Period of polling for available operators, in seconds
 ;rescan=5
 
+; mintime: int: Minimum time between queries, in milliseconds
+;mintime=500
+
 
 [queries]
 ; SQL queries that get data about the queue and operators
@@ -18,11 +21,13 @@
 ; Relevant substitutions:
 ;  ${queue}: string: Name of the queue as obtained from routing
 ; Relevant returned params:
+;  mintime: int: Minimum time between queries, in milliseconds
 ;  length: int: Maximum queue length, will declare congestion if grows larger
 ;  greeting: string: Resource to be played initially as greeting
 ;  onhold: string: Resource to be played while waiting in queue
 ;  maxcall: int: How much to call the operator, in milliseconds
 ;  prompt: string: Resource to play to the operator when it answers
+;  notify: string: Target ID for notification messages about queue activity
 ;queue=
 
 ; avail: string: Query to fetch operators to which calls can be distributed

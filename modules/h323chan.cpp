@@ -1369,7 +1369,8 @@ H323Channel* YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 	}
 	PIPSocket::Address externalIpAddress;
 	GetControlChannel().GetLocalAddress().GetIpAddress(externalIpAddress);
-	Debug(this,DebugInfo,"address '%s'",(const char *)externalIpAddress.AsString());
+	Debug(this,DebugAll,"Logical control channel address '%s'",
+	    (const char *)externalIpAddress.AsString());
 	WORD externalPort = 0;
 	if (!m_passtrough) {
 	    TelEngine::Lock lock(m_mutex);
@@ -1386,7 +1387,7 @@ H323Channel* YateH323Connection::CreateRealTimeLogicalChannel(const H323Capabili
 		}
 	    }
 	    else {
-		Debug(this,DebugInfo,"Not creating logical channel for a dead channel [%p]",this);
+		Debug(this,DebugNote,"Not creating logical channel for a dead channel [%p]",this);
 		return 0;
 	    }
 	}
@@ -1503,7 +1504,8 @@ BOOL YateH323Connection::decodeCapability(const H323Capability& capability, cons
 void YateH323Connection::setRemoteAddress(const char* remoteIP, WORD remotePort)
 {
     if (!m_remotePort) {
-	Debug(this,DebugInfo,"Copying remote RTP address [%p]",this);
+	Debug(this,DebugInfo,"Got remote RTP address %s:%u [%p]",
+	    remoteIP,remotePort,this);
 	m_remotePort = remotePort;
 	m_remoteAddr = remoteIP;
     }
@@ -1621,7 +1623,7 @@ BOOL YateH323_ExternalRTPChannel::Start()
     PIPSocket::Address remoteIpAddress;
     WORD remotePort;
     GetRemoteAddress(remoteIpAddress,remotePort);
-    Debug(&hplugin,DebugInfo,"external rtp ip address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
+    Debug(&hplugin,DebugInfo,"External RTP address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
 
     return isRunning = m_conn->startExternalRTP((const char *)remoteIpAddress.AsString(), remotePort, GetDirection(), this);
 }
@@ -1638,7 +1640,7 @@ BOOL YateH323_ExternalRTPChannel::OnReceivedPDU(
     PIPSocket::Address remoteIpAddress;
     WORD remotePort;
     GetRemoteAddress(remoteIpAddress,remotePort);
-    Debug(&hplugin,DebugInfo,"Remote RTP IP address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
+    Debug(&hplugin,DebugAll,"Remote RTP address %s:%u",(const char *)remoteIpAddress.AsString(),remotePort);
     m_conn->setRemoteAddress((const char *)remoteIpAddress.AsString(), remotePort);
     return TRUE;
 }

@@ -309,7 +309,8 @@ YRTPWrapper* YRTPWrapper::find(const String& id)
 
 void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
 {
-    Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\") [%p]",localip,this);
+    Debug(&splugin,DebugAll,"YRTPWrapper::setupRTP(\"%s\",%s) [%p]",
+	localip,String::boolText(rtcp),this);
     m_rtp = new YRTPSession(this);
     m_rtp->initTransport();
     int minport = s_minport;
@@ -334,7 +335,8 @@ void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
 	addr.port(lport);
 	if (m_rtp->localAddr(addr,rtcp)) {
 	    m_port = lport;
-	    Debug(&splugin,DebugInfo,"Session %p bound to %s:%u [%p]",m_rtp,localip,m_port,this);
+	    Debug(&splugin,DebugInfo,"Session %p bound to %s:%u%s [%p]",
+		m_rtp,localip,m_port,(rtcp ? " +RTCP" : ""),this);
 	    return;
 	}
     }
@@ -576,7 +578,8 @@ YRTPSource::YRTPSource(YRTPWrapper* wrap)
 
 YRTPSource::~YRTPSource()
 {
-    Debug(&splugin,DebugAll,"YRTPSource::~YRTPSource() [%p] wrapper=%p",this,m_wrap);
+    Debug(&splugin,DebugAll,"YRTPSource::~YRTPSource() [%p] wrapper=%p ts=%lu",
+	this,m_wrap,m_timestamp);
     if (m_wrap) {
 	s_srcMutex.lock();
 	YRTPWrapper* tmp = m_wrap;
@@ -607,7 +610,8 @@ YRTPConsumer::YRTPConsumer(YRTPWrapper *wrap)
 
 YRTPConsumer::~YRTPConsumer()
 {
-    Debug(&splugin,DebugAll,"YRTPConsumer::~YRTPConsumer() [%p] wrapper=%p ts=%lu",this,m_wrap,m_timestamp);
+    Debug(&splugin,DebugAll,"YRTPConsumer::~YRTPConsumer() [%p] wrapper=%p ts=%lu",
+	this,m_wrap,m_timestamp);
     if (m_wrap) {
 	YRTPWrapper* tmp = m_wrap;
 	const YRTPConsumer* c = tmp->m_consumer;
@@ -726,7 +730,7 @@ bool RtpHandler::received(Message &msg)
     String trans = msg.getValue("transport");
     if (trans && !trans.startsWith("RTP/"))
 	return false;
-    Debug(&splugin,DebugAll,"RTP message received");
+    Debug(&splugin,DebugAll,"%s message received",(trans ? trans.c_str() : "No-transport"));
     String dir(msg.getValue("direction"));
     RTPSession::Direction direction = RTPSession::SendRecv;
     bool d_recv = false;

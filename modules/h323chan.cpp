@@ -30,6 +30,7 @@
 
 #include <ptlib.h>
 #include <h323.h>
+#include <h323neg.h>
 #include <h323pdu.h>
 #include <h323caps.h>
 #include <ptclib/delaychan.h>
@@ -397,6 +398,8 @@ public:
     void setCallerID(const char* number, const char* name);
     void rtpExecuted(Message& msg);
     void rtpForward(Message& msg, bool init = false);
+    void updateFormats(const Message& msg);
+    bool adjustCapabilities();
     void answerCall(AnswerCallResponse response, bool autoEarly = false);
     static BOOL decodeCapability(const H323Capability& capability, const char** dataFormat, int* payload = 0, String* capabName = 0);
     inline bool hasRemoteAddress() const
@@ -1005,6 +1008,7 @@ YateH323Connection::YateH323Connection(YateH323EndPoint& endpoint,
 
     setCallerID(msg->getValue("caller"),msg->getValue("callername"));
     rtpForward(*msg,s_passtrough);
+    updateFormats(*msg);
     m_needMedia = msg->getBoolValue("needmedia",m_needMedia);
 
     CallEndpoint* ch = YOBJECT(CallEndpoint,msg->userData());
@@ -1168,6 +1172,68 @@ void YateH323Connection::rtpForward(Message& msg, bool init)
 	m_passtrough = false;
 	Debug(this,DebugInfo,"Disabling RTP forward [%p]",this);
     }
+}
+
+// Update the formats when RTP is proxied
+void YateH323Connection::updateFormats(const Message& msg)
+{
+    // when doing RTP forwarding formats are altered in rtpForward()
+    if (m_passtrough)
+	return;
+    // only audio is currently supported
+    const char* formats = msg.getValue("formats");
+    if (!formats)
+	return;
+    if (m_formats != formats) {
+	Debug(this,DebugNote,"Formats changed to '%s'",formats);
+	m_formats = formats;
+	// send changed capability set only if another was already sent
+	if (adjustCapabilities() && capabilityExchangeProcedure->HasSentCapabilities())
+	    SendCapabilitySet(FALSE);
+    }
+}
+
+// Adjust local capabilities to not exceed the format list
+bool YateH323Connection::adjustCapabilities()
+{
+    if (m_formats.null())
+	return false;
+    // remote has a list of supported codecs - remove unsupported capabilities
+    bool nocodecs = true;
+    bool changed = false;
+    for (int i = 0; i < localCapabilities.GetSize(); i++) {
+	const char* format = 0;
+	String fname;
+	decodeCapability(localCapabilities[i],&format,0,&fname);
+	if (format) {
+	    if (m_formats.find(format) < 0) {
+		Debug(this,DebugAll,"Removing capability '%s' (%s) not in remote '%s'",
+		    fname.c_str(),format,m_formats.c_str());
+		changed = true;
+		// also remove any matching fast start channels
+		for (PINDEX idx = 0; idx < fastStartChannels.GetSize(); idx++) {
+		    if (fastStartChannels[idx].GetCapability() == localCapabilities[i]) {
+			Debug(this,DebugInfo,"Removing fast start channel %s '%s' (%s)",
+			    lookup(fastStartChannels[idx].GetDirection(),dict_h323_dir,"?"),
+			    fname.c_str(),format);
+			fastStartChannels.RemoveAt(idx--);
+		    }
+		}
+		localCapabilities.Remove(fname.c_str());
+		i--;
+	    }
+	    else
+		nocodecs = false;
+	}
+    }
+    if (nocodecs) {
+	Debug(DebugWarn,"No codecs remaining for H323 connection [%p]",this);
+	if (m_needMedia) {
+	    changed = false;
+	    ClearCall(EndedByCapabilityExchange);
+	}
+    }
+    return changed;
 }
 
 void YateH323Connection::answerCall(AnswerCallResponse response, bool autoEarly)
@@ -1420,30 +1486,7 @@ void YateH323Connection::OnSetLocalCapabilities()
     Debug(this,DebugAll,"YateH323Connection::OnSetLocalCapabilities()%s%s [%p]",
 	m_externalRtp ? " external" : "",m_passtrough ? " passtrough" : "",this);
     H323Connection::OnSetLocalCapabilities();
-    if (m_formats.null())
-	return;
-    // remote has a list of supported codecs - remove unsupported capabilities
-    bool nocodecs = true;
-    for (int i = 0; i < localCapabilities.GetSize(); i++) {
-	const char* format = 0;
-	String fname;
-	decodeCapability(localCapabilities[i],&format,0,&fname);
-	if (format) {
-	    if (m_formats.find(format) < 0) {
-		Debug(this,DebugAll,"Removing capability '%s' (%s) not in remote '%s'",
-		    fname.c_str(),format,m_formats.c_str());
-		localCapabilities.Remove(fname.c_str());
-		i--;
-	    }
-	    else
-		nocodecs = false;
-	}
-    }
-    if (nocodecs) {
-	Debug(DebugWarn,"No codecs remaining for H323 connection [%p]",this);
-	if (m_needMedia)
-	    ClearCall(EndedByCapabilityExchange);
-    }
+    adjustCapabilities();
 }
 
 BOOL YateH323Connection::OnStartLogicalChannel(H323Channel & channel) 
@@ -1516,6 +1559,14 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
     const char* sdir = lookup(dir,dict_h323_dir);
     Debug(this,DebugAll,"YateH323Connection::startExternalRTP(\"%s\",%u,%s,%p) [%p]",
 	remoteIP,remotePort,sdir,chan,this);
+    int payload = 128;
+    const char *format = 0;
+    decodeCapability(chan->GetCapability(),&format,&payload);
+    if (format && m_formats && (m_formats.find(format) < 0)) {
+	Debug(this,DebugNote,"Refusing RTP '%s' payload %d, not in '%s'",
+	    format,payload,m_formats.c_str());
+	return FALSE;
+    }
     if (m_passtrough && m_rtpPort) {
 	setRemoteAddress(remoteIP,remotePort);
 
@@ -1535,9 +1586,6 @@ BOOL YateH323Connection::startExternalRTP(const char* remoteIP, WORD remotePort,
 	m.addParam("direction",sdir);
     m.addParam("remoteip",remoteIP);
     m.addParam("remoteport",String(remotePort));
-    int payload = 128;
-    const char *format = 0;
-    decodeCapability(chan->GetCapability(),&format,&payload);
     if (format)
 	m.addParam("format",format);
     if ((payload >= 0) && (payload < 127))
@@ -2112,6 +2160,7 @@ bool YateH323Chan::callRouted(Message& msg)
 	    m_conn->Unlock();
 	    return false;
 	}
+	m_conn->updateFormats(msg);
 	return true;
     }
     return false;
@@ -2122,6 +2171,7 @@ void YateH323Chan::callAccept(Message& msg)
     Channel::callAccept(msg);
     if (m_conn) {
 	m_conn->rtpExecuted(msg);
+	m_conn->updateFormats(msg);
 	m_conn->answerCall(H323Connection::AnswerCallDeferred);
     }
 }
@@ -2141,6 +2191,7 @@ bool YateH323Chan::msgProgress(Message& msg)
 	return false;
     if (msg.getParam("rtp_forward"))
 	m_conn->rtpForward(msg);
+    m_conn->updateFormats(msg);
     m_conn->answerCall(H323Connection::AnswerCallDeferred,msg.getBoolValue("earlymedia",true));
     return true;
 }
@@ -2152,6 +2203,7 @@ bool YateH323Chan::msgRinging(Message& msg)
 	return false;
     if (msg.getParam("rtp_forward"))
 	m_conn->rtpForward(msg);
+    m_conn->updateFormats(msg);
     m_conn->answerCall(H323Connection::AnswerCallPending,msg.getBoolValue("earlymedia",true));
     return true;
 }
@@ -2161,6 +2213,7 @@ bool YateH323Chan::msgAnswered(Message& msg)
     if (!m_conn)
 	return false;
     m_conn->rtpForward(msg);
+    m_conn->updateFormats(msg);
     m_conn->answerCall(H323Connection::AnswerCallNow);
     return true;
 }

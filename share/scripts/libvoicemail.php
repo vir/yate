@@ -26,13 +26,13 @@
 require_once("libyate.php");
 
 $vm_base = "/var/spool/voicemail";
+$vm_func_for_dir = "vmDefaultGetDir";
 
 function vmGetMessageStats($mailbox,&$total,&$unread,$type = "voicemail")
 {
-    global $vm_base;
     $o = 0;
     $n = 0;
-    $dir = "$vm_base/$mailbox";
+    $dir = vmGetVoicemailDir($mailbox);
     if (is_dir($dir) && ($d = @opendir($dir))) {
 	while (($f = readdir($d)) !== false) {
 	    if (substr($f,0,4) == "nvm-") {
@@ -52,8 +52,7 @@ function vmGetMessageStats($mailbox,&$total,&$unread,$type = "voicemail")
 
 function vmGetMessageFiles($mailbox,&$files)
 {
-    global $vm_base;
-    $dir = "$vm_base/$mailbox";
+    $dir = vmGetVoicemailDir($mailbox);
     if (is_dir($dir) && ($d = @opendir($dir))) {
 	$nf = array();
 	$of = array();
@@ -76,8 +75,7 @@ function vmGetMessageFiles($mailbox,&$files)
 
 function vmSetMessageRead($mailbox,&$file)
 {
-    global $vm_base;
-    $dir = "$vm_base/$mailbox";
+    $dir = vmGetVoicemailDir($mailbox);
     if (is_dir($dir) && is_file("$dir/$file")) {
 	if (substr($file,0,4) != "nvm-")
 	    return false;
@@ -92,17 +90,14 @@ function vmSetMessageRead($mailbox,&$file)
 
 function vmInitMessageDir($mailbox)
 {
-    global $vm_base;
-    $dir = "$vm_base/$mailbox";
+    $dir = vmGetVoicemailDir($mailbox);
     if (!is_dir($dir))
 	mkdir($dir,0750);
 }
 
 function vmHasMessageDir($mailbox)
 {
-    global $vm_base;
-    $dir = "$vm_base/$mailbox";
-    return is_dir($dir);
+    return is_dir(vmGetVoicemailDir($mailbox));
 }
 
 function vmBuildNewFilename($caller)
@@ -110,6 +105,20 @@ function vmBuildNewFilename($caller)
     $tmp = strftime("%Y.%m.%d-%H.%M.%S");
     $tmp = "nvm-$tmp-$caller.slin";
     return $tmp;
+}
+
+function vmGetVoicemailDir($called)
+{
+	global $vm_func_for_dir;
+
+	return call_user_func($vm_func_for_dir,$called);
+}
+
+function vmDefaultGetDir($called)
+{
+	global $vm_base;
+
+	return "$vm_base/$called";
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

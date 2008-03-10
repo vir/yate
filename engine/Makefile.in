@@ -81,7 +81,7 @@ strip: all
 	-strip --strip-debug --discard-locals ../$(YLIB)
 
 Engine.o: @srcdir@/Engine.cpp $(MKDEPS) $(EINC) ../yateversn.h ../yatepaths.h
-	$(COMPILE) -c $<
+	$(COMPILE) @FDSIZE_HACK@ -c $<
 
 Channel.o: @srcdir@/Channel.cpp $(MKDEPS) $(PINC)
 	$(COMPILE) -c $<

@@ -168,7 +168,18 @@ static Engine::PluginMode s_loadMode = Engine::LoadFail;
 static int s_maxworkers = 10;
 static bool s_debug = true;
 
+#ifdef RLIMIT_CORE
 static bool s_coredump = false;
+#endif
+
+#ifdef RLIMIT_NOFILE
+#ifdef FDSIZE_HACK
+static bool s_numfiles = false;
+#else
+#undef RLIMIT_NOFILE
+#endif
+#endif
+
 static bool s_sigabrt = false;
 static bool s_lateabrt = false;
 static String s_cfgfile;
@@ -1303,6 +1314,9 @@ static void usage(bool client, FILE* f)
 #ifdef RLIMIT_CORE
 "   -C             Enable core dumps if possible\n"
 #endif
+#ifdef RLIMIT_NOFILE
+"   -F             Increase the maximum file handle to compiled value\n"
+#endif
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
@@ -1514,6 +1528,11 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			s_coredump = true;
 			break;
 #endif
+#ifdef RLIMIT_NOFILE
+		    case 'F':
+			s_numfiles = true;
+			break;
+#endif
 		    case 'D':
 			while (*++pc) {
 			    switch (*pc) {
@@ -1710,6 +1729,24 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 		break;
 	}
 	Debug(DebugWarn,"Could not enable core dumps: %s (%d)",
+	    errno ? strerror(errno) : "hard limit",errno);
+	break;
+    }
+#endif
+#ifdef RLIMIT_NOFILE
+    while (s_numfiles) {
+	struct rlimit lim;
+	if (!::getrlimit(RLIMIT_NOFILE,&lim)) {
+	    errno = 0;
+	    if (lim.rlim_cur >= FDSIZE_HACK)
+		break;
+	    lim.rlim_cur = FDSIZE_HACK;
+	    if (lim.rlim_max < FDSIZE_HACK)
+		lim.rlim_max = FDSIZE_HACK;
+	    if (!::setrlimit(RLIMIT_NOFILE,&lim))
+		break;
+	}
+	Debug(DebugWarn,"Could not increase max file handle: %s (%d)",
 	    errno ? strerror(errno) : "hard limit",errno);
 	break;
     }

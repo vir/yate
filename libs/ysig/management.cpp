@@ -96,7 +96,7 @@ SS7MsgSNM::SS7MsgSNM(unsigned char type)
 
 // Parse a received buffer and build a message from it
 SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
-	const unsigned char* buf, unsigned int len)
+    SS7PointCode::Type pcType, const unsigned char* buf, unsigned int len)
 {
     SS7MsgSNM* msg = new SS7MsgSNM(type);
     Debug(receiver,DebugAll,"Decoding msg=%s from buf=%p len=%u [%p]",
@@ -104,6 +104,34 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     // TODO: parse the rest of the message. Check extra bytes (message specific)
     if (!(buf && len))
 	return msg;
+    unsigned int required = 0;
+    unsigned int expected = 0;
+    while (true) {
+	// TFP,TFR,TFA: Q.704 15.7 The must be at lease 2 bytes in buffer
+	if (type == TFP || type == TFR || type == TFA) {
+	    if (len < 2) {
+		required = 2;
+		break;
+	    }
+	    expected = 2;
+	    // 2 bytes destination
+	    SS7PointCode pc;
+	    unsigned char spare;
+	    if (pc.assign(pcType,buf,len,&spare)) {
+		String tmp;
+		tmp << pc;
+		msg->params().addParam("destination",tmp);
+		tmp.hexify(&spare,1);
+		msg->params().addParam("space",tmp);
+	    }
+	    else
+		Debug(receiver,DebugNote,
+		    "Failed to decode destination for msg=%s len=%u [%p]",
+		    msg->name(),len,receiver);
+	    break;
+	}
+	break;
+    }
     return msg;
 }
 
@@ -140,7 +168,7 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     const unsigned char* buf = msu.getData(label.length()+1,1);
     if (!buf)
 	return false;
-    SS7MsgSNM* msg = SS7MsgSNM::parse(this,buf[0],buf+1,len-1);
+    SS7MsgSNM* msg = SS7MsgSNM::parse(this,buf[0],label.type(),buf+1,len-1);
     if (!msg)
 	return false;
 
@@ -150,9 +178,18 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     l << label;
     String tmp;
     tmp.hexify((void*)buf,len,' ');
-    Debug(this,DebugMild,"Unhandled SNM type=%s group=%s label=%s len=%u: %s",
+    String params;
+    unsigned int n = msg->params().count();
+    if (n)
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = static_cast<NamedString*>(msg->params().getParam(i));
+	    if (ns)
+		params.append(String(ns->name()) + "=" + *ns,",");
+	}
+    Debug(this,DebugMild,
+	"Unhandled SNM type=%s group=%s label=%s params:%s len=%u: %s ",
 	msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
-	l.c_str(),len,tmp.c_str());
+	l.c_str(),params.c_str(),len,tmp.c_str());
 
     TelEngine::destruct(msg);
     return false;

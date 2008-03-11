@@ -4347,11 +4347,13 @@ public:
      * Parse a received buffer and build a message from it
      * @param receiver The SS7 management entity that received the MSU
      * @param type Message type
+     * @param pcType The point code type contained in received MSU's label
      * @param buf Buffer after message head
      * @param len Buffer length
      * @return Valid message pointer of 0 on failure
      */
     static SS7MsgSNM* parse(SS7Management* receiver, unsigned char type,
+	SS7PointCode::Type pcType,
 	const unsigned char* buf, unsigned int len);
 
     /**

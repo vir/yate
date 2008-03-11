@@ -157,6 +157,37 @@ unsigned char SS7PointCode::length(Type type)
     }
 }
 
+bool SS7PointCode::assign(Type type, const unsigned char* src, int len, unsigned char* spare)
+{
+    if (!src)
+	return false;
+    unsigned int llen = length(type);
+    if (!llen)
+	return false;
+    if ((len >= 0) && ((unsigned int)len < llen))
+	return false;
+
+    unsigned int tmp = 0;
+    unsigned char sbits = 0;
+    while (llen--) {
+	unsigned char c = *src++;
+	if (!llen) {
+	    // last octet may hold spare bits
+	    unsigned int sshift = size(type) & 7;
+	    if (sshift) {
+		sbits = c >> sshift;
+		c &= (0xff >> (8 - sshift));
+	    }
+	}
+	tmp = (tmp << 8) | c;
+    }
+    if (unpack(type,tmp)) {
+	if (spare)
+	    *spare = sbits;
+    }
+    return false;
+}
+
 bool SS7PointCode::store(Type type, unsigned char* dest, unsigned char spare) const
 {
     if (!dest)
@@ -244,52 +275,60 @@ bool SS7Label::assign(SS7PointCode::Type type, const SS7MSU& msu)
     unsigned int llen = length(type);
     if (!llen)
 	return false;
-    const unsigned char* s = (const unsigned char*) msu.getData(1,llen);
-    if (!s)
+    return assign(type,(const unsigned char*)msu.getData(1,llen),llen);
+}
+
+bool SS7Label::assign(SS7PointCode::Type type, const unsigned char* src, int len)
+{
+    unsigned int llen = length(type);
+    if (!llen)
 	return false;
+    if ((len >= 0) && ((unsigned int)len < llen))
+	return false;
+
     switch (type) {
 	case SS7PointCode::ITU:
 	    m_type = type;
 	    // it's easier to pack/unpack than to pick all those bits separately
-	    m_dpc.unpack(type,s[0] | ((s[1] & 0x3f) << 8));
-	    m_opc.unpack(type,((s[1] & 0xc0) >> 6) | (s[2] << 2) | ((s[3] & 0x0f) << 10));
-	    m_sls = (s[3] >> 4) & 0x0f;
+	    m_dpc.unpack(type,src[0] | ((src[1] & 0x3f) << 8));
+	    m_opc.unpack(type,((src[1] & 0xc0) >> 6) | (src[2] << 2) | ((src[3] & 0x0f) << 10));
+	    m_sls = (src[3] >> 4) & 0x0f;
 	    m_spare = 0;
 	    return true;
 	case SS7PointCode::ANSI:
 	    m_type = type;
-	    m_dpc.assign(s[2],s[1],s[0]);
-	    m_opc.assign(s[5],s[4],s[3]);
-	    m_sls = s[6] & 0x1f;
-	    m_spare = s[6] >> 5;
+	    m_dpc.assign(src[2],src[1],src[0]);
+	    m_opc.assign(src[5],src[4],src[3]);
+	    m_sls = src[6] & 0x1f;
+	    m_spare = src[6] >> 5;
 	    return true;
 	case SS7PointCode::ANSI8:
 	    m_type = type;
-	    m_dpc.assign(s[2],s[1],s[0]);
-	    m_opc.assign(s[5],s[4],s[3]);
-	    m_sls = s[6];
+	    m_dpc.assign(src[2],src[1],src[0]);
+	    m_opc.assign(src[5],src[4],src[3]);
+	    m_sls = src[6];
 	    m_spare = 0;
 	    return true;
 	case SS7PointCode::China:
 	    m_type = type;
-	    m_dpc.assign(s[2],s[1],s[0]);
-	    m_opc.assign(s[5],s[4],s[3]);
-	    m_sls = s[6] & 0x0f;
-	    m_spare = s[6] >> 4;
+	    m_dpc.assign(src[2],src[1],src[0]);
+	    m_opc.assign(src[5],src[4],src[3]);
+	    m_sls = src[6] & 0x0f;
+	    m_spare = src[6] >> 4;
 	    return true;
 	case SS7PointCode::Japan:
 	    m_type = type;
-	    m_dpc.unpack(type,s[0] | (s[1] << 8));
-	    m_opc.unpack(type,s[2] | (s[3] << 8));
-	    m_sls = s[4] & 0x0f;
-	    m_spare = s[4] >> 4;
+	    m_dpc.unpack(type,src[0] | (src[1] << 8));
+	    m_opc.unpack(type,src[2] | (src[3] << 8));
+	    m_sls = src[4] & 0x0f;
+	    m_spare = src[4] >> 4;
 	    return true;
 	case SS7PointCode::Japan5:
 	    m_type = type;
-	    m_dpc.unpack(type,s[0] | (s[1] << 8));
-	    m_opc.unpack(type,s[2] | (s[3] << 8));
-	    m_sls = s[4] & 0x1f;
-	    m_spare = s[4] >> 5;
+	    m_dpc.unpack(type,src[0] | (src[1] << 8));
+	    m_opc.unpack(type,src[2] | (src[3] << 8));
+	    m_sls = src[4] & 0x1f;
+	    m_spare = src[4] >> 5;
 	    return true;
 	default:
 	    break;

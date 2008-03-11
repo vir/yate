@@ -2644,6 +2644,16 @@ public:
     bool assign(const String& src);
 
     /**
+     * Assign data members from a packed memory block
+     * @param type Type of the point code in memory
+     * @param src Pointer to packed point code in memory
+     * @param len Length of data, negative to not check validity
+     * @param spare Pointer to variable to save spare bits, NULL to ignore them
+     * @return True if success, false if invalid type or memory area
+     */
+    bool assign(Type type, const unsigned char* src, int len = -1, unsigned char* spare = 0);
+
+    /**
      * Assignment operator
      * @param original Code point to be copied
      */
@@ -2815,6 +2825,15 @@ public:
      * @return True if the assignment succeeded
      */
     bool assign(SS7PointCode::Type type, const SS7MSU& msu);
+
+    /**
+     * Assignment from a packed memory block
+     * @param type Type of the point codes in memory block
+     * @param src Pointer to packed label in memory
+     * @param len Length of data, negative to not check validity
+     * @return True if success, false if invalid type or memory area
+     */
+    bool assign(SS7PointCode::Type type, const unsigned char* src, int len = -1);
 
     /**
      * Pack and store the label in a memory location

@@ -169,9 +169,9 @@ bool SS7PointCode::assign(Type type, const unsigned char* src, int len, unsigned
 
     unsigned int tmp = 0;
     unsigned char sbits = 0;
-    while (llen--) {
+    for (unsigned int i = 0; i < llen; i++) {
 	unsigned char c = *src++;
-	if (!llen) {
+	if (i == (llen - 1)) {
 	    // last octet may hold spare bits
 	    unsigned int sshift = size(type) & 7;
 	    if (sshift) {
@@ -179,7 +179,7 @@ bool SS7PointCode::assign(Type type, const unsigned char* src, int len, unsigned
 		c &= (0xff >> (8 - sshift));
 	    }
 	}
-	tmp |= ((unsigned int)c << llen);
+	tmp |= ((unsigned int)c << (llen - i));
     }
     if (unpack(type,tmp)) {
 	if (spare)

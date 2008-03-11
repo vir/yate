@@ -185,7 +185,7 @@ bool SS7PointCode::assign(Type type, const unsigned char* src, int len, unsigned
 	if (spare)
 	    *spare = sbits;
     }
-    return false;
+    return true;
 }
 
 bool SS7PointCode::store(Type type, unsigned char* dest, unsigned char spare) const

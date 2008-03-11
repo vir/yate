@@ -70,7 +70,42 @@ static const TokenDict s_snm_names[] = {
     MAKE_NAME(LRI), // alias
     { 0, 0 }
 };
+
+static const TokenDict s_snm_group[] = {
+    // this list must be kept in synch with the header
+    MAKE_NAME(CHM),
+    MAKE_NAME(ECM),
+    MAKE_NAME(FCM),
+    MAKE_NAME(TFM),
+    MAKE_NAME(RSM),
+    MAKE_NAME(MIM),
+    MAKE_NAME(TRM),
+    MAKE_NAME(DLM),
+    MAKE_NAME(UFC),
+    { 0, 0 }
+};
 #undef MAKE_NAME
+
+
+// Constructor
+SS7MsgSNM::SS7MsgSNM(unsigned char type)
+    : SignallingMessage(lookup((Type)type,"Unknown")),
+    m_type(type)
+{
+}
+
+// Parse a received buffer and build a message from it
+SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
+	const unsigned char* buf, unsigned int len)
+{
+    SS7MsgSNM* msg = new SS7MsgSNM(type);
+    Debug(receiver,DebugAll,"Decoding msg=%s from buf=%p len=%u [%p]",
+	msg->name(),buf,len,receiver);
+    // TODO: parse the rest of the message. Check extra bytes (message specific)
+    if (!(buf && len))
+	return msg;
+    return msg;
+}
 
 const TokenDict* SS7MsgSNM::names()
 {
@@ -100,18 +135,26 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     Debug(this,DebugStub,"Please implement SS7Management::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
 
-    unsigned int mlen = msu.length()-label.length()-1;
+    unsigned int len = msu.length() - label.length() - 1;
     // according to Q.704 there should be at least the heading codes (8 bit)
-    const unsigned char* s = msu.getData(label.length()+1,1);
-    if (!s)
+    const unsigned char* buf = msu.getData(label.length()+1,1);
+    if (!buf)
+	return false;
+    SS7MsgSNM* msg = SS7MsgSNM::parse(this,buf[0],buf+1,len-1);
+    if (!msg)
 	return false;
 
     // TODO: implement
 
+    String l;
+    l << label;
     String tmp;
-    tmp.hexify((void*)s,mlen,' ');
-    Debug(this,DebugMild,"Unhandled SNM type %s length %u: %s",
-	SS7MsgSNM::lookup((SS7MsgSNM::Type)s[0],"unknown"),mlen,tmp.c_str());
+    tmp.hexify((void*)buf,len,' ');
+    Debug(this,DebugMild,"Unhandled SNM type=%s group=%s label=%s len=%u: %s",
+	msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
+	l.c_str(),len,tmp.c_str());
+
+    TelEngine::destruct(msg);
     return false;
 }
 

@@ -4260,7 +4260,7 @@ private:
  * Decoded Signalling Network Management (SNM) User Part message
  * @short SNM signalling message
  */
-class YSIG_API SS7MsgSNM
+class YSIG_API SS7MsgSNM : public SignallingMessage
 {
 public:
     /**
@@ -4308,6 +4308,55 @@ public:
 	LRI  = LRT,  // Link Remote Inhibit Test signal (ANSI)
     };
 
+    /**
+     * SNM Message group (H0) as defined by Q.704 15.3
+     */
+    enum Group {
+	CHM = 0x01,  // Changeover and changeback
+	ECM = 0x02,  // Emergency changeover
+	FCM = 0x03,  // Tranfer controlled and signalling route set congestion
+	TFM = 0x04,  // Tranfer prohibited/allowed/restricted
+	RSM = 0x05,  // Signalling route/set/test
+	MIM = 0x06,  // Management inhibit
+	TRM = 0x07,  // Traffic restart allowed
+	DLM = 0x08,  // Signalling data/link/connection
+	UFC = 0x0a,  // User part flow control
+    };
+
+    /**
+     * Constructor
+     * @param type Message type
+     */
+    SS7MsgSNM(unsigned char type);
+
+    /**
+     * Get the type of this message
+     * @return The type of this message
+     */
+    inline unsigned char type() const
+	{ return m_type; }
+
+    /**
+     * Get the group this message belongs to
+     * @return This message's group
+     */
+    inline unsigned char group() const
+	{ return m_type & 0x0f; }
+
+    /**
+     * Parse a received buffer and build a message from it
+     * @param receiver The SS7 management entity that received the MSU
+     * @param type Message type
+     * @param buf Buffer after message head
+     * @param len Buffer length
+     * @return Valid message pointer of 0 on failure
+     */
+    static SS7MsgSNM* parse(SS7Management* receiver, unsigned char type,
+	const unsigned char* buf, unsigned int len);
+
+    /**
+     * Get the dictionary containing the names of the message type
+     */
     static const TokenDict* names();
 
     /**
@@ -4327,6 +4376,9 @@ public:
      */
     static inline Type lookup(const char* name, Type defvalue = Unknown)
 	{ return static_cast<Type>(TelEngine::lookup(name,names(),defvalue)); }
+
+private:
+    unsigned char m_type;
 };
 
 /**

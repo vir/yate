@@ -99,21 +99,18 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     SS7PointCode::Type pcType, const unsigned char* buf, unsigned int len)
 {
     SS7MsgSNM* msg = new SS7MsgSNM(type);
-    Debug(receiver,DebugAll,"Decoding msg=%s from buf=%p len=%u [%p]",
-	msg->name(),buf,len,receiver);
+//#ifdef XDEBUG
+    String tmp;
+    tmp.hexify((void*)buf,len);
+    Debug(receiver,DebugAll,"Decoding msg=%s from buf: %s [%p]",
+	msg->name(),tmp.c_str(),receiver);
+//#endif
     // TODO: parse the rest of the message. Check extra bytes (message specific)
     if (!(buf && len))
 	return msg;
-    unsigned int required = 0;
-    unsigned int expected = 0;
     while (true) {
 	// TFP,TFR,TFA: Q.704 15.7 The must be at lease 2 bytes in buffer
 	if (type == TFP || type == TFR || type == TFA) {
-	    if (len < 2) {
-		required = 2;
-		break;
-	    }
-	    expected = 2;
 	    // 2 bytes destination
 	    SS7PointCode pc;
 	    unsigned char spare;

@@ -101,9 +101,9 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     SS7MsgSNM* msg = new SS7MsgSNM(type);
 //#ifdef XDEBUG
     String tmp;
-    tmp.hexify((void*)buf,len);
-    Debug(receiver,DebugAll,"Decoding msg=%s from buf: %s [%p]",
-	msg->name(),tmp.c_str(),receiver);
+    tmp.hexify((void*)buf,len,' ');
+    Debug(receiver,DebugAll,"Decoding msg=%s pctype=%u buf: %s [%p]",
+	msg->name(),pcType,tmp.c_str(),receiver);
 //#endif
     // TODO: parse the rest of the message. Check extra bytes (message specific)
     if (!(buf && len))

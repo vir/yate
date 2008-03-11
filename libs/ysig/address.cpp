@@ -179,13 +179,14 @@ bool SS7PointCode::assign(Type type, const unsigned char* src, int len, unsigned
 		c &= (0xff >> (8 - sshift));
 	    }
 	}
-	tmp = (tmp << 8) | c;
+	tmp |= ((unsigned int)c << llen);
     }
     if (unpack(type,tmp)) {
 	if (spare)
 	    *spare = sbits;
+	return true;
     }
-    return true;
+    return false;
 }
 
 bool SS7PointCode::store(Type type, unsigned char* dest, unsigned char spare) const

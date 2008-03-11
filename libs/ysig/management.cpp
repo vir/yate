@@ -119,7 +119,7 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
 		tmp << pc;
 		msg->params().addParam("destination",tmp);
 		tmp.hexify(&spare,1);
-		msg->params().addParam("space",tmp);
+		msg->params().addParam("spare",tmp);
 	    }
 	    else
 		Debug(receiver,DebugNote,

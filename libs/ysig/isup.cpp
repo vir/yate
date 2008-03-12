@@ -2177,11 +2177,11 @@ void* SS7ISUP::getObject(const String& name) const
 void SS7ISUP::destruct()
 {
     lock();
-    SignallingCallControl::attach(0);
-    SS7Layer4::attach(0);
     clearCalls();
     unlock();
-    GenObject::destruct();
+    SignallingCallControl::attach(0);
+    SS7Layer4::attach(0);
+    SS7Layer4::destruct();
 }
 
 void SS7ISUP::timerTick(const Time& when)

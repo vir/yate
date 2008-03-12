@@ -99,12 +99,12 @@ SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     SS7PointCode::Type pcType, const unsigned char* buf, unsigned int len)
 {
     SS7MsgSNM* msg = new SS7MsgSNM(type);
-//#ifdef XDEBUG
+#ifdef XDEBUG
     String tmp;
     tmp.hexify((void*)buf,len,' ');
     Debug(receiver,DebugAll,"Decoding msg=%s pctype=%u buf: %s [%p]",
 	msg->name(),pcType,tmp.c_str(),receiver);
-//#endif
+#endif
     // TODO: parse the rest of the message. Check extra bytes (message specific)
     if (!(buf && len))
 	return msg;
@@ -201,6 +201,10 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	// TODO: implement MTP restart procedure (Q.704 - 9.1, 9.2)
 	// for now just send a Traffic Restart Allowed
 	// FIXME: get point codes and network indicator from configuration
+
+	// Get local services attached to network
+	// Get destination routes from network
+#if 0
 	SS7PointCode dpc(1,8,1);
 	SS7PointCode opc(1,8,2);
 	unsigned char sio = SS7MSU::National;
@@ -211,6 +215,7 @@ void SS7Management::notify(SS7Layer3* network, int sls)
 	unsigned char* d = tra.getData(lbl.length()+1,1);
 	d[0] = SS7MsgSNM::TRA;
 	transmitMSU(tra,lbl,sls);
+#endif
     }
 }
 

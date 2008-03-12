@@ -1225,6 +1225,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     // Type depending data: channel count, samples, circuit list
     String type = config.getValue("type");
     String cics = config.getValue("voicechans");
+    unsigned int offs = config.getIntValue("offset",0);
     m_samples = params.getIntValue("samples",config.getIntValue("samples"));
     if (type.null())
 	type = "E1";
@@ -1262,7 +1263,7 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     if (!m_buflen)
 	m_buflen = 160;
     // Channels
-    if (!createCircuits(params.getIntValue("start"),cics)) {
+    if (!createCircuits(params.getIntValue("start") + offs,cics)) {
 	Debug(m_group,DebugNote,
 	    "WpSpan('%s'). Failed to create voice chans (voicechans=%s) [%p]",
 	    id().safe(),cics.safe(),this);

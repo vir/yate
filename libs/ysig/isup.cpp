@@ -2689,6 +2689,27 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    }
 	    stopSGM = false;
 	    break;
+	case SS7MsgISUP::GRS: // Circuit Group Reset
+	    {
+		String rs = msg->params().getValue("RangeAndStatus");
+		unsigned int n = rs.toInteger();
+		// Q.763 3.43
+		if (n < 1 || n > 31) {
+		    reason = "invalid range";
+		    transmitCNF(this,msg->cic(),label,true,sls,"wrong-message");
+		    break;
+		}
+		String map('0',n);
+		char* d = (char*)map.c_str();
+		for (unsigned int i = 0; i < n; i++)
+		    if (!resetCircuit(msg->cic()+i,true))
+			d[i] = '1';
+		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::GRA,msg->cic());
+		m->params().addParam("RangeAndStatus",rs);
+		m->params().addParam("RangeAndStatus.map",map);
+		transmitMessage(m,label,true,sls);
+	    }
+	    break;
 	case SS7MsgISUP::BLA: // Blocking Acknowledgement
 	case SS7MsgISUP::UBA: // Unblocking Acknowledgement
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
@@ -2704,7 +2725,6 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
 	    stopSGM = false;
-	case SS7MsgISUP::GRS: // Circuit Group Reset
 	default:
 	    impl = false;
 	    reason = "not implemented";

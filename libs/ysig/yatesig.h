@@ -4344,6 +4344,14 @@ public:
 	{ return m_type & 0x0f; }
 
     /**
+     * Fill a string with this message's parameters for debug purposes
+     * @param dest The destination string
+     * @param label The routing label
+     * @param params True to add parameters
+     */
+    void toString(String& dest, const SS7Label& label, bool params) const;
+
+    /**
      * Parse a received buffer and build a message from it
      * @param receiver The SS7 management entity that received the MSU
      * @param type Message type

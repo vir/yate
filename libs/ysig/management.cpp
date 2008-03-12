@@ -94,6 +94,22 @@ SS7MsgSNM::SS7MsgSNM(unsigned char type)
 {
 }
 
+void SS7MsgSNM::toString(String& dest, const SS7Label& label, bool params) const
+{
+    const char* enclose = "\r\n-----";
+    dest = enclose;
+    dest << "\r\n" << name() << " [label=" << label << ']';
+    if (params) {
+	unsigned int n = m_params.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* s = m_params.getParam(i);
+	    if (s)
+		dest << "\r\n  " << s->name() << "='" << *s << "'";
+	}
+    }
+    dest << enclose;
+}
+
 // Parse a received buffer and build a message from it
 SS7MsgSNM* SS7MsgSNM::parse(SS7Management* receiver, unsigned char type,
     SS7PointCode::Type pcType, const unsigned char* buf, unsigned int len)
@@ -171,9 +187,14 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
     if (!msg)
 	return false;
 
+    if (debugAt(DebugInfo)) {
+	String tmp;
+	msg->toString(tmp,label,debugAt(DebugAll));
+	Debug(this,DebugInfo,"Received message (%p)%s",msg,tmp.c_str());
+    }
+
     // TODO: implement
 
-    bool processed = true;
     String l;
     l << label;
     if (msg->type() == SS7MsgSNM::TFP ||
@@ -213,11 +234,10 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 	    "Unhandled SNM type=%s group=%s label=%s params:%s len=%u: %s ",
 	    msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
 	    l.c_str(),params.c_str(),len,tmp.c_str());
-	processed = false;
     }
 
     TelEngine::destruct(msg);
-    return processed;
+    return true;
 }
 
 void SS7Management::notify(SS7Layer3* network, int sls)

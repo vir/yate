@@ -2359,8 +2359,15 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
     SS7MsgISUP::Type msgType, SS7PointCode::Type pcType,
     const unsigned char* paramPtr, unsigned int paramLen)
 {
+#ifdef XDEBUG
+    String tmp;
+    tmp.hexify((void*)paramPtr,paramLen,' ');
+    Debug(this,DebugAll,"Decoding msg=%s len=%u: %s [%p]",
+	SS7MsgISUP::lookup(msgType),paramLen,tmp.c_str(),this);
+#else
     DDebug(this,DebugAll,"Decoding msg=%s len=%u [%p]",
 	SS7MsgISUP::lookup(msgType),paramLen,this);
+#endif
 
     // see what parameters we expect for this message
     const MsgParams* params = getIsupParams(pcType,msgType);
@@ -2408,8 +2415,10 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	paramPtr += param->size;
 	paramLen -= param->size;
     } // while ((ptype = *plist++)...
+    bool mustWarn = true;
     // next decode any mandatory variable parameters the message should have
     while ((ptype = *plist++) != SS7MsgISUP::EndOfParameters) {
+	mustWarn = false;
 	const IsupParam* param = getParamDesc(ptype);
 	if (!param) {
 	    // we could skip over unknown mandatory variable length but it's still bad
@@ -2445,6 +2454,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	    return false;
 	}
 	else if (offs) {
+	    mustWarn = true;
 	    // advance pointer past mandatory parameters
 	    paramPtr += offs;
 	    paramLen -= offs;
@@ -2477,7 +2487,7 @@ bool SS7ISUP::decodeMessage(NamedList& msg,
 	else
 	    paramLen = 0;
     }
-    if (paramLen)
+    if (paramLen && mustWarn)
 	Debug(this,DebugWarn,"Got %u garbage octets after message type 0x%02x [%p]",
 	    paramLen,msgType,this);
     return true;

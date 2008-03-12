@@ -173,25 +173,51 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 
     // TODO: implement
 
+    bool processed = true;
     String l;
     l << label;
-    String tmp;
-    tmp.hexify((void*)buf,len,' ');
-    String params;
-    unsigned int n = msg->params().count();
-    if (n)
-	for (unsigned int i = 0; i < n; i++) {
-	    NamedString* ns = static_cast<NamedString*>(msg->params().getParam(i));
-	    if (ns)
-		params.append(String(ns->name()) + "=" + *ns,",");
+    if (msg->type() == SS7MsgSNM::TFP ||
+	msg->type() == SS7MsgSNM::TFR ||
+	msg->type() == SS7MsgSNM::TFA) {
+	String dest = msg->params().getValue("destination");
+	if (!dest.null()) {
+	    if (debugAt(DebugInfo)) {
+		const char* status = (msg->type() == SS7MsgSNM::TFP) ? "prohibited" :
+		    ((msg->type() == SS7MsgSNM::TFA) ? "allowed" : "restricted");
+		Debug(this,DebugInfo,"%s (label=%s): Traffic is %s to dest=%s [%p]",
+		    msg->name(),l.c_str(),status,dest.c_str(),this);
+	    }
 	}
-    Debug(this,DebugMild,
-	"Unhandled SNM type=%s group=%s label=%s params:%s len=%u: %s ",
-	msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
-	l.c_str(),params.c_str(),len,tmp.c_str());
+	else
+	    Debug(this,DebugNote,"Received %s (label=%s) without destination [%p]",
+		    msg->name(),l.c_str(),this);
+    }
+    else if (msg->type() == SS7MsgSNM::TRA) {
+	String dest;
+	dest << label.opc();
+	Debug(this,DebugInfo,"%s (label=%s): Traffic can restart to dest=%s [%p]",
+	    msg->name(),l.c_str(),dest.c_str(),this);
+    }
+    else {
+	String tmp;
+	tmp.hexify((void*)buf,len,' ');
+	String params;
+	unsigned int n = msg->params().count();
+	if (n)
+	    for (unsigned int i = 0; i < n; i++) {
+		NamedString* ns = static_cast<NamedString*>(msg->params().getParam(i));
+		if (ns)
+		    params.append(String(ns->name()) + "=" + *ns,",");
+	    }
+	Debug(this,DebugMild,
+	    "Unhandled SNM type=%s group=%s label=%s params:%s len=%u: %s ",
+	    msg->name(),lookup(msg->group(),s_snm_group,"Spare"),
+	    l.c_str(),params.c_str(),len,tmp.c_str());
+	processed = false;
+    }
 
     TelEngine::destruct(msg);
-    return false;
+    return processed;
 }
 
 void SS7Management::notify(SS7Layer3* network, int sls)

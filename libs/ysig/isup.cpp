@@ -1036,32 +1036,32 @@ static const MsgParams s_common_params[] = {
     // circuit group blocking, unblocking and acknowledgement
     { SS7MsgISUP::CGB, false,
 	{
-	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::GroupSupervisionTypeIndicator,
+	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::RangeAndStatus,
 	SS7MsgISUP::EndOfParameters
 	}
     },
     { SS7MsgISUP::CGA, false,
 	{
-	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::GroupSupervisionTypeIndicator,
+	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::RangeAndStatus,
 	SS7MsgISUP::EndOfParameters
 	}
     },
     { SS7MsgISUP::CGU, false,
 	{
-	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::GroupSupervisionTypeIndicator,
+	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::RangeAndStatus,
 	SS7MsgISUP::EndOfParameters
 	}
     },
     { SS7MsgISUP::CUA, false,
 	{
-	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::GroupSupervisionTypeIndicator,
+	SS7MsgISUP::EndOfParameters,
 	    SS7MsgISUP::RangeAndStatus,
 	SS7MsgISUP::EndOfParameters
 	}

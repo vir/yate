@@ -1282,12 +1282,17 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	s << " type=" << type;
 	s << " card=" << m_socket.card();
 	s << " device=" << m_socket.device();
-	s << " channels=" << cics << " (" << m_count << ")";
 	s << " samples=" << m_samples;
 	s << " bitswap=" << String::boolText(m_swap);
 	s << " idlevalue=" << (unsigned int)m_noData;
 	s << " buflen=" << (unsigned int)m_buflen;
 	s << " readonly=" << String::boolText(!m_canSend);
+	s << " channels=" << cics << " (" << m_count << ")";
+	String cicList;
+	if (m_circuits)
+	    for (unsigned int i = 0; i < m_count; i++)
+		cicList.append(String(m_circuits[i]->code()),",");
+	s << " circuits=" << cicList;
 	Debug(m_group,DebugInfo,"WpSpan('%s') %s [%p]",id().safe(),s.safe(),this);
     }
     return true;

@@ -585,16 +585,15 @@ static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu,
     unsigned char data[34] = {1};
     // 1st octet is the range code (range - 1)
     unsigned int range = val->toInteger(0);
-    if (!range || range > 255) {
+    if (range < 1 || range > 256) {
 	Debug(isup,DebugNote,"encodeRangeSt invalid range %s=%s",val->name().c_str(),val->safe());
 	return 0;
     }
-    data[1] = range;
+    data[1] = range - 1;
     // Next octets: status bits for the circuits given by range
     NamedString* map = extra->getParam(prefix+param->name+".map");
     if (map && *map) {
-	// Max status bits is 256. Relevant status bits: range + 1
-	range++;
+	// Max status bits is 256. Relevant status bits: range
 	if (range < map->length()) {
 	    Debug(isup,DebugNote,"encodeRangeSt truncating status bits %u to %u",map->length(),range);
 	    return 0;

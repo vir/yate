@@ -2744,11 +2744,12 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		char* d = (char*)map.c_str();
 		// TODO: Max bits set to 1 should be 32
 		for (unsigned int i = 0; i < nCics; i++)
-		    if (srcMap[i] != '0' && blockCircuit(msg->cic()+i,block,true))
+		    if ((*srcMap)[i] != '0' && blockCircuit(msg->cic()+i,block,true))
 			d[i] = '1';
 		SS7MsgISUP* m = new SS7MsgISUP(block?SS7MsgISUP::CGA:SS7MsgISUP::CUA,msg->cic());
 		m->params().addParam("RangeAndStatus",String(nCics));
 		m->params().addParam("RangeAndStatus.map",map);
+		m->params().copyParam(msg->params(),"GroupSupervisionTypeIndicator");
 		transmitMessage(m,label,true,sls);
 	    }
 	    break;

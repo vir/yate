@@ -2723,11 +2723,34 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::CGB: // Circuit Group Blocking
 	case SS7MsgISUP::CGU: // Circuit Group Unblocking
-	    // Q.763 3.43 range can be 1..256
-	    // Max bits set to 1: 32
-	    // Bit: 0-no indication 1-block/unblock(ack)
-
+	    // Don't stop receiving segments
 	    stopSGM = false;
+	    // Q.763 3.43 range can be 1..256
+	    // Bit: 0-no indication 1-block/unblock(ack)
+	    {
+		String rs = msg->params().getValue("RangeAndStatus");
+		NamedString* srcMap = msg->params().getParam("RangeAndStatus.map");
+		unsigned int nCics = rs.toInteger();
+		bool validMap = (srcMap && srcMap->length() <= 256 && srcMap->length() >= nCics);
+		if (!validMap || nCics < 1 || nCics > 256) {
+		    reason = validMap ? "invalid range" : "invalid circuit map";
+		    transmitCNF(this,msg->cic(),label,true,sls,"wrong-message");
+		    break;
+		}
+	        bool block = (msg->type() == SS7MsgISUP::CGB);
+		if (nCics > srcMap->length())
+		    nCics = srcMap->length();
+		String map('0',nCics);
+		char* d = (char*)map.c_str();
+		// TODO: Max bits set to 1 should be 32
+		for (unsigned int i = 0; i < nCics; i++)
+		    if (srcMap[i] != '0' && blockCircuit(msg->cic()+i,block,true))
+			d[i] = '1';
+		SS7MsgISUP* m = new SS7MsgISUP(block?SS7MsgISUP::CGA:SS7MsgISUP::CUA,msg->cic());
+		m->params().addParam("RangeAndStatus",String(nCics));
+		m->params().addParam("RangeAndStatus.map",map);
+		transmitMessage(m,label,true,sls);
+	    }
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity

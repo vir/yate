@@ -175,7 +175,7 @@ bool SS7Management::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Lay
 {
     if (msu.getSIF() != SS7MSU::SNM)
 	return false;
-    Debug(this,DebugStub,"Please implement SS7Management::receivedMSU(%p,%p,%p,%d) [%p]",
+    DDebug(this,DebugStub,"Please implement SS7Management::receivedMSU(%p,%p,%p,%d) [%p]",
 	&msu,&label,network,sls,this);
 
     unsigned int len = msu.length() - label.length() - 1;

@@ -584,30 +584,32 @@ static unsigned char encodeRangeSt(const SS7ISUP* isup, SS7MSU& msu,
 	return 0;
     unsigned char data[34] = {1};
     // 1st octet is the range code (range - 1)
+    // Q.763 3.43 Sent range avlue must be in interval 1..255
     unsigned int range = val->toInteger(0);
-    if (range < 1 || range > 256) {
+    if (range < 2 || range > 256) {
 	Debug(isup,DebugNote,"encodeRangeSt invalid range %s=%s",val->name().c_str(),val->safe());
 	return 0;
     }
     data[1] = range - 1;
     // Next octets: status bits for the circuits given by range
     NamedString* map = extra->getParam(prefix+param->name+".map");
-    if (map && *map) {
+    if (map && map->length()) {
 	// Max status bits is 256. Relevant status bits: range
-	if (range < map->length()) {
-	    Debug(isup,DebugNote,"encodeRangeSt truncating status bits %u to %u",map->length(),range);
-	    return 0;
+	unsigned int nBits = map->length();
+	if (nBits > 256) {
+	    Debug(isup,DebugNote,"encodeRangeSt truncating status bits %u to 256",map->length());
+	    nBits = 256;
 	}
 	unsigned char* src = (unsigned char*)map->c_str();
 	unsigned char* dest = data + 1;
-	for (unsigned char mask = 0; range && *src; range--, src++) {
-	    if (mask == 1) {
+	for (unsigned char crtBit = 0; nBits; nBits--, src++) {
+	    if (!crtBit) {
 		data[0]++;
 		*++dest = 0;
 	    }
 	    if (*src != '0')
-		*dest |= mask;
-	    mask = (mask == 128 ? 1 : mask << 1);
+		*dest |= (1 << crtBit);
+	    crtBit = (crtBit < 7 ? crtBit + 1 : 0);
 	}
     }
     // Copy to msu
@@ -2721,6 +2723,12 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::CGB: // Circuit Group Blocking
 	case SS7MsgISUP::CGU: // Circuit Group Unblocking
+	    // Q.763 3.43 range can be 1..256
+	    // Max bits set to 1: 32
+	    // Bit: 0-no indication 1-block/unblock(ack)
+
+	    stopSGM = false;
+	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
 	    stopSGM = false;

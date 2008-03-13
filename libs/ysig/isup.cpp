@@ -316,7 +316,8 @@ static bool decodeRangeSt(const SS7ISUP* isup, NamedList& list, const IsupParam*
     String map;
     if (len) {
 	unsigned char mask = 1;
-	while (range--) {
+	unsigned int r = range;
+	while (r--) {
 	    map += (buf[0] & mask) ? "1" : "0";
 	    mask <<= 1;
 	    if (!mask) {

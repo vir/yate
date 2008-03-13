@@ -380,8 +380,12 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
 	DDebug(this,DebugInfo,"Asked to send MSU while not operational [%p]",this);
 	return false;
     }
-    XDebug(this,DebugAll,"SS7MTP2::transmitMSU(%p) len=%u [%p]",
-	&msu,msu.length(),this);
+#ifdef XDEBUG
+    String tmp;
+    tmp.hexify((void*)msu.data(),msu.length(),' ');
+    XDebug(this,DebugAll,"SS7MTP2::transmitMSU(%p) len=%u: %s [%p]",
+	&msu,msu.length(),tmp.c_str(),this);
+#endif
     // if we don't have an attached interface don't bother
     if (!iface())
 	return false;

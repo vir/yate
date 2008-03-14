@@ -482,47 +482,46 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
     bool ok = false;
 
 #ifdef HAVE_WANPIPE_HWEC
-    wan_ec_api_t ecapi;
-    ::memset(&ecapi,0,sizeof(ecapi));
-    ::strncpy((char*)ecapi.devname,m_card,sizeof(ecapi.devname));
-    //::strncpy((char*)ecapi.if_name,device,sizeof(ecapi.if_name));
-    ecapi.channel_map = chanmap;
-    if (enable) {
-	ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
-	ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
-	// event on start of tone, before echo canceller
-	ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
-	ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
-    }
-    else
-	ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;
-
     int fd = -1;
+    String dev;
+    dev << WANEC_DEV_DIR << WANEC_DEV_NAME;
     for (int i = 0; i < 5; i++) {
-	fd = ::open(WANEC_DEV_DIR WANEC_DEV_NAME,O_RDONLY);
+	fd = ::open(dev,O_RDONLY);
 	if (fd >= 0)
 	    break;
 	Thread::msleep(200);
     }
     const char* operation = 0;
     if (fd >= 0) {
+	wan_ec_api_t ecapi;
+	::memset(&ecapi,0,sizeof(ecapi));
+	ecapi.channel_map = chanmap;
+	if (enable) {
+	    ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
+	    ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
+	    // event on start of tone, before echo canceller
+	    ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
+	    ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
+	}
+	else
+	    ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;
 	ecapi.err = WAN_EC_API_RC_OK;
 	if (::ioctl(fd,ecapi.cmd,ecapi))
-	    operation = "EC/DTMF IOCTL";
+	    operation = "IOCTL";
     }
     else
-	operation = "EC/DTMF Open";
-    ok = !operation;
-    if (!ok && m_dbg && m_dbg->debugAt(DebugNote)) {
-	String info;
-	info << ". Can't " << (enable?"enable":"disable") << " echo canceller";
-	showError(operation,info,DebugNote);
-    }
+	operation = "Open";
+    ok = (0 == operation);
+    if (!ok && m_dbg && m_dbg->debugAt(DebugNote))
+	Debug(m_dbg,DebugNote,
+	    "WpSocket(%s/%s). %s failed dev=%s. Can't %s echo canceller. %d: %s [%p]",
+	    m_card.c_str(),m_device.c_str(),operation,dev.c_str(),(enable?"enable":"disable"),
+	    errno,::strerror(errno),this);
     ::close(fd);
 #endif
 
 #ifdef DEBUG
-    if (ok && debugAt(DebugInfo)) {
+    if (ok && m_dbg && m_dbg->debugAt(DebugInfo)) {
 	String map('0',32);
 	for (unsigned int i = 0; i < 32; i++)
 	    if (chanmap & (1 << i))
@@ -532,6 +531,7 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
 	    m_card.c_str(),m_device.c_str(),enable?"En":"Dis",map.c_str(),this);
     }
 #endif
+
     return ok;
 }
 
@@ -1334,8 +1334,10 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
     m_swap = params.getBoolValue("bitswap",config.getBoolValue("bitswap",m_swap));
     m_noData = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_noData));
     m_buflen = params.getIntValue("buflen",config.getIntValue("buflen",m_buflen));
-    m_echoCancel = params.getBoolValue("echocancel",config.getBoolValue("echocancel",false));
-    m_dtmfDetect = params.getBoolValue("dtmfdetect",config.getBoolValue("dtmfdetect",false));
+    bool tmpDefault = defaults.getBoolValue("echocancel",config.getBoolValue("echocancel",false));
+    m_echoCancel = params.getBoolValue("echocancel",tmpDefault);
+    tmpDefault = defaults.getBoolValue("dtmfdetect",config.getBoolValue("dtmfdetect",false));
+    m_dtmfDetect = params.getBoolValue("dtmfdetect",tmpDefault);
 
     // Buffer length can't be 0
     if (!m_buflen)
@@ -1420,16 +1422,16 @@ void WpSpan::run()
 {
     if (!m_socket.open(true))
 	return;
-    DDebug(m_group,DebugInfo,
-	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
-	id().safe(),m_count,m_bufferLen,m_samples,this);
     // Set echo canceller / tone detector
-    if (m_echoCancel && m_socket.echoCancel(m_echoCancel,m_chanMap))
+    if (m_socket.echoCancel(m_echoCancel,m_chanMap))
 	m_socket.dtmfDetect(m_dtmfDetect);
     if (!m_buffer) {
 	m_bufferLen = WP_HEADER + m_samples * m_count;
 	m_buffer = new unsigned char[m_bufferLen];
     }
+    DDebug(m_group,DebugInfo,
+	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
+	id().safe(),m_count,m_bufferLen,m_samples,this);
     updateStatus();
     while (true) {
 	if (Thread::check(true))

@@ -371,7 +371,7 @@ fi
 AC_SUBST(HAVE_WANPIPE)
 
 WANPIPE_HWEC_INC=""
-AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=no])
+AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=/usr/include/wanpipe])
 if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
 if [[ "x$ac_cv_use_wphwec" != "xno" ]]; then
 AC_MSG_CHECKING([for Wanpipe/Octasic headers])

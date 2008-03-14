@@ -124,9 +124,17 @@ private:
 class WpSocket
 {
 public:
+    // Link state enumeration
+    enum LinkStatus {
+	Connected,                       // Link up
+	Disconnected,                    // Link down
+	Connecting,                      // Link is connecting
+    };
     WpSocket(DebugEnabler* dbg, const char* card = 0, const char* device = 0);
     inline ~WpSocket()
 	{ close(); }
+    inline LinkStatus status()
+	{ return m_status; }
     inline bool valid() const
 	{ return m_socket.valid(); }
     inline const String& card() const
@@ -160,14 +168,17 @@ public:
     // Check socket. Set flags to the appropriate values on success
     // Return false on failure
     bool select(unsigned int multiplier);
+    // Update the state of the link and return true if changed
+    bool updateLinkStatus();
 protected:
-    inline void showError(const char* action, const char* info = 0) {
-	    Debug(m_dbg,DebugWarn,"WpSocket(%s/%s). %s failed%s. %d: %s [%p]",
+    inline void showError(const char* action, const char* info = 0, int level = DebugWarn) {
+	    Debug(m_dbg,level,"WpSocket(%s/%s). %s failed%s. %d: %s [%p]",
 		m_card.c_str(),m_device.c_str(),action,c_safe(info),
 		m_socket.error(),::strerror(m_socket.error()),this);
 	}
 private:
     DebugEnabler* m_dbg;                 // Debug enabler owning this socket
+    LinkStatus m_status;                  // The state of the link
     Socket m_socket;                     // The socket
     String m_card;                       // Card name used to open socket
     String m_device;                     // Device name used to open socket
@@ -197,6 +208,8 @@ public:
     virtual bool transmitPacket(const DataBlock& packet, bool repeat, PacketType type);
     // Interface control
     virtual bool control(Operation oper, NamedList* params);
+    // Update link status. Notify the receiver if state changed
+    bool updateStatus();
 protected:
     virtual void timerTick(const Time& when);
     // Read data from socket
@@ -284,6 +297,8 @@ public:
 	{ return m_sourceValid; }
     inline WpConsumer* consumer()
 	{ return m_consumerValid; }
+    // Enqueue received events
+    bool enqueueEvent(SignallingCircuitEvent* e);
 private:
     Mutex m_mutex;
     unsigned int m_channel;              // Channel number inside span
@@ -324,6 +339,8 @@ protected:
     int readData();
     // Decode received event
     bool decodeEvent();
+    // Update link status. Enqueue an event in each circuit's queue on status change
+    bool updateStatus();
     // Swapped bits table
     static unsigned char s_bitswap[256];
 private:
@@ -361,19 +378,30 @@ private:
     WpSpan* m_data;
 };
 
-// The driver
-class WpModule : public DebugEnabler
+// The module
+class WpModule : public Module
 {
 public:
     WpModule();
     ~WpModule();
+    virtual void initialize();
+private:
+    bool m_init;
 };
 
+#define MAKE_NAME(x) { #x, WpSocket::x }
+static TokenDict s_linkStatus[] = {
+    MAKE_NAME(Connected),
+    MAKE_NAME(Disconnected),
+    MAKE_NAME(Connecting),
+    {0,0}
+};
+#undef MAKE_NAME
 
-static WpModule driver;
 YSIGFACTORY2(WpInterface,SignallingInterface);
-
 static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
+static WpModule driver;
+
 
 /**
  * Fifo
@@ -417,6 +445,7 @@ unsigned char Fifo::get()
  */
 WpSocket::WpSocket(DebugEnabler* dbg, const char* card, const char* device)
     : m_dbg(dbg),
+    m_status(Disconnected),
     m_card(card),
     m_device(device),
 #ifdef HAVE_WANPIPE_HWEC
@@ -436,7 +465,7 @@ WpSocket::WpSocket(DebugEnabler* dbg, const char* card, const char* device)
 void WpSocket::echoCanAvail(bool val)
 {
 #ifdef HAVE_WANPIPE_HWEC
-    m_echoCancelAvail = val;
+    m_echoCanAvail = val;
 #endif
 }
 
@@ -470,19 +499,19 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
 
     int fd = -1;
     for (int i = 0; i < 5; i++) {
-	fd = open(WANEC_DEV_DIR WANEC_DEV_NAME, O_RDONLY);
+	fd = ::open(WANEC_DEV_DIR WANEC_DEV_NAME,O_RDONLY);
 	if (fd >= 0)
 	    break;
 	Thread::msleep(200);
     }
     const char* operation = 0;
     if (fd >= 0) {
-	ecapi->err = WAN_EC_API_RC_OK;
-	if (::ioctl(fd,ecapi->cmd,ecapi))
-	    operation = "IOCTL";
+	ecapi.err = WAN_EC_API_RC_OK;
+	if (::ioctl(fd,ecapi.cmd,ecapi))
+	    operation = "EC/DTMF IOCTL";
     }
     else
-	operation = "Open";
+	operation = "EC/DTMF Open";
     ok = !operation;
     if (!ok && m_dbg && m_dbg->debugAt(DebugNote)) {
 	String info;
@@ -492,10 +521,17 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
     ::close(fd);
 #endif
 
-    if (ok)
+#ifdef DEBUG
+    if (ok && debugAt(DebugInfo)) {
+	String map('0',32);
+	for (unsigned int i = 0; i < 32; i++)
+	    if (chanmap & (1 << i))
+		((char*)(map.c_str()))[i] = '1';
 	DDebug(m_dbg,DebugInfo,
-	    "WpSocket(%s/%s). %sabled echo canceller [%p]",
-	    m_card.c_str(),m_device.c_str(),enable?"En":"Dis",this);
+	    "WpSocket(%s/%s). %sabled echo canceller chanmap=%s [%p]",
+	    m_card.c_str(),m_device.c_str(),enable?"En":"Dis",map.c_str(),this);
+    }
+#endif
     return ok;
 }
 
@@ -577,13 +613,7 @@ int WpSocket::recv(void* buffer, int len, int flags)
 	return r;
     }
     if (!(m_socket.canRetry() || m_readError)) {
-	const char* info = 0;
-#ifdef SIOC_WANPIPE_SOCK_STATE
-	r == ::ioctl(m_socket.handle(),SIOC_WANPIPE_SOCK_STATE,0);
-	if (r == -1)
-	    info = " (IOCTL failed: data link may be disconnected)";
-#endif
-	showError("Read",info);
+	showError("Read");
 	m_readError = true;
     }
     return -1;
@@ -624,6 +654,26 @@ bool WpSocket::select(unsigned int multiplier)
     showError("Select");
     m_selectError = true;
     return false;
+}
+
+// Update the state of the link and return true if changed
+bool WpSocket::updateLinkStatus()
+{
+    LinkStatus old = m_status;
+    if (valid())
+	switch (::ioctl(m_socket.handle(),SIOC_WANPIPE_SOCK_STATE,0)) {
+	    case 0:
+		m_status = Connected;
+		break;
+	    case 1:
+		m_status = Disconnected;
+		break;
+	    default:
+		m_status = Connecting;
+	}
+    else
+	m_status = Disconnected;
+    return m_status != old;
 }
 
 
@@ -788,6 +838,7 @@ bool WpInterface::receiveAttempt()
 	return false;
     if (!m_socket.select(5))
 	return false;
+    updateStatus();
     if (!m_socket.canRead())
 	return false;
     unsigned char buf[WP_HEADER + MAX_PACKET];
@@ -885,6 +936,20 @@ bool WpInterface::control(Operation oper, NamedList* params)
     return true;
 }
 
+// Update link status. Notify the receiver if state changed
+bool WpInterface::updateStatus()
+{
+    if (!m_socket.updateLinkStatus())
+	return false;
+    Debug(this,DebugNote,"Link status changed to %s [%p]",
+	lookup(m_socket.status(),s_linkStatus),this);
+    if (m_socket.status() == WpSocket::Connected)
+	notify(LinkUp);
+    else
+	notify(LinkDown);
+    return true;
+}
+
 void WpInterface::timerTick(const Time& when)
 {
     if (!m_timerRxUnder.timeout(when.msec()))
@@ -924,6 +989,7 @@ void WpSigThread::run()
 	return;
     }
     Debug(m_interface,DebugAll,"Worker thread started [%p]",this);
+    m_interface->updateStatus();
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())
@@ -1142,6 +1208,18 @@ void* WpCircuit::getObject(const String& name) const
     return 0;
 }
 
+// Enqueue received events
+inline bool WpCircuit::enqueueEvent(SignallingCircuitEvent* e)
+{
+    if (e) {
+	addEvent(e);
+	XDebug(group(),e->type()!=SignallingCircuitEvent::Unknown?DebugAll:DebugStub,
+	    "WpCircuit(%u). Enqueued event '%s' [%p]",code(),e->c_str(),this);
+    }
+    return true;
+}
+
+
 /**
  * WpSpan
  */
@@ -1287,6 +1365,8 @@ bool WpSpan::init(const NamedList& config, const NamedList& defaults, NamedList&
 	s << " bitswap=" << String::boolText(m_swap);
 	s << " idlevalue=" << (unsigned int)m_noData;
 	s << " buflen=" << (unsigned int)m_buflen;
+	s << " echocancel=" << String::boolText(m_echoCancel);
+	s << " dtmfdetect=" << String::boolText(m_dtmfDetect);
 	s << " readonly=" << String::boolText(!m_canSend);
 	s << " channels=" << cics << " (" << m_count << ")";
 	String cicList;
@@ -1340,6 +1420,9 @@ void WpSpan::run()
 {
     if (!m_socket.open(true))
 	return;
+    DDebug(m_group,DebugInfo,
+	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
+	id().safe(),m_count,m_bufferLen,m_samples,this);
     // Set echo canceller / tone detector
     if (m_echoCancel && m_socket.echoCancel(m_echoCancel,m_chanMap))
 	m_socket.dtmfDetect(m_dtmfDetect);
@@ -1347,14 +1430,13 @@ void WpSpan::run()
 	m_bufferLen = WP_HEADER + m_samples * m_count;
 	m_buffer = new unsigned char[m_bufferLen];
     }
-    DDebug(m_group,DebugInfo,
-	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
-	id().safe(),m_count,m_bufferLen,m_samples,this);
+    updateStatus();
     while (true) {
 	if (Thread::check(true))
 	    break;
 	if (!m_socket.select(m_samples))
 	    continue;
+	updateStatus();
 	if (m_socket.event())
 	    readEvent();
 	if (!m_socket.canRead())
@@ -1480,20 +1562,38 @@ bool WpSpan::decodeEvent()
 	    }
 	    break;
 	default:
-	    Debug(m_group,DebugMild,"WpSpan('%s'). Unhandled event %u [%p]",
+	    Debug(m_group,DebugStub,"WpSpan('%s'). Unhandled event %u [%p]",
 		id().safe(),ev->event_type,this);
     }
-    if (circuit && e) {
-	circuit->addEvent(e);
-	DDebug(m_group,DebugAll,
-	    "WpSpan('%s'). Enqueued event (%p,'%s') in circuit %u [%p]",
-	    id().safe(),e,e->c_str(),circuit->code(),this);
-    }
+    if (e)
+	(static_cast<WpCircuit*>(e->circuit()))->enqueueEvent(e);
     return true;
 #else
     return false;
 #endif
 }
+
+// Update link status. Notify the receiver if state changed
+bool WpSpan::updateStatus()
+{
+    if (!m_socket.updateLinkStatus())
+	return false;
+    const char* evName = lookup(m_socket.status(),s_linkStatus);
+    Debug(m_group,DebugNote,"WpSpan('%s'). Link status changed to %s [%p]",
+	id().safe(),evName,this);
+    SignallingCircuitEvent::Type evType = SignallingCircuitEvent::NoAlarm;
+    if (m_socket.status() != WpSocket::Connected)
+	evType = SignallingCircuitEvent::Alarm;
+    for (unsigned int i = 0; i < m_count; i++)
+	if (m_circuits[i]) {
+	    SignallingCircuitEvent* e = new SignallingCircuitEvent(m_circuits[i],evType,evName);
+	    if (evType == SignallingCircuitEvent::Alarm)
+		e->addParam("alarms","red");
+	    m_circuits[i]->enqueueEvent(e);
+    }
+    return true;
+}
+
 
 /**
  * WpSpanThread
@@ -1524,16 +1624,33 @@ void WpSpanThread::run()
  * WpModule
  */
 WpModule::WpModule()
+    : Module("wanpipe","misc",true),
+    m_init(false)
 {
-    debugName("Wanpipe");
-    Output("Loaded module %s",debugName());
-    Configuration cfg(Engine::configFile("wpcard"));
-    cfg.load();
+    Output("Loaded module Wanpipe");
 }
 
 WpModule::~WpModule()
 {
-    Output("Unloading module %s",debugName());
+    Output("Unloading module Wanpipe");
+}
+
+void WpModule::initialize()
+{
+    Output("Initializing module Wanpipe");
+    if (!m_init) {
+	m_init = true;
+	String events;
+#ifndef HAVE_WANPIPE_HWEC
+	events.append("set/reset echo canceller",", ");
+#endif
+#ifndef WAN_EC_TONE_PRESENT
+	events.append("detect tones",", ");
+#endif
+	if (!events.null())
+	    Debug(this,DebugWarn,"The module is unable to: %s [%p]",
+		events.c_str(),this);
+    }
 }
 
 }; // anonymous namespace

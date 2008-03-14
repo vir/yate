@@ -194,7 +194,8 @@ gtk2/%.yate: @srcdir@/gtk2/%.cpp $(MKDEPS) $(INCFILES)
 # Take special care of the modules that depend on optional libs
 
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
-server/ysigchan.yate server/wpcard.yate server/analog.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
+server/ysigchan.yate server/analog.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
+server/wpcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_HWEC_INC@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
 

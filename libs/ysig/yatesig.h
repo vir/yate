@@ -1109,6 +1109,13 @@ public:
     inline Type type() const
 	{ return m_type; }
 
+    /**
+     * Get the circuit that generated this event
+     * @return The circuit that generated this event
+     */
+    inline SignallingCircuit* circuit()
+	{ return m_circuit; }
+
 private:
     SignallingCircuit* m_circuit;
     Type m_type;

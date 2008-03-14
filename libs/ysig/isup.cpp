@@ -1408,7 +1408,7 @@ inline int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
     SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CNF,cic);
     if (reason)
 	m->params().addParam("CauseIndicators",reason);
-    return isup->transmitMessage(m,label,true,sls);
+    return isup->transmitMessage(m,label,recvLbl,sls);
 }
 
 

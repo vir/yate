@@ -144,6 +144,10 @@
 ; g729: bool: ITU G.729 all variations (G729/8000)
 ;g729=default
 
+; g729_annexb: bool: G.729 Annex B (VAD) support default (if not in SDP)
+; NOTE: RFC 3555 specifies the default should be yes
+;g729_annexb=no
+
 
 [methods]
 ; Use this section to allow server processing of various SIP methods by
@@ -163,3 +167,6 @@
 ;
 ; ilbc_default: string: Format to use for iLBC when packetization is unknown
 ;ilbc_default=ilbc30
+
+; g729_annexb: bool: Force G.729 Annex B support when parsing the SDP
+;g729_annexb=

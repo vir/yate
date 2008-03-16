@@ -13,9 +13,10 @@ class IVR1 extends IVR
     function OnEnter($state)
     {
 	$this->optable = array(
-	    ":5" => "call ivr2:b",
-	    ":6" => "jump ivr2:b",
-	    ":8" => "return",
+	    ":5" => "call:ivr2:b",
+	    ":6" => "jump:ivr2:b",
+	    ":8" => "leave",
+	    ":enter" => "output:Entered 1st IVR"
 	);
 	parent::OnEnter($state);
 	IVR::Call("ivr2");

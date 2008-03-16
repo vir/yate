@@ -98,6 +98,7 @@ class IVR
 
     /**
      * Change the state of this IVR instance
+     * @param $state New state of the IVR
      */
     function SetState($state)
     {
@@ -111,8 +112,40 @@ class IVR
     private function TryTable($state,$text)
     {
 	if (isset($this->optable["$state:$text"])) {
-	    $op = $this->optable["$state:$text"];
-	    $this->Debug("Found table operation '$op'");
+	    $op = explode(":",$this->optable["$state:$text"]);
+	    $this->Debug("Found table operation '" . $op[0] . "'");
+	    switch ($op[0]) {
+		case "output":
+		    $this->Output($op[1]);
+		    break;
+		case "debug":
+		    $this->Debug($op[1]);
+		    break;
+		case "state":
+		    $this->SetState($op[1]);
+		    break;
+		case "play":
+		    $this->PlayFile($op[1],(isset($op[2]) ? $op[2] : false));
+		    break;
+		case "stop":
+		    $this->PlayStop();
+		    break;
+		case "jump":
+		    IVR::Jump($op[1],(isset($op[2]) ? $op[2] : null));
+		    break;
+		case "call":
+		    IVR::Call($op[1],(isset($op[2]) ? $op[2] : null));
+		    break;
+		case "leave":
+		    IVR::Leave(isset($op[1]) ? $op[1] : null);
+		    break;
+		case "hangup":
+		    IVR::Hangup();
+		    break;
+		default:
+		    $this->Output("Invalid table operation '" . $op[0] . "'");
+		    return false;
+	    }
 	    return true;
 	}
 	return false;
@@ -138,6 +171,7 @@ class IVR
     function OnEnter($state)
     {
 	$this->Debug("::OnEnter('$state')");
+	$this->OperTable("enter");
     }
 
     /**
@@ -201,6 +235,8 @@ class IVR
 		return $this->OnExecute($event);
 	    case "chan.dtmf":
 		return $this->OnDTMF($event->GetValue("text"));
+	    case "chan.notify":
+		return $this->PlayNext() || $this->OnEOF();
 	}
 	return false;
     }
@@ -238,6 +274,7 @@ class IVR
     function OnExecute(&$event)
     {
 	$this->Debug("::OnExecute()");
+	$this->OperTable("execute");
 	$event->handled = true;
 	return true;
     }
@@ -249,7 +286,7 @@ class IVR
     function OnEOF()
     {
 	$this->Debug("::OnEOF()");
-	$this->OperTable("EOF");
+	$this->OperTable("eof");
     }
 
     /**
@@ -261,6 +298,47 @@ class IVR
     {
 	$this->Debug("::OnDTMF('$key')");
 	return $this->OperTable($key);
+    }
+
+
+    function PlayFile($file, $clear = false)
+    {
+	if ($clear)
+	    $this->playfile = array();
+	$this->playfile[] = $file;
+	if ($clear)
+	    $this->PlayNext();
+    }
+
+    /**
+     * Play next file from the play queue
+     * @return True if play started, false if queue was empty
+     */
+    function PlayNext()
+    {
+	$file = array_shift($this->playfile);
+	if ($file === null)
+	    return false;
+	$m = new Yate("chan.attach");
+	$m->id = "";
+	$m->SetParam("notify",IVR::ChannelID());
+	$m->SetParam("source","wave/play/$file");
+	$m->SetParam("single",true);
+	$m->Dispatch();
+	return true;
+    }
+
+    /**
+     * Stop the file playback and clear the play queue
+     */
+    function PlayStop()
+    {
+	$this->playfile = array();
+	$m = new Yate("chan.attach");
+	$m->id = "";
+	$m->SetParam("source","wave/play/-");
+	$m->SetParam("single",true);
+	$m->Dispatch();
     }
 
     /**
@@ -348,6 +426,18 @@ class IVR
     }
 
     /**
+     * Change the state of the current IVR.
+     * @param $state New state of the IVR
+     */
+    static function State($state)
+    {
+	global $yate_ivr_current;
+
+	if ($yate_ivr_current !== null)
+	    $yate_ivr_current->SetState($state);
+    }
+
+    /**
      * Register an IVR by its class name
      * @param $ivrname Name of the IVR to register
      * @param $classname Name of the class to instantiate
@@ -407,18 +497,19 @@ class IVR
 	if (IVR::Jump($ivrname)) {
 	    Yate::SetLocal("id",$yate_ivr_channel);
 	    Yate::Install("chan.dtmf",100,"targetid",$yate_ivr_channel);
+	    Yate::Install("chan.notify",100,"targetid",$yate_ivr_channel);
 	    while ($yate_ivr_current !== null) {
 		$ev = Yate::GetEvent();
 		if ($ev === true)
 		    continue;
 		if ($ev === false)
 		    break;
+		if (($ev->type == "incoming") && ($ev->name == "call.execute"))
+		    $yate_ivr_target = $ev->GetValue("id");
 		IVR::EventIVR($ev);
 		if ($ev && ($ev->type == "incoming")) {
-		    if ($ev->handled && $ev->name == "call.execute") {
+		    if ($ev->handled && $ev->name == "call.execute")
 			$ev->params["targetid"] = $yate_ivr_channel;
-			$yate_ivr_target = $ev->GetValue("id");
-		    }
 		    $ev->Acknowledge();
 		}
 	    }

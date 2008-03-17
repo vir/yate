@@ -1562,9 +1562,19 @@ SignallingEvent* SS7ISUPCall::getEvent(const Time& when)
 	    default: ;
 	}
     }
+    // Check circuit event
+    if (!m_lastEvent && m_circuit) {
+	SignallingCircuitEvent* cicEvent = m_circuit->getEvent(when);
+	if (cicEvent) {
+	    if (isup())
+		m_lastEvent = isup()->processCircuitEvent(*cicEvent,this);
+	    TelEngine::destruct(cicEvent);
+	}
+    }
     if (m_lastEvent)
 	XDebug(isup(),DebugNote,"Call(%u). Raising event (%p,'%s') [%p]",
 	    id(),m_lastEvent,m_lastEvent->name(),this);
+
     return m_lastEvent;
 }
 
@@ -2586,6 +2596,25 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     return true;
 }
 
+// Process an event received from a non-reserved circuit
+SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
+	SignallingCall* call)
+{
+    switch (event.type()) {
+	case SignallingCircuitEvent::Alarm:
+	case SignallingCircuitEvent::NoAlarm:
+	    if (event.circuit())
+		blockCircuit(event.circuit()->code(),
+		    event.type()==SignallingCircuitEvent::Alarm,false);
+	    break;
+	default:
+	    Debug(this,DebugStub,"Unhandled circuit event (%u,%s) from call %p",
+		event.type(),event.c_str(),call);
+    }
+    return 0;
+}
+
+
 // Process call related messages
 void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 {
@@ -2821,6 +2850,8 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote)
 	reserveCircuit(newCircuit);
 	call->replaceCircuit(newCircuit);
     }
+    if (!remote)
+	flag |= SignallingCircuit::LockLocalChanged;
     if (block)
 	circuit->setLock(flag);
     else

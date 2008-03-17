@@ -787,6 +787,16 @@ protected:
 	{ return false; }
 
     /**
+     * Process an event received from a non-reserved circuit
+     * @param event The event
+     * @param call Optional signalling call whose circuit generated the event
+     * @return Signalling event pointer or 0
+     */
+    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent& event,
+	SignallingCall* call = 0)
+	{ return 0; }
+
+    /**
      * Clear call list
      */
     void clearCalls();
@@ -1160,6 +1170,7 @@ public:
     enum LockFlags {
 	LockLocal  = 1,
 	LockRemote = 2,
+	LockLocalChanged = 4,
     };
 
     /**
@@ -1395,7 +1406,7 @@ private:
 class YSIG_API SignallingCircuitGroup : public SignallingComponent, public Mutex
 {
     friend class SignallingCircuit;
-
+    friend class SignallingCallControl;
 public:
     /**
      * Circuit allocation strategy
@@ -5100,6 +5111,15 @@ protected:
     virtual bool processMSU(SS7MsgISUP::Type type, unsigned int cic,
         const unsigned char* paramPtr, unsigned int paramLen,
 	const SS7Label& label, SS7Layer3* network, int sls);
+
+    /**
+     * Process an event received from a non-reserved circuit
+     * @param event The event
+     * @param call Optional signalling call whose circuit generated the event
+     * @return Signalling event pointer or 0
+     */
+    virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent& event,
+	SignallingCall* call = 0);
 
     /**
      * Length of the Circuit Identification Code in octets

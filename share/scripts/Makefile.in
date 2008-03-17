@@ -5,7 +5,9 @@
 DESTDIR :=
 
 SCRIPTS := leavemail.php voicemail.php route.php
-SCRLIBS := libyate.php libyatechan.php libvoicemail.php libyate.py Yate.pm
+SCRLIBS := libyate.php libyateivr libyatechan.php libvoicemail.php \
+	libyate.py \
+	Yate.pm
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

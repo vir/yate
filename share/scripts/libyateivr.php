@@ -127,8 +127,9 @@ class IVR
 		case "state":      // Change local IVR state
 		    $this->SetState($op[1]);
 		    break;
-		case "play":       // Play a sound file
-		    $this->PlayFile($op[1],(isset($op[2]) ? $op[2] : false));
+		case "play":       // Play one or many sound files
+		    array_shift($op);
+		    $this->PlayFile($op);
 		    break;
 		case "tone":       // Start playing a tone
 		    $this->PlayTone($op[1]);
@@ -148,11 +149,12 @@ class IVR
 		case "progress":   // Emit a call progress notification
 		case "ringing":    // Emit a call ringing notification
 		case "answered":   // Emit an answer notification
-		    $m = new Yate("chan." . $op[0]);
+		    $m = new Yate("call." . $op[0]);
 		    $m->id = "";
 		    $m->SetParam("id",IVR::ChannelID());
 		    $m->SetParam("targetid",IVR::TargetID());
 		    $m->Dispatch();
+		    break;
 		case "hangup":     // Hangup the entire IVR
 		    IVR::Hangup();
 		    break;
@@ -231,8 +233,12 @@ class IVR
      */
     function OnUnhandled(&$event)
     {
-	$this->Debug("::OnUnhandled()");
-	return false;
+	$this->Debug("::OnUnhandled(" . $event->type . " '" . $event->name . "')");
+	if ($event->type != "incoming")
+	    return false;
+	if ($event->name != "call.execute" && $event->name != "chan.disconnected")
+	    return false;
+	return $this->OnMessage($event->name,$event);
     }
 
     /**
@@ -290,9 +296,11 @@ class IVR
     function OnExecute(&$event)
     {
 	$this->Debug("::OnExecute()");
-	$this->OperTable("execute");
-	$event->handled = true;
-	return true;
+	if ($this->OperTable("execute")) {
+	    $event->handled = true;
+	    return true;
+	}
+	return false;
     }
 
     /**
@@ -319,14 +327,35 @@ class IVR
 
     /**
      * Play a wave file or add it to the queue
-     * @param $file Path to file to play
-     * @param $clear True to clear the queue and start playing this file
+     * @param $file1,$file2,... Path to files to play
+     * @param $clear Optional - true to clear the queue and start playing now
      */
-    function PlayFile($file, $clear = false)
+    function PlayFile()
     {
+	$args = func_get_args();
+	$n = count($args);
+	if ($n == 1 && is_array($args[0])) {
+	    $args = $args[0];
+	    $n = count($args);
+	}
+	if ($n < 1)
+	    return;
+	$clear = false;
+	$last = $args[$n - 1];
+	if ($last === false)
+	    $n--;
+	if (($last === true) || ($last == "clear")) {
+	    $n--;
+	    $clear = true;
+	}
+	if ($n == 1 && is_array($args[0])) {
+	    $args = $args[0];
+	    $n = count($args);
+	}
 	if ($clear)
 	    $this->playfile = array();
-	$this->playfile[] = $file;
+	for ($i = 0; $i < $n; $i++)
+	    $this->playfile[] = $args[$i];
 	if ($clear)
 	    $this->PlayNext();
     }

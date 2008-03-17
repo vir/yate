@@ -16,6 +16,8 @@ class IVR1 extends IVR
 	    ":5" => "call:ivr2:b",
 	    ":6" => "jump:ivr2:b",
 	    ":8" => "leave",
+	    ":9" => "play:file1.au:file2.slin:clear",
+	    ":execute" => "answered",
 	    ":enter" => "output:Entered 1st IVR"
 	);
 	parent::OnEnter($state);

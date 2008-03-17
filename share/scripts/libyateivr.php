@@ -107,7 +107,10 @@ class IVR
     }
 
     /**
-     *
+     * Try and if found execute a table described operation - internal use
+     * @param $state State to match
+     * @param $text Event name of DTMF
+     * @return True if handled
      */
     private function TryTable($state,$text)
     {
@@ -115,31 +118,42 @@ class IVR
 	    $op = explode(":",$this->optable["$state:$text"]);
 	    $this->Debug("Found table operation '" . $op[0] . "'");
 	    switch ($op[0]) {
-		case "output":
+		case "output":     // Output a text to console or log file
 		    $this->Output($op[1]);
 		    break;
-		case "debug":
+		case "debug":      // Output a text if debugging is enabled
 		    $this->Debug($op[1]);
 		    break;
-		case "state":
+		case "state":      // Change local IVR state
 		    $this->SetState($op[1]);
 		    break;
-		case "play":
+		case "play":       // Play a sound file
 		    $this->PlayFile($op[1],(isset($op[2]) ? $op[2] : false));
 		    break;
-		case "stop":
+		case "tone":       // Start playing a tone
+		    $this->PlayTone($op[1]);
+		    break;
+		case "stop":       // Stop sound playback
 		    $this->PlayStop();
 		    break;
-		case "jump":
+		case "jump":       // Jump to another IVR, leave this one
 		    IVR::Jump($op[1],(isset($op[2]) ? $op[2] : null));
 		    break;
-		case "call":
+		case "call":       // Call into another IVR, put this on stack
 		    IVR::Call($op[1],(isset($op[2]) ? $op[2] : null));
 		    break;
-		case "leave":
+		case "leave":      // Leave this IVR, return to one on stack
 		    IVR::Leave(isset($op[1]) ? $op[1] : null);
 		    break;
-		case "hangup":
+		case "progress":   // Emit a call progress notification
+		case "ringing":    // Emit a call ringing notification
+		case "answered":   // Emit an answer notification
+		    $m = new Yate("chan." . $op[0]);
+		    $m->id = "";
+		    $m->SetParam("id",IVR::ChannelID());
+		    $m->SetParam("targetid",IVR::TargetID());
+		    $m->Dispatch();
+		case "hangup":     // Hangup the entire IVR
 		    IVR::Hangup();
 		    break;
 		default:
@@ -236,6 +250,8 @@ class IVR
 	    case "chan.dtmf":
 		return $this->OnDTMF($event->GetValue("text"));
 	    case "chan.notify":
+		if ($event->GetValue("reason") == "replaced")
+		    return true;
 		return $this->PlayNext() || $this->OnEOF();
 	}
 	return false;
@@ -301,6 +317,11 @@ class IVR
     }
 
 
+    /**
+     * Play a wave file or add it to the queue
+     * @param $file Path to file to play
+     * @param $clear True to clear the queue and start playing this file
+     */
     function PlayFile($file, $clear = false)
     {
 	if ($clear)
@@ -308,6 +329,20 @@ class IVR
 	$this->playfile[] = $file;
 	if ($clear)
 	    $this->PlayNext();
+    }
+
+    /**
+     * Start playing a tone, clear the file queue
+     * @param $tone Name of the tone to play
+     */
+    function PlayTone($tone)
+    {
+	$this->playfile = array();
+	$m = new Yate("chan.attach");
+	$m->id = "";
+	$m->SetParam("source","tone/$tone");
+	$m->SetParam("single",true);
+	$m->Dispatch();
     }
 
     /**

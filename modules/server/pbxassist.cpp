@@ -269,7 +269,7 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	}
     }
 
-    if (m_state != "new") {
+    if (!m_guest && (m_state != "new")) {
 	Channel* c = static_cast<Channel*>(msg.userObject("Channel"));
 	if (!c)
 	    return false;

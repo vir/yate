@@ -1667,8 +1667,8 @@ bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
     unsigned int oldId = id();
     if (controller())
 	controller()->releaseCircuit(m_circuit);
-    Debug(isup(),DebugNote,"Call(%u). Circuit replaced by %u [%p]",oldId,id(),this);
     m_circuit = circuit;
+    Debug(isup(),DebugNote,"Call(%u). Circuit replaced by %u [%p]",oldId,id(),this);
     m_circuitChanged = true;
     transmitIAM();
     return true;

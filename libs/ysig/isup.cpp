@@ -2942,11 +2942,12 @@ SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
 bool SS7ISUP::notifyLock()
 {
     m_lockTimer.stop();
+    m_lockCicCode++;
     if (!circuits())
 	return false;
     for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
 	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	if (cic->code() <= m_lockCicCode)
+	if (cic->code() < m_lockCicCode)
 	    continue;
 	m_lockCicCode = cic->code();
 	if (!cic->locked(SignallingCircuit::LockLocalChanged))

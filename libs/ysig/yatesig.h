@@ -1411,6 +1411,7 @@ class YSIG_API SignallingCircuitGroup : public SignallingComponent, public Mutex
 {
     friend class SignallingCircuit;
     friend class SignallingCallControl;
+    friend class SS7ISUP;
 public:
     /**
      * Circuit allocation strategy
@@ -5166,6 +5167,9 @@ private:
     String m_format;                     // Default format
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset
+    SignallingTimer m_lockTimer;         // Block/unblock timer
+    bool m_lockCic;                      // Currently blocking or unblocking circuit
+    unsigned int m_lockCicCode;          // Last blocked/unblocked circuit
 };
 
 /**

@@ -1968,7 +1968,10 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_sls(255),
     m_inn(false),
     m_rscTimer(0),
-    m_rscCic(0)
+    m_rscCic(0),
+    m_lockTimer(0),
+    m_lockCic(false),
+    m_lockCicCode(0)
 {
     setName(params.getValue("debugname","isup"));
 
@@ -2011,6 +2014,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	m_callerCat = "ordinary";
 
     m_rscTimer.interval(params,"channelsync",60,1000,true,true);
+    m_lockTimer.interval(params,"channellock",3,10,false,true);
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -2200,30 +2204,58 @@ void SS7ISUP::destruct()
 void SS7ISUP::timerTick(const Time& when)
 {
     Lock lock(this);
-    // Circuit reset
-    while (circuits()) {
-	// Disabled ?
-	if (!m_rscTimer.interval())
-	    break;
-	if (m_rscTimer.started()) {
-	    if (!m_rscTimer.timeout(when.msec()))
-		break;
-	    m_rscTimer.stop();
-	    if (m_rscCic) {
-		Debug(this,DebugMild,"Circuit reset timed out for cic=%u",m_rscCic->code());
-		releaseCircuit(m_rscCic);
-		break;
-	    }
+    if (!circuits())
+	return;
+
+    // Blocking/unblocking circuits
+    if (m_lockCicCode <= circuits()->last() && m_lockTimer.interval()) {
+	if (m_lockTimer.started()) {
+	    if (!m_lockTimer.timeout(when.msec()))
+		return;
+	    m_lockTimer.stop();
+	    Debug(this,DebugMild,"Circuit %slocking timed out for cic=%u",
+		m_lockCic?"":"un",m_lockCicCode);
 	}
-	m_rscTimer.start(when.msec());
-	// Pick the next circuit to reset. Ignore lock flags
-	int flags = SignallingCircuit::LockLocal | SignallingCircuit::LockRemote;
-	if (m_defPoint && m_remotePoint && reserveCircuit(m_rscCic,~flags)) {
-	    SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
+	// Try to get another cic
+	for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
+	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	    if (cic->code() <= m_lockCicCode)
+		continue;
+	    m_lockCicCode = cic->code();
+	    if (!cic->locked(SignallingCircuit::LockLocalChanged))
+		continue;
+	    m_lockCic = cic->locked(SignallingCircuit::LockLocal);
+	    break;
+	}
+	if (m_lockCicCode <= circuits()->last()) {
+	    m_lockTimer.start();
+	    SS7MsgISUP* msg = new SS7MsgISUP(m_lockCic?SS7MsgISUP::BLK:SS7MsgISUP::UBL,m_lockCicCode);
 	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 	    transmitMessage(msg,label,false);
+	    return;
 	}
-	break;
+    }
+
+    // Circuit reset disabled ?
+    if (!m_rscTimer.interval())
+	return;
+    if (m_rscTimer.started()) {
+	if (!m_rscTimer.timeout(when.msec()))
+	    return;
+	m_rscTimer.stop();
+	if (m_rscCic) {
+	    Debug(this,DebugMild,"Circuit reset timed out for cic=%u",m_rscCic->code());
+	    releaseCircuit(m_rscCic);
+	    return;
+	}
+    }
+    m_rscTimer.start(when.msec());
+    // Pick the next circuit to reset. Ignore lock flags
+    int flags = SignallingCircuit::LockLocal | SignallingCircuit::LockRemote;
+    if (m_defPoint && m_remotePoint && reserveCircuit(m_rscCic,~flags)) {
+	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
+	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+	transmitMessage(msg,label,false);
     }
 }
 
@@ -2236,8 +2268,8 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	link->toString().safe(),link->operational()?"":"not ");
     if (!link->operational(sls))
 	return;
-    Debug(this,DebugStub,"L3 (%p,'%s') is operational: please implement circuit block/unblock",
-	link,link->toString().safe());
+    // TODO: reset local state changed flag when link is not operational
+    //       set local state changed flag when link is operational to notify remote party
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
@@ -2607,9 +2639,11 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
     switch (event.type()) {
 	case SignallingCircuitEvent::Alarm:
 	case SignallingCircuitEvent::NoAlarm:
-	    if (event.circuit())
+	    if (event.circuit()) {
 		blockCircuit(event.circuit()->code(),
 		    event.type()==SignallingCircuitEvent::Alarm,false,true);
+		event.circuit()->setLock(SignallingCircuit::LockLocalChanged);
+	    }
 	    break;
 	default:
 	    Debug(this,DebugStub,"Unhandled circuit event (%u,%s) from call %p",
@@ -2894,8 +2928,6 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 	call->replaceCircuit(newCircuit);
     }
     lockFlag |= hwFlag;
-    if (!remote)
-	lockFlag |= SignallingCircuit::LockLocalChanged;
     if (block)
 	circuit->setLock(lockFlag);
     else

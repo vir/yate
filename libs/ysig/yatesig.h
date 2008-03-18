@@ -689,7 +689,8 @@ public:
     unsigned int circuitCount();
 
     /**
-     * Attach/detach a circuit group to this call controller. Set group's allocation strategy
+     * Attach/detach a circuit group to this call controller. Set group's allocation strategy.
+     * Set locked flags for all circuits belonging to the attached circuit group.
      * Cleanup controller before detaching the group or attaching a new one
      * This method is thread safe
      * @param circuits Pointer to the SignallingCircuitGroup to attach. 0 to detach and force a cleanup
@@ -834,6 +835,7 @@ protected:
 
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
+    int m_cicLock;                       // Flags to be locked when a circuit group is attached to this controller 
     int m_strategy;                      // Strategy to allocate circuits for outgoing calls
     bool m_exiting;                      // Call control is terminating. Generate a Disable event when no more calls
     SignallingDumper* m_dumper;          // Data dumper in use
@@ -1168,9 +1170,11 @@ public:
      * Lock circuit flags
      */
     enum LockFlags {
-	LockLocal  = 1,
-	LockRemote = 2,
-	LockLocalChanged = 4,
+	LockLocal             = 0x0001,  // Local side of the circuit is locked
+	LockRemote            = 0x0002,  // Remote side of the circuit is locked
+	LockLocalHWFailure    = 0x0004,  // Local side of the circuit is locked due to HW failure
+	LockRemoteHWFailure   = 0x0008,  // Remote side of the circuit is locked due to HW failure
+	LockLocalChanged      = 0x0010,  // Local side of the circuit is locked
     };
 
     /**
@@ -5143,7 +5147,7 @@ private:
     bool resetCircuit(unsigned int cic, bool checkCall);
     // Block/unblock a circuit side (local or remote)
     // Return false if the given circuit doesn't exist
-    bool blockCircuit(unsigned int cic, bool block, bool remote);
+    bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail);
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
 

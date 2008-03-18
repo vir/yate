@@ -2025,6 +2025,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	else
 	    s << "missing";
 	s << " priority+SSF=" << (unsigned int)m_priossf;
+	s << " lockcircuits" << params.getValue("lockcircuits");
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
 }
@@ -2233,6 +2234,10 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 	return;
     DDebug(this,DebugInfo,"L3 (%p,'%s') is %soperational",link,
 	link->toString().safe(),link->operational()?"":"not ");
+    if (!link->operational(sls))
+	return;
+    Debug(this,DebugStub,"L3 (%p,'%s') is operational: please implement circuit block/unblock",
+	link,link->toString().safe());
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
@@ -2572,12 +2577,6 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
     }
 
     switch (msg->type()) {
-	case SS7MsgISUP::RLC:
-	    // Just reset the circuit if it's a response to RSC request
-	    if (m_rscCic && m_rscCic->code() == msg->cic()) {
-		resetCircuit(msg->cic(),false);
-		break;
-	    }
 	case SS7MsgISUP::IAM:
 	case SS7MsgISUP::SAM:
 	case SS7MsgISUP::ACM:
@@ -2588,6 +2587,11 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	case SS7MsgISUP::SGM:
 	    processCallMsg(msg,label,sls);
 	    break;
+	case SS7MsgISUP::RLC:
+	    if (m_rscCic && m_rscCic->code() == msg->cic())
+		processControllerMsg(msg,label,sls);
+	    else
+		processCallMsg(msg,label,sls);
 	default:
 	    processControllerMsg(msg,label,sls);
     }
@@ -2605,7 +2609,7 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
 	case SignallingCircuitEvent::NoAlarm:
 	    if (event.circuit())
 		blockCircuit(event.circuit()->code(),
-		    event.type()==SignallingCircuitEvent::Alarm,false);
+		    event.type()==SignallingCircuitEvent::Alarm,false,true);
 	    break;
 	default:
 	    Debug(this,DebugStub,"Unhandled circuit event (%u,%s) from call %p",
@@ -2613,7 +2617,6 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
     }
     return 0;
 }
-
 
 // Process call related messages
 void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
@@ -2664,7 +2667,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    flags &= ~SignallingCircuit::LockRemote;
 	}
 	else
-	    blockCircuit(msg->cic(),false,true);
+	    blockCircuit(msg->cic(),false,true,false);
 	if (reserveCircuit(circuit,flags,&s,true)) {
 	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,sls);
 	    m_calls.append(call);
@@ -2691,43 +2694,58 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
     }
 }
 
+unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned int maxRange,
+    unsigned int maxMap = 0, String* map = 0, bool* hwFail = 0)
+{
+    unsigned int range = nl.getIntValue("RangeAndStatus");
+    if (range < minRange || range > maxRange)
+	return 0;
+    if (!maxMap)
+	return range;
+    NamedString* ns = nl.getParam("RangeAndStatus.map");
+    if (!ns || ns->length() > maxMap || ns->length() < range)
+	return 0;
+    map = ns;
+    if (hwFail) {
+	ns = nl.getParam("GroupSupervisionTypeIndicator");
+	*hwFail = (ns && *ns == "hw-failure");
+    }
+    return range;
+}
+
 // Process controller related messages
 // Q.764 2.1.12: stop waiting for SGM if message is not: COT,BLK,BLA,UBL,UBA,CGB,CGA,CGU,CUA,CQM,CQR
 void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 {
     const char* reason = 0;
     bool impl = true;
-    bool stopSGM = true;
+    bool stopSGM = false;
     switch (msg->type()) {
 	case SS7MsgISUP::CNF: // Confusion
 	    Debug(this,DebugNote,"%s with cause='%s' diagnostic='%s'",msg->name(),
 		msg->params().getValue("CauseIndicators"),msg->params().getValue("CauseIndicators.diagnostic"));
+	    stopSGM = true;
+	    break;
+	case SS7MsgISUP::RLC: // Release Complete
+	    if (m_rscCic && m_rscCic->code() == msg->cic())
+		resetCircuit(msg->cic(),false);
+	    else
+		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit
 	    if (resetCircuit(msg->cic(),true))
 		transmitRLC(this,msg->cic(),label,true,sls);
 	    else
-		reason = "unknown CIC";
-	    break;
-	case SS7MsgISUP::UBL: // Unblocking
-	case SS7MsgISUP::BLK: // Blocking
-	    {
-	        bool block = (msg->type() == SS7MsgISUP::BLK);
-		if (blockCircuit(msg->cic(),block,true))
-		    transmitMessage(new SS7MsgISUP(block ? SS7MsgISUP::BLA : SS7MsgISUP::UBA,msg->cic()),label,true,sls);
-		else
-		    reason = "unknown CIC";
-	    }
-	    stopSGM = false;
+		reason = "unknown-channel";
+	    stopSGM = true;
 	    break;
 	case SS7MsgISUP::GRS: // Circuit Group Reset
+	    stopSGM = true;
 	    {
-		String rs = msg->params().getValue("RangeAndStatus");
-		unsigned int n = rs.toInteger();
-		// Q.763 3.43
-		if (n < 1 || n > 31) {
-		    reason = "invalid range";
-		    transmitCNF(this,msg->cic(),label,true,sls,"wrong-message");
+		// Q.763 3.43 min=1 max=31
+		unsigned int n = getRangeAndStatus(msg->params(),1,31);
+		if (!n) {
+		    reason = "invalid-ie";
 		    break;
 		}
 		String map('0',n);
@@ -2736,68 +2754,79 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		    if (!resetCircuit(msg->cic()+i,true))
 			d[i] = '1';
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::GRA,msg->cic());
-		m->params().addParam("RangeAndStatus",rs);
+		m->params().addParam("RangeAndStatus",String(n));
 		m->params().addParam("RangeAndStatus.map",map);
 		transmitMessage(m,label,true,sls);
 	    }
 	    break;
-	case SS7MsgISUP::BLA: // Blocking Acknowledgement
+	case SS7MsgISUP::UBL: // Unblocking
+	    if (blockCircuit(msg->cic(),false,true,false))
+		transmitMessage(new SS7MsgISUP(SS7MsgISUP::UBA,msg->cic()),label,true,sls);
+	    else
+		reason = "unknown-channel";
+	    break;
+	case SS7MsgISUP::BLK: // Blocking
+	    if (blockCircuit(msg->cic(),true,true,false))
+		transmitMessage(new SS7MsgISUP(SS7MsgISUP::BLA,msg->cic()),label,true,sls);
+	    else
+		reason = "unknown-channel";
+	    break;
 	case SS7MsgISUP::UBA: // Unblocking Acknowledgement
+	    if (!blockCircuit(msg->cic(),false,false,false))
+		reason = "unknown-channel";
+	    break;
+	case SS7MsgISUP::BLA: // Blocking Acknowledgement
+	    if (!blockCircuit(msg->cic(),true,false,false))
+		reason = "unknown-channel";
+	    break;
+	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
+	    stopSGM = true;
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
 	case SS7MsgISUP::CUA: // Circuit Group Unblocking Acknowledgement
 	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
-	    stopSGM = false;
-	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
-	    reason = "unexpected response";
-	    transmitCNF(this,msg->cic(),label,true,sls,"wrong-state-message");
+	    reason = "wrong-state-message";
 	    break;
 	case SS7MsgISUP::CGB: // Circuit Group Blocking
 	case SS7MsgISUP::CGU: // Circuit Group Unblocking
-	    // Don't stop receiving segments
-	    stopSGM = false;
 	    // Q.763 3.43 range can be 1..256
-	    // Bit: 0-no indication 1-block/unblock(ack)
+	    // Bit: 0-no indication 1-block/unblock
 	    {
-		String rs = msg->params().getValue("RangeAndStatus");
-		NamedString* srcMap = msg->params().getParam("RangeAndStatus.map");
-		unsigned int nCics = rs.toInteger();
-		bool validMap = (srcMap && srcMap->length() <= 256 && srcMap->length() >= nCics);
-		if (!validMap || nCics < 1 || nCics > 256) {
-		    reason = validMap ? "invalid range" : "invalid circuit map";
-		    transmitCNF(this,msg->cic(),label,true,sls,"wrong-message");
+		String* srcMap = 0;
+		bool hwFail = false;
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,srcMap,&hwFail);
+		if (!nCics) {
+		    reason = "invalid-ie";
 		    break;
 		}
 	        bool block = (msg->type() == SS7MsgISUP::CGB);
-		if (nCics > srcMap->length())
-		    nCics = srcMap->length();
-		String map('0',nCics);
+		String map('0',srcMap->length());
 		char* d = (char*)map.c_str();
 		// TODO: Max bits set to 1 should be 32
-		for (unsigned int i = 0; i < nCics; i++)
-		    if ((*srcMap)[i] != '0' && blockCircuit(msg->cic()+i,block,true))
+		for (unsigned int i = 0; i < srcMap->length(); i++)
+		    if ((*srcMap)[i] != '0' && blockCircuit(msg->cic()+i,block,true,hwFail))
 			d[i] = '1';
 		SS7MsgISUP* m = new SS7MsgISUP(block?SS7MsgISUP::CGA:SS7MsgISUP::CUA,msg->cic());
+		m->params().copyParam(msg->params(),"GroupSupervisionTypeIndicator");
 		m->params().addParam("RangeAndStatus",String(nCics));
 		m->params().addParam("RangeAndStatus.map",map);
-		m->params().copyParam(msg->params(),"GroupSupervisionTypeIndicator");
 		transmitMessage(m,label,true,sls);
 	    }
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
-	    stopSGM = false;
 	default:
 	    impl = false;
-	    reason = "not implemented";
-	    transmitCNF(this,msg->cic(),label,true,sls,"service-not-implemented");
+	    reason = "service-not-implemented";
     }
     if (stopSGM) {
 	SS7ISUPCall* call = findCall(msg->cic());
 	if (call)
 	    call->stopWaitSegment(false);
     }
-    if (reason)
+    if (reason) {
 	Debug(this,impl?DebugNote:DebugStub,"'%s' with cic=%u: %s",msg->name(),msg->cic(),reason);
+	transmitCNF(this,msg->cic(),label,true,sls,reason);
+    }
 }
 
 // Replace a call's circuit if checkCall is true
@@ -2833,16 +2862,30 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool checkCall)
 
 // Block/unblock a circuit
 // See Q.764 2.8.2
-bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote)
+bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail)
 {
     SignallingCircuit* circuit = circuits() ? circuits()->find(cic) : 0;
     if (!circuit)
 	return false;
-    int flag = remote ? SignallingCircuit::LockRemote : SignallingCircuit::LockLocal;
+    int lockFlag = 0;
+    int hwFlag = 0;
+    if (remote) {
+	lockFlag = SignallingCircuit::LockRemote;
+	if (hwFail)
+	    hwFlag = SignallingCircuit::LockRemoteHWFailure;
+    }
+    else {
+	lockFlag = SignallingCircuit::LockLocal;
+	if (hwFail)
+	    hwFlag = SignallingCircuit::LockLocalHWFailure;
+    }
     // Already blocked/unblocked ?
-    if (block == (0 != circuit->locked(flag)))
+    if (block == (0 != circuit->locked(lockFlag))) {
+	circuit->setLock(hwFlag);
 	return true;
-    Debug(this,DebugNote,"%slocking %s side of the circuit %u",block?"B":"Unb",remote?"remote":"local",cic);
+    }
+    Debug(this,DebugNote,"%slocking %s side of the circuit %u%s",
+	block?"B":"Unb",remote?"remote":"local",cic,(hwFlag)?": HW failure":"");
     // Replace circuit for call (Q.764 2.8.2.1)
     SS7ISUPCall* call = findCall(cic);
     if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
@@ -2850,12 +2893,13 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote)
 	reserveCircuit(newCircuit);
 	call->replaceCircuit(newCircuit);
     }
+    lockFlag |= hwFlag;
     if (!remote)
-	flag |= SignallingCircuit::LockLocalChanged;
+	lockFlag |= SignallingCircuit::LockLocalChanged;
     if (block)
-	circuit->setLock(flag);
+	circuit->setLock(lockFlag);
     else
-	circuit->resetLock(flag);
+	circuit->resetLock(lockFlag);
     return true;
 }
 

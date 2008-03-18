@@ -29,6 +29,13 @@
 
 using namespace TelEngine;
 
+static TokenDict s_dictCicLock[] = {
+    {"local",         SignallingCircuit::LockLocal},
+    {"remote",        SignallingCircuit::LockRemote},
+    {"localchanged",  SignallingCircuit::LockLocalChanged},
+    {0,0},
+};
+
 /**
  * SignallingCallControl
  */
@@ -36,6 +43,7 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
 	const char* msgPrefix)
     : Mutex(true),
     m_circuits(0),
+    m_cicLock(0),
     m_strategy(SignallingCircuitGroup::Increment),
     m_exiting(false),
     m_dumper(0)
@@ -58,6 +66,9 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
 
     // Message prefix
     m_msgPrefix = params.getValue("message-prefix",msgPrefix);
+
+    // Circuit lock
+    SignallingUtils::encodeFlags(0,m_cicLock,params.getValue("lockcircuits"),s_dictCicLock);
 }
 
 SignallingCallControl::~SignallingCallControl()
@@ -84,8 +95,14 @@ void SignallingCallControl::attach(SignallingCircuitGroup* circuits)
 	    "SignallingCallControl. Replaced circuit group (%p) with (%p) [%p]",
 	    m_circuits,circuits,this);
     m_circuits = circuits;
-    if (m_circuits)
+    if (m_circuits) {
+	Lock lock(m_circuits);
 	m_circuits->setStrategy(m_strategy);
+	DDebug(DebugAll,"SignallingCallControl. Attached group (%p) lock=%d [%p]",
+	    m_circuits,m_cicLock,this);
+	for (ObjList* o = m_circuits->circuits().skipNull(); o; o = o->skipNext())
+	    (static_cast<SignallingCircuit*>(o->get()))->setLock(m_cicLock);
+    }
 }
 
 // Reserve a circuit from a given list in attached group

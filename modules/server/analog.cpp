@@ -1220,7 +1220,7 @@ bool ModuleGroup::createRecorder(const NamedList& params, const NamedList& defau
 	String& error)
 {
     for (unsigned int i = 0; i < 2; i++) {
-	String device = params.getValue(callertype(i));
+	String device = params.getValue(callertype(0 != i));
 	ObjList* voice = device.split(',',false);
 	if (voice && voice->count())
 	    if (i)
@@ -1228,7 +1228,7 @@ bool ModuleGroup::createRecorder(const NamedList& params, const NamedList& defau
 	    else
 		buildGroup(fxoRec(),*voice,error);
 	else
-	    error << "Missing or invalid " << callertype(i) << " spans=" << device;
+	    error << "Missing or invalid " << callertype(0 != i) << " spans=" << device;
 	TelEngine::destruct(voice);
 	if (error)
 	    return false;

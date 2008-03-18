@@ -2829,7 +2829,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		char* d = (char*)map.c_str();
 		// TODO: Max bits set to 1 should be 32
 		for (unsigned int i = 0; i < srcMap->length(); i++)
-		    if ((*srcMap)[i] != '0' && blockCircuit(msg->cic()+i,block,true,hwFail))
+		    if (srcMap->at(i) != '0' && blockCircuit(msg->cic()+i,block,true,hwFail))
 			d[i] = '1';
 		SS7MsgISUP* m = new SS7MsgISUP(block?SS7MsgISUP::CGA:SS7MsgISUP::CUA,msg->cic());
 		m->params().copyParam(msg->params(),"GroupSupervisionTypeIndicator");
@@ -2952,7 +2952,7 @@ bool SS7ISUP::notifyLock()
 	m_lockCicCode = cic->code();
 	if (!cic->locked(SignallingCircuit::LockLocalChanged))
 	    continue;
-	m_lockCic = cic->locked(SignallingCircuit::LockLocal);
+	m_lockCic = (0 != cic->locked(SignallingCircuit::LockLocal));
 	break;
     }
     if (m_lockCicCode > circuits()->last())

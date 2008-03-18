@@ -2837,6 +2837,11 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		transmitMessage(m,label,true,sls);
 	    }
 	    break;
+	case SS7MsgISUP::UEC: // Unequipped CIC (national use)
+	    Debug(this,DebugWarn,"%s for cic=%u",msg->name(),msg->cic());
+	    blockCircuit(msg->cic(),true,true,false);
+	    blockCircuit(msg->cic(),true,false,false);
+	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
 	default:

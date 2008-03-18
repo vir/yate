@@ -5151,6 +5151,8 @@ private:
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail);
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
+    // Send blocking/unblocking messages
+    bool notifyLock();
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller

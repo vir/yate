@@ -2014,7 +2014,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	m_callerCat = "ordinary";
 
     m_rscTimer.interval(params,"channelsync",60,1000,true,true);
-    m_lockTimer.interval(params,"channellock",3,10,false,true);
+    m_lockTimer.interval(params,"channellock",1,3,false,true);
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -2213,27 +2213,11 @@ void SS7ISUP::timerTick(const Time& when)
 	    if (!m_lockTimer.timeout(when.msec()))
 		return;
 	    m_lockTimer.stop();
-	    Debug(this,DebugMild,"Circuit %slocking timed out for cic=%u",
+	    Debug(this,DebugMild,"Circuit %sblocking timed out for cic=%u",
 		m_lockCic?"":"un",m_lockCicCode);
 	}
-	// Try to get another cic
-	for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
-	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	    if (cic->code() <= m_lockCicCode)
-		continue;
-	    m_lockCicCode = cic->code();
-	    if (!cic->locked(SignallingCircuit::LockLocalChanged))
-		continue;
-	    m_lockCic = cic->locked(SignallingCircuit::LockLocal);
-	    break;
-	}
-	if (m_lockCicCode <= circuits()->last()) {
-	    m_lockTimer.start();
-	    SS7MsgISUP* msg = new SS7MsgISUP(m_lockCic?SS7MsgISUP::BLK:SS7MsgISUP::UBL,m_lockCicCode);
-	    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
-	    transmitMessage(msg,label,false);
+	if (notifyLock())
 	    return;
-	}
     }
 
     // Circuit reset disabled ?
@@ -2806,12 +2790,20 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::UBA: // Unblocking Acknowledgement
-	    if (!blockCircuit(msg->cic(),false,false,false))
-		reason = "unknown-channel";
-	    break;
 	case SS7MsgISUP::BLA: // Blocking Acknowledgement
-	    if (!blockCircuit(msg->cic(),true,false,false))
-		reason = "unknown-channel";
+	    if (msg->cic() == m_lockCicCode) {
+		bool block = (msg->type() == SS7MsgISUP::BLA);
+		if (blockCircuit(msg->cic(),block,false,false)) {
+		    SignallingCircuit* cic = circuits() ? circuits()->find(msg->cic()) : 0;
+		    if (cic)
+			cic->resetLock(SignallingCircuit::LockLocalChanged);
+		}
+		else
+		    reason = "unknown-channel";
+		notifyLock();
+	    }
+	    else
+		reason = "wrong-state-message";
 	    break;
 	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
 	    stopSGM = true;
@@ -2944,6 +2936,31 @@ SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
 	    return call;
     }
     return 0;
+}
+
+// Send blocking/unblocking messages
+bool SS7ISUP::notifyLock()
+{
+    m_lockTimer.stop();
+    if (!circuits())
+	return false;
+    for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
+	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	if (cic->code() <= m_lockCicCode)
+	    continue;
+	m_lockCicCode = cic->code();
+	if (!cic->locked(SignallingCircuit::LockLocalChanged))
+	    continue;
+	m_lockCic = cic->locked(SignallingCircuit::LockLocal);
+	break;
+    }
+    if (m_lockCicCode > circuits()->last())
+	return false;
+    m_lockTimer.start();
+    SS7MsgISUP* msg = new SS7MsgISUP(m_lockCic?SS7MsgISUP::BLK:SS7MsgISUP::UBL,m_lockCicCode);
+    SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+    transmitMessage(msg,label,false);
+    return true;
 }
 
 

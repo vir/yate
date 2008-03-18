@@ -2116,7 +2116,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    }
 	    dest = *m_remotePoint;
 	}
-	if (!reserveCircuit(cic)) {
+	if (!reserveCircuit(cic,SignallingCircuit::LockLocal|SignallingCircuit::LockRemote)) {
 	    Debug(this,DebugNote,"Can't reserve circuit");
 	    reason = "congestion";
 	    break;
@@ -2208,7 +2208,7 @@ void SS7ISUP::timerTick(const Time& when)
 	return;
 
     // Blocking/unblocking circuits
-    if (m_lockCicCode <= circuits()->last() && m_lockTimer.interval()) {
+    if (m_lockCicCode < circuits()->last() && m_lockTimer.interval()) {
 	if (m_lockTimer.started()) {
 	    if (!m_lockTimer.timeout(when.msec()))
 		return;
@@ -2955,7 +2955,7 @@ bool SS7ISUP::notifyLock()
 	m_lockCic = (0 != cic->locked(SignallingCircuit::LockLocal));
 	break;
     }
-    if (m_lockCicCode > circuits()->last())
+    if (m_lockCicCode >= circuits()->last())
 	return false;
     m_lockTimer.start();
     SS7MsgISUP* msg = new SS7MsgISUP(m_lockCic?SS7MsgISUP::BLK:SS7MsgISUP::UBL,m_lockCicCode);

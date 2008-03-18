@@ -1738,12 +1738,14 @@ bool SS7ISUPCall::copyParamIAM(SS7MsgISUP* msg, bool outgoing, SignallingMessage
     NamedList& dest = msg->params();
     if (outgoing) {
 	NamedList& src = sigMsg->params();
+	dest.copyParam(src,"ForwardCallIndicators");
+	dest.copyParam(src,"NatureOfConnectionIndicators");
+	dest.copyParam(src,"TransmissionMediumRequirement");
 	param(dest,src,"CalledPartyNumber","called","");
 	param(dest,src,"CalledPartyNumber.inn","inn",String::boolText(isup()->m_inn));
 	param(dest,src,"CalledPartyNumber.nature","callednumtype",isup()->m_numType);
 	param(dest,src,"CalledPartyNumber.plan","callednumplan",isup()->m_numPlan);
 	param(dest,src,"CallingPartyCategory","callercategory",isup()->m_callerCat);
-	dest.copyParam(src,"ForwardCallIndicators");
 	param(dest,src,"CallingPartyNumber","caller","");
 	param(dest,src,"CallingPartyNumber.nature","callernumtype",isup()->m_numType);
 	param(dest,src,"CallingPartyNumber.plan","callernumplan",isup()->m_numPlan);

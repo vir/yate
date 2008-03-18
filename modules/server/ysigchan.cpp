@@ -144,8 +144,6 @@ private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
 	const String& partWord);
-    // Execute commands
-    virtual bool commandExecute(String& retVal, const String& line);
     // Delete the given link if found
     // Clear link list if name is 0
     // Clear all stacks without waiting for call termination if name is 0
@@ -1062,19 +1060,27 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 
 bool SigDriver::received(Message& msg, int id)
 {
+    String target;
+
     switch (id) {
 	case Masquerade: {
 	    String s = msg.getValue("id");
 	    if (s.startsWith(prefix()))
-		break;
+		return Driver::received(msg,id);
 	    // Check for a link that would handle the message
 	    int found = s.find('/');
 	    if (found < 1)
-		break;
+		return Driver::received(msg,id);
 	    SigLink* link = findLink(s.substr(0,found),false);
 	    if (link && link->masquerade(s,msg))
 		return false;
 	    }
+	    return Driver::received(msg,id);
+	case Status:
+	    target = msg.getValue("module");
+	    // Target is the driver or channel
+	    if (!target || target == name() || target.startsWith(prefix()))
+		return Driver::received(msg,id);
 	    break;
 	case Drop: {
 	    String s = msg.getValue("id");
@@ -1084,14 +1090,54 @@ bool SigDriver::received(Message& msg, int id)
 	    SigLink* link = findLink(s.substr(0,s.find('/')),false);
 	    return link && link->drop(s,msg);
 	    }
-	    break;
+	    return Driver::received(msg,id);
 	case Halt:
 	    clearLink();
 	    if (m_engine)
 		m_engine->stop();
-	    break;
+	    return Driver::received(msg,id);
+	default:
+	    return Driver::received(msg,id);
     }
-    return Driver::received(msg,id);
+
+    if (!target.startSkip(name()))
+	return false;
+
+    // Status target=link[/cic]
+    Lock lock(this);
+    int pos = target.find("/");
+    String linkName = target.substr(0,pos);
+    target = target.substr(linkName.length() + 1);
+    SigLink* link = findLink(linkName,false);
+    SignallingCallControl* ctrl = link ? link->controller() : 0;
+    if (!ctrl)
+	return true;
+
+    String detail;
+    ctrl->lock();
+    unsigned int count = 0;
+    SignallingCircuit* cic = 0;
+    if (ctrl->circuits()) {
+	count = ctrl->circuits()->count();
+	cic = ctrl->circuits()->find(target.toInteger());
+    }
+    if (cic) {
+	detail << "code=" << cic->code();
+	detail << ",status=" << SignallingCircuit::lookupStatus(cic->status());
+	detail << ",locked-local=" << String::boolText(cic->locked(SignallingCircuit::LockLocal));
+	detail << ",locked-remote=" << String::boolText(cic->locked(SignallingCircuit::LockRemote));
+    }
+    ctrl->unlock();
+
+    msg.retValue().clear();
+    msg.retValue() << "module=" << name();
+    msg.retValue() << ",link=" << linkName;
+    msg.retValue() << ",circuits=" << count;
+    if (detail)
+	msg.retValue() << ";" << detail;
+    msg.retValue() << "\r\n";
+
+    return true;
 }
 
 void SigDriver::handleEvent(SignallingEvent* event)
@@ -1242,12 +1288,6 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
     const String& partWord)
 {
     return Driver::commandComplete(msg,partLine,partWord);
-}
-
-// Execute commands
-bool SigDriver::commandExecute(String& retVal, const String& line)
-{
-    return Driver::commandExecute(retVal,line);
 }
 
 // Append a link to the list. Duplicate names are not allowed

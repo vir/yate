@@ -2031,7 +2031,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	else
 	    s << "missing";
 	s << " priority+SSF=" << (unsigned int)m_priossf;
-	s << " lockcircuits" << params.getValue("lockcircuits");
+	s << " lockcircuits=" << params.getValue("lockcircuits");
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
 }
@@ -2747,9 +2747,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    stopSGM = true;
 	    break;
 	case SS7MsgISUP::RLC: // Release Complete
-	    if (m_rscCic && m_rscCic->code() == msg->cic())
-		resetCircuit(msg->cic(),false);
-	    else
+	    if (!resetCircuit(msg->cic(),false))
 		reason = "unknown-channel";
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit

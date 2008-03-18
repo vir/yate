@@ -2016,7 +2016,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	m_callerCat = "ordinary";
 
     m_rscTimer.interval(params,"channelsync",60,1000,true,true);
-    m_lockTimer.interval(params,"channellock",1,3,false,true);
+    m_lockTimer.interval(params,"channellock",5,10,false,true);
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -2747,8 +2747,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    stopSGM = true;
 	    break;
 	case SS7MsgISUP::RLC: // Release Complete
-	    if (!resetCircuit(msg->cic(),false))
-		reason = "unknown-channel";
+	    releaseCircuit(m_rscCic);
 	    break;
 	case SS7MsgISUP::RSC: // Reset Circuit
 	    if (resetCircuit(msg->cic(),true))

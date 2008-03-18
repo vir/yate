@@ -683,10 +683,11 @@ public:
 	{ return m_msgPrefix; }
 
     /**
-     * Get the number of circuits in the attached group
-     * @return The number of circuits in the attached group or 0 if no group attached
+     * Get the circuit group attached to this call controller
+     * @return The circuit group attached to this call controller
      */
-    unsigned int circuitCount();
+    inline SignallingCircuitGroup* circuits() const
+	{ return m_circuits; }
 
     /**
      * Attach/detach a circuit group to this call controller. Set group's allocation strategy.
@@ -769,13 +770,6 @@ protected:
      */
     inline int strategy() const
 	{ return m_strategy; }
-
-    /**
-     * Get the circuit group attached to this call controller
-     * @return The circuit group attached to this call controller
-     */
-    inline SignallingCircuitGroup* circuits() const
-	{ return m_circuits; }
 
     /**
      * Process an event received from a call. This will give to derived classes an opportunity
@@ -1444,6 +1438,13 @@ public:
      * Destructor
      */
     ~SignallingCircuitGroup();
+
+    /**
+     * Get the number of circuits in this group
+     * @return The number of circuits owned by this group
+     */
+    inline unsigned int count() const
+	{ return m_circuits.count(); }
 
     /**
      * Get the base of identification codes for this group

@@ -2935,7 +2935,7 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
 	    return;
     }
     else {
-	unsigned int count = circuitCount();
+	unsigned int count = circuits() ? circuits()->count() : 0;
 	for (m_lastRestart++; m_lastRestart <= count; m_lastRestart++) {
 	    String tmp = m_lastRestart;
 	    if (reserveCircuit(m_restartCic,-1,&tmp,true))

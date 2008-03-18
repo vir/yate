@@ -76,12 +76,6 @@ SignallingCallControl::~SignallingCallControl()
     attach((SignallingCircuitGroup*)0);
 }
 
-unsigned int SignallingCallControl::circuitCount()
-{
-    Lock lock(this);
-    return m_circuits ? m_circuits->count() : 0;
-}
-
 // Attach a signalling circuit group. Set its strategy
 void SignallingCallControl::attach(SignallingCircuitGroup* circuits)
 {

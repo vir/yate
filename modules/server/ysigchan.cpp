@@ -141,6 +141,11 @@ public:
     void copySigMsgParams(NamedList& dest, SignallingEvent* event,
 	const String* params = 0);
 private:
+    // Handle command complete requests
+    virtual bool commandComplete(Message& msg, const String& partLine,
+	const String& partWord);
+    // Execute commands
+    virtual bool commandExecute(String& retVal, const String& line);
     // Delete the given link if found
     // Clear link list if name is 0
     // Clear all stacks without waiting for call termination if name is 0
@@ -570,6 +575,15 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
     sigMsg->params().copyParam(msg,"callednumtype");
     sigMsg->params().copyParam(msg,"callednumplan");
     sigMsg->params().copyParam(msg,"calledpointcode");
+    // Copy routing params
+    unsigned int n = msg.length();
+    String prefix;
+    prefix << plugin.debugName() << ".";
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = msg.getParam(i);
+	if (ns && ns->name().startsWith(prefix))
+	    sigMsg->params().addParam(ns->name().substr(prefix.length()),*ns);
+    }
     m_call = link->controller()->call(sigMsg,m_reason);
     if (m_call) {
 	m_call->userdata(this);
@@ -1221,6 +1235,19 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
     }
     if (!prefix.null() && noParams)
 	dest.clearParam("message-prefix");
+}
+
+// Handle command complete requests
+bool SigDriver::commandComplete(Message& msg, const String& partLine,
+    const String& partWord)
+{
+    return Driver::commandComplete(msg,partLine,partWord);
+}
+
+// Execute commands
+bool SigDriver::commandExecute(String& retVal, const String& line)
+{
+    return Driver::commandExecute(retVal,line);
 }
 
 // Append a link to the list. Duplicate names are not allowed

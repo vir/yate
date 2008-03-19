@@ -2848,7 +2848,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		// TODO: Max bits set to 1 should be 32
 		for (unsigned int i = 0; i < m_lockMap.length(); i++)
 		    if (m_lockMap[i] != '0')
-			blockCircuit(msg->cic()+i,block,true,hwFail,true);
+			blockCircuit(msg->cic()+i,block,false,hwFail,true);
 		sendLocalLock();
 	    }
 	    break;

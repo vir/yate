@@ -2631,7 +2631,11 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
 		// TODO: check if the circuit should be locked now or when received the response
 //		blockCircuit(event.circuit()->code(),
 //		    event.type()==SignallingCircuitEvent::Alarm,false,true);
-		event.circuit()->setLock(SignallingCircuit::LockLocalChanged | SignallingCircuit::LockLocalHWFailure);
+		event.circuit()->setLock(SignallingCircuit::LockLocalChanged);
+		if (event.type() == SignallingCircuitEvent::Alarm)
+		    event.circuit()->setLock(SignallingCircuit::LockLocalHWFailure);
+		else
+		    event.circuit()->setLock(~SignallingCircuit::LockLocalHWFailure);
 		m_lockNeed = true;
 		unlock();
 	    }
@@ -2850,6 +2854,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		for (unsigned int i = 0; i < m_lockMap.length(); i++)
 		    if (m_lockMap[i] != '0')
 			blockCircuit(msg->cic()+i,block,true,hwFail);
+// TODO: reset changed flag
 		sendLocalLock();
 	    }
 	    break;

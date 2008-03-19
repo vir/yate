@@ -1969,6 +1969,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_priossf(0),
     m_sls(255),
     m_inn(false),
+    m_l3LinkUp(false),
     m_rscTimer(0),
     m_rscCic(0),
     m_lockTimer(0),
@@ -2095,6 +2096,10 @@ SS7MSU* SS7ISUP::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
 // Make an outgoing call
 SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 {
+    if (!m_l3LinkUp) {
+	reason = "net-out-of-order";
+	return 0;
+    }
     if (!msg) {
 	reason = "invalid-parameter";
 	return 0;
@@ -2147,6 +2152,10 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 {
     if (!msg)
 	return -1;
+    if (!m_l3LinkUp) {
+	TelEngine::destruct(msg);
+	return -1;
+    }
     const SS7Label* p = &label;
     SS7Label tmp;
     if (recvLbl) {
@@ -2168,7 +2177,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 	XDebug(this,DebugMild,"Failed to send message (%p): '%s'",msg,msg->name());
     if (m_sls == 255)
 	m_sls = (unsigned char)sls;
-    msg->deref();
+    TelEngine::destruct(msg);
     return sls;
 }
 
@@ -2207,7 +2216,7 @@ void SS7ISUP::destruct()
 void SS7ISUP::timerTick(const Time& when)
 {
     Lock lock(this);
-    if (!circuits())
+    if (!(m_l3LinkUp && circuits()))
 	return;
 
     // Blocking/unblocking circuits
@@ -2251,12 +2260,9 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 {
     if (!link)
 	return;
+    m_l3LinkUp = link->operational(-1);
     DDebug(this,DebugInfo,"L3 (%p,'%s') is %soperational",link,
-	link->toString().safe(),link->operational()?"":"not ");
-    if (!link->operational(sls))
-	return;
-    // TODO: reset local state changed flag when link is not operational
-    //       set local state changed flag when link is operational to notify remote party
+	link->toString().safe(),m_l3LinkUp?"":"not ");
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,

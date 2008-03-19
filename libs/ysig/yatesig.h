@@ -5170,6 +5170,7 @@ private:
     String m_numScreening;               // Number screening
     String m_callerCat;                  // Caller party category
     String m_format;                     // Default format
+    bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
     // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset

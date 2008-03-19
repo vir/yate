@@ -2037,7 +2037,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_lockTimer.interval(params,"channellock",5,10,false,true);
 
     // Remote user part test
-    m_uptTimer.interval(params,"userparttest",300,300,true,true);
+    m_uptTimer.interval(params,"userparttest",60,300,true,true);
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
 
@@ -2306,8 +2306,11 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
     Lock lock(this);
     m_l3LinkUp = link->operational(-1);
     // Reset remote user part's availablity state if supported
-    if (m_uptTimer.interval() && !m_l3LinkUp)
+    // Force UPT re-send
+    if (m_uptTimer.interval() && !m_l3LinkUp) {
+	m_uptTimer.stop();
 	m_userPartAvail = false;
+    }
     Debug(this,DebugInfo,
 	"L3 (%p,'%s') is %soperational sls=%d. Remote User Part is %savailable",link,
 	link->toString().safe(),m_l3LinkUp?"":"not ",sls,m_userPartAvail?"":"un");

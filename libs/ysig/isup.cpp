@@ -2037,7 +2037,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_lockTimer.interval(params,"channellock",5,10,false,true);
 
     // Remote user part test
-    m_uptTimer.interval(params,"userparttest",60,300,true,true);
+    m_uptTimer.interval(params,"userparttest",10,60,true,true);
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
 

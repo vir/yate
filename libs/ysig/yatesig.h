@@ -5149,7 +5149,8 @@ private:
     bool resetCircuit(unsigned int cic, bool checkCall);
     // Block/unblock a circuit side (local or remote)
     // Return false if the given circuit doesn't exist
-    bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail);
+    bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
+	bool resetChg = false);
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
     // Send blocking/unblocking messages

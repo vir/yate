@@ -1972,7 +1972,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_rscTimer(0),
     m_rscCic(0),
     m_lockTimer(0),
-    m_lockCic(false),
+    m_lockNeed(true),
+    m_lockFlags(0),
     m_lockCicCode(0)
 {
     setName(params.getValue("debugname","isup"));
@@ -2210,15 +2211,15 @@ void SS7ISUP::timerTick(const Time& when)
 	return;
 
     // Blocking/unblocking circuits
-    if (m_lockCicCode < circuits()->last() && m_lockTimer.interval()) {
+    if (m_lockNeed) {
 	if (m_lockTimer.started()) {
 	    if (!m_lockTimer.timeout(when.msec()))
 		return;
-	    m_lockTimer.stop();
-	    Debug(this,DebugMild,"Circuit %sblocking timed out for cic=%u",
-		m_lockCic?"":"un",m_lockCicCode);
+	    Debug(this,DebugMild,"Circuit %sblocking timed out cic=%u map=%s",
+		(m_lockFlags&SignallingCircuit::LockLocal)?"":"un",
+		m_lockCicCode,m_lockMap.c_str());
 	}
-	if (notifyLock())
+	if (sendLocalLock(when.msec()))
 	    return;
     }
 
@@ -2626,9 +2627,13 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
 	case SignallingCircuitEvent::Alarm:
 	case SignallingCircuitEvent::NoAlarm:
 	    if (event.circuit()) {
-		blockCircuit(event.circuit()->code(),
-		    event.type()==SignallingCircuitEvent::Alarm,false,true);
-		event.circuit()->setLock(SignallingCircuit::LockLocalChanged);
+		lock();
+		// TODO: check if the circuit should be locked now or when received the response
+//		blockCircuit(event.circuit()->code(),
+//		    event.type()==SignallingCircuitEvent::Alarm,false,true);
+		event.circuit()->setLock(SignallingCircuit::LockLocalChanged | SignallingCircuit::LockLocalHWFailure);
+		m_lockNeed = true;
+		unlock();
 	    }
 	    break;
 	default:
@@ -2740,6 +2745,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
     const char* reason = 0;
     bool impl = true;
     bool stopSGM = false;
+
+    // TODO: Check if segmentation shoud stop for all affected circuits received withing range (CGB,GRS, ...)
+
     switch (msg->type()) {
 	case SS7MsgISUP::CNF: // Confusion
 	    Debug(this,DebugNote,"%s with cause='%s' diagnostic='%s'",msg->name(),
@@ -2790,24 +2798,63 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    break;
 	case SS7MsgISUP::UBA: // Unblocking Acknowledgement
 	case SS7MsgISUP::BLA: // Blocking Acknowledgement
-	    if (msg->cic() == m_lockCicCode) {
-		bool block = (msg->type() == SS7MsgISUP::BLA);
-		if (blockCircuit(msg->cic(),block,false,false)) {
-		    SignallingCircuit* cic = circuits() ? circuits()->find(msg->cic()) : 0;
-		    if (cic)
-			cic->resetLock(SignallingCircuit::LockLocalChanged);
+	    {
+		int l = (msg->type() == SS7MsgISUP::BLA) ? SignallingCircuit::LockLocal : 0;
+		// Check for correct response: same msg type and circuit code
+		if (msg->cic() != m_lockCicCode || l != m_lockFlags ||
+		    m_lockMap.length() != 1) {
+		    reason = "wrong-state-message";
+		    break;
 		}
-		else
+		if (!blockCircuit(msg->cic(),m_lockFlags,false,false)) {
 		    reason = "unknown-channel";
-		notifyLock();
+		    break;
+		}
+		SignallingCircuit* cic = circuits() ? circuits()->find(msg->cic()) : 0;
+		if (cic)
+		    cic->resetLock(SignallingCircuit::LockLocalChanged);
+		sendLocalLock();
 	    }
-	    else
-		reason = "wrong-state-message";
 	    break;
-	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
-	    stopSGM = true;
 	case SS7MsgISUP::CGA: // Circuit Group Blocking Acknowledgement
 	case SS7MsgISUP::CUA: // Circuit Group Unblocking Acknowledgement
+	    // Q.763 3.43 range can be 1..256
+	    // Bit: 0-no indication 1-block/unblock
+	    {
+		String* srcMap = 0;
+		bool hwFail = false;
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,srcMap,&hwFail);
+		if (!nCics) {
+		    reason = "invalid-ie";
+		    break;
+		}
+		int l = 0;
+		if (msg->type() == SS7MsgISUP::CGA)
+		    l |= SignallingCircuit::LockLocal;
+		if (hwFail)
+		    l |= SignallingCircuit::LockLocalHWFailure;
+		// Check for correct response: same msg type, circuit code, type indicator, circuit map
+		bool ok = (msg->cic() == m_lockCicCode || l == m_lockFlags || m_lockMap.length() == nCics);
+		if (ok)
+		    for (unsigned int i = 0; i < m_lockMap.length(); i++)
+			if (m_lockMap[i] == '0' && srcMap->at(i) != '0') {
+			    ok = false;
+			    break;
+			}
+		if (!ok) {
+		    reason = "wrong-state-message";
+		    break;
+		}
+		bool block = (0 != (m_lockFlags & SignallingCircuit::LockLocal));
+		// TODO: Max bits set to 1 should be 32
+		for (unsigned int i = 0; i < m_lockMap.length(); i++)
+		    if (m_lockMap[i] != '0')
+			blockCircuit(msg->cic()+i,block,true,hwFail);
+		sendLocalLock();
+	    }
+	    break;
+	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
+	    // TODO: stop receiving segments
 	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
 	    reason = "wrong-state-message";
 	    break;
@@ -2838,9 +2885,9 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    }
 	    break;
 	case SS7MsgISUP::UEC: // Unequipped CIC (national use)
-	    Debug(this,DebugWarn,"%s for cic=%u",msg->name(),msg->cic());
+	    Debug(this,DebugWarn,"%s for cic=%u. Circuit is unequipped on remote side",
+		msg->name(),msg->cic());
 	    blockCircuit(msg->cic(),true,true,false);
-	    blockCircuit(msg->cic(),true,false,false);
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity
@@ -2943,29 +2990,87 @@ SS7ISUPCall* SS7ISUP::findCall(unsigned int cic)
 }
 
 // Send blocking/unblocking messages
-bool SS7ISUP::notifyLock()
+// Return false if no request was sent
+bool SS7ISUP::sendLocalLock(u_int64_t when)
 {
-    m_lockTimer.stop();
-    m_lockCicCode++;
+#define LOCK_FLAGS (SignallingCircuit::LockLocal | SignallingCircuit::LockLocalHWFailure)
     if (!circuits())
 	return false;
-    for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
+
+    // Reset all lock related data
+    m_lockTimer.stop();
+    m_lockNeed = false;
+    m_lockCicCode = 0;
+    m_lockMap.clear();
+
+    // Peek a starting circuit whose local state changed
+    ObjList* o = circuits()->circuits().skipNull();
+    SignallingCircuitSpan* span = 0;
+    for (; o; o = o->skipNext()) {
 	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
-	if (cic->code() < m_lockCicCode)
-	    continue;
-	m_lockCicCode = cic->code();
 	if (!cic->locked(SignallingCircuit::LockLocalChanged))
 	    continue;
-	m_lockCic = (0 != cic->locked(SignallingCircuit::LockLocal));
+	m_lockNeed = true;
+	m_lockCicCode = cic->code();
+	m_lockFlags = cic->locked(LOCK_FLAGS);
+	span = cic->span();
+	o = o->skipNext();
 	break;
     }
-    if (m_lockCicCode >= circuits()->last())
+    if (!m_lockNeed)
 	return false;
-    m_lockTimer.start();
-    SS7MsgISUP* msg = new SS7MsgISUP(m_lockCic?SS7MsgISUP::BLK:SS7MsgISUP::UBL,m_lockCicCode);
+
+    // Check if we can pick a range of circuits within the same span
+    //  with the same operation to do
+    // Q.763 3.43: range can be 2..256. Bit: 0-no indication 1-block/unblock.
+    // Max bits set to 1 must be 32
+    char d[256];
+    d[0] = '1';
+    unsigned int cics = 1;
+    unsigned int lockRange = 1;
+    for (; o && cics < 32; o = o->skipNext(), lockRange++) {
+	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	if (span != cic->span())
+	    break;
+	// Add circuit to map
+	// Circuit must have the lock state changed and the same lock flags as the base circuit's
+	if (0 != cic->locked(SignallingCircuit::LockLocalChanged) &&
+	    m_lockFlags == cic->locked(LOCK_FLAGS)) {
+	    d[lockRange] = '1';
+	    cics++;
+	}
+    }
+    if (cics == 1)
+	lockRange = 1;
+
+    // Build and send the message
+    SS7MsgISUP* msg = 0;
+    m_lockMap.assign(d,lockRange);
+    if (m_lockMap.length() > 1) {
+	if (m_lockFlags & SignallingCircuit::LockLocal)
+	    msg = new SS7MsgISUP(SS7MsgISUP::CGB,m_lockCicCode);
+	else
+	    msg = new SS7MsgISUP(SS7MsgISUP::CGU,m_lockCicCode);
+	if (m_lockFlags & SignallingCircuit::LockLocalHWFailure)
+	    msg->params().addParam("GroupSupervisionTypeIndicator","hw-failure");
+	else
+	    msg->params().addParam("GroupSupervisionTypeIndicator","maintenance");
+	msg->params().addParam("RangeAndStatus",String(m_lockMap.length()));
+	msg->params().addParam("RangeAndStatus.map",m_lockMap);
+    }
+    else {
+	if (m_lockFlags & SignallingCircuit::LockLocal)
+	    msg = new SS7MsgISUP(SS7MsgISUP::BLK,m_lockCicCode);
+	else
+	    msg = new SS7MsgISUP(SS7MsgISUP::UBL,m_lockCicCode);
+	// Reset all flags except for LockLocal
+	m_lockFlags &= ~SignallingCircuit::LockLocalHWFailure;
+    }
     SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
     transmitMessage(msg,label,false);
+    m_lockTimer.start(when);
     return true;
+#undef LOCK_FLAGS
 }
 
 

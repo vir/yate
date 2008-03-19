@@ -5153,7 +5153,8 @@ private:
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
     // Send blocking/unblocking messages
-    bool notifyLock();
+    // Return false if no request was sent
+    bool sendLocalLock(u_int64_t when = Time::msecNow());
 
     SS7PointCode::Type m_type;           // Point code type of this call controller
     ObjList m_pointCodes;                // Point codes serviced by this call controller
@@ -5168,11 +5169,15 @@ private:
     String m_numScreening;               // Number screening
     String m_callerCat;                  // Caller party category
     String m_format;                     // Default format
+    // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset
-    SignallingTimer m_lockTimer;         // Block/unblock timer
-    bool m_lockCic;                      // Currently blocking or unblocking circuit
-    unsigned int m_lockCicCode;          // Last blocked/unblocked circuit
+    // Blocking/unblocking circuits
+    SignallingTimer m_lockTimer;         // Request timeout
+    bool m_lockNeed;                     // Flag used to signal that there are circuits whose lock state changed
+    int m_lockFlags;                     // Current request flags: blocking/unblocking,hw-failure/maintenance
+    unsigned int m_lockCicCode;          // Current (un)blocking cic code
+    String m_lockMap;                    // The sent circuit map (contains 1 element for single circuit request)
 };
 
 /**

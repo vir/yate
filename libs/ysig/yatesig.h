@@ -5171,6 +5171,10 @@ private:
     String m_callerCat;                  // Caller party category
     String m_format;                     // Default format
     bool m_l3LinkUp;                     // Flag indicating the availability of a Layer3 data link
+    // Remote User Part test
+    SignallingTimer m_uptTimer;          // Timer for UPT
+    bool m_userPartAvail;                // Flag indicating the remote User Part availability
+    unsigned int m_uptCicCode;           // The circuit code sent with UPT
     // Circuit reset
     SignallingTimer m_rscTimer;          // RSC message or idle timeout
     SignallingCircuit* m_rscCic;         // Circuit currently beeing reset

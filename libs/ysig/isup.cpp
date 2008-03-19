@@ -1130,6 +1130,19 @@ static const MsgParams s_common_params[] = {
 	SS7MsgISUP::EndOfParameters
 	}
     },
+    // user part test and response
+    { SS7MsgISUP::UPT, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
+    { SS7MsgISUP::UPA, true,
+	{
+	SS7MsgISUP::EndOfParameters,
+	SS7MsgISUP::EndOfParameters
+	}
+    },
     { SS7MsgISUP::Unknown, false, { SS7MsgISUP::EndOfParameters } }
 };
 
@@ -1970,6 +1983,9 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_sls(255),
     m_inn(false),
     m_l3LinkUp(false),
+    m_uptTimer(0),
+    m_userPartAvail(true),
+    m_uptCicCode(0),
     m_rscTimer(0),
     m_rscCic(0),
     m_lockTimer(0),
@@ -2020,6 +2036,11 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_rscTimer.interval(params,"channelsync",60,1000,true,true);
     m_lockTimer.interval(params,"channellock",5,10,false,true);
 
+    // Remote user part test
+    m_uptTimer.interval(params,"userparttest",5,10,false,true);
+    if (m_uptTimer.interval())
+	m_userPartAvail = false;
+
     if (debugAt(DebugInfo)) {
 	String s;
 	s << "pointcode-type=" << stype;
@@ -2034,6 +2055,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
 	    s << "missing";
 	s << " priority+SSF=" << (unsigned int)m_priossf;
 	s << " lockcircuits=" << params.getValue("lockcircuits");
+	s << " userpartavail=" << String::boolText(m_userPartAvail);
 	Debug(this,DebugInfo,"ISUP Call Controller %s [%p]",s.c_str(),this);
     }
 }
@@ -2096,12 +2118,20 @@ SS7MSU* SS7ISUP::createMSU(SS7MsgISUP::Type type, unsigned char ssf,
 // Make an outgoing call
 SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 {
+    if (!msg) {
+	reason = "noconn";
+	return 0;
+    }
     if (!m_l3LinkUp) {
+	Debug(this,DebugNote,"L3 network is down");
+	TelEngine::destruct(msg);
 	reason = "net-out-of-order";
 	return 0;
     }
-    if (!msg) {
-	reason = "invalid-parameter";
+    if (!m_userPartAvail) {
+	Debug(this,DebugNote,"Remote User Part is unavailable");
+	TelEngine::destruct(msg);
+	reason = "noconn";
 	return 0;
     }
     SS7PointCode dest;
@@ -2142,7 +2172,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	if (!m_rscCic && m_rscTimer.interval())
 	    m_rscTimer.start();
     }
-    msg->deref();
+    TelEngine::destruct(msg);
     return call;
 }
 
@@ -2152,10 +2182,6 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 {
     if (!msg)
 	return -1;
-    if (!m_l3LinkUp) {
-	TelEngine::destruct(msg);
-	return -1;
-    }
     const SS7Label* p = &label;
     SS7Label tmp;
     if (recvLbl) {
@@ -2169,7 +2195,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
     }
     SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
     sls = -1;
-    if (msu) {
+    if (msu && m_l3LinkUp && m_userPartAvail) {
 	sls = transmitMSU(*msu,*p,p->sls());
 	TelEngine::destruct(msu);
     }
@@ -2219,6 +2245,20 @@ void SS7ISUP::timerTick(const Time& when)
     if (!(m_l3LinkUp && circuits()))
 	return;
 
+    // Test remote user part
+    if (!m_userPartAvail && m_uptTimer.interval()) {
+	if (m_uptTimer.started() && !m_uptTimer.timeout(when.msec()))
+	    return;
+	ObjList* o = circuits()->circuits().skipNull();
+	SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
+	m_uptCicCode = cic ? cic->code() : 1;
+	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::UPT,m_uptCicCode);
+	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
+	transmitMessage(msg,label,false);
+	m_uptTimer.start(when.msec());
+	return;
+    }
+
     // Blocking/unblocking circuits
     if (m_lockNeed) {
 	if (m_lockTimer.started()) {
@@ -2260,9 +2300,14 @@ void SS7ISUP::notify(SS7Layer3* link, int sls)
 {
     if (!link)
 	return;
+    Lock lock(this);
     m_l3LinkUp = link->operational(-1);
-    DDebug(this,DebugInfo,"L3 (%p,'%s') is %soperational",link,
-	link->toString().safe(),m_l3LinkUp?"":"not ");
+    // Reset remote user part's availablity state if supported
+    if (m_uptTimer.interval() && !m_l3LinkUp)
+	m_userPartAvail = false;
+    Debug(this,DebugInfo,
+	"L3 (%p,'%s') is %soperational sls=%d. Remote User Part is %savailable",link,
+	link->toString().safe(),m_l3LinkUp?"":"not ",sls,m_userPartAvail?"":"un");
 }
 
 SS7MSU* SS7ISUP::buildMSU(SS7MsgISUP::Type type, unsigned char sio,
@@ -2601,6 +2646,21 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	Debug(this,DebugInfo,"Received message (%p)%s",msg,tmp.c_str());
     }
 
+    // Check if we expected some response to UPT
+    // Ignore 
+    if (!m_userPartAvail && m_uptTimer.started()) {
+	m_uptTimer.stop();
+	m_userPartAvail = true;
+	Debug(this,DebugInfo,"Remote user part is available");
+	if (msg->cic() == m_uptCicCode &&
+	    (msg->type() == SS7MsgISUP::UPA ||
+	     msg->type() == SS7MsgISUP::CNF ||
+	     msg->type() == SS7MsgISUP::UEC)) {
+	    TelEngine::destruct(msg);
+	    return true;
+	}
+    }
+
     switch (msg->type()) {
 	case SS7MsgISUP::IAM:
 	case SS7MsgISUP::SAM:
@@ -2620,8 +2680,8 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	default:
 	    processControllerMsg(msg,label,sls);
     }
-    msg->deref();
 
+    TelEngine::destruct(msg);
     return true;
 }
 
@@ -2858,11 +2918,6 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		sendLocalLock();
 	    }
 	    break;
-	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
-	    // TODO: stop receiving segments
-	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
-	    reason = "wrong-state-message";
-	    break;
 	case SS7MsgISUP::CGB: // Circuit Group Blocking
 	case SS7MsgISUP::CGU: // Circuit Group Unblocking
 	    // Q.763 3.43 range can be 1..256
@@ -2893,6 +2948,15 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    Debug(this,DebugWarn,"%s for cic=%u. Circuit is unequipped on remote side",
 		msg->name(),msg->cic());
 	    blockCircuit(msg->cic(),true,true,false);
+	    break;
+	case SS7MsgISUP::UPT: // User Part Test
+	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::UPA,msg->cic()),label,true,sls);
+	    break;
+	case SS7MsgISUP::UPA: // User Part Available
+	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
+	    // TODO: stop receiving segments
+	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)
+	    reason = "wrong-state-message";
 	    break;
 	case SS7MsgISUP::CQM: // Circuit Group Query (national use)
 	case SS7MsgISUP::COT: // Continuity

@@ -2037,7 +2037,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_lockTimer.interval(params,"channellock",5,10,false,true);
 
     // Remote user part test
-    m_uptTimer.interval(params,"userparttest",5,10,false,true);
+    m_uptTimer.interval(params,"userparttest",300,300,true,true);
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
 
@@ -2195,7 +2195,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
     }
     SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
     sls = -1;
-    if (msu && m_l3LinkUp && m_userPartAvail) {
+    if (msu && m_l3LinkUp) {
 	sls = transmitMSU(*msu,*p,p->sls());
 	TelEngine::destruct(msu);
     }
@@ -2247,8 +2247,11 @@ void SS7ISUP::timerTick(const Time& when)
 
     // Test remote user part
     if (!m_userPartAvail && m_uptTimer.interval()) {
-	if (m_uptTimer.started() && !m_uptTimer.timeout(when.msec()))
-	    return;
+	if (m_uptTimer.started()) {
+	    if (!m_uptTimer.timeout(when.msec()))
+		return;
+	    DDebug(this,DebugNote,"UPT timed out. Retransmitting");
+	}
 	ObjList* o = circuits()->circuits().skipNull();
 	SignallingCircuit* cic = o ? static_cast<SignallingCircuit*>(o->get()) : 0;
 	m_uptCicCode = cic ? cic->code() : 1;

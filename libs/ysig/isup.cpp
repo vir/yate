@@ -2794,7 +2794,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 }
 
 unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned int maxRange,
-    unsigned int maxMap = 0, String* map = 0, bool* hwFail = 0)
+    unsigned int maxMap = 0, String** map = 0, bool* hwFail = 0)
 {
     unsigned int range = nl.getIntValue("RangeAndStatus");
     if (range < minRange || range > maxRange)
@@ -2804,7 +2804,8 @@ unsigned int getRangeAndStatus(NamedList& nl, unsigned int minRange, unsigned in
     NamedString* ns = nl.getParam("RangeAndStatus.map");
     if (!ns || ns->length() > maxMap || ns->length() < range)
 	return 0;
-    map = ns;
+    if (map)
+	*map = ns;
     if (hwFail) {
 	ns = nl.getParam("GroupSupervisionTypeIndicator");
 	*hwFail = (ns && *ns == "hw-failure");
@@ -2894,7 +2895,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    {
 		String* srcMap = 0;
 		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,srcMap,&hwFail);
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail);
 		if (!nCics) {
 		    reason = "invalid-ie";
 		    break;
@@ -2931,7 +2932,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    {
 		String* srcMap = 0;
 		bool hwFail = false;
-		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,srcMap,&hwFail);
+		unsigned int nCics = getRangeAndStatus(msg->params(),1,256,256,&srcMap,&hwFail);
 		if (!nCics) {
 		    reason = "invalid-ie";
 		    break;

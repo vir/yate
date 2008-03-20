@@ -118,7 +118,7 @@ class ConfChan : public Channel
 {
     YCLASS(ConfChan,Channel)
 public:
-    ConfChan(const String& name, const NamedList& params);
+    ConfChan(const String& name, const NamedList& params, bool utility);
     ConfChan(ConfRoom* room, bool voice = false);
     virtual ~ConfChan();
     inline bool isUtility() const
@@ -197,7 +197,7 @@ class ConferenceDriver : public Driver
 public:
     ConferenceDriver();
     virtual ~ConferenceDriver();
-    bool checkRoom(String& room, bool existing);
+    bool checkRoom(String& room, bool existing, bool utility);
 protected:
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
@@ -615,13 +615,12 @@ ConfSource::~ConfSource()
 
 // Constructor of a new conference leg, creates or attaches to an existing
 //  conference room; noise and echo suppression are also set here
-ConfChan::ConfChan(const String& name, const NamedList& params)
-    : Channel(__plugin,0,true), m_utility(true), m_billing(false)
+ConfChan::ConfChan(const String& name, const NamedList& params, bool utility)
+    : Channel(__plugin,0,true), m_utility(utility), m_billing(false)
 {
     DDebug(this,DebugAll,"ConfChan::ConfChan(%s,%p) %s [%p]",
 	name.c_str(),&params,id().c_str(),this);
     // much of the defaults depend if this is an utility channel or not
-    m_utility = params.getBoolValue("utility",false);
     m_billing = params.getBoolValue("billing",false);
     bool smart = params.getBoolValue("smart",!m_utility);
     bool echo = params.getBoolValue("echo",m_utility);
@@ -716,7 +715,8 @@ bool ConfHandler::received(Message& msg)
 	return false;
     }
 
-    if (!__plugin.checkRoom(room,msg.getBoolValue("existing")))
+    bool utility = msg.getBoolValue("utility",false);
+    if (!__plugin.checkRoom(room,msg.getBoolValue("existing"),utility))
 	return false;
 
     const char* reason = msg.getValue("reason","conference");
@@ -736,14 +736,14 @@ bool ConfHandler::received(Message& msg)
     }
 
     // create a conference leg or even a room for the caller
-    ConfChan *c = new ConfChan(room,msg);
+    ConfChan *c = new ConfChan(room,msg,utility);
     if (chan->connect(c,reason,false)) {
 	msg.setParam("peerid",c->id());
 	c->deref();
 	msg.setParam("room",__plugin.prefix()+room);
 	if (peer) {
 	    // create a conference leg for the old peer too
-	    ConfChan *p = new ConfChan(room,msg);
+	    ConfChan *p = new ConfChan(room,msg,utility);
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
@@ -785,11 +785,12 @@ bool ConfHandler::received(Message& msg)
 // Handle call.execute by creating or attaching to an existing conference
 bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 {
-    if (!checkRoom(dest,msg.getBoolValue("existing")))
+    bool utility = msg.getBoolValue("utility",false);
+    if (!checkRoom(dest,msg.getBoolValue("existing"),utility))
 	return false;
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	ConfChan *c = new ConfChan(dest,msg);
+	ConfChan *c = new ConfChan(dest,msg,utility);
 	if (ch->connect(c)) {
 	    msg.setParam("peerid",c->id());
 	    c->deref();
@@ -807,13 +808,13 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 }
 
 // Check if a room exists, allocates a new room name if not and asked so
-bool ConferenceDriver::checkRoom(String& room, bool existing)
+bool ConferenceDriver::checkRoom(String& room, bool existing, bool utility)
 {
     ConfRoom* conf = ConfRoom::get(room);
     if (existing && !conf)
 	return false;
     if (conf) {
-	bool ok = !conf->full();
+	bool ok = utility || !conf->full();
 	conf->deref();
 	return ok;
     }

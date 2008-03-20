@@ -819,7 +819,7 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
     setConsumer();
     m_hungup = true;
     if (m_reason.null())
-	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal");
+	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal-clearing");
     setState("hangup",true,true);
     if (m_call) {
 	m_call->userdata(0);
@@ -1955,7 +1955,7 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 		    break;
 		// Fall through to release if update failed
 	    case SignallingEvent::Release:
-		rec->disconnect(event->message() ? event->message()->params().getValue("reason") : "normal");
+		rec->disconnect(event->message() ? event->message()->params().getValue("reason") : "normal-clearing");
 		break;
 	    default:
 		DDebug(&plugin,DebugStub,

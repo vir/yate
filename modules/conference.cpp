@@ -96,6 +96,8 @@ public:
 	{ return m_users >= m_maxusers; }
     inline ConfChan* recorder() const
 	{ return m_record; }
+    inline const String& notify() const
+	{ return m_notify; }
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
@@ -123,11 +125,14 @@ public:
     ConfChan(const String& name, const NamedList& params, bool utility);
     ConfChan(ConfRoom* room, bool voice = false);
     virtual ~ConfChan();
+    virtual bool msgTone(Message& msg, const char* tone);
+    virtual bool msgText(Message& msg, const char* text);
     inline bool isUtility() const
 	{ return m_utility; }
     inline bool isRecorder() const
 	{ return m_room && (m_room->recorder() == this); }
 private:
+    void alterMsg(Message& msg, const char* event);
     RefPointer<ConfRoom> m_room;
     bool m_utility;
     bool m_billing;
@@ -200,6 +205,7 @@ public:
     ConferenceDriver();
     virtual ~ConferenceDriver();
     bool checkRoom(String& room, bool existing, bool utility);
+    bool unload();
 protected:
     virtual void initialize();
     virtual bool received(Message &msg, int id);
@@ -207,10 +213,17 @@ protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     virtual void statusParams(String& str);
 private:
-    bool m_init;
+    ConfHandler* m_handler;
 };
 
 INIT_PLUGIN(ConferenceDriver);
+
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow)
+	return __plugin.unload();
+    return true;
+}
 
 // Count the position of the most significant 1 bit - pretty close to logarithm
 static unsigned int binLog(unsigned int x)
@@ -719,6 +732,40 @@ ConfChan::~ConfChan()
 	Engine::enqueue(message("chan.hangup"));
 }
 
+bool ConfChan::msgTone(Message& msg, const char* tone)
+{
+    alterMsg(msg,"dtmf");
+    return false;
+}
+
+bool ConfChan::msgText(Message& msg, const char* text)
+{
+    alterMsg(msg,"text");
+    return false;
+}
+
+void ConfChan::alterMsg(Message& msg, const char* event)
+{
+    String* target = msg.getParam("targetid");
+    // if the message is already targeted to something else don't touch it
+    if (target && *target && (id() != *target))
+	return;
+    msg.setParam("utility",String::boolText(m_utility));
+    msg.setParam("room",m_address);
+    // if we were the target or it was none send it to the room's notifier
+    if (m_room && m_room->notify()) {
+	msg = "chan.notify";
+	const char* peerid = msg.getValue("id");
+	if (peerid)
+	    msg.setParam("peerid",peerid);
+	msg.setParam("id",id());
+	msg.setParam("event",event);
+	msg.setParam("users",String(m_room->users()));
+	msg.setParam("full",String::boolText(m_room->full()));
+	msg.setParam("targetid",m_room->notify());
+    }
+}
+
 
 bool ConfHandler::received(Message& msg)
 {
@@ -889,8 +936,21 @@ bool ConferenceDriver::checkRoom(String& room, bool existing, bool utility)
     return true;
 }
 
+bool ConferenceDriver::unload()
+{
+    Lock lock(this,500000);
+    if (!lock.mutex())
+	return false;
+    if (isBusy() || s_rooms.count())
+	return false;
+    uninstallRelays();
+    Engine::uninstall(m_handler);
+    m_handler = 0;
+    return true;
+}
+
 ConferenceDriver::ConferenceDriver()
-    : Driver("conf","misc"), m_init(false)
+    : Driver("conf","misc"), m_handler(0)
 {
     Output("Loaded module Conference");
 }
@@ -929,11 +989,14 @@ void ConferenceDriver::statusParams(String& str)
 void ConferenceDriver::initialize()
 {
     Output("Initializing module Conference");
+    // install intercept relays with a priority slightly higher than default
+    installRelay(Tone,75);
+    installRelay(Text,75);
     setup();
-    if (m_init)
+    if (m_handler)
 	return;
-    m_init = true;
-    Engine::install(new ConfHandler(150));
+    m_handler = new ConfHandler(150);
+    Engine::install(m_handler);
 }
 
 }; // anonymous namespace

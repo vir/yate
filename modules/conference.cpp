@@ -99,6 +99,8 @@ public:
     void mix(ConfConsumer* cons = 0);
     void addChannel(ConfChan* chan, bool player = false);
     void delChannel(ConfChan* chan);
+    void dropAll(const char* reason = 0);
+    void msgStatus(Message& msg);
     bool setRecording(const NamedList& params);
 private:
     ConfRoom(const String& name, const NamedList& params);
@@ -200,7 +202,9 @@ public:
     bool checkRoom(String& room, bool existing, bool utility);
 protected:
     virtual void initialize();
+    virtual bool received(Message &msg, int id);
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
     virtual void statusParams(String& str);
 private:
     bool m_init;
@@ -341,17 +345,42 @@ void ConfRoom::delChannel(ConfChan* chan)
 	}
 
 	// cleanup if there are only 1 or 0 (if lonely==true) real users left
-	if (m_users <= (m_lonely ? 0 : 1)) {
+	if (m_users <= (m_lonely ? 0 : 1))
 	    // all channels left are utility or the lonely user - drop them
-	    // make sure we continue to exist at least as long as the iterator
-	    if (!ref())
-		return;
-	    ListIterator iter(m_chans);
-	    while (ConfChan* ch = static_cast<ConfChan*>(iter.get()))
-		ch->disconnect("hangup");
-	    deref();
-	}
+	    dropAll("hangup");
     }
+}
+
+// Drop all channels attached to the room, the lock must not be hold
+void ConfRoom::dropAll(const char* reason)
+{
+    // make sure we continue to exist at least as long as the iterator
+    if (!ref())
+	return;
+    ListIterator iter(m_chans);
+    while (ConfChan* ch = static_cast<ConfChan*>(iter.get()))
+	ch->disconnect(reason);
+    deref();
+}
+
+// Retrive status information about this room
+void ConfRoom::msgStatus(Message& msg)
+{
+    Lock lock(mutex());
+    msg.retValue().clear();
+    msg.retValue() << "name=" << __plugin.prefix() << m_name;
+    msg.retValue() << ",type=conference";
+    msg.retValue() << ";module=" << __plugin.name();
+    msg.retValue() << ",room=" << m_name;
+    msg.retValue() << ",maxusers=" << m_maxusers;
+    msg.retValue() << ",lonely=" << m_lonely;
+    msg.retValue() << ",users=" << m_users;
+    msg.retValue() << ",chans=" << m_chans.count();
+    if (m_notify)
+	msg.retValue() << ",notify=" << m_notify;
+    if (m_playerId)
+	msg.retValue() << ",player=" << m_playerId;
+    msg.retValue() << "\r\n";
 }
 
 // Create or stop outgoing call to room record utility channel
@@ -754,6 +783,39 @@ bool ConfHandler::received(Message& msg)
 }
 
 
+// Message received override to drop entire rooms
+bool ConferenceDriver::received(Message &msg, int id)
+{
+    while ((id == Drop) || (id == Status) && prefix()) {
+	String dest;
+	switch (id) {
+	    case Drop:
+		dest = msg.getValue("id");
+		break;
+	    case Status:
+		dest = msg.getValue("module");
+		break;
+	}
+	if (!dest.startSkip(prefix(),false))
+	    break;
+	ConfRoom* room = ConfRoom::get(dest);
+	if (!room)
+	    break;
+	switch (id) {
+	    case Drop:
+		room->dropAll(msg.getValue("reason"));
+		room->deref();
+		break;
+	    case Status:
+		room->msgStatus(msg);
+		room->deref();
+		break;
+	}
+	return true;
+    }
+    return Driver::received(msg,id);
+}
+
 /* "call.execute" message
     Input parameters - per room:
 	"callto" - must be of the form "conf/NAME" where NAME is the name of
@@ -839,12 +901,30 @@ ConferenceDriver::~ConferenceDriver()
     s_rooms.clear();
 }
 
+bool ConferenceDriver::commandComplete(Message& msg, const String& partLine, const String& partWord)
+{
+    bool ok = Driver::commandComplete(msg,partLine,partWord);
+    if (ok && String(msg.getValue("complete")) == "channels") {
+	String tmp = partWord;
+	if (tmp.startSkip(prefix(),false)) {
+	    lock();
+	    ObjList* l = s_rooms.skipNull();
+	    for (; l; l=l->skipNext()) {
+		ConfRoom* r = static_cast<ConfRoom*>(l->get());
+		if (tmp.null() || r->toString().startsWith(tmp))
+		    msg.retValue().append(prefix() + r->toString(),"\t");
+	    }
+	    unlock();
+	}
+    }
+    return ok;
+}
+
 void ConferenceDriver::statusParams(String& str)
 {
     Driver::statusParams(str);
     str.append("rooms=",",") << s_rooms.count();
 }
-    
 
 void ConferenceDriver::initialize()
 {

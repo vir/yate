@@ -25,6 +25,7 @@
 #include "yatesig.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 
 using namespace TelEngine;
@@ -475,6 +476,66 @@ const char* SignallingCircuit::lookupType(int type)
 const char* SignallingCircuit::lookupStatus(int status)
 {
     return lookup(status,s_cicStatusDict);
+}
+
+/**
+ * SignallingCircuitRange
+ */
+SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr, const char* name)
+    : String(name)
+{
+    set(rangeStr);
+}
+
+// Set this range from a string
+bool SignallingCircuitRange::set(const String& rangeStr)
+{
+    clear();
+    unsigned int n = 0;
+    unsigned int* p = SignallingUtils::parseUIntArray(rangeStr,0,(unsigned int)-1,n,true);
+    if (!p)
+	return false;
+    add(p,n);
+    delete[] p;
+    return true;
+}
+
+// Add codes to this range from a string
+bool SignallingCircuitRange::add(const String& rangeStr)
+{
+    unsigned int n = 0;
+    unsigned int* p = SignallingUtils::parseUIntArray(rangeStr,0,(unsigned int)-1,n,true);
+    if (!p)
+	return false;
+    add(p,n);
+    delete[] p;
+    return true;
+}
+
+// Add an array of circuit codes to this rangevoid 
+void SignallingCircuitRange::add(unsigned int* codes, unsigned int len)
+{
+    if (!(codes && len))
+	return;
+    unsigned int n = count() + len;
+    unsigned int tmp[n];
+    if (m_range.length())
+	::memcpy(tmp,(void*)m_range.data(),m_range.length());
+    ::memcpy(tmp+count(),codes,len*sizeof(unsigned int));
+    m_range.assign(0,n*sizeof(unsigned int));
+    ::memcpy((void*)m_range.data(),tmp,m_range.length());
+    m_count = n;
+}
+
+// Check if a circuit code is within this range
+bool SignallingCircuitRange::find(unsigned int code)
+{
+    if (!range())
+	return false;
+    for (unsigned int i = 0; i < count(); i++)
+	if (range()[i] == code)
+	    return true;
+    return false;
 }
 
 

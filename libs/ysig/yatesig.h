@@ -62,6 +62,7 @@ class SignallingCall;                    // Abstract single phone call
 class SignallingEvent;                   // A single signalling related event
 class SignallingCircuitEvent;            // A single signalling circuit related event
 class SignallingCircuit;                 // Abstract data circuit used by signalling
+class SignallingCircuitRange;            // A circuit range (set of circuits)
 class SignallingCircuitGroup;            // Group of data circuits used by signalling
 class SignallingCircuitSpan;             // A span in a circuit group
 class SignallingInterface;               // Abstract digital signalling interface (hardware access)
@@ -1395,6 +1396,106 @@ private:
     int m_lock;                          // Circuit lock flags
     ObjList m_events;                    // In-band events
     SignallingCircuitEvent* m_lastEvent; // The last generated event
+};
+
+/**
+ * Keeps a range (set) of circuits. The circuit codes contained within a range may
+ *  not be contiguous.
+ * See @ref SignallingUtils::parseUIntArray() for the format of the string ranges
+ *  this object can be built from
+ * @short A circuit range (set of circuits)
+ */
+class YSIG_API SignallingCircuitRange : public String
+{
+public:
+    /**
+     * Constructor
+     * @param rangeStr String used to build this range
+     * @param name Range name
+     */
+    SignallingCircuitRange(const String& rangeStr, const char* name);
+
+    /**
+     * Destructor
+     */
+    virtual ~SignallingCircuitRange()
+	{ clear(); }
+
+    /**
+     * Get the number of circuits contained by this range
+     * @return The number of circuits contained by this range
+     */
+    inline unsigned int count() const
+	{ return m_count; }
+
+    /**
+     * Get the pointer to the circuit codes array
+     * @return Pointer to the circuit codes array or 0
+     */
+    inline const unsigned int* range() const
+	{ return (const unsigned int*)m_range.data(); }
+
+    /**
+     * Get the pointer to the circuit codes array
+     * @return Pointer to the circuit codes array or 0
+     */
+    inline void clear() 
+	{ m_range.clear(); m_count = 0; }
+
+    /**
+     * Indexing operator
+     * @param index The index in the array to retreive
+     * @return The code at the given index
+     */
+    inline unsigned int operator[](unsigned int index)
+	{ return range()[index]; }
+
+    /**
+     * Set this range from a string
+     * @param rangeStr String used to (re)build this range
+     * @return False if the string has invalid format
+     */
+    bool set(const String& rangeStr);
+
+    /**
+     * Add codes to this range from a string
+     * @param rangeStr String containing the codes to be added to this range
+     * @return False if the string has invalid format
+     */
+    bool add(const String& rangeStr);
+
+    /**
+     * Add an array of circuit codes to this range
+     * @param codes The array to add
+     * @param len The array's length
+     */
+    void add(unsigned int* codes, unsigned int len);
+
+    /**
+     * Add a circuit code to this range
+     * @param code The circuit code to add
+     */
+    inline void add(unsigned int code)
+	{ add(&code,1); }
+
+    /**
+     * Check if a circuit code is within this range
+     * @param code The circuit code to find
+     * @return True if found
+     */
+    bool find(unsigned int code);
+
+    /**
+     * Release memory
+     */
+    virtual void destruct() {
+	    clear();
+	    String::destruct();
+	}
+
+protected:
+    DataBlock m_range;
+    unsigned int m_count;
 };
 
 /**

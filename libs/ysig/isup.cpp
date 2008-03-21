@@ -2960,7 +2960,12 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::UPA,msg->cic()),label,true,sls);
 	    break;
 	case SS7MsgISUP::UPA: // User Part Available
-	    DDebug(this,DebugMild,"Received unexpected %s",msg->name());
+	    if (m_uptCicCode && m_uptCicCode == msg->cic()) {
+		DDebug(this,DebugInfo,"Received valid %s",msg->name());
+		m_uptCicCode = 0;
+	    }
+	    else
+		DDebug(this,DebugMild,"Received unexpected %s",msg->name());
 	    break;
 	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
 	    // TODO: stop receiving segments

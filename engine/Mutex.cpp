@@ -264,8 +264,13 @@ void MutexPrivate::unlock()
 	Thread* thr = Thread::current();
 	if (thr)
 	    thr->m_locks--;
-	if (!--m_locked)
+	if (!--m_locked) {
+	    const char* tname = thr ? thr->name() : 0;
+	    if (tname != m_owner) 
+		Debug(DebugFail,"MutexPrivate unlocked by '%s' but owned by '%s' [%p]",
+		    tname,m_owner,this);
 	    m_owner = 0;
+	}
 	if (--s_locks < 0)
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
 #ifdef _WINDOWS

@@ -167,10 +167,12 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 	    return event;
 	lock();
     }
+    unlock();
     // Get events from circuits not reserved
     // TODO: Find a better way to parse circuit list to get events
+    Lock lckCtrl(this);
     if (m_circuits) {
-	Lock lock(m_circuits);
+	Lock lckCic(m_circuits);
 	for (ObjList* o = m_circuits->circuits().skipNull(); o; o = o->skipNext()) {
 	    SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
 	    if (cic->status() == SignallingCircuit::Reserved)
@@ -180,17 +182,14 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 		continue;
 	    SignallingEvent* event = processCircuitEvent(*ev);
 	    TelEngine::destruct(ev);
-	    if (event) {
-		unlock();
+	    if (event)
 		return event;
-	    }
 	}
     }
     // Terminate if exiting and no more calls
     //TODO: Make sure we raise this event one time only
     if (exiting() && !m_calls.skipNull())
 	return new SignallingEvent(SignallingEvent::Disable,0,this);
-    unlock();
     return 0;
 }
 

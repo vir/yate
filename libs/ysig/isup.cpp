@@ -3111,6 +3111,9 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
 	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
 	if (span != cic->span())
 	    break;
+	// Make sure the circuit codes are sequential
+	if ((m_lockCicCode + lockRange) != cic->code())
+	    continue;
 	// Add circuit to map
 	// Circuit must have the lock state changed and the same lock flags as the base circuit's
 	if (0 != cic->locked(SignallingCircuit::LockLocalChanged) &&

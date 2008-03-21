@@ -450,10 +450,7 @@ public:
     inline SigLinkThread(SigLink* link)
 	: Thread("SigLinkThread"), m_link(link), m_timeout(0)
 	{}
-    virtual ~SigLinkThread() {
-	    if (m_link)
-		m_link->m_thread = 0;
-	}
+    virtual ~SigLinkThread();
     virtual void run();
 private:
     SigLink* m_link;
@@ -1629,6 +1626,7 @@ void SigLink::cleanup()
 	m_thread->cancel();
 	while(m_thread)
 	    Thread::yield();
+	Debug(&plugin,DebugAll,"Link('%s'). Worker thread terminated [%p]",name().c_str(),this);
     }
     release();
 }
@@ -2650,6 +2648,14 @@ void SigIsdnCallRecord::evInfo(SignallingEvent* event)
 /**
  * SigLinkThread
  */
+SigLinkThread::~SigLinkThread()
+{
+    if (m_link)
+	m_link->m_thread = 0;
+    DDebug(&plugin,DebugAll,"Worker destroyed for link '%s' [%p]",
+	m_link?m_link->name().c_str():"",this);
+}
+
 void SigLinkThread::run()
 {
     if (!(m_link && m_link->controller()))

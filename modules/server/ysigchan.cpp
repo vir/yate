@@ -1110,6 +1110,7 @@ bool SigDriver::received(Message& msg, int id)
     SigLink* link = findLink(linkName,false);
     String detail;
     unsigned int circuits = 0;
+    unsigned int count = 0;
     while (true) {
 	if (!link) 
 	    break;
@@ -1123,8 +1124,13 @@ bool SigDriver::received(Message& msg, int id)
 	    circuits = ctrl->circuits()->count();
 	else
 	    break;
-	SignallingCircuit* cic = ctrl->circuits()->find(target.toInteger());
-	if (cic) {
+
+	SignallingCircuitRange range(target,0);
+	for (unsigned int i = 0; i < range.count(); i++) {
+	    SignallingCircuit* cic = ctrl->circuits()->find(range[i]);
+	    if (!cic)
+		continue;
+	    count++;
 	    detail.append(String(cic->code()) + "=",",");
 	    if (cic->span())
 		detail << cic->span()->id();
@@ -1141,7 +1147,7 @@ bool SigDriver::received(Message& msg, int id)
     msg.retValue() << ",type=" << lookup(link->type(),SigLink::s_type);
     msg.retValue() << ",circuits=" << circuits;
     if (!target.null()) {
-	msg.retValue() << ";range=" << target;
+	msg.retValue() << ";count=" << count;
 	msg.retValue() << ",format=Span|Status|LockedLocal|LockedRemote";
 	msg.retValue() << ";" << detail;
     }

@@ -157,6 +157,7 @@ private:
     SS7Router* m_router;                 // The SS7 router
     ObjList m_links;                     // Link list
     Mutex m_linksMutex;                  // Lock link list operations
+    String m_statusCmd;                  // Prefix for status commands
 };
 
 // Named list containing creator data (pointers)
@@ -1008,6 +1009,7 @@ SigDriver::SigDriver()
     m_linksMutex(true)
 {
     Output("Loaded module Signalling Channel");
+    m_statusCmd << "status " << name();
 }
 
 SigDriver::~SigDriver()
@@ -1103,40 +1105,50 @@ bool SigDriver::received(Message& msg, int id)
     if (!target.startSkip(name()))
 	return false;
 
-    // Status target=link[/cic]
-    Lock lock(this);
+    // Status target=link[/cic|/range]
+    Lock lock(m_linksMutex);
     int pos = target.find("/");
     String linkName = target.substr(0,pos);
     target = target.substr(linkName.length() + 1);
     SigLink* link = findLink(linkName,false);
-    SignallingCallControl* ctrl = link ? link->controller() : 0;
-    if (!ctrl)
-	return true;
-
     String detail;
-    ctrl->lock();
-    unsigned int count = 0;
-    SignallingCircuit* cic = 0;
-    if (ctrl->circuits()) {
-	count = ctrl->circuits()->count();
-	cic = ctrl->circuits()->find(target.toInteger());
+    unsigned int circuits = 0;
+    while (true) {
+	if (!link) 
+	    break;
+	SignallingCallControl* ctrl = link ? link->controller() : 0;
+	if (!ctrl)
+	    break;
+	Lock lckCtrl(ctrl);
+	lock.drop();
+
+	if (ctrl->circuits())
+	    circuits = ctrl->circuits()->count();
+	else
+	    break;
+	SignallingCircuit* cic = ctrl->circuits()->find(target.toInteger());
+	if (cic) {
+	    detail.append(String(cic->code()) + "=",",");
+	    if (cic->span())
+		detail << cic->span()->id();
+	    detail << "|" << SignallingCircuit::lookupStatus(cic->status());
+	    detail << "|" << String::boolText(cic->locked(SignallingCircuit::LockLocal));
+	    detail << "|" << String::boolText(cic->locked(SignallingCircuit::LockRemote));
+	}
+	break;
     }
-    if (cic) {
-	detail << "code=" << cic->code();
-	detail << ",status=" << SignallingCircuit::lookupStatus(cic->status());
-	detail << ",locked-local=" << String::boolText(cic->locked(SignallingCircuit::LockLocal));
-	detail << ",locked-remote=" << String::boolText(cic->locked(SignallingCircuit::LockRemote));
-    }
-    ctrl->unlock();
 
     msg.retValue().clear();
     msg.retValue() << "module=" << name();
     msg.retValue() << ",link=" << linkName;
-    msg.retValue() << ",circuits=" << count;
-    if (detail)
+    msg.retValue() << ",type=" << lookup(link->type(),SigLink::s_type);
+    msg.retValue() << ",circuits=" << circuits;
+    if (!target.null()) {
+	msg.retValue() << ";range=" << target;
+	msg.retValue() << ",format=Span|Status|LockedLocal|LockedRemote";
 	msg.retValue() << ";" << detail;
+    }
     msg.retValue() << "\r\n";
-
     return true;
 }
 
@@ -1287,7 +1299,42 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
 bool SigDriver::commandComplete(Message& msg, const String& partLine,
     const String& partWord)
 {
-    return Driver::commandComplete(msg,partLine,partWord);
+    bool status = partLine.startsWith("status");
+    bool drop = !status && partLine.startsWith("drop");
+    if (!(status || drop))
+	return Driver::commandComplete(msg,partLine,partWord);
+
+    Lock lock(this);
+    // line='status sig': add links
+    if (partLine == m_statusCmd) {
+	Lock lock(m_linksMutex);
+	for (ObjList* o = m_links.skipNull(); o; o = o->skipNext())
+	    msg.retValue().append((static_cast<SigLink*>(o->get()))->name(),"\t");
+	return true;
+    }
+
+    if (partLine != "status" && partLine != "drop")
+	return false;
+
+    // Empty partial word or name start with it: add name and prefix
+    if (!partWord || name().startsWith(partWord)) {
+	msg.retValue().append(name(),"\t");
+	if (channels().skipNull())
+	    msg.retValue().append(prefix(),"\t");
+	return false;
+    }
+    // Non empty partial word greater then module name: check if we have a prefix
+    if (!partWord.startsWith(prefix()))
+	return false;
+    // Partial word is not empty and starts with module's prefix
+    // Complete channels
+    bool all = (partWord == prefix());
+    for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
+	CallEndpoint* c = static_cast<CallEndpoint*>(o->get());
+	if (all || c->id().startsWith(partWord))
+	    msg.retValue().append(c->id(),"\t");
+    }
+    return true;
 }
 
 // Append a link to the list. Duplicate names are not allowed

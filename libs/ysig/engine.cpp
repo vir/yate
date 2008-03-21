@@ -33,11 +33,10 @@ namespace TelEngine {
 class SignallingThreadPrivate : public Thread
 {
 public:
-    inline SignallingThreadPrivate(SignallingEngine*engine, const char* name, Priority prio, unsigned long usec)
+    inline SignallingThreadPrivate(SignallingEngine* engine, const char* name, Priority prio, unsigned long usec)
 	: Thread(name,prio), m_engine(engine), m_sleep(usec)
 	{ }
-    virtual ~SignallingThreadPrivate()
-	{ }
+    virtual ~SignallingThreadPrivate();
     virtual void run();
 
 private:
@@ -155,8 +154,12 @@ SignallingEngine::SignallingEngine(const char* name)
 
 SignallingEngine::~SignallingEngine()
 {
+    if (m_thread) {
+	Debug(this,DebugGoOn,
+	    "Engine destroyed with worker thread still running [%p]",this);
+	stop();
+    }
     lock();
-//    stop();
     m_components.clear();
     unlock();
 }
@@ -228,6 +231,15 @@ bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned l
     // sanity check - 20ms is long enough
     if (usec > 20000)
 	usec = 20000;
+
+    // TODO: experimental: remove commented if it's working
+    m_thread = new SignallingThreadPrivate(this,name,prio,usec);
+    if (m_thread->startup()) {
+	Debug(this,DebugAll,"Engine started worker thread [%p]",this);
+	return true;
+    }
+
+#if 0
     SignallingThreadPrivate* tmp = new SignallingThreadPrivate(this,name,prio,usec);
     if (tmp->startup()) {
 	m_thread = tmp;
@@ -235,12 +247,21 @@ bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned l
 	return true;
     }
     delete tmp;
+#endif
     Debug(this,DebugGoOn,"Engine failed to start worker thread [%p]",this);
     return false;
 }
 
 void SignallingEngine::stop()
 {
+    // TODO: experimental: remove commented if it's working
+    if (!m_thread)
+	return;
+    m_thread->cancel(false);
+    while (m_thread)
+	Thread::yield(true);
+    Debug(this,DebugAll,"Engine stopped worker thread [%p]",this);
+#if 0
     lock();
     SignallingThreadPrivate* tmp = m_thread;
     m_thread = 0;
@@ -249,6 +270,7 @@ void SignallingEngine::stop()
 	DDebug(this,DebugInfo,"Engine stopped worker thread [%p]",this);
     }
     unlock();
+#endif
 }
 
 Thread* SignallingEngine::thread() const
@@ -273,6 +295,12 @@ void SignallingEngine::timerTick(const Time& when)
     unlock();
 }
 
+
+SignallingThreadPrivate::~SignallingThreadPrivate()
+{
+    if (m_engine)
+	m_engine->m_thread = 0;
+}
 
 void SignallingThreadPrivate::run()
 {

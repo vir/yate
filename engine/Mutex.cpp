@@ -164,8 +164,10 @@ MutexPrivate::MutexPrivate(bool recursive)
 
 MutexPrivate::~MutexPrivate()
 {
+    bool warn = false;
     GlobalMutex::lock();
     if (m_locked) {
+	warn = true;
 	m_locked--;
 	s_locks--;
 #ifdef _WINDOWS
@@ -182,6 +184,12 @@ MutexPrivate::~MutexPrivate()
     ::pthread_mutex_destroy(&m_mutex);
 #endif
     GlobalMutex::unlock();
+    if (m_locked)
+	Debug(DebugFail,"MutexPrivate owned by '%s' destroyed with %u locks [%p]",
+	    m_owner,m_locked,this);
+    else if (warn)
+	Debug(DebugGoOn,"MutexPrivate owned by '%s' unlocked in destructor [%p]",
+	    m_owner,this);
 }
 
 bool MutexPrivate::lock(long maxwait)

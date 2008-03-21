@@ -2960,6 +2960,8 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 	    transmitMessage(new SS7MsgISUP(SS7MsgISUP::UPA,msg->cic()),label,true,sls);
 	    break;
 	case SS7MsgISUP::UPA: // User Part Available
+	    DDebug(this,DebugMild,"Received unexpected %s",msg->name());
+	    break;
 	case SS7MsgISUP::GRA: // Circuit Group Reset Acknowledgement
 	    // TODO: stop receiving segments
 	case SS7MsgISUP::CQR: // Circuit Group Query Response (national use)

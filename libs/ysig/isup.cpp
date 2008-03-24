@@ -1996,7 +1996,8 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_lockTimer(0),
     m_lockNeed(true),
     m_lockFlags(0),
-    m_lockCicCode(0)
+    m_lockCicCode(0),
+    m_lockChanged(false)
 {
     setName(params.getValue("debugname","isup"));
 
@@ -2723,6 +2724,14 @@ SignallingEvent* SS7ISUP::processCircuitEvent(SignallingCircuitEvent& event,
     return 0;
 }
 
+// Build the parameters of a Verify event
+void SS7ISUP::buildVerifyEvent(NamedList& params)
+{
+    Lock lock(this);
+    params.addParam("circuits-lockstate",String::boolText(m_lockChanged));
+    m_lockChanged = false;
+}
+
 // Process call related messages
 void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 {
@@ -3067,6 +3076,7 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
 	circuit->setLock(lockFlag);
     else
 	circuit->resetLock(lockFlag);
+    m_verifyEvent = m_lockChanged = true;
     return true;
 }
 

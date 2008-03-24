@@ -1401,9 +1401,9 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
     for (unsigned int i = 0; i < m_count; i++) {
 	m_circuits[i] = new WpCircuit(delta + cicCodes[i],m_group,this,m_buflen,cicCodes[i]);
 	if (m_group->insert(m_circuits[i])) {
-	    continue;
 	    if (m_circuits[i]->channel())
 		m_chanMap |= ((unsigned long)1 << (m_circuits[i]->channel() - 1));
+	    continue;
 	}
 	// Failure
 	Debug(m_group,DebugNote,

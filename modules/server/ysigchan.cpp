@@ -563,6 +563,7 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
     sigMsg->params().addParam("caller",caller);
     sigMsg->params().addParam("called",called);
     sigMsg->params().addParam("callername",msg.getValue("callername"));
+    sigMsg->params().copyParam(msg,"circuits");
     sigMsg->params().copyParam(msg,"format");
     sigMsg->params().copyParam(msg,"callernumtype");
     sigMsg->params().copyParam(msg,"callernumplan");
@@ -1704,6 +1705,7 @@ SigCircuitGroup* SigLink::buildCircuits(NamedList& params, const String& device,
 	    error << "Failed to build voice span '" << *s << "'";
 	    break;
 	}
+	group->insertRange(span,*s);
 	int chans = spanParams.getIntValue("chans");
 	start += chans;
     }

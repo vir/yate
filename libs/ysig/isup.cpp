@@ -1458,8 +1458,8 @@ SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
     if (isup()->debugAt(DebugAll)) {
 	String tmp;
 	tmp << m_label;
-	Debug(isup(),DebugAll,"Call(%u) direction=%s routing-label=%s [%p]",
-	    id(),(outgoing ? "outgoing" : "incoming"),tmp.c_str(),this);
+	Debug(isup(),DebugAll,"Call(%u) direction=%s routing-label=%s range=%s [%p]",
+	    id(),(outgoing ? "outgoing" : "incoming"),tmp.c_str(),m_cicRange.safe(),this);
     }
 }
 

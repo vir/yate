@@ -794,6 +794,13 @@ protected:
 	{ return 0; }
 
     /**
+     * Build the parameters of a Verify event
+     * @param params The list of parameters to fill
+     */
+    virtual void buildVerifyEvent(NamedList& params)
+	{}
+
+    /**
      * Clear call list
      */
     void clearCalls();
@@ -828,6 +835,12 @@ protected:
      *  retrive message parameters from a list
      */
     String m_msgPrefix;
+
+    /**
+     * Draw attention to call controller's user that something changed by
+     *  raising a Verify event
+     */
+    bool m_verifyEvent;
 
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
@@ -5292,6 +5305,12 @@ protected:
 	SignallingCall* call = 0);
 
     /**
+     * Build the parameters of a Verify event
+     * @param params The list of parameters to fill
+     */
+    virtual void buildVerifyEvent(NamedList& params);
+
+    /**
      * Length of the Circuit Identification Code in octets
      */
     unsigned int m_cicLen;
@@ -5348,6 +5367,7 @@ private:
     int m_lockFlags;                     // Current request flags: blocking/unblocking,hw-failure/maintenance
     unsigned int m_lockCicCode;          // Current (un)blocking cic code
     String m_lockMap;                    // The sent circuit map (contains 1 element for single circuit request)
+    bool m_lockChanged;                  // Lock changed flag used when building a Verify event
 };
 
 /**

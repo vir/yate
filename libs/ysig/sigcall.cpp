@@ -43,6 +43,7 @@ static TokenDict s_dictCicLock[] = {
 SignallingCallControl::SignallingCallControl(const NamedList& params,
 	const char* msgPrefix)
     : Mutex(true),
+    m_verifyEvent(false),
     m_circuits(0),
     m_cicLock(0),
     m_strategy(SignallingCircuitGroup::Increment),
@@ -186,6 +187,14 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 	    if (event)
 		return event;
 	}
+    }
+    // Verify ?
+    if (m_verifyEvent) {
+	m_verifyEvent = false;
+	SignallingMessage* msg = new SignallingMessage;
+	SignallingEvent* event = new SignallingEvent(SignallingEvent::Verify,msg,this);
+	buildVerifyEvent(msg->params());
+	return event;
     }
     // Terminate if exiting and no more calls
     //TODO: Make sure we raise this event one time only

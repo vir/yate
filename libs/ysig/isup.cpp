@@ -1689,7 +1689,7 @@ bool SS7ISUPCall::replaceCircuit(SignallingCircuit* circuit)
 	    controller()->releaseCircuit(m_circuit);
 	    controller()->releaseCircuit(circuit);
 	}
-	setTerminate(false,"normal");
+	setTerminate(false,"congestion");
 	return false;
     }
     unsigned int oldId = id();

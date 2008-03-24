@@ -1685,7 +1685,7 @@ bool ISDNQ931Call::reserveCircuit()
     if (anyCircuit)
 	q931()->reserveCircuit(m_circuit);
     else
-	q931()->reserveCircuit(m_circuit,-1,&m_data.m_channels,m_data.m_channelMandatory,true);
+	q931()->reserveCircuit(m_circuit,0,-1,&m_data.m_channels,m_data.m_channelMandatory,true);
     if (m_circuit) {
 	m_data.m_channels = m_circuit->code();
 	if (!m_circuit->connect(m_data.m_format))
@@ -2938,7 +2938,7 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
 	unsigned int count = circuits() ? circuits()->count() : 0;
 	for (m_lastRestart++; m_lastRestart <= count; m_lastRestart++) {
 	    String tmp = m_lastRestart;
-	    if (reserveCircuit(m_restartCic,-1,&tmp,true))
+	    if (reserveCircuit(m_restartCic,0,-1,&tmp,true))
 		break;
 	}
 	if (!m_restartCic) {

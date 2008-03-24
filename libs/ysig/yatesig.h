@@ -706,6 +706,7 @@ public:
      * This method is thread safe
      * @param cic Destination circuit
      * @param checkLock Lock flags to check. If the given lock flags are set, reservation will fail
+     * @param range Optional range name to restrict circuit reservation within attached circuit group
      * @param list Comma separated list of circuits
      * @param mandatory The list is mandatory. If false and none of the circuits in
      *  the list are available, try to reserve a free one. Ignored if list is 0
@@ -714,8 +715,8 @@ public:
      *  Ignored if mandatory is true
      * @return False if the operation failed
      */
-    bool reserveCircuit(SignallingCircuit*& cic, int checkLock = -1, const String* list = 0,
-	bool mandatory = true, bool reverseRestrict = false);
+    bool reserveCircuit(SignallingCircuit*& cic, const char* range = 0, int checkLock = -1,
+	const String* list = 0,	bool mandatory = true, bool reverseRestrict = false);
 
     /**
      * Initiate a release of a circuit. Set cic to 0.
@@ -1407,13 +1408,16 @@ private:
  */
 class YSIG_API SignallingCircuitRange : public String
 {
+    friend class SignallingCircuitGroup;
 public:
     /**
      * Constructor
      * @param rangeStr String used to build this range
      * @param name Range name
+     * @param strategy Strategy used to allocate circuits from this range
      */
-    SignallingCircuitRange(const String& rangeStr, const char* name);
+    SignallingCircuitRange(const String& rangeStr, const char* name = 0,
+	int strategy = -1);
 
     /**
      * Destructor
@@ -1455,7 +1459,10 @@ public:
      * @param rangeStr String used to (re)build this range
      * @return False if the string has invalid format
      */
-    bool set(const String& rangeStr);
+    inline bool set(const String& rangeStr) {
+	    clear();
+	    return add(rangeStr);
+	}
 
     /**
      * Add codes to this range from a string
@@ -1479,6 +1486,12 @@ public:
 	{ add(&code,1); }
 
     /**
+     * Remove a circuit code from this range
+     * @param code The circuit code to remove
+     */
+    void remove(unsigned int code);
+
+    /**
      * Check if a circuit code is within this range
      * @param code The circuit code to find
      * @return True if found
@@ -1494,8 +1507,13 @@ public:
 	}
 
 protected:
-    DataBlock m_range;
-    unsigned int m_count;
+    void updateLast();                   // Update last circuit code
+
+    DataBlock m_range;                   // Array containing the circuit codes
+    unsigned int m_count;                // The number of elements in the array
+    unsigned int m_last;                 // Last (the greater) not used circuit code within this range
+    int m_strategy;                      // Keep the strategy used to allocate circuits from this range
+    unsigned int m_used;                 // Last used circuit code
 };
 
 /**
@@ -1559,21 +1577,21 @@ public:
      * @return The maximum of identification codes for this group
      */
     inline unsigned int last() const
-	{ return m_last; }
+	{ return m_range.m_last; }
 
     /**
      * Get the circuit allocation strategy
      * @return Strategy flags ORed together
      */
     inline int strategy() const
-	{ return m_strategy; }
+	{ return m_range.m_strategy; }
 
     /**
      * Set the circuit allocation strategy
      * @param strategy The new circuit allocation strategy
      */
     inline void setStrategy(int strategy)
-	{ Lock lock(this); m_strategy = strategy; }
+	{ Lock lock(this); m_range.m_strategy = strategy; }
 
     /**
      * Create a comma separated list with this group's circuits
@@ -1602,6 +1620,27 @@ public:
     bool insertSpan(SignallingCircuitSpan* span);
 
     /**
+     * Build and insert a range from circuits belonging to a given span
+     * @param span Span to find
+     * @param name Range name or 0 to use span's id
+     * @param strategy Strategy used to allocate circuits from the new range,
+     *  -1 to use group's strategy
+     */
+    void insertRange(SignallingCircuitSpan* span, const char* name,
+	int strategy = -1);
+
+    /**
+     * Build and insert a range contained in a string.
+     * See @ref SignallingUtils::parseUIntArray() for the format of the string range
+     * @param range String used to build the range
+     * @param name Range name
+     * @param strategy Strategy used to allocate circuits from the new range,
+     *  -1 to use group's strategy
+     */
+    void insertRange(const String& range, const char* name,
+	int strategy = -1);
+
+    /**
      * Remove a circuit span from the group
      * @param span Pointer to the circuit span to remove
      * @param delCics True to delete signalling circuits associated to the span
@@ -1624,6 +1663,13 @@ public:
     SignallingCircuit* find(unsigned int cic, bool local = false);
 
     /**
+     * Find a range of circuits owned by this group
+     * @param name The range name to find
+     * @return Pointer to circuit range or 0 if not found
+     */
+    SignallingCircuitRange* findRange(const char* name);
+
+    /**
      * Get the status of a circuit
      * @param cic Circuit Identification Code
      * @return Enumerated status of circuit
@@ -1643,9 +1689,11 @@ public:
      * Reserve a circuit for later use
      * @param checkLock Lock flags to check. If the given lock flags are set, reservation will fail
      * @param strategy Strategy used for allocation, use group default if negative
+     * @param range Range of circuits to allocate from. 0 to use group default
      * @return Referenced pointer to a reserved circuit or 0 on failure
      */
-    SignallingCircuit* reserve(int checkLock = -1, int strategy = -1);
+    SignallingCircuit* reserve(int checkLock = -1, int strategy = -1,
+	SignallingCircuitRange* range = 0);
 
     /**
      * Reserve a circuit for later use
@@ -1655,9 +1703,11 @@ public:
      * @param checkLock Lock flags to check. If the given lock flags are set, reservation will fail
      * @param strategy Strategy used for allocation if failed to allocate one from
      *  the list, use group default if negative
+     * @param range Range of circuits to allocate from. 0 to use group default
      * @return Referenced pointer to a reserved circuit or 0 on failure
      */
-    SignallingCircuit* reserve(const String& list, bool mandatory, int checkLock = -1, int strategy = -1);
+    SignallingCircuit* reserve(const String& list, bool mandatory,
+	int checkLock = -1, int strategy = -1, SignallingCircuitRange* range = 0);
 
     /**
      * Initiate a release of a circuit
@@ -1671,7 +1721,10 @@ public:
     /**
      * Remove all spans and circuits. Release object
      */
-    virtual void destruct();
+    virtual void destruct() {
+	    clearAll();
+	    SignallingComponent::destruct();
+	}
 
     /**
      * Get the strategy value associated with a given name
@@ -1695,14 +1748,14 @@ protected:
 	{ return m_circuits; }
 
 private:
-    unsigned int advance(unsigned int n, int strategy);
+    unsigned int advance(unsigned int n, int strategy, SignallingCircuitRange& range);
+    void clearAll();
 
     ObjList m_circuits;                  // The circuits belonging to this group
     ObjList m_spans;                     // The spans belonging to this group
+    ObjList m_ranges;                    // Additional circuit ranges
+    SignallingCircuitRange m_range;      // Range containing all circuits belonging to this group
     unsigned int m_base;
-    unsigned int m_last;
-    int m_strategy;
-    unsigned int m_used;
 };
 
 /**
@@ -4903,6 +4956,13 @@ public:
 	{ return m_state; }
 
     /**
+     * Get the call's circuit range
+     * @return The call's circuit range
+     */
+    inline const String& cicRange() const
+	{ return m_cicRange; }
+
+    /**
      * Get the call id (the code of the circuit reserved for this call)
      * @return The call id
      */
@@ -4952,9 +5012,11 @@ protected:
      * @param remote The remote point code used to create the routing label for sent messages
      * @param outgoing Call direction
      * @param sls Optional link for the routing label
+     * @param range Optional range used to re-allocate a circuit for this call if necessary
      */
     SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
-	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing, int sls = -1);
+	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing,
+	int sls = -1, const char* range = 0);
 
     /**
      * Release call. Stop timers. Send a RLC (Release Complete) message if it should terminate gracefully
@@ -5016,6 +5078,7 @@ private:
 
     State m_state;                       // Call state
     SignallingCircuit* m_circuit;        // Circuit reserved for this call
+    String m_cicRange;                   // The range used to re(alloc) a circuit
     SS7Label m_label;                    // The routing label for this call
     bool m_terminate;                    // Termination flag
     bool m_gracefully;                   // Terminate gracefully: send RLC

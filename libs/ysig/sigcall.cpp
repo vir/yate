@@ -101,8 +101,8 @@ void SignallingCallControl::attach(SignallingCircuitGroup* circuits)
 }
 
 // Reserve a circuit from a given list in attached group
-bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, int checkLock,
-	const String* list, bool mandatory, bool reverseRestrict)
+bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, const char* range,
+	int checkLock, const String* list, bool mandatory, bool reverseRestrict)
 {
     Lock lock(this);
     releaseCircuit(cic);
@@ -118,10 +118,10 @@ bool SignallingCallControl::reserveCircuit(SignallingCircuit*& cic, int checkLoc
 	    else if (s & SignallingCircuitGroup::OnlyOdd)
 		s = (s & ~SignallingCircuitGroup::OnlyOdd) | SignallingCircuitGroup::OnlyEven;
 	}
-	cic = m_circuits->reserve(*list,mandatory,checkLock,s);
+	cic = m_circuits->reserve(*list,mandatory,checkLock,s,m_circuits->findRange(range));
     }
     else
-	cic = m_circuits->reserve(checkLock);
+	cic = m_circuits->reserve(checkLock,-1,m_circuits->findRange(range));
     return (cic != 0);
 }
 
@@ -481,23 +481,15 @@ const char* SignallingCircuit::lookupStatus(int status)
 /**
  * SignallingCircuitRange
  */
-SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr, const char* name)
-    : String(name)
+SignallingCircuitRange::SignallingCircuitRange(const String& rangeStr, const char* name,
+	int strategy)
+    : String(name),
+    m_count(0),
+    m_last(0),
+    m_strategy(strategy),
+    m_used(0)
 {
-    set(rangeStr);
-}
-
-// Set this range from a string
-bool SignallingCircuitRange::set(const String& rangeStr)
-{
-    clear();
-    unsigned int n = 0;
-    unsigned int* p = SignallingUtils::parseUIntArray(rangeStr,0,(unsigned int)-1,n,true);
-    if (!p)
-	return false;
-    add(p,n);
-    delete[] p;
-    return true;
+    add(rangeStr);
 }
 
 // Add codes to this range from a string
@@ -525,7 +517,19 @@ void SignallingCircuitRange::add(unsigned int* codes, unsigned int len)
     m_range.assign(0,n*sizeof(unsigned int));
     ::memcpy((void*)m_range.data(),tmp,m_range.length());
     m_count = n;
+    updateLast();
 }
+
+// Remove a circuit code from this range
+void SignallingCircuitRange::remove(unsigned int code)
+{
+    unsigned int* d = (unsigned int*)range();
+    for (unsigned int i = 0; i < count(); i++)
+	if (d[i] == code)
+	    d[i] = 0;
+    updateLast();
+}
+
 
 // Check if a circuit code is within this range
 bool SignallingCircuitRange::find(unsigned int code)
@@ -536,6 +540,15 @@ bool SignallingCircuitRange::find(unsigned int code)
 	if (range()[i] == code)
 	    return true;
     return false;
+}
+
+// Update last circuit code
+void SignallingCircuitRange::updateLast()
+{
+    m_last = 0;
+    for (unsigned int i = 0; i < count(); i++)
+	if (m_last <= range()[i])
+	    m_last = range()[i] + 1;
 }
 
 
@@ -554,10 +567,8 @@ TokenDict SignallingCircuitGroup::s_strategy[] = {
 SignallingCircuitGroup::SignallingCircuitGroup(unsigned int base, int strategy, const char* name)
     : SignallingComponent(name),
     Mutex(true),
-    m_base(base),
-    m_last(0),
-    m_strategy(strategy),
-    m_used(0)
+    m_range(String::empty(),name,strategy),
+    m_base(base)
 {
     setName(name);
     XDebug(this,DebugAll,"SignallingCircuitGroup::SignallingCircuitGroup() [%p]",this);
@@ -567,17 +578,7 @@ SignallingCircuitGroup::SignallingCircuitGroup(unsigned int base, int strategy, 
 // Clear span list
 SignallingCircuitGroup::~SignallingCircuitGroup()
 {
-    // Notify circuits of group destroy
-    // Some of them may continue to exists after clearing the list
-    Lock lock(this);
-    ObjList* l = m_circuits.skipNull();
-    for (; l; l = l->skipNext()) {
-	SignallingCircuit* c = static_cast<SignallingCircuit*>(l->get());
-	c->status(SignallingCircuit::Missing,true);
-	c->m_group = 0;
-    }
-    m_circuits.clear();
-    m_spans.clear();
+    clearAll();
     XDebug(this,DebugAll,"SignallingCircuitGroup::~SignallingCircuitGroup() [%p]",this);
 }
 
@@ -590,7 +591,7 @@ SignallingCircuit* SignallingCircuitGroup::find(unsigned int cic, bool local)
 	cic -= m_base;
     }
     Lock lock(this);
-    if (cic >= m_last)
+    if (cic >= m_range.m_last)
 	return 0;
     ObjList* l = m_circuits.skipNull();
     for (; l; l = l->skipNext()) {
@@ -599,6 +600,14 @@ SignallingCircuit* SignallingCircuitGroup::find(unsigned int cic, bool local)
 	    return c;
     }
     return 0;
+}
+
+// Find a range of circuits owned by this group
+SignallingCircuitRange* SignallingCircuitGroup::findRange(const char* name)
+{
+    Lock lock(this);
+    ObjList* obj = m_ranges.find(name);
+    return obj ? static_cast<SignallingCircuitRange*>(obj->get()) : 0;
 }
 
 void SignallingCircuitGroup::getCicList(String& dest)
@@ -619,9 +628,9 @@ bool SignallingCircuitGroup::insert(SignallingCircuit* circuit)
     Lock lock(this);
     if (m_circuits.find(circuit) || find(circuit->code(),true))
 	return false;
+    circuit->m_group = this;
     m_circuits.append(circuit);
-    if (m_last <= circuit->code())
-	m_last = circuit->code() + 1;
+    m_range.add(circuit->code());
     return true;
 }
 
@@ -633,14 +642,9 @@ void SignallingCircuitGroup::remove(SignallingCircuit* circuit)
     Lock lock(this);
     if (!m_circuits.remove(circuit,false))
 	return;
-    // circuit was removed - rescan list for maximum cic
-    m_last = 0;
-    ObjList* l = m_circuits.skipNull();
-    for (; l; l = l->skipNext()) {
-	SignallingCircuit* c = static_cast<SignallingCircuit*>(l->get());
-	if (m_last <= c->code())
-	    m_last = c->code() + 1;
-    }
+    circuit->m_group = 0;
+    m_range.remove(circuit->code());
+    // TODO: remove from all ranges
 }
 
 // Append a span to the list if not already there
@@ -652,6 +656,38 @@ bool SignallingCircuitGroup::insertSpan(SignallingCircuitSpan* span)
     if (!m_spans.find(span))
 	m_spans.append(span);
     return true;
+}
+
+// Build and insert a range from circuits belonging to a given span
+void SignallingCircuitGroup::insertRange(SignallingCircuitSpan* span, const char* name,
+	int strategy)
+{
+    if (!span)
+	return;
+    if (!name)
+	name = span->id();
+    Lock lock(this);
+    String tmp;
+    for (ObjList* o = m_circuits.skipNull(); o; o = o->skipNext()) {
+	SignallingCircuit* c = static_cast<SignallingCircuit*>(o->get());
+	if (span == c->span())
+	    tmp.append(String(c->code()),",");
+    }
+    lock.drop();
+    insertRange(tmp,name,strategy);
+}
+
+// Build and insert a range contained in a string
+void SignallingCircuitGroup::insertRange(const String& range, const char* name,
+	int strategy)
+{
+    Lock lock(this);
+    if (findRange(name))
+	return;
+    if (strategy < 0)
+	strategy = m_range.m_strategy;
+    m_ranges.append(new SignallingCircuitRange(range,name,strategy));
+    Debug(this,DebugAll,"Added range %s: %s [%p]",name,range.c_str(),this);
 }
 
 // Remove a span from list
@@ -674,8 +710,10 @@ void SignallingCircuitGroup::removeSpanCircuits(SignallingCircuitSpan* span)
     ListIterator iter(m_circuits);
     for (GenObject* obj = 0; (obj = iter.get());) {
 	SignallingCircuit* c = static_cast<SignallingCircuit*>(obj);
-	if (span == c->span())
-	    m_circuits.remove(c,true);
+	if (span == c->span()) {
+	    remove(c);
+	    TelEngine::destruct(c);
+	}
     }
 }
 
@@ -705,7 +743,8 @@ inline void adjustParity(unsigned int& n, int strategy)
 }
 
 // Choose the next circuit code to check, depending on strategy
-unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy)
+unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy,
+	SignallingCircuitRange& range)
 {
     // Increment by 2 when even or odd only circuits are requested
     unsigned int delta = (strategy & (OnlyOdd|OnlyEven)) ? 2 : 1;
@@ -713,7 +752,7 @@ unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy)
 	case Increment:
 	case Lowest:
 	    n += delta;
-	    if (n >= m_last)
+	    if (n >= range.m_last)
 		n = delta;
 	    break;
 	case Decrement:
@@ -721,66 +760,72 @@ unsigned int SignallingCircuitGroup::advance(unsigned int n, int strategy)
 	    if (n >= delta)
 		n -= delta;
 	    else {
-		n = m_last - 1;
+		n = range.m_last - 1;
 		adjustParity(n,strategy);
 	    }
 	    break;
 	default:
-	    n = (n + 1) % m_last;
+	    n = (n + 1) % range.m_last;
 	    break;
     }
     return n;
 }
 
 // Reserve a circuit
-SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy)
+SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy,
+	SignallingCircuitRange* range)
 {
     Lock lock(this);
-    if (m_last < 1)
+    if (!range)
+	range = &m_range;
+    if (range->m_last < 1)
 	return 0;
     if (strategy < 0)
-	strategy = m_strategy;
+	strategy = range->m_strategy;
     int dir = 1;
-    unsigned int n = m_used;
+    unsigned int n = range->m_used;
     // first adjust the last used channel number
     switch (strategy & 0xfff) {
 	case Increment:
-	    n = (n + 1) % m_last;
+	    n = (n + 1) % range->m_last;
 	    break;
 	case Decrement:
-	    n = (n ? n : m_last) - 1;
+	    n = (n ? n : range->m_last) - 1;
 	    dir = -1;
 	    break;
 	case Lowest:
 	    n = 0;
 	    break;
 	case Highest:
-	    n = m_last - 1;
+	    n = range->m_last - 1;
 	    dir = -1;
 	    break;
 	default:
-	    while ((m_last > 1) && (n == m_used))
-		n = ::random() % m_last;
+	    while ((range->m_last > 1) && (n == range->m_used))
+		n = ::random() % range->m_last;
     }
     // then go to the proper even/odd start circuit
     adjustParity(n,strategy);
     // remember where the scan started
     unsigned int start = n;
     // try at most how many channels we have, halve that if we only scan even or odd
-    unsigned int i = m_last;
+    unsigned int i = range->m_last;
     if (strategy & (OnlyOdd|OnlyEven))
 	i = (i + 1) / 2;
     while (i--) {
-	SignallingCircuit* circuit = find(n,true);
-	if (circuit && !circuit->locked(checkLock) && circuit->reserve()) {
-	    if (circuit->ref()) {
-		m_used = n;
-		return circuit;
+	// Check if the circuit is within range
+	if (range->find(n)) {
+	    SignallingCircuit* circuit = find(n,true);
+	    if (circuit && !circuit->locked(checkLock) && circuit->reserve()) {
+		if (circuit->ref()) {
+		    range->m_used = n;
+		    return circuit;
+		}
+		release(circuit);
+		return 0;
 	    }
-	    release(circuit);
-	    return 0;
 	}
-	n = advance(n,strategy);
+	n = advance(n,strategy,*range);
 	// if wrapped around bail out, don't scan again
 	if (n == start)
 	    break;
@@ -789,11 +834,11 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy)
     if (strategy & Fallback) {
 	if (strategy & OnlyEven) {
 	    Debug(this,DebugNote,"No even circuits available, falling back to odd [%p]",this);
-	    return reserve(checkLock,OnlyOdd | (strategy & 0xfff));
+	    return reserve(checkLock,OnlyOdd | (strategy & 0xfff),range);
 	}
 	if (strategy & OnlyOdd) {
 	    Debug(this,DebugNote,"No odd circuits available, falling back to even [%p]",this);
-	    return reserve(checkLock,OnlyEven | (strategy & 0xfff));
+	    return reserve(checkLock,OnlyEven | (strategy & 0xfff),range);
 	}
     }
     return 0;
@@ -802,9 +847,11 @@ SignallingCircuit* SignallingCircuitGroup::reserve(int checkLock, int strategy)
 // Reserve a circuit from the given list
 // Reserve another one if not found and not mandatory
 SignallingCircuit* SignallingCircuitGroup::reserve(const String& list, bool mandatory,
-	int checkLock, int strategy)
+	int checkLock, int strategy, SignallingCircuitRange* range)
 {
     Lock lock(this);
+    if (!range)
+	range = &m_range;
     // Check if any of the given circuits are free
     while (true) {
 	if (list.null())
@@ -812,40 +859,48 @@ SignallingCircuit* SignallingCircuitGroup::reserve(const String& list, bool mand
 	ObjList* circuits = list.split(',',false);
 	if (!circuits)
 	    break;
-	ObjList* obj = circuits->skipNull();
 	SignallingCircuit* circuit = 0;
-	for (; obj; obj = obj->skipNext()) {
+	for (ObjList* obj = circuits->skipNull(); obj; obj = obj->skipNext()) {
 	    int code = (static_cast<String*>(obj->get()))->toInteger(-1);
-	    if (code == -1)
-		continue;
-	    circuit = find(code,false);
+	    if (code > 0 && range->find(code))
+		circuit = find(code,false);
 	    if (circuit && !circuit->locked(checkLock) && circuit->reserve()) {
 		if (circuit->ref()) {
-		    m_used = m_base + circuit->code();
-		    TelEngine::destruct(circuits);
-		    return circuit;
+		    range->m_used = m_base + circuit->code();
+		    break;
 		}
 		release(circuit);
 	    }
 	    circuit = 0;
 	}
 	TelEngine::destruct(circuits);
+	if (circuit)
+	    return circuit;
 	break;
     }
     // Don't try to reserve another one if the given list is mandatory
     if (mandatory)
 	return 0;
-    return reserve(strategy,checkLock);
+    return reserve(checkLock,strategy,range);
 }
 
-// Remove all spans and circuits. Release object
-void SignallingCircuitGroup::destruct()
+// Clear data
+void SignallingCircuitGroup::clearAll()
 {
-    lock();
-    m_spans.clear();
+    Lock lock(this);
+    // Remove spans and their circuits
+    ListIterator iter(m_spans);
+    for (GenObject* obj = 0; (obj = iter.get());)
+	removeSpan(static_cast<SignallingCircuitSpan*>(obj),true,true);
+    // Remove the rest of circuits. Reset circuits' group
+    // Some of them may continue to exists after clearing the list
+    for (ObjList* l = m_circuits.skipNull(); l; l = l->skipNext()) {
+	SignallingCircuit* c = static_cast<SignallingCircuit*>(l->get());
+	c->status(SignallingCircuit::Missing,true);
+	c->m_group = 0;
+    }
     m_circuits.clear();
-    unlock();
-    GenObject::destruct();
+    m_ranges.clear();
 }
 
 

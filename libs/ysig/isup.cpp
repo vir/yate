@@ -27,6 +27,9 @@
 
 using namespace TelEngine;
 
+// Default value used to check if circuit is locked when trying to allocate it
+#define CIRCUIT_LOCKED (SignallingCircuit::LockLocal | SignallingCircuit::LockRemote)
+
 // Maximum number of mandatory parameters including two terminators
 #define MAX_MANDATORY_PARAMS 16
 
@@ -1429,10 +1432,12 @@ inline int transmitCNF(SS7ISUP* isup, unsigned int cic, const SS7Label& label, b
  * SS7ISUPCall
  */
 SS7ISUPCall::SS7ISUPCall(SS7ISUP* controller, SignallingCircuit* cic,
-	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing, int sls)
+	const SS7PointCode& local, const SS7PointCode& remote, bool outgoing,
+	int sls, const char* range)
     : SignallingCall(controller,outgoing),
     m_state(Null),
     m_circuit(cic),
+    m_cicRange(range),
     m_terminate(false),
     m_gracefully(true),
     m_circuitChanged(false),
@@ -2136,6 +2141,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     }
     SS7PointCode dest;
     SignallingCircuit* cic = 0;
+    const char* range = msg->params().getValue("circuits");
     Lock lock(this);
     // Check
     while (true) {
@@ -2154,7 +2160,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	    }
 	    dest = *m_remotePoint;
 	}
-	if (!reserveCircuit(cic,SignallingCircuit::LockLocal|SignallingCircuit::LockRemote)) {
+	if (!reserveCircuit(cic,range,CIRCUIT_LOCKED)) {
 	    Debug(this,DebugNote,"Can't reserve circuit");
 	    reason = "congestion";
 	    break;
@@ -2163,7 +2169,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     }
     SignallingCall* call = 0;
     if (reason.null()) {
-	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true);
+	call = new SS7ISUPCall(this,cic,*m_defPoint,dest,true,-1,range);
 	call->ref();
 	m_calls.append(call);
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::NewCall,msg,call);
@@ -2291,7 +2297,7 @@ void SS7ISUP::timerTick(const Time& when)
     m_rscTimer.start(when.msec());
     // Pick the next circuit to reset. Ignore lock flags
     int flags = SignallingCircuit::LockLocal | SignallingCircuit::LockRemote;
-    if (m_defPoint && m_remotePoint && reserveCircuit(m_rscCic,~flags)) {
+    if (m_defPoint && m_remotePoint && reserveCircuit(m_rscCic,0,~flags)) {
 	SS7MsgISUP* msg = new SS7MsgISUP(SS7MsgISUP::RSC,m_rscCic->code());
 	SS7Label label(m_type,*m_remotePoint,*m_defPoint,m_sls);
 	transmitMessage(msg,label,false);
@@ -2753,7 +2759,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	    if (dpc > opc && !(msg->cic() % 2))
 		DROP_MSG("collision - dpc greater then opc for even CIC")
 	    // Accept the incoming request. Change the call's circuit
-	    reserveCircuit(circuit);
+	    reserveCircuit(circuit,call->cicRange(),CIRCUIT_LOCKED);
 	    call->replaceCircuit(circuit);
 	    circuit = 0;
 	}
@@ -2767,7 +2773,7 @@ void SS7ISUP::processCallMsg(SS7MsgISUP* msg, const SS7Label& label, int sls)
 	}
 	else
 	    blockCircuit(msg->cic(),false,true,false);
-	if (reserveCircuit(circuit,flags,&s,true)) {
+	if (reserveCircuit(circuit,0,flags,&s,true)) {
 	    call = new SS7ISUPCall(this,circuit,label.dpc(),label.opc(),false,sls);
 	    m_calls.append(call);
 	    break;
@@ -3003,7 +3009,7 @@ bool SS7ISUP::resetCircuit(unsigned int cic, bool checkCall)
 	SS7ISUPCall* call = findCall(cic);
 	if (call) {
 	    SignallingCircuit* newCircuit = 0;
-	    reserveCircuit(newCircuit);
+	    reserveCircuit(newCircuit,call->cicRange(),CIRCUIT_LOCKED);
 	    call->replaceCircuit(newCircuit);
 	}
     }
@@ -3053,7 +3059,7 @@ bool SS7ISUP::blockCircuit(unsigned int cic, bool block, bool remote, bool hwFai
     SS7ISUPCall* call = findCall(cic);
     if (call && call->outgoing() && call->state() == SS7ISUPCall::Setup) {
 	SignallingCircuit* newCircuit = 0;
-	reserveCircuit(newCircuit);
+	reserveCircuit(newCircuit,call->cicRange(),CIRCUIT_LOCKED);
 	call->replaceCircuit(newCircuit);
     }
     lockFlag |= hwFlag;

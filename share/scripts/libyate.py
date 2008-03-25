@@ -306,7 +306,7 @@ class Yate:
 		i = 0
 		while i < n:
 			c = str[i]
-			if( ord(c) < 32 ) or (c == extra):
+			if( ord(c) < 32 ) or (c == ":") or (c == extra):
 				c = chr(ord(c) + 64)
 				s = s + "%"
 			elif( c == "%" ):

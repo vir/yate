@@ -429,6 +429,8 @@ bool ConfRoom::setRecording(const NamedList& params)
 	m->setParam("billid",params.getValue("billid"));
 	m->setParam("username",params.getValue("username"));
 	m->addParam("room",m_name);
+	if (m_notify)
+	    m->setParam("targetid",m_notify);
 	Engine::enqueue(m);
 	if (warn) {
 	    // play record warning to the entire conference

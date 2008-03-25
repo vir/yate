@@ -735,7 +735,6 @@ AC_SUBST(QT4_LIB)
 AC_SUBST(QT4_MOC)
 AC_SUBST(QT4_VER)
 
-AC_ARG_WITH(libgtk2,AC_HELP_STRING([--with-libgtk2],[use Gtk for graphical clients (default)]),[ac_cv_use_libgtk2=$withval],[ac_cv_use_libgtk2=yes])
 HAVE_COREDUMPER=no
 COREDUMPER_INC=""
 COREDUMPER_LIB=""

@@ -2896,7 +2896,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		    reason = "wrong-state-message";
 		    break;
 		}
-		if (!blockCircuit(msg->cic(),m_lockFlags,false,false,true)) {
+		if (!blockCircuit(msg->cic(),(0 != m_lockFlags),false,false,true)) {
 		    reason = "unknown-channel";
 		    break;
 		}
@@ -2924,7 +2924,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		bool ok = (msg->cic() == m_lockCicCode || l == m_lockFlags || m_lockMap.length() == nCics);
 		if (ok)
 		    for (unsigned int i = 0; i < m_lockMap.length(); i++)
-			if (m_lockMap[i] == '0' && srcMap->at(i) != '0') {
+			if (m_lockMap.at(i) == '0' && srcMap->at(i) != '0') {
 			    ok = false;
 			    break;
 			}
@@ -2935,7 +2935,7 @@ void SS7ISUP::processControllerMsg(SS7MsgISUP* msg, const SS7Label& label, int s
 		bool block = (0 != (m_lockFlags & SignallingCircuit::LockLocal));
 		// TODO: Max bits set to 1 should be 32
 		for (unsigned int i = 0; i < m_lockMap.length(); i++)
-		    if (m_lockMap[i] != '0')
+		    if (m_lockMap.at(i) != '0')
 			blockCircuit(msg->cic()+i,block,false,hwFail,true);
 		sendLocalLock();
 	    }

@@ -518,14 +518,8 @@ void SignallingCircuitRange::add(unsigned int* codes, unsigned int len)
 {
     if (!(codes && len))
 	return;
-    unsigned int n = count() + len;
-    unsigned int tmp[n];
-    if (m_range.length())
-	::memcpy(tmp,(void*)m_range.data(),m_range.length());
-    ::memcpy(tmp+count(),codes,len*sizeof(unsigned int));
-    m_range.assign(0,n*sizeof(unsigned int));
-    ::memcpy((void*)m_range.data(),tmp,m_range.length());
-    m_count = n;
+    m_range.append(codes,len*sizeof(int));
+    m_count += len;
     updateLast();
 }
 

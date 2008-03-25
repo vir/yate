@@ -650,6 +650,31 @@ AC_SUBST(H323_INC)
 AC_SUBST(H323_LIB)
 AC_SUBST(H323_RUN)
 
+HAVE_OPENSSL=no
+OPENSSL_INC=""
+OPENSSL_LIB=""
+OPENSSL_VER=""
+AC_ARG_WITH(openssl,AC_HELP_STRING([--with-openssl],[use OpenSSL for secure sockets (default)]),[ac_cv_use_openssl=$withval],[ac_cv_use_openssl=yes])
+if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
+    AC_MSG_CHECKING([for OpenSSL using pkg-config])
+    verssl=`pkg-config --modversion libssl 2>/dev/null`
+    incssl=`pkg-config --cflags libssl 2>/dev/null`
+    libssl=`pkg-config --libs libssl 2>/dev/null`
+    if [[ "x$incssl" != "x" -a "x$libssl" != "x" ]]; then
+	HAVE_OPENSSL=yes
+	OPENSSL_VER="$verssl"
+	OPENSSL_INC="$incssl"
+	OPENSSL_LIB="$libssl"
+    else
+	verssl="no"
+    fi
+    AC_MSG_RESULT([$verssl])
+fi
+AC_SUBST(HAVE_OPENSSL)
+AC_SUBST(OPENSSL_INC)
+AC_SUBST(OPENSSL_LIB)
+AC_SUBST(OPENSSL_VER)
+
 HAVE_GTK2=no
 GTK2_INC=""
 GTK2_LIB=""

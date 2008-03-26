@@ -7438,7 +7438,7 @@ public:
     virtual void destruct() {
 	    attach(0);
 	    SignallingCallControl::attach(0);
-	    GenObject::destruct();
+	    ISDNLayer3::destruct();
 	}
 
     /**
@@ -7703,7 +7703,7 @@ public:
 	    attach((ISDNQ921Pasive*)0,false);
 	    attach((SignallingCircuitGroup*)0,true);
 	    attach((SignallingCircuitGroup*)0,false);
-	    GenObject::destruct();
+	    ISDNLayer3::destruct();
 	}
 
     /**

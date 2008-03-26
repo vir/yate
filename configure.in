@@ -657,9 +657,14 @@ OPENSSL_VER=""
 AC_ARG_WITH(openssl,AC_HELP_STRING([--with-openssl],[use OpenSSL for secure sockets (default)]),[ac_cv_use_openssl=$withval],[ac_cv_use_openssl=yes])
 if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
     AC_MSG_CHECKING([for OpenSSL using pkg-config])
-    verssl=`pkg-config --modversion libssl 2>/dev/null`
-    incssl=`pkg-config --cflags libssl 2>/dev/null`
-    libssl=`pkg-config --libs libssl 2>/dev/null`
+    pkg="libssl"
+    verssl=`pkg-config --modversion $pkg 2>/dev/null`
+    if [[ "x$verssl" = "x" ]]; then
+	pkg="openssl"
+	verssl=`pkg-config --modversion $pkg 2>/dev/null`
+    fi
+    incssl=`pkg-config --cflags $pkg 2>/dev/null`
+    libssl=`pkg-config --libs $pkg 2>/dev/null`
     if [[ "x$incssl" != "x" -a "x$libssl" != "x" ]]; then
 	HAVE_OPENSSL=yes
 	OPENSSL_VER="$verssl"

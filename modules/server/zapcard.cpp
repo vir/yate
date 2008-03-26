@@ -2672,7 +2672,7 @@ bool ZapModule::received(Message& msg, int id)
 	// Module status
 	if (!dest || dest == name()) {
 	    Module::msgStatus(msg);
-	    return true;
+	    return false;
 	}
 
 	Lock lock(this);

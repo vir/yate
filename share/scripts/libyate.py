@@ -420,6 +420,7 @@ class Yate:
 		self.so.write('%%<message:' + i + ':' + k + ':' + n + ':' + r + p + '\n')
 		#self.se.write('%%<message:' + i + ':' + k + ':' + n + ':' + r + p + '\n')
 		self.type = "acknowledged"
+		self.flush()
 
 # vi: set ts=3 sw=4 sts=4 noet
 # EOF!

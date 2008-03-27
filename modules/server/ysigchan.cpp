@@ -847,7 +847,6 @@ void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
 {
     if (updateStatus && state)
 	status(state);
-#ifdef DEBUG
     if (!debugAt(DebugCall))
 	return;
     if (!state) {
@@ -866,7 +865,6 @@ void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
 	Debug(this,DebugCall,"%s [%p]",show.c_str(),this);
     else
 	DDebug(this,DebugCall,"%s [%p]",show.c_str(),this);
-#endif
 }
 
 void SigChannel::evInfo(SignallingEvent* event)

@@ -910,11 +910,9 @@ void SignallingCircuitGroup::clearAll()
 /**
  * SignallingCircuitSpan
  */
-SignallingCircuitSpan::SignallingCircuitSpan(const char* id,
-	SignallingCircuitGroup* group, bool dChan)
+SignallingCircuitSpan::SignallingCircuitSpan(const char* id, SignallingCircuitGroup* group)
     : m_group(group),
-    m_id(id),
-    m_dChan(dChan)
+    m_id(id)
 {
     if (m_group)
 	m_group->insertSpan(this);

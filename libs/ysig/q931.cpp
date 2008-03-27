@@ -2883,7 +2883,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	    break;
 	}
 
-	// Terminate all calls if all-interfaces is specified
+	// Terminate all calls if class is 'all-interfaces'
 	if (all) {
 	    terminateCalls(0,"resource-unavailable");
 	    break;
@@ -2901,16 +2901,15 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	    if (cic)
 		span = cic->span();
 	}
-	else
-	    for (ObjList* o = circuits()->m_spans.skipNull(); o; o = o->skipNext()) {
-		SignallingCircuitSpan* s = static_cast<SignallingCircuitSpan*>(o->get());
-		if (s->hasDChan()) {
-		    span = s;
-		    break;
-		}
-	    }
+	else {
+	    // FIXME: Make a proper implementation: identify the span containing the active D-channel
+	    // Use the first span
+	    ObjList* o = circuits()->m_spans.skipNull();
+	    if (o)
+		span = static_cast<SignallingCircuitSpan*>(o->get());
+	}
 	if (span) {
-	    // Fill a list with all circuits code used to trminate calls
+	    // Fill a list with all circuit codes used to reset and terminate calls
 	    ObjList m_terminate;
 	    for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
 		SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());

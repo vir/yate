@@ -1783,29 +1783,13 @@ public:
      * Constructor
      * @param id Optional span id
      * @param group Optional circuit group owning the span's circuits
-     * @param dChan Indicates whether this span contains a D-channel or not
      */
-    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0,
-	bool dChan = false);
+    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0);
 
     /**
      * Destructor. Remove from group's queue
      */
     virtual ~SignallingCircuitSpan();
-
-    /**
-     * Check if this span contains a D-channel
-     * @return True if this span contains a D-channel
-     */
-    inline bool hasDChan() const
-	{ return m_dChan; }
-
-    /**
-     * Set this span D-channel's flag
-     * @param dChan True if this span contains a D-channel, false otherwise
-     */
-    inline void setDChan(bool dChan)
-	{ m_dChan = dChan; }
 
     /**
      * Get the owner of this span
@@ -1829,7 +1813,6 @@ protected:
 
 private:
     String m_id;                         // Span's id
-    bool m_dChan;                        // True if this span contains a D-channel
 };
 
 /**

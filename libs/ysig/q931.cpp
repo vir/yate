@@ -5678,7 +5678,7 @@ bool Q931Parser::encodeSignal(ISDNQ931IE* ie, DataBlock& buffer)
 bool Q931Parser::encodeRestart(ISDNQ931IE* ie, DataBlock& buffer)
 {
     u_int8_t data[3] = {(u_int8_t)ie->type(),1,0x80};
-    data[2] = s_ie_ieRestart[0].getValue(ie,true,0xff);
+    data[2] |= s_ie_ieRestart[0].getValue(ie,true,0xff);
     buffer.assign(data,sizeof(data));
     return true;
 }

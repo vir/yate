@@ -122,18 +122,22 @@ class ConfChan : public Channel
 {
     YCLASS(ConfChan,Channel)
 public:
-    ConfChan(const String& name, const NamedList& params, bool utility);
+    ConfChan(const String& name, const NamedList& params, bool counted, bool utility);
     ConfChan(ConfRoom* room, bool voice = false);
     virtual ~ConfChan();
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    inline bool isCounted() const
+	{ return m_counted; }
     inline bool isUtility() const
 	{ return m_utility; }
     inline bool isRecorder() const
 	{ return m_room && (m_room->recorder() == this); }
+    void populateMsg(Message& msg) const;
 private:
     void alterMsg(Message& msg, const char* event);
     RefPointer<ConfRoom> m_room;
+    bool m_counted;
     bool m_utility;
     bool m_billing;
 };
@@ -204,7 +208,7 @@ class ConferenceDriver : public Driver
 public:
     ConferenceDriver();
     virtual ~ConferenceDriver();
-    bool checkRoom(String& room, bool existing, bool utility);
+    bool checkRoom(String& room, bool existing, bool counted);
     bool unload();
 protected:
     virtual void initialize();
@@ -308,21 +312,21 @@ void ConfRoom::addChannel(ConfChan* chan, bool player)
     m_chans.append(chan);
     if (player)
 	m_playerId = chan->id();
-    if (!chan->isUtility()) {
+    if (chan->isCounted())
 	m_users++;
-	if (m_notify) {
-	    String tmp(m_users);
-	    Message* m = new Message("chan.notify");
-	    m->addParam("id",chan->id());
-	    m->addParam("targetid",m_notify);
-	    m->addParam("event","joined");
-	    m->addParam("room",m_name);
-	    m->addParam("maxusers",String(m_maxusers));
-	    m->addParam("users",tmp);
-	    if (m_playerId)
-		m->addParam("player",m_playerId);
-	    Engine::enqueue(m);
-	}
+    if (m_notify && !chan->isUtility()) {
+	String tmp(m_users);
+	Message* m = new Message("chan.notify");
+	m->addParam("id",chan->id());
+	m->addParam("targetid",m_notify);
+	chan->populateMsg(*m);
+	m->addParam("event","joined");
+	m->addParam("room",m_name);
+	m->addParam("maxusers",String(m_maxusers));
+	m->addParam("users",tmp);
+	if (m_playerId)
+	    m->addParam("player",m_playerId);
+	Engine::enqueue(m);
     }
 }
 
@@ -336,32 +340,32 @@ void ConfRoom::delChannel(ConfChan* chan)
 	m_record = 0;
     if (m_playerId && (chan->id() == m_playerId))
 	m_playerId.clear();
-    if (m_chans.remove(chan,false) && !chan->isUtility()) {
+    if (m_chans.remove(chan,false) && chan->isCounted())
 	m_users--;
-	bool alone = (m_users == 1);
-	lock.drop();
-	if (m_notify) {
-	    String tmp(m_users);
-	    Message* m = new Message("chan.notify");
-	    m->addParam("id",chan->id());
-	    m->addParam("targetid",m_notify);
-	    m->addParam("event","left");
-	    m->addParam("room",m_name);
-	    m->addParam("maxusers",String(m_maxusers));
-	    m->addParam("users",tmp);
-	    // easy to check parameter indicating one user will be left alone
-	    if (m_lonely)
-		m->addParam("lonely",String::boolText(alone));
-	    if (m_playerId)
-		m->addParam("player",m_playerId);
-	    Engine::enqueue(m);
-	}
-
-	// cleanup if there are only 1 or 0 (if lonely==true) real users left
-	if (m_users <= (m_lonely ? 0 : 1))
-	    // all channels left are utility or the lonely user - drop them
-	    dropAll("hangup");
+    bool alone = (m_users == 1);
+    lock.drop();
+    if (m_notify && !chan->isUtility()) {
+	String tmp(m_users);
+	Message* m = new Message("chan.notify");
+	m->addParam("id",chan->id());
+	m->addParam("targetid",m_notify);
+	chan->populateMsg(*m);
+	m->addParam("event","left");
+	m->addParam("room",m_name);
+	m->addParam("maxusers",String(m_maxusers));
+	m->addParam("users",tmp);
+	// easy to check parameter indicating one user will be left alone
+	if (m_lonely)
+	    m->addParam("lonely",String::boolText(alone));
+	if (m_playerId)
+	    m->addParam("player",m_playerId);
+	Engine::enqueue(m);
     }
+
+    // cleanup if there are only 1 or 0 (if lonely==true) real users left
+    if (m_users <= (m_lonely ? 0 : 1))
+	// all channels left are utility or the lonely user - drop them
+	dropAll("hangup");
 }
 
 // Drop all channels attached to the room, the lock must not be hold
@@ -444,7 +448,9 @@ bool ConfRoom::setRecording(const NamedList& params)
 	    Debug(&__plugin,DebugNote,"Recording '%s' without playing tone!",m_name.c_str());
 	if (m_notify) {
 	    m = ch->message("chan.notify",true,true);
+	    m->addParam("id",ch->id());
 	    m->addParam("targetid",m_notify);
+	    ch->populateMsg(*m);
 	    m->addParam("event","recording");
 	    m->addParam("room",m_name);
 	    m->addParam("maxusers",String(m_maxusers));
@@ -659,8 +665,9 @@ ConfSource::~ConfSource()
 
 // Constructor of a new conference leg, creates or attaches to an existing
 //  conference room; noise and echo suppression are also set here
-ConfChan::ConfChan(const String& name, const NamedList& params, bool utility)
-    : Channel(__plugin,0,true), m_utility(utility), m_billing(false)
+ConfChan::ConfChan(const String& name, const NamedList& params, bool counted, bool utility)
+    : Channel(__plugin,0,true),
+      m_counted(counted), m_utility(utility), m_billing(false)
 {
     DDebug(this,DebugAll,"ConfChan::ConfChan(%s,%p) %s [%p]",
 	name.c_str(),&params,id().c_str(),this);
@@ -701,7 +708,8 @@ ConfChan::ConfChan(const String& name, const NamedList& params, bool utility)
 
 // Constructor of an utility conference leg (incoming call)
 ConfChan::ConfChan(ConfRoom* room, bool voice)
-    : Channel(__plugin), m_utility(true), m_billing(false)
+    : Channel(__plugin),
+      m_counted(false), m_utility(true), m_billing(false)
 {
     DDebug(this,DebugAll,"ConfChan::ConfChan(%p,%s) %s [%p]",
 	room,String::boolText(voice),id().c_str(),this);
@@ -734,26 +742,36 @@ ConfChan::~ConfChan()
 	Engine::enqueue(message("chan.hangup"));
 }
 
+// Intercept DTMF messages, possibly turn them into room notifications
 bool ConfChan::msgTone(Message& msg, const char* tone)
 {
     alterMsg(msg,"dtmf");
     return false;
 }
 
+// Intercept text messages, possibly turn them into room notifications
 bool ConfChan::msgText(Message& msg, const char* text)
 {
     alterMsg(msg,"text");
     return false;
 }
 
+// Populate messages with common conference leg parameters
+void ConfChan::populateMsg(Message& msg) const
+{
+    msg.setParam("counted",String::boolText(m_counted));
+    msg.setParam("utility",String::boolText(m_utility));
+    msg.setParam("room",m_address);
+}
+
+// Alter messages, possibly turn them into room event notifications
 void ConfChan::alterMsg(Message& msg, const char* event)
 {
     String* target = msg.getParam("targetid");
     // if the message is already targeted to something else don't touch it
     if (target && *target && (id() != *target))
 	return;
-    msg.setParam("utility",String::boolText(m_utility));
-    msg.setParam("room",m_address);
+    populateMsg(msg);
     // if we were the target or it was none send it to the room's notifier
     if (m_room && m_room->notify()) {
 	msg = "chan.notify";
@@ -794,7 +812,8 @@ bool ConfHandler::received(Message& msg)
     }
 
     bool utility = msg.getBoolValue("utility",false);
-    if (!__plugin.checkRoom(room,msg.getBoolValue("existing"),utility))
+    bool counted = msg.getBoolValue("counted",!utility);
+    if (!__plugin.checkRoom(room,msg.getBoolValue("existing"),counted))
 	return false;
 
     const char* reason = msg.getValue("reason","conference");
@@ -814,14 +833,14 @@ bool ConfHandler::received(Message& msg)
     }
 
     // create a conference leg or even a room for the caller
-    ConfChan *c = new ConfChan(room,msg,utility);
+    ConfChan *c = new ConfChan(room,msg,counted,utility);
     if (chan->connect(c,reason,false)) {
 	msg.setParam("peerid",c->id());
 	c->deref();
 	msg.setParam("room",__plugin.prefix()+room);
 	if (peer) {
 	    // create a conference leg for the old peer too
-	    ConfChan *p = new ConfChan(room,msg,utility);
+	    ConfChan *p = new ConfChan(room,msg,counted,utility);
 	    peer->connect(p,reason,false);
 	    p->deref();
 	}
@@ -881,6 +900,8 @@ bool ConferenceDriver::received(Message &msg, int id)
     Input parameters - per conference leg:
 	"utility" - true creates a channel that is used for housekeeping
 	    tasks like recording or playing prompts to everybody
+	"counted" - set to false (default for utility) to not count the
+	    conference leg against maxusers or disconnect criteria
 	"voice" - set to false to have the conference leg just listen to the
 	    voice mix without being able to talk
 	"smart" - set to false to disable energy and noise level calculation
@@ -897,11 +918,12 @@ bool ConferenceDriver::received(Message &msg, int id)
 bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 {
     bool utility = msg.getBoolValue("utility",false);
-    if (!checkRoom(dest,msg.getBoolValue("existing"),utility))
+    bool counted = msg.getBoolValue("counted",!utility);
+    if (!checkRoom(dest,msg.getBoolValue("existing"),counted))
 	return false;
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	ConfChan *c = new ConfChan(dest,msg,utility);
+	ConfChan *c = new ConfChan(dest,msg,counted,utility);
 	if (ch->connect(c)) {
 	    msg.setParam("peerid",c->id());
 	    c->deref();
@@ -919,13 +941,13 @@ bool ConferenceDriver::msgExecute(Message& msg, String& dest)
 }
 
 // Check if a room exists, allocates a new room name if not and asked so
-bool ConferenceDriver::checkRoom(String& room, bool existing, bool utility)
+bool ConferenceDriver::checkRoom(String& room, bool existing, bool counted)
 {
     ConfRoom* conf = ConfRoom::get(room);
     if (existing && !conf)
 	return false;
     if (conf) {
-	bool ok = utility || !conf->full();
+	bool ok = !(counted && conf->full());
 	conf->deref();
 	return ok;
     }

@@ -2851,40 +2851,100 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 }
 
 // Process restart requests
+// See Q.931 5.5
 void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 {
     m_data.processRestart(msg,false);
     m_data.processChannelID(msg,false);
     m_data.m_reason = "";
-    ObjList* list = 0;
-    if (m_data.m_restart == "channels") {
-	list = m_data.m_channels.split(',',false);
-	if (!list)
+    ObjList* list = m_data.m_channels.split(',',false);
+    unsigned char buf = 0;
+    DDebug(this,DebugInfo,"Received '%s' class=%s circuits=%s",
+	msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str());
+
+    while (true) {
+	if (m_data.m_restart == "channels") {
+	    if (list)
+		terminateCalls(list,"resource-unavailable");
+	    else {
+		m_data.m_reason = "invalid-ie";
+		buf = ISDNQ931IE::ChannelID;
+	    }
+	    break;
+	}
+
+	bool single = (m_data.m_restart == "interface");
+	bool all = !single && (m_data.m_restart == "all-interfaces");
+	// If all interfaces is specified, ChannelID must not be present
+	// If ChannelID is present and allowed, it must contain a single channel code
+	if (!(single || all) || (all && list) || (single && list && list->count() != 1)) {
 	    m_data.m_reason = "invalid-ie";
-    }
-    else
-	if (m_data.m_restart == "all-interfaces" || m_data.m_restart == "interface")
-	    m_data.m_reason = "service-not-implemented";
+	    buf = ISDNQ931IE::Restart;
+	    break;
+	}
+
+	// Terminate all calls if all-interfaces is specified
+	if (all) {
+	    terminateCalls(0,"resource-unavailable");
+	    break;
+	}
+
+	// Done if no circuits
+	if (!circuits())
+	    break;
+
+	// Identify the span containing the D-channel
+	SignallingCircuitSpan* span = 0;
+	if (list) {
+	    unsigned int code = static_cast<String*>(list->get())->toInteger(0);
+	    SignallingCircuit* cic = circuits()->find(code);
+	    if (cic)
+		span = cic->span();
+	}
 	else
-	    m_data.m_reason = "invalid-ie";
-    if (!m_data.m_reason.null()) {
-	Debug(this,DebugNote,
-	    "Incorrect/unsupported '%s' request. Class: '%s'. Circuit(s): '%s'. Reason: '%s'",
-	    msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str(),m_data.m_reason.c_str());
-	sendStatus(m_data.m_reason,m_callRefLen);
+	    for (ObjList* o = circuits()->m_spans.skipNull(); o; o = o->skipNext()) {
+		SignallingCircuitSpan* s = static_cast<SignallingCircuitSpan*>(o->get());
+		if (s->hasDChan()) {
+		    span = s;
+		    break;
+		}
+	    }
+	if (span) {
+	    // Fill a list with all circuits code used to trminate calls
+	    ObjList m_terminate;
+	    for (ObjList* o = circuits()->circuits().skipNull(); o; o = o->skipNext()) {
+		SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+		if (span == cic->span())
+		    m_terminate.append(new String(cic->code()));
+	    }
+	    terminateCalls(&m_terminate,"resource-unavailable");
+	}
+	else
+	    Debug(this,DebugNote,
+		"Unable to identify span containing D-channel for '%s' request class=%s circuit=%s",
+		msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str());
+	break;
+    }
+    TelEngine::destruct(list);
+
+    // ACK if no error
+    if (m_data.m_reason.null()) {
+	ISDNQ931Message* m = new ISDNQ931Message(ISDNQ931Message::RestartAck,
+	    false,0,m_callRefLen);
+	m->append(msg->removeIE(ISDNQ931IE::ChannelID));
+	m->append(msg->removeIE(ISDNQ931IE::Restart));
+	sendMessage(m);
 	return;
     }
-    if (!m_printMsg)
-	DDebug(this,DebugInfo,"Received '%s' request for circuit(s) '%s'",
-	    msg->name(),m_data.m_channels.c_str());
-    // Terminate calls and ACK
-    terminateCalls(list,"temporary-failure");
-    delete list;
-    ISDNQ931Message* m = new ISDNQ931Message(ISDNQ931Message::RestartAck,
-	false,0,m_callRefLen);
-    m->append(msg->removeIE(ISDNQ931IE::ChannelID));
-    m->append(msg->removeIE(ISDNQ931IE::Restart));
-    sendMessage(m);
+
+    String diagnostic;
+    if (buf)
+	diagnostic.hexify(&buf,1);
+    Debug(this,DebugNote,
+	"Invalid '%s' request class=%s circuits=%s reason='%s' diagnostic=%s",
+	msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str(),
+	m_data.m_reason.c_str(),diagnostic.c_str());
+    sendStatus(m_data.m_reason,m_callRefLen,0,false,ISDNQ931Call::Null,0,diagnostic);
 }
 
 // Process messages with invalid call reference. See Q.931 5.8
@@ -2994,7 +3054,8 @@ void ISDNQ931::endRestart(bool restart, u_int64_t time, bool timeout)
 // Send STATUS. See Q.931 3.1.16
 // IE: Cause, CallState, Display
 bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, ISDNQ931Call::State state, const char* display)
+	bool initiator, ISDNQ931Call::State state, const char* display,
+	const char* diagnostic)
 {
     // Create message
     ISDNQ931Message* msg;
@@ -3006,7 +3067,9 @@ bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t call
     if (!(callRef && callRefLen))
 	state = m_restartCic ? ISDNQ931Call::RestartReq : ISDNQ931Call::Null;
     // Add IEs
-    msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    if (diagnostic && ie)
+	ie->addParam("diagnostic",diagnostic);
     msg->appendIEValue(ISDNQ931IE::CallState,"state",ISDNQ931Call::stateName(state));
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
@@ -3291,7 +3354,7 @@ void ISDNQ931Monitor::processMsgRestart(ISDNQ931Message* msg)
 	String* s = static_cast<String*>(o->get());
 	ISDNQ931CallMonitor* mon = findMonitor(s->toInteger(-1),false);
 	if (mon) {
-	    terminateMonitor(mon,"temporary-failure");
+	    terminateMonitor(mon,"resource-unavailable");
 	    mon->deref();
 	}
     }

@@ -1538,6 +1538,7 @@ class YSIG_API SignallingCircuitGroup : public SignallingComponent, public Mutex
     friend class SignallingCircuit;
     friend class SignallingCallControl;
     friend class SS7ISUP;
+    friend class ISDNQ931;
 public:
     /**
      * Circuit allocation strategy
@@ -1780,8 +1781,12 @@ class YSIG_API SignallingCircuitSpan : public GenObject
 public:
     /**
      * Constructor
+     * @param id Optional span id
+     * @param group Optional circuit group owning the span's circuits
+     * @param dChan Indicates whether this span contains a D-channel or not
      */
-    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0);
+    SignallingCircuitSpan(const char* id = 0, SignallingCircuitGroup* group = 0,
+	bool dChan = false);
 
     /**
      * Destructor. Remove from group's queue
@@ -1789,10 +1794,24 @@ public:
     virtual ~SignallingCircuitSpan();
 
     /**
+     * Check if this span contains a D-channel
+     * @return True if this span contains a D-channel
+     */
+    inline bool hasDChan() const
+	{ return m_dChan; }
+
+    /**
+     * Set this span D-channel's flag
+     * @param dChan True if this span contains a D-channel, false otherwise
+     */
+    inline void setDChan(bool dChan)
+	{ m_dChan = dChan; }
+
+    /**
      * Get the owner of this span
      * @return SignallingCircuitGroup pointer or 0
      */
-    SignallingCircuitGroup* group() const
+    inline SignallingCircuitGroup* group() const
 	{ return m_group; }
 
     /**
@@ -1810,6 +1829,7 @@ protected:
 
 private:
     String m_id;                         // Span's id
+    bool m_dChan;                        // True if this span contains a D-channel
 };
 
 /**
@@ -7382,14 +7402,15 @@ public:
      * @param call The call requesting the operation
      * @param cause Value for Cause IE
      * @param display Optional value for Display IE 
+     * @param diagnostic Optional value for cause diagnostic value
      * @return The result of the operation (true if succesfully sent)
      */
     inline bool sendStatus(ISDNQ931Call* call, const char* cause,
-	const char* display = 0) {
+	const char* display = 0, const char* diagnostic = 0) {
 	    if (!call)
 		return false;
 	    return sendStatus(cause,call->callRefLen(),call->callRef(),
-		call->outgoing(),call->state(),display);
+		call->outgoing(),call->state(),display,diagnostic);
 	}
 
     /**
@@ -7560,11 +7581,12 @@ protected:
      * @param initiator True if this is from the call initiator
      * @param state The state for CallState IE
      * @param display Optional value for Display IE 
+     * @param diagnostic Optional value for cause diagnostic value
      * @return The result of the operation (true if succesfully sent)
      */
     bool sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t callRef = 0,
 	bool initiator = false, ISDNQ931Call::State state = ISDNQ931Call::Null,
-	const char* display = 0);
+	const char* display = 0, const char* diagnostic = 0);
 
     /**
      * Send a RELEASE or RELEASE COMPLETE message

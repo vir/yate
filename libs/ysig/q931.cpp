@@ -2864,7 +2864,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 
     while (true) {
 	if (m_data.m_restart == "channels") {
-	    if (list)
+	    if (list->count() > 0)
 		terminateCalls(list,"resource-unavailable");
 	    else {
 		m_data.m_reason = "invalid-ie";
@@ -2877,7 +2877,8 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	bool all = !single && (m_data.m_restart == "all-interfaces");
 	// If all interfaces is specified, ChannelID must not be present
 	// If ChannelID is present and allowed, it must contain a single channel code
-	if (!(single || all) || (all && list) || (single && list && list->count() != 1)) {
+	if (!(single || all) || (all && list->count() > 0) ||
+	    (single && list->count() != 1)) {
 	    m_data.m_reason = "invalid-ie";
 	    buf = ISDNQ931IE::Restart;
 	    break;

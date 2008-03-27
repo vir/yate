@@ -2878,7 +2878,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	// If all interfaces is specified, ChannelID must not be present
 	// If ChannelID is present and allowed, it must contain a single channel code
 	if (!(single || all) || (all && list->count() > 0) ||
-	    (single && list->count() != 1)) {
+	    (single && list->count() > 1)) {
 	    m_data.m_reason = "invalid-ie";
 	    buf = ISDNQ931IE::Restart;
 	    break;
@@ -2896,7 +2896,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 
 	// Identify the span containing the D-channel
 	SignallingCircuitSpan* span = 0;
-	if (list) {
+	if (list->count()) {
 	    unsigned int code = static_cast<String*>(list->get())->toInteger(0);
 	    SignallingCircuit* cic = circuits()->find(code);
 	    if (cic)

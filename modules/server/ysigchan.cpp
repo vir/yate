@@ -649,8 +649,7 @@ bool SigChannel::msgProgress(Message& msg)
 	    sm->params().addParam("format",format);
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
-    if (sm)
-	sm->deref();
+    TelEngine::destruct(sm);
     m_call->sendEvent(event);
     return true;
 }
@@ -669,8 +668,7 @@ bool SigChannel::msgRinging(Message& msg)
 	sm->params().addParam("format",format);
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
-    if (sm)
-	sm->deref();
+    TelEngine::destruct(sm);
     m_call->sendEvent(event);
     return true;
 }
@@ -695,8 +693,7 @@ bool SigChannel::msgAnswered(Message& msg)
 	sm->params().addParam("format",format);
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
-    if (sm)
-	sm->deref();
+    TelEngine::destruct(sm);
     m_call->sendEvent(event);
     return true;
 }
@@ -722,7 +719,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
     SignallingMessage* sm = new SignallingMessage;
     sm->params().addParam("tone",tone);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
-    sm->deref();
+    TelEngine::destruct(sm);
     m_call->sendEvent(event);
     return true;
 }
@@ -736,7 +733,7 @@ bool SigChannel::msgText(Message& msg, const char* text)
     SignallingMessage* sm = new SignallingMessage;
     sm->params().addParam("text",text);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Message,sm,m_call);
-    sm->deref();
+    TelEngine::destruct(sm);
     m_call->sendEvent(event);
     return true;
 }
@@ -783,8 +780,7 @@ void SigChannel::callAccept(Message& msg)
 	    sm->params().addParam("format",format);
 	}
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
-	if (sm)
-	    sm->deref();
+	TelEngine::destruct(sm);
 	m_call->sendEvent(event);
     }
     setState("accepted",false);
@@ -824,11 +820,10 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
 	m_call->userdata(0);
 	SignallingMessage* msg = new SignallingMessage;
 	msg->params().addParam("reason",m_reason);
-	SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,m_call);
-	msg->deref();
-	m_call->sendEvent(event);
-	m_call->deref();
-	m_call = 0;
+	SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
+	TelEngine::destruct(msg);
+	m_call->sendEvent(ev);
+	TelEngine::destruct(m_call);
     }
     lock.drop();
     Message* m = message("chan.hangup",true);
@@ -1052,7 +1047,7 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 	    msg.setParam("error","failure");
 	Debug(this,DebugNote,"Signalling call failed with reason '%s'",msg.getValue("error"));
     }
-    sigCh->deref();
+    TelEngine::destruct(sigCh);
     return ok;
 }
 
@@ -2023,7 +2018,7 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	if (rec->update(event)) {
 	    mon->userdata(rec);
 	    m_monitors.append(rec);
-	    rec->deref();
+	    TelEngine::destruct(rec);
 	}
 	else
 	    rec->disconnect(0);
@@ -2272,10 +2267,8 @@ SigSourceMux::~SigSourceMux()
     Lock lock(m_lock);
     removeSource(true);
     removeSource(false);
-    if (m_firstChan)
-	m_firstChan->deref();
-    if (m_secondChan)
-	m_secondChan->deref();
+    TelEngine::destruct(m_firstChan);
+    TelEngine::destruct(m_secondChan);
     XDebug(&plugin,DebugAll,"SigSourceMux::~SigSourceMux() [%p]",this);
 }
 
@@ -2421,8 +2414,7 @@ void SigSourceMux::removeSource(bool first)
     DataSource*& src = first ? m_firstSrc : m_secondSrc;
     if (src) {
 	src->clear();
-	src->deref();
-	src = 0;
+	TelEngine::destruct(src);
     }
 }
 
@@ -2509,12 +2501,12 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
 	    return true;
 	source = new SigSourceMux(format,m_monitor->idleValue(),m_monitor->chanBuffer());
 	if (!source->sampleLen()) {
-	    source->deref();
+	    TelEngine::destruct(source);
 	    m_reason = "Unsupported audio format";
 	    break;
 	}
 	setSource(source);
-	source->deref();
+	TelEngine::destruct(source);
 	if (!getSource()) {
 	    m_reason = "Failed to set data source";
 	    break;
@@ -2566,8 +2558,7 @@ bool SigIsdnCallRecord::close(const char* reason)
     m_call->userdata(0);
     if (m_monitor)
 	m_monitor->q931()->terminateMonitor(m_call,m_reason);
-    m_call->deref();
-    m_call = 0;
+    TelEngine::destruct(m_call);
     setSource();
     Debug(id(),DebugCall,"Closed. Reason: '%s' [%p]",m_reason.c_str(),this);
     return false;

@@ -1265,10 +1265,8 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
 	}
 	return 0;
     }
-    if (peerState == Null) {
-	changeState(Null);
+    if (peerState == Null)
 	return releaseComplete();
-    }
     // Check peer wrong states (these are states associated with dummy call reference)
     if (peerState == Restart || peerState == RestartReq)
 	return releaseComplete("wrong-state-message");
@@ -1609,6 +1607,8 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
 SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* diag)
 {
     Lock lock(m_callMutex);
+    if (state() == Null)
+	return 0;
     if (reason)
 	m_data.m_reason = reason;
     DDebug(q931(),DebugInfo,
@@ -1999,6 +1999,8 @@ SignallingEvent* ISDNQ931CallMonitor::processMsgInfo(ISDNQ931Message* msg)
 SignallingEvent* ISDNQ931CallMonitor::releaseComplete(const char* reason)
 {
     Lock lock(m_callMutex);
+    if (state() == Null)
+	return 0;
     if (reason)
 	m_data.m_reason = reason;
     DDebug(q931(),DebugInfo,

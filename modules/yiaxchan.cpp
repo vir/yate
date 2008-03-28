@@ -1067,8 +1067,13 @@ bool YIAXEngine::userreg(IAXTransaction* tr, bool regrel)
 	String data = "iax/iax2:";
 	data << tr->username() << "@";
 	data << tr->remoteAddr().host() << ":" << tr->remoteAddr().port();
-	// TODO: support number != username
-	data << "/" << tr->username();
+	const char* called = tr->calledNo();
+	const char* context = tr->calledContext();
+	if (called || context) {
+	    data << "/" << called;
+	    if (context)
+		data << "@" << context;
+	}
 	msg.addParam("data",data);
 	msg.addParam("expires",String((unsigned int)tr->expire()));
     }

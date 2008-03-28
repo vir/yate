@@ -712,9 +712,11 @@ void IAXTransaction::init(IAXIEList& ieList)
 		m_formatIn = m_format;
 	    break;
 	case RegReq:
+	    ieList.getString(IAXInfoElement::CALLED_NUMBER,m_calledNo);
+	    ieList.getString(IAXInfoElement::CALLED_CONTEXT,m_calledContext);
+	    ieList.getNumeric(IAXInfoElement::REFRESH,m_expire);
 	case RegRel:
 	    ieList.getString(IAXInfoElement::USERNAME,m_username);
-	    ieList.getNumeric(IAXInfoElement::REFRESH,m_expire);
 	    break;
 	case Poke:
 	default: ;

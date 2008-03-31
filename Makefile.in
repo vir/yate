@@ -112,7 +112,7 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
-.PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen check-topdir windows
+.PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir windows
 engine: tables library libyate.so $(PROGS)
 
 apidocs-kdoc: check-topdir
@@ -135,6 +135,9 @@ apidocs-build:
 	else \
 	    echo "Neither kdoc or doxygen is installed!" ; exit 1 ; \
 	fi
+
+apidocs-everything: check-topdir
+	$(MAKE) apidocs-build DOCGEN_F="$(DOCGEN_F) `echo libs/y*/*.h`"
 
 apidocs: @srcdir@/docs/api/index.html
 

@@ -719,6 +719,10 @@ if [[ "x$ac_cv_use_gtkmozilla" = "xyes" ]]; then
 	mozpkg="firefox-gtkmozembed"
 	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
     fi
+    if [[ "x$vergmoz" = "x" ]]; then
+	mozpkg="xulrunner-gtkmozembed"
+	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
+    fi
     incgmoz=`pkg-config --cflags $mozpkg 2>/dev/null`
     libgmoz=`pkg-config --libs $mozpkg 2>/dev/null`
     if [[ "x$incgmoz" != "x" -a "x$libgmoz" != "x" ]]; then

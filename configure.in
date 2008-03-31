@@ -616,6 +616,7 @@ fi
 AC_MSG_CHECKING([for OpenH323 in $ac_cv_use_openh323])
 local_lib="$ARCHLIB"
 # try first installed directory
+ver323=""
 inc323="$ac_cv_use_openh323/include/openh323/h323.h"
 lib323="$ac_cv_use_openh323/$local_lib/libopenh323.so"
 if [[ "x$local_lib" != "xlib" -a ! -f "$lib323" ]]; then
@@ -623,6 +624,7 @@ if [[ "x$local_lib" != "xlib" -a ! -f "$lib323" ]]; then
     lib323="$ac_cv_use_openh323/$local_lib/libopenh323.so"
 fi
 if [[ -f "$inc323" -a -f "$lib323" ]]; then
+    ver323=`sed -n 's/^.*OPENH323_VERSION.*"\([[^"]]\+\)".*$/\1/p' "$ac_cv_use_openh323/include/openh323/openh323buildopts.h" 2>/dev/null`
     HAVE_H323=installed
     H323_INC="-I$ac_cv_use_openh323/include/openh323"
     H323_LIB="-L$ac_cv_use_openh323/$local_lib -lopenh323"
@@ -631,13 +633,14 @@ else
     inc323="$ac_cv_use_openh323/include/h323.h"
     lib323=`echo "$ac_cv_use_openh323/lib/"libh323*r.so`
     if [[ -f "$inc323" -a -f "$lib323" ]]; then
+	ver323=`sed -n 's/^.*OPENH323_VERSION.*"\([[^"]]\+\)".*$/\1/p' "$ac_cv_use_openh323/include/openh323buildopts.h" 2>/dev/null`
         HAVE_H323=sources
         H323_INC="-I$ac_cv_use_openh323/include"
         H323_LIB="-L$ac_cv_use_openh323/lib -l`echo "$lib323"|sed 's,^.*/lib,,; s,\.so$,,'`"
         H323_RUN=":$ac_cv_use_openh323/lib"
     fi
 fi
-AC_MSG_RESULT([$HAVE_H323])
+AC_MSG_RESULT([$HAVE_H323 $ver323])
 fi
 
 if [[ "x$HAVE_H323" != "xno" ]]; then

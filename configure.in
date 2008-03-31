@@ -660,10 +660,10 @@ OPENSSL_VER=""
 AC_ARG_WITH(openssl,AC_HELP_STRING([--with-openssl],[use OpenSSL for secure sockets (default)]),[ac_cv_use_openssl=$withval],[ac_cv_use_openssl=yes])
 if [[ "x$ac_cv_use_openssl" = "xyes" ]]; then
     AC_MSG_CHECKING([for OpenSSL using pkg-config])
-    pkg="libssl"
+    pkg="openssl"
     verssl=`pkg-config --modversion $pkg 2>/dev/null`
     if [[ "x$verssl" = "x" ]]; then
-	pkg="openssl"
+	pkg="libssl"
 	verssl=`pkg-config --modversion $pkg 2>/dev/null`
     fi
     incssl=`pkg-config --cflags $pkg 2>/dev/null`

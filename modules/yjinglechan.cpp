@@ -186,7 +186,7 @@ protected:
     YJGConnection* m_conn;               // Connection owning this object
     bool m_mediaReady;                   // Media ready (updated) flag
     bool m_transportReady;               // Transport ready (both parties) flag
-    bool m_started;                      // True if chan.stun already sent
+    bool m_started;                      // True if socket.stun already sent
     JGTransport* m_remote;               // The remote transport info
 };
 
@@ -832,7 +832,7 @@ bool YJGData::rtp(bool start)
 
     if (start) {
 	// Start STUN
-	Message* msg = new Message("chan.stun");
+	Message* msg = new Message("socket.stun");
 	msg->userData(m.userData());
 	msg->addParam("localusername",m_remote->username + username);
 	msg->addParam("remoteusername",username + m_remote->username);

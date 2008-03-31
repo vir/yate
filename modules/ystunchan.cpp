@@ -35,7 +35,7 @@ using namespace TelEngine;
 namespace { // anonymous
 
 /*
-  chan.stun parameters
+  socket.stun parameters
 
   uselocalusername        Add USERNAME attribute when sending requests
                           Defaults to true
@@ -64,7 +64,7 @@ class YStunMessage;                      // STUN message
 class YStunUtils;                        // General usefull functions
 class YStunMessageOut;                   // Outgoing STUN message (message + retransmission info)
 class YStunSocketFilter;                 // Socket filter for STUN
-class StunHandler;                       // chan.stun handler
+class StunHandler;                       // socket.stun handler
 class YStunPlugin;                       // The plugin
 
 /**
@@ -416,12 +416,12 @@ private:
 };
 
 /**
- * chan.stun message handler
+ * socket.stun message handler
  */
 class StunHandler : public MessageHandler
 {
 public:
-    StunHandler() : MessageHandler("chan.stun") {}
+    StunHandler() : MessageHandler("socket.stun") {}
     // Process message. Create and install filter.
     virtual bool received(Message &msg);
 };

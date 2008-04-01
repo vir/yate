@@ -256,6 +256,9 @@ class IVR
 	    case "chan.dtmf":
 		return $this->OnDTMF($event->GetValue("text"));
 	    case "chan.notify":
+		$notify = $event->GetValue("event");
+		if (($notify !== null) && ($notify != "wave"))
+		    return $this->OnNotify($notify,$event);
 		if ($event->GetValue("reason") == "replaced")
 		    return true;
 		return $this->PlayNext() || $this->OnEOF();
@@ -311,6 +314,20 @@ class IVR
     {
 	$this->Debug("::OnEOF()");
 	$this->OperTable("eof");
+    }
+
+    /**
+     * Method called on named notifications
+     * @param $name Name of the notification (parameter "event" in message)
+     * @param $event Reference to notification message event
+     * @return True if the notification was handled, false if undesired
+     */
+    function OnNotify($name, &$event)
+    {
+	if ($ev == "dtmf")
+	    return $this->OnDTMF($event->GetValue("text"));
+	$this->Debug("::OnNotify('$name')");
+	return $this->OperTable($key);
     }
 
     /**
@@ -406,13 +423,30 @@ class IVR
     }
 
     /**
-     * Retrive the IVR's channel ID
+     * Retrive the IVR's channel ID, initialize it if required
      * @return ID of the IVR call leg
      */
     static function ChannelID()
     {
 	global $yate_ivr_channel;
+	if (!isset($yate_ivr_channel))
+	    $yate_ivr_channel = "ivr/" . uniqid(rand(),1);
 	return $yate_ivr_channel;
+    }
+
+    /**
+     * Set the IVR's channel ID, must be called early
+     * @param $id Desired ID of the IVR call leg
+     * @return True if the new ID was set successfully, false if already set
+     */
+    static function SetChannelID($id)
+    {
+	global $yate_ivr_channel;
+	if (($id != "") && !isset($yate_ivr_channel)) {
+	    $yate_ivr_channel = $id;
+	    return true;
+	}
+	return false;
     }
 
     /**
@@ -554,14 +588,11 @@ class IVR
      */
     static function Run($ivrname)
     {
-	global $yate_ivr_channel;
 	global $yate_ivr_target;
 	global $yate_ivr_current;
 
 	if (IVR::Jump($ivrname)) {
-	    Yate::SetLocal("id",$yate_ivr_channel);
-	    Yate::Install("chan.dtmf",100,"targetid",$yate_ivr_channel);
-	    Yate::Install("chan.notify",100,"targetid",$yate_ivr_channel);
+	    $init_id = true;
 	    while ($yate_ivr_current !== null) {
 		$ev = Yate::GetEvent();
 		if ($ev === true)
@@ -571,9 +602,15 @@ class IVR
 		if (($ev->type == "incoming") && ($ev->name == "call.execute"))
 		    $yate_ivr_target = $ev->GetValue("id");
 		IVR::EventIVR($ev);
+		if ($init_id && ($yate_ivr_current !== null)) {
+		    $init_id = false;
+		    Yate::SetLocal("id",IVR::ChannelID());
+		    Yate::Install("chan.dtmf",100,"targetid",IVR::ChannelID());
+		    Yate::Install("chan.notify",100,"targetid",IVR::ChannelID());
+		}
 		if ($ev && ($ev->type == "incoming")) {
 		    if ($ev->handled && $ev->name == "call.execute")
-			$ev->params["targetid"] = $yate_ivr_channel;
+			$ev->params["targetid"] = IVR::ChannelID();
 		    $ev->Acknowledge();
 		}
 	    }
@@ -640,7 +677,6 @@ class IVR
      */
     private static function InitIVR()
     {
-	global $yate_ivr_channel;
 	global $yate_ivr_target;
 	global $yate_ivr_register;
 	global $yate_ivr_current;
@@ -649,7 +685,6 @@ class IVR
 	if (isset($yate_ivr_register))
 	    return;
 	Yate::Debug("IVR::InitIVR()");
-	$yate_ivr_channel = "ivr/" . uniqid(rand(),1);
 	$yate_ivr_target = null;
 	$yate_ivr_register = array();
 	$yate_ivr_current = null;

@@ -286,9 +286,10 @@ protected:
     /**
      * Constructor
      * @param name Name of the module
+     * @param earlyInit True to attempt to initialize module before others
      */
-    inline ChanAssistList(const char* name)
-	: Module(name, "misc"), m_first(true)
+    inline ChanAssistList(const char* name, bool earlyInit = false)
+	: Module(name, "misc", earlyInit), m_first(true)
 	{ }
 
     /**

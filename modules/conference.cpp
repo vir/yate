@@ -679,6 +679,11 @@ ConfChan::ConfChan(const String& name, const NamedList& params, bool counted, bo
     m_room = ConfRoom::get(name,&params);
     if (m_room) {
 	m_address = name;
+	if (!m_utility) {
+	    int tout = params.getIntValue("timeout", driver() ? driver()->timeout() : 0);
+	    if (tout > 0)
+		timeout(Time::now() + tout*(u_int64_t)1000);
+	}
 	m_room->addChannel(this,params.getBoolValue("player",false));
 	RefPointer<ConfConsumer> cons;
 	if (voice) {

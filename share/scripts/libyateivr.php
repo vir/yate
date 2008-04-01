@@ -324,10 +324,10 @@ class IVR
      */
     function OnNotify($name, &$event)
     {
-	if ($ev == "dtmf")
+	if ($name == "dtmf")
 	    return $this->OnDTMF($event->GetValue("text"));
 	$this->Debug("::OnNotify('$name')");
-	return $this->OperTable($key);
+	return $this->OperTable($name);
     }
 
     /**

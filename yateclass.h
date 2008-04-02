@@ -2884,6 +2884,72 @@ private:
 };
 
 /**
+ * Base64 encoder/decoder class
+ * @short Base64 encoder/decoder class
+ */
+class Base64 : public DataBlock
+{
+public:
+    /**
+     * Constructor
+     */
+    inline Base64()
+	{}
+
+    /**
+     * Constructor. Set the buffer
+     * @param src Initial data buffer
+     * @param len Initial data buffer length
+     * @param copyData True to make a copy of the received data
+     */
+    inline Base64(void* src, unsigned int len, bool copyData = true)
+	: DataBlock(src,len,copyData)
+	{}
+
+    /**
+     * Encode this buffer to a destination string
+     * @param dest Destination string
+     * @param lineLen The length of a line. If non 0, a line break (CR/LF) will
+     *  be inserted in the encoded data after each lineLine characters.
+     *  No line break will be added after the last line. Use the lineAtEnd
+     *  parameter to do that
+     * @param lineAtEnd True to add a line break at the end of encoded data
+     */
+    void encode(String& dest, unsigned int lineLen = 0, bool lineAtEnd = false);
+
+    /**
+     * Decode this buffer to a destination one
+     * @param dest Destination data buffer
+     * @param liberal True to use 'liberal' rules when decoding. Some non alphabet
+     *  characters (such as CR, LF, TAB, SPACE or the Base64 padding char '=')
+     *  will be accepted and ignored. The resulting number of Base64 chars to
+     *  decode must be a valid one
+     * @return True on succes, false if an invalid (non Base64) character was
+     *  found or the number of Base64 characters is invalid (must be a multiple
+     *  of 4 plus 0, 2 or 3 characters) or the padding is incorrect 
+     */
+    bool decode(DataBlock& dest, bool liberal = true);
+
+    /**
+     * Base64 append operator for Strings
+     */
+    inline Base64& operator<<(const String& value)
+	{ append(value); return *this; }
+
+    /**
+     * Base64 append operator for DataBlocks
+     */
+    inline Base64& operator<<(const DataBlock& data)
+	{ append(data); return *this; }
+
+    /**
+     * Base64 append operator for C strings
+     */
+    inline Base64& operator<<(const char* value)
+	{ return operator<<(String(value)); }
+};
+
+/**
  * This class holds a named list of named strings
  * @short A named string container class
  */

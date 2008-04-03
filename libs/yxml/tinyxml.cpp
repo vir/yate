@@ -896,7 +896,7 @@ void TiXmlElement::StreamOut( TIXML_OSTREAM * stream, bool unclosed ) const
 		{
 			node->StreamOut( stream );
 		}
-		(*stream) << "</" << value << ">";
+		(*stream) << (unclosed ? "<" : "</") << value << ">";
 	}
 	else
 	{

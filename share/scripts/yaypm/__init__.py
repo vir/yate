@@ -28,7 +28,6 @@ from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import Protocol, ClientFactory
 from twisted.python import failure
 from threading import Thread, Event
-from logging import Formatter
 import logging, imp, time, random, traceback, string
 
 try:
@@ -50,8 +49,9 @@ try:
 except Exception:
     pass
 
-logger = logging.getLogger('yaypm.debug')
-logger_messages = logging.getLogger('yaypm.debug.messages')
+#main_logger = logging.getLogger('yaypm')
+logger = logging.getLogger('yaypm.internals')
+logger_messages = logging.getLogger('yaypm.messages')
 
 _HANDLER_TYPE_MSG=0
 _HANDLER_TYPE_WCH=1
@@ -72,8 +72,8 @@ class AbandonedException(Exception):
     
     """
     def __init__(self, cause):
-        Exception.__init__(self)
         self.cause = cause
+        Exception.__init__(self, cause)
 
 class DisconnectedException(Exception):
     """
@@ -99,7 +99,7 @@ class CancellableDeferred(defer.Deferred):
         self.cancelled = False
         
     def cancel(self, *args, **kwargs):
-        canceller=self.canceller
+        canceller = self.canceller
         if not self.called:
             self.cancelled = True
             if canceller:
@@ -134,10 +134,10 @@ class Dispatcher:
             lambda d, m = None : self._cancelHandler(m, name, hdlr_type, d))
       
         key = (name, hdlr_type)
-        handlers = self.handlers.get(key, []) 
+        handlers = self.handlers.get(key, {}) 
         if not handlers:
             self.handlers[key] = handlers
-        handlers.append((guard, d))
+        handlers[d] = guard
 
         if until:
             def until_callback(m):
@@ -148,6 +148,9 @@ class Dispatcher:
             d.addCallback(self._autoreturn)
             
         return d
+
+    def is_handler_installed(name, hdlr_type):
+        return self.handlers.get((name, hdlr_type), None) != None
 
     def _register_and_install_handler(
         self, name, hdlr_type, guard, until, autoreturn = False):
@@ -190,46 +193,32 @@ class Dispatcher:
 
         handlers = self.handlers.get(key, None)
         if not handlers:
-            
             return False
 
-        #sentinel guards agains inifite loop
-        #handlers added in handler won't be handled this time
-        sentinel = None
-        handlers.append(sentinel)
-
         done = False
+        to_check = handlers.keys()
 
-        for handler in handlers:
-            if handler == sentinel:
-                 #Todo: enyone has an idea how to avoid
-                 #going through handlers twice?
-                 #a dirty hack might be to search it by hand starting
-                 #from len(handlers) that should be faster for longer lists
-                break
-            guard, d = handler
-            if guard(m):
+        for d in to_check:
+            guard = handlers.get(d, None)
+            if guard and guard(m):
                 done = True
                 if logger_messages.isEnabledFor(logging.DEBUG):
                     logger.debug(
-                        "firing handler for %s: %s",
-                        _MSG_TYPE_DSCS[hdlr_type], m.getName())
-                try:
-                    d.callback(m)
-                    handlers.remove(handler)
-                except defer.AlreadyCalledError, e:
-                    logger.exception(
-                        "Message handled twice resulted in AlreadyCalledError. Swallowing.")
-                break
-        handlers.remove(sentinel)
+                        "firing handler for %s: %s on %s",
+                        _MSG_TYPE_DSCS[hdlr_type], m.getName(), str(d))
 
-        if logger.isEnabledFor(logging.DEBUG):
+                del handlers[d]
+                d.callback(m)
+                if hdlr_type == _HANDLER_TYPE_MSG:
+                    break
+                               
+        if logger_messages.isEnabledFor(logging.DEBUG):
             result = "Active handlers:\n" + "-"*80
             for (name, type), handlers in self.handlers.iteritems():
                 result = result + "\n%s \"%s\": %d handler(s)" % \
                          (_MSG_TYPE_DSCS[type], name, len(handlers))
             result = result + "\n" + "-"*80                
-            logger.debug(result)
+            logger_messages.debug(result)
         
         return done
 
@@ -240,16 +229,12 @@ class Dispatcher:
         
         key = (name, hdlr_type)
         if self.handlers.has_key(key):
-            for i, (_, d) in enumerate(self.handlers[key]):
-                if d == d2remove:
-                    del self.handlers[key][i]
-                    break
-
+            del self.handlers[key][d2remove]
+            
     def _cancelHandler(self, m, name, hdlr_type, d):
         """
         Cancel YAYPM deferred.
         """
-        
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Canceling: %s" % name)
         self._removeHandler(name, hdlr_type, d)
@@ -444,10 +429,11 @@ class EmbeddedDispatcher(Dispatcher):
 
         for i, script in enumerate(scripts):
             try:
-                yateproxy.debug("pymodule(%s)" % "yaypm", 
+                name = "__embedded_yaypm_module__%d" % i
+                yateproxy.debug("yaypm", 
                                 logging.DEBUG,
-                                "Loading script: %s" % script)
-                imp.load_source("__embedded_yaypm_module__", script)
+                                "Loading script: %s as %s" % (script, name))
+                imp.load_source(name, script)
             except Exception:
                 yateproxy.debug("pymodule(%s)" % "yaypm", 
                                 logging.ERROR,
@@ -479,27 +465,32 @@ class EmbeddedDispatcher(Dispatcher):
         Install Pymodule message handler.
         """
         key = (name, _HANDLER_TYPE_MSG)
-        self.handlers[key] = self.handlers.get(key, [])
+        self.handlers[key] = self.handlers.get(key, {})
         yateproxy.installMsgHandler(self.interpreter, name, prio)
-        d = CancellableDeferred()
-        d.callback(True)
-        return d
+        return None
+    
+        #d = CancellableDeferred()
+        #d.callback(True)
+        #return d
 
     def installWatchHandler(self, name):
         """
         Install Pymodule watch handler.
         """
         key = (name, _HANDLER_TYPE_WCH)
-        self.handlers[key] = self.handlers.get(key, [])
+        self.handlers[key] = self.handlers.get(key, {})
         yateproxy.installWatchHandler(self.interpreter, name)
-        d = CancellableDeferred()
-        d.callback(True)
-        return d
+        return None
+    
+        #d = CancellableDeferred()
+        #d.callback(True)
+        #return d
 
     def msg(self, name, attrs = None, retValue = None):
         """
         Create YATE message wrapped with MessageProxy.
-        """        
+        """
+        
         m = EmbeddedDispatcher._MessageProxy(
             yateproxy.message_create(name, str(retValue)))
 
@@ -821,12 +812,12 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             del self.waiting[wid]
             if unescape(values[1]) in ("ok", "true"):
                 key = (values[0], _HANDLER_TYPE_WCH)
-                self.handlers[key] = self.handlers.get(key, [])                
+                self.handlers[key] = self.handlers.get(key, {})                
                 d.callback(True)
             else:
                 logger.warn("Can't install handler for: %s" % str(values[0]))
                 d.errback(failure.Failure(
-                    "Can't install handler for: %s" % str(values[0])))
+                    Exception("Can't install handler for: %s" % str(values[0]))))
         else:
             if logger.isEnabledFor(logging.WARN):                    
                 logger.warn("Response to unknown message: %s" % str(values))
@@ -844,7 +835,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             del self.waiting[mid]
             if unescape(values[2]) in ("ok", "true"):
                 key = (values[1], _HANDLER_TYPE_MSG)
-                self.handlers[key] = self.handlers.get(key, [])
+                self.handlers[key] = self.handlers.get(key, {})
                 d.callback(True)
             else:
                 logger.warn("Can't install handler for: %s" % str(values[1]))
@@ -902,13 +893,17 @@ class TCPDispatcher(Dispatcher, LineReceiver):
 
     def connectionLost(self, reason):
         logger.info("Connection lost: %s" % reason.getErrorMessage());
-        for _, d in self.waiting.values():
+        for (m, (_, d)) in self.waiting.items():
             try:
                 raise DisconnectedException()
             except:
                 d.errback(failure.Failure())
         self.waiting.clear()
-
+##         try:
+##             reactor.stop()
+##         except:
+##             pass
+        
     def lineReceived(self, line):
         if logger_messages.isEnabledFor(logging.DEBUG):
             logger_messages.debug("received line:\n%s" % line);
@@ -996,12 +991,10 @@ class TCPDispatcherFactory(ClientFactory):
         self.selfwatch = selfwatch
 
     def startedConnecting(self, connector):
-        if logger.isEnabledFor(logging.DEBUG):        
-            logger.debug("Connecting...")
+        logger.info("Connecting...")
     
     def buildProtocol(self, addr):
-        if logger.isEnabledFor(logging.DEBUG):        
-            logger.debug("Connected.")        
+        logger.info("Connected.")        
         return TCPDispatcher(
             self.connected,
             self.args, self.kwargs,
@@ -1009,8 +1002,27 @@ class TCPDispatcherFactory(ClientFactory):
             self.selfwatch)
     
     def clientConnectionLost(self, connector, reason):
+        logger.info("clientConnectionLost")        
         pass
     
     def clientConnectionFailed(self, connector, reason):
-        if logger.isEnabledFor(logging.DEBUG):        
-            logger.debug("Connection failed for reason: %s" % str(reason))
+        reactor.stop()
+
+class Formatter(logging.Formatter) :
+    _level_colors  = {
+      "DEBUG": "\033[22;32m", "INFO": "\033[01;34m",
+      "WARNING": "\033[22;35m", "ERROR": "\033[22;31m",
+      "CRITICAL": "\033[01;31m"
+     };    
+    def __init__(self,
+                 fmt = '%(name)s %(levelname)s %(message)s',
+                 datefmt=None):
+        logging.Formatter.__init__(self, fmt, datefmt)
+        
+    def format(self, record):
+        if(Formatter._level_colors.has_key(record.levelname)):
+            record.levelname = "%s%s\033[0;0m" % \
+                            (Formatter._level_colors[record.levelname],
+                             record.levelname)
+        record.name = "\033[37m\033[1m%s\033[0;0m" % record.name
+        return logging.Formatter.format(self, record)    

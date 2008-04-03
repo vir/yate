@@ -42,5 +42,5 @@ def route(yate):
 
 if __name__ in ["__main__", "__embedded_yaypm_module__"]:
     logger.setLevel(logging.DEBUG)    
-    yaypm.utils.setup(lambda yate: go(route(yate)), host = "konopia", port = 5049)
+    yaypm.utils.setup(lambda yate: go(route(yate)))
 

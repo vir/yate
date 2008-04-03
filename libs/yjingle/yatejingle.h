@@ -441,7 +441,7 @@ public:
      * @return False on socket error
      */
     inline bool sendMessage(const char* msg) {
-	    return sendStanza(XMPPUtils::createMessage(XMPPUtils::MsgChat,
+	    return sendStanza(JBMessage::createMessage(JBMessage::Chat,
 		m_localJID,m_remoteJID,0,msg),false);
 	}
 

@@ -67,6 +67,18 @@ class YJINGLE_API XMPPServerInfo : public RefObject
 {
 public:
     /**
+     * Server flags
+     */
+    enum ServerFlag {
+	NoAutoRestart     = 0x0001,      // Don't auto restart streams when down
+	KeepRoster        = 0x0002,      // Tell the presence service to keep the roster for this server
+	NoVersion1        = 0x0004,      // The server doesn't support RFC 3920 TLS/SASL ...
+	TlsRequired       = 0x0008,      // The server always require connection encryption
+	Sasl              = 0x0010,      // Server supports RFC 3920 SASL authentication
+	AllowPlainAuth    = 0x0020,      // Allow plain password authentication
+    };
+
+    /**
      * Constructor. Construct a full server info object
      * @param name Server domain name
      * @param address IP address
@@ -74,15 +86,13 @@ public:
      * @param password  Component only: Password used for authentication
      * @param identity Component only: The stream identity used when connecting
      * @param fullidentity Component only: The user identity
-     * @param roster Component only: Keep the user roster
-     * @param autoRestart Auto restart stream when connection is down
+     * @param flags Server flags
      */
     inline XMPPServerInfo(const char* name, const char* address, int port,
 	const char* password, const char* identity, const char* fullidentity,
-	bool roster, bool autoRestart)
+	int flags)
 	: m_name(name), m_address(address), m_port(port), m_password(password),
-	m_identity(identity), m_fullIdentity(fullidentity),
-	m_roster(roster), m_autoRestart(autoRestart)
+	m_identity(identity), m_fullIdentity(fullidentity), m_flags(flags)
 	{}
 
     /**
@@ -91,7 +101,7 @@ public:
      * @param port IP port
      */
     inline XMPPServerInfo(const char* name, int port)
-	: m_name(name), m_port(port), m_roster(false)
+	: m_name(name), m_port(port)
 	{}
 
     /**
@@ -137,18 +147,16 @@ public:
 	{ return m_fullIdentity; }
 
     /**
-     * Check if someone should keep the roster for this server
-     * @return True if someone should keep the roster for this server
+     * Check if a given flag (or mask) is set
+     * @return True if the flag is set
      */
-    inline bool roster() const
-	{ return m_roster; }
+    inline bool flag(int mask) const
+	{ return 0 != (m_flags & mask); }
 
     /**
-     * Check if the stream should restart when down
-     * @return True if the stream should restart when down
+     * Flag names dictionary
      */
-    inline bool autoRestart() const
-	{ return m_autoRestart; }
+    static TokenDict s_flagName[];
 
 private:
     String m_name;                       // Domain name
@@ -157,8 +165,7 @@ private:
     String m_password;                   // Authentication data
     String m_identity;                   // Identity. Used for Jabber Component protocol
     String m_fullIdentity;               // Full identity for this server
-    bool m_roster;                       // Keep roster for this server
-    bool m_autoRestart;                  // Auto restart stream when down
+    int m_flags;                         // Server flags
 };
 
 
@@ -177,10 +184,14 @@ public:
 	ComponentConnect,                // jabber:component:connect
 	StreamError,                     // urn:ietf:params:xml:ns:xmpp-streams
 	StanzaError,                     // urn:ietf:params:xml:ns:xmpp-stanzas
+	Register,                        // http://jabber.org/features/iq-register
+	IqAuth,                          // jabber:iq:auth
+	IqAuthFeature,                   // http://jabber.org/features/iq-auth
 	Starttls,                        // urn:ietf:params:xml:ns:xmpp-tls
 	Sasl,                            // urn:ietf:params:xml:ns:xmpp-sasl
 	Session,                         // urn:ietf:params:xml:ns:xmpp-session
 	Bind,                            // urn:ietf:params:xml:ns:xmpp-bind
+	Roster,                          // jabber:iq:roster
 	DiscoInfo,                       // http://jabber.org/protocol/disco#info
 	DiscoItems,                      // http://jabber.org/protocol/disco#items
 	Jingle,                          // http://www.google.com/session
@@ -253,6 +264,14 @@ public:
 	UnsupportedStanza,               // unsupported-stanza-type
 	UnsupportedVersion,              // unsupported-version
 	Xml,                             // xml-not-well-formed
+	// Auth failures
+	Aborted,                         // aborted
+	IncorrectEnc,                    // incorrect-encoding
+	InvalidAuth,                     // invalid-authzid
+	InvalidMechanism,                // invalid-mechanism
+	MechanismTooWeak,                // mechanism-too-weak
+	NotAuthorized,                   // not-authorized
+	TempAuthFailure,                 // temporary-auth-failure
 	// Stanza errors
 	SBadRequest,                     // bad-request
 	SConflict,                       // conflict
@@ -264,7 +283,6 @@ public:
 	SBadJid,                         // jid-malformed
 	SNotAcceptable,                  // not-acceptable
 	SNotAllowed,                     // not-allowed
-	SNotAuth,                        // not-authorized
 	SPayment,                        // payment-required
 	SUnavailable,                    // recipient-unavailable
 	SRedirect,                       // redirect
@@ -473,7 +491,7 @@ private:
  * This class holds an identity for a JID
  * @short A JID identity
  */
-class YJINGLE_API JIDIdentity : public RefObject, virtual public String
+class YJINGLE_API JIDIdentity : public RefObject
 {
 public:
     /**
@@ -506,7 +524,7 @@ public:
      * @param name The name of this identity
      */
     inline JIDIdentity(Category c, Type t, const char* name = 0)
-	: String(name), m_category(c), m_type(t)
+	: m_name(name), m_category(c), m_type(t)
 	{}
 
     /**
@@ -526,6 +544,24 @@ public:
      * @return True on succes
      */
     bool fromXML(const XMLElement* element);
+
+    /**
+     * Get a string representation of this object
+     * @return This object's name
+     */
+    virtual const String& toString() const
+	{ return m_name; }
+
+    /**
+     * Get a pointer from this object
+     * @param name The requested pointer's name
+     * @return Requested pointer or 0
+     */
+    virtual void* getObject(const String& name) const {
+	    if (name == "JIDIdentity")
+		return (void*)this;
+	    return RefObject::getObject(name);
+	}
 
     /**
      * Lookup for a text associated with a given category
@@ -559,6 +595,7 @@ private:
     static TokenDict s_category[];
     static TokenDict s_type[];
 
+    String m_name;
     Category m_category;                 // Category
     Type m_type;                         // Type
 };
@@ -617,6 +654,7 @@ public:
      * Mechanisms used to authenticate a stream
      */
     enum Mechanism {
+	MechNone     = 0x00,             // No authentication mechanism
 	MechMD5      = 0x01,             // MD5 digest
 	MechSHA1     = 0x02,             // SHA1 digest
 	MechPlain    = 0x04,             // Plain text password
@@ -651,6 +689,11 @@ public:
      */
     inline operator XMPPNamespace::Type()
 	{ return JIDFeature::operator XMPPNamespace::Type(); }
+
+    /**
+     * Authentication mechanism names
+     */
+    static TokenDict s_authMech[];
 
 private:
     int m_mechanism;                     // Authentication mechanisms
@@ -712,6 +755,12 @@ public:
      */
     XMLElement* addTo(XMLElement* element);
 
+    /**
+     * Clear the feature list
+     */
+    inline void clear()
+	{ m_features.clear(); }
+
 private:
     ObjList m_features;                  // The features
 };
@@ -732,14 +781,6 @@ public:
 	IqResult,                        // result
 	IqError,                         // error
 	IqCount,
-    };
-
-    /**
-     * Message type enumeration
-     */
-    enum MsgType {
-	MsgChat,                         // chat
-	MsgCount,
     };
 
     /**
@@ -781,18 +822,6 @@ public:
      */
     static XMLElement* createElement(XMLElement::Type type, XMPPNamespace::Type ns,
 	const char* text = 0);
-
-    /**
-     * Create a 'message' element
-     * @param type Message type as enumeration
-     * @param from The 'from' attribute
-     * @param to The 'to' attribute
-     * @param id The 'id' attribute
-     * @param message The message body
-     * @return A valid XMLElement pointer
-     */
-    static XMLElement* createMessage(MsgType type, const char* from,
-	const char* to, const char* id, const char* message);
 
     /**
      * Create an 'iq' element
@@ -858,6 +887,18 @@ public:
 	XMPPError::Type error, const char* text = 0);
 
     /**
+     * Create an error from a received element. Consume the received element
+     * Reverse 'to' and 'from' attributes
+     * @param xml Received element
+     * @param type Error type
+     * @param error The error
+     * @param text Optional text to add to the error element
+     * @return A valid XMLElement pointer or 0 if xml is 0
+     */
+    static XMLElement* createError(XMLElement* xml, XMPPError::ErrorType type,
+	XMPPError::Type error, const char* text = 0);
+
+    /**
      * Create a 'stream:error' element
      * @param error The XMPP defined condition
      * @param text Optional text to add to the error
@@ -865,6 +906,14 @@ public:
      */
     static XMLElement* createStreamError(XMPPError::Type error,
 	const char* text = 0);
+
+    /**
+     * Check if the given element has an attribute 'xmlns' equal to a given value
+     * @param element Element to check
+     * @param ns Namespace value to check
+     * @return True if the given element has the requested namespace
+     */
+    static bool hasXmlns(XMLElement& element, XMPPNamespace::Type ns);
 
     /**
      * Decode a received stream error or stanza error
@@ -880,7 +929,7 @@ public:
      * @param element The element to print
      * @param indent The indent. 0 if it is the root element
      */
-    static void print(String& xmlStr, XMLElement* element, const char* indent = 0);
+    static void print(String& xmlStr, XMLElement& element, const char* indent = 0);
 
     /**
      * Split a string at a delimiter character and fills a named list with its parts
@@ -895,6 +944,22 @@ public:
 	bool nameFirst);
 
     /**
+     * Decode a comma separated list of flags and put them into an integer mask
+     * @param src Source string
+     * @param dict Dictionary containing flag names and values
+     * @return The mask of found flags
+     */
+    static int decodeFlags(const String& src, const TokenDict* dict);
+
+    /**
+     * Encode a mask of flags to a comma separated list of names
+     * @param dest Destination string
+     * @param src Source mask
+     * @param dict Dictionary containing flag names and values
+     */
+    static void buildFlags(String& dest, int src, const TokenDict* dict);
+
+    /**
      * Get the type of an 'iq' stanza as enumeration
      * @param text The text to check
      * @return Iq type as enumeration
@@ -906,11 +971,6 @@ public:
      * Keep the types of 'iq' stanzas
      */
     static TokenDict s_iq[];
-
-    /**
-     * Keep the types of 'message' stanzas
-     */
-    static TokenDict s_msg[];
 
     /**
      * Keep the command actions

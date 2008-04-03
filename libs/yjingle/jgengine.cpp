@@ -25,11 +25,14 @@
 
 using namespace TelEngine;
 
+static XMPPError s_err;
+
 /**
  * JGEngine
  */
 JGEngine::JGEngine(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jgengine",params,prio),
+    JBThreadList(this),
     m_sessionIdMutex(true),
     m_sessionId(1),
     m_stanzaTimeout(10000),
@@ -98,7 +101,7 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
 
     Debug(this,DebugNote,"Outgoing call from '%s' to '%s' failed: %s",
 	localJID.c_str(),remoteJID.c_str(),
-	stream?"can't create stream":"failed to send data");
+	!stream?"can't create stream":"failed to send data");
     return 0;
 }
 
@@ -141,6 +144,19 @@ void JGEngine::defProcessEvent(JGEvent* event)
     delete event;
 }
 
+static inline bool getSid(XMLElement* xml, String& sid, bool& useSid)
+{
+    if (!xml)
+	return false;
+    sid = xml->getAttribute("id");
+    if (!sid) {
+	sid = xml->getAttribute("sid");
+	useSid = true;
+    }
+    return !sid.null();
+}
+
+
 // Accept an event from the Jabber engine
 bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 {
@@ -149,6 +165,9 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
     XMLElement* child = event->child();
     XMPPError::Type error = XMPPError::NoError;
     const char* errorText = 0;
+    bool respond = true;
+    String sid;
+    bool useSid = false;
     Lock lock(this);
     switch (event->type()) {
 	case JBEvent::IqJingleGet:
@@ -158,49 +177,54 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	case JBEvent::IqJingleSet:
 	case JBEvent::IqJingleRes:
 	case JBEvent::IqJingleErr:
-	    if (child) {
-		// Jingle clients may send the session id as 'id' or 'sid'
-		bool useSid = false;
-		String sid = child->getAttribute("id");
-		if (!sid) {
-		    sid = child->getAttribute("sid");
-		    useSid = false;
-		}
-		if (!sid) {
-		    error = XMPPError::SBadRequest;
-		    errorText = "Missing or empty session id";
-		    break;
-		}
-		// Check for a destination by SID
-		for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
-		    JGSession* session = static_cast<JGSession*>(o->get());
-		    if (sid == session->sid()) {
-			session->enqueue(event);
-			processed = true;
-			return true;
-		    }
-		}
-		// Check if this an incoming session request
-		if (event->type() == JBEvent::IqJingleSet) {
-		    const char* type = event->child()->getAttribute("type");
-		    int action = lookup(type,JGSession::s_actions,JGSession::ActCount);
-		    if (action == JGSession::ActInitiate) {
-			if (!event->stream()->ref()) {
-			    error = XMPPError::SInternal;
-			    break;
-			}
-			DDebug(this,DebugAll,"New incoming call from '%s' to '%s'",
-			    event->from().c_str(),event->to().c_str());
-			m_sessions.append(new JGSession(this,event,sid,useSid));
-			processed = true;
-			return true;
-		    }
-		}
-		error = XMPPError::SRequest;
-		errorText = "Unknown session";
+	    if (!(event->element() && child)) {
+		Debug(this,DebugNote,"Received jingle event %s with no element or child",event->name());
+		return false;
+	    }
+	    // Jingle clients may send the session id as 'id' or 'sid'
+	    if (event->type() == JBEvent::IqJingleErr) {
+		respond = false;
+		getSid(event->element()->findFirstChild(XMLElement::Jingle),sid,useSid);
 	    }
 	    else
+		getSid(child,sid,useSid);
+	    DDebug(this,DebugAll,"Accepting event=%s child=%s id=%s useSid=%s",
+		event->name(),child->name(),sid.c_str(),String::boolText(useSid));
+	    if (sid.null()) {
 		error = XMPPError::SBadRequest;
+		errorText = "Missing or empty session id";
+		break;
+	    }
+	    // Check for a destination by SID
+	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
+		JGSession* session = static_cast<JGSession*>(o->get());
+		if (sid == session->sid()) {
+		    if (event->ref())
+			session->enqueue(event);
+		    processed = true;
+		    return true;
+		}
+	    }
+	    // Check if this an incoming session request
+	    if (event->type() == JBEvent::IqJingleSet) {
+		const char* type = event->child()->getAttribute("type");
+		int action = lookup(type,JGSession::s_actions,JGSession::ActCount);
+		if (action == JGSession::ActInitiate) {
+		    if (!event->stream()->ref()) {
+			error = XMPPError::SInternal;
+			errorText = "Stream ref() failed";
+			break;
+		    }
+		    DDebug(this,DebugAll,"New incoming call from=%s to=%s sid=%s",
+			event->from().c_str(),event->to().c_str(),sid.c_str());
+		    if (event->ref())
+			m_sessions.append(new JGSession(this,event,sid,useSid));
+		    processed = true;
+		    return true;
+		}
+	    }
+	    error = XMPPError::SRequest;
+	    errorText = "Unknown session";
 	    break;
 	case JBEvent::IqResult:
 	case JBEvent::WriteFail:
@@ -208,7 +232,8 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 		JGSession* session = static_cast<JGSession*>(o->get());
 		if (event->id().startsWith(session->m_localSid)) {
-		    session->enqueue(event);
+		    if (event->ref())
+			session->enqueue(event);
 		    processed = true;
 		    return true;
 		}
@@ -229,13 +254,15 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
     if (error == XMPPError::NoError)
 	return false;
 
+    Debug(this,DebugNote,"Accepted event=%s child=%s. Invalid: error=%s text=%s",
+	event->name(),child?child->name():"",s_err[error],errorText);
+
     // Send error
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqError,
-	event->to(),event->from(),event->id());
-    iq->addChild(event->releaseXML());
-    iq->addChild(XMPPUtils::createError(XMPPError::TypeModify,error,errorText));
-    event->stream()->sendStanza(iq);
-    TelEngine::destruct(event);
+    if (respond) {
+	XMLElement* iq = XMPPUtils::createError(event->releaseXML(),XMPPError::TypeModify,
+	    error,errorText);
+	event->stream()->sendStanza(iq);
+    }
     processed = true;
     return true;
 }
@@ -266,8 +293,7 @@ JGEvent::~JGEvent()
 	m_session->eventTerminated(this);
 	TelEngine::destruct(m_session);
     }
-    if (m_element)
-	delete m_element;
+    TelEngine::destruct(m_element);
     XDebug(DebugAll,"JGEvent::~JGEvent [%p]",this);
 }
 

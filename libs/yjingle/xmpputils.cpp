@@ -29,6 +29,16 @@ using namespace TelEngine;
 static XMPPNamespace s_ns;
 static XMPPError s_err;
 
+TokenDict XMPPServerInfo::s_flagName[] = {
+    {"noautorestart",    NoAutoRestart},
+    {"keeproster",       KeepRoster},
+    {"noversion1",       NoVersion1},
+    {"tlsrequired",      TlsRequired},
+    {"sasl",             Sasl},
+    {"allowplainauth",   AllowPlainAuth},
+    {0,0}
+};
+
 /**
  * XMPPNamespace
  */
@@ -40,10 +50,14 @@ TokenDict XMPPNamespace::s_value[] = {
     {"jabber:component:connect",                           ComponentConnect},
     {"urn:ietf:params:xml:ns:xmpp-streams",                StreamError},
     {"urn:ietf:params:xml:ns:xmpp-stanzas",                StanzaError},
+    {"http://jabber.org/features/iq-register",             Register},
+    {"jabber:iq:auth",                                     IqAuth},
+    {"http://jabber.org/features/iq-auth",                 IqAuthFeature},
     {"urn:ietf:params:xml:ns:xmpp-tls",                    Starttls},
     {"urn:ietf:params:xml:ns:xmpp-sasl",                   Sasl},
     {"urn:ietf:params:xml:ns:xmpp-session",                Session},
     {"urn:ietf:params:xml:ns:xmpp-bind",                   Bind},
+    {"jabber:iq:roster",                                   Roster},
     {"http://jabber.org/protocol/disco#info",              DiscoInfo},
     {"http://jabber.org/protocol/disco#items",             DiscoItems},
     {"http://www.google.com/session",                      Jingle},
@@ -96,6 +110,15 @@ TokenDict XMPPError::s_value[] = {
     {"unsupported-stanza-type",  UnsupportedStanza},
     {"unsupported-version",      UnsupportedVersion},
     {"xml-not-well-formed",      Xml},
+    // Auth failures
+    {"aborted",                  Aborted},
+    {"incorrect-encoding",       IncorrectEnc},
+    {"invalid-authzid",          InvalidAuth},
+    {"invalid-mechanism",        InvalidMechanism},
+    {"mechanism-too-weak",       MechanismTooWeak},
+    {"not-authorized",           NotAuthorized},
+    {"temporary-auth-failure",   TempAuthFailure},
+    // Stanza errors
     {"bad-request",              SBadRequest},
     {"conflict",                 SConflict},
     {"feature-not-implemented",  SFeatureNotImpl},
@@ -106,7 +129,6 @@ TokenDict XMPPError::s_value[] = {
     {"jid-malformed",            SBadJid},
     {"not-acceptable",           SNotAcceptable},
     {"not-allowed",              SNotAllowed},
-    {"not-authorized",           SNotAuth},
     {"payment-required",         SPayment},
     {"recipient-unavailable",    SUnavailable},
     {"redirect",                 SRedirect},
@@ -217,7 +239,7 @@ TokenDict JIDIdentity::s_type[] = {
 
 XMLElement* JIDIdentity::toXML()
 {
-    return XMPPUtils::createIdentity(categoryText(m_category),typeText(m_type),*this);
+    return XMPPUtils::createIdentity(categoryText(m_category),typeText(m_type),m_name);
 }
 
 bool JIDIdentity::fromXML(const XMLElement* element)
@@ -229,14 +251,25 @@ bool JIDIdentity::fromXML(const XMLElement* element)
 	return false;
     m_category = categoryValue(id->getAttribute("category"));
     m_type = typeValue(id->getAttribute("type"));
-    id->getAttribute("name",*this);
+    id->getAttribute("name",m_name);
     return true;
 }
 
 
 /**
+ * JIDFeatureSasl
+ */
+TokenDict JIDFeatureSasl::s_authMech[] = {
+    {"DIGEST-MD5",  MechMD5},
+    {"DIGEST-SHA1", MechSHA1},
+    {"PLAIN",       MechPlain},
+    {0,0}
+};
+
+/**
  * JIDFeatureList
  */
+
 // Find a specific feature
 JIDFeature* JIDFeatureList::get(XMPPNamespace::Type feature)
 {
@@ -276,11 +309,6 @@ TokenDict XMPPUtils::s_iq[] = {
 	{0,0}
 	};
 
-TokenDict XMPPUtils::s_msg[] = {
-	{"chat",    MsgChat},
-	{0,0}
-	};
-
 TokenDict XMPPUtils::s_commandAction[] = {
 	{"execute",  CommExecute},
 	{"cancel",   CommCancel},
@@ -313,27 +341,14 @@ XMLElement* XMPPUtils::createElement(XMLElement::Type type, XMPPNamespace::Type 
     return element;
 }
 
-XMLElement* XMPPUtils::createMessage(MsgType type, const char* from,
-	const char* to, const char* id, const char* message)
-{
-    XMLElement* msg = new XMLElement(XMLElement::Message);
-    msg->setAttribute("type",lookup(type,s_msg,""));
-    msg->setAttribute("from",from);
-    msg->setAttribute("to",to);
-    if (id)
-	msg->setAttributeValid("id",id);
-    msg->addChild(new XMLElement(XMLElement::Body,0,message));
-    return msg;
-}
-
 XMLElement* XMPPUtils::createIq(IqType type, const char* from,
 	const char* to, const char* id)
 {
     XMLElement* iq = new XMLElement(XMLElement::Iq);
     iq->setAttribute("type",lookup(type,s_iq,""));
-    iq->setAttribute("from",from);
-    iq->setAttribute("to",to);
-    iq->setAttribute("id",id);
+    iq->setAttributeValid("from",from);
+    iq->setAttributeValid("to",to);
+    iq->setAttributeValid("id",id);
     return iq;
 }
 
@@ -392,9 +407,21 @@ XMLElement* XMPPUtils::createError(XMPPError::ErrorType type,
     XMLElement* tmp = createElement(s_err[condition],XMPPNamespace::StanzaError);
     err->addChild(tmp);
     if (text) {
-	tmp = createElement("text",XMPPNamespace::StanzaError,text);
+	tmp = createElement(XMLElement::Text,XMPPNamespace::StanzaError,text);
 	err->addChild(tmp);
     }
+    return err;
+}
+
+// Create an error from a received element. Consume the received element
+XMLElement* XMPPUtils::createError(XMLElement* xml, XMPPError::ErrorType type,
+	XMPPError::Type error, const char* text)
+{
+    if (!xml)
+	return 0;
+    XMLElement* err = new XMLElement(*xml,true,false);
+    err->addChild(xml);
+    err->addChild(createError(type,error,text));
     return err;
 }
 
@@ -404,44 +431,72 @@ XMLElement* XMPPUtils::createStreamError(XMPPError::Type error, const char* text
     XMLElement* err = createElement(s_err[error],XMPPNamespace::StreamError);
     element->addChild(err);
     if (text) {
-	XMLElement* txt = createElement("text",XMPPNamespace::StreamError,text);
+	XMLElement* txt = createElement(XMLElement::Text,XMPPNamespace::StreamError,text);
 	element->addChild(txt);
     }
     return element;
 }
 
+// Check if the given element has an attribute 'xmlns' equal to a given value
+bool XMPPUtils::hasXmlns(XMLElement& element, XMPPNamespace::Type ns)
+{
+    return element.hasAttribute("xmlns",s_ns[ns]);
+}
+
+
 void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
 {
     if (!element)
 	return;
-    if (element->type() != XMLElement::StreamError && element->type() != XMLElement::Error)
-	return;
 
+    XMPPNamespace::Type nsErr;
     error = "";
     text = "";
+    switch (element->type()) {
+	case XMLElement::StreamError:
+	    nsErr = XMPPNamespace::StreamError;
+	    break;
+	case XMLElement::Error:
+	    nsErr = XMPPNamespace::StanzaError;
+	    break;
+	case XMLElement::Iq:
+	case XMLElement::Presence:
+	case XMLElement::Message:
+	    decodeError(element->findFirstChild(XMLElement::Error),error,text);
+	default:
+	    return;
+    }
 
-    element = element->findFirstChild("error");
-    if (!element)
-	return;
-    XMLElement* child = element->findFirstChild();
-    if (!child)
-	return;
-    error = child->name();
-    child = element->findFirstChild("text");
-    const char* t = child ? child->getText() : 0;
-    if (t)
-	text = t;
+    for (XMLElement* err = 0; 0 != (err = element->findNextChild(err,(const char*)0));)
+	if (hasXmlns(*err,nsErr)) {
+	    error = err->name();
+	    break;
+	}
+    XMLElement* child = element->findFirstChild(XMLElement::Text);
+    if (child)
+	text = child->getText();
 }
 
-void XMPPUtils::print(String& xmlStr, XMLElement* element, const char* indent)
+// Check if an element or attribute name restricts value output
+static const char* check(const String& name, const char* ok)
+{
+#define RESTRICT_LEN 2
+    static String restrict[RESTRICT_LEN] = {"auth", "password"};
+    static const char* pwd = "********";
+    for (unsigned int i = 0; i < RESTRICT_LEN; i++)
+	if (restrict[i] == name)
+	    return pwd;
+    return ok;
+#undef RESTRICT_LEN
+}
+
+void XMPPUtils::print(String& xmlStr, XMLElement& element, const char* indent)
 {
 #define STARTLINE(indent) "\r\n" << indent
     const char* enclose = "-----";
-    if (!element)
-	return;
-    bool hasAttr = (0 != element->firstAttribute());
-    bool hasChild = (0 != element->findFirstChild());
-    const char* txt = element->getText();
+    bool hasAttr = (0 != element.firstAttribute());
+    bool hasChild = (0 != element.findFirstChild());
+    const char* txt = element.getText();
     bool root = false;
     if (!(indent && *indent)) {
 	indent = "";
@@ -451,37 +506,37 @@ void XMPPUtils::print(String& xmlStr, XMLElement* element, const char* indent)
 	xmlStr << STARTLINE(indent) << enclose;
     // Name
     if (!(hasAttr || hasChild || txt)) {
-	// indent<element->name()/>
-	xmlStr << STARTLINE(indent) << '<' << element->name();
-	if ((element->name())[0] != '/')
+	// indent<element.name()/>
+	xmlStr << STARTLINE(indent) << '<' << element.name();
+	if ((element.name())[0] != '/')
 	    xmlStr << '/';
 	xmlStr << '>';
 	if (root)
 	    xmlStr << STARTLINE(indent) << enclose;
 	return;
     }
-    // <element->name()> or <element->name()
-    xmlStr << STARTLINE(indent) << '<' << element->name();
+    // <element.name()> or <element.name()
+    xmlStr << STARTLINE(indent) << '<' << element.name();
     if (hasChild)
 	xmlStr << '>';
     String sindent = indent;
     sindent << "  ";
     // Attributes
-    const TiXmlAttribute* attr = element->firstAttribute();
+    const TiXmlAttribute* attr = element.firstAttribute();
     for (; attr; attr = attr->Next())
-	// attr->name()="attr->value()"
-	xmlStr << STARTLINE(sindent) << attr->Name() << "=\"" << attr->Value() << '"';
-    // Text
+	xmlStr << STARTLINE(sindent) << attr->Name() << "=\""
+	    << check(attr->Name(),attr->Value()) << '"';
+    // Text. Filter some known elements to avoid output of passwords
     if (txt)
-	xmlStr << STARTLINE(sindent) << txt;
+	xmlStr << STARTLINE(sindent) << check(element.name(),txt);
     // Children
-    XMLElement* child = element->findFirstChild();
+    XMLElement* child = element.findFirstChild();
     String si = sindent;
-    for (; child; child = element->findNextChild(child))
-	print(xmlStr,child,si);
+    for (; child; child = element.findNextChild(child))
+	print(xmlStr,*child,si);
     // End tag
     if (hasChild)
-	xmlStr << STARTLINE(indent) << "</" << element->name() << '>';
+	xmlStr << STARTLINE(indent) << "</" << element.name() << '>';
     else
 	xmlStr << STARTLINE(indent) << "/>";
     if (root)
@@ -506,6 +561,29 @@ bool XMPPUtils::split(NamedList& dest, const char* src, const char sep,
     }
     TelEngine::destruct(obj);
     return true;
+}
+
+// Decode a comma separated list of flags and put them into an integr mask
+int XMPPUtils::decodeFlags(const String& src, const TokenDict* dict)
+{
+    if (!dict)
+	return 0;
+    int mask = 0;
+    ObjList* obj = src.split(',',false);
+    for (ObjList* o = obj->skipNull(); o; o = o->skipNext())
+	mask |= lookup(static_cast<String*>(o->get())->c_str(),dict);
+    TelEngine::destruct(obj);
+    return mask;
+}
+
+// Encode a mask of flags to a comma separated list. 
+void XMPPUtils::buildFlags(String& dest, int src, const TokenDict* dict)
+{
+    if (!dict)
+	return;
+    for (; dict->token; dict++)
+	if (0 != (src & dict->value))
+	    dest.append(dict->token,",");
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

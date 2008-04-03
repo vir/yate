@@ -205,7 +205,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 {
     m_engine->createSessionId(m_localSid);
     m_sid = m_localSid;
-    DDebug(m_engine,DebugAll,"Call(%s). Outgoing [%p]",m_sid.c_str(),this);
+    Debug(m_engine,DebugAll,"Call(%s). Outgoing msg=%s [%p]",m_sid.c_str(),msg,this);
     if (msg)
 	sendMessage(msg);
     XMLElement* xml = createJingle(ActInitiate,media,transport);
@@ -231,7 +231,7 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event, const String& id, bool si
 {
     m_events.append(event);
     m_engine->createSessionId(m_localSid);
-    DDebug(m_engine,DebugAll,"Call(%s). Incoming [%p]",m_sid.c_str(),this);
+    Debug(m_engine,DebugAll,"Call(%s). Incoming [%p]",m_sid.c_str(),this);
 }
 
 // Destructor: hangup, cleanup, remove from engine's list
@@ -582,7 +582,7 @@ bool JGSession::sendStanza(XMLElement* stanza, bool confirmation)
 	Debug(m_engine,DebugNote,
 	    "Call(%s). Can't send stanza (%p,'%s') in state %s [%p]",
 	    m_sid.c_str(),stanza,stanza->name(),lookupState(m_state),this);
-	delete stanza;
+	TelEngine::destruct(stanza);
 	return false;
     }
     DDebug(m_engine,DebugAll,"Call(%s). Sending stanza (%p,'%s') [%p]",

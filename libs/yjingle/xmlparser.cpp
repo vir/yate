@@ -33,7 +33,8 @@ TokenDict XMLElement::s_names[] = {
     {"stream:stream",        StreamStart},
     {"/stream:stream",       StreamEnd},
     {"stream:error",         StreamError},
-    {"stream::features",     StreamFeatures},
+    {"stream:features",      StreamFeatures},
+    {"register",             Register},
     {"starttls",             Starttls},
     {"handshake",            Handshake},
     {"auth",                 Auth},
@@ -41,6 +42,7 @@ TokenDict XMLElement::s_names[] = {
     {"abort",                Abort},
     {"aborted",              Aborted},
     {"response",             Response},
+    {"proceed",              Proceed},
     {"success",              Success},
     {"failure",              Failure},
     {"mechanisms",           Mechanisms},
@@ -60,10 +62,17 @@ TokenDict XMLElement::s_names[] = {
     {"feature",              Feature},
     {"bind",                 Bind},
     {"resource",             Resource},
-    {"Required",             Required},
+    {"jid",                  Jid},
+    {"username",             Username},
+    {"password",             Password},
+    {"digest",               Digest},
+    {"required",             Required},
     {"dtmf",                 Dtmf},
     {"dtmf-method",          DtmfMethod},
     {"command",              Command},
+    {"text",                 Text},
+    {"item",                 Item},
+    {"group",                Group},
     {0,0}
 };
 
@@ -82,6 +91,25 @@ XMLElement::XMLElement(const XMLElement& src)
 	return;
     m_element = new TiXmlElement(*e);
     setType();
+}
+
+// Partially build this element from another one.
+// Copy name and 'to', 'from', 'type', 'id' attributes
+XMLElement::XMLElement(const XMLElement& src, bool response, bool result)
+    : m_type(src.type()), m_owner(true), m_element(0)
+{
+    m_element = new TiXmlElement(src.name());
+    if (response) {
+	setAttributeValid("from",src.getAttribute("to"));
+	setAttributeValid("to",src.getAttribute("from"));
+	setAttribute("type",result?"result":"error");
+    }
+    else {
+	setAttributeValid("from",src.getAttribute("from"));
+	setAttributeValid("to",src.getAttribute("to"));
+	setAttributeValid("type",src.getAttribute("type"));
+    }
+    setAttributeValid("id",src.getAttribute("id"));
 }
 
 XMLElement::XMLElement(const char* name, NamedList* attributes,
@@ -158,14 +186,14 @@ void XMLElement::setAttribute(const char* name, const char* value)
     m_element->SetAttribute(name,value);
 }
 
-const char* XMLElement::getAttribute(const char* name)
+const char* XMLElement::getAttribute(const char* name) const
 {
     if (valid() && name)
 	return m_element->Attribute(name);
     return 0;
 }
 
-bool XMLElement::hasAttribute(const char* name, const char* value)
+bool XMLElement::hasAttribute(const char* name, const char* value) const
 {
     String tmp;
     if (getAttribute(name,tmp))
@@ -173,7 +201,7 @@ bool XMLElement::hasAttribute(const char* name, const char* value)
     return false;
 }
 
-const char* XMLElement::getText()
+const char* XMLElement::getText() const
 {
     if (valid())
 	return m_element->GetText();
@@ -187,8 +215,7 @@ void XMLElement::addChild(XMLElement* element)
 	if (tiElement)
 	    m_element->LinkEndChild(tiElement);
     }
-    if (element)
-	delete element;
+    TelEngine::destruct(element);
 }
 
 XMLElement* XMLElement::findFirstChild(const char* name)
@@ -209,7 +236,7 @@ XMLElement* XMLElement::findNextChild(const XMLElement* element, const char* nam
 {
     if (!valid())
 	return 0;
-    TiXmlElement* tiElement = element->get();
+    TiXmlElement* tiElement = element ? element->get() : 0;
     if (!(element && tiElement))
 	return findFirstChild(name);
     for (;;) {

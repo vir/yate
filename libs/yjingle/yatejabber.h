@@ -35,6 +35,7 @@ namespace TelEngine {
 class JBEvent;                           // A Jabber event
 class JBStream;                          // A Jabber stream
 class JBComponentStream;                 // A Jabber Component stream
+class JBClientStream;                    // A Jabber client to server stream
 class JBThread;                          // Base class for private threads
 class JBThreadList;                      // A list of threads
 class JBEngine;                          // A Jabber engine
@@ -53,6 +54,7 @@ class XMPPUserRoster;                    // An XMPP user's roster
 class YJINGLE_API JBEvent : public RefObject
 {
     friend class JBStream;
+    friend class JBClientStream;
 public:
     /**
      * Event type enumeration
@@ -92,6 +94,13 @@ public:
 	IqJingleSet             = 81,
 	IqJingleRes             = 82,
 	IqJingleErr             = 83,
+	// Roster: m_child is a 'query' element qualified by Roster namespace
+	IqRosterSet             = 91,
+	IqRosterRes             = 92,
+	IqRosterErr             = 93,
+	// Roster update (set or result) received by client streams: m_child is a 'query' element
+	//  qualified by Roster namespace
+	IqClientRosterUpdate    = 150,
 	// Invalid
 	Unhandled               = 200,   // m_element is an unhandled element
 	Invalid                 = 500,   // m_element is 0
@@ -145,14 +154,14 @@ public:
      * Get the 'from' attribute of a received stanza
      * @return The 'from' attribute
      */
-    inline const String& from() const
+    inline const JabberID& from() const
 	{ return m_from; }
 
     /**
      * Get the 'to' attribute of a received stanza
      * @return The 'to' attribute
      */
-    inline const String& to() const
+    inline const JabberID& to() const
 	{ return m_to; }
 
     /**
@@ -208,6 +217,16 @@ public:
     void releaseStream();
 
     /**
+     * Create an error response from this event if it contains a known type.
+     * Don't create the error response if this event is carrying a response
+     * @param type Error type
+     * @param error The error condition
+     * @param text Optional text to add to the error element
+     * @return A valid XMLElement pointer
+     */
+    XMLElement* createError(XMPPError::ErrorType type, XMPPError::Type error, const char* text = 0);
+
+    /**
      * Get the name of an event type
      * @return The name an event type
      */
@@ -225,8 +244,8 @@ private:
     XMLElement* m_element;               // Received XML element, if any
     XMLElement* m_child;                 // The first child element for 'iq' elements
     String m_stanzaType;                 // Stanza's 'type' attribute
-    String m_from;                       // Stanza's 'from' attribute
-    String m_to;                         // Stanza's 'to' attribute
+    JabberID m_from;                     // Stanza's 'from' attribute
+    JabberID m_to;                       // Stanza's 'to' attribute
     String m_id;                         // Sender's id for Write... events
                                          // 'id' attribute if the received stanza has one
     String m_text;                       // The stanza's text or termination reason for
@@ -243,14 +262,14 @@ class YJINGLE_API JBSocket
     friend class JBStream;
 public:
     /**
-     * Constructor
+     * Constructor. Build socket for an outgoing stream
      * @param engine The Jabber engine
      * @param stream The stream owning this socket
+     * @param address The address used to connect to
+     * @param port Port used to connect to remote server
      */
-    inline JBSocket(JBEngine* engine, JBStream* stream)
-	: m_engine(engine), m_stream(stream), m_socket(0),
-	  m_streamMutex(true), m_receiveMutex(true)
-	{}
+    JBSocket(JBEngine* engine, JBStream* stream,
+	const char* address, int port);
 
     /**
      * Destructor. Close the socket
@@ -266,18 +285,34 @@ public:
 	{ return m_socket && m_socket->valid(); }
 
     /**
+     * Get the remote peer's address
+     * @return The remote peer's address
+     */
+    inline const SocketAddr& addr() const
+	{ return m_address; }
+
+    /**
+     * Get last connect/send/receive error text
+     * @return Last error text
+     */
+    inline const String& error() const
+	{ return m_error; }
+
+    /**
      * Connect the socket
-     * @param addr Remote address to connect to
      * @param terminated True if false is returned and the socket was terminated
      *  while connecting
+     * @param newAddr Optional address to connect to
+     * @param newPort Optional port to connect to
      * @return False on failure
      */
-    bool connect(const SocketAddr& addr, bool& terminated);
+    bool connect(bool& terminated, const char* newAddr, int newPort = 0);
 
     /**
      * Terminate the socket
+     * @param shutdown True to shut down, false to asynchronously terminate the socket
      */
-    void terminate();
+    void terminate(bool shutdown = false);
 
     /**
      * Read data from socket
@@ -300,8 +335,11 @@ private:
     JBEngine* m_engine;                  // The Jabber engine
     JBStream* m_stream;                  // Stream owning this socket
     Socket* m_socket;                    // The socket
+    String m_remoteDomain;               // Remote domain used to resolve before connecting
+    SocketAddr m_address;                // Remote address
     Mutex m_streamMutex;                 // Lock stream
     Mutex m_receiveMutex;                // Lock receive
+    String m_error;                      // Keep error string from send/receive/connect
 };
 
 /**
@@ -338,22 +376,22 @@ public:
     };
 
     /**
-     * Constructor
-     * @param engine The engine that owns this stream
-     * @param localJid Local party's JID
-     * @param remoteJid Remote party's JID
-     * @param password Password used for authentication
-     * @param address The remote address to connect to
-     * @param autoRestart True to auto restart the stream
-     * @param maxRestart The maximum restart attempts allowed
-     * @param incRestartInterval The interval to increase the restart counter
-     * @param outgoing Stream direction
-     * @param type Stream type. Set to -1 to use the engine's protocol type
+     * Stream behaviour options
      */
-    JBStream(JBEngine* engine, const JabberID& localJid, const JabberID& remoteJid,
-	const String& password, const SocketAddr& address,
-	bool autoRestart, unsigned int maxRestart,
-	u_int64_t incRestartInterval, bool outgoing, int type = -1);
+    enum Flags {
+	AutoRestart     = 0x0001,        // Auto restart stream when down
+	AllowPlainAuth  = 0x0002,        // Allow plain password authentication
+	                                 //  If not allowed and this is the only method
+	                                 //  offered by server the stream will be terminated
+	NoVersion1      = 0x0004,        // Don't support RFC 3920 TLS/SASL ...
+	UseTls          = 0x0008,        // Use TLS if offered. Internally set if the remote server
+	                                 //  always require encryption
+	UseSasl         = 0x0010,        // Use SASL as authentication mechanism (RFC 3920)
+	                                 //  If not set, the deprecated XEP-0078 will be used for authentication
+	StreamSecured       = 0x0100,    // Stream already secured
+	StreamAuthenticated = 0x0200,    // Stream already authenticated
+	NoRemoteVersion1    = 0x0400,    // Remote doesn't support RFC 3920 TLS/SASL ...
+    };
 
     /**
      * Destructor.
@@ -411,11 +449,19 @@ public:
 	{ return m_remote; }
 
     /**
-     * Get the remote perr's address
-     * @return The remote perr's address
+     * Get the remote peer's address
+     * @return The remote peer's address
      */
     inline const SocketAddr& addr() const
-	{ return m_address; }
+	{ return m_socket.addr(); }
+
+    /**
+     * Check if a given option (or option mask) is set
+     * @param mask The flag(s) to check
+     * @return True if set
+     */
+    inline bool flag(int mask) const
+	{ return 0 != (m_flags & mask); }
 
     /**
      * Connect the stream. Send stream start tag on success
@@ -438,7 +484,7 @@ public:
      * @param senderId Optional sender's id. Used for notification events
      * @return The result of posting the stanza
      */
-    Error sendStanza(XMLElement* stanza, const char* senderId = 0);
+    virtual Error sendStanza(XMLElement* stanza, const char* senderId = 0);
 
     /**
      * Stream state and data processor. Increase restart counter.
@@ -476,18 +522,54 @@ public:
 	}
 
     /**
+     * Get an object from this stream
+     * @param name The name of the object to get
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Get the name of a stream state
      * @param state The requested state number
      * @return The name of the requested state
      */
     static const char* lookupState(int state);
 
+    /**
+     * Dictionary keeping the flag names
+     */
+    static TokenDict s_flagName[];
+
 protected:
+    /**
+     * Internal wait states enumeration. Defines what kind of XML is expected
+     */
+    enum WaitState {                     // Main state	Wait
+	WaitIdle,                        // Idle	nothing
+	WaitStart,                       // Started	stream start response
+	WaitFeatures,                    // Started	stream features
+	WaitBindRsp,                     // Started	wait for bind response
+	WaitTlsRsp,                      // Started:    wait response to starttls
+	WaitChallenge,                   // Auth	iq auth query with auth data sent, wait response
+	WaitResponse,                    // Auth	iq auth query sent, wait response
+	WaitAborted,                     // Auth	abort sent, wait confirmation to terminate stream
+    };
+
+    /**
+     * Constructor. Build an outgoing stream
+     * @param engine The engine that owns this stream
+     * @param type Stream type
+     * @param info Structure containing data used to connect to remote server
+     * @param localJid Local party's JID
+     * @param remoteJid Remote party's JID
+     */
+    JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
+	const JabberID& localJid, const JabberID& remoteJid);
+
     /**
      * Default constructor
      */
     inline JBStream()
-	: m_socket(0,0)
+	: m_socket(0,0,0,0)
 	{}
 
     /**
@@ -498,17 +580,24 @@ protected:
     /**
      * Check the 'to' attribute of a received element
      * @param xml The received element
+     * @param respond Action to be taken when if not accepted.
+     *  True to respond with an error, false to just drop it
      * @return False to reject it. If the stream is not in Running state,
      *  it will be terminated
      */
-    virtual bool checkDestination(XMLElement* xml)
-	{ return true; }
+    virtual bool checkDestination(XMLElement* xml, bool& respond);
 
     /**
      * Get the starting stream element to be sent after stream connected
      * @return XMLElement pointer
      */
-    virtual XMLElement* getStreamStart() = 0;
+    virtual XMLElement* getStreamStart();
+
+    /**
+     * Get the authentication element to be sent when authentication starts
+     * @return XMLElement pointer or 0 on failure
+     */
+    virtual XMLElement* getAuthStart();
 
     /**
      * Process a received stanza in Running state
@@ -520,22 +609,26 @@ protected:
      * Process a received element in Auth state. Descendants MUST consume the data
      * @param xml Valid XMLElement pointer
      */
-    virtual void processAuth(XMLElement* xml)
-	{ dropXML(xml,false); }
+    virtual void processAuth(XMLElement* xml);
 
     /**
-     * Process a received element in Securing state. Descendants MUST consume the data
+     * Process a received element in Securing state. Descendants MUST consume the data.
+     * Drop the received element
      * @param xml Valid XMLElement pointer
      */
-    virtual void processSecuring(XMLElement* xml)
-	{ dropXML(xml,false); }
+    virtual void processSecuring(XMLElement* xml);
 
     /**
      * Process a received element in Started state. Descendants MUST consume the data
      * @param xml Valid XMLElement pointer
      */
-    virtual void processStarted(XMLElement* xml)
-	{ dropXML(xml,false); }
+    virtual void processStarted(XMLElement* xml);
+
+    /**
+     * Notify descendants when stream state changed to Running
+     */
+    virtual void streamRunning()
+	{}
 
     /**
      * Create an iq event from a received iq stanza
@@ -547,13 +640,18 @@ protected:
     JBEvent* getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& error);
 
     /**
+     * Send declaration and stream start
+     * @return True on success
+     */
+    bool sendStreamStart();
+
+    /**
      * Send stream XML elements through the socket
      * @param e The element to send
      * @param newState The new stream state on success
-     * @param streamEnd Stream element is a stream ending one: end tag or stream error
      * @return False if send failed (stream termination was initiated)
      */
-    bool sendStreamXML(XMLElement* e, State newState, bool streamEnd);
+    bool sendStreamXML(XMLElement* e, State newState);
 
     /**
      * Terminate stream on receiving invalid elements
@@ -564,6 +662,12 @@ protected:
     void invalidStreamXML(XMLElement* xml, XMPPError::Type error, const char* reason);
 
     /**
+     * Terminate stream on receiving stanza errors while not running
+     * @param xml Received element
+     */
+    void errorStreamXML(XMLElement* xml);
+
+    /**
      * Drop an unexpected or unhandled element
      * @param xml Received element
      * @param unexpected True if unexpected
@@ -571,10 +675,87 @@ protected:
     void dropXML(XMLElement* xml, bool unexpected = true);
 
     /**
-     * Change stream's state
+     * Change stream's state. Raise a Running event when apropriate
      * @param newState the new stream state
      */
     void changeState(State newState);
+
+    /**
+     * Clear the remote feature list. Parse the received element to fill it up.
+     * Terminate the stream on error (such as invalid namespace).
+     * If false is returned, don't re-use the received element
+     * @param features Features element to parse
+     * @return False if the stream is terminated
+     */
+    bool getStreamFeatures(XMLElement* features);
+
+    /**
+     * Start client TLS. Terminate the stream on error
+     * @return True if TLS was initiated. False on failure: stream termination was initiated
+     */
+    bool startTls();
+
+    /**
+     * Start client authentication. Send first request to authenticate with the server.
+     * Terminate the stream on error
+     * @return False if the stream is terminated
+     */
+    bool startAuth();
+
+    /**
+     * Send authentication response. Terminate the stream on error
+     * @param challenge Received challenge. If non 0 a SASL response is built and sent.
+     *  If 0, a non-SASL response is sent (using handshaking for component and
+     *  XEP-0078 for client streams)
+     * @return False if the stream is terminated
+     */
+    bool sendAuthResponse(XMLElement* challenge = 0);
+
+    /**
+     * Build SASL authentication response (Plain or Digest MD5 SASL).
+     * A valid mechanism must be previously set
+     * @param response Destination string
+     * @param realm Received realm or 0 to use local jid. If 0, nonce param is ignored
+     * @param nonce Server nonce if available
+     */
+    void buildSaslResponse(String& response, String* realm = 0,
+	String* nonce = 0);
+
+    /**
+     * Parse remote's features and pick an authentication mechanism
+     *  to be used when requesting authentication
+     */
+    void setClientAuthMechanism();
+
+    /**
+     * Build a Digest MD5 SASL (RFC 2831) to be sent with authentication responses
+     * @param dest Destination string
+     * @param authenticate True if building a Digest MD5 challenge response, false if
+     *  building a Digest MD5 to check a 'success' response
+     */
+    void buildDigestMD5Sasl(String& dest, bool authenticate = true);
+
+    /**
+     * Safely set receive count
+     * @param value The new value of the receive count
+     */
+    void setRecvCount(int value);
+
+    /**
+     * Get last event from queue
+     * @return JBEvent pointer or 0
+     */
+    inline JBEvent* lastEvent() {
+	    ObjList* o = m_events.last();
+	    return o ? static_cast<JBEvent*>(o->get()) : 0;
+	}
+
+    /**
+     * Get the stream mutex to be used by descendants
+     * @return The stream mutex
+     */
+    inline Mutex* streamMutex()
+	{ return &m_socket.m_streamMutex; }
 
     /**
      * The password used for authentication
@@ -591,31 +772,50 @@ protected:
      */
     JIDFeatureList m_remoteFeatures;
 
+    /**
+     * Stream flags
+     */
+    int m_flags;
+
+    /**
+     * The number of challenge/response exchanges allowed before ending the stream
+     */
+    unsigned int m_challengeCount;
+
+    /**
+     * Internal states
+     */
+    WaitState m_waitState;
+
+    /**
+     * Chosen authentication mechanism
+     */
+    JIDFeatureSasl::Mechanism m_authMech;
+
+    /**
+     * Events queue
+     */
+    ObjList m_events;
+
 private:
     // Event termination notification
     // @param event The notifier. Ignored if it's not m_lastEvent
     void eventTerminated(const JBEvent* event);
+    // Try sending pending stream element if any
     // Try to send the first element in pending outgoing stanzas list
     // If ErrorNoSocket is returned, stream termination was initiated
     Error sendPending();
-    // Send XML elements through the socket
-    // @param e The element to send (used to print it to output)
-    // @param stream True if this is a stream element. If true, try to send any partial data
-    //  remaining from the last stanza transmission
-    // @param streamEnd Stream element is a stream ending one: end tag or stream error
-    // @return The result of the transmission. For stream elements, stream termination was initiated
-    //  if returned value is not ErrorNone
-    Error sendXML(XMLElement* e, const char* buffer, unsigned int& len,
-	bool stream = false, bool streamEnd = false);
     // Remove pending elements with id if id is not 0
     // Remove all elements without id if id is 0
     // Set force to true to remove the first element even if partially sent
     void removePending(bool notify, const String* id, bool force);
+    // Called when a setup state was completed
+    // Set/reset some stream flags and data
+    void resetStream();
 
     int m_type;                          // Stream type
     State m_state;                       // Stream state
     bool m_outgoing;                     // Stream direction
-    bool m_autoRestart;                  // Auto restart flag
     unsigned int m_restart;              // Remaining restart attempts
     unsigned int m_restartMax;           // Max restart attempts
     u_int64_t m_timeToFillRestart;       // Next time to increase the restart counter
@@ -625,13 +825,20 @@ private:
     JabberID m_remote;                   // Remote peer's jid
     JBEngine* m_engine;                  // The owner of this stream
     JBSocket m_socket;                   // The socket used by this stream
-    SocketAddr m_address;                // Remote peer's address
     XMLParser m_parser;                  // XML parser
     ObjList m_outXML;                    // Outgoing XML elements
-    ObjList m_events;                    // Event queue
     JBEvent* m_lastEvent;                // Last generated event
     JBEvent* m_terminateEvent;           // Destroy/Terminate event
     JBEvent* m_startEvent;               // Running event
+    int m_recvCount;                     // The number of bytes to read: -1: all, 0: nothing 1: 1 byte
+    XMLElementOut* m_streamXML;          // Pending (incomplete) stream element
+    unsigned int m_declarationSent;      // The number of declaration bytes sent
+    // Auth data
+    unsigned int m_nonceCount;           // Nonce count
+    String m_nc;                         // Nonce count string
+    String m_nonce;                      // Server nonce
+    String m_cnonce;                     // Client nonce
+    String m_realm;                      // Client realm
 };
 
 /**
@@ -650,28 +857,26 @@ public:
 
 protected:
     /**
-     * Constructor
+     * Constructor. Build an outgoing stream
      * @param engine The engine that owns this stream
+     * @param info Structure containing data used to connect to remote server
      * @param localJid Local party's JID
      * @param remoteJid Remote party's JID
-     * @param password Password used for authentication
-     * @param address The remote address to connect to
-     * @param autoRestart True to auto restart the stream
-     * @param maxRestart The maximum restart attempts allowed
-     * @param incRestartInterval The interval to increase the restart counter
-     * @param outgoing Stream direction
      */
-    JBComponentStream(JBEngine* engine,
-	const JabberID& localJid, const JabberID& remoteJid,
-	const String& password, const SocketAddr& address,
-	bool autoRestart, unsigned int maxRestart,
-	u_int64_t incRestartInterval, bool outgoing = true);
+    JBComponentStream(JBEngine* engine, XMPPServerInfo& info,
+	const JabberID& localJid, const JabberID& remoteJid);
 
     /**
      * Get the starting stream element to be sent after stream connected
      * @return XMLElement pointer
      */
     virtual XMLElement* getStreamStart();
+
+    /**
+     * Get the authentication element to be sent when authentication starts
+     * @return XMLElement pointer
+     */
+    virtual XMLElement* getAuthStart();
 
     /**
      * Process a received element in Auth state
@@ -689,6 +894,99 @@ private:
     // Default constructor is private to avoid unwanted use
     JBComponentStream() {}
 };
+
+/**
+ * This class holds a Jabber client stream used to connect an user to its server
+ * @short A Jabber client to server stream
+ */
+class YJINGLE_API JBClientStream : public JBStream
+{
+    friend class JBEngine;
+public:
+    /**
+     * Destructor
+     */
+    virtual ~JBClientStream();
+
+    /**
+     * Get the roster of this stream's client
+     * @return Valid XMPPUserRoster
+     */
+    inline XMPPUserRoster* roster()
+	{ return m_roster; }
+
+    /**
+     * Get a remote user from roster
+     * @param jid The user's bare jid
+     * @return Referenced XMPPUser object or 0 if not found
+     */
+    XMPPUser* getRemote(const JabberID& jid);
+
+    /**
+     * Send a stanza. This method is thread safe
+     * @param stanza Element to send
+     * @param senderId Optional sender's id. Used for notification events
+     * @return The result of posting the stanza
+     */
+    virtual Error sendStanza(XMLElement* stanza, const char* senderId = 0);
+
+protected:
+    /**
+     * Constructor. Build an outgoing stream
+     * @param engine The engine that owns this stream
+     * @param info Structure containing data used to connect to remote server
+     * @param jid Client's full Jabber ID
+     * @param params Other stream parameters
+     */
+    JBClientStream(JBEngine* engine, XMPPServerInfo& info, const JabberID& jid,
+	const NamedList& params);
+
+    /**
+     * Constructor
+     * @param engine The engine that owns this stream
+     * @param jid User's JID
+     * @param password Password used for authentication
+     * @param address The remote address to connect to
+     * @param autoRestart True to auto restart the stream
+     * @param maxRestart The maximum restart attempts allowed
+     * @param incRestartInterval The interval to increase the restart counter
+     * @param allowPlainAuth Allow plain text password authentication
+     * @param outgoing Stream direction
+     */
+    JBClientStream(JBEngine* engine, const JabberID& jid,
+	const String& password, const SocketAddr& address,
+	bool autoRestart, unsigned int maxRestart, u_int64_t incRestartInterval,
+	bool allowPlainAuth = false, bool outgoing = true);
+
+    /**
+     * Notification from parent when steam is authenticated: get roster from server
+     */
+    virtual void streamRunning();
+
+    /**
+     * Process a received stanza in Running state
+     * @param xml Valid XMLElement pointer
+     */
+    virtual void processRunning(XMLElement* xml);
+
+    /**
+     * Check the 'to' attribute of a received element against the local jid.
+     * Accept empty or bare/full jid match. Set the 'to' attribute to local jid if empty
+     * @param xml The received element
+     * @param respond Action to be taken if not accepted. Always false on exit
+     * @return False to reject it
+     */
+    virtual bool checkDestination(XMLElement* xml, bool& respond);
+
+private:
+    // Default constructor is private to avoid unwanted use
+    JBClientStream() {}
+
+    XMPPUserRoster* m_roster;            // Client's roster
+    JIDResource* m_resource;             // Client's resource
+    String m_rosterReqId;                // Roster request id
+};
+
 
 /**
  * This class holds encapsulates a private library thread
@@ -714,6 +1012,13 @@ public:
      * Destructor. Remove itself from the owner's list
      */
     virtual ~JBThread();
+
+    /**
+     * Get the type of this thread
+     * @return Thread type as enumeration
+     */
+    inline Type type() const
+	{ return m_type; }
 
     /**
      * Cancel (terminate) this thread
@@ -748,6 +1053,13 @@ protected:
      */
     void runClient();
 
+    /**
+     * Get the stream's client
+     * @return The stream's client
+     */
+    inline void* client()
+	{ return m_client; }
+
 private:
     Type m_type;                         // Thread type
     JBThreadList* m_owner;               // List owning this thread
@@ -763,7 +1075,15 @@ private:
 class YJINGLE_API JBThreadList
 {
     friend class JBThread;
+    friend class JBStream;
 public:
+    /**
+     * Get the enabler owning this list
+     * @return The owner of this list
+     */
+    inline DebugEnabler* owner() const
+	{ return m_owner; }
+
     /**
      * Cancel all threads
      * This method is thread safe
@@ -774,13 +1094,15 @@ public:
 
 protected:
     /**
-     * Constructor. Set the auto delete flag of the list to false
+     * Constructor
+     * @param owner The owner of this list
      */
-    JBThreadList()
-	: m_mutex(true), m_cancelling(false)
+    JBThreadList(DebugEnabler* owner)
+	: m_owner(owner), m_mutex(true), m_cancelling(false)
 	{ m_threads.setDelete(false); }
 
 private:
+    DebugEnabler* m_owner;               // The owner of this list
     Mutex m_mutex;                       // Lock list operations
     ObjList m_threads;                   // Private threads list
     bool m_cancelling;                   // Cancelling threads operation in progress
@@ -808,15 +1130,16 @@ public:
      * Service type enumeration
      */
     enum Service {
-	ServiceJingle   = 0,             // Receive Jingle events
-	ServiceIq       = 1,             // Receive generic Iq events
-	ServiceMessage  = 2,             // Receive Message events
-	ServicePresence = 3,             // Receive Presence events
-	ServiceCommand  = 4,             // Receive Command events
-	ServiceDisco    = 5,             // Receive Disco events
-	ServiceStream   = 6,             // Receive stream Terminated or Destroy events
+	ServiceJingle    = 0,            // Receive Jingle events
+	ServiceIq        = 1,            // Receive generic Iq events
+	ServiceMessage   = 2,            // Receive Message events
+	ServicePresence  = 3,            // Receive Presence events
+	ServiceCommand   = 4,            // Receive Command events
+	ServiceDisco     = 5,            // Receive Disco events
+	ServiceStream    = 6,            // Receive stream Terminated or Destroy events
 	ServiceWriteFail = 7,            // Receive WriteFail events
-	ServiceCount = 8
+	ServiceRoster    = 8,            // Receive roster events
+	ServiceCount     = 9
     };
 
     /**
@@ -836,13 +1159,6 @@ public:
      */
     inline Protocol protocol() const
 	{ return m_protocol; }
-
-    /**
-     * Check if a sender or receiver of XML elements should print them to output
-     * @return True to print XML element to output
-     */
-    inline bool printXml() const
-	{ return m_printXml; }
 
     /**
      * Get the default component server
@@ -907,28 +1223,31 @@ public:
      * Get a stream. Create it not found and requested.
      * For the component protocol, the jid parameter may contain the domain to find,
      *  otherwise, the default component will be used.
-     * For the client protocol, the jid parameter must contain the full user's
-     *  jid (including the resource).
-     * This method is thread safe.
+     * This method won't create a client stream. Use @ref createClientStream().
+     * This method is thread safe
      * @param jid Optional jid to use to find or create the stream
-     * @param create True to create a stream if don't exist
-     * @param pwd Password used to authenticate the user if the client protocol
-     *  is used and a new stream is going to be created. Set it to empty string
-     *  to create the stream without password
+     * @param create True to create a stream if don't exist. Ignored if the engine's protocol is Client
      * @return Referenced JBStream pointer or 0
      */
-    JBStream* getStream(const JabberID* jid = 0, bool create = true, const char* pwd = 0);
+    JBStream* getStream(const JabberID* jid = 0, bool create = true);
 
     /**
      * Try to get a stream if stream parameter is 0
      * @param stream Stream to check
      * @param release Set to true on exit if the caller must deref the stream
-     * @param pwd Password used to authenticate the user if the client protocol
-     *  is used and a new stream is going to be created. Set it to empty string
-     *  to create the stream without password
      * @return True if stream is valid
      */
-    bool getStream(JBStream*& stream, bool& release, const char* pwd = 0);
+    bool getStream(JBStream*& stream, bool& release);
+
+    /**
+     * Create a new client stream if no other stream exists for the given account
+     * This method is thread safe.
+     * @param params Stream parameters
+     * @param jid Optional client jid. If missing the parameters must contain
+     *  an 'account' entry with the client's jid
+     * @return Referenced JBClientStream pointer or 0
+     */
+    JBClientStream* createClientStream(NamedList& params, JabberID* jid = 0);
 
     /**
      * Keep calling receive() for each stream until no data is received or the
@@ -972,6 +1291,13 @@ public:
      */
     virtual bool exiting() const
 	{ return false; }
+
+    /**
+     * Setup the transport layer security for a stream
+     * @param stream The stream requesting the operation
+     * @return True if stream securing started, false on failure.
+     */
+    virtual bool encryptStream(JBStream* stream);
 
     /**
      * Append a server info element to the list
@@ -1019,6 +1345,14 @@ public:
     void detachService(JBService* service);
 
     /**
+     * Print an XML element to output
+     * @param xml Element to print
+     * @param stream Stream requesting the operation
+     * @param send True if sending, false if receiving
+     */
+    void printXml(const XMLElement& xml, const JBStream* stream, bool send) const;
+
+    /**
      * Get the name of a protocol
      * @return The name of the requested protocol or the default value
      */
@@ -1044,7 +1378,7 @@ private:
     Protocol m_protocol;                 // The protocol to use
     u_int32_t m_restartUpdateInterval;   // Update interval for restart counter of all streams
     u_int32_t m_restartCount;            // The default restart counter value
-    bool m_printXml;                     // Print XML data to output
+    int m_printXml;                      // Print XML data to output
     ObjList m_streams;                   // Streams belonging to this engine
     JIDIdentity* m_identity;             // Engine's identity
     JIDFeatureList m_features;           // Engine's features
@@ -1158,13 +1492,26 @@ class YJINGLE_API JBMessage : public JBService, public JBThreadList
 {
 public:
     /**
+     * Message type enumeration
+     */
+    enum MsgType {
+	Chat,                            // chat
+	GroupChat,                       // groupchat
+	HeadLine,                        // headline
+	Normal,                          // normal
+	Error,                           // error
+	None,
+    };
+
+    /**
      * Constructor. Constructs a Jabber message service
      * @param engine The Jabber engine
      * @param params Service's parameters
      * @param prio The priority of this service
      */
     inline JBMessage(JBEngine* engine, const NamedList* params, int prio = 0)
-	: JBService(engine,"jbmsgrecv",params,prio), m_syncProcess(true)
+	: JBService(engine,"jbmsgrecv",params,prio),
+	JBThreadList(this), m_syncProcess(true)
 	{}
 
     /**
@@ -1192,6 +1539,39 @@ public:
      * @param event The event to process
      */
     virtual void processMessage(JBEvent* event);
+
+    /**
+     * Create a 'message' element
+     * @param type Message type as enumeration
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param message The message body
+     * @return A valid XMLElement pointer
+     */
+    static XMLElement* createMessage(MsgType type, const char* from,
+	const char* to, const char* id, const char* message);
+
+    /**
+     * Get the type of a 'message' stanza
+     * @param text The text to check
+     * @return Message type as enumeration
+     */
+    static inline MsgType msgType(const char* text)
+	{ return (MsgType)lookup(text,s_msg,None); }
+
+    /**
+     * Get the text from a message type
+     * @param msg The message type
+     * @return The associated text or 0
+     */
+    static inline const char* msgText(MsgType msg)
+	{ return lookup(msg,s_msg,0); }
+
+    /**
+     * Keep the types of 'message' stanzas
+     */
+    static TokenDict s_msg[];
 
 protected:
     /**
@@ -1221,14 +1601,14 @@ public:
      * Presence type enumeration
      */
     enum Presence {
-	Error,                           // error
-	Probe,                           // probe
-	Subscribe,                       // subscribe request
-	Subscribed,                      // subscribe accepted
-	Unavailable,                     // unavailable
-	Unsubscribe,                     // unsubscribe request
-	Unsubscribed,                    // unsubscribe accepted
-	None,
+	Error         = 0,               // error
+	Probe         = 1,               // probe
+	Subscribe     = 2,               // subscribe request
+	Subscribed    = 3,               // subscribe accepted
+	Unavailable   = 4,               // unavailable
+	Unsubscribe   = 5,               // unsubscribe request
+	Unsubscribed  = 6,               // unsubscribe accepted
+	None          = 7,
     };
 
     /**
@@ -1323,78 +1703,54 @@ public:
     /**
      * Process disco info elements
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processDisco(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual void processDisco(JBEvent* event);
 
     /**
      * Process a presence error element
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processError(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual void processError(JBEvent* event);
 
     /**
      * Process a presence probe element
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual void processProbe(JBEvent* event);
 
     /**
      * Process a presence subscribe element
      * @param event The event with the element
      * @param presence Presence type: Subscribe,Subscribed,Unsubscribe,Unsubscribed
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processSubscribe(JBEvent* event, Presence presence,
-	const JabberID& local, const JabberID& remote);
+    virtual void processSubscribe(JBEvent* event, Presence presence);
 
     /**
      * Process a presence unavailable element
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processUnavailable(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual void processUnavailable(JBEvent* event);
 
     /**
      * Process a presence element
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      */
-    virtual void processPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual void processPresence(JBEvent* event);
 
     /**
      * Notify on probe request with users we don't know about
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      * @return False to send item-not-found error
      */
-    virtual bool notifyProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
+    virtual bool notifyProbe(JBEvent* event);
 
     /**
      * Notify on subscribe event with users we don't know about
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      * @param presence Presence type: Subscribe,Subscribed,Unsubscribe,Unsubscribed
      * @return False to send item-not-found error
      */
-    virtual bool notifySubscribe(JBEvent* event,
-	const JabberID& local, const JabberID& remote, Presence presence);
+    virtual bool notifySubscribe(JBEvent* event, Presence presence);
 
     /**
      * Notify on subscribe event
@@ -1407,13 +1763,10 @@ public:
      * Notify on presence event with users we don't know about or presence unavailable
      *  received without resource (the remote user is entirely unavailable)
      * @param event The event with the element
-     * @param local The local (destination) user
-     * @param remote The remote (source) user
      * @param available The availability of the remote user
      * @return False to send item-not-found error
      */
-    virtual bool notifyPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote, bool available);
+    virtual bool notifyPresence(JBEvent* event, bool available);
 
     /**
      * Notify on state/capabilities change
@@ -1628,6 +1981,13 @@ public:
 	{ return m_name; }
 
     /**
+     * Set the resource name
+     * @param name The new name of the resource
+     */
+    inline void setName(const char* name)
+	{ m_name = name; }
+
+    /**
      * Get the presence attribute
      * @return The presence attribute
      */
@@ -1746,6 +2106,7 @@ private:
 class YJINGLE_API JIDResourceList : public Mutex
 {
     friend class XMPPUser;
+    friend class JBPresence;
 public:
     /**
      * Constructor
@@ -1850,7 +2211,7 @@ public:
      * Get the jid of this user.
      * @return The jid of this user.
      */
-    const JabberID& jid() const
+    inline const JabberID& jid() const
 	{ return m_jid; }
 
     /**
@@ -1859,6 +2220,20 @@ public:
      */
     inline XMPPUserRoster* local() const
 	{ return m_local; }
+
+    /**
+     * Get the subscription state of this user
+     * @return The subscription state of this user
+     */
+    inline int subscription() const
+	{ return (int)m_subscription; }
+
+    /**
+     * Set the subscription state
+     * @param subscription The new subscription state
+     */
+    inline void setSubscription(u_int8_t subscription)
+	{ m_subscription = subscription; }
 
     /**
      * Add a local resource to the list.
@@ -1929,10 +2304,9 @@ public:
      * This method is thread safe.
      * @param event The event with the element.
      * @param available The availability of the user.
-     * @param from The sender's jid.
      * @return False if remote user has no more resources available.
      */
-    bool processPresence(JBEvent* event, bool available, const JabberID& from);
+    bool processPresence(JBEvent* event, bool available);
 
     /**
      * Process received subscription from remote peer.
@@ -2062,6 +2436,7 @@ private:
 class YJINGLE_API XMPPUserRoster : public RefObject, public Mutex
 {
     friend class JBPresence;
+    friend class JBClientStream;
     friend class XMPPUser;
 public:
     /**
@@ -2102,7 +2477,7 @@ public:
      */
     bool removeUser(const JabberID& remote);
 
-    /**
+    /**()
      * Clear remote user list.
      */
     inline void cleanup() {
@@ -2118,14 +2493,22 @@ public:
      */
     bool timeout(u_int64_t time);
 
+    /**
+     * Create an iq result to respond to disco info
+     * @return XMLElement pointer
+     */
+    XMLElement* createDiscoInfoResult(const char* from, const char* to, const char* id);
+
 protected:
     /**
      * Constructor.
-     * @param engine Pointer to the presence engine this user belongs to.
-     * @param node User's name.
-     * @param domain User's domain.
+     * @param engine Pointer to the presence engine this user belongs to
+     * @param node User's name
+     * @param domain User's domain
+     * @param proto Protocol. Used to create identity
      */
-    XMPPUserRoster(JBPresence* engine, const char* node, const char* domain);
+    XMPPUserRoster(JBPresence* engine, const char* node, const char* domain,
+	JBEngine::Protocol proto = JBEngine::Component);
 
 private:
     inline void addUser(XMPPUser* u) {
@@ -2138,6 +2521,8 @@ private:
 	}
 
     JabberID m_jid;                      // User's bare JID
+    JIDFeatureList m_features;           // Local user's resources
+    JIDIdentity* m_identity;             // JID's identity
     ObjList m_remote;                    // Remote users
     JBPresence* m_engine;                // Presence engine
 };

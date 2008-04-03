@@ -58,7 +58,7 @@ class XMLElementOut;
  * This class holds an XML element
  * @short An XML element
  */
-class YJINGLE_API XMLElement
+class YJINGLE_API XMLElement : public GenObject
 {
     friend class XMLParser;
 public:
@@ -71,6 +71,7 @@ public:
 	StreamEnd,                       // /stream:stream
 	StreamError,                     // stream::error
 	StreamFeatures,                  // stream::features
+	Register,                        // register
 	Starttls,                        // starttls
 	Handshake,                       // handshake
 	Auth,                            // auth
@@ -78,6 +79,7 @@ public:
 	Abort,                           // abort
 	Aborted,                         // aborted
 	Response,                        // response
+	Proceed,                         // proceed
 	Success,                         // success
 	Failure,                         // failure 
 	Mechanisms,                      // mechanisms
@@ -104,10 +106,17 @@ public:
 	Bind,                            // bind
 	Resource,                        // resource
 	// Miscellanous
+	Jid,                             // jid
+	Username,                        // username
+	Password,                        // password
+	Digest,                          // digest
 	Required,                        // required
 	Dtmf,                            // dtmf
 	DtmfMethod,                      // dtmf-method
 	Command,                         // command
+	Text,                            // text
+	Item,                            // item
+	Group,                           // group
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };
@@ -120,8 +129,19 @@ public:
 
     /**
      * Copy constructor
+     * @param src Source element
      */
     XMLElement(const XMLElement& src);
+
+    /**
+     * Constructor. Partially build this element from another one.
+     * Copy name and 'to', 'from', 'type', 'id' attributes
+     * @param src Source element
+     * @param response True to reverse 'to' and 'from' attributes
+     * @param result True to set type to "result", false to set it to "error".
+     *  Ignored if response is false
+     */
+    XMLElement(const XMLElement& src, bool response, bool result);
 
     /**
      * Constructor.
@@ -178,6 +198,13 @@ public:
 	{ return m_element != 0; }
 
     /**
+     * Change the type of this object
+     * @param t The new type of this object
+     */
+    inline void changeType(Type t)
+	{ m_type = t; }
+
+    /**
      * Put the element in a buffer
      * @param dest Destination string
      * @param unclose True to leave the tag unclosed
@@ -216,7 +243,7 @@ public:
      * @param name Attribute's name
      * @return Attribute's value. May be 0 if doesn't exists or empty
      */
-    const char* getAttribute(const char* name);
+    const char* getAttribute(const char* name) const;
 
     /**
      * Get the value of an attribute
@@ -224,7 +251,7 @@ public:
      * @param value Destination string
      * @return True if attribute with the given name exists and is not empty
      */
-    inline bool getAttribute(const char* name, String& value) {
+    inline bool getAttribute(const char* name, String& value) const {
 	    value = getAttribute(name);
 	    return 0 != value.length();
 	}
@@ -235,13 +262,13 @@ public:
      * @param value Attribute's value
      * @return True/False
      */
-    bool hasAttribute(const char* name, const char* value);
+    bool hasAttribute(const char* name, const char* value) const;
 
     /**
      * Get the text of this XML element
      * @return Pointer to the text of this XML element or 0
      */
-    const char* getText();
+    const char* getText() const;
 
     /**
      * Add a child to this object. Release the received element
@@ -297,7 +324,7 @@ public:
 	{ return lookup(type,s_names); }
 
     /**
-     * check if the given text is equal to the one associated with the given type
+     * Check if the given text is equal to the one associated with the given type
      * @param txt Text to compare
      * @param type Element type as enumeration
      * @return True if txt equals the text associated with the given type
@@ -305,6 +332,31 @@ public:
     static inline bool isType(const char* txt, Type type) {
 	    const char* s = typeName(type);
 	    return (txt && s && (0 == ::strcmp(txt,s)));
+	}
+
+    /**
+     * Get a pointer to this object
+     */
+    virtual void* getObject(const String& name) const {
+	    if (name == "XMLElement")
+		return (void*)this;
+	    return GenObject::getObject(name);
+	}
+
+    /**
+     * Release memory
+     */
+    virtual const String& toString() const
+	{ return m_name; }
+
+    /**
+     * Release memory
+     */
+    virtual void destruct() {
+	    if (m_owner && m_element)
+		delete m_element;
+	    m_element = 0;
+	    GenObject::destruct();
 	}
 
 protected:
@@ -340,11 +392,14 @@ protected:
 
 private:
     // Set this object's type from m_element's name
-    inline void setType()
-	{ m_type = (Type)lookup(name(),s_names,Unknown); }
+    inline void setType() {
+	    m_name = name();
+	    m_type = (Type)lookup(name(),s_names,Unknown);
+	}
 
     Type m_type;                         // Element's type
     bool m_owner;                        // Owner flag. If true, this object owns the XML element
+    String m_name;                       // The name of this element
     TiXmlElement* m_element;             // The underlying XML element
 };
 
@@ -389,6 +444,13 @@ public:
     XMLElement* extract();
 
     /**
+     * Get the buffer length (incomplete data)
+     * @return The number of bytes belonging to an incomplete XML element
+     */
+    inline unsigned int bufLen() const
+	{ return m_buffer.length(); }
+
+    /**
      * Get a copy of the parser's buffer
      * @param dest Destination string
      */
@@ -426,9 +488,12 @@ public:
      * Constructor
      * @param element The XML element
      * @param senderID Optional sender id
+     * @param unclose True to not close the tag when building the buffer
      */
-    inline XMLElementOut(XMLElement* element, const char* senderID = 0)
-	: m_element(element), m_offset(0), m_id(senderID)
+    inline XMLElementOut(XMLElement* element, const char* senderID = 0,
+	bool unclose = false)
+	: m_element(element), m_offset(0), m_id(senderID), m_unclose(unclose),
+	m_sent(false)
 	{}
 
     /**
@@ -446,6 +511,13 @@ public:
      */
     inline XMLElement* element() const
 	{ return m_element; }
+
+    /**
+     * Check if this element was (partially) sent
+     * @return True if an attempt to send this element was already done
+     */
+    inline bool sent() const
+	{ return m_sent; }
 
     /**
      * Get the data buffer
@@ -481,10 +553,11 @@ public:
 	}
 
     /**
-     * Increase the offset with nCount bytes
+     * Increase the offset with nCount bytes. Set the sent flag
      * @param nCount The number of bytes sent
      */
     inline void dataSent(u_int32_t nCount) {
+	    m_sent = true;
 	    m_offset += nCount;
 	    if (m_offset > m_buffer.length())
 		m_offset = m_buffer.length();
@@ -506,7 +579,7 @@ public:
      * @param buffer The buffer to fill
      */
     inline void toBuffer(String& buffer)
-	{ if (m_element) m_element->toString(buffer); }
+	{ if (m_element) m_element->toString(buffer,m_unclose); }
 
     /**
      * Fill the buffer with the XML element to send
@@ -519,6 +592,8 @@ private:
     String m_buffer;                     // Data to send
     u_int32_t m_offset;                  // Offset to send
     String m_id;                         // Sender's id
+    bool m_unclose;                      // Close or not the element's tag
+    bool m_sent;                         // Sent flag (true if an attempt to send was done)
 };
 
 };

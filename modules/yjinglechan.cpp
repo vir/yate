@@ -42,35 +42,21 @@ class YJBEngine;                         // Jabber engine. Initiate protocol fro
 class YJGEngine;                         // Jingle service
 class YJBMessage;                        // Message service
 class YJBStreamService;                  // Stream start/stop event service
+class YJBClientPresence;                 // Presence service for client streams
 class YJBPresence;                       // Presence service
 class YJGData;                           // Handle the transport and formats for a connection
 class YJGConnection;                     // Jingle channel
 class ResNotifyHandler;                  // resource.notify handler
 class ResSubscribeHandler;               // resource.subscribe handler
+class UserLoginHandler;                  // user.login handler
 class YJGDriver;                         // The driver
 
 // TODO:
 //  Negotiate DTMF method. Accept remote peer's method;
 
-
 // Username/Password length for transport
 #define JINGLE_AUTHSTRINGLEN         16
-// Messages
-/* MODULE_MSG_NOTIFY
-	protocol	s_name
-	subscription	true/false: subscription state 'to' --> 'from'
-	status		online/offline/subscribed/unsubscribed or any other string
-	from		node@domain
-	to		node@domain
-*/
-#define MODULE_MSG_NOTIFY      "resource.notify"
-/* MODULE_MSG_SUBSCRIBE
-	protocol	s_name
-	operation	probe/subscribe/unsubscribe
-	from		node@domain
-	to		node@domain
-*/
-#define MODULE_MSG_SUBSCRIBE   "resource.subscribe"
+
 
 /**
  * YJBEngine
@@ -83,6 +69,8 @@ public:
     virtual bool exiting() const
 	{ return Engine::exiting(); }
     void initialize();
+    // Setup the transport layer security for a stream
+    virtual bool encryptStream(JBStream* stream);
 };
 
 /**
@@ -133,6 +121,23 @@ protected:
 };
 
 /**
+ * YJBClientPresence
+ */
+class YJBClientPresence : public JBService
+{
+public:
+    YJBClientPresence(JBEngine* engine, int prio)
+	: JBService(engine,"clientpresence",0,prio)
+	{}
+    virtual ~YJBClientPresence()
+	{}
+    void initialize();
+protected:
+    // Process stream termination events
+    virtual bool accept(JBEvent* event, bool& processed, bool& insert);
+};
+
+/**
  * YJBPresence
  */
 class YJBPresence : public JBPresence
@@ -144,19 +149,15 @@ public:
 	{}
     void initialize();
     // Overloaded methods
-    virtual bool notifyProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote);
-    virtual bool notifySubscribe(JBEvent* event, const JabberID& local,
-	const JabberID& remote, Presence presence);
+    virtual bool notifyProbe(JBEvent* event);
+    virtual bool notifySubscribe(JBEvent* event, Presence presence);
     virtual void notifySubscribe(XMPPUser* user, Presence presence);
-    virtual bool notifyPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote, bool available);
+    virtual bool notifyPresence(JBEvent* event, bool available);
     virtual void notifyPresence(XMPPUser* user, JIDResource* resource);
     virtual void notifyNewUser(XMPPUser* user);
-protected:
     // Create & enqueue a message from received presence parameter.
     // Add status/operation/subscription parameters
-    bool message(Presence presence, const char* from, const char* to,
+    static Message* message(int presence, const char* from, const char* to,
 	const char* subscription);
 };
 
@@ -273,7 +274,7 @@ private:
 class ResNotifyHandler : public MessageHandler
 {
 public:
-    ResNotifyHandler() : MessageHandler(MODULE_MSG_NOTIFY) {}
+    ResNotifyHandler() : MessageHandler("resource.notify") {}
     virtual bool received(Message& msg);
     static void process(const JabberID& from, const JabberID& to,
 	const String& status, bool subFrom);
@@ -286,10 +287,20 @@ public:
 class ResSubscribeHandler : public MessageHandler
 {
 public:
-    ResSubscribeHandler() : MessageHandler(MODULE_MSG_SUBSCRIBE) {}
+    ResSubscribeHandler() : MessageHandler("resource.subscribe") {}
     virtual bool received(Message& msg);
     static void process(const JabberID& from, const JabberID& to,
 	JBPresence::Presence presence);
+};
+
+/**
+ * user.login handler
+ */
+class UserLoginHandler : public MessageHandler
+{
+public:
+    UserLoginHandler() : MessageHandler("user.login") {}
+    virtual bool received(Message& msg);
 };
 
 /**
@@ -362,6 +373,7 @@ static YJBEngine* s_jabber = 0;
 static YJGEngine* s_jingle = 0;
 static YJBMessage* s_message = 0;
 static YJBPresence* s_presence = 0;
+static YJBClientPresence* s_clientPresence = 0;
 static YJBStreamService* s_stream = 0;
 static YJGDriver plugin;                          // The driver
 
@@ -375,6 +387,12 @@ inline int threadCount(const NamedList& params, const char* param)
 	return 1;
     int t = params.getIntValue(param);
     return t < 1 ? 1 : t;
+}
+
+inline void addValidParam(Message& m, const char* param, const char* value)
+{
+    if (value)
+	m.addParam(param,value);
 }
 
 
@@ -394,8 +412,8 @@ void YJBEngine::initialize()
     JBEngine::initialize(*sect);
 
     String defComponent;
-    // Set server list
-    unsigned int count = s_cfg.sections();
+    // Set server list if not client
+    unsigned int count = (protocol() != Client) ? s_cfg.sections() : 0;
     for (unsigned int i = 0; i < count; i++) {
 	const NamedList* comp = s_cfg.getSection(i);
 	String name = comp ? comp->c_str() : "";
@@ -404,7 +422,7 @@ void YJBEngine::initialize()
 
 	const char* address = comp->getValue("address");
 	String tmp = comp->getValue("port");
-	int port = tmp.toInteger(0);
+	int port = tmp.toInteger();
 	if (!(address && port)) {
 	    Debug(this,DebugNote,
 		"Invalid address=%s or port=%s in configuration for %s",
@@ -444,21 +462,41 @@ void YJBEngine::initialize()
 	}
 	if (!identity)
 	    continue;
+	int flags = XMPPUtils::decodeFlags(comp->getValue("options"),
+	    XMPPServerInfo::s_flagName);
+	if (!comp->getBoolValue("auto_restart",true))
+	    flags |= XMPPServerInfo::NoAutoRestart;
+	if (keepRoster)
+	    flags |= XMPPServerInfo::KeepRoster;
+	XMPPServerInfo* server = new XMPPServerInfo(name,address,port,
+	    password,identity,fullId,flags);
 	bool startup = comp->getBoolValue("startup");
-	bool restart = comp->getBoolValue("auto_restart",true);
+#ifdef DEBUG
+	String f;
+	XMPPUtils::buildFlags(f,flags,XMPPServerInfo::s_flagName);
+	DDebug(this,DebugAll,
+	    "Add server '%s' %s:%d ident=%s full-ident=%s options=%s",
+	    name.c_str(),address,port,identity.c_str(),fullId.c_str(),
+	    f.c_str());
+#endif
+	appendServer(server,startup);
 	if (!defComponent || comp->getBoolValue("default"))
 	    defComponent = name;
-	XMPPServerInfo* server = new XMPPServerInfo(name,address,port,
-	    password,identity,fullId,keepRoster,restart);
-	DDebug(this,DebugAll,
-	    "Add server '%s' addr=%s port=%d ident=%s full-ident=%s roster=%s restart=%s startup=%s",
-	    name.c_str(),address,port,identity.c_str(),fullId.c_str(),
-	    String::boolText(keepRoster),String::boolText(restart),String::boolText(startup));
-	appendServer(server,startup);
     }
     // Set default component server
-    if (protocol() != Client)
+    if (protocol() == Component)
 	setComponentServer(defComponent);
+}
+
+// Setup the transport layer security for a stream
+bool YJBEngine::encryptStream(JBStream* stream)
+{
+    if (!stream)
+	return false;
+    Message msg("socket.ssl");
+    msg.userData(stream);
+    msg.addParam("server",String::boolText(!stream->outgoing()));
+    return Engine::dispatch(msg);
 }
 
 
@@ -541,13 +579,6 @@ void YJBMessage::processMessage(JBEvent* event)
     if (!(event && event->text()))
 	return;
 
-    if (engine()->protocol() == JBEngine::Client) {
-	//TODO: Enqueue message in Yate
-	Debug(this,DebugStub,"Please implement YJBMessage::processMessage() for Client protocol");
-	delete event;
-	return;
-    }
-
     YJGConnection* conn = plugin.find(event->to().c_str(),event->from().c_str());
     DDebug(this,DebugInfo,"Message from=%s to=%s conn=%p '%s' [%p]",
 	event->from().c_str(),event->to().c_str(),conn,event->text().c_str(),this);
@@ -556,7 +587,6 @@ void YJBMessage::processMessage(JBEvent* event)
 	m->addParam("text",event->text());
 	Engine::enqueue(m);
     }
-    delete event;
 }
 
 
@@ -571,14 +601,127 @@ void YJBStreamService::initialize()
 // Process stream termination events
 bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
 {
+    JBStream* stream = event ? event->stream() : 0;
+    if (!stream)
+	return false;
     if (event->type() != JBEvent::Terminated &&
 	event->type() != JBEvent::Running &&
 	event->type() != JBEvent::Destroy)
 	return false;
 
-    //TODO: Enqueue message in Yate. Notify user unavailable
-    Debug(this,DebugStub,"Please implement YJBStreamService::accept() for Client protocol");
+    Message* m = new Message("user.notify");
+    m->addParam("account",stream->local());
+    m->addParam("protocol",plugin.name());
+    m->addParam("username",stream->local().node());
+    m->addParam("registered",String::boolText(event->type() == JBEvent::Running));
+    if (event->type() != JBEvent::Running && event->text())
+	m->addParam("reason",event->text());
+    Engine::enqueue(m);
     return false;
+}
+
+/**
+ * YJBClientPresence
+ */
+void YJBClientPresence::initialize()
+{
+    debugChain(&plugin);
+}
+
+// Process client presence and roster updates
+bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
+{
+    if (!event)
+	return false;
+
+    processed = true;
+    while (true) {
+	if (event->type() != JBEvent::Presence &&
+	    event->type() != JBEvent::IqClientRosterUpdate) {
+	    Debug(this,DebugStub,"Can't accept unexpected event=%s [%p]",
+		event->name(),this);
+	    processed = false;
+	    break;
+	}
+
+	// User roster update
+	if (event->type() == JBEvent::IqClientRosterUpdate) {
+	    if (!event->child())
+		break;
+	    XMLElement* item = event->child()->findFirstChild(XMLElement::Item);
+	    for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
+		Message* m = YJBPresence::message(-1,0,event->to().bare(),
+		    item->getAttribute("subscription"));
+		m->setParam("contact",item->getAttribute("jid"));
+		addValidParam(*m,"contactname",item->getAttribute("name"));
+		addValidParam(*m,"ask",item->getAttribute("ask"));
+		// Get jid group(s)
+		XMLElement* group = item->findFirstChild(XMLElement::Group);
+		for (; group; group = item->findNextChild(group,XMLElement::Group))
+		    addValidParam(*m,"group",group->getText());
+		Engine::enqueue(m);
+	    }
+	    break;
+	}
+
+	// Presence
+	const char* sub = 0;
+	if (event->stream() && event->stream()->type() == JBEngine::Client) {
+	    JBClientStream* stream = static_cast<JBClientStream*>(event->stream());
+	    Lock lock(stream->roster());
+	    XMPPUser* user = stream->getRemote(event->from());
+	    if (user) {
+		sub = XMPPUser::subscribeText(user->subscription());
+		TelEngine::destruct(user);
+	    }
+	}
+
+	Message* m = 0;
+	JBPresence::Presence pres = JBPresence::presenceType(event->stanzaType());
+	if (pres == JBPresence::None || JBPresence::Unavailable) {
+	    bool capAudio = false;
+	    bool available = (pres == JBPresence::None);
+	    if (event->element()) {
+		JIDResource* res = new JIDResource(event->from().resource());
+		if (res->fromXML(event->element())) {
+		    capAudio = res->hasCap(JIDResource::CapAudio);
+		    available = res->available();
+		}
+		TelEngine::destruct(res);
+	    }
+	    // Notify presence to module and enqueue message in engine
+	    plugin.processPresence(event->to(),event->from(),available,capAudio);
+	    m = YJBPresence::message(pres,event->from(),event->to(),sub);
+	}
+	else
+	    switch (pres) {
+		case JBPresence::Subscribed:
+		case JBPresence::Unsubscribed:
+		case JBPresence::Subscribe:
+		case JBPresence::Unsubscribe:
+		case JBPresence::Probe:
+		    m = YJBPresence::message(pres,event->from().bare(),
+			event->to().bare(),sub);
+		    break;
+		case JBPresence::Error:
+		    if (event->text()) {
+			m = YJBPresence::message(pres,event->from().bare(),
+			    event->to().bare(),sub);
+			m->setParam("error",event->text());
+		    }
+		    break;
+		default:
+		    Debug(this,DebugStub,"accept() not implemented for presence=%s [%p]",
+			event->stanzaType().c_str(),this);
+		    processed = false;
+	    }
+
+	if (m)
+	    Engine::enqueue(m);
+	break;
+    }
+
+    return processed;
 }
 
 
@@ -597,20 +740,18 @@ void YJBPresence::initialize()
     JBPresence::initialize(*sect);
 }
 
-bool YJBPresence::notifyProbe(JBEvent* event, const JabberID& local,
-	const JabberID& remote)
+bool YJBPresence::notifyProbe(JBEvent* event)
 {
     XDebug(this,DebugAll,"notifyProbe local=%s remote=%s [%p]",
-	local.c_str(),remote.c_str(),this);
-    // Enqueue message
-    return message(JBPresence::Probe,remote.bare(),local.bare(),0);
+	event->to().c_str(),event->from().c_str(),this);
+    Engine::enqueue(message(JBPresence::Probe,event->from().bare(),event->to().bare(),0));
+    return true;
 }
 
-bool YJBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
-	const JabberID& remote, Presence presence)
+bool YJBPresence::notifySubscribe(JBEvent* event, Presence presence)
 {
     XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
-	presenceText(presence),local.c_str(),remote.c_str(),this);
+	presenceText(presence),event->to().c_str(),event->from().c_str(),this);
     // Respond if auto subscribe
     if (event->stream() && 0 != (autoSubscribe() & XMPPUser::From) &&
 	(presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe)) {
@@ -618,12 +759,13 @@ bool YJBPresence::notifySubscribe(JBEvent* event, const JabberID& local,
 	    presence = JBPresence::Subscribed;
 	else
 	    presence = JBPresence::Unsubscribed;
-	XMLElement* xml = createPresence(local.bare(),remote.bare(),presence);
+	XMLElement* xml = createPresence(event->to().bare(),event->from().bare(),presence);
 	event->stream()->sendStanza(xml);
 	return true;
     }
     // Enqueue message
-    return message(presence,remote.bare(),local.bare(),0);
+    Engine::enqueue(message(presence,event->from().bare(),event->to().bare(),0));
+    return true;
 }
 
 void YJBPresence::notifySubscribe(XMPPUser* user, Presence presence)
@@ -633,17 +775,15 @@ void YJBPresence::notifySubscribe(XMPPUser* user, Presence presence)
     XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
 	presenceText(presence),user->local()->jid().bare().c_str(),
 	user->jid().bare().c_str(),this);
-    // Enqueue message
-    message(presence,user->jid().bare(),user->local()->jid().bare(),0);
+    Engine::enqueue(message(presence,user->jid().bare(),user->local()->jid().bare(),0));
 }
 
-bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
-	const JabberID& remote, bool available)
+bool YJBPresence::notifyPresence(JBEvent* event, bool available)
 {
     // Check audio properties and availability for received resource
     bool capAudio = false;
     if (event && event->element()) {
-	JIDResource* res = new JIDResource(remote.resource());
+	JIDResource* res = new JIDResource(event->from().resource());
 	if (res->fromXML(event->element())) {
 	    capAudio = res->hasCap(JIDResource::CapAudio);
 	    available = res->available();
@@ -651,11 +791,12 @@ bool YJBPresence::notifyPresence(JBEvent* event, const JabberID& local,
 	TelEngine::destruct(res);
     }
     Debug(this,DebugAll,"notifyPresence local=%s remote=%s available=%s [%p]",
-	local.c_str(),remote.c_str(),String::boolText(available),this);
+	event->to().c_str(),event->from().c_str(),String::boolText(available),this);
     // Notify presence to module and enqueue message in engine
-    plugin.processPresence(local,remote,available,capAudio);
-    return message(available ? JBPresence::None : JBPresence::Unavailable,
-	remote.bare(),local.bare(),0);
+    plugin.processPresence(event->to(),event->from(),available,capAudio);
+    Engine::enqueue(message(available ? JBPresence::None : JBPresence::Unavailable,
+	event->from().bare(),event->to().bare(),0));
+    return true;
 }
 
 // Notify plugin and enqueue message in engine
@@ -669,9 +810,9 @@ void YJBPresence::notifyPresence(XMPPUser* user, JIDResource* resource)
 	String::boolText(resource->available()),this);
     plugin.processPresence(user->local()->jid(),remote,resource->available(),
 	resource->hasCap(JIDResource::CapAudio));
-    message(resource->available() ? JBPresence::None : JBPresence::Unavailable,
+    Engine::enqueue(message(resource->available() ? JBPresence::None : JBPresence::Unavailable,
 	user->jid().bare(),user->local()->jid().bare(),
-	String::boolText(user->subscribedTo()));
+	String::boolText(user->subscribedTo())));
 }
 
 void YJBPresence::notifyNewUser(XMPPUser* user)
@@ -685,56 +826,51 @@ void YJBPresence::notifyNewUser(XMPPUser* user)
 	JIDResource::CapAudio));
 }
 
-bool YJBPresence::message(Presence presence, const char* from, const char* to,
+Message* YJBPresence::message(int presence, const char* from, const char* to,
 	const char* subscription)
 {
     Message* m = 0;
-    const char* type = 0;
     const char* status = 0;
     const char* operation = 0;
     switch (presence) {
 	case JBPresence::None:
-	    type = MODULE_MSG_NOTIFY;
+	    m = new Message("resource.notify");
 	    status = "online";
 	    break;
 	case JBPresence::Unavailable:
-	    type = MODULE_MSG_NOTIFY;
+	    m = new Message("resource.notify");
 	    status = "offline";
 	    break;
 	case JBPresence::Subscribed:
-	    type = MODULE_MSG_NOTIFY;
+	    m = new Message("resource.notify");
 	    status = "subscribed";
 	    break;
 	case JBPresence::Unsubscribed:
-	    type = MODULE_MSG_NOTIFY;
+	    m = new Message("resource.notify");
 	    status = "unsubscribed";
 	    break;
 	case JBPresence::Probe:
-	    type = MODULE_MSG_SUBSCRIBE;
+	    m = new Message("resource.notify");
 	    operation = "probe";
 	    break;
 	case JBPresence::Subscribe:
-	    type = MODULE_MSG_SUBSCRIBE;
+	    m = new Message("resource.subscribe");
 	    operation = "subscribe";
 	    break;
 	case JBPresence::Unsubscribe:
-	    type = MODULE_MSG_SUBSCRIBE;
+	    m = new Message("resource.subscribe");
 	    operation = "unsubscribe";
 	    break;
 	default:
-	    return 0;
+	    m = new Message("resource.notify");
     }
-    m = new Message(type);
     m->addParam("module",s_name);
-    if (operation)
-	m->addParam("operation",operation);
-    if (subscription)
-	m->addParam("subscription",subscription);
-    if (status)
-	m->addParam("status",status);
-    m->addParam("from",from);
     m->addParam("to",to);
-    return Engine::enqueue(m);
+    addValidParam(*m,"from",from);
+    addValidParam(*m,"operation",operation);
+    addValidParam(*m,"subscription",subscription);
+    addValidParam(*m,"status",status);
+    return m;
 }
 
 
@@ -1276,12 +1412,12 @@ bool ResNotifyHandler::received(Message& msg)
     if (status.null()) {
 	Debug(&plugin,DebugNote,
 	    "Received '%s' from '%s' with missing 'status' parameter",
-	    MODULE_MSG_NOTIFY,from.c_str());
+	    msg.c_str(),from.c_str());
 	return true;
     }
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
-	MODULE_MSG_NOTIFY,from.c_str(),status.c_str());
+	msg.c_str(),from.c_str(),status.c_str());
     if (s_presence->addOnPresence())
 	process(from,to,status,msg.getBoolValue("subscription",false));
     else
@@ -1428,11 +1564,11 @@ bool ResSubscribeHandler::received(Message& msg)
     else {
 	Debug(&plugin,DebugNote,
 	    "Received '%s' with missing or unknown parameter: operation=%s",
-	    MODULE_MSG_SUBSCRIBE,msg.getValue("operation"));
+	    msg.c_str(),msg.getValue("operation"));
 	return true;
     }
     // *** Everything is OK. Process the message
-    XDebug(&plugin,DebugAll,"Accepted '%s'.",MODULE_MSG_SUBSCRIBE);
+    XDebug(&plugin,DebugAll,"Accepted '%s'",msg.c_str());
     process(from,to,presence);
     return true;
 }
@@ -1496,12 +1632,55 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	}
 	// No audio resource for remote user: send probe
 	// Send probe fails: Assume remote user unavailable
-	if (!user->probe(0))
-	    s_presence->notifyPresence(0,to,from,false);
+	if (!user->probe(0)) {
+	    XMLElement* xml = JBPresence::createPresence(to,from,JBPresence::Unavailable);
+	    JBEvent* event = new JBEvent(JBEvent::Presence,0,xml);
+	    s_presence->notifyPresence(event,false);
+	    TelEngine::destruct(event);
+	}
 	break;
     }
     user->unlock();
     user->deref();
+}
+
+/**
+ * UserLoginHandler
+ */
+bool UserLoginHandler::received(Message& msg)
+{
+    if (!s_jabber && s_jabber->protocol() == JBEngine::Client)
+	return false;
+    if (s_name != msg.getValue("protocol"))
+	return false;
+    NamedString* oper = msg.getParam("operation");
+    if (!(oper && (*oper == "login" || *oper == "logout")))
+	return false;
+    JabberID jid(msg.getValue("account"));
+    Debug(&plugin,DebugInfo,"user.login for account=%s operation=%s",
+	jid.safe(),oper->c_str());
+    // Login/logout: create/destroy the stream
+    if (*oper == "login") {
+	JBClientStream* stream = s_jabber->createClientStream(msg,&jid);
+	if (!stream)
+	    return false;
+	TelEngine::destruct(stream);
+    }
+    else {
+	JBStream* stream = s_jabber->getStream(&jid,false);
+	if (!(stream && stream->type() == JBEngine::Client)) {
+	    TelEngine::destruct(stream);
+	    return true;
+	}
+	if (stream->state() == JBStream::Running) {
+	    XMLElement* xml = JBPresence::createPresence(0,0,JBPresence::Unavailable);
+	    stream->sendStanza(xml);
+	}
+	stream->terminate(true,0,XMPPError::SUnavailable,
+	    msg.getValue("reason,","Logout"),true);
+	TelEngine::destruct(stream);
+    }
+    return true;
 }
 
 /**
@@ -1523,6 +1702,7 @@ YJGDriver::~YJGDriver()
     TelEngine::destruct(s_jingle);
     TelEngine::destruct(s_message);
     TelEngine::destruct(s_presence);
+    TelEngine::destruct(s_clientPresence);
     TelEngine::destruct(s_stream);
     TelEngine::destruct(s_jabber);
 }
@@ -1558,23 +1738,26 @@ void YJGDriver::initialize()
 	s_knownCodecs.add("98", "iLBC",    "8000",  "", "ilbc20");
 	s_knownCodecs.add("98", "iLBC",    "8000",  "", "ilbc30");
 
+	// Jabber protocol to use
+	JBEngine::Protocol proto = (Engine::mode() == Engine::Client) ?
+	    JBEngine::Client : JBEngine::Component;
+	NamedString* p = sect->getParam("protocol");
+	if (p)
+	    proto = (JBEngine::Protocol)JBEngine::lookupProto(*p,proto);
+
 	// Create Jabber engine and services
-	int p = JBEngine::lookupProto(sect->getValue("protocol"),-1);
-	JBEngine::Protocol proto;
-	if (p == -1)
-	    if (Engine::mode() == Engine::Client)
-		proto = JBEngine::Client;
-	    else
-		proto = JBEngine::Component;
-	else
-	    proto = (JBEngine::Protocol)p;
 	s_jabber = new YJBEngine(proto);
 	s_jingle = new YJGEngine(s_jabber,0);
 	s_message = new YJBMessage(s_jabber,1);
-	s_presence = new YJBPresence(s_jabber,0);
-	// We don't need stream notifications for Component protocol
-	if (s_jabber->protocol() != JBEngine::Component)
-	    s_stream = new YJBStreamService(s_jabber,1);
+	// Create protocol dependent services
+	// Don't create presence service for client protocol: presence is kept by client streams
+	// Instantiate event handler for messages related to presence when running in client mode
+	if (s_jabber->protocol() != JBEngine::Client)
+	    s_presence = new YJBPresence(s_jabber,0);
+	else {
+	    s_clientPresence = new YJBClientPresence(s_jabber,0);
+	    s_stream = new YJBStreamService(s_jabber,0);
+	}
 
 	// Attach services to the engine
 	s_jabber->attachService(s_jingle,JBEngine::ServiceJingle);
@@ -1582,8 +1765,14 @@ void YJGDriver::initialize()
 	s_jabber->attachService(s_jingle,JBEngine::ServiceIq);
 	s_jabber->attachService(s_jingle,JBEngine::ServiceStream);
 	s_jabber->attachService(s_message,JBEngine::ServiceMessage);
-	s_jabber->attachService(s_presence,JBEngine::ServicePresence);
-	s_jabber->attachService(s_presence,JBEngine::ServiceDisco);
+	if (s_presence) {
+	    s_jabber->attachService(s_presence,JBEngine::ServicePresence);
+	    s_jabber->attachService(s_presence,JBEngine::ServiceDisco);
+	}
+	else if (s_clientPresence) {
+	    s_jabber->attachService(s_clientPresence,JBEngine::ServicePresence);
+	    s_jabber->attachService(s_clientPresence,JBEngine::ServiceRoster);
+	}
 	if (s_stream)
 	    s_jabber->attachService(s_stream,JBEngine::ServiceStream);
 
@@ -1591,6 +1780,8 @@ void YJGDriver::initialize()
 	installRelay(Halt);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
+	if (s_jabber->protocol() == JBEngine::Client)
+	    Engine::install(new UserLoginHandler);
 	setup();
     }
 
@@ -1600,7 +1791,8 @@ void YJGDriver::initialize()
     s_jabber->initialize();
     s_jingle->initialize();
     s_message->initialize();
-    s_presence->initialize();
+    if (s_presence)
+	s_presence->initialize();
     if (s_stream)
 	s_stream->initialize();
 
@@ -1647,6 +1839,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     JabberID called;
     bool available = true;
     String error;
+    const char* errStr = "failure";
     while (true) {
 	if (!msg.userData()) {
 	    error = "No data channel";
@@ -1654,15 +1847,44 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	}
 	// Component: prepare caller/called. check availability
 	// Client: just check if caller/called are full JIDs
-	if (s_jabber->protocol() == JBEngine::Component)
+	if (s_jabber->protocol() == JBEngine::Component) {
 	    setComponentCall(caller,called,msg.getValue("caller"),dest,available,error);
-	else if (!(caller.isFull() && called.isFull()))
+	    break;
+	}
+	caller.set(msg.getValue("caller"));
+	called.set(dest);
+	// Check if a stream exists. Try to get a resource for caller and/or called
+	JBStream* stream = s_jabber->getStream(&caller,false);
+	if (!(stream && stream->type() == JBEngine::Client)) {
+	    error = "No stream";
+	    errStr = "noconn";
+	    TelEngine::destruct(stream);
+	    break;
+	}
+	if (!caller.resource()) {
+	    Debug(this,DebugAll,"Set resource '%s' for caller '%s'",
+		stream->local().resource().c_str(),caller.c_str());
+	    caller.resource(stream->local().resource());
+	}
+	if (!called.resource()) {
+	    JBClientStream* client = static_cast<JBClientStream*>(stream);
+	    XMPPUser* user = client->getRemote(called);
+	    if (user) {
+		user->lock();
+		JIDResource* res = user->getAudio(false);
+		if (res)
+		    called.resource(res->name());
+		user->unlock();
+		TelEngine::destruct(user);
+	    }
+	}
+	if (!(caller.isFull() && called.isFull()))
 	    error << "Incomplete caller=" << caller << " or called=" << called;
 	break;
     }
     if (error) {
 	Debug(this,DebugNote,"Jingle call failed. %s",error.c_str());
-	msg.setParam("error","failure");
+	msg.setParam("error",errStr);
 	return false;
     }
     // Parameters OK. Create connection and init channel
@@ -1848,15 +2070,18 @@ bool YJGDriver::received(Message& msg, int id)
 	lock();
 	channels().clear();
 	unlock();
-	s_presence->cleanup();
+	if (s_presence)
+	    s_presence->cleanup();
 	s_jabber->cleanup();
 	s_jabber->cancelThreads();
 	s_jingle->cancelThreads();
-	s_presence->cancelThreads();
+	if (s_presence)
+	    s_presence->cancelThreads();
 	s_jabber->detachService(s_presence);
 	s_jabber->detachService(s_jingle);
 	s_jabber->detachService(s_message);
 	s_jabber->detachService(s_stream);
+	s_jabber->detachService(s_clientPresence);
     }
     return Driver::received(msg,id);
 }

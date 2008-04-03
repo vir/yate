@@ -140,6 +140,7 @@ private:
     bool m_counted;
     bool m_utility;
     bool m_billing;
+    bool m_keepTarget;
 };
 
 // The data consumer computes energy and noise levels (if required) and
@@ -667,12 +668,13 @@ ConfSource::~ConfSource()
 //  conference room; noise and echo suppression are also set here
 ConfChan::ConfChan(const String& name, const NamedList& params, bool counted, bool utility)
     : Channel(__plugin,0,true),
-      m_counted(counted), m_utility(utility), m_billing(false)
+      m_counted(counted), m_utility(utility), m_billing(false), m_keepTarget(true)
 {
     DDebug(this,DebugAll,"ConfChan::ConfChan(%s,%p) %s [%p]",
 	name.c_str(),&params,id().c_str(),this);
     // much of the defaults depend if this is an utility channel or not
     m_billing = params.getBoolValue("billing",false);
+    m_keepTarget = params.getBoolValue("keeptarget",false);
     bool smart = params.getBoolValue("smart",!m_utility);
     bool echo = params.getBoolValue("echo",m_utility);
     bool voice = params.getBoolValue("voice",true);
@@ -772,10 +774,12 @@ void ConfChan::populateMsg(Message& msg) const
 // Alter messages, possibly turn them into room event notifications
 void ConfChan::alterMsg(Message& msg, const char* event)
 {
-    String* target = msg.getParam("targetid");
-    // if the message is already targeted to something else don't touch it
-    if (target && *target && (id() != *target))
-	return;
+    if (m_keepTarget) {
+	String* target = msg.getParam("targetid");
+	// if the message is already targeted to something else don't touch it
+	if (target && *target && (id() != *target))
+	    return;
+    }
     populateMsg(msg);
     // if we were the target or it was none send it to the room's notifier
     if (m_room && m_room->notify()) {

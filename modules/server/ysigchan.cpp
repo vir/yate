@@ -1056,17 +1056,12 @@ bool SigDriver::received(Message& msg, int id)
     String target;
 
     switch (id) {
-	case Masquerade: {
-	    String s = msg.getValue("id");
-	    if (s.startsWith(prefix()))
-		return Driver::received(msg,id);
-	    // Check for a link that would handle the message
-	    int found = s.find('/');
-	    if (found < 1)
-		return Driver::received(msg,id);
-	    SigLink* link = findLink(s.substr(0,found),false);
-	    if (link && link->masquerade(s,msg))
-		return false;
+	case Masquerade:
+	    target = msg.getValue("id");
+	    if (!target.startsWith(prefix())) {
+		SigLink* link = findLink(target.substr(0,target.find('/')),false);
+		if (link && link->masquerade(target,msg))
+		    return false;
 	    }
 	    return Driver::received(msg,id);
 	case Status:
@@ -1075,13 +1070,12 @@ bool SigDriver::received(Message& msg, int id)
 	    if (!target || target == name() || target.startsWith(prefix()))
 		return Driver::received(msg,id);
 	    break;
-	case Drop: {
-	    String s = msg.getValue("id");
-	    if (s.startsWith(prefix()))
-		break;
-	    // Check for a link that would handle the message
-	    SigLink* link = findLink(s.substr(0,s.find('/')),false);
-	    return link && link->drop(s,msg);
+	case Drop:
+	    target = msg.getValue("id");
+	    if (!target.startsWith(prefix())) {
+		SigLink* link = findLink(target.substr(0,target.find('/')),false);
+		if (link && link->drop(target,msg))
+		    return true;
 	    }
 	    return Driver::received(msg,id);
 	case Halt:

@@ -337,7 +337,7 @@ bool AAAHandler::loadQuery()
 {
     m_query = s_cfg.getValue(name(),"query");
     indirectQuery(m_query);
-    return m_query;
+    return !m_query.null();
 }
 
 // replace a "@query" with the result of that query
@@ -591,7 +591,7 @@ bool EventNotify::loadQuery()
 	Debug(&module,DebugNote,
 	    "Notify(%s). Invalid 'subscribe_notify' in section '%s'",
 	    m_event.c_str(),m_name.c_str());
-    return m_querySubs;
+    return !m_querySubs.null();
 }
 
 // Fill account/query and dispatch the message
@@ -838,7 +838,7 @@ bool SubscribeTimerHandler::loadQuery()
     if (!m_queryExpire)
 	Debug(&module,DebugNote,
 	    "Invalid 'subscribe_expire' in section '%s'",name().safe());
-    return m_queryExpire;
+    return !m_queryExpire.null();
 }
 
 bool SubscribeTimerHandler::received(Message& msg)

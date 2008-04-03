@@ -238,6 +238,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\engine\Base64.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\Channel.cpp"
 				>
 				<FileConfiguration

@@ -950,7 +950,7 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
 
     int level = params.getIntValue("debuglevel",m_init ? debugLevel() : plugin.debugLevel());
     if (level >= 0) {
-	debugEnabled(level);
+	debugEnabled(0 != level);
 	debugLevel(level);
     }
 

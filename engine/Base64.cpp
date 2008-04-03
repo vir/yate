@@ -69,7 +69,7 @@ static inline bool valid(char ch)
 static inline int validLiberal(char ch)
 {
     for (unsigned int i = 0; i < s_ignore.length(); i++)
-	if (s_ignore[i] == ch)
+	if (s_ignore.at(i) == ch)
 	    return -1;
     return valid(ch) ? 1 : 0;
 }

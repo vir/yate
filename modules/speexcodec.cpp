@@ -28,6 +28,12 @@
 
 extern "C"  {
 #include <speex.h>
+#ifdef _WINDOWS
+/* For some reason the DLL does not export the mode variables */
+#define speex_nb_mode (*speex_lib_get_mode(SPEEX_MODEID_NB))
+#define speex_wb_mode (*speex_lib_get_mode(SPEEX_MODEID_WB))
+#define speex_uwb_mode (*speex_lib_get_mode(SPEEX_MODEID_UWB))
+#endif
 }
 
 using namespace TelEngine;
@@ -316,7 +322,7 @@ void SpeexCodec::Consume(const DataBlock& data, unsigned long tStamp)
 	   m_encoding ? "en" : "de", frames, m_data.length(), consumed, outdata.length(), frame_size, tStamp, ret);
 
     if (frames) {
-	m_data.cut(-consumed);
+	m_data.cut(-(int)consumed);
 	getTransSource()->Forward(outdata, tStamp);
     }
 

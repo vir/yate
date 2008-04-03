@@ -34,6 +34,8 @@ Name: "server"; Description: "Server files"; Types: full server
 Name: "server\cluster"; Description: "Server clustering modules"; Types: full
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
+Name: "driver\openssl"; Description: "SSL/TLS encryption support"; Types: full client server
+Name: "driver\openssl\run"; Description: "OpenSSL runtime libraries"; Types: full client server
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
@@ -47,6 +49,8 @@ Name: "database\pg\run"; Description: "PostgreSQL client libraries"; Types: full
 Name: "codecs"; Description: "Audio codecs"; Types: full client server
 Name: "codecs\gsm"; Description: "GSM codec"; Types: full client server
 Name: "codecs\ilbc"; Description: "iLBC codec"; Types: full client server
+Name: "codecs\speex"; Description: "SPEEX codec"; Types: full client server
+Name: "codecs\speex\run"; Description: "SPEEX runtime libraries"; Types: full client server
 Name: "external"; Description: "External interfaces"; Types: full server
 Name: "external\php"; Description: "PHP5 scripting"; Types: full server
 Name: "debug"; Description: "Extra debugging support"; Types: full engine
@@ -109,20 +113,24 @@ Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h3
 Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
 Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
 Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
+Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Components: driver\openssl
 
 Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Components: codecs\gsm
 Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc
+Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Components: codecs\speex
 
 Source: "Release\server\mysqldb.yate"; DestDir: "{app}\modules\server"; Components: database\my
 Source: "Runtimes\libmysql.dll"; DestDir: "{app}"; Components: database\my\run
 Source: "Release\server\pgsqldb.yate"; DestDir: "{app}\modules\server"; Components: database\pg
 Source: "Runtimes\libpq.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\comerr32.dll"; DestDir: "{app}"; Components: database\pg\run
-Source: "Runtimes\libeay32.dll"; DestDir: "{app}"; Components: database\pg\run
-Source: "Runtimes\ssleay32.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\krb5_32.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libintl-2.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\libiconv-2.dll"; DestDir: "{app}"; Components: database\pg\run
+Source: "Runtimes\libeay32.dll"; DestDir: "{app}"; Components: database\pg\run driver\openssl\run
+Source: "Runtimes\ssleay32.dll"; DestDir: "{app}"; Components: database\pg\run driver\openssl\run
+Source: "Runtimes\libspeex.dll"; DestDir: "{app}"; Components: codecs\speex\run
+Source: "Runtimes\libspeexdsp.dll"; DestDir: "{app}"; Components: codecs\speex\run
 
 Source: "..\COPYING"; DestName: "COPYING.txt"; DestDir: "{app}"
 Source: "..\packing\yate.url"; DestDir: "{app}"

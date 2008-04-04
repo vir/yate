@@ -958,10 +958,15 @@ bool NetMedia::update(const char* formats, int rport, int lport)
     bool chg = false;
     String tmp(formats);
     if (m_formats != tmp) {
-	chg = true;
-	m_formats = tmp;
-	int q = m_formats.find(',');
-	m_format = m_formats.substr(0,q);
+	if ((tmp.find(',') < 0) && m_formats && m_formats.find(tmp) < 0)
+	    Debug(&plugin,DebugInfo,"Not changing to '%s' from '%s' [%p]",
+		formats,m_formats.c_str(),this);
+	else {
+	    chg = true;
+	    m_formats = tmp;
+	    int q = m_formats.find(',');
+	    m_format = m_formats.substr(0,q);
+	}
     }
     if (rport >= 0) {
 	tmp = rport;

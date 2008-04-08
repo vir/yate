@@ -2887,7 +2887,7 @@ private:
  * Base64 encoder/decoder class
  * @short Base64 encoder/decoder class
  */
-class Base64 : public DataBlock
+class YATE_API Base64 : public DataBlock
 {
 public:
     /**

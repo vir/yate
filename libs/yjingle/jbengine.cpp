@@ -298,11 +298,12 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
  */
 
 JBEngine::JBEngine(Protocol proto)
-    : Mutex(true), JBThreadList(this), m_protocol(proto),
+    : Mutex(true), m_protocol(proto),
     m_restartUpdateInterval(JB_RESTART_UPDATE), m_restartCount(JB_RESTART_COUNT),
     m_printXml(0), m_identity(0), m_componentCheckFrom(1), m_serverMutex(true),
     m_servicesMutex(true), m_initialized(false)
 {
+    JBThreadList::setOwner(this);
     for (int i = 0; i < ServiceCount; i++)
 	 m_services[i].setDelete(false);
     debugName("jbengine");
@@ -1850,17 +1851,12 @@ bool XMPPUserRoster::timeout(u_int64_t time)
 // Build the service
 JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jbpresence",params,prio),
-    JBThreadList(this),
-    m_autoSubscribe((int)XMPPUser::None),
-    m_delUnavailable(false),
-    m_autoRoster(false),
-    m_addOnSubscribe(false),
-    m_addOnProbe(false),
-    m_addOnPresence(false),
-    m_autoProbe(true),
-    m_probeInterval(1800000),
+    m_autoSubscribe((int)XMPPUser::None), m_delUnavailable(false),
+    m_autoRoster(false), m_addOnSubscribe(false), m_addOnProbe(false),
+    m_addOnPresence(false), m_autoProbe(true), m_probeInterval(1800000),
     m_expireInterval(300000)
 {
+    JBThreadList::setOwner(this);
 }
 
 JBPresence::~JBPresence()

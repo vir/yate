@@ -1075,7 +1075,6 @@ private:
 class YJINGLE_API JBThreadList
 {
     friend class JBThread;
-    friend class JBStream;
 public:
     /**
      * Get the enabler owning this list
@@ -1097,9 +1096,16 @@ protected:
      * Constructor
      * @param owner The owner of this list
      */
-    JBThreadList(DebugEnabler* owner)
+    JBThreadList(DebugEnabler* owner = 0)
 	: m_owner(owner), m_mutex(true), m_cancelling(false)
 	{ m_threads.setDelete(false); }
+
+    /**
+     * Set the enabler owning this list
+     * @param dbg The new owner of this list
+     */
+    inline void setOwner(DebugEnabler* dbg)
+	{ m_owner = dbg; }
 
 private:
     DebugEnabler* m_owner;               // The owner of this list
@@ -1510,9 +1516,8 @@ public:
      * @param prio The priority of this service
      */
     inline JBMessage(JBEngine* engine, const NamedList* params, int prio = 0)
-	: JBService(engine,"jbmsgrecv",params,prio),
-	JBThreadList(this), m_syncProcess(true)
-	{}
+	: JBService(engine,"jbmsgrecv",params,prio), m_syncProcess(true)
+	{ JBThreadList::setOwner(this); }
 
     /**
      * Destructor. Cancel private thread(s)

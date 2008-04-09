@@ -102,7 +102,7 @@ bool JGAudioList::createList(String& dest, bool synonym, const char* sep)
 	JGAudio* a = static_cast<JGAudio*>(o->get());
 	dest.append(synonym?a->synonym:a->name,sep);
     }
-    return dest.length();
+    return (0 != dest.length());
 }
 
 

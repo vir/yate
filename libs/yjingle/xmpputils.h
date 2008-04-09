@@ -564,6 +564,13 @@ public:
 	}
 
     /**
+     * Set the name of this identity
+     * @param name New identity name
+     */
+    inline void setName(const char* name)
+	{ if (name) m_name = name; }
+
+    /**
      * Lookup for a text associated with a given category
      * @return The category's name
      */

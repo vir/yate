@@ -321,7 +321,7 @@ JBEngine::~JBEngine()
 	for (GenObject* o = 0; 0 != (o = iter.get());)
 	    TelEngine::destruct(static_cast<JBStream*>(o));
     }
-    TelEngine::destruct((RefObject*)m_identity);
+    TelEngine::destruct(m_identity);
     XDebug(this,DebugAll,"~JBEngine [%p]",this);
 }
 
@@ -860,7 +860,7 @@ bool JBEngine::processDisco(JBEvent* event)
     XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
     m_features.addTo(query);
     if (m_identity) {
-	*(String*)(m_identity) = stream->local();
+	m_identity->setName(stream->local());
 	query->addChild(m_identity->toXML());
     }
     iq->addChild(query);

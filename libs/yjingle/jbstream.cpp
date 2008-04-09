@@ -237,10 +237,12 @@ JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
     m_timeToFillRestart(0), m_fillRestartInterval(0),
     m_local(localJid.node(),localJid.domain(),localJid.resource()),
     m_remote(remoteJid.node(),remoteJid.domain(),remoteJid.resource()),
-    m_engine(engine), m_socket(engine,this,info.address(),info.port()),
+    m_engine(engine), m_socket(engine,0,info.address(),info.port()),
     m_lastEvent(0), m_terminateEvent(0), m_startEvent(0), m_recvCount(-1),
     m_streamXML(0), m_declarationSent(0), m_nonceCount(0)
 {
+    m_socket.m_stream = this;
+
     if (!engine) {
 	Debug(DebugNote,"Can't create stream without engine [%p]",this);
 	return;

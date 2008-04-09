@@ -2,10 +2,10 @@
 <?
 /* Sample PBX assistant for the Yate PHP interface
 To use add in regexroute.conf
-                                                                                
+
    ^NNN$=external/nochan/pbxassist.php;real_callto=real/resource/to/call
 
-You will also need a priority= in extmodule.conf [general] lower than 100
+You will also need a priority= in extmodule.conf [general] in range 50-85
 */
 require_once("libyate.php");
 
@@ -31,12 +31,12 @@ function onDisconnect(&$ev,$reason)
     if ($reason == "busy") {
 	$m = new Yate("call.execute");
 	$m->id = $ev->id;
-	$m->params["id"] = $ourcallid;
-	$m->params["callto"] = "tone/info";
+	$m->SetParam("id",$ourcallid);
+	$m->SetParam("callto","tone/info");
 	$m->Dispatch();
 	// Also send progressing so the tone goes through in early media
 	$m = new Yate("call.progress");
-	$m->params["targetid"] = $ourcallid;
+	$m->SetParam("targetid",$ourcallid);
 	$m->Dispatch();
 	return true;
     }
@@ -65,7 +65,7 @@ while ($ourcallid) {
 		    $callto = $ev->GetValue("real_callto");
 		    if ($ourcallid && $callto) {
 			// Put back the real callto and let the message flow
-			$ev->params["callto"] = $callto;
+			$ev->SetParam("callto",$callto);
 			Yate::Install("chan.hangup",75,"id",$ourcallid);
 			Yate::Install("chan.disconnected",75,"id",$ourcallid);
 			onStartup($ev);

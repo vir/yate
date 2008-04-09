@@ -30,12 +30,18 @@
 
 using namespace TelEngine;
 
-static TokenDict s_dictCicLock[] = {
-    {"local",         SignallingCircuit::LockLocal},
-    {"remote",        SignallingCircuit::LockRemote},
-    {"localchanged",  SignallingCircuit::LockLocalChanged},
+TokenDict SignallingCircuit::s_lockNames[] = {
+    {"localhw",            LockLocalHWFail},
+    {"localmaint",         LockLocalMaint},
+    {"localhwchanged",     LockLocalHWFailChg},
+    {"localmaintchanged",  LockLocalMaintChg},
+    {"remotehw",           LockRemoteHWFail},
+    {"remotemaint",        LockRemoteMaint},
+    {"remotehwchanged",    LockRemoteHWFailChg},
+    {"remotemaintchanged", LockRemoteMaintChg},
     {0,0},
 };
+
 
 /**
  * SignallingCallControl
@@ -44,8 +50,8 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
 	const char* msgPrefix)
     : Mutex(true),
     m_verifyEvent(false),
+    m_verifyTimer(0),
     m_circuits(0),
-    m_cicLock(0),
     m_strategy(SignallingCircuitGroup::Increment),
     m_exiting(false),
     m_dumper(0)
@@ -69,8 +75,9 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
     // Message prefix
     m_msgPrefix = params.getValue("message-prefix",msgPrefix);
 
-    // Circuit lock
-    SignallingUtils::encodeFlags(0,m_cicLock,params.getValue("lockcircuits"),s_dictCicLock);
+    // Verify event timer
+    m_verifyTimer.interval(params,"verifyeventinterval",10,120,true,true);
+    m_verifyTimer.start();
 }
 
 SignallingCallControl::~SignallingCallControl()
@@ -94,10 +101,6 @@ void SignallingCallControl::attach(SignallingCircuitGroup* circuits)
     if (m_circuits) {
 	Lock lock(m_circuits);
 	m_circuits->setStrategy(m_strategy);
-	DDebug(DebugAll,"SignallingCallControl. Attached group (%p) lock=%d [%p]",
-	    m_circuits,m_cicLock,this);
-	for (ObjList* o = m_circuits->circuits().skipNull(); o; o = o->skipNext())
-	    (static_cast<SignallingCircuit*>(o->get()))->setLock(m_cicLock);
     }
 }
 
@@ -189,11 +192,11 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 	}
     }
     // Verify ?
-    if (m_verifyEvent) {
-	m_verifyEvent = false;
+    if (m_verifyTimer.timeout(when.msecNow()) && m_verifyEvent) {
 	SignallingMessage* msg = new SignallingMessage;
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::Verify,msg,this);
 	buildVerifyEvent(msg->params());
+	m_verifyTimer.start(when.msecNow());
 	return event;
     }
     // Terminate if exiting and no more calls
@@ -446,6 +449,41 @@ bool SignallingCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* 
 {
     XDebug(m_group,DebugStub,"SignallingCircuit::sendEvent(%u,%p) [%p]",type,params,this);
     return false;
+}
+
+// Set/reset circuit flag(s)
+inline bool cicFlag(SignallingCircuit* cic, bool set, int flag, int chgFlag, bool setChg)
+{
+    if (chgFlag)
+	if (setChg)
+	    cic->setLock(chgFlag);
+	else
+	    cic->resetLock(chgFlag);
+    if (set == (0 != cic->locked(flag)))
+	return false;
+    if (set)
+	cic->setLock(flag);
+    else
+	cic->resetLock(flag);
+    return true;
+}
+
+// Set/reset HW failure lock flag
+bool SignallingCircuit::hwLock(bool set, bool remote, bool changed, bool setChanged)
+{
+    Lock lock(m_mutex);
+    int flag = remote ? LockRemoteHWFail : LockLocalHWFail;
+    int chgFlag = changed ? (remote ? LockRemoteHWFailChg : LockLocalHWFailChg) : 0;
+    return cicFlag(this,set,flag,chgFlag,setChanged);
+}
+
+// Set/reset maintenance lock flag
+bool SignallingCircuit::maintLock(bool set, bool remote, bool changed, bool setChanged)
+{
+    Lock lock(m_mutex);
+    int flag = remote ? LockRemoteMaint : LockLocalMaint;
+    int chgFlag = changed ? (remote ? LockRemoteMaintChg : LockLocalMaintChg) : 0;
+    return cicFlag(this,set,flag,chgFlag,setChanged);
 }
 
 // Add event to queue

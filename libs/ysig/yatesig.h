@@ -676,6 +676,18 @@ public:
 	{ return m_exiting; }
 
     /**
+     * Check the verify event flag. Reset it if true is returned
+     * @return True if the verify event flag is set
+     */
+    inline bool verify() {
+	    Lock lock(this);
+	    if (!m_verifyEvent)
+		return false;
+	    m_verifyEvent = false;
+	    return true;
+	}
+
+    /**
      * Get the prefix used by this call controller when decoding message parameters or
      *  retrive message parameters from a list
      * @return Message parameters prefix used by this call controller
@@ -760,6 +772,13 @@ public:
 	{ reason = "not-implemented"; return 0; }
 
     /**
+     * Build the parameters of a Verify event
+     * @param params The list of parameters to fill
+     */
+    virtual void buildVerifyEvent(NamedList& params)
+	{}
+
+    /**
      * Set or remove the data dumper
      * @param dumper Pointer to the data dumper object, 0 to remove
      */
@@ -792,13 +811,6 @@ protected:
     virtual SignallingEvent* processCircuitEvent(SignallingCircuitEvent& event,
 	SignallingCall* call = 0)
 	{ return 0; }
-
-    /**
-     * Build the parameters of a Verify event
-     * @param params The list of parameters to fill
-     */
-    virtual void buildVerifyEvent(NamedList& params)
-	{}
 
     /**
      * Clear call list
@@ -842,9 +854,13 @@ protected:
      */
     bool m_verifyEvent;
 
+    /**
+     * Timer used to raise verify events
+     */
+    SignallingTimer m_verifyTimer;
+
 private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
-    int m_cicLock;                       // Flags to be locked when a circuit group is attached to this controller 
     int m_strategy;                      // Strategy to allocate circuits for outgoing calls
     bool m_exiting;                      // Call control is terminating. Generate a Disable event when no more calls
     SignallingDumper* m_dumper;          // Data dumper in use
@@ -1179,11 +1195,21 @@ public:
      * Lock circuit flags
      */
     enum LockFlags {
-	LockLocal             = 0x0001,  // Local side of the circuit is locked
-	LockRemote            = 0x0002,  // Remote side of the circuit is locked
-	LockLocalHWFailure    = 0x0004,  // Local side of the circuit is locked due to HW failure
-	LockRemoteHWFailure   = 0x0008,  // Remote side of the circuit is locked due to HW failure
-	LockLocalChanged      = 0x0010,  // Local side of the circuit is locked
+	LockLocalHWFail       = 0x0001,  // Local side of the circuit is locked due to HW failure
+	LockLocalMaint        = 0x0002,  // Local side of the circuit is locked for maintenance
+	LockLocalHWFailChg    = 0x0010,  // Local HW failure flag changed
+	LockLocalMaintChg     = 0x0020,  // Local maintenance flag changed
+	LockRemoteHWFail      = 0x0100,  // Remote side of the circuit is locked due to HW failure
+	LockRemoteMaint       = 0x0200,  // Remote side of the circuit is locked for maintenance
+	LockRemoteHWFailChg   = 0x1000,  // Remote HW failure flag changed
+	LockRemoteMaintChg    = 0x2000,  // Remote maintenance flag changed
+	// Masks used to test lock conditions
+	LockLocal             = LockLocalHWFail | LockLocalMaint,
+	LockRemote            = LockRemoteHWFail | LockRemoteMaint,
+	LockLocked            = LockLocal | LockRemote,
+	LockLocalChg          = LockLocalHWFailChg | LockLocalMaintChg,
+	LockRemoteChg         = LockRemoteHWFailChg | LockRemoteMaintChg,
+	LockChanged           = LockLocalChg | LockRemoteChg,
     };
 
     /**
@@ -1335,6 +1361,26 @@ public:
 	{ return status(Disabled,true); }
 
     /**
+     * Set/reset HW failure lock flag
+     * @param set True to set, false to reset the flag
+     * @param remote True to use remote side of the circuit, false to use the local one
+     * @param changed Set/reset changed flag. If false the changed flag won't be affected
+     * @param setChanged The value of the changed flag. gnored if changed is false
+     * @return True if the flag's state changed
+     */
+    bool hwLock(bool set, bool remote, bool changed = false, bool setChanged = false);
+
+    /**
+     * Set/reset maintenance lock flag
+     * @param set True to set, false to reset the flag
+     * @param remote True to use remote side of the circuit, false to use the local one
+     * @param changed Set/reset changed flag. If false the changed flag won't be affected
+     * @param setChanged The value of the changed flag. gnored if changed is false
+     * @return True if the flag's state changed
+     */
+    bool maintLock(bool set, bool remote, bool changed = false, bool setChanged = false);
+
+    /**
      * Add an event to the queue
      * This method is thread safe
      * @param event The event to enqueue
@@ -1370,6 +1416,11 @@ public:
      * @return Pointer to the string associated with the given circuit status
      */
     static const char* lookupStatus(int status);
+
+    /**
+     * Keep the lock flags names
+     */
+    static TokenDict s_lockNames[];
 
 protected:
     /**
@@ -1608,6 +1659,12 @@ public:
 	{ Lock lock(this); m_range.m_strategy = strategy; }
 
     /**
+     * Get the circuit list
+     */
+    inline ObjList& circuits()
+	{ return m_circuits; }
+
+    /**
      * Create a comma separated list with this group's circuits
      * @param dest The destination string
      */
@@ -1753,13 +1810,6 @@ public:
      * Keep the strategy names
      */
     static TokenDict s_strategy[];
-
-protected:
-    /**
-     * Get the circuit list
-     */
-    inline ObjList& circuits()
-	{ return m_circuits; }
 
 private:
     unsigned int advance(unsigned int n, int strategy, SignallingCircuitRange& range);
@@ -5308,12 +5358,6 @@ protected:
 	SignallingCall* call = 0);
 
     /**
-     * Build the parameters of a Verify event
-     * @param params The list of parameters to fill
-     */
-    virtual void buildVerifyEvent(NamedList& params);
-
-    /**
      * Length of the Circuit Identification Code in octets
      */
     unsigned int m_cicLen;
@@ -5332,11 +5376,11 @@ private:
     // Replace a call's circuit if checkCall is true
     // Clear lock flags of the circuit. Release currently reseting circuit if the code match
     // Return false if the given circuit doesn't exist
-    bool resetCircuit(unsigned int cic, bool checkCall);
+    bool resetCircuit(unsigned int cic, bool remote, bool checkCall);
     // Block/unblock a circuit side (local or remote)
     // Return false if the given circuit doesn't exist
     bool blockCircuit(unsigned int cic, bool block, bool remote, bool hwFail,
-	bool resetChg = false);
+	bool changed, bool changedState);
     // Find a call by its circuit identification code
     SS7ISUPCall* findCall(unsigned int cic);
     // Send blocking/unblocking messages
@@ -5367,10 +5411,10 @@ private:
     // Blocking/unblocking circuits
     SignallingTimer m_lockTimer;         // Request timeout
     bool m_lockNeed;                     // Flag used to signal that there are circuits whose lock state changed
-    int m_lockFlags;                     // Current request flags: blocking/unblocking,hw-failure/maintenance
+    bool m_hwFailReq;                    // HW failure/maintenance block/unblock sent
+    bool m_blockReq;                     // Block/unblock req. sent
     unsigned int m_lockCicCode;          // Current (un)blocking cic code
     String m_lockMap;                    // The sent circuit map (contains 1 element for single circuit request)
-    bool m_lockChanged;                  // Lock changed flag used when building a Verify event
 };
 
 /**

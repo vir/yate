@@ -272,6 +272,12 @@ protected:
     virtual bool reload(NamedList& params);
     virtual void release();
     virtual DebugEnabler* getDbgEnabler(int id);
+    // Handle events received from call controller
+    // Process Verify event. Calls the driver's handleEvent() method for other events
+    virtual void handleEvent(SignallingEvent* event);
+    // Save circuits state
+    // Return true if changed
+    bool verifyController(const NamedList* params, bool save = true);
     // Add point codes from a given configuration section
     // @return The number of point codes added
     unsigned int setPointCode(const NamedList& sect);
@@ -486,6 +492,7 @@ public:
 
 static SigDriver plugin;
 static Configuration s_cfg;
+static Configuration s_cfgData;
 
 inline void applyDebugLevel(DebugEnabler* dbg, int level)
 {
@@ -1123,8 +1130,8 @@ bool SigDriver::received(Message& msg, int id)
 	    if (cic->span())
 		detail << cic->span()->id();
 	    detail << "|" << SignallingCircuit::lookupStatus(cic->status());
-	    detail << "|" << String::boolText(cic->locked(SignallingCircuit::LockLocal));
-	    detail << "|" << String::boolText(cic->locked(SignallingCircuit::LockRemote));
+	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockLocal));
+	    detail << "|" << String::boolText(0 != cic->locked(SignallingCircuit::LockRemote));
 	}
 	break;
     }
@@ -1155,7 +1162,7 @@ void SigDriver::handleEvent(SignallingEvent* event)
 		if (event->controller())
 		    break;
 	    default:
-		DDebug(this,DebugGoOn,
+		DDebug(this,DebugStub,
 		    "Received event (%p,'%s') without call. Controller: (%p)",
 		    event,event->name(),event->controller());
 		return;
@@ -1392,6 +1399,8 @@ void SigDriver::initialize()
     s_cfg.load();
     // Startup
     if (!m_engine) {
+	s_cfgData = Engine::configFile("ysigdata");
+	s_cfgData.load();
 	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
@@ -1746,6 +1755,37 @@ bool SigSS7Isup::create(NamedList& params, String& error)
     if (!m_group)
 	return false;
 
+    // Load circuits lock state from file
+    NamedList* sect = s_cfgData.getSection(name());
+    if (sect) {
+	DDebug(&plugin,DebugAll,
+	    "SigSS7Isup('%s'). Loading circuits lock state from config [%p]",
+	    name().c_str(),this);
+	unsigned int n = sect->count();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = sect->getParam(i);
+	    if (!ns)
+		continue;
+	    unsigned int code = ns->name().toInteger(0);
+	    if (!code)
+		continue;
+	    SignallingCircuit* cic = m_group->find(code);
+	    if (!cic) {
+		DDebug(&plugin,DebugMild,"SigSS7Isup('%s'). Can't find circuit %u [%p]",
+		    name().c_str(),code,this);
+		continue;
+	    }
+	    int flags = 0;
+	    SignallingUtils::encodeFlags(m_group,flags,*ns,SignallingCircuit::s_lockNames);
+	    // Allow only remote HW/maintenance and local maintenance
+	    flags &= SignallingCircuit::LockRemote | SignallingCircuit::LockLocalMaint |
+		SignallingCircuit::LockLocalMaintChg;
+	    Debug(&plugin,DebugAll,"SigSS7Isup('%s'). Set lock %u=%s flags=0x%x [%p]",
+		name().c_str(),code,ns->c_str(),flags,this);
+	    cic->setLock(flags);
+	}
+    }
+
     // Layer 2
     buildName(compName,"mtp2");
     params.setParam("debugname",compName);
@@ -1795,6 +1835,7 @@ void SigSS7Isup::release()
 	m_iface->control(SignallingInterface::Disable);
 
     if (isup()) {
+	verifyController(0);
 	isup()->destruct();
 	m_controller = 0;
     }
@@ -1815,6 +1856,107 @@ DebugEnabler* SigSS7Isup::getDbgEnabler(int id)
 	case 4: return isup();
     }
     return 0;
+}
+
+// Handle events received from call controller
+// Process Verify event. Calls the driver's handleEvent() method for other events
+void SigSS7Isup::handleEvent(SignallingEvent* event)
+{
+    if (!event)
+	return;
+    if (event->type() != SignallingEvent::Verify) {
+	SigLink::handleEvent(event);
+	return;
+    }
+    if (event->message())
+	verifyController(&event->message()->params());
+    else
+	verifyController(0);
+}
+
+// Save circuits state
+bool SigSS7Isup::verifyController(const NamedList* params, bool save)
+{
+    if (!isup())
+	return false;
+    NamedList tmp("");
+    // Do that anyway to reset the verify flag
+    bool verify = isup()->verify();
+    if (!params) {
+	if (!verify)
+	    return false;
+	isup()->buildVerifyEvent(tmp);
+	params = &tmp;
+    }
+
+    Lock lock(m_controller);
+    SignallingCircuitGroup* group = m_controller->circuits();
+    if (!group)
+	return false;
+    DDebug(&plugin,DebugInfo,"SigSS7Isup('%s'). Verifying circuits state [%p]",
+	name().c_str(),this);
+    Lock lockGroup(group);
+    NamedList* sect = s_cfgData.getSection(name());
+    if (!sect) {
+	s_cfgData.createSection(name());
+	sect = s_cfgData.getSection(name());
+    }
+    bool changed = false;
+    // Save local changed maintenance status
+    // Save all remote lock flags (except for changed)
+    for (ObjList* o = group->circuits().skipNull(); o; o = o->skipNext()) {
+	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
+	String code = cic->code();
+	bool saveCic = false;
+
+	// Param exists and remote state didn't changed: check local
+	//  maintenance flag against params's value (save if last state
+        //  is not equal to the current one)
+	NamedString* cicParam = sect->getParam(code);
+	if (cicParam && !cic->locked(SignallingCircuit::LockRemoteChg)) {
+	    int cicFlags = 0;
+	    SignallingUtils::encodeFlags(0,cicFlags,*cicParam,SignallingCircuit::s_lockNames);
+	    cicFlags &= cic->locked(SignallingCircuit::LockLocalMaintChg|SignallingCircuit::LockLocalMaint);
+	    saveCic = (0 != cicFlags);
+	}
+	else
+	    saveCic = (0 != cic->locked(SignallingCircuit::LockRemoteChg));
+
+	if (!saveCic)
+	    continue;
+
+	int flags = 0;
+	if (cic->locked(SignallingCircuit::LockLocalMaintChg))
+	    flags |= SignallingCircuit::LockLocalMaintChg;
+	if (cic->locked(SignallingCircuit::LockLocalMaint))
+	    flags |= SignallingCircuit::LockLocalMaint;
+	if (cic->locked(SignallingCircuit::LockRemoteHWFailChg) &&
+	    cic->locked(SignallingCircuit::LockRemoteHWFail))
+	    flags |= SignallingCircuit::LockRemoteHWFail;
+	if (cic->locked(SignallingCircuit::LockRemoteMaintChg) &&
+	    cic->locked(SignallingCircuit::LockRemoteMaint))
+	    flags |= SignallingCircuit::LockRemoteMaint;
+
+	// Save only if we have something
+	if (flags || (cicParam && !cicParam->null())) {
+	    String tmp;
+	    for (TokenDict* dict = SignallingCircuit::s_lockNames; dict->token; dict++)
+		if (0 != (flags & dict->value))
+		    tmp.append(dict->token,",");
+	    DDebug(&plugin,DebugInfo,
+		"SigSS7Isup('%s'). Savind cic %s flags 0x%x '%s' (all=0x%x) [%p]",
+		name().c_str(),code.c_str(),flags,tmp.c_str(),cic->locked(-1),this);
+	    sect->setParam(code,tmp);
+	    changed = true;
+	}
+	cic->resetLock(SignallingCircuit::LockRemoteChg);
+    }
+    lockGroup.drop();
+    lock.drop();
+
+    if (changed && save)
+	s_cfgData.save();
+    return changed;
 }
 
 unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
@@ -1841,6 +1983,7 @@ unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
     }
     return count;
 }
+
 
 /**
  * SigIsdn
@@ -2663,7 +2806,8 @@ void SigLinkThread::run()
 	event = m_link->controller()->getEvent(time);
 	if (event) {
 	    XDebug(&plugin,DebugAll,"Link('%s'). Got event (%p,'%s',%p,%u)",
-		m_link->name().c_str(),event,event->name(),event->call(),event->call()?event->call()->refcount():0);
+		m_link->name().c_str(),event,event->name(),event->call(),
+		event->call()?event->call()->refcount():0);
 	    m_link->handleEvent(event);
 	    delete event;
 	}

@@ -29,12 +29,6 @@
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
 ;drillhole=disable in server mode, enable in client mode
 
-; timeout: int: Receiver timeout in ms (500-60000), zero disables
-;timeout=3000
-
-; needmedia: bool: Drop the channels for which a timeout was detected
-;needmedia=no
-
 ; thread: keyword: Default priority of the data service threads
 ; Can be one of: lowest, low, normal, high, highest
 ; It is a bad idea to set a low priority for anything but testing
@@ -45,3 +39,16 @@
 
 ; minsleep: int: Minimum allowed in-loop sleep time in milliseconds
 ;minsleep=1
+
+
+[timeouts]
+; This section controls the behaviour when RTP and RTCP data is missing
+
+; timeout: int: Receiver timeout in ms (500-60000), zero disables
+;timeout=3000
+
+; needmedia: bool: Drop the channels for which a timeout was detected
+;needmedia=no
+
+; warnlater: bool: Emit timeout warnings even if there was initially some RTP
+;warnlater=no

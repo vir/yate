@@ -85,7 +85,8 @@ static String s_tos;
 static String s_localip;
 static bool s_autoaddr  = true;
 static bool s_anyssrc   = false;
-static bool s_needmedia = false;
+static bool s_needMedia = false;
+static bool s_warnLater = false;
 static bool s_rtcp  = true;
 static bool s_drill = false;
 
@@ -496,11 +497,12 @@ void YRTPWrapper::gotDTMF(char tone)
 
 void YRTPWrapper::timeout(bool initial)
 {
-    Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
-	(initial ? "Initial" : "Later"),
-	(m_master ? " channel " : ""),
-	m_master.safe(),this);
-    if (s_needmedia && m_master) {
+    if (initial || s_warnLater)
+	Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
+	    (initial ? "Initial" : "Later"),
+	    (m_master ? " channel " : ""),
+	    m_master.safe(),this);
+    if (s_needMedia && m_master) {
 	Message* m = new Message("call.drop");
 	m->addParam("id",m_master);
 	m->addParam("reason","nomedia");
@@ -934,11 +936,12 @@ void YRTPPlugin::initialize()
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
-    s_timeout = cfg.getIntValue("general","timeout",3000);
-    s_needmedia = cfg.getBoolValue("general","needmedia",false);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));
+    s_timeout = cfg.getIntValue("timeouts","timeout",3000);
+    s_needMedia = cfg.getBoolValue("timeouts","needmedia",false);
+    s_warnLater = cfg.getBoolValue("timeouts","warnlater",false);
     setup();
     if (m_first) {
 	m_first = false;

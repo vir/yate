@@ -758,6 +758,8 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
     if (!event)
 	return false;
     Lock lock(m_callMutex);
+    DDebug(q931(),DebugAll,"Call(%u,%u). sendEvent(%s) state=%s [%p]",
+	Q931_CALL_ID,event->name(),stateName(state()),this);
     bool retVal = false;
     if (m_terminate || state() == CallAbort) {
 	delete event;
@@ -827,74 +829,81 @@ SignallingEvent* ISDNQ931Call::getEvent(const Time& when)
     // Check for last event or aborting
     if (m_lastEvent || state() == CallAbort)
 	return 0;
-    // Check for incoming messages
-    ISDNQ931Message* msg = static_cast<ISDNQ931Message*>(dequeue());
-    // No message: check terminate and timeouts. Try to get a circuit event
-    if (!msg) {
-	if (m_terminate)
-	    m_lastEvent = processTerminate();
-	if (!m_lastEvent)
-	    m_lastEvent = checkTimeout(when.msec());
-	if (!m_lastEvent)
-	    m_lastEvent = getCircuitEvent(when);
-	return m_lastEvent;
-    }
-    XDebug(q931(),DebugAll,
-	"Call(%u,%u). Dequeued message (%p): '%s' in state '%s' [%p]",
-	Q931_CALL_ID,msg,msg->name(),stateName(state()),this);
-    // Check for unknown madatory IE. See Q.931 7.8.7.1
-    if (msg->unknownMandatory()) {
-	Debug(q931(),DebugWarn,
-	    "Call(%u,%u). Received message (%p): '%s' with unknown mandatory IE [%p]",
-	    Q931_CALL_ID,msg,msg->name(),this);
-	msg->deref();
-	m_lastEvent = releaseComplete("missing-mandatory-ie");
-	return m_lastEvent;
-    }
-    switch (msg->type()) {
+    while (true) {
+	// Check for incoming messages
+	ISDNQ931Message* msg = static_cast<ISDNQ931Message*>(dequeue());
+	// No message: check terminate and timeouts. Try to get a circuit event
+	if (!msg) {
+	    if (m_terminate)
+		m_lastEvent = processTerminate();
+	    if (!m_lastEvent)
+		m_lastEvent = checkTimeout(when.msec());
+	    if (!m_lastEvent)
+		m_lastEvent = getCircuitEvent(when);
+	    break;
+	}
+	XDebug(q931(),DebugAll,
+	    "Call(%u,%u). Dequeued message (%p): '%s' in state '%s' [%p]",
+	    Q931_CALL_ID,msg,msg->name(),stateName(state()),this);
+	// Check for unknown madatory IE. See Q.931 7.8.7.1
+	if (msg->unknownMandatory()) {
+	    Debug(q931(),DebugWarn,
+		"Call(%u,%u). Received message (%p): '%s' with unknown mandatory IE [%p]",
+		Q931_CALL_ID,msg,msg->name(),this);
+	    TelEngine::destruct(msg);
+	    m_lastEvent = releaseComplete("missing-mandatory-ie");
+	    break;
+	}
+	switch (msg->type()) {
 #define Q931_CALL_PROCESS_MSG(type,method) \
 	    case type: \
 		m_lastEvent = !m_terminate ? method(msg) : processTerminate(msg); \
 		break;
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Alerting,processMsgAlerting)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Proceeding,processMsgCallProceeding)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Connect,processMsgConnect)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::ConnectAck,processMsgConnectAck)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Disconnect,processMsgDisconnect)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Info,processMsgInfo)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Notify,processMsgNotify)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Progress,processMsgProgress)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Release,processMsgRelease)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::ReleaseComplete,processMsgRelease)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Setup,processMsgSetup)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::SetupAck,processMsgSetupAck)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::Status,processMsgStatus)
-	Q931_CALL_PROCESS_MSG(ISDNQ931Message::StatusEnquiry,processMsgStatusEnquiry)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Alerting,processMsgAlerting)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Proceeding,processMsgCallProceeding)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Connect,processMsgConnect)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::ConnectAck,processMsgConnectAck)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Disconnect,processMsgDisconnect)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Info,processMsgInfo)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Notify,processMsgNotify)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Progress,processMsgProgress)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Release,processMsgRelease)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::ReleaseComplete,processMsgRelease)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Setup,processMsgSetup)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::SetupAck,processMsgSetupAck)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::Status,processMsgStatus)
+	    Q931_CALL_PROCESS_MSG(ISDNQ931Message::StatusEnquiry,processMsgStatusEnquiry)
 #undef Q931_CALL_PROCESS_MSG
-	case ISDNQ931Message::Suspend:
-	    sendSuspendRej("service-not-implemented",0);
-	    break;
-	case ISDNQ931Message::Resume:
-	    q931()->sendStatus(this,"no-call-suspended");
-	    break;
-	case ISDNQ931Message::SuspendAck:
-	case ISDNQ931Message::SuspendRej:
-	case ISDNQ931Message::ResumeAck:
-	case ISDNQ931Message::ResumeRej:
-	    q931()->sendStatus(this,"wrong-state-message");
-	    break;
-	default:
-	    DDebug(q931(),DebugNote,
-		"Call(%u,%u). Received unknown/not implemented message '%s'. Sending status [%p]",
-		Q931_CALL_ID,msg->name(),this);
-	    q931()->sendStatus(this,"unknown-message");
-	    // Fall through to deref the message and check timeouts
+	    case ISDNQ931Message::Suspend:
+		sendSuspendRej("service-not-implemented",0);
+		break;
+	    case ISDNQ931Message::Resume:
+		q931()->sendStatus(this,"no-call-suspended");
+		break;
+	    case ISDNQ931Message::SuspendAck:
+	    case ISDNQ931Message::SuspendRej:
+	    case ISDNQ931Message::ResumeAck:
+	    case ISDNQ931Message::ResumeRej:
+		q931()->sendStatus(this,"wrong-state-message");
+		break;
+	    default:
+		DDebug(q931(),DebugNote,
+		    "Call(%u,%u). Received unknown/not implemented message '%s'. Sending status [%p]",
+		    Q931_CALL_ID,msg->name(),this);
+		q931()->sendStatus(this,"unknown-message");
+	        // Fall through to destruct the message and check timeouts
+	}
+	TelEngine::destruct(msg);
+	if (!m_lastEvent)
+	    m_lastEvent = checkTimeout(when.msec());
+	if (!m_lastEvent)
+	    m_lastEvent = getCircuitEvent(when);
+	break;
     }
-    msg->deref();
     if (!m_lastEvent)
-	m_lastEvent = checkTimeout(when.msec());
-    if (!m_lastEvent)
-	m_lastEvent = getCircuitEvent(when);
+	return 0;
+    XDebug(q931(),DebugInfo,"Call(%u,%u). Raising event '%s' state=%s [%p]",
+	Q931_CALL_ID,m_lastEvent->name(),stateName(state()),this);
     return m_lastEvent;
 }
 
@@ -930,6 +939,8 @@ void ISDNQ931Call::dataLinkState(bool up)
 // Process termination flags or requests (messages)
 SignallingEvent* ISDNQ931Call::processTerminate(ISDNQ931Message* msg)
 {
+    XDebug(q931(),DebugAll,"Call(%u,%u). processTerminate(%s) state=%s [%p]",
+	Q931_CALL_ID,msg?msg->name():"",stateName(state()),this);
     bool complete = m_destroy;
     // We don't have to destroy and not send/received Release: Send Release
     if (!m_destroy && state() != ReleaseReq && state() != DisconnectReq)
@@ -1015,6 +1026,8 @@ bool ISDNQ931Call::checkMsgRecv(ISDNQ931Message* msg, bool status)
 // IE: BearerCaps, ChannelID, Progress, Display, Signal, HiLayerCompat
 SignallingEvent* ISDNQ931Call::processMsgAlerting(ISDNQ931Message* msg)
 {
+    DDebug(q931(),DebugAll,"Call(%u,%u). processMsgAlerting(%s) state=%s [%p]",
+	Q931_CALL_ID,msg?msg->name():"",stateName(state()),this);
     if (!checkMsgRecv(msg,true))
 	return 0;
     if (m_data.processChannelID(msg,false) && !reserveCircuit())
@@ -1034,6 +1047,8 @@ SignallingEvent* ISDNQ931Call::processMsgAlerting(ISDNQ931Message* msg)
 // IE: BearerCaps, ChannelID, Progress, Display, HiLayerCompat
 SignallingEvent* ISDNQ931Call::processMsgCallProceeding(ISDNQ931Message* msg)
 {
+    DDebug(q931(),DebugAll,"Call(%u,%u). processMsgCallProceeding(%s) state=%s [%p]",
+	Q931_CALL_ID,msg?msg->name():"",stateName(state()),this);
     if (!checkMsgRecv(msg,true))
 	return 0;
     if (m_data.processChannelID(msg,false) && !reserveCircuit())
@@ -1249,7 +1264,7 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
     if (!m_data.processCause(msg,false))
 	m_data.m_reason = "unknown";
     DDebug(q931(),DebugInfo,
-	"Call(%u,%u). Received '%s' state='%s' peer-state='%s' cause='%s' [%p]",
+	"Call(%u,%u). Received '%s' state=%s peer-state=%s cause='%s' [%p]",
 	Q931_CALL_ID,msg->name(),
 	stateName(state()),s,m_data.m_reason.c_str(),this);
     u_int8_t peerState = (u_int8_t)lookup(s,s_states,255);
@@ -1333,7 +1348,7 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
 	    break;
 	default: ;
     }
-    sigMsg->deref();
+    TelEngine::destruct(sigMsg);
     if (!recover)
 	return releaseComplete("wrong-state-message");
     return 0;
@@ -1351,7 +1366,7 @@ SignallingEvent* ISDNQ931Call::processMsgStatusEnquiry(ISDNQ931Message* msg)
 #define MSG_CHECK_SEND(type) \
 	if (!(q931() && checkStateSend(type))) { \
 	    DDebug(q931(),DebugNote, \
-		"Call(%u,%u). Can't send msg='%s' in state='%s'. %s [%p]", \
+		"Call(%u,%u). Can't send msg='%s' in state=%s. %s [%p]", \
 		Q931_CALL_ID,ISDNQ931Message::typeName(type), \
 		stateName(state()),(q931()?"Invalid state":"No call controller"),\
 		this); \
@@ -1587,8 +1602,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	msg = 0;
 	break;
     }
-    if (msg)
-	msg->deref();
+    TelEngine::destruct(msg);
     setTerminate(true,0);
     return false;
 }
@@ -1621,7 +1635,7 @@ SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* d
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::ReleaseComplete,this);
     msg->params().addParam("reason",m_data.m_reason);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,this);
-    msg->deref();
+    TelEngine::destruct(msg);
     deref();
     return event;
 }
@@ -1644,7 +1658,7 @@ SignallingEvent* ISDNQ931Call::getCircuitEvent(const Time& when)
 	    msg->params().addParam("tone",tone);
 	    msg->params().addParam("inband",String::boolText(true));
 	    event = new SignallingEvent(SignallingEvent::Info,msg,this);
-	    msg->deref();
+	    TelEngine::destruct(msg);
 	    }
 	    break;
 	default: ;
@@ -1833,9 +1847,9 @@ SignallingEvent* ISDNQ931CallMonitor::getEvent(const Time& when)
 	default:
 	    DDebug(q931(),DebugNote,"Monitor(%u). Unknown message '%s' [%p]",
 		m_callRef,msg->name(),this);
-	    // Fall through to deref the message and check timeouts
+	    // Fall through to destruct the message and check timeouts
     }
-    msg->deref();
+    TelEngine::destruct(msg);
     if (!m_lastEvent)
 	m_lastEvent = getCircuitEvent(when);
     return m_lastEvent;
@@ -2014,7 +2028,7 @@ SignallingEvent* ISDNQ931CallMonitor::releaseComplete(const char* reason)
     msg->params().addParam("reason",m_data.m_reason);
     msg->params().addParam("terminator",m_terminator);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,this);
-    msg->deref();
+    TelEngine::destruct(msg);
     deref();
     return event;
 }
@@ -2048,7 +2062,7 @@ SignallingEvent* ISDNQ931CallMonitor::getCircuitEvent(const Time& when)
 	    msg->params().addParam("inband",String::boolText(true));
 	    msg->params().addParam("fromcaller",String::boolText(fromCaller));
 	    event = new SignallingEvent(SignallingEvent::Info,msg,this);
-	    msg->deref();
+	    TelEngine::destruct(msg);
 	    }
 	    break;
 	default: ;
@@ -2085,13 +2099,11 @@ void ISDNQ931CallMonitor::releaseCircuit()
 {
     if (m_callerCircuit) {
 	q931()->releaseCircuit(m_callerCircuit);
-	m_callerCircuit->deref();
-	m_callerCircuit = 0;
+	TelEngine::destruct(m_callerCircuit);
     }
     if (m_calledCircuit) {
 	q931()->releaseCircuit(m_calledCircuit);
-	m_calledCircuit->deref();
-	m_calledCircuit = 0;
+	TelEngine::destruct(m_calledCircuit);
     }
 }
 
@@ -2301,7 +2313,7 @@ bool ISDNQ931::sendMessage(ISDNQ931Message* msg, String* reason)
 	    Debug(this,DebugNote,
 		"Refusing to send message. Layer 2 is missing or down");
 	m_flagQ921Invalid = true;
-	msg->deref();
+	TelEngine::destruct(msg);
 	if (reason)
 	    *reason = "net-out-of-order";
 	return false;
@@ -2315,7 +2327,7 @@ bool ISDNQ931::sendMessage(ISDNQ931Message* msg, String* reason)
 	msg->toString(tmp,m_extendedDebug);
 	Debug(this,DebugInfo,"Sending message (%p)%s",msg,tmp.c_str());
     }
-    msg->deref();
+    TelEngine::destruct(msg);
     ObjList* obj = segments.skipNull();
     if (!(count && obj)) {
 	Debug(this,DebugNote,"Failed to send message (%p). Parser failure",msg);
@@ -2400,14 +2412,14 @@ void ISDNQ931::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
     // Dummy call reference
     if (msg->dummyCallRef()) {
 	sendStatus("service-not-implemented",0);
-	msg->deref();
+	TelEngine::destruct(msg);
 	return;
     }
     // Global call reference or a message that should have a dummy call reference
     if (!msg->callRef() || msg->type() == ISDNQ931Message::Restart ||
 	msg->type() == ISDNQ931Message::RestartAck) {
 	processGlobalMsg(msg);
-	msg->deref();
+	TelEngine::destruct(msg);
 	return;
     }
     // This is an incoming message:
@@ -2443,10 +2455,8 @@ void ISDNQ931::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
 	processInvalidMsg(msg);
 	break;
     }
-    if (call)
-	call->deref();
-    if (msg)
-	msg->deref();
+    TelEngine::destruct(call);
+    TelEngine::destruct(msg);
 }
 
 // Attach layer 2
@@ -2516,7 +2526,7 @@ SignallingCall* ISDNQ931::call(SignallingMessage* msg, String& reason)
     }
     Lock lock(m_layer);
     if (!acceptNewCall(true,reason)) {
-	msg->deref();
+	TelEngine::destruct(msg);
 	return 0;
     }
     ISDNQ931Call* call = new ISDNQ931Call(this,true,m_callRef,m_callRefLen);
@@ -2527,7 +2537,7 @@ SignallingCall* ISDNQ931::call(SignallingMessage* msg, String& reason)
 	m_callRef = 1;
     m_calls.append(call);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::NewCall,msg,call);
-    msg->deref();
+    TelEngine::destruct(msg);
     call->sendEvent(event);
     return call;
 }
@@ -2648,7 +2658,7 @@ void ISDNQ931::terminateCalls(ObjList* list, const char* reason)
 	ISDNQ931Call* call = findCall(circuit);
 	if (call) {
 	    call->setTerminate(true,reason);
-	    call->deref();
+	    TelEngine::destruct(call);
 	    continue;
 	}
 	// No call for this circuit. Release the circuit
@@ -2674,7 +2684,7 @@ static inline ISDNQ931Message* dropSegMsg(ISDNQ931* q931, ISDNQ931Message* msg,
     if (reason)
 	Debug(q931,DebugNote,"Dropping message segment (%p): '%s'. %s",
 	    msg,msg->name(),reason);
-    msg->deref();
+    TelEngine::destruct(msg);
     return 0;
 }
 
@@ -2737,7 +2747,7 @@ ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
 	XDebug(this,DebugAll,"Start receiving message segments");
 	m_segmented = new ISDNQ931Message((ISDNQ931Message::Type)type,
 	    msg->initiator(),msg->callRef(),msg->callRefLen());
-	msg->deref();
+	TelEngine::destruct(msg);
 	// Put the message header in the buffer
 	u_int8_t header[7];
 	m_segmentData.assign(header,fillHeader(header,m_segmented,this));
@@ -2760,7 +2770,7 @@ ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
 	dropSegMsg(this,msg,"Invalid Segmented IE parameters");;
 	return endReceiveSegment("Segment with invalid parameters");
     }
-    msg->deref();
+    TelEngine::destruct(msg);
     // Update data
     m_remaining--;
     m_segmentData += segData;
@@ -2778,8 +2788,7 @@ ISDNQ931Message* ISDNQ931::endReceiveSegment(const char* reason)
     if (!m_segmented)
 	return 0;
     // Clear some data
-    m_segmented->deref();
-    m_segmented = 0;
+    TelEngine::destruct(m_segmented);
     m_remaining = 0;
     // Drop ?
     if (reason) {
@@ -3195,7 +3204,7 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 	else
 	    DDebug(this,DebugInfo,"Dropping message message (%p): '%s' from '%s'",
 		msg,msg->name(),layer2->debugName());
-	msg->deref();
+	TelEngine::destruct(msg);
 	return;
     }
     // Find a monitor for this message or create a new one
@@ -3220,10 +3229,8 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 	    msg,msg->name(),layer2->debugName(),msg->callRef());
 	break;
     }
-    if (mon)
-	mon->deref();
-    if (msg)
-	msg->deref();
+    TelEngine::destruct(mon);
+    TelEngine::destruct(msg);
 }
 
 // Attach ISDN Q.921 pasive transport that monitors one side of the link
@@ -3357,7 +3364,7 @@ void ISDNQ931Monitor::processMsgRestart(ISDNQ931Message* msg)
 	ISDNQ931CallMonitor* mon = findMonitor(s->toInteger(-1),false);
 	if (mon) {
 	    terminateMonitor(mon,"resource-unavailable");
-	    mon->deref();
+	    TelEngine::destruct(mon);
 	}
     }
     delete list;
@@ -4585,15 +4592,13 @@ ISDNQ931Message* Q931Parser::processSegment(const u_int8_t* data, u_int32_t len,
     if (!segData) {
 	Debug(m_settings->m_dbg,DebugNote,
 	    "Dropping segment message. Not allowed [%p]",m_msg);
-	m_msg->deref();
-	m_msg = 0;
+	TelEngine::destruct(m_msg);
 	return reset();
     }
     u_int32_t consumed = 0;
     ISDNQ931IE* ie = getIE(data,len,consumed);
     if (!ie) {
-	m_msg->deref();
-	m_msg = 0;
+	TelEngine::destruct(m_msg);
 	return reset();
     }
     if (ie->type() != ISDNQ931IE::Segmented || consumed > len) {
@@ -4601,8 +4606,7 @@ ISDNQ931Message* Q931Parser::processSegment(const u_int8_t* data, u_int32_t len,
 	    "Dropping segment message with missing or invalid Segmented IE [%p]",
 	    m_msg);
 	delete ie;
-	m_msg->deref();
-	m_msg = 0;
+	TelEngine::destruct(m_msg);
 	return reset();
     }
     m_msg->append(ie);

@@ -59,7 +59,9 @@ unsigned int RTPBaseIO::ssrcInit()
 {
     if (m_ssrcInit) {
 	m_ssrcInit = false;
-	m_ssrc = ::random();
+	do {
+	    m_ssrc = ::random();
+	} while (0 == m_ssrc);
     }
     return m_ssrc;
 }

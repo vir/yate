@@ -695,10 +695,11 @@ bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& bu
 	data[2] |= (rec & 0x7f);
 	data[0] = 3;
     }
-    // Value. Set to normal if missing for CCITT encoding or to 0 for other encoding standards
+    // Value. Set to normal-clearing if missing for CCITT encoding or
+    //  to 0 for other encoding standards
     unsigned char val = 0;
     if (!coding)
-	val = (unsigned char)params.getIntValue(causeName,dict(0,0),0x1f);
+	val = (unsigned char)params.getIntValue(causeName,dict(0,0),0x10);
     data[data[0]] |= (val & 0x7f);
     // Diagnostic
     DataBlock diagnostic;

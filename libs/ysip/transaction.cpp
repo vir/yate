@@ -319,7 +319,7 @@ void SIPTransaction::setResponse(SIPMessage* message)
 	if (isInvite()) {
 	    // we need to actively retransmit this message
 	    if (changeState(Retrans))
-		setTimeout(m_engine->getTimer('G'),5);
+		setTimeout(m_engine->getTimer('G'),6);
 	}
 	else {
 	    // just wait and reply to retransmits
@@ -647,6 +647,13 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 	    if (timeout)
 		break;
 	    setResponse(408);
+	    break;
+	case Retrans:
+	    if (isInvite() && (timeout == 0)) {
+		// we didn't got an ACK so declare timeout
+		m_response = 408;
+		changeState(Cleared);
+	    }
 	    break;
     }
     return e;

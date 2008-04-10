@@ -170,3 +170,6 @@
 
 ; g729_annexb: bool: Force G.729 Annex B support when parsing the SDP
 ;g729_annexb=
+
+; ignore_missing_ack: bool: Ignore missing ACK on INVITE, don't drop the calls
+;ignore_missing_ack=no

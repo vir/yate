@@ -553,6 +553,7 @@ static bool s_info = false;
 static bool s_rfc2833 = true;
 static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
+static bool s_ack_required = true;
 static bool s_auth_register = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
@@ -2206,6 +2207,8 @@ void YateSIPConnection::hangup()
 	    if (m_reason) {
 		// FIXME: add SIP and Q.850 cause codes, set the proper reason
 		MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
+		if ((m_reasonCode >= 300) && (m_reasonCode != 487))
+		    hl->setParam("cause",String(m_reasonCode));
 		hl->setParam("text","\"" + m_reason + "\"");
 		m->addHeader(hl);
 	    }
@@ -2736,6 +2739,11 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	}
 	if (m_state != Established)
 	    hangup();
+	else if (s_ack_required && (code == 408)) {
+	    // call was established but we didn't got the ACK
+	    setReason("Not received ACK",code);
+	    hangup();
+	}
 	else
 	    startPendingUpdate();
 	return false;
@@ -4317,6 +4325,7 @@ void SIPDriver::initialize()
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
     s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     s_nat_refresh = s_cfg.getIntValue("registrar","nat_refresh",25);
+    s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     initAudioCodecs();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();
@@ -4340,4 +4349,3 @@ void SIPDriver::initialize()
 }; // anonymous namespace
 
 /* vi: set ts=8 sw=4 sts=4 noet: */
-

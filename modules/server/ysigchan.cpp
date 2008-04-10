@@ -748,7 +748,7 @@ bool SigChannel::msgText(Message& msg, const char* text)
 bool SigChannel::msgDrop(Message& msg, const char* reason)
 {
     hangup(reason ? reason : "dropped");
-    return true;
+    return Channel::msgDrop(msg,m_reason);
 }
 
 bool SigChannel::msgTransfer(Message& msg)

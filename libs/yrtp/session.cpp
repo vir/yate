@@ -28,6 +28,8 @@
 
 using namespace TelEngine;
 
+#define INF_TIMEOUT ((u_int64_t)(int64_t)-1)
+
 bool RTPBaseIO::dataPayload(int type)
 {
     if ((type >= -1) && (type <= 127)) {
@@ -433,8 +435,8 @@ void RTPSession::timerTick(const Time& when)
 	// only check timeout if we have a receiver
 	if (m_timeoutTime && m_recv) {
 	    if (when >= m_timeoutTime) {
-		// rearm timeout next time we get here
-		m_timeoutTime = 0;
+		// rearm timeout next time we get a packet
+		m_timeoutTime = INF_TIMEOUT;
 		timeout(0 == m_recv->ssrc());
 	    }
 	}

@@ -7091,6 +7091,7 @@ private:
     // Termination
     bool m_terminate;                    // Terminate flag: send RELEASE
     bool m_destroy;                      // Destroy flag: call releaseComplete()
+    bool m_destroyed;                    // Call destroyed flag
 };
 
 /**

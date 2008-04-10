@@ -708,7 +708,8 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     m_relTimer(0),
     m_conTimer(0),
     m_terminate(false),
-    m_destroy(false)
+    m_destroy(false),
+    m_destroyed(false)
 {
     Debug(q931(),DebugAll,"Call(%u,%u) direction=%s [%p]",
 	Q931_CALL_ID,(outgoing ? "outgoing" : "incoming"),this);
@@ -738,6 +739,8 @@ ISDNQ931Call::~ISDNQ931Call()
 void ISDNQ931Call::setTerminate(bool destroy, const char* reason)
 {
     Lock lock(m_callMutex);
+    if (m_destroyed)
+	return;
     if (state() == CallAbort)
 	changeState(Null);
     // Check terminate & destroy flags
@@ -747,8 +750,7 @@ void ISDNQ931Call::setTerminate(bool destroy, const char* reason)
     m_destroy = destroy;
     if (m_data.m_reason.null())
 	m_data.m_reason = reason;
-    DDebug(q931(),DebugInfo,
-	"Call(%u,%u). Set terminate. Destroy: %s [%p]",
+    DDebug(q931(),DebugInfo,"Call(%u,%u). Set terminate. Destroy: %s [%p]",
 	Q931_CALL_ID,String::boolText(m_destroy),this);
 }
 
@@ -760,11 +762,11 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
     Lock lock(m_callMutex);
     DDebug(q931(),DebugAll,"Call(%u,%u). sendEvent(%s) state=%s [%p]",
 	Q931_CALL_ID,event->name(),stateName(state()),this);
-    bool retVal = false;
     if (m_terminate || state() == CallAbort) {
 	delete event;
 	return false;
     }
+    bool retVal = false;
     switch (event->type()) {
 	case SignallingEvent::Progress:
 	    retVal = sendProgress(event->message());
@@ -826,8 +828,8 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 SignallingEvent* ISDNQ931Call::getEvent(const Time& when)
 {
     Lock lock(m_callMutex);
-    // Check for last event or aborting
-    if (m_lastEvent || state() == CallAbort)
+    // Check for last event or destroyed/aborting
+    if (m_lastEvent || m_destroyed || state() == CallAbort)
 	return 0;
     while (true) {
 	// Check for incoming messages
@@ -949,7 +951,7 @@ SignallingEvent* ISDNQ931Call::processTerminate(ISDNQ931Message* msg)
     if (msg) {
 	if (msg->type() == ISDNQ931Message::Release ||
 	    msg->type() == ISDNQ931Message::ReleaseComplete) {
-	    changeState(Null);
+//FIXME	    changeState(Null);
 	    m_data.processCause(msg,false);
 	    complete = true;
 	}
@@ -1621,7 +1623,7 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
 SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* diag)
 {
     Lock lock(m_callMutex);
-    if (state() == Null)
+    if (m_destroyed)
 	return 0;
     if (reason)
 	m_data.m_reason = reason;
@@ -1637,6 +1639,7 @@ SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* d
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Release,msg,this);
     TelEngine::destruct(msg);
     deref();
+    m_destroyed = m_terminate = m_destroy = true;
     return event;
 }
 

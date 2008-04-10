@@ -180,8 +180,6 @@ public:
     static TokenDict s_dict_presentation[];
     static TokenDict s_dict_screening[];
     static TokenDict s_dict_subaddrType[];
-    static TokenDict s_dict_causeClass[];
-    static TokenDict s_dict_causeCause[];
     static TokenDict s_dict_channelIDSelect_BRI[];
     static TokenDict s_dict_channelIDSelect_PRI[];
     static TokenDict s_dict_channelIDUnits[];
@@ -260,7 +258,6 @@ private:
 	u_int8_t& crt, const IEParam* ieParam, u_int8_t ieParamIdx);
     // Decode the corresponding variable IE
     ISDNQ931IE* decodeBearerCaps(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
-    ISDNQ931IE* decodeCause(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeCallIdentity(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeCallState(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
     ISDNQ931IE* decodeChannelID(ISDNQ931IE* ie, const u_int8_t* data, u_int32_t len);
@@ -286,7 +283,6 @@ private:
 	{ return decodeCallingNo(ie,data,len); }
     // Encode the corresponding variable IE
     bool encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer);
-    bool encodeCause(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeCallState(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeChannelID(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeDisplay(ISDNQ931IE* ie, DataBlock& buffer);
@@ -515,10 +511,10 @@ bool ISDNQ931IEData::processCause(ISDNQ931Message* msg, bool add,
     if (!msg)
 	return false;
     if (add) {
-	msg->appendIEValue(ISDNQ931IE::Cause,"cause",m_reason);
+	msg->appendIEValue(ISDNQ931IE::Cause,0,m_reason?m_reason:"normal-clearing");
 	return true;
     }
-    m_reason = msg->getIEValue(ISDNQ931IE::Cause,"cause");
+    m_reason = msg->getIEValue(ISDNQ931IE::Cause,0);
     return !m_reason.null();
 }
 
@@ -951,7 +947,7 @@ SignallingEvent* ISDNQ931Call::processTerminate(ISDNQ931Message* msg)
     if (msg) {
 	if (msg->type() == ISDNQ931Message::Release ||
 	    msg->type() == ISDNQ931Message::ReleaseComplete) {
-//FIXME	    changeState(Null);
+	    changeState(Null);
 	    m_data.processCause(msg,false);
 	    complete = true;
 	}
@@ -1028,8 +1024,6 @@ bool ISDNQ931Call::checkMsgRecv(ISDNQ931Message* msg, bool status)
 // IE: BearerCaps, ChannelID, Progress, Display, Signal, HiLayerCompat
 SignallingEvent* ISDNQ931Call::processMsgAlerting(ISDNQ931Message* msg)
 {
-    DDebug(q931(),DebugAll,"Call(%u,%u). processMsgAlerting(%s) state=%s [%p]",
-	Q931_CALL_ID,msg?msg->name():"",stateName(state()),this);
     if (!checkMsgRecv(msg,true))
 	return 0;
     if (m_data.processChannelID(msg,false) && !reserveCircuit())
@@ -1049,8 +1043,6 @@ SignallingEvent* ISDNQ931Call::processMsgAlerting(ISDNQ931Message* msg)
 // IE: BearerCaps, ChannelID, Progress, Display, HiLayerCompat
 SignallingEvent* ISDNQ931Call::processMsgCallProceeding(ISDNQ931Message* msg)
 {
-    DDebug(q931(),DebugAll,"Call(%u,%u). processMsgCallProceeding(%s) state=%s [%p]",
-	Q931_CALL_ID,msg?msg->name():"",stateName(state()),this);
     if (!checkMsgRecv(msg,true))
 	return 0;
     if (m_data.processChannelID(msg,false) && !reserveCircuit())
@@ -1616,7 +1608,7 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
     if (!reason && sigMsg)
 	reason = sigMsg->params().getValue("reason");
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SuspendRej,this);
-    msg->appendIEValue(ISDNQ931IE::Cause,"cause",reason);
+    msg->appendIEValue(ISDNQ931IE::Cause,0,reason);
     return q931()->sendMessage(msg);
 }
 
@@ -2861,7 +2853,7 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 	"'%s' with global call reference. State: '%s'. Cause: '%s'",
 	msg->name(),
 	msg->getIEValue(ISDNQ931IE::CallState,"state","Unknown/missing"),
-	msg->getIEValue(ISDNQ931IE::Cause,"cause","Unknown/missing"));
+	msg->getIEValue(ISDNQ931IE::Cause,0,"Unknown/missing"));
 }
 
 // Process restart requests
@@ -3081,9 +3073,9 @@ bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t call
     if (!(callRef && callRefLen))
 	state = m_restartCic ? ISDNQ931Call::RestartReq : ISDNQ931Call::Null;
     // Add IEs
-    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,0,cause);
     if (diagnostic && ie)
-	ie->addParam("diagnostic",diagnostic);
+	ie->addParamPrefix("diagnostic",diagnostic);
     msg->appendIEValue(ISDNQ931IE::CallState,"state",ISDNQ931Call::stateName(state));
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
@@ -3100,9 +3092,9 @@ bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
     ISDNQ931Message::Type t = release ? ISDNQ931Message::Release : ISDNQ931Message::ReleaseComplete;
     ISDNQ931Message* msg = new ISDNQ931Message(t,initiator,callRef,callRefLen);
     // Add IEs
-    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,"cause",cause);
+    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,0,cause);
     if (diag)
-	ie->addParam("diagnostic",diag);
+	ie->addParamPrefix("diagnostic",diag);
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
     if (signal)
@@ -3699,7 +3691,7 @@ ISDNQ931Message* ISDNQ931Message::parse(ISDNQ931ParserData& parserData,
 // Max values for some IEs
 #define Q931_MAX_BEARERCAPS_LEN    12
 #define Q931_MAX_SEGMENTED_LEN     4
-#define Q931_MAX_CAUSE_LEN         32
+//#define Q931_MAX_CAUSE_LEN         32
 #define Q931_MAX_CHANNELID_LEN     255
 #define Q931_MAX_CALLINGNO_LEN     255
 #define Q931_MAX_CALLEDNO_LEN      255
@@ -3708,8 +3700,6 @@ ISDNQ931Message* ISDNQ931Message::parse(ISDNQ931ParserData& parserData,
 // Parse errors
 static const char* s_errorNoData  = "no data";
 static const char* s_errorWrongData  = "inconsistent data";
-static const char* s_errorNoCause  = "no cause value";
-static const char* s_errorUnsuppRecommen  = "unsupported recommendation";
 static const char* s_errorUnsuppCoding = "unsupported coding standard";
 
 //
@@ -3908,16 +3898,6 @@ static const IEParam s_ie_ieSubAddress[] = {
 	{"type",         0x60, Q931Parser::s_dict_subaddrType}, // Type of subaddress
 	{"odd",          0x10, 0},                              // Odd/even indicator of number of address signals
 	{"subaddress",   0xff, 0},                              // Subaddress information
-	{0,0,0}
-	};
-
-// *** Q.931 4.5.12: Cause
-
-// IE description
-static const IEParam s_ie_ieCause[] = {
-	{"location",   0x0f, SignallingUtils::locations()},
-	{"cause",      0x7f, SignallingUtils::dict(0,0)},
-	{"diagnostic", 0xff, 0},
 	{0,0,0}
 	};
 
@@ -4452,7 +4432,19 @@ bool Q931Parser::encodeIE(ISDNQ931IE* ie, DataBlock& buffer)
 {
     switch (ie->type()) {
 	case ISDNQ931IE::BearerCaps:      return encodeBearerCaps(ie,buffer);
-	case ISDNQ931IE::Cause:           return encodeCause(ie,buffer);
+	case ISDNQ931IE::Cause:
+	    {
+		DataBlock tmp;
+		if (SignallingUtils::encodeCause(
+		    static_cast<SignallingComponent*>(m_settings->m_dbg),
+		    tmp,*ie,ISDNQ931IE::typeName(ie->type()),false)) {
+		    unsigned char id = ISDNQ931IE::Cause;
+		    buffer.assign(&id,1);
+		    buffer += tmp;
+		    return true;
+		}
+		return false;
+	    }
 	case ISDNQ931IE::Display:         return encodeDisplay(ie,buffer);;
 	case ISDNQ931IE::CallingNo:       return encodeCallingNo(ie,buffer);
 	case ISDNQ931IE::CalledNo:        return encodeCalledNo(ie,buffer);
@@ -4629,9 +4621,13 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	consumed = 1;
 	return getFixedIE(data[0]);
     }
+    // Get type
+    u_int16_t type = ((u_int16_t)m_activeCodeset << 8) | data[0];
     // Variable length
     // Check/Get length. Byte 2 is the length of the rest of the IE
     u_int8_t ieLen = ((len == 1) ? 1 : data[1]);
+    XDebug(m_settings->m_dbg,DebugAll,"Decoding IE %u=%s len=%u [%p]",
+	type,ISDNQ931IE::typeName(type,"Unknown"),ieLen,m_msg);
     if (len == 1 || ieLen > len - 2) {
 	Debug(m_settings->m_dbg,DebugNote,
 	    "Invalid variable IE length %u. Remaing data: %u [%p]",
@@ -4640,14 +4636,11 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	return 0;
     }
     consumed = 2 + ieLen;
-    // Get type
-    u_int16_t type = ((u_int16_t)m_activeCodeset << 8) | data[0];
     // Skip type and length
     u_int8_t* ieData = (u_int8_t*)data + 2;
     switch (type) {
 #define CASE_DECODE_IE(id,method) case id: return method(new ISDNQ931IE(id),ieData,ieLen);
 	CASE_DECODE_IE(ISDNQ931IE::BearerCaps,decodeBearerCaps)
-	CASE_DECODE_IE(ISDNQ931IE::Cause,decodeCause)
 	CASE_DECODE_IE(ISDNQ931IE::Display,decodeDisplay)
 	CASE_DECODE_IE(ISDNQ931IE::CallingNo,decodeCallingNo)
 	CASE_DECODE_IE(ISDNQ931IE::CalledNo,decodeCalledNo)
@@ -4670,6 +4663,16 @@ ISDNQ931IE* Q931Parser::getIE(const u_int8_t* data, u_int32_t len, u_int32_t& co
 	CASE_DECODE_IE(ISDNQ931IE::HiLayerCompat,decodeHiLayerCompat)
 	CASE_DECODE_IE(ISDNQ931IE::UserUser,decodeUserUser)
 #undef CASE_DECODE_IE
+	case ISDNQ931IE::Cause:
+	    {
+		ISDNQ931IE* ie = new ISDNQ931IE(type);
+		if (SignallingUtils::decodeCause(
+		    static_cast<SignallingComponent*>(m_settings->m_dbg),
+		    *ie,ieData,ieLen,ie->c_str(),false))
+		    return ie;
+		TelEngine::destruct(ie);
+		return 0;
+	    }
 	default: ;
     }
     // Unknown or unhandled IE
@@ -4807,35 +4810,6 @@ ISDNQ931IE* Q931Parser::decodeBearerCaps(ISDNQ931IE* ie, const u_int8_t* data,
 	SignallingUtils::dumpData(0,*ie,"garbage",data+crt,len-crt);
     return ie;
 #undef CHECK_INDEX
-}
-
-// Q.850. Section 2
-ISDNQ931IE* Q931Parser::decodeCause(ISDNQ931IE* ie, const u_int8_t* data,
-	u_int32_t len)
-{
-    if (!len)
-	return errorParseIE(ie,s_errorNoData,0,0);
-    // Byte 0: Coding standard (bit 5,6), location (bit 0-3)
-    if (!checkCoding(data[0],0,ie))                          // Check coding standard (CCITT: 0)
-	return errorParseIE(ie,s_errorUnsuppCoding,data,len);
-    s_ie_ieCause[0].addParam(ie,data[0]);                    // Location
-    // End of data ?
-    if (len == 1)
-	return errorParseIE(ie,s_errorNoCause,0,0);
-    // Optional byte 1: Recommendation: If exists, must be 0: Q.931
-    u_int32_t crt = Q931_EXT_FINAL(data[0]) ? 1 : 2;
-    if (crt == 2 && 0 != (data[1] & 0x7f))
-	return errorParseIE(ie,s_errorUnsuppRecommen,data + 1,len - 1);
-    // End of data ?
-    if (crt >= len)
-	return errorParseIE(ie,s_errorNoCause,0,0);
-    // byte: Cause value
-    s_ie_ieCause[1].addParam(ie,data[crt]);
-    // Rest of data: diagnostic
-    crt++;
-    if (crt < len)
-	s_ie_ieCause[2].dumpData(ie,data + crt,len - crt);
-    return ie;
 }
 
 // Q.931 4.5.6
@@ -5437,30 +5411,6 @@ bool Q931Parser::encodeBearerCaps(ISDNQ931IE* ie, DataBlock& buffer)
     }
     CHECK_IE_LENGTH(data[1] + 2,Q931_MAX_BEARERCAPS_LEN)
     buffer.assign(data,data[1] + 2);
-    return true;
-}
-
-bool Q931Parser::encodeCause(ISDNQ931IE* ie, DataBlock& buffer)
-{
-    u_int8_t data[4] = {(u_int8_t)ie->type(),2,0x80,0x80};
-    // Coding standard (0: CCITT) + location. If no location, set it to 0x01: "LPN"
-    data[2] |= (u_int8_t)s_ie_ieCause[0].getValue(ie,true,0x01);
-    // Cause. If no cause, set to 0x1f: "Normal, unspecified"
-    data[3] |= (u_int8_t)s_ie_ieCause[1].getValue(ie,true,0x1f);
-    // Diagnostic
-    DataBlock diagnostic;
-    const char* tmp = ie->getValue(s_ie_ieCause[2].name);
-    if (tmp) {
-	if (!diagnostic.unHexify(tmp,strlen(tmp),' '))
-	    Debug(m_settings->m_dbg,DebugMild,
-		"Error encoding '%s' IE. Field %s=%s is incorrect [%p]",
-		ie->c_str(),s_ie_ieCause[3].name,tmp,m_msg);
-	data[1] += (u_int8_t)diagnostic.length();
-    }
-    CHECK_IE_LENGTH(diagnostic.length() + sizeof(data),Q931_MAX_CAUSE_LEN)
-    // Set data
-    buffer.assign(data,sizeof(data));
-    buffer += diagnostic;
     return true;
 }
 

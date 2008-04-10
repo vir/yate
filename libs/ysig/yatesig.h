@@ -6503,6 +6503,14 @@ public:
 	{ return (u_int8_t)m_type; }
 
     /**
+     * Add a parameter using the IE name as prefix
+     * @param name Parameter name
+     * @param value Parameter value
+     */
+    inline void addParamPrefix(const char* name, const char* value)
+	{ addParam(*this+"."+name,value); }
+
+    /**
      * Put this message into a string for debug purposes
      * @param dest The destination string
      * @param extendedDebug True to add the content of this IE and dump data.
@@ -6676,27 +6684,27 @@ public:
     /**
      * Get the value of a given parameter of a given IE
      * @param type Requested IE's type
-     * @param param Requested IE's parameter
+     * @param param Requested IE's parameter. Set to 0 to use IE's name
      * @param defVal Default value to return if IE is missing or the parameter is missing
      * @return Pointer to the requested value or 0
      */
     inline const char* getIEValue(ISDNQ931IE::Type type, const char* param,
 	const char* defVal = 0) {
 	    ISDNQ931IE* ie = getIE(type);
-	    return (ie ? ie->getValue(param,defVal) : defVal);
+	    return (ie ? ie->getValue(param?param:ie->c_str(),defVal) : defVal);
 	}
 
     /**
      * Append an IE with a given parameter
      * @param type IE's type
-     * @param param IE's parameter
+     * @param param IE's parameter. Set to 0 to use IE's name
      * @param value IE parameter's value
      * @return Pointer to the requested value or 0
      */
     inline ISDNQ931IE* appendIEValue(ISDNQ931IE::Type type, const char* param,
 	const char* value) {
 	    ISDNQ931IE* ie = new ISDNQ931IE(type);
-	    ie->addParam(param,value);
+	    ie->addParam(param?param:ie->c_str(),value);
 	    appendSafe(ie);
 	    return ie;
 	}

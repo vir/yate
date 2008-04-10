@@ -410,6 +410,12 @@ public:
     bool silencePayload(int type);
 
     /**
+     * Return SSRC value, initialize to a new, random value if needed
+     * @return Current value of SSRC
+     */
+    unsigned int ssrcInit();
+
+    /**
      * Requesting generation/grabbing of a new SSRC
      */
     inline void reset()
@@ -417,6 +423,7 @@ public:
 
     /**
      * Get the value of the current SSRC, zero if not initialized yet
+     * @return Value of SSRC, zero if not initialized
      */
     inline unsigned int ssrc() const
 	{ return m_ssrcInit ? 0 : m_ssrc; }
@@ -937,6 +944,12 @@ public:
     inline bool drillHole()
 	{ return m_transport && m_transport->drillHole(); }
 
+    /**
+     * Set the interval until receiver timeout is detected
+     * @param interval Milliseconds until receiver times out, zero to disable
+     */
+    void setTimeout(int interval);
+
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -944,11 +957,19 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
+    /**
+     * Method called when the receiver timed out
+     * @param initial True if no packet was ever received in this session
+     */
+    virtual void timeout(bool initial);
+
 private:
     RTPTransport* m_transport;
     Direction m_direction;
     RTPSender* m_send;
     RTPReceiver* m_recv;
+    u_int64_t m_timeoutTime;
+    u_int64_t m_timeoutInterval;
 };
 
 }

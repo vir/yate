@@ -7,6 +7,9 @@
 ; maxport: int: Maximum port range to allocate
 ;maxport=32768
 
+; localip: ipaddress: Local IP address to use instead of guessing
+;localip=
+
 ; tos: keyword: Type Of Service to set in outgoing UDP packets
 ; numeric TOS value or: lowdelay, throughput, reliability, mincost
 ;tos=0
@@ -25,6 +28,12 @@
 
 ; drillhole: bool: Attempt to drill a hole through a firewall or NAT
 ;drillhole=disable in server mode, enable in client mode
+
+; timeout: int: Receiver timeout in ms (500-60000), zero disables
+;timeout=3000
+
+; needmedia: bool: Drop the channels for which a timeout was detected
+;needmedia=no
 
 ; thread: keyword: Default priority of the data service threads
 ; Can be one of: lowest, low, normal, high, highest

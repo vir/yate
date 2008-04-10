@@ -55,6 +55,15 @@ bool RTPBaseIO::silencePayload(int type)
     return false;
 }
 
+unsigned int RTPBaseIO::ssrcInit()
+{
+    if (m_ssrcInit) {
+	m_ssrcInit = false;
+	m_ssrc = ::random();
+    }
+    return m_ssrc;
+}
+
 
 RTPReceiver::~RTPReceiver()
 {
@@ -283,10 +292,7 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
 	payload |= 0x80;
     m_tsLast = timestamp;
     timestamp += m_ts;
-    if (m_ssrcInit) {
-	m_ssrcInit = false;
-	m_ssrc = ::random();
-    }
+    ssrcInit();
     m_seq++;
 
     DataBlock buf(0,len+12);
@@ -399,7 +405,9 @@ void RTPSender::timerTick(const Time& when)
 
 
 RTPSession::RTPSession()
-    : m_transport(0), m_direction(FullStop), m_send(0), m_recv(0)
+    : m_transport(0), m_direction(FullStop),
+      m_send(0), m_recv(0),
+      m_timeoutTime(0), m_timeoutInterval(0)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
 }
@@ -418,22 +426,39 @@ void RTPSession::timerTick(const Time& when)
 	static_cast<RTPBaseIO*>(m_send)->timerTick(when);
     if (m_recv)
 	static_cast<RTPBaseIO*>(m_recv)->timerTick(when);
+
+    if (m_timeoutInterval) {
+	// only check timeout if we have a receiver
+	if (m_timeoutTime && m_recv) {
+	    if (when >= m_timeoutTime) {
+		// rearm timeout next time we get here
+		m_timeoutTime = 0;
+		timeout(0 == m_recv->ssrc());
+	    }
+	}
+	else
+	    m_timeoutTime = when + m_timeoutInterval;
+    }
 }
 
 void RTPSession::rtpData(const void* data, int len)
 {
     if ((m_direction & RecvOnly) == 0)
 	return;
-    if (m_recv)
+    if (m_recv) {
+	m_timeoutTime = 0;
 	m_recv->rtpData(data,len);
+    }
 }
 
 void RTPSession::rtcpData(const void* data, int len)
 {
     if ((m_direction & RecvOnly) == 0)
 	return;
-    if (m_recv)
+    if (m_recv) {
+	m_timeoutTime = 0;
 	m_recv->rtcpData(data,len);
+    }
 }
 
 bool RTPSession::rtpRecvData(bool marker, unsigned int timestamp, const void* data, int len)
@@ -460,6 +485,11 @@ void RTPSession::rtpNewSSRC(u_int32_t newSsrc,bool marker)
 {
     XDebug(DebugAll,"RTPSession::rtpNewSSRC(%08X,%s) [%p]",
 	newSsrc,String::boolText(marker),this);
+}
+
+void RTPSession::timeout(bool initial)
+{
+    DDebug(DebugNote,"RTPSession::timeout(%s) [%p]",String::boolText(initial),this);
 }
 
 RTPSender* RTPSession::createSender()
@@ -595,6 +625,21 @@ bool RTPSession::silencePayload(int type)
 	return ((!m_send) || m_send->silencePayload(type)) && ok;
     }
     return false;
+}
+
+void RTPSession::setTimeout(int interval)
+{
+    if (interval) {
+	if (interval < 0)
+	    interval = 0;
+	// force sane limits: between 500ms and 60s
+	else if (interval < 500)
+	    interval = 500;
+	else if (interval > 6000)
+	    interval = 6000;
+    }
+    m_timeoutTime = 0;
+    m_timeoutInterval = interval * (u_int64_t)1000;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

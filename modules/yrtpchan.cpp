@@ -82,13 +82,16 @@ static int s_minport = MIN_PORT;
 static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
-static bool s_autoaddr = true;
-static bool s_anyssrc = false;
-static bool s_rtcp = true;
+static String s_localip;
+static bool s_autoaddr  = true;
+static bool s_anyssrc   = false;
+static bool s_needmedia = false;
+static bool s_rtcp  = true;
 static bool s_drill = false;
 
 static Thread::Priority s_priority = Thread::Normal;
-static int s_sleep = 5;
+static int s_sleep   = 5;
+static int s_timeout = 0;
 static int s_minjitter = 0;
 static int s_maxjitter = 0;
 
@@ -110,6 +113,7 @@ public:
     bool setRemote(const char* raddr, unsigned int rport, const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
+    void timeout(bool initial);
     inline YRTPSession* rtp() const
 	{ return m_rtp; }
     inline RTPSession::Direction dir() const
@@ -137,6 +141,7 @@ public:
     static YRTPWrapper* find(const String& id);
     static void guessLocal(const char* remoteip, String& localip);
 private:
+    void setTimeout(const Message& msg, int timeOut);
     YRTPSession* m_rtp;
     RTPSession::Direction m_dir;
     CallEndpoint* m_conn;
@@ -168,6 +173,8 @@ public:
 	{ m_resync = true; }
     inline void anySSRC(bool acceptAny = true)
 	{ m_anyssrc = acceptAny; }
+protected:
+    virtual void timeout(bool initial);
 private:
     YRTPWrapper* m_wrap;
     bool m_resync;
@@ -358,6 +365,20 @@ bool YRTPWrapper::setRemote(const char* raddr, unsigned int rport, const Message
     return true;
 }
 
+void YRTPWrapper::setTimeout(const Message& msg, int timeOut)
+{
+    const String* param = msg.getParam("timeout");
+    if (param) {
+	// accept true/false to apply default or disable
+	if (param->isBoolean())
+	    timeOut = param->toBoolean() ? s_timeout : 0;
+	else
+	    timeOut = param->toInteger(timeOut);
+    }
+    if (timeOut >= 0)
+	m_rtp->setTimeout(timeOut);
+}
+
 bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message& msg)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
@@ -370,6 +391,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 	DDebug(&splugin,DebugAll,"Wrapper attempted to restart RTP! [%p]",this);
 	setRemote(raddr,rport,msg);
 	m_rtp->resync();
+	setTimeout(msg,-1);
 	return true;
     }
 
@@ -445,6 +467,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     m_rtp->setTOS(tos);
     if (msg.getBoolValue("drillhole",s_drill))
 	m_rtp->drillHole();
+    setTimeout(msg,s_timeout);
 //    if (maxJitter > 0)
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
@@ -471,8 +494,26 @@ void YRTPWrapper::gotDTMF(char tone)
     Engine::enqueue(m);
 }
 
+void YRTPWrapper::timeout(bool initial)
+{
+    Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
+	(initial ? "Initial" : "Later"),
+	(m_master ? " channel " : ""),
+	m_master.safe(),this);
+    if (s_needmedia && m_master) {
+	Message* m = new Message("call.drop");
+	m->addParam("id",m_master);
+	m->addParam("reason","nomedia");
+	Engine::enqueue(m);
+    }
+}
+
 void YRTPWrapper::guessLocal(const char* remoteip, String& localip)
 {
+    if (s_localip) {
+	localip = s_localip;
+	return;
+    }
     localip.clear();
     SocketAddr r(AF_INET);
     if (!r.host(remoteip)) {
@@ -567,6 +608,12 @@ void YRTPSession::rtpNewSSRC(u_int32_t newSsrc, bool marker)
 	    receiver()->ssrc(),newSsrc,m_wrap);
 	receiver()->ssrc(newSsrc);
     }
+}
+
+void YRTPSession::timeout(bool initial)
+{
+    if (m_wrap)
+	m_wrap->timeout(initial);
 }
 
 
@@ -882,10 +929,13 @@ void YRTPPlugin::initialize()
     s_minjitter = cfg.getIntValue("general","minjitter");
     s_maxjitter = cfg.getIntValue("general","maxjitter");
     s_tos = cfg.getValue("general","tos");
+    s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
+    s_timeout = cfg.getIntValue("general","timeout",3000);
+    s_needmedia = cfg.getBoolValue("general","needmedia",false);
     s_sleep = cfg.getIntValue("general","defsleep",5);
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));

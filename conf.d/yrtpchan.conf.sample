@@ -47,8 +47,9 @@
 ; timeout: int: Receiver timeout in ms (500-60000), zero disables
 ;timeout=3000
 
-; needmedia: bool: Drop the channels for which a timeout was detected
-;needmedia=no
+; notifymsg: string: Name of the notification message sent on timeout
+; Usually it should be chan.notify or call.drop, empty disables the message
+;notifymsg=
 
 ; warnlater: bool: Emit timeout warnings even if there was initially some RTP
 ;warnlater=no

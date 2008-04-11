@@ -83,9 +83,9 @@ static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
 static String s_tos;
 static String s_localip;
+static String s_notifyMsg;
 static bool s_autoaddr  = true;
 static bool s_anyssrc   = false;
-static bool s_needMedia = false;
 static bool s_warnLater = false;
 static bool s_rtcp  = true;
 static bool s_drill = false;
@@ -497,15 +497,18 @@ void YRTPWrapper::gotDTMF(char tone)
 
 void YRTPWrapper::timeout(bool initial)
 {
-    if (initial || s_warnLater)
-	Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
-	    (initial ? "Initial" : "Later"),
-	    (m_master ? " channel " : ""),
-	    m_master.safe(),this);
-    if (s_needMedia && m_master) {
-	Message* m = new Message("call.drop");
+    if (!(initial || s_warnLater))
+	return;
+    Debug(&splugin,DebugWarn,"%s timeout in%s%s wrapper [%p]",
+	(initial ? "Initial" : "Later"),
+	(m_master ? " channel " : ""),
+	m_master.safe(),this);
+    if (m_master && s_notifyMsg) {
+	Message* m = new Message(s_notifyMsg);
 	m->addParam("id",m_master);
 	m->addParam("reason","nomedia");
+	m->addParam("event","timeout");
+	m->addParam("initial",String::boolText(initial));
 	Engine::enqueue(m);
     }
 }
@@ -940,7 +943,7 @@ void YRTPPlugin::initialize()
     RTPGroup::setMinSleep(cfg.getIntValue("general","minsleep"));
     s_priority = Thread::priority(cfg.getValue("general","thread"));
     s_timeout = cfg.getIntValue("timeouts","timeout",3000);
-    s_needMedia = cfg.getBoolValue("timeouts","needmedia",false);
+    s_notifyMsg = cfg.getValue("timeouts","notifymsg");
     s_warnLater = cfg.getBoolValue("timeouts","warnlater",false);
     setup();
     if (m_first) {

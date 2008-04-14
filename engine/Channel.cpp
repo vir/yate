@@ -421,6 +421,13 @@ void Channel::setMaxcall(const Message* msg)
 	maxcall(Time::now() + tout*(u_int64_t)1000);
     else
 	maxcall(0);
+    if (msg) {
+	tout = msg->getIntValue("timeout",-1);
+	if (tout > 0)
+	    timeout(Time::now() + tout*(u_int64_t)1000);
+	else if (tout == 0)
+	    timeout(0);
+    }
 }
 
 void Channel::complete(Message& msg, bool minimal) const

@@ -1340,6 +1340,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     if (m_line->type() == AnalogLine::FXS && m_line->moduleGroup())
 	m_line->moduleGroup()->copyData(this);
 
+    setMaxcall(msg);
     // Startup
     Message* m = message("chan.startup");
     m->setParam("direction",status());

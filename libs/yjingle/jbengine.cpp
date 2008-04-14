@@ -534,14 +534,15 @@ JBClientStream* JBEngine::createClientStream(NamedList& params, JabberID* jid)
 
     // Build server info and create a new stream
     const char* address = params.getValue("address");
-    String tmp = params.getValue("port");
-    int port = tmp.toInteger(5222);
-    if (!(address && port)) {
-	Debug(this,DebugNote,"Can't create stream: invalid address=%s or port=%s",
-	    address,tmp.c_str());
-	params.setParam("error","Invalid address or port");
+    if (!address)
+	address = jid->domain();
+    if (!(address && jid->node() && jid->domain())) {
+	Debug(this,DebugNote,"Can't create client stream: invalid jid=%s or address=%s",
+	    jid->bare().c_str(),address);
+	params.setParam("error","Invalid id or address");
 	return 0;
     }
+    int port = params.getIntValue("port",5222);
     int flags = XMPPUtils::decodeFlags(params.getValue("options"),XMPPServerInfo::s_flagName);
     XMPPServerInfo* info = new XMPPServerInfo("",address,port,
 	params.getValue("password"),"","",flags);

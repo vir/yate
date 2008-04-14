@@ -2097,7 +2097,8 @@ bool YJGDriver::getJidFrom(JabberID& jid, Message& msg, bool checkDomain)
 	return decodeJid(jid,msg,"from",checkDomain);
     String domain;
     s_jabber->getServerIdentity(domain,true);
-    jid.set(username,domain,s_jabber->defaultResource());
+    const char* res = msg.getValue("resource",s_jabber->defaultResource());
+    jid.set(username,domain,res);
     return true;
 }
 
@@ -2106,12 +2107,12 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 {
     jid.set(msg.getValue(param));
     if (jid.node().null() || jid.domain().null()) {
-	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' is an invalid JID.",
+	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' is an invalid JID",
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }
     if (checkDomain && !s_presence->validDomain(jid.domain())) {
-	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' has invalid (unknown) domain.",
+	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' has invalid (unknown) domain",
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }

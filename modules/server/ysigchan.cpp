@@ -556,8 +556,6 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
     m_hungup(false),
     m_inband(false)
 {
-    // Startup
-    setState(0);
     if (!(m_link && m_link->controller())) {
 	msg.setParam("error","noconn");
 	m_hungup = true;
@@ -589,6 +587,7 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 	    sigMsg->params().addParam(ns->name().substr(prefix.length()),*ns);
     }
     m_call = link->controller()->call(sigMsg,m_reason);
+    setState(0);
     if (m_call) {
 	m_call->userdata(this);
 	SignallingCircuit* cic = getCircuit();
@@ -852,9 +851,10 @@ void SigChannel::setState(const char* state, bool updateStatus, bool showReason)
     if (!debugAt(DebugCall))
 	return;
     if (!state) {
-	Debug(this,DebugCall,"%s call from '%s' to '%s' (Link: %s) [%p]",
+	Debug(this,DebugCall,"%s call from=%s to=%s link=%s sigcall=%p [%p]",
 	    isOutgoing()?"Outgoing":"Incoming",m_caller.safe(),m_called.safe(),
-	    m_link ? m_link->name().c_str() : "no link",this);
+	    m_link ? m_link->name().c_str() : "no link",
+	    m_call,this);
 	return;
     }
     String show;

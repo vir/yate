@@ -1093,8 +1093,12 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     Debug(this,DebugCall,"Outgoing. caller='%s' called='%s' [%p]",caller,called,this);
     // Init transport
     m_data = new YJGData(this,&msg);
-    // Set timeout
-    //TODO: Do that only if not available
+    // Set timeout and maxcall
+    int tout = msg.getIntValue("timeout",-1);
+    if (tout > 0)
+	timeout(Time::now() + tout*(u_int64_t)1000);
+    else if (tout == 0)
+	timeout(0);
     m_timeout = msg.getIntValue("maxcall",0) * (u_int64_t)1000;
     u_int64_t pendingTimeout = s_pendingTimeout * (u_int64_t)1000;
     u_int64_t timenow = Time::now();

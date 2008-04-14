@@ -533,7 +533,7 @@ JBClientStream* JBEngine::createClientStream(NamedList& params, JabberID* jid)
     }
 
     // Build server info and create a new stream
-    const char* address = params.getValue("address");
+    const char* address = params.getValue("server",params.getValue("address"));
     if (!address)
 	address = jid->domain();
     if (!(address && jid->node() && jid->domain())) {

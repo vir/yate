@@ -952,12 +952,16 @@ bool YJGData::rtp(bool start)
     }
     else {
 	m.addParam("anyssrc","true");
-	if (s_localAddress)
+	if (s_localAddress) {
 	    address = s_localAddress;
-	else
-	    m_conn->getRemoteAddr(address);
-	if (address)
 	    m.addParam("localip",address);
+	}
+	else {
+	    String remote;
+	    m_conn->getRemoteAddr(remote);
+	    if (remote)
+		m.addParam("remoteip",remote);
+	}
     }
 
     if (!Engine::dispatch(m)) {

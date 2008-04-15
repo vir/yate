@@ -1426,7 +1426,7 @@ bool ResNotifyHandler::received(Message& msg)
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	msg.c_str(),from.c_str(),status.c_str());
-    if (s_presence->addOnPresence())
+    if (s_presence->addOnPresence().to())
 	process(from,to,status,msg.getBoolValue("subscription",false));
     else
 	sendPresence(from,to,status);
@@ -1585,9 +1585,9 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	JBPresence::Presence presence)
 {
     // Don't automatically add
-    if ((presence == JBPresence::Probe && !s_presence->addOnProbe()) ||
+    if ((presence == JBPresence::Probe && !s_presence->addOnProbe().to()) ||
 	((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
-	!s_presence->addOnSubscribe())) {
+	!s_presence->addOnSubscribe().to())) {
 	JBStream* stream = s_jabber->getStream();
 	if (!stream)
 	    return;

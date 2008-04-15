@@ -1644,24 +1644,24 @@ public:
 	{ return m_delUnavailable; }
 
     /**
-     * Check if this server should add new users when receiving subscribe stanzas
-     * @return True if should add a new user when receiving subscribe stanzas
+     * Get the 'add on subscribe' flags
+     * @return The 'add on subscribe' flags
      */
-    inline bool addOnSubscribe() const
+    inline XMPPDirVal addOnSubscribe() const
 	{ return m_addOnSubscribe; }
 
     /**
-     * Check if this server should add new users when receiving presence probes
-     * @return True if should add a new user when receiving presence probes
+     * Get the 'add on probe' flags
+     * @return The 'add on probe' flags
      */
-    inline bool addOnProbe() const
+    inline XMPPDirVal addOnProbe() const
 	{ return m_addOnProbe; }
 
     /**
-     * Check if this server should add new users when receiving presence
-     * @return True if should add a new user when receiving presence stanzas
+     * Get the 'add on presence' flags
+     * @return The 'add on presence' flags
      */
-    inline bool addOnPresence() const
+    inline XMPPDirVal addOnPresence() const
 	{ return m_addOnPresence; }
 
     /**
@@ -1906,9 +1906,9 @@ protected:
     XMPPDirVal m_autoSubscribe;          // Auto subscribe state
     bool m_delUnavailable;               // Delete unavailable user or resource
     bool m_autoRoster;                   // True if this service make an automatically roster management
-    bool m_addOnSubscribe;               // Add new user on subscribe request
-    bool m_addOnProbe;                   // Add new user on probe request
-    bool m_addOnPresence;                // Add new user on presence
+    XMPPDirVal m_addOnSubscribe;         // Add new user on subscribe request
+    XMPPDirVal m_addOnProbe;             // Add new user on probe request
+    XMPPDirVal m_addOnPresence;          // Add new user on presence
     bool m_autoProbe;                    // Automatically respond to probe requests
     u_int32_t m_probeInterval;           // Interval to probe a remote user
     u_int32_t m_expireInterval;          // Expire interval after probe

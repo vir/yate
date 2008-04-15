@@ -1842,8 +1842,7 @@ bool XMPPUserRoster::timeout(u_int64_t time)
 // Build the service
 JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jbpresence",params,prio),
-    m_delUnavailable(false), m_autoRoster(false), m_addOnSubscribe(false),
-    m_addOnProbe(false), m_addOnPresence(false), m_autoProbe(true),
+    m_delUnavailable(false), m_autoRoster(false), m_autoProbe(true),
     m_probeInterval(1800000), m_expireInterval(300000)
 {
     JBThreadList::setOwner(this);
@@ -1872,31 +1871,48 @@ void JBPresence::initialize(const NamedList& params)
     m_autoSubscribe.replace(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
     m_autoProbe = params.getBoolValue("auto_probe",true);
+    NamedString* addSubParam = params.getParam("add_onsubscribe");
+    if (addSubParam)
+	m_addOnSubscribe.replace(addSubParam->c_str());
+    NamedString* addPresParam = params.getParam("add_onpresence");
+    if (addPresParam)
+	m_addOnPresence.replace(addPresParam->c_str());
+    NamedString* addProbeParam = params.getParam("add_onprobe");
+    if (addProbeParam)
+	m_addOnProbe.replace(addProbeParam->c_str());
+
+    // Override missing add_ params if should keep the roster
+    // Automatically process (un)subscribe and probe requests if no roster
     if (engine()) {
 	XMPPServerInfo* info = engine()->findServerInfo(engine()->componentServer(),true);
-	if (info) {
-	    m_addOnPresence = info->flag(XMPPServerInfo::KeepRoster);
-	    m_addOnSubscribe = m_addOnProbe = m_addOnPresence;
-	    // Automatically process (un)subscribe and probe requests if no roster
-	    if (!info->flag(XMPPServerInfo::KeepRoster)) {
+	if (info)
+	    if (info->flag(XMPPServerInfo::KeepRoster)) {
+		if (!addSubParam)
+		    m_addOnSubscribe.set(XMPPDirVal::Both);
+		if (!addPresParam)
+		    m_addOnPresence.set(XMPPDirVal::Both);
+		if (!addProbeParam)
+		    m_addOnProbe.set(XMPPDirVal::Both);
+	    }
+	    else {
 		m_autoProbe = true;
 		m_autoSubscribe.replace(XMPPDirVal::From);
 	    }
-	}
     }
 
     m_probeInterval = 1000 * params.getIntValue("probe_interval",m_probeInterval/1000);
     m_expireInterval = 1000 * params.getIntValue("expire_interval",m_expireInterval/1000);
 
-    m_autoRoster = m_addOnSubscribe || m_addOnProbe || m_addOnPresence;
+    m_autoRoster = m_addOnSubscribe.flag(-1) || m_addOnProbe.flag(-1) ||
+	m_addOnPresence.flag(-1);
 
     if (debugAt(DebugInfo)) {
 	String s;
 	s << " auto_subscribe=" << XMPPDirVal::lookup((int)m_autoSubscribe);
 	s << " delete_unavailable=" << String::boolText(m_delUnavailable);
-	s << " add_onsubscribe=" << String::boolText(m_addOnSubscribe);
-	s << " add_onprobe=" << String::boolText(m_addOnProbe);
-	s << " add_onpresence=" << String::boolText(m_addOnPresence);
+	s << " add_onsubscribe=" << XMPPDirVal::lookup((int)m_addOnSubscribe);
+	s << " add_onprobe=" << XMPPDirVal::lookup((int)m_addOnProbe);
+	s << " add_onpresence=" << XMPPDirVal::lookup((int)m_addOnPresence);
 	s << " auto_probe=" << String::boolText(m_autoProbe);
 	s << " probe_interval=" << (unsigned int)m_probeInterval;
 	s << " expire_interval=" << (unsigned int)m_expireInterval;
@@ -2090,8 +2106,8 @@ void JBPresence::processProbe(JBEvent* event)
     XDebug(this,DebugAll,"processProbe event=(%p,%s) local=%s remote=%s [%p]",
 	event,event->name(),event->to().c_str(),event->from().c_str(),this);
     bool newUser = false;
-    XMPPUser* user = recvGetRemoteUser("probe",event->to(),event->from(),m_addOnProbe,0,
-	m_addOnProbe,&newUser);
+    XMPPUser* user = recvGetRemoteUser("probe",event->to(),event->from(),
+	m_addOnProbe.from(),0,m_addOnProbe.from(),&newUser);
     if (!user) {
 	if (m_autoProbe) {
 	    XMLElement* stanza = createPresence(event->to().bare(),event->from());
@@ -2125,7 +2141,7 @@ void JBPresence::processSubscribe(JBEvent* event, Presence presence)
 	"processSubscribe '%s' event=(%p,%s) local=%s remote=%s [%p]",
 	presenceText(presence),event,event->name(),
 	event->to().c_str(),event->from().c_str(),this);
-    bool addLocal = (presence == Subscribe) ? m_addOnSubscribe : false;
+    bool addLocal = (presence == Subscribe) ? m_addOnSubscribe.from() : false;
     bool newUser = false;
     XMPPUser* user = recvGetRemoteUser(presenceText(presence),event->to(),event->from(),
 	addLocal,0,addLocal,&newUser);
@@ -2147,7 +2163,7 @@ void JBPresence::processUnavailable(JBEvent* event)
     XDebug(this,DebugAll,"processUnavailable event=(%p,%s) local=%s remote=%s [%p]",
 	event,event->name(),event->to().c_str(),event->from().c_str(),this);
     // Don't add if delUnavailable is true
-    bool addLocal = m_addOnPresence && !m_delUnavailable;
+    bool addLocal = m_addOnPresence.from() && !m_delUnavailable;
     // Check if broadcast
     if (event->to().null()) {
 	Lock lock(this);
@@ -2196,7 +2212,7 @@ void JBPresence::processPresence(JBEvent* event)
 	    XMPPUserRoster* roster = static_cast<XMPPUserRoster*>(obj->get());
 	    bool newUser = false;
 	    XMPPUser* user = getRemoteUser(roster->jid(),event->from(),
-		m_addOnPresence,0,m_addOnPresence,&newUser);
+		m_addOnPresence.from(),0,m_addOnPresence.from(),&newUser);
 	    if (!user)
 		continue;
 	    if (newUser)
@@ -2209,7 +2225,7 @@ void JBPresence::processPresence(JBEvent* event)
     // Not broadcast: find user
     bool newUser = false;
     XMPPUser* user = recvGetRemoteUser("",event->to(),event->from(),
-	m_addOnPresence,0,m_addOnPresence,&newUser);
+	m_addOnPresence.from(),0,m_addOnPresence.from(),&newUser);
     if (!user) {
 	if (!notifyPresence(event,true))
 	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),

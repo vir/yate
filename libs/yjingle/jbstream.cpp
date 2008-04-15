@@ -350,14 +350,7 @@ void JBStream::connect()
 	m_local.safe(),m_remote.safe(),addr().host().safe(),addr().port(),this);
 
     // Send stream start
-#if 0
-    if (type() == JBEngine::Client && flag(NoVersion1)) {
-	Lock2 lck2(m_socket.m_streamMutex,m_socket.m_receiveMutex);
-	startTls();
-    }
-    else
-#endif
-	sendStreamStart();
+    sendStreamStart();
 }
 
 // Read data from socket and pass it to the parser

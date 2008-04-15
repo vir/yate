@@ -36,6 +36,7 @@ enum {
     CdrRoute,
     CdrRinging,
     CdrAnswer,
+    CdrUpdate,
     CdrHangup,
     CdrDrop,
     EngHalt
@@ -337,7 +338,13 @@ bool CdrHandler::received(Message &msg)
 	s_cdrs.clear();
 	return false;
     }
-    if (!msg.getBoolValue("cdrtrack",true))
+    bool track = true;
+    if (m_type == CdrUpdate) {
+	const String* oper = msg.getParam("operation");
+	if (oper && (*oper != "cdrbuild"))
+	    track = false;
+    }
+    if (!msg.getBoolValue("cdrtrack",track))
 	return false;
     String id(msg.getValue("id"));
     if (m_type == CdrDrop) {
@@ -459,6 +466,7 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CdrHandler("call.execute",CdrCall));
 	Engine::install(new CdrHandler("call.ringing",CdrRinging));
 	Engine::install(new CdrHandler("call.answered",CdrAnswer));
+	Engine::install(new CdrHandler("call.update",CdrUpdate));
 	Engine::install(new CdrHandler("chan.hangup",CdrHangup));
 	Engine::install(new CdrHandler("call.drop",CdrDrop));
 	Engine::install(new CdrHandler("engine.halt",EngHalt,150));

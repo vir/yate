@@ -345,6 +345,7 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgTone(Message& msg, const char* tone);
     virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgUpdate(Message& msg);
     virtual bool callRouted(Message& msg);
     virtual void callAccept(Message& msg);
@@ -3345,6 +3346,18 @@ bool YateSIPConnection::msgText(Message& msg, const char* text)
 	return true;
     }
     return false;
+}
+
+bool YateSIPConnection::msgDrop(Message& msg, const char* reason)
+{
+    if (!Channel::msgDrop(msg,reason))
+	return false;
+    int code = lookup(reason,dict_errors);
+    if (code >= 300) {
+	m_reasonCode = code;
+	m_reason = lookup(code,SIPResponses,reason);
+    }
+    return true;
 }
 
 bool YateSIPConnection::msgUpdate(Message& msg)

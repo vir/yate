@@ -1633,7 +1633,7 @@ public:
      * Get the auto subscribe parameter
      * @return The auto subscribe parameter
      */
-    inline int autoSubscribe() const
+    inline XMPPDirVal autoSubscribe() const
 	{ return m_autoSubscribe; }
 
     /**
@@ -1903,7 +1903,7 @@ protected:
     virtual bool accept(JBEvent* event, bool& processed, bool& insert);
 
     static TokenDict s_presence[];       // Keep the types of 'presence'
-    int m_autoSubscribe;                 // Auto subscribe state 
+    XMPPDirVal m_autoSubscribe;          // Auto subscribe state
     bool m_delUnavailable;               // Delete unavailable user or resource
     bool m_autoRoster;                   // True if this service make an automatically roster management
     bool m_addOnSubscribe;               // Add new user on subscribe request
@@ -2187,13 +2187,6 @@ class YJINGLE_API XMPPUser : public RefObject, public Mutex
 {
     friend class XMPPUserRoster;
 public:
-    enum Subscription {
-	None = 0,
-	To   = 1,
-	From = 2,
-	Both = 3,
-    };
-
     /**
      * Create a remote user.
      * @param local The local (owner) user peer.
@@ -2204,7 +2197,7 @@ public:
      * @param sendProbe True to probe the new user.
      */
     XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
-	Subscription sub, bool subTo = true, bool sendProbe = true);
+	XMPPDirVal sub, bool subTo = true, bool sendProbe = true);
 
     /**
      * Destructor.
@@ -2230,15 +2223,8 @@ public:
      * Get the subscription state of this user
      * @return The subscription state of this user
      */
-    inline int subscription() const
-	{ return (int)m_subscription; }
-
-    /**
-     * Set the subscription state
-     * @param subscription The new subscription state
-     */
-    inline void setSubscription(u_int8_t subscription)
-	{ m_subscription = subscription; }
+    inline XMPPDirVal& subscription()
+	{ return m_subscription; }
 
     /**
      * Add a local resource to the list.
@@ -2274,20 +2260,6 @@ public:
 	    return local ? m_localRes.getAudio(availableOnly) :
 		m_remoteRes.getAudio(availableOnly);
 	}
-
-    /**
-     * Check if the local user is subscribed to the remote one.
-     * @return True if the local user is subscribed to the remote one.
-     */
-    inline bool subscribedTo() const
-	{ return (m_subscription & To) != 0; }
-
-    /**
-     * Check if the remote user is subscribed to the local one.
-     * @return True if the remote user is subscribed to the local one.
-     */
-    inline bool subscribedFrom() const
-	{ return (m_subscription & From) != 0; }
 
     /**
      * Process received error elements.
@@ -2387,22 +2359,6 @@ public:
      */
     void notifyResources(bool remote, JBStream* stream = 0, bool force = false);
 
-    /**
-     * Get the string associated with a subscription enumeration value.
-     * @param value The subscription enumeration to get string for.
-     * @return Pointer to the string associated with the given subscription enumeration or 0 if none.
-     */
-    static inline const char* subscribeText(int value)
-	{ return lookup(value,s_subscription); }
-
-    /**
-     * Get the subscription enumeration value associated with the given string.
-     * @param value The subscription string.
-     * @return the subscription as enumeration.
-     */
-    static inline int subscribeType(const char* value)
-	{ return lookup(value,s_subscription,None); }
-
 protected:
     /**
      * Update subscription state.
@@ -2419,15 +2375,10 @@ protected:
      */
     void updateTimeout(bool from, u_int64_t time = Time::msecNow());
 
-    /**
-     * Keep the association between subscription enumeration and strings.
-     */
-    static TokenDict s_subscription[];
-
 private:
     XMPPUserRoster* m_local;             // Local user
     JabberID m_jid;                      // User's JID
-    u_int8_t m_subscription;             // Subscription state
+    XMPPDirVal m_subscription;           // Subscription state
     JIDResourceList m_localRes;          // Local user's resources
     JIDResourceList m_remoteRes;         // Remote user's resources
     u_int64_t m_nextProbe;               // Time to probe

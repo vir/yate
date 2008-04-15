@@ -57,7 +57,7 @@ class JIDFeature;                        // A JID's feature
 class JIDFeatureSasl;                    // A JID's SASL feature
 class JIDFeatureList;                    // Feature list
 class XMPPUtils;                         // Utilities
-
+class XMPPDirVal;                        // Direction flags
 
 /**
  * This class holds informations about a server
@@ -988,6 +988,119 @@ public:
      * Keep the command status
      */
     static TokenDict s_commandStatus[];
+};
+
+/**
+ * This class holds a 4-state direction value (such as subscription states)
+ * @short Direction flags
+ */
+class YJINGLE_API XMPPDirVal
+{
+public:
+    enum Direction {
+	None = 0,
+	To   = 1,
+	From = 2,
+	Both = 3,
+    };
+
+    /**
+     * Constructor
+     * @param flags Flag(s) to set
+     */
+    inline XMPPDirVal(int flags = None)
+	: m_value(flags)
+	{}
+
+    /**
+     * Constructor
+     * @param name The name of the flag used to initialize this object
+     */
+    inline XMPPDirVal(const char* name)
+	: m_value(lookup(name,None))
+	{}
+
+    /**
+     * Replace all flags
+     * @param flags The new value of the flags
+     */
+    inline void replace(int flag)
+	{ m_value = flag; }
+
+    /**
+     * Replace all flags from a value's name
+     * @param name The name of the flag used to replace this value
+     */
+    inline void replace(const char* name)
+	{ m_value = lookup(name,None); }
+
+    /**
+     * Set one or more flags
+     * @param flags Flag(s) to set
+     */
+    inline void set(int flag)
+	{ m_value |= flag; }
+
+    /**
+     * Reset one or more flags
+     * @param flags Flag(s) to reset
+     */
+    inline void reset(int flag)
+	{ m_value &= ~flag; }
+
+    /**
+     * Check if a given bit mask is set
+     * @param mask Bit mask to check
+     * @return True if the given bit mask is set
+     */
+    inline bool flag(int mask) const
+	{ return (m_value & mask) != 0; }
+
+    /**
+     * Check if the 'To' flag is set
+     * @return True if the 'To' flag is set
+     */
+    inline bool to() const
+	{ return flag(To); }
+
+    /**
+     * Check if the 'From' flag is set
+     * @return True if the 'From' flag is set
+     */
+    inline bool from() const
+	{ return flag(From); }
+
+    /**
+     * Cast operator
+     */
+    inline operator int()
+	{ return m_value; }
+
+    /**
+     * Get the name of a flag
+     * @param flag The flag
+     * @param defVal Value to return if not found
+     * @return The name of the requested flag
+     */
+    static inline const char* lookup(int flag, const char* defVal = "")
+	{ return TelEngine::lookup(flag,s_names,defVal); }
+
+    /**
+     * Get the value associated with a flag name
+     * @param name The flag name
+     * @param defVal Value to return if not found
+     * @return The value of the requested flag name
+     */
+    static inline int lookup(const char* name, int defVal = None)
+	{ return TelEngine::lookup(name,s_names,defVal); }
+
+    /**
+     * Keep the flag names
+     */
+    static TokenDict s_names[];
+
+private:
+    int m_value;                         // The value
 };
 
 };

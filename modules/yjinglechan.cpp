@@ -671,7 +671,7 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    Lock lock(stream->roster());
 	    XMPPUser* user = stream->getRemote(event->from());
 	    if (user) {
-		sub = XMPPUser::subscribeText(user->subscription());
+		sub = XMPPDirVal::lookup((int)user->subscription());
 		TelEngine::destruct(user);
 	    }
 	}
@@ -753,7 +753,7 @@ bool YJBPresence::notifySubscribe(JBEvent* event, Presence presence)
     XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
 	presenceText(presence),event->to().c_str(),event->from().c_str(),this);
     // Respond if auto subscribe
-    if (event->stream() && 0 != (autoSubscribe() & XMPPUser::From) &&
+    if (event->stream() && autoSubscribe().from() &&
 	(presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe)) {
 	if (presence == JBPresence::Subscribe)
 	    presence = JBPresence::Subscribed;
@@ -812,7 +812,7 @@ void YJBPresence::notifyPresence(XMPPUser* user, JIDResource* resource)
 	resource->hasCap(JIDResource::CapAudio));
     Engine::enqueue(message(resource->available() ? JBPresence::None : JBPresence::Unavailable,
 	user->jid().bare(),user->local()->jid().bare(),
-	String::boolText(user->subscribedTo())));
+	String::boolText(user->subscription().to())));
 }
 
 void YJBPresence::notifyNewUser(XMPPUser* user)
@@ -1441,7 +1441,7 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
     // Add new user and local resource
     if (!user) {
 	user = new XMPPUser(roster,to.node(),to.domain(),
-	    subFrom ? XMPPUser::From : XMPPUser::None,false,false);
+	    subFrom ? XMPPDirVal::From : XMPPDirVal::None,false,false);
 	s_presence->notifyNewUser(user);
 	if (!user->ref()) {
 	    roster->deref();
@@ -1454,13 +1454,13 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
     for (;;) {
 	if (status == "subscribed") {
 	    // Send only if not already subscribed to us
-	    if (!user->subscribedFrom())
+	    if (!user->subscription().from())
 		user->sendSubscribe(JBPresence::Subscribed,0);
 	    break;
 	}
 	if (status == "unsubscribed") {
 	    // Send only if not already unsubscribed from us
-	    if (user->subscribedFrom())
+	    if (user->subscription().from())
 		user->sendSubscribe(JBPresence::Unsubscribed,0);
 	    break;
 	}
@@ -1600,7 +1600,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
     XMPPUser* user = roster->getUser(to,false,0);
     // Add new user and local resource
     if (!user) {
-	user = new XMPPUser(roster,to.node(),to.domain(),XMPPUser::From,
+	user = new XMPPUser(roster,to.node(),to.domain(),XMPPDirVal::From,
 	    false,false);
 	s_presence->notifyNewUser(user);
 	if (!user->ref()) {
@@ -1614,7 +1614,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
     for (;;) {
 	if (presence == JBPresence::Subscribe) {
 	    // Already subscribed: notify. NO: send request
-	    if (user->subscribedTo())
+	    if (user->subscription().to())
 		s_presence->notifySubscribe(user,JBPresence::Subscribed);
 	    else {
 		user->sendSubscribe(JBPresence::Subscribe,0);
@@ -1624,7 +1624,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	}
 	if (presence == JBPresence::Unsubscribe) {
 	    // Already unsubscribed: notify. NO: send request
-	    if (!user->subscribedTo())
+	    if (!user->subscription().to())
 		s_presence->notifySubscribe(user,JBPresence::Unsubscribed);
 	    else {
 		user->sendSubscribe(JBPresence::Unsubscribe,0);

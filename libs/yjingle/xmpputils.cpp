@@ -39,6 +39,14 @@ TokenDict XMPPServerInfo::s_flagName[] = {
     {0,0}
 };
 
+TokenDict XMPPDirVal::s_names[] = {
+    {"none", None},
+    {"to",   To},
+    {"from", From},
+    {"both", Both},
+    {0,0},
+};
+
 /**
  * XMPPNamespace
  */

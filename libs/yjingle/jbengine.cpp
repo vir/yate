@@ -61,14 +61,6 @@ TokenDict JBEvent::s_type[] = {
     {0,0}
 };
 
-TokenDict XMPPUser::s_subscription[] = {
-    {"none", None},
-    {"to",   To},
-    {"from", From},
-    {"both", Both},
-    {0,0},
-};
-
 TokenDict JBEngine::s_protoName[] = {
     {"component",    Component},
     {"client",       Client},
@@ -1306,13 +1298,8 @@ JIDResource* JIDResourceList::getAudio(bool availableOnly)
  */
 // Constructor
 XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
-	Subscription sub, bool subTo, bool sendProbe)
-    : Mutex(true),
-      m_local(0),
-      m_jid(node,domain),
-      m_subscription(None),
-      m_nextProbe(0),
-      m_expire(0)
+	XMPPDirVal sub, bool subTo, bool sendProbe)
+    : Mutex(true), m_local(0), m_jid(node,domain), m_nextProbe(0), m_expire(0)
 {
     if (local && local->ref())
 	m_local = local;
@@ -1325,26 +1312,26 @@ XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
 	m_local->jid().c_str(),m_jid.c_str(),this);
     // Done if no engine
     if (!m_local->engine()) {
-	m_subscription = sub;
+	m_subscription.set((int)sub);
 	return;
     }
     // Update subscription
     switch (sub) {
-	case None:
+	case XMPPDirVal::None:
 	    break;
-	case Both:
+	case XMPPDirVal::Both:
 	    updateSubscription(true,true,0);
 	    updateSubscription(false,true,0);
 	    break;
-	case From:
+	case XMPPDirVal::From:
 	    updateSubscription(true,true,0);
 	    break;
-	case To:
+	case XMPPDirVal::To:
 	    updateSubscription(false,true,0);
 	    break;
     }
     // Subscribe to remote user if not already subscribed and auto subscribe is true
-    if (subTo || (!subscribedTo() && (m_local->engine()->autoSubscribe() & To)))
+    if (subTo || (!m_subscription.to() && (m_local->engine()->autoSubscribe().to())))
 	sendSubscribe(JBPresence::Subscribe,0);
     // Probe remote user
     if (sendProbe)
@@ -1376,7 +1363,7 @@ bool XMPPUser::addLocalRes(JIDResource* resource)
 	m_local->jid().c_str(),resource->name().c_str(),
 	String::boolText(resource->hasCap(JIDResource::CapAudio)),this);
     resource->setPresence(true);
-    if (subscribedFrom())
+    if (m_subscription.from())
 	sendPresence(resource,0,true);
     return true;
 }
@@ -1388,7 +1375,7 @@ void XMPPUser::removeLocalRes(JIDResource* resource)
 	return;
     Lock lock(this);
     resource->setPresence(false);
-    if (subscribedFrom())
+    if (m_subscription.from())
 	sendPresence(resource,0);
     m_localRes.remove(resource);
     DDebug(m_local->engine(),DebugAll,"User(%s). Removed resource name=%s [%p]",
@@ -1400,7 +1387,7 @@ void XMPPUser::clearLocalRes()
 {
     Lock lock(this);
     m_localRes.clear();
-    if (subscribedFrom())
+    if (m_subscription.from())
 	sendUnavailable(0);
 }
 
@@ -1466,7 +1453,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 	if (!m_remoteRes.getFirst() && m_local->engine()->delUnavailable())
 	    return false;
 	// Notify local resources to remote user if not already done
-	if (subscribedFrom())
+	if (m_subscription.from())
 	    notifyResources(false,event->stream(),false);
 	return true;
     }
@@ -1508,7 +1495,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 	    return false;
     }
     // Notify local resources to remote user if not already done
-    if (subscribedFrom())
+    if (m_subscription.from())
 	notifyResources(false,event->stream(),false);
     return true;
 }
@@ -1520,33 +1507,33 @@ void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
     switch (type) {
 	case JBPresence::Subscribe:
 	    // Already subscribed to us: Confirm subscription
-	    if (subscribedFrom()) {
+	    if (m_subscription.from()) {
 		sendSubscribe(JBPresence::Subscribed,event->stream());
 		return;
 	    }
 	    // Approve if auto subscribing
-	    if ((m_local->engine()->autoSubscribe() & From))
+	    if (m_local->engine()->autoSubscribe().from())
 		sendSubscribe(JBPresence::Subscribed,event->stream());
 	    break;
 	case JBPresence::Subscribed:
 	    // Already subscribed to remote user: do nothing
-	    if (subscribedTo())
+	    if (m_subscription.to())
 		return;
 	    updateSubscription(false,true,event->stream());
 	    break;
 	case JBPresence::Unsubscribe:
 	    // Already unsubscribed from us: confirm it
-	    if (!subscribedFrom()) {
+	    if (!m_subscription.from()) {
 		sendSubscribe(JBPresence::Unsubscribed,event->stream());
 		return;
 	    }
 	    // Approve if auto subscribing
-	    if ((m_local->engine()->autoSubscribe() & From))
+	    if (m_local->engine()->autoSubscribe().from())
 		sendSubscribe(JBPresence::Unsubscribed,event->stream());
 	    break;
 	case JBPresence::Unsubscribed:
 	    // If not subscribed to remote user ignore the unsubscribed confirmation
-	    if (!subscribedTo())
+	    if (!m_subscription.to())
 		return;
 	    updateSubscription(false,false,event->stream());
 	    break;
@@ -1715,21 +1702,20 @@ bool XMPPUser::sendUnavailable(JBStream* stream)
 void XMPPUser::updateSubscription(bool from, bool value, JBStream* stream)
 {
     Lock lock(this);
+    int sub = (from ? XMPPDirVal::From : XMPPDirVal::To);
     // Don't update if nothing changed
-    if ((from && value == subscribedFrom()) ||
-	(!from && value == subscribedTo()))
+    if (value == (0 != m_subscription.flag(sub)))
 	return;
-    // Update
-    int s = (from ? From : To);
     if (value)
-	m_subscription |= s;
+	m_subscription.set(sub);
     else
-	m_subscription &= ~s;
-    DDebug(m_local->engine(),DebugInfo,"User(%s). remote=%s subscription=%s [%p]",
-	m_local->jid().c_str(),m_jid.bare().c_str(),
-	subscribeText(m_subscription),this);
+	m_subscription.reset(sub);
+    DDebug(m_local->engine(),DebugInfo,
+	"User(%s). Updated subscription (%s) for remote=%s [%p]",
+	m_local->jid().c_str(),XMPPDirVal::lookup((int)m_subscription),
+	m_jid.bare().c_str(),this);
     // Send presence if remote user is subscribed to us
-    if (from && subscribedFrom()) {
+    if (from && m_subscription.from()) {
 	sendUnavailable(stream);
 	sendPresence(0,stream,true);
     }
@@ -1809,7 +1795,7 @@ XMPPUser* XMPPUserRoster::getUser(const JabberID& jid, bool add, bool* added)
     if (!u && !add)
 	return 0;
     if (!u) {
-	u = new XMPPUser(this,jid.node(),jid.domain(),XMPPUser::From);
+	u = new XMPPUser(this,jid.node(),jid.domain(),XMPPDirVal::From);
 	if (added)
 	    *added = true;
 	Debug(m_engine,DebugAll,"User(%s) added remote=%s [%p]",
@@ -1856,10 +1842,9 @@ bool XMPPUserRoster::timeout(u_int64_t time)
 // Build the service
 JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jbpresence",params,prio),
-    m_autoSubscribe((int)XMPPUser::None), m_delUnavailable(false),
-    m_autoRoster(false), m_addOnSubscribe(false), m_addOnProbe(false),
-    m_addOnPresence(false), m_autoProbe(true), m_probeInterval(1800000),
-    m_expireInterval(300000)
+    m_delUnavailable(false), m_autoRoster(false), m_addOnSubscribe(false),
+    m_addOnProbe(false), m_addOnPresence(false), m_autoProbe(true),
+    m_probeInterval(1800000), m_expireInterval(300000)
 {
     JBThreadList::setOwner(this);
 }
@@ -1884,7 +1869,7 @@ void JBPresence::initialize(const NamedList& params)
     if (lvl != -1)
 	debugLevel(lvl);
 
-    m_autoSubscribe = XMPPUser::subscribeType(params.getValue("auto_subscribe"));
+    m_autoSubscribe.replace(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
     m_autoProbe = params.getBoolValue("auto_probe",true);
     if (engine()) {
@@ -1895,7 +1880,7 @@ void JBPresence::initialize(const NamedList& params)
 	    // Automatically process (un)subscribe and probe requests if no roster
 	    if (!info->flag(XMPPServerInfo::KeepRoster)) {
 		m_autoProbe = true;
-		m_autoSubscribe = XMPPUser::From;
+		m_autoSubscribe.replace(XMPPDirVal::From);
 	    }
 	}
     }
@@ -1907,7 +1892,7 @@ void JBPresence::initialize(const NamedList& params)
 
     if (debugAt(DebugInfo)) {
 	String s;
-	s << " auto_subscribe=" << XMPPUser::subscribeText(m_autoSubscribe);
+	s << " auto_subscribe=" << XMPPDirVal::lookup((int)m_autoSubscribe);
 	s << " delete_unavailable=" << String::boolText(m_delUnavailable);
 	s << " add_onsubscribe=" << String::boolText(m_addOnSubscribe);
 	s << " add_onprobe=" << String::boolText(m_addOnProbe);

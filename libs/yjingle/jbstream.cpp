@@ -1973,14 +1973,14 @@ void JBClientStream::processRunning(XMLElement* xml)
     for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
 	JabberID jid = item->getAttribute("jid");
 	const char* sub = item->getAttribute("subscription");
-	XMPPUser::Subscription subType = (XMPPUser::Subscription)XMPPUser::subscribeType(sub);
+	XMPPDirVal::Direction subType = (XMPPDirVal::Direction)XMPPDirVal::lookup(sub);
 	XMPPUser* user = m_roster->getUser(jid,false);
 	bool newUser = true;
 	if (!user)
 	    user = new XMPPUser(m_roster,jid.node(),jid.domain(),subType,false,false);
 	else {
 	    newUser = false;
-	    user->setSubscription(subType);
+	    user->subscription().replace(subType);
 	}
 	if (!user->local()) {
 	    Debug(engine(),DebugStub,"Stream. Failed to update roster for jid=%s [%p]",

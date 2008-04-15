@@ -45,7 +45,10 @@ JGEngine::~JGEngine()
 // Create private stream(s) to get events from sessions
 void JGEngine::initialize(const NamedList& params)
 {
-    debugLevel(params.getIntValue("debug_level",debugLevel()));
+    int lvl = params.getIntValue("debug_level",-1);
+    if (lvl != -1)
+	debugLevel(lvl);
+
     int timeout = params.getIntValue("stanza_timeout",10);
     if (timeout < 10)
 	timeout = 10;

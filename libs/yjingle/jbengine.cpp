@@ -336,7 +336,9 @@ void JBEngine::destruct()
 // Initialize the engine's parameters
 void JBEngine::initialize(const NamedList& params)
 {
-    debugLevel(params.getIntValue("debug_level",debugLevel()));
+    int lvl = params.getIntValue("debug_level",-1);
+    if (lvl != -1)
+	debugLevel(lvl);
 
     int recv = -1, proc = -1;
 
@@ -1117,7 +1119,9 @@ bool JBEvent::init(JBStream* stream, XMLElement* element)
 // Initialize service. Create private threads
 void JBMessage::initialize(const NamedList& params)
 {
-    debugLevel(params.getIntValue("debug_level",debugLevel()));
+    int lvl = params.getIntValue("debug_level",-1);
+    if (lvl != -1)
+	debugLevel(lvl);
 
     if (m_initialized)
 	return;
@@ -1876,7 +1880,9 @@ JBPresence::~JBPresence()
 // Initialize the service
 void JBPresence::initialize(const NamedList& params)
 {
-    debugLevel(params.getIntValue("debug_level",debugLevel()));
+    int lvl = params.getIntValue("debug_level",-1);
+    if (lvl != -1)
+	debugLevel(lvl);
 
     m_autoSubscribe = XMPPUser::subscribeType(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);

@@ -102,7 +102,7 @@ static const CommandInfo s_cmdInfo[] =
 #ifdef HAVE_COREDUMPER
     { "coredump", "[filename]", 0, "Dumps memory image of running Yate to a file" },
 #endif
-    { "drop", "{chan|*|all}", s_dall, "Drops one or all active calls" },
+    { "drop", "{chan|*|all} [reason]", s_dall, "Drops one or all active calls" },
     { "call", "chan target", 0, "Execute an outgoing call" },
     { "reload", 0, 0, "Reloads module configuration files" },
     { "restart", "[now]", s_rnow, "Restarts the engine if executing supervised" },
@@ -851,6 +851,12 @@ bool Connection::processLine(const char *line)
     }
     if (str.startSkip("drop"))
     {
+	String reason;
+	int pos = str.find(' ');
+	if (pos > 0) {
+	    reason = str.substr(pos+1);
+	    str = str.substr(0,pos);
+	}
 	if (str.null()) {
 	    writeStr(m_machine ? "%%=drop:fail=noarg\r\n" : "You must specify what connection to drop!\r\n");
 	    return false;
@@ -863,6 +869,8 @@ bool Connection::processLine(const char *line)
 	}
 	else
 	    m.addParam("id",str); 
+	if (reason)
+	    m.addParam("reason",reason);
 	if (Engine::dispatch(m))
 	    str = (m_machine ? "%%=drop:success:" : "Dropped ") + str + "\r\n";
 	else if (all)

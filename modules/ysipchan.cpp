@@ -808,8 +808,11 @@ static void copySipHeaders(Message& msg, const SIPMessage& sip, bool filter = tr
 }
 
 // Copy headers from Yate message to SIP message
-static void copySipHeaders(SIPMessage& sip, const Message& msg, const char* prefix = "sip_")
+static void copySipHeaders(SIPMessage& sip, const Message& msg, const char* prefix = "osip_")
 {
+    prefix = msg.getValue("osip-prefix",prefix);
+    if (!prefix)
+	return;
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
 	NamedString* str = msg.getParam(i);
@@ -1751,7 +1754,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     }
     if ((code >= 200) && (code < 700)) {
 	SIPMessage* resp = new SIPMessage(message,code);
-	copySipHeaders(*resp,m,"osip_");
+	copySipHeaders(*resp,m);
 	t->setResponse(resp);
 	resp->deref();
 	return true;
@@ -1997,7 +2000,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     }
     int maxf = msg.getIntValue("antiloop",s_maxForwards);
     m->addHeader("Max-Forwards",String(maxf));
-    copySipHeaders(*m,msg,"osip_");
+    copySipHeaders(*m,msg);
     const String* callerId = msg.getParam("caller");
     String caller;
     if (callerId)
@@ -2802,6 +2805,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	setStatus("answered",Established);
 	maxcall(0);
 	Message *m = message("call.answered");
+	copySipHeaders(*m,*msg);
 	decodeIsupBody(*m,msg->body);
 	addRtpParams(*m,natAddr,msg->body);
 	Engine::enqueue(m);
@@ -2831,6 +2835,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    }
 	    if (name) {
 		Message* m = message(name);
+		copySipHeaders(*m,*msg);
 		decodeIsupBody(*m,msg->body);
 		if (reason)
 		    m->addParam("reason",reason);
@@ -3146,6 +3151,7 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	tmp[0] = s_dtmfs[sig];
 	tmp[1] = '\0';
 	Message* msg = message("chan.dtmf");
+	copySipHeaders(*msg,*t->initialMessage());
 	msg->addParam("text",tmp);
 	Engine::enqueue(msg);
     }
@@ -3219,6 +3225,7 @@ bool YateSIPConnection::msgProgress(Message& msg)
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), code);
+	copySipHeaders(*m,msg);
 	m->setBody(buildSIPBody(msg,createProvisionalSDP(msg)));
 	m_tr->setResponse(m);
 	m->deref();
@@ -3233,6 +3240,7 @@ bool YateSIPConnection::msgRinging(Message& msg)
     Lock lock(driver());
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 180);
+	copySipHeaders(*m,msg);
 	m->setBody(buildSIPBody(msg,createProvisionalSDP(msg)));
 	m_tr->setResponse(m);
 	m->deref();
@@ -3247,6 +3255,7 @@ bool YateSIPConnection::msgAnswered(Message& msg)
     if (m_tr && (m_tr->getState() == SIPTransaction::Process)) {
 	updateFormats(msg);
 	SIPMessage* m = new SIPMessage(m_tr->initialMessage(), 200);
+	copySipHeaders(*m,msg);
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
@@ -3297,6 +3306,7 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 		if (s_dtmfs[i] == c) {
 		    SIPMessage* m = createDlgMsg("INFO");
 		    if (m) {
+			copySipHeaders(*m,msg);
 			String tmp;
 			tmp << "Signal=" << i << "\r\n";
 			m->setBody(new MimeStringBody("application/dtmf-relay",tmp));
@@ -3328,6 +3338,7 @@ bool YateSIPConnection::msgText(Message& msg, const char* text)
 	return false;
     SIPMessage* m = createDlgMsg("MESSAGE");
     if (m) {
+	copySipHeaders(*m,msg);
 	m->setBody(new MimeStringBody("text/plain",text));
 	plugin.ep()->engine()->addMessage(m);
 	m->deref();
@@ -3540,7 +3551,7 @@ bool YateSIPConnection::startClientReInvite(Message& msg)
     Debug(this,DebugNote,"Initiating reINVITE (%s RTP before) [%p]",
 	hadRtp ? "had" : "no",this);
     SIPMessage* m = createDlgMsg("INVITE");
-    copySipHeaders(*m,msg,"osip_");
+    copySipHeaders(*m,msg);
     if (s_privacy)
 	copyPrivacy(*m,msg);
     m->setBody(sdp);
@@ -3640,6 +3651,7 @@ bool YateSIPConnection::initUnattendedTransfer(Message*& msg, SIPMessage*& sipNo
 	TelEngine::destruct(msg);
 	return false;
     }
+    copySipHeaders(*msg,*sipRefer);
     sipNotify->complete(plugin.ep()->engine());
     sipNotify->addHeader("Event","refer");
     sipNotify->addHeader("Subscription-State","terminated;reason=noresource");
@@ -4127,7 +4139,7 @@ bool SipHandler::received(Message &msg)
     }
     SIPMessage* sip = new SIPMessage(method,uri);
     plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
-    copySipHeaders(*sip,msg);
+    copySipHeaders(*sip,msg,"sip_");
     const char* type = msg.getValue("xsip_type");
     const char* body = msg.getValue("xsip_body");
     if (type && body)

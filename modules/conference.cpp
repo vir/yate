@@ -322,7 +322,6 @@ void ConfRoom::addChannel(ConfChan* chan, bool player)
 	m->addParam("targetid",m_notify);
 	chan->populateMsg(*m);
 	m->addParam("event","joined");
-	m->addParam("room",m_name);
 	m->addParam("maxusers",String(m_maxusers));
 	m->addParam("users",tmp);
 	if (m_playerId)
@@ -352,7 +351,6 @@ void ConfRoom::delChannel(ConfChan* chan)
 	m->addParam("targetid",m_notify);
 	chan->populateMsg(*m);
 	m->addParam("event","left");
-	m->addParam("room",m_name);
 	m->addParam("maxusers",String(m_maxusers));
 	m->addParam("users",tmp);
 	// easy to check parameter indicating one user will be left alone
@@ -453,7 +451,6 @@ bool ConfRoom::setRecording(const NamedList& params)
 	    m->addParam("targetid",m_notify);
 	    ch->populateMsg(*m);
 	    m->addParam("event","recording");
-	    m->addParam("room",m_name);
 	    m->addParam("maxusers",String(m_maxusers));
 	    m->addParam("users",String(m_users));
 	    m->addParam("record",*record);

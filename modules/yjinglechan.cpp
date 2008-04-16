@@ -753,7 +753,7 @@ bool YJBPresence::notifySubscribe(JBEvent* event, Presence presence)
     XDebug(this,DebugAll,"notifySubscribe(%s) local=%s remote=%s [%p]",
 	presenceText(presence),event->to().c_str(),event->from().c_str(),this);
     // Respond if auto subscribe
-    if (event->stream() && autoSubscribe().from() &&
+    if (!ignoreNonRoster() && event->stream() && autoSubscribe().from() &&
 	(presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe)) {
 	if (presence == JBPresence::Subscribe)
 	    presence = JBPresence::Subscribed;

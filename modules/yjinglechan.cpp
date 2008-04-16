@@ -1410,11 +1410,11 @@ bool ResNotifyHandler::received(Message& msg)
     JabberID from,to;
     // *** Check from/to
     if (!plugin.getJidFrom(from,msg,true))
-	return true;
+	return false;
     if (s_presence && !s_presence->autoRoster())
 	to = msg.getValue("to");
     else if (!plugin.decodeJid(to,msg,"to"))
-	return true;
+	return false;
     // *** Check status
     String status = msg.getValue("status");
     if (status.null()) {
@@ -1557,9 +1557,9 @@ bool ResSubscribeHandler::received(Message& msg)
     JabberID from,to;
     // *** Check from/to
     if (!plugin.decodeJid(from,msg,"from",true))
-	return true;
+	return false;
     if (!plugin.decodeJid(to,msg,"to"))
-	return true;
+	return false;
     // *** Check operation
     String tmpParam = msg.getValue("operation");
     JBPresence::Presence presence;
@@ -1573,7 +1573,7 @@ bool ResSubscribeHandler::received(Message& msg)
 	Debug(&plugin,DebugNote,
 	    "Received '%s' with missing or unknown parameter: operation=%s",
 	    msg.c_str(),msg.getValue("operation"));
-	return true;
+	return false;
     }
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Accepted '%s'",msg.c_str());

@@ -2372,7 +2372,7 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	    rtp->update(fmts,-1,port);
 	else
 	    rtp = new NetMedia(tmp,trans,fmts,-1,port);
-	rtp->mappings(msg.getValue("rtp_mapping"+tmp));
+	rtp->mappings(msg.getValue("rtp_mapping"+rtp->suffix()));
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(rtp);

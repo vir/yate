@@ -1035,7 +1035,7 @@ public:
 
     /**
      * Replace all flags
-     * @param flags The new value of the flags
+     * @param flag The new value of the flags
      */
     inline void replace(int flag)
 	{ m_value = flag; }
@@ -1049,14 +1049,14 @@ public:
 
     /**
      * Set one or more flags
-     * @param flags Flag(s) to set
+     * @param flag Flag(s) to set
      */
     inline void set(int flag)
 	{ m_value |= flag; }
 
     /**
      * Reset one or more flags
-     * @param flags Flag(s) to reset
+     * @param flag Flag(s) to reset
      */
     inline void reset(int flag)
 	{ m_value &= ~flag; }

@@ -884,6 +884,19 @@ public:
 	const char* id, bool info = true);
 
     /**
+     * Create an 'iq' of type 'result' element with a 'query' child in response to
+     *  a disco info request
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param features Features to be added to response
+     * @param identity The identity of the entity sending the response
+     * @return A valid XMLElement pointer
+     */
+    static XMLElement* createDiscoInfoRes(const char* from, const char* to,
+	const char* id, JIDFeatureList* features, JIDIdentity* identity);
+
+    /**
      * Create a 'error' element
      * @param type Error type
      * @param error The error

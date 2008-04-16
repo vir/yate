@@ -138,10 +138,7 @@ public:
  */
 // Constructor. Append itself to the list
 JBThread::JBThread(Type type, JBThreadList* list, void* client, int sleep)
-    : m_type(type),
-    m_owner(list),
-    m_client(client),
-    m_sleep(sleep)
+    : m_type(type), m_owner(list), m_client(client), m_sleep(sleep)
 {
     if (!m_owner)
 	return;
@@ -851,14 +848,10 @@ bool JBEngine::processDisco(JBEvent* event)
 	return false;
 
     // Create response
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,event->to(),event->from(),event->id());
-    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
-    m_features.addTo(query);
-    if (m_identity) {
+    if (m_identity)
 	m_identity->setName(stream->local());
-	query->addChild(m_identity->toXML());
-    }
-    iq->addChild(query);
+    XMLElement* iq = XMPPUtils::createDiscoInfoRes(event->to(),event->from(),event->id(),
+	&m_features,m_identity);
     stream->sendStanza(iq);
     TelEngine::destruct(event);
     return true;
@@ -902,10 +895,7 @@ bool JBEngine::received(Service service, JBEvent* event)
  */
 JBService::JBService(JBEngine* engine, const char* name,
 	const NamedList* params, int prio)
-    : Mutex(true),
-    m_initialized(false),
-    m_engine(engine),
-    m_priority(prio)
+    : Mutex(true), m_initialized(false), m_engine(engine), m_priority(prio)
 {
     debugName(name);
     XDebug(this,DebugAll,"Jabber service created [%p]",this);
@@ -987,23 +977,15 @@ JBEvent* JBService::deque()
  * JBEvent
  */
 JBEvent::JBEvent(Type type, JBStream* stream, XMLElement* element, XMLElement* child)
-    : m_type(type),
-      m_stream(0),
-      m_link(true),
-      m_element(element),
-      m_child(child)
+    : m_type(type), m_stream(0), m_link(true), m_element(element), m_child(child)
 {
     if (!init(stream,element))
 	m_type = Invalid;
 }
 
 JBEvent::JBEvent(Type type, JBStream* stream, XMLElement* element, const String& senderID)
-    : m_type(type),
-      m_stream(0),
-      m_link(true),
-      m_element(element),
-      m_child(0),
-      m_id(senderID)
+    : m_type(type), m_stream(0), m_link(true), m_element(element), m_child(0),
+    m_id(senderID)
 {
     if (!init(stream,element))
 	m_type = Invalid;
@@ -1767,18 +1749,6 @@ XMPPUserRoster::~XMPPUserRoster()
     Debug(m_engine,DebugAll, "~XMPPUserRoster %s [%p]",m_jid.c_str(),this);
 }
 
-// Create an iq result to respond to disco info
-XMLElement* XMPPUserRoster::createDiscoInfoResult(const char* from, const char* to,
-	const char* id)
-{
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,to,id);
-    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
-    query->addChild(m_identity->toXML());
-    m_features.addTo(query);
-    iq->addChild(query);
-    return iq;
-}
-
 // Get a remote user from roster
 // Add a new one if requested
 XMPPUser* XMPPUserRoster::getUser(const JabberID& jid, bool add, bool* added)
@@ -1842,10 +1812,13 @@ bool XMPPUserRoster::timeout(u_int64_t time)
 // Build the service
 JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jbpresence",params,prio),
-    m_delUnavailable(false), m_autoRoster(false), m_autoProbe(true),
-    m_probeInterval(1800000), m_expireInterval(300000)
+    m_delUnavailable(false), m_autoRoster(false), m_ignoreNonRoster(false),
+    m_autoProbe(true), m_probeInterval(1800000), m_expireInterval(300000),
+    m_defIdentity(0)
 {
     JBThreadList::setOwner(this);
+    m_defIdentity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
+    m_defFeatures.add(XMPPNamespace::CapVoiceV1);
 }
 
 JBPresence::~JBPresence()
@@ -1859,6 +1832,7 @@ JBPresence::~JBPresence()
 	ur->cleanup();
 	m_rosters.remove(ur,true);
     }
+    TelEngine::destruct(m_defIdentity);
 }
 
 // Initialize the service
@@ -1870,6 +1844,7 @@ void JBPresence::initialize(const NamedList& params)
 
     m_autoSubscribe.replace(params.getValue("auto_subscribe"));
     m_delUnavailable = params.getBoolValue("delete_unavailable",true);
+    m_ignoreNonRoster = params.getBoolValue("ignorenonroster",false);
     m_autoProbe = params.getBoolValue("auto_probe",true);
     NamedString* addSubParam = params.getParam("add_onsubscribe");
     if (addSubParam)
@@ -1906,10 +1881,14 @@ void JBPresence::initialize(const NamedList& params)
     m_autoRoster = m_addOnSubscribe.flag(-1) || m_addOnProbe.flag(-1) ||
 	m_addOnPresence.flag(-1);
 
+    if (m_ignoreNonRoster)
+	m_autoProbe = false;
+
     if (debugAt(DebugInfo)) {
 	String s;
 	s << " auto_subscribe=" << XMPPDirVal::lookup((int)m_autoSubscribe);
 	s << " delete_unavailable=" << String::boolText(m_delUnavailable);
+	s << " ignorenonroster=" << String::boolText(m_ignoreNonRoster);
 	s << " add_onsubscribe=" << XMPPDirVal::lookup((int)m_addOnSubscribe);
 	s << " add_onprobe=" << XMPPDirVal::lookup((int)m_addOnProbe);
 	s << " add_onpresence=" << XMPPDirVal::lookup((int)m_addOnPresence);
@@ -1970,13 +1949,18 @@ bool JBPresence::accept(JBEvent* event, bool& processed, bool& insert)
     else if (!event->to() || validDomain(jid.domain()))
 	return true;
 
-    Debug(this,DebugNote,"Received element with invalid domain '%s' [%p]",
-	jid.domain().c_str(),this);
-    // Respond only if stanza is not a response
-    if (event->stanzaType() != "error" && event->stanzaType() != "result") {
-	const String* id = event->id().null() ? 0 : &(event->id());
-	sendError(XMPPError::SNoRemote,event->to(),event->from(),
-	    event->releaseXML(),event->stream(),id);
+    if (m_ignoreNonRoster)
+	DDebug(this,DebugNote,"Received element with invalid domain '%s' [%p]",
+	     jid.domain().c_str(),this);
+    else {
+	Debug(this,DebugNote,"Received element with invalid domain '%s' [%p]",
+	     jid.domain().c_str(),this);
+	// Respond only if stanza is not a response
+	if (event->stanzaType() != "error" && event->stanzaType() != "result") {
+	    const String* id = event->id().null() ? 0 : &(event->id());
+	    sendError(XMPPError::SNoRemote,event->to(),event->from(),
+		event->releaseXML(),event->stream(),id);
+	}
     }
     processed = true;
     return true;
@@ -2027,9 +2011,12 @@ bool JBPresence::process()
 	default:
 	    // Simple presence shouldn't have a type
 	    if (event->element()->getAttribute("type")) {
+		if (m_ignoreNonRoster)
+		    break;
 		Debug(this,DebugNote,
 		    "Received unexpected presence type=%s from=%s to=%s [%p]",
-		    event->element()->getAttribute("type"),event->from().c_str(),event->to().c_str(),this);
+		    event->element()->getAttribute("type"),event->from().c_str(),
+		    event->to().c_str(),this);
 		sendError(XMPPError::SFeatureNotImpl,event->to(),event->from(),
 		    event->releaseXML(),event->stream());
 		break;
@@ -2068,6 +2055,7 @@ void JBPresence::checkTimeout(u_int64_t time)
     unlock();
 }
 
+
 // Process received disco 
 void JBPresence::processDisco(JBEvent* event)
 {
@@ -2075,20 +2063,40 @@ void JBPresence::processDisco(JBEvent* event)
 	event,event->name(),event->to().c_str(),event->from().c_str(),this);
     if (event->type() != JBEvent::IqDiscoInfoGet || !event->stream())
 	return;
+
+    XMLElement* rsp = 0;
     JabberID from(event->to());
-    if (event->to().resource().null() && engine())
-	from.resource(engine()->defaultResource());
-    // Create response: add identity and features
-    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,event->to(),event->id());
-    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
-    JIDIdentity* identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
-    query->addChild(identity->toXML());
-    identity->deref();
-    JIDFeatureList fl;
-    fl.add(XMPPNamespace::CapVoiceV1);
-    fl.addTo(query);
-    iq->addChild(query);
-    sendStanza(iq,event->stream());
+    XMPPUserRoster* roster = getRoster(event->to(),false,0);
+    if (roster) {
+	XMPPUser* user = roster->getUser(event->from());
+	bool ok = false;
+	if (user) {
+	    Lock lock(user);
+	    if (from.resource())
+		ok = (0 != user->m_localRes.get(from.resource()));
+	    else {
+		JIDResource* res = user->m_localRes.getFirst();
+		if (res) {
+		    ok = true;
+		    from.resource(res->name());
+		}
+	    }
+	}
+	if (ok)
+	    rsp = roster->createDiscoInfoResult(from,event->from(),event->id());
+	TelEngine::destruct(user);
+	TelEngine::destruct(roster);
+    }
+
+    if (!rsp && !m_ignoreNonRoster) {
+	if (from.resource().null() && engine())
+	    from.resource(engine()->defaultResource());
+	rsp = XMPPUtils::createDiscoInfoRes(from,event->from(),event->id(),
+	    &m_defFeatures,m_defIdentity);
+    }
+
+    if (rsp)
+	sendStanza(rsp,event->stream());
 }
 
 void JBPresence::processError(JBEvent* event)
@@ -2120,7 +2128,7 @@ void JBPresence::processProbe(JBEvent* event)
 	    else
 		TelEngine::destruct(stanza);
 	}
-	else if (!notifyProbe(event))
+	else if (!notifyProbe(event) && !m_ignoreNonRoster)
 	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
 		event->releaseXML(),event->stream());
 	return;
@@ -2147,7 +2155,8 @@ void JBPresence::processSubscribe(JBEvent* event, Presence presence)
 	addLocal,0,addLocal,&newUser);
     if (!user) {
 	if (!notifySubscribe(event,presence) &&
-	    (presence != Subscribed && presence != Unsubscribed))
+	    (presence != Subscribed && presence != Unsubscribed) &&
+	    !m_ignoreNonRoster)
 	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
 		event->releaseXML(),event->stream());
 	return;
@@ -2188,7 +2197,7 @@ void JBPresence::processUnavailable(JBEvent* event)
     XMPPUser* user = recvGetRemoteUser("unavailable",event->to(),event->from(),
 	addLocal,0,addLocal,&newUser);
     if (!user) {
-	if (!notifyPresence(event,false))
+	if (!notifyPresence(event,false) && !m_ignoreNonRoster)
 	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
 		event->releaseXML(),event->stream());
 	return;
@@ -2227,7 +2236,7 @@ void JBPresence::processPresence(JBEvent* event)
     XMPPUser* user = recvGetRemoteUser("",event->to(),event->from(),
 	m_addOnPresence.from(),0,m_addOnPresence.from(),&newUser);
     if (!user) {
-	if (!notifyPresence(event,true))
+	if (!notifyPresence(event,true) && !m_ignoreNonRoster)
 	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
 		event->releaseXML(),event->stream());
 	return;

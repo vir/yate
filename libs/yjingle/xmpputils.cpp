@@ -407,6 +407,19 @@ XMLElement* XMPPUtils::createIqDisco(const char* from, const char* to,
     return xml;
 }
 
+XMLElement* XMPPUtils::createDiscoInfoRes(const char* from, const char* to,
+    const char* id, JIDFeatureList* features, JIDIdentity* identity)
+{
+    XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqResult,from,to,id);
+    XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::DiscoInfo);
+    if (identity)
+	query->addChild(identity->toXML());
+    if (features)
+	features->addTo(query);
+    iq->addChild(query);
+    return iq;
+}
+
 XMLElement* XMPPUtils::createError(XMPPError::ErrorType type,
 	XMPPError::Type condition, const char* text)
 {

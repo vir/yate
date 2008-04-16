@@ -1665,11 +1665,18 @@ public:
 	{ return m_addOnPresence; }
 
     /**
-     * Check if this server should add new users when receiving presence, probe or subscribe
+     * Check if this service should add new users when receiving presence, probe or subscribe
      * @return True if should add a new user when receiving presence, probe or subscribe
      */
     inline bool autoRoster() const
 	{ return m_autoRoster; }
+
+    /**
+     * Check if this service should ignore destination users not in roster
+     * @return True if non existent destinations should be ignored
+     */
+    inline bool ignoreNonRoster() const
+	{ return m_ignoreNonRoster; }
 
     /**
      * Get the probe interval. Time to send a probe if nothing was received from that user
@@ -1906,6 +1913,7 @@ protected:
     XMPPDirVal m_autoSubscribe;          // Auto subscribe state
     bool m_delUnavailable;               // Delete unavailable user or resource
     bool m_autoRoster;                   // True if this service make an automatically roster management
+    bool m_ignoreNonRoster;              // Ignore all elements whose destination is not in roster
     XMPPDirVal m_addOnSubscribe;         // Add new user on subscribe request
     XMPPDirVal m_addOnProbe;             // Add new user on probe request
     XMPPDirVal m_addOnPresence;          // Add new user on presence
@@ -1913,6 +1921,8 @@ protected:
     u_int32_t m_probeInterval;           // Interval to probe a remote user
     u_int32_t m_expireInterval;          // Expire interval after probe
     ObjList m_rosters;                   // The rosters
+    JIDIdentity* m_defIdentity;          // Default identity
+    JIDFeatureList m_defFeatures;        // Default features
 
 private:
     // Wrapper for getRemoteUser() used when receiving presence
@@ -2186,6 +2196,7 @@ private:
 class YJINGLE_API XMPPUser : public RefObject, public Mutex
 {
     friend class XMPPUserRoster;
+    friend class JBPresence;
 public:
     /**
      * Create a remote user.
@@ -2450,10 +2461,15 @@ public:
     bool timeout(u_int64_t time);
 
     /**
-     * Create an iq result to respond to disco info
+     * Create an iq result to respond to disco info. Add user's features and identity
+     * @param from The from attribute
+     * @param to The to attribute
+     * @param id The id attribute
      * @return XMLElement pointer
      */
-    XMLElement* createDiscoInfoResult(const char* from, const char* to, const char* id);
+    inline XMLElement* createDiscoInfoResult(const char* from, const char* to,
+	const char* id)
+	{ return XMPPUtils::createDiscoInfoRes(from,to,id,&m_features,m_identity); }
 
 protected:
     /**

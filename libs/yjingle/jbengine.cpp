@@ -1432,7 +1432,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 		if (m_local->engine())
 		    m_local->engine()->notifyPresence(this,res);
 	    }
-	    if (m_local->engine() && m_local->engine()->delUnavailable())
+	    if (!m_local->engine() || m_local->engine()->delUnavailable())
 		m_remoteRes.m_resources.remove(res,true);
 		
 	}

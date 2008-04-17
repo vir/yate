@@ -542,7 +542,7 @@ void YJGEngine::processEvent(JGEvent* event)
 		conn = new YJGConnection(event);
 		// Constructor failed ?
 		if (conn->state() == YJGConnection::Pending)
-		    conn->deref();
+		    TelEngine::destruct(conn);
 		else if (!conn->route())
 		    event->session()->userData(0);
 	    }
@@ -1581,12 +1581,12 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	    JIDResource* resource = new JIDResource(from.resource(),JIDResource::Available,
 		JIDResource::CapAudio);
 	    resource->addTo(stanza);
-	    resource->deref();
+	    TelEngine::destruct(resource);
 	}
     }
     // Send
     stream->sendStanza(stanza);
-    stream->deref();
+    TelEngine::destruct(stream);
 }
 
 /**
@@ -1642,7 +1642,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	if (!stream)
 	    return;
 	stream->sendStanza(JBPresence::createPresence(from,to,presence));
-	stream->deref();
+	TelEngine::destruct(stream);
 	return;
     }
     // Add roster/user
@@ -1654,11 +1654,11 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	    false,false);
 	s_presence->notifyNewUser(user);
 	if (!user->ref()) {
-	    roster->deref();
+	    TelEngine::destruct(roster);
 	    return;
 	}
     }
-    roster->deref();
+    TelEngine::destruct(roster);
     // Process
     user->lock();
     for (;;) {
@@ -1699,7 +1699,7 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	break;
     }
     user->unlock();
-    user->deref();
+    TelEngine::destruct(user);
 }
 
 /**
@@ -1954,7 +1954,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
     }
-    conn->deref();
+    TelEngine::destruct(conn);
     return true;
 }
 
@@ -2040,7 +2040,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	    res = remote->getAudio(true,true);
 	    // This should never happen !!!
 	    if (!res) {
-		remote->deref();
+		TelEngine::destruct(remote);
 		error = "Unable to get a resource for the caller";
 		return false;
 	    }
@@ -2051,7 +2051,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	available = (res != 0);
 	if (!(newPresence || available)) {
 	    if (!s_jingle->requestSubscribe()) {
-		remote->deref();
+		TelEngine::destruct(remote);
 		error = "Remote peer is unavailable";
 		return false;
 	    }
@@ -2062,7 +2062,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	else
 	    if (!newPresence)
 		remote->probe(0);
-	remote->deref();
+	TelEngine::destruct(remote);
     }
     else {
 	available = false;
@@ -2080,7 +2080,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	}
 	xml = JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Probe);
 	stream->sendStanza(xml);
-	stream->deref();
+	TelEngine::destruct(stream);
     }
     return true;
 }

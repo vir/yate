@@ -301,7 +301,7 @@ bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
     XMLElement* iq = 0;
     if (error == XMPPError::NoError) {
 	iq = XMPPUtils::createIq(XMPPUtils::IqResult,m_localJID,m_remoteJID,id);
-	// The receiver will detect which stanza is confirmaed by id
+	// The receiver will detect which stanza is confirmed by id
 	// If missing, make a copy of the received element and attach it to the error
 	if (!id) {
 	    XMLElement* copy = new XMLElement(*xml);
@@ -554,8 +554,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		Debug(m_engine,DebugNote,"Call(%s). Sent stanza ('%s') timed out [%p]",
 		    m_sid.c_str(),tmp->c_str(),this);
 		// Notify the peer anyway (something may be wrong)
-		if (!hangup(false,"Timeout"))
-		    m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"timeout");
+		hangup(false,"Timeout");
+		m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"timeout");
 	    }
 	}
     }
@@ -623,9 +623,11 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
     }
 
     // *** ActTerminate or ActReject
-    if (act == ActTerminate || act == ActReject)
+    if (act == ActTerminate || act == ActReject) {
+	confirm(jbev->element());
 	return new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),
 	    act==ActTerminate?"hangup":"rejected");
+    }
 
     // *** ActContentInfo: ActDtmf or ActDtmfMethod
     if (act == ActContentInfo) {

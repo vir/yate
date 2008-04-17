@@ -788,7 +788,7 @@ void ExtModReceiver::die(bool clearChan)
     // Give the external script a chance to die gracefully
     closeOut();
     if (m_pid > 1) {
-	Debug(DebugAll,"ExtModReceiver::die() waiting for pid=%d to die",m_pid);
+	Debug(DebugAll,"ExtModReceiver::die() waiting for pid=%d to die [%p]",m_pid,this);
 	for (int i=0; i<100; i++) {
 	    Thread::yield();
 	    if (m_pid <= 0)
@@ -796,7 +796,7 @@ void ExtModReceiver::die(bool clearChan)
 	}
     }
     if (m_pid > 1)
-	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit?",m_pid);
+	Debug(DebugInfo,"ExtModReceiver::die() pid=%d did not exit? [%p]",m_pid,this);
 
     // Now terminate the process and close its stdout pipe
     closeIn();
@@ -831,10 +831,10 @@ bool ExtModReceiver::received(Message &msg, int id)
     MsgHolder h(msg);
     if (outputLine(msg.encode(h.m_id))) {
 	m_waiting.append(&h)->setDelete(false);
-	DDebug(DebugAll,"ExtMod [%p] queued message '%s' [%p]",this,msg.c_str(),&msg);
+	DDebug(DebugAll,"ExtMod queued message %p '%s' [%p]",&msg,msg.c_str(),this);
     }
     else {
-	Debug(DebugWarn,"ExtMod [%p] could not queue message '%s'",this,msg.c_str());
+	Debug(DebugWarn,"ExtMod could not queue message %p '%s' [%p]",&msg,msg.c_str(),this);
 	ok = false;
 	fail = true;
     }
@@ -847,15 +847,16 @@ bool ExtModReceiver::received(Message &msg, int id)
 	lock();
 	ok = (m_waiting.find(&h) != 0);
 	if (ok && tout && (Time::now() > tout)) {
-	    Debug(DebugWarn,"Message '%s' did not return in %d msec [%p]",
-		msg.c_str(),m_timeout,this);
+	    Debug(DebugWarn,"Message %p '%s' did not return in %d msec [%p]",
+		&msg,msg.c_str(),m_timeout,this);
 	    m_waiting.remove(&h,false);
 	    ok = false;
 	    fail = true;
 	}
 	unlock();
     }
-    DDebug(DebugAll,"ExtMod [%p] message '%s' [%p] returning %s",this,msg.c_str(),&msg, h.m_ret ? "true" : "false");
+    DDebug(DebugAll,"ExtMod message %p '%s' returning %s [%p]",
+	&msg,msg.c_str(),String::boolText(h.m_ret),this);
     if (fail && m_timebomb)
 	die();
     unuse();
@@ -1157,7 +1158,7 @@ bool ExtModReceiver::processLine(const char* line)
 		return false;
 	    }
 	}
-	Debug("ExtModReceiver",DebugWarn,"Unmatched message: %s",line);
+	Debug("ExtModReceiver",DebugWarn,"Unmatched message: %s [%p]",line,this);
 	return false;
     }
     else if (id.startSkip("%%>install:",false)) {
@@ -1339,7 +1340,8 @@ bool ExtModReceiver::processLine(const char* line)
 		    MsgHolder *h = static_cast<MsgHolder *>(p->get());
 		    if (h && (h->m_id == id)) {
 			RefObject* ud = h->m_msg.userData();
-			Debug("ExtModReceiver",DebugAll,"Copying data pointer %p from %p",ud,&(h->m_msg));
+			Debug("ExtModReceiver",DebugAll,"Copying data pointer %p from %p '%s' [%p]",
+			    ud,h->msg(),h->msg()->c_str(),this);
 			m->userData(ud);
 			break;
 		    }

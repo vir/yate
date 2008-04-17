@@ -1174,6 +1174,7 @@ bool YJGConnection::route()
     Message* m = message("call.preroute",false,true);
     m->addParam("username",m_remote.node());
     m->addParam("called",m_local.node());
+    m->addParam("calleduri",plugin.name() + ":" + m_local);
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
     m_mutex.lock();
@@ -1426,53 +1427,89 @@ bool ResNotifyHandler::received(Message& msg)
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	msg.c_str(),from.c_str(),status.c_str());
-    if (s_presence->addOnPresence().to())
-	process(from,to,status,msg.getBoolValue("subscription",false));
-    else
-	sendPresence(from,to,status);
+    if (s_presence)
+	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
+	    process(from,to,status,msg.getBoolValue("subscription",false));
+	else
+	    sendPresence(from,to,status);
+    else {
+	// TODO: implement for client
+	return false;
+    }
     return true;
 }
 
 void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 	const String& status, bool subFrom)
 {
-    XMPPUserRoster* roster = s_presence->getRoster(from,true,0);
+    if (!s_presence)
+	return;
+
+    DDebug(&plugin,DebugAll,"ResNotifyHandler::process() from=%s to=%s status=%s",
+	from.c_str(),to.c_str(),status.c_str());
+
+    bool pres = (status != "subscribed") && (status != "unsubscribed");
+    bool add = pres ? s_presence->addOnPresence().to() : s_presence->addOnSubscribe().to();
+    XMPPUserRoster* roster = s_presence->getRoster(from,add,0);
+    if (!roster)
+	return;
     XMPPUser* user = roster->getUser(to,false,0);
-    // Add new user and local resource
-    if (!user) {
+
+    bool newUser = (0 == user);
+    // Add new user
+    if (newUser) {
 	user = new XMPPUser(roster,to.node(),to.domain(),
 	    subFrom ? XMPPDirVal::From : XMPPDirVal::None,false,false);
-	s_presence->notifyNewUser(user);
-	if (!user->ref()) {
-	    roster->deref();
-	    return;
-	}
+	if (!user->ref())
+	    user = 0;
     }
-    roster->deref();
-    user->lock();
+    TelEngine::destruct(roster);
+    if (!user)
+	return;
+    Lock lock(user);
     // Process
     for (;;) {
-	if (status == "subscribed") {
-	    // Send only if not already subscribed to us
-	    if (!user->subscription().from())
-		user->sendSubscribe(JBPresence::Subscribed,0);
+	// Subscription response
+	if (!pres) {
+	    if (status == "subscribed") {
+		// Send only if not already subscribed to us
+		if (!user->subscription().from())
+		    user->sendSubscribe(JBPresence::Subscribed,0);
+		break;
+	    }
+	    if (status == "unsubscribed") {
+		// Send only if not already unsubscribed from us
+		if (user->subscription().from())
+		    user->sendSubscribe(JBPresence::Unsubscribed,0);
+		break;
+	    }
 	    break;
 	}
-	if (status == "unsubscribed") {
-	    // Send only if not already unsubscribed from us
-	    if (user->subscription().from())
-		user->sendSubscribe(JBPresence::Unsubscribed,0);
-	    break;
-	}
+
 	// Presence
-	JIDResource* res = user->getAudio(true,true);
-	if (!res)
-	    break;
+	JIDResource::Presence p = (status != "offline") ?
+	    JIDResource::Available : JIDResource::Unavailable;
+	const char* name = from.resource();
+	if (!name)
+	    name = s_jabber->defaultResource();
+	JIDResource* res = 0;
 	bool changed = false;
-	if (status == "offline")
-	    changed = res->setPresence(false);
+	if (name) {
+	    changed = user->addLocalRes(new JIDResource(name,p,JIDResource::CapAudio),false);
+	    res = user->localRes().get(name);
+	}
+	else
+	    res = user->getAudio(true,true);
+	if (!res) {
+	    DDebug(&plugin,DebugNote,
+		"ResNotifyHandler::process() from=%s to=%s status=%s: no resource named '%s'",
+		from.c_str(),to.c_str(),status.c_str(),name);
+	    break;
+	}
+	if (p == JIDResource::Unavailable)
+	    changed = res->setPresence(false) || changed;
 	else {
-	    changed = res->setPresence(true);
+	    changed = res->setPresence(true) || changed;
 	    if (status == "online") {
 		if (!res->status().null()) {
 		    res->status("");
@@ -1486,17 +1523,23 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 		}
 	    }
 	}
-	if (changed)
+
+	if (changed && user->subscription().from())
 	    user->sendPresence(res,0,true);
+	// Remove if unavailable
+	if (!res->available())
+	    user->removeLocalRes(res);
 	break;
     }
-    user->unlock();
-    user->deref();
+    lock.drop();
+    TelEngine::destruct(user);
 }
 
 void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	const String& status)
 {
+    if (!s_presence)
+	return;
     JBPresence::Presence jbPresence;
     // Get presence type from status
     if (status == "online")
@@ -1577,13 +1620,20 @@ bool ResSubscribeHandler::received(Message& msg)
     }
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Accepted '%s'",msg.c_str());
-    process(from,to,presence);
+    if (s_presence)
+	process(from,to,presence);
+    else {
+	// TODO: implement for client
+	return false;
+    }
     return true;
 }
 
 void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
 	JBPresence::Presence presence)
 {
+    if (!s_presence)
+	return;
     // Don't automatically add
     if ((presence == JBPresence::Probe && !s_presence->addOnProbe().to()) ||
 	((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&

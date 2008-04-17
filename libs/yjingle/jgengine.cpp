@@ -32,7 +32,7 @@ static XMPPError s_err;
  */
 JGEngine::JGEngine(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jgengine",params,prio), m_sessionIdMutex(true),
-    m_sessionId(1), m_stanzaTimeout(10000), m_useSidAttr(false)
+    m_sessionId(1), m_stanzaTimeout(20000), m_useSidAttr(false)
 {
     JBThreadList::setOwner(this);
 }

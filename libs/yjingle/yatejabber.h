@@ -70,10 +70,9 @@ public:
 	Presence                = 20,    // m_element is a 'presence' stanza
 	Message                 = 30,    // m_element is a 'message' stanza
 	Iq                      = 50,    // m_element is an 'iq' set/get, m_child is it's first child
-	IqError                 = 51,    // m_element is an 'iq' error, m_child is the 'error' child if any
-	IqResult                = 52,    // m_element is an 'iq' result, m_child is it's first child
+	IqError                 = 51,    // m_element is an 'iq' error, m_child is the 'iq' child if any
+	IqResult                = 52,    // m_element is an 'iq' result, m_child is it's first child if any
 	// Disco: m_child is a 'query' element qualified by DiscoInfo/DiscoItems namespaces
-	// IqDisco error: m_child is the 'error' child, m_element has a 'query' child
 	IqDiscoInfoGet          = 60,
 	IqDiscoInfoSet          = 61,
 	IqDiscoInfoRes          = 62,
@@ -83,13 +82,11 @@ public:
 	IqDiscoItemsRes         = 66,
 	IqDiscoItemsErr         = 67,
 	// Command: m_child is a 'command' element qualified by Command namespace
-	// IqCommandError: m_child is the 'error' child, m_element has a 'command' child
 	IqCommandGet            = 70,
 	IqCommandSet            = 71,
 	IqCommandRes            = 72,
 	IqCommandErr            = 73,
 	// Jingle: m_child is a 'jingle' element qualified by Jingle namespace
-	// IqJingleError: m_child is the 'error' child, m_element has a 'jingle' child
 	IqJingleGet             = 80,
 	IqJingleSet             = 81,
 	IqJingleRes             = 82,
@@ -2238,13 +2235,28 @@ public:
 	{ return m_subscription; }
 
     /**
+     * Get the local resource list
+     * @return The local resource list
+     */
+    inline JIDResourceList& localRes()
+	{ return m_localRes; }
+
+    /**
+     * Get the remote resource list
+     * @return The remote resource list
+     */
+    inline JIDResourceList& remoteRes()
+	{ return m_remoteRes; }
+
+    /**
      * Add a local resource to the list.
      * Send presence if the remote peer is subscribed to the local one.
      * This method is thread safe.
      * @param resource The resource to add.
+     * @param send True to send presence from the resource if it is a new one
      * @return False if the the resource already exists in the list.
      */
-    bool addLocalRes(JIDResource* resource);
+    bool addLocalRes(JIDResource* resource, bool send = true);
 
     /**
      * Remove a local resource from the list.

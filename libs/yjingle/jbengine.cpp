@@ -1333,7 +1333,7 @@ XMPPUser::~XMPPUser()
 }
 
 // Add a resource for the user
-bool XMPPUser::addLocalRes(JIDResource* resource)
+bool XMPPUser::addLocalRes(JIDResource* resource, bool send)
 {
     if (!resource)
 	return false;
@@ -1341,11 +1341,11 @@ bool XMPPUser::addLocalRes(JIDResource* resource)
     if (!m_localRes.add(resource))
 	return false;
     DDebug(m_local->engine(),DebugAll,
-	"User(%s). Added resource name=%s audio=%s [%p]",
+	"User(%s). Added local resource name=%s audio=%s avail=%s [%p]",
 	m_local->jid().c_str(),resource->name().c_str(),
-	String::boolText(resource->hasCap(JIDResource::CapAudio)),this);
-    resource->setPresence(true);
-    if (m_subscription.from())
+	String::boolText(resource->hasCap(JIDResource::CapAudio)),
+	String::boolText(resource->available()),this);
+    if (send && m_subscription.from())
 	sendPresence(resource,0,true);
     return true;
 }
@@ -1353,15 +1353,18 @@ bool XMPPUser::addLocalRes(JIDResource* resource)
 // Remove a resource of the user
 void XMPPUser::removeLocalRes(JIDResource* resource)
 {
-    if (!(resource && m_localRes.get(resource->name())))
+    if (!(resource && m_localRes.get(resource->name()))) {
+	TelEngine::destruct(resource);
 	return;
+    }
     Lock lock(this);
     resource->setPresence(false);
     if (m_subscription.from())
 	sendPresence(resource,0);
-    m_localRes.remove(resource);
-    DDebug(m_local->engine(),DebugAll,"User(%s). Removed resource name=%s [%p]",
+    DDebug(m_local->engine(),DebugAll,
+	"User(%s). Removing local resource name=%s [%p]",
 	m_local->jid().c_str(),resource->name().c_str(),this);
+    m_localRes.remove(resource);
 }
 
 // Remove all user's resources

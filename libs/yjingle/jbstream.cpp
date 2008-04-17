@@ -59,8 +59,8 @@ TokenDict JBStream::s_flagName[] = {
 static String s_version = "1.0";         // Protocol version
 static String s_declaration = "<?xml version='1.0' encoding='UTF-8'?>";
 
-// Utility: append a param to a string
-inline void s_appendParam(String& dest, const char* name, const char* value,
+// Utility: append a quoted param to a string
+inline void appendQParam(String& dest, const char* name, const char* value,
 	bool quotes, bool first = false)
 {
     if (!first)
@@ -70,6 +70,27 @@ inline void s_appendParam(String& dest, const char* name, const char* value,
 	dest << "\"" << value << "\"";
     else
 	dest << value;
+}
+
+// Check if an element exists and have an expected namespace
+inline bool checkValidXmlns(XMLElement* e, XMPPNamespace::Type ns,
+	XMPPError::Type& error)
+{
+    if (e && XMPPUtils::hasXmlns(*e,ns))
+	return true;
+    error = e ? XMPPError::SFeatureNotImpl : XMPPError::SBadRequest;
+    return false;
+}
+
+// Fix some element name conflicts: change type according to their namespace
+// Some elements may have the same name in different namespaces
+inline void fixXmlType(XMLElement* xml)
+{
+    if (!xml)
+	return;
+    if (xml->type() == XMLElement::Session &&
+	xml->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle]))
+	xml->changeType(XMLElement::Jingle);
 }
 
 #define DROP_AND_EXIT { dropXML(xml); return; }
@@ -774,19 +795,6 @@ void JBStream::processRunning(XMLElement* xml)
     sendStanza(XMPPUtils::createError(xml,XMPPError::TypeModify,error));
 }
 
-// Helper function to make the code simpler
-inline bool checkChild(XMLElement* e, XMPPNamespace::Type ns, XMPPError::Type& error)
-{
-    if (!e) {
-	error = XMPPError::SBadRequest;
-	return false;
-    }
-    if (XMPPUtils::hasXmlns(*e,ns))
-	return true;
-    error = XMPPError::SFeatureNotImpl;
-    return false;
-}
-
 // Process a received element in Securing state
 void JBStream::processSecuring(XMLElement* xml)
 {
@@ -1060,121 +1068,102 @@ void JBStream::processStarted(XMLElement* xml)
 }
 
 // Create an iq event from a received iq stanza
+// Filter iq stanzas to generate an appropriate event
+// Get iq type : set/get, error, result
+//   result:  MAY have a first child with a response
+//   set/get: MUST have a first child
+//   error:   MAY have a first child with the sent stanza
+//            MUST have an 'error' child
+// Check type and the first child's namespace
 JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& error)
 {
-    // Filter iq stanzas to generate an appropriate event
-    // Get iq type : set/get, error, result
-    //   result:  MAY have a first child with a response
-    //   set/get: MUST have a first child
-    //   error:   MAY have a first child with the sent stanza
-    //            MUST have an 'error' child
-    // Check type and the first child's namespace
-    XMLElement* child = xml->findFirstChild();
+#define IQEVENT_SET_REQ(get,set) evType = (iqType == XMPPUtils::IqGet) ? get : set
+#define IQEVENT_SET_RSP(res,err) evType = (iqType == XMPPUtils::IqResult) ? res : err
+    JBEvent::Type evType;
+    switch (iqType) {
+	case XMPPUtils::IqGet:
+	case XMPPUtils::IqSet:
+	    evType = JBEvent::Iq;
+	    break;
+	case XMPPUtils::IqResult:
+	    evType = JBEvent::IqResult;
+	    break;
+	case XMPPUtils::IqError:
+	    evType = JBEvent::IqError;
+	    break;
+	default:
+	    error = XMPPError::SFeatureNotImpl;
+	    return 0;
+    }
+    error = XMPPError::NoError;
+    XMLElement* child = 0;
 
-    // Fix some element name conflicts
-    if (child && child->type() == XMLElement::Session &&
-	child->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle]))
-	child->changeType(XMLElement::Jingle);
-
-    // Create event
-    if (iqType == XMPPUtils::IqResult || iqType == XMPPUtils::IqSet ||
-	iqType == XMPPUtils::IqGet) {
+    // Request (type is set or get): check the child (MUST exists)
+    // Response (type is result or error). Check it only if it has an 'iq' child
+    if (evType == JBEvent::Iq) {
+	child = xml->findFirstChild();
+	// No child: request what ???
 	if (!child) {
-	    if (iqType == XMPPUtils::IqResult)
-		return new JBEvent(JBEvent::IqResult,this,xml);
-	    return new JBEvent(JBEvent::Iq,this,xml);
+	    error = XMPPError::SBadRequest;
+	    return 0;
 	}
-
+	fixXmlType(child);
 	switch (child->type()) {
 	    case XMLElement::Jingle:
-		if (!checkChild(child,XMPPNamespace::Jingle,error))
-		    return 0;
-		switch (iqType) {
-		    case XMPPUtils::IqGet:
-			return new JBEvent(JBEvent::IqJingleGet,this,xml,child);
-		    case XMPPUtils::IqSet:
-			return new JBEvent(JBEvent::IqJingleSet,this,xml,child);
-		    case XMPPUtils::IqResult:
-			return new JBEvent(JBEvent::IqJingleRes,this,xml,child);
-		}
+		if (checkValidXmlns(child,XMPPNamespace::Jingle,error))
+		    IQEVENT_SET_REQ(JBEvent::IqJingleGet,JBEvent::IqJingleSet);
 		break;
 	    case XMLElement::Query:
-		if (checkChild(child,XMPPNamespace::DiscoInfo,error))
-		    switch (iqType) {
-			case XMPPUtils::IqGet:
-			    return new JBEvent(JBEvent::IqDiscoInfoGet,this,xml,child);
-			case XMPPUtils::IqSet:
-			    return new JBEvent(JBEvent::IqDiscoInfoSet,this,xml,child);
-			case XMPPUtils::IqResult:
-			    return new JBEvent(JBEvent::IqDiscoInfoRes,this,xml,child);
-		    }
-		else if (checkChild(child,XMPPNamespace::DiscoItems,error))
-		    switch (iqType) {
-			case XMPPUtils::IqGet:
-			    return new JBEvent(JBEvent::IqDiscoItemsGet,this,xml,child);
-			case XMPPUtils::IqSet:
-			    return new JBEvent(JBEvent::IqDiscoItemsSet,this,xml,child);
-			case XMPPUtils::IqResult:
-			    return new JBEvent(JBEvent::IqDiscoItemsRes,this,xml,child);
-		    }
-		else if (checkChild(child,XMPPNamespace::Roster,error))
-		    switch (iqType) {
-			case XMPPUtils::IqGet:
-			    error = XMPPError::SBadRequest;
-			    break;
-			case XMPPUtils::IqSet:
-			    return new JBEvent(JBEvent::IqRosterSet,this,xml,child);
-			case XMPPUtils::IqResult:
-			    return new JBEvent(JBEvent::IqRosterRes,this,xml,child);
-		    }
-		return 0;
+		if (checkValidXmlns(child,XMPPNamespace::DiscoInfo,error))
+		    IQEVENT_SET_REQ(JBEvent::IqDiscoInfoGet,JBEvent::IqDiscoInfoSet);
+		else if (checkValidXmlns(child,XMPPNamespace::DiscoItems,error))
+		    IQEVENT_SET_REQ(JBEvent::IqDiscoItemsGet,JBEvent::IqDiscoItemsSet);
+		else if (checkValidXmlns(child,XMPPNamespace::Roster,error))
+		    if (iqType == XMPPUtils::IqGet)
+			error = XMPPError::SBadRequest;
+		    else
+			evType = JBEvent::IqRosterSet;
+		break;
 	    case XMLElement::Command:
-		if (!checkChild(child,XMPPNamespace::Command,error))
-		    return 0;
-		switch (iqType) {
-		    case XMPPUtils::IqGet:
-			return new JBEvent(JBEvent::IqCommandGet,this,xml,child);
-		    case XMPPUtils::IqSet:
-			return new JBEvent(JBEvent::IqCommandSet,this,xml,child);
-		    case XMPPUtils::IqResult:
-			return new JBEvent(JBEvent::IqCommandRes,this,xml,child);
-		}
+		if (checkValidXmlns(child,XMPPNamespace::Command,error))
+		    IQEVENT_SET_REQ(JBEvent::IqCommandGet,JBEvent::IqCommandSet);
+		break;
 	    default: ;
 	}
-	// Unhandled child
-	if (iqType != XMPPUtils::IqResult)
-	    return new JBEvent(JBEvent::Iq,this,xml,child);
-	return new JBEvent(JBEvent::IqResult,this,xml,child);
     }
-    else if (iqType == XMPPUtils::IqError) {
-	JBEvent::Type evType = JBEvent::IqError;
-	// First child may be a sent stanza
-	if (child && child->type() != XMLElement::Error) {
-	    switch (child->type()) {
+    else {
+	child = xml->findFirstChild(XMLElement::Iq);
+	XMLElement* c = child ? child->findFirstChild() : 0;
+	// The child of this 'iq' sets the event's type
+	if (c) {
+	    fixXmlType(c);
+	    switch (c->type()) {
 		case XMLElement::Jingle:
-		    evType = JBEvent::IqJingleErr;
+		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Jingle))
+			IQEVENT_SET_RSP(JBEvent::IqJingleRes,JBEvent::IqJingleErr);
 		    break;
 		case XMLElement::Query:
-		    if (XMPPUtils::hasXmlns(*xml,XMPPNamespace::DiscoInfo))
-			evType = JBEvent::IqDiscoInfoErr;
-		    else if (XMPPUtils::hasXmlns(*xml,XMPPNamespace::DiscoItems))
-			evType = JBEvent::IqDiscoItemsErr;
-		    else if (XMPPUtils::hasXmlns(*xml,XMPPNamespace::Roster))
-			evType = JBEvent::IqRosterErr;
+		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::DiscoInfo))
+			IQEVENT_SET_RSP(JBEvent::IqDiscoInfoRes,JBEvent::IqDiscoInfoErr);
+		    else if (XMPPUtils::hasXmlns(*c,XMPPNamespace::DiscoItems))
+			IQEVENT_SET_RSP(JBEvent::IqDiscoItemsRes,JBEvent::IqDiscoItemsErr);
+		    else if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Roster))
+			IQEVENT_SET_RSP(JBEvent::IqRosterRes,JBEvent::IqRosterErr);
 		    break;
 		case XMLElement::Command:
-		    evType = JBEvent::IqCommandErr;
+		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Command))
+			IQEVENT_SET_RSP(JBEvent::IqCommandRes,JBEvent::IqCommandErr);
 		    break;
 		default: ;
 	    }
-	    child = xml->findNextChild(child);
 	}
-	if (!(child && child->type() == XMLElement::Error))
-	    child = 0;
-	return new JBEvent(evType,this,xml,child);
     }
-    error = XMPPError::SBadRequest;
+
+    if (error == XMPPError::NoError)
+	return new JBEvent(evType,this,xml,child);
     return 0;
+#undef IQEVENT_SET_REQ
+#undef IQEVENT_SET_RSP
 }
 
 // Send declaration and stream start
@@ -1453,28 +1442,28 @@ void JBStream::buildSaslResponse(String& response, String* realm, String* nonce)
     // Digest MD5. See RFC 2831 2.1.2.1
     MD5 md5(String((unsigned int)::random()));
     m_cnonce = md5.hexDigest();
-    s_appendParam(response,"username",m_local.node(),true,true);
+    appendQParam(response,"username",m_local.node(),true,true);
     if (realm) {
 	m_realm = *realm;
-	s_appendParam(response,"realm",m_realm,true);
+	appendQParam(response,"realm",m_realm,true);
 	if (nonce) {
 	    m_nonce = *nonce;
-	    s_appendParam(response,"nonce",m_nonce,true);
+	    appendQParam(response,"nonce",m_nonce,true);
 	    m_nonceCount++;
 	    char tmp[9];
 	    ::sprintf(tmp,"%08x",m_nonceCount);
 	    m_nc = tmp;
-	    s_appendParam(response,"nc",m_nc,false);
+	    appendQParam(response,"nc",m_nc,false);
 	}
     }
-    s_appendParam(response,"cnonce",m_cnonce,true);
-    s_appendParam(response,"digest-uri",String("xmpp/")+m_local.domain(),true);
-    s_appendParam(response,"qop",s_qop,true);
+    appendQParam(response,"cnonce",m_cnonce,true);
+    appendQParam(response,"digest-uri",String("xmpp/")+m_local.domain(),true);
+    appendQParam(response,"qop",s_qop,true);
     String rsp;
     buildDigestMD5Sasl(rsp,true);
-    s_appendParam(response,"response",rsp,false);
-    s_appendParam(response,"charset","utf-8",false);
-    s_appendParam(response,"algorithm","md5-sess",false);
+    appendQParam(response,"response",rsp,false);
+    appendQParam(response,"charset","utf-8",false);
+    appendQParam(response,"algorithm","md5-sess",false);
     Base64 base64((void*)response.c_str(),response.length());
     base64.encode(response);
 }

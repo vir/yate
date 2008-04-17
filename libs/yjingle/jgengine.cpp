@@ -184,7 +184,7 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    // Jingle clients may send the session id as 'id' or 'sid'
 	    if (event->type() == JBEvent::IqJingleErr) {
 		respond = false;
-		getSid(event->element()->findFirstChild(XMLElement::Jingle),sid,useSid);
+		getSid(child->findFirstChild(XMLElement::Jingle),sid,useSid);
 	    }
 	    else
 		getSid(child,sid,useSid);

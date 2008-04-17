@@ -1767,6 +1767,7 @@ JBClientStream::JBClientStream(JBEngine* engine, XMPPServerInfo& info,
 	const JabberID& localJid, const NamedList& params)
     : JBStream(engine,JBEngine::Client,info,localJid,JabberID(0,localJid.domain(),0))
 {
+    m_name = params.getValue("account");
     m_roster = new XMPPUserRoster(0,localJid.node(),localJid.domain());
     m_resource = new JIDResource(local().resource(),JIDResource::Available,
 	JIDResource::CapChat|JIDResource::CapAudio);

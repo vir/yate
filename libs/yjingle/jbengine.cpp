@@ -442,6 +442,15 @@ void JBEngine::setComponentServer(const char* domain)
 	m_componentDomain.c_str(),m_componentAddr.c_str(),this);
 }
 
+// Find a stream by its name
+JBStream* JBEngine::findStream(const String& name)
+{
+    Lock lock(this);
+    ObjList* tmp = m_streams.find(name);
+    JBStream* stream = tmp ? static_cast<JBStream*>(tmp->get()) : 0;
+    return stream && stream->ref() ? stream : 0;
+}
+
 // Get a stream. Create it not found and requested
 // For the component protocol, the jid parameter may contain the domain to find,
 //  otherwise, the default component will be used
@@ -503,33 +512,32 @@ bool JBEngine::getStream(JBStream*& stream, bool& release)
 }
 
 // Create a new client stream if no other stream exists for the given account
-JBClientStream* JBEngine::createClientStream(NamedList& params, JabberID* jid)
+JBClientStream* JBEngine::createClientStream(NamedList& params)
 {
-    JabberID dummy;
-    if (!jid) {
-	dummy.set(params.getValue("account"));
-	jid = &dummy;
-    }
-    if (!jid->resource())
-	jid->resource(params.getValue("resource"));
-
-    Lock lock(this);
+    NamedString* account = params.getParam("account");
+    if (!account)
+	return 0;
 
     // Check for existing stream
-    JBStream* stream = getStream(jid);
+    JBStream* stream = findStream(*account);
     if (stream) {
 	if (stream->type() != Client)
 	    TelEngine::destruct(stream);
 	return static_cast<JBClientStream*>(stream);
     }
 
-    // Build server info and create a new stream
+    Lock lock(this);
+    const char* domain = params.getValue("domain");
     const char* address = params.getValue("server",params.getValue("address"));
+    if (!domain)
+	domain = address;
+    JabberID jid(params.getValue("username"),domain,params.getValue("resource"));
+    // Build server info and create a new stream
     if (!address)
-	address = jid->domain();
-    if (!(address && jid->node() && jid->domain())) {
+	address = jid.domain();
+    if (!(address && jid.node() && jid.domain())) {
 	Debug(this,DebugNote,"Can't create client stream: invalid jid=%s or address=%s",
-	    jid->bare().c_str(),address);
+	    jid.bare().c_str(),address);
 	params.setParam("error","Invalid id or address");
 	return 0;
     }
@@ -537,7 +545,7 @@ JBClientStream* JBEngine::createClientStream(NamedList& params, JabberID* jid)
     int flags = XMPPUtils::decodeFlags(params.getValue("options"),XMPPServerInfo::s_flagName);
     XMPPServerInfo* info = new XMPPServerInfo("",address,port,
 	params.getValue("password"),"","",flags);
-    stream = new JBClientStream(this,*info,*jid,params);
+    stream = new JBClientStream(this,*info,jid,params);
     m_streams.append(stream);
     TelEngine::destruct(info);
     return stream->ref() ? static_cast<JBClientStream*>(stream) : 0;

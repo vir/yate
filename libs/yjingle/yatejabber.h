@@ -418,6 +418,13 @@ public:
 	{ return m_outgoing; }
 
     /**
+     * Get the stream's name
+     * @return The stream's name
+     */
+    inline const String& name() const
+	{ return m_name; }
+
+    /**
      * Get the stream id
      * @return The stream id
      */
@@ -517,6 +524,13 @@ public:
 	    Lock lock(m_socket.m_streamMutex);
 	    removePending(notify,&id,false);
 	}
+
+    /**
+     * Get the string representation of this stream
+     * @return The string representation of this stream
+     */
+    virtual const String& toString() const
+	{ return name(); }
 
     /**
      * Get an object from this stream
@@ -753,6 +767,11 @@ protected:
      */
     inline Mutex* streamMutex()
 	{ return &m_socket.m_streamMutex; }
+
+    /**
+     * Stream's name
+     */
+    String m_name;
 
     /**
      * The password used for authentication
@@ -1223,6 +1242,13 @@ public:
     void setComponentServer(const char* domain);
 
     /**
+     * Find a stream by its name. This method is thread safe
+     * @param name The name of the stream to find
+     * @return Referenced JBStream pointer or 0
+     */
+    JBStream* findStream(const String& name);
+
+    /**
      * Get a stream. Create it not found and requested.
      * For the component protocol, the jid parameter may contain the domain to find,
      *  otherwise, the default component will be used.
@@ -1243,14 +1269,11 @@ public:
     bool getStream(JBStream*& stream, bool& release);
 
     /**
-     * Create a new client stream if no other stream exists for the given account
-     * This method is thread safe.
+     * Create a new client stream. This method is thread safe
      * @param params Stream parameters
-     * @param jid Optional client jid. If missing the parameters must contain
-     *  an 'account' entry with the client's jid
      * @return Referenced JBClientStream pointer or 0
      */
-    JBClientStream* createClientStream(NamedList& params, JabberID* jid = 0);
+    JBClientStream* createClientStream(NamedList& params);
 
     /**
      * Keep calling receive() for each stream until no data is received or the

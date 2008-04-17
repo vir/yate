@@ -1720,38 +1720,45 @@ void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
  */
 bool UserLoginHandler::received(Message& msg)
 {
-    if (!s_jabber && s_jabber->protocol() == JBEngine::Client)
+    if (!(s_jabber && s_jabber->protocol() == JBEngine::Client))
 	return false;
     if (s_name != msg.getValue("protocol"))
 	return false;
-    NamedString* oper = msg.getParam("operation");
-    if (!(oper && (*oper == "login" || *oper == "logout")))
+    NamedString* account = msg.getParam("account");
+    if (!account || account->null())
 	return false;
-    JabberID jid(msg.getValue("account"));
-    Debug(&plugin,DebugInfo,"user.login for account=%s operation=%s",
-	jid.safe(),oper->c_str());
-    // Login/logout: create/destroy the stream
-    if (*oper == "login") {
-	JBClientStream* stream = s_jabber->createClientStream(msg,&jid);
+    // Check operation
+    NamedString* oper = msg.getParam("operation");
+    bool login = !oper || *oper == "login" || *oper == "create";
+    if (!login && (!oper || (*oper != "logout" && *oper == "delete")))
+	return false;
+
+    Debug(&plugin,DebugAll,"user.login for account=%s operation=%s",
+	account->c_str(),oper?oper->c_str():"");
+
+    JBClientStream* stream = static_cast<JBClientStream*>(s_jabber->findStream(*account));
+    bool ok = false;
+    if (login) {
 	if (!stream)
-	    return false;
-	TelEngine::destruct(stream);
+	    stream = s_jabber->createClientStream(msg);
+	else
+	    msg.setParam("error","User already logged in");
+	ok = (0 != stream);
     }
-    else {
-	JBStream* stream = s_jabber->getStream(&jid,false);
-	if (!(stream && stream->type() == JBEngine::Client)) {
-	    TelEngine::destruct(stream);
-	    return true;
-	}
+    else if (stream) {
 	if (stream->state() == JBStream::Running) {
 	    XMLElement* xml = JBPresence::createPresence(0,0,JBPresence::Unavailable);
 	    stream->sendStanza(xml);
 	}
-	stream->terminate(true,0,XMPPError::SUnavailable,
-	    msg.getValue("reason,","Logout"),true);
-	TelEngine::destruct(stream);
+	const char* reason = msg.getValue("reason");
+	if (!reason)
+	    reason = Engine::exiting() ? "" : "Logout";
+	XMPPError::Type err = Engine::exiting()?XMPPError::Shutdown:XMPPError::NoError;
+	stream->terminate(true,0,err,reason,true);
+	ok = true;
     }
-    return true;
+    TelEngine::destruct(stream);
+    return ok;
 }
 
 /**
@@ -2121,12 +2128,13 @@ bool YJGDriver::received(Message& msg, int id)
 	    msg.retValue().clear();
 	    msg.retValue() << "name=" << name();
 	    msg.retValue() << ",type=" << type();
-	    msg.retValue() << ",format=Type|State|Local|Remote";
+	    msg.retValue() << ",format=Account|State|Local|Remote";
 	    s_jabber->lock();
 	    msg.retValue() << ";count=" << s_jabber->streams().count();
 	    for (ObjList* o = s_jabber->streams().skipNull(); o; o = o->skipNext()) {
 		JBStream* stream = static_cast<JBStream*>(o->get());
 		msg.retValue() << ";" << JBEngine::lookupProto(stream->type());
+		msg.retValue() << "=" << stream->name();
 		msg.retValue() << "|" << JBStream::lookupState(stream->state());
 		msg.retValue() << "|" << stream->local();
 		msg.retValue() << "|" << stream->remote();
@@ -2138,9 +2146,6 @@ bool YJGDriver::received(Message& msg, int id)
     }
     else if (id == Halt) {
 	dropAll(msg);
-	lock();
-	channels().clear();
-	unlock();
 	if (s_presence)
 	    s_presence->cleanup();
 	s_jabber->cleanup();

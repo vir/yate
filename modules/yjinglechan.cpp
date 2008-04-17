@@ -1,3 +1,4 @@
+
 /**
  * yjinglechan.cpp
  * This file is part of the YATE Project http://YATE.null.ro
@@ -222,6 +223,7 @@ public:
     virtual bool msgAnswered(Message& msg);
     virtual bool msgUpdate(Message& msg);
     virtual bool msgText(Message& msg, const char* text);
+    virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgTone(Message& msg, const char* tone);
     inline bool disconnect(const char* reason) {
 	    setReason(reason);
@@ -1246,6 +1248,17 @@ bool YJGConnection::msgText(Message& msg, const char* text)
 	return true;
     }
     return false;
+}
+
+// Hangup
+bool YJGConnection::msgDrop(Message& msg, const char* reason)
+{
+    DDebug(this,DebugCall,"msgDrop('%s') [%p]",reason,this);
+    setReason(reason?reason:"dropped");
+    if (!Channel::msgDrop(msg,m_reason))
+	return false;
+    hangup(false);
+    return true;
 }
 
 // Send tones to remote peer

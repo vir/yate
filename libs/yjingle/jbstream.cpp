@@ -1099,7 +1099,8 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
     XMLElement* child = 0;
 
     // Request (type is set or get): check the child (MUST exists)
-    // Response (type is result or error). Check it only if it has an 'iq' child
+    // Result: check it only if it has a child
+    // Error: check it only if it has an 'iq' child with a child
     if (evType == JBEvent::Iq) {
 	child = xml->findFirstChild();
 	// No child: request what ???
@@ -1132,9 +1133,14 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	}
     }
     else {
-	child = xml->findFirstChild(XMLElement::Iq);
-	XMLElement* c = child ? child->findFirstChild() : 0;
-	// The child of this 'iq' sets the event's type
+	XMLElement* c = 0;
+	if (iqType == XMPPUtils::IqResult)
+	    c = child = xml->findFirstChild();
+	else {
+	    child = xml->findFirstChild(XMLElement::Iq);
+	    if (child)
+		c = child->findFirstChild();
+	}
 	if (c) {
 	    fixXmlType(c);
 	    switch (c->type()) {

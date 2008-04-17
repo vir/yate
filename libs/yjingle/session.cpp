@@ -553,7 +553,9 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (tmp->timeout(time)) {
 		Debug(m_engine,DebugNote,"Call(%s). Sent stanza ('%s') timed out [%p]",
 		    m_sid.c_str(),tmp->c_str(),this);
-		m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"timeout");
+		// Notify the peer anyway (something may be wrong)
+		if (!hangup(false,"Timeout"))
+		    m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"timeout");
 	    }
 	}
     }

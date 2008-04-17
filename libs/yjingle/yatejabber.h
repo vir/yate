@@ -2297,6 +2297,19 @@ public:
     void clearLocalRes();
 
     /**
+     * Add a remote resource to the list. This method is thread safe.
+     * @param resource The resource to add
+     * @return False if the the resource already exists in the list
+     */
+    bool addRemoteRes(JIDResource* resource);
+
+    /**
+     * Remove a remote resource from the list. This method is thread safe.
+     * @param resource The resource to remove
+     */
+    void removeRemoteRes(JIDResource* resource);
+
+    /**
      * Get the first remote resource with audio capability.
      * @param local True to request a local resource, false for a remote one.
      * @param availableOnly True to get only if available.

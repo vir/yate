@@ -1384,6 +1384,36 @@ void XMPPUser::clearLocalRes()
 	sendUnavailable(0);
 }
 
+// Add a remote resource to the list
+bool XMPPUser::addRemoteRes(JIDResource* resource)
+{
+    if (!resource)
+	return false;
+    Lock lock(this);
+    if (!m_remoteRes.add(resource))
+	return false;
+    DDebug(m_local->engine(),DebugAll,
+	"User(%s). Added remote resource name=%s audio=%s avail=%s [%p]",
+	m_local->jid().c_str(),resource->name().c_str(),
+	String::boolText(resource->hasCap(JIDResource::CapAudio)),
+	String::boolText(resource->available()),this);
+    return true;
+}
+
+// Remove a remote resource from the list
+void XMPPUser::removeRemoteRes(JIDResource* resource)
+{
+    if (!(resource && m_remoteRes.get(resource->name()))) {
+	TelEngine::destruct(resource);
+	return;
+    }
+    Lock lock(this);
+    DDebug(m_local->engine(),DebugAll,
+	"User(%s). Removing remote resource name=%s [%p]",
+	m_local->jid().c_str(),resource->name().c_str(),this);
+    m_remoteRes.remove(resource);
+}
+
 // Process an error stanza
 void XMPPUser::processError(JBEvent* event)
 {
@@ -1433,7 +1463,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 		    m_local->engine()->notifyPresence(this,res);
 	    }
 	    if (!m_local->engine() || m_local->engine()->delUnavailable())
-		m_remoteRes.m_resources.remove(res,true);
+		removeRemoteRes(res);
 		
 	}
 	// Done if no presence service
@@ -1478,15 +1508,15 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 	if (m_local->engine())
 	    m_local->engine()->notifyPresence(this,res);
     }
-    // Done if no presence service
-    if (!m_local->engine())
-	return true;
-    if (!available && m_local->engine()->delUnavailable()) {
-	m_remoteRes.m_resources.remove(res,true);
+    if (!available || !m_local->engine() || m_local->engine()->delUnavailable()) {
+	removeRemoteRes(res);
 	// No more resources ? Remove user
 	if (!m_remoteRes.getFirst())
 	    return false;
     }
+    // Done if no presence service
+    if (!m_local->engine())
+	return true;
     // Notify local resources to remote user if not already done
     if (m_subscription.from())
 	notifyResources(false,event->stream(),false);

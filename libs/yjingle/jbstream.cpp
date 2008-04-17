@@ -338,8 +338,8 @@ bool JBStream::checkDestination(XMLElement* xml, bool& respond)
 void JBStream::connect()
 {
     Lock2 lck(m_socket.m_streamMutex,m_socket.m_receiveMutex);
-    if (state() != Idle && state() != Connecting) {
-	Debug(m_engine,DebugNote,
+    if (state() != Idle) {
+	Debug(m_engine,state()!=Connecting?DebugNote:DebugAll,
 	    "Stream. Attempt to connect when not idle [%p]",this);
 	return;
     }

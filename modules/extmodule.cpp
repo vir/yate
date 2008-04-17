@@ -59,6 +59,14 @@ static Mutex s_mutex(true);
 static int s_timeout = MSG_TIMEOUT;
 static bool s_timebomb = false;
 
+static const char* s_cmds[] = {
+    "info",
+    "start",
+    "stop",
+    "restart",
+    0
+};
+
 class ExtModReceiver;
 class ExtModChan;
 
@@ -218,6 +226,7 @@ public:
 	{ return m_selfWatch; }
     inline void setRestart(bool restart)
 	{ m_restart = restart; }
+    void describe(String& rval) const;
 
 private:
     ExtModReceiver(const char* script, const char* args,
@@ -274,6 +283,8 @@ class ExtModCommand : public MessageHandler
 public:
     ExtModCommand(const char *name) : MessageHandler(name) { }
     virtual bool received(Message &msg);
+private:
+    bool complete(const String& partLine, const String& partWord, String& rval) const;
 };
 
 class ExtListener : public Thread
@@ -401,6 +412,7 @@ void ExtModSource::run()
     m_chan->setRunning(false);
 }
 
+
 ExtModConsumer::ExtModConsumer(Stream* str)
     : m_str(str), m_total(0)
 {
@@ -424,6 +436,7 @@ void ExtModConsumer::Consume(const DataBlock& data, unsigned long timestamp)
 	m_total += data.length();
     }
 }
+
 
 ExtModChan* ExtModChan::build(const char* file, const char* args, int type)
 {
@@ -516,6 +529,7 @@ void ExtModChan::disconnected(bool final, const char *reason)
 	Engine::enqueue(m);
     }
 }
+
 
 MsgHolder::MsgHolder(Message &msg)
     : m_msg(msg), m_ret(false)
@@ -1357,6 +1371,35 @@ bool ExtModReceiver::processLine(const char* line)
     return false;
 }
 
+void ExtModReceiver::describe(String& rval) const
+{
+    rval << "\t";
+    switch (m_role) {
+	case RoleUnknown:
+	    rval << "Unknown";
+	    break;
+	case RoleGlobal:
+	    rval << "Global";
+	    break;
+	case RoleChannel:
+	    rval << "Channel";
+	    break;
+	default:
+	    rval << "Invalid";
+	    break;
+    }
+    if (m_dead)
+	rval << ", dead";
+    if (m_chan)
+	rval << ", has channel";
+    if (m_restart)
+	rval << ", autorestart";
+    if (m_pid > 0)
+	rval << ", pid=" << m_pid;
+    rval << "\r\n";
+}
+
+
 bool ExtModHandler::received(Message& msg)
 {
     String dest(msg.getValue("callto"));
@@ -1416,22 +1459,26 @@ bool ExtModHandler::received(Message& msg)
     return true;
 }
 
+
 bool ExtModCommand::received(Message& msg)
 {
     String line(msg.getValue("line"));
     if (!line.startsWith("external",true))
-	return false;
+	return complete(msg.getValue("partline"),msg.getValue("partword"),msg.retValue());;
     line >> "external";
     line.trimBlanks();
-    if (line.null()) {
+    if (line.null() || line == "info") {
 	msg.retValue() = "";
 	int n = 0;
 	Lock lock(s_mutex);
 	ObjList *l = &s_modules;
 	for (; l; l=l->next()) {
 	    ExtModReceiver *r = static_cast<ExtModReceiver *>(l->get());
-	    if (r)
+	    if (r) {
 		msg.retValue() << ++n << ". " << r->scriptFile() << " " << r->commandArg() << "\r\n";
+		if (line)
+		    r->describe(msg.retValue());
+	    }
 	}
 	return true;
     }
@@ -1463,6 +1510,25 @@ bool ExtModCommand::received(Message& msg)
 	(blank >= 0) ? line.substr(blank+1).c_str() : (const char*)0);
     msg.retValue() = r ? "External start attempt\r\n" : "External command failed\r\n";
     return true;
+}
+
+bool ExtModCommand::complete(const String& partLine, const String& partWord, String& rval) const
+{
+    if (partLine.null() && partWord.null())
+	return false;
+    if (partLine.null()) {
+	if (partWord.null() || String("external").startsWith(partWord))
+	    rval.append("external","\t");
+    }
+    else if (partLine == "external") {
+	for (const char** list = s_cmds; *list; list++) {
+	    String tmp = *list;
+	    if (partWord.null() || tmp.startsWith(partWord))
+		rval.append(tmp,"\t");
+	}
+	return true;
+    }
+    return false;
 }
 
 

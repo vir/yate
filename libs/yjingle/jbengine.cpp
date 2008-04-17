@@ -1508,7 +1508,7 @@ bool XMPPUser::processPresence(JBEvent* event, bool available)
 	if (m_local->engine())
 	    m_local->engine()->notifyPresence(this,res);
     }
-    if (!available || !m_local->engine() || m_local->engine()->delUnavailable()) {
+    if (!available && (!m_local->engine() || m_local->engine()->delUnavailable())) {
 	removeRemoteRes(res);
 	// No more resources ? Remove user
 	if (!m_remoteRes.getFirst())

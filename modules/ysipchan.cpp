@@ -121,7 +121,7 @@ static TokenDict info_signals[] = {
 };
 
 // Network media description
-class NetMedia : public String
+class NetMedia : public NamedList
 {
 public:
     NetMedia(const char* media, const char* transport, const char* formats,
@@ -129,6 +129,10 @@ public:
     virtual ~NetMedia();
     inline bool isAudio() const
 	{ return m_audio; }
+    inline bool isModified() const
+	{ return m_modified; }
+    inline void setModified(bool modified = true)
+	{ m_modified = modified; }
     inline const String& suffix() const
 	{ return m_suffix; }
     inline const String& transport() const
@@ -150,8 +154,11 @@ public:
     const char* fmtList() const;
     bool update(const char* formats, int rport = -1, int lport = -1);
     void update(const Message& msg, bool pickFormat);
+    void parameter(const char* name, const char* value, bool append);
+    void parameter(NamedString* param, bool append);
 private:
     bool m_audio;
+    bool m_modified;
     // suffix used for this type
     String m_suffix;
     // transport protocol
@@ -611,7 +618,9 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	String fmt;
 	String aux;
 	String mappings;
+	ObjList params;
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
+	bool first = true;
 	int ptime = 0;
 	while (tmp[0] == ' ') {
 	    int var = -1;
@@ -662,7 +671,15 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 			    line >> annexB;
 		    }
 		}
+		else if (first) {
+		    int pos = line.find(':');
+		    if (pos >= 0)
+			params.append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
+		    else
+			params.append(new NamedString(line));
+		}
 	    }
+	    first = false;
 
 	    if (payload == "ilbc") {
 		const char* forced = s_cfg.getValue("hacks","ilbc_forced");
@@ -699,10 +716,16 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	    if (om)
 		net = static_cast<NetMedia*>(om->remove(false));
 	}
+	bool append = false;
 	if (net)
 	    net->update(fmt,port);
-	else
+	else {
 	    net = new NetMedia(type,trans,fmt,port);
+	    append = true;
+	}
+	while (NamedString* par = static_cast<NamedString*>(params.remove(false)))
+	    net->parameter(par,append);
+	net->setModified(false);
 	net->mappings(mappings);
 	if (!lst)
 	    lst = new ObjList;
@@ -729,6 +752,12 @@ static void putMedia(Message& msg, ObjList* lst, bool putPort = true)
 	    msg.addParam("rtp_mapping"+m->suffix(),m->mappings());
 	if (putPort)
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
+	unsigned int n = m->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* param = m->getParam(i);
+	    if (param)
+		msg.addParam("sdp"+m->suffix()+"_"+param->name(),*param);
+	}
     }
 }
 
@@ -932,11 +961,13 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
 }
 
 NetMedia::NetMedia(const char* media, const char* transport, const char* formats, int rport, int lport)
-    : String(media), m_audio(true), m_transport(transport), m_formats(formats)
+    : NamedList(media),
+      m_audio(true), m_modified(false),
+      m_transport(transport), m_formats(formats)
 {
     DDebug(&plugin,DebugAll,"NetMedia::NetMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
-    if (operator!=("audio")) {
+    if (String::operator!=("audio")) {
 	m_audio = false;
 	m_suffix << "_" << media;
     }
@@ -1008,6 +1039,31 @@ void NetMedia::update(const Message& msg, bool pickFormat)
     if (pickFormat)
 	m_format = msg.getValue("format");
 }
+
+// Add or replace a parameter by name and value, set the modified flag
+void NetMedia::parameter(const char* name, const char* value, bool append)
+{
+    if (!name)
+	return;
+    m_modified = true;
+    if (append)
+	addParam(name,value);
+    else
+	setParam(name,value);
+}
+
+// Add or replace a parameter, set the modified flag
+void NetMedia::parameter(NamedString* param, bool append)
+{
+    if (!param)
+	return;
+    m_modified = true;
+    if (append)
+	addParam(param);
+    else
+	setParam(param);
+}
+
 
 YateUDPParty::YateUDPParty(Socket* sock, const SocketAddr& addr, int localPort, const char* localAddr)
     : m_sock(sock), m_addr(addr)
@@ -2333,6 +2389,7 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
     if (addr.null())
 	return 0;
 
+    const char* sdpPrefix = msg.getValue("osdp-prefix","osdp");
     ObjList* lst = 0;
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
@@ -2368,10 +2425,21 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	    if (om)
 		rtp = static_cast<NetMedia*>(om->remove(false));
 	}
+	bool append = false;
 	if (rtp)
 	    rtp->update(fmts,-1,port);
-	else
+	else {
 	    rtp = new NetMedia(tmp,trans,fmts,-1,port);
+	    append = true;
+	}
+	if (sdpPrefix) {
+	    for (unsigned int j = 0; j < n; j++) {
+		const NamedString* param = msg.getParam(j);
+		tmp = param->name();
+		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
+		    rtp->parameter(tmp,*param,append);
+	    }
+	}
 	rtp->mappings(msg.getValue("rtp_mapping"+rtp->suffix()));
 	if (!lst)
 	    lst = new ObjList;
@@ -2426,6 +2494,12 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 	}
 	TelEngine::destruct(mappings);
     }
+    unsigned int n = media->length();
+    for (unsigned int i = 0; i < n; i++) {
+	const NamedString* param = media->getParam(i);
+	if (param)
+	    m.addParam("sdp_" + param->name(),*param);
+    }
     if (!Engine::dispatch(m))
 	return false;
     if (!pick)
@@ -2434,6 +2508,16 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
     m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = MediaStarted;
     media->update(m,start);
+    const char* sdpPrefix = m.getValue("osdp-prefix","osdp");
+    if (sdpPrefix) {
+	n = m.length();
+	for (unsigned int j = 0; j < n; j++) {
+	    const NamedString* param = m.getParam(j);
+	    String tmp = param->name();
+	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
+	        media->parameter(tmp,*param,false);
+	}
+    }
     return true;
 }
 
@@ -2442,6 +2526,7 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 {
 
     bool defaults = true;
+    const char* sdpPrefix = msg.getValue("osdp-prefix","osdp");
     ObjList* lst = 0;
     unsigned int n = msg.length();
     for (unsigned int i = 0; i < n; i++) {
@@ -2478,10 +2563,21 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 	    if (om)
 		rtp = static_cast<NetMedia*>(om->remove(false));
 	}
+	bool append = false;
 	if (rtp)
 	    rtp->update(fmts);
-	else
+	else {
 	    rtp = new NetMedia(tmp,trans,fmts);
+	    append = true;
+	}
+	if (sdpPrefix) {
+	    for (unsigned int j = 0; j < n; j++) {
+		const NamedString* param = msg.getParam(j);
+		tmp = param->name();
+		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
+		    rtp->parameter(tmp,*param,append);
+	    }
+	}
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(rtp);
@@ -2658,6 +2754,18 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	}
 
 	sdp->addLine("m",mline + frm);
+	if (m->isModified()) {
+	    unsigned int n = m->length();
+	    for (unsigned int i = 0; i < n; i++) {
+		const NamedString* param = m->getParam(i);
+		if (param) {
+		    String tmp = param->name();
+		    if (*param)
+			tmp << ":" << *param;
+		    sdp->addLine("a",tmp);
+		}
+	    }
+	}
 	for (f = rtpmap.skipNull(); f; f = f->skipNext()) {
 	    String* s = static_cast<String*>(f->get());
 	    if (s)

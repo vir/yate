@@ -1973,26 +1973,32 @@ void JBClientStream::processRunning(XMLElement* xml)
     XMLElement* item = event->child() ? event->child()->findFirstChild(XMLElement::Item) : 0;
     for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
 	JabberID jid = item->getAttribute("jid");
-	const char* sub = item->getAttribute("subscription");
-	XMPPDirVal::Direction subType = (XMPPDirVal::Direction)XMPPDirVal::lookup(sub);
+	String sub = item->getAttribute("subscription");
 	XMPPUser* user = m_roster->getUser(jid,false);
-	bool newUser = true;
-	if (!user)
-	    user = new XMPPUser(m_roster,jid.node(),jid.domain(),subType,false,false);
-	else {
-	    newUser = false;
-	    user->subscription().replace(subType);
+	bool removeUser = false;
+	if (sub != "remove") {
+	    XMPPDirVal::Direction subType = (XMPPDirVal::Direction)XMPPDirVal::lookup(sub);
+	    if (user)
+		user->subscription().replace(subType);
+	    else {
+		user = new XMPPUser(m_roster,jid.node(),jid.domain(),subType,false,false);
+		user->ref();
+	    }
+	    removeUser = !user->local();
 	}
-	if (!user->local()) {
-	    Debug(engine(),DebugStub,"Stream. Failed to update roster for jid=%s [%p]",
-		jid.c_str(),this);
-	    TelEngine::destruct(user);
-	    continue;
+	else
+	    removeUser = true;
+	if (user) {
+	    Debug(engine(),DebugAll,"Stream. Updated roster jid=%s subscription=%s [%p]",
+		jid.c_str(),sub.c_str(),this);
+	    if (removeUser) {
+		Debug(engine(),DebugInfo,
+		    "Stream. Removing jid=%s from roster [%p]",jid.c_str(),this);
+		// deref() the user since we've increased its reference counter
+		user->deref();
+	    }
 	}
-	Debug(engine(),DebugAll,"Stream. Updated roster jid=%s subscription=%s [%p]",
-	    jid.c_str(),sub,this);
-	if (!newUser)
-	    TelEngine::destruct(user);
+	TelEngine::destruct(user);
     }
 }
 

@@ -1079,6 +1079,9 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 {
 #define IQEVENT_SET_REQ(get,set) evType = (iqType == XMPPUtils::IqGet) ? get : set
 #define IQEVENT_SET_RSP(res,err) evType = (iqType == XMPPUtils::IqResult) ? res : err
+
+bool d = false;
+
     JBEvent::Type evType;
     switch (iqType) {
 	case XMPPUtils::IqGet:
@@ -1115,15 +1118,17 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 		    IQEVENT_SET_REQ(JBEvent::IqJingleGet,JBEvent::IqJingleSet);
 		break;
 	    case XMLElement::Query:
-		if (checkValidXmlns(child,XMPPNamespace::DiscoInfo,error))
+		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::DiscoInfo))
 		    IQEVENT_SET_REQ(JBEvent::IqDiscoInfoGet,JBEvent::IqDiscoInfoSet);
-		else if (checkValidXmlns(child,XMPPNamespace::DiscoItems,error))
+		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::DiscoItems))
 		    IQEVENT_SET_REQ(JBEvent::IqDiscoItemsGet,JBEvent::IqDiscoItemsSet);
-		else if (checkValidXmlns(child,XMPPNamespace::Roster,error))
+		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Roster))
 		    if (iqType == XMPPUtils::IqGet)
 			error = XMPPError::SBadRequest;
 		    else
 			evType = JBEvent::IqRosterSet;
+		else
+		    error = XMPPError::SFeatureNotImpl;
 		break;
 	    case XMLElement::Command:
 		if (checkValidXmlns(child,XMPPNamespace::Command,error))
@@ -1164,6 +1169,9 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	    }
 	}
     }
+
+if (d)
+   Output("HERE error %u",error);
 
     if (error == XMPPError::NoError)
 	return new JBEvent(evType,this,xml,child);
@@ -1856,18 +1864,15 @@ void JBClientStream::processRunning(XMLElement* xml)
 	case JBEvent::Presence:
 	    break;
 	case JBEvent::IqRosterSet:
-	    // Send response and fall through to process it
 	    sendStanza(XMPPUtils::createIq(XMPPUtils::IqResult,event->to(),
 		event->from(),event->id()));
+	    sendPres = false;
+	    break;
 	case JBEvent::IqRosterRes:
 	case JBEvent::IqRosterErr:
 	    if (m_rosterReqId == event->id()) {
 		// Cleanup roster only if received result or error
 		m_rosterReqId = "";
-		if (event->type() == JBEvent::IqRosterSet) {
-		    sendPres = false;
-		    break;
-		}
 		m_roster->cleanup();
 		if (event->type() == JBEvent::IqRosterRes)
 		    break;

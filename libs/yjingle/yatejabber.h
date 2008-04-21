@@ -198,11 +198,17 @@ public:
 	{ return m_child; }
 
     /**
-     * Get the underlying XMLElement. Release the ownership.
-     * The caller is responsable of returned pointer
-     * @return XMLElement pointer or 0
+     * Delete the underlying XMLElement(s). Release the ownership.
+     * The caller is responsable of the returned pointer
+     * @param del True to delete all xml elements owned by this event
+     * @return XMLElement pointer if not deleted or 0
      */
-    inline XMLElement* releaseXML() {
+    inline XMLElement* releaseXML(bool del = false) {
+	    TelEngine::destruct(m_child);
+	    if (del) {
+		TelEngine::destruct(m_element);
+		return 0;
+	    }
 	    XMLElement* tmp = m_element;
 	    m_element = 0;
 	    return tmp;
@@ -248,7 +254,6 @@ private:
     String m_text;                       // The stanza's text or termination reason for
                                          //  Terminated/Destroy events
 };
-
 
 /**
  * A socket used used to transport data for a Jabber stream

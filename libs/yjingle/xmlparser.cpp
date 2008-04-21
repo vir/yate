@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#define HERE
+
 #include <xmlparser.h>
 #include <string.h>
 
@@ -80,7 +82,7 @@ XMLElement::XMLElement()
     : m_type(StreamEnd), m_owner(true), m_element(0)
 {
     m_element = new TiXmlElement(typeName(m_type));
-//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",name(),this);
 }
 
 XMLElement::XMLElement(const XMLElement& src)
@@ -91,6 +93,7 @@ XMLElement::XMLElement(const XMLElement& src)
 	return;
     m_element = new TiXmlElement(*e);
     setType();
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",name(),this);
 }
 
 // Partially build this element from another one.
@@ -110,6 +113,7 @@ XMLElement::XMLElement(const XMLElement& src, bool response, bool result)
 	setAttributeValid("type",src.getAttribute("type"));
     }
     setAttributeValid("id",src.getAttribute("id"));
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",name(),this);
 }
 
 XMLElement::XMLElement(const char* name, NamedList* attributes,
@@ -131,7 +135,7 @@ XMLElement::XMLElement(const char* name, NamedList* attributes,
 	}
     }
     setType();
-//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name);
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",this->name(),this);
 }
 
 XMLElement::XMLElement(Type type, NamedList* attributes,
@@ -152,21 +156,23 @@ XMLElement::XMLElement(Type type, NamedList* attributes,
 	    m_element->SetAttribute(ns->name().c_str(),ns->c_str());
 	}
     }
-//    XDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) [%p]",name(),this);
 }
 
 XMLElement::XMLElement(TiXmlElement* element, bool owner)
     : m_type(Unknown), m_owner(owner), m_element(element)
 {
     setType();
-//    XDDebug(DebugAll,"XMLElement::XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::XMLElement(%s) owner=%u [%p]",
+//	name(),m_owner,this);
 }
 
 XMLElement::~XMLElement()
 {
     if (m_owner && m_element)
 	delete m_element;
-//    XDebug(DebugAll,"XMLElement::~XMLElement [%p]. Name: '%s'",this,name());
+//    XDebug(DebugAll,"XMLElement::~XMLElement(%s) owner=%u [%p]",
+//	m_name.c_str(),m_owner,this);
 }
 
 void XMLElement::toString(String& dest, bool unclose) const
@@ -232,23 +238,26 @@ XMLElement* XMLElement::findFirstChild(const char* name)
     return 0;
 }
 
-XMLElement* XMLElement::findNextChild(const XMLElement* element, const char* name)
+XMLElement* XMLElement::findNextChild(XMLElement* element, const char* name)
 {
-    if (!valid())
+    if (!valid()) {
+	TelEngine::destruct(element);
 	return 0;
+    }
     TiXmlElement* tiElement = element ? element->get() : 0;
-    if (!(element && tiElement))
-	return findFirstChild(name);
-    for (;;) {
+    XMLElement* result = 0;
+    if (tiElement) {
 	if (name && *name)
 	    tiElement = tiElement->NextSiblingElement(name);
 	else
 	    tiElement = tiElement->NextSiblingElement();
-	if (!tiElement)
-	    break;
-	return new XMLElement(tiElement,false);
+	if (tiElement)
+	    result = new XMLElement(tiElement,false);
     }
-    return 0;
+    else
+	result = findFirstChild(name);
+    TelEngine::destruct(element);
+    return result;
 }
 
 TiXmlElement* XMLElement::releaseOwnership()

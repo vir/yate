@@ -260,6 +260,7 @@ bool JIDIdentity::fromXML(const XMLElement* element)
     m_category = categoryValue(id->getAttribute("category"));
     m_type = typeValue(id->getAttribute("type"));
     id->getAttribute("name",m_name);
+    TelEngine::destruct(id);
     return true;
 }
 
@@ -464,7 +465,7 @@ bool XMPPUtils::hasXmlns(XMLElement& element, XMPPNamespace::Type ns)
     return element.hasAttribute("xmlns",s_ns[ns]);
 }
 
-
+// Decode an 'error' XML element
 void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
 {
     if (!element)
@@ -473,6 +474,7 @@ void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
     XMPPNamespace::Type nsErr;
     error = "";
     text = "";
+    XMLElement* child = 0;
     switch (element->type()) {
 	case XMLElement::StreamError:
 	    nsErr = XMPPNamespace::StreamError;
@@ -483,19 +485,24 @@ void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
 	case XMLElement::Iq:
 	case XMLElement::Presence:
 	case XMLElement::Message:
-	    decodeError(element->findFirstChild(XMLElement::Error),error,text);
+	    child = element->findFirstChild(XMLElement::Error);
+	    decodeError(child,error,text);
+	    TelEngine::destruct(child);
 	default:
 	    return;
     }
 
-    for (XMLElement* err = 0; 0 != (err = element->findNextChild(err,(const char*)0));)
-	if (hasXmlns(*err,nsErr)) {
-	    error = err->name();
+    while (0 != (child = element->findNextChild(child)))
+	if (hasXmlns(*child,nsErr)) {
+	    error = child->name();
+	    TelEngine::destruct(child);
 	    break;
 	}
-    XMLElement* child = element->findFirstChild(XMLElement::Text);
-    if (child)
+    child = element->findFirstChild(XMLElement::Text);
+    if (child) {
 	text = child->getText();
+	TelEngine::destruct(child);
+    }
 }
 
 // Check if an element or attribute name restricts value output
@@ -516,7 +523,7 @@ void XMPPUtils::print(String& xmlStr, XMLElement& element, const char* indent)
 #define STARTLINE(indent) "\r\n" << indent
     const char* enclose = "-----";
     bool hasAttr = (0 != element.firstAttribute());
-    bool hasChild = (0 != element.findFirstChild());
+    bool hasChild = element.hasChild(0);
     const char* txt = element.getText();
     bool root = false;
     if (!(indent && *indent)) {

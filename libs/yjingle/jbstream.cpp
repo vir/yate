@@ -167,8 +167,10 @@ void JBSocket::terminate(bool shutdown)
 	return;
     Socket* tmp = m_socket;
     m_socket = 0;
-    Debug(m_engine,DebugInfo,"Stream. Terminating socket shutdown=%s [%p]",
-	String::boolText(shutdown),m_stream);
+    Debug(m_engine,DebugInfo,
+	"Stream. Terminating socket shutdown=%s error=%s [%p]",
+	String::boolText(shutdown),m_error.c_str(),m_stream);
+    m_error = "";
     lck.drop();
     if (shutdown)
 	tmp->shutdown(true,true);
@@ -313,6 +315,7 @@ JBStream::~JBStream()
 // Close the stream. Release memory
 void JBStream::destroyed()
 {
+    XDebug(m_engine,DebugAll,"Stream::destroyed() state=%s [%p]",lookupState(state()),this);
     if (m_engine) {
 	Lock lock(m_engine);
 	m_engine->m_streams.remove(this,false);
@@ -613,6 +616,8 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type error,
 	const char* reason, bool send, bool final)
 {
+    XDebug(m_engine,DebugAll,"Stream::terminate(%u,%p,%u,%s,%u,%u) state=%s [%p]",
+	destroy,recvStanza,error,reason,send,final,lookupState(state()),this);
     Lock2 lock(m_socket.m_streamMutex,m_socket.m_receiveMutex);
     if (!flag(AutoRestart))
 	destroy = true;
@@ -686,14 +691,15 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
     }
     TelEngine::destruct(recvStanza);
 
-    // Change state
+    // Terminate
+    changeState(destroy ? Destroy : Idle);
+    resetStream();
     if (destroy) {
-	changeState(Destroy);
+	DDebug(m_engine,DebugAll,"Stream::terminate() deref() in state=%s [%p]",
+	    lookupState(state()),this);
+	lock.drop();
 	deref();
     }
-    else
-	changeState(Idle);
-    resetStream();
 }
 
 // Get an object from this stream
@@ -879,6 +885,7 @@ void JBStream::processAuth(XMLElement* xml)
 		if (err == XMPPError::Count)
 		    err = XMPPError::NoError;
 		reason << " with reason '" << e->name() << "'";
+		TelEngine::destruct(e);
 	    }
 	    terminate(false,xml,err,reason,false);
 	    return;
@@ -913,20 +920,40 @@ void JBStream::processAuth(XMLElement* xml)
 	    TelEngine::destruct(xml);
 	    break;
 	}
+
 	// WaitChallenge: Check child and its namespace. Send response
-	XMLElement* child = xml->findFirstChild(XMLElement::Query);
-	if (!(child && XMPPUtils::hasXmlns(*child,XMPPNamespace::IqAuth)))
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidNamespace,0)
-	// XEP-0078: username and resource children must be present
-	if (!(child->findFirstChild(XMLElement::Username) &&
-	    child->findFirstChild(XMLElement::Resource)))
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidXml,"Username or resource child is missing")
-	// Get authentication methods
-	m_remoteFeatures.clear();
-	if (child->findFirstChild(XMLElement::Digest))
-	    m_remoteFeatures.add(new JIDFeatureSasl(JIDFeatureSasl::MechSHA1));
-	if (child->findFirstChild(XMLElement::Password))
-	    m_remoteFeatures.add(new JIDFeatureSasl(JIDFeatureSasl::MechPlain));
+	XMLElement* child = 0;
+	XMLElement* username = 0;
+	XMLElement* resource = 0;
+	XMPPError::Type err = XMPPError::NoError;
+	const char* reason = 0;
+	while (true) {
+	    child = xml->findFirstChild(XMLElement::Query);
+	    if (!(child && XMPPUtils::hasXmlns(*child,XMPPNamespace::IqAuth))) {
+		err = XMPPError::InvalidNamespace;
+		break;
+	    }
+	    // XEP-0078: username and resource children must be present
+	    username = child->findFirstChild(XMLElement::Username);
+	    resource = child->findFirstChild(XMLElement::Resource);
+	    if (!(username && resource)) {
+		reason = "Username or resource child is missing";
+		err = XMPPError::InvalidXml;
+		break;
+	    }
+	    // Get authentication methods
+	    m_remoteFeatures.clear();
+	    if (child->hasChild(XMLElement::Digest))
+		m_remoteFeatures.add(new JIDFeatureSasl(JIDFeatureSasl::MechSHA1));
+	    if (child->hasChild(XMLElement::Password))
+		m_remoteFeatures.add(new JIDFeatureSasl(JIDFeatureSasl::MechPlain));
+	    break;
+	}
+	TelEngine::destruct(username);
+	TelEngine::destruct(resource);
+	TelEngine::destruct(child);
+	if (err != XMPPError::NoError)
+	    INVALIDXML_AND_EXIT(err,reason)
 	setClientAuthMechanism();
 	sendAuthResponse(xml);
 	return;
@@ -1004,10 +1031,11 @@ void JBStream::processStarted(XMLElement* xml)
 	if (!flag(StreamAuthenticated)) {
 	    // RFC 3920 6.1: no mechanisms --> SASL not supported
 	    XMLElement* e = xml->findFirstChild(XMLElement::Mechanisms);
-	    if (!(e && e->findFirstChild()))
+	    if (!(e && e->hasChild(0)))
 		m_flags &= ~UseSasl;
-	    startAuth();
+	    TelEngine::destruct(e);
 	    TelEngine::destruct(xml);
+	    startAuth();
 	    return;
 	}
 	m_flags |= StreamAuthenticated;
@@ -1048,19 +1076,42 @@ void JBStream::processStarted(XMLElement* xml)
 	    ERRORXML_AND_EXIT
 
 	// Result
-	XMLElement* child = xml->findFirstChild(XMLElement::Bind);
-	if (!child)
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidXml,"Bind child is missing")
-	if (!XMPPUtils::hasXmlns(*child,XMPPNamespace::Bind))
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidNamespace,0)
-	child = child->findFirstChild(XMLElement::Jid);
-	if (!child)
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidXml,"Jid child is misssing")
-	JabberID jid(child->getText());
-	if (!jid.isFull())
-	    INVALIDXML_AND_EXIT(XMPPError::InvalidXml,"Invalid JID")
-	m_local.set(jid.node(),jid.domain(),jid.resource());
-	changeState(Running);
+	XMLElement* bind = 0;
+	XMLElement* jidxml = 0;
+	XMPPError::Type err = XMPPError::NoError;
+	const char* reason = 0;
+	while (true) {
+	    bind = xml->findFirstChild(XMLElement::Bind);
+	    if (!bind) {
+		err = XMPPError::InvalidXml;
+		reason = "Bind child is missing";
+		break;
+	    }
+	    if (!XMPPUtils::hasXmlns(*bind,XMPPNamespace::Bind)) {
+		err = XMPPError::InvalidNamespace;
+		break;
+	    }
+	    jidxml = bind->findFirstChild(XMLElement::Jid);
+	    if (!jidxml) {
+		err = XMPPError::InvalidXml;
+		reason = "Jid child is misssing";
+		break;
+	    }
+	    JabberID jid(jidxml->getText());
+	    if (!jid.isFull()) {
+		err = XMPPError::InvalidXml;
+		reason = "Jid is not full";
+		break;
+	    }
+	    m_local.set(jid.node(),jid.domain(),jid.resource());
+	    break;
+	}
+	TelEngine::destruct(jidxml);
+	TelEngine::destruct(bind);
+	if (err == XMPPError::NoError)
+	    changeState(Running);
+	else
+	    INVALIDXML_AND_EXIT(err,reason)
     }
     else
 	DROP_AND_EXIT
@@ -1079,8 +1130,6 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 {
 #define IQEVENT_SET_REQ(get,set) evType = (iqType == XMPPUtils::IqGet) ? get : set
 #define IQEVENT_SET_RSP(res,err) evType = (iqType == XMPPUtils::IqResult) ? res : err
-
-bool d = false;
 
     JBEvent::Type evType;
     switch (iqType) {
@@ -1168,13 +1217,13 @@ bool d = false;
 		default: ;
 	    }
 	}
+	if (c != child)
+	    TelEngine::destruct(c);
     }
-
-if (d)
-   Output("HERE error %u",error);
 
     if (error == XMPPError::NoError)
 	return new JBEvent(evType,this,xml,child);
+    TelEngine::destruct(child);
     return 0;
 #undef IQEVENT_SET_REQ
 #undef IQEVENT_SET_RSP
@@ -1232,7 +1281,9 @@ void JBStream::errorStreamXML(XMLElement* xml)
 {
     String error, reason;
     if (xml) {
-	XMPPUtils::decodeError(xml->findFirstChild(XMLElement::Error),error,reason);
+	XMLElement* tmp = xml->findFirstChild(XMLElement::Error);
+	XMPPUtils::decodeError(tmp,error,reason);
+	TelEngine::destruct(tmp);
 	TelEngine::destruct(xml);
     }
     Debug(m_engine,DebugNote,"Stream. Received error=%s reason='%s' state=%s [%p]",
@@ -1270,15 +1321,17 @@ void JBStream::changeState(State newState)
 // Parse receive stream features
 bool JBStream::getStreamFeatures(XMLElement* features)
 {
-#define REQUIRED(xml) (0 != xml->findFirstChild(XMLElement::Required))
+// Get xmlType child, check 'ns' namespace, add remote feature
 #define GET_FEATURE(xmlType,ns) { \
     XMLElement* e = features->findFirstChild(xmlType); \
     if (e) { \
 	if (!(XMPPUtils::hasXmlns(*e,ns))) { \
+	    TelEngine::destruct(e); \
 	    invalidStreamXML(features,XMPPError::InvalidNamespace,0); \
 	    return false; \
 	} \
-	m_remoteFeatures.add(ns,REQUIRED(e)); \
+	m_remoteFeatures.add(ns,e->hasChild(XMLElement::Required)); \
+	TelEngine::destruct(e); \
     } \
 }
     m_remoteFeatures.clear();
@@ -1291,6 +1344,7 @@ bool JBStream::getStreamFeatures(XMLElement* features)
     XMLElement* sasl = features->findFirstChild(XMLElement::Mechanisms);
     if (sasl) {
 	if (!(XMPPUtils::hasXmlns(*sasl,XMPPNamespace::Sasl))) {
+	    TelEngine::destruct(sasl);
 	    invalidStreamXML(features,XMPPError::InvalidNamespace,0);
 	    return false;
 	}
@@ -1298,10 +1352,11 @@ bool JBStream::getStreamFeatures(XMLElement* features)
 	XMLElement* m = 0;
 	while (0 != (m = sasl->findNextChild(m,XMLElement::Mechanism)))
 	    auth |= lookup(m->getText(),JIDFeatureSasl::s_authMech);
-	m_remoteFeatures.add(new JIDFeatureSasl(auth,REQUIRED(sasl)));
+	m_remoteFeatures.add(new JIDFeatureSasl(auth,sasl->hasChild(XMLElement::Required)));
+	TelEngine::destruct(sasl);
     }
     setClientAuthMechanism();
-    // Old auth (older the version 1.0 SASL)
+    // Old auth (older then version 1.0 SASL)
     GET_FEATURE(XMLElement::Auth,XMPPNamespace::IqAuthFeature)
     // Register new user
     GET_FEATURE(XMLElement::Register,XMPPNamespace::Register)

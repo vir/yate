@@ -277,14 +277,16 @@ public:
     void addChild(XMLElement* element);
 
     /**
-     * Find the first child element
+     * Find the first child element of this one.
+     * If an element is returned, it is a newly allocated one, not owning its TiXmlElement pointer
      * @param name Optional name of the child
      * @return Pointer to an XMLElement or 0 if not found
      */
     XMLElement* findFirstChild(const char* name = 0);
 
     /**
-     * Find the first child element of the given type
+     * Find the first child element of the given type.
+     * If an element is returned, it is a newly allocated one, not owning its TiXmlElement pointer
      * @param type Child's type to find
      * @return Pointer to an XMLElement or 0 if not found
      */
@@ -292,20 +294,42 @@ public:
 	{ return findFirstChild(typeName(type)); }
 
     /**
-     * Find the next child element
+     * Check if this element has a given child
+     * @param name Optional name of the child (check for the first one if 0)
+     * @return True if this element has the desired child
+     */
+    inline bool hasChild(const char* name) {
+	    XMLElement* tmp = findFirstChild(name);
+	    bool ok = (0 != tmp);
+	    TelEngine::destruct(tmp);
+	    return ok;
+	}
+
+    /**
+     * Check if this element has a given child
+     * @param type Child's type to find
+     * @return True if this element has the desired child
+     */
+    inline bool hasChild(Type type)
+	{ return hasChild(typeName(type)); }
+
+    /**
+     * Find the next child element. Delete the starting element if not 0.
+     * If an element is returned, it is a newly allocated one, not owning its TiXmlElement pointer
      * @param element Starting XMLElement. O to find from the beginning
      * @param name Optional name of the child
      * @return Pointer to an XMLElement or 0 if not found
      */
-    XMLElement* findNextChild(const XMLElement* element, const char* name = 0);
+    XMLElement* findNextChild(XMLElement* element, const char* name = 0);
 
     /**
-     * Find the next child element of the given type
+     * Find the next child element of the given type. Delete the starting element if not 0.
+     * If an element is returned, it is a newly allocated one, not owning its TiXmlElement pointer
      * @param element Starting XMLElement. O to find from the beginning
      * @param type Child's type to find
      * @return Pointer to an XMLElement or 0 if not found
      */
-    inline XMLElement* findNextChild(const XMLElement* element, Type type)
+    inline XMLElement* findNextChild(XMLElement* element, Type type)
 	{ return findNextChild(element,typeName(type)); }
 
     /**
@@ -500,10 +524,8 @@ public:
      * Destructor
      * Delete m_element if not 0
      */
-    virtual ~XMLElementOut() {
-	    if (m_element)
-		delete m_element;
-	}
+    virtual ~XMLElementOut()
+	{ TelEngine::destruct(m_element); }
 
     /**
      * Get the underlying element

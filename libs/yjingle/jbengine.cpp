@@ -1005,7 +1005,7 @@ JBEvent::~JBEvent()
 	releaseStream();
 	TelEngine::destruct(m_stream);
     }
-    TelEngine::destruct(m_element);
+    releaseXML(true);
     XDebug(DebugAll,"JBEvent::~JBEvent [%p]",this);
 }
 
@@ -1078,8 +1078,10 @@ bool JBEvent::init(JBStream* stream, XMLElement* element)
 	case XMLElement::Message:
 	    if (m_stanzaType != "error") {
 		XMLElement* body = m_element->findFirstChild("body");
-		if (body)
+		if (body) {
 		    m_text = body->getText();
+		    TelEngine::destruct(body);
+		}
 	    }
 	    else
 		XMPPUtils::decodeError(m_element,m_text,m_text);
@@ -1183,6 +1185,7 @@ bool JIDResource::fromXML(XMLElement* element)
     // Status
     tmp = element->findFirstChild("status");
     m_status = tmp ? tmp->getText() : "";
+    TelEngine::destruct(tmp);
     // Capability
     bool capsChanged = false;
     tmp = element->findFirstChild("c");
@@ -1199,6 +1202,7 @@ bool JIDResource::fromXML(XMLElement* element)
 		    m_capability &= ~CapAudio;
 	    }
 	}
+	TelEngine::destruct(tmp);
     }
     // Presence
     bool presenceChanged = setPresence(p == JBPresence::None);
@@ -2452,9 +2456,12 @@ bool JBPresence::decodeError(const XMLElement* element,
 	return true;
     child->getAttribute("code",code);
     child->getAttribute("type",type);
-    child = child->findFirstChild();
-    if (child)
-	error = child->name();
+    XMLElement* tmp = child->findFirstChild();
+    TelEngine::destruct(child);
+    if (tmp) {
+	error = tmp->name();
+	TelEngine::destruct(tmp);
+    }
     return true;
 }
 

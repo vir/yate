@@ -497,6 +497,7 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 			m_sid.c_str(),this);
 		    m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"noconn");
 		}
+		TelEngine::destruct(e);
 		break;
 	    }
 
@@ -636,6 +637,7 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	if (tmp) {
 	    String reason = tmp->getAttribute("action");
 	    String text = tmp->getAttribute("code");
+	    TelEngine::destruct(tmp);
 	    if (!text || (reason != "button-up" && reason != "button-down")) {
 		confirm(jbev->releaseXML(),XMPPError::SBadRequest,"Unknown action");
 		return 0;
@@ -646,6 +648,7 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	tmp = jingle->findFirstChild(XMLElement::DtmfMethod);
 	if (tmp) {
 	    String text = tmp->getAttribute("method");
+	    TelEngine::destruct(tmp);
 	    if (text != "rtp" && text != "xmpp") {
 		confirm(jbev->releaseXML(),XMPPError::SBadRequest,"Unknown method");
 		return 0;
@@ -679,28 +682,32 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
     // Get transport candidates parent:
     //     transport-info: A 'transport' child element
     //     candidates: The 'session' element
-    XMLElement* trans = jingle;
-    if (m_transportType == TransportInfo) {
-	trans = trans->findFirstChild(XMLElement::Transport);
-	if (trans && !trans->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleTransport])) {
-	    confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
-	    return 0;
-	}
-    }
     // Get media description
-    XMLElement* media = jingle->findFirstChild(XMLElement::Description);
-    if (media && !media->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleAudio])) {
-	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
-	return 0;
-    }
-	
     // Create event, update transport and media
-    JGEvent* event = new JGEvent(act,this,jbev->releaseXML());
-
-    XMLElement* t = trans ? trans->findFirstChild(XMLElement::Candidate) : 0;
-    for (; t; t = trans->findNextChild(t,XMLElement::Candidate))
-	event->m_transport.append(new JGTransport(t));
-    event->m_audio.fromXML(media);
+    XMLElement* trans = jingle;
+    XMLElement* media = 0;
+    JGEvent* event = 0;
+    while (true) {
+	if (m_transportType == TransportInfo) {
+	    trans = trans->findFirstChild(XMLElement::Transport);
+	    if (trans && !trans->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleTransport]))
+		break;
+	}
+	media = jingle->findFirstChild(XMLElement::Description);
+	if (media && !media->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleAudio]))
+	    break;
+	event = new JGEvent(act,this,jbev->releaseXML());
+	XMLElement* t = trans ? trans->findFirstChild(XMLElement::Candidate) : 0;
+	for (; t; t = trans->findNextChild(t,XMLElement::Candidate))
+	    event->m_transport.append(new JGTransport(t));
+	event->m_audio.fromXML(media);
+	break;
+    }
+    if (trans != jingle)
+	TelEngine::destruct(trans);
+    TelEngine::destruct(media);
+    if (!event)
+	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
     return event;
 }
 

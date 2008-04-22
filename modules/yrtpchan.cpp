@@ -127,6 +127,8 @@ public:
 	{ return m_master; }
     inline const String& media() const
 	{ return m_media; }
+    inline const String& host() const
+	{ return m_host; }
     inline unsigned int bufSize() const
 	{ return m_bufsize; }
     inline unsigned int port() const
@@ -151,6 +153,7 @@ private:
     String m_id;
     String m_media;
     String m_master;
+    String m_host;
     unsigned int m_bufsize;
     unsigned int m_port;
     bool m_audio;
@@ -347,6 +350,7 @@ void YRTPWrapper::setupRTP(const char* localip, bool rtcp)
 	int lport = (minport + (::random() % (maxport - minport))) & 0xfffe;
 	addr.port(lport);
 	if (m_rtp->localAddr(addr,rtcp)) {
+	    m_host = addr.host();
 	    m_port = lport;
 	    Debug(&splugin,DebugInfo,"Session %p bound to %s:%u%s [%p]",
 		m_rtp,localip,m_port,(rtcp ? " +RTCP" : ""),this);
@@ -734,11 +738,8 @@ bool AttachHandler::received(Message &msg)
 	return false;
 
     const char* media = msg.getValue("media","audio");
-    String lip(msg.getValue("localip"));
     String rip(msg.getValue("remoteip"));
     String rport(msg.getValue("remoteport"));
-    if (lip.null())
-	YRTPWrapper::guessLocal(rip,lip);
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (!src.null())
@@ -752,6 +753,9 @@ bool AttachHandler::received(Message &msg)
     if (!w)
 	w = YRTPWrapper::find(msg.getValue("rtpid"));
     if (!w) {
+	String lip(msg.getValue("localip"));
+	if (lip.null())
+	    YRTPWrapper::guessLocal(rip,lip);
 	w = new YRTPWrapper(lip,ch,media,RTPSession::SendRecv,msg.getBoolValue("rtcp",s_rtcp));
 	w->setMaster(msg.getValue("id"));
 
@@ -773,7 +777,7 @@ bool AttachHandler::received(Message &msg)
 
     if (rip && rport)
 	w->startRTP(rip,rport.toInteger(),msg);
-    msg.setParam("localip",lip);
+    msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
 
@@ -837,7 +841,6 @@ bool RtpHandler::received(Message &msg)
 	    Debug(&splugin,DebugWarn,"RTP request with no local address!");
 	    return false;
 	}
-	msg.setParam("localip",lip);
 
 	w = new YRTPWrapper(lip,ch,media,direction,msg.getBoolValue("rtcp",s_rtcp));
 	w->setMaster(msg.getValue("id"));
@@ -865,6 +868,7 @@ bool RtpHandler::received(Message &msg)
     String rport(msg.getValue("remoteport"));
     if (rip && rport)
 	w->startRTP(rip,rport.toInteger(),msg);
+    msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
 

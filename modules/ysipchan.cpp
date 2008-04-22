@@ -151,6 +151,10 @@ public:
 	{ return m_mappings; }
     inline void mappings(const char* newMap)
 	{ if (newMap) m_mappings = newMap; }
+    inline bool sameAs(const NetMedia* other) const
+	{ return other && (other->formats() == m_formats) &&
+	  (other->transport() == m_transport) &&
+	  (other->remotePort() == m_rPort); }
     const char* fmtList() const;
     bool update(const char* formats, int rport = -1, int lport = -1);
     void update(const Message& msg, bool pickFormat);
@@ -2156,6 +2160,9 @@ void YateSIPConnection::setMedia(ObjList* media)
 	ObjList* l = tmp->skipNull();
 	for (; l; l = l->skipNext()) {
 	    NetMedia* m = static_cast<NetMedia*>(l->get());
+	    // preserve data endpoints if media didn't change
+	    if (m->sameAs(static_cast<NetMedia*>((*media)[*m])))
+		continue;
 	    clearEndpoint(*m);
 	}
 	tmp->destruct();
@@ -3131,15 +3138,17 @@ void YateSIPConnection::reInvite(SIPTransaction* t)
 	// TODO: check if we should accept the new media
 	// many implementation don't handle well failure so we should drop
 
-	m_rtpAddr = addr;
+	if (m_rtpAddr != addr) {
+	    m_rtpAddr = addr;
+	    Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
+	    // clear all data endpoints - createRtpSDP will build new ones
+	    clearEndpoint();
+	}
 	setMedia(lst);
-	Debug(this,DebugAll,"New RTP addr '%s'",m_rtpAddr.c_str());
 
 	m_mediaStatus = MediaMissing;
 	// let RTP guess again the local interface or use the enforced address
 	m_rtpLocalAddr = s_rtpip;
-	// clear all data endpoints - createRtpSDP will build new ones
-	clearEndpoint();
 
 	SIPMessage* m = new SIPMessage(t->initialMessage(), 200);
 	MimeSdpBody* sdpNew = createRtpSDP(true);

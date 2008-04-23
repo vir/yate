@@ -790,7 +790,7 @@ void* Module::getObject(const String& name) const
 
 bool Module::installRelay(int id, const char* name, unsigned priority)
 {
-    if (!(id && name))
+    if (!(id && name && priority))
 	return false;
 
     Lock lock(this);

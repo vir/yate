@@ -1,4 +1,3 @@
-
 /**
  * yjinglechan.cpp
  * This file is part of the YATE Project http://YATE.null.ro
@@ -279,8 +278,9 @@ public:
     ResNotifyHandler() : MessageHandler("resource.notify") {}
     virtual bool received(Message& msg);
     static void process(const JabberID& from, const JabberID& to,
-	const String& status, bool subFrom);
-    static void sendPresence(JabberID& from, JabberID& to, const String& status);
+	const String& status, bool subFrom, NamedList* params = 0);
+    static void sendPresence(JabberID& from, JabberID& to, const String& status,
+	NamedList* params = 0);
 };
 
 /**
@@ -343,6 +343,8 @@ public:
     void createMediaString(String& dest, ObjList& formats, char sep);
     // Find a connection by local and remote jid, optionally ignore local resource (always ignore if local has no resource)
     YJGConnection* find(const JabberID& local, const JabberID& remote, bool anyResource = false);
+    // Build and add XML child elements from a received message
+    bool addChildren(NamedList& msg, XMLElement* xml = 0, ObjList* list = 0);
 protected:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -612,9 +614,11 @@ bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
 	return false;
 
     Message* m = new Message("user.notify");
-    m->addParam("account",stream->local());
+    m->addParam("account",stream->name());
     m->addParam("protocol",plugin.name());
     m->addParam("username",stream->local().node());
+    m->addParam("server",stream->local().domain());
+    m->addParam("jid",stream->local());
     m->addParam("registered",String::boolText(event->type() == JBEvent::Running));
     if (event->type() != JBEvent::Running && event->text())
 	m->addParam("reason",event->text());
@@ -654,6 +658,8 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
 		Message* m = YJBPresence::message(-1,0,event->to().bare(),
 		    item->getAttribute("subscription"));
+		if (event->stream() && event->stream()->name())
+		    m->setParam("account",event->stream()->name());
 		m->setParam("contact",item->getAttribute("jid"));
 		addValidParam(*m,"contactname",item->getAttribute("name"));
 		addValidParam(*m,"ask",item->getAttribute("ask"));
@@ -718,8 +724,11 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 		    processed = false;
 	    }
 
-	if (m)
+	if (m) {
+	    if (event->stream() && event->stream()->name())
+		m->setParam("account",event->stream()->name());
 	    Engine::enqueue(m);
+	}
 	break;
     }
 
@@ -1440,11 +1449,13 @@ bool ResNotifyHandler::received(Message& msg)
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	msg.c_str(),from.c_str(),status.c_str());
+
+    // Build additional stanza child
     if (s_presence)
 	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
-	    process(from,to,status,msg.getBoolValue("subscription",false));
+	    process(from,to,status,msg.getBoolValue("subscription",false),&msg);
 	else
-	    sendPresence(from,to,status);
+	    sendPresence(from,to,status,&msg);
     else {
 	// TODO: implement for client
 	return false;
@@ -1453,11 +1464,10 @@ bool ResNotifyHandler::received(Message& msg)
 }
 
 void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
-	const String& status, bool subFrom)
+	const String& status, bool subFrom, NamedList* params)
 {
     if (!s_presence)
 	return;
-
     DDebug(&plugin,DebugAll,"ResNotifyHandler::process() from=%s to=%s status=%s",
 	from.c_str(),to.c_str(),status.c_str());
 
@@ -1519,6 +1529,8 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 		from.c_str(),to.c_str(),status.c_str(),name);
 	    break;
 	}
+	res->infoXml()->clear();
+	plugin.addChildren(*params,0,res->infoXml());
 	if (p == JIDResource::Unavailable)
 	    changed = res->setPresence(false) || changed;
 	else {
@@ -1549,7 +1561,7 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 }
 
 void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
-	const String& status)
+	const String& status, NamedList* params)
 {
     if (!s_presence)
 	return;
@@ -1597,6 +1609,8 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 	    TelEngine::destruct(resource);
 	}
     }
+    if (stanza && params)
+	plugin.addChildren(*params,stanza);
     // Send
     stream->sendStanza(stanza);
     TelEngine::destruct(stream);
@@ -2183,7 +2197,7 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 	    msg.c_str(),param,jid.c_str());
 	return false;
     }
-    if (checkDomain && !s_presence->validDomain(jid.domain())) {
+    if (checkDomain && !(s_presence && s_presence->validDomain(jid.domain()))) {
 	Debug(this,DebugNote,"'%s'. Parameter '%s'='%s' has invalid (unknown) domain",
 	    msg.c_str(),param,jid.c_str());
 	return false;
@@ -2298,6 +2312,36 @@ YJGConnection* YJGDriver::find(const JabberID& local, const JabberID& remote, bo
     return 0;
 }
 
+// Build an XML element from a received message
+bool YJGDriver::addChildren(NamedList& msg, XMLElement* xml, ObjList* list)
+{
+    String prefix = msg.getValue("message-prefix");
+    if (!(prefix && (xml || list)))
+	return false;
+
+    bool added = false;
+    unsigned int n = msg.count();
+    for (unsigned int i = 1; i < 0xffffffff; i++) {
+	String childName = msg.getValue(prefix + String(i));
+	if (!childName)
+	    break;
+	XMLElement* child = new XMLElement(childName);
+	childName << ".";
+	DDebug(this,DebugAll,"Building xml=%s from msg=%s to XML %s",
+	    child->name(),msg.c_str(),xml?"element":"list");
+	for (unsigned int j = 0; j < n; j++) {
+	    NamedString* ns = msg.getParam(j);
+	    if (ns && ns->name().startsWith(childName))
+		child->setAttribute(ns->name().substr(childName.length()),*ns);
+	}
+	if (xml)
+	    xml->addChild(child);
+	else
+	    list->append(child);
+	added = true;
+    }
+    return added;
+}
 
 }; // anonymous namespace
 

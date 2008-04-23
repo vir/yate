@@ -1211,7 +1211,7 @@ bool JIDResource::fromXML(XMLElement* element)
 }
 
 // Append this resource's capabilities to a given element
-void JIDResource::addTo(XMLElement* element)
+void JIDResource::addTo(XMLElement* element, bool addInfo)
 {
     if (!element)
 	return;
@@ -1229,6 +1229,8 @@ void JIDResource::addTo(XMLElement* element)
     if (hasCap(CapAudio))
 	c->setAttribute("ext",JINGLE_VOICE);
     element->addChild(c);
+    if (addInfo)
+	XMPPUtils::addChidren(element,m_info);
 }
 
 

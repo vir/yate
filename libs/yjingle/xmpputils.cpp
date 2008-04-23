@@ -614,4 +614,18 @@ void XMPPUtils::buildFlags(String& dest, int src, const TokenDict* dict)
 	    dest.append(dict->token,",");
 }
 
+// Add child elements from a list to a destination element
+bool XMPPUtils::addChidren(XMLElement* dest, ObjList& list)
+{
+    if (!dest)
+	return false;
+    ObjList* o = list.skipNull();
+    bool added = (0 != o);
+    for (; o; o = o->skipNext()) {
+	XMLElement* xml = static_cast<XMLElement*>(o->get());
+	dest->addChild(new XMLElement(*xml));
+    }
+    return added;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

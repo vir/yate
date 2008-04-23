@@ -980,6 +980,14 @@ public:
     static void buildFlags(String& dest, int src, const TokenDict* dict);
 
     /**
+     * Add child elements from a list to a destination element
+     * @param dest Destination XMLElement
+     * @param list A list containing XML elements
+     * @return True if at least one child was added
+     */
+    static bool addChidren(XMLElement* dest, ObjList& list);
+
+    /**
      * Get the type of an 'iq' stanza as enumeration
      * @param text The text to check
      * @return Iq type as enumeration

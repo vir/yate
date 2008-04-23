@@ -2070,6 +2070,13 @@ public:
 	{ m_status = s; }
 
     /**
+     * Get the list containing XML elements with additional data describing this resource
+     * @return The info list
+     */
+    inline ObjList* infoXml()
+	{ return &m_info; }
+
+    /**
      * Set the presence information
      * @param value True if available, False if not
      * @return True if presence changed
@@ -2094,8 +2101,9 @@ public:
     /**
      * Add capabilities to a presence element
      * @param element The target presence element
+     * @param addInfo True to add the elements from info list
      */
-    void addTo(XMLElement* element);
+    void addTo(XMLElement* element, bool addInfo = true);
 
     /**
      * Get the 'show' child of a presence element
@@ -2136,6 +2144,7 @@ private:
     u_int32_t m_capability;              // Resource capabilities
     Show m_show;                         // Show attribute
     String m_status;                     // Status attribute
+    ObjList m_info;                      // XML elements containing additional info about this resource
 };
 
 

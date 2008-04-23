@@ -1179,35 +1179,38 @@ bool JIDResource::fromXML(XMLElement* element)
     JBPresence::Presence p = JBPresence::presenceType(element->getAttribute("type"));
     if (p != JBPresence::None && p != JBPresence::Unavailable)
 	return false;
-    // Show
-    XMLElement* tmp = element->findFirstChild("show");
-    m_show = tmp ? showType(tmp->getText()) : ShowNone;
-    // Status
-    tmp = element->findFirstChild("status");
-    m_status = tmp ? tmp->getText() : "";
-    TelEngine::destruct(tmp);
-    // Capability
-    bool capsChanged = false;
-    tmp = element->findFirstChild("c");
-    if (tmp) {
-	NamedList caps("");
-	if (XMPPUtils::split(caps,tmp->getAttribute("ext"),' ',true)) {
-	    // Check audio
-	    bool tmp = (0 != caps.getParam(JINGLE_VOICE));
-	    if (tmp != hasCap(CapAudio)) {
-		capsChanged = true;
-		if (tmp)
-		    m_capability |= CapAudio;
-		else
-		    m_capability &= ~CapAudio;
+
+    m_info.clear();
+    bool changed = setPresence(p == JBPresence::None);
+    for (XMLElement* c = element->findFirstChild(); c; c = element->findNextChild(c)) {
+	if (c->nameIs("show")) {
+	    if (!changed && m_show != showType(c->getText()))
+		changed = true;
+	    m_show = showType(c->getText());
+	}
+	else if (c->nameIs("status")) {
+	    if (!changed && m_status != c->getText())
+		changed = true;
+	    m_status = c->getText();
+	}
+	else if (c->nameIs("c")) {
+	    NamedList caps("");
+	    if (XMPPUtils::split(caps,c->getAttribute("ext"),' ',true)) {
+		// Check audio
+		bool tmp = (0 != caps.getParam(JINGLE_VOICE));
+		if (tmp != hasCap(CapAudio)) {
+		    changed = true;
+		    if (tmp)
+			m_capability |= CapAudio;
+		    else
+			m_capability &= ~CapAudio;
+		}
 	    }
 	}
-	TelEngine::destruct(tmp);
+	else
+	    m_info.append(new XMLElement(*c));
     }
-    // Presence
-    bool presenceChanged = setPresence(p == JBPresence::None);
-    // Return
-    return capsChanged || presenceChanged;
+    return changed;
 }
 
 // Append this resource's capabilities to a given element

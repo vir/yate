@@ -3271,6 +3271,7 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	Message* msg = message("chan.dtmf");
 	copySipHeaders(*msg,*t->initialMessage());
 	msg->addParam("text",tmp);
+	msg->addParam("detected","sip-info");
 	Engine::enqueue(msg);
     }
 }
@@ -3404,7 +3405,7 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
     bool inband = m_inband;
     const String* method = msg.getParam("method");
     if (method) {
-	if (*method == "info") {
+	if ((*method == "info") || (*method == "sip-info")) {
 	    info = true;
 	    inband = false;
 	}

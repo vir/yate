@@ -327,6 +327,7 @@ void ToneConsumer::checkDtmf()
 	m->addParam("id",m_id);
 	m->addParam("message","chan.dtmf");
 	m->addParam("text",buf);
+	m->addParam("detected","inband");
 	Engine::enqueue(m);
     }
 }

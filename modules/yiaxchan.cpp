@@ -1562,6 +1562,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    DDebug(this,DebugCall,"DTMF: %s [%p]",dtmf.safe(),this);
 	    Message* m = message("chan.dtmf");
 	    m->addParam("text",dtmf);
+	    m->addParam("detected","iax-event");
 	    Engine::enqueue(m);
 	    }
 	    break;

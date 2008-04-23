@@ -1335,6 +1335,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    if (event->reason() == "button-up" && event->text()) {
 		Message* m = message("chan.dtmf");
 		m->addParam("text",event->text());
+		m->addParam("detected","jingle");
 		Engine::enqueue(m);
 	    }
 	    break;

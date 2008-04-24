@@ -164,6 +164,17 @@ public:
     XMLElement(Type type, NamedList* attributes = 0, const char* text = 0);
 
     /**
+     * Constructor.
+     * Build this XML element from a list containing name, attributes and text.
+     * Element's name must be a parameter whose name must be equal to prefix.
+     * Element's text must be a parameter whose name is prefix followed by a dot.
+     * The list of attributes will be built from parameters starting with prefix.attributename
+     * @param src The list containing data used to build this XML element
+     * @param prefix The prefix used to search the list of parameters
+     */
+    XMLElement(NamedList& src, const char* prefix);
+
+    /**
      * Destructor. Deletes the underlying TiXmlElement if owned
      */
     virtual ~XMLElement();
@@ -210,6 +221,13 @@ public:
      * @param unclose True to leave the tag unclosed
      */
     void toString(String& dest, bool unclose = false) const;
+
+    /**
+     * Put this element's name, text and attributes to a list of parameters
+     * @param dest Destination list
+     * @param prefix Prefix to add to parameters
+     */
+    void toList(NamedList& dest, const char* prefix);
 
     /**
      * Set the value of an existing attribute or adds a new one

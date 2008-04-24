@@ -167,6 +167,28 @@ XMLElement::XMLElement(TiXmlElement* element, bool owner)
 //	name(),m_owner,this);
 }
 
+// Build this XML element from a list containing name, attributes and text.
+XMLElement::XMLElement(NamedList& src, const char* prefix)
+    : m_type(Unknown), m_owner(true), m_element(0)
+{
+    m_element = new TiXmlElement(src.getValue(prefix));
+    DDebug(DebugAll,"XMLElement(%s) src=%s prefix=%s [%p]",
+	m_name.c_str(),src.c_str(),prefix,this);
+    String pref(String(prefix) + ".");
+    // Set text
+    const char* text = src.getValue(pref);
+    if (text)
+	m_element->LinkEndChild(new TiXmlText(text));
+    // Add attributes
+    unsigned int n = src.count();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = src.getParam(i);
+	if (ns && ns->name().startsWith(pref))
+	    setAttribute(ns->name().substr(pref.length()),*ns);
+    }
+    setType();
+}
+
 XMLElement::~XMLElement()
 {
     if (m_owner && m_element)
@@ -183,6 +205,20 @@ void XMLElement::toString(String& dest, bool unclose) const
 	m_element->StreamOut(&xmlStr,unclose);
 	dest.assign(xmlStr.c_str(),xmlStr.length());
     }
+}
+
+// Put this element's name, text and attributes to a list of parameters
+void XMLElement::toList(NamedList& dest, const char* prefix)
+{
+    DDebug(DebugAll,"XMLElement(%s) to list=%s prefix=%s [%p]",
+	m_name.c_str(),dest.c_str(),prefix,this);
+    dest.addParam(prefix,name());
+    String pref(String(prefix) + ".");
+    const char* tmp = getText();
+    if (tmp)
+	dest.addParam(pref,tmp);
+    for (const TiXmlAttribute* a = firstAttribute(); a; a = a->Next())
+	dest.addParam(pref + a->Name(),a->Value());
 }
 
 void XMLElement::setAttribute(const char* name, const char* value)

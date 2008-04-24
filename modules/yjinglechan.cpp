@@ -684,9 +684,11 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    }
 	}
 
+
 	Message* m = 0;
 	JBPresence::Presence pres = JBPresence::presenceType(event->stanzaType());
-	if (pres == JBPresence::None || JBPresence::Unavailable) {
+
+	if (pres == JBPresence::None || pres == JBPresence::Unavailable) {
 	    bool capAudio = false;
 	    bool available = (pres == JBPresence::None);
 	    JIDResource* res = 0;

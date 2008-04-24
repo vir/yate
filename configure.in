@@ -179,7 +179,19 @@ AC_SUBST(INLINE_FLAGS)
 FDSIZE_HACK=""
 AC_ARG_WITH(fdsize,AC_HELP_STRING([--with-fdsize=NNNN],[set FD_SIZE to NNNN (default 8192)]),[ac_cv_use_fdsize=$withval],[ac_cv_use_fdsize=8192])
 if [[ "x$ac_cv_use_fdsize" != "xno" ]]; then
-    FDSIZE_HACK="-DFDSIZE_HACK=$ac_cv_use_fdsize"
+FDSIZE_HACK="-DFDSIZE_HACK=$ac_cv_use_fdsize"
+AC_LANG_SAVE
+AC_LANG_C
+AC_TRY_COMPILE([#include <features.h>
+#if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)
+#include <bits/types.h>
+#else
+#error FD_SETSIZE cannot be set
+#endif],[if (__FD_SETSIZE>10) exit();],[],[FDSIZE_HACK=""])
+AC_LANG_RESTORE
+if [[ "x$FDSIZE_HACK" = "x" ]]; then
+AC_ERROR([Cannot set FD_SETSIZE on this platform, use --without-fdsize])
+fi
 fi
 AC_SUBST(FDSIZE_HACK)
 

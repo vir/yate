@@ -2001,6 +2001,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     YJGConnection* conn = new YJGConnection(msg,caller,called,available);
     Channel* ch = static_cast<Channel*>(msg.userData());
     if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	conn->callConnect(msg);
 	msg.setParam("peerid",conn->id());
 	msg.setParam("targetid",conn->id());
     }

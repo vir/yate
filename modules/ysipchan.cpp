@@ -1038,10 +1038,21 @@ bool NetMedia::update(const char* formats, int rport, int lport)
 // Update members from a dispatched "chan.rtp" message
 void NetMedia::update(const Message& msg, bool pickFormat)
 {
+    DDebug(&plugin,DebugAll,"NetMedia::update('%s',%s) [%p]",
+	msg.c_str(),String::boolText(pickFormat),this);
     m_id = msg.getValue("rtpid",m_id);
     m_lPort = msg.getValue("localport",m_lPort);
-    if (pickFormat)
-	m_format = msg.getValue("format");
+    if (pickFormat) {
+	const char* format = msg.getValue("format");
+	if (format) {
+	    m_format = format;
+	    if ((m_formats != m_format) && (msg.getIntValue("remoteport") > 0)) {
+		Debug(&plugin,DebugNote,"Choosing started '%s' format '%s' [%p]",
+		    c_str(),format,this);
+		m_formats = m_format;
+	    }
+	}
+    }
 }
 
 // Add or replace a parameter by name and value, set the modified flag
@@ -2509,12 +2520,12 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
     }
     if (!Engine::dispatch(m))
 	return false;
+    media->update(m,start);
     if (!pick)
 	return true;
     m_rtpForward = false;
     m_rtpLocalAddr = m.getValue("localip",m_rtpLocalAddr);
     m_mediaStatus = MediaStarted;
-    media->update(m,start);
     const char* sdpPrefix = m.getValue("osdp-prefix","osdp");
     if (sdpPrefix) {
 	n = m.length();

@@ -212,15 +212,23 @@ AC_SUBST(HAVE_SCTP_NETINET)
 # Checks for optional libraries.
 
 HAVE_RESOLV=no
+RESOLV_LIB=""
 AC_MSG_CHECKING([for resolver library])
 AC_LANG_SAVE
 AC_LANG_C
 AC_TRY_LINK([#include <netinet/in.h>
 #include <arpa/nameser.h>
 #include <resolv.h>],[res_init();],[HAVE_RESOLV=yes],[HAVE_RESOLV=no])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Wall -Werror $GCC_UNRESOLVED_SYMBOLS"
+AC_TRY_LINK([#include <netinet/in.h>
+#include <arpa/nameser.h>
+#include <resolv.h>],[unsigned char x[2]; res_query("",0,0,x,0);],[],[RESOLV_LIB=-lresolv])
+CFLAGS="$SAVE_CFLAGS"
 AC_LANG_RESTORE
-AC_MSG_RESULT([$HAVE_RESOLV])
+AC_MSG_RESULT([$HAVE_RESOLV $RESOLV_LIB])
 AC_SUBST(HAVE_RESOLV)
+AC_SUBST(RESOLV_LIB)
 
 INTERNAL_REGEX=yes
 AC_ARG_ENABLE(internalregex,AC_HELP_STRING([--enable-internalregex],[Use internal regexp library (default: not on Linux)]),want_internalregex=$enableval,want_internalregex=auto)
@@ -828,11 +836,19 @@ AC_MSG_WARN([Mismatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_
 fi
 fi
 
+INSTALL_D="install -D"
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
 MODULE_LDRELAX="-export-dynamic -shared"
+case "x$uname_os" in
+    x*BSD)
+	INSTALL_D="install"
+	MODULE_LDRELAX="$MODULE_LDRELAX -lc"
+	;;
+esac
 MODULE_LDFLAGS="$MODULE_LDRELAX $GCC_UNRESOLVED_SYMBOLS"
 MODULE_SYMBOLS="-Wl,--retain-symbols-file,/dev/null"
+AC_SUBST(INSTALL_D)
 AC_SUBST(MODULE_CFLAGS)
 AC_SUBST(MODULE_CPPFLAGS)
 AC_SUBST(MODULE_LDRELAX)

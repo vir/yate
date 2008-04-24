@@ -16,9 +16,12 @@ all clean:
 
 install:
 	@lst="`cd @srcdir@; ls -1 -d */* | sed '/CVS\|\.orig/d'`" ; \
-	mkdir -p "$(DESTDIR)$(skindir)/" && \
+	dir="`echo "$$lst" | sed 's,/.*,,' | uniq`" ; \
+	for i in $$dir ; do \
+	    mkdir -p "$(DESTDIR)$(skindir)/$$i" ; \
+	done; \
 	for i in $$lst ; do \
-	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(skindir)/$$i" ; \
+	    install -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(skindir)/$$i" ; \
 	done;
 
 uninstall:

@@ -147,7 +147,7 @@ install: all do-install
 	    mkdir -p "$(DESTDIR)$(moddir)/$$i" ; \
 	done; \
 	for i in $(PROGS) ; do \
-	    install -D "$$i" "$(DESTDIR)$(moddir)/$$i" ; \
+	    @INSTALL_D@ "$$i" "$(DESTDIR)$(moddir)/$$i" ; \
 	done;
 
 .PHONY: uninstall
@@ -216,7 +216,7 @@ server/pgsqldb.yate: LOCALLIBS = -lpq
 server/mysqldb.yate: LOCALFLAGS = @MYSQL_INC@
 server/mysqldb.yate: LOCALLIBS = @MYSQL_LIB@
 
-enumroute.yate: LOCALLIBS = -lresolv
+enumroute.yate: LOCALLIBS = @RESOLV_LIB@
 
 client/alsachan.yate: LOCALLIBS = -lasound
 

@@ -82,19 +82,19 @@ install: all do-install
 	$(if $(MENUFILES),\
 	@mkdir -p "$(DESTDIR)$(menudir)/" && \
 	for i in $(MENUFILES) ; do \
-	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(menudir)/$$i" ; \
+	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(menudir)/$$i" ; \
 	done \
 	)
 	$(if $(ICONFILES),\
 	@mkdir -p "$(DESTDIR)$(icondir)/" && \
 	for i in $(ICONFILES) ; do \
-	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$i" ; \
+	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(icondir)/$$i" ; \
 	done \
 	)
 	$(if $(DESKFILES),\
 	@mkdir -p "$(DESTDIR)$(deskdir)/" && \
 	for i in $(DESKFILES) ; do \
-	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(deskdir)/$$i" ; \
+	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(deskdir)/$$i" ; \
 	done \
 	)
 

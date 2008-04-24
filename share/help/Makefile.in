@@ -18,7 +18,7 @@ install:
 	@lst="`cd @srcdir@; ls -1 -d *.yhlp`" ; \
 	mkdir -p "$(DESTDIR)$(helpdir)/" && \
 	for i in $$lst ; do \
-	    install -D -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(helpdir)/$$i" ; \
+	    @INSTALL_D@ -m 0644 "@srcdir@/$$i" "$(DESTDIR)$(helpdir)/$$i" ; \
 	done;
 
 uninstall:

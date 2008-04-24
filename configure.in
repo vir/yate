@@ -187,7 +187,7 @@ AC_TRY_COMPILE([#include <features.h>
 #include <bits/types.h>
 #else
 #error FD_SETSIZE cannot be set
-#endif],[if (__FD_SETSIZE>10) exit();],[],[FDSIZE_HACK=""])
+#endif],[if (__FD_SETSIZE>10) return 0;],[],[FDSIZE_HACK=""])
 AC_LANG_RESTORE
 if [[ "x$FDSIZE_HACK" = "x" ]]; then
 AC_ERROR([Cannot set FD_SETSIZE on this platform, use --without-fdsize])

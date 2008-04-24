@@ -689,17 +689,31 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	if (pres == JBPresence::None || JBPresence::Unavailable) {
 	    bool capAudio = false;
 	    bool available = (pres == JBPresence::None);
+	    JIDResource* res = 0;
 	    if (event->element()) {
-		JIDResource* res = new JIDResource(event->from().resource());
+		res = new JIDResource(event->from().resource());
 		if (res->fromXML(event->element())) {
 		    capAudio = res->hasCap(JIDResource::CapAudio);
 		    available = res->available();
 		}
-		TelEngine::destruct(res);
 	    }
 	    // Notify presence to module and enqueue message in engine
 	    plugin.processPresence(event->to(),event->from(),available,capAudio);
 	    m = YJBPresence::message(pres,event->from(),event->to(),sub);
+	    if (res) {
+		ObjList* o = res->infoXml()->skipNull();
+		if (o) {
+		    String prefix = "jingle";
+		    m->addParam("message-prefix",prefix);
+		    prefix << ".";
+		    unsigned int n = 1;
+		    for (; o; o = o->skipNext(), n++) {
+			XMLElement* e = static_cast<XMLElement*>(o->get());
+			e->toList(*m,String(prefix + String(n)));
+		    }
+		}
+		TelEngine::destruct(res);
+	    }
 	}
 	else
 	    switch (pres) {
@@ -1335,7 +1349,6 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    if (event->reason() == "button-up" && event->text()) {
 		Message* m = message("chan.dtmf");
 		m->addParam("text",event->text());
-		m->addParam("detected","jingle");
 		Engine::enqueue(m);
 	    }
 	    break;
@@ -2320,21 +2333,13 @@ bool YJGDriver::addChildren(NamedList& msg, XMLElement* xml, ObjList* list)
     if (!(prefix && (xml || list)))
 	return false;
 
+    prefix << ".";
     bool added = false;
-    unsigned int n = msg.count();
     for (unsigned int i = 1; i < 0xffffffff; i++) {
-	String childName = msg.getValue(prefix + String(i));
-	if (!childName)
+	String childPrefix(prefix + String(i));
+	if (!msg.getValue(childPrefix))
 	    break;
-	XMLElement* child = new XMLElement(childName);
-	childName << ".";
-	DDebug(this,DebugAll,"Building xml=%s from msg=%s to XML %s",
-	    child->name(),msg.c_str(),xml?"element":"list");
-	for (unsigned int j = 0; j < n; j++) {
-	    NamedString* ns = msg.getParam(j);
-	    if (ns && ns->name().startsWith(childName))
-		child->setAttribute(ns->name().substr(childName.length()),*ns);
-	}
+	XMLElement* child = new XMLElement(msg,childPrefix);
 	if (xml)
 	    xml->addChild(child);
 	else

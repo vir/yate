@@ -277,6 +277,8 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
 #define JB_RESTART_UPDATE          15000 // Stream restart counter update interval
 #define JB_RESTART_UPDATE_MIN       5000
 #define JB_RESTART_UPDATE_MAX     300000
+#define JB_SETUP_INTERVAL          60000 // Stream setup timeout
+#define JB_IDLE_INTERVAL           60000 // Stream idle timeout
 
 // Presence values
 #define JINGLE_VERSION            "1.0"  // Version capability
@@ -289,6 +291,7 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
 JBEngine::JBEngine(Protocol proto)
     : Mutex(true), m_protocol(proto),
     m_restartUpdateInterval(JB_RESTART_UPDATE), m_restartCount(JB_RESTART_COUNT),
+    m_streamSetupInterval(JB_SETUP_INTERVAL), m_streamIdleInterval(JB_IDLE_INTERVAL),
     m_printXml(0), m_identity(0), m_componentCheckFrom(1), m_serverMutex(true),
     m_servicesMutex(true), m_initialized(false)
 {

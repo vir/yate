@@ -257,7 +257,7 @@ JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
     : m_password(info.password()), m_flags(0), m_challengeCount(2),
     m_waitState(WaitIdle), m_authMech(JIDFeatureSasl::MechNone), m_type(type),
     m_state(Idle), m_outgoing(true), m_restart(0), m_restartMax(0),
-    m_timeToFillRestart(0), m_fillRestartInterval(0),
+    m_timeToFillRestart(0), m_setupTimeout(0), m_idleTimeout(0),
     m_local(localJid.node(),localJid.domain(),localJid.resource()),
     m_remote(remoteJid.node(),remoteJid.domain(),remoteJid.resource()),
     m_engine(engine), m_socket(engine,0,info.address(),info.port()),
@@ -294,8 +294,7 @@ JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
 	m_restartMax = m_restart = engine->m_restartCount;
     else
 	m_restartMax = m_restart = 1;
-    m_fillRestartInterval = engine->m_restartUpdateInterval;
-    m_timeToFillRestart = Time::msecNow() + m_fillRestartInterval;
+    m_timeToFillRestart = Time::msecNow() + engine->m_restartUpdateInterval;
 
     if (m_engine->debugAt(DebugAll)) {
 	String f;
@@ -373,6 +372,10 @@ void JBStream::connect()
     Debug(m_engine,DebugAll,"Stream. local=%s remote=%s connected to %s:%d [%p]",
 	m_local.safe(),m_remote.safe(),addr().host().safe(),addr().port(),this);
 
+    m_setupTimeout = 0;
+    if (m_engine && m_engine->m_streamSetupInterval)
+	m_setupTimeout = Time::msecNow() + m_engine->m_streamSetupInterval;
+
     // Send stream start
     sendStreamStart();
 }
@@ -401,6 +404,8 @@ bool JBStream::receive()
 		Debug(m_engine,DebugNote,"Stream. Parser error: '%s' [%p]",text,this);
 		send = true;
 	    }
+	    else
+		startIdleTimer();
 	    // Check if the parser consumed all it's buffer and the stream
 	    //  will start TLS
 	    if (!m_parser.bufLen() && m_recvCount > 0)
@@ -449,18 +454,28 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 {
     Lock lock(m_socket.m_streamMutex);
 
+    if (m_lastEvent)
+	return 0;
+
+    if (!m_engine) {
+	Debug(DebugMild,"Stream. Engine vanished. Can't live as orphan [%p]",this);
+	terminate(true,0,XMPPError::Internal,"Engine is missing",false);
+	if (m_terminateEvent) {
+	    m_lastEvent = m_terminateEvent;
+	    m_terminateEvent = 0;
+	}
+	return m_lastEvent;
+    }
+
     // Increase stream restart counter if it's time to and should auto restart
     if (flag(AutoRestart) && m_timeToFillRestart < time) {
-	m_timeToFillRestart = time + m_fillRestartInterval;
+	m_timeToFillRestart = time + m_engine->m_restartUpdateInterval;
 	if (m_restart < m_restartMax) {
 	    m_restart++;
 	    Debug(m_engine,DebugAll,"Stream. restart count=%u max=%u [%p]",
 		m_restart,m_restartMax,this);
 	}
     }
-
-    if (m_lastEvent)
-	return 0;
 
     // Do nothing if destroying or connecting
     // Just check Terminated or Running events
@@ -482,16 +497,6 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 	else if (m_startEvent) {
 	    m_lastEvent = m_startEvent;
 	    m_startEvent = 0;
-	}
-	return m_lastEvent;
-    }
-
-    if (!m_engine) {
-	Debug(DebugMild,"Stream. Engine vanished. Can't live as orphan [%p]",this);
-	terminate(true,0,XMPPError::Internal,"Engine is missing",false);
-	if (m_terminateEvent) {
-	    m_lastEvent = m_terminateEvent;
-	    m_terminateEvent = 0;
 	}
 	return m_lastEvent;
     }
@@ -605,6 +610,29 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 	    m_events.remove(m_lastEvent,false);
     }
 
+    // Check timers if no events
+    if (!m_lastEvent) {
+	if (m_idleTimeout && time > m_idleTimeout) {
+	    if (startIdleTimer(time)) {
+		Debug(m_engine,DebugAll,"Stream. Sending keep alive in state %s [%p]",
+		    lookupState(state()),this);
+		const char* keepAlive = "\t";
+		unsigned int l = 1;
+		if (!m_socket.send(keepAlive,l))
+		    terminate(false,0,XMPPError::Internal,m_socket.m_error,true);
+	    }
+	}
+	else if (m_setupTimeout && time > m_setupTimeout) {
+	    Debug(m_engine,DebugNote,"Stream. Setup timed out in state %s [%p]",
+		lookupState(state()),this);
+	    terminate(false,0,XMPPError::ConnTimeout,"Connection timeout",true);
+	}
+	if (m_terminateEvent) {
+	    m_lastEvent = m_terminateEvent;
+	    m_terminateEvent = 0;
+	}
+    }
+
     if (m_lastEvent)
 	DDebug(m_engine,DebugAll,"Stream. Raising event (%p,%s) [%p]",
 	    m_lastEvent,m_lastEvent->name(),this);
@@ -623,6 +651,7 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
 	destroy = true;
     setRecvCount(-1);
     m_nonceCount = 0;
+    m_setupTimeout = m_idleTimeout = 0;
     TelEngine::destruct(m_startEvent);
     if (m_streamXML) {
 	if (m_streamXML->dataCount())
@@ -1311,7 +1340,9 @@ void JBStream::changeState(State newState)
     Debug(m_engine,DebugInfo,"Stream. Changing state from %s to %s [%p]",
 	lookupState(m_state),lookupState(newState),this);
     m_state = newState;
+    m_setupTimeout = 0;
     if (newState == Running) {
+	startIdleTimer();
 	streamRunning();
 	if (!m_startEvent)
 	    m_startEvent = new JBEvent(JBEvent::Running,this,0);
@@ -1606,6 +1637,7 @@ JBStream::Error JBStream::sendPending()
 	return ErrorContext;
 
     if (m_streamXML) {
+	m_idleTimeout = 0;
 	// Check if declaration was sent
 	if (m_declarationSent < s_declaration.length()) {
 	    const char* data = s_declaration.c_str() + m_declarationSent;
@@ -1625,16 +1657,24 @@ JBStream::Error JBStream::sendPending()
     }
     else {
 	ObjList* obj = m_outXML.skipNull();
-	if (!obj)
+	if (!obj) {
+	    if (!m_idleTimeout)
+		startIdleTimer();
 	    return ErrorNone;
-	if (state() != Running)
+	}
+	if (state() != Running) {
+	    m_idleTimeout = 0;
 	    return ErrorPending;
+	}
 	eout = obj ? static_cast<XMLElementOut*>(obj->get()) : 0;
     }
     XMLElement* xml = eout->element();
     if (!xml) {
-	if (eout != m_streamXML)
+	if (eout != m_streamXML) {
 	    m_outXML.remove(eout,true);
+	    if (!m_idleTimeout)
+		startIdleTimer();
+	}
 	else
 	    TelEngine::destruct(m_streamXML);
 	return ErrorNone;
@@ -1656,8 +1696,10 @@ JBStream::Error JBStream::sendPending()
     else
 	ret = ErrorNoSocket;
 
-    if (ret == ErrorPending)
+    if (ret == ErrorPending) {
+	m_idleTimeout = 0;
 	return ret;
+    }
 
     if (ret == ErrorNone)
 	DDebug(m_engine,DebugAll,"Stream. Sent element (%p,%s) id='%s [%p]",
@@ -1681,6 +1723,7 @@ JBStream::Error JBStream::sendPending()
 	m_outXML.remove(eout,true);
     else
 	TelEngine::destruct(m_streamXML);
+    startIdleTimer();
     return ret;
 }
 
@@ -1751,6 +1794,20 @@ void JBStream::setRecvCount(int value)
     DDebug(m_engine,DebugInfo,"Stream. recvCount changed from %d to %d [%p]",
 	m_recvCount,value,this);
     m_recvCount = value;
+}
+
+// Start idle timer if there are no pending stanzas
+bool JBStream::startIdleTimer(u_int64_t time)
+{
+    if (state() != Running || !m_engine || m_outXML.skipNull() ||
+	!m_engine->m_streamIdleInterval) {
+	m_idleTimeout = 0;
+	return false;
+    }
+    m_idleTimeout = time + m_engine->m_streamIdleInterval;
+    XDebug(m_engine,DebugInfo,"Stream. Started idle timer for " FMT64 "ms [%p]",
+	m_engine->m_streamIdleInterval,this);
+    return true;
 }
 
 

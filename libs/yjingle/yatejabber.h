@@ -758,6 +758,13 @@ protected:
     void setRecvCount(int value);
 
     /**
+     * Start the idle timer if there are no pending stanzas
+     * @param time The current time in miliseconds
+     * @return True if started
+     */
+    bool startIdleTimer(u_int64_t time = Time::msecNow());
+
+    /**
      * Get last event from queue
      * @return JBEvent pointer or 0
      */
@@ -840,7 +847,8 @@ private:
     unsigned int m_restart;              // Remaining restart attempts
     unsigned int m_restartMax;           // Max restart attempts
     u_int64_t m_timeToFillRestart;       // Next time to increase the restart counter
-    u_int64_t m_fillRestartInterval;     // Interval to increase the restart counter
+    u_int64_t m_setupTimeout;            // Stream setup timeout (interval allowed between Idle and Running states)
+    u_int64_t m_idleTimeout;             // Connection idle in state Running (send keep alive packet)
     String m_id;                         // Stream id
     JabberID m_local;                    // Local peer's jid
     JabberID m_remote;                   // Remote peer's jid
@@ -1409,6 +1417,8 @@ private:
     Protocol m_protocol;                 // The protocol to use
     u_int32_t m_restartUpdateInterval;   // Update interval for restart counter of all streams
     u_int32_t m_restartCount;            // The default restart counter value
+    u_int64_t m_streamSetupInterval;     // Timeout for stream setup
+    u_int64_t m_streamIdleInterval;      // Timeout for stream idle (nothing sent/received in Running state)
     int m_printXml;                      // Print XML data to output
     ObjList m_streams;                   // Streams belonging to this engine
     JIDIdentity* m_identity;             // Engine's identity

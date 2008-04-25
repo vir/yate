@@ -566,8 +566,8 @@ bool Channel::msgMasquerade(Message& msg)
     else if (msg == "chan.dtmf") {
 	// add sequence, stop the message if it was a disallowed DTMF duplicate
 	if (dtmfSequence(msg) && m_driver && !m_driver->m_dtmfDups) {
-	    Debug(this,DebugInfo,"Stopping duplicate DTMF '%s' [%p]",
-		msg.getValue("text"),this);
+	    Debug(this,DebugNote,"Stopping duplicate '%s' DTMF '%s' [%p]",
+		msg.getValue("detected"),msg.getValue("text"),this);
 	    return true;
 	}
     }
@@ -714,8 +714,8 @@ bool Channel::dtmfEnqueue(Message* msg)
     if (!msg)
 	return false;
     if (dtmfSequence(*msg) && m_driver && !m_driver->m_dtmfDups) {
-	Debug(this,DebugInfo,"Dropping duplicate DTMF '%s' [%p]",
-	    msg->getValue("text"),this);
+	Debug(this,DebugNote,"Dropping duplicate '%s' DTMF '%s' [%p]",
+	    msg->getValue("detected"),msg->getValue("text"),this);
 	TelEngine::destruct(msg);
 	return false;
     }

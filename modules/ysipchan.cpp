@@ -151,6 +151,13 @@ public:
 	{ return m_mappings; }
     inline void mappings(const char* newMap)
 	{ if (newMap) m_mappings = newMap; }
+    inline const String& rfc2833() const
+	{ return m_rfc2833; }
+    inline void rfc2833(int payload)
+	{ if (payload >= 0)
+	    m_rfc2833 = payload;
+	  else
+	    m_rfc2833 = String::boolText(false); }
     inline bool sameAs(const NetMedia* other) const
 	{ return other && (other->formats() == m_formats) &&
 	  (other->transport() == m_transport) &&
@@ -179,6 +186,8 @@ private:
     String m_lPort;
     // mappings of RTP payloads
     String m_mappings;
+    // payload for telephone/event
+    String m_rfc2833;
 };
 
 class YateUDPParty : public SIPParty
@@ -626,9 +635,12 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
 	bool first = true;
 	int ptime = 0;
+	int rfc2833 = -1;
 	while (tmp[0] == ' ') {
 	    int var = -1;
 	    tmp >> " " >> var;
+	    if (var < 0)
+		continue;
 	    int mode = 0;
 	    bool annexB = s_cfg.getBoolValue("codecs","g729_annexb",false);
 	    int defmap = -1;
@@ -652,6 +664,10 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 			if (line.startsWith("G729B/")) {
 			    // some devices add a second map for same payload
 			    annexB = true;
+			    continue;
+			}
+			if (line.startsWith("TELEPHONE-EVENT/")) {
+			    rfc2833 = var;
 			    continue;
 			}
 			const char* pload = 0;
@@ -731,6 +747,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	    net->parameter(par,append);
 	net->setModified(false);
 	net->mappings(mappings);
+	net->rfc2833(rfc2833);
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(net);
@@ -754,6 +771,8 @@ static void putMedia(Message& msg, ObjList* lst, bool putPort = true)
 	msg.addParam("transport"+m->suffix(),m->transport());
 	if (m->mappings())
 	    msg.addParam("rtp_mapping"+m->suffix(),m->mappings());
+	if (m->isAudio())
+	    msg.addParam("rtp_rfc2833",m->rfc2833());
 	if (putPort)
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
 	unsigned int n = m->length();
@@ -967,7 +986,8 @@ inline bool addBodyParam(NamedList& nl, const char* param, MimeBody* body, const
 NetMedia::NetMedia(const char* media, const char* transport, const char* formats, int rport, int lport)
     : NamedList(media),
       m_audio(true), m_modified(false),
-      m_transport(transport), m_formats(formats)
+      m_transport(transport), m_formats(formats),
+      m_rfc2833(String::boolText(false))
 {
     DDebug(&plugin,DebugAll,"NetMedia::NetMedia('%s','%s','%s',%d,%d) [%p]",
 	media,transport,formats,rport,lport,this);
@@ -2459,6 +2479,8 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	    }
 	}
 	rtp->mappings(msg.getValue("rtp_mapping"+rtp->suffix()));
+	if (audio)
+	    rtp->rfc2833(msg.getIntValue("rtp_rfc2833",-1));
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(rtp);
@@ -2510,6 +2532,7 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 		break;
 	    }
 	}
+	m.addParam("evpayload",media->rfc2833());
 	TelEngine::destruct(mappings);
     }
     unsigned int n = media->length();
@@ -2754,9 +2777,14 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	TelEngine::destruct(map);
 
 	if (m_rfc2833 && frm && m->isAudio()) {
+	    int rfc2833 = m->rfc2833().toInteger(-1);
+	    if (rfc2833 < 0)
+		rfc2833 = 101;
 	    // claim to support telephone events
-	    frm << " 101";
-	    rtpmap.append(new String("rtpmap:101 telephone-event/8000"));
+	    frm << " " << rfc2833;
+	    String* s = new String;
+	    *s << "rtpmap:" << rfc2833 << " telephone-event/8000";
+	    rtpmap.append(s);
 	}
 
 	if (frm.null()) {
@@ -2824,6 +2852,8 @@ bool YateSIPConnection::addRtpParams(Message& msg, const String& natAddr, const 
 	for (; l; l = l->skipNext()) {
 	    NetMedia* m = static_cast<NetMedia*>(l->get());
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
+	    if (m->isAudio())
+		msg.addParam("rtp_rfc2833",m->rfc2833());
 	}
 	addSdpParams(msg,body);
 	return true;

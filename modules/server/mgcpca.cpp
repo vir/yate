@@ -386,6 +386,7 @@ void MGCPWrapper::gotDTMF(char tone)
     m->addParam("id",m_master);
     m->addParam("message","chan.dtmf");
     m->addParam("text",buf);
+    m->addParam("detected","mgcp");
     Engine::enqueue(m);
 }
 

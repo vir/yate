@@ -282,7 +282,7 @@ Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_driver(driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
-      m_sequence(0), m_answered(false)
+      m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -291,7 +291,7 @@ Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_driver(&driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
-      m_sequence(0), m_answered(false)
+      m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -435,11 +435,6 @@ void Channel::complete(Message& msg, bool minimal) const
     msg.setParam("id",id());
     if (m_driver)
 	msg.setParam("module",m_driver->name());
-    if ((msg == "chan.dtmf") && !msg.getParam("sequence")) {
-	// need to add sequence number used to detect reorders
-	Lock lock(mutex());
-	msg.addParam("sequence",String(m_sequence++));
-    }
 
     if (minimal)
 	return;
@@ -568,6 +563,14 @@ bool Channel::msgMasquerade(Message& msg)
 	Debug(this,DebugInfo,"Masquerading ringing operation [%p]",this);
 	status("ringing");
     }
+    else if (msg == "chan.dtmf") {
+	// add sequence, stop the message if it was a disallowed DTMF duplicate
+	if (dtmfSequence(msg) && m_driver && !m_driver->m_dtmfDups) {
+	    Debug(this,DebugInfo,"Stopping duplicate DTMF '%s' [%p]",
+		msg.getValue("text"),this);
+	    return true;
+	}
+    }
     return false;
 }
 
@@ -682,6 +685,41 @@ void Channel::callRejected(const char* error, const char* reason, const Message*
 {
     Debug(this,DebugMild,"Call rejected error='%s' reason='%s' [%p]",error,reason,this);
     status("rejected");
+}
+
+bool Channel::dtmfSequence(Message& msg)
+{
+    if ((msg != "chan.dtmf") || msg.getParam("sequence"))
+	return false;
+    bool duplicate = false;
+    const String* detected = msg.getParam("detected");
+    const String* text = msg.getParam("text");
+    Lock lock(mutex());
+    unsigned int seq = m_dtmfSeq;
+    if (text && detected && (*text == m_dtmfText) && (*detected != m_dtmfDetected))
+	duplicate = true;
+    else {
+	seq = ++m_dtmfSeq;
+	m_dtmfText = text;
+	m_dtmfDetected = detected;
+    }
+    // need to add sequence number used to detect reorders
+    msg.addParam("sequence",String(seq));
+    msg.addParam("duplicate",String::boolText(duplicate));
+    return duplicate;
+}
+
+bool Channel::dtmfEnqueue(Message* msg)
+{
+    if (!msg)
+	return false;
+    if (dtmfSequence(*msg) && m_driver && !m_driver->m_dtmfDups) {
+	Debug(this,DebugInfo,"Dropping duplicate DTMF '%s' [%p]",
+	    msg->getValue("text"),this);
+	TelEngine::destruct(msg);
+	return false;
+    }
+    return Engine::enqueue(msg);
 }
 
 bool Channel::dtmfInband(const char* tone)
@@ -1038,7 +1076,7 @@ Driver::Driver(const char* name, const char* type)
       m_init(false), m_varchan(true),
       m_routing(0), m_routed(0), m_total(0),
       m_nextid(0), m_timeout(0),
-      m_maxroute(0), m_maxchans(0)
+      m_maxroute(0), m_maxchans(0), m_dtmfDups(false)
 {
     m_prefix << name << "/";
 }
@@ -1323,6 +1361,7 @@ void Driver::loadLimits()
     timeout(Engine::config().getIntValue("telephony","timeout"));
     maxRoute(Engine::config().getIntValue("telephony","maxroute"));
     maxChans(Engine::config().getIntValue("telephony","maxchans"));
+    dtmfDups(Engine::config().getBoolValue("telephony","dtmfdups"));
 }
 
 unsigned int Driver::nextid()

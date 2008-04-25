@@ -884,7 +884,7 @@ void SigChannel::evInfo(SignallingEvent* event)
 	Message* m = message("chan.dtmf");
 	m->addParam("text",tmp);
 	m->addParam("detected",inband ? "inband" : "signal");
-	Engine::enqueue(m);
+	dtmfEnqueue(m);
     }
 }
 

@@ -1370,7 +1370,8 @@ void YateH323Connection::OnUserInputTone(char tone, unsigned duration, unsigned 
     buf[1] = 0;
     m->addParam("text",buf);
     m->addParam("duration",String(duration));
-    Engine::enqueue(m);
+    m->addParam("detected","h323");
+    m_chan->dtmfEnqueue(m);
 }
 
 void YateH323Connection::OnUserInputString(const PString &value)

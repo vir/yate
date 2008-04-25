@@ -1563,7 +1563,7 @@ void YIAXConnection::handleEvent(IAXEvent* event)
 	    Message* m = message("chan.dtmf");
 	    m->addParam("text",dtmf);
 	    m->addParam("detected","iax-event");
-	    Engine::enqueue(m);
+	    dtmfEnqueue(m);
 	    }
 	    break;
 	case IAXEvent::Noise:

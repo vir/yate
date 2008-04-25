@@ -1491,7 +1491,9 @@ private:
     bool m_outgoing;
     u_int64_t m_timeout;
     u_int64_t m_maxcall;
-    mutable unsigned int m_sequence;
+    unsigned int m_dtmfSeq;
+    String m_dtmfText;
+    String m_dtmfDetected;
 
 protected:
     String m_status;
@@ -1868,6 +1870,20 @@ protected:
 	{ m_outgoing = outgoing; }
 
     /**
+     * Add sequence number to chan.dtmf message, check for duplicates
+     * @param msg chan.dtmf message to apply sequence number
+     * @return True if the message is a duplicate (same tone, different method)
+     */
+    bool dtmfSequence(Message& msg);
+
+    /**
+     * Add sequence number to chan.dtmf and enqueue it, delete if duplicate
+     * @param msg chan.dtmf message to sequence and enqueue
+     * @return True if the message was enqueued, false if was a duplicate
+     */
+    bool dtmfEnqueue(Message* msg);
+
+    /**
      * Attempt to install an override data source to send DTMF inband.
      * Needs a tone generator module capable to override with "tone/dtmfstr/xyz"
      * @param tone Pointer to the tone sequence to send
@@ -1909,6 +1925,7 @@ private:
     int m_timeout;
     int m_maxroute;
     int m_maxchans;
+    bool m_dtmfDups;
 
 public:
     /**
@@ -2120,6 +2137,13 @@ protected:
      */
     inline void maxChans(int ncalls)
 	{ m_maxchans = ncalls; }
+
+    /**
+     * Set the DTMF duplicates allowed flag
+     * @param duplicates True to allow DTMF duplicate messages
+     */
+    inline void dtmfDups(bool duplicates)
+	{ m_dtmfDups = duplicates; }
 
 private:
     Driver(); // no default constructor please

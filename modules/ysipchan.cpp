@@ -3313,7 +3313,7 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	copySipHeaders(*msg,*t->initialMessage());
 	msg->addParam("text",tmp);
 	msg->addParam("detected","sip-info");
-	Engine::enqueue(msg);
+	dtmfEnqueue(msg);
     }
 }
 

@@ -105,3 +105,6 @@ h323chan.yate=yes
 
 ; maxchans: int: Maximum number of channels running at once in each driver
 ;maxchans=0
+
+; dtmfdups: bool: Allow duplicate DTMFs (detected with different methods)
+;dtmfdups=disable

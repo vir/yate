@@ -1655,7 +1655,8 @@ void AnalogChannel::evDigits(const char* text, bool tone)
     m->addParam("text",text);
     if (!tone)
 	m->addParam("pulse",String::boolText(true));
-    Engine::enqueue(m);
+    m->addParam("detected","analog");
+    dtmfEnqueue(m);
 }
 
 // Line got off hook. Terminate ringing
@@ -2334,6 +2335,7 @@ void AnalogCallRec::evDigits(bool fxsEvent, const char* text, bool tone)
     if (!tone)
 	m->addParam("pulse",String::boolText(true));
     m->addParam("sender",callertype(fxsEvent));
+    m->addParam("detected","analog");
     Engine::enqueue(m);
 }
 

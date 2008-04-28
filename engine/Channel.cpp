@@ -282,7 +282,7 @@ Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_driver(driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
-      m_dtmfSeq(0), m_answered(false)
+      m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -291,7 +291,7 @@ Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
       m_driver(&driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
-      m_dtmfSeq(0), m_answered(false)
+      m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
 {
     init();
 }
@@ -696,10 +696,13 @@ bool Channel::dtmfSequence(Message& msg)
     const String* text = msg.getParam("text");
     Lock lock(mutex());
     unsigned int seq = m_dtmfSeq;
-    if (text && detected && (*text == m_dtmfText) && (*detected != m_dtmfDetected))
+    if (text && detected &&
+	(*text == m_dtmfText) && (*detected != m_dtmfDetected) &&
+	(msg.msgTime() < m_dtmfTime))
 	duplicate = true;
     else {
 	seq = ++m_dtmfSeq;
+	m_dtmfTime = msg.msgTime() + 4000000;
 	m_dtmfText = text;
 	m_dtmfDetected = detected;
     }

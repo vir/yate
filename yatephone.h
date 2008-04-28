@@ -1491,6 +1491,7 @@ private:
     bool m_outgoing;
     u_int64_t m_timeout;
     u_int64_t m_maxcall;
+    u_int64_t m_dtmfTime;
     unsigned int m_dtmfSeq;
     String m_dtmfText;
     String m_dtmfDetected;

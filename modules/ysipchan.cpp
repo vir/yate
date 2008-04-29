@@ -2473,6 +2473,8 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	if (sdpPrefix) {
 	    for (unsigned int j = 0; j < n; j++) {
 		const NamedString* param = msg.getParam(j);
+		if (!param)
+		    continue;
 		tmp = param->name();
 		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
 		    rtp->parameter(tmp,*param,append);
@@ -2554,6 +2556,8 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 	n = m.length();
 	for (unsigned int j = 0; j < n; j++) {
 	    const NamedString* param = m.getParam(j);
+	    if (!param)
+		continue;
 	    String tmp = param->name();
 	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
 	        media->parameter(tmp,*param,false);
@@ -2614,6 +2618,8 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 	if (sdpPrefix) {
 	    for (unsigned int j = 0; j < n; j++) {
 		const NamedString* param = msg.getParam(j);
+		if (!param)
+		    continue;
 		tmp = param->name();
 		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
 		    rtp->parameter(tmp,*param,append);

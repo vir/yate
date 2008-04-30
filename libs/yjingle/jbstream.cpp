@@ -618,8 +618,11 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 		    lookupState(state()),this);
 		const char* keepAlive = "\t";
 		unsigned int l = 1;
-		if (!m_socket.send(keepAlive,l))
-		    terminate(false,0,XMPPError::Internal,m_socket.m_error,true);
+		if (!m_socket.send(keepAlive,l)) {
+		    // Keep the reason: terminate() might override the last socket error
+		    String reason = m_socket.m_error;
+		    terminate(false,0,XMPPError::HostGone,reason,true);
+		}
 	    }
 	}
 	else if (m_setupTimeout && time > m_setupTimeout) {

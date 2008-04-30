@@ -182,6 +182,9 @@ TokenDict JGSession::s_actions[] = {
     {"transport-info",   ActTransportInfo},
     {"transport-accept", ActTransportAccept},
     {"content-info",     ActContentInfo},
+    {"Transport",        ActTransport},
+    {"DTMF",             ActDtmf},
+    {"DTMF method",      ActDtmfMethod},
     {0,0}
 };
 
@@ -402,6 +405,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		}
 		continue;
 	    }
+
+	    DDebug(m_engine,DebugInfo,
+		"Call(%s). Processing action (%u,'%s') state=%s [%p]",
+		m_sid.c_str(),m_lastEvent->action(),
+		lookup(m_lastEvent->action(),s_actions),lookupState(state()),this);
+
 	    // Check for termination events
 	    if (m_lastEvent->final())
 		break;

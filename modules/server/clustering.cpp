@@ -45,6 +45,7 @@ private:
     String m_prefix;
     String m_callto;
     Regexp m_regexp;
+    String m_message;
     bool m_init;
 };
 
@@ -100,6 +101,38 @@ bool ClusterModule::msgExecute(Message& msg)
     if (callto.trimBlanks().null())
 	return false;
     DDebug(&__plugin,DebugAll,"Call to '%s' on node '%s'",callto.c_str(),node.c_str());
+    // check if the node is to be dynamically allocated
+    if ((node == "*") && m_message) {
+	Message m(m_message);
+	m.addParam("operation","allocate");
+	m.addParam("nodename",Engine::nodeName());
+	m.addParam("callto",callto);
+	const char* param = msg.getValue("billid");
+	if (param)
+	    m.addParam("billid",param);
+	param = msg.getValue("username");
+	    m.addParam("username",param);
+	if (!Engine::dispatch(m) || (m.retValue() == "-") || (m.retValue() == "error")) {
+	    const char* error = m.getValue("error","failure");
+	    const char* reason = m.getValue("reason");
+	    Debug(&__plugin,DebugWarn,"Could not get node for '%s'%s%s%s%s",
+		callto.c_str(),
+		(error ? ": " : ""), c_safe(error),
+		(reason ? ": " : ""), c_safe(reason));
+	    if (error)
+		msg.setParam("error",error);
+	    else
+		msg.clearParam("error");
+	    if (reason)
+		msg.setParam("reason",reason);
+	    else
+		msg.clearParam("reason");
+	    return false;
+	}
+	node = m.retValue();
+	Debug(&__plugin,DebugInfo,"Using node '%s' for '%s'",
+	    node.c_str(),callto.c_str());
+    }
     msg.setParam("callto",callto);
     // if the call is for the local node just let it through
     if (node.null() || (Engine::nodeName() == node))
@@ -115,7 +148,7 @@ bool ClusterModule::msgExecute(Message& msg)
 	msg.setParam("callto",tmp);
 	return false;
     }
-    Debug(&__plugin,DebugInfo,"Call to '%s' on node '%s' goes to '%s'",
+    Debug(&__plugin,DebugNote,"Call to '%s' on node '%s' goes to '%s'",
 	callto.c_str(),node.c_str(),dest.c_str());
     msg.setParam("callto",dest);
     msg.setParam("osip_x-callto",callto);
@@ -175,6 +208,7 @@ void ClusterModule::initialize()
 	m_prefix += "/";
     m_regexp = cfg.getValue("general","regexp");
     m_callto = cfg.getValue("general","callto");
+    m_message = cfg.getValue("general","message","cluster.node");
     unlock();
     if (!m_init && cfg.getBoolValue("general","enabled",(m_callto && m_regexp))) {
 	setup();

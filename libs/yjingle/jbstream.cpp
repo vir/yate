@@ -614,7 +614,7 @@ JBEvent* JBStream::getEvent(u_int64_t time)
     if (!m_lastEvent) {
 	if (m_idleTimeout && time > m_idleTimeout) {
 	    if (startIdleTimer(time)) {
-		Debug(m_engine,DebugAll,"Stream. Sending keep alive in state %s [%p]",
+		DDebug(m_engine,DebugAll,"Stream. Sending keep alive in state %s [%p]",
 		    lookupState(state()),this);
 		const char* keepAlive = "\t";
 		unsigned int l = 1;

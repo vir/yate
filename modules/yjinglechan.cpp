@@ -1363,7 +1363,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	case JGSession::ActTransport:
 	    if (m_data->m_transportReady) {
-		DDebug(this,DebugAll,"Received transport while ready [%p]",this);
+		Debug(this,DebugAll,"Received transport while ready [%p]",this);
 		m_session->confirm(event->releaseXML(),XMPPError::SNotAcceptable,
 		    0,XMPPError::TypeCancel);
 		break;

@@ -709,11 +709,17 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 		    m->addParam("message-prefix",prefix);
 		    prefix << ".";
 		    unsigned int n = 1;
-		    if (res->status()) {
-			m->addParam(prefix + "1","status");
-			m->addParam(prefix + "1.",res->status());
-			n = 2;
-		    }
+		    // Set status: avoid some meaningful values
+		    if (res->status())
+			if (res->status() != "subscribed" &&
+			    res->status() != "unsubscribed" &&
+			    res->status() != "offline")
+			    m->setParam("status",res->status());
+			else {
+			    m->addParam(prefix + "1","status");
+			    m->addParam(prefix + "1.",res->status());
+			    n = 2;
+			}
 		    for (; o; o = o->skipNext(), n++) {
 			XMLElement* e = static_cast<XMLElement*>(o->get());
 			e->toList(*m,String(prefix + String(n)));

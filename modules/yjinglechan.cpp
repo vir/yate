@@ -1251,7 +1251,7 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 bool YJGConnection::callRouted(Message& msg)
 {
     DDebug(this,DebugCall,"callRouted [%p]",this);
-    return true;
+    return Channel::callRouted(msg);
 }
 
 void YJGConnection::disconnected(bool final, const char* reason)
@@ -1264,14 +1264,14 @@ void YJGConnection::disconnected(bool final, const char* reason)
 
 bool YJGConnection::msgAnswered(Message& msg)
 {
-    DDebug(this,DebugCall,"msgAnswered [%p]",this);
-    return true;
+    Debug(this,DebugCall,"msgAnswered [%p]",this);
+    return Channel::msgAnswered(msg);
 }
 
 bool YJGConnection::msgUpdate(Message& msg)
 {
     DDebug(this,DebugCall,"msgUpdate [%p]",this);
-    return true;
+    return Channel::msgUpdate(msg);
 }
 
 // Send message to remote peer

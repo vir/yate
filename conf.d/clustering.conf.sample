@@ -13,8 +13,8 @@
 ; callto: string: Template for forwarding the call to target node
 ;callto=
 
-; message: string: Message used for operations on cluster nodes
-;message=cluster.node
+; locate: string: Message used for locating dynamic resources on cluster nodes
+;locate=cluster.locate
 
 
 [priorities]

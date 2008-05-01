@@ -104,7 +104,7 @@ bool ClusterModule::msgExecute(Message& msg)
     // check if the node is to be dynamically allocated
     if ((node == "*") && m_message) {
 	Message m(m_message);
-	m.addParam("operation","allocate");
+	m.addParam("allocate",String::boolText(true));
 	m.addParam("nodename",Engine::nodeName());
 	m.addParam("callto",callto);
 	const char* param = msg.getValue("billid");
@@ -208,7 +208,7 @@ void ClusterModule::initialize()
 	m_prefix += "/";
     m_regexp = cfg.getValue("general","regexp");
     m_callto = cfg.getValue("general","callto");
-    m_message = cfg.getValue("general","message","cluster.node");
+    m_message = cfg.getValue("general","locate","cluster.locate");
     unlock();
     if (!m_init && cfg.getBoolValue("general","enabled",(m_callto && m_regexp))) {
 	setup();

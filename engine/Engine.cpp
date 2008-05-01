@@ -569,7 +569,8 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 #define checkPoint()
 
 static bool s_logrotator = false;
-static bool s_runagain = true;
+static volatile bool s_rotatenow = false;
+static volatile bool s_runagain = true;
 static pid_t s_childpid = -1;
 static pid_t s_superpid = -1;
 
@@ -577,11 +578,8 @@ static void superhandler(int signal)
 {
     switch (signal) {
 	case SIGHUP:
-	    if (s_logrotator) {
-		::fprintf(stderr,"Supervisor (%d) closing the log file\n",s_superpid);
-		logFileOpen();
-		::fprintf(stderr,"Supervisor (%d) reopening the log file\n",s_superpid);
-	    }
+	    if (s_logrotator)
+		s_rotatenow = true;
 	    break;
 	case SIGINT:
 	case SIGTERM:
@@ -590,6 +588,16 @@ static void superhandler(int signal)
     }
     if (s_childpid > 0)
 	::kill(s_childpid,signal);
+}
+
+static void rotatelogs()
+{
+    if (s_rotatenow) {
+	s_rotatenow = false;
+	::fprintf(stderr,"Supervisor (%d) closing the log file\n",s_superpid);
+	logFileOpen();
+	::fprintf(stderr,"Supervisor (%d) reopening the log file\n",s_superpid);
+    }
 }
 
 static void copystream(int dest, int src)
@@ -601,6 +609,7 @@ static void copystream(int dest, int src)
 	    break;
 	::write(dest,buf,rd);
     }
+    rotatelogs();
 }
 
 static int supervise(void)
@@ -636,6 +645,7 @@ static int supervise(void)
 	// reap any children we may have before spawning a new one
 	while (::waitpid(-1,0,WNOHANG) > 0)
 	    ;
+	rotatelogs();
 	s_childpid = ::fork();
 	if (s_childpid < 0) {
 	    int err = errno;
@@ -699,7 +709,8 @@ static int supervise(void)
 		break;
 	    // Consume sanity points slightly slower than added
 	    for (int i = 0; i < 12; i++) {
-		copystream(2,logfd[0]);
+		if (s_logrotator)
+		    copystream(2,logfd[0]);
 		::usleep(100000);
 	    }
 	}

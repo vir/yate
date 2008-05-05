@@ -1576,7 +1576,8 @@ void XMPPUser::processSubscribe(JBEvent* event, JBPresence::Presence type)
 	    return;
     }
     // Notify
-    m_local->engine()->notifySubscribe(this,type);
+    if (m_local->engine())
+	m_local->engine()->notifySubscribe(this,type);
 }
 
 // Probe a remote user

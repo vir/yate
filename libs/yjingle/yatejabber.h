@@ -473,6 +473,13 @@ public:
 	{ return 0 != (m_flags & mask); }
 
     /**
+     * Get the stream mutex
+     * @return The stream mutex
+     */
+    inline Mutex* streamMutex()
+	{ return &m_socket.m_streamMutex; }
+
+    /**
      * Connect the stream. Send stream start tag on success
      * This method is thread safe
      */
@@ -772,13 +779,6 @@ protected:
 	    ObjList* o = m_events.last();
 	    return o ? static_cast<JBEvent*>(o->get()) : 0;
 	}
-
-    /**
-     * Get the stream mutex to be used by descendants
-     * @return The stream mutex
-     */
-    inline Mutex* streamMutex()
-	{ return &m_socket.m_streamMutex; }
 
     /**
      * Stream's name

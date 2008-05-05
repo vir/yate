@@ -44,6 +44,7 @@ class YJBMessage;                        // Message service
 class YJBStreamService;                  // Stream start/stop event service
 class YJBClientPresence;                 // Presence service for client streams
 class YJBPresence;                       // Presence service
+class YJBIqService;                      // Handle 'iq' stanzas not processed by other services
 class YJGData;                           // Handle the transport and formats for a connection
 class YJGConnection;                     // Jingle channel
 class ResNotifyHandler;                  // resource.notify handler
@@ -56,6 +57,9 @@ class YJGDriver;                         // The driver
 
 // Username/Password length for transport
 #define JINGLE_AUTHSTRINGLEN         16
+
+// URI
+#define BUILD_XMPP_URI(jid) (plugin.name() + ":" + jid)
 
 
 /**
@@ -159,6 +163,21 @@ public:
     // Add status/operation/subscription parameters
     static Message* message(int presence, const char* from, const char* to,
 	const char* subscription);
+};
+
+/**
+ * YJBIqService
+ */
+class YJBIqService : public JBService
+{
+public:
+    YJBIqService(JBEngine* engine, int prio)
+	: JBService(engine,"jabberiqservice",0,prio)
+	{}
+    void initialize();
+protected:
+    // Process iq events
+    virtual bool accept(JBEvent* event, bool& processed, bool& insert);
 };
 
 /**
@@ -359,6 +378,8 @@ private:
 	const char* cd, bool& available, String& error);
 
     bool m_init;
+    bool m_installIq;                    // Install the 'iq' service in jabber
+                                         //  engine and xmpp. message handlers
     String m_statusCmd;                  // status jingle
 };
 
@@ -379,6 +400,7 @@ static YJBMessage* s_message = 0;
 static YJBPresence* s_presence = 0;
 static YJBClientPresence* s_clientPresence = 0;
 static YJBStreamService* s_stream = 0;
+static YJBIqService* s_iqService = 0;
 static YJGDriver plugin;                          // The driver
 
 
@@ -913,6 +935,62 @@ Message* YJBPresence::message(int presence, const char* from, const char* to,
 
 
 /**
+ * YJBIqService
+ */
+void YJBIqService::initialize()
+{
+    debugChain(&plugin);
+}
+
+// Process events
+bool YJBIqService::accept(JBEvent* event, bool& processed, bool& insert)
+{
+    if (!(event && event->element()))
+	return false;
+
+    processed = (event->element()->type() == XMLElement::Iq);
+    if (!processed) {
+	// Don't show the debug if it's a WriteFail event: this event may
+	//  carry any failed stanza
+	if (event->type() != JBEvent::WriteFail)
+	    Debug(this,DebugStub,"Can't accept unexpected event=%s [%p]",
+		event->name(),this);
+	return false;
+    }
+
+    bool incoming = (event->type() != JBEvent::WriteFail);
+    Message* m = new Message("xmpp.iq");
+    m->addParam("module",s_name);
+    if (event->stream())
+	m->addParam("account",event->stream()->name());
+    const JabberID* from = &(event->from());
+    const JabberID* to = &(event->to());
+    // Received stanza: get source/destination JID from stream if missing
+    if (incoming) {
+	if (to->null() && event->stream())
+	    to = &(event->stream()->local());
+	if (from->null() && event->stream())
+	    from = &(event->stream()->remote());
+    }
+    addValidParam(*m,"from",*from);
+    addValidParam(*m,"to",*to);
+    m->addParam("type",event->stanzaType());
+    addValidParam(*m,"id",event->id());
+    addValidParam(*m,"username",from->node());
+    if (!to->null())
+	m->addParam("calleduri",BUILD_XMPP_URI(*to));
+    if (!incoming)
+	m->addParam("failure",String::boolText(true));
+    XMLElement* xml = event->releaseXML();
+    XMLElement* child = xml->findFirstChild();
+    m->addParam(new NamedPointer("xml",xml,child?child->name():0));
+    TelEngine::destruct(child);
+    Engine::enqueue(m);
+    return true;
+}
+
+
+/**
  * YJGData
  */
 // Init data and format list
@@ -1212,7 +1290,7 @@ bool YJGConnection::route()
     Message* m = message("call.preroute",false,true);
     m->addParam("username",m_remote.node());
     m->addParam("called",m_local.node());
-    m->addParam("calleduri",plugin.name() + ":" + m_local);
+    m->addParam("calleduri",BUILD_XMPP_URI(m_local));
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
     m_mutex.lock();
@@ -1809,8 +1887,7 @@ bool UserLoginHandler::received(Message& msg)
 String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
 
 YJGDriver::YJGDriver()
-    : Driver(s_name,"varchans"),
-    m_init(false)
+    : Driver(s_name,"varchans"), m_init(false), m_installIq(true)
 {
     Output("Loaded module YJingle");
     m_statusCmd << "status " << s_name;
@@ -1824,6 +1901,7 @@ YJGDriver::~YJGDriver()
     TelEngine::destruct(s_presence);
     TelEngine::destruct(s_clientPresence);
     TelEngine::destruct(s_stream);
+    TelEngine::destruct(s_iqService);
     TelEngine::destruct(s_jabber);
 }
 
@@ -1865,6 +1943,11 @@ void YJGDriver::initialize()
 	if (p)
 	    proto = (JBEngine::Protocol)JBEngine::lookupProto(*p,proto);
 
+	if (proto == JBEngine::Client)
+	    m_installIq = true;
+	else
+	    m_installIq = sect->getBoolValue("installiq",true);
+
 	// Create Jabber engine and services
 	s_jabber = new YJBEngine(proto);
 	s_jingle = new YJGEngine(s_jabber,0);
@@ -1878,6 +1961,8 @@ void YJGDriver::initialize()
 	    s_clientPresence = new YJBClientPresence(s_jabber,0);
 	    s_stream = new YJBStreamService(s_jabber,0);
 	}
+	if (m_installIq)
+	    s_iqService = new YJBIqService(s_jabber,100);
 
 	// Attach services to the engine
 	s_jabber->attachService(s_jingle,JBEngine::ServiceJingle);
@@ -1895,6 +1980,12 @@ void YJGDriver::initialize()
 	}
 	if (s_stream)
 	    s_jabber->attachService(s_stream,JBEngine::ServiceStream);
+	if (s_iqService) {
+	    s_jabber->attachService(s_iqService,JBEngine::ServiceIq);
+	    s_jabber->attachService(s_iqService,JBEngine::ServiceCommand);
+	    s_jabber->attachService(s_iqService,JBEngine::ServiceDisco);
+	    s_jabber->attachService(s_iqService,JBEngine::ServiceWriteFail);
+	}
 
 	// Driver setup
 	installRelay(Halt);

@@ -310,8 +310,6 @@ class ResSubscribeHandler : public MessageHandler
 public:
     ResSubscribeHandler() : MessageHandler("resource.subscribe") {}
     virtual bool received(Message& msg);
-    static void process(const JabberID& from, const JabberID& to,
-	JBPresence::Presence presence);
 };
 
 /**
@@ -1536,36 +1534,70 @@ bool ResNotifyHandler::received(Message& msg)
     // Avoid loopback message (if the same module: it's a message sent by this module)
     if (s_name == msg.getValue("module"))
 	return false;
+
+    // Check status
+    NamedString* status = msg.getParam("status");
+    if (!status || status->null())
+	return false;
+
+    if (s_jabber && s_jabber->protocol() == JBEngine::Client) {
+	NamedString* account = msg.getParam("account");
+	if (!account || account->null())
+	    return false;
+	JBClientStream* stream = static_cast<JBClientStream*>(s_jabber->findStream(*account));
+	if (!stream)
+	    return false;
+	const char* to = msg.getValue("to");
+	XDebug(&plugin,DebugAll,"%s account=%s to=%s status=%s",
+	    account->c_str(),to,status->c_str());
+	XMLElement* pres = 0;
+	bool ok = (*status == "subscribed");
+	if (ok || *status == "unsubscribed")
+	    pres = JBPresence::createPresence(stream->local().bare(),to,
+		ok?JBPresence::Subscribed:JBPresence::Unsubscribed);
+	else {
+	    Lock lock(stream->streamMutex());
+	    JIDResource* res = stream->getResource();
+	    if (res && res->ref()) {
+		if (*status == "online")
+		    res->setPresence(true);
+		else if (*status == "offline")
+		    res->setPresence(false);
+		else
+		    res->status(*status);
+		pres = JBPresence::createPresence(stream->local().bare(),to,
+		   res->available()?JBPresence::None:JBPresence::Unavailable);
+		res->addTo(pres,true);
+		TelEngine::destruct(res);
+	    }
+	}
+	ok = false;
+	if (pres) {
+	    JBStream::Error err = stream->sendStanza(pres);
+	    ok = (err == JBStream::ErrorNone) || (err == JBStream::ErrorPending);
+	}
+	TelEngine::destruct(stream);
+	return ok;
+    }
+
+    if (!s_presence)
+	return false;
+
     JabberID from,to;
     // *** Check from/to
     if (!plugin.getJidFrom(from,msg,true))
 	return false;
-    if (s_presence && !s_presence->autoRoster())
+    if (!s_presence->autoRoster())
 	to = msg.getValue("to");
     else if (!plugin.decodeJid(to,msg,"to"))
 	return false;
-    // *** Check status
-    String status = msg.getValue("status");
-    if (status.null()) {
-	Debug(&plugin,DebugNote,
-	    "Received '%s' from '%s' with missing 'status' parameter",
-	    msg.c_str(),from.c_str());
-	return true;
-    }
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
-	msg.c_str(),from.c_str(),status.c_str());
-
-    // Build additional stanza child
-    if (s_presence)
-	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
-	    process(from,to,status,msg.getBoolValue("subscription",false),&msg);
-	else
-	    sendPresence(from,to,status,&msg);
-    else {
-	// TODO: implement for client
-	return false;
-    }
+	msg.c_str(),from.c_str(),status->c_str());
+    if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
+	process(from,to,*status,msg.getBoolValue("subscription",false),&msg);
+    else
+	sendPresence(from,to,*status,&msg);
     return true;
 }
 
@@ -1730,109 +1762,117 @@ bool ResSubscribeHandler::received(Message& msg)
     // Avoid loopback message (if the same module: it's a message sent by this module)
     if (s_name == msg.getValue("module"))
 	return false;
-    JabberID from,to;
-    // *** Check from/to
-    if (!plugin.decodeJid(from,msg,"from",true))
-	return false;
-    if (!plugin.decodeJid(to,msg,"to"))
-	return false;
-    // *** Check operation
-    String tmpParam = msg.getValue("operation");
-    JBPresence::Presence presence;
-    if (tmpParam == "subscribe")
-	presence = JBPresence::Subscribe;
-    else if (tmpParam == "probe")
-	presence = JBPresence::Probe;
-    else if (tmpParam == "unsubscribe")
-	presence = JBPresence::Unsubscribe;
-    else {
-	Debug(&plugin,DebugNote,
-	    "Received '%s' with missing or unknown parameter: operation=%s",
-	    msg.c_str(),msg.getValue("operation"));
-	return false;
-    }
-    // *** Everything is OK. Process the message
-    XDebug(&plugin,DebugAll,"Accepted '%s'",msg.c_str());
-    if (s_presence)
-	process(from,to,presence);
-    else {
-	// TODO: implement for client
-	return false;
-    }
-    return true;
-}
 
-void ResSubscribeHandler::process(const JabberID& from, const JabberID& to,
-	JBPresence::Presence presence)
-{
-    if (!s_presence)
-	return;
-    // Don't automatically add
-    if ((presence == JBPresence::Probe && !s_presence->addOnProbe().to()) ||
-	((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
-	!s_presence->addOnSubscribe().to())) {
-	JBStream* stream = s_jabber->getStream();
-	if (!stream)
-	    return;
-	stream->sendStanza(JBPresence::createPresence(from,to,presence));
-	TelEngine::destruct(stream);
-	return;
-    }
-    // Add roster/user
-    XMPPUserRoster* roster = s_presence->getRoster(from,true,0);
-    XMPPUser* user = roster->getUser(to,false,0);
-    // Add new user and local resource
-    if (!user) {
-	user = new XMPPUser(roster,to.node(),to.domain(),XMPPDirVal::From,
-	    false,false);
-	s_presence->notifyNewUser(user);
-	if (!user->ref()) {
-	    TelEngine::destruct(roster);
-	    return;
+    // Check operation
+    NamedString* oper = msg.getParam("operation");
+    if (!oper)
+	return false;
+    JBPresence::Presence presence;
+    if (*oper == "subscribe")
+	presence = JBPresence::Subscribe;
+    else if (*oper == "probe")
+	presence = JBPresence::Probe;
+    else if (*oper == "unsubscribe")
+	presence = JBPresence::Unsubscribe;
+    else
+	return false;
+
+    XMLElement* pres = 0;
+    JBStream* stream = 0;
+    bool ok = false;
+    while (true) {
+	// Client stream
+	NamedString* account = msg.getParam("account");
+	if (account) {
+	    stream = s_jabber->findStream(*account);
+	    if (stream) {
+		XDebug(&plugin,DebugAll,"%s account=%s to=%s operation=%s",
+		    account->c_str(),msg.getValue("to"),oper->c_str());
+		pres = JBPresence::createPresence(stream->local(),
+		    msg.getValue("to"),presence);
+		break;
+	    }
 	}
-    }
-    TelEngine::destruct(roster);
-    // Process
-    user->lock();
-    for (;;) {
-	if (presence == JBPresence::Subscribe) {
-	    // Already subscribed: notify. NO: send request
-	    if (user->subscription().to())
-		s_presence->notifySubscribe(user,JBPresence::Subscribed);
-	    else {
-		user->sendSubscribe(JBPresence::Subscribe,0);
-		user->probe(0);
+
+	// Component stream
+	if (!s_presence || s_jabber->protocol() == JBEngine::Client)
+	    break;
+	JabberID from,to;
+	// Check from/to
+	if (!plugin.decodeJid(from,msg,"from",true))
+	    break;
+	if (!plugin.decodeJid(to,msg,"to"))
+	    break;
+	XDebug(&plugin,DebugAll,"%s from=%s to=%s operation=%s",
+	    from.c_str(),to.c_str(),oper->c_str());
+	// Don't automatically add
+	if ((presence == JBPresence::Probe && !s_presence->addOnProbe().to()) ||
+	    ((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
+	    !s_presence->addOnSubscribe().to())) {
+	    stream = s_jabber->getStream();
+	    if (stream)
+		pres = JBPresence::createPresence(from,to,presence);
+	    break;
+	}
+	// Add roster/user
+	XMPPUserRoster* roster = s_presence->getRoster(from,true,0);
+	XMPPUser* user = roster->getUser(to,false,0);
+	// Add new user and local resource
+	if (!user) {
+	    user = new XMPPUser(roster,to.node(),to.domain(),XMPPDirVal::From,
+		false,false);
+	    s_presence->notifyNewUser(user);
+	    if (!user->ref()) {
+		TelEngine::destruct(roster);
+		break;
+	    }
+	}
+	TelEngine::destruct(roster);
+	// Process
+	ok = true;
+	user->lock();
+	for (;;) {
+	    if (presence == JBPresence::Subscribe ||
+		presence == JBPresence::Unsubscribe) {
+		bool sub = (presence == JBPresence::Subscribe);
+		// Already (un)subscribed: notify. NO: send request
+		if (sub != user->subscription().to()) {
+		    user->sendSubscribe(presence,0);
+		    user->probe(0);
+		}
+		else
+		    s_presence->notifySubscribe(user,sub?JBPresence::Subscribed:JBPresence::Unsubscribed);
+		break;
+	    }
+	    // Respond if user has a resource with audio capabilities
+	    JIDResource* res = user->getAudio(false,true);
+	    if (res) {
+		user->notifyResource(true,res->name());
+		break;
+	    }
+	    // No audio resource for remote user: send probe
+	    // Send probe fails: Assume remote user unavailable
+	    if (!user->probe(0)) {
+		XMLElement* xml = JBPresence::createPresence(to,from,JBPresence::Unavailable);
+		JBEvent* event = new JBEvent(JBEvent::Presence,0,xml);
+		s_presence->notifyPresence(event,false);
+		TelEngine::destruct(event);
 	    }
 	    break;
 	}
-	if (presence == JBPresence::Unsubscribe) {
-	    // Already unsubscribed: notify. NO: send request
-	    if (!user->subscription().to())
-		s_presence->notifySubscribe(user,JBPresence::Unsubscribed);
-	    else {
-		user->sendSubscribe(JBPresence::Unsubscribe,0);
-		user->probe(0);
-	    }
-	    break;
-	}
-	// Respond if user has a resource with audio capabilities
-	JIDResource* res = user->getAudio(false,true);
-	if (res) {
-	    user->notifyResource(true,res->name());
-	    break;
-	}
-	// No audio resource for remote user: send probe
-	// Send probe fails: Assume remote user unavailable
-	if (!user->probe(0)) {
-	    XMLElement* xml = JBPresence::createPresence(to,from,JBPresence::Unavailable);
-	    JBEvent* event = new JBEvent(JBEvent::Presence,0,xml);
-	    s_presence->notifyPresence(event,false);
-	    TelEngine::destruct(event);
-	}
+	user->unlock();
+	TelEngine::destruct(user);
 	break;
     }
-    user->unlock();
-    TelEngine::destruct(user);
+
+    if (stream && !ok) {
+	JBStream::Error err = stream->sendStanza(pres);
+	pres = 0;
+	ok = (err == JBStream::ErrorNone) || (err == JBStream::ErrorPending);
+    }
+    TelEngine::destruct(stream);
+    TelEngine::destruct(pres);
+    return ok;
 }
 
 /**
@@ -2292,6 +2332,7 @@ bool YJGDriver::received(Message& msg, int id)
 	s_jabber->detachService(s_message);
 	s_jabber->detachService(s_stream);
 	s_jabber->detachService(s_clientPresence);
+	s_jabber->detachService(s_iqService);
     }
     return Driver::received(msg,id);
 }

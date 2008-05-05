@@ -945,6 +945,13 @@ public:
 	{ return m_roster; }
 
     /**
+     * Get the client's resource
+     * @return The client's resource
+     */
+    inline JIDResource* getResource()
+	{ return m_resource; }
+
+    /**
      * Get a remote user from roster
      * @param jid The user's bare jid
      * @return Referenced XMPPUser object or 0 if not found

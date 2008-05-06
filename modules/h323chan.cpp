@@ -615,6 +615,7 @@ DEFINE_YATE_CAPAB(YateG729AB,BaseG729Capab,H245_AudioCapability::e_g729AnnexAwAn
 
 // end of fake capabilities code
 
+#ifndef DISABLE_CAPS_DUMP
 #ifdef USE_CAPABILITY_FACTORY
 static void ListRegisteredCaps(int level)
 {
@@ -655,7 +656,7 @@ bool FakeH323CapabilityRegistration::IsRegistered(const PString& name)
     return false;
 }
 #endif
-
+#endif // DISABLE_CAPS_DUMP
 
 YateGatekeeperServer::YateGatekeeperServer(YateH323EndPoint& ep)
     : H323GatekeeperServer(ep), m_endpoint(ep)
@@ -731,6 +732,7 @@ H323Connection* YateH323EndPoint::CreateConnection(unsigned callReference,
 
 bool YateH323EndPoint::Init(const NamedList* params)
 {
+#ifndef DISABLE_CAPS_DUMP
     if (null()) {
 	int dump = s_cfg.getIntValue("general","dumpcodecs");
 	if (dump > 0)
@@ -740,6 +742,7 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	    FakeH323CapabilityRegistration::ListRegistered(dump);
 #endif
     }
+#endif
 
     String csect("codecs");
     if (!null()) {

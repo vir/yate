@@ -2793,9 +2793,6 @@ private:
     bool m_slave;                        // True if this is an FXO group owned by an FXS one
 };
 
-// The number of valid point code types
-#define YSS7_PCTYPE_COUNT 6
-
 /**
  * An universal SS7 Layer 3 routing Code Point
  * @short SS7 Code Point
@@ -2814,7 +2811,8 @@ public:
 	China  = 4, // GF 001-9001
 	Japan  = 5, // JT-Q704, NTT-Q704
 	Japan5 = 6, // 5-bit SLS
-	//NOTE: Update YSS7_PCTYPE_COUNT when modifying this enum
+	// Do not change the next line, must be past last defined type
+	DefinedTypes
     };
 
     /**
@@ -2977,6 +2975,9 @@ private:
     unsigned char m_cluster;
     unsigned char m_member;
 };
+
+// The number of valid point code types
+#define YSS7_PCTYPE_COUNT (SS7PointCode::DefinedTypes-1)
 
 /**
  * Operator to write a point code to a string

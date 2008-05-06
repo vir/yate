@@ -50,6 +50,7 @@ class YJGConnection;                     // Jingle channel
 class ResNotifyHandler;                  // resource.notify handler
 class ResSubscribeHandler;               // resource.subscribe handler
 class UserLoginHandler;                  // user.login handler
+class XmppIqHandler;                     // xmpp.iq handler used to respond to unprocessed set/get stanzas
 class YJGDriver;                         // The driver
 
 // TODO:
@@ -319,6 +320,16 @@ class UserLoginHandler : public MessageHandler
 {
 public:
     UserLoginHandler() : MessageHandler("user.login") {}
+    virtual bool received(Message& msg);
+};
+
+/**
+ * xmpp.iq message handler
+ */
+class XmppIqHandler : public MessageHandler
+{
+public:
+    inline XmppIqHandler(int prio = 1000) : MessageHandler("xmpp.iq",prio) {}
     virtual bool received(Message& msg);
 };
 
@@ -1922,6 +1933,60 @@ bool UserLoginHandler::received(Message& msg)
 }
 
 /**
+ * XmppIqHandler
+ */
+bool XmppIqHandler::received(Message& msg)
+{
+    // Process only mesages enqueued by this module
+    if (s_name != msg.getValue("module"))
+	return false;
+    // Ignore failed stanzas
+    if (msg.getBoolValue("failure"))
+	return false;
+    // Respond only to type 'set' or 'get'
+    NamedString* type = msg.getParam("type");
+    if (!type || (*type != "set" && *type != "get"))
+	return false;
+
+    NamedString* account = msg.getParam("account");
+    const char* from = msg.getValue("from");
+    const char* to = msg.getValue("to");
+    const char* id = msg.getValue("id");
+    Debug(&plugin,DebugAll,"%s: account=%s from=%s to=%s id=%s returned to module",
+	msg.c_str(),account?account->c_str():"",from,to,id);
+
+    JBStream* stream = 0;
+    if (account)
+	stream = s_jabber->findStream(*account);
+    else {
+	JabberID f(from);
+	stream = s_jabber->getStream(f.null()?0:&f);
+    }
+    if (!stream)
+	return false;
+
+    // Don't send error without id or received element:
+    //  the sender won't be able to match the response
+    XMLElement* recvStanza = 0;
+    NamedString* tmp = msg.getParam("xml");
+    if (tmp && tmp->getObject("NamedPointer")) {
+	NamedPointer* np = static_cast<NamedPointer*>(tmp);
+	if (np && np->userData() && np->userData()->getObject("XMLElement"))
+	    recvStanza = static_cast<XMLElement*>(np->takeData());
+    }
+    if (id || recvStanza) {
+	XMLElement* stanza = XMPPUtils::createIq(XMPPUtils::IqError,to,from,id);
+	stanza->addChild(recvStanza);
+	stanza->addChild(XMPPUtils::createError(XMPPError::TypeModify,XMPPError::SFeatureNotImpl));
+	stream->sendStanza(stanza);
+    }
+    else
+	TelEngine::destruct(recvStanza);
+    // Return true to make sure nobody will respond again!!!
+    return true;
+}
+
+/**
  * YJGDriver
  */
 String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
@@ -2033,6 +2098,8 @@ void YJGDriver::initialize()
 	Engine::install(new ResSubscribeHandler);
 	if (s_jabber->protocol() == JBEngine::Client)
 	    Engine::install(new UserLoginHandler);
+	if (m_installIq)
+	    Engine::install(new XmppIqHandler);
 	setup();
     }
 

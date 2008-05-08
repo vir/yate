@@ -470,8 +470,12 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
-    if (msg.getBoolValue("drillhole",s_drill))
-	m_rtp->drillHole();
+    if (msg.getBoolValue("drillhole",s_drill)) {
+	bool ok = m_rtp->drillHole();
+	Debug(&splugin,(ok ? DebugInfo : DebugWarn),
+	    "Wrapper %s a hole in firewall/NAT [%p]",
+	    (ok ? "opened" : "failed to open"),this);
+    }
     setTimeout(msg,s_timeout);
 //    if (maxJitter > 0)
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);

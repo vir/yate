@@ -239,6 +239,10 @@ String CdrBuilder::getStatus() const
 {
     String s(m_status);
     s << "|" << getValue("caller") << "|" << getValue("called");
+    unsigned int sec = 0;
+    if (m_start)
+	sec = (Time::now() - m_start + 500000) / 1000000;
+    s << "|" << sec;
     return s;
 }
 
@@ -388,7 +392,7 @@ bool StatusHandler::received(Message &msg)
     const char *sel = msg.getValue("module");
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
-    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called");
+    String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|Duration");
     st << ";cdrs=" << s_cdrs.count();
     if (msg.getBoolValue("details",true)) {
 	st << ";";

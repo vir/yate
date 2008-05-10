@@ -173,3 +173,6 @@
 
 ; ignore_missing_ack: bool: Ignore missing ACK on INVITE, don't drop the calls
 ;ignore_missing_ack=no
+
+; 1xx_change_formats: bool: Provisional messages can change the formats list
+;1xx_change_formats=yes

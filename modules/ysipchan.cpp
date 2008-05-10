@@ -576,6 +576,7 @@ static bool s_rfc2833 = true;
 static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
+static bool s_1xx_formats = true;
 static bool s_auth_register = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
@@ -2406,6 +2407,8 @@ MimeSdpBody* YateSIPConnection::createProvisionalSDP(Message& msg)
 	return 0;
     if (m_rtpAddr.null())
 	return 0;
+    if (s_1xx_formats)
+	updateFormats(msg);
     return createRtpSDP(true);
 }
 
@@ -4517,6 +4520,7 @@ void SIPDriver::initialize()
     s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     s_nat_refresh = s_cfg.getIntValue("registrar","nat_refresh",25);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
+    s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
     initAudioCodecs();
     if (!m_endpoint) {
 	m_endpoint = new YateSIPEndPoint();

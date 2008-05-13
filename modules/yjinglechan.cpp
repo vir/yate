@@ -2169,10 +2169,18 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    setComponentCall(caller,called,msg.getValue("caller"),dest,available,error);
 	    break;
 	}
-	caller.set(msg.getValue("caller"));
-	called.set(dest);
 	// Check if a stream exists. Try to get a resource for caller and/or called
-	JBStream* stream = s_jabber->getStream(&caller,false);
+	JBStream* stream = 0;
+	NamedString* account = msg.getParam("account");
+	if (account)
+	    stream = s_jabber->findStream(*account);
+	if (stream)
+	    caller.set(stream->local().node(),stream->local().domain(),
+		stream->local().resource());
+	else {
+	    caller.set(msg.getValue("caller"));
+	    stream = s_jabber->getStream(&caller,false);
+	}
 	if (!(stream && stream->type() == JBEngine::Client)) {
 	    error = "No stream";
 	    errStr = "noconn";
@@ -2184,6 +2192,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 		stream->local().resource().c_str(),caller.c_str());
 	    caller.resource(stream->local().resource());
 	}
+	called.set(dest);
 	if (!called.resource()) {
 	    JBClientStream* client = static_cast<JBClientStream*>(stream);
 	    XMPPUser* user = client->getRemote(called);
@@ -2198,6 +2207,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	}
 	if (!(caller.isFull() && called.isFull()))
 	    error << "Incomplete caller=" << caller << " or called=" << called;
+	TelEngine::destruct(stream);
 	break;
     }
     if (error) {

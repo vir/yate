@@ -692,7 +692,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
 
 ExtModReceiver::~ExtModReceiver()
 {   
-    Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
+    Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() pid=%d [%p]",m_pid,this);
     Lock lock(this);
     // One destruction is plenty enough
     m_use = -100;
@@ -701,12 +701,8 @@ ExtModReceiver::~ExtModReceiver()
     s_mutex.unlock();
     die();
     if (m_pid > 1)
-	Debug(DebugWarn,"ExtModReceiver::~ExtModReceiver() [%p] pid=%d",this,m_pid);
+	Debug(DebugWarn,"ExtModReceiver::~ExtModReceiver() pid=%d [%p]",m_pid,this);
     closeAudio();
-    if (m_restart && !Engine::exiting()) {
-	Debug(DebugMild,"Restarting external '%s' '%s'",m_script.safe(),m_args.safe());
-	ExtModReceiver::build(m_script,m_args);
-    }
 }
 
 void ExtModReceiver::closeIn()
@@ -820,6 +816,10 @@ void ExtModReceiver::die(bool clearChan)
 #endif
     if (chan && clearChan)
 	chan->disconnect(m_reason);
+    if (m_restart && !Engine::exiting()) {
+	Debug(DebugMild,"Restarting external '%s' '%s'",m_script.safe(),m_args.safe());
+	ExtModReceiver::build(m_script,m_args);
+    }
     unuse();
 }
 
@@ -1389,7 +1389,7 @@ void ExtModReceiver::describe(String& rval) const
 	    break;
     }
     if (m_dead)
-	rval << ", dead";
+	rval << ", dead, use=" << m_use;
     if (m_chan)
 	rval << ", has channel";
     if (m_restart)

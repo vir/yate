@@ -705,11 +705,14 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	media = jingle->findFirstChild(XMLElement::Description);
 	if (media && !media->hasAttribute("xmlns",s_ns[XMPPNamespace::JingleAudio]))
 	    break;
-	event = new JGEvent(act,this,jbev->releaseXML());
+	// Don't set the event's element yet: this would invalidate the 'jingle' variable
+	event = new JGEvent(act,this,0);
 	XMLElement* t = trans ? trans->findFirstChild(XMLElement::Candidate) : 0;
 	for (; t; t = trans->findNextChild(t,XMLElement::Candidate))
 	    event->m_transport.append(new JGTransport(t));
 	event->m_audio.fromXML(media);
+	event->m_id = jbev->id();
+	event->m_element = jbev->releaseXML();
 	break;
     }
     if (trans != jingle)

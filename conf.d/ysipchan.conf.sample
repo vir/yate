@@ -114,7 +114,7 @@
 [codecs]
 ; This section allows to individually enable or disable the codecs
 
-; default: bool: Enable all unlisted codecs by default
+; default: bool: Enable all unlisted codecs by default if a transcoder exists
 ;default=enable
 
 ; mulaw: bool: Companded-only G711 mu-law (PCMU/8000)
@@ -128,6 +128,12 @@
 
 ; lpc10: bool: Linear Prediction Codec (LPC/8000)
 ;lpc10=default
+
+; ilbc: bool: Internet Low Bandwidth Codec (iLBC/8000)
+;ilbc=default
+
+; amr: bool: Adaptive Multi-Rate 3GPP (AMR/8000)
+;amr=default
 
 ; slin: bool: Signed Linear 16-bit uncompressed (L16/8000)
 ;slin=default

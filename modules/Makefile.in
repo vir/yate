@@ -92,6 +92,10 @@ ifneq (@HAVE_SPEEX@,no)
 PROGS := $(PROGS) speexcodec.yate
 endif
 
+ifneq (@HAVE_AMRNB@,no)
+PROGS := $(PROGS) amrnbcodec.yate
+endif
+
 ifneq (@HAVE_OPENSSL@,no)
 PROGS := $(PROGS) openssl.yate
 endif
@@ -245,6 +249,9 @@ gsmcodec.yate: LOCALFLAGS = @GSM_INC@
 
 speexcodec.yate: LOCALLIBS = -lspeex
 speexcodec.yate: LOCALFLAGS = @SPEEX_INC@
+
+amrnbcodec.yate: LOCALFLAGS = @AMRNB_INC@
+amrnbcodec.yate: LOCALLIBS = @AMRNB_LIB@
 
 faxchan.yate: LOCALLIBS = -lspandsp
 faxchan.yate: LOCALFLAGS = @SPANDSP_INC@

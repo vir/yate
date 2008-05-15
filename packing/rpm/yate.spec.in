@@ -412,7 +412,11 @@ chmod +x %{local_find_requires} %{local_find_provides}
 %endif
 
 %build
-./configure --prefix=%{prefix} --sysconfdir=%{_sysconfdir} --datadir=%{_datadir} --includedir=%{_includedir} --libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} --without-libspeex --without-spandsp --without-coredumper
+./configure --prefix=%{prefix} --sysconfdir=%{_sysconfdir} \
+	--datadir=%{_datadir} --includedir=%{_includedir} \
+	--libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} \
+	--without-libspeex --without-amrnb \
+	--without-spandsp --without-coredumper
 make strip
 
 %install
@@ -428,6 +432,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu May 15 2008 Paul Chitescu <paulc@voip.null.ro>
+- Disabled the newly added AMR-NB from building
+
 * Mon Jan 07 2008 Paul Chitescu <paulc@voip.null.ro>
 - Added Qt client
 

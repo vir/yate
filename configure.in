@@ -446,6 +446,7 @@ HAVE_ALSA="yes"
 AC_MSG_RESULT([$HAVE_ALSA])
 AC_SUBST(HAVE_ALSA)
 
+
 HAVE_GSM=no
 GSM_INC=""
 AC_ARG_WITH(libgsm,AC_HELP_STRING([--with-libgsm],[use GSM codec if available (default)]),[ac_cv_use_libgsm=$withval],[ac_cv_use_libgsm=yes])
@@ -465,6 +466,7 @@ AC_MSG_RESULT([$HAVE_GSM])
 fi
 AC_SUBST(HAVE_GSM)
 AC_SUBST(GSM_INC)
+
 
 HAVE_ILBC=no
 ILBC_INC=""
@@ -516,6 +518,31 @@ fi
 AC_SUBST(HAVE_SPEEX)
 AC_SUBST(SPEEX_INC)
 
+
+HAVE_AMRNB=no
+AMRNB_INC=""
+AMRNB_LIB=""
+AC_ARG_WITH(amrnb,AC_HELP_STRING([--with-amrnb=DIR],[use AMR-NB if available (default)]),[ac_cv_use_amrnb=$withval],[ac_cv_use_amrnb=/usr])
+if [[ "x$ac_cv_use_amrnb" != "xno" ]]; then
+AC_MSG_CHECKING([for AMR-NB in $ac_cv_use_amrnb])
+local_lib="$ARCHLIB"
+amrinc="$ac_cv_use_amrnb/include/amrnb"
+test -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" || local_lib="lib"
+if [[ -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" -a -f "$amrinc/interf_rom.h" ]]; then
+    HAVE_AMRNB=yes
+    AMRNB_LIB="-L$ac_cv_use_amrnb/$local_lib -lamrnb"
+    AMRNB_INC="-I$amrinc"
+fi
+AC_MSG_RESULT([$HAVE_AMRNB])
+if [[ "x$HAVE_AMRNB" != "xyes" -a "x$YATE_VER" != "xno" ]]; then
+    AC_ERROR([Could not find AMR-NB devel files])
+fi
+fi
+AC_SUBST(HAVE_AMRNB)
+AC_SUBST(AMRNB_INC)
+AC_SUBST(AMRNB_LIB)
+
+
 HAVE_SPANDSP=no
 SPANDSP_INC=""
 AC_ARG_WITH(spandsp,AC_HELP_STRING([--with-spandsp],[use spandsp library if available (default)]),[ac_cv_use_spandsp=$withval],[ac_cv_use_spandsp=yes])
@@ -563,6 +590,7 @@ AC_MSG_RESULT([$HAVE_SPANDSP])
 fi
 AC_SUBST(HAVE_SPANDSP)
 AC_SUBST(SPANDSP_INC)
+
 
 HAVE_PWLIB=no
 PWLIB_RTTI=none
@@ -623,6 +651,7 @@ fi
 AC_MSG_RESULT([$HAVE_PWLIB $verpw RTTI: $PWLIB_RTTI])
 fi
 
+
 HAVE_H323=no
 H323_INC=""
 H323_LIB=""
@@ -673,6 +702,7 @@ AC_SUBST(H323_INC)
 AC_SUBST(H323_LIB)
 AC_SUBST(H323_RUN)
 
+
 HAVE_OPENSSL=no
 OPENSSL_INC=""
 OPENSSL_LIB=""
@@ -703,6 +733,7 @@ AC_SUBST(OPENSSL_INC)
 AC_SUBST(OPENSSL_LIB)
 AC_SUBST(OPENSSL_VER)
 
+
 HAVE_GTK2=no
 GTK2_INC=""
 GTK2_LIB=""
@@ -725,6 +756,7 @@ fi
 AC_SUBST(HAVE_GTK2)
 AC_SUBST(GTK2_INC)
 AC_SUBST(GTK2_LIB)
+
 
 HAVE_GMOZ=no
 GMOZ_INC=""
@@ -762,6 +794,7 @@ AC_SUBST(HAVE_GMOZ)
 AC_SUBST(GMOZ_INC)
 AC_SUBST(GMOZ_LIB)
 
+
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""
@@ -792,6 +825,7 @@ AC_SUBST(QT4_LIB)
 AC_SUBST(QT4_MOC)
 AC_SUBST(QT4_VER)
 
+
 HAVE_COREDUMPER=no
 COREDUMPER_INC=""
 COREDUMPER_LIB=""
@@ -815,6 +849,7 @@ fi
 AC_SUBST(HAVE_COREDUMPER)
 AC_SUBST(COREDUMPER_INC)
 AC_SUBST(COREDUMPER_LIB)
+
 
 RTTI_OPT=""
 AC_ARG_ENABLE(rtti,AC_HELP_STRING([--enable-rtti],[Enable RTTI support (default: like pwlib)]),want_rtti=$enableval,want_rtti=auto)
@@ -848,6 +883,7 @@ AC_MSG_WARN([Mismatched RTTI setting between Yate ($USE_RTTI) and pwlib ($PWLIB_
 fi
 fi
 
+
 INSTALL_D="install -D"
 MODULE_CFLAGS="-fno-exceptions -fPIC $HAVE_GCC_FORMAT_CHECK"
 MODULE_CPPFLAGS="-fno-check-new $RTTI_OPT $MODULE_CFLAGS"
@@ -867,6 +903,7 @@ AC_SUBST(MODULE_LDRELAX)
 AC_SUBST(MODULE_LDFLAGS)
 AC_SUBST(MODULE_SYMBOLS)
 
+
 DOXYGEN_BIN=""
 AC_ARG_WITH(doxygen,AC_HELP_STRING([--with-doxygen=EXE],[use doxygen to generate API docs (default: PATH)]),[ac_cv_use_doxygen=$withval],[ac_cv_use_doxygen=yes])
 if [[ "x$ac_cv_use_doxygen" != "xno" ]]; then
@@ -882,6 +919,7 @@ AC_MSG_RESULT([$ac_cv_use_doxygen])
 fi
 AC_SUBST(DOXYGEN_BIN)
 
+
 KDOC_BIN=""
 AC_ARG_WITH(kdoc,AC_HELP_STRING([--with-kdoc=EXE],[use kdoc to generate API docs (default: PATH)]),[ac_cv_use_kdoc=$withval],[ac_cv_use_kdoc=yes])
 if [[ "x$ac_cv_use_kdoc" != "xno" ]]; then
@@ -896,6 +934,7 @@ fi
 AC_MSG_RESULT([$ac_cv_use_kdoc])
 fi
 AC_SUBST(KDOC_BIN)
+
 
 m4_sinclude(./YateLocal.ac)
 

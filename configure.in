@@ -534,9 +534,6 @@ if [[ -f "$ac_cv_use_amrnb/$local_lib/libamrnb.so" -a -f "$amrinc/interf_rom.h" 
     AMRNB_INC="-I$amrinc"
 fi
 AC_MSG_RESULT([$HAVE_AMRNB])
-if [[ "x$HAVE_AMRNB" != "xyes" -a "x$YATE_VER" != "xno" ]]; then
-    AC_ERROR([Could not find AMR-NB devel files])
-fi
 fi
 AC_SUBST(HAVE_AMRNB)
 AC_SUBST(AMRNB_INC)

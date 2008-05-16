@@ -23,8 +23,9 @@
 import logging, yaypm
 from twisted.internet import reactor, defer
 from twisted.python import failure
-from yaypm import CancellableDeferred, TCPDispatcherFactory
+from yaypm import CancellableDeferred, TCPDispatcherFactory, AbandonedException
 
+logger = logging.getLogger('yaypm.util')
 
 def sleep(time, until = None):
     d = CancellableDeferred()
@@ -184,3 +185,95 @@ class ConsoleFormatter(logging.Formatter) :
                              record.levelname)
         record.name = "\033[37m\033[1m%s\033[0;0m" % record.name
         return logging.Formatter.format(self, record)    
+
+
+class OutgoingCallException(Exception):
+    """
+    Raised when deferred is abandoned by until condition.
+    
+    """
+    def __init__(self, cause):
+        Exception.__init__(self, cause)
+        self.cause = cause
+
+@defer.inlineCallbacks
+def outgoing(yate, target, maxcall = 30*1000,
+             callto = "dumb/", formats = None, ret_callid = False,
+             extra_attrs = {}):
+
+    logger.debug("Calling: %s" % target)
+
+    attrs = {"callto": callto,
+             "target": target,
+             "maxcall": maxcall}
+
+    if extra_attrs:
+        attrs.update(extra_attrs)
+
+    if formats:
+        attrs["media_audio"] = "yes"
+        attrs["formats_audio"] = formats
+
+    execute = yate.msg("call.execute", attrs)
+    
+    if not (yield execute.dispatch()):
+        raise OutgoingCallException(execute["reason"])
+
+    end = yate.onwatch("chan.hangup",
+        lambda m : m["id"] == execute["targetid"])
+
+    @defer.inlineCallbacks
+    def rest():
+        try:
+            logger.debug(
+                "Waiting for answer: %s, %s" % (execute["id"], execute["targetid"]))
+
+            answered = yield yate.onwatch(
+                    "call.answered",
+                    lambda m : m["id"] ==  execute["targetid"],
+                    until = end)
+
+            logger.debug("Answered: %s, %s" % (answered["id"], answered["peerid"]))
+
+            defer.returnValue(answered)
+
+        except AbandonedException, e:
+            raise OutgoingCallException(e.cause["reason"])
+
+    if ret_callid:
+        defer.returnValue((execute["targetid"], rest))
+    else:
+        defer.returnValue((yield rest()))
+
+## @defer.inlineCallbacks
+## def attach(yate, callid, wave, sync = False):
+
+##     m = {"message" : "chan.attach",
+##          "id": callid,
+##          "source": "wave/play/%s" % wave}
+
+##     if sync:
+##         m["notify"] =  callid
+        
+##     yate.msg("chan.masquerade", m).enqueue()
+
+##     end = yate.onwatch("chan.hangup",
+##         lambda m : m["id"] == callid)
+
+##     if sync:
+##         yield yate.onmsg("chan.notify",
+##                          lambda m : m["targetid"] == callid,
+##                          autoreturn = True, until = end)       
+
+## @defer.inlineCallbacks
+## def record(yate, callid, fileName, maxlen = 100000):
+##         yate.msg("chan.masquerade",        
+##                  {"message": "chan.attach",
+##                   "id": callid,            
+##                   "consumer": "wave/record/" + fileName,
+##                     "maxlen": maxlen,
+##                     "notify": callid}).enqueue()
+        
+##         yield yate.onmsg("chan.notify",
+##                          lambda m : m["targetid"] == callid,
+##                          autoreturn = True)       

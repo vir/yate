@@ -1,20 +1,18 @@
 #!/usr/bin/python
 from twisted.internet import reactor, defer
 from yaypm import TCPDispatcherFactory, AbandonedException
-from yaypm.flow import go, getResult
 import logging, yaypm.utils
 
 logger = logging.getLogger('yaypm.examples')
 
+@defer.inlineCallbacks
 def ivr(yate, callid):
     try:
         end = yate.onwatch("chan.hangup", lambda m : m["id"] == callid)
 
-        yield yate.onwatch("call.execute",
-            lambda m : m["id"] == callid,
-            until = end)
-        execute = getResult()
-
+        execute = yield yate.onwatch("call.execute",
+                                     lambda m : m["id"] == callid,
+                                     until = end)
         targetid = execute["targetid"]
 
         yate.msg("call.answered",
@@ -24,11 +22,9 @@ def ivr(yate, callid):
         logger.debug("Call %s answered." % callid)
 
         while True:
-            yield yate.onmsg(
-                "chan.dtmf",
-                lambda m : m["id"] == callid,
-                end)
-            dtmf = getResult()
+            dtmf = yield yate.onmsg("chan.dtmf",
+                                    lambda m : m["id"] == callid,
+                                    end)
 
             logger.debug("Dtmf %s received." % dtmf["text"])
 
@@ -43,14 +39,14 @@ def ivr(yate, callid):
     except AbandonedException, e:
         logger.debug("Call %s abandoned." % callid)
 
+@defer.inlineCallbacks
 def route(yate):
     while True:
-        yield yate.onmsg("call.route", lambda m : m["called"] == "ivr")
-        route = getResult()
-        go(ivr(yate, route["id"]))
+        route = yield yate.onmsg("call.route", lambda m : m["called"] == "ivr")
+        ivr(yate, route["id"])
         route.ret(True, "dumb/")
 
 if __name__ in ["__main__", "__embedded_yaypm_module__"]:
     logger.setLevel(logging.DEBUG)
-    yaypm.utils.setup(lambda yate: go(route(yate)))
+    yaypm.utils.setup(lambda yate: route(yate))
 

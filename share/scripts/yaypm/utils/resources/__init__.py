@@ -1,12 +1,14 @@
 import logging
 from yaypm.utils import XOR
-from yaypm.flow import getResult
+from twisted.internet import defer
 
 logger = logging.getLogger("yaypm.resources")
 
 class Resource:
     def _match(self, *args):
         raise NotImplementedError("Abstract Method!")
+    
+    @defer.inlineCallbacks
     def play(self, yate, callid, targetid, stopOnDTMF=False, until = None, override = False, *args):
         files = self._match(*args)
         nid = targetid
@@ -22,10 +24,9 @@ class Resource:
                       "override" if override else "source": f,
                       "notify": nid})
             yield m.dispatch()
-            getResult()
 
             if stopOnDTMF:
-                yield XOR(
+                dtmf, _ = yield XOR(
                     yate.onmsg("chan.notify",
                                lambda m : m["targetid"] == nid,
                                autoreturn = True,
@@ -33,7 +34,6 @@ class Resource:
                     yate.onwatch("chan.dtmf",
                                  lambda m : m["id"] == callid,
                                 until = until))
-                dtmf, _ = getResult()
                 if dtmf:
                     yield dtmf
                     break
@@ -42,10 +42,8 @@ class Resource:
                                  lambda m : m["targetid"] == nid,
                                  autoreturn = True,
                                  until = until)
-                getResult()
 
-    def override(self, yate, callid, stopOnDTMF=False, until = None, *args):
-        
+    def override(self, yate, callid, stopOnDTMF=False, until = None, *args):        
         return Resource.play(self, yate, callid, callid, stopOnDTMF,
                              until, override = True, *args)        
 

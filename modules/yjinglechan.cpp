@@ -666,7 +666,7 @@ bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
 
     Message* m = new Message("user.notify");
     m->addParam("account",stream->name());
-    m->addParam("protocol",plugin.name());
+    m->addParam("protocol",plugin.defProtoName());
     m->addParam("username",stream->local().node());
     m->addParam("server",stream->local().domain());
     m->addParam("jid",stream->local());
@@ -1921,7 +1921,7 @@ bool UserLoginHandler::received(Message& msg)
     // Check operation
     NamedString* oper = msg.getParam("operation");
     bool login = !oper || *oper == "login" || *oper == "create";
-    if (!login && (!oper || (*oper != "logout" && *oper == "delete")))
+    if (!login && (!oper || (*oper != "logout" && *oper != "delete")))
 	return false;
 
     Debug(&plugin,DebugAll,"user.login for account=%s operation=%s",

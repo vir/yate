@@ -32,9 +32,8 @@ static XMPPError s_err;
 TokenDict XMPPServerInfo::s_flagName[] = {
     {"noautorestart",    NoAutoRestart},
     {"keeproster",       KeepRoster},
-    {"noversion1",       NoVersion1},
     {"tlsrequired",      TlsRequired},
-    {"sasl",             Sasl},
+    {"oldstyleauth",     OldStyleAuth},
     {"allowplainauth",   AllowPlainAuth},
     {0,0}
 };

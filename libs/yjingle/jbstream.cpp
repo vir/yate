@@ -274,16 +274,15 @@ JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
     // Update options from server info
     if (!info.flag(XMPPServerInfo::NoAutoRestart))
 	m_flags |= AutoRestart;
-    // Force stream encryption if required by config
-    if (info.flag(XMPPServerInfo::TlsRequired))
-	m_flags |= UseTls;
-    // Stream version supported by server. Ignore SASL flag if version 1 is not supported
-    if (info.flag(XMPPServerInfo::NoVersion1))
+    // Stream version supported by server
+    if (info.flag(XMPPServerInfo::OldStyleAuth))
 	m_flags |= NoVersion1;
     else  {
+	// Force stream encryption if required by config
+	if (info.flag(XMPPServerInfo::TlsRequired))
+	    m_flags |= UseTls;
 	// Use RFC-3920 SASL instead of XEP-0078 authentication
-	if (info.flag(XMPPServerInfo::Sasl))
-	    m_flags |= UseSasl;
+	m_flags |= UseSasl;
     }
     // Allow plain auth
     if (info.flag(XMPPServerInfo::AllowPlainAuth))

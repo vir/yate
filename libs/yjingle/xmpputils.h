@@ -72,9 +72,8 @@ public:
     enum ServerFlag {
 	NoAutoRestart     = 0x0001,      // Don't auto restart streams when down
 	KeepRoster        = 0x0002,      // Tell the presence service to keep the roster for this server
-	NoVersion1        = 0x0004,      // The server doesn't support RFC 3920 TLS/SASL ...
-	TlsRequired       = 0x0008,      // The server always require connection encryption
-	Sasl              = 0x0010,      // Server supports RFC 3920 SASL authentication
+	TlsRequired       = 0x0004,      // The server always requires connection encryption
+	OldStyleAuth      = 0x0008,      // The server doesn't support RFC 3920 TLS/SASL ...
 	AllowPlainAuth    = 0x0020,      // Allow plain password authentication
     };
 

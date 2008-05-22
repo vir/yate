@@ -339,6 +339,13 @@ public:
 class YJGDriver : public Driver
 {
 public:
+    // Enumerate protocols supported by this module
+    enum Protocol {
+	Jabber     = 0,
+	Xmpp       = 1,
+	Jingle     = 2,
+	ProtoCount = 3
+    };
     // Additional driver status commands
     enum StatusCommands {
 	StatusStreams  = 0,              // Show all streams
@@ -369,10 +376,23 @@ public:
 	bool available, bool audio);
     // Create a media string from a list
     void createMediaString(String& dest, ObjList& formats, char sep);
-    // Find a connection by local and remote jid, optionally ignore local resource (always ignore if local has no resource)
+    // Find a connection by local and remote jid, optionally ignore local
+    // resource (always ignore if local has no resource)
     YJGConnection* find(const JabberID& local, const JabberID& remote, bool anyResource = false);
     // Build and add XML child elements from a received message
     bool addChildren(NamedList& msg, XMLElement* xml = 0, ObjList* list = 0);
+    // Check if this module handles a given protocol
+    static bool canHandleProtocol(const String& proto) {
+	    for (unsigned int i = 0; i < ProtoCount; i++)
+		if (proto == s_protocol[i])
+		    return true;
+	    return false;
+	}
+    // Check if this module handles a given protocol
+    static const char* defProtoName()
+	{ return s_protocol[Jingle].c_str(); }
+    // Protocols supported by this module
+    static const String s_protocol[ProtoCount];
 protected:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -389,7 +409,7 @@ private:
     bool m_init;
     bool m_installIq;                    // Install the 'iq' service in jabber
                                          //  engine and xmpp. message handlers
-    String m_statusCmd;                  // status jingle
+    String m_statusCmd;                  //
 };
 
 
@@ -397,7 +417,6 @@ private:
  * Local data
  */
 static Configuration s_cfg;                       // The configuration file
-static const String s_name = "jingle";            // Module's name
 static JGAudioList s_knownCodecs;                 // List of all known codecs (JGAudio)
 static JGAudioList s_usedCodecs;                  // List of used codecs (JGAudio)
 static String s_localAddress;                     // The local machine's address
@@ -410,6 +429,7 @@ static YJBPresence* s_presence = 0;
 static YJBClientPresence* s_clientPresence = 0;
 static YJBStreamService* s_stream = 0;
 static YJBIqService* s_iqService = 0;
+const String YJGDriver::s_protocol[YJGDriver::ProtoCount] = {"jabber", "xmpp", "jingle"};
 static YJGDriver plugin;                          // The driver
 
 
@@ -933,7 +953,7 @@ Message* YJBPresence::message(int presence, const char* from, const char* to,
 	default:
 	    m = new Message("resource.notify");
     }
-    m->addParam("module",s_name);
+    m->addParam("module",plugin.name());
     m->addParam("to",to);
     addValidParam(*m,"from",from);
     addValidParam(*m,"operation",operation);
@@ -969,7 +989,7 @@ bool YJBIqService::accept(JBEvent* event, bool& processed, bool& insert)
 
     bool incoming = (event->type() != JBEvent::WriteFail);
     Message* m = new Message("xmpp.iq");
-    m->addParam("module",s_name);
+    m->addParam("module",plugin.name());
     if (event->stream())
 	m->addParam("account",event->stream()->name());
     const JabberID* from = &(event->from());
@@ -1543,7 +1563,7 @@ bool YJGConnection::presenceChanged(bool available)
 bool ResNotifyHandler::received(Message& msg)
 {
     // Avoid loopback message (if the same module: it's a message sent by this module)
-    if (s_name == msg.getValue("module"))
+    if (plugin.name() == msg.getValue("module"))
 	return false;
 
     // Check status
@@ -1771,7 +1791,7 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
 bool ResSubscribeHandler::received(Message& msg)
 {
     // Avoid loopback message (if the same module: it's a message sent by this module)
-    if (s_name == msg.getValue("module"))
+    if (plugin.name() == msg.getValue("module"))
 	return false;
 
     // Check operation
@@ -1893,7 +1913,7 @@ bool UserLoginHandler::received(Message& msg)
 {
     if (!(s_jabber && s_jabber->protocol() == JBEngine::Client))
 	return false;
-    if (s_name != msg.getValue("protocol"))
+    if (!plugin.canHandleProtocol(msg.getValue("protocol")))
 	return false;
     NamedString* account = msg.getParam("account");
     if (!account || account->null())
@@ -1938,7 +1958,7 @@ bool UserLoginHandler::received(Message& msg)
 bool XmppIqHandler::received(Message& msg)
 {
     // Process only mesages enqueued by this module
-    if (s_name != msg.getValue("module"))
+    if (plugin.name() != msg.getValue("module"))
 	return false;
     // Ignore failed stanzas
     if (msg.getBoolValue("failure"))
@@ -1992,10 +2012,10 @@ bool XmppIqHandler::received(Message& msg)
 String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
 
 YJGDriver::YJGDriver()
-    : Driver(s_name,"varchans"), m_init(false), m_installIq(true)
+    : Driver("jingle","varchans"), m_init(false), m_installIq(true)
 {
     Output("Loaded module YJingle");
-    m_statusCmd << "status " << s_name;
+    m_statusCmd << "status " << name();
 }
 
 YJGDriver::~YJGDriver()

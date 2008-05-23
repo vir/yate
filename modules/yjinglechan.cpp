@@ -390,7 +390,7 @@ public:
 	}
     // Check if this module handles a given protocol
     static const char* defProtoName()
-	{ return s_protocol[Jingle].c_str(); }
+	{ return s_protocol[Jabber].c_str(); }
     // Protocols supported by this module
     static const String s_protocol[ProtoCount];
 protected:

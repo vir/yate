@@ -1039,6 +1039,50 @@ unsigned int String::hash(const char* value)
     return h;
 }
 
+int String::lenUtf8(const char* value, unsigned int maxSeq)
+{
+    if (!value)
+	return 0;
+    if (maxSeq < 1)
+	maxSeq = 255;
+
+    int count = 0;
+    unsigned int more = 0;
+    while (unsigned char c = (unsigned char) *value++) {
+	if (more) {
+	    // all continuation bytes are in range [128..191]
+	    if ((c & 0xc0) != 0x80)
+		return -1;
+	    more--;
+	    continue;
+	}
+	count++;
+	// from 1st byte we find out how many are supposed to follow
+	if (c < 128)      // 1 byte, 0...0x7F, ASCII characters
+	    ;
+	else if (c < 192) // invalid
+	    return -1;
+	else if (c < 224) // 2 bytes, 0x7F...0x7FF
+	    more = 1;
+	else if (c < 240) // 3 bytes, 0x800...0xFFFF, Basic Multilingual Plane
+	    more = 2;
+	else if (c < 248) // 4 bytes, 0x10000...0x1FFFFF, RFC 3629 limit (10FFFF)
+	    more = 3;
+	else if (c < 252) // 5 bytes, 0x200000...0x3FFFFFF
+	    more = 4;
+	else if (c < 254) // 6 bytes, 0x4000000...0x7FFFFFFF
+	    more = 5;
+	else
+	    return -1;
+	// check if we accept a character with such sequence length
+	if (more >= maxSeq)
+	    return -1;
+    }
+    if (more)
+	return -1;
+    return count;
+}
+
 void* String::getObject(const String& name) const
 {
     if (name == "String")

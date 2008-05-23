@@ -1318,6 +1318,22 @@ public:
 	{ return !m_string; }
 
     /**
+     * Get the number of characters in a string assuming UTF-8 encoding
+     * @param value C string to compute Unicode length
+     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @return Count of Unicode characters, -1 if not valid UTF-8
+     */
+    static int lenUtf8(const char* value, unsigned int maxSeq = 4);
+
+    /**
+     * Get the number of characters in the string assuming UTF-8 encoding
+     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @return Count of Unicode characters, -1 if not valid UTF-8
+     */
+    inline int lenUtf8(unsigned int maxSeq = 4) const
+	{ return lenUtf8(m_string,maxSeq); }
+
+    /**
      * Get the hash of the contained string.
      * @return The hash of the string.
      */
@@ -1325,6 +1341,7 @@ public:
 
     /**
      * Get the hash of an arbitrary string.
+     * @param value C string to hash
      * @return The hash of the string.
      */
     static unsigned int hash(const char* value);

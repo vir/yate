@@ -954,6 +954,7 @@ Message* YJBPresence::message(int presence, const char* from, const char* to,
 	    m = new Message("resource.notify");
     }
     m->addParam("module",plugin.name());
+    m->addParam("protocol",plugin.defProtoName());
     m->addParam("to",to);
     addValidParam(*m,"from",from);
     addValidParam(*m,"operation",operation);

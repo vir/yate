@@ -1039,39 +1039,69 @@ unsigned int String::hash(const char* value)
     return h;
 }
 
-int String::lenUtf8(const char* value, unsigned int maxSeq)
+int String::lenUtf8(const char* value, unsigned int maxSeq, bool overlong)
 {
     if (!value)
 	return 0;
     if (maxSeq < 1)
-	maxSeq = 255;
+	maxSeq = 4; // RFC 3629 default limit
 
     int count = 0;
     unsigned int more = 0;
+    int32_t min = 0;
+    int32_t val = 0;
+
     while (unsigned char c = (unsigned char) *value++) {
 	if (more) {
 	    // all continuation bytes are in range [128..191]
 	    if ((c & 0xc0) != 0x80)
 		return -1;
-	    more--;
+	    val = (val << 6) | (c & 0x3f);
+	    if (!--more) {
+		if (overlong)
+		    continue;
+		// got full value, check for overlongs
+		if (val < min)
+		    return -1;
+	    }
 	    continue;
 	}
 	count++;
 	// from 1st byte we find out how many are supposed to follow
-	if (c < 128)      // 1 byte, 0...0x7F, ASCII characters
+	if (c < 128)      // 1 byte, 0...0x7F, ASCII characters, no check
 	    ;
-	else if (c < 192) // invalid
+	else if (c < 192) // invalid as first UFT-8 byte
 	    return -1;
-	else if (c < 224) // 2 bytes, 0x7F...0x7FF
+	else if (c < 224) {
+	    // 2 bytes, 0x80...0x7FF
+	    min = 0x80;
+	    val = c & 0x1f;
 	    more = 1;
-	else if (c < 240) // 3 bytes, 0x800...0xFFFF, Basic Multilingual Plane
+	}
+	else if (c < 240) {
+	    // 3 bytes, 0x800...0xFFFF, Basic Multilingual Plane
+	    min = 0x800;
+	    val = c & 0x0f;
 	    more = 2;
-	else if (c < 248) // 4 bytes, 0x10000...0x1FFFFF, RFC 3629 limit (10FFFF)
+	}
+	else if (c < 248) {
+	    // 4 bytes, 0x10000...0x1FFFFF, RFC 3629 limit (10FFFF)
+	    min = 0x10000;
+	    val = c & 0x07;
 	    more = 3;
-	else if (c < 252) // 5 bytes, 0x200000...0x3FFFFFF
+	}
+	else if (c < 252) {
+	    // 5 bytes, 0x200000...0x3FFFFFF
+	    min = 0x200000;
+	    val = c & 0x03;
 	    more = 4;
-	else if (c < 254) // 6 bytes, 0x4000000...0x7FFFFFFF
+	}
+	else if (c < 254) {
+	    // 6 bytes, 0x4000000...0x7FFFFFFF
+	    min = 0x4000000;
+	    val = c & 0x01;
 	    more = 5;
+	}
 	else
 	    return -1;
 	// check if we accept a character with such sequence length
@@ -1080,6 +1110,112 @@ int String::lenUtf8(const char* value, unsigned int maxSeq)
     }
     if (more)
 	return -1;
+    return count;
+}
+
+int String::fixUtf8(const char* replace, unsigned int maxSeq, bool overlong)
+{
+    if (null())
+	return 0;
+    if (maxSeq < 1)
+	maxSeq = 4; // RFC 3629 default limit
+    if (!replace)
+	replace = "\xEF\xBF\xBD";
+
+    int count = 0;
+    unsigned int more = 0;
+    int32_t min = 0;
+    int32_t val = 0;
+    unsigned int pos = 0;
+    bool bad = false;
+    String tmp;
+
+    for (unsigned int i = 0; i < m_length; i++) {
+	unsigned char c = (unsigned char) at(i);
+	if (more) {
+	    // remember to reject a character with a too long sequence
+	    if (more >= maxSeq)
+		bad = true;
+	    // all continuation bytes are in range [128..191]
+	    if ((c & 0xc0) != 0x80) {
+		// truncated sequence, must search for 1st byte again
+		more = 0;
+		count++;
+		tmp += replace;
+	    }
+	    else {
+		val = (val << 6) | (c & 0x3f);
+		if (!--more) {
+		    // got full value, check for overlongs
+		    if ((val < min) && !overlong)
+			bad = true;
+		    // finished multibyte, add it to temporary
+		    if (bad) {
+			count++;
+			tmp += replace;
+		    }
+		    else
+			tmp += substr(pos,(int)(i+1-pos));
+		}
+		continue;
+	    }
+	}
+	pos = i;
+	bad = false;
+	// from 1st byte we find out how many are supposed to follow
+	if (c < 128)      // 1 byte, 0...0x7F, ASCII characters, good
+	    ;
+	else if (c < 192) // invalid as first UFT-8 byte
+	    bad = true;
+	else if (c < 224) {
+	    // 2 bytes, 0x80...0x7FF
+	    min = 0x80;
+	    val = c & 0x1f;
+	    more = 1;
+	}
+	else if (c < 240) {
+	    // 3 bytes, 0x800...0xFFFF, Basic Multilingual Plane
+	    min = 0x800;
+	    val = c & 0x0f;
+	    more = 2;
+	}
+	else if (c < 248) {
+	    // 4 bytes, 0x10000...0x1FFFFF, RFC 3629 limit (10FFFF)
+	    min = 0x10000;
+	    val = c & 0x07;
+	    more = 3;
+	}
+	else if (c < 252) {
+	    // 5 bytes, 0x200000...0x3FFFFFF
+	    min = 0x200000;
+	    val = c & 0x03;
+	    more = 4;
+	}
+	else if (c < 254) {
+	    // 6 bytes, 0x4000000...0x7FFFFFFF
+	    min = 0x4000000;
+	    val = c & 0x01;
+	    more = 5;
+	}
+	else
+	    bad = true;
+	if (!more) {
+	    if (bad) {
+		count++;
+		tmp += replace;
+	    }
+	    else
+		tmp += (char)c;
+	}
+    }
+    if (more) {
+	// UTF-8 truncated at end of string
+	count++;
+	tmp += replace;
+    }
+
+    if (count)
+	operator=(tmp);
     return count;
 }
 

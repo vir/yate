@@ -1321,17 +1321,29 @@ public:
      * Get the number of characters in a string assuming UTF-8 encoding
      * @param value C string to compute Unicode length
      * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    static int lenUtf8(const char* value, unsigned int maxSeq = 4);
+    static int lenUtf8(const char* value, unsigned int maxSeq = 4, bool overlong = false);
 
     /**
      * Get the number of characters in the string assuming UTF-8 encoding
      * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param overlong Accept overlong UTF-8 sequences (dangerous!)
      * @return Count of Unicode characters, -1 if not valid UTF-8
      */
-    inline int lenUtf8(unsigned int maxSeq = 4) const
-	{ return lenUtf8(m_string,maxSeq); }
+    inline int lenUtf8(unsigned int maxSeq = 4, bool overlong = false) const
+	{ return lenUtf8(m_string,maxSeq,overlong); }
+
+
+    /**
+     * Fix an UTF-8 encoded string by replacing invalid sequences
+     * @param replace String to replace invalid sequences, use U+FFFD if null
+     * @param maxSeq Maximum accepted UTF-8 sequence length
+     * @param overlong Accept overlong UTF-8 sequences (dangerous!)
+     * @return Count of invalid UTF-8 sequences that were replaced
+     */
+    int fixUtf8(const char* replace = 0, unsigned int maxSeq = 4, bool overlong = false);
 
     /**
      * Get the hash of the contained string.

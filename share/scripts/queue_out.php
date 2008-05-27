@@ -4,6 +4,10 @@
  * Queue outbound calls (distributed to operators)
  * The queue module will create one instance every time it tries to send a
  *  call from queue to an available operator.
+ *
+ * To use add in queues.conf:
+ * [channels]
+ * outgoing=external/nodata/queue_out.php
  */
 require_once("libyate.php");
 

@@ -4,6 +4,10 @@
  * Queue inbound calls (waiting in queue)
  * The queue module should let the call.execute fall through to this script.
  * It will optionally play a short greeting and then attach an on-hold source.
+ *
+ * To use add in queues.conf:
+ * [channels]
+ * incoming=external/nodata/queue_in.php
  */
 require_once("libyate.php");
 

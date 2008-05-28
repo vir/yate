@@ -32,7 +32,7 @@ namespace { // anonymous
 
 #define MODNAME "openssl"
 
-#define MAKE_ERR(x) { ": " #x, X509_V_ERR_##x }
+#define MAKE_ERR(x) { #x, X509_V_ERR_##x }
 static TokenDict s_verifyCodes[] = {
     MAKE_ERR(UNABLE_TO_GET_ISSUER_CERT),
     MAKE_ERR(UNABLE_TO_DECRYPT_CERT_SIGNATURE),
@@ -54,10 +54,25 @@ static TokenDict s_verifyCodes[] = {
 };
 #undef MAKE_ERR
 
+static TokenDict s_verifyMode[] = {
+    // don't ask for a certificate, don't stop if verification fails
+    { "none", SSL_VERIFY_NONE },
+    // certificate is verified only if provided (a server always provides one)
+    { "peer", SSL_VERIFY_PEER },
+    // server only - verify client certificate only if provided and only once
+    { "only", SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE },
+    // server only - client must provide a certificate at every (re)negotiation
+    { "must", SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT },
+    // server only - client must provide a certificate only at first negotiation
+    { "once", SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_CLIENT_ONCE },
+    { 0, 0 }
+};
+
+
 class SslSocket : public Socket, public Mutex
 {
 public:
-    SslSocket(SOCKET handle, bool server);
+    SslSocket(SOCKET handle, bool server, int verify);
     virtual ~SslSocket();
     virtual bool terminate();
     virtual bool valid();
@@ -118,16 +133,17 @@ void infoCallback(const SSL* ssl, int where, int retVal)
 
 
 // Create a SSL socket from a regular socket handle
-SslSocket::SslSocket(SOCKET handle, bool server)
+SslSocket::SslSocket(SOCKET handle, bool server, int verify)
     : Socket(handle),
       m_ssl(0)
 {
-    DDebug(DebugAll,"SslSocket::SslSocket(%d,%s) [%p]",
-	handle,String::boolText(server),this);
+    DDebug(DebugAll,"SslSocket::SslSocket(%d,%s,%s) [%p]",
+	handle,String::boolText(server),lookup(verify,s_verifyMode,"unknown"),this);
     if (Socket::valid()) {
 	m_ssl = ::SSL_new(s_context);
 	if (s_index >= 0)
 	    ::SSL_set_ex_data(m_ssl,s_index,this);
+	::SSL_set_verify(m_ssl,verify,0);
 	::SSL_set_fd(m_ssl,handle);
 	if (server)
 	    ::SSL_set_accept_state(m_ssl);
@@ -221,18 +237,20 @@ void SslSocket::onInfo(int where, int retVal)
 #ifdef DEBUG
     if (where & SSL_CB_LOOP)
 	Debug(MODNAME,DebugAll,"State %s [%p]",SSL_state_string_long(m_ssl),this);
+#endif
+    if ((where & SSL_CB_EXIT) && (retVal == 0))
+	Debug(MODNAME,DebugMild,"Failed %s [%p]",SSL_state_string_long(m_ssl),this);
     if (where & SSL_CB_ALERT)
-	Debug(MODNAME,DebugAll,"Alert %s:%s [%p]",
+	Debug(MODNAME,DebugMild,"Alert %s: %s [%p]",
 	    SSL_alert_type_string_long(retVal),
 	    SSL_alert_desc_string_long(retVal),this);
-    if ((where & SSL_CB_EXIT) && (retVal == 0))
-	Debug(MODNAME,DebugAll,"Failed %s [%p]",SSL_state_string_long(m_ssl),this);
-#endif
     if (where & SSL_CB_HANDSHAKE_DONE) {
 	long verify = ::SSL_get_verify_result(m_ssl);
 	if (verify != X509_V_OK) {
-	    const char* error = c_safe(lookup(verify,s_verifyCodes));
-	    Debug(MODNAME,DebugWarn,"Certificate verify error %ld%s [%p]",verify,error,this);
+	    // handshake succeeded but the certificate has problems
+	    const char* error = lookup(verify,s_verifyCodes);
+	    Debug(MODNAME,DebugWarn,"Certificate verify error %ld%s%s [%p]",
+		verify,error ? ": " : "",c_safe(error),this);
 	}
     }
 }
@@ -256,7 +274,9 @@ bool SslHandler::received(Message& msg)
 	Debug(MODNAME,DebugWarn,"SslHandler: Invalid Socket");
 	return false;
     }
-    SslSocket* sSock = new SslSocket(pSock->handle(),msg.getBoolValue("server",false));
+    SslSocket* sSock = new SslSocket(pSock->handle(),
+	msg.getBoolValue("server",false),
+	msg.getIntValue("verify",s_verifyMode,SSL_VERIFY_NONE));
     if (!sSock->valid()) {
 	Debug(MODNAME,DebugWarn,"SslHandler: Invalid SSL Socket");
 	// detach and destroy new socket, preserve old one

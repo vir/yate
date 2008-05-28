@@ -30,6 +30,30 @@
 using namespace TelEngine;
 namespace { // anonymous
 
+#define MODNAME "openssl"
+
+#define MAKE_ERR(x) { ": " #x, X509_V_ERR_##x }
+static TokenDict s_verifyCodes[] = {
+    MAKE_ERR(UNABLE_TO_GET_ISSUER_CERT),
+    MAKE_ERR(UNABLE_TO_DECRYPT_CERT_SIGNATURE),
+    MAKE_ERR(UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY),
+    MAKE_ERR(CERT_SIGNATURE_FAILURE),
+    MAKE_ERR(CERT_NOT_YET_VALID),
+    MAKE_ERR(CERT_HAS_EXPIRED),
+    MAKE_ERR(ERROR_IN_CERT_NOT_BEFORE_FIELD),
+    MAKE_ERR(DEPTH_ZERO_SELF_SIGNED_CERT),
+    MAKE_ERR(SELF_SIGNED_CERT_IN_CHAIN),
+    MAKE_ERR(UNABLE_TO_GET_ISSUER_CERT_LOCALLY),
+    MAKE_ERR(UNABLE_TO_VERIFY_LEAF_SIGNATURE),
+    MAKE_ERR(INVALID_CA),
+    MAKE_ERR(PATH_LENGTH_EXCEEDED),
+    MAKE_ERR(INVALID_PURPOSE),
+    MAKE_ERR(CERT_UNTRUSTED),
+    MAKE_ERR(CERT_REJECTED),
+    { 0, 0 }
+};
+#undef MAKE_ERR
+
 class SslSocket : public Socket, public Mutex
 {
 public:
@@ -39,6 +63,9 @@ public:
     virtual bool valid();
     virtual int writeData(const void* buffer, int length);
     virtual int readData(void* buffer, int length);
+    void onInfo(int where, int retVal);
+    inline SSL* ssl() const
+	{ return m_ssl; }
 private:
     int sslError(int retcode);
     SSL* m_ssl;
@@ -65,6 +92,7 @@ protected:
 
 INIT_PLUGIN(OpenSSL);
 
+static int s_index = -1;
 static SSL_CTX* s_context = 0;
 
 
@@ -73,6 +101,19 @@ static void addRand(u_int64_t usec)
 {
     // a rough estimation of 2 bytes of entropy
     ::RAND_add(&usec,sizeof(usec),2);
+}
+
+// Callback function called from OpenSSL for state changes and alerts
+void infoCallback(const SSL* ssl, int where, int retVal)
+{
+    SslSocket* sock = 0;
+    if (s_index >= 0)
+	sock = static_cast<SslSocket*>(::SSL_get_ex_data(const_cast<SSL*>(ssl),s_index));
+    if (sock)
+	if (sock->ssl() == ssl)
+	    sock->onInfo(where,retVal);
+	else
+	    Debug(MODNAME,DebugFail,"Mismatched session %p [%p]",ssl,sock);
 }
 
 
@@ -85,6 +126,8 @@ SslSocket::SslSocket(SOCKET handle, bool server)
 	handle,String::boolText(server),this);
     if (Socket::valid()) {
 	m_ssl = ::SSL_new(s_context);
+	if (s_index >= 0)
+	    ::SSL_set_ex_data(m_ssl,s_index,this);
 	::SSL_set_fd(m_ssl,handle);
 	if (server)
 	    ::SSL_set_accept_state(m_ssl);
@@ -106,6 +149,8 @@ bool SslSocket::terminate()
 {
     lock();
     if (m_ssl) {
+	if (s_index >= 0)
+	    ::SSL_set_ex_data(m_ssl,s_index,0);
 	::SSL_shutdown(m_ssl);
 	::SSL_free(m_ssl);
 	m_ssl = 0;
@@ -170,6 +215,28 @@ int SslSocket::sslError(int retcode)
     return retcode;
 }
 
+// Callback function called from OpenSSL for state changes and alerts
+void SslSocket::onInfo(int where, int retVal)
+{
+#ifdef DEBUG
+    if (where & SSL_CB_LOOP)
+	Debug(MODNAME,DebugAll,"State %s [%p]",SSL_state_string_long(m_ssl),this);
+    if (where & SSL_CB_ALERT)
+	Debug(MODNAME,DebugAll,"Alert %s:%s [%p]",
+	    SSL_alert_type_string_long(retVal),
+	    SSL_alert_desc_string_long(retVal),this);
+    if ((where & SSL_CB_EXIT) && (retVal == 0))
+	Debug(MODNAME,DebugAll,"Failed %s [%p]",SSL_state_string_long(m_ssl),this);
+#endif
+    if (where & SSL_CB_HANDSHAKE_DONE) {
+	long verify = ::SSL_get_verify_result(m_ssl);
+	if (verify != X509_V_OK) {
+	    const char* error = c_safe(lookup(verify,s_verifyCodes));
+	    Debug(MODNAME,DebugWarn,"Certificate verify error %ld%s [%p]",verify,error,this);
+	}
+    }
+}
+
 
 // Handler for the socket.ssl message - turns regular sockets into SSL
 bool SslHandler::received(Message& msg)
@@ -177,21 +244,21 @@ bool SslHandler::received(Message& msg)
     addRand(msg.msgTime());
     Socket** ppSock = static_cast<Socket**>(msg.userObject("Socket*"));
     if (!ppSock) {
-	Debug("openssl",DebugGoOn,"SslHandler: No pointer to Socket");
+	Debug(MODNAME,DebugGoOn,"SslHandler: No pointer to Socket");
 	return false;
     }
     Socket* pSock = *ppSock;
     if (!pSock) {
-	Debug("openssl",DebugGoOn,"SslHandler: NULL Socket pointer");
+	Debug(MODNAME,DebugGoOn,"SslHandler: NULL Socket pointer");
 	return false;
     }
     if (!pSock->valid()) {
-	Debug("openssl",DebugWarn,"SslHandler: Invalid Socket");
+	Debug(MODNAME,DebugWarn,"SslHandler: Invalid Socket");
 	return false;
     }
     SslSocket* sSock = new SslSocket(pSock->handle(),msg.getBoolValue("server",false));
     if (!sSock->valid()) {
-	Debug("openssl",DebugWarn,"SslHandler: Invalid SSL Socket");
+	Debug(MODNAME,DebugWarn,"SslHandler: Invalid SSL Socket");
 	// detach and destroy new socket, preserve old one
 	sSock->detach();
 	delete sSock;
@@ -226,7 +293,9 @@ void OpenSSL::initialize()
     ::SSL_load_error_strings();
     ::SSL_library_init();
     addRand(Time::now());
+    s_index = ::SSL_get_ex_new_index(0,const_cast<char*>("TelEngine::SslSocket"),0,0,0);
     s_context = ::SSL_CTX_new(::SSLv23_method());
+    SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
     m_handler = new SslHandler;
     Engine::install(m_handler);
 }

@@ -673,6 +673,8 @@ bool YJBStreamService::accept(JBEvent* event, bool& processed, bool& insert)
     m->addParam("registered",String::boolText(event->type() == JBEvent::Running));
     if (event->type() != JBEvent::Running && event->text())
 	m->addParam("reason",event->text());
+    bool restart = (stream->state() != JBStream::Destroy && stream->flag(JBStream::AutoRestart));
+    m->addParam("autorestart",String::boolText(restart));
     Engine::enqueue(m);
     return false;
 }

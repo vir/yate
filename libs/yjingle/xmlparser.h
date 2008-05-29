@@ -401,6 +401,18 @@ public:
 	    GenObject::destruct();
 	}
 
+    /**
+     * Get an xml element from a list's parameter
+     * @param list The list to be searched for the given parameter
+     * @param stole True to release parameter ownership (defaults to false)
+     * @param name Parameter name (defaults to 'xml')
+     * @param value Optional parameter value to check
+     * @return XMLElement pointer or 0. If a valid pointer is returned and
+     *  stole is true the caller will own the pointer
+     */
+    static XMLElement* getXml(NamedList& list, bool stole = false,
+	const char* name = "xml", const char* value = 0);
+
 protected:
     /**
      * Constructor.

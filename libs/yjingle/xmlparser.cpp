@@ -294,6 +294,21 @@ XMLElement* XMLElement::findNextChild(XMLElement* element, const char* name)
     return result;
 }
 
+// Get an xml element from a list's parameter
+XMLElement* XMLElement::getXml(NamedList& list, bool stole,
+	const char* name, const char* value)
+{
+    NamedString* ns = list.getParam(name);
+    if (!ns)
+	return 0;
+    NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+    if (!(np && np->userObject("XMLElement")) || (value && *np != value))
+	return 0;
+    if (stole)
+	return static_cast<XMLElement*>(np->takeData());
+    return static_cast<XMLElement*>(np->userData());
+}
+
 TiXmlElement* XMLElement::releaseOwnership()
 {
     if (!(m_owner && m_element))

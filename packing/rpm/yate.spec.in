@@ -246,45 +246,6 @@ This package includes the common files needed to use Yate as a VoIP client.
 %config(noreplace) %{_sysconfdir}/yate/providers.conf
 
 
-%package gtk2
-Summary:	Gtk2 client package for Yate
-Group:		Applications/Communication
-Provides:	%{name}-client
-Requires:	%{name}-client-common = %{version}-%{release}
-
-%description gtk2
-The yate-gtk2 package includes the files needed to use Yate as a VoIP client
-with a Gtk2 graphical interface.
-
-%files gtk2
-%defattr(-, root, root)
-%{_bindir}/yate-gtk2
-%{_menudir}/yate-gtk2.menu
-%{_datadir}/applications/yate-gtk2.desktop
-%config(noreplace) %{_sysconfdir}/yate/yate-gtk2.conf
-
-%post gtk2
-test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
-
-%postun gtk2
-test -x /usr/bin/update-menus && /usr/bin/update-menus || /bin/true
-
-
-%package mozilla
-Summary:	Mozilla embedding in Yate
-Group:		Applications/Communication
-Requires:	%{name}-gtk2 = %{version}-%{release}
-Provides:	%{name}-browser
-
-%description mozilla
-This package adds a Mozilla widget that can be embedded in a Yate client window.
-
-%files mozilla
-%defattr(-, root, root)
-%dir %{_libdir}/yate/gtk2
-%{_libdir}/yate/gtk2/*
-
-
 %package qt4
 Summary:	Qt-4 client package for Yate
 Group:		Applications/Communication
@@ -359,8 +320,6 @@ Requires:	%{name}-isdn = %{version}-%{release}
 Requires:	%{name}-mysql = %{version}-%{release}
 Requires:	%{name}-pgsql = %{version}-%{release}
 %if "%{no_gui}" != "1"
-Requires:	%{name}-gtk2 = %{version}-%{release}
-Requires:	%{name}-mozilla = %{version}-%{release}
 Requires:	%{name}-qt4 = %{version}-%{release}
 %endif
 Requires:	%{name}-scripts = %{version}-%{release}
@@ -432,6 +391,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri May 30 2008 Paul Chitescu <paulc@voip.null.ro>
+- Removed GTK client
+
 * Thu May 15 2008 Paul Chitescu <paulc@voip.null.ro>
 - Disabled the newly added AMR-NB from building
 

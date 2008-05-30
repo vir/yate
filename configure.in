@@ -731,67 +731,6 @@ AC_SUBST(OPENSSL_LIB)
 AC_SUBST(OPENSSL_VER)
 
 
-HAVE_GTK2=no
-GTK2_INC=""
-GTK2_LIB=""
-AC_ARG_WITH(libgtk2,AC_HELP_STRING([--with-libgtk2],[use Gtk for graphical clients (default)]),[ac_cv_use_libgtk2=$withval],[ac_cv_use_libgtk2=yes])
-if [[ "x$ac_cv_use_libgtk2" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Gtk2 using pkg-config])
-    vergt=`pkg-config --modversion gtk+-2.0 2>/dev/null`
-    incgt=`pkg-config --cflags gtk+-2.0 gthread-2.0 2>/dev/null`
-    libgt=`pkg-config --libs gtk+-2.0 gthread-2.0 2>/dev/null`
-    if [[ "x$incgt" != "x" -a "x$libgt" != "x" ]]; then
-	HAVE_GTK2=yes
-	GTK2_INC="$incgt"
-	GTK2_LIB="$libgt"
-	ac_cv_use_libgtk2="no"
-    else
-	vergt="no"
-    fi
-    AC_MSG_RESULT([$vergt])
-fi
-AC_SUBST(HAVE_GTK2)
-AC_SUBST(GTK2_INC)
-AC_SUBST(GTK2_LIB)
-
-
-HAVE_GMOZ=no
-GMOZ_INC=""
-GMOZ_LIB=""
-AC_ARG_WITH(gtkmozilla,AC_HELP_STRING([--with-gtkmozilla],[use Mozilla embedded in Gtk clients (default)]),[ac_cv_use_gtkmozilla=$withval],[ac_cv_use_gtkmozilla=yes])
-if [[ "x$ac_cv_use_gtkmozilla" = "xyes" ]]; then
-    AC_MSG_CHECKING([for Gtk Mozilla embedding using pkg-config])
-    mozpkg="mozilla-gtkmozembed"
-    vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
-    if [[ "x$vergmoz" = "x" ]]; then
-	mozpkg="mozilla-firefox-gtkmozembed"
-	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
-    fi
-    if [[ "x$vergmoz" = "x" ]]; then
-	mozpkg="firefox-gtkmozembed"
-	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
-    fi
-    if [[ "x$vergmoz" = "x" ]]; then
-	mozpkg="xulrunner-gtkmozembed"
-	vergmoz=`pkg-config --modversion $mozpkg 2>/dev/null`
-    fi
-    incgmoz=`pkg-config --cflags $mozpkg 2>/dev/null`
-    libgmoz=`pkg-config --libs $mozpkg 2>/dev/null`
-    if [[ "x$incgmoz" != "x" -a "x$libgmoz" != "x" ]]; then
-	HAVE_GMOZ=yes
-	GMOZ_INC="$incgmoz"
-	GMOZ_LIB="$libgmoz"
-	ac_cv_use_gtkmozilla="no"
-    else
-	vergmoz="no"
-    fi
-    AC_MSG_RESULT([$vergmoz])
-fi
-AC_SUBST(HAVE_GMOZ)
-AC_SUBST(GMOZ_INC)
-AC_SUBST(GMOZ_LIB)
-
-
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""
@@ -944,7 +883,6 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
                  modules/Makefile
                  modules/test/Makefile
                  clients/Makefile
-                 clients/gtk2/Makefile
                  clients/qt4/Makefile
                  libs/ilbc/Makefile
                  libs/ysip/Makefile

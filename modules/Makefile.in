@@ -42,7 +42,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/analog.yate server/analogdetect.yate \
 	callgen.yate analyzer.yate rmanager.yate msgsniff.yate
 LIBS :=
-DIRS := client server gtk2
+DIRS := client server
 
 ifneq (@HAVE_PGSQL@,no)
 PROGS := $(PROGS) server/pgsqldb.yate
@@ -98,10 +98,6 @@ endif
 
 ifneq (@HAVE_OPENSSL@,no)
 PROGS := $(PROGS) openssl.yate
-endif
-
-ifeq (@HAVE_GTK2@_@HAVE_GMOZ@,yes_yes)
-PROGS := $(PROGS) gtk2/gtk2mozilla.yate
 endif
 
 ifeq (@HAVE_COREDUMPER@,yes)
@@ -196,9 +192,6 @@ server/%.yate: @srcdir@/server/%.cpp $(MKDEPS) $(INCFILES)
 client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
 
-gtk2/%.yate: @srcdir@/gtk2/%.cpp $(MKDEPS) $(INCFILES)
-	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)
-
 # Take special care of the modules that depend on optional libs
 
 server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
@@ -266,11 +259,6 @@ yrtpchan.yate: LOCALLIBS = ../libs/yrtp/libyatertp.a
 
 openssl.yate: LOCALFLAGS = @OPENSSL_INC@
 openssl.yate: LOCALLIBS = @OPENSSL_LIB@
-
-gtk2/gtk2mozilla.yate: @top_srcdir@/clients/gtk2/gtk2client.h
-gtk2/gtk2mozilla.yate: LOCALFLAGS = @GTK2_INC@ @GMOZ_INC@ -I@top_srcdir@/clients/gtk2
-gtk2/gtk2mozilla.yate: LOCALLIBS = @GMOZ_LIB@
-gtk2/gtk2mozilla.yate: MODFLAGS = $(MODRELAX)
 
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)

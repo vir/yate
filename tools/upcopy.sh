@@ -1,7 +1,7 @@
 #!/bin/sh
 
 cpy="$1"
-test -n "$cpy" || cpy="2004-2006"
+test -n "$cpy" || cpy="2004-2008"
 
 grep -l -r '^ \* Copyright (C) .* Null Team$' * | while read fn; do
 echo -n "Processing: $fn ..."

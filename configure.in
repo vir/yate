@@ -611,6 +611,9 @@ if [[ "x$local_lib" != "xlib" -a ! -f "$libpw" ]]; then
     local_lib="lib"
     libpw="$ac_cv_use_pwlib/$local_lib/libpt.so"
 fi
+if [[ "x$verpw" = "x" ]]; then
+    verpw=`cat "$ac_cv_use_pwlib/include/ptbuildopts.h" 2>/dev/null | sed -n 's/^.*PWLIB_VERSION "\([[^"]]*\)".*$/\1/p'`
+fi
 PWLIB_INC="-I$ac_cv_use_pwlib/include/ptlib"
 vpw=`echo "$verpw" | sed "$vsed" | sed "$vsed"`
 if [[ "$vpw" '<' "01.06.00" ]]; then
@@ -633,6 +636,7 @@ else
     if [[ -f "$incpw" -a -f "$libpw" ]]; then
 	prtti=`"$ac_cv_use_pwlib/make/ptlib-config" --ccflags 2>/dev/null | sed -n 's/^.*\(-f[[^ ]]*rtti\).*$/\1/p'`
         HAVE_PWLIB=sources
+	PWLIB_INC="-I$ac_cv_use_pwlib/include $PWLIB_INC"
         PWLIB_LIB="-L$ac_cv_use_pwlib/lib -l`echo "$libpw"|sed 's,^.*/lib,,; s,\.so$,,'`"
         PWLIB_RUN=":$ac_cv_use_pwlib/lib"
 	case "x$prtti" in

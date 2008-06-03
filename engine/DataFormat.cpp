@@ -750,6 +750,7 @@ bool DataEndpoint::disconnect()
     DataEndpoint* temp = m_peer;
     m_peer = 0;
     temp->m_peer = 0;
+    lock.drop();
     temp->deref();
     return deref();
 }
@@ -790,7 +791,6 @@ void DataEndpoint::setSource(DataSource* source)
 	ObjList* l = m_sniffers.skipNull();
 	for (; l; l = l->skipNext())
 	    DataTranslator::detachChain(temp,static_cast<DataConsumer*>(l->get()));
-	temp->deref();
     }
     if (source) {
 	source->ref();
@@ -805,12 +805,12 @@ void DataEndpoint::setSource(DataSource* source)
 	    DataTranslator::attachChain(source,static_cast<DataConsumer*>(l->get()));
     }
     m_source = source;
-    if (c1)
-	c1->deref();
-    if (c2)
-	c2->deref();
     if (m_callRecord)
 	m_callRecord->deref();
+    lock.drop();
+    TelEngine::destruct(temp);
+    TelEngine::destruct(c1);
+    TelEngine::destruct(c2);
 }
 
 void DataEndpoint::setConsumer(DataConsumer* consumer)
@@ -831,11 +831,10 @@ void DataEndpoint::setConsumer(DataConsumer* consumer)
 	    consumer = 0;
     }
     m_consumer = consumer;
-    if (temp) {
-	if (source)
-	    DataTranslator::detachChain(source,temp);
-	temp->deref();
-    }
+    if (source && temp)
+	DataTranslator::detachChain(source,temp);
+    lock.drop();
+    TelEngine::destruct(temp);
 }
 
 void DataEndpoint::setPeerRecord(DataConsumer* consumer)
@@ -856,11 +855,10 @@ void DataEndpoint::setPeerRecord(DataConsumer* consumer)
 	    consumer = 0;
     }
     m_peerRecord = consumer;
-    if (temp) {
-	if (source)
-	    DataTranslator::detachChain(source,temp);
-	temp->deref();
-    }
+    if (source && temp)
+	DataTranslator::detachChain(source,temp);
+    lock.drop();
+    TelEngine::destruct(temp);
 }
 
 void DataEndpoint::setCallRecord(DataConsumer* consumer)
@@ -880,11 +878,10 @@ void DataEndpoint::setCallRecord(DataConsumer* consumer)
 	    consumer = 0;
     }
     m_callRecord = consumer;
-    if (temp) {
-	if (m_source)
-	    DataTranslator::detachChain(m_source,temp);
-	temp->deref();
-    }
+    if (temp && m_source)
+	DataTranslator::detachChain(m_source,temp);
+    lock.drop();
+    TelEngine::destruct(temp);
 }
 
 bool DataEndpoint::addSniffer(DataConsumer* sniffer)

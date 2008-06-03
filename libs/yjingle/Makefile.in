@@ -8,7 +8,7 @@ AR  := ar
 DEFS :=
 INCLUDES := -I@top_srcdir@ -I../.. -I@srcdir@/../yxml -I@srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= -L../.. -lyate
+LDFLAGS:= @LDFLAGS@ -L../.. -lyate
 INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/tinystr.h @srcdir@/../yxml/tinyxml.h @srcdir@/xmlparser.h @srcdir@/xmpputils.h @srcdir@/yatejabber.h @srcdir@/yatejingle.h
 
 PROGS=

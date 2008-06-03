@@ -13,7 +13,7 @@ DEFS :=
 LIBTHR:= -lpthread
 INCLUDES := -I.. -I@top_srcdir@
 CFLAGS := -O2 @MODULE_CPPFLAGS@ @INLINE_FLAGS@
-LDFLAGS:= -L.. -lyate
+LDFLAGS:= @LDFLAGS@ -L.. -lyate
 INCFILES := @top_srcdir@/yatengine.h @top_srcdir@/yatephone.h ../yateversn.h
 
 MKDEPS  := ../config.status

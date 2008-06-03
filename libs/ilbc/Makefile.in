@@ -7,7 +7,7 @@ SED := sed
 DEFS :=
 INCLUDES := -I@top_srcdir@
 CFLAGS := -O3 -funroll-loops -fomit-frame-pointer -fsigned-char @MODULE_CFLAGS@
-LDFLAGS:=
+LDFLAGS:= @LDFLAGS@
 
 PROGS=
 LIBS = libilbc.a

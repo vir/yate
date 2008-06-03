@@ -524,10 +524,8 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 	    Debug(m_engine,DebugNote,
 		"Stream. Received %s with unacceptable destination to=%s type=%s [%p]",
 		xml->name(),xml->getAttribute("to"),type.c_str(),this);
-	    if (!respond)
-		dropXML(xml);
-	    else
-		if (state() == Running)
+	    if (state() == Running)
+		if (respond)
 		    switch (xml->type()) {
 			case XMLElement::Iq:
 			case XMLElement::Presence:
@@ -541,7 +539,9 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 			    dropXML(xml);
 		    }
 		else
-		    invalidStreamXML(xml,XMPPError::HostUnknown,"Unknown destination");
+		    dropXML(xml);
+	    else if (respond || this->type() == JBEngine::Client)
+		invalidStreamXML(xml,XMPPError::HostUnknown,"Received invalid destination");
 	    break;
 	}
 
@@ -759,7 +759,6 @@ XMLElement* JBStream::getStreamStart()
     XMLElement* start = XMPPUtils::createElement(XMLElement::StreamStart,
 	XMPPNamespace::Client);
     start->setAttribute("xmlns:stream",s_ns[XMPPNamespace::Stream]);
-//    start->setAttribute("from",local().bare());
     start->setAttribute("to",remote());
     // Add version to notify the server we support RFC3920 TLS/SASL authentication
     if (!flag(NoVersion1))
@@ -851,7 +850,7 @@ void JBStream::processAuth(XMLElement* xml)
 	    DROP_AND_EXIT
 	if (!XMPPUtils::hasXmlns(*xml,XMPPNamespace::Sasl))
 	    INVALIDXML_AND_EXIT(XMPPError::InvalidNamespace,0)
-	terminate(false,0,XMPPError::Aborted,"Authentication aborted",false);
+	terminate(true,0,XMPPError::Aborted,"Authentication aborted",false);
 	TelEngine::destruct(xml);
 	return;
     }
@@ -910,14 +909,16 @@ void JBStream::processAuth(XMLElement* xml)
 	    // Failure
 	    XMLElement* e = xml->findFirstChild();
 	    XMPPError::Type err = XMPPError::NoError;
-	    String reason = "Authentication failed";
+	    const char* reason = 0;
 	    if (e) {
 		err = (XMPPError::Type)XMPPError::type(e->name());
 		if (err == XMPPError::Count)
 		    err = XMPPError::NoError;
-		reason << " with reason '" << e->name() << "'";
+		reason = e->name();
 		TelEngine::destruct(e);
 	    }
+	    else
+		reason = "Authentication failed";
 	    terminate(false,xml,err,reason,false);
 	    return;
 	}
@@ -1088,7 +1089,7 @@ void JBStream::processStarted(XMLElement* xml)
 	if (ok)
 	    startTls();
 	else
-	    terminate(false,0,XMPPError::NoError,"Server can't start TLS",false);
+	    terminate(true,0,XMPPError::NoError,"Server can't start TLS",false);
     }
     else if (m_waitState == WaitBindRsp) {
 	// Accept iq result or error
@@ -1304,7 +1305,7 @@ void JBStream::invalidStreamXML(XMLElement* xml, XMPPError::Type error, const ch
     Debug(m_engine,DebugNote,
 	"Stream. Invalid XML (%p,%s) state=%s error='%s' reason='%s' [%p]",
 	xml,xml->name(),lookupState(state()),s_err[error],reason,this);
-    terminate(false,xml,error,reason,true);
+    terminate(true,xml,error,reason,true);
 }
 
 // Terminate stream on receiving stanza errors

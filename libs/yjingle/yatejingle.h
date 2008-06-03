@@ -395,12 +395,13 @@ public:
 	const char* text = 0, XMPPError::ErrorType type = XMPPError::TypeModify);
 
     /**
-     * Send a dtmf character to remote peer
-     * @param dtmf The dtmf character
+     * Send a dtmf string to remote peer. If the string's lenght is greater then 1, each
+     *  character is added as a 'dtmf' child of the jingle element
+     * @param dtmf The dtmf string
      * @param buttonUp True to send button-up action. False to send button-down
      * @return False if send failed
      */
-    bool sendDtmf(char dtmf, bool buttonUp = true);
+    bool sendDtmf(const char* dtmf, bool buttonUp = true);
 
     /**
      * Send a dtmf method to remote peer

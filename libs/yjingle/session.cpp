@@ -319,14 +319,24 @@ bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
     return sendStanza(iq,false);
 }
 
-// Send a dtmf character to remote peer
-bool JGSession::sendDtmf(char dtmf, bool buttonUp)
+// Send a dtmf string to remote peer
+bool JGSession::sendDtmf(const char* dtmf, bool buttonUp)
 {
-    XMLElement* xml = XMPPUtils::createElement(XMLElement::Dtmf,XMPPNamespace::Dtmf);
-    xml->setAttribute("action",buttonUp?"button-up":"button-down");
-    String tmp = dtmf;
-    xml->setAttribute("code",tmp);
-    return sendStanza(createJingle(ActContentInfo,xml));
+    XMLElement* iq = createJingle(ActContentInfo);
+    XMLElement* sess = iq->findFirstChild();
+    if (!(dtmf && *dtmf && sess))
+	return sendStanza(iq);
+    char s[2] = {0,0};
+    const char* action = buttonUp ? "button-up" : "button-down";
+    while (*dtmf) {
+	s[0] = *dtmf++;
+	XMLElement* xml = XMPPUtils::createElement(XMLElement::Dtmf,XMPPNamespace::Dtmf);
+	xml->setAttribute("action",action);
+	xml->setAttribute("code",s);
+	sess->addChild(xml);
+    }
+    TelEngine::destruct(sess);
+    return sendStanza(iq);
 }
 
 // Send a dtmf method to remote peer
@@ -645,8 +655,10 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	XMLElement* tmp = jingle->findFirstChild(XMLElement::Dtmf);
 	if (tmp) {
 	    String reason = tmp->getAttribute("action");
-	    String text = tmp->getAttribute("code");
-	    TelEngine::destruct(tmp);
+	    // Expect more then 1 'dtmf' child
+	    String text;
+	    for (; tmp; tmp = jingle->findNextChild(tmp,XMLElement::Dtmf))
+		text << tmp->getAttribute("code");
 	    if (!text || (reason != "button-up" && reason != "button-down")) {
 		confirm(jbev->releaseXML(),XMPPError::SBadRequest,"Unknown action");
 		return 0;

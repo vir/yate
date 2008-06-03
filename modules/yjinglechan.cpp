@@ -364,6 +364,10 @@ public:
     };
     YJGDriver();
     virtual ~YJGDriver();
+    // Check if the channels should send single DTMFs
+    inline bool singleTone() const
+	{ return m_singleTone; }
+    // Inherited methods
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
     // Message handler: Disconnect channels, destroy streams, clear rosters
@@ -418,6 +422,7 @@ private:
 	const char* cd, bool& available, String& error);
 
     bool m_init;
+    bool m_singleTone;                   // Send single/batch DTMFs
     bool m_installIq;                    // Install the 'iq' service in jabber
                                          //  engine and xmpp. message handlers
     String m_statusCmd;                  //
@@ -1422,10 +1427,20 @@ bool YJGConnection::msgDrop(Message& msg, const char* reason)
 bool YJGConnection::msgTone(Message& msg, const char* tone)
 {
     DDebug(this,DebugCall,"msgTone. '%s' [%p]",tone,this);
+    if (!(tone && *tone))
+	return true;
     Lock lock(m_mutex);
-    if (m_session)
-	while (tone && *tone)
-	    m_session->sendDtmf(*tone++);
+    if (!m_session)
+	return true;
+    if (plugin.singleTone()) {
+	char s[2] = {0,0};
+	while (*tone) {
+	    s[0] = *tone++;
+	    m_session->sendDtmf(s);
+	}
+    }
+    else
+	m_session->sendDtmf(tone);
     return true;
 }
 
@@ -2060,7 +2075,7 @@ bool XmppIqHandler::received(Message& msg)
 String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
 
 YJGDriver::YJGDriver()
-    : Driver("jingle","varchans"), m_init(false), m_installIq(true)
+    : Driver("jingle","varchans"), m_init(false), m_singleTone(true), m_installIq(true)
 {
     Output("Loaded module YJingle");
     m_statusCmd << "status " << name();
@@ -2183,6 +2198,7 @@ void YJGDriver::initialize()
     if (s_stream)
 	s_stream->initialize();
 
+    m_singleTone = sect->getBoolValue("singletone",true);
     s_localAddress = sect->getValue("localip");
     s_anonymousCaller = sect->getValue("anonymous_caller","unk_caller");
     s_pendingTimeout = sect->getIntValue("pending_timeout",10000);
@@ -2205,6 +2221,7 @@ void YJGDriver::initialize()
     if (debugAt(dbg)) {
 	String s;
 	s << " localip=" << s_localAddress ? s_localAddress.c_str() : "MISSING";
+	s << " singletone=" << String::boolText(m_singleTone);
 	s << " pending_timeout=" << s_pendingTimeout;
 	s << " anonymous_caller=" << s_anonymousCaller;
 	String media;

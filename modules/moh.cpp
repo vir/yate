@@ -57,6 +57,7 @@ class MOHSource : public ThreadedSource
 public:
     ~MOHSource();
     virtual void run();
+    virtual void destroyed();
     inline const String &name()
 	{ return m_name; }
     static MOHSource *getSource(const String &name);
@@ -119,6 +120,7 @@ private:
     MOHHandler *m_handler;
 };
 
+
 MOHSource::MOHSource(const String &name, const String &command_line)
     : ThreadedSource("slin"),
       m_name(name), m_command_line(command_line), m_swap(false), m_brate(16000)
@@ -128,15 +130,22 @@ MOHSource::MOHSource(const String &name, const String &command_line)
 
 MOHSource::~MOHSource()
 {
-    Lock lock(s_mutex);
-    Debug(DebugAll,"MOHSource::~MOHSource() [%p]",this);
-    sources.remove(this,false);
+    Debug(DebugAll,"MOHSource::~MOHSource() '%s' [%p]",m_name.c_str(),this);
     if (m_pid > 0)
 	::kill(m_pid,SIGTERM);
     if (m_in >= 0) {
 	::close(m_in);
 	m_in = -1;
     }
+}
+
+void MOHSource::destroyed()
+{
+    DDebug(DebugAll,"MOHSource::destroyed() [%p]",this);
+    s_mutex.lock();
+    sources.remove(this,false);
+    s_mutex.unlock();
+    ThreadedSource::destroyed();
 }
 
 
@@ -146,7 +155,7 @@ MOHSource *MOHSource::getSource(const String &name)
     ObjList *l = &sources;
     for (; l; l = l->next()) {
 	MOHSource *t = static_cast<MOHSource *>(l->get());
-	if (t && (t->name() == name)) {
+	if (t && t->alive() && (t->name() == name)) {
 	    t->ref();
 	    return t;
 	}
@@ -257,6 +266,7 @@ void MOHSource::run()
     } while (r > 0);
 }
 
+
 int MOHChan::s_nextid = 1;
 
 MOHChan::MOHChan(const String &name)
@@ -287,6 +297,7 @@ void MOHChan::disconnected(bool final, const char *reason)
 {
     Debugger debug("MOHChan::disconnected()"," '%s' [%p]",reason,this);
 }
+
 
 bool MOHHandler::received(Message &msg)
 {
@@ -350,6 +361,7 @@ bool MOHHandler::received(Message &msg)
     return true;
 }
 
+
 bool AttachHandler::received(Message &msg)
 {
     String src(msg.getValue("source"));
@@ -376,6 +388,7 @@ bool AttachHandler::received(Message &msg)
     return false;
 }
 
+
 bool StatusHandler::received(Message &msg)
 {
     const char *sel = msg.getValue("module");
@@ -386,6 +399,7 @@ bool StatusHandler::received(Message &msg)
 		   << ",chans=" << chans.count() << "\r\n";
     return false;
 }
+
 
 MOHPlugin::MOHPlugin()
     : m_handler(0)

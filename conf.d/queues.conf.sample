@@ -53,3 +53,12 @@
 
 ; outgoing: string: Target that will be called to make calls to operators
 ;outgoing=
+
+
+;[queue PUT_NAME_HERE]
+; Queues can be defined from config file sections - one per queue
+; This overrides the "queue" query but not the "avail" query
+; See the "queue" description in the [queries] section for possible settings
+
+; enabled: bool: Enable or disable this queue definition
+;enabled=true

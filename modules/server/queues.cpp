@@ -179,15 +179,16 @@ CallsQueue::~CallsQueue()
 // Create a queue, either from database or from config file
 CallsQueue* CallsQueue::create(const char* name, const NamedList& params)
 {
-    if (s_account.null() || s_queryQueue.null()) {
-	// account or query not set - use config file instead
-	NamedList* sect = s_cfg.getSection("queue " + String(name));
-	if (!sect)
-	    return 0;
+    NamedList* sect = s_cfg.getSection("queue " + String(name));
+    if (sect && sect->getBoolValue("enabled",true)) {
+	// configure queue parameters from file
 	CallsQueue* queue = new CallsQueue(*sect,name);
 	queue->init();
 	return queue;
     }
+
+    if (s_account.null() || s_queryQueue.null())
+	return 0;
     String query = s_queryQueue;
     params.replaceParams(query,true);
     Message m("database");

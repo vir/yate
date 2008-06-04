@@ -82,6 +82,7 @@ private:
     CallsQueue(const NamedList& params, const char* name);
     void init();
     const char* m_notify;
+    bool m_single;
 };
 
 class QueuesModule : public Module
@@ -149,7 +150,7 @@ static void copyArrayParams(NamedList& params, Array* a, int row)
 // Constructor from database query, parameters are populated later
 CallsQueue::CallsQueue(const char* name)
     : NamedList(name),
-      m_time(0), m_rate(0), m_notify(0)
+      m_time(0), m_rate(0), m_notify(0), m_single(false)
 {
     Debug(&__plugin,DebugInfo,"Creating queue '%s' from database",name);
     setParam("queue",name);
@@ -159,7 +160,7 @@ CallsQueue::CallsQueue(const char* name)
 // Constructor from config file section, copy parameters from it
 CallsQueue::CallsQueue(const NamedList& params, const char* name)
     : NamedList(params),
-      m_time(0), m_rate(0), m_notify(0)
+      m_time(0), m_rate(0), m_notify(0), m_single(false)
 {
     Debug(&__plugin,DebugInfo,"Creating queue '%s' from config file",name);
     String::operator=(name);
@@ -213,6 +214,7 @@ void CallsQueue::init()
     int rate = getIntValue("mintime",s_mintime);
     if (rate > 0)
 	m_rate = rate * (u_int64_t)1000;
+    m_single = getBoolValue("single");
     m_notify = getValue("notify");
     notify("created");
 }
@@ -282,6 +284,10 @@ bool CallsQueue::unmarkCall(const String& id)
     QueuedCall* call = findCall(id);
     if (!call)
 	return false;
+    if (m_single) {
+	removeCall(call,"noanswer");
+	return false;
+    }
     call->setMarked();
     return true;
 }

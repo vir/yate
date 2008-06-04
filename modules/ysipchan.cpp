@@ -906,6 +906,18 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
     }
     if (priv)
 	msg.setParam("privacy",priv);
+    if (hl) {
+	URI uri(*hl);
+	const char* tmp = uri.getDescription();
+	if (tmp)
+	    msg.setParam("privacy_callername",tmp);
+	tmp = uri.getUser();
+	if (tmp)
+	    msg.setParam("privacy_caller",tmp);
+	tmp = uri.getHost();
+	if (tmp)
+	    msg.setParam("privacy_domain",tmp);
+    }
 }
 
 // Copy privacy related information from Yate message to SIP message
@@ -925,11 +937,16 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     if (anonip)
 	sip.setHeader("Anonymity","ipaddr");
     if (screen || privname || privuri) {
-	const char* caller = msg.getValue("caller","anonymous");
-	String tmp = msg.getValue("callername",caller);
+	const char* caller = msg.getValue("privacy_caller",msg.getValue("caller"));
+	if (!caller)
+	    caller = "anonymous";
+	const char* domain = msg.getValue("privacy_domain",msg.getValue("domain"));
+	if (!domain)
+	    domain = "domain";
+	String tmp = msg.getValue("privacy_callername",msg.getValue("callername",caller));
 	if (tmp)
 	    tmp = "\"" + tmp + "\" ";
-	tmp << "<sip:" << caller << "@" << msg.getValue("domain","domain") << ">";
+	tmp << "<sip:" << caller << "@" << domain << ">";
 	MimeHeaderLine* hl = new MimeHeaderLine("Remote-Party-ID",tmp);
 	if (screen)
 	    hl->setParam("screen","yes");

@@ -28,6 +28,7 @@
 ;  maxcall: int: How much to call the operator, in milliseconds
 ;  prompt: string: Resource to play to the operator when it answers
 ;  notify: string: Target ID for notification messages about queue activity
+;  detail: bool: Notify when details change, including call position in queue
 ;  single: bool: Make just a single delivery attempt for each queued call
 ;queue=
 

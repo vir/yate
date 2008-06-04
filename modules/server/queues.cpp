@@ -45,6 +45,7 @@ public:
 	{ m_marked = mark; m_last = Time::now(); }
     inline const String& getCaller() const
 	{ return m_caller; }
+    void complete(Message& msg) const;
 
 protected:
     String m_caller;
@@ -70,8 +71,10 @@ public:
     bool unmarkCall(const String& id);
     unsigned int unmarkedCalls() const;
     QueuedCall* topCall() const;
+    int position(const QueuedCall* call) const;
     void listCalls(String& retval);
     void startACD();
+    void complete(Message& msg) const;
 protected:
     void notify(const char* event, const QueuedCall* call = 0);
     ObjList m_calls;
@@ -83,6 +86,7 @@ private:
     void init();
     const char* m_notify;
     bool m_single;
+    bool m_detail;
 };
 
 class QueuesModule : public Module
@@ -147,10 +151,22 @@ static void copyArrayParams(NamedList& params, Array* a, int row)
 }
 
 
+// Fill message with parameters about the call
+void QueuedCall::complete(Message& msg) const
+{
+    msg.addParam("id",c_str());
+    if (m_caller)
+	msg.addParam("caller",m_caller);
+    if (m_marked)
+	msg.addParam("operator",m_marked);
+}
+
+
 // Constructor from database query, parameters are populated later
 CallsQueue::CallsQueue(const char* name)
     : NamedList(name),
-      m_time(0), m_rate(0), m_notify(0), m_single(false)
+      m_time(0), m_rate(0),
+      m_notify(0), m_single(false), m_detail(false)
 {
     Debug(&__plugin,DebugInfo,"Creating queue '%s' from database",name);
     setParam("queue",name);
@@ -160,7 +176,8 @@ CallsQueue::CallsQueue(const char* name)
 // Constructor from config file section, copy parameters from it
 CallsQueue::CallsQueue(const NamedList& params, const char* name)
     : NamedList(params),
-      m_time(0), m_rate(0), m_notify(0), m_single(false)
+      m_time(0), m_rate(0),
+      m_notify(0), m_single(false), m_detail(false)
 {
     Debug(&__plugin,DebugInfo,"Creating queue '%s' from config file",name);
     String::operator=(name);
@@ -216,6 +233,7 @@ void CallsQueue::init()
     if (rate > 0)
 	m_rate = rate * (u_int64_t)1000;
     m_single = getBoolValue("single");
+    m_detail = getBoolValue("detail");
     m_notify = getValue("notify");
     notify("created");
 }
@@ -245,8 +263,18 @@ bool CallsQueue::addCall(Message& msg)
     msg.setParam("callto",s_chanIncoming);
     QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"));
     // high priority calls will go in queue's head instead of tail
-    if (msg.getBoolValue("priority"))
+    if (msg.getBoolValue("priority")) {
 	m_calls.insert(call);
+	if (m_notify && m_detail) {
+	    // all other calls' position in queue changed - notify
+	    ObjList* l = m_calls.skipNull();
+	    for (; l; l=l->skipNext()) {
+		QueuedCall* c = static_cast<QueuedCall*>(l->get());
+		if (c != call)
+		    notify("position",c);
+	    }
+	}
+    }
     else
 	m_calls.append(call);
     notify("queued",call);
@@ -259,9 +287,18 @@ bool CallsQueue::removeCall(QueuedCall* call, const char* reason)
     if (!call)
 	return false;
     notify(reason,call);
+    int pos = m_detail ? position(call) : -1;
     m_calls.remove(call);
     if (!m_calls.count())
 	destruct();
+    else if (pos >= 0) {
+	// some calls position in queue changed - notify
+	for (int n = m_calls.length(); pos < n; pos++) {
+	    QueuedCall* c = static_cast<QueuedCall*>(m_calls[pos]);
+	    if (c)
+		notify("position",c);
+	}
+    }
     return true;
 }
 
@@ -310,6 +347,16 @@ QueuedCall* CallsQueue::topCall() const
 {
     ObjList* l = m_calls.skipNull();
     return l ? static_cast<QueuedCall*>(l->get()) : 0;
+}
+
+// Get the numeric position of a call in queue, -1 if not found
+int CallsQueue::position(const QueuedCall* call) const
+{
+    ObjList* l = m_calls.skipNull();
+    for (int pos = 0; l; l=l->skipNext(), pos++)
+	if (call == l->get())
+	    return pos;
+    return -1;
 }
 
 // List the calls currently in the queue
@@ -399,14 +446,21 @@ void CallsQueue::notify(const char* event, const QueuedCall* call)
 	return;
     Message* m = new Message("chan.notify");
     if (call) {
-	m->addParam("id",*call);
-	if (call->getCaller())
-	    m->addParam("caller",call->getCaller());
+	call->complete(*m);
+	int pos = position(call);
+	if (pos >= 0)
+	    m->addParam("position",String(pos));
     }
-    m->addParam("targetid",m_notify);
     m->addParam("event",event);
-    m->addParam("queue",c_str());
+    complete(*m);
     Engine::enqueue(m);
+}
+
+// Fill message with parameters about the queue
+void CallsQueue::complete(Message& msg) const
+{
+    msg.addParam("targetid",m_notify);
+    msg.addParam("queue",c_str());
 }
 
 

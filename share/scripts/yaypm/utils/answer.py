@@ -26,7 +26,6 @@ from twisted.internet import reactor, defer
 import yaypm, logging
 from random import randint
 from yaypm import AbandonedException, TCPDispatcherFactory
-from yaypm.flow import go, getResult
 from yaypm.utils import RestrictedDispatcher, sleep
 
 logger = logging.getLogger('yaypm.answer')
@@ -50,15 +49,13 @@ def answer(yate, called,
                 "chan.hangup",
                 lambda m : m["id"] == callid)
 
-        yield yate.onwatch(
+        execute = yield yate.onwatch(
             "call.execute",
             lambda m : m["id"] == callid, until = end)
-        execute = getResult()
 
         targetid = execute["targetid"]
 
         yield sleep(1)
-        getResult()
 
         yate.msg("call.drop",
                  {"id": targetid, "reason": "noanswer"}).enqueue()
@@ -73,11 +70,9 @@ def answer(yate, called,
                 "chan.hangup",
                 lambda m : m["id"] == callid)
 
-        yield yate.onwatch(
+        execute = yield yate.onwatch(
             "call.execute",
             lambda m : m["id"] == callid, until = end)    
-
-        execute = getResult()
 
         targetid = execute["targetid"]
 
@@ -87,10 +82,9 @@ def answer(yate, called,
                       "targetid": callid}).enqueue()
 
         if answered_handler:
-            go(answered_handler(yate, called, callid, targetid))
+            answered_handler(yate, called, callid, targetid)
         else:
             yield sleep(2)
-            getResult()            
             yate.msg("call.drop", {"id": targetid}).enqueue()
 
     def busy(yate, route):
@@ -104,11 +98,9 @@ def answer(yate, called,
                 "chan.hangup",
                 lambda m : m["id"] == callid)
 
-        yield yate.onmsg(
+        execute = yield yate.onmsg(
             "call.execute",
             lambda m : m["callto"] == target, until = end)
-
-        execute = getResult()
 
         execute["reason"] = "busy"
         execute.ret(False)
@@ -138,16 +130,14 @@ def answer(yate, called,
                 called, str(handlers.keys()))
 
     while True:
-        yield yate.onmsg(
+        route = yield yate.onmsg(
             "call.route", lambda m: handlers.has_key(m["called"]))
-        route = getResult()
 
-        go(handlers[route["called"]](yate, route))
+        handlers[route["called"]](yate, route)
 
 if __name__ in ["__main__", "__embedded_yaypm_module__"]:
     def start(yate):
-        go(answer(yate, "1234"))
+        answer(yate, "1234")
 
     logger.setLevel(logging.DEBUG)
-
     yaypm.utils.setup(start)

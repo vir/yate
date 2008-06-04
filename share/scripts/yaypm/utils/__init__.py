@@ -217,7 +217,7 @@ def outgoing(yate, target, maxcall = 30*1000,
     execute = yate.msg("call.execute", attrs)
     
     if not (yield execute.dispatch()):
-        raise OutgoingCallException(execute["reason"])
+        raise OutgoingCallException(execute["reason"] or execute["error"])
 
     end = yate.onwatch("chan.hangup",
         lambda m : m["id"] == execute["targetid"])

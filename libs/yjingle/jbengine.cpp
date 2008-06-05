@@ -586,6 +586,7 @@ bool JBEngine::process(u_int64_t time)
 {
     lock();
     ListIterator iter(m_streams);
+    bool gotEvent = false;
     for (;;) {
 	if (Thread::check(false))
 	    break;
@@ -600,32 +601,31 @@ bool JBEngine::process(u_int64_t time)
 	// Get event
 	unlock();
 	JBEvent* event = sref->getEvent(time);
-	if (!event)
-	    return false;
+	if (!event) {
+	    lock();
+	    continue;
+	}
 
-	Lock serviceLock(m_servicesMutex);
+	gotEvent = true;
+	bool recv = false;
 	// Send events to the registered services
 	switch (event->type()) {
 	    case JBEvent::Message:
-		if (received(ServiceMessage,event))
-		    return true;
+		recv = received(ServiceMessage,event);
 		break;
 	    case JBEvent::IqJingleGet:
 	    case JBEvent::IqJingleSet:
 	    case JBEvent::IqJingleRes:
 	    case JBEvent::IqJingleErr:
-		if (received(ServiceJingle,event))
-		    return true;
+		recv = received(ServiceJingle,event);
 		break;
 	    case JBEvent::Iq:
 	    case JBEvent::IqError:
 	    case JBEvent::IqResult:
-		if (received(ServiceIq,event))
-		    return true;
+		recv = received(ServiceIq,event);
 		break;
 	    case JBEvent::Presence:
-		if (received(ServicePresence,event))
-		    return true;
+		recv = received(ServicePresence,event);
 		break;
 	    case JBEvent::IqDiscoInfoGet:
 	    case JBEvent::IqDiscoInfoSet:
@@ -635,40 +635,31 @@ bool JBEngine::process(u_int64_t time)
 	    case JBEvent::IqDiscoItemsSet:
 	    case JBEvent::IqDiscoItemsRes:
 	    case JBEvent::IqDiscoItemsErr:
-		if (received(ServiceDisco,event))
-		    return true;
-		if (processDisco(event))
-		    event = 0;
+		recv = received(ServiceDisco,event) || processDisco(event);
 		break;
 	    case JBEvent::IqCommandGet:
 	    case JBEvent::IqCommandSet:
 	    case JBEvent::IqCommandRes:
 	    case JBEvent::IqCommandErr:
-		if (received(ServiceCommand,event))
-		    return true;
-		if (processCommand(event))
-		    event = 0;
+		recv = received(ServiceCommand,event) || processCommand(event);
 		break;
 	    case JBEvent::IqRosterSet:
 	    case JBEvent::IqRosterRes:
 	    case JBEvent::IqRosterErr:
 	    case JBEvent::IqClientRosterUpdate:
-		if (received(ServiceRoster,event))
-		    return true;
+		recv = received(ServiceRoster,event);
+		break;
 	    case JBEvent::WriteFail:
-		if (received(ServiceWriteFail,event))
-		    return true;
+		recv = received(ServiceWriteFail,event);
 		break;
 	    case JBEvent::Terminated:
 	    case JBEvent::Destroy:
 	    case JBEvent::Running:
-		if (received(ServiceStream,event))
-		    return true;
+		recv = received(ServiceStream,event);
 		break;
 	    default: ;
 	}
-	serviceLock.drop();
-	if (event) {
+	if (!recv && event) {
 	    Debug(this,DebugAll,"Delete unhandled event (%p,%s) [%p]",
 		event,event->name(),this);
 	    TelEngine::destruct(event);
@@ -676,7 +667,7 @@ bool JBEngine::process(u_int64_t time)
 	lock();
     }
     unlock();
-    return false;
+    return gotEvent;
 }
 
 // Check for duplicate stream id at a remote server
@@ -890,6 +881,7 @@ bool JBEngine::received(Service service, JBEvent* event)
 {
     if (!event)
 	return false;
+    Lock lock(m_servicesMutex);
     for (ObjList* o = m_services[service].skipNull(); o; o = o->skipNext()) {
 	JBService* service = static_cast<JBService*>(o->get());
 	XDebug(this,DebugAll,"Sending event (%p,%s) to service '%s' [%p]",

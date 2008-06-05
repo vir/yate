@@ -23,6 +23,7 @@
 ; Relevant returned params:
 ;  mintime: int: Minimum time between queries, in milliseconds
 ;  length: int: Maximum queue length, will declare congestion if grows larger
+;  maxout: int: Maximum number of simultaneous outgoing calls to operators
 ;  greeting: string: Resource to be played initially as greeting
 ;  onhold: string: Resource to be played while waiting in queue
 ;  maxcall: int: How much to call the operator, in milliseconds
@@ -36,6 +37,7 @@
 ; Relevant substitutions:
 ;  ${queue}: string: Name of this queue
 ;  ${required}: int: Number of operators required to handle incoming calls
+;  ${current}: int: Number of calls to operators currently running
 ;  ${waiting}: int: Total number of calls waiting in this queue (assigned or not)
 ; Mandatory returned params:
 ;  location: string: Resource where the operator is located

@@ -69,7 +69,7 @@ public:
     bool removeCall(QueuedCall* call, const char* reason);
     QueuedCall* markCall(const char* mark);
     bool unmarkCall(const String& id);
-    unsigned int unmarkedCalls() const;
+    void countCalls(unsigned int& marked, unsigned int& unmarked) const;
     QueuedCall* topCall() const;
     int position(const QueuedCall* call) const;
     void listCalls(String& retval);
@@ -85,6 +85,7 @@ private:
     CallsQueue(const NamedList& params, const char* name);
     void init();
     const char* m_notify;
+    int m_maxCalls;
     bool m_single;
     bool m_detail;
 };
@@ -330,16 +331,17 @@ bool CallsQueue::unmarkCall(const String& id)
     return true;
 }
 
-// Count the number of calls not routed to an operator
-unsigned int CallsQueue::unmarkedCalls() const
+// Count the number of calls routed and not routed to an operator
+void CallsQueue::countCalls(unsigned int& marked, unsigned int& unmarked) const
 {
-    unsigned int c = 0;
+    marked = unmarked = 0;
     ObjList* l = m_calls.skipNull();
     for (; l; l=l->skipNext()) {
-	if (static_cast<QueuedCall*>(l->get())->getMarked().null())
-	    c++;
+	if (static_cast<QueuedCall*>(l->get())->getMarked())
+	    marked++;
+	else
+	    unmarked++;
     }
-    return c;
 }
 
 // Retrive the call from the head of the queue
@@ -388,14 +390,30 @@ void CallsQueue::startACD()
 	    return;
 	m_time = m_rate ? when + m_rate : 0;
     }
-    unsigned int cnt = unmarkedCalls();
-    if (!cnt)
+
+    unsigned int marked = 0;
+    unsigned int unmarked = 0;
+    countCalls(marked,unmarked);
+    if (!unmarked)
 	return;
+    unsigned int required = unmarked;
+    int maxout = getIntValue("maxout",-1);
+    if (maxout >= 0) {
+	// put a number limit on outgoing calls
+	maxout -= marked;
+	if (maxout <= 0)
+	    return;
+	if (required > (unsigned int)maxout)
+	    required = maxout;
+    }
 
     // how many operators are required to handle calls in queue
-    setParam("required",String(cnt));
+    setParam("required",String(required));
     // how many total calls are waiting in queue
-    setParam("waiting",String(m_calls.count()));
+    setParam("waiting",String(marked+unmarked));
+    // how many calls are currently going on to operators
+    setParam("current",String(marked));
+
     String query = s_queryAvail;
     replaceParams(query,true);
     Message msg("database");

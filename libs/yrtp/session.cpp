@@ -639,8 +639,8 @@ void RTPSession::setTimeout(int interval)
 	// force sane limits: between 500ms and 60s
 	else if (interval < 500)
 	    interval = 500;
-	else if (interval > 6000)
-	    interval = 6000;
+	else if (interval > 60000)
+	    interval = 60000;
     }
     m_timeoutTime = 0;
     m_timeoutInterval = interval * (u_int64_t)1000;

@@ -146,8 +146,10 @@ class ExtMessage : public Message
     YCLASS(ExtMessage,Message)
 public:
     inline ExtMessage(ExtModReceiver* recv)
-	: Message(""), m_receiver(recv)
+	: Message(""),
+	  m_receiver(recv), m_accepted(false)
 	{ }
+    virtual ~ExtMessage();
     void startup();
     virtual void dispatched(bool accepted);
     inline bool belongsTo(ExtModReceiver* recv) const
@@ -159,6 +161,7 @@ public:
 private:
     ExtModReceiver* m_receiver;
     String m_id;
+    bool m_accepted;
 };
 
 class MsgHolder : public GenObject
@@ -215,8 +218,7 @@ public:
     void cleanup();
     bool flush();
     void die(bool clearChan = true);
-    inline void use()
-	{ m_use++; }
+    void use();
     bool unuse();
     inline const String& scriptFile() const
 	{ return m_script; }
@@ -546,19 +548,27 @@ bool MsgHolder::decode(const char *s)
 }
 
 
+ExtMessage::~ExtMessage()
+{
+    if (m_receiver) {
+	m_receiver->returnMsg(this,m_id,m_accepted);
+	m_receiver->unuse();
+    }
+}
+
 void ExtMessage::startup()
 {
     if (m_receiver && m_id)
 	m_receiver->use();
+    else
+	m_receiver = 0;
     Engine::enqueue(this);
 }
 
 void ExtMessage::dispatched(bool accepted)
 {
-    if (m_receiver && m_id) {
-	m_receiver->returnMsg(this,m_id,accepted);
-	m_receiver->unuse();
-    }
+    m_accepted = accepted;
+    Message::dispatched(accepted);
 }
   
 
@@ -620,7 +630,7 @@ ExtModReceiver* ExtModReceiver::build(const char* script, const char* args,
 {
     ExtModReceiver* recv = new ExtModReceiver(script,args,ain,aout,chan);
     if (!recv->start()) {
-	recv->destruct();
+	recv->unuse();
 	return 0;
     }
     return recv;
@@ -630,7 +640,7 @@ ExtModReceiver* ExtModReceiver::build(const char* name, Stream* io, ExtModChan* 
 {
     ExtModReceiver* recv = new ExtModReceiver(name,io,chan,role);
     if (!recv->start()) {
-	recv->destruct();
+	recv->unuse();
 	return 0;
     }
     return recv;
@@ -648,9 +658,19 @@ ExtModReceiver* ExtModReceiver::find(const String& script)
     return 0;
 }
 
+void ExtModReceiver::use()
+{
+    lock();
+    if (m_use > 0)
+	++m_use;
+    unlock();
+}
+
 bool ExtModReceiver::unuse()
 {
+    lock();
     int u = --m_use;
+    unlock();
     if (!u)
 	destruct();
     return (u <= 0);
@@ -658,7 +678,7 @@ bool ExtModReceiver::unuse()
 
 ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, File* aout, ExtModChan* chan)
     : Mutex(true),
-      m_role(RoleUnknown), m_dead(false), m_use(0), m_pid(-1),
+      m_role(RoleUnknown), m_dead(false), m_use(1), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
@@ -675,7 +695,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
 
 ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, int role)
     : Mutex(true),
-      m_role(role), m_dead(false), m_use(0), m_pid(-1),
+      m_role(role), m_dead(false), m_use(1), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
@@ -695,7 +715,7 @@ ExtModReceiver::~ExtModReceiver()
     Debug(DebugAll,"ExtModReceiver::~ExtModReceiver() pid=%d [%p]",m_pid,this);
     Lock lock(this);
     // One destruction is plenty enough
-    m_use = -100;
+    m_use = -1;
     s_mutex.lock();
     s_modules.remove(this,false);
     s_mutex.unlock();
@@ -999,7 +1019,6 @@ void ExtModReceiver::run()
 	m_pid = 0;
 	return;
     }
-    use();
     if (m_in)
 	m_in->setBlocking(false);
     char buffer[MAX_INCOMING_LINE];

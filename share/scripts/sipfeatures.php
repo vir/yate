@@ -366,6 +366,8 @@ Yate::Init();
 
 Yate::Debug(true);
 
+Yate::SetLocal("restart",true);
+
 Yate::Install("sip.subscribe");
 Yate::Install("user.update");
 Yate::Install("chan.update");

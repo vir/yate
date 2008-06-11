@@ -208,6 +208,8 @@ class Yate
      */
     static function SetLocal($name, $value)
     {
+	if (($value === true) || ($value === false))
+	    $value = Yate::Bool2str($value);
 	$name=Yate::Escape($name);
 	$value=Yate::Escape($value);
 	_yate_print("%%>setlocal:$name:$value\n");

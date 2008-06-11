@@ -33,11 +33,10 @@ function SendMsg($msg)
 /* Always the first action to do */
 Yate::Init();
 
-Yate::SetLocal("id",$ourcallid);
-Yate::SetLocal("disconnected","true");
+/* Uncomment next line to get debugging messages */
+//Yate::Debug(true);
 
-/* Install handlers for the wave end and dtmf notify messages */
-//Yate::Install("chan.dtmf");
+Yate::SetLocal("id",$ourcallid);
 
 /* The main loop. We pick events and handle them */
 for (;;) {
@@ -77,7 +76,7 @@ for (;;) {
 			}
 			if ($newsource) {
 			    $m->params["notify"] = $ourcallid;
-			    Yate::Install("chan.notify");
+			    Yate::Install("chan.notify",100,"targetid",$ourcallid);
 			}
 			else if ($answermode == "late")
 			    $answermode = "early";
@@ -98,16 +97,14 @@ for (;;) {
 		    $ev = false;
 		    break;
 		case "chan.notify":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			Yate::Uninstall("chan.notify");
-			$m = new Yate("chan.attach");
-			$m->params["id"] = $ourcallid;
-			$m->params["source"] = $newsource;
-			$m->Dispatch();
-			$newsource = "";
-			if ($answermode == "late")
-			    SendMsg("call.answered");
-		    }
+		    Yate::Uninstall("chan.notify");
+		    $m = new Yate("chan.attach");
+		    $m->params["id"] = $ourcallid;
+		    $m->params["source"] = $newsource;
+		    $m->Dispatch();
+		    $newsource = "";
+		    if ($answermode == "late")
+			SendMsg("call.answered");
 		    break;
 	    }
 	    /* This is extremely important.
@@ -115,21 +112,12 @@ for (;;) {
 	    if ($ev)
 		$ev->Acknowledge();
 	    break;
-	case "answer":
-	    Yate::Output("PHP Answered: " . $ev->name . " id: " . $ev->id);
-	    break;
-	case "installed":
-	    Yate::Output("PHP Installed: " . $ev->name);
-	    break;
-	case "uninstalled":
-	    Yate::Output("PHP Uninstalled: " . $ev->name);
-	    break;
 	default:
-	    Yate::Output("PHP Event: " . $ev->type);
+	    Yate::Debug("PHP Event: " . $ev->type);
     }
 }
 
-Yate::Output("PHP: bye!");
+Yate::Debug("PHP: bye!");
 
 /* vi: set ts=8 sw=4 sts=4 noet: */
 ?>

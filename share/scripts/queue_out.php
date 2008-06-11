@@ -19,12 +19,14 @@ $queue = "";
 /* Always the first action to do */
 Yate::Init();
 
+/* Uncomment next line to get debugging messages */
+//Yate::Debug(true);
+
 Yate::SetLocal("id",$ourcallid);
 Yate::SetLocal("disconnected","true");
 
-Yate::Install("call.answered",50);
-Yate::Install("chan.hangup");
-Yate::Install("chan.disconnected",20);
+Yate::Install("call.answered",40,"targetid",$ourcallid);
+Yate::Install("chan.disconnected",20,"id",$ourcallid);
 
 /* The main loop. We pick events and handle them */
 for (;;) {
@@ -44,6 +46,7 @@ for (;;) {
 		    $prompt = $ev->GetValue("prompt");
 		    $queue = $ev->GetValue("queue");
 		    $ev->handled=true;
+		    Yate::Install("chan.hangup",80,"id",$partycallid);
 		    $m = new Yate("call.execute");
 		    $m->params["id"] = $ourcallid;
 		    $m->params["caller"] = $ev->GetValue("caller");
@@ -54,23 +57,17 @@ for (;;) {
 		    $m->Dispatch();
 		    break;
 		case "call.answered":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			$ev->params["targetid"] = $partycallid;
-			$ev->Acknowledge();
-			$m = new Yate("chan.connect");
-			$m->params["id"] = $ev->GetValue("id");
-			$m->params["targetid"] = $partycallid;
-			$ev = false;
-			$m->Dispatch();
-		    }
-		    break;
-		case "chan.notify":
-		    if ($ev->GetValue("targetid") == $ourcallid) {
-			Yate::Uninstall("chan.notify");
-		    }
+		    $ev->params["targetid"] = $partycallid;
+		    $ev->Acknowledge();
+		    $m = new Yate("chan.connect");
+		    $m->id = "";
+		    $m->params["id"] = $ev->GetValue("id");
+		    $m->params["targetid"] = $partycallid;
+		    $ev = false;
+		    $m->Dispatch();
 		    break;
 		case "chan.disconnected":
-		    if (($ev->GetValue("id") == $ourcallid) && $ev->GetValue("reason")) {
+		    if ($ev->GetValue("reason")) {
 			$ev->name = "chan.hangup";
 			$ev->params["notify"] = $partycallid;
 			$ev->params["queue"] = $queue;
@@ -78,8 +75,7 @@ for (;;) {
 		    }
 		    break;
 		case "chan.hangup":
-		    if ($ev->GetValue("id") == $partycallid)
-			exit();
+		    exit();
 	    }
 	    /* This is extremely important.
 	       We MUST let messages return, handled or not */
@@ -87,9 +83,9 @@ for (;;) {
 		$ev->Acknowledge();
 	    break;
 	case "answer":
-	    Yate::Output("PHP Answered: " . $ev->name . " id: " . $ev->id);
+	    Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);
 	    if (($ev->name == "call.execute") && !$ev->handled) {
-		Yate::Output("Failed to start queue call leg to: " . $ev->GetValue("callto"));
+		Yate::Output("Failed to start queue '$queue' call leg to: " . $ev->GetValue("callto"));
 		$m = new Yate("chan.hangup");
 		$m->id = "";
 		$m->params["notify"] = $partycallid;
@@ -98,18 +94,12 @@ for (;;) {
 		$m->Dispatch();
 	    }
 	    break;
-	case "installed":
-	    Yate::Output("PHP Installed: " . $ev->name);
-	    break;
-	case "uninstalled":
-	    Yate::Output("PHP Uninstalled: " . $ev->name);
-	    break;
 	default:
-	    Yate::Output("PHP Event: " . $ev->type);
+	    Yate::Debug("PHP Event: " . $ev->type);
     }
 }
 
-Yate::Output("PHP: bye!");
+Yate::Debug("PHP: bye!");
 
 /* vi: set ts=8 sw=4 sts=4 noet: */
 ?>

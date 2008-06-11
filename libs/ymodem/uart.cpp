@@ -703,8 +703,10 @@ void UART::reset(State st)
 // Return false to stop feeding data
 bool UART::recvBit(bool value)
 {
-    XDebug(this,DebugAll,"recvBit(%c) state=%s [%p]",
+#ifdef XDEBUG
+    Debug(this,DebugAll,"recvBit(%c) state=%s [%p]",
 	value?'1':'0',lookup(m_state,s_uartState),this);
+#endif
 
     int res = 0;
 
@@ -773,8 +775,10 @@ void UART::changeState(State newState)
 {
     if (m_state == newState)
 	return;
-    XDebug(this,DebugAll,"UART changed state from %s to %s [%p]",
+#ifdef XDEBUG
+    Debug(this,DebugAll,"UART changed state from %s to %s [%p]",
 	lookup(m_state,s_uartState),lookup(newState,s_uartState),this);
+#endif
     m_state = newState;
 }
 

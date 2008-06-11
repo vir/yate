@@ -968,14 +968,20 @@ SignallingCircuitSpan::~SignallingCircuitSpan()
 /**
  * AnalogLine
  */
-TokenDict AnalogLine::s_typeName[] = {
+const TokenDict* AnalogLine::typeNames()
+{
+    static const TokenDict names[] = {
 	{"FXO",     FXO},
 	{"FXS",     FXS},
 	{"monitor", Monitor},
 	{0,0}
-	};
+    };
+    return names;
+}
 
-TokenDict AnalogLine::s_stateName[] = {
+const TokenDict* AnalogLine::stateNames()
+{
+    static const TokenDict names[] = {
 	{"OutOfService",   OutOfService},
 	{"Idle",           Idle},
 	{"Dialing",        Dialing},
@@ -986,13 +992,18 @@ TokenDict AnalogLine::s_stateName[] = {
 	{"OutOfOrder",     OutOfOrder},
 	{0,0}
 	};
+    return names;
+}
 
-TokenDict AnalogLine::s_csName[] = {
+const TokenDict* AnalogLine::csNames() {
+    static const TokenDict names[] = {
 	{"after",  After},
 	{"before", Before},
 	{"none",   NoCallSetup},
 	{0,0}
 	};
+    return names;
+}
 
 inline u_int64_t getValidInt(const NamedList& params, const char* param, int defVal)
 {
@@ -1050,7 +1061,7 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     m_hangupOnPolarity = params.getBoolValue("hangup-on-polarity",false);
     m_polarityControl = params.getBoolValue("polaritycontrol",false);
 
-    m_callSetup = (CallSetupInfo)lookup(params.getValue("callsetup"),s_csName,After);
+    m_callSetup = (CallSetupInfo)lookup(params.getValue("callsetup"),csNames(),After);
 
     m_callSetupTimeout = getValidInt(params,"callsetup-timeout",2000);
     m_noRingTimeout = getValidInt(params,"ring-timeout",10000);
@@ -1058,7 +1069,7 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     m_delayDial = getValidInt(params,"delaydial",2000);
 
     DDebug(m_group,DebugAll,"AnalogLine() addr=%s type=%s [%p]",
-	address(),lookup(m_type,s_typeName),this);
+	address(),lookup(m_type,typeNames()),this);
 
     if (!params.getBoolValue("out-of-service",false)) {
 	resetCircuit();
@@ -1211,8 +1222,8 @@ bool AnalogLine::changeState(State newState, bool sync)
 	if (newState != Idle && newState < m_state)
 	    break;
 	DDebug(m_group,DebugInfo,"%s: changed state from %s to %s [%p]",
-	    address(),lookup(m_state,s_stateName),
-	    lookup(newState,s_stateName),this);
+	    address(),lookup(m_state,stateNames()),
+	    lookup(newState,stateNames()),this);
 	m_state = newState;
 	ok = true;
 	break;

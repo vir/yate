@@ -704,8 +704,8 @@ void ModuleLine::statusParams(String& str)
 {
     str.append("module=",";") << plugin.name();
     str << ",address=" << address();
-    str << ",type=" << lookup(type(),s_typeName);
-    str << ",state=" << lookup(state(),s_stateName);
+    str << ",type=" << lookup(type(),typeNames());
+    str << ",state=" << lookup(state(),stateNames());
     str  << ",usedby=";
     if (userdata())
 	str << (static_cast<CallEndpoint*>(userdata()))->id();
@@ -716,7 +716,7 @@ void ModuleLine::statusParams(String& str)
     }
     else
 	str << ",answer-on-polarity=not-defined,hangup-on-polarity=not-defined";
-    str << ",callsetup=" << lookup(callSetup(),AnalogLine::s_csName);
+    str << ",callsetup=" << lookup(callSetup(),AnalogLine::csNames());
     // Lines with peer are used in recorders (don't send DTMFs)
     if (!getPeer())
 	str << ",dtmf=" << (outbandDtmf() ? "outband" : "inband");
@@ -735,7 +735,7 @@ void ModuleLine::statusDetail(String& str)
     // format=State|UsedBy
     Lock lock(this);
     str.append(address(),";") << "=";
-    str << lookup(state(),AnalogLine::s_stateName) << "|";
+    str << lookup(state(),AnalogLine::stateNames()) << "|";
     if (userdata())
 	str << (static_cast<CallEndpoint*>(userdata()))->id();
 }
@@ -1107,7 +1107,7 @@ void ModuleGroup::statusParams(String& str)
 {
     str.append("module=",";") << plugin.name();
     str << ",name=" << toString();
-    str << ",type=" << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::s_typeName);
+    str << ",type=" << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::typeNames());
     str << ",lines=" << lines().count();
     str << "," << s_lineStatusDetail;
     for (ObjList* o = lines().skipNull(); o; o = o->skipNext())
@@ -1120,7 +1120,7 @@ void ModuleGroup::statusDetail(String& str)
     // format=Type|Lines
     Lock lock(this);
     str.append(toString(),";") << "=";
-    str << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::s_typeName);
+    str << lookup(!fxo()?type():AnalogLine::Monitor,AnalogLine::typeNames());
     str << "|" << lines().count();
 }
 
@@ -1369,7 +1369,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
 		{
 		    NamedString* ns = msg->getParam("callsetup");
 		    if (ns)
-			m_callsetup = lookup(*ns,AnalogLine::s_csName,AnalogLine::NoCallSetup);
+			m_callsetup = lookup(*ns,AnalogLine::csNames(),AnalogLine::NoCallSetup);
 		}
 		m_privacy = getPrivacy(*msg);
 		if (m_callsetup == AnalogLine::Before)
@@ -2552,7 +2552,7 @@ void AnalogDriver::initialize()
 
 	// Create and/or initialize. Check for valid type if creating
 	const char* stype = sect->getValue("type");
-	int type = lookup(stype,AnalogLine::s_typeName,AnalogLine::Unknown);
+	int type = lookup(stype,AnalogLine::typeNames(),AnalogLine::Unknown);
 	switch (type) {
 	    case AnalogLine::FXO:
 	    case AnalogLine::FXS:

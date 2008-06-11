@@ -2583,17 +2583,17 @@ public:
     /**
      * Line type names dictionary
      */
-    static TokenDict s_typeName[];
+    static const TokenDict* typeNames();
 
     /**
      * Line state names dictionary
      */
-    static TokenDict s_stateName[];
+    static const TokenDict* stateNames();
 
     /**
      * Call setup info names
      */
-    static TokenDict s_csName[];
+    static const TokenDict* csNames();
 
 protected:
     /**

@@ -27,4 +27,23 @@
 
 using namespace TelEngine;
 
+SCCP::~SCCP()
+{
+}
+
+void SCCP::attach(SCCPUser* user)
+{
+    Debug(DebugStub,"Plsease implement SCCP::attach()");
+}
+
+
+SCCPUser::~SCCPUser()
+{
+}
+
+void SCCPUser::attach(SCCP* sccp)
+{
+    Debug(DebugStub,"Plsease implement SCCPUser::attach()");
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

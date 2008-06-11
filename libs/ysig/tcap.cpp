@@ -27,4 +27,13 @@
 
 using namespace TelEngine;
 
+TCAPUser::~TCAPUser()
+{
+}
+
+void TCAPUser::attach(SS7TCAP* tcap)
+{
+    Debug(DebugStub,"Plsease implement TCAPUser::attach()");
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -88,6 +88,15 @@ for (;;) {
 	    break;
 	case "answer":
 	    Yate::Output("PHP Answered: " . $ev->name . " id: " . $ev->id);
+	    if (($ev->name == "call.execute") && !$ev->handled) {
+		Yate::Output("Failed to start queue call leg to: " . $ev->GetValue("callto"));
+		$m = new Yate("chan.hangup");
+		$m->id = "";
+		$m->params["notify"] = $partycallid;
+		$m->params["queue"] = $queue;
+		$m->params["cdrtrack"] = "false";
+		$m->Dispatch();
+	    }
 	    break;
 	case "installed":
 	    Yate::Output("PHP Installed: " . $ev->name);

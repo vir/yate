@@ -51,7 +51,9 @@ static TokenDict dict_payloads[] = {
     { "ilbc20",       98 },
     { "ilbc30",       98 },
     { "amr",          96 },
+    { "amr-o",        96 },
     { "amr/16000",    99 },
+    { "amr-o/16000",  99 },
     { "speex",       102 },
     { "speex/16000", 103 },
     { "speex/32000", 104 },
@@ -645,6 +647,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		continue;
 	    int mode = 0;
 	    bool annexB = s_cfg.getBoolValue("codecs","g729_annexb",false);
+	    bool amrOctet = s_cfg.getBoolValue("codecs","amr_octet",false);
 	    int defmap = -1;
 	    String payload(lookup(var,dict_payloads));
 
@@ -691,6 +694,8 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 			    line >> mode;
 			else if (line.startSkip("annexb=",false))
 			    line >> annexB;
+			else if (line.startSkip("octet-align=",false))
+			    amrOctet = (0 != line.toInteger(0));
 		    }
 		}
 		else if (first) {
@@ -714,6 +719,9 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		else
 		    payload = s_cfg.getValue("hacks","ilbc_default","ilbc30");
 	    }
+
+	    if (amrOctet && payload == "amr")
+		payload = "amr-o";
 
 	    XDebug(&plugin,DebugAll,"Payload %d format '%s'",var,payload.c_str());
 	    if (payload && s_cfg.getBoolValue("codecs",payload,defcodecs && DataTranslator::canConvert(payload))) {
@@ -2794,6 +2802,16 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 			    temp = new String("fmtp:");
 			    *temp << payload << " annexb=" <<
 				((0 != l->find("g729b")) ? "yes" : "no");
+			    rtpmap.append(temp);
+			}
+			else if (*s == "amr") {
+			    temp = new String("fmtp:");
+			    *temp << payload << " octet-align=0";
+			    rtpmap.append(temp);
+			}
+			else if (*s == "amr-o") {
+			    temp = new String("fmtp:");
+			    *temp << payload << " octet-align=1";
 			    rtpmap.append(temp);
 			}
 		    }

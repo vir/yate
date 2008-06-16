@@ -154,6 +154,10 @@
 ; NOTE: RFC 3555 specifies the default should be yes
 ;g729_annexb=no
 
+; amr_octet: bool: Octet aligned AMR RTP payload default (if not in SDP)
+; NOTE: RFC 4867 (and older 3267) specifies the default is bandwidth efficient
+;amr_octet=no
+
 
 [methods]
 ; Use this section to allow server processing of various SIP methods by

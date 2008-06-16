@@ -51,7 +51,7 @@ namespace { // anonymous
 #define BUFFER_SIZE   (2*SAMPLES_FRAME)
 
 // Maximum compressed frame size
-#define MAX_AMRNB_SIZE 32
+#define MAX_AMRNB_SIZE 33
 
 // Maximum number of frames we are willing to decode in a packet
 #define MAX_PKT_FRAMES  4
@@ -70,17 +70,20 @@ public:
 class AmrTrans : public DataTranslator
 {
 public:
-    AmrTrans(const char* sFormat, const char* dFormat, void* amrState);
+    AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign = false);
     virtual ~AmrTrans();
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
     inline bool valid() const
 	{ return 0 != m_amrState; }
+    static inline const char* alignName(bool align)
+	{ return align ? "octet aligned" : "bandwidth efficient"; }
 protected:
     bool dataError(const char* text = 0);
     virtual bool pushData(unsigned long& tStamp) = 0;
     void* m_amrState;
     DataBlock m_data;
     bool m_showError;
+    bool m_octetAlign;
     Mode m_cmr;
 };
 
@@ -88,8 +91,8 @@ protected:
 class AmrEncoder : public AmrTrans
 {
 public:
-    inline AmrEncoder(const char* sFormat, const char* dFormat, bool discont = false)
-	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0)),
+    inline AmrEncoder(const char* sFormat, const char* dFormat, bool octetAlign, bool discont = false)
+	: AmrTrans(sFormat,dFormat,::Encoder_Interface_init(discont ? 1 : 0),octetAlign),
 	 m_mode(MR122)
 	{ }
     virtual ~AmrEncoder();
@@ -102,8 +105,8 @@ protected:
 class AmrDecoder : public AmrTrans
 {
 public:
-    inline AmrDecoder(const char* sFormat, const char* dFormat)
-	: AmrTrans(sFormat,dFormat,::Decoder_Interface_init())
+    inline AmrDecoder(const char* sFormat, const char* dFormat, bool octetAlign)
+	: AmrTrans(sFormat,dFormat,::Decoder_Interface_init(),octetAlign)
 	{ }
     virtual ~AmrDecoder();
 protected:
@@ -114,6 +117,8 @@ protected:
 static int count = 0;                   // Created objects
 
 static TranslatorCaps caps[] = {
+    { 0, 0 },
+    { 0, 0 },
     { 0, 0 },
     { 0, 0 },
     { 0, 0 }
@@ -127,7 +132,6 @@ static int modeBits[16] = {
 
 // Discontinuous Transmission (DTX)
 bool s_discontinuous = false;
-
 
 // Helper function, gets a number of bits and advances pointer, return -1 for error
 static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char bits)
@@ -155,12 +159,13 @@ static int getBits(unsigned const char*& ptr, int& len, int& bpos, unsigned char
 
 
 // Arbitrary type transcoder constructor
-AmrTrans::AmrTrans(const char* sFormat, const char* dFormat, void* amrState)
+AmrTrans::AmrTrans(const char* sFormat, const char* dFormat, void* amrState, bool octetAlign)
     : DataTranslator(sFormat,dFormat),
-      m_amrState(amrState), m_showError(true), m_cmr(MR122)
+      m_amrState(amrState), m_showError(true),
+      m_octetAlign(octetAlign), m_cmr(MR122)
 {
-    Debug(MODNAME,DebugAll,"AmrTrans::AmrTrans('%s','%s',%p) [%p]",
-	sFormat,dFormat,amrState,this);
+    Debug(MODNAME,DebugAll,"AmrTrans::AmrTrans('%s','%s',%p,%s) [%p]",
+	sFormat,dFormat,amrState,String::boolText(octetAlign),this);
     count++;
 }
 
@@ -217,20 +222,33 @@ bool AmrEncoder::pushData(unsigned long& tStamp)
 
     unsigned char unpacked[MAX_AMRNB_SIZE+1];
     int len = ::Encoder_Interface_Encode(m_amrState,m_mode,(short*)m_data.data(),unpacked,0);
-    if ((len <= 0) || (len > MAX_AMRNB_SIZE))
+    if ((len <= 0) || (len >= MAX_AMRNB_SIZE))
 	return dataError("encoder");
     unpacked[len] = 0;
     XDebug(MODNAME,DebugAll,"Encoded mode %d frame to %d bytes first %02x [%p]",
 	m_mode,len,unpacked[0],this);
     unsigned char buffer[MAX_AMRNB_SIZE];
     // build a TOC with just one entry
-    // 4 bit CMR, 1 bit follows (forced 0), 3 bits of mode
-    buffer[0] = (m_cmr << 4) | ((unpacked[0] >> 4) & 0x07);
-    // 1 bit of mode and 1 bit Q
-    unsigned char leftover = (unpacked[0] << 4) & 0xc0;
-    for (int i = 1; i < len; i++) {
-	buffer[i] = leftover | (unpacked[i] >> 2);
-	leftover = (unpacked[i] << 6) & 0xc0;
+    if (m_octetAlign) {
+	// 4 bit CMR, 4 bits reserved
+	buffer[0] = (m_cmr << 4);
+	// 1 bit follows (0), 4 bits of mode, 1 bit Q, 2 bits padding (0)
+	buffer[1] = unpacked[0] & 0x7c;
+	// AMR data
+	for (int i = 1; i < len; i++)
+	    buffer[i+1] = unpacked[i];
+	len++;
+    }
+    else {
+	// 4 bit CMR, 1 bit follows (forced 0), 3 bits of mode
+	buffer[0] = (m_cmr << 4) | ((unpacked[0] >> 4) & 0x07);
+	// 1 bit of mode and 1 bit Q
+	unsigned char leftover = (unpacked[0] << 4) & 0xc0;
+	// AMR data
+	for (int i = 1; i < len; i++) {
+	    buffer[i] = leftover | (unpacked[i] >> 2);
+	    leftover = (unpacked[i] << 6) & 0xc0;
+	}
     }
     m_data.cut(-BUFFER_SIZE);
     DataBlock outData(buffer,len,false);
@@ -256,20 +274,35 @@ bool AmrDecoder::pushData(unsigned long& tStamp)
 	return false;
     unsigned const char* ptr = (unsigned const char*)m_data.data();
     int len = m_data.length();
+    // an octet aligned packet should have 0 in the 4 reserved bits of CMR
+    //  and in the lower 2 bits of first TOC entry octet
+    bool octetHint = ((ptr[0] & 0x0f) | (ptr[1] & 0x03)) == 0;
+    if (octetHint != m_octetAlign) {
+	Debug(MODNAME,DebugNote,"Decoder switching from %s to %s mode [%p]",
+	    alignName(m_octetAlign),alignName(octetHint),this);
+	m_octetAlign = octetHint;
+	// TODO: find and notify paired encoder about the new alignment
+    }
     int bpos = 0;
     unsigned char cmr = getBits(ptr,len,bpos,4) >> 4;
+    if (m_octetAlign)
+	getBits(ptr,len,bpos,4);
     unsigned int tocLen = 0;
     unsigned char toc[MAX_PKT_FRAMES];
     int dataBits = 0;
     // read the TOC
     for (;;) {
 	int ft = getBits(ptr,len,bpos,6);
+	if (m_octetAlign)
+	    getBits(ptr,len,bpos,2);
 	if (ft < 0)
 	    return dataError("TOC truncated");
 	int nBits = modeBits[(ft >> 3) & 0x0f];
 	// discard the entire packet if an invalid frame is found
 	if (nBits < 0)
 	    return dataError("invalid mode");
+	if (m_octetAlign)
+	    nBits = (nBits + 7) & (~7);
 	dataBits += nBits;
 	toc[tocLen++] = ft & 0x7c; // keep type and quality bit
 	// does another TOC follow?
@@ -282,11 +315,15 @@ bool AmrDecoder::pushData(unsigned long& tStamp)
 	return dataError("data truncated");
     // We read the TOC, now pick the following voice frames and decode
     for (unsigned int idx = 0; idx < tocLen; idx++) {
+	if (m_octetAlign && (bpos != 0))
+	    return dataError("internal alignment error");
 	int mode = (toc[idx] >> 3) & 0x0f;
 	bool good = 0 != (toc[idx] & 0x04);
 	int nBits = modeBits[mode];
 	XDebug(MODNAME,DebugAll,"Decoding %d bits %s mode %d frame %u [%p]",
 	    nBits,(good ? "good" : "bad"),mode,idx,this);
+	if (m_octetAlign)
+	    nBits = (nBits + 7) & (~7);
 	unsigned char unpacked[MAX_AMRNB_SIZE];
 	unpacked[0] = toc[idx];
 	for (unsigned int i = 1; i < MAX_AMRNB_SIZE; i++) {
@@ -324,9 +361,11 @@ AmrPlugin::AmrPlugin()
     Output("Loaded module AMR-NB codec - based on 3GPP code");
     const FormatInfo* f = FormatRepository::addFormat("amr",0,20000);
     caps[0].src = caps[1].dest = f;
-    caps[0].dest = caps[1].src = FormatRepository::getFormat("slin");
+    f = FormatRepository::addFormat("amr-o",0,20000);
+    caps[2].src = caps[3].dest = f;
+    caps[0].dest = caps[1].src = caps[2].dest = caps[3].src = FormatRepository::getFormat("slin");
     // FIXME: put proper conversion costs
-    caps[0].cost = caps[1].cost = 5;
+    caps[0].cost = caps[1].cost = caps[2].cost = caps[3].cost = 5;
 }
 
 AmrPlugin::~AmrPlugin()
@@ -342,11 +381,19 @@ bool AmrPlugin::isBusy() const
 // Create transcoder instance for requested formats
 DataTranslator* AmrPlugin::create(const DataFormat& sFormat, const DataFormat& dFormat)
 {
-    if (sFormat == "slin" && dFormat == "amr")
-	return new AmrEncoder(sFormat,dFormat,s_discontinuous);
-    else if (sFormat == "amr" && dFormat == "slin")
-	return new AmrDecoder(sFormat,dFormat);
-    else return 0;
+    if (sFormat == "slin") {
+	if (dFormat == "amr")
+	    return new AmrEncoder(sFormat,dFormat,false,s_discontinuous);
+	if (dFormat == "amr-o")
+	    return new AmrEncoder(sFormat,dFormat,true,s_discontinuous);
+    }
+    else if (dFormat == "slin") {
+	if (sFormat == "amr")
+	    return new AmrDecoder(sFormat,dFormat,false);
+	if (sFormat == "amr-o")
+	    return new AmrDecoder(sFormat,dFormat,true);
+    }
+    return 0;
 }
 
 const TranslatorCaps* AmrPlugin::getCapabilities() const

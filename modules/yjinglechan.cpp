@@ -2445,6 +2445,24 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 // Message handler: Disconnect channels, destroy streams, clear rosters
 bool YJGDriver::received(Message& msg, int id)
 {
+    // Execute: accept 
+    if (id == Execute) {
+	while (true) {
+	    NamedString* callto = msg.getParam("callto");
+	    if (!callto)
+		break;
+	    int pos = callto->find('/');
+	    if (pos < 1)
+		break;
+	    String dest = callto->substr(0,pos);
+	    if (!canHandleProtocol(dest))
+		break;
+	    dest = callto->substr(pos + 1);
+	    return msgExecute(msg,dest);
+	}
+	return Driver::received(msg,Execute);
+    }
+
     if (id == Status) {
 	String target = msg.getValue("module");
 	// Target is the driver or channel

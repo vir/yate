@@ -2065,6 +2065,7 @@ bool XmppIqHandler::received(Message& msg)
     }
     else
 	TelEngine::destruct(recvStanza);
+    TelEngine::destruct(stream);
     // Return true to make sure nobody will respond again!!!
     return true;
 }

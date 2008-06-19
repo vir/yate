@@ -1,11 +1,13 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
 # to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
+# to disable H.323 support run rpmbuild --define 'noh323 1'
 # to disable the GUI clients run rpmbuild --define 'nogui 1'
 
 %{!?dist:%define dist %{nil}}
 %{?nodeps:%define no_auto_deps 1}
 %{?nopstn:%define no_pstn 1}
+%{?noh323:%define no_h323 1}
 %{?nogui:%define no_gui 1}
 
 %if "%{dist}" == ""
@@ -167,6 +169,8 @@ provides moderate compression and good voice quality.
 %{_libdir}/yate/gsmcodec.yate
 
 
+%if "%{no_h323}" != "1"
+
 %package h323
 Summary:	H.323 protocol driver for Yate
 Group:		Applications/Communication
@@ -177,6 +181,8 @@ Yate driver for the ITU-T H.323 VoIP protocol based on the OpenH323 library.
 %files h323
 %{_libdir}/yate/h323chan.yate
 %config(noreplace) %{_sysconfdir}/yate/h323chan.conf
+
+%endif
 
 
 %if "%{no_pstn}" != "1"
@@ -313,7 +319,9 @@ Requires:	%{name} = %{version}-%{release}
 Requires:	%{name}-alsa = %{version}-%{release}
 %endif
 Requires:	%{name}-gsm = %{version}-%{release}
+%if "%{no_h323}" != "1"
 Requires:	%{name}-h323 = %{version}-%{release}
+%endif
 %if "%{no_pstn}" != "1"
 Requires:	%{name}-isdn = %{version}-%{release}
 %endif
@@ -335,6 +343,9 @@ The devel package must still be installed separately.
 
 # disable unpackaged files check if we know we are going to skip some
 %if "%{no_pstn}" == "1"
+%define _unpackaged_files_terminate_build 0
+%endif
+%if "%{no_h323}" == "1"
 %define _unpackaged_files_terminate_build 0
 %endif
 %if "%{no_gui}" == "1"
@@ -391,6 +402,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Fri Jun 20 2008 Paul Chitescu <paulc@voip.null.ro>
+- Option to remove H.323 subpackage
+
 * Fri May 30 2008 Paul Chitescu <paulc@voip.null.ro>
 - Removed GTK client
 

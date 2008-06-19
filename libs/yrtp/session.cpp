@@ -277,7 +277,7 @@ void RTPReceiver::timerTick(const Time& when)
 
 
 RTPSender::RTPSender(RTPSession* session, bool randomTs)
-    : RTPBaseIO(session), m_evTime(0), m_tsLast(0)
+    : RTPBaseIO(session), m_evTime(0), m_tsLast(0), m_padding(0)
 {
     if (randomTs)
 	m_ts = ::random() & ~1;
@@ -299,9 +299,21 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     ssrcInit();
     m_seq++;
 
-    DataBlock buf(0,len+12);
+    unsigned char padding = 0;
+    unsigned char byte1 = 0x80;
+    if (m_padding > 1) {
+	padding = len % m_padding;
+	if (padding) {
+	    padding = m_padding - padding;
+	    byte1 |= 0x20;
+	}
+    }
+
+    DataBlock buf(0,len+padding+12);
     unsigned char* pc = (unsigned char*)buf.data();
-    *pc++ = 0x80;
+    if (padding)
+	pc[buf.length() - 1] = padding;
+    *pc++ = byte1;
     *pc++ = payload;
     *pc++ = (unsigned char)(m_seq >> 8);
     *pc++ = (unsigned char)(m_seq & 0xff);
@@ -401,6 +413,14 @@ bool RTPSender::sendEventData(unsigned int timestamp)
 	return ok;
     }
     return false;
+}
+
+bool RTPSender::padding(int chunk)
+{
+    if ((chunk < 0) || (chunk > 128))
+	return false;
+    m_padding = chunk;
+    return true;
 }
 
 void RTPSender::timerTick(const Time& when)

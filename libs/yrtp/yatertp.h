@@ -626,6 +626,21 @@ public:
      */
     bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0);
 
+
+    /**
+     * Get the payload padding size
+     * @return Chunk size to pad the payload to a multiple of
+     */
+    inline int padding() const
+	{ return m_padding; }
+
+    /**
+     * Set the padding to a multiple of a data chunk
+     * @param chunk Size to pad the payload to a multiple of
+     * @return True if the new chunk size is valid
+     */
+    bool padding(int chunk);
+
 protected:
     /**
      * Method called periodically to send events and buffered data
@@ -636,6 +651,7 @@ protected:
 private:
     int m_evTime;
     unsigned int m_tsLast;
+    unsigned char m_padding;
     bool sendEventData(unsigned int timestamp);
 };
 
@@ -802,6 +818,21 @@ public:
      */
     inline bool rtpSendKey(char key, int duration, int volume = 0, unsigned int timestamp = 0)
 	{ return m_send && m_send->rtpSendKey(key,duration,volume,timestamp); }
+
+    /**
+     * Get the payload padding size
+     * @return Chunk size to pad the payload to a multiple of
+     */
+    inline int padding() const
+	{ return m_send ? m_send->padding() : 0; }
+
+    /**
+     * Set the padding to a multiple of a data chunk
+     * @param chunk Size to pad the payload to a multiple of
+     * @return True if the new chunk size is valid
+     */
+    inline bool padding(int chunk)
+	{ return m_send && m_send->padding(chunk); }
 
     /**
      * Allocate and set a new dejitter buffer for the receiver in the session

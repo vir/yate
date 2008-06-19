@@ -23,6 +23,10 @@
 ; anyssrc: bool: Accept any incoming SSRC, even if it changes frequently
 ;anyssrc=disable
 
+; padding: int: Pad the RTP payload to a multiple of this setting
+; Supported values are between 2 and 128
+;padding=0
+
 ; rtcp: bool: Allocate socket for the RTCP protocol by default
 ;rtcp=enabled
 

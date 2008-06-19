@@ -83,6 +83,7 @@ static TokenDict dict_tos[] = {
 static int s_minport = MIN_PORT;
 static int s_maxport = MAX_PORT;
 static int s_bufsize = BUF_SIZE;
+static int s_padding = 0;
 static String s_tos;
 static String s_localip;
 static String s_notifyMsg;
@@ -472,6 +473,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
+    m_rtp->padding(msg.getIntValue("padding",s_padding));
     if (msg.getBoolValue("drillhole",s_drill)) {
 	bool ok = m_rtp->drillHole();
 	Debug(&splugin,(ok ? DebugInfo : DebugWarn),
@@ -948,6 +950,7 @@ void YRTPPlugin::initialize()
     s_localip = cfg.getValue("general","localip");
     s_autoaddr = cfg.getBoolValue("general","autoaddr",true);
     s_anyssrc = cfg.getBoolValue("general","anyssrc",false);
+    s_padding = cfg.getIntValue("general","padding",0);
     s_rtcp = cfg.getBoolValue("general","rtcp",true);
     s_drill = cfg.getBoolValue("general","drillhole",Engine::clientMode());
     s_sleep = cfg.getIntValue("general","defsleep",5);

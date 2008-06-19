@@ -29,45 +29,18 @@
 #error This module is only for Windows
 #else
 
-extern "C" {
-
-#include <winioctl.h>
-#define IOCTL_WRITE 1
-#define IOCTL_READ 2
-#define IOCTL_MGMT 3
-#define IoctlWriteCommand \
-	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_WRITE, METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
-#define IoctlReadCommand \
-	CTL_CODE(FILE_DEVICE_UNKNOWN, IOCTL_READ, METHOD_IN_DIRECT, FILE_ANY_ACCESS)
-
-};
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
-#define WP_HEADER 16
+#include <sang_api.h>
+#include <sang_status_defines.h>
 
-#define WP_RD_ERROR    0
-#define WP_RD_STAMP_LO 1
-#define WP_RD_STAMP_HI 2
-
-#define WP_WR_TYPE     0
-#define WP_WR_FORCE    1
-
-#define WP_ERR_FIFO  0x01
-#define WP_ERR_CRC   0x02
-#define WP_ERR_ABORT 0x04
-
-#define WP_RPT_REPEAT 0                  // Repeat flag in header
-#define WP_RPT_LEN 1                     // Repeated data length
-#define WP_RPT_DATA 2                    // Repeated data offset in header
-#define WP_RPT_MAXDATA 8                 // Max repeated data length
-
-#define MAX_PACKET 1200
+#define WP_HEADER ((int)sizeof(api_header_t))
 
 #define MAX_READ_ERRORS 250              // WpSpan::run(): Display read error message
+#define WPSOCKET_SELECT_TIMEOUT 125      // Value used in WpSocket::select() to timeout
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -129,21 +102,26 @@ public:
 	{ m_card = name; }
     inline void device(const char* name)
 	{ m_device = name; }
+    inline bool canRead() const
+	{ return m_canRead; }
     // Open socket. Return false on failure
-    bool open(bool blocking);
+    bool open();
     // Close socket
     void close();
     // Read data. Return -1 on failure
     int recv(void* buffer, int len);
     // Send data. Return -1 on failure
     int send(void* buffer, int len);
+    // Check socket. Set flags to the appropriate values on success
+    // Return false on failure
+    bool select(unsigned int multiplier);
     // Update the state of the link and return true if changed
     bool updateLinkStatus();
 protected:
     inline void showError(const char* action, const char* info = 0, int level = DebugWarn) {
-	    Debug(m_dbg,level,"WpSocket(%s/%s). %s failed%s. %d: %s [%p]",
+	    Debug(m_dbg,level,"WpSocket(%s_%s). %s failed%s. Code %d [%p]",
 		m_card.c_str(),m_device.c_str(),action,c_safe(info),
-		m_error,::strerror(m_error),this);
+		m_error,this);
 	}
 private:
     DebugEnabler* m_dbg;                 // Debug enabler owning this socket
@@ -151,8 +129,10 @@ private:
     int m_error;                         // Last error code
     String m_card;                       // Card name used to open socket
     String m_device;                     // Device name used to open socket
+    bool m_canRead;                      // Set by select(). Can read from socket
     bool m_readError;                    // Flag used to print read errors
     bool m_writeError;                   // Flag used to print write errors
+    bool m_selectError;                  // Flag used to print select errors
 };
 
 // Wanpipe D-channel
@@ -188,8 +168,6 @@ private:
     WpSigThread* m_thread;               // Thread used to read data from socket
     bool m_readOnly;                     // Readonly interface
     int m_notify;                        // Upper layer notification on received data (0: success. 1: not notified. 2: notified)
-    int m_overRead;                      // Header extension
-    unsigned char m_errorMask;           // Error mask to filter received errors
     bool m_sendReadOnly;                 // Print send attempt on readonly interface error
     SignallingTimer m_timerRxUnder;      // RX underrun notification
 };
@@ -316,8 +294,7 @@ private:
     // Used for data processing
     WpCircuit** m_circuits;              // The circuits belonging to this span
     unsigned int m_readErrors;           // Count data read errors
-    unsigned char* m_buffer;             // I/O data buffer
-    unsigned int m_bufferLen;            // I/O data buffer length
+    TX_RX_DATA_STRUCT m_buffer;          // I/O data buffer
 };
 
 // B-channel group read/write data
@@ -395,18 +372,20 @@ WpSocket::WpSocket(DebugEnabler* dbg, const char* card, const char* device)
     m_fd(INVALID_HANDLE_VALUE),
     m_card(card),
     m_device(device),
+    m_canRead(false),
     m_readError(false),
-    m_writeError(false)
+    m_writeError(false),
+    m_selectError(false)
 {
 }
 
 
 // Open socket
-bool WpSocket::open(bool blocking)
+bool WpSocket::open()
 {
     DDebug(m_dbg,DebugAll,
-	"WpSocket::open(). Card: '%s'. Device: '%s'. Blocking: %s [%p]",
-	m_card.c_str(),m_device.c_str(),String::boolText(blocking),this);
+	"WpSocket::open(). Card: '%s'. Device: '%s' [%p]",
+	m_card.c_str(),m_device.c_str(),this);
     String devname("\\\\.\\");
     devname << m_card << "_" << m_device;
     m_fd = ::CreateFile(devname,
@@ -470,6 +449,35 @@ int WpSocket::send(void* buffer, int len)
     return -1;
 }
 
+// Check events and socket availability
+bool WpSocket::select(unsigned int multiplier)
+{
+    m_canRead = false;
+    API_POLL_STRUCT apiPoll;
+    apiPoll.operation_status = 0;
+    apiPoll.poll_events_bitmap = 0;
+    apiPoll.user_flags_bitmap = POLLIN;
+    apiPoll.timeout = (multiplier * WPSOCKET_SELECT_TIMEOUT) / 1000;
+    if (0 == apiPoll.timeout)
+	apiPoll.timeout = 1;
+
+    int sz = 0;
+    if (DeviceIoControl(m_fd,IoctlApiPoll,0,0,&apiPoll,sizeof(apiPoll),(LPDWORD)&sz,0)) {
+Output("HERE - 1");
+	m_canRead = (apiPoll.poll_events_bitmap & POLL_EVENT_RX_DATA) != 0;
+	m_selectError = false;
+	return true;
+    }
+
+    if (m_selectError)
+	return false;
+    m_error = ::GetLastError();
+    showError("Select");
+    m_selectError = true;
+    return false;
+}
+
+
 /**
  * WpInterface
  */
@@ -515,7 +523,6 @@ WpInterface::WpInterface(const NamedList& params)
     m_thread(0),
     m_readOnly(false),
     m_notify(0),
-    m_overRead(0),
     m_sendReadOnly(false),
     m_timerRxUnder(0)
 {
@@ -544,9 +551,6 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 
     m_readOnly = params.getBoolValue("readonly",config.getBoolValue("readonly",false));
 
-    int i = params.getIntValue("errormask",config.getIntValue("errormask",255));
-    m_errorMask = ((i >= 0 && i < 256) ? i : 255);
-
     int rx = params.getIntValue("rxunderruninterval");
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
@@ -558,7 +562,6 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 	s << " type=" << config.getValue("type","T1");
 	s << " card=" << m_socket.card();
 	s << " device=" << m_socket.device();
-	s << " errormask=" << (unsigned int)m_errorMask;
 	s << " readonly=" << String::boolText(m_readOnly);
 	s << " rxunderruninterval=" << (unsigned int)m_timerRxUnder.interval() << "ms";
 	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
@@ -587,41 +590,12 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     }
 #endif
 
-#ifdef wp_api_tx_hdr_hdlc_rpt_data
-    // Repeat supported and data not too big
-    if (repeat)
-	if (packet.length() <= WP_RPT_MAXDATA) {
-	    unsigned char hdr[WP_HEADER];
-	    ::memset(hdr,0,WP_HEADER);
-	    hdr[WP_RPT_REPEAT] = 1;
-	    hdr[WP_RPT_LEN] = packet.length();
-	    ::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
-	    return -1 != m_socket.send(hdr,WP_HEADER,0);
-	}
-	else
-	    Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
-		type,packet.length());
-#endif
+    TX_DATA_STRUCT buffer;
+    ::memcpy(buffer.data,packet.data(),packet.length());
+    buffer.api_header.data_length = packet.length();
+    buffer.api_header.operation_status = SANG_STATUS_TX_TIMEOUT;
 
-    DataBlock data(0,WP_HEADER);
-    data += packet;
-
-    return -1 != m_socket.send(data.data(),data.length());
-}
-
-static inline const char* error(unsigned char err)
-{
-    static String s;
-    s.clear();
-    if (err & WP_ERR_CRC)
-	s.append("CRC");
-    if (err & WP_ERR_FIFO)
-	s.append("RxOver"," ");
-    if (err & WP_ERR_ABORT)
-	s.append("Align"," ");
-    if (s.null())
-	s << (int)err;
-    return s.safe();
+    return -1 != m_socket.send(&buffer,sizeof(buffer));
 }
 
 // Receive signalling packet
@@ -629,24 +603,20 @@ bool WpInterface::receiveAttempt()
 {
     if (!m_socket.valid())
 	return false;
-    unsigned char buf[WP_HEADER + MAX_PACKET];
-    int r = m_socket.recv(buf,sizeof(buf));
+    if (!m_socket.select(5))
+	return false;
+    RX_DATA_STRUCT buffer;
+    buffer.api_header.operation_status = SANG_STATUS_RX_DATA_TIMEOUT;
+    int r = m_socket.recv(&buffer,sizeof(buffer));
     if (r == -1)
 	return false;
-    if (r > (WP_HEADER + m_overRead)) {
+    if (r > WP_HEADER) {
 	XDebug(this,DebugAll,"Received %d bytes packet. Header length is %u [%p]",
-	    r,WP_HEADER + m_overRead,this);
-	r -= (WP_HEADER + m_overRead);
-	unsigned char err = buf[WP_RD_ERROR] & m_errorMask;
-	if (err) {
+	    r,WP_HEADER,this);
+	r -= WP_HEADER;
+	if (SANG_STATUS_SUCCESS != buffer.api_header.operation_status) {
 	    DDebug(this,DebugWarn,"Packet got error: %u (%s) [%p]",
-		buf[WP_RD_ERROR],error(buf[WP_RD_ERROR]),this);
-	    if (err & WP_ERR_FIFO)
-		notify(RxOverflow);
-	    if (err & WP_ERR_CRC)
-		notify(CksumError);
-	    if (err & WP_ERR_ABORT)
-		notify(AlignError);
+		buffer.api_header.operation_status,SDLA_DECODE_SANG_STATUS(buffer.api_header.operation_status),this);
 	    return true;
 	}
 
@@ -662,7 +632,7 @@ bool WpInterface::receiveAttempt()
 	}
 #endif
 
-	DataBlock data(buf+WP_HEADER,r);
+	DataBlock data(buffer.data,r);
 	receivedPacket(data);
 	data.clear(false);
     }
@@ -694,7 +664,7 @@ bool WpInterface::control(Operation oper, NamedList* params)
     }
     if (oper == Enable) {
 	bool ok = false;
-	if (m_socket.valid() || m_socket.open(true)) {
+	if (m_socket.valid() || m_socket.open()) {
 	    if (!m_thread)
 		m_thread = new WpSigThread(this);
 	    if (m_thread->running())
@@ -1028,9 +998,7 @@ WpSpan::WpSpan(const NamedList& params)
     m_noData(0),
     m_buflen(0),
     m_circuits(0),
-    m_readErrors(0),
-    m_buffer(0),
-    m_bufferLen(0)
+    m_readErrors(0)
 {
     XDebug(m_group,DebugAll,"WpSpan::WpSpan(). Name '%s' [%p]",id().safe(),this);
 }
@@ -1047,8 +1015,6 @@ WpSpan::~WpSpan()
     m_socket.close();
     if (m_circuits)
 	delete[] m_circuits;
-    if (m_buffer)
-	delete[] m_buffer;
     XDebug(m_group,DebugAll,"WpSpan::~WpSpan() [%p]",this);
 }
 
@@ -1180,18 +1146,18 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
 // Sent data from each circuit is merged into one data block
 void WpSpan::run()
 {
-    if (!m_socket.open(true))
+    if (!m_socket.open())
 	return;
-    if (!m_buffer) {
-	m_bufferLen = WP_HEADER + m_samples * m_count;
-	m_buffer = new unsigned char[m_bufferLen];
-    }
     DDebug(m_group,DebugInfo,
-	"WpSpan('%s'). Worker is running: circuits=%u, buffer=%u, samples=%u [%p]",
-	id().safe(),m_count,m_bufferLen,m_samples,this);
+	"WpSpan('%s'). Worker is running: circuits=%u, samples=%u [%p]",
+	id().safe(),m_count,m_samples,this);
     while (true) {
 	if (Thread::check(true))
 	    break;
+	if (!m_socket.select(m_samples))
+	    continue;
+	if (!m_socket.canRead())
+	    continue;
 	int r = readData();
 	if (r == -1)
 	    continue;
@@ -1210,10 +1176,10 @@ void WpSpan::run()
 	    Debug(m_group,DebugInfo,
 		"WpSpan('%s'). Received %u samples. Expected %u [%p]",
 		id().safe(),samples,m_samples,this);
-	unsigned char* dat = m_buffer + WP_HEADER;
+	unsigned char* dat = m_buffer.data;
 	if (m_canSend) {
 	    // Read each byte from buffer. Prepare buffer for sending
-	    for (int n = samples; n > 0; n--)
+	    for (int n = samples; n > 0; n--) {
 		for (unsigned int i = 0; i < m_count; i++) {
 		    if (m_circuits[i]->source())
 			m_circuits[i]->source()->put(swap(*dat));
@@ -1223,8 +1189,10 @@ void WpSpan::run()
 			*dat = swap(m_noData);
 		    dat++;
 		}
-	    ::memset(m_buffer,0,WP_HEADER);
-	    m_socket.send(m_buffer,WP_HEADER + samples * m_count);
+	    }
+	    m_buffer.api_header.data_length = m_samples * m_count;
+	    m_buffer.api_header.operation_status = SANG_STATUS_TX_TIMEOUT;
+	    m_socket.send(&m_buffer,sizeof(m_buffer));
 	}
 	else
 	    for (int n = samples; n > 0; n--)
@@ -1249,8 +1217,8 @@ WpCircuit* WpSpan::find(unsigned int channel)
 // Return -1 on error
 int WpSpan::readData()
 {
-    m_buffer[WP_RD_ERROR] = 0;
-    int r = m_socket.recv(m_buffer,m_bufferLen);
+    m_buffer.api_header.operation_status = SANG_STATUS_RX_DATA_TIMEOUT;
+    int r = m_socket.recv(&m_buffer,sizeof(m_buffer));
     // Check errors
     if (r == -1)
 	return -1;
@@ -1259,11 +1227,12 @@ int WpSpan::readData()
 	    id().safe(),r,this);
 	return -1;
     }
-    if (m_buffer[WP_RD_ERROR]) {
+    if (SANG_STATUS_SUCCESS != m_buffer.api_header.operation_status) {
 	m_readErrors++;
 	if (m_readErrors == MAX_READ_ERRORS) {
-	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error %u [%p]",
-		id().safe(),m_buffer[WP_RD_ERROR],this);
+	    Debug(m_group,DebugGoOn,"WpSpan('%s'). Read error %u (%s) [%p]",
+		id().safe(),m_buffer.api_header.operation_status,
+		SDLA_DECODE_SANG_STATUS(m_buffer.api_header.operation_status),this);
 	    m_readErrors = 0;
 	}
     }

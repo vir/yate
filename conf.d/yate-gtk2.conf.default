@@ -1,5 +1,0 @@
-; This minimal file is here just to set the default skin.
-; You can replace it with a more complete version from yate.conf.sample
-
-[localsym]
-h323chan.yate=yes

@@ -205,6 +205,20 @@ interfaces.
 %endif
 
 
+%package openssl
+Summary:	OpenSSL based encryption support for Yate
+Group:		Applications/Communication
+Provides:	%{name}-ssl
+Provides:	%{name}-crypto
+
+%description openssl
+This package provides SSL/TLS encrypted communication support for Yate as
+well as cryptographic routines used for other purposes.
+
+%files openssl
+%{_libdir}/yate/openssl.yate
+
+
 %package pgsql
 Summary:	PostgreSQL database driver for Yate
 Group:		Applications/Communication
@@ -325,6 +339,7 @@ Requires:	%{name}-h323 = %{version}-%{release}
 %if "%{no_pstn}" != "1"
 Requires:	%{name}-isdn = %{version}-%{release}
 %endif
+Requires:	%{name}-openssl = %{version}-%{release}
 Requires:	%{name}-mysql = %{version}-%{release}
 Requires:	%{name}-pgsql = %{version}-%{release}
 %if "%{no_gui}" != "1"
@@ -404,6 +419,7 @@ rm -rf %{buildroot}
 %changelog
 * Fri Jun 20 2008 Paul Chitescu <paulc@voip.null.ro>
 - Option to remove H.323 subpackage
+- Added missing openssl subpackage
 
 * Fri May 30 2008 Paul Chitescu <paulc@voip.null.ro>
 - Removed GTK client

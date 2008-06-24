@@ -723,7 +723,15 @@ static int supervise(void)
 		::kill(s_childpid,SIGABRT);
 		::usleep(500000);
 	    }
-	    ::kill(s_childpid,SIGKILL);
+	    // Try to kill until it dies or we get a termination signal
+	    while ((s_childpid > 0) && !::kill(s_childpid,SIGKILL)) {
+		if (!s_runagain)
+		    break;
+		::usleep(100000);
+		int status = -1;
+		if (::waitpid(s_childpid,&status,WNOHANG) > 0)
+		    break;
+	    }
 	    s_childpid = -1;
 	}
 	if (s_logrotator) {

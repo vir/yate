@@ -2091,10 +2091,10 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
 	    fxo->removeCallSetupDetector();
     }
 
-    if (fxsCaller)
-	m_address = m_line->address();
-    else if (m_line->getPeer())
+    if (fxsCaller && m_line->getPeer())
 	m_address = m_line->getPeer()->address();
+    else
+	m_address = m_line->address();
 
     // Set caller/called
     ModuleLine* info = m_line;

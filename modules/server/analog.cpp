@@ -2109,7 +2109,7 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
 	m_line->setCall(s_unk,"",fxo->called());
 
     Debug(this,DebugCall,"Created addr=%s initiator=%s [%p]",
-	m_line->address(),callertype(fxsCaller),this);
+	m_address.c_str(),callertype(fxsCaller),this);
 
     Engine::enqueue(message("chan.startup"));
 

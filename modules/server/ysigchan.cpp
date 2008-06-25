@@ -2645,7 +2645,7 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
 	    break;
 	}
 	setSource(source);
-	TelEngine::destruct(source);
+	source->deref();
 	if (!getSource()) {
 	    m_reason = "Failed to set data source";
 	    break;

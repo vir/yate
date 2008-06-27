@@ -244,7 +244,7 @@ public:
     inline bool canRead() const
 	{ return m_canRead; }
     inline bool event() const
-	{ return m_event; }
+	{ return m_event || m_savedEvent; }
     inline const char* zapDevName() const
 	{ return (m_type != Control) ? s_zapDevName : s_zapCtlName; }
     // Get driver/chan format
@@ -264,6 +264,11 @@ public:
     bool setEchoCancel(bool enable, unsigned int taps);
     // Start echo canceller training for a given period of time (in miliseconds)
     bool startEchoTrain(unsigned int period);
+    // Enable polling of off-hook state, call only for passive FXO
+    inline void initHook()
+	{ m_rxOffHook = 0; }
+    // Poll the hook state and save event since a FXO does not generate events
+    void pollHook();
     // Send hook events
     bool sendHook(HookEvent event);
     // Send DTMFs events using dialing or tone structure
@@ -327,6 +332,8 @@ private:
     int m_span;                          // Span this device's channel belongs to
     int m_spanPos;                       // Physical channel inside span
     int m_alarms;                        // Device alarms flag
+    int m_rxOffHook;                     // Keep hook status for bridged lines
+    int m_savedEvent;                    // Event saved asynchronously for later
     String m_alarmsText;                 // Alarms text
     bool m_canRead;                      // True if there is data to read
     bool m_event;                        // True if an event occurred when recv/select
@@ -797,6 +804,8 @@ ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
     m_span(-1),
     m_spanPos(-1),
     m_alarms(NotOpen),
+    m_rxOffHook(-1),
+    m_savedEvent(0),
     m_canRead(false),
     m_event(false),
     m_readError(false),
@@ -824,6 +833,8 @@ ZapDevice::ZapDevice(unsigned int chan, bool disableDbg, bool open)
     m_span(-1),
     m_spanPos(-1),
     m_alarms(NotOpen),
+    m_rxOffHook(-1),
+    m_savedEvent(0),
     m_canRead(false),
     m_event(false),
     m_readError(false),
@@ -1017,6 +1028,23 @@ bool ZapDevice::startEchoTrain(unsigned int period)
     return true;
 }
 
+// Poll for hook events (passive FXO)
+void ZapDevice::pollHook()
+{
+    if (m_rxOffHook < 0)
+	return;
+
+    ZT_PARAMS par;
+    if (!ioctl(GetParams,&par))
+	return;
+
+    if (m_rxOffHook == par.rxisoffhook)
+	return;
+    // state changed, save the event for later
+    m_rxOffHook = par.rxisoffhook;
+    m_savedEvent = m_rxOffHook ? ZT_EVENT_ONHOOK : ZT_EVENT_WINKFLASH;
+}
+
 // Send hook events
 bool ZapDevice::sendHook(HookEvent event)
 {
@@ -1115,8 +1143,10 @@ bool ZapDevice::sendDtmf(char tone)
 // Get an event. Return 0 if no events. Set digit if the event is a DTMF/PULSE digit
 int ZapDevice::getEvent(char& digit)
 {
-    int event = 0;
-    if (!ioctl(GetEvent,&event,DebugMild))
+    int event = m_savedEvent;
+    if (event)
+	m_savedEvent = 0;
+    else if (!ioctl(GetEvent,&event,DebugMild))
 	return 0;
     if (event & DigitEvent) {
 	digit = (char)event;
@@ -1124,7 +1154,7 @@ int ZapDevice::getEvent(char& digit)
 	XDebug(m_owner	,DebugAll,"%sGot digit event %d '%s'=%c on channel %u [%p]",
 	    m_name.safe(),event,lookup(event,s_events),digit,m_channel,m_owner);
     }
-#ifdef XDEBUG
+#ifdef DEBUG
     else if (event)
 	Debug(m_owner,DebugAll,"%sGot event %d on channel %u [%p]",
 	    m_name.safe(),event,m_channel,m_owner);
@@ -1401,7 +1431,7 @@ bool ZapDevice::ioctl(IoctlRequest request, void* param, int level)
 	    DDebug(m_owner,DebugAll,"%sIOCTL(%s) in progress on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
 		m_channel,*(int*)param,m_owner);
-#ifdef DEBUG
+#ifdef XDEBUG
 	else if (request != GetEvent)
 	    Debug(m_owner,DebugAll,"%sIOCTL(%s) succedded on channel %u (param=%d) [%p]",
 		m_name.safe(),lookup(request,s_ioctl_request),
@@ -1872,19 +1902,29 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
     m_idleValue = params.getIntValue("idlevalue",config.getIntValue("idlevalue",m_idleValue));
     m_priority = Thread::priority(config.getValue("priority",defaults.getValue("priority")));
 
-    if (type == ZapDevice::E1)
-	m_format = ZapDevice::Alaw;
-    else if (type == ZapDevice::T1)
-	m_format = ZapDevice::Mulaw;
-    else if (type == ZapDevice::FXO || type == ZapDevice::FXS) {
-	const char* f = config.getValue("format",defaults.getValue("format"));
-	m_format = (ZapDevice::Format)lookup(f,s_formats,ZapDevice::Mulaw);
-	if (m_format != ZapDevice::Alaw && m_format != ZapDevice::Mulaw)
+    switch (type) {
+	case ZapDevice::E1:
+	    m_format = ZapDevice::Alaw;
+	    break;
+	case ZapDevice::T1:
 	    m_format = ZapDevice::Mulaw;
+	    break;
+	case ZapDevice::FXO:
+	    if (!m_canSend)
+		m_device.initHook();
+	    // fall through
+	case ZapDevice::FXS:
+	    {
+		const char* f = config.getValue("format",defaults.getValue("format"));
+		m_format = (ZapDevice::Format)lookup(f,s_formats,ZapDevice::Mulaw);
+		if (m_format != ZapDevice::Alaw && m_format != ZapDevice::Mulaw)
+		    m_format = ZapDevice::Mulaw;
+	    }
+	    break;
+	default:
+	    Debug(group(),DebugStub,"ZapCircuit(%u). Unhandled circuit type=%d [%p]",
+		code,type,this);
     }
-    else
-	Debug(group(),DebugStub,"ZapCircuit(%u). Unhandled circuit type=%d [%p]",
-	    code,type,this);
 
     if (group() && group()->debugAt(DebugAll)) {
 	String s;
@@ -2497,6 +2537,7 @@ bool ZapAnalogCircuit::process()
     if (!(m_device.valid() && SignallingCircuit::status() != SignallingCircuit::Disabled))
 	return false;
 
+    m_device.pollHook();
     checkEvents();
 
     if (!(m_source && m_device.select(10) && m_device.canRead()))

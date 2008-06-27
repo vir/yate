@@ -2296,6 +2296,7 @@ public:
     enum Type {
 	FXO,                             // Telephone linked to an exchange
 	FXS,                             // Telephone exchange linked to a telephone
+	Recorder,                        // Passive FXO recording a 2 wire line
 	Monitor,                         // Monitor (a pair of FXS/FXO lines)
 	Unknown
     };

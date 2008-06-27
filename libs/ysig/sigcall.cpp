@@ -971,9 +971,10 @@ SignallingCircuitSpan::~SignallingCircuitSpan()
 const TokenDict* AnalogLine::typeNames()
 {
     static const TokenDict names[] = {
-	{"FXO",     FXO},
-	{"FXS",     FXS},
-	{"monitor", Monitor},
+	{"FXO",       FXO},
+	{"FXS",       FXS},
+	{"recorder",  Recorder},
+	{"monitor",   Monitor},
 	{0,0}
     };
     return names;
@@ -1052,6 +1053,8 @@ AnalogLine::AnalogLine(AnalogLineGroup* grp, unsigned int cic, const NamedList& 
     }
 
     m_type = m_group->type();
+    if (m_type == Recorder)
+	m_type = FXO;
     m_address << m_group->toString() << "/" << m_circuit->code();
     m_inband = params.getBoolValue("dtmfinband",false);
     String tmp = params.getValue("echocancel");
@@ -1320,7 +1323,10 @@ AnalogLineGroup::~AnalogLineGroup()
 // Append it to the list
 bool AnalogLineGroup::appendLine(AnalogLine* line, bool destructOnFail)
 {
-    if (!(line && line->type() == m_type && line->group() == this)) {
+    AnalogLine::Type type = m_type;
+    if (type == AnalogLine::Recorder)
+	type = AnalogLine::FXO;
+    if (!(line && line->type() == type && line->group() == this)) {
 	if (destructOnFail)
 	    TelEngine::destruct(line);
 	return false;

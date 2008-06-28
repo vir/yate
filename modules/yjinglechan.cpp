@@ -772,6 +772,7 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    plugin.processPresence(event->to(),event->from(),available,capAudio);
 	    m = YJBPresence::message(pres,event->from(),event->to(),sub);
 	    if (res) {
+		m->addParam("audio",String::boolText(capAudio));
 		ObjList* o = res->infoXml()->skipNull();
 		if (o || res->status()) {
 		    String prefix = "jingle";

@@ -118,6 +118,10 @@ class Yate
      */
     static function Escape($str, $extra = "")
     {
+	if ($str === true)
+	    return "true";
+	if ($str === false)
+	    return "false";
 	$str = $str . "";
 	$s = "";
 	$n = strlen($str);

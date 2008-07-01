@@ -271,8 +271,11 @@ void MutexPrivate::unlock()
 		    tname,m_owner,this);
 	    m_owner = 0;
 	}
-	if (--s_locks < 0)
+	if (--s_locks < 0) {
+	    // this is very very bad - abort right now
+	    abortOnBug(true);
 	    Debug(DebugFail,"MutexPrivate::locks() is %d [%p]",s_locks,this);
+	}
 #ifdef _WINDOWS
 	::ReleaseMutex(m_mutex);
 #else

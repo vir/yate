@@ -97,8 +97,10 @@ class ThreadPrivateKeyAlloc
 public:
     ThreadPrivateKeyAlloc()
     {
-	if (::pthread_key_create(&current_key,ThreadPrivate::destroyFunc))
+	if (::pthread_key_create(&current_key,ThreadPrivate::destroyFunc)) {
+	    abortOnBug(true);
 	    Debug(DebugFail,"Failed to create current thread key!");
+	}
     }
 };
 

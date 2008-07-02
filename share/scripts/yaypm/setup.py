@@ -32,10 +32,9 @@ setup(
     author = 'Maciek Kaminski',
     author_email = 'maciejka@tiger.com.pl',
     url = 'http://yate.null.ro/pmwiki/index.php?n=Main.YAYPM',
-    package_dir = {'': '..'},
     packages = ['yaypm',
                 'yaypm.utils',
                 'yaypm.utils.resources',
                 'yaypm.utils.tester',
-                'yaypm.examples'],
+                'yaypm.examples']
 )

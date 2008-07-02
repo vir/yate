@@ -72,6 +72,7 @@ URI::URI(const char* proto, const char* user, const char* host, int port, const 
 void URI::changed()
 {
     m_parsed = false;
+    String::changed();
 }
 
 void URI::parse() const

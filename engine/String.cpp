@@ -1394,6 +1394,7 @@ void* NamedPointer::getObject(const String& name) const
 void NamedPointer::changed()
 {
     userData(0);
+    NamedString::changed();
 }
 
 

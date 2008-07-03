@@ -59,6 +59,8 @@ public:
 	{ return m_callerName; }
     inline String& called()
 	{ return m_called; }
+    inline SignallingTimer& noRingTimer()
+	{ return m_noRingTimer; }
     // Send call setup data
     void sendCallSetup(bool privacy);
     // Set call setup detector
@@ -92,6 +94,7 @@ protected:
     String m_caller;                     // Caller's extension
     String m_callerName;                 // Caller's name
     DataConsumer* m_callSetupDetector;   // The call setup detector
+    SignallingTimer m_noRingTimer;       // No more rings detected on unanswered line
     SignallingTimer m_callSetupTimer;    // Timeout of call setup data received before the first ring
                                          // Stop detector if started and timeout
 };
@@ -303,7 +306,6 @@ private:
     String m_reason;                     // Hangup reason
     SignallingTimer m_callEndedTimer;    // Call ended notification to the FXO
     SignallingTimer m_ringTimer;         // Timer used to fix some ring patterns
-    SignallingTimer m_noRingTimer;       // No more rings on incoming not answered FXO line
     SignallingTimer m_alarmTimer;        // How much time a channel may stay with its line in alarm
     SignallingTimer m_dialTimer;         // FXO: delay dialing the number
                                          // FXS: send call setup after first ring
@@ -323,8 +325,6 @@ public:
     AnalogCallRec(ModuleLine* m_line, bool fxsCaller, const char* id);
     inline ModuleLine* line()
 	{ return m_line; }
-    inline ModuleLine* fxo()
-	{ return m_line ? static_cast<ModuleLine*>(m_line->getPeer()) : 0; }
     inline ModuleLine* fxo() const
 	{ return m_line ? static_cast<ModuleLine*>(m_line->getPeer()) : 0; }
     inline bool startOnSecondRing()
@@ -370,7 +370,6 @@ private:
     unsigned int m_polarityCount;        // The number of polarity changes received
     bool m_startOnSecondRing;            // Start recording on second ring if waiting callerid
     SignallingTimer m_ringTimer;         // Timer used to fix some ring patterns
-    SignallingTimer m_noRingTimer;       // No more rings on detected on unanswered line
     String m_reason;                     // Hangup reason
     String m_status;                     // Call status
     String m_address;                    // Call enspoint's address
@@ -558,6 +557,7 @@ static inline bool getPrivacy(const Message& msg)
 ModuleLine::ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params)
     : AnalogLine(grp,cic,params),
     m_callSetupDetector(0),
+    m_noRingTimer(0),
     m_callSetupTimer(callSetupTimeout())
 {
     if (type() == AnalogLine::FXO && callSetup() == AnalogLine::Before && s_engineStarted)
@@ -788,6 +788,14 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
     AnalogChannel* ch = static_cast<AnalogChannel*>(line.userdata());
     DDebug(this,DebugInfo,"Processing event %u '%s' line=%s channel=%s",
 	event.type(),event.c_str(),line.address(),ch?ch->id().c_str():"");
+
+    switch (event.type()) {
+	case SignallingCircuitEvent::OffHook:
+	case SignallingCircuitEvent::Wink:
+	    // Line got offhook - clear the ring timer
+	    line.noRingTimer().stop();
+	default: ;
+    }
     if (ch) {
 	switch (event.type()) {
 	    case SignallingCircuitEvent::Dtmf:
@@ -801,6 +809,7 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
 		plugin.terminateChan(ch);
 		break;
 	    case SignallingCircuitEvent::OffHook:
+	    case SignallingCircuitEvent::Wink:
 		ch->evOffHook();
 		break;
 	    case SignallingCircuitEvent::RingBegin:
@@ -845,6 +854,18 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
 		Debug(this,DebugWarn,"Incoming call on line '%s' failed [%p]",
 		    line.address(),this);
 		return;
+	    }
+	    if (line.noRingTimer().started()) {
+		if (line.noRingTimer().timeout())
+		    line.noRingTimer().stop();
+		else {
+		    DDebug(this,DebugNote,
+			"Ring timer still active on line (%p,%s) without channel [%p]",
+			&line,line.address(),this);
+		    // Restart the timer
+		    line.noRingTimer().start();
+		    return;
+		}
 	    }
 	    AnalogChannel::RecordTrigger rec =
 		(type() == AnalogLine::Recorder)
@@ -1311,7 +1332,6 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
     m_recording(recorder),
     m_callEndedTimer(0),
     m_ringTimer(RING_PATTERN_TIME),
-    m_noRingTimer(0),
     m_alarmTimer(line ? line->alarmTimeout() : 0),
     m_dialTimer(0),
     m_polarityCount(0),
@@ -1329,7 +1349,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 	if ((m_line->type() == AnalogLine::FXS) || (recorder == FXO))
 	    m_line->setCall("","","off-hook");
 	else
-	    m_line->setCall();
+	    m_line->setCall("","","ringing");
 
     const char* mode = 0;
     switch (recorder) {
@@ -1420,10 +1440,15 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 	    case AnalogLine::FXO:
 		if (recorder == FXO)
 		    break;
-		m_noRingTimer.interval(m_line->noRingTimeout());
+		if (recorder == FXS) {
+		    // The FXS recorder will route only on off-hook
+		    m_routeOnSecondRing = false;
+		    return;
+		}
+		m_line->noRingTimer().interval(m_line->noRingTimeout());
 		DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
-		    m_noRingTimer.interval(),this);
-		m_noRingTimer.start();
+		    m_line->noRingTimer().interval(),this);
+		m_line->noRingTimer().start();
 		break;
 	    case AnalogLine::FXS:
 		break;
@@ -1486,8 +1511,8 @@ bool AnalogChannel::msgRinging(Message& msg)
 bool AnalogChannel::msgAnswered(Message& msg)
 {
     Lock lock(m_mutex);
-    m_noRingTimer.stop();
     if (m_line) {
+	m_line->noRingTimer().stop();
 	m_line->removeCallSetupDetector();
 	if (m_line->type() == AnalogLine::FXS) {
 	    m_line->sendEvent(SignallingCircuitEvent::RingEnd);
@@ -1631,7 +1656,6 @@ void AnalogChannel::hangup(bool local, const char* status, const char* reason)
 
     Lock lock(m_mutex);
 
-    m_noRingTimer.stop();
     if (m_hungup)
 	return;
     m_hungup = true;
@@ -1700,6 +1724,8 @@ void AnalogChannel::evOffHook()
     else if (m_line) {
 	m_line->sendEvent(SignallingCircuitEvent::RingEnd,m_line->state());
 	m_line->setCircuitParam("echotrain");
+	if (m_recording == FXS)
+	    startRouter(true);
     }
 }
 
@@ -1746,10 +1772,10 @@ void AnalogChannel::evRing(bool on)
 	    startRouter(false);
 	}
 	m_line->removeCallSetupDetector();
-	if (m_noRingTimer.interval()) {
+	if (m_line->noRingTimer().interval()) {
 	    DDebug(this,DebugAll,"Restarting ring timer for " FMT64 "ms [%p]",
-		m_noRingTimer.interval(),this);
-	    m_noRingTimer.start();
+		m_line->noRingTimer().interval(),this);
+	    m_line->noRingTimer().start();
 	}
     }
 }
@@ -1878,9 +1904,10 @@ bool AnalogChannel::checkTimeouts(const Time& when)
 	    ref();
 	return true;
     }
-    if (m_noRingTimer.timeout(when.msecNow())) {
+    if (m_line->noRingTimer().timeout(when.msecNow())) {
 	DDebug(this,DebugInfo,"No ring for " FMT64 " ms. Terminating [%p]",
-	    m_noRingTimer.interval(),this);
+	    m_line->noRingTimer().interval(),this);
+	m_line->noRingTimer().stop();
 	setReason("cancelled");
 	hangup(false);
 	return false;
@@ -1941,6 +1968,8 @@ void AnalogChannel::startRouter(bool first)
 bool AnalogChannel::setAudio(bool in)
 {
     if ((in && getSource()) || (!in && getConsumer()))
+	return true;
+    if ((m_recording != None) && !in)
 	return true;
 
     SignallingCircuit* cic = m_line ? m_line->circuit() : 0;
@@ -2093,7 +2122,6 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
     m_polarityCount(0),
     m_startOnSecondRing(false),
     m_ringTimer(RING_PATTERN_TIME),
-    m_noRingTimer(0),
     m_status("startup")
 {
     debugName(CallEndpoint::id());
@@ -2150,10 +2178,10 @@ AnalogCallRec::AnalogCallRec(ModuleLine* line, bool fxsCaller, const char* id)
     Engine::enqueue(message("chan.startup"));
 
     if (fxsCaller) {
-	m_noRingTimer.interval(fxo->noRingTimeout());
+	fxo->noRingTimer().interval(fxo->noRingTimeout());
 	DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
-	    m_noRingTimer.interval(),this);
-	m_noRingTimer.start();
+	    fxo->noRingTimer().interval(),this);
+	fxo->noRingTimer().start();
     }
 }
 
@@ -2303,7 +2331,8 @@ bool AnalogCallRec::startRecording()
 bool AnalogCallRec::answered()
 {
     Lock lock(m_mutex);
-    m_noRingTimer.stop();
+    if (m_line)
+	m_line->noRingTimer().stop();
     m_startOnSecondRing = false;
     if (!(m_line && startRecording()))
 	return false;
@@ -2352,8 +2381,8 @@ bool AnalogCallRec::ringing(bool fxsEvent)
 	    fxo()->removeCallSetupDetector();
 	if (ok && !m_answered) {
 	    DDebug(this,DebugAll,"Restarting ring timer for " FMT64 "ms [%p]",
-		m_noRingTimer.interval(),this);
-	    m_noRingTimer.start();
+		fxo()->noRingTimer().interval(),this);
+	    fxo()->noRingTimer().start();
 	}
     }
     return ok;
@@ -2428,10 +2457,10 @@ bool AnalogCallRec::checkTimeouts(const Time& when)
     if (m_ringTimer.timeout(when.msecNow()))
 	m_ringTimer.stop();
 
-    if (!m_noRingTimer.timeout(when.msecNow()))
+    if (!fxo()->noRingTimer().timeout(when.msecNow()))
 	return true;
     DDebug(this,DebugInfo,"Ring timer expired [%p]",this);
-    m_noRingTimer.stop();
+    fxo()->noRingTimer().stop();
     hangup("cancelled");
     return false;
 }

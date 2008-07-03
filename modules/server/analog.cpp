@@ -204,7 +204,12 @@ class AnalogChannel : public Channel
 {
     friend class ModuleGroup;            // Copy data
 public:
-    AnalogChannel(ModuleLine* line, Message* msg);
+    enum RecordTrigger {
+	None = 0,
+	FXO,
+	FXS
+    };
+    AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recorder = None);
     virtual ~AnalogChannel();
     inline ModuleLine* line() const
         { return m_line; }
@@ -294,6 +299,7 @@ private:
     ModuleLine* m_line;                  // The analog line associated with this channel
     bool m_hungup;                       // Hang up flag
     bool m_routeOnSecondRing;            // Delay router if waiting callerid
+    RecordTrigger m_recording;           // Recording trigger source
     String m_reason;                     // Hangup reason
     SignallingTimer m_callEndedTimer;    // Call ended notification to the FXO
     SignallingTimer m_ringTimer;         // Timer used to fix some ring patterns
@@ -833,13 +839,19 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
 	if ((line.type() == AnalogLine::FXS &&
 		event.type() == SignallingCircuitEvent::OffHook) ||
 	    (line.type() == AnalogLine::FXO &&
-		event.type() == SignallingCircuitEvent::RingBegin)) {
+		(event.type() == SignallingCircuitEvent::RingBegin) ||
+		(type() == AnalogLine::Recorder && event.type() == SignallingCircuitEvent::Wink))) {
 	    if (!line.ref()) {
 		Debug(this,DebugWarn,"Incoming call on line '%s' failed [%p]",
 		    line.address(),this);
 		return;
 	    }
-	    ch = new AnalogChannel(&line,0);
+	    AnalogChannel::RecordTrigger rec =
+		(type() == AnalogLine::Recorder)
+		    ? ((event.type() == SignallingCircuitEvent::RingBegin)
+			? AnalogChannel::FXS : AnalogChannel::FXO)
+		    : AnalogChannel::None;
+	    ch = new AnalogChannel(&line,0,rec);
 	    if (!ch->line())
 		plugin.terminateChan(ch);
 	}
@@ -1291,11 +1303,12 @@ void ModuleGroup::buildGroup(ModuleGroup* group, ObjList& spanList, String& erro
  * AnalogChannel
  */
 // Incoming: msg=0. Outgoing: msg is the call execute message
-AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
+AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recorder)
     : Channel(&plugin,0,(msg != 0)),
     m_line(line),
     m_hungup(false),
     m_routeOnSecondRing(false),
+    m_recording(recorder),
     m_callEndedTimer(0),
     m_ringTimer(RING_PATTERN_TIME),
     m_noRingTimer(0),
@@ -1313,13 +1326,25 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     if (isOutgoing())
 	m_line->setCall(msg->getValue("caller"),msg->getValue("callername"),msg->getValue("called"));
     else
-	if (m_line->type() == AnalogLine::FXS)
+	if ((m_line->type() == AnalogLine::FXS) || (recorder == FXO))
 	    m_line->setCall("","","off-hook");
 	else
 	    m_line->setCall();
 
-    Debug(this,DebugCall,"%sing call on line %s caller=%s called=%s [%p]",
-	isOutgoing()?"Outgo":"Incom",m_line->address(),
+    const char* mode = 0;
+    switch (recorder) {
+	case FXO:
+	    mode = "Record FXO";
+	    break;
+	case FXS:
+	    mode = "Record FXS";
+	    break;
+	default:
+	    mode = isOutgoing() ? "Outgoing" : "Incoming";
+    }
+    Debug(this,DebugCall,"%s call on line %s caller=%s called=%s [%p]",
+	mode,
+	m_line->address(),
 	m_line->caller().c_str(),m_line->called().c_str(),this);
 
     m_line->connect(false);
@@ -1328,7 +1353,7 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
     // Incoming on FXO:
     // Caller id after first ring: delay router until the second ring and
     //  set/remove call setup detector
-    if (isIncoming() && m_line->type() == AnalogLine::FXO) {
+    if (isIncoming() && m_line->type() == AnalogLine::FXO && recorder != FXO) {
 	m_routeOnSecondRing = (m_line->callSetup() == AnalogLine::After);
 	if (m_routeOnSecondRing)
 	    m_line->setCallSetupDetector();
@@ -1393,6 +1418,8 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg)
 	// FXS: do nothing
 	switch (line->type()) {
 	    case AnalogLine::FXO:
+		if (recorder == FXO)
+		    break;
 		m_noRingTimer.interval(m_line->noRingTimeout());
 		DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
 		    m_noRingTimer.interval(),this);
@@ -1894,6 +1921,15 @@ void AnalogChannel::startRouter(bool first)
 		break;
 	    default: ;
 	}
+    }
+    switch (m_recording) {
+	case FXO:
+	    m->addParam("callsource","fxo");
+	    break;
+	case FXS:
+	    m->addParam("callsource","fxs");
+	    break;
+	default: ;
     }
     DDebug(this,DebugInfo,"Starting router %scaller=%s callername=%s [%p]",
 	first?"":"(delayed) ",
@@ -2556,6 +2592,7 @@ void AnalogDriver::initialize()
 	switch (type) {
 	    case AnalogLine::FXO:
 	    case AnalogLine::FXS:
+	    case AnalogLine::Recorder:
 	    case AnalogLine::Monitor:
 		break;
 	    default:

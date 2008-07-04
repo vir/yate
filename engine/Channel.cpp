@@ -377,9 +377,11 @@ void Channel::zeroRefs()
 
 void Channel::connected(const char* reason)
 {
+    CallEndpoint::connected(reason);
     Channel* peer = YOBJECT(Channel,getPeer());
     if (peer && peer->billid() && m_billid.null())
 	m_billid = peer->billid();
+    m_lastPeerId = getPeerId();
 }
 
 void Channel::disconnected(bool final, const char* reason)
@@ -449,6 +451,8 @@ void Channel::complete(Message& msg, bool minimal) const
 	msg.setParam("billid",m_billid);
     if (getPeer())
 	msg.setParam("peerid",getPeer()->id());
+    if (m_lastPeerId)
+	msg.setParam("lastpeerid",m_lastPeerId);
     msg.setParam("answered",String::boolText(m_answered));
 }
 

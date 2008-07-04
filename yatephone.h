@@ -1495,6 +1495,7 @@ private:
     unsigned int m_dtmfSeq;
     String m_dtmfText;
     String m_dtmfDetected;
+    String m_lastPeerId;
 
 protected:
     String m_status;
@@ -1782,6 +1783,13 @@ public:
      */
     inline const String& billid() const
 	{ return m_billid; }
+
+    /**
+     * Get the last connected peer id
+     * @return The last connected peer id
+     */
+    const String& lastPeerId() const
+	{ return m_lastPeerId; }
 
     /**
      * Start a routing thread for this channel, dereference dynamic channels

@@ -1438,17 +1438,19 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
 	// FXS: do nothing
 	switch (line->type()) {
 	    case AnalogLine::FXO:
-		if (recorder == FXO)
+		if (recorder == FXO) {
+		    m_line->noRingTimer().stop();
 		    break;
-		if (recorder == FXS) {
-		    // The FXS recorder will route only on off-hook
-		    m_routeOnSecondRing = false;
-		    return;
 		}
 		m_line->noRingTimer().interval(m_line->noRingTimeout());
 		DDebug(this,DebugAll,"Starting ring timer for " FMT64 "ms [%p]",
 		    m_line->noRingTimer().interval(),this);
 		m_line->noRingTimer().start();
+		if (recorder == FXS) {
+		    // The FXS recorder will route only on off-hook
+		    m_routeOnSecondRing = false;
+		    return;
+		}
 		break;
 	    case AnalogLine::FXS:
 		break;

@@ -1910,8 +1910,11 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
 	    m_format = ZapDevice::Mulaw;
 	    break;
 	case ZapDevice::FXO:
-	    if (!m_canSend)
+	    if (getBoolValue("trackhook",config,defaults,params)) {
+		if (m_canSend)
+		    Debug(group(),DebugNote,"ZapCircuit(%u): Hook tracking for active FXO [%p]",code,this);
 		m_device.initHook();
+	    }
 	    // fall through
 	case ZapDevice::FXS:
 	    {

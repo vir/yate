@@ -122,3 +122,6 @@
 ; Defaults to no
 ;readonly=no
 
+; trackhook: boolean: Poll the hook status (only in FXO mode) for devices in parallel
+; Defaults to no
+;trackhook=no

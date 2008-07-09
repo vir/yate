@@ -889,6 +889,8 @@ void ModuleGroup::handleRecEvent(ModuleLine& line, SignallingCircuitEvent& event
     AnalogCallRec* rec = static_cast<AnalogCallRec*>(line.userdata());
     DDebug(this,DebugInfo,"Processing event %u '%s' line=%s recorder=%s",
 	event.type(),event.c_str(),line.address(),rec?rec->id().c_str():"");
+    if (event.type() == SignallingCircuitEvent::OffHook)
+	    line.noRingTimer().stop();
     if (rec) {
 	// FXS event: our FXO receiver is watching the FXS end of the monitored line
 	bool fxsEvent = (line.type() == AnalogLine::FXO);
@@ -926,6 +928,7 @@ void ModuleGroup::handleRecEvent(ModuleLine& line, SignallingCircuitEvent& event
 	    case SignallingCircuitEvent::PulseStart:
 	    case SignallingCircuitEvent::LineStarted:
 	    case SignallingCircuitEvent::DialComplete:
+	    case SignallingCircuitEvent::Wink:
 		DDebug(rec,DebugAll,"Ignoring '%s' event [%p]",event.c_str(),rec);
 		break;
 	    default:
@@ -2335,6 +2338,8 @@ bool AnalogCallRec::answered()
     Lock lock(m_mutex);
     if (m_line)
 	m_line->noRingTimer().stop();
+    if (fxo())
+	fxo()->noRingTimer().stop();
     m_startOnSecondRing = false;
     if (!(m_line && startRecording()))
 	return false;

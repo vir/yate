@@ -4412,6 +4412,20 @@ public:
     SOCKET acceptHandle(struct sockaddr* addr = 0, socklen_t* addrlen = 0);
 
     /**
+     * Check if a socket handle can be used in select
+     * @param handle The socket handle to check
+     * @return True if the socket handle can be safely used in select
+     */
+    static bool canSelect(SOCKET handle);
+
+    /**
+     * Check if this socket object can be used in a select
+     * @return True if this socket can be safely used in select
+     */
+    inline bool canSelect() const
+	{ return canSelect(handle()); }
+
+    /**
      * Create a new socket by peeling off an association from a SCTP socket
      * @param assoc Identifier of the association to peel off
      * @return Open socket to the association or NULL on failure

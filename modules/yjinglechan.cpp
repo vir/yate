@@ -370,6 +370,7 @@ public:
     // Inherited methods
     virtual void initialize();
     virtual bool msgExecute(Message& msg, String& dest);
+    virtual bool msgRoute(Message& msg);
     // Message handler: Disconnect channels, destroy streams, clear rosters
     virtual bool received(Message& msg, int id);
     // Try to create a JID from a message.
@@ -2179,6 +2180,7 @@ void YJGDriver::initialize()
 
 	// Driver setup
 	installRelay(Halt);
+	installRelay(Route);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
 	Engine::install(new XmppGenerateHandler);
@@ -2314,6 +2316,28 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("targetid",conn->id());
     }
     TelEngine::destruct(conn);
+    return true;
+}
+
+// Route to an existing stream (account)
+bool YJGDriver::msgRoute(Message& msg)
+{
+    if (!s_jabber)
+	return false;
+    NamedString* called = msg.getParam("called");
+    if (!called)
+	return false;
+    NamedString* account = msg.getParam("account");
+    if (!account)
+	account = msg.getParam("line");
+    if (!account)
+	return false;
+    JBStream* stream = s_jabber->findStream(*account);
+    if (!stream)
+	return false;
+    TelEngine::destruct(stream);
+    msg.setParam("account",*account);
+    msg.retValue() = prefix() + *called;
     return true;
 }
 

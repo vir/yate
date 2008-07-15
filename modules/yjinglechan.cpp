@@ -2262,6 +2262,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     bool available = true;
     String error;
     const char* errStr = "failure";
+    bool sendSub = false;
     while (true) {
 	if (!msg.userData()) {
 	    error = "No data channel";
@@ -2287,7 +2288,6 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	}
 	if (!(stream && stream->type() == JBEngine::Client)) {
 	    error = "No stream";
-	    errStr = "noconn";
 	    TelEngine::destruct(stream);
 	    break;
 	}
@@ -2297,26 +2297,39 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    caller.resource(stream->local().resource());
 	}
 	called.set(dest);
-	if (!called.resource()) {
-	    JBClientStream* client = static_cast<JBClientStream*>(stream);
-	    XMPPUser* user = client->getRemote(called);
-	    if (user) {
-		user->lock();
-		JIDResource* res = user->getAudio(false);
+	// Check if we have it in the roster
+	XMPPUser* user = (static_cast<JBClientStream*>(stream))->getRemote(called);
+	sendSub = (0 == user);
+	if (user) {
+	    user->lock();
+	    // Get an audio resource if available
+	    if (!called.resource()) {
+		JIDResource* res = user->getAudio(true);
 		if (res)
 		    called.resource(res->name());
-		user->unlock();
-		TelEngine::destruct(user);
 	    }
+	    // No resource:
+	    // check subscription to. Declare unavailable if the caller is subscribed to called's presence
+	    if (!called.resource())
+		if (user->subscription().to()) {
+		    error = "No resource available for called party";
+		    errStr = "offline";
+		}
+		else
+		    sendSub = true;
+	    user->unlock();
+	    TelEngine::destruct(user);
 	}
-	if (!(caller.isFull() && called.isFull()))
+	if (sendSub)
+	    available = false;
+	else if (error.null() && !(caller.isFull() && called.isFull()))
 	    error << "Incomplete caller=" << caller << " or called=" << called;
 	TelEngine::destruct(stream);
 	break;
     }
     if (error) {
 	Debug(this,DebugNote,"Jingle call failed. %s",error.c_str());
-	msg.setParam("error",errStr);
+	msg.setParam("error",errStr?errStr:"noconn");
 	return false;
     }
     // Parameters OK. Create connection and init channel
@@ -2330,6 +2343,14 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("targetid",conn->id());
     }
     TelEngine::destruct(conn);
+    // Send subscribe after creating the connection:
+    // the presence info might be received before creating it
+    if (sendSub) {
+	JBStream* stream = s_jabber->getStream(&caller,false);
+	if (stream)
+	    stream->sendStanza(JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe));
+	TelEngine::destruct(stream);
+    }
     return true;
 }
 

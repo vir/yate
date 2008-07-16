@@ -2297,6 +2297,26 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    caller.resource(stream->local().resource());
 	}
 	called.set(dest);
+	// Check if it's the same user
+	if (caller.bare() &= called.bare()) {
+	    if (!called.resource()) {
+		XMPPUserRoster* roster = (static_cast<JBClientStream*>(stream))->roster();
+		roster->ref();
+		Lock2 lock(roster,&roster->resources());
+		JIDResource* res = roster->resources().getAudio(true);
+		if (res)
+		    called.resource(res->name());
+		lock.drop();
+		TelEngine::destruct(roster);
+	    }
+	    if (!called.resource()) {
+		error = "No resource available for called party";
+		errStr = "offline";
+	    }
+	    else if (caller.resource() == called.resource())
+		error = "Can't call the same resource";
+	    break;
+	}
 	// Check if we have it in the roster
 	XMPPUser* user = (static_cast<JBClientStream*>(stream))->getRemote(called);
 	sendSub = (0 == user);

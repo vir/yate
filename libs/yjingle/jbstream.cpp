@@ -2035,6 +2035,39 @@ void JBClientStream::processRunning(XMLElement* xml)
     //       Don't do that: someone might rely on those presences (for timeout purposes?)
     if (event->type() == JBEvent::Presence) {
 	JBPresence::Presence pres = JBPresence::presenceType(event->stanzaType());
+
+	// Check if it's the same user: update resource list
+	if (local().bare() &= event->from().bare()) {
+	    Lock2 lock(m_roster,&m_roster->resources());
+	    bool avail = pres == JBPresence::None;
+	    if (avail || pres == JBPresence::Unavailable) {
+		if (event->from().resource()) {
+		    JIDResource* res = m_roster->resources().get(event->from().resource());
+		    if (pres == JBPresence::Unavailable) {
+			if (res)
+			    m_roster->resources().remove(res,true);
+		    }
+		    else
+			if (res)
+			    res->fromXML(event->element());
+			else {
+			    res = new JIDResource(event->from().resource());
+			    res->fromXML(event->element());
+			    m_roster->resources().add(res);
+			}
+		    if (res)
+			Debug(engine(),DebugAll,
+			    "Stream. %s own resource '%s' [%p]",
+			    avail?"Added":"Removed",event->from().resource().c_str(),this);
+		}
+		else if (!avail && m_roster->resources().count()) {
+		    m_roster->resources().clear();
+		    Debug(engine(),DebugAll,"Stream. Removed own resources [%p]",this);
+		}
+	    }
+	    return;
+	}
+
 	XMPPUser* user = getRemote(event->from());
 	bool error = false;
 	switch (pres) {

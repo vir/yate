@@ -133,7 +133,7 @@ class YJBClientPresence : public JBService
 {
 public:
     YJBClientPresence(JBEngine* engine, int prio)
-	: JBService(engine,"clientpresence",0,prio), m_autoAcceptSubscribe(true)
+	: JBService(engine,"clientpresence",0,prio)
 	{}
     virtual ~YJBClientPresence()
 	{}
@@ -141,8 +141,6 @@ public:
 protected:
     // Process stream termination events
     virtual bool accept(JBEvent* event, bool& processed, bool& insert);
-private:
-    bool m_autoAcceptSubscribe;          // Automatically accept (un)subscribe requests
 };
 
 /**
@@ -805,18 +803,6 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    switch (pres) {
 		case JBPresence::Subscribe:
 		case JBPresence::Unsubscribe:
-		    // Accept ?
-		    if (m_autoAcceptSubscribe) {
-			JBClientStream* stream = static_cast<JBClientStream*>(event->stream());
-			if (stream && stream->type() == JBEngine::Client) {
-			    JBPresence::Presence p = JBPresence::Subscribed;
-			    if (pres == JBPresence::Unsubscribe)
-				p = JBPresence::Unsubscribed;
-			    stream->sendStanza(JBPresence::createPresence(0,event->from(),p));
-			}
-			break;
-		    }
-		    // Fall through to enqueue a message
 		case JBPresence::Subscribed:
 		case JBPresence::Unsubscribed:
 		case JBPresence::Probe:
@@ -2255,7 +2241,10 @@ void YJGDriver::initialize()
 // Check if we have an existing stream (account)
 bool YJGDriver::hasLine(const String& line) const
 {
-    return line && s_jabber && s_jabber->findStream(line);
+    JBStream* stream = (line && s_jabber) ? s_jabber->findStream(line) : 0;
+    if (stream)
+	stream->deref();
+    return 0 != stream;
 }
 
 // Make an outgoing calls

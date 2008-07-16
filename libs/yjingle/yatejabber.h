@@ -2506,6 +2506,13 @@ public:
 	{ return m_engine; }
 
     /**
+     * Get the list of available resources belonging to the same user
+     * @return The list of available resources
+     */
+    inline JIDResourceList& resources()
+	{ return m_resources; }
+
+    /**
      * Get a remote user.
      * This method is thread safe.
      * @param jid User's jid.
@@ -2575,6 +2582,7 @@ private:
     JIDFeatureList m_features;           // Local user's resources
     JIDIdentity* m_identity;             // JID's identity
     ObjList m_remote;                    // Remote users
+    JIDResourceList m_resources;         // Available resources of the user
     JBPresence* m_engine;                // Presence engine
 };
 

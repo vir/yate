@@ -345,6 +345,7 @@ public:
     YIAXDriver();
     virtual ~YIAXDriver();
     virtual void initialize();
+    virtual bool hasLine(const String& line) const;
     virtual bool msgExecute(Message& msg, String& dest);
     virtual bool msgRoute(Message& msg);
     virtual bool received(Message& msg, int id);
@@ -1181,23 +1182,18 @@ void YIAXDriver::initialize()
     m_iaxEngine->start(readThreadCount,eventThreadCount,trunkingThreadCount);
 }
 
+// Check if we have a line
+bool YIAXDriver::hasLine(const String& line) const
+{
+    return line && s_lines.hasLine(line);
+}
+
 // Route calls that use a line owned by this driver
 bool YIAXDriver::msgRoute(Message& msg)
 {
-    String called = msg.getValue("called");
-    if (!isE164(called))
+    if (!isE164(msg.getValue("called")))
 	return false;
-    String line = msg.getValue("line");
-    if (line.null())
-	line = msg.getValue("account");
-    if (line.null())
-	return false;
-    if (s_lines.hasLine(line)) {
-	msg.setParam("line",line);
-	msg.retValue() = prefix() + called;
-	return true;
-    }
-    return false;
+    return Driver::msgRoute(msg);
 }
 
 bool YIAXDriver::msgExecute(Message& msg, String& dest)

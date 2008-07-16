@@ -545,14 +545,14 @@ public:
     SIPDriver();
     ~SIPDriver();
     virtual void initialize();
+    virtual bool hasLine(const String& line) const;
     virtual bool msgExecute(Message& msg, String& dest);
-    virtual bool msgRoute(Message& msg);
     virtual bool received(Message& msg, int id);
     inline YateSIPEndPoint* ep() const
 	{ return m_endpoint; }
     YateSIPConnection* findCall(const String& callid, bool incRef = false);
     YateSIPConnection* findDialog(const SIPDialog& dialog, bool incRef = false);
-    YateSIPLine* findLine(const String& line);
+    YateSIPLine* findLine(const String& line) const;
     YateSIPLine* findLine(const String& addr, int port, const String& user = String::empty());
     bool validLine(const String& line);
 private:
@@ -4404,7 +4404,7 @@ YateSIPConnection* SIPDriver::findDialog(const SIPDialog& dialog, bool incRef)
 }
 
 // find line by name
-YateSIPLine* SIPDriver::findLine(const String& line)
+YateSIPLine* SIPDriver::findLine(const String& line) const
 {
     if (line.null())
 	return 0;
@@ -4454,21 +4454,9 @@ bool SIPDriver::received(Message& msg, int id)
     return Driver::received(msg,id);
 }
 
-bool SIPDriver::msgRoute(Message& msg)
+bool SIPDriver::hasLine(const String& line) const
 {
-    String called = msg.getValue("called");
-    if (called.null())
-	return false;
-    String line = msg.getValue("line");
-    if (line.null())
-	line = msg.getValue("account");
-    if (line && findLine(line)) {
-	// asked to route to a line we have locally
-	msg.setParam("line",line);
-	msg.retValue() = prefix() + called;
-	return true;
-    }
-    return false;
+    return line && findLine(line);
 }
 
 bool SIPDriver::msgExecute(Message& msg, String& dest)

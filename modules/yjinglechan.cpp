@@ -371,8 +371,8 @@ public:
 	{ return m_singleTone; }
     // Inherited methods
     virtual void initialize();
+    virtual bool hasLine(const String& line) const;
     virtual bool msgExecute(Message& msg, String& dest);
-    virtual bool msgRoute(Message& msg);
     // Message handler: Disconnect channels, destroy streams, clear rosters
     virtual bool received(Message& msg, int id);
     // Try to create a JID from a message.
@@ -2252,6 +2252,12 @@ void YJGDriver::initialize()
     unlock();
 }
 
+// Check if we have an existing stream (account)
+bool YJGDriver::hasLine(const String& line) const
+{
+    return line && s_jabber && s_jabber->findStream(line);
+}
+
 // Make an outgoing calls
 // Build peers' JIDs and check if the destination is available
 bool YJGDriver::msgExecute(Message& msg, String& dest)
@@ -2276,7 +2282,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	}
 	// Check if a stream exists. Try to get a resource for caller and/or called
 	JBStream* stream = 0;
-	NamedString* account = msg.getParam("account");
+	NamedString* account = msg.getParam("line");
 	if (account)
 	    stream = s_jabber->findStream(*account);
 	if (stream)
@@ -2371,28 +2377,6 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    stream->sendStanza(JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe));
 	TelEngine::destruct(stream);
     }
-    return true;
-}
-
-// Route to an existing stream (account)
-bool YJGDriver::msgRoute(Message& msg)
-{
-    if (!s_jabber)
-	return false;
-    NamedString* called = msg.getParam("called");
-    if (!called)
-	return false;
-    NamedString* account = msg.getParam("account");
-    if (!account)
-	account = msg.getParam("line");
-    if (!account)
-	return false;
-    JBStream* stream = s_jabber->findStream(*account);
-    if (!stream)
-	return false;
-    TelEngine::destruct(stream);
-    msg.setParam("account",*account);
-    msg.retValue() = prefix() + *called;
     return true;
 }
 

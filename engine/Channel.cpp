@@ -1193,17 +1193,20 @@ bool Driver::received(Message &msg, int id)
 	    return exact;
 	}
     }
-    // check if the message was for this driver
-    if (!dest.startsWith(m_prefix))
-	return false;
 
     // handle call.execute which should start a new channel
     if (id == Execute) {
 	if (!canAccept(false))
 	    return false;
-	dest.startSkip(m_prefix,false);
-	return msgExecute(msg,dest);
+	if (dest.startSkip(m_prefix,false) ||
+	    (dest.startSkip("line/",false) && hasLine(msg.getValue("line"))))
+	    return msgExecute(msg,dest);
+	return false;
     }
+
+    // check if the message was for this driver
+    if (!dest.startsWith(m_prefix))
+	return false;
 
     lock();
     RefPointer<Channel> chan = find(dest);
@@ -1286,6 +1289,28 @@ bool Driver::canRoute()
     if (m_maxroute && (m_routing >= m_maxroute))
 	return false;
     return true;
+}
+
+bool Driver::hasLine(const String& line) const
+{
+    return false;
+}
+
+bool Driver::msgRoute(Message& msg)
+{
+    String called = msg.getValue("called");
+    if (called.null())
+	return false;
+    String line = msg.getValue("line");
+    if (line.null())
+	line = msg.getValue("account");
+    if (line && hasLine(line)) {
+	// asked to route to a line we have locally
+	msg.setParam("line",line);
+	msg.retValue() = prefix() + called;
+	return true;
+    }
+    return Module::msgRoute(msg);
 }
 
 void Driver::genUpdate(Message& msg)

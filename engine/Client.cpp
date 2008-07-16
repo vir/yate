@@ -2459,7 +2459,7 @@ bool ClientDriver::msgRoute(Message& msg)
 	msg.retValue() = name() + "/*";
 	return true;
     }
-    return false;
+    return Driver::msgRoute(msg);
 }
 
 ClientChannel* ClientDriver::findLine(int line)

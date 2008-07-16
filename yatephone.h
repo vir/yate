@@ -2073,6 +2073,22 @@ protected:
     virtual void genUpdate(Message& msg);
 
     /**
+     * Check if driver owns a client line (registered to an external server)
+     * @param line Name of the line to check
+     * @return True if this driver owns  line with the specified name
+     *
+     */
+    virtual bool hasLine(const String& line) const;
+
+    /**
+     * Routing message handler. The default implementation routes to this
+     *  driver if it owns a line named in the "account" or "line" parameter.
+     * @param msg Call routing message
+     * @return True to stop processing the message, false to try other handlers
+     */
+    virtual bool msgRoute(Message& msg);
+
+    /**
      * Create an outgoing calling channel
      * @param msg Call execute message
      * @param dest Destination of the new call

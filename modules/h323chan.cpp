@@ -248,8 +248,9 @@ public:
     H323Driver();
     virtual ~H323Driver();
     virtual void initialize();
-    virtual bool msgExecute(Message& msg, String& dest);
+    virtual bool hasLine(const String& line) const;
     virtual bool msgRoute(Message& msg);
+    virtual bool msgExecute(Message& msg, String& dest);
     virtual void msgTimer(Message& msg);
     virtual bool received(Message &msg, int id);
     virtual void statusParams(String& str);
@@ -2312,22 +2313,18 @@ void H323Driver::statusParams(String& str)
     Driver::statusParams(str);
     str.append("cleaning=",",") << cleaningCount();
 }
+
+bool H323Driver::hasLine(const String& line) const
+{
+    return line && hplugin.findEndpoint(line);
+}
     
 bool H323Driver::msgRoute(Message& msg)
 {
-    String called = msg.getValue("called");
-    if (called.null() || (called.find('@') >= 0))
+    String* called = msg.getParam("called");
+    if (!called || (called->find('@') >= 0))
 	return false;
-    String line = msg.getValue("line");
-    if (line.null())
-	line = msg.getValue("account");
-    if (line && hplugin.findEndpoint(line)) {
-	// asked to route to a line we have locally
-	msg.setParam("line",line);
-	msg.retValue() = prefix() + called;
-	return true;
-    }
-    return false;
+    return Driver::msgRoute(msg);
 }
 
 bool H323Driver::msgExecute(Message& msg, String& dest)

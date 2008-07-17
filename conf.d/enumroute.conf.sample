@@ -2,7 +2,7 @@
 ; This section sets global variables of the implementation
 
 ; priority: int: Priority in Yate's handlers chain
-; This MUST be set to a positive value to enable the module
+;  This MUST be set to a positive value to enable the module
 ;priority=0
 
 ; prefix: string: Local dial prefix for international numbers
@@ -15,11 +15,11 @@
 ;domains=e164.arpa,e164.org
 
 ; domain: string: Domain to use as suffix for ENUM
-; NOTE: Obsolete!
+;  OBSOLETE - do not use, for backwards compatibility only
 ;domain=e164.arpa
 
 ; backup: string: Secondary domain to use as suffix for ENUM
-; NONE: Obsolete!
+;  OBSOLETE - do not use, for backwards compatibility only
 ;backup=e164.org
 
 ; timeout: int: Timeout of each resolver attempt in seconds
@@ -39,7 +39,7 @@
 ;forkstop=busy
 
 ; maxcall: int: Milliseconds to call each route when forking the call
-;  this parameter is constrained between 2000 and 120000
+;  This parameter is constrained between 2000 and 120000 ms
 ;maxcall=30000
 
 

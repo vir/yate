@@ -44,9 +44,8 @@ public:
     virtual bool received(Message& msg);
 };
 
-static Regexp s_regexp;
-static String s_called;
 static Mutex s_mutex;
+static ObjList* s_prefixes = 0;
 static LateHandler* s_handler = 0;
 
 INIT_PLUGIN(LateRouter);
@@ -64,15 +63,17 @@ UNLOAD_PLUGIN(unloadNow)
 
 bool LateHandler::received(Message& msg)
 {
-    String dest = msg.getValue("callto");
-    if (dest.null() || !msg.getBoolValue("lateroute",true))
+    String callto = msg.getValue("callto");
+    int sep = callto.find('/');
+    if ((sep < 1) || !msg.getBoolValue("lateroute",true))
 	return false;
-    Lock lock(s_mutex);
-    if (s_called.null() || !dest.matches(s_regexp))
+    s_mutex.lock();
+    bool ok = s_prefixes && s_prefixes->find(callto.substr(0,sep));
+    s_mutex.unlock();
+    if (!ok)
 	return false;
-    String callto = dest;
-    dest = dest.replaceMatches(s_called);
-    msg.replaceParams(dest);
+    // found the prefix, now skip it and the separator
+    String dest = callto.substr(sep + 1);
     if (dest.trimBlanks().null())
 	return false;
 
@@ -80,7 +81,7 @@ bool LateHandler::received(Message& msg)
     msg.clearParam("callto");
     msg.setParam("called",dest);
     msg = "call.route";
-    bool ok = Engine::dispatch(msg);
+    ok = Engine::dispatch(msg);
     dest = msg.retValue();
     msg.retValue().clear();
     msg = "call.execute";
@@ -111,17 +112,19 @@ LateRouter::LateRouter()
 LateRouter::~LateRouter()
 {
     Output("Unloading module Late Router");
+    TelEngine::destruct(s_prefixes);
 }
 
 void LateRouter::initialize()
 {
     Output("Initializing module Late Router");
     Configuration cfg(Engine::configFile("lateroute"));
+    String tmp = cfg.getValue("general","prefixes","lateroute,pstn,voice");
     s_mutex.lock();
-    s_regexp = cfg.getValue("general","regexp");
-    s_called = cfg.getValue("general","called","\\0");
+    TelEngine::destruct(s_prefixes);
+    s_prefixes = tmp.split(',',false);
     s_mutex.unlock();
-    if (!s_handler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
+    if (!s_handler && cfg.getBoolValue("general","enabled",(s_prefixes->count() != 0))) {
 	s_handler = new LateHandler(cfg.getIntValue("general","priority",75));
 	Engine::install(s_handler);
     }

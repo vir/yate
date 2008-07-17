@@ -44,8 +44,9 @@ public:
     virtual bool received(Message& msg);
 };
 
+static Regexp s_regexp;
+static String s_called;
 static Mutex s_mutex;
-static ObjList* s_prefixes = 0;
 static LateHandler* s_handler = 0;
 
 INIT_PLUGIN(LateRouter);
@@ -63,17 +64,15 @@ UNLOAD_PLUGIN(unloadNow)
 
 bool LateHandler::received(Message& msg)
 {
-    String callto = msg.getValue("callto");
-    int sep = callto.find('/');
-    if ((sep < 1) || !msg.getBoolValue("lateroute",true))
+    String dest = msg.getValue("callto");
+    if (dest.null() || !msg.getBoolValue("lateroute",true))
 	return false;
-    s_mutex.lock();
-    bool ok = s_prefixes && s_prefixes->find(callto.substr(0,sep));
-    s_mutex.unlock();
-    if (!ok)
+    Lock lock(s_mutex);
+    if (s_called.null() || !dest.matches(s_regexp))
 	return false;
-    // found the prefix, now skip it and the separator
-    String dest = callto.substr(sep + 1);
+    String callto = dest;
+    dest = dest.replaceMatches(s_called);
+    msg.replaceParams(dest);
     if (dest.trimBlanks().null())
 	return false;
 
@@ -81,7 +80,7 @@ bool LateHandler::received(Message& msg)
     msg.clearParam("callto");
     msg.setParam("called",dest);
     msg = "call.route";
-    ok = Engine::dispatch(msg);
+    bool ok = Engine::dispatch(msg);
     dest = msg.retValue();
     msg.retValue().clear();
     msg = "call.execute";
@@ -112,19 +111,43 @@ LateRouter::LateRouter()
 LateRouter::~LateRouter()
 {
     Output("Unloading module Late Router");
-    TelEngine::destruct(s_prefixes);
 }
 
 void LateRouter::initialize()
 {
+    static Regexp listCheck("^[[:alnum:]_,-]*$");
+
     Output("Initializing module Late Router");
     Configuration cfg(Engine::configFile("lateroute"));
-    String tmp = cfg.getValue("general","prefixes","lateroute,route,pstn,voice");
+    // "regexp" and "called" should be used for backwards compatibility only
+    String types = cfg.getValue("general","regexp");
+    String called = cfg.getValue("general","called","\\0");
+    if (types.null()) {
+	types = cfg.getValue("general","types","lateroute,route,pstn,voice");
+	if (types && listCheck.matches(types)) {
+	    // this is a list,of,types,to,route - convert it to regexp
+	    ObjList* list = types.split(',',false);
+	    types.clear();
+	    types.append(list,"\\|",false);
+	    TelEngine::destruct(list);
+	    if (types) {
+		// regexp is ^\(type1\|type2\|...\)/\(.\+\)$
+		types = "^\\(" + types + "\\)/\\(.\\+\\)$";
+		// called is the matched part after the slash
+		called = "\\2";
+	    }
+	    else
+		called.clear();
+	}
+	else
+	    Debug("lateroute",DebugNote,"Using regexp: '%s'",types.c_str());
+    }
     s_mutex.lock();
-    TelEngine::destruct(s_prefixes);
-    s_prefixes = tmp.split(',',false);
+    s_regexp = types;
+    s_called = called;
     s_mutex.unlock();
-    if (!s_handler && cfg.getBoolValue("general","enabled",(s_prefixes->count() != 0))) {
+    DDebug("lateroute",DebugInfo,"regexp='%s' called='%s'",s_regexp.c_str(),s_called.c_str());
+    if (!s_handler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
 	s_handler = new LateHandler(cfg.getIntValue("general","priority",75));
 	Engine::install(s_handler);
     }

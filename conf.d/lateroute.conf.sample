@@ -2,12 +2,21 @@
 ; Global settings of the late routing module
 
 ; enabled: boolean: Enable late routing module operation
-;enabled=true if the list of prefixes is not empty
+;enabled=true if the list of types is not empty
 
 ; priority: int: Priority of call.execute handler
 ;priority=75
 
-; prefixes: list: Comma separated list of target types to be late routed
+; types: list: Comma separated list of target types to be late routed
 ;  For each target of the form type/NNN a route request for NNN will be made
 ;  The "pstn" and "voice" types must be enabled in the ENUM module
-;prefixes=lateroute,route,pstn,voice
+;types=lateroute,route,pstn,voice
+
+
+; regexp: string: Regular expression describing callto match rules
+;  OBSOLETE - do not use, for backwards compatibility only
+;regexp=
+
+; called: string: Template for creating calling number from regexp match
+;  OBSOLETE - do not use, for backwards compatibility only
+;called=\0

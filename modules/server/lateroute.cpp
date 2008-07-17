@@ -119,7 +119,7 @@ void LateRouter::initialize()
 {
     Output("Initializing module Late Router");
     Configuration cfg(Engine::configFile("lateroute"));
-    String tmp = cfg.getValue("general","prefixes","lateroute,pstn,voice");
+    String tmp = cfg.getValue("general","prefixes","lateroute,route,pstn,voice");
     s_mutex.lock();
     TelEngine::destruct(s_prefixes);
     s_prefixes = tmp.split(',',false);

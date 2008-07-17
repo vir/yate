@@ -10,4 +10,4 @@
 ; prefixes: list: Comma separated list of target types to be late routed
 ;  For each target of the form type/NNN a route request for NNN will be made
 ;  The "pstn" and "voice" types must be enabled in the ENUM module
-;prefixes=lateroute,pstn,voice
+;prefixes=lateroute,route,pstn,voice

@@ -1850,6 +1850,14 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     }
     if (user)
 	m.addParam("username",user);
+
+    String tmp(message->getHeaderValue("Max-Forwards"));
+    int maxf = tmp.toInteger(s_maxForwards);
+    if (maxf > s_maxForwards)
+	maxf = s_maxForwards;
+    tmp = maxf-1;
+    m.addParam("antiloop",tmp);
+
     m.addParam("ip_host",message->getParty()->getPartyAddr());
     m.addParam("ip_port",String(message->getParty()->getPartyPort()));
     m.addParam("sip_uri",t->getURI());
@@ -1858,6 +1866,13 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
     t->setDialogTag();
     m.addParam("xsip_dlgtag",t->getDialogTag());
     copySipHeaders(m,*message,false);
+
+    // add the body if it's a string one
+    MimeStringBody* strBody = YOBJECT(MimeStringBody,message->body);
+    if (strBody) {
+	m.addParam("xsip_type",strBody->getType());
+	m.addParam("xsip_body",strBody->text());
+    }
 
     int code = 0;
     if (Engine::dispatch(m)) {
@@ -4349,6 +4364,15 @@ bool SipHandler::received(Message &msg)
 	uri = uri.matchString(1);
     if (!(method && uri))
 	return false;
+
+    int maxf = msg.getIntValue("antiloop",s_maxForwards);
+    if (maxf <= 0) {
+	Debug(&plugin,DebugMild,"Blocking looping request '%s %s' [%p]",
+	    method,uri.c_str(),this);
+	msg.setParam("error","looping");
+	return false;
+    }
+
     YateSIPLine* line = plugin.findLine(msg.getValue("line"));
     if (line && !line->valid()) {
 	msg.setParam("error","offline");
@@ -4356,6 +4380,7 @@ bool SipHandler::received(Message &msg)
     }
     SIPMessage* sip = new SIPMessage(method,uri);
     plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
+    sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
     const char* type = msg.getValue("xsip_type");
     const char* body = msg.getValue("xsip_body");

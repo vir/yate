@@ -51,8 +51,9 @@ public:
     /**
      * Create a configuration from a file
      * @param filename Name of file to initialize from
+     * @param warn True to warn if the configuration could not be loaded
      */
-    Configuration(const char* filename);
+    Configuration(const char* filename, bool warn = true);
 
     /**
      * Assignment from string operator
@@ -189,9 +190,10 @@ public:
 
     /**
      * Load the configuration from file
+     * @param warn True to also warn if the configuration could not be loaded
      * @return True if successfull, false for failure
      */
-    bool load();
+    bool load(bool warn = true);
 
     /**
      * Save the configuration to file

@@ -1402,7 +1402,7 @@ void SigDriver::initialize()
     // Startup
     if (!m_engine) {
 	s_cfgData = Engine::configFile("ysigdata");
-	s_cfgData.load();
+	s_cfgData.load(false);
 	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);

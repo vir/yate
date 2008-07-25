@@ -31,10 +31,10 @@ Configuration::Configuration()
 {
 }
 
-Configuration::Configuration(const char* filename)
+Configuration::Configuration(const char* filename, bool warn)
     : String(filename)
 {
-    load();
+    load(warn);
 }
 
 ObjList* Configuration::getSectHolder(const String& sect) const
@@ -153,7 +153,7 @@ void Configuration::setValue(const String& sect, const char* key, bool value)
     setValue(sect,key,String::boolText(value));
 }
 
-bool Configuration::load()
+bool Configuration::load(bool warn)
 {
     m_sections.clear();
     if (null())
@@ -196,9 +196,11 @@ bool Configuration::load()
 	::fclose(f);
 	return true;
     }
-    int err = errno;
-    Debug(DebugNote,"Failed to open config file '%s', using defaults (%d: %s)",
-	c_str(),err,strerror(err));
+    if (warn) {
+	int err = errno;
+	Debug(DebugNote,"Failed to open config file '%s', using defaults (%d: %s)",
+	    c_str(),err,strerror(err));
+    }
     return false;
 }
 

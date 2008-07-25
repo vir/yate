@@ -515,8 +515,11 @@ bool CmdHandler::doCommand(String& line, String& rval)
     }
     else if (line == "load") {
 	s_mutex.lock();
-	s_cfg.load();
-	rval << "Loaded config from " << s_cfg;
+	bool ok = s_cfg.load(false);
+	if (ok)
+	    rval << "Loaded config from " << s_cfg;
+	else
+	    rval << "Failed to load from " << s_cfg;
 	s_mutex.unlock();
     }
     else if (line == "save") {
@@ -612,7 +615,7 @@ void CallGenPlugin::initialize()
     Output("Initializing module Call Generator");
     s_mutex.lock();
     s_cfg = Engine::configFile("callgen",Engine::clientMode());
-    s_cfg.load();
+    s_cfg.load(false);
     s_mutex.unlock();
     if (m_first) {
 	m_first = false;

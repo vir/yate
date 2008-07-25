@@ -36,7 +36,9 @@
 #define YSERV_INS 2
 #define YSERV_DEL 4
 #define PATH_SEP "\\"
+#ifndef CFG_DIR
 #define CFG_DIR "Yate"
+#endif
 
 #ifndef SHGetSpecialFolderPath
 __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
@@ -51,7 +53,9 @@ __declspec(dllimport) BOOL WINAPI SHGetSpecialFolderPathA(HWND,LPSTR,INT,BOOL);
 #include <sys/resource.h>
 typedef void* HMODULE;
 #define PATH_SEP "/"
+#ifndef CFG_DIR
 #define CFG_DIR ".yate"
+#endif
 
 #endif
 

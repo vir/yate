@@ -134,6 +134,9 @@ public:
 	TimerPing = ZT_EVENT_TIMER_PING,
 	RingBegin = ZT_EVENT_RINGBEGIN,
 	Polarity = ZT_EVENT_POLARITY,        // Polarity reversal event
+#ifdef ZT_EVENT_REMOVED
+	Removed = ZT_EVENT_REMOVED,
+#endif
 	// These are event masks
 	PulseDigit = ZT_EVENT_PULSEDIGIT,    // This is OR'd with the digit received
 	DtmfDown = ZT_EVENT_DTMFDOWN,        // Ditto for DTMF key down event
@@ -733,6 +736,9 @@ static TokenDict s_events[] = {
     MAKE_NAME(DtmfDown),
     MAKE_NAME(DtmfUp),
     MAKE_NAME(DigitEvent),
+#ifdef ZT_EVENT_REMOVED
+    MAKE_NAME(Removed),
+#endif
     {0,0}
 };
 
@@ -2494,6 +2500,9 @@ bool ZapAnalogCircuit::processEvent(int event, char c)
 	    return enqueueEvent(event,SignallingCircuitEvent::RingerOn);
 	case ZapDevice::RingerOff:
 	    return enqueueEvent(event,SignallingCircuitEvent::RingerOff);
+#ifdef ZT_EVENT_REMOVED
+	case ZapDevice::Removed:
+#endif
 	case ZapDevice::OnHook:
 	    changeHook(true);
 	    return enqueueEvent(event,SignallingCircuitEvent::OnHook);

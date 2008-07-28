@@ -130,6 +130,7 @@ class AnalyzerChan : public Channel
 public:
     AnalyzerChan(const String& type, bool outgoing, const char* window = 0);
     virtual ~AnalyzerChan();
+    virtual void destroyed();
     virtual void statusParams(String& str);
     virtual bool callRouted(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -553,6 +554,11 @@ AnalyzerChan::AnalyzerChan(const String& type, bool outgoing, const char* window
 AnalyzerChan::~AnalyzerChan()
 {
     DDebug(this,DebugAll,"AnalyzerChan::~AnalyzerChan() %s [%p]",id().c_str(),this);
+    Engine::enqueue(message("chan.hangup"));
+}
+
+void AnalyzerChan::destroyed()
+{
     RefPointer<AnalyzerCons> cons = YOBJECT(AnalyzerCons,getConsumer());
     char buf[32];
     printTime(buf,(unsigned int)(Time::now() - m_timeStart));
@@ -562,7 +568,7 @@ AnalyzerChan::~AnalyzerChan()
     if (cons)
 	cons->statusParams(str);
     Output("Finished '%s' status: %s",id().c_str(),str.c_str());
-    Engine::enqueue(message("chan.hangup"));
+    Channel::destroyed();
 }
 
 void AnalyzerChan::statusParams(String& str)

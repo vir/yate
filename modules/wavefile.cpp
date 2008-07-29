@@ -1016,6 +1016,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	    dest.matchString(2).c_str());
 	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
 	if (ch->connect(c,msg.getValue("reason"))) {
+	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());
 	    c->deref();
 	    return true;

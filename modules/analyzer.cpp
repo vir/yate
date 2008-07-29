@@ -716,6 +716,7 @@ bool AnalyzerDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	AnalyzerChan *ac = new AnalyzerChan(dest,true,msg.getValue("window"));
 	if (ch->connect(ac,msg.getValue("reason"))) {
+	    ac->callConnect(msg);
 	    msg.setParam("peerid",ac->id());
 	    ac->startChannel(msg);
 	    ac->deref();

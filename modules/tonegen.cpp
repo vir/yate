@@ -789,6 +789,7 @@ bool ToneGenDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	ToneChan *tc = new ToneChan(dest);
 	if (ch->connect(tc,msg.getValue("reason"))) {
+	    tc->callConnect(msg);
 	    msg.setParam("peerid",tc->id());
 	    tc->deref();
 	}

@@ -68,6 +68,7 @@ bool DumbDriver::msgExecute(Message& msg, String& dest)
     if (dd) {
 	DumbChannel *c = new DumbChannel(dest,&msg);
 	if (dd->connect(c)) {
+	    c->callConnect(msg);
 	    msg.setParam("peerid", c->id());
 	    msg.setParam("targetid", c->id());
 	    c->setTargetid(dd->id());

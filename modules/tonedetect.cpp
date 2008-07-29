@@ -43,7 +43,7 @@ namespace { // anonymous
 // each tone from threshold from total
 #define THRESHOLD2_REL_DTMF 0.33
 // hysteresis after tone detection
-#define THRESHOLD2_REL_HIST 0.90
+#define THRESHOLD2_REL_HIST 0.75
 
 // minimum DTMF detect time
 #define DETECT_DTMF_MSEC 32
@@ -294,15 +294,17 @@ void ToneConsumer::checkDtmf()
 	}
     }
     double limitAll = m_pwr*THRESHOLD2_REL_ALL;
-    if (c)
-	limitAll *= THRESHOLD2_REL_HIST;
     double limitOne = limitAll*THRESHOLD2_REL_DTMF;
+    if (c) {
+	limitAll *= THRESHOLD2_REL_HIST;
+	limitOne *= THRESHOLD2_REL_HIST;
+    }
     if ((maxL < limitOne) ||
 	(maxH < limitOne) ||
 	((maxL+maxH) < limitAll)) {
 #ifdef DEBUG
 	if (c)
-	    Debug(&plugin,DebugAll,"Giving up DTMF '%c' lo=%f, hi=%f, total=%f",
+	    Debug(&plugin,DebugInfo,"Giving up DTMF '%c' lo=%0.1f, hi=%0.1f, total=%0.1f",
 		c,maxL,maxH,m_pwr);
 #endif
 	return;
@@ -311,17 +313,17 @@ void ToneConsumer::checkDtmf()
     buf[0] = s_tableDtmf[l][h];
     buf[1] = '\0';
     if (buf[0] != c) {
-	DDebug(&plugin,DebugAll,"DTMF '%s' new candidate on %s, lo=%f, hi=%f, total=%f",
+	DDebug(&plugin,DebugInfo,"DTMF '%s' new candidate on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
 	    buf,m_id.c_str(),maxL,maxH,m_pwr);
 	m_dtmfTone = buf[0];
 	m_dtmfCount = 1;
 	return;
     }
     m_dtmfTone = c;
-    XDebug(&plugin,DebugInfo,"DTMF '%s' candidate %d on %s, lo=%f, hi=%f, total=%f",
+    XDebug(&plugin,DebugAll,"DTMF '%s' candidate %d on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
 	buf,m_dtmfCount,m_id.c_str(),maxL,maxH,m_pwr);
     if (m_dtmfCount++ == DETECT_DTMF_MSEC) {
-	DDebug(&plugin,DebugInfo,"DTMF '%s' detected on %s, lo=%f, hi=%f, total=%f",
+	DDebug(&plugin,DebugNote,"DTMF '%s' detected on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
 	    buf,m_id.c_str(),maxL,maxH,m_pwr);
 	Message *m = new Message("chan.masquerade");
 	m->addParam("id",m_id);
@@ -338,12 +340,12 @@ void ToneConsumer::checkFax()
     if (m_fax.value() < m_pwr*THRESHOLD2_REL_FAX)
 	return;
     if (m_fax.value() > m_pwr) {
-	DDebug(&plugin,DebugNote,"Overshoot on %s, signal=%f, total=%f",
+	DDebug(&plugin,DebugNote,"Overshoot on %s, signal=%0.2f, total=%0.2f",
 	    m_id.c_str(),m_fax.value(),m_pwr);
 	init();
 	return;
     }
-    DDebug(&plugin,DebugInfo,"Fax detected on %s, signal=%f, total=%f",
+    DDebug(&plugin,DebugInfo,"Fax detected on %s, signal=%0.1f, total=%0.1f",
 	m_id.c_str(),m_fax.value(),m_pwr);
     // prepare for new detection
     init();
@@ -421,7 +423,7 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	    m_dtmfCount = 0;
 	}
     }
-    XDebug(&plugin,DebugInfo,"Fax detector on %s: signal=%f, total=%f",
+    XDebug(&plugin,DebugAll,"Fax detector on %s: signal=%0.1f, total=%0.1f",
 	m_id.c_str(),m_fax.value(),m_pwr);
 }
 

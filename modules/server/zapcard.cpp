@@ -1154,6 +1154,17 @@ int ZapDevice::getEvent(char& digit)
 	m_savedEvent = 0;
     else if (!ioctl(GetEvent,&event,DebugMild))
 	return 0;
+    if ((m_zapsig == ZT_SIG_EM) && (m_type == FXO)) {
+	// For an "E&M FXO" the meanings of on/off hook change
+	switch (event) {
+	    case OnHook:
+		event = OffHookRing;
+		break;
+	    case OffHookRing:
+		event = RingBegin;
+		break;
+	}
+    }
     if (event & DigitEvent) {
 	digit = (char)event;
 	event &= DigitEvent;

@@ -50,7 +50,7 @@ class EngineStartHandler;                // engine.start handler (start detector
 class ModuleLine : public AnalogLine
 {
 public:
-    ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params);
+    ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params, const NamedList& groupParams);
     // Get the module group representation of this line's owner
     ModuleGroup* moduleGroup();
     inline const String& caller() const
@@ -93,6 +93,7 @@ protected:
     // Call setup (caller id)
     String m_caller;                     // Caller's extension
     String m_callerName;                 // Caller's name
+    String m_detector;                   // Call setup detector resource
     DataConsumer* m_callSetupDetector;   // The call setup detector
     SignallingTimer m_noRingTimer;       // No more rings detected on unanswered line
     SignallingTimer m_callSetupTimer;    // Timeout of call setup data received before the first ring
@@ -554,12 +555,14 @@ static inline bool getPrivacy(const Message& msg)
 /**
  * ModuleLine
  */
-ModuleLine::ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params)
+ModuleLine::ModuleLine(ModuleGroup* grp, unsigned int cic, const NamedList& params, const NamedList& groupParams)
     : AnalogLine(grp,cic,params),
     m_callSetupDetector(0),
     m_noRingTimer(0),
     m_callSetupTimer(callSetupTimeout())
 {
+    m_detector = groupParams.getValue("analogdetect","analogdetect/callsetup");
+    m_detector = params.getValue("analogdetect",m_detector);
     if (type() == AnalogLine::FXO && callSetup() == AnalogLine::Before && s_engineStarted)
 	setCallSetupDetector();
 }
@@ -581,7 +584,8 @@ void ModuleLine::sendCallSetup(bool privacy)
     Message msg("chan.attach");
     if (userdata())
 	msg.userData(static_cast<RefObject*>(userdata()));
-    msg.addParam("source","analogdetect/callsetup");
+    msg.addParam("source",m_detector);
+    msg.addParam("single",String::boolText(true));
     String tmp;
     tmp << plugin.prefix() << address();
     msg.addParam("notify",tmp);
@@ -609,7 +613,8 @@ void ModuleLine::setCallSetupDetector()
 	src = static_cast<DataSource*>(circuit()->getObject("DataSource"));
     Message msg("chan.attach");
     msg.userData(src);
-    msg.addParam("consumer","analogdetect/callsetup");
+    msg.addParam("consumer",m_detector);
+    msg.addParam("single",String::boolText(true));
     String tmp;
     tmp << plugin.prefix() << address();
     msg.addParam("notify",tmp);
@@ -665,11 +670,13 @@ void ModuleLine::processNotify(Message& msg)
 
     if (operation == "setup") {
 	DDebug(group(),DebugAll,
-	    "%s: received setup info detector=%p caller=%s callername=%s [%p]",
+	    "%s: received setup info detector=%p caller=%s callername=%s called=%s [%p]",
 	    address(),m_callSetupDetector,
-	    msg.getValue("caller"),msg.getValue("callername"),this);
+	    msg.getValue("caller"),msg.getValue("callername"),
+	    msg.getValue("called"),this);
 	if (!m_callSetupDetector)
 	    return;
+	m_called = msg.getValue("called",m_called);
 	m_caller = msg.getValue("caller");
 	m_callerName = msg.getValue("callername");
     }
@@ -1052,7 +1059,7 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
 
 	DDebug(this,DebugAll,"Creating line for cic=%u [%p]",cic->code(),this);
 	// Create a new line (create its peer if this is a monitor)
-	line = new ModuleLine(this,cic->code(),*lineParams);
+	line = new ModuleLine(this,cic->code(),*lineParams,params);
 	while (fxoRec() && line->type() != AnalogLine::Unknown) {
 	    SignallingCircuit* fxoCic = static_cast<SignallingCircuit*>(fxoRec()->circuits()[i]);
 	    if (!fxoCic) {
@@ -1070,7 +1077,7 @@ bool ModuleGroup::initialize(const NamedList& params, const NamedList& defaults,
 
 	    completeLineParams(*fxoParams,params,defaults);
 
-	    ModuleLine* fxoLine = new ModuleLine(fxoRec(),fxoCic->code(),*fxoParams);
+	    ModuleLine* fxoLine = new ModuleLine(fxoRec(),fxoCic->code(),*fxoParams,params);
 	    if (fxoLine->type() == AnalogLine::Unknown) {
 		TelEngine::destruct(fxoLine);
 		TelEngine::destruct(line);
@@ -2275,6 +2282,7 @@ bool AnalogCallRec::startRecording()
     // Create source
     Message* m = message("chan.attach",false,true);
     m->addParam("source","mux/");
+    m->addParam("single",String::boolText(true));
     m->addParam("notify",id());
     if (buflen)
 	m->addParam("chanbuffer",buflen);

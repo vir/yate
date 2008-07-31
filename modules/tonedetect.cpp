@@ -111,9 +111,12 @@ private:
     String m_divert;
     String m_caller;
     String m_called;
+    String m_target;
+    String m_dnis;
     Mode m_mode;
     bool m_detFax;
     bool m_detDtmf;
+    bool m_detDnis;
     char m_dtmfTone;
     int m_dtmfCount;
     double m_xv[3];
@@ -205,7 +208,8 @@ void Tone2PoleFilter::update(double xd)
 
 
 ToneConsumer::ToneConsumer(const String& id, const String& name)
-    : m_id(id), m_name(name), m_mode(Mono), m_detFax(true), m_detDtmf(true),
+    : m_id(id), m_name(name), m_mode(Mono),
+      m_detFax(true), m_detDtmf(true), m_detDnis(false),
       m_fax(s_paramsCNG)
 { 
     Debug(&plugin,DebugAll,"ToneConsumer::ToneConsumer(%s,'%s') [%p]",
@@ -228,7 +232,7 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
 	m_format = "2*slin";
     if (tmp && (tmp != "*")) {
 	// individual detection requested
-	m_detFax = m_detDtmf = false;
+	m_detFax = m_detDtmf = m_detDnis = false;
 	ObjList* k = tmp.split(',',false);
 	for (ObjList* l = k; l; l = l->next()) {
 	    String* s = static_cast<String*>(l->get());
@@ -240,6 +244,10 @@ ToneConsumer::ToneConsumer(const String& id, const String& name)
 		// detection of receiving Fax requested
 		m_fax.assign(s_paramsCED);
 		m_detFax = true;
+	    }
+	    else if (*s == "callsetup") {
+		// call setup info in the form *ANI*DNIS*
+		m_detDnis = true;
 	    }
 	}
 	TelEngine::destruct(k);
@@ -323,8 +331,25 @@ void ToneConsumer::checkDtmf()
     XDebug(&plugin,DebugAll,"DTMF '%s' candidate %d on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
 	buf,m_dtmfCount,m_id.c_str(),maxL,maxH,m_pwr);
     if (m_dtmfCount++ == DETECT_DTMF_MSEC) {
-	DDebug(&plugin,DebugNote,"DTMF '%s' detected on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
+	DDebug(&plugin,DebugNote,"%sDTMF '%s' detected on %s, lo=%0.1f, hi=%0.1f, total=%0.1f",
+	    (m_detDnis ? "DNIS/" : ""),
 	    buf,m_id.c_str(),maxL,maxH,m_pwr);
+	if (m_detDnis) {
+	    static Regexp r("^\\*\\([0-9#]*\\)\\*\\([0-9#]*\\)\\*$");
+	    m_dnis += buf;
+	    if (m_dnis.matches(r)) {
+		m_detDnis = false;
+		Message* m = new Message("chan.notify");
+		m->addParam("id",m_id);
+		if (m_target)
+		    m->addParam("targetid",m_target);
+		m->addParam("operation","setup");
+		m->addParam("caller",m_dnis.matchString(1));
+		m->addParam("called",m_dnis.matchString(2));
+		Engine::enqueue(m);
+	    }
+	    return;
+	}
 	Message *m = new Message("chan.masquerade");
 	m->addParam("id",m_id);
 	m->addParam("message","chan.dtmf");
@@ -402,7 +427,7 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	// update all active detectors
 	if (m_detFax)
 	    m_fax.update(dx);
-	if (m_detDtmf) {
+	if (m_detDtmf || m_detDnis) {
 	    for (int j = 0; j < 4; j++) {
 		m_dtmfL[j].update(dx);
 		m_dtmfH[j].update(dx);
@@ -413,7 +438,7 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 	    continue;
 	// is it enough total power to accept a signal?
 	if (m_pwr >= THRESHOLD2_ABS) {
-	    if (m_detDtmf)
+	    if (m_detDtmf || m_detDnis)
 		checkDtmf();
 	    if (m_detFax)
 		checkFax();
@@ -430,6 +455,9 @@ void ToneConsumer::Consume(const DataBlock& data, unsigned long timeDelta)
 // Copy parameters required for automatic fax call diversion
 void ToneConsumer::setDivert(const Message& msg)
 {
+    m_target = msg.getParam("notify");
+    if (m_id.null())
+	m_id = m_target;
     NamedString* divert = msg.getParam("fax_divert");
     if (!divert)
 	return;
@@ -457,6 +485,7 @@ bool AttachHandler::received(Message& msg)
     if (cons.null() && snif.null())
 	return false;
     CallEndpoint* ch = static_cast<CallEndpoint *>(msg.userObject("CallEndpoint"));
+    DataSource* ds = static_cast<DataSource *>(msg.userObject("DataSource"));
     if (ch) {
 	if (cons) {
 	    ToneConsumer* c = new ToneConsumer(ch->id(),cons);
@@ -480,6 +509,17 @@ bool AttachHandler::received(Message& msg)
 	    }
 	}
 	return msg.getBoolValue("single");
+    }
+    else if (ds && cons) {
+	ToneConsumer* c = new ToneConsumer(msg.getValue("id"),cons);
+	c->setDivert(msg);
+	bool ok = DataTranslator::attachChain(ds,c);
+	if (ok)
+	    msg.userData(c);
+	else
+	    msg.setParam("reason","attach-failure");
+	c->deref();
+	return ok && msg.getBoolValue("single");
     }
     else
 	Debug(&plugin,DebugWarn,"ToneDetector attach request with no call endpoint!");

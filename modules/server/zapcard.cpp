@@ -1053,20 +1053,15 @@ void ZapDevice::pollHook()
     if (!ioctl(GetParams,&par))
 	return;
 
-    if (m_rxHookSig == par.rxhooksig)
+    int rxsig = par.rxhooksig;
+    if (rxsig != RxSigOnHook)
+	rxsig = RxSigOffHook;
+    if (m_rxHookSig == rxsig)
 	return;
     // state changed, save the event for later
-    m_rxHookSig = par.rxhooksig;
+    m_rxHookSig = rxsig;
     // states are reversed but that's how Zaptel is...
-    switch (m_rxHookSig) {
-	case RxSigInitial:
-	case RxSigOffHook:
-	    m_savedEvent = ZT_EVENT_ONHOOK;
-	    break;
-	case RxSigOnHook:
-	    m_savedEvent = ZT_EVENT_WINKFLASH;
-	    break;
-    }
+    m_savedEvent = (rxsig == RxSigOnHook) ? ZT_EVENT_WINKFLASH : ZT_EVENT_ONHOOK;
 }
 
 // Send hook events

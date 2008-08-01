@@ -155,6 +155,15 @@ public:
 	HookRingOff = ZT_RINGOFF
     };
 
+    // Rx Hook states, not exported from zaptel.h in user mode
+    enum RxSigState {
+	RxSigOnHook = 0,
+	RxSigOffHook,
+	RxSigStart,
+	RxSigRing,
+	RxSigInitial
+    };
+
     // List of valid IOCTL requests
     enum IoctlRequest {
 	SetChannel     = 0,              // Specify a channel number for an opened device
@@ -269,7 +278,7 @@ public:
     bool startEchoTrain(unsigned int period);
     // Enable polling of off-hook state, call only for passive FXO
     inline void initHook()
-	{ m_rxOffHook = 0; }
+	{ m_rxHookSig = RxSigInitial; }
     // Poll the hook state and save event since a FXO does not generate events
     void pollHook();
     // Send hook events
@@ -335,7 +344,7 @@ private:
     int m_span;                          // Span this device's channel belongs to
     int m_spanPos;                       // Physical channel inside span
     int m_alarms;                        // Device alarms flag
-    int m_rxOffHook;                     // Keep hook status for bridged lines
+    int m_rxHookSig;                     // Keep hook status for bridged lines
     int m_savedEvent;                    // Event saved asynchronously for later
     String m_alarmsText;                 // Alarms text
     bool m_canRead;                      // True if there is data to read
@@ -810,7 +819,7 @@ ZapDevice::ZapDevice(Type t, SignallingComponent* dbg, unsigned int chan,
     m_span(-1),
     m_spanPos(-1),
     m_alarms(NotOpen),
-    m_rxOffHook(-1),
+    m_rxHookSig(-1),
     m_savedEvent(0),
     m_canRead(false),
     m_event(false),
@@ -839,7 +848,7 @@ ZapDevice::ZapDevice(unsigned int chan, bool disableDbg, bool open)
     m_span(-1),
     m_spanPos(-1),
     m_alarms(NotOpen),
-    m_rxOffHook(-1),
+    m_rxHookSig(-1),
     m_savedEvent(0),
     m_canRead(false),
     m_event(false),
@@ -1037,18 +1046,27 @@ bool ZapDevice::startEchoTrain(unsigned int period)
 // Poll for hook events (passive FXO)
 void ZapDevice::pollHook()
 {
-    if (m_rxOffHook < 0)
+    if (m_rxHookSig < 0)
 	return;
 
     ZT_PARAMS par;
     if (!ioctl(GetParams,&par))
 	return;
 
-    if (m_rxOffHook == par.rxisoffhook)
+    if (m_rxHookSig == par.rxhooksig)
 	return;
     // state changed, save the event for later
-    m_rxOffHook = par.rxisoffhook;
-    m_savedEvent = m_rxOffHook ? ZT_EVENT_ONHOOK : ZT_EVENT_WINKFLASH;
+    m_rxHookSig = par.rxhooksig;
+    // states are reversed but that's how Zaptel is...
+    switch (m_rxHookSig) {
+	case RxSigInitial:
+	case RxSigOffHook:
+	    m_savedEvent = ZT_EVENT_ONHOOK;
+	    break;
+	case RxSigOnHook:
+	    m_savedEvent = ZT_EVENT_WINKFLASH;
+	    break;
+    }
 }
 
 // Send hook events

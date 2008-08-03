@@ -538,10 +538,10 @@ class IVR
     /**
      * Register an IVR by its class name
      * @param $ivrname Name of the IVR to register
-     * @param $classname Name of the class to instantiate
+     * @param $classname Name of the class to instantiate, defaults to name of IVR
      * @return True if registered, false if invalid class or IVR already registered
      */
-    static function Register($ivrname, $classname)
+    static function Register($ivrname, $classname = null)
     {
 	global $yate_ivr_register;
 
@@ -550,6 +550,8 @@ class IVR
 	    Yate::Output("IVR: Already registered IVR '$ivrname'");
 	    return false;
 	}
+	if ($classname === null)
+	    $classname = $ivrname;
 	if (!class_exists($classname)) {
 	    Yate::Output("IVR: Inexistent class '$classname' for IVR '$ivrname'");
 	    return false;

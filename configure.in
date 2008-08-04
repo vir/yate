@@ -743,9 +743,14 @@ QT4_VER=""
 AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients (default)]),[ac_cv_use_libqt4=$withval],[ac_cv_use_libqt4=yes])
 if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
     AC_MSG_CHECKING([for Qt4 using pkg-config])
+    pkgd="/usr/lib/qt4/$ARCHLIB/pkgconfig"
+    if [[ -d "$pkgd" ]]; then
+	export PKG_CONFIG_LIBDIR="$pkgd"
+    fi
     verqt=`pkg-config --modversion QtCore 2>/dev/null`
     incqt=`pkg-config --cflags QtCore QtGui QtXml QtNetwork 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
     libqt=`pkg-config --libs QtCore QtGui QtXml QtNetwork 2>/dev/null | sed 's/QtNetwork/QtUiTools/'`
+    unset PKG_CONFIG_LIBDIR
     if [[ "x$incqt" != "x" -a "x$libqt" != "x" ]]; then
 	HAVE_QT4=yes
 	QT4_INC="$incqt"

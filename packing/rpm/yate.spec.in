@@ -261,6 +261,8 @@ This package includes the common files needed to use Yate as a VoIP client.
 %{_datadir}/pixmaps/null_team-*.png
 %dir %{_datadir}/yate/skins
 %{_datadir}/yate/skins/*
+%dir %{_datadir}/yate/sounds
+%{_datadir}/yate/sounds/*
 %dir %{_datadir}/yate/help
 %{_datadir}/yate/help/*
 %config(noreplace) %{_sysconfdir}/yate/providers.conf

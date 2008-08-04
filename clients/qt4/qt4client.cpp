@@ -27,1026 +27,1185 @@
 
 #ifdef _WINDOWS
 #define DEFAULT_DEVICE "dsound/*"
+#elif defined(__linux__)
+#define DEFAULT_DEVICE "alsa/default"
 #else
 #define DEFAULT_DEVICE "oss//dev/dsp"
 #endif
 
+namespace TelEngine {
+
+// Utility: get an UTF8 representation of a QT string
+#define qtGetUtf8(str) str.toUtf8().constData()
+
+// Utility: set a QT string from an UTF8 char buffer
+inline QString qtSetUtf8(const char* src)
+{
+    return QString::fromUtf8(src?src:"");
+}
+
+// Factory used to create objects in client's thread
+class Qt4ClientFactory : public UIFactory
+{
+public:
+    Qt4ClientFactory(const char* name = "Qt4ClientFactory");
+    virtual void* create(const String& type, const char* name, NamedList* params = 0);
+};
+
+// Class used for temporary operations on QT widgets
+// Keeps a pointer to a widget and its type
+// NOTE: The methods of this class don't check the widget pointer
+class QtWidget
+{
+public:
+    enum Type {
+	PushButton     = 0,
+	CheckBox       = 1,
+	Table          = 2,
+	ListBox        = 3,
+	ComboBox       = 4,
+	Tab            = 5,
+	StackWidget    = 6,
+	TextEdit       = 7,
+	Label          = 8,
+	LineEdit       = 9,
+	AbstractButton = 10,
+	Slider         = 11,
+	ProgressBar    = 12,
+	Unknown        = 13,             // Unknown type
+	Action,                          // QAction descendant
+	CustomTable,                     // QtTable descendant
+	Missing                          // Invalid pointer
+    };
+    // Set widget from object
+    inline QtWidget(QObject* w)
+	: m_widget(0), m_action(0), m_type(Missing) {
+	    if (!w)
+		return;
+	    if (w->inherits("QWidget"))
+		m_widget = static_cast<QWidget*>(w);
+	    else if (w->inherits("QAction"))
+		m_action = static_cast<QAction*>(w);
+	    m_type = getType();
+	}
+    // Set widget from object and type
+    inline QtWidget(QWidget* w, int t)
+	: m_widget(w), m_action(0), m_type(t) {
+	    if (!m_widget)
+		m_type = Missing;
+	}
+    // Set widget/action from object and name
+    inline QtWidget(QtWindow* wnd, const String& name)
+	: m_widget(0), m_action(0), m_type(Missing) {
+	    m_widget = qFindChild<QWidget*>(wnd,name.c_str());
+	    if (!m_widget)
+		m_action = qFindChild<QAction*>(wnd,name.c_str());
+	    m_type = getType();
+	}
+    inline bool valid() const
+	{ return type() != Missing; }
+    inline bool invalid() const
+	{ return type() == Missing; }
+    inline int type() const
+	{ return m_type; }
+    inline const char* name() {
+	    return m_widget ? qtGetUtf8(m_widget->objectName()) :
+		(m_action ? qtGetUtf8(m_action->objectName()) : "");
+	}
+    inline operator QWidget*()
+	{ return m_widget; }
+    inline bool inherits(const char* classname)
+	{ return m_widget && m_widget->inherits(classname); }
+    inline bool inherits(Type t)
+	{ return inherits(s_types[t]); }
+    inline QWidget* operator ->()
+	{ return m_widget; }
+    // Static cast methods
+    inline QPushButton* button()
+	{ return static_cast<QPushButton*>(m_widget); }
+    inline QCheckBox* check()
+	{ return static_cast<QCheckBox*>(m_widget); }
+    inline QTableWidget* table()
+	{ return static_cast<QTableWidget*>(m_widget); }
+    inline QListWidget* list()
+	{ return static_cast<QListWidget*>(m_widget); }
+    inline QComboBox* combo()
+	{ return static_cast<QComboBox*>(m_widget); }
+    inline QTabWidget* tab()
+	{ return static_cast<QTabWidget*>(m_widget); }
+    inline QStackedWidget* stackWidget()
+	{ return static_cast<QStackedWidget*>(m_widget); }
+    inline QTextEdit* textEdit()
+	{ return static_cast<QTextEdit*>(m_widget); }
+    inline QLabel* label()
+	{ return static_cast<QLabel*>(m_widget); }
+    inline QLineEdit* lineEdit()
+	{ return static_cast<QLineEdit*>(m_widget); }
+    inline QAbstractButton* abstractButton()
+	{ return static_cast<QAbstractButton*>(m_widget); }
+    inline QSlider* slider()
+	{ return static_cast<QSlider*>(m_widget); }
+    inline QProgressBar* progressBar()
+	{ return static_cast<QProgressBar*>(m_widget); }
+    inline QtTable* customTable()
+	{ return qobject_cast<QtTable*>(m_widget); }
+    inline QAction* action()
+	{ return m_action; }
+
+    int getType() {
+	    if (m_widget) {
+		String cls = m_widget->metaObject()->className(); 
+		for (int i = 0; i < Unknown; i++)
+		    if (s_types[i] == cls)
+			return i;
+		if (customTable())
+		    return CustomTable;
+		return Unknown;
+	    }
+	    if (m_action && m_action->inherits("QAction"))
+		return Action;
+	    return Missing;
+	}
+    static String s_types[Unknown];
+protected:
+    QWidget* m_widget;
+    QAction* m_action;
+    int m_type;
+private:
+    QtWidget() {}
+};
+
+// Class used for temporary operations on QTableWidget objects
+// NOTE: The methods of this class don't check the table pointer
+class TableWidget : public GenObject
+{
+public:
+    TableWidget(QTableWidget* table, bool tmp = true);
+    TableWidget(QtWindow* wnd, const String& name, bool tmp = true);
+    TableWidget(QtWidget& table, bool tmp = true);
+    ~TableWidget();
+    inline QTableWidget* table()
+	{ return m_table; }
+    inline bool valid()
+	{ return m_table != 0; }
+    inline QtTable* customTable()
+	{ return (valid()) ? qobject_cast<QtTable*>(m_table) : 0; }
+    inline const String& name()
+	{ return m_name; }
+    inline int rowCount()
+	{ return m_table->rowCount(); }
+    inline int columnCount()
+	{ return m_table->columnCount(); }
+    inline void setHeaderText(int col, const char* text) {
+	    if (col < columnCount())
+		m_table->setHorizontalHeaderItem(col,
+		    new QTableWidgetItem(text ? text : ""));
+	}
+    inline bool getHeaderText(int col, String& dest, bool lower = true) {
+    	    QTableWidgetItem* item = m_table->horizontalHeaderItem(col);
+	    if (item)	{
+		dest = qtGetUtf8(item->text());
+		if (lower)
+		    dest.toLower();
+	    }
+	    return item != 0;
+	}
+    // Get the current selection's row
+    inline int crtRow() {
+	    QList<QTableWidgetItem*> items = m_table->selectedItems();
+	    if (items.size())
+		return items[0]->row();
+	    return -1;
+	}
+    inline void repaint()
+	{ m_table->repaint(); }
+    inline void addRow(int index)
+	{ m_table->insertRow(index); }
+    inline void delRow(int index) {
+	    if (index >= 0)
+		m_table->removeRow(index);
+	}
+    inline void addColumn(int index, int width = -1, const char* name = 0) {
+	    m_table->insertColumn(index);
+	    if (width >= 0)
+		m_table->setColumnWidth(index,width); 
+	    setHeaderText(index,name);
+	}
+    inline void setImage(int row, int col, const String& image) {
+	    QTableWidgetItem* item = m_table->item(row,col);
+	    if (item)
+		item->setIcon(QIcon(image.c_str()));
+	}
+    inline void addCell(int row, int col, const String& value) {
+	    QTableWidgetItem* item = new QTableWidgetItem(value.safe());
+	    m_table->setItem(row,col,item);
+	}
+    inline void setCell(int row, int col, const String& value, bool addNew = true) {
+	    QTableWidgetItem* item = m_table->item(row,col);
+	    if (item)
+		item->setText(value.safe());
+	    else if (addNew)
+		addCell(row,col,value);
+	}
+    inline bool getCell(int row, int col, String& dest, bool lower = false) {
+    	    QTableWidgetItem* item = m_table->item(row,col);
+	    if (item) {
+		dest = qtGetUtf8(item->text());
+		if (lower)
+		    dest.toLower();
+		return true;
+	    }
+	    return false;
+	}
+    inline void setID(int row, const String& value)
+	{ setCell(row,0,value); }
+    // Update a row from a list of parameters
+    void updateRow(int row, const NamedList& data);
+    // Find a row by the first's column value. Return -1 if not found 
+    int getRow(const String& item);
+    // Find a column by its label. Return -1 if not found 
+    int getColumn(const String& name, bool caseInsentive = true);
+    // Save/Load the table column's widths from/to a comma separated list
+    void colWidths(bool save, const String& section);
+protected:
+    void init(bool tmp);
+private:
+    QTableWidget* m_table;               // The table
+    String m_name;                       // Table's name
+    int m_sortControl;                   // Flag used to set/reset sorting attribute of the table
+};
+
+}; // namespace TelEngine
+
 using namespace TelEngine;
 
+// Dynamic properies
+static String s_propFrameless = "dynamicFrameless";   // Windows: show/hide the border
+static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
+static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
+//
+static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
 static Configuration s_save;
 static Configuration s_callHistory;
-static String s_skinPath;
+
+String QtWidget::s_types[QtWidget::Unknown] = {
+    "QPushButton",
+    "QCheckBox",
+    "QTableWidget",
+    "QListWidget",
+    "QComboBox",
+    "QTabWidget",
+    "QStackedWidget",
+    "QTextEdit",
+    "QLabel",
+    "QLineEdit",
+    "QAbstractButton",
+    "QSlider",
+    "QProgressBar"
+};
+
+// Connect a sender's signal to a receiver's slot
+#define YQT_CONNECT(sender,signal,receiver,method,sName) \
+    if (QObject::connect(sender,SIGNAL(signal),receiver,SLOT(method))) \
+	DDebug(QtDriver::self(),DebugAll,"Connected sender=%s signal=%s to receiver=%s", \
+	    qtGetUtf8(sender->objectName()),sName,qtGetUtf8(receiver->objectName())); \
+    else \
+	Debug(QtDriver::self(),DebugWarn,"Failed to connect sender=%s signal=%s to receiver=%s", \
+	    qtGetUtf8(sender->objectName()),sName,qtGetUtf8(receiver->objectName()))
 
 
-QtWindow::QtWindow()
+// Utility: get a list row containing the given text
+static int findListRow(QListWidget& list, const String& item)
 {
-    m_ringtone = new QSound("ring.wav", this);
+    QString it(qtSetUtf8(item));
+    for (int i = 0; i < list.count(); i++) {
+	QListWidgetItem* tmp = list.item(i);
+	if (tmp && it == tmp->text())
+	    return i;
+    }
+    return -1;
+}
+
+// Utility: find a stacked widget's page with the given name
+static int findStackedWidget(QStackedWidget& w, const String& name)
+{
+    QString n(qtSetUtf8(name));
+    for (int i = 0; i < w.count(); i++) {
+	QWidget* page = w.widget(i);
+	if (page && n == page->objectName())
+	    return i;
+    }
+    return -1;
+}
+
+// Utility: Insert a widget into another
+static void setWidget(QWidget* parent, QWidget* child)
+{
+    if (!(parent && child))
+	return;
+    QVBoxLayout* layout = new QVBoxLayout;
+    layout->setSpacing(0);
+#if QT_VERSION < 0x040300
+    layout->setMargin(0);
+#else
+    layout->setContentsMargins(0,0,0,0);
+#endif
+    layout->addWidget(child);
+    QLayout* l = parent->layout();
+    if (l)
+	delete l;
+    parent->setLayout(layout);
+}
+
+// Utility function used to get the name of a control
+static bool translateName(QtWidget& w, String& name)
+{
+    if (w.invalid())
+	return false;
+    if (w.type() != QtWidget::Action)
+	if (w->accessibleName().isEmpty()) 
+	    name = qtGetUtf8(w->objectName());
+	else
+	    name = qtGetUtf8(w->accessibleName());
+    else
+	name = qtGetUtf8(w.action()->objectName());
+    return true;
+}
+
+// Utility: raise a select event if a list is empty
+inline void raiseSelectIfEmpty(int count, Window* wnd, const String& name)
+{
+    if (count <= 0 && Client::self())
+	Client::self()->select(wnd,name,String::empty());
+}
+
+
+/**
+ * Qt4ClientFactory
+ */
+Qt4ClientFactory::Qt4ClientFactory(const char* name)
+    : UIFactory(name)
+{
+    m_types.append(new String("QSound"));
+}
+
+// Build QSound
+void* Qt4ClientFactory::create(const String& type, const char* name, NamedList* params)
+{
+    if (type == "QSound")
+	return new QSound(name);
+    return 0;
+}
+
+
+/**
+ * TableWidget
+ */
+TableWidget::TableWidget(QTableWidget* table, bool tmp)
+    : m_table(table), m_sortControl(-1)
+{
+    if (!m_table)
+	return;
+    init(tmp);
+}
+
+TableWidget::TableWidget(QtWindow* wnd, const String& name, bool tmp)
+    : m_table(0), m_sortControl(-1)
+{
+    if (wnd)
+	m_table = qFindChild<QTableWidget*>(wnd,name.c_str());
+    if (!m_table)
+	return;
+    init(tmp);
+}
+
+TableWidget::TableWidget(QtWidget& table, bool tmp)
+    : m_table(static_cast<QTableWidget*>((QWidget*)table)), m_sortControl(-1)
+{
+    if (m_table)
+	init(tmp);
+}
+
+TableWidget::~TableWidget()
+{
+    if (!m_table)
+	return;
+    if (m_sortControl >= 0)
+	m_table->setSortingEnabled((bool)m_sortControl);
+    m_table->verticalHeader()->hide();
+    m_table->repaint();
+}
+
+// Update a row from a list of parameters
+void TableWidget::updateRow(int row, const NamedList& data)
+{
+    int ncol = columnCount();
+    for(int i = 0; i < ncol; i++) {
+	String header;
+	if (!getHeaderText(i,header))
+	    continue;
+	NamedString* tmp = data.getParam(header);
+	if (tmp)
+	    setCell(row,i,*tmp);
+	// Set image
+	tmp = data.getParam(header + "_image");
+	if (tmp)
+	    setImage(row,i,*tmp);
+    }
+}
+
+// Find a row by the first's column value. Return -1 if not found 
+int TableWidget::getRow(const String& item)
+{
+    int n = rowCount();
+    for (int i = 0; i < n; i++) {
+	String val;
+	if (getCell(i,0,val) && item == val)
+	    return i;
+    }
+    return -1;
+}
+
+// Find a column by its label. Return -1 if not found 
+int TableWidget::getColumn(const String& name, bool caseInsensitive)
+{
+    int n = columnCount();
+    for (int i = 0; i < n; i++) {
+	String val;
+	if (!getHeaderText(i,val,false))
+	    continue;
+	if ((caseInsensitive && (name |= val)) || (name == val))
+	    return i;
+    }
+    return -1;
+}
+
+// Load/save the table column's widths to/from a comma separated list
+void TableWidget::colWidths(bool save, const String& section)
+{
+    String param(m_name + "_col_widths");
+    if (save) {
+	unsigned int n = columnCount();
+	String widths;
+	for (unsigned int i = 0; i < n; i++)
+	    widths.append(String(m_table->columnWidth(i)),",",true);
+	s_save.setValue(section,param,widths);
+	return;
+    }
+    // Load
+    String widths = s_save.getValue(section,param);
+    ObjList* list = widths.split(',');
+    unsigned int col = 0;
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext(), col++) {
+	int width = (static_cast<String*>(o->get()))->toInteger(-1);
+	if (width >= 0)
+	    m_table->setColumnWidth(col,width); 
+    }
+    TelEngine::destruct(list);
+}
+
+void TableWidget::init(bool tmp)
+{
+    m_name = qtGetUtf8(m_table->objectName());
+    if (tmp)
+	m_sortControl = m_table->isSortingEnabled() ? 1 : 0; 
+}
+
+
+/**
+ * QtWindow
+ */
+QtWindow::QtWindow()
+    : m_x(0), m_y(0), m_width(0), m_height(0),
+    m_maximized(false), m_mainWindow(false), m_moving(false)
+{
 }
 
 QtWindow::QtWindow(const char* name, const char* description)
-    : Window(name), m_description(description), m_keysVisible(true)
+    : Window(name), m_description(description),
+    m_x(0), m_y(0), m_width(0), m_height(0),
+    m_maximized(false), m_mainWindow(false)
 {
-    m_ringtone = new QSound("ring.wav", this);
+    setObjectName(name);
+    setAccessibleName(description);
 }
 
 QtWindow::~QtWindow()
 {
-    s_save.setValue(m_id, "x", m_x);
-    s_save.setValue(m_id, "y", m_y);
-    s_save.setValue(m_id, "width", m_width);
-    s_save.setValue(m_id, "height", m_height);
-    s_save.setValue(m_id, "visible", m_visible);
-    QList<QTimer*> timer = qFindChildren<QTimer*>(this);
+    // Save settings
+    if (m_saveOnClose) {
+	m_maximized = isMaximized();
+	s_save.setValue(m_id,"maximized",String::boolText(m_maximized));
+	// Don't save position if maximized: keep the old one
+	if (!m_maximized) {
+	    s_save.setValue(m_id,"x",m_x);
+	    s_save.setValue(m_id,"y",m_y);
+	    s_save.setValue(m_id,"width",m_width);
+	    s_save.setValue(m_id,"height",m_height);
+	}
+	s_save.setValue(m_id,"visible",m_visible);
+	// Save tables
+	QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
+	for (int i = 0; i < tables.size(); i++) {
+	    TableWidget t(tables[i]);
+	    t.colWidths(true,m_id);
+	}
+    }
 }
 
+// Set windows title
 void QtWindow::title(const String& text)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::title() : text %s", text.c_str());
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::title(%s) [%p]",text.c_str(),this);
+    Window::title(text);
+    QWidget::setWindowTitle(text.c_str());
 }
 
 void QtWindow::context(const String& text)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::context() : text %s", text.c_str());
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::context(%s) [%p]",text.c_str(),this);
     m_context = text;
 }
 
 bool QtWindow::setParams(const NamedList& params)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setParams()");
-
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setParams() [%p]",this);
+    if (params.getBoolValue("modal"))
+	setWindowModality(Qt::ApplicationModal);
+    if (params.getBoolValue("minimized"))
+	QWidget::setWindowState(Qt::WindowMinimized);
     return Window::setParams(params);
 }
 
 void QtWindow::setOver(const Window* parent)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setOver() [%p]", parent);
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setOver(%p) [%p]",parent,this);
+    QWidget::raise();
 }
 
 bool QtWindow::hasElement(const String& name)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::hasElement() name : %s", name.c_str());
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (wid)
-	return true;
-    return false;
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::hasElement(%s) [%p]",name.c_str(),this);
+    QtWidget w(this,name);
+    return w.valid();
 }
 
 bool QtWindow::setActive(const String& name, bool active)
 {
-    DDebug(QtDriver::self(), DebugWarn, "QtWindow::setActive() name : %s, bool : %s", name.c_str(),
-		 String::boolText(active));
-
-
-    if (name == "ringtone") {
-	if(active) {
-	    if (m_ringtone->isFinished())
-		m_ringtone->play();
-	}
-	else
-	    m_ringtone->stop();
-    }
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setActive(%s,%s) [%p]",
+	name.c_str(),String::boolText(active),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    //accept behaviour
-    if (name == "accept")
-    {
-	setShow("accept", active);
-	setShow("call", !active);
-    }
-    
-    wid->setEnabled(active);
+    if (w.type() != QtWidget::Action)
+	w->setEnabled(active);
+    else
+	w.action()->setEnabled(active);
     return true;
 }
 
 bool QtWindow::setFocus(const String& name, bool select)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setFocus() name : %s, select : %s", name.c_str(),
-		String::boolText(select));
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setFocus(%s,%s) [%p]",
+	name.c_str(),String::boolText(select),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QComboBox") {
-	wid->setFocus();
-	QComboBox* combo = (QComboBox*) wid;
-	if (combo->isEditable() && select)
-	    combo->lineEdit()->selectAll();
-	return true;
+    w->setFocus();
+    switch (w.type()) {
+	case  QtWidget::ComboBox:
+	    if (w.combo()->isEditable() && select)
+		w.combo()->lineEdit()->selectAll();
+	    break;
     }
-
-    return false;
+    return true;
 }
 
 bool QtWindow::setShow(const String& name, bool visible)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setShow() name : %s, visible %s", name.c_str(),
-		String::boolText(visible));
-
-    if( name == "keypad") {
-	QList<QAbstractButton*> keys = qFindChildren<QAbstractButton*>(this, "digit");
-	if (keys.isEmpty())
-	    return false;
-	for(int i = 0; i < keys.size(); i++)
-	    keys[i]->setVisible(visible);
-	QPushButton* back = qFindChild<QPushButton*>(this, "back_callto");
-	if (back)
-	    back->setVisible(visible);
-	QPushButton* clear = qFindChild<QPushButton*>(this, "clear_callto");
-	if (clear)
-	    clear->setVisible(visible);
-	return true;
-    }
-
-    if (name == "transfer") {
-	QLineEdit* lineEdit = qFindChild<QLineEdit*>(this, "transferedit");
-	if (lineEdit) {
-	    lineEdit->setVisible(visible);
-	    lineEdit->clear();
-	    lineEdit->setFocus();
-	    }
-	QPushButton* button = qFindChild<QPushButton*>(this, "transferbutton");
-	if (button)
-	    button->setVisible(visible);
-	return true;
-    }
-
-    if (name == "conference") {
-	QLineEdit* lineEdit = qFindChild<QLineEdit*>(this, "conferenceedit");
-	if (lineEdit) {
-	    lineEdit->setVisible(visible);
-	    lineEdit->clear();
-	    lineEdit->setFocus();
-	    }
-	QPushButton* button = qFindChild<QPushButton*>(this, "conferencebutton");
-	if (button)
-	    button->setVisible(visible);
-	return true;
-    }
-
-   QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setShow(%s,%s) [%p]",
+	name.c_str(),String::boolText(visible),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QPushButton") {
-	((QPushButton*) wid)->setVisible(visible);
-	return true;
-    }
-    return false;
+    if (w.type() != QtWidget::Action)
+	w->setVisible(visible);
+    else
+	w.action()->setVisible(visible);
+    return true;
 }
 
-bool QtWindow::setText(const String& name, const String& text)
+bool QtWindow::setText(const String& name, const String& text,
+	bool richText)
 {
-   // DDebug(QtDriver::self(), DebugInfo, "QtWindow::settext() name: %s, text: <<<<< %s >>>>>", name.c_str(), text.c_str());
-    if (name == "log_events")
-    {
-	QCheckBox* window = qFindChild<QCheckBox*>(this, "events");
-	if (window && window->isChecked())
-	{
-	    QTextEdit* textEdit = qFindChild<QTextEdit*>(this, "log_events");
-	    if (textEdit)
-	    {
-		textEdit->append(text.c_str());
-		return true;
-	    }
-	}
-	QCheckBox* fileDebug = qFindChild<QCheckBox*>(this, "debugtofile");
-	if (fileDebug && fileDebug->isChecked())
-	{
-	    QLineEdit* filename = qFindChild<QLineEdit*>(this, "filename");
-	    if (filename)
-	    {
-		QString textInEdit =  filename->text();
-		if (!textInEdit.isEmpty())
-		{
-		    QFile file(textInEdit);
-		    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append))
-			return false;
-		    QByteArray textToWrite(text.c_str());
-		    if (file.write(textToWrite) == -1)
-		        return false;
-		    if (file.write("\n") == -1)
-		        return false;
-		    file.close();
-		    return true;
-		}
-	    }
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setText(%s,%s) [%p]",
+	m_id.c_str(),name.c_str(),text.c_str(),this);
 
-	}
-
-    }
-    if (name.startsWith("l:")) {
-	QList<QWidget*> lines = qFindChildren<QWidget*>(this, "internalLine");
-	if (lines.empty())
-	    return false;
-	
-	QString type = lines[0]->metaObject()->className();
-	
-	if (type == "QPushButton") {
-	    for (int i = 0; i < lines.size(); i++) {
-		if (lines[i]->accessibleName() == name.c_str()) {
-		    QPushButton* button = (QPushButton*) lines[i];
-		    QString qtext = button->text();
-		    if (text != "") {
-			qtext.append(": ");
-			qtext.append(text.c_str());
-			button->setText(qtext);
-			return true;
-		    }
-		    else {
-			qtext.truncate(6);
-			button->setText(qtext);
-			return true;
-		    }
-		}
-	    }
-	}
-    }
-    if (name == "internalLine") {
-	QList<QWidget*> lines = qFindChildren<QWidget*>(this, name.c_str());
-	if (lines.empty())
-	    return false;
-
-	QString type = lines[0]->metaObject()->className();
-	if (type == "QPushButton") {
-	    for (int i = 0; i < lines.size(); i++) {
-		QPushButton* button = (QPushButton*) lines[i];
-		if (button->isChecked()) {
-		    QString qtext = button->text();
-		    if (text != "") {
-			qtext.append(": ");
-			qtext.append(text.c_str());
-			button->setText(qtext);
-			return true;
-		    }
-		    else {
-			qtext.truncate(6);
-			button->setText(qtext);
-			return true;
-		    }
-		}
-	    }
-	}
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    }
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
-	if (!channelsList.contains(name.c_str()))
-	    return false;
-	else {
-	    int index = -1;
-	    for (int i = 0; i < channelsList.size(); i++)
-		if (channelsList[i] == name.c_str())
-		    index = i;
-	    if (index > -1) {
-		QListWidget* list = qFindChild<QListWidget*>(this, "channels");
-		if (list) {
-		    (list->item(index))->setText(text.c_str());
-		    list->update();
-		    list->dumpObjectInfo();
-		    return true;
-		}
+    switch (w.type()) {
+	case QtWidget::CheckBox:
+	    w.check()->setText(text.c_str());
+	    return true;
+	case QtWidget::LineEdit:
+	    w.lineEdit()->setText(text.c_str());
+	    return true;
+	case QtWidget::TextEdit:
+	    if (richText) {
+		w.textEdit()->clear();
+		w.textEdit()->insertHtml(text.c_str());
 	    }
-	    return false;		
-	}
-
-    QString type = wid->metaObject()->className();
-
-    if( type == "QComboBox") {
-	if (((QComboBox*) wid )->lineEdit())
-	    ((QComboBox*) wid )->lineEdit()->setText(text.c_str());
-	QTabWidget* tabs = qFindChild<QTabWidget*>(this, "tabs");
-	if (tabs)
-	    tabs->setCurrentIndex(0);
-	return true;
+	    else
+		w.textEdit()->setText(text.c_str());
+	    return true;
+	case QtWidget::Label:
+	    w.label()->setText(text.c_str());
+	    return true;
+	case QtWidget::ComboBox:
+	    if (w.combo()->lineEdit())
+		w.combo()->lineEdit()->setText(text.c_str());
+	    else
+		setSelect(name,text);
+	    return true;
+	case QtWidget::Action:
+	    w.action()->setText(text.c_str());
+	    return true;
     }
 
-    if (type == "QLabel") {
-	QLabel* label = ((QLabel*) wid);
-	label->setText(text.c_str());
-	return true;
-    }
-
-    if (type == "QLineEdit") { 
-	((QLineEdit*) wid)->setText(text.c_str());
-	return true;
-    }
-
-    if (type == "QTextEdit") {
-	QTextEdit* textEdit = (QTextEdit*) wid;
-	if(!name.startsWith("help"))
-	    textEdit->append(text.c_str());
-	else
-	    textEdit->setText(text.c_str());
-	return true;
-    }
-    return false;
+    // Handle some known base classes having a setText() method
+    if (w.inherits(QtWidget::AbstractButton))
+	w.abstractButton()->setText(text.c_str());
+    else
+	return false;
+    return true;
 }
 
 bool QtWindow::setCheck(const String& name, bool checked)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setCheck() name : %s, visible : %s", name.c_str(),
-		String::boolText(checked));
-
-    if (name.startsWith("l:")) {
-	int l = name.substr(2).toInteger();
-	QList<QWidget*> lines = qFindChildren<QWidget*>(this, "internalLine");
-	if (lines.empty())
-	    return false;
-	if (l > lines.size())
-	    return false;
-
-	QString type = lines[0]->metaObject()->className();
-
-	if (type == "QPushButton") {
-	    for (int i = 0; i < lines.size(); i++)
-		if (lines[i]->accessibleName() == name.c_str()) {
-		    ((QPushButton*) lines[i])->setChecked(checked);
-		    return true;
-		}
-	}
-	
+    XDebug(QtDriver::self(), DebugInfo, "QtWindow::setCheck(%s,%s) [%p]",
+	name.c_str(),String::boolText(checked),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    }
-    if (name == "internalLine") {
-	QList<QWidget*> lines = qFindChildren<QWidget*>(this, name.c_str());
-	if (lines.empty())
-	    return false;
-
-	QString type = lines[0]->metaObject()->className();
-	
-	if (type == "QPushButton") {
-	    for (int i = 0; i < lines.size(); i++) {
-		QPushButton* button = (QPushButton*) lines[i];
-		if (button->isChecked()) {
-		    button->setChecked(checked);
-		    return true;
-		}
-	    }
-	}
+    if (w.inherits(QtWidget::AbstractButton))
+	w.abstractButton()->setChecked(checked);
+    else if (w.type() == QtWidget::Action)
+	w.action()->setChecked(checked);
+    else
 	return false;
-    }
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
-	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QCheckBox") {
-	((QCheckBox*) wid)->setChecked(checked);
-	return true;
-    }
-
-    if (type == "QPushButton") {
-	((QPushButton*) wid)->setChecked(checked);
-	return true;
-    }
-
-    return false;
+    return true;
 }
 
 bool QtWindow::setSelect(const String& name, const String& item)
 {
-    Debug(QtDriver::self(), DebugInfo, "QtWindow::setSelect() name : %s, item %s", name.c_str(), item.c_str());
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setSelect(%s,%s) [%p]",
+	name.c_str(),item.c_str(),this);
 
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    QtWidget w(this,name);
+    if (w.invalid() || !item)
 	return false;
 
-    QString type = wid->metaObject()->className();
-
-    if (item == "")
-	return true;
-
-    if (type == "QComboBox") {
-	int index = ((QComboBox*) wid)->findText(item.c_str());
-	if (index == -1)
+    int d = 0;
+    switch (w.type()) {
+	case QtWidget::Table:
+	    {
+		TableWidget t(w);
+		int row = t.getRow(item);
+		if (row < 0)
+		    return false;
+		t.table()->setCurrentCell(row,0);
+		return true;
+	    }
+	case QtWidget::ComboBox:
+	    d = w.combo()->findText(item.c_str());
+	    if (d < 0)
+		return false;
+	    w.combo()->setCurrentIndex(d);
+	    return true;
+	case QtWidget::ListBox:
+	    d = findListRow(*(w.list()),item);
+	    if (d >= 0)
+		w.list()->setCurrentRow(d);
+	    return d >= 0;
+	case QtWidget::Slider:
+	    w.slider()->setValue(item.toInteger());
+	    return true;
+	case QtWidget::StackWidget:
+	    d = item.toInteger(-1);
+	    while (d < 0) {
+		d = findStackedWidget(*(w.stackWidget()),item);
+		if (d >= 0)
+		    break;
+		// Check for a default widget
+		String def;
+		def << qtGetUtf8(w.stackWidget()->objectName()) << "_default";
+		d = findStackedWidget(*(w.stackWidget()),def);
+		break;
+	    }
+	    if (d >= 0 && d < w.stackWidget()->count()) {
+		w.stackWidget()->setCurrentIndex(d);
+		return true;
+	    }
 	    return false;
-	((QComboBox*) wid)->setCurrentIndex(index);
-	return true;
-    }
-
-    if (type == "QListWidget") {
-	QListWidget* listWidget = (QListWidget*) wid;
-	for (int i = 0; i < channelsList.size(); i++)
-	    if (channelsList[i] == item.c_str())
-		listWidget->setCurrentItem(listWidget->item(i));
-	return true;
-    }
-    
-    if (type == "QSlider") {
-	((QSlider*) wid)->setValue(item.toInteger());
-	return true;
-    }
-
-    if (type == "QStackedWidget") {
-        QStackedWidget* stack = (QStackedWidget*)wid;
-	int i = item.toInteger(-1);
-	if (i >= 0) {
-	    if (i < stack->count()) {
-		stack->setCurrentIndex(i);
-		return true;
-	    }
-	}
-	for (i = 0; i < stack->count(); i++) {
-	    QWidget* page = stack->widget(i);
-	    if (page && (page->objectName().toAscii() == item)) {
-		stack->setCurrentIndex(i);
-		return true;
-	    }
-	}
-	return false;
+	case QtWidget::ProgressBar:
+	    d = item.toInteger();
+	    if (d >= w.progressBar()->minimum() && d <= w.progressBar()->maximum())
+		w.progressBar()->setValue(d);
+	    else if (d < w.progressBar()->minimum())
+		w.progressBar()->setValue(w.progressBar()->minimum());
+	    else
+		w.progressBar()->setValue(w.progressBar()->maximum());
+	    return true;
     }
     return false;
 }
 
 bool QtWindow::setUrgent(const String& name, bool urgent)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setUrgent() name : %s, visible %s", name.c_str(),
-		String::boolText(urgent));
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::setUrgent(%s,%s) [%p]",
+	name.c_str(),String::boolText(urgent),this);
     return false;
 }
 
 bool QtWindow::hasOption(const String& name, const String& item)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::hasOption() name : %s, item %s", name.c_str(), item.c_str());
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::hasOption(%s,%s) [%p]",
+	name.c_str(),item.c_str(),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QComboBox") {
-	QComboBox* combo = (QComboBox*) wid;
-	if( combo->findText(item.c_str()) != -1)
-	    return true;
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    return -1 != w.combo()->findText(item.c_str());
+	case QtWidget::Table:
+	    return getTableRow(name,item);
+	case QtWidget::ListBox:
+	    return 0 <= findListRow(*(w.list()),item);
     }
-
-    if (type == "QTableWidget") {
-	QString itemLabel(item.c_str());
-	QList<QTableWidgetItem*> items =  ((QTableWidget*)wid)->findItems(itemLabel, Qt::MatchFixedString);
-	if (items.isEmpty())
-	    return false;
-	return true;
-    }
-
-    if (type == "QListWidget") {
-	if (!channelsList.empty())
-	    for (int i = 0; i < channelsList.size(); i++)
-		if (channelsList[i] == item.c_str())
-		    return true;
-    }
-
     return false;
 }
 
-bool QtWindow::addOption(const String& name, const String& item, bool atStart, const String& text)
+bool QtWindow::addOption(const String& name, const String& item, bool atStart,
+	const String& text)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::addOption() %s , %s, %s %s", name.c_str(), item.c_str(),
-	text.c_str(), String::boolText(atStart));
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) addOption(%s,%s,%s,%s) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),
+	String::boolText(atStart),text.c_str(),this);
 
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
-	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QListWidget") {
-	QListWidget* list = (QListWidget*) wid;
-	QString str = text.c_str();
-	QString itemStr = item.c_str();
-	if (atStart) {
-	    list->insertItem(0, str);
-	    channelsList.insert(0, itemStr);
-	}
-	else {
-	    list->addItem(str);
-	    channelsList.append(itemStr);
-	}
-	return true;
-    }
-
-    if (type == "QComboBox") {
-	QComboBox* combo = (QComboBox*) wid;
-	if (atStart) {
-	    combo->insertItem(0, item.c_str());
-	    if (combo->lineEdit())
-		combo->lineEdit()->setText(combo->itemText(0));
-	}
-	else 
-	    ((QComboBox*) wid)->addItem(item.c_str());
-	return true;
-    }
-
-    if (type == "QTableWidget") {
-	QTableWidget* table = (QTableWidget*) wid;
-	QTableWidgetItem* tableItem = new QTableWidgetItem(item.c_str());
-	if (atStart) {
-	    table->insertRow(0);
-	    table->setItem(0, 0, tableItem);
-	}
-	else {
-	    table->insertRow(table->rowCount());
-	    table->setItem(table->rowCount()-1, 0, tableItem);
-	}
-	return true;
+    QtWidget w(this,name);
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    if (atStart) {
+		w.combo()->insertItem(0,item.c_str());
+		if (w.combo()->lineEdit())
+		    w.combo()->lineEdit()->setText(w.combo()->itemText(0));
+	    }
+	    else 
+		w.combo()->addItem(item.c_str());
+	    return true;
+	case QtWidget::Table:
+	    return addTableRow(name,item,0,atStart);
+	case QtWidget::ListBox:
+	    if (atStart)
+		w.list()->insertItem(0,item.c_str());
+	    else
+		w.list()->addItem(item.c_str());
+	    return true;
     }
     return false;
-
 }
 
 bool QtWindow::delOption(const String& name, const String& item)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::delOption() name : %s, item %s", name.c_str(), item.c_str());
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) delOption(%s,%s) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),this);
+
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QTableWidget") {
-
-	QTableWidget* table = (QTableWidget*) wid;
-	QList<QTableWidgetItem*> items = table->selectedItems();
-	if (items.isEmpty())
-	    return false;
-	for (int i = 0; i < items.size(); i++)
-	    if (items[i]->text() == item.c_str()) {
-		table->removeRow(items[i]->row());
+    int row = -1;
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    row = w.combo()->findText(item.c_str());
+	    if (row >= 0) {
+		w.combo()->removeItem(row);
+		raiseSelectIfEmpty(w.combo()->count(),this,name);
 	    }
-	return true;
+	    break;
+	case QtWidget::Table:
+	    return delTableRow(name,item);
+	case QtWidget::ListBox:
+	    row = findListRow(*(w.list()),item);
+	    if (row >= 0) {
+		QStringListModel* model = (QStringListModel*)w.list()->model();
+		if (!(model && model->removeRow(row)))
+		    row = -1;
+		raiseSelectIfEmpty(w.list()->count(),this,name);
+	    }
+	    break;
     }
+    return row >= 0;
+}
 
-    if (type == "QComboBox") {
-	int index = ((QComboBox*) wid)->findText(item.c_str());
-	if (index != -1)
-	    ((QComboBox*) wid)->removeItem(index);
+bool QtWindow::getOptions(const String& name, NamedList* items)
+{
+    Debug(QtDriver::self(),DebugAll,"QtWindow(%s) getOptions(%s,%p) [%p]",
+	m_id.c_str(),name.c_str(),items,this);
+
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    if (!items)
 	return true;
+
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    for (int i = 0; i < w.combo()->count(); i++)
+		items->addParam(qtGetUtf8(w.combo()->itemText(i)),"");
+	    break;
+	case QtWidget::Table:
+	    {
+		TableWidget t(w.table(),false);
+		for (int i = 0; i < t.rowCount(); i++) {
+		    String item;
+		    if (t.getCell(i,0,item) && item)
+			items->addParam(item,"");
+		}
+	    }
+	    break;
+	case QtWidget::ListBox:
+	    for (int i = 0; i < w.list()->count(); i++) {
+		QListWidgetItem* tmp = w.list()->item(i);
+		if (tmp)
+		    items->addParam(qtGetUtf8(tmp->text()),"");
+	    }
+	    break;
+	case QtWidget::CustomTable:
+	    return w.customTable()->getOptions(*items);
     }
+    return true;
+}
 
-    if (type == "QListWidget") {
-	int index = -1;
-	QListWidget* list = (QListWidget*) wid;
-	for (int i = 0; i < channelsList.size(); i++)
-	    if (channelsList[i] == item.c_str())
-		index = i;
-	channelsList.removeAt(index);
-	QStringListModel* modelList = (QStringListModel*)list->model();
-	modelList->removeRow(index);
+// Append or insert text lines to a widget
+bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int max, 
+	bool atStart)
+{
+    DDebug(ClientDriver::self(),DebugAll,"QtWindow(%s) addLines('%s',%p,%u,%s) [%p]",
+	m_id.c_str(),name.c_str(),lines,max,String::boolText(atStart),this);
+
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    if (!lines)
 	return true;
+    unsigned int count = lines->count();
+    if (!count)
+	return true;
+
+    switch (w.type()) {
+	case QtWidget::TextEdit:
+	    // Limit the maximum number of paragraphs
+	    if (max) {
+		QTextDocument* doc = w.textEdit()->document();
+		if (!doc)
+		    return false;
+		doc->setMaximumBlockCount((int)max);
+	    }
+	    {
+		// FIXME: delete lines from begining if appending and the number
+		//  of lines exceeds the maximum allowed
+		unsigned int n = lines->length();
+		QString s = w.textEdit()->toPlainText();
+		int pos = atStart ? 0 : s.length();
+		for (unsigned int i = 0; i < n; i++) {
+		    NamedString* ns = lines->getParam(i);
+		    if (!ns)
+			continue;
+		    if (ns->name().endsWith("\n"))
+			s.insert(pos,ns->name().c_str());
+		    else {
+			String tmp = ns->name() + "\n";
+			s.insert(pos,tmp.c_str());
+			pos++;
+		    }
+		    pos += (int)ns->name().length();
+		}
+		w.textEdit()->setText(s);
+		// Scroll down if added at end
+		if (!atStart) {
+		    QScrollBar* bar = w.textEdit()->verticalScrollBar();
+		    if (bar)
+			bar->setSliderPosition(bar->maximum());
+		}
+	    }
+	    return true;
+	case QtWidget::Table:
+	    // TODO: implement
+	    break;
+	case QtWidget::ComboBox:
+	    // TODO: implement
+	    break;
+	case QtWidget::ListBox:
+	    // TODO: implement
+	    break;
     }
     return false;
 }
 
-bool QtWindow::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart)
+bool QtWindow::addTableRow(const String& name, const String& item,
+	const NamedList* data, bool atStart)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::addTableRow() name : %s, item %s, data %s, atStart %s", name.c_str(),
-		item.c_str(), data->toString().c_str(), String::boolText(atStart));
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) addTableRow(%s,%s,%p,%s) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
 
-    QTableWidget* table = qFindChild<QTableWidget*>(this, name.c_str());
-    if (!table)
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
 	return false;
-    int ncol =  table->columnCount();
-    int index;
-    if (atStart) {
-	table->insertRow(0);
-	index = 0;
-    }
-    else {
-	table->insertRow(table->rowCount());
-	index = table->rowCount() - 1;
-    }
 
-    for(int i = 0; i < ncol; i++) {
-	String header = table->horizontalHeaderItem(i)->text().toAscii().data();
-	header.toLower();
-	const String* value;
-	if (header == "time")
-	{
-	    value = data->getParam(header);
-	    QString str= value->c_str();
-	    str.chop(4);
-	    uint secs = str.toUInt();
-	    
-	    QDateTime time = QDateTime::fromTime_t(secs);
-	    
-	    value = new String(time.toString("hh:mm \nMM.dd.yy").toAscii().data());
-	}
-	else
-	    value = data->getParam(header);
-	if (value) {
-	    QTableWidgetItem* tableItem = new QTableWidgetItem(value->c_str());
-	    table->verticalHeader()->hide();
-	    table->setItem(index, i, tableItem);
-	}
-    }
-    table->repaint();
+    QtTable* custom = tbl.customTable();
+    if (custom)
+	return custom->addTableRow(item,data,atStart);
+
+    int row = atStart ? 0 : tbl.rowCount();
+    tbl.addRow(row);
+    // Set item (the first column) and the rest of data
+    tbl.setID(row,item);
+    if (data)
+	tbl.updateRow(row,*data);
     return true;
 }
 
 bool QtWindow::delTableRow(const String& name, const String& item)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::delTableRow() name : %s, item %s", name.c_str(), item.c_str());
-    return false;
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::delTableRow(%s,%s) [%p]",
+	name.c_str(),item.c_str(),this);
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+    QtTable* custom = tbl.customTable();
+    if (custom)
+	custom->delTableRow(item);
+    else
+	tbl.delRow(tbl.getRow(item));
+    raiseSelectIfEmpty(tbl.rowCount(),this,name);
+    return true;
 }
 
 bool QtWindow::setTableRow(const String& name, const String& item, const NamedList* data)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::setTableRow() name : %s, item %s, data [%p]", name.c_str(),
-	item.c_str(), data);
-    return false;
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setTableRow(%s,%s,%p) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),data,this);
+
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+
+    QtTable* custom = tbl.customTable();
+    if (custom)
+	return custom->setTableRow(item,data);
+
+    int row = tbl.getRow(item);
+    if (row < 0)
+	return false;
+    if (data)
+	tbl.updateRow(row,*data);
+    return true;
 }
 
 bool QtWindow::getTableRow(const String& name, const String& item, NamedList* data)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::getTableRow() name : %s, item %s, data [%p]", name.c_str(),
-	item.c_str(), data->toString().c_str());
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::getTableRow(%s,%s,%p) [%p]",
+	name.c_str(),item.c_str(),data,this);
 
-    QTableWidget* table = qFindChild<QTableWidget*>(this, name.c_str());
-    if (!table)
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
 	return false;
 
-    QList<QTableWidgetItem*> items = table->selectedItems();
-    if (items.isEmpty())
-	return false;
+    QtTable* custom = tbl.customTable();
+    if (custom)
+	return custom->getTableRow(item,data);
 
-    if (data) {
-	int ncol = items.size();
-	for(int i = 0; i < ncol; i++) {
-	    String header = table->horizontalHeaderItem(items[i]->column())->text().toAscii().constData();
-	    String value = items[i]->text().toAscii().constData();
-	    data->setParam(header.toLower(), value);
-	}
+    int row = tbl.getRow(item);
+    if (row < 0)
+	return false;
+    if (!data)
 	return true;
+    int n = tbl.columnCount();
+    for (int i = 0; i < n; i++) {
+	String name;
+	if (!tbl.getHeaderText(i,name))
+	    continue;
+	String value;
+	if (tbl.getCell(row,i,value))
+	    data->setParam(name,value);
     }
-
-    return false;
+    return true;
 }
 
 bool QtWindow::clearTable(const String& name)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::clearTable() name : %s", name.c_str());
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::clearTable(%s) [%p]",name.c_str(),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QTableWidget") {
-	QTableWidget* table = (QTableWidget*) wid;
- 	int n = table->rowCount();
- 	for (int i = 0; i < n; i++)
-	    table->removeRow(0);
-	
-	return true;
+    switch (w.type()) {
+	case QtWidget::Table:
+	    while (w.table()->rowCount())
+		w.table()->removeRow(0);
+	    return true;
+	case QtWidget::TextEdit:
+	    w.textEdit()->clear();
+	    return true;
+	case QtWidget::ListBox:
+	    w.list()->clear();
+	    return true;
+	case QtWidget::CustomTable:
+	    return w.customTable()->clearTable();
     }
-
-    if (type == "QTextEdit") {
-	((QTextEdit*) wid)->clear();
-	return true;
-    }
-
     return false;
 }
 
 bool QtWindow::getText(const String& name, String& text)
 {
-//     DDebug(QtDriver::self(),DebugInfo, "QtWindow::getText() name : %s , text : %s", name.c_str(), text.c_str());
-    if (name == "internalLine") {
-	QList<QWidget*> widgets = qFindChildren<QWidget*>(this, name.c_str());
-	if (widgets.isEmpty())
-	    return false;
-	
-	QString type = widgets[0]->metaObject()->className();
-
-	if (type == "QPushButton") {
-	    for (int i = 0; i < widgets.size(); i++) {
-		QPushButton* button = (QPushButton*) widgets[i];
-		if (button->isChecked()) {
-		    text = button->accessibleName().toAscii().data();
-		    return true;
-		}
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getText(%s) [%p]",
+	m_id.c_str(),name.c_str(),this);
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    text = qtGetUtf8(w.combo()->currentText());
+	    return true;
+	case QtWidget::LineEdit:
+	    text = qtGetUtf8(w.lineEdit()->text());
+	    return true;
+	case QtWidget::TextEdit:
+	    text = qtGetUtf8(w.textEdit()->toPlainText());
+	    return true;
+	case QtWidget::Label:
+	    text = qtGetUtf8(w.label()->text());
+	    return true;
+	case QtWidget::Action:
+	    text = qtGetUtf8(w.action()->text());
+	    return true;
+	default:
+	    if (w.inherits(QtWidget::AbstractButton)) {
+		text = qtGetUtf8(w.abstractButton()->text());
+		return true;
 	    }
-	}
-	
-	return false;
-    }
-
-    else {
-	QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-	if (!wid)
-	    return false;
-
-	QString type = wid->metaObject()->className();
-
-	if (type == "QPushButton") {
-	    text = ((QPushButton*) wid)->text().toAscii().data();
-	    return true;
-	}
-
-	if (type == "QComboBox") {
-	    text = ((QComboBox*) wid)->currentText().toAscii().data();
-	    return true;
-	}
-
-	if (type == "QLineEdit") {
-	    text = ((QLineEdit*) wid)->text().toAscii().data();
-	    return true;
-	}
-
-	if (type == "QTextEdit") {
-	    text = ((QTextEdit*) wid)->toPlainText().toAscii().data();
-	    return true;
-	}
-
-	if (type == "QLabel") {
-	    text = ((QLabel*) wid)->text().toAscii().data();
-	    return true;
-	}
-
-	return false;
-    }
+     }
+     return false;
 }
 
 bool QtWindow::getCheck(const String& name, bool& checked)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::getCheck() name : %s", name.c_str());
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::getCheck(%s) [%p]",name.c_str(),this);
 
-    if (name.startsWith("l:")) {
-	QList<QWidget*> lines = qFindChildren<QWidget*>(this, "internalLine");
-	if (lines.empty())
-	    return false;
-
-	QString type = lines[0]->metaObject()->className();
-	
-	if (type == "QPushButton") {
-	    for (int i = 0; i < lines.size(); i++) {
-		QPushButton* button = (QPushButton*) lines[i];
-		if (button->accessibleName() == name.c_str()) {
-		    checked = button->isChecked();
-		    return true;
-		}
-	    }
-	}
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    }
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    if (w.inherits(QtWidget::AbstractButton))
+	checked = w.abstractButton()->isChecked();
+    else if (w.type() == QtWidget::Action)
+	checked = w.action()->isChecked();
+    else
 	return false;
-
-    QString type = wid->metaObject()->className();
-
-    if (type == "QCheckBox") { 
-	checked = ((QCheckBox*) wid)->isChecked();
-	return true;
-    }
-
-    if (type == "QPushButton") {
-	checked = ((QPushButton*) wid)->isChecked();
-	return true;
-    }
-
-    return false;
+    return true;
 }
 
 bool QtWindow::getSelect(const String& name, String& item)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::getSelect() name : %s, item : %s", name.c_str(), item.c_str());
-
-    QWidget* wid = qFindChild<QWidget*>(this, name.c_str());
-    if (!wid)
+    XDebug(QtDriver::self(),DebugAll,"QtWindow::getSelect(%s) [%p]",name.c_str(),this);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    QString type = wid->metaObject()->className();
-
-    if (type == "QComboBox") {
-	item = ((QComboBox*) wid)->currentText().toAscii().data();
-	//
-	if (((QComboBox*) wid)->lineEdit() && (((QComboBox*) wid)->lineEdit()->selectedText()).isEmpty())
-	    return false;
-	//
-	return true;
-    }
-
-    if (type == "QTableWidget") {
-	QTableWidget* table = (QTableWidget*) wid;
-	QList<QTableWidgetItem*> items = table->selectedItems();
-	if (items.isEmpty())
-	    return false;
-	item = items[0]->text().toAscii().constData();
-	return true;
-    }
-
-    if (type == "QListWidget") {
-	QListWidget* list = (QListWidget*) wid;
-	QList<QListWidgetItem*> items = list->selectedItems();
-	if (items.isEmpty())
-	    return false;
-	item = channelsList[list->row(items[0])].toAscii().constData();
-	return true;
-    }
-
-    if (type == "QSlider") {
-	item = ((QSlider*) wid)->value();
-	return true;
+    switch (w.type()) {
+	case QtWidget::ComboBox:
+	    if (w.combo()->lineEdit() && w.combo()->lineEdit()->selectedText().isEmpty())
+		return false;
+	    item = qtGetUtf8(w.combo()->currentText());
+	    return true;
+	case QtWidget::Table:
+	    {
+		TableWidget t(w);
+		int row = t.crtRow();
+		return row >= 0 ? t.getCell(row,0,item) : false; 
+	    }
+	case QtWidget::ListBox:
+	    {
+		QListWidgetItem* crt = w.list()->currentItem();
+		if (!crt)
+		    return false;
+		item = qtGetUtf8(crt->text());
+	    }
+	    return true;
+	case QtWidget::Slider:
+	    item = w.slider()->value();
+	    return true;
+	case QtWidget::ProgressBar:
+	    item = w.progressBar()->value();
+	    return true;
+	case QtWidget::CustomTable:
+	    return w.customTable()->getSelect(item);
     }
     return false;
 }
 
-bool QtWindow::select(const String& name, const String& item, const String& text)
+// Set a property for this window or for a widget owned by it
+bool QtWindow::setProperty(const String& name, const String& item, const String& value)
 {
-    if (!QtClient::self() || QtClient::changing())
+    if (name == m_id)
+	return QtClient::property(true,wndWidget(),item,(String&)value);
+    QtWidget w(this,name);
+    if (w.invalid())
 	return false;
-    return QtClient::self()->select(this, name, item, text);
+    return QtClient::property(true,w,item,(String&)value);
+}
+
+// Get a property from this window or from a widget owned by it
+bool QtWindow::getProperty(const String& name, const String& item, String& value)
+{
+    if (name == m_id)
+	return QtClient::property(false,wndWidget(),item,value);
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    return QtClient::property(false,w,item,value);
 }
 
 void QtWindow::closeEvent(QCloseEvent* event)
 {
-    QtWindow* win = (QtWindow*) QtClient::getWindow("mainwindow");
-    if (m_id == "events") {
-	if (win) {
-	    QCheckBox* check = qFindChild<QCheckBox*>(win, "events");
-	    if (check)
-		check->setChecked(false);
-	}
-    }
-
-    if (m_id == "help") {
-	if (win) {
-	    QPushButton* button = qFindChild<QPushButton*>(win, "help");
-	    if (button)
-		button->setChecked(false);
-	}
-    }
-
-    if (m_id == "mainwindow") {
-	for (ObjList* windows = QtClient::listWindows(); windows; windows = windows->next()) {
-	    String* str = static_cast<String*>(windows->get());
-	    QtWindow* win = (QtWindow*) Client::getWindow(str);
-	    if (win->isVisible())
-		if (win->m_id != "events" && win->m_id != "help" && win->m_id != "mainwindow") {
-		    event->ignore();
-		    return;
-		}
-	}
-	for (ObjList* windows = QtClient::listWindows(); windows; windows = windows->next()) {
-	    String* str = static_cast<String*>(windows->get());
-	    QtWindow* win = (QtWindow*) Client::getWindow(str);
-	    if (win->isVisible())
-		win->m_visible = true;
-	    else
-		win->m_visible = false;
-	    if (win->m_id != "mainwindow")
-		win->close();
-	}
-    }
+    hide();
+    if (m_mainWindow && Client::self())
+	Client::self()->quit();
     QWidget::closeEvent(event);
-}
-
-void QtWindow::populate()
-{
-    Debug(QtDriver::self(), DebugInfo, "Populating window %s", m_id.c_str());
-    QUiLoader loader;
-    loader.setWorkingDirectory(QDir(s_skinPath.c_str()));
-    QFile file(m_description.c_str());
-    if (!file.exists()) {
-	Debug(DebugWarn,"UI description file does not exist");
-	return;
-    }
-
-    QWidget *formWidget = loader.load(&file, this);
-
-    file.close();
-
-    QSize frame = frameSize();
-    setMinimumSize(formWidget->minimumSize().width(), formWidget->minimumSize().height());
-    setMaximumSize(formWidget->maximumSize().width(), formWidget->maximumSize().height());
-    resize(formWidget->width(), formWidget->height());
-    //QWidget::move(formWidget->pos().x(), formWidget->pos().y());
-
-    QVBoxLayout *layout = new QVBoxLayout;
-    layout->setSpacing(0);
-#if defined(QT4_VER) && (QT4_VER < 040300)
-    layout->setMargin(0);
-#else
-    layout->setContentsMargins(0,0,0,0);
-#endif
-    layout->addWidget(formWidget);
-    setLayout(layout);
-    setWindowTitle(formWidget->windowTitle());
-    setWindowIcon(formWidget->windowIcon());
-}
-
-void QtWindow::disableCombo()
-{
-    QComboBox* senderWidget = (QComboBox*) sender();
-    if (senderWidget->currentIndex() == 0)
-	return;
-    if (senderWidget->objectName() == "protocol")
-	qFindChild<QComboBox*>(this, "account")->setCurrentIndex(0);
-    if (senderWidget->objectName() == "account")
-	qFindChild<QComboBox*>(this, "protocol")->setCurrentIndex(0);
-}
-
-void QtWindow::focus()
-{
-    QComboBox* combo = qFindChild<QComboBox*>(this, "callto");
-    combo->lineEdit()->selectAll();
 }
 
 void QtWindow::action()
 {
-    DDebug(QtDriver::self(), DebugMild, "QtWindow::action() in window '%s' action is %s", m_id.c_str(),
-	sender()->objectName().toAscii().data());
-
-    QWidget* wid = (QWidget*) sender();
-    String name;
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) action() sender=%s [%p]",
+	m_id.c_str(),qtGetUtf8(sender()->objectName()),this);
     if (!QtClient::self() || QtClient::changing())
 	return;
-    if (wid->accessibleName().isEmpty()) 
-	name = wid->objectName().toAscii().data();
-    else
-	name = wid->accessibleName().toAscii().data();
-
-    if (String(wid->metaObject()->className()) == "QComboBox")
-	QtClient::self()->select(this, name, ((QComboBox*)wid)->currentText().toAscii().data());
-
-    if (name == "button_hide") {
-	if (wid->parent()->objectName() == "help") {
-	    QtWindow* win = (QtWindow*) QtClient::getWindow("mainwindow");
-	    if (win) {
-		QPushButton* button = qFindChild<QPushButton*>(win, "help");
-		if (button)
-		    button->setChecked(false);
-	    }
-	}
-	hide();
-    }
-
-    if (name == "debug")
-	QtClient::self()->action(this, "events");
-
-#if 0
-    if (name.startsWith("display:") || name.startsWith("debug:") || name == "autoanswer" || name == "multilines"
-		|| name == "dnd" || name == "hold" || name == "log_events_debug" || name == "events" || name == "help"
-		|| name == "transfer" || name == "conference" || name == "record")
-#endif
-    if (wid->inherits("QAbstractButton") && ((QAbstractButton*)wid)->isCheckable())
-	QtClient::self()->toggle(this, name, ((QAbstractButton*)wid)->isChecked());
-    else
-	QtClient::self()->action(this, name);
-
+    QtWidget w(sender());
+    String name;
+    if (translateName(w,name))
+	QtClient::self()->action(this,name);
 }
 
-void QtWindow::enableDebugOptions(bool enable)
+// Toggled actions
+void QtWindow::toggled(bool on)
 {
-    QCheckBox* window = qFindChild<QCheckBox*>(this, "events");
-    if (window)
-    {
-	if (!enable)
-	    setCheck("events", false);
-	window->setEnabled(enable);
-    }
-    QCheckBox* file = qFindChild<QCheckBox*>(this, "debugtofile");
-    if (file)
-    {
-	if (!enable)
-	    setCheck("debugtofile", false);
-	file->setEnabled(enable);
-    }
-}
-
-void QtWindow::enableFileChoosing(bool enable)
-{
-    QLineEdit* lineEdit =  qFindChild<QLineEdit*>(this, "filename");
-    if (lineEdit)
-	lineEdit->setEnabled(enable);
-    QPushButton* pushButton = qFindChild<QPushButton*>(this, "chooseFile");
-    if (pushButton)
-	pushButton->setEnabled(enable);
-}
-
-void QtWindow::chooseFile()
-{
-    QString filename = QFileDialog::getSaveFileName(this, "Save File", "log.txt", 0);
-    if (!filename.isNull())
-    {
-	QLineEdit* line = qFindChild<QLineEdit*>(this, "filename");
-        if (line)
-	    line->setText(filename);
-    }	
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) toggled=%s sender=%s [%p]",
+	m_id.c_str(),String::boolText(on),qtGetUtf8(sender()->objectName()),this);
+    if (!QtClient::self() || QtClient::changing())
+	return;
+    QtWidget w(sender());
+    String name;
+    if (translateName(w,name))
+	QtClient::self()->toggle(this,name,on);
 }
 
 void QtWindow::openUrl(const QString& link)
@@ -1054,265 +1213,410 @@ void QtWindow::openUrl(const QString& link)
     QDesktopServices::openUrl(QUrl(link));
 }
 
-
-void QtWindow::idleActions()
+void QtWindow::doubleClick()
 {
-    QtClient::self()->idleActions();
+    if (QtClient::self() && sender())
+	Client::self()->action(this,qtGetUtf8(sender()->objectName()));
 }
 
-void QtWindow::select(int value)
+// A widget's selection changed
+void QtWindow::selectionChanged()
 {
-    QWidget* wid = (QWidget*) sender();
-    String name = wid->objectName().toAscii().data();
-    select(wid->objectName().toAscii().data(), value);
-}
-
-void QtWindow::selectionToCallto()
-{
-    QWidget* wid = (QWidget*) sender();
-    String name = wid->objectName().toAscii().data();
-    String selected;
-    getSelect(name, selected);
-    setText("callto", selected);
-}
-
-void QtWindow::keyPressEvent(QKeyEvent* e)
-{
-    QPushButton* call = qFindChild<QPushButton*>(this, "call");
-    QPushButton* accept = qFindChild<QPushButton*>(this, "accept");
-    String name;
-    if (!call && !accept)
-	e->ignore();
-    if (call && call->isVisible())
-	name = "call";
-    else
-	name = "accept";
-
-    if (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return) {
-	QtClient::self()->action(this, name);
+    if (!(QtClient::self() && sender()))
 	return;
-    }
-    if (e->key() == Qt::Key_Escape) {
-	QtClient::self()->action(this, "hangup");
-	return;
-    }
-    e->ignore();    
+    String name = qtGetUtf8(sender()->objectName());
+    String item;
+    getSelect(name,item);
+    Client::self()->select(this,name,item);
 }
 
-void QtWindow::init()
+// Load a widget from file
+QWidget* QtWindow::loadUI(const char* fileName, QWidget* parent,
+	const char* uiName, const char* path)
 {
-    DDebug(QtDriver::self(), DebugWarn, "QtWindow::init()");
+    if (!(fileName && *fileName && parent))
+	return 0;
 
-    m_x = s_save.getIntValue(m_id, "x", pos().x());
-    m_y = s_save.getIntValue(m_id, "y", pos().y());
-    m_width = s_save.getIntValue(m_id, "width", width());
-    m_height = s_save.getIntValue(m_id, "height", height());
-    bool m_visible = s_save.getBoolValue(m_id, "visible", false);
+    QUiLoader loader;
+    if (!(path && *path))
+	path = Client::s_skinPath.c_str();
+    loader.setWorkingDirectory(QDir(path));
+    QFile file(fileName);
+    const char* err = 0;
+    QWidget* w = 0;
+    if (!file.exists())
+	err = "file not found";
+    else {
+	w = loader.load(&file,parent);
+	if (!w)
+	    err = "loader failed";
+    }
+    file.close();
+    if (!w)
+	Debug(DebugWarn,"Failed to load widget '%s' from '%s': %s",
+	    uiName,fileName,err);
+    return w;
+}
 
-    if (m_id == "mainwindow")
-	m_visible = true;
-
-    QLineEdit* transferTo = qFindChild<QLineEdit*>(this, "transferedit");
-    if (transferTo)
-	transferTo->hide();
-    QPushButton* transferButton = qFindChild<QPushButton*>(this, "transferbutton");
-    if (transferButton)
-	transferButton->hide();
-    QLineEdit* conferenceWith = qFindChild<QLineEdit*>(this, "conferenceedit");
-    if (conferenceWith)
-	conferenceWith->hide();
-    QPushButton* conferenceButton = qFindChild<QPushButton*>(this, "conferencebutton");
-    if (conferenceButton)
-	conferenceButton->hide();
-
-    if (m_id == "events") {
-	QtWindow* win = (QtWindow*) QtClient::getWindow("mainwindow");
-	if (win && m_visible) {
-	    QCheckBox* check = qFindChild<QCheckBox*>(win, "events");
-	    if (check)
-		check->setChecked(true);
+// Filter events to apply dynamic properties changes
+bool QtWindow::eventFilter(QObject* obj, QEvent* event)
+{
+    if (!obj)
+	return false;
+#if QT_VERSION >= 0x040200
+    if (event->type() == QEvent::DynamicPropertyChange) {
+	String name = qtGetUtf8(obj->objectName());
+	QDynamicPropertyChangeEvent* ev = static_cast<QDynamicPropertyChangeEvent*>(event);
+	String prop = ev->propertyName().constData();
+	// Avoid QT's internal dynamic properties
+	if (prop.startsWith(s_qtPropPrefix))
+	    return QWidget::eventFilter(obj,event);
+	// Return false for now on: it's our property
+	QtWidget w(obj);
+	if (w.invalid())
+	    return false;
+	QVariant var = obj->property(prop);
+	if (var.isNull())
+	    return false;
+	bool ok = false;
+	if (prop == s_propHHeader) {
+	    // Show/hide the horizontal header
+	    ok = (w.type() == QtWidget::Table && var.type() == QVariant::Bool &&
+		w.table()->horizontalHeader());
+	    if (ok)
+		w.table()->horizontalHeader()->setVisible(var.toBool());
 	}
+	if (ok)
+	    DDebug(ClientDriver::self(),DebugAll,
+		"Applied dynamic property='%s' for object='%s'",
+		prop.c_str(),name.c_str());
+	else
+	    Debug(ClientDriver::self(),DebugNote,
+		"Failed to apply dynamic property='%s' for object='%s'",
+		prop.c_str(),name.c_str());
+	return false;
     }
-
-    if (m_id != "mainwindow" && m_id != "events" && m_id != "help")
-	setWindowModality(Qt::WindowModal);
-
-    QComboBox* callTo = qFindChild<QComboBox*>(this, "callto");
-
-    QPushButton* hangup = qFindChild<QPushButton*>(this, "hangup");
-    if (callTo && hangup)
-	connect(hangup, SIGNAL(clicked()), this, SLOT(focus()));
-
-    QComboBox* protocol = qFindChild<QComboBox*>(this,"protocol");
-    QComboBox* account = qFindChild<QComboBox*>(this, "account");
-
-    if (protocol && account) {
-	connect(protocol, SIGNAL(activated(int)), this, SLOT(disableCombo()));
-	connect(account, SIGNAL(activated(int)), this, SLOT(disableCombo()));
-    }
-
-    QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);
-    if (!combos.empty())
-	for (int i = 0; i < combos.size(); i++)
-	    if (combos[i]->objectName() != "callto")
-		connect(combos[i], SIGNAL(activated(int)), this, SLOT(action()));
-
-    QList<QPushButton*> buttons = qFindChildren<QPushButton*>(this);
-    if (!buttons.empty())
-	for(int i = 0; i < buttons.size(); i++)
-	    connect(buttons[i], SIGNAL(clicked()), this, SLOT(action()));
-
-    QList<QCheckBox*> checkBoxes = qFindChildren<QCheckBox*>(this);
-    if (!checkBoxes.empty())
-	for(int i = 0; i < checkBoxes.size(); i++)
-	    connect(checkBoxes[i], SIGNAL(toggled(bool)), this, SLOT(action()));
-
-    QList<QRadioButton*> radios = qFindChildren<QRadioButton*>(this);
-    if (!radios.empty())
-	for(int i = 0; i < radios.size(); i++)
-	    connect(radios[i], SIGNAL(clicked(bool)), this, SLOT(action()));
-
-//debug alterations
-    QCheckBox* debug =  qFindChild<QCheckBox*>(this, "debug");
-    if (debug)
-	connect(debug, SIGNAL(toggled(bool)), this, SLOT(enableDebugOptions(bool)));
-
-    QCheckBox* debugFileOption = qFindChild<QCheckBox*>(this, "debugtofile");
-    if (debugFileOption)
-    	connect(debugFileOption, SIGNAL(toggled(bool)), this, SLOT(enableFileChoosing(bool)));
-	
-    QPushButton* chooseFile = qFindChild<QPushButton*>(this, "chooseFile");
-    if (chooseFile)
-	connect(chooseFile, SIGNAL(clicked()), this, SLOT(chooseFile()));
-
-//
-// volume control alterations
-    QList<QSlider*> sliders = qFindChildren<QSlider*>(this);
-    if (!sliders.empty())
-	for (int i = 0; i < sliders.size(); i++)
-	    connect(sliders[i], SIGNAL(valueChanged(int)), this, SLOT(select(int)));
-
-// accept button behaviour changed
-    QPushButton* accept = qFindChild<QPushButton*>(this, "accept");
-    if (accept)
-	setShow("accept", false);
-
-// putting in the callto the number selected from a log
-    QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
-    if (!tables.empty()) {
-	
-	for (int i = 0; i < tables.size(); i++)
-	    connect(tables[i], SIGNAL(itemDoubleClicked(QTableWidgetItem*)), this, SLOT(selectionToCallto()));
-	for (int i = 0; i < tables.size(); i++)
-	    for (int j = 0; j < tables[i]->columnCount(); j++) {
-	//	tables[i]->setColumnWidth(j, 60);
-		if (j == 0) tables[i]->setColumnWidth(j, 90);
-		if (j == 1) tables[i]->setColumnWidth(j, 50);
-		if (j == 2) tables[i]->setColumnWidth(j, 60);
-	    }
-    }
-
-    m_ringtone->setLoops(-1);
-
-    qRegisterMetaType<QModelIndex>("QModelIndex");
-    qRegisterMetaType<QTextCursor>("QTextCursor");
-
-    if (m_visible)
-	show();
+#endif
+    return QWidget::eventFilter(obj,event);
 }
 
+// Handle key pressed events
+void QtWindow::keyPressEvent(QKeyEvent* event)
+{
+    if (!Client::self())
+	return QWidget::keyPressEvent(event);
+    if (event->key() == Qt::Key_Backspace)
+	Client::self()->backspace(m_id,this);
+    return QWidget::keyPressEvent(event);
+}
+
+// Show hide window. Notify the client
 void QtWindow::setVisible(bool visible)
 {
     if (visible) {
-	QWidget::move(m_x, m_y);
-	resize(m_width, m_height);	
-    }
-    else {
-	QPoint point = pos();
-	m_x = point.x();
-	m_y = point.y();
-	m_width = width();
-	m_height = height();
+	QWidget::move(m_x,m_y);
+	resize(m_width,m_height);	
     }
     QWidget::setVisible(visible);
+    // Notify the client on window visibility changes
+    bool changed = (m_visible != visible);
+    m_visible = visible;
+    if (changed && Client::self())
+	Client::self()->toggle(this,"window_visible_changed",m_visible);
 }
 
+// Show the window
 void QtWindow::show()
 {
     setVisible(true);
+    if (!m_maximized)
+	m_maximized = isMaximized();
+    if (m_maximized) {
+	m_maximized = false;
+	setWindowState(Qt::WindowMaximized);
+    }
 }
 
+// Hide the window
 void QtWindow::hide()
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::hide()");
-
-    QList<QComboBox*> boxes = qFindChildren<QComboBox*>(this);
-    if (!boxes.isEmpty())
-	for (int i = 0; i < boxes.size(); i++)
-	    boxes[i]->setCurrentIndex(0);
-
-    if (m_id == "events") {
-	QtWindow* mainWind = (QtWindow*) Client::getWindow("mainwindow");
-	QCheckBox* checkBox = qFindChild<QCheckBox*>(mainWind, "events");
-	if (checkBox)
-	    checkBox->setChecked(false);
-    }
-
     setVisible(false);
 }
 
 void QtWindow::size(int width, int height)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::size() width : %d, height : %d", width, height);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::size(%d,%d) [%p]",width,height,this);
 }
 
 void QtWindow::move(int x, int y)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::move() x : %d, y : %d", x, y);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::move(%d,%d) [%p]",x,y,this);
 }
 
 void QtWindow::moveRel(int dx, int dy)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::moveRel() dx : %d, dy : %d", dx, dy);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::moveRel(%d,%d) [%p]",dx,dy,this);
 }
 
 bool QtWindow::related(const Window* wnd) const
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::related() wnd : [%p]", wnd);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::related(%p) [%p]",wnd,this);
     return false;
 }
 
 void QtWindow::menu(int x, int y)
 {
-    DDebug(QtDriver::self(), DebugInfo, "QtWindow::menu() x : %d, y : %d", x, y);
+    DDebug(QtDriver::self(),DebugAll,"QtWindow::menu(%d,%d) [%p]",x,y,this);
+}
+
+// Load UI file and setup the window
+void QtWindow::doPopulate()
+{
+    Debug(QtDriver::self(),DebugAll,"Populating window '%s' [%p]",m_id.c_str(),this);
+    QWidget* formWidget = loadUI(m_description,this,m_id);
+    if (!formWidget)
+	return;
+    QSize frame = frameSize();
+    setMinimumSize(formWidget->minimumSize().width(),formWidget->minimumSize().height());
+    setMaximumSize(formWidget->maximumSize().width(),formWidget->maximumSize().height());
+    resize(formWidget->width(),formWidget->height());
+    setWidget(this,formWidget);
+    m_widget = formWidget->objectName();
+    title(qtGetUtf8(formWidget->windowTitle()));
+    setWindowIcon(formWidget->windowIcon());
+}
+
+// Initialize window
+void QtWindow::doInit()
+{
+    DDebug(QtDriver::self(),DebugAll,"Initializing window '%s' [%p]",
+	m_id.c_str(),this);
+
+    // Check if this is a frameless window
+    String frameLess;
+    getProperty(m_id,s_propFrameless,frameLess);
+    if (frameLess.toBoolean())
+	setWindowFlags(Qt::FramelessWindowHint);
+
+    // Load window data
+    m_mainWindow = s_cfg.getBoolValue(m_id,"mainwindow");
+    m_saveOnClose = s_cfg.getBoolValue(m_id,"save",true);
+    NamedList* sect = s_save.getSection(m_id);
+    if (sect) {
+	m_maximized = sect->getBoolValue("maximized");
+	m_x = sect->getIntValue("x",pos().x());
+	m_y = sect->getIntValue("y",pos().y());
+	m_width = sect->getIntValue("width",width());
+	m_height = sect->getIntValue("height",height());
+	m_visible = sect->getBoolValue("visible");
+    }
+    else {
+	Debug(QtDriver::self(),DebugNote,"Window(%s) not found in config [%p]",
+	    m_id.c_str(),this);
+	m_visible = s_cfg.getBoolValue(m_id,"visible");
+    }
+    m_visible = m_mainWindow || m_visible;
+
+    // Create custom widgets
+    QList<QFrame*> frm = qFindChildren<QFrame*>(this);
+    for (int i = 0; i < frm.size(); i++) {
+	String create = qtGetUtf8(frm[i]->accessibleName());
+	if (!create.startSkip("customwidget;",false))
+	    continue;
+	ObjList* list = create.split(';',false);
+	String type;
+	String name;
+	NamedList params("");
+	int what = 0;
+	for (ObjList* o = list->skipNull(); o; o = o->skipNext(), what++) {
+	    GenObject* p = o->get();
+	    if (what == 0)
+		type = p->toString();
+	    else if (what == 1)
+		name = p->toString();
+	    else {
+		// Decode param
+		int pos = p->toString().find('=');
+		if (pos != -1)
+		    params.addParam(p->toString().substr(0,pos),p->toString().substr(pos+1));
+	    }
+	}
+	TelEngine::destruct(list);
+	// Handle known types
+	setWidget(frm[i],(QWidget*)UIFactory::build(type,name,&params));
+    }
+
+    // Connect actions' signal
+    QList<QAction*> actions = qFindChildren<QAction*>(this);
+    for (int i = 0; i < actions.size(); i++)
+	if (actions[i]->isCheckable())
+	    YQT_CONNECT(actions[i],toggled(bool),this,toggled(bool),"toggled()");
+	else
+	    YQT_CONNECT(actions[i],triggered(),this,action(),"triggered()");
+
+    // Connect combo boxes signals
+    QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);
+    for (int i = 0; i < combos.size(); i++)
+	YQT_CONNECT(combos[i],activated(int),this,selectionChanged(),"activated(int)");
+
+    // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
+    QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(this);
+    for(int i = 0; i < buttons.size(); i++)
+	if (buttons[i]->isCheckable())
+	    YQT_CONNECT(buttons[i],toggled(bool),this,toggled(bool),"toggled(bool)");
+	else
+	    YQT_CONNECT(buttons[i],clicked(),this,action(),"clicked()");
+
+    // Connect group boxes signals
+    QList<QGroupBox*> grp = qFindChildren<QGroupBox*>(this);
+    for(int i = 0; i < grp.size(); i++)
+	if (grp[i]->isCheckable())
+	    YQT_CONNECT(grp[i],toggled(bool),this,toggled(bool),"toggled(bool)");
+
+    // Connect sliders signals
+    QList<QSlider*> sliders = qFindChildren<QSlider*>(this);
+    for (int i = 0; i < sliders.size(); i++)
+	YQT_CONNECT(sliders[i],valueChanged(int),this,selectionChanged(),"valueChanged(int)");
+
+    // Connect list boxes signals
+    QList<QListWidget*> lists = qFindChildren<QListWidget*>(this);
+    for (int i = 0; i < lists.size(); i++) {
+	YQT_CONNECT(lists[i],itemDoubleClicked(QListWidgetItem*),this,doubleClick(),"itemDoubleClicked(QListWidgetItem*)");
+	YQT_CONNECT(lists[i],itemActivated(QListWidgetItem*),this,doubleClick(),"itemDoubleClicked(QListWidgetItem*)");
+	YQT_CONNECT(lists[i],currentRowChanged(int),this,selectionChanged(),"currentRowChanged(int)");
+    }
+
+    // Process tables:
+    // Insert a column and connect signals
+    // Hide columns starting with "hidden:"
+    QList<QTableWidget*> tables = qFindChildren<QTableWidget*>(this);
+    for (int i = 0; i < tables.size(); i++) {
+	TableWidget t(tables[i]);
+	// Insert the column containing the ID
+	t.addColumn(0,0,"hidden:id");
+	// Set column widths
+	t.colWidths(false,m_id);
+	// Hide columns
+	for (int i = 0; i < t.columnCount(); i++) {
+	    String name;
+	    t.getHeaderText(i,name,false);
+	    if (name.startsWith("hidden:"))
+		t.table()->setColumnHidden(i,true);
+	}
+	// Connect signals
+	YQT_CONNECT(t.table(),cellDoubleClicked(int,int),this,doubleClick(),"cellDoubleClicked(int,int)");
+	YQT_CONNECT(t.table(),itemDoubleClicked(QTableWidgetItem*),this,doubleClick(),"itemDoubleClicked(QTableWidgetItem*)");
+	YQT_CONNECT(t.table(),itemSelectionChanged(),this,selectionChanged(),"itemSelectionChanged()");
+	// Optionally connect cell clicked
+	// This is done when we want to generate a select() or action() from cell clicked
+	String cellClicked;
+	getProperty(t.name(),"dynamicCellClicked",cellClicked);
+	if (cellClicked)
+	    if (cellClicked == "selectionChanged")
+		YQT_CONNECT(t.table(),cellClicked(int,int),this,selectionChanged(),"cellClicked(int,int)");
+	    else if (cellClicked == "doubleClick")
+		YQT_CONNECT(t.table(),cellClicked(int,int),this,doubleClick(),"cellClicked(int,int)");
+    }
+
+#if QT_VERSION >= 0x040200
+    // Install event filer and apply dynamic properties
+    QList<QObject*> w = qFindChildren<QObject*>(this);
+    for (int i = 0; i < w.size(); i++) {
+	// dynamicPropertyNames() was added in 4.2
+	String name = qtGetUtf8(w[i]->objectName());
+	QList<QByteArray> props = w[i]->dynamicPropertyNames();
+	// Check for our dynamic properties
+	int j = 0;
+	for (j = 0; j < props.size(); j++)
+	    if (!props[j].startsWith(s_qtPropPrefix))
+		break;
+	if (j == props.size())
+	    continue;
+	// Add event hook to be used when a dynamic property changes
+	w[i]->installEventFilter(this);
+	// Fake dynamic property change to apply them
+	for (j = 0; j < props.size(); j++) {
+	    if (props[j].startsWith(s_qtPropPrefix))
+		continue;
+	    QDynamicPropertyChangeEvent ev(props[j]);
+	    eventFilter(w[i],&ev);
+	}
+    }
+#endif
+
+    qRegisterMetaType<QModelIndex>("QModelIndex");
+    qRegisterMetaType<QTextCursor>("QTextCursor");
+
+    // Force window visibility change notification by changing the visibility flag
+    // Some controls might need to be updated
+    m_visible = !m_visible;
+    if (m_visible)
+	hide();
+    else
+	show();
+}
+
+// Mouse button pressed notification
+void QtWindow::mousePressEvent(QMouseEvent* event)
+{
+    if (Qt::LeftButton == event->button()) {
+	m_movePos = event->globalPos();
+	m_moving = true;
+    }
+}
+
+// Mouse button release notification
+void QtWindow::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (Qt::LeftButton == event->button())
+	m_moving = false;
+}
+
+// Move the window if the moving flag is set
+void QtWindow::mouseMoveEvent(QMouseEvent* event)
+{
+    if (!m_moving)
+	return;
+    int cx = event->globalPos().x() - m_movePos.x();
+    int cy = event->globalPos().y() - m_movePos.y();
+    if (cx || cy) {
+	m_movePos = event->globalPos();
+	QWidget::move(x() + cx,y() + cy);
+    }
+}
+
+// Update window position and size
+void QtWindow::updatePosSize()
+{
+    QPoint point = pos();
+    m_x = point.x();
+    m_y = point.y();
+    m_width = width();
+    m_height = height();
 }
 
 
+/**
+ * QtClient
+ */
 QtClient::QtClient()
     : Client("QtClient")
 {
     m_oneThread = Engine::config().getBoolValue("client","onethread",true);
 
-    s_skinPath = Engine::config().getValue("client","skinbase");
-    if (s_skinPath.null())
-	s_skinPath << Engine::sharedPath() << Engine::pathSeparator() << "skins";
-    s_skinPath << Engine::pathSeparator();
-    String skin(Engine::config().getValue("client","skin","default")); 
-
-    if (skin)
-	s_skinPath << skin;
-    if (!s_skinPath.endsWith(Engine::pathSeparator()))
-	s_skinPath << Engine::pathSeparator();
-    s_cfg = s_skinPath + "qt4client.rc";
-    s_cfg.load();
     s_save = Engine::configFile("qt4client",true);
     s_save.load();
 }
 
 QtClient::~QtClient()
 {
-   // m_windows.clear();
-    s_save.save();
+}
+
+void QtClient::cleanup()
+{
+    Client::cleanup();
+    m_events.clear();
+    Client::save(s_save);
     m_app->quit();
     delete m_app;
 }
@@ -1321,8 +1625,13 @@ void QtClient::run()
 {
     int argc = 0;
     char* argv =  0;
-    m_app = new QApplication(argc, &argv);
-
+    m_app = new QApplication(argc,&argv);
+    Debug(ClientDriver::self(),DebugInfo,"QT client start running (version=%s)",qVersion());
+    if (!QSound::isAvailable())
+	Debug(ClientDriver::self(),DebugWarn,"QT sounds are not available");
+    // Create events proxy
+    m_events.append(new QtEventProxy(QtEventProxy::Timer));
+    m_events.append(new QtEventProxy(QtEventProxy::AllHidden,m_app));
     Client::run();
 }
 
@@ -1339,45 +1648,96 @@ void QtClient::unlock()
 
 void QtClient::allHidden()
 {
-    Debug(QtDriver::self(), DebugInfo, "QtClient::allHiden()");
-    for (ObjList* windows = listWindows(); windows; windows = windows->next()) {
-	String* str = static_cast<String*>(windows->get());
-	QtWindow* win = (QtWindow*) Client::getWindow(str);
-	if (win)
-	    win->hide();
-    }
+    Debug(QtDriver::self(),DebugInfo,"QtClient::allHiden()");
+    quit();
 }
 
-bool QtClient::createWindow(const String& name)
+bool QtClient::createWindow(const String& name, const String& alias)
 {
-    Debug(QtDriver::self(), DebugInfo, "Creating window %s", name.c_str());
-    QtWindow* w;
-    if ((w = new QtWindow(name, s_skinPath + s_cfg.getValue(name, "description")))) {
+    String wName = alias ? alias : name;
+    QtWindow* w = new QtWindow(wName,s_skinPath + s_cfg.getValue(name,"description"));
+    if (w) {
+	Debug(QtDriver::self(),DebugAll,"Created window %s (%p)",wName.c_str(),w);
+	// Remove the old window
+	ObjList* o = m_windows.find(wName);
+	if (o)
+	    Client::self()->closeWindow(wName,false);
 	w->populate();
 	m_windows.append(w);
 	return true;
     }
     else
-	Debug(QtDriver::self(), DebugGoOn, "Could not create window %s ", name.c_str());
+	Debug(QtDriver::self(),DebugGoOn,"Could not create window %s",wName.c_str());
     return false;
-
 }
 
-void QtClient::loadWindows()
+void QtClient::loadWindows(const char* file)
 {
-    Debug(QtDriver::self(), DebugInfo, "Loading Windows");
+    if (!file)
+	s_cfg = s_skinPath + "qt4client.rc";
+    else
+	s_cfg = String(file);
+    s_cfg.load();
+    Debug(QtDriver::self(),DebugInfo,"Loading Windows");
     unsigned int n = s_cfg.sections();
     for (unsigned int i = 0; i < n; i++) {
 	NamedList* l = s_cfg.getSection(i);
 	if (l && l->getBoolValue("enabled",true))
 	    createWindow(*l);
     }
-    QtWindow* win = (QtWindow*) getWindow("mainwindow");
-    if (win) {
-	QTimer* timer = new QTimer(win);
-	QObject::connect(timer, SIGNAL(timeout()), win, SLOT(idleActions()));
-	timer->start(1);
+}
+
+// Open a file open dialog window
+// Parameters that can be specified include 'caption',
+//  'dir', 'filter', 'selectedfilter', 'confirmoverwrite', 'choosedir'
+// files List of selected file(s). Allow multiple file selection if non 0
+// file The selected file if multiple file selection is disabled
+bool QtClient::chooseFile(Window* parent, const NamedList& params,
+    NamedList* files, String* file)
+{
+    if (!(files || file))
+	return false;
+
+    const char* caption = params.getValue("caption");
+    const char* dir = params.getValue("dir");
+    QString* filters = 0;
+    NamedString* f = params.getParam("filters");
+    if (f) {
+	filters = new QString;
+	ObjList* obj = f->split('|',false);
+	for (ObjList* o = obj->skipNull(); o; o = o->skipNext()) {
+	    if (!filters->isEmpty())
+		filters->append(";;");
+	    filters->append((static_cast<String*>(o->get()))->c_str());
+	}
+	TelEngine::destruct(obj);
     }
+    NamedString* tmp = params.getParam("selectedfilter");
+    QString* sFilter = tmp ? new QString(tmp->c_str()) : 0;
+    QFileDialog::Options options;
+    if (params.getBoolValue("choosedir"))
+	options |= QFileDialog::ShowDirsOnly;
+    if (params.getBoolValue("confirmoverwrite"))
+	options |= QFileDialog::DontConfirmOverwrite;
+
+    QWidget* p = static_cast<QtWindow*>(parent);
+    if (files) {
+	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,caption,
+	    dir,filters?*filters:QString::null,sFilter,options);
+	for (int i = 0; i < list.size(); i++)
+	    files->addParam("file",qtGetUtf8(list[i]));
+    }
+    else {
+	QString str = QFileDialog::getOpenFileName((QWidget*)p,caption,dir,
+	    filters?*filters:QString::null,sFilter,options);
+	*file = qtGetUtf8(str);
+    }
+
+    if (filters)
+	delete filters;
+    if (sFilter)
+	delete sFilter;
+    return true;
 }
 
 bool QtClient::action(Window* wnd, const String& name)
@@ -1388,7 +1748,94 @@ bool QtClient::action(Window* wnd, const String& name)
     return Client::action(wnd,name);
 }
 
+// Create a sound object. Append it to the global list
+bool QtClient::createSound(const char* name, const char* file, const char* device)
+{
+    if (!(name && *name && file && *file))
+	return false;
+    Lock lock(ClientSound::s_soundsMutex);
+    if (ClientSound::s_sounds.find(name))
+	return false;
+    ClientSound::s_sounds.append(new QtSound(name,file,device));
+    DDebug(ClientDriver::self(),DebugAll,"Added sound=%s file=%s device=%s",
+	name,file,device);
+    return true;
+}
+
+// Set/get an object's property
+bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
+{
+    if (!(obj && name && *name))
+	return false;
+    QVariant var = obj->property(name);
+    const char* err = "unknown error";
+    bool ok = true;
+    switch (var.type()) {
+	case QVariant::String:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(qtSetUtf8(value)));
+	    else
+		value = qtGetUtf8(var.toString());
+	    break;
+	case QVariant::Bool:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(value.toBoolean()));
+	    else
+		value = var.toBool();
+	    break;
+	case QVariant::Int:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(value.toInteger()));
+	    else
+		value = var.toInt();
+	    break;
+	case QVariant::UInt:
+	    if (set)
+		ok = obj->setProperty(name,QVariant((unsigned int)value.toInteger()));
+	    else
+		value = var.toUInt();
+	    break;
+	case QVariant::Double:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(value.toDouble()));
+	    else {
+		var.convert(QVariant::String);
+		value = qtGetUtf8(var.toString());
+	    }
+	    break;
+	case QVariant::Icon:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(QIcon(value.c_str())));
+	    break;
+	case QVariant::Pixmap:
+	    if (set)
+		ok = obj->setProperty(name,QVariant(QPixmap(qtSetUtf8(value))));
+	    break;
+	case QVariant::Invalid:
+	    ok = false;
+	    err = "no such property";
+	    break;
+	default:
+	    ok = false;
+	    err = "unsupported type";
+    }
+    if (ok)
+	DDebug(ClientDriver::self(),DebugAll,"%s %s=%s for object '%s'",
+	    set?"Set":"Got",name,value.c_str(),qtGetUtf8(obj->objectName()));
+    else
+	DDebug(ClientDriver::self(),DebugNote,
+	    "Failed to %s %s=%s (type=%s) for object '%s': %s",
+	    set?"set":"get",name,value.c_str(),var.typeName(),
+	    qtGetUtf8(obj->objectName()),err);
+    return ok;
+}
+
+
+/**
+ * QtDriver
+ */
 QtDriver::QtDriver()
+    : m_init(false)
 {
 }
 
@@ -1400,13 +1847,83 @@ void QtDriver::initialize()
 {
     Output("Initializing module Qt4 client");
     s_device = Engine::config().getValue("client","device",DEFAULT_DEVICE);
-    if (!QtClient::self())
-    {
+    if (!QtClient::self()) {
 	debugCopy();
 	new QtClient;
 	QtClient::self()->startup();
     }
-    setup();
+    if (!m_init) {
+	m_init = true;
+	setup();
+    }
+}
+
+/**
+ * QtEventProxy
+ */
+QtEventProxy::QtEventProxy(Type type, QApplication* app)
+{
+#define SET_NAME(n) { m_name = n; setObjectName(m_name.c_str()); }
+    switch (type) {
+	case Timer:
+	    SET_NAME("qtClientTimerProxy");
+	    {
+		QTimer* timer = new QTimer(this);
+		timer->setObjectName("qtClientIdleTimer");
+		YQT_CONNECT(timer,timeout(),this,timerTick(),"timeout()");
+		timer->start(1);
+	    }
+	    break;
+	case AllHidden:
+	    SET_NAME("qtClientAllHidden");
+	    if (app)
+		YQT_CONNECT(app,lastWindowClosed(),this,allHidden(),"lastWindowClosed()");
+	    break;
+	default:
+	    return;
+    }
+#undef SET_NAME
+}
+
+void QtEventProxy::timerTick()
+{
+    if (Client::self())
+	Client::self()->idleActions();
+}
+
+void QtEventProxy::allHidden()
+{
+    if (Client::self())
+	Client::self()->allHidden();
+}
+
+/**
+ * QtSound
+ */
+bool QtSound::doStart()
+{
+    doStop();
+    if (Client::self())
+	Client::self()->createObject((void**)&m_sound,"QSound",m_file);
+    if (m_sound)
+	DDebug(ClientDriver::self(),DebugAll,"Sound(%s) started file=%s",
+	    c_str(),m_file.c_str());
+    else
+	Debug(ClientDriver::self(),DebugNote,"Sound(%s) failed to start file=%s",
+	    c_str(),m_file.c_str());
+    m_sound->setLoops(m_repeat);
+    m_sound->play();
+    return true;
+}
+
+void QtSound::doStop()
+{
+    if (!m_sound)
+	return;
+    m_sound->stop();
+    delete m_sound;
+    DDebug(ClientDriver::self(),DebugAll,"Sound(%s) stopped",c_str());
+    m_sound = 0;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

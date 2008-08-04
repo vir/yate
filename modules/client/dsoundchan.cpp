@@ -56,6 +56,7 @@ class DSoundSource : public DataSource
 public:
     DSoundSource();
     ~DSoundSource();
+    bool control(NamedList& msg);
 private:
     DSoundRec* m_dsound;
 };
@@ -67,6 +68,7 @@ public:
     DSoundConsumer();
     ~DSoundConsumer();
     virtual void Consume(const DataBlock &data, unsigned long tStamp);
+    bool control(NamedList& msg);
 private:
     DSoundPlay* m_dsound;
 };
@@ -87,6 +89,7 @@ public:
     inline LPDIRECTSOUNDBUFFER buffer() const
 	{ return m_dsb; }
     void put(const DataBlock& data);
+    bool control(NamedList& msg);
 private:
     DSoundConsumer* m_owner;
     LPGUID m_device;
@@ -113,6 +116,7 @@ public:
 	{ return m_ds; }
     inline LPDIRECTSOUNDCAPTUREBUFFER buffer() const
 	{ return m_dsb; }
+    bool control(NamedList& msg);
 private:
     DSoundSource* m_owner;
     LPGUID m_device;
@@ -122,6 +126,7 @@ private:
     DWORD m_readPos;
     u_int64_t m_start;
     u_int64_t m_total;
+    int m_rshift;
 };
 
 class DSoundChan : public Channel
@@ -152,7 +157,9 @@ private:
     AttachHandler* m_handler;
 };
 
+
 INIT_PLUGIN(SoundDriver);
+
 
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
     : Thread("DirectSound Play",High),
@@ -205,10 +212,11 @@ bool DSoundPlay::init()
     DSBUFFERDESC bdesc;
     ZeroMemory(&bdesc, sizeof(bdesc));
     bdesc.dwSize = sizeof(bdesc);
+    bdesc.dwFlags = DSBCAPS_CTRLVOLUME;
     if (s_primary)
-	bdesc.dwFlags = DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
+	bdesc.dwFlags |= DSBCAPS_PRIMARYBUFFER | DSBCAPS_STICKYFOCUS;
     else {
-	bdesc.dwFlags = DSBCAPS_GLOBALFOCUS;
+	bdesc.dwFlags |= DSBCAPS_GLOBALFOCUS;
 	// we have to set format when creating secondary buffers
 	bdesc.dwBufferBytes = s_bufsize;
 	bdesc.lpwfxFormat = &fmt;
@@ -260,22 +268,21 @@ void DSoundPlay::run()
     if (m_owner)
 	m_owner->m_dsound = this;
     DWORD writeOffs = 0;
-    DWORD margin = s_chunk/4;
     bool first = true;
     Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
     while (m_owner) {
 	msleep(1,true);
 	if (first) {
-	    if ((m_buf.length() < s_minsize) || !m_dsb)
+	    if (m_buf.length() < s_minsize)
 		continue;
 	    first = false;
 	    m_dsb->GetCurrentPosition(NULL,&writeOffs);
-	    writeOffs = (margin + writeOffs) % m_buffSize;
+	    writeOffs = (s_chunk/4 + writeOffs) % m_buffSize;
 	    Debug(&__plugin,DebugAll,"DSoundPlay has %u in buffer and starts playing at %u",
 		m_buf.length(),writeOffs);
 	    m_start = Time::now();
 	}
-	while (m_dsb) {
+	while (m_dsb && (m_buf.length() >= s_chunk)) {
 	    DWORD playPos = 0;
 	    DWORD writePos = 0;
 	    bool adjust = false;
@@ -289,16 +296,10 @@ void DSoundPlay::run()
 		    adjust = (writeOffs < writePos) || (playPos <= writeOffs) ;
 	    }
 	    if (adjust) {
-		DWORD adjOffs = (margin + writePos) % m_buffSize;
-		Debug(&__plugin,DebugNote,"Slip detected, changing write offs from %u to %u, p=%u w=%u",
+		DWORD adjOffs = (s_chunk/4 + writePos) % m_buffSize;
+		Debug(&__plugin,DebugInfo,"Slip detected, changing write offs from %u to %u, p=%u w=%u",
 		    writeOffs,adjOffs,playPos,writePos);
 		writeOffs = adjOffs;
-	    }
-	    bool hasData = (m_buf.length() >= s_chunk);
-	    if (!(adjust || hasData)) {
-		// don't fill the buffer if we still have at least one chunk until underflow
-		if ((m_buffSize + writeOffs - writePos) % m_buffSize >= s_chunk)
-		    break;
 	    }
 	    void* buf = 0;
 	    void* buf2 = 0;
@@ -323,31 +324,41 @@ void DSoundPlay::run()
 		continue;
 	    }
 	    lock();
-	    if (hasData) {
-		::memcpy(buf,m_buf.data(),len);
-		if (buf2)
-		    ::memcpy(buf2,((const char*)m_buf.data())+len,len2);
-	    }
-	    else {
-		::memset(buf,0,len);
-		if (buf2)
-		    ::memset(buf2,0,len2);
-	    }
+	    ::memcpy(buf,m_buf.data(),len);
+	    if (buf2)
+		::memcpy(buf2,((const char*)m_buf.data())+len,len2);
 	    m_dsb->Unlock(buf,len,buf2,len2);
-	    m_total += s_chunk;
-	    m_buf.cut(-(int)s_chunk);
-	    unlock();
-#ifdef DEBUG
-	    if (!hasData)
-		Debug(&__plugin,DebugInfo,"Underflow, filled %u bytes at %u, p=%u w=%u",
-		    s_chunk,writeOffs,playPos,writePos);
-#endif
 	    writeOffs += s_chunk;
 	    if (writeOffs >= m_buffSize)
 		writeOffs -= m_buffSize;
+	    m_total += s_chunk;
+	    m_buf.cut(-(int)s_chunk);
+	    unlock();
 	    XDebug(&__plugin,DebugAll,"Locked %p,%d %p,%d",buf,len,buf2,len2);
 	}
     }
+}
+
+bool DSoundPlay::control(NamedList& msg)
+{
+    bool ok = false;
+    LONG val = 0;
+    int outValue = msg.getIntValue("out_volume",-1);
+    HRESULT hr; // we need it for debugging
+    if ((outValue >= 0) && (outValue <= 100)) {
+	// convert 0...100 to 0...-50.00 dB
+	val = (outValue - 100) * 50;
+	ok = ((hr = m_dsb->SetVolume(val)) == DS_OK);
+    }
+
+    if ((hr = m_dsb->GetVolume(&val)) == DS_OK) {
+	// convert back 0...-50.0 dB to 0...100, watch out for values up to -100.00 dB
+	outValue = (5000 + val) / 50;
+	if (outValue < 0)
+	    outValue = 0;
+	msg.setParam("out_volume", String(outValue));
+    }
+    return ok;
 }
 
 void DSoundPlay::cleanup()
@@ -377,10 +388,11 @@ void DSoundPlay::put(const DataBlock& data)
     unlock();
 }
 
+
 DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
     : Thread("DirectSound Rec",High),
       m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
-      m_buffSize(0), m_readPos(0), m_start(0), m_total(0)
+      m_buffSize(0), m_readPos(0), m_start(0), m_total(0), m_rshift(0)
 {
 }
 
@@ -490,6 +502,12 @@ void DSoundRec::run()
 	    m_readPos += (len+len2);
 	    if (m_readPos >= m_buffSize)
 		m_readPos -= m_buffSize;
+	    if (m_rshift) {
+		// apply volume attenuation
+		signed short* s = (signed short*)data.data();
+		for (unsigned int n = data.length() / 2; n--; s++)
+		    *s >>= m_rshift;
+	    }
 	    if (m_owner)
 		m_owner->Forward(data);
 	}
@@ -511,6 +529,22 @@ void DSoundRec::cleanup()
     ::CoUninitialize();
 }
 
+bool DSoundRec::control(TelEngine::NamedList &msg)
+{
+    bool ok = false;
+    int inValue = msg.getIntValue("in_volume",-1);
+    if ((inValue >= 0) && (inValue <= 100)) {
+	// convert 0...100 to a 10...0 right shift count
+	m_rshift = (105 - inValue) / 10;
+	ok = true;
+    }
+
+    inValue = (10 - m_rshift) * 10;
+    msg.setParam("in_volume", String(inValue));
+    return ok;
+}
+
+
 DSoundSource::DSoundSource()
     : m_dsound(0)
 {
@@ -523,6 +557,14 @@ DSoundSource::~DSoundSource()
     if (m_dsound)
 	m_dsound->terminate();
 }
+
+bool DSoundSource::control(NamedList& msg)
+{
+    if (m_dsound)
+	return m_dsound->control(msg);
+    return false;
+}
+
 
 DSoundConsumer::DSoundConsumer()
     : m_dsound(0)
@@ -543,6 +585,14 @@ void DSoundConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 	m_dsound->put(data);
 }
 
+bool DSoundConsumer::control(NamedList& msg)
+{
+    if (m_dsound)	
+	return m_dsound->control(msg);
+    return false;
+}
+
+
 DSoundChan::DSoundChan()
     : Channel(__plugin)
 {
@@ -560,6 +610,7 @@ DSoundChan::~DSoundChan()
 {
     Debug(this,DebugAll,"DSoundChan::~DSoundChan()  [%p]",this);
 }
+
 
 bool AttachHandler::received(Message &msg)
 {
@@ -609,6 +660,7 @@ bool AttachHandler::received(Message &msg)
     // Stop dispatching if we handled all requested
     return !more;
 }
+
 
 bool SoundDriver::msgExecute(Message& msg, String& dest)
 {

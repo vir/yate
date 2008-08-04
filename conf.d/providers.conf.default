@@ -37,3 +37,11 @@ enabled=yes
 description=Vox Gratia Test Gatekeeper
 protocol=h323
 server=66.135.35.44
+
+[GTalk]
+enabled=yes
+description=Google Talk
+protocol=jabber
+domain=gmail.com
+server=talk.l.google.com
+options=allowplainauth

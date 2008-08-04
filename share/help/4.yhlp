@@ -1,19 +1,28 @@
 <markup><big><b>Events Log</b></big>
 
+<p>
 This window keeps record of status messages
 displayed by Yate. You can use it to have a
 second look at the messages that show up for a
 too short time.
+</p>
 
+<p>
 Text can be copied from here and pasted in an
 editor or e-mail client for debugging purposes.
+</p>
 
+<p>
 Please note that the event window text will not
 persist if you stop the Yate client. You have
 to copy any data before closing the program.
+</p>
 
+<p>
 If you turn on <b>Debug here</b> the debugging
 messages will be displayed in the event window.
 You can turn on detail display for individual
 VoIP protocols.
+</p>
+    
 </markup><!-- pango -->

@@ -331,6 +331,14 @@ public:
 	{ return m_timestamp; }
 
     /**
+     * Modify node parameters
+     * @param params The list of parameters to change
+     * @return True if processed
+     */
+    virtual bool control(NamedList& params)
+	{ return false; }
+
+    /**
      * Get the internal representation of an invalid or unknown timestamp
      * @return Invalid timestamp - unsigned long conversion of -1
      */
@@ -1002,6 +1010,13 @@ public:
     inline const String& name() const
 	{ return m_name; }
 
+    /**
+     * Modify data parameters
+     * @param params The list of parameters to change
+     * @return True if processed
+     */
+    virtual bool control(NamedList& params);
+
 protected:
     /**
      * Attempt to connect the endpoint to a peer of the same type
@@ -1298,6 +1313,7 @@ protected:
 	Progress   = 0x00010000,
 	Update     = 0x00020000,
 	Transfer   = 0x00040000,
+	Control	   = 0x00080000,
 	// Last possible public ID
 	PubLast    = 0x0fffffff,
 	// Private messages base ID
@@ -1629,6 +1645,13 @@ public:
      * @param msg Status message
      */
     virtual void msgStatus(Message& msg);
+
+    /**
+     * Control message handler that is invoked only for messages to this channel
+     * @param msg Control message
+     * @return True to stop processing the message, false to let it flow
+     */
+    virtual bool msgControl(Message& msg);
 
     /**
      * Timer check method, by default handles channel timeouts

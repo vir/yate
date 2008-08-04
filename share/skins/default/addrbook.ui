@@ -30,6 +30,9 @@
   <property name="windowTitle" >
    <string>Contact</string>
   </property>
+  <property name="windowIcon" >
+   <iconset>book.png</iconset>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>6</number>
@@ -52,12 +55,12 @@
       <string>Name used to identify this contact</string>
      </property>
      <property name="text" >
-      <string>Contact Name:</string>
+      <string>Name:</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="abk_contact" >
+    <widget class="QLineEdit" name="abk_name" >
      <property name="toolTip" >
       <string>Name used to identify this contact</string>
      </property>
@@ -69,12 +72,12 @@
       <string>Number or URI used to reach this contact</string>
      </property>
      <property name="text" >
-      <string>Phone Number:</string>
+      <string>Phone Number or URI Target:</string>
      </property>
     </widget>
    </item>
    <item>
-    <widget class="QLineEdit" name="abk_number" >
+    <widget class="QLineEdit" name="abk_target" >
      <property name="toolTip" >
       <string>Number or URI used to reach this contact</string>
      </property>
@@ -99,21 +102,57 @@
      </property>
      <item>
       <widget class="QPushButton" name="abk_accept" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
        <property name="toolTip" >
         <string>Update the contact data</string>
        </property>
        <property name="text" >
         <string>Ok</string>
        </property>
+       <property name="icon" >
+        <iconset>ok.png</iconset>
+       </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="button_hide" >
+       <property name="minimumSize" >
+        <size>
+         <width>0</width>
+         <height>25</height>
+        </size>
+       </property>
+       <property name="maximumSize" >
+        <size>
+         <width>16777215</width>
+         <height>25</height>
+        </size>
+       </property>
        <property name="toolTip" >
         <string>Abandon changes and exit</string>
        </property>
        <property name="text" >
         <string>Cancel</string>
+       </property>
+       <property name="icon" >
+        <iconset>close.png</iconset>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
        </property>
       </widget>
      </item>
@@ -131,12 +170,12 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="help_show" >
+      <widget class="QPushButton" name="toggle_show_help" >
        <property name="toolTip" >
         <string>Help on this window</string>
        </property>
        <property name="accessibleName" >
-        <string>help_show:2</string>
+        <string>showwindow:help:2</string>
        </property>
        <property name="text" >
         <string/>

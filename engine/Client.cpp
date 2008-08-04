@@ -28,42 +28,6 @@
 
 using namespace TelEngine;
 
-class UIHandler : public MessageHandler
-{
-public:
-    UIHandler()
-	: MessageHandler("ui.action",150)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class UICdrHandler : public MessageHandler
-{
-public:
-    UICdrHandler()
-	: MessageHandler("call.cdr",90)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class UIUserHandler : public MessageHandler
-{
-public:
-    UIUserHandler()
-	: MessageHandler("user.login",50)
-	{ }
-    virtual bool received(Message &msg);
-};
-
-class UIUserNotifyHandler : public MessageHandler
-{
-public:
-    UIUserNotifyHandler()
-	: MessageHandler("user.notify",50)
-	{ }
-    virtual bool received(Message &msg);
-};
-
 class ClientThreadProxy
 {
 public:
@@ -81,6 +45,7 @@ public:
 	hasOption,
 	addOption,
 	delOption,
+	getOptions,
 	addTableRow,
 	delTableRow,
 	setTableRow,
@@ -89,13 +54,29 @@ public:
 	getText,
 	getCheck,
 	getSelect,
+	createWindow,
+	closeWindow,
+	setParams,
+	addLines,
+	createObject,
+	setProperty,
+	getProperty
     };
     ClientThreadProxy(int func, const String& name, bool show, Window* wnd = 0, Window* skip = 0);
     ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip);
-    ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd, Window* skip);
-    ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd, Window* skip);
-    ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent);
-    ClientThreadProxy(int func, const String& name, const String& item, bool start, const NamedList* params, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, const String& text,
+	const String& item, bool show, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool,
+	Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, const NamedList* params,
+	const Window* parent);
+    ClientThreadProxy(int func, const String& name, const String& item, bool start,
+	const NamedList* params, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, NamedList* params,
+	Window* wnd, Window* skip);
+    ClientThreadProxy(int func, const String& name, NamedList* params,
+	unsigned int uintVal, bool atStart, Window* wnd, Window* skip);
+    ClientThreadProxy(int func, void** addr, const String& name, const String& text, NamedList* params);
     void process();
     bool execute();
 private:
@@ -110,52 +91,236 @@ private:
     Window* m_wnd;
     Window* m_skip;
     const NamedList* m_params;
+    unsigned int m_uint;
+    void** m_pointer;
 };
 
 
-// utility function to check if a string begins and ends with -dashes-
-static bool checkDashes(const String& str)
+/**
+ * Static classes/function/data
+ */
+
+// Struct used to build client relays array
+struct MsgRelay
 {
-    return str.startsWith("-") && str.endsWith("-");
+    const char* name;
+    int id;
+    int prio;
+};
+
+// List of window params prefix handled in setParams()
+static String s_wndParamPrefix[] = {"show:","active:","focus:","check:","select:","display:",""};
+// Error messages returned by channels
+static String s_userBusy = "User busy";
+static String s_rejectReason = "Rejected";
+static String s_hangupReason = "User hangup";
+static unsigned int s_eventLen = 0;              // Log maximum lines (0: unlimited)
+static Mutex s_debugMutex;
+static Mutex s_proxyMutex;
+static NamedList* s_debugLog = 0;
+static ClientThreadProxy* s_proxy = 0;
+static bool s_busy = false;
+Client* Client::s_client = 0;
+Configuration Client::s_settings;                // Client settings
+Configuration Client::s_actions;                 // Logic preferrences
+Configuration Client::s_accounts;                // Accounts
+Configuration Client::s_contacts;                // Contacts
+Configuration Client::s_providers;               // Provider settings
+Configuration Client::s_history;                 // Call log
+Configuration Client::s_calltoHistory;           // Dialed destinations history
+ObjList Client::s_accOptions;
+int Client::s_changing = 0;
+Regexp Client::s_notSelected = "^-\\(.*\\)-$";   // Holds a not selected/set value match
+ObjList Client::s_logics;
+String Client::s_protocols[Client::OtherProtocol] = {"sip","jabber","h323","iax"};
+String Client::s_skinPath;                       // Skin path
+String Client::s_soundPath;                      // Sounds path
+String Client::s_ringInName = "defaultringin";   // Ring name for incoming channels
+String Client::s_ringOutName = "defaultringout"; // Ring name for outgoing channels
+String Client::s_statusWidget = "status";        // Status widget's name
+String Client::s_debugWidget = "log_events";     // Default widget displaying the debug text
+// The list of client's toggles
+String Client::s_toggles[OptCount] = {
+    "multilines", "autoanswer", "ringincoming", "ringoutgoing",
+    "activatelastoutcall", "activatelastincall", "activatecallonselect",
+    "display_keypad"
+};
+bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
+ClientDriver* ClientDriver::s_driver = 0;
+String ClientDriver::s_confName = "conf/client"; // The name of the client's conference room
+bool ClientDriver::s_dropConfPeer = true;        // Drop a channel's old peer when terminated while in conference
+String ClientDriver::s_device;                   // Currently used audio device
+ObjList ClientSound::s_sounds;                   // ClientSound's list
+Mutex ClientSound::s_soundsMutex(true);          // ClientSound's list lock mutex
+static ClientLogic s_defaultLogic;               // The default logic
+
+// Parameters that are applied from provider template
+const char* Client::s_provParams[] = {
+    "server",
+    "domain",
+    "outbound",
+    "port",
+    0
+};
+
+// Client relays
+static MsgRelay s_relays[] = {
+    {"call.cdr",           Client::CallCdr,           90},
+    {"ui.action",          Client::UiAction,          150},
+    {"user.login",         Client::UserLogin,         50},
+    {"user.notify",        Client::UserNotify,        50},
+    {"resource.notify",    Client::ResourceNotify,    50},
+    {"resource.subscribe", Client::ResourceSubscribe, 50},
+    {"xmpp.iq",            Client::XmppIq,            50},
+    {"clientchan.update",  Client::ClientChanUpdate,  50},
+    {0,0,0},
+};
+
+// Channel notifications
+TokenDict ClientChannel::s_notification[] = {
+    {"startup",         ClientChannel::Startup},
+    {"destroyed",       ClientChannel::Destroyed},
+    {"active",          ClientChannel::Active},
+    {"onhold",          ClientChannel::OnHold},
+    {"noticed",         ClientChannel::Noticed},
+    {"addresschanged",  ClientChannel::AddrChanged},
+    {"routed",          ClientChannel::Routed},
+    {"accepted",        ClientChannel::Accepted},
+    {"rejected",        ClientChannel::Rejected},
+    {"progressing",     ClientChannel::Progressing},
+    {"ringing",         ClientChannel::Ringing},
+    {"answered",        ClientChannel::Answered},
+    {"transfer",        ClientChannel::Transfer},
+    {"conference",      ClientChannel::Conference},
+    {0,0}
+};
+
+String ClientContact::s_chatPrefix = "chat";     // Client contact chat window prefix
+
+
+// Debug output handler
+static void dbg_client_func(const char* buf, int level)
+{
+    if (!buf)
+	return;
+    Lock lock(s_debugMutex);
+    if (!s_debugLog)
+	s_debugLog = new NamedList("");
+    s_debugLog->addParam(buf,String(level));
 }
 
-// utility function to make empty a string that begins and ends with -dashes-
-// returns true if fixed string is empty
-static bool fixDashes(String& str)
+// Utility function used in Client::action()
+// Output a debug message and calls a logic's action method
+inline bool callLogicAction(ClientLogic* logic, Window* wnd, const String& name, NamedList* params)
 {
-    if (checkDashes(str))
-	str.clear();
-    str.trimBlanks();
-    return str.null();
+    if (!logic)
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,
+	"Logic(%s) action='%s' in window (%p,%s) [%p]",
+	logic->toString().c_str(),name.c_str(),wnd,wnd?wnd->id().c_str():"",logic);
+    return logic->action(wnd,name,params);
+}
+
+// Utility function used in Client::toggle()
+// Output a debug message and calls a logic's toggle method
+inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String& name, bool active)
+{
+    if (!logic)
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,
+	"Logic(%s) toggle='%s' active=%s in window (%p,%s) [%p]",
+	logic->toString().c_str(),name.c_str(),String::boolText(active),
+	wnd,wnd?wnd->id().c_str():"",logic);
+    return logic->toggle(wnd,name,active);
+}
+
+// Utility function used in Client::select()
+// Output a debug message and calls a logic's select method
+inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
+    const String& item, const String& text)
+{
+    if (!logic)
+	return false;
+    DDebug(ClientDriver::self(),DebugAll,
+	"Logic(%s) select='%s' item='%s' in window (%p,%s) [%p]",
+	logic->toString().c_str(),name.c_str(),item.c_str(),
+	wnd,wnd?wnd->id().c_str():"",logic);
+    return logic->select(wnd,name,item,text);
+}
+
+// Utility function used to check for action/toggle/select preferences
+// Check for a substitute
+// Check if only a logic should process the action 
+// Check for a preffered logic to process the action 
+// Check if a logic should be ignored (not notified)
+// Otherwise: check if the action should be ignored
+inline bool hasOverride(const NamedList* params, String& name, String& handle,
+    bool& only, bool& prefer, bool& ignore, bool& bailout)
+{
+    static String s_ignoreString = "ignore";
+
+    if (!params)
+	return false;
+    handle = params->getValue(name);
+    // Set name if a substitute is found
+    if (handle.startSkip("sameas:",false)) {
+	const char* tmp = params->getValue(handle);
+	if (tmp) {
+	    name = handle;
+	    handle = tmp;
+	}
+	else
+	    handle = "";
+    }
+    // Check logic indications
+    if (!handle)
+	return false;
+    only = handle.startSkip("only:",false);
+    if (only)
+	return true;
+    prefer = handle.startSkip("prefer:",false);
+    ignore = !prefer && handle.startSkip("ignore:",false);
+    bailout = !ignore && handle == s_ignoreString;
+    return true;
 }
 
 
+/**
+ * Window
+ */
+// Constructor with the specified id
 Window::Window(const char* id)
-    : m_id(id), m_visible(false), m_master(false), m_popup(false)
+    : m_id(id), m_visible(false), m_master(false), m_popup(false),
+    m_saveOnClose(true), m_populated(false), m_initialized(false)
 {
 }
 
+// destructor
 Window::~Window()
 {
     if (Client::self())
 	Client::self()->m_windows.remove(this,false);
 }
 
+// retrieve the window id
 const String& Window::toString() const
 {
     return m_id;
 }
 
+// set the window title
 void Window::title(const String& text)
 {
     m_title = text;
 }
 
+// set the window context
 void Window::context(const String& text)
 {
     m_context = text;
 }
 
+// checkes if this window is related to the given window
 bool Window::related(const Window* wnd) const
 {
     if ((wnd == this) || !wnd || wnd->master())
@@ -163,6 +328,8 @@ bool Window::related(const Window* wnd) const
     return true;
 }
 
+// function for interpreting a set or parameters and take appropiate action
+// maybe not needed anymore?
 bool Window::setParams(const NamedList& params)
 {
     bool ok = true;
@@ -175,7 +342,7 @@ bool Window::setParams(const NamedList& params)
 		title(*s);
 	    if (n == "context")
 		context(*s);
-	    else if (n.startSkip("show:",false))
+	    else if (n.startSkip("show:",false) || n.startSkip("display:",false))
 		ok = setShow(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("active:",false))
 		ok = setActive(n,s->toBoolean()) && ok;
@@ -185,6 +352,14 @@ bool Window::setParams(const NamedList& params)
 		ok = setCheck(n,s->toBoolean()) && ok;
 	    else if (n.startSkip("select:",false))
 		ok = setSelect(n,*s) && ok;
+	    else if (n.startSkip("property:",false)) {
+		// Set property: object_name:property_name=value
+		int pos = n.find(':');
+		if (pos > 0)
+		    ok = setProperty(n.substr(0,pos),n.substr(pos+1),*s) && ok;
+		else
+		    ok = false;
+	    }
 	    else if (n.find(':') < 0)
 		ok = setText(n,*s) && ok;
 	    else
@@ -194,6 +369,16 @@ bool Window::setParams(const NamedList& params)
     return ok;
 }
 
+// Append or insert text lines to a widget
+bool Window::addLines(const String& name, const NamedList* lines, unsigned int max,
+	bool atStart)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub addLines('%s',%p,%u,%s) [%p]",
+	name.c_str(),lines,max,String::boolText(atStart),this);
+    return false;
+}
+
+// stub function for adding a row to a table
 bool Window::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub addTableRow('%s','%s',%p,%s) [%p]",
@@ -201,6 +386,7 @@ bool Window::addTableRow(const String& name, const String& item, const NamedList
     return false;
 }
 
+// stub function for deleting a row from a table
 bool Window::delTableRow(const String& name, const String& item)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub delTableRow('%s','%s') [%p]",
@@ -208,6 +394,7 @@ bool Window::delTableRow(const String& name, const String& item)
     return false;
 }
 
+// stub function for setting the value for a row
 bool Window::setTableRow(const String& name, const String& item, const NamedList* data)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub setTableRow('%s','%s',%p) [%p]",
@@ -215,6 +402,7 @@ bool Window::setTableRow(const String& name, const String& item, const NamedList
     return false;
 }
 
+// stub function for retrieving the information from a row
 bool Window::getTableRow(const String& name, const String& item, NamedList* data)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub getTableRow('%s','%s',%p) [%p]",
@@ -222,6 +410,7 @@ bool Window::getTableRow(const String& name, const String& item, NamedList* data
     return false;
 }
 
+// stub function for clearing a table
 bool Window::clearTable(const String& name)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub clearTable('%s') [%p]",
@@ -229,72 +418,135 @@ bool Window::clearTable(const String& name)
     return false;
 }
 
+// Check window param prefix
+bool Window::isValidParamPrefix(const String& prefix)
+{
+    for (int i = 0; s_wndParamPrefix[i].length(); i++)
+	if (prefix.startsWith(s_wndParamPrefix[i]))
+	    return prefix.length() > s_wndParamPrefix[i].length();
+    return false;
+}
 
-UIFactory::UIFactory(const char* type, const char* name)
+
+/**
+ * UIFactory
+ */
+
+ObjList UIFactory::s_factories;
+
+// Constructor. Append itself to the factories list
+UIFactory::UIFactory(const char* name)
     : String(name)
 {
-    if (ClientDriver::self() && ClientDriver::self()->factory(this,type))
-	return;
-    Debug(ClientDriver::self(),DebugGoOn,"Could not register '%s' factory type '%s'",
-	name,type);
+    s_factories.append(this)->setDelete(false);
+    Debug(ClientDriver::self(),DebugAll,"Added factory '%s' [%p]",name,this);
 }
 
+// Destructor
 UIFactory::~UIFactory()
 {
-    if (ClientDriver::self())
-	ClientDriver::self()->factory(this,0);
+    s_factories.remove(this,false);
+    Debug(ClientDriver::self(),DebugAll,"Removed factory '%s' [%p]",c_str(),this);
+}
+
+// Ask all factories to create an object of a given type
+void* UIFactory::build(const String& type, const char* name, NamedList* params,
+	const char* factory)
+{
+    for (ObjList* o = s_factories.skipNull(); o; o = o->skipNext()) {
+	UIFactory* f = static_cast<UIFactory*>(o->get());
+	if (!f->canBuild(type) || (factory && *f != factory))
+	    continue;
+	DDebug(ClientDriver::self(),DebugAll,
+	    "Factory '%s' trying to create type='%s' name='%s' [%p]",
+	    f->c_str(),type.c_str(),name,f);
+	void* p = f->create(type,name,params);
+	if (p)
+	    return p;
+    }
+    return 0;
 }
 
 
-static Mutex s_proxyMutex;
-static ClientThreadProxy* s_proxy = 0;
-static bool s_busy = false;
-
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show, Window* wnd, Window* skip)
+/**
+ * ClientThreadProxy
+ */
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, bool show,
+	Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_bool(show), m_rtext(0), m_rbool(0),
-      m_wnd(wnd), m_skip(skip), m_params(0)
+      m_wnd(wnd), m_skip(skip), m_params(0), m_uint(0), m_pointer(0)
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip)
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text,
+	Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_text(text), m_bool(false), m_rtext(0), m_rbool(0),
-      m_wnd(wnd), m_skip(skip), m_params(0)
+      m_wnd(wnd), m_skip(skip), m_params(0), m_uint(0), m_pointer(0)
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text, const String& item, bool show, Window* wnd, Window* skip)
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text,
+	const String& item, bool show, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_text(text), m_item(item), m_bool(show), m_rtext(0), m_rbool(0),
-      m_wnd(wnd), m_skip(skip), m_params(0)
+      m_wnd(wnd), m_skip(skip), m_params(0), m_uint(0), m_pointer(0)
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, String* rtext, bool* rbool, Window* wnd, Window* skip)
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, String* rtext,
+	bool* rbool, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_bool(false), m_rtext(rtext), m_rbool(rbool),
-      m_wnd(wnd), m_skip(skip), m_params(0)
+      m_wnd(wnd), m_skip(skip), m_params(0), m_uint(0), m_pointer(0)
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params, const Window* parent)
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const NamedList* params,
+	const Window* parent)
     : m_func(func), m_rval(false),
       m_name(name), m_bool(false), m_rtext(0), m_rbool(0),
-      m_wnd(const_cast<Window*>(parent)), m_skip(0), m_params(params)
+      m_wnd(const_cast<Window*>(parent)), m_skip(0), m_params(params), m_uint(0),
+      m_pointer(0)
 {
 }
 
-ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& item, bool start, const NamedList* params, Window* wnd, Window* skip)
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& item,
+	bool start, const NamedList* params, Window* wnd, Window* skip)
     : m_func(func), m_rval(false),
       m_name(name), m_item(item), m_bool(start), m_rtext(0), m_rbool(0),
-      m_wnd(wnd), m_skip(skip), m_params(params)
+      m_wnd(wnd), m_skip(skip), m_params(params), m_uint(0), m_pointer(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* params,
+	Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_bool(false), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(params), m_uint(0), m_pointer(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, NamedList* params,
+	unsigned int uintVal, bool atStart, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_bool(atStart), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(params), m_uint(uintVal), m_pointer(0)
+{
+}
+
+ClientThreadProxy::ClientThreadProxy(int func, void** addr, const String& name,
+    const String& text, NamedList* params)
+    : m_func(func), m_rval(false),
+      m_name(name), m_text(text), m_bool(false), m_rtext(0), m_rbool(0),
+      m_wnd(0), m_skip(0), m_params(params), m_uint(0), m_pointer(addr)
 {
 }
 
 void ClientThreadProxy::process()
 {
-    Debugger debug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
+    XDebug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
     Client* client = Client::self();
     if (!client) {
 	s_busy = false;
@@ -314,7 +566,7 @@ void ClientThreadProxy::process()
 	    m_rval = client->setShow(m_name,m_bool,m_wnd,m_skip);
 	    break;
 	case setText:
-	    m_rval = client->setText(m_name,m_text,m_wnd,m_skip);
+	    m_rval = client->setText(m_name,m_text,m_bool,m_wnd,m_skip);
 	    break;
 	case setActive:
 	    m_rval = client->setActive(m_name,m_bool,m_wnd,m_skip);
@@ -364,13 +616,38 @@ void ClientThreadProxy::process()
 	case getSelect:
 	    m_rval = client->getSelect(m_name,*m_rtext,m_wnd,m_skip);
 	    break;
+	case getOptions:
+	    m_rval = client->getOptions(m_name,const_cast<NamedList*>(m_params),m_wnd,m_skip);
+	    break;
+	case createWindow:
+	    m_rval = client->createWindowSafe(m_name,m_text);
+	    break;
+	case closeWindow:
+	    m_rval = client->closeWindow(m_name,m_bool);
+	    break;
+	case setParams:
+	    m_rval = client->setParams(const_cast<NamedList*>(m_params),m_wnd,m_skip);
+	    break;
+	case addLines:
+	    m_rval = client->addLines(m_name,const_cast<NamedList*>(m_params),m_uint,
+		m_bool,m_wnd,m_skip);
+	    break;
+	case createObject:
+	    m_rval = client->createObject(m_pointer,m_name,m_text,const_cast<NamedList*>(m_params));
+	    break;
+	case setProperty:
+	    m_rval = client->setProperty(m_name,m_item,m_text);
+	    break;
+	case getProperty:
+	    m_rval = client->getProperty(m_name,m_item,m_text);
+	    break;
     }
     s_busy = false;
 }
 
 bool ClientThreadProxy::execute()
 {
-    Debugger debug(DebugAll,"ClientThreadProxy::execute()"," %d in %p [%p]",
+    XDebug(DebugAll,"ClientThreadProxy::execute()"," %d in %p [%p]",
 	m_func,Thread::current(),this);
     s_proxyMutex.lock();
     s_proxy = this;
@@ -381,65 +658,63 @@ bool ClientThreadProxy::execute()
     return m_rval;
 }
 
-
-Client* Client::s_client = 0;
-int Client::s_changing = 0;
-static Configuration s_accounts;
-static Configuration s_contacts;
-static Configuration s_providers;
-static Configuration s_history;
-static unsigned int s_eventLen = 0;
-static Mutex s_debugMutex;
-static String* s_debugLog = 0;
-
-// Parameters that are stored with account
-static const char* s_accParams[] = {
-    "username",
-    "password",
-    "server",
-    "domain",
-    "outbound",
-    0
-};
-
-// Parameters that are applied from provider template
-static const char* s_provParams[] = {
-    "server",
-    "domain",
-    "outbound",
-    0
-};
-
-static void dbg_client_func(const char *buf, int level)
-{
-    if (!buf)
-	return;
-    s_debugMutex.lock();
-    if (s_debugLog)
-	*s_debugLog += buf;
-    else
-	s_debugLog = new String(buf);
-    s_debugMutex.unlock();
-}
-
+/**
+ * Client
+ */
+// Constructor
 Client::Client(const char *name)
-    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
-      m_multiLines(false), m_autoAnswer(false)
+    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true)
 {
     s_client = this;
-    Engine::install(new UICdrHandler);
-    Engine::install(new UIUserHandler);
-    Engine::install(new UIUserNotifyHandler);
-    Engine::install(new UIHandler);
+
+    // Set default options
+    for (unsigned int i = 0; i < OptCount; i++)
+	m_toggles[i] = false;
+    m_toggles[OptMultiLines] = true;
+    m_toggles[OptKeypadVisible] = true;
+
+    // Install relays
+    for (int i = 0; s_relays[i].name; i++)
+	installRelay(s_relays[i].name,s_relays[i].id,s_relays[i].prio);
+
+    // Build account options list
+    if (!s_accOptions.skipNull()) {
+	s_accOptions.append(new String("allowplainauth"));
+	s_accOptions.append(new String("noautorestart"));
+	s_accOptions.append(new String("oldstyleauth"));
+	s_accOptions.append(new String("tlsrequired"));
+    }
+
+    // Set paths
+    s_skinPath = Engine::config().getValue("client","skinbase");
+    if (!s_skinPath)
+	s_skinPath << Engine::sharedPath() << Engine::pathSeparator() << "skins";
+    s_skinPath << Engine::pathSeparator();
+    String skin(Engine::config().getValue("client","skin","default")); 
+    if (skin)
+	s_skinPath << skin;
+    if (!s_skinPath.endsWith(Engine::pathSeparator()))
+	s_skinPath << Engine::pathSeparator();
+    s_soundPath << Engine::sharedPath() << Engine::pathSeparator() << "sounds" <<
+	Engine::pathSeparator();
 }
 
+// destructor
 Client::~Client()
 {
+    // Halt the engine
     Engine::halt(0);
 }
 
+// Cleanup before halting
 void Client::cleanup()
 {
+    for (ObjList* o = m_relays.skipNull(); o; o = o->skipNext())
+	Engine::uninstall(static_cast<MessageRelay*>(o->get()));
+    m_relays.clear();
+    ClientSound::s_soundsMutex.lock();
+    ClientSound::s_sounds.clear();
+    ClientSound::s_soundsMutex.unlock();
     m_windows.clear();
     s_client = 0;
     m_oneThread = false;
@@ -448,25 +723,63 @@ void Client::cleanup()
     while (ClientDriver::self() && !ClientDriver::self()->check(100000));
 }
 
+// Load windows and optionally (re)initialize the client's options
+void Client::loadUI(const char* file, bool init)
+{
+    Debug(ClientDriver::self(),DebugAll,"Client::loadUI() [%p]",this);
+    loadWindows(file);
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) loadedWindows() [%p]",
+	    logic->toString().c_str(),logic);
+	logic->loadedWindows();
+    }
+    initWindows();
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) initializedWindows() [%p]",
+	    logic->toString().c_str(),logic);
+	logic->initializedWindows();
+    }
+    if (init) {
+	m_initialized = false;
+	initClient();
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	    ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	    Debug(ClientDriver::self(),DebugAll,"Logic(%s) initializedClient() [%p]",
+		logic->toString().c_str(),logic);
+	    if (logic->initializedClient())
+		break;
+	}
+	setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " - " YATE_STATUS YATE_RELEASE));
+	m_initialized = true;
+    }
+    // Sanity check: at least one window should be visible
+    ObjList* o = m_windows.skipNull();
+    for (; o && !getVisible(o->get()->toString()); o = o->skipNext())
+	;
+    if (!o)
+	Debug(ClientDriver::self(),DebugWarn,"There is no window visible !!!");
+}
+
+// run function for the main thread
 void Client::run()
 {
-    loadWindows();
-    Message msg("ui.event");
-    msg.setParam("event","load");
-    if (Engine::dispatch(msg))
-	Debug(DebugGoOn,"Message %s was unexpectedly handled!",msg.c_str());
-    initWindows();
-    initClient();
-    updateFrom(0);
-    setStatus(Engine::config().getValue("client","greeting","Yate " YATE_VERSION " - " YATE_STATUS YATE_RELEASE));
-    m_initialized = true;
-    msg.setParam("event","init");
-    if (Engine::dispatch(msg))
-	Debug(DebugGoOn,"Message %s was unexpectedly handled!",msg.c_str());
+    Debug(ClientDriver::self(),DebugAll,"Client::run() [%p]",this);
+    loadUI();
+    // Run
     main();
+    // Notify termination to logics
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) exitingClient() [%p]",
+	    logic->toString().c_str(),logic);
+	logic->exitingClient();
+    }
     exitClient();
 }
 
+// retrieve the window named by the value of "name" from the client's list of windows 
 Window* Client::getWindow(const String& name)
 {
     if (!s_client)
@@ -475,6 +788,7 @@ Window* Client::getWindow(const String& name)
     return static_cast<Window*>(l ? l->get() : 0);
 }
 
+// function for obtaining a list of all windows that the client uses
 ObjList* Client::listWindows()
 {
     if (!s_client)
@@ -491,6 +805,7 @@ ObjList* Client::listWindows()
     return lst;
 }
 
+// function for setting the visibility attribute of the "name" window
 bool Client::setVisible(const String& name, bool show)
 {
     if (s_client && s_client->needProxy()) {
@@ -504,12 +819,14 @@ bool Client::setVisible(const String& name, bool show)
     return true;
 }
 
+// function for obtaining the visibility status of the "name" window
 bool Client::getVisible(const String& name)
 {
     Window* w = getWindow(name);
     return w && w->visible();
 }
 
+// function for initiating the windows
 void Client::initWindows()
 {
     ObjList* l = &m_windows;
@@ -520,6 +837,7 @@ void Client::initWindows()
     }
 }
 
+// function for initializing the client
 void Client::initClient()
 {
     s_eventLen = Engine::config().getIntValue("client","eventlen",10240);
@@ -528,100 +846,80 @@ void Client::initClient()
     else if (s_eventLen && (s_eventLen < 1024))
 	s_eventLen = 1024;
 
+    // Load the settings file
+    s_settings = Engine::configFile("client_settings",true);
+    s_settings.load();
+
+    // Load logic actions file
+    s_actions = Engine::configFile("client_actions", false);
+    s_actions.load();
+
+    // Load the accounts file and notify logics
     s_accounts = Engine::configFile("client_accounts",true);
     s_accounts.load();
     unsigned int n = s_accounts.sections();
-    unsigned int i;
-    for (i=0; i<n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_accounts.getSection(i);
-	if (sect) {
-	    if (!hasOption("accounts",*sect))
-		addOption("accounts",*sect,false);
-	    Message* m = new Message("user.login");
-	    m->addParam("account",*sect);
-//	    m->addParam("operation","create");
-	    unsigned int n2 = sect->length();
-	    for (unsigned int j=0; j<n2; j++) {
-		NamedString* param = sect->getParam(j);
-		if (param)
-		    m->addParam(param->name(),*param);
-	    }
-	    Engine::enqueue(m);
+	if (!sect)
+	    continue;
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	    ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	    if (logic->updateAccount(*sect,sect->getBoolValue("enabled",true),false))
+		break;
 	}
     }
 
+    // Load the contacts file and notify logics
     s_contacts = Engine::configFile("client_contacts",true);
     s_contacts.load();
     n = s_contacts.sections();
-    for (i=0; i<n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_contacts.getSection(i);
-	if (sect) {
-	    if (!hasOption("contacts",*sect))
-		addOption("contacts",*sect,false);
-	}
+	if (!sect)
+	    continue;
+	// Make sure we have a name
+	if (!sect->getParam("name"))
+	    sect->addParam("name",*sect);
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
+	    if ((static_cast<ClientLogic*>(o->get()))->updateContact(*sect,false,true))
+		break;
     }
 
+    // Load the providers file and notify logics
     s_providers = Engine::configFile("providers");
     s_providers.load();
     n = s_providers.sections();
-    for (i=0; i<n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_providers.getSection(i);
-	if (sect && sect->getBoolValue("enabled",true)) {
-	    if (!hasOption("acc_providers",*sect))
-		addOption("acc_providers",*sect,false);
-	}
+	if (!sect)
+	    continue;
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
+	    if ((static_cast<ClientLogic*>(o->get()))->updateProviders(*sect,false,true))
+		break;
     }
 
+    // Load the log file and notify logics
     s_history = Engine::configFile("client_history",true);
     s_history.load();
     n = s_history.sections();
-    for (i=0; i<n; i++) {
+    for (unsigned int i = 0; i < n; i++) {
 	NamedList* sect = s_history.getSection(i);
-	if (sect)
-	    updateCallHist(*sect);
+	if (!sect)
+	    continue;
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
+	    if ((static_cast<ClientLogic*>(o->get()))->callLogUpdate(*sect,false,true))
+		break;
     }
 
-    Configuration settings(Engine::configFile("client_settings",true));
-    settings.load();
-    // guess if we at least can support multiple lines
-    bool tmp =
-	getWindow("channels") || hasElement("channels") ||
-	getWindow("lines") || hasElement("lines");
-    // then apply saved preferences
-    tmp = settings.getBoolValue("general","multilines",tmp);
-    // finally restrict from the main config file
-    m_multiLines = Engine::config().getBoolValue("client","multilines",tmp);
-    tmp = false;
-    getCheck("autoanswer",tmp);
-    tmp = settings.getBoolValue("general","autoanswer",tmp);
-    m_autoAnswer = Engine::config().getBoolValue("client","autoanswer",tmp);
-    setCheck("multilines",m_multiLines);
-    setCheck("autoanswer",m_autoAnswer);
-    setText("def_username",settings.getValue("default","username"));
-    setText("def_callerid",settings.getValue("default","callerid"));
-    setText("def_domain",settings.getValue("default","domain"));
-    Window* help = getWindow("help");
-    if (help)
-	action(help,"help_home");
+    // Load the callto history
+    s_calltoHistory = Engine::configFile("client_calltohistory",true);
+    s_calltoHistory.load();
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
+	if ((static_cast<ClientLogic*>(o->get()))->calltoLoaded())
+	    break;
 }
 
-void Client::exitClient()
-{
-    Configuration settings(Engine::configFile("client_settings",true));
-    settings.setValue("general","multilines",m_multiLines);
-    settings.setValue("general","autoanswer",m_autoAnswer);
-    String tmp;
-    if (getText("def_username",tmp))
-	settings.setValue("default","username",tmp);
-    tmp.clear();
-    if (getText("def_callerid",tmp))
-	settings.setValue("default","callerid",tmp);
-    tmp.clear();
-    if (getText("def_domain",tmp))
-	settings.setValue("default","domain",tmp);
-    settings.save();
-}
-
+// function for moving simultaneously two related windows
 void Client::moveRelated(const Window* wnd, int dx, int dy)
 {
     if (!wnd)
@@ -634,8 +932,9 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
     }
 }
 
+// function for opening the pop-up window that has the id "name" with the given parameters
 bool Client::openPopup(const String& name, const NamedList* params, const Window* parent)
-{
+{   
     if (s_client && s_client->needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::openPopup,name,params,parent);
 	return proxy.execute();
@@ -652,6 +951,7 @@ bool Client::openPopup(const String& name, const NamedList* params, const Window
     return true;
 }
 
+// function for opening a message type pop-up window with the given text, parent, context
 bool Client::openMessage(const char* text, const Window* parent, const char* context)
 {
     NamedList params("");
@@ -662,6 +962,7 @@ bool Client::openMessage(const char* text, const Window* parent, const char* con
     return openPopup("message",&params,parent);
 }
 
+// function for opening a confirm type pop-up window with the given text, parent, context
 bool Client::openConfirm(const char* text, const Window* parent, const char* context)
 {
     NamedList params("");
@@ -672,6 +973,7 @@ bool Client::openConfirm(const char* text, const Window* parent, const char* con
     return openPopup("confirm",&params,parent);
 }
 
+// check if the window has a widget named "name"
 bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -689,6 +991,8 @@ bool Client::hasElement(const String& name, Window* wnd, Window* skip)
     return false;
 }
 
+// function for controlling the visibility attribute of the "name" widget from the window given as a parameter
+// if no window is given, we search for it 
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -709,6 +1013,7 @@ bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip
     return ok;
 }
 
+// function for controlling the enabled attribute of the "name" widget from the "wnd" window
 bool Client::setActive(const String& name, bool active, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -729,6 +1034,7 @@ bool Client::setActive(const String& name, bool active, Window* wnd, Window* ski
     return ok;
 }
 
+// function for controlling the focus attribute of the "name" widget from the "wnd" window
 bool Client::setFocus(const String& name, bool select, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -749,26 +1055,28 @@ bool Client::setFocus(const String& name, bool select, Window* wnd, Window* skip
     return ok;
 }
 
-bool Client::setText(const String& name, const String& text, Window* wnd, Window* skip)
+// function for setting the text of the widget identified by "name"
+bool Client::setText(const String& name, const String& text, bool richText,
+    Window* wnd, Window* skip)
 {
     if (needProxy()) {
-	ClientThreadProxy proxy(ClientThreadProxy::setText,name,text,wnd,skip);
+	ClientThreadProxy proxy(ClientThreadProxy::setText,name,text,"",richText,wnd,skip);
 	return proxy.execute();
     }
     if (wnd)
-	return wnd->setText(name,text);
+	return wnd->setText(name,text,richText);
     ++s_changing;
     bool ok = false;
-    ObjList* l = &m_windows;
-    for (; l; l = l->next()) {
-	wnd = static_cast<Window*>(l->get());
-	if (wnd && (wnd != skip))
-	    ok = wnd->setText(name,text) || ok;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setText(name,text,richText) || ok;
     }
     --s_changing;
     return ok;
 }
 
+// function that controls the checked attribute of checkable widgets
 bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -789,6 +1097,7 @@ bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* ski
     return ok;
 }	    
 
+// function for selecting the widget named "name" from the "wnd" window if given, else look for the widget
 bool Client::setSelect(const String& name, const String& item, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -809,6 +1118,7 @@ bool Client::setSelect(const String& name, const String& item, Window* wnd, Wind
     return ok;
 }
 
+// function for handling an action that requires immediate action on the "name" widget
 bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -829,6 +1139,7 @@ bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* ski
     return ok;
 }
 
+// function for checking if the "name" widget has the specified item
 bool Client::hasOption(const String& name, const String& item, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -846,6 +1157,7 @@ bool Client::hasOption(const String& name, const String& item, Window* wnd, Wind
     return false;
 }
 
+// function for adding a new option to the "name" widget from the "wnd" window, if given
 bool Client::addOption(const String& name, const String& item, bool atStart, const String& text, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -866,6 +1178,7 @@ bool Client::addOption(const String& name, const String& item, bool atStart, con
     return ok;
 }
 
+// function for deleting an option from the "name" widget from the "wnd" window, if given
 bool Client::delOption(const String& name, const String& item, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -886,7 +1199,54 @@ bool Client::delOption(const String& name, const String& item, Window* wnd, Wind
     return ok;
 }
 
-bool Client::addTableRow(const String& name, const String& item, const NamedList* data, bool atStart, Window* wnd, Window* skip)
+// Get an element's items
+bool Client::getOptions(const String& name, NamedList* items,
+	Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getOptions,name,items,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->getOptions(name,items);
+    ++s_changing;
+    bool ok = false;
+    ObjList* l = &m_windows;
+    for (; l; l = l->next()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->getOptions(name,items) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Append or insert text lines to a widget
+bool Client::addLines(const String& name, const NamedList* lines, unsigned int max, 
+	bool atStart, Window* wnd, Window* skip)
+{
+    if (!lines)
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::addLines,name,lines,max,atStart,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->addLines(name,lines,max,atStart);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->addLines(name,lines,max,atStart) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// function for adding a new row to a table with the "name" id
+bool Client::addTableRow(const String& name, const String& item, const NamedList* data,
+	bool atStart, Window* wnd, Window* skip)
 {
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::addTableRow,name,item,atStart,data,wnd,skip);
@@ -906,6 +1266,7 @@ bool Client::addTableRow(const String& name, const String& item, const NamedList
     return ok;
 }
 
+// function for deleting a row from the "name" table
 bool Client::delTableRow(const String& name, const String& item, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -926,6 +1287,7 @@ bool Client::delTableRow(const String& name, const String& item, Window* wnd, Wi
     return ok;
 }
 
+// function for changing the value of a row from the "name" table
 bool Client::setTableRow(const String& name, const String& item, const NamedList* data, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -946,6 +1308,7 @@ bool Client::setTableRow(const String& name, const String& item, const NamedList
     return ok;
 }
 
+// function for obtaining the information from a specific row from the "name" table
 bool Client::getTableRow(const String& name, const String& item, NamedList* data, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -963,6 +1326,7 @@ bool Client::getTableRow(const String& name, const String& item, NamedList* data
     return false;
 }
 
+// function for deleting all row from a table given by the name parameter
 bool Client::clearTable(const String& name, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -983,6 +1347,7 @@ bool Client::clearTable(const String& name, Window* wnd, Window* skip)
     return ok;
 }
 
+// function for obtaining the text from the "name" widget
 bool Client::getText(const String& name, String& text, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -1000,6 +1365,7 @@ bool Client::getText(const String& name, String& text, Window* wnd, Window* skip
     return false;
 }
 
+// function for obtaining the status of the checked attribute for the "name" checkable attribute
 bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -1017,6 +1383,7 @@ bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* sk
     return false;
 }
 
+// get the iten currently selected from the "name" widget
 bool Client::getSelect(const String& name, String& item, Window* wnd, Window* skip)
 {
     if (needProxy()) {
@@ -1034,40 +1401,132 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
     return false;
 }
 
-bool Client::addToLog(const String& text, Window* wnd)
+// Set a property
+bool Client::setProperty(const String& name, const String& item, const String& value,
+	Window* wnd, Window* skip)
 {
-    if (text.null())
-	return true;
-    String tmp;
-    if (getText("log_events",tmp,wnd)) {
-	if (tmp && tmp.at(tmp.length()-1) != '\n')
-	    tmp += "\n";
-	tmp += text;
-	while (s_eventLen && (tmp.length() > s_eventLen)) {
-	    int pos = tmp.find('\n');
-	    if (pos < 0)
-		break;
-	    tmp.assign(tmp.c_str()+pos+1);
-	}
-	setText("log_events",tmp,wnd);
-	return true;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setProperty,name,value,item,false,wnd,skip);
+	return proxy.execute();
     }
-    return false;
+    if (wnd)
+	return wnd->setProperty(name,item,value);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setProperty(name,item,value) || ok;
+    }
+    --s_changing;
+    return ok;
 }
 
+// Get a property
+bool Client::getProperty(const String& name, const String& item, String& value,
+    Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::getProperty,name,value,item,false,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->getProperty(name,item,value);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->getProperty(name,item,value) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Create a window with a given name
+bool Client::createWindowSafe(const String& name, const String& alias)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::createWindow,name,alias,0,0);
+	return proxy.execute();
+    }
+    if (!createWindow(name,alias))
+	return false;
+    ObjList* obj = m_windows.find(alias);
+    if (!obj)
+	return false;
+    (static_cast<Window*>(obj->get()))->init();
+    return true;
+}
+
+// Ask to an UI factory to create an object in the UI's thread
+bool Client::createObject(void** dest, const String& type, const char* name,
+	NamedList* params)
+{
+    if (!dest)
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::createObject,dest,type,name,params);
+	return proxy.execute();
+    }
+    *dest = UIFactory::build(type,name,params);
+    return (0 != *dest);
+}
+
+// Hide/close a window with a given name
+bool Client::closeWindow(const String& name, bool hide)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::closeWindow,name,hide);
+	return proxy.execute();
+    }
+    Window* wnd = getWindow(name);
+    if (!wnd)
+	return false;
+    if (hide)
+	wnd->hide();
+    else if (wnd->canClose())
+	TelEngine::destruct(wnd);
+    else
+	return false;
+    return true;
+}
+
+// Set multiple window parameters
+bool Client::setParams(const NamedList* params, Window* wnd, Window* skip)
+{
+    if (!params)
+	return false;
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setParams,String::empty(),
+	    (NamedList*)params,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setParams(*params);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->setParams(*params) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+bool Client::addToLog(const String& text)
+{
+    dbg_client_func(text,-1);
+    return true;
+}
+
+// set the status of the client
 bool Client::setStatus(const String& text, Window* wnd)
 {
     Debug(ClientDriver::self(),DebugInfo,"Status '%s' in window %p",text.c_str(),wnd);
-    bool ok = addToLog(text,wnd);
-    return setText("status",text,wnd) || ok;
-}
-
-bool Client::addToLogLocked(const String& text, Window* wnd)
-{
-    lockOther();
-    bool ok = addToLog(text,wnd);
-    unlockOther();
-    return ok;
+    addToLog(text);
+    return setText(s_statusWidget,text,false,wnd);
 }
 
 bool Client::setStatusLocked(const String& text, Window* wnd)
@@ -1078,599 +1537,150 @@ bool Client::setStatusLocked(const String& text, Window* wnd)
     return ok;
 }
 
-bool Client::action(Window* wnd, const String& name)
+// Change debug output
+bool Client::debugHook(bool active)
 {
-    DDebug(ClientDriver::self(),DebugInfo,"Action '%s' in %p",name.c_str(),wnd);
-    // hack to simplify actions from confirmation boxes
-    if (wnd && wnd->context() && (name == "ok") && (wnd->context() != "ok")) {
-	bool ok = action(wnd,wnd->context());
-	if (ok)
-	    wnd->hide();
-	return ok;
-    }
-    if (name.startsWith("help_show:")) {
-	Window* help = getWindow("help");
-	if (help)
-	    wnd = help;
-    }
-    if (name == "call" || name == "callto") {
-	String target;
-	getText("callto",target,wnd);
-	target.trimBlanks();
-	if (target.null())
-	    return false;
-	String line;
-	getText("line",line,wnd);
-	line.trimBlanks();
-	fixDashes(line);
-	String proto;
-	getText("protocol",proto,wnd);
-	proto.trimBlanks();
-	fixDashes(proto);
-	String account;
-	getText("account",account,wnd);
-	account.trimBlanks();
-	fixDashes(account);
-	if (!callStart(target,line,proto,account))
-	    return false;
-	delOption("callto",target,wnd);
-	addOption("callto",target,true,target,wnd);
-	return true;
-    }
-    else if (name.startsWith("callto:"))
-	return callStart(name.substr(7));
-    else if (name == "accept") {
-	callAccept(m_activeId);
-	return true;
-    }
-    else if (name.startsWith("accept:")) {
-	callAccept(name.substr(7));
-	return true;
-    }
-    else if (name == "reject") {
-	callReject(m_activeId);
-	return true;
-    }
-    else if (name.startsWith("reject:")) {
-	callReject(name.substr(7));
-	return true;
-    }
-    else if (name == "hangup") {
-	callHangup(m_activeId);
-	return true;
-    }
-    else if (name.startsWith("hangup:")) {
-	callHangup(name.substr(7));
-	return true;
-    }
-    else if (name.startsWith("digit:")) {
-	if (m_activeId) {
-	    emitDigit(name.at(6));
-	    return true;
-	}
-	String target;
-	Window* win = (wnd && hasElement("callto",wnd)) ? wnd : 0;
-	if (getText("callto",target)) {
-	    String digits = name.at(6);
-	    if (isE164(digits)) {
-		target += digits;
-		if (setText("callto",target,win)) {
-		    setFocus("callto",false,win);
-		    return true;
-		}
-	    }
-	}
-    }
-    else if (name.startsWith("line:")) {
-	int l = name.substr(5).toInteger(-1);
-	if (l >= 0) {
-	    line(l);
-	    return true;
-	}
-    }
-    else if (name.startsWith("clear:")) {
-	// clear a text field or table
-	String wid = name.substr(6);
-	Window* win = (wnd && hasElement(wid,wnd)) ? wnd : 0;
-	if (wid && (setText(wid,"",win) || clearTable(wid,win))) {
-	    setFocus(wid,false,win);
-	    return true;
-	}
-    }
-    else if (name.startsWith("back:")) {
-	// delete last character (backspace)
-	String wid = name.substr(5);
-	String str;
-	Window* win = (wnd && hasElement(wid,wnd)) ? wnd : 0;
-	if (getText(wid,str,win)) {
-	    if (str.null() || setText(wid,str.substr(0,str.length()-1),win)) {
-		setFocus(wid,false,win);
-		return true;
-	    }
-	}
-    }
-    else if (name.startsWith("command:") && name.at(8)) {
-	// generic engine commands
-	Message* m = new Message("engine.command");
-	m->addParam("line",name.c_str()+8);
-	Engine::enqueue(m);
-	return true;
-    }
-    else if (name.startsWith("debug:")) {
-	// module debugging control commands
-	int sep = name.find(':',6);
-	if (sep > 0) {
-	    Message* m = new Message("engine.debug");
-	    m->addParam("module",name.substr(6,sep-6));
-	    m->addParam("line",name.substr(sep+1));
-	    Engine::enqueue(m);
-	    return true;
-	}
-    }
-    // accounts window actions
-    else if (name == "acc_new") {
-	NamedList params("");
-	params.setParam("select:acc_providers","--");
-	params.setParam("acc_account","");
-	params.setParam("acc_username","");
-	params.setParam("acc_password","");
-	params.setParam("acc_server","");
-	params.setParam("acc_domain","");
-	params.setParam("acc_outbound","");
-	params.setParam("modal",String::boolText(true));
-	if (openPopup("account",&params,wnd))
-	    return true;
-    }
-    else if ((name == "acc_edit") || (name == "accounts")) {
-	String acc;
-	if (getSelect("accounts",acc,wnd)) {
-	    NamedList params("");
-	    params.setParam("context",acc);
-	    params.setParam("select:acc_providers","--");
-	    params.setParam("acc_account",acc);
-	    NamedList* sect = s_accounts.getSection(acc);
-	    if (sect) {
-		params.setParam("select:acc_protocol",sect->getValue("protocol"));
-		for (const char** par = s_accParams; *par; par++) {
-		    String name;
-		    name << "acc_" << *par;
-		    params.setParam(name,sect->getValue(*par));
-		}
-	    }
-	    params.setParam("modal",String::boolText(true));
-	    if (openPopup("account",&params,wnd))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name == "acc_del") {
-	String acc;
-	if (getSelect("accounts",acc,wnd) && acc) {
-	    if (openConfirm("Delete account "+acc,wnd,name + ":" + acc))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name.startsWith("acc_del:")) {
-	String acc = name.substr(8);
-	s_accounts.clearSection(acc);
-	s_accounts.save();
-	Message* m = new Message("user.login");
-	m->addParam("account",acc);
-	m->addParam("operation","delete");
-	Engine::enqueue(m);
-	return true;
-    }
-    else if (name == "acc_accept") {
-	String newAcc;
-	if (getText("acc_account",newAcc,wnd) && newAcc) {
-	    String proto;
-	    if (!(getSelect("acc_protocol",proto,wnd) && proto)) {
-		Debug(ClientDriver::self(),DebugWarn,"No protocol is set for account '%s' in %p",newAcc.c_str(),wnd);
-		return false;
-	    }
-	    // check if the account name has changed, delete old if so
-	    if (wnd && wnd->context() && (wnd->context() != newAcc)) {
-		s_accounts.clearSection(wnd->context());
-		Message* m = new Message("user.login");
-		m->addParam("account",wnd->context());
-		m->addParam("operation","delete");
-		Engine::enqueue(m);
-	    }
-	    if (!hasOption("accounts",newAcc))
-		addOption("accounts",newAcc,false);
-	    Message* m = new Message("user.login");
-	    m->addParam("account",newAcc);
-//	    m->addParam("operation","create");
-	    s_accounts.setValue(newAcc,"protocol",proto);
-	    m->addParam("protocol",proto);
-	    for (const char** par = s_accParams; *par; par++) {
-		String name;
-		name << "acc_" << *par;
-		String val;
-		if (getText(name,val,wnd)) {
-		    if (val.null())
-			s_accounts.clearKey(newAcc,*par);
-		    else {
-			s_accounts.setValue(newAcc,*par,val);
-			m->addParam(*par,val);
-		    }
-		}
-	    }
-	    Engine::enqueue(m);
-	    s_accounts.save();
-	    if (wnd)
-		wnd->hide();
-	    return true;
-	}
-    }
-    // address book window actions
-    else if ((name == "abk_call") || (name == "contacts")) {
-	String cnt;
-	if (getSelect("contacts",cnt,wnd) && cnt) {
-	    NamedList* sect = s_contacts.getSection(cnt);
-	    if (sect) {
-		String* callto = sect->getParam("callto");
-		if (!(callto && *callto))
-		    callto = sect->getParam("number");
-		if (callto && *callto && openConfirm("Call to "+*callto,wnd,"callto:" + *callto))
-		    return true;
-	    }
-	}
-	else
-	    return false;
-    }
-    else if (name == "abk_new") {
-	NamedList params("");
-	params.setParam("abk_contact","");
-	params.setParam("abk_callto","");
-	params.setParam("abk_number","");
-	params.setParam("modal",String::boolText(true));
-	if (openPopup("addrbook",&params,wnd))
-	    return true;
-    }
-    else if (name == "abk_edit") {
-	String cnt;
-	if (getSelect("contacts",cnt,wnd)) {
-	    NamedList params("");
-	    params.setParam("abk_contact",cnt);
-	    params.setParam("abk_callto",s_contacts.getValue(cnt,"callto"));
-	    params.setParam("abk_number",s_contacts.getValue(cnt,"number"));
-	    params.setParam("context",cnt);
-	    params.setParam("modal",String::boolText(true));
-	    if (openPopup("addrbook",&params,wnd))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name == "abk_del") {
-	String cnt;
-	if (getSelect("contacts",cnt,wnd)) {
-	    if (openConfirm("Delete contact "+cnt,wnd,name + ":" + cnt))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name.startsWith("abk_del:")) {
-	String cnt = name.substr(8);
-	delOption("contacts",cnt);
-	s_contacts.clearSection(cnt);
-	s_contacts.save();
-	return true;
-    }
-    else if (name == "abk_accept") {
-	String newAbk;
-	if (getText("abk_contact",newAbk,wnd) && newAbk) {
-	    // check if the contact name has changed, delete old if so
-	    if (wnd && wnd->context() && (wnd->context() != newAbk)) {
-		s_contacts.clearSection(wnd->context());
-		delOption("contacts",wnd->context());
-	    }
-	    if (!hasOption("contacts",newAbk))
-		addOption("contacts",newAbk,false);
-	    String tmp;
-	    if (getText("abk_callto",tmp,wnd))
-		s_contacts.setValue(newAbk,"callto",tmp);
-	    else
-		s_contacts.clearKey(newAbk,"callto");
-	    if (getText("abk_number",tmp,wnd))
-		s_contacts.setValue(newAbk,"number",tmp);
-	    else
-		s_contacts.clearKey(newAbk,"callto");
-	    s_contacts.save();
-	    if (wnd)
-		wnd->hide();
-	    return true;
-	}
-	else
-	    return false;
-    }
-    // outgoing (placed) call log actions
-    else if (name == "log_out_clear") {
-	if (clearTable("log_outgoing")) {
-	    for (unsigned int i = 0; i < s_history.sections(); i++) {
-		NamedList* sect = s_history.getSection(i);
-		if (!sect)
-		    continue;
-		String* dir = sect->getParam("direction");
-		// directions are backwards
-		if (dir && (*dir == "incoming")) {
-		    s_history.clearSection(*sect);
-		    i--;
-		}
-	    }
-	    s_history.save();
-	    return true;
-	}
-    }
-    else if ((name == "log_out_call") || (name == "log_outgoing")) {
-	NamedList log("");
-	if (getTableRow("log_outgoing","",&log,wnd)) {
-	    String* called = log.getParam("called");
-	    if (called && *called && openConfirm("Call to "+*called,wnd,"callto:" + *called))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name == "log_out_contact") {
-	NamedList log("");
-	if (getTableRow("log_outgoing","",&log,wnd)) {
-	    String* called = log.getParam("called");
-	    if (called && *called) {
-		NamedList params("");
-		params.setParam("abk_contact","");
-		params.setParam("abk_callto","");
-		params.setParam("abk_number",*called);
-		params.setParam("modal",String::boolText(true));
-		if (openPopup("addrbook",&params,wnd))
-		    return true;
-	    }
-	}
-	else
-	    return false;
-    }
-    // incoming (received) call log actions
-    else if (name == "log_in_clear") {
-	if (clearTable("log_incoming")) {
-	    for (unsigned int i = 0; i < s_history.sections(); i++) {
-		NamedList* sect = s_history.getSection(i);
-		if (!sect)
-		    continue;
-		String* dir = sect->getParam("direction");
-		// directions are backwards, remember?
-		if (dir && (*dir == "outgoing")) {
-		    s_history.clearSection(*sect);
-		    i--;
-		}
-	    }
-	    s_history.save();
-	    return true;
-	}
-    }
-    else if ((name == "log_in_call") || (name == "log_incoming")) {
-	NamedList log("");
-	if (getTableRow("log_incoming","",&log,wnd)) {
-	    String* caller = log.getParam("caller");
-	    if (caller && *caller && openConfirm("Call to "+*caller,wnd,"callto:" + *caller))
-		return true;
-	}
-	else
-	    return false;
-    }
-    else if (name == "log_in_contact") {
-	NamedList log("");
-	if (getTableRow("log_incoming","",&log,wnd)) {
-	    String* caller = log.getParam("caller");
-	    if (caller && *caller) {
-		NamedList params("");
-		params.setParam("abk_contact","");
-		params.setParam("abk_callto","");
-		params.setParam("abk_number",*caller);
-		params.setParam("modal",String::boolText(true));
-		if (openPopup("addrbook",&params,wnd))
-		    return true;
-	    }
-	}
-	else
-	    return false;
-    }
-    // mixed call log actions
-    else if (name == "log_clear") {
-	if (clearTable("log_global")) {
-	    s_history.clearSection();
-	    s_history.save();
-	    return true;
-	}
-    }
-    // event log actions
-    else if (name == "log_events_clear") {
-	// clear the event log, be it table or text
-	bool ok = clearTable("log_events");
-	ok = setText("log_events","") || ok;
-	return ok;
-    }
-    // help window actions
-    else if (wnd && name.startsWith("help_")) {
-	bool show = false;
-	int page = wnd->context().toInteger();
-	if (name == "help_home")
-	    page = 0;
-	else if (name == "help_prev")
-	    page--;
-	else if (name == "help_next")
-	    page++;
-	else if (name.startsWith("help_page:"))
-	    page = name.substr(10).toInteger(page);
-	else if (name.startsWith("help_show:")) {
-	    page = name.substr(10).toInteger(page);
-	    show = true;
-	}
-	if (page < 0)
-	    page = 0;
-	String helpFile = Engine::config().getValue("client","helpbase");
-	if (helpFile.null())
-	    helpFile << Engine::sharedPath() << Engine::pathSeparator() << "help";
-	if (!helpFile.endsWith(Engine::pathSeparator()))
-	    helpFile << Engine::pathSeparator();
-	helpFile << page << ".yhlp";
-	File f;
-	if (!f.openPath(helpFile)) {
-	    Debug(ClientDriver::self(),DebugMild,"Could not open help file '%s'",helpFile.c_str());
-	    return false;
-	}
-	unsigned int len = f.length();
-	if (len) {
-	    String helpText(' ',len);
-	    int rd = f.readData(const_cast<char*>(helpText.c_str()),len);
-	    if (rd == (int)len) {
-		setText("help_text",helpText,wnd);
-		wnd->context(page);
-		if (show)
-		    wnd->show();
-	    }
-	    else
-		Debug(ClientDriver::self(),DebugWarn,"Read only %d out of %u bytes in file %s",
-		    rd,len,helpFile.c_str());
-	    return true;
-	}
-    }
+    if (ClientDriver::self())
+	ClientDriver::self()->debugEnabled(!active);
+    Debugger::setOutput(active ? dbg_client_func : 0);
+    return true;
+}
 
-    // unknown/unhandled - generate a message for them
-    Message* m = new Message("ui.event");
-    if (wnd)
-	m->addParam("window",wnd->id());
-    m->addParam("event","action");
-    m->addParam("name",name);
-    Engine::enqueue(m);
+// Process received messages
+bool Client::received(Message& msg, int id)
+{
+    bool processed = false;
+    bool stop = false;
+    for (ObjList* o = s_logics.skipNull(); !stop && o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) processing %s [%p]",
+	    logic->toString().c_str(),msg.c_str(),logic);
+	switch (id) {
+	    case CallCdr:
+		processed = logic->handleCallCdr(msg,stop) || processed;
+		break;
+	    case UiAction:
+		processed = logic->handleUiAction(msg,stop) || processed;
+		break;
+	    case UserLogin:
+		processed = logic->handleUserLogin(msg,stop) || processed;
+		break;
+	    case UserNotify:
+		processed = logic->handleUserNotify(msg,stop) || processed;
+		break;
+	    case ResourceNotify:
+		processed = logic->handleResourceNotify(msg,stop) || processed;
+		break;
+	    case ResourceSubscribe:
+		processed = logic->handleResourceSubscribe(msg,stop) || processed;
+		break;
+	    case XmppIq:
+		processed = logic->handleXmppIq(msg,stop) || processed;
+		break;
+	    case ClientChanUpdate:
+		processed = logic->handleClientChanUpdate(msg,stop) || processed;
+		break;
+	    default:
+		processed = logic->defaultMsgHandler(msg,id,stop) || processed;
+	}
+    }
+    return processed;
+}
+
+// Handle actions from user interface
+bool Client::action(Window* wnd, const String& name, NamedList* params)
+{
+    static String sect = "action";
+
+    XDebug(ClientDriver::self(),DebugAll,"Action '%s' in window (%p,%s)",
+	name.c_str(),wnd,wnd?wnd->id().c_str():"");
+
+    String substitute = name;
+    String handle;
+    bool only = false, prefer = false, ignore = false, bailout = false;
+    bool ok = false;
+    if (hasOverride(s_actions.getSection(sect),substitute,handle,only,prefer,ignore,bailout) &&
+	(only || prefer)) {
+	ok = callLogicAction(findLogic(handle),wnd,substitute,params);
+	bailout = only || ok;
+    }
+    if (bailout)
+	return ok;
+    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (ignore && handle == logic->toString())
+	    continue;
+	if (callLogicAction(logic,wnd,substitute,params))
+	    return true;
+    }
+    // Not processed: enqueue event
+    Engine::enqueue(eventMessage("action",wnd,substitute,params));
     return false;
 }
 
+// Deal with toggle widget events
 bool Client::toggle(Window* wnd, const String& name, bool active)
 {
-    DDebug(ClientDriver::self(),DebugInfo,"Toggle '%s' %s in %p",
-	name.c_str(),String::boolText(active),wnd);
-    // handle the window visibility buttons, these will sync toggles themselves
-    if (setVisible(name,active))
-	return true;
-    else if (name.startsWith("display:")) {
-	if (setShow(name.substr(8),active,wnd))
-	    return true;
-    }
-    else if (name.startsWith("debug:")) {
-	// module debugging control commands
-	int sep = name.find(':',6);
-	if (sep > 0) {
-	    String line = name.substr(sep+1);
-	    int sep2 = line.find(':');
-	    if (sep2 > 0)
-		line = active ? line.substr(0,sep2) : line.substr(sep2+1);
-	    else if (!active)
-		return true;
-	    if (line) {
-		Message* m = new Message("engine.debug");
-		m->addParam("module",name.substr(6,sep-6));
-		m->addParam("line",line);
-		Engine::enqueue(m);
-	    }
-	    return true;
-	}
-    }
-    // keep the toggle in sync in all windows
-    setCheck(name,active,0,wnd);
-    if (name == "autoanswer") {
-	m_autoAnswer = active;
-	return true;
-    }
-    if (name == "multilines") {
-	m_multiLines = active;
-	return true;
-    }
-    if (name == "log_events_debug") {
-	Debug(ClientDriver::self(),DebugNote,"Debug to window: %s",String::boolText(active));
-	setShow("log_events_control",active,wnd);
-	if (active) {
-	    ClientDriver::self()->debugEnabled(false);
-	    Debugger::setOutput(dbg_client_func);
-	}
-	else {
-	    Debugger::setOutput(0);
-	    ClientDriver::self()->debugEnabled(true);
-	}
-	return true;
-    }
+    static String sect = "toggle";
 
-    // unknown/unhandled - generate a message for them
-    Message* m = new Message("ui.event");
-    if (wnd)
-	m->addParam("window",wnd->id());
-    m->addParam("event","toggle");
-    m->addParam("name",name);
+    XDebug(ClientDriver::self(),DebugAll,
+	"Toggle name='%s' active='%s' in window (%p,%s)",
+	name.c_str(),String::boolText(active),wnd,wnd?wnd->id().c_str():"");
+
+    String substitute = name;
+    String handle;
+    bool only = false, prefer = false, ignore = false, bailout = false;
+    bool ok = false;
+    if (hasOverride(s_actions.getSection(sect),substitute,handle,only,prefer,ignore,bailout) &&
+	(only || prefer)) {
+	ok = callLogicToggle(findLogic(handle),wnd,substitute,active);
+	bailout = only || ok;
+    }
+    if (bailout)
+	return ok;
+    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (ignore && handle == logic->toString())
+	    continue;
+	if (callLogicToggle(logic,wnd,substitute,active))
+	    return true;
+    }
+    // Not processed: enqueue event
+    Message* m = eventMessage("toggle",wnd,substitute);
     m->addParam("active",String::boolText(active));
     Engine::enqueue(m);
     return false;
 }
 
+// Handle selection changes (list selection changes, focus changes ...) 
 bool Client::select(Window* wnd, const String& name, const String& item, const String& text)
 {
-    DDebug(ClientDriver::self(),DebugInfo,"Select '%s' '%s' in %p",
-	name.c_str(),item.c_str(),wnd);
-    // keep the item in sync in all windows
-    setSelect(name,item,0,wnd);
-    if (name == "channels") {
-	updateFrom(item);
-	return true;
-    }
-    else if (name == "account") {
-	if (checkDashes(item))
-	    return true;
-	// selecting an account unselects protocol
-	if (setSelect("protocol","") || setSelect("protocol","--"))
-	    return true;
-    }
-    else if (name == "protocol") {
-	if (checkDashes(item))
-	    return true;
-	// selecting a protocol unselects account
-	if (setSelect("account","") || setSelect("account","--"))
-	    return true;
-    }
-    else if (name == "acc_providers") {
-	// apply provider template
-	if (checkDashes(item))
-	    return true;
-	// reset selection after we apply it
-	if (!setSelect(name,""))
-	    setSelect(name,"--");
-	NamedList* sect = s_providers.getSection(item);
-	if (!sect)
-	    return false;
-	setSelect("acc_protocol",sect->getValue("protocol"));
-	String acc = item;
-	// make sure we offer an unique account name
-	for (unsigned int i = 1; s_accounts.getSection(acc); i++) {
-	    acc = item;
-	    acc << "_" << i;
-	}
-	setText("acc_account",acc,wnd);
-	for (const char** par = s_provParams; *par; par++) {
-	    String name;
-	    name << "acc_" << *par;
-	    setText(name,sect->getValue(*par),wnd);
-	}
-	return true;
-    }
+    static String sect = "select";
 
-    // unknown/unhandled - generate a message for them
-    Message* m = new Message("ui.event");
-    if (wnd)
-	m->addParam("window",wnd->id());
-    m->addParam("event","select");
-    m->addParam("name",name);
+    XDebug(ClientDriver::self(),DebugAll,
+	"Select name='%s' item='%s' in window (%p,%s)",
+	name.c_str(),item.c_str(),wnd,wnd?wnd->id().c_str():"");
+
+    String substitute = name;
+    String handle;
+    bool only = false, prefer = false, ignore = false, bailout = false;
+    bool ok = false;
+    if (hasOverride(s_actions.getSection(sect),substitute,handle,only,prefer,ignore,bailout) &&
+	(only || prefer)) {
+	ok = callLogicSelect(findLogic(handle),wnd,substitute,item,text);
+	bailout = only || ok;
+    }
+    if (bailout)
+	return ok;
+    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (ignore && handle == logic->toString())
+	    continue;
+	if (callLogicSelect(logic,wnd,substitute,item,text))
+	    return true;
+    }
+    // Not processed: enqueue event
+    Message* m = eventMessage("select",wnd,substitute);
     m->addParam("item",item);
     if (text)
 	m->addParam("text",text);
@@ -1678,305 +1688,31 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
     return false;
 }
 
+// function for setting the current line
 void Client::line(int newLine)
 {
     Debug(ClientDriver::self(),DebugInfo,"line(%d)",newLine);
     m_line = newLine;
 }
 
-void Client::callAccept(const char* callId)
-{
-    Debug(ClientDriver::self(),DebugInfo,"callAccept('%s')",callId);
-    if (!driverLockLoop())
-	return;
-    ClientChannel* cc = static_cast<ClientChannel*>(ClientDriver::self()->find(callId));
-    if (cc) {
-	cc->ref();
-	cc->callAnswer();
-	setChannelInternal(cc);
-	cc->deref();
-    }
-    driverUnlock();
-}
-
-void Client::callReject(const char* callId)
-{
-    Debug(ClientDriver::self(),DebugInfo,"callReject('%s')",callId);
-    if (!ClientDriver::self())
-	return;
-    Message* m = new Message("call.drop");
-    m->addParam("id",callId ? callId : ClientDriver::self()->name().c_str());
-    m->addParam("error","rejected");
-    m->addParam("reason","Refused");
-    Engine::enqueue(m);
-}
-
-void Client::callHangup(const char* callId)
-{
-    Debug(ClientDriver::self(),DebugInfo,"callHangup('%s')",callId);
-    if (!ClientDriver::self())
-	return;
-    Message* m = new Message("call.drop");
-    m->addParam("id",callId ? callId : ClientDriver::self()->name().c_str());
-    m->addParam("reason","User hangup");
-    Engine::enqueue(m);
-}
-
-bool Client::callStart(const String& target, const String& line,
-    const String& proto, const String& account)
-{
-    Debug(ClientDriver::self(),DebugInfo,"callStart('%s','%s','%s','%s')",
-	target.c_str(),line.c_str(),proto.c_str(),account.c_str());
-    if (target.null())
-	return false;
-    if (!driverLockLoop())
-	return false;
-    ClientChannel* cc = new ClientChannel(target);
-    selectChannel(cc);
-    Message* m = cc->message("call.route");
-    driverUnlock();
-    Regexp r("^[a-z0-9]\\+/");
-    bool hasProto = r.matches(target.safe());
-    if (hasProto)
-	m->setParam("callto",target);
-    else if (proto)
-	m->setParam("callto",proto + "/" + target);
-    else
-	m->setParam("called",target);
-    if (line)
-	m->setParam("line",line);
-    if (proto)
-	m->setParam("protocol",proto);
-    if (account)
-	m->setParam("account",account);
-    String tmp;
-    if (getText("def_username",tmp) && tmp)
-	m->setParam("caller",tmp);
-    tmp.clear();
-    if (getText("def_callerid",tmp) && tmp)
-	m->setParam("callername",tmp);
-    tmp.clear();
-    if (getText("def_domain",tmp) && tmp)
-	m->setParam("domain",tmp);
-    return cc->startRouter(m);
-}
-
-bool Client::emitDigit(char digit)
-{
-    Debug(ClientDriver::self(),DebugInfo,"emitDigit('%c')",digit);
-    if (!ClientDriver::self())
-	return false;
-    Channel* chan = ClientDriver::self()->find(m_activeId);
-    if (!chan)
-	return false;
-    char buf[2];
-    buf[0] = digit;
-    buf[1] = '\0';
-    Message* m = chan->message("chan.dtmf");
-    m->addParam("text",buf);
-    Engine::enqueue(m);
-    return true;
-}
-
-bool Client::callIncoming(const String& caller, const String& dest, Message* msg)
-{
-    Debug(ClientDriver::self(),DebugAll,"callIncoming [%p]",this);
-    if (m_activeId && !m_multiLines) {
-	if (msg) {
-	    msg->setParam("error","busy");
-	    msg->setParam("reason","User busy");
-	}
-	return false;
-    }
-    if (msg && msg->userData()) {
-	CallEndpoint* ch = static_cast<CallEndpoint*>(msg->userData());
-	lockOther();
-	ClientChannel* cc = new ClientChannel(caller,ch->id(),msg);
-	selectChannel(cc);
-	unlockOther();
-	if (cc->connect(ch,msg->getValue("reason"))) {
-	    m_activeId = cc->id();
-	    msg->setParam("peerid",m_activeId);
-	    msg->setParam("targetid",m_activeId);
-	    Engine::enqueue(cc->message("call.ringing",false,true));
-	    lockOther();
-	    // notify the UI about the call
-	    String tmp("Call from:");
-	    tmp << " " << caller;
-	    setStatus(tmp);
-	    setText("incoming",tmp);
-	    String* info = msg->getParam("caller_info_uri");
-	    if (info && (info->startsWith("http://",false) || info->startsWith("https://",false)))
-		setText("caller_info",*info);
-	    info = msg->getParam("caller_icon_uri");
-	    if (info && (info->startsWith("http://",false) || info->startsWith("https://",false)))
-		setText("caller_icon",*info);
-	    if (m_autoAnswer) {
-		cc->callAnswer();
-		setChannelInternal(cc);
-	    }
-	    else {
-		if (!(m_multiLines && setVisible("channels")))
-		    setVisible("incoming");
-	    }
-	    unlockOther();
-	    cc->deref();
-	    return true;
-	}
-    }
-    return false;
-}
-
-bool Client::callRouting(const String& caller, const String& called, Message* msg)
-{
-    // route here all calls by default
-    return true;
-}
-
-void Client::updateCDR(const Message& msg)
-{
-    if (!updateCallHist(msg))
-	return;
-    String id = msg.getParam("billid");
-    if (id.null())
-	id = msg.getParam("id");
-    // it worked before - but paranoia can be fun
-    if (id.null())
-	return;
-    while (s_history.sections() >= 20) {
-	NamedList* sect = s_history.getSection(0);
-	if (!sect)
-	    break;
-	s_history.clearSection(*sect);
-    }
-    unsigned int n = msg.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* param = msg.getParam(i);
-	if (!param)
-	    continue;
-	s_history.setValue(id,param->name(),param->c_str());
-    }
-    s_history.save();
-}
-
-bool Client::updateCallHist(const NamedList& params)
-{
-    String* dir = params.getParam("direction");
-    if (!dir)
-	return false;
-    String* id = params.getParam("billid");
-    if (!id || id->null())
-	id = params.getParam("id");
-    if (!id || id->null())
-	return false;
-    String table;
-    // remember, directions are opposite of what the user expects
-    if (*dir == "outgoing")
-	table = "log_incoming";
-    else if (*dir == "incoming")
-	table = "log_outgoing";
-    else
-	return false;
-    bool ok = addTableRow(table,*id,&params);
-    ok = addTableRow("log_global",*id,&params) || ok;
-    return ok;
-}
-
-void Client::clearActive(const String& id)
-{
-    if (id == m_activeId)
-	updateFrom(0);
-}
-
-void Client::addChannel(ClientChannel* chan)
-{
-    addOption("channels",chan->id(),false,chan->description());
-}
-
-void Client::setChannel(ClientChannel* chan)
-{
-    Debug(ClientDriver::self(),DebugAll,"setChannel %p",chan);
-    if (!chan)
-	return;
-    lockOther();
-    setChannelInternal(chan);
-    unlockOther();
-}
-
-void Client::setChannelInternal(ClientChannel* chan)
-{
-    setChannelDisplay(chan);
-    bool upd = !m_multiLines;
-    if (!upd) {
-	String tmp;
-	upd = getSelect("channels",tmp) && (tmp == chan->id());
-    }
-    if (upd)
-	updateFrom(chan);
-}
-
-void Client::setChannelDisplay(ClientChannel* chan)
-{
-    String tmp(chan->description());
-    if (!setUrgent(chan->id(),chan->flashing()) && chan->flashing())
-	tmp << " <<<";
-    setText(chan->id(),tmp);
-}
-
-void Client::delChannel(ClientChannel* chan)
-{
-    lockOther();
-    clearActive(chan->id());
-    delOption("channels",chan->id());
-    unlockOther();
-}
-
-void Client::selectChannel(ClientChannel* chan, bool force)
-{
-    if (!chan)
-	return;
-    if (force || m_activeId.null()) {
-	setSelect("channels",chan->id());
-	updateFrom(chan);
-    }
-}
-
-void Client::updateFrom(const String& id)
-{
-    ClientChannel* chan = 0;
-    if (ClientDriver::self())
-	chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
-    if (chan)
-	chan->noticed();
-    updateFrom(chan);
-}
-
-void Client::updateFrom(const ClientChannel* chan)
-{
-    m_activeId = chan ? chan->id().c_str() : "";
-    enableAction(chan,"accept");
-    enableAction(chan,"reject");
-    enableAction(chan,"hangup");
-    enableAction(chan,"voicemail");
-    enableAction(chan,"transfer");
-    enableAction(chan,"conference");
-    setActive("call",m_multiLines || m_activeId.null());
-}
-
-void Client::enableAction(const ClientChannel* chan, const String& action)
-{
-    setActive(action,chan && chan->enableAction(action));
-}
-
+// actions taken when the client is idle, has nothing to do
 void Client::idleActions()
 {
     s_debugMutex.lock();
-    String* log = s_debugLog;
+    NamedList* log = s_debugLog;
     s_debugLog = 0;
     s_debugMutex.unlock();
+    // add to the debug log new information  
     if (log) {
-	addToLog(*log);
-	log->destruct();
+	addLines(s_debugWidget,log,s_eventLen);
+	TelEngine::destruct(log);
+    }
+    // Tick the logics
+    if (s_idleLogicsTick) {
+	s_idleLogicsTick = false;
+	Time time;
+	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
+	    (static_cast<ClientLogic*>(o->get()))->idleTimerTick(time);
     }
     // arbitrary limit to let other threads run too
     for (int i = 0; i < 4; i++) {
@@ -1988,6 +1724,30 @@ void Client::idleActions()
 	    return;
 	tmp->process();
     }
+}
+
+// Request to a logic to set a client's parameter. Save the settings file
+// and/or update interface
+bool Client::setClientParam(const String& param, const String& value,
+	bool save, bool update)
+{
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (logic->setClientParam(param,value,save,update))
+	    return true;
+    }
+    return false;
+}
+
+// Called when the user pressed the backspace key
+bool Client::backspace(const String& name, Window* wnd)
+{
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (logic->backspace(name,wnd))
+	    return true;
+    }
+    return false;
 }
 
 bool Client::driverLock(long maxwait)
@@ -2018,389 +1778,677 @@ void Client::driverUnlock()
 }
 
 
-bool UICdrHandler::received(Message &msg)
+// Create and install a message relay owned by this client.
+void Client::installRelay(const char* name, int id, int prio)
 {
-    if (!Client::self())
-	return false;
-
-    String* op = msg.getParam("operation");
-    if (!(op && (*op == "finalize")))
-	return false;
-    op = msg.getParam("chan");
-    if (!(op && op->startsWith("client/",false)))
-	return false;
-
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::msleep(10);
-
-    Client::self()->updateCDR(msg);
-    return false;
+    if (!(name && *name))
+	return;
+    Debug(ClientDriver::self(),DebugAll,"installRelay(%s,%d,%d)",name,id,prio);
+    MessageRelay* relay = new MessageRelay(name,this,id,prio);
+    if (Engine::install(relay))
+	m_relays.append(relay);
+    else
+	TelEngine::destruct(relay);
 }
 
-
-bool UIHandler::received(Message &msg)
+// Build an incoming channel
+bool Client::buildIncomingChannel(Message& msg, const String& dest)
 {
-    if (!Client::self())
+    Debug(ClientDriver::self(),DebugAll,"Client::buildIncomingChannel() [%p]",this);
+    if (!(msg.userData() && ClientDriver::self()))
 	return false;
-    String action(msg.getValue("action"));
-    if (action.null())
+    CallEndpoint* peer = static_cast<CallEndpoint*>(msg.userData());
+    if (!peer)
 	return false;
-
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::msleep(10);
-
-    Window* wnd = Client::getWindow(msg.getValue("window"));
-    if (action == "set_status")
-	return Client::self()->setStatusLocked(msg.getValue("status"),wnd);
-    else if (action == "add_log")
-	return Client::self()->addToLogLocked(msg.getValue("text"),wnd);
-    else if (action == "show_message") {
-	Client::self()->lockOther();
-	bool ok = Client::openMessage(msg.getValue("text"),Client::getWindow(msg.getValue("parent")),msg.getValue("context"));
-	Client::self()->unlockOther();
-	return ok;
+    ClientDriver::self()->lock();
+    ClientChannel* chan = new ClientChannel(msg,peer->id());
+    ClientDriver::self()->unlock();
+    bool ok = chan->connect(peer,msg.getValue("reason"));
+    // Activate or answer
+    if (ok) {
+	msg.setParam("targetid",chan->id());
+	if (!getBoolOpt(OptAutoAnswer)) {
+	    if (getBoolOpt(OptActivateLastInCall) && !ClientDriver::self()->activeId())
+		ClientDriver::self()->setActive(chan->id());
+	}
+	else
+	    chan->callAnswer();
     }
-    else if (action == "show_confirm") {
-	Client::self()->lockOther();
-	bool ok = Client::openConfirm(msg.getValue("text"),Client::getWindow(msg.getValue("parent")),msg.getValue("context"));
-	Client::self()->unlockOther();
-	return ok;
-    }
-    String name(msg.getValue("name"));
-    if (name.null())
-	return false;
-    DDebug(ClientDriver::self(),DebugAll,"UI action '%s' on '%s' in %p",
-	action.c_str(),name.c_str(),wnd);
-    bool ok = false;
-    Client::self()->lockOther();
-    if (action == "set_text")
-	ok = Client::self()->setText(name,msg.getValue("text"),wnd);
-    else if (action == "set_toggle")
-	ok = Client::self()->setCheck(name,msg.getBoolValue("active"),wnd);
-    else if (action == "set_select")
-	ok = Client::self()->setSelect(name,msg.getValue("item"),wnd);
-    else if (action == "set_active")
-	ok = Client::self()->setActive(name,msg.getBoolValue("active"),wnd);
-    else if (action == "set_focus")
-	ok = Client::self()->setFocus(name,msg.getBoolValue("select"),wnd);
-    else if (action == "set_visible")
-	ok = Client::self()->setShow(name,msg.getBoolValue("visible"),wnd);
-    else if (action == "has_option")
-	ok = Client::self()->hasOption(name,msg.getValue("item"),wnd);
-    else if (action == "add_option")
-	ok = Client::self()->addOption(name,msg.getValue("item"),msg.getBoolValue("insert"),msg.getValue("text"),wnd);
-    else if (action == "del_option")
-	ok = Client::self()->delOption(name,msg.getValue("item"),wnd);
-    else if (action == "get_text") {
-	String text;
-	ok = Client::self()->getText(name,text,wnd);
-	if (ok)
-	    msg.retValue() = text;
-    }
-    else if (action == "get_toggle") {
-	bool check;
-	ok = Client::self()->getCheck(name,check,wnd);
-	if (ok)
-	    msg.retValue() = check;
-    }
-    else if (action == "get_select") {
-	String item;
-	ok = Client::self()->getSelect(name,item,wnd);
-	if (ok)
-	    msg.retValue() = item;
-    }
-    else if (action == "window_show")
-	ok = Client::setVisible(name,true);
-    else if (action == "window_hide")
-	ok = Client::setVisible(name,false);
-    else if (action == "window_popup")
-	ok = Client::openPopup(name,&msg,Client::getWindow(msg.getValue("parent")));
-    Client::self()->unlockOther();
+    TelEngine::destruct(chan);
     return ok;
 }
 
-
-bool UIUserHandler::received(Message &msg)
+// Build an outgoing channel
+bool Client::buildOutgoingChannel(NamedList& params)
 {
-    if (!Client::self())
+    Debug(ClientDriver::self(),DebugAll,"Client::buildOutgoingChannel() [%p]",this);
+    // get the target of the call
+    NamedString* target = params.getParam("target");
+    if (!target || target->null())
 	return false;
-    String account = msg.getValue("account");
-    if (account.null())
+    // Create the channel. Release driver's mutex as soon as possible
+    if (!driverLockLoop())
 	return false;
+    ClientChannel* chan = new ClientChannel(target,params);
+    if (!chan->ref())
+	TelEngine::destruct(chan);
+    driverUnlock();
+    if (!chan)
+	return false;
+    params.addParam("channelid",chan->id());
+    if (getBoolOpt(OptActivateLastOutCall) || !ClientDriver::self()->activeId())
+	ClientDriver::self()->setActive(chan->id());
+    TelEngine::destruct(chan);
+    return true;
+}
 
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::msleep(10);
+// Call execute handler called by the driver
+bool Client::callIncoming(Message& msg, const String& dest)
+{
+    static String sect = "miscellanous";
 
-    Client::self()->lockOther();
-    String op = msg.getParam("operation");
-    if ((op == "create") || (op == "login") || op.null()) {
-	if (!Client::self()->hasOption("account",account))
-	    Client::self()->addOption("account",account,false);
+    XDebug(ClientDriver::self(),DebugAll,"Client::callIncoming [%p]",this);
+    // if we are in single line mode and we have already a channel, reject the call
+    if (ClientDriver::self() && ClientDriver::self()->isBusy() && !getBoolOpt(OptMultiLines)) {
+	msg.setParam("error","busy");
+	msg.setParam("reason",s_userBusy);
+	return false;
     }
-    else if (op == "delete") {
-	Client::self()->delOption("account",account);
-	Client::self()->delOption("accounts",account);
+    // Check for a preferred or only logic
+    String name = "callincoming";
+    String handle;
+    bool only = false, prefer = false, ignore = false, bailout = false;
+    bool ok = false;
+    if (hasOverride(s_actions.getSection(sect),name,handle,only,prefer,ignore,bailout) &&
+	(only || prefer)) {
+	ClientLogic* logic = findLogic(handle);
+	if (logic)
+	    ok = logic->callIncoming(msg,dest);
+	bailout = only || ok;
     }
-    Client::self()->unlockOther();
+    if (bailout)
+	return ok;
+    // Ask the logics to create a channel
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (ignore && handle == logic->toString())
+	    continue;
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) callIncoming [%p]",
+	    logic->toString().c_str(),logic);
+	if (logic->callIncoming(msg,dest))
+	    return true;
+    }
     return false;
 }
 
-
-bool UIUserNotifyHandler::received(Message &msg)
+// Accept an incoming call
+void Client::callAnswer(const String& id)
 {
-    if (!Client::self())
-	return false;
-    String account = msg.getValue("account");
-    if (account.null())
-	return false;
-    bool reg = msg.getBoolValue("registered");
-    const char* proto = msg.getValue("protocol");
-    const char* reason = msg.getValue("reason");
-    String txt = reg ? "Registered" : "Unregistered";
-    if (proto)
-	txt << " " << proto;
-    txt << " account " << account;
-    if (reason)
-	txt << " reason: " << reason;
+    Debug(ClientDriver::self(),DebugInfo,"callAccept('%s')",id.c_str());
+    if (!driverLockLoop())
+	return;
+    ClientChannel* chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
+    if (chan) {
+	chan->callAnswer();
+	ClientDriver::self()->setActive(chan->id());
+    }
+    driverUnlock();
+}
 
-    // block until client finishes initialization
-    while (!Client::self()->initialized())
-	Thread::msleep(10);
+// Terminate a call
+void Client::callTerminate(const String& id, const char* reason, const char* error)
+{
+    Debug(ClientDriver::self(),DebugInfo,"callTerminate(%s)",id.c_str());
+    // Check if the channel exists
+    Lock lock(ClientDriver::self());
+    if (!ClientDriver::self())
+	return;
+    Channel* chan = ClientDriver::self()->find(id);
+    if (!chan)
+	return;
+    bool hangup = chan->isAnswered();
+    lock.drop();
+    // Drop the call
+    Message* m = new Message("call.drop");
+    m->addParam("id",id);
+    if (hangup)
+	m->addParam("reason",reason ? reason : s_hangupReason.c_str());
+    else {
+	m->addParam("error",error ? error : "rejected");
+	m->addParam("reason",reason ? reason : s_rejectReason.c_str());
+    }
+    Engine::enqueue(m);
+}
 
-    Client::self()->addToLogLocked(txt);
+// Get the active channel if any
+ClientChannel* Client::getActiveChannel()
+{
+    return ClientDriver::self() ? ClientDriver::self()->findActiveChan() : 0;
+}
+
+// Start/stop ringer
+bool Client::ringer(bool in, bool on)
+{
+    String* what = in ? &s_ringInName : &s_ringOutName;
+    bool ok = in ? getBoolOpt(OptRingIn) : getBoolOpt(OptRingOut);
+    Lock lock(ClientSound::s_soundsMutex);
+    DDebug(ClientDriver::self(),DebugAll,"Ringer in=%s on=%s",
+	String::boolText(in),String::boolText(on));
+    if (!on)
+	ClientSound::stop(*what);
+    else if (*what)
+	return ok && ClientSound::start(*what,-1,false);
+    else
+	return false;
+    return true;
+}
+
+// Send DTMFs on selected channel
+bool Client::emitDigits(const char* digits, const String& id)
+{
+    Debug(ClientDriver::self(),DebugInfo,"emitDigit(%s,%s)",digits,id.c_str());
+    if (!driverLockLoop())
+	return false;
+    ClientChannel* chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
+    bool ok = (0 != chan);
+    if (ok) {
+	Message* m = chan->message("chan.dtmf");
+	m->addParam("text",digits);
+	Engine::enqueue(m);
+    }
+    driverUnlock();
+    return ok;
+}
+
+// Set a boolean option of this client
+bool Client::setBoolOpt(ClientToggle toggle, bool value, bool updateUi)
+{
+    if (toggle >= OptCount)
+	return false;
+
+    if (m_toggles[toggle] == value && !updateUi)
+	return false;
+
+    m_toggles[toggle] = value;
+    if (updateUi)
+	setCheck(s_toggles[toggle],value);
+
+    // Special options
+    switch (toggle) {
+	case OptRingIn:
+	    if (!value)
+		ringer(true,false);
+	    break;
+	case OptRingOut:
+	    if (!value)
+		ringer(false,false);
+	    break;
+	default: ;
+    }
+    return true;
+}
+
+// Add a new module for handling actions
+bool Client::addLogic(ClientLogic* logic)
+{
+    if (!logic || s_logics.find(logic))
+	return false;
+
+    bool dup = (0 != s_logics.find(logic->toString()));
+    Debug(ClientDriver::self(),dup?DebugGoOn:DebugInfo,
+	"Adding logic%s %p name=%s prio=%d",
+	dup?" [DUPLICATE]":"",logic,logic->toString().c_str(),logic->priority());
+
+    for (ObjList* l = s_logics.skipNull(); l; l = l->skipNext()) {
+	ClientLogic* obj = static_cast<ClientLogic*>(l->get());
+	if (logic->priority() <= obj->priority()) {
+	    l->insert(logic)->setDelete(false);
+	    return true;
+	}
+    }
+    s_logics.append(logic)->setDelete(false);
+    return true;
+}
+
+// Remove a logic from the list
+void Client::removeLogic(ClientLogic* logic)
+{
+    if (!(logic && s_logics.find(logic)))
+	return;
+    Debug(ClientDriver::self(),DebugInfo,"Removing logic %p name=%s",
+	logic,logic->toString().c_str());
+    s_logics.remove(logic,false);
+}
+
+// Convenience method to retrieve a logic
+inline ClientLogic* Client::findLogic(const String& name)
+{
+    ObjList* o = s_logics.find(name);
+    return o ? static_cast<ClientLogic*>(o->get()) : 0;
+}
+
+// Save a configuration file. Call openMessage() on failure
+bool Client::save(Configuration& cfg, Window* parent, bool showErr)
+{
+    DDebug(ClientDriver::self(),DebugAll,"Saving '%s'",cfg.c_str());
+    if (cfg.save())
+	return true;
+    String s = "Failed to save configuration file " + cfg;
+    if (!(showErr && self() && self()->openMessage(s,parent)))
+	Debug(ClientDriver::self(),DebugWarn,"%s",s.c_str());
     return false;
 }
 
-
-// IMPORTANT: having a target means "from inside Yate to the user"
-//  An user initiated call must be incoming (no target)
-ClientChannel::ClientChannel(const String& party, const char* target, const Message* msg)
-    : Channel(ClientDriver::self(),0,(target != 0)),
-      m_party(party), m_line(0), m_flashing(false),
-      m_canAnswer(false), m_canTransfer(false), m_canConference(false)
+// Check if a string names a client's boolean option
+Client::ClientToggle Client::getBoolOpt(const String& name)
 {
-    m_time = Time::now();
-    m_targetid = target;
-    if (target) {
-	m_flashing = true;
-	m_canAnswer = true;
+    for (int i = 0; i < OptCount; i++)
+	if (s_toggles[i] == name)
+	    return (ClientToggle)i;
+    return OptCount;
+}
+
+// Build an 'ui.event' message
+Message* Client::eventMessage(const String& event, Window* wnd, const char* name,
+	NamedList* params)
+{
+    Message* m = new Message("ui.event");
+    if (wnd)
+	m->addParam("window",wnd->id());
+    m->addParam("event",event);
+    if (name && *name)
+	m->addParam("name",name);
+    if (params) {
+	unsigned int n = params->count();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* p = params->getParam(i);
+	    if (p)
+		m->addParam(p->name(),*p);
+	}
     }
-    update(false);
-    if (Client::self())
-	Client::self()->addChannel(this);
+    return m;
+}
+
+// Incoming (from engine) constructor
+ClientChannel::ClientChannel(const Message& msg, const String& peerid)
+    : Channel(ClientDriver::self(),0,true),
+    m_party(msg.getValue("caller")), m_noticed(false),
+    m_line(0), m_active(false), m_silence(false), m_conference(false),
+    m_clientData(0)
+{
+    Debug(this,DebugCall,"Created incoming from=%s peer=%s [%p]",
+	m_party.c_str(),peerid.c_str(),this);
+    m_targetid = peerid;
+    m_peerId = peerid;
     Message* s = message("chan.startup");
-    if (msg) {
-	s->setParam("caller",msg->getValue("caller"));
-	s->setParam("called",msg->getValue("called"));
-	s->setParam("billid",msg->getValue("billid"));
-    }
+    s->setParam("caller",msg.getValue("caller"));
+    s->setParam("called",msg.getValue("called"));
+    s->setParam("billid",msg.getValue("billid"));
     Engine::enqueue(s);
+    update(Startup,true,true,"call.ringing",false,true);
 }
 
+// Outgoing (to engine) constructor
+ClientChannel::ClientChannel(const String& target, const NamedList& params)
+    : Channel(ClientDriver::self(),0,false),
+    m_party(target), m_noticed(true), m_line(0), m_active(false),
+    m_silence(true), m_conference(false), m_clientData(0)
+{
+    Debug(this,DebugCall,"Created outgoing to=%s [%p]",
+	m_party.c_str(),this);
+    // Build the call.route and chan.startup messages
+    Message* m = message("call.route");
+    Message* s = message("chan.startup");
+    // Make sure we set the target's protocol if we have one
+    Regexp r("^[a-z0-9]\\+/");
+    String to = target;
+    const char* param = "callto";
+    if (!r.matches(target.safe())) {
+	const char* proto = params.getValue("protocol");
+	if (proto)
+	    to = String(proto) + "/" + target;
+	else
+	    param = "called";
+    }
+    m->setParam(param,to);
+    s->setParam("called",to);
+    m->copyParams(params,"line,protocol,account,username,callername,domain");
+    s->copyParams(params,"line,protocol,account,username,callername,domain");
+    Engine::enqueue(s);
+    if (startRouter(m))
+	update(Startup);
+}
+
+// Destructor
 ClientChannel::~ClientChannel()
 {
-    closeMedia();
-    String tmp("Hung up:");
-    tmp << " " << (address() ? address() : id());
-    if (m_reason)
-	tmp << " reason: " << m_reason;
-    if (Client::self()) {
-	Client::self()->delChannel(this);
-	Client::self()->setStatusLocked(tmp);
+    XDebug(this,DebugInfo,"ClientChannel::~ClientChannel() [%p]",this);
+}
+
+void ClientChannel::destroyed()
+{
+    Debug(this,DebugCall,"Destroyed [%p]",this);
+    Lock lock(m_mutex);
+    setClientData();
+    if (m_conference) {
+	// Drop old peer if conference
+	if (ClientDriver::s_dropConfPeer) {
+	    Message* m = new Message("call.drop");
+	    m->addParam("id",m_peerId);
+	    m->addParam("reason","Conference terminated");
+	    Engine::enqueue(m);
+	}
     }
-    Engine::enqueue(message("chan.hangup"));
+    else if (m_transferId)
+	ClientDriver::setAudioTransfer(id());
+    // Reset driver's active id
+    ClientDriver* drv = static_cast<ClientDriver*>(driver());
+    if (drv && id() == drv->activeId())
+	drv->setActive();
+    setMedia();
+    update(Destroyed,false,false,"chan.hangup");
+    lock.drop();
+    Channel::destroyed();
 }
 
 void ClientChannel::disconnected(bool final, const char* reason)
 {
+    Debug(this,DebugCall,"Disconnected reason=%s [%p]",reason,this);
     Channel::disconnected(final,reason);
-    if (!final)
+    if (!m_reason)
 	m_reason = reason;
+    setActive(false);
+    // Reset transfer
+    if (m_transferId && !m_conference)
+	ClientDriver::setAudioTransfer(id());
 }
 
-bool ClientChannel::openMedia(bool replace)
+// Check if our consumer's source sent any data
+// Don't set the silence flag is already reset
+void ClientChannel::checkSilence()
 {
+    if (!m_silence)
+	return;
+    m_silence = !(getConsumer() && getConsumer()->getConnSource() &&
+	DataNode::invalidStamp() != getConsumer()->getConnSource()->timeStamp());
+    if (!m_silence)
+	DDebug(this,DebugInfo,"Got audio data [%p]",this);
+}
+
+// Open/close media
+bool ClientChannel::setMedia(bool open, bool replace)
+{
+    Lock lock(m_mutex);
+
+    // Check silence (we might already have a consumer)
+    checkSilence();
+
+    // Remove source/consumer if replacing
+    if (!open) {
+	if (getSource() || getConsumer()) {
+	    Debug(this,DebugInfo,"Closing media channels [%p]",this);
+	    setSource();
+	    setConsumer();
+	}
+	return true;
+    }
+
     String dev = ClientDriver::device();
     if (dev.null())
 	return false;
-    if ((!replace) && getSource() && getConsumer())
+    if (!replace && getSource() && getConsumer())
 	return true;
     Debug(this,DebugAll,"Opening media channels [%p]",this);
     Message m("chan.attach");
     complete(m,true);
-    m.setParam("source",dev);
-    m.setParam("consumer",dev);
     m.userData(this);
-    return Engine::dispatch(m);
-}
-
-void ClientChannel::closeMedia()
-{
-    setSource();
-    setConsumer();
-}
-
-void ClientChannel::line(int newLine)
-{
-    m_line = newLine;
-    m_address.clear();
-    if (m_line > 0)
-	m_address << "line/" << m_line;
-}
-
-void ClientChannel::update(bool client)
-{
-    String desc;
-    if (m_canAnswer)
-	desc = "Ringing";
-    // directions are from engine's perspective so reverse them for user
-    else if (isOutgoing())
-	desc = "Incoming";
-    else desc = "Outgoing";
-    desc << " " << m_party;
-    unsigned int sec = (unsigned int)((Time::now() - m_time + 500000) / 1000000);
-    char buf[32];
-    ::snprintf(buf,sizeof(buf)," [%02u:%02u:%02u]",sec/3600,(sec/60)%60,sec%60);
-    desc << buf;
-    CallEndpoint* peer = getPeer();
-    if (peer) {
-	peer->ref();
-	String tmp;
-	if (peer->getConsumer())
-	    tmp = peer->getConsumer()->getFormat();
-	if (tmp.null())
-	    tmp = "-";
-	desc << " [" << tmp;
-	tmp.clear();
-	if (peer->getSource())
-	    tmp = peer->getSource()->getFormat();
-	peer->deref();
-	if (tmp.null())
-	    tmp = "-";
-	desc << "/" << tmp << "]";
+    m.setParam("consumer",dev);
+    m.setParam("source",dev);
+    Engine::dispatch(m);
+    if (getConsumer())
+	checkSilence();
+    else
+        Debug(this,DebugNote,"Failed to set data consumer [%p]",this);
+    if (!getSource())
+        Debug(this,DebugNote,"Failed to set data source [%p]",this);
+    bool ok = (getSource() && getConsumer());
+    if (!ok && Client::self()) {
+	String tmp = "Failed to open media channel(s)";
+	Client::self()->setStatusLocked(tmp);
     }
-    desc << " " << id();
-    m_desc = desc;
-    XDebug(this,DebugAll,"update %d '%s'",client,desc.c_str());
-    if (client && Client::self())
-	Client::self()->setChannel(this);
+    return ok;
 }
 
-bool ClientChannel::enableAction(const String& action) const
+// Set/reset this channel's data source/consumer
+bool ClientChannel::setActive(bool active, bool upd)
 {
-    if (action == "hangup")
+    Lock lock(m_mutex);
+    // Don't activate it if envolved in a transfer
+    noticed();
+    if (active && m_transferId && !m_conference)
+	return false;
+    if (isAnswered())
+	setMedia(active);
+    // Don't notify if nothing changed
+    if (m_active == active)
 	return true;
-    else if ((action == "accept") || (action == "reject") || (action == "voicemail"))
-	return m_canAnswer;
-    else if (action == "transfer")
-	return m_canTransfer;
-    else if (action == "conference")
-	return m_canConference;
-    return false;
-}
-
-bool ClientChannel::callRouted(Message& msg)
-{
-    String tmp("Calling:");
-    tmp << " " << msg.retValue();
-    Client::self()->setStatusLocked(tmp);
-    update();
+    Debug(this,DebugInfo,"Set active=%s [%p]",String::boolText(active),this);
+    m_active = active;
+    if (!upd)
+	return true;
+    update(active ? Active : OnHold);
+    // TODO: notify the peer if answered
     return true;
 }
 
-void ClientChannel::callAccept(Message& msg)
+// Set/reset the transferred peer's id. Enqueue clientchan.update if changed
+void ClientChannel::setTransfer(const String& target)
 {
-    Debug(this,DebugAll,"ClientChannel::callAccept() [%p]",this);
-    Client::self()->setStatusLocked("Calling target");
-    Channel::callAccept(msg);
-    update();
+    Lock lock(m_mutex);
+    if (m_conference || m_transferId == target)
+	return;
+    if (target)
+	Debug(this,DebugCall,"Transferred to '%s' [%p]",target.c_str(),this);
+    else
+	Debug(this,DebugCall,"Transfer released [%p]",this);
+    m_transferId = target;
+    setMedia(!m_transferId && m_active && isAnswered());
+    update(Transfer);
 }
 
+// Set/reset the conference data. Enqueue clientchan.update if changed.
+void ClientChannel::setConference(const String& target)
+{
+    Lock lock(m_mutex);
+    if (m_transferId == target && !m_transferId)
+	return;
+    Debug(this,DebugCall,"%sing conference room '%s' [%p]",
+	target?"Enter":"Exit",target?target.c_str():m_transferId.c_str(),this);
+    m_transferId = target;
+    m_conference = (0 != m_transferId);
+    setMedia(m_active && isAnswered());
+    update(Conference);
+}
+
+// Notice this channel. Enqueue a clientchan.update message
+void ClientChannel::noticed()
+{
+    Lock lock(m_mutex);
+    if (m_noticed)
+	return;
+    m_noticed = true;
+    update(Noticed);
+}
+
+// Set the channel's line (address)
+void ClientChannel::line(int newLine)
+{
+    Lock lock(m_mutex);
+    m_line = newLine;
+    m_address.clear();
+    if (m_line > 0) {
+	m_address << "line/" << m_line;
+	update(AddrChanged);
+    }
+}
+
+// Outgoing call routed: enqueue update message
+bool ClientChannel::callRouted(Message& msg)
+{
+    Lock lock(m_mutex);
+    update(Routed,true,false);
+    return true;
+}
+
+// Outgoing call accepted: enqueue update message
+void ClientChannel::callAccept(Message& msg)
+{
+    Debug(this,DebugCall,"callAccept() [%p]",this);
+    Channel::callAccept(msg);
+    Lock lock(m_mutex);
+    m_peerId = getPeerId();
+    Debug(this,DebugInfo,"Peer id set to %s",m_peerId.c_str());
+    update(Accepted);
+}
+
+// Outgoing call rejected: reset and and enqueue update message
 void ClientChannel::callRejected(const char* error, const char* reason, const Message* msg)
 {
-    Debug(ClientDriver::self(),DebugAll,"ClientChannel::callReject('%s','%s',%p) [%p]",
+    Debug(this,DebugCall,"callRejected('%s','%s',%p) [%p]",
 	error,reason,msg,this);
+    setMedia();
     if (!reason)
 	reason = error;
     if (!reason)
 	reason = "Unknown reason";
-    String tmp("Call failed:");
-    tmp << " " << reason;
-    if (Client::self())
-	Client::self()->setStatusLocked(tmp);
     Channel::callRejected(error,reason,msg);
-    m_flashing = true;
-    m_canConference = m_canTransfer = m_canAnswer = false;
-    update();
+    setActive(false);
+    m_reason = reason;
+    update(Rejected,true,false);
 }
 
+// Outgoing call progress
+// Check for early media: start ringing tone if missing and the channel is active
+// Enqueue update message
 bool ClientChannel::msgProgress(Message& msg)
 {
-    Debug(this,DebugAll,"ClientChannel::msgProgress() [%p]",this);
-    Client::self()->setStatusLocked("Call progressing");
-    CallEndpoint* ch = getPeer();
-    if (!ch)
-	ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    if (ch && ch->getSource())
-	openMedia();
+    Debug(this,DebugCall,"msgProgress() [%p]",this);
+    if (active() && peerHasSource(msg))
+	setMedia(true);
     bool ret = Channel::msgProgress(msg);
-    update();
+    update(Progressing);
     return ret;
 }
 
+// Outgoing call ringing
+// Check for early media: start ringing tone if missing and the channel is active
+// Enqueue update message
 bool ClientChannel::msgRinging(Message& msg)
 {
-    Debug(this,DebugAll,"ClientChannel::msgRinging() [%p]",this);
-    Client::self()->setStatusLocked("Call ringing");
-    CallEndpoint* ch = getPeer();
-    if (!ch)
-	ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
-    if (ch && ch->getSource())
-	openMedia();
+    Debug(this,DebugCall,"msgRinging() [%p]",this);
+    if (active() && peerHasSource(msg))
+	setMedia(true);
     bool ret = Channel::msgRinging(msg);
-    update();
+    update(Ringing);
     return ret;
 }
 
+// set status for when a call was answered, set the flags for different actions
+// accordingly, and attach media channels
 bool ClientChannel::msgAnswered(Message& msg)
 {
-    Debug(this,DebugAll,"ClientChannel::msgAnswered() [%p]",this);
-    m_time = Time::now();
-    m_flashing = true;
-    m_canAnswer = false;
-    m_canConference = true;
-    m_canTransfer = true;
+    Lock lock(m_mutex);
+    Debug(this,DebugCall,"msgAnswered() [%p]",this);
     m_reason.clear();
-    Client::self()->setStatusLocked("Call answered");
-    openMedia();
+    // Active: Open media if the peer has a source
+    if (active() && peerHasSource(msg))
+	setMedia(true);
+    m_silence = false;
     bool ret = Channel::msgAnswered(msg);
-    update();
+    update(Answered);
     return ret;
 }
 
+// Dropped notification
+bool ClientChannel::msgDrop(Message& msg, const char* reason)
+{
+    Lock lock(m_mutex);
+    noticed();
+    Debug(this,DebugCall,"msgDrop() reason=%s [%p]",reason,this);
+    if (!m_reason)
+	m_reason = reason;
+    // Reset transfer
+    if (m_transferId && !m_conference)
+	ClientDriver::setAudioTransfer(id());
+    setActive(false,!Engine::exiting());
+    lock.drop();
+    return Channel::msgDrop(msg,reason);
+}
+
+// Answer the call if not answered
+// Activate the channel
 void ClientChannel::callAnswer()
 {
-    Debug(this,DebugAll,"ClientChannel::callAnswer() [%p]",this);
-    m_time = Time::now();
-    m_flashing = false;
-    m_canAnswer = false;
-    m_canConference = true;
-    m_canTransfer = true;
-    m_reason.clear();
-    status("answered");
-    Client::self()->setStatus("Call answered");
-    openMedia();
-    update(false);
-    Engine::enqueue(message("call.answered",false,true));
+    Lock lock(m_mutex);
+    noticed();
+    if (!isAnswered()) {
+	Debug(this,DebugCall,"callAnswer() [%p]",this);
+	m_reason.clear();
+	status("answered");
+	update(Answered,true,true,"call.answered",false,true);
+    }
+    // Activating channel will set the media
+    if (ClientDriver::self())
+	ClientDriver::self()->setActive(id());
+}
+
+// Enqueue clientchan.update message
+void ClientChannel::update(int notif, bool chan, bool updatePeer,
+    const char* engineMsg, bool minimal, bool data)
+{
+    if (engineMsg)
+	Engine::enqueue(message(engineMsg,minimal,data));
+    if (updatePeer) {
+	CallEndpoint* peer = getPeer();
+	if (peer && peer->ref()) {
+	    if (peer->getConsumer())
+		m_peerOutFormat = peer->getConsumer()->getFormat();
+	    if (peer->getSource())
+		m_peerInFormat = peer->getSource()->getFormat();
+	    TelEngine::destruct(peer);
+	}
+    }
+    const char* op = lookup(notif);
+    if (!op)
+	return;
+    Message* m = new Message("clientchan.update");
+    m->addParam("notify",op);
+    // Add extended params only if we don't set the channel
+    if (chan)
+	m->userData(this);
+    else {
+	m->addParam("id",id());
+	m->addParam("direction",isOutgoing() ? "incoming" : "outgoing");
+	if (m_address)
+	    m->addParam("address",m_address);
+	if (notif != Noticed && m_noticed)
+	    m->addParam("noticed",String::boolText(true));
+	if (m_active)
+	    m->addParam("active",String::boolText(true));
+	if (m_transferId)
+ 	    m->addParam("transferid",m_transferId);
+	if (m_conference)
+ 	    m->addParam("conference",String::boolText(m_conference));
+    }
+    if (m_silence)
+	m->addParam("silence",String::boolText(true));
+    Engine::enqueue(m);
 }
 
 
-ClientDriver* ClientDriver::s_driver = 0;
-String ClientDriver::s_device;
-
+/**
+ * ClientDriver
+ */
 ClientDriver::ClientDriver()
     : Driver("client","misc")
 {
@@ -2412,6 +2460,7 @@ ClientDriver::~ClientDriver()
     s_driver = 0;
 }
 
+// install relays
 void ClientDriver::setup()
 {
     Driver::setup();
@@ -2420,48 +2469,69 @@ void ClientDriver::setup()
     installRelay(Route,200);
 }
 
-bool ClientDriver::factory(UIFactory* factory, const char* type)
-{
-    return false;
-}
-
+// if we receive a message for an incoming call, we pass the message on
+// to the callIncoming function to handle it
 bool ClientDriver::msgExecute(Message& msg, String& dest)
 {
     Debug(this,DebugInfo,"msgExecute() '%s'",dest.c_str());
-    return (Client::self()) && (Client::self()->callIncoming(msg.getValue("caller"),dest,&msg));
+    return Client::self() && Client::self()->callIncoming(msg,dest);
 }
 
+// Timer notification
 void ClientDriver::msgTimer(Message& msg)
 {
     Driver::msgTimer(msg);
-    if (Client::self()) {
-	Client::self()->lockOther();
-	ListIterator iter(channels());
-	while (ClientChannel* cc = static_cast<ClientChannel*>(iter.get())) {
-	    if (cc->ref()) {
-		unlock();
-		cc->update(false);
-		Client::self()->setChannelInternal(cc);
-		cc->deref();
-		lock();
-	    }
-	}
-	Client::self()->unlockOther();
-    }
+    // Tell the client to tick the logigs if busy
+    if (isBusy())
+    	Client::setLogicsTick();
 }
 
+// Routing handler
 bool ClientDriver::msgRoute(Message& msg)
 {
     // don't route here our own calls
     if (name() == msg.getValue("module"))
 	return false;
-    if (Client::self() && Client::self()->callRouting(msg.getValue("caller"),msg.getValue("called"),&msg)) {
+    if (Client::self() && Client::self()->callRouting(msg)) {
 	msg.retValue() = name() + "/*";
 	return true;
     }
     return Driver::msgRoute(msg);
 }
 
+bool ClientDriver::received(Message& msg, int id)
+{
+    if (id == Halt && Client::self()) {
+	dropAll(msg);
+	Client::self()->quit();
+    }
+    return Driver::received(msg,id);
+}
+
+// Set/reset the active channel.
+bool ClientDriver::setActive(const String& id)
+{
+    Lock lock(this);
+    bool ok = false;
+    // Hold the old one
+    if (m_activeId && m_activeId != id) {
+	ClientChannel* chan = findChan(m_activeId);
+	ok = chan && chan->setActive(false);
+	TelEngine::destruct(chan);
+    }
+    m_activeId = "";
+    // Select the new one
+    if (!id)
+	return ok;
+    ClientChannel* chan = findChan(id);
+    ok = chan && chan->setActive(true);
+    TelEngine::destruct(chan);
+    if (ok)
+	m_activeId = id;
+    return ok;
+}
+
+// find a channel with the specified line
 ClientChannel* ClientDriver::findLine(int line)
 {
     if (line < 1)
@@ -2472,6 +2542,641 @@ ClientChannel* ClientDriver::findLine(int line)
 	ClientChannel* cc = static_cast<ClientChannel*>(l->get());
 	if (cc && (cc->line() == line))
 	    return cc;
+    }
+    return 0;
+}
+
+// Attach/detach client channels peers' source/consumer
+bool ClientDriver::setAudioTransfer(const String& id, const String& target)
+{
+    DDebug(s_driver,DebugInfo,"setAudioTransfer(%s,%s)",id.c_str(),target.safe());
+
+    // Get master (id) and its peer
+    ClientChannel* master = findChan(id);
+    if (!master)
+	return false;
+    CallEndpoint* masterPeer = master->getPeer();
+    if (!(masterPeer && masterPeer->ref()))
+	masterPeer = 0;
+
+    // Release conference or transfer
+    String tmp = master->transferId();
+    if (master->conference())
+	setConference(id,false);
+    else if (master->transferId())
+	master->setTransfer();
+
+    // First remove any slave's transfer
+    ClientChannel* slave = findChan(tmp);
+    if (slave && !slave->conference()) {
+	setAudioTransfer(slave->id());
+	if (masterPeer) {
+	    CallEndpoint* slavePeer = slave->getPeer();
+	    if (slavePeer && slavePeer->ref()) {
+		DDebug(s_driver,DebugAll,"setAudioTransfer detaching peers for %s - %s",
+		    master->id().c_str(),slave->id().c_str());
+		DataTranslator::detachChain(masterPeer->getSource(),slavePeer->getConsumer());
+		DataTranslator::detachChain(slavePeer->getSource(),masterPeer->getConsumer());
+		TelEngine::destruct(slavePeer);
+	    }
+	}
+    }
+    TelEngine::destruct(slave);
+
+    // Set new transfer: we must have a valid target
+    bool ok = true;
+    CallEndpoint* slavePeer = 0;
+    while (target) {
+	ok = false;
+	if (!masterPeer)
+	    break;
+	slave = findChan(target);
+	if (!slave)
+	    break;
+	if (slave->conference())
+	    break;
+	slavePeer = slave->getPeer();
+	if (!(slavePeer && slavePeer->ref())) {
+	    slavePeer = 0;
+	    break;
+	}
+	// The new target may be involved in a transfer
+	if (slave->transferId())
+	    setAudioTransfer(target);
+	DDebug(s_driver,DebugAll,"setAudioTransfer attaching peers for %s - %s",
+	    master->id().c_str(),slave->id().c_str());
+	ok = DataTranslator::attachChain(masterPeer->getSource(),slavePeer->getConsumer()) &&
+	     DataTranslator::attachChain(slavePeer->getSource(),masterPeer->getConsumer());
+	// Fallback on failure
+	if (!ok) {
+	    DataTranslator::detachChain(masterPeer->getSource(),slavePeer->getConsumer());
+	    DataTranslator::detachChain(slavePeer->getSource(),masterPeer->getConsumer());
+	}
+	break;
+    }
+
+    // Set channels on success
+    if (target)
+	if (ok) {
+	    master->setTransfer(slave->id());
+	    slave->setTransfer(master->id());
+	}
+	else
+	    Debug(s_driver,DebugNote,
+		"setAudioTransfer failed to attach peers for %s - %s",
+		master->id().c_str(),target.c_str());
+
+    // Release references
+    TelEngine::destruct(slavePeer);
+    TelEngine::destruct(slave);
+    TelEngine::destruct(masterPeer);
+    TelEngine::destruct(master);
+    return ok;
+}
+
+// Attach/detach a client channel to/from a conference room
+bool ClientDriver::setConference(const String& id, bool in, const String* confName)
+{
+    Lock lock(s_driver);
+    if (!s_driver)
+	return false;
+
+    if (!confName)
+	confName = &s_confName;
+
+    DDebug(s_driver,DebugInfo,"setConference id=%s in=%s conf=%s",
+	id.c_str(),String::boolText(in),confName->c_str());
+    ClientChannel* chan = findChan(id);
+    if (!chan)
+	return false;
+
+    bool ok = false;
+    if (in) {
+	// Check if already in conference (or if the conference room is the same)
+	// Remove transfer
+	if (chan->conference()) {
+	    if (chan->transferId() == *confName) {
+		TelEngine::destruct(chan);
+		return true;;
+	    }
+	    setConference(id,false);
+	}
+	else if (chan->transferId())
+	    setAudioTransfer(id);
+	Message m("call.conference");
+	m.addParam("room",*confName);
+	m.addParam("notify",*confName);
+	m.userData(chan);
+	ok = Engine::dispatch(m);
+	if (ok)
+	    chan->setConference(*confName);
+	else
+	    Debug(s_driver,DebugNote,"setConference failed for '%s'",id.c_str());
+    }
+    else {
+	Message m("chan.locate");
+	m.addParam("id",chan->m_peerId);
+	Engine::dispatch(m);
+	CallEndpoint* cp = 0;
+	if (m.userData())
+	    cp = static_cast<CallEndpoint*>(m.userData()->getObject("CallEndpoint"));
+	const char* reason = "Unable to locate peer";
+	if (cp) {
+	    ok = chan->connect(cp,"Conference terminated");
+	    if (ok)
+		chan->setConference();
+	    else
+		reason = "Connect failed";
+	}
+	if (!ok)
+	    Debug(s_driver,DebugNote,"setConference failed to re-connect '%s'. %s",
+		id.c_str(),reason);
+    }
+    TelEngine::destruct(chan);
+    return ok;
+}
+
+// Find a channel with the specified id
+ClientChannel* ClientDriver::findChan(const String& id)
+{
+    Lock lock(s_driver);
+    if (!s_driver)
+	return 0;
+    Channel* chan = s_driver->find(id);
+    return (chan && chan->ref()) ? static_cast<ClientChannel*>(chan) : 0;
+}
+
+// Get a referenced channel whose stored peer is the given one
+ClientChannel* ClientDriver::findChanByPeer(const String& peer)
+{
+    Lock lock(s_driver);
+    if (!s_driver)
+	return 0;
+    for (ObjList* o = s_driver->channels().skipNull(); o; o = o->skipNext()) {
+	ClientChannel* c = static_cast<ClientChannel*>(o->get());
+	if (c && c->m_peerId == peer)
+	    return c->ref() ? c : 0;
+    }
+    return 0;
+}
+
+
+/**
+ * ClientAccount
+ */
+// Constructor
+ClientAccount::ClientAccount(const char* proto, const char* user,
+	const char* host, bool startup)
+    : Mutex(true),
+    m_port(0), m_startup(startup), m_expires(-1), m_connected(false),
+    m_resource(0)
+{
+    setIdUri(proto,user,host);
+    DDebug(ClientDriver::self(),DebugAll,"Created client account=%s [%p]",
+	m_uri.c_str(),this);
+}
+
+// Constructor. Build an account from a list of parameters.
+ClientAccount::ClientAccount(const NamedList& params)
+    : Mutex(true),
+    m_port(0), m_startup(false), m_expires(-1), m_connected(false),
+    m_resource(0)
+{
+    setIdUri(params.getValue("protocol"),params.getValue("username"),params.getValue("domain"));
+    m_startup = params.getBoolValue("enable");
+    m_password = params.getValue("password");
+    const char* res = params.getValue("resource");
+    if (res)
+	setResource(new ClientResource(res));
+    m_server = params.getValue("server");
+    m_options = params.getValue("options");
+    m_port = params.getIntValue("port",m_port);
+    m_outbound = params.getValue("outbound");
+    m_expires = params.getIntValue("expires",m_expires);
+    DDebug(ClientDriver::self(),DebugAll,"Created client account=%s [%p]",
+	m_uri.c_str(),this);
+}
+
+// Get this account's resource
+ClientResource* ClientAccount::resource(bool ref)
+{
+    Lock lock(this);
+    if (!m_resource)
+	return 0;
+    return (!ref || m_resource->ref()) ? m_resource : 0; 
+}
+
+// Set/reset this account's resource
+void ClientAccount::setResource(ClientResource* res)
+{
+    Lock lock(this);
+    TelEngine::destruct(m_resource);
+    m_resource = res;
+}
+
+// Find a contact by its id
+ClientContact* ClientAccount::findContact(const String& id, bool ref)
+{
+    Lock lock(this);
+    ObjList* obj = m_contacts.find(id);
+    if (!obj)
+	return 0;
+    ClientContact* c = static_cast<ClientContact*>(obj->get());
+    return (!ref || c->ref()) ? c : 0;
+}
+
+// Find a contact having a given id and resource
+ClientContact* ClientAccount::findContact(const String& id, const String& resid, 
+    bool ref)
+{
+    Lock lock(this);
+    ClientContact* c = findContact(id,false);
+    if (!(c && c->findResource(resid)))
+	return 0;
+    return (!ref || c->ref()) ? c : 0;
+}
+
+// Build a contact and append it to the list
+ClientContact* ClientAccount::appendContact(const String& id, const char* name)
+{
+    Lock lock(this);
+    if (!id || findContact(id))
+	return 0;
+    ClientContact* c = new ClientContact(this,id,name);
+    return c;
+}
+
+// Build a contact and append it to the list
+ClientContact* ClientAccount::appendContact(const NamedList& params)
+{
+    Lock lock(this);
+    if (params.null() || findContact(params))
+	return 0;
+    ClientContact* c = new ClientContact(this,params);
+    return c;
+}
+
+// Remove a contact from list. Reset contact's owner
+ClientContact* ClientAccount::removeContact(const String& id, bool delObj)
+{
+    Lock lock(this);
+    ClientContact* c = findContact(id);
+    if (!c)
+	return 0;
+    m_contacts.remove(c,false);
+    c->m_owner = 0;
+    lock.drop();
+    Debug(ClientDriver::self(),DebugAll,
+	"Account(%s) removed contact '%s' delObj=%u [%p]",
+	m_uri.c_str(),c->uri().c_str(),delObj,this);
+    if (delObj)
+	TelEngine::destruct(c);
+    return c;
+}
+
+// Build a login/logout message from account's data
+Message* ClientAccount::userlogin(bool login, const char* msg)
+{
+#define SAFE_FILL(param,value) { if(value) m->addParam(param,value); }
+    Message* m = new Message(msg);
+    m->addParam("account",m_id);
+    m->addParam("operation",login ? "create" : "delete");
+    // Fill login data    
+    if (login) {
+	SAFE_FILL("username",m_uri.getUser());
+	SAFE_FILL("password",m_password);
+	SAFE_FILL("domain",m_uri.getHost());
+	lock();
+	if (m_resource)
+	    SAFE_FILL("resource",m_resource->toString());
+	unlock();
+	SAFE_FILL("server",m_server);
+	SAFE_FILL("options",m_options);
+	if (m_port)
+	    m->addParam("port",String(m_port));
+	SAFE_FILL("outbound",m_outbound);
+	if (m_expires >= 0)
+	    m->addParam("expires",String(m_expires));
+    }
+    SAFE_FILL("protocol",m_id.getProtocol());
+#undef SAFE_FILL
+    return m;
+}
+
+// Remove from owner. Release data
+void ClientAccount::destroyed()
+{
+    lock();
+    setResource();
+    // Clear contacts. Remove their owner before
+    for (ObjList* o = m_contacts.skipNull(); o; o = o->skipNext())
+	(static_cast<ClientContact*>(o->get()))->m_owner = 0;
+    m_contacts.clear();
+    unlock();
+    DDebug(ClientDriver::self(),DebugAll,"Destroyed client account=%s [%p]",
+	m_uri.c_str(),this);
+    RefObject::destroyed();
+}
+
+// Method used by the contact to append itself to this account's list
+void ClientAccount::appendContact(ClientContact* contact)
+{
+    if (!contact)
+	return;
+    Lock lock(this);
+    m_contacts.append(contact);
+    Debug(ClientDriver::self(),DebugAll,
+	"Account(%s) added contact '%s' [%p]",
+	m_uri.c_str(),contact->uri().c_str(),this);
+}
+
+
+/**
+ * ClientAccountList
+ */
+// Find an account
+ClientAccount* ClientAccountList::findAccount(const String& id, bool ref)
+{
+    Lock lock(this);
+    ObjList* obj = m_accounts.find(id);
+    if (!obj)
+	return 0;
+    ClientAccount* a = static_cast<ClientAccount*>(obj->get());
+    return (!ref || a->ref()) ? a : 0;
+}
+
+// Find an account's contact
+ClientContact* ClientAccountList::findContact(const String& account, const String& id, bool ref)
+{
+    Lock lock(this);
+    ClientAccount* acc = findAccount(account,false);
+    return acc ? acc->findContact(id,ref) : 0;
+}
+
+// Find an account's contact from a built id
+ClientContact* ClientAccountList::findContact(const String& builtId, bool ref)
+{
+    String account, contact;
+    ClientContact::splitContactId(builtId,account,contact);
+    return findContact(account,contact,ref);
+}
+
+// Append a new account
+bool ClientAccountList::appendAccount(ClientAccount* account)
+{
+    if (!account || findAccount(account->toString()) || !account->ref())
+	return false;
+    m_accounts.append(account);
+    DDebug(ClientDriver::self(),DebugAll,"List(%s) added account '%s'",
+	c_str(),account->uri().c_str());
+    return true;
+}
+
+// Remove an account
+void ClientAccountList::removeAccount(const String& id)
+{
+    Lock lock(this);
+    ObjList* obj = m_accounts.find(id);
+    if (!obj)
+	return;
+    DDebug(ClientDriver::self(),DebugAll,"List(%s) removed account '%s'",
+	c_str(),(static_cast<ClientAccount*>(obj->get()))->uri().c_str());
+    obj->remove();
+}
+
+/**
+ * ClientContact
+ */
+// Constructor. Append itself to the owner's list
+ClientContact::ClientContact(ClientAccount* owner, const char* id, const char* name,
+    bool chat)
+    : m_name(name ? name : id), m_owner(owner), m_uri(id)
+{
+    m_id = m_uri;
+    m_id.toLower();
+    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p,%s) [%p]",
+	owner,m_uri.c_str(),this);
+    if (m_owner)
+	m_owner->appendContact(this);
+    if (chat)
+	createChatWindow();
+}
+
+// Constructor. Build a contact from a list of parameters.
+ClientContact::ClientContact(ClientAccount* owner, NamedList& params, bool chat)
+    : m_name(params.getValue("name",params)), m_owner(owner), m_uri(params)
+{
+    m_id = m_uri;
+    m_id.toLower();
+    XDebug(ClientDriver::self(),DebugAll,"ClientContact(%p,%s) [%p]",
+	owner,m_uri.c_str(),this);
+    if (m_owner)
+	m_owner->appendContact(this);
+    if (chat)
+	createChatWindow();
+}
+
+// Create the chat window
+void ClientContact::createChatWindow(bool force, const char* name)
+{
+    if (force)
+	destroyChatWindow();
+    if (hasChat())
+	return;
+
+    // Generate chat window name and create the window
+    MD5 md5(m_id);
+    m_chatWndName = s_chatPrefix + md5.hexDigest();
+    if (Client::self())
+	Client::self()->createWindowSafe(name,m_chatWndName);
+    Window* w = Client::self()->getWindow(m_chatWndName);
+    if (!w)
+	return;
+    String id;
+    buildContactId(id);
+    w->context(id);
+    NamedList tmp("");
+    tmp.addParam("contactname",m_name);
+    Client::self()->setParams(&tmp,w);
+    return;
+}
+
+// Find a group this contact might belong to
+String* ClientContact::findGroup(const String& group)
+{
+    Lock lock(m_owner);
+    ObjList* obj = m_groups.find(group);
+    return obj ? static_cast<String*>(obj->get()) : 0;
+}
+
+// Append a group to this contact
+bool ClientContact::appendGroup(const String& group)
+{
+    Lock lock(m_owner);
+    if (findGroup(group))
+	return false;
+    m_groups.append(new String(group));
+    DDebug(ClientDriver::self(),DebugAll,
+	"Account(%s) contact='%s' added group '%s' [%p]",
+	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),group.c_str(),this);
+    return true;
+}
+
+// Remove a contact's group
+bool ClientContact::removeGroup(const String& group)
+{
+    Lock lock(m_owner);
+    ObjList* obj = m_groups.find(group);
+    if (!obj)
+	return false;
+    obj->remove();
+    DDebug(ClientDriver::self(),DebugAll,
+	"Account(%s) contact='%s' removed group '%s' [%p]",
+	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),group.c_str(),this);
+    return true;
+}
+
+// Find a resource having a given id
+ClientResource* ClientContact::findResource(const String& id, bool ref)
+{
+    Lock lock(m_owner);
+    ObjList* obj = m_resources.find(id);
+    if (!obj)
+	return 0;
+    ClientResource* r = static_cast<ClientResource*>(obj->get());
+    return (!ref || r->ref()) ? r : 0;
+}
+
+// Get the first resource with audio capability
+ClientResource* ClientContact::findAudioResource(bool ref)
+{
+    Lock lock(m_owner);
+    ObjList* o = m_resources.skipNull();
+    for (; o; o = o->skipNext())
+	if ((static_cast<ClientResource*>(o->get()))->m_audio)
+	    break;
+    if (!o)
+	return 0;
+    ClientResource* r = static_cast<ClientResource*>(o->get());
+    return (!ref || r->ref()) ? r : 0;
+}
+
+// Append a resource having a given id
+ClientResource* ClientContact::appendResource(const String& id)
+{
+    Lock lock(m_owner);
+    if (findResource(id))
+	return 0;
+    ClientResource* r = new ClientResource(id);
+    m_resources.append(r);
+    DDebug(ClientDriver::self(),DebugAll,
+	"Account(%s) contact='%s' added resource '%s' [%p]",
+	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),id.c_str(),this);
+    return r;
+}
+
+// Remove a resource having a given id
+bool ClientContact::removeResource(const String& id)
+{
+    Lock lock(m_owner);
+    ObjList* obj = m_resources.find(id);
+    if (!obj)
+	return false;
+    obj->remove();
+    DDebug(ClientDriver::self(),DebugAll,
+	"Account(%s) contact='%s' removed resource '%s' [%p]",
+	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),id.c_str(),this);
+    return true;
+}
+
+// Remove from owner. Release data
+void ClientContact::destroyed()
+{
+    destroyChatWindow();
+    if (m_owner) {
+	Lock lock(m_owner);
+	m_owner->removeContact(m_id,false);
+	m_owner = 0;
+    }
+    RefObject::destroyed();
+}
+
+
+/**
+ * ClientSound
+ */
+// Start playing the file
+bool ClientSound::start(int repeat, bool force)
+{
+    if (m_started && !force)
+	return true;
+    stop();
+    DDebug(ClientDriver::self(),DebugInfo,"Starting sound %s",c_str());
+    m_repeat = (repeat > 0 ? repeat : -1);
+    m_started = doStart();
+    return m_started;
+}
+
+// Stop playing the file
+void ClientSound::stop()
+{
+    if (!m_started)
+	return;
+    DDebug(ClientDriver::self(),DebugInfo,"Stopping sound %s",c_str());
+    doStop();
+    m_started = false;
+}
+
+// Check if a sound is started
+bool ClientSound::started(const String& name)
+{
+    if (!name)
+	return false;
+    Lock lock(s_soundsMutex);
+    ObjList* obj = s_sounds.find(name);
+    return obj ? (static_cast<ClientSound*>(obj->get()))->started() : false;
+}
+
+
+// Start playing a given sound
+bool ClientSound::start(const String& name, int repeat, bool force)
+{
+    if (!name)
+	return false;
+    Lock lock(s_soundsMutex);
+    ObjList* obj = s_sounds.find(name);
+    if (!obj)
+	return false;
+    return (static_cast<ClientSound*>(obj->get()))->start(repeat,force);
+}
+
+// Stop playing a given sound
+void ClientSound::stop(const String& name)
+{
+    if (!name)
+	return;
+    Lock lock(s_soundsMutex);
+    ObjList* obj = s_sounds.find(name);
+    if (!obj)
+	return;
+    (static_cast<ClientSound*>(obj->get()))->stop();
+}
+
+// Find a sound object
+ClientSound* ClientSound::find(const String& token, bool byName)
+{
+    if (!token)
+	return 0;
+    Lock lock(s_soundsMutex);
+    if (byName) {
+	ObjList* obj = s_sounds.find(token);
+	return obj ? static_cast<ClientSound*>(obj->get()) : 0;
+    }
+    // Find by file
+    for (ObjList* o = s_sounds.skipNull(); o; o = o->skipNext()) {
+	ClientSound* sound = static_cast<ClientSound*>(o->get());
+	if (token == sound->file())
+	    return sound;
     }
     return 0;
 }

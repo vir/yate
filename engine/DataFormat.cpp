@@ -931,6 +931,15 @@ void DataEndpoint::clearSniffers()
     }
 }
 
+// Change source(s) or consumer(s)
+bool DataEndpoint::control(NamedList& params)
+{
+    return (m_source && m_source->control(params)) ||
+	(m_consumer && m_consumer->control(params)) ||
+	(m_peerRecord && m_peerRecord->control(params)) ||
+	(m_callRecord && m_callRecord->control(params));
+}
+
 
 void ThreadedSource::destroyed()
 {

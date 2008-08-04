@@ -27,7 +27,7 @@ CLSOBJS := TelEngine.o ObjList.o HashList.o String.o DataBlock.o NamedList.o \
 	URI.o Mime.o Array.o Iterator.o YMD5.o YSHA1.o Base64.o Mutex.o Thread.o Socket.o
 ENGOBJS := Configuration.o Message.o Plugin.o Engine.o
 TELOBJS := DataFormat.o Channel.o
-CLIOBJS := Client.o
+CLIOBJS := Client.o ClientLogic.o
 
 LIBOBJS := $(CLSOBJS) $(ENGOBJS) $(TELOBJS) $(CLIOBJS)
 CLEANS = $(LIBOBJS) core
@@ -102,6 +102,9 @@ Thread.o: @srcdir@/Thread.cpp $(MKDEPS) $(CINC)
 	$(COMPILE) @THREAD_KILL@ -c $<
 
 Client.o: @srcdir@/Client.cpp $(MKDEPS) $(CLINC)
+	$(COMPILE) -c $<
+
+ClientLogic.o: @srcdir@/ClientLogic.cpp $(MKDEPS) $(CLINC)
 	$(COMPILE) -c $<
 
 String.o: @srcdir@/String.cpp $(MKDEPS) $(CINC)

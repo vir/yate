@@ -589,6 +589,18 @@ void Channel::msgStatus(Message& msg)
     msg.retValue() << "name=" << id() << ",type=channel;" << par << "\r\n";
 }
 
+// Control message handler that is invoked only for messages to this channel
+// Find a data endpoint to process it
+bool Channel::msgControl(Message& msg)
+{
+    for (ObjList* o = m_data.skipNull(); o; o = o->skipNext()) {
+	DataEndpoint* dep = static_cast<DataEndpoint*>(o->get());
+	if (dep->control(msg))
+	    return true;
+    }
+    return false;
+}
+
 void Channel::statusParams(String& str)
 {
     if (m_driver)
@@ -802,6 +814,7 @@ TokenDict Module::s_messages[] = {
     { "chan.masquerade", Module::Masquerade },
     { "chan.locate",     Module::Locate },
     { "chan.transfer",   Module::Transfer },
+    { "chan.control",	 Module::Control },
     { 0, 0 }
 };
 
@@ -1116,6 +1129,7 @@ void Driver::setup(const char* prefix, bool minimal)
     installRelay(Locate,40);
     installRelay(Drop,60);
     installRelay(Execute,90);
+    installRelay(Control,90);
     if (minimal)
 	return;
     installRelay(Tone);
@@ -1247,6 +1261,8 @@ bool Driver::received(Message &msg, int id)
 	case Locate:
 	    msg.userData(chan);
 	    return true;
+	case Control:
+	    return chan->msgControl(msg);
     }
     return false;
 }

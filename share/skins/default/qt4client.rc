@@ -1,15 +1,12 @@
 [mainwindow]
 enabled=true
 visible=true
+mainwindow=true
 description=qt4client.ui
 
 [account]
 enabled=true
 description=account.ui
-
-[confirm]
-enabled=true
-description=confirm.ui
 
 [addrbook]
 enabled=true
@@ -22,3 +19,11 @@ description=events.ui
 [help]
 enabled=true
 description=help.ui
+
+[confirm]
+enabled=true
+description=confirm.ui
+
+[message]
+enabled=true
+description=message.ui

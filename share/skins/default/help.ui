@@ -30,6 +30,9 @@
   <property name="windowTitle" >
    <string>Yate Help</string>
   </property>
+  <property name="windowIcon" >
+   <iconset>quest.png</iconset>
+  </property>
   <layout class="QVBoxLayout" >
    <property name="spacing" >
     <number>6</number>
@@ -48,7 +51,13 @@
    </property>
    <item>
     <widget class="QTextEdit" name="help_text" >
+     <property name="undoRedoEnabled" >
+      <bool>false</bool>
+     </property>
      <property name="readOnly" >
+      <bool>true</bool>
+     </property>
+     <property name="overwriteMode" >
       <bool>true</bool>
      </property>
     </widget>
@@ -56,7 +65,7 @@
    <item>
     <layout class="QHBoxLayout" >
      <property name="spacing" >
-      <number>6</number>
+      <number>2</number>
      </property>
      <property name="leftMargin" >
       <number>0</number>
@@ -73,14 +82,14 @@
      <item>
       <widget class="QPushButton" name="help_prev" >
        <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
        <property name="minimumSize" >
         <size>
-         <width>75</width>
+         <width>25</width>
          <height>25</height>
         </size>
        </property>
@@ -90,22 +99,31 @@
          <height>25</height>
         </size>
        </property>
+       <property name="toolTip" >
+        <string/>
+       </property>
+       <property name="accessibleName" >
+        <string>help:prev</string>
+       </property>
        <property name="text" >
         <string>Previous</string>
+       </property>
+       <property name="icon" >
+        <iconset>prev.png</iconset>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="help_home" >
        <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
        <property name="minimumSize" >
         <size>
-         <width>75</width>
+         <width>25</width>
          <height>25</height>
         </size>
        </property>
@@ -115,22 +133,31 @@
          <height>25</height>
         </size>
        </property>
+       <property name="toolTip" >
+        <string>Home</string>
+       </property>
+       <property name="accessibleName" >
+        <string>help:home</string>
+       </property>
        <property name="text" >
         <string>Home</string>
+       </property>
+       <property name="icon" >
+        <iconset>home.png</iconset>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="help_next" >
        <property name="sizePolicy" >
-        <sizepolicy vsizetype="Fixed" hsizetype="Expanding" >
+        <sizepolicy vsizetype="Fixed" hsizetype="Preferred" >
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
        </property>
        <property name="minimumSize" >
         <size>
-         <width>75</width>
+         <width>25</width>
          <height>25</height>
         </size>
        </property>
@@ -140,10 +167,29 @@
          <height>25</height>
         </size>
        </property>
+       <property name="accessibleName" >
+        <string>help:next</string>
+       </property>
        <property name="text" >
         <string>Next</string>
        </property>
+       <property name="icon" >
+        <iconset>next.png</iconset>
+       </property>
       </widget>
+     </item>
+     <item>
+      <spacer>
+       <property name="orientation" >
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" >
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
      <item>
       <widget class="QPushButton" name="button_hide" >
@@ -167,6 +213,15 @@
        </property>
        <property name="text" >
         <string>Close</string>
+       </property>
+       <property name="icon" >
+        <iconset>close.png</iconset>
+       </property>
+       <property name="iconSize" >
+        <size>
+         <width>20</width>
+         <height>20</height>
+        </size>
        </property>
       </widget>
      </item>

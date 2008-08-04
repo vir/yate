@@ -901,6 +901,7 @@ AC_CONFIG_FILES([packing/rpm/yate.spec
                  share/Makefile
                  share/scripts/Makefile
                  share/skins/Makefile
+                 share/sounds/Makefile
                  share/help/Makefile
                  conf.d/Makefile])
 AC_CONFIG_FILES([yate-config],[chmod +x yate-config])

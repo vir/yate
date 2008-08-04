@@ -8,26 +8,28 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>456</width>
-    <height>280</height>
+    <width>500</width>
+    <height>285</height>
    </rect>
   </property>
   <property name="sizePolicy" >
-   <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+   <sizepolicy>
+    <hsizetype>0</hsizetype>
+    <vsizetype>0</vsizetype>
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
   </property>
   <property name="minimumSize" >
    <size>
-    <width>456</width>
-    <height>280</height>
+    <width>500</width>
+    <height>285</height>
    </size>
   </property>
   <property name="maximumSize" >
    <size>
-    <width>456</width>
-    <height>280</height>
+    <width>500</width>
+    <height>285</height>
    </size>
   </property>
   <property name="windowTitle" >
@@ -37,23 +39,20 @@
    <iconset>user.png</iconset>
   </property>
   <layout class="QVBoxLayout" >
+   <property name="margin" >
+    <number>9</number>
+   </property>
    <property name="spacing" >
-    <number>2</number>
-   </property>
-   <property name="leftMargin" >
-    <number>2</number>
-   </property>
-   <property name="topMargin" >
-    <number>2</number>
-   </property>
-   <property name="rightMargin" >
-    <number>2</number>
-   </property>
-   <property name="bottomMargin" >
     <number>2</number>
    </property>
    <item>
     <layout class="QHBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
+     <property name="spacing" >
+      <number>6</number>
+     </property>
      <item>
       <widget class="QFrame" name="frame_protocol" >
        <property name="minimumSize" >
@@ -75,23 +74,20 @@
         <enum>QFrame::Raised</enum>
        </property>
        <layout class="QVBoxLayout" >
+        <property name="margin" >
+         <number>0</number>
+        </property>
         <property name="spacing" >
          <number>2</number>
         </property>
-        <property name="leftMargin" >
-         <number>1</number>
-        </property>
-        <property name="topMargin" >
-         <number>1</number>
-        </property>
-        <property name="rightMargin" >
-         <number>1</number>
-        </property>
-        <property name="bottomMargin" >
-         <number>1</number>
-        </property>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
+          <property name="spacing" >
+           <number>6</number>
+          </property>
           <item>
            <widget class="QLabel" name="label_protocol" >
             <property name="text" >
@@ -102,7 +98,9 @@
           <item>
            <widget class="QComboBox" name="acc_protocol" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>3</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -128,17 +126,25 @@
      </item>
      <item>
       <layout class="QHBoxLayout" >
+       <property name="margin" >
+        <number>0</number>
+       </property>
+       <property name="spacing" >
+        <number>6</number>
+       </property>
        <item>
         <widget class="QLabel" name="label" >
          <property name="text" >
-          <string>Use provider settings:</string>
+          <string>Use provider:</string>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QComboBox" name="acc_providers" >
          <property name="sizePolicy" >
-          <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+          <sizepolicy>
+           <hsizetype>3</hsizetype>
+           <vsizetype>0</vsizetype>
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
@@ -163,6 +169,12 @@
    </item>
    <item>
     <layout class="QVBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
+     <property name="spacing" >
+      <number>6</number>
+     </property>
      <item>
       <widget class="Line" name="line_3" >
        <property name="orientation" >
@@ -174,6 +186,12 @@
    </item>
    <item>
     <layout class="QHBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
+     <property name="spacing" >
+      <number>6</number>
+     </property>
      <item>
       <widget class="QFrame" name="frame_account" >
        <property name="minimumSize" >
@@ -195,23 +213,17 @@
         <enum>QFrame::Raised</enum>
        </property>
        <layout class="QVBoxLayout" >
+        <property name="margin" >
+         <number>0</number>
+        </property>
         <property name="spacing" >
          <number>2</number>
         </property>
-        <property name="leftMargin" >
-         <number>1</number>
-        </property>
-        <property name="topMargin" >
-         <number>1</number>
-        </property>
-        <property name="rightMargin" >
-         <number>1</number>
-        </property>
-        <property name="bottomMargin" >
-         <number>1</number>
-        </property>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
           <property name="spacing" >
            <number>2</number>
           </property>
@@ -225,7 +237,9 @@
           <item>
            <widget class="QLineEdit" name="acc_account" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -251,6 +265,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
           <property name="spacing" >
            <number>2</number>
           </property>
@@ -264,7 +281,9 @@
           <item>
            <widget class="QLineEdit" name="acc_username" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -286,7 +305,9 @@
           <item>
            <widget class="QLabel" name="label_13" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -299,7 +320,9 @@
           <item>
            <widget class="QLineEdit" name="acc_domain" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -322,6 +345,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
           <property name="spacing" >
            <number>2</number>
           </property>
@@ -335,7 +361,9 @@
           <item>
            <widget class="QLineEdit" name="acc_password" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -361,6 +389,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
           <property name="spacing" >
            <number>2</number>
           </property>
@@ -374,7 +405,9 @@
           <item>
            <widget class="QLineEdit" name="acc_server" >
             <property name="sizePolicy" >
-             <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+             <sizepolicy>
+              <hsizetype>0</hsizetype>
+              <vsizetype>0</vsizetype>
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -397,6 +430,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" >
+          <property name="margin" >
+           <number>0</number>
+          </property>
           <property name="spacing" >
            <number>2</number>
           </property>
@@ -458,17 +494,22 @@
         <enum>QFrame::Sunken</enum>
        </property>
        <property name="currentIndex" >
-        <number>0</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="acc_proto_spec_none" >
         <layout class="QVBoxLayout" >
-         <property name="leftMargin" >
-          <number>90</number>
+         <property name="margin" >
+          <number>9</number>
+         </property>
+         <property name="spacing" >
+          <number>6</number>
          </property>
          <item>
           <widget class="QLabel" name="label_2" >
            <property name="sizePolicy" >
-            <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+            <sizepolicy>
+             <hsizetype>0</hsizetype>
+             <vsizetype>0</vsizetype>
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
@@ -488,6 +529,12 @@
        </widget>
        <widget class="QWidget" name="acc_proto_spec_jabber" >
         <layout class="QVBoxLayout" >
+         <property name="margin" >
+          <number>9</number>
+         </property>
+         <property name="spacing" >
+          <number>6</number>
+         </property>
          <item>
           <widget class="QGroupBox" name="acc_proto_jabber_opt" >
            <property name="minimumSize" >
@@ -502,29 +549,23 @@
            <property name="alignment" >
             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
            </property>
+           <property name="flat" >
+            <bool>true</bool>
+           </property>
            <property name="checkable" >
             <bool>false</bool>
            </property>
            <layout class="QVBoxLayout" >
+            <property name="margin" >
+             <number>0</number>
+            </property>
             <property name="spacing" >
-             <number>2</number>
-            </property>
-            <property name="leftMargin" >
-             <number>2</number>
-            </property>
-            <property name="topMargin" >
-             <number>2</number>
-            </property>
-            <property name="rightMargin" >
-             <number>2</number>
-            </property>
-            <property name="bottomMargin" >
              <number>2</number>
             </property>
             <item>
              <widget class="QCheckBox" name="acc_proto_jabber_opt_tlsrequired" >
               <property name="text" >
-               <string>Use TLS (enchrypt connection)</string>
+               <string>Use TLS (encrypt connection)</string>
               </property>
               <property name="autoExclusive" >
                <bool>false</bool>
@@ -560,11 +601,20 @@
          </item>
          <item>
           <layout class="QVBoxLayout" >
+           <property name="margin" >
+            <number>0</number>
+           </property>
            <property name="spacing" >
             <number>2</number>
            </property>
            <item>
             <layout class="QHBoxLayout" >
+             <property name="margin" >
+              <number>0</number>
+             </property>
+             <property name="spacing" >
+              <number>6</number>
+             </property>
              <item>
               <widget class="QLabel" name="label_12" >
                <property name="text" >
@@ -578,7 +628,9 @@
              <item>
               <widget class="QLineEdit" name="acc_proto_jabber_resource" >
                <property name="sizePolicy" >
-                <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                <sizepolicy>
+                 <hsizetype>0</hsizetype>
+                 <vsizetype>0</vsizetype>
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
@@ -607,6 +659,12 @@
            </item>
            <item>
             <layout class="QHBoxLayout" >
+             <property name="margin" >
+              <number>0</number>
+             </property>
+             <property name="spacing" >
+              <number>6</number>
+             </property>
              <item>
               <widget class="QLabel" name="label_11" >
                <property name="text" >
@@ -620,7 +678,9 @@
              <item>
               <widget class="QLineEdit" name="acc_proto_jabber_port" >
                <property name="sizePolicy" >
-                <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+                <sizepolicy>
+                 <hsizetype>0</hsizetype>
+                 <vsizetype>0</vsizetype>
                  <horstretch>0</horstretch>
                  <verstretch>0</verstretch>
                 </sizepolicy>
@@ -663,8 +723,17 @@
        </widget>
        <widget class="QWidget" name="acc_proto_spec_default" >
         <layout class="QGridLayout" >
+         <property name="margin" >
+          <number>9</number>
+         </property>
+         <property name="spacing" >
+          <number>6</number>
+         </property>
          <item row="0" column="0" >
           <layout class="QVBoxLayout" >
+           <property name="margin" >
+            <number>0</number>
+           </property>
            <property name="spacing" >
             <number>2</number>
            </property>
@@ -678,7 +747,9 @@
            <item>
             <widget class="QLineEdit" name="acc_outbound" >
              <property name="sizePolicy" >
-              <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+              <sizepolicy>
+               <hsizetype>0</hsizetype>
+               <vsizetype>0</vsizetype>
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -707,7 +778,9 @@
            <item>
             <widget class="QLineEdit" name="acc_interval" >
              <property name="sizePolicy" >
-              <sizepolicy vsizetype="Fixed" hsizetype="Fixed" >
+              <sizepolicy>
+               <hsizetype>0</hsizetype>
+               <vsizetype>0</vsizetype>
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
@@ -725,7 +798,7 @@
               </size>
              </property>
              <property name="alignment" >
-              <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+              <set>Qt::AlignLeading</set>
              </property>
             </widget>
            </item>
@@ -752,6 +825,12 @@
    </item>
    <item>
     <layout class="QVBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
+     <property name="spacing" >
+      <number>6</number>
+     </property>
      <item>
       <widget class="Line" name="line" >
        <property name="orientation" >
@@ -763,6 +842,9 @@
    </item>
    <item>
     <layout class="QVBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
      <property name="spacing" >
       <number>2</number>
      </property>
@@ -784,6 +866,12 @@
    </item>
    <item>
     <layout class="QVBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
+     <property name="spacing" >
+      <number>6</number>
+     </property>
      <item>
       <widget class="Line" name="line_4" >
        <property name="orientation" >
@@ -795,20 +883,11 @@
    </item>
    <item>
     <layout class="QHBoxLayout" >
+     <property name="margin" >
+      <number>0</number>
+     </property>
      <property name="spacing" >
       <number>2</number>
-     </property>
-     <property name="leftMargin" >
-      <number>0</number>
-     </property>
-     <property name="topMargin" >
-      <number>0</number>
-     </property>
-     <property name="rightMargin" >
-      <number>0</number>
-     </property>
-     <property name="bottomMargin" >
-      <number>0</number>
      </property>
      <item>
       <widget class="QPushButton" name="acc_accept" >
@@ -875,6 +954,12 @@
      </item>
      <item>
       <layout class="QVBoxLayout" >
+       <property name="margin" >
+        <number>0</number>
+       </property>
+       <property name="spacing" >
+        <number>6</number>
+       </property>
        <item>
         <widget class="Line" name="line_2" >
          <property name="orientation" >

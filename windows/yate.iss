@@ -134,13 +134,15 @@ Source: "null_team.ico"; DestDir: "{app}"
 Source: "..\conf.d\*.conf.sample"; DestDir: "{app}\conf.d"
 
 Source: "..\share\help\*.yhlp"; DestDir: "{app}\share\help"; Components: client
+Source: "..\share\sounds\*.wav"; DestDir: "{app}\share\sounds"; Components: client
 Source: "..\conf.d\providers.conf.default"; DestName: "providers.conf"; DestDir: "{app}\conf.d"; Components: client
 Source: "..\share\skins\default\qt4client.??"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\account.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\addrbook.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
-Source: "..\share\skins\default\confirm.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\events.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\help.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\confirm.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
+Source: "..\share\skins\default\message.ui"; DestDir: "{app}\share\skins\default"; Components: client\qt
 Source: "..\share\skins\default\*.png"; DestDir: "{app}\share\skins\default"; Components: client
 
 Source: "..\conf.d\yate-qt4.conf.default"; DestName: "yate-qt4.conf"; DestDir: "{app}\conf.d"; Components: client\qt; Flags: skipifsourcedoesntexist

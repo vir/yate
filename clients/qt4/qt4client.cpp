@@ -1740,12 +1740,12 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
     return true;
 }
 
-bool QtClient::action(Window* wnd, const String& name)
+bool QtClient::action(Window* wnd, const String& name, NamedList* params)
 {
     String tmp = name;
     if (tmp.startSkip("openurl:",false))
 	return QDesktopServices::openUrl(QUrl(tmp.safe()));
-    return Client::action(wnd,name);
+    return Client::action(wnd,name,params);
 }
 
 // Create a sound object. Append it to the global list

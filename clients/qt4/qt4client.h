@@ -119,7 +119,7 @@ public:
     virtual void allHidden();
     virtual bool createWindow(const String& name,
 	const String& alias = String::empty());
-    virtual bool action(Window* wnd, const String& name);
+    virtual bool action(Window* wnd, const String& name, NamedList* params = 0);
     virtual void quit() {
 	    if (m_app)
 		m_app->quit();

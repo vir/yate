@@ -2351,6 +2351,13 @@ public:
 	{ return Client::self() ? Client::self()->setVisible(m_chatWndName,active) : false; }
 
     /**
+     * Get the chat window
+     * @return Valid Window pointer or 0
+     */
+    inline Window* getChatWnd() const
+	{ return Client::self() ? Client::self()->getWindow(m_chatWndName) : 0; }
+
+    /**
      * Create the chat window
      * @param force True to destroy the current one if any
      * @param name The window's name

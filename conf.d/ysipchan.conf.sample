@@ -17,7 +17,7 @@
 ;maxforwards=20
 
 ; useragent: string: String to set in User-Agent or Server headers
-;useragent=YATE/1.2.0
+;useragent=YATE/2.0.0
 
 ; realm: string: Authentication realm to offer in authentication requests
 ;realm=Yate

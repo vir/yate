@@ -1001,6 +1001,20 @@ public:
 	{ return ++m_cseq; }
 
     /**
+     * Check if the engine is set up for lazy "100 Trying" messages
+     * @return True if the first 100 message is to be skipped for non-INVITE
+     */
+    inline bool lazyTrying() const
+	{ return m_lazyTrying; }
+
+    /**
+     * Set the lazy "100 Trying" messages flag
+     * @param lazy100 True to not send the 1st 100 message for non-INVITE
+     */
+    inline void lazyTrying(bool lazy100)
+	{ m_lazyTrying = lazy100; }
+
+    /**
      * Get an authentication nonce
      * @param nonce String reference to fill with the current nonce
      */
@@ -1075,6 +1089,7 @@ protected:
     u_int64_t m_t4;
     unsigned int m_maxForwards;
     int m_cseq;
+    bool m_lazyTrying;
     String m_userAgent;
     String m_allowed;
     String m_nonce;

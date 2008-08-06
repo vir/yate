@@ -52,6 +52,10 @@
 ; ignorevia: bool: Ignore Via headers and send answer back to the source
 ;ignorevia=enable
 
+; lazy100: bool: Do not generate an initial "100 Trying" for non-INVITE
+;  transactions unless a retransmission arrives before having a final answer
+;lazy100=no
+
 ; dtmfinband: bool: Generate DTMF inband by default
 ;dtmfinband=no
 

@@ -152,7 +152,8 @@ SIPEvent::~SIPEvent()
 SIPEngine::SIPEngine(const char* userAgent)
     : m_mutex(true),
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
-      m_cseq(0), m_userAgent(userAgent), m_nonce_time(0)
+      m_cseq(0), m_lazyTrying(false),
+      m_userAgent(userAgent), m_nonce_time(0)
 {
     debugName("sipengine");
     DDebug(this,DebugInfo,"SIPEngine::SIPEngine() [%p]",this);

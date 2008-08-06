@@ -1228,6 +1228,7 @@ YateSIPEngine::YateSIPEngine(YateSIPEndPoint* ep)
     m_info = s_cfg.getBoolValue("general","info",true);
     if (m_info)
 	addAllowed("INFO");
+    lazyTrying(s_cfg.getBoolValue("general","lazy100",false));
     m_fork = s_cfg.getBoolValue("general","fork",true);
     NamedList *l = s_cfg.getSection("methods");
     if (l) {

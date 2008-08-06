@@ -624,6 +624,9 @@ SIPEvent* SIPTransaction::getServerEvent(int state, int timeout)
 		setResponse(501);
 	    else {
 		setResponse(100);
+		// if engine is set up lazy skip first 100 transmission
+		if (!isInvite() && m_engine && m_engine->lazyTrying())
+		    m_transmit = false;
 		changeState(Trying);
 		break;
 	    }

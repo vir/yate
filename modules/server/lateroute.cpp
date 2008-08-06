@@ -2,7 +2,7 @@
  * lateroute.cpp
  * This file is part of the YATE Project http://YATE.null.ro
  *
- * Last chance routing in call.execute messages.
+ * Last chance routing in call.execute and msg.execute messages.
  *
  * Yet Another Telephony Engine - a fully featured software PBX and IVR
  * Copyright (C) 2004-2006 Null Team
@@ -38,16 +38,17 @@ public:
 class LateHandler : public MessageHandler
 {
 public:
-    inline LateHandler(unsigned priority)
-	: MessageHandler("call.execute",priority)
-	{ }
+    LateHandler(const char* name, unsigned priority);
     virtual bool received(Message& msg);
+protected:
+    String m_routeMsg;
 };
 
 static Regexp s_regexp;
 static String s_called;
 static Mutex s_mutex;
-static LateHandler* s_handler = 0;
+static LateHandler* s_callHandler = 0;
+static LateHandler* s_msgHandler = 0;
 
 INIT_PLUGIN(LateRouter);
 
@@ -56,10 +57,20 @@ UNLOAD_PLUGIN(unloadNow)
     if (unloadNow) {
 	if (!s_mutex.lock(500000))
 	    return false;
-	TelEngine::destruct(s_handler);
+	TelEngine::destruct(s_callHandler);
+	TelEngine::destruct(s_msgHandler);
 	s_mutex.unlock();
     }
     return true;
+}
+
+
+LateHandler::LateHandler(const char* name, unsigned priority)
+    : MessageHandler(name,priority)
+{
+    // build a proper routing message name
+    int sep = find('.');
+    m_routeMsg = substr(0,sep) + ".route";
 }
 
 bool LateHandler::received(Message& msg)
@@ -79,11 +90,13 @@ bool LateHandler::received(Message& msg)
     String called = msg.getValue("called");
     msg.clearParam("callto");
     msg.setParam("called",dest);
-    msg = "call.route";
+    // change the message name to the routing one
+    msg = m_routeMsg;
     bool ok = Engine::dispatch(msg);
     dest = msg.retValue();
     msg.retValue().clear();
-    msg = "call.execute";
+    // and restore it back to this handler's name
+    msg = toString();
     ok = ok && dest && (dest != "-") && (dest != "error");
     if (ok && (dest == callto)) {
 	Debug(DebugMild,"Call to '%s' late routed back to itself!",callto.c_str());
@@ -147,9 +160,12 @@ void LateRouter::initialize()
     s_called = called;
     s_mutex.unlock();
     DDebug("lateroute",DebugInfo,"regexp='%s' called='%s'",s_regexp.c_str(),s_called.c_str());
-    if (!s_handler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
-	s_handler = new LateHandler(cfg.getIntValue("general","priority",75));
-	Engine::install(s_handler);
+    if (!s_callHandler && cfg.getBoolValue("general","enabled",(s_regexp && s_called))) {
+	int priority = cfg.getIntValue("general","priority",75);
+	s_callHandler = new LateHandler("call.execute",priority);
+	s_msgHandler = new LateHandler("msg.execute",priority);
+	Engine::install(s_callHandler);
+	Engine::install(s_msgHandler);
     }
 }
 

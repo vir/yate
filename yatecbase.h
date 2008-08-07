@@ -1086,6 +1086,16 @@ public:
     bool setBoolOpt(ClientToggle toggle, bool value, bool updateUi = false);
 
     /**
+     * Build a date/time string
+     * @param dest Destination string
+     * @param secs Seconds since EPOCH
+     * @param format Format string used to build the destination
+     * @return True on success
+     */
+    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format)
+	{ return false; }
+
+    /**
      * Add a logic to the list. The added object is not owned by the client  
      * @param logic Pointer to the logic to add
      * @return True on success. False if the pointer is 0 or already added

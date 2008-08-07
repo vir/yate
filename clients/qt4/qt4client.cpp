@@ -1762,6 +1762,14 @@ bool QtClient::createSound(const char* name, const char* file, const char* devic
     return true;
 }
 
+bool QtClient::formatDateTime(String& dest, unsigned int secs, const char* format)
+{
+    if (!(format && *format))
+	return false;
+    dest = qtGetUtf8(formatDateTime(secs,format));
+    return true;
+}
+
 // Set/get an object's property
 bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
 {

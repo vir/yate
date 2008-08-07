@@ -149,6 +149,26 @@ public:
     virtual bool createSound(const char* name, const char* file, const char* device = 0);
 
     /**
+     * Build a date/time string
+     * @param dest Destination string
+     * @param secs Seconds since EPOCH
+     * @param format Format string used to build the destination
+     * @return True on success
+     */
+    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format);
+
+    /**
+     * Build a date/time QT string
+     * @param secs Seconds since EPOCH
+     * @param format Format string
+     * @return The formated string
+     */
+    static QString formatDateTime(unsigned int secs, const char* format) {
+	    QDateTime time = QDateTime::fromTime_t(secs);
+	    return time.toString(format);
+	}
+
+    /**
      * Set or get an object's property
      * @param set True to set, false to get the property
      * @param obj The object

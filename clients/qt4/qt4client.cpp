@@ -1281,8 +1281,8 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	bool ok = false;
 	if (prop == s_propHHeader) {
 	    // Show/hide the horizontal header
-	    ok = (w.type() == QtWidget::Table && var.type() == QVariant::Bool &&
-		w.table()->horizontalHeader());
+	    ok = ((w.type() == QtWidget::Table || w.type() == QtWidget::CustomTable) &&
+		var.type() == QVariant::Bool &&	w.table()->horizontalHeader());
 	    if (ok)
 		w.table()->horizontalHeader()->setVisible(var.toBool());
 	}

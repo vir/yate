@@ -1417,13 +1417,22 @@ void QtWindow::doInit()
     }
     m_visible = m_mainWindow || m_visible;
 
-    // Create custom widgets
+    // Create custom widgets from
+    // accessibleName=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
     QList<QFrame*> frm = qFindChildren<QFrame*>(this);
     for (int i = 0; i < frm.size(); i++) {
 	String create = qtGetUtf8(frm[i]->accessibleName());
-	if (!create.startSkip("customwidget;",false))
+	if (!create.startSkip("customwidget|",false))
 	    continue;
-	ObjList* list = create.split(';',false);
+	char sep = '|';
+	// Check if we have another separator
+	if (create.startSkip("separator=",false)) {
+	    if (create.length() < 2)
+		continue;
+	    sep = create.at(0);
+	    create = create.substr(2);
+	}
+	ObjList* list = create.split(sep,false);
 	String type;
 	String name;
 	NamedList params("");
@@ -1442,7 +1451,6 @@ void QtWindow::doInit()
 	    }
 	}
 	TelEngine::destruct(list);
-	// Handle known types
 	setWidget(frm[i],(QWidget*)UIFactory::build(type,name,&params));
     }
 

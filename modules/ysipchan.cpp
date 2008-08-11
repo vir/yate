@@ -3520,37 +3520,41 @@ bool YateSIPConnection::msgTone(Message& msg, const char* tone)
 	    inband = true;
 	}
     }
-    if (info) {
-	for (; tone && *tone; tone++) {
-	    char c = *tone;
-	    for (int i = 0; i <= 16; i++) {
-		if (s_dtmfs[i] == c) {
-		    SIPMessage* m = createDlgMsg("INFO");
-		    if (m) {
-			copySipHeaders(*m,msg);
-			String tmp;
-			tmp << "Signal=" << i << "\r\n";
-			m->setBody(new MimeStringBody("application/dtmf-relay",tmp));
-			plugin.ep()->engine()->addMessage(m);
-			m->deref();
-		    }
-		    break;
-		}
-	    }
-	}
-	return true;
-    }
-    if (m_rtpMedia && (m_mediaStatus == MediaStarted)) {
+    // RFC 2833 and inband require that we have an active local RTP stream
+    if (m_rtpMedia && (m_mediaStatus == MediaStarted) && !info) {
 	ObjList* l = m_rtpMedia->find("audio");
 	const NetMedia* m = static_cast<const NetMedia*>(l ? l->get() : 0);
 	if (m) {
+	    if (!(inband || m->rfc2833().toBoolean(true))) {
+		Debug(this,DebugNote,"Forcing DTMF '%s' inband, format '%s' [%p]",
+		    tone,m->format().c_str(),this);
+		inband = true;
+	    }
 	    if (inband && dtmfInband(tone))
 		return true;
 	    msg.setParam("targetid",m->id());
 	    return false;
 	}
     }
-    return false;
+    // either INFO was requested or we have no other choice
+    for (; tone && *tone; tone++) {
+	char c = *tone;
+	for (int i = 0; i <= 16; i++) {
+	    if (s_dtmfs[i] == c) {
+		SIPMessage* m = createDlgMsg("INFO");
+		if (m) {
+		    copySipHeaders(*m,msg);
+		    String tmp;
+		    tmp << "Signal=" << i << "\r\n";
+		    m->setBody(new MimeStringBody("application/dtmf-relay",tmp));
+		    plugin.ep()->engine()->addMessage(m);
+		    m->deref();
+		}
+		break;
+	    }
+	}
+    }
+    return true;
 }
 
 bool YateSIPConnection::msgText(Message& msg, const char* text)

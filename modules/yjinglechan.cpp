@@ -1615,7 +1615,7 @@ bool ResNotifyHandler::received(Message& msg)
 	XMLElement* pres = 0;
 	bool ok = (*status == "subscribed");
 	if (ok || *status == "unsubscribed")
-	    pres = JBPresence::createPresence(stream->local().bare(),to,
+	    pres = JBPresence::createPresence(0,to,
 		ok?JBPresence::Subscribed:JBPresence::Unsubscribed);
 	else {
 	    Lock lock(stream->streamMutex());

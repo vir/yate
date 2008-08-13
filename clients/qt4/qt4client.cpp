@@ -282,6 +282,7 @@ using namespace TelEngine;
 // Dynamic properies
 static String s_propFrameless = "dynamicFrameless";   // Windows: show/hide the border
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
+static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
 //
 static Qt4ClientFactory s_qt4Factory;
@@ -1297,6 +1298,38 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	return false;
     }
 #endif
+    if (event->type() == QEvent::KeyPress) {
+	static int mask = Qt::SHIFT | Qt::CTRL | Qt::ALT;
+
+	if (!Client::self())
+	    return QWidget::eventFilter(obj,event);
+	QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+	QWidget* wid = QApplication::focusWidget();
+	if (!wid)
+	    return false;
+	// Check if we should raise an action for the widget
+	QKeySequence ks(keyEvent->key());
+	String prop = s_propAction + qtGetUtf8(ks.toString());
+	String action;
+	getProperty(qtGetUtf8(wid->objectName()),prop,action);
+	if (!action)
+	    return QWidget::eventFilter(obj,event);
+	QVariant v = wid->property(prop + "Modifiers");
+	// Get modifiers from property and check them against event
+	int tmp = 0;
+	if (v.type() == QVariant::String) {
+	    QKeySequence ks(v.toString());
+	    for (unsigned int i = 0; i < ks.count(); i++)
+		tmp |= ks[i];
+	}
+	if (tmp == (mask & keyEvent->modifiers())) {
+	    // Check if we should let the control process the key
+	    QVariant v = wid->property(prop + "Filter");
+	    bool ret = ((v.type() == QVariant::Bool) ? v.toBool() : false);
+	    Client::self()->action(this,action);
+	    return ret;
+	}
+    }
     return QWidget::eventFilter(obj,event);
 }
 

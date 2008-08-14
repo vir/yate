@@ -1791,6 +1791,39 @@ void Client::installRelay(const char* name, int id, int prio)
 	TelEngine::destruct(relay);
 }
 
+// Process an IM message
+bool Client::imExecute(Message& msg)
+{
+    static String sect = "miscellanous";
+
+    XDebug(ClientDriver::self(),DebugAll,"Client::imExecute [%p]",this);
+    // Check for a preferred or only logic
+    String name = "imincoming";
+    String handle;
+    bool only = false, prefer = false, ignore = false, bailout = false;
+    bool ok = false;
+    if (hasOverride(s_actions.getSection(sect),name,handle,only,prefer,ignore,bailout) &&
+	(only || prefer)) {
+	ClientLogic* logic = findLogic(handle);
+	if (logic)
+	    ok = logic->imIncoming(msg);
+	bailout = only || ok;
+    }
+    if (bailout)
+	return ok;
+    // Ask the logics to create a channel
+    for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	if (ignore && handle == logic->toString())
+	    continue;
+	Debug(ClientDriver::self(),DebugAll,"Logic(%s) imIncoming [%p]",
+	    logic->toString().c_str(),logic);
+	if (logic->imIncoming(msg))
+	    return true;
+    }
+    return false;
+}
+
 // Build an incoming channel
 bool Client::buildIncomingChannel(Message& msg, const String& dest)
 {
@@ -2467,6 +2500,9 @@ void ClientDriver::setup()
     installRelay(Halt);
     installRelay(Progress);
     installRelay(Route,200);
+    installRelay(Text);
+    installRelay(ImRoute);
+    installRelay(ImExecute);
 }
 
 // if we receive a message for an incoming call, we pass the message on
@@ -2501,6 +2537,20 @@ bool ClientDriver::msgRoute(Message& msg)
 
 bool ClientDriver::received(Message& msg, int id)
 {
+    if (id == ImRoute) {
+	// don't route here our own messages
+	if (name() == msg.getValue("module"))
+	    return false;
+	if (!(Client::self() && Client::self()->imRouting(msg)))
+	    return false;
+	msg.retValue() = name() + "/*";
+	return true;
+    }
+    if (id == ImExecute || id == Text) {
+	if (name() == msg.getValue("module"))
+	    return false;
+	return Client::self() && Client::self()->imExecute(msg);
+    }
     if (id == Halt && Client::self()) {
 	dropAll(msg);
 	Client::self()->quit();

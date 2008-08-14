@@ -981,6 +981,19 @@ public:
 	{ return true;}
 
     /**
+     * IM message routing handler called by the driver
+     * @param msg The im.route message
+     */
+    virtual bool imRouting(Message& msg)
+	{ return true;}
+
+    /**
+     * Process an IM message
+     * @param msg The im.execute of chan.text message
+     */
+    virtual bool imExecute(Message& msg);
+
+    /**
      * Build an incoming channel.
      * Answer it if succesfully connected and auto answer is set.
      * Reject it if multiline is false and the driver is busy.
@@ -1643,6 +1656,13 @@ public:
      */
     virtual bool setClientParam(const String& param, const String& value,
 	bool save, bool update);
+
+    /**
+     * Process an IM message
+     * @param msg The im.execute of chan.text message
+     */
+    virtual bool imIncoming(Message& msg)
+	{ return false; }
 
     /**
      * Call execute handler called by the client.

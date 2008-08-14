@@ -1362,12 +1362,9 @@ void QtWindow::setVisible(bool visible)
 void QtWindow::show()
 {
     setVisible(true);
-    if (!m_maximized)
-	m_maximized = isMaximized();
-    if (m_maximized) {
-	m_maximized = false;
+    m_maximized = isMaximized();
+    if (m_maximized)
 	setWindowState(Qt::WindowMaximized);
-    }
 }
 
 // Hide the window

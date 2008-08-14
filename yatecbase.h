@@ -258,12 +258,13 @@ public:
     virtual bool clearTable(const String& name);
 
     /**
-     * Get a control's text
+     * Get an element's text
      * @param name Name of the element
      * @param text The destination string
+     * @param richText True to get the element's roch text if supported.
      * @return True if the operation was successfull
      */
-    virtual bool getText(const String& name, String& text) = 0;
+    virtual bool getText(const String& name, String& text, bool richText = false) = 0;
 
     /**
      * Get the checked state of a checkable control
@@ -884,7 +885,18 @@ public:
     bool getTableRow(const String& name, const String& item, NamedList* data = 0,
 	Window* wnd = 0, Window* skip = 0);
     bool clearTable(const String& name, Window* wnd = 0, Window* skip = 0);
-    bool getText(const String& name, String& text, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Get an element's text
+     * @param name Name of the element
+     * @param text The destination string
+     * @param richText True to get the element's roch text if supported.
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if the operation was successfull
+     */
+    bool getText(const String& name, String& text, bool richText = false, Window* wnd = 0, Window* skip = 0);
+
     bool getCheck(const String& name, bool& checked, Window* wnd = 0, Window* skip = 0);
     bool getSelect(const String& name, String& item, Window* wnd = 0, Window* skip = 0);
 

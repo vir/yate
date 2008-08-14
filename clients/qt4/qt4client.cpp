@@ -660,6 +660,11 @@ bool QtWindow::setText(const String& name, const String& text,
 	    }
 	    else
 		w.textEdit()->setText(qtSetUtf8(text));
+	    {
+		QScrollBar* bar = w.textEdit()->verticalScrollBar();
+		if (bar)
+		    bar->setSliderPosition(bar->maximum());
+	    }
 	    return true;
 	case QtWidget::Label:
 	    w.label()->setText(qtSetUtf8(text));
@@ -1068,7 +1073,7 @@ bool QtWindow::clearTable(const String& name)
     return false;
 }
 
-bool QtWindow::getText(const String& name, String& text)
+bool QtWindow::getText(const String& name, String& text, bool richText)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) getText(%s) [%p]",
 	m_id.c_str(),name.c_str(),this);
@@ -1083,7 +1088,10 @@ bool QtWindow::getText(const String& name, String& text)
 	    text = qtGetUtf8(w.lineEdit()->text());
 	    return true;
 	case QtWidget::TextEdit:
-	    text = qtGetUtf8(w.textEdit()->toPlainText());
+	    if (!richText)
+		text = qtGetUtf8(w.textEdit()->toPlainText());
+	    else
+		text = qtGetUtf8(w.textEdit()->toHtml());
 	    return true;
 	case QtWidget::Label:
 	    text = qtGetUtf8(w.label()->text());

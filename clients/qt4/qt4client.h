@@ -251,7 +251,16 @@ public:
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
     virtual bool getTableRow(const String& name, const String& item, NamedList* data = 0);
     virtual bool clearTable(const String& name);
-    virtual bool getText(const String& name, String& text);
+
+    /**
+     * Get an element's text
+     * @param name Name of the element
+     * @param text The destination string
+     * @param richText True to get the element's roch text if supported.
+     * @return True if the operation was successfull
+     */
+    virtual bool getText(const String& name, String& text, bool richText = false);
+
     virtual bool getCheck(const String& name, bool& checked);
     virtual bool getSelect(const String& name, String& item);
 

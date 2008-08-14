@@ -608,7 +608,7 @@ void ClientThreadProxy::process()
 	    m_rval = client->clearTable(m_name);
 	    break;
 	case getText:
-	    m_rval = client->getText(m_name,*m_rtext,m_wnd,m_skip);
+	    m_rval = client->getText(m_name,*m_rtext,m_rbool?*m_rbool:false,m_wnd,m_skip);
 	    break;
 	case getCheck:
 	    m_rval = client->getCheck(m_name,*m_rbool,m_wnd,m_skip);
@@ -1348,18 +1348,18 @@ bool Client::clearTable(const String& name, Window* wnd, Window* skip)
 }
 
 // function for obtaining the text from the "name" widget
-bool Client::getText(const String& name, String& text, Window* wnd, Window* skip)
+bool Client::getText(const String& name, String& text, bool richText, Window* wnd, Window* skip)
 {
     if (needProxy()) {
-	ClientThreadProxy proxy(ClientThreadProxy::getText,name,&text,0,wnd,skip);
+	ClientThreadProxy proxy(ClientThreadProxy::getText,name,&text,&richText,wnd,skip);
 	return proxy.execute();
     }
     if (wnd)
-	return wnd->getText(name,text);
+	return wnd->getText(name,text,richText);
     ObjList* l = &m_windows;
     for (; l; l = l->next()) {
 	wnd = static_cast<Window*>(l->get());
-	if (wnd && (wnd != skip) && wnd->getText(name,text))
+	if (wnd && (wnd != skip) && wnd->getText(name,text,richText))
 	    return true;
     }
     return false;

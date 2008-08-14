@@ -133,7 +133,7 @@ static bool checkParam(NamedList& p, const char* param, const String& widget,
     if (!Client::self())
 	return false;
     String value;
-    Client::self()->getText(widget,value,wnd);
+    Client::self()->getText(widget,value,false,wnd);
     value.trimBlanks();
     bool ok = value && !(checkNotSel && value.matches(Client::s_notSelected));
     if (ok)
@@ -798,7 +798,7 @@ bool ClientLogic::backspace(const String& name, Window* wnd)
 	return false;
 
     String str;
-    if (Client::self()->getText(name,str,wnd) &&
+    if (Client::self()->getText(name,str,false,wnd) &&
 	(!str || Client::self()->setText(name,str.substr(0,str.length()-1),false,wnd)))
 	Client::self()->setFocus(name,false,wnd);
     return true;
@@ -881,7 +881,7 @@ static inline void saveAccParam(NamedList& params,
 	const String& prefix, const String& param, Window* wnd)
 {
     String val;
-    if (!Client::self()->getText(prefix+param,val,wnd))
+    if (!Client::self()->getText(prefix+param,val,false,wnd))
 	return;
     if (val)
 	params.setParam(param,val);
@@ -901,10 +901,10 @@ bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
     const char* err = 0;
     while (true) {
 #define SET_ERR_BREAK(e) { err = e; break; }
-	Client::self()->getText("acc_account",account,wnd);
+	Client::self()->getText("acc_account",account,false,wnd);
 	if (!account)
 	    SET_ERR_BREAK("Account name field can't be empty");
-	Client::self()->getText("acc_protocol",proto,wnd);
+	Client::self()->getText("acc_protocol",proto,false,wnd);
 	if (!proto)
 	    SET_ERR_BREAK("A protocol must be selected");
 	break;
@@ -1089,10 +1089,10 @@ bool ClientLogic::acceptContact(NamedList* params, Window* wnd)
     // Check required data
     while (true) {
 #define SET_ERR_BREAK(e) { err = e; break; }
-	Client::self()->getText("abk_name",p,wnd);
+	Client::self()->getText("abk_name",p,false,wnd);
 	if (p.null())
 	    SET_ERR_BREAK("A contact name must be specified");
-	Client::self()->getText("abk_target",target,wnd);
+	Client::self()->getText("abk_target",target,false,wnd);
 	if (target)
 	    p.addParam("target",target);
 	else
@@ -1515,7 +1515,7 @@ bool ClientLogic::handleUiAction(Message& msg, bool& stopLogic)
 	ok = Client::self()->delOption(name,msg.getValue("item"),wnd);
     else if (*action == "get_text") {
 	String text;
-	ok = Client::self()->getText(name,text,wnd);
+	ok = Client::self()->getText(name,text,false,wnd);
 	if (ok)
 	    msg.retValue() = text;
     }

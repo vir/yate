@@ -3,6 +3,17 @@
 [general]
 ; Global settings of Jabber and Jingle engines
 
+; singletone: boolean: Send chan tones as single characters.
+; If disabled, the whole text received as chan tone(s) will be sent
+;  in the same XML element
+; Defaults to enable
+;singletone=enable
+
+; imtochantext: boolean: Send received IM messages as chan.text if a channel is found
+; If disabled, an im.route message will be pushed into the engine
+; Defaults to disable
+;imtochantext=disable
+
 ; localip: string: Set this machine's IP address. If missing, we will try to guess one
 ; The local machine's IP address is used to negotiate the audio stream
 ;localip=

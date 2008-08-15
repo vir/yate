@@ -2322,7 +2322,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    user->lock();
 	    // Get an audio resource if available
 	    if (!called.resource()) {
-		JIDResource* res = user->getAudio(true);
+		JIDResource* res = user->getAudio(false);
 		if (res)
 		    called.resource(res->name());
 	    }

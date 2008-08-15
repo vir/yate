@@ -795,19 +795,22 @@ public:
     ~SIPEvent();
 
     /**
-     * The SIP engine this event belongs to, if any
+     * Get the SIP engine this event belongs to, if any
+     * @return Pointer to owning SIP engine or NULL
      */
     inline SIPEngine* getEngine() const
 	{ return m_transaction ? m_transaction->getEngine() : 0; }
 
     /**
-     * The SIP message this event is supposed to handle
+     * Get the SIP message this event is supposed to handle
+     * @return Pointer to SIP message causing the event
      */
-    inline const SIPMessage* getMessage() const
+    inline SIPMessage* getMessage() const
 	{ return m_message; }
 
     /**
-     * The SIP transaction that gererated the event, if any
+     * Get the SIP transaction that generated the event, if any
+     * @return Pointer to owning SIP transaction or NULL
      */
     inline SIPTransaction* getTransaction() const
 	{ return m_transaction; }

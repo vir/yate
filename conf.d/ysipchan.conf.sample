@@ -102,6 +102,9 @@
 ; nat_refresh: int: Proposed client NAT refresh interval in seconds
 ;nat_refresh=25
 
+; async_process: bool: Process registrations asynchronously in their own thread
+;async_process=enable
+
 
 [sip-t]
 ; Controls the SIP-T parameter handling

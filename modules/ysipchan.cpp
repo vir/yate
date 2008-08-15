@@ -303,7 +303,8 @@ public:
     void run(void);
     bool incoming(SIPEvent* e, SIPTransaction* t);
     void invite(SIPEvent* e, SIPTransaction* t);
-    void regreq(SIPEvent* e, SIPTransaction* t);
+    void regReq(SIPEvent* e, SIPTransaction* t);
+    void regRun(const SIPMessage* message, SIPTransaction* t);
     void options(SIPEvent* e, SIPTransaction* t);
     bool generic(SIPEvent* e, SIPTransaction* t);
     bool buildParty(SIPMessage* message, const char* host = 0, int port = 0, const YateSIPLine* line = 0);
@@ -336,6 +337,21 @@ private:
     Driver* m_transferredDrv;        // Transferred driver's pointer
     Message* m_msg;                  // 'call.route' message
     SIPMessage* m_sipNotify;         // NOTIFY message to send the result
+};
+
+class YateSIPRegister : public Thread
+{
+public:
+    inline YateSIPRegister(YateSIPEndPoint* ep, SIPMessage* message, SIPTransaction* t)
+	: Thread("YSIP Register"),
+	  m_ep(ep), m_msg(message), m_tr(t)
+	{ }
+    virtual void run()
+	{ m_ep->regRun(m_msg,m_tr); }
+private:
+    YateSIPEndPoint* m_ep;
+    RefPointer<SIPMessage> m_msg;
+    RefPointer<SIPTransaction> m_tr;
 };
 
 class YateSIPConnection : public Channel
@@ -580,6 +596,7 @@ static bool s_start_rtp = false;
 static bool s_ack_required = true;
 static bool s_1xx_formats = true;
 static bool s_auth_register = true;
+static bool s_reg_async = true;
 static bool s_multi_ringing = false;
 static bool s_refresh_nosdp = true;
 static bool s_sipt_isup = false;         // Control the application/isup body processing
@@ -1648,7 +1665,7 @@ bool YateSIPEndPoint::incoming(SIPEvent* e, SIPTransaction* t)
 	    t->setResponse(481);
     }
     else if (t->getMethod() == "REGISTER")
-	regreq(e,t);
+	regReq(e,t);
     else if (t->getMethod() == "OPTIONS")
 	options(e,t);
     else if (t->getMethod() == "REFER") {
@@ -1692,14 +1709,25 @@ void YateSIPEndPoint::invite(SIPEvent* e, SIPTransaction* t)
 
 }
 
-void YateSIPEndPoint::regreq(SIPEvent* e, SIPTransaction* t)
+void YateSIPEndPoint::regReq(SIPEvent* e, SIPTransaction* t)
 {
     if (Engine::exiting()) {
 	Debug(&plugin,DebugWarn,"Dropping request, engine is exiting");
 	t->setResponse(500, "Server Shutting Down");
 	return;
     }
-    const SIPMessage* message = e->getMessage();
+    if (s_reg_async) {
+	YateSIPRegister* reg = new YateSIPRegister(this,e->getMessage(),t);
+	if (reg->startup())
+	    return;
+	Debug(&plugin,DebugWarn,"Failed to start register thread");
+	delete reg;
+    }
+    regRun(e->getMessage(),t);
+}
+
+void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
+{
     const MimeHeaderLine* hl = message->getHeader("Contact");
     if (!hl) {
 	t->setResponse(400);
@@ -1904,7 +1932,7 @@ bool YateSIPEndPoint::generic(SIPEvent* e, SIPTransaction* t)
 // sipNotify: already populated SIPMessage("NOTIFY")
 YateSIPRefer::YateSIPRefer(const String& transferorID, const String& transferredID,
 			   Driver* transferredDrv, Message* msg, SIPMessage* sipNotify)
-    : Thread("SIP Transfer"), m_transferorID(transferorID), m_transferredID(transferredID),
+    : Thread("YSIP Transfer"), m_transferorID(transferorID), m_transferredID(transferredID),
       m_transferredDrv(transferredDrv), m_msg(msg), m_sipNotify(sipNotify)
 {
 }
@@ -4572,6 +4600,7 @@ void SIPDriver::initialize()
     s_expires_max = s_cfg.getIntValue("registrar","expires_max",EXPIRES_MAX);
     s_auth_register = s_cfg.getBoolValue("registrar","auth_required",true);
     s_nat_refresh = s_cfg.getIntValue("registrar","nat_refresh",25);
+    s_reg_async = s_cfg.getBoolValue("registrar","async_process",true);
     s_ack_required = !s_cfg.getBoolValue("hacks","ignore_missing_ack",false);
     s_1xx_formats = s_cfg.getBoolValue("hacks","1xx_change_formats",true);
     initAudioCodecs();

@@ -101,11 +101,14 @@ public:
 	Candidate,                       // candidate
 	// Message
 	Body,                            // body
+	Subject,                         // subject
 	// Resources
 	Feature,                         // feature
 	Bind,                            // bind
 	Resource,                        // resource
 	// Miscellanous
+	Registered,                      // registered
+	Remove,                          // remove
 	Jid,                             // jid
 	Username,                        // username
 	Password,                        // password

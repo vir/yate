@@ -38,6 +38,7 @@ static TokenDict s_streamState[] = {
     {"Connecting", JBStream::Connecting},
     {"Started",    JBStream::Started},
     {"Securing",   JBStream::Securing},
+    {"Register",   JBStream::Register},
     {"Auth",       JBStream::Auth},
     {"Running",    JBStream::Running},
     {"Destroy",    JBStream::Destroy},
@@ -53,6 +54,7 @@ TokenDict JBStream::s_flagName[] = {
     {"secured",          StreamSecured},
     {"authenticated",    StreamAuthenticated},
     {"allowplainauth",   AllowPlainAuth},
+    {"allowunsafesetup", AllowUnsafeSetup},
     {0,0}
 };
 
@@ -255,14 +257,14 @@ bool JBSocket::send(const char* buffer, unsigned int& len)
 JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
 	const JabberID& localJid, const JabberID& remoteJid)
     : m_password(info.password()), m_flags(0), m_challengeCount(2),
-    m_waitState(WaitIdle), m_authMech(JIDFeatureSasl::MechNone), m_type(type),
+    m_waitState(WaitIdle), m_authMech(JIDFeatureSasl::MechNone), m_register(false), m_type(type),
     m_state(Idle), m_outgoing(true), m_restart(0), m_restartMax(0),
     m_timeToFillRestart(0), m_setupTimeout(0), m_idleTimeout(0),
     m_local(localJid.node(),localJid.domain(),localJid.resource()),
     m_remote(remoteJid.node(),remoteJid.domain(),remoteJid.resource()),
     m_engine(engine), m_socket(engine,0,info.address(),info.port()),
     m_lastEvent(0), m_terminateEvent(0), m_startEvent(0), m_recvCount(-1),
-    m_streamXML(0), m_declarationSent(0), m_nonceCount(0)
+    m_streamXML(0), m_declarationSent(0), m_nonceCount(0), m_registerId(0)
 {
     m_socket.m_stream = this;
 
@@ -287,6 +289,9 @@ JBStream::JBStream(JBEngine* engine, int type, XMPPServerInfo& info,
     // Allow plain auth
     if (info.flag(XMPPServerInfo::AllowPlainAuth))
 	m_flags |= AllowPlainAuth;
+    // Allow unsecure user registration
+    if (info.flag(XMPPServerInfo::AllowUnsafeSetup))
+	m_flags |= AllowUnsafeSetup;
 
     // Restart counter and update interval
     if (flag(AutoRestart))
@@ -584,6 +589,9 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 		}
 		processStarted(xml);
 		break;
+	    case Register:
+		processRegister(xml);
+		break;
 	    default: 
 		Debug(m_engine,DebugStub,"Unhandled stream state %u '%s' [%p]",
 		    state(),lookupState(state()),this);
@@ -839,6 +847,83 @@ void JBStream::processSecuring(XMLElement* xml)
     dropXML(xml);
 }
 
+// Process a received element in Register state
+void JBStream::processRegister(XMLElement* xml)
+{
+    XDebug(m_engine,DebugAll,"JBStream::processRegister('%s') [%p]",xml->name(),this);
+
+    XMPPUtils::IqType type = XMPPUtils::iqType(xml->getAttribute("type"));
+    String tmp = xml->getAttribute("id");
+    unsigned int id = tmp.toInteger();
+    if (xml->type() != XMLElement::Iq ||
+	(type != XMPPUtils::IqResult && type != XMPPUtils::IqError) ||
+	id != m_registerId) {
+	terminate(true,xml,XMPPError::UndefinedCondition,"Unacceptable response",true);
+	return;
+    }
+
+    // Check for errors
+    if (type == XMPPUtils::IqError) {
+	String error, text;
+	XMPPUtils::decodeError(xml,error,text);
+	delete xml;
+	terminate(true,0,XMPPError::UndefinedCondition,text?text:error,false);
+	return;
+    }
+
+    XMLElement* query = 0;
+    XMPPError::Type err = XMPPError::NoError;
+    const char* reason = "Invalid response";
+#define	SETERR_BREAK(e,r) { err = e; reason = r; break; }
+    // Wait for register query response
+    if (m_registerId == 1)
+	while (true) {
+	    XMLElement* query = xml->findFirstChild(XMLElement::Query);
+	    if (!query)
+		SETERR_BREAK(XMPPError::UndefinedCondition,reason);
+	    if (!XMPPUtils::hasXmlns(*query,XMPPNamespace::IqRegister))
+		SETERR_BREAK(XMPPError::InvalidNamespace,reason);
+	    // Check if already registered
+	    XMLElement* r = query->findFirstChild(XMLElement::Registered);
+	    if (r) {
+		m_register = false;
+		TelEngine::destruct(r);
+		break;
+	    }
+	    // Check if we have username/password
+	    XMLElement* user = query->findFirstChild(XMLElement::Username);
+	    XMLElement* pwd = query->findFirstChild(XMLElement::Password);
+	    bool ok = (user && pwd);
+	    TelEngine::destruct(user);
+	    TelEngine::destruct(pwd);
+	    if (!ok)
+		SETERR_BREAK(XMPPError::UndefinedCondition,"Unsupported method");
+	    // Send credential
+	    m_registerId = 2;
+	    String id = m_registerId;
+	    XMLElement* q = XMPPUtils::createRegisterQuery(0,0,id,m_local.node(),m_password);
+	    sendStreamXML(q,state());
+	    break;
+	}
+    // Registered
+    else if (m_registerId == 2)
+	m_register = false;
+    else {
+	dropXML(xml);
+	xml = 0;
+    }
+#undef SETERR_BREAK
+
+    TelEngine::destruct(query);
+    if (xml)
+	TelEngine::destruct(xml);
+
+    if (!m_register)
+	startAuth();
+    else if (err != XMPPError::NoError)
+	terminate(true,0,err,reason,true);
+}
+
 // Process a received element in Auth state
 void JBStream::processAuth(XMLElement* xml)
 {
@@ -1032,9 +1117,13 @@ void JBStream::processStarted(XMLElement* xml)
 
 	// Version 1: wait stream features
 	// Version 0: XEP-0078: start auth
+	// Start registering a new user if required
 	setRecvCount(-1);
 	if (flag(NoVersion1))
-	    startAuth();
+	    if (!m_register)
+		startAuth();
+	    else
+		startRegister();
 	else
 	    m_waitState = WaitFeatures;
     }
@@ -1057,9 +1146,16 @@ void JBStream::processStarted(XMLElement* xml)
 		m_waitState = WaitTlsRsp;
 		return;
 	    }
+	    // Allow user register through unsecured streams ?
+	    if (m_register && !flag(AllowUnsafeSetup)) {
+		TelEngine::destruct(xml);
+		terminate(true,0,XMPPError::Policy,"Can't register new user on unsecured stream",true);
+		return;
+	    } 
 	}
 	m_flags |= StreamSecured;
 	// Check if already authenticated
+	// Start registering a new user if required
 	if (!flag(StreamAuthenticated)) {
 	    // RFC 3920 6.1: no mechanisms --> SASL not supported
 	    XMLElement* e = xml->findFirstChild(XMLElement::Mechanisms);
@@ -1067,7 +1163,10 @@ void JBStream::processStarted(XMLElement* xml)
 		m_flags &= ~UseSasl;
 	    TelEngine::destruct(e);
 	    TelEngine::destruct(xml);
-	    startAuth();
+	    if (!m_register)
+		startAuth();
+	    else
+		startRegister();
 	    return;
 	}
 	m_flags |= StreamAuthenticated;
@@ -1416,6 +1515,27 @@ bool JBStream::startTls()
     }
     terminate(false,0,XMPPError::NoError,"Failed to start TLS",false);
     return false;
+}
+
+// Start client registration
+bool JBStream::startRegister()
+{
+    // Allow user register through unsecured streams ?
+    if (!flag(StreamSecured | AllowUnsafeSetup)) {
+	terminate(true,0,XMPPError::Policy,"Can't register new user on unsecured stream",true);
+	return false;
+    }
+
+    // Check if the server already told us it supports in-band register
+    // or query register support
+    XMLElement* xml = 0;
+    m_registerId = m_remoteFeatures.get(XMPPNamespace::Register) ? 2 : 1;
+    String id = m_registerId;
+    if (m_registerId == 2)
+	xml = XMPPUtils::createRegisterQuery(0,0,id,m_local.node(),m_password);
+    else
+	xml = XMPPUtils::createRegisterQuery(XMPPUtils::IqGet,0,0,id);
+    return sendStreamXML(xml,Register);
 }
 
 // Start client authentication
@@ -1894,6 +2014,8 @@ JBClientStream::JBClientStream(JBEngine* engine, XMPPServerInfo& info,
     m_roster = new XMPPUserRoster(0,localJid.node(),localJid.domain());
     m_resource = new JIDResource(local().resource(),JIDResource::Available,
 	JIDResource::CapChat|JIDResource::CapAudio);
+    // Check if we should register this user
+    m_register = params.getBoolValue("register");
 }
 
 // Destructor

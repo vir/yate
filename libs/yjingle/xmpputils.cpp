@@ -35,6 +35,7 @@ TokenDict XMPPServerInfo::s_flagName[] = {
     {"tlsrequired",      TlsRequired},
     {"oldstyleauth",     OldStyleAuth},
     {"allowplainauth",   AllowPlainAuth},
+    {"allowunsafesetup", AllowUnsafeSetup},
     {0,0}
 };
 
@@ -58,6 +59,7 @@ TokenDict XMPPNamespace::s_value[] = {
     {"urn:ietf:params:xml:ns:xmpp-streams",                StreamError},
     {"urn:ietf:params:xml:ns:xmpp-stanzas",                StanzaError},
     {"http://jabber.org/features/iq-register",             Register},
+    {"jabber:iq:register",                                 IqRegister},
     {"jabber:iq:auth",                                     IqAuth},
     {"http://jabber.org/features/iq-auth",                 IqAuthFeature},
     {"urn:ietf:params:xml:ns:xmpp-tls",                    Starttls},
@@ -456,6 +458,23 @@ XMLElement* XMPPUtils::createStreamError(XMPPError::Type error, const char* text
 	element->addChild(txt);
     }
     return element;
+}
+
+// Build a register query element
+XMLElement* XMPPUtils::createRegisterQuery(IqType type, const char* from,
+	const char* to, const char* id,
+	XMLElement* child1, XMLElement* child2, XMLElement* child3)
+{
+    XMLElement* iq = createIq(type,from,to,id);
+    XMLElement* q = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::IqRegister);
+    if (child1)
+	q->addChild(child1);
+    if (child2)
+	q->addChild(child2);
+    if (child3)
+	q->addChild(child3);
+    iq->addChild(q);
+    return iq;
 }
 
 // Check if the given element has an attribute 'xmlns' equal to a given value

@@ -75,6 +75,7 @@ public:
 	TlsRequired       = 0x0004,      // The server always requires connection encryption
 	OldStyleAuth      = 0x0008,      // The server doesn't support RFC 3920 TLS/SASL ...
 	AllowPlainAuth    = 0x0020,      // Allow plain password authentication
+	AllowUnsafeSetup  = 0x0040,      // Allow user account setup on unenchrypted streams
     };
 
     /**
@@ -184,6 +185,7 @@ public:
 	StreamError,                     // urn:ietf:params:xml:ns:xmpp-streams
 	StanzaError,                     // urn:ietf:params:xml:ns:xmpp-stanzas
 	Register,                        // http://jabber.org/features/iq-register
+	IqRegister,                      // jabber:iq:register
 	IqAuth,                          // jabber:iq:auth
 	IqAuthFeature,                   // http://jabber.org/features/iq-auth
 	Starttls,                        // urn:ietf:params:xml:ns:xmpp-tls
@@ -925,6 +927,38 @@ public:
      */
     static XMLElement* createStreamError(XMPPError::Type error,
 	const char* text = 0);
+
+    /**
+     * Build a register query element
+     * @param type Iq type as enumeration
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param child1 Optional child of query element
+     * @param child2 Optional child of query element
+     * @param child3 Optional child of query element
+     * @return Valid XMLElement pointer
+     */
+    static XMLElement* createRegisterQuery(IqType type, const char* from,
+	const char* to, const char* id,
+	XMLElement* child1 = 0, XMLElement* child2 = 0, XMLElement* child3 = 0);
+
+    /**
+     * Build an register query element used to create/set username/password
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param username The username
+     * @param password The password
+     * @return Valid XMLElement pointer
+     */
+    static inline XMLElement* createRegisterQuery(const char* from,
+	const char* to, const char* id,
+	const char* username, const char* password) {
+	    return createRegisterQuery(XMPPUtils::IqSet,from,to,id,
+		new XMLElement(XMLElement::Username,0,username),
+		new XMLElement(XMLElement::Password,0,password));
+	}
 
     /**
      * Check if the given element has an attribute 'xmlns' equal to a given value

@@ -362,9 +362,10 @@ public:
 	Connecting  = 1,                 // Stream is waiting for the socket to connect
 	Started     = 2,                 // Stream start tag sent
 	Securing    = 3,                 // Stream is currently negotiating the TLS
-	Auth        = 4,                 // Stream is currently authenticating
-	Running     = 5,                 // Established. Allow XML stanzas to pass over the stream
-	Destroy     = 6,                 // Stream is destroying. No more traffic allowed
+	Register    = 4,                 // A new user is currently registering
+	Auth        = 5,                 // Stream is currently authenticating
+	Running     = 6,                 // Established. Allow XML stanzas to pass over the stream
+	Destroy     = 7,                 // Stream is destroying. No more traffic allowed
     };
 
     /**
@@ -390,6 +391,7 @@ public:
 	                                 //  always require encryption
 	UseSasl         = 0x0010,        // Use SASL as authentication mechanism (RFC 3920)
 	                                 //  If not set, the deprecated XEP-0078 will be used for authentication
+	AllowUnsafeSetup    = 0x0020,    // Allow in-band user account setup on unsecured streams
 	StreamSecured       = 0x0100,    // Stream already secured
 	StreamAuthenticated = 0x0200,    // Stream already authenticated
 	NoRemoteVersion1    = 0x0400,    // Remote doesn't support RFC 3920 TLS/SASL ...
@@ -629,6 +631,12 @@ protected:
     virtual void processRunning(XMLElement* xml);
 
     /**
+     * Process a received element in Register state. Descendants MUST consume the data
+     * @param xml Valid XMLElement pointer
+     */
+    virtual void processRegister(XMLElement* xml);
+
+    /**
      * Process a received element in Auth state. Descendants MUST consume the data
      * @param xml Valid XMLElement pointer
      */
@@ -717,6 +725,13 @@ protected:
      * @return True if TLS was initiated. False on failure: stream termination was initiated
      */
     bool startTls();
+
+    /**
+     * Start client registration
+     * Terminate the stream on error
+     * @return False if the stream is terminated
+     */
+    bool startRegister();
 
     /**
      * Start client authentication. Send first request to authenticate with the server.
@@ -825,6 +840,11 @@ protected:
      */
     ObjList m_events;
 
+    /**
+     * Register a new account
+     */
+    bool m_register;
+
 private:
     // Event termination notification
     // @param event The notifier. Ignored if it's not m_lastEvent
@@ -868,6 +888,8 @@ private:
     String m_nonce;                      // Server nonce
     String m_cnonce;                     // Client nonce
     String m_realm;                      // Client realm
+    // Register data
+    unsigned int m_registerId;           // Id used when registering a new account
 };
 
 /**

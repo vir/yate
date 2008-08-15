@@ -24,6 +24,7 @@
  */
 
 #include <yatephone.h>
+#include <yatemime.h>
 #include <yateversn.h>
 
 #include <stdio.h>
@@ -371,6 +372,8 @@ public:
     virtual void initialize();
     virtual bool hasLine(const String& line) const;
     virtual bool msgExecute(Message& msg, String& dest);
+    // Send IM messages
+    virtual bool imExecute(Message& msg, String& dest);
     // Message handler: Disconnect channels, destroy streams, clear rosters
     virtual bool received(Message& msg, int id);
     // Try to create a JID from a message.
@@ -397,6 +400,10 @@ public:
     YJGConnection* find(const JabberID& local, const JabberID& remote, bool anyResource = false);
     // Build and add XML child elements from a received message
     bool addChildren(NamedList& msg, XMLElement* xml = 0, ObjList* list = 0);
+    // Get the destination (callto) from a call/im execute message
+    bool getExecuteDest(Message& msg, String& dest);
+    // Process a message received by a stream
+    void processImMsg(JBEvent& event);
     // Check if this module handles a given protocol
     static bool canHandleProtocol(const String& proto) {
 	    for (unsigned int i = 0; i < ProtoCount; i++)
@@ -426,6 +433,7 @@ private:
     bool m_singleTone;                   // Send single/batch DTMFs
     bool m_installIq;                    // Install the 'iq' service in jabber
                                          //  engine and xmpp. message handlers
+    bool m_imToChanText;                 // Send received IM messages as chan.text if a channel is found
     String m_statusCmd;                  //
 };
 
@@ -648,17 +656,9 @@ void YJBMessage::initialize()
 // Process a Jabber message
 void YJBMessage::processMessage(JBEvent* event)
 {
-    if (!(event && event->text()))
+    if (!event)
 	return;
-
-    YJGConnection* conn = plugin.find(event->to().c_str(),event->from().c_str());
-    DDebug(this,DebugInfo,"Message from=%s to=%s conn=%p '%s' [%p]",
-	event->from().c_str(),event->to().c_str(),conn,event->text().c_str(),this);
-    if (conn) {
-	Message* m = conn->message("chan.text");
-	m->addParam("text",event->text());
-	Engine::enqueue(m);
-    }
+    plugin.processImMsg(*event);
 }
 
 
@@ -2078,7 +2078,8 @@ bool XmppIqHandler::received(Message& msg)
 String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
 
 YJGDriver::YJGDriver()
-    : Driver("jingle","varchans"), m_init(false), m_singleTone(true), m_installIq(true)
+    : Driver("jingle","varchans"), m_init(false), m_singleTone(true), m_installIq(true),
+    m_imToChanText(false)
 {
     Output("Loaded module YJingle");
     m_statusCmd << "status " << name();
@@ -2181,6 +2182,7 @@ void YJGDriver::initialize()
 	// Driver setup
 	installRelay(Halt);
 	installRelay(Route);
+	installRelay(ImExecute);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
 	Engine::install(new XmppGenerateHandler);
@@ -2206,6 +2208,7 @@ void YJGDriver::initialize()
     s_localAddress = sect->getValue("localip");
     s_anonymousCaller = sect->getValue("anonymous_caller","unk_caller");
     s_pendingTimeout = sect->getIntValue("pending_timeout",10000);
+    m_imToChanText = sect->getBoolValue("imtochantext",false);
     // Init codecs in use. Check each codec in known codecs list against the configuration
     s_usedCodecs.clear();
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
@@ -2369,6 +2372,76 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
     return true;
 }
 
+// Send IM messages
+bool YJGDriver::imExecute(Message& msg, String& dest)
+{
+    // Construct JIDs
+    JabberID caller(msg.getValue("caller"));
+    JabberID called(dest);
+    String error;
+    const char* errStr = "failure";
+    JBStream* stream = 0;
+    while (true) {
+	// Component: prepare caller/called
+	if (s_jabber->protocol() == JBEngine::Component) {
+	    // TODO: implement
+	    error = "Message for component protocol is not implemented";
+	    break;
+	}
+	// Check if a stream exists
+	NamedString* account = msg.getParam("line");
+	if (account)
+	    stream = s_jabber->findStream(*account);
+	if (!stream)
+	    stream = s_jabber->getStream(&caller,false);
+	if (!(stream && stream->type() == JBEngine::Client)) {
+	    error = "No stream";
+	    break;
+	}
+	// Reset caller
+	caller.set("");
+	// Caller must be at least bare JIDs
+	if (!(called.node() && called.domain()))
+	    error << "Incomplete called=" << called;
+	break;
+    }
+    // Send the message
+    if (!error) {
+	const char* t = msg.getValue("xmpp_type",msg.getValue("type"));
+	JBMessage::MsgType type = JBMessage::msgType(t);
+	if (type == JBMessage::None)
+	    type = JBMessage::Chat;
+	const char* id = msg.getValue("id");
+	const char* stanzaId = msg.getValue("xmpp_id",id);
+	XMLElement* im = JBMessage::createMessage(type,caller,called,stanzaId,0);
+	const char* subject = msg.getValue("subject");
+	if (subject)
+	    im->addChild(new XMLElement(XMLElement::Subject,0,subject));
+	NamedString* b = msg.getParam("body");
+	XMLElement* body = 0;
+	if (b) {
+	    body = new XMLElement(XMLElement::Body,0,*b);
+	    NamedPointer* np = static_cast<NamedPointer*>(b->getObject("NamedPointer"));
+	    MimeStringBody* sb = static_cast<MimeStringBody*>(np ? np->userObject("MimeStringBody") : 0);
+	    if (sb) {
+		String name = sb->getType();
+		name.startSkip("text/",false);
+		body->addChild(new XMLElement(name,0,sb->text()));
+	    }
+	}
+	im->addChild(body);
+	JBStream::Error result = stream->sendStanza(im,id);
+	if (result == JBStream::ErrorContext || result == JBStream::ErrorNoSocket)
+	    error = "Failed to send message";
+    }
+    TelEngine::destruct(stream);
+    if (!error)
+	return true;
+    Debug(this,DebugNote,"Jabber message failed. %s",error.c_str());
+    msg.setParam("error",errStr?errStr:"noconn");
+    return false;
+}
+
 // Handle command complete requests
 bool YJGDriver::commandComplete(Message& msg, const String& partLine,
 	const String& partWord)
@@ -2499,21 +2572,19 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 // Message handler: Disconnect channels, destroy streams, clear rosters
 bool YJGDriver::received(Message& msg, int id)
 {
-    // Execute: accept 
+    // Execute: accept
     if (id == Execute) {
-	while (true) {
-	    NamedString* callto = msg.getParam("callto");
-	    if (!callto)
-		break;
-	    int pos = callto->find('/');
-	    if (pos < 1)
-		break;
-	    String dest = callto->substr(0,pos);
-	    if (!canHandleProtocol(dest))
-		break;
-	    dest = callto->substr(pos + 1);
+	String dest;
+	if (getExecuteDest(msg,dest))
 	    return msgExecute(msg,dest);
-	}
+	return Driver::received(msg,Execute);
+    }
+
+    // Send message
+    if (id == ImExecute) {
+	String dest;
+	if (getExecuteDest(msg,dest))
+	    return imExecute(msg,dest);
 	return Driver::received(msg,Execute);
     }
 
@@ -2729,6 +2800,93 @@ bool YJGDriver::addChildren(NamedList& msg, XMLElement* xml, ObjList* list)
 	added = true;
     }
     return added;
+}
+
+// Get the destination from a call/im execute message
+bool YJGDriver::getExecuteDest(Message& msg, String& dest)
+{
+    NamedString* callto = msg.getParam("callto");
+    if (!callto)
+	return false;
+    int pos = callto->find('/');
+    if (pos < 1)
+	return false;
+    dest = callto->substr(0,pos);
+    if (!canHandleProtocol(dest))
+	return false;
+    dest = callto->substr(pos + 1);
+    return true;
+}
+
+// Process a message received by a stream
+void YJGDriver::processImMsg(JBEvent& event)
+{
+    DDebug(this,DebugInfo,"Message from=%s to=%s '%s'",
+	event.from().c_str(),event.to().c_str(),event.text().c_str());
+
+    if (!event.text())
+	return;
+
+    JBMessage::MsgType type = JBMessage::msgType(event.stanzaType());
+    if (type != JBMessage::Chat)
+	return;
+
+    Message* m = 0;
+    YJGConnection* conn = 0;
+    while (m_imToChanText) {
+	conn = find(event.to().c_str(),event.from().c_str());
+	if (!conn)
+	    break;
+	DDebug(this,DebugInfo,"Found conn=%p for message from=%s to=%s [%p]",
+	    conn,event.from().c_str(),event.to().c_str());
+	m = conn->message("chan.text");
+	m->addParam("text",event.text());
+	break;
+    }
+    if (!m) {
+	m = new Message("msg.execute");
+	m->addParam("caller",event.from());
+	m->addParam("called",event.to());
+	m->addParam("module",name());
+	String billid;
+	billid << Engine::runId() << "-" << Channel::allocId();
+	m->addParam("billid",billid);
+    }
+
+    if (event.stream())
+	m->addParam("account",event.stream()->name());
+
+    // Fill the message
+    m->addParam("xmpp_id",event.id());
+    if (event.type())
+	m->addParam("xmpp_type",event.stanzaType());
+    XMLElement* xml = event.element();
+    XMLElement* body = 0;
+    if (xml) {
+	XMLElement* e = xml->findFirstChild(XMLElement::Subject);
+	if (e)
+	    m->addParam("subject",e->getText());
+	TelEngine::destruct(e);
+	body = xml->findFirstChild(XMLElement::Body);
+    }
+    // FIXME: the body child may be repeated
+    NamedPointer* p = new NamedPointer("body");
+    if (body) {
+	*p = body->getText();
+	// FIXME: the body may have more then 1 child
+	XMLElement* tmp = body->findFirstChild();
+	if (tmp)
+	    p->userData(new MimeStringBody("text/" + String(tmp->name()),tmp->getText()));
+	TelEngine::destruct(tmp);
+    }
+    m->addParam(p);
+    TelEngine::destruct(body);
+    if (conn)
+	Engine::enqueue(m);
+    else {
+	Engine::dispatch(*m);
+	TelEngine::destruct(m);
+    }
 }
 
 }; // anonymous namespace

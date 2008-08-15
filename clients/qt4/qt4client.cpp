@@ -572,6 +572,29 @@ void QtWindow::context(const String& text)
 bool QtWindow::setParams(const NamedList& params)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setParams() [%p]",this);
+
+    // Check for custom widget params
+    if (params == "customwidget") {
+	// Each parameter is a list of parameters for a custom widget
+	// Parameter name is the widget's name
+	unsigned int n = params.length();
+	bool ok = false;
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = params.getParam(i);
+	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
+	    if (!(nl && ns->name()))
+		continue;
+	    // Find the widget and set its params
+	    QtWidget w(this,ns->name());
+	    if (w.type() == QtWidget::CustomTable)
+		ok = w.customTable()->setParams(*nl) && ok;
+	    else
+		ok = false;
+	}
+	return ok;
+    }
+
+    // Window or other parameters
     if (params.getBoolValue("modal"))
 	setWindowModality(Qt::ApplicationModal);
     if (params.getBoolValue("minimized"))

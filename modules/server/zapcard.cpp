@@ -610,6 +610,7 @@ private:
 static ZapModule plugin;
 YSIGFACTORY2(ZapInterface,SignallingInterface);  // Factory used to create zaptel interfaces and spans
 static Mutex s_ifaceNotifyMutex(true);           // ZapInterface: lock recv data notification counter
+static Mutex s_sourceAccessMutex;                // ZapSource access to pointers
 static const char* s_chanParamsHdr = "format=Type|ZaptelType|Span|SpanPos|Alarms|UsedBy";
 static const char* s_spanParamsHdr = "format=Channels|Total|Alarms|Name|Description";
 
@@ -2037,10 +2038,14 @@ bool ZapCircuit::status(Status newStat, bool sync)
 // Update data format for zaptel device and source/consumer 
 bool ZapCircuit::updateFormat(const char* format, int direction)
 {
-    if (!(m_source && format && *format))
+    s_sourceAccessMutex.lock();
+    RefPointer<ZapSource> src = m_source;
+    s_sourceAccessMutex.unlock();
+
+    if (!(src && format && *format))
 	return false;
     // Do nothing if format is the same
-    if (m_source->getFormat() == format && m_consumer && m_consumer->getFormat() == format)
+    if (src->getFormat() == format && m_consumer && m_consumer->getFormat() == format)
 	return false;
     // Check format
     // T1,E1: allow alaw or mulaw
@@ -2061,7 +2066,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
     }
     // Update the format for Zaptel device
     if (setFormat((ZapDevice::Format)f)) {
-	m_source->changeFormat(format);
+	src->changeFormat(format);
 	if (m_consumer)
 	    m_consumer->changeFormat(format);
 	return true;
@@ -2159,7 +2164,11 @@ void* ZapCircuit::getObject(const String& name) const
 // Process incoming data
 bool ZapCircuit::process()
 {
-    if (!(m_device.valid() && SignallingCircuit::status() == Connected && m_source))
+    s_sourceAccessMutex.lock();
+    RefPointer<ZapSource> src = m_source;
+    s_sourceAccessMutex.unlock();
+
+    if (!(m_device.valid() && SignallingCircuit::status() == Connected && src))
 	return false;
 
     if (!m_device.select(10))
@@ -2176,7 +2185,7 @@ bool ZapCircuit::process()
     if (r > 0) {
 	if ((unsigned int)r != m_sourceBuffer.length())
 	    ::memset((unsigned char*)m_sourceBuffer.data() + r,m_idleValue,m_sourceBuffer.length() - r);
-	m_source->Forward(m_sourceBuffer);
+	src->Forward(m_sourceBuffer);
 	return true;
     }
     return false;
@@ -2259,8 +2268,14 @@ void ZapCircuit::cleanup(bool release, Status stat, bool stop)
 	TelEngine::destruct(m_consumer);
     }
     if (m_source) {
-	m_source->clear();
-	TelEngine::destruct(m_source);
+	s_sourceAccessMutex.lock();
+	ZapSource* tmp = m_source;
+	m_source = 0;
+	s_sourceAccessMutex.unlock();
+	if (tmp) {
+	    tmp->clear();
+	    TelEngine::destruct(tmp);
+	}
     }
     if (release) {
 	SignallingCircuit::destroyed();
@@ -2576,7 +2591,11 @@ bool ZapAnalogCircuit::process()
     m_device.pollHook();
     checkEvents();
 
-    if (!(m_source && m_device.select(10) && m_device.canRead()))
+    s_sourceAccessMutex.lock();
+    RefPointer<ZapSource> src = m_source;
+    s_sourceAccessMutex.unlock();
+
+    if (!(src && m_device.select(10) && m_device.canRead()))
 	return false;
 
     int r = m_device.recv(m_sourceBuffer.data(),m_sourceBuffer.length());
@@ -2587,7 +2606,7 @@ bool ZapAnalogCircuit::process()
 	    ::memset((unsigned char*)m_sourceBuffer.data() + r,m_idleValue,m_sourceBuffer.length() - r);
 	XDebug(group(),DebugAll,"ZapCircuit(%u). Forwarding %u bytes [%p]",
 	    code(),m_sourceBuffer.length(),this);
-	m_source->Forward(m_sourceBuffer);
+	src->Forward(m_sourceBuffer);
 	return true;
     }
 

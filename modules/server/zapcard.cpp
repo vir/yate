@@ -2665,7 +2665,6 @@ ZapModule::ZapModule()
     Output("Loaded module Zaptel");
     m_prefix << name() << "/";
     m_statusCmd << "status " << name();
-    m_devices.setDelete(false);
 }
 
 ZapModule::~ZapModule()
@@ -2678,7 +2677,7 @@ void ZapModule::append(ZapDevice* dev)
     if (!dev)
 	return;
     Lock lock(this);
-    m_devices.append(dev);
+    m_devices.append(dev)->setDelete(false);
     m_count = m_devices.count();
 }
 

@@ -1350,7 +1350,8 @@ AnalogChannel::AnalogChannel(ModuleLine* line, Message* msg, RecordTrigger recor
     m_callsetup(AnalogLine::NoCallSetup)
 {
     m_line->userdata(this);
-    m_line->moduleGroup()->setEndpoint(this,true);
+    if (m_line->moduleGroup())
+	m_line->moduleGroup()->setEndpoint(this,true);
 
     // Set caller/called from line
     if (isOutgoing())
@@ -2081,7 +2082,8 @@ void AnalogChannel::detachLine()
     if (!m_line)
 	return;
 
-    m_line->moduleGroup()->setEndpoint(this,false);
+    if (m_line->moduleGroup())
+	m_line->moduleGroup()->setEndpoint(this,false);
     m_line->userdata(0);
     m_line->acceptPulseDigit(true);
     if (m_line->state() != AnalogLine::Idle) {

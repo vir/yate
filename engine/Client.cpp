@@ -2145,8 +2145,8 @@ ClientChannel::ClientChannel(const String& target, const NamedList& params)
     }
     m->setParam(param,to);
     s->setParam("called",to);
-    m->copyParams(params,"line,protocol,account,username,callername,domain");
-    s->copyParams(params,"line,protocol,account,username,callername,domain");
+    m->copyParams(params,"line,protocol,account,caller,callername,domain");
+    s->copyParams(params,"line,protocol,account,caller,callername,domain");
     Engine::enqueue(s);
     if (startRouter(m))
 	update(Startup);

@@ -2252,7 +2252,7 @@ bool ClientLogic::fillCallStart(NamedList& p, Window* wnd)
     checkParam(p,"line","line",false,wnd);
     checkParam(p,"protocol","protocol",true,wnd);
     checkParam(p,"account","account",true,wnd);
-    checkParam(p,"username","def_username",false,wnd);
+    checkParam(p,"caller","def_username",false,wnd);
     checkParam(p,"callername","def_callerid",false,wnd);
     checkParam(p,"domain","def_domain",false,wnd);
     return true;

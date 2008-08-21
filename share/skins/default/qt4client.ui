@@ -2590,7 +2590,7 @@
                    <string>Phone number, user identifier or alias</string>
                   </property>
                   <property name="text" >
-                   <string>Username</string>
+                   <string>Username or number</string>
                   </property>
                  </widget>
                 </item>

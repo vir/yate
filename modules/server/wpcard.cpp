@@ -1646,6 +1646,7 @@ void WpModule::initialize()
     Output("Initializing module Wanpipe");
     if (!m_init) {
 	m_init = true;
+	setup();
 	String events;
 #ifndef HAVE_WANPIPE_HWEC
 	events.append("set/reset echo canceller",", ");

@@ -204,7 +204,7 @@ class YQT4_API QtWindow : public QWidget, public Window
     friend class QtClient;
 public:
     QtWindow();
-    QtWindow(const char* name, const char* description);
+    QtWindow(const char* name, const char* description, const char* alias);
     virtual ~QtWindow();
 
     virtual void title(const String& text);
@@ -348,6 +348,7 @@ protected:
 	{ return findChild<QWidget*>(m_widget); }
 
     String m_description;
+    String m_oldId;                     // Old id used to retreive the config section in .rc
     bool m_keysVisible;
     int m_x;
     int m_y;

@@ -523,12 +523,12 @@ QtWindow::QtWindow()
 {
 }
 
-QtWindow::QtWindow(const char* name, const char* description)
-    : Window(name), m_description(description),
+QtWindow::QtWindow(const char* name, const char* description, const char* alias)
+    : Window(alias ? alias : name), m_description(description), m_oldId(name),
     m_x(0), m_y(0), m_width(0), m_height(0),
     m_maximized(false), m_mainWindow(false)
 {
-    setObjectName(qtSetUtf8(name));
+    setObjectName(qtSetUtf8(m_id));
     setAccessibleName(qtSetUtf8(description));
 }
 
@@ -1393,7 +1393,7 @@ void QtWindow::setVisible(bool visible)
 void QtWindow::show()
 {
     setVisible(true);
-    m_maximized = isMaximized();
+    m_maximized = m_maximized || isMaximized();
     if (m_maximized)
 	setWindowState(Qt::WindowMaximized);
 }
@@ -1460,8 +1460,8 @@ void QtWindow::doInit()
 	setWindowFlags(Qt::FramelessWindowHint);
 
     // Load window data
-    m_mainWindow = s_cfg.getBoolValue(m_id,"mainwindow");
-    m_saveOnClose = s_cfg.getBoolValue(m_id,"save",true);
+    m_mainWindow = s_cfg.getBoolValue(m_oldId,"mainwindow");
+    m_saveOnClose = s_cfg.getBoolValue(m_oldId,"save",true);
     NamedList* sect = s_save.getSection(m_id);
     if (sect) {
 	m_maximized = sect->getBoolValue("maximized");
@@ -1474,7 +1474,7 @@ void QtWindow::doInit()
     else {
 	Debug(QtDriver::self(),DebugNote,"Window(%s) not found in config [%p]",
 	    m_id.c_str(),this);
-	m_visible = s_cfg.getBoolValue(m_id,"visible");
+	m_visible = s_cfg.getBoolValue(m_oldId,"visible");
     }
     m_visible = m_mainWindow || m_visible;
 
@@ -1723,20 +1723,21 @@ void QtClient::allHidden()
 
 bool QtClient::createWindow(const String& name, const String& alias)
 {
-    String wName = alias ? alias : name;
-    QtWindow* w = new QtWindow(wName,s_skinPath + s_cfg.getValue(name,"description"));
+    QtWindow* w = new QtWindow(name,s_skinPath + s_cfg.getValue(name,"description"),alias);
     if (w) {
-	Debug(QtDriver::self(),DebugAll,"Created window %s (%p)",wName.c_str(),w);
+	Debug(QtDriver::self(),DebugAll,"Created window name=%s alias=%s (%p)",
+	    name.c_str(),alias.c_str(),w);
 	// Remove the old window
-	ObjList* o = m_windows.find(wName);
+	ObjList* o = m_windows.find(w->id());
 	if (o)
-	    Client::self()->closeWindow(wName,false);
+	    Client::self()->closeWindow(w->id(),false);
 	w->populate();
 	m_windows.append(w);
 	return true;
     }
     else
-	Debug(QtDriver::self(),DebugGoOn,"Could not create window %s",wName.c_str());
+	Debug(QtDriver::self(),DebugGoOn,"Could not create window name=%s alias=%s",
+	    name.c_str(),alias.c_str());
     return false;
 }
 

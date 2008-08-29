@@ -234,9 +234,9 @@ bool NamedList::getBoolValue(const String& name, bool defvalue) const
 
 int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 {
-    int p1;
+    int p1 = 0;
     int cnt = 0;
-    while ((p1 = str.find("${")) >= 0) {
+    while ((p1 = str.find("${",p1)) >= 0) {
 	int p2 = str.find('}',p1+2);
 	if (p2 > 0) {
 	    String tmp = str.substr(p1+2,p2-p1-2);
@@ -246,11 +246,8 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 	    if (sqlEsc)
 		tmp = tmp.sqlEscape(extraEsc);
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
-	    // put a limit to avoid infinite loops
-	    if (++cnt >= 1000) {
-		Debug(DebugWarn,"NamedList reached count %d replacing into '%s' [%p]",cnt,str.c_str(),this);
-		return -1;
-	    }
+	    // advance search offset past the string we just replaced
+	    p1 += tmp.length();
 	}
 	else
 	    return -1;

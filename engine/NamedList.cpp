@@ -248,6 +248,7 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
 	    // advance search offset past the string we just replaced
 	    p1 += tmp.length();
+	    cnt++;
 	}
 	else
 	    return -1;

@@ -96,6 +96,11 @@ check-topdir:
 check-root:
 	@test `id -u` = '0' || (echo "You must run this command as root"; exit 1)
 
+check-ldconfig:
+	@test "x/usr/@ARCHLIB@" = "x$(libdir)" || \
+	    grep -l -R "^$(libdir)$$" /etc/ld.so.conf* >/dev/null 2>&1 || \
+	    echo "Add manually $(libdir) to /etc/ld.so.conf and run ldconfig (as root)"
+
 clean-config-files: check-topdir
 	-rm -rf auto*.cache
 	-rm -f @CONFIGURE_FILES@
@@ -112,7 +117,7 @@ distclean: check-topdir clean clean-config-files
 cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 	-rm -f configure
 
-.PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir windows
+.PHONY: engine libs modules clients test apidocs-build apidocs-kdoc apidocs-doxygen apidocs-everything check-topdir check-ldconfig windows
 engine: tables library libyate.so $(PROGS)
 
 apidocs-kdoc: check-topdir
@@ -183,7 +188,7 @@ windows: check-topdir
 	@cmp -s yateiss.inc $@/yateiss.inc || cp -p yateiss.inc $@/yateiss.inc
 
 .PHONY: install install-root install-noapi install-api uninstall uninstall-root
-install install-root: all apidocs install-noapi install-api
+install install-root: all apidocs install-noapi install-api check-ldconfig
 
 install-noapi: all
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \

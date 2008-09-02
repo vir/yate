@@ -2576,15 +2576,13 @@ public:
     /**
      * Destructor
      */
-    virtual ~DurationUpdate()
-	{ setLogic(); }
+    virtual ~DurationUpdate();
 
     /**
      * Get a string representation of this object
      * @return This duration's id
      */
-    virtual const String& toString() const
-	{ return m_id; }
+    virtual const String& toString() const;
 
     /**
      * Set the logic used to update this duration object. Remove from the old one
@@ -2613,8 +2611,7 @@ public:
      * @return The duration
      */
     virtual unsigned int buildTimeParam(NamedList& dest, unsigned int secNow,
-	bool force = false)
-	{ return buildTimeParam(dest,m_name,m_startTime,secNow,force); }
+	bool force = false);
 
     /**
      * Build a duration string representation hh:mm:ss. The hours are added only if non 0
@@ -2624,8 +2621,7 @@ public:
      * @return The duration
      */
     virtual unsigned int buildTimeString(String& dest, unsigned int secNow,
-	bool force = false)
-	{ return buildTimeString(dest,m_startTime,secNow,force); }
+	bool force = false);
 
     /**
      * Build a duration string representation and add the parameter to a list
@@ -2654,10 +2650,7 @@ protected:
     /**
      * Release memory. Remove from updater
      */
-    virtual void destroyed() {
-	    setLogic();
-	    RefObject::destroyed();
-	}
+    virtual void destroyed();
 
     String m_id;                         // Duration's id
     ClientLogic* m_logic;                // Client logic having this object in its list

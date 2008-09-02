@@ -2291,6 +2291,32 @@ void ClientLogic::channelSelectionChanged(const String& old)
  * DurationUpdate
  */
 
+// Destructor
+DurationUpdate::~DurationUpdate()
+{
+    setLogic();
+}
+
+// Get a string representation of this object
+const String& DurationUpdate::toString() const
+{
+    return m_id;
+}
+
+// Build a duration string representation and add the parameter to a list
+unsigned int DurationUpdate::buildTimeParam(NamedList& dest, unsigned int secNow,
+	bool force)
+{
+    return buildTimeParam(dest,m_name,m_startTime,secNow,force);
+}
+
+// Build a duration string representation hh:mm:ss. The hours are added only if non 0
+unsigned int DurationUpdate::buildTimeString(String& dest, unsigned int secNow,
+	bool force)
+{
+    return buildTimeString(dest,m_startTime,secNow,force);
+}
+
 // Set the logic used to update this duration object. Remove from the old one
 void DurationUpdate::setLogic(ClientLogic* logic, bool owner)
 {
@@ -2345,6 +2371,13 @@ unsigned int DurationUpdate::buildTimeString(String& dest, unsigned int secStart
     unsigned int secs = rest % 60;
     dest << ((hrs && mins < 10) ? "0" : "") << mins << ":" << (secs < 10 ? "0" : "") << secs;
     return duration;
+}
+
+// Release memory. Remove from updater
+void DurationUpdate::destroyed()
+{
+    setLogic();
+    RefObject::destroyed();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

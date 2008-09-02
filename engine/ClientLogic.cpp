@@ -2172,7 +2172,21 @@ bool ClientLogic::removeDurationUpdate(const String& name, bool delObj)
 // Remove a duration object from list
 bool ClientLogic::removeDurationUpdate(DurationUpdate* duration, bool delObj)
 {
-    return duration ? removeDurationUpdate(duration->toString(),delObj) : false;
+    if (!duration)
+	return false;
+    Lock lock(m_durationMutex);
+    ObjList* obj = m_durationUpdate.find(duration);
+    if (!obj)
+	return false;
+    obj->remove(false);
+    DDebug(ClientDriver::self(),DebugInfo,
+	"Logic(%s) removed duration ('%s',%p) delObj=%u",
+	m_name.c_str(),duration->toString().c_str(),duration,delObj); 
+    lock.drop();
+    duration->setLogic(0);
+    if (delObj)
+	TelEngine::destruct(duration);
+    return true;
 }
 
 // Find a duration update by its name

@@ -619,9 +619,12 @@ bool QtWindow::setActive(const String& name, bool active)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setActive(%s,%s) [%p]",
 	name.c_str(),String::boolText(active),this);
+    bool ok = (name == m_id);
+    if (ok)
+	QApplication::setActiveWindow(this);
     QtWidget w(this,name);
     if (w.invalid())
-	return false;
+	return ok;
     if (w.type() != QtWidget::Action)
 	w->setEnabled(active);
     else

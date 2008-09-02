@@ -471,7 +471,7 @@ void YSipNotifyHandler::createDialogBody(String& dest, const Message& src,
 void YSipNotifyHandler::createMWIBody(String& dest, const Message& src)
 {
     // See RFC3458 6.2 for message classes
-    dest = "Message-Waiting: ";
+    dest = "Messages-Waiting: ";
     unsigned int n = (unsigned int)src.getIntValue("message-summary.voicenew",0);
     unsigned int o = (unsigned int)src.getIntValue("message-summary.voiceold",0);
     if (n || o) {

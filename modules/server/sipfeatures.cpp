@@ -187,26 +187,28 @@ bool YSipSubscribeHandler::received(Message &msg)
     else
 	m.addParam("operation","unsubscribe");
     m.addParam("subscriber",msg.getValue("username"));
-    URI uriContact(contact);
-    String notifyto;
-    notifyto << "sip:" << uriContact.getUser() << "@" << uriContact.getHost();
-    m.addParam("notifyto",notifyto);
+
+    String notifyTo = contact;
+    static Regexp r("<\\([^>]\\+\\)>");
+    if (notifyTo.matches(r))
+	notifyTo = notifyTo.matchString(1);
+    m.addParam("notifyto",notifyTo);
+
     URI uriRequest = msg.getValue("sip_uri");
     m.addParam("notifier",uriRequest.getUser());
     // Pack data parameters
     String data;
     appendEsc(data,"host",msg.getValue("ip_host"));
     appendEsc(data,"port",msg.getValue("ip_port"));
-    appendEsc(data,"uri",msg.getValue("sip_contact"));
+    appendEsc(data,"uri",notifyTo);
     String from = msg.getValue("sip_to");
     if (-1 == from.find("tag="))
 	from << ";tag=" << msg.getValue("xsip_dlgtag");
     appendEsc(data,"sip_From",from);
     appendEsc(data,"sip_To",msg.getValue("sip_from"));
     appendEsc(data,"sip_Call-ID",msg.getValue("sip_callid"));
-    String c;
-    c << "<" << notifyto << ">";
-    appendEsc(data,"sip_Contact",c);
+    String uri = msg.getValue("sip_uri");
+    appendEsc(data,"sip_Contact","<" + uri + ">");
     appendEsc(data,"sip_Event",evName);
     if (content)
 	appendEsc(data,"xsip_type",content);
@@ -215,7 +217,7 @@ bool YSipSubscribeHandler::received(Message &msg)
     XDebug(&s_module,DebugAll,
 	"SUBSCRIBE. notifier=%s subscriber=%s event=%s notifyto=%s",
 	m.getValue("notifier"),m.getValue("subscriber"),
-	evName.c_str(),notifyto.c_str());
+	evName.c_str(),notifyTo.c_str());
 
     if (!Engine::dispatch(m))
 	return false;

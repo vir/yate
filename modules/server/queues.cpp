@@ -32,8 +32,8 @@ static ObjList s_queues;
 class QueuedCall : public String
 {
 public:
-    inline QueuedCall(const String& id, const char* caller = 0)
-	: String(id), m_caller(caller)
+    inline QueuedCall(const String& id, const char* caller, const char* billid)
+	: String(id), m_caller(caller), m_billid(billid)
 	{ m_last = m_time = Time::now(); }
     inline int waitingTime(u_int64_t when = Time::now())
 	{ return (int)(when - m_time); }
@@ -45,11 +45,14 @@ public:
 	{ m_marked = mark; m_last = Time::now(); }
     inline const String& getCaller() const
 	{ return m_caller; }
+    inline const String& getBillId() const
+	{ return m_billid; }
     void complete(Message& msg) const;
 
 protected:
     String m_caller;
     String m_marked;
+    String m_billid;
     u_int64_t m_time;
     u_int64_t m_last;
 };
@@ -262,7 +265,7 @@ bool CallsQueue::addCall(Message& msg)
     }
     msg.setParam("source",tmp);
     msg.setParam("callto",s_chanIncoming);
-    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"));
+    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"),msg.getValue("billid"));
     // high priority calls will go in queue's head instead of tail
     if (msg.getBoolValue("priority")) {
 	m_calls.insert(call);
@@ -445,6 +448,7 @@ void CallsQueue::startACD()
 	ex->addParam("caller",call->getCaller());
 	ex->addParam("called",user);
 	ex->addParam("callto",s_chanOutgoing);
+	ex->addParam("billid",call->getBillId());
 	ex->addParam("notify",*call);
 	ex->addParam("queue",c_str());
 	const char* tmp = params.getValue("maxcall",getValue("maxcall"));

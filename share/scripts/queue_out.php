@@ -52,6 +52,7 @@ for (;;) {
 		    $m->params["caller"] = $ev->GetValue("caller");
 		    $m->params["called"] = $ev->GetValue("called");
 		    $m->params["callto"] = $ev->GetValue("direct");
+		    $m->params["billid"] = $ev->GetValue("billid");
 		    $m->params["maxcall"] = $ev->GetValue("maxcall");
 		    $m->params["cdrtrack"] = "false";
 		    $m->Dispatch();

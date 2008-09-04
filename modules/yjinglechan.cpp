@@ -1635,6 +1635,7 @@ bool ResNotifyHandler::received(Message& msg)
 	}
 	ok = false;
 	if (pres) {
+	    plugin.addChildren(msg,pres);
 	    JBStream::Error err = stream->sendStanza(pres);
 	    ok = (err == JBStream::ErrorNone) || (err == JBStream::ErrorPending);
 	}

@@ -601,7 +601,12 @@ void Thread::msleep(unsigned long msec, bool exitCheck)
 void Thread::usleep(unsigned long usec, bool exitCheck)
 {
 #ifdef _WINDOWS
-    ::Sleep(usec/1000);
+    if (usec) {
+	usec = (usec + 500) / 1000;
+	if (!usec)
+	    usec = 1;
+    }
+    ::Sleep(usec);
 #else
     ::usleep(usec);
 #endif

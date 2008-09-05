@@ -223,6 +223,7 @@ bool YSipSubscribeHandler::received(Message &msg)
 	return false;
 
     msg.setParam("osip_Expires",sExpires);
+    msg.setParam("osip_Contact",*contact);
     msg.setParam("code","200");
     return true;
 }

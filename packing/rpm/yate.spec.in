@@ -20,6 +20,9 @@
 %define dist %(test -f /etc/fedora-release && echo fc)
 %endif
 %if "%{dist}" == ""
+%define dist %(grep -q ^CentOS /etc/issue && echo centos)
+%endif
+%if "%{dist}" == ""
 %define dist %(test -f /etc/redhat-release && echo rh)
 %endif
 %if "%{dist}" == ""

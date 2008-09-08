@@ -1611,7 +1611,7 @@ bool ResNotifyHandler::received(Message& msg)
 	    return false;
 	const char* to = msg.getValue("to");
 	XDebug(&plugin,DebugAll,"%s account=%s to=%s status=%s",
-	    account->c_str(),to,status->c_str());
+	    msg.c_str(),account->c_str(),to,status->c_str());
 	XMLElement* pres = 0;
 	bool ok = (*status == "subscribed");
 	if (ok || *status == "unsubscribed")
@@ -1850,7 +1850,7 @@ bool ResSubscribeHandler::received(Message& msg)
 	    stream = s_jabber->findStream(*account);
 	    if (stream) {
 		XDebug(&plugin,DebugAll,"%s account=%s to=%s operation=%s",
-		    account->c_str(),msg.getValue("to"),oper->c_str());
+		    msg.c_str(),account->c_str(),msg.getValue("to"),oper->c_str());
 		pres = JBPresence::createPresence(stream->local(),
 		    msg.getValue("to"),presence);
 		break;
@@ -1867,7 +1867,7 @@ bool ResSubscribeHandler::received(Message& msg)
 	if (!plugin.decodeJid(to,msg,"to"))
 	    break;
 	XDebug(&plugin,DebugAll,"%s from=%s to=%s operation=%s",
-	    from.c_str(),to.c_str(),oper->c_str());
+	    msg.c_str(),from.c_str(),to.c_str(),oper->c_str());
 	// Don't automatically add
 	if ((presence == JBPresence::Probe && !s_presence->addOnProbe().to()) ||
 	    ((presence == JBPresence::Subscribe || presence == JBPresence::Unsubscribe) &&
@@ -2838,7 +2838,7 @@ void YJGDriver::processImMsg(JBEvent& event)
 	conn = find(event.to().c_str(),event.from().c_str());
 	if (!conn)
 	    break;
-	DDebug(this,DebugInfo,"Found conn=%p for message from=%s to=%s [%p]",
+	DDebug(this,DebugInfo,"Found conn=%p for message from=%s to=%s",
 	    conn,event.from().c_str(),event.to().c_str());
 	m = conn->message("chan.text");
 	m->addParam("text",event.text());

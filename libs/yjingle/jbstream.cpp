@@ -1279,19 +1279,19 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	    return 0;
     }
     error = XMPPError::NoError;
-    XMLElement* child = 0;
+    XMLElement* child = xml->findFirstChild();
+    if (child)
+	fixXmlType(child);
 
     // Request (type is set or get): check the child (MUST exists)
     // Result: check it only if it has a child
     // Error: check it only if it has an 'iq' child with a child
     if (evType == JBEvent::Iq) {
-	child = xml->findFirstChild();
 	// No child: request what ???
 	if (!child) {
 	    error = XMPPError::SBadRequest;
 	    return 0;
 	}
-	fixXmlType(child);
 	switch (child->type()) {
 	    case XMLElement::Jingle:
 		if (checkValidXmlns(child,XMPPNamespace::Jingle,error))
@@ -1317,39 +1317,26 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 	    default: ;
 	}
     }
-    else {
-	XMLElement* c = 0;
-	if (iqType == XMPPUtils::IqResult)
-	    c = child = xml->findFirstChild();
-	else {
-	    child = xml->findFirstChild(XMLElement::Iq);
-	    if (child)
-		c = child->findFirstChild();
+    else if (child) {
+	switch (child->type()) {
+	    case XMLElement::Jingle:
+		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Jingle))
+		    IQEVENT_SET_RSP(JBEvent::IqJingleRes,JBEvent::IqJingleErr);
+		break;
+	    case XMLElement::Query:
+		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::DiscoInfo))
+		    IQEVENT_SET_RSP(JBEvent::IqDiscoInfoRes,JBEvent::IqDiscoInfoErr);
+		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::DiscoItems))
+		    IQEVENT_SET_RSP(JBEvent::IqDiscoItemsRes,JBEvent::IqDiscoItemsErr);
+		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Roster))
+		    IQEVENT_SET_RSP(JBEvent::IqRosterRes,JBEvent::IqRosterErr);
+		break;
+	    case XMLElement::Command:
+		if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Command))
+		    IQEVENT_SET_RSP(JBEvent::IqCommandRes,JBEvent::IqCommandErr);
+		break;
+	    default: ;
 	}
-	if (c) {
-	    fixXmlType(c);
-	    switch (c->type()) {
-		case XMLElement::Jingle:
-		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Jingle))
-			IQEVENT_SET_RSP(JBEvent::IqJingleRes,JBEvent::IqJingleErr);
-		    break;
-		case XMLElement::Query:
-		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::DiscoInfo))
-			IQEVENT_SET_RSP(JBEvent::IqDiscoInfoRes,JBEvent::IqDiscoInfoErr);
-		    else if (XMPPUtils::hasXmlns(*c,XMPPNamespace::DiscoItems))
-			IQEVENT_SET_RSP(JBEvent::IqDiscoItemsRes,JBEvent::IqDiscoItemsErr);
-		    else if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Roster))
-			IQEVENT_SET_RSP(JBEvent::IqRosterRes,JBEvent::IqRosterErr);
-		    break;
-		case XMLElement::Command:
-		    if (XMPPUtils::hasXmlns(*c,XMPPNamespace::Command))
-			IQEVENT_SET_RSP(JBEvent::IqCommandRes,JBEvent::IqCommandErr);
-		    break;
-		default: ;
-	    }
-	}
-	if (c != child)
-	    TelEngine::destruct(c);
     }
 
     if (error == XMPPError::NoError)

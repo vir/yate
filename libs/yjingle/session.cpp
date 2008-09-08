@@ -263,13 +263,13 @@ void JGSession::destroyed()
 }
 
 // Accept a Pending incoming session
-bool JGSession::accept(XMLElement* description)
+bool JGSession::accept(XMLElement* description, String* stanzaId)
 {
     Lock lock(this);
     if (outgoing() || state() != Pending)
 	return false;
     XMLElement* xml = createJingle(ActAccept,description,JGTransport::createTransport());
-    if (!sendStanza(xml))
+    if (!sendStanza(xml,stanzaId))
 	return false;
     changeState(Active);
     return true;
@@ -316,16 +316,18 @@ bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
 	iq->addChild(xml);
 	iq->addChild(XMPPUtils::createError(type,error,text));
     }
-    return sendStanza(iq,false);
+    return sendStanza(iq,0,false);
 }
 
 // Send a dtmf string to remote peer
-bool JGSession::sendDtmf(const char* dtmf, bool buttonUp)
+bool JGSession::sendDtmf(const char* dtmf, bool buttonUp, String* stanzaId)
 {
     XMLElement* iq = createJingle(ActContentInfo);
     XMLElement* sess = iq->findFirstChild();
-    if (!(dtmf && *dtmf && sess))
-	return sendStanza(iq);
+    if (!(dtmf && *dtmf && sess)) {
+	TelEngine::destruct(sess);
+	return sendStanza(iq,stanzaId);
+    }
     char s[2] = {0,0};
     const char* action = buttonUp ? "button-up" : "button-down";
     while (*dtmf) {
@@ -336,16 +338,16 @@ bool JGSession::sendDtmf(const char* dtmf, bool buttonUp)
 	sess->addChild(xml);
     }
     TelEngine::destruct(sess);
-    return sendStanza(iq);
+    return sendStanza(iq,stanzaId);
 }
 
 // Send a dtmf method to remote peer
-bool JGSession::sendDtmfMethod(const char* method)
+bool JGSession::sendDtmfMethod(const char* method, String* stanzaId)
 {
     XMLElement* xml = XMPPUtils::createElement(XMLElement::DtmfMethod,
 	XMPPNamespace::Dtmf);
     xml->setAttribute("method",method);
-    return sendStanza(createJingle(ActContentInfo,xml));
+    return sendStanza(createJingle(ActContentInfo,xml),stanzaId);
 }
 
 // Deny a dtmf method request from remote peer
@@ -359,7 +361,7 @@ bool JGSession::denyDtmfMethod(XMLElement* element)
     XMLElement* err = XMPPUtils::createError(XMPPError::TypeCancel,XMPPError::SFeatureNotImpl);
     err->addChild(XMPPUtils::createElement(s_err[XMPPError::DtmfNoMethod],XMPPNamespace::DtmfError));
     iq->addChild(err);
-    return sendStanza(iq,false);
+    return sendStanza(iq,0,false);
 }
 
 // Enqueue a Jabber engine event
@@ -487,52 +489,60 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	bool response = jbev->type() == JBEvent::IqJingleRes ||
 			jbev->type() == JBEvent::IqJingleErr ||
 			jbev->type() == JBEvent::IqResult ||
+			jbev->type() == JBEvent::IqError ||
 			jbev->type() == JBEvent::WriteFail;
 	while (response) {
-	    bool notSent = true;
-	    // Don't use iterator: we stop searching the list at first item removal
+	    JGSentStanza* sent = 0;
+	    // Find a sent stanza to match the event's id
 	    for (ObjList* o = m_sentStanza.skipNull(); o; o = o->skipNext()) {
-		JGSentStanza* sent = static_cast<JGSentStanza*>(o->get());
-		if (jbev->id() == *sent) {
-		    m_sentStanza.remove(sent,true);
-		    notSent = false;
-		    if (state() == Ending)
-			m_lastEvent = new JGEvent(JGEvent::Destroy,this);
+		sent = static_cast<JGSentStanza*>(o->get());
+		if (jbev->id() == *sent)
 		    break;
-		}
+		sent = 0;
 	    }
-	    // Ignore it if this event is not a result of a known sent stanza
-	    // We didn't expect a result anyway
-	    if (notSent)
+	    if (!sent)
 		break;
-	    // Write fail: Terminate if failed stanza is a Jingle one
-	    // Ignore all other write failures
-	    if (jbev->type() == JBEvent::WriteFail) {
+
+
+	    // Check termination conditions
+	    bool terminateEnding = (state() == Ending);
+	    bool terminatePending = (state() == Pending && outgoing() &&
+		(jbev->type() == JBEvent::IqJingleErr || jbev->type() == JBEvent::WriteFail));
+	    // Write fail: Terminate if failed stanza is a Jingle one and the sender
+	    //  didn't requested notification
+	    bool terminateFail = false;
+	    if (!(terminateEnding || terminatePending) && jbev->type() == JBEvent::WriteFail) {
 		// Check if failed stanza is a jingle one
 		XMLElement* e = jbev->element() ? jbev->element()->findFirstChild() : 0;
-		if (e && e->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle])) {
-		    Debug(m_engine,DebugInfo,
-			"Call(%s). Write stanza failure. Terminating [%p]",
-			m_sid.c_str(),this);
-		    m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"noconn");
-		}
+		bool jingle = (e && e->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle]));
 		TelEngine::destruct(e);
-		break;
+		terminateFail = !sent->notify();
 	    }
 
-#ifdef DEBUG
-	    String error;
-	    if (jbev->text())
-		error << ". Error: " << jbev->text();
-	    Debug(m_engine,DebugAll,
-		"Call(%s). Sent element with id '%s' confirmed%s [%p]",
-		m_sid.c_str(),jbev->id().c_str(),error.safe(),this);
-#endif
+	    // Generate event
+	    if (terminateEnding)
+		m_lastEvent = new JGEvent(JGEvent::Destroy,this);
+	    else if (terminatePending || terminateFail)
+		m_lastEvent = new JGEvent(JGEvent::Terminated,this,
+		    jbev->type() != JBEvent::WriteFail ? jbev->releaseXML() : 0,
+		    jbev->text() ? jbev->text().c_str() : "failure");
+	    else if (sent->notify())
+		m_lastEvent = new JGEvent(JGEvent::Response,this,
+		    jbev->type() != JBEvent::WriteFail ? jbev->releaseXML() : 0,
+		    jbev->text() ? jbev->text().c_str() : "");
+	    if (m_lastEvent && !m_lastEvent->m_id)
+		m_lastEvent->m_id = *sent;
+	    m_sentStanza.remove(sent,true);
 
-	    // Terminate pending outgoing sessions if session initiate stanza received error
-	    if (state() == Pending && outgoing() && jbev->type() == JBEvent::IqJingleErr)
-		m_lastEvent = new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),
-		    jbev->text()?jbev->text().c_str():"failure");
+	    String error;
+#ifdef DEBUG
+	    if (jbev->type() == JBEvent::IqJingleErr && jbev->text())
+		error << " (error='" << jbev->text() << "')";
+#endif
+	    Debug(m_engine,DebugAll,
+		"Call(%s). Sent element with id=%s confirmed by event=%s%s%s [%p]",
+		m_sid.c_str(),jbev->id().c_str(),jbev->name(),error.safe(),
+		(m_lastEvent && m_lastEvent->final()) ? ". Terminating":"",this);
 
 	    break;
 	}
@@ -568,15 +578,17 @@ JGEvent* JGSession::getEvent(u_int64_t time)
     // No event: check first sent stanza's timeout
     if (!m_lastEvent) {
 	ObjList* o = m_sentStanza.skipNull();
-	if (o) {
-	    JGSentStanza* tmp = static_cast<JGSentStanza*>(o->get());
-	    if (tmp->timeout(time)) {
-		Debug(m_engine,DebugNote,"Call(%s). Sent stanza ('%s') timed out [%p]",
-		    m_sid.c_str(),tmp->c_str(),this);
-		// Notify the peer anyway (something may be wrong)
+	JGSentStanza* tmp = o ? static_cast<JGSentStanza*>(o->get()) : 0;
+	while (tmp && tmp->timeout(time)) {
+	    Debug(m_engine,DebugNote,"Call(%s). Sent stanza ('%s') timed out [%p]",
+		m_sid.c_str(),tmp->c_str(),this);
+	    // Don't terminate if the sender requested to be notified
+	    m_lastEvent = new JGEvent(tmp->notify()?JGEvent::Response:JGEvent::Terminated,this,0,"timeout");
+	    m_lastEvent->m_id = *tmp;
+	    o->remove();
+	    if (m_lastEvent->final())
 		hangup(false,"Timeout");
-		m_lastEvent = new JGEvent(JGEvent::Terminated,this,0,"timeout");
-	    }
+	    break;
 	}
     }
 
@@ -597,7 +609,7 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 }
 
 // Send a stanza to the remote peer
-bool JGSession::sendStanza(XMLElement* stanza, bool confirmation)
+bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmation)
 {
     Lock lock(this);
     if (!(state() != Ending && state() != Destroy && stanza && m_stream)) {
@@ -609,18 +621,21 @@ bool JGSession::sendStanza(XMLElement* stanza, bool confirmation)
     }
     DDebug(m_engine,DebugAll,"Call(%s). Sending stanza (%p,'%s') [%p]",
 	m_sid.c_str(),stanza,stanza->name(),this);
+    const char* senderId = m_localSid;
     // Check if the stanza should be added to the list of stanzas requiring confirmation
     if (confirmation && stanza->type() == XMLElement::Iq) {
-	// Create id
 	String id = m_localSid;
-	id << "_" << (unsigned int)m_stanzaId;
-	m_stanzaId++;
-	stanza->setAttribute("id",id);
-	// Append to sent stanzas
-	m_sentStanza.append(new JGSentStanza(id,m_engine->stanzaTimeout() + Time::msecNow()));
+	id << "_" << (unsigned int)m_stanzaId++;
+	JGSentStanza* sent = new JGSentStanza(id,
+	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0);
+	stanza->setAttribute("id",*sent);
+	senderId = *sent;
+	if (stanzaId)
+	    *stanzaId = *sent;
+	m_sentStanza.append(sent);
     }
     // Send. If it fails leave it in the sent items to timeout
-    JBStream::Error res = m_stream->sendStanza(stanza,m_localSid);
+    JBStream::Error res = m_stream->sendStanza(stanza,senderId);
     if (res == JBStream::ErrorNoSocket || res == JBStream::ErrorContext)
 	return false;
     return true;
@@ -753,7 +768,7 @@ XMLElement* JGSession::createJingle(Action action, XMLElement* element1, XMLElem
 }
 
 // Send a transport related element to the remote peer
-bool JGSession::sendTransport(JGTransport* transport, Action act)
+bool JGSession::sendTransport(JGTransport* transport, Action act, String* stanzaId)
 {
     if (act != ActTransport && act != ActTransportAccept)
 	return false;
@@ -764,7 +779,7 @@ bool JGSession::sendTransport(JGTransport* transport, Action act)
 	if (m_transportType == TransportCandidates)
 	    return true;
 	XMLElement* child = JGTransport::createTransport();
-	return sendStanza(createJingle(ActTransportAccept,0,child));
+	return sendStanza(createJingle(ActTransportAccept,0,child),stanzaId);
     }
     // Sent transport
     if (!transport)
@@ -780,13 +795,13 @@ bool JGSession::sendTransport(JGTransport* transport, Action act)
 	case TransportInfo:
 	    child = JGTransport::createTransport();
 	    transport->addTo(child);
-	    ok = sendStanza(createJingle(ActTransportInfo,0,child));
+	    ok = sendStanza(createJingle(ActTransportInfo,0,child),stanzaId);
 	    if (!ok || m_transportType == TransportInfo)
 		break;
 	    // Fallthrough to send candidates if unknown and succedded
 	case TransportCandidates:
 	    child = transport->toXML();
-	    ok = sendStanza(createJingle(ActTransportCandidates,0,child));
+	    ok = sendStanza(createJingle(ActTransportCandidates,0,child),stanzaId);
     }
     TelEngine::destruct(transport);
     return ok;

@@ -368,9 +368,10 @@ public:
      * Accept a Pending incoming session.
      * This method is thread safe
      * @param description The media description element to send
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False if send failed
      */
-    bool accept(XMLElement* description);
+    bool accept(XMLElement* description, String* stanzaId = 0);
 
     /**
      * Close a Pending or Active session
@@ -399,16 +400,18 @@ public:
      *  character is added as a 'dtmf' child of the jingle element
      * @param dtmf The dtmf string
      * @param buttonUp True to send button-up action. False to send button-down
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False if send failed
      */
-    bool sendDtmf(const char* dtmf, bool buttonUp = true);
+    bool sendDtmf(const char* dtmf, bool buttonUp = true, String* stanzaId = 0);
 
     /**
      * Send a dtmf method to remote peer
      * @param method The method to send
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False if send failed
      */
-    bool sendDtmfMethod(const char* method);
+    bool sendDtmfMethod(const char* method, String* stanzaId = 0);
 
     /**
      * Deny a dtmf method request from remote peer
@@ -421,19 +424,21 @@ public:
      * Send a 'transport-accept' element to the remote peer.
      * This method is thread safe
      * @param transport Optional transport data to send
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False if send failed
      */
-    inline bool acceptTransport(JGTransport* transport = 0)
-	{ return sendTransport(transport,ActTransportAccept); }
+    inline bool acceptTransport(JGTransport* transport = 0, String* stanzaId = 0)
+	{ return sendTransport(transport,ActTransportAccept,stanzaId); }
 
     /**
      * Send a 'transport-info' element to the remote peer.
      * This method is thread safe
      * @param transport The transport data
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False if send failed
      */
-    inline bool sendTransport(JGTransport* transport)
-	{ return sendTransport(transport,ActTransport); }
+    inline bool sendTransport(JGTransport* transport, String* stanzaId = 0)
+	{ return sendTransport(transport,ActTransport,stanzaId); }
 
     /**
      * Send a message to the remote peer.
@@ -443,7 +448,7 @@ public:
      */
     inline bool sendMessage(const char* msg) {
 	    return sendStanza(JBMessage::createMessage(JBMessage::Chat,
-		m_localJID,m_remoteJID,0,msg),false);
+		m_localJID,m_remoteJID,0,msg),0,false);
 	}
 
 protected:
@@ -495,10 +500,11 @@ protected:
     /**
      * Send a stanza to the remote peer
      * @param stanza The stanza to send
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @param confirmation True if the stanza needs confirmation (add 'id' attribute)
      * @return True on success
      */
-    bool sendStanza(XMLElement* stanza, bool confirmation = true);
+    bool sendStanza(XMLElement* stanza, String* stanzaId = 0, bool confirmation = true);
 
     /**
      * Decode a valid jingle set event. Set the event's data on success
@@ -520,9 +526,10 @@ protected:
      * Send a transport related element to the remote peer
      * @param transport Transport data to send
      * @param act The element's type (info, accept, etc)
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return True on success
      */
-    bool sendTransport(JGTransport* transport, Action act);
+    bool sendTransport(JGTransport* transport, Action act, String* stanzaId = 0);
 
     /**
      * Get the name of a session state
@@ -582,6 +589,7 @@ public:
 	                                 //  ActTransportAccept
 	                                 //  ActDtmf                 m_reason is button-up/button-down. m_text is the dtmf
 	                                 //  ActDtmfMethod           m_text is the dtmf method: rtp/xmpp
+	Response,                        // Response for a sent stanza
 	// Final
 	Terminated,                      // m_element is the element that caused the termination
 	                                 //  m_reason contains the reason
@@ -820,9 +828,10 @@ public:
      * Constructor
      * @param id The sent stanza's id
      * @param time The sent time
+     * @param notif True to notify stanza timeout or response
      */
-    JGSentStanza(const char* id, u_int64_t time)
-	: String(id), m_time(time)
+    JGSentStanza(const char* id, u_int64_t time, bool notif = false)
+	: String(id), m_time(time), m_notify(notif)
 	{}
 
     /**
@@ -832,8 +841,16 @@ public:
     inline bool timeout(u_int64_t time) const
 	{ return time > m_time; }
 
+    /**
+     * Check if timeout should be notified to sender
+     * @return True to notify
+     */
+    inline bool notify() const
+	{ return m_notify; }
+
 private:
     u_int64_t m_time;                    // Timeout
+    bool m_notify;                       // Notify timeout to sender
 };
 
 }

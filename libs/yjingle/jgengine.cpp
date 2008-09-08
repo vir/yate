@@ -174,22 +174,17 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    // Jingle stanzas should never have type='get'
 	    Debug(this,DebugNote,"Received iq jingle stanza with type='get'");
 	    return false;
-	case JBEvent::IqJingleSet:
 	case JBEvent::IqJingleRes:
 	case JBEvent::IqJingleErr:
+	    respond = false;
+	    // Fall through to process it
+	case JBEvent::IqJingleSet:
 	    if (!(event->element() && child)) {
 		Debug(this,DebugNote,"Received jingle event %s with no element or child",event->name());
 		return false;
 	    }
 	    // Jingle clients may send the session id as 'id' or 'sid'
-	    if (event->type() == JBEvent::IqJingleErr) {
-		respond = false;
-		XMLElement* tmp = child->findFirstChild(XMLElement::Jingle);
-		getSid(tmp,sid,useSid);
-		TelEngine::destruct(tmp);
-	    }
-	    else
-		getSid(child,sid,useSid);
+	    getSid(child,sid,useSid);
 	    DDebug(this,DebugAll,"Accepting event=%s child=%s id=%s useSid=%s",
 		event->name(),child->name(),sid.c_str(),String::boolText(useSid));
 	    if (sid.null()) {
@@ -229,8 +224,9 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    errorText = "Unknown session";
 	    break;
 	case JBEvent::IqResult:
+	case JBEvent::IqError:
 	case JBEvent::WriteFail:
-	    // Sessions always set the id of sent stanzas to their local id
+	    // Stanzas sent by sessions have an id starting with their local id
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 		JGSession* session = static_cast<JGSession*>(o->get());
 		if (event->id().startsWith(session->m_localSid)) {

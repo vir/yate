@@ -60,7 +60,7 @@ public:
     virtual void destroyed();
     inline const String &name()
 	{ return m_name; }
-    static MOHSource *getSource(const String &name);
+    static MOHSource* getSource(String& name, const NamedList& params);
 private:
     MOHSource(const String &name, const String &command_line);
     String m_name;
@@ -79,7 +79,7 @@ private:
 class MOHChan : public CallEndpoint
 {
 public:
-    MOHChan(const String &name);
+    MOHChan(String& name, const NamedList& params);
     ~MOHChan();
     virtual void disconnected(bool final, const char *reason);
     inline const String &id() const
@@ -149,9 +149,14 @@ void MOHSource::destroyed()
 }
 
 
-MOHSource *MOHSource::getSource(const String &name)
+MOHSource* MOHSource::getSource(String& name, const NamedList& params)
 {
-    String cmd;
+    String cmd = s_cfg.getValue("mohs", name);
+    if (params.replaceParams(cmd) > 0) {
+	// command is parametrized, suffix name to account for it
+	name << "-" << cmd.hash();
+	DDebug(DebugInfo,"Parametrized MOH: '%s'",name.c_str());
+    }
     ObjList *l = &sources;
     for (; l; l = l->next()) {
 	MOHSource *t = static_cast<MOHSource *>(l->get());
@@ -160,9 +165,8 @@ MOHSource *MOHSource::getSource(const String &name)
 	    return t;
 	}
     }
-    cmd = s_cfg.getValue("mohs", name);
     if (cmd) {
-	MOHSource *s = new MOHSource(name, cmd);
+	MOHSource *s = new MOHSource(name,cmd);
 	if (s->start("MOHSource")) {
 	    sources.append(s);
 	    return s;
@@ -269,14 +273,14 @@ void MOHSource::run()
 
 int MOHChan::s_nextid = 1;
 
-MOHChan::MOHChan(const String &name)
+MOHChan::MOHChan(String& name, const NamedList& params)
     : CallEndpoint("moh")
 {
     Debug(DebugAll,"MOHChan::MOHChan(\"%s\") [%p]",name.c_str(),this);
     Lock lock(s_mutex);
     m_id << "moh/" << s_nextid++;
     chans.append(this);
-    MOHSource *s = MOHSource::getSource(name);
+    MOHSource *s = MOHSource::getSource(name,params);
     if (s) {
 	setSource(s);
 	s->deref();
@@ -310,7 +314,7 @@ bool MOHHandler::received(Message &msg)
     String name = dest.matchString(1);
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
-	MOHChan *mc = new MOHChan(name);
+	MOHChan* mc = new MOHChan(name,msg);
 	if (ch->connect(mc,msg.getValue("reason"))) {
 	    msg.setParam("peerid",mc->id());
 	    mc->deref();
@@ -346,7 +350,7 @@ bool MOHHandler::received(Message &msg)
 	}
 	m = "call.execute";
 	m.addParam("callto",callto);
-	MOHChan *mc = new MOHChan(dest.matchString(1).c_str());
+	MOHChan* mc = new MOHChan(name,msg);
 	m.setParam("id",mc->id());
 	m.userData(mc);
 	if (Engine::dispatch(m)) {
@@ -374,7 +378,7 @@ bool AttachHandler::received(Message &msg)
     CallEndpoint *ch = static_cast<CallEndpoint *>(msg.userData());
     if (ch) {
 	Lock lock(s_mutex);
-	MOHSource *t = MOHSource::getSource(src);
+	MOHSource* t = MOHSource::getSource(src,msg);
 	if (t) {
 	    ch->setSource(t);
 	    t->deref();
@@ -425,8 +429,10 @@ MOHPlugin::~MOHPlugin()
 void MOHPlugin::initialize()
 {
     Output("Initializing module MOH");
+    s_mutex.lock();
     s_cfg = Engine::configFile("moh");
     s_cfg.load();
+    s_mutex.unlock();
     if (!m_handler) {
 	m_handler = new MOHHandler;
 	Engine::install(m_handler);

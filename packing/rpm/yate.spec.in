@@ -412,7 +412,7 @@ make strip
 %install
 make install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}%{_initrddir}
-cp -p %{_builddir}/%{name}/packing/yate.init %{buildroot}%{_initrddir}/yate
+cp -p %{_builddir}/%{name}/packing/rpm/yate.init %{buildroot}%{_initrddir}/yate
 mkdir -p %{buildroot}%{_sysconfdir}/logrotate.d
 cp -p %{_builddir}/%{name}/packing/yate.logrotate %{buildroot}%{_sysconfdir}/logrotate.d/yate
 

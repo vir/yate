@@ -397,10 +397,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	// Process Jingle 'set' stanzas
 	if (jbev->type() == JBEvent::IqJingleSet) {
 	    // Filter some conditions in which we can't accept any jingle stanza
-	    // Incoming pending sessions are waiting for the user to accept/reject them
 	    // Outgoing idle sessions are waiting for the user to initiate them
-	    if ((state() == Pending && !outgoing()) ||
-		(state() == Idle && outgoing())) {
+	    if (state() == Idle && outgoing()) {
 		confirm(jbev->releaseXML(),XMPPError::SRequest);
 		continue;
 	    }
@@ -508,13 +506,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    // Write fail: Terminate if failed stanza is a Jingle one and the sender
 	    //  didn't requested notification
 	    bool terminateFail = false;
-	    if (!(terminateEnding || terminatePending) && jbev->type() == JBEvent::WriteFail) {
-		// Check if failed stanza is a jingle one
-		XMLElement* e = jbev->element() ? jbev->element()->findFirstChild() : 0;
-		bool jingle = (e && e->hasAttribute("xmlns",s_ns[XMPPNamespace::Jingle]));
-		TelEngine::destruct(e);
+	    if (!(terminateEnding || terminatePending) && jbev->type() == JBEvent::WriteFail)
 		terminateFail = !sent->notify();
-	    }
 
 	    // Generate event
 	    if (terminateEnding)

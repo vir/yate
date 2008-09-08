@@ -1908,20 +1908,6 @@ public:
     bool sendStanza(XMLElement* element, JBStream* stream);
 
     /**
-     * Send an error. Error type is 'modify'.
-     * If id is 0 sent element will be of type 'presence'. Otherwise: 'iq'
-     * @param type The error
-     * @param from The from attribute
-     * @param to The to attribute
-     * @param element The element that generated the error
-     * @param stream Optional stream to use
-     * @param id Optional id. If present (even if empty) the error element will be of type 'iq'
-     * @return The result of send operation
-     */
-    bool sendError(XMPPError::Type type, const String& from, const String& to,
-	XMLElement* element, JBStream* stream = 0, const String* id = 0);
-
-    /**
      * Create an 'presence' element
      * @param from The 'from' attribute
      * @param to The 'to' attribute

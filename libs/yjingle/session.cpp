@@ -300,9 +300,9 @@ bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
 {
     if (!xml)
 	return false;
-    String id = xml->getAttribute("id");
     XMLElement* iq = 0;
     if (error == XMPPError::NoError) {
+	String id = xml->getAttribute("id");
 	iq = XMPPUtils::createIq(XMPPUtils::IqResult,m_localJID,m_remoteJID,id);
 	// The receiver will detect which stanza is confirmed by id
 	// If missing, make a copy of the received element and attach it to the error
@@ -311,11 +311,8 @@ bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
 	    iq->addChild(copy);
 	}
     }
-    else {
-	iq = XMPPUtils::createIq(XMPPUtils::IqError,m_localJID,m_remoteJID,id);
-	iq->addChild(xml);
-	iq->addChild(XMPPUtils::createError(type,error,text));
-    }
+    else
+	iq = XMPPUtils::createError(xml,type,error,text);
     return sendStanza(iq,0,false);
 }
 

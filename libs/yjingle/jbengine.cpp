@@ -868,10 +868,7 @@ bool JBEngine::processCommand(JBEvent* event)
 	return false;
 
     // Send error
-    XMLElement* err = XMPPUtils::createIq(XMPPUtils::IqError,event->to(),event->from(),event->id());
-    err->addChild(event->releaseXML());
-    err->addChild(XMPPUtils::createError(XMPPError::TypeCancel,XMPPError::SFeatureNotImpl));
-    stream->sendStanza(err);
+    stream->sendStanza(event->createError(XMPPError::TypeCancel,XMPPError::SFeatureNotImpl));
     TelEngine::destruct(event);
     return true;
 }
@@ -1029,23 +1026,19 @@ XMLElement* JBEvent::createError(XMPPError::ErrorType type, XMPPError::Type erro
 	case IqCommandSet:
 	case IqJingleGet:
 	case IqJingleSet:
-	    xml = XMPPUtils::createIq(XMPPUtils::IqError,to(),from(),id());
 	    break;
 	case Message:
 	    if (JBMessage::Error == JBMessage::msgType(element()->getAttribute("type")))
 		return 0;
-	    xml = JBMessage::createMessage(JBMessage::Error,to(),from(),id(),0);
 	    break;
 	case Presence:
 	    if (JBPresence::Error == JBPresence::presenceType(element()->getAttribute("type")))
 		return 0;
-	    xml = JBPresence::createPresence(to(),from(),JBPresence::Error);
 	    break;
 	default:
 	    return 0;
     }
-    xml->addChild(releaseXML());
-    xml->addChild(XMPPUtils::createError(type,error,text));
+    xml = XMPPUtils::createError(releaseXML(),type,error,text);
     return xml;
 }
 
@@ -2002,11 +1995,8 @@ bool JBPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	Debug(this,DebugNote,"Received element with invalid domain '%s' [%p]",
 	     jid.domain().c_str(),this);
 	// Respond only if stanza is not a response
-	if (event->stanzaType() != "error" && event->stanzaType() != "result") {
-	    const String* id = event->id().null() ? 0 : &(event->id());
-	    sendError(XMPPError::SNoRemote,event->to(),event->from(),
-		event->releaseXML(),event->stream(),id);
-	}
+	if (event->stanzaType() != "error" && event->stanzaType() != "result")
+	    sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SNoRemote),event->stream());
     }
     processed = true;
     return true;
@@ -2063,8 +2053,8 @@ bool JBPresence::process()
 		    "Received unexpected presence type=%s from=%s to=%s [%p]",
 		    event->element()->getAttribute("type"),event->from().c_str(),
 		    event->to().c_str(),this);
-		sendError(XMPPError::SFeatureNotImpl,event->to(),event->from(),
-		    event->releaseXML(),event->stream());
+		sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SFeatureNotImpl),
+		    event->stream());
 		break;
 	    }
 	    processPresence(event);
@@ -2175,8 +2165,8 @@ void JBPresence::processProbe(JBEvent* event)
 		TelEngine::destruct(stanza);
 	}
 	else if (!notifyProbe(event) && !m_ignoreNonRoster)
-	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
-		event->releaseXML(),event->stream());
+	    sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SItemNotFound),
+		    event->stream());
 	return;
     }
     if (newUser)
@@ -2203,8 +2193,8 @@ void JBPresence::processSubscribe(JBEvent* event, Presence presence)
 	if (!notifySubscribe(event,presence) &&
 	    (presence != Subscribed && presence != Unsubscribed) &&
 	    !m_ignoreNonRoster)
-	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
-		event->releaseXML(),event->stream());
+	    sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SItemNotFound),
+		    event->stream());
 	return;
     }
     if (newUser)
@@ -2244,8 +2234,8 @@ void JBPresence::processUnavailable(JBEvent* event)
 	addLocal,0,addLocal,&newUser);
     if (!user) {
 	if (!notifyPresence(event,false) && !m_ignoreNonRoster)
-	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
-		event->releaseXML(),event->stream());
+	    sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SItemNotFound),
+		    event->stream());
 	return;
     }
     if (newUser)
@@ -2283,8 +2273,8 @@ void JBPresence::processPresence(JBEvent* event)
 	m_addOnPresence.from(),0,m_addOnPresence.from(),&newUser);
     if (!user) {
 	if (!notifyPresence(event,true) && !m_ignoreNonRoster)
-	    sendError(XMPPError::SItemNotFound,event->to(),event->from(),
-		event->releaseXML(),event->stream());
+	    sendStanza(event->createError(XMPPError::TypeModify,XMPPError::SItemNotFound),
+		    event->stream());
 	return;
     }
     if (newUser)
@@ -2413,23 +2403,6 @@ bool JBPresence::sendStanza(XMLElement* element, JBStream* stream)
 	res == JBStream::ErrorNoSocket)
 	return false;
     return true;
-}
-
-// Send an error stanza
-bool JBPresence::sendError(XMPPError::Type type,
-	const String& from, const String& to,
-	XMLElement* element, JBStream* stream, const String* id)
-{
-    XMLElement* xml = 0;
-    XMLElement::Type t = element ? element->type() : XMLElement::Invalid;
-    if (t == XMLElement::Iq)
-	xml = XMPPUtils::createIq(XMPPUtils::IqError,from,to,
-	    id ? id->c_str() : element->getAttribute("id"));
-    else
-	xml = createPresence(from,to,Error);
-    xml->addChild(element);
-    xml->addChild(XMPPUtils::createError(XMPPError::TypeModify,type));
-    return sendStanza(xml,stream);
 }
 
 // Create a presence stanza

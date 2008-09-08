@@ -443,7 +443,12 @@ XMLElement* XMPPUtils::createError(XMLElement* xml, XMPPError::ErrorType type,
     if (!xml)
 	return 0;
     XMLElement* err = new XMLElement(*xml,true,false);
-    err->addChild(xml);
+    // Copy children from xml to the error element
+    XMLElement* child = 0;
+    while (0 != (child = xml->removeChild()))
+	err->addChild(child);
+    TelEngine::destruct(xml);
+    // Create the error
     err->addChild(createError(type,error,text));
     return err;
 }

@@ -95,6 +95,16 @@ private:
     void** m_pointer;
 };
 
+// engine.start message handler used to notify logics
+class EngineStartHandler : public MessageHandler
+{
+public:
+    inline EngineStartHandler(unsigned int prio = 100)
+	: MessageHandler("engine.start",prio)
+	{}
+    virtual bool received(Message& msg);
+};
+
 
 /**
  * Static classes/function/data
@@ -658,6 +668,19 @@ bool ClientThreadProxy::execute()
     return m_rval;
 }
 
+
+/**
+ * EngineStartHandler
+ */
+// Notify logics
+bool EngineStartHandler::received(Message& msg)
+{
+    if (Client::self())
+	Client::self()->engineStart(msg);
+    return false;
+}
+
+
 /**
  * Client
  */
@@ -766,6 +789,7 @@ void Client::loadUI(const char* file, bool init)
 void Client::run()
 {
     Debug(ClientDriver::self(),DebugAll,"Client::run() [%p]",this);
+    Engine::install(new EngineStartHandler);
     loadUI();
     // Run
     main();
@@ -2019,6 +2043,20 @@ bool Client::setBoolOpt(ClientToggle toggle, bool value, bool updateUi)
 	default: ;
     }
     return true;
+}
+
+// Engine start notification. Notify all registered logics
+void Client::engineStart(Message& msg)
+{
+    // Wait for init
+    while (!initialized())
+	Thread::yield();
+    for(ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
+	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
+	DDebug(ClientDriver::self(),DebugAll,"Logic(%s) processing engine.start [%p]",
+	    logic->toString().c_str(),logic);
+	logic->engineStart(msg);
+    }
 }
 
 // Add a new module for handling actions

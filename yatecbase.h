@@ -1121,6 +1121,12 @@ public:
 	{ return false; }
 
     /**
+     * Engine start notification. Notify all registered logics
+     * @param msg The engine.start message
+     */
+    virtual void engineStart(Message& msg);
+
+    /**
      * Add a logic to the list. The added object is not owned by the client  
      * @param logic Pointer to the logic to add
      * @return True on success. False if the pointer is 0 or already added
@@ -1997,6 +2003,13 @@ public:
      * @param item Optional new value for current selection. Set to 0 to upadte from UI
      */
     virtual void updateSelectedChannel(const String* item = 0);
+
+    /**
+     * Engine start notification
+     * @param msg The engine.start message
+     */
+    virtual void engineStart(Message& msg)
+	{}
 
     /**
      * Add a duration object to this client's list

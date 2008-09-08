@@ -299,6 +299,27 @@ public:
 
     /**
      * Find the first child element of this one.
+     * Remove it from the children list.
+     * If an element is returned, it owns the TiXmlElement pointer.
+     * This element must own its TiXmlElement pointer.
+     * @param name Optional name of the child
+     * @return Pointer to an XMLElement or 0 if not found
+     */
+    XMLElement* removeChild(const char* name = 0);
+
+    /**
+     * Find the first child element of this one.
+     * Remove it from the children list.
+     * If an element is returned, it owns the TiXmlElement pointer.
+     * This element must own its TiXmlElement pointer.
+     * @param type Child's type to find
+     * @return Pointer to an XMLElement or 0 if not found
+     */
+    inline XMLElement* removeChild(Type type)
+	{ return removeChild(typeName(type)); }
+
+    /**
+     * Find the first child element of this one.
      * If an element is returned, it is a newly allocated one, not owning its TiXmlElement pointer
      * @param name Optional name of the child
      * @return Pointer to an XMLElement or 0 if not found

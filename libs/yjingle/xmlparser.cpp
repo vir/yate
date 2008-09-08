@@ -261,6 +261,24 @@ void XMLElement::addChild(XMLElement* element)
     TelEngine::destruct(element);
 }
 
+// Find the first child element of this one.
+// Remove it from the children list.
+// This element must own its TiXmlElement pointer.
+XMLElement* XMLElement::removeChild(const char* name)
+{
+    if (!valid() && m_owner)
+	return 0;
+    TiXmlElement* element;
+    if (name && *name)
+	element = ((TiXmlNode*)m_element)->FirstChildElement(name);
+    else
+	element = ((TiXmlNode*)m_element)->FirstChildElement();
+    if (!element)
+	return 0;
+    m_element->RemoveChild(element,false);
+    return new XMLElement(element,true);
+}
+
 XMLElement* XMLElement::findFirstChild(const char* name)
 {
     if (!valid())

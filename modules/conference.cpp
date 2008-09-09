@@ -507,9 +507,15 @@ void ConfRoom::mix(ConfConsumer* cons)
 	    // avoid mixing in noise
 	    if (co->hasSignal()) {
 		unsigned int n = co->m_buffer.length() / 2;
-		XDebug(ch,DebugAll,"Cons %p samp=%u |%s%s>",
-		    co,n,String('#',co->noise()).safe(),
-		    String('=',co->energy() - co->noise()).safe());
+#ifdef XDEBUG
+		int noise = co->noise();
+		int energy = co->energy() - noise;
+		if (energy < 0)
+		    energy = 0;
+		Debug(ch,DebugAll,"Cons %p samp=%u |%s%s>",
+		    co,n,String('#',noise).safe(),
+		    String('=',energy).safe());
+#endif
 		if (n > len)
 		    n = len;
 		const int16_t* p = (const int16_t*)co->m_buffer.data();

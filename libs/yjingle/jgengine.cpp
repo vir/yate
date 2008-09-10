@@ -173,11 +173,8 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	case JBEvent::IqJingleGet:
 	    // Jingle stanzas should never have type='get'
 	    Debug(this,DebugNote,"Received iq jingle stanza with type='get'");
-	    return false;
-	case JBEvent::IqJingleRes:
-	case JBEvent::IqJingleErr:
-	    respond = false;
-	    // Fall through to process it
+	    error = XMPPError::SServiceUnavailable;
+	    break;
 	case JBEvent::IqJingleSet:
 	    if (!(event->element() && child)) {
 		Debug(this,DebugNote,"Received jingle event %s with no element or child",event->name());
@@ -195,9 +192,7 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    // Check for a destination by SID
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 		JGSession* session = static_cast<JGSession*>(o->get());
-		if (sid == session->sid()) {
-		    if (event->ref())
-			session->enqueue(event);
+		if (session->acceptEvent(event,sid)) {
 		    processed = true;
 		    return true;
 		}
@@ -223,15 +218,15 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 	    error = XMPPError::SRequest;
 	    errorText = "Unknown session";
 	    break;
+	case JBEvent::IqJingleRes:
+	case JBEvent::IqJingleErr:
 	case JBEvent::IqResult:
 	case JBEvent::IqError:
 	case JBEvent::WriteFail:
-	    // Stanzas sent by sessions have an id starting with their local id
+	    respond = false;
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 		JGSession* session = static_cast<JGSession*>(o->get());
-		if (event->id().startsWith(session->m_localSid)) {
-		    if (event->ref())
-			session->enqueue(event);
+		if (session->acceptEvent(event)) {
 		    processed = true;
 		    return true;
 		}

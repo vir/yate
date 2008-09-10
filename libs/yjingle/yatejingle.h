@@ -358,6 +358,14 @@ public:
 	{ return m_private; }
 
     /**
+     * Ask this session to accept an event
+     * @param event The event to accept
+     * @param sid The session id if this is a request
+     * @return True if accepted (the event was enqueued), false if not
+     */
+    bool acceptEvent(JBEvent* event, const String& sid = String::empty());
+
+    /**
      * Set the arbitrary user data of this session
      * @param userdata The new arbitrary user data's value
      */

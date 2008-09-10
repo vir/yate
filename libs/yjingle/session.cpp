@@ -262,6 +262,30 @@ void JGSession::destroyed()
     DDebug(m_engine,DebugAll,"Call(%s). Destroyed [%p]",m_sid.c_str(),this);
 }
 
+// Ask this session to accept an event
+bool JGSession::acceptEvent(JBEvent* event, const String& sid)
+{
+    if (!event)
+	return false;
+
+    // Requests must match the session id
+    // Responses' id must start with session's local id (this is the way we generate the stanza id)
+    if (sid) {
+	if (sid != m_sid)
+	    return false;
+    }
+    else if (!event->id().startsWith(m_localSid))
+	return false;
+    // Check to/from
+    if (m_localJID != event->to() || m_remoteJID != event->from())
+	return false;
+
+    // Ok: keep a referenced event
+    if (event->ref())
+	enqueue(event);
+    return true;
+}
+
 // Accept a Pending incoming session
 bool JGSession::accept(XMLElement* description, String* stanzaId)
 {

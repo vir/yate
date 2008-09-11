@@ -1692,7 +1692,7 @@ bool ClientLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     // Update presence
     bool offline = (status && *status == "offline");
     NamedString* proto = msg.getParam("protocol");
-    bool jabber = *proto && (*proto == "jabber" || *proto == "xmpp" || *proto == "jingle");
+    bool jabber = proto && *proto && (*proto == "jabber" || *proto == "xmpp" || *proto == "jingle");
     String contactName = *contact;
     String contactUri = *contact;
     // Special care for jabber

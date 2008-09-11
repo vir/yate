@@ -1127,6 +1127,13 @@ public:
     virtual void engineStart(Message& msg);
 
     /**
+     * Check if the client is exiting
+     * @return True if the client therad is exiting
+     */
+    static inline bool exiting()
+	{ return s_exiting; }
+
+    /**
      * Add a logic to the list. The added object is not owned by the client  
      * @param logic Pointer to the logic to add
      * @return True on success. False if the pointer is 0 or already added
@@ -1237,6 +1244,8 @@ protected:
     bool driverLockLoop();
     static bool driverLock(long maxwait = 0);
     static void driverUnlock();
+
+    static bool s_exiting;               // Exiting flag
 
     ObjList m_windows;
     bool m_initialized;
@@ -1532,6 +1541,12 @@ public:
 	{ return s_device; }
 
     /**
+     * Drop all calls belonging to the active driver
+     * @param reason Optional drop reason
+     */
+    static void dropCalls(const char* reason = 0);
+
+    /**
      * Attach/detach client channels peers' source/consumer
      * @param id The id of the channel to tranfer
      * @param target The transfer target. Leave blank to reset the channel's transfer id
@@ -1561,7 +1576,7 @@ public:
      * @param peer Peer id to check
      * @return Referenced ClientChannel pointer or 0
      */
-   static ClientChannel* findChanByPeer(const String& peer);
+    static ClientChannel* findChanByPeer(const String& peer);
 
     /**
      * Get the active channel

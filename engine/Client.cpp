@@ -156,6 +156,7 @@ String Client::s_toggles[OptCount] = {
     "display_keypad"
 };
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
+bool Client::s_exiting = false;                  // Client exiting flag
 ClientDriver* ClientDriver::s_driver = 0;
 String ClientDriver::s_confName = "conf/client"; // The name of the client's conference room
 bool ClientDriver::s_dropConfPeer = true;        // Drop a channel's old peer when terminated while in conference
@@ -558,7 +559,7 @@ void ClientThreadProxy::process()
 {
     XDebug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
     Client* client = Client::self();
-    if (!client) {
+    if (!client || Client::exiting()) {
 	s_busy = false;
 	return;
     }
@@ -793,6 +794,9 @@ void Client::run()
     loadUI();
     // Run
     main();
+    s_exiting = true;
+    // Drop all calls
+    ClientDriver::dropCalls();
     // Notify termination to logics
     for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext()) {
 	ClientLogic* logic = static_cast<ClientLogic*>(o->get());
@@ -2589,9 +2593,10 @@ bool ClientDriver::received(Message& msg, int id)
 	    return false;
 	return Client::self() && Client::self()->imExecute(msg);
     }
-    if (id == Halt && Client::self()) {
-	dropAll(msg);
-	Client::self()->quit();
+    if (id == Halt) {
+	dropCalls();
+	if (Client::self())
+	    Client::self()->quit();
     }
     return Driver::received(msg,id);
 }
@@ -2632,6 +2637,18 @@ ClientChannel* ClientDriver::findLine(int line)
 	    return cc;
     }
     return 0;
+}
+
+// Drop all calls belonging to the active driver
+void ClientDriver::dropCalls(const char* reason)
+{
+    Message m("call.drop");
+    if (!reason && Engine::exiting())
+	reason = "shutdown";
+    if (reason)
+	m.addParam("reason",reason);
+    if (self())
+	self()->dropAll(m);
 }
 
 // Attach/detach client channels peers' source/consumer

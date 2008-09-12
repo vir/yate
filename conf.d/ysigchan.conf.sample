@@ -209,6 +209,26 @@
 ; The format is network-cluster-member
 ;remotepointcode=
 
+; netind2pctype: string: Comma separated list of point code types used to map an incoming
+;  network indicator to a specific point code type
+; This option is required and is used to configure a SS7 MTP3 network
+; The list must contain 4 values indicating the point code type for International,
+;  SpareInternational, National and ReservedNational network indicators
+; See the pointcodetype option for allowed values
+; NOTE: If an incoming packet comes with an unconfigured network indicator it will be dropped
+; Examples:
+;  netind2pctype=ITU,ITU,ITU,ITU
+;  netind2pctype=ITU,ANSI,ITU,ITU
+;  netind2pctype=ANSI8,ITU,ANSI,ITU
+;netind2pctype=
+
+; route: string: Build a destination route for a SS7 MTP3 network
+; The format of this option is pointcodetype,label,priority
+; This parameter can be repeated to build multiple destination routes
+; The network will notify the router about its destination(s) and priority
+; Example: route=ITU,2-2-2,0
+;route=
+
 ; debuglevel: string: Comma separated list of debug levels for link layers
 ; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
 ; ss7-isup: Interface,Circuit group, MTP2, MTP3, ISUP

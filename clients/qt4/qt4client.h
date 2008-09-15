@@ -149,24 +149,25 @@ public:
     virtual bool createSound(const char* name, const char* file, const char* device = 0);
 
     /**
-     * Build a date/time string
+     * Build a date/time string from UTC time
      * @param dest Destination string
      * @param secs Seconds since EPOCH
      * @param format Format string used to build the destination
+     * @param utc True to build UTC time instead of local time
      * @return True on success
      */
-    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format);
+    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format,
+	bool utc = false);
 
     /**
-     * Build a date/time QT string
+     * Build a date/time QT string from UTC time
      * @param secs Seconds since EPOCH
      * @param format Format string
+     * @param utc True to build UTC time instead of local time
      * @return The formated string
      */
-    static QString formatDateTime(unsigned int secs, const char* format) {
-	    QDateTime time = QDateTime::fromTime_t(secs);
-	    return time.toString(format);
-	}
+    static QString formatDateTime(unsigned int secs, const char* format,
+	bool utc = false);
 
     /**
      * Set or get an object's property

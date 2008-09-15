@@ -1835,12 +1835,24 @@ bool QtClient::createSound(const char* name, const char* file, const char* devic
     return true;
 }
 
-bool QtClient::formatDateTime(String& dest, unsigned int secs, const char* format)
+// Build a date/time string from UTC time
+bool QtClient::formatDateTime(String& dest, unsigned int secs,
+    const char* format, bool utc)
 {
     if (!(format && *format))
 	return false;
-    dest = qtGetUtf8(formatDateTime(secs,format));
+    dest = qtGetUtf8(formatDateTime(secs,format,utc));
     return true;
+}
+
+// Build a date/time QT string from UTC time
+QString QtClient::formatDateTime(unsigned int secs, const char* format, bool utc)
+{
+    QDateTime time;
+    if (utc)
+	time.setTimeSpec(Qt::UTC);
+    time.setTime_t(secs);
+    return time.toString(format);
 }
 
 // Set/get an object's property

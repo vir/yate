@@ -1111,13 +1111,15 @@ public:
     bool setBoolOpt(ClientToggle toggle, bool value, bool updateUi = false);
 
     /**
-     * Build a date/time string
+     * Build a date/time string from UTC time
      * @param dest Destination string
      * @param secs Seconds since EPOCH
      * @param format Format string used to build the destination
+     * @param utc True to build UTC time instead of local time
      * @return True on success
      */
-    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format)
+    virtual bool formatDateTime(String& dest, unsigned int secs, const char* format,
+	bool utc = false)
 	{ return false; }
 
     /**

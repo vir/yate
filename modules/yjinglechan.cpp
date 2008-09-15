@@ -1362,7 +1362,9 @@ void YJGConnection::callAccept(Message& msg)
 	m_data->rtp(false);
 	m_session->accept(m_data->JGAudioList::toXML());
 	m_session->acceptTransport();
-	m_session->sendTransport(new JGTransport(*m_data));
+	// Avoid termination if error is received
+	String transportId;
+	m_session->sendTransport(new JGTransport(*m_data),&transportId);
     }
     m_mutex.unlock();
     Channel::callAccept(msg);
@@ -1584,7 +1586,9 @@ bool YJGConnection::presenceChanged(bool available)
     Engine::enqueue(message("call.ringing",false,true));
     // Init & send transport
     m_data->rtp(false);
-    m_session->sendTransport(new JGTransport(*m_data));
+    // Avoid termination if error is received
+    String transportId;
+    m_session->sendTransport(new JGTransport(*m_data),&transportId);
     return false;
 }
 

@@ -1484,6 +1484,15 @@ protected:
     virtual bool commandComplete(Message& msg, const String& partLine, const String& partWord);
 
     /**
+     * Helper function to complete just one item on a command line
+     * @param itemList Tab separated list of possible values to complete
+     * @param item Item to possibly insert in the list
+     * @param partWord Partial word to complete, may be empty
+     * @return True if the item was added to list, false if it didn't match
+     */
+    static bool itemComplete(String& itemList, const String& item, const String& partWord);
+
+    /**
      * Set the local debugging level
      * @param msg Debug setting message
      * @param target String to match for local settings

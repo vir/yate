@@ -1309,7 +1309,7 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
     if (partLine == m_statusCmd) {
 	Lock lock(m_linksMutex);
 	for (ObjList* o = m_links.skipNull(); o; o = o->skipNext())
-	    msg.retValue().append((static_cast<SigLink*>(o->get()))->name(),"\t");
+	    itemComplete(msg.retValue(),static_cast<SigLink*>(o->get())->name(),partWord);
 	return true;
     }
 

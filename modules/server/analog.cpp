@@ -2935,8 +2935,7 @@ bool AnalogDriver::commandComplete(Message& msg, const String& partLine,
     if (partLine == m_statusCmd) {
 	DDebug(this,DebugInfo,"Processing '%s' partWord=%s",partLine.c_str(),partWord.c_str());
 	for (unsigned int i = 0; i < StatusCmdCount; i++)
-	    if (!partWord || s_statusCmd[i].startsWith(partWord))
-		msg.retValue().append(s_statusCmd[i],"\t");
+	    itemComplete(msg.retValue(),s_statusCmd[i],partWord);
 	completeGroups(msg.retValue(),partWord);
 	completeLines(msg.retValue(),partWord);
 	return true;
@@ -2946,8 +2945,7 @@ bool AnalogDriver::commandComplete(Message& msg, const String& partLine,
 	return false;
 
     // Empty partial word or name start with it: add name, prefix and recorder prefix
-    if (!partWord || name().startsWith(partWord)) {
-	msg.retValue().append(name(),"\t");
+    if (itemComplete(msg.retValue(),name(),partWord)) {
 	if (channels().skipNull())
 	    msg.retValue().append(prefix(),"\t");
 	return false;
@@ -2980,11 +2978,8 @@ bool AnalogDriver::commandExecute(String& retVal, const String& line)
 // Complete group names from partial command word
 void AnalogDriver::completeGroups(String& dest, const String& partWord)
 {
-    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
-	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
-	if (!partWord || grp->toString().startsWith(partWord))
-	    dest.append(grp->toString(),"\t");
-    }
+    for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext())
+	itemComplete(dest,static_cast<ModuleGroup*>(o->get())->toString(),partWord);
 }
 
 // Complete line names from partial command word
@@ -2993,12 +2988,8 @@ void AnalogDriver::completeLines(String& dest, const String& partWord)
     for (ObjList* o = m_groups.skipNull(); o; o = o->skipNext()) {
 	ModuleGroup* grp = static_cast<ModuleGroup*>(o->get());
 	Lock lock(grp);
-	bool all = (!partWord || partWord == grp->prefix());
-	for (ObjList* ol = grp->lines().skipNull(); ol; ol = ol->skipNext()) {
-	    ModuleLine* line = static_cast<ModuleLine*>(ol->get());
-	    if (all || line->toString().startsWith(partWord))
-		dest.append(line->toString(),"\t");
-	}
+	for (ObjList* ol = grp->lines().skipNull(); ol; ol = ol->skipNext())
+	    itemComplete(dest,static_cast<ModuleLine*>(ol->get())->toString(),partWord);
     }
 }
 

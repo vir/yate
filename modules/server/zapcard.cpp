@@ -2941,16 +2941,12 @@ bool ZapModule::commandComplete(Message& msg, const String& partLine,
     }
     if (partLine == m_statusCmd) {
 	for (unsigned int i = 0; i < StatusCmdCount; i++)
-	    if (!partWord || s_statusCmd[i].startsWith(partWord))
-		msg.retValue().append(s_statusCmd[i],"\t");
+	    itemComplete(msg.retValue(),s_statusCmd[i],partWord);
 	return true;
     }
     if (partWord.startsWith(prefix())) {
-	for (ObjList* o = m_devices.skipNull(); o; o = o->skipNext()) {
-	    ZapDevice* dev = static_cast<ZapDevice*>(o->get());
-	    if (!partWord || dev->zapName().startsWith(partWord))
-		msg.retValue().append(dev->zapName(),"\t");
-	}
+	for (ObjList* o = m_devices.skipNull(); o; o = o->skipNext())
+	    itemComplete(msg.retValue(),static_cast<ZapDevice*>(o->get())->zapName(),partWord);
 	return true;
     }
     return ok;

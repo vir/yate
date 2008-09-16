@@ -2461,8 +2461,7 @@ bool YJGDriver::commandComplete(Message& msg, const String& partLine,
     // line='status jingle': add additional commands
     if (partLine == m_statusCmd) {
 	for (unsigned int i = 0; i < StatusCmdCount; i++)
-	    if (!partWord || s_statusCmd[i].startsWith(partWord))
-		msg.retValue().append(s_statusCmd[i],"\t");
+	    itemComplete(msg.retValue(),s_statusCmd[i],partWord);
 	return true;
     }
 
@@ -2470,8 +2469,7 @@ bool YJGDriver::commandComplete(Message& msg, const String& partLine,
 	return false;
 
     // Empty partial word or name start with it: add name and prefix
-    if (!partWord || name().startsWith(partWord)) {
-	msg.retValue().append(name(),"\t");
+    if (itemComplete(msg.retValue(),name(),partWord)) {
 	if (channels().skipNull())
 	    msg.retValue().append(prefix(),"\t");
 	return false;

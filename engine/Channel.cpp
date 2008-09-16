@@ -978,11 +978,16 @@ bool Module::commandExecute(String& retVal, const String& line)
 
 bool Module::commandComplete(Message& msg, const String& partLine, const String& partWord)
 {
-    if ((partLine == "debug") || (partLine == "status")) {
-	if (partWord.null() || name().startsWith(partWord)) {
-	    msg.retValue().append(name(),"\t");
-	    return false;
-	}
+    if ((partLine == "debug") || (partLine == "status"))
+	itemComplete(msg.retValue(),name(),partWord);
+    return false;
+}
+
+bool Module::itemComplete(String& itemList, const String& item, const String& partWord)
+{
+    if (partWord.null() || item.startsWith(partWord)) {
+	itemList.append(item,"\t");
+	return true;
     }
     return false;
 }

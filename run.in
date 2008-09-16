@@ -25,6 +25,13 @@ if [ "$1" = "--core" ]; then
     set_conf=""
     set_mods=""
 fi
+if [ "$1" = "--backtrace" ]; then
+    shift
+    yate="gdb -x tools/gdb-bt-all.txt $yate core*"
+    set_conf=""
+    set_mods=""
+    exec </dev/null 2>&1
+fi
 if [ "$1" = "--valgrind" ]; then
     shift
     yate="valgrind $1 $yate"

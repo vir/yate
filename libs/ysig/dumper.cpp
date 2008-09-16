@@ -64,7 +64,11 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
 {
     if (!(active() && buf && len))
 	return false;
-    if (m_type == Hexa) {
+    if (m_type == Raw) {
+	int wr = m_output->writeData(buf,len);
+	return (wr == (int)len);
+    }
+    else if (m_type == Hexa) {
 	String str;
 	str.hexify(buf,len);
 	str = "0 " + str + "\n";
@@ -92,7 +96,7 @@ void SignallingDumper::head()
 {
     if (!active())
 	return;
-    if (m_type == Hexa)
+    if (m_type == Raw || m_type == Hexa)
 	return;
     u_int32_t hdr[6];
     hdr[0] = 0xa1b2c3d4; // libpcap magic
@@ -111,7 +115,10 @@ void SignallingDumper::head()
 	case Mtp3:
 	    hdr[5] = 141;
 	    break;
-	case Hexa:
+	case Sccp:
+	    hdr[5] = 142;
+	    break;
+	default:
 	    // compiler, please shut up
 	    break;
     }

@@ -155,10 +155,12 @@ public:
      * Type of dumper output
      */
     enum Type {
+	Raw,
 	Hexa,
 	Hdlc,
 	Mtp2,
 	Mtp3,
+	Sccp,
     };
 
     /**

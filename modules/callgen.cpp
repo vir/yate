@@ -424,16 +424,11 @@ bool CmdHandler::doComplete(const String& partLine, const String& partWord, Stri
 {
     if (partLine.null() && partWord.null())
 	return false;
-    if (partLine.null() || (partLine == "help")) {
-	if (partWord.null() || String("callgen").startsWith(partWord))
-	    rval.append("callgen","\t");
-    }
+    if (partLine.null() || (partLine == "help"))
+	Module::itemComplete(rval,"callgen",partWord);
     else if (partLine == "callgen") {
-	for (const char** list = s_cmds; *list; list++) {
-	    String tmp = *list;
-	    if (partWord.null() || tmp.startsWith(partWord))
-		rval.append(tmp,"\t");
-	}
+	for (const char** list = s_cmds; *list; list++)
+	    Module::itemComplete(rval,*list,partWord);
 	return true;
     }
     return false;

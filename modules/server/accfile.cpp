@@ -22,7 +22,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#include <yatengine.h>
+#include <yatephone.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -127,29 +127,21 @@ static bool operAccounts(const String& operation, const String& account = String
     return emitAccounts(operation,account);
 }
 
-// perform one completion only if match still possible
-static void completeOne(String& ret, const String& str, const char* part)
-{
-    if (part && !str.startsWith(part))
-	return;
-    ret.append(str,"\t");
-}
-
 // perform command line completion
 static void doCompletion(Message &msg, const String& partLine, const String& partWord)
 {
     if (partLine.null() || (partLine == "help") || (partLine == "status"))
-	completeOne(msg.retValue(),"accounts",partWord);
+	Module::itemComplete(msg.retValue(),"accounts",partWord);
     else if (partLine == "accounts") {
-	completeOne(msg.retValue(),"reload",partWord);
-	completeOne(msg.retValue(),"login",partWord);
-	completeOne(msg.retValue(),"logout",partWord);
+	Module::itemComplete(msg.retValue(),"reload",partWord);
+	Module::itemComplete(msg.retValue(),"login",partWord);
+	Module::itemComplete(msg.retValue(),"logout",partWord);
     }
     else if ((partLine == "accounts login") || (partLine == "accounts logout")) {
 	for (unsigned int i=0;i<s_cfg.sections();i++) {
 	    NamedList* acc = s_cfg.getSection(i);
 	    if (acc && acc->getValue("username") && acc->getBoolValue("enabled",true))
-		completeOne(msg.retValue(),*acc,partWord);
+		Module::itemComplete(msg.retValue(),*acc,partWord);
 	}
     }
 }

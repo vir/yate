@@ -1535,16 +1535,11 @@ bool ExtModCommand::complete(const String& partLine, const String& partWord, Str
 {
     if (partLine.null() && partWord.null())
 	return false;
-    if (partLine.null()) {
-	if (partWord.null() || String("external").startsWith(partWord))
-	    rval.append("external","\t");
-    }
+    if (partLine.null())
+	Module::itemComplete(rval,"external",partWord);
     else if (partLine == "external") {
-	for (const char** list = s_cmds; *list; list++) {
-	    String tmp = *list;
-	    if (partWord.null() || tmp.startsWith(partWord))
-		rval.append(tmp,"\t");
-	}
+	for (const char** list = s_cmds; *list; list++)
+	    Module::itemComplete(rval,*list,partWord);
 	return true;
     }
     return false;

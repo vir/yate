@@ -79,11 +79,21 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
     struct timeval tv;
     u_int32_t hdr[4];
     t.toTimeval(&tv);
+    DataBlock hdr2;
+    if (m_type == Hdlc) {
+	// add LAPD pseudoheader
+	hdr2.assign(0,16);
+	unsigned char* ptr2 = (unsigned char*)hdr2.data();
+	ptr2[6] = sent ? 1 : 0;
+	ptr2[14] = 0x00;
+	ptr2[15] = 0x30;
+    }
     hdr[0] = tv.tv_sec;
     hdr[1] = tv.tv_usec;
-    hdr[2] = len;
-    hdr[3] = len;
+    hdr[2] = len + hdr2.length();
+    hdr[3] = hdr[2];
     DataBlock blk(hdr,sizeof(hdr));
+    blk += hdr2;
     DataBlock dat(buf,len,false);
     blk += dat;
     dat.clear(false);
@@ -107,16 +117,16 @@ void SignallingDumper::head()
     hdr[4] = 65535; // rather arbitrary snaplen
     switch (m_type) {
 	case Hdlc:
-	    hdr[5] = 0;
+	    hdr[5] = 177; // DLT_LINUX_LAPD
 	    break;
 	case Mtp2:
-	    hdr[5] = 140;
+	    hdr[5] = 140; // DLT_MTP2
 	    break;
 	case Mtp3:
-	    hdr[5] = 141;
+	    hdr[5] = 141; // DLT_MTP3
 	    break;
 	case Sccp:
-	    hdr[5] = 142;
+	    hdr[5] = 142; // DLT_SCCP
 	    break;
 	default:
 	    // compiler, please shut up

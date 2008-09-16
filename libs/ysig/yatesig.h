@@ -786,6 +786,12 @@ public:
      */
     void setDumper(SignallingDumper* dumper = 0);
 
+    /**
+     * Set or remove a data dump file
+     * @param file Name of the file to dump to, empty to remove dumper
+     */
+    virtual bool setDumpFile(const String& file);
+
 protected:
     /**
      * Get the strategy used by the attached circuit group to allocate circuits
@@ -7380,6 +7386,12 @@ public:
      */
     inline const String& format() const
 	{ return m_format; }
+
+    /**
+     * Set or remove a data dump file
+     * @param file Name of the file to dump to, empty to remove dumper
+     */
+    virtual bool setDumpFile(const String& file);
 
     /**
      * Send a message

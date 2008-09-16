@@ -217,6 +217,12 @@ void SignallingCallControl::setDumper(SignallingDumper* dumper)
     XDebug(DebugAll,"SignallingCallControl. Data dumper set to (%p) [%p]",m_dumper,this);
 }
 
+bool SignallingCallControl::setDumpFile(const String& file)
+{
+    Debug(DebugMild,"SignallingCallControl does not support dumping");
+    return false;
+}
+
 // Clear call list
 void SignallingCallControl::clearCalls()
 {

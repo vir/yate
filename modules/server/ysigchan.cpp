@@ -144,6 +144,10 @@ private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
 	const String& partWord);
+    // Custom command handler
+    virtual bool commandExecute(String& retVal, const String& line);
+    // Help message handler
+    bool commandHelp(String& retVal, const String& line);
     // Delete the given link if found
     // Clear link list if name is 0
     // Clear all stacks without waiting for call termination if name is 0
@@ -213,6 +217,8 @@ public:
 	{ return m_inband; }
     // Set exiting flag for call controller and timeout for the thread
     void setExiting(unsigned int msec);
+    // Set or remove a data dumper on the link or its components
+    bool setDumpFile(const String& file);
     // Initialize (create or reload) the link. Process the debuglayer parameter.
     // Fix some type depending parameters
     // Return false on failure
@@ -493,6 +499,9 @@ public:
 static SigDriver plugin;
 static Configuration s_cfg;
 static Configuration s_cfgData;
+
+static const char s_miniHelp[] = "sigdump component [filename]";
+static const char s_fullHelp[] = "Command to dump signalling data to a file";
 
 inline void applyDebugLevel(DebugEnabler* dbg, int level)
 {
@@ -1092,6 +1101,8 @@ bool SigDriver::received(Message& msg, int id)
 	    if (m_engine)
 		m_engine->stop();
 	    return Driver::received(msg,id);
+	case Help:
+	    return commandHelp(msg.retValue(),msg.getValue("line"));
 	default:
 	    return Driver::received(msg,id);
     }
@@ -1299,6 +1310,15 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
 bool SigDriver::commandComplete(Message& msg, const String& partLine,
     const String& partWord)
 {
+    if (partLine.null() || partLine == "help") {
+	if (itemComplete(msg.retValue(),"sigdump",partWord))
+	    return false;
+    }
+    else if (partLine == "sigdump") {
+	Lock lock(m_linksMutex);
+	for (ObjList* o = m_links.skipNull(); o; o = o->skipNext())
+	    itemComplete(msg.retValue(),static_cast<SigLink*>(o->get())->name(),partWord);
+    }
     bool status = partLine.startsWith("status");
     bool drop = !status && partLine.startsWith("drop");
     if (!(status || drop))
@@ -1335,6 +1355,41 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
 	    msg.retValue().append(c->id(),"\t");
     }
     return true;
+}
+
+// Custom command handler
+bool SigDriver::commandExecute(String& retVal, const String& line)
+{
+    String tmp = line;
+    if (tmp.startSkip("sigdump")) {
+	if (tmp.null() || tmp == "help" || tmp == "?")
+	    retVal << "Usage: " << s_miniHelp << "\r\n" << s_fullHelp;
+	else {
+	    Lock lock(m_linksMutex);
+	    for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
+		SigLink* link = static_cast<SigLink*>(o->get());
+		if (tmp.startSkip(link->name()))
+		    return link->setDumpFile(tmp.trimBlanks());
+	    }
+	    return false;
+	}
+	retVal << "\r\n";
+	return true;
+    }
+    return Driver::commandExecute(retVal,line);
+}
+
+// Help message handler
+bool SigDriver::commandHelp(String& retVal, const String& line)
+{
+    if (line.null() || line == "sigdump") {
+	retVal << "  " << s_miniHelp << "\r\n";
+	if (line) {
+	    retVal << s_fullHelp << "\r\n";
+	    return true;
+	}
+    }
+    return false;
 }
 
 // Append a link to the list. Duplicate names are not allowed
@@ -1406,6 +1461,7 @@ void SigDriver::initialize()
 	setup();
 	installRelay(Masquerade);
 	installRelay(Halt);
+	installRelay(Help);
 	installRelay(Progress);
 	installRelay(Update);
 	installRelay(Route);
@@ -1547,6 +1603,15 @@ void SigLink::setExiting(unsigned int msec)
 	m_controller->setExiting();
     if (m_thread)
 	m_thread->m_timeout = Time::msecNow() + msec;
+}
+
+// Set or remove a data dumper on the link or its components
+bool SigLink::setDumpFile(const String& file)
+{
+    if (!(m_controller && m_controller->setDumpFile(file)))
+	return false;
+    Debug(&plugin,DebugNote,"Link '%s' dumping to '%s'",name().c_str(),file.c_str());
+    return true;
 }
 
 // Initialize (create or reload) the link. Set debug levels for contained objects

@@ -2281,6 +2281,9 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 #endif
 	Debug(this,DebugInfo,"ISDN Call Controller %s [%p]",s.c_str(),this);
     }
+    const char* fn = params.getValue("isdndump");
+    if (fn)
+	setDumper(SignallingDumper::create(this,fn,SignallingDumper::Hdlc));
     m_syncGroupTimer.start();
 }
 
@@ -2292,6 +2295,19 @@ ISDNQ931::~ISDNQ931()
     }
     attach((ISDNLayer2*)0);
     DDebug(this,DebugAll,"ISDN Call Controller destroyed [%p]",this);
+}
+
+bool ISDNQ931::setDumpFile(const String& file)
+{
+    if (file.null())
+	setDumper();
+    else {
+	SignallingDumper* dumper = SignallingDumper::create(this,file,SignallingDumper::Hdlc);
+	if (!dumper)
+	    return false;
+	setDumper(dumper);
+    }
+    return true;
 }
 
 // Send a message to layer 2

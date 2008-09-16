@@ -217,6 +217,7 @@ static void dbg_output(int level,const char* prefix, const char* format, va_list
     l = sizeof(buf)-n-2;
     if (format) {
 	::vsnprintf(buf+n,l,format,ap);
+	buf[OUT_BUFFER_SIZE - 2] = 0;
     }
     common_output(level,buf);
 }

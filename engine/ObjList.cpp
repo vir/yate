@@ -148,6 +148,26 @@ ObjList* ObjList::find(const String& str) const
     return const_cast<ObjList*>(n);
 }
 
+int ObjList::index(const GenObject* obj) const
+{
+    if (!obj)
+	return -1;
+    int idx = 0;
+    for (const ObjList* n = this; n; n = n->next(), idx++)
+	if (n->get() == obj)
+	    return idx;
+    return -1;
+}
+
+int ObjList::index(const String& str) const
+{
+    int idx = 0;
+    for (const ObjList* n = this; n; n = n->next(), idx++)
+	if (n->get() && str.matches(n->get()->toString()))
+	    return idx;
+    return -1;
+}
+
 GenObject* ObjList::set(const GenObject* obj, bool delold)
 {
     if (m_obj == obj)

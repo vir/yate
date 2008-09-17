@@ -1050,6 +1050,20 @@ public:
     ObjList* find(const String& str) const;
 
     /**
+     * Get the position in list of a GenObject by a pointer to it
+     * @param obj Pointer to the object to search for
+     * @return Index of object in list, -1 if not found
+     */
+    int index(const GenObject* obj) const;
+
+    /**
+     * Get the position in list of the first GenObject with a given value
+     * @param str String value (toString) of the object to search for
+     * @return Index of object in list, -1 if not found
+     */
+    int index(const String& str) const;
+
+    /**
      * Insert an object at this point
      * @param obj Pointer to the object to insert
      * @param compact True to replace NULL values in list if possible

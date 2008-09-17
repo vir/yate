@@ -548,7 +548,7 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	flags |= O_APPEND;
     if (binary)
 	flags |= O_BINARY;
-    HANDLE h = ::open(name,flags,S_IRWXU);
+    HANDLE h = ::open(name,flags,(S_IRUSR|S_IWUSR));
     if (h == invalidHandle()) {
 	copyError();
 	return false;

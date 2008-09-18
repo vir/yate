@@ -364,7 +364,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     buildRoutes(params);
-    setDumper(params.getValue("mtp3dump"));
+    setDumper(params.getValue("layer3dump"));
 }
 
 SS7MTP3::~SS7MTP3()

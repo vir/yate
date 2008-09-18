@@ -234,3 +234,9 @@
 ; ss7-isup: Interface,Circuit group, MTP2, MTP3, ISUP
 ; isdn-pri-net,isdn-pri-cpe: Interface,Circuit group, Q921, Q931
 ;debuglevel=
+
+; layer2dump: string: Filename to dump Q.921 or MTP2 packets to (if applicable)
+;layer2dump=
+
+; layer3dump: string: Filename to dump Q.931 or MTP3 packets to (if applicable)
+;layer3dump=

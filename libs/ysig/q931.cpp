@@ -2282,7 +2282,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 #endif
 	Debug(this,DebugInfo,"ISDN Call Controller %s [%p]",s.c_str(),this);
     }
-    setDumper(params.getValue("q931dump"));
+    setDumper(params.getValue("layer3dump"));
     m_syncGroupTimer.start();
 }
 

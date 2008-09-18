@@ -147,7 +147,7 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
 	Debug(this,DebugInfo,"ISDN Data Link type=%s%s [%p]",
 	    linkSide(network()),tmp.safe(),this);
     }
-    setDumper(params.getValue("q921dump"));
+    setDumper(params.getValue("layer2dump"));
 }
 
 // Destructor
@@ -977,7 +977,7 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
 	linkSide(network()),String::boolText(detectType()),
 	(unsigned int)m_idleTimer.interval(),this);
     m_idleTimer.start();
-    setDumper(params.getValue("q921dump"));
+    setDumper(params.getValue("layer2dump"));
 }
 
 // Destructor

@@ -190,7 +190,12 @@ bool SignallingDumpable::setDumper(const String& name, bool create, bool append)
     if (name.null())
 	setDumper();
     else {
-	SignallingDumper* dumper = SignallingDumper::create(0,name,m_type,create,append);
+	SignallingDumper::Type type = m_type;
+	if (name.endsWith(".raw"))
+	    type = SignallingDumper::Raw;
+	else if (name.endsWith(".hex") || name.endsWith(".txt"))
+	    type = SignallingDumper::Hexa;
+	SignallingDumper* dumper = SignallingDumper::create(0,name,type,create,append);
 	if (dumper)
 	    setDumper(dumper);
 	else

@@ -194,7 +194,7 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
       m_resendMs(250), m_abortMs(5000)
 {
     setName(params.getValue("debugname","mtp2"));
-    setDumper(params.getValue("mtp2dump"));
+    setDumper(params.getValue("layer2dump"));
 }
 
 SS7MTP2::~SS7MTP2()

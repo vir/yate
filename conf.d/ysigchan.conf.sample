@@ -240,3 +240,9 @@
 
 ; layer3dump: string: Filename to dump Q.931 or MTP3 packets to (if applicable)
 ;layer3dump=
+
+; layer2dump-net: string: Filename to dump NET Q.921 packets to (passive only)
+;layer2dump-net=
+
+; layer2dump-cpe: string: Filename to dump CPE Q.921 packets to (passive only)
+;layer2dump-cpe=

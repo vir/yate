@@ -977,7 +977,9 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
 	linkSide(network()),String::boolText(detectType()),
 	(unsigned int)m_idleTimer.interval(),this);
     m_idleTimer.start();
-    setDumper(params.getValue("layer2dump"));
+    // Try to dump from specific parameter, fall back to generic
+    const char* dump = network() ? "layer2dump-net" : "layer2dump-cpe";
+    setDumper(params.getValue(dump,params.getValue("layer2dump")));
 }
 
 // Destructor

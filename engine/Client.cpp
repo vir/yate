@@ -1894,7 +1894,7 @@ void Client::installRelay(const char* name, int id, int prio)
 // Process an IM message
 bool Client::imExecute(Message& msg)
 {
-    static String sect = "miscellanous";
+    static String sect = "miscellaneous";
 
     XDebug(ClientDriver::self(),DebugAll,"Client::imExecute [%p]",this);
     // Check for a preferred or only logic
@@ -1978,7 +1978,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
 // Call execute handler called by the driver
 bool Client::callIncoming(Message& msg, const String& dest)
 {
-    static String sect = "miscellanous";
+    static String sect = "miscellaneous";
 
     XDebug(ClientDriver::self(),DebugAll,"Client::callIncoming [%p]",this);
     // if we are in single line mode and we have already a channel, reject the call

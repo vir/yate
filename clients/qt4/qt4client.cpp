@@ -1622,7 +1622,7 @@ void QtWindow::doInit()
 		// Decode param
 		int pos = p->toString().find('=');
 		if (pos != -1)
-		    params.addParam(p->toString().substr(0,pos),p->toString().substr(pos+1));
+		    params.addParam(p->toString().substr(0,pos),p->toString().substr(pos + 1));
 	    }
 	}
 	TelEngine::destruct(list);
@@ -1907,13 +1907,13 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
     QWidget* p = static_cast<QtWindow*>(parent);
     if (files) {
 	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters?*filters:QString::null,sFilter,options);
+	    QtClient::setUtf8(dir),filters ? *filters : QString::null,sFilter,options);
 	for (int i = 0; i < list.size(); i++)
 	    QtClient::getUtf8(*files,"file",list[i]);
     }
     else {
 	QString str = QFileDialog::getOpenFileName((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters?*filters:QString::null,sFilter,options);
+	    QtClient::setUtf8(dir),filters ? *filters : QString::null,sFilter,options);
 	QtClient::getUtf8(*file,str);
     }
 
@@ -2025,11 +2025,11 @@ bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
     }
     if (ok)
 	DDebug(ClientDriver::self(),DebugAll,"%s %s=%s for object '%s'",
-	    set?"Set":"Got",name,value.c_str(),YQT_OBJECT_NAME(obj));
+	    set ? "Set" : "Got",name,value.c_str(),YQT_OBJECT_NAME(obj));
     else
 	DDebug(ClientDriver::self(),DebugNote,
 	    "Failed to %s %s=%s (type=%s) for object '%s': %s",
-	    set?"set":"get",name,value.c_str(),var.typeName(),
+	    set ? "set" : "get",name,value.c_str(),var.typeName(),
 	    YQT_OBJECT_NAME(obj),err);
     return ok;
 }

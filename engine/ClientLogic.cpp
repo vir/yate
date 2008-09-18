@@ -70,7 +70,7 @@ static inline void setAccParam(NamedList& params, const String& prefix,
     const String& param, const char* defVal)
 {
     NamedString* ns = params.getParam("acc_" + param);
-    params.setParam(prefix + "_" + param,ns?ns->c_str():defVal);
+    params.setParam(prefix + "_" + param,ns ? ns->c_str() : defVal);
 }
 
 // Set the image parameter of a list
@@ -98,8 +98,8 @@ static void updateProtocolSpec(NamedList& p, const String& proto, const String& 
     ObjList* obj = options.split(',',false);
     String prefix = "acc_proto_" + proto;
     // Texts
-    setAccParam(p,prefix,"resource",proto=="jabber"?"yate":"");
-    setAccParam(p,prefix,"port",proto=="jabber"?"5222":"");
+    setAccParam(p,prefix,"resource",proto == "jabber" ? "yate" : "");
+    setAccParam(p,prefix,"port",proto == "jabber" ? "5222" : "");
     setAccParam(p,prefix,"address","");
     // Options
     prefix << "_opt_";
@@ -368,7 +368,7 @@ bool ClientLogic::action(Window* wnd, const String& name, NamedList* params)
     if (callOut || name == "log_in_call") {
 	String billid;
 	if (Client::self() && 
-	    Client::self()->getSelect(callOut?s_logOutgoing:s_logIncoming,billid) &&
+	    Client::self()->getSelect(callOut ? s_logOutgoing : s_logIncoming,billid) &&
 	    billid)
 	    return callLogCall(billid);
 	return false;
@@ -378,7 +378,7 @@ bool ClientLogic::action(Window* wnd, const String& name, NamedList* params)
     if (callOut || name == "log_in_contact") {
 	String billid;
 	if (Client::self() && 
-	    Client::self()->getSelect(callOut?s_logOutgoing:s_logIncoming,billid) &&
+	    Client::self()->getSelect(callOut ? s_logOutgoing : s_logIncoming,billid) &&
 	    billid)
 	    return callLogCreateContact(billid);
 	return false;
@@ -405,7 +405,7 @@ bool ClientLogic::toggle(Window* wnd, const String& name, bool active)
     Debug(ClientDriver::self(),DebugAll,
 	"Logic(%s) toggle '%s'=%s in window (%p,%s)",
 	m_name.c_str(),name.c_str(),String::boolText(active),
-	wnd,wnd?wnd->id().c_str():"");
+	wnd,wnd ? wnd->id().c_str() : "");
 
     // Check for window params
     if (Client::self() && Window::isValidParamPrefix(name)) {
@@ -495,7 +495,7 @@ bool ClientLogic::toggle(Window* wnd, const String& name, bool active)
 	    return true;
 	int pos = tmp.find(':');
 	if (pos > 0 && Client::self())
-	    return Client::self()->setSelect(tmp.substr(0,pos),tmp.substr(pos+1),wnd);
+	    return Client::self()->setSelect(tmp.substr(0,pos),tmp.substr(pos + 1),wnd);
 	return true;
     }
 
@@ -561,7 +561,7 @@ bool ClientLogic::select(Window* wnd, const String& name, const String& item,
 {
     DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) select name='%s' item='%s' in window (%p,%s)",
-	m_name.c_str(),name.c_str(),item.c_str(),wnd,wnd?wnd->id().c_str():"");
+	m_name.c_str(),name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
 
     if (name == s_accountList) {
 	if (!Client::self())
@@ -648,12 +648,12 @@ bool ClientLogic::select(Window* wnd, const String& name, const String& item,
 	    return false;
 	NamedList p("");
 	for (const char** par = Client::s_provParams; *par; par++)
-	    p.addParam(String("acc_")+*par,sect->getValue(*par));
+	    p.addParam(String("acc_") + *par,sect->getValue(*par));
 	NamedString* proto = sect->getParam("protocol");
 	if (proto) {
 	    selectProtocolSpec(p,*proto,m_accShowAdvanced);
 	    NamedString* opt = sect->getParam("options");
-	    updateProtocolSpec(p,*proto,opt?*opt:String::empty());
+	    updateProtocolSpec(p,*proto,opt ? *opt : String::empty());
 	}
 	Client::self()->setParams(&p,wnd);
 	return true;
@@ -847,7 +847,7 @@ bool ClientLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
     if (newAcc) {
 	proto = "--";
 	for (const String* par = s_accParams; !par->null(); par++)
-	    params->setParam("acc_"+*par,"");
+	    params->setParam("acc_" + *par,"");
     }
     else {
 	if (!Client::self())
@@ -869,7 +869,7 @@ bool ClientLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
     selectProtocolSpec(*params,proto,m_accShowAdvanced);
     NamedString* tmp = params->getParam("acc_options");
     for (int i = 0; i < Client::OtherProtocol; i++)
-	updateProtocolSpec(*params,Client::s_protocols[i],tmp?*tmp:String::empty());
+	updateProtocolSpec(*params,Client::s_protocols[i],tmp ? *tmp : String::empty());
     params->setParam("context",acc);
     params->setParam("acc_account",acc);
     params->setParam("modal",String::boolText(true));
@@ -881,7 +881,7 @@ static inline void saveAccParam(NamedList& params,
 	const String& prefix, const String& param, Window* wnd)
 {
     String val;
-    if (!Client::self()->getText(prefix+param,val,false,wnd))
+    if (!Client::self()->getText(prefix + param,val,false,wnd))
 	return;
     if (val)
 	params.setParam(param,val);
@@ -949,7 +949,7 @@ bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
     for (ObjList* o = Client::s_accOptions.skipNull(); o; o = o->skipNext()) {
 	String* opt = static_cast<String*>(o->get());
 	bool checked = false;
-	Client::self()->getCheck(prefix+*opt,checked,wnd);
+	Client::self()->getCheck(prefix + *opt,checked,wnd);
 	if (checked)
 	    options.append(*opt,",");
     }
@@ -1115,8 +1115,8 @@ bool ClientLogic::editContact(bool newCont, NamedList* params, Window* wnd)
     // Make sure we reset all controls in window
     NamedList p("");
     if (newCont) {
-	p.addParam("abk_name",params?params->c_str():"");
-	p.addParam("abk_target",params?params->getValue("target"):"");
+	p.addParam("abk_name",params ? params->c_str() : "");
+	p.addParam("abk_target",params ? params->getValue("target") : "");
     }
     else {
 	if (!Client::self())
@@ -1365,8 +1365,8 @@ bool ClientLogic::callLogCreateContact(const String& billid)
 	return false;
     NamedString* called = getCdrCalled(*sect,*direction);
     NamedList p("");
-    p.setParam("abk_name",called?called->c_str():"");
-    p.setParam("abk_target",called?called->c_str():"");
+    p.setParam("abk_name",called ? called->c_str() : "");
+    p.setParam("abk_target",called ? called->c_str() : "");
     p.setParam("modal",String::boolText(true));
     return Client::openPopup("addrbook",&p);
 }
@@ -1815,7 +1815,7 @@ bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    updateFormats = false;
     	    buildStatus(status,"Call active",CHANUPD_ADDR,CHANUPD_ID);
 	    Client::self()->setSelect(s_channelList,CHANUPD_ID);
-	    setImageParam(p,"party",outgoing?"down_active.png":"up_active.png");
+	    setImageParam(p,"party",outgoing ? "down_active.png" : "up_active.png");
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
@@ -1829,7 +1829,7 @@ bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	case ClientChannel::OnHold:
 	    enableActions = true;
 	    buildStatus(status,"Call on hold",CHANUPD_ADDR,CHANUPD_ID);
-	    setImageParam(p,"party",outgoing?"down.png":"up.png");
+	    setImageParam(p,"party",outgoing ? "down.png" : "up.png");
 	    if (outgoing) {
 		if (noticed)
 		    Client::self()->ringer(true,false);
@@ -1864,8 +1864,8 @@ bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    }
 	    else
 		return false;
-	    setImageParam(p,"party",chan?chan->party():"",outgoing?"down.png":"up.png");
-	    setImageParam(p,"time","",outgoing?"chan_ringing.png":"chan_idle.png");
+	    setImageParam(p,"party",chan ? chan->party() : "",outgoing ? "down.png" : "up.png");
+	    setImageParam(p,"time","",outgoing ? "chan_ringing.png" : "chan_idle.png");
 	    // Start incoming ringer if there is no active channel
 	    if (outgoing && notConf) {
 		ClientChannel* ch = ClientDriver::findActiveChan();
@@ -1926,7 +1926,7 @@ bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 	    if (chan && chan->transferId() && notConf) {
 		setStatus = false;
 		ClientChannel* trans = ClientDriver::findChan(chan->transferId());
-		setImageParam(p,"status",trans?trans->party():"","transfer.png");
+		setImageParam(p,"status",trans ? trans->party() : "","transfer.png");
 		TelEngine::destruct(trans);
 	    	buildStatus(status,"Call transferred",CHANUPD_ADDR,CHANUPD_ID);
 	    }

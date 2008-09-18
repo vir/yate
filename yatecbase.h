@@ -2444,7 +2444,7 @@ public:
      * @param dest Destination string
      */
     inline void buildContactId(String& dest)
-	{  buildContactId(dest,m_owner?m_owner->toString():String::empty(),m_id); }
+	{  buildContactId(dest,m_owner ? m_owner->toString() : String::empty(),m_id); }
 
     /**
      * Check if a window is this contact's chat

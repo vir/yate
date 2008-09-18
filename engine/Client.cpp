@@ -230,7 +230,7 @@ inline bool callLogicAction(ClientLogic* logic, Window* wnd, const String& name,
 	return false;
     DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) action='%s' in window (%p,%s) [%p]",
-	logic->toString().c_str(),name.c_str(),wnd,wnd?wnd->id().c_str():"",logic);
+	logic->toString().c_str(),name.c_str(),wnd,wnd ? wnd->id().c_str() : "",logic);
     return logic->action(wnd,name,params);
 }
 
@@ -243,7 +243,7 @@ inline bool callLogicToggle(ClientLogic* logic, Window* wnd, const String& name,
     DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) toggle='%s' active=%s in window (%p,%s) [%p]",
 	logic->toString().c_str(),name.c_str(),String::boolText(active),
-	wnd,wnd?wnd->id().c_str():"",logic);
+	wnd,wnd ? wnd->id().c_str() : "",logic);
     return logic->toggle(wnd,name,active);
 }
 
@@ -257,7 +257,7 @@ inline bool callLogicSelect(ClientLogic* logic, Window* wnd, const String& name,
     DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) select='%s' item='%s' in window (%p,%s) [%p]",
 	logic->toString().c_str(),name.c_str(),item.c_str(),
-	wnd,wnd?wnd->id().c_str():"",logic);
+	wnd,wnd ? wnd->id().c_str() : "",logic);
     return logic->select(wnd,name,item,text);
 }
 
@@ -369,7 +369,7 @@ bool Window::setParams(const NamedList& params)
 		// Set property: object_name:property_name=value
 		int pos = n.find(':');
 		if (pos > 0)
-		    ok = setProperty(n.substr(0,pos),n.substr(pos+1),*s) && ok;
+		    ok = setProperty(n.substr(0,pos),n.substr(pos + 1),*s) && ok;
 		else
 		    ok = false;
 	    }
@@ -647,7 +647,7 @@ void ClientThreadProxy::process()
 	    m_rval = client->clearTable(m_name);
 	    break;
 	case getText:
-	    m_rval = client->getText(m_name,*m_rtext,m_rbool?*m_rbool:false,m_wnd,m_skip);
+	    m_rval = client->getText(m_name,*m_rtext,m_rbool ? *m_rbool : false,m_wnd,m_skip);
 	    break;
 	case getCheck:
 	    m_rval = client->getCheck(m_name,*m_rbool,m_wnd,m_skip);
@@ -1693,7 +1693,7 @@ bool Client::action(Window* wnd, const String& name, NamedList* params)
     static String sect = "action";
 
     XDebug(ClientDriver::self(),DebugAll,"Action '%s' in window (%p,%s)",
-	name.c_str(),wnd,wnd?wnd->id().c_str():"");
+	name.c_str(),wnd,wnd ? wnd->id().c_str() : "");
 
     String substitute = name;
     String handle;
@@ -1725,7 +1725,7 @@ bool Client::toggle(Window* wnd, const String& name, bool active)
 
     XDebug(ClientDriver::self(),DebugAll,
 	"Toggle name='%s' active='%s' in window (%p,%s)",
-	name.c_str(),String::boolText(active),wnd,wnd?wnd->id().c_str():"");
+	name.c_str(),String::boolText(active),wnd,wnd ? wnd->id().c_str() : "");
 
     String substitute = name;
     String handle;
@@ -1759,7 +1759,7 @@ bool Client::select(Window* wnd, const String& name, const String& item, const S
 
     XDebug(ClientDriver::self(),DebugAll,
 	"Select name='%s' item='%s' in window (%p,%s)",
-	name.c_str(),item.c_str(),wnd,wnd?wnd->id().c_str():"");
+	name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
 
     String substitute = name;
     String handle;
@@ -2142,9 +2142,9 @@ bool Client::addLogic(ClientLogic* logic)
 	return false;
 
     bool dup = (0 != s_logics.find(logic->toString()));
-    Debug(ClientDriver::self(),dup?DebugGoOn:DebugInfo,
+    Debug(ClientDriver::self(),dup ? DebugGoOn : DebugInfo,
 	"Adding logic%s %p name=%s prio=%d",
-	dup?" [DUPLICATE]":"",logic,logic->toString().c_str(),logic->priority());
+	dup ? " [DUPLICATE]" : "",logic,logic->toString().c_str(),logic->priority());
 
     for (ObjList* l = s_logics.skipNull(); l; l = l->skipNext()) {
 	ClientLogic* obj = static_cast<ClientLogic*>(l->get());
@@ -2410,7 +2410,7 @@ void ClientChannel::setConference(const String& target)
     if (m_transferId == target && !m_transferId)
 	return;
     Debug(this,DebugCall,"%sing conference room '%s' [%p]",
-	target?"Enter":"Exit",target?target.c_str():m_transferId.c_str(),this);
+	target ? "Enter" : "Exit",target ? target.c_str() : m_transferId.c_str(),this);
     m_transferId = target;
     m_conference = (0 != m_transferId);
     setMedia(m_active && isAnswered());
@@ -3195,7 +3195,7 @@ bool ClientContact::appendGroup(const String& group)
     m_groups.append(new String(group));
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' added group '%s' [%p]",
-	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),group.c_str(),this);
+	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),group.c_str(),this);
     return true;
 }
 
@@ -3209,7 +3209,7 @@ bool ClientContact::removeGroup(const String& group)
     obj->remove();
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' removed group '%s' [%p]",
-	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),group.c_str(),this);
+	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),group.c_str(),this);
     return true;
 }
 
@@ -3248,7 +3248,7 @@ ClientResource* ClientContact::appendResource(const String& id)
     m_resources.append(r);
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' added resource '%s' [%p]",
-	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),id.c_str(),this);
+	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),id.c_str(),this);
     return r;
 }
 
@@ -3262,7 +3262,7 @@ bool ClientContact::removeResource(const String& id)
     obj->remove();
     DDebug(ClientDriver::self(),DebugAll,
 	"Account(%s) contact='%s' removed resource '%s' [%p]",
-	m_owner?m_owner->uri().c_str():"",m_uri.c_str(),id.c_str(),this);
+	m_owner ? m_owner->uri().c_str() : "",m_uri.c_str(),id.c_str(),this);
     return true;
 }
 

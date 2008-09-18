@@ -50,6 +50,8 @@ public:
 	delTableRow,
 	setTableRow,
 	getTableRow,
+	updateTableRow,
+	updateTableRows,
 	clearTable,
 	getText,
 	getCheck,
@@ -413,6 +415,26 @@ bool Window::setTableRow(const String& name, const String& item, const NamedList
     return false;
 }
 
+// Set a table row or add a new one if not found
+bool Window::updateTableRow(const String& name, const String& item,
+    const NamedList* data, bool atStart)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub updateTableRow('%s','%s',%p,%s) [%p]",
+	name.c_str(),item.c_str(),data,String::boolText(atStart),this);
+    return false;
+}
+
+// Add or set one or more table row(s). Screen update is locked while changing the table.
+// Each data list element is a NamedPointer carrying a NamedList with item parameters.
+// The name of an element is the item to update. Set element's value to 'false'
+//  to avoid adding a new item.
+bool Window::updateTableRows(const String& name, const NamedList* data, bool atStart)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub updateTableRows('%s',%p,%s) [%p]",
+	name.c_str(),data,String::boolText(atStart),this);
+    return false;
+}
+
 // stub function for retrieving the information from a row
 bool Window::getTableRow(const String& name, const String& item, NamedList* data)
 {
@@ -611,6 +633,12 @@ void ClientThreadProxy::process()
 	    break;
 	case setTableRow:
 	    m_rval = client->setTableRow(m_name,m_item,m_params,m_wnd,m_skip);
+	    break;
+	case updateTableRow:
+	    m_rval = client->updateTableRow(m_name,m_item,m_params,m_bool,m_wnd,m_skip);
+	    break;
+	case updateTableRows:
+	    m_rval = client->updateTableRows(m_name,m_params,m_bool,m_wnd,m_skip);
 	    break;
 	case getTableRow:
 	    m_rval = client->getTableRow(m_name,m_item,const_cast<NamedList*>(m_params),m_wnd,m_skip);
@@ -1352,6 +1380,50 @@ bool Client::getTableRow(const String& name, const String& item, NamedList* data
 	    return true;
     }
     return false;
+}
+
+// Set a table row or add a new one if not found
+bool Client::updateTableRow(const String& name, const String& item,
+    const NamedList* data, bool atStart, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::updateTableRow,name,item,
+	    atStart,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->updateTableRow(name,item,data,atStart);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* l = m_windows.skipNull(); l; l = l->skipNext()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->updateTableRow(name,item,data,atStart) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Add or set one or more table row(s)
+bool Client::updateTableRows(const String& name, const NamedList* data, bool atStart,
+	Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::updateTableRows,name,String::empty(),
+	    atStart,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->updateTableRows(name,data,atStart);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* l = m_windows.skipNull(); l; l = l->skipNext()) {
+	wnd = static_cast<Window*>(l->get());
+	if (wnd && (wnd != skip))
+	    ok = wnd->updateTableRows(name,data,atStart) || ok;
+    }
+    --s_changing;
+    return ok;
 }
 
 // function for deleting all row from a table given by the name parameter

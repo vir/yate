@@ -259,6 +259,8 @@ public:
 	}
     inline void setID(int row, const String& value)
 	{ setCell(row,0,value); }
+    // Add or set a row
+    void updateRow(const String& item, const NamedList* data, bool atStart);
     // Update a row from a list of parameters
     void updateRow(int row, const NamedList& data);
     // Find a row by the first's column value. Return -1 if not found 
@@ -377,7 +379,7 @@ static bool translateName(QtWidget& w, String& name)
 // Utility: raise a select event if a list is empty
 inline void raiseSelectIfEmpty(int count, Window* wnd, const String& name)
 {
-    if (count <= 0 && Client::self())
+    if (!Client::exiting() && count <= 0 && Client::self())
 	Client::self()->select(wnd,name,String::empty());
 }
 
@@ -438,11 +440,26 @@ TableWidget::~TableWidget()
     m_table->repaint();
 }
 
+// Add or set a row
+void TableWidget::updateRow(const String& item, const NamedList* data, bool atStart)
+{
+    int row = getRow(item);
+    // Add a new one ?
+    if (row < 0) {
+	row = atStart ? 0 : rowCount();
+	addRow(row);
+	setID(row,item);
+    }
+    // Update
+    if (data)
+	updateRow(row,*data);
+}
+
 // Update a row from a list of parameters
 void TableWidget::updateRow(int row, const NamedList& data)
 {
     int ncol = columnCount();
-    for(int i = 0; i < ncol; i++) {
+    for (int i = 0; i < ncol; i++) {
 	String header;
 	if (!getHeaderText(i,header))
 	    continue;
@@ -1074,6 +1091,101 @@ bool QtWindow::getTableRow(const String& name, const String& item, NamedList* da
 	    data->setParam(name,value);
     }
     return true;
+}
+
+// Set a table row or add a new one if not found
+bool QtWindow::updateTableRow(const String& name, const String& item,
+    const NamedList* data, bool atStart)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRow('%s','%s',%p,%s) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),data,String::boolText(atStart),this);
+
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+
+    QtTable* custom = tbl.customTable();
+    if (custom) {
+	if (custom->getTableRow(item))
+	    return custom->setTableRow(item,data);
+	return custom->addTableRow(item,data,atStart);
+    }
+    tbl.updateRow(item,data,atStart);
+    return true;
+}
+
+// Add or set one or more table row(s). Screen update is locked while changing the table.
+// Each data list element is a NamedPointer carrying a NamedList with item parameters.
+// The name of an element is the item to update.
+// Element's value not empty: update the item
+// Else: delete it
+bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool atStart)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) updateTableRows('%s',%p,%s) [%p]",
+	m_id.c_str(),name.c_str(),data,String::boolText(atStart),this);
+
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+    if (!data)
+	return true;
+
+    bool ok = true;
+    tbl.table()->setUpdatesEnabled(false);
+    QtTable* custom = tbl.customTable();
+    unsigned int n = data->length();
+    for (unsigned int i = 0; i < n; i++) {
+	if (Client::exiting())
+	    break;
+
+	// Get item and the list of parameters
+	NamedString* ns = data->getParam(i);
+	if (!ns)
+	    continue;
+
+	// Delete ?
+	if (ns->null()) {
+	    if (custom)
+		ok = custom->delTableRow(ns->name()) && ok;
+	    else {
+		int row = tbl.getRow(ns->name());
+		if (row >= 0)
+		    tbl.delRow(row);
+		else
+		    ok = false;
+	    }
+	    continue;
+	}
+
+	NamedPointer* np = static_cast<NamedPointer*>(ns->getObject("NamedPointer"));
+	NamedList* params = 0;
+	if (np)
+	    params = static_cast<NamedList*>(np->userObject("NamedList"));
+	bool addNew = ns->toBoolean();
+
+	if (custom) {
+	    if (custom->getTableRow(ns->name()))
+		ok = custom->setTableRow(ns->name(),params) && ok;
+	    else if (addNew)
+		ok = custom->addTableRow(ns->name(),params,atStart) && ok;
+	    else
+		ok = false;
+	    continue;
+	}
+
+	if (addNew)
+	    tbl.updateRow(ns->name(),params,atStart);
+	else {
+	    int row = tbl.getRow(ns->name());
+	    bool found = (row >= 0);
+	    if (found && params)
+		tbl.updateRow(row,*params);
+	    ok = found && ok;
+	}
+    }
+    tbl.table()->setUpdatesEnabled(true);
+    raiseSelectIfEmpty(tbl.rowCount(),this,name);
+    return ok;
 }
 
 bool QtWindow::clearTable(const String& name)

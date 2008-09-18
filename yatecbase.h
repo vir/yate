@@ -242,6 +242,31 @@ public:
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
 
     /**
+     * Set a table row or add a new one if not found
+     * @param name Name of the element
+     * @param item Table item to set/add
+     * @param data Optional list of parameters used to set row data
+     * @param atStart True to add item at start, false to add them to the end
+     * @return True if the operation was successfull
+     */
+    virtual bool updateTableRow(const String& name, const String& item,
+	const NamedList* data = 0, bool atStart = false);
+
+    /**
+     * Add or set one or more table row(s). Screen update is locked while changing the table.
+     * Each data list element is a NamedPointer carrying a NamedList with item parameters.
+     * The name of an element is the item to update.
+     * Set element's value to boolean value 'true' to add a new item if not found
+     *  or 'false' to set an existing one. Set it to empty string to delete the item
+     * @param name Name of the table
+     * @param data The list of items to add/set/delete
+     * @param atStart True to add new items at start, false to add them to the end
+     * @return True if the operation was successfull
+     */
+    virtual bool updateTableRows(const String& name, const NamedList* data,
+	bool atStart = false);
+
+    /**
      * Retrieve a row from a table owned by this window
      * @param name Name of the element
      * @param item Name of the item to retrieve
@@ -885,6 +910,35 @@ public:
     bool getTableRow(const String& name, const String& item, NamedList* data = 0,
 	Window* wnd = 0, Window* skip = 0);
     bool clearTable(const String& name, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Set a table row or add a new one if not found
+     * @param name Name of the element
+     * @param item Table item to set/add
+     * @param data Optional list of parameters used to set row data
+     * @param atStart True to add item at start, false to add them to the end
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if the operation was successfull
+     */
+    bool updateTableRow(const String& name, const String& item, const NamedList* data = 0,
+	bool atStart = false, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Add or set one or more table row(s). Screen update is locked while changing the table.
+     * Each data list element is a NamedPointer carrying a NamedList with item parameters.
+     * The name of an element is the item to update.
+     * Set element's value to boolean value 'true' to add a new item if not found
+     *  or 'false' to set an existing one. Set it to empty string to delete the item
+     * @param name Name of the table
+     * @param data The list of items to add/set/delete
+     * @param atStart True to add new items at start, false to add them to the end
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if the operation was successfull
+     */
+    bool updateTableRows(const String& name, const NamedList* data, bool atStart = false,
+	Window* wnd = 0, Window* skip = 0);
 
     /**
      * Get an element's text

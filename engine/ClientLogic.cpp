@@ -1005,10 +1005,7 @@ bool ClientLogic::updateAccount(const NamedList& account, bool login, bool save)
     // Update UI (lists and tables)
     if (!Client::self()->hasOption("account",account))
 	Client::self()->addOption("account",account,false);
-    if (Client::self()->getTableRow(s_accountList,account))
-	Client::self()->setTableRow(s_accountList,account,&uiParams);
-    else
-	Client::self()->addTableRow(s_accountList,account,&uiParams);
+    Client::self()->updateTableRow(s_accountList,account,&uiParams);
     // Login if required
     if (login)
 	return loginAccount(account,true);
@@ -1052,10 +1049,7 @@ bool ClientLogic::updateContact(const NamedList& params, bool save, bool update)
     if (update) {
 	NamedList tmp(params);
 	tmp.setParam("number/uri",*target);
-	if (Client::self()->getTableRow(s_contactList,*target))
-	    Client::self()->setTableRow(s_contactList,*target,&tmp);
-	else
-	    Client::self()->addTableRow(s_contactList,*target,&tmp);
+	Client::self()->updateTableRow(s_contactList,*target,&tmp);
     }
     // Save file
     bool ok = true;
@@ -1743,10 +1737,7 @@ bool ClientLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 	p.addParam("hidden:account",*account);
 	p.addParam("hidden:protocol",msg.getValue("protocol"));
 	p.addParam("hidden:editable",String::boolText(!jabber));
-	if (Client::self()->getTableRow(s_contactList,contactUri))
-	    Client::self()->setTableRow(s_contactList,contactUri,&p);
-	else
-	    Client::self()->addTableRow(s_contactList,contactUri,&p);
+	Client::self()->updateTableRow(s_contactList,contactUri,&p);
     }
 	
     return true;

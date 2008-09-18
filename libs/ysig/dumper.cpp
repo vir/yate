@@ -72,7 +72,7 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
     }
     else if (m_type == Hexa) {
 	String str;
-	str.hexify(buf,len);
+	str.hexify(buf,len,' ');
 	str = "0 " + str + "\n";
 	int wr = m_output->writeData(str);
 	return (wr == (int)str.length());

@@ -314,7 +314,7 @@ private:
 };
 
 // Q.931 call control monitor over HDLC interface
-class SigIsdnMonitor : public SigLink
+class SigIsdnMonitor : public SigLink, public Mutex
 {
     friend class SigIsdnCallRecord;
 public:
@@ -341,7 +341,6 @@ protected:
     inline void buildName(String& dest, const char* name, bool net)
 	{ dest = ""; dest << (net ? m_netId : m_cpeId) << '/' << name; }
 private:
-    Mutex m_monitorMutex;                // Lock monitor list operations
     ObjList m_monitors;                  // Monitor list
     unsigned int m_id;                   // ID generator
     unsigned int m_chanBuffer;           // The buffer length of one channel of a data source multiplexer
@@ -829,8 +828,10 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
     if (m_reason.null())
 	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal-clearing");
     setState("hangup",true,true);
+    Lock lock2(driver());
     if (m_call) {
 	m_call->userdata(0);
+	lock2.drop();
 	SignallingMessage* msg = new SignallingMessage;
 	msg->params().addParam("reason",m_reason);
 	SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
@@ -838,6 +839,7 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
 	m_call->sendEvent(ev);
 	TelEngine::destruct(m_call);
     }
+    lock2.drop();
     lock.drop();
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
@@ -1050,7 +1052,9 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
     // Create channel
+    lock();
     SigChannel* sigCh = new SigChannel(msg,msg.getValue("caller"),dest,link);
+    unlock();
     bool ok = sigCh->call() != 0;
     if (ok) {
 	if (sigCh->connect(peer,msg.getValue("reason"))) {
@@ -1152,6 +1156,7 @@ bool SigDriver::received(Message& msg, int id)
     msg.retValue() << ",link=" << linkName;
     msg.retValue() << ",type=" << lookup(link->type(),SigLink::s_type);
     msg.retValue() << ",circuits=" << circuits;
+    msg.retValue() << ",calls=" << (link->controller() ? link->controller()->calls().count() : 0);
     if (!target.null()) {
 	msg.retValue() << ";count=" << count;
 	msg.retValue() << ",format=Span|Status|LockedLocal|LockedRemote";
@@ -1191,7 +1196,9 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	return;
     }
     // Ok. Send the message to the channel if we have one
-    SigChannel* ch = static_cast<SigChannel*>(event->call()->userdata());
+    lock();
+    RefPointer<SigChannel> ch = static_cast<SigChannel*>(event->call()->userdata());
+    unlock();
     if (ch) {
 	ch->handleEvent(event);
 	if (event->type() == SignallingEvent::Release)
@@ -1200,7 +1207,9 @@ void SigDriver::handleEvent(SignallingEvent* event)
     }
     // No channel
     if (event->type() == SignallingEvent::NewCall) {
+	lock();
 	ch = new SigChannel(event);
+	unlock();
 	if (ch->hungup())
 	    ch->disconnect();
     }
@@ -2161,7 +2170,7 @@ DebugEnabler* SigIsdn::getDbgEnabler(int id)
  */
 SigIsdnMonitor::SigIsdnMonitor(const char* name)
     : SigLink(name,IsdnPriMon),
-    m_monitorMutex(true),
+      Mutex(true),
     m_id(0),
     m_chanBuffer(160),
     m_idleValue(255),
@@ -2185,7 +2194,7 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	return;
     }
 
-    Lock lock(m_monitorMutex);
+    Lock lock(this);
     SigIsdnCallRecord* rec = 0;
     ISDNQ931CallMonitor* mon = static_cast<ISDNQ931CallMonitor*>(event->call());
 
@@ -2255,19 +2264,24 @@ bool SigIsdnMonitor::drop(String& id, Message& msg)
 {
     const char* reason = msg.getValue("reason","dropped");
     if (id == name()) {
-	m_monitorMutex.lock();
+	lock();
 	ListIterator iter(m_monitors);
 	GenObject* o = 0;
 	for (; (o = iter.get()); ) {
-	    CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	    RefPointer<CallEndpoint> c = static_cast<CallEndpoint*>(o);
+	    unlock();
 	    c->disconnect(reason);
+	    c = 0;
+	    lock();
 	}
-	m_monitorMutex.unlock();
+	unlock();
 	return true;
     }
+    Lock lock(this);
     for (ObjList* o = m_monitors.skipNull(); o; o = o->skipNext()) {
-	SigIsdnCallRecord* rec = static_cast<SigIsdnCallRecord*>(o->get());
+	RefPointer<SigIsdnCallRecord> rec = static_cast<SigIsdnCallRecord*>(o->get());
 	if (id == rec->id()) {
+	    lock.drop();
 	    rec->disconnect(reason);
 	    return true;
 	}
@@ -2277,7 +2291,7 @@ bool SigIsdnMonitor::drop(String& id, Message& msg)
 
 void SigIsdnMonitor::removeCall(SigIsdnCallRecord* call)
 {
-    Lock lock(m_monitorMutex);
+    Lock lock(this);
     m_monitors.remove(call,false);
 }
 
@@ -2391,14 +2405,17 @@ bool SigIsdnMonitor::reload(NamedList& params)
 
 void SigIsdnMonitor::release()
 {
-    m_monitorMutex.lock();
+    lock();
     ListIterator iter(m_monitors);
     GenObject* o = 0;
     for (; (o = iter.get()); ) {
-	CallEndpoint* c = static_cast<CallEndpoint*>(o);
+	RefPointer<CallEndpoint> c = static_cast<CallEndpoint*>(o);
+	unlock();
 	c->disconnect();
+	c = 0;
+	lock();
     }
-    m_monitorMutex.unlock();
+    unlock();
 
     if (m_ifaceNet)
 	m_ifaceNet->control(SignallingInterface::Disable);
@@ -2763,7 +2780,9 @@ bool SigIsdnCallRecord::close(const char* reason)
 	m_reason = reason;
     if (m_reason.null())
 	m_reason = Engine::exiting() ? "net-out-of-order" : "unknown";
+    Lock lock2(m_monitor);
     m_call->userdata(0);
+    lock2.drop();
     if (m_monitor)
 	m_monitor->q931()->terminateMonitor(m_call,m_reason);
     TelEngine::destruct(m_call);

@@ -803,6 +803,13 @@ public:
 	{ return m_circuits; }
 
     /**
+     * Get the list of calls currently known by this call controller
+     * @return Reference to the list of calls
+     */
+    inline const ObjList& calls() const
+	{ return m_calls; }
+
+    /**
      * Attach/detach a circuit group to this call controller. Set group's allocation strategy.
      * Set locked flags for all circuits belonging to the attached circuit group.
      * Cleanup controller before detaching the group or attaching a new one

@@ -12,7 +12,7 @@
 %{?nogui:%define no_gui 1}
 
 %if "%{revision}" == "svn"
-%define revision svn@PACKAGE_REVISION@-
+%define revision svn@PACKAGE_REVISION@
 %endif
 
 %if "%{dist}" == ""

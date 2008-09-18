@@ -35,14 +35,11 @@
 
 namespace TelEngine {
 
-// Utility: get an UTF8 representation of a QT string
-#define qtGetUtf8(str) str.toUtf8().constData()
+// Macro used to get a QT object's name
+// Can't use an inline function: the QByteArray object returned by toUtf8()
+//  would be destroyed on exit
+#define	YQT_OBJECT_NAME(qobject) ((qobject) ? (qobject)->objectName().toUtf8().constData() : "")
 
-// Utility: set a QT string from an UTF8 char buffer
-inline QString qtSetUtf8(const char* src)
-{
-    return QString::fromUtf8(src?src:"");
-}
 
 // Factory used to create objects in client's thread
 class Qt4ClientFactory : public UIFactory
@@ -97,9 +94,10 @@ public:
     // Set widget/action from object and name
     inline QtWidget(QtWindow* wnd, const String& name)
 	: m_widget(0), m_action(0), m_type(Missing) {
-	    m_widget = qFindChild<QWidget*>(wnd,qtSetUtf8(name));
+	    QString what = QtClient::setUtf8(name);
+	    m_widget = qFindChild<QWidget*>(wnd,what);
 	    if (!m_widget)
-		m_action = qFindChild<QAction*>(wnd,qtSetUtf8(name));
+		m_action = qFindChild<QAction*>(wnd,what);
 	    m_type = getType();
 	}
     inline bool valid() const
@@ -108,10 +106,6 @@ public:
 	{ return type() == Missing; }
     inline int type() const
 	{ return m_type; }
-    inline const char* name() {
-	    return m_widget ? qtGetUtf8(m_widget->objectName()) :
-		(m_action ? qtGetUtf8(m_action->objectName()) : "");
-	}
     inline operator QWidget*()
 	{ return m_widget; }
     inline bool inherits(const char* classname)
@@ -199,12 +193,12 @@ public:
     inline void setHeaderText(int col, const char* text) {
 	    if (col < columnCount())
 		m_table->setHorizontalHeaderItem(col,
-		    new QTableWidgetItem(qtSetUtf8(text)));
+		    new QTableWidgetItem(QtClient::setUtf8(text)));
 	}
     inline bool getHeaderText(int col, String& dest, bool lower = true) {
     	    QTableWidgetItem* item = m_table->horizontalHeaderItem(col);
 	    if (item)	{
-		dest = qtGetUtf8(item->text());
+		QtClient::getUtf8(dest,item->text());
 		if (lower)
 		    dest.toLower();
 	    }
@@ -234,23 +228,23 @@ public:
     inline void setImage(int row, int col, const String& image) {
 	    QTableWidgetItem* item = m_table->item(row,col);
 	    if (item)
-		item->setIcon(QIcon(qtSetUtf8(image)));
+		item->setIcon(QIcon(QtClient::setUtf8(image)));
 	}
     inline void addCell(int row, int col, const String& value) {
-	    QTableWidgetItem* item = new QTableWidgetItem(qtSetUtf8(value));
+	    QTableWidgetItem* item = new QTableWidgetItem(QtClient::setUtf8(value));
 	    m_table->setItem(row,col,item);
 	}
     inline void setCell(int row, int col, const String& value, bool addNew = true) {
 	    QTableWidgetItem* item = m_table->item(row,col);
 	    if (item)
-		item->setText(qtSetUtf8(value));
+		item->setText(QtClient::setUtf8(value));
 	    else if (addNew)
 		addCell(row,col,value);
 	}
     inline bool getCell(int row, int col, String& dest, bool lower = false) {
     	    QTableWidgetItem* item = m_table->item(row,col);
 	    if (item) {
-		dest = qtGetUtf8(item->text());
+		QtClient::getUtf8(dest,item->text());
 		if (lower)
 		    dest.toLower();
 		return true;
@@ -312,16 +306,16 @@ String QtWidget::s_types[QtWidget::Unknown] = {
 #define YQT_CONNECT(sender,signal,receiver,method,sName) \
     if (QObject::connect(sender,SIGNAL(signal),receiver,SLOT(method))) \
 	DDebug(QtDriver::self(),DebugAll,"Connected sender=%s signal=%s to receiver=%s", \
-	    qtGetUtf8(sender->objectName()),sName,qtGetUtf8(receiver->objectName())); \
+	    YQT_OBJECT_NAME(sender),sName,YQT_OBJECT_NAME(receiver)); \
     else \
 	Debug(QtDriver::self(),DebugWarn,"Failed to connect sender=%s signal=%s to receiver=%s", \
-	    qtGetUtf8(sender->objectName()),sName,qtGetUtf8(receiver->objectName()))
+	    YQT_OBJECT_NAME(sender),sName,YQT_OBJECT_NAME(receiver))
 
 
 // Utility: get a list row containing the given text
 static int findListRow(QListWidget& list, const String& item)
 {
-    QString it(qtSetUtf8(item));
+    QString it(QtClient::setUtf8(item));
     for (int i = 0; i < list.count(); i++) {
 	QListWidgetItem* tmp = list.item(i);
 	if (tmp && it == tmp->text())
@@ -333,7 +327,7 @@ static int findListRow(QListWidget& list, const String& item)
 // Utility: find a stacked widget's page with the given name
 static int findStackedWidget(QStackedWidget& w, const String& name)
 {
-    QString n(qtSetUtf8(name));
+    QString n(QtClient::setUtf8(name));
     for (int i = 0; i < w.count(); i++) {
 	QWidget* page = w.widget(i);
 	if (page && n == page->objectName())
@@ -368,11 +362,11 @@ static bool translateName(QtWidget& w, String& name)
 	return false;
     if (w.type() != QtWidget::Action)
 	if (w->accessibleName().isEmpty()) 
-	    name = qtGetUtf8(w->objectName());
+	    QtClient::getUtf8(name,w->objectName());
 	else
-	    name = qtGetUtf8(w->accessibleName());
+	    QtClient::getUtf8(name,w->accessibleName());
     else
-	name = qtGetUtf8(w.action()->objectName());
+	QtClient::getUtf8(name,w.action()->objectName());
     return true;
 }
 
@@ -397,7 +391,7 @@ Qt4ClientFactory::Qt4ClientFactory(const char* name)
 void* Qt4ClientFactory::create(const String& type, const char* name, NamedList* params)
 {
     if (type == "QSound")
-	return new QSound(qtSetUtf8(name));
+	return new QSound(QtClient::setUtf8(name));
     return 0;
 }
 
@@ -417,7 +411,7 @@ TableWidget::TableWidget(QtWindow* wnd, const String& name, bool tmp)
     : m_table(0), m_sortControl(-1)
 {
     if (wnd)
-	m_table = qFindChild<QTableWidget*>(wnd,qtSetUtf8(name));
+	m_table = qFindChild<QTableWidget*>(wnd,QtClient::setUtf8(name));
     if (!m_table)
 	return;
     init(tmp);
@@ -525,7 +519,7 @@ void TableWidget::colWidths(bool save, const String& section)
 
 void TableWidget::init(bool tmp)
 {
-    m_name = qtGetUtf8(m_table->objectName());
+    QtClient::getUtf8(m_name,m_table->objectName());
     if (tmp)
 	m_sortControl = m_table->isSortingEnabled() ? 1 : 0; 
 }
@@ -545,8 +539,8 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias)
     m_x(0), m_y(0), m_width(0), m_height(0),
     m_maximized(false), m_mainWindow(false)
 {
-    setObjectName(qtSetUtf8(m_id));
-    setAccessibleName(qtSetUtf8(description));
+    setObjectName(QtClient::setUtf8(m_id));
+    setAccessibleName(QtClient::setUtf8(description));
 }
 
 QtWindow::~QtWindow()
@@ -577,7 +571,7 @@ void QtWindow::title(const String& text)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::title(%s) [%p]",text.c_str(),this);
     Window::title(text);
-    QWidget::setWindowTitle(qtSetUtf8(text));
+    QWidget::setWindowTitle(QtClient::setUtf8(text));
 }
 
 void QtWindow::context(const String& text)
@@ -691,10 +685,10 @@ bool QtWindow::setText(const String& name, const String& text,
 	return false;
     switch (w.type()) {
 	case QtWidget::CheckBox:
-	    w.check()->setText(qtSetUtf8(text));
+	    w.check()->setText(QtClient::setUtf8(text));
 	    return true;
 	case QtWidget::LineEdit:
-	    w.lineEdit()->setText(qtSetUtf8(text));
+	    w.lineEdit()->setText(QtClient::setUtf8(text));
 	    return true;
 	case QtWidget::TextEdit:
 	    if (richText) {
@@ -702,7 +696,7 @@ bool QtWindow::setText(const String& name, const String& text,
 		w.textEdit()->insertHtml(text.c_str());
 	    }
 	    else
-		w.textEdit()->setText(qtSetUtf8(text));
+		w.textEdit()->setText(QtClient::setUtf8(text));
 	    {
 		QScrollBar* bar = w.textEdit()->verticalScrollBar();
 		if (bar)
@@ -710,22 +704,22 @@ bool QtWindow::setText(const String& name, const String& text,
 	    }
 	    return true;
 	case QtWidget::Label:
-	    w.label()->setText(qtSetUtf8(text));
+	    w.label()->setText(QtClient::setUtf8(text));
 	    return true;
 	case QtWidget::ComboBox:
 	    if (w.combo()->lineEdit())
-		w.combo()->lineEdit()->setText(qtSetUtf8(text));
+		w.combo()->lineEdit()->setText(QtClient::setUtf8(text));
 	    else
 		setSelect(name,text);
 	    return true;
 	case QtWidget::Action:
-	    w.action()->setText(qtSetUtf8(text));
+	    w.action()->setText(QtClient::setUtf8(text));
 	    return true;
     }
 
     // Handle some known base classes having a setText() method
     if (w.inherits(QtWidget::AbstractButton))
-	w.abstractButton()->setText(qtSetUtf8(text));
+	w.abstractButton()->setText(QtClient::setUtf8(text));
     else
 	return false;
     return true;
@@ -768,7 +762,7 @@ bool QtWindow::setSelect(const String& name, const String& item)
 		return true;
 	    }
 	case QtWidget::ComboBox:
-	    d = w.combo()->findText(qtSetUtf8(item));
+	    d = w.combo()->findText(QtClient::setUtf8(item));
 	    if (d < 0)
 		return false;
 	    w.combo()->setCurrentIndex(d);
@@ -788,8 +782,8 @@ bool QtWindow::setSelect(const String& name, const String& item)
 		if (d >= 0)
 		    break;
 		// Check for a default widget
-		String def;
-		def << qtGetUtf8(w.stackWidget()->objectName()) << "_default";
+		String def = YQT_OBJECT_NAME(w.stackWidget());
+		def << "_default";
 		d = findStackedWidget(*(w.stackWidget()),def);
 		break;
 	    }
@@ -827,7 +821,7 @@ bool QtWindow::hasOption(const String& name, const String& item)
 	return false;
     switch (w.type()) {
 	case QtWidget::ComboBox:
-	    return -1 != w.combo()->findText(qtSetUtf8(item));
+	    return -1 != w.combo()->findText(QtClient::setUtf8(item));
 	case QtWidget::Table:
 	    return getTableRow(name,item);
 	case QtWidget::ListBox:
@@ -847,20 +841,20 @@ bool QtWindow::addOption(const String& name, const String& item, bool atStart,
     switch (w.type()) {
 	case QtWidget::ComboBox:
 	    if (atStart) {
-		w.combo()->insertItem(0,qtSetUtf8(item));
+		w.combo()->insertItem(0,QtClient::setUtf8(item));
 		if (w.combo()->lineEdit())
 		    w.combo()->lineEdit()->setText(w.combo()->itemText(0));
 	    }
 	    else 
-		w.combo()->addItem(qtSetUtf8(item));
+		w.combo()->addItem(QtClient::setUtf8(item));
 	    return true;
 	case QtWidget::Table:
 	    return addTableRow(name,item,0,atStart);
 	case QtWidget::ListBox:
 	    if (atStart)
-		w.list()->insertItem(0,qtSetUtf8(item));
+		w.list()->insertItem(0,QtClient::setUtf8(item));
 	    else
-		w.list()->addItem(qtSetUtf8(item));
+		w.list()->addItem(QtClient::setUtf8(item));
 	    return true;
     }
     return false;
@@ -877,7 +871,7 @@ bool QtWindow::delOption(const String& name, const String& item)
     int row = -1;
     switch (w.type()) {
 	case QtWidget::ComboBox:
-	    row = w.combo()->findText(qtSetUtf8(item));
+	    row = w.combo()->findText(QtClient::setUtf8(item));
 	    if (row >= 0) {
 		w.combo()->removeItem(row);
 		raiseSelectIfEmpty(w.combo()->count(),this,name);
@@ -912,7 +906,7 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
     switch (w.type()) {
 	case QtWidget::ComboBox:
 	    for (int i = 0; i < w.combo()->count(); i++)
-		items->addParam(qtGetUtf8(w.combo()->itemText(i)),"");
+		QtClient::getUtf8(*items,"",w.combo()->itemText(i),false);
 	    break;
 	case QtWidget::Table:
 	    {
@@ -928,7 +922,7 @@ bool QtWindow::getOptions(const String& name, NamedList* items)
 	    for (int i = 0; i < w.list()->count(); i++) {
 		QListWidgetItem* tmp = w.list()->item(i);
 		if (tmp)
-		    items->addParam(qtGetUtf8(tmp->text()),"");
+		    QtClient::getUtf8(*items,"",tmp->text(),false);
 	    }
 	    break;
 	case QtWidget::CustomTable:
@@ -973,10 +967,10 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 		    if (!ns)
 			continue;
 		    if (ns->name().endsWith("\n"))
-			s.insert(pos,qtSetUtf8(ns->name()));
+			s.insert(pos,QtClient::setUtf8(ns->name()));
 		    else {
 			String tmp = ns->name() + "\n";
-			s.insert(pos,qtSetUtf8(tmp));
+			s.insert(pos,QtClient::setUtf8(tmp));
 			pos++;
 		    }
 		    pos += (int)ns->name().length();
@@ -1220,26 +1214,26 @@ bool QtWindow::getText(const String& name, String& text, bool richText)
 	return false;
     switch (w.type()) {
 	case QtWidget::ComboBox:
-	    text = qtGetUtf8(w.combo()->currentText());
+	    QtClient::getUtf8(text,w.combo()->currentText());
 	    return true;
 	case QtWidget::LineEdit:
-	    text = qtGetUtf8(w.lineEdit()->text());
+	    QtClient::getUtf8(text,w.lineEdit()->text());
 	    return true;
 	case QtWidget::TextEdit:
 	    if (!richText)
-		text = qtGetUtf8(w.textEdit()->toPlainText());
+		QtClient::getUtf8(text,w.textEdit()->toPlainText());
 	    else
-		text = qtGetUtf8(w.textEdit()->toHtml());
+		QtClient::getUtf8(text,w.textEdit()->toHtml());
 	    return true;
 	case QtWidget::Label:
-	    text = qtGetUtf8(w.label()->text());
+	    QtClient::getUtf8(text,w.label()->text());
 	    return true;
 	case QtWidget::Action:
-	    text = qtGetUtf8(w.action()->text());
+	    QtClient::getUtf8(text,w.action()->text());
 	    return true;
 	default:
 	    if (w.inherits(QtWidget::AbstractButton)) {
-		text = qtGetUtf8(w.abstractButton()->text());
+		QtClient::getUtf8(text,w.abstractButton()->text());
 		return true;
 	    }
      }
@@ -1272,7 +1266,7 @@ bool QtWindow::getSelect(const String& name, String& item)
 	case QtWidget::ComboBox:
 	    if (w.combo()->lineEdit() && w.combo()->lineEdit()->selectedText().isEmpty())
 		return false;
-	    item = qtGetUtf8(w.combo()->currentText());
+	    QtClient::getUtf8(item,w.combo()->currentText());
 	    return true;
 	case QtWidget::Table:
 	    {
@@ -1285,7 +1279,7 @@ bool QtWindow::getSelect(const String& name, String& item)
 		QListWidgetItem* crt = w.list()->currentItem();
 		if (!crt)
 		    return false;
-		item = qtGetUtf8(crt->text());
+		QtClient::getUtf8(item,crt->text());
 	    }
 	    return true;
 	case QtWidget::Slider:
@@ -1333,7 +1327,7 @@ void QtWindow::closeEvent(QCloseEvent* event)
 void QtWindow::action()
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) action() sender=%s [%p]",
-	m_id.c_str(),qtGetUtf8(sender()->objectName()),this);
+	m_id.c_str(),YQT_OBJECT_NAME(sender()),this);
     if (!QtClient::self() || QtClient::changing())
 	return;
     QtWidget w(sender());
@@ -1346,7 +1340,7 @@ void QtWindow::action()
 void QtWindow::toggled(bool on)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) toggled=%s sender=%s [%p]",
-	m_id.c_str(),String::boolText(on),qtGetUtf8(sender()->objectName()),this);
+	m_id.c_str(),String::boolText(on),YQT_OBJECT_NAME(sender()),this);
     if (!QtClient::self() || QtClient::changing())
 	return;
     QtWidget w(sender());
@@ -1363,7 +1357,7 @@ void QtWindow::openUrl(const QString& link)
 void QtWindow::doubleClick()
 {
     if (QtClient::self() && sender())
-	Client::self()->action(this,qtGetUtf8(sender()->objectName()));
+	Client::self()->action(this,YQT_OBJECT_NAME(sender()));
 }
 
 // A widget's selection changed
@@ -1371,7 +1365,7 @@ void QtWindow::selectionChanged()
 {
     if (!(QtClient::self() && sender()))
 	return;
-    String name = qtGetUtf8(sender()->objectName());
+    String name = YQT_OBJECT_NAME(sender());
     String item;
     getSelect(name,item);
     Client::self()->select(this,name,item);
@@ -1387,8 +1381,8 @@ QWidget* QtWindow::loadUI(const char* fileName, QWidget* parent,
     QUiLoader loader;
     if (!(path && *path))
 	path = Client::s_skinPath.c_str();
-    loader.setWorkingDirectory(QDir(qtSetUtf8(path)));
-    QFile file(qtSetUtf8(fileName));
+    loader.setWorkingDirectory(QDir(QtClient::setUtf8(path)));
+    QFile file(QtClient::setUtf8(fileName));
     const char* err = 0;
     QWidget* w = 0;
     if (!file.exists())
@@ -1412,7 +1406,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	return false;
 #if QT_VERSION >= 0x040200
     if (event->type() == QEvent::DynamicPropertyChange) {
-	String name = qtGetUtf8(obj->objectName());
+	String name = YQT_OBJECT_NAME(obj);
 	QDynamicPropertyChangeEvent* ev = static_cast<QDynamicPropertyChangeEvent*>(event);
 	String prop = ev->propertyName().constData();
 	// Avoid QT's internal dynamic properties
@@ -1455,9 +1449,11 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    return false;
 	// Check if we should raise an action for the widget
 	QKeySequence ks(keyEvent->key());
-	String prop = s_propAction + qtGetUtf8(ks.toString());
+	String prop;
+	QtClient::getUtf8(prop,ks.toString());
+	prop = s_propAction + prop;
 	String action;
-	getProperty(qtGetUtf8(wid->objectName()),prop,action);
+	getProperty(YQT_OBJECT_NAME(wid),prop,action);
 	if (!action)
 	    return QWidget::eventFilter(obj,event);
 	QVariant v = wid->property(prop + "Modifiers");
@@ -1557,8 +1553,10 @@ void QtWindow::doPopulate()
     setMaximumSize(formWidget->maximumSize().width(),formWidget->maximumSize().height());
     resize(formWidget->width(),formWidget->height());
     setWidget(this,formWidget);
-    m_widget = formWidget->objectName();
-    title(qtGetUtf8(formWidget->windowTitle()));
+    m_widget = YQT_OBJECT_NAME(formWidget);
+    String wTitle;
+    QtClient::getUtf8(wTitle,formWidget->windowTitle());
+    title(wTitle);
     setWindowIcon(formWidget->windowIcon());
 }
 
@@ -1597,7 +1595,8 @@ void QtWindow::doInit()
     // accessibleName=customwidget|[separator=sep|] sep widgetclass sep widgetname [sep param=value]
     QList<QFrame*> frm = qFindChildren<QFrame*>(this);
     for (int i = 0; i < frm.size(); i++) {
-	String create = qtGetUtf8(frm[i]->accessibleName());
+	String create;
+	QtClient::getUtf8(create,frm[i]->accessibleName());
 	if (!create.startSkip("customwidget|",false))
 	    continue;
 	char sep = '|';
@@ -1707,7 +1706,7 @@ void QtWindow::doInit()
     QList<QObject*> w = qFindChildren<QObject*>(this);
     for (int i = 0; i < w.size(); i++) {
 	// dynamicPropertyNames() was added in 4.2
-	String name = qtGetUtf8(w[i]->objectName());
+	String name = YQT_OBJECT_NAME(w[i]);
 	QList<QByteArray> props = w[i]->dynamicPropertyNames();
 	// Check for our dynamic properties
 	int j = 0;
@@ -1893,12 +1892,12 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
 	for (ObjList* o = obj->skipNull(); o; o = o->skipNext()) {
 	    if (!filters->isEmpty())
 		filters->append(";;");
-	    filters->append(qtSetUtf8(*(static_cast<String*>(o->get()))));
+	    filters->append(QtClient::setUtf8(*(static_cast<String*>(o->get()))));
 	}
 	TelEngine::destruct(obj);
     }
     NamedString* tmp = params.getParam("selectedfilter");
-    QString* sFilter = tmp ? new QString(qtSetUtf8(*tmp)) : 0;
+    QString* sFilter = tmp ? new QString(QtClient::setUtf8(*tmp)) : 0;
     QFileDialog::Options options;
     if (params.getBoolValue("choosedir"))
 	options |= QFileDialog::ShowDirsOnly;
@@ -1907,15 +1906,15 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
 
     QWidget* p = static_cast<QtWindow*>(parent);
     if (files) {
-	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,qtSetUtf8(caption),
-	    qtSetUtf8(dir),filters?*filters:QString::null,sFilter,options);
+	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,QtClient::setUtf8(caption),
+	    QtClient::setUtf8(dir),filters?*filters:QString::null,sFilter,options);
 	for (int i = 0; i < list.size(); i++)
-	    files->addParam("file",qtGetUtf8(list[i]));
+	    QtClient::getUtf8(*files,"file",list[i]);
     }
     else {
-	QString str = QFileDialog::getOpenFileName((QWidget*)p,qtSetUtf8(caption),qtSetUtf8(dir),
-	    filters?*filters:QString::null,sFilter,options);
-	*file = qtGetUtf8(str);
+	QString str = QFileDialog::getOpenFileName((QWidget*)p,QtClient::setUtf8(caption),
+	    QtClient::setUtf8(dir),filters?*filters:QString::null,sFilter,options);
+	QtClient::getUtf8(*file,str);
     }
 
     if (filters)
@@ -1929,7 +1928,7 @@ bool QtClient::action(Window* wnd, const String& name, NamedList* params)
 {
     String tmp = name;
     if (tmp.startSkip("openurl:",false))
-	return QDesktopServices::openUrl(QUrl(qtSetUtf8(tmp)));
+	return QDesktopServices::openUrl(QUrl(QtClient::setUtf8(tmp)));
     return Client::action(wnd,name,params);
 }
 
@@ -1953,7 +1952,7 @@ bool QtClient::formatDateTime(String& dest, unsigned int secs,
 {
     if (!(format && *format))
 	return false;
-    dest = qtGetUtf8(formatDateTime(secs,format,utc));
+    QtClient::getUtf8(dest,formatDateTime(secs,format,utc));
     return true;
 }
 
@@ -1978,9 +1977,9 @@ bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
     switch (var.type()) {
 	case QVariant::String:
 	    if (set)
-		ok = obj->setProperty(name,QVariant(qtSetUtf8(value)));
+		ok = obj->setProperty(name,QVariant(QtClient::setUtf8(value)));
 	    else
-		value = qtGetUtf8(var.toString());
+		QtClient::getUtf8(value,var.toString());
 	    break;
 	case QVariant::Bool:
 	    if (set)
@@ -2005,16 +2004,16 @@ bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
 		ok = obj->setProperty(name,QVariant(value.toDouble()));
 	    else {
 		var.convert(QVariant::String);
-		value = qtGetUtf8(var.toString());
+		QtClient::getUtf8(value,var.toString());
 	    }
 	    break;
 	case QVariant::Icon:
 	    if (set)
-		ok = obj->setProperty(name,QVariant(QIcon(qtSetUtf8(value))));
+		ok = obj->setProperty(name,QVariant(QIcon(QtClient::setUtf8(value))));
 	    break;
 	case QVariant::Pixmap:
 	    if (set)
-		ok = obj->setProperty(name,QVariant(QPixmap(qtSetUtf8(value))));
+		ok = obj->setProperty(name,QVariant(QPixmap(QtClient::setUtf8(value))));
 	    break;
 	case QVariant::Invalid:
 	    ok = false;
@@ -2026,12 +2025,12 @@ bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
     }
     if (ok)
 	DDebug(ClientDriver::self(),DebugAll,"%s %s=%s for object '%s'",
-	    set?"Set":"Got",name,value.c_str(),qtGetUtf8(obj->objectName()));
+	    set?"Set":"Got",name,value.c_str(),YQT_OBJECT_NAME(obj));
     else
 	DDebug(ClientDriver::self(),DebugNote,
 	    "Failed to %s %s=%s (type=%s) for object '%s': %s",
 	    set?"set":"get",name,value.c_str(),var.typeName(),
-	    qtGetUtf8(obj->objectName()),err);
+	    YQT_OBJECT_NAME(obj),err);
     return ok;
 }
 
@@ -2068,7 +2067,7 @@ void QtDriver::initialize()
  */
 QtEventProxy::QtEventProxy(Type type, QApplication* app)
 {
-#define SET_NAME(n) { m_name = n; setObjectName(qtSetUtf8(m_name)); }
+#define SET_NAME(n) { m_name = n; setObjectName(QtClient::setUtf8(m_name)); }
     switch (type) {
 	case Timer:
 	    SET_NAME("qtClientTimerProxy");

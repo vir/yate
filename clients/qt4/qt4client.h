@@ -170,6 +170,38 @@ public:
 	bool utc = false);
 
     /**
+     * Get an UTF8 representation of a QT string
+     * @param dest Destination string
+     * @param src Source QT string
+     */
+    static inline void getUtf8(String& dest, const QString& src)
+	{ dest = src.toUtf8().constData(); }
+
+    /**
+     * Get an UTF8 representation of a QT string and add it to a list of parameters
+     * @param dest Destination list
+     * @param param Parameter name/value
+     * @param src Source QT string
+     * @param setValue True to set the QT string as parameter value, false to set it
+     *  as parameter name
+     */
+    static inline void getUtf8(NamedList& dest, const char* param,
+	const QString& src, bool setValue = true) {
+	    if (setValue)
+		dest.addParam(param,src.toUtf8().constData());
+	    else
+		dest.addParam(src.toUtf8().constData(),param);
+	}
+
+    /**
+     * Set a QT string from an UTF8 char buffer
+     * @param str The buffer
+     * @return A QT string filled with the buffer
+     */
+    static inline QString setUtf8(const char* str)
+	{ return QString::fromUtf8(TelEngine::c_safe(str)); }
+
+    /**
      * Set or get an object's property
      * @param set True to set, false to get the property
      * @param obj The object

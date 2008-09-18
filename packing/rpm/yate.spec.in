@@ -1,4 +1,5 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
+# to add a revision tag run rpmbuild --define 'revision value'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
 # to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
 # to disable H.323 support run rpmbuild --define 'noh323 1'
@@ -9,6 +10,10 @@
 %{?nopstn:%define no_pstn 1}
 %{?noh323:%define no_h323 1}
 %{?nogui:%define no_gui 1}
+
+%if "%{revision}" == "svn"
+%define revision svn@PACKAGE_REVISION@-
+%endif
 
 %if "%{dist}" == ""
 %define dist %(test -f /etc/mandriva-release && echo mdv)
@@ -35,7 +40,7 @@
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@
 Version: 	@PACKAGE_VERSION@
-Release:	@PACKAGE_STATUS@@PACKAGE_RELEASE@%{dist}
+Release:	%{revision}@PACKAGE_STATUS@@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc@voip.null.ro>
 Source:		http://yate.null.ro/%{name}-%{version}-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz

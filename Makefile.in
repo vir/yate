@@ -254,8 +254,8 @@ uninstall uninstall-root:
 
 install-root uninstall-root: LDCONFIG:=ldconfig
 
-.PHONY: snapshot tarball rpm srpm
-snapshot tarball: check-topdir clean tables windows apidocs
+.PHONY: snapshot tarball rpm srpm revision
+snapshot tarball: check-topdir revision clean tables windows apidocs
 	@if [ $@ = snapshot ]; then ver="`date '+SVN-%Y%m%d'`"; else ver="@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@"; fi ; \
 	wd=`pwd|sed 's,^.*/,,'`; \
 	mkdir -p packing/tarballs; cd ..; \
@@ -291,6 +291,10 @@ rpm: check-root tarball
 
 srpm: check-root tarball
 	rpmbuild -ta packing/tarballs/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz
+
+revision: check-topdir
+	@-rev=`svn info 2>/dev/null | sed -n 's,^Revision: *,,p'`; \
+	test -z "$$rev" || echo "$$rev" > packing/revision.txt
 
 %.o: @srcdir@/%.cpp $(MKDEPS) @srcdir@/yatengine.h
 	$(COMPILE) -c $<

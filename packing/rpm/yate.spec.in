@@ -12,7 +12,7 @@
 %{?nogui:%define no_gui 1}
 
 %if "%{revision}" == "svn"
-%define revision svn@PACKAGE_REVISION@
+%define revision @PACKAGE_REVISION@svn
 %endif
 
 %if "%{dist}" == ""
@@ -40,7 +40,7 @@
 Summary:	Yet Another Telephony Engine
 Name:     	@PACKAGE_TARNAME@
 Version: 	@PACKAGE_VERSION@
-Release:	%{revision}@PACKAGE_STATUS@@PACKAGE_RELEASE@%{dist}
+Release:	@PACKAGE_STATUS@%{revision}@PACKAGE_RELEASE@%{dist}
 License:	GPL
 Packager:	Paul Chitescu <paulc@voip.null.ro>
 Source:		http://yate.null.ro/%{name}-%{version}-@PACKAGE_STATUS@@PACKAGE_RELEASE@.tar.gz

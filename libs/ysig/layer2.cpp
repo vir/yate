@@ -185,18 +185,16 @@ bool SS7Layer2::control(Operation oper, NamedList* params)
 
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
-    : Mutex(true),
+    : SignallingDumpable(SignallingDumper::Mtp2),
+      Mutex(true),
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
       m_interval(0), m_resend(0), m_abort(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
       m_lastBsn(127), m_lastBib(true), m_errors(0),
-      m_resendMs(250), m_abortMs(5000), m_dumper(0)
+      m_resendMs(250), m_abortMs(5000)
 {
     setName(params.getValue("debugname","mtp2"));
-
-    const char* fn = params.getValue("mtp2dump");
-    if (fn)
-	setDumper(SignallingDumper::create(this,fn,SignallingDumper::Mtp2));
+    setDumper(params.getValue("mtp2dump"));
 }
 
 SS7MTP2::~SS7MTP2()
@@ -438,8 +436,7 @@ ObjList* SS7MTP2::recoverMSU()
 // Decode a received packet into signalling units
 bool SS7MTP2::receivedPacket(const DataBlock& packet)
 {
-    if (m_dumper)
-	m_dumper->dump(packet,false,sls());
+    dump(packet,false,sls());
     if (packet.length() < 3) {
 	XDebug(this,DebugMild,"Received short packet of length %u [%p]",
 	    packet.length(),this);
@@ -559,8 +556,7 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 bool SS7MTP2::txPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type)
 {
     if (transmitPacket(packet,repeat,type)) {
-	if (m_dumper)
-	    m_dumper->dump(packet,true,sls());
+	dump(packet,true,sls());
 	return true;
     }
     return false;
@@ -698,15 +694,6 @@ bool SS7MTP2::startProving()
     m_interval = Time::now() + (125 * interval);
     unlock();
     return true;
-}
-
-void SS7MTP2::setDumper(SignallingDumper* dumper)
-{
-    if (dumper == m_dumper)
-	return;
-    SignallingDumper* tmp = m_dumper;
-    m_dumper = dumper;
-    delete tmp;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

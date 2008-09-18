@@ -337,8 +337,9 @@ void SS7Layer3::printRoutes()
 }
 
 SS7MTP3::SS7MTP3(const NamedList& params)
-    : Mutex(true),
-      m_total(0), m_active(0), m_dumper(0)
+    : SignallingDumpable(SignallingDumper::Mtp3),
+      Mutex(true),
+      m_total(0), m_active(0)
 {
     setName(params.getValue("debugname","mtp3"));
     // Set point code type for each network indicator
@@ -363,10 +364,7 @@ SS7MTP3::SS7MTP3(const NamedList& params)
     Debug(this,level,"Point code types are '%s' [%p]",stype.safe(),this);
 
     buildRoutes(params);
-
-    const char* fn = params.getValue("mtp3dump");
-    if (fn)
-	setDumper(SignallingDumper::create(this,fn,SignallingDumper::Mtp3));
+    setDumper(params.getValue("mtp3dump"));
 }
 
 SS7MTP3::~SS7MTP3()
@@ -497,8 +495,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    DDebug(this,DebugAll,"Found link %p for SLS=%d [%p]",link,sls,this);
 	    if (link->operational()) {
 		if (link->transmitMSU(msu)) {
-		    if (m_dumper)
-			m_dumper->dump(msu,true,sls);
+		    dump(msu,true,sls);
 		    return sls;
 		}
 		return -1;
@@ -516,8 +513,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 	    continue;
 	SS7Layer2* link = *p;
 	if (link->operational() && link->transmitMSU(msu)) {
-	    if (m_dumper)
-		m_dumper->dump(msu,true,link->sls());
+	    dump(msu,true,link->sls());
 	    return link->sls();
 	}
     }
@@ -528,10 +524,7 @@ int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)
 
 bool SS7MTP3::receivedMSU(const SS7MSU& msu, SS7Layer2* link, int sls)
 {
-    if (m_dumper)
-	m_dumper->dump(msu,false,sls);
-    XDebug(this,DebugStub,"Possibly incomplete SS7MTP3::receivedMSU(%p,%p,%d) [%p]",
-	&msu,link,sls,this);
+    dump(msu,false,sls);
     int netType = msu.getNI();
     SS7PointCode::Type cpType = type(netType);
     unsigned int llen = SS7Label::length(cpType);
@@ -577,16 +570,6 @@ void SS7MTP3::notify(SS7Layer2* link)
     // if operational status changed notify upper layer
     if (ok != operational())
 	SS7Layer3::notify(link ? link->sls() : -1);
-}
-
-void SS7MTP3::setDumper(SignallingDumper* dumper)
-{
-    if (dumper == m_dumper)
-	return;
-    SignallingDumper* tmp = m_dumper;
-    m_dumper = dumper;
-    if (tmp)
-	delete tmp;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

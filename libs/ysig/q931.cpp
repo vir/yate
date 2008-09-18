@@ -2189,7 +2189,8 @@ TokenDict ISDNQ931::s_swType[] = {
 
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     : SignallingCallControl(params,"isdn."),
-    ISDNLayer3(name),
+      SignallingDumpable(SignallingDumper::Q931),
+      ISDNLayer3(name),
     m_layer(true),
     m_q921(0),
     m_q921Up(false),
@@ -2281,9 +2282,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 #endif
 	Debug(this,DebugInfo,"ISDN Call Controller %s [%p]",s.c_str(),this);
     }
-    const char* fn = params.getValue("isdndump");
-    if (fn)
-	setDumper(SignallingDumper::create(this,fn,SignallingDumper::Hdlc));
+    setDumper(params.getValue("q931dump"));
     m_syncGroupTimer.start();
 }
 
@@ -2295,19 +2294,6 @@ ISDNQ931::~ISDNQ931()
     }
     attach((ISDNLayer2*)0);
     DDebug(this,DebugAll,"ISDN Call Controller destroyed [%p]",this);
-}
-
-bool ISDNQ931::setDumpFile(const String& file)
-{
-    if (file.null())
-	setDumper();
-    else {
-	SignallingDumper* dumper = SignallingDumper::create(this,file,SignallingDumper::Hdlc);
-	if (!dumper)
-	    return false;
-	setDumper(dumper);
-    }
-    return true;
 }
 
 // Send a message to layer 2
@@ -3146,8 +3132,8 @@ ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
 ISDNQ931Monitor::~ISDNQ931Monitor()
 {
     terminateMonitor(0,0);
-    attach((ISDNQ921Pasive*)0,true);
-    attach((ISDNQ921Pasive*)0,false);
+    attach((ISDNQ921Passive*)0,true);
+    attach((ISDNQ921Passive*)0,false);
     attach((SignallingCircuitGroup*)0,true);
     attach((SignallingCircuitGroup*)0,false);
     m_calls.clear();
@@ -3245,14 +3231,14 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 }
 
 // Attach ISDN Q.921 pasive transport that monitors one side of the link
-void ISDNQ931Monitor::attach(ISDNQ921Pasive* q921, bool net)
+void ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
 {
     Lock lock(m_layer);
-    ISDNQ921Pasive* which = net ? m_q921Net : m_q921Cpe;
+    ISDNQ921Passive* which = net ? m_q921Net : m_q921Cpe;
     if (which == q921)
 	return;
     terminateMonitor(0,q921 ? "layer 2 attach" : "layer 2 detach");
-    ISDNQ921Pasive* tmp = which;
+    ISDNQ921Passive* tmp = which;
     if (net)
 	m_q921Net = q921;
     else

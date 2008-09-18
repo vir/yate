@@ -217,8 +217,6 @@ public:
 	{ return m_inband; }
     // Set exiting flag for call controller and timeout for the thread
     void setExiting(unsigned int msec);
-    // Set or remove a data dumper on the link or its components
-    bool setDumpFile(const String& file);
     // Initialize (create or reload) the link. Process the debuglayer parameter.
     // Fix some type depending parameters
     // Return false on failure
@@ -351,8 +349,8 @@ private:
     String m_netId;                      // The id of the network side of the data link
     String m_cpeId;                      // The id of the user side of the data link
     // Components
-    ISDNQ921Pasive* m_q921Net;
-    ISDNQ921Pasive* m_q921Cpe;
+    ISDNQ921Passive* m_q921Net;
+    ISDNQ921Passive* m_q921Cpe;
     SignallingInterface* m_ifaceNet;
     SignallingInterface* m_ifaceCpe;
     SigCircuitGroup* m_groupNet;
@@ -1315,9 +1313,14 @@ bool SigDriver::commandComplete(Message& msg, const String& partLine,
 	    return false;
     }
     else if (partLine == "sigdump") {
-	Lock lock(m_linksMutex);
-	for (ObjList* o = m_links.skipNull(); o; o = o->skipNext())
-	    itemComplete(msg.retValue(),static_cast<SigLink*>(o->get())->name(),partWord);
+	if (m_engine) {
+	    NamedList params("");
+	    params.addParam("operation","sigdump");
+	    params.addParam("partword",partWord);
+	    params.addParam("completion",msg.retValue());
+	    if (m_engine->control(params))
+		msg.retValue() = params.getValue("completion");
+	}
     }
     bool status = partLine.startsWith("status");
     bool drop = !status && partLine.startsWith("drop");
@@ -1362,14 +1365,24 @@ bool SigDriver::commandExecute(String& retVal, const String& line)
 {
     String tmp = line;
     if (tmp.startSkip("sigdump")) {
+	tmp.trimBlanks();
 	if (tmp.null() || tmp == "help" || tmp == "?")
 	    retVal << "Usage: " << s_miniHelp << "\r\n" << s_fullHelp;
 	else {
-	    Lock lock(m_linksMutex);
-	    for (ObjList* o = m_links.skipNull(); o; o = o->skipNext()) {
-		SigLink* link = static_cast<SigLink*>(o->get());
-		if (tmp.startSkip(link->name()))
-		    return link->setDumpFile(tmp.trimBlanks());
+	    if (m_engine) {
+		NamedList params("");
+		params.addParam("operation","sigdump");
+		int sep = tmp.find(' ');
+		if (sep > 0) {
+		    params.addParam("component",tmp.substr(0,sep));
+		    tmp >> " ";
+		    params.addParam("file",tmp.trimBlanks());
+		}
+		else {
+		    params.addParam("component",tmp);
+		    params.addParam("file","");
+		}
+		return m_engine->control(params);
 	    }
 	    return false;
 	}
@@ -1603,15 +1616,6 @@ void SigLink::setExiting(unsigned int msec)
 	m_controller->setExiting();
     if (m_thread)
 	m_thread->m_timeout = Time::msecNow() + msec;
-}
-
-// Set or remove a data dumper on the link or its components
-bool SigLink::setDumpFile(const String& file)
-{
-    if (!(m_controller && m_controller->setDumpFile(file)))
-	return false;
-    Debug(&plugin,DebugNote,"Link '%s' dumping to '%s'",name().c_str(),file.c_str());
-    return true;
 }
 
 // Initialize (create or reload) the link. Set debug levels for contained objects
@@ -2329,12 +2333,12 @@ bool SigIsdnMonitor::create(NamedList& params, String& error)
     params.setParam("debugname",compName);
     params.setParam("network",String::boolText(true));
     params.setParam("print-frames",params.getValue("print-layer2PDU"));
-    m_q921Net = new ISDNQ921Pasive(params,compName);
+    m_q921Net = new ISDNQ921Passive(params,compName);
     plugin.engine()->insert(m_q921Net);
     buildName(compName,"Q921",false);
     params.setParam("debugname",compName);
     params.setParam("network",String::boolText(false));
-    m_q921Cpe = new ISDNQ921Pasive(params,compName);
+    m_q921Cpe = new ISDNQ921Passive(params,compName);
     plugin.engine()->insert(m_q921Cpe);
 
     // Q931

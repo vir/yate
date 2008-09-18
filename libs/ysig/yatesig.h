@@ -50,6 +50,7 @@ namespace TelEngine {
 
 // Signalling classes
 class SignallingDumper;                  // A generic data dumper
+class SignallingDumpable;                // A component that can dump data
 class SignallingTimer;                   // A signalling timer
 class SignallingCounter;                 // A signalling counter
 class SignallingFactory;                 // A signalling component factory
@@ -112,7 +113,7 @@ class ISDNLayer2;                        // Abstract ISDN layer 2 (Q.921) messag
 class ISDNLayer3;                        // Abstract ISDN layer 3 (Q.931) message transport
 class ISDNFrame;                         // An ISDN Q.921 frame
 class ISDNQ921;                          // ISDN Q.921 implementation on top of a hardware interface
-class ISDNQ921Pasive;                    // Stateless ISDN Q.921 implementation on top of a hardware interface
+class ISDNQ921Passive;                   // Stateless ISDN Q.921 implementation on top of a hardware interface
 class ISDNIUA;                           // SIGTRAN ISDN Q.921 User Adaptation Layer
 class ISDNQ931IE;                        // A Q.931 ISDN Layer 3 message Information Element
 class ISDNQ931Message;                   // A Q.931 ISDN Layer 3 message
@@ -158,6 +159,8 @@ public:
 	Raw,
 	Hexa,
 	Hdlc,
+	Q921,
+	Q931,
 	Mtp2,
 	Mtp3,
 	Sccp,
@@ -195,8 +198,9 @@ public:
     /**
      * Set a new output stream
      * @param stream New stream for output, NULL to terminate
+     * @param writeHeader True to write the header (if any) at start of stream
      */
-    void setStream(Stream* stream = 0);
+    void setStream(Stream* stream = 0, bool writeHeader = true);
 
     /**
      * Dump the provided data
@@ -230,10 +234,90 @@ public:
     static SignallingDumper* create(DebugEnabler* dbg, const char* filename, Type type,
 	bool create = true, bool append = false);
 
+    /**
+     * Create a dumper from an already existing stream
+     * @param stream Stream to use for output, will be owned by dumper
+     * @param type The dumper type
+     * @param writeHeader True to write the header (if any) at start of stream
+     * @return SignallingDumper pointer on success, 0 on failure
+     */
+    static SignallingDumper* create(Stream* stream, Type type, bool writeHeader = true);
+
 private:
     void head();
     Type m_type;
     Stream* m_output;
+};
+
+/**
+ * A generic base class for components capable of creating data dumps
+ * @short A data dumping capable component
+ */
+class YSIG_API SignallingDumpable
+{
+public:
+    /**
+     * Destructor - destroys the data dumper
+     */
+    inline ~SignallingDumpable()
+	{ setDumper(); }
+
+protected:
+    /**
+     * Constructor
+     * @param type Default type of the data dumper
+     */
+    inline SignallingDumpable(SignallingDumper::Type type)
+	: m_type(type), m_dumper(0)
+	{ }
+
+    /**
+     * Dump the provided data if the dumper is valid
+     * @param buf Pointer to buffer to dump
+     * @param len Length of the data
+     * @param sent True if data is being sent, false if is being received
+     * @param link Link number (relevant to MTP2 only)
+     * @return True if the data was dumped successfully
+     */
+    inline bool dump(void* buf, unsigned int len, bool sent = false, int link = 0)
+	{ return (m_dumper && m_dumper->dump(buf,len,sent,link)); }
+
+    /**
+     * Dump data if the dumper is valid
+     * @param data Buffer to dump
+     * @param sent True if data is being sent, false if is being received
+     * @param link Link number (relevant to MTP2 only)
+     * @return True if the data was dumped successfully
+     */
+    inline bool dump(const DataBlock& data, bool sent = false, int link = 0)
+	{ return dump(data.data(),data.length(),sent,link); }
+
+    /**
+     * Set or remove the data dumper
+     * @param dumper Pointer to the data dumper object, 0 to remove
+     */
+    void setDumper(SignallingDumper* dumper = 0);
+
+    /**
+     * Set or remove a file data dumper
+     * @param name Name of the file to dump to, empty to remove dumper
+     * @param create True to create the file if doesn't exist
+     * @param append Append to an existing file. If false and the file already exists, it will be truncated
+     * @return True if the file dumper was created or removed
+     */
+    bool setDumper(const String& name, bool create = true, bool append = false);
+
+    /**
+     * Handle dumper related control on behalf of the owning component
+     * @param params Control parameters to handle
+     * @param owner Optional owning component
+     * @return True if control operation was applied
+     */
+    bool control(NamedList& params, SignallingComponent* owner = 0);
+
+private:
+    SignallingDumper::Type m_type;
+    SignallingDumper* m_dumper;
 };
 
 /**
@@ -466,6 +550,13 @@ public:
     virtual const String& toString() const;
 
     /**
+     * Query or modify component's settings or operational parameters
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed
+     */
+    virtual bool control(NamedList& params);
+
+    /**
      * Get the @ref TelEngine::SignallingEngine that manages this component
      * @return Pointer to engine or NULL if not managed by an engine
      */
@@ -559,6 +650,13 @@ public:
      * @return Pointer to component found or NULL
      */
     SignallingComponent* find(const String& name);
+
+    /**
+     * Apply a control operation to all components in the engine
+     * @param params The list of parameters to query or change
+     * @return True if the control operation was executed by at least one component
+     */
+    bool control(NamedList& params);
 
     /**
      * Check if a component is in the engine's list
@@ -780,18 +878,6 @@ public:
     virtual void buildVerifyEvent(NamedList& params)
 	{}
 
-    /**
-     * Set or remove the data dumper
-     * @param dumper Pointer to the data dumper object, 0 to remove
-     */
-    void setDumper(SignallingDumper* dumper = 0);
-
-    /**
-     * Set or remove a data dump file
-     * @param file Name of the file to dump to, empty to remove dumper
-     */
-    virtual bool setDumpFile(const String& file);
-
 protected:
     /**
      * Get the strategy used by the attached circuit group to allocate circuits
@@ -833,19 +919,6 @@ protected:
     void removeCall(SignallingCall* call, bool del = false);
 
     /**
-     * Dump data if the dumper is valid
-     * This method is thread safe
-     * @param data Buffer to dump
-     * @param sent True if data is being sent, false if is being received
-     * @param link Link number (relevant to MTP2 only)
-     * @return True if the data was dumped successfully
-     */
-    inline bool dump(const DataBlock& data, bool sent = false, int link = 0) {
-	    Lock lock(this);
-	    return (m_dumper && m_dumper->dump(data.data(),data.length(),sent,link));
-	}
-
-    /**
      * List of active calls
      */
     ObjList m_calls;
@@ -871,7 +944,6 @@ private:
     SignallingCircuitGroup* m_circuits;  // Circuit group
     int m_strategy;                      // Strategy to allocate circuits for outgoing calls
     bool m_exiting;                      // Call control is terminating. Generate a Disable event when no more calls
-    SignallingDumper* m_dumper;          // Data dumper in use
 };
 
 /**
@@ -4223,7 +4295,7 @@ class YSIG_API SS7M3UA : public SS7Layer3, public SIGTRAN
  * Q.703 SS7 Layer 2 (Data Link) implementation on top of a hardware interface
  * @short SS7 Layer 2 implementation on top of a hardware interface
  */
-class YSIG_API SS7MTP2 : public SS7Layer2, public SignallingReceiver, public Mutex
+class YSIG_API SS7MTP2 : public SS7Layer2, public SignallingReceiver, public SignallingDumpable, public Mutex
 {
 public:
     /**
@@ -4366,13 +4438,9 @@ protected:
      */
     bool startProving();
 
-    /**
-     * Set or remove a data dumper
-     * @param dumper Pointer to the data dumper object, NULL to remove
-     */
-    void setDumper(SignallingDumper* dumper = 0);
-
 private:
+    virtual bool control(NamedList& params)
+	{ return SignallingDumpable::control(params,this); }
     bool txPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type = SignallingInterface::Unknown);
     void setLocalStatus(unsigned int status);
     void setRemoteStatus(unsigned int status);
@@ -4402,15 +4470,13 @@ private:
     unsigned int m_resendMs;
     // packet resend abort interval
     unsigned int m_abortMs;
-    // data dumper in use
-    SignallingDumper* m_dumper;
 };
 
 /**
  * Q.704 SS7 Layer 3 (Network) implementation on top of SS7 Layer 2
  * @short SS7 Layer 3 implementation on top of Layer 2
  */
-class YSIG_API SS7MTP3 : public SS7Layer3, public SS7L2User, public Mutex
+class YSIG_API SS7MTP3 : public SS7Layer3, public SS7L2User, public SignallingDumpable, public Mutex
 {
 public:
     /**
@@ -4494,20 +4560,14 @@ protected:
      */
     unsigned int countLinks();
 
-    /**
-     * Set or remove a data dumper
-     * @param dumper Pointer to the data dumper object, NULL to remove
-     */
-    void setDumper(SignallingDumper* dumper = 0);
-
 private:
+    virtual bool control(NamedList& params)
+	{ return SignallingDumpable::control(params,this); }
     ObjList m_links;
     // total links in linkset
     unsigned int m_total;
     // currently active links
     unsigned int m_active;
-    // data dumper in use
-    SignallingDumper* m_dumper;
 };
 
 /**
@@ -6120,7 +6180,7 @@ private:
  * Q.921 ISDN Layer 2 implementation on top of a hardware HDLC interface
  * @short ISDN Q.921 implementation on top of a hardware interface
  */
-class YSIG_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver
+class YSIG_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver, public SignallingDumpable
 {
 public:
     /**
@@ -6197,12 +6257,6 @@ public:
 	    m_extendedDebug = m_printFrames && extendedDebug;
 	}
 
-    /**
-     * Set or remove a data dumper
-     * @param dumper Pointer to the data dumper object, 0 to remove
-     */
-    void setDumper(SignallingDumper* dumper = 0);
-
 protected:
     /**
      * Method called periodically to check timeouts
@@ -6234,6 +6288,8 @@ protected:
     void reset();
 
 private:
+    virtual bool control(NamedList& params)
+	{ return SignallingDumpable::control(params,this); }
     // Acknoledge outgoing frames
     // @param frame The acknoledging frame
     bool ackOutgoingFrames(const ISDNFrame* frame);
@@ -6306,8 +6362,6 @@ private:
     u_int32_t m_rxRejectedFrames;        // The number of rejected frames. Doesn't include dropped frames
     u_int32_t m_rxDroppedFrames;         // The number of dropped frames. Doesn't include rejected frames
     u_int32_t m_hwErrors;                // The number of hardware notifications
-    // Dumper
-    SignallingDumper* m_dumper;          // Data dumper in use
     // Debug flags
     bool m_printFrames;                  // Print frames to output
     bool m_extendedDebug;                // Extended debug flag
@@ -6320,7 +6374,7 @@ private:
  * Q.921 ISDN Layer 2 pasive (stateless) implementation on top of a hardware HDLC interface
  * @short Stateless pasive ISDN Q.921 implementation on top of a hardware interface
  */
-class YSIG_API ISDNQ921Pasive : public ISDNLayer2, public SignallingReceiver
+class YSIG_API ISDNQ921Passive : public ISDNLayer2, public SignallingReceiver, public SignallingDumpable
 {
 public:
     /**
@@ -6329,12 +6383,12 @@ public:
      * @param params Layer's and @ref TelEngine::ISDNLayer2 parameters
      * @param name Name of this component
      */
-    ISDNQ921Pasive(const NamedList& params, const char* name = 0);
+    ISDNQ921Passive(const NamedList& params, const char* name = 0);
 
     /**
      * Destructor
      */
-    virtual ~ISDNQ921Pasive();
+    virtual ~ISDNQ921Passive();
 
     /**
      * Emergency release
@@ -6369,12 +6423,6 @@ public:
 	    m_extendedDebug = m_printFrames && extendedDebug;
 	}
 
-    /**
-     * Set or remove a data dumper
-     * @param dumper Pointer to the data dumper object, 0 to remove
-     */
-    void setDumper(SignallingDumper* dumper = 0);
-
 protected:
     /**
      * Method called periodically to check timeouts
@@ -6400,6 +6448,8 @@ protected:
     virtual bool notify(SignallingInterface::Notification event);
 
 private:
+    virtual bool control(NamedList& params)
+	{ return SignallingDumpable::control(params,this); }
     // Filter received frames. Accept only frames that would generate a notification to the upper layer:
     // UI/I, and Valid SABME/DISC/UA/DM
     // On success, if frame is not a data one, prepare cmd and value to notify layer 3
@@ -6415,7 +6465,6 @@ private:
     u_int32_t m_rxRejectedFrames;        // The number of rejected frames. Doesn't include dropped frames
     u_int32_t m_rxDroppedFrames;         // The number of dropped frames. Doesn't include rejected frames
     u_int32_t m_hwErrors;                // The number of hardware notifications
-    SignallingDumper* m_dumper;          // Data dumper in use
     bool m_printFrames;                  // Print frames to output
     bool m_extendedDebug;                // Extended debug flag
     bool m_errorReceive;                 // Receive error
@@ -7242,7 +7291,7 @@ public:
  * Q.931 ISDN Layer 3 implementation on top of a Layer 2
  * @short ISDN Q.931 implementation on top of Q.921
  */
-class YSIG_API ISDNQ931 : public SignallingCallControl, public ISDNLayer3
+class YSIG_API ISDNQ931 : public SignallingCallControl, public SignallingDumpable, public ISDNLayer3
 {
     friend class ISDNQ931Call;
 public:
@@ -7386,12 +7435,6 @@ public:
      */
     inline const String& format() const
 	{ return m_format; }
-
-    /**
-     * Set or remove a data dump file
-     * @param file Name of the file to dump to, empty to remove dumper
-     */
-    virtual bool setDumpFile(const String& file);
 
     /**
      * Send a message
@@ -7656,6 +7699,8 @@ protected:
 	bool initiator, const char* cause, const char* diag = 0,
 	const char* display = 0, const char* signal = 0);
 private:
+    virtual bool control(NamedList& params)
+	{ return SignallingDumpable::control(params,this); }
     Mutex m_layer;                       // Lock layer operation
     ISDNLayer2* m_q921;                  // The attached layer 2
     bool m_q921Up;                       // Layer 2 state
@@ -7751,7 +7796,7 @@ public:
      * @param q921 Pointer to the monitor to attach
      * @param net True if this is the network side of the data link, false for user (CPE) side
      */
-    virtual void attach(ISDNQ921Pasive* q921, bool net);
+    virtual void attach(ISDNQ921Passive* q921, bool net);
 
     /**
      * Attach a circuit group to this call controller
@@ -7773,8 +7818,8 @@ public:
      */
     virtual void destruct() {
 	    SignallingCallControl::attach(0);
-	    attach((ISDNQ921Pasive*)0,true);
-	    attach((ISDNQ921Pasive*)0,false);
+	    attach((ISDNQ921Passive*)0,true);
+	    attach((ISDNQ921Passive*)0,false);
 	    attach((SignallingCircuitGroup*)0,true);
 	    attach((SignallingCircuitGroup*)0,false);
 	    ISDNLayer3::destruct();
@@ -7852,8 +7897,8 @@ private:
     bool dropMessage(const ISDNQ931Message* msg);
 
     Mutex m_layer;                       // Lock layer operation
-    ISDNQ921Pasive* m_q921Net;           // Net side of the link
-    ISDNQ921Pasive* m_q921Cpe;           // CPE side of the link
+    ISDNQ921Passive* m_q921Net;          // Net side of the link
+    ISDNQ921Passive* m_q921Cpe;          // CPE side of the link
     SignallingCircuitGroup* m_cicNet;    // Circuit group for the net side of the link
     SignallingCircuitGroup* m_cicCpe;    // Circuit group for the cpe side of the link
     ISDNQ931ParserData m_parserData;     // Parser settings

@@ -98,6 +98,7 @@ public:
 ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
     : ISDNLayer2(params,name),
       SignallingReceiver(),
+      SignallingDumpable(SignallingDumper::Q921),
       m_remoteBusy(false),
       m_timerRecovery(false),
       m_rejectSent(false),
@@ -117,7 +118,6 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
       m_rxRejectedFrames(0),
       m_rxDroppedFrames(0),
       m_hwErrors(0),
-      m_dumper(0),
       m_printFrames(true),
       m_extendedDebug(false),
       m_errorSend(false),
@@ -147,6 +147,7 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
 	Debug(this,DebugInfo,"ISDN Data Link type=%s%s [%p]",
 	    linkSide(network()),tmp.safe(),this);
     }
+    setDumper(params.getValue("q921dump"));
 }
 
 // Destructor
@@ -334,8 +335,8 @@ bool ISDNQ921::receivedPacket(const DataBlock& packet)
 	frame->toString(tmp,m_extendedDebug);
 	Debug(this,DebugInfo,"Received frame (%p):%s",frame,tmp.c_str());
     }
-    if (m_dumper && frame->type() < ISDNFrame::Invalid)
-	m_dumper->dump(frame->buffer(),false);
+    if (frame->type() < ISDNFrame::Invalid)
+	dump(frame->buffer(),false);
     // Accept
     bool reject = false;
     // Not accepted:
@@ -468,18 +469,6 @@ void ISDNQ921::reset()
     timer(false,false);
     m_outFrames.clear();
     m_va = m_vs = m_vr = 0;
-}
-
-// Set/remove data dumper
-void ISDNQ921::setDumper(SignallingDumper* dumper)
-{
-    Lock lock(m_layer);
-    if (m_dumper == dumper)
-	return;
-    SignallingDumper* tmp = m_dumper;
-    m_dumper = dumper;
-    delete tmp;
-    XDebug(this,DebugAll,"Data dumper set to (%p)",m_dumper);
 }
 
 // Acknoledge pending outgoing frames. See Q.921 5.6.3.2
@@ -869,8 +858,7 @@ bool ISDNQ921::sendFrame(const ISDNFrame* frame)
     // Dump frame if no error and we have a dumper
     if (result) {
 	m_txFrames++;
-	if (m_dumper)
-	    m_dumper->dump(frame->buffer(),true);
+	dump(frame->buffer(),true);
 	m_errorSend = false;
     }
     else {
@@ -960,12 +948,13 @@ void ISDNQ921::timer(bool start, bool t203, u_int64_t time)
 }
 
 /**
- * ISDNQ921Pasive
+ * ISDNQ921Passive
  */
 // Constructor. Set data members. Print them
-ISDNQ921Pasive::ISDNQ921Pasive(const NamedList& params, const char* name)
+ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
     : ISDNLayer2(params,name),
       SignallingReceiver(),
+      SignallingDumpable(SignallingDumper::Q921),
       m_layer(true),
       m_checkLinkSide(false),
       m_idleTimer(0),
@@ -974,7 +963,6 @@ ISDNQ921Pasive::ISDNQ921Pasive(const NamedList& params, const char* name)
       m_rxRejectedFrames(0),
       m_rxDroppedFrames(0),
       m_hwErrors(0),
-      m_dumper(0),
       m_printFrames(true),
       m_extendedDebug(false),
       m_errorReceive(false)
@@ -989,10 +977,11 @@ ISDNQ921Pasive::ISDNQ921Pasive(const NamedList& params, const char* name)
 	linkSide(network()),String::boolText(detectType()),
 	(unsigned int)m_idleTimer.interval(),this);
     m_idleTimer.start();
+    setDumper(params.getValue("q921dump"));
 }
 
 // Destructor
-ISDNQ921Pasive::~ISDNQ921Pasive()
+ISDNQ921Passive::~ISDNQ921Passive()
 {
     Lock lock(m_layer);
     ISDNLayer2::attach(0);
@@ -1006,35 +995,23 @@ ISDNQ921Pasive::~ISDNQ921Pasive()
 }
 
 // Reset data
-void ISDNQ921Pasive::cleanup()
+void ISDNQ921Passive::cleanup()
 {
     Lock lock(m_layer);
     m_idleTimer.start();
 }
 
 // Get data members pointers
-void* ISDNQ921Pasive::getObject(const String& name) const
+void* ISDNQ921Passive::getObject(const String& name) const
 {
-    if (name == "ISDNQ921Pasive")
+    if (name == "ISDNQ921Passive")
 	return (void*)this;
     return 0;
 }
 
-// Set/remove data dumper
-void ISDNQ921Pasive::setDumper(SignallingDumper* dumper)
-{
-    Lock lock(m_layer);
-    if (m_dumper == dumper)
-	return;
-    SignallingDumper* tmp = m_dumper;
-    m_dumper = dumper;
-    delete tmp;
-    XDebug(this,DebugAll,"Data dumper set to (%p)",m_dumper);
-}
-
 // Called periodically by the engine to check timeouts
 // Check idle timer. Notify upper layer on timeout
-void ISDNQ921Pasive::timerTick(const Time& when)
+void ISDNQ921Passive::timerTick(const Time& when)
 {
     Lock lock(m_layer);
     if (!m_idleTimer.timeout(when.msec()))
@@ -1047,7 +1024,7 @@ void ISDNQ921Pasive::timerTick(const Time& when)
 }
 
 // Process a packet received by the receiver's interface
-bool ISDNQ921Pasive::receivedPacket(const DataBlock& packet)
+bool ISDNQ921Passive::receivedPacket(const DataBlock& packet)
 {
     if (!packet.length())
 	return false;
@@ -1067,8 +1044,8 @@ bool ISDNQ921Pasive::receivedPacket(const DataBlock& packet)
 	frame->toString(tmp,m_extendedDebug);
 	Debug(this,DebugInfo,"Received frame (%p):%s",frame,tmp.c_str());
     }
-    if (m_dumper && frame->type() < ISDNFrame::Invalid)
-	m_dumper->dump(frame->buffer(),false);
+    if (frame->type() < ISDNFrame::Invalid)
+	dump(frame->buffer(),false);
     // Received enough data to parse. Assume the channel not idle (restart timer)
     // If accepted, the frame is a data frame or a unnumbered (SABME,DISC,UA,DM) one
     //   Drop retransmissions of data frames
@@ -1093,7 +1070,7 @@ bool ISDNQ921Pasive::receivedPacket(const DataBlock& packet)
 }
 
 // Process a notification generated by the attached interface
-bool ISDNQ921Pasive::notify(SignallingInterface::Notification event)
+bool ISDNQ921Passive::notify(SignallingInterface::Notification event)
 {
     Lock lock(m_layer);
     if (event != SignallingInterface::LinkUp)
@@ -1117,7 +1094,7 @@ bool ISDNQ921Pasive::notify(SignallingInterface::Notification event)
 // Accept frame according to Q.921 5.8.5
 // Filter received frames. Accept only frames that would generate a notification to the upper layer:
 // UI/I and valid SABME/DISC/UA/DM
-bool ISDNQ921Pasive::acceptFrame(ISDNFrame* frame, bool& cmd, bool& value)
+bool ISDNQ921Passive::acceptFrame(ISDNFrame* frame, bool& cmd, bool& value)
 {
     // Update received frames
     m_rxFrames++;
@@ -1169,7 +1146,7 @@ bool ISDNQ921Pasive::acceptFrame(ISDNFrame* frame, bool& cmd, bool& value)
     return dropFrame(frame);
 }
 
-bool ISDNQ921Pasive::dropFrame(const ISDNFrame* frame, const char* reason)
+bool ISDNQ921Passive::dropFrame(const ISDNFrame* frame, const char* reason)
 {
     m_rxDroppedFrames++;
     DDebug(this,DebugNote,"Dropping frame (%p): %s. Reason: %s",

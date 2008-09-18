@@ -53,8 +53,7 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
     m_verifyTimer(0),
     m_circuits(0),
     m_strategy(SignallingCircuitGroup::Increment),
-    m_exiting(false),
-    m_dumper(0)
+    m_exiting(false)
 {
     // Strategy
     const char* strategy = params.getValue("strategy","increment");
@@ -204,23 +203,6 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
     if (exiting() && !m_calls.skipNull())
 	return new SignallingEvent(SignallingEvent::Disable,0,this);
     return 0;
-}
-
-void SignallingCallControl::setDumper(SignallingDumper* dumper)
-{
-    Lock lock(this);
-    if (m_dumper == dumper)
-	return;
-    SignallingDumper* tmp = m_dumper;
-    m_dumper = dumper;
-    delete tmp;
-    XDebug(DebugAll,"SignallingCallControl. Data dumper set to (%p) [%p]",m_dumper,this);
-}
-
-bool SignallingCallControl::setDumpFile(const String& file)
-{
-    Debug(DebugMild,"SignallingCallControl does not support dumping");
-    return false;
 }
 
 // Clear call list

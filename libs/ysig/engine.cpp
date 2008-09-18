@@ -116,6 +116,11 @@ const String& SignallingComponent::toString() const
     return m_name;
 }
 
+bool SignallingComponent::control(NamedList& params)
+{
+    return false;
+}
+
 void SignallingComponent::insert(SignallingComponent* component)
 {
     if (!component)
@@ -221,6 +226,15 @@ bool SignallingEngine::remove(const String& name)
     component->detach();
     m_components.remove(component);
     return true;
+}
+
+bool SignallingEngine::control(NamedList& params)
+{
+    bool ok = false;
+    Lock lock(this);
+    for (ObjList* l = m_components.skipNull(); l; l = l->skipNext())
+	ok = static_cast<SignallingComponent*>(l->get())->control(params) || ok;
+    return ok;
 }
 
 bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned long usec)

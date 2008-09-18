@@ -23,6 +23,7 @@
  */
 
 #include "yatesig.h"
+#include <yatephone.h>
 
 
 using namespace TelEngine;
@@ -37,13 +38,14 @@ SignallingDumper::~SignallingDumper()
     terminate();
 }
 
-void SignallingDumper::setStream(Stream* stream)
+void SignallingDumper::setStream(Stream* stream, bool writeHeader)
 {
     if (stream == m_output)
 	return;
     Stream* tmp = m_output;
     m_output = stream;
-    head();
+    if (writeHeader)
+	head();
     delete tmp;
 }
 
@@ -80,13 +82,21 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
     u_int32_t hdr[4];
     t.toTimeval(&tv);
     DataBlock hdr2;
-    if (m_type == Hdlc) {
+    switch (m_type) {
+	case Q931:
+	case Q921:
+	case Hdlc:
+	    {
 	// add LAPD pseudoheader
 	hdr2.assign(0,16);
 	unsigned char* ptr2 = (unsigned char*)hdr2.data();
 	ptr2[6] = sent ? 1 : 0;
 	ptr2[14] = 0x00;
 	ptr2[15] = 0x30;
+	    }
+	    break;
+	default:
+	    break;
     }
     hdr[0] = tv.tv_sec;
     hdr[1] = tv.tv_usec;
@@ -116,6 +126,8 @@ void SignallingDumper::head()
     hdr[3] = 0; // timestamp accuracy
     hdr[4] = 65535; // rather arbitrary snaplen
     switch (m_type) {
+	case Q931:
+	case Q921:
 	case Hdlc:
 	    hdr[5] = 177; // DLT_LINUX_LAPD
 	    break;
@@ -135,23 +147,77 @@ void SignallingDumper::head()
     m_output->writeData(hdr,sizeof(hdr));
 }
 
-// Create a dumper
+// Create a dumper from file
 SignallingDumper* SignallingDumper::create(DebugEnabler* dbg, const char* filename, Type type,
 	bool create, bool append)
 {
     if (!filename)
 	return 0;
-    SignallingDumper* dumper = 0;
     File* f = new File;
-    if (f->openPath(filename,true,false,create,append,true)) {
-	dumper = new SignallingDumper(type);
-	dumper->setStream(f);
+    if (f->openPath(filename,true,false,create,append,true))
+	return SignallingDumper::create(f,type);
+    Debug(dbg,DebugWarn,"Failed to create dumper '%s'",filename);
+    delete f;
+    return 0;
+}
+
+// Create a dumper from stream
+SignallingDumper* SignallingDumper::create(Stream* stream, Type type, bool writeHeader)
+{
+    if (!stream)
+	return 0;
+    if (!stream->valid()) {
+	delete stream;
+	return 0;
     }
-    else {
-	Debug(dbg,DebugWarn,"Failed to create dumper '%s'",filename);
-	delete f;
-    }
+    SignallingDumper* dumper = new SignallingDumper(type);
+    dumper->setStream(stream,writeHeader);
     return dumper;
+}
+
+
+void SignallingDumpable::setDumper(SignallingDumper* dumper)
+{
+    if (dumper == m_dumper)
+	return;
+    SignallingDumper* tmp = m_dumper;
+    m_dumper = dumper;
+    delete tmp;
+}
+
+bool SignallingDumpable::setDumper(const String& name, bool create, bool append)
+{
+    if (name.null())
+	setDumper();
+    else {
+	SignallingDumper* dumper = SignallingDumper::create(0,name,m_type,create,append);
+	if (dumper)
+	    setDumper(dumper);
+	else
+	    return false;
+    }
+    return true;
+}
+
+bool SignallingDumpable::control(NamedList& params, SignallingComponent* owner)
+{
+    String* tmp = params.getParam("operation");
+    if (!(tmp && (*tmp == "sigdump")))
+	return false;
+    tmp = params.getParam("component");
+    if (tmp && *tmp && owner && (owner->toString() != *tmp))
+	return false;
+    tmp = params.getParam("completion");
+    if (tmp) {
+	if (!owner)
+	    return false;
+	String part = params.getValue("partword");
+	return Module::itemComplete(*tmp,owner->toString(),part);
+    }
+    tmp = params.getParam("file");
+    if (tmp)
+	return setDumper(*tmp);
+    return false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

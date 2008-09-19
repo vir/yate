@@ -1113,17 +1113,18 @@ bool SigDriver::received(Message& msg, int id)
 	return false;
 
     // Status target=link[/cic|/range]
-    Lock lock(m_linksMutex);
     int pos = target.find("/");
     String linkName = target.substr(0,pos);
     target = target.substr(linkName.length() + 1);
+    Lock lock(m_linksMutex);
     SigLink* link = findLink(linkName,false);
+    if (!link)
+	return false;
+
     String detail;
     unsigned int circuits = 0;
     unsigned int count = 0;
     while (true) {
-	if (!link) 
-	    break;
 	SignallingCallControl* ctrl = link ? link->controller() : 0;
 	if (!ctrl)
 	    break;

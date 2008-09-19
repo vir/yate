@@ -551,8 +551,14 @@ bool Thread::check(bool exitNow)
     ThreadPrivate* t = ThreadPrivate::current();
     if (!(t && t->m_cancel))
 	return false;
-    if (exitNow)
+    if (exitNow) {
+	if (t->m_thread) {
+	    if (t->m_thread->locked())
+		Debug(DebugFail,"Thread::check(true) in '%s' with mutex locks (%d held) [%p]",
+		    t->m_name,t->m_thread->locks(),t->m_thread);
+	}
 	exit();
+    }
     return true;
 }
 

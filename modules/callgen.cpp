@@ -431,6 +431,24 @@ bool CmdHandler::doComplete(const String& partLine, const String& partWord, Stri
 	    Module::itemComplete(rval,*list,partWord);
 	return true;
     }
+    else if (partLine == "callgen set") {
+	const NamedList* sect = s_cfg.getSection("parameters");
+	if (!sect)
+	    return false;
+	unsigned int n = sect->length();
+	for (unsigned int i = 0; i < n; i++) {
+	    const NamedString* param = sect->getParam(i);
+	    if (param) {
+		if (partWord == (param->name() + "=")) {
+		    // complete the value
+		    Module::itemComplete(rval,param->name() + "=" + *param,partWord);
+		    return true;
+		}
+		Module::itemComplete(rval,param->name(),partWord);
+	    }
+	}
+	return true;
+    }
     return false;
 }
 

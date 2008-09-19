@@ -799,6 +799,7 @@ void Client::loadUI(const char* file, bool init)
 void Client::run()
 {
     Debug(ClientDriver::self(),DebugAll,"Client::run() [%p]",this);
+    ClientLogic::initStaticData();
     Engine::install(new EngineStartHandler);
     loadUI();
     // Run

@@ -50,7 +50,8 @@ static String s_notSelected = "-none-";
 static unsigned int s_maxCallHistory = 20;
 
 ObjList ClientLogic::s_accOptions;
-String ClientLogic::s_protocols[ClientLogic::OtherProtocol] = {"sip","jabber","h323","iax"};
+ObjList ClientLogic::s_protocols;
+Mutex ClientLogic::s_protocolsMutex(true);
 // Parameters that are applied from provider template
 const char* ClientLogic::s_provParams[] = {
     "server",
@@ -879,8 +880,13 @@ bool ClientLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
     // Protocol combo and specific widget (page) data
     selectProtocolSpec(*params,proto,m_accShowAdvanced);
     NamedString* tmp = params->getParam("acc_options");
-    for (int i = 0; i < OtherProtocol; i++)
-	updateProtocolSpec(*params,s_protocols[i],tmp ? *tmp : String::empty());
+    s_protocolsMutex.lock();
+    for (ObjList* o = s_protocols.skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (*s)
+	    updateProtocolSpec(*params,*s,tmp ? *tmp : String::empty());
+    }
+    s_protocolsMutex.unlock();
     params->setParam("context",acc);
     params->setParam("acc_account",acc);
     params->setParam("modal",String::boolText(true));
@@ -2013,14 +2019,6 @@ bool ClientLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 // Client created and initialized all windows
 void ClientLogic::initializedWindows()
 {
-    // Build account options list
-    if (!s_accOptions.skipNull()) {
-	s_accOptions.append(new String("allowplainauth"));
-	s_accOptions.append(new String("noautorestart"));
-	s_accOptions.append(new String("oldstyleauth"));
-	s_accOptions.append(new String("tlsrequired"));
-    }
-
     if (!Client::self())
 	return;
 
@@ -2029,12 +2027,17 @@ void ClientLogic::initializedWindows()
     String acc_proto = "acc_protocol";
     if (!Client::self()->hasOption(proto,s_notSelected))
 	Client::self()->addOption(proto,s_notSelected,true);
-    for (int i = 0; i < OtherProtocol; i++) {
-	if (!Client::self()->hasOption(proto,s_protocols[i]))
-	    Client::self()->addOption(proto,s_protocols[i],false);
-	if (!Client::self()->hasOption(acc_proto,s_protocols[i]))
-	    Client::self()->addOption(acc_proto,s_protocols[i],false);
+    s_protocolsMutex.lock();
+    for (ObjList* o = s_protocols.skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	if (!*s)
+	    continue;
+	if (!Client::self()->hasOption(proto,*s))
+	    Client::self()->addOption(proto,*s,false);
+	if (!Client::self()->hasOption(acc_proto,*s))
+	    Client::self()->addOption(acc_proto,*s,false);
     }
+    s_protocolsMutex.unlock();
     // Add account/providers 'not selected' item
     String tmp = "account";
     if (!Client::self()->hasOption(tmp,s_notSelected))
@@ -2219,6 +2222,28 @@ void ClientLogic::clearDurationUpdate()
     for (GenObject* o = 0; 0 != (o = iter.get());)
 	(static_cast<DurationUpdate*>(o))->setLogic();
     m_durationUpdate.clear();
+}
+
+// Init static logic data
+void ClientLogic::initStaticData()
+{
+    // Build account options list
+    if (!s_accOptions.skipNull()) {
+	s_accOptions.append(new String("allowplainauth"));
+	s_accOptions.append(new String("noautorestart"));
+	s_accOptions.append(new String("oldstyleauth"));
+	s_accOptions.append(new String("tlsrequired"));
+    }
+
+    // Build protocol list
+    s_protocolsMutex.lock();
+    if (!s_protocols.skipNull()) {
+	s_protocols.append(new String("sip"));
+	s_protocols.append(new String("jabber"));
+	s_protocols.append(new String("h323"));
+	s_protocols.append(new String("iax"));
+    }
+    s_protocolsMutex.unlock();
 }
 
 // Method called by the client when idle

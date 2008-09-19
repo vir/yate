@@ -1637,17 +1637,6 @@ class YATE_API ClientLogic : public GenObject
     friend class Client;
 public:
     /**
-     * Known voip protocols
-     */
-    enum Protocol {
-	SIP           = 0,
-	JABBER        = 1,
-	H323          = 2,
-	IAX           = 3,
-	OtherProtocol = 4
-    };
-
-    /**
      * Constructor. Append itself to the client's list
      */
     ClientLogic();
@@ -2097,12 +2086,16 @@ public:
      */
     void clearDurationUpdate();
 
+    /**
+     * Init static logic lists.
+     * Called by the client when start running
+     */
+    static void initStaticData();
+
     // Account options string list
     static ObjList s_accOptions;
     // Parameters that are applied from provider template
     static const char* s_provParams[];
-    // The list of protocols supported by the client
-    static String s_protocols[OtherProtocol];
 
 protected:
     /**
@@ -2133,6 +2126,11 @@ protected:
      * @param old The old selection
      */
     virtual void channelSelectionChanged(const String& old);
+
+    // The list of protocols supported by the client
+    static ObjList s_protocols;
+    // Mutext used to lock protocol list
+    static Mutex s_protocolsMutex;
 
     String m_name;                       // Logic's name
     String m_selectedChannel;            // The currently selected channel

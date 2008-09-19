@@ -140,11 +140,9 @@ Configuration Client::s_contacts;                // Contacts
 Configuration Client::s_providers;               // Provider settings
 Configuration Client::s_history;                 // Call log
 Configuration Client::s_calltoHistory;           // Dialed destinations history
-ObjList Client::s_accOptions;
 int Client::s_changing = 0;
 Regexp Client::s_notSelected = "^-\\(.*\\)-$";   // Holds a not selected/set value match
 ObjList Client::s_logics;
-String Client::s_protocols[Client::OtherProtocol] = {"sip","jabber","h323","iax"};
 String Client::s_skinPath;                       // Skin path
 String Client::s_soundPath;                      // Sounds path
 String Client::s_ringInName = "defaultringin";   // Ring name for incoming channels
@@ -166,15 +164,6 @@ String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
 Mutex ClientSound::s_soundsMutex(true);          // ClientSound's list lock mutex
 static ClientLogic s_defaultLogic;               // The default logic
-
-// Parameters that are applied from provider template
-const char* Client::s_provParams[] = {
-    "server",
-    "domain",
-    "outbound",
-    "port",
-    0
-};
 
 // Client relays
 static MsgRelay s_relays[] = {
@@ -728,14 +717,6 @@ Client::Client(const char *name)
     // Install relays
     for (int i = 0; s_relays[i].name; i++)
 	installRelay(s_relays[i].name,s_relays[i].id,s_relays[i].prio);
-
-    // Build account options list
-    if (!s_accOptions.skipNull()) {
-	s_accOptions.append(new String("allowplainauth"));
-	s_accOptions.append(new String("noautorestart"));
-	s_accOptions.append(new String("oldstyleauth"));
-	s_accOptions.append(new String("tlsrequired"));
-    }
 
     // Set paths
     s_skinPath = Engine::config().getValue("client","skinbase");

@@ -49,6 +49,17 @@ static String s_notSelected = "-none-";
 // Maximum number of call log entries
 static unsigned int s_maxCallHistory = 20;
 
+ObjList ClientLogic::s_accOptions;
+String ClientLogic::s_protocols[ClientLogic::OtherProtocol] = {"sip","jabber","h323","iax"};
+// Parameters that are applied from provider template
+const char* ClientLogic::s_provParams[] = {
+    "server",
+    "domain",
+    "outbound",
+    "port",
+    0
+};
+
 // strings used for completing account parameters
 static String s_accParams[] = {
     "username", "password", "server", "domain",
@@ -103,7 +114,7 @@ static void updateProtocolSpec(NamedList& p, const String& proto, const String& 
     setAccParam(p,prefix,"address","");
     // Options
     prefix << "_opt_";
-    for (ObjList* o = Client::s_accOptions.skipNull(); o; o = o->skipNext()) {
+    for (ObjList* o = ClientLogic::s_accOptions.skipNull(); o; o = o->skipNext()) {
 	String* opt = static_cast<String*>(o->get());
 	bool checked = (0 != obj->find(*opt));
 	p.setParam("check:" + prefix + *opt,String::boolText(checked));
@@ -647,7 +658,7 @@ bool ClientLogic::select(Window* wnd, const String& name, const String& item,
 	if (!sect)
 	    return false;
 	NamedList p("");
-	for (const char** par = Client::s_provParams; *par; par++)
+	for (const char** par = s_provParams; *par; par++)
 	    p.addParam(String("acc_") + *par,sect->getValue(*par));
 	NamedString* proto = sect->getParam("protocol");
 	if (proto) {
@@ -868,8 +879,8 @@ bool ClientLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
     // Protocol combo and specific widget (page) data
     selectProtocolSpec(*params,proto,m_accShowAdvanced);
     NamedString* tmp = params->getParam("acc_options");
-    for (int i = 0; i < Client::OtherProtocol; i++)
-	updateProtocolSpec(*params,Client::s_protocols[i],tmp ? *tmp : String::empty());
+    for (int i = 0; i < OtherProtocol; i++)
+	updateProtocolSpec(*params,s_protocols[i],tmp ? *tmp : String::empty());
     params->setParam("context",acc);
     params->setParam("acc_account",acc);
     params->setParam("modal",String::boolText(true));
@@ -946,7 +957,7 @@ bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
     // Options
     prefix << "opt_";
     String options;
-    for (ObjList* o = Client::s_accOptions.skipNull(); o; o = o->skipNext()) {
+    for (ObjList* o = s_accOptions.skipNull(); o; o = o->skipNext()) {
 	String* opt = static_cast<String*>(o->get());
 	bool checked = false;
 	Client::self()->getCheck(prefix + *opt,checked,wnd);
@@ -2002,6 +2013,14 @@ bool ClientLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 // Client created and initialized all windows
 void ClientLogic::initializedWindows()
 {
+    // Build account options list
+    if (!s_accOptions.skipNull()) {
+	s_accOptions.append(new String("allowplainauth"));
+	s_accOptions.append(new String("noautorestart"));
+	s_accOptions.append(new String("oldstyleauth"));
+	s_accOptions.append(new String("tlsrequired"));
+    }
+
     if (!Client::self())
 	return;
 
@@ -2010,11 +2029,11 @@ void ClientLogic::initializedWindows()
     String acc_proto = "acc_protocol";
     if (!Client::self()->hasOption(proto,s_notSelected))
 	Client::self()->addOption(proto,s_notSelected,true);
-    for (int i = 0; i < Client::OtherProtocol; i++) {
-	if (!Client::self()->hasOption(proto,Client::s_protocols[i]))
-	    Client::self()->addOption(proto,Client::s_protocols[i],false);
-	if (!Client::self()->hasOption(acc_proto,Client::s_protocols[i]))
-	    Client::self()->addOption(acc_proto,Client::s_protocols[i],false);
+    for (int i = 0; i < OtherProtocol; i++) {
+	if (!Client::self()->hasOption(proto,s_protocols[i]))
+	    Client::self()->addOption(proto,s_protocols[i],false);
+	if (!Client::self()->hasOption(acc_proto,s_protocols[i]))
+	    Client::self()->addOption(acc_proto,s_protocols[i],false);
     }
     // Add account/providers 'not selected' item
     String tmp = "account";

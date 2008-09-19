@@ -661,17 +661,6 @@ public:
     };
 
     /**
-     * Known voip protocols
-     */
-    enum Protocol {
-	SIP           = 0,
-	JABBER        = 1,
-	H323          = 2,
-	IAX           = 3,
-	OtherProtocol = 4
-    };
-
-    /**
      * Constructor
      * @param name The client's name
      */
@@ -1242,22 +1231,6 @@ public:
     static inline void setLogicsTick()
 	{ s_idleLogicsTick = true; }
 
-    /**
-     * Get the protocol from a string
-     */
-    static inline Protocol getProtocol(const String& proto) {
-	    for (int i = 0; i < OtherProtocol; i++)
-		if (proto == s_protocols[i])
-		    return (Protocol)i;
-	    return OtherProtocol;
-	}
-
-    /**
-     * Get the protocol name from an integer value
-     */
-    static inline const String& getProtocol(int proto)
-	{ return proto < OtherProtocol ? s_protocols[proto] : String::empty(); }
-
     static Configuration s_settings;     // Client settings
     static Configuration s_actions;      // Logic preferrences
     static Configuration s_accounts;     // Accounts
@@ -1267,12 +1240,6 @@ public:
     static Configuration s_calltoHistory;  // Dialed destinations history
     // Holds a not selected/set value match
     static Regexp s_notSelected;
-    // Parameters that are applied from provider template
-    static const char* s_provParams[];
-    // Account options string list
-    static ObjList s_accOptions;
-    // The list of protocols supported by the client
-    static String s_protocols[OtherProtocol];
     // Paths
     static String s_skinPath;
     static String s_soundPath;
@@ -1669,6 +1636,17 @@ class YATE_API ClientLogic : public GenObject
 {
     friend class Client;
 public:
+    /**
+     * Known voip protocols
+     */
+    enum Protocol {
+	SIP           = 0,
+	JABBER        = 1,
+	H323          = 2,
+	IAX           = 3,
+	OtherProtocol = 4
+    };
+
     /**
      * Constructor. Append itself to the client's list
      */
@@ -2118,6 +2096,13 @@ public:
      * Remove all duration objects
      */
     void clearDurationUpdate();
+
+    // Account options string list
+    static ObjList s_accOptions;
+    // Parameters that are applied from provider template
+    static const char* s_provParams[];
+    // The list of protocols supported by the client
+    static String s_protocols[OtherProtocol];
 
 protected:
     /**

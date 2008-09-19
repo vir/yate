@@ -202,14 +202,22 @@ public:
 	{ return QString::fromUtf8(TelEngine::c_safe(str)); }
 
     /**
-     * Set or get an object's property
-     * @param set True to set, false to get the property
+     * Set or an object's property
      * @param obj The object
      * @param name Property's name
      * @param value Property's value
      * @return False if the property doesn't exist or has a type not supported by String
      */
-    static bool property(bool set, QObject* obj, const char* name, String& value);
+    static bool setProperty(QObject* obj, const char* name, const String& value);
+
+    /**
+     * Get an object's property
+     * @param obj The object
+     * @param name Property's name
+     * @param value Property's value
+     * @return False if the property doesn't exist or has a type not supported by String
+     */
+    static bool getProperty(QObject* obj, const char* name, String& value);
 
 protected:
     virtual void loadWindows(const char* file = 0);

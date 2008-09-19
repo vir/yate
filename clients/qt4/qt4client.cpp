@@ -1298,22 +1298,22 @@ bool QtWindow::getSelect(const String& name, String& item)
 bool QtWindow::setProperty(const String& name, const String& item, const String& value)
 {
     if (name == m_id)
-	return QtClient::property(true,wndWidget(),item,(String&)value);
+	return QtClient::setProperty(wndWidget(),item,value);
     QtWidget w(this,name);
     if (w.invalid())
 	return false;
-    return QtClient::property(true,w,item,(String&)value);
+    return QtClient::setProperty(w,item,value);
 }
 
 // Get a property from this window or from a widget owned by it
 bool QtWindow::getProperty(const String& name, const String& item, String& value)
 {
     if (name == m_id)
-	return QtClient::property(false,wndWidget(),item,value);
+	return QtClient::getProperty(wndWidget(),item,value);
     QtWidget w(this,name);
     if (w.invalid())
 	return false;
-    return QtClient::property(false,w,item,value);
+    return QtClient::getProperty(w,item,value);
 }
 
 void QtWindow::closeEvent(QCloseEvent* event)
@@ -1966,72 +1966,70 @@ QString QtClient::formatDateTime(unsigned int secs, const char* format, bool utc
     return time.toString(format);
 }
 
-// Set/get an object's property
-bool QtClient::property(bool set, QObject* obj, const char* name, String& value)
+// Set or an object's property
+bool QtClient::setProperty(QObject* obj, const char* name, const String& value)
 {
     if (!(obj && name && *name))
 	return false;
     QVariant var = obj->property(name);
-    const char* err = "unknown error";
-    bool ok = true;
+    const char* err = 0;
+    bool ok = false;
     switch (var.type()) {
 	case QVariant::String:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(QtClient::setUtf8(value)));
-	    else
-		QtClient::getUtf8(value,var.toString());
+	    ok = obj->setProperty(name,QVariant(QtClient::setUtf8(value)));
 	    break;
 	case QVariant::Bool:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(value.toBoolean()));
-	    else
-		value = var.toBool();
+	    ok = obj->setProperty(name,QVariant(value.toBoolean()));
 	    break;
 	case QVariant::Int:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(value.toInteger()));
-	    else
-		value = var.toInt();
+	    ok = obj->setProperty(name,QVariant(value.toInteger()));
 	    break;
 	case QVariant::UInt:
-	    if (set)
-		ok = obj->setProperty(name,QVariant((unsigned int)value.toInteger()));
-	    else
-		value = var.toUInt();
-	    break;
-	case QVariant::Double:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(value.toDouble()));
-	    else {
-		var.convert(QVariant::String);
-		QtClient::getUtf8(value,var.toString());
-	    }
+	    ok = obj->setProperty(name,QVariant((unsigned int)value.toInteger()));
 	    break;
 	case QVariant::Icon:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(QIcon(QtClient::setUtf8(value))));
+	    ok = obj->setProperty(name,QVariant(QIcon(QtClient::setUtf8(value))));
 	    break;
 	case QVariant::Pixmap:
-	    if (set)
-		ok = obj->setProperty(name,QVariant(QPixmap(QtClient::setUtf8(value))));
+	    ok = obj->setProperty(name,QVariant(QPixmap(QtClient::setUtf8(value))));
+	    break;
+	case QVariant::Double:
+	    ok = obj->setProperty(name,QVariant(value.toDouble()));
 	    break;
 	case QVariant::Invalid:
-	    ok = false;
 	    err = "no such property";
 	    break;
 	default:
-	    ok = false;
 	    err = "unsupported type";
     }
     if (ok)
-	DDebug(ClientDriver::self(),DebugAll,"%s %s=%s for object '%s'",
-	    set ? "Set" : "Got",name,value.c_str(),YQT_OBJECT_NAME(obj));
+	DDebug(ClientDriver::self(),DebugAll,"Set property %s=%s for object '%s'",
+	    name,value.c_str(),YQT_OBJECT_NAME(obj));
     else
 	DDebug(ClientDriver::self(),DebugNote,
-	    "Failed to %s %s=%s (type=%s) for object '%s': %s",
-	    set ? "set" : "get",name,value.c_str(),var.typeName(),
-	    YQT_OBJECT_NAME(obj),err);
+	    "Failed to set %s=%s (type=%s) for object '%s': %s",
+	    name,value.c_str(),var.typeName(),YQT_OBJECT_NAME(obj),err);
     return ok;
+}
+
+// Get an object's property
+bool QtClient::getProperty(QObject* obj, const char* name, String& value)
+{
+    if (!(obj && name && *name))
+	return false;
+    QVariant var = obj->property(name);
+    if (var.canConvert(QVariant::String)) {
+	QtClient::getUtf8(value,var.toString());
+	DDebug(ClientDriver::self(),DebugAll,"Got property %s=%s for object '%s'",
+	    name,value.c_str(),YQT_OBJECT_NAME(obj));
+	return true;
+    }
+    const char* err = (var.type() == QVariant::Invalid) ? "no such property" :
+	"unsupported type";
+    DDebug(ClientDriver::self(),DebugNote,
+	"Failed to get property '%s' (type=%s) for object '%s': %s",
+	name,var.typeName(),YQT_OBJECT_NAME(obj),err);
+    return false;
 }
 
 

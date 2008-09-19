@@ -2219,7 +2219,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     if (m_callRefLen < 1 || m_callRefLen > 4)
 	m_callRefLen = 2;
     // Set mask. Bit 7 of the first byte of the message header it's used for initiator flag
-    m_callRefMask = 0x7fffffff >> (4 - m_callRefLen);
+    m_callRefMask = 0x7fffffff >> (8 * (4 - m_callRefLen));
     // Timers
     m_l2DownTimer.interval(params,"t309",60000,90000,false);
     m_recvSgmTimer.interval(params,"t314",3000,4000,false);

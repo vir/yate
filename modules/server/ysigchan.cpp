@@ -2236,10 +2236,11 @@ void SigIsdnMonitor::handleEvent(SignallingEvent* event)
 	if (rec->update(event)) {
 	    mon->userdata(rec);
 	    m_monitors.append(rec);
-	    TelEngine::destruct(rec);
 	}
 	else
 	    rec->disconnect(0);
+	lock.drop();
+	TelEngine::destruct(rec);
     }
     else
 	XDebug(&plugin,DebugNote,

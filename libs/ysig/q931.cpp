@@ -1747,13 +1747,8 @@ void ISDNQ931Call::changeState(State newState)
 {
     if (state() == newState)
 	return;
-#ifdef DEBUG
-    Debug(q931(),DebugAll,"Call(%u,%u). Changing state '%s' --> '%s' [%p]",
+    Debug(q931(),DebugAll,"Call(%u,%u). State '%s' --> '%s' [%p]",
 	Q931_CALL_ID,stateName(state()),stateName(newState),this);
-#else
-    Debug(q931(),DebugAll,"Call(%u,%u). Changing state %u --> %u [%p]",
-	Q931_CALL_ID,state(),newState,this);
-#endif
     m_state = newState;
 }
 

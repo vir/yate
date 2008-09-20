@@ -534,8 +534,11 @@ void Thread::killall()
 void Thread::exit()
 {
     DDebug(DebugAll,"Thread::exit()");
-#ifdef _WINDOWS
     ThreadPrivate* t = ThreadPrivate::current();
+    if (t && t->m_thread && t->m_thread->locked())
+	Debug(DebugFail,"Thread::exit() in '%s' with mutex locks (%d held) [%p]",
+	    t->m_name,t->m_thread->locks(),t->m_thread);
+#ifdef _WINDOWS
     if (t) {
 	t->m_running = false;
 	t->destroy();
@@ -551,14 +554,8 @@ bool Thread::check(bool exitNow)
     ThreadPrivate* t = ThreadPrivate::current();
     if (!(t && t->m_cancel))
 	return false;
-    if (exitNow) {
-	if (t->m_thread) {
-	    if (t->m_thread->locked())
-		Debug(DebugFail,"Thread::check(true) in '%s' with mutex locks (%d held) [%p]",
-		    t->m_name,t->m_thread->locks(),t->m_thread);
-	}
+    if (exitNow)
 	exit();
-    }
     return true;
 }
 

@@ -223,8 +223,12 @@ bool MutexPrivate::lock(long maxwait)
     else {
 	u_int64_t t = Time::now() + maxwait;
 	do {
-	    if (dead = Thread::check(false))
-		break;
+	    if (!dead) {
+		dead = Thread::check(false);
+		// give up only if caller asked for a limited wait
+		if (dead && !warn)
+		    break;
+	    }
 	    rval = !::pthread_mutex_trylock(&m_mutex);
 	    if (rval)
 		break;
@@ -248,8 +252,6 @@ bool MutexPrivate::lock(long maxwait)
     else
 	deref();
     GlobalMutex::unlock();
-    if (dead)
-	Thread::exit();
     if (warn && !rval)
 	Debug(DebugFail,"Thread '%s' could not take lock owned by '%s' for %lu usec!",
 	    Thread::currentName(),m_owner,maxwait);

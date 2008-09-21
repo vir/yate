@@ -110,8 +110,20 @@ using namespace TelEngine;
 #define DLL_SUFFIX ".yate"
 #define CFG_SUFFIX ".conf"
 
+
+// Supervisor control constants
+
+// Maximum the child's sanity pool can grow
 #define MAX_SANITY 5
+// Initial sanity buffer, allow some init time for the child
 #define INIT_SANITY 30
+// Minimum (and initial) delay until supervisor restarts child
+#define RUNDELAY_MIN 1000000
+// Maximum delay until supervisor restarts child, allow system to breathe
+#define RUNDELAY_MAX 60000000
+// Amount we decerease delay towards minimum each time child proves sanity
+#define RUNDELAY_DEC 20000
+// Size of log relay buffer in bytes
 #define MAX_LOGBUFF 4096
 
 #ifndef HOST_NAME_MAX
@@ -575,6 +587,7 @@ static SERVICE_TABLE_ENTRY dispatchTable[] =
 static bool s_logrotator = false;
 static volatile bool s_rotatenow = false;
 static volatile bool s_runagain = true;
+static unsigned int s_rundelay = RUNDELAY_MIN;
 static pid_t s_childpid = -1;
 static pid_t s_superpid = -1;
 
@@ -708,6 +721,10 @@ static int supervise(void)
 		    tmp = MAX_SANITY;
 		if (sanity < tmp)
 		    sanity = tmp;
+		// Decrement inter-run delay each time child proves sanity
+		s_rundelay -= RUNDELAY_DEC;
+		if (s_rundelay < RUNDELAY_MIN)
+		    s_rundelay = RUNDELAY_MIN;
 	    }
 	    else if ((errno != EINTR) && (errno != EAGAIN))
 		break;
@@ -742,8 +759,16 @@ static int supervise(void)
 	    copystream(2,logfd[0]);
 	    ::close(logfd[0]);
 	}
-	if (s_runagain)
-	    ::usleep(1000000);
+	if (s_runagain) {
+	    if (s_rundelay > RUNDELAY_MIN)
+		::fprintf(stderr,"Supervisor (%d) delaying child start by %u.%02u seconds\n",
+		    s_superpid,s_rundelay / 1000000,(s_rundelay / 10000) % 100);
+	    ::usleep(s_rundelay);
+	    // Exponential backoff, double run delay each time we restart child
+	    s_rundelay *= 2;
+	    if (s_rundelay > RUNDELAY_MAX)
+		s_rundelay = RUNDELAY_MAX;
+	}
     }
     ::fprintf(stderr,"Supervisor (%d) exiting with code %d\n",s_superpid,retcode);
     return retcode;

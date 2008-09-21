@@ -1359,7 +1359,8 @@ void YJGConnection::callAccept(Message& msg)
     Debug(this,DebugCall,"callAccept [%p]",this);
     m_mutex.lock();
     if (m_session) {
-	m_data->rtp(false);
+	if (!m_data->address)
+	    m_data->rtp(false);
 	m_session->accept(m_data->JGAudioList::toXML());
 	m_session->acceptTransport();
 	// Avoid termination if error is received
@@ -1524,6 +1525,8 @@ void YJGConnection::handleEvent(JGEvent* event)
 		m_session->confirm(event->element());
 		if (isOutgoing())
 		    m_session->acceptTransport();
+		if (!m_data->address)
+		    m_data->rtp(false);
 		m_data->rtp(true);
 	    }
 	    else

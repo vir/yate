@@ -1689,7 +1689,10 @@ void QtWindow::doInit()
 	// Connect signals
 	YQT_CONNECT(t.table(),cellDoubleClicked(int,int),this,doubleClick(),"cellDoubleClicked(int,int)");
 	YQT_CONNECT(t.table(),itemDoubleClicked(QTableWidgetItem*),this,doubleClick(),"itemDoubleClicked(QTableWidgetItem*)");
-	YQT_CONNECT(t.table(),itemSelectionChanged(),this,selectionChanged(),"itemSelectionChanged()");
+	String noSel;
+	getProperty(t.name(),"dynamicNoItemSelChanged",noSel);
+	if (!noSel.toBoolean())
+	    YQT_CONNECT(t.table(),itemSelectionChanged(),this,selectionChanged(),"itemSelectionChanged()");
 	// Optionally connect cell clicked
 	// This is done when we want to generate a select() or action() from cell clicked
 	String cellClicked;

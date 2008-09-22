@@ -403,9 +403,18 @@ bool JBStream::receive()
 	if (len) {
 	    XDebug(m_engine,DebugAll,"Stream. Received %u bytes [%p]",len,this);
 	    if (!m_parser.consume(buf,len)) {
-		error = XMPPError::Xml;
+		bool full = (m_parser.bufLen() > m_parser.s_maxDataBuffer);
 		text = m_parser.ErrorDesc();
-		Debug(m_engine,DebugNote,"Stream. Parser error: '%s' [%p]",text,this);
+		// Don't display the buffer if full
+		String tmp;
+		if (!full)
+		    m_parser.getBuffer(tmp);
+		else
+		    tmp << "overflow len=" << m_parser.bufLen() << " max=" <<
+			m_parser.s_maxDataBuffer;
+		Debug(m_engine,DebugNote,"Stream. Parser error='%s' buffer='%s' [%p]",
+		    text,tmp.c_str(),this);
+		error = full ? XMPPError::Internal : XMPPError::Xml;
 		send = true;
 	    }
 	    else

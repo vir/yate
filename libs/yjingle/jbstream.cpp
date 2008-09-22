@@ -661,7 +661,7 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 // Terminate stream. Send stream end tag or error. Remove pending stanzas without id
 // Deref stream if destroying
 void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type error,
-	const char* reason, bool send, bool final)
+	const char* reason, bool send, bool final, bool sendError)
 {
     XDebug(m_engine,DebugAll,"Stream::terminate(%u,%p,%u,%s,%u,%u) state=%s [%p]",
 	destroy,recvStanza,error,reason,send,final,lookupState(state()),this);
@@ -694,24 +694,17 @@ void JBStream::terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type e
 
     // Send ending stream element
     if (send && state() != Connecting && state() != Idle) {
-	XMLElement* e;
-	XMLElement* streamEnd = 0;
-	if (error == XMPPError::NoError)
-	    e = new XMLElement(XMLElement::StreamEnd);
-	else {
+	XMLElement* e = 0;
+	if (sendError && error != XMPPError::NoError) {
 	    e = XMPPUtils::createStreamError(error,reason);
-	    XMLElement* child = recvStanza;
-	    // Preserve received element if an event will be generated
+	    // Add received element
+	    // Preserve received element: we might generate an event
 	    if (recvStanza)
-		if (final || m_terminateEvent)
-		    recvStanza = 0;
-		else
-		    recvStanza = new XMLElement(*child);
-	    e->addChild(child);
-	    streamEnd = new XMLElement(XMLElement::StreamEnd);
+		e->addChild(new XMLElement(*recvStanza));
 	}
-	if (sendStreamXML(e,m_state) && streamEnd)
-	    sendStreamXML(streamEnd,m_state);
+	bool ok = e ? sendStreamXML(e,m_state) : true;
+	if (ok)
+	    sendStreamXML(new XMLElement(XMLElement::StreamEnd),m_state);
     }
     m_socket.terminate(state() == Connecting);
 
@@ -1003,17 +996,13 @@ void JBStream::processAuth(XMLElement* xml)
 	    // Failure
 	    XMLElement* e = xml->findFirstChild();
 	    XMPPError::Type err = XMPPError::NoError;
-	    const char* reason = 0;
 	    if (e) {
 		err = (XMPPError::Type)XMPPError::type(e->name());
 		if (err == XMPPError::Count)
 		    err = XMPPError::NoError;
-		reason = e->name();
 		TelEngine::destruct(e);
 	    }
-	    else
-		reason = "Authentication failed";
-	    terminate(false,xml,err,reason,false);
+	    terminate(true,xml,err,"Authentication failed",true,false,false);
 	    return;
 	}
 

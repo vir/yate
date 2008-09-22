@@ -522,11 +522,12 @@ public:
      * @param recvStanza Received stanza, if any
      * @param error Termination reason. Set it to NoError to send stream end tag
      * @param reason Optional text to be added to the error stanza
-     * @param send True to send the error element (ignored if error is NoError)
+     * @param send True to send the stream end element
      * @param final True if called from destructor
+     * @param sendError True to send the error element (ignored if error is NoError)
      */
     void terminate(bool destroy, XMLElement* recvStanza, XMPPError::Type error, const char* reason,
-	bool send, bool final = false);
+	bool send, bool final = false, bool sendError = true);
 
     /**
      * Remove pending stanzas with a given id.

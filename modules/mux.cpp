@@ -131,6 +131,7 @@ public:
 	}
 protected:
     virtual void statusParams(String& str);
+    virtual void statusDetail(String& str);
 private:
     bool m_first;                        // First init flag
     String m_prefix;                     // Module's prefix (name/)
@@ -634,11 +635,15 @@ bool MuxModule::chanAttach(Message& msg)
 void MuxModule::statusParams(String& str)
 {
     Module::statusParams(str);
-    Lock lock(this);
-    str << "count=" << m_sources.count() << ",format=channels|targetid";
+    str.append("count=",",") << m_sources.count() << ",format=channels|targetid";
+}
+
+void MuxModule::statusDetail(String& str)
+{
+    Module::statusDetail(str);
     for (ObjList* o = m_sources.skipNull(); o; o = o->skipNext()) {
 	MuxSource* s = static_cast<MuxSource*>(o->get());
-	str << ";" << s->id() << "=" << s->channels() << "|" << s->targetid();
+	str.append(s->id(),",") << "=" << s->channels() << "|" << s->targetid();
     }
 }
 

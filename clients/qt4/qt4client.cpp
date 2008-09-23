@@ -112,6 +112,8 @@ public:
 	{ return m_widget && m_widget->inherits(classname); }
     inline bool inherits(Type t)
 	{ return inherits(s_types[t]); }
+    inline QWidget* widget()
+	{ return m_widget; }
     inline QWidget* operator ->()
 	{ return m_widget; }
     // Static cast methods
@@ -1188,21 +1190,29 @@ bool QtWindow::clearTable(const String& name)
     QtWidget w(this,name);
     if (w.invalid())
 	return false;
+    bool ok = true;
+    if (w.widget())
+	w->setUpdatesEnabled(false);
     switch (w.type()) {
 	case QtWidget::Table:
 	    while (w.table()->rowCount())
 		w.table()->removeRow(0);
-	    return true;
+	    break;
 	case QtWidget::TextEdit:
 	    w.textEdit()->clear();
-	    return true;
+	    break;
 	case QtWidget::ListBox:
 	    w.list()->clear();
-	    return true;
+	    break;
 	case QtWidget::CustomTable:
-	    return w.customTable()->clearTable();
+	    ok = w.customTable()->clearTable();
+	    break;
+	default:
+	    ok = false;
     }
-    return false;
+    if (w.widget())
+	w->setUpdatesEnabled(true);
+    return ok;
 }
 
 bool QtWindow::getText(const String& name, String& text, bool richText)

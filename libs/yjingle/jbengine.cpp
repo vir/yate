@@ -1210,7 +1210,7 @@ void JIDResource::addTo(XMLElement* element, bool addInfo)
 	element->addChild(new XMLElement("show",0,showText(m_show)));
     element->addChild(new XMLElement("status",0,m_status));
     // Add priority
-    XMLElement* priority = new XMLElement("priority",0,"25");
+    XMLElement* priority = new XMLElement("priority",0,String(m_priority));
     element->addChild(priority);
     // Add capabilities
     XMLElement* c = new XMLElement("c");

@@ -2026,10 +2026,11 @@ public:
      * @param name The resource name
      * @param presence The resource presence
      * @param capability The resource capability
+     * @param prio The resource priority
      */
     inline JIDResource(const char* name, Presence presence = Unknown,
-	u_int32_t capability = CapChat)
-	: m_name(name), m_presence(presence),
+	u_int32_t capability = CapChat, int prio = 0)
+	: m_name(name), m_presence(presence), m_priority(prio),
 	  m_capability(capability), m_show(ShowNone)
 	{}
 
@@ -2094,6 +2095,20 @@ public:
      */
     inline void status(const char* s)
 	{ m_status = s; }
+
+    /**
+     * Get the priority of this resource
+     * @return The priority of this resource
+     */
+    inline int priority()
+	{ return m_priority; }
+
+    /**
+     * Set the priority of this resource
+     * @param value The new priority of this resource
+     */
+    inline void priority(int value)
+	{ m_priority = value; }
 
     /**
      * Get the list containing XML elements with additional data describing this resource
@@ -2167,6 +2182,7 @@ protected:
 private:
     String m_name;                       // Resource name
     Presence m_presence;                 // Resorce presence
+    int m_priority;                      // Resource priority
     u_int32_t m_capability;              // Resource capabilities
     Show m_show;                         // Show attribute
     String m_status;                     // Status attribute

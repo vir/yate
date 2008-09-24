@@ -29,13 +29,18 @@ logger = logging.getLogger('yaypm.util')
 
 def sleep(time, until = None):
     d = CancellableDeferred()
+    later = reactor.callLater(time, d.callback, None)
+    
     if until:
         def until_callback(m):
-            d.cancel(m)
-            return m
+            if later.active():
+                later.cancel()
+                try:
+                    raise AbandonedException(m)
+                except:
+                    d.errback(failure.Failure())
+
         until.addBoth(until_callback)
-    
-    reactor.callLater(time, lambda : not d.cancelled and d.callback(None))
     return d
 
 def setup(start, args = [], kwargs = {},
@@ -196,6 +201,12 @@ class OutgoingCallException(Exception):
         Exception.__init__(self, cause)
         self.cause = cause
 
+def formatReason(msg):
+    reason = msg["reason"] or msg["error"]
+    if msg["code"]:
+        reason += "(%s)" % msg["code"]
+    return reason
+            
 @defer.inlineCallbacks
 def outgoing(yate, target, maxcall = 30*1000,
              callto = "dumb/", formats = None, ret_callid = False,
@@ -217,7 +228,7 @@ def outgoing(yate, target, maxcall = 30*1000,
     execute = yate.msg("call.execute", attrs)
     
     if not (yield execute.dispatch()):
-        raise OutgoingCallException(execute["reason"] or execute["error"])
+        raise OutgoingCallException(formatReason(execute))
 
     end = yate.onwatch("chan.hangup",
         lambda m : m["id"] == execute["targetid"])
@@ -238,7 +249,7 @@ def outgoing(yate, target, maxcall = 30*1000,
             defer.returnValue(answered)
 
         except AbandonedException, e:
-            raise OutgoingCallException(e.cause["reason"])
+            raise OutgoingCallException(formatReason(e.cause))
 
     if ret_callid:
         defer.returnValue((execute["targetid"], rest))

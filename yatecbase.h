@@ -225,6 +225,17 @@ public:
 	const NamedList* data = 0, bool atStart = false);
 
     /**
+     * Insert a row into a table owned by this window
+     * @param name Name of the element
+     * @param item Name of the item to insert
+     * @param before Name of the item to insert before
+     * @param data Table's columns to set
+     * @return True if the operation was successfull
+     */
+    virtual bool insertTableRow(const String& name, const String& item,
+	const String& before, const NamedList* data = 0);
+
+    /**
      * Delete a row from a table owned by this window
      * @param name Name of the element
      * @param item Name of the item to remove
@@ -517,6 +528,17 @@ public:
      */
     virtual bool addTableRow(const String& item, const NamedList* data = 0,
 	bool atStart = false)
+	{ return false; }
+
+    /**
+     * Insert a row into a table
+     * @param item Name of the item to insert
+     * @param before Name of the item to insert before
+     * @param data Table's columns to set
+     * @return True if the operation was successfull
+     */
+    virtual bool insertTableRow(const String& item, const String& before,
+	const NamedList* data = 0)
 	{ return false; }
 
     /**
@@ -888,11 +910,26 @@ public:
      * @param skip Optional window to skip if wnd is 0
      * @return True on success
      */
-    virtual bool addLines(const String& name, const NamedList* lines, unsigned int max, 
+    bool addLines(const String& name, const NamedList* lines, unsigned int max, 
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
 
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0,
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
+
+    /**
+     * Insert a row into a table owned by this window
+     * @param name Name of the element
+     * @param item Name of the item to insert
+     * @param before Name of the item to insert before
+     * @param data Table's columns to set
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if the operation was successfull
+     */
+    bool insertTableRow(const String& name, const String& item,
+	const String& before, const NamedList* data = 0,
+	Window* wnd = 0, Window* skip = 0);
+
     bool delTableRow(const String& name, const String& item, Window* wnd = 0, Window* skip = 0);
     bool setTableRow(const String& name, const String& item, const NamedList* data,
 	Window* wnd = 0, Window* skip = 0);

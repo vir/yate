@@ -47,6 +47,7 @@ public:
 	delOption,
 	getOptions,
 	addTableRow,
+	insertTableRow,
 	delTableRow,
 	setTableRow,
 	getTableRow,
@@ -79,6 +80,8 @@ public:
     ClientThreadProxy(int func, const String& name, NamedList* params,
 	unsigned int uintVal, bool atStart, Window* wnd, Window* skip);
     ClientThreadProxy(int func, void** addr, const String& name, const String& text, NamedList* params);
+    ClientThreadProxy(int func, const String& name, const String& text,
+	const String& item, const NamedList* params, Window* wnd, Window* skip);
     void process();
     bool execute();
 private:
@@ -388,6 +391,15 @@ bool Window::addTableRow(const String& name, const String& item, const NamedList
     return false;
 }
 
+// stub function for inserting a row to a table
+bool Window::insertTableRow(const String& name, const String& item,
+    const String& before, const NamedList* data)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub inserTableRow('%s','%s','%s',%p) [%p]",
+	name.c_str(),item.c_str(),before.c_str(),data,this);
+    return false;
+}
+
 // stub function for deleting a row from a table
 bool Window::delTableRow(const String& name, const String& item)
 {
@@ -566,6 +578,14 @@ ClientThreadProxy::ClientThreadProxy(int func, void** addr, const String& name,
 {
 }
 
+ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String& text,
+    const String& item, const NamedList* params, Window* wnd, Window* skip)
+    : m_func(func), m_rval(false),
+      m_name(name), m_text(text), m_item(item), m_bool(false), m_rtext(0), m_rbool(0),
+      m_wnd(wnd), m_skip(skip), m_params(params), m_uint(0), m_pointer(0)
+{
+}
+
 void ClientThreadProxy::process()
 {
     XDebug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
@@ -616,6 +636,9 @@ void ClientThreadProxy::process()
 	    break;
 	case addTableRow:
 	    m_rval = client->addTableRow(m_name,m_item,m_params,m_bool,m_wnd,m_skip);
+	    break;
+	case insertTableRow:
+	    m_rval = client->insertTableRow(m_name,m_item,m_text,m_params,m_wnd,m_skip);
 	    break;
 	case delTableRow:
 	    m_rval = client->delTableRow(m_name,m_text,m_wnd,m_skip);
@@ -1299,6 +1322,27 @@ bool Client::addTableRow(const String& name, const String& item, const NamedList
 	wnd = static_cast<Window*>(l->get());
 	if (wnd && (wnd != skip))
 	    ok = wnd->addTableRow(name,item,data,atStart) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
+// Function to insert a new row into a table with the "name" id
+bool Client::insertTableRow(const String& name, const String& item,
+    const String& before, const NamedList* data, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::insertTableRow,name,before,item,data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->insertTableRow(name,item,before,data);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->insertTableRow(name,item,before,data) || ok;
     }
     --s_changing;
     return ok;

@@ -1022,6 +1022,32 @@ bool QtWindow::addTableRow(const String& name, const String& item,
     return true;
 }
 
+// Insert a row into a table owned by this window
+bool QtWindow::insertTableRow(const String& name, const String& item,
+    const String& before, const NamedList* data)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) insertTableRow(%s,%s,%s,%p) [%p]",
+	m_id.c_str(),name.c_str(),item.c_str(),before.c_str(),data,this);
+
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+
+    QtTable* custom = tbl.customTable();
+    if (custom)
+	return custom->insertTableRow(item,before,data);
+
+    int row = tbl.getRow(before);
+    if (row == -1)
+	row = tbl.rowCount();
+    tbl.addRow(row);
+    // Set item (the first column) and the rest of data
+    tbl.setID(row,item);
+    if (data)
+	tbl.updateRow(row,*data);
+    return true;
+}
+
 bool QtWindow::delTableRow(const String& name, const String& item)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::delTableRow(%s,%s) [%p]",

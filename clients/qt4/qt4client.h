@@ -288,6 +288,18 @@ public:
 	bool atStart = false);
 
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
+
+    /**
+     * Insert a row into a table owned by this window
+     * @param name Name of the element
+     * @param item Name of the item to insert
+     * @param before Name of the item to insert before
+     * @param data Table's columns to set
+     * @return True if the operation was successfull
+     */
+    virtual bool insertTableRow(const String& name, const String& item,
+	const String& before, const NamedList* data = 0);
+
     virtual bool delTableRow(const String& name, const String& item);
     virtual bool setTableRow(const String& name, const String& item, const NamedList* data);
     virtual bool getTableRow(const String& name, const String& item, NamedList* data = 0);

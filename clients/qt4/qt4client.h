@@ -289,6 +289,8 @@ public:
 
     virtual bool addTableRow(const String& name, const String& item, const NamedList* data = 0, bool atStart = false);
 
+    virtual bool setMultipleRows(const String& name, const NamedList& data, const String& prefix);
+
     /**
      * Insert a row into a table owned by this window
      * @param name Name of the element

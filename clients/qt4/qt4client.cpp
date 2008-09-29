@@ -1022,6 +1022,21 @@ bool QtWindow::addTableRow(const String& name, const String& item,
     return true;
 }
 
+// Insert or update multiple rows in a single operation
+bool QtWindow::setMultipleRows(const String& name, const NamedList& data, const String& prefix)
+{
+    XDebug(QtDriver::self(),DebugAll,"QtWindow(%s) setMultipleRows('%s',%p,'%s') [%p]",
+	m_id.c_str(),name.c_str(),&data,prefix.c_str(),this);
+
+    TableWidget tbl(this,name);
+    if (!tbl.valid())
+	return false;
+
+    QtTable* custom = tbl.customTable();
+    return custom && custom->setMultipleRows(data,prefix);
+}
+
+
 // Insert a row into a table owned by this window
 bool QtWindow::insertTableRow(const String& name, const String& item,
     const String& before, const NamedList* data)

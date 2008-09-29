@@ -47,6 +47,7 @@ public:
 	delOption,
 	getOptions,
 	addTableRow,
+	setMultipleRows,
 	insertTableRow,
 	delTableRow,
 	setTableRow,
@@ -100,6 +101,19 @@ private:
     void** m_pointer;
 };
 
+// holder for a postponed message
+class PostponedMessage : public Message
+{
+public:
+    inline PostponedMessage(const Message& msg, int id)
+	: Message(msg), m_id(id)
+	{ }
+    inline int id() const
+	{ return m_id; }
+private:
+    int m_id;
+};
+
 // engine.start message handler used to notify logics
 class EngineStartHandler : public MessageHandler
 {
@@ -132,6 +146,8 @@ static String s_hangupReason = "User hangup";
 static unsigned int s_eventLen = 0;              // Log maximum lines (0: unlimited)
 static Mutex s_debugMutex;
 static Mutex s_proxyMutex;
+static Mutex s_postponeMutex;
+static ObjList s_postponed;
 static NamedList* s_debugLog = 0;
 static ClientThreadProxy* s_proxy = 0;
 static bool s_busy = false;
@@ -391,6 +407,14 @@ bool Window::addTableRow(const String& name, const String& item, const NamedList
     return false;
 }
 
+// stub function for setting multiple lines at once
+bool Window::setMultipleRows(const String& name, const NamedList& data, const String& prefix)
+{
+    DDebug(ClientDriver::self(),DebugInfo,"stub setMultipleRows('%s',%p,'%s') [%p]",
+	name.c_str(),&data,data,prefix.c_str(),this);
+    return false;
+}
+
 // stub function for inserting a row to a table
 bool Window::insertTableRow(const String& name, const String& item,
     const String& before, const NamedList* data)
@@ -636,6 +660,9 @@ void ClientThreadProxy::process()
 	    break;
 	case addTableRow:
 	    m_rval = client->addTableRow(m_name,m_item,m_params,m_bool,m_wnd,m_skip);
+	    break;
+	case setMultipleRows:
+	    m_rval = client->setMultipleRows(m_name,*m_params,m_item,m_wnd,m_skip);
 	    break;
 	case insertTableRow:
 	    m_rval = client->insertTableRow(m_name,m_item,m_text,m_params,m_wnd,m_skip);
@@ -1327,6 +1354,25 @@ bool Client::addTableRow(const String& name, const String& item, const NamedList
     return ok;
 }
 
+bool Client::setMultipleRows(const String& name, const NamedList& data, const String& prefix, Window* wnd, Window* skip)
+{
+    if (needProxy()) {
+	ClientThreadProxy proxy(ClientThreadProxy::setMultipleRows,name,prefix,false,&data,wnd,skip);
+	return proxy.execute();
+    }
+    if (wnd)
+	return wnd->setMultipleRows(name,data,prefix);
+    ++s_changing;
+    bool ok = false;
+    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+	wnd = static_cast<Window*>(o->get());
+	if (wnd != skip)
+	    ok = wnd->setMultipleRows(name,data,prefix) || ok;
+    }
+    --s_changing;
+    return ok;
+}
+
 // Function to insert a new row into a table with the "name" id
 bool Client::insertTableRow(const String& name, const String& item,
     const String& before, const NamedList* data, Window* wnd, Window* skip)
@@ -1713,6 +1759,18 @@ bool Client::received(Message& msg, int id)
     return processed;
 }
 
+// Postpone messages to be redispatched from UI thread
+bool Client::postpone(const Message& msg, int id)
+{
+    if (isCurrent())
+	return false;
+    PostponedMessage* postponed = new PostponedMessage(msg,id);
+    s_postponeMutex.lock();
+    s_postponed.append(postponed);
+    s_postponeMutex.unlock();
+    return true;
+}
+
 // Handle actions from user interface
 bool Client::action(Window* wnd, const String& name, NamedList* params)
 {
@@ -1839,6 +1897,31 @@ void Client::idleActions()
 	Time time;
 	for (ObjList* o = s_logics.skipNull(); o; o = o->skipNext())
 	    (static_cast<ClientLogic*>(o->get()))->idleTimerTick(time);
+    }
+    // Dispatch postponed messages
+    ObjList postponed;
+    int postponedCount = 0;
+    s_postponeMutex.lock();
+    for (;;) {
+	// First move some messages from the global list to the local one
+	GenObject* msg = s_postponed.remove(false);
+	if (!msg)
+	    break;
+	postponed.append(msg);
+	// arbitrary limit to avoid freezing the user interface
+	if (++postponedCount >= 16)
+	    break;
+    }
+    s_postponeMutex.unlock();
+    if (postponedCount) {
+	Debug(ClientDriver::self(),DebugInfo,"Dispatching %d postponed messages",postponedCount);
+	for (;;) {
+	    PostponedMessage* msg = static_cast<PostponedMessage*>(postponed.remove(false));
+	    if (!msg)
+		break;
+	    received(*msg,msg->id());
+	    delete msg;
+	}
     }
     // arbitrary limit to let other threads run too
     for (int i = 0; i < 4; i++) {

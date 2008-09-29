@@ -225,6 +225,15 @@ public:
 	const NamedList* data = 0, bool atStart = false);
 
     /**
+     * Append or update several table rows at once
+     * @param name Name of the element
+     * @param data Parameters to initialize the rows with
+     * @param prefix Prefix to match (and remove) in parameter names
+     * @return True if all the operations were successfull
+     */
+    virtual bool setMultipleRows(const String& name, const NamedList& data, const String& prefix = String::empty());
+
+    /**
      * Insert a row into a table owned by this window
      * @param name Name of the element
      * @param item Name of the item to insert
@@ -528,6 +537,14 @@ public:
      */
     virtual bool addTableRow(const String& item, const NamedList* data = 0,
 	bool atStart = false)
+	{ return false; }
+
+    /** Append or update several table rows at once
+     * @param data Parameters to initialize the rows with
+     * @param prefix Prefix to match (and remove) in parameter names
+     * @return True if all the operations were successfull
+     */
+    virtual bool setMultipleRows(const NamedList& data, const String& prefix = String::empty())
 	{ return false; }
 
     /**
@@ -916,6 +933,16 @@ public:
     bool addTableRow(const String& name, const String& item, const NamedList* data = 0,
 	bool atStart = false, Window* wnd = 0, Window* skip = 0);
 
+    /** Append or update several table rows at once
+     * @param name Name of the element
+     * @param data Parameters to initialize the rows with
+     * @param prefix Prefix to match (and remove) in parameter names
+     * @param wnd Optional window owning the element
+     * @param skip Optional window to skip if wnd is 0
+     * @return True if all the operations were successfull
+     */
+    bool setMultipleRows(const String& name, const NamedList& data, const String& prefix = String::empty(), Window* wnd = 0, Window* skip = 0);
+
     /**
      * Insert a row into a table owned by this window
      * @param name Name of the element
@@ -1019,6 +1046,14 @@ public:
     static bool openConfirm(const char* text, const Window* parent = 0, const char* context = 0);
     static ObjList* listWindows();
     void idleActions();
+
+    /**
+     * Postpone a copy of a message to be dispatched from the UI thread
+     * @param msg Message to be postponed
+     * @param id Identifier of the message to be used on dispatch
+     * @return True if the UI thread was not current so the message was postponed
+     */
+    bool postpone(const Message& msg, int id);
 
     /**
      * Show a file open dialog window

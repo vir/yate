@@ -104,6 +104,8 @@ DbConn::DbConn(const NamedList* sect)
 	    m_connection << " password='" << tmp << "'";
     }
     m_timeout = (u_int64_t)1000 * sect->getIntValue("timeout",10000);
+    if (m_timeout < 500000)
+	m_timeout = 500000;
     m_retry = sect->getIntValue("retry",5);
 }
 
@@ -127,7 +129,9 @@ bool DbConn::initDb(int retry)
 	return false;
     }
     PQsetnonblocking(m_conn,1);
+    Thread::msleep(1);
     while (Time::now() < timeout) {
+	PQconnectPoll(m_conn);
 	switch (PQstatus(m_conn)) {
 	    case CONNECTION_BAD:
 		Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),PQerrorMessage(m_conn));
@@ -139,7 +143,6 @@ bool DbConn::initDb(int retry)
 	    default:
 		break;
 	}
-	PQconnectPoll(m_conn);
 	Thread::yield();
     }
     Debug(&module,DebugWarn,"Connection timed out for '%s'",m_name.c_str());

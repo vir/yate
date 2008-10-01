@@ -1333,6 +1333,11 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
 		sendConnectAck(sigMsg);
 		recover = true;
 	    }
+	    else if (peerState == Active) {
+		Debug(q931(),DebugNote,"Call(%u,%u). Recovering from STATUS, cause='%s' [%p]",
+		    Q931_CALL_ID,m_data.m_reason.c_str(),this);
+		recover = true;
+	    }
 	case CallInitiated:	    // We've sent Setup. Can't recover: something went wrong
 	case OverlapSend:
 	case OverlapRecv:	    // TODO: implement if overlap send/recv is implemented

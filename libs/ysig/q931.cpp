@@ -3076,6 +3076,8 @@ bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t call
 	state = m_restartCic ? ISDNQ931Call::RestartReq : ISDNQ931Call::Null;
     // Add IEs
     ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,0,cause);
+    // We always send status about the local network
+    ie->addParamPrefix("location","LN");
     if (diagnostic && ie)
 	ie->addParamPrefix("diagnostic",diagnostic);
     msg->appendIEValue(ISDNQ931IE::CallState,"state",ISDNQ931Call::stateName(state));

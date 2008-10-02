@@ -32,8 +32,8 @@ static ObjList s_queues;
 class QueuedCall : public String
 {
 public:
-    inline QueuedCall(const String& id, const char* caller, const char* billid)
-	: String(id), m_caller(caller), m_billid(billid)
+    inline QueuedCall(const String& id, const char* caller, const char* billid, const char* callerName = 0)
+	: String(id), m_caller(caller), m_billid(billid), m_callerName(callerName)
 	{ m_last = m_time = Time::now(); }
     inline int waitingTime(u_int64_t when = Time::now())
 	{ return (int)(when - m_time); }
@@ -45,14 +45,13 @@ public:
 	{ m_marked = mark; m_last = Time::now(); }
     inline const String& getCaller() const
 	{ return m_caller; }
-    inline const String& getBillId() const
-	{ return m_billid; }
-    void complete(Message& msg) const;
+    void complete(Message& msg, bool addId = true) const;
 
 protected:
     String m_caller;
     String m_marked;
     String m_billid;
+    String m_callerName;
     u_int64_t m_time;
     u_int64_t m_last;
 };
@@ -156,13 +155,19 @@ static void copyArrayParams(NamedList& params, Array* a, int row)
 
 
 // Fill message with parameters about the call
-void QueuedCall::complete(Message& msg) const
+void QueuedCall::complete(Message& msg, bool addId) const
 {
-    msg.addParam("id",c_str());
+    if (addId) {
+	msg.addParam("id",c_str());
+	if (m_marked)
+	    msg.addParam("operator",m_marked);
+    }
     if (m_caller)
 	msg.addParam("caller",m_caller);
-    if (m_marked)
-	msg.addParam("operator",m_marked);
+    if (m_callerName)
+	msg.addParam("callername",m_callerName);
+    if (m_billid)
+	msg.addParam("billid",m_billid);
 }
 
 
@@ -265,7 +270,7 @@ bool CallsQueue::addCall(Message& msg)
     }
     msg.setParam("source",tmp);
     msg.setParam("callto",s_chanIncoming);
-    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"),msg.getValue("billid"));
+    QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"),msg.getValue("billid"),msg.getValue("callername"));
     // high priority calls will go in queue's head instead of tail
     if (msg.getBoolValue("priority")) {
 	m_calls.insert(call);
@@ -443,12 +448,11 @@ void CallsQueue::startACD()
 	Debug(&__plugin,DebugInfo,"Distributing call '%s' to '%s' in group '%s'",
 	    call->c_str(),user,c_str());
 	Message* ex = new Message("call.execute");
+	call->complete(*ex,false);
 	ex->addParam("direct",callto);
 	ex->addParam("target",user);
-	ex->addParam("caller",call->getCaller());
 	ex->addParam("called",user);
 	ex->addParam("callto",s_chanOutgoing);
-	ex->addParam("billid",call->getBillId());
 	ex->addParam("notify",*call);
 	ex->addParam("queue",c_str());
 	const char* tmp = params.getValue("maxcall",getValue("maxcall"));

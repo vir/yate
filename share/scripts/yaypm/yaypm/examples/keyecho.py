@@ -1,8 +1,6 @@
 #!/usr/bin/python
 
 from twisted.internet import reactor, defer
-from yaypm import TCPDispatcherFactory, embeddedStart
-from yaypm.flow import go
 import logging, yaypm.utils
 
 logger = logging.getLogger('yaypm.examples')
@@ -40,7 +38,7 @@ def route(yate):
     yate.onmsg("call.route", 
         lambda m : m["called"] == "ivr").addCallback(on_route)
 
-if __name__ in ["__main__", "__embedded_yaypm_module__"]:
+if __name__ in ["__main__"]:
     logger.setLevel(logging.DEBUG)    
-    yaypm.utils.setup(lambda yate: go(route(yate)))
+    yaypm.utils.setup(route)
 

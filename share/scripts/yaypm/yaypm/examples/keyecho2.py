@@ -1,6 +1,6 @@
 #!/usr/bin/python
-from twisted.internet import reactor, defer
-from yaypm import TCPDispatcherFactory, AbandonedException
+from twisted.internet import defer
+from yaypm import AbandonedException
 import logging, yaypm.utils
 
 logger = logging.getLogger('yaypm.examples')

@@ -192,7 +192,6 @@ static MsgRelay s_relays[] = {
     {"user.notify",        Client::UserNotify,        50},
     {"resource.notify",    Client::ResourceNotify,    50},
     {"resource.subscribe", Client::ResourceSubscribe, 50},
-    {"xmpp.iq",            Client::XmppIq,            50},
     {"clientchan.update",  Client::ClientChanUpdate,  50},
     {0,0,0},
 };
@@ -1745,9 +1744,6 @@ bool Client::received(Message& msg, int id)
 		break;
 	    case ResourceSubscribe:
 		processed = logic->handleResourceSubscribe(msg,stop) || processed;
-		break;
-	    case XmppIq:
-		processed = logic->handleXmppIq(msg,stop) || processed;
 		break;
 	    case ClientChanUpdate:
 		processed = logic->handleClientChanUpdate(msg,stop) || processed;

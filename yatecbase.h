@@ -675,13 +675,12 @@ public:
 	UserNotify         = 3,
 	ResourceNotify     = 4,
 	ResourceSubscribe  = 5,
-	XmppIq             = 7,
-	ClientChanUpdate   = 8,
+	ClientChanUpdate   = 7,
 	// Handlers not automatically installed
-	ChanNotify         = 9,
+	ChanNotify         = 8,
 	// NOTE: Keep the MsgIdCount in sync: it can be used by other parties to install
 	//  other relays
-	MsgIdCount         = 10
+	MsgIdCount         = 9
     };
 
     /**
@@ -2078,15 +2077,6 @@ public:
      * @return True to stop further processing by the engine
      */
     virtual bool handleResourceSubscribe(Message& msg, bool& stopLogic);
-
-    /**
-     * Process xmpp.iq message
-     * @param msg Received message
-     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
-     * @return True to stop further processing by the engine
-     */
-    virtual bool handleXmppIq(Message& msg, bool& stopLogic)
-	{ return false; }
 
     /**
      * Process clientchan.update message

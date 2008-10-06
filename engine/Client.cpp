@@ -742,8 +742,9 @@ bool ClientThreadProxy::execute()
 // Notify logics
 bool EngineStartHandler::received(Message& msg)
 {
-    if (Client::self())
-	Client::self()->engineStart(msg);
+    while (!Client::self())
+	Thread::yield(true);
+    Client::self()->engineStart(msg);
     return false;
 }
 
@@ -849,7 +850,6 @@ void Client::run()
 {
     Debug(ClientDriver::self(),DebugAll,"Client::run() [%p]",this);
     ClientLogic::initStaticData();
-    Engine::install(new EngineStartHandler);
     loadUI();
     // Run
     main();
@@ -2716,6 +2716,7 @@ ClientDriver::~ClientDriver()
 void ClientDriver::setup()
 {
     Driver::setup();
+    Engine::install(new EngineStartHandler);
     installRelay(Halt);
     installRelay(Progress);
     installRelay(Route,200);

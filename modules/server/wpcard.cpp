@@ -43,7 +43,7 @@ extern "C" {
 #ifdef HAVE_WANPIPE_HWEC
 #include <wanec_iface.h>
 #ifndef WANEC_DEV_DIR
-#warning Echo canceller API is too old, upgrade or configure --without-wphwec
+#warning Incompatible echo canceller API, upgrade or configure --without-wphwec
 #undef HAVE_WANPIPE_HWEC
 #endif // WANEC_DEV_DIR
 #endif

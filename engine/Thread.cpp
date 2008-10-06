@@ -382,12 +382,18 @@ void ThreadPrivate::killall()
 	    c = 1;
 	else {
 	    if (ok) {
+#ifdef _WINDOWS
 		Debug(DebugGoOn,"Could not kill %p but seems OK to delete it (library bug?)",t);
 		s_tmutex.unlock();
 		t->destroy();
 		s_tmutex.lock();
 		if (t != l->get())
 		    c = 1;
+#else
+		Debug(DebugGoOn,"Could not kill cancelled %p so we'll abandon it (library bug?)",t);
+		l->remove(t,false);
+		c = 1;
+#endif
 		continue;
 	    }
 	    Thread::msleep(1);

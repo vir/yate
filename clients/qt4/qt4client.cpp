@@ -69,7 +69,8 @@ public:
 	AbstractButton = 10,
 	Slider         = 11,
 	ProgressBar    = 12,
-	Unknown        = 13,             // Unknown type
+	SpinBox        = 13,
+	Unknown        = 14,             // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
 	Missing                          // Invalid pointer
@@ -143,6 +144,8 @@ public:
 	{ return static_cast<QSlider*>(m_widget); }
     inline QProgressBar* progressBar()
 	{ return static_cast<QProgressBar*>(m_widget); }
+    inline QSpinBox* spinBox()
+	{ return static_cast<QSpinBox*>(m_widget); }
     inline QtTable* customTable()
 	{ return qobject_cast<QtTable*>(m_widget); }
     inline QAction* action()
@@ -301,7 +304,8 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QLineEdit",
     "QAbstractButton",
     "QSlider",
-    "QProgressBar"
+    "QProgressBar",
+    "QSpinBox"
 };
 
 // Connect a sender's signal to a receiver's slot
@@ -716,6 +720,9 @@ bool QtWindow::setText(const String& name, const String& text,
 	    return true;
 	case QtWidget::Action:
 	    w.action()->setText(QtClient::setUtf8(text));
+	    return true;
+	case QtWidget::SpinBox:
+	    w.spinBox()->setValue(text.toInteger());
 	    return true;
     }
 
@@ -1281,6 +1288,9 @@ bool QtWindow::getText(const String& name, String& text, bool richText)
 	    return true;
 	case QtWidget::Action:
 	    QtClient::getUtf8(text,w.action()->text());
+	    return true;
+	case QtWidget::SpinBox:
+	    text = w.spinBox()->value();
 	    return true;
 	default:
 	    if (w.inherits(QtWidget::AbstractButton)) {

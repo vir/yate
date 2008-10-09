@@ -2,12 +2,21 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
+datarootdir=@datarootdir@
+
+share=@datadir@/yate
+config=@sysconfdir@/yate
+modules=@libdir@/yate
+skins=${share}/skins
+scripts=${share}/scripts
+helpdir=${share}/help
 
 yate=yate
 yate_config=yate-config
 
 Name: Yate
 Description: Yet Another Telephony Engine
+URL: http://yate.null.ro/
 Version: @PACKAGE_VERSION@
 Libs: -L${libdir} -lyate @MODULE_LDFLAGS@ @MODULE_SYMBOLS@
 Cflags: -I${includedir}/yate @MODULE_CPPFLAGS@

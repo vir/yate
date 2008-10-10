@@ -1,0 +1,11 @@
+@make_variables@
+VPATH=@srcdir@
+OBJS=
+AUTODOC_SRC_IN=
+MODDIR=Public.pmod/Protocols.pmod/
+MODNAME=Yate
+MODULE_PMOD_IN=Yate.pmod.in
+MODULE_LDFLAGS=@LDFLAGS@ @LIBS@
+CONFIG_HEADERS=@CONFIG_HEADERS@
+@dynamic_module_makefile@
+@dependencies@

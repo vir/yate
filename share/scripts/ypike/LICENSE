@@ -1,0 +1,9 @@
+This module implements a Yate Engine interface.
+
+Copyright (C) 2004-2006 Null Team (libyate.php).
+Copyright (C) 2007-2008, by Marc Dirix, The Netherlands.
+
+This module is open source software; you can redistribute it and/or modify 
+it under the terms of the GNU General Public License as published by the 
+Free Software Foundation; either version 2, or (at your option) any later 
+version.

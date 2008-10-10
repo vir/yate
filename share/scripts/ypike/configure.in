@@ -1,0 +1,4 @@
+ifdef([AC_MODULE_INIT],[],[m4_fatal(pike is not installed)])
+AC_INIT(Yate.pmod.in)
+AC_MODULE_INIT()
+AC_OUTPUT(Makefile)

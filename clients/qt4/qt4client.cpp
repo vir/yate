@@ -364,6 +364,8 @@ static void setWidget(QWidget* parent, QWidget* child)
 // Utility function used to get the name of a control
 static bool translateName(QtWidget& w, String& name)
 {
+    static String actionProp = "accessibleName";
+
     if (w.invalid())
 	return false;
     if (w.type() != QtWidget::Action)
@@ -371,8 +373,11 @@ static bool translateName(QtWidget& w, String& name)
 	    QtClient::getUtf8(name,w->objectName());
 	else
 	    QtClient::getUtf8(name,w->accessibleName());
-    else
-	QtClient::getUtf8(name,w.action()->objectName());
+    else {
+	QtClient::getProperty(w.action(),actionProp,name);
+	if (!name)
+	    QtClient::getUtf8(name,w.action()->objectName());
+    }
     return true;
 }
 

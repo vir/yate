@@ -1434,7 +1434,7 @@ static void usage(bool client, FILE* f)
 "   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
     ,s_cfgfile.safe()
-    ,Engine::configPath(true).safe());
+    ,s_usrpath.safe());
 }
 
 static void badopt(bool client, char chr, const char* opt)

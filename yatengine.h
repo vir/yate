@@ -820,11 +820,11 @@ public:
     static String configFile(const char* name, bool user = false);
 
     /**
-     * Get the system configuration directory path
-     * @return The directory path for system configuration files
+     * Get the system or user configuration directory path
+     * @param user True to get the user settings path
+     * @return The directory path for system or user configuration files
      */
-    inline static const String& configPath()
-	{ return s_cfgpath; }
+    static const String& configPath(bool user = false);
 
     /**
      * Get the configuration file suffix
@@ -845,6 +845,14 @@ public:
      * @param path Relative path to extra modules to be loaded
      */
     static void extraPath(const String& path);
+
+    /**
+     * Set the per user application data path. This method must be called
+     *  by a main program before calling @ref main() or @ref help()
+     * Path separators are not allowed. The default is taken from CFG_DIR.
+     * @param path Single relative path component to write user specific data
+     */
+    static void userPath(const String& path);
 
     /**
      * Get the module filename suffix
@@ -1032,7 +1040,6 @@ private:
     static Engine* s_self;
     static String s_node;
     static String s_shrpath;
-    static String s_cfgpath;
     static String s_cfgsuffix;
     static String s_modpath;
     static String s_modsuffix;

@@ -167,7 +167,6 @@ static void sighandler(int signal)
 
 String Engine::s_node;
 String Engine::s_shrpath(SHR_PATH);
-String Engine::s_cfgpath(CFG_PATH);
 String Engine::s_cfgsuffix(CFG_SUFFIX);
 String Engine::s_modpath(MOD_PATH);
 String Engine::s_modsuffix(DLL_SUFFIX);
@@ -178,6 +177,9 @@ Engine::RunMode Engine::s_mode = Engine::Stopped;
 Engine* Engine::s_self = 0;
 int Engine::s_haltcode = -1;
 int EnginePrivate::count = 0;
+static String s_cfgpath(CFG_PATH);
+static String s_usrpath;
+static bool s_createusr = true;
 static bool s_init = false;
 static bool s_dynplugin = false;
 static Engine::PluginMode s_loadMode = Engine::LoadFail;
@@ -199,6 +201,7 @@ static bool s_numfiles = false;
 static bool s_sigabrt = false;
 static bool s_lateabrt = false;
 static String s_cfgfile;
+static String s_userdir(CFG_DIR);
 static const char* s_logfile = 0;
 static Configuration s_cfg;
 static ObjList plugins;
@@ -240,6 +243,35 @@ public:
 };
 
 
+// helper function to initialize user application data dir
+static void initUsrPath(String& path, const char* newPath = 0)
+{
+    if (path)
+	return;
+    if (TelEngine::null(newPath)) {
+#ifdef _WINDOWS
+	// we force using the ANSI version
+	char szPath[MAX_PATH];
+	if (SHGetSpecialFolderPathA(NULL,szPath,CSIDL_APPDATA,TRUE))
+	    path = szPath;
+#else
+	path = ::getenv("HOME");
+#endif
+	if (path.null()) {
+	    Debug(DebugWarn,"Could not get per-user application data path!");
+	    return;
+	}
+	if (!path.endsWith(PATH_SEP))
+	    path += PATH_SEP;
+	path += s_userdir;
+    }
+    else
+	path = newPath;
+    if (path.endsWith(PATH_SEP))
+	path = path.substr(0,path.length()-1);
+}
+
+
 bool EngineStatusHandler::received(Message &msg)
 {
     const char *sel = msg.getValue("module");
@@ -263,6 +295,7 @@ bool EngineStatusHandler::received(Message &msg)
 static char s_cmdsOpt[] = "  module {{load|reload} modulefile|unload modulename|list}\r\n";
 static char s_cmdsMsg[] = "Controls the modules loaded in the Telephony Engine\r\n";
 
+// get the base name of a module file
 static String moduleBase(const String& fname)
 {
     int sep = fname.rfind(PATH_SEP[0]);
@@ -852,6 +885,7 @@ bool SLib::unload(bool unloadNow)
 Engine::Engine()
 {
     DDebug(DebugAll,"Engine::Engine() [%p]",this);
+    initUsrPath(s_usrpath);
 }
 
 Engine::~Engine()
@@ -932,6 +966,7 @@ int Engine::run()
     s_params.addParam("configname",s_cfgfile);
     s_params.addParam("sharedpath",s_shrpath);
     s_params.addParam("configpath",s_cfgpath);
+    s_params.addParam("usercfgpath",s_usrpath);
     s_params.addParam("cfgsuffix",s_cfgsuffix);
     s_params.addParam("modulepath",s_modpath);
     s_params.addParam("modsuffix",s_modsuffix);
@@ -1091,27 +1126,23 @@ const char* Engine::pathSeparator()
     return PATH_SEP;
 }
 
+const String& Engine::configPath(bool user)
+{
+    if (user) {
+	if (s_createusr) {
+	    // create user data dir on first request
+	    s_createusr = false;
+	    if (::mkdir(s_usrpath,S_IRWXU) == 0)
+		Debug(DebugNote,"Created user data directory: '%s'",s_usrpath.c_str());
+	}
+	return s_usrpath;
+    }
+    return s_cfgpath;
+}
+
 String Engine::configFile(const char* name, bool user)
 {
-    String path;
-    if (user) {
-#ifdef _WINDOWS
-	// we force using the ANSI version
-	char szPath[MAX_PATH];
-	if (SHGetSpecialFolderPathA(NULL,szPath,CSIDL_APPDATA,TRUE))
-	    path = szPath;
-#else
-	path = ::getenv("HOME");
-#endif
-    }
-    if (path.null())
-	path = s_cfgpath;
-    else {
-	if (!path.endsWith(PATH_SEP))
-	    path += PATH_SEP;
-	path += CFG_DIR;
-	::mkdir(path,S_IRWXU);
-    }
+    String path = configPath(user);
     if (!path.endsWith(PATH_SEP))
 	path += PATH_SEP;
     return path + name + s_cfgsuffix;
@@ -1281,6 +1312,16 @@ void Engine::extraPath(const String& path)
     s_extramod.append(new String(path));
 }
 
+void Engine::userPath(const String& path)
+{
+    if (path.null())
+	return;
+    if (s_usrpath.null())
+	s_userdir = path;
+    else
+	Debug(DebugWarn,"Engine::userPath('%s') called too late!",path.c_str());
+}
+
 void Engine::halt(unsigned int code)
 {
     if (s_haltcode == -1)
@@ -1355,6 +1396,7 @@ static void usage(bool client, FILE* f)
 "   -n configname  Use specified configuration name (%s)\n"
 "   -e pathname    Path to shared files directory (" SHR_PATH ")\n"
 "   -c pathname    Path to conf files directory (" CFG_PATH ")\n"
+"   -u pathname    Path to user files directory (%s)\n"
 "   -m pathname    Path to modules directory (" MOD_PATH ")\n"
 "   -x relpath     Relative path to extra modules directory (can be repeated)\n"
 "   -w directory   Change working directory\n"
@@ -1391,7 +1433,8 @@ static void usage(bool client, FILE* f)
 "   -s             Supervised, restart if crashes or locks up\n"
 "   -r             Enable rotation of log file (needs -s and -l)\n"
 #endif
-    ,s_cfgfile.safe());
+    ,s_cfgfile.safe()
+    ,Engine::configPath(true).safe());
 }
 
 static void badopt(bool client, char chr, const char* opt)
@@ -1427,6 +1470,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     bool colorize = false;
     const char* pidfile = 0;
     const char* workdir = 0;
+    const char* usrpath = 0;
     int debug_level = debugLevel();
 
     const char* cfgfile = ::strrchr(argv[0],'/');
@@ -1452,6 +1496,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    continue;
 			}
 			if (!::strcmp(pc,"help")) {
+			    initUsrPath(s_usrpath);
 			    usage(client,stdout);
 			    return 0;
 			}
@@ -1476,10 +1521,12 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    continue;
 			}
 #endif
+			initUsrPath(s_usrpath);
 			badopt(client,0,argv[i]);
 			return EINVAL;
 			break;
 		    case 'h':
+			initUsrPath(s_usrpath);
 			usage(client,stdout);
 			return 0;
 		    case 'v':
@@ -1538,6 +1585,14 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			}
 			pc = 0;
 			s_cfgpath=argv[++i];
+			break;
+		    case 'u':
+			if (i+1 >= argc) {
+			    noarg(client,argv[i]);
+			    return ENOENT;
+			}
+			pc = 0;
+			usrpath=argv[++i];
 			break;
 		    case 'm':
 			if (i+1 >= argc) {
@@ -1626,6 +1681,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 				    tstamp = Debugger::Textual;
 				    break;
 				default:
+				    initUsrPath(s_usrpath);
 				    badopt(client,*pc,argv[i]);
 				    return EINVAL;
 			    }
@@ -1636,6 +1692,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			version();
 			return 0;
 		    default:
+			initUsrPath(s_usrpath);
 			badopt(client,*pc,argv[i]);
 			return EINVAL;
 		}
@@ -1656,6 +1713,8 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
     s_cfgfile = cfgfile;
     if (s_cfgfile.endsWith(".exe") || s_cfgfile.endsWith(".EXE"))
 	s_cfgfile = s_cfgfile.substr(0,s_cfgfile.length()-4);
+
+    initUsrPath(s_usrpath,usrpath);
 
     if (workdir)
 	::chdir(workdir);
@@ -1822,6 +1881,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
 void Engine::help(bool client, bool errout)
 {
+    initUsrPath(s_usrpath);
     usage(client, errout ? stderr : stdout);
 }
 

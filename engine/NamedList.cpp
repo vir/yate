@@ -126,10 +126,21 @@ NamedList& NamedList::copyParam(const NamedList& original, const String& name, c
     return *this;
 }
 
+NamedList& NamedList::copyParams(const NamedList& original)
+{
+    XDebug(DebugInfo,"NamedList::copyParams(%p) [%p]",&original,this);
+    for (unsigned int i = 0; i < original.length(); i++) {
+	const NamedString* p = original.getParam(i);
+	if (p)
+	    setParam(p->name(),*p);
+    }
+    return *this;
+}
+
 NamedList& NamedList::copyParams(const NamedList& original, ObjList* list, char childSep)
 {
-    XDebug(DebugInfo,"NamedList::copyParams(%p,%p,'%1s')",
-	&original,list,&childSep);
+    XDebug(DebugInfo,"NamedList::copyParams(%p,%p,'%1s') [%p]",
+	&original,list,&childSep,this);
     for (; list; list = list->next()) {
 	GenObject* obj = list->get();
 	if (!obj)
@@ -144,8 +155,8 @@ NamedList& NamedList::copyParams(const NamedList& original, ObjList* list, char 
 
 NamedList& NamedList::copyParams(const NamedList& original, const String& list, char childSep)
 {
-    XDebug(DebugInfo,"NamedList::copyParams(%p,\"%s\",'%1s')",
-	&original,list.c_str(),&childSep);
+    XDebug(DebugInfo,"NamedList::copyParams(%p,\"%s\",'%1s') [%p]",
+	&original,list.c_str(),&childSep,this);
     ObjList* l = list.split(',',false);
     if (l) {
 	copyParams(original,l,childSep);

@@ -3074,6 +3074,12 @@ public:
     NamedList& copyParam(const NamedList& original, const String& name, char childSep = 0);
 
     /**
+     * Copy all parameters from another NamedList, does not clear list first
+     * @param original NamedList to copy the parameters from
+     */
+    NamedList& copyParams(const NamedList& original);
+
+    /**
      * Copy multiple parameters from another NamedList, clears them if not present there
      * @param original NamedList to copy the parameters from
      * @param list List of objects (usually String) whose name (blanks stripped) is used as parameters names

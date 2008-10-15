@@ -2826,6 +2826,20 @@ public:
 	{ return m_started; }
 
     /**
+     * Get the device used to play this sound
+     * @return The device used to play sound
+     */
+    inline const String& device() const
+	{ return m_device; }
+
+    /**
+     * Set the device used to play this sound
+     * @param dev The device used to play sound
+     */
+    inline void device(const char* dev)
+	{ Lock lock(s_soundsMutex); m_device = dev; }
+
+    /**
      * Get the file played by this sound
      * @return The file played by this sound
      */
@@ -2838,7 +2852,7 @@ public:
      * @param filename The new file played by this sound
      */
     inline void file(const char* filename)
-	{ m_file = filename; }
+	{ Lock lock(s_soundsMutex); m_file = filename; }
 
     /**
      * Start playing the file

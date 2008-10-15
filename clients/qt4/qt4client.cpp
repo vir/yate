@@ -1811,7 +1811,7 @@ void QtWindow::doInit()
 // Mouse button pressed notification
 void QtWindow::mousePressEvent(QMouseEvent* event)
 {
-    if (Qt::LeftButton == event->button()) {
+    if (Qt::LeftButton == event->button() && !isMaximized()) {
 	m_movePos = event->globalPos();
 	m_moving = true;
     }

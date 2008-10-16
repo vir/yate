@@ -436,7 +436,7 @@ public:
     /**
      * Append a binary Information Element to the list
      * @param type The type of the IAXInfoElementBinary to append
-     * @param value The source
+     * @param data The source data to append
      * @param len Source length
      */
     inline void appendBinary(IAXInfoElement::Type type, unsigned char* data, unsigned len)
@@ -519,7 +519,7 @@ public:
     /**
      * Create a string list from authentication methods
      * @param dest The destination
-     * @param formats The authentication methods
+     * @param auth The authentication methods as ORed bits
      * @param sep The separator to use
     */
     static void authList(String& dest, u_int16_t auth, char sep);
@@ -1570,11 +1570,11 @@ protected:
      * Create an event
      * @param evType Event type
      * @param local If true it is a locally generated event.
-     * @param frameOut Frame to create from
+     * @param frame Frame to create from
      * @param newState The transaction new state
      * @return Pointer to an IAXEvent or 0 (invalid IE list)
      */
-    IAXEvent* createEvent(u_int8_t evType, bool local, const  IAXFullFrame* frame, State newState);
+    IAXEvent* createEvent(u_int8_t evType, bool local, const IAXFullFrame* frame, State newState);
 
     /**
      * Create an event from a received frame that is a response to a sent frame and
@@ -1699,7 +1699,7 @@ protected:
      * Send a frame to remote peer in state Connected
      * This method is thread safe
      * @param subclass Frame subclass to send
-     * @param subclass Frame type to send
+     * @param frametype Frame type to send
      * @return False if the current transaction state is not Connected
      */
     bool sendConnected(IAXFullFrame::ControlType subclass, IAXFrame::Type frametype = IAXFrame::Control);
@@ -2207,7 +2207,7 @@ public:
 
     /**
      * Remove a trunk meta frame from the queue and deref it
-     * @param trunkFrame The trunk meta frame to remove
+     * @param metaFrame The trunk meta frame to remove
      */
     void removeTrunkFrame(IAXMetaTrunkFrame* metaFrame);
 

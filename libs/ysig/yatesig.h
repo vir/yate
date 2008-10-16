@@ -687,7 +687,7 @@ public:
 
 protected:
     /**
-     * Method called periodically by the @ref SignallingThreadPrivate to keep everything alive
+     * Method called periodically by the worker thread to keep everything alive
      * @param when Time to use as computing base for events and timeouts
      */
     virtual void timerTick(const Time& when);

@@ -382,6 +382,12 @@ public:
     static QWidget* loadUI(const char* fileName, QWidget* parent,
 	const char* uiName, const char* path = 0);
 
+    /**
+     * Clear the UI cache
+     * @param fileName Optional UI filename to clear. Clear all if 0
+     */
+    static void clearUICache(const char* fileName = 0);
+
 protected:
     // Notify client on selection changes
     inline bool select(const String& name, const String& item,

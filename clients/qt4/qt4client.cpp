@@ -276,6 +276,28 @@ private:
     int m_sortControl;                   // Flag used to set/reset sorting attribute of the table
 };
 
+// Store an UI loaded from file to avoid loading it again
+class UIBuffer : public String
+{
+public:
+    inline UIBuffer(const String& name, QByteArray* buf)
+	: String(name), m_buffer(buf)
+	{ s_uiCache.append(this); }
+    inline QByteArray* buffer()
+	{ return m_buffer; }
+    // Remove from list. Release memory
+    virtual void destruct();
+    // Return an already loaded UI. Load from file if not found.
+    // Add URLs paths when missing
+    static UIBuffer* build(const String& name);
+    // Find a buffer
+    static UIBuffer* find(const String& name);
+    // Buffer cache
+    static ObjList s_uiCache;
+private:
+    QByteArray* m_buffer;                // The buffer
+};
+
 }; // namespace TelEngine
 
 using namespace TelEngine;
@@ -289,7 +311,8 @@ static String s_qtPropPrefix = "_q_";                 // QT dynamic properties p
 static Qt4ClientFactory s_qt4Factory;
 static Configuration s_cfg;
 static Configuration s_save;
-static Configuration s_callHistory;
+ObjList UIBuffer::s_uiCache;
+
 
 String QtWidget::s_types[QtWidget::Unknown] = {
     "QPushButton",
@@ -362,6 +385,8 @@ static void setWidget(QWidget* parent, QWidget* child)
 }
 
 // Utility function used to get the name of a control
+// The name of the control indicates actions, toggles ...
+// The accessible name property can override controls's name
 static bool translateName(QtWidget& w, String& name)
 {
     static String actionProp = "accessibleName";
@@ -533,6 +558,71 @@ void TableWidget::init(bool tmp)
     QtClient::getUtf8(m_name,m_table->objectName());
     if (tmp)
 	m_sortControl = m_table->isSortingEnabled() ? 1 : 0; 
+}
+
+/**
+ * UIBuffer
+ */
+// Remove from list. Release memory
+void UIBuffer::destruct()
+{
+    s_uiCache.remove(this,false);
+    if (m_buffer) {
+	delete m_buffer;
+	m_buffer = 0;
+    }
+    String::destruct();
+}
+
+// Return an already loaded UI. Load from file if not found.
+// Add URLs paths when missing
+UIBuffer* UIBuffer::build(const String& name)
+{
+    // Check if already loaded from the same location
+    UIBuffer* buf = find(name);
+    if (buf)
+	return buf;
+
+    // Load
+    QFile file(QtClient::setUtf8(name));
+    file.open(QIODevice::ReadOnly);
+    QByteArray* qArray = new QByteArray;
+    *qArray = file.readAll();
+    file.close();
+    if (!qArray->size()) {
+	delete qArray;
+	return 0;
+    }
+
+    // Add URLs path when missing
+    QString path = QDir::fromNativeSeparators(QtClient::setUtf8(name));
+    // Truncate after last path separator (lastIndexOf() returns -1 if not found)
+    path.truncate(path.lastIndexOf(QString("/")) + 1);
+    if (path.size()) {
+	int start = 0;
+	int end = -1;
+	while ((start = qArray->indexOf("url(",end + 1)) > 0) {
+	    start += 4;
+	    end = qArray->indexOf(")",start);
+	    if (end <= start)
+		break;
+	    // Add
+	    int len = end - start;
+	    QByteArray tmp = qArray->mid(start,len);
+	    if (tmp.indexOf('/') != -1)
+	        continue;
+	    tmp.insert(0,path);
+	    qArray->replace(start,len,tmp);
+	}
+    }
+    return new UIBuffer(name,qArray);
+}
+
+// Find a buffer
+UIBuffer* UIBuffer::find(const String& name)
+{
+    ObjList* o = s_uiCache.find(name);
+    return o ? static_cast<UIBuffer*>(o->get()) : 0;
 }
 
 
@@ -1441,28 +1531,40 @@ void QtWindow::selectionChanged()
 QWidget* QtWindow::loadUI(const char* fileName, QWidget* parent,
 	const char* uiName, const char* path)
 {
+    if (Client::exiting())
+	return 0;
     if (!(fileName && *fileName && parent))
 	return 0;
 
-    QUiLoader loader;
     if (!(path && *path))
 	path = Client::s_skinPath.c_str();
-    loader.setWorkingDirectory(QDir(QtClient::setUtf8(path)));
-    QFile file(QtClient::setUtf8(fileName));
+    UIBuffer* buf = UIBuffer::build(fileName);
     const char* err = 0;
-    QWidget* w = 0;
-    if (!file.exists())
-	err = "file not found";
-    else {
-	w = loader.load(&file,parent);
-	if (!w)
-	    err = "loader failed";
+    if (buf && buf->buffer()) {
+	QBuffer b(buf->buffer());
+	QUiLoader loader;
+        loader.setWorkingDirectory(QDir(QtClient::setUtf8(path)));
+	QWidget* w = loader.load(&b,parent);
+	if (w)
+	    return w;
+	err = "loader failed";
     }
-    file.close();
-    if (!w)
-	Debug(DebugWarn,"Failed to load widget '%s' from '%s': %s",
-	    uiName,fileName,err);
-    return w;
+    else
+	err = buf ? "file is empty" : "file not found";
+    // Error
+    TelEngine::destruct(buf);
+    Debug(DebugWarn,"Failed to load widget '%s' file='%s' path='%s': %s",
+        uiName,fileName,path,err);
+    return 0;
+}
+
+// Clear the UI cache
+void QtWindow::clearUICache(const char* fileName)
+{
+    if (!fileName)
+	UIBuffer::s_uiCache.clear();
+    else
+	TelEngine::destruct(UIBuffer::s_uiCache.find(fileName));
 }
 
 // Filter events to apply dynamic properties changes
@@ -1869,6 +1971,7 @@ void QtClient::cleanup()
     Client::cleanup();
     m_events.clear();
     Client::save(s_save);
+    QtWindow::clearUICache();
     m_app->quit();
     delete m_app;
 }

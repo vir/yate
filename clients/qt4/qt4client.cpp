@@ -1474,10 +1474,13 @@ bool QtWindow::getProperty(const String& name, const String& item, String& value
 
 void QtWindow::closeEvent(QCloseEvent* event)
 {
-    hide();
+    // NOTE: Don't access window's data after calling hide():
+    //  some logics might destroy the window when hidden
+    QWidget::closeEvent(event);
     if (m_mainWindow && Client::self())
 	Client::self()->quit();
-    QWidget::closeEvent(event);
+    else
+	hide();
 }
 
 void QtWindow::action()

@@ -1101,9 +1101,14 @@ SignallingEvent* ISDNQ931Call::processMsgConnectAck(ISDNQ931Message* msg)
 // IE: Cause, Progress, Display, Signal
 SignallingEvent* ISDNQ931Call::processMsgDisconnect(ISDNQ931Message* msg)
 {
-    m_discTimer.stop();
+    if (state() == DisconnectReq) {
+	// Disconnect requested concurrently from both sides
+	sendRelease();
+	return 0;
+    }
     if (!checkMsgRecv(msg,false))
 	return 0;
+    m_discTimer.stop();
     changeState(DisconnectIndication);
     if (m_data.processCause(msg,false))
 	msg->params().setParam("reason",m_data.m_reason);

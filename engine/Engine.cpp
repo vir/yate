@@ -258,8 +258,9 @@ static void initUsrPath(String& path, const char* newPath = 0)
 	path = ::getenv("HOME");
 #endif
 	if (path.null()) {
-	    Debug(DebugWarn,"Could not get per-user application data path!");
-	    return;
+	    if (Engine::clientMode())
+		Debug(DebugWarn,"Could not get per-user application data path!");
+	    path = s_cfgpath;
 	}
 	if (!path.endsWith(PATH_SEP))
 	    path += PATH_SEP;
@@ -1496,6 +1497,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			    continue;
 			}
 			if (!::strcmp(pc,"help")) {
+			    s_mode = mode;
 			    initUsrPath(s_usrpath);
 			    usage(client,stdout);
 			    return 0;
@@ -1526,6 +1528,7 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			return EINVAL;
 			break;
 		    case 'h':
+			s_mode = mode;
 			initUsrPath(s_usrpath);
 			usage(client,stdout);
 			return 0;

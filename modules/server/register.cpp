@@ -955,20 +955,30 @@ void RegistModule::addHandler(const char *name, int type)
 {
     int prio = getPriority(name);
     if (prio >= 0) {
-	if ((type == FallBackHandler::Disconnect) || (FallBackHandler::Answered) || (FallBackHandler::Hangup))
-	    addHandler(new FallBackHandler(name,type,prio));
-	if (type == AAAHandler::Cdr)
-	    addHandler(new CDRHandler(name,prio));
-	else if (type == AAAHandler::DialogNotify)
-	    addHandler(new DialogNotify(name,prio));
-	else if (type == AAAHandler::MWINotify)
-	    addHandler(new MWINotify(name,prio));
-	if (type == AAAHandler::Subscribe)
-	    addHandler(new SubscribeHandler(name, type, prio));
-	if(type == AAAHandler::SubscribeTimer)
-	    addHandler(new SubscribeTimerHandler(name, type, prio));
-	else
-	    addHandler(new AAAHandler(name,type,prio));
+	switch (type) {
+	    case FallBackHandler::Disconnect:
+	    case FallBackHandler::Answered:
+	    case FallBackHandler::Hangup:
+		addHandler(new FallBackHandler(name,type,prio));
+		break;
+	    case AAAHandler::Cdr:
+		addHandler(new CDRHandler(name,prio));
+		break;
+	    case AAAHandler::DialogNotify:
+		addHandler(new DialogNotify(name,prio));
+		break;
+	    case AAAHandler::MWINotify:
+		addHandler(new MWINotify(name,prio));
+		break;
+	    case AAAHandler::Subscribe:
+		addHandler(new SubscribeHandler(name, type, prio));
+		break;
+	    case AAAHandler::SubscribeTimer:
+		addHandler(new SubscribeTimerHandler(name, type, prio));
+		break;
+	    default:
+		addHandler(new AAAHandler(name,type,prio));
+	}
     }
 }
 

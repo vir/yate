@@ -2557,11 +2557,18 @@ void ISDNQ931::cleanup(const char* reason)
 void ISDNQ931::setInterval(SignallingTimer& timer, int id)
 {
     switch (id) {
-	case 305: timer.interval(m_callDiscTimer.interval()); break;
-	case 308: timer.interval(m_callRelTimer.interval()); break;
-	case 313: timer.interval(m_callConTimer.interval()); break;
+	case 305:
+	    timer.interval(m_callDiscTimer.interval());
+	    break;
+	case 308:
+	    timer.interval(m_callRelTimer.interval());
+	    break;
+	case 313:
+	    timer.interval(m_callConTimer.interval());
+	    break;
+	default:
+	    Debug(this,DebugWarn,"Unknown interval %d",id);
     }
-    timer.interval(0);
 }
 
 void* ISDNQ931::getObject(const String& name) const

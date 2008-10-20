@@ -1773,8 +1773,7 @@ void QtWindow::doInit()
 	m_id.c_str(),this);
 
     // Create window's dynamic properties from config
-    Configuration cfg(Engine::configFile(m_oldId));
-    cfg.load(false);
+    Configuration cfg(Engine::configFile(m_oldId),false);
     NamedList* sectGeneral = cfg.getSection("general");
     if (sectGeneral)
 	addDynamicProps(wndWidget(),*sectGeneral);

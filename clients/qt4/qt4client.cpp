@@ -413,6 +413,41 @@ inline void raiseSelectIfEmpty(int count, Window* wnd, const String& name)
 	Client::self()->select(wnd,name,String::empty());
 }
 
+// Add dynamic properties from a list of parameters
+// Parameter format:
+// property_name:property_type=property_value
+static void addDynamicProps(QObject* obj, NamedList& props)
+{
+    static String typeString = "string";
+    static String typeBool = "bool";
+    static String typeInt = "int";
+
+    if (!obj)
+	return;
+    unsigned int n = props.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* ns = props.getParam(i);
+	if (!(ns && ns->name()))
+	    continue;
+	int pos = ns->name().find(':');
+	if (pos < 1)
+	    continue;
+
+	String prop = ns->name().substr(0,pos);
+	String type = ns->name().substr(pos + 1);
+	QVariant var;
+	if (type == typeString)
+	    var.setValue(QString(ns->c_str()));
+	else if (type == typeBool)
+	    var.setValue(ns->toBoolean());
+	else if (type == typeInt)
+	    var.setValue(ns->toInteger());
+
+	if (var.type() != QVariant::Invalid)
+	    obj->setProperty(prop,var);
+    }
+}
+
 
 /**
  * Qt4ClientFactory
@@ -1737,6 +1772,13 @@ void QtWindow::doInit()
     DDebug(QtDriver::self(),DebugAll,"Initializing window '%s' [%p]",
 	m_id.c_str(),this);
 
+    // Create window's dynamic properties from config
+    Configuration cfg = Engine::configFile(m_oldId);
+    cfg.load(false);
+    NamedList* sectGeneral = cfg.getSection("general");
+    if (sectGeneral)
+	addDynamicProps(wndWidget(),*sectGeneral);
+	
     // Check if this is a frameless window
     String frameLess;
     getProperty(m_id,s_propFrameless,frameLess);
@@ -1800,6 +1842,14 @@ void QtWindow::doInit()
 	setWidget(frm[i],(QWidget*)UIFactory::build(type,name,&params));
     }
 
+    // Create window's children dynamic properties from config
+    unsigned int n = cfg.sections();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedList* sect = cfg.getSection(i);
+	if (sect && *sect && *sect != "general")
+	    addDynamicProps(qFindChild<QObject*>(this,sect->c_str()),*sect);
+    }
+	
     // Connect actions' signal
     QList<QAction*> actions = qFindChildren<QAction*>(this);
     for (int i = 0; i < actions.size(); i++)

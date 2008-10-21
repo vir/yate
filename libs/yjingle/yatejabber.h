@@ -2538,6 +2538,13 @@ public:
 	{ return m_resources; }
 
     /**
+     * Get the list of remote users
+     * @return The list of remote users
+     */
+    inline ObjList& users()
+	{ return m_remote; }
+
+    /**
      * Get a remote user.
      * This method is thread safe.
      * @param jid User's jid.

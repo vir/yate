@@ -548,6 +548,19 @@ public:
 	{ return false; }
 
     /**
+     * Add or set one or more table row(s). Screen update is locked while changing the table.
+     * Each data list element is a NamedPointer carrying a NamedList with item parameters.
+     * The name of an element is the item to update.
+     * Set element's value to boolean value 'true' to add a new item if not found
+     *  or 'false' to set an existing one. Set it to empty string to delete the item
+     * @param data The list of items to add/set/delete
+     * @param atStart True to add new items at start, false to add them to the end
+     * @return True if the operation was successfull
+     */
+    virtual bool updateTableRows(const NamedList* data, bool atStart = false)
+	{ return false; }
+
+    /**
      * Insert a row into a table
      * @param item Name of the item to insert
      * @param before Name of the item to insert before

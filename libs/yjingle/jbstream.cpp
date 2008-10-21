@@ -123,8 +123,8 @@ bool JBSocket::connect(bool& terminated, const char* newAddr, int newPort)
 	m_remoteDomain = newAddr;
     if (newPort)
 	m_address.port(newPort);
-    m_address.host(m_remoteDomain);
     lck1.drop();
+    m_address.host(m_remoteDomain);
     terminated = false;
     bool res = m_socket->connect(m_address);
     // Lock again to update data

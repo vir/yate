@@ -1750,6 +1750,8 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     }
 
     URI addr(*hl);
+    if (user.null())
+	user = addr.getUser();
     msg.setParam("username",user);
     msg.setParam("number",addr.getUser());
     msg.setParam("driver","sip");

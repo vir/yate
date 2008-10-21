@@ -1304,9 +1304,15 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
     if (!data)
 	return true;
 
+    QtTable* custom = tbl.customTable();
+    if (custom) {
+	bool ok = custom->updateTableRows(data,atStart);
+	raiseSelectIfEmpty(tbl.rowCount(),this,name);
+	return ok;
+    }
+
     bool ok = true;
     tbl.table()->setUpdatesEnabled(false);
-    QtTable* custom = tbl.customTable();
     unsigned int n = data->length();
     for (unsigned int i = 0; i < n; i++) {
 	if (Client::exiting())
@@ -1319,15 +1325,11 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
 
 	// Delete ?
 	if (ns->null()) {
-	    if (custom)
-		ok = custom->delTableRow(ns->name()) && ok;
-	    else {
-		int row = tbl.getRow(ns->name());
-		if (row >= 0)
-		    tbl.delRow(row);
-		else
-		    ok = false;
-	    }
+	    int row = tbl.getRow(ns->name());
+	    if (row >= 0)
+		tbl.delRow(row);
+	    else
+		ok = false;
 	    continue;
 	}
 
@@ -1336,16 +1338,6 @@ bool QtWindow::updateTableRows(const String& name, const NamedList* data, bool a
 	if (np)
 	    params = static_cast<NamedList*>(np->userObject("NamedList"));
 	bool addNew = ns->toBoolean();
-
-	if (custom) {
-	    if (custom->getTableRow(ns->name()))
-		ok = custom->setTableRow(ns->name(),params) && ok;
-	    else if (addNew)
-		ok = custom->addTableRow(ns->name(),params,atStart) && ok;
-	    else
-		ok = false;
-	    continue;
-	}
 
 	if (addNew)
 	    tbl.updateRow(ns->name(),params,atStart);
@@ -1626,6 +1618,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	if (var.isNull())
 	    return false;
 	bool ok = false;
+	bool handled = true;
 	if (prop == s_propHHeader) {
 	    // Show/hide the horizontal header
 	    ok = ((w.type() == QtWidget::Table || w.type() == QtWidget::CustomTable) &&
@@ -1633,11 +1626,13 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    if (ok)
 		w.table()->horizontalHeader()->setVisible(var.toBool());
 	}
+	else
+	    handled = false;
 	if (ok)
 	    DDebug(ClientDriver::self(),DebugAll,
 		"Applied dynamic property='%s' for object='%s'",
 		prop.c_str(),name.c_str());
-	else
+	else if (handled)
 	    Debug(ClientDriver::self(),DebugNote,
 		"Failed to apply dynamic property='%s' for object='%s'",
 		prop.c_str(),name.c_str());

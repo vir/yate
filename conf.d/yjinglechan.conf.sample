@@ -57,6 +57,14 @@
 ;stream_restartcount=2
 ;stream_restartupdateinterval=15000
 
+; stream_setuptimeout: integer: The time, in milliseconds, allowed for stream
+;   setup (negotiate stream features, authenticate, bind client resource, etc)
+; The stream will be destroyed if this timer expires before setup completion
+; Set it to 0 to disable this timer (NOT RECOMMENDED)
+; Defaults to 10000. Minimum allowed value is 1000
+; Any value below the minimum allowed will disable this timer
+;stream_setuptimeout=10000
+
 ; auto_subscribe: string: Presence. Set the behaviour of processing the subscribe/unsubscribe requests
 ; Allowed values:
 ;    none: All subscription are processed as a result of messages. The subscription changes are made

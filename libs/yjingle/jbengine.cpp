@@ -277,7 +277,7 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
 #define JB_RESTART_UPDATE          15000 // Stream restart counter update interval
 #define JB_RESTART_UPDATE_MIN       5000
 #define JB_RESTART_UPDATE_MAX     300000
-#define JB_SETUP_INTERVAL          60000 // Stream setup timeout
+#define JB_SETUP_INTERVAL          10000 // Stream setup timeout
 #define JB_IDLE_INTERVAL           60000 // Stream idle timeout
 
 // Presence values
@@ -378,6 +378,9 @@ void JBEngine::initialize(const NamedList& params)
     else
 	if (m_restartCount > JB_RESTART_COUNT_MAX)
 	    m_restartCount = JB_RESTART_COUNT_MAX;
+    // Stream setup timer interval
+    int t = params.getIntValue("stream_setuptimeout",(int)m_streamSetupInterval);
+    m_streamSetupInterval = (t >= 1000) ? t : 0;
     // XML parser max receive buffer
     XMLParser::s_maxDataBuffer =
 	params.getIntValue("xmlparser_maxbuffer",XMLPARSER_MAXDATABUFFER);
@@ -399,6 +402,7 @@ void JBEngine::initialize(const NamedList& params)
 	s << " component_checkfrom=" << m_componentCheckFrom;
 	s << " stream_restartupdateinterval=" << (unsigned int)m_restartUpdateInterval;
 	s << " stream_restartcount=" << (unsigned int)m_restartCount;
+	s << " stream_setuptimeout=" << (unsigned int)m_streamSetupInterval;
 	s << " xmlparser_maxbuffer=" << (unsigned int)XMLParser::s_maxDataBuffer;
 	s << " printxml=" << m_printXml;
 	if (recv > -1)

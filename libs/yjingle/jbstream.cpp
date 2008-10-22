@@ -644,7 +644,7 @@ JBEvent* JBStream::getEvent(u_int64_t time)
 	else if (m_setupTimeout && time > m_setupTimeout) {
 	    Debug(m_engine,DebugNote,"Stream. Setup timed out in state %s [%p]",
 		lookupState(state()),this);
-	    terminate(false,0,XMPPError::ConnTimeout,"Connection timeout",true);
+	    terminate(true,0,XMPPError::ConnTimeout,"Connection timeout",true);
 	}
 	if (m_terminateEvent) {
 	    m_lastEvent = m_terminateEvent;
@@ -1495,8 +1495,8 @@ void JBStream::changeState(State newState)
     Debug(m_engine,DebugInfo,"Stream. Changing state from %s to %s [%p]",
 	lookupState(m_state),lookupState(newState),this);
     m_state = newState;
-    m_setupTimeout = 0;
     if (newState == Running) {
+	m_setupTimeout = 0;
 	startIdleTimer();
 	streamRunning();
 	if (!m_startEvent)

@@ -32,7 +32,7 @@ extern "C" {
 using namespace TelEngine;
 
 
-static DataBlock s_empty;
+static const DataBlock s_empty;
 
 const DataBlock& DataBlock::empty()
 {

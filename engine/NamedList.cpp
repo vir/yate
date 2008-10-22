@@ -24,6 +24,13 @@
 
 using namespace TelEngine;
 
+static const NamedList s_empty("");
+
+const NamedList& NamedList::empty()
+{
+    return s_empty;
+}
+
 NamedList::NamedList(const char* name)
     : String(name)
 {

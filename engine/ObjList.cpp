@@ -24,6 +24,13 @@
 
 using namespace TelEngine;
 
+static const ObjList s_empty;
+
+const ObjList& ObjList::empty()
+{
+    return s_empty;
+}
+
 ObjList::ObjList()
     : m_next(0), m_obj(0), m_delete(true)
 {

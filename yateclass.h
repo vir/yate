@@ -1113,6 +1113,12 @@ public:
     inline void setDelete(bool autodelete)
 	{ m_delete = autodelete; }
 
+    /**
+     * A static empty object list
+     * @return Reference to a static empty list
+     */
+    static const ObjList& empty();
+
 private:
     ObjList* m_next;
     GenObject* m_obj;
@@ -1292,6 +1298,7 @@ public:
 
     /**
      * A static null String
+     * @return Reference to a static empty String
      */
     static const String& empty();
 
@@ -3179,6 +3186,12 @@ public:
      * @return Number of replacements made, -1 if an error occured
      */
     int replaceParams(String& str, bool sqlEsc = false, char extraEsc = 0) const;
+
+    /**
+     * A static empty named list
+     * @return Reference to a static empty named list
+     */
+    static const NamedList& empty();
 
 private:
     NamedList(); // no default constructor please

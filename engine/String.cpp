@@ -182,7 +182,7 @@ void StringMatchPrivate::fixup()
 }
 
 
-static String s_empty;
+static const String s_empty;
 
 const String& String::empty()
 {

@@ -792,11 +792,16 @@ XMLElement* JBStream::getAuthStart()
 	m_authMech != JIDFeatureSasl::MechPlain)
 	return 0;
     String rsp;
-    if (m_authMech == JIDFeatureSasl::MechPlain)
+    // MD5: send auth element, wait challenge
+    // Plain auth: send auth element with credentials and wait response (success/failure)
+    if (m_authMech == JIDFeatureSasl::MechMD5)
+	m_waitState = WaitChallenge;
+    else {
 	buildSaslResponse(rsp);
+	m_waitState = WaitResponse;
+    }
     xml = XMPPUtils::createElement(XMLElement::Auth,XMPPNamespace::Sasl,rsp);
     xml->setAttribute("mechanism",lookup(m_authMech,JIDFeatureSasl::s_authMech));
-    m_waitState = WaitChallenge;
     return xml;
 }
 
@@ -955,31 +960,60 @@ void JBStream::processAuth(XMLElement* xml)
 		DROP_AND_EXIT
 	    if (!XMPPUtils::hasXmlns(*xml,XMPPNamespace::Sasl))
 		INVALIDXML_AND_EXIT(XMPPError::InvalidNamespace,0)
-	    // Succes
-	    if (xml->type() == XMLElement::Success) {
-		// SASL Digest MD5: Check server credentials
-		if (flag(UseSasl) && m_authMech == JIDFeatureSasl::MechMD5) {
-		    String tmp = xml->getText();
-		    DataBlock rspauth;
-		    Base64 base((void*)tmp.c_str(),tmp.length(),false);
-		    bool ok = base.decode(rspauth);
-		    base.clear(false);
-		    if (!ok)
-			INVALIDXML_AND_EXIT(XMPPError::IncorrectEnc,0);
-		    tmp.assign((const char*)rspauth.data(),rspauth.length());
-		    if (!tmp.startSkip("rspauth=",false))
-			INVALIDXML_AND_EXIT(XMPPError::BadFormat,"Invalid challenge");
-		    String rspAuth;
-		    buildDigestMD5Sasl(rspAuth,false);
-		    if (rspAuth != tmp)
-			INVALIDXML_AND_EXIT(XMPPError::InvalidAuth,"Invalid challenge auth");
-		    DDebug(m_engine,DebugAll,"Stream. Server authenticated [%p]",this);
+	    // Waiting for response (sent auth or challenge response)
+	    if (m_waitState == WaitResponse)
+		// MD5 auth
+		//   Stream already authenticated: we received a challenge with valid rspauth
+		//      and sent an empty response: wait for sucess/failure
+		//   Stream not authenticated: we've sent auth or challenge response:
+		//      wait for challenge or success with credentials
+		// Plain auth: accept success/failure
+		switch (m_authMech) {
+		    case JIDFeatureSasl::MechMD5:
+			if (xml->type() == XMLElement::Failure)
+			    break;
+			if (!flag(StreamAuthenticated)) {
+			    String tmp = xml->getText();
+			    DataBlock rspauth;
+			    Base64 base((void*)tmp.c_str(),tmp.length(),false);
+			    bool ok = base.decode(rspauth);
+			    base.clear(false);
+			    if (!ok)
+				INVALIDXML_AND_EXIT(XMPPError::IncorrectEnc,0);
+			    tmp.assign((const char*)rspauth.data(),rspauth.length());
+			    if (!tmp.startSkip("rspauth=",false))
+				INVALIDXML_AND_EXIT(XMPPError::BadFormat,"Invalid response");
+			    String rspAuth;
+			    buildDigestMD5Sasl(rspAuth,false);
+			    if (rspAuth != tmp)
+				INVALIDXML_AND_EXIT(XMPPError::InvalidAuth,"Invalid response auth");
+			    DDebug(m_engine,DebugAll,"Stream. Stream authenticated [%p]",this);
+			    m_flags |= StreamAuthenticated;
+			    // Send empty response to challenge
+			    if (xml->type() == XMLElement::Challenge) {
+				TelEngine::destruct(xml);
+				xml = XMPPUtils::createElement(XMLElement::Response,XMPPNamespace::Sasl);
+				sendStreamXML(xml,state());
+				return;
+			    }
+			    break;
+			}
+			if (xml->type() != XMLElement::Success)
+			    DROP_AND_EXIT
+			break;
+		    case JIDFeatureSasl::MechPlain:
+			if (xml->type() == XMLElement::Challenge)
+			    DROP_AND_EXIT
+			break;
+		    default:
+			DDebug(m_engine,DebugStub,
+			    "Stream. Unhandled SASL auth mechanism in Auth state [%p]",this);
+			DROP_AND_EXIT
 		}
-		TelEngine::destruct(xml);
-		break;
-	    }
-	    // Challenge. Send response or abort if can't retry
-	    if (xml->type() == XMLElement::Challenge) {
+	    // Waiting for challenge: sent auth element
+	    else {
+		if (xml->type() != XMLElement::Challenge)
+		    DROP_AND_EXIT
 		if (m_challengeCount) {
 		    m_challengeCount--;
 		    sendAuthResponse(xml);
@@ -990,10 +1024,18 @@ void JBStream::processAuth(XMLElement* xml)
 		    TelEngine::destruct(xml);
 		    xml = XMPPUtils::createElement(XMLElement::Abort,XMPPNamespace::Sasl);
 		    sendStreamXML(xml,state());
-		}
+		}			
 		return;
 	    }
+
+	    if (xml->type() == XMLElement::Success) {
+		TelEngine::destruct(xml);
+		break;
+	    }
+
 	    // Failure
+	    if (xml->type() != XMLElement::Failure)
+		DROP_AND_EXIT
 	    XMLElement* e = xml->findFirstChild();
 	    XMPPError::Type err = XMPPError::NoError;
 	    if (e) {
@@ -1539,7 +1581,7 @@ bool JBStream::startAuth()
     return false;
 }
 
-// Send auth response to received challenge/ig
+// Send auth response to received challenge/iq
 bool JBStream::sendAuthResponse(XMLElement* challenge)
 {
     XMLElement* xml = 0;
@@ -1574,6 +1616,8 @@ bool JBStream::sendAuthResponse(XMLElement* challenge)
 	    String tmp((const char*)chg.data(),chg.length());
 	    if (tmp.null())
 		SET_CODE_AND_BREAK(XMPPError::BadFormat,"Challenge is empty")
+	    Debug(m_engine,DebugAll,"Stream(%s). Received challenge '%s' [%p]",
+		toString().c_str(),tmp.c_str(),this);
 	    String nonce,realm;
 	    ObjList* obj = tmp.split(',',false);
 	    for (ObjList* o = obj->skipNull(); o; o = o->skipNext()) {
@@ -1586,7 +1630,7 @@ bool JBStream::sendAuthResponse(XMLElement* challenge)
 	    TelEngine::destruct(obj);
 	    MimeHeaderLine::delQuotes(realm);
 	    MimeHeaderLine::delQuotes(nonce);
-	    if (realm.null() || nonce.null())
+	    if (nonce.null())
 		SET_CODE_AND_BREAK(XMPPError::BadFormat,"Challenge is incomplete")
 	    buildSaslResponse(response,&realm,&nonce);
 	    xml = XMPPUtils::createElement(XMLElement::Response,XMPPNamespace::Sasl,response);
@@ -1651,19 +1695,16 @@ void JBStream::buildSaslResponse(String& response, String* realm, String* nonce)
     MD5 md5(String((unsigned int)::random()));
     m_cnonce = md5.hexDigest();
     appendQParam(response,"username",m_local.node(),true,true);
-    if (realm) {
-	m_realm = *realm;
+    m_realm = realm ? *realm : "";
+    if (m_realm)
 	appendQParam(response,"realm",m_realm,true);
-	if (nonce) {
-	    m_nonce = *nonce;
-	    appendQParam(response,"nonce",m_nonce,true);
-	    m_nonceCount++;
-	    char tmp[9];
-	    ::sprintf(tmp,"%08x",m_nonceCount);
-	    m_nc = tmp;
-	    appendQParam(response,"nc",m_nc,false);
-	}
-    }
+    m_nonce = nonce ? *nonce : "";
+    appendQParam(response,"nonce",m_nonce,true);
+    m_nonceCount++;
+    char tmp[9];
+    ::sprintf(tmp,"%08x",m_nonceCount);
+    m_nc = tmp;
+    appendQParam(response,"nc",m_nc,false);
     appendQParam(response,"cnonce",m_cnonce,true);
     appendQParam(response,"digest-uri",String("xmpp/")+m_local.domain(),true);
     appendQParam(response,"qop",s_qop,true);
@@ -1672,6 +1713,8 @@ void JBStream::buildSaslResponse(String& response, String* realm, String* nonce)
     appendQParam(response,"response",rsp,false);
     appendQParam(response,"charset","utf-8",false);
     appendQParam(response,"algorithm","md5-sess",false);
+    Debug(m_engine,DebugAll,"Stream(%s). Built SASL response '%s' [%p]",
+	toString().c_str(),response.c_str(),this);
     Base64 base64((void*)response.c_str(),response.length());
     base64.encode(response);
 }

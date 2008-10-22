@@ -574,7 +574,8 @@ protected:
 	WaitStart,                       // Started	stream start response
 	WaitFeatures,                    // Started	stream features
 	WaitBindRsp,                     // Started	wait for bind response
-	WaitTlsRsp,                      // Started:    wait response to starttls
+	WaitSessionRsp,                  // Started	wait for session response
+	WaitTlsRsp,                      // Started	wait response to starttls
 	WaitChallenge,                   // Auth	iq auth query with auth data sent, wait response
 	WaitResponse,                    // Auth	iq auth query sent, wait response
 	WaitAborted,                     // Auth	abort sent, wait confirmation to terminate stream

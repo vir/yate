@@ -1280,9 +1280,35 @@ void JBStream::processStarted(XMLElement* xml)
 	TelEngine::destruct(jidxml);
 	TelEngine::destruct(bind);
 	if (err == XMPPError::NoError)
-	    changeState(Running);
+	    // Create session if required
+	    if (m_remoteFeatures.get(XMPPNamespace::Session)) {
+		XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,0,0,"sess_1");
+		iq->addChild(XMPPUtils::createElement(XMLElement::Session,
+		    XMPPNamespace::Session));
+		m_waitState = WaitSessionRsp;
+		sendStreamXML(iq,state());
+	    }
+	    else
+		changeState(Running);
 	else
 	    INVALIDXML_AND_EXIT(err,reason)
+    }
+    else if (m_waitState == WaitSessionRsp) {
+	// Accept iq result or error
+	if (xml->type() != XMLElement::Iq)
+	    DROP_AND_EXIT
+	// Check if received correct type
+	XMPPUtils::IqType t = XMPPUtils::iqType(xml->getAttribute("type"));
+	if (t != XMPPUtils::IqResult && t != XMPPUtils::IqError)
+	    DROP_AND_EXIT
+	// Check if received correct id for the current waiting state
+	if (!xml->hasAttribute("id","sess_1"))
+	    DROP_AND_EXIT
+	// Terminate on error
+	if (t == XMPPUtils::IqError)
+	    ERRORXML_AND_EXIT
+	// Result
+	changeState(Running);
     }
     else
 	DROP_AND_EXIT
@@ -2192,6 +2218,13 @@ void JBClientStream::processRunning(XMLElement* xml)
 	    bool avail = pres == JBPresence::None;
 	    if (avail || pres == JBPresence::Unavailable) {
 		if (event->from().resource()) {
+		    // Check for our own resource: we've seen that
+		    if (event->from().resource() == local().resource()) {
+			Debug(engine(),DebugAll,
+			    "Stream. Ignoring presence from the same resource [%p]",this);
+			m_events.remove(event,true);
+			return;
+		    }
 		    JIDResource* res = m_roster->resources().get(event->from().resource());
 		    if (pres == JBPresence::Unavailable) {
 			if (res)

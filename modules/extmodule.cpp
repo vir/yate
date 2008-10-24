@@ -145,12 +145,12 @@ class ExtMessage : public Message
 {
     YCLASS(ExtMessage,Message)
 public:
-    inline ExtMessage(ExtModReceiver* recv)
+    inline ExtMessage()
 	: Message(""),
-	  m_receiver(recv), m_accepted(false)
+	  m_receiver(0), m_accepted(false)
 	{ }
     virtual ~ExtMessage();
-    void startup();
+    void startup(ExtModReceiver* recv);
     virtual void dispatched(bool accepted);
     inline bool belongsTo(ExtModReceiver* recv) const
 	{ return m_receiver == recv; }
@@ -556,12 +556,12 @@ ExtMessage::~ExtMessage()
     }
 }
 
-void ExtMessage::startup()
+void ExtMessage::startup(ExtModReceiver* recv)
 {
-    if (m_receiver && m_id)
+    if (recv && m_id) {
+	m_receiver = recv;
 	m_receiver->use();
-    else
-	m_receiver = 0;
+    }
     Engine::enqueue(this);
 }
 
@@ -1339,7 +1339,7 @@ bool ExtModReceiver::processLine(const char* line)
 	return true;
     }
     else {
-	ExtMessage* m = new ExtMessage(this);
+	ExtMessage* m = new ExtMessage;
 	if (m->decode(line) == -2) {
 	    DDebug("ExtModReceiver",DebugAll,"Created message %p '%s' [%p]",m,m->c_str(),this);
 	    lock();
@@ -1380,7 +1380,7 @@ bool ExtModReceiver::processLine(const char* line)
 		    }
 		}
 	    }
-	    m->startup();
+	    m->startup(this);
 	    unlock();
 	    return false;
 	}

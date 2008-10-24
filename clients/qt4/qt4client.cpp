@@ -1020,7 +1020,21 @@ bool QtWindow::setUrgent(const String& name, bool urgent)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setUrgent(%s,%s) [%p]",
 	name.c_str(),String::boolText(urgent),this);
-    return false;
+
+    if (name == m_id) {
+#if QT_VERSION >= 0x040300
+	QApplication::alert(this,0);
+	return true;
+#else
+	return false;
+#endif
+    }
+
+    QtWidget w(this,name);
+    if (w.invalid())
+	return false;
+    w->raise();
+    return true;
 }
 
 bool QtWindow::hasOption(const String& name, const String& item)

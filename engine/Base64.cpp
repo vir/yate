@@ -60,7 +60,7 @@ static unsigned char s_ato64[256] = {
 // Check in the translation table if 'ch' is a valid Base64 char
 static inline bool valid(char ch)
 {
-    return s_ato64[(int)ch] < 64;
+    return s_ato64[(unsigned char)ch] < 64;
 }
 
 // Check if 'ch' should be ignored

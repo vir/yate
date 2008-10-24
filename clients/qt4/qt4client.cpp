@@ -303,9 +303,9 @@ private:
 using namespace TelEngine;
 
 // Dynamic properies
-static String s_propFrameless = "dynamicFrameless";   // Windows: show/hide the border
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
+static String s_propWindowFlags = "dynamicWindowFlags"; // Window flags
 static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
 //
 static Qt4ClientFactory s_qt4Factory;
@@ -313,6 +313,17 @@ static Configuration s_cfg;
 static Configuration s_save;
 ObjList UIBuffer::s_uiCache;
 
+// Values used to configure window title bar and border
+static TokenDict s_windowFlags[] = {
+    {"title",              Qt::WindowTitleHint},
+    {"sysmenu",            Qt::WindowSystemMenuHint},
+    {"maximize",           Qt::WindowMaximizeButtonHint},
+    {"minimize",           Qt::WindowMinimizeButtonHint},
+    {"help",               Qt::WindowContextHelpButtonHint},
+    {"stayontop",          Qt::WindowStaysOnTopHint},
+    {"frameless",          Qt::FramelessWindowHint},
+    {0,0}
+};
 
 String QtWidget::s_types[QtWidget::Unknown] = {
     "QPushButton",
@@ -330,16 +341,6 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QProgressBar",
     "QSpinBox"
 };
-
-// Connect a sender's signal to a receiver's slot
-#define YQT_CONNECT(sender,signal,receiver,method,sName) \
-    if (QObject::connect(sender,SIGNAL(signal),receiver,SLOT(method))) \
-	DDebug(QtDriver::self(),DebugAll,"Connected sender=%s signal=%s to receiver=%s", \
-	    YQT_OBJECT_NAME(sender),sName,YQT_OBJECT_NAME(receiver)); \
-    else \
-	Debug(QtDriver::self(),DebugWarn,"Failed to connect sender=%s signal=%s to receiver=%s", \
-	    YQT_OBJECT_NAME(sender),sName,YQT_OBJECT_NAME(receiver))
-
 
 // Utility: get a list row containing the given text
 static int findListRow(QListWidget& list, const String& item)
@@ -443,11 +444,24 @@ static void addDynamicProps(QObject* obj, NamedList& props)
 	else if (type == typeInt)
 	    var.setValue(ns->toInteger());
 
-	if (var.type() != QVariant::Invalid)
+	if (var.type() != QVariant::Invalid) {
 	    obj->setProperty(prop,var);
+	    DDebug(ClientDriver::self(),DebugAll,
+		"Object '%s': added dynamic property %s='%s' type=%s",
+		YQT_OBJECT_NAME(obj),prop.c_str(),ns->c_str(),var.typeName());
+	}
+	else
+	    Debug(ClientDriver::self(),DebugStub,
+		"Object '%s': dynamic property '%s' type '%s' is not supported",
+		YQT_OBJECT_NAME(obj),prop.c_str(),type.c_str());
     }
 }
 
+// Find a QSystemTrayIcon child of an object
+inline QSystemTrayIcon* findSysTrayIcon(QObject* obj, const char* name)
+{
+    return qFindChild<QSystemTrayIcon*>(obj,QtClient::setUtf8(name));
+}
 
 /**
  * Qt4ClientFactory
@@ -740,6 +754,57 @@ bool QtWindow::setParams(const NamedList& params)
 	}
 	return ok;
     }
+    // Check for system tray icon params
+    if (params == "systemtrayicon") {
+	// Each parameter is a list of parameters for a system tray icon
+	// Parameter name is the widget's name
+	// Parameter value indicates delete/create/set an existing one
+	unsigned int n = params.length();
+	bool ok = false;
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = params.getParam(i);
+	    NamedList* nl = static_cast<NamedList*>(ns ? ns->getObject("NamedList") : 0);
+	    if (!(nl && ns->name()))
+		continue;
+
+	    QSystemTrayIcon* trayIcon = findSysTrayIcon(this,ns->name());
+	    // Delete
+	    if (ns->null()) {
+		if (trayIcon)
+		    delete trayIcon;
+		continue;
+	    }
+	    // Create a new one
+	    bool newObj = !trayIcon;
+	    if (newObj) {
+		if (!ns->toBoolean())
+		    continue;
+		trayIcon = new QSystemTrayIcon(this);
+		trayIcon->setObjectName(QtClient::setUtf8(ns->name()));
+		QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
+		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)));
+	    }
+	    // Add dynamic properties on creation
+	    // See 
+	    if (newObj)
+		addDynamicProps(trayIcon,*nl);
+	    // Set icon and tooltip
+	    NamedString* tmp = nl->getParam("icon");
+	    if (tmp && *tmp)
+		trayIcon->setIcon(QIcon(QtClient::setUtf8(*tmp)));
+	    tmp = nl->getParam("tooltip");
+	    if (tmp && *tmp)
+		trayIcon->setToolTip(QtClient::setUtf8(*tmp));
+	    // Check context menu
+	    NamedString* menu = nl->getParam("menu");
+	    if (menu) {
+		NamedList* nlMenu = static_cast<NamedList*>(menu->getObject("NamedList"));
+		trayIcon->setContextMenu(nlMenu ? QtClient::buildMenu(*nlMenu,*menu,this,
+		    SLOT(action()),SLOT(toggled(bool)),this) : 0);
+	    }
+	}
+	return ok;
+    }
 
     // Window or other parameters
     if (params.getBoolValue("modal"))
@@ -800,6 +865,13 @@ bool QtWindow::setShow(const String& name, bool visible)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setShow(%s,%s) [%p]",
 	name.c_str(),String::boolText(visible),this);
+    // Check system tray icons
+    QSystemTrayIcon* trayIcon = findSysTrayIcon(this,name);
+    if (trayIcon) {
+	trayIcon->setVisible(visible);
+	return true;
+    }
+    // Widgets
     QtWidget w(this,name);
     if (w.invalid())
 	return false;
@@ -1503,11 +1575,28 @@ void QtWindow::closeEvent(QCloseEvent* event)
 {
     // NOTE: Don't access window's data after calling hide():
     //  some logics might destroy the window when hidden
+
+    // Hide the window when requested
+    String hideWnd;
+    if (QtClient::getProperty(wndWidget(),"dynamicHideOnClose",hideWnd)	&&
+	hideWnd.toBoolean()) {
+	event->ignore();
+	hide();
+	return;
+    }
+
     QWidget::closeEvent(event);
     if (m_mainWindow && Client::self())
 	Client::self()->quit();
     else
 	hide();
+}
+
+void QtWindow::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::WindowStateChange)
+	m_maximized = isMaximized();
+    QWidget::changeEvent(event);
 }
 
 void QtWindow::action()
@@ -1533,6 +1622,30 @@ void QtWindow::toggled(bool on)
     String name;
     if (translateName(w,name))
 	QtClient::self()->toggle(this,name,on);
+}
+
+// System tray actions
+void QtWindow::sysTrayIconAction(QSystemTrayIcon::ActivationReason reason)
+{
+    String action;
+    switch (reason) {
+	case QSystemTrayIcon::Context:
+	    QtClient::getProperty(sender(),s_propAction + "Context",action);
+	    break;
+	case QSystemTrayIcon::DoubleClick:
+	    QtClient::getProperty(sender(),s_propAction + "DoubleClick",action);
+	    break;
+	case QSystemTrayIcon::Trigger:
+	    QtClient::getProperty(sender(),s_propAction + "Trigger",action);
+	    break;
+	case QSystemTrayIcon::MiddleClick:
+	    QtClient::getProperty(sender(),s_propAction + "MiddleClick",action);
+	    break;
+	default:
+	    return;
+    }
+    if (action)
+	Client::self()->action(this,action);
 }
 
 void QtWindow::openUrl(const QString& link)
@@ -1597,12 +1710,13 @@ void QtWindow::clearUICache(const char* fileName)
 	TelEngine::destruct(UIBuffer::s_uiCache.find(fileName));
 }
 
-// Filter events to apply dynamic properties changes
+// Filter events
 bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 {
     if (!obj)
 	return false;
 #if QT_VERSION >= 0x040200
+    // Apply dynamic properties changes
     if (event->type() == QEvent::DynamicPropertyChange) {
 	String name = YQT_OBJECT_NAME(obj);
 	QDynamicPropertyChangeEvent* ev = static_cast<QDynamicPropertyChangeEvent*>(event);
@@ -1614,28 +1728,40 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	QtWidget w(obj);
 	if (w.invalid())
 	    return false;
-	QVariant var = obj->property(prop);
-	if (var.isNull())
+	String value;
+	if (!QtClient::getProperty(obj,prop,value))
 	    return false;
-	bool ok = false;
+	bool ok = true;
 	bool handled = true;
-	if (prop == s_propHHeader) {
+	if (prop == s_propWindowFlags) {
+	    QWidget* wid = (name == m_id) ? this : w.widget();
+	    // Set window flags from enclosed widget:
+	    //  custom window title/border/sysmenu config
+	    ObjList* f = value.split(',',false);
+	    wid->setWindowFlags(Qt::CustomizeWindowHint);
+	    int flags = wid->windowFlags();
+	    for (ObjList* o = f->skipNull(); o; o = o->skipNext())
+		flags |= lookup(o->get()->toString(),s_windowFlags,0);
+	    TelEngine::destruct(f);
+	    wid->setWindowFlags((Qt::WindowFlags)flags);
+	}
+	else if (prop == s_propHHeader) {
 	    // Show/hide the horizontal header
 	    ok = ((w.type() == QtWidget::Table || w.type() == QtWidget::CustomTable) &&
-		var.type() == QVariant::Bool &&	w.table()->horizontalHeader());
+		value.isBoolean() && w.table()->horizontalHeader());
 	    if (ok)
-		w.table()->horizontalHeader()->setVisible(var.toBool());
+		w.table()->horizontalHeader()->setVisible(value.toBoolean());
 	}
 	else
-	    handled = false;
+	    ok = handled = false;
 	if (ok)
 	    DDebug(ClientDriver::self(),DebugAll,
-		"Applied dynamic property='%s' for object='%s'",
-		prop.c_str(),name.c_str());
+		"Applied dynamic property %s='%s' for object='%s'",
+		prop.c_str(),value.c_str(),name.c_str());
 	else if (handled)
-	    Debug(ClientDriver::self(),DebugNote,
-		"Failed to apply dynamic property='%s' for object='%s'",
-		prop.c_str(),name.c_str());
+	    Debug(ClientDriver::self(),DebugMild,
+		"Failed to apply dynamic property %s='%s' for object='%s'",
+		prop.c_str(),value.c_str(),name.c_str());
 	return false;
     }
 #endif
@@ -1673,6 +1799,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    return ret;
 	}
     }
+
     return QWidget::eventFilter(obj,event);
 }
 
@@ -1691,7 +1818,7 @@ void QtWindow::setVisible(bool visible)
 {
     if (visible) {
 	QWidget::move(m_x,m_y);
-	resize(m_width,m_height);	
+	resize(m_width,m_height);
     }
     QWidget::setVisible(visible);
     // Notify the client on window visibility changes
@@ -1772,12 +1899,6 @@ void QtWindow::doInit()
     NamedList* sectGeneral = cfg.getSection("general");
     if (sectGeneral)
 	addDynamicProps(wndWidget(),*sectGeneral);
-	
-    // Check if this is a frameless window
-    String frameLess;
-    getProperty(m_id,s_propFrameless,frameLess);
-    if (frameLess.toBoolean())
-	setWindowFlags(Qt::FramelessWindowHint);
 
     // Load window data
     m_mainWindow = s_cfg.getBoolValue(m_oldId,"mainwindow");
@@ -1848,40 +1969,43 @@ void QtWindow::doInit()
     QList<QAction*> actions = qFindChildren<QAction*>(this);
     for (int i = 0; i < actions.size(); i++)
 	if (actions[i]->isCheckable())
-	    YQT_CONNECT(actions[i],toggled(bool),this,toggled(bool),"toggled()");
+	    QtClient::connectObjects(actions[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
 	else
-	    YQT_CONNECT(actions[i],triggered(),this,action(),"triggered()");
+	    QtClient::connectObjects(actions[i],SIGNAL(triggered()),this,SLOT(action()));
 
     // Connect combo boxes signals
     QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);
     for (int i = 0; i < combos.size(); i++)
-	YQT_CONNECT(combos[i],activated(int),this,selectionChanged(),"activated(int)");
+	QtClient::connectObjects(combos[i],SIGNAL(activated(int)),this,SLOT(selectionChanged()));
 
     // Connect abstract buttons (check boxes and radio/push/tool buttons) signals
     QList<QAbstractButton*> buttons = qFindChildren<QAbstractButton*>(this);
     for(int i = 0; i < buttons.size(); i++)
 	if (buttons[i]->isCheckable())
-	    YQT_CONNECT(buttons[i],toggled(bool),this,toggled(bool),"toggled(bool)");
+	    QtClient::connectObjects(buttons[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
 	else
-	    YQT_CONNECT(buttons[i],clicked(),this,action(),"clicked()");
+	    QtClient::connectObjects(buttons[i],SIGNAL(clicked()),this,SLOT(action()));
 
     // Connect group boxes signals
     QList<QGroupBox*> grp = qFindChildren<QGroupBox*>(this);
     for(int i = 0; i < grp.size(); i++)
 	if (grp[i]->isCheckable())
-	    YQT_CONNECT(grp[i],toggled(bool),this,toggled(bool),"toggled(bool)");
+	    QtClient::connectObjects(grp[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
 
     // Connect sliders signals
     QList<QSlider*> sliders = qFindChildren<QSlider*>(this);
     for (int i = 0; i < sliders.size(); i++)
-	YQT_CONNECT(sliders[i],valueChanged(int),this,selectionChanged(),"valueChanged(int)");
+	QtClient::connectObjects(sliders[i],SIGNAL(valueChanged(int)),this,SLOT(selectionChanged()));
 
     // Connect list boxes signals
     QList<QListWidget*> lists = qFindChildren<QListWidget*>(this);
     for (int i = 0; i < lists.size(); i++) {
-	YQT_CONNECT(lists[i],itemDoubleClicked(QListWidgetItem*),this,doubleClick(),"itemDoubleClicked(QListWidgetItem*)");
-	YQT_CONNECT(lists[i],itemActivated(QListWidgetItem*),this,doubleClick(),"itemDoubleClicked(QListWidgetItem*)");
-	YQT_CONNECT(lists[i],currentRowChanged(int),this,selectionChanged(),"currentRowChanged(int)");
+	QtClient::connectObjects(lists[i],SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+	    this,SLOT(doubleClick()));
+	QtClient::connectObjects(lists[i],SIGNAL(itemActivated(QListWidgetItem*)),
+	    this,SLOT(doubleClick()));
+	QtClient::connectObjects(lists[i],SIGNAL(currentRowChanged(int)),
+	    this,SLOT(selectionChanged()));
     }
 
     // Process tables:
@@ -1902,21 +2026,26 @@ void QtWindow::doInit()
 		t.table()->setColumnHidden(i,true);
 	}
 	// Connect signals
-	YQT_CONNECT(t.table(),cellDoubleClicked(int,int),this,doubleClick(),"cellDoubleClicked(int,int)");
-	YQT_CONNECT(t.table(),itemDoubleClicked(QTableWidgetItem*),this,doubleClick(),"itemDoubleClicked(QTableWidgetItem*)");
+	QtClient::connectObjects(t.table(),SIGNAL(cellDoubleClicked(int,int)),
+	    this,SLOT(doubleClick()));
+	QtClient::connectObjects(t.table(),SIGNAL(itemDoubleClicked(QTableWidgetItem*)),
+	    this,SLOT(doubleClick()));
 	String noSel;
 	getProperty(t.name(),"dynamicNoItemSelChanged",noSel);
 	if (!noSel.toBoolean())
-	    YQT_CONNECT(t.table(),itemSelectionChanged(),this,selectionChanged(),"itemSelectionChanged()");
+	    QtClient::connectObjects(t.table(),SIGNAL(itemSelectionChanged()),
+		this,SLOT(selectionChanged()));
 	// Optionally connect cell clicked
 	// This is done when we want to generate a select() or action() from cell clicked
 	String cellClicked;
 	getProperty(t.name(),"dynamicCellClicked",cellClicked);
 	if (cellClicked)
 	    if (cellClicked == "selectionChanged")
-		YQT_CONNECT(t.table(),cellClicked(int,int),this,selectionChanged(),"cellClicked(int,int)");
+		QtClient::connectObjects(t.table(),SIGNAL(cellClicked(int,int)),
+		    this,SLOT(selectionChanged()));
 	    else if (cellClicked == "doubleClick")
-		YQT_CONNECT(t.table(),cellClicked(int,int),this,doubleClick(),"cellClicked(int,int)");
+		QtClient::connectObjects(t.table(),SIGNAL(cellClicked(int,int)),
+		    this,SLOT(doubleClick()));
     }
 
 #if QT_VERSION >= 0x040200
@@ -2251,6 +2380,84 @@ bool QtClient::getProperty(QObject* obj, const char* name, String& value)
     return false;
 }
 
+// Build a menu object from a list of parameters
+QMenu* QtClient::buildMenu(NamedList& params, const char* text, QObject* receiver,
+	 const char* triggerSlot, const char* toggleSlot, QWidget* parent)
+{
+    QMenu* menu = 0;
+    for (unsigned int i = 0; i < params.length(); i++) {
+	NamedString* param = params.getParam(i);
+	if (!(param && param->name().startsWith("item:")))
+	    continue;
+
+	if (!menu)
+	    menu = new QMenu(setUtf8(text),parent);
+
+        String name = param->name().substr(5);
+	NamedList* p = static_cast<NamedList*>(param->getObject("NamedList"));
+	QAction* action = 0;
+	if (p)  {
+	    QMenu* subMenu = buildMenu(*p,*param,receiver,triggerSlot,toggleSlot,menu);
+	    if (subMenu)
+		action = menu->addMenu(subMenu);
+	}
+	else if (*param) {
+	    action = menu->addAction(QtClient::setUtf8(*param));
+	    action->setObjectName(QtClient::setUtf8(name));
+	}
+	else
+	    menu->addSeparator();
+    }
+
+    if (!menu)
+	return 0;
+
+    // Set name
+    menu->setObjectName(setUtf8(params));
+    // Apply properties
+    // Format: property:object_name:property_name=value
+    if (parent)
+	for (unsigned int i = 0; i < params.length(); i++) {
+	    NamedString* param = params.getParam(i);
+	    if (!(param && param->name().startsWith("property:")))
+		continue;
+	    int pos = param->name().find(':',9);
+	    if (pos < 9)
+		continue;
+	    QObject* obj = qFindChild<QObject*>(parent,setUtf8(param->name().substr(9,pos - 9)));
+	    if (obj)
+		setProperty(obj,param->name().substr(pos + 1),*param);
+	}
+    // Connect signals
+    QList<QAction*> list = qFindChildren<QAction*>(menu);
+    for (int i = 0; i < list.size(); i++) {
+	if (list[i]->isCheckable())
+	    QtClient::connectObjects(list[i],SIGNAL(toggled(bool)),receiver,toggleSlot);
+	else
+	    QtClient::connectObjects(list[i],SIGNAL(triggered()),receiver,triggerSlot);
+    }
+
+    return menu;
+}
+
+// Wrapper for QObject::connect() used to put a debug mesage on failure
+bool QtClient::connectObjects(QObject* sender, const char* signal,
+    QObject* receiver, const char* slot)
+{
+    if (!(sender && signal && *signal && receiver && slot && *slot))
+	return false;
+    bool ok = QObject::connect(sender,signal,receiver,slot);
+    if (ok)
+	DDebug(QtDriver::self(),DebugAll,
+	    "Connected sender=%s signal=%s to receiver=%s slot=%s",
+	    YQT_OBJECT_NAME(sender),signal,YQT_OBJECT_NAME(receiver),slot);
+    else
+	Debug(QtDriver::self(),DebugWarn,
+	    "Failed to connect sender=%s signal=%s to receiver=%s slot=%s",
+	    YQT_OBJECT_NAME(sender),signal,YQT_OBJECT_NAME(receiver),slot);
+    return ok;
+}
+
 
 /**
  * QtDriver
@@ -2291,14 +2498,14 @@ QtEventProxy::QtEventProxy(Type type, QApplication* app)
 	    {
 		QTimer* timer = new QTimer(this);
 		timer->setObjectName("qtClientIdleTimer");
-		YQT_CONNECT(timer,timeout(),this,timerTick(),"timeout()");
+		QtClient::connectObjects(timer,SIGNAL(timeout()),this,SLOT(timerTick()));
 		timer->start(1);
 	    }
 	    break;
 	case AllHidden:
 	    SET_NAME("qtClientAllHidden");
 	    if (app)
-		YQT_CONNECT(app,lastWindowClosed(),this,allHidden(),"lastWindowClosed()");
+		QtClient::connectObjects(app,SIGNAL(lastWindowClosed()),this,SLOT(allHidden()));
 	    break;
 	default:
 	    return;

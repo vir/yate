@@ -219,6 +219,31 @@ public:
      */
     static bool getProperty(QObject* obj, const char* name, String& value);
 
+    /**
+     * Build a menu object from a list of parameters.
+     * Each menu item is indicated by a parameter starting with 'item:".
+     * item:menu_name=Menu Text will create a menu item named 'menu_name' with 
+     *  'Menu Text' as display name.
+     * If the item parameter is a NamedPointer a submenu will be created.
+     * Menu actions properties can be set from parameters with format:
+     *  property:object_name:property_name=value
+     * @param params The menu parameters. The list name is the object name
+     * @param text The menu display text
+     * @param receiver Object receiving menu actions
+     * @param actionSlot The receiver's slot for menu signal triggered()
+     * @param toggleSlot The receiver's slot for menu signal toggled()
+     * @param parent Optional widget parent
+     * @return QMenu pointer or 0 if failed to build it
+     */
+    static QMenu* buildMenu(NamedList& params, const char* text, QObject* receiver,
+	 const char* actionSlot, const char* toggleSlot, QWidget* parent = 0);
+
+    /**
+     * Wrapper for QObject::connect() used to put a debug mesage on failure
+     */
+    static bool connectObjects(QObject* sender, const char* signal,
+	 QObject* receiver, const char* slot);
+
 protected:
     virtual void loadWindows(const char* file = 0);
 private:
@@ -369,7 +394,6 @@ public:
     virtual void moveRel(int dx, int dy);
     virtual bool related(const Window* wnd) const;
     virtual void menu(int x, int y) ;
-    virtual void closeEvent(QCloseEvent* event);
 
     /**
      * Load a widget from file
@@ -412,6 +436,8 @@ public slots:
     void action();
     // Toggled actions
     void toggled(bool);
+    // System tray actions
+    void sysTrayIconAction(QSystemTrayIcon::ActivationReason reason);
 
 private slots:
     void openUrl(const QString& link);
@@ -427,6 +453,8 @@ protected:
     virtual void mousePressEvent(QMouseEvent* event);
     virtual void mouseReleaseEvent(QMouseEvent* event);
     virtual void mouseMoveEvent(QMouseEvent* event);
+    virtual void closeEvent(QCloseEvent* event);
+    virtual void changeEvent(QEvent* event);
     // Update window position and size
     void updatePosSize();
     // Get the widget with this window's content
@@ -434,7 +462,7 @@ protected:
 	{ return findChild<QWidget*>(m_widget); }
 
     String m_description;
-    String m_oldId;                     // Old id used to retreive the config section in .rc
+    String m_oldId;                      // Old id used to retreive the config section in .rc
     bool m_keysVisible;
     int m_x;
     int m_y;

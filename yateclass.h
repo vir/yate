@@ -4715,7 +4715,7 @@ public:
     /**
      * Get a direction from the dictionary given the name
      * @param name Name of the direction
-     * @param defdir Default direction to return if @ref name is empty or unknown
+     * @param defdir Default direction to return if name is empty or unknown
      * @return Direction associated with the given name
      */
     inline static Direction direction(const char* name, Direction defdir = Bidir)

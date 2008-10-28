@@ -24,8 +24,15 @@
 
 #include <yatengine.h>
 
+#include <string.h>
+
+#include <openssl/opensslconf.h>
 #include <openssl/ssl.h>
 #include <openssl/rand.h>
+
+#ifndef OPENSSL_NO_AES
+#include <openssl/aes.h>
+#endif
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -94,6 +101,36 @@ public:
 	{ }
     virtual bool received(Message& msg);
 };
+
+#ifndef OPENSSL_NO_AES
+// AES Counter Mode
+class AesCtrCipher : public Cipher
+{
+public:
+    AesCtrCipher();
+    virtual ~AesCtrCipher();
+    virtual unsigned int blockSize() const
+	{ return AES_BLOCK_SIZE; }
+    virtual unsigned int initVectorSize() const
+	{ return AES_BLOCK_SIZE; }
+    virtual bool setKey(const void* key, unsigned int len, Direction dir);
+    virtual bool initVector(const void* vect, unsigned int len, Direction dir);
+    virtual bool encrypt(void* outData, unsigned int len, const void* inpData);
+    virtual bool decrypt(void* outData, unsigned int len, const void* inpData);
+private:
+    AES_KEY* m_key;
+    unsigned char m_initVector[AES_BLOCK_SIZE];
+};
+
+class CipherHandler : public MessageHandler
+{
+public:
+    inline CipherHandler()
+	: MessageHandler("engine.cipher")
+	{ }
+    virtual bool received(Message& msg);
+};
+#endif
 
 class OpenSSL : public Plugin
 {
@@ -292,6 +329,85 @@ bool SslHandler::received(Message& msg)
 }
 
 
+#ifndef OPENSSL_NO_AES
+AesCtrCipher::AesCtrCipher()
+    : m_key(0)
+{
+    m_key = new AES_KEY;
+    DDebug(DebugAll,"AesCtrCipher::AesCtrCipher() key=%p [%p]",m_key,this);
+}
+
+AesCtrCipher::~AesCtrCipher()
+{
+    DDebug(DebugAll,"AesCtrCipher::~AesCtrCipher() key=%p [%p]",m_key,this);
+    delete m_key;
+}
+
+bool AesCtrCipher::setKey(const void* key, unsigned int len, Direction dir)
+{
+    if (!(key && len && m_key))
+	return false;
+    // AES_ctr128_encrypt is its own inverse
+    return 0 == AES_set_encrypt_key((const unsigned char*)key,len*8,m_key);
+}
+
+bool AesCtrCipher::initVector(const void* vect, unsigned int len, Direction dir)
+{
+    if (len && !vect)
+	return false;
+    if (len > AES_BLOCK_SIZE)
+	len = AES_BLOCK_SIZE;
+    if (len < AES_BLOCK_SIZE)
+	::memset(m_initVector,0,AES_BLOCK_SIZE);
+    if (len)
+	::memcpy(m_initVector,vect,len);
+    return true;
+}
+
+bool AesCtrCipher::encrypt(void* outData, unsigned int len, const void* inpData)
+{
+    if (!(outData && len))
+	return false;
+    if (!inpData)
+	inpData = outData;
+    unsigned int num = 0;
+    unsigned char eCountBuf[AES_BLOCK_SIZE];
+    AES_ctr128_encrypt(
+	(const unsigned char*)inpData,
+	(unsigned char*)outData,
+	len,
+	m_key,
+	m_initVector,
+	eCountBuf,
+	&num);
+    return true;
+}
+
+bool AesCtrCipher::decrypt(void* outData, unsigned int len, const void* inpData)
+{
+    // AES_ctr128_encrypt is its own inverse
+    return encrypt(outData,len,inpData);
+}
+
+
+// Handler for the engine.cipher message - Cipher Factory
+bool CipherHandler::received(Message& msg)
+{
+    addRand(msg.msgTime());
+    const String* name = msg.getParam("cipher");
+    if (!name)
+	return false;
+    Cipher** ppCipher = static_cast<Cipher**>(msg.userObject("Cipher*"));
+    if (*name == "aes_ctr") {
+	if (ppCipher)
+	    *ppCipher = new AesCtrCipher();
+	return true;
+    }
+    return false;
+}
+#endif
+
+
 OpenSSL::OpenSSL()
     : Plugin("openssl",true),
       m_handler(0)
@@ -318,6 +434,9 @@ void OpenSSL::initialize()
     SSL_CTX_set_info_callback(s_context,infoCallback); // macro - no ::
     m_handler = new SslHandler;
     Engine::install(m_handler);
+#ifndef OPENSSL_NO_AES
+    Engine::install(new CipherHandler);
+#endif
 }
 
 }; // anonymous namespace

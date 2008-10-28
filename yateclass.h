@@ -4690,6 +4690,157 @@ protected:
 };
 
 /**
+ * The Cipher class provides an abstraction for data encryption classes
+ * @short An abstract cipher
+ */
+class YATE_API Cipher : public GenObject
+{
+public:
+    /**
+     * Cipher direction
+     */
+    enum Direction {
+	Bidir,
+	Encrypt,
+	Decrypt,
+    };
+
+    /**
+     * Get the dictionary of cipher directions
+     * @return Pointer to the dictionary of cipher directions
+     */
+    inline static const TokenDict* directions()
+	{ return s_directions; }
+
+    /**
+     * Get a direction from the dictionary given the name
+     * @param name Name of the direction
+     * @param defdir Default direction to return if @ref name is empty or unknown
+     * @return Direction associated with the given name
+     */
+    inline static Direction direction(const char* name, Direction defdir = Bidir)
+	{ return (Direction)TelEngine::lookup(name,s_directions,defdir); }
+
+    /**
+     * Destructor
+     */
+    virtual ~Cipher();
+
+    /**
+     * Get a pointer to a derived class given that class name
+     * @param name Name of the class we are asking for
+     * @return Pointer to the requested class or NULL if this object doesn't implement it
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Check if the cipher instance is valid for a specific direction
+     * @param dir Direction to check
+     * @return True if the cipher is able to perform operation on given direction
+     */
+    virtual bool valid(Direction dir = Bidir) const;
+
+    /**
+     * Get the cipher block size
+     * @return Cipher block size in bytes
+     */
+    virtual unsigned int blockSize() const = 0;
+
+    /**
+     * Get the initialization vector size
+     * @return Initialization vector size in bytes, 0 if not applicable
+     */
+    virtual unsigned int initVectorSize() const;
+
+    /**
+     * Round up a buffer length to a multiple of block size
+     * @param len Length of data to encrypt or decrypt in bytes
+     * @return Length of required buffer in bytes
+     */
+    unsigned int bufferSize(unsigned int len) const;
+
+    /**
+     * Check if a buffer length is multiple of block size
+     * @param len Length of data to encrypt or decrypt in bytes
+     * @return True if buffer length is multiple of block size
+     */
+    bool bufferFull(unsigned int len) const;
+
+    /**
+     * Set the key required to encrypt or decrypt data
+     * @param key Pointer to binary key data
+     * @param len Length of key in bytes
+     * @param dir Direction to set key for
+     * @return True if the key was set successfully
+     */
+    virtual bool setKey(const void* key, unsigned int len, Direction dir = Bidir) = 0;
+
+    /**
+     * Set the key required to encrypt or decrypt data
+     * @param key Binary key data block
+     * @param dir Direction to set key for
+     * @return True if the key was set successfully
+     */
+    inline bool setKey(const DataBlock& key, Direction dir = Bidir)
+	{ return setKey(key.data(),key.length(),dir); }
+
+    /**
+     * Set the Initialization Vector if applicable
+     * @param vect Pointer to binary Initialization Vector data
+     * @param len Length of Initialization Vector in bytes
+     * @param dir Direction to set the Initialization Vector for
+     * @return True if the Initialization Vector was set successfully
+     */
+    virtual bool initVector(const void* vect, unsigned int len, Direction dir = Bidir);
+
+    /**
+     * Set the Initialization Vector is applicable
+     * @param vect Binary Initialization Vector
+     * @param dir Direction to set the Initialization Vector for
+     * @return True if the Initialization Vector was set successfully
+     */
+    inline bool initVector(const DataBlock& vect, Direction dir = Bidir)
+	{ return initVector(vect.data(),vect.length(),dir); }
+
+    /**
+     * Encrypt data
+     * @param outData Pointer to buffer for output (encrypted) and possibly input data
+     * @param len Length of output data, may not be multiple of block size
+     * @param inpData Pointer to buffer containing input (unencrypted) data, NULL to encrypt in place
+     * @return True if data was successfully encrypted
+     */
+    virtual bool encrypt(void* outData, unsigned int len, const void* inpData = 0) = 0;
+
+    /**
+     * Encrypt a DataBlock in place
+     * @param data Data block to encrypt
+     * @return True if data was successfully encrypted
+     */
+    inline bool encrypt(DataBlock& data)
+	{ return encrypt(data.data(),data.length()); }
+
+    /**
+     * Decrypt data
+     * @param outData Pointer to buffer for output (decrypted) and possibly input data
+     * @param len Length of output data, may not be multiple of block size
+     * @param inpData Pointer to buffer containing input (encrypted) data, NULL to decrypt in place
+     * @return True if data was successfully decrypted
+     */
+    virtual bool decrypt(void* outData, unsigned int len, const void* inpData = 0) = 0;
+
+    /**
+     * Decrypt a DataBlock in place
+     * @param data Data block to decrypt
+     * @return True if data was successfully decrypted
+     */
+    inline bool decrypt(DataBlock& data)
+	{ return decrypt(data.data(),data.length()); }
+
+private:
+    static const TokenDict s_directions[];
+};
+
+/**
  * The SysUsage class allows collecting some statistics about engine's usage
  *  of system resources
  * @short A class exposing system resources usage

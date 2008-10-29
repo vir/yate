@@ -159,6 +159,8 @@ public:
     bool dtmfDetect(bool enable);
     inline bool canRead() const
 	{ return m_canRead; }
+    inline bool canWrite() const
+	{ return m_canWrite; }
     inline bool event() const
 	{ return m_event; }
     // Open socket. Return false on failure
@@ -171,7 +173,7 @@ public:
     int send(const void* buffer, int len, int flags = 0);
     // Check socket. Set flags to the appropriate values on success
     // Return false on failure
-    bool select(unsigned int multiplier);
+    bool select(unsigned int multiplier, bool checkWrite = false);
     // Update the state of the link and return true if changed
     bool updateLinkStatus();
 protected:
@@ -188,6 +190,7 @@ private:
     String m_device;                     // Device name used to open socket
     bool m_echoCanAvail;                 // Echo canceller is available or not
     bool m_canRead;                      // Set by select(). Can read from socket
+    bool m_canWrite;                     // Set by select(). Can write to socket
     bool m_event;                        // Set by select(). An event occurred
     bool m_readError;                    // Flag used to print read errors
     bool m_writeError;                   // Flag used to print write errors
@@ -233,6 +236,10 @@ private:
     unsigned char m_errorMask;           // Error mask to filter received errors
     bool m_sendReadOnly;                 // Print send attempt on readonly interface error
     SignallingTimer m_timerRxUnder;      // RX underrun notification
+    // Repeat packet
+    bool m_repeatCapable;                // HW repeat available
+    Mutex m_repeatMutex;                 // Lock repeat buffer
+    DataBlock m_repeatPacket;            // Packet to repeat
 };
 
 // Read signalling data for WpInterface
@@ -404,6 +411,7 @@ static TokenDict s_linkStatus[] = {
 
 YSIGFACTORY2(WpInterface,SignallingInterface);
 static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
+static bool s_repeatCapable = true;      // Global repeat packet capability
 static WpModule driver;
 
 
@@ -458,6 +466,7 @@ WpSocket::WpSocket(DebugEnabler* dbg, const char* card, const char* device)
     m_echoCanAvail(false),
 #endif
     m_canRead(false),
+    m_canWrite(false),
     m_event(false),
     m_readError(false),
     m_writeError(false),
@@ -643,13 +652,13 @@ int WpSocket::send(const void* buffer, int len, int flags)
 }
 
 // Check events and socket availability
-bool WpSocket::select(unsigned int multiplier)
+bool WpSocket::select(unsigned int multiplier, bool checkWrite)
 {
-    m_canRead = m_event = false;
+    m_canRead = m_canWrite = m_event = false;
     struct timeval tv;
     tv.tv_sec = 0;
     tv.tv_usec = multiplier * WPSOCKET_SELECT_TIMEOUT;
-    if (m_socket.select(&m_canRead,0,&m_event,&tv)) {
+    if (m_socket.select(&m_canRead,(checkWrite ? &m_canWrite : 0),&m_event,&tv)) {
 	m_selectError = false;
 	return true;
     }
@@ -728,7 +737,9 @@ WpInterface::WpInterface(const NamedList& params)
     m_notify(0),
     m_overRead(0),
     m_sendReadOnly(false),
-    m_timerRxUnder(0)
+    m_timerRxUnder(0),
+    m_repeatCapable(s_repeatCapable),
+    m_repeatMutex(true)
 {
     setName(params.getValue("debugname","WpInterface"));
     XDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
@@ -762,6 +773,9 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
     if (rx > 0)
 	m_timerRxUnder.interval(rx);
 
+    m_repeatCapable = params.getBoolValue("hwrepeatcapable",
+	config.getBoolValue("hwrepeatcapable",m_repeatCapable));
+
     if (debugAt(DebugInfo)) {
 	String s;
 	s << "driver=" << driver.debugName();
@@ -772,6 +786,7 @@ bool WpInterface::init(const NamedList& config, NamedList& params)
 	s << " errormask=" << (unsigned int)m_errorMask;
 	s << " readonly=" << String::boolText(m_readOnly);
 	s << " rxunderruninterval=" << (unsigned int)m_timerRxUnder.interval() << "ms";
+	s << " hwrepeatcapable=" << String::boolText(m_repeatCapable);
 	Debug(this,DebugInfo,"D-channel: %s [%p]",s.c_str(),this);
     }
     return true;
@@ -798,24 +813,37 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     }
 #endif
 
+    m_repeatMutex.lock();
+    m_repeatPacket.clear();
+    m_repeatMutex.unlock();
+
 #ifdef wp_api_tx_hdr_hdlc_rpt_data
     // Repeat supported and data not too big
-    if (repeat)
+    if (repeat && m_repeatCapable) {
 	if (packet.length() <= WP_RPT_MAXDATA) {
 	    unsigned char hdr[WP_HEADER];
 	    ::memset(hdr,0,WP_HEADER);
 	    hdr[WP_RPT_REPEAT] = 1;
 	    hdr[WP_RPT_LEN] = packet.length();
 	    ::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
-	    return -1 != m_socket.send(hdr,WP_HEADER,0);
+	    if (m_socket.send(hdr,WP_HEADER,0) != -1)
+		return true;
+	    // Failed to send repeat header: reset repeat capability
+	    m_repeatCapable = false;
 	}
-	else
-	    Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
-		type,packet.length());
+	Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
+	    type,packet.length());
+    }
 #endif
 
     DataBlock data(0,WP_HEADER);
     data += packet;
+
+    if (repeat) {
+	m_repeatMutex.lock();
+	m_repeatPacket = data;
+	m_repeatMutex.unlock();
+    }
 
     return -1 != m_socket.send(data.data(),data.length(),0);
 }
@@ -836,12 +864,18 @@ static inline const char* error(unsigned char err)
 }
 
 // Receive signalling packet
+// Send repeated packet if needed
 bool WpInterface::receiveAttempt()
 {
     if (!m_socket.valid())
 	return false;
-    if (!m_socket.select(5))
+
+    if (!m_socket.select(5,(0 != m_repeatPacket.length())))
 	return false;
+    m_repeatMutex.lock();
+    if (m_socket.canWrite() && m_repeatPacket.length())
+	m_socket.send(m_repeatPacket.data(),m_repeatPacket.length(),0);
+    m_repeatMutex.unlock();
     updateStatus();
     if (!m_socket.canRead())
 	return false;
@@ -997,7 +1031,7 @@ void WpSigThread::run()
     for (;;) {
 	Thread::yield(true);
 	while (m_interface && m_interface->receiveAttempt())
-	    ;
+	    Thread::check(true);
     }
 }
 
@@ -1644,6 +1678,10 @@ WpModule::~WpModule()
 void WpModule::initialize()
 {
     Output("Initializing module Wanpipe");
+
+    Configuration cfg(Engine::configFile("wpcard"));
+    s_repeatCapable = cfg.getBoolValue("general","hwrepeatcapable",s_repeatCapable);
+
     if (!m_init) {
 	m_init = true;
 	setup();

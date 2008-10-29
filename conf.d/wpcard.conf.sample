@@ -22,6 +22,11 @@
 ; This parameter can be overridden in group sections
 ;buflen=160
 
+; hwrepeatcapable: boolean: Use HW signalling packet repeat capability
+; If disabled, the module will handle packet repeat when requested by the upper layer
+; This parameter can be overridden in group sections
+;hwrepeatcapable=true
+
 
 ;[wanpipe1]
 ;The section's name is the card name defined in wanpipe driver

@@ -188,12 +188,13 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
     : SignallingDumpable(SignallingDumper::Mtp2),
       Mutex(true),
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
-      m_interval(0), m_resend(0), m_abort(0), m_congestion(false),
+      m_interval(0), m_resend(0), m_abort(0), m_fillTime(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
       m_lastBsn(127), m_lastBib(true), m_errors(0),
-      m_resendMs(250), m_abortMs(5000)
+      m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true)
 {
     setName(params.getValue("debugname","mtp2"));
+    m_fillLink = params.getBoolValue("filllink",m_fillLink);
     setDumper(params.getValue("layer2dump"));
 }
 
@@ -214,6 +215,7 @@ void SS7MTP2::setLocalStatus(unsigned int status)
     DDebug(this,DebugInfo,"Local status change: %s -> %s [%p]",
 	statusName(m_lStatus,true),statusName(status,true),this);
     m_lStatus = status;
+    m_fillTime = 0;
 }
 
 void SS7MTP2::setRemoteStatus(unsigned int status)
@@ -344,12 +346,14 @@ void SS7MTP2::timerTick(const Time& when)
 		transmitPacket(*packet,false,SignallingInterface::SS7Msu);
 		c++;
 	    }
-	    m_resend = Time::now() + (1000 * m_resendMs);
-	    Debug(this,DebugNote,"Resent %d packets, last bsn=%u/%u [%p]",
-		c,m_lastBsn,m_lastBib,this);
+	    if (c) {
+		m_resend = Time::now() + (1000 * m_resendMs);
+		m_fillTime = 0;
+		Debug(this,DebugNote,"Resent %d packets, last bsn=%u/%u [%p]",
+		    c,m_lastBsn,m_lastBib,this);
+	    }
 	    unlock();
 	}
-	transmitFISU();
     }
     else {
 	if (tout && (m_lStatus == OutOfService)) {
@@ -362,7 +366,12 @@ void SS7MTP2::timerTick(const Time& when)
 		    setLocalStatus(m_status);
 	    }
 	}
-	transmitLSSU();
+    }
+    if (when >= m_fillTime) {
+	if (operational())
+	    transmitFISU();
+	else
+	    transmitLSSU();
     }
 }
 
@@ -397,6 +406,7 @@ bool SS7MTP2::transmitMSU(const SS7MSU& msu)
     // lock the object so we can safely use member variables
     Lock lock(this);
     m_fsn = (m_fsn + 1) & 0x7f;
+    m_fillTime = 0;
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
@@ -467,6 +477,7 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	m_bib = fib;
 	m_lastBsn = bsn;
 	m_lastBib = bib;
+	m_fillTime = 0;
     }
     // sequence control as explained by Q.703 5.2.2
     bool same = (fsn == m_bsn);
@@ -538,6 +549,7 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     if (!(next && operational()))
 	return false;
     m_bsn = fsn;
+    m_fillTime = 0;
     DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
 	m_bsn,m_bib,m_fsn,m_fib,this);
     SS7MSU msu((void*)(buf+3),len,false);
@@ -623,7 +635,8 @@ bool SS7MTP2::transmitLSSU(unsigned int status)
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,buf[2]+3,false);
     XDebug(this,DebugAll,"Transmit LSSU with status %s",statusName(buf[3],true));
-    bool ok = transmitPacket(packet,true,SignallingInterface::SS7Lssu);
+    bool ok = transmitPacket(packet,m_fillLink,SignallingInterface::SS7Lssu);
+    m_fillTime = Time::now() + (1000 * m_fillIntervalMs);
     unlock();
     packet.clear(false);
     return ok;
@@ -639,7 +652,8 @@ bool SS7MTP2::transmitFISU()
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,3,false);
-    bool ok = transmitPacket(packet,true,SignallingInterface::SS7Fisu);
+    bool ok = transmitPacket(packet,m_fillLink,SignallingInterface::SS7Fisu);
+    m_fillTime = Time::now() + (1000 * m_fillIntervalMs);
     unlock();
     packet.clear(false);
     return ok;

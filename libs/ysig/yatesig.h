@@ -4461,6 +4461,8 @@ private:
     u_int64_t m_resend;
     // time when aborting resending packets
     u_int64_t m_abort;
+    // time when need to transmit next FISU/LSSU
+    u_int64_t m_fillTime;
     // remote congestion indicator
     bool m_congestion;
     // backward and forward sqeuence numbers
@@ -4477,6 +4479,10 @@ private:
     unsigned int m_resendMs;
     // packet resend abort interval
     unsigned int m_abortMs;
+    // FISU/LSSU soft resend interval
+    unsigned int m_fillIntervalMs;
+    // fill link with end-to-end FISU/LSSU
+    bool m_fillLink;
 };
 
 /**

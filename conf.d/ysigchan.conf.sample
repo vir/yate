@@ -229,6 +229,11 @@
 ; Example: route=ITU,2-2-2,0
 ;route=
 
+; filllink: boolean: Configure MTP2 to request link fill (packet repeat) when sending
+;  FISU/LSSU packets
+; Defaults to yes
+;filllink=yes
+
 ; debuglevel: string: Comma separated list of debug levels for link layers
 ; Set to 0 to disable any debug message or -1 (or void) to left it unchanged
 ; ss7-isup: Interface,Circuit group, MTP2, MTP3, ISUP

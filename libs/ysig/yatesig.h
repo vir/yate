@@ -4977,8 +4977,11 @@ public:
      * @param dest The destination string
      * @param label The routing label
      * @param params True to add parameters
+     * @param raw Optional raw message data to be added to destination
+     * @param rawLen Raw data length
      */
-    void toString(String& dest, const SS7Label& label, bool params) const;
+    void toString(String& dest, const SS7Label& label, bool params,
+	const void* raw = 0, unsigned int rawLen = 0) const;
 
     /**
      * Get a pointer to this object or other data
@@ -5317,6 +5320,16 @@ public:
 	{ label.assign(m_type,dpc,opc,sls); }
 
     /**
+     * Set debug data of this call controller
+     * @param printMsg Enable/disable message printing on output
+     * @param extendedDebug Enable/disable hex data dump if print messages is enabled
+     */
+    inline void setDebug(bool printMsg, bool extendedDebug) {
+	    m_printMsg = printMsg;
+	    m_extendedDebug = m_printMsg && extendedDebug;
+	}
+
+    /**
      * Create a new MSU populated with type, routing label and space for fixed part
      * @param type Type of ISUP message
      * @param ssf Subservice Field
@@ -5511,6 +5524,9 @@ private:
     bool m_blockReq;                     // Block/unblock req. sent
     unsigned int m_lockCicCode;          // Current (un)blocking cic code
     String m_lockMap;                    // The sent circuit map (contains 1 element for single circuit request)
+    // Debug flags
+    bool m_printMsg;                     // Print messages to output
+    bool m_extendedDebug;                // Extended debug flag
 };
 
 /**

@@ -1900,6 +1900,9 @@ bool SigSS7Isup::create(NamedList& params, String& error)
 
 bool SigSS7Isup::reload(NamedList& params)
 {
+    if (isup())
+	isup()->setDebug(params.getBoolValue("print-layer4PDU",false),
+	    params.getBoolValue("extended-debug",false));
     setPointCode(params);
     return true;
 }

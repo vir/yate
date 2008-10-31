@@ -1356,11 +1356,17 @@ const TokenDict* SS7MsgISUP::names()
     return s_names;
 }
 
-void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params) const
+void SS7MsgISUP::toString(String& dest, const SS7Label& label, bool params,
+	const void* raw, unsigned int rawLen) const
 {
     const char* enclose = "\r\n-----";
     dest = enclose;
     dest << "\r\n" << name() << " [cic=" << m_cic << " label=" << label << ']';
+    if (raw && rawLen) {
+	String tmp;
+	tmp.hexify((void*)raw,rawLen,' ');
+	dest << "  " << tmp;
+    }
     if (params) {
 	unsigned int n = m_params.length();
 	for (unsigned int i = 0; i < n; i++) {
@@ -1994,7 +2000,9 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_lockNeed(true),
     m_hwFailReq(false),
     m_blockReq(false),
-    m_lockCicCode(0)
+    m_lockCicCode(0),
+    m_printMsg(false),
+    m_extendedDebug(false)
 {
     setName(params.getValue("debugname","isup"));
 
@@ -2043,6 +2051,9 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_uptTimer.interval(params,"userparttest",10,60,true,true);
     if (m_uptTimer.interval())
 	m_userPartAvail = false;
+
+    setDebug(params.getBoolValue("print-layer4PDU",m_printMsg),
+	params.getBoolValue("extended-debug",m_extendedDebug));
 
     if (debugAt(DebugInfo)) {
 	String s;
@@ -2192,12 +2203,28 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 	tmp.assign(label.type(),label.opc(),label.dpc(),sls,label.spare());
 	p = &tmp;
     }
-    if (debugAt(DebugInfo)) {
+
+    SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
+
+    if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
-	msg->toString(tmp,*p,debugAt(DebugAll));
+	void* data = 0;
+	unsigned int len = 0;
+	if (m_extendedDebug && msu) {
+	    unsigned int offs = label.length() + 4;
+	    data = msu->getData(offs);
+	    len = data ? msu->length() - offs : 0;
+	}
+	msg->toString(tmp,*p,debugAt(DebugAll),data,len);
 	Debug(this,DebugInfo,"Sending message (%p)%s",msg,tmp.c_str());
     }
-    SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
+    else if (debugAt(DebugAll)) {
+	String tmp;
+	tmp << label;
+	Debug(this,DebugAll,"Sending message '%s' cic=%u label=%s",
+	    msg->name(),msg->cic(),tmp.c_str());
+    }
+
     sls = -1;
     if (msu && m_l3LinkUp) {
 	sls = transmitMSU(*msu,*p,p->sls());
@@ -2649,10 +2676,17 @@ bool SS7ISUP::processMSU(SS7MsgISUP::Type type, unsigned int cic,
 	return false;
     }
 
-    if (debugAt(DebugInfo)) {
+    if (m_printMsg && debugAt(DebugInfo)) {
 	String tmp;
-	msg->toString(tmp,label,debugAt(DebugAll));
+	msg->toString(tmp,label,debugAt(DebugAll),
+	    m_extendedDebug ? paramPtr : 0,paramLen);
 	Debug(this,DebugInfo,"Received message (%p)%s",msg,tmp.c_str());
+    }
+    else if (debugAt(DebugAll)) {
+	String tmp;
+	tmp << label;
+	Debug(this,DebugAll,"Received message '%s' cic=%u label=%s",
+	    msg->name(),msg->cic(),tmp.c_str());
     }
 
     // Check if we expected some response to UPT

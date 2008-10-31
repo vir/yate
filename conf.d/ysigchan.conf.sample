@@ -121,10 +121,17 @@
 ; Defaults to no
 ;print-layer3PDU=no
 
+; print-layer4PDU: boolean: Print layer 4 (SS7-ISUP) protocol data units to output
+; This option is applied on reload
+; Defaults to no
+;print-layer4PDU=no
+
 ; extended-debug: boolean: Print extented debug data (such as raw hex data) to output
 ; For ISDN this parameter is used in conjuction with print-layer2PDU and print-layer3PDU and
 ;   is ignored if it's pair is not enabled
-; For ISDN this option is applied on reload
+; For SS7 this parameter is used in conjuction with print-layer4PDU and
+;   is ignored if it's pair is not enabled
+; This option is applied on reload
 ; Defaults to no
 ;extended-debug=no
 

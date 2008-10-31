@@ -1025,11 +1025,7 @@ SigDriver::~SigDriver()
 {
     Output("Unloading module Signalling Channel");
     clearLink();
-    if (m_router) {
-	if (m_engine)
-	    m_engine->remove(m_router);
-	TelEngine::destruct(m_router);
-    }
+    SignallingEngine::destruct(m_router);
     if (m_engine)
 	delete m_engine;
 }
@@ -1791,7 +1787,7 @@ SigCircuitGroup* SigLink::buildCircuits(NamedList& params, const String& device,
 	plugin.engine()->insert(group);
 	return group;
     }
-    TelEngine::destruct(group);
+    SignallingEngine::destruct(group);
     return 0;
 }
 
@@ -1915,15 +1911,18 @@ void SigSS7Isup::release()
     if (m_iface)
 	m_iface->control(SignallingInterface::Disable);
 
-    if (isup()) {
+    // m_controller is a SS7ISUP call controller
+    if (m_controller) {
 	verifyController(0);
+	if (plugin.engine())
+	    plugin.engine()->remove(isup());
 	isup()->destruct();
 	m_controller = 0;
     }
-    TelEngine::destruct(m_network);
-    TelEngine::destruct(m_link);
-    TelEngine::destruct(m_group);
-    TelEngine::destruct(m_iface);
+    SignallingEngine::destruct(m_network);
+    SignallingEngine::destruct(m_link);
+    SignallingEngine::destruct(m_group);
+    SignallingEngine::destruct(m_iface);
     XDebug(&plugin,DebugAll,"SigSS7Isup('%s'). Released [%p]",name().c_str(),this);
 }
 
@@ -2145,13 +2144,17 @@ void SigIsdn::release()
 {
     if (m_iface)
 	m_iface->control(SignallingInterface::Disable);
-    if (q931()) {
+
+    // m_controller is an ISDNQ931 call controller
+    if (m_controller) {
+	if (plugin.engine())
+	    plugin.engine()->remove(q931());
 	q931()->destruct();
 	m_controller = 0;
     }
-    TelEngine::destruct(m_q921);
-    TelEngine::destruct(m_group);
-    TelEngine::destruct(m_iface);
+    SignallingEngine::destruct(m_q921);
+    SignallingEngine::destruct(m_group);
+    SignallingEngine::destruct(m_iface);
     XDebug(&plugin,DebugAll,"SigIsdn('%s'). Released [%p]",name().c_str(),this);
 }
 
@@ -2424,16 +2427,19 @@ void SigIsdnMonitor::release()
     if (m_ifaceCpe)
 	m_ifaceCpe->control(SignallingInterface::Disable);
 
-    if (q931()) {
+    // m_controller is a ISDNQ931Monitor call controller
+    if (m_controller) {
+	if (plugin.engine())
+	    plugin.engine()->remove(q931());
 	q931()->destruct();
 	m_controller = 0;
     }
-    TelEngine::destruct(m_q921Net);
-    TelEngine::destruct(m_q921Cpe);
-    TelEngine::destruct(m_groupNet);
-    TelEngine::destruct(m_groupCpe);
-    TelEngine::destruct(m_ifaceNet);
-    TelEngine::destruct(m_ifaceCpe);
+    SignallingEngine::destruct(m_q921Net);
+    SignallingEngine::destruct(m_q921Cpe);
+    SignallingEngine::destruct(m_groupNet);
+    SignallingEngine::destruct(m_groupCpe);
+    SignallingEngine::destruct(m_ifaceNet);
+    SignallingEngine::destruct(m_ifaceCpe);
     XDebug(&plugin,DebugAll,"SigIsdnMonitor('%s'). Released [%p]",name().c_str(),this);
 }
 
@@ -2936,7 +2942,7 @@ IsupDecodeHandler::IsupDecodeHandler(bool decode)
 
 void IsupDecodeHandler::destruct()
 {
-    TelEngine::destruct(m_isup);
+    SignallingEngine::destruct(m_isup);
 }
 
 bool IsupDecodeHandler::received(Message& msg)

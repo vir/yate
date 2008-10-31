@@ -87,12 +87,12 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
 	case Q921:
 	case Hdlc:
 	    {
-	// add LAPD pseudoheader
-	hdr2.assign(0,16);
-	unsigned char* ptr2 = (unsigned char*)hdr2.data();
-	ptr2[6] = sent ? 1 : 0;
-	ptr2[14] = 0x00;
-	ptr2[15] = 0x30;
+		// add LAPD pseudoheader
+		hdr2.assign(0,16);
+		unsigned char* ptr2 = (unsigned char*)hdr2.data();
+		ptr2[6] = sent ? 1 : 0;
+		ptr2[14] = 0x00;
+		ptr2[15] = 0x30;
 	    }
 	    break;
 	default:

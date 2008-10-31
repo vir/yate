@@ -685,6 +685,19 @@ public:
      */
     Thread* thread() const;
 
+    /**
+     * Helper template used to remove a component descendant from its engine,
+     *  destroy it and set the received pointer to 0
+     * @param obj Reference to pointer (lvalue) to the object to remove and destroy
+     */
+    template <class Obj> static inline void destruct(Obj*& obj) {
+	    if (!obj)
+		return;
+	    if (obj->engine())
+		obj->engine()->remove(obj);
+	    TelEngine::destruct(obj);
+	}
+
 protected:
     /**
      * Method called periodically by the worker thread to keep everything alive

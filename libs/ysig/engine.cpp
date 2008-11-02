@@ -299,7 +299,7 @@ Thread* SignallingEngine::thread() const
 
 unsigned long SignallingEngine::tickSleep(unsigned long usec)
 {
-    if (m_tickSleep < usec)
+    if (m_tickSleep > usec)
 	m_tickSleep = usec;
     return m_tickSleep;
 }

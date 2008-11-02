@@ -599,6 +599,14 @@ protected:
      */
     void setName(const char* name);
 
+    /**
+     * Adjust (decrease only) the desired maximum time until next tick.
+     * Can be called only from within timerTick()
+     * @param usec Desired time until next engine's timerTick() call in usec
+     * @return Timer sleep in usec after applying the current change
+     */
+    unsigned long tickSleep(unsigned long usec = 1000000) const;
+
 private:
     SignallingEngine* m_engine;
     String m_name;
@@ -669,10 +677,10 @@ public:
      * Starts the worker thread that keeps components alive
      * @param name Static name of the thread
      * @param prio Thread's priority
-     * @param usec How long to sleep between iterations, in microseconds
+     * @param usec How long to sleep between iterations in usec, 0 to use library default
      * @return True if (already) started, false if an error occured
      */
-    bool start(const char* name = "Signalling", Thread::Priority prio = Thread::Normal, unsigned long usec = 1000);
+    bool start(const char* name = "Signalling", Thread::Priority prio = Thread::Normal, unsigned long usec = 0);
 
     /**
      * Stops and destroys the worker thread if running
@@ -684,6 +692,14 @@ public:
      * @return Pointer to running worker thread or NULL
      */
     Thread* thread() const;
+
+    /**
+     * Adjust (decrease only) the desired maximum time until next tick.
+     * Can be called only from within timerTick()
+     * @param usec Desired time until next timerTick() call in usec
+     * @return Timer sleep in usec after applying the current change
+     */
+    unsigned long tickSleep(unsigned long usec = 1000000);
 
     /**
      * Helper template used to remove a component descendant from its engine,
@@ -702,8 +718,9 @@ protected:
     /**
      * Method called periodically by the worker thread to keep everything alive
      * @param when Time to use as computing base for events and timeouts
+     * @return Desired sleep (in usec) until thread's next tick interval
      */
-    virtual void timerTick(const Time& when);
+    virtual unsigned long timerTick(const Time& when);
 
     /**
      * The list of components managed by this engine
@@ -713,6 +730,8 @@ protected:
 private:
     SignallingThreadPrivate* m_thread;
     bool m_listChanged;
+    unsigned long m_usecSleep;
+    unsigned long m_tickSleep;
 };
 
 /**

@@ -27,21 +27,23 @@
 
 #include <string.h>
 
+#define MIN_TICK_SLEEP 500
+#define DEF_TICK_SLEEP 5000
+#define MAX_TICK_SLEEP 50000
 
 namespace TelEngine {
 
 class SignallingThreadPrivate : public Thread
 {
 public:
-    inline SignallingThreadPrivate(SignallingEngine* engine, const char* name, Priority prio, unsigned long usec)
-	: Thread(name,prio), m_engine(engine), m_sleep(usec)
+    inline SignallingThreadPrivate(SignallingEngine* engine, const char* name, Priority prio)
+	: Thread(name,prio), m_engine(engine)
 	{ }
     virtual ~SignallingThreadPrivate();
     virtual void run();
 
 private:
     SignallingEngine* m_engine;
-    unsigned long m_sleep;
 };
 
 };
@@ -150,9 +152,16 @@ void SignallingComponent::timerTick(const Time& when)
 	toString().c_str(),this);
 }
 
+unsigned long SignallingComponent::tickSleep(unsigned long usec) const
+{
+    return m_engine ? m_engine->tickSleep(usec) : 0;
+}
+
 
 SignallingEngine::SignallingEngine(const char* name)
-    : Mutex(true), m_thread(0), m_listChanged(true)
+    : Mutex(true),
+      m_thread(0), m_listChanged(true),
+      m_usecSleep(DEF_TICK_SLEEP), m_tickSleep(0)
 {
     debugName(name);
 }
@@ -242,26 +251,22 @@ bool SignallingEngine::start(const char* name, Thread::Priority prio, unsigned l
     Lock lock(this);
     if (m_thread)
 	return m_thread->running();
-    // sanity check - 20ms is long enough
-    if (usec > 20000)
-	usec = 20000;
+    // defaults and sanity checks
+    if (usec == 0)
+	usec = DEF_TICK_SLEEP;
+    else if (usec < MIN_TICK_SLEEP)
+	usec = MIN_TICK_SLEEP;
+    else if (usec > MAX_TICK_SLEEP)
+	usec = MAX_TICK_SLEEP;
 
-    // TODO: experimental: remove commented if it's working
-    m_thread = new SignallingThreadPrivate(this,name,prio,usec);
-    if (m_thread->startup()) {
-	Debug(this,DebugAll,"Engine started worker thread [%p]",this);
-	return true;
-    }
-
-#if 0
-    SignallingThreadPrivate* tmp = new SignallingThreadPrivate(this,name,prio,usec);
+    SignallingThreadPrivate* tmp = new SignallingThreadPrivate(this,name,prio);
     if (tmp->startup()) {
+	m_usecSleep = usec;
 	m_thread = tmp;
 	DDebug(this,DebugInfo,"Engine started worker thread [%p]",this);
 	return true;
     }
     delete tmp;
-#endif
     Debug(this,DebugGoOn,"Engine failed to start worker thread [%p]",this);
     return false;
 }
@@ -292,9 +297,17 @@ Thread* SignallingEngine::thread() const
     return m_thread;
 }
 
-void SignallingEngine::timerTick(const Time& when)
+unsigned long SignallingEngine::tickSleep(unsigned long usec)
+{
+    if (m_tickSleep < usec)
+	m_tickSleep = usec;
+    return m_tickSleep;
+}
+
+unsigned long SignallingEngine::timerTick(const Time& when)
 {
     lock();
+    m_tickSleep = m_usecSleep;
     m_listChanged = false;
     for (ObjList* l = &m_components; l; l = l->next()) {
 	SignallingComponent* c = static_cast<SignallingComponent*>(l->get());
@@ -306,7 +319,10 @@ void SignallingEngine::timerTick(const Time& when)
 		break;
 	}
     }
+    unsigned long rval = m_listChanged ? 0 : m_tickSleep;
+    m_tickSleep = m_usecSleep;
     unlock();
+    return rval;
 }
 
 
@@ -321,9 +337,9 @@ void SignallingThreadPrivate::run()
     for (;;) {
 	if (m_engine) {
 	    Time t;
-	    m_engine->timerTick(t);
-	    if (m_sleep) {
-		usleep(m_sleep,true);
+	    unsigned long sleepTime = m_engine->timerTick(t);
+	    if (sleepTime) {
+		usleep(sleepTime,true);
 		continue;
 	    }
 	}

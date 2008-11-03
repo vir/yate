@@ -113,6 +113,7 @@ protected:
     void onHangup(Message& msg, String id);
     void onQueued(Message& msg, String qname);
     void onPickup(Message& msg, String qname);
+    void onDrop(Message& msg, String qname);
 private:
     bool m_init;
 };
@@ -543,7 +544,7 @@ void QueuesModule::onQueued(Message& msg, String qname)
     }
 }
 
-// Pick up the call from the head of a queue
+// Pick up the call from the head of a queue or a call specified by ID
 void QueuesModule::onPickup(Message& msg, String qname)
 {
     if (qname.null())
@@ -628,6 +629,29 @@ void QueuesModule::onHangup(Message& msg, String id)
     queue->removeCall(id,"hangup");
 }
 
+// Drop the call from the head of a queue or a call specified by ID
+void QueuesModule::onDrop(Message& msg, String qname)
+{
+    if (qname.null())
+	return;
+    String id;
+    int sep = qname.find('/');
+    if (sep >= 0) {
+	id = qname.substr(sep+1);
+	qname = qname.substr(0,sep);
+    }
+    CallsQueue* queue = findQueue(qname);
+    if (queue) {
+	QueuedCall* call = id ? queue->findCall(id) : queue->topCall();
+	if (call) {
+	    id = *call;
+	    Debug(this,DebugCall,"Dropping call '%s' from '%s'",
+		id.c_str(),qname.c_str());
+	    msg.setParam("id",id);
+	}
+    }
+}
+
 // Command line execute handler
 bool QueuesModule::commandExecute(String& retVal, const String& line)
 {
@@ -663,6 +687,9 @@ bool QueuesModule::received(Message& msg, int id)
 	    break;
 	case Private:
 	    onHangup(msg,msg.getValue("id"));
+	    break;
+	case Drop:
+	    onDrop(msg,msg.getValue("id"));
 	    break;
 	default:
 	    lock.drop();
@@ -722,6 +749,7 @@ void QueuesModule::initialize()
     installRelay(Execute,priority);
     installRelay(Answered,priority);
     installRelay(Private,"chan.hangup",priority);
+    installRelay(Drop,priority);
 }
 
 }; // anonymous namespace

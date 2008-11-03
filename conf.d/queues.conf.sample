@@ -4,7 +4,7 @@
 ; account: string: Name of the database account used in queries
 ;account=
 
-; priority: int: Priority of message handlers
+; priority: int: Default priority of message handlers, 0 to disable them
 ;priority=50
 
 ; rescan: int: Period of polling for available operators, in seconds
@@ -12,6 +12,23 @@
 
 ; mintime: int: Minimum time between queries, in milliseconds
 ;mintime=500
+
+
+[priorities]
+; Handler priorities for each message, override priority from [general]
+; Each handler can be disabled by setting priority 0
+
+; call.execute: int: Priority of call.execute handler
+;call.execute=
+
+; call.answered: int: Priority of call.answered handler, do not set to 0
+;call.answered=
+
+; chan.hangup: int: Priority of chan.hangup handler, do not set to 0
+;chan.hangup=
+
+; call.drop: int: Priority of call.drop handler, 0 disables dropping queued calls
+;call.drop=
 
 
 [queries]

@@ -746,10 +746,10 @@ void QueuesModule::initialize()
     m_init = true;
     setup();
     int priority = s_cfg.getIntValue("general","priority",50);
-    installRelay(Execute,priority);
-    installRelay(Answered,priority);
-    installRelay(Private,"chan.hangup",priority);
-    installRelay(Drop,priority);
+    installRelay(Execute,s_cfg.getIntValue("priorities","call.execute",priority));
+    installRelay(Answered,s_cfg.getIntValue("priorities","call.answered",priority));
+    installRelay(Private,"chan.hangup",s_cfg.getIntValue("priorities","chan.hangup",priority));
+    installRelay(Drop,s_cfg.getIntValue("priorities","call.drop",priority));
 }
 
 }; // anonymous namespace

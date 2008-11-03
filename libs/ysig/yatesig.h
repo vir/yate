@@ -702,6 +702,13 @@ public:
     unsigned long tickSleep(unsigned long usec = 1000000);
 
     /**
+     * Get the default engine tick sleep time in microseconds
+     * @return Default timer sleep in usec
+     */
+    inline unsigned long tickDefault() const
+	{ return m_usecSleep; }
+
+    /**
      * Helper template used to remove a component descendant from its engine,
      *  destroy it and set the received pointer to 0
      * @param obj Reference to pointer (lvalue) to the object to remove and destroy

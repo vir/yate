@@ -155,6 +155,7 @@ private:
     YRTPConsumer* m_consumer;
     String m_id;
     String m_media;
+    String m_format;
     String m_master;
     String m_host;
     unsigned int m_bufsize;
@@ -442,6 +443,7 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     if (!setRemote(raddr,rport,msg))
 	return false;
     m_rtp->anySSRC(msg.getBoolValue("anyssrc",s_anyssrc));
+    m_format = format;
     // Change format of source and/or consumer,
     //  reinstall them to rebuild codec chains
     if (m_source) {
@@ -642,6 +644,7 @@ YRTPSource::YRTPSource(YRTPWrapper* wrap)
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
+	m_format = m_wrap->m_format;
 	m_wrap->m_source = this;
     }
 }
@@ -674,6 +677,9 @@ YRTPConsumer::YRTPConsumer(YRTPWrapper *wrap)
     m_format.clear();
     if (m_wrap) {
 	m_wrap->ref();
+	m_format = m_wrap->m_format;
+	if (m_format)
+	    setSplitable();
 	m_wrap->m_consumer = this;
     }
 }

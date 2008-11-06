@@ -264,6 +264,10 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\engine\Cipher.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\engine\Client.cpp"
 				>
 				<FileConfiguration

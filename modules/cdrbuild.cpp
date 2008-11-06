@@ -99,6 +99,7 @@ private:
 
 static ObjList s_cdrs;
 
+// This mutex protects both the CDR list and the params list
 static Mutex s_mutex;
 static ObjList s_params;
 static int s_res = 1;
@@ -174,6 +175,11 @@ CdrBuilder::CdrBuilder(const char *name)
 
 CdrBuilder::~CdrBuilder()
 {
+    if (!m_hangup) {
+	// chan.hangup not seen yet - mark the record if possible
+	if (!getParam("reason"))
+	    addParam("reason","CDR shutdown");
+    }
     emit("finalize");
 }
 
@@ -203,6 +209,8 @@ void CdrBuilder::emit(const char *operation)
 	operation = m_first ? "initialize" : "update";
     m_first = false;
 
+    DDebug("cdrbuild",DebugInfo,"Emit '%s' for '%s' status '%s'",
+	operation,c_str(),m_status.c_str());
     char buf[64];
     Message *m = new Message("call.cdr");
     m->addParam("time",printTime(buf,m_start));
@@ -266,10 +274,7 @@ void CdrBuilder::update(int type, u_int64_t val)
 	    break;
 	case CdrHangup:
 	    m_hangup = val;
-	    s_mutex.lock();
-	    s_cdrs.remove(this);
-	    s_mutex.unlock();
-	    return;
+	    break;
     }
 }
 
@@ -281,7 +286,17 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
 	// if we didn't generate an initialize generate no finalize
 	if (m_first)
 	    clear();
+	else {
+	    // set a reason if none was set or one is explicitely provided
+	    const char* reason = msg.getValue("reason");
+	    if (!(reason || getValue("reason")))
+		reason = "CDR dropped";
+	    if (reason)
+		setParam("reason",reason);
+	}
+	s_mutex.lock();
 	s_cdrs.remove(this);
+	s_mutex.unlock();
 	return true;
     }
     // cdrwrite must be consistent over all emitted messages so we read it once
@@ -322,9 +337,13 @@ bool CdrBuilder::update(const Message& msg, int type, u_int64_t val)
     update(type,val);
 
     if (type == CdrHangup) {
+	s_mutex.lock();
 	s_cdrs.remove(this);
+	s_mutex.unlock();
+	// object is now destroyed, "this" no longer valid
 	return false;
     }
+
     emit();
     return false;
 }
@@ -336,10 +355,13 @@ CdrBuilder* CdrBuilder::find(String &id)
 
 bool CdrHandler::received(Message &msg)
 {
+    // this mutex serializes all CDR building
     static Mutex mutex;
     Lock lock(mutex);
     if (m_type == EngHalt) {
+	s_mutex.lock();
 	s_cdrs.clear();
+	s_mutex.unlock();
 	return false;
     }
     bool track = true;
@@ -375,7 +397,7 @@ bool CdrHandler::received(Message &msg)
     if (b)
 	rval = b->update(msg,m_type,msg.msgTime().usec());
     else
-	Debug("CdrBuilder",DebugInfo,"Got message '%s' for untracked id '%s'",
+	Debug("cdrbuild",DebugInfo,"Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
     if ((m_type == CdrRinging) || (m_type == CdrAnswer)) {
 	id = msg.getValue("peerid");
@@ -393,6 +415,7 @@ bool StatusHandler::received(Message &msg)
     if (sel && ::strcmp(sel,"cdrbuild"))
 	return false;
     String st("name=cdrbuild,type=cdr,format=Status|Caller|Called|Duration");
+    s_mutex.lock();
     st << ";cdrs=" << s_cdrs.count();
     if (msg.getBoolValue("details",true)) {
 	st << ";";
@@ -409,6 +432,7 @@ bool StatusHandler::received(Message &msg)
 	    }
 	}
     }
+    s_mutex.unlock();
     msg.retValue() << st << "\r\n";
     return false;
 }
@@ -418,6 +442,7 @@ class CdrBuildPlugin : public Plugin
 {
 public:
     CdrBuildPlugin();
+    virtual ~CdrBuildPlugin();
     virtual void initialize();
 private:
     bool m_first;
@@ -427,6 +452,11 @@ CdrBuildPlugin::CdrBuildPlugin()
     : m_first(true)
 {
     Output("Loaded module CdrBuild");
+}
+
+CdrBuildPlugin::~CdrBuildPlugin()
+{
+    Output("Unloading module CdrBuild");
 }
 
 void CdrBuildPlugin::initialize()

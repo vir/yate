@@ -489,8 +489,8 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	    if (next)
 		break;
 	}
-	Debug(this,DebugMild,"Detected loss of %u packets [%p]",
-	    (fsn - m_bsn) & 0x7f,this);
+	Debug(this,DebugMild,"We lost %u packets, remote fsn=%u local bsn=%u [%p]",
+	    (fsn - m_bsn) & 0x7f,fsn,m_bsn,this);
 	m_bib = !m_bib;
 	DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
 	    m_bsn,m_bib,m_fsn,m_fib,this);

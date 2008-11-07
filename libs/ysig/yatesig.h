@@ -3584,8 +3584,40 @@ public:
     enum Transport {
 	None = 0,
 	Sctp,
+	// All the following transports are not standard
 	Tcp,
+	Udp,
 	Unix,
+    };
+
+    /**
+     * Message classes
+     */
+    enum MsgClass {
+	// Management (IUA/M2UA/M3UA/SUA)
+	MGMT  =  0,
+	// Transfer (M3UA)
+	TRAN  =  1,
+	// SS7 Signalling Network Management (M3UA/SUA)
+	SSNM  =  2,
+	// ASP State Maintenance (IUA/M2UA/M3UA/SUA)
+	ASPSM =  3,
+	// ASP Traffic Maintenance (IUA/M2UA/M3UA/SUA)
+	ASPTM =  4,
+	// Q.921/Q.931 Boundary Primitives Transport (IUA)
+	QPTM  =  5,
+	// MTP2 User Adaptation (M2UA)
+	MAUP  =  6,
+	// Connectionless Messages (SUA)
+	CLMSG =  7,
+	// Connection-Oriented Messages (SUA)
+	COMSG =  8,
+	// Routing Key Management (M3UA)
+	RKM   =  9,
+	// Interface Identifier Management (M2UA)
+	IIM   = 10,
+	// M2PA Messages (M2PA)
+	M2PA  = 11,
     };
 
     /**
@@ -3603,6 +3635,19 @@ public:
      */
     virtual void terminate();
 
+    /**
+     * Check if the network transport layer is connected
+     * @param streamId Identifier of the stream to check if applicable
+     * @return True if the transport (and stream if applicable) is connected
+     */
+    virtual bool connected(int streamId = 0) const;
+
+    /**
+     * Message class names dictionary
+     * @return Pointer to dictionary of message classes
+     */
+    static const TokenDict* classNames();
+
 protected:
     /**
      * Attach an open socket
@@ -3618,15 +3663,36 @@ protected:
      * @param msgClass Class of the message
      * @param msgType Type of the message, depends on the class
      * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
      * @return True if the message was handled
      */
     virtual bool processMSG(unsigned char msgVersion, unsigned char msgClass,
-	unsigned char msgType, const DataBlock& msg) = 0;
+	unsigned char msgType, const DataBlock& msg, int streamId) = 0;
+
+    /**
+     * Transmit a message to the network transport layer
+     * @param msgVersion Version of the protocol
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    bool transmitMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId = 0);
+
+    /**
+     * Transmit a prepared message to the network transport layer
+     * @param header Message header, typically 8 octets
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    virtual bool transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
 
 private:
     Transport m_trans;
     Socket* m_socket;
-    DataBlock m_part;
 };
 
 /**

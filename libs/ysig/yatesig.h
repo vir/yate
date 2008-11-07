@@ -3806,7 +3806,7 @@ public:
      * Remove the MSUs waiting in the transmit queue and return them
      * @return List of MSUs taken from the queue
      */
-    virtual ObjList* recoverMSU() = 0;
+    virtual ObjList* recoverMSU();
 
     /**
      * Retrive the current link status indications
@@ -4459,7 +4459,7 @@ protected:
      * @return True if message was successfully queued
      */
     inline bool transmitLSSU()
-	{ return transmitLSSU(m_status); }
+	{ return transmitLSSU(m_lStatus); }
 
     /**
      * Push a Fill-In Signal Unit down the protocol stack
@@ -4487,6 +4487,7 @@ protected:
 private:
     virtual bool control(NamedList& params)
 	{ return SignallingDumpable::control(params,this); }
+    void unqueueAck(unsigned char bsn);
     bool txPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type = SignallingInterface::Unknown);
     void setLocalStatus(unsigned int status);
     void setRemoteStatus(unsigned int status);
@@ -4504,11 +4505,13 @@ private:
     u_int64_t m_fillTime;
     // remote congestion indicator
     bool m_congestion;
-    // backward and forward sqeuence numbers
+    // backward and forward sequence numbers
     unsigned char m_bsn, m_fsn;
     // backward and forward indicator bits
     bool m_bib, m_fib;
-    // last received backward sqeuence number
+    // last forward sequence number we sent a retransmission request
+    unsigned char m_lastFsn;
+    // last received backward sequence number
     unsigned char m_lastBsn;
     // last received backward indicator bit
     bool m_lastBib;

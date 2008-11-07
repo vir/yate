@@ -183,6 +183,11 @@ bool SS7Layer2::control(Operation oper, NamedList* params)
     return false;
 }
 
+ObjList* SS7Layer2::recoverMSU()
+{
+    return 0;
+}
+
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
     : SignallingDumpable(SignallingDumper::Mtp2),
@@ -190,7 +195,7 @@ SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
       m_status(status), m_lStatus(OutOfService), m_rStatus(OutOfAlignment),
       m_interval(0), m_resend(0), m_abort(0), m_fillTime(0), m_congestion(false),
       m_bsn(127), m_fsn(127), m_bib(true), m_fib(true),
-      m_lastBsn(127), m_lastBib(true), m_errors(0),
+      m_lastFsn(128), m_lastBsn(127), m_lastBib(true), m_errors(0),
       m_resendMs(250), m_abortMs(5000), m_fillIntervalMs(20), m_fillLink(true)
 {
     setName(params.getValue("debugname","mtp2"));
@@ -309,11 +314,12 @@ void SS7MTP2::timerTick(const Time& when)
 		m_queue.clear();
 	    }
 	    else if (q) {
-		Debug(this,DebugWarn,"Changing FSN of %u MSUs queued in proved link! [%p]",q,this);
+		Debug(this,DebugNote,"Changing FSN of %u MSUs queued in proved link! [%p]",q,this);
 		// transmit a FISU just before the bunch of MSUs
 		transmitFISU();
 		resend = true;
 		// reset the FSN of packets still waiting in queue
+		m_lastBsn = m_fsn;
 		ObjList* l = m_queue.skipNull();
 		for (; l; l = l->skipNext()) {
 		    DataBlock* packet = static_cast<DataBlock*>(l->get());
@@ -337,19 +343,15 @@ void SS7MTP2::timerTick(const Time& when)
 		unsigned char* buf = (unsigned char*)packet->data();
 		// update the BSN/BIB in packet
 		buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
-		unsigned char pfsn = buf[1] & 0x7f;
-		// check if we are retransmitting the last ACKed packet
-		if (pfsn == m_lastBsn)
-		    m_lastBsn = (m_lastBsn - 1) & 0x7f;
-		DDebug(this,DebugInfo,"Resending packet %p with FSN=%u [%p]",
-		    packet,pfsn,this);
+		Debug(this,DebugInfo,"Resending packet %p with FSN=%u [%p]",
+		    packet,buf[1] & 0x7f,this);
 		transmitPacket(*packet,false,SignallingInterface::SS7Msu);
 		c++;
 	    }
 	    if (c) {
 		m_resend = Time::now() + (1000 * m_resendMs);
 		m_fillTime = 0;
-		Debug(this,DebugNote,"Resent %d packets, last bsn=%u/%u [%p]",
+		Debug(this,DebugInfo,"Resent %d packets, last bsn=%u/%u [%p]",
 		    c,m_lastBsn,m_lastBib,this);
 	    }
 	    unlock();
@@ -432,12 +434,16 @@ ObjList* SS7MTP2::recoverMSU()
     lock();
     ObjList* lst = 0;
     for (;;) {
-	GenObject* pkt = m_queue.remove(false);
+	DataBlock* pkt = static_cast<DataBlock*>(m_queue.remove(false));
 	if (!pkt)
 	    break;
-	if (!lst)
-	    lst = new ObjList;
-	lst->append(pkt);
+	if (pkt->length() > 3) {
+	    SS7MSU* msu = new SS7MSU(3 + (char*)pkt->data(),pkt->length() - 3);
+	    if (!lst)
+		lst = new ObjList;
+	    lst->append(msu);
+	}
+	TelEngine::destruct(pkt);
     }
     unlock();
     return lst;
@@ -461,7 +467,21 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
 	    len,packet.length(),this);
 	return false;
     }
-    // packet length is valid, check sequence numbers
+
+    // process LSSU and FISU to detect link status changes
+    switch (len) {
+	case 2:
+	    processLSSU(buf[3] + (buf[4] << 8));
+	    break;
+	case 1:
+	    processLSSU(buf[3]);
+	    break;
+	case 0:
+	    processFISU();
+	    break;
+    }
+
+    // check sequence numbers
     unsigned char bsn = buf[0] & 0x7f;
     unsigned char fsn = buf[1] & 0x7f;
     bool bib = (buf[0] & 0x80) != 0;
@@ -470,83 +490,48 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     lock();
     XDebug(this,DebugAll,"got bsn=%u/%d fsn=%u/%d local bsn=%u/%d fsn=%u/%d [%p]",
 	bsn,bib,fsn,fib,m_bsn,m_bib,m_fsn,m_fib,this);
+    unsigned char diff = 0;
+    if (aligned()) {
+	// sequence control as explained by Q.703 5.2.2
+	diff = (fsn - m_bsn) & 0x7f;
+	// received FSN should be only 1 ahead of last we handled
+	if (diff > 1) {
+	    if (diff < 64)
+		Debug(this,DebugMild,"We lost %u packets, remote fsn=%u local bsn=%u [%p]",
+		    (diff - 1),fsn,m_bsn,this);
+	    if (fsn != m_lastFsn) {
+		m_lastFsn = fsn;
+		// toggle BIB to request immediate retransmission
+		m_bib = !m_bib;
+		DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
+		    m_bsn,m_bib,m_fsn,m_fib,this);
+	    }
+	}
+	else
+	    m_lastFsn = 128;
 
-    if ((m_rStatus == OutOfAlignment) || (m_rStatus == OutOfService)) {
-	// sync sequence
+	if (m_lastBib != bib) {
+	    Debug(this,DebugNote,"Remote requested resend remote bsn=%u local fsn=%u [%p]",
+		bsn,m_fsn,this);
+	    m_lastBib = bib;
+	    m_resend = Time::now();
+	}
+	unqueueAck(bsn);
+    }
+    else {
+	// keep sequence numbers in sync with the remote
 	m_bsn = fsn;
 	m_bib = fib;
 	m_lastBsn = bsn;
 	m_lastBib = bib;
 	m_fillTime = 0;
     }
-    // sequence control as explained by Q.703 5.2.2
-    bool same = (fsn == m_bsn);
-    bool next = false;
-    // hack - use a while so we can break out
-    while (!same) {
-	if (len >= 3) {
-	    next = (fsn == ((m_bsn + 1) & 0x7f));
-	    if (next)
-		break;
-	}
-	Debug(this,DebugMild,"We lost %u packets, remote fsn=%u local bsn=%u [%p]",
-	    (fsn - m_bsn) & 0x7f,fsn,m_bsn,this);
-	m_bib = !m_bib;
-	DDebug(this,DebugInfo,"New local bsn=%u/%d fsn=%u/%d [%p]",
-	    m_bsn,m_bib,m_fsn,m_fib,this);
-	break;
-    }
-
-    if (m_lastBib != bib) {
-	Debug(this,DebugMild,"Remote requested resend remote bsn=%u local fsn=%u [%p]",
-	    bsn,m_fsn,this);
-	m_lastBib = bib;
-	m_resend = Time::now();
-    }
-    if (m_lastBsn != bsn) {
-	Debug(this,DebugNote,"Unqueueing packets in range %u - %u [%p]",
-	    m_lastBsn,bsn,this);
-	m_lastBsn = bsn;
-	int c = 0;
-	for (;;) {
-	    DataBlock* packet = static_cast<DataBlock*>(m_queue.get());
-	    if (!packet) {
-		// all packets confirmed - stop resending
-		m_resend = 0;
-		m_abort = 0;
-		break;
-	    }
-	    unsigned char pfsn = ((const unsigned char*)packet->data())[1] & 0x7f;
-	    char diff = bsn - pfsn;
-	    if (diff < 0)
-		break;
-	    c++;
-	    DDebug(this,DebugInfo,"Unqueueing packet %p with FSN=%u [%p]",
-		packet,pfsn,this);
-	    m_queue.remove(packet);
-	}
-	if (c) {
-	    Debug(this,DebugNote,"Unqueued %d packets up to FSN=%u [%p]",c,bsn,this);
-	    m_abort = m_resend ? Time::now() + (1000 * m_abortMs) : 0;
-	}
-    }
     unlock();
 
-    //TODO: implement Q.703 6.3.1
-
-    switch (len) {
-	case 2:
-	    processLSSU(buf[3] + (buf[4] << 8));
-	    return true;
-	case 1:
-	    processLSSU(buf[3]);
-	    return true;
-	case 0:
-	    processFISU();
-	    return true;
-    }
-    // just drop MSUs
-    if (!(next && operational()))
+    if (len < 3)
+	return true;
+    // just drop MSUs if not operational or out of sequence
+    if (!((diff == 1) && operational()))
 	return false;
     m_bsn = fsn;
     m_fillTime = 0;
@@ -565,6 +550,52 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     return ok;
 }
 
+// Remove from send queue confirmed packets up to received BSN
+void SS7MTP2::unqueueAck(unsigned char bsn)
+{
+    if (m_lastBsn == bsn)
+	return;
+    // positive acknowledgement - Q.703 6.3.1
+    DDebug(this,DebugNote,"Unqueueing packets in range %u - %u [%p]",
+	m_lastBsn,bsn,this);
+    int c = 0;
+    for (;;) {
+	unsigned char efsn = (m_lastBsn + 1) & 0x7f;
+	DataBlock* packet = static_cast<DataBlock*>(m_queue.get());
+	if (!packet) {
+	    Debug(this,DebugMild,"Queue empty while expecting packet with FSN=%u [%p]",
+		efsn,this);
+	    m_lastBsn = bsn;
+	    // all packets confirmed - stop resending
+	    m_resend = 0;
+	    m_abort = 0;
+	    break;
+	}
+	unsigned char pfsn = ((const unsigned char*)packet->data())[1] & 0x7f;
+	if (pfsn != efsn)
+	    Debug(this,DebugMild,"Found in queue packet with FSN=%u expected %u [%p]",
+		pfsn,efsn,this);
+	c++;
+	XDebug(this,DebugInfo,"Unqueueing packet %p with FSN=%u [%p]",
+	    packet,pfsn,this);
+	m_queue.remove(packet);
+	m_lastBsn = pfsn;
+	if (pfsn == bsn) {
+	    if (m_queue.count() == 0) {
+		// all packets confirmed - stop resending
+		m_resend = 0;
+		m_abort = 0;
+	    }
+	    break;
+	}
+    }
+    if (c) {
+	DDebug(this,DebugNote,"Unqueued %d packets up to FSN=%u [%p]",c,bsn,this);
+	m_abort = m_resend ? Time::now() + (1000 * m_abortMs) : 0;
+    }
+}
+
+// Transmit packet to interface, dump it if successfull
 bool SS7MTP2::txPacket(const DataBlock& packet, bool repeat, SignallingInterface::PacketType type)
 {
     if (transmitPacket(packet,repeat,type)) {
@@ -593,6 +624,7 @@ void SS7MTP2::processLSSU(unsigned int status)
 	case EmergencyAlignment:
 	    unaligned = false;
     }
+    setRemoteStatus(status);
     if (status == Busy) {
 	if (unaligned)
 	    abortAlignment();
@@ -600,7 +632,6 @@ void SS7MTP2::processLSSU(unsigned int status)
 	    m_congestion = true;
 	return;
     }
-    setRemoteStatus(status);
     // cancel any timer except aborted alignment
     switch (status) {
 	case OutOfAlignment:
@@ -686,6 +717,7 @@ void SS7MTP2::abortAlignment()
     m_errors = 0;
     m_fsn = 127;
     m_fib = true;
+    m_fillTime = 0;
     unlock();
     SS7Layer2::notify();
 }

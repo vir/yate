@@ -483,6 +483,8 @@ void File::copyError()
 
 bool File::canRetry() const
 {
+    if (!valid())
+	return false;
     if (!m_error)
 	return true;
     return (m_error == EAGAIN) || (m_error == EINTR)
@@ -791,6 +793,8 @@ bool Socket::checkError(int retcode, bool strict)
 
 bool Socket::canRetry() const
 {
+    if (!valid())
+	return false;
     if (!m_error)
 	return true;
 #ifdef _WINDOWS

@@ -662,7 +662,8 @@ bool SigChannel::msgProgress(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
     TelEngine::destruct(sm);
-    m_call->sendEvent(event);
+    lock.drop();
+    event->sendEvent();
     return true;
 }
 
@@ -681,7 +682,8 @@ bool SigChannel::msgRinging(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
-    m_call->sendEvent(event);
+    lock.drop();
+    event->sendEvent();
     return true;
 }
 
@@ -706,7 +708,8 @@ bool SigChannel::msgAnswered(Message& msg)
     }
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
     TelEngine::destruct(sm);
-    m_call->sendEvent(event);
+    lock.drop();
+    event->sendEvent();
     return true;
 }
 
@@ -732,7 +735,8 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
     sm->params().addParam("tone",tone);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
     TelEngine::destruct(sm);
-    m_call->sendEvent(event);
+    lock.drop();
+    event->sendEvent();
     return true;
 }
 
@@ -746,7 +750,8 @@ bool SigChannel::msgText(Message& msg, const char* text)
     sm->params().addParam("text",text);
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Message,sm,m_call);
     TelEngine::destruct(sm);
-    m_call->sendEvent(event);
+    lock.drop();
+    event->sendEvent();
     return true;
 }
 
@@ -763,7 +768,8 @@ bool SigChannel::msgTransfer(Message& msg)
     if (!m_call)
 	return true;
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Transfer,0,m_call);
-    return m_call->sendEvent(event);
+    lock.drop();
+    return event->sendEvent();
 }
 
 bool SigChannel::callPrerouted(Message& msg, bool handled)
@@ -783,6 +789,7 @@ bool SigChannel::callRouted(Message& msg)
 void SigChannel::callAccept(Message& msg)
 {
     Lock lock(m_mutex);
+    SignallingEvent* event = 0;
     if (m_call) {
 	const char* format = msg.getValue("format");
 	updateConsumer(format,false);
@@ -791,11 +798,13 @@ void SigChannel::callAccept(Message& msg)
 	    sm = new SignallingMessage;
 	    sm->params().addParam("format",format);
 	}
-	SignallingEvent* event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
+	event = new SignallingEvent(SignallingEvent::Accept,sm,m_call);
 	TelEngine::destruct(sm);
-	m_call->sendEvent(event);
     }
     setState("accepted",false);
+    lock.drop();
+    if (event)
+	event->call()->sendEvent(event);
     Channel::callAccept(msg);
 }
 
@@ -828,19 +837,21 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
     if (m_reason.null())
 	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal-clearing");
     setState("hangup",true,true);
+    SignallingEvent* ev = 0;
     Lock lock2(driver());
     if (m_call) {
 	m_call->userdata(0);
 	lock2.drop();
 	SignallingMessage* msg = new SignallingMessage;
 	msg->params().addParam("reason",m_reason);
-	SignallingEvent* ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
+	ev = new SignallingEvent(SignallingEvent::Release,msg,m_call);
 	TelEngine::destruct(msg);
-	m_call->sendEvent(ev);
 	TelEngine::destruct(m_call);
     }
     lock2.drop();
     lock.drop();
+    if (ev)
+	ev->sendEvent();
     Message* m = message("chan.hangup",true);
     m->setParam("status",status());
     m->setParam("reason",m_reason);

@@ -1965,6 +1965,12 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 // Transmit message. Set routing label's link if not already set
 bool SS7ISUPCall::transmitMessage(SS7MsgISUP* msg)
 {
+    if (!msg || !isup()) {
+	TelEngine::destruct(msg);
+	return false;
+    }
+    DDebug(isup(),DebugAll,"Call(%u). Transmitting messsage (%s,%p) [%p]",
+	id(),msg->name(),msg,this);
     int sls = isup()->transmitMessage(msg,m_label,false);
     if (sls == -1)
 	return false;
@@ -2182,10 +2188,12 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	call->ref();
 	m_calls.append(call);
 	SignallingEvent* event = new SignallingEvent(SignallingEvent::NewCall,msg,call);
-	call->sendEvent(event);
 	// (re)start RSC timer if not currently reseting
 	if (!m_rscCic && m_rscTimer.interval())
 	    m_rscTimer.start();
+	// Drop lock and send the event
+	lock.drop();
+	event->sendEvent();
     }
     TelEngine::destruct(msg);
     return call;
@@ -2204,6 +2212,7 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 	p = &tmp;
     }
 
+    lock();
     SS7MSU* msu = createMSU(msg->type(),m_priossf,*p,msg->cic(),&msg->params());
 
     if (m_printMsg && debugAt(DebugInfo)) {
@@ -2227,13 +2236,18 @@ int SS7ISUP::transmitMessage(SS7MsgISUP* msg, const SS7Label& label, bool recvLb
 
     sls = -1;
     if (msu && m_l3LinkUp) {
+	unlock();
 	sls = transmitMSU(*msu,*p,p->sls());
-	TelEngine::destruct(msu);
+	lock();
+	if ((m_sls == 255) && (sls != -1))
+	    m_sls = (unsigned char)sls;
     }
+    unlock();
+#ifdef XDEBUG
     if (sls == -1)
-	XDebug(this,DebugMild,"Failed to send message (%p): '%s'",msg,msg->name());
-    if (m_sls == 255)
-	m_sls = (unsigned char)sls;
+	Debug(this,DebugMild,"Failed to send message (%p): '%s'",msg,msg->name());
+#endif
+    TelEngine::destruct(msu);
     TelEngine::destruct(msg);
     return sls;
 }

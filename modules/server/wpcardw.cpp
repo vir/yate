@@ -162,7 +162,7 @@ private:
 	    control(Disable,0);
 	    attach(0);
 	    if (release)
-		GenObject::destruct();
+		RefObject::destruct();
 	}
     WpSocket m_socket;
     WpSigThread* m_thread;               // Thread used to read data from socket

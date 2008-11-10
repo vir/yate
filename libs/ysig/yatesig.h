@@ -534,7 +534,7 @@ protected:
  * The engine will periodically poll each component to keep them alive.
  * @short Abstract signalling component that can be managed by the engine
  */
-class YSIG_API SignallingComponent : public GenObject, public DebugEnabler
+class YSIG_API SignallingComponent : public RefObject, public DebugEnabler
 {
     friend class SignallingEngine;
 public:
@@ -571,6 +571,12 @@ protected:
     inline SignallingComponent(const char* name = 0)
 	: m_engine(0), m_name(name)
 	{ }
+
+    /**
+     * This method is called to clean up and destroy the object after the
+     *  reference counter becomes zero
+     */
+    void destroyed();
 
     /**
      * Insert another component in the same engine as this one.
@@ -1923,14 +1929,6 @@ public:
 	{ return cic && cic->status(SignallingCircuit::Idle,sync); }
 
     /**
-     * Remove all spans and circuits. Release object
-     */
-    virtual void destruct() {
-	    clearAll();
-	    SignallingComponent::destruct();
-	}
-
-    /**
      * Get the strategy value associated with a given name
      * @param name Strategy name whose value we want to obtain
      * @param def Value to return if not found
@@ -1943,6 +1941,15 @@ public:
      * Keep the strategy names
      */
     static TokenDict s_strategy[];
+
+protected:
+    /**
+     * Remove all spans and circuits. Release object
+     */
+    virtual void destroyed() {
+	    clearAll();
+	    SignallingComponent::destroyed();
+	}
 
 private:
     unsigned int advance(unsigned int n, int strategy, SignallingCircuitRange& range);
@@ -2166,10 +2173,7 @@ public:
      * @return True if the command completed successfully, for query operations
      *  also indicates the interface is enabled and operational
      */
-    inline bool control(SignallingInterface::Operation oper, NamedList* params = 0) {
-	    Lock lock(m_ifaceMutex);
-	    return m_interface && m_interface->control(oper,params);
-	}
+    bool control(SignallingInterface::Operation oper, NamedList* params = 0);
 
 protected:
     /**
@@ -2180,11 +2184,8 @@ protected:
      * @param type Type of the packet to send
      * @return True if the interface accepted the packet
      */
-    inline bool transmitPacket(const DataBlock& packet, bool repeat,
-	SignallingInterface::PacketType type = SignallingInterface::Unknown) {
-	    Lock lock(m_ifaceMutex);
-	    return m_interface && m_interface->transmitPacket(packet,repeat,type);
-	}
+    bool transmitPacket(const DataBlock& packet, bool repeat,
+	SignallingInterface::PacketType type = SignallingInterface::Unknown);
 
     /**
      * Process a Signalling Packet received by the interface
@@ -2910,12 +2911,12 @@ public:
      */
     virtual AnalogLineEvent* getEvent(const Time& when);
 
+protected:
     /**
      * Remove all lines. Release object
      */
-    virtual void destruct();
+    virtual void destroyed();
 
-protected:
     /**
      * The analog lines belonging to this group
      */
@@ -3961,9 +3962,9 @@ protected:
      */
     inline bool receivedMSU(const SS7MSU& msu) {
 	    m_l2userMutex.lock();
-	    SS7L2User* tmp = m_l2user;
+	    RefPointer<SS7L2User> tmp = m_l2user;
 	    m_l2userMutex.unlock();
-	    return tmp && tmp->receivedMSU(msu,this,m_sls);
+	    return tmp && tmp->receivedMSU(msu,RefPointer<SS7Layer2>(this),m_sls);
 	}
 
     /**
@@ -3971,10 +3972,10 @@ protected:
      */
     inline void notify() {
 	    m_l2userMutex.lock();
-	    SS7L2User* tmp = m_l2user;
+	    RefPointer<SS7L2User> tmp = m_l2user;
 	    m_l2userMutex.unlock();
 	    if (tmp)
-		tmp->notify(this);
+		tmp->notify(RefPointer<SS7Layer2>(this));
 	}
 
 private:
@@ -4120,8 +4121,10 @@ protected:
      * @return True if message was successfully delivered to the user component
      */
     inline bool receivedMSU(const SS7MSU& msu, const SS7Label& label, int sls) {
-	    Lock lock(m_l3userMutex);
-	    return m_l3user && m_l3user->receivedMSU(msu,label,this,sls);
+	    m_l3userMutex.lock();
+	    RefPointer<SS7L3User> tmp = m_l3user;
+	    m_l3userMutex.unlock();
+	    return tmp && tmp->receivedMSU(msu,label,RefPointer<SS7Layer3>(this),sls);
 	}
 
     /**
@@ -4129,9 +4132,11 @@ protected:
      * @param sls Signallink Link that generated the notification, -1 if none
      */
     inline void notify(int sls = -1) {
-	    Lock lock(m_l3userMutex);
-	    if (m_l3user)
-		m_l3user->notify(this,sls);
+	    m_l3userMutex.lock();
+	    RefPointer<SS7L3User> tmp = m_l3user;
+	    m_l3userMutex.unlock();
+	    if (tmp)
+		tmp->notify(RefPointer<SS7Layer3>(this),sls);
 	}
 
     /**
@@ -4229,8 +4234,10 @@ protected:
      * @return Link the message was successfully queued to, negative for error
      */
     inline int transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls = -1) {
-	    Lock lock(m_l3Mutex);
-	    return m_layer3 ? m_layer3->transmitMSU(msu,label,sls) : -1;
+	    m_l3Mutex.lock();
+	    RefPointer<SS7Layer3> tmp = m_layer3;
+	    m_l3Mutex.unlock();
+	    return tmp ? tmp->transmitMSU(msu,label,sls) : -1;
 	}
 
 private:
@@ -4487,16 +4494,16 @@ public:
      */
     virtual bool notify(SignallingInterface::Notification event);
 
+protected:
     /**
      * Remove all attachements. Disposes the memory
      */
-    virtual void destruct() {
+    virtual void destroyed() {
 	    SS7Layer2::attach(0);
 	    SignallingReceiver::attach(0);
-	    GenObject::destruct();
+	    SignallingComponent::destroyed();
 	}
 
-protected:
     /**
      * Periodical timer tick used to perform alignment and housekeeping
      * @param when Time to use as computing base for events and timeouts
@@ -4647,11 +4654,6 @@ public:
     virtual void detach(SS7Layer2* link);
 
     /**
-     * Detach all links and user. Destroys the object, disposes the memory
-     */
-    virtual void destruct();
-
-    /**
      * Get the total number of links attached
      * @return Number of attached data links
      */
@@ -4666,6 +4668,11 @@ public:
 	{ return m_active; }
 
 protected:
+    /**
+     * Detach all links and user. Destroys the object, disposes the memory
+     */
+    virtual void destroyed();
+
     /**
      * Process a MSU received from the Layer 2 component
      * @param msu Message data, starting with Service Indicator Octet
@@ -5479,11 +5486,6 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Remove all links with other layers. Disposes the memory
-     */
-    virtual void destruct();
-
-    /**
      * Decode an ISUP message buffer to a list of parameters
      * @param msg Destination list of parameters
      * @param msgType The message type
@@ -5509,6 +5511,11 @@ public:
 	const NamedList& params, unsigned int* cic = 0);
 
 protected:
+    /**
+     * Remove all links with other layers. Disposes the memory
+     */
+    virtual void destroyed();
+
     /**
      * Send CGU if not already done. Check timeouts
      * @param when Time to use as computing base for timeouts
@@ -6383,15 +6390,6 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Detach links. Disposes memory
-     */
-    virtual void destruct() {
-	    ISDNLayer2::attach(0);
-	    SignallingReceiver::attach(0);
-	    GenObject::destruct();
-	}
-
-    /**
      * Set debug data of this layer
      * @param printFrames Enable/disable frame printing on output
      * @param extendedDebug Enable/disable hex data dump if print frames is enabled
@@ -6402,6 +6400,15 @@ public:
 	}
 
 protected:
+    /**
+     * Detach links. Disposes memory
+     */
+    virtual void destroyed() {
+	    ISDNLayer2::attach(0);
+	    SignallingReceiver::attach(0);
+	    SignallingComponent::destroyed();
+	}
+
     /**
      * Method called periodically to check timeouts
      * This method is thread safe
@@ -6549,15 +6556,6 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Detach links. Disposes memory
-     */
-    virtual void destruct() {
-	    ISDNLayer2::attach(0);
-	    SignallingReceiver::attach(0);
-	    GenObject::destruct();
-	}
-
-    /**
      * Set debug data of this layer
      * @param printFrames Enable/disable frame printing on output
      * @param extendedDebug Enable/disable hex data dump if print frames is enabled
@@ -6568,6 +6566,15 @@ public:
 	}
 
 protected:
+    /**
+     * Detach links. Disposes memory
+     */
+    virtual void destroyed() {
+	    ISDNLayer2::attach(0);
+	    SignallingReceiver::attach(0);
+	    SignallingComponent::destroyed();
+	}
+
     /**
      * Method called periodically to check timeouts
      * This method is thread safe
@@ -7693,15 +7700,6 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Detach links. Disposes memory
-     */
-    virtual void destruct() {
-	    attach(0);
-	    SignallingCallControl::attach(0);
-	    ISDNLayer3::destruct();
-	}
-
-    /**
      * Set debug data of this call controller
      * @param printMsg Enable/disable message printing on output
      * @param extendedDebug Enable/disable hex data dump if print messages is enabled
@@ -7723,6 +7721,15 @@ public:
     static TokenDict s_swType[];
 
 protected:
+    /**
+     * Detach links. Disposes memory
+     */
+    virtual void destroyed() {
+	    attach(0);
+	    SignallingCallControl::attach(0);
+	    ISDNLayer3::destroyed();
+	}
+
     /**
      * Method called periodically to check timeouts
      * This method is thread safe
@@ -7958,18 +7965,6 @@ public:
     virtual void* getObject(const String& name) const;
 
     /**
-     * Detach links. Disposes memory
-     */
-    virtual void destruct() {
-	    SignallingCallControl::attach(0);
-	    attach((ISDNQ921Passive*)0,true);
-	    attach((ISDNQ921Passive*)0,false);
-	    attach((SignallingCircuitGroup*)0,true);
-	    attach((SignallingCircuitGroup*)0,false);
-	    ISDNLayer3::destruct();
-	}
-
-    /**
      * Set debug data of this call controller
      * @param printMsg Enable/disable message printing on output
      * @param extendedDebug Enable/disable hex data dump if print messages is enabled
@@ -7997,6 +7992,18 @@ public:
     void terminateMonitor(ISDNQ931CallMonitor* mon, const char* reason);
 
 protected:
+    /**
+     * Detach links. Disposes memory
+     */
+    virtual void destroyed() {
+	    SignallingCallControl::attach(0);
+	    attach((ISDNQ921Passive*)0,true);
+	    attach((ISDNQ921Passive*)0,false);
+	    attach((SignallingCircuitGroup*)0,true);
+	    attach((SignallingCircuitGroup*)0,false);
+	    ISDNLayer3::destroyed();
+	}
+
     /**
      * Method called periodically to check timeouts
      * This method is thread safe

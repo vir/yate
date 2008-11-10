@@ -1391,7 +1391,7 @@ AnalogLineEvent* AnalogLineGroup::getEvent(const Time& when)
 }
 
 // Remove all spans and circuits. Release object
-void AnalogLineGroup::destruct()
+void AnalogLineGroup::destroyed()
 {
     lock();
     for (ObjList* o = m_lines.skipNull(); o; o = o->skipNext()) {
@@ -1402,7 +1402,7 @@ void AnalogLineGroup::destruct()
     m_lines.clear();
     TelEngine::destruct(m_fxo);
     unlock();
-    SignallingCircuitGroup::destruct();
+    SignallingCircuitGroup::destroyed();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

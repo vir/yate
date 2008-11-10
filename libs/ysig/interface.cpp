@@ -84,14 +84,18 @@ bool SignallingInterface::control(Operation oper, NamedList* params)
 
 bool SignallingInterface::receivedPacket(const DataBlock& packet)
 {
-    Lock lock(m_recvMutex);
-    return m_receiver && m_receiver->receivedPacket(packet);
+    m_recvMutex.lock();
+    RefPointer<SignallingReceiver> tmp = m_receiver;
+    m_recvMutex.unlock();
+    return tmp && tmp->receivedPacket(packet);
 }
 
 bool SignallingInterface::notify(Notification event)
 {
-    Lock lock(m_recvMutex);
-    return m_receiver && m_receiver->notify(event);
+    m_recvMutex.lock();
+    RefPointer<SignallingReceiver> tmp = m_receiver;
+    m_recvMutex.unlock();
+    return tmp && tmp->notify(event);
 }
 
 
@@ -130,5 +134,23 @@ bool SignallingReceiver::notify(SignallingInterface::Notification event)
     DDebug(this,DebugInfo,"Unhandled SignallingReceiver::notify(%d) [%p]",event,this);
     return false;
 }
+
+bool SignallingReceiver::control(SignallingInterface::Operation oper, NamedList* params)
+{
+    m_ifaceMutex.lock();
+    RefPointer<SignallingInterface> tmp = m_interface;
+    m_ifaceMutex.unlock();
+    return tmp && tmp->control(oper,params);
+}
+
+bool SignallingReceiver::transmitPacket(const DataBlock& packet, bool repeat,
+    SignallingInterface::PacketType type)
+{
+    m_ifaceMutex.lock();
+    RefPointer<SignallingInterface> tmp = m_interface;
+    m_ifaceMutex.unlock();
+    return tmp && tmp->transmitPacket(packet,repeat,type);
+}
+
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

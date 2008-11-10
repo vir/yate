@@ -462,7 +462,7 @@ void SS7MTP3::detach(SS7Layer2* link)
 }
 
 // Detach all links and user. Destroys the object, disposes the memory
-void SS7MTP3::destruct()
+void SS7MTP3::destroyed()
 {
     lock();
     ListIterator iter(m_links);
@@ -472,7 +472,7 @@ void SS7MTP3::destruct()
     }
     SS7Layer3::attach(0);
     unlock();
-    GenObject::destruct();
+    SS7Layer3::destroyed();
 }
 
 int SS7MTP3::transmitMSU(const SS7MSU& msu, const SS7Label& label, int sls)

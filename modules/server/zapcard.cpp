@@ -391,7 +391,7 @@ private:
 	    control(Disable,0);
 	    attach(0);
 	    if (release)
-		GenObject::destruct();
+		RefObject::destruct();
 	}
 
     ZapDevice m_device;                  // The device

@@ -2274,14 +2274,14 @@ void* SS7ISUP::getObject(const String& name) const
 }
 
 // Remove all links with other layers. Disposes the memory
-void SS7ISUP::destruct()
+void SS7ISUP::destroyed()
 {
     lock();
     clearCalls();
     unlock();
     SignallingCallControl::attach(0);
     SS7Layer4::attach(0);
-    SS7Layer4::destruct();
+    SS7Layer4::destroyed();
 }
 
 void SS7ISUP::timerTick(const Time& when)

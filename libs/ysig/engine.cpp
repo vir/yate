@@ -110,6 +110,10 @@ void SignallingComponent::setName(const char* name)
 SignallingComponent::~SignallingComponent()
 {
     DDebug(engine(),DebugAll,"Component '%s' deleted [%p]",toString().c_str(),this);
+}
+
+void SignallingComponent::destroyed()
+{
     detach();
 }
 

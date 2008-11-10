@@ -1,2 +1,2 @@
-thread apply all bt
+thread apply all bt full
 quit

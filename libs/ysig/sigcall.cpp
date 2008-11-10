@@ -339,6 +339,14 @@ SignallingEvent::~SignallingEvent()
     }
 }
 
+bool SignallingEvent::sendEvent()
+{
+    if (m_call)
+	return m_call->sendEvent(this);
+    delete this;
+    return false;
+}
+
 
 /**
  * SignallingCircuitEvent

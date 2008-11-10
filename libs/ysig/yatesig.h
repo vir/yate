@@ -1220,8 +1220,7 @@ public:
      * Send this event through the call that generated it
      * @return True if there was a call and the operation succedded
      */
-    inline bool sendEvent()
-	{ return m_call && m_call->sendEvent(this); }
+    bool sendEvent();
 
 private:
     Type m_type;

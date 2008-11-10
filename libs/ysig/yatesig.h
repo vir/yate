@@ -1210,6 +1210,13 @@ public:
     static inline const char* typeName(Type t)
 	{ return lookup(t,s_types,0); }
 
+    /**
+     * Send this event through the call that generated it
+     * @return True if there was a call and the operation succedded
+     */
+    inline bool sendEvent()
+	{ return m_call && m_call->sendEvent(this); }
+
 private:
     Type m_type;
     SignallingMessage* m_message;

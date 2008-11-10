@@ -3964,7 +3964,7 @@ protected:
 	    m_l2userMutex.lock();
 	    RefPointer<SS7L2User> tmp = m_l2user;
 	    m_l2userMutex.unlock();
-	    return tmp && tmp->receivedMSU(msu,RefPointer<SS7Layer2>(this),m_sls);
+	    return tmp && tmp->receivedMSU(msu,this,m_sls);
 	}
 
     /**
@@ -3975,7 +3975,7 @@ protected:
 	    RefPointer<SS7L2User> tmp = m_l2user;
 	    m_l2userMutex.unlock();
 	    if (tmp)
-		tmp->notify(RefPointer<SS7Layer2>(this));
+		tmp->notify(this);
 	}
 
 private:
@@ -4124,7 +4124,7 @@ protected:
 	    m_l3userMutex.lock();
 	    RefPointer<SS7L3User> tmp = m_l3user;
 	    m_l3userMutex.unlock();
-	    return tmp && tmp->receivedMSU(msu,label,RefPointer<SS7Layer3>(this),sls);
+	    return tmp && tmp->receivedMSU(msu,label,this,sls);
 	}
 
     /**
@@ -4136,7 +4136,7 @@ protected:
 	    RefPointer<SS7L3User> tmp = m_l3user;
 	    m_l3userMutex.unlock();
 	    if (tmp)
-		tmp->notify(RefPointer<SS7Layer3>(this),sls);
+		tmp->notify(this,sls);
 	}
 
     /**
@@ -4250,7 +4250,7 @@ private:
  *  to route to the enclosed destination point code
  * @short A SS7 MSU route
  */
-class YSIG_API SS7Route : public GenObject
+class YSIG_API SS7Route : public RefObject, public Mutex
 {
     friend class SS7Layer3;
 public:
@@ -4260,7 +4260,8 @@ public:
      * @param priority Optional value of the network priority
      */
     inline SS7Route(unsigned int packed, unsigned int priority = 0)
-	: m_packed(packed), m_priority(priority), m_listMutex(true)
+	: Mutex(true),
+	  m_packed(packed), m_priority(priority), m_changes(0)
 	{ m_networks.setDelete(false); }
 
     /**
@@ -4299,8 +4300,8 @@ public:
 private:
     unsigned int m_packed;               // Packed destination point code
     unsigned int m_priority;             // Network priority for the given destination (used by SS7Layer3)
-    Mutex m_listMutex;                   // Lock list operations
     ObjList m_networks;                  // List of networks used to route to the given destination (used by SS7Router)
+    int m_changes;                       // Counter used to spot changes in the list
 };
 
 /**
@@ -4383,8 +4384,12 @@ protected:
      */
     virtual void notify(SS7Layer3* network, int sls);
 
-    ObjList m_layer3;                    // List of L3 (networks) attached to this router
-    ObjList m_layer4;                    // List of L4 (services) attached to this router
+    /** List of L3 (networks) attached to this router */
+    ObjList m_layer3;
+    /** List of L4 (services) attached to this router */
+    ObjList m_layer4;
+    /** Counter used to spot changes in the lists of L3 or L4 */
+    int m_changes;
 };
 
 /**

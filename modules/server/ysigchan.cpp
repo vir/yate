@@ -804,7 +804,7 @@ void SigChannel::callAccept(Message& msg)
     setState("accepted",false);
     lock.drop();
     if (event)
-	event->call()->sendEvent(event);
+	event->sendEvent();
     Channel::callAccept(msg);
 }
 

@@ -2120,16 +2120,14 @@ bool Client::callIncoming(Message& msg, const String& dest)
 }
 
 // Accept an incoming call
-void Client::callAnswer(const String& id)
+void Client::callAnswer(const String& id, bool setActive)
 {
     Debug(ClientDriver::self(),DebugInfo,"callAccept('%s')",id.c_str());
     if (!driverLockLoop())
 	return;
     ClientChannel* chan = static_cast<ClientChannel*>(ClientDriver::self()->find(id));
-    if (chan) {
-	chan->callAnswer();
-	ClientDriver::self()->setActive(chan->id());
-    }
+    if (chan)
+	chan->callAnswer(setActive);
     driverUnlock();
 }
 
@@ -2639,7 +2637,7 @@ bool ClientChannel::msgDrop(Message& msg, const char* reason)
 
 // Answer the call if not answered
 // Activate the channel
-void ClientChannel::callAnswer()
+void ClientChannel::callAnswer(bool setActive)
 {
     Lock lock(m_mutex);
     noticed();
@@ -2650,7 +2648,7 @@ void ClientChannel::callAnswer()
 	update(Answered,true,true,"call.answered",false,true);
     }
     // Activating channel will set the media
-    if (ClientDriver::self())
+    if (setActive && ClientDriver::self())
 	ClientDriver::self()->setActive(id());
 }
 

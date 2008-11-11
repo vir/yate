@@ -1163,9 +1163,10 @@ public:
     /**
      * Answer an incoming call
      * @param id The accepted channel's id
+     * @param setActive True to activate the answered channel
      * @return True on success
      */
-    void callAnswer(const String& id);
+    void callAnswer(const String& id, bool setActive = true);
 
     /**
      * Terminate a call
@@ -1410,8 +1411,9 @@ public:
 
     /**
      * Answer an incoming call. Set media channels. Enqueue a clientchan.update message
+     * @param setActive True to activate the channel
      */
-    void callAnswer();
+    void callAnswer(bool setActive = true);
 
     /**
      * Get the remote party of this channel

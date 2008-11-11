@@ -2002,6 +2002,14 @@ JBComponentStream::JBComponentStream(JBEngine* engine, XMPPServerInfo& info,
     m_remoteFeatures.add(sasl);
 }
 
+// Get an object from this stream
+void* JBComponentStream::getObject(const String& name) const
+{
+    if (name == "JBComponentStream")
+	return (void*)this;
+    return JBStream::getObject(name);
+}
+
 // Create stream start element
 XMLElement* JBComponentStream::getStreamStart()
 {
@@ -2077,6 +2085,14 @@ JBClientStream::~JBClientStream()
 {
     TelEngine::destruct(m_roster);
     TelEngine::destruct(m_resource);
+}
+
+// Get an object from this stream
+void* JBClientStream::getObject(const String& name) const
+{
+    if (name == "JBClientStream")
+	return (void*)this;
+    return JBStream::getObject(name);
 }
 
 // Get a remote user from roster

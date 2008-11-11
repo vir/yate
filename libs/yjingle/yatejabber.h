@@ -908,6 +908,13 @@ public:
     virtual ~JBComponentStream()
 	{}
 
+    /**
+     * Get an object from this stream
+     * @param name The name of the object to get
+     * @return Pointer to the object or 0 if not found
+     */
+    virtual void* getObject(const String& name) const;
+
 protected:
     /**
      * Constructor. Build an outgoing stream
@@ -974,6 +981,13 @@ public:
      */
     inline JIDResource* getResource()
 	{ return m_resource; }
+
+    /**
+     * Get an object from this stream
+     * @param name The name of the object to get
+     * @return Pointer to the object or 0 if not found
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * Get a remote user from roster

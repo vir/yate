@@ -1123,11 +1123,11 @@ void JBMessage::processMessage(JBEvent* event)
 }
 
 // Create a message element
-XMLElement* JBMessage::createMessage(MsgType type, const char* from,
-	const char* to, const char* id, const char* message)
+XMLElement* JBMessage::createMessage(const char* type, const char* from,
+    const char* to, const char* id, const char* message)
 {
     XMLElement* msg = new XMLElement(XMLElement::Message);
-    msg->setAttributeValid("type",lookup(type,s_msg,""));
+    msg->setAttributeValid("type",type);
     msg->setAttribute("from",from);
     msg->setAttribute("to",to);
     if (id)

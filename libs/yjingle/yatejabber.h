@@ -1613,6 +1613,18 @@ public:
 
     /**
      * Create a 'message' element
+     * @param type Message type string
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @param message The message body
+     * @return A valid XMLElement pointer
+     */
+    static XMLElement* createMessage(const char* type, const char* from,
+	const char* to, const char* id, const char* message);
+
+    /**
+     * Create a 'message' element
      * @param type Message type as enumeration
      * @param from The 'from' attribute
      * @param to The 'to' attribute
@@ -1620,8 +1632,9 @@ public:
      * @param message The message body
      * @return A valid XMLElement pointer
      */
-    static XMLElement* createMessage(MsgType type, const char* from,
-	const char* to, const char* id, const char* message);
+    static inline XMLElement* createMessage(MsgType type, const char* from,
+	const char* to, const char* id, const char* message)
+	{ return createMessage(lookup(type,s_msg,""),from,to,id,message); }
 
     /**
      * Get the type of a 'message' stanza
@@ -2112,6 +2125,13 @@ public:
 	{ m_priority = value; }
 
     /**
+     * Get the list of resource features
+     * @return The resource features
+     */
+    inline JIDFeatureList& features()
+	{ return m_features; }
+
+    /**
      * Get the list containing XML elements with additional data describing this resource
      * @return The info list
      */
@@ -2187,6 +2207,7 @@ private:
     u_int32_t m_capability;              // Resource capabilities
     Show m_show;                         // Show attribute
     String m_status;                     // Status attribute
+    JIDFeatureList m_features;           // Resource features
     ObjList m_info;                      // XML elements containing additional info about this resource
 };
 

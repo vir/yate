@@ -195,9 +195,13 @@ public:
 	Roster,                          // jabber:iq:roster
 	DiscoInfo,                       // http://jabber.org/protocol/disco#info
 	DiscoItems,                      // http://jabber.org/protocol/disco#items
+	VCard,                           // vcard-temp
 	Jingle,                          // http://www.google.com/session
+	JingleError,                     // urn:xmpp:jingle:errors
 	JingleAudio,                     // http://www.google.com/session/phone
 	JingleTransport,                 // http://www.google.com/transport/p2p
+	JingleTransfer,                  // urn:xmpp:jingle:transfer
+	JingleRtpInfo,                   // urn:xmpp:jingle:apps:rtp:info
 	Dtmf,                            // http://jabber.org/protocol/jingle/info/dtmf
 	DtmfError,                       // http://jabber.org/protocol/jingle/info/dtmf#errors
 	Command,                         // http://jabber.org/protocol/command
@@ -762,6 +766,14 @@ public:
      * @return The given element
      */
     XMLElement* addTo(XMLElement* element);
+
+    /**
+     * Update the list from 'feature' children of the given element
+     * @param element The source XMLElement
+     * @param reset True to clear the list before updating
+     * @return The given element
+     */
+    void fromXml(XMLElement* element, bool reset = true);
 
     /**
      * Clear the feature list

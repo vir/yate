@@ -69,9 +69,13 @@ TokenDict XMPPNamespace::s_value[] = {
     {"jabber:iq:roster",                                   Roster},
     {"http://jabber.org/protocol/disco#info",              DiscoInfo},
     {"http://jabber.org/protocol/disco#items",             DiscoItems},
+    {"vcard-temp",                                         VCard},
     {"http://www.google.com/session",                      Jingle},
+    {"urn:xmpp:jingle:errors",                             JingleError},
     {"http://www.google.com/session/phone",                JingleAudio},
     {"http://www.google.com/transport/p2p",                JingleTransport},
+    {"urn:xmpp:jingle:transfer",                           JingleTransfer},
+    {"urn:xmpp:jingle:apps:rtp:info",                      JingleRtpInfo},
     {"http://jabber.org/protocol/jingle/info/dtmf",        Dtmf},
     {"http://jabber.org/protocol/jingle/info/dtmf#errors", DtmfError},
     {"http://jabber.org/protocol/commands",                Command},
@@ -305,6 +309,22 @@ XMLElement* JIDFeatureList::addTo(XMLElement* element)
 	element->addChild(feature);
     }
     return element;
+}
+
+// Update the list from 'feature' children of the given element
+void JIDFeatureList::fromXml(XMLElement* element, bool reset)
+{
+    if (reset)
+	clear();
+    if (!element)
+	return;
+
+    XMLElement* x = 0;
+    while (0 != (x = element->findNextChild(x,XMLElement::Feature))) {
+	XMPPNamespace::Type t = XMPPNamespace::type(x->getAttribute("var"));
+	if (t != XMPPNamespace::Count && !get(t))
+	    add(t);
+    }
 }
 
 

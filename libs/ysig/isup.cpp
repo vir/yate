@@ -3158,7 +3158,7 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
     d[0] = '1';
     unsigned int cics = 1;
     unsigned int lockRange = 1;
-    for (; o && cics < 32; o = o->skipNext(), lockRange++) {
+    for (; o && cics < 32 && lockRange < 256; o = o->skipNext()) {
 	SignallingCircuit* cic = static_cast<SignallingCircuit*>(o->get());
 	// Presume all circuits belonging to the same span to follow each other in the list
 	if (span != cic->span())
@@ -3179,6 +3179,9 @@ bool SS7ISUP::sendLocalLock(u_int64_t when)
 	    d[lockRange] = '1';
 	    cics++;
 	}
+	else
+	    d[lockRange] = '0';
+	lockRange++;
     }
     if (cics == 1)
 	lockRange = 1;

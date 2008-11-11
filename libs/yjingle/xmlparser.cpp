@@ -53,6 +53,7 @@ TokenDict XMLElement::s_names[] = {
     {"presence",             Presence},
     {"error",                Error},
     {"query",                Query},
+    {"vCard",                VCard},
     {"session",              Jingle},
     {"description",          Description},
     {"payload-type",         PayloadType},
@@ -63,6 +64,11 @@ TokenDict XMLElement::s_names[] = {
     {"feature",              Feature},
     {"bind",                 Bind},
     {"resource",             Resource},
+    {"transfer",             Transfer},
+    {"hold",                 Hold},
+    {"active",               Active},
+    {"ringing",              Ringing},
+    {"mute",                 Mute},
     {"registered",           Registered},
     {"remove",               Remove},
     {"jid",                  Jid},
@@ -76,6 +82,7 @@ TokenDict XMLElement::s_names[] = {
     {"text",                 Text},
     {"item",                 Item},
     {"group",                Group},
+    {"reason",               Reason},
     {0,0}
 };
 
@@ -211,7 +218,7 @@ void XMLElement::toString(String& dest, bool unclose) const
 // Put this element's name, text and attributes to a list of parameters
 void XMLElement::toList(NamedList& dest, const char* prefix)
 {
-    DDebug(DebugAll,"XMLElement(%s) to list=%s prefix=%s [%p]",
+    XDebug(DebugAll,"XMLElement(%s) to list=%s prefix=%s [%p]",
 	m_name.c_str(),dest.c_str(),prefix,this);
     dest.addParam(prefix,name());
     String pref(String(prefix) + ".");

@@ -92,6 +92,7 @@ public:
 	// *** Stanza children
 	Error,                           // error
 	Query,                           // query
+	VCard,                           // vCard
 	Jingle,                          // session
 	// Description
 	Description,                     // description
@@ -106,7 +107,13 @@ public:
 	Feature,                         // feature
 	Bind,                            // bind
 	Resource,                        // resource
-	// Miscellanous
+	// Jingle session info
+	Transfer,                        // transfer
+	Hold,                            // hold
+	Active,                          // active
+	Ringing,                         // ringing
+	Mute,                            // mute
+	// Miscellaneous
 	Registered,                      // registered
 	Remove,                          // remove
 	Jid,                             // jid
@@ -120,6 +127,7 @@ public:
 	Text,                            // text
 	Item,                            // item
 	Group,                           // group
+	Reason,                          // reason
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };

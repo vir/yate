@@ -186,8 +186,8 @@ g729=default
 ;subdomain=yate
 
 ; startup: boolean: Open the stream to the server when initializing the driver
-; Defaults to enable
-;startup=enable
+; Defaults to no (open stream on first demand)
+;startup=no
 
 ; default: boolean: This is the default component to use. If no component is
 ;  marked as default the first will be implicitely default

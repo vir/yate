@@ -3118,7 +3118,7 @@ private:
  * @param str String to append to
  * @param cp Point code to append to the string
  */
-String& operator<<(String& str, const SS7PointCode& cp);
+YSIG_API String& operator<<(String& str, const SS7PointCode& cp);
 
 /**
  * A SS7 Layer 3 routing label, both ANSI and ITU capable
@@ -3331,7 +3331,7 @@ private:
  * @param str String to append to
  * @param label Label to append to the string
  */
-String& operator<<(String& str, const SS7Label& label);
+YSIG_API String& operator<<(String& str, const SS7Label& label);
 
 /**
  * A raw data block with a little more understanding about MSU format

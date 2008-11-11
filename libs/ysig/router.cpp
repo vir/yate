@@ -94,7 +94,7 @@ int SS7Route::transmitMSU(const SS7Router* router, const SS7MSU& msu,
 	    if (!l3)
 		continue;
 	    DDebug(router,DebugAll,"Attempting transmitMSU on L3=%p '%s' [%p]",
-		l3.pointer(),l3->toString().c_str(),router);
+		(void*)l3,l3->toString().c_str(),router);
 	    int chg = m_changes;
 	    unlock();
 	    int res = l3->transmitMSU(msu,label,sls);
@@ -257,7 +257,7 @@ bool SS7Router::receivedMSU(const SS7MSU& msu, const SS7Label& label, SS7Layer3*
 	    if (!l4)
 		continue;
 	    DDebug(this,DebugAll,"Attempting receivedMSU to L4=%p '%s' [%p]",
-		l4.pointer(),l4->toString().c_str(),this);
+		(void*)l4,l4->toString().c_str(),this);
 	    int chg = m_changes;
 	    unlock();
 	    if (l4->receivedMSU(msu,label,network,sls))

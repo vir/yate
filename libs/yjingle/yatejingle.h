@@ -284,6 +284,7 @@ public:
 	ActInitiate,                     // initiate
 	ActReject,                       // reject
 	ActTerminate,                    // terminate
+	ActInfo,                         // session-info
 	ActTransport,                    // Used to set/get transport info
 	ActTransportInfo,                // transport-info
 	ActTransportCandidates,          // candidates
@@ -301,6 +302,24 @@ public:
 	TransportUnknown,               // Detect transport type on incoming, sent both on outgoing
 	TransportInfo,                  // transport-info
 	TransportCandidates,            // candidates
+    };
+
+    /**
+     * Jingle defined termination reasons
+     */
+    enum Reason {
+	ReasonBusy,                      // <busy/>
+	ReasonDecline,                   // <decline/>
+	ReasonConn,                      // <connectivity-error/>
+	ReasonMedia,                     // <media-error/>
+	ReasonTransport,                 // <unsupported-transports/>
+	ReasonNoError,                   // <no-error/>
+	ReasonOk,                        // <success/>
+	ReasonNoApp,                     // <unsupported-applications/>
+	ReasonAltSess,                   // <alternative-session/>
+	ReasonUnknown,                   // <general-error/>
+	ReasonTransfer,                  // <transferred>
+	ReasonNone                       // None of the above
     };
 
     /**
@@ -384,11 +403,11 @@ public:
     /**
      * Close a Pending or Active session
      * This method is thread safe
-     * @param reject True to reject. False to terminate gracefully
-     * @param msg Optional message to send before hangup
+     * @param reason Termination reason
+     * @param msg Optional termination message
      * @return False if send failed
      */
-    bool hangup(bool reject = false, const char* msg = 0);
+    bool hangup(int reason, const char* msg = 0);
 
     /**
      * Confirm a received element. If the error is NoError a result stanza will be sent.
@@ -459,6 +478,53 @@ public:
 		m_localJID,m_remoteJID,0,msg),0,false);
 	}
 
+    /**
+     * Send a session info element to the remote peer.
+     * This method is thread safe
+     * @param data The XMLElement carried by the session info element
+     * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
+     * @return False on failure
+     */
+    inline bool sendInfo(XMLElement* xml, String* stanzaId = 0)
+	{ return xml ? sendStanza(createJingle(ActInfo,xml),stanzaId) : false; }
+
+    /**
+     * Check if the remote party supports a given feature
+     * @param feature The requested feature
+     * @return True if the remote party supports the given feature
+     */
+    bool hasFeature(XMPPNamespace::Type feature);
+
+    /**
+     * Get the termination code associated with a text
+     * @param value The termination text
+     * @param def Default value to return if not found
+     * @return Termination code
+     */
+    static inline int lookupReason(const char* value, int def = ReasonOk)
+	{ return lookup(value,s_reasons,def); }
+
+    /**
+     * Get the termination code associated with a text
+     * @param value The termination code
+     * @param def Default value to return if not found
+     * @return Termination text
+     */
+    static inline const char* lookupReason(int value, const char* def = 0)
+	{ return lookup(value,s_reasons,def); }
+
+    /**
+     * Get the name of an action
+     * @return The name of an action
+     */
+    static inline const char* lookupAction(int act)
+	{ return lookup(act,s_actions); }
+
+    /**
+     * Termination reasons
+     */
+    static TokenDict s_reasons[];
+
 protected:
     /**
      * Constructor. Create an outgoing session
@@ -469,12 +535,13 @@ protected:
      * @param media The session media description
      * @param transport The session transport method(s)
      * @param sid True to used 'sid' instead of 'id' as session id attribute
+     * @param extra Optional extra child to be added to the session initiate element
      * @param msg Optional message to be sent before session initiate
      */
     JGSession(JGEngine* engine, JBStream* stream,
 	const String& callerJID, const String& calledJID,
 	XMLElement* media, XMLElement* transport,
-	bool sid, const char* msg = 0);
+	bool sid, XMLElement* extra = 0, const char* msg = 0);
 
     /**
      * Constructor. Create an incoming session.
@@ -526,9 +593,11 @@ protected:
      * @param action The action of the Jingle stanza
      * @param element1 Optional child element
      * @param element2 Optional child element
+     * @param element3 Optional child element
      * @return Valid XMLElement pointer
      */
-    XMLElement* createJingle(Action action, XMLElement* element1 = 0, XMLElement* element2 = 0);
+    XMLElement* createJingle(Action action, XMLElement* element1 = 0,
+	XMLElement* element2 = 0, XMLElement* element3 = 0);
 
     /**
      * Send a transport related element to the remote peer
@@ -597,7 +666,10 @@ public:
 	                                 //  ActTransportAccept
 	                                 //  ActDtmf                 m_reason is button-up/button-down. m_text is the dtmf
 	                                 //  ActDtmfMethod           m_text is the dtmf method: rtp/xmpp
-	Response,                        // Response for a sent stanza
+	ResultOk,                        // Response for a sent stanza (iq with type=result)
+	ResultError,                     // Response for a sent stanza (iq with type=error)
+	ResultWriteFail,                 // Response for a sent stanza (failed to send stanza)
+	ResultTimeout,                   // Response for a sent stanza (stanza timeout)
 	// Final
 	Terminated,                      // m_element is the element that caused the termination
 	                                 //  m_reason contains the reason
@@ -617,6 +689,13 @@ public:
 	{ return m_type; }
 
     /**
+     * Get the name of this
+     * @return The name of this event
+     */
+    inline const char* name()
+	{ return lookupType(m_type); }
+
+    /**
      * Get the session that generated this event
      * @return The session that generated this event
      */
@@ -631,11 +710,26 @@ public:
 	{ return m_element; }
 
     /**
+     * Get the Jingle child of the XML element carried by the event
+     * Don't delete it after use: it is owned by the event
+     * @return The Jingle child of the XML element carried by the event
+     */
+    inline XMLElement* jingle() const
+	{ return m_jingle; }
+
+    /**
      * Get the jingle action as enumeration
      * @return The jingle action as enumeration
      */
     inline JGSession::Action action() const
 	{ return m_action; }
+
+    /**
+     * Get the name of an action
+     * @return The name of an action
+     */
+    inline const char* actionName()
+	{ return JGSession::lookupAction(m_action); }
 
     /**
      * Get the audio payloads list
@@ -677,6 +771,7 @@ public:
      * @return The XML element that generated this event
      */
     inline XMLElement* releaseXML() {
+	    TelEngine::destruct(m_jingle);
 	    XMLElement* tmp = m_element;
 	    m_element = 0;
 	    return tmp;
@@ -689,6 +784,18 @@ public:
     inline bool final() const
 	{ return m_type == Terminated || m_type == Destroy; }
 
+    /**
+     * Get the name of an event type
+     * @return The name of an event type
+     */
+    static inline const char* lookupType(int type)
+	{ return lookup(type,s_typeName); }
+
+    /**
+     * Dictionary with event type names
+     */
+    static TokenDict s_typeName[];
+
 protected:
     /**
      * Constructor. Set the id parameter if the element is valid
@@ -700,8 +807,8 @@ protected:
      */
     inline JGEvent(Type type, JGSession* session, XMLElement* element = 0,
 	const char* reason = 0, const char* text = 0)
-	: m_type(type), m_session(0), m_element(element), m_action(JGSession::ActCount),
-	m_reason(reason), m_text(text)
+	: m_type(type), m_session(0), m_element(element), m_jingle(0),
+	m_action(JGSession::ActCount), m_reason(reason), m_text(text)
 	{ init(session); }
 
     /**
@@ -714,8 +821,8 @@ protected:
      */
     inline JGEvent(JGSession::Action act, JGSession* session, XMLElement* element,
 	const char* reason = 0, const char* text = 0)
-	: m_type(Jingle), m_session(0), m_element(element), m_action(act),
-	m_reason(reason), m_text(text)
+	: m_type(Jingle), m_session(0), m_element(element), m_jingle(0),
+	m_action(act), m_reason(reason), m_text(text)
 	{ init(session); }
 
 private:
@@ -725,6 +832,7 @@ private:
     Type m_type;                         // The type of this event
     JGSession* m_session;                // Jingle session that generated this event
     XMLElement* m_element;               // XML element that generated this event
+    XMLElement* m_jingle;                // The session child, if present
     // Event specific
     JGSession::Action m_action;          // The action if type is Jingle
     JGAudioList m_audio;                 // The received audio payloads
@@ -784,11 +892,13 @@ public:
      * @param remoteJID The remote peer's JID
      * @param media A valid 'description' XML element
      * @param transport A valid 'transport' XML element
+     * @param extra Optional extra child for session initiate element
      * @param msg Optional message to send before call
      * @return Valid JGSession pointer (referenced) on success
      */
     JGSession* call(const String& callerName, const String& remoteJID,
-	XMLElement* media, XMLElement* transport, const char* msg = 0);
+	XMLElement* media, XMLElement* transport, XMLElement* extra = 0,
+	const char* msg = 0);
 
     /**
      * Default event processor. Delete event.

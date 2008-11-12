@@ -14,6 +14,11 @@
 ; Defaults to disable
 ;imtochantext=disable
 
+; addpresencetocommand: boolean: Attach a presence stanza to an 'iq' command when
+;  this one is used to notify presence
+; Defaults to disable
+;addpresencetocommand=disable
+
 ; localip: string: Set this machine's IP address. If missing, we will try to guess one
 ; The local machine's IP address is used to negotiate the audio stream
 ;localip=

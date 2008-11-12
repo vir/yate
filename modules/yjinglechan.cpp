@@ -197,6 +197,8 @@ public:
     // Create media description XML element
     inline XMLElement* mediaXML()
 	{ return JGAudioList::toXML(); }
+    // Reset transport data
+    void resetTransport();
     // Reserve RTP address and port or start the RTP session
     bool rtp(bool start);
     // Update media from received data. Return false if already updated media or failed to negotiate a format
@@ -241,6 +243,7 @@ public:
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
     virtual bool callRouted(Message& msg);
     virtual void disconnected(bool final, const char* reason);
+    virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);
     virtual bool msgUpdate(Message& msg);
     virtual bool msgText(Message& msg, const char* text);
@@ -254,7 +257,7 @@ public:
     bool route();
     // Process Jingle and Terminated events
     void handleEvent(JGEvent* event);
-    void hangup(bool reject, const char* reason = 0);
+    void hangup(const char* reason, const char* text = 0);
     // Process remote user's presence changes.
     // Make the call if outgoing and in Pending (waiting for presence information) state
     // Hangup if the remote user is unavailbale
@@ -284,6 +287,7 @@ private:
     JabberID m_remote;                   // Remote user's JID
     String m_callerPrompt;               // Text to be sent to called before calling it
     YJGData* m_data;                     // Transport and data format(s)
+    bool m_remoteSuportRing;             // Remote party supports ringing
     // Termination
     bool m_hangup;                       // Hang up flag: True - already hung up
     String m_reason;                     // Hangup reason
@@ -387,7 +391,8 @@ public:
     bool decodeJid(JabberID& jid, Message& msg, const char* param,
 	bool checkDomain = false);
     // Create the presence notification command
-    XMLElement* getPresenceCommand(JabberID& from, JabberID& to, bool available);
+    XMLElement* getPresenceCommand(JabberID& from, JabberID& to, bool available,
+	XMLElement* presence = 0);
     // Create a random string of JINGLE_AUTHSTRINGLEN length
     void createAuthRandomString(String& dest);
     // Process presence. Notify connections
@@ -404,6 +409,12 @@ public:
     bool getExecuteDest(Message& msg, String& dest);
     // Process a message received by a stream
     void processImMsg(JBEvent& event);
+    // Search a client's roster to get a resource
+    //  (with audio capabilities) for a subscribed user.
+    // Set noSub to true if false is returned and the client
+    //  is not subscribed to the remote user (or the remote user is not found).
+    // Return false if user or resource is not found
+    bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
     // Check if this module handles a given protocol
     static bool canHandleProtocol(const String& proto) {
 	    for (unsigned int i = 0; i < ProtoCount; i++)
@@ -447,6 +458,7 @@ static JGAudioList s_usedCodecs;                  // List of used codecs (JGAudi
 static String s_localAddress;                     // The local machine's address
 static unsigned int s_pendingTimeout = 10000;     // Outgoing call pending timeout
 static String s_anonymousCaller = "unk_caller";   // Caller name when missing
+static bool s_attachPresToCmd = false;            // Attach presence to command (when used)
 static YJBEngine* s_jabber = 0;
 static YJGEngine* s_jingle = 0;
 static YJBMessage* s_message = 0;
@@ -457,6 +469,34 @@ static YJBIqService* s_iqService = 0;
 const String YJGDriver::s_protocol[YJGDriver::ProtoCount] = {"jabber", "xmpp", "jingle"};
 static YJGDriver plugin;                          // The driver
 
+// Error mapping
+static TokenDict s_errMap[] = {
+    {"normal",          JGSession::ReasonOk},
+    {"normal-clearing", JGSession::ReasonOk},
+    {"hangup",          JGSession::ReasonOk},
+    {"busy",            JGSession::ReasonBusy},
+    {"rejected",        JGSession::ReasonDecline},
+    {"nomedia",         JGSession::ReasonMedia},
+    {"transferred",     JGSession::ReasonTransfer},
+    {"failure",         JGSession::ReasonUnknown},
+    {"noroute",         JGSession::ReasonUnknown},
+    {"noconn",          JGSession::ReasonUnknown},
+    {"noauth",          JGSession::ReasonUnknown},
+    {"nocall",          JGSession::ReasonUnknown},
+    {"noanswer",        JGSession::ReasonUnknown},
+    {"forbidden",       JGSession::ReasonUnknown},
+    {"offline",         JGSession::ReasonUnknown},
+    {"congestion",      JGSession::ReasonUnknown},
+    {"looping",         JGSession::ReasonUnknown},
+    {"shutdown",        JGSession::ReasonUnknown},
+    // Remote termination only
+    {"failure",         JGSession::ReasonConn},
+    {"failure",         JGSession::ReasonTransport},
+    {"failure",         JGSession::ReasonNoError},
+    {"failure",         JGSession::ReasonNoApp},
+    {"failure",         JGSession::ReasonAltSess},
+    {0,0}
+};
 
 // Get the number of private threads of a given type
 // Force to 1 for client run mode
@@ -628,7 +668,7 @@ void YJGEngine::processEvent(JGEvent* event)
 	    }
 	    else {
 		Debug(this,DebugWarn,"Session ref failed for new connection");
-		event->session()->hangup(false,"failure");
+		event->session()->hangup(JGSession::ReasonUnknown,"Internal error");
 	    }
         }
 	else
@@ -724,6 +764,7 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	if (event->type() == JBEvent::IqClientRosterUpdate) {
 	    if (!event->child())
 		break;
+	    // Send the roster in individual resource.notify
 	    XMLElement* item = event->child()->findFirstChild(XMLElement::Item);
 	    for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
 		Message* m = YJBPresence::message(-1,0,event->to().bare(),
@@ -1052,14 +1093,7 @@ YJGData::YJGData(YJGConnection* conn, Message* msg)
     m_remote(0)
 {
     // Set data members
-    name = "rtp";
-    protocol = "udp";
-    type = "local";
-    network = "0";
-    preference = "1";
-    generation = "0";
-    plugin.createAuthRandomString(username);
-    plugin.createAuthRandomString(password);
+    resetTransport();
     // Get formats from message. Fill with all supported if none
     String f = msg ? msg->getValue("formats") : 0;
     if (!f)
@@ -1082,6 +1116,25 @@ YJGData::YJGData(YJGConnection* conn, Message* msg)
 YJGData::~YJGData()
 {
     TelEngine::destruct(m_remote);
+}
+
+// Reset transport data
+void YJGData::resetTransport()
+{
+    name = "rtp";
+    protocol = "udp";
+    type = "local";
+    network = "0";
+    preference = "1";
+    int gen = generation.toInteger(-1);
+    generation = ++gen;
+    address = "";
+    port = 0;
+    plugin.createAuthRandomString(username);
+    plugin.createAuthRandomString(password);
+    m_transportReady = false;
+    TelEngine::destruct(m_remote);
+    m_started = false;
 }
 
 // Reserve RTP address and port or start the RTP session
@@ -1164,7 +1217,7 @@ bool YJGData::updateMedia(JGAudioList& media)
     // Check if we received any media
     if (!media.skipNull()) {
 	Debug(m_conn,DebugNote,"Remote party has no media [%p]",m_conn);
-	m_conn->hangup(false,"nomedia");
+	m_conn->hangup("nomedia","No media format(s) available");
 	return false;
     }
 
@@ -1196,7 +1249,7 @@ bool YJGData::updateMedia(JGAudioList& media)
 	    Debug(m_conn,DebugNote,"No common format(s) local=%s remote=%s [%p]",
 		caps.c_str(),recvCaps.c_str(),m_conn);
 	}
-	m_conn->hangup(false,"nomedia");
+	m_conn->hangup("nomedia","No supported media format(s) available");
 	return false;
     }
     m_mediaReady = true;
@@ -1250,15 +1303,9 @@ bool YJGData::updateTransport(ObjList& transport)
 YJGConnection::YJGConnection(Message& msg, const char* caller, const char* called,
 	bool available)
     : Channel(&plugin,0,true),
-    m_mutex(true),
-    m_state(Pending),
-    m_session(0),
-    m_local(caller),
-    m_remote(called),
-    m_callerPrompt(msg.getValue("callerprompt")),
-    m_data(0),
-    m_hangup(false),
-    m_timeout(0)
+    m_mutex(true), m_state(Pending), m_session(0), m_local(caller),
+    m_remote(called), m_callerPrompt(msg.getValue("callerprompt")),
+    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0)
 {
     Debug(this,DebugCall,"Outgoing. caller='%s' called='%s' [%p]",caller,called,this);
     // Init transport
@@ -1299,14 +1346,9 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 // Incoming call
 YJGConnection::YJGConnection(JGEvent* event)
     : Channel(&plugin,0,false),
-    m_mutex(true),
-    m_state(Active),
-    m_session(event->session()),
-    m_local(event->session()->local()),
-    m_remote(event->session()->remote()),
-    m_data(0),
-    m_hangup(false),
-    m_timeout(0)
+    m_mutex(true), m_state(Active), m_session(event->session()),
+    m_local(event->session()->local()), m_remote(event->session()->remote()),
+    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0)
 {
     Debug(this,DebugCall,"Incoming. caller='%s' called='%s' [%p]",
 	m_remote.c_str(),m_local.c_str(),this);
@@ -1328,7 +1370,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 // Release data
 YJGConnection::~YJGConnection()
 {
-    hangup(false);
+    hangup(0);
     disconnected(true,m_reason);
     TelEngine::destruct((RefObject*)m_data);
     Debug(this,DebugCall,"Destroyed [%p]",this);
@@ -1361,7 +1403,6 @@ void YJGConnection::callAccept(Message& msg)
     if (m_session) {
 	if (!m_data->address)
 	    m_data->rtp(false);
-	m_session->accept(m_data->JGAudioList::toXML());
 	m_session->acceptTransport();
 	// Avoid termination if error is received
 	String transportId;
@@ -1375,7 +1416,7 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 	const Message* msg)
 {
     Debug(this,DebugCall,"callRejected. error=%s reason=%s [%p]",error,reason,this);
-    hangup(false,error?error:reason);
+    hangup(reason?reason:error,error);
     Channel::callRejected(error,reason,msg);
 }
 
@@ -1393,9 +1434,20 @@ void YJGConnection::disconnected(bool final, const char* reason)
     Channel::disconnected(final,m_reason);
 }
 
+bool YJGConnection::msgRinging(Message& msg)
+{
+    DDebug(this,DebugInfo,"msgRinging [%p]",this);
+    return true;
+}
+
 bool YJGConnection::msgAnswered(Message& msg)
 {
     Debug(this,DebugCall,"msgAnswered [%p]",this);
+    m_mutex.lock();
+    if (m_session)
+	m_session->accept(m_data->JGAudioList::toXML());
+    m_data->rtp(true);
+    m_mutex.unlock();
     return Channel::msgAnswered(msg);
 }
 
@@ -1424,7 +1476,7 @@ bool YJGConnection::msgDrop(Message& msg, const char* reason)
     setReason(reason?reason:"dropped");
     if (!Channel::msgDrop(msg,m_reason))
 	return false;
-    hangup(false);
+    hangup(m_reason);
     return true;
 }
 
@@ -1450,7 +1502,7 @@ bool YJGConnection::msgTone(Message& msg, const char* tone)
 }
 
 // Hangup the call. Send session terminate if not already done
-void YJGConnection::hangup(bool reject, const char* reason)
+void YJGConnection::hangup(const char* reason, const char* text)
 {
     Lock lock(m_mutex);
     if (m_hangup)
@@ -1458,13 +1510,15 @@ void YJGConnection::hangup(bool reject, const char* reason)
     m_hangup = true;
     m_state = Terminated;
     setReason(reason?reason:(Engine::exiting()?"shutdown":"hangup"));
+    if (!text && Engine::exiting())
+	text = "Shutdown";
     Message* m = message("chan.hangup",true);
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
     Engine::enqueue(m);
     if (m_session) {
 	m_session->userData(0);
-	m_session->hangup(reject,m_reason);
+	m_session->hangup(lookup(m_reason,s_errMap,JGSession::ReasonOk),text);
 	TelEngine::destruct(m_session);
     }
     Debug(this,DebugCall,"Hangup. reason=%s [%p]",m_reason.c_str(),this);
@@ -1483,15 +1537,39 @@ void YJGConnection::handleEvent(JGEvent* event)
     }
 
     if (event->type() == JGEvent::Terminated) {
-	Debug(this,DebugInfo,"Remote terminated with reason='%s' [%p]",
-	    event->reason().c_str(),this);
-	setReason(event->reason());
+	const char* reason = event->reason();
+	Debug(this,DebugInfo,
+	    "Session terminated with reason='%s' text='%s' [%p]",
+	    reason,event->text().c_str(),this);
+	// Check for Jingle reasons
+	int res = JGSession::lookupReason(reason,JGSession::ReasonNone);
+	if (res != JGSession::ReasonNone)
+	    reason = lookup(res,s_errMap,reason);
+	setReason(reason);
 	return;
     }
 
-    if (event->type() != JGEvent::Jingle) {
-	Debug(this,DebugNote,"Received unexpected event (%p,%u) [%p]",
-	    event,event->type(),this);
+    bool response = false;
+    switch (event->type()) {
+	case JGEvent::Jingle:
+	    break;
+	case JGEvent::ResultOk:
+	case JGEvent::ResultError:
+	case JGEvent::ResultWriteFail:
+	case JGEvent::ResultTimeout:
+	    response = true;
+	    break;
+	default:
+	    Debug(this,DebugStub,"Unhandled event (%p,%u) [%p]",
+		event,event->type(),this);
+	    return;
+    }
+
+    // Process responses
+    if (response) {
+	XDebug(this,DebugAll,"Processing response event=%s id=%s [%p]",
+	    event->name(),event->id().c_str(),this);
+	// TODO: implement
 	return;
     }
 
@@ -1567,7 +1645,7 @@ bool YJGConnection::presenceChanged(bool available)
     if (!available) {
 	if (!m_hangup) {
 	    DDebug(this,DebugCall,"Remote user is unavailable [%p]",this);
-	    hangup(false,"offline");
+	    hangup("offline","Remote user is unavailable");
 	}
 	return true;
     }
@@ -1579,14 +1657,15 @@ bool YJGConnection::presenceChanged(bool available)
 	m_local.c_str(),m_remote.c_str(),this);
     m_state = Active;
     m_session = s_jingle->call(m_local,m_remote,m_data->JGAudioList::toXML(),
-	JGTransport::createTransport(),m_callerPrompt);
+	JGTransport::createTransport(),0,m_callerPrompt);
     if (!m_session) {
-	hangup(false,"noconn");
+	hangup("noconn");
 	return true;
     }
     m_session->userData(this);
     maxcall(m_timeout);
-    Engine::enqueue(message("call.ringing",false,true));
+    if (!m_remoteSuportRing)
+	Engine::enqueue(message("call.ringing",false,true));
     // Init & send transport
     m_data->rtp(false);
     // Avoid termination if error is received
@@ -1594,6 +1673,7 @@ bool YJGConnection::presenceChanged(bool available)
     m_session->sendTransport(new JGTransport(*m_data),&transportId);
     return false;
 }
+
 
 /**
  * resource.notify message handler
@@ -1628,6 +1708,7 @@ bool ResNotifyHandler::received(Message& msg)
 	    Lock lock(stream->streamMutex());
 	    JIDResource* res = stream->getResource();
 	    if (res && res->ref()) {
+		res->priority(msg.getIntValue("priority",res->priority()));
 		if (*status == "online")
 		    res->setPresence(true);
 		else if (*status == "offline")
@@ -1655,19 +1736,83 @@ bool ResNotifyHandler::received(Message& msg)
 
     JabberID from,to;
     // *** Check from/to
+    bool broadcast = false;
     if (!plugin.getJidFrom(from,msg,true))
 	return false;
     if (!s_presence->autoRoster())
 	to = msg.getValue("to");
-    else if (!plugin.decodeJid(to,msg,"to"))
-	return false;
+    else
+	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to()) {
+	    broadcast = (0 == msg.getParam("to"));
+	    if (!(broadcast || plugin.decodeJid(to,msg,"to")))
+		return false;
+	}
+	else if (!plugin.decodeJid(to,msg,"to"))
+	    return false;
     // *** Everything is OK. Process the message
     XDebug(&plugin,DebugAll,"Received '%s' from '%s' with status '%s'",
 	msg.c_str(),from.c_str(),status->c_str());
-    if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
-	process(from,to,*status,msg.getBoolValue("subscription",false),&msg);
+    // Broadcast
+    if (broadcast) {
+	NamedString* status = msg.getParam("status");
+	if (status && (*status == "subscribed" || *status == "unsubscribed"))
+	    return false;
+	XMPPUserRoster* roster = s_presence->getRoster(from,false,0);
+	if (!roster) {
+	    Debug(&plugin,DebugNote,"Can't send presence from '%s': no roster",from.c_str());
+	    return false;
+	}
+	bool unavail = (status && *status == "offline");
+	roster->lock();
+	for (ObjList* o = roster->users().skipNull(); o; o = o->skipNext()) {
+	    XMPPUser* user = static_cast<XMPPUser*>(o->get());
+	    const char* name = from.resource();
+	    if (!name)
+		name = s_jabber->defaultResource();
+	    JIDResource* res = 0;
+	    bool changed = false;
+	    if (name) {
+		changed = user->addLocalRes(new JIDResource(name,
+		    unavail ? JIDResource::Unavailable : JIDResource::Available,
+		    JIDResource::CapAudio),false);
+		res = user->localRes().get(name);
+	    }
+	    else
+		res = user->getAudio(true,true);
+	    if (!res)
+		continue;
+	    res->infoXml()->clear();
+	    res->priority(msg.getIntValue("priority",res->priority()));
+	    plugin.addChildren(msg,0,res->infoXml());
+	    if (unavail)
+		changed = res->setPresence(false) || changed;
+	    else {
+		changed = res->setPresence(true) || changed;
+	    	if (status && *status == "online") {
+		    if (!res->status().null()) {
+			res->status("");
+			changed = true;
+		    }
+		}
+		else if (status && *status != res->status()) {
+		    res->status(*status);
+		    changed = true;
+		}
+	    }
+	    if (changed && user->subscription().from())
+		user->sendPresence(res,0,true);
+	    // Remove if unavailable
+	    if (!res->available())
+		user->removeLocalRes(res);
+	}
+	roster->unlock();
+	TelEngine::destruct(roster);
+    }
     else
-	sendPresence(from,to,*status,&msg);
+	if (s_presence->addOnPresence().to() || s_presence->addOnSubscribe().to())
+	    process(from,to,*status,msg.getBoolValue("subscription",false),&msg);
+	else
+	    sendPresence(from,to,*status,&msg);
     return true;
 }
 
@@ -1738,7 +1883,10 @@ void ResNotifyHandler::process(const JabberID& from, const JabberID& to,
 	    break;
 	}
 	res->infoXml()->clear();
-	plugin.addChildren(*params,0,res->infoXml());
+	if (params) {
+	    res->priority(params->getIntValue("priority",res->priority()));
+	    plugin.addChildren(*params,0,res->infoXml());
+	}
 	if (p == JIDResource::Unavailable)
 	    changed = res->setPresence(false) || changed;
 	else {
@@ -1774,22 +1922,21 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
     if (!s_presence)
 	return;
     JBPresence::Presence jbPresence;
+    bool command = !s_presence->autoRoster();
     // Get presence type from status
     if (status == "online")
 	jbPresence = JBPresence::None;
     else if (status == "offline")
 	jbPresence = JBPresence::Unavailable;
     else {
-	if (!s_presence->autoRoster()) {
-	    XDebug(&plugin,DebugNote,"Can't send command for status='%s'",status.c_str());
-	    return;
-	}
 	if (status == "subscribed")
 	    jbPresence = JBPresence::Subscribed;
 	else if (status == "unsubscribed") 
 	    jbPresence = JBPresence::Unsubscribed;
-	else {
-	    XDebug(&plugin,DebugNote,"Can't send presence for status='%s'",status.c_str());
+	else
+	    jbPresence = JBPresence::None;
+	if (command && (jbPresence != JBPresence::None)) {
+	    XDebug(&plugin,DebugNote,"Can't send command for status='%s'",status.c_str());
 	    return;
 	}
     }
@@ -1800,26 +1947,36 @@ void ResNotifyHandler::sendPresence(JabberID& from, JabberID& to,
     // Create XML element to be sent
     bool available = (jbPresence == JBPresence::None);
     XMLElement* stanza = 0;
-    if (!s_presence->autoRoster()) {
-	if (to.domain().null())
-	    to.domain(s_jabber->componentServer().c_str());
-	DDebug(&plugin,DebugAll,"Sending presence %s from: %s to: %s",
-	    String::boolText(available),from.c_str(),to.c_str());
-	stanza = plugin.getPresenceCommand(from,to,available);
-    }
-    else {
-	stanza = JBPresence::createPresence(from,to,jbPresence);
-	// Create resource info if available
+    // Build the presence element:
+    // Command: no 'from'/'to'
+    XMLElement* pres = 0;
+    if (!command)
+	pres = stanza = JBPresence::createPresence(from,to,jbPresence);
+    else if (s_attachPresToCmd && params)
+	pres = JBPresence::createPresence(0,0,jbPresence);
+    if (pres) {
+	// Create resource info if available or command
 	if (available) {
 	    JIDResource* resource = new JIDResource(from.resource(),JIDResource::Available,
-		JIDResource::CapAudio);
-	    resource->addTo(stanza);
+		JIDResource::CapAudio,params ? params->getIntValue("priority") : -1);
+	    if (status != "online")
+		resource->status(status);
+	    resource->addTo(pres);
 	    TelEngine::destruct(resource);
 	}
+	// Add extra children to presence
+	if (params)
+	    plugin.addChildren(*params,pres);
     }
-    if (stanza && params)
-	plugin.addChildren(*params,stanza);
+    if (command) {
+	if (to.domain().null())
+	    to.domain(s_jabber->componentServer().c_str());
+	stanza = plugin.getPresenceCommand(from,to,available,pres);
+    }
     // Send
+    DDebug(&plugin,DebugAll,"Sending presence%s '%s' from '%s' to '%s'",
+	command ? " command" : "",
+	String::boolText(available),from.c_str(),to.c_str());
     stream->sendStanza(stanza);
     TelEngine::destruct(stream);
 }
@@ -2031,6 +2188,7 @@ bool XmppGenerateHandler::received(Message& msg)
     return ok;
 }
 
+
 /**
  * XmppIqHandler
  */
@@ -2190,6 +2348,7 @@ void YJGDriver::initialize()
 	// Driver setup
 	installRelay(Halt);
 	installRelay(Route);
+	installRelay(Update);
 	installRelay(ImExecute);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
@@ -2217,6 +2376,7 @@ void YJGDriver::initialize()
     s_anonymousCaller = sect->getValue("anonymous_caller","unk_caller");
     s_pendingTimeout = sect->getIntValue("pending_timeout",10000);
     m_imToChanText = sect->getBoolValue("imtochantext",false);
+    s_attachPresToCmd = sect->getBoolValue("addpresencetocommand",false);
     // Init codecs in use. Check each codec in known codecs list against the configuration
     s_usedCodecs.clear();
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
@@ -2323,28 +2483,14 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 		error = "Can't call the same resource";
 	    break;
 	}
+	// No resource:
 	// Check if we have it in the roster
-	XMPPUser* user = (static_cast<JBClientStream*>(stream))->getRemote(called);
-	sendSub = (0 == user);
-	if (user) {
-	    user->lock();
-	    // Get an audio resource if available
-	    if (!called.resource()) {
-		JIDResource* res = user->getAudio(false);
-		if (res)
-		    called.resource(res->name());
-	    }
-	    // No resource:
-	    // check subscription to. Declare unavailable if the caller is subscribed to called's presence
-	    if (!called.resource())
-		if (user->subscription().to()) {
-		    error = "No resource available for called party";
-		    errStr = "offline";
-		}
-		else
-		    sendSub = true;
-	    user->unlock();
-	    TelEngine::destruct(user);
+	// Declare unavailable if the caller is subscribed to called's presence
+	if (!(called.resource() ||
+	    getClientTargetResource(static_cast<JBClientStream*>(stream),called,&sendSub) ||
+	    sendSub)) {
+	    error = "No resource available for called party";
+	    errStr = "offline";
 	}
 	if (sendSub)
 	    available = false;
@@ -2390,10 +2536,31 @@ bool YJGDriver::imExecute(Message& msg, String& dest)
     const char* errStr = "failure";
     JBStream* stream = 0;
     while (true) {
-	// Component: prepare caller/called
+	// Component: prepare/check caller/called
 	if (s_jabber->protocol() == JBEngine::Component) {
-	    // TODO: implement
-	    error = "Message for component protocol is not implemented";
+	    stream = s_jabber->getStream(0,false);
+	    if (!stream)
+		error = "No stream";
+	    // Check caller:
+	    // No node: use its domain part as node
+	    if (!caller.node() && caller.domain()) {
+	        String domain;
+		if (!s_jabber->getServerIdentity(domain,!s_presence->autoRoster())) {
+		    error = "No default server";
+		    break;
+		}
+		String node = caller.domain();
+		String res = caller.resource();
+		caller.set(node,domain,res);
+	    }
+	    if (!caller.bare()) {
+		error << "Invalid caller=" << caller;
+		break;
+	    }
+	    if (!called) {
+		error = "called is empty";
+		break;
+	    }
 	    break;
 	}
 	// Check if a stream exists
@@ -2416,12 +2583,18 @@ bool YJGDriver::imExecute(Message& msg, String& dest)
     // Send the message
     if (!error) {
 	const char* t = msg.getValue("xmpp_type",msg.getValue("type"));
-	JBMessage::MsgType type = JBMessage::msgType(t);
-	if (type == JBMessage::None)
-	    type = JBMessage::Chat;
 	const char* id = msg.getValue("id");
 	const char* stanzaId = msg.getValue("xmpp_id",id);
-	XMLElement* im = JBMessage::createMessage(type,caller,called,stanzaId,0);
+	JBMessage::MsgType type = JBMessage::msgType(t);
+	XMLElement* im = 0;
+	if (type == JBMessage::None) {
+	    if (!t)
+		im = JBMessage::createMessage(JBMessage::Chat,caller,called,stanzaId,0);
+	    else
+		im = JBMessage::createMessage(t,caller,called,stanzaId,0);
+	}
+        else
+	    im = JBMessage::createMessage(type,caller,called,stanzaId,0);
 	const char* subject = msg.getValue("subject");
 	if (subject)
 	    im->addChild(new XMLElement(XMLElement::Subject,0,subject));
@@ -2464,7 +2637,8 @@ bool YJGDriver::commandComplete(Message& msg, const String& partLine,
     // line='status jingle': add additional commands
     if (partLine == m_statusCmd) {
 	for (unsigned int i = 0; i < StatusCmdCount; i++)
-	    itemComplete(msg.retValue(),s_statusCmd[i],partWord);
+	    if (!partWord || s_statusCmd[i].startsWith(partWord))
+		msg.retValue().append(s_statusCmd[i],"\t");
 	return true;
     }
 
@@ -2472,7 +2646,8 @@ bool YJGDriver::commandComplete(Message& msg, const String& partLine,
 	return false;
 
     // Empty partial word or name start with it: add name and prefix
-    if (itemComplete(msg.retValue(),name(),partWord)) {
+    if (!partWord || name().startsWith(partWord)) {
+	msg.retValue().append(name(),"\t");
 	if (channels().skipNull())
 	    msg.retValue().append(prefix(),"\t");
 	return false;
@@ -2498,7 +2673,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 {
     // Get identity for default server
     String domain;
-    if (!s_jabber->getServerIdentity(domain,true)) {
+    if (!s_jabber->getServerIdentity(domain,!s_presence->autoRoster())) {
 	error = "No default server";
 	return false;
     }
@@ -2562,6 +2737,7 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	    error << "No stream for called=" << called;
 	    return false;
 	}
+	caller.resource(s_jabber->defaultResource());
 	// Send subscribe request and probe
 	XMLElement* xml = 0;
 	if (s_jingle->requestSubscribe()) {
@@ -2679,7 +2855,7 @@ bool YJGDriver::decodeJid(JabberID& jid, Message& msg, const char* param,
 }
 
 XMLElement* YJGDriver::getPresenceCommand(JabberID& from, JabberID& to,
-	bool available)
+	bool available, XMLElement* presence)
 {
     // Used only for debug purposes
     static int idCrt = 1;
@@ -2702,6 +2878,9 @@ XMLElement* YJGDriver::getPresenceCommand(JabberID& from, JabberID& to,
     XMLElement* command = XMPPUtils::createElement(XMLElement::Command,XMPPNamespace::Command);
     command->setAttribute("node","USER_STATUS");
     command->addChild(x);
+    // Add other children
+    if (presence)
+	command->addChild(presence);
     // 'iq' stanza
     String id = idCrt++;
     String domain;
@@ -2833,9 +3012,7 @@ void YJGDriver::processImMsg(JBEvent& event)
     if (!event.text())
 	return;
 
-    JBMessage::MsgType type = JBMessage::msgType(event.stanzaType());
-    if (type != JBMessage::Chat)
-	return;
+    //JBMessage::MsgType type = JBMessage::msgType(event.stanzaType());
 
     Message* m = 0;
     YJGConnection* conn = 0;
@@ -2863,9 +3040,10 @@ void YJGDriver::processImMsg(JBEvent& event)
 	m->addParam("account",event.stream()->name());
 
     // Fill the message
-    m->addParam("xmpp_id",event.id());
-    if (event.type())
-	m->addParam("xmpp_type",event.stanzaType());
+    if (event.id())
+	m->addParam("id",event.id());
+    if (event.stanzaType())
+	m->addParam("type",event.stanzaType());
     XMLElement* xml = event.element();
     XMLElement* body = 0;
     if (xml) {
@@ -2893,6 +3071,36 @@ void YJGDriver::processImMsg(JBEvent& event)
 	Engine::dispatch(*m);
 	TelEngine::destruct(m);
     }
+}
+
+// Search a client's roster to get a resource
+//  (with audio capabilities) for a subscribed user.
+// Set noSub to true if false is returned and the client
+//  is not subscribed to the remote user (or the remote user is not found).
+// Return false if user or resource is not found
+bool YJGDriver::getClientTargetResource(JBClientStream* stream,
+    JabberID& target, bool* noSub)
+{
+    if (!stream)
+	return false;
+    XMPPUser* user = stream->getRemote(target);
+    if (noSub)
+	*noSub = (0 == user);
+    if (!user)
+	return false;
+    user->lock();
+    // Get an audio resource if available
+    if (!target.resource()) {
+	JIDResource* res = user->getAudio(false);
+	if (res)
+	    target.resource(res->name());
+    }
+    // No resource: check subscription to
+    if (!target.resource() && noSub)
+	*noSub = !user->subscription().to();
+    user->unlock();
+    TelEngine::destruct(user);
+    return !target.resource().null();
 }
 
 }; // anonymous namespace

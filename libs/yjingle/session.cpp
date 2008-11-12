@@ -178,6 +178,7 @@ TokenDict JGSession::s_actions[] = {
     {"initiate",         ActInitiate},
     {"reject",           ActReject},
     {"terminate",        ActTerminate},
+    {"session-info",     ActInfo},
     {"candidates",       ActTransportCandidates},
     {"transport-info",   ActTransportInfo},
     {"transport-accept", ActTransportAccept},
@@ -188,11 +189,26 @@ TokenDict JGSession::s_actions[] = {
     {0,0}
 };
 
+TokenDict JGSession::s_reasons[] = {
+    {"busy",                     ReasonBusy},
+    {"decline",                  ReasonDecline},
+    {"connectivity-error",       ReasonConn},
+    {"media-error",              ReasonMedia},
+    {"unsupported-transports",   ReasonTransport},
+    {"no-error",                 ReasonNoError},
+    {"success",                  ReasonOk},
+    {"unsupported-applications", ReasonNoApp},
+    {"alternative-session",      ReasonAltSess},
+    {"general-error",            ReasonUnknown},
+    {"transferred",              ReasonTransfer},
+    {0,0}
+};
+
 // Create an outgoing session
 JGSession::JGSession(JGEngine* engine, JBStream* stream,
 	const String& callerJID, const String& calledJID,
 	XMLElement* media, XMLElement* transport,
-	bool sid, const char* msg)
+	bool sid, XMLElement* extra, const char* msg)
     : Mutex(true),
     m_state(Idle),
     m_transportType(TransportUnknown),
@@ -211,7 +227,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
     Debug(m_engine,DebugAll,"Call(%s). Outgoing msg=%s [%p]",m_sid.c_str(),msg,this);
     if (msg)
 	sendMessage(msg);
-    XMLElement* xml = createJingle(ActInitiate,media,transport);
+    XMLElement* xml = createJingle(ActInitiate,media,transport,extra);
     if (sendStanza(xml))
 	changeState(Pending);
     else
@@ -250,7 +266,7 @@ void JGSession::destroyed()
     // Cancel pending outgoing. Hangup. Cleanup
     if (m_stream) {
 	m_stream->removePending(m_localSid,false);
-	hangup();
+	hangup(ReasonUnknown);
 	TelEngine::destruct(m_stream);
     }
     m_events.clear();
@@ -259,7 +275,7 @@ void JGSession::destroyed()
     Lock lock(m_engine);
     m_engine->m_sessions.remove(this,false);
     lock.drop();
-    DDebug(m_engine,DebugAll,"Call(%s). Destroyed [%p]",m_sid.c_str(),this);
+    DDebug(m_engine,DebugInfo,"Call(%s). Destroyed [%p]",m_sid.c_str(),this);
 }
 
 // Ask this session to accept an event
@@ -300,18 +316,26 @@ bool JGSession::accept(XMLElement* description, String* stanzaId)
 }
 
 // Close a Pending or Active session
-bool JGSession::hangup(bool reject, const char* msg)
+bool JGSession::hangup(int reason, const char* msg)
 {
     Lock lock(this);
     if (state() != Pending && state() != Active)
 	return false;
+    bool reject = (state() == Pending);
     DDebug(m_engine,DebugAll,"Call(%s). %s('%s') [%p]",m_sid.c_str(),
 	reject?"Reject":"Hangup",msg,this);
-    if (msg)
-	sendMessage(msg);
     // Clear sent stanzas list. We will wait for this element to be confirmed
     m_sentStanza.clear();
-    XMLElement* xml = createJingle(reject ? ActReject : ActTerminate);
+    const char* tmp = lookupReason(reason);
+    XMLElement* res = 0;
+    if (tmp || msg) {
+	res = new XMLElement(XMLElement::Reason);
+	if (tmp)
+	    res->addChild(new XMLElement(tmp));
+	if (msg)
+	    res->addChild(new XMLElement(XMLElement::Text,0,msg));
+    }
+    XMLElement* xml = createJingle(reject?ActReject:ActTerminate,res);
     bool ok = sendStanza(xml);
     changeState(Ending);
     return ok;
@@ -385,6 +409,27 @@ bool JGSession::denyDtmfMethod(XMLElement* element)
     return sendStanza(iq,0,false);
 }
 
+// Check if the remote party supports a given feature
+bool JGSession::hasFeature(XMPPNamespace::Type feature)
+{
+    if (!m_stream)
+	return false;
+    JBClientStream* cStream = static_cast<JBClientStream*>(m_stream->getObject("JBClientStream"));
+    if (cStream) {
+	XMPPUser* user = cStream->getRemote(remote());
+	if (!user)
+	    return false;
+	bool ok = false;
+	user->lock();
+	JIDResource* res = user->remoteRes().get(remote().resource());
+	ok = res && res->features().get(feature);
+	user->unlock();
+	TelEngine::destruct(user);
+	return ok;
+    }
+    return false;
+}
+
 // Enqueue a Jabber engine event
 void JGSession::enqueue(JBEvent* event)
 {
@@ -428,12 +473,23 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    }
 
 	    m_lastEvent = decodeJingle(jbev);
+
 	    if (!m_lastEvent) {
 		// Destroy incoming session if session initiate stanza contains errors
 		if (!outgoing() && state() == Idle) {
 		    m_lastEvent = new JGEvent(JGEvent::Destroy,this,0,"failure");
 		    break;
 		}
+		continue;
+	    }
+
+	    // ActInfo: empty session info
+	    if (m_lastEvent->action() == ActInfo) {
+	        XDebug(m_engine,DebugAll,"Call(%s). Received empty '%s' (ping) [%p]",
+		    m_sid.c_str(),lookup(m_lastEvent->action(),s_actions),this);
+		confirm(m_lastEvent->element());
+		delete m_lastEvent;
+		m_lastEvent = 0;
 		continue;
 	    }
 
@@ -450,12 +506,11 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    bool fatal = false;
 	    switch (state()) {
 		case Active:
-		    if (m_lastEvent->action() == ActAccept ||
-			m_lastEvent->action() == ActInitiate)
-			error = true;
+		    error = m_lastEvent->action() == ActAccept ||
+			m_lastEvent->action() == ActInitiate;
 		    break;
 		case Pending:
-		    // Accept session-accept or transport stanzas
+		    // Accept session-accept, transport, ringing stanzas
 		    switch (m_lastEvent->action()) {
 			case ActAccept:
 			    changeState(Active);
@@ -487,10 +542,14 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (!error) {
 		// Automatically confirm some actions
 		// Don't confirm actions that need session user's interaction:
-		//  transport and dtmf method negotiation
-		if (m_lastEvent->action() != ActTransport &&
-		    m_lastEvent->action() != ActDtmfMethod)
-		    confirm(m_lastEvent->element());
+		//  transport, dtmf method negotiation or other info
+		switch (m_lastEvent->action()) {
+		    case ActTransport:
+		    case ActDtmfMethod:
+			break;
+		    default:
+			confirm(m_lastEvent->element());
+		}
 	    }
 	    else {
 		confirm(m_lastEvent->releaseXML(),XMPPError::SRequest);
@@ -522,11 +581,15 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (!sent)
 		break;
 
-
 	    // Check termination conditions
+	    // Always terminate when receiving responses in Ending state
 	    bool terminateEnding = (state() == Ending);
-	    bool terminatePending = (state() == Pending && outgoing() &&
-		(jbev->type() == JBEvent::IqJingleErr || jbev->type() == JBEvent::WriteFail));
+	    // Terminate pending outgoing if no notification required
+	    // (Initial session request is sent without notification required)
+	    bool terminatePending = false;
+	    if (state() == Pending && outgoing() &&
+		(jbev->type() == JBEvent::IqJingleErr || jbev->type() == JBEvent::WriteFail))
+		terminatePending = !sent->notify();
 	    // Write fail: Terminate if failed stanza is a Jingle one and the sender
 	    //  didn't requested notification
 	    bool terminateFail = false;
@@ -541,9 +604,26 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		    jbev->type() != JBEvent::WriteFail ? jbev->releaseXML() : 0,
 		    jbev->text() ? jbev->text().c_str() : "failure");
 	    else if (sent->notify())
-		m_lastEvent = new JGEvent(JGEvent::Response,this,
-		    jbev->type() != JBEvent::WriteFail ? jbev->releaseXML() : 0,
-		    jbev->text() ? jbev->text().c_str() : "");
+		switch (jbev->type()) {
+		    case JBEvent::IqJingleRes:
+		    case JBEvent::IqResult:
+			m_lastEvent = new JGEvent(JGEvent::ResultOk,this,
+			    jbev->releaseXML());
+			break;
+		    case JBEvent::IqJingleErr:
+		    case JBEvent::IqError:
+			m_lastEvent = new JGEvent(JGEvent::ResultError,this,
+			    jbev->releaseXML(),jbev->text());
+			break;
+		    case JBEvent::WriteFail:
+			m_lastEvent = new JGEvent(JGEvent::ResultWriteFail,this,
+			    jbev->releaseXML(),jbev->text());
+			break;
+		    default:
+			DDebug(m_engine,DebugStub,
+			    "Call(%s). Unhandled response event (%p,%u,%s) [%p]",
+			    m_sid.c_str(),jbev,jbev->type(),jbev->name(),this);
+		}
 	    if (m_lastEvent && !m_lastEvent->m_id)
 		m_lastEvent->m_id = *sent;
 	    m_sentStanza.remove(sent,true);
@@ -553,10 +633,15 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (jbev->type() == JBEvent::IqJingleErr && jbev->text())
 		error << " (error='" << jbev->text() << "')";
 #endif
+	    bool terminate = (m_lastEvent && m_lastEvent->final());
 	    Debug(m_engine,DebugAll,
 		"Call(%s). Sent element with id=%s confirmed by event=%s%s%s [%p]",
 		m_sid.c_str(),jbev->id().c_str(),jbev->name(),error.safe(),
-		(m_lastEvent && m_lastEvent->final()) ? ". Terminating":"",this);
+		terminate ? ". Terminating": "",this);
+
+	    // Gracefully terminate
+	    if (terminate && state() != Ending)
+		hangup(ReasonUnknown);
 
 	    break;
 	}
@@ -597,7 +682,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    Debug(m_engine,DebugNote,"Call(%s). Sent stanza ('%s') timed out [%p]",
 		m_sid.c_str(),tmp->c_str(),this);
 	    // Don't terminate if the sender requested to be notified
-	    m_lastEvent = new JGEvent(tmp->notify()?JGEvent::Response:JGEvent::Terminated,this,0,"timeout");
+	    m_lastEvent = new JGEvent(tmp->notify() ? JGEvent::ResultTimeout : JGEvent::Terminated,
+		this,0,"timeout");
 	    m_lastEvent->m_id = *tmp;
 	    o->remove();
 	    if (m_lastEvent->final())
@@ -627,14 +713,16 @@ bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmati
 {
     Lock lock(this);
     if (!(state() != Ending && state() != Destroy && stanza && m_stream)) {
+#ifdef DEBUG
 	Debug(m_engine,DebugNote,
 	    "Call(%s). Can't send stanza (%p,'%s') in state %s [%p]",
 	    m_sid.c_str(),stanza,stanza->name(),lookupState(m_state),this);
+#endif
 	TelEngine::destruct(stanza);
 	return false;
     }
-    DDebug(m_engine,DebugAll,"Call(%s). Sending stanza (%p,'%s') [%p]",
-	m_sid.c_str(),stanza,stanza->name(),this);
+    DDebug(m_engine,DebugAll,"Call(%s). Sending stanza (%p,'%s') id=%s [%p]",
+	m_sid.c_str(),stanza,stanza->name(),String::boolText(stanzaId != 0),this);
     const char* senderId = m_localSid;
     // Check if the stanza should be added to the list of stanzas requiring confirmation
     if (confirmation && stanza->type() == XMLElement::Iq) {
@@ -667,15 +755,30 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
     Action act = (Action)lookup(jingle->getAttribute("type"),s_actions,ActCount);
     if (act == ActCount) {
 	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable,
-	    "Unknown jingle type");
+	    "Unknown session action");
 	return 0;
     }
 
     // *** ActTerminate or ActReject
     if (act == ActTerminate || act == ActReject) {
 	confirm(jbev->element());
-	return new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),
-	    act==ActTerminate?"hangup":"rejected");
+	const char* reason = 0;
+	const char* text = 0;
+	XMLElement* res = jingle->findFirstChild(XMLElement::Reason);
+	if (res) {
+	    XMLElement* tmp = res->findFirstChild();
+	    if (tmp && tmp->type() != XMLElement::Text)
+		reason = tmp->name();
+	    TelEngine::destruct(tmp);
+	    tmp = res->findFirstChild(XMLElement::Text);
+	    if (tmp)
+		text = tmp->getText();
+	    TelEngine::destruct(tmp);
+	    TelEngine::destruct(res);
+	}
+	if (!reason)
+	    reason = act==ActTerminate ? "hangup" : "rejected";
+	return new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),reason,text);
     }
 
     // *** ActContentInfo: ActDtmf or ActDtmfMethod
@@ -707,6 +810,19 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	}
 	confirm(jbev->releaseXML(),XMPPError::SServiceUnavailable);
 	return 0;
+    }
+
+    // *** ActInfo
+    if (act == ActInfo) {
+	JGEvent* event = 0;
+        // Check info element
+	// Return ActInfo event to signal ping (XEP-0166 6.8)
+	XMLElement* child = jingle->findFirstChild();
+	if (!child)
+	    return new JGEvent(ActInfo,this,jbev->releaseXML());
+        confirm(jbev->releaseXML(),XMPPError::SFeatureNotImpl);
+        TelEngine::destruct(child);
+	return event;
     }
 
     // *** ActAccept ActInitiate ActModify
@@ -765,7 +881,8 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 }
 
 // Create an 'iq' stanza with a 'jingle' child
-XMLElement* JGSession::createJingle(Action action, XMLElement* element1, XMLElement* element2)
+XMLElement* JGSession::createJingle(Action action, XMLElement* element1,
+    XMLElement* element2, XMLElement* element3)
 {
     XMLElement* iq = XMPPUtils::createIq(XMPPUtils::IqSet,m_localJID,m_remoteJID,0);
     XMLElement* jingle = XMPPUtils::createElement(XMLElement::Jingle,
@@ -777,6 +894,7 @@ XMLElement* JGSession::createJingle(Action action, XMLElement* element1, XMLElem
     jingle->setAttribute(m_sidAttr,m_sid);
     jingle->addChild(element1);
     jingle->addChild(element2);
+    jingle->addChild(element3);
     iq->addChild(jingle);
     return iq;
 }

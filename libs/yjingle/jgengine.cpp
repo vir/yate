@@ -27,6 +27,18 @@ using namespace TelEngine;
 
 static XMPPError s_err;
 
+TokenDict JGEvent::s_typeName[] = {
+    {"Jingle",           Jingle},
+    {"ResultOk",         ResultOk},
+    {"ResultError",      ResultError},
+    {"ResultWriteFail",  ResultWriteFail},
+    {"ResultTimeout",    ResultTimeout},
+    {"Terminated",       Terminated},
+    {"Destroy",          Destroy},
+    {0,0}
+};
+
+
 /**
  * JGEngine
  */
@@ -73,7 +85,8 @@ void JGEngine::initialize(const NamedList& params)
 
 // Make an outgoing call
 JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
-	XMLElement* media, XMLElement* transport, const char* message)
+	XMLElement* media, XMLElement* transport, XMLElement* extra,
+	const char* message)
 {
     DDebug(this,DebugAll,"New outgoing call from '%s' to '%s'",
 	localJID.c_str(),remoteJID.c_str());
@@ -91,12 +104,17 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
     // Create outgoing session
     if (stream) {
 	JGSession* session = new JGSession(this,stream,localJID,remoteJID,
-	    media,transport,m_useSidAttr,message);
+	    media,transport,m_useSidAttr,extra,message);
 	if (session->state() != JGSession::Destroy) {
 	    m_sessions.append(session);
 	    return (session && session->ref() ? session : 0);
 	}
 	TelEngine::destruct(session);
+    }
+    else {
+	TelEngine::destruct(media);
+	TelEngine::destruct(transport);
+	TelEngine::destruct(extra);
     }
 
     Debug(this,DebugNote,"Outgoing call from '%s' to '%s' failed: %s",
@@ -144,6 +162,7 @@ void JGEngine::defProcessEvent(JGEvent* event)
     delete event;
 }
 
+// Utility: get the (s)id attribute: the session id
 static inline bool getSid(XMLElement* xml, String& sid, bool& useSid)
 {
     if (!xml)
@@ -155,7 +174,6 @@ static inline bool getSid(XMLElement* xml, String& sid, bool& useSid)
     }
     return !sid.null();
 }
-
 
 // Accept an event from the Jabber engine
 bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
@@ -189,7 +207,7 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		errorText = "Missing or empty session id";
 		break;
 	    }
-	    // Check for a destination by SID
+	    // Check for a destination
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
 		JGSession* session = static_cast<JGSession*>(o->get());
 		if (session->acceptEvent(event,sid)) {
@@ -286,7 +304,7 @@ JGEvent::~JGEvent()
 	m_session->eventTerminated(this);
 	TelEngine::destruct(m_session);
     }
-    TelEngine::destruct(m_element);
+    TelEngine::destruct(releaseXML());
     XDebug(DebugAll,"JGEvent::~JGEvent [%p]",this);
 }
 
@@ -295,8 +313,10 @@ void JGEvent::init(JGSession* session)
     XDebug(DebugAll,"JGEvent::JGEvent [%p]",this);
     if (session && session->ref())
 	m_session = session;
-    if (m_element)
+    if (m_element) {
 	m_id = m_element->getAttribute("id");
+	m_jingle = m_element->findFirstChild(XMLElement::Jingle);
+    }
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

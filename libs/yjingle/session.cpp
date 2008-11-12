@@ -184,6 +184,7 @@ TokenDict JGSession::s_actions[] = {
     {"transport-accept", ActTransportAccept},
     {"content-info",     ActContentInfo},
     {"Transport",        ActTransport},
+    {"session-transfer", ActTransfer},
     {"DTMF",             ActDtmf},
     {"DTMF method",      ActDtmfMethod},
     {0,0}
@@ -409,6 +410,20 @@ bool JGSession::denyDtmfMethod(XMLElement* element)
     return sendStanza(iq,0,false);
 }
 
+// Send a session info element to the remote peer
+bool JGSession::sendInfo(XMLElement* xml, String* stanzaId)
+{
+    if (!xml)
+	return false;
+    // Make sure we dont't terminate the session if info fails
+    String tmp;
+    if (stanzaId) {
+	tmp = "Info" + String(Time::secNow());
+	stanzaId = &tmp;
+    }
+    return sendStanza(createJingle(ActInfo,xml),stanzaId);
+}
+
 // Check if the remote party supports a given feature
 bool JGSession::hasFeature(XMPPNamespace::Type feature)
 {
@@ -428,6 +443,18 @@ bool JGSession::hasFeature(XMPPNamespace::Type feature)
 	return ok;
     }
     return false;
+}
+
+// Build a transfer element
+XMLElement* JGSession::buildTransfer(const String& transferTo,
+    const String& transferFrom, const String& sid)
+{
+    XMLElement* transfer = XMPPUtils::createElement(XMLElement::Transfer,
+	XMPPNamespace::JingleTransfer);
+    transfer->setAttributeValid("from",transferFrom);
+    transfer->setAttributeValid("to",transferTo);
+    transfer->setAttributeValid("sid",sid);
+    return transfer;
 }
 
 // Enqueue a Jabber engine event
@@ -507,7 +534,8 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    switch (state()) {
 		case Active:
 		    error = m_lastEvent->action() == ActAccept ||
-			m_lastEvent->action() == ActInitiate;
+			m_lastEvent->action() == ActInitiate ||
+			m_lastEvent->action() == ActRinging;
 		    break;
 		case Pending:
 		    // Accept session-accept, transport, ringing stanzas
@@ -520,6 +548,7 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 			case ActTransportInfo:
 			case ActTransportCandidates:
 			case ActContentInfo:
+			case ActRinging:
 			    break;
 			default:
 			    error = true;
@@ -542,10 +571,15 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (!error) {
 		// Automatically confirm some actions
 		// Don't confirm actions that need session user's interaction:
-		//  transport, dtmf method negotiation or other info
+		//  transfer, transport, dtmf method negotiation or other info
 		switch (m_lastEvent->action()) {
 		    case ActTransport:
 		    case ActDtmfMethod:
+		    case ActTransfer:
+		    case ActRinging:
+		    case ActHold:
+		    case ActActive:
+		    case ActMute:
 			break;
 		    default:
 			confirm(m_lastEvent->element());
@@ -814,13 +848,43 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 
     // *** ActInfo
     if (act == ActInfo) {
-	JGEvent* event = 0;
         // Check info element
 	// Return ActInfo event to signal ping (XEP-0166 6.8)
 	XMLElement* child = jingle->findFirstChild();
 	if (!child)
 	    return new JGEvent(ActInfo,this,jbev->releaseXML());
-        confirm(jbev->releaseXML(),XMPPError::SFeatureNotImpl);
+
+	JGEvent* event = 0;
+	Action a = ActCount;
+	XMPPNamespace::Type ns = XMPPNamespace::Count;
+	// Check namespace and build event
+	switch (child->type()) {
+	    case XMLElement::Transfer:
+		a = ActTransfer;
+		ns = XMPPNamespace::JingleTransfer;
+		break;
+	    case XMLElement::Hold:
+		a = ActHold;
+		ns = XMPPNamespace::JingleRtpInfo;
+		break;
+	    case XMLElement::Active:
+		a = ActActive;
+		ns = XMPPNamespace::JingleRtpInfo;
+		break;
+	    case XMLElement::Ringing:
+		a = ActRinging;
+		ns = XMPPNamespace::JingleRtpInfo;
+		break;
+	    case XMLElement::Mute:
+		a = ActMute;
+		ns = XMPPNamespace::JingleRtpInfo;
+		break;
+	    default: ;
+	}
+	if (a != ActCount && XMPPUtils::hasXmlns(*child,ns))
+	    event = new JGEvent(a,this,jbev->releaseXML());
+	else
+	    confirm(jbev->releaseXML(),XMPPError::SFeatureNotImpl);
         TelEngine::destruct(child);
 	return event;
     }

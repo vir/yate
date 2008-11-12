@@ -290,6 +290,11 @@ public:
 	ActTransportCandidates,          // candidates
 	ActTransportAccept,              // transport-accept
 	ActContentInfo,                  // content-info
+	ActTransfer,                     // session-transfer
+	ActRinging,                      // session-info: Ringing
+	ActHold,                         // session-info: Hold
+	ActActive,                       // session-info: Active
+	ActMute,                         // session-info: Mute
 	ActDtmf,                         // Used to set/get dtmf content-info element
 	ActDtmfMethod,                   // Used to set/get dtmf method content-info element
 	ActCount,
@@ -485,8 +490,7 @@ public:
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False on failure
      */
-    inline bool sendInfo(XMLElement* xml, String* stanzaId = 0)
-	{ return xml ? sendStanza(createJingle(ActInfo,xml),stanzaId) : false; }
+    bool sendInfo(XMLElement* xml, String* stanzaId = 0);
 
     /**
      * Check if the remote party supports a given feature
@@ -494,6 +498,16 @@ public:
      * @return True if the remote party supports the given feature
      */
     bool hasFeature(XMPPNamespace::Type feature);
+
+    /**
+     * Build a transfer element
+     * @param transferTo The JID to transfer to
+     * @param transferFrom The transferror's JID
+     * @param sid Optional session id used for attended transfer (empty for unattended transfer)
+     * @return Valid XMLElement pointer
+     */
+    static XMLElement* buildTransfer(const String& transferTo, const String& transferFrom,
+	const String& sid = String::empty());
 
     /**
      * Get the termination code associated with a text

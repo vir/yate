@@ -1482,6 +1482,12 @@ void YJGConnection::disconnected(bool final, const char* reason)
 bool YJGConnection::msgRinging(Message& msg)
 {
     DDebug(this,DebugInfo,"msgRinging [%p]",this);
+    m_mutex.lock();
+    if (m_session) {
+	XMLElement* xml = XMPPUtils::createElement(XMLElement::Ringing,XMPPNamespace::JingleRtpInfo);
+	m_session->sendInfo(xml);
+    }
+    m_mutex.unlock();
     return true;
 }
 
@@ -1670,6 +1676,21 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    status("answered");
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;
+	case JGSession::ActTransfer:
+	    if (m_session)
+		m_session->confirm(event->releaseXML(),XMPPError::SFeatureNotImpl);
+	    break;
+	case JGSession::ActRinging:
+	    m_session->confirm(event->element());
+	    Engine::enqueue(message("call.ringing",false,true));
+	    break;
+	case JGSession::ActHold:
+	case JGSession::ActActive:
+	case JGSession::ActMute:
+	    if (m_session)
+		m_session->confirm(event->releaseXML(),XMPPError::SFeatureNotImpl);
+	    break;
+
 	default:
 	    Debug(this,DebugNote,
 		"Received unexpected Jingle event (%p) with action=%u [%p]",

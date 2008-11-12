@@ -1254,9 +1254,11 @@ void ISDNLayer2::multipleFrameReleased(bool confirmation, bool timeout)
 // Data link state change command/response
 void ISDNLayer2::dataLinkState(bool cmd, bool value)
 {
-    Lock lock(m_layer3Mutex);
-    if (m_layer3)
-	m_layer3->dataLinkState(cmd,value,this);
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> tmp = m_layer3;
+    m_layer3Mutex.unlock();
+    if (tmp)
+	tmp->dataLinkState(cmd,value,this);
     else
 	Debug(this,DebugNote,"Data link notification. No Layer 3 attached");
 }
@@ -1264,9 +1266,11 @@ void ISDNLayer2::dataLinkState(bool cmd, bool value)
 // Notify layer 3 of data link idle timeout
 void ISDNLayer2::idleTimeout()
 {
-    Lock lock(m_layer3Mutex);
-    if (m_layer3)
-	m_layer3->idleTimeout(this);
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> tmp = m_layer3;
+    m_layer3Mutex.unlock();
+    if (tmp)
+	tmp->idleTimeout(this);
     else
 	Debug(this,DebugNote,"Data link idle timeout. No Layer 3 attached");
 }
@@ -1274,9 +1278,11 @@ void ISDNLayer2::idleTimeout()
 // Indication of received data
 void ISDNLayer2::receiveData(const DataBlock& data, bool ack)
 {
-    Lock lock(m_layer3Mutex);
-    if (m_layer3)
-	m_layer3->receiveData(data,ack,this);
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> tmp = m_layer3;
+    m_layer3Mutex.unlock();
+    if (tmp)
+	tmp->receiveData(data,ack,this);
     else
 	Debug(this,DebugNote,"Data received. No Layer 3 attached");
 }

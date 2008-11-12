@@ -2760,8 +2760,11 @@ bool SigIsdnCallRecord::update(SignallingEvent* event)
 	    break;
 	}
 	// Start recording
-	if (!callRouteAndExec(format))
+	if (!callRouteAndExec(format)) {
+	    if (m_reason)
+		m_reason = "local-" + m_reason;
 	    break;
+	}
 	DDebug(id(),DebugCall,"Start recording. Format: %s [%p]",format.c_str(),this);
     }
     if (m_reason.null() && format && source->getFormat() != format)

@@ -3157,7 +3157,6 @@ ISDNQ931Monitor::~ISDNQ931Monitor()
 // Notification from layer 2 of data link set/release command or response
 void ISDNQ931Monitor::dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
 {
-    Lock lock(m_layer);
 #ifdef DEBUG
     if (debugAt(DebugInfo)) {
 	String tmp;
@@ -3175,7 +3174,6 @@ void ISDNQ931Monitor::dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
 // Notification from layer 2 of data link idle timeout
 void ISDNQ931Monitor::idleTimeout(ISDNLayer2* layer2)
 {
-    Lock lock(m_layer);
     DDebug(this,DebugInfo,"Idle timeout from '%s'. Clearing monitors",
 	layer2->debugName());
     terminateMonitor(0,"net-out-of-order");
@@ -3184,14 +3182,11 @@ void ISDNQ931Monitor::idleTimeout(ISDNLayer2* layer2)
 // Receive data
 void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
 {
-    if (!layer2)
-	return;
     XDebug(this,DebugAll,"Received data. Length: %u",data.length());
     if (!ack) {
 	Debug(this,DebugNote,"Received unacknoledged data. Drop");
 	return;
     }
-    Lock lock(m_layer);
     //TODO: Implement segmentation
     ISDNQ931Message* msg = ISDNQ931Message::parse(m_parserData,data,0);
     if (!msg)
@@ -3228,10 +3223,11 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 	}
 	// Check if it is a new incoming call
 	if (msg->initiator() && msg->type() == ISDNQ931Message::Setup) {
-	    mon = new ISDNQ931CallMonitor(this,msg->callRef(),m_q921Net == layer2);
-	    m_calls.append(mon);
-	    mon->enqueue(msg);
-	    mon = 0;
+	    lock();
+	    ISDNQ931CallMonitor* newMon = new ISDNQ931CallMonitor(this,msg->callRef(),m_q921Net == layer2);
+	    m_calls.append(newMon);
+	    unlock();
+	    newMon->enqueue(msg);
 	    msg = 0;
 	    break;
 	}

@@ -517,8 +517,6 @@ SigChannel::SigChannel(SignallingEvent* event)
     m_hungup(false),
     m_inband(false)
 {
-    // Parameters to be copied to call.preroute
-    static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn";
     if (!(m_call && m_call->ref())) {
 	Debug(this,DebugCall,"No signalling call for this incoming call");
 	m_call = 0;
@@ -544,12 +542,6 @@ SigChannel::SigChannel(SignallingEvent* event)
 	m->copyParam(msg->params(),"callername");
     // TODO: Add call control parameter ?
     Engine::enqueue(m);
-    // Route the call
-    m = message("call.preroute",false,true);
-    plugin.copySigMsgParams(*m,event,&params);
-    // TODO: Add call control parameter ?
-    if (!startRouter(m))
-	hangup("temporary-failure");
 }
 
 // Construct an outgoing channel
@@ -1218,8 +1210,16 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	lock();
 	ch = new SigChannel(event);
 	unlock();
-	if (ch->hungup())
-	    ch->disconnect();
+	// Route the call
+	Message* m = ch->message("call.preroute",false,true);
+	// Parameters to be copied to call.preroute
+	static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn";
+	copySigMsgParams(*m,event,&params);
+	// TODO: Add call control parameter ?
+	if (!ch->startRouter(m)) {
+	    ch->hangup("temporary-failure");
+	    TelEngine::destruct(ch);
+	}
     }
     else
 	XDebug(this,DebugNote,"Received event (%p,'%s') from call without user data",
@@ -1261,19 +1261,20 @@ SigLink* SigDriver::findLink(const SignallingCallControl* ctrl)
 // Disconnect channels. If link is not 0, disconnect only channels belonging to that link
 void SigDriver::disconnectChannels(SigLink* link)
 {
+    RefPointer<SigChannel> o;
+    lock();
     ListIterator iter(channels());
-    GenObject* o = 0;
-    if (link)
-	for (; (o = iter.get()); ) {
-	    SigChannel* c = static_cast<SigChannel*>(o);
-	    if (link == c->link())
-		c->disconnect();
-	}
-    else
-	for (; (o = iter.get()); ) {
-	    SigChannel* c = static_cast<SigChannel*>(o);
-	    c->disconnect();
-	}
+    unlock();
+    for (;;) {
+	lock();
+	o = static_cast<SigChannel*>(iter.get());
+	unlock();
+	if (!o)
+	    return;
+	if (!link || (link == o->link()))
+	    o->disconnect();
+	o = 0;
+    }
 }
 
 // Copy incoming message parameters to another list of parameters

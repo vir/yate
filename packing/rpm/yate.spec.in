@@ -1,5 +1,6 @@
 # to add a distro release tag run rpmbuild --define 'dist value'
 # to add a revision tag run rpmbuild --define 'revision value'
+# to create a debug info package run rpmbuild --define 'debuginfo 1'
 # to suppress auto dependencies run rpmbuild --define 'nodeps 1'
 # to disable PSTN card drivers run rpmbuild --define 'nopstn 1'
 # to disable H.323 support run rpmbuild --define 'noh323 1'
@@ -10,6 +11,14 @@
 %{?nopstn:%define no_pstn 1}
 %{?noh323:%define no_h323 1}
 %{?nogui:%define no_gui 1}
+
+%{!?debuginfo:%define debuginfo %{nil}}
+%if "%{debuginfo}"
+%define stripped %{nil}
+%else
+%define stripped strip
+%define debug_package ${nil}
+%endif
 
 %if "%{revision}" == "svn"
 %define revision @PACKAGE_REVISION@svn
@@ -412,7 +421,7 @@ chmod +x %{local_find_requires} %{local_find_provides}
 	--libdir=%{_libdir} --mandir=%{_mandir} --with-archlib=%{_lib} \
 	--without-libspeex --without-amrnb \
 	--without-spandsp --without-coredumper
-make strip
+make %{stripped}
 
 %install
 make install DESTDIR=%{buildroot}

@@ -19,6 +19,14 @@
 ; Defaults to disable
 ;addpresencetocommand=disable
 
+; user.roster: boolean: Controls the way a roster query response or roster
+;  push received from server is handled.
+; If disabled, a resource.notify message will be sent for each item in the list received
+;  from server.
+; If enabled, an user.roster message containing all items wil be enqueued.
+; Defaults to disable
+;user.roster=disable
+
 ; localip: string: Set this machine's IP address. If missing, we will try to guess one
 ; The local machine's IP address is used to negotiate the audio stream
 ;localip=

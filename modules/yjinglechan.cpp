@@ -459,6 +459,7 @@ static String s_localAddress;                     // The local machine's address
 static unsigned int s_pendingTimeout = 10000;     // Outgoing call pending timeout
 static String s_anonymousCaller = "unk_caller";   // Caller name when missing
 static bool s_attachPresToCmd = false;            // Attach presence to command (when used)
+static bool s_userRoster = false;                 // Send client roster with user.roster or resource.notify
 static YJBEngine* s_jabber = 0;
 static YJGEngine* s_jingle = 0;
 static YJBMessage* s_message = 0;
@@ -764,6 +765,50 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	if (event->type() == JBEvent::IqClientRosterUpdate) {
 	    if (!event->child())
 		break;
+	    // Send the whole roster in one message
+	    if (s_userRoster) {
+		Message* m = new Message("user.roster");
+		m->addParam("module",plugin.name());
+		m->addParam("protocol",plugin.defProtoName());
+		if (event->stream() && event->stream()->name())
+		    m->addParam("account",event->stream()->name());
+		else if (event->to().node())
+		    m->addParam("username",event->to().node());
+		XMLElement* iq = event->releaseXML();
+		XMLElement* query = iq->findFirstChild("query");
+		if (query) {
+		    XMLElement* item = 0;
+		    int count = 0;
+		    for (;;) {
+			item = query->findNextChild(item,"item");
+			if (!item)
+			    break;
+			const char* tmp = item->getAttribute("jid");
+			if (!tmp)
+			    continue;
+			count++;
+			String base("contact.");
+			base << count;
+			m->addParam(base,tmp);
+			tmp = item->getAttribute("name");
+			if (tmp)
+			    m->addParam(base + ".name",tmp);
+			tmp = item->getAttribute("subscription");
+			if (tmp)
+			    m->addParam(base + ".subscription",tmp);
+			XMLElement* group = item->findFirstChild("group");
+			if (group) {
+			    m->addParam(base + ".group",group->getText());
+			    TelEngine::destruct(group);
+			}
+		    }
+		    TelEngine::destruct(query);
+		    m->addParam("contact.count",String(count));
+		}
+		m->addParam(new NamedPointer("xml",iq,"roster"));
+		Engine::enqueue(m);
+		break;
+	    }
 	    // Send the roster in individual resource.notify
 	    XMLElement* item = event->child()->findFirstChild(XMLElement::Item);
 	    for (; item; item = event->child()->findNextChild(item,XMLElement::Item)) {
@@ -2377,6 +2422,7 @@ void YJGDriver::initialize()
     s_pendingTimeout = sect->getIntValue("pending_timeout",10000);
     m_imToChanText = sect->getBoolValue("imtochantext",false);
     s_attachPresToCmd = sect->getBoolValue("addpresencetocommand",false);
+    s_userRoster = sect->getBoolValue("user.roster",false);
     // Init codecs in use. Check each codec in known codecs list against the configuration
     s_usedCodecs.clear();
     bool defcodecs = s_cfg.getBoolValue("codecs","default",true);

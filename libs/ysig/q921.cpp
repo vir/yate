@@ -165,7 +165,7 @@ ISDNQ921::~ISDNQ921()
 	    (unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
-// Set or release 'multiple frame acknoledged' mode
+// Set or release 'multiple frame acknowledged' mode
 bool ISDNQ921::multipleFrame(bool establish, bool force)
 {
     Lock lock(m_layer);
@@ -222,7 +222,7 @@ bool ISDNQ921::sendData(const DataBlock& data, bool ack)
 	sendOutgoingData();
 	return true;
     }
-    // Unacknoledged data request
+    // Unacknowledged data request
     if (!allowUnack())
 	return false;
     // P/F bit is always false for UI frames. See Q.921 5.2.2
@@ -488,7 +488,7 @@ bool ISDNQ921::ackOutgoingFrames(const ISDNFrame* frame)
 	}
 	ack = true;
 	DDebug(this,DebugAll,
-	    "Remove acknoledged data frame (%p). Sequence number: %u",f,f->ns());
+	    "Remove acknowledged data frame (%p). Sequence number: %u",f,f->ns());
 	m_window.dec();
 	m_outFrames.remove(f,true);
     }
@@ -497,14 +497,14 @@ bool ISDNQ921::ackOutgoingFrames(const ISDNFrame* frame)
     if (!m_timerRecovery && ack &&
 	!(frame->type() != ISDNFrame::I && m_lastPFBit))
 	timer(false,false);
-    // Start T200 if we have unacknoledged data and not already started
+    // Start T200 if we have unacknowledged data and not already started
     if (unack && !m_retransTimer.started())
 	timer(true,false);
     return ack;
 }
 
 // Receive I/UI (data) frames (See Q.921 5.6.2)
-// Send unacknoledged data to upper layer
+// Send unacknowledged data to upper layer
 // Ack pending outgoing data and confirm (by sending any pending data or an RR confirmation)
 bool ISDNQ921::processDataFrame(const ISDNFrame* frame, bool ack)
 {
@@ -522,7 +522,7 @@ bool ISDNQ921::processDataFrame(const ISDNFrame* frame, bool ack)
 	dropFrame(frame,reason);
 	return false;
     }
-    // Done for unacknoledged (UI frame) data
+    // Done for unacknowledged (UI frame) data
     if (!ack)
 	return true;
     // Acknoledged data
@@ -1231,7 +1231,7 @@ void ISDNLayer2::attach(ISDNLayer3* layer3)
     layer3->attach(this);
 }
 
-// Indication/confirmation of 'multiple frame acknoledged' mode established
+// Indication/confirmation of 'multiple frame acknowledged' mode established
 void ISDNLayer2::multipleFrameEstablished(bool confirmation, bool timeout)
 {
     Lock lock(m_layer3Mutex);
@@ -1241,7 +1241,7 @@ void ISDNLayer2::multipleFrameEstablished(bool confirmation, bool timeout)
 	Debug(this,DebugNote,"'Established' notification. No Layer 3 attached");
 }
 
-// Indication/confirmation of 'multiple frame acknoledged' mode released
+// Indication/confirmation of 'multiple frame acknowledged' mode released
 void ISDNLayer2::multipleFrameReleased(bool confirmation, bool timeout)
 {
     Lock lock(m_layer3Mutex);

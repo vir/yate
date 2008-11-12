@@ -2404,7 +2404,7 @@ void ISDNQ931::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
 {
     XDebug(this,DebugAll,"Received data. Length: %u",data.length());
     if (!ack) {
-	Debug(this,DebugNote,"Received unacknoledged data. Drop");
+	Debug(this,DebugNote,"Received unacknowledged data. Drop");
 	return;
     }
     Lock lock(m_layer);
@@ -3184,7 +3184,7 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 {
     XDebug(this,DebugAll,"Received data. Length: %u",data.length());
     if (!ack) {
-	Debug(this,DebugNote,"Received unacknoledged data. Drop");
+	Debug(this,DebugNote,"Received unacknowledged data. Drop");
 	return;
     }
     //TODO: Implement segmentation

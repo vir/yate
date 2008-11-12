@@ -5761,10 +5761,10 @@ public:
      * Layer states if it has a TEI assigned
      */
     enum State {
-	Released,                        // Multiple frame acknoledged not allowed
-	WaitEstablish,                   // Wating to establish 'multiple frame acknoledged' mode
-	Established,                     // Multiple frame acknoledged allowed
-	WaitRelease,                     // Wating to release 'multiple frame acknoledged' mode
+	Released,                        // Multiple frame acknowledged not allowed
+	WaitEstablish,                   // Wating to establish 'multiple frame acknowledged' mode
+	Established,                     // Multiple frame acknowledged allowed
+	WaitRelease,                     // Wating to release 'multiple frame acknowledged' mode
     };
 
     /**
@@ -5822,8 +5822,8 @@ public:
 	{ return m_teiAssigned; }
 
     /**
-     * Check if unacknoledged data is allowed to pass through this interface
-     * @return True if unacknoledged data is allowed to pass through this interface
+     * Check if unacknowledged data is allowed to pass through this interface
+     * @return True if unacknowledged data is allowed to pass through this interface
      */
     inline bool allowUnack() const
 	{ return m_allowUnack; }
@@ -5850,7 +5850,7 @@ public:
      * Implements Q.921 DL-DATA and DL-UNIT DATA request primitives
      * Descendants must implement this method to fullfill the request
      * @param data Data to send
-     * @param ack True to send an acknoledged frame, false to send an unacknoledged one
+     * @param ack True to send an acknowledged frame, false to send an unacknowledged one
      * @return True if the request was accepted
      */
     virtual bool sendData(const DataBlock& data, bool ack)
@@ -5889,7 +5889,7 @@ protected:
 
     /**
      * Implements Q.921 DL-ESTABLISH indication/confirmation primitive
-     *  of 'multiple frame acknoledged' mode established
+     *  of 'multiple frame acknowledged' mode established
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
@@ -5898,7 +5898,7 @@ protected:
 
     /**
      * Implements Q.921 DL-RELEASE indication/confirmation primitive
-     *  of 'multiple frame acknoledged' mode released
+     *  of 'multiple frame acknowledged' mode released
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
@@ -5926,7 +5926,7 @@ protected:
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * Receive data from remote peer
      * @param data Received data
-     * @param ack True if data is an acknoledged frame, false if it is an unacknoledged one
+     * @param ack True if data is an acknowledged frame, false if it is an unacknowledged one
      */
     void receiveData(const DataBlock& data, bool ack);
 
@@ -5960,7 +5960,7 @@ private:
     u_int8_t m_sapi;                     // SAPI value
     u_int8_t m_tei;                      // TEI value
     bool m_teiAssigned;                  // The TEI status
-    bool m_allowUnack;                   // Allow unacknoledged data to pass through this interface
+    bool m_allowUnack;                   // Allow unacknowledged data to pass through this interface
     bool m_autoRestart;                  // True to restart when released
     u_int32_t m_maxUserData;             // Maximum length of user data transported trough this layer
     static TokenDict m_states[];         // Keep the string associated with each state
@@ -5975,7 +5975,7 @@ class YSIG_API ISDNLayer3 : virtual public SignallingComponent
 public:
     /**
      * Implements Q.921 DL-ESTABLISH indication/confirmation primitive:
-     *  'multiple frame acknoledged' mode established
+     *  'multiple frame acknowledged' mode established
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout
@@ -5986,7 +5986,7 @@ public:
 
     /**
      * Implements Q.921 DL-RELEASE indication/confirmation primitive:
-     *  'multiple frame acknoledged' mode released
+     *  'multiple frame acknowledged' mode released
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
@@ -6020,8 +6020,8 @@ public:
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * Receive data from remote peer
      * @param data Received data
-     * @param ack True if data is an acknoledged frame,
-     *  false if it is an unacknoledged one
+     * @param ack True if data is an acknowledged frame,
+     *  false if it is an unacknowledged one
      * @param layer2 Pointer to the sender
      */
     virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2) = 0;
@@ -6374,7 +6374,7 @@ public:
      * Send data through the HDLC interface
      * This method is thread safe
      * @param data Data to send
-     * @param ack True to send an acknoledged frame, false to send an unacknoledged one
+     * @param ack True to send an acknowledged frame, false to send an unacknowledged one
      * @return False if the request was not accepted or send operation failed
      */
     virtual bool sendData(const DataBlock& data, bool ack);
@@ -7620,7 +7620,7 @@ public:
     /**
      * Receive data from Layer 2
      * @param data Received data
-     * @param ack True if data is an acknoledged frame, false if it is an unacknoledged one
+     * @param ack True if data is an acknowledged frame, false if it is an unacknowledged one
      * @param layer2 Pointer to the sender
      */
     virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2);
@@ -7939,8 +7939,8 @@ public:
     /**
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * @param data Received data
-     * @param ack True if data is an acknoledged frame,
-     *  false if it is an unacknoledged one
+     * @param ack True if data is an acknowledged frame,
+     *  false if it is an unacknowledged one
      * @param layer2 Pointer to the sender
      */
     virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2);

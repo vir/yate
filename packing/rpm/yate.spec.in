@@ -14,7 +14,7 @@
 
 %{!?debuginfo:%define debuginfo %{nil}}
 %if "%{debuginfo}"
-%define stripped %{nil}
+%define stripped debug
 %else
 %define stripped strip
 %define debug_package ${nil}

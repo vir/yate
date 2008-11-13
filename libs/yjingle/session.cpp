@@ -417,7 +417,7 @@ bool JGSession::sendInfo(XMLElement* xml, String* stanzaId)
 	return false;
     // Make sure we dont't terminate the session if info fails
     String tmp;
-    if (stanzaId) {
+    if (!stanzaId) {
 	tmp = "Info" + String(Time::secNow());
 	stanzaId = &tmp;
     }

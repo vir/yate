@@ -2358,6 +2358,9 @@ bool QtClient::setProperty(QObject* obj, const char* name, const String& value)
 	case QVariant::Double:
 	    ok = obj->setProperty(name,QVariant(value.toDouble()));
 	    break;
+	case QVariant::KeySequence:
+	    ok = obj->setProperty(name,QVariant(QtClient::setUtf8(value)));
+	    break;
 	case QVariant::Invalid:
 	    err = "no such property";
 	    break;

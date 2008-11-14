@@ -963,6 +963,8 @@ bool QtWindow::setSelect(const String& name, const String& item)
 
     int d = 0;
     switch (w.type()) {
+	case QtWidget::CustomTable:
+	    return w.customTable()->setSelect(item);
 	case QtWidget::Table:
 	    {
 		TableWidget t(w);

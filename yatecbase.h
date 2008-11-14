@@ -605,6 +605,14 @@ public:
 	{ return false; }
 
     /**
+     * Set the widget's selection
+     * @param item String containing the new selection
+     * @return True if the operation was successfull
+     */
+    virtual bool setSelect(const String& item)
+	{ return false; }
+
+    /**
      * Retrieve the widget's selection
      * @param item String to fill with selection's contents
      * @return True if the operation was successfull

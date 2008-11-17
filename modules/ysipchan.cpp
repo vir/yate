@@ -969,8 +969,10 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	if (!domain)
 	    domain = "domain";
 	String tmp = msg.getValue("privacy_callername",msg.getValue("callername",caller));
-	if (tmp)
-	    tmp = "\"" + tmp + "\" ";
+	if (tmp) {
+	    MimeHeaderLine::addQuotes(tmp);
+	    tmp += " ";
+	}
 	tmp << "<sip:" << caller << "@" << domain << ">";
 	MimeHeaderLine* hl = new MimeHeaderLine("Remote-Party-ID",tmp);
 	if (screen)
@@ -2179,18 +2181,19 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	callerId ? (callerId->null() ? "anonymous" : callerId->c_str()) : (const char*)0,
 	msg.getValue("domain",(line ? line->domain().c_str() : (const char*)0)));
     if (display) {
-	String desc;
-	desc << "\"" << display << "\" ";
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("From"));
-	if (hl)
-	    *hl = desc + *hl;
+	if (hl) {
+	    MimeHeaderLine::addQuotes(display);
+	    *hl = display + " " + *hl;
+	}
     }
     if (msg.getParam("calledname")) {
-	String desc;
-	desc << "\"" << msg.getValue("calledname") << "\" ";
+	display = msg.getValue("calledname");
 	MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(m->getHeader("To"));
-	if (hl)
-	    *hl = desc + *hl;
+	if (hl) {
+	    MimeHeaderLine::addQuotes(display);
+	    *hl = display + " " + *hl;
+	}
     }
     if (plugin.ep()->engine()->prack())
 	m->addHeader("Supported","100rel");
@@ -2380,7 +2383,7 @@ void YateSIPConnection::hangup()
 		MimeHeaderLine* hl = new MimeHeaderLine("Reason","SIP");
 		if ((m_reasonCode >= 300) && (m_reasonCode != 487))
 		    hl->setParam("cause",String(m_reasonCode));
-		hl->setParam("text","\"" + m_reason + "\"");
+		hl->setParam("text",MimeHeaderLine::quote(m_reason));
 		m->addHeader(hl);
 	    }
 	    plugin.ep()->engine()->addMessage(m);
@@ -3710,8 +3713,10 @@ bool YateSIPConnection::callRouted(Message& msg)
 	if (s.startSkip("sip/",false) && s && msg.getBoolValue("redirect")) {
 	    Debug(this,DebugAll,"YateSIPConnection redirecting to '%s' [%p]",s.c_str(),this);
 	    String tmp(msg.getValue("calledname"));
-	    if (tmp)
-		tmp = "\"" + tmp + "\" ";
+	    if (tmp) {
+		MimeHeaderLine::addQuotes(tmp);
+		tmp += " ";
+	    }
 	    s = tmp + "<" + s + ">";
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),302);
 	    m->addHeader("Contact",s);
@@ -4079,7 +4084,7 @@ SIPMessage* YateSIPLine::buildRegister(int expires) const
     }
     tmp.clear();
     if (m_display)
-	tmp << "\"" << m_display << "\" ";
+	tmp = MimeHeaderLine::quote(m_display) + " ";
     tmp << "<sip:";
     tmp << m_username << "@";
     tmp << m->getParty()->getLocalAddr() << ":";

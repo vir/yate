@@ -375,12 +375,12 @@ void SIPTransaction::requestAuth(const String& realm, const String& domain, bool
     SIPMessage* msg = new SIPMessage(m_firstMessage, code, lookup(code,SIPResponses));
     if (realm) {
 	String tmp;
-	tmp << "Digest realm=\"" << realm << "\"";
+	tmp << "Digest realm=" << MimeHeaderLine::quote(realm);
 	MimeHeaderLine* line = new MimeHeaderLine(hdr,tmp,',');
 	if (domain)
-	    line->setParam(" domain","\"" + domain + "\"");
+	    line->setParam(" domain",MimeHeaderLine::quote(domain));
 	m_engine->nonceGet(tmp);
-	line->setParam(" nonce","\"" + tmp + "\"");
+	line->setParam(" nonce",MimeHeaderLine::quote(tmp));
 	line->setParam(" stale",stale ? "TRUE" : "FALSE");
 	line->setParam(" algorithm","MD5");
 	msg->addHeader(line);

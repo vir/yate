@@ -178,7 +178,7 @@
 ; Ignored if type is not isdn-pri-mon
 ;idlevalue=255
 
-; idletimeout: integer: HDLC data link idle timeout
+; idletimeout: integer: HDLC data link idle timeout, should be 3 * T203
 ; The minimum allowed value is 4000. Defaults to 30000 if missing or invalid
 ; Ignored if type is not isdn-pri-mon
 ;idletimeout=30000
@@ -187,8 +187,8 @@
 ; Defaults to no
 ;emergency=yes
 
-; rxunderruninterval: integer: The interval (in miliseconds) allowed between 2 packets received
-;  on the signalling channel (required)
+; rxunderruninterval: integer: The interval (in miliseconds) allowed between
+;  2 packets received on the signalling channel (required)
 ; Minimum value is 5 for SS7 links and 3000 for ISDN links
 ;rxunderruninterval=10
 

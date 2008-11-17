@@ -1605,10 +1605,10 @@ bool Client::getProperty(const String& name, const String& item, String& value,
 	return wnd->getProperty(name,item,value);
     ++s_changing;
     bool ok = false;
-    for (ObjList* o = m_windows.skipNull(); o; o = o->skipNext()) {
+    for (ObjList* o = m_windows.skipNull(); o && !ok; o = o->skipNext()) {
 	wnd = static_cast<Window*>(o->get());
 	if (wnd != skip)
-	    ok = wnd->getProperty(name,item,value) || ok;
+	    ok = wnd->getProperty(name,item,value);
     }
     --s_changing;
     return ok;

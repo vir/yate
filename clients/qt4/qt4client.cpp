@@ -1577,10 +1577,8 @@ bool QtWindow::setProperty(const String& name, const String& item, const String&
 {
     if (name == m_id)
 	return QtClient::setProperty(wndWidget(),item,value);
-    QtWidget w(this,name);
-    if (w.invalid())
-	return false;
-    return QtClient::setProperty(w,item,value);
+    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
+    return obj ? QtClient::setProperty(obj,item,value) : false;
 }
 
 // Get a property from this window or from a widget owned by it
@@ -1588,10 +1586,8 @@ bool QtWindow::getProperty(const String& name, const String& item, String& value
 {
     if (name == m_id)
 	return QtClient::getProperty(wndWidget(),item,value);
-    QtWidget w(this,name);
-    if (w.invalid())
-	return false;
-    return QtClient::getProperty(w,item,value);
+    QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
+    return obj ? QtClient::getProperty(obj,item,value) : false;
 }
 
 void QtWindow::closeEvent(QCloseEvent* event)

@@ -73,6 +73,7 @@ public:
 	Unknown        = 14,             // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
+	CustomWidget,                    // QtCustomWidget descendant
 	Missing                          // Invalid pointer
     };
     // Set widget from object
@@ -148,6 +149,8 @@ public:
 	{ return static_cast<QSpinBox*>(m_widget); }
     inline QtTable* customTable()
 	{ return qobject_cast<QtTable*>(m_widget); }
+    inline QtCustomWidget* customWidget()
+	{ return qobject_cast<QtCustomWidget*>(m_widget); }
     inline QAction* action()
 	{ return m_action; }
 
@@ -159,6 +162,8 @@ public:
 			return i;
 		if (customTable())
 		    return CustomTable;
+		if (customWidget())
+		    return CustomWidget;
 		return Unknown;
 	    }
 	    if (m_action && m_action->inherits("QAction"))
@@ -749,6 +754,8 @@ bool QtWindow::setParams(const NamedList& params)
 	    QtWidget w(this,ns->name());
 	    if (w.type() == QtWidget::CustomTable)
 		ok = w.customTable()->setParams(*nl) && ok;
+	    else if (w.type() == QtWidget::CustomWidget)
+		ok = w.customWidget()->setParams(*nl) && ok;
 	    else
 		ok = false;
 	}

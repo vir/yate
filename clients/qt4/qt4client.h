@@ -475,6 +475,28 @@ protected:
     QPoint m_movePos;                    // Old position used when moving the window
 };
 
+/**
+ * This class encapsulates a custom QT table
+ * @short A custom QT table widget
+ */
+class YQT4_API QtCustomWidget : public QWidget, public UIWidget
+{
+    YCLASS(QtCustomWidget,UIWidget)
+    Q_CLASSINFO("QtCustomWidget","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param name Widget's name
+     * @param parent Optional parent widget
+     */
+    inline QtCustomWidget(const char* name, QWidget* parent = 0)
+	: QWidget(parent), UIWidget(name)
+	{ setObjectName(name);	}
+
+private:
+    QtCustomWidget() {}                  // No default constructor
+};
 
 /**
  * This class encapsulates a custom QT table

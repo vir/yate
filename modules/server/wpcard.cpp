@@ -817,32 +817,29 @@ bool WpInterface::transmitPacket(const DataBlock& packet, bool repeat, PacketTyp
     m_repeatPacket.clear();
     m_repeatMutex.unlock();
 
-#ifdef wp_api_tx_hdr_hdlc_rpt_data
-    // Repeat supported and data not too big
-    if (repeat && m_repeatCapable) {
-	if (packet.length() <= WP_RPT_MAXDATA) {
-	    unsigned char hdr[WP_HEADER];
-	    ::memset(hdr,0,WP_HEADER);
-	    hdr[WP_RPT_REPEAT] = 1;
-	    hdr[WP_RPT_LEN] = packet.length();
-	    ::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
-	    if (m_socket.send(hdr,WP_HEADER,0) != -1)
-		return true;
-	    // Failed to send repeat header: reset repeat capability
-	    m_repeatCapable = false;
-	}
-	Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
-	    type,packet.length());
-    }
-#endif
-
     DataBlock data(0,WP_HEADER);
     data += packet;
 
-    if (repeat) {
+    // using a while is a hack so we can break out of it
+    while (repeat) {
+#ifdef wp_api_tx_hdr_hdlc_rpt_data
+	if (m_repeatCapable) {
+	    if (packet.length() <= WP_RPT_MAXDATA) {
+		unsigned char* hdr = (unsigned char*)data.data();
+		hdr[WP_RPT_REPEAT] = 1;
+		hdr[WP_RPT_LEN] = packet.length();
+		::memcpy(hdr+WP_RPT_DATA,packet.data(),packet.length());
+	    }
+	    else
+		Debug(this,DebugWarn,"Can't repeat packet (type=%u) with length=%u",
+		    type,packet.length());
+	    break;
+	}
+#endif
 	m_repeatMutex.lock();
 	m_repeatPacket = data;
 	m_repeatMutex.unlock();
+	break;
     }
 
     return -1 != m_socket.send(data.data(),data.length(),0);

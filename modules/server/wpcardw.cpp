@@ -632,7 +632,7 @@ bool WpInterface::receiveAttempt()
 	}
 #endif
 
-	DataBlock data(buffer.data,r);
+	DataBlock data(buffer.data,r,false);
 	receivedPacket(data);
 	data.clear(false);
     }

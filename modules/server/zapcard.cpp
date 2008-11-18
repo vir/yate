@@ -1633,7 +1633,7 @@ bool ZapInterface::process()
     s_ifaceNotifyMutex.lock();
     m_notify = 0;
     s_ifaceNotifyMutex.unlock();
-    DataBlock packet(m_buffer,r - ZAP_CRC_LEN);
+    DataBlock packet(m_buffer,r - ZAP_CRC_LEN,false);
 #ifdef XDEBUG
     String hex;
     hex.hexify(packet.data(),packet.length(),' ');

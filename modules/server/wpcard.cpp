@@ -912,7 +912,7 @@ bool WpInterface::receiveAttempt()
 	}
 #endif
 
-	DataBlock data(buf+WP_HEADER,r);
+	DataBlock data(buf+WP_HEADER,r,false);
 	receivedPacket(data);
 	data.clear(false);
     }

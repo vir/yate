@@ -249,6 +249,7 @@ bool SS7MTP2::control(Operation oper, NamedList* params)
 	case Pause:
 	    m_status = OutOfService;
 	    abortAlignment();
+	    transmitLSSU();
 	    return true;
 	case Resume:
 	    if (aligned())
@@ -488,12 +489,11 @@ bool SS7MTP2::receivedPacket(const DataBlock& packet)
     bool fib = (buf[1] & 0x80) != 0;
     // lock the object as we modify members
     lock();
-    XDebug(this,DebugAll,"got bsn=%u/%d fsn=%u/%d local bsn=%u/%d fsn=%u/%d [%p]",
-	bsn,bib,fsn,fib,m_bsn,m_bib,m_fsn,m_fib,this);
-    unsigned char diff = 0;
+    // sequence control as explained by Q.703 5.2.2
+    unsigned char diff = (fsn - m_bsn) & 0x7f;
+    XDebug(this,DebugAll,"got bsn=%u/%d fsn=%u/%d local bsn=%u/%d fsn=%u/%d diff=%u len=%u [%p]",
+	bsn,bib,fsn,fib,m_bsn,m_bib,m_fsn,m_fib,diff,len,this);
     if (aligned()) {
-	// sequence control as explained by Q.703 5.2.2
-	diff = (fsn - m_bsn) & 0x7f;
 	// received FSN should be only 1 ahead of last we handled
 	if (diff > 1) {
 	    if (diff < 64)
@@ -662,11 +662,12 @@ bool SS7MTP2::transmitLSSU(unsigned int status)
     }
     // lock the object so we can safely use member variables
     lock();
+    bool repeat = m_fillLink && (m_status != OutOfService);
     buf[0] = m_bib ? m_bsn | 0x80 : m_bsn;
     buf[1] = m_fib ? m_fsn | 0x80 : m_fsn;
     DataBlock packet(buf,buf[2]+3,false);
     XDebug(this,DebugAll,"Transmit LSSU with status %s",statusName(buf[3],true));
-    bool ok = transmitPacket(packet,m_fillLink,SignallingInterface::SS7Lssu);
+    bool ok = transmitPacket(packet,repeat,SignallingInterface::SS7Lssu);
     m_fillTime = Time::now() + (1000 * m_fillIntervalMs);
     unlock();
     packet.clear(false);

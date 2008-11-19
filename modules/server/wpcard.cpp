@@ -347,6 +347,8 @@ protected:
     // delta: number to add to each circuit code
     // cicList: Circuits to create
     bool createCircuits(unsigned int delta, const String& cicList);
+    // Clear circuit vector safely
+    void clearCircuits();
     // Check for received event (including in-band events)
     bool readEvent();
     // Read data from socket. Check for errors or in-band events
@@ -746,13 +748,13 @@ WpInterface::WpInterface(const NamedList& params)
     m_repeatMutex(true)
 {
     setName(params.getValue("debugname","WpInterface"));
-    XDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
+    DDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
 }
 
 WpInterface::~WpInterface()
 {
     cleanup(false);
-    XDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
+    DDebug(this,DebugAll,"WpInterface::~WpInterface() [%p]",this);
 }
 
 bool WpInterface::init(const NamedList& config, NamedList& params)
@@ -1125,13 +1127,11 @@ WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* d
 
 WpCircuit::~WpCircuit()
 {
+    XDebug(group(),DebugAll,"WpCircuit::~WpCircuit(%u) [%p]",code(),this);
     Lock lock(m_mutex);
     status(Missing);
-    if (m_source)
-	m_source->deref();
-    if (m_consumer)
-	m_consumer->deref();
-    XDebug(group(),DebugAll,"WpCircuit::~WpCircuit(%u) [%p]",code(),this);
+    TelEngine::destruct(m_source);
+    TelEngine::destruct(m_consumer);
 }
 
 // Change circuit status. Clear events on succesfully changes status
@@ -1244,7 +1244,7 @@ void* WpCircuit::getObject(const String& name) const
 	return m_sourceValid;
     if (name == "DataConsumer")
 	return m_consumerValid;
-    return 0;
+    return SignallingCircuit::getObject(name);
 }
 
 // Enqueue received events
@@ -1301,7 +1301,7 @@ WpSpan::WpSpan(const NamedList& params)
     m_buffer(0),
     m_bufferLen(0)
 {
-    XDebug(m_group,DebugAll,"WpSpan::WpSpan(). Name '%s' [%p]",id().safe(),this);
+    DDebug(m_group,DebugAll,"WpSpan::WpSpan(). Name '%s' [%p]",id().safe(),this);
 }
 
 // Terminate worker thread
@@ -1314,11 +1314,10 @@ WpSpan::~WpSpan()
 	    Thread::yield();
     }
     m_socket.close();
-    if (m_circuits)
-	delete[] m_circuits;
+    clearCircuits();
     if (m_buffer)
 	delete[] m_buffer;
-    XDebug(m_group,DebugAll,"WpSpan::~WpSpan() [%p]",this);
+    DDebug(m_group,DebugAll,"WpSpan::~WpSpan() [%p]",this);
 }
 
 // Initialize
@@ -1428,14 +1427,17 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
     unsigned int* cicCodes = SignallingUtils::parseUIntArray(cicList,1,m_chans,m_count,true);
     if (!cicCodes)
 	return false;
-    if (m_circuits)
-	delete[] m_circuits;
+    clearCircuits();
     m_circuits = new WpCircuit*[m_count];
+    unsigned int i;
+    for (i = 0; i < m_count; i++)
+	m_circuits[i] = 0;
     bool ok = true;
     m_chanMap = 0;
-    for (unsigned int i = 0; i < m_count; i++) {
+    for (i = 0; i < m_count; i++) {
 	m_circuits[i] = new WpCircuit(delta + cicCodes[i],m_group,this,m_buflen,cicCodes[i]);
 	if (m_group->insert(m_circuits[i])) {
+	    m_circuits[i]->ref();
 	    if (m_circuits[i]->channel())
 		m_chanMap |= ((unsigned long)1 << (m_circuits[i]->channel() - 1));
 	    continue;
@@ -1445,13 +1447,23 @@ bool WpSpan::createCircuits(unsigned int delta, const String& cicList)
 	    "WpSpan('%s'). Failed to create/insert circuit %u. Rollback [%p]",
 	    id().safe(),cicCodes[i],this);
 	m_group->removeSpan(this,true,false);
-	delete[] m_circuits;
-	m_circuits = 0;
+	clearCircuits();
 	ok = false;
 	break;
     }
     delete cicCodes;
     return ok;
+}
+
+void WpSpan::clearCircuits()
+{
+    WpCircuit** circuits = m_circuits;
+    m_circuits = 0;
+    if (!circuits)
+	return;
+    for (unsigned int i = 0; i < m_count; i++)
+	TelEngine::destruct(circuits[i]);
+    delete[] circuits;
 }
 
 // Read events and data from socket. Send data when succesfully read
@@ -1473,8 +1485,7 @@ void WpSpan::run()
 	id().safe(),m_count,m_bufferLen,m_samples,this);
     updateStatus();
     while (true) {
-	if (Thread::check(true))
-	    break;
+	Thread::check(true);
 	if (!m_socket.select(m_samples))
 	    continue;
 	updateStatus();
@@ -1506,22 +1517,28 @@ void WpSpan::run()
 	    // Read each byte from buffer. Prepare buffer for sending
 	    for (int n = samples; n > 0; n--)
 		for (unsigned int i = 0; i < m_count; i++) {
-		    if (m_circuits[i]->validSource())
-			m_circuits[i]->source()->put(swap(*dat));
-		    if (m_circuits[i]->validConsumer())
-			*dat = swap(m_circuits[i]->consumer()->get());
+		    WpCircuit* circuit = m_circuits[i];
+		    if (!circuit) {
+			*dat++ = noData;
+			continue;
+		    }
+		    if (circuit->validSource())
+			circuit->source()->put(swap(*dat));
+		    if (circuit->validConsumer())
+			*dat++ = swap(circuit->consumer()->get());
 		    else
-			*dat = noData;
-		    dat++;
+			*dat++ = noData;
 		}
 	    ::memset(m_buffer,0,WP_HEADER);
 	    m_socket.send(m_buffer,WP_HEADER + samples * m_count,MSG_DONTWAIT);
 	}
 	else
 	    for (int n = samples; n > 0; n--)
-		for (unsigned int i = 0; i < m_count; i++)
-		    if (m_circuits[i]->validSource())
-			m_circuits[i]->source()->put(swap(*dat++));
+		for (unsigned int i = 0; i < m_count; i++) {
+		    WpCircuit* circuit = m_circuits[i];
+		    if (circuit && circuit->validSource())
+			circuit->source()->put(swap(*dat++));
+		}
     }
 }
 

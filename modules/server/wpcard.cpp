@@ -304,10 +304,14 @@ public:
     virtual bool status(Status newStat, bool sync = false);
     virtual bool updateFormat(const char* format, int direction);
     virtual void* getObject(const String& name) const;
+    inline bool validSource()
+	{ return 0 != m_sourceValid; }
+    inline bool validConsumer()
+	{ return 0 != m_consumerValid; }
     inline WpSource* source()
-	{ return m_sourceValid; }
+	{ return m_source; }
     inline WpConsumer* consumer()
-	{ return m_consumerValid; }
+	{ return m_consumer; }
     // Enqueue received events
     bool enqueueEvent(SignallingCircuitEvent* e);
 private:
@@ -1178,6 +1182,7 @@ bool WpCircuit::status(Status newStat, bool sync)
     }
     // Disable data if not already disabled
     if (m_consumerValid) {
+	m_consumerValid = 0;
 	if (oldStat == Connected) {
 	    XDebug(group(),DebugAll,"WpCircuit(%u). Consumer transferred %u byte(s) [%p]",
 		code(),m_consumer->m_total,this);
@@ -1187,16 +1192,15 @@ bool WpCircuit::status(Status newStat, bool sync)
 		    m_consumer->m_total,this);
 	}
 	m_consumer->clear();
-	m_consumerValid = 0;
 	m_consumer->m_errorCount = m_consumer->m_errorBytes = 0;
 	m_consumer->m_total = 0;
     }
     if (m_sourceValid) {
+	m_sourceValid = 0;
 	if (oldStat == Connected)
 	    XDebug(group(),DebugAll,"WpCircuit(%u). Source transferred %u byte(s) [%p]",
 		code(),m_source->m_total,this);
 	m_source->clear();
-	m_sourceValid = 0;
 	m_source->m_total = 0;
     }
     return true;
@@ -1498,15 +1502,16 @@ void WpSpan::run()
 		id().safe(),samples,m_samples,this);
 	unsigned char* dat = m_buffer + WP_HEADER;
 	if (m_canSend) {
+	    unsigned char noData = swap(m_noData);
 	    // Read each byte from buffer. Prepare buffer for sending
 	    for (int n = samples; n > 0; n--)
 		for (unsigned int i = 0; i < m_count; i++) {
-		    if (m_circuits[i]->source())
+		    if (m_circuits[i]->validSource())
 			m_circuits[i]->source()->put(swap(*dat));
-		    if (m_circuits[i]->consumer())
+		    if (m_circuits[i]->validConsumer())
 			*dat = swap(m_circuits[i]->consumer()->get());
 		    else
-			*dat = swap(m_noData);
+			*dat = noData;
 		    dat++;
 		}
 	    ::memset(m_buffer,0,WP_HEADER);
@@ -1515,7 +1520,7 @@ void WpSpan::run()
 	else
 	    for (int n = samples; n > 0; n--)
 		for (unsigned int i = 0; i < m_count; i++)
-		    if (m_circuits[i]->source())
+		    if (m_circuits[i]->validSource())
 			m_circuits[i]->source()->put(swap(*dat++));
     }
 }

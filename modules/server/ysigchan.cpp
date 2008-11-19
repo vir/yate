@@ -246,7 +246,7 @@ protected:
     // Get debug enabler to set debug for it
     virtual DebugEnabler* getDbgEnabler(int id) { return 0; }
     // Start worker thread. Set error on failure
-    bool startThread(String& error);
+    bool startThread(String& error, unsigned long sleepUsec);
     // Build the signalling interface and insert it in the engine
     static SignallingInterface* buildInterface(NamedList& params, const String& device,
 	const String& debugName, String& error);
@@ -456,14 +456,16 @@ class SigLinkThread : public Thread
 {
     friend class SigLink;                // SigLink will set m_timeout when needded
 public:
-    inline SigLinkThread(SigLink* link)
-	: Thread("SigLinkThread"), m_link(link), m_timeout(0)
+    inline SigLinkThread(SigLink* link, unsigned long sleepUsec)
+	: Thread("SigLinkThread"),
+	  m_link(link), m_timeout(0), m_sleepUsec(sleepUsec)
 	{}
     virtual ~SigLinkThread();
     virtual void run();
 private:
     SigLink* m_link;
     u_int64_t m_timeout;
+    unsigned long m_sleepUsec;
 };
 
 
@@ -1723,11 +1725,11 @@ void SigLink::cleanup()
     release();
 }
 
-bool SigLink::startThread(String& error)
+bool SigLink::startThread(String& error, unsigned long sleepUsec)
 {
     if (!m_thread) {
 	if (m_controller)
-	    m_thread = new SigLinkThread(this);
+	    m_thread = new SigLinkThread(this,sleepUsec);
 	else {
 	    Debug(&plugin,DebugNote,
 		"Link('%s'). No worker thread for link without call controller [%p]",
@@ -1904,7 +1906,7 @@ bool SigSS7Isup::create(NamedList& params, String& error)
     m_link->control(SS7Layer2::Align,&params);
 
     // Start thread
-    if (!startThread(error))
+    if (!startThread(error,plugin.engine()->tickDefault()))
 	return false;
 
     return true;
@@ -2138,7 +2140,7 @@ bool SigIsdn::create(NamedList& params, String& error)
     m_q921->multipleFrame(true,false);
 
     // Start thread
-    if (!startThread(error))
+    if (!startThread(error,plugin.engine()->tickDefault()))
 	return false;
 
     return true;
@@ -2396,7 +2398,7 @@ bool SigIsdnMonitor::create(NamedList& params, String& error)
     q931()->attach(m_q921Cpe,false);
 
     // Start thread
-    if (!startThread(error))
+    if (!startThread(error,plugin.engine()->tickDefault()))
 	return false;
 
     if (debugAt(DebugInfo)) {
@@ -2915,9 +2917,9 @@ void SigLinkThread::run()
     SignallingEvent* event = 0;
     while (true) {
 	if (!event)
-	    Thread::yield(true);
-	else if (Thread::check(true))
-	    break;
+	    Thread::usleep(m_sleepUsec,true);
+	else
+	    Thread::check(true);
 	Time time;
 	event = m_link->controller()->getEvent(time);
 	if (event) {

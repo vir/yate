@@ -52,46 +52,72 @@ const TokenDict* SIGTRAN::classNames()
 }
 
 SIGTRAN::SIGTRAN()
-    : m_trans(None), m_socket(0)
+    : m_trans(0)
 {
 }
 
 SIGTRAN::~SIGTRAN()
 {
-    terminate();
-}
-
-// Terminate the transport
-void SIGTRAN::terminate()
-{
-    Socket* tmp = m_socket;
-    m_trans = None;
-    m_socket = 0;
-    delete tmp;
+    attach(0);
 }
 
 // Check if a stream in the transport is connected
 bool SIGTRAN::connected(int streamId) const
 {
-    if ((m_trans == None) || !(m_socket && m_socket->valid()))
-	return false;
-    Debug(DebugStub,"Please implement SIGTRAN::connected()");
-    return true;
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    return trans && trans->connected(streamId);
 }
 
-// Attach a socket to the SIGTRAN instance
-bool SIGTRAN::attach(Socket* socket, Transport trans)
+// Attach a transport to the SIGTRAN instance
+void SIGTRAN::attach(SIGTransport* trans)
 {
-    terminate();
-    if ((trans == None) || !socket)
-	return false;
-    m_socket = socket;
+    Lock lock(m_transMutex);
+    if (trans == m_trans)
+	return;
+    if (trans && trans->ref())
+	trans = 0;
+    SIGTransport* tmp = m_trans;
     m_trans = trans;
-    return true;
+    lock.drop();
+    if (tmp) {
+	tmp->attach(0);
+	tmp->destruct();
+    }
+    if (trans)
+	trans->attach(this);
+}
+
+// Transmit a SIGTRAN message over the attached transport
+bool SIGTRAN::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
+    unsigned char msgType, const DataBlock& msg, int streamId) const
+{
+    m_transMutex.lock();
+    RefPointer<SIGTransport> trans = m_trans;
+    m_transMutex.unlock();
+    return trans && trans->transmitMSG(msgVersion,msgClass,msgType,msg,streamId);
+}
+
+
+// Attach or detach an user adaptation layer
+void SIGTransport::attach(SIGTRAN* sigtran)
+{
+    if (m_sigtran != sigtran) {
+	m_sigtran = sigtran;
+	attached(sigtran != 0);
+    }
+}
+
+// Request processing from the adaptation layer
+bool SIGTransport::processMSG(unsigned char msgVersion, unsigned char msgClass,
+    unsigned char msgType, const DataBlock& msg, int streamId) const
+{
+    return m_sigtran && m_sigtran->processMSG(msgVersion,msgClass,msgType,msg,streamId);
 }
 
 // Build the common header and transmit a message to the network
-bool SIGTRAN::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
+bool SIGTransport::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
     unsigned char msgType, const DataBlock& msg, int streamId)
 {
     if (!connected(streamId))
@@ -112,18 +138,6 @@ bool SIGTRAN::transmitMSG(unsigned char msgVersion, unsigned char msgClass,
     bool ok = transmitMSG(header,msg,streamId);
     header.clear(false);
     return ok;
-}
-
-// Generic message transmission method, can be overriden to improve performance
-bool SIGTRAN::transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId)
-{
-    if (!connected(streamId))
-	return false;
-
-    DataBlock tmp(header);
-    tmp += msg;
-    int len = tmp.length();
-    return m_socket->send(tmp.data(),len) == len;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

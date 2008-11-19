@@ -79,6 +79,7 @@ class SS7PointCode;                      // SS7 Code Point
 class SS7Label;                          // SS7 Routing Label
 class SS7MSU;                            // A block of data that holds a Message Signal Unit
 class SIGTRAN;                           // Abstract SIGTRAN component
+class SIGTransport;                      // Abstract transport for SIGTRAN
 class ASPUser;                           // Abstract SS7 ASP user interface
 class SCCP;                              // Abstract SS7 SCCP interface
 class SCCPUser;                          // Abstract SS7 SCCP user interface
@@ -3579,11 +3580,12 @@ public:
 };
 
 /**
- * An interface to a Signalling Transport component
- * @short Abstract SIGTRAN component
+ * A an abstraction offering connectivity to a SIGTRAN transport
+ * @short An abstract SIGTRAN transport layer
  */
-class YSIG_API SIGTRAN
+class YSIG_API SIGTransport : public SignallingComponent
 {
+    friend class SIGTRAN;
 public:
     /**
      * Type of transport used
@@ -3597,6 +3599,86 @@ public:
 	Unix,
     };
 
+    /**
+     * Get the SIGTRAN component attached to this transport
+     * @return Pointer to adaptation layer or NULL
+     */
+    inline SIGTRAN* sigtran() const
+	{ return m_sigtran; }
+
+    /**
+     * Check if the network transport layer is connected
+     * @param streamId Identifier of the stream to check if applicable
+     * @return True if the transport (and stream if applicable) is connected
+     */
+    virtual bool connected(int streamId) const = 0;
+
+protected:
+    /**
+     * Constructor
+     * @param name Default empty component name
+     */
+    inline SIGTransport(const char* name = 0)
+	: SignallingComponent(name), m_sigtran(0)
+	{ }
+
+    /**
+     * Attach an user adaptation layer
+     * @param sigtran SIGTRAN component to attach, can be NULL
+     */
+    void attach(SIGTRAN* sigtran);
+
+    /**
+     * Notification if the attached state changed
+     * @param hasUAL True if an User Adaptation Layer is now attached
+     */
+    virtual void attached(bool hasUAL) = 0;
+
+    /**
+     * Send a complete message to the adaptation layer for processing
+     * @param msgVersion Version of the protocol
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream the message was received on
+     * @return True if the message was handled
+     */
+    bool processMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId) const;
+
+    /**
+     * Transmit a message to the network
+     * @param msgVersion Version of the protocol
+     * @param msgClass Class of the message
+     * @param msgType Type of the message, depends on the class
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    virtual bool transmitMSG(unsigned char msgVersion, unsigned char msgClass,
+	unsigned char msgType, const DataBlock& msg, int streamId = 0);
+
+    /**
+     * Transmit a prepared message to the network
+     * @param header Message header, typically 8 octets
+     * @param msg Message data, may be empty
+     * @param streamId Identifier of the stream to send the data over
+     * @return True if the message was transmitted to network
+     */
+    virtual bool transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0) = 0;
+
+private:
+    SIGTRAN* m_sigtran;
+};
+
+/**
+ * An interface to a Signalling Transport user adaptation component
+ * @short Abstract SIGTRAN user adaptation component
+ */
+class YSIG_API SIGTRAN
+{
+    friend class SIGTransport;
+public:
     /**
      * Message classes
      */
@@ -3633,21 +3715,29 @@ public:
     SIGTRAN();
 
     /**
-     * Destructor, closes connection and any socket
+     * Destructor, terminates transport layer
      */
     virtual ~SIGTRAN();
 
     /**
-     * Terminate the transport, close the socket, drop partial data
+     * Attach a transport (connectivity provider)
+     * @param trans Transport to attach to this component
      */
-    virtual void terminate();
+    virtual void attach(SIGTransport* trans);
+
+    /**
+     * Get the transport of this user adaptation component
+     * @return Pointer to the transport layer or NULL
+     */
+    inline SIGTransport* transport() const
+	{ return m_trans; }
 
     /**
      * Check if the network transport layer is connected
      * @param streamId Identifier of the stream to check if applicable
      * @return True if the transport (and stream if applicable) is connected
      */
-    virtual bool connected(int streamId = 0) const;
+    bool connected(int streamId = 0) const;
 
     /**
      * Message class names dictionary
@@ -3656,14 +3746,6 @@ public:
     static const TokenDict* classNames();
 
 protected:
-    /**
-     * Attach an open socket
-     * @param socket Already open socket to attach
-     * @param trans Type of the socket (transport)
-     * @return True if the new socket was attached successfully
-     */
-    virtual bool attach(Socket* socket, Transport trans);
-
     /**
      * Process a complete message
      * @param msgVersion Version of the protocol
@@ -3686,20 +3768,11 @@ protected:
      * @return True if the message was transmitted to network
      */
     bool transmitMSG(unsigned char msgVersion, unsigned char msgClass,
-	unsigned char msgType, const DataBlock& msg, int streamId = 0);
-
-    /**
-     * Transmit a prepared message to the network transport layer
-     * @param header Message header, typically 8 octets
-     * @param msg Message data, may be empty
-     * @param streamId Identifier of the stream to send the data over
-     * @return True if the message was transmitted to network
-     */
-    virtual bool transmitMSG(const DataBlock& header, const DataBlock& msg, int streamId = 0);
+	unsigned char msgType, const DataBlock& msg, int streamId = 0) const;
 
 private:
-    Transport m_trans;
-    Socket* m_socket;
+    SIGTransport* m_trans;
+    mutable Mutex m_transMutex;
 };
 
 /**

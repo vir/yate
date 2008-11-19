@@ -200,9 +200,9 @@ void SignallingEngine::insert(SignallingComponent* component)
 {
     if (!component)
 	return;
+    Lock lock(this);
     if (component->engine() == this)
 	return;
-    Lock lock(this);
     DDebug(this,DebugAll,"Engine inserting component '%s' @%p [%p]",
 	component->toString().c_str(),component,this);
     component->detach();
@@ -215,11 +215,11 @@ void SignallingEngine::remove(SignallingComponent* component)
 {
     if (!component)
 	return;
+    Lock lock(this);
     if (component->engine() != this)
 	return;
-    Lock lock(this);
-    DDebug(this,DebugAll,"Engine removing component '%s' @%p [%p]",
-	component->toString().c_str(),component,this);
+    DDebug(this,DebugAll,"Engine removing component @%p '%s' [%p]",
+	component,component->toString().c_str(),this);
     component->m_engine = 0;
     component->detach();
     m_components.remove(component,false);

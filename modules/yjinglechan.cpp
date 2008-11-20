@@ -48,6 +48,7 @@ class YJBPresence;                       // Presence service
 class YJBIqService;                      // Handle 'iq' stanzas not processed by other services
 class YJGData;                           // Handle the transport and formats for a connection
 class YJGConnection;                     // Jingle channel
+class YJGTransfer;                       // Transfer thread (route and execute)
 class ResNotifyHandler;                  // resource.notify handler
 class ResSubscribeHandler;               // resource.subscribe handler
 class UserLoginHandler;                  // user.login handler
@@ -221,6 +222,7 @@ protected:
 class YJGConnection : public Channel
 {
     YCLASS(YJGConnection,Channel)
+    friend class YJGTransfer;
 public:
     enum State {
 	Pending,
@@ -244,6 +246,19 @@ public:
 	{ return m_local; }
     inline const JabberID& remote() const
 	{ return m_remote; }
+    // Check session id
+    inline bool isSid(const String& sid) {
+	    Lock lock(m_mutex);
+	    return m_session && sid == m_session->sid();
+	}
+    // Get jingle session id
+    inline bool getSid(String& buf) {
+	    Lock lock(m_mutex);
+	    if (!m_session)
+		return false;
+	    buf = m_session->sid();
+	    return true;
+	}
     // Overloaded methods from Channel
     virtual void callAccept(Message& msg);
     virtual void callRejected(const char* error, const char* reason, const Message* msg);
@@ -255,6 +270,7 @@ public:
     virtual bool msgText(Message& msg, const char* text);
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgTone(Message& msg, const char* tone);
+    virtual bool msgTransfer(Message& msg);
     inline bool disconnect(const char* reason) {
 	setReason(reason);
 	return Channel::disconnect(m_reason);
@@ -269,6 +285,15 @@ public:
     // Hangup if the remote user is unavailbale
     // Return true to disconnect
     bool presenceChanged(bool available);
+    // Process a transfer request
+    // Return true if the event was accepted
+    bool processTransferRequest(JGEvent* event);
+    // Transfer terminated notification from transfer thread
+    void transferTerminated(bool ok, const char* reason = 0);
+
+    // Check if a transfer can be initiated
+    inline bool canTransfer() const
+	{ return m_session && !m_transferring && isAnswered(); }
 
     inline void updateResource(const String& resource) {
 	if (!m_remote.resource() && resource)
@@ -304,10 +329,34 @@ private:
     String m_reason;                     // Hangup reason
     // Timeouts
     u_int64_t m_timeout;                 // Timeout for not answered outgoing connections
+    // Transfer
+    bool m_transferring;                 // The call is already involved in a transfer
+    String m_transferStanzaId;           // Sent transfer stanza id used to track the result
+    JabberID m_transferTo;               // Transfer target
+    JabberID m_transferFrom;             // Transfer source
+    String m_transferSid;                // Session id for attended transfer
     // On hold data
     int m_dataFlags;                    // The data status
     String m_onHoldOutId;               // The id of the hold stanza sent to remote
     String m_activeOutId;               // The id of the active stanza sent to remote
+};
+
+/**
+ * Transfer thread (route and execute)
+ */
+class YJGTransfer : public Thread
+{
+public:
+    YJGTransfer(YJGConnection* conn);
+    virtual void run(void);
+private:
+    String m_transferorID;           // Transferor channel's id
+    String m_transferredID;          // Transferred channel's id
+    Driver* m_transferredDrv;        // Transferred driver's pointer
+    JabberID m_to;                   // Transfer target
+    JabberID m_from;                 // Transfer source
+    String m_sid;                    // Session id for unattended transfer
+    Message m_msg;
 };
 
 /**
@@ -430,6 +479,11 @@ public:
     //  is not subscribed to the remote user (or the remote user is not found).
     // Return false if user or resource is not found
     bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
+    // Find a channel by its sid
+    YJGConnection* findBySid(const String& sid);
+    // Get a channel's session id. Return false if not found
+    bool getSid(const String& id, String& sid);
+
     // Check if this module handles a given protocol
     static bool canHandleProtocol(const String& proto) {
 	for (unsigned int i = 0; i < ProtoCount; i++)
@@ -1366,9 +1420,18 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_mutex(true), m_state(Pending), m_session(0), m_local(caller),
     m_remote(called), m_callerPrompt(msg.getValue("callerprompt")),
     m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0),
-    m_dataFlags(0)
+    m_transferring(false), m_dataFlags(0)
 {
-    Debug(this,DebugCall,"Outgoing. caller='%s' called='%s' [%p]",caller,called,this);
+    String uri = msg.getValue("diverteruri",msg.getValue("diverter"));
+    // Skip protocol if present
+    if (uri) {
+	int pos = uri.find(':');
+	m_transferFrom.set((pos >= 0) ? uri.substr(pos + 1) : uri);
+    }
+    Debug(this,DebugCall,"Outgoing. caller='%s' called='%s'%s%s [%p]",
+	caller,called,
+	m_transferFrom?". Transferred from=":"",
+	m_transferFrom.safe(),this);
     // Init transport
     m_data = new YJGData(this,&msg);
     // Set timeout and maxcall
@@ -1410,10 +1473,20 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_mutex(true), m_state(Active), m_session(event->session()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0),
-    m_dataFlags(0)
+    m_transferring(false), m_dataFlags(0)
 {
-    Debug(this,DebugCall,"Incoming. caller='%s' called='%s' [%p]",
-	m_remote.c_str(),m_local.c_str(),this);
+    // Check if this call is transferred
+    if (event->jingle()) {
+	XMLElement* trans = event->jingle()->findFirstChild(XMLElement::Transfer);
+	if (trans) {
+	    m_transferFrom.set(trans->getAttribute("from"));
+	    TelEngine::destruct(trans);
+	}
+    }
+    Debug(this,DebugCall,"Incoming. caller='%s' called='%s'%s%s [%p]",
+	m_remote.c_str(),m_local.c_str(),
+	m_transferFrom?". Transferred from=":"",
+	m_transferFrom.safe(),this);
     // Set session
     m_session->userData(this);
     // Init transport
@@ -1670,6 +1743,57 @@ bool YJGConnection::msgTone(Message& msg, const char* tone)
     return true;
 }
 
+// Send a transfer request
+bool YJGConnection::msgTransfer(Message& msg)
+{
+    Lock lock(m_mutex);
+    if (!canTransfer())
+	return false;
+
+    // Get transfer destination
+    // Try to get a resource for transfer target if incomplete
+    m_transferTo.set(msg.getValue("to"));
+    if (!m_transferTo) {
+	DDebug(this,DebugNote,"Transfer request with empty target [%p]",this);
+	return false;
+    }
+    if (!m_transferTo.isFull()) {
+	const JBStream* stream = m_session ? m_session->stream() : 0;
+	if (stream && stream->type() == JBEngine::Client)
+	    plugin.getClientTargetResource((JBClientStream*)stream,m_transferTo);
+    }
+
+    // Check attended transfer request
+    NamedString* chanId = msg.getParam("channelid");
+    if (chanId) {
+	bool ok = plugin.getSid(*chanId,m_transferSid);
+
+	if (!m_transferSid) {
+	    Debug(this,DebugNote,"Attended transfer failed for conn=%s 'no %s' [%p]",
+		chanId->c_str(),ok ? "session" : "connection",this);
+	    return false;
+	}
+
+	// Don't transfer the same channel
+	if (m_transferSid == m_session->sid()) {
+	    Debug(this,DebugNote,
+		"Attended transfer request for the same session! [%p]",this);
+	    return false;
+	}
+    }
+
+    // Send the transfer request
+    XMLElement* trans = m_session->buildTransfer(m_transferTo,
+	m_transferSid ? m_session->local() : String::empty(),m_transferSid);
+    m_transferring = m_session->sendInfo(trans,&m_transferStanzaId);
+    Debug(this,m_transferring?DebugCall:DebugNote,"%s transfer to=%s sid=%s [%p]",
+	m_transferring ? "Sent" : "Failed to send",m_transferTo.c_str(),
+	m_transferSid.c_str(),this);
+    if (!m_transferring)
+	m_transferStanzaId = "";
+    return m_transferring;
+}
+
 // Hangup the call. Send session terminate if not already done
 void YJGConnection::hangup(const char* reason, const char* text)
 {
@@ -1771,6 +1895,23 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    }
 	    return;
 	}
+
+	// Check if this is a transfer request result
+	if (m_transferring && m_transferStanzaId &&
+	    m_transferStanzaId == event->id()) {
+	    // Reset transfer
+	    m_transferStanzaId = "";
+	    m_transferring = false;
+	    if (rspOk) {
+		Debug(this,DebugStub,"Transfer succeedded !!!!! [%p]",this);
+		// TODO: implement
+	    }
+	    else {
+		Debug(this,DebugMild,"Transfer failed error=%s [%p]",
+		    event->text().c_str(),this);
+	    }
+	    return;
+	}
 	return;
     }
 
@@ -1827,8 +1968,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;
 	case JGSession::ActTransfer:
-	    if (m_session)
-		m_session->confirm(event->releaseXML(),XMPPError::SFeatureNotImpl);
+	    processTransferRequest(event);
 	    break;
 	case JGSession::ActRinging:
 	    m_session->confirm(event->element());
@@ -1871,8 +2011,11 @@ bool YJGConnection::presenceChanged(bool available)
     Debug(this,DebugCall,"Calling. caller=%s called=%s [%p]",
 	m_local.c_str(),m_remote.c_str(),this);
     m_state = Active;
+    XMLElement* transfer = 0;
+    if (m_transferFrom)
+	transfer = JGSession::buildTransfer(String::empty(),m_transferFrom);
     m_session = s_jingle->call(m_local,m_remote,m_data->JGAudioList::toXML(),
-	JGTransport::createTransport(),0,m_callerPrompt);
+	JGTransport::createTransport(),transfer,m_callerPrompt);
     if (!m_session) {
 	hangup("noconn");
 	return true;
@@ -1887,6 +2030,74 @@ bool YJGConnection::presenceChanged(bool available)
     String transportId;
     m_session->sendTransport(new JGTransport(*m_data),&transportId);
     return false;
+}
+
+// Process a transfer request
+bool YJGConnection::processTransferRequest(JGEvent* event)
+{
+    Lock lock(m_mutex);
+    // Check if we can accept a transfer and if it is a valid request
+    XMLElement* trans = 0;
+    const char* reason = 0;
+    XMPPError::Type error = XMPPError::SBadRequest;
+    while (true) {
+	if (!canTransfer()) {
+	    error = XMPPError::SRequest;
+	    reason = "Unacceptable in current state";
+	    break;
+	}
+	trans = event->jingle() ? event->jingle()->findFirstChild(XMLElement::Transfer) : 0;
+	if (!trans) {
+	    reason = "Transfer element is misssing";
+	    break;
+	}
+	m_transferTo.set(trans->getAttribute("to"));
+	// Check transfer target
+	if (!m_transferTo) {
+	    reason = "Transfer target is misssing or incomplete";
+	    break;
+	}
+	// Check sid: don't accept the replacement of the same session
+	m_transferSid = trans->getAttribute("sid");
+	if (m_transferSid && isSid(m_transferSid)) {
+	    reason = "Can't replace the same session";
+	    break;
+	}
+	m_transferFrom.set(trans->getAttribute("from"));
+	break;
+    }
+    TelEngine::destruct(trans);
+
+    if (!reason) {
+	m_transferring = true;
+	Debug(this,DebugCall,"Starting transfer to=%s from=%s sid=%s [%p]",
+	    m_transferTo.c_str(),m_transferFrom.c_str(),m_transferSid.c_str(),this);
+	(new YJGTransfer(this))->startup();
+	return true;
+    }
+
+    // Not acceptable
+    Debug(this,DebugNote,
+	"Refusing transfer request reason='%s' (transferring=%u answered=%u) [%p]",
+	reason,m_transferring,isAnswered(),this);
+    m_session->confirm(event->releaseXML(),error,reason);
+    return false;
+}
+
+// Transfer terminated notification from transfer thread
+void YJGConnection::transferTerminated(bool ok, const char* reason)
+{
+    if (ok)
+	Debug(this,DebugCall,"Transfer succeedded [%p]",this);
+    else
+	Debug(this,DebugNote,"Transfer failed error='%s' [%p]",reason,this);
+    // Reset transfer data
+    Lock lock(m_mutex);
+    m_transferring = false;
+    m_transferStanzaId = "";
+    m_transferTo = "";
+    m_transferFrom = "";
+    m_transferSid = "";
 }
 
 // Handle hold/active/mute actions
@@ -1965,6 +2176,101 @@ void YJGConnection::handleAudioInfoEvent(JGEvent* event)
 	m_session->confirm(event->releaseXML(),err,text);
     }
 }
+
+/**
+ * Transfer thread (route and execute)
+ */
+YJGTransfer::YJGTransfer(YJGConnection* conn)
+    : Thread("Jingle transfer"),
+    m_msg("call.route")
+{
+    if (!conn)
+	return;
+    m_transferorID = conn->id();
+    Channel* ch = YOBJECT(Channel,conn->getPeer());
+    if (!(ch && ch->driver()))
+	return;
+    m_transferredID = ch->id();
+    m_transferredDrv = ch->driver();
+    // Set transfer data from channel
+    m_to.set(conn->m_transferTo.node(),conn->m_transferTo.domain(),conn->m_transferTo.resource());
+    m_from.set(conn->m_transferFrom.node(),conn->m_transferFrom.domain(),conn->m_transferFrom.resource());
+    m_sid = conn->m_transferSid;
+    if (!m_from)
+	m_from.set(conn->remote().node(),conn->remote().domain(),conn->remote().resource());
+    // Build the routing message if unattended
+    if (!m_sid) {
+	m_msg.addParam("id",m_transferredID);
+	if (conn->billid())
+	    m_msg.addParam("billid",conn->billid());
+	m_msg.addParam("caller",m_from.node());
+	m_msg.addParam("called",m_to.node());
+	m_msg.addParam("calleduri",BUILD_XMPP_URI(m_to));
+	m_msg.addParam("diverter",m_from.bare());
+	m_msg.addParam("diverteruri",BUILD_XMPP_URI(m_from));
+	m_msg.addParam("reason",lookup(JGSession::ReasonTransfer,s_errMap));
+    }
+}
+
+void YJGTransfer::run()
+{
+    DDebug(&plugin,DebugAll,"'%s' thread transferror=%s transferred=%s to=%s [%p]",
+	name(),m_transferorID.c_str(),m_transferredID.c_str(),m_to.c_str(),this);
+    String error;
+    // Attended
+    if (m_sid) {
+	plugin.lock();
+	RefPointer<Channel> chan = plugin.findBySid(m_sid);
+	plugin.unlock();
+	String peer = chan ? chan->getPeerId() : "";
+	if (peer) {
+	    Message m("chan.connect");
+	    m.addParam("id",m_transferredID);
+	    m.addParam("targetid",peer);
+	    m.addParam("reason","transferred");
+	    if (!Engine::dispatch(m))
+		error = m.getValue("error","Failed to connect");
+	}
+	else
+	    error << "No peer for sid=" << m_sid;
+    }
+    else {
+        error = m_transferredDrv ? "" : "No driver for transferred connection";
+	while (m_transferredDrv) {
+	    // Unattended: route the call
+#define SET_ERROR(err) { error << err; break; }
+	    bool ok = Engine::dispatch(m_msg);
+	    m_transferredDrv->lock();
+	    RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
+	    m_transferredDrv->unlock();
+    	    if (!chan)
+		SET_ERROR("Connection vanished while routing");
+	    if (!ok || (m_msg.retValue() == "-") || (m_msg.retValue() == "error"))
+		SET_ERROR("call.route failed error=" << m_msg.getValue("error"));
+	    // Execute the call
+	    m_msg = "call.execute";
+	    m_msg.setParam("callto",m_msg.retValue());
+	    m_msg.clearParam("error");
+	    m_msg.retValue().clear();
+	    m_msg.userData(chan);
+	    if (Engine::dispatch(m_msg))
+		break;
+	    SET_ERROR("'call.execute' failed error=" << m_msg.getValue("error"));
+#undef SET_ERROR
+	}
+    }
+    // Notify termination to transferor
+    plugin.lock();
+    YJGConnection* conn = static_cast<YJGConnection*>(plugin.Driver::find(m_transferorID));
+    if (conn)
+	conn->transferTerminated(!error,error);
+    else
+	DDebug(&plugin,DebugInfo,
+	    "%s thread transfer terminated trans=%s error=%s [%p]",
+	    name(),m_transferredID.c_str(),error.c_str(),this);
+    plugin.unlock();
+}
+
 
 /**
  * resource.notify message handler
@@ -2640,6 +2946,7 @@ void YJGDriver::initialize()
 	installRelay(Halt);
 	installRelay(Route);
 	installRelay(Update);
+	installRelay(Transfer);
 	installRelay(ImExecute);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
@@ -3393,6 +3700,30 @@ bool YJGDriver::getClientTargetResource(JBClientStream* stream,
     user->unlock();
     TelEngine::destruct(user);
     return !target.resource().null();
+}
+
+// Get a channel's session id. Return false if not found
+bool YJGDriver::getSid(const String& id, String& sid)
+{
+    Lock lock(this);
+    YJGConnection* conn = static_cast<YJGConnection*>(Driver::find(id));
+    if (conn)
+	conn->getSid(sid);
+    return 0 != conn;
+}
+
+// Find a channel by its sid
+YJGConnection* YJGDriver::findBySid(const String& sid)
+{
+    if (!sid)
+	return 0;
+    Lock lock(this);
+    for (ObjList* o = channels().skipNull(); o; o = o->skipNext()) {
+	YJGConnection* conn = static_cast<YJGConnection*>(o->get());
+	if (conn->isSid(sid))
+	    return conn;
+    }
+    return 0;
 }
 
 }; // anonymous namespace

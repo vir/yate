@@ -227,6 +227,12 @@ public:
 	Active,
 	Terminated,
     };
+    // Flags controlling the state of the data source/consumer
+    enum DataFlags {
+	OnHoldRemote = 0x0001,           // Put on hold by remote party
+	OnHoldLocal  = 0x0002,           // Put on hold by peer
+	OnHold = OnHoldRemote | OnHoldLocal,
+    };
     // Outgoing constructor
     YJGConnection(Message& msg, const char* caller, const char* called, bool available);
     // Incoming contructor
@@ -250,9 +256,9 @@ public:
     virtual bool msgDrop(Message& msg, const char* reason);
     virtual bool msgTone(Message& msg, const char* tone);
     inline bool disconnect(const char* reason) {
-	    setReason(reason);
-	    return Channel::disconnect(m_reason);
-	}
+	setReason(reason);
+	return Channel::disconnect(m_reason);
+    }
     // Route an incoming call
     bool route();
     // Process Jingle and Terminated events
@@ -265,21 +271,26 @@ public:
     bool presenceChanged(bool available);
 
     inline void updateResource(const String& resource) {
-	    if (!m_remote.resource() && resource)
-		m_remote.resource(resource);
-	}
-
+	if (!m_remote.resource() && resource)
+	    m_remote.resource(resource);
+    }
     inline void getRemoteAddr(String& dest) {
 	if (m_session && m_session->stream())
 	    dest = m_session->stream()->addr().host();
     }
-
     inline void setReason(const char* reason) {
-	    if (!m_reason)
-		m_reason = reason;
-	}
+	if (!m_reason)
+	    m_reason = reason;
+    }
+    // Check the status of the given data flag(s)
+    inline bool dataFlags(int mask)
+	{ return 0 != (m_dataFlags & mask); }
 
 private:
+    // Handle hold/active/mute actions
+    // Confirm the received element
+    void handleAudioInfoEvent(JGEvent* event);
+
     Mutex m_mutex;                       // Lock transport and session
     State m_state;                       // Connection state
     JGSession* m_session;                // Jingle session attached to this connection
@@ -293,6 +304,10 @@ private:
     String m_reason;                     // Hangup reason
     // Timeouts
     u_int64_t m_timeout;                 // Timeout for not answered outgoing connections
+    // On hold data
+    int m_dataFlags;                    // The data status
+    String m_onHoldOutId;               // The id of the hold stanza sent to remote
+    String m_activeOutId;               // The id of the active stanza sent to remote
 };
 
 /**
@@ -417,11 +432,11 @@ public:
     bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
     // Check if this module handles a given protocol
     static bool canHandleProtocol(const String& proto) {
-	    for (unsigned int i = 0; i < ProtoCount; i++)
-		if (proto == s_protocol[i])
-		    return true;
-	    return false;
-	}
+	for (unsigned int i = 0; i < ProtoCount; i++)
+	    if (proto == s_protocol[i])
+		return true;
+	return false;
+    }
     // Check if this module handles a given protocol
     static const char* defProtoName()
 	{ return s_protocol[Jabber].c_str(); }
@@ -1350,7 +1365,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     : Channel(&plugin,0,true),
     m_mutex(true), m_state(Pending), m_session(0), m_local(caller),
     m_remote(called), m_callerPrompt(msg.getValue("callerprompt")),
-    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0)
+    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0),
+    m_dataFlags(0)
 {
     Debug(this,DebugCall,"Outgoing. caller='%s' called='%s' [%p]",caller,called,this);
     // Init transport
@@ -1393,7 +1409,8 @@ YJGConnection::YJGConnection(JGEvent* event)
     : Channel(&plugin,0,false),
     m_mutex(true), m_state(Active), m_session(event->session()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
-    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0)
+    m_data(0), m_remoteSuportRing(true), m_hangup(false), m_timeout(0),
+    m_dataFlags(0)
 {
     Debug(this,DebugCall,"Incoming. caller='%s' called='%s' [%p]",
 	m_remote.c_str(),m_local.c_str(),this);
@@ -1505,7 +1522,108 @@ bool YJGConnection::msgAnswered(Message& msg)
 bool YJGConnection::msgUpdate(Message& msg)
 {
     DDebug(this,DebugCall,"msgUpdate [%p]",this);
-    return Channel::msgUpdate(msg);
+    Channel::msgUpdate(msg);
+
+    NamedString* oper = msg.getParam("operation");
+    bool req = (*oper == "request");
+    bool notify = !req && (*oper == "notify");
+
+    bool ok = false;
+
+#define SET_ERROR_BREAK(error,reason) { \
+    if (error) \
+	msg.setParam("error",error); \
+    if (reason) \
+	msg.setParam("reason",reason); \
+    break; \
+}
+
+    Lock lock(m_mutex);
+    bool hold = msg.getBoolValue("hold");
+    bool active = msg.getBoolValue("active");
+    // Use a while to check session and break to method end
+    while (m_session) {
+        // Hold
+	if (hold) {
+	    // TODO: check if remote peer supports JingleRtpInfo
+	    if (notify) {
+		ok = true;
+		break;
+	    }
+	    if (!req)
+		break;
+	    // Already put on hold
+	    if (dataFlags(OnHold)) {
+		if (dataFlags(OnHoldLocal))
+		    SET_ERROR_BREAK("pending",0);
+		SET_ERROR_BREAK("failure","Already on hold");
+	    }
+	    // Send XML. Copy any additional params
+	    XMLElement* hold = XMPPUtils::createElement(XMLElement::Hold,
+		XMPPNamespace::JingleRtpInfo);
+	    unsigned int n = msg.length();
+	    for (unsigned int i = 0; i < n; i++) {
+		NamedString* ns = msg.getParam(i);
+		if (!(ns && ns->name().startsWith("hold.") && ns->name().at(5)))
+		    continue;
+		hold->setAttributeValid(ns->name().substr(5),*ns);
+	    }
+	    m_onHoldOutId << "hold" << Time::secNow();
+	    if (!m_session->sendInfo(hold,&m_onHoldOutId)) {
+		m_onHoldOutId = "";
+		SET_ERROR_BREAK("noconn",0);
+	    }
+	    DDebug(this,DebugAll,"Sent hold request [%p]",this);
+	    m_dataFlags |= OnHoldLocal;
+	    clearEndpoint();
+	    m_data->resetTransport();
+    	    ok = true;
+	    break;
+	}
+        // Active
+	if (active) {
+	    // TODO: check if remote peer supports JingleRtpInfo
+	    if (notify) {
+		ok = true;
+		break;
+	    }
+	    if (!req)
+		break;
+	    // Not on hold
+	    if (!dataFlags(OnHold))
+		SET_ERROR_BREAK("failure","Already active");
+	    // Put on hold by remote
+	    if (dataFlags(OnHoldRemote))
+		SET_ERROR_BREAK("failure","Already on hold by the other party");
+	    // Send XML. Copy additional attributes
+	    XMLElement* active = XMPPUtils::createElement(XMLElement::Active,
+		XMPPNamespace::JingleRtpInfo);
+	    unsigned int n = msg.length();
+	    for (unsigned int i = 0; i < n; i++) {
+		NamedString* ns = msg.getParam(i);
+		if (!(ns && ns->name().startsWith("active.") && ns->name().at(5)))
+		    continue;
+		active->setAttributeValid(ns->name().substr(5),*ns);
+	    }
+	    m_activeOutId << "active" << Time::secNow();
+	    if (!m_session->sendInfo(active,&m_activeOutId)) {
+		m_activeOutId = "";
+		SET_ERROR_BREAK("noconn",0);
+	    }
+	    DDebug(this,DebugAll,"Sent active request [%p]",this);
+    	    ok = true;
+	    break;
+	}
+
+	break;
+    }
+
+    if (!ok && req && (hold || active))
+	Debug(this,DebugNote,"Failed to send '%s' request error='%s' reason='%s' [%p]",
+	    hold ? "hold" : "active",msg.getValue("error"),msg.getValue("reason"),this);
+
+#undef SET_ERROR_BREAK
+    return ok;
 }
 
 // Send message to remote peer
@@ -1620,7 +1738,39 @@ void YJGConnection::handleEvent(JGEvent* event)
     if (response) {
 	XDebug(this,DebugAll,"Processing response event=%s id=%s [%p]",
 	    event->name(),event->id().c_str(),this);
-	// TODO: implement
+
+	bool rspOk = (event->type() == JGEvent::ResultOk);
+
+	// Hold/active result
+	bool hold = (m_onHoldOutId && m_onHoldOutId == event->id());
+	if (hold || (m_activeOutId && m_activeOutId == event->id())) {
+	    Debug(this,rspOk ? DebugAll : DebugMild,
+		"Received result=%s to %s request [%p]",
+		event->name(),hold ? "hold" : "active",this);
+
+	    if (!hold)
+		m_dataFlags &= ~OnHoldLocal;
+	    Message* m = message("call.update");
+	    m->userData(this);
+	    m->addParam("operation","notify");
+	    if (hold)
+		m->addParam("hold",String::boolText(dataFlags(OnHold)));
+	    else
+		m->addParam("active",String::boolText(!dataFlags(OnHold)));
+	    Engine::enqueue(m);
+	    if (hold)
+		m_onHoldOutId = "";
+	    else {
+		m_activeOutId = "";
+		if (m_session) {
+		    m_data->rtp(false);
+		    // Avoid termination if error is received
+		    String transportId;
+		    m_session->sendTransport(new JGTransport(*m_data),&transportId);
+		}
+	    }
+	    return;
+	}
 	return;
     }
 
@@ -1687,8 +1837,7 @@ void YJGConnection::handleEvent(JGEvent* event)
 	case JGSession::ActHold:
 	case JGSession::ActActive:
 	case JGSession::ActMute:
-	    if (m_session)
-		m_session->confirm(event->releaseXML(),XMPPError::SFeatureNotImpl);
+	    handleAudioInfoEvent(event);
 	    break;
 
 	default:
@@ -1740,6 +1889,82 @@ bool YJGConnection::presenceChanged(bool available)
     return false;
 }
 
+// Handle hold/active/mute actions
+// Confirm the received element
+void YJGConnection::handleAudioInfoEvent(JGEvent* event)
+{
+    Lock lock(m_mutex);
+    if (!(event && m_session))
+	return;
+
+    XMPPError::Type err = XMPPError::NoError;
+    const char* text = 0;
+    // Hold
+    bool hold = event->action() == JGSession::ActHold;
+    if (hold || event->action() == JGSession::ActActive) {
+	if ((hold && !dataFlags(OnHold)) || (!hold && dataFlags(OnHoldRemote))) {
+	    XMLElement* what = event->jingle() ? event->jingle()->findFirstChild(
+		hold ? XMLElement::Hold : XMLElement::Active) : 0;
+	    if (what) {
+		if (hold)
+		    m_dataFlags |= OnHoldRemote;
+		else
+		    m_dataFlags &= ~OnHoldRemote;
+		const char* name = what->name();
+		Message* m = message("call.update");
+		m->addParam("operation","notify");
+		m->userData(this);
+		// Copy additional attributes
+		// Reset param 'name': the second param of toList() is the prefix
+		what->toList(*m,name);
+		m->setParam(name,String::boolText(true));
+		TelEngine::destruct(what);
+		// Clear endpoint before dispatching the message
+		// Our data source/consumer may be replaced
+		if (hold)
+		    clearEndpoint();
+		Engine::dispatch(*m);
+		TelEngine::destruct(m);
+		// Reset data transport when put on hold
+		clearEndpoint();
+		if (hold)
+		    m_data->resetTransport();
+		// Update channel data source/consumer
+		if (!hold) {
+		    m_data->rtp(false);
+		    // Avoid termination if error is received
+		    String transportId;
+		    m_session->sendTransport(new JGTransport(*m_data),&transportId);
+		}
+	    }
+	    else
+		err = XMPPError::SFeatureNotImpl;
+	}
+	// Respond with error if put on hold by the other party
+	else if (dataFlags(OnHoldLocal)) {
+	    err = XMPPError::SRequest;
+	    text = "Already on hold by the other party";
+	}
+    }
+    else if (event->action() == JGSession::ActMute) {
+	// TODO: implement
+	err = XMPPError::SFeatureNotImpl;
+    }
+    else
+	err = XMPPError::SFeatureNotImpl;
+
+    // Confirm received element
+    if (err == XMPPError::NoError) {
+	DDebug(this,DebugAll,"Accepted '%s' request [%p]",event->actionName(),this);
+	m_session->confirm(event->element());
+    }
+    else {
+	XMPPError e;
+	Debug(this,DebugInfo,"Denying '%s' request error='%s' reason='%s' [%p]",
+	    event->actionName(),e[err],text,this);
+	m_session->confirm(event->releaseXML(),err,text);
+    }
+}
 
 /**
  * resource.notify message handler

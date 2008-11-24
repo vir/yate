@@ -47,6 +47,9 @@ extern "C" {
 #include <wanec_iface_api.h>
 #define WAN_EC_CMD_DTMF_ENABLE WAN_EC_API_CMD_DTMF_ENABLE
 #define WAN_EC_CMD_DTMF_DISABLE WAN_EC_API_CMD_DTMF_DISABLE
+#ifdef u_buffer_config
+#define HAVE_WANPIPE_HWEC_3310
+#endif
 #endif
 
 #ifndef WANEC_DEV_DIR
@@ -522,13 +525,21 @@ bool WpSocket::echoCancel(bool enable, unsigned long chanmap)
     if (fd >= 0) {
 	wan_ec_api_t ecapi;
 	::memset(&ecapi,0,sizeof(ecapi));
+#ifdef HAVE_WANPIPE_HWEC_3310
+	ecapi.fe_chan_map = chanmap;
+#else
 	ecapi.channel_map = chanmap;
+#endif
 	if (enable) {
 	    ecapi.cmd = WAN_EC_CMD_DTMF_ENABLE;
 	    ecapi.verbose = WAN_EC_VERBOSE_EXTRA1;
 	    // event on start of tone, before echo canceller
 	    ecapi.u_dtmf_config.type = WAN_EC_TONE_PRESENT;
+#ifdef HAVE_WANPIPE_HWEC_3310
+	    ecapi.u_dtmf_config.port_map = WAN_EC_CHANNEL_PORT_SOUT;
+#else
 	    ecapi.u_dtmf_config.port = WAN_EC_CHANNEL_PORT_SOUT;
+#endif
 	}
 	else
 	    ecapi.cmd = WAN_EC_CMD_DTMF_DISABLE;

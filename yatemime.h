@@ -131,21 +131,32 @@ public:
     /**
      * Utility function, puts quotes around a string.
      * @param str String to put quotes around.
+     * @param force True to force quoting even if was already quoted
      */
-    static void addQuotes(String& str);
+    static void addQuotes(String& str, bool force = false);
 
     /**
      * Utility function, removes quotes around a string.
      * @param str String to remove quotes.
+     * @param force True to force unquoting even if wasn't properly quoted
      */
-    static void delQuotes(String& str);
+    static void delQuotes(String& str, bool force = false);
 
     /**
      * Utility function, puts quotes around a string.
      * @param str String to put quotes around.
+     * @param force True to force quoting even if was already quoted
      * @return The input string enclosed in quotes.
      */
-    static String quote(const String& str);
+    static String quote(const String& str, bool force = false);
+
+    /**
+     * Utility function, removes quotes around a string.
+     * @param str String to remove quotes around.
+     * @param force True to force unquoting even if wasn't properly quoted
+     * @return The input string with enclosing quotes removed.
+     */
+    static String unquote(const String& str, bool force = false);
 
     /**
      * Utility function to find a separator not in "quotes" or inside \<uri\>.

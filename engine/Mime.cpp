@@ -148,30 +148,69 @@ void MimeHeaderLine::delParam(const char* name)
 }
 
 // Utility function, puts quotes around a string
-void MimeHeaderLine::addQuotes(String& str)
+void MimeHeaderLine::addQuotes(String& str, bool force)
 {
     str.trimBlanks();
-    int l = str.length();
-    if ((l < 2) || (str[0] != '"') || (str[l-1] != '"'))
+    unsigned int l = str.length();
+    if (force || (l < 2) || (str[0] != '"') || (str[l-1] != '"')) {
 	str = "\"" + str + "\"";
+	force = true;
+    }
+    for (l = 1; l < str.length() - 1; l++) {
+	switch (str.at(l)) {
+	    case '\\':
+		if (!force) {
+		    // check only, don't quote again
+		    switch (str.at(l+1)) {
+			case '\\':
+			case '"':
+			    // already quoted, skip it
+			    l++;
+			    continue;
+		    }
+		}
+		// fall through
+	    case '"':
+		str = str.substr(0,l) + "\\" + str.substr(l);
+		l++;
+	    default:
+		break;
+	}
+    }
 }
 
 // Utility function, removes quotes around a string
-void MimeHeaderLine::delQuotes(String& str)
+void MimeHeaderLine::delQuotes(String& str, bool force)
 {
     str.trimBlanks();
-    int l = str.length();
+    unsigned int l = str.length();
     if ((l >= 2) && (str[0] == '"') && (str[l-1] == '"')) {
 	str = str.substr(1,l-2);
 	str.trimBlanks();
+	force = true;
+    }
+    if (force) {
+	for (l = 0; l < str.length(); l++) {
+	    if (str.at(l) == '\\')
+		str = str.substr(0,l) + str.substr(l+1);
+	    // since the string is shorter the loop will skip past next char
+	}
     }
 }
 
 // Utility function, puts quotes around a string
-String MimeHeaderLine::quote(const String& str)
+String MimeHeaderLine::quote(const String& str, bool force)
 {
     String tmp(str);
-    addQuotes(tmp);
+    addQuotes(tmp,force);
+    return tmp;
+}
+
+// Utility function, removed quotes around a string
+String MimeHeaderLine::unquote(const String& str, bool force)
+{
+    String tmp(str);
+    delQuotes(tmp,force);
     return tmp;
 }
 

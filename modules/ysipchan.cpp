@@ -3345,7 +3345,7 @@ void YateSIPConnection::doBye(SIPTransaction* t)
     if (hl) {
 	const NamedString* text = hl->getParam("text");
 	if (text)
-	    m_reason = *text;
+	    m_reason = MimeHeaderLine::unquote(*text);
 	// FIXME: add SIP and Q.850 cause codes
     }
     t->setResponse(200);

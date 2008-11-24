@@ -399,6 +399,9 @@ if [[ "x$ac_cv_use_wphwec" != "xno" ]]; then
 AC_MSG_CHECKING([for Wanpipe/Octasic headers])
 if [[ -f "$ac_cv_use_wphwec/wanec_iface.h" -a -f "$ac_cv_use_wphwec/oct6100_api/oct6100api/oct6100_api.h" ]]; then
     WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec -I$ac_cv_use_wphwec/oct6100_api"
+    if [[ -f "$ac_cv_use_wphwec/wanec_iface_api.h" ]]; then
+	WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC_API $WANPIPE_HWEC_INC"
+    fi
     ac_cv_use_wphwec=yes
 else
     ac_cv_use_wphwec=no

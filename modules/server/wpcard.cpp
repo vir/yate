@@ -41,12 +41,20 @@ extern "C" {
 #include <linux/sdla_aft_te1.h>
 
 #ifdef HAVE_WANPIPE_HWEC
+
 #include <wanec_iface.h>
+#ifdef HAVE_WANPIPE_HWEC_API
+#include <wanec_iface_api.h>
+#define WAN_EC_CMD_DTMF_ENABLE WAN_EC_API_CMD_DTMF_ENABLE
+#define WAN_EC_CMD_DTMF_DISABLE WAN_EC_API_CMD_DTMF_DISABLE
+#endif
+
 #ifndef WANEC_DEV_DIR
 #warning Incompatible echo canceller API, upgrade or configure --without-wphwec
 #undef HAVE_WANPIPE_HWEC
 #endif // WANEC_DEV_DIR
-#endif
+
+#endif // HAVE_WANPIPE_HWEC
 
 };
 
@@ -562,8 +570,8 @@ bool WpSocket::dtmfDetect(bool enable)
 #ifdef HAVE_WANPIPE_HWEC
     api_tx_hdr_t a;
     ::memset(&a,0,sizeof(api_tx_hdr_t));
-    a.u.event.type = WP_API_EVENT_DTMF;
-    a.u.event.mode = enable ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
+    a.wp_api_tx_hdr_event_type = WP_API_EVENT_DTMF;
+    a.wp_api_tx_hdr_event_mode = enable ? WP_API_EVENT_ENABLE : WP_API_EVENT_DISABLE;
     ok = (::ioctl(m_socket.handle(),SIOC_WANPIPE_API,&a) >= 0);
 #else
     // pretend enabling fails, disabling succeeds

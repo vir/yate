@@ -397,7 +397,8 @@ bool CdrHandler::received(Message &msg)
     if (b)
 	rval = b->update(msg,m_type,msg.msgTime().usec());
     else
-	Debug("cdrbuild",DebugInfo,"Got message '%s' for untracked id '%s'",
+	Debug("cdrbuild",((CdrHangup == m_type) ? DebugNote : DebugInfo),
+	    "Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
     if ((m_type == CdrRinging) || (m_type == CdrAnswer)) {
 	id = msg.getValue("peerid");

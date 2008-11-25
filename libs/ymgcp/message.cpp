@@ -280,7 +280,7 @@ bool MGCPMessage::parse(MGCPEngine* engine, ObjList& dest,
 		    error = "Invalid end-of-line";
 		    break;
 		}
-		if (!count || (count == 1 && *line == '.')) {
+		if (!count || (count == 1 && (*line == '.' || !*line))) {
 		    if (!count)
 			empty++;
 		    else
@@ -311,7 +311,7 @@ bool MGCPMessage::parse(MGCPEngine* engine, ObjList& dest,
 		    continue;
 		}
 		// Fallback with current index if found non empty line which doesn't start with '.'
-		if (*line != '.')
+		if (*line && *line != '.')
 		    crt = start;
 		break;
 	    }
@@ -457,7 +457,7 @@ bool MGCPMessage::decodeParams(const unsigned char* buffer, unsigned int len,
 	// Terminate if the line is empty or is a message separator
 	if (!count)
 	    break;
-	if (count == 1 && *line == '.')
+	if (count == 1 && (*line == '.' || !*line))
 	    return true;
 
 #ifdef PARSER_DEBUG

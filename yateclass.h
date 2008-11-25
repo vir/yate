@@ -1460,11 +1460,19 @@ public:
     String& toLower();
 
     /**
-     * Indexing operator
+     * Indexing operator with signed int
      * @param index Index of character in string
      * @return Character at given index or 0 if out of range
      */
-    inline char operator[](int index) const
+    inline char operator[](signed int index) const
+	{ return at(index); }
+
+    /**
+     * Indexing operator with unsigned int
+     * @param index Index of character in string
+     * @return Character at given index or 0 if out of range
+     */
+    inline char operator[](unsigned int index) const
 	{ return at(index); }
 
     /**

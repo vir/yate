@@ -42,10 +42,13 @@ MGCPTransaction::MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outg
     m_crtRetransInterval(0),
     m_retransCount(0),
     m_timeout(false),
+    m_ackRequest(true),
     m_private(0)
 {
-    if (m_engine)
+    if (m_engine) {
+	ackRequest(m_engine->ackRequest());
 	m_engine->appendTrans(this);
+    }
     else {
 	Debug(engine,DebugNote,"Can't create MGCP transaction without engine");
 	return;
@@ -180,10 +183,13 @@ bool MGCPTransaction::setResponse(MGCPMessage* msg)
 	m_debug.c_str(),msg->name().c_str(),state(),this);
 
     m_response = msg;
-    // Force response ACK request
-    m_response->params.setParam("K","");
+    if (m_ackRequest)
+	// Force response ACK request
+	m_response->params.setParam("K","");
     // Send and init timeout
     send(m_response);
+    if (!m_ackRequest)
+	changeState(Ack);
     initTimeout(Time(),false);
     return true;
 }

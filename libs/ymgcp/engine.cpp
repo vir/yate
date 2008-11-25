@@ -113,7 +113,8 @@ MGCPEngine::MGCPEngine(bool gateway, const char* name, const NamedList* params)
     m_retransCount(TR_RETRANS_COUNT),
     m_extraTime(TR_EXTRA_TIME * 1000),
     m_parseParamToLower(true),
-    m_provisional(true)
+    m_provisional(true),
+    m_ackRequest(true)
 {
     debugName((name && *name) ? name : (gateway ? "mgcp_gw" : "mgcp_ca"));
 
@@ -157,6 +158,7 @@ void MGCPEngine::initialize(const NamedList& params)
 
     m_parseParamToLower = params.getBoolValue("lower_case_params",true);
     m_provisional = params.getBoolValue("send_provisional",true);
+    m_ackRequest = params.getBoolValue("request_ack",true);
 
     // Bind socket if not valid
     if (!m_socket.valid()) {

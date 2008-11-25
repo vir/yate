@@ -340,6 +340,13 @@ public:
 	{ return m_timeout; }
 
     /**
+     * Set the remote ACK request flag
+     * @param request False if remote is not required to send an ACK
+     */
+    inline void ackRequest(bool request)
+	{ m_ackRequest = request; }
+
+    /**
      * Get the private user data of this transaction
      * @return The private user data of this transaction
      */
@@ -467,6 +474,7 @@ private:
     unsigned int m_crtRetransInterval;   // Current retransmission interval
     unsigned int m_retransCount;         // Remainig number of retransmissions
     bool m_timeout;                      // Transaction timeout flag
+    bool m_ackRequest;                   // Remote is requested to send ACK
     void* m_private;                     // Data used by this transaction's user
     String m_debug;                      // String used to identify the transaction in debug messages
 };
@@ -817,6 +825,20 @@ public:
 	{ return m_provisional; }
 
     /**
+     * Get the remote ACK request flag
+     * @return True if remote will be requested to send an ACK
+     */
+    inline bool ackRequest() const
+	{ return m_ackRequest; }
+
+    /**
+     * Set the remote ACK request flag
+     * @param request False to not request from remote to send an ACK
+     */
+    inline void ackRequest(bool request)
+	{ m_ackRequest = request; }
+
+    /**
      * Initialize this engine
      * @param params Engine's parameters
      */
@@ -1046,6 +1068,7 @@ private:
     u_int64_t m_extraTime;               // Time to live after the transaction terminated gracefully
     bool m_parseParamToLower;            // Convert received messages' params to lower case
     bool m_provisional;                  // Send provisional responses flag
+    bool m_ackRequest;                   // Remote is requested to send ACK
     ObjList m_knownCommands;             // The list of known commands
     ObjList m_threads;
 };

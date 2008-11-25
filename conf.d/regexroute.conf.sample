@@ -43,6 +43,7 @@
 ;  $(index,N,ITEM1,ITEM2,...) = N-th (modulo length of list) item in list
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
 ;  $(runid) = the current Engine run identifier
+;  $(nodename) = the node name the Engine runs as, may be empty
 ;  $(transcode,FLAGS,FORMAT1,FORMAT2,...) = list of formats the input can be transcoded into
 ;       e - exclude initial formats form generated list
 ;       r - allow rate conversion (for use with wideband)

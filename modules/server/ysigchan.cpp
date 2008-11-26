@@ -604,6 +604,8 @@ bool SigChannel::startCall(Message& msg, String& links)
 		cic->setParam("echotaps",*echo);
 		cic->setParam("echocancel",String::boolText(true));
 	    }
+	    else if (taps == 0)
+		cic->setParam("echocancel",String::boolText(false));
 	    else
 		cic->setParam("echocancel",String::boolText(echo->toBoolean(true)));
 	}

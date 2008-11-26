@@ -68,6 +68,7 @@
 			/>
 			<Tool
 				Name="VCLibrarianTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile=".\Release\libyrtp.lib"
 				SuppressStartupBanner="true"
 			/>
@@ -144,6 +145,7 @@
 			/>
 			<Tool
 				Name="VCLibrarianTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile=".\Debug\libyrtp.lib"
 				SuppressStartupBanner="true"
 			/>
@@ -173,6 +175,14 @@
 			Name="Source Files"
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
+			<File
+				RelativePath="..\libs\yrtp\dejitter.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\libs\yrtp\secure.cpp"
+				>
+			</File>
 			<File
 				RelativePath="..\libs\yrtp\session.cpp"
 				>

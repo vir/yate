@@ -2142,8 +2142,9 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
 	reason = "noconn";
 	return 0;
     }
-    if (!m_l3LinkUp) {
-	Debug(this,DebugNote,"L3 network is down");
+    if (exiting() || !m_l3LinkUp) {
+	Debug(this,DebugInfo,"Denying outgoing call request, reason: %s.",
+	    exiting() ? "exiting" : "L3 down");
 	TelEngine::destruct(msg);
 	reason = "net-out-of-order";
 	return 0;
@@ -2157,6 +2158,7 @@ SignallingCall* SS7ISUP::call(SignallingMessage* msg, String& reason)
     SS7PointCode dest;
     SignallingCircuit* cic = 0;
     const char* range = msg->params().getValue("circuits");
+    reason.clear();
     Lock lock(this);
     // Check
     while (true) {

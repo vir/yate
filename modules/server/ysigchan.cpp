@@ -54,8 +54,9 @@ public:
     // Incoming
     SigChannel(SignallingEvent* event);
     // Outgoing
-    SigChannel(Message& msg, const char* caller, const char* called, SigLink* link);
+    SigChannel(const char* caller, const char* called);
     virtual ~SigChannel();
+    bool startCall(Message& msg, String& links);
     inline SignallingCall* call() const
         { return m_call; }
     inline SigLink* link() const
@@ -81,6 +82,7 @@ public:
     void handleEvent(SignallingEvent* event);
     void hangup(const char* reason = 0, SignallingEvent* event = 0);
 private:
+    bool startCall(Message& msg, SigLink* link);
     virtual void statusParams(String& str);
     // Set call status. Print debug message
     void setState(const char* state, bool updateStatus = true, bool showReason = false);
@@ -516,7 +518,7 @@ SigChannel::SigChannel(SignallingEvent* event)
     : Channel(&plugin,0,false),
     m_call(event->call()),
     m_link(0),
-    m_hungup(false),
+    m_hungup(true),
     m_inband(false)
 {
     if (!(m_call && m_call->ref())) {
@@ -532,6 +534,7 @@ SigChannel::SigChannel(SignallingEvent* event)
     if (m_link)
 	m_inband = m_link->inband();
     // Startup
+    m_hungup = false;
     setState(0);
     SignallingCircuit* cic = getCircuit();
     if (m_link && cic)
@@ -546,27 +549,87 @@ SigChannel::SigChannel(SignallingEvent* event)
     Engine::enqueue(m);
 }
 
-// Construct an outgoing channel
-SigChannel::SigChannel(Message& msg, const char* caller, const char* called, SigLink* link)
+// Construct an unstarted outgoing channel
+SigChannel::SigChannel(const char* caller, const char* called)
     : Channel(&plugin,0,true),
     m_caller(caller),
     m_called(called),
     m_call(0),
-    m_link(link),
-    m_hungup(false),
+    m_link(0),
+    m_hungup(true),
+    m_reason("noconn"),
     m_inband(false)
 {
-    if (!(m_link && m_link->controller())) {
-	msg.setParam("error","noconn");
-	m_hungup = true;
-	return;
+}
+
+SigChannel::~SigChannel()
+{
+    hangup();
+    setState("destroyed",true,true);
+}
+
+// Start outgoing call by name of a link or list of links
+bool SigChannel::startCall(Message& msg, String& links)
+{
+    ObjList* linkList = links.split(',',false);
+    unsigned int n = linkList->length();
+    for (unsigned int i = 0; i < n; i++) {
+	const String* linkName = static_cast<const String*>((*linkList)[i]);
+	if (!linkName)
+	    continue;
+	SigLink* link = plugin.findLink(*linkName,true);
+	if (link && startCall(msg,link)) {
+	    // success - update link parameter in message
+	    links = *linkName;
+	    break;
+	}
     }
+    delete linkList;
+
+    setState(0);
+    if (!m_call) {
+	msg.setParam("error",m_reason);
+	return false;
+    }
+    // Since the channel started the call remember to hang up as well
+    m_hungup = false;
+    SignallingCircuit* cic = getCircuit();
+    if (cic) {
+	m_address << m_link->name() << "/" << cic->code();
+	// Set echo cancel
+	const String* echo = msg.getParam("cancelecho");
+	if (echo && *echo) {
+	    int taps = echo->toInteger(-1);
+	    if (taps > 0) {
+		cic->setParam("echotaps",*echo);
+		cic->setParam("echocancel",String::boolText(true));
+	    }
+	    else
+		cic->setParam("echocancel",String::boolText(echo->toBoolean(true)));
+	}
+    }
+    setMaxcall(msg);
+    Message* m = message("chan.startup",msg);
+    m->setParam("direction",status());
+    m_targetid = msg.getValue("id");
+    m->setParam("caller",m_caller);
+    m->setParam("called",m_called);
+    m->setParam("billid",msg.getValue("billid"));
+    // TODO: Add call control parameter ?
+    Engine::enqueue(m);
+    return true;
+}
+
+bool SigChannel::startCall(Message& msg, SigLink* link)
+{
+    if (!(link && link->controller()))
+	return false;
     // Data
     m_inband = msg.getBoolValue("dtmfinband",link->inband());
     // Make the call
     SignallingMessage* sigMsg = new SignallingMessage;
-    sigMsg->params().addParam("caller",caller);
-    sigMsg->params().addParam("called",called);
+    sigMsg->params().addParam("caller",m_caller);
+    sigMsg->params().addParam("called",m_called);
     sigMsg->params().addParam("callername",msg.getValue("callername"));
     sigMsg->params().copyParam(msg,"circuits");
     sigMsg->params().copyParam(msg,"format");
@@ -587,38 +650,15 @@ SigChannel::SigChannel(Message& msg, const char* caller, const char* called, Sig
 	    sigMsg->params().addParam(ns->name().substr(prefix.length()),*ns);
     }
     m_call = link->controller()->call(sigMsg,m_reason);
-    setState(0);
     if (m_call) {
 	m_call->userdata(this);
-	SignallingCircuit* cic = getCircuit();
-	if (cic) {
-	    m_address << m_link->name() << "/" << cic->code();
-	    // Set echo cancel
-	    const char* echo = msg.getValue("cancelecho");
-	    if (echo) {
-		String value = echo;
-		cic->setParam("echotaps",value);
-		cic->setParam("echocancel",String::boolText(0 != value.toInteger()));
-	    }
-	}
-	setMaxcall(msg);
+	m_link = link;
+	m_reason.clear();
+	return true;
     }
-    else
-	msg.setParam("error",m_reason);
-    Message* m = message("chan.startup",msg);
-    m->setParam("direction",status());
-    m_targetid = msg.getValue("id");
-    m->setParam("caller",caller);
-    m->setParam("called",called);
-    m->setParam("billid",msg.getValue("billid"));
-    // TODO: Add call control parameter ?
-    Engine::enqueue(m);
-}
-
-SigChannel::~SigChannel()
-{
-    hangup();
-    setState("destroyed",true,true);
+    DDebug(this,DebugNote,"Failed to call on link '%s' reason: '%s' [%p]",
+	link->name().safe(),m_reason.c_str(),this);
+    return false;
 }
 
 void SigChannel::handleEvent(SignallingEvent* event)
@@ -825,9 +865,9 @@ void SigChannel::hangup(const char* reason, SignallingEvent* event)
     Lock lock(m_mutex);
     if (m_hungup)
 	return;
+    m_hungup = true;
     setSource();
     setConsumer();
-    m_hungup = true;
     if (m_reason.null())
 	m_reason = reason ? reason : (Engine::exiting() ? "net-out-of-order" : "normal-clearing");
     setState("hangup",true,true);
@@ -1043,20 +1083,19 @@ bool SigDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","failure");
 	return false;
     }
-    // Identify the call controller before create channel
-    const char* tmp = msg.getValue("link");
-    SigLink* link = findLink(tmp,true);
-    if (!link) {
+    // Locate and check the link parameter
+    String* link = msg.getParam("link");
+    if (!link || link->null()) {
 	Debug(this,DebugNote,
-	    "Signalling call failed. No call controller named '%s'",tmp);
-	msg.setParam("error","noroute");
+	    "Signalling call failed. No link specified");
+	msg.setParam("error","noconn");
 	return false;
     }
     // Create channel
     lock();
-    SigChannel* sigCh = new SigChannel(msg,msg.getValue("caller"),dest,link);
+    SigChannel* sigCh = new SigChannel(msg.getValue("caller"),dest);
     unlock();
-    bool ok = sigCh->call() != 0;
+    bool ok = sigCh->startCall(msg,*link);
     if (ok) {
 	if (sigCh->connect(peer,msg.getValue("reason"))) {
 	    msg.setParam("peerid",sigCh->id());

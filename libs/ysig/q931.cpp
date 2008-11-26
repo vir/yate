@@ -720,6 +720,8 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
     q931()->setInterval(m_discTimer,305);
     q931()->setInterval(m_relTimer,308);
     q931()->setInterval(m_conTimer,313);
+    if (outgoing)
+	reserveCircuit();
 }
 
 ISDNQ931Call::~ISDNQ931Call()
@@ -1571,7 +1573,7 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	    m_data.m_format = "alaw";
 	m_data.processBearerCaps(msg,true);
 	// ChannelID
-	if (!reserveCircuit())
+	if (!m_circuit)
 	    break;
 	m_circuit->updateFormat(m_data.m_format,0);
 	m_data.m_bri = false;
@@ -2532,6 +2534,11 @@ SignallingCall* ISDNQ931::call(SignallingMessage* msg, String& reason)
 	return 0;
     }
     ISDNQ931Call* call = new ISDNQ931Call(this,true,m_callRef,m_callRefLen);
+    if (!call->circuit()) {
+	reason = "congestion";
+	TelEngine::destruct(call);
+	return 0;
+    }
     call->ref();
     // Adjust m_callRef. Avoid to use 0
     m_callRef = (m_callRef + 1) & m_callRefMask;
@@ -2678,12 +2685,14 @@ void ISDNQ931::terminateCalls(ObjList* list, const char* reason)
 // Check if new calls are acceptable
 bool ISDNQ931::acceptNewCall(bool outgoing, String& reason)
 {
-    if (!exiting())
-	return true;
-    Debug(this,DebugNote,"Denying %s call request. We are exiting",
-	outgoing ? "outgoing" : "incoming");
-    reason = "net-out-of-order";
-    return false;
+    if (exiting() || !m_q921 || !m_q921Up) {
+	Debug(this,DebugInfo,"Denying %s call request, reason: %s.",
+	    outgoing ? "outgoing" : "incoming",
+	    exiting() ? "exiting" : "link down");
+	reason = "net-out-of-order";
+	return false;
+    }
+    return true;
 }
 
 // Helper function called in ISDNQ931::receive()

@@ -52,6 +52,7 @@ class RTPTransport;
 class RTPSession;
 class RTPSender;
 class RTPReceiver;
+class RTPSecure;
 
 /**
  * A base class that contains just placeholders to process raw RTP and RTCP packets.
@@ -350,21 +351,23 @@ private:
 class YRTP_API RTPBaseIO
 {
     friend class RTPSession;
+    friend class RTPSecure;
 public:
     /**
      * Default constructor.
      */
     inline RTPBaseIO(RTPSession* session = 0)
-	: m_session(session), m_ssrcInit(true), m_ssrc(0), m_ts(0), m_seq(0),
+	: m_session(session), m_secure(0),
+	  m_ssrcInit(true), m_ssrc(0), m_ts(0),
+	  m_seq(0), m_rollover(0), m_secLen(0), m_mkiLen(0),
 	  m_evTs(0), m_evNum(-1), m_evVol(-1),
 	  m_dataType(-1), m_eventType(-1), m_silenceType(-1)
 	{ }
 
     /**
-     * Do-nothing destructor
+     * Destructor
      */
-    virtual ~RTPBaseIO()
-	{ }
+    virtual ~RTPBaseIO();
 
     /**
      * Get the payload type for data packets
@@ -434,6 +437,47 @@ public:
     inline void ssrc(unsigned int src)
 	{ m_ssrc = src; m_ssrcInit = false; }
 
+    /**
+     * Get the current sequence number
+     * @return Sequence number
+     */
+    inline u_int16_t seq() const
+	{ return m_seq; }
+
+    /**
+     * Get the value of the rollover counter
+     * @return How many times the seqeunce has rolled over since SSRC changed
+     */
+    inline u_int32_t rollover() const
+	{ return m_rollover; }
+
+    /**
+     * Get the full current sequence number including rollovers
+     * @return Full 48 bit current sequence number
+     */
+    inline u_int64_t fullSeq() const
+	{ return m_seq | (((u_int64_t)m_rollover) << 16); }
+
+    /**
+     * Get the session this object belongs to
+     * @return Pointer to RTP session or NULL
+     */
+    inline RTPSession* session() const
+	{ return m_session; }
+
+    /**
+     * Get the security provider of this sender or receiver
+     * @return A pointer to the RTPSecure or NULL
+     */
+    inline RTPSecure* security() const
+	{ return m_secure; }
+
+    /**
+     * Set the security provider of this sender or receiver
+     * @param secure Pointer to the new RTPSecure or NULL
+     */
+    void security(RTPSecure* secure);
+
 protected:
     /**
      * Method called periodically to keep the data flowing
@@ -441,11 +485,23 @@ protected:
      */
     virtual void timerTick(const Time& when) = 0;
 
+    /**
+     * Set the length of the added / expected security info block
+     * @param len Length of security information portion
+     * @param key Length of master key identifier
+     */
+    inline void secLength(u_int32_t len, u_int32_t key = 0)
+	{ m_secLen = len; m_mkiLen = key; }
+
     RTPSession* m_session;
+    RTPSecure* m_secure;
     bool m_ssrcInit;
     u_int32_t m_ssrc;
     u_int32_t m_ts;
     u_int16_t m_seq;
+    u_int32_t m_rollover;
+    u_int16_t m_secLen;
+    u_int16_t m_mkiLen;
     u_int32_t m_evTs;
     int m_evNum;
     int m_evVol;
@@ -551,6 +607,30 @@ protected:
      */
     virtual void timerTick(const Time& when);
 
+    /**
+     * Method called to decipher RTP data in-place.
+     * The default implementation calls session's @ref RTPSecure::rtpDecipher()
+     * @param data Pointer to data block to decipher
+     * @param len Length of data including any padding
+     * @param secData Pointer to security data if applicable
+     * @param ssrc SSRC of the packet to decipher
+     * @param seq Full (48 bit) seqence number of the packet including rollovers
+     * @return True is the packet was deciphered correctly or can't tell
+     */
+    virtual bool rtpDecipher(unsigned char* data, int len, const void* secData, u_int32_t ssrc, u_int64_t seq);
+
+    /**
+     * Method called to check the integrity of the RTP packet.
+     * The default implementation calls session's @ref RTPSecure::rtpCheckIntegrity()
+     * @param data Pointer to RTP header and data
+     * @param len Length of header, data and padding
+     * @param authData Pointer to authentication data
+     * @param ssrc SSRC of the packet to validate
+     * @param seq Full (48 bit) seqence number of the packet including rollovers
+     * @return True is the packet passed integrity checks
+     */
+    virtual bool rtpCheckIntegrity(const unsigned char* data, int len, const void* authData, u_int32_t ssrc, u_int64_t seq);
+
 private:
     void rtpData(const void* data, int len);
     void rtcpData(const void* data, int len);
@@ -647,6 +727,24 @@ protected:
      * @param when Time to use as base in all computing
      */
     virtual void timerTick(const Time& when);
+
+    /**
+     * Method called to encipher RTP payload data in-place.
+     * The default implementation calls session's @ref RTPSecure::rtpEncipher()
+     * @param data Pointer to data block to encipher
+     * @param len Length of payload data to be encrypted including any padding
+     */
+    virtual void rtpEncipher(unsigned char* data, int len);
+
+    /**
+     * Method called to add integrity information to the RTP packet.
+     * The default implementation calls session's @ref RTPSecure::rtpAddIntegrity()
+     * @param data Pointer to the RTP packet to protect
+     * @param len Length of RTP data to be encrypted including header and padding
+     * @param authData Address to write the integrity data to
+     */
+    virtual void rtpAddIntegrity(const unsigned char* data, int len, unsigned char* authData);
+
 
 private:
     int m_evTime;
@@ -757,6 +855,21 @@ public:
      * @return Pointer to the new transport or NULL on failure
      */
     virtual RTPTransport* createTransport();
+
+    /**
+     * Create a cipher when required for SRTP
+     * @param name Name of the cipher to create
+     * @param dir Direction the cipher must be able to handle
+     * @return Pointer to newly allocated Cipher or NULL
+     */
+    virtual Cipher* createCipher(const String& name, Cipher::Direction dir);
+
+    /**
+     * Check if a cipher is supported for SRTP
+     * @param name Name of the cipher to check
+     * @return True if the specified cipher is supported
+     */
+    virtual bool checkCipher(const String& name);
 
     /**
      * Initialize the RTP session, attach a transport if there is none
@@ -938,7 +1051,7 @@ public:
     /**
      * Set the local network address of the RTP transport of this session
      * @param addr New local RTP transport address
-     * @param rtpc Enable RTCP in this session
+     * @param rtcp Enable RTCP in this session
      * @return True if address set, false if a failure occured
      */
     inline bool localAddr(SocketAddr& addr, bool rtcp = true)
@@ -981,6 +1094,19 @@ public:
      */
     void setTimeout(int interval);
 
+    /**
+     * Get the stored security provider or of the sender
+     * @return A pointer to the RTPSecure or NULL
+     */
+    inline RTPSecure* security() const
+	{ return m_send ? m_send->security() : m_secure; }
+
+    /**
+     * Store a security provider for the sender
+     * @param secure Pointer to the new RTPSecure or NULL
+     */
+    void security(RTPSecure* secure);
+
 protected:
     /**
      * Method called periodically to push any asynchronous data or statistics
@@ -999,8 +1125,153 @@ private:
     Direction m_direction;
     RTPSender* m_send;
     RTPReceiver* m_recv;
+    RTPSecure* m_secure;
     u_int64_t m_timeoutTime;
     u_int64_t m_timeoutInterval;
+};
+
+/**
+ * Security and integrity implementation
+ * @short SRTP implementation
+ */
+class YRTP_API RTPSecure : public GenObject
+{
+    friend class RTPReceiver;
+    friend class RTPSender;
+    friend class RTPSession;
+public:
+    /**
+     * Default constructor, builds an inactive implementation
+     */
+    RTPSecure();
+
+    /**
+     * Constructor that creates an active implementation
+     * @param suite Cryptographic suite to use by default
+     */
+    RTPSecure(const String& suite);
+
+    /**
+     * Constructor that copies the basic crypto lengths
+     * @param other Security provider to copy parameters from
+     */
+    RTPSecure(const RTPSecure& other);
+
+    /**
+     * Destructor
+     */
+    virtual ~RTPSecure();
+
+    /**
+     * Get the owner of this security instance
+     * @return Pointer to RTPBaseIO or NULL
+     */
+    inline RTPBaseIO* owner() const
+	{ return m_owner; }
+
+    /**
+     * Set the owner of this security instance
+     * @param newOwner Pointer to new RTPBaseIO owning this security instance
+     */
+    void owner(RTPBaseIO* newOwner);
+
+    /**
+     * Get the current RTP cipher if set
+     * @return Pointer to current RTP cipher or NULL
+     */
+    inline Cipher* rtpCipher() const
+	{ return m_rtpCipher; }
+
+    /**
+     * Check if the systems supports requirements for activating SRTP
+     * @param session RTP session to use for cipher checking, NULL to use owner session
+     * @return True if it looks like SRTP can be activated later
+     */
+    virtual bool supported(RTPSession* session = 0) const;
+
+    /**
+     * Set up the cryptographic parameters
+     * @param suite Descriptor of the encryption and authentication algorithms
+     * @param keyParams Keying material and related parameters
+     * @param paramList Optional session parameters as list of Strings
+     * @return True if the session parameters were applied successfully
+     */
+    virtual bool setup(const String& suite, const String& keyParams, const ObjList* paramList = 0);
+
+    /**
+     * Create a set of cryptographic parameters
+     * @param suite Reference of returned cryptographic suite description
+     * @param keyParams Reference to returned keying material
+     * @param buildMaster Create random master key and salt if not already set
+     * @return True if security instance is valid and ready
+     */
+    virtual bool create(String& suite, String& keyParams, bool buildMaster = true);
+
+protected:
+    /**
+     * Initialize security related variables in the RTP session
+     */
+    virtual void init();
+
+    /**
+     * Method called to encipher RTP payload data in-place
+     * @param data Pointer to data block to encipher
+     * @param len Length of payload data to be encrypted including any padding
+     */
+    virtual void rtpEncipher(unsigned char* data, int len);
+
+    /**
+     * Method called to add integrity information to the RTP packet
+     * @param data Pointer to the RTP packet to protect
+     * @param len Length of RTP data to be encrypted including header and padding
+     * @param authData Address to write the integrity data to
+     */
+    virtual void rtpAddIntegrity(const unsigned char* data, int len, unsigned char* authData);
+
+    /**
+     * Method called to decipher RTP data in-place
+     * @param data Pointer to data block to decipher
+     * @param len Length of data including any padding
+     * @param secData Pointer to security data if applicable
+     * @param ssrc SSRC of the packet to decipher
+     * @param seq Full (48 bit) seqence number of the packet including rollovers
+     * @return True is the packet was deciphered correctly or can't tell
+     */
+    virtual bool rtpDecipher(unsigned char* data, int len, const void* secData, u_int32_t ssrc, u_int64_t seq);
+
+    /**
+     * Method called to check the integrity of the RTP packet
+     * @param data Pointer to RTP header and data
+     * @param len Length of header, data and padding
+     * @param authData Pointer to authentication data
+     * @param ssrc SSRC of the packet to validate
+     * @param seq Full (48 bit) seqence number of the packet including rollovers
+     * @return True is the packet passed integrity checks
+     */
+    virtual bool rtpCheckIntegrity(const unsigned char* data, int len, const void* authData, u_int32_t ssrc, u_int64_t seq);
+
+    /**
+     * Internal method implementing key derivation
+     * @param cipher Cipher used for key derivation
+     * @param key Reference to derived key output
+     * @param len Desired length of the key, should be at most cipher block length
+     * @param label Derived key type
+     * @param index Packet index after being divided by KDR
+     * @return True if success, false if invalid parameters or missing cipher
+     */
+    bool deriveKey(Cipher& cipher, DataBlock& key, unsigned int len, unsigned char label, u_int64_t index = 0);
+
+private:
+    RTPBaseIO* m_owner;
+    Cipher* m_rtpCipher;
+    DataBlock m_masterKey;
+    DataBlock m_masterSalt;
+    DataBlock m_cipherKey;
+    DataBlock m_cipherSalt;
+    SHA1 m_authIpad;
+    SHA1 m_authOpad;
+    u_int32_t m_rtpAuthLen;
+    bool m_rtpEncrypted;
 };
 
 }

@@ -30,6 +30,11 @@ using namespace TelEngine;
 
 #define INF_TIMEOUT ((u_int64_t)(int64_t)-1)
 
+RTPBaseIO::~RTPBaseIO()
+{
+    security(0);
+}
+
 bool RTPBaseIO::dataPayload(int type)
 {
     if ((type >= -1) && (type <= 127)) {
@@ -68,6 +73,22 @@ unsigned int RTPBaseIO::ssrcInit()
     return m_ssrc;
 }
 
+void RTPBaseIO::security(RTPSecure* secure)
+{
+    DDebug(DebugInfo,"RTPBaseIO::security(%p) old=%p [%p]",secure,m_secure,this);
+    if (secure == m_secure)
+	return;
+    RTPSecure* tmp = m_secure;
+    m_secure = 0;
+    if (secure) {
+	secure->owner(this);
+	m_secure = secure;
+    }
+    else
+	secLength(0,0);
+    TelEngine::destruct(tmp);
+}
+
 
 RTPReceiver::~RTPReceiver()
 {
@@ -94,18 +115,26 @@ void RTPReceiver::setDejitter(RTPDejitter* dejitter)
 void RTPReceiver::rtpData(const void* data, int len)
 {
     // trivial check for basic fields validity
-    if ((len < 12) || !data)
+    if ((len < m_secLen + 12) || !data)
 	return;
     const unsigned char* pc = (const unsigned char*)data;
     // check protocol version number
     if ((pc[0] & 0xc0) != 0x80)
 	return;
-    // check if padding is present and remove it
+    const unsigned char* secPtr = 0;
+    if (m_secLen) {
+	// security info is placed after data and padding
+	len -= m_secLen;
+	secPtr = pc + len;
+    }
+    // check if padding is present and remove it (but remember length)
+    unsigned char padding = 0;
     if (pc[0] & 0x20) {
-	len -= pc[len-1];
+	len -= (padding = pc[len-1]);
 	if (len < 12)
 	    return;
     }
+
     bool ext = (pc[0] & 0x10) != 0;
     int cc = pc[0] & 0x0f;
     bool marker = (pc[1] & 0x80) != 0;
@@ -115,6 +144,20 @@ void RTPReceiver::rtpData(const void* data, int len)
 	((u_int32_t)pc[6] << 8) | pc[7];
     u_int32_t ss = ((u_int32_t)pc[8] << 24) | ((u_int32_t)pc[9] << 16) |
 	((u_int32_t)pc[10] << 8) | pc[11];
+
+    // skip over header and any CSRC
+    pc += 12+(4*cc);
+    len -= 12+(4*cc);
+    // check if extension is present and skip it
+    if (ext) {
+	if (len < 4)
+	    return;
+	int xl = ((int)pc[2] << 8) | pc[3];
+	pc += xl+4;
+	len -= xl+4;
+    }
+    if (len < 0)
+	return;
 
     // grab some data at the first packet received or resync
     if (m_ssrcInit) {
@@ -136,10 +179,11 @@ void RTPReceiver::rtpData(const void* data, int len)
 	    }
 	    return;
 	}
-	// SSRC accepted, sync sequence but drop this packet as duplicate
+	// SSRC accepted, sync sequence and resync the timestamp offset
 	m_seq = seq;
-	// resync the timestamps, next packet will come in correctly
 	m_ts = ts - m_tsLast;
+	// drop this packet, next packet will come in correctly
+	return;
     }
 
     // substraction with overflow
@@ -149,26 +193,27 @@ void RTPReceiver::rtpData(const void* data, int len)
 	DDebug(DebugMild,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
 	return;
     }
-    // keep track of the last sequence number and timestamp we have seen
+
+    u_int32_t rollover = m_rollover;
+    // this time compare unsigned to detect rollovers
+    if (seq < m_seq)
+	rollover++;
+    u_int64_t seq48 = rollover;
+    seq48 = (seq48 << 16) | seq;
+
+    // if some security data is present authenticate the packet now
+    if (secPtr && !rtpCheckIntegrity((const unsigned char*)data,len + padding + 12,secPtr + m_mkiLen,ss,seq48))
+	return;
+
+    // keep track of the last valid sequence number and timestamp we have seen
     m_seq = seq;
+    m_rollover = rollover;
     m_tsLast = ts - m_ts;
 
-    // skip over header and any CSRC
-    pc += 12+(4*cc);
-    len -= 12+(4*cc);
-    // check if extension is present and skip it
-    if (ext) {
-	if (len < 4)
-	    return;
-	int xl = ((int)pc[2] << 8) | pc[3];
-	pc += xl+4;
-	len -= xl+4;
-    }
-    if (len < 0)
-	return;
     if (!len)
 	pc = 0;
-    rtpRecv(marker,typ,m_tsLast,pc,len);
+    if (rtpDecipher(const_cast<unsigned char*>(pc),len + padding,secPtr,ss,seq48))
+	rtpRecv(marker,typ,m_tsLast,pc,len);
 }
 
 void RTPReceiver::rtcpData(const void* data, int len)
@@ -275,12 +320,29 @@ void RTPReceiver::timerTick(const Time& when)
 {
 }
 
+bool RTPReceiver::rtpDecipher(unsigned char* data, int len, const void* secData, u_int32_t ssrc, u_int64_t seq)
+{
+    return (m_secure)
+	? m_secure->rtpDecipher(data,len,secData,ssrc,seq)
+	: true;
+}
+
+bool RTPReceiver::rtpCheckIntegrity(const unsigned char* data, int len, const void* authData, u_int32_t ssrc, u_int64_t seq)
+{
+    return (m_secure)
+	? m_secure->rtpCheckIntegrity(data,len,authData,ssrc,seq)
+	: true;
+}
+
 
 RTPSender::RTPSender(RTPSession* session, bool randomTs)
     : RTPBaseIO(session), m_evTime(0), m_tsLast(0), m_padding(0)
 {
-    if (randomTs)
+    if (randomTs) {
 	m_ts = ::random() & ~1;
+	// avoid starting sequence numbers too close to zero
+	m_seq = 2500 + (::random() % 60000);
+    }
 }
 		
 
@@ -292,12 +354,14 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     if (!data)
 	len = 0;
     payload &= 0x7f;
-    if (marker)
+    if (marker || m_ssrcInit)
 	payload |= 0x80;
     m_tsLast = timestamp;
     timestamp += m_ts;
     ssrcInit();
     m_seq++;
+    if (m_seq == 0)
+	m_rollover++;
 
     unsigned char padding = 0;
     unsigned char byte1 = 0x80;
@@ -309,10 +373,10 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
 	}
     }
 
-    DataBlock buf(0,len+padding+12);
+    DataBlock buf(0,len+padding+m_secLen+12);
     unsigned char* pc = (unsigned char*)buf.data();
     if (padding)
-	pc[buf.length() - 1] = padding;
+	pc[len + padding + 11] = padding;
     *pc++ = byte1;
     *pc++ = payload;
     *pc++ = (unsigned char)(m_seq >> 8);
@@ -325,8 +389,12 @@ bool RTPSender::rtpSend(bool marker, int payload, unsigned int timestamp, const 
     *pc++ = (unsigned char)(m_ssrc >> 16);
     *pc++ = (unsigned char)(m_ssrc >> 8);
     *pc++ = (unsigned char)(m_ssrc & 0xff);
-    if (data && len)
+    if (data && len) {
 	::memcpy(pc,data,len);
+	rtpEncipher(pc,len + padding);
+    }
+    if (m_secLen)
+	rtpAddIntegrity((const unsigned char*)buf.data(),len + padding + 12,pc + (len + padding + m_mkiLen));
     static_cast<RTPProcessor*>(m_session->transport())->rtpData(buf.data(),buf.length());
     return true;
 }
@@ -427,10 +495,22 @@ void RTPSender::timerTick(const Time& when)
 {
 }
 
+void RTPSender::rtpEncipher(unsigned char* data, int len)
+{
+    if (m_secure)
+	m_secure->rtpEncipher(data,len);
+}
+
+void RTPSender::rtpAddIntegrity(const unsigned char* data, int len, unsigned char* authData)
+{
+    if (m_secure)
+	m_secure->rtpAddIntegrity(data,len,authData);
+}
+
 
 RTPSession::RTPSession()
     : m_transport(0), m_direction(FullStop),
-      m_send(0), m_recv(0),
+      m_send(0), m_recv(0), m_secure(0),
       m_timeoutTime(0), m_timeoutInterval(0)
 {
     DDebug(DebugInfo,"RTPSession::RTPSession() [%p]",this);
@@ -442,6 +522,7 @@ RTPSession::~RTPSession()
     direction(FullStop);
     group(0);
     transport(0);
+    TelEngine::destruct(m_secure);
 }
 
 void RTPSession::timerTick(const Time& when)
@@ -533,6 +614,16 @@ RTPTransport* RTPSession::createTransport()
     return trans;
 }
 
+Cipher* RTPSession::createCipher(const String& name, Cipher::Direction dir)
+{
+    return 0;
+}
+
+bool RTPSession::checkCipher(const String& name)
+{
+    return false;
+}
+
 bool RTPSession::initGroup(int msec, Thread::Priority prio)
 {
     if (m_group)
@@ -584,6 +675,11 @@ void RTPSession::sender(RTPSender* send)
     m_send = send;
     if (tmp)
 	delete tmp;
+    if (m_send && m_secure) {
+	RTPSecure* sec = m_secure;
+	m_secure = 0;
+	m_send->security(sec);
+    }
 }
 
 void RTPSession::receiver(RTPReceiver* recv)
@@ -595,6 +691,16 @@ void RTPSession::receiver(RTPReceiver* recv)
     m_recv = recv;
     if (tmp)
 	delete tmp;
+}
+
+void RTPSession::security(RTPSecure* secure)
+{
+    if (m_send)
+	m_send->security(secure);
+    else if (secure != m_secure) {
+	TelEngine::destruct(m_secure);
+	m_secure = secure;
+    }
 }
 
 bool RTPSession::direction(Direction dir)

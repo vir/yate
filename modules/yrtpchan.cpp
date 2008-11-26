@@ -113,7 +113,9 @@ public:
     ~YRTPWrapper();
     virtual void* getObject(const String &name) const;
     void setupRTP(const char* localip, bool rtcp);
-    bool startRTP(const char* raddr, unsigned int rport, const Message& msg);
+    bool startRTP(const char* raddr, unsigned int rport, Message& msg);
+    bool setupSRTP(Message& msg, bool buildMaster);
+    bool startSRTP(const String& suite, const String& keyParams, const ObjList* paramList);
     bool setRemote(const char* raddr, unsigned int rport, const Message& msg);
     bool sendDTMF(char dtmf, int duration = 0);
     void gotDTMF(char tone);
@@ -177,6 +179,8 @@ public:
 	int volume, unsigned int timestamp);
     virtual void rtpNewPayload(int payload, unsigned int timestamp);
     virtual void rtpNewSSRC(u_int32_t newSsrc, bool marker);
+    virtual Cipher* createCipher(const String& name, Cipher::Direction dir);
+    virtual bool checkCipher(const String& name);
     inline void resync()
 	{ m_resync = true; }
     inline void anySSRC(bool acceptAny = true)
@@ -214,6 +218,22 @@ public:
 private:
     YRTPWrapper* m_wrap;
     bool m_splitable;
+};
+
+class CipherHolder : public RefObject
+{
+public:
+    inline CipherHolder()
+	: m_cipher(0)
+	{ }
+    virtual ~CipherHolder()
+	{ TelEngine::destruct(m_cipher); }
+    virtual void* getObject(const String& name) const
+	{ return (name == "Cipher*") ? (void*)&m_cipher : RefObject::getObject(name); }
+    inline Cipher* cipher()
+	{ Cipher* tmp = m_cipher; m_cipher = 0; return tmp; }
+private:
+    Cipher* m_cipher;
 };
 
 class AttachHandler : public MessageHandler
@@ -388,7 +408,7 @@ void YRTPWrapper::setTimeout(const Message& msg, int timeOut)
 	m_rtp->setTimeout(timeOut);
 }
 
-bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message& msg)
+bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, Message& msg)
 {
     Debug(&splugin,DebugAll,"YRTPWrapper::startRTP(\"%s\",%u) [%p]",raddr,rport,this);
     if (!m_rtp) {
@@ -472,6 +492,26 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
     if (!(m_rtp->initGroup(msec,Thread::priority(msg.getValue("thread"),s_priority)) &&
 	 m_rtp->direction(m_dir)))
 	return false;
+
+    bool secure = false;
+    const String* sec = msg.getParam("crypto_suite");
+    if (sec && *sec) {
+	// separate crypto parameters
+	const String* key = msg.getParam("crypto_key");
+	if (key && *key) {
+	    if (startSRTP(*sec,*key,0))
+		secure = true;
+	    else
+		Debug(&splugin,DebugWarn,"Could not start SRTP for: '%s' '%s' [%p]",
+		    sec->c_str(),key->c_str(),this);
+	}
+	sec = 0;
+	msg.clearParam("crypto_suite");
+    }
+    secure = secure && setupSRTP(msg,true);
+    if (!secure)
+	m_rtp->security(0);
+
     m_rtp->dataPayload(payload);
     m_rtp->eventPayload(evpayload);
     m_rtp->setTOS(tos);
@@ -487,6 +527,57 @@ bool YRTPWrapper::startRTP(const char* raddr, unsigned int rport, const Message&
 //	m_rtp->setDejitter(minJitter*1000,maxJitter*1000);
     m_bufsize = s_bufsize;
     return true;
+}
+
+bool YRTPWrapper::setupSRTP(Message& msg, bool buildMaster)
+{
+    Debug(&splugin,DebugAll,"YRTPWrapper::setupSRTP(%s) [%p]",
+	String::boolText(buildMaster),this);
+    if (!m_rtp)
+	return false;
+
+    RTPSecure* srtp = m_rtp->security();
+    if (!srtp) {
+	if (!buildMaster)
+	    return false;
+	if (m_rtp->receiver())
+	    srtp = m_rtp->receiver()->security();
+	if (srtp)
+	    srtp = new RTPSecure(*srtp);
+	else
+	    srtp = new RTPSecure(msg.getValue("crypto_suite"));
+    }
+    else
+	buildMaster = false;
+
+    String suite;
+    String key;
+    if (!(srtp->supported(m_rtp) && srtp->create(suite,key,true))) {
+	if (buildMaster)
+	    TelEngine::destruct(srtp);
+	return false;
+    }
+    m_rtp->security(srtp);
+
+    msg.setParam("ocrypto_suite",suite);
+    msg.setParam("ocrypto_key",key);
+    return true;
+}
+
+bool YRTPWrapper::startSRTP(const String& suite, const String& keyParams, const ObjList* paramList)
+{
+    Debug(&splugin,DebugAll,"YRTPWrapper::startSRTP('%s','%s',%p) [%p]",
+	suite.c_str(),keyParams.c_str(),paramList,this);
+    if (!(m_rtp && m_rtp->receiver()))
+	return false;
+    RTPSecure* srtp = new RTPSecure;
+    if (srtp->supported(m_rtp) && srtp->setup(suite,keyParams,paramList)) {
+	m_rtp->receiver()->security(srtp);
+	Debug(&splugin,DebugNote,"Started SRTP suite '%s' [%p]",suite.c_str(),this);
+	return true;
+    }
+    TelEngine::destruct(srtp);
+    return false;
 }
 
 bool YRTPWrapper::sendDTMF(char dtmf, int duration)
@@ -634,6 +725,24 @@ void YRTPSession::timeout(bool initial)
 {
     if (m_wrap)
 	m_wrap->timeout(initial);
+}
+
+Cipher* YRTPSession::createCipher(const String& name, Cipher::Direction dir)
+{
+    Message msg("engine.cipher");
+    msg.addParam("cipher",name);
+    msg.addParam("direction",lookup(dir,Cipher::directions(),"unknown"));
+    CipherHolder* cHold = new CipherHolder;
+    msg.userData(cHold);
+    cHold->deref();
+    return Engine::dispatch(msg) ? cHold->cipher() : 0;
+}
+
+bool YRTPSession::checkCipher(const String& name)
+{
+    Message msg("engine.cipher");
+    msg.addParam("cipher",name);
+    return Engine::dispatch(msg);
 }
 
 
@@ -792,6 +901,8 @@ bool AttachHandler::received(Message &msg)
 
     if (rip && rport)
 	w->startRTP(rip,rport.toInteger(),msg);
+    else
+	w->setupSRTP(msg,msg.getBoolValue("secure"));
     msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());
@@ -883,6 +994,8 @@ bool RtpHandler::received(Message &msg)
     String rport(msg.getValue("remoteport"));
     if (rip && rport)
 	w->startRTP(rip,rport.toInteger(),msg);
+    else
+	w->setupSRTP(msg,msg.getBoolValue("secure"));
     msg.setParam("localip",w->host());
     msg.setParam("localport",String(w->port()));
     msg.setParam("rtpid",w->id());

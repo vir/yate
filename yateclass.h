@@ -1903,12 +1903,28 @@ private:
 };
 
 /**
- * Utility function to replace NULL string pointers with an empty string
- * @param str Pointer to a C string that may be NULL
- * @return Original pointer or pointer to an empty string
+ * Utility function to retrieve a C string from a possibly NULL String pointer
+ * @param str Pointer to a String that may be NULL
+ * @return String data pointer or NULL
  */
-inline const char *c_safe(const char* str)
+inline const char* c_str(const String* str)
+    { return str ? str->c_str() : (const char*)0; }
+
+/**
+ * Utility function to replace NULL C string pointers with an empty C string
+ * @param str Pointer to a C string that may be NULL
+ * @return Original pointer or pointer to an empty C string
+ */
+inline const char* c_safe(const char* str)
     { return str ? str : ""; }
+
+/**
+ * Utility function to replace NULL String pointers with an empty C string
+ * @param str Pointer to a String that may be NULL
+ * @return String data pointer or pointer to an empty C string
+ */
+inline const char* c_safe(const String* str)
+    { return str ? str->safe() : ""; }
 
 /**
  * Utility function to check if a C string is null or empty
@@ -1917,6 +1933,14 @@ inline const char *c_safe(const char* str)
  */
 inline bool null(const char* str)
     { return !(str && *str); }
+
+/**
+ * Utility function to check if a String is null or empty
+ * @param str Pointer to a String
+ * @return True if str is NULL or is empty
+ */
+inline bool null(const String* str)
+    { return !str || str->null(); }
 
 /**
  * Concatenation operator for strings.

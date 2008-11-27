@@ -28,7 +28,12 @@ from yaypm import CancellableDeferred, TCPDispatcherFactory, AbandonedException
 logger = logging.getLogger('yaypm.util')
 
 def sleep(time, until = None):
-    d = CancellableDeferred()
+    later = None
+    def canceller(*args):
+        if later and later.active:
+            later.cancel()
+                
+    d = CancellableDeferred(canceller)
     later = reactor.callLater(time, d.callback, None)
     
     if until:

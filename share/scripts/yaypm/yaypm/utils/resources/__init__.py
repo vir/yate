@@ -1,6 +1,7 @@
 import logging
 from yaypm.utils import XOR
 from twisted.internet import defer
+from random import random
 
 logger = logging.getLogger("yaypm.resources")
 
@@ -9,24 +10,28 @@ class Resource:
         raise NotImplementedError("Abstract Method!")
     
     @defer.inlineCallbacks
-    def play(self, yate, callid, targetid, stopOnDTMF=False, until = None, override = False, *args):
+    def play(self, yate, callid, targetid,
+             stopOnDTMF=False, until = None,
+             override = False, *args):
+
         files = self._match(*args)
-        nid = targetid
 
         if not until:
             until = yate.onwatch("chan.hangup",
                                lambda m : m["id"] == callid)
 
         for f in files:
+            nid = f + str(random())
+
             m = yate.msg("chan.masquerade",
-                     {"message": "chan.attach",
-                      "id": targetid,
-                      "override" if override else "source": f,
-                      "notify": nid})
+                         {"message": "chan.attach",
+                          "id": targetid,
+                          "override" if override else "source": f,
+                          "notify": nid})
             yield m.dispatch()
 
             if stopOnDTMF:
-                dtmf, _ = yield XOR(
+                dtmf, notify = yield XOR(
                     yate.onmsg("chan.notify",
                                lambda m : m["targetid"] == nid,
                                autoreturn = True,
@@ -38,12 +43,16 @@ class Resource:
                     yield dtmf
                     break
             else:
-                yield yate.onmsg("chan.notify",
+                notify = yield yate.onwatch("chan.notify",
                                  lambda m : m["targetid"] == nid,
-                                 autoreturn = True,
                                  until = until)
 
-    def override(self, yate, callid, stopOnDTMF=False, until = None, *args):        
+            if notify["reason"] != "eof":
+                break
+
+    def override(self, yate, callid,
+                 stopOnDTMF=False, until = None, *args):
+        
         return Resource.play(self, yate, callid, callid, stopOnDTMF,
                              until, override = True, *args)        
 

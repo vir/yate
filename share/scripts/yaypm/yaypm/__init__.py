@@ -164,8 +164,8 @@ class Dispatcher:
         if handler == None:
             if logger_messages.isEnabledFor(logging.DEBUG):
                 logger.debug(
-                    "No handler registered in Yate for %s: %s" % \
-                    (_MSG_TYPE_DSCS[hdlr_type], name))
+                    "No handler registered in Yate for %s: %s",\
+                    _MSG_TYPE_DSCS[hdlr_type], name)
             if hdlr_type == _HANDLER_TYPE_MSG:
                 d = self.installMsgHandler(name)
             else:
@@ -236,7 +236,7 @@ class Dispatcher:
         Cancel YAYPM deferred.
         """
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("Canceling: %s" % name)
+            logger.debug("Canceling: %s", name)
         self._removeHandler(name, hdlr_type, d)
         try:
             raise AbandonedException(m)
@@ -357,7 +357,7 @@ class EmbeddedDispatcher(Dispatcher):
         @_checkIfIsAlive
         def ret(self, handled=True, retValue=None):
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Retuning(%s): %s" % (str(handled), str(self)))
+                logger.debug("Retuning(%s): %s", str(handled), str(self))
             
             if not self._result or not self._event:
                 raise RuntimeError("Can't return own message!")            
@@ -374,7 +374,7 @@ class EmbeddedDispatcher(Dispatcher):
         @_checkIfIsAlive
         def dispatch(self):            
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Dispatching: %s" % str(self))
+                logger.debug("Dispatching: %s", str(self))
             if self._result or self._event:        
                 raise RuntimeError("Can't dispatch incomming message!")
             d = defer.Deferred()
@@ -385,7 +385,7 @@ class EmbeddedDispatcher(Dispatcher):
         def enqueue(self):
             if not self._gone:
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug("Enqueing: %s" % str(self))
+                    logger.debug("Enqueing: %s", str(self))
                 self._gone = True
                 yateproxy.message_enqueue(self._yatemsg)
             else:
@@ -522,7 +522,7 @@ class EmbeddedDispatcher(Dispatcher):
 
     def _timeoutHandler(self, m):
         if not m._event.isSet():
-            logger.warn("Message %s not returned in %d sec!" % (m, self._timeout))
+            logger.warn("Message %s not returned in %d sec!", m, self._timeout)
             
     def _enqueEmbeddedMessage(self, yateMessage):
         """
@@ -700,7 +700,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
 
         def _cancelResponse(self, d, m):
             if logger.isEnabledFor(logging.DEBUG):                    
-                logger.debug("Canceling: %s" % self);
+                logger.debug("Canceling: %s", self);
             del self.waiting[self._mid]
             try:
                 raise AbandonedException("Abandoned by: %s" % m)
@@ -791,7 +791,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             d.callback(values[1] == "true")
         else:
             if logger.isEnabledFor(logging.WARN):                    
-                logger.warn("Response to unknown message: %s" % str(values))
+                logger.warn("Response to unknown message: %s", str(values))
 
     def _watchOrResponseReceived(self, values):
         values = values.split(':', 4)            
@@ -815,12 +815,12 @@ class TCPDispatcher(Dispatcher, LineReceiver):
                 self.handlers[key] = self.handlers.get(key, {})                
                 d.callback(True)
             else:
-                logger.warn("Can't install handler for: %s" % str(values[0]))
+                logger.warn("Can't install handler for: %s", str(values[0]))
                 d.errback(failure.Failure(
-                    Exception("Can't install handler for: %s" % str(values[0]))))
+                    Exception("Can't install handler for: %s", str(values[0]))))
         else:
             if logger.isEnabledFor(logging.WARN):                    
-                logger.warn("Response to unknown message: %s" % str(values))
+                logger.warn("Response to unknown message: %s", str(values))
 
 
     def _installResponse(self, values):
@@ -838,12 +838,12 @@ class TCPDispatcher(Dispatcher, LineReceiver):
                 self.handlers[key] = self.handlers.get(key, {})
                 d.callback(True)
             else:
-                logger.warn("Can't install handler for: %s" % str(values[1]))
+                logger.warn("Can't install handler for: %s", str(values[1]))
                 d.errback(failure.Failure(
                     "Can't install handler for: %s" % str(values[1])))
         else:
             if logger.isEnabledFor(logging.WARN):
-                logger.warn("Response to unknown message: %s" % str(values))
+                logger.warn("Response to unknown message: %s", str(values))
 
     def _setlocalResponse(self, values):
         """
@@ -855,10 +855,10 @@ class TCPDispatcher(Dispatcher, LineReceiver):
 
         if success:
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Local %s set to: %s" % (name, value))            
+                logger.debug("Local %s set to: %s", name, value)            
         else:
             if logger.isEnabledFor(logging.WARN):
-                logger.warn("Local %s not set to: %s" % (name, value))
+                logger.warn("Local %s not set to: %s", name, value)
 
     def __init__(self, connected, args = [], kwargs = {},
                  reenter = True, selfwatch = True):
@@ -892,7 +892,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         self.connectedFunction(self, *self.args, **self.kwargs)
 
     def connectionLost(self, reason):
-        logger.info("Connection lost: %s" % reason.getErrorMessage());
+        logger.info("Connection lost: %s", reason.getErrorMessage());
         for (m, (_, d)) in self.waiting.items():
             try:
                 raise DisconnectedException()
@@ -906,7 +906,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         
     def lineReceived(self, line):
         if logger_messages.isEnabledFor(logging.DEBUG):
-            logger_messages.debug("received line:\n%s" % line);
+            logger_messages.debug("received line:\n%s", line);
 
         if line == "":
             raise Exception("Can't build message from empty string!")
@@ -927,7 +927,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         Install Pymodule message handler.
         """
         d = CancellableDeferred(
-            lambda d, m = None : self._cancelHandler(m, name, hdlr_type, d))
+            lambda d, m = None : self._cancelHandler(m, name, _HANDLER_TYPE_MSG, d))
 
         logger_messages.debug("installing %s..." % name);        
 
@@ -935,7 +935,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
 
         if self.waiting.has_key(key):
             if logger_messages.isEnabledFor(logging.DEBUG):
-                logger_messages.debug("install of %s already sent..." % name);
+                logger_messages.debug("install of %s already sent...", name);
             _, otherd = self.waiting[key]
             d.chainDeferred(otherd)
             self.waiting[key] = (None, d)
@@ -945,7 +945,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             line = "%%%%>install:%d:%s\n" % (prio, name)
 
             if logger_messages.isEnabledFor(logging.DEBUG):
-                logger_messages.debug("sending:\n%s" % str(line[:-1]));
+                logger_messages.debug("sending:\n%s", str(line[:-1]));
 
             self.transport.write(line)
 
@@ -956,7 +956,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
         Install Pymodule watch handler.
         """
         d = CancellableDeferred(
-            lambda d, m = None : self._cancelHandler(m, name, hdlr_type, d))
+            lambda d, m = None : self._cancelHandler(m, name, _HANDLER_TYPE_WCH, d))
 
         key = "watch-" + name
 
@@ -970,7 +970,7 @@ class TCPDispatcher(Dispatcher, LineReceiver):
             line = "%%%%>watch:%s\n" % name
 
             if logger_messages.isEnabledFor(logging.DEBUG):
-                logger_messages.debug("sending:\n" + str(line[:-1]));
+                logger_messages.debug("sending:\n%s", str(line[:-1]));
 
             self.transport.write(line)
             

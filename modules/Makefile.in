@@ -9,6 +9,7 @@ DEBUG :=
 
 CC  := @CC@ -Wall
 CXX := @CXX@ -Wall
+MOC := @QT4_MOC@
 SED := sed
 DEFS :=
 INCLUDES := -I.. -I@top_srcdir@
@@ -138,7 +139,7 @@ strip: all do-strip
 
 .PHONY: clean
 clean: do-clean
-	@-$(RM) $(PROGS) $(LIBS) *.o core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) *.o qt4/*.moc core 2>/dev/null
 
 .PHONY: install
 install: all do-install
@@ -191,6 +192,9 @@ client/%.yate: @srcdir@/client/%.cpp $(MKDEPS) $(INCFILES)
 
 qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) @QT4_INC@ -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) @QT4_LIB@
+
+qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
+	$(MOC) $(DEFS) $(INCLUDES) @QT4_INC@ -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)

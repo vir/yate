@@ -743,6 +743,8 @@ AC_SUBST(OPENSSL_VER)
 HAVE_QT4=no
 QT4_INC=""
 QT4_LIB=""
+QT4_INC_NET=""
+QT4_LIB_NET=""
 QT4_MOC=""
 QT4_VER=""
 AC_ARG_WITH(libqt4,AC_HELP_STRING([--with-libqt4],[use Qt for graphical clients (default)]),[ac_cv_use_libqt4=$withval],[ac_cv_use_libqt4=yes])
@@ -760,6 +762,8 @@ if [[ "x$ac_cv_use_libqt4" = "xyes" ]]; then
 	HAVE_QT4=yes
 	QT4_INC="$incqt"
 	QT4_LIB="$libqt"
+	QT4_INC_NET=`pkg-config --cflags QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
+	QT4_LIB_NET=`pkg-config --libs QtNetwork 2>/dev/null | grep -o '[[^ ]]*QtNetwork[[^ ]]*'`
 	QT4_MOC=`echo "$incqt" | sed -n 's,^.*-I\([[^ ]]\+\)/include .*$,\1/bin/moc,p'`
 	test -z "$QT4_MOC" && QT4_MOC="moc"
 	QT4_VER=`echo "$verqt" | sed "$vsed" | sed "$vsed" | sed 's/\(..\)\.\(..\)\.\(..\)/\1\2\3/'`
@@ -772,6 +776,8 @@ fi
 AC_SUBST(HAVE_QT4)
 AC_SUBST(QT4_INC)
 AC_SUBST(QT4_LIB)
+AC_SUBST(QT4_INC_NET)
+AC_SUBST(QT4_LIB_NET)
 AC_SUBST(QT4_MOC)
 AC_SUBST(QT4_VER)
 

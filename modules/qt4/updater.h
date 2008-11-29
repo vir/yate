@@ -27,6 +27,12 @@
 
 #include <yatecbase.h>
 
+#undef open
+#undef read
+#undef close
+#undef write
+#undef mkdir
+
 #define QT_NO_DEBUG
 #define QT_DLL
 #define QT_GUI_LIB

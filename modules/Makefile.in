@@ -65,6 +65,10 @@ ifneq (@HAVE_ALSA@,no)
 PROGS := $(PROGS) client/alsachan.yate
 endif
 
+ifneq (@HAVE_QT4@,no)
+PROGS := $(PROGS) qt4/updater.yate
+endif
+
 ifneq (@HAVE_ZAP@,no)
 PROGS := $(PROGS) server/zapcard.yate
 endif
@@ -269,6 +273,10 @@ openssl.yate: LOCALLIBS = @OPENSSL_LIB@
 
 rmanager.yate: LOCALFLAGS = $(COREDUMP_INC)
 rmanager.yate: LOCALLIBS = $(COREDUMP_LIB)
+
+qt4/updater.yate: qt4/updater.moc
+qt4/updater.yate: LOCALFLAGS = @QT4_INC_NET@
+qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
 
 ../libyatesig.so ../libs/ysig/libyatesig.a:
 	$(MAKE) -C ../libs/ysig

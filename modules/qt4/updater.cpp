@@ -123,12 +123,17 @@ UpdateLogic::~UpdateLogic()
 
 bool UpdateLogic::initializedClient()
 {
-    m_install = Client::s_settings.getBoolValue(toString(),"install") &&
-	QFile::exists(filePath(false));
-    Client::self()->setActive("upd_install",m_install);
     int policy = Engine::config().getIntValue("client",toString(),s_policies,Never);
     policy = Client::s_settings.getIntValue(toString(),"policy",s_policies,policy);
     setPolicy(policy,false);
+    if (QFile::exists(filePath(false))) {
+	m_install = Client::s_settings.getBoolValue(toString(),"install");
+	if ((m_policy >= Install) && !m_install) {
+	    Debug(toString(),DebugNote,"Deleting old updater file");
+	    QFile::remove(filePath(false));
+	}
+    }
+    Client::self()->setActive("upd_install",m_install);
     if (m_install && (m_policy >= Install))
 	startInstalling();
     else if (m_policy >= Check)
@@ -269,6 +274,8 @@ void UpdateLogic::startInstalling()
 	cmd = filePath(false);
     if (QProcess::startDetached(cmd)) {
 	Debug(toString(),DebugNote,"Executing: %s",cmd.toUtf8().constData());
+	Client::s_settings.setValue(toString(),"install",String::boolText(false));
+	Client::save(Client::s_settings);
 	Engine::halt(0);
 	return;
     }

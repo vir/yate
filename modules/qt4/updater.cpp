@@ -126,7 +126,9 @@ bool UpdateLogic::initializedClient()
     m_install = Client::s_settings.getBoolValue(toString(),"install") &&
 	QFile::exists(filePath(false));
     Client::self()->setActive("upd_install",m_install);
-    setPolicy(Client::s_settings.getIntValue(toString(),"policy",s_policies,Never),false);
+    int policy = Engine::config().getIntValue("client",toString(),s_policies,Never);
+    policy = Client::s_settings.getIntValue(toString(),"policy",s_policies,policy);
+    setPolicy(policy,false);
     if (m_install && (m_policy >= Install))
 	startInstalling();
     else if (m_policy >= Check)
@@ -267,10 +269,7 @@ void UpdateLogic::startInstalling()
 	cmd = filePath(false);
     if (QProcess::startDetached(cmd)) {
 	Debug(toString(),DebugNote,"Executing: %s",cmd.toUtf8().constData());
-	if (Client::self())
-	    Client::self()->quit();
-	else
-	    Engine::halt(0);
+	Engine::halt(0);
 	return;
     }
     Debug(toString(),DebugWarn,"Failed to execute: %s",cmd.toUtf8().constData());

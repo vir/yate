@@ -123,6 +123,8 @@ public:
     virtual void quit() {
 	    if (m_app)
 		m_app->quit();
+	    else
+		Engine::halt(0);
 	}
 
     /**

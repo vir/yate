@@ -128,6 +128,12 @@ public:
 	Item,                            // item
 	Group,                           // group
 	Reason,                          // reason
+	Content,                         // content
+	Parameter,                       // parameter
+	Crypto,                          // crypto
+	CryptoRequired,                  // crypto-required
+	Trying,                          // trying
+	Received,                        // received
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };
@@ -284,6 +290,12 @@ public:
 	    value = getAttribute(name);
 	    return 0 != value.length();
 	}
+
+    /**
+     * Fill a list with element's attributes
+     * @param dest The destination list
+     */
+    void getAttributes(NamedList& dest) const;
 
     /**
      * Check if an attribute with the given name and value exists
@@ -445,6 +457,11 @@ public:
     static XMLElement* getXml(NamedList& list, bool stole = false,
 	const char* name = "xml", const char* value = 0);
 
+    /**
+     * Associations between XML element name and type
+     */
+    static TokenDict s_names[];
+
 protected:
     /**
      * Constructor.
@@ -470,11 +487,6 @@ protected:
      * @return The underlying TiXmlElement object or 0 if not owned or 0
      */
     TiXmlElement* releaseOwnership();
-
-    /**
-     * Associations between XML element name and type
-     */
-    static TokenDict s_names[];
 
 private:
     // Set this object's type from m_element's name

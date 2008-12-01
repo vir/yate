@@ -341,7 +341,12 @@ void JBEngine::initialize(const NamedList& params)
 	else
 	    m_identity = new JIDIdentity(JIDIdentity::Account,JIDIdentity::AccountRegistered);
 	m_features.add(XMPPNamespace::Jingle);
-	m_features.add(XMPPNamespace::JingleAudio);
+	m_features.add(XMPPNamespace::JingleError);
+	m_features.add(XMPPNamespace::JingleAppsRtp);
+	m_features.add(XMPPNamespace::JingleAppsRtpInfo);
+	m_features.add(XMPPNamespace::JingleTransportIceUdp);
+	m_features.add(XMPPNamespace::JingleTransportRawUdp);
+	m_features.add(XMPPNamespace::JingleTransfer);
 	m_features.add(XMPPNamespace::Dtmf);
 	m_features.add(XMPPNamespace::DiscoInfo);
 

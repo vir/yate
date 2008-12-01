@@ -3,6 +3,10 @@
 [general]
 ; Global settings of Jabber and Jingle engines
 
+; secure_rtp: boolean: Offer SRTP when negotiating Jingle sessions
+; Defaults to disable
+;secure_rtp=disable
+
 ; singletone: boolean: Send chan tones as single characters.
 ; If disabled, the whole text received as chan tone(s) will be sent
 ;  in the same XML element

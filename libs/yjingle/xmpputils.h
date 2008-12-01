@@ -193,17 +193,19 @@ public:
 	Session,                         // urn:ietf:params:xml:ns:xmpp-session
 	Bind,                            // urn:ietf:params:xml:ns:xmpp-bind
 	Roster,                          // jabber:iq:roster
+	DynamicRoster,                   // jabber:iq:roster-dynamic
 	DiscoInfo,                       // http://jabber.org/protocol/disco#info
 	DiscoItems,                      // http://jabber.org/protocol/disco#items
 	VCard,                           // vcard-temp
-	Jingle,                          // http://www.google.com/session
-	JingleError,                     // urn:xmpp:jingle:errors
-	JingleAudio,                     // http://www.google.com/session/phone
-	JingleTransport,                 // http://www.google.com/transport/p2p
-	JingleTransfer,                  // urn:xmpp:jingle:transfer
-	JingleRtpInfo,                   // urn:xmpp:jingle:apps:rtp:info
-	Dtmf,                            // http://jabber.org/protocol/jingle/info/dtmf
-	DtmfError,                       // http://jabber.org/protocol/jingle/info/dtmf#errors
+	Jingle,                          // xmlns='urn:xmpp:jingle:0
+	JingleError,                     // urn:xmpp:jingle:errors:0
+	JingleAppsRtp,                   // urn:xmpp:jingle:apps:rtp:0
+	JingleAppsRtpInfo,               // urn:xmpp:jingle:apps:rtp:info:0
+	JingleTransportIceUdp,           // urn:xmpp:jingle:transports:ice-udp:0
+	JingleTransportRawUdp,           // urn:xmpp:jingle:transports:raw-udp:0
+	JingleTransportRawUdpInfo,       // urn:xmpp:jingle:transports:raw-udp:info:0
+	JingleTransfer,                  // urn:xmpp:jingle:transfer:0
+	Dtmf,                            // urn:xmpp:jingle:dtmf:0
 	Command,                         // http://jabber.org/protocol/command
 	CapVoiceV1,                      // http://www.google.com/xmpp/protocol/voice/v1
 	Count,

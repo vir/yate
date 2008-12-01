@@ -44,7 +44,7 @@ TokenDict JGEvent::s_typeName[] = {
  */
 JGEngine::JGEngine(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jgengine",params,prio), m_sessionIdMutex(true),
-    m_sessionId(1), m_stanzaTimeout(20000), m_useSidAttr(false)
+    m_sessionId(1), m_stanzaTimeout(20000)
 {
     JBThreadList::setOwner(this);
 }
@@ -65,12 +65,10 @@ void JGEngine::initialize(const NamedList& params)
     if (timeout < 10)
 	timeout = 10;
     m_stanzaTimeout = timeout * 1000;
-    m_useSidAttr = params.getBoolValue("session_sid",false);
 
     if (debugAt(DebugInfo)) {
 	String s;
 	s << " stanza_timeout=" << (unsigned int)m_stanzaTimeout;
-	s << " session_sid=" << m_useSidAttr;
 	Debug(this,DebugInfo,"Jabber Jingle service initialized:%s [%p]",
 	    s.c_str(),this);
     }
@@ -85,8 +83,7 @@ void JGEngine::initialize(const NamedList& params)
 
 // Make an outgoing call
 JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
-	XMLElement* media, XMLElement* transport, XMLElement* extra,
-	const char* message)
+	const ObjList& contents, XMLElement* extra, const char* message)
 {
     DDebug(this,DebugAll,"New outgoing call from '%s' to '%s'",
 	localJID.c_str(),remoteJID.c_str());
@@ -102,24 +99,24 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
     }
 
     // Create outgoing session
-    if (stream) {
+    bool hasStream = (0 != stream);
+    if (hasStream) {
 	JGSession* session = new JGSession(this,stream,localJID,remoteJID,
-	    media,transport,m_useSidAttr,extra,message);
+	    contents,extra,message);
+	TelEngine::destruct(stream);
 	if (session->state() != JGSession::Destroy) {
+	    Lock lock(this);
 	    m_sessions.append(session);
-	    return (session && session->ref() ? session : 0);
+	    return (session && session->ref()) ? session : 0;
 	}
 	TelEngine::destruct(session);
     }
-    else {
-	TelEngine::destruct(media);
-	TelEngine::destruct(transport);
+    else
 	TelEngine::destruct(extra);
-    }
 
     Debug(this,DebugNote,"Outgoing call from '%s' to '%s' failed: %s",
 	localJID.c_str(),remoteJID.c_str(),
-	!stream?"can't create stream":"failed to send data");
+	!hasStream? "can't create stream" : "failed to send data");
     return 0;
 }
 
@@ -162,19 +159,6 @@ void JGEngine::defProcessEvent(JGEvent* event)
     delete event;
 }
 
-// Utility: get the (s)id attribute: the session id
-static inline bool getSid(XMLElement* xml, String& sid, bool& useSid)
-{
-    if (!xml)
-	return false;
-    sid = xml->getAttribute("id");
-    if (!sid) {
-	sid = xml->getAttribute("sid");
-	useSid = true;
-    }
-    return !sid.null();
-}
-
 // Accept an event from the Jabber engine
 bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 {
@@ -185,7 +169,6 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
     const char* errorText = 0;
     bool respond = true;
     String sid;
-    bool useSid = false;
     Lock lock(this);
     switch (event->type()) {
 	case JBEvent::IqJingleGet:
@@ -199,9 +182,9 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		return false;
 	    }
 	    // Jingle clients may send the session id as 'id' or 'sid'
-	    getSid(child,sid,useSid);
-	    DDebug(this,DebugAll,"Accepting event=%s child=%s id=%s useSid=%s",
-		event->name(),child->name(),sid.c_str(),String::boolText(useSid));
+	    sid = child->getAttribute("sid");
+	    DDebug(this,DebugAll,"Accepting event=%s child=%s sid=%s",
+		event->name(),child->name(),sid.c_str());
 	    if (sid.null()) {
 		error = XMPPError::SBadRequest;
 		errorText = "Missing or empty session id";
@@ -228,7 +211,7 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		    DDebug(this,DebugAll,"New incoming call from=%s to=%s sid=%s",
 			event->from().c_str(),event->to().c_str(),sid.c_str());
 		    if (event->ref())
-			m_sessions.append(new JGSession(this,event,sid,useSid));
+			m_sessions.append(new JGSession(this,event,sid));
 		    processed = true;
 		    return true;
 		}

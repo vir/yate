@@ -54,7 +54,7 @@ TokenDict XMLElement::s_names[] = {
     {"error",                Error},
     {"query",                Query},
     {"vCard",                VCard},
-    {"session",              Jingle},
+    {"jingle",               Jingle},
     {"description",          Description},
     {"payload-type",         PayloadType},
     {"transport",            Transport},
@@ -83,6 +83,12 @@ TokenDict XMLElement::s_names[] = {
     {"item",                 Item},
     {"group",                Group},
     {"reason",               Reason},
+    {"content",              Content},
+    {"parameter",            Parameter},
+    {"crypto",               Crypto},
+    {"crypto-required",      CryptoRequired},
+    {"trying",               Trying},
+    {"received",             Received},
     {0,0}
 };
 
@@ -241,6 +247,16 @@ const char* XMLElement::getAttribute(const char* name) const
     if (valid() && name)
 	return m_element->Attribute(name);
     return 0;
+}
+
+// Fill a list with element's attributes
+void XMLElement::getAttributes(NamedList& dest) const
+{
+    if (!valid())
+	return;
+    const TiXmlAttribute* attr = m_element->FirstAttribute();
+    for (; attr; attr = attr->Next())
+	dest.addParam(attr->Name(),attr->Value());
 }
 
 bool XMLElement::hasAttribute(const char* name, const char* value) const

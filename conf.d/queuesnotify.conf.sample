@@ -1,0 +1,44 @@
+; This file keeps the configuration for the Queues Notify module
+
+[general]
+
+; account: string: The account used to query the database
+;account=
+account=reception
+
+; notifyhanguponunload: boolean: Notify hangup for all queued calls when the
+;  module is unloaded or the program terminates
+; Defaults to yes
+;notifyhanguponunload=yes
+
+
+[events]
+; This section configures the status set in resource.notify messages when
+;  a queued call status changes
+
+; queued: string: The status text to be sent when a call is queued
+; Defaults to 'online' if missing
+;queued=
+
+; pickup: string: The status text to be sent when a call is picked up from queue
+; Defaults to 'dnd' if missing
+;pickup=
+
+; hangup: string: The status text to be sent when a previously queued call
+;  is terminated
+; Defaults to 'offline' if missing
+;hangup=
+
+
+[queued]
+; This section configures the queries used when a call is queued
+
+; callinfo: string: The query to be used when a call is queued to get callinfo data
+; These values will be added to the callinfo parameter(s) of the resource.notify
+;  message
+; If the query fails a minimum set of parameters will be copied
+;  from received message to the resource.notify message: caller, called, callername
+;callinfo=
+
+; cdr: string: The query used when a call is queued to get CDR data
+;query=

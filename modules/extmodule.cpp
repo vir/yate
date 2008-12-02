@@ -785,10 +785,12 @@ bool ExtModReceiver::flush()
 	for (; p; p=p->next())
 	    p->setDelete(false);
     }
+    Lock lock(this);
     if (m_waiting.get()) {
-	DDebug(DebugAll,"ExtModReceiver releasing %u pending messages [%p]",
+	Debug(DebugInfo,"ExtModReceiver releasing %u pending messages [%p]",
 	    m_waiting.count(),this);
 	m_waiting.clear();
+	lock.drop();
 	Thread::yield();
 	return true;
     }

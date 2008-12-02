@@ -2,14 +2,20 @@
 
 awk -f "$1/gen.awk"
 sc="sox -r 8000 -c 1 -t raw"
-$sc -w -s 16b.raw -b -U -t raw s2u
-$sc -w -s 16b.raw -b -A -t raw s2a
+b=-1
+w=-2
+# for very old versions of sox you may need to uncomment the following 2 lines:
+# b=-b
+# w=-w
 
-$sc -b -U 08b.raw -w -s -t raw u2s
-$sc -b -A 08b.raw -w -s -t raw a2s
+$sc $w -s 16b.raw $b -U -t raw s2u
+$sc $w -s 16b.raw $b -A -t raw s2a
 
-$sc -b -U 08b.raw -b -A -t raw u2a
-$sc -b -A 08b.raw -b -U -t raw a2u
+$sc $b -U 08b.raw $w -s -t raw u2s
+$sc $b -A 08b.raw $w -s -t raw a2s
+
+$sc $b -U 08b.raw $b -A -t raw u2a
+$sc $b -A 08b.raw $b -U -t raw a2u
 
 gcc -o gen "$1/gen.c"
 

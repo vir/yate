@@ -868,6 +868,16 @@ public:
 	const char* to, const char* id, const ObjList& resources);
 
     /**
+     * Create an 'iq' element with a 'vcard' child
+     * @param get True to set the iq's type to 'get', false to set it to 'set'
+     * @param from The 'from' attribute
+     * @param to The 'to' attribute
+     * @param id The 'id' attribute
+     * @return A valid XMLElement pointer
+     */
+    static XMLElement* createVCard(bool get, const char* from, const char* to, const char* id);
+
+    /**
      * Create a 'command' element
      * @param action The command action
      * @param node The command

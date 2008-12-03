@@ -401,6 +401,14 @@ XMLElement* XMPPUtils::createIqBind( const char* from,
     return iq;
 }
 
+// Create an 'iq' element of type 'get' with a 'vcard' child
+XMLElement* XMPPUtils::createVCard(bool get, const char* from, const char* to, const char* id)
+{
+    XMLElement* xml = createIq(get ? IqGet : IqSet,from,to,id);
+    xml->addChild(createElement(XMLElement::VCard,XMPPNamespace::VCard));
+    return xml;
+}
+
 XMLElement* XMPPUtils::createCommand(CommandAction action, const char* node,
 	const char* sessionId)
 {

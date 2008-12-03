@@ -3166,6 +3166,7 @@ void ClientAccount::appendContact(ClientContact* contact)
 	return;
     Lock lock(this);
     m_contacts.append(contact);
+    contact->m_owner = this;
     Debug(ClientDriver::self(),DebugAll,
 	"Account(%s) added contact '%s' [%p]",
 	m_uri.c_str(),contact->uri().c_str(),this);

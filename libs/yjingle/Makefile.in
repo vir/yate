@@ -14,6 +14,10 @@ INCFILES := @top_srcdir@/yateclass.h @srcdir@/../yxml/tinystr.h @srcdir@/../yxml
 PROGS=
 LIBS = libyatejingle.a
 OBJS = xmlparser.o xmpputils.o jbstream.o jbengine.o session.o jgengine.o
+LIBD_DEV:= libyatejingle.so
+LIBD_VER:= $(LIBD_DEV).@PACKAGE_VERSION@
+LIBD:= ../../$(LIBD_VER) ../../$(LIBD_DEV)
+YXML:= ../yxml/libyatexml.a
 
 LOCALFLAGS =
 LOCALLIBS =
@@ -27,7 +31,7 @@ exec_prefix = @exec_prefix@
 -include YateLocal.mak
 
 .PHONY: all debug ddebug xdebug
-all: $(LIBS) $(PROGS)
+all: $(LIBS) $(LIBD) $(PROGS)
 
 debug:
 	$(MAKE) all DEBUG=-g3 MODSTRIP=
@@ -44,7 +48,7 @@ strip: all
 
 .PHONY: clean
 clean:
-	@-$(RM) $(PROGS) $(LIBS) $(OBJS) core 2>/dev/null
+	@-$(RM) $(PROGS) $(LIBS) $(LIBD) $(OBJS) core 2>/dev/null
 
 %.o: @srcdir@/%.cpp $(INCFILES)
 	$(COMPILE) -c $<
@@ -52,5 +56,14 @@ clean:
 Makefile: @srcdir@/Makefile.in ../../config.status
 	cd ../.. && ./config.status
 
-libyatejingle.a: $(OBJS)
+../../$(LIBD_VER): $(OBJS) $(YXML)
+	$(LINK) -shared -o $@ -Wl,--soname=$(LIBD_VER) $^
+
+../../$(LIBD_DEV): ../../$(LIBD_VER)
+	cd ../.. && ln -sf $(LIBD_VER) $(LIBD_DEV)
+
+$(LIBS): $(OBJS)
 	$(AR) rcs $@ $^
+
+$(YXML):
+	$(MAKE) -C ../yxml

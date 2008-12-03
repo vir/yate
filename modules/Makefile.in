@@ -232,17 +232,17 @@ yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
 yiaxchan.yate: LOCALLIBS = -L../libs/yiax -lyateiax
 
-yjinglechan.yate: ../libs/yxml/libyatexml.a ../libs/yjingle/libyatejingle.a
+yjinglechan.yate: ../libyatejingle.so
 yjinglechan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjingle
-yjinglechan.yate: LOCALLIBS = -L../libs/yjingle -L../libs/yxml -lyatejingle -lyatexml
+yjinglechan.yate: LOCALLIBS = -lyatejingle
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
 server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = ../libs/ypbx/libyatepbx.a
 
-server/mgcpgw.yate server/mgcpca.yate: ../libs/ymgcp/libyatemgcp.a
+server/mgcpgw.yate server/mgcpca.yate: ../libyatemgcp.so
 server/mgcpgw.yate server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
-server/mgcpgw.yate server/mgcpca.yate: LOCALLIBS = ../libs/ymgcp/libyatemgcp.a
+server/mgcpgw.yate server/mgcpca.yate: LOCALLIBS = -lyatemgcp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = ../libs/ilbc/libilbc.a
@@ -293,7 +293,7 @@ qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
 ../libs/yiax/libyateiax.a:
 	$(MAKE) -C ../libs/yiax
 
-../libs/ymgcp/libyatemgcp.a:
+../libyatemgcp.so ../libs/ymgcp/libyatemgcp.a:
 	$(MAKE) -C ../libs/ymgcp
 
 ../libs/ymodem/libyatemodem.a:
@@ -302,7 +302,7 @@ qt4/updater.yate: LOCALLIBS = @QT4_LIB_NET@
 ../libs/yxml/libyatexml.a:
 	$(MAKE) -C ../libs/yxml
 
-../libs/yjingle/libyatejingle.a:
+../libyatejingle.so ../libs/yjingle/libyatejingle.a:
 	$(MAKE) -C ../libs/yjingle
 
 ../libs/ypbx/libyatepbx.a:

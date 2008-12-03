@@ -19,7 +19,10 @@ LDCONFIG:=true
 MKDEPS := ./config.status
 PROGS:= yate
 YLIB := libyate.so.@PACKAGE_VERSION@
-SLIBS:= $(YLIB) libyate.so libyatesig.so.@PACKAGE_VERSION@ libyatesig.so
+SLIBS:= $(YLIB) libyate.so \
+	libyatesig.so.@PACKAGE_VERSION@ libyatesig.so \
+	libyatemgcp.so.@PACKAGE_VERSION@ libyatemgcp.so \
+	libyatejingle.so.@PACKAGE_VERSION@ libyatejingle.so
 INCS := yateclass.h yatemime.h yatengine.h yatephone.h yatecbase.h
 GENS := yateversn.h
 LIBS :=

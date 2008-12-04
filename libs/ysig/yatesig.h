@@ -137,7 +137,7 @@ virtual void* create(const String& type, const NamedList& name) \
 static clas ## Factory s_ ## clas ## Factory
 
 // Macro to create a factory that calls a component's static create method
-#define YSIGFACTORY2(clas,iface) \
+#define YSIGFACTORY2(clas) \
 class clas ## Factory : public SignallingFactory \
 { \
 protected: \

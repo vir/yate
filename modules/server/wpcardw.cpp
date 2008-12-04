@@ -322,7 +322,7 @@ private:
     bool m_init;
 };
 
-YSIGFACTORY2(WpInterface,SignallingInterface);
+YSIGFACTORY2(WpInterface);
 static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
 static WpModule driver;
 

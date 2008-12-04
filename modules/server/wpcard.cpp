@@ -426,7 +426,7 @@ static TokenDict s_linkStatus[] = {
 };
 #undef MAKE_NAME
 
-YSIGFACTORY2(WpInterface,SignallingInterface);
+YSIGFACTORY2(WpInterface);
 static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
 static bool s_repeatCapable = true;      // Global repeat packet capability
 static WpModule driver;

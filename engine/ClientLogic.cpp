@@ -177,7 +177,7 @@ inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
  */
 // contructor, the object appends itself to the Client's list of this kind of objects
 ClientLogic::ClientLogic()
-    : m_name("default"), m_prio(100), m_durationMutex(true), m_accShowAdvanced(false)
+    : m_name("default"), m_prio(100), m_durationMutex(true)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientLogic(%s) [%p]",m_name.c_str(),this);
     Client::addLogic(this);
@@ -185,7 +185,7 @@ ClientLogic::ClientLogic()
 
 // constructor, specifies a name
 ClientLogic::ClientLogic(const char* name, int priority)
-    : m_name(name), m_prio(priority), m_durationMutex(true), m_accShowAdvanced(false)
+    : m_name(name), m_prio(priority), m_durationMutex(true)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientLogic(%s) [%p]",m_name.c_str(),this);
     Client::addLogic(this);
@@ -198,7 +198,6 @@ ClientLogic::~ClientLogic()
     clearDurationUpdate();
     Client::removeLogic(this);
 }
-
 
 // obtain the name of the object
 const String& ClientLogic::toString() const 
@@ -234,6 +233,201 @@ bool ClientLogic::setParams(const NamedList& params)
     return ok;
 }
 
+// Add a duration object to this client's list
+bool ClientLogic::addDurationUpdate(DurationUpdate* duration, bool autoDelete)
+{
+    if (!duration)
+	return false;
+    Lock lock(m_durationMutex);
+    m_durationUpdate.append(duration)->setDelete(autoDelete);
+    DDebug(ClientDriver::self(),DebugInfo,
+	"Logic(%s) added duration ('%s',%p) owner=%u",
+	m_name.c_str(),duration->toString().c_str(),duration,autoDelete); 
+    return true;
+}
+
+// Remove a duration object from list
+bool ClientLogic::removeDurationUpdate(const String& name, bool delObj)
+{
+    if (!name)
+	return false;
+    Lock lock(m_durationMutex);
+    DurationUpdate* duration = findDurationUpdate(name,false);
+    if (!duration)
+	return false;
+    m_durationUpdate.remove(duration,false);
+    DDebug(ClientDriver::self(),DebugInfo,
+	"Logic(%s) removed duration ('%s',%p) delObj=%u",
+	m_name.c_str(),duration->toString().c_str(),duration,delObj); 
+    lock.drop();
+    duration->setLogic(0);
+    if (delObj)
+	TelEngine::destruct(duration);
+    return true;
+}
+
+// Remove a duration object from list
+bool ClientLogic::removeDurationUpdate(DurationUpdate* duration, bool delObj)
+{
+    if (!duration)
+	return false;
+    Lock lock(m_durationMutex);
+    ObjList* obj = m_durationUpdate.find(duration);
+    if (!obj)
+	return false;
+    obj->remove(false);
+    DDebug(ClientDriver::self(),DebugInfo,
+	"Logic(%s) removed duration ('%s',%p) delObj=%u",
+	m_name.c_str(),duration->toString().c_str(),duration,delObj); 
+    lock.drop();
+    duration->setLogic(0);
+    if (delObj)
+	TelEngine::destruct(duration);
+    return true;
+}
+
+// Find a duration update by its name
+DurationUpdate* ClientLogic::findDurationUpdate(const String& name, bool ref)
+{
+    Lock lock(m_durationMutex);
+    ObjList* obj = m_durationUpdate.find(name);
+    if (!obj)
+	return 0;
+    DurationUpdate* duration = static_cast<DurationUpdate*>(obj->get());
+    return (!ref || duration->ref()) ? duration : 0;
+}
+
+// Remove all duration objects
+void ClientLogic::clearDurationUpdate()
+{
+    Lock lock(m_durationMutex);
+    // Reset logic pointer: some of them may not be destroyed when clearing the list
+    ListIterator iter(m_durationUpdate);
+    for (GenObject* o = 0; 0 != (o = iter.get());)
+	(static_cast<DurationUpdate*>(o))->setLogic();
+    m_durationUpdate.clear();
+}
+
+// Release memory. Remove from client's list
+void ClientLogic::destruct()
+{
+    clearDurationUpdate();
+    Client::removeLogic(this);
+    GenObject::destruct();
+}
+
+// Init static logic data
+void ClientLogic::initStaticData()
+{
+    // Build account options list
+    if (!s_accOptions.skipNull()) {
+	s_accOptions.append(new String("allowplainauth"));
+	s_accOptions.append(new String("noautorestart"));
+	s_accOptions.append(new String("oldstyleauth"));
+	s_accOptions.append(new String("tlsrequired"));
+    }
+
+    // Build protocol list
+    s_protocolsMutex.lock();
+    if (!s_protocols.skipNull()) {
+	s_protocols.append(new String("sip"));
+	s_protocols.append(new String("jabber"));
+	s_protocols.append(new String("h323"));
+	s_protocols.append(new String("iax"));
+    }
+    s_protocolsMutex.unlock();
+}
+
+// Called when the user selected a line
+bool ClientLogic::line(const String& name, Window* wnd)
+{
+    int l = name.toInteger(-1);
+    if (l >= 0 && Client::self()) {
+	Client::self()->line(l);
+	return true;
+    }
+    return false;
+}
+
+// Show/hide widget(s)
+bool ClientLogic::display(NamedList& params, bool widget, Window* wnd)
+{
+    if (!Client::self())
+	return false;
+
+    bool result = false;
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* p = params.getParam(i);
+	if (!p)
+	    continue;
+	bool tmp = false;
+	if (widget)
+	    tmp = Client::self()->setShow(p->name(),p->toBoolean(),wnd);
+	else
+	    tmp = Client::self()->setVisible(p->name(),p->toBoolean());
+	if (tmp)
+	    params.clearParam(p->name());
+	else
+	    result = false;
+    }
+    return result;
+}
+
+// Called when the user pressed the backspace key.
+// Erase the last digit from the given item and set focus on it
+bool ClientLogic::backspace(const String& name, Window* wnd)
+{
+    if (!Client::self())
+	return false;
+
+    String str;
+    if (Client::self()->getText(name,str,false,wnd) &&
+	(!str || Client::self()->setText(name,str.substr(0,str.length()-1),false,wnd)))
+	Client::self()->setFocus(name,false,wnd);
+    return true;
+}
+
+// Called when the user pressed a command action
+bool ClientLogic::command(const String& name, Window* wnd)
+{
+    Message* m = new Message("engine.command");
+    m->addParam("line",name);
+    Engine::enqueue(m);
+    return true;
+}
+
+// Called when the user changes debug options
+bool ClientLogic::debug(const String& name, bool active, Window* wnd)
+{
+    // pos: module name
+    int pos = name.find(':');
+    if (pos <= 0)
+	return false;
+    // posLine: active/inactive command line
+    int posLine = name.find(':',pos + 1);
+    if (posLine < 0 || posLine - pos < 2)
+	return false;
+    // Get module/line and enqueue the message
+    String module = name.substr(0,pos);
+    String line = (active ? name.substr(pos + 1,posLine - pos - 1) : name.substr(posLine + 1));
+    Message* m = new Message("engine.debug");
+    m->addParam("module",module);
+    m->addParam("line",line);
+    Engine::enqueue(m);
+    return true;
+}
+
+
+/**
+ * DefaultLogic
+ */
+// constructor
+DefaultLogic::DefaultLogic(const char* name, int prio)
+    : ClientLogic(name,prio), m_accShowAdvanced(false)
+{
+}
+
 // Declare a NamedList and set a parameter
 // Used to avoid use of null pointers
 #define USE_SAFE_PARAMS(param,value) NamedList dummy(""); if (!params) params = &dummy; \
@@ -241,7 +435,7 @@ bool ClientLogic::setParams(const NamedList& params)
 
 // main function which considering de value of the "action" parameter
 // Handle actions from user interface
-bool ClientLogic::action(Window* wnd, const String& name, NamedList* params)
+bool DefaultLogic::action(Window* wnd, const String& name, NamedList* params)
 {
     // Translate actions from confirmation boxes
     // the window context specifies what action will be taken forward
@@ -412,11 +606,11 @@ bool ClientLogic::action(Window* wnd, const String& name, NamedList* params)
 }
 
 // Handle actions from checkable widgets
-bool ClientLogic::toggle(Window* wnd, const String& name, bool active)
+bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
 {
     Debug(ClientDriver::self(),DebugAll,
 	"Logic(%s) toggle '%s'=%s in window (%p,%s)",
-	m_name.c_str(),name.c_str(),String::boolText(active),
+	toString().c_str(),name.c_str(),String::boolText(active),
 	wnd,wnd ? wnd->id().c_str() : "");
 
     // Check for window params
@@ -568,12 +762,12 @@ bool ClientLogic::toggle(Window* wnd, const String& name, bool active)
 }
 
 // Handle 'select' actions from user interface
-bool ClientLogic::select(Window* wnd, const String& name, const String& item,
+bool DefaultLogic::select(Window* wnd, const String& name, const String& item,
 	const String& text)
 {
     DDebug(ClientDriver::self(),DebugAll,
 	"Logic(%s) select name='%s' item='%s' in window (%p,%s)",
-	m_name.c_str(),name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
+	toString().c_str(),name.c_str(),item.c_str(),wnd,wnd ? wnd->id().c_str() : "");
 
     if (name == s_accountList) {
 	if (!Client::self())
@@ -679,11 +873,11 @@ bool ClientLogic::select(Window* wnd, const String& name, const String& item,
 }
 
 // Set a client's parameter. Save the settings file and/or update interface
-bool ClientLogic::setClientParam(const String& param, const String& value,
+bool DefaultLogic::setClientParam(const String& param, const String& value,
 	bool save, bool update)
 {
     DDebug(ClientDriver::self(),DebugAll,"Logic(%s) setClientParam(%s,%s,%s,%s)",
-	m_name.c_str(),param.c_str(),value.c_str(),
+	toString().c_str(),param.c_str(),value.c_str(),
 	String::boolText(save),String::boolText(update));
 
     update = update && (0 != Client::self());
@@ -724,7 +918,7 @@ bool ClientLogic::setClientParam(const String& param, const String& value,
 }
 
 // Start an outgoing call
-bool ClientLogic::callStart(NamedList& params, Window* wnd)
+bool DefaultLogic::callStart(NamedList& params, Window* wnd)
 {
     if (!(Client::self() && fillCallStart(params,wnd)))
 	return false;
@@ -743,7 +937,7 @@ bool ClientLogic::callStart(NamedList& params, Window* wnd)
 }
 
 // function which is called when a digit is pressed
-bool ClientLogic::digitPressed(TelEngine::NamedList& params, Window* wnd)
+bool DefaultLogic::digitPressed(NamedList& params, Window* wnd)
 {
     if (!Client::self())
 	return false;
@@ -766,88 +960,8 @@ bool ClientLogic::digitPressed(TelEngine::NamedList& params, Window* wnd)
     return false;
 }
 
-// Called when the user selected a line
-bool ClientLogic::line(const String& name, Window* wnd)
-{
-    int l = name.toInteger(-1);
-    if (l >= 0 && Client::self()) {
-	Client::self()->line(l);
-	return true;
-    }
-    return false;
-}
-
-// Show/hide widget(s)
-bool ClientLogic::display(NamedList& params, bool widget, Window* wnd)
-{
-    if (!Client::self())
-	return false;
-
-    bool result = false;
-    unsigned int n = params.length();
-    for (unsigned int i = 0; i < n; i++) {
-	NamedString* p = params.getParam(i);
-	if (!p)
-	    continue;
-	bool tmp = false;
-	if (widget)
-	    tmp = Client::self()->setShow(p->name(),p->toBoolean(),wnd);
-	else
-	    tmp = Client::self()->setVisible(p->name(),p->toBoolean());
-	if (tmp)
-	    params.clearParam(p->name());
-	else
-	    result = false;
-    }
-    return result;
-}
-
-// Called when the user pressed the backspace key.
-// Erase the last digit from the "callto" box 
-bool ClientLogic::backspace(const String& name, Window* wnd)
-{
-    if (!Client::self())
-	return false;
-
-    String str;
-    if (Client::self()->getText(name,str,false,wnd) &&
-	(!str || Client::self()->setText(name,str.substr(0,str.length()-1),false,wnd)))
-	Client::self()->setFocus(name,false,wnd);
-    return true;
-}
-
-// Called when the user pressed a command action
-bool ClientLogic::command(const String& name, Window* wnd)
-{
-    Message* m = new Message("engine.command");
-    m->addParam("line",name);
-    Engine::enqueue(m);
-    return true;
-}
-
-// Called when the user changes debug options
-bool ClientLogic::debug(const String& name, bool active, Window* wnd)
-{
-    // pos: module name
-    int pos = name.find(':');
-    if (pos <= 0)
-	return false;
-    // posLine: active/inactive command line
-    int posLine = name.find(':',pos + 1);
-    if (posLine < 0 || posLine - pos < 2)
-	return false;
-    // Get module/line and enqueue the message
-    String module = name.substr(0,pos);
-    String line = (active ? name.substr(pos + 1,posLine - pos - 1) : name.substr(posLine + 1));
-    Message* m = new Message("engine.debug");
-    m->addParam("module",module);
-    m->addParam("line",line);
-    Engine::enqueue(m);
-    return true;
-}
-
 // Called when the user wants to add ane account or edit an existing one
-bool ClientLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
+bool DefaultLogic::editAccount(bool newAcc, NamedList* params, Window* wnd)
 {
     // Make sure we reset all controls in window
     USE_SAFE_PARAMS("select:acc_providers",s_notSelected);
@@ -907,7 +1021,7 @@ static inline void saveAccParam(NamedList& params,
 }
 
 // Called when the user wants to save account data
-bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
+bool DefaultLogic::acceptAccount(NamedList* params, Window* wnd)
 {
     if (!Client::self())
 	return false;
@@ -929,7 +1043,7 @@ bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
     }
     if (err) {
 	if (!Client::openMessage(err,wnd))
-	    Debug(ClientDriver::self(),DebugNote,"Logic(%s). %s",m_name.c_str(),err);
+	    Debug(ClientDriver::self(),DebugNote,"Logic(%s). %s",toString().c_str(),err);
 	return false;
     }
 
@@ -981,7 +1095,7 @@ bool ClientLogic::acceptAccount(NamedList* params, Window* wnd)
 }
 
 // Called when the user wants to delete an existing account
-bool ClientLogic::delAccount(const String& account, Window* wnd)
+bool DefaultLogic::delAccount(const String& account, Window* wnd)
 {
     if (!account) {
 	String acc;
@@ -1004,10 +1118,10 @@ bool ClientLogic::delAccount(const String& account, Window* wnd)
 }
 
 // Add/set an account to UI. Save accounts file and login if required
-bool ClientLogic::updateAccount(const NamedList& account, bool login, bool save)
+bool DefaultLogic::updateAccount(const NamedList& account, bool login, bool save)
 {
     DDebug(ClientDriver::self(),DebugAll,"Logic(%s) updateAccount(%s,%s,%s)",
-	m_name.c_str(),account.c_str(),String::boolText(login),String::boolText(save));
+	toString().c_str(),account.c_str(),String::boolText(login),String::boolText(save));
 
     if (!Client::self() || account.null())
 	return false;
@@ -1030,10 +1144,10 @@ bool ClientLogic::updateAccount(const NamedList& account, bool login, bool save)
 }
 
 // Login/logout an account
-bool ClientLogic::loginAccount(const NamedList& account, bool login)
+bool DefaultLogic::loginAccount(const NamedList& account, bool login)
 {
     DDebug(ClientDriver::self(),DebugAll,"Logic(%s) loginAccount(%s,%s)",
-	m_name.c_str(),account.c_str(),String::boolText(login));
+	toString().c_str(),account.c_str(),String::boolText(login));
 
     Message* m = new Message("user.login");
     m->addParam("account",account);
@@ -1053,7 +1167,7 @@ bool ClientLogic::loginAccount(const NamedList& account, bool login)
 }
 
 // Add/update a contact
-bool ClientLogic::updateContact(const NamedList& params, bool save, bool update)
+bool DefaultLogic::updateContact(const NamedList& params, bool save, bool update)
 {
     if (!(Client::self() && (save || update)))
 	return false;
@@ -1089,7 +1203,7 @@ bool ClientLogic::updateContact(const NamedList& params, bool save, bool update)
 }
 
 // Called when the user wants to save account data
-bool ClientLogic::acceptContact(NamedList* params, Window* wnd)
+bool DefaultLogic::acceptContact(NamedList* params, Window* wnd)
 {
     if (!Client::self())
 	return false;
@@ -1127,7 +1241,7 @@ bool ClientLogic::acceptContact(NamedList* params, Window* wnd)
 }
 
 // Called when the user wants to add a new contact or edit an existing one
-bool ClientLogic::editContact(bool newCont, NamedList* params, Window* wnd)
+bool DefaultLogic::editContact(bool newCont, NamedList* params, Window* wnd)
 {
     // Make sure we reset all controls in window
     NamedList p("");
@@ -1153,7 +1267,7 @@ bool ClientLogic::editContact(bool newCont, NamedList* params, Window* wnd)
 }
 
 // Called when the user wants to delete an existing contact
-bool ClientLogic::delContact(const String& contact, Window* wnd)
+bool DefaultLogic::delContact(const String& contact, Window* wnd)
 {
     if (!contact) {
 	String c;
@@ -1179,7 +1293,7 @@ bool ClientLogic::delContact(const String& contact, Window* wnd)
 }
 
 // Add/set account providers data
-bool ClientLogic::updateProviders(const NamedList& provider, bool save, bool update)
+bool DefaultLogic::updateProviders(const NamedList& provider, bool save, bool update)
 {
     if (!(save || update))
 	return false;
@@ -1195,7 +1309,7 @@ bool ClientLogic::updateProviders(const NamedList& provider, bool save, bool upd
 }
 
 // Called when the user wants to call an existing contact
-bool ClientLogic::callContact(NamedList* params, Window* wnd)
+bool DefaultLogic::callContact(NamedList* params, Window* wnd)
 {
     if (!Client::self())
 	return false;
@@ -1267,7 +1381,7 @@ bool ClientLogic::callContact(NamedList* params, Window* wnd)
 }
 
 // Update the call log history
-bool ClientLogic::callLogUpdate(NamedList& params, bool save, bool update)
+bool DefaultLogic::callLogUpdate(NamedList& params, bool save, bool update)
 {
     if (!(save || update))
 	return false;
@@ -1319,7 +1433,7 @@ bool ClientLogic::callLogUpdate(NamedList& params, bool save, bool update)
 }
 
 // Clear the specified log and the entries from the history file and save the history file
-bool ClientLogic::callLogClear(const String& table, const String& direction)
+bool DefaultLogic::callLogClear(const String& table, const String& direction)
 {
     // Clear history
     bool save = false;
@@ -1359,7 +1473,7 @@ inline NamedString* getCdrCalled(NamedList& list, const String& direction)
 }
 
 // Make an outgoing call to a target picked from the call log
-bool ClientLogic::callLogCall(const String& billid)
+bool DefaultLogic::callLogCall(const String& billid)
 {
     NamedList* sect = Client::s_history.getSection(billid);
     if (!sect)
@@ -1372,7 +1486,7 @@ bool ClientLogic::callLogCall(const String& billid)
 }
 
 // Create a contact from a call log entry
-bool ClientLogic::callLogCreateContact(const String& billid)
+bool DefaultLogic::callLogCreateContact(const String& billid)
 {
     NamedList* sect = Client::s_history.getSection(billid);
     if (!sect)
@@ -1389,7 +1503,7 @@ bool ClientLogic::callLogCreateContact(const String& billid)
 }
 
 // Process help related actions
-bool ClientLogic::help(const String& name, Window* wnd)
+bool DefaultLogic::help(const String& name, Window* wnd)
 {
     if (!Client::self())
 	return false;
@@ -1447,7 +1561,7 @@ bool ClientLogic::help(const String& name, Window* wnd)
 }
 
 // Called by the client after loaded the callto history file
-bool ClientLogic::calltoLoaded()
+bool DefaultLogic::calltoLoaded()
 {
     if (!Client::self())
 	return false;
@@ -1468,7 +1582,7 @@ bool ClientLogic::calltoLoaded()
 }
 
 // Process ui.action message
-bool ClientLogic::handleUiAction(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleUiAction(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
@@ -1553,7 +1667,7 @@ bool ClientLogic::handleUiAction(Message& msg, bool& stopLogic)
 }
 
 // Process call.cdr message
-bool ClientLogic::handleCallCdr(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleCallCdr(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
@@ -1575,13 +1689,13 @@ bool ClientLogic::handleCallCdr(Message& msg, bool& stopLogic)
 }
 
 // Process user.login message
-bool ClientLogic::handleUserLogin(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleUserLogin(Message& msg, bool& stopLogic)
 {
     return false;
 }
 
 // Process user.notify message
-bool ClientLogic::handleUserNotify(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleUserNotify(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
@@ -1651,7 +1765,7 @@ static bool decodeJID(const String& jid, String& bare, String& res)
 }
 
 // Process resource.notify message
-bool ClientLogic::handleResourceNotify(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
@@ -1670,7 +1784,7 @@ bool ClientLogic::handleResourceNotify(Message& msg, bool& stopLogic)
     if (contact) {
 	DDebug(ClientDriver::self(),DebugStub,
 	    "Logic(%s) account=%s contact='%s' [%p]",
-	    m_name.c_str(),account->c_str(),contact->c_str(),this);
+	    toString().c_str(),account->c_str(),contact->c_str(),this);
 	return true;
     }
 
@@ -1761,7 +1875,7 @@ bool ClientLogic::handleResourceNotify(Message& msg, bool& stopLogic)
 }
 
 // Process resource.subscribe message
-bool ClientLogic::handleResourceSubscribe(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleResourceSubscribe(Message& msg, bool& stopLogic)
 {
     if (!Client::self())
 	return false;
@@ -1793,7 +1907,7 @@ bool ClientLogic::handleResourceSubscribe(Message& msg, bool& stopLogic)
 }
 
 // Process chan.startup message
-bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
+bool DefaultLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 {
 #define CHANUPD_ID (chan ? chan->id() : *id)
 #define CHANUPD_ADDR (chan ? chan->address() : String::empty())
@@ -1988,7 +2102,7 @@ bool ClientLogic::handleClientChanUpdate(Message& msg, bool& stopLogic)
 }
 
 // Default message processor called for id's not defined in client.
-bool ClientLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
+bool DefaultLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 {
     if (id == Client::ChanNotify) {
 	String event = msg.getValue("event");
@@ -2017,7 +2131,7 @@ bool ClientLogic::defaultMsgHandler(Message& msg, int id, bool& stopLogic)
 }
 
 // Client created and initialized all windows
-void ClientLogic::initializedWindows()
+void DefaultLogic::initializedWindows()
 {
     if (!Client::self())
 	return;
@@ -2051,7 +2165,7 @@ void ClientLogic::initializedWindows()
 }
 
 // Initialize client from settings
-bool ClientLogic::initializedClient()
+bool DefaultLogic::initializedClient()
 {
     m_accShowAdvanced = Client::s_settings.getBoolValue("client","showaccadvanced",m_accShowAdvanced);
     if (Client::self())
@@ -2096,7 +2210,7 @@ bool ClientLogic::initializedClient()
 }
 
 // Client is exiting: save settings
-void ClientLogic::exitingClient()
+void DefaultLogic::exitingClient()
 {
     clearDurationUpdate();
 
@@ -2136,7 +2250,7 @@ void ClientLogic::exitingClient()
 }
 
 // Update from UI the selected item in channels list
-void ClientLogic::updateSelectedChannel(const String* item)
+void DefaultLogic::updateSelectedChannel(const String* item)
 {
     String old = m_selectedChannel;
     if (item)
@@ -2149,112 +2263,15 @@ void ClientLogic::updateSelectedChannel(const String* item)
 	channelSelectionChanged(old);
 }
 
-// Add a duration object to this client's list
-bool ClientLogic::addDurationUpdate(DurationUpdate* duration, bool autoDelete)
-{
-    if (!duration)
-	return false;
-    Lock lock(m_durationMutex);
-    m_durationUpdate.append(duration)->setDelete(autoDelete);
-    DDebug(ClientDriver::self(),DebugInfo,
-	"Logic(%s) added duration ('%s',%p) owner=%u",
-	m_name.c_str(),duration->toString().c_str(),duration,autoDelete); 
-    return true;
-}
-
-// Remove a duration object from list
-bool ClientLogic::removeDurationUpdate(const String& name, bool delObj)
-{
-    if (!name)
-	return false;
-    Lock lock(m_durationMutex);
-    DurationUpdate* duration = findDurationUpdate(name,false);
-    if (!duration)
-	return false;
-    m_durationUpdate.remove(duration,false);
-    DDebug(ClientDriver::self(),DebugInfo,
-	"Logic(%s) removed duration ('%s',%p) delObj=%u",
-	m_name.c_str(),duration->toString().c_str(),duration,delObj); 
-    lock.drop();
-    duration->setLogic(0);
-    if (delObj)
-	TelEngine::destruct(duration);
-    return true;
-}
-
-// Remove a duration object from list
-bool ClientLogic::removeDurationUpdate(DurationUpdate* duration, bool delObj)
-{
-    if (!duration)
-	return false;
-    Lock lock(m_durationMutex);
-    ObjList* obj = m_durationUpdate.find(duration);
-    if (!obj)
-	return false;
-    obj->remove(false);
-    DDebug(ClientDriver::self(),DebugInfo,
-	"Logic(%s) removed duration ('%s',%p) delObj=%u",
-	m_name.c_str(),duration->toString().c_str(),duration,delObj); 
-    lock.drop();
-    duration->setLogic(0);
-    if (delObj)
-	TelEngine::destruct(duration);
-    return true;
-}
-
-// Find a duration update by its name
-DurationUpdate* ClientLogic::findDurationUpdate(const String& name, bool ref)
-{
-    Lock lock(m_durationMutex);
-    ObjList* obj = m_durationUpdate.find(name);
-    if (!obj)
-	return 0;
-    DurationUpdate* duration = static_cast<DurationUpdate*>(obj->get());
-    return (!ref || duration->ref()) ? duration : 0;
-}
-
-// Remove all duration objects
-void ClientLogic::clearDurationUpdate()
-{
-    Lock lock(m_durationMutex);
-    // Reset logic pointer: some of them may not be destroyed when clearing the list
-    ListIterator iter(m_durationUpdate);
-    for (GenObject* o = 0; 0 != (o = iter.get());)
-	(static_cast<DurationUpdate*>(o))->setLogic();
-    m_durationUpdate.clear();
-}
-
-// Init static logic data
-void ClientLogic::initStaticData()
-{
-    // Build account options list
-    if (!s_accOptions.skipNull()) {
-	s_accOptions.append(new String("allowplainauth"));
-	s_accOptions.append(new String("noautorestart"));
-	s_accOptions.append(new String("oldstyleauth"));
-	s_accOptions.append(new String("tlsrequired"));
-    }
-
-    // Build protocol list
-    s_protocolsMutex.lock();
-    if (!s_protocols.skipNull()) {
-	s_protocols.append(new String("sip"));
-	s_protocols.append(new String("jabber"));
-	s_protocols.append(new String("h323"));
-	s_protocols.append(new String("iax"));
-    }
-    s_protocolsMutex.unlock();
-}
-
 // Method called by the client when idle
-void ClientLogic::idleTimerTick(Time& time)
+void DefaultLogic::idleTimerTick(Time& time)
 {
     for (ObjList* o = m_durationUpdate.skipNull(); o; o = o->skipNext())
 	(static_cast<DurationUpdate*>(o->get()))->update(time.sec(),&s_channelList);
 }
 
 // Enable call actions
-bool ClientLogic::enableCallActions(const String& id)
+bool DefaultLogic::enableCallActions(const String& id)
 {
     if (!Client::self())
 	return false;
@@ -2294,7 +2311,7 @@ bool ClientLogic::enableCallActions(const String& id)
 }
 
 // Fill call start parameter list from UI
-bool ClientLogic::fillCallStart(NamedList& p, Window* wnd)
+bool DefaultLogic::fillCallStart(NamedList& p, Window* wnd)
 {
     if (!checkParam(p,"target","callto",false,wnd))
 	return false;
@@ -2308,7 +2325,7 @@ bool ClientLogic::fillCallStart(NamedList& p, Window* wnd)
 }
 
 // Notification on selection changes in channels list
-void ClientLogic::channelSelectionChanged(const String& old)
+void DefaultLogic::channelSelectionChanged(const String& old)
 {
     Debug(ClientDriver::self(),DebugInfo,"channelSelectionChanged() to '%s' old='%s'",
 	m_selectedChannel.c_str(),old.c_str());

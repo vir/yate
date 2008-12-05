@@ -182,7 +182,6 @@ bool ClientDriver::s_dropConfPeer = true;        // Drop a channel's old peer wh
 String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
 Mutex ClientSound::s_soundsMutex(true);          // ClientSound's list lock mutex
-static ClientLogic s_defaultLogic;               // The default logic
 
 // Client relays
 static MsgRelay s_relays[] = {
@@ -754,7 +753,8 @@ bool EngineStartHandler::received(Message& msg)
  */
 // Constructor
 Client::Client(const char *name)
-    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true)
+    : Thread(name), m_initialized(false), m_line(0), m_oneThread(true),
+    m_defaultLogic(0)
 {
     s_client = this;
 
@@ -850,6 +850,7 @@ void Client::run()
 {
     Debug(ClientDriver::self(),DebugAll,"Client::run() [%p]",this);
     ClientLogic::initStaticData();
+    m_defaultLogic = createDefaultLogic();
     loadUI();
     // Run
     main();
@@ -863,6 +864,7 @@ void Client::run()
 	    logic->toString().c_str(),logic);
 	logic->exitingClient();
     }
+    TelEngine::destruct(m_defaultLogic);
     exitClient();
 }
 
@@ -911,6 +913,12 @@ bool Client::getVisible(const String& name)
 {
     Window* w = getWindow(name);
     return w && w->visible();
+}
+
+// Create the default logic
+ClientLogic* Client::createDefaultLogic()
+{
+    return new DefaultLogic;
 }
 
 // function for initiating the windows

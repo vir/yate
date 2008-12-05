@@ -42,7 +42,8 @@ class UIFactory;                         // Base factory used to build custom wi
 class Client;                            // The client
 class ClientChannel;                     // A client telephony channel
 class ClientDriver;                      // The client telephony driver
-class ClientLogic;                       // The client's default logic
+class ClientLogic;                       // Base class for all client logics
+class DefaultLogic;                      // The client's default logic
 class ClientAccount;                     // A client account
 class ClientAccountList;                 // A client account list
 class ClientContact;                     // A client contact
@@ -1104,8 +1105,8 @@ public:
 	bool save, bool update);
 
     /**
-     * Called when the user pressed the backspace key
-     * @param name The active widget (it might be the window itself)
+     * Remove the last character of the given widget
+     * @param name The widget (it might be the window itself)
      * @param wnd Optional window containing the widget that triggered the action
      * @return True on success
      */
@@ -1348,6 +1349,12 @@ public:
     static String s_toggles[OptCount];
 
 protected:
+    /**
+     * Create the default logic
+     * The default implementation creates a DefaultLogic object
+     * @return ClientLogic pointer or 0
+     */
+    virtual ClientLogic* createDefaultLogic();
     virtual bool createWindow(const String& name,
 	const String& alias = String::empty()) = 0;
     virtual void loadWindows(const char* file = 0) = 0;
@@ -1369,6 +1376,7 @@ protected:
     bool m_oneThread;
     bool m_toggles[OptCount];
     ObjList m_relays;                    // Message relays installed by this receiver
+    ClientLogic* m_defaultLogic;         // The default logic
     static Client* s_client;
     static int s_changing;
     static ObjList s_logics;
@@ -1724,7 +1732,7 @@ protected:
  * This class implements the logic behind different actions in the client.
  * It specifies the way the graphical interface of the client will behave
  *  in different circumstances.
- * @short Base client functionality
+ * @short Base class for all client logics
  */
 class YATE_API ClientLogic : public GenObject
 {
@@ -1748,10 +1756,11 @@ public:
     virtual ~ClientLogic();
 
     /**
-     * Function that returns the name of the logic
-     * @return The name of this client logic
+     * Get the name of this logic
+     * @return This logic's name
      */
-    virtual const String& toString() const;
+    inline const String& name() const
+	{ return m_name; }
 
     /**
      * Get the priority of this logic
@@ -1761,11 +1770,491 @@ public:
 	{ return m_prio; }
 
     /**
+     * Function that returns the name of the logic
+     * @return The name of this client logic
+     */
+    virtual const String& toString() const;
+
+    /**
      * Process a request to set client parameters
      * @param params The parameter list
      * @return True on success
      */
     bool setParams(const NamedList& params);
+
+    /**
+     * Handle actions from user interface
+     * @param wnd The window in which the user did something
+     * @param name The action's name
+     * @param params Optional action parameters
+     * @return True if the action was handled
+     */
+    virtual bool action(Window* wnd, const String& name, NamedList* params = 0)
+	{ return false; }
+
+    /**
+     * Handle actions from checkable widgets
+     * @param wnd The window in which the user did something
+     * @param name The object's name
+     * @param active Object's state
+     * @return True if the action was handled by a client logic
+     */
+    virtual bool toggle(Window* wnd, const String& name, bool active)
+	{ return false; }
+
+    /**
+     * Handle 'select' actions from user interface
+     * @param wnd The window in which the user did something
+     * @param name The object's name
+     * @param item Item identifying the selection
+     * @param text Selection's text
+     * @return True if the action was handled
+     */
+    virtual bool select(Window* wnd, const String& name, const String& item,
+	const String& text = String::empty())
+	{ return false; }
+
+    /**
+     * Set a client's parameter. Save the settings file and/or update interface
+     * @param param Parameter's name
+     * @param value The value of the parameter
+     * @param save True to save the configuration file
+     * @param update True to update the interface
+     * @return True on success
+     */
+    virtual bool setClientParam(const String& param, const String& value,
+	bool save, bool update)
+	{ return false; }
+
+    /**
+     * Process an IM message
+     * @param msg The im.execute or chan.text message
+     */
+    virtual bool imIncoming(Message& msg)
+	{ return false; }
+
+    /**
+     * Call execute handler called by the client.
+     * The default logic ask the client to build an incoming channel
+     * @param msg The call.execute message
+     * @param dest The destination (target)
+     * @return True if a channel was created and connected
+     */
+    virtual bool callIncoming(Message& msg, const String& dest)
+	{ return false; }
+
+    /**
+     * Called when the user trigger a call start action
+     * The default logic fill the parameter list and ask the client to create an outgoing channel
+     * @param params List of call parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool callStart(NamedList& params, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user selected a line
+     * @param name The line name
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool line(const String& name, Window* wnd = 0);
+
+    /**
+     * Show/hide widget(s) or window(s) on 'display'/'show' action.
+     * @param params Widget(s) or window(s) to show/hide
+     * @param widget True if the operation indicates widget(s), false otherwise
+     * @param wnd Optional window owning the widget(s) to show or hide
+     * @return False if failed to show/hide all widgets/windows
+     */
+    virtual bool display(NamedList& params, bool widget, Window* wnd = 0);
+
+    /**
+     * Erase the last digit from the given widget and set focus on it 
+     * @param name The widget (it might be the window itself)
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool backspace(const String& name, Window* wnd = 0);
+
+    /**
+     * Enqueue an engine.command message
+     * @param name The command line
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool command(const String& name, Window* wnd = 0);
+
+    /**
+     * Enqueue an engine.debug message.
+     * @param name The debug action content (following the prefix). The format
+     *  of this parameter must be 'module:active-true:active-false'.
+     *  The line parameter of the message will be filled with 'active-true' if
+     *  active is true and with 'active-false' if active is false
+     * @param active The widget's state
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool debug(const String& name, bool active, Window* wnd = 0);
+
+    /**
+     * Called when the user wants to add a new account or edit an existing one
+     * @param newAcc True to add a new account, false to edit an exisiting one
+     * @param params Initial parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool editAccount(bool newAcc, NamedList* params, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user wants to save account data
+     * @param params Initial parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool acceptAccount(NamedList* params, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user wants to delete an existing account
+     * @param account The account's name. Set to empty to delete the current selection
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool delAccount(const String& account, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Add/set an account. Login if required
+     * @param account The account's parameters. The name of the list must be the account's name
+     * @param login True to login the account
+     * @param save True to save the accounts file. If true and file save fails the method will fail
+     * @return True on success
+     */
+    virtual bool updateAccount(const NamedList& account, bool login, bool save)
+	{ return false; }
+
+    /**
+     * Login/logout an account
+     * @param account The account's parameters. The name of the list must be the account's name
+     * @param login True to login the account, false to logout
+     * @return True on success
+     */
+    virtual bool loginAccount(const NamedList& account, bool login)
+	{ return false; }
+
+    /**
+     * Add/set a contact
+     * @param contact The contact's parameters. The name of the list must be the contacts's id (name).
+     *  If it starts with 'client/' this is a contact updated from server: it can't be changed
+     * @param save True to save data to contacts file
+     * @param update True to update the interface
+     * @return True on success
+     */
+    virtual bool updateContact(const NamedList& contact, bool save, bool update)
+	{ return false; }
+
+    /**
+     * Called when the user wants to save account data
+     * @param params Initial parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool acceptContact(NamedList* params, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user wants to add a new contact or edit an existing one
+     * @param newCont True to add a new contact, false to edit an existing one
+     * @param params Optional initial parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool editContact(bool newCont, NamedList* params = 0, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user wants to delete an existing contact
+     * @param contact The contact's id. Set to empty to delete the current selection
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool delContact(const String& contact, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Called when the user wants to call an existing contact
+     * @param params Optional parameters
+     * @param wnd Optional window containing the widget that triggered the action
+     * @return True on success
+     */
+    virtual bool callContact(NamedList* params = 0, Window* wnd = 0)
+	{ return false; }
+
+    /**
+     * Add/set account providers data
+     * @param provider The provider's parameters. The name of the list must be the provider's id (name)
+     * @param save True to save data to providers file
+     * @param update True to update the interface
+     * @return True on success
+     */
+    virtual bool updateProviders(const NamedList& provider, bool save, bool update)
+	{ return false; }
+
+    /**
+     * Update the call log history
+     * @param params Call log data
+     * @param save True to save data to history file
+     * @param update True to update the interface
+     * @return True
+    */
+    virtual bool callLogUpdate(NamedList& params, bool save, bool update)
+	{ return false; }
+
+    /**
+     * Clear the specified log and the entries from the history file and save the history file
+     * @param table Tebale to clear
+     * @param direction The call direction to clear (incoming,outgoing).
+     *  Note that the direction is the value saved from call.cdr messages.
+     *  If empty, all log entries will be cleared
+     * @return True
+    */
+    virtual bool callLogClear(const String& table, const String& direction)
+	{ return false; }
+
+    /**
+     * Make an outgoing call to a target picked from the call log
+     * @param billid The bill id of the call
+     * @return True on success (call initiated)
+    */
+    virtual bool callLogCall(const String& billid)
+	{ return false; }
+
+    /**
+     * Create a contact from a call log entry
+     * @param billid The bill id of the call
+     * @return True on success (address book popup window was displayed)
+    */
+    virtual bool callLogCreateContact(const String& billid)
+	{ return false; }
+
+    /** 
+     * Process help related actions
+     * @param action The action's name
+     * @param wnd The window owning the control
+     * @return True on success
+     */
+    virtual bool help(const String& action, Window* wnd)
+	{ return false; }
+
+    /**
+     * Called by the client after loaded the callto history file
+     * @return True to tell the client to stop notifying other logics
+     */
+    virtual bool calltoLoaded()
+	{ return false; }
+
+    /**
+     * Called by the client after loaded the windows
+     */
+    virtual void loadedWindows()
+	{}
+
+    /**
+     * Called by the client after loaded and intialized the windows
+     */
+    virtual void initializedWindows()
+	{}
+
+    /**
+     * Called by the client after loaded and intialized the windows and
+     *  loaded configuration files.
+     * The default logic update client settings
+     * @return True to stop processing this notification
+     */
+    virtual bool initializedClient()
+	{ return false; }
+
+    /**
+     * Called by the client before exiting.
+     * The default logic save client settings
+     */
+    virtual void exitingClient()
+	{}
+
+    /**
+     * Process ui.action message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleUiAction(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process call.cdr message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleCallCdr(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process user.login message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleUserLogin(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process user.notify message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleUserNotify(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process resource.notify message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleResourceNotify(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process resource.subscribe message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleResourceSubscribe(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Process clientchan.update message
+     * @param msg Received message
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool handleClientChanUpdate(Message& msg, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Default message processor called for id's not defined in client.
+     * Descendants may override it to process custom messages installed by
+     *  them and relayed through the client
+     * @param msg Received message
+     * @param id Message id
+     * @param stopLogic Set to true on exit to tell the client to stop asking other logics
+     * @return True to stop further processing by the engine
+     */
+    virtual bool defaultMsgHandler(Message& msg, int id, bool& stopLogic)
+	{ return false; }
+
+    /**
+     * Engine start notification
+     * @param msg The engine.start message
+     */
+    virtual void engineStart(Message& msg)
+	{}
+
+    /**
+     * Add a duration object to this client's list
+     * @param duration The object to add
+     * @param autoDelete True to delete the object when the list is cleared
+     * @return True on success 
+     */
+    virtual bool addDurationUpdate(DurationUpdate* duration, bool autoDelete = false);
+
+    /**
+     * Remove a duration object from list
+     * @param name The name of the object to remove
+     * @param delObj True to destroy the object, false to remove it
+     * @return True on success 
+     */
+    virtual bool removeDurationUpdate(const String& name, bool delObj = false);
+
+    /**
+     * Remove a duration object from list
+     * @param duration The object to remove
+     * @param delObj True to destroy the object, false to remove it
+     * @return True on success 
+     */
+    virtual bool removeDurationUpdate(DurationUpdate* duration, bool delObj = false);
+
+    /**
+     * Find a duration update by its name
+     * @param name The name of the object to find
+     * @param ref True to increase its reference counter before returning
+     * @return DurationUpdate pointer or 0
+     */
+    virtual DurationUpdate* findDurationUpdate(const String& name, bool ref = true);
+
+    /**
+     * Remove all duration objects
+     */
+    virtual void clearDurationUpdate();
+
+    /**
+     * Release memory. Remove from client's list
+     */
+    virtual void destruct();
+
+    /**
+     * Init static logic lists.
+     * Called by the client when start running
+     */
+    static void initStaticData();
+
+    // Account options string list
+    static ObjList s_accOptions;
+    // Parameters that are applied from provider template
+    static const char* s_provParams[];
+
+protected:
+    /**
+     * Method called by the client when idle.
+     * This method is called in the UI's thread
+     * @param time The current time
+     */
+    virtual void idleTimerTick(Time& time)
+	{}
+
+    // The list of protocols supported by the client
+    static ObjList s_protocols;
+    // Mutext used to lock protocol list
+    static Mutex s_protocolsMutex;
+
+    ObjList m_durationUpdate;            // Duration updates
+    Mutex m_durationMutex;               // Lock duration operations
+
+private:
+    String m_name;                       // Logic's name
+    int m_prio;                          // Logics priority
+};
+
+
+/**
+ * This class implements the default client behaviour.
+ * @short The client's default logic
+ */
+class YATE_API DefaultLogic : public ClientLogic
+{
+public:
+    /**
+     * Constructor
+     * @param name The name of this logic
+     * @param priority The priority of this logic
+     */
+    DefaultLogic(const char* name = "default", int prio = 100);
 
     /**
      * Handle actions from user interface
@@ -1841,51 +2330,6 @@ public:
      * @return True on success
      */
     virtual bool digitPressed(NamedList& params, Window* wnd = 0);
-
-    /**
-     * Called when the user selected a line
-     * @param name The line name
-     * @param wnd Optional window containing the widget that triggered the action
-     * @return True on success
-     */
-    virtual bool line(const String& name, Window* wnd = 0);
-
-    /**
-     * Show/hide widget(s) or window(s) on 'display'/'show' action
-     * @param params Widget(s) or window(s) to show/hide
-     * @param widget True if the operation indicates widget(s), false otherwise
-     * @param wnd Optional window owning the action sender
-     * @return False if failed to show/hide all widgets/windows
-     */
-    virtual bool display(NamedList& params, bool widget, Window* wnd = 0);
-
-    /**
-     * Called when the user pressed the backspace key.
-     * The default behaviour is to erase the last digit from the "callto" box 
-     * @param name The active widget (it might be the window itself)
-     * @param wnd Optional window containing the widget that triggered the action
-     * @return True on success
-     */
-    virtual bool backspace(const String& name, Window* wnd = 0);
-
-    /**
-     * Called when the user pressed a command action.
-     * The default behaviour is to enqueue an engine.command message
-     * @param name The command name
-     * @param wnd Optional window containing the widget that triggered the action
-     * @return True on success
-     */
-    virtual bool command(const String& name, Window* wnd = 0);
-
-    /**
-     * Called when the user changed the toggled state of a "debug:" widget.
-     * The default behaviour is to enqueue an engine.debug message
-     * @param name The debug action content (following the prefix)
-     * @param active The widget's state
-     * @param wnd Optional window containing the widget that triggered the action
-     * @return True on success
-     */
-    virtual bool debug(const String& name, bool active, Window* wnd = 0);
 
     /**
      * Called when the user wants to add a new account or edit an existing one
@@ -2134,54 +2578,6 @@ public:
     virtual void engineStart(Message& msg)
 	{}
 
-    /**
-     * Add a duration object to this client's list
-     * @param duration The object to add
-     * @param autoDelete True to delete the object when the list is cleared
-     * @return True on success 
-     */
-    bool addDurationUpdate(DurationUpdate* duration, bool autoDelete = false);
-
-    /**
-     * Remove a duration object from list
-     * @param name The name of the object to remove
-     * @param delObj True to destroy the object, false to remove it
-     * @return True on success 
-     */
-    bool removeDurationUpdate(const String& name, bool delObj = false);
-
-    /**
-     * Remove a duration object from list
-     * @param duration The object to remove
-     * @param delObj True to destroy the object, false to remove it
-     * @return True on success 
-     */
-    bool removeDurationUpdate(DurationUpdate* duration, bool delObj = false);
-
-    /**
-     * Find a duration update by its name
-     * @param name The name of the object to find
-     * @param ref True to increase its reference counter before returning
-     * @return DurationUpdate pointer or 0
-     */
-    DurationUpdate* findDurationUpdate(const String& name, bool ref = true);
-
-    /**
-     * Remove all duration objects
-     */
-    void clearDurationUpdate();
-
-    /**
-     * Init static logic lists.
-     * Called by the client when start running
-     */
-    static void initStaticData();
-
-    // Account options string list
-    static ObjList s_accOptions;
-    // Parameters that are applied from provider template
-    static const char* s_provParams[];
-
 protected:
     /**
      * Method called by the client when idle.
@@ -2212,26 +2608,12 @@ protected:
      */
     virtual void channelSelectionChanged(const String& old);
 
-    // The list of protocols supported by the client
-    static ObjList s_protocols;
-    // Mutext used to lock protocol list
-    static Mutex s_protocolsMutex;
-
-    String m_name;                       // Logic's name
     String m_selectedChannel;            // The currently selected channel
-    int m_prio;                          // Logics priority
-    ObjList m_durationUpdate;            // Duration updates
-    Mutex m_durationMutex;               // Lock duration operations
     String m_transferInitiated;          // Tranfer initiated id
     bool m_accShowAdvanced;              // Show/hide the account advanced options
 };
 
-/**
- * This class holds data about an account that can be registered to a server.
- * It also holds a list of contacts belonging to this account.
- * The account's id is kept in a lower case URI
- * @short A client account
- */
+
 class YATE_API ClientAccount : public RefObject, public Mutex
 {
     friend class ClientContact;

@@ -182,6 +182,7 @@ static NamedList s_resNotifStatus("");   // Events to status resource notify tra
 static QueuedCallWorker* s_thread = 0;
 static Configuration s_cfg;
 static ObjList s_calls;                  // Queued calls (this list must be locked using the plugin)
+static int s_sleepMs = 20;               // Loop sleep time
 
 // Event strings associated with queued call status
 TokenDict QueuedCall::s_events[] = {
@@ -536,8 +537,10 @@ void QueuedCallWorker::run()
 		}
 	    }
 	    __plugin.unlock();
-	    Thread::yield(true);
+	    Thread::msleep(s_sleepMs,true);
 	}
+	else
+	    Thread::yield(true);
 	// Pick a call to process
 	processed = false;
 	__plugin.lock();
@@ -726,6 +729,11 @@ void QueuesNotifyModule::initialize()
     m_account = general->getValue("account");
     s_notifyHangupOnUnload = general->getBoolValue("notifyhanguponunload",true);
     s_addNodeToResource = general->getBoolValue("addnodenametoresource",true);
+    s_sleepMs = general->getIntValue("defsleep",20);
+    if (s_sleepMs < 5)
+	s_sleepMs = 5;
+    if (s_sleepMs > 1000)
+	s_sleepMs = 1000;
 
     // Events to status translation table
     NamedList* status = s_cfg.getSection("events");

@@ -5,6 +5,9 @@
 ; account: string: The account used to query the database
 ;account=
 
+; defsleep: int: Loop sleep time in milliseconds
+;defsleep=20
+
 ; notifyhanguponunload: boolean: Notify hangup for all queued calls when the
 ;  module is unloaded or the program terminates
 ; Defaults to yes

@@ -607,7 +607,7 @@ public:
 	ActContentModify,                // content-modify
 	ActContentReject,                // content-reject
 	ActContentRemove,                // content-remove
-	ActTransfer,                     // session-transfer
+	ActTransfer,                     // session-info: Transfer
 	ActRinging,                      // session-info: Ringing
 	ActTrying,                       // session-info: Trying
 	ActReceived,                     // session-info: Received

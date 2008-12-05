@@ -501,7 +501,7 @@ TokenDict JGSession::s_actions[] = {
     {"content-modify",        ActContentModify},
     {"content-reject",        ActContentReject},
     {"content-remove",        ActContentRemove},
-    {"session-transfer",      ActTransfer},
+    {"transfer",              ActTransfer},
     {"DTMF",                  ActDtmf},
     {"ringing",               ActRinging},
     {"trying",                ActTrying},
@@ -1174,10 +1174,6 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	    "Unknown session action");
 	return 0;
     }
-
-    // *** Check some actions without any processing
-    if (act == ActTransfer)
-	return new JGEvent(act,this,jbev->releaseXML());
 
     // *** ActTerminate
     if (act == ActTerminate) {

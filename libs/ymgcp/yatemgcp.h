@@ -611,6 +611,11 @@ public:
      * The IP address and port of this endpoint
      */
     SocketAddr address;
+
+    /**
+     * An alias name of the remote endpoint, may be empty
+     */
+    String alias;
 };
 
 /**
@@ -674,7 +679,14 @@ public:
      * @param epId The remote endpoint's id to find
      * @return MGCPEpInfo pointer or 0 if not found
      */
-    MGCPEpInfo* find(const char* epId);
+    MGCPEpInfo* find(const String& epId);
+
+    /**
+     * Find an info object by remote peer alias
+     * @param alias Alias of the remote endpoint's id to find
+     * @return MGCPEpInfo pointer or 0 if not found
+     */
+    MGCPEpInfo* findAlias(const String& alias);
 
     /**
      * Find the info object associated with an unique remote peer
@@ -885,7 +897,7 @@ public:
      * @param epId The endpoint's id to find
      * @return MGCPEndpoint pointer or 0 if not found
      */
-    MGCPEndpoint* findEp(const char* epId);
+    MGCPEndpoint* findEp(const String& epId);
 
     /**
      * Find a transaction by its id

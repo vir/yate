@@ -281,16 +281,14 @@ void MGCPEngine::detach(MGCPEndpoint* ep, bool del, bool delTrans)
 MGCPEndpoint* MGCPEngine::findEp(MGCPEndpoint* ep)
 {
     Lock lock(this);
-    ObjList* o = m_endpoints.find(ep);
-    return o ? static_cast<MGCPEndpoint*>(o->get()) : 0;
+    return m_endpoints.find(ep) ? ep : 0;
 }
 
 // Find an endpoint by its id
-MGCPEndpoint* MGCPEngine::findEp(const char* epId)
+MGCPEndpoint* MGCPEngine::findEp(const String& epId)
 {
     Lock lock(this);
-    ObjList* o = m_endpoints.find(epId);
-    return o ? static_cast<MGCPEndpoint*>(o->get()) : 0;
+    return static_cast<MGCPEndpoint*>(m_endpoints[epId]);
 }
 
 // find a transaction

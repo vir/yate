@@ -68,11 +68,24 @@ MGCPEpInfo* MGCPEndpoint::append(const char* endpoint, const char* host, int por
 }
 
 //  Find the info object associated with a remote peer
-MGCPEpInfo* MGCPEndpoint::find(const char* epId)
+MGCPEpInfo* MGCPEndpoint::find(const String& epId)
 {
     Lock lock(m_mutex);
-    ObjList* obj = m_remote.find(epId);
-    return obj ? static_cast<MGCPEpInfo*>(obj->get()) : 0;
+    return static_cast<MGCPEpInfo*>(m_remote[epId]);
+}
+
+//  Find the info object associated with a remote peer by alias name
+MGCPEpInfo* MGCPEndpoint::findAlias(const String& alias)
+{
+    if (alias.null())
+	return 0;
+    Lock lock(m_mutex);
+    for (ObjList* o = m_remote.skipNull(); o; o = o->skipNext()) {
+	MGCPEpInfo* info = static_cast<MGCPEpInfo*>(o->get());
+	if (alias == info->alias)
+	    return info;
+    }
+    return 0;
 }
 
 // Find the info object associated with an unique remote peer

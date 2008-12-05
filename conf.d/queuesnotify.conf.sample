@@ -4,7 +4,6 @@
 
 ; account: string: The account used to query the database
 ;account=
-account=reception
 
 ; notifyhanguponunload: boolean: Notify hangup for all queued calls when the
 ;  module is unloaded or the program terminates
@@ -40,5 +39,5 @@ account=reception
 ;  from received message to the resource.notify message: caller, called, callername
 ;callinfo=
 
-; cdr: string: The query used when a call is queued to get CDR data
-;query=
+; cdrinfo: string: The query used when a call is queued to get CDR data
+;cdrinfo=

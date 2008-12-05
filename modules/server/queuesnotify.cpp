@@ -143,6 +143,10 @@ public:
 class QueuesNotifyModule : public Module
 {
 public:
+    enum QueryType {
+	CallInfo,
+	CdrInfo,
+    };
     QueuesNotifyModule();
     ~QueuesNotifyModule();
     // Uninstall the relays and message handlers
@@ -151,7 +155,7 @@ public:
     // Reset call's notification flag
     void notifyCall(QueuedCall* call, Message* notify, int status);
     // Prepare a database message
-    Message* getDBMsg(const char* query, const char* caller);
+    Message* getDBMsg(QueryType type, const char* caller);
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
@@ -161,7 +165,7 @@ private:
     bool m_init;
     String m_account;
     String m_queryCallInfo;
-    String m_queryCdr;
+    String m_queryCdrInfo;
     ChanNotifyHandler* m_chanNotify;
     CallCdrHandler* m_callCdr;
 };
@@ -341,7 +345,7 @@ void QueuedCall::process(QueuedCall* call)
 
     // Get call info
     call->unlock();
-    Message* m = __plugin.getDBMsg("callinfo",call->m_caller);
+    Message* m = __plugin.getDBMsg(QueuesNotifyModule::CallInfo,call->m_caller);
     Array* callinfo = 0;
     processQueryDB(m,call,callinfo,"callinfo");
     call->lock();
@@ -374,9 +378,9 @@ void QueuedCall::process(QueuedCall* call)
 
     // Get CDR
     call->unlock();
-    m = __plugin.getDBMsg("cdr",call->m_caller);
+    m = __plugin.getDBMsg(QueuesNotifyModule::CdrInfo,call->m_caller);
     Array* cdr = 0;
-    processQueryDB(m,call,cdr,"cdr");
+    processQueryDB(m,call,cdr,"cdrinfo");
     call->lock();
     // Check if should return without notifying
     if (!call->notify(Queued) || Engine::exiting() || Thread::check(false)) {
@@ -626,15 +630,21 @@ void QueuesNotifyModule::notifyCall(QueuedCall* call, Message* notify, int statu
 }
 
 // Prepare a database message
-Message* QueuesNotifyModule::getDBMsg(const char* query, const char* caller)
+Message* QueuesNotifyModule::getDBMsg(QueryType type, const char* caller)
 {
     Lock lock(this);
-    if (!(query && *query && caller && *caller && m_account))
+    if (m_account.null() || null(caller))
 	return 0;
     String tmp;
-    if (m_queryCallInfo == query || m_queryCdr == query)
-	tmp = query;
-    if (!tmp)
+    switch (type) {
+	case CallInfo:
+	    tmp = m_queryCallInfo;
+	    break;
+	case CdrInfo:
+	    tmp = m_queryCdrInfo;
+	    break;
+    }
+    if (tmp.null())
 	return 0;
 
     Message* m = new Message("database");
@@ -727,15 +737,18 @@ void QueuesNotifyModule::initialize()
 
     // Caller info
     NamedList* queued = s_cfg.getSection("queued");
-    if (!queued)
-	queued = &dummy;
-    m_queryCallInfo = queued->getValue("callinfo");
-    m_queryCdr = queued->getValue("cdr");
-
-    if (!m_queryCallInfo)
-	Debug(&__plugin,DebugInfo,"Query 'callinfo' not configured");
-    if (!m_queryCdr)
-	Debug(&__plugin,DebugInfo,"Query 'cdr' not configured");
+    if (queued) {
+	m_queryCallInfo = queued->getValue("callinfo");
+	m_queryCdrInfo = queued->getValue("cdrinfo");
+	if (!m_queryCallInfo)
+	    Debug(&__plugin,DebugInfo,"Query 'callinfo' not configured");
+	if (!m_queryCdrInfo)
+	    Debug(&__plugin,DebugInfo,"Query 'cdrinfo' not configured");
+    }
+    else {
+	m_queryCallInfo.clear();
+	m_queryCdrInfo.clear();
+    }
 
     unlock();
 

@@ -397,7 +397,7 @@ bool CdrHandler::received(Message &msg)
     if (b)
 	rval = b->update(msg,m_type,msg.msgTime().usec());
     else
-	Debug("cdrbuild",((CdrHangup == m_type) ? DebugNote : DebugInfo),
+	Debug("cdrbuild",((CdrHangup == m_type) ? DebugMild : DebugInfo),
 	    "Got message '%s' for untracked id '%s'",
 	    msg.c_str(),id.c_str());
     if ((m_type == CdrRinging) || (m_type == CdrAnswer)) {
@@ -502,7 +502,7 @@ void CdrBuildPlugin::initialize()
 	Engine::install(new CdrHandler("call.ringing",CdrRinging));
 	Engine::install(new CdrHandler("call.answered",CdrAnswer));
 	Engine::install(new CdrHandler("call.update",CdrUpdate));
-	Engine::install(new CdrHandler("chan.hangup",CdrHangup));
+	Engine::install(new CdrHandler("chan.hangup",CdrHangup,150));
 	Engine::install(new CdrHandler("call.drop",CdrDrop));
 	Engine::install(new CdrHandler("engine.halt",EngHalt,150));
 	Engine::install(new StatusHandler);

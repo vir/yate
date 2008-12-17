@@ -920,11 +920,10 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 			tmp = item->getAttribute("subscription");
 			if (tmp)
 			    m->addParam(base + ".subscription",tmp);
-			XMLElement* group = item->findFirstChild("group");
-			if (group) {
-			    m->addParam(base + ".group",group->getText());
-			    TelEngine::destruct(group);
-			}
+			// Copy children
+			XMLElement* child = item->findFirstChild();
+			for (; child; child = item->findNextChild(child))
+			    m->addParam(base + "." + child->name(),child->getText());
 		    }
 		    TelEngine::destruct(query);
 		    m->addParam("contact.count",String(count));
@@ -943,10 +942,10 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 		m->setParam("contact",item->getAttribute("jid"));
 		addValidParam(*m,"contactname",item->getAttribute("name"));
 		addValidParam(*m,"ask",item->getAttribute("ask"));
-		// Get jid group(s)
-		XMLElement* group = item->findFirstChild(XMLElement::Group);
-		for (; group; group = item->findNextChild(group,XMLElement::Group))
-		    addValidParam(*m,"group",group->getText());
+		// Copy children
+		XMLElement* child = item->findFirstChild();
+		for (; child; child = item->findNextChild(child))
+		    addValidParam(*m,child->name(),child->getText());
 		Engine::enqueue(m);
 	    }
 	    break;

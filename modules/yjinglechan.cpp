@@ -3499,15 +3499,14 @@ void YJGDriver::initialize()
 	s_jabber = new YJBEngine(proto);
 	s_jingle = new YJGEngine(s_jabber,0);
 	s_message = new YJBMessage(s_jabber,1);
+        s_stream = new YJBStreamService(s_jabber,0);
 	// Create protocol dependent services
 	// Don't create presence service for client protocol: presence is kept by client streams
 	// Instantiate event handler for messages related to presence when running in client mode
 	if (s_jabber->protocol() != JBEngine::Client)
 	    s_presence = new YJBPresence(s_jabber,0);
-	else {
+	else
 	    s_clientPresence = new YJBClientPresence(s_jabber,0);
-	    s_stream = new YJBStreamService(s_jabber,0);
-	}
 	if (m_installIq)
 	    s_iqService = new YJBIqService(s_jabber,100);
 

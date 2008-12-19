@@ -3392,8 +3392,11 @@ void YateSIPConnection::doInfo(SIPTransaction* t)
 	    }
 	}
     }
-    else if (sb)
-	sig = sb->text().toInteger(info_signals,-1);
+    else if (sb) {
+	String tmp = sb->text();
+	tmp.trimSpaces();
+	sig = tmp.toInteger(info_signals,-1);
+    }
     else {
 	t->setResponse(415);
 	return;

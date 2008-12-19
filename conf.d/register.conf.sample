@@ -69,8 +69,9 @@
 
 [user.auth]
 ; Query and result name for the user.auth message
+; The result must not be empty for password authentication to work
 
-;query=SELECT password FROM users WHERE username='${username}'
+;query=SELECT password FROM users WHERE username='${username}' AND password IS NOT NULL AND password<>''
 ;result=password
 
 

@@ -577,9 +577,9 @@ void QueuesModule::onPickup(Message& msg, String qname)
 	    Engine::enqueue(m);
 	    return;
 	}
+	msg.setParam("error","nocall");
+	msg.setParam("reason","The call is not in queue");
     }
-    msg.setParam("error","nocall");
-    msg.setParam("reason","There are no calls in queue");
 }
 
 // Handle call.execute messages that put or pick up calls in a queue

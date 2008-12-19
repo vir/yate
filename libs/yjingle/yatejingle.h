@@ -210,7 +210,8 @@ public:
 
     /**
      * Constructor
-     * @param t Media type as enumeration
+     * @param m Media type as enumeration
+     * @param cryptoMandatory True to require media encryption
      */
     inline JGRtpMediaList(Media m = MediaMissing, bool cryptoMandatory = false)
 	: m_media(m), m_cryptoMandatory(cryptoMandatory)
@@ -237,7 +238,7 @@ public:
 
     /**
      * Find a data payload by its id
-     * @param value The value to compare with
+     * @param id Identifier of media to find
      * @return JGRtpMedia pointer or 0 if not found
      */
     JGRtpMedia* findMedia(const String& id);
@@ -381,15 +382,15 @@ public:
 
     /**
      * Find a candidate by its component value
-     * @component The value to search
+     * @param component The value to search
      * @return JGRtpCandidate pointer or 0
      */
     JGRtpCandidate* findByComponent(unsigned int component);
 
     /**
      * Create a 'transport' element from this object. Add candidates
-     * @addCandidates True to add the candidate children
-     * @addAuth RtpIceUdp only: add auth data
+     * @param addCandidates True to add the candidate children
+     * @param addAuth RtpIceUdp only: add auth data
      * @return Valid XMLElement pointer
      */
     XMLElement* toXML(bool addCandidates, bool addAuth) const;
@@ -517,11 +518,11 @@ public:
 
     /**
      * Build a 'content' XML element from this object
-     * @minimum Minimum data (only creator and name)
-     * @addDesc True to add the description child
-     * @addTrans True to add the transport child
-     * @addCandidates True to add the transport candidate children
-     * @addAuth RtpIceUdp only: add auth data
+     * @param minimum Minimum data (only creator and name)
+     * @param addDesc True to add the description child
+     * @param addTrans True to add the transport child
+     * @param addCandidates True to add the transport candidate children
+     * @param addAuth RtpIceUdp only: add auth data
      * @return Valid XMLElement pointer
      */
     XMLElement* toXml(bool minimum, bool addDesc,
@@ -789,7 +790,7 @@ public:
     /**
      * Send a session info element to the remote peer.
      * This method is thread safe
-     * @param data The XMLElement carried by the session info element
+     * @param xml The XMLElement carried by the session info element
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @return False on failure
      */

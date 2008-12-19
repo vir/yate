@@ -2252,7 +2252,7 @@ public:
     /**
      * Constructor
      * @param name The name of this logic
-     * @param priority The priority of this logic
+     * @param prio The priority of this logic
      */
     DefaultLogic(const char* name = "default", int prio = 100);
 

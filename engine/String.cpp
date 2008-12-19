@@ -118,7 +118,7 @@ using namespace TelEngine;
 
 static bool isWordBreak(char c, bool nullOk = false)
 {
-    return (c == ' ' || c == '\t' || c == '\n' || (nullOk && !c));
+    return (c == ' ' || c == '\t' || c == '\r' || c == '\n' || (nullOk && !c));
 }
 
 // Decode a single nibble, return -1 on error
@@ -514,6 +514,21 @@ String& String::trimBlanks()
 	const char *e = s;
 	for (const char *p = e; *p; p++)
 	    if (*p != ' ' && *p != '\t')
+		e = p+1;
+	assign(s,e-s);
+    }
+    return *this;
+}
+
+String& String::trimSpaces()
+{
+    if (m_string) {
+	const char *s = m_string;
+	while (*s == ' ' || *s == '\t' || *s == '\v' || *s == '\f' || *s == '\r' || *s == '\n')
+	    s++;
+	const char *e = s;
+	for (const char *p = e; *p; p++)
+	    if (*p != ' ' && *p != '\t' || *p == '\v' || *p == '\f' || *p == '\r' || *p == '\n')
 		e = p+1;
 	assign(s,e-s);
     }

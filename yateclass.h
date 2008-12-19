@@ -1405,6 +1405,12 @@ public:
     String& trimBlanks();
 
     /**
+     * Strip off leading and trailing whitespace characters
+     *  (blank, tabs, form-feed, newlines)
+     */
+    String& trimSpaces();
+
+    /**
      * Override GenObject's method to return this String
      * @return A reference to this String
      */

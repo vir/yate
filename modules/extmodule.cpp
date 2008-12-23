@@ -250,6 +250,7 @@ private:
     MsgWatcher* m_watcher;
     bool m_selfWatch;
     bool m_reenter;
+    bool m_setdata;
     int m_timeout;
     bool m_timebomb;
     bool m_restart;
@@ -680,7 +681,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
     : Mutex(true),
       m_role(RoleUnknown), m_dead(false), m_use(1), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
-      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
+      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(script), m_args(args)
 {
@@ -697,7 +698,7 @@ ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, i
     : Mutex(true),
       m_role(role), m_dead(false), m_use(1), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
-      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false),
+      m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
       m_timeout(s_timeout), m_timebomb(s_timebomb), m_restart(false),
       m_script(name)
 {
@@ -1313,6 +1314,11 @@ bool ExtModReceiver::processLine(const char* line)
 		val = m_reenter;
 		ok = true;
 	    }
+	    else if (id == "setdata") {
+		m_setdata = val.toBoolean(m_setdata);
+		val = m_setdata;
+		ok = true;
+	    }
 	    else if (id == "selfwatch") {
 		m_selfWatch = val.toBoolean(m_selfWatch);
 		val = m_selfWatch;
@@ -1357,18 +1363,19 @@ bool ExtModReceiver::processLine(const char* line)
 		lock();
 	    }
 	    ExtModChan* chan = 0;
-	    if ((m_role == RoleChannel) && !m_chan && (*m == "call.execute")) {
+	    if ((m_role == RoleChannel) && !m_chan && m_setdata && (*m == "call.execute")) {
 		// we delayed channel creation as there was nothing to ref() it
 		chan = new ExtModChan(this);
 		m_chan = chan;
 		m->setParam("id",chan->id());
 	    }
-	    m->userData(m_chan);
+	    if (m_setdata)
+		m->userData(m_chan);
 	    // now the newly created channel is referenced by the message
 	    if (chan)
 		chan->deref();
 	    id = m->id();
-	    if (id) {
+	    if (id && !chan) {
 		// Copy the user data pointer from waiting message with same id
 		ObjList *p = &m_waiting;
 		for (; p; p=p->next()) {

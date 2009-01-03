@@ -30,6 +30,8 @@
 // For SpanDSP we have to ask for various C99 stuff
 #define __STDC_LIMIT_MACROS
 
+#define SPANDSP_EXPOSE_INTERNAL_STRUCTURES
+
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -242,16 +244,18 @@ void FaxConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 }
 
 
-static void phase_b_handler(t30_state_t* s, void* user_data, int result)
+static int phase_b_handler(t30_state_t* s, void* user_data, int result)
 {
     if (user_data)
 	static_cast<FaxWrapper*>(user_data)->phaseB(result);
+    return T30_ERR_OK;
 }
 
-static void phase_d_handler(t30_state_t* s, void* user_data, int result)
+static int phase_d_handler(t30_state_t* s, void* user_data, int result)
 {
     if (user_data)
 	static_cast<FaxWrapper*>(user_data)->phaseD(result);
+    return T30_ERR_OK;
 }
 
 static void phase_e_handler(t30_state_t* s, void* user_data, int result)
@@ -301,7 +305,7 @@ void FaxWrapper::init(t30_state_t* t30, const char* ident, const char* file, boo
 {
     if (!ident)
 	ident = "anonymous";
-    t30_set_local_ident(t30,ident);
+    t30_set_tx_sender_ident(t30,ident);
     t30_set_phase_e_handler(t30,phase_e_handler,this);
     t30_set_phase_d_handler(t30,phase_d_handler,this);
     t30_set_phase_b_handler(t30,phase_b_handler,this);
@@ -358,7 +362,6 @@ void FaxWrapper::phaseD(int result)
 	result,t30_completion_code_to_str(result),this);
 
     t30_stats_t t;
-    char ident[21];
 
     t30_get_transfer_statistics(t30(), &t);
     Debug(this,DebugAll,"bit rate %d", t.bit_rate);
@@ -370,11 +373,8 @@ void FaxWrapper::phaseD(int result)
     Debug(this,DebugAll,"compression type %d", t.encoding);
     Debug(this,DebugAll,"image size %d", t.image_size);
 
-    t30_get_local_ident(t30(), ident);
-    Debug(this,DebugAll,"local ident '%s'", ident);
-
-    t30_get_far_ident(t30(), ident);
-    Debug(this,DebugAll,"remote ident '%s'", ident);
+    Debug(this,DebugAll,"local ident '%s'", t30_get_tx_ident(t30()));
+    Debug(this,DebugAll,"remote ident '%s'", t30_get_rx_ident(t30()));
 }
 
 // Called to report end of transfer
@@ -395,7 +395,7 @@ FaxTerminal::FaxTerminal(const char *file, const char *ident, bool sender, bool 
 	(sender ? "transmit" : "receive"),
 	file,this);
     fax_init(&m_fax,iscaller);
-    init(&m_fax.t30_state,ident,file,sender);
+    init(fax_get_t30_state(&m_fax),ident,file,sender);
     fax_set_transmit_on_idle(&m_fax,1);
 }
 
@@ -416,8 +416,8 @@ void FaxTerminal::run()
 
 	tpos += ((u_int64_t)1000000*r/16000);
 	int64_t dly = tpos - Time::now();
-	if (dly > 10000)
-	    dly = 10000;
+	if (dly > 30000)
+	    dly = 30000;
 	if (dly > 0)
 	    Thread::usleep(dly,true);
     }
@@ -472,8 +472,8 @@ T38Terminal::T38Terminal(const char *file, const char *ident, bool sender, bool 
 	(sender ? "transmit" : "receive"),
 	file,this);
     t38_terminal_init(&m_t38,iscaller,txHandler,this);
-    t38_set_t38_version(&m_t38.t38,1);
-    init(&m_t38.t30_state,ident,file,sender);
+    t38_set_t38_version(&m_t38.t38_fe.t38,1);
+    init(&m_t38.t30,ident,file,sender);
 }
 
 T38Terminal::~T38Terminal()
@@ -501,7 +501,7 @@ int T38Terminal::txHandler(t38_core_state_t* t38s, void* userData,
 void T38Terminal::rxData(const DataBlock& data, unsigned long tStamp)
 {
     Debug(this,DebugStub,"Please implement T38Terminal::rxData()");
-    t38_core_rx_ifp_packet(&m_t38.t38,tStamp,(uint8_t*)data.data(),data.length());
+    t38_core_rx_ifp_packet(&m_t38.t38_fe.t38,(uint8_t*)data.data(),data.length(),tStamp);
 }
 
 int T38Terminal::txData(const void* buf, int len, int seq, int count)

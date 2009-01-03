@@ -563,6 +563,7 @@ SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -Wall -Werror"
 AC_TRY_COMPILE([
 #define __STDC_LIMIT_MACROS
+#define SPANDSP_EXPOSE_INTERNAL_STRUCTURES
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -573,9 +574,9 @@ fax_state_t fax_state;
 t38_terminal_state_t t38_t_state;
 t38_gateway_state_t t38_g_state;
 fax_init(&fax_state,TRUE);
-t30_set_ecm_capability(&fax_state.t30_state,1);
-t30_set_supported_compressions(&fax_state.t30_state,T30_SUPPORT_T6_COMPRESSION);
-t30_set_tx_file(&fax_state.t30_state,"abc",-1,-1);
+t30_set_ecm_capability(fax_get_t30_state(&fax_state),1);
+t30_set_supported_compressions(fax_get_t30_state(&fax_state),T30_SUPPORT_T6_COMPRESSION);
+t30_set_tx_file(fax_get_t30_state(&fax_state),"abc",-1,-1);
 fax_set_transmit_on_idle(&fax_state,1);
 t38_terminal_init(&t38_t_state,TRUE,NULL,NULL);
 t38_gateway_init(&t38_g_state,NULL,NULL);

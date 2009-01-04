@@ -2,11 +2,12 @@
 
 awk -f "$1/gen.awk"
 sc="sox -r 8000 -c 1 -t raw"
-b=-1
-w=-2
-# for very old versions of sox you may need to uncomment the following 2 lines:
-# b=-b
-# w=-w
+b=-b
+w=-w
+if sox --help 2>&1 | grep -q /-4; then
+    b=-1
+    w=-2
+fi
 
 $sc $w -s 16b.raw $b -U -t raw s2u
 $sc $w -s 16b.raw $b -A -t raw s2a

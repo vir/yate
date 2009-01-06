@@ -4433,6 +4433,7 @@ bool SipHandler::received(Message &msg)
     if (!msg.getBoolValue("wait")) {
 	// no answer requested - start transaction and forget
 	plugin.ep()->engine()->addMessage(sip);
+	sip->deref();
 	return true;
     }
     YateSIPGenerate gen(sip);

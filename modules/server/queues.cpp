@@ -271,10 +271,12 @@ bool CallsQueue::addCall(Message& msg)
     }
     msg.setParam("source",tmp);
     msg.setParam("callto",s_chanIncoming);
+    int pos = -1;
     QueuedCall* call = new QueuedCall(msg.getValue("id"),msg.getValue("caller"),msg.getValue("billid"),msg.getValue("callername"));
     // high priority calls will go in queue's head instead of tail
     if (msg.getBoolValue("priority")) {
 	m_calls.insert(call);
+	pos = 0;
 	if (m_notify && m_detail) {
 	    // all other calls' position in queue changed - notify
 	    ObjList* l = m_calls.skipNull();
@@ -285,9 +287,13 @@ bool CallsQueue::addCall(Message& msg)
 	    }
 	}
     }
-    else
+    else {
 	m_calls.append(call);
+	pos = position(call);
+    }
     notify("queued",call);
+    if (pos >= 0)
+	msg.setParam("position",String(pos));
     return true;
 }
 

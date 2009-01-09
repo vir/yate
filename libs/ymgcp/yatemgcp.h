@@ -497,9 +497,17 @@ public:
      * Constructor. Construct this endpoint id from a string
      * @param src The string to construct from
      */
-    inline MGCPEndpointId(String& src)
+    inline MGCPEndpointId(const String& src)
 	: m_port(0)
 	{ set(src); }
+
+    /**
+     * Copy constructor
+     * @param value Original Endpoint ID to copy
+     */
+    inline MGCPEndpointId(const MGCPEndpointId& value)
+	: m_port(0)
+	{ set(value.user(),value.host(),value.port()); }
 
     /**
      * Constructor. Construct this endpoint id
@@ -558,7 +566,7 @@ public:
      * Set this endpoint id. Convert it to lower case
      * @param src The string to construct from
      */
-    inline void set(String& src) {
+    inline void set(const String& src) {
 	    URI uri(src);
 	    set(uri.getUser(),uri.getHost(),uri.getPort());
 	}

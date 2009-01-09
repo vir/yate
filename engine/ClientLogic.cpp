@@ -1543,8 +1543,8 @@ bool DefaultLogic::help(const String& name, Window* wnd)
     }
     // if the opening of the help file succeeds, we set it as the text of the help window
     int rd = 0;
-    unsigned int len = f.length();
-    if (len) {
+    unsigned int len = (unsigned int)f.length();
+    if (len != (unsigned int)-1) {
 	String helpText(' ',len);
 	rd = f.readData(const_cast<char*>(helpText.c_str()),len);
 	if (rd == (int)len) {

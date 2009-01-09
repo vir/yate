@@ -30,7 +30,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	yrtpchan.yate ystunchan.yate \
 	ysipchan.yate \
 	yiaxchan.yate \
-	yjinglechan.yate jinglefeatures.yate \
+	yjinglechan.yate jingle/jinglefeatures.yate \
 	ysockschan.yate filetransfer.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
@@ -233,17 +233,21 @@ yiaxchan.yate: ../libs/yiax/libyateiax.a
 yiaxchan.yate: LOCALFLAGS = -I@top_srcdir@/libs/yiax
 yiaxchan.yate: LOCALLIBS = -L../libs/yiax -lyateiax
 
-yjinglechan.yate jinglefeatures.yate: ../libyatejingle.so
-yjinglechan.yate jinglefeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjingle
-yjinglechan.yate jinglefeatures.yate: LOCALLIBS = -lyatejingle
+yjinglechan.yate jingle/jinglefeatures.yate: ../libyatejingle.so
+yjinglechan.yate jingle/jinglefeatures.yate: LOCALFLAGS = -I@top_srcdir@/libs/yxml -I@top_srcdir@/libs/yjingle
+yjinglechan.yate jingle/jinglefeatures.yate: LOCALLIBS = -lyatejingle
 
 server/dbpbx.yate server/pbxassist.yate: ../libs/ypbx/libyatepbx.a
 server/dbpbx.yate server/pbxassist.yate: LOCALFLAGS = -I@top_srcdir@/libs/ypbx
 server/dbpbx.yate server/pbxassist.yate: LOCALLIBS = ../libs/ypbx/libyatepbx.a
 
-server/mgcpgw.yate server/mgcpca.yate: ../libyatemgcp.so
-server/mgcpgw.yate server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
-server/mgcpgw.yate server/mgcpca.yate: LOCALLIBS = -lyatemgcp
+server/mgcpca.yate: ../libyatemgcp.so ../libyatesig.so
+server/mgcpca.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp -I@top_srcdir@/libs/ysig
+server/mgcpca.yate: LOCALLIBS = -lyatemgcp -lyatesig
+
+server/mgcpgw.yate: ../libyatemgcp.so
+server/mgcpgw.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymgcp
+server/mgcpgw.yate: LOCALLIBS = -lyatemgcp
 
 ilbccodec.yate: ../libs/ilbc/libilbc.a
 ilbccodec.yate: LOCALLIBS = ../libs/ilbc/libilbc.a

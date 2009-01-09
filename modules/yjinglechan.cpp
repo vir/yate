@@ -4036,6 +4036,7 @@ YJGDriver::YJGDriver()
 {
     Output("Loaded module YJingle");
     m_statusCmd << "status " << name();
+    Engine::extraPath("jingle");
 }
 
 YJGDriver::~YJGDriver()

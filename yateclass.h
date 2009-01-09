@@ -2549,6 +2549,44 @@ public:
      */
     static u_int32_t secNow();
 
+    /**
+     * Build EPOCH time from date/time components
+     * @param year The year component of the date. Must be greater then 1969
+     * @param month The month component of the date (1 to 12)
+     * @param day The day component of the date (1 to 31)
+     * @param hour The hour component of the time (0 to 23). The hour can be 24
+     *  if minute and sec are 0
+     * @param minute The minute component of the time (0 to 59)
+     * @param sec The seconds component of the time (0 to 59)
+     * @param offset Optional number of seconds to be added/substracted
+     *  to/from result. It can't exceed the number of seconds in a day
+     * @return EPOCH time in seconds, -1 on failure
+     */
+    static unsigned int toEpoch(int year, unsigned int month, unsigned int day,
+	unsigned int hour, unsigned int minute, unsigned int sec, int offset = 0);
+
+    /**
+     * Split a given EPOCH time into its date/time components
+     * @param epochTimeSec EPOCH time in seconds
+     * @param year The year component of the date
+     * @param month The month component of the date (1 to 12)
+     * @param day The day component of the date (1 to 31)
+     * @param hour The hour component of the time (0 to 23)
+     * @param minute The minute component of the time (0 to 59)
+     * @param sec The seconds component of the time (0 to 59)
+     * @return True on succes, false if conversion failed
+     */
+    static bool toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
+	unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec);
+
+    /**
+     * Check if an year is a leap one
+     * @param year The year to check
+     * @return True if the given year is a leap one
+     */
+    static inline bool isLeap(unsigned int year)
+	{ return (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)); }
+
 private:
     u_int64_t m_time;
 };
@@ -3771,6 +3809,34 @@ public:
      */
     static void preExec();
 
+    /**
+     * Get the last thread error
+     * @return The value returned by GetLastError() (on Windows) or
+     *  the value of C library 'errno' variable otherwise
+     */
+    static int lastError();
+
+    /**
+     * Get the last thread error's string from system.
+     * @param buffer The destination string
+     * @return True if an error string was retrieved. If false is returned, the buffer
+     *  is filled with a generic string indicating an unknown error and its code
+     */
+    static inline bool errorString(String& buffer)
+	{ return errorString(buffer,lastError()); }
+
+    /**
+     * Get an error string from system.
+     * On Windows the code parameter must be a code returned by GetLastError().
+     * Otherwise, the error code should be a valid value for the C library 'errno'
+     *  variable
+     * @param buffer The destination string
+     * @param code The error code
+     * @return True if an error string was retrieved. If false is returned, the buffer
+     *  is filled with a generic string indicating an unknown error and its code
+     */
+    static bool errorString(String& buffer, int code);
+
 protected:
     /**
      * Creates and starts a new thread
@@ -4161,6 +4227,15 @@ class YATE_API File : public Stream
 {
 public:
     /**
+     * Enumerate seek start position
+     */
+    enum SeekPos {
+	SeekBegin,                       // Seek from file begine
+	SeekEnd,                         // Seek from file end
+	SeekCurrent                      // Seek from current position
+    };
+
+    /**
      * Default constructor, creates a closed file
      */
     File();
@@ -4243,7 +4318,23 @@ public:
      * Find the length of the file if it has one
      * @return Length of the file or zero if length is not defined
      */
-    virtual unsigned int length();
+    virtual int64_t length();
+
+    /**
+     * Set the file read/write pointer
+     * @param pos The seek start as enumeration
+     * @param offset The number of bytes to move the pointer from starting position
+     * @return The new position of the file read/write pointer. Negative on failure
+     */
+    virtual int64_t seek(SeekPos pos, int64_t offset = 0);
+
+    /**
+     * Set the file read/write pointer from begin of file
+     * @param offset The position in file to move the pointer
+     * @return The new position of the file read/write pointer. Negative on failure
+     */
+    inline int64_t seek(int64_t offset = 0)
+	{ return seek(SeekBegin,offset); }
 
     /**
      * Write data to an open file
@@ -4262,11 +4353,79 @@ public:
     virtual int readData(void* buffer, int length);
 
     /**
+     * Retrive the file's modification time (the file must be already opened)
+     * @param secEpoch File creation time (seconds since Epoch)
+     * @return True on success
+     */
+    bool getFileTime(unsigned int& secEpoch);
+
+    /**
+     * Build the MD5 hex digest of a file. The file must be opened for read access.
+     * This method will move the file pointer 
+     * @param buffer Destination buffer
+     * @return True on success 
+     */
+    virtual bool md5(String& buffer);
+
+    /**
+     * Set a file's modification time.
+     * @param name Path and name of the file
+     * @param secEpoch File modification time (seconds since Epoch)
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success
+     */
+    static bool setFileTime(const char* name, unsigned int secEpoch, int* error = 0);
+
+    /**
+     * Retrieve a file's modification time
+     * @param name Path and name of the file
+     * @param secEpoch File modification time (seconds since Epoch)
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success
+     */
+    static bool getFileTime(const char* name, unsigned int& secEpoch, int* error = 0);
+
+    /**
+     * Check if a file exists
+     * @param name The file to check
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True if the file exists
+     */
+    static bool exists(const char* name, int* error = 0);
+
+    /**
+     * Rename (move) a file (or directory) entry from the filesystem
+     * @param oldFile Path and name of the file to rename
+     * @param newFile The new path and name of the file
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True if the file was successfully renamed (moved)
+     */
+    static bool rename(const char* oldFile, const char* newFile, int* error = 0);
+
+    /**
      * Deletes a file entry from the filesystem
      * @param name Absolute path and name of the file to delete
+     * @param error Optional pointer to error code to be filled on failure
      * @return True if the file was successfully deleted
      */
-    static bool remove(const char* name);
+    static bool remove(const char* name, int* error = 0);
+
+    /**
+     * Build the MD5 hex digest of a file.
+     * @param name The file to build MD5 from
+     * @param buffer Destination buffer
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success 
+     */
+    static bool md5(const char* name, String& buffer, int* error = 0);
+
+    /**
+     * Create a folder (directory). It only creates the last directory in the path
+     * @param path The folder path
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success 
+     */
+    static bool mkDir(const char* path, int* error = 0);
 
     /**
      * Create a pair of unidirectionally pipe connected streams

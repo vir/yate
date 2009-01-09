@@ -52,6 +52,8 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <utime.h>
 #endif
 
 #ifndef SHUT_RD
@@ -72,6 +74,36 @@
 using namespace TelEngine;
 
 static Mutex s_mutex;
+
+
+#ifdef _WINDOWS
+
+// The number of seconds from January 1, 1601 (Windows FILETIME)
+//  to EPOCH January 1, 1970
+#define FILETIME_EPOCH_SEC 11644473600
+
+// Convert from FILETIME (100 nsec units since January 1, 1601)
+//  to time_t (seconds since January 1, 1970)
+static inline unsigned int ftToEpoch(FILETIME& ft)
+{
+    // FILETIME in seconds
+    u_int64_t rval = ((ULARGE_INTEGER*)&ft)->QuadPart / 10000000;
+    // EPOCH time in seconds
+    rval -= FILETIME_EPOCH_SEC;
+    return (unsigned int)rval;
+}
+
+// Convert from time_t (seconds since January 1, 1970)
+//  to FILETIME (100 nsec units since January 1, 1601)
+static void epochToFt(unsigned int secEpoch, FILETIME& ft)
+{
+    u_int64_t time = (secEpoch + FILETIME_EPOCH_SEC) * 10000000;
+    ft.dwLowDateTime = (DWORD)time;
+    ft.dwHighDateTime = (DWORD)(time >> 32);
+}
+
+#endif
+
 
 SocketAddr::SocketAddr(const struct sockaddr* addr, socklen_t len)
     : m_address(0), m_length(0)
@@ -536,8 +568,14 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	copyError();
 	return false;
     }
-    if (append)
-	SetFilePointer(h,0,NULL,FILE_END);
+    // Move file pointer if append. Result might be the same as the error code
+    if (append &&
+	::SetFilePointer(h,0,NULL,FILE_END) == INVALID_SET_FILE_POINTER &&
+	::GetLastError() != NO_ERROR) {
+	copyError();
+	::CloseHandle(h);
+	return false;
+    }
 #else
     int flags = 0;
     if (canWrite)
@@ -561,26 +599,55 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
     return true;
 }
 
-unsigned int File::length()
+int64_t File::length()
 {
     if (!valid())
 	return 0;
 #ifdef _WINDOWS
-    DWORD sz = GetFileSize(m_handle,NULL);
-    if (sz == (DWORD)-1) {
+    LARGE_INTEGER li;
+    li.LowPart = ::GetFileSize(m_handle,(LPDWORD)(&li.HighPart));
+    if (li.LowPart == INVALID_FILE_SIZE && ::GetLastError() != NO_ERROR) {
 	copyError();
-	return 0;
+	return -1;
     }
-    return sz;
+    return li.QuadPart;
 #else
-    off_t pos = ::lseek(m_handle,0,SEEK_CUR);
-    if (pos == (off_t)-1) {
+    int64_t pos = seek(SeekCurrent);
+    if (pos < 0) {
 	copyError();
 	return 0;
     }
-    off_t len = ::lseek(m_handle,0,SEEK_END);
-    ::lseek(m_handle,pos,SEEK_SET);
-    return (len == (off_t)-1) ? 0 : len;
+    int64_t len = seek(SeekEnd);
+    seek(SeekBegin,pos);
+    return len;
+#endif
+}
+
+// Set the file read/write pointer
+int64_t File::seek(SeekPos pos, int64_t offset)
+{
+    if (!valid())
+	return -1;
+#ifdef _WINDOWS
+    int whence = (pos == SeekBegin) ? FILE_BEGIN : ((pos == SeekEnd) ? FILE_END : FILE_CURRENT);
+    LARGE_INTEGER li;
+    li.QuadPart = offset;
+    li.LowPart = ::SetFilePointer(m_handle,li.LowPart,&li.HighPart,whence);
+    // Check low 32bit value and the last error
+    // It might have the same as the error code
+    if (li.LowPart == INVALID_SET_FILE_POINTER && ::GetLastError() != NO_ERROR) {
+	copyError();
+	return -1;
+    }
+    return li.QuadPart;
+#else
+    int whence = (pos == SeekBegin) ? SEEK_SET : ((pos == SeekEnd) ? SEEK_END : SEEK_CUR);
+    off_t p = ::lseek(m_handle,(off_t)offset,whence);
+    if (p == (off_t)-1) {
+	copyError();
+	return -1;
+    }
+    return (int64_t)p;
 #endif
 }
 
@@ -652,11 +719,212 @@ bool File::createPipe(File& reader, File& writer)
     return false;
 }
 
-bool File::remove(const char* name)
+// Retrive the file's modification time (the file must be already opened)
+bool File::getFileTime(unsigned int& secEpoch)
 {
-    if (null(name))
+#ifdef _WINDOWS
+    FILETIME ftWrite;
+    if (::GetFileTime(handle(),NULL,NULL,&ftWrite)) {
+	clearError();
+	secEpoch = ftToEpoch(ftWrite);
+	return true;
+    }
+#else
+    struct stat st;
+    if (0 == ::fstat(handle(),&st)) {
+	clearError();
+	secEpoch = st.st_mtime;
+	return true;
+    }
+#endif
+    copyError();
+    return false;
+}
+
+// Build the MD5 hex digest of an opened file.
+bool File::md5(String& buffer)
+{
+    if (-1 == seek())
 	return false;
-    return !::unlink(name);
+    MD5 md5;
+    unsigned char buf[65536];
+    bool ok = false;
+    unsigned int retry = 3;
+    while (retry) {
+	int n = readData(buf,sizeof(buf));
+	if (n < 0) {
+	    if (canRetry())
+		retry--;
+	    else
+		retry = 0;
+	    continue;
+	}
+	if (n == 0) {
+	    ok = true;
+	    break;
+	}
+	DataBlock tmp(buf,n,false);
+	md5 << tmp;
+	tmp.clear(false);
+    }
+    if (ok)
+	buffer = md5.hexDigest();
+    else
+	buffer = "";
+    return ok;
+}
+
+
+// Set last error and return false
+static inline bool getLastError(int* error)
+{
+    if (error)
+	*error = Thread::lastError();
+    return false;
+}
+
+// Check if a file name is non null
+// Set error and return false if it is
+static inline bool fileNameOk(const char* name, int* error)
+{
+    if (!null(name))
+	return true;
+    if (error)
+#ifdef _WINDOWS
+	*error = ERROR_INVALID_PARAMETER;
+#else
+	*error = EINVAL;
+#endif
+    return false;
+}
+
+// Set a file's modification time
+bool File::setFileTime(const char* name, unsigned int secEpoch, int* error)
+{
+    if (!fileNameOk(name,error))
+	return false;
+#ifdef _WINDOWS
+    File f;
+    if (f.openPath(name,true)) {
+	FILETIME ftWrite;
+	epochToFt(secEpoch,ftWrite);
+	bool ok = (0 != ::SetFileTime(f.handle(),NULL,NULL,&ftWrite));
+	if (!ok && error)
+	    *error = ::GetLastError();
+	f.terminate();
+	return ok;
+    }
+#else
+    struct stat st;
+    if (0 == ::stat(name,&st)) {
+	struct utimbuf tb;
+	tb.actime = st.st_atime;
+	tb.modtime = secEpoch;
+	if (0 == ::utime(name,&tb))
+	    return true;
+    }
+#endif
+    return getLastError(error);
+}
+
+// Retrieve a file's modification time
+bool File::getFileTime(const char* name, unsigned int& secEpoch, int* error)
+{
+    if (!fileNameOk(name,error))
+	return false;
+#ifdef _WINDOWS
+    WIN32_FILE_ATTRIBUTE_DATA fa;
+    if (::GetFileAttributesExA(name,GetFileExInfoStandard,&fa)) {
+	secEpoch = ftToEpoch(fa.ftLastWriteTime);
+	return true;
+    }
+#else
+    struct stat st;
+    if (0 == ::stat(name,&st)) {
+	secEpoch = st.st_mtime;
+	return true;
+    }
+#endif
+    return getLastError(error);
+}
+
+// Check if a file exists
+bool File::exists(const char* name, int* error)
+{
+    if (!fileNameOk(name,error))
+	return false;
+#ifdef _WINDOWS
+    WIN32_FIND_DATA d;
+    HANDLE h = ::FindFirstFile(name,&d);
+    if (h != invalidHandle()) {
+	::FindClose(h);
+	return true;
+    }
+#else
+    if (0 == ::access(name,F_OK))
+	return true;
+#endif
+    return getLastError(error);
+}
+
+// Rename (move) a file (or directory) entry from the filesystem
+bool File::rename(const char* oldFile, const char* newFile, int* error)
+{
+    if (!(fileNameOk(oldFile,error) && fileNameOk(newFile,error)))
+	return false;
+#ifdef _WINDOWS
+    DWORD flags = MOVEFILE_COPY_ALLOWED |  // Allow moving file on another volume
+	MOVEFILE_REPLACE_EXISTING |        // Replace existing
+	MOVEFILE_WRITE_THROUGH;            // Don't return until copy/delete is performed
+    if (::MoveFileExA(oldFile,newFile,flags))
+	return true;
+#else
+    if (0 == ::rename(oldFile,newFile))
+	return true;
+#endif
+    return getLastError(error);
+}
+
+bool File::remove(const char* name, int* error)
+{
+    if (!fileNameOk(name,error))
+	return false;
+#ifdef _WINDOWS
+    if (::DeleteFileA(name))
+	return true;
+#else
+    if (0 == ::unlink(name))
+	return true;
+#endif
+    return getLastError(error);
+}
+
+// Build the MD5 hex digest of a file.
+bool File::md5(const char* name, String& buffer, int* error)
+{
+    File f;
+    bool ok = false;
+    if (f.openPath(name,false,true) && f.md5(buffer))
+	ok = true;
+    else if (error)
+        *error = f.error();
+    f.terminate();
+    return ok;
+}
+
+// Create a folder (directory)
+bool File::mkDir(const char* path, int* error)
+{
+    if (!fileNameOk(path,error))
+	return false;
+#ifdef _WINDOWS
+    if (::CreateDirectoryA(path,NULL))
+	return true;
+#else
+    if (0 == ::mkdir(path,(mode_t)-1))
+	return true;
+#endif
+    return getLastError(error);
 }
 
 

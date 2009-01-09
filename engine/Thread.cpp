@@ -640,4 +640,36 @@ void Thread::preExec()
 #endif
 }
 
+// Get the last thread error
+int Thread::lastError()
+{
+#ifdef _WINDOWS
+    return ::GetLastError();
+#else
+    return errno;
+#endif
+}
+
+// Get an error string from system.
+bool Thread::errorString(String& buffer, int code)
+{
+#ifdef _WINDOWS
+    LPTSTR buf = 0;
+    DWORD res = FormatMessageA(
+	FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+	NULL,code,0,(LPTSTR)&buf,0,0);
+    if (buf) {
+	if (res > 0)
+	    buffer.assign(buf,res);
+	::LocalFree(buf);
+    }
+#else
+    buffer = ::strerror(code);
+#endif
+    if (buffer)
+	return true;
+    buffer << "Unknown error (code=" << code << ")";
+    return false;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

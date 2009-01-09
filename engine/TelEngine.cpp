@@ -520,6 +520,83 @@ void Time::toTimeval(struct timeval* tv, u_int64_t usec)
     }
 }
 
+// Build EPOCH time from date/time components
+unsigned int Time::toEpoch(int year, unsigned int month, unsigned int day,
+	unsigned int hour, unsigned int minute, unsigned int sec, int offset)
+{
+    Debug(DebugAll,"Time::toEpoch(%d,%u,%u,%u,%u,%u,%d)",
+	year,month,day,hour,minute,sec,offset);
+    if (year < 1970)
+	return (unsigned int)-1;
+    if (month < 1 || month > 12 || !day)
+	return (unsigned int)-1;
+    if (hour == 24 && (minute || sec))
+	return (unsigned int)-1;
+    else if (hour > 23 || minute > 59 || sec > 59)
+	return (unsigned int)-1;
+    // Check if month and day are correct in the given year
+    month--;
+    unsigned int m[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    if (isLeap(year))
+	m[1] = 29;
+    if (day > m[month])
+	return (unsigned int)-1;
+    // Count the number of days since EPOCH
+    int64_t days = (year - 1970) * 365;
+    // Add a day for each leap year from 1970 to 'year' (not including)
+    for (int y = 1970; y < year; y += 4)
+	if (isLeap(y))
+	    days++;
+    // Add days ellapsed in given year
+    for (unsigned int i = 0; i < month; i++)
+	days += m[i];
+    days += day - 1;
+    int64_t ret = (days * 24 + hour) * 3600 + minute * 60 + sec + offset;
+
+    // Check for incorrect time or overflow
+    if (ret < 0 || ret > (unsigned int)-1)
+	return (unsigned int)-1;
+    return (unsigned int)ret;
+}
+
+// Split a given EPOCH time into its date/time components
+bool Time::toDateTime(unsigned int epochTimeSec, int& year, unsigned int& month,
+    unsigned int& day, unsigned int& hour, unsigned int& minute, unsigned int& sec)
+{
+#ifdef _WINDOWS
+    FILETIME ft;
+    SYSTEMTIME st;
+    // 11644473600: the number of seconds from 1601, January 1st (FILETIME)
+    //  to EPOCH (1970, January 1st)
+    // Remember: FILETIME keeps the number of 100 nsec units
+    u_int64_t time = (11644473600 + epochTimeSec) * 10000000;
+    ft.dwLowDateTime = (DWORD)time;
+    ft.dwHighDateTime = (DWORD)(time >> 32);
+    if (!FileTimeToSystemTime(&ft,&st))
+	return false;
+    year = st.wYear;
+    month = st.wMonth;
+    day = st.wDay;
+    hour = st.wHour;
+    minute = st.wMinute;
+    sec = st.wSecond;
+#else
+    struct tm t;
+    time_t time = (time_t)epochTimeSec;
+    if (!gmtime_r(&time,&t))
+	return false;
+    year = 1900 + t.tm_year;
+    month = t.tm_mon + 1;
+    day = t.tm_mday;
+    hour = t.tm_hour;
+    minute = t.tm_min;
+    sec = t.tm_sec;
+#endif
+    Debug(DebugAll,"Time::toDateTime(%u,%d,%u,%u,%u,%u,%u)",
+	epochTimeSec,year,month,day,hour,minute,sec);
+    return true;
+}
+
 
 bool GenObject::alive() const
 {

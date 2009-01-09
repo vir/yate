@@ -26,6 +26,8 @@
 
 using namespace TelEngine;
 
+#include <time.h>
+
 static XMPPNamespace s_ns;
 static XMPPError s_err;
 
@@ -71,13 +73,17 @@ TokenDict XMPPNamespace::s_value[] = {
     {"http://jabber.org/protocol/disco#info",              DiscoInfo},
     {"http://jabber.org/protocol/disco#items",             DiscoItems},
     {"vcard-temp",                                         VCard},
-    {"xmlns='urn:xmpp:jingle:0",                           Jingle},
+    {"http://jabber.org/protocol/si/profile/file-transfer",SIProfileFileTransfer},
+    {"http://jabber.org/protocol/bytestreams",             ByteStreams},
+    {"urn:xmpp:jingle:0",                                  Jingle},
     {"urn:xmpp:jingle:errors:0",                           JingleError},
     {"urn:xmpp:jingle:apps:rtp:0",                         JingleAppsRtp},
     {"urn:xmpp:jingle:apps:rtp:info:0",                    JingleAppsRtpInfo},
+    {"urn:xmpp:jingle:apps:file-transfer:0",               JingleAppsFileTransfer},
     {"urn:xmpp:jingle:transports:ice-udp:0",               JingleTransportIceUdp},
     {"urn:xmpp:jingle:transports:raw-udp:0",               JingleTransportRawUdp},
     {"urn:xmpp:jingle:transports:raw-udp:info:0",          JingleTransportRawUdpInfo},
+    {"urn:xmpp:jingle:transports:bytestreams:0",           JingleTransportByteStreams},
     {"urn:xmpp:jingle:transfer:0",                         JingleTransfer},
     {"urn:xmpp:jingle:dtmf:0",                             Dtmf},
     {"http://jabber.org/protocol/commands",                Command},
@@ -156,6 +162,7 @@ TokenDict XMPPError::s_value[] = {
     {"undefined-condition",      SUndefinedCondition},
     {"unexpected-request",       SRequest},
     {"unsupported-dtmf-method",  DtmfNoMethod},
+    {"item-not-found",           ItemNotFound},
     {0,0}
 };
 
@@ -556,6 +563,190 @@ void XMPPUtils::decodeError(XMLElement* element, String& error, String& text)
 	text = child->getText();
 	TelEngine::destruct(child);
     }
+}
+
+inline void addPaddedVal(String& buf, int val, const char* sep)
+{
+    if (val < 10)
+	buf << "0";
+    buf << val << sep;
+}
+
+// Encode EPOCH time given in seconds to a date/time profile as defined in
+//  XEP-0082
+void XMPPUtils::encodeDateTimeSec(String& buf, unsigned int timeSec,
+	unsigned int fractions)
+{
+    int y;
+    unsigned int m,d,hh,mm,ss;
+    if (!Time::toDateTime(timeSec,y,m,d,hh,mm,ss))
+	return;
+    buf << y << "-";
+    addPaddedVal(buf,m,"-");
+    addPaddedVal(buf,d,"T");
+    addPaddedVal(buf,hh,":");
+    addPaddedVal(buf,mm,":");
+    addPaddedVal(buf,ss,"");
+    if (fractions)
+	buf << "." << fractions;
+    buf << "Z";
+}
+
+// Decode a date/time profile as defined in XEP-0082 and
+//  XML Schema Part 2: Datatypes Second Edition to EPOCH time
+unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* fractions)
+{
+    // XML Schema Part 2: Datatypes Second Edition
+    // (see http://www.w3.org/TR/xmlschema-2/#dateTime)
+    // Section 3.2.7: dateTime
+    // Format: [-]yyyy[y+]-mm-ddThh:mm:ss[.s+][Z|[+|-]hh:mm]
+    // NOTE: The document specify that yyyy may be negative and may have more then 4 digits:
+    //       for now we only accept positive years greater then 1970
+
+    unsigned int ret = (unsigned int)-1;
+    unsigned int timeFractions = 0;
+    while (true) {
+	// Split date/time
+	int pos = time.find('T');
+	if (pos == -1)
+	    return (unsigned int)-1;
+	// Decode date
+	if (time.at(0) == '-')
+	    break;
+	int year = 0;
+	unsigned int month = 0;
+	unsigned int day = 0;
+	String date = time.substr(0,pos);
+	ObjList* list = date.split('-');
+	bool valid = (list->length() == 3 && list->count() == 3);
+	if (valid) {
+	    year = (*list)[0]->toString().toInteger(-1);
+	    month = (unsigned int)(*list)[1]->toString().toInteger(-1);
+	    day = (unsigned int)(*list)[2]->toString().toInteger(-1);
+	    valid = year >= 1970 && month && month <= 12 && day && day <= 31;
+	}
+	TelEngine::destruct(list);
+	if (valid)
+	    DDebug(DebugAll,
+		"XMPPUtils::decodeDateTimeSec() decoded year=%d month=%u day=%u from '%s'",
+		year,month,day,time.c_str());
+	else {
+	    DDebug(DebugNote,
+		"XMPPUtils::decodeDateTimeSec() incorrect date=%s in '%s'",
+		date.c_str(),time.c_str());
+	    break;
+	}
+	// Decode Time
+	String t = time.substr(pos + 1,8);
+	if (t.length() != 8)
+	    break;
+	unsigned int hh = 0;
+	unsigned int mm = 0;
+	unsigned int ss = 0;
+	int offsetSec = 0;
+	list = t.split(':');
+	valid = (list->length() == 3 && list->count() == 3);
+	if (valid) {
+	    hh = (unsigned int)(*list)[0]->toString().toInteger(-1);
+	    mm = (unsigned int)(*list)[1]->toString().toInteger(-1);
+	    ss = (unsigned int)(*list)[2]->toString().toInteger(-1);
+	    valid = (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && ss >= 0 && ss <= 59) ||
+		(hh == 24 && mm == 0 && ss == 0);
+	}
+	TelEngine::destruct(list);
+	if (valid)
+	    DDebug(DebugAll,
+		"XMPPUtils::decodeDateTimeSec() decoded hour=%u minute=%u sec=%u from '%s'",
+		hh,mm,ss,time.c_str());
+	else {
+	    DDebug(DebugNote,
+		"XMPPUtils::decodeDateTimeSec() incorrect time=%s in '%s'",
+		t.c_str(),time.c_str());
+	    break;
+	}
+	// Get the rest
+	unsigned int parsed = date.length() + t.length() + 1;
+	unsigned int len = time.length() - parsed;
+	const char* buf = time.c_str() + parsed;
+	if (len > 1) {
+	    // Get time fractions
+	    if (buf[0] == '.') {
+		unsigned int i = 1;
+		// FIXME: Trailing 0s are not allowed in fractions
+		for (; i < len && buf[i] >= '0' && buf[i] <= '9'; i++)
+		    ;
+		String fr(buf + 1,i - 1);
+		if (i > 2)
+		    timeFractions = (unsigned int)fr.toInteger(-1);
+		else
+		    timeFractions = (unsigned int)-1;
+		if (timeFractions != (unsigned int)-1)
+		    DDebug(DebugAll,
+			"XMPPUtils::decodeDateTimeSec() decoded fractions=%u from '%s'",
+			timeFractions,time.c_str());
+		else {
+		    DDebug(DebugNote,
+			"XMPPUtils::decodeDateTimeSec() incorrect fractions=%s in '%s'",
+			fr.c_str(),time.c_str());
+		    break;
+		}
+		len -= i;
+		buf += i;
+	    }
+	    // Get offset
+	    if (len > 1) {
+		int sign = 1;
+		if (*buf == '-' || *buf == '+') {
+		    if (*buf == '-')
+			sign = -1;
+		    buf++;
+		    len--;
+		}
+		String offs(buf,5);
+		// We should have at least 5 bytes: hh:ss
+		if (len < 5 || buf[2] != ':') {
+		    DDebug(DebugNote,
+			"XMPPUtils::decodeDateTimeSec() incorrect time offset=%s in '%s'",
+			offs.c_str(),time.c_str());
+		    break;
+		}
+		unsigned int hhOffs = (unsigned int)offs.substr(0,2).toInteger(-1);
+		unsigned int mmOffs = (unsigned int)offs.substr(3,2).toInteger(-1);
+		// XML Schema Part 2 3.2.7.3: the hour may be 0..13. It can be 14 if minute is 0
+		if (mmOffs > 59 || (hhOffs > 13 && !mmOffs)) {
+		    DDebug(DebugNote,
+			"XMPPUtils::decodeDateTimeSec() incorrect time offset values hour=%u minute=%u in '%s'",
+			hhOffs,mmOffs,time.c_str());
+		    break;
+		}
+		DDebug(DebugAll,
+		    "XMPPUtils::decodeDateTimeSec() decoded time offset '%c' hour=%u minute=%u from '%s'",
+		    sign > 0 ? '+' : '-',hhOffs,mmOffs,time.c_str());
+		offsetSec = sign * (hhOffs * 3600 + mmOffs * 60);
+		buf += 5;
+		len -= 5;
+	    }
+	}
+	// Check termination markup
+	if (len && (len != 1 || *buf != 'Z')) {
+	    DDebug(DebugNote,
+		"XMPPUtils::decodeDateTimeSec() '%s' is incorrectly terminated '%s'",
+		time.c_str(),buf);
+	    break;
+	}
+	ret = Time::toEpoch(year,month,day,hh,mm,ss,offsetSec);
+	if (ret == (unsigned int)-1)
+	    DDebug(DebugNote,
+		"XMPPUtils::decodeDateTimeSec() failed to convert '%s'",
+		time.c_str());
+	break;
+    }
+
+    if (ret != (unsigned int)-1) {
+	if (fractions)
+	    *fractions = timeFractions;
+    }
+    return ret;
 }
 
 // Check if an element or attribute name restricts value output

@@ -83,7 +83,8 @@ void JGEngine::initialize(const NamedList& params)
 
 // Make an outgoing call
 JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
-	const ObjList& contents, XMLElement* extra, const char* message)
+	const ObjList& contents, XMLElement* extra, const char* message,
+	const char* subject)
 {
     DDebug(this,DebugAll,"New outgoing call from '%s' to '%s'",
 	localJID.c_str(),remoteJID.c_str());
@@ -102,7 +103,7 @@ JGSession* JGEngine::call(const String& localJID, const String& remoteJID,
     bool hasStream = (0 != stream);
     if (hasStream) {
 	JGSession* session = new JGSession(this,stream,localJID,remoteJID,
-	    contents,extra,message);
+	    contents,extra,message,subject);
 	TelEngine::destruct(stream);
 	if (session->state() != JGSession::Destroy) {
 	    Lock lock(this);
@@ -136,13 +137,14 @@ JGEvent* JGEngine::getEvent(u_int64_t time)
 	if (!s)
 	    continue;
 	unlock();
-	if (0 != (event = s->getEvent(time)))
+	if (0 != (event = s->getEvent(time))) {
 	    if (event->type() == JGEvent::Destroy) {
 		DDebug(this,DebugAll,"Deleting internal event (%p,Destroy)",event);
 		delete event;
 	    }
 	    else
 		return event;
+	}
 	lock();
     }
     unlock();
@@ -233,6 +235,21 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		}
 	    }
 	    break;
+	case JBEvent::Iq:
+	    // Check file transfer
+	    if (child && child->type() == XMLElement::Query &&
+		XMPPUtils::hasXmlns(*child,XMPPNamespace::ByteStreams)) {
+		sid = child->getAttribute("sid");
+		// Check for a destination
+		for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
+		    JGSession* session = static_cast<JGSession*>(o->get());
+		    if (session->acceptEvent(event,sid)) {
+			processed = true;
+			return true;
+		    }
+		}
+	    }
+	    break;
 	case JBEvent::Terminated:
 	case JBEvent::Destroy:
 	    for (ObjList* o = m_sessions.skipNull(); o; o = o->skipNext()) {
@@ -284,6 +301,8 @@ void JGEngine::createSessionId(String& id)
 JGEvent::~JGEvent()
 {
     if (m_session) {
+	if (!m_confirmed)
+	    confirmElement(XMPPError::UndefinedCondition,"Unhandled");
 	m_session->eventTerminated(this);
 	TelEngine::destruct(m_session);
     }
@@ -300,6 +319,14 @@ void JGEvent::init(JGSession* session)
 	m_id = m_element->getAttribute("id");
 	m_jingle = m_element->findFirstChild(XMLElement::Jingle);
     }
+}
+
+// Set the jingle action as enumeration. Set confirmation flag if
+//   the element don't require it
+void JGEvent::setAction(JGSession::Action act)
+{
+    m_action = act;
+    m_confirmed = !(m_element && act != JGSession::ActCount);
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

@@ -1274,7 +1274,11 @@ void JBStream::processStarted(XMLElement* xml)
 		reason = "Jid is not full";
 		break;
 	    }
+	    bool changed = !(local() == jid);
 	    m_local.set(jid.node(),jid.domain(),jid.resource());
+	    if (changed)
+		Debug(m_engine,DebugInfo,"Stream. Local jid changed to '%s' [%p]",
+		    local().c_str(),this);
 	    break;
 	}
 	TelEngine::destruct(jidxml);
@@ -1368,13 +1372,12 @@ JBEvent* JBStream::getIqEvent(XMLElement* xml, int iqType, XMPPError::Type& erro
 		    IQEVENT_SET_REQ(JBEvent::IqDiscoInfoGet,JBEvent::IqDiscoInfoSet);
 		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::DiscoItems))
 		    IQEVENT_SET_REQ(JBEvent::IqDiscoItemsGet,JBEvent::IqDiscoItemsSet);
-		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Roster))
+		else if (XMPPUtils::hasXmlns(*child,XMPPNamespace::Roster)) {
 		    if (iqType == XMPPUtils::IqGet)
 			error = XMPPError::SBadRequest;
 		    else
 			evType = JBEvent::IqRosterSet;
-		else
-		    error = XMPPError::SFeatureNotImpl;
+		}
 		break;
 	    case XMLElement::Command:
 		if (checkValidXmlns(child,XMPPNamespace::Command,error))
@@ -2359,7 +2362,10 @@ bool JBClientStream::checkDestination(XMLElement* xml, bool& respond)
     const char* to = xml->getAttribute("to");
     if (to && *to) {
 	JabberID jid(to);
-	return local().match(to);
+	// Waiting for bid response: accept 'to' with resource if we don't have one
+	if (state() == Started && m_waitState == WaitBindRsp && !local().resource())
+	    return jid.match(local());
+	return local().match(jid);
     }
     xml->setAttribute("to",local());
     return true;

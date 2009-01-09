@@ -177,7 +177,7 @@ class YJINGLE_API XMPPNamespace
 {
 public:
     enum Type {
-	Stream,                          // http://etherx.jabber.org/streams
+	Stream = 1,                      // http://etherx.jabber.org/streams
 	Client,                          // jabber:client
 	Server,                          // jabber:server
 	ComponentAccept,                 // jabber:component:accept
@@ -197,13 +197,17 @@ public:
 	DiscoInfo,                       // http://jabber.org/protocol/disco#info
 	DiscoItems,                      // http://jabber.org/protocol/disco#items
 	VCard,                           // vcard-temp
+	SIProfileFileTransfer,           // http://jabber.org/protocol/si/profile/file-transfer
+	ByteStreams,                     // http://jabber.org/protocol/bytestreams
 	Jingle,                          // xmlns='urn:xmpp:jingle:0
 	JingleError,                     // urn:xmpp:jingle:errors:0
 	JingleAppsRtp,                   // urn:xmpp:jingle:apps:rtp:0
 	JingleAppsRtpInfo,               // urn:xmpp:jingle:apps:rtp:info:0
+	JingleAppsFileTransfer,          // urn:xmpp:jingle:apps:file-transfer:0
 	JingleTransportIceUdp,           // urn:xmpp:jingle:transports:ice-udp:0
 	JingleTransportRawUdp,           // urn:xmpp:jingle:transports:raw-udp:0
 	JingleTransportRawUdpInfo,       // urn:xmpp:jingle:transports:raw-udp:info:0
+	JingleTransportByteStreams,      // urn:xmpp:jingle:transports:bytestreams:0
 	JingleTransfer,                  // urn:xmpp:jingle:transfer:0
 	Dtmf,                            // urn:xmpp:jingle:dtmf:0
 	Command,                         // http://jabber.org/protocol/command
@@ -301,8 +305,9 @@ public:
 	SSubscription,                   // subscription-required
 	SUndefinedCondition,             // undefined-condition
 	SRequest,                        // unexpected-request
-	// Dtmf
+	// Misc
 	DtmfNoMethod,                    // unsupported-dtmf-method
+	ItemNotFound,                    // item-not-found 
 	Count,
     };
 
@@ -787,6 +792,7 @@ private:
     ObjList m_features;                  // The features
 };
 
+
 /**
  * This class is a general XMPP utilities
  * @short General XMPP utilities
@@ -999,6 +1005,25 @@ public:
      * @param text The stanza's error or error text
      */
     static void decodeError(XMLElement* element, String& error, String& text);
+
+    /**
+     * Encode EPOCH time given in seconds to a date/time profile as defined in
+     *  XEP-0082 and XML Schema Part 2: Datatypes Second Edition
+     * @param buf Destination string
+     * @param timeSec The time to encode (in seconds)
+     * @param fractions Optional second fractions
+     */
+    static void encodeDateTimeSec(String& buf, unsigned int timeSec,
+	unsigned int fractions = 0);
+
+    /**
+     * Decode a date/time profile as defined in XEP-0082
+     *  and XML Schema Part 2: Datatypes Second Edition to EPOCH time
+     * @param time The date/time string
+     * @param fractions Pointer to integer to be filled with second fractions, if present
+     * @return The decoded time in seconds, -1 on error
+     */
+    static unsigned int decodeDateTimeSec(const String& time, unsigned int* fractions = 0);
 
     /**
      * Print an XMLElement to a string

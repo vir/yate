@@ -25,9 +25,6 @@
 
 using namespace TelEngine;
 
-static XMPPNamespace s_ns;
-static XMPPError s_err;
-
 // Utility: add session content(s) to an already created stanza's jingle child
 static void addJingleContents(XMLElement* xml, const ObjList& contents, bool minimum,
     bool addDesc, bool addTrans, bool addCandidates, bool addAuth = true)
@@ -54,6 +51,14 @@ static void addJingleChild(XMLElement* xml, XMLElement* child)
 	return;
     jingle->addChild(child);
     TelEngine::destruct(jingle);
+}
+
+// Utility: add NamedList param only if not empty
+static inline void addParamValid(NamedList& list, const char* param, const char* value)
+{
+    if (null(param) || null(value))
+	return;
+    list.addParam(param,value);
 }
 
 
@@ -152,23 +157,23 @@ XMLElement* JGRtpMediaList::toXML(bool telEvent) const
     if (m_media != Audio)
 	return 0;
     XMLElement* desc = XMPPUtils::createElement(XMLElement::Description,
-	XMPPNamespace::JingleAppsRtp);
+       XMPPNamespace::JingleAppsRtp);
     desc->setAttributeValid("media",lookup(m_media,s_media));
     for (ObjList* o = skipNull(); o; o = o->skipNext()) {
-	JGRtpMedia* a = static_cast<JGRtpMedia*>(o->get());
-	desc->addChild(a->toXML());
+       JGRtpMedia* a = static_cast<JGRtpMedia*>(o->get());
+       desc->addChild(a->toXML());
     }
     if (telEvent) {
-	JGRtpMedia* te = new JGRtpMedia("106","telephone-event","8000","","");
-	desc->addChild(te->toXML());
-	TelEngine::destruct(te);
+       JGRtpMedia* te = new JGRtpMedia("106","telephone-event","8000","","");
+       desc->addChild(te->toXML());
+       TelEngine::destruct(te);
     }
     ObjList* c = m_cryptoLocal.skipNull();
     if (c) {
-	if (m_cryptoMandatory)
-	    desc->addChild(new XMLElement(XMLElement::CryptoRequired));
-	for (; c; c = c->skipNext())
-	    desc->addChild((static_cast<JGCrypto*>(c->get()))->toXML());
+       if (m_cryptoMandatory)
+           desc->addChild(new XMLElement(XMLElement::CryptoRequired));
+       for (; c; c = c->skipNext())
+           desc->addChild((static_cast<JGCrypto*>(c->get()))->toXML());
     }
     return desc;
 }
@@ -373,9 +378,10 @@ TokenDict JGSessionContent::s_creator[] = {
 };
 
 // Constructor
-JGSessionContent::JGSessionContent(const char* name, Senders senders,
+JGSessionContent::JGSessionContent(Type t, const char* name, Senders senders,
     Creator creator, const char* disposition)
-    : m_name(name), m_senders(senders), m_creator(creator),
+    : m_fileTransfer(""),
+    m_type(t), m_name(name), m_senders(senders), m_creator(creator),
     m_disposition(disposition)
 {
 }
@@ -392,10 +398,39 @@ XMLElement* JGSessionContent::toXml(bool minimum, bool addDesc,
 	xml->setAttributeValid("disposition",m_disposition);
     }
     // Add description and transport
-    if (addDesc)
-	xml->addChild(m_rtpMedia.toXML());
-    if (addTrans)
-	xml->addChild(m_rtpLocalCandidates.toXML(addCandidates,addAuth));
+    XMLElement* desc = 0;
+    XMLElement* trans = 0;
+    if (m_type == RtpIceUdp || m_type == RtpRawUdp) {
+	// Audio content
+	if (addDesc)
+	    desc = m_rtpMedia.toXML();
+	if (addTrans)
+	    trans = m_rtpLocalCandidates.toXML(addCandidates,addAuth);
+    }
+    else if (m_type == FileBSBOffer || m_type == FileBSBRequest) {
+	// File transfer content
+	XMLElement* file = XMPPUtils::createElement(XMLElement::File,
+	    XMPPNamespace::SIProfileFileTransfer);
+	unsigned int n = m_fileTransfer.length();
+	for (unsigned int i = 0; i < n; i++) {
+	    NamedString* ns = m_fileTransfer.getParam(i);
+	    if (ns)
+		file->setAttributeValid(ns->name(),*ns);
+	}
+	XMLElement* child = 0;
+	if (m_type == FileBSBOffer)
+	    child = new XMLElement(XMLElement::Offer);
+	else
+	    child = new XMLElement(XMLElement::Request);
+	child->addChild(file);
+	desc = XMPPUtils::createElement(XMLElement::Description,
+	    XMPPNamespace::JingleAppsFileTransfer);
+	desc->addChild(child);
+	trans = XMPPUtils::createElement(XMLElement::Transport,
+	    XMPPNamespace::JingleTransportByteStreams);
+    }
+    xml->addChild(desc);
+    xml->addChild(trans);
     return xml;
 }
 
@@ -437,18 +472,45 @@ JGSessionContent* JGSessionContent::fromXml(XMLElement* xml, XMPPError::Type& er
 	return 0;
     }
 
-    JGSessionContent* content = new JGSessionContent(name,senders,creator,
+    JGSessionContent* content = new JGSessionContent(Unknown,name,senders,creator,
 	xml->getAttribute("disposition"));
     XMLElement* desc = 0;
     XMLElement* trans = 0;
     err = XMPPError::NoError;
     // Use a while() to go to end and cleanup data
     while (true) {
+	int offer = -1;
 	// Check description
 	desc = xml->findFirstChild(XMLElement::Description);
 	if (desc) {
-	    if (XMPPUtils::hasXmlns(*desc,XMPPNamespace::JingleAppsRtp))
+	    if (XMPPUtils::hasXmlns(*desc,XMPPNamespace::JingleAppsRtp)) {
 		content->m_rtpMedia.fromXML(desc);
+	    }
+	    else if (XMPPUtils::hasXmlns(*desc,XMPPNamespace::JingleAppsFileTransfer)) {
+		content->m_type = UnknownFileTransfer;
+		// Get file and type
+		XMLElement* dir = desc->findFirstChild(XMLElement::Offer);
+		if (dir)
+		    offer = 1;
+		else {
+		    dir = desc->findFirstChild(XMLElement::Request);
+		    if (dir)
+			offer = 0;
+		}
+		if (dir) {
+		    XMLElement* file = dir->findFirstChild(XMLElement::File);
+		    if (file && XMPPUtils::hasXmlns(*file,XMPPNamespace::SIProfileFileTransfer)) {
+			addParamValid(content->m_fileTransfer,"name",file->getAttribute("name"));
+			addParamValid(content->m_fileTransfer,"size",file->getAttribute("size"));
+			addParamValid(content->m_fileTransfer,"hash",file->getAttribute("hash"));
+			addParamValid(content->m_fileTransfer,"date",file->getAttribute("date"));
+		    }
+		    else
+			offer = -1;
+		    TelEngine::destruct(file);
+		    TelEngine::destruct(dir);
+		}
+	    }
 	    else
 		content->m_rtpMedia.m_media = JGRtpMediaList::MediaUnknown;
 	}
@@ -457,8 +519,21 @@ JGSessionContent* JGSessionContent::fromXml(XMLElement* xml, XMPPError::Type& er
 
 	// Check transport
 	trans = xml->findFirstChild(XMLElement::Transport);
-	if (trans)
-	    content->m_rtpRemoteCandidates.fromXML(trans);
+	if (trans) {
+	    if (content->type() != UnknownFileTransfer) {
+		content->m_rtpRemoteCandidates.fromXML(trans);
+		if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpIceUdp)
+		    content->m_type = RtpIceUdp;
+		else if (content->m_rtpRemoteCandidates.m_type == JGRtpCandidates::RtpRawUdp)
+		    content->m_type = RtpRawUdp;
+	    }
+	    else {
+		if (offer >= 0) {
+		    if (XMPPUtils::hasXmlns(*trans,XMPPNamespace::JingleTransportByteStreams))
+			content->m_type = offer ? FileBSBOffer : FileBSBRequest;
+		}
+	    }
+	}
 	else
 	    content->m_rtpRemoteCandidates.m_type = JGRtpCandidates::Unknown;
 
@@ -471,6 +546,63 @@ JGSessionContent* JGSessionContent::fromXml(XMLElement* xml, XMPPError::Type& er
 	return content;
     TelEngine::destruct(content);
     return 0;
+}
+
+
+/**
+ * JGStreamHost
+ */
+
+// Build an XML element from this stream host
+XMLElement* JGStreamHost::toXml()
+{
+    if (!length())
+	return 0;
+    XMLElement* xml = new XMLElement(XMLElement::StreamHost);
+    xml->setAttribute("jid",c_str());
+    if (m_zeroConf.null()) {
+	xml->setAttribute("host",m_address);
+	xml->setAttribute("port",String(m_port));
+    }
+    else
+	xml->setAttribute("zeroconf",m_zeroConf);
+    return xml;
+}
+
+// Build a stream host from an XML element
+JGStreamHost* JGStreamHost::fromXml(XMLElement* xml)
+{
+    if (!xml)
+	return 0;
+    const char* jid = xml->getAttribute("jid");
+    if (TelEngine::null(jid))
+	return 0;
+    return new JGStreamHost(jid,xml->getAttribute("host"),
+	String(xml->getAttribute("port")).toInteger(-1),xml->getAttribute("zeroconf"));
+}
+
+// Build a query XML element carrying a list of stream hosts
+XMLElement* JGStreamHost::buildHosts(const ObjList& hosts, const char* sid,
+    const char* mode)
+{
+    XMLElement* xml = XMPPUtils::createElement(XMLElement::Query,
+	XMPPNamespace::ByteStreams);
+    xml->setAttribute("sid",sid);
+    xml->setAttribute("mode",mode);
+    for (ObjList* o = hosts.skipNull(); o; o = o->skipNext())
+	xml->addChild((static_cast<JGStreamHost*>(o->get()))->toXml());
+    return xml;
+}
+
+// Build a query XML element with a streamhost-used child
+XMLElement* JGStreamHost::buildRsp(const char* jid)
+{
+    XMLElement* xml = XMPPUtils::createElement(XMLElement::Query,
+	XMPPNamespace::ByteStreams);
+    XMLElement* used = new XMLElement(XMLElement::StreamHostUsed);
+    used->setAttribute("jid",jid);
+    xml->addChild(used);
+    return xml;
 }
 
 
@@ -509,6 +641,7 @@ TokenDict JGSession::s_actions[] = {
     {"hold",                  ActHold},
     {"active",                ActActive},
     {"mute",                  ActMute},
+    {"streamhost",            ActStreamHost},
     {0,0}
 };
 
@@ -530,7 +663,8 @@ TokenDict JGSession::s_reasons[] = {
 // Create an outgoing session
 JGSession::JGSession(JGEngine* engine, JBStream* stream,
 	const String& callerJID, const String& calledJID,
-	const ObjList& contents, XMLElement* extra, const char* msg)
+	const ObjList& contents, XMLElement* extra, const char* msg,
+	const char* subject)
     : Mutex(true),
     m_state(Idle),
     m_engine(engine),
@@ -539,6 +673,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
     m_localJID(callerJID),
     m_remoteJID(calledJID),
     m_lastEvent(0),
+    m_recvTerminate(false),
     m_private(0),
     m_stanzaId(1)
 {
@@ -552,6 +687,8 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
     XMLElement* xml = createJingle(ActInitiate);
     addJingleContents(xml,contents,false,true,true,true);
     addJingleChild(xml,extra);
+    if (!null(subject))
+	addJingleChild(xml,new XMLElement(XMLElement::Subject,0,subject));
     if (sendStanza(xml))
 	changeState(Pending);
     else
@@ -567,6 +704,7 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event, const String& id)
     m_outgoing(false),
     m_sid(id),
     m_lastEvent(0),
+    m_recvTerminate(false),
     m_private(0),
     m_stanzaId(1)
 {
@@ -586,19 +724,45 @@ JGSession::~JGSession()
 // Release this session and its memory
 void JGSession::destroyed()
 {
+    // Remove from engine
+    if (m_engine) {
+	Lock lock(m_engine);
+	m_engine->m_sessions.remove(this,false);
+    }
     lock();
-    // Cancel pending outgoing. Hangup. Cleanup
+    // Cleanup. Respond to events in queue
     if (m_stream) {
-	m_stream->removePending(m_localSid,false);
 	hangup(ReasonUnknown);
+	for (ObjList* o = m_events.skipNull(); o; o = o->skipNext()) {
+	    JBEvent* jbev = static_cast<JBEvent*>(o->get());
+	    // Skip events generated by the stream
+	    if (jbev->type() == JBEvent::WriteFail ||
+		jbev->type() == JBEvent::Terminated ||
+		jbev->type() == JBEvent::Destroy)
+		continue;
+	    // Respond to non error/result IQs
+	    XMLElement* xml = jbev->element();
+	    if (!(xml && xml->type() == XMLElement::Iq))
+		continue;
+	    XMPPUtils::IqType t = XMPPUtils::iqType(xml->getAttribute("type"));
+	    if (t == XMPPUtils::IqError || t == XMPPUtils::IqResult)
+		continue;
+	    // Respond 
+	    if (m_recvTerminate)
+		confirm(jbev->releaseXML(),XMPPError::SRequest,
+		    "Session terminated",XMPPError::TypeCancel);
+	    else {
+		XMLElement* jingle = jbev->child();
+		m_recvTerminate = (jingle && jingle->type() == XMLElement::Jingle &&
+		    XMPPUtils::hasXmlns(*jingle,XMPPNamespace::Jingle) &&
+		    jingle->hasAttribute("type",lookupAction(ActTerminate)));
+		confirm(jbev->element());
+	    }
+	}
 	TelEngine::destruct(m_stream);
     }
     m_events.clear();
     unlock();
-    // Remove from engine
-    Lock lock(m_engine);
-    m_engine->m_sessions.remove(this,false);
-    lock.drop();
     DDebug(m_engine,DebugInfo,"Call(%s). Destroyed [%p]",m_sid.c_str(),this);
 }
 
@@ -714,6 +878,34 @@ bool JGSession::sendContent(Action action, const ObjList& contents, String* stan
     return sendStanza(xml,stanzaId);
 }
 
+// Send a stanza with stream hosts
+bool JGSession::sendStreamHosts(const ObjList& hosts, String* stanzaId)
+{
+    Lock lock(this);
+    if (state() != Pending)
+	return false;
+    XMLElement* xml = XMPPUtils::createIq(XMPPUtils::IqSet,m_localJID,m_remoteJID,0);
+    xml->addChild(JGStreamHost::buildHosts(hosts,m_sid));
+    return sendStanza(xml,stanzaId);
+}
+
+// Send a stanza with a stream host used
+bool JGSession::sendStreamHostUsed(const char* jid, const char* stanzaId)
+{
+    Lock lock(this);
+    if (state() != Pending)
+	return false;
+    bool ok = !null(jid);
+    XMLElement* xml = XMPPUtils::createIq(ok ? XMPPUtils::IqResult : XMPPUtils::IqError,
+	m_localJID,m_remoteJID,stanzaId);
+    if (ok)
+	xml->addChild(JGStreamHost::buildRsp(jid));
+    else
+	xml->addChild(XMPPUtils::createError(XMPPError::TypeModify,
+	    XMPPError::ItemNotFound));
+    return sendStanza(xml,0,false);
+}
+
 // Confirm a received element. If the error is NoError a result stanza will be sent
 // Otherwise, an error stanza will be created and sent
 bool JGSession::confirm(XMLElement* xml, XMPPError::Type error,
@@ -797,6 +989,17 @@ bool JGSession::hasFeature(XMPPNamespace::Type feature)
     return false;
 }
 
+// Build SOCKS SHA1 dst.addr used by file transfer
+void JGSession::buildSocksDstAddr(String& buf)
+{
+    SHA1 sha(m_sid);
+    if (outgoing())
+	sha << m_localJID << m_remoteJID;
+    else
+	sha << m_remoteJID << m_localJID;
+    buf = sha.hexDigest();
+}
+
 // Build a transfer element
 XMLElement* JGSession::buildTransfer(const String& transferTo,
     const String& transferFrom, const String& sid)
@@ -867,7 +1070,7 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    if (m_lastEvent->action() == ActInfo) {
 	        XDebug(m_engine,DebugAll,"Call(%s). Received empty '%s' (ping) [%p]",
 		    m_sid.c_str(),lookup(m_lastEvent->action(),s_actions),this);
-		confirm(m_lastEvent->element());
+		m_lastEvent->confirmElement();
 		delete m_lastEvent;
 		m_lastEvent = 0;
 		continue;
@@ -964,11 +1167,11 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		    case ActReceived:
 			break;
 		    default:
-			confirm(m_lastEvent->element());
+			m_lastEvent->confirmElement();
 		}
 	    }
 	    else {
-		confirm(m_lastEvent->releaseXML(),XMPPError::SRequest);
+		m_lastEvent->confirmElement(XMPPError::SRequest);
 		delete m_lastEvent;
 		m_lastEvent = 0;
 		if (fatal)
@@ -976,6 +1179,26 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		else
 		    continue;
 	    }
+	    break;
+	}
+
+	if (jbev->type() == JBEvent::Iq) {
+	    // File transfer
+	    XMLElement* child = jbev->child();
+	    if (child && child->type() == XMLElement::Query &&
+		XMPPUtils::hasXmlns(*child,XMPPNamespace::ByteStreams)) {
+		m_lastEvent = new JGEvent(ActStreamHost,this,jbev->releaseXML());
+		child = m_lastEvent->element()->findFirstChild(XMLElement::Query);
+		XMLElement* sh = child->findFirstChild(XMLElement::StreamHost);
+		for (; sh; sh = child->findNextChild(sh,XMLElement::StreamHost)) {
+		    JGStreamHost* s = JGStreamHost::fromXml(sh);
+		    if (s)
+			m_lastEvent->m_streamHosts.append(s);
+		}
+		TelEngine::destruct(child);
+	    }
+	    else
+		confirm(jbev->releaseXML(),XMPPError::SFeatureNotImpl);
 	    break;
 	}
 
@@ -1061,11 +1284,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 
 	    break;
 	}
-	if (response)
+	if (response) {
 	    if (!m_lastEvent)
 		continue;
 	    else
 		break;
+	}
 
 	// Silently ignore temporary stream down
 	if (jbev->type() == JBEvent::Terminated) {
@@ -1127,8 +1351,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 // Send a stanza to the remote peer
 bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmation)
 {
+    if (!stanza)
+	return false;
     Lock lock(this);
-    if (!(state() != Ending && state() != Destroy && stanza && m_stream)) {
+    // confirmation=true: this is not a response, don't allow if terminated
+    bool terminated = (state() == Ending || state() == Destroy);
+    if (!m_stream || (terminated && confirmation)) {
 #ifdef DEBUG
 	Debug(m_engine,DebugNote,
 	    "Call(%s). Can't send stanza (%p,'%s') in state %s [%p]",
@@ -1179,7 +1407,7 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
     if (act == ActTerminate) {
 	// Confirm here: this is a final event, 
 	//  stanza won't be confirmed in getEvent()
-	confirm(jbev->element());
+	m_recvTerminate = true;
 	const char* reason = 0;
 	const char* text = 0;
 	XMLElement* res = jingle->findFirstChild(XMLElement::Reason);
@@ -1196,7 +1424,10 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	}
 	if (!reason)
 	    reason = act==ActTerminate ? "hangup" : "rejected";
-	return new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),reason,text);
+	JGEvent* ev = new JGEvent(JGEvent::Terminated,this,jbev->releaseXML(),reason,text);
+	ev->setAction(act);
+	ev->confirmElement();
+	return ev;
     }
 
     // *** ActInfo
@@ -1288,7 +1519,7 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
     JGEvent* event = new JGEvent(act,this,jbev->releaseXML());
     jingle = event->jingle();
     if (!jingle) {
-	confirm(event->releaseXML(),XMPPError::SInternal);
+	event->confirmElement(XMPPError::SInternal);
 	delete event;
 	return 0;
     }
@@ -1312,7 +1543,7 @@ JGEvent* JGSession::decodeJingle(JBEvent* jbev)
 	}
 	// Error
 	TelEngine::destruct(c);
-	confirm(event->releaseXML(),err,text);
+	event->confirmElement(err,text);
 	delete event;
 	return 0;
     }

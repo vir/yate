@@ -199,17 +199,35 @@ public:
 	OnHoldLocal  = 0x0002,           // Put on hold by peer
 	OnHold = OnHoldRemote | OnHoldLocal,
     };
+    // File transfer status
+    enum FileTransferStatus {
+	FTNone,                          // No file transfer allowed
+	FTIdle,                          // Nothing done yet
+	FTWaitEstablish,                 // Waiting for SOCKS to be negotiated
+	FTEstablished,                   // Transport succesfully setup
+	FTRunning,                       // Running
+	FTTerminated                     // Terminated
+    };
+    // File transfer host sender
+    enum FileTransferHostSender {
+	FTHostNone = 0,
+	FTHostLocal,
+	FTHostRemote,
+    };
     // Outgoing constructor
-    YJGConnection(Message& msg, const char* caller, const char* called, bool available);
+    YJGConnection(Message& msg, const char* caller, const char* called, bool available,
+	const char* file);
     // Incoming contructor
     YJGConnection(JGEvent* event);
     virtual ~YJGConnection();
-    inline State state()
+    inline State state() const
 	{ return m_state; }
     inline const JabberID& local() const
 	{ return m_local; }
     inline const JabberID& remote() const
 	{ return m_remote; }
+    inline const String& reason() const
+	{ return m_reason; }
     // Check session id
     inline bool isSid(const String& sid) {
 	    Lock lock(m_mutex);
@@ -259,10 +277,13 @@ public:
     // Get the remote party address (actually this is the address of the 
     //  local party's server)
     void getRemoteAddr(String& dest);
+    // Process chan.notify messages
+    // Handle SOCKS status changes for file transfer
+    bool processChanNotify(Message& msg);
 
     // Check if a transfer can be initiated
     inline bool canTransfer() const
-	{ return m_session && !m_transferring && isAnswered(); }
+	{ return m_session && !m_transferring && isAnswered() && m_ftStatus == FTNone; }
 
     inline void updateResource(const String& resource) {
 	if (!m_remote.resource() && resource)
@@ -319,18 +340,26 @@ protected:
     JGSessionContent* buildAudioContent(JGRtpCandidates::Type type,
 	JGSessionContent::Senders senders = JGSessionContent::SendBoth,
 	bool rtcp = false, bool useFormats = true);
+    // Build a file transfer content
+    JGSessionContent* buildFileTransferContent(bool send, const char* filename,
+	NamedList& params);
     // Reserve local port for a RTP session content
     bool initLocalCandidates(JGSessionContent& content, bool sendTransInfo);
     // Match a local content agaist a received one
     // Return false if there is no common media
     bool matchMedia(JGSessionContent& local, JGSessionContent& recv) const;
-    // Find a session content in the list
-    JGSessionContent* findAudioContent(JGSessionContent& recv) const;
+    // Find a session content in a list
+    JGSessionContent* findContent(JGSessionContent& recv, const ObjList& list) const;
     // Set early media to remote
     void setEarlyMediaOut(Message& msg);
     // Enqueue a call.progress message from the current audio content
     // Used for early media
     void enqueueCallProgress();
+    // Init/start file transfer. Try to change host direction on failure
+    // If host dir succeeds, still return false, but don't terminate transfer
+    bool setupSocksFileTransfer(bool start);
+    // Change host sender. Return false on failure
+    bool changeFTHostDir();
     // Get the RTP direction param from a content
     // FIXME: ignore content senders for early media ?
     inline const char* rtpDir(const JGSessionContent& c) {
@@ -344,6 +373,11 @@ protected:
     inline JGRtpCandidate* buildCandidate(bool rtp = true) {
 	    return new JGRtpCandidate(id() + "_candidate_" + String((int)::random()),
 		rtp ? "1" : "2");
+	}
+    // Get the first file transfer content
+    inline JGSessionContent* firstFTContent() {
+	    ObjList* o = m_ftContents.skipNull();
+	    return o ? static_cast<JGSessionContent*>(o->get()) : 0;
 	}
 
 private:
@@ -360,6 +394,7 @@ private:
     JGSessionContent* m_audioContent;    // The current audio content
     String m_callerPrompt;               // Text to be sent to called before calling it
     String m_formats;                    // Formats received in call.execute
+    String m_subject;                    // Connection subject
     bool m_sendRawRtpFirst;              // Send raw-rtp transport as the first content of outgoing session
     // Crypto (for contents created by us)
     bool m_useCrypto;
@@ -376,9 +411,17 @@ private:
     JabberID m_transferFrom;             // Transfer source
     String m_transferSid;                // Session id for attended transfer
     // On hold data
-    int m_dataFlags;                    // The data status
-    String m_onHoldOutId;               // The id of the hold stanza sent to remote
-    String m_activeOutId;               // The id of the active stanza sent to remote
+    int m_dataFlags;                     // The data status
+    String m_onHoldOutId;                // The id of the hold stanza sent to remote
+    String m_activeOutId;                // The id of the active stanza sent to remote
+    // File transfer
+    FileTransferStatus m_ftStatus;       // File transfer status
+    int m_ftHostDirection;               // Which endpoint can send file transfer hosts
+    String m_ftNotifier;                 // The notifier expected in chan.notify
+    String m_ftStanzaId;
+    String m_dstAddrDomain;              // SHA1(SID + local + remote) used by SOCKS
+    ObjList m_ftContents;                // The list of negotiated file transfer contents
+    ObjList m_streamHosts;               // The list of negotiated SOCKS stream hosts
 };
 
 /**
@@ -459,6 +502,10 @@ public:
 class YJGDriver : public Driver
 {
 public:
+    // Message handlers
+    enum {
+	ChanNotify = Private
+    };
     // Enumerate protocols supported by this module
     enum Protocol {
 	Jabber     = 0,
@@ -521,6 +568,11 @@ public:
     YJGConnection* findBySid(const String& sid);
     // Get a channel's session id. Return false if not found
     bool getSid(const String& id, String& sid);
+    // Get a copy of the default file transfer proxy
+    inline JGStreamHost* defFTProxy() {
+	    Lock lock(this);
+	    return m_ftProxy ? new JGStreamHost(*m_ftProxy) : 0;
+	}
 
     // Check if this module handles a given protocol
     static bool canHandleProtocol(const String& proto) {
@@ -552,6 +604,7 @@ private:
     bool m_installIq;                    // Install the 'iq' service in jabber
                                          //  engine and xmpp. message handlers
     bool m_imToChanText;                 // Send received IM messages as chan.text if a channel is found
+    JGStreamHost* m_ftProxy;             // Default file transfer proxy
     String m_statusCmd;                  //
 };
 
@@ -589,7 +642,7 @@ static TokenDict s_errMap[] = {
     {"nomedia",         JGSession::ReasonMedia},
     {"transferred",     JGSession::ReasonTransfer},
     {"failure",         JGSession::ReasonUnknown},
-    {"noroute",         JGSession::ReasonUnknown},
+    {"noroute",         JGSession::ReasonDecline},
     {"noconn",          JGSession::ReasonUnknown},
     {"noauth",          JGSession::ReasonUnknown},
     {"nocall",          JGSession::ReasonUnknown},
@@ -599,6 +652,7 @@ static TokenDict s_errMap[] = {
     {"congestion",      JGSession::ReasonUnknown},
     {"looping",         JGSession::ReasonUnknown},
     {"shutdown",        JGSession::ReasonUnknown},
+    {"notransport",     JGSession::ReasonTransport},
     // Remote termination only
     {"failure",         JGSession::ReasonConn},
     {"failure",         JGSession::ReasonTransport},
@@ -621,7 +675,7 @@ inline int threadCount(const NamedList& params, const char* param)
 
 inline void addValidParam(Message& m, const char* param, const char* value)
 {
-    if (value)
+    if (!null(value))
 	m.addParam(param,value);
 }
 
@@ -963,7 +1017,6 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 	    }
 	}
 
-
 	Message* m = 0;
 	JBPresence::Presence pres = JBPresence::presenceType(event->stanzaType());
 
@@ -990,7 +1043,7 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 		    prefix << ".";
 		    unsigned int n = 1;
 		    // Set status: avoid some meaningful values
-		    if (res->status())
+		    if (res->status()) {
 			if (res->status() != "subscribed" &&
 			    res->status() != "unsubscribed" &&
 			    res->status() != "offline")
@@ -1000,6 +1053,7 @@ bool YJBClientPresence::accept(JBEvent* event, bool& processed, bool& insert)
 			    m->addParam(prefix + "1.",res->status());
 			    n = 2;
 			}
+		    }
 		    for (; o; o = o->skipNext(), n++) {
 			XMLElement* e = static_cast<XMLElement*>(o->get());
 			e->toList(*m,String(prefix + String(n)));
@@ -1254,14 +1308,16 @@ bool YJBIqService::accept(JBEvent* event, bool& processed, bool& insert)
  */
 // Outgoing call
 YJGConnection::YJGConnection(Message& msg, const char* caller, const char* called,
-	bool available)
+	bool available, const char* file)
     : Channel(&plugin,0,true),
     m_mutex(true), m_state(Pending), m_session(0), m_local(caller),
     m_remote(called), m_audioContent(0),
     m_callerPrompt(msg.getValue("callerprompt")), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0)
+    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0),
+    m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
+    m_subject = msg.getValue("subject");
     String uri = msg.getValue("diverteruri",msg.getValue("diverter"));
     // Skip protocol if present
     if (uri) {
@@ -1272,10 +1328,23 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	caller,called,
 	m_transferFrom?". Transferred from=":"",
 	m_transferFrom.safe(),this);
-    // Get formats
-    m_formats = msg.getValue("formats");
-    if (!m_formats)
-	s_usedCodecs.createList(m_formats,true);
+    // Get formats. Check if this is a file transfer session
+    if (null(file)) {
+	m_formats = msg.getValue("formats");
+	if (!m_formats)
+	    s_usedCodecs.createList(m_formats,true);
+    }
+    else {
+	m_ftStatus = FTIdle;
+	m_ftHostDirection = FTHostLocal;
+	NamedString* oper = msg.getParam("operation");
+	bool send = (oper && *oper == "send");
+	m_ftContents.append(buildFileTransferContent(send,file,msg));
+	// Add default proxy stream host if we have one
+	JGStreamHost* sh = plugin.defFTProxy();
+	if (sh)
+	    m_streamHosts.append(sh);
+    }
     // Set timeout and maxcall
     int tout = msg.getIntValue("timeout",-1);
     if (tout > 0)
@@ -1291,8 +1360,14 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     }
     else {
 	maxcall(timenow + pendingTimeout);
-	if (m_timeout)
-	    m_timeout += timenow - pendingTimeout;
+	if (m_timeout) {
+	    // Set a greater timeout for file transfer due to
+	    // TCP connect
+	    if (m_ftStatus == FTNone)
+		m_timeout += timenow - pendingTimeout;
+	    else
+		m_timeout += timenow;
+	}
     }
     XDebug(this,DebugInfo,"Time: " FMT64 ". Maxcall set to " FMT64 " us. [%p]",
 	Time::now(),maxcall(),this);
@@ -1316,14 +1391,21 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0)
+    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0),
+    m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
-    // Check if this call is transferred
     if (event->jingle()) {
+        // Check if this call is transferred
 	XMLElement* trans = event->jingle()->findFirstChild(XMLElement::Transfer);
 	if (trans) {
 	    m_transferFrom.set(trans->getAttribute("from"));
 	    TelEngine::destruct(trans);
+	}
+	// Get subject
+	XMLElement* subject = event->jingle()->findFirstChild(XMLElement::Subject);
+	if (subject) {
+	    m_subject = subject->getText();
+	    TelEngine::destruct(subject);
 	}
     }
     Debug(this,DebugCall,"Incoming. caller='%s' called='%s'%s%s [%p]",
@@ -1333,30 +1415,67 @@ YJGConnection::YJGConnection(JGEvent* event)
     // Set session
     m_session->userData(this);
     // Process incoming content(s)
-    bool haveSess = false;
     ObjList ok;
     ObjList remove;
+    bool haveAudioSession = false;
+    bool haveFTSession = false;
     if (processContentAdd(*event,ok,remove)) {
 	for (ObjList* o = ok.skipNull(); o; o = o->skipNext()) {
 	    JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
-	    haveSess = haveSess || c->isSession();
+	    switch (c->type()) {
+		case JGSessionContent::RtpIceUdp:
+		case JGSessionContent::RtpRawUdp:
+		    haveAudioSession = haveAudioSession || c->isSession();
+		    addContent(false,c);
+		    break;
+		case JGSessionContent::FileBSBOffer:
+		case JGSessionContent::FileBSBRequest:
+		    haveFTSession = haveFTSession || c->isSession();
+		    m_ftContents.append(c);
+		    break;
+		default:
+		    // processContentAdd() should return only known content types in ok list
+		    // This a safeguard if we add new content type(s) and forget to process them
+		    Debug(this,DebugStub,
+			"Can't process incoming content '%s' of type %u [%p]",
+			c->toString().c_str(),c->type(),this);
+		    remove.append(c)->setDelete(false);
+		    continue;
+	    }
 	    event->m_contents.remove(c,false);
-	    addContent(false,c);
 	}
     }
     // XEP-0166 7.2.8 At least one content should have disposition=session
     // Change state to Pending on failure to terminate the session
     const char* error = 0;
     if (m_audioContents.skipNull()) {
-	if (!haveSess)
+	if (!haveAudioSession)
+	    error = "No content with session disposition";
+    }
+    else if (m_ftContents.skipNull()) {
+	m_ftStatus = FTIdle;
+	m_ftHostDirection = FTHostRemote;
+	m_session->buildSocksDstAddr(m_dstAddrDomain);
+	if (haveFTSession) {
+	    // TODO: Check data consistency: all file transfer contents should be
+	    // identical (except for transport method, of course)
+	}
+	else
 	    error = "No content with session disposition";
     }
     else
-	error = "No acceptable session content(s) in initiate event [%p]";
+	error = "No acceptable session content(s) in initiate event";
     if (!error) {
 	event->confirmElement();
 	if (remove.skipNull())
 	    m_session->sendContent(JGSession::ActContentRemove,remove);
+	// We don't support mixed sessions for now
+	// Remove file transfer contents if we have an audio session request
+	if (m_audioContents.skipNull() && m_ftContents.skipNull()) {
+	    Debug(this,DebugMild,"Denying file transfer in audio session [%p]",this);
+	    m_session->sendContent(JGSession::ActContentRemove,m_ftContents);
+	    m_ftContents.clear();
+	}
     }
     else {
 	m_state = Pending;
@@ -1390,8 +1509,32 @@ bool YJGConnection::route()
     m->addParam("calleduri",BUILD_XMPP_URI(m_local));
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
+    if (m_subject)
+	m->addParam("subject",m_subject);
     m_mutex.lock();
     // TODO: add remote ip/port
+    // Fill file transfer data
+    JGSessionContent* c = firstFTContent();
+    if (c) {
+	m->addParam("format","data");
+	if (c->type() == JGSessionContent::FileBSBOffer)
+	    m->addParam("operation","receive");
+	else if (c->type() == JGSessionContent::FileBSBRequest)
+	    m->addParam("operation","send");
+	m->addParam("file_name",c->m_fileTransfer.getValue("name"));
+	int sz = c->m_fileTransfer.getIntValue("size",-1);
+	if (sz >= 0)
+	    m->addParam("file_size",String(sz));
+	const char* md5 = c->m_fileTransfer.getValue("hash");
+	if (!null(md5))
+	    m->addParam("file_md5",md5);
+	String* date = c->m_fileTransfer.getParam("date");
+	if (!null(date)) {
+	    unsigned int time = XMPPUtils::decodeDateTimeSec(*date);
+	    if (time != (unsigned int)-1)
+		m->addParam("file_time",String(time));
+	}
+    }
     m_mutex.unlock();
     return startRouter(m);
 }
@@ -1408,7 +1551,7 @@ void YJGConnection::callRejected(const char* error, const char* reason,
 	const Message* msg)
 {
     Debug(this,DebugCall,"callRejected. error=%s reason=%s [%p]",error,reason,this);
-    hangup(reason?reason:error,error);
+    hangup(error ? error : reason,reason);
     Channel::callRejected(error,reason,msg);
 }
 
@@ -1430,13 +1573,16 @@ void YJGConnection::disconnected(bool final, const char* reason)
 bool YJGConnection::msgProgress(Message& msg)
 {
     DDebug(this,DebugInfo,"msgProgress [%p]",this);
-    setEarlyMediaOut(msg);
+    if (m_ftStatus == FTNone)
+	setEarlyMediaOut(msg);
     return true;
 }
 
 bool YJGConnection::msgRinging(Message& msg)
 {
     DDebug(this,DebugInfo,"msgRinging [%p]",this);
+    if (m_ftStatus != FTNone)
+	return true;
     m_mutex.lock();
     if (m_session && m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo)) {
 	XMLElement* xml = XMPPUtils::createElement(XMLElement::Ringing,
@@ -1451,24 +1597,43 @@ bool YJGConnection::msgRinging(Message& msg)
 bool YJGConnection::msgAnswered(Message& msg)
 {
     Debug(this,DebugCall,"msgAnswered [%p]",this);
-    clearEndpoint();
-    m_mutex.lock();
-    resetCurrentAudioContent(true,false,false);
-    ObjList tmp;
-    if (m_audioContent)
-	tmp.append(m_audioContent)->setDelete(false);
-    else
-	Debug(this,DebugMild,"No session audio content available on answer time!!! [%p]",this);
-    if (m_session)
-	m_session->accept(tmp);
-    m_mutex.unlock();
-    return Channel::msgAnswered(msg);
+    if (m_ftStatus == FTNone) {
+	clearEndpoint();
+	m_mutex.lock();
+	resetCurrentAudioContent(true,false,false);
+	ObjList tmp;
+	if (m_audioContent)
+	    tmp.append(m_audioContent)->setDelete(false);
+	else
+	    Debug(this,DebugMild,"No session audio content available on answer time!!! [%p]",this);
+	if (m_session)
+	    m_session->accept(tmp);
+	m_mutex.unlock();
+	return Channel::msgAnswered(msg);
+    }
+    // File transfer connection
+    Channel::msgAnswered(msg);
+    if (m_ftStatus == FTEstablished) {
+	if (setupSocksFileTransfer(true)) {
+	    ObjList tmp;
+	    JGSessionContent* c = firstFTContent();
+	    if (c)
+		tmp.append(c)->setDelete(false);
+	    m_session->accept(tmp);
+	}
+	else
+	    hangup("failure");
+    }
+    return true;
 }
 
 bool YJGConnection::msgUpdate(Message& msg)
 {
     DDebug(this,DebugCall,"msgUpdate [%p]",this);
     Channel::msgUpdate(msg);
+
+    if (m_ftStatus != FTNone)
+	return false;
 
     NamedString* oper = msg.getParam("operation");
     bool req = (*oper == "request");
@@ -1587,7 +1752,7 @@ bool YJGConnection::msgText(Message& msg, const char* text)
 bool YJGConnection::msgDrop(Message& msg, const char* reason)
 {
     DDebug(this,DebugCall,"msgDrop('%s') [%p]",reason,this);
-    setReason(reason?reason:"dropped");
+    setReason(reason ? reason : "dropped");
     if (!Channel::msgDrop(msg,m_reason))
 	return false;
     hangup(m_reason);
@@ -1674,7 +1839,8 @@ void YJGConnection::hangup(const char* reason, const char* text)
 	return;
     m_hangup = true;
     m_state = Terminated;
-    setReason(reason?reason:(Engine::exiting()?"shutdown":"hangup"));
+    m_ftStatus = FTTerminated;
+    setReason(reason ? reason : (Engine::exiting() ? "shutdown" : "hangup"));
     if (!text && Engine::exiting())
 	text = "Shutdown";
     Message* m = message("chan.hangup",true);
@@ -1683,7 +1849,7 @@ void YJGConnection::hangup(const char* reason, const char* text)
     Engine::enqueue(m);
     if (m_session) {
 	m_session->userData(0);
-	m_session->hangup(lookup(m_reason,s_errMap,JGSession::ReasonOk),text);
+	m_session->hangup(lookup(m_reason,s_errMap,JGSession::ReasonUnknown),text);
 	TelEngine::destruct(m_session);
     }
     Debug(this,DebugCall,"Hangup. reason=%s [%p]",m_reason.c_str(),this);
@@ -1738,6 +1904,34 @@ bool YJGConnection::handleEvent(JGEvent* event)
 
 	bool rspOk = (event->type() == JGEvent::ResultOk);
 
+	if (m_ftStanzaId && m_ftStanzaId == event->id()) {
+	    m_ftStanzaId = "";
+	    String usedHost;
+	    bool ok = rspOk;
+	    if (rspOk && event->element()) {
+		XMLElement* query = event->element()->findFirstChild(XMLElement::Query);
+		XMLElement* used = 0;
+		if (query) {
+		    used = query->findFirstChild(XMLElement::StreamHostUsed);
+		    if (used)
+			usedHost = used->getAttribute("jid");
+		}
+		TelEngine::destruct(query);
+		TelEngine::destruct(used);
+	    }
+	    if (!ok) {
+		// Result error: continue if we still can receive hosts
+		ok = (event->type() == JGEvent::ResultError && isOutgoing());
+		if (ok && m_ftStatus == FTWaitEstablish) 
+		    m_ftStatus = FTIdle;
+		clearEndpoint("data");
+	    }
+	    Debug(this,rspOk ? DebugAll : DebugMild,
+		"Received result=%s to streamhost used=%s [%p]",
+		event->name(),usedHost.c_str(),this);
+	    return ok;
+	}
+
 	// Hold/active result
 	bool hold = (m_onHoldOutId && m_onHoldOutId == event->id());
 	if (hold || (m_activeOutId && m_activeOutId == event->id())) {
@@ -1780,6 +1974,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    }
 	    return true;
 	}
+
 	return true;
     }
 
@@ -1797,7 +1992,10 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    }
 	    break;
 	case JGSession::ActTransportInfo:
-	    processActionTransportInfo(event);
+	    if (m_ftStatus == FTNone)
+		processActionTransportInfo(event);
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	case JGSession::ActTransportAccept:
 	    // TODO: handle it when (if) we'll send transport-replace
@@ -1815,10 +2013,14 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		m_session->sendContent(JGSession::ActTransportReject,event->m_contents);
 	    break;
 	case JGSession::ActContentAccept:
+	    if (m_ftStatus != FTNone) {
+		event->confirmElement(XMPPError::SRequest);
+		break;
+	    }
 	    event->confirmElement();
 	    for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
 		JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
-		if (findAudioContent(*c))
+		if (findContent(*c,m_audioContents))
 		    Debug(this,DebugAll,"Event(%s) remote accepted content=%s [%p]",
 			event->actionName(),c->toString().c_str(),this);
 		else {
@@ -1832,7 +2034,10 @@ bool YJGConnection::handleEvent(JGEvent* event)
 		resetCurrentAudioContent(isAnswered(),!isAnswered());
 	    break;
 	case JGSession::ActContentAdd:
-	    processActionContentAdd(event);
+	    if (m_ftStatus == FTNone)
+		processActionContentAdd(event);
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	case JGSession::ActContentModify:
 	    // This event should modify the content 'senders' attribute
@@ -1840,6 +2045,10 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    event->confirmElement(XMPPError::SNotAllowed);
 	    break;
 	case JGSession::ActContentReject:
+	    if (m_ftStatus != FTNone) {
+		event->confirmElement(XMPPError::SRequest);
+		break;
+	    }
 	    // XEP-0166 Notes - 16: terminate the session if there are no more contents
 	    if (!removeContents(event))
 		return true;
@@ -1848,21 +2057,40 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	case JGSession::ActContentRemove:
 	    // XEP-0166 Notes - 16: terminate the session if there are no more contents
-	    if (!removeContents(event))
-		return true;
-	    if (!m_audioContent)
-		resetCurrentAudioContent(isAnswered(),!isAnswered());
+	    if (m_ftStatus != FTNone) {
+		if (!removeContents(event))
+		    return true;
+		if (!m_audioContent)
+		    resetCurrentAudioContent(isAnswered(),!isAnswered());
+	    }
+	    else {
+		// Confirm and remove requested content(s)
+		// Terminate if the first content is removed while negotiating
+		event->confirmElement();
+		for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
+		    JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
+		    JGSessionContent* cc = findContent(*c,m_ftContents);
+		    if (cc) {
+			if (cc == firstFTContent() && m_ftStatus != FTIdle)
+			    return false;
+			m_ftContents.remove(cc);
+		    }
+		}
+		return 0 != m_ftContents.skipNull();
+	    }
 	    break;
 	case JGSession::ActAccept:
 	    if (isAnswered())
 		break;
+	    if (m_ftStatus != FTNone)
+		return setupSocksFileTransfer(true);
 	    // Update media
 	    Debug(this,DebugCall,"Remote peer answered the call [%p]",this);
 	    m_state = Active; 
 	    removeCurrentAudioContent();
 	    for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
 		JGSessionContent* recv = static_cast<JGSessionContent*>(o->get());
-		JGSessionContent* c = findAudioContent(*recv);
+		JGSessionContent* c = findContent(*recv,m_audioContents);
 		if (!c)
 		    continue;
 		// Update credentials for ICE-UDP
@@ -1887,22 +2115,69 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    Engine::enqueue(message("call.answered",false,true));
 	    break;
 	case JGSession::ActTransfer:
-	    processTransferRequest(event);
+	    if (m_ftStatus == FTNone)
+		processTransferRequest(event);
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	case JGSession::ActRinging:
-	    event->confirmElement();
-	    Engine::enqueue(message("call.ringing",false,true));
+	    if (m_ftStatus == FTNone) {
+		event->confirmElement();
+		Engine::enqueue(message("call.ringing",false,true));
+	    }
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	case JGSession::ActHold:
 	case JGSession::ActActive:
 	case JGSession::ActMute:
-	    handleAudioInfoEvent(event);
+	    if (m_ftStatus == FTNone)
+		handleAudioInfoEvent(event);
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	case JGSession::ActTrying:
 	case JGSession::ActReceived:
-	    event->confirmElement();
-	    Debug(this,DebugAll,"Received Jingle event (%p) with action=%s [%p]",
-		event,event->actionName(),this);
+	    if (m_ftStatus == FTNone) {
+		event->confirmElement();
+		Debug(this,DebugAll,"Received Jingle event (%p) with action=%s [%p]",
+		    event,event->actionName(),this);
+	    }
+	    else
+		event->confirmElement(XMPPError::SRequest);
+	    break;
+	case JGSession::ActStreamHost:
+	    if (m_ftStatus != FTNone) {
+		// Check if allowed
+		if (m_ftHostDirection != FTHostRemote) {
+		    event->confirmElement(XMPPError::SRequest);
+		    break;
+		}
+		// Check if we already received it
+		if (m_ftStatus != FTIdle) {
+		    event->confirmElement(XMPPError::SRequest);
+		    break;
+		}
+		event->setConfirmed();
+		// Remember stanza id
+		m_ftStanzaId = event->id();
+		// Copy hosts from event
+		ListIterator iter(event->m_streamHosts);
+		for (GenObject* o = 0; 0 != (o = iter.get());) {
+		    event->m_streamHosts.remove(o,false);
+		    m_streamHosts.append(o);
+		}
+		if (!setupSocksFileTransfer(false)) {
+		    if (m_ftStanzaId) {
+			m_session->sendStreamHostUsed("",m_ftStanzaId);
+			m_ftStanzaId = "";
+		    }
+		    if (!setupSocksFileTransfer(false))
+			return false;
+		}
+	    }
+	    else
+		event->confirmElement(XMPPError::SRequest);
 	    break;
 	default:
 	    Debug(this,DebugNote,
@@ -1921,6 +2196,7 @@ bool YJGConnection::presenceChanged(bool available)
     Lock lock(m_mutex);
     if (m_state == Terminated)
 	return false;
+    maxcall(m_timeout);
     // Check if unavailable in any other states
     if (!available) {
 	if (!m_hangup) {
@@ -1936,26 +2212,43 @@ bool YJGConnection::presenceChanged(bool available)
     Debug(this,DebugCall,"Calling. caller=%s called=%s [%p]",
 	m_local.c_str(),m_remote.c_str(),this);
     m_state = Active;
-    XMLElement* transfer = 0;
-    if (m_transferFrom)
-	transfer = JGSession::buildTransfer(String::empty(),m_transferFrom);
-    if (m_sendRawRtpFirst) {
-	addContent(true,buildAudioContent(JGRtpCandidates::RtpRawUdp));
-	addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
+    if (m_ftStatus == FTNone) {
+	XMLElement* transfer = 0;
+	if (m_transferFrom)
+	    transfer = JGSession::buildTransfer(String::empty(),m_transferFrom);
+	if (m_sendRawRtpFirst) {
+	    addContent(true,buildAudioContent(JGRtpCandidates::RtpRawUdp));
+	    addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
+	}
+	else {
+	    addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
+	    addContent(true,buildAudioContent(JGRtpCandidates::RtpRawUdp));
+	}
+	m_session = s_jingle->call(m_local,m_remote,m_audioContents,transfer,
+	    m_callerPrompt,m_subject);
     }
-    else {
-	addContent(true,buildAudioContent(JGRtpCandidates::RtpIceUdp));
-	addContent(true,buildAudioContent(JGRtpCandidates::RtpRawUdp));
-    }
-    m_session = s_jingle->call(m_local,m_remote,m_audioContents,transfer,m_callerPrompt);
+    else
+	m_session = s_jingle->call(m_local,m_remote,m_ftContents,0,
+	    m_callerPrompt,m_subject);
     if (!m_session) {
 	hangup("noconn");
 	return true;
     }
     m_session->userData(this);
-    maxcall(m_timeout);
+    if (m_ftStatus != FTNone) {
+	m_session->buildSocksDstAddr(m_dstAddrDomain);
+	if (!setupSocksFileTransfer(false)) {
+	    if (m_ftStatus == FTTerminated) {
+		hangup("noconn");
+		return true;
+	    }
+	    // Send empty host
+	    m_streamHosts.clear();
+	    m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
+	}
+    }
     // Notify now ringing if the remote party doesn't support it
-    if (!m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
+    if (m_ftStatus == FTNone && !m_session->hasFeature(XMPPNamespace::JingleAppsRtpInfo))
 	Engine::enqueue(message("call.ringing",false,true));
     return false;
 }
@@ -2089,7 +2382,7 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
 
     for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
 	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
-	JGSessionContent* cc = findAudioContent(*c);
+	JGSessionContent* cc = findContent(*c,m_audioContents);
 	if (!cc) {
 	    Debug(this,DebugNote,"Event('%s') content '%s' not found [%p]",
 		event->actionName(),c->toString().c_str(),this);
@@ -2388,12 +2681,32 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
     for (ObjList* o = event.m_contents.skipNull(); o; o = o->skipNext()) {
 	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
 
-	// Check if we already have a content with the same name and creator
-	if (findAudioContent(*c)) {
-	    Debug(this,DebugInfo,
-		"Event(%s) content='%s' is already added [%p]",
-		event.actionName(),c->toString().c_str(),this);
-	    return false;
+	bool fileTransfer = false;
+
+	// Check content type
+	switch (c->type()) {
+	    case JGSessionContent::RtpIceUdp:
+	    case JGSessionContent::RtpRawUdp:
+		break;
+	    case JGSessionContent::FileBSBOffer:
+	    case JGSessionContent::FileBSBRequest:
+		// File transfer contents can be added only in session initiate
+		if (event.action() != JGSession::ActInitiate) {
+		    Debug(this,DebugInfo,
+			"Event(%s) content='%s':  [%p]",
+			event.actionName(),c->toString().c_str(),this);
+		    remove.append(c)->remove(false);
+		    continue;
+		}
+		fileTransfer = true;
+		break;
+	    case JGSessionContent::Unknown:
+	    case JGSessionContent::UnknownFileTransfer:
+		Debug(this,DebugInfo,
+		    "Event(%s) with unknown (unsupported) content '%s' [%p]",
+		    event.actionName(),c->toString().c_str(),this);
+		remove.append(c)->remove(false);
+		continue;
 	}
 
 	// Check creator
@@ -2404,6 +2717,20 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		event.actionName(),c->toString().c_str(),this);
 	    remove.append(c)->remove(false);
 	    continue;
+	}
+
+	// Done if file transfer
+	if (fileTransfer) {
+	    ok.append(c)->setDelete(false);
+	    continue;
+	}
+
+	// Check if we already have an audio content with the same name and creator
+	if (findContent(*c,m_audioContents)) {
+	    Debug(this,DebugInfo,
+		"Event(%s) content='%s' is already added [%p]",
+		event.actionName(),c->toString().c_str(),this);
+	    return false;
 	}
 
 	// Check transport type
@@ -2512,7 +2839,7 @@ bool YJGConnection::removeContents(JGEvent* event)
     event->confirmElement();
     for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
 	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
-	JGSessionContent* cc = findAudioContent(*c);
+	JGSessionContent* cc = findContent(*c,m_audioContents);
 	if (cc) {
 	    if (m_audioContent == cc)
 		removeCurrentAudioContent(true);
@@ -2530,7 +2857,12 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
 {
     String id;
     id << this->id() << "_content_" << (int)::random();
-    JGSessionContent* c = new JGSessionContent(id,senders,
+    JGSessionContent::Type t = JGSessionContent::Unknown;
+    if (type == JGRtpCandidates::RtpRawUdp)
+	t = JGSessionContent::RtpRawUdp;
+    else if (type == JGRtpCandidates::RtpIceUdp)
+	t = JGSessionContent::RtpIceUdp;
+    JGSessionContent* c = new JGSessionContent(t,id,senders,
 	isOutgoing() ? JGSessionContent::CreatorInitiator : JGSessionContent::CreatorResponder);
 
     // Add codecs
@@ -2544,6 +2876,43 @@ JGSessionContent* YJGConnection::buildAudioContent(JGRtpCandidates::Type type,
 
     if (type == JGRtpCandidates::RtpRawUdp || m_useCrypto)
 	initLocalCandidates(*c,false);
+
+    return c;
+}
+
+// Build a file transfer content
+JGSessionContent* YJGConnection::buildFileTransferContent(bool send, const char* filename,
+    NamedList& params)
+{
+    // Build the content
+    String id;
+    id << this->id() << "_content_" << (int)::random();
+    JGSessionContent::Type t = JGSessionContent::Unknown;
+    JGSessionContent::Senders s = JGSessionContent::SendUnknown;
+    if (send) {
+	t = JGSessionContent::FileBSBOffer;
+	s = JGSessionContent::SendInitiator;
+    }
+    else {
+	t = JGSessionContent::FileBSBRequest;
+	s = JGSessionContent::SendResponder;
+    }
+    JGSessionContent* c = new JGSessionContent(t,id,s,JGSessionContent::CreatorInitiator);
+
+    // Init file
+    c->m_fileTransfer.addParam("name",filename);
+    int sz = params.getIntValue("file_size",-1);
+    if (sz >= 0)
+	c->m_fileTransfer.addParam("size",String(sz));
+    const char* hash = params.getValue("file_md5");
+    if (!null(hash))
+	c->m_fileTransfer.addParam("hash",hash);
+    int date = params.getIntValue("file_time",-1);
+    if (date >= 0) {
+	String buf;
+	XMPPUtils::encodeDateTimeSec(buf,date);
+	c->m_fileTransfer.addParam("date",buf);
+    }
 
     return c;
 }
@@ -2630,10 +2999,11 @@ bool YJGConnection::matchMedia(JGSessionContent& local, JGSessionContent& recv) 
     return 0 != local.m_rtpMedia.skipNull();
 }
 
-// Find a session content in the list
-JGSessionContent* YJGConnection::findAudioContent(JGSessionContent& recv) const
+// Find a session content in a list
+JGSessionContent* YJGConnection::findContent(JGSessionContent& recv,
+    const ObjList& list) const
 {
-    for (ObjList* o = m_audioContents.skipNull(); o; o = o->skipNext()) {
+    for (ObjList* o = list.skipNull(); o; o = o->skipNext()) {
 	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
 	if (c->creator() == recv.creator() && c->toString() == recv.toString())
 	    return c;
@@ -2696,6 +3066,234 @@ void YJGConnection::enqueueCallProgress()
     m_audioContent->m_rtpMedia.createList(formats,true);
     m->addParam("formats",formats);
     Engine::enqueue(m);
+}
+
+// Set file transfer stream host
+bool YJGConnection::setupSocksFileTransfer(bool start)
+{
+    if (!m_session) {
+	DDebug(this,DebugNote,"setupSocksFileTransfer: no session [%p]",this);
+	return false;
+    }
+    JGSessionContent* c = firstFTContent();
+    if (!c) {
+	DDebug(this,DebugNote,"setupSocksFileTransfer: no contents [%p]",this);
+	return false;
+    }
+    const char* dir = 0;
+    if (c->type() == JGSessionContent::FileBSBOffer)
+	dir = isOutgoing() ? "send" : "receive";
+    else if (c->type() == JGSessionContent::FileBSBRequest)
+	dir = isIncoming() ? "send" : "receive";
+    else {
+	DDebug(this,DebugNote,"setupSocksFileTransfer: no SOCKS contents [%p]",this);
+	return false;
+    }
+
+    if (start) {
+	Message m("chan.socks");
+	m.userData(this);
+	m.addParam("dst_addr_domain",m_dstAddrDomain);
+	m.addParam("format","data");
+	bool ok = Engine::dispatch(m);
+	if (ok) {
+	    m_ftStatus = FTRunning;
+	    Debug(this,DebugAll,"Started SOCKS file transfer [%p]",this);
+	}
+	else {
+	    setReason("notransport");
+	    m_ftStatus = FTTerminated;
+	    Debug(this,DebugNote,"Failed to start SOCKS file transfer [%p]",this);
+	}
+	return ok;
+    }
+
+    // Init transport
+    const char* error = 0;
+    while (true) {
+	ObjList* o = m_streamHosts.skipNull();
+	if (!o) {
+	    // We can send hosts: try to get a local socks server
+	    if (m_ftHostDirection == FTHostLocal) {
+		Message m("chan.socks");
+		m.userData(this);
+		m.addParam("dst_addr_domain",m_dstAddrDomain);
+		m.addParam("direction",dir);
+		m.addParam("client",String::boolText(false));
+		DDebug(this,DebugAll,"Trying to setup local SOCKS server [%p]",this);
+		clearEndpoint("data");
+		if (Engine::dispatch(m)) {
+		    const char* addr = m.getValue("address");
+		    int port = m.getIntValue("port");
+		    if (!null(addr) && port > 0) {
+			m_ftNotifier = m.getValue("notifier");
+			m_streamHosts.append(new JGStreamHost(m_local,addr,port));
+			m_ftStatus = FTWaitEstablish;
+			// Send our stream host
+			m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
+			break;
+		    }
+		}
+		error = "chan.socks failed";
+	    }
+	    else
+		error = "no hosts";
+	    break;
+	}
+
+	// Remove the first stream host if status is idle: it failed
+	if (m_ftStatus != FTIdle) {
+	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
+	    Debug(this,DebugNote,"Removing failed streamhost '%s:%d' [%p]",
+		sh->m_address.c_str(),sh->m_port,this);
+	    o->remove();
+	    o = m_streamHosts.skipNull();
+	}
+
+	while (o) {
+	    Message m("chan.socks");
+	    m.userData(this);
+	    m.addParam("dst_addr_domain",m_dstAddrDomain);
+	    m.addParam("direction",dir);
+	    m.addParam("client",String::boolText(true));
+	    JGStreamHost* sh = static_cast<JGStreamHost*>(o->get());
+	    m.addParam("remoteip",sh->m_address);
+	    m.addParam("remoteport",String(sh->m_port));
+	    clearEndpoint("data");
+	    if (Engine::dispatch(m)) {
+		m_ftNotifier = m.getValue("notifier");
+		break;
+	    }
+	    Debug(this,DebugNote,"Removing failed streamhost '%s:%d' [%p]",
+		sh->m_address.c_str(),sh->m_port,this);
+	    o->remove();
+	    o = m_streamHosts.skipNull();
+	}
+	if (o)
+	    m_ftStatus = FTWaitEstablish;
+	else
+	    error = "no more hosts";
+	break;
+    }
+
+    if (!error) {
+	DDebug(this,DebugAll,"Waiting SOCKS file transfer [%p]",this);
+	return true;
+    }
+
+    // Check if we can still negotiate hosts
+    if (changeFTHostDir()) {
+	m_ftStatus = FTIdle;
+	return false;
+    }
+
+    setReason("notransport");
+    m_ftStatus = FTTerminated;
+    Debug(this,DebugNote,"Failed to initialize SOCKS file transfer '%s' [%p]",
+	error,this);
+    return false;
+}
+
+// Change host sender. Return false on failure
+bool YJGConnection::changeFTHostDir()
+{
+    // Outgoing: we've sent hosts, allow remote to sent hosts
+    // Incoming: remote sent hosts, allow us to send hosts
+    bool fromLocal = (m_ftHostDirection == FTHostRemote);
+    if (m_ftHostDirection != FTHostNone && isOutgoing() != fromLocal) {
+	m_ftHostDirection = fromLocal ? FTHostLocal : FTHostRemote;
+	Debug(this,DebugAll,"Allowing %s party to send file transfer host(s) [%p]",
+	    fromLocal ? "local" : "remote",this);
+	return true;
+    }
+    if (m_ftHostDirection != FTHostNone)
+	Debug(this,DebugNote,"No more host available [%p]",this); 
+    m_ftHostDirection = FTHostNone;
+    return false;
+}
+
+// Process chan.notify messages
+// Handle SOCKS status changes for file transfer
+bool YJGConnection::processChanNotify(Message& msg)
+{
+    NamedString* notifier = msg.getParam("id");
+    if (!notifier)
+	return false;
+    Lock lock(m_mutex);
+    if (m_state == Terminated)
+	return true;
+    if (*notifier == m_ftNotifier) {
+	NamedString* status = msg.getParam("status");
+	if (!status)
+	    return false;
+	if (*status == "established") {
+	    // Safety check
+	    if (m_state == Terminated || !m_session ||
+		m_ftHostDirection == FTHostNone || !m_streamHosts.skipNull()) {
+		hangup("failure");
+		return true;
+	    }
+	    const String& jid = m_streamHosts.skipNull()->get()->toString();
+	    if (isOutgoing()) {
+		// Send hosts if the jid is not our's: we did't sent it
+		if (m_ftHostDirection == FTHostLocal) {
+		    if (m_local != jid)
+			m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
+		}
+		else
+		    m_session->sendStreamHostUsed(jid,m_ftStanzaId);
+	    }
+	    else {
+		if (m_ftHostDirection == FTHostRemote)
+		    m_session->sendStreamHostUsed(jid,m_ftStanzaId);
+		// Accept the session
+		if (isAnswered()) {
+		    if (setupSocksFileTransfer(true)) {
+			ObjList tmp;
+			JGSessionContent* c = firstFTContent();
+			if (c)
+			    tmp.append(c)->setDelete(false);
+			m_session->accept(tmp);
+		    }
+		    else
+			hangup("failure");
+		}
+	    }
+	    if (m_ftStatus != FTRunning && !m_hangup)
+		m_ftStatus = FTEstablished;
+	}
+	else if (*status == "running") {
+	    // Ignore it for now !!!
+	}
+	else if (*status == "terminated") {
+	    if (m_ftStatus == FTWaitEstablish) {
+		// Try to setup another stream host
+		// Remember: setupSocksFileTransfer changes the host dir
+		if (setupSocksFileTransfer(false))
+		    return true;
+		if (m_ftStatus != FTTerminated &&
+		    m_ftHostDirection != FTHostNone && m_session) {
+		    m_streamHosts.clear();
+		    // Current host dir is remote: old one was local: send empty hosts
+		    if (m_ftHostDirection == FTHostRemote) {
+			m_session->sendStreamHosts(m_streamHosts,&m_ftStanzaId);
+			return true;
+		    }
+		    // Respond and try to setup our hosts
+		    if (m_ftStanzaId) {
+			m_session->sendStreamHostUsed("",m_ftStanzaId);
+			m_ftStanzaId = "";
+		    }
+		    if (setupSocksFileTransfer(false))
+			return true;
+		}
+	    }
+	    else if (m_ftStatus != FTIdle)
+		hangup("failure");
+	}
+	return true;
+    }
+    return false;
 }
 
 // Handle hold/active/mute actions
@@ -3416,12 +4014,12 @@ bool XmppIqHandler::received(Message& msg)
     XMLElement* recvStanza = XMLElement::getXml(msg,true);
     if (id || recvStanza) {
 	XMLElement* stanza = XMPPUtils::createIq(XMPPUtils::IqError,to,from,id);
-	stanza->addChild(recvStanza);
+	// Add the first child of the received element
+	stanza->addChild(recvStanza->removeChild());
 	stanza->addChild(XMPPUtils::createError(XMPPError::TypeModify,XMPPError::SFeatureNotImpl));
 	stream->sendStanza(stanza);
     }
-    else
-	TelEngine::destruct(recvStanza);
+    TelEngine::destruct(recvStanza);
     TelEngine::destruct(stream);
     // Return true to make sure nobody will respond again!!!
     return true;
@@ -3434,7 +4032,7 @@ String YJGDriver::s_statusCmd[StatusCmdCount] = {"streams"};
 
 YJGDriver::YJGDriver()
     : Driver("jingle","varchans"), m_init(false), m_singleTone(true), m_installIq(true),
-    m_imToChanText(false)
+    m_imToChanText(false), m_ftProxy(0)
 {
     Output("Loaded module YJingle");
     m_statusCmd << "status " << name();
@@ -3540,6 +4138,7 @@ void YJGDriver::initialize()
 	installRelay(Transfer);
 	installRelay(ImExecute);
 	installRelay(Progress);
+	installRelay(ChanNotify,"chan.notify",100);
 	Engine::install(new ResNotifyHandler);
 	Engine::install(new ResSubscribeHandler);
 	Engine::install(new XmppGenerateHandler);
@@ -3581,6 +4180,19 @@ void YJGDriver::initialize()
 	    s_usedCodecs.append(new JGRtpMedia(*crt));
     }
 
+    TelEngine::destruct(m_ftProxy);
+    const char* ftJid = sect->getValue("socks_proxy_jid");
+    if (!null(ftJid)) {
+	const char* ftAddr = sect->getValue("socks_proxy_ip");
+	int ftPort = sect->getIntValue("socks_proxy_port",-1);
+	if (!(null(ftAddr) || ftPort < 1))
+	    m_ftProxy = new JGStreamHost(ftJid,ftAddr,ftPort);
+	else
+	    Debug(this,DebugNote,
+		"Invalid addr/port (%s:%s) for default file transfer proxy",
+		sect->getValue("socks_proxy_ip"),sect->getValue("socks_proxy_port"));
+    }
+
     int dbg = DebugInfo;
     if (!s_localAddress)
 	dbg = DebugNote;
@@ -3597,6 +4209,9 @@ void YJGDriver::initialize()
 	if (!s_usedCodecs.createList(media,true))
 	    media = "MISSING";
 	s << " codecs=" << media;
+	if (m_ftProxy)
+	    s << " socks_proxy=" << m_ftProxy->c_str() << ":" <<
+		m_ftProxy->m_address.c_str() << ":" << m_ftProxy->m_port;
 	Debug(this,dbg,"Module initialized:%s",s.c_str());
     }
 
@@ -3693,22 +4308,51 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	TelEngine::destruct(stream);
 	break;
     }
+
+    // Check if this is a file transfer
+    String file;
+    if (!error) {
+	String* format = msg.getParam("format");
+	if (format && *format == "data") {
+	    // Check file. Remove path if present
+	    file = msg.getValue("file_name");
+	    int pos = file.rfind('/');
+	    if (pos == -1)
+		pos = file.rfind('\\');
+	    if (pos != -1)
+		file = file.substr(pos + 1);
+	    if (file.null())
+		error << "File transfer request with no file";
+	}
+    }
+
     if (error) {
 	Debug(this,DebugNote,"Jingle call failed. %s",error.c_str());
-	msg.setParam("error",errStr?errStr:"noconn");
+	msg.setParam("error",errStr ? errStr : "noconn");
 	return false;
     }
+
     // Parameters OK. Create connection and init channel
     Debug(this,DebugAll,"msgExecute. caller='%s' called='%s' available=%u",
 	caller.c_str(),called.c_str(),available);
-    YJGConnection* conn = new YJGConnection(msg,caller,called,available);
-    Channel* ch = static_cast<Channel*>(msg.userData());
-    if (ch && conn->connect(ch,msg.getValue("reason"))) {
-	conn->callConnect(msg);
-	msg.setParam("peerid",conn->id());
-	msg.setParam("targetid",conn->id());
+    YJGConnection* conn = new YJGConnection(msg,caller,called,available,file);
+    bool ok = conn->state() != YJGConnection::Terminated;
+    if (ok) {
+	Channel* ch = static_cast<Channel*>(msg.userData());
+	if (ch && conn->connect(ch,msg.getValue("reason"))) {
+	    conn->callConnect(msg);
+	    msg.setParam("peerid",conn->id());
+	    msg.setParam("targetid",conn->id());
+	}
+    }
+    else {
+	Debug(this,DebugNote,"Jingle call failed to initialize. error=%s",
+	    conn->reason().c_str());
+	msg.setParam("error","failure");
     }
     TelEngine::destruct(conn);
+    if (!ok)
+	return false;
     // Send subscribe after creating the connection:
     // the presence info might be received before creating it
     if (sendSub) {
@@ -3878,7 +4522,11 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	error << "Invalid caller=" << cr;
 	return false;
     }
-    caller.set(cr,domain);
+    JabberID tmp(cr);
+    if (tmp.node())
+	caller.set(tmp.node(),domain,tmp.resource());
+    else
+	caller.set(tmp.domain(),domain,tmp.resource());
     called.set(cd);
 
     // Get an available resource for the remote user if we keep the roster
@@ -3931,7 +4579,8 @@ bool YJGDriver::setComponentCall(JabberID& caller, JabberID& called,
 	    error << "No stream for called=" << called;
 	    return false;
 	}
-	caller.resource(s_jabber->defaultResource());
+	if (!caller.resource())
+	    caller.resource(s_jabber->defaultResource());
 	// Send subscribe request and probe
 	XMLElement* xml = 0;
 	if (s_jingle->requestSubscribe()) {
@@ -3999,6 +4648,21 @@ bool YJGDriver::received(Message& msg, int id)
 	    msg.retValue() << "\r\n";
 	    return true;
 	}
+    }
+    else if (id == ChanNotify) {
+	String* module = msg.getParam("module");
+	if (module && *module == name())
+	    return false;
+	String* chan = msg.getParam("notify");
+	if (!chan)
+	    return false;
+	YJGConnection* ch = static_cast<YJGConnection*>(Driver::find(*chan));
+	if (!ch)
+	    return false;
+	ch->processChanNotify(msg);
+	if (ch->state() == YJGConnection::Terminated)
+	    ch->disconnect(0);
+	return true;
     }
     else if (id == Halt) {
 	dropAll(msg);

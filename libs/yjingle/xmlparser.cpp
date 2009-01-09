@@ -89,6 +89,11 @@ TokenDict XMLElement::s_names[] = {
     {"crypto-required",      CryptoRequired},
     {"trying",               Trying},
     {"received",             Received},
+    {"file",                 File},
+    {"offer",                Offer},
+    {"request",              Request},
+    {"streamhost",           StreamHost},
+    {"streamhost-used",      StreamHostUsed},
     {0,0}
 };
 

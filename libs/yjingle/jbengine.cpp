@@ -1908,7 +1908,7 @@ void JBPresence::initialize(const NamedList& params)
     // Automatically process (un)subscribe and probe requests if no roster
     if (engine()) {
 	XMPPServerInfo* info = engine()->findServerInfo(engine()->componentServer(),true);
-	if (info)
+	if (info) {
 	    if (info->flag(XMPPServerInfo::KeepRoster)) {
 		if (!addSubParam)
 		    m_addOnSubscribe.set(XMPPDirVal::Both);
@@ -1921,6 +1921,7 @@ void JBPresence::initialize(const NamedList& params)
 		m_autoProbe = true;
 		m_autoSubscribe.replace(XMPPDirVal::From);
 	    }
+	}
     }
 
     m_probeInterval = 1000 * params.getIntValue("probe_interval",m_probeInterval/1000);

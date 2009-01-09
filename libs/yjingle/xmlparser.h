@@ -134,6 +134,11 @@ public:
 	CryptoRequired,                  // crypto-required
 	Trying,                          // trying
 	Received,                        // received
+	File,                            // file
+	Offer,                           // offer
+	Request,                         // request
+	StreamHost,                      // streamhost
+	StreamHostUsed,                  // streamhost-used
 	Unknown,                         // Any text
 	Invalid,                         // m_element is 0
     };

@@ -1759,6 +1759,12 @@ void YateSIPEndPoint::regRun(const SIPMessage* message, SIPTransaction* t)
     msg.setParam("driver","sip");
     String data(addr);
     bool nat = isNatBetween(addr.getHost(),message->getParty()->getPartyAddr());
+    if (!nat) {
+	int port = addr.getPort();
+	if (!port)
+	    port = 5060;
+	nat = (message->getParty()->getPartyPort() != port) && msg.getBoolValue("nat_port_support",true);
+    }
     bool natChanged = false;
     if (msg.getBoolValue("nat_support",s_auto_nat && nat)) {
 	Debug(&plugin,DebugInfo,"Registration NAT detected: private '%s:%d' public '%s:%d'",

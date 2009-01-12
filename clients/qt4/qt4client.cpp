@@ -70,7 +70,8 @@ public:
 	Slider         = 11,
 	ProgressBar    = 12,
 	SpinBox        = 13,
-	Unknown        = 14,             // Unknown type
+	Calendar       = 14,
+	Unknown        = 15,             // Unknown type
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
 	CustomWidget,                    // QtCustomWidget descendant
@@ -147,6 +148,8 @@ public:
 	{ return static_cast<QProgressBar*>(m_widget); }
     inline QSpinBox* spinBox()
 	{ return static_cast<QSpinBox*>(m_widget); }
+    inline QCalendarWidget* calendar()
+	{ return static_cast<QCalendarWidget*>(m_widget); }
     inline QtTable* customTable()
 	{ return qobject_cast<QtTable*>(m_widget); }
     inline QtCustomWidget* customWidget()
@@ -344,7 +347,8 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QAbstractButton",
     "QSlider",
     "QProgressBar",
-    "QSpinBox"
+    "QSpinBox",
+    "QCalendarWidget"
 };
 
 // Utility: get a list row containing the given text
@@ -1684,9 +1688,20 @@ void QtWindow::selectionChanged()
     if (!(QtClient::self() && sender()))
 	return;
     String name = YQT_OBJECT_NAME(sender());
-    String item;
-    getSelect(name,item);
-    Client::self()->select(this,name,item);
+    QtWidget w(sender());
+    if (w.type() != QtWidget::Calendar) {
+	String item;
+	getSelect(name,item);
+	Client::self()->select(this,name,item);
+    }
+    else {
+	NamedList p("");
+	QDate d = w.calendar()->selectedDate();
+	p.addParam("year",String(d.year()));
+	p.addParam("month",String(d.month()));
+	p.addParam("day",String(d.day()));
+	Client::self()->action(this,name,&p);
+    }
 }
 
 // Load a widget from file
@@ -2015,6 +2030,11 @@ void QtWindow::doInit()
     QList<QSlider*> sliders = qFindChildren<QSlider*>(this);
     for (int i = 0; i < sliders.size(); i++)
 	QtClient::connectObjects(sliders[i],SIGNAL(valueChanged(int)),this,SLOT(selectionChanged()));
+
+    // Connect calendar widget signals
+    QList<QCalendarWidget*> cals = qFindChildren<QCalendarWidget*>(this);
+    for (int i = 0; i < cals.size(); i++)
+	QtClient::connectObjects(cals[i],SIGNAL(selectionChanged()),this,SLOT(selectionChanged()));
 
     // Connect list boxes signals
     QList<QListWidget*> lists = qFindChildren<QListWidget*>(this);

@@ -544,9 +544,10 @@ unsigned int Time::toEpoch(int year, unsigned int month, unsigned int day,
     // Count the number of days since EPOCH
     int64_t days = (year - 1970) * 365;
     // Add a day for each leap year from 1970 to 'year' (not including)
-    for (int y = 1970; y < year; y += 4)
+    for (int y = 1972; y < year; y += 4) {
 	if (isLeap(y))
 	    days++;
+    }
     // Add days ellapsed in given year
     for (unsigned int i = 0; i < month; i++)
 	days += m[i];

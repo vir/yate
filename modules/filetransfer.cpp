@@ -40,8 +40,9 @@ class FileDriver;                        // The driver
 
 // Minimum value allowed for send chunk buffer
 #define SEND_CHUNK_MIN 4096
-// Default value for send interval
-#define SEND_SLEEP_DEF 2
+// Minimum/Default value for send interval
+#define SEND_SLEEP_MIN 10
+#define SEND_SLEEP_DEF 50
 
 // A file info holder
 class FileHolder
@@ -251,7 +252,9 @@ private:
  */
 INIT_PLUGIN(FileDriver);
 static unsigned int s_sendChunk = 4096;      // Buffer size used when sending data
-static unsigned int s_sendIntervalMs = 10;   // Interval to send packets
+static unsigned int s_sendIntervalMs = SEND_SLEEP_DEF;   // Interval to send packets
+static unsigned int s_srcLingerIntervals = 10;           // How many intervals to wait before terminating
+                                                         // an autoclose source
 static int s_retryableReadErrors = 1000;     // How many retryable read errors are
                                              //  allowed when sending a file (-1 to retry forever)
 static bool s_notifyProgress = true;         // Notify file transfer progress
@@ -340,7 +343,7 @@ FileSource::FileSource(const String& file, NamedList* params, const char* chan,
 	m_notify = params->getValue("notify");
 	m_notifyProgress = params->getBoolValue("notify_progress",m_notifyProgress);
 	m_buflen = getIntValue(*params,"send_chunk_size",s_sendChunk,SEND_CHUNK_MIN,true);
-	m_sleepMs = getIntValue(*params,"send_interval",s_sendIntervalMs,SEND_SLEEP_DEF,false);
+	m_sleepMs = getIntValue(*params,"send_interval",s_sendIntervalMs,SEND_SLEEP_MIN,false);
 	__plugin.copyParams(m_params,*params);
     }
     Debug(&__plugin,DebugAll,"FileSource('%s') [%p]",file.c_str(),this);
@@ -462,11 +465,16 @@ void FileSource::run()
 	    m_fileName.c_str(),error.c_str(),this);
     }
 
+    m_file.terminate();
     FileDriver::notifyStatus(true,m_notify,"terminated",m_fileName,
 	m_transferred,m_fileSize,error,&m_params);
-    m_file.terminate();
 
     if (m_dropChan) {
+	// Wait a while to give some time to the remote party to receive the data
+	unsigned int n = !error ? s_srcLingerIntervals : 0;
+	for (; n && !Thread::check(false); n--)
+	    Thread::msleep(m_sleepMs ? m_sleepMs : SEND_SLEEP_DEF,false);
+	// Drop channel
 	Message* m = new Message("call.drop");
 	m->addParam("id",m_dropChan);
 	if (error) {
@@ -951,7 +959,9 @@ void FileDriver::initialize()
     m_copyExecParams = "line,account,caller,username,password,subject";
     m_copyParams = general->getValue("parameters");
     s_sendChunk = getIntValue(*general,"send_chunk_size",4096,SEND_CHUNK_MIN,true);
-    s_sendIntervalMs = getIntValue(*general,"send_interval",10,SEND_SLEEP_DEF,true);
+    s_sendIntervalMs = getIntValue(*general,"send_interval",
+	SEND_SLEEP_DEF,SEND_SLEEP_MIN,false);
+    s_srcLingerIntervals = getIntValue(*general,"send_linger_intervals",20,1,false);
     s_notifyProgress = general->getBoolValue("notify_progress",Engine::clientMode());
     s_srcFileInfo = general->getBoolValue("source_file_info",true);
     s_srcFileMd5 = general->getBoolValue("source_file_md5",true);
@@ -964,6 +974,7 @@ void FileDriver::initialize()
 	String s;
 	s << "send_chunk_size=" << s_sendChunk;
 	s << " send_interval=" << s_sendIntervalMs << "ms";
+	s << " send_linger_intervals=" << s_srcLingerIntervals;
 	s << " notify_progress=" << String::boolText(s_notifyProgress);
 	Debug(this,DebugInfo,"Initialized %s",s.c_str());
     }

@@ -1266,7 +1266,7 @@ private:
 // Local data and functions
 INIT_PLUGIN(YSocksPlugin);
 static YSocksEngine* s_engine = 0;
-static unsigned int s_bufLen = 4092;     // Read buffer length
+static unsigned int s_bufLen = 4096;     // Read buffer length
 static Mutex s_srcMutex(true);           // Protect source/wrapper association
 
 // Data transfer directions
@@ -3423,7 +3423,7 @@ void YSocksPlugin::initialize()
 
     s_engine->initialize(*general);
 
-    int tmp = general->getIntValue("buflen",4092);
+    int tmp = general->getIntValue("buflen",4096);
     s_bufLen = (tmp >= 1024 ? tmp : 1024);
 
     // Update proxy list

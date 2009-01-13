@@ -1,0 +1,65 @@
+; This file keeps the configuration for the SOCKS channel
+
+[general]
+; Global settings of SOCKS engine
+
+; auth-timeout: integer: The time (in milliseconds) a connection can wait
+;  to receive a message. This value is used until a connection has sent or
+;  received a SOCKS request (command)
+; The allowed interval is 3000..30000
+; Defaults to 10000
+;auth-timeout=10000
+
+; reply-timeout: integer: The time (in milliseconds) a connection can wait
+;  for a reply after sending or receiving a SOCKS request (command)
+; The allowed interval is 5000..120000
+; Defaults to 30000
+;reply-timeout=30000
+
+; buflen: integer: The number of bytes in receive buffer
+; Can't be less then 1024
+; Defaults to 4096 (4KB)
+;buflen=4096
+
+; print-msg: boolean: Print sent/received messages to output or debug log
+; Defaults to no
+;print-msg=no
+
+; print-extended: boolean: Print sent/received messages extended data (such as
+;  field names and hexadecimal message dump) to output or debug log.
+; Ignored if print-msg is not enabled.
+; Defaults to no
+;print-extended=no
+
+
+[server]
+; This section configures a SOCKS server used for local endpoints
+
+; enable: boolean: Enable or disable the server
+; This option is applied on reload.
+; NOTE: Destroying the server listener will not terminate already authenticated
+;  incoming connections
+; Defaults to no
+;enable=no
+
+; address: string: The IP address used to listen for incoming connections
+; This parameter is required
+;address=
+
+; port: integer: The port to listen for incoming connection
+; This parameter is required
+;port=
+
+; external_address: string: The external (public) IP or domain
+; This parameter is used when the server is behind a NAT with the port forwarded to
+;  the machine running it.
+; This address will be used to advertise the server's address to remote users
+;  whishing to connect to the server
+;external_address=
+
+; username: string: Username used to authenticate incoming SOCKS connections
+; password: string: Password used to authenticate incoming SOCKS connections
+; If username or password is empty, incoming SOCKS connections will
+;  be accepted without authentication
+;username=
+;password=

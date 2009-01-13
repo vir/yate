@@ -525,7 +525,7 @@ FaxChan::FaxChan(bool outgoing, const char *file, bool sender, Message& msg)
     Debug(this,DebugAll,"FaxChan::FaxChan(%s \"%s\") [%p]",
 	(sender ? "transmit" : "receive"),
 	file,this);
-    m_localId = msg.getValue("faxident",msg.getValue("caller"));
+    m_localId = msg.getValue("faxident",msg.getValue(outgoing ? "called" : "caller"));
     // outgoing means from Yate to file so the fax should answer by default
     m_caller = msg.getBoolValue("faxcaller",!outgoing);
     m_ecm = msg.getBoolValue("faxecm",true);

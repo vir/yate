@@ -1,0 +1,41 @@
+[general]
+; Global settings for the file transfer module
+
+; path: string: Default path to save incoming files
+;path=
+
+; parameters: string: Comma separated list of parameters to be saved from
+;  call.execute and chan.attach messages and added to the final notification
+;  of the file transfer status
+;parameters=
+
+; send_chunk_size: integer: The size of a sent packet. This value is used to split a file
+;  and send it into several chunks
+; Set it to 0 to send the whole file in one packet
+; Minimum value allowed is 4096 (4KB)
+;send_chunk_size=4096
+
+; send_interval: integer: The interval (in milliseconds) between sent packets
+; Mimimum allowed value is 10
+; Defaults to 50
+;send_interval=50
+
+; send_linger_intervals: integer: The number of send_interval to wait before terminating
+;  when sending a file. This will give some time to the receiver to handle all sent data
+; Mimimum value allowed is 1
+; Defaults to 20
+;send_linger_intervals=20
+
+; notify_progress: boolean: Notify each received/sent data block
+; Defaults to enable if running in client mode, disable otherwise
+;notify_progress=
+
+; source_file_info: boolean: Attach source file info (such as size, time ...) when
+;  this module is initiating a file transfer
+; Defaults to yes
+;source_file_info=yes
+
+; source_file_md5: boolean: Attach source file MD5 checksum when
+;  this module is initiating a file transfer
+; Defaults to yes
+;source_file_md5=yes

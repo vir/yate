@@ -190,8 +190,29 @@ bool Configuration::load(bool warn)
 		continue;
 	    }
 	    int q = s.find('=');
-	    if (q > 0)
-		addValue(sect,s.substr(0,q).trimBlanks(),s.substr(q+1).trimBlanks());
+	    if (q <= 0)
+		continue;
+	    String key = s.substr(0,q).trimBlanks();
+	    if (key.null())
+		continue;
+	    s = s.substr(q+1);
+	    while (s.endsWith("\\",false)) {
+		// line continues onto next
+		s.assign(s,s.length()-1);
+		if (!::fgets(buf,sizeof(buf),f))
+		    break;
+		pc = ::strchr(buf,'\r');
+		if (pc)
+		    *pc = 0;
+		pc = ::strchr(buf,'\n');
+		if (pc)
+		    *pc = 0;
+		pc = buf;
+		while (*pc == ' ' || *pc == '\t')
+		    pc++;
+		s += pc;
+	    }
+	    addValue(sect,key,s.trimBlanks());
 	}
 	::fclose(f);
 	return true;

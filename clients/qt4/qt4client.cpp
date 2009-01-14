@@ -1473,6 +1473,9 @@ bool QtWindow::clearTable(const String& name)
 	case QtWidget::ListBox:
 	    w.list()->clear();
 	    break;
+	case QtWidget::ComboBox:
+	    w.combo()->clear();
+	    break;
 	case QtWidget::CustomTable:
 	    ok = w.customTable()->clearTable();
 	    break;

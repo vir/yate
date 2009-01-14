@@ -1325,10 +1325,6 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	int pos = uri.find(':');
 	m_transferFrom.set((pos >= 0) ? uri.substr(pos + 1) : uri);
     }
-    Debug(this,DebugCall,"Outgoing. caller='%s' called='%s'%s%s [%p]",
-	caller,called,
-	m_transferFrom?". Transferred from=":"",
-	m_transferFrom.safe(),this);
     // Get formats. Check if this is a file transfer session
     if (null(file)) {
 	m_formats = msg.getValue("formats");
@@ -1346,6 +1342,10 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 	if (sh)
 	    m_streamHosts.append(sh);
     }
+    Debug(this,DebugCall,"Outgoing%s. caller='%s' called='%s'%s%s [%p]",
+	m_ftStatus != FTNone ? " file transfer" : "",caller,called,
+	m_transferFrom ? ". Transferred from=": "",
+	m_transferFrom.safe(),this);
     // Set timeout and maxcall
     int tout = msg.getIntValue("timeout",-1);
     if (tout > 0)
@@ -4277,12 +4277,10 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	    error = "No data channel";
 	    break;
 	}
-	// Component: prepare caller/called. check availability
+	// Component: delay check
 	// Client: just check if caller/called are full JIDs
-	if (s_jabber->protocol() == JBEngine::Component) {
-	    setComponentCall(caller,called,msg.getValue("caller"),dest,available,error);
+	if (s_jabber->protocol() == JBEngine::Component)
 	    break;
-	}
 	// Check if a stream exists. Try to get a resource for caller and/or called
 	JBStream* stream = 0;
 	NamedString* account = msg.getParam("line");
@@ -4366,11 +4364,32 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
 
-    // Parameters OK. Create connection and init channel
-    Debug(this,DebugAll,"msgExecute. caller='%s' called='%s' available=%u",
-	caller.c_str(),called.c_str(),available);
+    // Component: prepare caller/called. check availability
+    // Lock driver to prevent probe response to be processed before the channel
+    //  is fully built
+    Lock lock(this);
+    if (s_jabber->protocol() == JBEngine::Component)
+	setComponentCall(caller,called,msg.getValue("caller"),dest,available,error);
+    if (error) {
+	Debug(this,DebugNote,"Jingle call failed. %s",error.c_str());
+	msg.setParam("error",errStr ? errStr : "noconn");
+	return false;
+    }
+    Debug(this,DebugAll,
+	"msgExecute. caller='%s' called='%s' available=%s filetransfer=%s",
+	caller.c_str(),called.c_str(),String::boolText(available),
+	String::boolText(!file.null()));
+    // Send subscribe
+    if (sendSub) {
+	JBStream* stream = s_jabber->getStream(&caller,false);
+	if (stream)
+	    stream->sendStanza(JBPresence::createPresence(caller.bare(),called.bare(),
+		JBPresence::Subscribe));
+	TelEngine::destruct(stream);
+    }
     YJGConnection* conn = new YJGConnection(msg,caller,called,available,file);
     bool ok = conn->state() != YJGConnection::Terminated;
+    lock.drop();
     if (ok) {
 	Channel* ch = static_cast<Channel*>(msg.userData());
 	if (ch && conn->connect(ch,msg.getValue("reason"))) {
@@ -4385,17 +4404,7 @@ bool YJGDriver::msgExecute(Message& msg, String& dest)
 	msg.setParam("error","failure");
     }
     TelEngine::destruct(conn);
-    if (!ok)
-	return false;
-    // Send subscribe after creating the connection:
-    // the presence info might be received before creating it
-    if (sendSub) {
-	JBStream* stream = s_jabber->getStream(&caller,false);
-	if (stream)
-	    stream->sendStanza(JBPresence::createPresence(caller.bare(),called.bare(),JBPresence::Subscribe));
-	TelEngine::destruct(stream);
-    }
-    return true;
+    return ok;
 }
 
 // Send IM messages

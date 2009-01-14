@@ -45,6 +45,7 @@ class YSocksSource;                      // A data source
 class YSocksConsumer;                    // A data consumer
 class YSocksListenerThread;              // A socket listener thread
 class YSocksProcessThread;               // A connection processor thread
+class YSocksPlugin;
 
 /*
     SOCKS packet formats:
@@ -752,6 +753,15 @@ class SOCKSListener : virtual public Runnable
 {
     friend class SOCKSEngine;            // Reset the engine when stopped
 public:
+    enum Status {
+	Created,
+	Initializing,
+	Bind,
+	Listening,
+	Accepting,
+	Terminated
+    };
+
     /**
      * Constructor
      * @param engine The engine using this listener's services
@@ -781,6 +791,21 @@ public:
      */
     inline SOCKSEngine* engine() const
 	{ return m_engine; }
+
+    /**
+     * Get socket address
+     * @param addr Destination address
+     * @return True on success (valid socket)
+     */
+    inline bool getAddr(SocketAddr& addr)
+	{ return m_socket && m_socket->getSockName(addr); }
+
+    /**
+     * Get the listener status
+     * @return The listener status
+     */
+    inline int status() const
+	{ return m_status; }
 
     /**
      * Create and bind the socket
@@ -819,6 +844,11 @@ public:
      */
     virtual void stop(bool hard);
 
+    /**
+     * Listener status name
+     */
+    static TokenDict s_statusName[];
+
 protected:
     SOCKSEndpointDef* m_epDef;
     String m_id;
@@ -828,6 +858,7 @@ protected:
     Socket* m_socket;
     bool m_listenError;
     SOCKSEngine* m_engine;
+    Status m_status;
 };
 
 /**
@@ -1052,6 +1083,8 @@ protected:
     virtual SOCKSPacket::Error processSOCKSRequest(const SOCKSPacket& packet, SOCKSConn* conn);
     virtual bool processSOCKSReply(const SOCKSPacket& packet, SOCKSConn* conn);
     virtual void socksConnError(SOCKSConn* conn, bool timeout);
+    inline ObjList& listeners()
+	{ return m_listeners; }
 private:
     ObjList m_wrappers;
 };
@@ -1256,7 +1289,10 @@ public:
 	    Lock lock(this);
 	    buf << name() << "/" << ++m_wrapperId;
 	}
-
+protected:
+    // Handle command complete requests
+    virtual bool commandComplete(Message& msg, const String& partLine,
+	const String& partWord);
 private:
     unsigned int m_wrapperId;
     bool m_init;
@@ -1275,6 +1311,13 @@ static TokenDict dict_conn_dir[] = {
     { "send",    SOCKSConn::Send },
     { "bidir",   SOCKSConn::Both },
     { 0, 0 },
+};
+
+static String s_statusCmd;
+// Status commands handled by this module
+static String s_statusCmds[] = {
+    "listeners",                         // Show listeners
+    ""
 };
 
 UNLOAD_PLUGIN(unloadNow)
@@ -1351,6 +1394,16 @@ TokenDict SOCKSConn::s_statusName[] = {
     { 0, 0 }
 };
 
+// Listener status names
+TokenDict SOCKSListener::s_statusName[] = {
+    { "Created",      Created },
+    { "Initializing", Initializing },
+    { "Bind",         Bind },
+    { "Listening",    Listening },
+    { "Accepting",    Accepting },
+    { "Terminated",   Terminated },
+    { 0, 0 }
+};
 
 // Check the version of a SOCKS packet
 inline bool validSocksVersion(SOCKSPacket& packet, unsigned char ver)
@@ -2276,7 +2329,7 @@ SOCKSListener::SOCKSListener(SOCKSEngine* engine, SOCKSEndpointDef* epDef,
     unsigned int backlog, bool blocking, unsigned int sleepMs)
     : m_epDef(epDef),
     m_backlog(backlog), m_blocking(blocking), m_sleepMs(sleepMs),
-    m_socket(0), m_listenError(false), m_engine(engine)
+    m_socket(0), m_listenError(false), m_engine(engine), m_status(Created)
 {
     if (m_epDef)
 	m_id << m_epDef->address() << ":" << m_epDef->port();
@@ -2299,6 +2352,7 @@ bool SOCKSListener::init()
     if (!m_epDef)
 	return false;
 
+    m_status = Initializing;
     SocketAddr addr(PF_INET);
     addr.host(m_epDef->address());
     addr.port(m_epDef->port());
@@ -2306,6 +2360,7 @@ bool SOCKSListener::init()
     bool ok = m_socket->create(PF_INET,SOCK_STREAM);
     const char* op = 0;
     if (ok) {
+	m_socket->setReuse();
 	ok = m_socket->bind(addr);
 	if (!ok)
 	    op = "bind";
@@ -2313,6 +2368,7 @@ bool SOCKSListener::init()
     else
 	op = "create";
     if (ok) {
+	m_status = Bind;
 	Debug(m_engine,DebugAll,"Listener(%s) succesfully bind blocking=%s [%p]",
 	    m_id.c_str(),String::boolText(m_blocking),this);
 	m_socket->setBlocking(m_blocking);
@@ -2336,6 +2392,7 @@ bool SOCKSListener::startListen()
     if (m_socket->listen(m_backlog)) {
 	Debug(m_engine,DebugAll,"Listener(%s) started [%p]",m_id.c_str(),this);
 	m_listenError = false;
+	m_status = Listening;
 	return true;
     }
     if (!m_listenError) {
@@ -2363,6 +2420,7 @@ void SOCKSListener::terminate()
 {
     if (!m_socket)
 	return;
+    m_status = Terminated;
     DDebug(m_engine,DebugAll,"Listener(%s) terminating socket [%p]",
 	m_id.c_str(),this);
     SOCKSEngine::destroySocket(m_socket);
@@ -2380,11 +2438,13 @@ void SOCKSListener::run()
 	    Socket* sock = accept(addr);
 	    bool processed = false;
 	    if (sock) {
+		m_status = Accepting;
 		if (m_engine)
 		    processed = m_engine->incomingConnection(this,sock,addr);
 		else
 		    delete sock;
 	    }
+	    m_status = Listening;
 	    if (processed)
 		Thread::yield(false);
 	    else
@@ -2712,7 +2772,6 @@ void SOCKSEngine::destroySocket(Socket*& sock)
     Socket* tmp = sock;
     sock = 0;
     tmp->setLinger(-1);
-    tmp->shutdown(true,true);
     tmp->terminate();
     delete tmp;
 }
@@ -3141,6 +3200,11 @@ void YSocksWrapper::notify(const char* status) const
     m->addParam("id",m_id);
     m->addParam("notify",m_notify);
     m->addParam("status",status);
+    SocketAddr remote;
+    if (!client() && m_conn && m_conn->getAddr(false,remote)) {
+	m->addParam("remoteip",remote.host());
+	m->addParam("remoteport",String(remote.port()));
+    }
     Engine::enqueue(m);
 }
 
@@ -3388,17 +3452,22 @@ bool YSocksPlugin::handleChanSocks(Message& msg)
 	}
     }
 
-    // Add server params
+    // Add server and client params
     if (!w->client()) {
 	msg.setParam("address",w->srvAddr());
 	msg.setParam("port",String(w->srvPort()));
+	// Add remote ip
+	SocketAddr remote;
+	if (w->conn() && w->conn()->getAddr(false,remote)) {
+	    msg.addParam("remoteip",remote.host());
+	    msg.addParam("remoteport",String(remote.port()));
+	}
     }
     msg.setParam("notifier",w->toString());
     // Start ?
     const char* format = msg.getValue("format");
     if (!null(format))
 	w->enableDataTransfer(format);
-
     return !w->deref();
 }
 
@@ -3413,6 +3482,7 @@ void YSocksPlugin::initialize()
 	general = &dummy;
 
     if (!m_init) {
+	s_statusCmd = "status " + name();
 	setup();
 	installRelay(Halt);
 	installRelay(ChanSocks,"chan.socks",50);
@@ -3469,6 +3539,35 @@ bool YSocksPlugin::received(Message& msg, int id)
 {
     if (id == ChanSocks)
 	return handleChanSocks(msg);
+    if (id == Status) {
+	String target = msg.getValue("module");
+	// Target is the driver or channel
+	if (!target || target == name())
+	    return Module::received(msg,id);
+	// Check additional commands
+	if (!target.startSkip(name(),false))
+	    return false;
+	target.trimBlanks();
+	if (target == "listeners") {
+	    lock();
+	    msg.retValue() << "name=" << name() << ",type=" << type();
+	    unlock();
+	    if (!(s_engine && s_engine->lock(1000000)))
+		return true;
+	    msg.retValue() << ";count=" << s_engine->listeners().count();
+	    msg.retValue() << ";format=Status";
+	    for (ObjList* o = s_engine->listeners().skipNull(); o; o = o->skipNext()) {
+		ListenerPointer* p = static_cast<ListenerPointer*>(o->get());
+		SocketAddr addr;
+		(*p)->getAddr(addr);
+		msg.retValue() << ";" << addr.host() << ":" << addr.port();
+		msg.retValue() << "=" << lookup((*p)->status(),SOCKSListener::s_statusName);
+	    }
+	    s_engine->unlock();
+	    msg.retValue() << "\r\n";
+	}
+	return false;
+    }
     if (id == Halt)
 	unload();
     return Module::received(msg,id);
@@ -3509,6 +3608,27 @@ bool YSocksPlugin::unload()
     uninstallRelays();
     unlock();
     return true;
+}
+
+// Handle command complete requests
+bool YSocksPlugin::commandComplete(Message& msg, const String& partLine,
+    const String& partWord)
+{
+    if (partLine.null() && partWord.null())
+	return false;
+
+    bool status = partLine.startsWith("status");
+    if (!status)
+	return Module::commandComplete(msg,partLine,partWord);
+
+    // Add additional commands
+    if (partLine == s_statusCmd) {
+	for (String* list = s_statusCmds; !null(list); list++)
+	    if (!partWord || list->startsWith(partWord))
+		Module::itemComplete(msg.retValue(),*list,partWord);
+	return true;
+    }
+    return Module::commandComplete(msg,partLine,partWord);
 }
 
 }; // anonymous namespace

@@ -244,10 +244,9 @@ bool Configuration::save() const
 	    for (unsigned int i = 0; i < n; i++) {
 		NamedString *ns = nl->getParam(i);
 		if (ns) {
-		    const char *v = ns->c_str();
-		    if (!v)
-			v = "";
-		    ::fprintf(f,"%s=%s\n",ns->name().c_str(),v);
+		    // add a space after a line that ends with backslash
+		    const char* bk = ns->endsWith("\\",false) ? " " : "";
+		    ::fprintf(f,"%s=%s%s\n",ns->name().safe(),ns->safe(),bk);
 		}
 	    }
 	}

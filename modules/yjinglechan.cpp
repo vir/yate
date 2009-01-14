@@ -410,6 +410,7 @@ private:
     JabberID m_transferTo;               // Transfer target
     JabberID m_transferFrom;             // Transfer source
     String m_transferSid;                // Session id for attended transfer
+    XMLElement* m_recvTransferStanza;    // Received iq transfer element
     // On hold data
     int m_dataFlags;                     // The data status
     String m_onHoldOutId;                // The id of the hold stanza sent to remote
@@ -430,7 +431,7 @@ private:
 class YJGTransfer : public Thread
 {
 public:
-    YJGTransfer(YJGConnection* conn);
+    YJGTransfer(YJGConnection* conn, const char* subject = 0);
     virtual void run(void);
 private:
     String m_transferorID;           // Transferor channel's id
@@ -1314,8 +1315,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
     m_remote(called), m_audioContent(0),
     m_callerPrompt(msg.getValue("callerprompt")), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0),
-    m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
+    m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
+    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
     m_subject = msg.getValue("subject");
     String uri = msg.getValue("diverteruri",msg.getValue("diverter"));
@@ -1391,8 +1392,8 @@ YJGConnection::YJGConnection(JGEvent* event)
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
-    m_hangup(false), m_timeout(0), m_transferring(false), m_dataFlags(0),
-    m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
+    m_hangup(false), m_timeout(0), m_transferring(false), m_recvTransferStanza(0),
+    m_dataFlags(0), m_ftStatus(FTNone), m_ftHostDirection(FTHostNone)
 {
     if (event->jingle()) {
         // Check if this call is transferred
@@ -1495,6 +1496,7 @@ YJGConnection::YJGConnection(JGEvent* event)
 // Release data
 YJGConnection::~YJGConnection()
 {
+    TelEngine::destruct(m_recvTransferStanza);
     hangup(0);
     disconnected(true,m_reason);
     Debug(this,DebugCall,"Destroyed [%p]",this);
@@ -1822,6 +1824,9 @@ bool YJGConnection::msgTransfer(Message& msg)
     // Send the transfer request
     XMLElement* trans = m_session->buildTransfer(m_transferTo,
 	m_transferSid ? m_session->local() : String::empty(),m_transferSid);
+    const char* subject = msg.getValue("subject");
+    if (!null(subject))
+	trans->addChild(new XMLElement(XMLElement::Subject,0,subject));
     m_transferring = m_session->sendInfo(trans,&m_transferStanzaId);
     Debug(this,m_transferring?DebugCall:DebugNote,"%s transfer to=%s sid=%s [%p]",
 	m_transferring ? "Sent" : "Failed to send",m_transferTo.c_str(),
@@ -1843,6 +1848,8 @@ void YJGConnection::hangup(const char* reason, const char* text)
     setReason(reason ? reason : (Engine::exiting() ? "shutdown" : "hangup"));
     if (!text && Engine::exiting())
 	text = "Shutdown";
+    if (m_transferring)
+	transferTerminated(false,m_reason);
     Message* m = message("chan.hangup",true);
     m->setParam("status","hangup");
     m->setParam("reason",m_reason);
@@ -2057,7 +2064,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    break;
 	case JGSession::ActContentRemove:
 	    // XEP-0166 Notes - 16: terminate the session if there are no more contents
-	    if (m_ftStatus != FTNone) {
+	    if (m_ftStatus == FTNone) {
 		if (!removeContents(event))
 		    return true;
 		if (!m_audioContent)
@@ -2287,14 +2294,27 @@ bool YJGConnection::processTransferRequest(JGEvent* event)
 	m_transferFrom.set(trans->getAttribute("from"));
 	break;
     }
+    String subject;
+    if (!reason && trans) {
+	XMLElement* s = trans->findFirstChild(XMLElement::Subject);
+	if (s) {
+	    subject = s->getText();
+	    TelEngine::destruct(s);
+	}
+    }
     TelEngine::destruct(trans);
 
     if (!reason) {
+	TelEngine::destruct(m_recvTransferStanza);
+	m_recvTransferStanza = event->releaseXML();
+	event->setConfirmed();
 	m_transferring = true;
 	Debug(this,DebugCall,"Starting transfer to=%s from=%s sid=%s [%p]",
 	    m_transferTo.c_str(),m_transferFrom.c_str(),m_transferSid.c_str(),this);
-	(new YJGTransfer(this))->startup();
-	return true;
+	bool ok = ((new YJGTransfer(this,subject))->startup());
+	if (!ok)
+	    transferTerminated(false,"Internal server error");
+	return ok;
     }
 
     // Not acceptable
@@ -2308,12 +2328,20 @@ bool YJGConnection::processTransferRequest(JGEvent* event)
 // Transfer terminated notification from transfer thread
 void YJGConnection::transferTerminated(bool ok, const char* reason)
 {
-    if (ok)
-	Debug(this,DebugCall,"Transfer succeedded [%p]",this);
-    else
-	Debug(this,DebugNote,"Transfer failed error='%s' [%p]",reason,this);
-    // Reset transfer data
     Lock lock(m_mutex);
+    if (m_transferring && m_recvTransferStanza) {
+	if (ok)
+	    Debug(this,DebugCall,"Transfer succeedded [%p]",this);
+	else
+	    Debug(this,DebugNote,"Transfer failed error='%s' [%p]",reason,this);
+    }
+    if (m_session && m_recvTransferStanza) {
+	XMPPError::Type err = ok ? XMPPError::NoError : XMPPError::SUndefinedCondition;
+	m_session->confirm(m_recvTransferStanza,err,reason,XMPPError::TypeCancel);
+	m_recvTransferStanza = 0;
+    }
+    // Reset transfer data
+    TelEngine::destruct(m_recvTransferStanza);
     m_transferring = false;
     m_transferStanzaId = "";
     m_transferTo = "";
@@ -2847,7 +2875,10 @@ bool YJGConnection::removeContents(JGEvent* event)
 		removeContent(cc);
 	}
     }
-    return 0 != m_audioContents.skipNull();
+    bool ok = 0 != m_audioContents.skipNull();
+    if (!ok)
+	Debug(this,DebugCall,"No more audio contents [%p]",this);
+    return ok;
 }
 
 // Build a RTP audio content. Add used codecs to the list
@@ -3370,7 +3401,7 @@ void YJGConnection::handleAudioInfoEvent(JGEvent* event)
 /**
  * Transfer thread (route and execute)
  */
-YJGTransfer::YJGTransfer(YJGConnection* conn)
+YJGTransfer::YJGTransfer(YJGConnection* conn, const char* subject)
     : Thread("Jingle transfer"),
     m_msg("call.route")
 {
@@ -3398,6 +3429,8 @@ YJGTransfer::YJGTransfer(YJGConnection* conn)
 	m_msg.addParam("calleduri",BUILD_XMPP_URI(m_to));
 	m_msg.addParam("diverter",m_from.bare());
 	m_msg.addParam("diverteruri",BUILD_XMPP_URI(m_from));
+	if (!null(subject))
+	    m_msg.addParam("subject",subject);
 	m_msg.addParam("reason",lookup(JGSession::ReasonTransfer,s_errMap));
     }
 }

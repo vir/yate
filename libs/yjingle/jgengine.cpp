@@ -205,11 +205,6 @@ bool JGEngine::accept(JBEvent* event, bool& processed, bool& insert)
 		const char* type = event->child()->getAttribute("type");
 		int action = lookup(type,JGSession::s_actions,JGSession::ActCount);
 		if (action == JGSession::ActInitiate) {
-		    if (!event->stream()->ref()) {
-			error = XMPPError::SInternal;
-			errorText = "Stream ref() failed";
-			break;
-		    }
 		    DDebug(this,DebugAll,"New incoming call from=%s to=%s sid=%s",
 			event->from().c_str(),event->to().c_str(),sid.c_str());
 		    if (event->ref())

@@ -533,6 +533,7 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 	case Process:
 	    if (message->code <= 100)
 		break;
+	    setLatestMessage(message);
 	    if (tryAutoAuth(message))
 		break;
 	    if (m_invite && !final)

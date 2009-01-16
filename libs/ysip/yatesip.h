@@ -971,7 +971,8 @@ public:
 
     /**
      * Get the timeout to be used for transactions involving human interaction.
-     * The default implementation returns 120000000 (2 minutes)
+     * The default implementation returns the proxy INVITE timeout (timer C = 3 minutes)
+     *  minus the INVITE response retransmit interval (timer T2 = 4 seconds)
      * @return Duration of the timeout in microseconds
      */
     virtual u_int64_t getUserTimeout() const;

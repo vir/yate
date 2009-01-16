@@ -535,7 +535,7 @@ void SIPTransaction::processClientMessage(SIPMessage* message, int state)
 		break;
 	    if (tryAutoAuth(message))
 		break;
-	    if (m_invite && (m_response <= 100))
+	    if (m_invite && !final)
 		// use the human interaction timeout in INVITEs
 		setTimeout(m_engine->getUserTimeout());
 	    m_response = message->code;

@@ -6,6 +6,9 @@
    ^NNN$=external/nodata/voicemail.php
 
    where NNN is the number you want to assign to handle voicemail
+
+   Sample prompt sound files can be found at:
+   http://yate.null.ro/tarballs/yate-sounds.tar.gz
 */
 require_once("libyate.php");
 require_once("libvoicemail.php");

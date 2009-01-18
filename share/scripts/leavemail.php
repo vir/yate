@@ -4,6 +4,9 @@
 
    To use it you must re-route calls to offline or non-responding numbers to:
    external/nodata/leavemail.php
+
+   Sample prompt sound files can be found at:
+   http://yate.null.ro/tarballs/yate-sounds.tar.gz
 */
 require_once("libyate.php");
 require_once("libvoicemail.php");

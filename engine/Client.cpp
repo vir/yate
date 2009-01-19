@@ -1631,7 +1631,7 @@ bool Client::createWindowSafe(const String& name, const String& alias)
     }
     if (!createWindow(name,alias))
 	return false;
-    ObjList* obj = m_windows.find(alias);
+    ObjList* obj = m_windows.find(alias.null() ? name : alias);
     if (!obj)
 	return false;
     (static_cast<Window*>(obj->get()))->init();

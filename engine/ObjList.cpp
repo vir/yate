@@ -120,7 +120,7 @@ ObjList* ObjList::operator+(int index) const
     return obj;
 }
 
-GenObject* ObjList::operator[](int index) const
+GenObject* ObjList::at(int index) const
 {
     ObjList *obj = operator+(index);
     return obj ? obj->get() : 0;

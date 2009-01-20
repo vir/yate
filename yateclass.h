@@ -1015,6 +1015,13 @@ public:
     ObjList* skipNext() const;
 
     /**
+     * Get the object at a specific index in list
+     * @param index Index of the object to retrive
+     * @return Pointer to the object or NULL
+     */
+    GenObject* at(int index) const;
+
+    /**
      * Pointer-like indexing operator
      * @param index Index of the list item to retrive
      * @return Pointer to the list item or NULL
@@ -1022,11 +1029,20 @@ public:
     ObjList* operator+(int index) const;
 
     /**
-     * Array-like indexing operator
+     * Array-like indexing operator with signed parameter
      * @param index Index of the object to retrive
      * @return Pointer to the object or NULL
      */
-    GenObject* operator[](int index) const;
+    inline GenObject* operator[](signed int index) const
+	{ return at(index); }
+
+    /**
+     * Array-like indexing operator with unsigned parameter
+     * @param index Index of the object to retrive
+     * @return Pointer to the object or NULL
+     */
+    inline GenObject* operator[](unsigned int index) const
+	{ return at(index); }
 
     /**
      * Array-like indexing operator
@@ -2642,6 +2658,23 @@ public:
 	{ return m_data; }
 
     /**
+     * Get a pointer to a byte range inside the stored data.
+     * @param offs Byte offset inside the stored data
+     * @param len Number of bytes that must be valid starting at offset
+     * @return A pointer to the data or NULL if the range is not available.
+     */
+    inline unsigned char* data(unsigned int offs, unsigned int len = 1) const
+	{ return (offs + len <= m_length) ? (static_cast<unsigned char*>(m_data) + offs) : 0; }
+
+    /**
+     * Get the value of a single byte inside the stored data
+     * @param offs Byte offset inside the stored data
+     * @return Byte value at offset (0-255) or -1 if offset outside data
+     */
+    inline int at(unsigned int offs) const
+	{ return (offs < m_length) ? static_cast<unsigned char*>(m_data)[offs] : -1; }
+
+    /**
      * Checks if the block holds a NULL pointer.
      * @return True if the block holds NULL, false otherwise.
      */
@@ -2709,6 +2742,22 @@ public:
      * @param len Amount to cut, positive to cut from end, negative to cut from start of block
      */
     void cut(int len);
+
+    /**
+     * Byte indexing operator with signed parameter
+     * @param index Index of the byte to retrieve
+     * @return Byte value at offset (0-255) or -1 if index outside data
+     */
+    inline int operator[](signed int index) const
+	{ return at(index); }
+
+    /**
+     * Byte indexing operator with unsigned parameter
+     * @param index Index of the byte to retrieve
+     * @return Byte value at offset (0-255) or -1 if index outside data
+     */
+    inline int operator[](unsigned int index) const
+	{ return at(index); }
 
     /**
      * Assignment operator.

@@ -2669,10 +2669,11 @@ public:
     /**
      * Get the value of a single byte inside the stored data
      * @param offs Byte offset inside the stored data
-     * @return Byte value at offset (0-255) or -1 if offset outside data
+     * @param defvalue Default value to return if offset is outside data
+     * @return Byte value at offset (0-255) or defvalue if offset outside data
      */
-    inline int at(unsigned int offs) const
-	{ return (offs < m_length) ? static_cast<unsigned char*>(m_data)[offs] : -1; }
+    inline int at(unsigned int offs, int defvalue = -1) const
+	{ return (offs < m_length) ? static_cast<unsigned char*>(m_data)[offs] : defvalue; }
 
     /**
      * Checks if the block holds a NULL pointer.

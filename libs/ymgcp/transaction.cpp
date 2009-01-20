@@ -172,7 +172,7 @@ bool MGCPTransaction::setResponse(MGCPMessage* msg)
     Lock lock(this);
 
     // Check state, message, transaction direction. Also check if we already have a response
-    bool msgValid = (msg && msg->code() >= 200 || !msg->isCommand());
+    bool msgValid = (msg && (msg->code() >= 200 || !msg->isCommand()));
     bool stateValid = (state() >= Initiated || state() <= Ack);
     if (m_response || outgoing() || !msgValid || !stateValid) {
 	TelEngine::destruct(msg);

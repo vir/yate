@@ -528,7 +528,7 @@ String& String::trimSpaces()
 	    s++;
 	const char *e = s;
 	for (const char *p = e; *p; p++)
-	    if (*p != ' ' && *p != '\t' || *p == '\v' || *p == '\f' || *p == '\r' || *p == '\n')
+	    if (*p != ' ' && *p != '\t' && *p != '\v' && *p != '\f' && *p != '\r' && *p != '\n')
 		e = p+1;
 	assign(s,e-s);
     }

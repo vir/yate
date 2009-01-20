@@ -670,11 +670,12 @@ bool DefaultLogic::toggle(Window* wnd, const String& name, bool active)
     // Show/hide windows
     if (name.startsWith("showwindow:") && name.at(11)) {
 	String what = name.substr(11);
-	if (what.startsWith("help:"))
+	if (what.startsWith("help:")) {
 	    if (active)
 		return help(what,wnd);
 	    else
 		return Client::self() && Client::self()->setVisible("help",false);
+	}
 	NamedList p("");
 	p.addParam(what,String::boolText(active));
 	return display(p,false);
@@ -2336,11 +2337,12 @@ void DefaultLogic::channelSelectionChanged(const String& old)
 	    bool transfer = false;
 	    if (Client::self())
 		Client::self()->getCheck(s_actionTransfer,transfer);
-	    if (transfer)
+	    if (transfer) {
 		if (ClientDriver::setAudioTransfer(old,m_selectedChannel))
 		    break;
 		else if (Client::self())
 		    Client::self()->setStatusLocked("Failed to transfer");
+	    }
 	}
 	m_transferInitiated = "";
 	// Set the active channel
@@ -2401,11 +2403,12 @@ unsigned int DurationUpdate::update(unsigned int secNow, const String* table,
 {
     NamedList p("");
     unsigned int duration = buildTimeParam(p,secNow,force);
-    if ((duration || force) && Client::self())
+    if ((duration || force) && Client::self()) {
 	if (table)
 	    Client::self()->setTableRow(*table,toString(),&p,wnd,skip);
 	else
 	    Client::self()->setParams(&p,wnd,skip);
+    }
     return duration;
 }
 

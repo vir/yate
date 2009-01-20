@@ -2081,13 +2081,14 @@ void QtWindow::doInit()
 	// This is done when we want to generate a select() or action() from cell clicked
 	String cellClicked;
 	getProperty(t.name(),"dynamicCellClicked",cellClicked);
-	if (cellClicked)
+	if (cellClicked) {
 	    if (cellClicked == "selectionChanged")
 		QtClient::connectObjects(t.table(),SIGNAL(cellClicked(int,int)),
 		    this,SLOT(selectionChanged()));
 	    else if (cellClicked == "doubleClick")
 		QtClient::connectObjects(t.table(),SIGNAL(cellClicked(int,int)),
 		    this,SLOT(doubleClick()));
+	}
     }
 
 #if QT_VERSION >= 0x040200

@@ -161,11 +161,12 @@ void infoCallback(const SSL* ssl, int where, int retVal)
     SslSocket* sock = 0;
     if (s_index >= 0)
 	sock = static_cast<SslSocket*>(::SSL_get_ex_data(const_cast<SSL*>(ssl),s_index));
-    if (sock)
+    if (sock) {
 	if (sock->ssl() == ssl)
 	    sock->onInfo(where,retVal);
 	else
 	    Debug(MODNAME,DebugFail,"Mismatched session %p [%p]",ssl,sock);
+    }
 }
 
 

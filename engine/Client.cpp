@@ -409,7 +409,7 @@ bool Window::addTableRow(const String& name, const String& item, const NamedList
 bool Window::setMultipleRows(const String& name, const NamedList& data, const String& prefix)
 {
     DDebug(ClientDriver::self(),DebugInfo,"stub setMultipleRows('%s',%p,'%s') [%p]",
-	name.c_str(),&data,data,prefix.c_str(),this);
+	name.c_str(),&data,prefix.c_str(),this);
     return false;
 }
 
@@ -610,7 +610,7 @@ ClientThreadProxy::ClientThreadProxy(int func, const String& name, const String&
 
 void ClientThreadProxy::process()
 {
-    XDebug(DebugAll,"ClientThreadProxy::process()"," %d [%p]",m_func,this);
+    XDebug(DebugAll,"ClientThreadProxy::process() %d [%p]",m_func,this);
     Client* client = Client::self();
     if (!client || Client::exiting()) {
 	s_busy = false;
@@ -723,7 +723,7 @@ void ClientThreadProxy::process()
 
 bool ClientThreadProxy::execute()
 {
-    XDebug(DebugAll,"ClientThreadProxy::execute()"," %d in %p [%p]",
+    XDebug(DebugAll,"ClientThreadProxy::execute() %d in %p [%p]",
 	m_func,Thread::current(),this);
     s_proxyMutex.lock();
     s_proxy = this;
@@ -2905,7 +2905,7 @@ bool ClientDriver::setAudioTransfer(const String& id, const String& target)
     }
 
     // Set channels on success
-    if (target)
+    if (target) {
 	if (ok) {
 	    master->setTransfer(slave->id());
 	    slave->setTransfer(master->id());
@@ -2914,6 +2914,7 @@ bool ClientDriver::setAudioTransfer(const String& id, const String& target)
 	    Debug(s_driver,DebugNote,
 		"setAudioTransfer failed to attach peers for %s - %s",
 		master->id().c_str(),target.c_str());
+    }
 
     // Release references
     TelEngine::destruct(slavePeer);

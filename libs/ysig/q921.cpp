@@ -612,7 +612,7 @@ bool ISDNQ921::processSFrame(const ISDNFrame* frame)
 	// Ack sent data.
 	ackOutgoingFrames(frame);
 	// Respond
-	if (frame->poll())
+	if (frame->poll()) {
 	    if (frame->command())
 		sendSFrame(ISDNFrame::RR,false,true);
 	    else {
@@ -620,6 +620,7 @@ bool ISDNQ921::processSFrame(const ISDNFrame* frame)
 		m_vs = frame->nr();
 		XDebug(this,DebugAll,"Set V(S) to %u.",m_vs);
 	    }
+	}
 	if (!m_lastPFBit)
 	    timer(true,false);
 	return false;
@@ -932,18 +933,18 @@ void ISDNQ921::timer(bool start, bool t203, u_int64_t time)
 	    m_retransTimer.stop();
 	    XDebug(this,DebugAll,"T200 stopped");
 	}
-	if (t203)
+	if (t203) {
 	    if (!m_idleTimer.started()) {
 		if (!time)
 		     time = Time::msecNow();
 		m_idleTimer.start(time);
 		XDebug(this,DebugAll,"T203 started");
 	    }
-	else
-	    if (m_idleTimer.started()) {
-		m_idleTimer.stop();
-		XDebug(this,DebugAll,"T203 stopped");
-	    }
+	}
+	else if (m_idleTimer.started()) {
+	    m_idleTimer.stop();
+	    XDebug(this,DebugAll,"T203 stopped");
+	}
     }
 }
 

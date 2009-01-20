@@ -251,8 +251,9 @@ bool Base64::decode(DataBlock& dest, bool liberal)
 	if (rest) {
 	    GET_DEC(0)
 	    GET_DEC(1)
-	    if (rest == 3)
+	    if (rest == 3) {
 		GET_DEC(2)
+	    }
 	}
 	#undef GET_DEC
     }

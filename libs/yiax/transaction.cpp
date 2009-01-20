@@ -235,7 +235,7 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	sendInval();
 	return 0;
     }
-    if (state() == Terminating)
+    if (state() == Terminating) {
 	// Local terminate: Accept only Ack. Remote terminate: Accept none.
 	if (m_localReqEnd && frame->fullFrame()) {
 	    if (!(frame->type() == IAXFrame::IAX && frame->fullFrame()->subclass() == IAXControl::Ack))
@@ -243,6 +243,7 @@ IAXTransaction* IAXTransaction::processFrame(IAXFrame* frame)
 	}
 	else
 	    return 0;
+    }
     // Mini frame
     if (!frame->fullFrame())
 	return processMedia(frame->data(),frame->timeStamp());

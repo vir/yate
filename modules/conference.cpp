@@ -869,7 +869,7 @@ bool ConfHandler::received(Message& msg)
 // Message received override to drop entire rooms
 bool ConferenceDriver::received(Message &msg, int id)
 {
-    while ((id == Drop) || (id == Status) && prefix()) {
+    while (((id == Drop) || (id == Status)) && prefix()) {
 	String dest;
 	switch (id) {
 	    case Drop:

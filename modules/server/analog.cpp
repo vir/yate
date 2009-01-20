@@ -855,8 +855,8 @@ void ModuleGroup::handleEvent(ModuleLine& line, SignallingCircuitEvent& event)
 	if ((line.type() == AnalogLine::FXS &&
 		event.type() == SignallingCircuitEvent::OffHook) ||
 	    (line.type() == AnalogLine::FXO &&
-		(event.type() == SignallingCircuitEvent::RingBegin) ||
-		(type() == AnalogLine::Recorder && event.type() == SignallingCircuitEvent::Wink))) {
+		((event.type() == SignallingCircuitEvent::RingBegin) ||
+		(type() == AnalogLine::Recorder && event.type() == SignallingCircuitEvent::Wink)))) {
 	    if (!line.ref()) {
 		Debug(this,DebugWarn,"Incoming call on line '%s' failed [%p]",
 		    line.address(),this);
@@ -1758,11 +1758,12 @@ void AnalogChannel::evRing(bool on)
     }
 
     // Check call setup
-    if (m_callsetup == AnalogLine::After)
+    if (m_callsetup == AnalogLine::After) {
 	if (on)
 	    m_dialTimer.stop();
 	else
 	    m_dialTimer.start();
+    }
 
     // Done if ringer is off
     if (!on)
@@ -1803,7 +1804,7 @@ void AnalogChannel::evLineStarted()
 	return;
     // Send number: delay it if interval is not 0
     bool stopDial = true;
-    if (m_line->called())
+    if (m_line->called()) {
 	if (m_line->delayDial() || m_dialTimer.interval()) {
 	    if (!m_dialTimer.started()) {
 		if (!m_dialTimer.interval())
@@ -1816,6 +1817,7 @@ void AnalogChannel::evLineStarted()
 	}
 	else
 	    sendTones(m_line->called());
+    }
 
     // Answer now outgoing FXO calls on lines not expecting polarity changes to answer
     if (isOutgoing() && m_line && m_line->type() == AnalogLine::FXO &&
@@ -1849,7 +1851,7 @@ void AnalogChannel::evPolarity()
     m_polarityCount++;
     DDebug(this,DebugAll,"Line polarity changed %u time(s) [%p]",m_polarityCount,this);
     bool terminate = (!m_line || m_line->type() != AnalogLine::FXO);
-    if (!terminate)
+    if (!terminate) {
 	if (isOutgoing())
 	    if (!m_line->answerOnPolarity() || isAnswered())
 		terminate = m_line->hangupOnPolarity();
@@ -1857,6 +1859,7 @@ void AnalogChannel::evPolarity()
 		outCallAnswered();
 	else if (!m_line->answerOnPolarity() || m_polarityCount > 1)
 	    terminate = m_line->hangupOnPolarity();
+    }
 
     if (terminate) {
 	DDebug(this,DebugAll,"Terminating on polarity change [%p]",this);
@@ -1986,11 +1989,12 @@ bool AnalogChannel::setAudio(bool in)
 	return true;
 
     SignallingCircuit* cic = m_line ? m_line->circuit() : 0;
-    if (cic)
+    if (cic) {
 	if (in)
 	    setSource(static_cast<DataSource*>(cic->getObject("DataSource")));
 	else
 	    setConsumer(static_cast<DataConsumer*>(cic->getObject("DataConsumer")));
+    }
 
     DataNode* res = in ? (DataNode*)getSource() : (DataNode*)getConsumer();
     if (res)
@@ -2690,7 +2694,7 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
 	String tmp;
 	int cic = decodeAddr(dest,tmp,true);
 	ModuleGroup* group = findGroup(tmp);
-	if (group && !group->fxoRec())
+	if (group && !group->fxoRec()) {
 	    if (cic >= 0)
 		line = static_cast<ModuleLine*>(group->findLine(cic));
 	    else if (cic == -1) {
@@ -2710,6 +2714,7 @@ bool AnalogDriver::msgExecute(Message& msg, String& dest)
 		    break;
 		}
 	    }
+	}
 
 	if (!line) {
 	    cause << "No line with address '" << dest << "'";

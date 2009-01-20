@@ -1438,7 +1438,7 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	error = reason;
     String s(error);
     Lock lock(m_mutexTrans);
-    if (m_transaction && s == "noauth")
+    if (m_transaction && s == "noauth") {
 	if (safeRefIncrease()) {
 	    Debug(this,DebugInfo,"callRejected. Requesting authentication [%p]",this);
 	    m_transaction->sendAuth();
@@ -1446,6 +1446,7 @@ void YIAXConnection::callRejected(const char* error, const char* reason, const M
 	}
 	else
 	    error = "temporary-failure";
+    }
     lock.drop();
     Debug(this,DebugCall,"callRejected. Reason: '%s' [%p]",error,this);
     hangup(reason,true);

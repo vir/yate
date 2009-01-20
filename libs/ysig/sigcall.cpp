@@ -61,7 +61,7 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
     String restrict;
     if (m_strategy != SignallingCircuitGroup::Random)
 	restrict = params.getValue("strategy-restrict");
-    if (!restrict.null())
+    if (!restrict.null()) {
 	if (restrict == "odd")
 	    m_strategy |= SignallingCircuitGroup::OnlyOdd;
 	else if (restrict == "even")
@@ -70,6 +70,7 @@ SignallingCallControl::SignallingCallControl(const NamedList& params,
 	    m_strategy |= SignallingCircuitGroup::OnlyOdd | SignallingCircuitGroup::Fallback;
 	else if (restrict == "even-fallback")
 	    m_strategy |= SignallingCircuitGroup::OnlyEven | SignallingCircuitGroup::Fallback;
+    }
 
     // Message prefix
     m_msgPrefix = params.getValue("message-prefix",msgPrefix);
@@ -450,11 +451,12 @@ bool SignallingCircuit::sendEvent(SignallingCircuitEvent::Type type, NamedList* 
 // Set/reset circuit flag(s)
 inline bool cicFlag(SignallingCircuit* cic, bool set, int flag, int chgFlag, bool setChg)
 {
-    if (chgFlag)
+    if (chgFlag) {
 	if (setChg)
 	    cic->setLock(chgFlag);
 	else
 	    cic->resetLock(chgFlag);
+    }
     if (set == (0 != cic->locked(flag)))
 	return false;
     if (set)

@@ -38,13 +38,13 @@
 ; sig: string: Specify the span(s) containing the signalling channel(s)
 ; For example wanpipe1 or any other section specified in any of the telephony
 ;   modules like wpcard or zapcard
-; Ignored if type is not isdn-pri-net or isdn-pri-cpe
+; Ignored if type is isdn-pri-mon
 ;sig=wanpipe1
 
 ; voice: string: Specify the span(s) containing the voice channel(s)
 ; Multiple cards may be specified by simply separating them with a comma (',') character
 ; Defaults to the span specified in the sig parameter
-; Ignored if type is not isdn-pri-net or isdn-pri-cpe
+; Ignored if type is isdn-pri-mon
 ;voice=
 
 ; switchtype: string: The switch type of this group
@@ -192,7 +192,7 @@
 ; Minimum value is 5 for SS7 links and 3000 for ISDN links
 ;rxunderruninterval=10
 
-; pointcodetype: string: SS7 link point code type (required)
+; pointcodetype: string: SS7 point code type for ISUP (required)
 ; Allowed values:
 ;  ITU    ITU-T Q.704
 ;  ANSI   ANSI T1.111.4
@@ -203,12 +203,14 @@
 ;pointcodetype=
 
 ; pointcode: string: Point code serviced by this link
-; defaultpointcode: string: Default point code for outgoing calls
-; If missing or invalid, the default point code is set to the first point code added
-; If no point codes are added no calls can be made (incoming or outgoing) through this link
 ; The format is network-cluster-member
-; Parameter pointcode may be repeated
+; Parameter pointcode may be repeated to add more local point codes
 ;pointcode=
+
+; defaultpointcode: string: Default originating point code used for outgoing calls
+; The format is network-cluster-member
+; If missing or invalid the first point code added is used
+; If no point codes are added no calls can be made (incoming or outgoing) through this link
 ;defaultpointcode=
 
 ; remotepointcode: string: Default destination point code used for outgoing calls and maintenance messages

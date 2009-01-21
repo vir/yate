@@ -577,11 +577,45 @@ class Mutex;
 void YCLASS(class type,class base);
 
 /**
+ * Macro to create a GenObject class from two base classes and implement @ref GenObject::getObject
+ * @param type Class that is declared
+ * @param base1 First base class that is inherited
+ * @param base2 Second base class that is inherited
+ */
+void YCLASS2(class type,class base1,class base2);
+
+/**
+ * Macro to create a GenObject class from three base classes and implement @ref GenObject::getObject
+ * @param type Class that is declared
+ * @param base1 First base class that is inherited
+ * @param base2 Second base class that is inherited
+ * @param base3 Third base class that is inherited
+ */
+void YCLASS3(class type,class base1,class base2,class base3);
+
+/**
  * Macro to implement @ref GenObject::getObject in a derived class
  * @param type Class that is declared
  * @param base Base class that is inherited
  */
 void YCLASSIMP(class type,class base);
+
+/**
+ * Macro to implement @ref GenObject::getObject in a derived class
+ * @param type Class that is declared
+ * @param base1 First base class that is inherited
+ * @param base2 Second base class that is inherited
+ */
+void YCLASSIMP2(class type,class base1,class base2);
+
+/**
+ * Macro to implement @ref GenObject::getObject in a derived class
+ * @param type Class that is declared
+ * @param base1 First base class that is inherited
+ * @param base2 Second base class that is inherited
+ * @param base3 Third base class that is inherited
+ */
+void YCLASSIMP3(class type,class base1,class base2,class base3);
 
 /**
  * Macro to retrive a typed pointer to an interface from an object
@@ -596,9 +630,37 @@ class* YOBJECT(class type,GenObject* pntr);
 public: virtual void* getObject(const String& name) const \
 { return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
 
+#define YCLASS2(type,base1,base2) \
+public: virtual void* getObject(const String& name) const \
+{ if (name == #type) return const_cast<type*>(this); \
+  void* tmp = base1::getObject(name); \
+  return tmp ? tmp : base2::getObject(name); }
+
+#define YCLASS3(type,base1,base2,base3) \
+public: virtual void* getObject(const String& name) const \
+{ if (name == #type) return const_cast<type*>(this); \
+  void* tmp = base1::getObject(name); \
+  if (tmp) return tmp; \
+  tmp = base2::getObject(name); \
+  return tmp ? tmp : base3::getObject(name); }
+
 #define YCLASSIMP(type,base) \
 void* type::getObject(const String& name) const \
 { return (name == #type) ? const_cast<type*>(this) : base::getObject(name); }
+
+#define YCLASSIMP2(type,base1,base2) \
+void* type::getObject(const String& name) const \
+{ if (name == #type) return const_cast<type*>(this); \
+  void* tmp = base1::getObject(name); \
+  return tmp ? tmp : base2::getObject(name); }
+
+#define YCLASSIMP3(type,base1,base2,base3) \
+void* type::getObject(const String& name) const \
+{ if (name == #type) return const_cast<type*>(this); \
+  void* tmp = base1::getObject(name); \
+  if (tmp) return tmp; \
+  tmp = base2::getObject(name); \
+  return tmp ? tmp : base3::getObject(name); }
 
 #define YOBJECT(type,pntr) (static_cast<type*>((pntr) ? (pntr)->getObject(#type) : 0))
 

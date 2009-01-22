@@ -29,6 +29,7 @@ Name: "client"; Description: "VoIP Clients"; Types: full client
 Name: "client\qt"; Description: "Client based on Qt"; Types: full client
 Name: "client\qt\run"; Description: "Qt runtime libraries"; Types: full client
 Name: "server"; Description: "Server files"; Types: full server
+Name: "server\pstn"; Description: "Server PSTN support"; Types: full
 Name: "server\cluster"; Description: "Server clustering modules"; Types: full
 Name: "driver"; Description: "Protocol drivers"; Types: full client server
 Name: "driver\base"; Description: "Files, tones, mixers"; Types: full client server custom
@@ -37,7 +38,9 @@ Name: "driver\openssl\run"; Description: "OpenSSL runtime libraries"; Types: ful
 Name: "driver\sip"; Description: "SIP Protocol driver"; Types: full client server
 Name: "driver\h323"; Description: "H.323 Protocol driver"; Types: full client server
 Name: "driver\iax"; Description: "IAX Protocol driver"; Types: full client server
-Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full server
+Name: "driver\jingle"; Description: "Jingle Protocol driver"; Types: full client server
+Name: "driver\jingle\transfer"; Description: "Jingle file transfer"; Types: full client server
+Name: "driver\jingle\features"; Description: "Jingle special features"; Types: full server
 ;Name: "driver\wp"; Description: "Wanpipe card driver"; Types: full server
 Name: "database"; Description: "Database drivers"; Types: full server
 Name: "database\my"; Description: "MySQL database driver"; Types: full server
@@ -60,64 +63,71 @@ Name: "qlaunch"; Description: "Create a &Quick Launch icon"; GroupDescription: "
 Name: "desktop"; Description: "Create a &Desktop icon"; GroupDescription: "Additional icons:"; Components: client; Flags: unchecked
 
 [Files]
-Source: "Release\libyate.dll"; DestDir: "{app}"; Components: engine
-Source: "Release\libyqt4.dll"; DestDir: "{app}"; Components: client\qt
-Source: "Release\yate-qt4.exe"; DestDir: "{app}"; Components: client\qt
-;Source: "..\share\sounds\ring.wav"; DestDir: "{app}\sounds"; Components: client
+Source: "Release\libyate.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: engine
+Source: "Release\libyjingle.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: driver\jingle
+Source: "Release\libymgcp.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
+Source: "Release\libysig.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: server\pstn server\cluster
+Source: "Release\libyqt4.dll"; DestDir: "{app}"; Flags: replacesameversion; Components: client\qt
+Source: "Release\yate-qt4.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: client\qt
 Source: "Runtimes\qtcore4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtgui4.dll"; DestDir: "{app}"; Components: client\qt\run
 Source: "Runtimes\qtxml4.dll"; DestDir: "{app}"; Components: client\qt\run
-Source: "Release\yate-service.exe"; DestDir: "{app}"; Components: server
-Source: "Release\yate-console.exe"; DestDir: "{app}"; Components: debug
+Source: "Release\yate-service.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: server
+Source: "Release\yate-console.exe"; DestDir: "{app}"; Flags: replacesameversion; Components: debug
 
-Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Components: client server
-Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Components: server debug
-Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Components: debug
-Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\conference.yate"; DestDir: "{app}\modules"; Components: driver\base
-Source: "Release\client\dsoundchan.yate"; DestDir: "{app}\modules\client"; Components: client
-Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Components: debug
-Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Components: client server debug
-Source: "Release\server\regfile.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Components: server debug
-Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Components: driver\base
-Source: "Release\tonedetect.yate"; DestDir: "{app}\modules"; Components: driver\base
+Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: client server
+Source: "Release\server\analog.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
+Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
+Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
+Source: "Release\cdrbuild.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\cdrfile.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\conference.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
+Source: "Release\client\dsoundchan.yate"; DestDir: "{app}\modules\client"; Flags: replacesameversion; Components: client
+Source: "Release\dumbchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\extmodule.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\msgsniff.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug
+Source: "Release\regexroute.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: client server debug
+Source: "Release\server\regfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\rmanager.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
+Source: "Release\tonegen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
+Source: "Release\tonedetect.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\base
 Source: "Release\wavefile.yate"; DestDir: "{app}\modules"; Components: driver\base
-Source: "Release\server\yradius.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\register.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\dbpbx.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Components: server
-Source: "Release\server\pbxassist.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\park.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Components: server
-Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Components: server
+Source: "Release\server\yradius.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\register.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\dbpbx.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\pbx.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
+Source: "Release\server\pbxassist.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\park.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\queues.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\lateroute.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
+Source: "Release\server\sipfeatures.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server
 
-Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
-Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
-Source: "Release\server\mgcpca.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
-Source: "Release\server\mgcpgw.yate"; DestDir: "{app}\modules\server"; Components: server\cluster
+Source: "Release\server\heartbeat.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
+Source: "Release\server\clustering.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\cluster
+Source: "Release\server\mgcpca.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn server\cluster
+Source: "Release\server\mgcpgw.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn server\cluster
 
-;Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Components: driver\wp
-Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Components: driver\sip driver\h323 driver\jingle
-Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Components: driver\sip
-Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Components: driver\h323
-Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Components: driver\iax
-Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
-Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Components: driver\jingle
-Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Components: driver\openssl
+;Source: "Release\wpchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\wp
+Source: "Release\yrtpchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\sip driver\h323 driver\jingle
+Source: "Release\ysipchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\sip
+Source: "Release\h323chan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\h323
+Source: "Release\yiaxchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\iax
+Source: "Release\yjinglechan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle
+Source: "Release\ystunchan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle
+Source: "Release\ysockschan.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle\transfer
+Source: "Release\filetransfer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\jingle\transfer
+Source: "Release\jingle\jinglefeatures.yate"; DestDir: "{app}\modules\jingle"; Flags: replacesameversion; Components: driver\jingle\features
+Source: "Release\openssl.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: driver\openssl
 
-Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Components: codecs\gsm
-Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Components: codecs\ilbc
-Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Components: codecs\speex
+Source: "Release\gsmcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\gsm
+Source: "Release\ilbccodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\ilbc
+Source: "Release\speexcodec.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: codecs\speex
 
-Source: "Release\server\mysqldb.yate"; DestDir: "{app}\modules\server"; Components: database\my
+Source: "Release\server\mysqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\my
+Source: "Release\server\pgsqldb.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: database\pg
+
 Source: "Runtimes\libmysql.dll"; DestDir: "{app}"; Components: database\my\run
-Source: "Release\server\pgsqldb.yate"; DestDir: "{app}\modules\server"; Components: database\pg
 Source: "Runtimes\libpq.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\comerr32.dll"; DestDir: "{app}"; Components: database\pg\run
 Source: "Runtimes\krb5_32.dll"; DestDir: "{app}"; Components: database\pg\run

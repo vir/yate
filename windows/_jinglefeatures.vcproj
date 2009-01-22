@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="libymgcp"
-	ProjectGUID="{8A30C2FB-E471-9C74-AA33-1629A2F8424E}"
-	RootNamespace="libymgcp"
+	Name="_jinglefeatures"
+	ProjectGUID="{4A88A731-2F2E-4702-2398-14C32A18D588}"
+	RootNamespace="_jinglefeatures"
 	>
 	<Platforms>
 		<Platform
@@ -16,8 +16,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug"
-			IntermediateDirectory=".\Debug\ymgcp"
+			OutputDirectory=".\Debug\jingle"
+			IntermediateDirectory=".\Debug\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -38,20 +38,25 @@
 			/>
 			<Tool
 				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Debug/_jinglefeatures.tlb"
+				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp"
-				PreprocessorDefinitions="_DEBUG;WIN32;_LIB;LIBYMGCP_EXPORTS;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,..,..\libs\yxml,..\libs\yjingle"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;_USRDLL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				PrecompiledHeaderFile=".\Debug\ymgcp/libymgcp.pch"
-				AssemblerListingLocation=".\Debug\ymgcp/"
-				ObjectFile=".\Debug\ymgcp/"
-				ProgramDataBaseFileName=".\Debug\ymgcp/"
-				BrowseInformation="1"
+				PrecompiledHeaderFile=".\Debug\modules/_jinglefeatures.pch"
+				AssemblerListingLocation=".\Debug\modules/"
+				ObjectFile=".\Debug\modules/"
+				ProgramDataBaseFileName=".\Debug\modules/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 				DebugInformationFormat="3"
@@ -69,7 +74,14 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				IgnoreImportLibrary="true"
+				OutputFile="Debug/jingle/jinglefeatures.yate"
 				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile=".\Debug/jinglefeatures.pdb"
+				ImportLibrary=".\Debug/jinglefeatures.lib"
+				TargetMachine="1"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -83,7 +95,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/libymgcp.bsc"
+				OutputFile=".\Debug/_jinglefeatures.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -100,8 +112,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release"
-			IntermediateDirectory=".\Release\ymgcp"
+			OutputDirectory=".\Release\jingle"
+			IntermediateDirectory=".\Release\modules"
 			ConfigurationType="2"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC60.vsprops"
 			UseOfMFC="0"
@@ -122,20 +134,26 @@
 			/>
 			<Tool
 				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\Release/_jinglefeatures.tlb"
+				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories=".,..,..\libs\ymgcp"
-				PreprocessorDefinitions="NDEBUG;WIN32;_LIB;LIBYMGCP_EXPORTS;_CRT_SECURE_NO_DEPRECATE"
+				AdditionalIncludeDirectories=".,..,..\libs\yxml,..\libs\yjingle"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;_USRDLL"
 				StringPooling="true"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile=".\Release\ymgcp/libymgcp.pch"
-				AssemblerListingLocation=".\Release\ymgcp/"
-				ObjectFile=".\Release\ymgcp/"
-				ProgramDataBaseFileName=".\Release\ymgcp/"
+				PrecompiledHeaderFile=".\Release\modules/_jinglefeatures.pch"
+				AssemblerListingLocation=".\Release\modules/"
+				ObjectFile=".\Release\modules/"
+				ProgramDataBaseFileName=".\Release\modules/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -152,7 +170,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				IgnoreImportLibrary="true"
+				OutputFile="Release/jingle/jinglefeatures.yate"
 				LinkIncremental="1"
+				SuppressStartupBanner="true"
+				ProgramDatabaseFile=".\Release/jinglefeatures.pdb"
+				ImportLibrary=".\Release/jinglefeatures.lib"
+				TargetMachine="1"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -166,7 +190,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/libymgcp.bsc"
+				OutputFile=".\Release/_jinglefeatures.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -190,30 +214,57 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 			>
 			<File
-				RelativePath="..\libs\ymgcp\endpoint.cpp"
+				RelativePath="..\modules\jingle\jinglefeatures.cpp"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
 			</File>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
+			>
 			<File
-				RelativePath="..\libs\ymgcp\engine.cpp"
+				RelativePath="version.rc"
 				>
-			</File>
-			<File
-				RelativePath="..\libs\ymgcp\message.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\libs\ymgcp\transaction.cpp"
-				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions=""
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl"
 			>
-			<File
-				RelativePath="..\libs\ymgcp\yatemgcp.h"
-				>
-			</File>
 		</Filter>
 	</Files>
 	<Globals>

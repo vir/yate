@@ -25,7 +25,7 @@ Yate::Init();
 Yate::SetLocal("id",$ourcallid);
 Yate::SetLocal("disconnected","true");
 
-Yate::Install("call.answered",40,"targetid",$ourcallid);
+Yate::Install("call.answered",40);
 Yate::Install("chan.disconnected",20,"id",$ourcallid);
 
 /* The main loop. We pick events and handle them */
@@ -58,6 +58,14 @@ for (;;) {
 		    $m->Dispatch();
 		    break;
 		case "call.answered":
+		    if ($ev->GetValue("id") == $partycallid) {
+			// call was picked up from queue
+			$ev->Acknowledge();
+			Yate::SetLocal("reason","pickup");
+			exit();
+		    }
+		    if ($ev->GetValue("targetid") != $ourcallid)
+			break;
 		    $ev->params["targetid"] = $partycallid;
 		    $ev->Acknowledge();
 		    $m = new Yate("chan.connect");

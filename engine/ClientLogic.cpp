@@ -1152,8 +1152,8 @@ bool DefaultLogic::loginAccount(const NamedList& account, bool login)
 
     Message* m = new Message("user.login");
     m->addParam("account",account);
-    m->addParam("operation",login ? "create" : "delete");
-    // Fill login data    
+    m->addParam("operation",login ? "login" : "delete");
+    // Fill login data
     if (login) {
     	unsigned int n = account.length();
 	for (unsigned int i = 0; i < n; i++) {

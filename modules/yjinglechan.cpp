@@ -2986,7 +2986,6 @@ bool YJGConnection::initLocalCandidates(JGSessionContent& content, bool sendTran
 	m.addParam("secure",String::boolText(true));
 	m.addParam("crypto_suite",crypto->m_suite);
 	m.addParam("crypto_key",crypto->m_keyParams);
-	m.addParam("crypto_key",crypto->m_keyParams);
     }
     else if (m_useCrypto)
 	m.addParam("secure",String::boolText(true));

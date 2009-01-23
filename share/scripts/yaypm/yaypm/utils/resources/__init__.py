@@ -11,7 +11,7 @@ class Resource:
     
     @defer.inlineCallbacks
     def play(self, yate, callid, targetid,
-             stopOnDTMF=False, until = None,
+             stopOnDTMF = False, until = None,
              override = False, *args):
 
         files = self._match(*args)
@@ -40,8 +40,7 @@ class Resource:
                                  lambda m : m["id"] == callid,
                                 until = until))
                 if dtmf:
-                    yield dtmf
-                    break
+                    defer.returnValue(notify)
             else:
                 notify = yield yate.onwatch("chan.notify",
                                  lambda m : m["targetid"] == nid,
@@ -54,7 +53,7 @@ class Resource:
                  stopOnDTMF=False, until = None, *args):
         
         return Resource.play(self, yate, callid, callid, stopOnDTMF,
-                             until, override = True, *args)        
+                             until, True, *args)        
 
 class StaticResource(Resource):
     def __init__(self, attach, desc = None):

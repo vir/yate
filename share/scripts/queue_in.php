@@ -71,6 +71,8 @@ for (;;) {
 			if ($ev->GetValue("greeting"))
 			    $m->params["source"] = $ev->GetValue("greeting");
 			else if ($newsource) {
+			    if (substr($newsource,0,4) == "moh/")
+				$m->params["mohlist"] = $ev->GetValue("mohlist");
 			    $m->params["source"] = $newsource;
 			    $newsource = "";
 			}

@@ -1739,18 +1739,6 @@ class YATE_API ClientLogic : public GenObject
     friend class Client;
 public:
     /**
-     * Constructor. Append itself to the client's list
-     */
-    ClientLogic();
-
-    /**
-     * Constructor. Append itself to the client's list
-     * @param name The name of this logic (module)
-     * @param priority The priority of this logic
-     */
-    ClientLogic(const char* name, int priority);
-
-    /**
      * Destructor. Remove itself from the client's list
      */
     virtual ~ClientLogic();
@@ -2221,6 +2209,13 @@ public:
 
 protected:
     /**
+     * Constructor. Append itself to the client's list
+     * @param name The name of this logic (module)
+     * @param priority The priority of this logic
+     */
+    ClientLogic(const char* name, int priority);
+
+    /**
      * Method called by the client when idle.
      * This method is called in the UI's thread
      * @param time The current time
@@ -2237,6 +2232,8 @@ protected:
     Mutex m_durationMutex;               // Lock duration operations
 
 private:
+    ClientLogic() {}                     // No default constructor
+
     String m_name;                       // Logic's name
     int m_prio;                          // Logics priority
 };

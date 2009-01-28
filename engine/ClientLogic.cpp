@@ -175,15 +175,7 @@ inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
 /**
  * ClientLogic
  */
-// contructor, the object appends itself to the Client's list of this kind of objects
-ClientLogic::ClientLogic()
-    : m_durationMutex(true), m_name("default"), m_prio(100)
-{
-    Debug(ClientDriver::self(),DebugAll,"ClientLogic(%s) [%p]",m_name.c_str(),this);
-    Client::addLogic(this);
-}
-
-// constructor, specifies a name
+// Constructor
 ClientLogic::ClientLogic(const char* name, int priority)
     : m_durationMutex(true), m_name(name), m_prio(priority)
 {

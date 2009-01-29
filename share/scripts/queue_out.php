@@ -47,6 +47,7 @@ for (;;) {
 		    $queue = $ev->GetValue("queue");
 		    $ev->handled=true;
 		    Yate::Install("chan.hangup",80,"id",$partycallid);
+		    // create call leg to operator
 		    $m = new Yate("call.execute");
 		    $m->params["id"] = $ourcallid;
 		    $m->params["caller"] = $ev->GetValue("caller");
@@ -55,6 +56,10 @@ for (;;) {
 		    $m->params["billid"] = $ev->GetValue("billid");
 		    $m->params["maxcall"] = $ev->GetValue("maxcall");
 		    $m->params["cdrtrack"] = "false";
+		    $m->Dispatch();
+		    // check if queued call still exists
+		    $m = new Yate("chan.locate");
+		    $m->params["id"] = $partycallid;
 		    $m->Dispatch();
 		    break;
 		case "call.answered":
@@ -68,6 +73,7 @@ for (;;) {
 			break;
 		    $ev->params["targetid"] = $partycallid;
 		    $ev->Acknowledge();
+		    // connect operator call leg directly to incoming one
 		    $m = new Yate("chan.connect");
 		    $m->id = "";
 		    $m->params["id"] = $ev->GetValue("id");
@@ -76,6 +82,7 @@ for (;;) {
 		    $m->Dispatch();
 		    break;
 		case "chan.disconnected":
+		    // operator hung up or did not answer
 		    if ($ev->GetValue("reason")) {
 			$ev->name = "chan.hangup";
 			$ev->params["notify"] = $partycallid;
@@ -84,6 +91,7 @@ for (;;) {
 		    }
 		    break;
 		case "chan.hangup":
+		    // caller hung up while in queue
 		    exit();
 	    }
 	    /* This is extremely important.
@@ -93,14 +101,23 @@ for (;;) {
 	    break;
 	case "answer":
 	    Yate::Debug("PHP Answered: " . $ev->name . " id: " . $ev->id);
-	    if (($ev->name == "call.execute") && !$ev->handled) {
-		Yate::Output("Failed to start queue '$queue' call leg to: " . $ev->GetValue("callto"));
-		$m = new Yate("chan.hangup");
-		$m->id = "";
-		$m->params["notify"] = $partycallid;
-		$m->params["queue"] = $queue;
-		$m->params["cdrtrack"] = "false";
-		$m->Dispatch();
+	    if (!$ev->handled) {
+		if ($ev->name == "call.execute") {
+		    // call leg to operator didn't even start
+		    Yate::Output("Failed to start queue '$queue' call leg to: " . $ev->GetValue("callto"));
+		    $m = new Yate("chan.hangup");
+		    $m->id = "";
+		    $m->params["notify"] = $partycallid;
+		    $m->params["queue"] = $queue;
+		    $m->params["cdrtrack"] = "false";
+		    $m->Dispatch();
+		}
+		else if ($ev->name == "chan.locate") {
+		    // caller hung up before we installed the hangup handler
+		    Yate::Output("Call $partycallid from '$caller' exited early from '$queue'");
+		    Yate::SetLocal("reason","nocall");
+		    exit();
+		}
 	    }
 	    break;
 	default:

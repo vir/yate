@@ -2103,19 +2103,32 @@ unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
 	return 0;
     unsigned int count = 0;
     unsigned int n = sect.length();
+    NamedString* defPc = 0;
     for (unsigned int i= 0; i < n; i++) {
 	NamedString* ns = sect.getParam(i);
 	if (!ns)
 	    continue;
-	bool def = (ns->name() == "defaultpointcode");
-	if (!def && ns->name() != "pointcode")
+	if (ns->name() == "defaultpointcode") {
+	    defPc = ns;
+	    continue;
+	}
+	if (ns->name() != "pointcode")
 	    continue;
 	SS7PointCode* pc = new SS7PointCode(0,0,0);
-	if (pc->assign(*ns) && isup()->setPointCode(pc,def))
+	if (pc->assign(*ns) && isup()->setPointCode(pc,false))
 	    count++;
 	else {
 	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
 		ns->name().c_str(),ns->safe(),sect.safe());
+	    TelEngine::destruct(pc);
+	}
+    }
+    if (defPc) {
+	SS7PointCode* pc = new SS7PointCode(0,0,0);
+	if (!(pc->assign(*defPc) && isup()->hasPointCode(*pc) &&
+	    isup()->setPointCode(pc,true))) {
+	    Debug(&plugin,DebugNote,"Invalid %s=%s in section '%s'",
+		defPc->name().c_str(),defPc->safe(),sect.safe());
 	    TelEngine::destruct(pc);
 	}
     }

@@ -163,15 +163,15 @@ INIT_PLUGIN(SoundDriver);
 
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
     : Thread("DirectSound Play",High),
-      m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
+      m_owner(0), m_device(device), m_ds(0), m_dsb(0),
       m_buffSize(0), m_start(0), m_total(0)
 {
+    if (owner && owner->ref())
+	m_owner = owner;
 }
 
 DSoundPlay::~DSoundPlay()
 {
-    if (m_owner)
-	m_owner->m_dsound = 0;
     if (m_start && m_total) {
 	unsigned int rate = (unsigned int)(m_total * 1000000 / (Time::now() - m_start));
 	Debug(&__plugin,DebugInfo,"DSoundPlay transferred %u bytes/s, total " FMT64U,rate,m_total);
@@ -265,13 +265,15 @@ void DSoundPlay::run()
 {
     if (!init())
 	return;
+    Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
     if (m_owner)
 	m_owner->m_dsound = this;
+    else
+	return;
     DWORD writeOffs = 0;
     DWORD margin = s_chunk/4;
     bool first = true;
-    Debug(&__plugin,DebugInfo,"DSoundPlay is initialized and running");
-    while (m_owner) {
+    while (m_owner->refcount() > 1) {
 	msleep(1,true);
 	if (first) {
 	    if ((m_buf.length() < s_minsize) || !m_dsb)
@@ -383,6 +385,12 @@ bool DSoundPlay::control(NamedList& msg)
 void DSoundPlay::cleanup()
 {
     Debug(DebugInfo,"DSoundPlay cleaning up");
+    if (m_owner) {
+	m_owner->m_dsound = 0;
+	if (m_owner->refcount() > 1)
+	    Debug(&__plugin,DebugWarn,"DSoundPlay destroyed while consumer is still active");
+	TelEngine::destruct(m_owner);
+    }
     if (m_dsb) {
 	m_dsb->Stop();
 	m_dsb->Release();
@@ -410,15 +418,15 @@ void DSoundPlay::put(const DataBlock& data)
 
 DSoundRec::DSoundRec(DSoundSource* owner, LPGUID device)
     : Thread("DirectSound Rec",High),
-      m_owner(owner), m_device(device), m_ds(0), m_dsb(0),
+      m_owner(0), m_device(device), m_ds(0), m_dsb(0),
       m_buffSize(0), m_readPos(0), m_start(0), m_total(0), m_rshift(0)
 {
+    if (owner && owner->ref())
+	m_owner = owner;
 }
 
 DSoundRec::~DSoundRec()
 {
-    if (m_owner)
-	m_owner->m_dsound = 0;
     if (m_start && m_total) {
 	unsigned int rate = (unsigned int)(m_total * 1000000 / (Time::now() - m_start));
 	Debug(&__plugin,DebugInfo,"DSoundRec transferred %u bytes/s, total " FMT64U,rate,m_total);
@@ -491,11 +499,13 @@ void DSoundRec::run()
 {
     if (!init())
 	return;
-    if (m_owner)
-	m_owner->m_dsound = this;
     Debug(&__plugin,DebugInfo,"DSoundRec is initialized and running");
     m_start = Time::now();
-    while (m_owner) {
+    if (m_owner)
+	m_owner->m_dsound = this;
+    else
+	return;
+    while (m_owner->refcount() > 1) {
 	msleep(1,true);
 	if (m_dsb) {
 	    DWORD pos = 0;
@@ -536,6 +546,12 @@ void DSoundRec::run()
 void DSoundRec::cleanup()
 {
     Debug(&__plugin,DebugInfo,"DSoundRec cleaning up");
+    if (m_owner) {
+	m_owner->m_dsound = 0;
+	if (m_owner->refcount() > 1)
+	    Debug(&__plugin,DebugWarn,"DSoundRec destroyed while source is still active");
+	TelEngine::destruct(m_owner);
+    }
     if (m_dsb) {
 	m_dsb->Stop();
 	m_dsb->Release();

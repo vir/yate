@@ -1412,10 +1412,26 @@ public:
 	Unknown
     };
 
-    // Incoming (from engine) consructor
+    /**
+     * Incoming (from engine) constructor
+     * @param msg The call.execute message
+     * @param peerid The peer's id
+     */
     ClientChannel(const Message& msg, const String& peerid);
-    // Outgoing (to engine) constructor
+
+    /**
+     * Outgoing (to engine) constructor
+     * @param target The target to call
+     * @param params Call parameters
+     */
     ClientChannel(const String& target, const NamedList& params);
+
+    /**
+     * Constructor for utility channels used to play notifications
+     * @param soundId The id of the sound to play
+     */
+    ClientChannel(const String& soundId);
+
     virtual ~ClientChannel();
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -1585,6 +1601,7 @@ public:
 
 protected:
     virtual void destroyed();
+    virtual void connected(const char* reason);
     virtual void disconnected(bool final, const char* reason);
     // Check for a source in channel's peer or a received message's user data
     inline bool peerHasSource(Message& msg) {
@@ -1609,6 +1626,8 @@ protected:
     bool m_conference;                   // True if this channel is in conference
     String m_transferId;                 // Transferred id or empty if not transferred
     RefObject* m_clientData;             // Obscure data used by client logics
+    bool m_utility;                      // Regular client channel flag
+    String m_soundId;                    // The id of the sound to play
 };
 
 /**
@@ -3203,7 +3222,7 @@ public:
      * @param device Optional device used to play the file. Set to 0 to use the default one
      */
     inline ClientSound(const char* name, const char* file, const char* device = 0)
-	: String(name), m_file(file), m_device(device), m_repeat(-1), m_started(false)
+	: String(name), m_file(file), m_device(device), m_repeat(0), m_started(false)
 	{}
 
     /**
@@ -3257,18 +3276,51 @@ public:
 	{ Lock lock(s_soundsMutex); m_file = filename; }
 
     /**
+     * Set the repeat counter.
+     * @param count The number of times to play the sound,
+     *  0 to repeat until explicitely stopped
+     */
+    inline void setRepeat(unsigned int count)
+	{ m_repeat = count; }
+
+    /**
      * Start playing the file
-     * @param repeat The number of times to play the file if positive,
-     *  play until explicitely stopped otherwise
      * @param force True to start playing the file even if already started
      * @return True on success
      */
-    bool start(int repeat = -1, bool force = true);
+    bool start(bool force = true);
 
     /**
      * Stop playing the file
      */
     void stop();
+
+    /**
+     * Set/reset channel on sound start/stop
+     * @param chan The channel id
+     * @param ok Operation: true to start, false to stop
+     */
+    void setChannel(const String& chan, bool ok);
+
+    /**
+     * Attach this sound to a channel
+     * @param chan The channel to attach to
+     * @return True on success
+     */
+    bool attachSource(ClientChannel* chan);
+
+    /**
+     * Build a client sound
+     * @param name The name of the object
+     * @param file The file to play (should contain the whole path and the file name)
+     * @param device Optional device used to play the file. Set to 0 to use the default one
+     * @param repeat The number of times to play the sound,
+     *  0 to repeat until explicitely stopped
+     * @param resetExisting True to reset the file of an already created sound
+     * @return True on success, false if the sound already exists
+     */
+    static bool build(const String& id, const char* file, const char* device = 0,
+	unsigned int repeat = 0, bool resetExisting = true);
 
     /**
      * Check if a sound is started
@@ -3280,12 +3332,10 @@ public:
     /**
      * Start playing a given sound
      * @param name The name of the sound to play
-     * @param repeat The number of times to play the file if positive,
-     *  play until explicitely stopped otherwise
      * @param force True to start playing the file even if already started
      * @return True on success
      */
-    static bool start(const String& name, int repeat = -1, bool force = true);
+    static bool start(const String& name, bool force = true);
 
     /**
      * Stop playing a given sound
@@ -3297,7 +3347,7 @@ public:
      * Find a sound object
      * @param token The token used to match the sound
      * @param byName True to match the sound's name, false to match its file
-     * @return True on success
+     * @return ClientSound pointer or 0 if not found
      */
     static ClientSound* find(const String& token, bool byName = true);
 
@@ -3311,16 +3361,21 @@ public:
      */
     static Mutex s_soundsMutex;
 
+    /**
+     * The prefix to be added to the file when an utility channel is started
+     *  or a sound is played in a regular client channel
+     */
+    static String s_calltoPrefix;
+
 protected:
-    virtual bool doStart()
-	{ return false; }
-    virtual void doStop()
-	{}
+    virtual bool doStart();
+    virtual void doStop();
 
     String m_file;
     String m_device;
-    int m_repeat;
+    unsigned int m_repeat;
     bool m_started;
+    String m_channel;                    // Utility channel using this sound
 };
 
 }; // namespace TelEngine

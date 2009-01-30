@@ -182,6 +182,7 @@ bool ClientDriver::s_dropConfPeer = true;        // Drop a channel's old peer wh
 String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
 Mutex ClientSound::s_soundsMutex(true);          // ClientSound's list lock mutex
+String ClientSound::s_calltoPrefix = "wave/play/"; // Client sound target prefix
 
 // Client relays
 static MsgRelay s_relays[] = {
@@ -2177,7 +2178,7 @@ bool Client::ringer(bool in, bool on)
     if (!on)
 	ClientSound::stop(*what);
     else if (*what)
-	return ok && ClientSound::start(*what,-1,false);
+	return ok && ClientSound::start(*what,false);
     else
 	return false;
     return true;
@@ -2360,7 +2361,7 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     : Channel(ClientDriver::self(),0,true),
     m_party(msg.getValue("caller")), m_noticed(false),
     m_line(0), m_active(false), m_silence(false), m_conference(false),
-    m_clientData(0)
+    m_clientData(0), m_utility(false)
 {
     Debug(this,DebugCall,"Created incoming from=%s peer=%s [%p]",
 	m_party.c_str(),peerid.c_str(),this);
@@ -2378,7 +2379,7 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
 ClientChannel::ClientChannel(const String& target, const NamedList& params)
     : Channel(ClientDriver::self(),0,false),
     m_party(target), m_noticed(true), m_line(0), m_active(false),
-    m_silence(true), m_conference(false), m_clientData(0)
+    m_silence(true), m_conference(false), m_clientData(0), m_utility(false)
 {
     Debug(this,DebugCall,"Created outgoing to=%s [%p]",
 	m_party.c_str(),this);
@@ -2405,6 +2406,21 @@ ClientChannel::ClientChannel(const String& target, const NamedList& params)
 	update(Startup);
 }
 
+// Constructor for utility channels used to play notifications
+ClientChannel::ClientChannel(const String& soundId)
+    : Channel(ClientDriver::self(),0,true),
+    m_noticed(true), m_line(0), m_active(false), m_silence(true),
+    m_conference(false), m_clientData(0), m_utility(true),
+    m_soundId(soundId)
+{
+    Lock lock(ClientSound::s_soundsMutex);
+    ClientSound* s = ClientSound::find(m_soundId);
+    if (s)
+	s->setChannel(id(),true);
+    else
+	m_soundId = "";
+}
+
 // Destructor
 ClientChannel::~ClientChannel()
 {
@@ -2414,6 +2430,15 @@ ClientChannel::~ClientChannel()
 void ClientChannel::destroyed()
 {
     Debug(this,DebugCall,"Destroyed [%p]",this);
+    if (m_utility) {
+	Lock lock(ClientSound::s_soundsMutex);
+	ClientSound* s = ClientSound::find(m_soundId);
+	if (s)
+	    s->setChannel(id(),false);
+	m_soundId = "";
+	Channel::destroyed();
+	return;
+    }
     Lock lock(m_mutex);
     setClientData();
     if (m_conference) {
@@ -2435,6 +2460,30 @@ void ClientChannel::destroyed()
     update(Destroyed,false,false,"chan.hangup");
     lock.drop();
     Channel::destroyed();
+}
+
+void ClientChannel::connected(const char* reason)
+{
+    DDebug(this,DebugCall,"Connected reason=%s [%p]",reason,this);
+    Channel::connected(reason);
+    if (!m_utility)
+	return;
+
+    // Utility channel: set media
+    if (ClientDriver::self() && ClientDriver::self()->activeId())
+	return;
+    String dev = ClientDriver::device();
+    if (dev.null())
+	return;
+    DDebug(this,DebugCall,"Utility channel opening media [%p]",this);
+    Message m("chan.attach");
+    complete(m,true);
+    m.userData(this);
+    m.clearParam("id");
+    m.setParam("consumer",dev);
+    Engine::dispatch(m);
+    if (!getConsumer())
+        Debug(this,DebugNote,"Utility channel failed to set data consumer [%p]",this);
 }
 
 void ClientChannel::disconnected(bool final, const char* reason)
@@ -2508,6 +2557,8 @@ bool ClientChannel::setMedia(bool open, bool replace)
 // Set/reset this channel's data source/consumer
 bool ClientChannel::setActive(bool active, bool upd)
 {
+    if (m_utility)
+	return false;
     Lock lock(m_mutex);
     // Don't activate it if envolved in a transfer
     noticed();
@@ -2692,6 +2743,8 @@ void ClientChannel::callAnswer(bool setActive)
 void ClientChannel::update(int notif, bool chan, bool updatePeer,
     const char* engineMsg, bool minimal, bool data)
 {
+    if (m_utility)
+	return;
     if (engineMsg)
 	Engine::enqueue(message(engineMsg,minimal,data));
     if (updatePeer) {
@@ -2813,7 +2866,7 @@ bool ClientDriver::received(Message& msg, int id)
     return Driver::received(msg,id);
 }
 
-// Set/reset the active channel.
+// Set/reset the active channel
 bool ClientDriver::setActive(const String& id)
 {
     Lock lock(this);
@@ -3425,13 +3478,12 @@ void ClientContact::destroyed()
  * ClientSound
  */
 // Start playing the file
-bool ClientSound::start(int repeat, bool force)
+bool ClientSound::start(bool force)
 {
     if (m_started && !force)
 	return true;
     stop();
     DDebug(ClientDriver::self(),DebugInfo,"Starting sound %s",c_str());
-    m_repeat = (repeat > 0 ? repeat : -1);
     m_started = doStart();
     return m_started;
 }
@@ -3446,6 +3498,38 @@ void ClientSound::stop()
     m_started = false;
 }
 
+// Set/reset channel on sound start/stop
+void ClientSound::setChannel(const String& chan, bool ok)
+{
+    // Reset
+    if (!ok) {
+	if (m_channel && m_channel == chan)
+	    doStop();
+	return;
+    }
+    // Set
+    if (m_started) {
+	if (m_channel == chan)
+	    return;
+	else
+	    doStop();
+    }
+    m_channel = chan;
+    m_started = true;
+}
+
+// Attach this sound to a channel
+bool ClientSound::attachSource(ClientChannel* chan)
+{
+    if (!chan)
+	return false;
+    Message* m = new Message("chan.attach");
+    m->userData(chan);
+    m->addParam("source",s_calltoPrefix + file());
+    m->addParam("autorepeat",String::boolText(m_repeat != 1));
+    return Engine::enqueue(m);
+}
+
 // Check if a sound is started
 bool ClientSound::started(const String& name)
 {
@@ -3457,8 +3541,32 @@ bool ClientSound::started(const String& name)
 }
 
 
+// Create a sound
+bool ClientSound::build(const String& id, const char* file, const char* device,
+    unsigned int repeat, bool resetExisting)
+{
+    if (!id)
+	return false;
+    Lock lock(s_soundsMutex);
+    ClientSound* s = find(id);
+    if (s) {
+	if (resetExisting) {
+	    s->file(file);
+	    s->device(device);
+	    s->setRepeat(repeat);
+	}
+	return false;
+    }
+    s = new ClientSound(id,file,device);
+    s->setRepeat(repeat);
+    s_sounds.append(s);
+    DDebug(ClientDriver::self(),DebugAll,"Created sound '%s' file=%s device=%s [%p]",
+	id.c_str(),file,device,s);
+    return true;
+}
+
 // Start playing a given sound
-bool ClientSound::start(const String& name, int repeat, bool force)
+bool ClientSound::start(const String& name, bool force)
 {
     if (!name)
 	return false;
@@ -3466,7 +3574,7 @@ bool ClientSound::start(const String& name, int repeat, bool force)
     ObjList* obj = s_sounds.find(name);
     if (!obj)
 	return false;
-    return (static_cast<ClientSound*>(obj->get()))->start(repeat,force);
+    return (static_cast<ClientSound*>(obj->get()))->start(force);
 }
 
 // Stop playing a given sound
@@ -3498,6 +3606,30 @@ ClientSound* ClientSound::find(const String& token, bool byName)
 	    return sound;
     }
     return 0;
+}
+
+bool ClientSound::doStart()
+{
+    if (file().null())
+	return false;
+    Message m("call.execute");
+    m.addParam("callto",s_calltoPrefix + file());
+    ClientChannel* chan = new ClientChannel(toString());
+    m.userData(chan);
+    m.addParam("autorepeat",String::boolText(m_repeat != 1));
+    TelEngine::destruct(chan);
+    return Engine::dispatch(m);
+}
+
+void ClientSound::doStop()
+{
+    if (m_channel) {
+	Message* m = new Message("call.drop");
+	m->addParam("id",m_channel);
+	Engine::enqueue(m);
+    }
+    m_channel = "";
+    m_started = false;
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

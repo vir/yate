@@ -945,10 +945,6 @@ void Client::initClient()
     s_settings = Engine::configFile("client_settings",true);
     s_settings.load();
 
-    // Load logic actions file
-    s_actions = Engine::configFile("client_actions", false);
-    s_actions.load();
-
     // Load the accounts file and notify logics
     s_accounts = Engine::configFile("client_accounts",true);
     s_accounts.load();
@@ -2249,12 +2245,44 @@ void Client::engineStart(Message& msg)
 // Add a new module for handling actions
 bool Client::addLogic(ClientLogic* logic)
 {
+    static NamedList* s_load = 0;
+
+    // Load logic actions file
+    if (!s_actions.getSection(0)) {
+	s_actions = Engine::configFile("client_actions",false);
+	s_actions.load();
+	s_load = s_actions.getSection("load");
+    }
+
     if (!logic || s_logics.find(logic))
 	return false;
 
+    // Check if we should accept logic load
+    // If not in config, accept only if priority is negative
+    // Else: check boolean value or accept only valid positive integer values
+    String* param = s_load ? s_load->getParam(logic->toString()) : 0;
+    bool deny = true;
+    if (param) {
+	if (param->isBoolean())
+	    deny = !param->toBoolean();
+	else
+	    deny = param->toInteger(-1) < 0;
+    }
+    else if (logic->priority() < 0)
+	deny = false;
+    if (deny) {
+	Debug(DebugInfo,"Skipping client logic %p name=%s prio=%d%s%s",
+	    logic,logic->toString().c_str(),logic->priority(),
+	    param ? " config value: " : " not found in config",
+	    param ? param->c_str() : "");
+	return false;
+    }
+
+    // Add the logic
+    if (logic->priority() < 0)
+	logic->m_prio = -logic->priority();
     bool dup = (0 != s_logics.find(logic->toString()));
-    Debug(ClientDriver::self(),dup ? DebugGoOn : DebugInfo,
-	"Adding logic%s %p name=%s prio=%d",
+    Debug(dup ? DebugGoOn : DebugInfo,"Adding client logic%s %p name=%s prio=%d",
 	dup ? " [DUPLICATE]" : "",logic,logic->toString().c_str(),logic->priority());
 
     for (ObjList* l = s_logics.skipNull(); l; l = l->skipNext()) {

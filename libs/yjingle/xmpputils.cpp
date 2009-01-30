@@ -620,9 +620,9 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	ObjList* list = date.split('-');
 	bool valid = (list->length() == 3 && list->count() == 3);
 	if (valid) {
-	    year = (*list)[0]->toString().toInteger(-1);
-	    month = (unsigned int)(*list)[1]->toString().toInteger(-1);
-	    day = (unsigned int)(*list)[2]->toString().toInteger(-1);
+	    year = (*list)[0]->toString().toInteger(-1,10);
+	    month = (unsigned int)(*list)[1]->toString().toInteger(-1,10);
+	    day = (unsigned int)(*list)[2]->toString().toInteger(-1,10);
 	    valid = year >= 1970 && month && month <= 12 && day && day <= 31;
 	}
 	TelEngine::destruct(list);
@@ -647,9 +647,9 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 	list = t.split(':');
 	valid = (list->length() == 3 && list->count() == 3);
 	if (valid) {
-	    hh = (unsigned int)(*list)[0]->toString().toInteger(-1);
-	    mm = (unsigned int)(*list)[1]->toString().toInteger(-1);
-	    ss = (unsigned int)(*list)[2]->toString().toInteger(-1);
+	    hh = (unsigned int)(*list)[0]->toString().toInteger(-1,10);
+	    mm = (unsigned int)(*list)[1]->toString().toInteger(-1,10);
+	    ss = (unsigned int)(*list)[2]->toString().toInteger(-1,10);
 	    valid = (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && ss >= 0 && ss <= 59) ||
 		(hh == 24 && mm == 0 && ss == 0);
 	}
@@ -710,8 +710,8 @@ unsigned int XMPPUtils::decodeDateTimeSec(const String& time, unsigned int* frac
 			offs.c_str(),time.c_str());
 		    break;
 		}
-		unsigned int hhOffs = (unsigned int)offs.substr(0,2).toInteger(-1);
-		unsigned int mmOffs = (unsigned int)offs.substr(3,2).toInteger(-1);
+		unsigned int hhOffs = (unsigned int)offs.substr(0,2).toInteger(-1,10);
+		unsigned int mmOffs = (unsigned int)offs.substr(3,2).toInteger(-1,10);
 		// XML Schema Part 2 3.2.7.3: the hour may be 0..13. It can be 14 if minute is 0
 		if (mmOffs > 59 || (hhOffs > 13 && !mmOffs)) {
 		    DDebug(DebugNote,

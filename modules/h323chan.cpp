@@ -99,14 +99,14 @@ static Mutex s_mutex;
 static int s_connCount = 0;
 static int s_chanCount = 0;
 
-static TokenDict dict_str2code[] = {
+static const TokenDict dict_str2code[] = {
     { "alpha" , PProcess::AlphaCode },
     { "beta" , PProcess::BetaCode },
     { "release" , PProcess::ReleaseCode },
     { 0 , 0 },
 };
 
-const char* h323_formats[] = {
+static const char* h323_formats[] = {
     "G.711-ALaw-64k", "alaw",
     "G.711-uLaw-64k", "mulaw",
     "GSM-06.10", "gsm",
@@ -143,21 +143,21 @@ const char* h323_formats[] = {
     0
 };
 
-static TokenDict dict_h323_dir[] = {
+static const TokenDict dict_h323_dir[] = {
     { "receive", H323Channel::IsReceiver },
     { "send", H323Channel::IsTransmitter },
     { "bidir", H323Channel::IsBidirectional },
     { 0 , 0 },
 };
 
-static TokenDict dict_silence[] = {
+static const TokenDict dict_silence[] = {
     { "none", H323AudioCodec::NoSilenceDetection },
     { "fixed", H323AudioCodec::FixedSilenceDetection },
     { "adaptive", H323AudioCodec::AdaptiveSilenceDetection },
     { 0 , 0 },
 };
 
-static TokenDict dict_errors[] = {
+static const TokenDict dict_errors[] = {
     { "noroute", H323Connection::EndedByUnreachable },
     { "noroute", H323Connection::EndedByNoUser },
     { "noconn", H323Connection::EndedByNoEndPoint },

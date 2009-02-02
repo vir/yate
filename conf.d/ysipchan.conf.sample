@@ -7,10 +7,13 @@
 ; addr: ipaddress: IP address to bind to
 ;addr=0.0.0.0
 
+; maxpkt: int: Maximum received packet size, 524 to 65528, default 1500
+;maxpkt=1500
+
 ; buffer: int: Requested size of socket's receive buffer, 0 to use default
 ;buffer=0
 
-; floodevents: int: How many SIP events retrived in a row trigger flood warning
+; floodevents: int: How many SIP events retrieved in a row trigger flood warning
 ;floodevents=20
 
 ; maxforwards: int: Default Max-Forwards header, used to avoid looping calls

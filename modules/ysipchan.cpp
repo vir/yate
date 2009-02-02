@@ -321,6 +321,7 @@ private:
     Socket* m_sock;
     SocketAddr m_addr;
     YateSIPEngine *m_engine;
+    DataBlock m_buffer;
 };
 
 class YateSIPRefer : public Thread
@@ -1499,7 +1500,16 @@ bool YateSIPEndPoint::Init()
 	Debug(&plugin,DebugGoOn,"Unable to set non-blocking mode");
 	return false;
     }
-    Debug(&plugin,DebugCall,"Started on %s:%d", addr.host().safe(), addr.port());
+    int maxpkt = s_cfg.getIntValue("general","maxpkt");
+    if (maxpkt <= 0)
+	maxpkt = 1500;
+    else if (maxpkt > 65528)
+	maxpkt = 65528;
+    else if (maxpkt < 524)
+	maxpkt = 524;
+    m_buffer.assign(0,maxpkt);
+    Debug(&plugin,DebugCall,"Started on %s:%d, max %d bytes",
+	addr.host().safe(),addr.port(),maxpkt);
     if (addr.host() != "0.0.0.0")
 	m_local = addr.host();
     m_port = addr.port();
@@ -1536,8 +1546,8 @@ void YateSIPEndPoint::addMessage(const char* buf, int len, const SocketAddr& add
 void YateSIPEndPoint::run()
 {
     struct timeval tv;
-    char buf[1500];
     int evCount = 0;
+    char* buf = (char*)m_buffer.data();
 
     for (;;)
     {
@@ -1560,7 +1570,7 @@ void YateSIPEndPoint::run()
 	if (ok)
 	{
 	    // we can read the data
-	    int res = m_sock->recvFrom(buf,sizeof(buf)-1,m_addr);
+	    int res = m_sock->recvFrom(buf,m_buffer.length()-1,m_addr);
 	    if (res <= 0) {
 		if (!m_sock->canRetry()) {
 		    Debug(&plugin,DebugGoOn,"Error on read: %d", m_sock->error());

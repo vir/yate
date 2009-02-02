@@ -43,7 +43,12 @@
 ;accounts=no
 
 ; subscriptions: bool: Activate resource subscriptions support
+;  You will also need to activate the handlers for the following messages:
+;  "resource.subscribe", "user.notify", "call.cdr", "engine.timer"
 ;subscriptions=no
+
+; resource.subscribe: bool: Activate handler on the "resource.subscribe" message
+;resource.subscribe=no
 
 
 [default]

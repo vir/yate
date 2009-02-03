@@ -157,6 +157,7 @@ static const TokenDict dict_silence[] = {
     { 0 , 0 },
 };
 
+// OpenH323 cause code mappings
 static const TokenDict dict_errors[] = {
     { "noroute", H323Connection::EndedByUnreachable },
     { "noroute", H323Connection::EndedByNoUser },
@@ -172,6 +173,18 @@ static const TokenDict dict_errors[] = {
     { "congestion", H323Connection::EndedByRemoteCongestion },
     { "offline", H323Connection::EndedByHostOffline },
     { "timeout", H323Connection::EndedByDurationLimit },
+    { 0 , 0 },
+};
+
+// Q.931/Q.850 cause code mappings
+static const TokenDict q931_errors[] = {
+    { "incomplete", Q931::InvalidNumberFormat },
+    { "congestion", Q931::NoCircuitChannelAvailable },
+    { "congestion", Q931::TemporaryFailure },
+    { "congestion", Q931::Congestion },
+    { "offline", Q931::SubscriberAbsent },
+    { "nocall", Q931::InvalidCallReference },
+    { "nocall", Q931::IdentifiedChannelNonExistent },
     { 0 , 0 },
 };
 
@@ -1310,7 +1323,9 @@ void YateH323Connection::OnCleared()
 {
     int reason = GetCallEndReason();
     const char* rtext = CallEndReasonText(reason);
-    const char* error = lookup(reason,dict_errors);
+    const char* error = lookup(GetQ931Cause(),q931_errors);
+    if (!error)
+	error = lookup(reason,dict_errors);
     Debug(this,DebugInfo,"YateH323Connection::OnCleared() error: '%s' reason: %s (%d) [%p]",
 	error,rtext,reason,this);
     TelEngine::Lock lock(m_mutex);
@@ -2072,10 +2087,14 @@ void YateH323Chan::hangup(bool dropChan, bool clearCall)
     YateH323Connection* tmp = m_conn;
     m_conn = 0;
     if (clearCall && tmp) {
+	const char* err = 0;
 	H323Connection::CallEndReason reason = tmp->GetCallEndReason();
 	if (reason == H323Connection::NumCallEndReasons)
 	    reason = m_reason;
-	const char* err = lookup(reason,dict_errors);
+	else
+	    err = lookup(tmp->GetQ931Cause(),q931_errors);
+	if (!err)
+	    err = lookup(reason,dict_errors);
 	const char* txt = CallEndReasonText(reason);
 	if (err)
 	    m->setParam("error",err);

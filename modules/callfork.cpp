@@ -436,9 +436,12 @@ ForkSlave::~ForkSlave()
 
 void ForkSlave::disconnected(bool final, const char* reason)
 {
+    s_mutex.lock();
+    RefPointer<ForkMaster> master = m_master;
+    s_mutex.unlock();
     CallEndpoint::disconnected(final,reason);
-    if (m_master)
-	m_master->lostSlave(this,reason);
+    if (master)
+	master->lostSlave(this,reason);
 }
 
 

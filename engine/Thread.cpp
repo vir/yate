@@ -144,13 +144,24 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 	    default:
 		break;
 	}
-	int err = ::pthread_attr_setschedpolicy(&attr,policy);
+	int err = ::pthread_attr_setinheritsched(&attr,PTHREAD_EXPLICIT_SCHED);
+	if (!err)
+	    err = ::pthread_attr_setschedpolicy(&attr,policy);
 	if (!err)
 	    err = ::pthread_attr_setschedparam(&attr,&param);
-	if (err) {
-	    DDebug(DebugWarn,"Could not set thread scheduling parameters: %s (%d)",
+	if (err)
+	    Debug(
+#ifdef DEBUG
+		DebugWarn,
+#else
+		DebugNote,
+#endif
+		"Could not set thread scheduling parameters: %s (%d)",
 		strerror(err),err);
-	}
+#ifdef XDEBUG
+	else
+	    Debug(DebugInfo,"Successfully set high thread priority %d",prio);
+#endif
     }
 #endif
 
@@ -182,6 +193,11 @@ ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority
 	}
 #else
 	e = ::pthread_create(&p->thread,&attr,startFunc,p);
+	if ((0 == i) && (EPERM == e) && (prio > Thread::Normal)) {
+	    Debug(DebugWarn,"Failed to create thread with priority %d, trying with inherited",prio);
+	    ::pthread_attr_setinheritsched(&attr,PTHREAD_INHERIT_SCHED);
+	    e = EAGAIN;
+	}
 #endif
 	if (e != EAGAIN)
 	    break;

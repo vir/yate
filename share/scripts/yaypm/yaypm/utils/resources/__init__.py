@@ -21,6 +21,10 @@ class Resource:
                                lambda m : m["id"] == callid)
 
         for f in files:
+            logger.debug("on %s %s: %s", targetid,
+                         "overiding" if override else "playing",
+                         f)
+
             nid = f + str(random())
 
             m = yate.msg("chan.masquerade",

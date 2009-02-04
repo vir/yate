@@ -90,6 +90,7 @@ class ForkModule : public Module
 public:
     ForkModule();
     virtual ~ForkModule();
+    bool unload();
 protected:
     virtual void initialize();
     virtual bool received(Message& msg, int id);
@@ -106,6 +107,13 @@ static TokenDict s_calltypes[] = {
 };
 
 INIT_PLUGIN(ForkModule);
+
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow)
+	return __plugin.unload();
+    return true;
+}
 
 
 ForkMaster::ForkMaster(ObjList* targets)
@@ -464,6 +472,17 @@ void ForkModule::initialize()
     installRelay(Answered,20);
     installRelay(Ringing,20);
     installRelay(Progress,20);
+}
+
+bool ForkModule::unload()
+{
+    Lock lock(s_mutex,500000);
+    if (!lock.mutex())
+	return false;
+    if (s_calls.count())
+	return false;
+    uninstallRelays();
+    return true;
 }
 
 void ForkModule::statusParams(String& str)

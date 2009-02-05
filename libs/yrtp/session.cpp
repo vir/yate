@@ -266,29 +266,31 @@ void RTPReceiver::rtpNewSSRC(u_int32_t newSsrc, bool marker)
 bool RTPReceiver::decodeEvent(bool marker, unsigned int timestamp, const void* data, int len)
 {
     // we support only basic RFC2833, no RFC2198 redundancy
-    if (len != 4)
+    if (len < 4)
 	return false;
     const unsigned char* pc = (const unsigned char*)data;
-    int event = pc[0];
-    int vol = pc[1] & 0x3f;
-    bool end = (pc[1] & 0x80) != 0;
-    int duration = ((int)pc[2] << 8) | pc[3];
-    if (m_evTs && (m_evNum >= 0)) {
-	if ((m_evNum != event) && (m_evTs <= timestamp))
-	    pushEvent(m_evNum,timestamp - m_evTs,m_evVol,m_evTs);
+    for (; len >= 4; len-=4, pc+=4) {
+	int event = pc[0];
+	int vol = pc[1] & 0x3f;
+	bool end = (pc[1] & 0x80) != 0;
+	int duration = ((int)pc[2] << 8) | pc[3];
+	if (m_evTs && (m_evNum >= 0)) {
+	    if ((m_evNum != event) && (m_evTs <= timestamp))
+		pushEvent(m_evNum,timestamp - m_evTs,m_evVol,m_evTs);
+	}
+	m_evVol = vol;
+	if (!end) {
+	    m_evTs = timestamp;
+	    m_evNum = event;
+	    continue;
+	}
+	if (m_evTs > timestamp)
+	    return false;
+	// make sure we don't see the same event again
+	m_evTs = timestamp+1;
+	m_evNum = -1;
+	pushEvent(event,duration,vol,timestamp);
     }
-    m_evVol = vol;
-    if (!end) {
-	m_evTs = timestamp;
-	m_evNum = event;
-	return true;
-    }
-    if (m_evTs > timestamp)
-	return false;
-    // make sure we don't see the same event again
-    m_evTs = timestamp+1;
-    m_evNum = -1;
-    pushEvent(event,duration,vol,timestamp);
     return true;
 }
 

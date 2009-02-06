@@ -332,4 +332,24 @@ bool DataBlock::unHexify(const char* data, unsigned int len, char sep)
     return (iBuf >= n);
 }
 
+String DataBlock::sqlEscape(char extraEsc) const
+{
+    unsigned int len = m_length;
+    unsigned int i;
+    for (i = 0; i < m_length; i++) {
+	char c = static_cast<char*>(m_data)[i];
+	if (c == '\0' || c == '\\' || c == '\'' || c == extraEsc)
+	    len++;
+    }
+    String tmp(' ',len);
+    char* d = const_cast<char*>(tmp.c_str());
+    for (i = 0; i < m_length; i++) {
+	char c = static_cast<char*>(m_data)[i];
+	if (c == '\0' || c == '\\' || c == '\'' || c == extraEsc)
+	    *d++ = '\\';
+	*d++ = c ? c : '0';
+    }
+    return tmp;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

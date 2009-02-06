@@ -2862,6 +2862,13 @@ public:
      */
     bool unHexify(const char* data, unsigned int len, char sep = 0);
 
+    /**
+     * Create an escaped string suitable for use in SQL queries
+     * @param extraEsc Character to escape other than the default ones
+     * @return A string with binary zeros and other special characters escaped
+     */
+    String sqlEscape(char extraEsc) const;
+
 private:
     void* m_data;
     unsigned int m_length;

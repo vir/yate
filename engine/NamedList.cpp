@@ -260,9 +260,25 @@ int NamedList::replaceParams(String& str, bool sqlEsc, char extraEsc) const
 	    String tmp = str.substr(p1+2,p2-p1-2);
 	    tmp.trimBlanks();
 	    DDebug(DebugAll,"NamedList replacing parameter '%s' [%p]",tmp.c_str(),this);
-	    tmp = getValue(tmp);
-	    if (sqlEsc)
-		tmp = tmp.sqlEscape(extraEsc);
+	    const NamedString* ns = getParam(tmp);
+	    if (ns) {
+		if (sqlEsc) {
+		    const DataBlock* data = 0;
+		    if (ns->null()) {
+			NamedPointer* np = YOBJECT(NamedPointer,ns);
+			if (np)
+			    data = YOBJECT(DataBlock,np->userData());
+		    }
+		    if (data)
+			tmp = data->sqlEscape(extraEsc);
+		    else
+			tmp = ns->sqlEscape(extraEsc);
+		}
+		else
+		    tmp = *ns;
+	    }
+	    else
+		tmp.clear();
 	    str = str.substr(0,p1) + tmp + str.substr(p2+1);
 	    // advance search offset past the string we just replaced
 	    p1 += tmp.length();

@@ -256,7 +256,11 @@ int DbConn::queryDbInternal(const char* query, Message* dest)
 				    // skip over NULL values
 				    if (PQgetisnull(res,j,k))
 					continue;
-				    String *v= new String(PQgetvalue(res,j,k));
+				    GenObject* v = 0;
+				    if (PQfformat(res,k))
+					v = new DataBlock(PQgetvalue(res,j,k),PQgetlength(res,j,k));
+				    else
+					v = new String(PQgetvalue(res,j,k));
 				    a->set(v,k,j+1);
 				}
 			    }

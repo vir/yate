@@ -213,7 +213,7 @@ int DbConn::queryDbInternal()
     if (!testDb())
 	return -1;
 
-    if (mysql_query(m_conn,m_query)) {
+    if (mysql_real_query(m_conn,m_query.safe(),m_query.length())) {
 	Debug(&module,DebugWarn,"Query for '%s' failed: %s",m_name.c_str(),mysql_error(m_conn));
 	return -1;
     }
@@ -245,8 +245,17 @@ int DbConn::queryDbInternal()
 			MYSQL_ROW row = mysql_fetch_row(res);
 			if (!row)
 			    break;
+			unsigned long* len = mysql_fetch_lengths(res);
 			for (c = 0; c < cols; c++) {
-			    if (row[c])
+			    if (!row[c])
+				continue;
+			    if (63 == fields[c].charsetnr) {
+				// field holds binary data
+				if (!len)
+				    continue;
+				a->set(new DataBlock(row[c],len[c]),c,r);
+			    }
+			    else
 				a->set(new String(row[c]),c,r);
 			}
 		    }

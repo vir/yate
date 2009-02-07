@@ -548,12 +548,11 @@ bool Connection::processChar(unsigned char c)
 		m_escmode = c;
 		return false;
 	}
-	unsigned char last = m_escmode;
-	m_escmode = 0;
 	DDebug("RManager",DebugInfo,"ANSI '%s%c' last '%s%c'",
 	    (c >= ' ') ? "" : "^", (c >= ' ') ? c : c+0x40,
-	    (last >= ' ') ? "" : "^", (last >= ' ') ? last : last+0x40
+	    (m_escmode >= ' ') ? "" : "^", (m_escmode >= ' ') ? m_escmode : m_escmode+0x40
 	);
+	m_escmode = 0;
 	switch (c) {
 	    case 'A': // Up arrow
 	    case 'B': // Down arrow
@@ -717,6 +716,8 @@ bool Connection::processLine(const char *line)
 	return false;
 
     m_lastcmd = str;
+    line = 0;
+    m_buffer.clear();
 
     if (str.startSkip("status"))
     {
@@ -1032,6 +1033,8 @@ void Connection::writeDebug(const char *str, int level)
     if (null(str))
 	return;
     if (m_debug || (m_output && (level < 0))) {
+	if (m_echoing && m_buffer)
+	    clearLine();
 	const char* col = m_colorize ? debugColor(level) : 0;
 	if (col)
 	    writeStr(col,::strlen(col));
@@ -1046,6 +1049,8 @@ void Connection::writeDebug(const char *str, int level)
 	    col = debugColor(-2);
 	if (col)
 	    writeStr(col,::strlen(col));
+	if (m_echoing && m_buffer)
+	    writeStr(m_buffer);
     }
 }
 

@@ -284,15 +284,15 @@ void Connection::run()
 
     Output("Remote connection from %s",m_address.c_str());
     m_auth = !s_cfg.getValue("general","password");
-    const char *hdr = s_cfg.getValue("general","header","YATE (http://YATE.null.ro) ready.");
-    if (hdr) {
-	writeStr(hdr);
-	writeStr("\r\n");
-	hdr = 0;
-    }
+    String hdr = s_cfg.getValue("general","header","YATE ${version}-${release} (http://YATE.null.ro) ready.");
+    Engine::runParams().replaceParams(hdr);
     if (s_cfg.getBoolValue("general","telnet",true)) {
 	// WILL SUPPRESS GO AHEAD, WILL ECHO - and enough BS and blanks to hide them
-	writeStr("\377\373\003\377\373\001\b\b\b\b\b\b      \b\b\b\b\b\b");
+	writeStr("\377\373\003\377\373\001\r      \b\b\b\b\b\b");
+    }
+    if (hdr) {
+	writeStr("\r" + hdr + "\r\n");
+	hdr.clear();
     }
     unsigned char buffer[128];
     for (;;) {

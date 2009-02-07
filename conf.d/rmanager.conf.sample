@@ -8,10 +8,13 @@
 ;addr=127.0.0.1
 
 ; header: string: Header string to display on connect
-;header=YATE (http://YATE.null.ro) ready.
+;header=YATE ${version}-${release} (http://YATE.null.ro) ready.
 
 ; password: string: Password required to authenticate, default empty!
 ;password=
+
+; telnet: bool: Initiate TELNET negotiation on connect
+;telnet=yes
 
 ; output: bool: Enable output as soon as connecting
 ;output=no

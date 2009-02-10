@@ -808,6 +808,8 @@ bool YateH323EndPoint::Init(const NamedList* params)
 	 : H323AudioCodec::NoSilenceDetection));
 
     PIPSocket::Address addr = INADDR_ANY;
+    if (params && params->getValue("addr"))
+	addr = params->getValue("addr");
     int port = 1720;
     if (params)
 	port = params-> getIntValue("port",port);

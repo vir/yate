@@ -117,6 +117,9 @@ ep = true
 ; gw: bool: Set to true if you want this endpoint to declare itself as gateway
 gw = false
 
+; addr: string: IP address to bind the endpoint to, defaults to all interfaces
+;addr=
+
 ; port: int: TCP port on which the endpoint will listen
 ;port=1720
 

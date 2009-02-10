@@ -568,20 +568,20 @@ void WaveConsumer::writeAuHeader()
     }
     if (fmt == "slin") {
 	m_swap = true;
-	header.form = ntohl(3);
+	header.form = htonl(3);
     }
     else if (fmt == "mulaw")
-	header.form = ntohl(1);
+	header.form = htonl(1);
     else if (fmt == "alaw")
-	header.form = ntohl(27);
+	header.form = htonl(27);
     else {
 	Debug(DebugMild,"Invalid au format '%s', not writing header",m_format.c_str());
 	return;
     }
     header.sign = htonl(0x2E736E64);
     header.offs = htonl(sizeof(header));
-    header.freq = ntohl(rate);
-    header.chan = ntohl(chans);
+    header.freq = htonl(rate);
+    header.chan = htonl(chans);
     header.len = 0;
     ::write(m_fd,&header,sizeof(header));
 }
@@ -635,7 +635,7 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 		const uint16_t* s = (const uint16_t*)data.data();
 		uint16_t* d = (uint16_t*)swapped.data();
 		for (unsigned int i = 0; i < n; i+= 2)
-		    *d++ = ntohs(*s++);
+		    *d++ = htons(*s++);
 		::write(m_fd,swapped.data(),swapped.length());
 	    }
 	    else

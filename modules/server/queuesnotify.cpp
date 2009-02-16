@@ -186,10 +186,11 @@ static int s_sleepMs = 20;               // Loop sleep time
 
 // Event strings associated with queued call status
 TokenDict QueuedCall::s_events[] = {
-    {"queued",  Queued},
-    {"pickup",  Pickup},
-    {"hangup",  Hangup},
-    {0,0},
+    { "queued",   Queued },
+    { "pickup",   Pickup },
+    { "answered", Pickup },
+    { "hangup",   Hangup },
+    { 0, 0 },
 };
 
 

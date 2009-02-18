@@ -93,6 +93,8 @@ private:
     void evAccept(SignallingEvent* event);
     void evAnswer(SignallingEvent* event);
     void evRinging(SignallingEvent* event);
+    // Update circuit and format in source, optionally in consumer too
+    void updateCircuitFormat(SignallingEvent* event, bool consumer);
     // Open or update format source/consumer
     // Set force to true to change source/consumer pointer/format
     bool updateConsumer(const char* format, bool force);
@@ -142,6 +144,8 @@ public:
     //  event call controller's prefix
     void copySigMsgParams(NamedList& dest, SignallingEvent* event,
 	const String* params = 0);
+    // Copy outgoing message parameters
+    void copySigMsgParams(SignallingEvent* event, const NamedList& params);
 private:
     // Handle command complete requests
     virtual bool commandComplete(Message& msg, const String& partLine,
@@ -500,6 +504,7 @@ public:
 static SigDriver plugin;
 static Configuration s_cfg;
 static Configuration s_cfgData;
+static const String s_noPrefixParams = "format,earlymedia";
 
 static const char s_miniHelp[] = "sigdump component [filename]";
 static const char s_fullHelp[] = "Command to dump signalling data to a file";
@@ -699,6 +704,7 @@ bool SigChannel::msgProgress(Message& msg)
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Progress,sm,m_call);
     TelEngine::destruct(sm);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
 }
@@ -719,6 +725,7 @@ bool SigChannel::msgRinging(Message& msg)
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Ringing,sm,m_call);
     TelEngine::destruct(sm);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
 }
@@ -745,6 +752,7 @@ bool SigChannel::msgAnswered(Message& msg)
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Answer,sm,m_call);
     TelEngine::destruct(sm);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
 }
@@ -772,6 +780,7 @@ bool SigChannel::msgTone(Message& msg, const char* tone)
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Info,sm,m_call);
     TelEngine::destruct(sm);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
 }
@@ -787,6 +796,7 @@ bool SigChannel::msgText(Message& msg, const char* text)
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Message,sm,m_call);
     TelEngine::destruct(sm);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     event->sendEvent();
     return true;
 }
@@ -805,6 +815,7 @@ bool SigChannel::msgTransfer(Message& msg)
 	return true;
     SignallingEvent* event = new SignallingEvent(SignallingEvent::Transfer,0,m_call);
     lock.drop();
+    plugin.copySigMsgParams(event,msg);
     return event->sendEvent();
 }
 
@@ -839,8 +850,10 @@ void SigChannel::callAccept(Message& msg)
     }
     setState("accepted",false);
     lock.drop();
-    if (event)
+    if (event) {
+	plugin.copySigMsgParams(event,msg);
 	event->sendEvent();
+    }
     Channel::callAccept(msg);
 }
 
@@ -947,8 +960,9 @@ void SigChannel::evInfo(SignallingEvent* event)
 void SigChannel::evProgress(SignallingEvent* event)
 {
     setState("progressing");
+    updateCircuitFormat(event,false);
     Message* msg = message("call.progress");
-    plugin.copySigMsgParams(*msg,event);
+    plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
     Engine::enqueue(msg);
 }
 
@@ -964,28 +978,13 @@ void SigChannel::evRelease(SignallingEvent* event)
 void SigChannel::evAccept(SignallingEvent* event)
 {
     setState("accepted",false,false);
-    const char* format = 0;
-    bool cicChange = false;
-    if (event->message()) {
-	format = event->message()->params().getValue("format");
-	cicChange = event->message()->params().getBoolValue("circuit-change",false);
-    }
-    updateSource(format,cicChange);
-    updateConsumer(0,cicChange);
+    updateCircuitFormat(event,true);
 }
 
 void SigChannel::evAnswer(SignallingEvent* event)
 {
-    static String params = "format";
     setState("answered");
-    const char* format = 0;
-    bool cicChange = false;
-    if (event->message()) {
-	format = event->message()->params().getValue("format");
-	cicChange = event->message()->params().getBoolValue("circuit-change",false);
-    }
-    updateSource(format,cicChange);
-    updateConsumer(0,cicChange);
+    updateCircuitFormat(event,true);
     // Start echo training
     SignallingCircuit* cic = getCircuit();
     if (cic) {
@@ -993,24 +992,32 @@ void SigChannel::evAnswer(SignallingEvent* event)
 	cic->setParam("echotrain",value);
     }
     Message* msg = message("call.answered",false,true);
-    plugin.copySigMsgParams(*msg,event,&params);
+    plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    msg->clearParam("earlymedia");
     Engine::enqueue(msg);
 }
 
 void SigChannel::evRinging(SignallingEvent* event)
 {
-    static String params = "format";
     setState("ringing");
+    updateCircuitFormat(event,false);
+    Message* msg = message("call.ringing",false,true);
+    plugin.copySigMsgParams(*msg,event,&s_noPrefixParams);
+    Engine::enqueue(msg);
+}
+
+void SigChannel::updateCircuitFormat(SignallingEvent* event, bool consumer)
+{
     const char* format = 0;
     bool cicChange = false;
     if (event->message()) {
 	format = event->message()->params().getValue("format");
 	cicChange = event->message()->params().getBoolValue("circuit-change",false);
     }
+    DDebug(this,DebugInfo,"Updating format to '%s'%s",format,cicChange ? ", circuit changed" : "");
     updateSource(format,cicChange);
-    Message* msg = message("call.ringing",false,true);
-    plugin.copySigMsgParams(*msg,event,&params);
-    Engine::enqueue(msg);
+    if (consumer)
+	updateConsumer(0,cicChange);
 }
 
 bool SigChannel::updateConsumer(const char* format, bool force)
@@ -1363,6 +1370,28 @@ void SigDriver::copySigMsgParams(NamedList& dest, SignallingEvent* event,
     }
     if (!prefix.null() && noParams)
 	dest.clearParam("message-prefix");
+}
+
+// Copy outgoing message parameters
+void SigDriver::copySigMsgParams(SignallingEvent* event, const NamedList& params)
+{
+    if (!(event && event->message() && event->controller()))
+	return;
+    String prefix = event->controller()->msgPrefix();
+    if (prefix)
+	prefix = "o" + prefix;
+    prefix = params.getValue("message-oprefix",prefix);
+    if (prefix.null())
+	return;
+    unsigned int n = params.length();
+    for (unsigned int i = 0; i < n; i++) {
+	NamedString* param = params.getParam(i);
+	if (!param)
+	    continue;
+	String name = param->name();
+	if (name.startSkip(prefix,false))
+	    event->message()->params().addParam(name,*param);
+    }
 }
 
 // Handle command complete requests

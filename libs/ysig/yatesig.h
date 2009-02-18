@@ -5688,6 +5688,7 @@ private:
     SS7PointCode* m_remotePoint;         // Default remote point code for outgoing calls and maintenance
     unsigned char m_priossf;             // MSU priority + Subservice field
     unsigned char m_sls;                 // Last known valid SLS
+    bool m_earlyAcm;                     // Accept progress/ringing in early ACM
     bool m_inn;                          // Routing to internal network number flag
     String m_numPlan;                    // Numbering plan
     String m_numType;                    // Number type

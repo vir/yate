@@ -106,6 +106,10 @@
 ; Defaults to user-provided if missing or incorrect
 ;screening=user-provided
 
+; earlyacm: boolean: Convert received early ACM user state into progress or ringing
+; Defaults to enable
+;earlyacm=enable
+
 ; format: string:  Default data format for outgoing calls. Values: alaw, mulaw, g721
 ; Defaults to alaw if missing or incorrect
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.

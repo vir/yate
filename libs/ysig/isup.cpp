@@ -128,6 +128,9 @@ static const SignallingFlags s_flags_paramcompat[] = {
     { 0, 0, 0 }
 };
 
+// Backward call indicators to be copied
+static const String s_copyBkInd("BackwardCallIndicators,OptionalBackwardCallIndicators");
+
 // Default decoder, dumps raw octets
 static bool decodeRaw(const SS7ISUP* isup, NamedList& list, const IsupParam* param,
     const unsigned char* buf, unsigned int len, const String& prefix)
@@ -1630,6 +1633,8 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::CPR,id());
 		m->params().addParam("EventInformation",
 		    event->type() == SignallingEvent::Ringing ? "ringing": "progress");
+		if (event->message())
+		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Ringing;
 		result = transmitMessage(m);
 	    }
@@ -1638,8 +1643,7 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	    if (validMsgState(true,SS7MsgISUP::ACM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ACM,id());
 		if (event->message())
-		    m->params().addParam("BackwardCallIndicators",
-			event->message()->params().getValue("BackwardCallIndicators"));
+		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Accepted;
 		result = transmitMessage(m);
 	    }
@@ -1647,6 +1651,8 @@ bool SS7ISUPCall::sendEvent(SignallingEvent* event)
 	case SignallingEvent::Answer:
 	    if (validMsgState(true,SS7MsgISUP::ANM)) {
 		SS7MsgISUP* m = new SS7MsgISUP(SS7MsgISUP::ANM,id());
+		if (event->message())
+		    m->params().copyParams(event->message()->params(),s_copyBkInd);
 		m_state = Answered;
 		result = transmitMessage(m);
 	    }
@@ -1942,11 +1948,33 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    break;
 	case SS7MsgISUP::ACM:
 	    m_state = Accepted;
-	    m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
+	    {
+		m_lastEvent = 0;
+		bool inband = SignallingUtils::hasFlag(m_sgmMsg->params(),"OptionalBackwardCallIndicators","inband");
+		if (isup() && isup()->m_earlyAcm) {
+		    // If the called party is known free report ringing
+		    // If it may become free or there is inband audio report progress
+		    bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-free");
+		    if (inband || ring || SignallingUtils::hasFlag(m_sgmMsg->params(),"BackwardCallIndicators","called-conn")) {
+			m_sgmMsg->params().setParam("earlymedia",String::boolText(inband));
+			m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
+		    }
+		}
+		if (!m_lastEvent) {
+		    if (inband)
+			m_sgmMsg->params().setParam("earlymedia",String::boolText(true));
+		    m_lastEvent = new SignallingEvent(SignallingEvent::Accept,m_sgmMsg,this);
+		}
+	    }
 	    break;
 	case SS7MsgISUP::CPR:
 	    m_state = Ringing;
-	    m_lastEvent = new SignallingEvent(SignallingEvent::Ringing,m_sgmMsg,this);
+	    {
+		bool ring = SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","ringing");
+		if (!ring && SignallingUtils::hasFlag(m_sgmMsg->params(),"EventInformation","inband"))
+		    m_sgmMsg->params().setParam("earlymedia",String::boolText(true));
+		m_lastEvent = new SignallingEvent(ring ? SignallingEvent::Ringing : SignallingEvent::Progress,m_sgmMsg,this);
+	    }
 	    break;
 	case SS7MsgISUP::ANM:
 	case SS7MsgISUP::CON:
@@ -1957,8 +1985,7 @@ SignallingEvent* SS7ISUPCall::processSegmented(SS7MsgISUP* sgm, bool timeout)
 	    Debug(isup(),DebugStub,"Call(%u). Segment waiting message is '%s' [%p]",
 		id(),m_sgmMsg->name(),this);
     }
-    m_sgmMsg->deref();
-    m_sgmMsg = 0;
+    TelEngine::destruct(m_sgmMsg);
     return m_lastEvent;
 }
 
@@ -1995,6 +2022,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_remotePoint(0),
     m_priossf(0),
     m_sls(255),
+    m_earlyAcm(true),
     m_inn(false),
     m_l3LinkUp(false),
     m_uptTimer(0),
@@ -2033,6 +2061,7 @@ SS7ISUP::SS7ISUP(const NamedList& params)
     m_priossf |= SS7MSU::getPriority(params.getValue("priority"),SS7MSU::Regular);
     m_priossf |= SS7MSU::getNetIndicator(params.getValue("netindicator"),SS7MSU::National);
 
+    m_earlyAcm = params.getBoolValue("earlyacm",m_earlyAcm);
     m_inn = params.getBoolValue("inn",m_inn);
     m_numPlan = params.getValue("numplan");
     if (-1 == lookup(m_numPlan,s_dict_numPlan,-1))

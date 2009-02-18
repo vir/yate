@@ -816,6 +816,18 @@ bool QtWindow::setParams(const NamedList& params)
 	}
 	return ok;
     }
+    // Parameters for the widget whose name is the list name
+    if(params) {
+	QtWidget w(this, params);
+	if (w.type() == QtWidget::Calendar) {
+	    int year = params.getIntValue("year");
+	    int month = params.getIntValue("month");
+	    int day = params.getIntValue("day");
+	    w.calendar()->setCurrentPage(year, month);
+	    w.calendar()->setSelectedDate(QDate(year, month, day));
+	    return true;
+	}
+    }
 
     // Window or other parameters
     if (params.getBoolValue("modal"))
@@ -1888,6 +1900,9 @@ void QtWindow::size(int width, int height)
 void QtWindow::move(int x, int y)
 {
     DDebug(QtDriver::self(),DebugAll,"QtWindow::move(%d,%d) [%p]",x,y,this);
+    m_x = x;
+    m_y = y;
+    QWidget::move(x, y);
 }
 
 void QtWindow::moveRel(int dx, int dy)

@@ -924,7 +924,7 @@ bool QtWindow::setText(const String& name, const String& text,
 	case QtWidget::TextEdit:
 	    if (richText) {
 		w.textEdit()->clear();
-		w.textEdit()->insertHtml(text.c_str());
+		w.textEdit()->insertHtml(QtClient::setUtf8(text));
 	    }
 	    else
 		w.textEdit()->setText(QtClient::setUtf8(text));
@@ -2019,11 +2019,16 @@ void QtWindow::doInit()
 	
     // Connect actions' signal
     QList<QAction*> actions = qFindChildren<QAction*>(this);
-    for (int i = 0; i < actions.size(); i++)
+    for (int i = 0; i < actions.size(); i++) {
+	String addToWidget;
+	QtClient::getProperty(actions[i],"dynamicAddToParent",addToWidget);
+	if (addToWidget && addToWidget.toBoolean())
+	    QWidget::addAction(actions[i]);
 	if (actions[i]->isCheckable())
 	    QtClient::connectObjects(actions[i],SIGNAL(toggled(bool)),this,SLOT(toggled(bool)));
 	else
 	    QtClient::connectObjects(actions[i],SIGNAL(triggered()),this,SLOT(action()));
+    }
 
     // Connect combo boxes signals
     QList<QComboBox*> combos = qFindChildren<QComboBox*>(this);

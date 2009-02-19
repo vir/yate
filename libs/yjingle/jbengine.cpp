@@ -1783,6 +1783,15 @@ XMPPUserRoster::XMPPUserRoster(JBPresence* engine, const char* node,
 	m_identity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::AccountRegistered);
     else
 	m_identity = new JIDIdentity(JIDIdentity::CategoryUnknown,JIDIdentity::TypeUnknown);
+    m_features.add(XMPPNamespace::Jingle);
+    m_features.add(XMPPNamespace::JingleAppsRtp);
+    m_features.add(XMPPNamespace::JingleAppsRtpInfo);
+    m_features.add(XMPPNamespace::JingleAppsRtpAudio);
+    m_features.add(XMPPNamespace::JingleTransportIceUdp);
+    m_features.add(XMPPNamespace::JingleTransportRawUdp);
+    m_features.add(XMPPNamespace::JingleTransportRawUdpInfo);
+    m_features.add(XMPPNamespace::JingleTransportByteStreams);
+    m_features.add(XMPPNamespace::JingleAppsFileTransfer);
     m_features.add(XMPPNamespace::CapVoiceV1);
 
     Debug(m_engine,DebugAll, "XMPPUserRoster %s [%p]",m_jid.c_str(),this);
@@ -1866,6 +1875,15 @@ JBPresence::JBPresence(JBEngine* engine, const NamedList* params, int prio)
 {
     JBThreadList::setOwner(this);
     m_defIdentity = new JIDIdentity(JIDIdentity::Client,JIDIdentity::ComponentGeneric);
+    m_defFeatures.add(XMPPNamespace::Jingle);
+    m_defFeatures.add(XMPPNamespace::JingleAppsRtp);
+    m_defFeatures.add(XMPPNamespace::JingleAppsRtpInfo);
+    m_defFeatures.add(XMPPNamespace::JingleAppsRtpAudio);
+    m_defFeatures.add(XMPPNamespace::JingleTransportIceUdp);
+    m_defFeatures.add(XMPPNamespace::JingleTransportRawUdp);
+    m_defFeatures.add(XMPPNamespace::JingleTransportRawUdpInfo);
+    m_defFeatures.add(XMPPNamespace::JingleTransportByteStreams);
+    m_defFeatures.add(XMPPNamespace::JingleAppsFileTransfer);
     m_defFeatures.add(XMPPNamespace::CapVoiceV1);
 }
 

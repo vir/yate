@@ -203,6 +203,7 @@ public:
 	JingleError,                     // urn:xmpp:jingle:errors:0
 	JingleAppsRtp,                   // urn:xmpp:jingle:apps:rtp:0
 	JingleAppsRtpInfo,               // urn:xmpp:jingle:apps:rtp:info:0
+	JingleAppsRtpAudio,              // urn:xmpp:jingle:apps:rtp:audio
 	JingleAppsFileTransfer,          // urn:xmpp:jingle:apps:file-transfer:0
 	JingleTransportIceUdp,           // urn:xmpp:jingle:transports:ice-udp:0
 	JingleTransportRawUdp,           // urn:xmpp:jingle:transports:raw-udp:0

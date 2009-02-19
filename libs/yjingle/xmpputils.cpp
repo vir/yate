@@ -79,6 +79,7 @@ TokenDict XMPPNamespace::s_value[] = {
     {"urn:xmpp:jingle:errors:0",                           JingleError},
     {"urn:xmpp:jingle:apps:rtp:0",                         JingleAppsRtp},
     {"urn:xmpp:jingle:apps:rtp:info:0",                    JingleAppsRtpInfo},
+    {"urn:xmpp:jingle:apps:rtp:audio",                     JingleAppsRtpAudio},
     {"urn:xmpp:jingle:apps:file-transfer:0",               JingleAppsFileTransfer},
     {"urn:xmpp:jingle:transports:ice-udp:0",               JingleTransportIceUdp},
     {"urn:xmpp:jingle:transports:raw-udp:0",               JingleTransportRawUdp},

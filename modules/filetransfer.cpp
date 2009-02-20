@@ -196,7 +196,8 @@ public:
     // Notify file transfer status
     static bool notifyStatus(bool send, const String& id, const char* status,
         const char* filename, int64_t transferred, int64_t total,
-	const char* error = 0, const NamedList* params = 0);
+	const char* error = 0, const NamedList* params = 0,
+	const char* chan = 0);
     // Copy params
     inline void copyParams(NamedList& dest, const NamedList& src) {
 	    Lock lock(this);
@@ -381,7 +382,7 @@ bool FileSource::init(bool buildMd5, String& error)
 void FileSource::run()
 {
     m_transferred = 0;
-    FileDriver::notifyStatus(true,m_notify,"pending",m_fileName,0,m_fileSize);
+    FileDriver::notifyStatus(true,m_notify,"pending",m_fileName,0,m_fileSize,0,&m_params);
 
     String error;
     u_int64_t start = 0;
@@ -410,7 +411,8 @@ void FileSource::run()
 	    "FileSource(%s) starting size=" FMT64 " buflen=%u interval=%u [%p]",
 	    m_fileName.c_str(),m_fileSize,m_buflen,m_sleepMs,this);
 
-	FileDriver::notifyStatus(true,m_notify,"start",m_fileName,0,m_fileSize);
+	FileDriver::notifyStatus(true,m_notify,"start",m_fileName,0,m_fileSize,0,
+	    &m_params,m_dropChan);
 	unsigned long tStamp = 0;
 	start = Time::msecNow();
 	// Set file pos at start
@@ -546,7 +548,8 @@ void FileConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 {
     if (!m_startTime) {
 	m_startTime = Time::now();
-	FileDriver::notifyStatus(false,m_notify,"start",m_fileName,0,m_fileSize);
+	FileDriver::notifyStatus(false,m_notify,"start",m_fileName,0,m_fileSize,0,
+	    &m_params,m_dropChan);
 	// Check file existence
 	if (fileExists(true,false)) {
 	    terminate("File exists");
@@ -598,7 +601,7 @@ void FileConsumer::destroyed()
 {
     terminate("cancelled");
     FileDriver::notifyStatus(false,m_notify,"destroyed",m_fileName,
-	m_transferred,m_fileSize);
+	m_transferred,m_fileSize,0,&m_params);
     __plugin.removeConsumer(this);
     Debug(&__plugin,DebugAll,
 	"FileConsumer('%s') destroyed transferred " FMT64 "/" FMT64 " [%p]",
@@ -1060,7 +1063,7 @@ bool FileDriver::unload()
 // Notify file transfer status
 bool FileDriver::notifyStatus(bool send, const String& id, const char* status,
     const char* filename, int64_t transferred, int64_t total, const char* error,
-    const NamedList* params)
+    const NamedList* params, const char* chan)
 {
     Message* m = new Message("transfer.notify");
     m->addParam("targetid",id);
@@ -1074,6 +1077,8 @@ bool FileDriver::notifyStatus(bool send, const String& id, const char* status,
 	m->addParam("total",String((unsigned int)total));
     if (error)
 	m->addParam("error",error);
+    if (chan)
+	m->addParam("channelid",chan);
     // Add params
     if (params) {
 	unsigned int n = params->length();

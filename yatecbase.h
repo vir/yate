@@ -3311,7 +3311,7 @@ public:
 
     /**
      * Build a client sound
-     * @param name The name of the object
+     * @param id The name of the object
      * @param file The file to play (should contain the whole path and the file name)
      * @param device Optional device used to play the file. Set to 0 to use the default one
      * @param repeat The number of times to play the sound,

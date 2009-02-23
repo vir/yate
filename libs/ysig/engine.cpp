@@ -749,8 +749,9 @@ bool SignallingUtils::encodeCause(const SignallingComponent* comp, DataBlock& bu
 	    return false;
 	diagnostic.clear();
     }
+    u_int8_t len = data[0] + 1;
     data[0] += diagnostic.length();
-    buf.assign(data,data[0] + 1);
+    buf.assign(data,len);
     buf += diagnostic;
     return true;
 }

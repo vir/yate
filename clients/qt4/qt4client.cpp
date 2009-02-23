@@ -351,6 +351,27 @@ String QtWidget::s_types[QtWidget::Unknown] = {
     "QCalendarWidget"
 };
 
+// Handler for QT library messages
+static void qtMsgHandler(QtMsgType type, const char* text)
+{
+    int dbg = DebugAll;
+    switch (type) {
+	case QtDebugMsg:
+	    dbg = DebugInfo;
+	    break;
+	case QtWarningMsg:
+	    dbg = DebugWarn;
+	    break;
+	case QtCriticalMsg:
+	    dbg = DebugGoOn;
+	    break;
+	case QtFatalMsg:
+	    dbg = DebugFail;
+	    break;
+    }
+    Debug("QT",dbg,text);
+}
+
 // Utility: get a list row containing the given text
 static int findListRow(QListWidget& list, const String& item)
 {
@@ -2545,10 +2566,12 @@ bool QtClient::connectObjects(QObject* sender, const char* signal,
 QtDriver::QtDriver()
     : m_init(false)
 {
+    qInstallMsgHandler(qtMsgHandler);
 }
 
 QtDriver::~QtDriver()
 {
+    qInstallMsgHandler(0);
 }
 
 void QtDriver::initialize()

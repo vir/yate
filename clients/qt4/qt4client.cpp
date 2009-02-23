@@ -2287,7 +2287,7 @@ void QtClient::loadWindows(const char* file)
 //  'dir', 'filter', 'selectedfilter', 'confirmoverwrite', 'choosedir'
 // files List of selected file(s). Allow multiple file selection if non 0
 // file The selected file if multiple file selection is disabled
-bool QtClient::chooseFile(Window* parent, const NamedList& params,
+bool QtClient::chooseFile(Window* parent, NamedList& params,
     NamedList* files, String* file)
 {
     if (!(files || file))
@@ -2295,20 +2295,18 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
 
     const char* caption = params.getValue("caption");
     const char* dir = params.getValue("dir");
-    QString* filters = 0;
+    QString filters;
     NamedString* f = params.getParam("filters");
     if (f) {
-	filters = new QString;
 	ObjList* obj = f->split('|',false);
 	for (ObjList* o = obj->skipNull(); o; o = o->skipNext()) {
-	    if (!filters->isEmpty())
-		filters->append(";;");
-	    filters->append(QtClient::setUtf8(*(static_cast<String*>(o->get()))));
+	    if (!filters.isEmpty())
+		filters.append(";;");
+	    filters.append(QtClient::setUtf8(o->get()->toString()));
 	}
 	TelEngine::destruct(obj);
     }
-    NamedString* tmp = params.getParam("selectedfilter");
-    QString* sFilter = tmp ? new QString(QtClient::setUtf8(*tmp)) : 0;
+    QString filter = QtClient::setUtf8(params.getValue("selectedfilter"));
     QFileDialog::Options options;
     if (params.getBoolValue("choosedir"))
 	options |= QFileDialog::ShowDirsOnly;
@@ -2316,23 +2314,39 @@ bool QtClient::chooseFile(Window* parent, const NamedList& params,
 	options |= QFileDialog::DontConfirmOverwrite;
 
     QWidget* p = static_cast<QtWindow*>(parent);
+    bool ok = false;
     if (files) {
 	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters ? *filters : QString::null,sFilter,options);
+	    QtClient::setUtf8(dir),filters,&filter,options);
+	ok = (list.size() != 0);
 	for (int i = 0; i < list.size(); i++)
 	    QtClient::getUtf8(*files,"file",list[i]);
     }
     else {
 	QString str = QFileDialog::getOpenFileName((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters ? *filters : QString::null,sFilter,options);
+	    QtClient::setUtf8(dir),filters,&filter,options);
+	ok = !str.isEmpty();
 	QtClient::getUtf8(*file,str);
     }
 
-    if (filters)
-	delete filters;
-    if (sFilter)
-	delete sFilter;
-    return true;
+    if (ok) {
+	// Return the selected filter to the caller
+	String* tmp = params.getParam("selectedfilter");
+	if (tmp)
+	    QtClient::getUtf8(*tmp,filter);
+	// Return the last used directory to the caller
+	tmp = params.getParam("dir");
+	if (tmp) {
+	    String* f = files ? files->getParam("file") : file;
+	    if (f) {
+		int i = f->rfind('/');
+		if (i < 0)
+		    i = f->rfind('\\');
+		*tmp = (i >= 0) ? f->substr(0,i + 1) : String::empty();
+	    }
+	}
+    }
+    return ok;
 }
 
 bool QtClient::action(Window* wnd, const String& name, NamedList* params)

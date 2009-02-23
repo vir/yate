@@ -1087,7 +1087,7 @@ public:
      * @param file The selected file if multiple file selection is disabled
      * @return True on success
      */
-    virtual bool chooseFile(Window* parent, const NamedList& params,
+    virtual bool chooseFile(Window* parent, NamedList& params,
 	NamedList* files, String* file)
 	{ return false; }
 

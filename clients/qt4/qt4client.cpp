@@ -2168,7 +2168,7 @@ void QtWindow::mouseReleaseEvent(QMouseEvent* event)
 // Move the window if the moving flag is set
 void QtWindow::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!m_moving)
+    if (!m_moving || Qt::LeftButton != event->buttons() || isMaximized())
 	return;
     int cx = event->globalPos().x() - m_movePos.x();
     int cy = event->globalPos().y() - m_movePos.y();

@@ -241,7 +241,10 @@ GenObject* ObjList::remove(bool delobj)
 
     if (delobj && tmp) {
 	XDebug(DebugInfo,"ObjList::remove() deleting %p",tmp);
-	TelEngine::destruct(tmp);
+	// Don't use TelEngine::destruct(): the compiler will call the non-template
+	// function (which doesn't reset the pointer)
+	tmp->destruct();
+	tmp = 0;
     }
     return tmp;
 }

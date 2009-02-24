@@ -19,6 +19,9 @@
 ; dtmfpass: bool: Enter DTMF pass-through mode by default
 ;dtmfpass=no
 
+; dialheld: bool: Dial back from held calls if the control call leg hangs up
+;dialheld=no
+
 ; minlen: int: Minimum length of command sequences
 ;minlen=2
 

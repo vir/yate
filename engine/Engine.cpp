@@ -137,6 +137,7 @@ static bool s_keepclosing = false;
 static bool s_nounload = false;
 static int s_super_handle = -1;
 static bool s_localsymbol = false;
+static bool s_logtruncate = false;
 
 static void sighandler(int signal)
 {
@@ -515,7 +516,14 @@ void EnginePrivate::run()
 static bool logFileOpen()
 {
     if (s_logfile) {
-	int fd = ::open(s_logfile,O_WRONLY|O_CREAT|O_APPEND,0640);
+	int flags = O_WRONLY|O_CREAT;
+	if (s_logtruncate) {
+	    s_logtruncate = false;
+	    flags |= O_TRUNC;
+	}
+	else
+	    flags |= O_APPEND;
+	int fd = ::open(s_logfile,flags,0640);
 	if (fd >= 0) {
 	    // Redirect stdout and stderr to the new file
 	    ::fflush(stdout);
@@ -1408,6 +1416,7 @@ static void usage(bool client, FILE* f)
 #ifdef RLIMIT_NOFILE
 "   -F             Increase the maximum file handle to compiled value\n"
 #endif
+"   -t             Truncate log file, don't append to it\n"
 "   -D[options]    Special debugging options\n"
 "     a            Abort if bugs are encountered\n"
 "     m            Attempt to debug mutex deadlocks\n"
@@ -1549,6 +1558,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 			s_logrotator = true;
 			break;
 #endif
+		    case 't':
+			s_logtruncate = true;
+			break;
 		    case 'p':
 			if (i+1 >= argc) {
 			    noarg(client,argv[i]);

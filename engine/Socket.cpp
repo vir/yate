@@ -563,7 +563,12 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	access |= GENERIC_WRITE;
     if (canRead)
 	access |= GENERIC_READ;
-    HANDLE h = CreateFile(name,access,0,NULL,create ? OPEN_ALWAYS : OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
+    DWORD createMode;
+    if (create)
+	createMode = (canWrite && !append) ? CREATE_NEW : OPEN_ALWAYS;
+    else
+	createMode = OPEN_EXISTING;
+    HANDLE h = CreateFile(name,access,0,NULL,createMode,FILE_ATTRIBUTE_NORMAL,NULL);
     if (h == invalidHandle()) {
 	copyError();
 	return false;
@@ -586,6 +591,8 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	flags |= O_CREAT;
     if (append)
 	flags |= O_APPEND;
+    else if (canWrite)
+	flags |= O_TRUNC;
     if (binary)
 	flags |= O_BINARY;
     HANDLE h = ::open(name,flags,(S_IRUSR|S_IWUSR));

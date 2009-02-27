@@ -452,6 +452,7 @@ protected:
 	{ updatePosSize(); }
     virtual void resizeEvent(QResizeEvent* event)
 	{ updatePosSize(); }
+    virtual bool event(QEvent* ev);
     virtual void mousePressEvent(QMouseEvent* event);
     virtual void mouseReleaseEvent(QMouseEvent* event);
     virtual void mouseMoveEvent(QMouseEvent* event);

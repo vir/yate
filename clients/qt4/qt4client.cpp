@@ -314,6 +314,7 @@ using namespace TelEngine;
 static String s_propHHeader = "dynamicHHeader";       // Tables: show/hide the horizontal header
 static String s_propAction = "dynamicAction";         // Prefix for properties that would trigger some action
 static String s_propWindowFlags = "dynamicWindowFlags"; // Window flags
+static String s_propHideInactive = "dynamicHideOnInactive"; // Hide inactive window
 static String s_qtPropPrefix = "_q_";                 // QT dynamic properties prefix
 //
 static Qt4ClientFactory s_qt4Factory;
@@ -1628,6 +1629,17 @@ bool QtWindow::getProperty(const String& name, const String& item, String& value
 	return QtClient::getProperty(wndWidget(),item,value);
     QObject* obj = qFindChild<QObject*>(this,QtClient::setUtf8(name));
     return obj ? QtClient::getProperty(obj,item,value) : false;
+}
+
+bool QtWindow::event(QEvent* ev)
+{
+    if (ev->type() == QEvent::WindowDeactivate) {
+	String hideProp;
+	QtClient::getProperty(wndWidget(),s_propHideInactive,hideProp);
+	if (hideProp && hideProp.toBoolean())
+	    setVisible(false);
+    }
+    return QWidget::event(ev);
 }
 
 void QtWindow::closeEvent(QCloseEvent* event)

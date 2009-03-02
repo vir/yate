@@ -1237,15 +1237,6 @@ void JIDResource::addTo(XMLElement* element, bool addInfo)
 /**
  * JIDResourceList
  */
-// Add a resource to the list
-bool JIDResourceList::add(const String& name)
-{
-    Lock lock(this);
-    if (get(name))
-	return false;
-    m_resources.append(new JIDResource(name));
-    return true;
-}
 
 // Add a resource to the list
 bool JIDResourceList::add(JIDResource* resource)
@@ -1257,7 +1248,17 @@ bool JIDResourceList::add(JIDResource* resource)
 	TelEngine::destruct(resource);
 	return false;
     }
-    m_resources.append(resource);
+    // Add resource in the proper place
+    ObjList* o = m_resources.skipNull();
+    for (; o; o = o->skipNext()) {
+	JIDResource* tmp = static_cast<JIDResource*>(o->get());
+	if (resource->priority() >= tmp->priority())
+	    break;
+    }
+    if (o)
+	o->insert(resource);
+    else
+	m_resources.append(resource);
     return true;
 }
 

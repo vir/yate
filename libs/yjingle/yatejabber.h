@@ -2248,7 +2248,8 @@ public:
      * @param name The resource name
      * @return False if the the resource already exists in the list
      */
-    bool add(const String& name);
+    inline bool add(const String& name)
+	{ return add(new JIDResource(name)); }
 
     /**
      * Add a resource to the list if not already there.

@@ -45,7 +45,7 @@ function setState($newstate)
 	$state = $newstate;
 	$m = new Yate("chan.attach");
 	$m->params["id"] = $ourcallid;
-	$m->params["source"] = "tone/specdial";
+	$m->params["source"] = "tone/dial";
 	$m->params["consumer"] = "wave/record/-";
 	$m->params["maxlen"] = 320000;
 	$m->params["notify"] = $ourcallid;
@@ -69,7 +69,7 @@ function setState($newstate)
 	case "routing":
 	    $m = new Yate("chan.attach");
 	    $m->params["id"] = $ourcallid;
-	    $m->params["source"] = "wave/play/-";
+	    $m->params["source"] = "tone/noise";
 	    $m->params["consumer"] = "wave/record/-";
 	    $m->params["maxlen"] = 320000;
 	    $m->params["notify"] = $ourcallid;
@@ -137,7 +137,7 @@ function gotDTMF($dtmf)
     routeTo($collect);
 }
 
-function endRoute($callto,$ok,$err)
+function endRoute($callto,$ok,$err,$params)
 {
     global $partycallid;
     global $num;
@@ -145,6 +145,7 @@ function endRoute($callto,$ok,$err)
     if ($ok) {
 	Yate::Output("Overlapped got route: '$callto' for '$collect'");
 	$m = new Yate("chan.masquerade");
+	$m->params = $params;
 	$m->params["message"] = "call.execute";
 	$m->params["id"] = $partycallid;
 	$m->params["callto"] = $callto;
@@ -175,16 +176,18 @@ while ($state != "") {
 		    $partycallid = $ev->GetValue("id");
 		    $ev->params["targetid"] = $ourcallid;
 		    $num = $ev->GetValue("caller");
+		    $autoanswer = ($ev->GetValue("called") != "off-hook");
 		    $ev->handled = true;
 		    // we must ACK this message before dispatching a call.answered
 		    $ev->Acknowledge();
 		    // we already ACKed this message
 		    $ev = false;
-
-		    $m = new Yate("call.answered");
-		    $m->params["id"] = $ourcallid;
-		    $m->params["targetid"] = $partycallid;
-		    $m->Dispatch();
+		    if ($autoanswer) {
+			$m = new Yate("call.answered");
+			$m->params["id"] = $ourcallid;
+			$m->params["targetid"] = $partycallid;
+			$m->Dispatch();
+		    }
 
 		    setState("prompt");
 		    break;
@@ -212,7 +215,7 @@ while ($state != "") {
 	    break;
 	case "answer":
 	    if ($ev->name == "call.route")
-		endRoute($ev->retval,$ev->handled,$ev->GetValue("error"));
+		endRoute($ev->retval,$ev->handled,$ev->GetValue("error"),$ev->params);
 	    break;
     }
 }

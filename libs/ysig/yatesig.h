@@ -7682,6 +7682,7 @@ protected:
      * @param outgoing The call direction
      * @param callRef The call reference
      * @param callRefLen The call reference length in bytes
+     * @param tei The Terminal Equipment Identifier used in this call
      */
     ISDNQ931Call(ISDNQ931* controller, bool outgoing, u_int32_t callRef,
 	u_int8_t callRefLen, u_int8_t tei = 0);
@@ -8118,6 +8119,7 @@ public:
     /**
      * Send a STATUS message for a given call
      * @param call The call requesting the operation
+     * @param tei The TEI to send with the STATUS message
      * @param cause Value for Cause IE
      * @param display Optional value for Display IE 
      * @param diagnostic Optional value for cause diagnostic value
@@ -8306,6 +8308,7 @@ protected:
      * @param cause Value for Cause IE
      * @param callRefLen The call reference length parameter.
      * @param callRef The call reference
+     * @param tei The TEI to send with the STATUS message
      * @param initiator True if this is from the call initiator
      * @param state The state for CallState IE
      * @param display Optional value for Display IE 

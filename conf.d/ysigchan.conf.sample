@@ -22,6 +22,8 @@
 ; type: string: Specify the link type 
 ; Allowed values:
 ;  ss7-isup:      SS7 ISDN User Part over synchronous (HDLC) interface(s)
+;  isdn-bri-net:  ISDN network side of a data link over basic rate HDLC interface(s)
+;  isdn-bri-cpe:  ISDN CPE (user) side of a data link over basic rate HDLC interface(s)
 ;  isdn-pri-net:  ISDN network side of a data link over one or more primary HDLC interface(s)
 ;  isdn-pri-cpe:  ISDN CPE (user) side of a data link over one or more primary HDLC interface(s)
 ;  isdn-pri-mon:  ISDN monitor of one or more primary HDLC interface(s)

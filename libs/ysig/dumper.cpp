@@ -28,8 +28,8 @@
 
 using namespace TelEngine;
 
-SignallingDumper::SignallingDumper(Type type)
-    : m_type(type), m_output(0)
+SignallingDumper::SignallingDumper(Type type, bool network)
+    : m_type(type), m_network(network), m_output(0)
 {
 }
 
@@ -87,10 +87,15 @@ bool SignallingDumper::dump(void* buf, unsigned int len, bool sent, int link)
 	case Q921:
 	case Hdlc:
 	    {
-		// add LAPD pseudoheader
+		// add LAPD pseudoheader - see wiretap/libpcap.c
 		hdr2.assign(0,16);
 		unsigned char* ptr2 = (unsigned char*)hdr2.data();
-		ptr2[6] = sent ? 1 : 0;
+		// packet type: outgoing 4, sniffed 3, incoming 0
+		ptr2[0] = 0x00;
+		ptr2[1] = sent ? 0x04 : 0x00;
+		// address: are we the network side?
+		ptr2[6] = m_network ? 1 : 0;
+		// ETH_P_LAPD
 		ptr2[14] = 0x00;
 		ptr2[15] = 0x30;
 	    }
@@ -149,20 +154,20 @@ void SignallingDumper::head()
 
 // Create a dumper from file
 SignallingDumper* SignallingDumper::create(DebugEnabler* dbg, const char* filename, Type type,
-	bool create, bool append)
+	bool network, bool create, bool append)
 {
     if (!filename)
 	return 0;
     File* f = new File;
     if (f->openPath(filename,true,false,create,append,true))
-	return SignallingDumper::create(f,type);
+	return SignallingDumper::create(f,type,network);
     Debug(dbg,DebugWarn,"Failed to create dumper '%s'",filename);
     delete f;
     return 0;
 }
 
 // Create a dumper from stream
-SignallingDumper* SignallingDumper::create(Stream* stream, Type type, bool writeHeader)
+SignallingDumper* SignallingDumper::create(Stream* stream, Type type, bool network, bool writeHeader)
 {
     if (!stream)
 	return 0;
@@ -170,7 +175,7 @@ SignallingDumper* SignallingDumper::create(Stream* stream, Type type, bool write
 	delete stream;
 	return 0;
     }
-    SignallingDumper* dumper = new SignallingDumper(type);
+    SignallingDumper* dumper = new SignallingDumper(type,network);
     dumper->setStream(stream,writeHeader);
     return dumper;
 }
@@ -195,7 +200,7 @@ bool SignallingDumpable::setDumper(const String& name, bool create, bool append)
 	    type = SignallingDumper::Raw;
 	else if (name.endsWith(".hex") || name.endsWith(".txt"))
 	    type = SignallingDumper::Hexa;
-	SignallingDumper* dumper = SignallingDumper::create(0,name,type,create,append);
+	SignallingDumper* dumper = SignallingDumper::create(0,name,type,m_dumpNet,create,append);
 	if (dumper)
 	    setDumper(dumper);
 	else

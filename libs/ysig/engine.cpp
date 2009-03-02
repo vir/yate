@@ -100,6 +100,13 @@ void* SignallingFactory::build(const String& type, const NamedList* name)
 }
 
 
+SignallingComponent::SignallingComponent(const char* name)
+    : m_engine(0)
+{
+    DDebug(engine(),DebugAll,"Component '%s' created [%p]",name,this);
+    setName(name);
+}
+
 void SignallingComponent::setName(const char* name)
 {
     debugName(0);
@@ -125,6 +132,16 @@ const String& SignallingComponent::toString() const
 bool SignallingComponent::control(NamedList& params)
 {
     return false;
+}
+
+void SignallingComponent::engine(SignallingEngine* eng)
+{
+    if (eng == m_engine)
+	return;
+    if (eng)
+	eng->insert(this);
+    else
+	detach();
 }
 
 void SignallingComponent::insert(SignallingComponent* component)
@@ -395,7 +412,7 @@ static TokenDict s_dict_causeCCITT[] = {
 	{"noanswer",                       0x13}, // No answer from user (user alerted)
 	{"rejected",                       0x15}, // Call Rejected
 	{"moved",                          0x16}, // Number changed
-	{"non-sel-user-clearing",          0x1a}, // Non-selected user clearing
+	{"answered",                       0x1a}, // Non-selected user clearing (answered elsewhere)
 	{"offline",                        0x1b}, // Destination out of order
 	{"invalid-number",                 0x1c}, // Invalid number format
 	{"facility-rejected",              0x1d}, // Facility rejected

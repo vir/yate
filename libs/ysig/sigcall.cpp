@@ -209,8 +209,9 @@ SignallingEvent* SignallingCallControl::getEvent(const Time& when)
 // Clear call list
 void SignallingCallControl::clearCalls()
 {
-    Lock lock(this);
+    lock();
     m_calls.clear();
+    unlock();
 }
 
 // Remove a call from list
@@ -218,11 +219,12 @@ void SignallingCallControl::removeCall(SignallingCall* call, bool del)
 {
     if (!call)
 	return;
-    Lock lock(this);
+    lock();
     if (m_calls.remove(call,del))
 	DDebug(DebugAll,
-	    "SignallingCallControl. Call (%p) removed from queue. Deleted: %s [%p]",
-	    call,String::boolText(del),this);
+	    "SignallingCallControl. Call (%p) removed%s from queue [%p]",
+	    call,(del ? " and deleted" : ""),this);
+    unlock();
 }
 
 
@@ -242,9 +244,11 @@ SignallingCall::SignallingCall(SignallingCallControl* controller, bool outgoing,
 
 SignallingCall::~SignallingCall()
 {
+    m_callMutex.lock();
     m_inMsg.clear();
     if (m_controller)
 	m_controller->removeCall(this,false);
+    m_callMutex.unlock();
 }
 
 // Event termination notification

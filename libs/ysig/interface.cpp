@@ -99,6 +99,14 @@ bool SignallingInterface::notify(Notification event)
 }
 
 
+YCLASSIMP(SignallingReceiver,SignallingComponent)
+
+SignallingReceiver::SignallingReceiver(const char* name)
+    : SignallingComponent(name),
+      m_ifaceMutex(true), m_interface(0)
+{
+}
+
 SignallingReceiver::~SignallingReceiver()
 {
     if (m_interface)

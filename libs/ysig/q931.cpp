@@ -294,6 +294,8 @@ private:
     bool encodeSignal(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeRestart(ISDNQ931IE* ie, DataBlock& buffer);
     bool encodeSendComplete(ISDNQ931IE* ie, DataBlock& buffer);
+    bool encodeHighLayerCap(ISDNQ931IE* ie, DataBlock& buffer);
+    bool encodeUserUser(ISDNQ931IE* ie, DataBlock& buffer);
 
     ISDNQ931ParserData* m_settings;      // Settings
     ISDNQ931Message* m_msg;              // Current encoded/decoded message
@@ -306,8 +308,8 @@ private:
 /**
  * ISDNQ931IEData
  */
-ISDNQ931IEData::ISDNQ931IEData()
-    : m_bri(false),
+ISDNQ931IEData::ISDNQ931IEData(bool bri)
+    : m_bri(bri),
     m_channelMandatory(true),
     m_channelByNumber(true)
 {
@@ -365,17 +367,23 @@ bool ISDNQ931IEData::processChannelID(ISDNQ931Message* msg, bool add,
     ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::ChannelID);
     m_channels = "";
     if (!ie) {
-	m_bri = m_channelMandatory = m_channelByNumber = false;
+	m_channelMandatory = m_channelByNumber = false;
 	return false;
     }
-    m_bri = ie->getBoolValue("interface-bri");
-    // Done for basic rate interface
-    if (m_bri)
-	return true;
+    m_bri = ie->getBoolValue("interface-bri",m_bri);
     m_channelMandatory = ie->getBoolValue("channel-exclusive");
     m_channelByNumber = ie->getBoolValue("channel-by-number");
     m_channelType = ie->getValue("type");
     m_channelSelect = ie->getValue("channel-select");
+    if (m_bri && m_channelSelect) {
+	m_channelByNumber = true;
+	if (m_channelSelect == "b1")
+	    m_channels = "1";
+	else if (m_channelSelect == "b2")
+	    m_channels = "2";
+	else
+	    return false;
+    }
     // ChannelID IE may repeat if channel is given by number
     if (m_channelByNumber)
 	for (; ie; ie = msg->getIE(ISDNQ931IE::ChannelID,ie))
@@ -623,6 +631,7 @@ bool ISDNQ931State::checkStateRecv(int type, bool* retrans)
 		case ConnectReq:
 		case IncomingProceeding:
 		case Active:
+		case OverlapSend:
 		    return true;
 		default: ;
 	    }
@@ -669,6 +678,7 @@ bool ISDNQ931State::checkStateSend(int type)
 		case ConnectReq:
 		case IncomingProceeding:
 		case Active:
+		case OverlapSend:
 		    return true;
 		default: ;
 	    }
@@ -692,23 +702,32 @@ bool ISDNQ931State::checkStateSend(int type)
 #define Q931_CALL_ID this->outgoing(),this->callRef()
 
 ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
-	u_int32_t callRef, u_int8_t callRefLen)
+	u_int32_t callRef, u_int8_t callRefLen, u_int8_t tei)
     : SignallingCall(controller,outgoing),
     m_callRef(callRef),
     m_callRefLen(callRefLen),
+    m_tei(tei),
     m_circuit(0),
+    m_overlap(false),
     m_circuitChange(false),
     m_channelIDSent(false),
     m_rspBearerCaps(false),
+    m_net(false),
+    m_data(controller && !controller->primaryRate()),
     m_discTimer(0),
     m_relTimer(0),
     m_conTimer(0),
+    m_overlapSendTimer(0),
+    m_overlapRecvTimer(0),
+    m_retransSetupTimer(0),
     m_terminate(false),
     m_destroy(false),
     m_destroyed(false)
 {
-    Debug(q931(),DebugAll,"Call(%u,%u) direction=%s [%p]",
-	Q931_CALL_ID,(outgoing ? "outgoing" : "incoming"),this);
+    Debug(q931(),DebugAll,"Call(%u,%u) direction=%s TEI=%u [%p]",
+	Q931_CALL_ID,(outgoing ? "outgoing" : "incoming"),tei,this);
+    for (u_int8_t i = 0; i < 127; i++)
+	m_broadcast[i] = false;
     if (!controller) {
 	Debug(DebugWarn,"ISDNQ931Call(%u,%u). No call controller. Terminate [%p]",
 	    Q931_CALL_ID,this);
@@ -716,10 +735,14 @@ ISDNQ931Call::ISDNQ931Call(ISDNQ931* controller, bool outgoing,
 	m_data.m_reason = "temporary-failure";
 	return;
     }
+    m_net = q931() && q931()->m_q921 && q931()->m_q921->network();
     // Init timers
     q931()->setInterval(m_discTimer,305);
     q931()->setInterval(m_relTimer,308);
     q931()->setInterval(m_conTimer,313);
+    m_overlapSendTimer.interval(10000);
+    m_overlapRecvTimer.interval(20000);
+    m_retransSetupTimer.interval(1000);
     if (outgoing)
 	reserveCircuit();
 }
@@ -773,9 +796,16 @@ bool ISDNQ931Call::sendEvent(SignallingEvent* event)
 	    retVal = sendAlerting(event->message());
 	    break;
 	case SignallingEvent::Accept:
+	    if (m_overlap) {
+		sendSetupAck();
+		m_overlap = false;
+		break;
+	    }
+	    changeState(CallPresent);
 	    retVal = sendCallProceeding(event->message());
 	    break;
 	case SignallingEvent::Answer:
+	    changeState(CallPresent);
 	    retVal = sendConnect(event->message());
 	    break;
 	case SignallingEvent::Release:
@@ -878,19 +908,19 @@ SignallingEvent* ISDNQ931Call::getEvent(const Time& when)
 		sendSuspendRej("service-not-implemented",0);
 		break;
 	    case ISDNQ931Message::Resume:
-		q931()->sendStatus(this,"no-call-suspended");
+		q931()->sendStatus(this,"no-call-suspended",callTei());
 		break;
 	    case ISDNQ931Message::SuspendAck:
 	    case ISDNQ931Message::SuspendRej:
 	    case ISDNQ931Message::ResumeAck:
 	    case ISDNQ931Message::ResumeRej:
-		q931()->sendStatus(this,"wrong-state-message");
+		q931()->sendStatus(this,"wrong-state-message",callTei());
 		break;
 	    default:
 		DDebug(q931(),DebugNote,
 		    "Call(%u,%u). Received unknown/not implemented message '%s'. Sending status [%p]",
 		    Q931_CALL_ID,msg->name(),this);
-		q931()->sendStatus(this,"unknown-message");
+		q931()->sendStatus(this,"unknown-message",callTei());
 	        // Fall through to destruct the message and check timeouts
 	}
 	TelEngine::destruct(msg);
@@ -933,7 +963,7 @@ void ISDNQ931Call::dataLinkState(bool up)
 	state() == ISDNQ931Call::OverlapRecv) {
 	setTerminate(true,"temporary-failure");
     }
-    q931()->sendStatus(this,"normal");
+    q931()->sendStatus(this,"normal",callTei());
 }
 
 // Process termination flags or requests (messages)
@@ -960,11 +990,11 @@ SignallingEvent* ISDNQ931Call::processTerminate(ISDNQ931Message* msg)
     }
     if (complete)
 	return releaseComplete();
-    sendRelease();
+    sendRelease("normal-clearing");
     return 0;
 }
 
-// Check message timeout for Connect, Disconnect, Release
+// Check message timeout for Connect, Disconnect, Release, Setup
 SignallingEvent* ISDNQ931Call::checkTimeout(u_int64_t time)
 {
 #define CALL_TIMEOUT_DEBUG(info) \
@@ -995,6 +1025,19 @@ SignallingEvent* ISDNQ931Call::checkTimeout(u_int64_t time)
 	    m_data.m_reason = reason;
 	    sendDisconnect(0);
 	    break;
+	case CallInitiated:
+	    if (!m_retransSetupTimer.timeout(time))
+		break;
+	    CALL_TIMEOUT_DEBUG("Setup")
+	    m_retransSetupTimer.stop();
+	    m_data.m_reason = reason;
+	    return releaseComplete(reason);
+	case OverlapSend:
+	    if (!m_overlapSendTimer.timeout(time)) {
+		m_overlapSendTimer.stop();
+		m_overlapSendTimer.start();
+	    }
+	    break;
 	default: ;
     }
     return 0;
@@ -1017,7 +1060,7 @@ bool ISDNQ931Call::checkMsgRecv(ISDNQ931Message* msg, bool status)
 	    "Call(%u,%u). Received '%s'. Invalid in state '%s'. Drop [%p]",
 	    Q931_CALL_ID,msg->name(),stateName(state()),this);
 	if (status && state() != Null)
-	    q931()->sendStatus(this,"wrong-state-message");
+	    q931()->sendStatus(this,"wrong-state-message",callTei());
     }
     return false;
 }
@@ -1064,6 +1107,7 @@ SignallingEvent* ISDNQ931Call::processMsgCallProceeding(ISDNQ931Message* msg)
 // IE: BearerCaps, ChannelID, Progress, Display, DateTime, Signal, LoLayerCompat, HiLayerCompat
 SignallingEvent* ISDNQ931Call::processMsgConnect(ISDNQ931Message* msg)
 {
+    m_retransSetupTimer.stop();
     if (!checkMsgRecv(msg,true))
 	return 0;
     if (m_data.processChannelID(msg,false) && !reserveCircuit())
@@ -1121,6 +1165,7 @@ SignallingEvent* ISDNQ931Call::processMsgDisconnect(ISDNQ931Message* msg)
 // IE: SendComplete, Display, Keypad, Signal, CalledNo
 SignallingEvent* ISDNQ931Call::processMsgInfo(ISDNQ931Message* msg)
 {
+    m_lastEvent = checkTimeout(10000);
     // Check complete
     bool complete = (0 != msg->getIE(ISDNQ931IE::SendComplete));
     msg->params().addParam("complete",String::boolText(complete));
@@ -1160,13 +1205,15 @@ SignallingEvent* ISDNQ931Call::processMsgProgress(ISDNQ931Message* msg)
 	msg->params().setParam("reason",m_data.m_reason);
     if (m_data.processDisplay(msg,false))
 	msg->params().setParam("callername",m_data.m_display);
-    return new SignallingEvent(SignallingEvent::Progress,msg,this);;
+    return new SignallingEvent(SignallingEvent::Progress,msg,this);
 }
 
 // Process RELEASE and RELEASE COMPLETE. See Q.931 3.1.9/3.1.10
 // IE: Cause, Display, Signal
 SignallingEvent* ISDNQ931Call::processMsgRelease(ISDNQ931Message* msg)
 {
+    if (!msg)
+	return 0;
     m_discTimer.stop();
     m_relTimer.stop();
     m_conTimer.stop();
@@ -1206,24 +1253,25 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
 	    Q931_CALL_ID,m_data.m_transferMode.c_str(),this);
 	return errorWrongIE(msg,ISDNQ931IE::BearerCaps,true);
     }
-    // *** ChannelID. Mandatory
-    if (!msg->getIE(ISDNQ931IE::ChannelID))
+    // *** ChannelID. Mandatory on PRI
+    if (msg->getIE(ISDNQ931IE::ChannelID))
+	m_data.processChannelID(msg,false);
+    else if (q931() && q931()->primaryRate())
 	return errorNoIE(msg,ISDNQ931IE::ChannelID,true);
-    m_data.processChannelID(msg,false);
-    // Check if channel contains valid BRI flag
-    // TODO: Support BRI: check consistency with q931()->primaryRate()
-    if (m_data.m_bri) {
+    // Check if channel contains valid PRI/BRI flag
+    if (q931() && (m_data.m_bri == q931()->primaryRate())) {
 	Debug(q931(),DebugWarn,
-	    "Call(%u,%u). Invalid interface (BRI not implemented). Releasing call [%p]",
+	    "Call(%u,%u). Invalid interface type. Releasing call [%p]",
 	    Q931_CALL_ID,this);
 	return errorWrongIE(msg,ISDNQ931IE::ChannelID,true);
     }
     // Get a circuit from controller
-    if (!reserveCircuit())
-	return releaseComplete();
-    m_circuit->updateFormat(m_data.m_format,0);
+    if (reserveCircuit())
+	m_circuit->updateFormat(m_data.m_format,0);
+    else if (q931() && q931()->primaryRate())
+	return releaseComplete("congestion");
     // *** CalledNo /CallingNo
-    m_data.processCalledNo(msg,false);
+    m_overlap = !m_data.processCalledNo(msg,false);
     m_data.processCallingNo(msg,false);
     // *** Display
     m_data.processDisplay(msg,false);
@@ -1238,6 +1286,7 @@ SignallingEvent* ISDNQ931Call::processMsgSetup(ISDNQ931Message* msg)
     msg->params().setParam("callerscreening",m_data.m_callerScreening);
     msg->params().setParam("callednumtype",m_data.m_calledType);
     msg->params().setParam("callednumplan",m_data.m_calledPlan);
+    msg->params().setParam("overlapped",String::boolText(m_overlap));
     return new SignallingEvent(SignallingEvent::NewCall,msg,this);
 }
 
@@ -1364,7 +1413,7 @@ SignallingEvent* ISDNQ931Call::processMsgStatus(ISDNQ931Message* msg)
 // IE: Display
 SignallingEvent* ISDNQ931Call::processMsgStatusEnquiry(ISDNQ931Message* msg)
 {
-    q931()->sendStatus(this,"status-enquiry-rsp");
+    q931()->sendStatus(this,"status-enquiry-rsp",callTei());
     return 0;
 }
 
@@ -1395,10 +1444,19 @@ bool ISDNQ931Call::sendAlerting(SignallingMessage* sigMsg)
 	m_rspBearerCaps = false;
     }
     if (!m_channelIDSent) {
-	m_data.processChannelID(msg,true);
+	if (!q931()->primaryRate()) {
+	    m_data.m_channelType = "B";
+	    if (m_circuit)
+		m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+	    if (!m_data.m_channelSelect) {
+		TelEngine::destruct(msg);
+		return sendReleaseComplete("congestion");
+	    }
+	}
+	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
     }
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send CALL PROCEEDING. See Q.931 3.1.2
@@ -1417,7 +1475,7 @@ bool ISDNQ931Call::sendCallProceeding(SignallingMessage* sigMsg)
 	m_data.processChannelID(msg,true);
 	m_channelIDSent = true;
     }
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send CONNECT. See Q.931 3.1.3
@@ -1437,6 +1495,11 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
 	m_rspBearerCaps = false;
     }
     if (!m_channelIDSent) {
+	if (!q931()->primaryRate()) {
+	    m_data.m_channelType = "B";
+	    m_data.m_channelByNumber = true;
+	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+	}
 	m_data.processChannelID(msg,true,&q931()->parserData());
 	m_channelIDSent = true;
     }
@@ -1446,7 +1509,7 @@ bool ISDNQ931Call::sendConnect(SignallingMessage* sigMsg)
 	m_data.processProgress(msg,true,&q931()->parserData());
     }
     m_conTimer.start();
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send CONNECT ACK. See Q.931 3.1.4
@@ -1464,7 +1527,7 @@ bool ISDNQ931Call::sendConnectAck(SignallingMessage* sigMsg)
     }
     else
 	m_data.m_progress = "";
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send DISCONNECT. See Q.931 3.1.5
@@ -1479,7 +1542,7 @@ bool ISDNQ931Call::sendDisconnect(SignallingMessage* sigMsg)
     m_data.processCause(msg,true);
     changeState(DisconnectReq);
     m_discTimer.start();
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send INFORMATION. See Q.931 3.1.6
@@ -1499,7 +1562,7 @@ bool ISDNQ931Call::sendInfo(SignallingMessage* sigMsg)
     const char* tone = sigMsg->params().getValue("tone");
     if (tone)
 	msg->appendIEValue(ISDNQ931IE::Keypad,"keypad",tone);
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send PROGRESS. See Q.931 3.1.8
@@ -1515,7 +1578,7 @@ bool ISDNQ931Call::sendProgress(SignallingMessage* sigMsg)
     }
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::Progress,this);
     m_data.processProgress(msg,true);
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
 }
 
 // Send RELEASE. See Q.931 3.1.9
@@ -1532,22 +1595,30 @@ bool ISDNQ931Call::sendRelease(const char* reason, SignallingMessage* sigMsg)
     m_terminate = true;
     changeState(ReleaseReq);
     m_relTimer.start();
-    return q931()->sendRelease(this,true,m_data.m_reason);
+    return q931()->sendRelease(this,true,m_data.m_reason,callTei());
 }
 
 // Send RELEASE COMPLETE. See Q.931 3.1.10
 // IE: Cause, Display, Signal
-bool ISDNQ931Call::sendReleaseComplete(const char* reason, const char* diag)
+bool ISDNQ931Call::sendReleaseComplete(const char* reason, const char* diag, u_int8_t tei)
 {
     m_relTimer.stop();
-    if (state() == Null)
+    if ((state() == Null) && (0 == tei))
 	return false;
     if (reason)
 	m_data.m_reason = reason;
     m_terminate = m_destroy = true;
     changeState(Null);
     q931()->releaseCircuit(m_circuit);
-    return q931()->sendRelease(this,false,m_data.m_reason,diag);
+    if (callTei() >= 127) {
+	for (u_int8_t i = 0; i < 127; i++)
+	    if (m_broadcast[i])
+		return q931()->sendRelease(this,false,m_data.m_reason,i,diag);
+	return true;
+    }
+    if (0 == tei)
+	tei = callTei();
+    return q931()->sendRelease(this,false,m_data.m_reason,tei,diag);
 }
 
 // Send SETUP. See Q.931 3.1.14
@@ -1575,14 +1646,30 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	// ChannelID
 	if (!m_circuit)
 	    break;
-	m_circuit->updateFormat(m_data.m_format,0);
-	m_data.m_bri = false;
-	m_data.m_channelMandatory = false;
-	m_data.m_channelByNumber = true;
-	m_data.m_channelType = "B";
-	m_data.m_channelSelect = "present";
-	m_data.m_channels = m_circuit->code();
-	m_data.processChannelID(msg,true);
+	if (m_net || q931()->primaryRate()) {
+	    // Reserving a circuit attempted only on PRI or if we are NET
+	    if (!reserveCircuit()) {
+		m_data.m_reason = "network-busy";
+		break;
+	    }
+	    m_circuit->updateFormat(m_data.m_format,0);
+	    m_data.m_channelMandatory = false;
+	    m_data.m_channelByNumber = true;
+	    m_data.m_channelType = "B";
+	    if (m_data.m_bri) {
+		if (m_circuit->code() > 0 && m_circuit->code() < 3)
+		    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+		if (!m_data.m_channelSelect) {
+		    m_data.m_reason = "network-busy";
+		    break;
+		}
+	    }
+	    else {
+		m_data.m_channelSelect = "present";
+		m_data.m_channels = m_circuit->code();
+	    }
+	    m_data.processChannelID(msg,true);
+	}
 	// Progress indicator
 	m_data.m_progress = sigMsg->params().getValue("call-progress");
 	m_data.processProgress(msg,true,&q931()->parserData());
@@ -1603,7 +1690,11 @@ bool ISDNQ931Call::sendSetup(SignallingMessage* sigMsg)
 	m_data.processCalledNo(msg,true);
 	// Send
 	changeState(CallInitiated);
-	if (q931()->sendMessage(msg,&m_data.m_reason))
+	if (m_net && !q931()->primaryRate()) {
+	    m_tei = 127;
+	    m_retransSetupTimer.start();
+	}
+	if (q931()->sendMessage(msg,callTei(),&m_data.m_reason))
 	    return true;
 	msg = 0;
 	break;
@@ -1621,7 +1712,26 @@ bool ISDNQ931Call::sendSuspendRej(const char* reason, SignallingMessage* sigMsg)
 	reason = sigMsg->params().getValue("reason");
     ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SuspendRej,this);
     msg->appendIEValue(ISDNQ931IE::Cause,0,reason);
-    return q931()->sendMessage(msg);
+    return q931()->sendMessage(msg,callTei());
+}
+
+bool ISDNQ931Call::sendSetupAck()
+{
+    MSG_CHECK_SEND(ISDNQ931Message::SetupAck)
+    ISDNQ931Message* msg = new ISDNQ931Message(ISDNQ931Message::SetupAck,this);
+    if (!m_channelIDSent) {
+	m_data.m_channelType = "B";
+	if (m_circuit)
+	    m_data.m_channelSelect = lookup(m_circuit->code(),Q931Parser::s_dict_channelIDSelect_BRI);
+	if (!m_data.m_channelSelect) {
+	    Debug(q931(),DebugNote,"Call(%u,%u). No voice channel available [%p]",
+		Q931_CALL_ID,this);
+	    return sendReleaseComplete("congestion");
+	}
+	m_data.processChannelID(msg,true,&q931()->parserData());
+	m_channelIDSent = true;
+    }
+    return q931()->sendMessage(msg,callTei());
 }
 
 SignallingEvent* ISDNQ931Call::releaseComplete(const char* reason, const char* diag)
@@ -1680,9 +1790,16 @@ bool ISDNQ931Call::reserveCircuit()
     m_circuitChange = false;
     bool anyCircuit = false;
     while (true) {
-	// For incoming calls we reserve the circuit only one time (at SETUP)
-	if (!outgoing())
+	// For incoming PRI calls we reserve the circuit only one time (at SETUP)
+	if (!outgoing()) {
+	    // Check if we are a BRI NET and we should assign any channel
+	    int briChan = lookup(m_data.m_channelSelect,Q931Parser::s_dict_channelIDSelect_BRI,3);
+	    if (m_net && (briChan == 3) && !q931()->primaryRate())
+		anyCircuit = true;
+	    else
+		m_data.m_channels = briChan;
 	    break;
+	}
 	// Outgoing calls
 	if (!m_data.m_channelByNumber) {
 	    m_data.m_reason = "service-not-implemented";
@@ -1690,7 +1807,7 @@ bool ISDNQ931Call::reserveCircuit()
 	}
 	// Check if we don't have a circuit reserved
 	if (!m_circuit) {
-	    anyCircuit = true;
+	    anyCircuit = m_net || q931()->primaryRate();
 	    break;
 	}
 	// Check the received circuit if any
@@ -1709,13 +1826,18 @@ bool ISDNQ931Call::reserveCircuit()
 	q931()->reserveCircuit(m_circuit,0,-1,&m_data.m_channels,m_data.m_channelMandatory,true);
     if (m_circuit) {
 	m_data.m_channels = m_circuit->code();
-	if (!m_circuit->connect(m_data.m_format))
+	if (!m_circuit->connect(m_data.m_format) && !m_net && (state() != ISDNQ931State::CallPresent)) {
 	    Debug(q931(),DebugNote,
 		"Call(%u,%u). Failed to connect circuit [%p]",Q931_CALL_ID,this);
+	    return false;
+	}
+	DDebug(q931(),DebugInfo,"Call(%u,%u). Connected to circuit %u [%p]",
+	    Q931_CALL_ID,m_circuit->code(),this);
 	return true;
     }
     DDebug(q931(),DebugNote,
-	"Call(%u,%u). Can't reserve circuit [%p]",Q931_CALL_ID,this);
+	"Call(%u,%u). Can't reserve%s circuit [%p]",
+	Q931_CALL_ID,(anyCircuit ? " any" : ""),this);
     m_data.m_reason = anyCircuit ? "congestion" : "channel-unacceptable";
     return false;
 }
@@ -2194,11 +2316,13 @@ TokenDict ISDNQ931::s_swType[] = {
 	{0,0}
 	};
 
+YCLASSIMP(ISDNQ931,ISDNLayer3)
+
 ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
-    : SignallingCallControl(params,"isdn."),
+    : SignallingComponent(name),
+      SignallingCallControl(params,"isdn."),
       SignallingDumpable(SignallingDumper::Q931),
       ISDNLayer3(name),
-    m_layer(true),
     m_q921(0),
     m_q921Up(false),
     m_primaryRate(true),
@@ -2226,7 +2350,6 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
 {
     setName(params.getValue("debugname",name));
     m_parserData.m_dbg = this;
-    //m_primaryRate = params.getBoolValue("pri",true);
     m_callRefLen = params.getIntValue("callreflen",2);
     if (m_callRefLen < 1 || m_callRefLen > 4)
 	m_callRefLen = 2;
@@ -2240,6 +2363,7 @@ ISDNQ931::ISDNQ931(const NamedList& params, const char* name)
     m_callDiscTimer.interval(params,"t305",0,5000,false);
     m_callRelTimer.interval(params,"t308",0,5000,false);
     m_callConTimer.interval(params,"t313",0,5000,false);
+    m_cpeNumber = params.getValue("number");
     m_numPlan = params.getValue("numplan");
     if (0xffff == lookup(m_numPlan,Q931Parser::s_dict_numPlan,0xffff))
 	m_numPlan = "unknown";
@@ -2303,16 +2427,27 @@ ISDNQ931::~ISDNQ931()
     DDebug(this,DebugAll,"ISDN Call Controller destroyed [%p]",this);
 }
 
+// Check if layer 2 may be up
+bool ISDNQ931::q921Up() const
+{
+    if (!m_q921)
+	return false;
+    if (m_q921Up)
+	return true;
+    // Assume BRI NET is always up
+    return !primaryRate() && m_q921->network();
+}
+
 // Send a message to layer 2
-bool ISDNQ931::sendMessage(ISDNQ931Message* msg, String* reason)
+bool ISDNQ931::sendMessage(ISDNQ931Message* msg, u_int8_t tei, String* reason)
 {
     if (!msg) {
 	if (reason)
 	    *reason = "wrong-message";
 	return false;
     }
-    Lock lock(m_layer);
-    if (!(m_q921 && m_q921Up)) {
+    Lock lock(l3Mutex());
+    if (!q921Up()) {
 	if (!m_flagQ921Invalid)
 	    Debug(this,DebugNote,
 		"Refusing to send message. Layer 2 is missing or down");
@@ -2344,7 +2479,7 @@ bool ISDNQ931::sendMessage(ISDNQ931Message* msg, String* reason)
     for (; obj; obj = obj->skipNext()) {
 	DataBlock* buffer = static_cast<DataBlock*>(obj->get());
 	dump(*buffer,true);
-	if (!m_q921->sendData(*buffer,true)) {
+	if (!m_q921->sendData(*buffer,tei,true)) {
 	    if (reason)
 		*reason = "net-out-of-order";
 	    return false;
@@ -2353,18 +2488,18 @@ bool ISDNQ931::sendMessage(ISDNQ931Message* msg, String* reason)
     return true;
 }
 
-// Data link up notificatin from layer 2
+// Data link up notification from layer 2
 // Notify calls
-void ISDNQ931::multipleFrameEstablished(bool confirmation, bool timeout, ISDNLayer2* layer2)
+void ISDNQ931::multipleFrameEstablished(u_int8_t tei, bool confirmation, bool timeout, ISDNLayer2* layer2)
 {
-    m_layer.lock();
+    l3Mutex().lock();
     m_q921Up = true;
-    DDebug(this,DebugNote,"'Established' %s",
-	confirmation ? "confirmation" :"indication");
+    DDebug(this,DebugNote,"'Established' %s TEI %u",
+	confirmation ? "confirmation" :"indication",tei);
     endReceiveSegment("Data link is up");
     m_l2DownTimer.stop();
     m_flagQ921Down = false;
-    m_layer.unlock();
+    l3Mutex().unlock();
     if (confirmation)
 	return;
     // Notify calls
@@ -2373,23 +2508,23 @@ void ISDNQ931::multipleFrameEstablished(bool confirmation, bool timeout, ISDNLay
 	(static_cast<ISDNQ931Call*>(obj->get()))->dataLinkState(true);
 }
 
-// Data link down notificatin from layer 2
+// Data link down notification from layer 2
 // Notify calls
-void ISDNQ931::multipleFrameReleased(bool confirmation, bool timeout, ISDNLayer2* layer2)
+void ISDNQ931::multipleFrameReleased(u_int8_t tei, bool confirmation, bool timeout, ISDNLayer2* layer2)
 {
-    Lock lockLayer(m_layer);
+    Lock lockLayer(l3Mutex());
     m_q921Up = false;
-    DDebug(this,DebugNote,"'Released' %s. Timeout: %s",
-	confirmation ? "confirmation" :"indication",String::boolText(timeout));
+    DDebug(this,DebugNote,"'Released' %s TEI %u. Timeout: %s",
+	confirmation ? "confirmation" :"indication",tei,String::boolText(timeout));
     endReceiveSegment("Data link is down");
     // Re-establish if layer 2 doesn't have an automatically re-establish procedure
     if (m_q921 && !m_q921->autoRestart()) {
 	DDebug(this,DebugNote,"Re-establish layer 2.");
-	m_q921->multipleFrame(true,false);
+	m_q921->multipleFrame(tei,true,false);
     }
     if (confirmation)
 	return;
-    if (!m_l2DownTimer.started()) {
+    if (primaryRate() && !m_l2DownTimer.started()) {
 	XDebug(this,DebugAll,"Starting T309 (layer 2 down)");
 	m_l2DownTimer.start();
     }
@@ -2402,61 +2537,115 @@ void ISDNQ931::multipleFrameReleased(bool confirmation, bool timeout, ISDNLayer2
 
 // Receive and parse data from layer 2
 // Process the message
-void ISDNQ931::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
+void ISDNQ931::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2)
 {
-    XDebug(this,DebugAll,"Received data. Length: %u",data.length());
-    if (!ack) {
-	Debug(this,DebugNote,"Received unacknowledged data. Drop");
-	return;
-    }
-    Lock lock(m_layer);
+    XDebug(this,DebugAll,"Received data. Length: %u, TEI: %u",data.length(),tei);
+    Lock lock(l3Mutex());
     ISDNQ931Message* msg = getMsg(data);
     if (!msg)
 	return;
     // Dummy call reference
     if (msg->dummyCallRef()) {
-	sendStatus("service-not-implemented",0);
+	sendStatus("service-not-implemented",0,tei);
 	TelEngine::destruct(msg);
 	return;
     }
     // Global call reference or a message that should have a dummy call reference
     if (!msg->callRef() || msg->type() == ISDNQ931Message::Restart ||
 	msg->type() == ISDNQ931Message::RestartAck) {
-	processGlobalMsg(msg);
+	processGlobalMsg(msg,tei);
 	TelEngine::destruct(msg);
 	return;
     }
+    bool doMore = true;
     // This is an incoming message:
     //   if initiator is true, the message is for an incoming call
-    ISDNQ931Call* call = findCall(msg->callRef(),!msg->initiator());
-    while (true) {
+    ISDNQ931Call* call = findCall(msg->callRef(),!msg->initiator(),tei);
+    if (call && (call->callTei() == 127) && (call->callRef() == msg->callRef())) {
+	// Call was or still is Point-to-Multipoint
+	int i;
+	switch (msg->type()) {
+	    case ISDNQ931Message::Disconnect:
+	    case ISDNQ931Message::ReleaseComplete:
+		if ((tei < 127) && call->m_broadcast[tei])
+		    call->m_broadcast[tei] = false;
+		else
+		    doMore = false;
+		if (call->m_retransSetupTimer.timeout()) {
+		    call->m_retransSetupTimer.stop();
+		    for (i = 0; i < 127; i++) {
+			if (call->m_broadcast[i]) {
+			    doMore = false;
+			    break;
+			}
+		    }
+		}
+		if ((msg->type() != ISDNQ931Message::ReleaseComplete) && !doMore)
+		    sendRelease(false,msg->callRefLen(),msg->callRef(),
+			tei,!msg->initiator());
+		break;
+	    case ISDNQ931Message::Connect:
+		if (tei >= 127)
+		    break;
+		call->m_tei = tei;
+		call->m_broadcast[tei] = false;
+		// All other pending calls are to be aborted
+		for (i = 0; i < 127; i++) {
+		    if (call->m_broadcast[i]) {
+			sendRelease(true,msg->callRefLen(),msg->callRef(),
+			    i,!msg->initiator(),"answered");
+			call->m_broadcast[i] = false;
+			break;
+		    }
+		}
+		break;
+	    default:
+		if (tei < 127)
+		    call->m_broadcast[tei] = true;
+	}
+    }
+    while (doMore) {
 	if (call) {
-	    if (msg->type() != ISDNQ931Message::Setup) {
+	    if (msg->type() != ISDNQ931Message::Setup &&
+		(call->callTei() == 127 || call->callTei() == tei)) {
 		call->enqueue(msg);
 		msg = 0;
 	    }
-	    else
-		sendRelease(false,msg->callRefLen(),msg->callRef(),!msg->initiator(),
-		    "invalid-callref");
+	    else if (msg->type() != ISDNQ931Message::ReleaseComplete) {
+		sendRelease((msg->type() != ISDNQ931Message::Release),
+		    msg->callRefLen(),msg->callRef(),tei,
+		    !msg->initiator(),"invalid-callref");
+	    }
 	    break;
 	}
 	// Check if it is a new incoming call
 	if (msg->initiator() && msg->type() == ISDNQ931Message::Setup) {
+	    if (!primaryRate() && m_cpeNumber && m_q921 && !m_q921->network()) {
+		// We are a BRI CPE with a number - check the called party field
+		ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::CalledNo);
+		if (ie) {
+		    const char* number = ie->getValue("number");
+		    if (number && (m_cpeNumber != number)) {
+			DDebug(this,DebugInfo,"Setup was for '%s', not us.",number);
+			break;
+		    }
+		}
+	    }
 	    // Accept new calls only if no channel is restarting and not exiting
 	    String reason;
 	    if (acceptNewCall(false,reason)) {
-		call = new ISDNQ931Call(this,false,msg->callRef(),msg->callRefLen());
+		call = new ISDNQ931Call(this,false,msg->callRef(),msg->callRefLen(),tei);
 		m_calls.append(call);
 		call->enqueue(msg);
 		msg = 0;
 		call = 0;
 	    }
 	    else
-		sendRelease(false,msg->callRefLen(),msg->callRef(),
+		sendRelease(false,msg->callRefLen(),msg->callRef(),tei,
 		    !msg->initiator(),reason);
 	    break;
 	}
-	processInvalidMsg(msg);
+	processInvalidMsg(msg,tei);
 	break;
     }
     TelEngine::destruct(call);
@@ -2467,18 +2656,20 @@ void ISDNQ931::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
 // Update some data from the attached object
 void ISDNQ931::attach(ISDNLayer2* q921)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     if (m_q921 == q921)
 	return;
     cleanup(q921 ? "layer 2 attach" : "layer 2 detach");
     ISDNLayer2* tmp = m_q921;
     m_q921 = q921;
     if (m_q921) {
-	ISDNQ921* q = static_cast<ISDNQ921*>(m_q921->getObject("ISDNQ921"));
+	ISDNQ921* q = YOBJECT(ISDNQ921,m_q921);
 	// Adjust timers from the new lower layer
 	// Add 1000 ms to minimum value to allow the lower layer to re-establish
         //   the data link before we make a retransmission
 	if (q) {
+	    m_primaryRate = true;
+	    m_data.m_bri = false;
 	    u_int64_t min = q->dataTimeout();
 	    if (m_callDiscTimer.interval() <= min)
 		m_callDiscTimer.interval(min + 1000);
@@ -2490,14 +2681,21 @@ void ISDNQ931::attach(ISDNLayer2* q921)
 		m_l2DownTimer.interval(min + 1000);
 	    if (m_syncCicTimer.interval() <= min)
 		m_syncCicTimer.interval(min + 1000);
+	    // Adjust some parser flags
+	    if (m_parserData.m_flagsOrig == EuroIsdnE1 && !q->network())
+		m_parserData.m_flags |= NoDisplayIE;
+	    if (m_parserData.m_flagsOrig != QSIG && !q->network())
+		m_parserData.m_flags |= NoActiveOnConnect;
+	}
+	else if (YOBJECT(ISDNQ921Management,m_q921)) {
+	    m_primaryRate = false;
+	    m_data.m_bri = true;
+	    m_callRefLen = 1;
+	    m_callRefMask = 0x7f;
+	    m_callRef &= m_callRefMask;
 	}
 	// Adjust parser data message length limit
 	m_parserData.m_maxMsgLen = m_q921->maxUserData();
-	// Adjust some parser flags
-	if (m_parserData.m_flagsOrig == EuroIsdnE1 && !q->network())
-	    m_parserData.m_flags |= NoDisplayIE;
-	if (m_parserData.m_flagsOrig != QSIG && !q->network())
-	    m_parserData.m_flags |= NoActiveOnConnect;
     }
     else {
 	// Reset parser data if no layer 2
@@ -2516,7 +2714,8 @@ void ISDNQ931::attach(ISDNLayer2* q921)
     if (!q921)
 	return;
     Debug(this,DebugAll,"Attached L2 '%s' (%p,'%s') [%p]",
-	(q921->network()?"NET":"CPE"),q921,q921->toString().safe(),this);
+	(q921->network() ? "NET" : "CPE"),
+	q921,q921->toString().safe(),this);
     insert(q921);
     q921->attach(this);
 }
@@ -2528,7 +2727,7 @@ SignallingCall* ISDNQ931::call(SignallingMessage* msg, String& reason)
 	reason = "invalid-parameter";
 	return 0;
     }
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     if (!acceptNewCall(true,reason)) {
 	TelEngine::destruct(msg);
 	return 0;
@@ -2578,17 +2777,10 @@ void ISDNQ931::setInterval(SignallingTimer& timer, int id)
     }
 }
 
-void* ISDNQ931::getObject(const String& name) const
-{
-    if (name == "ISDNQ931")
-	return (void*)this;
-    return SignallingComponent::getObject(name);
-}
-
 // Check timeouts for segmented messages, layer 2 down state, restart circuits
 void ISDNQ931::timerTick(const Time& when)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     // Check segmented message
     if (m_recvSgmTimer.timeout(when.msec()))
 	endReceiveSegment("timeout");
@@ -2627,14 +2819,17 @@ void ISDNQ931::timerTick(const Time& when)
 }
 
 // Find a call by call reference and direction
-ISDNQ931Call* ISDNQ931::findCall(u_int32_t callRef, bool outgoing)
+ISDNQ931Call* ISDNQ931::findCall(u_int32_t callRef, bool outgoing, u_int8_t tei)
 {
     Lock lock(this);
     ObjList* obj = m_calls.skipNull();
     for (; obj; obj = obj->skipNext()) {
 	ISDNQ931Call* call = static_cast<ISDNQ931Call*>(obj->get());
-	if (callRef == call->callRef() && outgoing == call->outgoing())
+	if (callRef == call->callRef() && outgoing == call->outgoing()) {
+	    if (!primaryRate() && (call->callTei() != tei) && (call->callTei() != 127))
+		return 0;
 	    return (call->ref() ? call : 0);
+	}
     }
     return 0;
 }
@@ -2685,7 +2880,7 @@ void ISDNQ931::terminateCalls(ObjList* list, const char* reason)
 // Check if new calls are acceptable
 bool ISDNQ931::acceptNewCall(bool outgoing, String& reason)
 {
-    if (exiting() || !m_q921 || !m_q921Up) {
+    if (exiting() || !q921Up()) {
 	Debug(this,DebugInfo,"Denying %s call request, reason: %s.",
 	    outgoing ? "outgoing" : "incoming",
 	    exiting() ? "exiting" : "link down");
@@ -2710,7 +2905,7 @@ static inline ISDNQ931Message* dropSegMsg(ISDNQ931* q931, ISDNQ931Message* msg,
 // Create a message from it. Validate it. Process segmented messages
 ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     DataBlock segData;
     ISDNQ931Message* msg = ISDNQ931Message::parse(m_parserData,data,&segData);
     if (!msg)
@@ -2780,12 +2975,12 @@ ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
     // Check call identification
     if (m_segmented->initiator() != msg->initiator() ||
 	m_segmented->callRef() != msg->callRef()) {
-	dropSegMsg(this,msg,"Invalid call identification");;
+	dropSegMsg(this,msg,"Invalid call identification");
 	return endReceiveSegment("Segment with invalid call identification");
     }
     // Check segment parameters
     if (first || m_remaining <= remaining || m_remaining - remaining != 1) {
-	dropSegMsg(this,msg,"Invalid Segmented IE parameters");;
+	dropSegMsg(this,msg,"Invalid Segmented IE parameters");
 	return endReceiveSegment("Segment with invalid parameters");
     }
     TelEngine::destruct(msg);
@@ -2801,7 +2996,7 @@ ISDNQ931Message* ISDNQ931::getMsg(const DataBlock& data)
 // Terminate receiving segmented message
 ISDNQ931Message* ISDNQ931::endReceiveSegment(const char* reason)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     m_recvSgmTimer.stop();
     if (!m_segmented)
 	return 0;
@@ -2827,7 +3022,7 @@ ISDNQ931Message* ISDNQ931::endReceiveSegment(const char* reason)
 }
 
 // Process messages with global call reference and messages that should have it
-void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
+void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg, u_int8_t tei)
 {
     if (!msg)
 	return;
@@ -2840,7 +3035,7 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 		Debug(this,DebugNote,
 		    "Dropping (%p): '%s' without global call reference",
 		    msg,msg->name());
-		sendStatus("invalid-message",m_callRefLen);
+		sendStatus("invalid-message",m_callRefLen,tei);
 		return;
 #else
 		DDebug(this,DebugNote,"(%p): '%s' without global call reference",
@@ -2848,7 +3043,7 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 #endif
 	    }
 	    if (msg->type() == ISDNQ931Message::Restart) {
-		processMsgRestart(msg);
+		processMsgRestart(msg,tei);
 		return;
 	    }
 	    if (m_restartCic) {
@@ -2861,14 +3056,14 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 			msg->name(),tmp.c_str(),m_restartCic->code());
 		}
 	    else
-		sendStatus("wrong-state-message",m_callRefLen);
+		sendStatus("wrong-state-message",m_callRefLen,tei);
 	    return;
 	case ISDNQ931Message::Status:
 	    break;
 	default:
 	    Debug(this,DebugNote,"Dropping (%p): '%s' with global call reference",
 		msg,msg->name());
-	    sendStatus("invalid-callref",m_callRefLen);
+	    sendStatus("invalid-callref",m_callRefLen,tei);
 	    return;
     }
     // Message is a STATUS one
@@ -2881,7 +3076,7 @@ void ISDNQ931::processGlobalMsg(ISDNQ931Message* msg)
 
 // Process restart requests
 // See Q.931 5.5
-void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
+void ISDNQ931::processMsgRestart(ISDNQ931Message* msg, u_int8_t tei)
 {
     m_data.processRestart(msg,false);
     m_data.processChannelID(msg,false);
@@ -2962,7 +3157,7 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	    false,0,m_callRefLen);
 	m->append(msg->removeIE(ISDNQ931IE::ChannelID));
 	m->append(msg->removeIE(ISDNQ931IE::Restart));
-	sendMessage(m);
+	sendMessage(m,tei);
 	return;
     }
 
@@ -2973,16 +3168,16 @@ void ISDNQ931::processMsgRestart(ISDNQ931Message* msg)
 	"Invalid '%s' request class=%s circuits=%s reason='%s' diagnostic=%s",
 	msg->name(),m_data.m_restart.c_str(),m_data.m_channels.c_str(),
 	m_data.m_reason.c_str(),diagnostic.c_str());
-    sendStatus(m_data.m_reason,m_callRefLen,0,false,ISDNQ931Call::Null,0,diagnostic);
+    sendStatus(m_data.m_reason,m_callRefLen,tei,0,false,ISDNQ931Call::Null,0,diagnostic);
 }
 
 // Process messages with invalid call reference. See Q.931 5.8
-void ISDNQ931::processInvalidMsg(ISDNQ931Message* msg)
+void ISDNQ931::processInvalidMsg(ISDNQ931Message* msg, u_int8_t tei)
 {
     if (!msg)
 	return;
-    DDebug(this,DebugNote,"Received (%p): '%s' with invalid call reference [%p]",
-	msg,msg->name(),this);
+    DDebug(this,DebugNote,"Received (%p): '%s' with invalid call reference %u [%p]",
+	msg,msg->name(),msg->callRef(),this);
     switch (msg->type()) {
 	case ISDNQ931Message::Resume:
 	case ISDNQ931Message::Setup:
@@ -2990,7 +3185,7 @@ void ISDNQ931::processInvalidMsg(ISDNQ931Message* msg)
 	    break;
 	case ISDNQ931Message::Release:
 	    sendRelease(false,msg->callRefLen(),msg->callRef(),
-		!msg->initiator(),"invalid-callref");
+		tei,!msg->initiator(),"invalid-callref");
 	    break;
 	case ISDNQ931Message::Status:
 	    // Assume our call state to be Null. See Q.931 5.8.11
@@ -2999,16 +3194,16 @@ void ISDNQ931::processInvalidMsg(ISDNQ931Message* msg)
 	    String s = msg->getIEValue(ISDNQ931IE::CallState,"state");
 	    if (s != ISDNQ931Call::stateName(ISDNQ931Call::Null))
 		sendRelease(false,msg->callRefLen(),msg->callRef(),
-		    !msg->initiator(),"wrong-state-message");
+		    tei,!msg->initiator(),"wrong-state-message");
 	    }
 	    break;
 	case ISDNQ931Message::StatusEnquiry:
 	    sendStatus("status-enquiry-rsp",msg->callRefLen(),msg->callRef(),
-		!msg->initiator(),ISDNQ931Call::Null);
+		tei,!msg->initiator(),ISDNQ931Call::Null);
 	    break;
 	default:
 	    sendRelease(true,msg->callRefLen(),msg->callRef(),
-		!msg->initiator(),"invalid-callref");
+		tei,!msg->initiator(),"invalid-callref");
 	    return;
     }
 }
@@ -3017,8 +3212,10 @@ void ISDNQ931::processInvalidMsg(ISDNQ931Message* msg)
 // Start counting the restart interval if no circuit reserved
 void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     m_syncCicTimer.stop();
+    if (!primaryRate())
+	return;
     if (m_restartCic) {
 	if (!retrans)
 	    return;
@@ -3053,14 +3250,14 @@ void ISDNQ931::sendRestart(u_int64_t time, bool retrans)
     msg->appendSafe(ie);
     msg->appendIEValue(ISDNQ931IE::Restart,"class","channels");
     m_syncCicTimer.start(time ? time : Time::msecNow());
-    sendMessage(msg);
+    sendMessage(msg,0);
 }
 
 // End our restart requests
 // Release reserved circuit. Continue restarting circuits if requested
 void ISDNQ931::endRestart(bool restart, u_int64_t time, bool timeout)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     m_syncCicTimer.stop();
     m_syncCicCounter.reset();
     if (m_restartCic) {
@@ -3083,11 +3280,13 @@ void ISDNQ931::endRestart(bool restart, u_int64_t time, bool timeout)
 // Send STATUS. See Q.931 3.1.16
 // IE: Cause, CallState, Display
 bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, ISDNQ931Call::State state, const char* display,
+	u_int8_t tei, bool initiator, ISDNQ931Call::State state, const char* display,
 	const char* diagnostic)
 {
+    if (!primaryRate())
+	return false;
     // Create message
-    ISDNQ931Message* msg;
+    ISDNQ931Message* msg = 0;
     if (callRefLen)
 	msg = new ISDNQ931Message(ISDNQ931Message::Status,initiator,callRef,callRefLen);
     else
@@ -3104,27 +3303,29 @@ bool ISDNQ931::sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t call
     msg->appendIEValue(ISDNQ931IE::CallState,"state",ISDNQ931Call::stateName(state));
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
-    return sendMessage(msg);
+    return sendMessage(msg,tei);
 }
 
 // Send RELEASE (See Q.931 3.1.9) or RELEASE COMPLETE (See Q.931 3.1.10)
 // IE: Cause, Display, Signal
 bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, const char* cause, const char* diag,
+	u_int8_t tei, bool initiator, const char* cause, const char* diag,
 	const char* display, const char* signal)
 {
     // Create message
     ISDNQ931Message::Type t = release ? ISDNQ931Message::Release : ISDNQ931Message::ReleaseComplete;
     ISDNQ931Message* msg = new ISDNQ931Message(t,initiator,callRef,callRefLen);
     // Add IEs
-    ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,0,cause);
-    if (diag)
-	ie->addParamPrefix("diagnostic",diag);
+    if (cause) {
+	ISDNQ931IE* ie = msg->appendIEValue(ISDNQ931IE::Cause,0,cause);
+	if (diag)
+	    ie->addParamPrefix("diagnostic",diag);
+    }
     if (display)
 	msg->appendIEValue(ISDNQ931IE::Display,"display",display);
     if (signal)
 	msg->appendIEValue(ISDNQ931IE::Signal,"signal",signal);
-    return sendMessage(msg);
+    return sendMessage(msg,tei);
 }
 
 /**
@@ -3133,7 +3334,6 @@ bool ISDNQ931::sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
 ISDNQ931Monitor::ISDNQ931Monitor(const NamedList& params, const char* name)
     : SignallingCallControl(params,"isdn."),
     ISDNLayer3(name),
-    m_layer(true),
     m_q921Net(0),
     m_q921Cpe(0),
     m_cicNet(0),
@@ -3164,7 +3364,7 @@ ISDNQ931Monitor::~ISDNQ931Monitor()
 }
 
 // Notification from layer 2 of data link set/release command or response
-void ISDNQ931Monitor::dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
+void ISDNQ931Monitor::dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2)
 {
 #ifdef DEBUG
     if (debugAt(DebugInfo)) {
@@ -3189,13 +3389,9 @@ void ISDNQ931Monitor::idleTimeout(ISDNLayer2* layer2)
 }
 
 // Receive data
-void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2)
+void ISDNQ931Monitor::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2)
 {
-    XDebug(this,DebugAll,"Received data. Length: %u",data.length());
-    if (!ack) {
-	Debug(this,DebugNote,"Received unacknowledged data. Drop");
-	return;
-    }
+    XDebug(this,DebugAll,"Received data. Length: %u, TEI: %u",data.length(),tei);
     //TODO: Implement segmentation
     ISDNQ931Message* msg = ISDNQ931Message::parse(m_parserData,data,0);
     if (!msg)
@@ -3252,7 +3448,7 @@ void ISDNQ931Monitor::receiveData(const DataBlock& data, bool ack, ISDNLayer2* l
 // Attach ISDN Q.921 pasive transport that monitors one side of the link
 void ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     ISDNQ921Passive* which = net ? m_q921Net : m_q921Cpe;
     if (which == q921)
 	return;
@@ -3267,7 +3463,7 @@ void ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
 	const char* name = 0;
 	if (engine() && engine()->find(tmp)) {
 	    name = tmp->toString().safe();
-	    tmp->ISDNLayer2::attach(0);
+	    static_cast<ISDNLayer2*>(tmp)->attach((ISDNLayer3*)0);
 	}
 	Debug(this,DebugAll,"Detached L2 %s (%p,'%s') [%p]",net?"NET":"CPE",tmp,name,this);
     }
@@ -3282,7 +3478,7 @@ void ISDNQ931Monitor::attach(ISDNQ921Passive* q921, bool net)
 // Attach a circuit group to this call controller
 void ISDNQ931Monitor::attach(SignallingCircuitGroup* circuits, bool net)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     // Don't attach if it's the same object
     SignallingCircuitGroup* tmp = net ? m_cicNet : m_cicCpe;
     if (tmp == circuits)
@@ -3320,7 +3516,7 @@ void ISDNQ931Monitor::timerTick(const Time& when)
 bool ISDNQ931Monitor::reserveCircuit(unsigned int code, bool netInit,
 	SignallingCircuit** caller, SignallingCircuit** called)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     if (!(m_cicNet && m_cicCpe))
 	return false;
     String cic = code;
@@ -3342,7 +3538,7 @@ bool ISDNQ931Monitor::reserveCircuit(unsigned int code, bool netInit,
 // Release a circuit from both groups
 bool ISDNQ931Monitor::releaseCircuit(SignallingCircuit* circuit)
 {
-    Lock lock(m_layer);
+    Lock lock(l3Mutex());
     if (!circuit)
 	return false;
     if (m_cicNet == circuit->group())
@@ -4466,7 +4662,7 @@ bool Q931Parser::encodeIE(ISDNQ931IE* ie, DataBlock& buffer)
 		}
 		return false;
 	    }
-	case ISDNQ931IE::Display:         return encodeDisplay(ie,buffer);;
+	case ISDNQ931IE::Display:         return encodeDisplay(ie,buffer);
 	case ISDNQ931IE::CallingNo:       return encodeCallingNo(ie,buffer);
 	case ISDNQ931IE::CalledNo:        return encodeCalledNo(ie,buffer);
 	case ISDNQ931IE::CallState:       return encodeCallState(ie,buffer);
@@ -4477,6 +4673,8 @@ bool Q931Parser::encodeIE(ISDNQ931IE* ie, DataBlock& buffer)
 	case ISDNQ931IE::Signal:          return encodeSignal(ie,buffer);
 	case ISDNQ931IE::Restart:         return encodeRestart(ie,buffer);
 	case ISDNQ931IE::SendComplete:    return encodeSendComplete(ie,buffer);
+	case ISDNQ931IE::HiLayerCompat:   return encodeHighLayerCap(ie,buffer);
+	case ISDNQ931IE::UserUser:        return encodeUserUser(ie,buffer);
     }
     Debug(m_settings->m_dbg,DebugMild,"Encoding not implemented for IE '%s' [%p]",
 	ie->c_str(),m_msg);
@@ -5667,6 +5865,35 @@ bool Q931Parser::encodeSendComplete(ISDNQ931IE* ie, DataBlock& buffer)
 {
     u_int8_t data[1] = {(u_int8_t)ie->type()};
     buffer.assign(data,sizeof(data));
+    return true;
+}
+
+bool Q931Parser::encodeHighLayerCap(ISDNQ931IE* ie, DataBlock& buffer)
+{
+    //        **coding standard **
+    //octet 1:information element identifier 7d
+    //      2:the length of contents
+    //      3:bit -8 extension set to 1
+    //            -7-6 coding standad
+    //            -5-4-3 interpretation
+    //            -2-1 presentation method of protocol profile
+    //      4:bit -8 extension set to 0
+    //            -7-1 high layer caracteristics identification
+
+    // TODO: implement it!
+    u_int8_t tmp[4];
+    tmp[0]=0x7d; tmp[1]=0x02; tmp[2]=0x91; tmp[3]=0x81;
+    buffer.assign(tmp,sizeof(tmp));
+    return true;
+}
+
+bool Q931Parser::encodeUserUser(ISDNQ931IE* ie, DataBlock& buffer)
+{
+    // TODO: implement it!
+    u_int8_t tmp[10];
+    tmp[0]=0x7e;tmp[1]=0x08;tmp[2]=0x04;tmp[3]=0x30;tmp[4]=0x39;
+    tmp[5]=0x32;tmp[6]=0x21;tmp[7]=0x30;tmp[8]=0x39;tmp[9]=0x32;
+    buffer.assign(tmp,sizeof(tmp));
     return true;
 }
 

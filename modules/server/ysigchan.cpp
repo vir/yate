@@ -202,18 +202,29 @@ class SigLink : public RefObject
 {
     friend class SigLinkThread;         // The thread must set m_thread to 0 on terminate
 public:
+    enum Mask {
+	MaskSS7  = 0x01,
+	MaskIsdn = 0x02,
+	MaskMon  = 0x04,
+	MaskNet  = 0x10,
+	MaskCpe  = 0x20,
+	MaskPri  = 0x40,
+	MaskBri  = 0x80,
+    };
     enum Type {
-	SS7Isup,
-	IsdnPriNet,
-	IsdnPriCpe,
-	IsdnPriMon,
-	Unknown
+	Unknown    = 0,
+	SS7Isup    = MaskSS7,
+	IsdnPriNet = MaskIsdn | MaskNet | MaskPri,
+	IsdnBriNet = MaskIsdn | MaskNet | MaskBri,
+	IsdnPriCpe = MaskIsdn | MaskCpe | MaskPri,
+	IsdnBriCpe = MaskIsdn | MaskCpe | MaskBri,
+	IsdnPriMon = MaskIsdn | MaskMon,
     };
     // Set link name and type. Append to plugin list
     SigLink(const char* name, Type type);
     // Cancel thread. Cleanup. Remove from plugin list
     virtual ~SigLink();
-    inline int type() const
+    inline Type type() const
 	{ return m_type; }
     inline SignallingCallControl* controller() const
 	{ return m_controller; }
@@ -266,7 +277,7 @@ protected:
     bool m_init;                         // True if already initialized
     bool m_inband;                       // True to send in-band tones through this link
 private:
-    int m_type;                          // Link type
+    Type m_type;                         // Link type
     String m_name;                       // Link name
     SigLinkThread* m_thread;             // Event thread for call controller
 };
@@ -304,7 +315,7 @@ private:
 class SigIsdn : public SigLink
 {
 public:
-    SigIsdn(const char* name, bool net);
+    SigIsdn(const char* name, Type type);
     virtual ~SigIsdn();
 protected:
     virtual bool create(NamedList& params, String& error);
@@ -314,7 +325,7 @@ protected:
     inline ISDNQ931* q931()
 	{ return static_cast<ISDNQ931*>(m_controller); }
 private:
-    ISDNQ921* m_q921;
+    ISDNLayer2* m_q921;
     SignallingInterface* m_iface;
     SigCircuitGroup* m_group;
 };
@@ -1263,8 +1274,10 @@ void SigDriver::handleEvent(SignallingEvent* event)
 	// Route the call
 	Message* m = ch->message("call.preroute",false,true);
 	// Parameters to be copied to call.preroute
-	static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn";
+	static String params = "caller,called,callername,format,formats,callernumtype,callernumplan,callerpres,callerscreening,callednumtype,callednumplan,inn,overlapped";
 	copySigMsgParams(*m,event,&params);
+	if (m->getBoolValue("overlapped") && !m->getValue("called"))
+	    m->setParam("called","off-hook");
 	// TODO: Add call control parameter ?
 	if (!ch->startRouter(m)) {
 	    ch->hangup("temporary-failure");
@@ -1640,8 +1653,10 @@ void SigDriver::initialize()
 		    link = new SigSS7Isup(*sect);
 		    break;
 		case SigLink::IsdnPriNet:
+		case SigLink::IsdnBriNet:
 		case SigLink::IsdnPriCpe:
-		    link = new SigIsdn(*sect,type == SigLink::IsdnPriNet);
+		case SigLink::IsdnBriCpe:
+		    link = new SigIsdn(*sect,(SigLink::Type)type);
 		    break;
 		case SigLink::IsdnPriMon:
 		    link = new SigIsdnMonitor(*sect);
@@ -1675,7 +1690,9 @@ void* SigParams::getObject(const String& name) const
 TokenDict SigLink::s_type[] = {
 	{"ss7-isup",     SS7Isup},
 	{"isdn-pri-net", IsdnPriNet},
+	{"isdn-bri-net", IsdnBriNet},
 	{"isdn-pri-cpe", IsdnPriCpe},
+	{"isdn-bri-cpe", IsdnBriCpe},
 	{"isdn-pri-mon", IsdnPriMon},
 	{0,0}
 	};
@@ -1736,7 +1753,9 @@ bool SigLink::initialize(NamedList& params)
 		minRxUnder = 25;
 		break;
 	    case SigLink::IsdnPriNet:
+	    case SigLink::IsdnBriNet:
 	    case SigLink::IsdnPriCpe:
+	    case SigLink::IsdnBriCpe:
 		minRxUnder = 2500;
 		break;
 	    case SigLink::IsdnPriMon:
@@ -2168,8 +2187,8 @@ unsigned int SigSS7Isup::setPointCode(const NamedList& sect)
 /**
  * SigIsdn
  */
-SigIsdn::SigIsdn(const char* name, bool net)
-    : SigLink(name,net ? IsdnPriNet : IsdnPriCpe),
+SigIsdn::SigIsdn(const char* name, Type type)
+    : SigLink(name,type),
     m_q921(0),
     m_iface(0),
     m_group(0)
@@ -2200,12 +2219,26 @@ bool SigIsdn::create(NamedList& params, String& error)
 	return false;
 
     // Q921
-    buildName(compName,"Q921");
-    params.setParam("debugname",compName);
-    params.setParam("network",String::boolText(IsdnPriNet == type()));
+    params.setParam("network",String::boolText(0 != (MaskNet & type())));
     params.setParam("print-frames",params.getValue("print-layer2PDU"));
-    m_q921 = new ISDNQ921(params,compName);
-    plugin.engine()->insert(m_q921);
+    switch (type()) {
+	case IsdnBriNet:
+	    buildName(compName,"Q921Management");
+	    params.setParam("debugname",compName);
+	    m_q921 = new ISDNQ921Management(params,compName,true);
+	    break;
+	case IsdnBriCpe:
+	    buildName(compName,"Q921Management");
+	    params.setParam("debugname",compName);
+	    m_q921 = new ISDNQ921Management(params,compName,false);
+	    break;
+	default:
+	    buildName(compName,"Q921");
+	    params.setParam("debugname",compName);
+	    m_q921 = new ISDNQ921(params,compName);
+	    break;
+    }
+    m_q921->engine(plugin.engine());
 
     // Q931
     buildName(compName,"Q931");
@@ -2215,12 +2248,15 @@ bool SigIsdn::create(NamedList& params, String& error)
     plugin.engine()->insert(q931());
 
     // Create links between components and enable them
-    m_q921->SignallingReceiver::attach(m_iface);
+    SignallingReceiver* recv = YOBJECT(SignallingReceiver,m_q921);
+    if (recv)
+	recv->attach(m_iface);
     m_iface->control(SignallingInterface::Enable);
     controller()->attach(m_group);
-    m_q921->ISDNLayer2::attach(q931());
+    m_q921->attach(q931());
     q931()->attach(m_q921);
-    m_q921->multipleFrame(true,false);
+    if (0 == (MaskBri & type()))
+	m_q921->multipleFrame(0,true,false);
 
     // Start thread
     if (!startThread(error,plugin.engine()->tickDefault()))
@@ -2234,9 +2270,11 @@ bool SigIsdn::reload(NamedList& params)
     if (q931())
 	q931()->setDebug(params.getBoolValue("print-layer3PDU",false),
 	    params.getBoolValue("extended-debug",false));
+#if 0
     if (m_q921)
 	m_q921->setDebug(params.getBoolValue("print-layer2PDU",false),
 	    params.getBoolValue("extended-debug",false));
+#endif
     return true;
 }
 

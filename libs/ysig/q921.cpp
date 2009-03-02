@@ -24,6 +24,8 @@
 
 #include "yatesig.h"
 
+#include <stdlib.h>
+
 
 using namespace TelEngine;
 
@@ -40,6 +42,10 @@ using namespace TelEngine;
 static const char* s_linkSideNet = "NET";
 static const char* s_linkSideCpe = "CPE";
 
+#define Q921_MANAGEMENT_TEI   15         // TEI management message descriptor (first byte). See Q.921 Table 8
+#define Q921_TEI_BROADCAST   127         // TEI value for broadcast and management procedures
+#define Q921_SAPI_MANAGEMENT  63         // SAPI value for management procedures
+
 inline const char* linkSide(bool net)
 {
     return net ? s_linkSideNet : s_linkSideCpe;
@@ -47,7 +53,6 @@ inline const char* linkSide(bool net)
 
 // Drop frame reasons
 static const char* s_noState = "Not allowed in this state";
-static const char* s_noCfg = "Not allowed by configuration";
 
 // Used to set or compare values that may wrap at 127 boundary
 class Modulo128
@@ -95,10 +100,12 @@ public:
 // ****************************************************************************
 
 // Constructor. Set data members. Print them
-ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
-    : ISDNLayer2(params,name),
-      SignallingReceiver(),
-      SignallingDumpable(SignallingDumper::Q921),
+ISDNQ921::ISDNQ921(const NamedList& params, const char* name, ISDNQ921Management* mgmt, u_int8_t tei)
+    : SignallingComponent(name),
+      ISDNLayer2(params,name,tei),
+      SignallingReceiver(name),
+      SignallingDumpable(SignallingDumper::Q921,network()),
+      m_management(mgmt),
       m_remoteBusy(false),
       m_timerRecovery(false),
       m_rejectSent(false),
@@ -107,7 +114,6 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
       m_vs(0),
       m_va(0),
       m_vr(0),
-      m_layer(true),
       m_retransTimer(0),
       m_idleTimer(0),
       m_window(7),
@@ -123,7 +129,10 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
       m_errorSend(false),
       m_errorReceive(false)
 {
-    setName(params.getValue("debugname",name));
+    if (mgmt && network())
+	autoRestart(false);
+    if (!mgmt)
+	setName(params.getValue("debugname",name));
     m_retransTimer.interval(params,"t200",1000,1000,false);
     m_idleTimer.interval(params,"t203",2000,10000,false);
     // Adjust idle timeout to data link side
@@ -136,126 +145,128 @@ ISDNQ921::ISDNQ921(const NamedList& params, const char* name)
     if (debugAt(DebugInfo)) {
 	String tmp;
 #ifdef DEBUG
-	tmp << " SAPI/TEI=" << (unsigned int)sapi() << "/" << (unsigned int)tei();
+	tmp << " SAPI/TEI=" << (unsigned int)localSapi() << "/" << (unsigned int)localTei();
 	tmp << " auto-restart=" << String::boolText(autoRestart());
 	tmp << " max-user-data=" << (unsigned int)maxUserData();
 	tmp << " max-pending-frames: " << (unsigned int)m_window.maxVal();
 	tmp << " retrans/idle=" << (unsigned int)m_retransTimer.interval()  << "/"
 		<< (unsigned int)m_idleTimer.interval();
-	tmp << " allow-unack-data=" << String::boolText(allowUnack());
 #endif
-	Debug(this,DebugInfo,"ISDN Data Link type=%s%s [%p]",
+	Debug(this,DebugAll,"ISDN Data Link type=%s%s [%p]",
 	    linkSide(network()),tmp.safe(),this);
     }
-    setDumper(params.getValue("layer2dump"));
+    if (!mgmt)
+	setDumper(params.getValue("layer2dump"));
 }
 
 // Destructor
 ISDNQ921::~ISDNQ921()
 {
-    Lock lock(m_layer);
-    ISDNLayer2::attach(0);
+    Lock lock(l2Mutex());
+    ISDNLayer2::attach((ISDNLayer3*)0);
     SignallingReceiver::attach(0);
     cleanup();
-    if (debugAt(DebugAll))
-	Debug(this,DebugAll,
-	    "ISDN Data Link destroyed. Frames: sent=%u (failed=%u) recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
-	    (unsigned int)m_txFrames,(unsigned int)m_txFailFrames,
-	    (unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
-	    (unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
+    DDebug(this,DebugAll,
+	"ISDN Data Link destroyed. Frames: sent=%u (failed=%u) recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
+	(unsigned int)m_txFrames,(unsigned int)m_txFailFrames,
+	(unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
+	(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
 // Set or release 'multiple frame acknowledged' mode
-bool ISDNQ921::multipleFrame(bool establish, bool force)
+bool ISDNQ921::multipleFrame(u_int8_t tei, bool establish, bool force)
 {
-    Lock lock(m_layer);
-    // Check state. Don't do nothing in transition states
-    if (state() == WaitEstablish || state() == WaitRelease)
+    Lock lock(l2Mutex());
+    // Check state. Don't do anything in transition states or if TEI changes
+    if ((localTei() != tei) || (state() == WaitEstablish) || (state() == WaitRelease))
 	return false;
     // The request wouldn't change our state and we are not forced to fulfill it
     if (!force &&
-	((establish && (state() == Established || state() == WaitEstablish)) ||
-	(!establish && (state() == Released || state() == WaitRelease))))
+	((establish && (state() == Established)) ||
+	(!establish && (state() == Released))))
 	return false;
-    XDebug(this,DebugAll,"Process '%s' request",establish ? "ESTABLISH" : "RELEASE");
-    bool result;
+    XDebug(this,DebugAll,"Process '%s' request, TEI=%u",establish ? "ESTABLISH" : "RELEASE",tei);
+    bool result = true;
     if (establish) {
 	reset();
 	result = sendUFrame(ISDNFrame::SABME,true,true);
-	changeState(WaitEstablish);
+	changeState(WaitEstablish,"multiple frame");
 	timer(true,false);
     }
     else {
 	// Already disconnected: Just notify Layer 3
 	if (state() == Released) {
 	    lock.drop();
-	    multipleFrameReleased(true,false);
+	    if (m_management)
+		m_management->multipleFrameReleased(tei,true,false,this);
+	    else
+		multipleFrameReleased(tei,true,false);
 	    return true;
 	}
 	reset();
 	result = sendUFrame(ISDNFrame::DISC,true,true);
-	changeState(WaitRelease);
+	changeState(WaitRelease,"multiple frame");
 	timer(true,false);
     }
     return result;
 }
 
 // Send data through the HDLC interface
-bool ISDNQ921::sendData(const DataBlock& data, bool ack)
+bool ISDNQ921::sendData(const DataBlock& data, u_int8_t tei, bool ack)
 {
-    Lock lock(m_layer);
-    if (!(data.length() && teiAssigned()))
+    if (data.null())
 	return false;
+    Lock lock(l2Mutex());
     if (ack) {
-	if (state() == Released || m_window.full())
+	if (localTei() != tei || !teiAssigned() || state() == Released || m_window.full())
 	    return false;
 	// Enqueue and send outgoing data
-	ISDNFrame* f = new ISDNFrame(true,network(),sapi(),tei(),false,data);
+	ISDNFrame* f = new ISDNFrame(true,network(),localSapi(),localTei(),false,data);
 	// Update frame send seq number. Inc our send seq number and window counter
 	f->update(&m_vs,0);
 	Modulo128::inc(m_vs);
 	m_window.inc();
 	// Append and try to send frame
 	m_outFrames.append(f);
-	DDebug(this,DebugAll,
-	    "Enqueued data frame (%p). Sequence number: %u",f,f->ns());
+	XDebug(this,DebugAll,"Enqueued data frame (%p). Sequence number: %u",f,f->ns());
 	sendOutgoingData();
 	return true;
     }
     // Unacknowledged data request
-    if (!allowUnack())
+    if (tei != Q921_TEI_BROADCAST) {
+	Debug(this,DebugInfo,"Not sending unacknowledged data with TEI %u [%p]",tei,this);
 	return false;
+    }
     // P/F bit is always false for UI frames. See Q.921 5.2.2
-    ISDNFrame* f = new ISDNFrame(false,network(),sapi(),tei(),false,data);
+    ISDNFrame* f = new ISDNFrame(false,network(),localSapi(),localTei(),false,data);
     bool result = sendFrame(f);
-    f->deref();
+    TelEngine::destruct(f);
     return result;
 }
 
 // Send DISC. Reset data
 void ISDNQ921::cleanup()
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     DDebug(this,DebugAll,"Cleanup in state '%s'",stateName(state()));
     // Don't send DISC if we are disconnected or waiting to become disconnected
     if (state() == Established)
 	sendUFrame(ISDNFrame::DISC,true,true);
     reset();
-    changeState(Released);
+    changeState(Released,"cleanup");
 }
 
-void* ISDNQ921::getObject(const String& name) const
-{
-    if (name == "ISDNQ921")
-	return (void*)this;
-    return 0;
-}
+YCLASSIMP2(ISDNQ921,ISDNLayer2,SignallingReceiver)
 
 // Method called periodically to check timeouts
 // Re-sync with remote peer if necessary
 void ISDNQ921::timerTick(const Time& when)
 {
-    Lock lock(m_layer);
+    // If possible return early without locking
+    if (state() == Released)
+	return;
+    Lock lock(l2Mutex());
+    // Check state again after locking, to be sure it didn't change
     if (state() == Released)
 	return;
     // T200 not started
@@ -279,13 +290,12 @@ void ISDNQ921::timerTick(const Time& when)
     // Q.921 5.6.7: Timeout
     // Done all retransmissions ?
     if (m_n200.full()) {
-	DDebug(this,DebugNote,"Timeout. Link is down");
 	reset();
-	changeState(Released);
+	changeState(Released,"timeout");
 	lock.drop();
-	multipleFrameReleased(false,true);
+	multipleFrameReleased(localTei(),false,true);
 	if (autoRestart())
-	    multipleFrame(true,false);
+	    multipleFrame(localTei(),true,false);
 	return;
     }
     // Waiting to establish/release ?
@@ -317,27 +327,31 @@ void ISDNQ921::timerTick(const Time& when)
 // Parse data. Validate received frame and process it
 bool ISDNQ921::receivedPacket(const DataBlock& packet)
 {
-    if (!packet.length())
-	return false;
-    Lock lock(m_layer);
-    XDebug(this,DebugAll,"Received packet (Length: %u)",packet.length());
-    ISDNFrame* frame = ISDNFrame::parse(packet,this);
-    if (!frame) {
-	if (!m_errorReceive)
-	    Debug(this,DebugNote,"Received short data (Length: %u)",packet.length());
-	m_errorReceive = true;
+    ISDNFrame* f = parsePacket(packet);
+    if (!f) {
+	if (!m_errorReceive) {
+	    m_errorReceive = true;
+	    Debug(this,DebugNote,"Received invalid packet with length %u [%p]",packet.length(),this);
+	}
 	return false;
     }
     m_errorReceive = false;
     // Print & dump
     if (debugAt(DebugInfo) && m_printFrames) {
 	String tmp;
-	frame->toString(tmp,m_extendedDebug);
-	Debug(this,DebugInfo,"Received frame (%p):%s",frame,tmp.c_str());
+	f->toString(tmp,m_extendedDebug);
+	Debug(this,DebugInfo,"Received frame (%p):%s",f,tmp.c_str());
     }
-    if (frame->type() < ISDNFrame::Invalid)
-	dump(frame->buffer(),false);
-    // Accept
+    if (f->type() < ISDNFrame::Invalid)
+	dump(f->buffer(),false);
+    return receivedFrame(f);
+}
+
+bool ISDNQ921::receivedFrame(ISDNFrame* frame)
+{
+    if (!frame)
+	return false;
+    Lock lock(l2Mutex());
     bool reject = false;
     // Not accepted:
     // If not rejected, for out of range sequence number send
@@ -355,22 +369,22 @@ bool ISDNQ921::receivedPacket(const DataBlock& packet)
 		else
 		    sendSFrame(ISDNFrame::RR,false,frame->poll());
 	    }
-	    frame->deref();
+	    TelEngine::destruct(frame);
 	    return true;
 	}
 	// Unrecoverable error: re-establish
-	Debug(this,DebugNote,"Rejected frame (%p): %s. Reason: '%s'. Restarting",
-	    frame,frame->name(),ISDNFrame::typeName(frame->error()));
-	frame->deref();
+	Debug(this,DebugNote,"Rejected %s frame %p, reason: '%s'. Restarting",
+	    frame->name(),frame,ISDNFrame::typeName(frame->error()));
+	TelEngine::destruct(frame);
 	reset();
-	changeState(WaitEstablish);
+	changeState(WaitEstablish,"received frame");
 	sendUFrame(ISDNFrame::SABME,true,true);
 	timer(true,false);
 	return true;
     }
     // Process
-    XDebug(this,DebugAll,"Process frame (%p): '%s' in state '%s'",
-	frame,frame->name(),ISDNLayer2::stateName(state()));
+    XDebug(this,DebugAll,"Process %s frame %p in state '%s'",
+	frame->name(),frame,ISDNLayer2::stateName(state()));
     bool chgState = false, confirmation = false;
     State newState;
     if (frame->category() == ISDNFrame::Data) {
@@ -379,7 +393,7 @@ bool ISDNQ921::receivedPacket(const DataBlock& packet)
 	    DataBlock tmp;
 	    frame->getData(tmp);
 	    lock.drop();
-	    receiveData(tmp,ack);
+	    receiveData(tmp,localTei());
 	}
 	frame->deref();
 	return true;
@@ -397,21 +411,27 @@ bool ISDNQ921::receivedPacket(const DataBlock& packet)
     }
     else
 	chgState = processUFrame(frame,newState,confirmation);
-    frame->deref();
+    TelEngine::destruct(frame);
     // Change state ?
     if (!chgState)
 	return true;
     reset();
-    changeState(newState);
+    changeState(newState,"received frame");
     switch (newState) {
 	case Established:
 	    timer(false,true);
 	    lock.drop();
-	    multipleFrameEstablished(confirmation,false);
+	    if (m_management)
+		m_management->multipleFrameEstablished(localTei(),confirmation,false,this);
+	    else
+		multipleFrameEstablished(localTei(),confirmation,false);
 	    break;
 	case Released:
 	    lock.drop();
-	    multipleFrameReleased(confirmation,false);
+	    if (m_management)
+		m_management->multipleFrameReleased(localTei(),confirmation,false,this);
+	    else
+		multipleFrameReleased(localTei(),confirmation,false);
 	    break;
 	case WaitEstablish:
 	    sendUFrame(ISDNFrame::SABME,true,true);
@@ -428,7 +448,7 @@ bool ISDNQ921::receivedPacket(const DataBlock& packet)
 // Process a notification generated by the attached interface
 bool ISDNQ921::notify(SignallingInterface::Notification event)
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     if (event != SignallingInterface::LinkUp)
 	m_hwErrors++;
     else {
@@ -440,16 +460,20 @@ bool ISDNQ921::notify(SignallingInterface::Notification event)
 	Debug(this,DebugWarn,"Received notification %u: '%s'",
 	    event,lookup(event,SignallingInterface::s_notifName));
 	reset();
-	changeState(Released);
+	changeState(Released,"interface down");
 	lock.drop();
-	multipleFrameReleased(false,false);
+	multipleFrameReleased(localTei(),false,false);
+	if (m_management && !network()) {
+	    teiAssigned(false);
+	    setRi(0);
+	}
 	if (autoRestart())
-	    multipleFrame(true,false);
+	    multipleFrame(localTei(),true,false);
 	return true;
     }
 #ifdef DEBUG
     if (!(m_hwErrors % 250))
-	DDebug(this,DebugNote,"Received notification %u: '%s'. Total=%u",
+	Debug(this,DebugNote,"Received notification %u: '%s'. Total=%u",
 	    event,lookup(event,SignallingInterface::s_notifName,"Undefined"),m_hwErrors);
 #endif
     return true;
@@ -458,8 +482,8 @@ bool ISDNQ921::notify(SignallingInterface::Notification event)
 // Reset data
 void ISDNQ921::reset()
 {
-    Lock lock(m_layer);
-    XDebug(this,DebugAll,"Reset");
+    Lock lock(l2Mutex());
+    XDebug(this,DebugAll,"Reset, total frames: %d [%p]",m_outFrames.count(),this);
     m_remoteBusy = false;
     m_timerRecovery = false;
     m_rejectSent = false;
@@ -487,7 +511,7 @@ bool ISDNQ921::ackOutgoingFrames(const ISDNFrame* frame)
 	    break;
 	}
 	ack = true;
-	DDebug(this,DebugAll,
+	XDebug(this,DebugAll,
 	    "Remove acknowledged data frame (%p). Sequence number: %u",f,f->ns());
 	m_window.dec();
 	m_outFrames.remove(f,true);
@@ -508,24 +532,14 @@ bool ISDNQ921::ackOutgoingFrames(const ISDNFrame* frame)
 // Ack pending outgoing data and confirm (by sending any pending data or an RR confirmation)
 bool ISDNQ921::processDataFrame(const ISDNFrame* frame, bool ack)
 {
-    const char* reason = 0;
-    // State or configuration allow receiving data ?
-    if (ack) {
-	if (state() != Established)
-	    reason = s_noState;
-    }
-    else {
-	if (!allowUnack())
-	    reason = s_noCfg;
-    }
-    if (reason) {
-	dropFrame(frame,reason);
-	return false;
-    }
-    // Done for unacknowledged (UI frame) data
+    // Always accept UI
     if (!ack)
 	return true;
-    // Acknoledged data
+    // Acknowledged data: accept only when established
+    if (state() != Established) {
+	dropFrame(frame,s_noState);
+	return false;
+    }
     m_rejectSent = false;
     m_remoteBusy = false;
     m_vr = frame->ns();
@@ -553,6 +567,9 @@ bool ISDNQ921::processDataFrame(const ISDNFrame* frame, bool ack)
 // RNR   Adjust send frame counter if necessary
 bool ISDNQ921::processSFrame(const ISDNFrame* frame)
 {
+    if (!frame)
+	return false;
+    Lock lock(l2Mutex());
     if (state() != Established) {
 	dropFrame(frame,s_noState);
 	return false;
@@ -735,7 +752,7 @@ bool ISDNQ921::acceptFrame(ISDNFrame* frame, bool& reject)
     // Check frame only if it's not already invalid
     for (; frame->error() < ISDNFrame::Invalid;) {
 	// Check SAPI/TEI
-	if (frame->sapi() != sapi() || frame->tei() != tei()) {
+	if (frame->sapi() != localSapi() || frame->tei() != localTei()) {
 	    frame->m_error = ISDNFrame::ErrInvalidAddress;
 	    break;
 	}
@@ -816,10 +833,10 @@ bool ISDNQ921::sendUFrame(ISDNFrame::Type type, bool command, bool pf,
     }
     // Create and send frame
     // U frames don't have an N(R) control data
-    ISDNFrame* f = new ISDNFrame(type,command,network(),sapi(),tei(),pf);
+    ISDNFrame* f = new ISDNFrame(type,command,network(),localSapi(),localTei(),pf);
     f->sent(retrans);
     bool result = sendFrame(f);
-    f->deref();
+    TelEngine::destruct(f);
     return result;
 }
 
@@ -831,9 +848,9 @@ bool ISDNQ921::sendSFrame(ISDNFrame::Type type, bool command, bool pf)
 	type == ISDNFrame::REJ))
 	return false;
     // Create and send frame
-    ISDNFrame* f = new ISDNFrame(type,command,network(),sapi(),tei(),pf,m_vr);
+    ISDNFrame* f = new ISDNFrame(type,command,network(),localSapi(),localTei(),pf,m_vr);
     bool result = sendFrame(f);
-    f->deref();
+    TelEngine::destruct(f);
     return result;
 }
 
@@ -848,14 +865,14 @@ bool ISDNQ921::sendFrame(const ISDNFrame* frame)
 	return false;
     }
     // Print frame
-    if (debugAt(DebugInfo) && m_printFrames && !m_errorSend) {
+    if (debugAt(DebugInfo) && m_printFrames && !m_errorSend && frame->type() != ISDNFrame::UI) {
 	String tmp;
 	frame->toString(tmp,m_extendedDebug);
 	Debug(this,DebugInfo,"Sending frame (%p):%s",
 	    frame,tmp.c_str());
     }
-    bool result = SignallingReceiver::transmitPacket(frame->buffer(),
-	false,SignallingInterface::Q921);
+    bool result = m_management ? m_management->sendFrame(frame,this) :
+	SignallingReceiver::transmitPacket(frame->buffer(),false,SignallingInterface::Q921);
     // Dump frame if no error and we have a dumper
     if (result) {
 	m_txFrames++;
@@ -949,14 +966,430 @@ void ISDNQ921::timer(bool start, bool t203, u_int64_t time)
 }
 
 /**
+ * ISDNQ921Management
+ */
+// Constructor
+ISDNQ921Management::ISDNQ921Management(const NamedList& params, const char* name, bool net)
+    : ISDNLayer2(params,name),
+      SignallingReceiver(name),
+      SignallingDumpable(SignallingDumper::Q921,network()),
+      m_teiManTimer(0), m_teiTimer(0)
+{
+    String baseName = params.getValue("debugname",name);
+    setName(baseName);
+    m_network = net;
+    m_teiManTimer.interval(params,"t202",2500,2600,false);
+    m_teiTimer.interval(params,"t201",1000,5000,false);
+    setDumper(params.getValue("layer2dump"));
+    bool set0 = true;
+    if (baseName.endsWith("Management")) {
+	baseName = baseName.substr(0,baseName.length()-10);
+	set0 = false;
+    }
+    // If we are NET create one ISDNQ921 for each possible TEI
+    for (int i = 0; i < 127; i++) {
+	if (network() || (i == 0)) {
+	    String qName = baseName;
+	    if (set0 || (i != 0))
+		qName << "-" << i;
+	    m_layer2[i] = new ISDNQ921(params,qName,this,i);
+	    m_layer2[i]->ISDNLayer2::attach(this);
+	}
+	else
+	    m_layer2[i] = 0;
+    }
+    if (!network()) {
+	m_layer2[0]->teiAssigned(false);
+	m_teiManTimer.start();
+    }
+}
+
+ISDNQ921Management::~ISDNQ921Management()
+{
+    Lock lock(l2Mutex());
+    ISDNLayer2::attach((ISDNLayer3*)0);
+    SignallingReceiver::attach(0);
+    for (int i = 0; i < 127; i++)
+	TelEngine::destruct(m_layer2[i]);
+}
+
+YCLASSIMP3(ISDNQ921Management,ISDNLayer2,ISDNLayer3,SignallingReceiver)
+
+void ISDNQ921Management::engine(SignallingEngine* eng)
+{
+    SignallingComponent::engine(eng);
+    for (int i = 0; i < 127; i++)
+	if (m_layer2[i])
+	    m_layer2[i]->engine(eng);
+}
+
+void ISDNQ921Management::cleanup()
+{
+    Lock lock(l2Mutex());
+    for (int i = 0;i < 127; i++)
+	if (m_layer2[i])
+	    m_layer2[i]->cleanup();
+}
+
+bool ISDNQ921Management::multipleFrame(u_int8_t tei, bool establish, bool force)
+{
+    if (tei >= 127)
+	return false;
+    m_sapi = Q921_SAPI_MANAGEMENT;
+    l2Mutex().lock();
+    RefPointer<ISDNQ921> q921 = m_layer2[network() ? tei : 0];
+    l2Mutex().unlock();
+    return q921 && q921->multipleFrame(tei,establish,force);
+}
+
+bool ISDNQ921Management::sendFrame(const ISDNFrame* frame, const ISDNQ921* q921)
+{
+    if (!frame)
+	return false;
+    Lock lock(l2Mutex());
+    if (SignallingReceiver::transmitPacket(frame->buffer(),false,SignallingInterface::Q921)) {
+	dump(frame->buffer(),true);
+	return true;
+    }
+    return false;
+}
+
+bool ISDNQ921Management::sendData(const DataBlock& data, u_int8_t tei, bool ack)
+{
+    if (tei > Q921_TEI_BROADCAST)
+	return false;
+    if (tei == Q921_TEI_BROADCAST)
+	ack = false;
+    int auxTei = tei;
+
+    Lock lock(l2Mutex());
+    if (!network()) {
+       if (m_layer2[0] && m_layer2[0]->teiAssigned())
+           auxTei = 0;
+       else
+           return false;
+    }
+    if (ack)
+       return m_layer2[auxTei] && m_layer2[auxTei]->sendData(data,tei,true);
+
+    // P/F bit is always false for UI frames. See Q.921 5.2.2
+    ISDNFrame* f = new ISDNFrame(false,network(),0,tei,false,data);
+    bool ok = sendFrame(f);
+    lock.drop();
+    TelEngine::destruct(f);
+    return ok;
+}
+
+void ISDNQ921Management::multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> l3 = m_layer3;
+    m_layer3Mutex.unlock();
+    if (l3)
+	l3->multipleFrameEstablished(tei,confirm,timeout,layer2);
+    else
+	Debug(this,DebugNote,"'Established' notification. No Layer 3 attached");
+}
+
+void ISDNQ921Management::multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> l3 = m_layer3;
+    m_layer3Mutex.unlock();
+    if (l3)
+	l3->multipleFrameReleased(tei,confirm,timeout,layer2);
+    else
+	Debug(this,DebugNote,"'Released' notification. No Layer 3 attached");
+}
+
+void ISDNQ921Management::dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> l3 = m_layer3;
+    m_layer3Mutex.unlock();
+    if (l3)
+	l3->dataLinkState(tei,cmd,value,layer2);
+    else
+	Debug(this,DebugNote,"Data link notification. No Layer 3 attached");
+}
+
+void ISDNQ921Management::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> l3 = m_layer3;
+    m_layer3Mutex.unlock();
+    if (!network()) {
+	l2Mutex().lock();
+	if (m_layer2[0])
+	    tei = m_layer2[0]->localTei();
+	l2Mutex().unlock();
+    }
+    if (l3)
+	l3->receiveData(data,tei,layer2);
+    else
+	Debug(this,DebugNote,"Data received. No Layer 3 attached");
+}
+
+// Process a Signalling Packet received by the interface
+bool ISDNQ921Management::receivedPacket(const DataBlock& packet)
+{
+    Lock lock(l2Mutex());
+    ISDNFrame* frame = parsePacket(packet);
+    if (!frame)
+	return false;
+    if (frame->type() < ISDNFrame::Invalid)
+	dump(frame->buffer(),false);
+    // Non UI frame (even invalid): send it to the appropriate Layer 2
+    if (frame->type() != ISDNFrame::UI) {
+	if (network()) {
+	    if (m_layer2[frame->tei()] && m_layer2[frame->tei()]->m_ri) {
+		lock.drop();
+		return m_layer2[frame->tei()]->receivedFrame(frame);
+	    }
+	    sendTeiManagement(ISDNFrame::TeiRemove,0,frame->tei());
+	    lock.drop();
+	    TelEngine::destruct(frame);
+	    return false;
+	}
+	else if (m_layer2[0] && m_layer2[0]->m_ri && m_layer2[0]->localTei() == frame->tei()) {
+	    lock.drop();
+	    return m_layer2[0]->receivedFrame(frame);
+	}
+	return false;
+    }
+    if (!processTeiManagement(frame)) {
+	DataBlock tmp;
+	frame->getData(tmp);
+	u_int8_t tei = frame->tei();
+	TelEngine::destruct(frame);
+	receiveData(tmp,tei,m_layer2[0]);
+	return true;
+    }
+    // FIXME
+    TelEngine::destruct(frame);
+    return true;
+}
+
+// Periodically called method to take care of timers
+void ISDNQ921Management::timerTick(const Time& when)
+{
+    if (network()) {
+	if (m_teiTimer.started() && m_teiTimer.timeout(when.msec())) {
+	    for (u_int8_t i = 0; i < 127; i++) {
+		if (m_layer2[i] && !m_layer2[i]->m_checked) {
+		    m_layer2[i]->setRi(0);
+		    m_layer2[i]->teiAssigned(false);
+		    multipleFrameReleased(i,false,true,this);
+		}
+	    }
+	    m_teiTimer.stop();
+	}
+    }
+    else if (m_layer2[0]) {
+	if (m_layer2[0]->teiAssigned())
+	    m_teiManTimer.stop();
+	else if (!m_teiManTimer.started())
+	    m_teiManTimer.start();
+	else if (m_teiManTimer.timeout(when.msec())) {
+	    m_teiManTimer.stop();
+	    u_int16_t ri = m_layer2[0]->m_ri;
+	    while (!ri)
+		ri = ::random() & 0xffff;
+	    m_layer2[0]->m_tei = 0;
+	    m_layer2[0]->setRi(ri);
+	    sendTeiManagement(ISDNFrame::TeiReq,ri,Q921_TEI_BROADCAST);
+	}
+    }
+}
+
+// Forward interface notifications to controlled Q.921
+bool ISDNQ921Management::notify(SignallingInterface::Notification event)
+{
+    DDebug(this,DebugInfo,"Received notification %u: '%s'",
+	event,lookup(event,SignallingInterface::s_notifName));
+    for (u_int8_t i = 0; i < 127; i++)
+	if (m_layer2[i])
+	    m_layer2[i]->notify(event);
+    return true;
+}
+
+// Process TEI management frames according to their type
+bool ISDNQ921Management::processTeiManagement(ISDNFrame* frame)
+{
+    if (!frame)
+	return false;
+    if (!frame->checkTeiManagement())
+	return false;
+    DataBlock data;
+    frame->getData(data);
+    u_int8_t ai = ISDNFrame::getAi(data);
+    u_int16_t ri = ISDNFrame::getRi(data);
+    u_int8_t type = ISDNFrame::getType(data);
+    XDebug(this,DebugAll,"Management frame type=0x%02X ri=%u ai=%u",type,ri,ai);
+    switch (type) {
+	case ISDNFrame::TeiReq:
+	    processTeiRequest(ri,ai,frame->poll());
+	    break;
+	case ISDNFrame::TeiRemove:
+	    processTeiRemove(ai);
+	    break;
+	case ISDNFrame::TeiCheckReq:
+	    processTeiCheckRequest(ai,frame->poll());
+	    break;
+	case ISDNFrame::TeiAssigned:
+	    processTeiAssigned(ri,ai);
+	    break;
+	case ISDNFrame::TeiDenied:
+	    processTeiDenied(ri);
+	    break;
+	case ISDNFrame::TeiCheckRsp:
+	    processTeiCheckResponse(ri,ai);
+	    break;
+	case ISDNFrame::TeiVerify:
+	    processTeiVerify(ai,frame->poll());
+	    break;
+	default:
+	    Debug(this,DebugNote,"Unknown management frame type 0x%02X",type);
+    }
+    return true;
+}
+
+// Build and send a TEI management frame
+bool ISDNQ921Management::sendTeiManagement(ISDNFrame::TeiManagement type,
+    u_int16_t ri, u_int8_t ai, u_int8_t tei, bool pf)
+{
+    DataBlock data;
+    if (!ISDNFrame::buildTeiManagement(data,type,ri,ai)) {
+	Debug(this,DebugNote,"Could not build TEI management frame");
+	return false;
+    }
+    ISDNFrame* frame = new ISDNFrame(false,network(),
+	Q921_SAPI_MANAGEMENT,tei,pf,data);
+    bool ok = sendFrame(frame);
+    TelEngine::destruct(frame);
+    return ok;
+}
+
+// We are NET, a CPE has requested a TEI assignment
+void ISDNQ921Management::processTeiRequest(u_int16_t ri, u_int8_t ai, bool pf)
+{
+    if (!network() || !ri)
+	return;
+    if (ai < 127 && m_layer2[ai] && m_layer2[ai]->m_ri == ri) {
+	// TEI already assigned to same reference number, confirm it
+	sendTeiManagement(ISDNFrame::TeiAssigned,ri,ai,Q921_TEI_BROADCAST,pf);
+	return;
+    }
+    u_int8_t i;
+    for (i = 0; i < 127; i++) {
+	if (!m_layer2[i])
+	    continue;
+	if (m_layer2[i]->m_ri == ri) {
+	    // Reference number already used for different TEI
+	    sendTeiManagement(ISDNFrame::TeiDenied,ri,ai,Q921_TEI_BROADCAST,pf);
+	    return;
+	}
+    }
+    for (i = 64; i < 127; i++) {
+	if (m_layer2[i]->m_ri != 0)
+	    continue;
+	// Found a free dynamic TEI slot, assign to given reference number
+	if (sendTeiManagement(ISDNFrame::TeiAssigned,ri,i,Q921_TEI_BROADCAST,pf)) {
+	    m_layer2[i]->setRi(ri);
+	    m_layer2[i]->reset();
+	}
+	return;
+    }
+    // All dynamic TEI slots are in use, deny new request
+    sendTeiManagement(ISDNFrame::TeiDenied,ri,Q921_TEI_BROADCAST,pf);
+    m_teiTimer.stop();
+    // Mark all dynamic TEI slots as not checked and ask them to check
+    for (i = 64; i < 127; i++)
+	if (m_layer2[i])
+	    m_layer2[i]->m_checked = false;
+    sendTeiManagement(ISDNFrame::TeiCheckReq,0,Q921_TEI_BROADCAST);
+    m_teiTimer.start();
+}
+
+// We are CPE, NET asked us to remove our TEI
+void ISDNQ921Management::processTeiRemove(u_int8_t ai)
+{
+    if (network())
+	return;
+    u_int8_t tei = m_layer2[0]->localTei();
+    if ((ai == tei) || (ai == Q921_TEI_BROADCAST && tei >= 64)) {
+	Debug(this,((tei < 64) ? DebugMild : DebugInfo),"Removing our TEI %u",tei);
+	m_layer2[0]->teiAssigned(false);
+	m_layer2[0]->setRi(0);
+	multipleFrameReleased(ai,false,false,this);
+	m_teiManTimer.start();
+    }
+}
+
+// We are CPE, NET is checking our TEI
+void ISDNQ921Management::processTeiCheckRequest(u_int8_t ai, bool pf)
+{
+    if (network())
+	return;
+    if (m_layer2[0]->m_ri && ((ai == Q921_TEI_BROADCAST) || (ai == m_layer2[0]->localTei())))
+	sendTeiManagement(ISDNFrame::TeiCheckRsp,m_layer2[0]->m_ri,ai,Q921_TEI_BROADCAST,pf);
+}
+
+// We are NET and received a TEI check response to our request
+void ISDNQ921Management::processTeiCheckResponse(u_int16_t ri, u_int8_t ai)
+{
+    if (!network())
+	return;
+    if ((ai >= 127) || !m_layer2[ai])
+	return;
+    if (m_layer2[ai]->m_ri == ri)
+	m_layer2[ai]->m_checked = true;
+    else if (sendTeiManagement(ISDNFrame::TeiRemove,ri,ai))
+	m_layer2[ai]->setRi(0);
+}
+
+// We are CPE and the NET assigned a TEI, possibly to us
+void ISDNQ921Management::processTeiAssigned(u_int16_t ri, u_int8_t ai)
+{
+    if (network())
+	return;
+    if (m_layer2[0]->m_ri != ri)
+	return;
+    m_teiManTimer.stop();
+    m_layer2[0]->m_tei = ai;
+    m_layer2[0]->teiAssigned(true);
+    multipleFrame(ai,true,true);
+}
+
+// We are CPE and the NET denied assigning a TEI, possibly to us
+void ISDNQ921Management::processTeiDenied(u_int16_t ri)
+{
+    if (network())
+	return;
+    if (m_layer2[0]->m_ri != ri)
+	return;
+    m_layer2[0]->setRi(0);
+    m_teiManTimer.start();
+}
+
+// We are NET, a CPE is asking to be verified
+void ISDNQ921Management::processTeiVerify(u_int8_t ai, bool pf)
+{
+    if (!network())
+	return;
+    if ((ai < 127) && m_layer2[ai] && m_layer2[ai]->m_ri)
+	sendTeiManagement(ISDNFrame::TeiCheckReq,0,ai,Q921_TEI_BROADCAST,pf);
+}
+
+
+/**
  * ISDNQ921Passive
  */
 // Constructor. Set data members. Print them
 ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
     : ISDNLayer2(params,name),
-      SignallingReceiver(),
-      SignallingDumpable(SignallingDumper::Q921),
-      m_layer(true),
+      SignallingReceiver(name),
+      SignallingDumpable(SignallingDumper::Q921,network()),
       m_checkLinkSide(false),
       m_idleTimer(0),
       m_lastFrame(255),
@@ -973,7 +1406,7 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
     m_checkLinkSide = detectType();
     setDebug(params.getBoolValue("print-frames",false),
 	params.getBoolValue("extended-debug",false));
-    Debug(this,DebugInfo,
+    DDebug(this,DebugInfo,
 	"ISDN Passive Data Link type=%s autodetect=%s idle-timeout=%u [%p]",
 	linkSide(network()),String::boolText(detectType()),
 	(unsigned int)m_idleTimer.interval(),this);
@@ -986,37 +1419,30 @@ ISDNQ921Passive::ISDNQ921Passive(const NamedList& params, const char* name)
 // Destructor
 ISDNQ921Passive::~ISDNQ921Passive()
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     ISDNLayer2::attach(0);
     SignallingReceiver::attach(0);
     cleanup();
-    if (debugAt(DebugAll))
-	Debug(this,DebugAll,
-	    "ISDN Passive Data Link destroyed. Frames: recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
-	    (unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
-	    (unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
+    DDebug(this,DebugAll,
+	"ISDN Passive Data Link destroyed. Frames: recv=%u rejected=%u dropped=%u. HW errors=%u [%p]",
+	(unsigned int)m_rxFrames,(unsigned int)m_rxRejectedFrames,
+	(unsigned int)m_rxDroppedFrames,(unsigned int)m_hwErrors,this);
 }
 
 // Reset data
 void ISDNQ921Passive::cleanup()
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     m_idleTimer.start();
 }
 
-// Get data members pointers
-void* ISDNQ921Passive::getObject(const String& name) const
-{
-    if (name == "ISDNQ921Passive")
-	return (void*)this;
-    return 0;
-}
+YCLASSIMP2(ISDNQ921Passive,ISDNLayer2,SignallingReceiver)
 
 // Called periodically by the engine to check timeouts
 // Check idle timer. Notify upper layer on timeout
 void ISDNQ921Passive::timerTick(const Time& when)
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     if (!m_idleTimer.timeout(when.msec()))
 	return;
     // Timeout. Notify layer 3. Restart timer
@@ -1031,12 +1457,12 @@ bool ISDNQ921Passive::receivedPacket(const DataBlock& packet)
 {
     if (!packet.length())
 	return false;
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     XDebug(this,DebugAll,"Received packet (Length: %u)",packet.length());
-    ISDNFrame* frame = ISDNFrame::parse(packet,this);
+    ISDNFrame* frame = parsePacket(packet);
     if (!frame) {
 	if (!m_errorReceive)
-	    Debug(this,DebugNote,"Received short data (Length: %u)",packet.length());
+	    Debug(this,DebugNote,"Received invalid frame (Length: %u)",packet.length());
 	m_errorReceive = true;
 	return false;
     }
@@ -1062,20 +1488,20 @@ bool ISDNQ921Passive::receivedPacket(const DataBlock& packet)
 		DataBlock tmp;
 		frame->getData(tmp);
 		m_lastFrame = frame->ns();
-		receiveData(tmp,frame->type() == ISDNFrame::I);
+		receiveData(tmp,localTei());
 	    }
 	}
 	else
-	    dataLinkState(cmd,value);
+	    dataLinkState(localTei(),cmd,value);
     }
-    frame->deref();
+    TelEngine::destruct(frame);
     return true;
 }
 
 // Process a notification generated by the attached interface
 bool ISDNQ921Passive::notify(SignallingInterface::Notification event)
 {
-    Lock lock(m_layer);
+    Lock lock(l2Mutex());
     if (event != SignallingInterface::LinkUp)
 	m_hwErrors++;
     else {
@@ -1105,7 +1531,7 @@ bool ISDNQ921Passive::acceptFrame(ISDNFrame* frame, bool& cmd, bool& value)
     if (frame->error() >= ISDNFrame::Invalid)
 	return dropFrame(frame);
     // Check SAPI/TEI
-    if (frame->sapi() != sapi() || frame->tei() != tei())
+    if (frame->sapi() != localSapi() || frame->tei() != localTei())
 	return dropFrame(frame,ISDNFrame::typeName(ISDNFrame::ErrInvalidAddress));
     // Valid UI/I
     if (frame->category() == ISDNFrame::Data)
@@ -1168,31 +1594,30 @@ TokenDict ISDNLayer2::m_states[] = {
 	{0,0}
 	};
 
-ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name)
+ISDNLayer2::ISDNLayer2(const NamedList& params, const char* name, u_int8_t tei)
     : SignallingComponent(name),
       m_layer3(0),
-      m_interfaceMutex(true),
+      m_layerMutex(true),
       m_layer3Mutex(true),
       m_state(Released),
       m_network(false),
       m_detectType(false),
       m_sapi(0),
       m_tei(0),
+      m_ri(0),
+      m_checked(false),
       m_teiAssigned(false),
-      m_allowUnack(false),
       m_autoRestart(true),
       m_maxUserData(260)
 {
-    setName(params.getValue("debugname",name));
-    XDebug(this,DebugAll,"ISDNLayer2");
+    XDebug(this,DebugAll,"ISDNLayer2 '%s' comp=%p [%p]",name,static_cast<const SignallingComponent*>(this),this);
     m_network = params.getBoolValue("network",false);
     m_detectType = params.getBoolValue("detect",false);
     int tmp = params.getIntValue("sapi",0);
-    m_sapi = (tmp  >= 0 && tmp <= 63) ? tmp : 0;
-    tmp = params.getIntValue("tei",0);
-    m_tei = (tmp  >= 0 && tmp <= 127) ? tmp : 0;
+    m_sapi = (tmp >= 0 && tmp <= Q921_SAPI_MANAGEMENT) ? tmp : 0;
+    tmp = params.getIntValue("tei",tei);
+    m_tei = (tmp >= 0 && tmp < Q921_TEI_BROADCAST) ? tmp : 0;
     teiAssigned(true);
-    m_allowUnack = params.getBoolValue("allow-unack",false);
     m_autoRestart = params.getBoolValue("auto-restart",true);
     m_maxUserData = params.getIntValue("maxuserdata",260);
     if (!m_maxUserData)
@@ -1223,43 +1648,68 @@ void ISDNLayer2::attach(ISDNLayer3* layer3)
 	    name = tmp->toString().safe();
 	    tmp->attach(0);
 	}
-	Debug(this,DebugAll,"Detached L3 (%p,'%s') [%p]",tmp,name,this);
+	DDebug(this,DebugAll,"Detached L3 (%p,'%s') [%p]",tmp,name,this);
     }
     if (!layer3)
 	return;
-    Debug(this,DebugAll,"Attached L3 (%p,'%s') [%p]",layer3,layer3->toString().safe(),this);
+    DDebug(this,DebugAll,"Attached L3 (%p,'%s') [%p]",layer3,layer3->toString().safe(),this);
     insert(layer3);
     layer3->attach(this);
 }
 
+// Parse a received packet, create a frame from it
+ISDNFrame* ISDNLayer2::parsePacket(const DataBlock& packet)
+{
+    if (packet.null())
+	return 0;
+    Lock lock(m_layerMutex);
+    ISDNFrame* frame = ISDNFrame::parse(packet,this);
+#ifdef XDEBUG
+    if (frame) {
+	if (debugAt(DebugAll)) {
+	    String tmp;
+	    frame->toString(tmp,true);
+	    Debug(this,DebugInfo,"Parsed frame (%p):%s",frame,tmp.c_str());
+	}
+    }
+    else
+	Debug(this,DebugWarn,"Packet with length %u invalid [%p]",packet.length(),this);
+#endif
+    return frame;
+}
+
 // Indication/confirmation of 'multiple frame acknowledged' mode established
-void ISDNLayer2::multipleFrameEstablished(bool confirmation, bool timeout)
-{
-    Lock lock(m_layer3Mutex);
-    if (m_layer3)
-	m_layer3->multipleFrameEstablished(confirmation,timeout,this);
-    else
-	Debug(this,DebugNote,"'Established' notification. No Layer 3 attached");
-}
-
-// Indication/confirmation of 'multiple frame acknowledged' mode released
-void ISDNLayer2::multipleFrameReleased(bool confirmation, bool timeout)
-{
-    Lock lock(m_layer3Mutex);
-    if (m_layer3)
-	m_layer3->multipleFrameReleased(confirmation,timeout,this);
-    else
-	Debug(this,DebugNote,"'Released' notification. No Layer 3 attached");
-}
-
-// Data link state change command/response
-void ISDNLayer2::dataLinkState(bool cmd, bool value)
+void ISDNLayer2::multipleFrameEstablished(u_int8_t tei, bool confirmation, bool timeout)
 {
     m_layer3Mutex.lock();
     RefPointer<ISDNLayer3> tmp = m_layer3;
     m_layer3Mutex.unlock();
     if (tmp)
-	tmp->dataLinkState(cmd,value,this);
+	tmp->multipleFrameEstablished(tei,confirmation,timeout,this);
+    else
+	Debug(this,DebugNote,"'Established' notification. No Layer 3 attached");
+}
+
+// Indication/confirmation of 'multiple frame acknowledged' mode released
+void ISDNLayer2::multipleFrameReleased(u_int8_t tei, bool confirmation, bool timeout)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> tmp = m_layer3;
+    m_layer3Mutex.unlock();
+    if (tmp)
+	tmp->multipleFrameReleased(tei,confirmation,timeout,this);
+    else
+	Debug(this,DebugNote,"'Released' notification. No Layer 3 attached");
+}
+
+// Data link state change command/response
+void ISDNLayer2::dataLinkState(u_int8_t tei, bool cmd, bool value)
+{
+    m_layer3Mutex.lock();
+    RefPointer<ISDNLayer3> tmp = m_layer3;
+    m_layer3Mutex.unlock();
+    if (tmp)
+	tmp->dataLinkState(tei,cmd,value,this);
     else
 	Debug(this,DebugNote,"Data link notification. No Layer 3 attached");
 }
@@ -1277,13 +1727,13 @@ void ISDNLayer2::idleTimeout()
 }
 
 // Indication of received data
-void ISDNLayer2::receiveData(const DataBlock& data, bool ack)
+void ISDNLayer2::receiveData(const DataBlock& data, u_int8_t tei)
 {
     m_layer3Mutex.lock();
     RefPointer<ISDNLayer3> tmp = m_layer3;
     m_layer3Mutex.unlock();
     if (tmp)
-	tmp->receiveData(data,ack,this);
+	tmp->receiveData(data,tei,this);
     else
 	Debug(this,DebugNote,"Data received. No Layer 3 attached");
 }
@@ -1291,34 +1741,35 @@ void ISDNLayer2::receiveData(const DataBlock& data, bool ack)
 // Change TEI ASSIGNED state
 void ISDNLayer2::teiAssigned(bool status)
 {
-    Lock lock(m_interfaceMutex);
+    Lock lock(m_layerMutex);
     if (m_teiAssigned == status)
 	return;
     m_teiAssigned = status;
-    XDebug(this,DebugAll,"%s 'TEI assigned' state",
+    DDebug(this,DebugAll,"%s 'TEI assigned' state",
 	m_teiAssigned ? "Enter" : "Exit from");
     if (!m_teiAssigned)
 	cleanup();
 }
 
 // Change the data link status while in TEI ASSIGNED state
-void ISDNLayer2::changeState(State newState)
+void ISDNLayer2::changeState(State newState, const char* reason)
 {
-    Lock lock(m_interfaceMutex);
-    if (!m_teiAssigned)
-	return;
+    Lock lock(m_layerMutex);
     if (m_state == newState)
 	return;
-    DDebug(this,DebugInfo,"Changing state from '%s' to '%s'",
-	stateName(m_state),stateName(newState));
+    if (!m_teiAssigned && (newState != Released))
+	return;
+    DDebug(this,DebugInfo,"Changing state from '%s' to '%s'%s%s%s",
+	stateName(m_state),stateName(newState),
+	(reason ? " (" : ""),c_safe(reason),(reason ? ")" : ""));
     m_state = newState;
 }
 
 // Change the interface type
 bool ISDNLayer2::changeType()
 {
-    Lock lock(m_interfaceMutex);
-    DDebug(this,DebugNote,"Interface type changed from '%s' to '%s'",
+    Lock lock(m_layerMutex);
+    Debug(this,DebugNote,"Interface type changed from '%s' to '%s'",
 	linkSide(m_network),linkSide(!m_network));
     m_network = !m_network;
     return true;
@@ -1681,6 +2132,30 @@ ISDNFrame* ISDNFrame::parse(const DataBlock& data, ISDNLayer2* receiver)
     frame->m_buffer = data;
     frame->m_dataLength = data.length() - frame->m_headerLength;
     return frame;
+}
+
+// Get the Reference number from a frame data block
+u_int16_t ISDNFrame::getRi(const DataBlock& data)
+{
+    int i = data.at(2);
+    if (i < 0)
+	return 0;
+    return (u_int16_t)((data.at(1) << 8) | i);
+}
+
+// Build a TEI management message buffer
+bool ISDNFrame::buildTeiManagement(DataBlock& data, u_int8_t type, u_int16_t ri, u_int8_t ai)
+{
+    u_int8_t d[5] = { Q921_MANAGEMENT_TEI, (ri >> 8) & 0xff, ri & 0xff, type, (ai << 1) | 1 };
+    data.assign(d,5);
+    return true;
+}
+
+// Check if a message buffer holds a TEI management frame
+bool ISDNFrame::checkTeiManagement() const
+{
+    const u_int8_t* d = m_buffer.data(m_headerLength);
+    return (d && (type() == UI) && (m_dataLength >= 5) && (d[0] == Q921_MANAGEMENT_TEI));
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

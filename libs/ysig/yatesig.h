@@ -115,6 +115,7 @@ class ISDNLayer3;                        // Abstract ISDN layer 3 (Q.931) messag
 class ISDNFrame;                         // An ISDN Q.921 frame
 class ISDNQ921;                          // ISDN Q.921 implementation on top of a hardware interface
 class ISDNQ921Passive;                   // Stateless ISDN Q.921 implementation on top of a hardware interface
+class ISDNQ921Management;                // ISDN Layer 2 BRI TEI management or PRI with D-channel(s) backup
 class ISDNIUA;                           // SIGTRAN ISDN Q.921 User Adaptation Layer
 class ISDNQ931IE;                        // A Q.931 ISDN Layer 3 message Information Element
 class ISDNQ931Message;                   // A Q.931 ISDN Layer 3 message
@@ -170,8 +171,9 @@ public:
     /**
      * Constructor
      * @param type Type of the output desired
+     * @param network True if we are the network side of the link
      */
-    SignallingDumper(Type type = Hexa);
+    SignallingDumper(Type type = Hexa, bool network = false);
 
     /**
      * Destructor, closes the output
@@ -184,6 +186,13 @@ public:
      */
     inline Type type() const
 	{ return m_type; }
+
+    /**
+     * Get the network side flag
+     * @return True if we are the network side
+     */
+    inline bool network() const
+	{ return m_network; }
 
     /**
      * Check if the dumper is active
@@ -228,25 +237,28 @@ public:
      * @param dbg DebugEnabler requesting the operation (used for debug message on failure)
      * @param filename The file name to use
      * @param type The dumper type
+     * @param network True to create a network side dumper
      * @param create True to create the file if doesn't exist
      * @param append Append to an existing file. If false and the file already exists, it will be truncated
      * @return SignallingDumper pointer on success, 0 on failure
      */
     static SignallingDumper* create(DebugEnabler* dbg, const char* filename, Type type,
-	bool create = true, bool append = false);
+	bool network = false, bool create = true, bool append = false);
 
     /**
      * Create a dumper from an already existing stream
      * @param stream Stream to use for output, will be owned by dumper
      * @param type The dumper type
+     * @param network True to create a network side dumper
      * @param writeHeader True to write the header (if any) at start of stream
      * @return SignallingDumper pointer on success, 0 on failure
      */
-    static SignallingDumper* create(Stream* stream, Type type, bool writeHeader = true);
+    static SignallingDumper* create(Stream* stream, Type type, bool network = false, bool writeHeader = true);
 
 private:
     void head();
     Type m_type;
+    bool m_network;
     Stream* m_output;
 };
 
@@ -267,9 +279,10 @@ protected:
     /**
      * Constructor
      * @param type Default type of the data dumper
+     * @param network True if we are the network side of the link
      */
-    inline SignallingDumpable(SignallingDumper::Type type)
-	: m_type(type), m_dumper(0)
+    inline SignallingDumpable(SignallingDumper::Type type, bool network = false)
+	: m_type(type), m_dumpNet(network), m_dumper(0)
 	{ }
 
     /**
@@ -292,6 +305,13 @@ protected:
      */
     inline bool dump(const DataBlock& data, bool sent = false, int link = 0)
 	{ return dump(data.data(),data.length(),sent,link); }
+
+    /**
+     * Set the dump network side flag
+     * @param network True to dump as network side, false othervise
+     */
+    inline void setDumpNetwork(bool network)
+	{ m_dumpNet = network; }
 
     /**
      * Set or remove the data dumper
@@ -318,6 +338,7 @@ protected:
 
 private:
     SignallingDumper::Type m_type;
+    bool m_dumpNet;
     SignallingDumper* m_dumper;
 };
 
@@ -558,6 +579,13 @@ public:
     virtual bool control(NamedList& params);
 
     /**
+     * Set the @ref TelEngine::SignallingEngine that manages this component
+     *  and any subcomponent of it
+     * @param eng Pointer to the engine that will manage this component
+     */
+    virtual void engine(SignallingEngine* eng);
+
+    /**
      * Get the @ref TelEngine::SignallingEngine that manages this component
      * @return Pointer to engine or NULL if not managed by an engine
      */
@@ -569,9 +597,7 @@ protected:
      * Constructor with a default empty component name
      * @param name Name of this component
      */
-    inline SignallingComponent(const char* name = 0)
-	: m_engine(0), m_name(name)
-	{ }
+    SignallingComponent(const char* name = 0);
 
     /**
      * This method is called to clean up and destroy the object after the
@@ -2143,15 +2169,21 @@ class YSIG_API SignallingReceiver : virtual public SignallingComponent
 public:
     /**
      * Constructor
+     * @param name Name of the component to create
      */
-    inline SignallingReceiver()
-	: m_ifaceMutex(true), m_interface(0)
-	{}
+    SignallingReceiver(const char* name = 0);
 
     /**
      * Destructor, stops the interface and detaches from it
      */
     virtual ~SignallingReceiver();
+
+    /**
+     * Get a pointer to this object or other data
+     * @param name Object name
+     * @return The requested pointer or 0 if not exists
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * Attach a hardware interface to the data link. Detach from the old one if valid
@@ -5830,6 +5862,7 @@ protected:
  */
 class YSIG_API ISDNLayer2 : virtual public SignallingComponent
 {
+    friend class ISDNQ921Management;
 public:
     /**
      * Layer states if it has a TEI assigned
@@ -5871,14 +5904,14 @@ public:
      * Get the SAPI (Service Access Point Identifier) of this interface
      * @return The SAPI (Service Access Point Identifier) of this interface
      */
-    inline u_int8_t sapi() const
+    inline u_int8_t localSapi() const
 	{ return m_sapi; }
 
     /**
      * Get the TEI (Terminal Endpoint Identifier) of this interface
      * @return The TEI (Terminal Endpoint Identifier) of this interface
      */
-    inline u_int8_t tei() const
+    inline u_int8_t localTei() const
 	{ return m_tei; }
 
     /**
@@ -5896,13 +5929,6 @@ public:
 	{ return m_teiAssigned; }
 
     /**
-     * Check if unacknowledged data is allowed to pass through this interface
-     * @return True if unacknowledged data is allowed to pass through this interface
-     */
-    inline bool allowUnack() const
-	{ return m_allowUnack; }
-
-    /**
      * Check if this interface will automatically re-establish when released
      * @return The auto restart flag
      */
@@ -5912,22 +5938,24 @@ public:
     /**
      * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives
      * Descendants must implement this method to fullfill the request
+     * @param tei This layer TEI (Terminal Endpoint Identifier)
      * @param establish True to establish. False to release
      * @param force True to establish even if we already are in this mode. This
      *  parameter is ignored if establish is false
      * @return True if the request was accepted
      */
-    virtual bool multipleFrame(bool establish, bool force)
+    virtual bool multipleFrame(u_int8_t tei, bool establish, bool force)
 	{ return false; }
 
     /**
      * Implements Q.921 DL-DATA and DL-UNIT DATA request primitives
      * Descendants must implement this method to fullfill the request
      * @param data Data to send
+     * @param tei This layer TEI
      * @param ack True to send an acknowledged frame, false to send an unacknowledged one
      * @return True if the request was accepted
      */
-    virtual bool sendData(const DataBlock& data, bool ack)
+    virtual bool sendData(const DataBlock& data, u_int8_t tei, bool ack)
 	{ return false; }
 
     /**
@@ -5958,37 +5986,48 @@ protected:
      * Initialize this interface and the component
      * @param params Layer's parameters
      * @param name Optional name of the component
+     * @param tei Value of TEI for this layer
      */
-    ISDNLayer2(const NamedList& params, const char* name = 0);
+    ISDNLayer2(const NamedList& params, const char* name = 0, u_int8_t tei = 0);
+
+    /**
+     * Retrieve the layer's mutex
+     * @return Reference to the Layer 2 mutex
+     */
+    inline Mutex& l2Mutex()
+	{ return m_layerMutex; }
 
     /**
      * Implements Q.921 DL-ESTABLISH indication/confirmation primitive
      *  of 'multiple frame acknowledged' mode established
+     * @param tei The TEI requested
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
      */
-    void multipleFrameEstablished(bool confirm, bool timeout);
+    void multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout);
 
     /**
      * Implements Q.921 DL-RELEASE indication/confirmation primitive
      *  of 'multiple frame acknowledged' mode released
+     * @param tei The TEI released
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
      */
-    void multipleFrameReleased(bool confirm, bool timeout);
+    void multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout);
 
     /**
      * Notify layer 3 of data link set/release command or response
      * Used for stateless layer 2
+     * @param tei The TEI of this layer
      * @param cmd True if received a command, false if received a response
      * @param value The value of the notification
      *	If 'cmd' is true (command), the value is true if a request to establish data link was received
      *   or false if received a request to release data link
      *	If 'cmd' is false (response), the value is the response
      */
-    void dataLinkState(bool cmd, bool value);
+    void dataLinkState(u_int8_t tei, bool cmd, bool value);
 
     /**
      * Notify layer 3 of data link idle timeout
@@ -6000,9 +6039,9 @@ protected:
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * Receive data from remote peer
      * @param data Received data
-     * @param ack True if data is an acknowledged frame, false if it is an unacknowledged one
+     * @param tei The TEI for which the data was received
      */
-    void receiveData(const DataBlock& data, bool ack);
+    void receiveData(const DataBlock& data, u_int8_t tei);
 
     /**
      * Set TEI assigned status. Print a debug message. If status is false calls cleanup()
@@ -6015,8 +6054,9 @@ protected:
      * Set the state
      * Descendants are responsable for multiple frame status management
      * @param newState The new state
+     * @param reason Reason of state change, NULL if unspecified
      */
-    void changeState(State newState);
+    void changeState(State newState, const char* reason = 0);
 
     /**
      * Change the interface type
@@ -6024,19 +6064,42 @@ protected:
      */
     bool changeType();
 
+    /**
+     * Set the automatically re-establish when released flag
+     * @param restart The new value of the auto restart flag
+     */
+    inline void autoRestart(bool restart)
+	{ m_autoRestart = restart; }
+
+    /**
+     * Set the Reference Identifier used in management procedures
+     * @param ri The new reference number
+     */
+    inline void setRi(u_int16_t ri)
+	{ m_ri = ri; }
+
+    /**
+     * Parse a received packet
+     * @param packet The packet received
+     * @return Pointer to a newly created frame, NULL if an error occured
+     */
+    ISDNFrame* parsePacket(const DataBlock& packet);
+
 private:
     ISDNLayer3* m_layer3;                // The attached Layer 3 interface
-    Mutex m_interfaceMutex;              // Interface operations lock
+    Mutex m_layerMutex;                  // Layer 2 operations mutex
     Mutex m_layer3Mutex;                 // Control m_layer3 operations
     State m_state;                       // Layer's state
     bool m_network;                      // Network/CPE type of the interface
     bool m_detectType;                   // Detect interface type
     u_int8_t m_sapi;                     // SAPI value
     u_int8_t m_tei;                      // TEI value
+    u_int16_t m_ri;                      // Reference number
+    bool m_checked;                      // Flag to indicate if the layer was checked
     bool m_teiAssigned;                  // The TEI status
-    bool m_allowUnack;                   // Allow unacknowledged data to pass through this interface
     bool m_autoRestart;                  // True to restart when released
     u_int32_t m_maxUserData;             // Maximum length of user data transported trough this layer
+    unsigned int m_teiRefNumber;         // The Reference Number (Ri) carried by a TEI management frame
     static TokenDict m_states[];         // Keep the string associated with each state
 };
 
@@ -6050,28 +6113,31 @@ public:
     /**
      * Implements Q.921 DL-ESTABLISH indication/confirmation primitive:
      *  'multiple frame acknowledged' mode established
+     * @param tei The TEI of the frame
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout
      * @param layer2 Pointer to the notifier
      */
-    virtual void multipleFrameEstablished(bool confirm, bool timeout, ISDNLayer2* layer2)
+    virtual void multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
 	{}
 
     /**
      * Implements Q.921 DL-RELEASE indication/confirmation primitive:
      *  'multiple frame acknowledged' mode released
+     * @param tei The TEI of the frame
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
      * @param layer2 Pointer to the notifier
      */
-    virtual void multipleFrameReleased(bool confirm, bool timeout, ISDNLayer2* layer2)
+    virtual void multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2)
 	{}
 
     /**
      * Notification from layer 2 of data link set/release command or response
      * Used for stateless layer 2
+     * @param tei The TEI of the command or response
      * @param cmd True if received a command, false if received a response
      * @param value The value of the notification
      *	If 'cmd' is true (command), the value is true if a request to establish data link was received
@@ -6079,7 +6145,7 @@ public:
      *	If 'cmd' is false (response), the value is the response
      * @param layer2 Pointer to the notifier
      */
-    virtual void dataLinkState(bool cmd, bool value, ISDNLayer2* layer2)
+    virtual void dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2)
 	{}
 
     /**
@@ -6094,17 +6160,23 @@ public:
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * Receive data from remote peer
      * @param data Received data
-     * @param ack True if data is an acknowledged frame,
-     *  false if it is an unacknowledged one
+     * @param tei The TEI of the received frame
      * @param layer2 Pointer to the sender
      */
-    virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2) = 0;
+    virtual void receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2) = 0;
 
     /**
      * Attach an ISDN Q.921 Layer 2
      * @param layer2 Pointer to the Q.921 Layer 2 to attach
      */
     virtual void attach(ISDNLayer2* layer2)
+	{}
+
+    /**
+     * Detach an ISDN Q.921 Layer 2
+     * @param layer2 Pointer to the Q.921 Layer 2 to detach
+     */
+    virtual void detach(ISDNLayer2* layer2)
 	{}
 
 protected:
@@ -6114,8 +6186,18 @@ protected:
      * @param name Name of this component
      */
     inline ISDNLayer3(const char* name = 0)
-	: SignallingComponent(name)
+	: SignallingComponent(name), m_layerMutex(true)
 	{}
+
+    /**
+     * Retrieve the layer's mutex
+     * @return Reference to the Layer 3 mutex
+     */
+    inline Mutex& l3Mutex()
+	{ return m_layerMutex; }
+
+private:
+    Mutex m_layerMutex;                  // Layer 2 operations mutex
 };
 
 /**
@@ -6125,6 +6207,7 @@ protected:
 class YSIG_API ISDNFrame : public RefObject
 {
     friend class ISDNQ921;
+    friend class ISDNQ921Management;
 public:
     /**
      * Frame type according to Q.921 3.6
@@ -6152,6 +6235,19 @@ public:
 	ErrInvalidAddress = 107,         // Error: Invalid SAPI/TEI
 	ErrUnsupported = 108,            // Error: Unsupported command. E.g. XID
 	ErrInvalidCR = 109,              // Error: Invalid command/response flag
+    };
+
+    /**
+     * Codes used for TEI management procedures (Q.921 Table 8)
+     */
+    enum TeiManagement {
+	TeiReq       = 1,                // TEI request (user to network)
+	TeiAssigned  = 2,                // TEI assigned (network to user)
+	TeiDenied    = 3,                // TEI denied (network to user)
+	TeiCheckReq  = 4,                // TEI check request (network to user)
+	TeiCheckRsp  = 5,                // TEI check response (user to network)
+	TeiRemove    = 6,                // TEI remove (network to user)
+	TeiVerify    = 7                 // TEI verify (user to network)
     };
 
     /**
@@ -6187,7 +6283,7 @@ public:
      * Get the category of this frame
      * @return The category of this frame as enumeration
      */
-    inline Category category()
+    inline Category category() const
 	{ return m_category; }
 
     /**
@@ -6295,6 +6391,36 @@ public:
     void toString(String& dest, bool extendedDebug) const;
 
     /**
+     * Check if the received frame is a TEI management frame
+     * @return True if the frame is a TEI management one, false if it's not
+     */
+    bool checkTeiManagement() const;
+
+    /**
+     * Get reference number from frame
+     * @param data The data block which contains it
+     * @return Reference number
+     */
+    static u_int16_t getRi(const DataBlock& data);
+
+    /**
+     * Get frame message type
+     * @param data The data block which contains it
+     * @return Message type
+     */
+    inline static u_int8_t getType(const DataBlock& data)
+	{ return static_cast<u_int8_t>(data.at(3,0)); }
+
+    /**
+     * Get action indicator
+     * @param data Data block which contains it
+     * @return Action indicator value
+     */
+    inline static u_int8_t getAi(const DataBlock& data)
+	{ return static_cast<u_int8_t>(data.at(4,0) >> 1); }
+
+
+    /**
      * Parse a received data block
      * @param data Data to parse
      * @param receiver The receiver of the data
@@ -6303,13 +6429,24 @@ public:
     static ISDNFrame* parse(const DataBlock& data, ISDNLayer2* receiver);
 
     /**
+     * Build a TEI management message buffer
+     * @param data Destination buffer to fill
+     * @param type The message type
+     * @param ri The reference number
+     * @param ai The action indicator
+     * @return True on succes
+     */
+    static bool buildTeiManagement(DataBlock& data, u_int8_t type, u_int16_t ri,
+	u_int8_t ai);
+
+    /**
      * Get the command bit value for a given side of a data link
      * @param network True for the network side,
      *  false for the user side of a data link
      * @return The appropriate command bit value
      */
     static inline bool commandBit(bool network)
-	{ return network ? true : false; }
+	{ return network; }
 
     /**
      * Get the response bit value for a given side of a data link
@@ -6318,19 +6455,16 @@ public:
      * @return The appropriate response bit value
      */
     static inline bool responseBit(bool network)
-	{ return network ? false : true; }
+	{ return !network; }
 
     /**
      * Get the command/response type from C/R bit value and sender type
      * @param cr The value of the C/R bit
-     * @param senderNetwork True if the sender is the network side of the data link
+     * @param sentByNetwork True if the sender is the network side of the data link
      * @return True if it is a command
      */
-    static inline bool isCommand(u_int8_t cr, bool senderNetwork) {
-	    if (cr)
-		return senderNetwork ? true : false;
-	    return senderNetwork ? false : true;
-	}
+    static inline bool isCommand(u_int8_t cr, bool sentByNetwork)
+	{ return cr ? sentByNetwork : !sentByNetwork; }
 
     /**
      * Get the text associated with the given frame type
@@ -6411,14 +6545,17 @@ private:
  */
 class YSIG_API ISDNQ921 : public ISDNLayer2, public SignallingReceiver, public SignallingDumpable
 {
+    friend class ISDNQ921Management;
 public:
     /**
      * Constructor
      * Initialize this object and the component
      * @param params Layer's and @ref TelEngine::ISDNLayer2 parameters
      * @param name Name of this component
+     * @param mgmt TEI management component
+     * @param tei Value of TEI for this component
      */
-    ISDNQ921(const NamedList& params, const char* name = 0);
+    ISDNQ921(const NamedList& params, const char* name = 0, ISDNQ921Management* mgmt = 0, u_int8_t tei = 0);
 
     /**
      * Destructor
@@ -6436,22 +6573,31 @@ public:
      * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives
      * If accepted, the primitive is enqueued for further processing
      * This method is thread safe
+     * @param tei This layer's TEI
      * @param establish True to establish. False to release
      * @param force True to establish even if we already are in this mode. This
      *  parameter is ignored if establish is false
      * @return True if the request was accepted
      */
-    virtual bool multipleFrame(bool establish, bool force);
+    virtual bool multipleFrame(u_int8_t tei, bool establish, bool force);
 
     /**
      * Implements Q.921 DL-DATA and DL-UNIT DATA request primitives
      * Send data through the HDLC interface
      * This method is thread safe
      * @param data Data to send
+     * @param tei The TEI to send with the data frane
      * @param ack True to send an acknowledged frame, false to send an unacknowledged one
      * @return False if the request was not accepted or send operation failed
      */
-    virtual bool sendData(const DataBlock& data, bool ack);
+    virtual bool sendData(const DataBlock& data, u_int8_t tei, bool ack);
+
+    /**
+     * Send a SABME frame to reset the layer
+     * @return True if a SABME frame was sent
+     */
+    inline bool sendSabme()
+	{ return sendUFrame(ISDNFrame::SABME,true,true); }
 
     /**
      * Emergency release.
@@ -6482,7 +6628,7 @@ protected:
      * Detach links. Disposes memory
      */
     virtual void destroyed() {
-	    ISDNLayer2::attach(0);
+	    ISDNLayer2::attach((ISDNLayer3*)0);
 	    SignallingReceiver::attach(0);
 	    SignallingComponent::destroyed();
 	}
@@ -6501,6 +6647,13 @@ protected:
      * @return True if message was successfully processed
      */
     virtual bool receivedPacket(const DataBlock& packet);
+
+    /**
+     * Process the frame received
+     * @param frame Pointer to frame to process
+     * @return True if the frame was processed
+     */
+    bool receivedFrame(ISDNFrame* frame);
 
     /**
      * Process a notification generated by the attached interface
@@ -6566,6 +6719,7 @@ private:
     // @param time Current time if known
     void timer(bool start, bool t203, u_int64_t time = 0);
 
+    ISDNQ921Management* m_management;    // TEI management component
     // State variables
     bool m_remoteBusy;                   // Remote peer is busy: don't send any I frames
     bool m_timerRecovery;                // T200 expired
@@ -6575,8 +6729,6 @@ private:
     u_int8_t m_vs;                       // Sequence number of the next transmitted I frame
     u_int8_t m_va;                       // Last ack'd I frame by remote peer
     u_int8_t m_vr;                       // Expected I frame sequence number
-    // Lock
-    Mutex m_layer;                       // Lock all layer operations
     // Timers and counters
     SignallingTimer m_retransTimer;      // T200: Retransmission interval
     SignallingTimer m_idleTimer;         // T203: Channel idle interval
@@ -6597,6 +6749,231 @@ private:
     // Flags used to avoid repetitive errors
     bool m_errorSend;                    // Send error
     bool m_errorReceive;                 // Receive error
+};
+
+/**
+ * This class is intended to be used as a proxy between an ISDN Layer 3 and multiple
+ *  Layer 2 objects sharing the same signalling interface.
+ * It is used for BRI TEI management or PRI with D-channel backup.
+ * It also keeps a list of ISDN Layer 2 object(s) used for the designated purpose
+ * @short ISDN Layer 2 BRI TEI management or PRI with D-channel(s) backup
+ */
+class YSIG_API ISDNQ921Management : public ISDNLayer2, public ISDNLayer3, public SignallingReceiver, public SignallingDumpable
+{
+public:
+    /**
+     * Constructor - initialize this Layer 2 and the component
+     * @param params Layer's parameters
+     * @param name Optional name of the component
+     * @param net True if managing the network side of Q.921
+     */
+    ISDNQ921Management(const NamedList& params, const char* name = 0, bool net = true);
+
+    /**
+     * Destructor
+     */
+    virtual ~ISDNQ921Management();
+
+
+    /**
+     * Get an object from this management
+     * @return The requested object or 0
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
+     * Set the engine for this management and all Layer 2 children
+     * @param eng Pointer to the engine that will manage this mangement
+     */
+    virtual void engine(SignallingEngine* eng);
+
+    /**
+     * Implements Q.921 DL-ESTABLISH and DL-RELEASE request primitives
+     * @param tei This layer TEI (-1 to apply it to all targets this object may have attached)
+     * @param establish True to establish. False to release
+     * @param force True to establish even if we already are established.
+     * @return True if the request was accepted
+     */
+    virtual bool multipleFrame(u_int8_t tei, bool establish, bool force);
+
+    /**
+     * Implements Q.921 DL-DATA and DL-UNIT DATA request primitives
+     * @param data Data to send
+     * @param tei This layer TEI (-1 for broadcast)
+     * @param ack True to send an acknowledged frame, false to send an unacknowledged one
+     * @return True if the request was accepted
+     */
+    virtual bool sendData(const DataBlock& data, u_int8_t tei, bool ack);
+
+    /**
+     * Implements Q.921 send frame to the interface
+     * @param frame The frame to be sent
+     * @param q921 Pointer to the Q.921 that sends the frame, if any
+     * @return True if the frame was sent
+     */
+    bool sendFrame(const ISDNFrame* frame, const ISDNQ921* q921 = 0);
+
+
+    /**
+     * Emergency release.
+     * Cleanup all Layer 2 objects attached to this Management
+     */
+    virtual void cleanup();
+
+    /**
+     * Implements Q.921 DL-ESTABLISH indication/confirmation primitive:
+     *  'multiple frame acknowledged' mode established
+     * @param tei This layer TEI
+     * @param confirm True if this is a confirmation of a previous request,
+     *  false if it is an indication of state change on remote request
+     * @param timeout True if the reason is a timeout
+     * @param layer2 Pointer to the notifier
+     */
+    virtual void multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2);
+
+    /**
+     * Implements Q.921 DL-RELEASE indication/confirmation primitive:
+     *  'multiple frame acknowledged' mode released
+     * @param tei This layer TEI
+     * @param confirm True if this is a confirmation of a previous request,
+     *  false if it is an indication of state change on remote request
+     * @param timeout True if the reason is a timeout.
+     * @param layer2 Pointer to the notifier
+     */
+    virtual void multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2);
+
+    /**
+     * Notification from layer 2 of data link set/release command or response
+     * Used for stateless layer 2
+     * @param tei This layer TEI
+     * @param cmd True if received a command, false if received a response
+     * @param value The value of the notification
+     * If 'cmd' is true (command), the value is true if a request to establish data link was received
+     *   or false if received a request to release data link
+     * If 'cmd' is false (response), the value is the response
+     * @param layer2 Pointer to the notifier
+     */
+    virtual void dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2);
+
+    /**
+     * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
+     * Receive data from an encapsulated Layer 2 and send it to the attached Layer 3
+     * @param data Received data
+     * @param tei The TEI as received in the packet
+     * @param layer2 Pointer to the sender
+     */
+    virtual void receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2);
+
+protected:
+    /**
+     * Method called periodically to check timeouts
+     * This method is thread safe
+     * @param when Time to use as computing base for events and timeouts
+     */
+    virtual void timerTick(const Time& when);
+
+    /**
+     * Process a Signalling Packet received by the interface.
+     * Parse the data and send all non-UI frames to the appropriate Layer 2.
+     * Process UI frames
+     * @return True if message was successfully processed
+     */
+    virtual bool receivedPacket(const DataBlock& packet);
+
+    /**
+     * Process a notification generated by the attached interface
+     * @param event Notification event reported by the interface
+     * @return True if notification was processed
+     */
+    virtual bool notify(SignallingInterface::Notification event);
+
+    /**
+     * Process UI frames carrying TEI management messages
+     * @param frame The parsed frame
+     * @return False if the frame is not a TEI management one, true otherwise
+     */
+    bool processTeiManagement(ISDNFrame* frame);
+
+    /**
+     * Send a TEI management frame
+     * @param type Type of the frame to send
+     * @param ri Reference number to send in frame
+     * @param ai Action indicator to send in frame
+     * @param tei The TEI to send the frame to, default use broadcast
+     * @param pf The Poll/Final bit to set in the frame
+     * @return True if frame was sent successfully
+     */
+    bool sendTeiManagement(ISDNFrame::TeiManagement type, u_int16_t ri, u_int8_t ai, u_int8_t tei = 127, bool pf = false);
+
+    /**
+     * Process TEI request message and send back to TE:
+     *  TEI Assigned message if the request succeeded;
+     *  TEI Denied message with the received reference number if the
+     *   reference number is already in use;
+     *  TEI Denied message with the reference number set to 127 if
+     *   there is no TEI value available.
+     * @param ri The reference number
+     * @param ai Action indicator
+     * @param pf The Poll/Final bit in the incoming frame
+     */
+    void processTeiRequest(u_int16_t ri, u_int8_t ai, bool pf);
+
+    /**
+     * Process Tei remove message removing the tei(s) contained by ai
+     * @param ai Contains the TEI value to remove or 127 to remove all TEI values
+     */
+    void processTeiRemove(u_int8_t ai);
+
+    /**
+     * Process TEI Check Request message and send to the NET a message with
+     *  the TEI and the asociated reference number
+     * @param ai Contains the TEI value to check or 127 to check all TEI values
+     * @param pf The Poll/Final bit in the incoming frame
+     */
+    void processTeiCheckRequest(u_int8_t ai, bool pf);
+
+    /**
+     * Process TEI Check Response message and set the check flag to true to know that we have a response for that TEI
+     * @param ri The associated reference number to the ai
+     * @param ai The TEI value as received in the answer
+     */
+    void processTeiCheckResponse(u_int16_t ri, u_int8_t ai);
+
+    /**
+     * Process TEI Assigned message
+     * @param ri The reference number assigned to the ai
+     * @param ai The TEI value assigned
+     */
+    void processTeiAssigned(u_int16_t ri, u_int8_t ai);
+
+    /**
+     * Process TEI Denied message
+     * @param ri The reference number of the denied request
+     */
+    void processTeiDenied(u_int16_t ri);
+
+    /**
+     * Process TEI verify
+     * @param ai The TEI value of the message initiator
+     * @param pf The Poll/Final bit in the incoming frame
+     */
+    void processTeiVerify(u_int8_t ai, bool pf);
+
+    /**
+     * Send TEI request message
+     * @param tei TEI value to assign
+     */
+    void sendTeiReq(u_int8_t tei);
+
+    /**
+     * Send a TEI remove frame
+     */
+    void sendTeiRemove();
+
+private:
+    ISDNQ921* m_layer2[127];             // The list of Layer 2 objects attached to this Layer 3
+    SignallingTimer m_teiManTimer;       // T202
+    SignallingTimer m_teiTimer;          // T201
 };
 
 /**
@@ -6686,7 +7063,6 @@ private:
     // Show debug message. Count dropped frames
     bool dropFrame(const ISDNFrame* frame, const char* reason = 0);
 
-    Mutex m_layer;                       // Lock all layer operations
     bool m_checkLinkSide;                // Check if this is the correct side of the data link
     SignallingTimer m_idleTimer;         // Channel idle interval
     u_int8_t m_lastFrame;                // Transmitter send number of the last received frame
@@ -7093,7 +7469,7 @@ class YSIG_API ISDNQ931IEData
     friend class ISDNQ931Monitor;
 private:
     // Constructor
-    ISDNQ931IEData();
+    ISDNQ931IEData(bool bri = false);
     // Process received IEs
     // If add is true, append an IE to the message
     // If add is false, extract data from message. Set data to default values if IE is missing
@@ -7248,6 +7624,13 @@ public:
 	{ return m_callRefLen; }
 
     /**
+     * Get the Terminal Equipment Indicator for this call
+     * @return Value of TEI used in this call
+     */
+    inline u_int8_t callTei() const
+	{ return m_tei; }
+
+    /**
      * Get the circuit this call had reserved
      * @return The circuit reserved by this call
      */
@@ -7301,7 +7684,7 @@ protected:
      * @param callRefLen The call reference length in bytes
      */
     ISDNQ931Call(ISDNQ931* controller, bool outgoing, u_int32_t callRef,
-	u_int8_t callRefLen);
+	u_int8_t callRefLen, u_int8_t tei = 0);
 
     /**
      * Send RELEASE COMPLETE if not in Null state.
@@ -7356,9 +7739,10 @@ private:
     bool sendInfo(SignallingMessage* sigMsg);
     bool sendProgress(SignallingMessage* sigMsg);
     bool sendRelease(const char* reason = 0, SignallingMessage* sigMsg = 0);
-    bool sendReleaseComplete(const char* reason = 0, const char* diag = 0);
+    bool sendReleaseComplete(const char* reason = 0, const char* diag = 0, u_int8_t tei = 0);
     bool sendSetup(SignallingMessage* sigMsg);
     bool sendSuspendRej(const char* reason = 0, SignallingMessage* sigMsg = 0);
+    bool sendSetupAck();
     // Errors on processing received messages
     // Missing mandatory IE
     // @param release True to send release complete and generate a release event
@@ -7374,16 +7758,23 @@ private:
     // Call data
     u_int32_t m_callRef;                 // Call reference
     u_int32_t m_callRefLen;              // Call reference length
+    u_int8_t m_tei;                      // TEI used for the call
     SignallingCircuit* m_circuit;        // Circuit reserved for this call
+    bool m_overlap;                      // Call is using overlapped sending
     bool m_circuitChange;                // True if circuit changed
     bool m_channelIDSent;                // Incoming calls: ChannelID IE already sent
     bool m_rspBearerCaps;                // Incoming calls: Send BearerCaps IE in the first response
+    bool m_net;                          // Flag indicating call is sent by a NT
     ISDNQ931IEData m_data;               // Data to process IEs
     ObjList m_inMsg;                     // Incoming message queue
+    bool m_broadcast[127];               // TEIs that answered to PTMP SETUP
     // Timers
     SignallingTimer m_discTimer;         // T305: sending DISCONNECT
     SignallingTimer m_relTimer;          // T308: sending RELEASE
     SignallingTimer m_conTimer;          // T313: sending CONNECT
+    SignallingTimer m_overlapSendTimer;  // T302 for overlapped sending
+    SignallingTimer m_overlapRecvTimer;  // T304
+    SignallingTimer m_retransSetupTimer; // T302 for setup retransmission (PTMP)
     // Termination
     bool m_terminate;                    // Terminate flag: send RELEASE
     bool m_destroy;                      // Destroy flag: call releaseComplete()
@@ -7668,36 +8059,39 @@ public:
     /**
      * Send a message
      * @param msg The message to be sent
+     * @param tei TEI value to use at Layer 2
      * @param reason Optional string to write the failure reason
      * @return False if the message is invalid, Layer 2 is missing or refused the data
      */
-    bool sendMessage(ISDNQ931Message* msg, String* reason = 0);
+    bool sendMessage(ISDNQ931Message* msg, u_int8_t tei, String* reason = 0);
 
     /**
      * Notification of Layer 2 up state
+     * @param tei TEI received by the Layer 2
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
      * @param layer2 Pointer to the notifier
      */
-    virtual void multipleFrameEstablished(bool confirm, bool timeout, ISDNLayer2* layer2);
+    virtual void multipleFrameEstablished(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2);
 
     /**
      * Notification of Layer 2 down state
+     * @param tei TEI received by the Layer 2
      * @param confirm True if this is a confirmation of a previous request.
      *  False if it is an indication of state change on remote request
      * @param timeout True if the reason is a timeout.
      * @param layer2 Pointer to the notifier
      */
-    virtual void multipleFrameReleased(bool confirm, bool timeout, ISDNLayer2* layer2);
+    virtual void multipleFrameReleased(u_int8_t tei, bool confirm, bool timeout, ISDNLayer2* layer2);
 
     /**
      * Receive data from Layer 2
      * @param data Received data
-     * @param ack True if data is an acknowledged frame, false if it is an unacknowledged one
-     * @param layer2 Pointer to the sender
+     * @param tei TEI received by the Layer 2
+     * @param layer2 Pointer to the sender Layer 2
      */
-    virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2);
+    virtual void receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2);
 
     /**
      * Attach an ISDN Q.921 transport
@@ -7729,11 +8123,11 @@ public:
      * @param diagnostic Optional value for cause diagnostic value
      * @return The result of the operation (true if succesfully sent)
      */
-    inline bool sendStatus(ISDNQ931Call* call, const char* cause,
+    inline bool sendStatus(ISDNQ931Call* call, const char* cause, u_int8_t tei = 0,
 	const char* display = 0, const char* diagnostic = 0) {
 	    if (!call)
 		return false;
-	    return sendStatus(cause,call->callRefLen(),call->callRef(),
+	    return sendStatus(cause,call->callRefLen(),call->callRef(),tei,
 		call->outgoing(),call->state(),display,diagnostic);
 	}
 
@@ -7742,16 +8136,17 @@ public:
      * @param call The call requesting the operation
      * @param release True to send RELEASE, false to send RELEASE COMPLETE
      * @param cause Value for Cause IE
+     * @param tei TEI to which the release is sent to
      * @param diag Optional hexified string for cause dignostic
      * @param display Optional value for Display IE 
      * @param signal Optional value for Signal IE 
      * @return The result of the operation (true if succesfully sent)
      */
-    inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause,
+    inline bool sendRelease(ISDNQ931Call* call, bool release, const char* cause, u_int8_t tei = 0,
 	const char* diag = 0, const char* display = 0, const char* signal = 0) {
 	    if (!call)
 		return false;
-	    return sendRelease(release,call->callRefLen(),call->callRef(),
+	    return sendRelease(release,call->callRefLen(),call->callRef(),tei,
 		call->outgoing(),cause,diag,display,signal);
 	}
 
@@ -7769,6 +8164,11 @@ public:
      * @param id The timer number as defined in Q.931
      */
     void setInterval(SignallingTimer& timer, int id);
+
+    /**
+     * Manage timeout for the call setup message
+     */
+    void manageTimeout();
 
     /**
      * Get a pointer to this call controller
@@ -7819,9 +8219,10 @@ protected:
      * Find a call given its call reference and direction
      * @param callRef The call reference to find
      * @param outgoing True to find an outgoing call, false to find an incoming one
+     * @param tei TEI of the layer associated to the call to find
      * @return A referenced pointer to a call or 0
      */
-    ISDNQ931Call* findCall(u_int32_t callRef, bool outgoing);
+    ISDNQ931Call* findCall(u_int32_t callRef, bool outgoing, u_int8_t tei = 0);
 
     /**
      * Find a call given a circuit number
@@ -7864,20 +8265,23 @@ protected:
     /**
      * Process messages with global call reference or should have one
      * @param msg The received message
+     * @param tei The TEI received with the message
      */
-    void processGlobalMsg(ISDNQ931Message* msg);
+    void processGlobalMsg(ISDNQ931Message* msg, u_int8_t tei = 0);
 
     /**
      * Process a restart request
      * @param msg The received message
+     * @param tei The TEI received with the message
      */
-    void processMsgRestart(ISDNQ931Message* msg);
+    void processMsgRestart(ISDNQ931Message* msg, u_int8_t tei = 0);
 
     /**
      * Process messages with invalid call reference
      * @param msg The received message
+     * @param tei The TEI received with the message
      */
-    void processInvalidMsg(ISDNQ931Message* msg);
+    void processInvalidMsg(ISDNQ931Message* msg, u_int8_t tei = 0);
 
     /**
      * Try to reserve a circuit for restarting if none. Send a restart request on it's behalf
@@ -7909,7 +8313,7 @@ protected:
      * @return The result of the operation (true if succesfully sent)
      */
     bool sendStatus(const char* cause, u_int8_t callRefLen, u_int32_t callRef = 0,
-	bool initiator = false, ISDNQ931Call::State state = ISDNQ931Call::Null,
+	u_int8_t tei = 0, bool initiator = false, ISDNQ931Call::State state = ISDNQ931Call::Null,
 	const char* display = 0, const char* diagnostic = 0);
 
     /**
@@ -7917,6 +8321,7 @@ protected:
      * @param release True to send RELEASE, false to send RELEASE COMPLETE
      * @param callRefLen The call reference length parameter
      * @param callRef The call reference
+     * @param tei The TEI of the Layer 2 associated with the call
      * @param initiator The call initiator flag
      * @param cause Value for Cause IE
      * @param diag Optional hexified string for cause dignostic
@@ -7924,13 +8329,14 @@ protected:
      * @param signal Optional value for Signal IE 
      * @return The result of the operation (true if succesfully sent)
      */
-    bool sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef,
-	bool initiator, const char* cause, const char* diag = 0,
+    bool sendRelease(bool release, u_int8_t callRefLen, u_int32_t callRef, u_int8_t tei,
+	bool initiator, const char* cause = 0, const char* diag = 0,
 	const char* display = 0, const char* signal = 0);
+
 private:
     virtual bool control(NamedList& params)
 	{ return SignallingDumpable::control(params,this); }
-    Mutex m_layer;                       // Lock layer operation
+    bool q921Up() const;                 // Check if layer 2 may be up
     ISDNLayer2* m_q921;                  // The attached layer 2
     bool m_q921Up;                       // Layer 2 state
     // Protocol data
@@ -7955,6 +8361,7 @@ private:
     String m_numPresentation;            // Number presentation
     String m_numScreening;               // Number screening
     String m_format;                     // Data format
+    String m_cpeNumber;                  // The number of the BRI CPE
     // Restart data
     SignallingCircuit* m_restartCic;     // Currently restarting circuit
     unsigned int m_lastRestart;          // Last restarted circuit's code
@@ -7995,6 +8402,7 @@ public:
 
     /**
      * Notification from layer 2 of data link set/release command or response
+     * @param tei The TEI of the notification
      * @param cmd True if received a command, false if received a response
      * @param value The value of the notification
      *	If 'cmd' is true (command), the value is true if a request to establish data link was received
@@ -8002,7 +8410,7 @@ public:
      *	If 'cmd' is false (response), the value is the response
      * @param layer2 Pointer to the notifier
      */
-    virtual void dataLinkState(bool cmd, bool value, ISDNLayer2* layer2);
+    virtual void dataLinkState(u_int8_t tei, bool cmd, bool value, ISDNLayer2* layer2);
 
     /**
      * Notification from layer 2 of data link idle timeout
@@ -8013,11 +8421,10 @@ public:
     /**
      * Implements Q.921 DL-DATA and DL-UNIT DATA indication primitives
      * @param data Received data
-     * @param ack True if data is an acknowledged frame,
-     *  false if it is an unacknowledged one
+     * @param tei The TEI of the Layer 2
      * @param layer2 Pointer to the sender
      */
-    virtual void receiveData(const DataBlock& data, bool ack, ISDNLayer2* layer2);
+    virtual void receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* layer2);
 
     /**
      * Attach ISDN Q.921 pasive transport that monitors one side of the link
@@ -8125,7 +8532,6 @@ private:
     // Drop some messages. Return true if the message should be dropped
     bool dropMessage(const ISDNQ931Message* msg);
 
-    Mutex m_layer;                       // Lock layer operation
     ISDNQ921Passive* m_q921Net;          // Net side of the link
     ISDNQ921Passive* m_q921Cpe;          // CPE side of the link
     SignallingCircuitGroup* m_cicNet;    // Circuit group for the net side of the link

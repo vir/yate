@@ -1440,7 +1440,9 @@ YJGConnection::YJGConnection(JGEvent* event)
 		    Debug(this,DebugStub,
 			"Can't process incoming content '%s' of type %u [%p]",
 			c->toString().c_str(),c->type(),this);
-		    remove.append(c)->setDelete(false);
+		    // Append this content to 'remove' list
+		    // Let the list own it since we'll remove it from event's list
+		    remove.append(c);
 		    continue;
 	    }
 	    event->m_contents.remove(c,false);
@@ -2723,7 +2725,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		    Debug(this,DebugInfo,
 			"Event(%s) content='%s':  [%p]",
 			event.actionName(),c->toString().c_str(),this);
-		    remove.append(c)->remove(false);
+		    remove.append(c)->setDelete(false);
 		    continue;
 		}
 		fileTransfer = true;
@@ -2733,7 +2735,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		Debug(this,DebugInfo,
 		    "Event(%s) with unknown (unsupported) content '%s' [%p]",
 		    event.actionName(),c->toString().c_str(),this);
-		remove.append(c)->remove(false);
+		remove.append(c)->setDelete(false);
 		continue;
 	}
 
@@ -2743,7 +2745,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    Debug(this,DebugInfo,
 		"Event(%s) content='%s' has invalid creator [%p]",
 		event.actionName(),c->toString().c_str(),this);
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 
@@ -2766,7 +2768,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    Debug(this,DebugInfo,
 		"Event(%s) content='%s' has unknown transport type [%p]",
 		event.actionName(),c->toString().c_str(),this);
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 
@@ -2778,7 +2780,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		Debug(this,DebugInfo,
 		    "Event(%s) content='%s' has invalid RTP candidate [%p]",
 		    event.actionName(),c->toString().c_str(),this);
-	        remove.append(c)->remove(false);
+	        remove.append(c)->setDelete(false);
 		continue;
 	    }
 	}
@@ -2786,7 +2788,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    Debug(this,DebugInfo,
 		"Event(%s) raw udp content='%s' without RTP candidate [%p]",
 		event.actionName(),c->toString().c_str(),this);
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 	JGRtpCandidate* rtcp = c->m_rtpRemoteCandidates.findByComponent(2);
@@ -2794,7 +2796,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    Debug(this,DebugInfo,
 		"Event(%s) content='%s' has invalid RTCP candidate [%p]",
 		event.actionName(),c->toString().c_str(),this);
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 
@@ -2827,7 +2829,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 		    event.actionName(),c->toString().c_str(),localCaps.c_str(),
 		    remoteCaps.c_str(),this);
 	    }
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 
@@ -2845,7 +2847,7 @@ bool YJGConnection::processContentAdd(const JGEvent& event, ObjList& ok, ObjList
 	    Debug(this,DebugInfo,
 		"Event(%s) content=%s with invalid crypto [%p]",
 		event.actionName(),c->toString().c_str(),this);
-	    remove.append(c)->remove(false);
+	    remove.append(c)->setDelete(false);
 	    continue;
 	}
 

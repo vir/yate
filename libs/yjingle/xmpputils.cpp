@@ -790,7 +790,7 @@ void XMPPUtils::print(String& xmlStr, XMLElement& element, const char* indent)
     }
     // <element.name()> or <element.name()
     xmlStr << STARTLINE(indent) << '<' << element.name();
-    if (hasChild)
+    if (hasChild || txt)
 	xmlStr << '>';
     String sindent = indent;
     sindent << "  ";
@@ -808,7 +808,7 @@ void XMPPUtils::print(String& xmlStr, XMLElement& element, const char* indent)
     for (; child; child = element.findNextChild(child))
 	print(xmlStr,*child,si);
     // End tag
-    if (hasChild)
+    if (hasChild || txt)
 	xmlStr << STARTLINE(indent) << "</" << element.name() << '>';
     else
 	xmlStr << STARTLINE(indent) << "/>";

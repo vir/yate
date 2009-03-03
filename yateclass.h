@@ -3495,6 +3495,14 @@ public:
      */
     inline int getPort() const
 	{ parse(); return m_port; }
+
+    /**
+     * Access method to the additional text part of the URI
+     * @return Additional text of the URI including the separator
+     */
+    inline const String& getExtra() const
+	{ parse(); return m_extra; }
+
 protected:
     /**
      * Notification method called whenever the string URI has changed.
@@ -3507,6 +3515,7 @@ protected:
     mutable String m_proto;
     mutable String m_user;
     mutable String m_host;
+    mutable String m_extra;
     mutable int m_port;
 };
 

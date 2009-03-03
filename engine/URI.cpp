@@ -37,6 +37,7 @@ URI::URI(const URI& uri)
     m_user = uri.getUser();
     m_host = uri.getHost();
     m_port = uri.getPort();
+    m_extra = uri.getExtra();
     m_parsed = true;
 }
 
@@ -127,10 +128,12 @@ void URI::parse() const
 	    break;
 	if (m_host[0] == '[')
 	    m_host = m_host.substr(1,m_host.length()-2);
-	tmp = tmp.matchString(4);
-	tmp >> ":" >> m_port;
+	String p = tmp.matchString(4);
+	p >> ":" >> m_port;
 	DDebug("URI",DebugAll,"desc='%s' proto='%s' user='%s' host='%s' port=%d [%p]",
 	    m_desc.c_str(), m_proto.c_str(), m_user.c_str(), m_host.c_str(), m_port, this);
+	int index = (tmp.matchLength(4) > 0) ? 4 : 3;
+	m_extra = tmp.substr(tmp.matchOffset(index) + tmp.matchLength(index));
 	m_parsed = true;
 	return;
     }
@@ -139,6 +142,7 @@ void URI::parse() const
     m_proto.clear();
     m_user.clear();
     m_host.clear();
+    m_extra.clear();
     m_parsed = true;
 }
 

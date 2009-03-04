@@ -207,6 +207,7 @@ protected:
 };
 
 class YateSIPEndPoint;
+class SipHandler;
 
 class YateSIPEngine : public SIPEngine
 {
@@ -369,6 +370,7 @@ private:
 
 class YateSIPConnection : public Channel
 {
+    friend class SipHandler;
     YCLASS(YateSIPConnection,Channel)
 public:
     enum {
@@ -427,6 +429,8 @@ public:
 	{ return m_host; }
     inline int getPort() const
 	{ return m_port; }
+    inline const String& getLine() const
+	{ return m_line; }
     inline const String& getRtpAddr() const
 	{ return m_externalAddr ? m_externalAddr : m_rtpLocalAddr; }
     inline void referTerminated()
@@ -4547,6 +4551,7 @@ bool YateSIPLine::update(const Message& msg)
     return chg;
 }
 
+
 YateSIPGenerate::YateSIPGenerate(SIPMessage* m)
     : m_tr(0), m_code(0)
 {
@@ -4596,6 +4601,7 @@ void YateSIPGenerate::clearTransaction()
     }
 }
 
+
 bool UserHandler::received(Message &msg)
 {
     String tmp(msg.getValue("protocol"));
@@ -4611,11 +4617,25 @@ bool UserHandler::received(Message &msg)
     return true;
 }
 
+
 bool SipHandler::received(Message &msg)
 {
     Debug(&plugin,DebugInfo,"SipHandler::received() [%p]",this);
+    RefPointer<YateSIPConnection> conn;
+    String uri;
+    const char* id = msg.getValue("id");
+    if (id) {
+	plugin.lock();
+	conn = static_cast<YateSIPConnection*>(plugin.find(id));
+	plugin.unlock();
+	if (!conn) {
+	    msg.setParam("error","noconn");
+	    return false;
+	}
+	uri = conn->m_uri;
+    }
     const char* method = msg.getValue("method");
-    String uri(msg.getValue("uri"));
+    uri = msg.getValue("uri",uri);
     Regexp r("<\\([^>]\\+\\)>");
     if (uri.matches(r))
 	uri = uri.matchString(1);
@@ -4630,13 +4650,22 @@ bool SipHandler::received(Message &msg)
 	return false;
     }
 
-    YateSIPLine* line = plugin.findLine(msg.getValue("line"));
-    if (line && !line->valid()) {
-	msg.setParam("error","offline");
-	return false;
+    SIPMessage* sip = 0;
+    YateSIPLine* line = 0;
+    if (conn) {
+	line = plugin.findLine(conn->getLine());
+	sip = conn->createDlgMsg(method,uri);
+	conn = 0;
     }
-    SIPMessage* sip = new SIPMessage(method,uri);
-    plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
+    else {
+	line = plugin.findLine(msg.getValue("line"));
+	if (line && !line->valid()) {
+	    msg.setParam("error","offline");
+	    return false;
+	}
+	sip = new SIPMessage(method,uri);
+	plugin.ep()->buildParty(sip,msg.getValue("host"),msg.getIntValue("port"),line);
+    }
     sip->addHeader("Max-Forwards",String(maxf));
     copySipHeaders(*sip,msg,"sip_");
     const char* type = msg.getValue("xsip_type");
@@ -4659,6 +4688,7 @@ bool SipHandler::received(Message &msg)
 	msg.clearParam("code");
     return true;
 }
+
 
 YateSIPConnection* SIPDriver::findCall(const String& callid, bool incRef)
 {

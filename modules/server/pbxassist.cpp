@@ -139,6 +139,8 @@ static void copyParams(NamedList& dest, const NamedList& original, const NamedLi
 	dest.copyParams(original,*params);
     if (pbxkeep) {
 	params = original.getParam("pbxparams");
+	if (!params)
+	    params = pbxkeep->getParam("copyparams");
 	if (params && *params)
 	    dest.copyParams(*pbxkeep,*params);
     }

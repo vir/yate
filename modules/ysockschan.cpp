@@ -876,6 +876,12 @@ public:
     SOCKSEngine(NamedList& params);
 
     /**
+     * Destructor
+     */
+    virtual ~SOCKSEngine()
+	{ }
+
+    /**
      * Check if the engine is exiting
      * @return True if the engine is exiting
      */

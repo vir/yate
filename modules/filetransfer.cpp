@@ -416,7 +416,7 @@ void FileSource::run()
 	unsigned long tStamp = 0;
 	start = Time::msecNow();
 	// Set file pos at start
-	if (-1 == m_file.seek()) {
+	if (-1 == m_file.Stream::seek(0)) {
 	    Thread::errorString(error,m_file.error());
 	    break;
 	}

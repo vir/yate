@@ -373,6 +373,16 @@ bool Stream::setBlocking(bool block)
     return false;
 }
 
+int64_t Stream::length()
+{
+    return 0;
+}
+
+int64_t Stream::seek(SeekPos pos, int64_t offset)
+{
+    return -1;
+}
+
 int Stream::writeData(const char* str)
 {
     if (null(str))
@@ -751,7 +761,7 @@ bool File::getFileTime(unsigned int& secEpoch)
 // Build the MD5 hex digest of an opened file.
 bool File::md5(String& buffer)
 {
-    if (-1 == seek())
+    if (-1 == Stream::seek(0))
 	return false;
     MD5 md5;
     unsigned char buf[65536];

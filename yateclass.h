@@ -4227,6 +4227,15 @@ class YATE_API Stream
 {
 public:
     /**
+     * Enumerate seek start position
+     */
+    enum SeekPos {
+	SeekBegin,                       // Seek from start of stream
+	SeekEnd,                         // Seek from stream end
+	SeekCurrent                      // Seek from current position
+    };
+
+    /**
      * Destructor, terminates the stream
      */
     virtual ~Stream();
@@ -4303,6 +4312,28 @@ public:
     virtual int readData(void* buffer, int length) = 0;
 
     /**
+     * Find the length of the stream if it has one
+     * @return Length of the stream or zero if length is not defined
+     */
+    virtual int64_t length();
+
+    /**
+     * Set the stream read/write pointer
+     * @param pos The seek start as enumeration
+     * @param offset The number of bytes to move the pointer from starting position
+     * @return The new position of the stream read/write pointer. Negative on failure
+     */
+    virtual int64_t seek(SeekPos pos, int64_t offset = 0);
+
+    /**
+     * Set the read/write pointer from begin of stream
+     * @param offset The position in stream to move the pointer
+     * @return The new position of the stream read/write pointer. Negative on failure
+     */
+    inline int64_t seek(int64_t offset)
+	{ return seek(SeekBegin,offset); }
+
+    /**
      * Allocate a new pair of unidirectionally pipe connected streams
      * @param reader Reference of a pointer receiving the newly allocated reading side of the pipe
      * @param writer Reference of a pointer receiving the newly allocated writing side of the pipe
@@ -4354,15 +4385,6 @@ protected:
 class YATE_API File : public Stream
 {
 public:
-    /**
-     * Enumerate seek start position
-     */
-    enum SeekPos {
-	SeekBegin,                       // Seek from file begine
-	SeekEnd,                         // Seek from file end
-	SeekCurrent                      // Seek from current position
-    };
-
     /**
      * Default constructor, creates a closed file
      */
@@ -4455,14 +4477,6 @@ public:
      * @return The new position of the file read/write pointer. Negative on failure
      */
     virtual int64_t seek(SeekPos pos, int64_t offset = 0);
-
-    /**
-     * Set the file read/write pointer from begin of file
-     * @param offset The position in file to move the pointer
-     * @return The new position of the file read/write pointer. Negative on failure
-     */
-    inline int64_t seek(int64_t offset = 0)
-	{ return seek(SeekBegin,offset); }
 
     /**
      * Write data to an open file

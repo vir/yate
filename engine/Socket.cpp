@@ -565,7 +565,7 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	access |= GENERIC_READ;
     DWORD createMode;
     if (create)
-	createMode = (canWrite && !append) ? CREATE_NEW : OPEN_ALWAYS;
+	createMode = (!canRead && !append) ? CREATE_ALWAYS : OPEN_ALWAYS;
     else
 	createMode = OPEN_EXISTING;
     HANDLE h = CreateFile(name,access,0,NULL,createMode,FILE_ATTRIBUTE_NORMAL,NULL);
@@ -591,7 +591,7 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	flags |= O_CREAT;
     if (append)
 	flags |= O_APPEND;
-    else if (canWrite)
+    else if (!canRead)
 	flags |= O_TRUNC;
     if (binary)
 	flags |= O_BINARY;

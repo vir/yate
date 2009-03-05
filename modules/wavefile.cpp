@@ -24,11 +24,7 @@
 
 #include <yatephone.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <string.h>
-#include <fcntl.h>
-#include <errno.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -52,8 +48,8 @@ private:
     bool computeDataRate();
     bool notify(WaveSource* source, const char* reason = 0);
     CallEndpoint* m_chan;
+    Stream* m_stream;
     DataBlock m_data;
-    int m_fd;
     bool m_swap;
     unsigned m_brate;
     long m_repeatPos;
@@ -85,7 +81,7 @@ private:
     void writeIlbcHeader() const;
     void writeAuHeader();
     CallEndpoint* m_chan;
-    int m_fd;
+    Stream* m_stream;
     bool m_swap;
     bool m_locked;
     Header m_header;
@@ -180,10 +176,12 @@ void WaveSource::init(const String& file, bool autorepeat)
 	start("WaveSource");
 	return;
     }
-    m_fd = ::open(file.safe(),O_RDONLY|O_NOCTTY|O_BINARY);
-    if (m_fd < 0) {
+    m_stream = new File;
+    if (!static_cast<File*>(m_stream)->openPath(file,false,true,false,false,true)) {
 	Debug(DebugWarn,"Opening '%s': error %d: %s",
-	    file.c_str(), errno, ::strerror(errno));
+	    file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
+	delete m_stream;
+	m_stream = 0;
 	m_format.clear();
 	notify(this,"error");
 	return;
@@ -214,7 +212,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 	Debug(DebugMild,"Unknown format for playback file '%s', assuming signed linear",file.c_str());
     if (computeDataRate()) {
 	if (autorepeat)
-	    m_repeatPos = ::lseek(m_fd,0,SEEK_CUR);
+	    m_repeatPos = m_stream->seek(Stream::SeekCurrent);
 	asyncDelete(s_asyncDelete);
 	start("WaveSource");
     }
@@ -225,7 +223,7 @@ void WaveSource::init(const String& file, bool autorepeat)
 }
 
 WaveSource::WaveSource(const char* file, CallEndpoint* chan, bool autoclose)
-    : m_chan(chan), m_fd(-1), m_swap(false), m_brate(0), m_repeatPos(-1),
+    : m_chan(chan), m_stream(0), m_swap(false), m_brate(0), m_repeatPos(-1),
       m_total(0), m_time(0), m_autoclose(autoclose), m_autoclean(false),
       m_nodata(false), m_insert(false), m_derefOk(true)
 {
@@ -245,22 +243,20 @@ WaveSource::~WaveSource()
 	    Debug(&__plugin,DebugInfo,"WaveSource rate=" FMT64U " b/s",m_time);
 	}
     }
-    if (m_fd >= 0) {
-	::close(m_fd);
-	m_fd = -1;
-    }
+    delete m_stream;
+    m_stream = 0;
 }
 
 void WaveSource::detectAuFormat()
 {
     AuHeader header;
-    if ((::read(m_fd,&header,sizeof(header)) != sizeof(header)) ||
+    if ((m_stream->readData(&header,sizeof(header)) != sizeof(header)) ||
 	(ntohl(header.sign) != 0x2E736E64)) {
 	Debug(DebugMild,"Invalid .au file header, assuming raw signed linear");
-	::lseek(m_fd,0,SEEK_SET);
+	m_stream->seek(0);
 	return;
     }
-    ::lseek(m_fd,ntohl(header.offs),SEEK_SET);
+    m_stream->seek(ntohl(header.offs));
     int samp = ntohl(header.freq);
     int chan = ntohl(header.chan);
     m_brate = samp;
@@ -294,7 +290,7 @@ void WaveSource::detectWavFormat()
 void WaveSource::detectIlbcFormat()
 {
     char header[ILBC_HEADER_LEN+1];
-    if (::read(m_fd,&header,ILBC_HEADER_LEN) == ILBC_HEADER_LEN) {
+    if (m_stream->readData(&header,ILBC_HEADER_LEN) == ILBC_HEADER_LEN) {
 	header[ILBC_HEADER_LEN] = '\0';
 	if (::strcmp(header,"#!iLBC20\n") == 0) {
 	    m_format = "ilbc20";
@@ -340,9 +336,9 @@ void WaveSource::run()
     u_int64_t tpos = 0;
     m_time = tpos;
     do {
-	r = (m_fd >= 0) ? ::read(m_fd,m_data.data(),m_data.length()) : m_data.length();
+	r = m_stream ? m_stream->readData(m_data.data(),m_data.length()) : m_data.length();
 	if (r < 0) {
-	    if (errno == EINTR) {
+	    if (m_stream->canRetry()) {
 		r = 1;
 		continue;
 	    }
@@ -355,7 +351,7 @@ void WaveSource::run()
 	    if (m_repeatPos >= 0) {
 		DDebug(&__plugin,DebugAll,"Autorepeating from offset %ld [%p]",
 		    m_repeatPos,this);
-		::lseek(m_fd,m_repeatPos,SEEK_SET);
+		m_stream->seek(m_repeatPos);
 		m_data.assign(0,blen);
 		r = 1;
 		continue;
@@ -447,7 +443,7 @@ bool WaveSource::zeroRefsTest()
 void WaveSource::setNotify(const String& id)
 {
     m_id = id;
-    if ((m_fd < 0) && !m_nodata)
+    if (!(m_stream || m_nodata))
 	notify(this);
 }
 
@@ -487,7 +483,7 @@ bool WaveSource::notify(WaveSource* source, const char* reason)
 
 
 WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format)
-    : m_chan(chan), m_fd(-1), m_swap(false), m_locked(false), m_header(None),
+    : m_chan(chan), m_stream(0), m_swap(false), m_locked(false), m_header(None),
       m_total(0), m_maxlen(maxlen), m_time(0)
 {
     Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\") [%p]",
@@ -520,10 +516,13 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_header=Au;
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for recorded file '%s', assuming signed linear",file.c_str());
-    m_fd = ::open(file.safe(),O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_BINARY,CREATE_MODE);
-    if (m_fd < 0)
+    m_stream = new File;
+    if (!static_cast<File*>(m_stream)->openPath(file,true,false,true,false,true)) {
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
-	    file.c_str(), errno, ::strerror(errno));
+	    file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
+	delete m_stream;
+	m_stream = 0;
+    }
 }
 
 WaveConsumer::~WaveConsumer()
@@ -536,18 +535,16 @@ WaveConsumer::~WaveConsumer()
 	    Debug(&__plugin,DebugInfo,"WaveConsumer rate=" FMT64U " b/s",m_time);
 	}
     }
-    if (m_fd >= 0) {
-	::close(m_fd);
-	m_fd = -1;
-    }
+    delete m_stream;
+    m_stream = 0;
 }
 
 void WaveConsumer::writeIlbcHeader() const
 {
     if (m_format == "ilbc20")
-	::write(m_fd,"#!iLBC20\n",ILBC_HEADER_LEN);
+	m_stream->writeData("#!iLBC20\n",ILBC_HEADER_LEN);
     else if (m_format == "ilbc30")
-	::write(m_fd,"#!iLBC30\n",ILBC_HEADER_LEN);
+	m_stream->writeData("#!iLBC30\n",ILBC_HEADER_LEN);
     else
 	Debug(DebugMild,"Invalid iLBC format '%s', not writing header",m_format.c_str());
 }
@@ -583,7 +580,7 @@ void WaveConsumer::writeAuHeader()
     header.freq = htonl(rate);
     header.chan = htonl(chans);
     header.len = 0;
-    ::write(m_fd,&header,sizeof(header));
+    m_stream->writeData(&header,sizeof(header));
 }
 
 bool WaveConsumer::setFormat(const DataFormat& format)
@@ -617,7 +614,7 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
     if (!data.null()) {
 	if (!m_time)
 	    m_time = Time::now();
-	if (m_fd >= 0) {
+	if (m_stream) {
 	    switch (m_header) {
 		case Ilbc:
 		    writeIlbcHeader();
@@ -636,18 +633,16 @@ void WaveConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 		uint16_t* d = (uint16_t*)swapped.data();
 		for (unsigned int i = 0; i < n; i+= 2)
 		    *d++ = htons(*s++);
-		::write(m_fd,swapped.data(),swapped.length());
+		m_stream->writeData(swapped);
 	    }
 	    else
-		::write(m_fd,data.data(),data.length());
+		m_stream->writeData(data);
 	}
 	m_total += data.length();
 	if (m_maxlen && (m_total >= m_maxlen)) {
 	    m_maxlen = 0;
-	    if (m_fd >= 0) {
-		::close(m_fd);
-		m_fd = -1;
-	    }
+	    delete m_stream;
+	    m_stream = 0;
 	    if (m_chan) {
 		DDebug(&__plugin,DebugInfo,"Preparing 'maxlen' disconnector for '%s' chan %p '%s' in consumer [%p]",
 		    m_id.c_str(),m_chan,(m_chan ? m_chan->id().c_str() : ""),this);

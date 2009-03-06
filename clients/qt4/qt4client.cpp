@@ -373,6 +373,31 @@ static void qtMsgHandler(QtMsgType type, const char* text)
     Debug("QT",dbg,text);
 }
 
+// Build a list of parameters from a string
+// Return the number of parameters found
+static unsigned int str2Params(NamedList& params, const String& buf, char sep = '|')
+{
+    ObjList* list = 0;
+    // Check if we have another separator
+    if (buf.startsWith("separator=")) {
+	sep = buf.at(10);
+	list = buf.substr(11).split(sep,false);
+    }
+    else
+	list = buf.split(sep,false);
+    unsigned int n = 0;
+    for (ObjList* o = list->skipNull(); o; o = o->skipNext()) {
+	String* s = static_cast<String*>(o->get());
+	int pos = s->find('=');
+	if (pos < 1)
+	    continue;
+	params.addParam(s->substr(0,pos),s->substr(pos + 1));
+	n++;
+    }
+    TelEngine::destruct(list);
+    return n;
+}
+
 // Utility: get a list row containing the given text
 static int findListRow(QListWidget& list, const String& item)
 {
@@ -418,23 +443,40 @@ static void setWidget(QWidget* parent, QWidget* child)
 
 // Utility function used to get the name of a control
 // The name of the control indicates actions, toggles ...
+// The action name alias can contain parameters
 // The accessible name property can override controls's name
-static bool translateName(QtWidget& w, String& name)
+static bool translateName(QtWidget& w, String& name, NamedList** params = 0)
 {
     static String actionProp = "accessibleName";
 
     if (w.invalid())
 	return false;
-    if (w.type() != QtWidget::Action)
-	if (w->accessibleName().isEmpty()) 
+    bool noAlias = true;
+    if (w.type() != QtWidget::Action) {
+	noAlias = w->accessibleName().isEmpty();
+	if (noAlias) 
 	    QtClient::getUtf8(name,w->objectName());
 	else
 	    QtClient::getUtf8(name,w->accessibleName());
+    }
     else {
 	QtClient::getProperty(w.action(),actionProp,name);
-	if (!name)
+	noAlias = name.null();
+	if (noAlias)
 	    QtClient::getUtf8(name,w.action()->objectName());
     }
+    if (noAlias)
+	return true;
+    // Check params
+    int pos = name.find('|');
+    if (pos < 1)
+	return true;
+    if (params) {
+	*params = new NamedList("");
+	if (!str2Params(**params,name.substr(pos + 1)))
+	    TelEngine::destruct(*params);
+    }
+    name = name.substr(0,pos);
     return true;
 }
 
@@ -1678,8 +1720,10 @@ void QtWindow::action()
 	return;
     QtWidget w(sender());
     String name;
-    if (translateName(w,name))
-	QtClient::self()->action(this,name);
+    NamedList* params = 0;
+    if (translateName(w,name,&params))
+	QtClient::self()->action(this,name,params);
+    TelEngine::destruct(params);
 }
 
 // Toggled actions

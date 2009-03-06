@@ -43,6 +43,7 @@
 
 #ifndef _WINDOWS
 
+#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #define HAS_AF_UNIX
@@ -942,6 +943,94 @@ bool File::mkDir(const char* path, int* error)
 	return true;
 #endif
     return getLastError(error);
+}
+
+// Skip special directories (. or ..)
+static inline bool skipSpecial(const char* s)
+{
+    return *s && *s == '.' && (!s[1] || (s[1] == '.' && !s[2]));
+}
+
+// Enumerate a folder (directory) content
+bool File::listDirectory(const char* path, ObjList* dirs, ObjList* files, int* error)
+{
+    if (!(dirs || files))
+	return true;
+    if (!fileNameOk(path,error))
+	return false;
+    bool ok = false;
+#ifdef _WINDOWS
+    String name(path);
+    if (!name.endsWith("\\"))
+	name << "\\";
+    name << "*";
+    // Init find
+    WIN32_FIND_DATAA d;
+    HANDLE hFind = ::FindFirstFileA(name,&d);
+    if (hFind == INVALID_HANDLE_VALUE) {
+	if (::GetLastError() == ERROR_NO_MORE_FILES)
+	    return true;
+	return getLastError(error);
+    }
+    // Enumerate content
+    ::SetLastError(0);
+    do {
+        if (d.dwFileAttributes & FILE_ATTRIBUTE_DEVICE ||
+	    skipSpecial(d.cFileName))
+	    continue;
+        if (d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+	    if (dirs)
+		dirs->append(new String(d.cFileName));
+	}
+	else if (files)
+	    files->append(new String(d.cFileName));
+    }
+    while (::FindNextFileA(hFind,&d));
+    int code = ::GetLastError();
+    ok = !code || code == ERROR_NO_MORE_FILES;
+    // Get error before closing the handle to avoid having a wrong one
+    if (!ok && error)
+	*error = code;
+    ::FindClose(hFind);
+#else
+    DIR* dir = ::opendir(path);
+    if (!dir) {
+	if (!errno)
+	    return true;
+	return getLastError(error);
+    }
+    struct dirent* entry;
+    while ((entry = ::readdir(dir)) != 0) {
+	if (skipSpecial(entry->d_name))
+	    continue;
+#ifdef _DIRENT_HAVE_D_TYPE
+	if (entry->d_type == DT_DIR) {
+	    if (dirs)
+		dirs->append(new String(entry->d_name));
+	}
+	else if (entry->d_type == DT_REG && files)
+	    files->append(new String(entry->d_name));
+#else
+	struct stat stat_buf;
+	String p;
+	p << path << "/" << entry->d_name;
+	if (::stat(p,&stat_buf))
+	    break;
+	if (S_ISDIR(stat_buf.st_mode)) {
+	    if (dirs)
+		dirs->append(new String(entry->d_name));
+	}
+	else if (S_ISREG(stat_buf.st_mode) && files)
+	    files->append(new String(entry->d_name));
+#endif // _DIRENT_HAVE_D_TYPE
+    }
+    ok = !errno;
+    // Get error before closing DIR to avoid having a wrong one
+    if (!ok && error)
+	*error = errno;
+    ::closedir(dir);
+#endif // _WINDOWS
+    return ok;
 }
 
 

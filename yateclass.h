@@ -4570,6 +4570,20 @@ public:
     static bool mkDir(const char* path, int* error = 0);
 
     /**
+     * Enumerate a folder (directory) content.
+     * Fill the given lists with children item names
+     * @param path The folder path
+     * @param dirs List to be filled with child directories.
+     *  It can be NULL if not requested
+     * @param files List to be filled with child files.
+     *  It can be NULL if not requested
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success
+     */
+    static bool listDirectory(const char* path, ObjList* dirs, ObjList* files,
+	int* error = 0);
+
+    /**
      * Create a pair of unidirectionally pipe connected streams
      * @param reader Reference to a File that becomes the reading side of the pipe
      * @param writer Reference to a File that becomes the writing side of the pipe

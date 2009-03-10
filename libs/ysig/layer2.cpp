@@ -188,6 +188,7 @@ ObjList* SS7Layer2::recoverMSU()
     return 0;
 }
 
+YCLASSIMP2(SS7MTP2,SS7Layer2,SignallingReceiver)
 
 SS7MTP2::SS7MTP2(const NamedList& params, unsigned int status)
     : SignallingDumpable(SignallingDumper::Mtp2),

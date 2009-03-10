@@ -4555,6 +4555,13 @@ public:
     virtual ~SS7MTP2();
 
     /**
+     * Get a pointer to this object or other data
+     * @param name Object name
+     * @return The requested pointer or 0 if not exists
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Push a Message Signal Unit down the protocol stack
      * @param msu MSU data to transmit
      * @return True if message was successfully queued

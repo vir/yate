@@ -347,6 +347,7 @@ void AAAHandler::indirectQuery(String& query)
 	return;
     if (!query.startSkip("@",false))
 	return;
+    Engine::runParams().replaceParams(query,true);
     query.trimBlanks();
     if (query.null())
 	return;
@@ -370,8 +371,8 @@ void AAAHandler::initQuery()
     if (m_account.null())
 	return;
     String query = s_cfg.getValue(name(),"initquery");
-    Engine::runParams().replaceParams(query);
     indirectQuery(query);
+    Engine::runParams().replaceParams(query,true);
     if (query.null())
 	return;
     // no error check needed as we can't fix - enqueue the query and we're out

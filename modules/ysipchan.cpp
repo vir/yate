@@ -393,6 +393,7 @@ public:
     YateSIPConnection(SIPEvent* ev, SIPTransaction* tr);
     YateSIPConnection(Message& msg, const String& uri, const char* target = 0);
     ~YateSIPConnection();
+    virtual void complete(Message& msg, bool minimal=false) const;
     virtual void disconnected(bool final, const char *reason);
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
@@ -443,6 +444,20 @@ public:
 		return fromTag == m_dialog.remoteTag && toTag == m_dialog.localTag;
 	    return fromTag == m_dialog.localTag && toTag == m_dialog.remoteTag;
 	}
+    // Build a callid parameter from channel dialog and add it to a list
+    inline void addDialog(NamedList& nl) const {
+	    addCallId(nl,m_dialog,
+		isIncoming() ? m_dialog.remoteTag : m_dialog.localTag,
+		isIncoming() ? m_dialog.localTag : m_dialog.remoteTag);
+	}
+    // Build and add a callid parameter to a list
+    static inline void addCallId(NamedList& nl, const String& dialog,
+	const String& fromTag, const String& toTag) {
+	    String tmp;
+	    tmp << "sip/" << dialog << "/" << fromTag << "/" << toTag;
+	    nl.addParam("callid",tmp);
+	}
+
 private:
     virtual void statusParams(String& str);
     void setMedia(ObjList* media);
@@ -2021,8 +2036,13 @@ void YateSIPRefer::run()
 	// NOTE: Remove the whole 'if' when a routing module will be able to route
 	//  attended transfer requests
 	if (attended) {
-	    YateSIPConnection* conn = plugin.findDialog(*attended,
-		m_msg->getValue("transfer_fromtag"),m_msg->getValue("transfer_totag"),true);
+	    String* from = m_msg->getParam("transfer_fromtag");
+	    String* to = m_msg->getParam("transfer_totag");
+	    if (null(from) || null(to)) {
+		m_rspCode = m_notifyCode = 487;     // Request Terminated
+		break;
+	    }
+	    YateSIPConnection* conn = plugin.findDialog(*attended,*from,*to,true);
 	    if (conn) {
 		m_transferredDrv->lock();
 		RefPointer<Channel> chan = m_transferredDrv->find(m_transferredID);
@@ -2035,10 +2055,11 @@ void YateSIPRefer::run()
 		else
 		    m_rspCode = m_notifyCode = 487;     // Request Terminated
 		TelEngine::destruct(conn);
+		break;
 	    }
-	    else
-		m_rspCode = m_notifyCode = 481;         // Call/Transaction Does Not Exist
-	    break;
+	    // Not ours
+	    m_msg->clearParam("called");
+	    YateSIPConnection::addCallId(*m_msg,*attended,*from,*to);
 	}
 
 	// Route the call
@@ -3126,6 +3147,12 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	return processTransaction2(ev,msg,code);
 
     m_dialog = *ev->getTransaction()->recentMessage();
+    // Update incoming channels' callid
+    if (isIncoming()) {
+	Message* m = message("call.update");
+	m->addParam("operation","cdrbuild");
+	Engine::enqueue(m);
+    }
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	m_cancel = false;
 	m_byebye = false;
@@ -3656,6 +3683,12 @@ void YateSIPConnection::doRefer(SIPTransaction* t)
     DDebug(this,DebugAll,"doRefer(%p). No peer or peer has no driver [%p]",t,this);
     t->setResponse(503);       // Service Unavailable
     m_referring = false;
+}
+
+void YateSIPConnection::complete(Message& msg, bool minimal) const
+{
+    Channel::complete(msg,minimal);
+    addDialog(msg);
 }
 
 void YateSIPConnection::disconnected(bool final, const char *reason)

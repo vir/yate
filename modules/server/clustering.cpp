@@ -80,10 +80,19 @@ bool ClusterModule::msgRoute(Message& msg)
     if (!called.startSkip(m_prefix,false))
 	return false;
     lock.drop();
-    if (called.trimBlanks().null())
+    const char* tmp = msg.getValue("sip_x-callto");
+    if (called.trimBlanks().null() && !tmp)
 	return false;
-    Debug(&__plugin,DebugInfo,"Got call to '%s' on this node",called.c_str());
+    Debug(&__plugin,DebugInfo,"Got call to '%s' on this node '%s'",
+	called.c_str(),tmp);
     msg.setParam("called",called);
+    if (called.null() && tmp) {
+	msg.retValue() = tmp;
+	tmp = msg.getValue("sip_x-billid");
+	if (tmp)
+	    msg.setParam("billid",tmp);
+	return true;
+    }
     return false;
 }
 

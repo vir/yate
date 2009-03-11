@@ -370,6 +370,7 @@ void AAAHandler::initQuery()
     if (m_account.null())
 	return;
     String query = s_cfg.getValue(name(),"initquery");
+    Engine::runParams().replaceParams(query);
     indirectQuery(query);
     if (query.null())
 	return;

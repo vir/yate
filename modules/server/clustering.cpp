@@ -32,6 +32,7 @@ class ClusterModule : public Module
 public:
     enum {
 	Register = Private,
+	Cdr = (Private << 1),
     };
     ClusterModule();
     ~ClusterModule();
@@ -41,8 +42,10 @@ public:
     virtual bool msgRoute(Message& msg);
     virtual bool msgExecute(Message& msg);
     virtual bool msgRegister(Message& msg);
+    virtual bool msgCdr(Message& msg);
 private:
     String m_prefix;
+    String m_myPrefix;
     String m_callto;
     Regexp m_regexp;
     String m_message;
@@ -166,7 +169,19 @@ bool ClusterModule::msgRegister(Message& msg)
     Lock lock(this);
     if (data.startsWith(m_prefix))
 	return false;
-    msg.setParam("data",m_prefix + Engine::nodeName() + "/" + data);
+    msg.setParam("data",m_myPrefix + data);
+    return false;
+}
+
+bool ClusterModule::msgCdr(Message& msg)
+{
+    if (!msg.getParam("nodename"))
+	msg.addParam("nodename",Engine::nodeName());
+    if (!msg.getParam("nodeprefix")) {
+	lock();
+	msg.addParam("nodeprefix",m_myPrefix);
+	unlock();
+    }
     return false;
 }
 
@@ -177,6 +192,8 @@ bool ClusterModule::received(Message& msg, int id)
 	    return msgExecute(msg);
 	case Register:
 	    return msgRegister(msg);
+	case Cdr:
+	    return msgCdr(msg);
 	default:
 	    return Module::received(msg,id);
     }
@@ -206,6 +223,7 @@ void ClusterModule::initialize()
     m_prefix = cfg.getValue("general","prefix","cluster");
     if (!m_prefix.endsWith("/"))
 	m_prefix += "/";
+    m_myPrefix = m_prefix + Engine::nodeName() + "/";
     m_regexp = cfg.getValue("general","regexp");
     m_callto = cfg.getValue("general","callto");
     m_message = cfg.getValue("general","locate","cluster.locate");
@@ -215,6 +233,7 @@ void ClusterModule::initialize()
 	installRelay(Route,cfg.getIntValue("priorities","call.route",50));
 	installRelay(Execute,cfg.getIntValue("priorities","call.execute",50));
 	installRelay(Register,"user.register",cfg.getIntValue("priorities","user.register",50));
+	installRelay(Cdr,"call.cdr",cfg.getIntValue("priorities","call.cdr",25));
 	m_init = true;
     }
 }

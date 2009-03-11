@@ -28,3 +28,6 @@
 
 ; user.register: int: Priority of registration message handler (on registrar)
 ;user.register=50
+
+; call.cdr: int: Priority of CDR message handler (all nodes)
+;call.cdr=25

@@ -807,6 +807,7 @@ bool QtWindow::setParams(const NamedList& params)
 {
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setParams() [%p]",this);
 
+    setUpdatesEnabled(false);
     // Check for custom widget params
     if (params == "customwidget") {
 	// Each parameter is a list of parameters for a custom widget
@@ -827,6 +828,7 @@ bool QtWindow::setParams(const NamedList& params)
 	    else
 		ok = false;
 	}
+	setUpdatesEnabled(true);
 	return ok;
     }
     // Check for system tray icon params
@@ -878,6 +880,7 @@ bool QtWindow::setParams(const NamedList& params)
 		    SLOT(action()),SLOT(toggled(bool)),this) : 0);
 	    }
 	}
+	setUpdatesEnabled(true);
 	return ok;
     }
     // Parameters for the widget whose name is the list name
@@ -889,6 +892,7 @@ bool QtWindow::setParams(const NamedList& params)
 	    int day = params.getIntValue("day");
 	    w.calendar()->setCurrentPage(year, month);
 	    w.calendar()->setSelectedDate(QDate(year, month, day));
+	    setUpdatesEnabled(true);
 	    return true;
 	}
     }
@@ -898,7 +902,9 @@ bool QtWindow::setParams(const NamedList& params)
 	setWindowModality(Qt::ApplicationModal);
     if (params.getBoolValue("minimized"))
 	QWidget::setWindowState(Qt::WindowMinimized);
-    return Window::setParams(params);
+    bool ok = Window::setParams(params);
+    setUpdatesEnabled(true);
+    return ok;
 }
 
 void QtWindow::setOver(const Window* parent)
@@ -1866,6 +1872,11 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	    ObjList* f = value.split(',',false);
 	    wid->setWindowFlags(Qt::CustomizeWindowHint);
 	    int flags = wid->windowFlags();
+	    // Clear settable flags
+	    TokenDict* dict = s_windowFlags;
+	    for (int i = 0; dict[i].token; i++)
+		flags &= ~dict[i].value;
+	    // Set flags
 	    for (ObjList* o = f->skipNull(); o; o = o->skipNext())
 		flags |= lookup(o->get()->toString(),s_windowFlags,0);
 	    TelEngine::destruct(f);

@@ -1513,6 +1513,7 @@ bool YJGConnection::route()
     m->addParam("calleduri",BUILD_XMPP_URI(m_local));
     m->addParam("caller",m_remote.node());
     m->addParam("callername",m_remote.bare());
+    m->addParam("calleruri",BUILD_XMPP_URI(m_remote));
     if (m_subject)
 	m->addParam("subject",m_subject);
     m_mutex.lock();

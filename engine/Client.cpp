@@ -2371,6 +2371,9 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     s->setParam("caller",msg.getValue("caller"));
     s->setParam("called",msg.getValue("called"));
     s->setParam("billid",msg.getValue("billid"));
+    String* cs = msg.getParam("chanstartup_parameters");
+    if (!null(cs))
+	s->copyParams(msg,*cs);
     Engine::enqueue(s);
     update(Startup,true,true,"call.ringing",false,true);
 }
@@ -2401,6 +2404,9 @@ ClientChannel::ClientChannel(const String& target, const NamedList& params)
     s->setParam("called",to);
     m->copyParams(params,"line,protocol,account,caller,callername,domain");
     s->copyParams(params,"line,protocol,account,caller,callername,domain");
+    String* cs = params.getParam("chanstartup_parameters");
+    if (!null(cs))
+	s->copyParams(params,*cs);
     Engine::enqueue(s);
     if (startRouter(m))
 	update(Startup);

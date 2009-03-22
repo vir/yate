@@ -32,7 +32,8 @@ namespace { // anonymous
 class WaveSource : public ThreadedSource
 {
 public:
-    static WaveSource* create(const String& file, CallEndpoint* chan, bool autoclose = true, bool autorepeat = false);
+    static WaveSource* create(const String& file, CallEndpoint* chan,
+	bool autoclose = true, bool autorepeat = false, const NamedString* param = 0);
     ~WaveSource();
     virtual void run();
     virtual void cleanup();
@@ -71,7 +72,7 @@ public:
 	Au,
 	Ilbc,
     };
-    WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format = 0);
+    WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format = 0, const NamedString* param = 0);
     ~WaveConsumer();
     virtual bool setFormat(const DataFormat& format);
     virtual void Consume(const DataBlock& data, unsigned long tStamp);
@@ -94,7 +95,7 @@ private:
 class WaveChan : public Channel
 {
 public:
-    WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format = 0);
+    WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format = 0, const NamedString* param = 0);
     ~WaveChan();
 };
 
@@ -161,30 +162,49 @@ typedef struct {
 #define ILBC_HEADER_LEN 9
 
 
-WaveSource* WaveSource::create(const String& file, CallEndpoint* chan, bool autoclose, bool autorepeat)
+WaveSource* WaveSource::create(const String& file, CallEndpoint* chan, bool autoclose, bool autorepeat, const NamedString* param)
 {
     WaveSource* tmp = new WaveSource(file,chan,autoclose);
+    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+    if (ptr) {
+	Stream* stream = YOBJECT(Stream,ptr);
+	if (stream) {
+	    DDebug(&__plugin,DebugInfo,"WaveSource using Stream %p [%p]",stream,tmp);
+	    tmp->m_stream = stream;
+	    ptr->takeData();
+	}
+	else {
+	    DataBlock* data = YOBJECT(DataBlock,ptr);
+	    if (data) {
+		DDebug(&__plugin,DebugInfo,"WaveSource using DataBlock %p len=%u [%p]",
+		    data,data->length(),tmp);
+		tmp->m_stream = new MemoryStream(*data);
+	    }
+	}
+    }
     tmp->init(file,autorepeat);
     return tmp;
 }
 
 void WaveSource::init(const String& file, bool autorepeat)
 {
-    if (file == "-") {
-	m_nodata = true;
-	m_brate = 8000;
-	start("WaveSource");
-	return;
-    }
-    m_stream = new File;
-    if (!static_cast<File*>(m_stream)->openPath(file,false,true,false,false,true)) {
-	Debug(DebugWarn,"Opening '%s': error %d: %s",
-	    file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
-	delete m_stream;
-	m_stream = 0;
-	m_format.clear();
-	notify(this,"error");
-	return;
+    if (!m_stream) {
+	if (file == "-") {
+	    m_nodata = true;
+	    m_brate = 8000;
+	    start("WaveSource");
+	    return;
+	}
+	m_stream = new File;
+	if (!static_cast<File*>(m_stream)->openPath(file,false,true,false,false,true)) {
+	    Debug(DebugWarn,"Opening '%s': error %d: %s",
+		file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
+	    delete m_stream;
+	    m_stream = 0;
+	    m_format.clear();
+	    notify(this,"error");
+	    return;
+	}
     }
     if (file.endsWith(".gsm"))
 	m_format = "gsm";
@@ -482,15 +502,23 @@ bool WaveSource::notify(WaveSource* source, const char* reason)
 }
 
 
-WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format)
+WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxlen, const char* format, const NamedString* param)
     : m_chan(chan), m_stream(0), m_swap(false), m_locked(false), m_header(None),
       m_total(0), m_maxlen(maxlen), m_time(0)
 {
-    Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\") [%p]",
-	file.c_str(),chan,maxlen,format,this);
+    Debug(&__plugin,DebugAll,"WaveConsumer::WaveConsumer(\"%s\",%p,%u,\"%s\",%p) [%p]",
+	file.c_str(),chan,maxlen,format,param,this);
     if (format) {
 	m_locked = true;
 	m_format = format;
+    }
+    NamedPointer* ptr = YOBJECT(NamedPointer,param);
+    if (ptr) {
+	m_stream = YOBJECT(Stream,ptr);
+	if (m_stream) {
+	    DDebug(&__plugin,DebugInfo,"WaveConsumer using Stream %p [%p]",m_stream,this);
+	    ptr->takeData();
+	}
     }
     if (file == "-")
 	return;
@@ -516,6 +544,8 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
 	m_header=Au;
     else if (!file.endsWith(".slin"))
 	Debug(DebugMild,"Unknown format for recorded file '%s', assuming signed linear",file.c_str());
+    if (m_stream)
+	return;
     m_stream = new File;
     if (!static_cast<File*>(m_stream)->openPath(file,true,false,true,false,true)) {
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
@@ -725,16 +755,16 @@ void Disconnector::run()
 }
 
 
-WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format)
+WaveChan::WaveChan(const String& file, bool record, unsigned maxlen, bool autorepeat, const char* format, const NamedString* param)
     : Channel(__plugin)
 {
     Debug(this,DebugAll,"WaveChan::WaveChan(%s) [%p]",(record ? "record" : "play"),this);
     if (record) {
-	setConsumer(new WaveConsumer(file,this,maxlen,format));
+	setConsumer(new WaveConsumer(file,this,maxlen,format,param));
 	getConsumer()->deref();
     }
     else {
-	setSource(WaveSource::create(file,this,true,autorepeat));
+	setSource(WaveSource::create(file,this,true,autorepeat,param));
 	getSource()->deref();
     }
 }
@@ -848,7 +878,7 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!src.null()) {
-	WaveSource* s = WaveSource::create(src,ch,false,msg.getBoolValue("autorepeat"));
+	WaveSource* s = WaveSource::create(src,ch,false,msg.getBoolValue("autorepeat"),msg.getParam("source"));
 	ch->setSource(s);
 	s->setNotify(msg.getValue("notify"));
 	s->deref();
@@ -856,7 +886,7 @@ bool AttachHandler::received(Message &msg)
     }
 
     if (!cons.null()) {
-	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen,msg.getValue("format"));
+	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen,msg.getValue("format"),msg.getParam("consumer"));
 	c->setNotify(msg.getValue("notify"));
 	ch->setConsumer(c);
 	c->deref();
@@ -870,7 +900,7 @@ bool AttachHandler::received(Message &msg)
 	    ret = false;
 	    break;
 	}
-	WaveSource* s = WaveSource::create(ovr,0,false,msg.getBoolValue("autorepeat"));
+	WaveSource* s = WaveSource::create(ovr,0,false,msg.getBoolValue("autorepeat"),msg.getParam("override"));
 	s->setNotify(msg.getValue("notify"));
 	if (DataTranslator::attachChain(s,c,true))
 	    msg.clearParam("override");
@@ -889,7 +919,7 @@ bool AttachHandler::received(Message &msg)
 	    ret = false;
 	    break;
 	}
-	WaveSource* s = WaveSource::create(repl,0,false,msg.getBoolValue("autorepeat"));
+	WaveSource* s = WaveSource::create(repl,0,false,msg.getBoolValue("autorepeat"),msg.getParam("replace"));
 	s->setNotify(msg.getValue("notify"));
 	if (DataTranslator::attachChain(s,c,false))
 	    msg.clearParam("replace");
@@ -970,14 +1000,14 @@ bool RecordHandler::received(Message &msg)
     }
 
     if (!c1.null()) {
-	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen,msg.getValue("format"));
+	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen,msg.getValue("format"),msg.getParam("call"));
 	c->setNotify(msg.getValue("notify"));
 	de->setCallRecord(c);
 	c->deref();
     }
 
     if (!c2.null()) {
-	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen,msg.getValue("format"));
+	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen,msg.getValue("format"),msg.getParam("peer"));
 	c->setNotify(msg.getValue("notify"));
 	de->setPeerRecord(c);
 	c->deref();
@@ -1009,7 +1039,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
     if (ch) {
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),
 	    dest.matchString(2).c_str());
-	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"));
+	WaveChan *c = new WaveChan(dest.matchString(2),meth,maxlen,msg.getBoolValue("autorepeat"),msg.getValue("format"),msg.getParam("callto"));
 	if (ch->connect(c,msg.getValue("reason"))) {
 	    c->callConnect(msg);
 	    msg.setParam("peerid",c->id());

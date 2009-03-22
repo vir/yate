@@ -4387,6 +4387,91 @@ protected:
 };
 
 /**
+ * An implementation of a Stream that reads and writes data in a DataBlock
+ * @short A Stream that operates on DataBlocks in memory
+ */
+class YATE_API MemoryStream : public Stream
+{
+public:
+    /**
+     * Constructor of an empty stream
+     */
+    inline MemoryStream()
+	: m_offset(0)
+	{ }
+
+    /**
+     * Constructor of aan initialized stream
+     * @param data Initial data to be copied in the memory stream
+     */
+    inline MemoryStream(const DataBlock& data)
+	: m_data(data), m_offset(0)
+	{ }
+
+    /**
+     * Get read-only access to the DataBlock held
+     * @return Const reference to the DataBlock
+     */
+    inline const DataBlock& data() const
+	{ return m_data; }
+
+    /**
+     * Do-nothing termination handler
+     * @return True to signal the stream was closed
+     */
+    virtual bool terminate()
+	{ return true; }
+    /**
+     * Do-nothing validity check
+     * @return True to indicate the stream is valid
+     */
+    virtual bool valid() const
+	{ return true; }
+
+    /**
+     * Write new data to the DataBlock at current position, advance pointer
+     * @param buffer Buffer of source data
+     * @param len Length of data to be written
+     * @return Number of bytes written, negative on error
+     */
+    virtual int writeData(const void* buffer, int len);
+
+    /**
+     * Get data from internal DataBlock, advance pointer
+     * @param buffer Buffer for getting the data
+     * @param len Length of the buffer
+     * @return Number of bytes read, negative on error, zero on end of data
+     */
+    virtual int readData(void* buffer, int len);
+
+    /**
+     * Get the length of the stream
+     * @return Length of the DataBlock in memory
+     */
+    virtual int64_t length()
+	{ return m_data.length(); }
+
+    /**
+     * Set the read/write pointer
+     * @param pos The seek start as enumeration
+     * @param offset The number of bytes to move the pointer from starting position
+     * @return The new position of the stream read/write pointer. Negative on failure
+     */
+    virtual int64_t seek(SeekPos pos, int64_t offset = 0);
+
+protected:
+    /**
+     * The DataBlock holding the data in memory
+     */
+    DataBlock m_data;
+
+    /**
+     * The current position for read/write operation
+     */
+    int64_t m_offset;
+};
+
+/**
  * Class to encapsulate a system dependent file in a system independent abstraction
  * @short A stream file class
  */

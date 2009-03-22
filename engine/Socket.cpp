@@ -441,6 +441,71 @@ bool Stream::supportsPairs()
 }
 
 
+int MemoryStream::writeData(const void* buffer, int len)
+{
+    if ((len < 0) || !buffer)
+	return -1;
+    if (!len)
+	return 0;
+    int ovr = m_data.length() - m_offset;
+    if (ovr < 0)
+	ovr = 0;
+    else if (ovr > len)
+	ovr = len;
+    if (ovr > 0) {
+	// overwrite part of the existing data
+	void* dest = m_data.data(m_offset,ovr);
+	if (!dest)
+	    return -1;
+	::memcpy(dest,buffer,ovr);
+	m_offset += ovr;
+	len -= ovr;
+	buffer = static_cast<const char*>(buffer) + ovr;
+    }
+    if (len > 0) {
+	DataBlock tmp(const_cast<void*>(buffer),len,false);
+	m_data += tmp;
+	m_offset += len;
+	tmp.clear(false);
+    }
+    return len + ovr;
+}
+
+int MemoryStream::readData(void* buffer, int len)
+{
+    if ((len <= 0) || !buffer)
+	return -1;
+    if (len + m_offset > m_data.length())
+	len = m_data.length() - m_offset;
+    if (len <= 0)
+	return 0;
+    void* src = m_data.data(m_offset,len);
+    if (!src)
+	return -1;
+    ::memcpy(buffer,src,len);
+    m_offset += len;
+    return len;
+}
+
+int64_t MemoryStream::seek(SeekPos pos, int64_t offset)
+{
+    switch (pos) {
+	case SeekBegin:
+	    break;
+	case SeekEnd:
+	    offset += length();
+	    break;
+	case SeekCurrent:
+	    offset += m_offset;
+	    break;
+    }
+    if ((offset < 0) || (offset > length()))
+	return -1;
+    m_offset = offset;
+    return offset;
+}
+
+
 File::File()
     : m_handle(invalidHandle())
 {

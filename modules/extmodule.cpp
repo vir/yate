@@ -1194,7 +1194,8 @@ bool ExtModReceiver::processLine(const char* line)
 		return false;
 	    }
 	}
-	Debug("ExtModReceiver",DebugWarn,"Unmatched message: %s [%p]",line,this);
+	Debug("ExtModReceiver",(m_dead ? DebugInfo : DebugWarn),
+	    "Unmatched%s message: %s [%p]",(m_dead ? " dead" : ""),line,this);
 	return false;
     }
     else if (id.startSkip("%%>install:",false)) {

@@ -111,13 +111,25 @@ GenObject* Array::get(int column,int row) const
 {
     if (column < 0 || column >= m_columns || row < 0 || row >= m_rows)
 	return 0;
-//    return ((*(ObjList *)(m_obj[column]))+row)->get();
     ObjList* l = static_cast<ObjList*>(m_obj[column]);
     if (l)
 	l = (*l)+row;
     if (l)
 	return l->get();
     Debug(DebugFail,"Array %p get item holder (%d,%d) does not exist!",this,column,row);
+    return 0;
+}
+
+GenObject* Array::take(int column,int row)
+{
+    if (column < 0 || column >= m_columns || row < 0 || row >= m_rows)
+	return 0;
+    ObjList* l = static_cast<ObjList*>(m_obj[column]);
+    if (l)
+	l = (*l)+row;
+    if (l)
+	return l->set(0,false);
+    Debug(DebugFail,"Array %p take item holder (%d,%d) does not exist!",this,column,row);
     return 0;
 }
 

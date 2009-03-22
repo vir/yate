@@ -1270,7 +1270,15 @@ public:
      * @return Pointer to the stored object, NULL for out of bound indexes
      */
     GenObject* get(int column, int row) const;
-    
+
+    /**
+     * Retrive and remove an object from the array
+     * @param column Number of the column in the array
+     * @param row Number of the row in the array
+     * @return Pointer to the stored object, NULL for out of bound indexes
+     */
+    GenObject* take(int column, int row);
+
     /**
      * Store an object in the array
      * @param obj Object to store in the array

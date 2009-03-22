@@ -16,6 +16,10 @@
 ; retry: int: How many times to retry the connection or query
 ;retry=5
 
+; encoding: string: Character set encoding used to communicate with the server
+;  If not set will match the encoding of server side database
+;encoding=
+
 ; connection: string: Ready-built client connection string for PQconnectStart
 ;  If this is not set the string is built from the following pieces
 ;  Take care if you set this - it will override anything that follows

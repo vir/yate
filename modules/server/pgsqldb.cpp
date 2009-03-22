@@ -56,6 +56,7 @@ private:
     bool startDb();
     int queryDbInternal(const char* query, Message* dest);
     String m_name,m_connection;
+    String m_encoding;
     int m_retry;
     u_int64_t m_timeout;
     PGconn *m_conn;
@@ -107,6 +108,7 @@ DbConn::DbConn(const NamedList* sect)
     if (m_timeout < 500000)
 	m_timeout = 500000;
     m_retry = sect->getIntValue("retry",5);
+    m_encoding = sect->getValue("encoding");
 }
 
 DbConn::~DbConn()
@@ -139,6 +141,9 @@ bool DbConn::initDb(int retry)
 		return false;
 	    case CONNECTION_OK:
 		Debug(&module,DebugAll,"Connection for '%s' succeeded",m_name.c_str());
+		if (m_encoding && PQsetClientEncoding(m_conn,m_encoding))
+		    Debug(&module,DebugWarn,"Failed to set encoding '%s' on connection '%s'",
+			m_encoding.c_str(),m_name.c_str());
 		return true;
 	    default:
 		break;

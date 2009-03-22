@@ -338,16 +338,27 @@ String DataBlock::sqlEscape(char extraEsc) const
     unsigned int i;
     for (i = 0; i < m_length; i++) {
 	char c = static_cast<char*>(m_data)[i];
-	if (c == '\0' || c == '\\' || c == '\'' || c == extraEsc)
+	if (c == '\0' || c == '\r' || c == '\n' || c == '\\' || c == '\'' || c == extraEsc)
 	    len++;
     }
     String tmp(' ',len);
     char* d = const_cast<char*>(tmp.c_str());
     for (i = 0; i < m_length; i++) {
 	char c = static_cast<char*>(m_data)[i];
-	if (c == '\0' || c == '\\' || c == '\'' || c == extraEsc)
+	if (c == '\0' || c == '\r' || c == '\n' || c == '\\' || c == '\'' || c == extraEsc)
 	    *d++ = '\\';
-	*d++ = c ? c : '0';
+	switch (c) {
+	    case '\0':
+		c = '0';
+		break;
+	    case '\r':
+		c = 'r';
+		break;
+	    case '\n':
+		c = 'n';
+		break;
+	}
+	*d++ = c;
     }
     return tmp;
 }

@@ -84,6 +84,7 @@ private:
     String m_unix;
     unsigned int m_port;
     bool m_compress;
+    String m_encoding;
     String m_query;
     Message* m_msg;
     int m_res;
@@ -144,6 +145,7 @@ DbConn::DbConn(const NamedList* sect)
     m_port = sect->getIntValue("port");
     m_unix = sect->getValue("socket");
     m_compress = sect->getBoolValue("compress");
+    m_encoding = sect->getValue("encoding");
 }
 
 DbConn::~DbConn()
@@ -179,6 +181,9 @@ bool DbConn::initDb()
 	my_bool reconn = 1;
 	mysql_options(m_conn,MYSQL_OPT_RECONNECT,(const char*)&reconn);
 #endif
+	if (m_encoding && mysql_set_character_set(m_conn,m_encoding))
+	    Debug(&module,DebugWarn,"Failed to set encoding '%s' on connection '%s'",
+		m_encoding.c_str(),m_name.c_str());
 	return true;
     }
     Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),mysql_error(m_conn));

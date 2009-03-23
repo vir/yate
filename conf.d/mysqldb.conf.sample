@@ -33,3 +33,7 @@
 
 ; compress: bool: Enable use of compression protocol
 ;compress=disable
+
+; encoding: string: Character set encoding used to communicate with the server
+; If not set or empty will use the default for your system
+;encoding=

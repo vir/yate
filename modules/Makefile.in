@@ -35,6 +35,7 @@ PROGS := cdrbuild.yate cdrfile.yate regexroute.yate \
 	server/pbxassist.yate server/dbpbx.yate server/lateroute.yate \
 	server/park.yate server/queues.yate server/queuesnotify.yate \
 	server/regfile.yate server/accfile.yate server/register.yate \
+	server/dbwave.yate \
 	server/yradius.yate \
 	server/sipfeatures.yate \
 	server/heartbeat.yate server/clustering.yate \

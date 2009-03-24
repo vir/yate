@@ -1399,6 +1399,7 @@ public:
 	Destroyed,
 	Active,
 	OnHold,
+	Mute,
 	Noticed,
 	AddrChanged,
 	Routed,
@@ -1503,6 +1504,14 @@ public:
     bool setActive(bool active, bool update = true);
 
     /**
+     * Set/reset this channel's muted flag. Set media if 'on' is false and the channel is active
+     * @param on True to reset outgoing media, false to set outgoing media
+     * @param update True to enqueue an update message
+     * @return True on success
+     */
+    bool setMuted(bool on, bool update = true);
+
+    /**
      * Set/reset the transferred peer's id. Enqueue clientchan.update if changed.
      * Open media when reset if the channel is active and answered
      * @param target The transferred peer's id. Leave it blank to reset
@@ -1536,6 +1545,13 @@ public:
      */
     inline bool active() const
 	{ return m_active; }
+
+    /**
+     * Check if this channel is muted
+     * @return True if this channel is muted
+     */
+    inline bool muted() const
+	{ return m_muted; }
 
     /**
      * Check if this channel was noticed
@@ -1624,6 +1640,7 @@ protected:
     bool m_active;                       // Channel active flag
     bool m_silence;                      // True if the peer did't sent us any audio data
     bool m_conference;                   // True if this channel is in conference
+    bool m_muted;                        // True if this channel is muted (no data source))
     String m_transferId;                 // Transferred id or empty if not transferred
     RefObject* m_clientData;             // Obscure data used by client logics
     bool m_utility;                      // Regular client channel flag

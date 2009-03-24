@@ -2361,7 +2361,7 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
     : Channel(ClientDriver::self(),0,true),
     m_party(msg.getValue("caller")), m_noticed(false),
     m_line(0), m_active(false), m_silence(false), m_conference(false),
-    m_clientData(0), m_utility(false)
+    m_muted(false), m_clientData(0), m_utility(false)
 {
     Debug(this,DebugCall,"Created incoming from=%s peer=%s [%p]",
 	m_party.c_str(),peerid.c_str(),this);
@@ -2382,7 +2382,8 @@ ClientChannel::ClientChannel(const Message& msg, const String& peerid)
 ClientChannel::ClientChannel(const String& target, const NamedList& params)
     : Channel(ClientDriver::self(),0,false),
     m_party(target), m_noticed(true), m_line(0), m_active(false),
-    m_silence(true), m_conference(false), m_clientData(0), m_utility(false)
+    m_silence(true), m_conference(false), m_muted(false), m_clientData(0),
+    m_utility(false)
 {
     Debug(this,DebugCall,"Created outgoing to=%s [%p]",
 	m_party.c_str(),this);
@@ -2544,15 +2545,16 @@ bool ClientChannel::setMedia(bool open, bool replace)
     complete(m,true);
     m.userData(this);
     m.setParam("consumer",dev);
-    m.setParam("source",dev);
+    if (!m_muted)
+	m.setParam("source",dev);
     Engine::dispatch(m);
     if (getConsumer())
 	checkSilence();
     else
         Debug(this,DebugNote,"Failed to set data consumer [%p]",this);
-    if (!getSource())
+    if (!(getSource() || m_muted))
         Debug(this,DebugNote,"Failed to set data source [%p]",this);
-    bool ok = (getSource() && getConsumer());
+    bool ok = ((m_muted || getSource()) && getConsumer());
     if (!ok && Client::self()) {
 	String tmp = "Failed to open media channel(s)";
 	Client::self()->setStatusLocked(tmp);
@@ -2570,6 +2572,9 @@ bool ClientChannel::setActive(bool active, bool upd)
     noticed();
     if (active && m_transferId && !m_conference)
 	return false;
+    // Reset data source to make sure we remove any MOH
+    if (active)
+	setSource();
     if (isAnswered())
 	setMedia(active);
     // Don't notify if nothing changed
@@ -2581,6 +2586,26 @@ bool ClientChannel::setActive(bool active, bool upd)
 	return true;
     update(active ? Active : OnHold);
     // TODO: notify the peer if answered
+    return true;
+}
+
+// Set/reset this channel's muted flag. Set media if on
+bool ClientChannel::setMuted(bool on, bool upd)
+{
+    Lock lock(m_mutex);
+    if (m_muted == on)
+	return true;
+
+    Debug(this,DebugInfo,"Set muted=%s [%p]",String::boolText(on),this);
+    m_muted = on;
+    if (m_active) {
+	if (m_muted)
+	    setSource();
+	else
+	    setMedia(true);
+    }
+    if (upd)
+	update(Mute);
     return true;
 }
 

@@ -21,11 +21,13 @@
 
 ; Functions callable in the right-hand side:
 ;  $() = a ; character
+;  $($) = a $ character
 ;  $(++N) = N+1
 ;  $(--N) = N-1
 ;  $(length,STRING) = length of STRING
 ;  $(upper,STRING) = STRING converted to upper case
 ;  $(lower,STRING) = STRING converted to lower case
+;  $(chr,N) = character with numeric code N
 ;  $(add,VAL1,VAL2[,LEN]) = VAL1+VAL2 left filled to LEN or length of VAL1
 ;  $(sub,VAL1,VAL2[,LEN]) = VAL1-VAL2 left filled to LEN or length of VAL1
 ;  $(mul,VAL1,VAL2[,LEN]) = VAL1*VAL2 left filled to LEN or length of VAL1

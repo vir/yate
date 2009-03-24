@@ -139,6 +139,8 @@ static void evalFunc(String& str)
 {
     if (str.null())
 	str = ";";
+    else if (str == "$")
+	;
     else if (str.startSkip("++",false)) {
 	String tmp;
 	str = vars(str,&tmp).toInteger(0,10) + 1;
@@ -165,6 +167,8 @@ static void evalFunc(String& str)
 	    str = vars(par).toUpper();
 	else if (str == "lower")
 	    str = vars(par).toLower();
+	else if (str == "chr")
+	    str = static_cast<char>(0xff & vars(par).toInteger());
 	else if ((sep > 0) && ((str == "streq") || (str == "strne"))) {
 	    bool ret = (str == "strne");
 	    str = par.substr(sep+1);

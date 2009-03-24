@@ -36,4 +36,5 @@
 
 ; encoding: string: Character set encoding used to communicate with the server
 ; If not set or empty will use the default for your system
+; This setting is not available on older MySQL client libraries
 ;encoding=

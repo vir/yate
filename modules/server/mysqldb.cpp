@@ -181,9 +181,14 @@ bool DbConn::initDb()
 	my_bool reconn = 1;
 	mysql_options(m_conn,MYSQL_OPT_RECONNECT,(const char*)&reconn);
 #endif
+#ifdef HAVE_MYSQL_SET_CHARSET
 	if (m_encoding && mysql_set_character_set(m_conn,m_encoding))
 	    Debug(&module,DebugWarn,"Failed to set encoding '%s' on connection '%s'",
 		m_encoding.c_str(),m_name.c_str());
+#else
+	if (m_encoding)
+	    Debug(&module,DebugWarn,"Your client library does not support setting the character set");
+#endif
 	return true;
     }
     Debug(&module,DebugWarn,"Connection for '%s' failed: %s",m_name.c_str(),mysql_error(m_conn));

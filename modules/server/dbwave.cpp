@@ -168,6 +168,7 @@ DbWriter::~DbWriter()
     }
     NamedList params("");
     params.addParam(new NamedPointer("data",new DataBlock(data())));
+    params.addParam("length",String(data().length()));
     params.replaceParams(m_query,true);
     DDebug(DebugInfo,"DbWriter data size: %u query size: %u",data().length(),m_query.length());
     Message* m = new Message("database");

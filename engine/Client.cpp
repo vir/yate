@@ -105,9 +105,11 @@ private:
 class PostponedMessage : public Message
 {
 public:
-    inline PostponedMessage(const Message& msg, int id)
-	: Message(msg), m_id(id)
-	{ }
+    inline PostponedMessage(const Message& msg, int id, bool copyUserData)
+	: Message(msg), m_id(id) {
+	    if (copyUserData)
+		userData(msg.userData());
+	}
     inline int id() const
 	{ return m_id; }
 private:
@@ -1761,11 +1763,11 @@ bool Client::received(Message& msg, int id)
 }
 
 // Postpone messages to be redispatched from UI thread
-bool Client::postpone(const Message& msg, int id)
+bool Client::postpone(const Message& msg, int id, bool copyUserData)
 {
     if (isCurrent())
 	return false;
-    PostponedMessage* postponed = new PostponedMessage(msg,id);
+    PostponedMessage* postponed = new PostponedMessage(msg,id,copyUserData);
     s_postponeMutex.lock();
     s_postponed.append(postponed);
     s_postponeMutex.unlock();

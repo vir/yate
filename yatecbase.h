@@ -1072,9 +1072,10 @@ public:
      * Postpone a copy of a message to be dispatched from the UI thread
      * @param msg Message to be postponed
      * @param id Identifier of the message to be used on dispatch
+     * @param copyUserData Copy source user data in postponed message
      * @return True if the UI thread was not current so the message was postponed
      */
-    bool postpone(const Message& msg, int id);
+    bool postpone(const Message& msg, int id, bool copyUserData = false);
 
     /**
      * Show a file open dialog window

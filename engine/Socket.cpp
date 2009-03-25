@@ -644,7 +644,10 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	createMode = (!canRead && !append) ? CREATE_ALWAYS : OPEN_ALWAYS;
     else
 	createMode = OPEN_EXISTING;
-    HANDLE h = CreateFile(name,access,0,NULL,createMode,FILE_ATTRIBUTE_NORMAL,NULL);
+    DWORD share = 0;
+    if (!canWrite && canRead)
+	share |= FILE_SHARE_READ;
+    HANDLE h = CreateFile(name,access,share,NULL,createMode,FILE_ATTRIBUTE_NORMAL,NULL);
     if (h == invalidHandle()) {
 	copyError();
 	return false;
@@ -766,6 +769,10 @@ int File::readData(void* buffer, int length)
 	clearError();
 	return nbytes;
     }
+    else if (::GetLastError() == ERROR_HANDLE_EOF) {
+	clearError();
+	return 0;
+    } 
     copyError();
     return -1;
 #else

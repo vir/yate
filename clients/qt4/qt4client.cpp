@@ -1051,7 +1051,7 @@ bool QtWindow::setSelect(const String& name, const String& item)
 	name.c_str(),item.c_str(),this);
 
     QtWidget w(this,name);
-    if (w.invalid() || !item)
+    if (w.invalid())
 	return false;
 
     int d = 0;

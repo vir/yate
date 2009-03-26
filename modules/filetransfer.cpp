@@ -721,7 +721,7 @@ FileChan::~FileChan()
 FileDriver::FileDriver()
     : Driver("filetransfer","misc"), m_init(false)
 {
-    Output("Loaded Driver File Transfer");
+    Output("Loaded module File Transfer");
     Engine::pluginMode(Engine::LoadEarly);
 }
 

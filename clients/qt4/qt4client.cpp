@@ -1866,7 +1866,7 @@ bool QtWindow::eventFilter(QObject* obj, QEvent* event)
 	bool ok = true;
 	bool handled = true;
 	if (prop == s_propWindowFlags) {
-	    QWidget* wid = (name == m_id) ? this : w.widget();
+	    QWidget* wid = (name == m_id || name == m_oldId) ? this : w.widget();
 	    // Set window flags from enclosed widget:
 	    //  custom window title/border/sysmenu config
 	    ObjList* f = value.split(',',false);

@@ -867,6 +867,10 @@ void Client::run()
 	    logic->toString().c_str(),logic);
 	logic->exitingClient();
     }
+    // Make sure we drop all channels whose peers are not client channels
+    Message m("call.drop");
+    m.addParam("reason","shutdown");
+    Engine::dispatch(m);
     TelEngine::destruct(m_defaultLogic);
     exitClient();
 }

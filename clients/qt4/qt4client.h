@@ -64,6 +64,8 @@ class QtEventProxy;                      // Proxy to global QT events
 class QtClient;                          // The QT based client
 class QtDriver;                          // The QT based telephony driver
 class QtWindow;                          // A QT window
+class QtCustomObject;                    // A custom QT object
+class QtCustomWidget;                    // A custom QT widget
 class QtTable;                           // A custom QT table widget
 class QtSound;                           // A QT client sound
 
@@ -479,8 +481,37 @@ protected:
 };
 
 /**
- * This class encapsulates a custom QT table
- * @short A custom QT table widget
+ * This class encapsulates a custom QT object
+ * @short A custom QT object
+ */
+class YQT4_API QtCustomObject : public QObject, public UIWidget
+{
+    YCLASS(QtCustomObject,UIWidget)
+    Q_CLASSINFO("QtCustomObject","Yate")
+    Q_OBJECT
+public:
+    /**
+     * Constructor
+     * @param name Object's name
+     * @param parent Optional parent object
+     */
+    inline QtCustomObject(const char* name, QObject* parent = 0)
+	: QObject(parent), UIWidget(name)
+	{ setObjectName(name);	}
+
+    /**
+     * Parent changed notification
+     */
+    virtual void parentChanged()
+	{}
+
+private:
+    QtCustomObject() {}                  // No default constructor
+};
+
+/**
+ * This class encapsulates a custom QT widget
+ * @short A custom QT widget
  */
 class YQT4_API QtCustomWidget : public QWidget, public UIWidget
 {

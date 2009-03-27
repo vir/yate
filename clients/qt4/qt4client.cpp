@@ -75,11 +75,12 @@ public:
 	Action,                          // QAction descendant
 	CustomTable,                     // QtTable descendant
 	CustomWidget,                    // QtCustomWidget descendant
+	CustomObject,                    // QtCustomObject descendant
 	Missing                          // Invalid pointer
     };
     // Set widget from object
     inline QtWidget(QObject* w)
-	: m_widget(0), m_action(0), m_type(Missing) {
+	: m_widget(0), m_action(0), m_object(0), m_type(Missing) {
 	    if (!w)
 		return;
 	    if (w->inherits("QWidget"))
@@ -90,17 +91,20 @@ public:
 	}
     // Set widget from object and type
     inline QtWidget(QWidget* w, int t)
-	: m_widget(w), m_action(0), m_type(t) {
+	: m_widget(w), m_action(0), m_object(0), m_type(t) {
 	    if (!m_widget)
 		m_type = Missing;
 	}
     // Set widget/action from object and name
     inline QtWidget(QtWindow* wnd, const String& name)
-	: m_widget(0), m_action(0), m_type(Missing) {
+	: m_widget(0), m_action(0), m_object(0), m_type(Missing) {
 	    QString what = QtClient::setUtf8(name);
 	    m_widget = qFindChild<QWidget*>(wnd,what);
-	    if (!m_widget)
+	    if (!m_widget) {
 		m_action = qFindChild<QAction*>(wnd,what);
+		if (!m_action)
+		    m_object = qFindChild<QObject*>(wnd,what);
+	    }
 	    m_type = getType();
 	}
     inline bool valid() const
@@ -154,6 +158,8 @@ public:
 	{ return qobject_cast<QtTable*>(m_widget); }
     inline QtCustomWidget* customWidget()
 	{ return qobject_cast<QtCustomWidget*>(m_widget); }
+    inline QtCustomObject* customObject()
+	{ return qobject_cast<QtCustomObject*>(m_object); }
     inline QAction* action()
 	{ return m_action; }
 
@@ -171,12 +177,15 @@ public:
 	    }
 	    if (m_action && m_action->inherits("QAction"))
 		return Action;
+	    if (customObject())
+		return CustomObject;
 	    return Missing;
 	}
     static String s_types[Unknown];
 protected:
     QWidget* m_widget;
     QAction* m_action;
+    QObject* m_object;
     int m_type;
 private:
     QtWidget() {}
@@ -825,6 +834,8 @@ bool QtWindow::setParams(const NamedList& params)
 		ok = w.customTable()->setParams(*nl) && ok;
 	    else if (w.type() == QtWidget::CustomWidget)
 		ok = w.customWidget()->setParams(*nl) && ok;
+	    else if (w.type() == QtWidget::CustomObject)
+		ok = w.customObject()->setParams(*nl) && ok;
 	    else
 		ok = false;
 	}
@@ -2094,7 +2105,18 @@ void QtWindow::doInit()
 	    }
 	}
 	TelEngine::destruct(list);
-	setWidget(frm[i],(QWidget*)UIFactory::build(type,name,&params));
+	QObject* obj = (QObject*)UIFactory::build(type,name,&params);
+	if (!obj)
+	    continue;
+	QWidget* wid = qobject_cast<QWidget*>(obj);
+	if (wid)
+	    setWidget(frm[i],wid);
+	else {
+	    obj->setParent(frm[i]);
+	    QtCustomObject* customObj = qobject_cast<QtCustomObject*>(obj);
+	    if (customObj)
+		customObj->parentChanged();
+	}
     }
 
     // Create window's children dynamic properties from config

@@ -3243,6 +3243,12 @@ public:
 	{ return m_params.count(); }
 
     /**
+     * Clear all parameters
+     */
+    inline void clearParams()
+	{ m_params.clear(); }
+
+    /**
      * Add a named string to the parameter list.
      * @param param Parameter to add
      */

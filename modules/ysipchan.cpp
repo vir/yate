@@ -2234,12 +2234,43 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
     m->addParam("sip_callid",m_callid);
     m->addParam("device",ev->getMessage()->getHeaderValue("User-Agent"));
     copySipHeaders(*m,*ev->getMessage());
+    const char* reason = 0;
     hl = m_tr->initialMessage()->getHeader("Referred-By");
+    if (hl)
+	reason = "transfer";
+    else {
+	hl = m_tr->initialMessage()->getHeader("Diversion");
+	if (hl) {
+	    reason = "divert";
+	    const String* par = hl->getParam("reason");
+	    if (par) {
+		tmp = par->c_str();
+		MimeHeaderLine::delQuotes(tmp);
+		if (tmp.trimBlanks())
+		    m->addParam("divert_reason",tmp);
+	    }
+	    par = hl->getParam("privacy");
+	    if (par) {
+		tmp = par->c_str();
+		MimeHeaderLine::delQuotes(tmp);
+		if (tmp.trimBlanks())
+		    m->addParam("divert_privacy",tmp);
+	    }
+	    par = hl->getParam("screen");
+	    if (par) {
+		tmp = par->c_str();
+		MimeHeaderLine::delQuotes(tmp);
+		if (tmp.trimBlanks())
+		    m->addParam("divert_screen",tmp);
+	    }
+	}
+    }
     if (hl) {
-	URI d(*hl);
-	m->addParam("diverter",uri.getUser());
-	if (uri.getDescription())
-	    m->addParam("divertername",uri.getDescription());
+	URI div(*hl);
+	m->addParam("diverter",div.getUser());
+	if (div.getDescription())
+	    m->addParam("divertername",div.getDescription());
+	m->addParam("diverteruri",div);
     }
     m_rtpLocalAddr = s_rtpip;
     MimeSdpBody* sdp = getSdpBody(ev->getMessage()->body);
@@ -2268,6 +2299,8 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
 	    m->addParam("rtp_forward","possible");
     }
     DDebug(this,DebugAll,"RTP addr '%s' [%p]",m_rtpAddr.c_str(),this);
+    if (reason)
+	m->addParam("reason",reason);
     m_route = m;
     Message* s = message("chan.startup");
     s->addParam("caller",m_uri.getUser());
@@ -2370,8 +2403,18 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	if (from) {
 	    URI fr(*from);
 	    URI d(fr.getProtocol(),*diverter,fr.getHost(),fr.getPort(),
-		msg.getValue("divertername"));
-	    MimeHeaderLine* hl = new MimeHeaderLine("Referred-By",d);
+		msg.getValue("divertername",""));
+	    String* reason = msg.getParam("divert_reason");
+	    String* privacy = msg.getParam("divert_privacy");
+	    String* screen = msg.getParam("divert_screen");
+	    bool refer = TelEngine::null(reason) && TelEngine::null(privacy) && TelEngine::null(screen);
+	    MimeHeaderLine* hl = new MimeHeaderLine(refer ? "Referred-By" : "Diversion",d);
+	    if (!TelEngine::null(reason))
+		hl->setParam("reason",MimeHeaderLine::quote(*reason));
+	    if (!TelEngine::null(privacy))
+		hl->setParam("privacy",MimeHeaderLine::quote(*privacy));
+	    if (!TelEngine::null(screen))
+		hl->setParam("screen",MimeHeaderLine::quote(*screen));
 	    m->addHeader(hl);
 	}
     }
@@ -2563,7 +2606,7 @@ void YateSIPConnection::hangup()
     }
     if (!error)
 	error = m_reason.c_str();
-    disconnect(error);
+    disconnect(error,parameters());
 }
 
 // Creates a new message in an existing dialog
@@ -3156,7 +3199,42 @@ bool YateSIPConnection::process(SIPEvent* ev)
     if (msg && !msg->isOutgoing() && msg->isAnswer() && (code >= 300)) {
 	m_cancel = false;
 	m_byebye = false;
+	parameters().clearParams();
+	parameters().addParam("cause_sip",String(code));
 	setReason(msg->reason,code);
+	if (code < 400) {
+	    // this is a redirect, it should provide a Contact and possibly a Diversion
+	    const MimeHeaderLine* hl = msg->getHeader("Contact");
+	    if (hl) {
+		URI uri(*hl);
+		parameters().addParam("called",uri.getUser());
+		if (uri.getDescription())
+		    parameters().addParam("calledname",uri.getDescription());
+		parameters().addParam("calleduri",uri);
+		hl = msg->getHeader("Diversion");
+		if (hl) {
+		    uri = *hl;
+		    parameters().addParam("diverter",uri.getUser());
+		    if (uri.getDescription())
+			parameters().addParam("divertername",uri.getDescription());
+		    parameters().addParam("diverteruri",uri);
+		    String tmp = hl->getParam("reason");
+		    MimeHeaderLine::delQuotes(tmp);
+		    if (tmp.trimBlanks())
+			parameters().addParam("divert_reason",tmp);
+		    tmp = hl->getParam("privacy");
+		    MimeHeaderLine::delQuotes(tmp);
+		    if (tmp.trimBlanks())
+			parameters().addParam("divert_privacy",tmp);
+		    tmp = hl->getParam("screen");
+		    MimeHeaderLine::delQuotes(tmp);
+		    if (tmp.trimBlanks())
+			parameters().addParam("divert_screen",tmp);
+		}
+	    }
+	    else
+		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
+	}
 	hangup();
     }
     if (!ev->isActive()) {
@@ -3202,7 +3280,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	// see if we should detect our external address
 	const YateSIPLine* line = plugin.findLine(m_line);
 	if (line && line->localDetect()) {
-	    MimeHeaderLine* hl = const_cast<MimeHeaderLine*>(msg->getHeader("Via"));
+	    const MimeHeaderLine* hl = msg->getHeader("Via");
 	    if (hl) {
 		const NamedString* par = hl->getParam("received");
 		if (par && *par) {
@@ -3960,6 +4038,31 @@ bool YateSIPConnection::callRouted(Message& msg)
 	    s = tmp + "<" + s + ">";
 	    SIPMessage* m = new SIPMessage(m_tr->initialMessage(),302);
 	    m->addHeader("Contact",s);
+	    tmp = msg.getValue("diversion");
+	    if (tmp.trimBlanks() && tmp.toBoolean(true)) {
+		// if diversion is a boolean true use the dialog local URI
+		if (tmp.toBoolean(false))
+		    tmp = m_dialog.localURI;
+		if (!(tmp.startsWith("<") && tmp.endsWith(">")))
+		    tmp = "<" + tmp + ">";
+		MimeHeaderLine* hl = new MimeHeaderLine("Diversion",tmp);
+		tmp = msg.getValue("divert_reason");
+		if (tmp) {
+		    MimeHeaderLine::addQuotes(tmp);
+		    hl->setParam("reason",tmp);
+		}
+		tmp = msg.getValue("divert_privacy");
+		if (tmp) {
+		    MimeHeaderLine::addQuotes(tmp);
+		    hl->setParam("privacy",tmp);
+		}
+		tmp = msg.getValue("divert_screen");
+		if (tmp) {
+		    MimeHeaderLine::addQuotes(tmp);
+		    hl->setParam("screen",tmp);
+		}
+		m->addHeader(hl);
+	    }
 	    m_tr->setResponse(m);
 	    m->deref();
 	    m_byebye = false;

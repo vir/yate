@@ -54,8 +54,11 @@ URI::URI(const char* uri)
 URI::URI(const char* proto, const char* user, const char* host, int port, const char* desc)
     : m_desc(desc), m_proto(proto), m_user(user), m_host(host), m_port(port)
 {
-    if (desc)
-	*this << "\"" << m_desc << "\" <";
+    if (desc) {
+	if (m_desc)
+	    *this << "\"" << m_desc << "\" ";
+	*this << "<";
+    }
     *this << m_proto << ":";
     if (user)
 	*this << m_user << "@";

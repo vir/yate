@@ -3206,6 +3206,7 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    // this is a redirect, it should provide a Contact and possibly a Diversion
 	    const MimeHeaderLine* hl = msg->getHeader("Contact");
 	    if (hl) {
+		parameters().addParam("redirect",String::boolText(true));
 		URI uri(*hl);
 		parameters().addParam("called",uri.getUser());
 		if (uri.getDescription())

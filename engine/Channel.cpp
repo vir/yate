@@ -82,7 +82,7 @@ void CallEndpoint::destroyed()
 	Debug(DebugAll,"Endpoint at %p type '%s' refcount=%d",e,e->name().c_str(),e->refcount());
     }
 #endif
-    disconnect(true,0,true);
+    disconnect(true,0,true,0);
     m_data.clear();
 }
 
@@ -144,6 +144,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
 
     m_peer = peer;
     peer->setPeer(this,reason,notify);
+    setDisconnect(0);
     connected(reason);
 
 #if 0
@@ -153,7 +154,7 @@ bool CallEndpoint::connect(CallEndpoint* peer, const char* reason, bool notify)
     return true;
 }
 
-bool CallEndpoint::disconnect(bool final, const char* reason, bool notify)
+bool CallEndpoint::disconnect(bool final, const char* reason, bool notify, const NamedList* params)
 {
     if (!m_peer)
 	return false;
@@ -178,7 +179,7 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify)
 	e->disconnect();
     }
 
-    temp->setPeer(0,reason,notify);
+    temp->setPeer(0,reason,notify,params);
     if (final)
 	disconnected(true,reason);
     lock.drop();
@@ -186,13 +187,17 @@ bool CallEndpoint::disconnect(bool final, const char* reason, bool notify)
     return deref();
 }
 
-void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify)
+void CallEndpoint::setPeer(CallEndpoint* peer, const char* reason, bool notify, const NamedList* params)
 {
     m_peer = peer;
-    if (m_peer)
+    if (m_peer) {
+	setDisconnect(0);
 	connected(reason);
-    else if (notify)
+    }
+    else if (notify) {
+	setDisconnect(params);
 	disconnected(false,reason);
+    }
 }
 
 DataEndpoint* CallEndpoint::getEndpoint(const char* type) const
@@ -280,7 +285,7 @@ DataConsumer* CallEndpoint::getConsumer(const char* type) const
 
 Channel::Channel(Driver* driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(driver), m_outgoing(outgoing),
+      m_parameters(""), m_driver(driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
       m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
 {
@@ -289,7 +294,7 @@ Channel::Channel(Driver* driver, const char* id, bool outgoing)
 
 Channel::Channel(Driver& driver, const char* id, bool outgoing)
     : CallEndpoint(id),
-      m_driver(&driver), m_outgoing(outgoing),
+      m_parameters(""), m_driver(&driver), m_outgoing(outgoing),
       m_timeout(0), m_maxcall(0),
       m_dtmfTime(0), m_dtmfSeq(0), m_answered(false)
 {
@@ -389,13 +394,19 @@ void Channel::disconnected(bool final, const char* reason)
     if (final || Engine::exiting())
 	return;
     // last chance to get reconnected to something
-    Message* m = message("chan.disconnected");
+    Message* m = getDisconnect(reason);
     m_targetid.clear();
     // we will remain referenced until the message is destroyed
     m->userData(this);
-    if (reason)
-	m->setParam("reason",reason);
     Engine::enqueue(m);
+}
+
+void Channel::setDisconnect(const NamedList* params)
+{
+    DDebug(this,DebugInfo,"setDisconnect(%p) [%p]",params,this);
+    m_parameters.clearParams();
+    if (params)
+	m_parameters.copyParams(*params);
 }
 
 void Channel::setId(const char* newId)
@@ -403,6 +414,16 @@ void Channel::setId(const char* newId)
     debugName(0);
     CallEndpoint::setId(newId);
     debugName(id());
+}
+
+Message* Channel::getDisconnect(const char* reason)
+{
+    Message* msg = new Message("chan.disconnected");
+    msg->copyParams(m_parameters);
+    complete(*msg);
+    if (reason)
+	msg->setParam("reason",reason);
+    return msg;
 }
 
 void Channel::status(const char* newstat)

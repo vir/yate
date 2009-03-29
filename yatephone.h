@@ -1120,10 +1120,20 @@ public:
      * Disconnect from the connected peer call endpoint.
      * @param reason Text that describes disconnect reason.
      * @param notify Call disconnected() notification method on old peer
+     * @param params Optional pointer to extra parameters for disconnect cause
      * @return True if the object was deleted, false if it still exists
      */
-    inline bool disconnect(const char* reason = 0, bool notify = true)
-	{ return disconnect(false,reason,notify); }
+    inline bool disconnect(const char* reason = 0, bool notify = true, const NamedList* params = 0)
+	{ return disconnect(false,reason,notify,params); }
+
+    /**
+     * Disconnect from the connected peer call endpoint and notify old peer.
+     * @param reason Text that describes disconnect reason.
+     * @param params Extra parameters for disconnect cause
+     * @return True if the object was deleted, false if it still exists
+     */
+    inline bool disconnect(const char* reason, const NamedList& params)
+	{ return disconnect(false,reason,true,&params); }
 
     /**
      * Get a data endpoint of this object
@@ -1193,12 +1203,19 @@ protected:
     virtual void disconnected(bool final, const char* reason) { }
 
     /**
+     * Set disconnect parameters
+     * @param params Pointer to disconnect cause parameters, NULL to reset them
+     */
+    virtual void setDisconnect(const NamedList* params) { }
+
+    /**
      * Set the peer call endpoint pointer.
      * @param peer A pointer to the new peer or NULL.
      * @param reason Text describing the reason in case of disconnect.
      * @param notify Call notification methods - connected() or disconnected()
+     * @param params Optional pointer to extra parameters for disconnect cause
      */
-    void setPeer(CallEndpoint* peer, const char* reason = 0, bool notify = true);
+    void setPeer(CallEndpoint* peer, const char* reason = 0, bool notify = true, const NamedList* params = 0);
 
     /**
      * Set a foreign data endpoint in this object
@@ -1213,7 +1230,7 @@ protected:
     virtual void setId(const char* newId);
 
 private:
-    bool disconnect(bool final, const char* reason, bool notify);
+    bool disconnect(bool final, const char* reason, bool notify, const NamedList* params);
 };
 
 /**
@@ -1515,6 +1532,7 @@ class YATE_API Channel : public CallEndpoint, public DebugEnabler
     friend class Router;
 
 private:
+    NamedList m_parameters;
     Driver* m_driver;
     bool m_outgoing;
     u_int64_t m_timeout;
@@ -1888,10 +1906,23 @@ protected:
     virtual void disconnected(bool final, const char* reason);
 
     /**
+     * Set disconnect parameters
+     * @param params Pointer to disconnect cause parameters, NULL to reset them
+     */
+    virtual void setDisconnect(const NamedList* params);
+
+    /**
      * Set a new ID for this channel
      * @param newId New ID to set to this channel
      */
     virtual void setId(const char* newId);
+
+    /**
+     * Create a properly populated chan.disconnect message
+     * @param reason Channel disconnect reason if available
+     * @return A new allocated and parameter filled chan.disconnected message
+     */
+    virtual Message* getDisconnect(const char* reason);
 
     /**
      * Set the current status of the channel.
@@ -1942,6 +1973,20 @@ protected:
      * @return True on success
      */
     bool toneDetect(const char* sniffer = 0);
+
+    /**
+     * Get the disconnect parameters list
+     * @return Reference to disconnect parameters
+     */
+    inline NamedList& parameters()
+	{ return m_parameters; }
+
+    /**
+     * Get the disconnect parameters list
+     * @return Constant teference to disconnect parameters
+     */
+    inline const NamedList& parameters() const
+	{ return m_parameters; }
 
 private:
     void init();

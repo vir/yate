@@ -22,6 +22,9 @@
 ; dialheld: bool: Dial back from held calls if the control call leg hangs up
 ;dialheld=no
 
+; diversion: bool: Honor protocol requested diversion of calls
+;diversion=no
+
 ; minlen: int: Minimum length of command sequences
 ;minlen=2
 

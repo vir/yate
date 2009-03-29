@@ -107,6 +107,9 @@ static bool s_pass = false;
 // redial from calls that are left on hold or drop them?
 static bool s_dialHeld = false;
 
+// allow diversion requested through protocol
+static bool s_divProto = false;
+
 // interdigit timeout, clear collected digits if last was older than this
 static unsigned int s_timeout = 30000000;
 
@@ -196,6 +199,7 @@ void PBXList::initialize()
     s_filter = s_cfg.getValue("general","filter");
     s_pass = s_cfg.getBoolValue("general","dtmfpass",false);
     s_dialHeld = s_cfg.getBoolValue("general","dialheld",false);
+    s_divProto = s_cfg.getBoolValue("general","diversion",false);
     s_minlen = s_cfg.getIntValue("general","minlen",2);
     if (s_minlen < 1)
 	s_minlen = 1;
@@ -313,46 +317,60 @@ bool PBXAssist::msgDisconnect(Message& msg, const String& reason)
 	    id().c_str(),transfer.c_str());
     }
 
-    if (reason) {
-	// we have a reason, see if we should divert the call
-	String called = m_keep.getValue("divert_"+reason);
-	if (called && (called != m_keep.getValue("called"))) {
-	    Message* m = new Message("call.preroute");
-	    m->addParam("id",id());
-	    m->addParam("reason",reason);
-	    m->addParam("pbxstate",state());
-	    m->copyParam(m_keep,"billid");
-	    m->copyParam(m_keep,"caller");
-	    copyParams(*m,msg,&m_keep);
-	    if (isE164(called)) {
-		// divert target is a number so we have to route it
-		m->addParam("called",called);
-		Engine::dispatch(m);
-		*m = "call.route";
-		if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
-		    // routing failed
-		    TelEngine::destruct(m);
-		    return errorBeep("no route");
-		}
-		called = m->retValue();
-		m->retValue().clear();
-		m->msgTime() = Time::now();
-	    }
-	    else {
-		// diverting to resource, add old called for reference
-		m->copyParam(m_keep,"called");
-	    }
-	    Debug(list(),DebugCall,"Chan '%s' divert on '%s' to '%s'",
-		id().c_str(),reason.c_str(),called.c_str());
-	    *m = "chan.masquerade";
-	    m->setParam("id",id());
-	    m->setParam("message","call.execute");
-	    m->setParam("callto",called);
-	    m->setParam("reason","divert_"+reason);
-	    m->userData(msg.userData());
-	    Engine::enqueue(m);
-	    return true;
+    String divertReason = reason;
+    String called;
+    bool proto = s_divProto && msg.getBoolValue("redirect");
+    if (proto) {
+	// protocol requested redirect or diversion
+	divertReason = msg.getValue("divert_reason");
+	called = msg.getValue("called");
+    }
+    else if (reason) {
+	// we have a disconnect reason, see if we should divert the call
+	called = m_keep.getValue("divert_"+reason);
+    }
+    if (called && (called != m_keep.getValue("called"))) {
+	Message* m = new Message("call.preroute");
+	m->addParam("id",id());
+	m->addParam("reason",divertReason);
+	m->addParam("pbxstate",state());
+	m->copyParam(m_keep,"billid");
+	m->copyParam(m_keep,"caller");
+	if (proto) {
+	    m->copyParam(msg,"diverter");
+	    m->addParam("divert_reason",divertReason);
+	    m->copyParam(msg,"divert_privacy");
+	    m->copyParam(msg,"divert_screen");
 	}
+	copyParams(*m,msg,&m_keep);
+	if (isE164(called)) {
+	    // divert target is a number so we have to route it
+	    m->addParam("called",called);
+	    Engine::dispatch(m);
+	    *m = "call.route";
+	    if (!Engine::dispatch(m) || m->retValue().null() || (m->retValue() == "-") || (m->retValue() == "error")) {
+		// routing failed
+		TelEngine::destruct(m);
+		return errorBeep("no route");
+	    }
+	    called = m->retValue();
+	    m->retValue().clear();
+	    m->msgTime() = Time::now();
+	}
+	else {
+	    // diverting to resource, add old called for reference
+	    m->copyParam(m_keep,"called");
+	}
+	Debug(list(),DebugCall,"Chan '%s' divert on '%s' to '%s'",
+	    id().c_str(),divertReason.c_str(),called.c_str());
+	*m = "chan.masquerade";
+	m->setParam("id",id());
+	m->setParam("message","call.execute");
+	m->setParam("callto",called);
+	m->setParam("reason","divert_"+divertReason);
+	m->userData(msg.userData());
+	Engine::enqueue(m);
+	return true;
     }
 
     if (!m_guest && (state() != "new")) {

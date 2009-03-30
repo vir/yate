@@ -2407,14 +2407,17 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	    String* reason = msg.getParam("divert_reason");
 	    String* privacy = msg.getParam("divert_privacy");
 	    String* screen = msg.getParam("divert_screen");
-	    bool refer = TelEngine::null(reason) && TelEngine::null(privacy) && TelEngine::null(screen);
-	    MimeHeaderLine* hl = new MimeHeaderLine(refer ? "Referred-By" : "Diversion",d);
-	    if (!TelEngine::null(reason))
-		hl->setParam("reason",MimeHeaderLine::quote(*reason));
-	    if (!TelEngine::null(privacy))
-		hl->setParam("privacy",MimeHeaderLine::quote(*privacy));
-	    if (!TelEngine::null(screen))
-		hl->setParam("screen",MimeHeaderLine::quote(*screen));
+	    bool divert = !(TelEngine::null(reason) && TelEngine::null(privacy) && TelEngine::null(screen));
+	    divert = msg.getBoolValue("diversion",divert);
+	    MimeHeaderLine* hl = new MimeHeaderLine(divert ? "Diversion" : "Referred-By",d);
+	    if (divert) {
+		if (!TelEngine::null(reason))
+		    hl->setParam("reason",MimeHeaderLine::quote(*reason));
+		if (!TelEngine::null(privacy))
+		    hl->setParam("privacy",MimeHeaderLine::quote(*privacy));
+		if (!TelEngine::null(screen))
+		    hl->setParam("screen",MimeHeaderLine::quote(*screen));
+	    }
 	    m->addHeader(hl);
 	}
     }

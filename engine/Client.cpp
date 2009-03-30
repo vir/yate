@@ -64,7 +64,8 @@ public:
 	addLines,
 	createObject,
 	setProperty,
-	getProperty
+	getProperty,
+	openUrl
     };
     ClientThreadProxy(int func, const String& name, bool show, Window* wnd = 0, Window* skip = 0);
     ClientThreadProxy(int func, const String& name, const String& text, Window* wnd, Window* skip);
@@ -153,6 +154,7 @@ static ObjList s_postponed;
 static NamedList* s_debugLog = 0;
 static ClientThreadProxy* s_proxy = 0;
 static bool s_busy = false;
+static String s_incomingUrlParam;                // Incoming URL param in call.execute message
 Client* Client::s_client = 0;
 Configuration Client::s_settings;                // Client settings
 Configuration Client::s_actions;                 // Logic preferrences
@@ -174,7 +176,7 @@ String Client::s_debugWidget = "log_events";     // Default widget displaying th
 String Client::s_toggles[OptCount] = {
     "multilines", "autoanswer", "ringincoming", "ringoutgoing",
     "activatelastoutcall", "activatelastincall", "activatecallonselect",
-    "display_keypad"
+    "display_keypad", "openincomingurl"
 };
 bool Client::s_idleLogicsTick = false;           // Call logics' timerTick()
 bool Client::s_exiting = false;                  // Client exiting flag
@@ -720,6 +722,9 @@ void ClientThreadProxy::process()
 	case getProperty:
 	    m_rval = client->getProperty(m_name,m_item,m_text);
 	    break;
+	case openUrl:
+	    m_rval = client->openUrl(m_name);
+	    break;
     }
     s_busy = false;
 }
@@ -766,6 +771,7 @@ Client::Client(const char *name)
 	m_toggles[i] = false;
     m_toggles[OptMultiLines] = true;
     m_toggles[OptKeypadVisible] = true;
+    s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam","sip_url");
 
     // Install relays
     for (int i = 0; s_relays[i].name; i++)
@@ -899,6 +905,17 @@ ObjList* Client::listWindows()
 	}
     }
     return lst;
+}
+
+// Open an URL (link) in the client's thread
+bool Client::openUrlSafe(const String& url)
+{
+    if (s_client && s_client->needProxy()) {
+	// The 'false' parameter is here because there is no constructor with name only
+	ClientThreadProxy proxy(ClientThreadProxy::openUrl,url,false);
+	return proxy.execute();
+    }
+    return openUrl(url);
 }
 
 // function for setting the visibility attribute of the "name" window
@@ -2055,6 +2072,12 @@ bool Client::buildIncomingChannel(Message& msg, const String& dest)
     bool ok = chan->connect(peer,msg.getValue("reason"));
     // Activate or answer
     if (ok) {
+	// Open an incoming URL if configured
+	if (getBoolOpt(OptOpenIncomingUrl)) {
+	    String* url = msg.getParam(s_incomingUrlParam);
+	    if (!null(url) && Client::self() && !Client::self()->openUrlSafe(*url))
+		Debug(ClientDriver::self(),DebugMild,"Failed to open incoming url=%s",url->c_str());
+	}
 	msg.setParam("targetid",chan->id());
 	if (!getBoolOpt(OptAutoAnswer)) {
 	    if (getBoolOpt(OptActivateLastInCall) && !ClientDriver::self()->activeId())

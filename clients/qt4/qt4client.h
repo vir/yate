@@ -130,6 +130,14 @@ public:
 	}
 
     /**
+     * Open an URL (link)
+     * @param url The URL to open
+     * @return True on success
+     */
+    virtual bool openUrl(const String& url)
+	{ return QDesktopServices::openUrl(QUrl(setUtf8(url))); }
+
+    /**
      * Show a file open dialog window
      * This method isn't using the proxy thread since it's usually called on UI action
      * @param parent Dialog window's parent

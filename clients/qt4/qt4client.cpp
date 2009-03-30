@@ -2463,7 +2463,7 @@ bool QtClient::action(Window* wnd, const String& name, NamedList* params)
 {
     String tmp = name;
     if (tmp.startSkip("openurl:",false))
-	return QDesktopServices::openUrl(QUrl(QtClient::setUtf8(tmp)));
+	return openUrl(tmp);
     return Client::action(wnd,name,params);
 }
 

@@ -717,7 +717,8 @@ public:
 	OptActivateLastInCall     = 5,   // Set the last incoming call active
 	OptActivateCallOnSelect   = 6,   // Set the active call when selected in channel list (don't require double click)
 	OptKeypadVisible          = 7,   // Show/hide keypad
-	OptCount                  = 8
+	OptOpenIncomingUrl        = 8,   // Open an incoming URL in call.execute message
+	OptCount                  = 9
     };
 
     /**
@@ -784,6 +785,20 @@ public:
      * Terminate application
      */
     virtual void quit() = 0;
+
+    /**
+     * Open an URL (link) in the client's thread
+     * @param url The URL to open
+     * @return True on success
+     */
+    bool openUrlSafe(const String& url);
+
+    /**
+     * Open an URL (link)
+     * @param url The URL to open
+     * @return True on success
+     */
+    virtual bool openUrl(const String& url) = 0;
 
     /**
      * Process a received message. Check for a logic to process it

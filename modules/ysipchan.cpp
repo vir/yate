@@ -956,22 +956,45 @@ static void copyPrivacy(Message& msg, const SIPMessage& sip)
 {
     bool anonip = (sip.getHeaderValue("Anonymity") &= "ipaddr");
     const MimeHeaderLine* hl = sip.getHeader("Remote-Party-ID");
-    if (!(anonip || hl))
+    const MimeHeaderLine* pr = sip.getHeader("Privacy");
+    if (!(anonip || hl || pr))
 	return;
     const NamedString* p = hl ? hl->getParam("screen") : 0;
     if (p)
 	msg.setParam("screened",*p);
+    if (pr && (*pr &= "none")) {
+	msg.setParam("privacy",String::boolText(false));
+	return;
+    }
+    bool privname = false;
+    bool privuri = false;
     String priv;
     if (anonip)
 	priv.append("addr",",");
     p = hl ? hl->getParam("privacy") : 0;
     if (p) {
 	if ((*p &= "full") || (*p &= "full-network"))
-	    priv.append("name,uri",",");
+	    privname = privuri = true;
 	else if ((*p &= "name") || (*p &= "name-network"))
-	    priv.append("name",",");
+	    privname = true;
 	else if ((*p &= "uri") || (*p &= "uri-network"))
-	    priv.append("uri",",");
+	    privuri = true;
+    }
+    if (pr) {
+	if ((*pr &= "user") || pr->getParam("user"))
+	    privname = true;
+	if ((*pr &= "header") || pr->getParam("header"))
+	    privuri = true;
+    }
+    if (privname)
+	priv.append("name",",");
+    if (privuri)
+	priv.append("uri",",");
+    if (pr) {
+	if ((*pr &= "session") || pr->getParam("session"))
+	    priv.append("session",",");
+	if ((*pr &= "critical") || pr->getParam("critical"))
+	    priv.append("critical",",");
     }
     if (priv)
 	msg.setParam("privacy",priv);
@@ -1000,9 +1023,13 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
     bool anonip = (privacy.find("addr") >= 0);
     bool privname = (privacy.find("name") >= 0);
     bool privuri = (privacy.find("uri") >= 0);
+    String rfc3323;
     // allow for a simple "privacy=yes" or similar
     if (privacy.toBoolean(false))
 	privname = privuri = true;
+    // "privacy=no" is translated to RFC 3323 "none"
+    else if (!privacy.toBoolean(true))
+	rfc3323 = "none";
     if (anonip)
 	sip.setHeader("Anonymity","ipaddr");
     if (screen || privname || privuri) {
@@ -1031,6 +1058,18 @@ static void copyPrivacy(SIPMessage& sip, const Message& msg)
 	    hl->setParam("privacy","none");
 	sip.addHeader(hl);
     }
+    if (rfc3323.null()) {
+	if (privname)
+	    rfc3323.append("user",";");
+	if (privuri)
+	    rfc3323.append("header",";");
+	if (privacy.find("session") >= 0)
+	    rfc3323.append("session",";");
+	if (rfc3323 && (privacy.find("critical") >= 0))
+	    rfc3323.append("critical",";");
+    }
+    if (rfc3323)
+	sip.addHeader("Privacy",rfc3323);
 }
 
 // Check if the given body have the given type

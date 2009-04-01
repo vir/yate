@@ -936,8 +936,11 @@ bool QtWindow::setActive(const String& name, bool active)
     XDebug(QtDriver::self(),DebugAll,"QtWindow::setActive(%s,%s) [%p]",
 	name.c_str(),String::boolText(active),this);
     bool ok = (name == m_id);
-    if (ok)
-	QApplication::setActiveWindow(this);
+    if (ok) {
+	if (QWidget::isMinimized())
+	    QWidget::showNormal();
+	QWidget::activateWindow();
+    }
     QtWidget w(this,name);
     if (w.invalid())
 	return ok;

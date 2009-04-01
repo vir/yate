@@ -72,6 +72,9 @@
 ; privacy: bool: Process and generate privacy related SIP headers
 ;privacy=disable
 
+; secure: bool: Generate and accept RFC 4568 security descriptors for SRTP
+;secure=disable
+
 ; forward_sdp: bool: Include the raw SDP body to be used as-is for forwarding RTP
 ;forward_sdp=disable
 

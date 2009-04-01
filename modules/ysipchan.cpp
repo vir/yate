@@ -161,6 +161,12 @@ public:
 	    m_rfc2833 = payload;
 	  else
 	    m_rfc2833 = String::boolText(false); }
+    inline const String& remoteCrypto() const
+	{ return m_rCrypto; }
+    inline const String& localCrypto() const
+	{ return m_lCrypto; }
+    inline bool securable() const
+	{ return m_securable; }
     inline bool sameAs(const NetMedia* other) const
 	{ return other && (other->formats() == m_formats) &&
 	  (other->transport() == m_transport) &&
@@ -170,9 +176,11 @@ public:
     void update(const Message& msg, bool pickFormat);
     void parameter(const char* name, const char* value, bool append);
     void parameter(NamedString* param, bool append);
+    void crypto(const char* desc, bool remote);
 private:
     bool m_audio;
     bool m_modified;
+    bool m_securable;
     // suffix used for this type
     String m_suffix;
     // transport protocol
@@ -191,6 +199,10 @@ private:
     String m_mappings;
     // payload for telephone/event
     String m_rfc2833;
+    // remote security descriptor
+    String m_rCrypto;
+    // local security descriptor
+    String m_lCrypto;
 };
 
 class YateUDPParty : public SIPParty
@@ -532,6 +544,7 @@ private:
     int m_mediaStatus;
     bool m_inband;
     bool m_info;
+    bool m_secure;
     // REFER already running
     bool m_referring;
     // reINVITE requested or in progress
@@ -635,6 +648,7 @@ static bool s_progress = false;
 static bool s_inband = false;
 static bool s_info = false;
 static bool s_rfc2833 = true;
+static bool s_secure = false;
 static bool s_forward_sdp = false;
 static bool s_start_rtp = false;
 static bool s_ack_required = true;
@@ -696,6 +710,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	String fmt;
 	String aux;
 	String mappings;
+	String crypto;
 	ObjList params;
 	bool defcodecs = s_cfg.getBoolValue("codecs","default",true);
 	bool first = true;
@@ -760,11 +775,19 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		    }
 		}
 		else if (first) {
-		    int pos = line.find(':');
-		    if (pos >= 0)
-			params.append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
-		    else
-			params.append(new NamedString(line));
+		    if (line.startSkip("crypto:",false)) {
+			if (crypto.null())
+			    crypto = line;
+			else
+			    Debug(DebugMild,"Ignoring SDES: '%s'",line.c_str());
+		    }
+		    else {
+			int pos = line.find(':');
+			if (pos >= 0)
+			    params.append(new NamedString(line.substr(0,pos),line.substr(pos+1)));
+			else
+			    params.append(new NamedString(line));
+		    }
 		}
 	    }
 	    first = false;
@@ -819,6 +842,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	net->setModified(false);
 	net->mappings(mappings);
 	net->rfc2833(rfc2833);
+	net->crypto(crypto,true);
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(net);
@@ -846,6 +870,13 @@ static void putMedia(Message& msg, ObjList* lst, bool putPort = true)
 	    msg.addParam("rtp_rfc2833",m->rfc2833());
 	if (putPort)
 	    msg.addParam("rtp_port"+m->suffix(),m->remotePort());
+	if (m->remoteCrypto())
+	    msg.addParam("crypto"+m->suffix(),m->remoteCrypto());
+	// must handle encryption differently
+	const char* enc = m->getValue("encryption");
+	if (enc)
+	    msg.addParam("encryption"+m->suffix(),enc);
+	m->clearParam("encryption");
 	unsigned int n = m->length();
 	for (unsigned int i = 0; i < n; i++) {
 	    const NamedString* param = m->getParam(i);
@@ -1125,7 +1156,7 @@ static inline int findURIParamSep(const String& str, int start)
 
 NetMedia::NetMedia(const char* media, const char* transport, const char* formats, int rport, int lport)
     : NamedList(media),
-      m_audio(true), m_modified(false),
+      m_audio(true), m_modified(false), m_securable(true),
       m_transport(transport), m_formats(formats),
       m_rfc2833(String::boolText(false))
 {
@@ -1237,6 +1268,17 @@ void NetMedia::parameter(NamedString* param, bool append)
 	addParam(param);
     else
 	setParam(param);
+}
+
+void NetMedia::crypto(const char* desc, bool remote)
+{
+    String& sdes = remote ? m_rCrypto : m_lCrypto;
+    if (sdes != desc) {
+	sdes = desc;
+	m_modified = true;
+    }
+    if (remote && !desc)
+	m_securable = false;
 }
 
 
@@ -2198,7 +2240,7 @@ YateSIPConnection::YateSIPConnection(SIPEvent* ev, SIPTransaction* tr)
       m_tr(tr), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(false),
       m_state(Incoming), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
+      m_authBye(true), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info), m_secure(s_secure),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,%p) [%p]",ev,tr,this);
@@ -2355,7 +2397,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
       m_tr(0), m_tr2(0), m_hungup(false), m_byebye(true), m_cancel(true),
       m_state(Outgoing), m_rtpForward(false), m_sdpForward(false), m_rtpMedia(0),
       m_sdpSession(0), m_sdpVersion(0), m_port(0), m_route(0), m_routes(0),
-      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info),
+      m_authBye(false), m_mediaStatus(MediaMissing), m_inband(s_inband), m_info(s_info), m_secure(s_secure),
       m_referring(false), m_reInviting(ReinviteNone), m_lastRseq(0), m_rfc2833(s_rfc2833)
 {
     Debug(this,DebugAll,"YateSIPConnection::YateSIPConnection(%p,'%s') [%p]",
@@ -2364,6 +2406,7 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
     setReason();
     m_inband = msg.getBoolValue("dtmfinband",s_inband);
     m_info = msg.getBoolValue("dtmfinfo",s_info);
+    m_secure = msg.getBoolValue("secure",s_secure);
     m_rfc2833 = msg.getBoolValue("rfc2833",s_rfc2833);
     m_rtpForward = msg.getBoolValue("rtp_forward");
     m_user = msg.getValue("user");
@@ -2817,6 +2860,7 @@ MimeSdpBody* YateSIPConnection::createPasstroughSDP(Message& msg, bool update)
 	rtp->mappings(msg.getValue("rtp_mapping"+rtp->suffix()));
 	if (audio)
 	    rtp->rfc2833(msg.getIntValue("rtp_rfc2833",-1));
+	rtp->crypto(msg.getValue("crypto"+rtp->suffix()),false);
 	if (!lst)
 	    lst = new ObjList;
 	lst->append(rtp);
@@ -2871,11 +2915,32 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 	m.addParam("evpayload",media->rfc2833());
 	TelEngine::destruct(mappings);
     }
+    if (m_secure) {
+	if (media->remoteCrypto()) {
+	    String sdes = media->remoteCrypto();
+	    Regexp r("^\\([0-9]\\+\\) \\+\\([^ ]\\+\\) \\+\\([^ ]\\+\\) *\\(.*\\)$");
+	    if (sdes.matches(r)) {
+		m.addParam("secure",String::boolText(true));
+		m.addParam("crypto_tag",sdes.matchString(1));
+		m.addParam("crypto_suite",sdes.matchString(2));
+		m.addParam("crypto_key",sdes.matchString(3));
+		if (sdes.matchLength(4))
+		    m.addParam("crypto_params",sdes.matchString(4));
+	    }
+	    else
+		Debug(this,DebugWarn,"Invalid SDES: '%s' [%p]",sdes.c_str(),this);
+	}
+	else if (media->securable())
+	    m.addParam("secure",String::boolText(true));
+    }
+    else
+	media->crypto(0,true);
     unsigned int n = media->length();
     for (unsigned int i = 0; i < n; i++) {
 	const NamedString* param = media->getParam(i);
-	if (param)
-	    m.addParam("sdp_" + param->name(),*param);
+	if (!param)
+	    continue;
+	m.addParam("sdp_" + param->name(),*param);
     }
     if (!Engine::dispatch(m))
 	return false;
@@ -2895,6 +2960,20 @@ bool YateSIPConnection::dispatchRtp(NetMedia* media, const char* addr, bool star
 	    String tmp = param->name();
 	    if (tmp.startSkip(sdpPrefix,false) && tmp.startSkip("_",false) && tmp)
 	        media->parameter(tmp,*param,false);
+	}
+    }
+    if (m_secure) {
+	int tag = m.getIntValue("crypto_tag",1);
+	tag = m.getIntValue("ocrypto_tag",tag);
+	const String* suite = m.getParam("ocrypto_suite");
+	const String* key = m.getParam("ocrypto_key");
+	const String* params = m.getParam("ocrypto_params");
+	if (suite && key && (tag > 0)) {
+	    String sdes(tag);
+	    sdes << " " << *suite << " " << *key;
+	    if (params)
+		sdes << " " << *params;
+	    media->crypto(sdes,false);
 	}
     }
     return true;
@@ -2931,6 +3010,9 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 	if (fmts.null())
 	    continue;
 	String trans = msg.getValue("transport"+tmp,"RTP/AVP");
+	String crypto;
+	if (m_secure)
+	    crypto = msg.getValue("crypto"+tmp);
 	if (audio)
 	    tmp = "audio";
 	else
@@ -2949,6 +3031,7 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 	    rtp = new NetMedia(tmp,trans,fmts);
 	    append = true;
 	}
+	rtp->crypto(crypto,false);
 	if (sdpPrefix) {
 	    for (unsigned int j = 0; j < n; j++) {
 		const NamedString* param = msg.getParam(j);
@@ -3150,6 +3233,7 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	}
 
 	sdp->addLine("m",mline + frm);
+	bool enc = false;
 	if (m->isModified()) {
 	    unsigned int n = m->length();
 	    for (unsigned int i = 0; i < n; i++) {
@@ -3159,6 +3243,7 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 		    if (*param)
 			tmp << ":" << *param;
 		    sdp->addLine("a",tmp);
+		    enc = enc || (param->name() == "encryption");
 		}
 	    }
 	}
@@ -3166,6 +3251,11 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	    String* s = static_cast<String*>(f->get());
 	    if (s)
 		sdp->addLine("a",*s);
+	}
+	if (addr && m->localCrypto()) {
+	    sdp->addLine("a","crypto:" + m->localCrypto());
+	    if (!enc)
+		sdp->addLine("a","encryption:optional");
 	}
     }
 
@@ -4131,6 +4221,7 @@ void YateSIPConnection::callAccept(Message& msg)
 	if (tmp != "accepted")
 	    m_rtpForward = false;
     }
+    m_secure = m_secure && msg.getBoolValue("secure",true);
     Channel::callAccept(msg);
 
     if ((m_reInviting == ReinviteNone) && !m_rtpForward && !isAnswered() && 
@@ -5037,6 +5128,7 @@ void SIPDriver::initialize()
     s_inband = s_cfg.getBoolValue("general","dtmfinband",false);
     s_info = s_cfg.getBoolValue("general","dtmfinfo",false);
     s_rfc2833 = s_cfg.getBoolValue("general","rfc2833",true);
+    s_secure = s_cfg.getBoolValue("general","secure",false);
     s_forward_sdp = s_cfg.getBoolValue("general","forward_sdp",false);
     s_rtpip = s_cfg.getValue("general","rtp_localip");
     s_start_rtp = s_cfg.getBoolValue("general","rtp_start",false);

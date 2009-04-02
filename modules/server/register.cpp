@@ -58,7 +58,7 @@ public:
     AAAHandler(const char* hname, int type, int prio = 50);
     virtual ~AAAHandler();
     void loadAccount();
-    void indirectQuery(String& query);
+    static void prepareQuery(Message& msg, const String& account, const String& query, bool results);
     virtual const String& name() const;
     virtual bool received(Message& msg);
     virtual bool loadQuery();
@@ -66,6 +66,7 @@ public:
     virtual void chkConfig();
 
 protected:
+    void indirectQuery(String& query);
     int m_type;
     String m_query;
     String m_result;
@@ -352,8 +353,7 @@ void AAAHandler::indirectQuery(String& query)
     if (query.null())
 	return;
     Message m("database");
-    m.addParam("account",m_account);
-    m.addParam("query",query);
+    prepareQuery(m,m_account,query,true);
     query.clear();
     // query must return exactly one row, one column
     if (!Engine::dispatch(m) || (m.getIntValue("rows") != 1) || (m.getIntValue("columns") != 1))
@@ -363,6 +363,16 @@ void AAAHandler::indirectQuery(String& query)
 	return;
     query = YOBJECT(String,a->get(0,1));
     Debug(&module,DebugInfo,"For '%s' fetched query '%s'",name().c_str(),query.c_str());
+}
+
+// add the account and query to the "database" message
+void AAAHandler::prepareQuery(Message& msg, const String& account, const String& query, bool results)
+{
+    Debug(&module,DebugInfo,"On account '%s' performing query '%s'%s",
+	account.c_str(),query.c_str(),(results ? " expects results" : ""));
+    msg.setParam("account",account);
+    msg.setParam("query",query);
+    msg.setParam("results",String::boolText(results));
 }
 
 // run the initialization query
@@ -377,9 +387,7 @@ void AAAHandler::initQuery()
 	return;
     // no error check needed as we can't fix - enqueue the query and we're out
     Message* m = new Message("database");
-    m->addParam("account",m_account);
-    m->addParam("query",query);
-    m->addParam("results","false");
+    prepareQuery(*m,m_account,query,false);
     Engine::enqueue(m);
 }
 
@@ -412,9 +420,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",account);
-	    m.addParam("query",query);
-	    m.addParam("results","false");
+	    prepareQuery(m,account,query,false);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("affected") >= 1 || m.getIntValue("rows") >=1)
 		    return true;
@@ -424,8 +430,7 @@ bool AAAHandler::received(Message& msg)
 	case Auth:
 	{
 	    Message m("database");
-	    m.addParam("account",account);
-	    m.addParam("query",query);
+	    prepareQuery(m,account,query,true);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
@@ -441,8 +446,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",account);
-	    m.addParam("query",query);
+	    prepareQuery(m,account,query,true);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
@@ -457,8 +461,7 @@ bool AAAHandler::received(Message& msg)
 	    if (s_critical)
 		return failure(&msg);
 	    Message m("database");
-	    m.addParam("account",account);
-	    m.addParam("query",query);
+	    prepareQuery(m,account,query,true);
 	    if (Engine::dispatch(m))
 		if (m.getIntValue("rows") >=1)
 		{
@@ -483,9 +486,7 @@ bool AAAHandler::received(Message& msg)
 	{
 	    // no error check needed on unregister - we return false
 	    Message m("database");
-	    m.addParam("account",account);
-	    m.addParam("query",query);
-	    m.addParam("results","false");
+	    prepareQuery(m,account,query,false);
 	    Engine::dispatch(m);
 	}
 	break;
@@ -499,9 +500,7 @@ bool AAAHandler::received(Message& msg)
 		return false;
 	    // no error check needed - we enqueue the query and return false
 	    Message* m = new Message("database");
-	    m->addParam("account",account);
-	    m->addParam("query",query);
-	    m->addParam("results","false");
+	    prepareQuery(*m,account,query,false);
 	    Engine::enqueue(m);
 	}
 	break;
@@ -561,8 +560,7 @@ bool CDRHandler::received(Message& msg)
     msg.replaceParams(account,true);
     // failure while accounting is critical
     Message m("database");
-    m.addParam("account",account);
-    m.addParam("query",query);
+    prepareQuery(m,account,query,true);
     bool error = !Engine::dispatch(m) || m.getParam("error");
     if (m_critical && (s_critical != error)) {
 	s_critical = error;
@@ -608,8 +606,7 @@ Array* EventNotify::queryDatabase(Message& msg, const String& notifier,
     String account = m_account;
     nl.replaceParams(query,true);
     nl.replaceParams(account,true);
-    msg.addParam("account",account);
-    msg.addParam("query",query);
+    prepareQuery(msg,account,query,true);
     if (!Engine::dispatch(msg))
 	return 0;
     rows = msg.getIntValue("rows",0);
@@ -782,8 +779,7 @@ bool SubscribeHandler::received(Message& msg)
     msg.replaceParams(query,true);
     msg.replaceParams(account,true);
     Message m("database");
-    m.addParam("query",query);
-    m.addParam("account",account);
+    prepareQuery(m,account,query,true);
     int rows = 0;
     if(!Engine::dispatch(m)) {
 	msg.setParam("reason","failure");
@@ -862,8 +858,7 @@ bool SubscribeTimerHandler::received(Message& msg)
     String query = m_queryExpire;
     msg.replaceParams(query,true);
     msg.replaceParams(account,true);
-    m.addParam("account",account);
-    m.addParam("query",query);
+    prepareQuery(m,account,query,true);
     if(!Engine::dispatch(m))
 	return false;
 
@@ -1089,7 +1084,6 @@ bool AccountsModule::received(Message &msg, int id)
 	Message *m = new Message("database");
 	String account(m_account);
 	msg.replaceParams(account,true);
-	m->addParam("account",account);
 	String query(m_updateStatus);
 	String status;
 	if (msg.getBoolValue("registered"))
@@ -1099,7 +1093,7 @@ bool AccountsModule::received(Message &msg, int id)
 	m->addParam("status",status);
 	m->addParam("internalaccount",msg.getValue("account"));
 	m->replaceParams(query,true);
-	m->addParam("query",query);
+	AAAHandler::prepareQuery(*m,account,query,false);
 	Engine::enqueue(m);
 	return false;
     }
@@ -1125,8 +1119,7 @@ bool AccountsModule::received(Message &msg, int id)
 	Message m("database");
 	String account(m_account);
 	msg.replaceParams(account,true);
-	m.addParam("account",account);
-	m.addParam("query",query);
+	AAAHandler::prepareQuery(m,account,query,true);
 	if (Engine::dispatch(m)) {
 	    int rows = m.getIntValue("rows");
 	    if (rows>0) {

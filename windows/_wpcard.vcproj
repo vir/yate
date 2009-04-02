@@ -75,7 +75,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="ws2_32.lib libprid.lib"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="Debug/server/wpcard.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -172,7 +172,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="true"
-				AdditionalDependencies="ws2_32.lib libpri.lib"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="Release/server/wpcard.yate"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

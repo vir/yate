@@ -1263,11 +1263,11 @@ bool Driver::received(Message &msg, int id)
 	    chan->msgStatus(msg);
 	    return true;
 	case Progress:
-	    return chan->isIncoming() && chan->msgProgress(msg);
+	    return chan->isIncoming() && !chan->isAnswered() && chan->msgProgress(msg);
 	case Ringing:
-	    return chan->isIncoming() && chan->msgRinging(msg);
+	    return chan->isIncoming() && !chan->isAnswered() && chan->msgRinging(msg);
 	case Answered:
-	    return chan->isIncoming() && chan->msgAnswered(msg);
+	    return chan->isIncoming() && !chan->isAnswered() && chan->msgAnswered(msg);
 	case Tone:
 	    return chan->msgTone(msg,msg.getValue("text"));
 	case Text:

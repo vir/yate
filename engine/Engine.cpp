@@ -209,6 +209,13 @@ static ObjList plugins;
 static ObjList* s_cmds = 0;
 static unsigned int s_runid = 0;
 
+static EngineCheck* s_engineCheck = 0;
+
+void EngineCheck::setChecker(EngineCheck* ptr)
+{
+    s_engineCheck = ptr;
+}
+
 class SLib : public String
 {
 public:
@@ -1733,6 +1740,9 @@ int Engine::main(int argc, const char** argv, const char** env, RunMode mode, bo
 
     if (workdir)
 	::chdir(workdir);
+
+    if (s_engineCheck && !s_engineCheck->check(s_cmds))
+	return s_haltcode;
 
 #ifdef _WINDOWS
     if ((mode == Server) && !service)

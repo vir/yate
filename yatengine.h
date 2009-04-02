@@ -712,6 +712,30 @@ bool UNLOAD_PLUGIN(bool unloadNow);
 #endif
 
 /**
+ * Base class for engine running stage checkers.
+ * Descendants may check specific conditions and decide to stop the engine.
+ * There should be only one (static) instance of an engine checker
+ * @short Engine checker interface
+ */
+class YATE_API EngineCheck
+{
+public:
+    /**
+     * Check running conditions. This method is called by the engine in the initialize process
+     * @param cmds Optional list of strings containing extra command line parameters
+     *  (not parsed by the engine)
+     * @return False to stop the program
+     */
+    virtual bool check(const ObjList* cmds) = 0;
+
+    /**
+     * Set the current engine checker
+     * @param ptr The new engine checker. May be 0 to reset it
+     */
+    static void setChecker(EngineCheck* ptr = 0);
+};
+
+/**
  * This class holds global information about the engine.
  * Note: this is a singleton class.
  *

@@ -721,6 +721,12 @@ class YATE_API EngineCheck
 {
 public:
     /**
+     * Do-nothing destructor of base class
+     */
+    virtual ~EngineCheck()
+	{ }
+
+    /**
      * Check running conditions. This method is called by the engine in the initialize process
      * @param cmds Optional list of strings containing extra command line parameters
      *  (not parsed by the engine)

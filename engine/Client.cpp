@@ -771,7 +771,8 @@ Client::Client(const char *name)
 	m_toggles[i] = false;
     m_toggles[OptMultiLines] = true;
     m_toggles[OptKeypadVisible] = true;
-    s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam","sip_url");
+    s_incomingUrlParam = Engine::config().getValue("client","incomingcallurlparam",
+	"caller_info_uri");
 
     // Install relays
     for (int i = 0; s_relays[i].name; i++)

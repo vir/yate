@@ -35,6 +35,8 @@
 
 namespace TelEngine {
 
+static int s_allHiddenQuit = 1;          // Quit on all hidden notification
+
 // Macro used to get a QT object's name
 // Can't use an inline function: the QByteArray object returned by toUtf8()
 //  would be destroyed on exit
@@ -858,8 +860,11 @@ bool QtWindow::setParams(const NamedList& params)
 	    QSystemTrayIcon* trayIcon = findSysTrayIcon(this,ns->name());
 	    // Delete
 	    if (ns->null()) {
-		if (trayIcon)
+		if (trayIcon) {
 		    delete trayIcon;
+		    // Reactivate program termination when the last window was hidden
+		    s_allHiddenQuit++;
+		}
 		continue;
 	    }
 	    // Create a new one
@@ -869,8 +874,11 @@ bool QtWindow::setParams(const NamedList& params)
 		    continue;
 		trayIcon = new QSystemTrayIcon(this);
 		trayIcon->setObjectName(QtClient::setUtf8(ns->name()));
-		QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
-		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)));
+		if (QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
+		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)))) {
+		    // Deactivate program termination when the last window was hidden
+		    s_allHiddenQuit--;
+		}
 	    }
 	    // Add dynamic properties on creation
 	    // See 
@@ -2333,6 +2341,7 @@ void QtClient::run()
     int argc = 0;
     char* argv =  0;
     m_app = new QApplication(argc,&argv);
+    m_app->setQuitOnLastWindowClosed(false);
     Debug(ClientDriver::self(),DebugInfo,"QT client start running (version=%s)",qVersion());
     if (!QSound::isAvailable())
 	Debug(ClientDriver::self(),DebugWarn,"QT sounds are not available");
@@ -2355,7 +2364,9 @@ void QtClient::unlock()
 
 void QtClient::allHidden()
 {
-    Debug(QtDriver::self(),DebugInfo,"QtClient::allHiden()");
+    Debug(QtDriver::self(),DebugInfo,"QtClient::allHiden() counter=%d",s_allHiddenQuit);
+    if (!s_allHiddenQuit)
+	return;
     quit();
 }
 

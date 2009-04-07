@@ -35,7 +35,7 @@
 
 namespace TelEngine {
 
-static int s_allHiddenQuit = 1;          // Quit on all hidden notification
+static unsigned int s_allHiddenQuit = 0; // Quit on all hidden notification if this counter is 0
 
 // Macro used to get a QT object's name
 // Can't use an inline function: the QByteArray object returned by toUtf8()
@@ -779,6 +779,19 @@ QtWindow::QtWindow(const char* name, const char* description, const char* alias)
 
 QtWindow::~QtWindow()
 {
+    // Update all hidden counter for tray icons owned by this window
+    QList<QSystemTrayIcon*> trayIcons = qFindChildren<QSystemTrayIcon*>(this);
+    if (trayIcons.size() > 0) {
+	if (s_allHiddenQuit >= (unsigned int)trayIcons.size())
+	    s_allHiddenQuit -= trayIcons.size();
+	else {
+	    Debug(QtDriver::self(),DebugFail,
+		"QtWindow(%s) destroyed with all hidden counter %u greater then tray icons %d [%p]",
+		m_id.c_str(),s_allHiddenQuit,trayIcons.size(),this);
+	    s_allHiddenQuit = 0;
+	}
+    }
+
     // Save settings
     if (m_saveOnClose) {
 	m_maximized = isMaximized();
@@ -861,9 +874,14 @@ bool QtWindow::setParams(const NamedList& params)
 	    // Delete
 	    if (ns->null()) {
 		if (trayIcon) {
-		    delete trayIcon;
 		    // Reactivate program termination when the last window was hidden
-		    s_allHiddenQuit++;
+		    if (s_allHiddenQuit)
+			s_allHiddenQuit--;
+		    else
+			Debug(QtDriver::self(),DebugFail,
+			    "QtWindow(%s) all hidden counter is 0 while deleting '%s' tray icon [%p]",
+			    m_id.c_str(),YQT_OBJECT_NAME(trayIcon),this);
+		    delete trayIcon;
 		}
 		continue;
 	    }
@@ -874,14 +892,13 @@ bool QtWindow::setParams(const NamedList& params)
 		    continue;
 		trayIcon = new QSystemTrayIcon(this);
 		trayIcon->setObjectName(QtClient::setUtf8(ns->name()));
-		if (QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
-		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)))) {
-		    // Deactivate program termination when the last window was hidden
-		    s_allHiddenQuit--;
-		}
+		QtClient::connectObjects(trayIcon,SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
+		    this,SLOT(sysTrayIconAction(QSystemTrayIcon::ActivationReason)));
+		// Deactivate program termination when the last window was hidden
+		s_allHiddenQuit++;
 	    }
+	    ok = true;
 	    // Add dynamic properties on creation
-	    // See 
 	    if (newObj)
 		addDynamicProps(trayIcon,*nl);
 	    // Set icon and tooltip
@@ -2365,7 +2382,7 @@ void QtClient::unlock()
 void QtClient::allHidden()
 {
     Debug(QtDriver::self(),DebugInfo,"QtClient::allHiden() counter=%d",s_allHiddenQuit);
-    if (!s_allHiddenQuit)
+    if (s_allHiddenQuit > 0)
 	return;
     quit();
 }

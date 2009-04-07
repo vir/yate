@@ -2165,21 +2165,28 @@ bool DefaultLogic::initializedClient()
 	Client::self()->setCheck("toggleAccAdvanced",m_accShowAdvanced);
 
     // Check if global settings override the users'
-    bool globalOverride = Engine::config().getBoolValue("client","globaloverride",false);
+    NamedList* clientSect = Engine::config().getSection("client");
+    bool globalOverride = clientSect && clientSect->getBoolValue("globaloverride",false);
 
     // Booleans
     for (unsigned int i = 0; i < Client::OptCount; i++) {
 	bool tmp = Client::self()->getBoolOpt((Client::ClientToggle)i);
+	bool active = true;
 	if (globalOverride) {
-	    tmp = Client::s_settings.getBoolValue("general",Client::s_toggles[i],tmp);
-	    tmp = Engine::config().getBoolValue("client",Client::s_toggles[i],tmp);
+	    String* over = clientSect->getParam(Client::s_toggles[i]);
+	    if (over) {
+		tmp = over->toBoolean(tmp);
+		active = false;
+	    }
+	    else
+		tmp = Client::s_settings.getBoolValue("general",Client::s_toggles[i],tmp);
 	}
 	else {
 	    tmp = Engine::config().getBoolValue("client",Client::s_toggles[i],tmp);
 	    tmp = Client::s_settings.getBoolValue("general",Client::s_toggles[i],tmp);
 	}
 	if (Client::self())
-	    Client::self()->setActive(Client::s_toggles[i],!globalOverride);
+	    Client::self()->setActive(Client::s_toggles[i],active);
 	setClientParam(Client::s_toggles[i],String::boolText(tmp),false,true);
     }
 

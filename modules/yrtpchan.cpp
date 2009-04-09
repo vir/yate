@@ -111,7 +111,7 @@ class YRTPWrapper : public RefObject
 public:
     YRTPWrapper(const char *localip, CallEndpoint* conn = 0, const char* media = "audio", RTPSession::Direction direction = RTPSession::SendRecv, bool rtcp = true);
     ~YRTPWrapper();
-    virtual void* getObject(const String &name) const;
+    virtual void* getObject(const String& name) const;
     void setupRTP(const char* localip, bool rtcp);
     bool startRTP(const char* raddr, unsigned int rport, Message& msg);
     bool setupSRTP(Message& msg, bool buildMaster);
@@ -316,10 +316,14 @@ YRTPWrapper::~YRTPWrapper()
     s_mutex.unlock();
 }
 
-void* YRTPWrapper::getObject(const String &name) const
+void* YRTPWrapper::getObject(const String& name) const
 {
     if (name == "Socket")
 	return m_rtp ? m_rtp->rtpSock() : 0;
+    if (name == "DataSource")
+	return m_source;
+    if (name == "DataConsumer")
+	return m_consumer;
     return RefObject::getObject(name);
 }
 

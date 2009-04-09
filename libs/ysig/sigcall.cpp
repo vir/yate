@@ -607,6 +607,8 @@ TokenDict SignallingCircuitGroup::s_strategy[] = {
 	{0,0}
 	};
 
+YCLASSIMP(SignallingCircuitGroup,SignallingComponent)
+
 SignallingCircuitGroup::SignallingCircuitGroup(unsigned int base, int strategy, const char* name)
     : SignallingComponent(name),
     Mutex(true),
@@ -1290,6 +1292,9 @@ void AnalogLine::destroyed()
 /**
  * AnalogLineGroup
  */
+
+YCLASSIMP(AnalogLineGroup,SignallingCircuitGroup)
+
 // Construct an analog line group owning single lines
 AnalogLineGroup::AnalogLineGroup(AnalogLine::Type type, const char* name, bool slave)
     : SignallingCircuitGroup(0,SignallingCircuitGroup::Increment,name),

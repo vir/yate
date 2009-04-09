@@ -1789,6 +1789,13 @@ public:
     ~SignallingCircuitGroup();
 
     /**
+     * Get a pointer to this object or other data
+     * @param name Object name
+     * @return The requested pointer or 0 if not exists
+     */
+    virtual void* getObject(const String& name) const;
+
+    /**
      * Get the number of circuits in this group
      * @return The number of circuits owned by this group
      */
@@ -2873,6 +2880,13 @@ public:
      * Destructor
      */
     virtual ~AnalogLineGroup();
+
+    /**
+     * Get a pointer to this object or other data
+     * @param name Object name
+     * @return The requested pointer or 0 if not exists
+     */
+    virtual void* getObject(const String& name) const;
 
     /**
      * Get this group's type

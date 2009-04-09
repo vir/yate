@@ -411,16 +411,19 @@ MGCPMessage* MGCPMessage::decodeMessage(const char* line, unsigned int len, unsi
 
 	    // 4th item: protocol name if this is a verb (command)
 	    case 4:
-		if (tmp.toUpper() == "MGCP")
-		    ver = "MGCP 1.0";
-		else
+		ver = tmp.toUpper();
+		if (ver != "MGCP")
 		    error << "Invalid protocol '" << tmp << "'";
 		break;
 
 	    // 5th item: protocol version if this is a verb (command)
 	    case 5:
-		if (tmp != "1.0")
-		    error << "Invalid protocol version '" << tmp << "'";
+		{
+		    static const Regexp r("^[0-9]\\.[0-9]\\+$");
+		    if (!r.matches(tmp))
+			error << "Invalid protocol version '" << tmp << "'";
+		}
+		ver << " " << tmp;
 		break;
 	}
 	if (error)

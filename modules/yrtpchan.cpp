@@ -324,11 +324,15 @@ void* YRTPWrapper::getObject(const String& name) const
 	return m_source;
     if (name == "DataConsumer")
 	return m_consumer;
+    if (name == "RTPSession")
+	return m_rtp;
     return RefObject::getObject(name);
 }
 
 YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, const String& media)
 {
+    if (!conn)
+	return 0;
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
@@ -341,6 +345,8 @@ YRTPWrapper* YRTPWrapper::find(const CallEndpoint* conn, const String& media)
 
 YRTPWrapper* YRTPWrapper::find(const String& id)
 {
+    if (id.null())
+	return 0;
     Lock lock(s_mutex);
     ObjList* l = &s_calls;
     for (; l; l=l->next()) {
@@ -868,7 +874,7 @@ bool AttachHandler::received(Message &msg)
     const char* media = msg.getValue("media","audio");
     String rip(msg.getValue("remoteip"));
     String rport(msg.getValue("remoteport"));
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
     if (!ch) {
 	if (!src.null())
 	    Debug(&splugin,DebugWarn,"RTP source '%s' attach request with no call channel!",src.c_str());
@@ -939,21 +945,19 @@ bool RtpHandler::received(Message &msg)
 	direction = RTPSession::SendOnly;
     }
 
-    YRTPWrapper* w = 0;
-    const char* media = msg.getValue("media","audio");
-    CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
-    if (ch) {
-	w = YRTPWrapper::find(ch,media);
-	if (w)
-	    Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",w,ch);
-    }
-    if (!w) {
+    CallEndpoint* ch = YOBJECT(CallEndpoint,msg.userData());
+    DataEndpoint* de = YOBJECT(DataEndpoint,msg.userData());
+    const char* media = msg.getValue("media",(de ? de->name().c_str() : "audio"));
+    YRTPWrapper* w = YRTPWrapper::find(ch,media);
+    if (w)
+	Debug(&splugin,DebugAll,"Wrapper %p found by CallEndpoint %p",w,ch);
+    else {
 	const char* rid = msg.getValue("rtpid");
 	w = YRTPWrapper::find(rid);
 	if (w)
 	    Debug(&splugin,DebugAll,"Wrapper %p found by ID '%s'",w,rid);
     }
-    if (!(ch || w)) {
+    if (!(ch || de || w)) {
 	Debug(&splugin,DebugWarn,"Neither call channel nor RTP wrapper found!");
 	return false;
     }
@@ -980,16 +984,30 @@ bool RtpHandler::received(Message &msg)
 	w->addDirection(direction);
     }
 
-    if (d_recv && ch && !ch->getSource(media)) {
-	YRTPSource* s = w->getSource();
-	ch->setSource(s,media);
-	s->deref();
+    if (d_recv) {
+	if (ch && !ch->getSource(media)) {
+	    YRTPSource* s = w->getSource();
+	    ch->setSource(s,media);
+	    s->deref();
+	}
+	else if (de && !de->getSource()) {
+	    YRTPSource* s = w->getSource();
+	    de->setSource(s);
+	    s->deref();
+	}
     }
 
-    if (d_send && ch && !ch->getConsumer(media)) {
-	YRTPConsumer* c = w->getConsumer();
-	ch->setConsumer(c,media);
-	c->deref();
+    if (d_send) {
+	if (ch && !ch->getConsumer(media)) {
+	    YRTPConsumer* c = w->getConsumer();
+	    ch->setConsumer(c,media);
+	    c->deref();
+	}
+	else if (de && !de->getConsumer()) {
+	    YRTPConsumer* c = w->getConsumer();
+	    de->setConsumer(c);
+	    c->deref();
+	}
     }
 
     if (w->deref())

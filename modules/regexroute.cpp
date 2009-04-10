@@ -290,7 +290,7 @@ static void replaceFuncs(String &str)
 }
 
 // handle ;paramname[=value] assignments
-static void setMessage(Message& msg, String& line, Message* target = 0)
+static void setMessage(const String& match, Message& msg, String& line, Message* target = 0)
 {
     if (!target)
 	target = &msg;
@@ -299,6 +299,7 @@ static void setMessage(Message& msg, String& line, Message* target = 0)
     for (ObjList *p = strs; p; p=p->next()) {
 	String *s = static_cast<String*>(p->get());
 	if (s) {
+	    *s = match.replaceMatches(*s);
 	    msg.replaceParams(*s);
 	    replaceFuncs(*s);
 	}
@@ -344,11 +345,11 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
     NamedList *l = s_cfg.getSection(context);
     if (l) {
 	unsigned int len = l->length();
-	for (unsigned int i=0; i<len; i++) {
-	    NamedString *n = l->getParam(i);
+	for (unsigned int i = 0; i < len; i++) {
+	    const NamedString* n = l->getParam(i);
 	    if (n) {
 		Regexp r(n->name(),s_extended,s_insensitive);
-		String val;
+		String match;
 		if (r.startsWith("${")) {
 		    // handle special matching by param ${paramname}regexp
 		    int p = r.find('}');
@@ -357,18 +358,18 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    r.c_str(),i+1,context.c_str());
 			continue;
 		    }
-		    val = r.substr(2,p-2);
+		    match = r.substr(2,p-2);
 		    r = r.substr(p+1);
-		    val.trimBlanks();
+		    match.trimBlanks();
 		    r.trimBlanks();
-		    if (val.null() || r.null()) {
+		    if (match.null() || r.null()) {
 			Debug("RegexRoute",DebugWarn,"Missing parameter or rule in rule #%u in context '%s'",
 			    i+1,context.c_str());
 			continue;
 		    }
 		    DDebug("RegexRoute",DebugAll,"Using message parameter '%s'",
-			val.c_str());
-		    val = msg.getValue(val);
+			match.c_str());
+		    match = msg.getValue(match);
 		}
 		else if (r.startsWith("$(")) {
 		    // handle special matching by param $(function)regexp
@@ -378,7 +379,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    r.c_str(),i+1,context.c_str());
 			continue;
 		    }
-		    val = r.substr(0,p+1);
+		    match = r.substr(0,p+1);
 		    r = r.substr(p+1);
 		    r.trimBlanks();
 		    if (r.null()) {
@@ -387,13 +388,13 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			continue;
 		    }
 		    DDebug("RegexRoute",DebugAll,"Using function '%s'",
-			val.c_str());
-		    msg.replaceParams(val);
-		    replaceFuncs(val);
+			match.c_str());
+		    msg.replaceParams(match);
+		    replaceFuncs(match);
 		}
 		else
-		    val = str;
-		val.trimBlanks();
+		    match = str;
+		match.trimBlanks();
 
 		bool doMatch = true;
 		if (r.endsWith("^")) {
@@ -401,10 +402,11 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 		    doMatch = false;
 		    r = r.substr(0,r.length()-1);
 		}
-		if (val.matches(r) == doMatch) {
-		    val = val.replaceMatches(*n);
+		if (match.matches(r) == doMatch) {
+		    String val = *n;
 		    if (val.startSkip("echo") || val.startSkip("output")) {
 			// special case: display the line but don't set params
+			val = match.replaceMatches(val);
 			msg.replaceParams(val);
 			replaceFuncs(val);
 			Output("%s",val.safe());
@@ -415,7 +417,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			if (val && (val[0] != ';')) {
 			    Message* m = new Message("");
 			    // parameters are set in the new message
-			    setMessage(msg,val,m);
+			    setMessage(match,msg,val,m);
 			    val.trimBlanks();
 			    if (val) {
 				*m = val;
@@ -429,7 +431,7 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			}
 			continue;
 		    }
-		    setMessage(msg,val);
+		    setMessage(match,msg,val);
 		    val.trimBlanks();
 		    if (val.null()) {
 			// special case: do nothing on empty target

@@ -689,8 +689,11 @@ void TableWidget::colWidths(bool save, const String& section)
 void TableWidget::init(bool tmp)
 {
     QtClient::getUtf8(m_name,m_table->objectName());
-    if (tmp)
-	m_sortControl = m_table->isSortingEnabled() ? 1 : 0; 
+    if (tmp) {
+	m_sortControl = m_table->isSortingEnabled() ? 1 : 0;
+	if (m_sortControl)
+	    m_table->setSortingEnabled(false);
+    }
 }
 
 /**

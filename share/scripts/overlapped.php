@@ -18,6 +18,9 @@ require_once("libyate.php");
 /* Always the first action to do */
 Yate::Init();
 
+/* Uncomment next line to get debugging messages */
+// Yate::Debug(true);
+
 /* Install handlers for the DTMF and wave EOF messages */
 Yate::Install("chan.dtmf");
 Yate::Install("chan.notify");
@@ -38,7 +41,7 @@ function setState($newstate)
     if ($state == "")
 	return;
 
-//    Yate::Output("Overlapped setState('" . $newstate . "') in state: " . $state);
+    Yate::Debug("Overlapped setState('" . $newstate . "') in state: " . $state);
 
     // always obey a return to prompt
     if ($newstate == "prompt") {
@@ -104,7 +107,7 @@ function gotNotify()
     global $ourcallid;
     global $state;
 
-//    Yate::Output("Overlapped gotNotify() in state: " . $state);
+    Yate::Debug("Overlapped gotNotify() in state: " . $state);
 
     switch ($state) {
 	case "prompt":
@@ -121,7 +124,7 @@ function gotDTMF($dtmf)
     global $state;
     global $collect;
 
-//    Yate::Output("Overlapped gotDTMF('$dtmf') in state: $state collected: '$collect'");
+    Yate::Debug("Overlapped gotDTMF('$dtmf') in state: $state collected: '$collect'");
     switch ($dtmf) {
 	case "*":
 	    setState("");
@@ -157,7 +160,7 @@ function endRoute($callto,$ok,$err,$params)
     if ($err != "incomplete")
 	setState("noroute");
     else
-	Yate::Output("Overlapped still incomplete: '$collect'");
+	Yate::Debug("Overlapped still incomplete: '$collect'");
 }
 
 /* The main loop. We pick events and handle them */

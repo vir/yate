@@ -51,4 +51,6 @@
 ;port=2427
 
 ; default: bool: This is the default gateway to send commands to
+; The first gateway which is not explicitely disabled or the last that is
+;  explicitely enabled will become default
 ;default=no

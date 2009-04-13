@@ -14,8 +14,14 @@
 ; address: ipaddress: Local IP address to bind to, default all interfaces
 ;address=0.0.0.0
 
-; UDP port to bind, set to zero to use default MGCP CA port (2727)
+; port: int: UDP port to bind, set to zero to use default MGCP CA port (2727)
 ;port=
+
+; request_ack: bool: Request an Acknowledge of the transactions
+;request_ack=yes
+
+; send_provisional: bool: Send 1xx provisional answers to the requests
+;send_provisional=yes
 
 
 [endpoint]
@@ -31,8 +37,9 @@
 ;port=
 
 
-[gw PUT_NAME_HERE]
-; One fw ... section is required for each gateway we control
+;[gw PUT_NAME_HERE]
+; One gw ... section is required for each gateway we control
+; The gateway name is a string that can be referenced from other modules
 
 ; user: string: Remote MGCP resource name
 ;user=

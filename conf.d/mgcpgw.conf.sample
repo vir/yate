@@ -14,13 +14,20 @@
 ; address: ipaddress: Local IP address to bind to, default all interfaces
 ;address=0.0.0.0
 
-; UDP port to bind, set to zero to use default MGCP GW port (2427)
+; port: int: UDP port to bind, set to zero to use default MGCP GW port (2427)
 ;port=
 
+; request_ack: bool: Request an Acknowledge of the transactions
+;request_ack=yes
 
-[ep PUT_NAME_HERE]
+; send_provisional: bool: Send 1xx provisional answers to the requests
+;send_provisional=yes
+
+
+;[ep PUT_NAME_HERE]
 ; One ep ... section is required for each of our endpoints
 ; Each endpoint can be associated with at most one Call Agent
+; The endpoint name is a string that can be referenced from other modules
 
 ; local_user: string: The user part of the local endpoint, default endpoint name
 ;local_user=

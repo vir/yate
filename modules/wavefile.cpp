@@ -864,8 +864,6 @@ bool AttachHandler::received(Message &msg)
     // if single attach was requested we can return true if everything is ok
     bool ret = msg.getBoolValue("single");
 
-    String ml(msg.getValue("maxlen"));
-    unsigned maxlen = ml.toInteger(0);
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userData());
     if (!ch) {
 	if (!src.null())
@@ -877,17 +875,20 @@ bool AttachHandler::received(Message &msg)
 	return false;
     }
 
+    const char* notify = msg.getValue("notify");
+    unsigned int maxlen = msg.getIntValue("maxlen");
+
     if (!src.null()) {
 	WaveSource* s = WaveSource::create(src,ch,false,msg.getBoolValue("autorepeat"),msg.getParam("source"));
 	ch->setSource(s);
-	s->setNotify(msg.getValue("notify"));
+	s->setNotify(msg.getValue("notify_source",notify));
 	s->deref();
 	msg.clearParam("source");
     }
 
     if (!cons.null()) {
 	WaveConsumer* c = new WaveConsumer(cons,ch,maxlen,msg.getValue("format"),msg.getParam("consumer"));
-	c->setNotify(msg.getValue("notify"));
+	c->setNotify(msg.getValue("notify_consumer",notify));
 	ch->setConsumer(c);
 	c->deref();
 	msg.clearParam("consumer");
@@ -901,7 +902,7 @@ bool AttachHandler::received(Message &msg)
 	    break;
 	}
 	WaveSource* s = WaveSource::create(ovr,0,false,msg.getBoolValue("autorepeat"),msg.getParam("override"));
-	s->setNotify(msg.getValue("notify"));
+	s->setNotify(msg.getValue("notify_override",notify));
 	if (DataTranslator::attachChain(s,c,true))
 	    msg.clearParam("override");
 	else {
@@ -920,7 +921,7 @@ bool AttachHandler::received(Message &msg)
 	    break;
 	}
 	WaveSource* s = WaveSource::create(repl,0,false,msg.getBoolValue("autorepeat"),msg.getParam("replace"));
-	s->setNotify(msg.getValue("notify"));
+	s->setNotify(msg.getValue("notify_replace",notify));
 	if (DataTranslator::attachChain(s,c,false))
 	    msg.clearParam("replace");
 	else {
@@ -983,8 +984,8 @@ bool RecordHandler::received(Message &msg)
     if (c1.null() && c2.null())
 	return false;
 
-    String ml(msg.getValue("maxlen"));
-    unsigned maxlen = ml.toInteger(0);
+    const char* notify = msg.getValue("notify");
+    unsigned int maxlen = msg.getIntValue("maxlen");
 
     CallEndpoint *ch = static_cast<CallEndpoint*>(msg.userObject("CallEndpoint"));
     DataEndpoint *de = static_cast<DataEndpoint*>(msg.userObject("DataEndpoint"));
@@ -1001,14 +1002,14 @@ bool RecordHandler::received(Message &msg)
 
     if (!c1.null()) {
 	WaveConsumer* c = new WaveConsumer(c1,ch,maxlen,msg.getValue("format"),msg.getParam("call"));
-	c->setNotify(msg.getValue("notify"));
+	c->setNotify(msg.getValue("notify_call",notify));
 	de->setCallRecord(c);
 	c->deref();
     }
 
     if (!c2.null()) {
 	WaveConsumer* c = new WaveConsumer(c2,ch,maxlen,msg.getValue("format"),msg.getParam("peer"));
-	c->setNotify(msg.getValue("notify"));
+	c->setNotify(msg.getValue("notify_peer",notify));
 	de->setPeerRecord(c);
 	c->deref();
     }
@@ -1033,8 +1034,7 @@ bool WaveFileDriver::msgExecute(Message& msg, String& dest)
 	return false;
     }
 
-    String ml(msg.getValue("maxlen"));
-    unsigned maxlen = ml.toInteger(0);
+    unsigned int maxlen = msg.getIntValue("maxlen");
     CallEndpoint* ch = static_cast<CallEndpoint*>(msg.userData());
     if (ch) {
 	Debug(this,DebugInfo,"%s wave file '%s'", (meth ? "Record to" : "Play from"),

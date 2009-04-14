@@ -202,12 +202,14 @@ int Message::commonDecode(const char* str, int offs)
 MessageHandler::MessageHandler(const char* name, unsigned priority)
     : String(name), m_priority(priority), m_dispatcher(0), m_filter(0)
 {
-    XDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",name,priority,this);
+    DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",
+	name,priority,this);
 }
 
 MessageHandler::~MessageHandler()
 {
-    XDebug(DebugAll,"MessageHandler::~MessageHandler() [%p]",this);
+    DDebug(DebugAll,"MessageHandler::~MessageHandler() '%s', %u [%p]",
+	safe(),m_priority,this);
     cleanup();
 }
 
@@ -244,12 +246,12 @@ void MessageHandler::clearFilter()
 MessageDispatcher::MessageDispatcher()
     : m_changes(0), m_warnTime(0)
 {
-    XDebug(DebugAll,"MessageDispatcher::MessageDispatcher() [%p]",this);
+    XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }
 
 MessageDispatcher::~MessageDispatcher()
 {
-    XDebug(DebugAll,"MessageDispatcher::~MessageDispatcher() [%p]",this);
+    XDebug(DebugInfo,"MessageDispatcher::~MessageDispatcher() [%p]",this);
     m_mutex.lock();
     m_handlers.clear();
     m_hooks.clear();
@@ -258,7 +260,7 @@ MessageDispatcher::~MessageDispatcher()
 
 bool MessageDispatcher::install(MessageHandler* handler)
 {
-    XDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
+    DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
 	return false;
     Lock lock(m_mutex);
@@ -296,7 +298,7 @@ bool MessageDispatcher::install(MessageHandler* handler)
 
 bool MessageDispatcher::uninstall(MessageHandler* handler)
 {
-    XDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
+    DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
     Lock lock(m_mutex);
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
     if (handler) {

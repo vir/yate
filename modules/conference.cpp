@@ -171,7 +171,7 @@ public:
 private:
     void consumed(const int* mixed, unsigned int samples);
     void dataForward(const int* mixed, unsigned int samples);
-    ConfRoom* m_room;
+    RefPointer<ConfRoom> m_room;
     ConfSource* m_src;
     bool m_muted;
     bool m_smart;

@@ -141,12 +141,6 @@ bool s_asyncDelete = true;
 bool s_dataPadding = true;
 bool s_pubReadable = false;
 
-#if defined (S_IRGRP) && defined(S_IROTH)
-#define CREATE_MODE (S_IRUSR|S_IWUSR|(s_pubReadable?(S_IRGRP|S_IROTH):0))
-#else
-#define CREATE_MODE (S_IRUSR|S_IWUSR)
-#endif
-
 INIT_PLUGIN(WaveFileDriver);
 
 
@@ -547,7 +541,7 @@ WaveConsumer::WaveConsumer(const String& file, CallEndpoint* chan, unsigned maxl
     if (m_stream)
 	return;
     m_stream = new File;
-    if (!static_cast<File*>(m_stream)->openPath(file,true,false,true,false,true)) {
+    if (!static_cast<File*>(m_stream)->openPath(file,true,false,true,false,true,s_pubReadable)) {
 	Debug(DebugWarn,"Creating '%s': error %d: %s",
 	    file.c_str(), m_stream->error(), ::strerror(m_stream->error()));
 	delete m_stream;

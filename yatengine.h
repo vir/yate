@@ -481,12 +481,13 @@ public:
 	: MessageHandler(name,priority), m_receiver(receiver), m_id(id) { }
 
     /**
-     * This method is never called and must not be used or reimplemented.
+     * This method is not called from MessageHandler through polymorphism
+     *  and should not be used or reimplemented.
      * @param msg The received message
-     * @return Always false
+     * @return True if the receiver exists and has handled the message
      */
     virtual bool received(Message& msg)
-	{ return false; }
+	{ return m_receiver && m_receiver->received(msg,m_id); }
 
     /**
      * Get the ID of this message relay

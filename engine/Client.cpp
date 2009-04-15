@@ -686,7 +686,7 @@ void ClientThreadProxy::process()
 	    m_rval = client->getTableRow(m_name,m_item,const_cast<NamedList*>(m_params),m_wnd,m_skip);
 	    break;
 	case clearTable:
-	    m_rval = client->clearTable(m_name);
+	    m_rval = client->clearTable(m_name,m_wnd,m_skip);
 	    break;
 	case getText:
 	    m_rval = client->getText(m_name,*m_rtext,m_rbool ? *m_rbool : false,m_wnd,m_skip);
@@ -717,10 +717,10 @@ void ClientThreadProxy::process()
 	    m_rval = client->createObject(m_pointer,m_name,m_text,const_cast<NamedList*>(m_params));
 	    break;
 	case setProperty:
-	    m_rval = client->setProperty(m_name,m_item,m_text);
+	    m_rval = client->setProperty(m_name,m_item,m_text,m_wnd,m_skip);
 	    break;
 	case getProperty:
-	    m_rval = client->getProperty(m_name,m_item,m_text);
+	    m_rval = client->getProperty(m_name,m_item,m_text,m_wnd,m_skip);
 	    break;
 	case openUrl:
 	    m_rval = client->openUrl(m_name);

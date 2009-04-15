@@ -4508,10 +4508,13 @@ public:
      * @param create Create the file if it doesn't exist
      * @param append Set the write pointer at the end of an existing file
      * @param binary Open the file in binary mode if applicable
+     * @param pubReadable If the file is created make it public readable
+     * @param pubWritable If the file is created make it public writable
      * @return True if the file was successfully opened
      */
     virtual bool openPath(const char* name, bool canWrite = false, bool canRead = true,
-	bool create = false, bool append = false, bool binary = false);
+	bool create = false, bool append = false, bool binary = false,
+	bool pubReadable = false, bool pubWritable = false);
 
     /**
      * Closes the file handle

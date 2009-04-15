@@ -627,7 +627,7 @@ bool File::setBlocking(bool block)
 }
 
 bool File::openPath(const char* name, bool canWrite, bool canRead,
-    bool create, bool append, bool binary)
+    bool create, bool append, bool binary, bool pubReadable, bool pubWritable)
 {
     if (!terminate())
 	return false;
@@ -674,7 +674,12 @@ bool File::openPath(const char* name, bool canWrite, bool canRead,
 	flags |= O_TRUNC;
     if (binary)
 	flags |= O_BINARY;
-    HANDLE h = ::open(name,flags,(S_IRUSR|S_IWUSR));
+    int mode = S_IRUSR|S_IWUSR;
+    if (pubReadable)
+	mode |= S_IRGRP|S_IROTH;
+    if (pubWritable)
+	mode |= S_IWGRP|S_IWOTH;
+    HANDLE h = ::open(name,flags,mode);
     if (h == invalidHandle()) {
 	copyError();
 	return false;

@@ -1859,7 +1859,10 @@ void YJGConnection::hangup(const char* reason, const char* text)
     Engine::enqueue(m);
     if (m_session) {
 	m_session->userData(0);
-	m_session->hangup(lookup(m_reason,s_errMap,JGSession::ReasonUnknown),text);
+	int res = lookup(m_reason,s_errMap,JGSession::ReasonUnknown);
+	if (res == JGSession::ReasonUnknown && !text)
+	    text = m_reason;
+	m_session->hangup(res,text);
 	TelEngine::destruct(m_session);
     }
     Debug(this,DebugCall,"Hangup. reason=%s [%p]",m_reason.c_str(),this);

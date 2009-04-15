@@ -146,6 +146,7 @@ static String s_wndParamPrefix[] = {"show:","active:","focus:","check:","select:
 static String s_userBusy = "User busy";
 static String s_rejectReason = "Rejected";
 static String s_hangupReason = "User hangup";
+static String s_cancelReason = "Cancelled";
 static unsigned int s_eventLen = 0;              // Log maximum lines (0: unlimited)
 static Mutex s_debugMutex;
 static Mutex s_proxyMutex;
@@ -2178,16 +2179,27 @@ void Client::callTerminate(const String& id, const char* reason, const char* err
     if (!chan)
 	return;
     bool hangup = chan->isAnswered();
+    bool cancel = !hangup && chan->isIncoming();
     lock.drop();
     // Drop the call
     Message* m = new Message("call.drop");
     m->addParam("id",id);
-    if (hangup)
-	m->addParam("reason",reason ? reason : s_hangupReason.c_str());
-    else {
-	m->addParam("error",error ? error : "rejected");
-	m->addParam("reason",reason ? reason : s_rejectReason.c_str());
+    if (hangup || cancel) {
+	if (!error && cancel)
+	    error = "cancelled";
+	if (!reason)
+	    reason = cancel ? s_cancelReason : s_hangupReason;
     }
+    else {
+	if (!error)
+	    error = "rejected";
+	if (!reason)
+	    reason = s_rejectReason;
+    }
+    if (!null(error))
+	m->addParam("error",error);
+    if (!null(reason))
+	m->addParam("reason",reason);
     Engine::enqueue(m);
 }
 

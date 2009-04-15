@@ -210,6 +210,7 @@ private:
 };
 
 class MessageDispatcher;
+class MessageRelay;
 
 /**
  * This class holds the messages that are moved around in the engine.
@@ -377,6 +378,7 @@ private:
 class YATE_API MessageHandler : public String
 {
     friend class MessageDispatcher;
+    friend class MessageRelay;
 public:
     /**
      * Creates a new message handler.
@@ -436,8 +438,11 @@ public:
     void clearFilter();
 
 private:
+    virtual bool receivedInternal(Message& msg);
     void cleanup();
+    void safeNow();
     unsigned m_priority;
+    int m_unsafe;
     MessageDispatcher* m_dispatcher;
     NamedString* m_filter;
 };
@@ -476,12 +481,12 @@ public:
 	: MessageHandler(name,priority), m_receiver(receiver), m_id(id) { }
 
     /**
-     * This method is called whenever the registered name matches the message.
+     * This method is never called and must not be used or reimplemented.
      * @param msg The received message
-     * @return True to stop processing, false to try other handlers
+     * @return Always false
      */
     virtual bool received(Message& msg)
-	{ return m_receiver ? m_receiver->received(msg,m_id) : false; }
+	{ return false; }
 
     /**
      * Get the ID of this message relay
@@ -491,6 +496,7 @@ public:
 	{ return m_id; }
 
 private:
+    virtual bool receivedInternal(Message& msg);
     MessageReceiver* m_receiver;
     int m_id;
 };
@@ -533,7 +539,7 @@ class YATE_API MessagePostHook : public GenObject, public MessageNotifier
  *  messages that are typically dispatched by a separate thread.
  * @short A message dispatching hub
  */
-class YATE_API MessageDispatcher : public GenObject
+class YATE_API MessageDispatcher : public GenObject, public Mutex
 {
 public:
     /**
@@ -621,7 +627,6 @@ private:
     ObjList m_handlers;
     ObjList m_messages;
     ObjList m_hooks;
-    Mutex m_mutex;
     unsigned int m_changes;
     u_int64_t m_warnTime;
 };

@@ -199,8 +199,10 @@ int Message::commonDecode(const char* str, int offs)
     return -2;
 }
 
+
 MessageHandler::MessageHandler(const char* name, unsigned priority)
-    : String(name), m_priority(priority), m_dispatcher(0), m_filter(0)
+    : String(name),
+      m_priority(priority), m_unsafe(0), m_dispatcher(0), m_filter(0)
 {
     DDebug(DebugAll,"MessageHandler::MessageHandler(\"%s\",%u) [%p]",
 	name,priority,this);
@@ -228,6 +230,20 @@ void MessageHandler::destruct()
     String::destruct();
 }
 
+void MessageHandler::safeNow()
+{
+    Lock lock(m_dispatcher);
+    // when the unsafe counter reaches zero we're again safe to destroy
+    m_unsafe--;
+}
+
+bool MessageHandler::receivedInternal(Message& msg)
+{
+    bool ok = received(msg);
+    safeNow();
+    return ok;
+}
+
 void MessageHandler::setFilter(NamedString* filter)
 {
     clearFilter();
@@ -243,6 +259,16 @@ void MessageHandler::clearFilter()
     }
 }
 
+
+bool MessageRelay::receivedInternal(Message& msg)
+{
+    MessageReceiver* receiver = m_receiver;
+    int id = m_id;
+    safeNow();
+    return receiver && receiver->received(msg,id);
+}
+
+
 MessageDispatcher::MessageDispatcher()
     : m_changes(0), m_warnTime(0)
 {
@@ -252,10 +278,9 @@ MessageDispatcher::MessageDispatcher()
 MessageDispatcher::~MessageDispatcher()
 {
     XDebug(DebugInfo,"MessageDispatcher::~MessageDispatcher() [%p]",this);
-    m_mutex.lock();
-    m_handlers.clear();
-    m_hooks.clear();
-    m_mutex.unlock();
+    lock();
+    clear();
+    unlock();
 }
 
 bool MessageDispatcher::install(MessageHandler* handler)
@@ -263,7 +288,7 @@ bool MessageDispatcher::install(MessageHandler* handler)
     DDebug(DebugAll,"MessageDispatcher::install(%p)",handler);
     if (!handler)
 	return false;
-    Lock lock(m_mutex);
+    Lock lock(this);
     ObjList *l = m_handlers.find(handler);
     if (l)
 	return false;
@@ -299,12 +324,25 @@ bool MessageDispatcher::install(MessageHandler* handler)
 bool MessageDispatcher::uninstall(MessageHandler* handler)
 {
     DDebug(DebugAll,"MessageDispatcher::uninstall(%p)",handler);
-    Lock lock(m_mutex);
+    lock();
     handler = static_cast<MessageHandler *>(m_handlers.remove(handler,false));
     if (handler) {
 	m_changes++;
+	if (handler->m_unsafe > 0) {
+	    DDebug(DebugNote,"Waiting for unsafe MessageHandler %p '%s'",
+		handler,handler->c_str());
+	    // wait until handler is again safe to destroy
+	    do {
+		unlock();
+		Thread::yield();
+		lock();
+	    } while (handler->m_unsafe > 0);
+	}
+	if (handler->m_unsafe != 0)
+	    Debug(DebugFail,"MessageHandler %p has unsafe=%d",handler,handler->m_unsafe);
 	handler->m_dispatcher = 0;
     }
+    unlock();
     return (handler != 0);
 }
 
@@ -318,7 +356,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 #endif
     bool retv = false;
     ObjList *l = &m_handlers;
-    m_mutex.lock();
+    lock();
     for (; l; l=l->next()) {
 	MessageHandler *h = static_cast<MessageHandler*>(l->get());
 	if (h && (h->null() || *h == msg)) {
@@ -326,11 +364,13 @@ bool MessageDispatcher::dispatch(Message& msg)
 		continue;
 	    unsigned int c = m_changes;
 	    unsigned int p = h->priority();
-	    m_mutex.unlock();
+	    // mark handler as unsafe to destroy / uninstall
+	    h->m_unsafe++;
+	    unlock();
 #ifdef DEBUG
 	    u_int64_t tm = Time::now();
 #endif
-	    retv = h->received(msg);
+	    retv = h->receivedInternal(msg);
 #ifdef DEBUG
 	    tm = Time::now() - tm;
 	    if (m_warnTime && (tm > m_warnTime))
@@ -339,7 +379,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 #endif
 	    if (retv)
 		break;
-	    m_mutex.lock();
+	    lock();
 	    if (c == m_changes)
 		continue;
 	    // the handler list has changed - find again
@@ -363,7 +403,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 	}
     }
     if (!l)
-	m_mutex.unlock();
+	unlock();
     msg.dispatched(retv);
 #ifndef NDEBUG
     t = Time::now() - t;
@@ -390,7 +430,7 @@ bool MessageDispatcher::dispatch(Message& msg)
 
 bool MessageDispatcher::enqueue(Message* msg)
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     if (!msg || m_messages.find(msg))
 	return false;
     m_messages.append(msg);
@@ -399,9 +439,9 @@ bool MessageDispatcher::enqueue(Message* msg)
 
 bool MessageDispatcher::dequeueOne()
 {
-    m_mutex.lock();
-    Message *msg = static_cast<Message *>(m_messages.remove(false));
-    m_mutex.unlock();
+    lock();
+    Message* msg = static_cast<Message *>(m_messages.remove(false));
+    unlock();
     if (!msg)
 	return false;
     dispatch(*msg);
@@ -417,24 +457,24 @@ void MessageDispatcher::dequeue()
 
 unsigned int MessageDispatcher::messageCount()
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     return m_messages.count();
 }
 
 unsigned int MessageDispatcher::handlerCount()
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     return m_handlers.count();
 }
 
 void MessageDispatcher::setHook(MessagePostHook* hook, bool remove)
 {
-    m_mutex.lock();
+    lock();
     if (remove)
 	m_hooks.remove(hook,false);
     else
 	m_hooks.append(hook);
-    m_mutex.unlock();
+    unlock();
 }
 
 

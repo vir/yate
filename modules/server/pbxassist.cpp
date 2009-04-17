@@ -52,6 +52,8 @@ protected:
     void setGuest(const Message& msg);
     void setParams(const Message& msg);
     void copyParameter(const NamedList& params, const char* dest, const char* src = 0);
+    bool cancelTransfer(const String& chId) const;
+    bool cancelTransfer() const;
     u_int64_t m_last;
     bool m_pass;
     bool m_guest;
@@ -252,6 +254,30 @@ void PBXAssist::defState()
     if (!locate(m_peer1))
 	m_peer1.clear();
     setState(m_peer1 ? "call" : "new");
+}
+
+// Cancel a pending assisted transfer
+bool PBXAssist::cancelTransfer(const String& chId) const
+{
+    Lock lock(s_transMutex);
+    for (ObjList* l = s_transList.skipNull(); l; l = l->skipNext()) {
+	NamedString* n = static_cast<NamedString*>(l->get());
+	if ((chId && (chId == n->name() || chId == *n)) ||
+	    (m_peer1 && (m_peer1 == n->name() || m_peer1 == *n))) {
+	    // found one of the channels in list, remove entry
+	    DDebug(list(),DebugInfo,"Chan '%s' cancelled transfer '%s' - '%s'",
+		id().c_str(),n->name().c_str(),n->c_str());
+	    l->remove();
+	    return true;
+	}
+    }
+    return false;
+}
+
+bool PBXAssist::cancelTransfer() const
+{
+    RefPointer<CallEndpoint> c = locate(id());
+    return cancelTransfer(c ? c->getPeerId() : String::empty());
 }
 
 // Handler for channel disconnects, may go on hold or to dialtone
@@ -604,6 +630,9 @@ bool PBXAssist::msgOperation(Message& msg, const String& operation)
     if (operation == "fortransfer")
 	return operForTransfer(msg);
 
+    if (operation == "canceltransfer")
+	return cancelTransfer();
+
     return false;
 }
 
@@ -647,6 +676,7 @@ bool PBXAssist::operConference(Message& msg)
     String peer = c->getPeerId();
     if (peer.startsWith("tone"))
 	peer.clear();
+    cancelTransfer(peer);
     const char* room = msg.getValue("room",m_room);
 
     if (peer) {
@@ -731,6 +761,7 @@ bool PBXAssist::operSecondCall(Message& msg)
     if (!Engine::dispatch(m) || m.retValue().null() || (m.retValue() == "-") || (m.retValue() == "error"))
 	return errorBeep(m.getValue("reason",m.getValue("error","no route")));
 
+    cancelTransfer();
     m = "chan.masquerade";
     m.setParam("message","call.execute");
     m_keep.setParam("called",msg.getValue("target"));
@@ -796,6 +827,7 @@ bool PBXAssist::operReturnHold(Message& msg)
 	m_peer1.clear();
     if (!(c1 && c2))
 	return errorBeep("no held channel");
+    cancelTransfer(c1->getPeerId());
     m_peer1.clear();
     defState();
     c1->connect(c2);
@@ -826,6 +858,7 @@ bool PBXAssist::operReturnConf(Message& msg)
 // Return to a dialtone, hangup the peer if any
 bool PBXAssist::operReturnTone(Message& msg, const char* reason)
 {
+    cancelTransfer();
     setState(msg.getValue("state","dial"));
     Message* m = new Message("chan.masquerade");
     m->addParam("id",id());
@@ -848,6 +881,7 @@ bool PBXAssist::operDialTone(Message& msg)
     if (!c)
 	return errorBeep("no channel");
 
+    cancelTransfer(c->getPeerId());
     m_peer1 = c->getPeerId();
     if (m_peer1.startsWith("tone"))
 	m_peer1.clear();
@@ -877,6 +911,7 @@ bool PBXAssist::operTransfer(Message& msg)
     m = "call.route";
     if (!Engine::dispatch(m) || m.retValue().null() || (m.retValue() == "-") || (m.retValue() == "error"))
 	return errorBeep(m.getValue("reason",m.getValue("error","no route")));
+    cancelTransfer(peer);
     setState(msg.getValue("state","hangup"));
     m = "chan.masquerade";
     m.setParam("message","call.execute");
@@ -902,6 +937,7 @@ bool PBXAssist::operDoTransfer(Message& msg)
 	m_peer1.clear();
     if (!(c1 && c2))
 	return errorBeep("no held channel");
+    cancelTransfer();
     setState(msg.getValue("state","hangup"));
     m_peer1.clear();
     c1->connect(c2);

@@ -1072,6 +1072,14 @@ public:
 	{ return m_initialized; }
     inline static Client* self()
 	{ return s_client; }
+
+    /**
+     * Check if the client object still exists and the client or engine is not exiting
+     * @return True if the client is valid (running)
+     */
+    static inline bool valid()
+	{ return self() && !(exiting() || Engine::exiting()); }
+
     inline static bool changing()
 	{ return (s_changing > 0); }
     static Window* getWindow(const String& name);

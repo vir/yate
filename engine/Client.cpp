@@ -318,6 +318,7 @@ Window::Window(const char* id)
     : m_id(id), m_visible(false), m_master(false), m_popup(false),
     m_saveOnClose(true), m_populated(false), m_initialized(false)
 {
+    DDebug(ClientDriver::self(),DebugAll,"Window(%s) created",m_id.c_str());
 }
 
 // destructor
@@ -325,6 +326,7 @@ Window::~Window()
 {
     if (Client::self())
 	Client::self()->m_windows.remove(this,false);
+    DDebug(ClientDriver::self(),DebugAll,"Window(%s) destroyed",m_id.c_str());
 }
 
 // retrieve the window id
@@ -886,7 +888,7 @@ void Client::run()
 // retrieve the window named by the value of "name" from the client's list of windows 
 Window* Client::getWindow(const String& name)
 {
-    if (!s_client)
+    if (!valid())
 	return 0;
     ObjList* l = s_client->m_windows.find(name);
     return static_cast<Window*>(l ? l->get() : 0);
@@ -895,7 +897,7 @@ Window* Client::getWindow(const String& name)
 // function for obtaining a list of all windows that the client uses
 ObjList* Client::listWindows()
 {
-    if (!s_client)
+    if (!valid())
 	return 0;
     ObjList* lst = 0;
     for (ObjList* l = &s_client->m_windows; l; l = l->next()) {
@@ -912,7 +914,9 @@ ObjList* Client::listWindows()
 // Open an URL (link) in the client's thread
 bool Client::openUrlSafe(const String& url)
 {
-    if (s_client && s_client->needProxy()) {
+    if (!valid())
+	return false;
+    if (s_client->needProxy()) {
 	// The 'false' parameter is here because there is no constructor with name only
 	ClientThreadProxy proxy(ClientThreadProxy::openUrl,url,false);
 	return proxy.execute();
@@ -923,7 +927,9 @@ bool Client::openUrlSafe(const String& url)
 // function for setting the visibility attribute of the "name" window
 bool Client::setVisible(const String& name, bool show)
 {
-    if (s_client && s_client->needProxy()) {
+    if (!valid())
+	return false;
+    if (s_client->needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setVisible,name,show);
 	return proxy.execute();
     }
@@ -1052,7 +1058,9 @@ void Client::moveRelated(const Window* wnd, int dx, int dy)
 // function for opening the pop-up window that has the id "name" with the given parameters
 bool Client::openPopup(const String& name, const NamedList* params, const Window* parent)
 {   
-    if (s_client && s_client->needProxy()) {
+    if (!valid())
+	return false;
+    if (s_client->needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::openPopup,name,params,parent);
 	return proxy.execute();
     }
@@ -1093,6 +1101,8 @@ bool Client::openConfirm(const char* text, const Window* parent, const char* con
 // check if the window has a widget named "name"
 bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::hasElement,name,false,wnd,skip);
 	return proxy.execute();
@@ -1112,6 +1122,8 @@ bool Client::hasElement(const String& name, Window* wnd, Window* skip)
 // if no window is given, we search for it 
 bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setShow,name,visible,wnd,skip);
 	return proxy.execute();
@@ -1133,6 +1145,8 @@ bool Client::setShow(const String& name, bool visible, Window* wnd, Window* skip
 // function for controlling the enabled attribute of the "name" widget from the "wnd" window
 bool Client::setActive(const String& name, bool active, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setActive,name,active,wnd,skip);
 	return proxy.execute();
@@ -1154,6 +1168,8 @@ bool Client::setActive(const String& name, bool active, Window* wnd, Window* ski
 // function for controlling the focus attribute of the "name" widget from the "wnd" window
 bool Client::setFocus(const String& name, bool select, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setFocus,name,select,wnd,skip);
 	return proxy.execute();
@@ -1176,6 +1192,8 @@ bool Client::setFocus(const String& name, bool select, Window* wnd, Window* skip
 bool Client::setText(const String& name, const String& text, bool richText,
     Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setText,name,text,"",richText,wnd,skip);
 	return proxy.execute();
@@ -1196,6 +1214,8 @@ bool Client::setText(const String& name, const String& text, bool richText,
 // function that controls the checked attribute of checkable widgets
 bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setCheck,name,checked,wnd,skip);
 	return proxy.execute();
@@ -1217,6 +1237,8 @@ bool Client::setCheck(const String& name, bool checked, Window* wnd, Window* ski
 // function for selecting the widget named "name" from the "wnd" window if given, else look for the widget
 bool Client::setSelect(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setSelect,name,item,wnd,skip);
 	return proxy.execute();
@@ -1238,6 +1260,8 @@ bool Client::setSelect(const String& name, const String& item, Window* wnd, Wind
 // function for handling an action that requires immediate action on the "name" widget
 bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setUrgent,name,urgent,wnd,skip);
 	return proxy.execute();
@@ -1259,6 +1283,8 @@ bool Client::setUrgent(const String& name, bool urgent, Window* wnd, Window* ski
 // function for checking if the "name" widget has the specified item
 bool Client::hasOption(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::hasOption,name,item,wnd,skip);
 	return proxy.execute();
@@ -1277,6 +1303,8 @@ bool Client::hasOption(const String& name, const String& item, Window* wnd, Wind
 // function for adding a new option to the "name" widget from the "wnd" window, if given
 bool Client::addOption(const String& name, const String& item, bool atStart, const String& text, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::addOption,name,text,item,atStart,wnd,skip);
 	return proxy.execute();
@@ -1298,6 +1326,8 @@ bool Client::addOption(const String& name, const String& item, bool atStart, con
 // function for deleting an option from the "name" widget from the "wnd" window, if given
 bool Client::delOption(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::delOption,name,item,wnd,skip);
 	return proxy.execute();
@@ -1320,6 +1350,8 @@ bool Client::delOption(const String& name, const String& item, Window* wnd, Wind
 bool Client::getOptions(const String& name, NamedList* items,
 	Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getOptions,name,items,wnd,skip);
 	return proxy.execute();
@@ -1342,7 +1374,7 @@ bool Client::getOptions(const String& name, NamedList* items,
 bool Client::addLines(const String& name, const NamedList* lines, unsigned int max, 
 	bool atStart, Window* wnd, Window* skip)
 {
-    if (!lines)
+    if (!(lines && valid()))
 	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::addLines,name,lines,max,atStart,wnd,skip);
@@ -1365,6 +1397,8 @@ bool Client::addLines(const String& name, const NamedList* lines, unsigned int m
 bool Client::addTableRow(const String& name, const String& item, const NamedList* data,
 	bool atStart, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::addTableRow,name,item,atStart,data,wnd,skip);
 	return proxy.execute();
@@ -1385,6 +1419,8 @@ bool Client::addTableRow(const String& name, const String& item, const NamedList
 
 bool Client::setMultipleRows(const String& name, const NamedList& data, const String& prefix, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setMultipleRows,name,prefix,false,&data,wnd,skip);
 	return proxy.execute();
@@ -1406,6 +1442,8 @@ bool Client::setMultipleRows(const String& name, const NamedList& data, const St
 bool Client::insertTableRow(const String& name, const String& item,
     const String& before, const NamedList* data, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::insertTableRow,name,before,item,data,wnd,skip);
 	return proxy.execute();
@@ -1426,6 +1464,8 @@ bool Client::insertTableRow(const String& name, const String& item,
 // function for deleting a row from the "name" table
 bool Client::delTableRow(const String& name, const String& item, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::delTableRow,name,item,wnd,skip);
 	return proxy.execute();
@@ -1447,6 +1487,8 @@ bool Client::delTableRow(const String& name, const String& item, Window* wnd, Wi
 // function for changing the value of a row from the "name" table
 bool Client::setTableRow(const String& name, const String& item, const NamedList* data, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setTableRow,name,item,false,data,wnd,skip);
 	return proxy.execute();
@@ -1468,6 +1510,8 @@ bool Client::setTableRow(const String& name, const String& item, const NamedList
 // function for obtaining the information from a specific row from the "name" table
 bool Client::getTableRow(const String& name, const String& item, NamedList* data, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getTableRow,name,item,false,data,wnd,skip);
 	return proxy.execute();
@@ -1487,6 +1531,8 @@ bool Client::getTableRow(const String& name, const String& item, NamedList* data
 bool Client::updateTableRow(const String& name, const String& item,
     const NamedList* data, bool atStart, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::updateTableRow,name,item,
 	    atStart,data,wnd,skip);
@@ -1509,6 +1555,8 @@ bool Client::updateTableRow(const String& name, const String& item,
 bool Client::updateTableRows(const String& name, const NamedList* data, bool atStart,
 	Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::updateTableRows,name,String::empty(),
 	    atStart,data,wnd,skip);
@@ -1530,6 +1578,8 @@ bool Client::updateTableRows(const String& name, const NamedList* data, bool atS
 // function for deleting all row from a table given by the name parameter
 bool Client::clearTable(const String& name, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::clearTable,name,false,wnd,skip);
 	return proxy.execute();
@@ -1551,6 +1601,8 @@ bool Client::clearTable(const String& name, Window* wnd, Window* skip)
 // function for obtaining the text from the "name" widget
 bool Client::getText(const String& name, String& text, bool richText, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getText,name,&text,&richText,wnd,skip);
 	return proxy.execute();
@@ -1569,6 +1621,8 @@ bool Client::getText(const String& name, String& text, bool richText, Window* wn
 // function for obtaining the status of the checked attribute for the "name" checkable attribute
 bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getCheck,name,0,&checked,wnd,skip);
 	return proxy.execute();
@@ -1587,6 +1641,8 @@ bool Client::getCheck(const String& name, bool& checked, Window* wnd, Window* sk
 // get the iten currently selected from the "name" widget
 bool Client::getSelect(const String& name, String& item, Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getSelect,name,&item,0,wnd,skip);
 	return proxy.execute();
@@ -1606,6 +1662,8 @@ bool Client::getSelect(const String& name, String& item, Window* wnd, Window* sk
 bool Client::setProperty(const String& name, const String& item, const String& value,
 	Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setProperty,name,value,item,false,wnd,skip);
 	return proxy.execute();
@@ -1627,6 +1685,8 @@ bool Client::setProperty(const String& name, const String& item, const String& v
 bool Client::getProperty(const String& name, const String& item, String& value,
     Window* wnd, Window* skip)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::getProperty,name,value,item,false,wnd,skip);
 	return proxy.execute();
@@ -1647,6 +1707,8 @@ bool Client::getProperty(const String& name, const String& item, String& value,
 // Create a window with a given name
 bool Client::createWindowSafe(const String& name, const String& alias)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::createWindow,name,alias,0,0);
 	return proxy.execute();
@@ -1664,7 +1726,7 @@ bool Client::createWindowSafe(const String& name, const String& alias)
 bool Client::createObject(void** dest, const String& type, const char* name,
 	NamedList* params)
 {
-    if (!dest)
+    if (!(dest && valid()))
 	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::createObject,dest,type,name,params);
@@ -1677,6 +1739,8 @@ bool Client::createObject(void** dest, const String& type, const char* name,
 // Hide/close a window with a given name
 bool Client::closeWindow(const String& name, bool hide)
 {
+    if (!valid())
+	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::closeWindow,name,hide);
 	return proxy.execute();
@@ -1696,7 +1760,7 @@ bool Client::closeWindow(const String& name, bool hide)
 // Set multiple window parameters
 bool Client::setParams(const NamedList* params, Window* wnd, Window* skip)
 {
-    if (!params)
+    if (!(params && valid()))
 	return false;
     if (needProxy()) {
 	ClientThreadProxy proxy(ClientThreadProxy::setParams,String::empty(),

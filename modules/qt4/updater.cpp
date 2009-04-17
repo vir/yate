@@ -62,7 +62,7 @@ public:
 	: ClientLogic(name,100),
 	  m_policy(Invalid), m_checking(false),
 	  m_checked(false), m_install(false),
-	  m_http(0), m_file(0), m_httpSlots(0)
+	  m_http(0), m_file(0), m_httpSlots(0), m_canUpdate(true)
 	{ }
     virtual ~UpdateLogic();
     inline Policy policy() const
@@ -93,6 +93,7 @@ private:
     QHttp* m_http;
     QFile* m_file;
     QtUpdateHttp* m_httpSlots;
+    bool m_canUpdate;
 };
 /**
  * Plugin registration
@@ -123,6 +124,26 @@ UpdateLogic::~UpdateLogic()
 
 bool UpdateLogic::initializedClient()
 {
+    // Check if the current user can write to install dir
+    // Disable and uncheck all updater UI controls on failure
+    Configuration cfg = Engine::configFile("updater");
+    m_canUpdate = !File::exists(cfg) || cfg.save();
+    if (!m_canUpdate) {
+	Debug(toString(),DebugInfo,"Disabling updates: the current user can't write to '%s'",
+	    Engine::configPath().c_str());
+	NamedList p("");
+	p.addParam("check:upd_automatic","false");
+	p.addParam("active:upd_automatic","false");
+	p.addParam("active:upd_install","false");
+	p.addParam("active:upd_check","false");
+	p.addParam("active:upd_download","false");
+	for (int i = 0; s_policies[i].token; i++)
+	    p.addParam("active:upd_policy_" + String(s_policies[i].token),"false");
+	if (Client::self())
+	    Client::self()->setParams(&p);
+	return false;
+    }
+
     int policy = Engine::config().getIntValue("client",toString(),s_policies,Never);
     policy = Client::s_settings.getIntValue(toString(),"policy",s_policies,policy);
     setPolicy(policy,false);
@@ -152,6 +173,8 @@ void UpdateLogic::exitingClient()
 
 bool UpdateLogic::action(Window* wnd, const String& name, NamedList* params)
 {
+    if (!m_canUpdate)
+	return false;
     if (name == "upd_install")
 	startInstalling();
     else if (name == "upd_check")
@@ -165,6 +188,8 @@ bool UpdateLogic::action(Window* wnd, const String& name, NamedList* params)
 
 bool UpdateLogic::toggle(Window* wnd, const String& name, bool active)
 {
+    if (!m_canUpdate)
+	return false;
     if (!name.startsWith("upd_"))
 	return false;
     if (name == "upd_check")

@@ -126,7 +126,7 @@ bool UpdateLogic::initializedClient()
 {
     // Check if the current user can write to install dir
     // Disable and uncheck all updater UI controls on failure
-    Configuration cfg = Engine::configFile("updater");
+    Configuration cfg(Engine::configFile("updater"));
     m_canUpdate = !File::exists(cfg) || cfg.save();
     if (!m_canUpdate) {
 	Debug(toString(),DebugInfo,"Disabling updates: the current user can't write to '%s'",

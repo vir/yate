@@ -1978,7 +1978,7 @@ bool YJGConnection::handleEvent(JGEvent* event)
 	    m_transferStanzaId = "";
 	    m_transferring = false;
 	    if (rspOk) {
-		Debug(this,DebugStub,"Transfer succeedded !!!!! [%p]",this);
+		Debug(this,DebugInfo,"Transfer succeedded [%p]",this);
 		// TODO: implement
 	    }
 	    else {
@@ -2413,7 +2413,7 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
 
     event->confirmElement();
     bool startAudioContent = false;
-
+    JGSessionContent* newContent = 0;
     for (ObjList* o = event->m_contents.skipNull(); o; o = o->skipNext()) {
 	JGSessionContent* c = static_cast<JGSessionContent*>(o->get());
 	JGSessionContent* cc = findContent(*c,m_audioContents);
@@ -2428,12 +2428,23 @@ void YJGConnection::processActionTransportInfo(JGEvent* event)
         // Update transport(s)
 	bool changed = updateCandidate(1,*cc,*c);
 	changed = updateCandidate(2,*cc,*c) || changed;
-	// Check if the current audio content changed
-	if (changed && m_audioContent == cc)
+	if (!changed)
+	    continue;
+	// Restart current content if the transport belongs to it or
+	// replace or if the transport belongs to another one
+	if (m_audioContent == cc) {
 	    startAudioContent = true;
+	    newContent = 0;
+	}
+	else
+	    newContent = cc;
     }
 
-    if ((startAudioContent && !startRtp()) || !(m_audioContent || dataFlags(OnHold)))
+    if (newContent) {
+	if (!dataFlags(OnHold))
+	    resetCurrentAudioContent(isAnswered(),!isAnswered(),true,newContent);
+    }
+    else if ((startAudioContent && !startRtp()) || !(m_audioContent || dataFlags(OnHold)))
 	resetCurrentAudioContent(isAnswered(),!isAnswered());
     enqueueCallProgress();
 }
@@ -2513,6 +2524,9 @@ void YJGConnection::removeCurrentAudioContent(bool removeReq)
 	clearEndpoint();
     if (!m_audioContent)
 	return;
+
+    Debug(this,DebugAll,"Resetting current audio content (%p,'%s') [%p]",
+	m_audioContent,m_audioContent->toString().c_str(),this);
 
     // Remove from list if not re-usable
     bool check = (m_audioContent->isSession() == isAnswered());
@@ -2682,8 +2696,6 @@ bool YJGConnection::startRtp()
 	    m_session->sendInfo(trying);
 	}
     }
-
-
 
     return true;
 }

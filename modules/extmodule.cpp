@@ -779,6 +779,7 @@ bool ExtModReceiver::flush()
 {
     TelEngine::destruct(m_watcher);
     // Make sure we release all pending messages and not accept new ones
+    bool relays = m_relays.count() != 0;
     if (!Engine::exiting())
 	m_relays.clear();
     else {
@@ -786,6 +787,8 @@ bool ExtModReceiver::flush()
 	for (; p; p=p->next())
 	    p->setDelete(false);
     }
+    if (relays)
+	Thread::yield();
     Lock lock(this);
     if (m_waiting.get()) {
 	Debug(DebugInfo,"ExtModReceiver releasing %u pending messages [%p]",
@@ -848,6 +851,8 @@ void ExtModReceiver::die(bool clearChan)
 
 bool ExtModReceiver::received(Message &msg, int id)
 {
+    if (m_dead)
+	return false;
     lock();
     // check if we are no longer running
     bool ok = (m_pid > 0) && m_in && m_out;
@@ -1080,14 +1085,14 @@ bool ExtModReceiver::outputLine(const char* line)
 {
     DDebug("ExtModReceiver",DebugAll,"%soutputLine '%s'",
 	(m_out ? "" : "failing "), line);
-    if (!m_out)
+    if (m_dead || !m_out)
 	return false;
     // since m_out can be non-blocking (the socket) we have to loop
     int len = ::strlen(line);
-    while (m_out && (len > 0)) {
+    while (m_out && (len > 0) && !m_dead) {
 	int w = m_out->writeData(line,len);
 	if (w < 0) {
-	    if (!m_out->canRetry())
+	    if (m_dead || !m_out || !m_out->canRetry())
 		return false;
 	}
 	else {
@@ -1098,8 +1103,10 @@ bool ExtModReceiver::outputLine(const char* line)
 	    Thread::yield();
     }
     char nl = '\n';
-    while (m_out) {
+    while (m_out && !m_dead) {
 	int w = m_out->writeData(&nl,1);
+	if (m_dead || !m_out)
+	    return false;
 	if ((w < 0) && !m_out->canRetry())
 	    return false;
 	if (w > 0)
@@ -1141,6 +1148,8 @@ bool ExtModReceiver::delWatched(const String& name)
 
 bool ExtModReceiver::processLine(const char* line)
 {
+    if (m_dead)
+	return false;
     DDebug("ExtModReceiver",DebugAll,"processLine '%s'", line);
     String id(line);
     if (m_role == RoleUnknown) {
@@ -1353,7 +1362,7 @@ bool ExtModReceiver::processLine(const char* line)
 	    DDebug("ExtModReceiver",DebugAll,"Created message %p '%s' [%p]",m,m->c_str(),this);
 	    lock();
 	    bool note = true;
-	    while (m_chan && m_chan->waiting()) {
+	    while (!m_dead && m_chan && m_chan->waiting()) {
 		if (note) {
 		    note = false;
 		    Debug("ExtModReceiver",DebugNote,"Waiting before enqueueing new message %p '%s' [%p]",
@@ -1361,6 +1370,10 @@ bool ExtModReceiver::processLine(const char* line)
 		}
 		unlock();
 		Thread::yield();
+		if (m_dead) {
+		    m->destruct();
+		    return false;
+		}
 		lock();
 	    }
 	    ExtModChan* chan = 0;

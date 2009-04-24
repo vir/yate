@@ -29,6 +29,7 @@
 #include <yatesig.h>
 
 #include <stdlib.h>
+#include <string.h>
 
 using namespace TelEngine;
 namespace { // anonymous
@@ -102,6 +103,8 @@ public:
 	{ return m_operational; }
     inline const String& address() const
 	{ return m_address; }
+    inline const char* version() const
+	{ return m_version.null() ? m_version.c_str() : "MGCP 1.0"; }
     inline bool fxo() const
 	{ return m_fxo; }
     inline bool fxs() const
@@ -127,6 +130,7 @@ private:
     bool m_fxs;
     String m_notify;
     String m_address;
+    String m_version;
 };
 
 class MGCPCircuit : public SignallingCircuit
@@ -177,10 +181,13 @@ private:
     String m_rtpId;
     String m_localIp;
     int m_localPort;
+    int m_sdpSession;
+    int m_sdpVersion;
     // Remote (MGCP GW side) RTP data
     String m_remoteIp;
     int m_remotePort;
     int m_remotePayload;
+    const char* m_payloads;
     // Synchronous transaction data
     MGCPTransaction* m_tr;
     RefPointer<MGCPMessage> m_msg;
@@ -219,6 +226,8 @@ public:
 
 YSIGFACTORY2(MGCPSpan);
 
+static const char* s_payloads = "0 8";
+
 static YMGCPEngine* s_engine = 0;
 static MGCPEndpoint* s_endpoint = 0;
 static String s_defaultEp;
@@ -244,23 +253,15 @@ static bool copyRename(NamedList& dest, const char* dname, const NamedList& src,
 // Increment the number at the end of a name by an offset
 static bool increment(String& name, unsigned int offs)
 {
-    unsigned int i = name.length();
-    while (i--) {
-	char c = name.at(i);
-	if ((c < '0') || (c > '9'))
-	    return false;
-	int d = offs % 10;
-	offs /= 10;
-	if (d) {
-	    c += d;
-	    if (c > '9') {
-		c -= 10;
-		offs++;
-	    }
-	    const_cast<char*>(name.c_str())[i] = c;
-	}
-	if (0 == offs)
-	    return true;
+    Regexp r("\\([0-9]\\+\\)@");
+    if (name.matches(r)) {
+	int pos = name.matchOffset(1);
+	unsigned int len = name.matchLength(1);
+	String num(offs + name.matchString(1).toInteger(0,10));
+	while (num.length() < len)
+	    num = "0" + num;
+	name = name.substr(0,pos) + num + name.substr(pos + len);
+	return true;
     }
     return false;
 }
@@ -708,7 +709,7 @@ MGCPSpan* MGCPSpan::findNotify(const String& id)
 MGCPSpan::MGCPSpan(const NamedList& params, const char* name, const MGCPEpInfo& ep)
     : SignallingCircuitSpan(params.getValue("debugname",name),
        static_cast<SignallingCircuitGroup*>(params.getObject("SignallingCircuitGroup"))),
-      m_circuits(0), m_count(1), m_epId(ep), m_operational(false),
+      m_circuits(0), m_count(0), m_epId(ep), m_operational(false),
       m_fxo(false), m_fxs(false)
 {
     Debug(&splugin,DebugAll,"MGCPSpan::MGCPSpan(%p,'%s') [%p]",
@@ -759,9 +760,19 @@ void MGCPSpan::clearCircuits()
 bool MGCPSpan::init(const NamedList& params)
 {
     clearCircuits();
+    const String* sect = params.getParam("voice");
     int cicStart = params.getIntValue("start");
-    if (cicStart < 0)
+    if ((cicStart < 0) || !sect)
 	return false;
+    Configuration cfg(Engine::configFile("mgcpca"));
+    const NamedList* config = cfg.getSection("gw " + *sect);
+    if (!config) {
+	Debug(m_group,DebugWarn,"MGCPSpan('%s'). Failed to find config section [%p]",
+	    id().safe(),this);
+	return false;
+    }
+    m_count = config->getIntValue("chans",1);
+    cicStart += config->getIntValue("offset");
 
     if (!m_count)
 	return false;
@@ -803,6 +814,13 @@ void MGCPSpan::operational(bool active)
     Debug(&splugin,DebugCall,"MGCPSpan '%s' is%s operational [%p]",
 	id().c_str(),(active ? "" : " not"),this);
     m_operational = active;
+    if (!m_circuits)
+	return;
+    for (unsigned int i = 0; i < m_count; i++) {
+	MGCPCircuit* circuit = m_circuits[i];
+	if (circuit)
+	    circuit->status((active ? SignallingCircuit::Idle : SignallingCircuit::Missing),true);
+    }
 }
 
 // Set the operational state and copy GW address
@@ -810,6 +828,9 @@ void MGCPSpan::operational(const SocketAddr& address)
 {
     if (address.valid() && address.host())
 	m_address = address.host();
+    MGCPEpInfo* ep = s_endpoint->find(epId().id());
+    if (ep && !(m_operational && ep->address.valid()))
+	ep->address = address;
     operational(true);
 }
 
@@ -923,6 +944,11 @@ bool MGCPSpan::processRestart(MGCPTransaction* tr, MGCPMessage* mm, const String
     DDebug(&splugin,DebugInfo,"MGCPSpan::processRestart(%p,%p,'%s') [%p]",
 	tr,mm,method.c_str(),this);
     if ((method &= "X-KeepAlive") || (method &= "disconnected") || (method &= "restart")) {
+	if (m_version.null()) {
+	    m_version = mm->version();
+	    Debug(&splugin,DebugNote,"MGCPSpan '%s' using version '%s' [%p]",
+		id().c_str(),m_version.c_str(),this);
+	}
 	operational(tr->addr());
     }
     else if (method &= "graceful")
@@ -939,7 +965,9 @@ bool MGCPSpan::processRestart(MGCPTransaction* tr, MGCPMessage* mm, const String
 MGCPCircuit::MGCPCircuit(unsigned int code, MGCPSpan* span, const char* id)
     : SignallingCircuit(RTP,code,Missing,span->group(),span),
       m_epId(id), m_statusReq(Missing),
-      m_localPort(0), m_remotePort(0), m_remotePayload(-1), m_tr(0)
+      m_localPort(0), m_sdpSession(0), m_sdpVersion(0),
+      m_remotePort(0), m_remotePayload(-1),
+      m_payloads(s_payloads), m_tr(0)
 {
     Debug(&splugin,DebugAll,"MGCPCircuit::MGCPCircuit(%u,%p,'%s') [%p]",
 	code,span,id,this);
@@ -967,7 +995,7 @@ MGCPCircuit::~MGCPCircuit()
 
 void* MGCPCircuit::getObject(const String& name) const
 {
-    if (SignallingCircuit::status() == Connected) {
+    if (connected()) {
 	if (name == "DataSource")
 	    return m_source;
 	if (name == "DataConsumer")
@@ -1054,11 +1082,18 @@ bool MGCPCircuit::setupConn()
     if (m_connId)
 	mm->params.addParam("I",m_connId);
     if (m_localIp && m_localPort) {
+	mm->params.addParam("M","sendrecv");
+	if (m_sdpSession)
+	    ++m_sdpVersion;
+	else
+	    m_sdpSession = m_sdpVersion = Time::secNow();
 	String mLine("audio ");
-	mLine << m_localPort << " RTP/AVP 0 8";
+	String oLine("yate ");
+	mLine << m_localPort << " RTP/AVP " << m_payloads;
+	oLine << m_sdpSession << " " << m_sdpVersion << " IN IP4 " << m_localIp;
 	MimeSdpBody* sdp = new MimeSdpBody;
 	sdp->addLine("v","0");
-	sdp->addLine("o",m_localIp);
+	sdp->addLine("o",oLine);
 	sdp->addLine("s","PSTN Circuit");
 	sdp->addLine("c","IN IP4 " + m_localIp);
 	sdp->addLine("t","0 0");
@@ -1114,13 +1149,14 @@ void MGCPCircuit::clearConn()
     m_connId.clear();
     m_remoteIp.clear();
     m_remotePort = 0;
+    m_sdpSession = 0;
     sendAsync(mm);
 }
 
 // Build a MGCP message
 MGCPMessage* MGCPCircuit::message(const char* cmd)
 {
-    return new MGCPMessage(s_engine,cmd,epId());
+    return new MGCPMessage(s_engine,cmd,epId(),mySpan()->version());
 }
 
 // Send a MGCP message asynchronously
@@ -1198,6 +1234,7 @@ bool MGCPCircuit::status(Status newStat, bool sync)
 	    m_statusReq = SignallingCircuit::status();
 	    return false;
 	default:
+	    m_payloads = s_payloads;
 	    cleanupRtp();
 	    clearConn();
     }
@@ -1209,9 +1246,15 @@ bool MGCPCircuit::updateFormat(const char* format, int direction)
 {
     if (!format)
 	return false;
-    Debug(&splugin,DebugStub,"MGCPCircuit::updateFormat('%s',%d) %u [%p]",
+    Debug(&splugin,DebugInfo,"MGCPCircuit::updateFormat('%s',%d) %u [%p]",
 	format,direction,code(),this);
-    return false;
+    if (0 == ::strcmp(format,"mulaw"))
+	m_payloads = "0";
+    else if (0 == ::strcmp(format,"alaw"))
+	m_payloads = "8";
+    else
+	return false;
+    return true;
 }
 
 // Send out an event on this circuit

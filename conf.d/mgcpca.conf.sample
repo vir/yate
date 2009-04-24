@@ -54,3 +54,9 @@
 ; The first gateway which is not explicitely disabled or the last that is
 ;  explicitely enabled will become default
 ;default=no
+
+; chans: int: Number of PSTN circuits to create in span
+;chans=1
+
+; offset: int: Offset of circuit code relative to start in span
+;offset=0

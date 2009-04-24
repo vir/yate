@@ -104,7 +104,7 @@ public:
     inline const String& address() const
 	{ return m_address; }
     inline const char* version() const
-	{ return m_version.null() ? m_version.c_str() : "MGCP 1.0"; }
+	{ return m_version.null() ? "MGCP 1.0" : m_version.c_str(); }
     inline bool fxo() const
 	{ return m_fxo; }
     inline bool fxs() const

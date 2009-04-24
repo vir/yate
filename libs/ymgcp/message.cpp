@@ -355,15 +355,17 @@ MGCPMessage* MGCPMessage::decodeMessage(const char* line, unsigned int len, unsi
 	    break;
 	}
 
+	// Response: the 3rd item is the comment
+	bool comment = (item == 3) && (code != -1);
+
 	// Get current item
-	if (!skipBlanks(line,len)) {
+	if (!(skipBlanks(line,len) || comment)) {
 	    error = "Unexpected end of line";
 	    return 0;
 	}
 
 	unsigned int itemLen = 0;
-	// Response: the 3rd item is the comment
-	if (item == 3 && code != -1)
+	if (comment)
 	    itemLen = len;
 	else
 	    for (; itemLen < len && !isBlank(line[itemLen]); itemLen++)
@@ -429,7 +431,7 @@ MGCPMessage* MGCPMessage::decodeMessage(const char* line, unsigned int len, unsi
 	if (error)
 	    return 0;
 	// Stop parse the rest if this is a response
-	if (item == 3 && code != -1)
+	if (comment)
 	    break;
     }
     // Check known commands

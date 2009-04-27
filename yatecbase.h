@@ -1458,6 +1458,15 @@ public:
     ClientChannel(const String& soundId);
 
     virtual ~ClientChannel();
+
+    /**
+     * Init and start router for an outgoing (to engine), not utility, channel
+     * @param target The target to call
+     * @param params Call parameters
+     * @return True on success
+     */
+    bool start(const String& target, const NamedList& params);
+
     virtual bool msgProgress(Message& msg);
     virtual bool msgRinging(Message& msg);
     virtual bool msgAnswered(Message& msg);

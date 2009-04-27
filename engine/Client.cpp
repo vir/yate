@@ -2168,7 +2168,7 @@ bool Client::buildOutgoingChannel(NamedList& params)
     if (!driverLockLoop())
 	return false;
     ClientChannel* chan = new ClientChannel(target,params);
-    if (!chan->ref())
+    if (!(chan->ref() && chan->start(target,params)))
 	TelEngine::destruct(chan);
     driverUnlock();
     if (!chan)
@@ -2493,6 +2493,32 @@ ClientChannel::ClientChannel(const String& target, const NamedList& params)
 {
     Debug(this,DebugCall,"Created outgoing to=%s [%p]",
 	m_party.c_str(),this);
+}
+
+// Constructor for utility channels used to play notifications
+ClientChannel::ClientChannel(const String& soundId)
+    : Channel(ClientDriver::self(),0,true),
+    m_noticed(true), m_line(0), m_active(false), m_silence(true),
+    m_conference(false), m_clientData(0), m_utility(true),
+    m_soundId(soundId)
+{
+    Lock lock(ClientSound::s_soundsMutex);
+    ClientSound* s = ClientSound::find(m_soundId);
+    if (s)
+	s->setChannel(id(),true);
+    else
+	m_soundId = "";
+}
+
+// Destructor
+ClientChannel::~ClientChannel()
+{
+    XDebug(this,DebugInfo,"ClientChannel::~ClientChannel() [%p]",this);
+}
+
+// Init and start router for an outgoing (to engine), not utility, channel
+bool ClientChannel::start(const String& target, const NamedList& params)
+{
     // Build the call.route and chan.startup messages
     Message* m = message("call.route");
     Message* s = message("chan.startup");
@@ -2515,29 +2541,11 @@ ClientChannel::ClientChannel(const String& target, const NamedList& params)
     if (!null(cs))
 	s->copyParams(params,*cs);
     Engine::enqueue(s);
-    if (startRouter(m))
+    if (startRouter(m)) {
 	update(Startup);
-}
-
-// Constructor for utility channels used to play notifications
-ClientChannel::ClientChannel(const String& soundId)
-    : Channel(ClientDriver::self(),0,true),
-    m_noticed(true), m_line(0), m_active(false), m_silence(true),
-    m_conference(false), m_clientData(0), m_utility(true),
-    m_soundId(soundId)
-{
-    Lock lock(ClientSound::s_soundsMutex);
-    ClientSound* s = ClientSound::find(m_soundId);
-    if (s)
-	s->setChannel(id(),true);
-    else
-	m_soundId = "";
-}
-
-// Destructor
-ClientChannel::~ClientChannel()
-{
-    XDebug(this,DebugInfo,"ClientChannel::~ClientChannel() [%p]",this);
+	return true;
+    }
+    return false;
 }
 
 void ClientChannel::destroyed()

@@ -200,7 +200,7 @@ qt4/%.yate: @srcdir@/qt4/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) @QT4_INC@ -I@top_srcdir@/clients/qt4 $< $(LOCALLIBS) @QT4_LIB@
 
 qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
-	$(MOC) $(DEFS) $(INCLUDES) @QT4_INC@ -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
+	mkdir -p qt4 && $(MOC) $(DEFS) $(INCLUDES) @QT4_INC@ -I@top_srcdir@/clients/qt4 -I@srcdir@/qt4 -o $@ $<
 
 %.yate: @srcdir@/%.cpp $(MKDEPS) $(INCFILES)
 	$(MODCOMP) -o $@ $(LOCALFLAGS) $< $(LOCALLIBS)

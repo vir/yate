@@ -567,8 +567,6 @@ public:
     bool getClientTargetResource(JBClientStream* stream, JabberID& target, bool* noSub = 0);
     // Find a channel by its sid
     YJGConnection* findBySid(const String& sid);
-    // Get a channel's session id. Return false if not found
-    bool getSid(const String& id, String& sid);
     // Get a copy of the default file transfer proxy
     inline JGStreamHost* defFTProxy() {
 	    Lock lock(this);
@@ -1793,22 +1791,20 @@ bool YJGConnection::msgTransfer(Message& msg)
 	return false;
 
     // Get transfer destination
-    // Try to get a resource for transfer target if incomplete
     m_transferTo.set(msg.getValue("to"));
-    if (!m_transferTo) {
-	DDebug(this,DebugNote,"Transfer request with empty target [%p]",this);
-	return false;
-    }
-    if (!m_transferTo.isFull()) {
-	const JBStream* stream = m_session ? m_session->stream() : 0;
-	if (stream && stream->type() == JBEngine::Client)
-	    plugin.getClientTargetResource((JBClientStream*)stream,m_transferTo);
-    }
 
     // Check attended transfer request
     NamedString* chanId = msg.getParam("channelid");
     if (chanId) {
-	bool ok = plugin.getSid(*chanId,m_transferSid);
+	bool ok = false;
+	plugin.lock();
+	YJGConnection* conn = static_cast<YJGConnection*>(plugin.Driver::find(*chanId));
+	if (conn) {
+	    ok = conn->getSid(m_transferSid);
+	    if (!m_transferTo)
+		m_transferTo = conn->remote();
+	}
+	plugin.unlock();
 
 	if (!m_transferSid) {
 	    Debug(this,DebugNote,"Attended transfer failed for conn=%s 'no %s' [%p]",
@@ -1822,6 +1818,16 @@ bool YJGConnection::msgTransfer(Message& msg)
 		"Attended transfer request for the same session! [%p]",this);
 	    return false;
 	}
+    }
+    else if (!m_transferTo) {
+	DDebug(this,DebugNote,"Transfer request with empty target [%p]",this);
+	return false;
+    }
+    // Try to get a resource for transfer target if incomplete
+    if (!m_transferTo.isFull()) {
+	const JBStream* stream = m_session ? m_session->stream() : 0;
+	if (stream && stream->type() == JBEngine::Client)
+	    plugin.getClientTargetResource((JBClientStream*)stream,m_transferTo);
     }
 
     // Send the transfer request
@@ -5011,16 +5017,6 @@ bool YJGDriver::getClientTargetResource(JBClientStream* stream,
     user->unlock();
     TelEngine::destruct(user);
     return !target.resource().null();
-}
-
-// Get a channel's session id. Return false if not found
-bool YJGDriver::getSid(const String& id, String& sid)
-{
-    Lock lock(this);
-    YJGConnection* conn = static_cast<YJGConnection*>(Driver::find(id));
-    if (conn)
-	conn->getSid(sid);
-    return 0 != conn;
 }
 
 // Find a channel by its sid

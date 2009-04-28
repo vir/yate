@@ -1075,10 +1075,10 @@ public:
 
     /**
      * Check if the client object still exists and the client or engine is not exiting
-     * @return True if the client is valid (running)
+     * @return True if the client is valid (running) or the method is called from client's thread
      */
     static inline bool valid()
-	{ return self() && !(exiting() || Engine::exiting()); }
+	{ return self() && (self() == Thread::current() || !(exiting() || Engine::exiting())); }
 
     inline static bool changing()
 	{ return (s_changing > 0); }

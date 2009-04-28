@@ -130,7 +130,6 @@ protected:
     unsigned char& operator[](unsigned int index)
 	{ return ((unsigned char*)m_buffer.data())[index]; }
 private:
-    Mutex m_mutex;
     DataBlock m_buffer;
     unsigned int m_head;
     unsigned int m_tail;

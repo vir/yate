@@ -107,11 +107,12 @@ class WpSpanThread;                      // B-channel group read/write data
 class WpModule;                          // The driver
 
 // Implements a circular queue for data consumer
-class Fifo
+class Fifo : public Mutex
 {
 public:
     inline Fifo(unsigned int buflen)
-	: m_mutex(true), m_buffer(0,buflen), m_head(0), m_tail(1)
+	: Mutex(true),
+	  m_buffer(0,buflen), m_head(0), m_tail(1)
 	{}
     inline void clear() {
 	    m_head = 0;
@@ -449,17 +450,17 @@ bool Fifo::put(unsigned char value)
 
 unsigned int Fifo::put(const unsigned char* buf, unsigned int length)
 {
-    Lock lock(m_mutex);
+    lock();
     unsigned int errors = 0;
     while (length--)
 	if (put(*buf++))
 	    errors++;
+    unlock();
     return errors;
 }
 
 unsigned char Fifo::get()
 {
-    Lock lock(m_mutex);
     unsigned char tmp = (*this)[m_head];
     unsigned int nh = m_head + 1;
     if (nh >= m_buffer.length())
@@ -1530,34 +1531,35 @@ void WpSpan::run()
 	    Debug(m_group,DebugInfo,
 		"WpSpan('%s'). Received %u samples. Expected %u [%p]",
 		id().safe(),samples,m_samples,this);
-	unsigned char* dat = m_buffer + WP_HEADER;
 	if (m_canSend) {
 	    unsigned char noData = swap(m_noData);
-	    // Read each byte from buffer. Prepare buffer for sending
-	    for (int n = samples; n > 0; n--)
-		for (unsigned int i = 0; i < m_count; i++) {
-		    WpCircuit* circuit = m_circuits[i];
-		    if (!circuit) {
-			*dat++ = noData;
-			continue;
-		    }
-		    if (circuit->validSource())
-			circuit->source()->put(swap(*dat));
-		    if (circuit->validConsumer())
-			*dat++ = swap(circuit->consumer()->get());
-		    else
-			*dat++ = noData;
+	    for (unsigned int i = 0; i < m_count; i++) {
+		unsigned char* dat = m_buffer + WP_HEADER + i;
+		WpCircuit* circuit = m_circuits[i];
+		WpSource* s = (circuit && circuit->validSource()) ? circuit->source() : 0;
+		WpConsumer* c = (circuit && circuit->validConsumer()) ? circuit->consumer() : 0;
+		Lock lock(c);
+		for (int n = samples; n > 0; n--, dat += m_count) {
+		    // Read each byte from buffer. Prepare buffer for sending
+		    if (s)
+			s->put(swap(*dat));
+		    *dat = c ? swap(c->get()) : noData;
 		}
+	    }
 	    ::memset(m_buffer,0,WP_HEADER);
 	    m_socket.send(m_buffer,WP_HEADER + samples * m_count,MSG_DONTWAIT);
 	}
-	else
-	    for (int n = samples; n > 0; n--)
-		for (unsigned int i = 0; i < m_count; i++) {
-		    WpCircuit* circuit = m_circuits[i];
-		    if (circuit && circuit->validSource())
-			circuit->source()->put(swap(*dat++));
-		}
+	else {
+	    for (unsigned int i = 0; i < m_count; i++) {
+		WpCircuit* circuit = m_circuits[i];
+		if (!(circuit && circuit->validSource()))
+		    continue;
+		WpSource* s = circuit->source();
+		unsigned char* dat = m_buffer + WP_HEADER + i;
+		for (int n = samples; n > 0; n--, dat += m_count)
+		    s->put(swap(*dat));
+	    }
+	}
     }
 }
 

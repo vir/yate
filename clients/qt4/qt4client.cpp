@@ -2068,6 +2068,7 @@ void QtWindow::doPopulate()
     QtClient::getUtf8(wTitle,formWidget->windowTitle());
     title(wTitle);
     setWindowIcon(formWidget->windowIcon());
+    setStyleSheet(formWidget->styleSheet());
 }
 
 // Initialize window
@@ -2136,6 +2137,10 @@ void QtWindow::doInit()
 	    }
 	}
 	TelEngine::destruct(list);
+	params.addParam("parentwindow",m_id);
+	NamedString* pw = new NamedString("parentwidget");
+	QtClient::getUtf8(*pw,frm[i]->objectName());
+	params.addParam(pw);
 	QObject* obj = (QObject*)UIFactory::build(type,name,&params);
 	if (!obj)
 	    continue;

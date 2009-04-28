@@ -553,10 +553,11 @@ public:
     /**
      * Constructor
      * @param name Table's name
+     * @param parent Optional parent widget
      */
-    inline QtTable(const char* name)
-	: UIWidget(name)
-	{ setObjectName(name);	}
+    inline QtTable(const char* name, QWidget* parent = 0)
+	: QTableWidget(parent), UIWidget(name)
+	{ setObjectName(name); }
 
 private:
     QtTable() {}                         // No default constructor

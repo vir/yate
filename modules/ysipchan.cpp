@@ -3964,8 +3964,16 @@ bool YateSIPConnection::msgAnswered(Message& msg)
 	MimeSdpBody* sdp = createPasstroughSDP(msg);
 	if (!sdp) {
 	    m_rtpForward = false;
+	    bool startNow = msg.getBoolValue("rtp_start",s_start_rtp);
+	    if (startNow && !m_rtpMedia) {
+		// early RTP start but media list yet unknown - build best guess
+		ObjList* lst = new ObjList;
+		lst->append(new NetMedia("audio","RTP/AVP",msg.getValue("formats",s_audio)));
+		setMedia(lst);
+		m_rtpAddr = m_host;
+	    }
 	    // normally don't start RTP yet, only when we get the ACK
-	    sdp = createRtpSDP(msg.getBoolValue("rtp_start",s_start_rtp));
+	    sdp = createRtpSDP(startNow);
 	}
 	m->setBody(buildSIPBody(msg,sdp));
 

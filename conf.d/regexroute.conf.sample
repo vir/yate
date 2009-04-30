@@ -46,6 +46,7 @@
 ;  $(rotate,N,ITEM1,ITEM2,...) = list rotated N (modulo length of list) times
 ;  $(runid) = the current Engine run identifier
 ;  $(nodename) = the node name the Engine runs as, may be empty
+;  $(dispatching) = the reentry depth, 0 if the message is not generated locally
 ;  $(transcode,FLAGS,FORMAT1,FORMAT2,...) = list of formats the input can be transcoded into
 ;       e - exclude initial formats form generated list
 ;       r - allow rate conversion (for use with wideband)
@@ -139,6 +140,8 @@
 ; rename - changes the name of the message
 ; enqueue - puts a new message in the engine, parameters are taken from the
 ;   old message but placed in the new one
+; dispatch - dispatches a new message in the engine waiting for it to return,
+;   parameters are taken from the old message but placed in the new one
 ; echo - displays that line after making substitutions
 ;
 ; It is possible to set message parameters by appending them as name=value
@@ -183,6 +186,7 @@
 ^99991005$=tone/congestion
 ^99991006$=tone/outoforder
 ^99991007$=tone/milliwatt
+^99991008$=tone/info
 
 ; Example of handling call authorization by caller authentication or ip address
 ; If the user is not authenticated call the subsection check_addr_auth

@@ -33,9 +33,10 @@ namespace { // anonymous
 static Configuration s_cfg;
 static bool s_extended;
 static bool s_insensitive;
-static Mutex s_mutex;
+static Mutex s_mutex(true);
 static ObjList s_extra;
 static NamedList s_vars("");
+static int s_dispatching = 0;
 
 class RouteHandler : public MessageHandler
 {
@@ -263,6 +264,8 @@ static void evalFunc(String& str)
 	    str.append(fmts,",");
 	    TelEngine::destruct(fmts);
 	}
+	else if (str == "dispatching")
+	    str = s_dispatching;
 	else if ((sep < 0) && str.trimBlanks())
 	    str = s_vars.getValue(str);
 	else {
@@ -412,8 +415,9 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			Output("%s",val.safe());
 			continue;
 		    }
-		    else if (val.startSkip("enqueue")) {
-			// special case: enqueue a new message
+		    bool disp = val.startSkip("dispatch");
+		    if (disp || val.startSkip("enqueue")) {
+			// special case: enqueue or dispatch a new message
 			if (val && (val[0] != ';')) {
 			    Message* m = new Message("");
 			    // parameters are set in the new message
@@ -422,12 +426,20 @@ static bool oneContext(Message &msg, String &str, const String &context, String 
 			    if (val) {
 				*m = val;
 				m->userData(msg.userData());
-				NDebug("RegexRoute",DebugAll,"Enqueueing new message '%s' by rule #%u '%s' in context '%s'",
+				NDebug("RegexRoute",DebugAll,"%s new message '%s' by rule #%u '%s' in context '%s'",
+				    (disp ? "Dispatching" : "Enqueueing"),
 				    val.c_str(),i+1,n->name().c_str(),context.c_str());
-				Engine::enqueue(m);
+				if (disp) {
+				    s_dispatching++;
+				    Engine::dispatch(m);
+				    s_dispatching--;
+				}
+				else {
+				    Engine::enqueue(m);
+				    m = 0;
+				}
 			    }
-			    else
-				m->destruct();
+			    TelEngine::destruct(m);
 			}
 			continue;
 		    }

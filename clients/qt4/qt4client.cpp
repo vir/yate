@@ -1305,7 +1305,7 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	return false;
     if (!lines)
 	return true;
-    unsigned int count = lines->count();
+    unsigned int count = lines->length();
     if (!count)
 	return true;
 
@@ -1321,10 +1321,9 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	    {
 		// FIXME: delete lines from begining if appending and the number
 		//  of lines exceeds the maximum allowed
-		unsigned int n = lines->length();
 		QString s = w.textEdit()->toPlainText();
 		int pos = atStart ? 0 : s.length();
-		for (unsigned int i = 0; i < n; i++) {
+		for (unsigned int i = 0; i < count; i++) {
 		    NamedString* ns = lines->getParam(i);
 		    if (!ns)
 			continue;
@@ -1350,8 +1349,23 @@ bool QtWindow::addLines(const String& name, const NamedList* lines, unsigned int
 	    // TODO: implement
 	    break;
 	case QtWidget::ComboBox:
-	    // TODO: implement
-	    break;
+	    if (atStart) {
+		for (unsigned int i = count; i >= 0; i--) {
+		    NamedString* ns = lines->getParam(i);
+		    if (ns)
+			w.combo()->insertItem(0,QtClient::setUtf8(ns->name()));
+		}
+		if (w.combo()->lineEdit())
+		    w.combo()->lineEdit()->setText(w.combo()->itemText(0));
+	    }
+	    else { 
+		for (unsigned int i = 0; i < count; i++) {
+		    NamedString* ns = lines->getParam(i);
+		    if (ns)
+			w.combo()->addItem(QtClient::setUtf8(ns->name()));
+		}
+	    }
+	    return true;
 	case QtWidget::ListBox:
 	    // TODO: implement
 	    break;

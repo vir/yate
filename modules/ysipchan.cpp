@@ -484,7 +484,8 @@ private:
     MimeSdpBody* createProvisionalSDP(Message& msg);
     MimeSdpBody* createPasstroughSDP(Message& msg, bool update = true);
     MimeSdpBody* createRtpSDP(const char* addr, const Message& msg);
-    MimeSdpBody* createRtpSDP(bool start = false);
+    MimeSdpBody* createRtpSDP(const char* addr, bool start);
+    MimeSdpBody* createRtpSDP(bool start);
     void updateFormats(const Message& msg);
     bool startRtp();
     bool addSdpParams(Message& msg, const MimeBody* body);
@@ -704,7 +705,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	    rtp = false;
 	}
 	else {
-	    Debug(DebugWarn,"Unknown SDP transport '%s' for media '%s'",trans.c_str(),type.c_str());
+	    Debug(&plugin,DebugWarn,"Unknown SDP transport '%s' for media '%s'",trans.c_str(),type.c_str());
 	    continue;
 	}
 	String fmt;
@@ -719,8 +720,19 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 	while (tmp[0] == ' ') {
 	    int var = -1;
 	    tmp >> " " >> var;
-	    if (var < 0)
-		continue;
+	    if (var < 0) {
+		if (rtp || fmt || aux || tmp.null())
+		    continue;
+		// brutal but effective
+		for (char* p = const_cast<char*>(tmp.c_str()); *p; p++) {
+		    if (*p == ' ')
+			*p = ',';
+		}
+		Debug(&plugin,DebugInfo,"Assuming format list '%s' for media '%s'",
+		    tmp.c_str(),type.c_str());
+		fmt = tmp;
+		tmp.clear();
+	    }
 	    int mode = 0;
 	    bool annexB = s_cfg.getBoolValue("codecs","g729_annexb",false);
 	    bool amrOctet = s_cfg.getBoolValue("codecs","amr_octet",false);
@@ -738,7 +750,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		if (line.startSkip("ptime:",false))
 		    line >> ptime;
 		else if (line.startSkip("rtpmap:",false)) {
-		    int num = -1;
+		    int num = var - 1;
 		    line >> num >> " ";
 		    if (num == var) {
 			line.trimBlanks().toUpper();
@@ -763,7 +775,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		    }
 		}
 		else if (line.startSkip("fmtp:",false)) {
-		    int num = -1;
+		    int num = var - 1;
 		    line >> num >> " ";
 		    if (num == var) {
 			if (line.startSkip("mode=",false))
@@ -779,7 +791,7 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 			if (crypto.null())
 			    crypto = line;
 			else
-			    Debug(DebugMild,"Ignoring SDES: '%s'",line.c_str());
+			    Debug(&plugin,DebugMild,"Ignoring SDES: '%s'",line.c_str());
 		    }
 		    else {
 			int pos = line.find(':');
@@ -790,6 +802,8 @@ static ObjList* parseSDP(const MimeSdpBody* sdp, String& addr, ObjList* oldMedia
 		    }
 		}
 	    }
+	    if (var < 0)
+		break;
 	    first = false;
 
 	    if (payload == "ilbc") {
@@ -3038,7 +3052,7 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
 		if (!param)
 		    continue;
 		tmp = param->name();
-		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false))
+		if (tmp.startSkip(sdpPrefix+rtp->suffix()+"_",false) && (tmp.find('_') < 0))
 		    rtp->parameter(tmp,*param,append);
 	    }
 	}
@@ -3053,29 +3067,17 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, const Message& ms
     }
 
     setMedia(lst);
-
-    ObjList* l = m_rtpMedia->skipNull();
-    for (; l; l = l->skipNext()) {
-	NetMedia* m = static_cast<NetMedia*>(l->get());
-	if (!dispatchRtp(m,addr,false,true))
-	    return 0;
-    }
-    return createSDP(getRtpAddr());
+    return createRtpSDP(addr,false);
 }
 
-// Creates a set of started external RTP channels from remote addr and builds SDP from them
-MimeSdpBody* YateSIPConnection::createRtpSDP(bool start)
+// Creates a set of RTP channels from address and media info and builds SDP from them
+MimeSdpBody* YateSIPConnection::createRtpSDP(const char* addr, bool start)
 {
-    if (m_rtpAddr.null()) {
-	m_mediaStatus = MediaMuted;
-	return createSDP(0);
-    }
-
     bool ok = false;
     ObjList* l = m_rtpMedia->skipNull();
     while (l) {
 	NetMedia* m = static_cast<NetMedia*>(l->get());
-	if (dispatchRtp(m,m_rtpAddr,start,true))
+	if (dispatchRtp(m,addr,start,true))
 	    ok = true;
 	else {
 	    Debug(this,DebugMild,"Removing failed media '%s' format '%s' from offer [%p]",
@@ -3087,6 +3089,16 @@ MimeSdpBody* YateSIPConnection::createRtpSDP(bool start)
 	l = l->skipNext();
     }
     return ok ? createSDP(getRtpAddr()) : 0;
+}
+
+// Creates a set of started external RTP channels from remote addr and builds SDP from them
+MimeSdpBody* YateSIPConnection::createRtpSDP(bool start)
+{
+    if (m_rtpAddr.null()) {
+	m_mediaStatus = MediaMuted;
+	return createSDP(0);
+    }
+    return createRtpSDP(m_rtpAddr,start);
 }
 
 // Starts an already created set of external RTP channels
@@ -3221,9 +3233,19 @@ MimeSdpBody* YateSIPConnection::createSDP(const char* addr, ObjList* mediaList)
 	}
 
 	if (frm.null()) {
-	    Debug(this,DebugMild,"No formats for '%s', excluding from SDP [%p]",
-		m->c_str(),this);
-	    continue;
+	    if (m->isAudio() || !m->fmtList()) {
+		Debug(this,DebugMild,"No formats for '%s', excluding from SDP [%p]",
+		    m->c_str(),this);
+		continue;
+	    }
+	    Debug(this,DebugInfo,"Assuming formats '%s' for media '%s' [%p]",
+		m->fmtList(),m->c_str(),this);
+	    frm << " " << m->fmtList();
+	    // brutal but effective
+	    for (char* p = const_cast<char*>(frm.c_str()); *p; p++) {
+		if (*p == ',')
+		    *p = ' ';
+	    }
 	}
 
 	if (ptime) {

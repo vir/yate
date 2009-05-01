@@ -4672,6 +4672,14 @@ public:
     static bool mkDir(const char* path, int* error = 0);
 
     /**
+     * Remove an empty folder (directory)
+     * @param path The folder path
+     * @param error Optional pointer to error code to be filled on failure
+     * @return True on success 
+     */
+    static bool rmDir(const char* path, int* error = 0);
+
+    /**
      * Enumerate a folder (directory) content.
      * Fill the given lists with children item names
      * @param path The folder path

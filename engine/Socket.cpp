@@ -1022,6 +1022,21 @@ bool File::mkDir(const char* path, int* error)
     return getLastError(error);
 }
 
+// Remove an empty folder (directory)
+bool File::rmDir(const char* path, int* error)
+{
+    if (!fileNameOk(path,error))
+	return false;
+#ifdef _WINDOWS
+    if (::RemoveDirectoryA(path))
+	return true;
+#else
+    if (0 == ::rmdir(path))
+	return true;
+#endif
+    return getLastError(error);
+}
+
 // Skip special directories (. or ..)
 static inline bool skipSpecial(const char* s)
 {

@@ -524,7 +524,8 @@ public:
      * Constructor
      */
     inline RTPReceiver(RTPSession* session = 0)
-	: RTPBaseIO(session), m_dejitter(0), m_tsLast(0), m_warn(true)
+	: RTPBaseIO(session), m_dejitter(0), m_tsLast(0),
+	  m_seqSync(0), m_seqCount(0), m_warn(true)
 	{ }
 
     /**
@@ -640,6 +641,8 @@ private:
     bool pushEvent(int event, int duration, int volume, unsigned int timestamp);
     RTPDejitter* m_dejitter;
     unsigned int m_tsLast;
+    u_int16_t m_seqSync;
+    u_int16_t m_seqCount;
     bool m_warn;
 };
 

@@ -28,7 +28,13 @@
 
 using namespace TelEngine;
 
+// u_int64_t Infinity
 #define INF_TIMEOUT ((u_int64_t)(int64_t)-1)
+
+// How many lost packets mean we lost sequence sync
+#define SEQ_DESYNC_COUNT 50
+// How many packets in a row will resync sequence
+#define SEQ_RESYNC_COUNT 5
 
 RTPBaseIO::~RTPBaseIO()
 {
@@ -165,6 +171,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 	m_ssrc = ss;
 	m_ts = ts - m_tsLast;
 	m_seq = seq-1;
+	m_seqCount = 0;
 	m_warn = true;
     }
 
@@ -182,15 +189,42 @@ void RTPReceiver::rtpData(const void* data, int len)
 	// SSRC accepted, sync sequence and resync the timestamp offset
 	m_seq = seq;
 	m_ts = ts - m_tsLast;
+	m_seqCount = 0;
 	// drop this packet, next packet will come in correctly
 	return;
     }
 
     // substraction with overflow
     int16_t ds = seq - m_seq;
-    // received duplicate or delayed packet?
-    if (ds <= 0) {
-	DDebug(DebugMild,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
+    // check if we received duplicate or delayed packet
+    // be much more tolerant when authenticating as we cannot resync
+    if ((ds <= 0) || ((ds > SEQ_DESYNC_COUNT) && !secPtr)) {
+	if (ds && !secPtr) {
+	    // try to resync sequence unless we need to authenticate
+	    if (m_seqCount++) {
+		if (seq == ++m_seqSync) {
+		    // good - packets numbers still in sequence
+		    if (m_seqCount >= SEQ_RESYNC_COUNT) {
+			Debug(DebugNote,"RTP sequence resync: %u -> %u [%p]",m_seq,seq,this);
+			// sync sequence and resync the timestamp offset
+			m_seq = seq;
+			m_ts = ts - m_tsLast;
+			m_seqCount = 0;
+			m_warn = true;
+			// drop this packet, next packet will come in correctly
+			return;
+		    }
+		}
+		else
+		    m_seqCount = 0;
+	    }
+	    else
+		m_seqSync = seq;
+	}
+	if (m_warn) {
+	    m_warn = false;
+	    Debug(DebugWarn,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
+	}
 	return;
     }
 
@@ -209,6 +243,7 @@ void RTPReceiver::rtpData(const void* data, int len)
     m_seq = seq;
     m_rollover = rollover;
     m_tsLast = ts - m_ts;
+    m_seqCount = 0;
 
     if (!len)
 	pc = 0;

@@ -50,7 +50,7 @@ static Configuration s_cfg;
 
 static ObjList sources;
 static ObjList chans;
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"MOH");
 
 class MOHSource : public ThreadedSource
 {

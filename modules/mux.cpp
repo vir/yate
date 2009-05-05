@@ -226,7 +226,7 @@ void MuxConsumer::destroyed()
 MuxSource::MuxSource(const String& id, const char* targetid, const char* format,
 	const NamedList& params, String& error)
     : DataSource(format),
-    m_lock(true),
+    m_lock(true,"MuxSource::lock"),
     m_id(id),
     m_targetid(targetid),
     m_consumers(0),

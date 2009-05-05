@@ -127,7 +127,7 @@ static bool s_output = false;
 
 /* I need this here because i'm gonna use it in both classes */
 Socket s_sock;
-Mutex s_mutex(true);
+Mutex s_mutex(true,"RManager");
 
 //we gonna create here the list with all the new connections.
 static ObjList connectionlist;

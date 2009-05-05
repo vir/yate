@@ -46,7 +46,7 @@ protected:
 
 static Regexp s_regexp;
 static String s_called;
-static Mutex s_mutex;
+static Mutex s_mutex(false,"LateRoute");
 static LateHandler* s_callHandler = 0;
 static LateHandler* s_msgHandler = 0;
 

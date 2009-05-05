@@ -100,7 +100,7 @@ private:
 static ObjList s_cdrs;
 
 // This mutex protects both the CDR list and the params list
-static Mutex s_mutex;
+static Mutex s_mutex(false,"CdrBuild");
 static ObjList s_params;
 static int s_res = 1;
 static int s_seq = 0;
@@ -356,7 +356,7 @@ CdrBuilder* CdrBuilder::find(String &id)
 bool CdrHandler::received(Message &msg)
 {
     // this mutex serializes all CDR building
-    static Mutex mutex;
+    static Mutex mutex(false,"CdrBuild::handler");
     Lock lock(mutex);
     if (m_type == EngHalt) {
 	s_mutex.lock();

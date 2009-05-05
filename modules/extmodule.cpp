@@ -58,7 +58,7 @@ namespace { // anonymous
 static Configuration s_cfg;
 static ObjList s_chans;
 static ObjList s_modules;
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"ExtModule");
 static int s_waitFlush = WAIT_FLUSH;
 static int s_timeout = MSG_TIMEOUT;
 static bool s_timebomb = false;
@@ -683,7 +683,7 @@ bool ExtModReceiver::unuse()
 }
 
 ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, File* aout, ExtModChan* chan)
-    : Mutex(true),
+    : Mutex(true,"ExtModReceiver"),
       m_role(RoleUnknown), m_dead(false), m_use(1), m_pid(-1),
       m_in(0), m_out(0), m_ain(ain), m_aout(aout),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),
@@ -700,7 +700,7 @@ ExtModReceiver::ExtModReceiver(const char* script, const char* args, File* ain, 
 }
 
 ExtModReceiver::ExtModReceiver(const char* name, Stream* io, ExtModChan* chan, int role)
-    : Mutex(true),
+    : Mutex(true,"ExtModReceiver"),
       m_role(role), m_dead(false), m_use(1), m_pid(-1),
       m_in(io), m_out(io), m_ain(0), m_aout(0),
       m_chan(chan), m_watcher(0), m_selfWatch(false), m_reenter(false), m_setdata(true),

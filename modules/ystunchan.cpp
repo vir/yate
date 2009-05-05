@@ -329,7 +329,7 @@ public:
     static bool getAttrAuth(YStunMessage* msg, YStunAttribute::Type type,
 	String& auth);
 protected:
-    static Mutex m_idMutex;              // Lock id changes
+    static Mutex s_idMutex;              // Lock id changes
     static unsigned int m_id;            // Used to generate unique id for requests
 };
 
@@ -701,7 +701,7 @@ void YStunMessage::print()
  * YStunUtils
  */
 unsigned int YStunUtils::m_id = 1;
-Mutex YStunUtils::m_idMutex(true);
+Mutex YStunUtils::s_idMutex(true,"YStunUtils::id");
 
 YStunUtils::YStunUtils()
 {
@@ -815,9 +815,9 @@ YStunMessage* YStunUtils::decode(const void* data, u_int32_t len, bool& isStun)
 void YStunUtils::createId(String& id)
 {
     id = "";
-    m_idMutex.lock();
+    s_idMutex.lock();
     id << m_id++ << "_";
-    m_idMutex.unlock();
+    s_idMutex.unlock();
     for (; id.length() < STUN_MSG_IDLENGTH;)
  	id << (int)random();
     id = id.substr(0,STUN_MSG_IDLENGTH);
@@ -936,7 +936,7 @@ YStunSocketFilter::YStunSocketFilter()
       m_useLocalUsername(false),
       m_useRemoteUsername(false),
       m_bindReq(0),
-      m_bindReqMutex(true),
+      m_bindReqMutex(true,"YStunSocketFilter::bindReq"),
       m_bindReqNext(0),
       m_notFound(true)
 {

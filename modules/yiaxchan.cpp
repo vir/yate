@@ -126,7 +126,7 @@ private:
 class YIAXLineContainer : public Mutex
 {
 public:
-    inline YIAXLineContainer() : Mutex(true) {}
+    inline YIAXLineContainer() : Mutex(true,"YIAXLineContainer") {}
     inline ~YIAXLineContainer() {}
 
     /*
@@ -1388,7 +1388,10 @@ void YIAXSource::Forward(const DataBlock& data, unsigned long tStamp)
 YIAXConnection::YIAXConnection(YIAXEngine* iaxEngine, IAXTransaction* transaction, Message* msg)
     : Channel(&iplugin,0,transaction->outgoing()),
       m_iaxEngine(iaxEngine), m_transaction(transaction), m_mutedIn(false), m_mutedOut(false),
-      m_hangup(true), m_mutexTrans(true), m_mutexRefIncreased(true), m_refIncreased(false)
+      m_hangup(true),
+      m_mutexTrans(true,"YIAXConnection::trans"),
+      m_mutexRefIncreased(true,"YIAXConnection::refIncreased"),
+      m_refIncreased(false)
 {
     Debug(this,DebugAll,"Created %s [%p]",isOutgoing()?"outgoing":"incoming",this);
     setMaxcall(msg);

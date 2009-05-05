@@ -184,7 +184,7 @@ static TokenDict dict_windows[] = {
     { 0,   0 }
 };
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"Analyzer");
 
 static int s_res = 1;
 

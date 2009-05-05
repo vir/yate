@@ -46,14 +46,14 @@ namespace { // anonymous
 class DbThread;
 
 static ObjList s_conns;
-Mutex s_conmutex;
+Mutex s_conmutex(false,"MySQL::conn");
 
-class DbConn : public GenObject
+class MyConn : public GenObject, public Mutex
 {
     friend class DbThread;
 public:
-    DbConn(const NamedList* sect);
-    ~DbConn();
+    MyConn(const NamedList* sect);
+    ~MyConn();
     virtual const String& toString() const
 	{ return m_name; }
 
@@ -62,12 +62,7 @@ public:
     void dropDb();
     inline bool ok() const
 	{ return 0 != m_thread; }
-    inline Mutex& mutex()
-	{ return m_dbmutex; }
     void runQueries();
-
-protected:
-    Mutex m_dbmutex;
 
 private:
     bool testDb();
@@ -94,13 +89,13 @@ private:
 class DbThread : public Thread
 {
 public:
-    inline DbThread(DbConn* conn)
+    inline DbThread(MyConn* conn)
 	: Thread("mysqldb"), m_conn(conn)
 	{ }
     virtual void run();
     virtual void cleanup();
 private:
-    DbConn* m_conn;
+    MyConn* m_conn;
 };
 
 class MyHandler : public MessageHandler
@@ -125,11 +120,12 @@ private:
 };
 
 static MyModule module;
-static Mutex s_libMutex(false);
+static Mutex s_libMutex(false,"MySQL::lib");
 static int s_libCounter = 0;
 
-DbConn::DbConn(const NamedList* sect)
-    : m_dbmutex(true), m_name(*sect),
+MyConn::MyConn(const NamedList* sect)
+    : Mutex(true,"MyConn"),
+      m_name(*sect),
       m_conn(0), m_thread(0), m_msg(0), m_go(false)
 {
     int tout = sect->getIntValue("timeout",10000);
@@ -148,7 +144,7 @@ DbConn::DbConn(const NamedList* sect)
     m_encoding = sect->getValue("encoding");
 }
 
-DbConn::~DbConn()
+MyConn::~MyConn()
 { 
     s_conns.remove(this,false);
     // FIXME: should we try to do it from this thread?
@@ -156,9 +152,9 @@ DbConn::~DbConn()
 }
 
 // initialize the database connection
-bool DbConn::initDb()
+bool MyConn::initDb()
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     // allow specifying the raw connection string
     Debug(&module,DebugInfo,"Initiating connection for '%s'",m_name.c_str());
     m_conn = mysql_init(m_conn);
@@ -196,9 +192,9 @@ bool DbConn::initDb()
 }
 
 // drop the connection
-void DbConn::dropDb()
+void MyConn::dropDb()
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     m_res = -1;
     m_go = false;
     if (!m_conn)
@@ -211,14 +207,14 @@ void DbConn::dropDb()
 }
 
 // test it the connection is still OK
-bool DbConn::testDb()
+bool MyConn::testDb()
 {
     return m_conn && !mysql_ping(m_conn);
 }
 
 // perform the query, fill the message with data
 //  return number of rows, -1 for error
-int DbConn::queryDbInternal()
+int MyConn::queryDbInternal()
 {
     if (!testDb())
 	return -1;
@@ -285,7 +281,7 @@ int DbConn::queryDbInternal()
     return total;
 }
 
-void DbConn::runQueries()
+void MyConn::runQueries()
 {
     while (m_conn) {
 	if (m_go) {
@@ -309,7 +305,7 @@ static bool failure(Message* m)
     return false;
 }
 
-int DbConn::queryDb(const char* query, Message* dest)
+int MyConn::queryDb(const char* query, Message* dest)
 {
     if (TelEngine::null(query))
 	return -1;
@@ -358,12 +354,12 @@ void DbThread::cleanup()
 }
 
 
-static DbConn* findDb(String& account)
+static MyConn* findDb(String& account)
 {
     if (account.null())
 	return 0;
     ObjList* l = s_conns.find(account);
-    return l ? static_cast<DbConn *>(l->get()): 0;
+    return l ? static_cast<MyConn *>(l->get()): 0;
 }
 
 
@@ -373,10 +369,10 @@ bool MyHandler::received(Message& msg)
     if (tmp.null())
 	return false;
     Lock lock(s_conmutex);
-    DbConn* db = findDb(tmp);
+    MyConn* db = findDb(tmp);
     if (!(db && db->ok()))
 	return false;
-    Lock lo(db->mutex());
+    Lock lo(db);
     lock.drop();
     String query(msg.getValue("query"));
     db->queryDb(query,&msg);
@@ -414,7 +410,7 @@ void MyModule::initialize()
 	NamedList* sec = cfg.getSection(i);
 	if (!sec || (*sec == "general"))
 	    continue;
-	DbConn* conn = findDb(*sec);
+	MyConn* conn = findDb(*sec);
 	if (conn) {
 	    if (!conn->ok()) {
 		Debug(this,DebugNote,"Reinitializing connection '%s'",conn->toString().c_str());
@@ -424,7 +420,7 @@ void MyModule::initialize()
 	    }
 	    continue;
 	}
-	conn = new DbConn(sec);
+	conn = new MyConn(sec);
 	DbThread* thr = new DbThread(conn);
 	if (thr->startup())
 	    s_conns.insert(conn);

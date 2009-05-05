@@ -274,7 +274,7 @@ static void phase_e_handler(t30_state_t* s, void* user_data, int result)
 
 
 FaxWrapper::FaxWrapper()
-    : Mutex(true),
+    : Mutex(true,"FaxWrapper"),
       m_t30(0), m_source(0), m_consumer(0), m_chan(0), m_eof(false)
 {
     debugChain(&plugin);

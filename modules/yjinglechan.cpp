@@ -1309,7 +1309,8 @@ bool YJBIqService::accept(JBEvent* event, bool& processed, bool& insert)
 YJGConnection::YJGConnection(Message& msg, const char* caller, const char* called,
 	bool available, const char* file)
     : Channel(&plugin,0,true),
-    m_mutex(true), m_state(Pending), m_session(0), m_local(caller),
+    m_mutex(true,"YJGConnection"),
+    m_state(Pending), m_session(0), m_local(caller),
     m_remote(called), m_audioContent(0),
     m_callerPrompt(msg.getValue("callerprompt")), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),
@@ -1386,7 +1387,8 @@ YJGConnection::YJGConnection(Message& msg, const char* caller, const char* calle
 // Incoming call
 YJGConnection::YJGConnection(JGEvent* event)
     : Channel(&plugin,0,false),
-    m_mutex(true), m_state(Active), m_session(event->session()),
+    m_mutex(true,"YJGConnection"),
+    m_state(Active), m_session(event->session()),
     m_local(event->session()->local()), m_remote(event->session()->remote()),
     m_audioContent(0), m_sendRawRtpFirst(true),
     m_useCrypto(s_useCrypto), m_cryptoMandatory(s_cryptoMandatory),

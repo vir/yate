@@ -132,7 +132,7 @@ static String s_error;
 
 // on-hangup transfer list
 static ObjList s_transList;
-static Mutex s_transMutex;
+static Mutex s_transMutex(false,"PBXAssist::transfer");
 
 static Configuration s_cfg;
 

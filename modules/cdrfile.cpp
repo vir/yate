@@ -29,23 +29,24 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-class CdrFileHandler : public MessageHandler
+class CdrFileHandler : public MessageHandler, public Mutex
 {
 public:
     CdrFileHandler(const char *name)
-	: MessageHandler(name), m_file(0) { }
+	: MessageHandler(name), Mutex(false,"CdrFileHandler"),
+	  m_file(0)
+	{ }
     virtual ~CdrFileHandler();
     virtual bool received(Message &msg);
     void init(const char *fname, bool tabsep, const char* format);
 private:
     FILE *m_file;
     String m_format;
-    Mutex m_lock;
 };
 
 CdrFileHandler::~CdrFileHandler()
 {
-    Lock lock(m_lock);
+    Lock lock(this);
     if (m_file) {
 	::fclose(m_file);
 	m_file = 0;
@@ -54,7 +55,7 @@ CdrFileHandler::~CdrFileHandler()
 
 void CdrFileHandler::init(const char *fname, bool tabsep, const char* format)
 {
-    Lock lock(m_lock);
+    Lock lock(this);
     if (m_file)
 	::fclose(m_file);
     m_format = format;
@@ -73,7 +74,7 @@ bool CdrFileHandler::received(Message &msg)
     if (!msg.getBoolValue("cdrwrite",true))
         return false;
 
-    Lock lock(m_lock);
+    Lock lock(this);
     if (m_file && m_format) {
 	String str = m_format;
 	str += "\n";

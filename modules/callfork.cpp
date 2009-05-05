@@ -29,7 +29,7 @@ namespace { // anonymous
 
 #define MOD_PREFIX "fork"
 
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"CallFork");
 static ObjList s_calls;
 static int s_current = 0;
 

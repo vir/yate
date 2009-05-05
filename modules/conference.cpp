@@ -72,7 +72,7 @@ class ConfChan;
 static ObjList s_rooms;
 
 // Mutex that protects the source while accessed by the consumer
-static Mutex s_srcMutex;
+static Mutex s_srcMutex(false,"Conference");
 
 // Hold the number of the newest allocated dynamic room
 static int s_roomAlloc = 0;

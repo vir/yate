@@ -126,7 +126,7 @@ static bool s_voiceUsed;
 static bool s_pstnUsed;
 static bool s_voidUsed;
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"EnumRoute");
 static int s_queries = 0;
 static int s_routed = 0;
 static int s_reroute = 0;

@@ -151,7 +151,7 @@ private:
     bool m_first;
 };
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"ToneDetect");
 static int s_count = 0;
 
 static ToneDetectorModule plugin;

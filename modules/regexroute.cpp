@@ -33,7 +33,7 @@ namespace { // anonymous
 static Configuration s_cfg;
 static bool s_extended;
 static bool s_insensitive;
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"RegexRoute");
 static ObjList s_extra;
 static NamedList s_vars("");
 static int s_dispatching = 0;

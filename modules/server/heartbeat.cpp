@@ -116,7 +116,7 @@ public:
     virtual bool received(Message &msg);
 };
 
-class HBeatPlugin : public Plugin
+class HBeatPlugin : public Plugin, public Mutex
 {
 public:
     enum AuthType {
@@ -130,7 +130,6 @@ public:
     virtual void initialize();
     void sendHeartbeat(const Time& tStamp, bool goDown);
 private:
-    Mutex m_mutex;
     Socket m_socket;
     String m_node;
     String m_authKey;
@@ -145,7 +144,7 @@ static HBeatPlugin splugin;
 
 void HBeatPlugin::sendHeartbeat(const Time& tStamp, bool goDown)
 {
-    m_mutex.lock();
+    lock();
     if (m_socket.valid()) {
 	char hex[16];
 	String buf;
@@ -234,7 +233,7 @@ void HBeatPlugin::sendHeartbeat(const Time& tStamp, bool goDown)
 	if (goDown)
 	    m_socket.terminate();
     }
-    m_mutex.unlock();
+    unlock();
 }
 
 
@@ -253,7 +252,7 @@ bool HaltHandler::received(Message &msg)
 
 
 HBeatPlugin::HBeatPlugin()
-    : Plugin("heartbeat"),
+    : Plugin("heartbeat"), Mutex(false,"HBeatPlugin"),
       m_seq(0), m_ttl(2), m_authIdx(0), m_authType(AuthNone)
 {
     Output("Loaded module Heartbeat");
@@ -268,7 +267,7 @@ HBeatPlugin::~HBeatPlugin()
 void HBeatPlugin::initialize()
 {
     Configuration cfg(Engine::configFile("heartbeat"));
-    Lock lock(m_mutex);
+    Lock lock(this);
     m_authIdx = cfg.getIntValue("authentication","index");
     m_authKey = cfg.getValue("authentication","key");
     NamedString* auth = cfg.getKey("authentication","method");

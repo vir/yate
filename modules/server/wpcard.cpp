@@ -111,7 +111,7 @@ class Fifo : public Mutex
 {
 public:
     inline Fifo(unsigned int buflen)
-	: Mutex(true),
+	: Mutex(true,"WPCard::Fifo"),
 	  m_buffer(0,buflen), m_head(0), m_tail(1)
 	{}
     inline void clear() {
@@ -303,7 +303,7 @@ protected:
 };
 
 // Single Wanpipe B-channel
-class WpCircuit : public SignallingCircuit
+class WpCircuit : public SignallingCircuit, public Mutex
 {
 public:
     WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
@@ -326,7 +326,6 @@ public:
     // Enqueue received events
     bool enqueueEvent(SignallingCircuitEvent* e);
 private:
-    Mutex m_mutex;
     unsigned int m_channel;              // Channel number inside span
     WpSource* m_sourceValid;             // Circuit's source if reserved, otherwise: 0
     WpConsumer* m_consumerValid;         // Circuit's consumer if reserved, otherwise: 0
@@ -427,7 +426,7 @@ static TokenDict s_linkStatus[] = {
 #undef MAKE_NAME
 
 YSIGFACTORY2(WpInterface);
-static Mutex s_ifaceNotify(true);        // WpInterface: lock recv data notification counter
+static Mutex s_ifaceNotify(true,"WPCard::notify"); // WpInterface: lock recv data notification counter
 static bool s_repeatCapable = true;      // Global repeat packet capability
 static WpModule driver;
 
@@ -764,7 +763,7 @@ WpInterface::WpInterface(const NamedList& params)
     m_sendReadOnly(false),
     m_timerRxUnder(0),
     m_repeatCapable(s_repeatCapable),
-    m_repeatMutex(true)
+    m_repeatMutex(true,"WpInterface::repeat")
 {
     setName(params.getValue("debugname","WpInterface"));
     DDebug(this,DebugAll,"WpInterface::WpInterface() [%p]",this);
@@ -1124,8 +1123,7 @@ void WpConsumer::Consume(const DataBlock& data, unsigned long tStamp)
  */
 WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* data,
 	unsigned int buflen, unsigned int channel)
-    : SignallingCircuit(TDM,code,Idle,group,data),
-    m_mutex(true),
+    : SignallingCircuit(TDM,code,Idle,group,data), Mutex(true,"WpCircuit"),
     m_channel(channel),
     m_sourceValid(0),
     m_consumerValid(0),
@@ -1147,7 +1145,7 @@ WpCircuit::WpCircuit(unsigned int code, SignallingCircuitGroup* group, WpSpan* d
 WpCircuit::~WpCircuit()
 {
     XDebug(group(),DebugAll,"WpCircuit::~WpCircuit(%u) [%p]",code(),this);
-    Lock lock(m_mutex);
+    Lock lock(this);
     status(Missing);
     TelEngine::destruct(m_source);
     TelEngine::destruct(m_consumer);
@@ -1158,7 +1156,7 @@ WpCircuit::~WpCircuit()
 // Otherwise: Invalidate and reset source and consumer
 bool WpCircuit::status(Status newStat, bool sync)
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     if (SignallingCircuit::status() == newStat)
 	return true;
     // Allow status change for the following values
@@ -1232,7 +1230,7 @@ bool WpCircuit::updateFormat(const char* format, int direction)
 	return false;
     bool consumerChanged = true;
     bool sourceChanged = true;
-    Lock lock(m_mutex);
+    Lock lock(this);
     if (direction == -1 || direction == 0) {
 	if (m_consumer && m_consumer->getFormat() != format) {
 	    m_consumer->changeFormat(format);

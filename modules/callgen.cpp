@@ -29,7 +29,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"CallGen");
 static ObjList s_calls;
 static Configuration s_cfg;
 static bool s_runs = false;

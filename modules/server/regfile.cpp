@@ -27,7 +27,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-Mutex lmutex;
+Mutex lmutex(false,"RegFile");
 
 static Configuration s_cfg(Engine::configFile("regfile"));
 

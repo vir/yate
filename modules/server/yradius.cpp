@@ -61,7 +61,7 @@ enum
 };
 
 static Configuration s_cfg;
-static Mutex s_cfgMutex;
+static Mutex s_cfgMutex("YRadius::cfg");
 static ObjList acctBuilders;
 static SocketAddr s_localAddr(AF_INET);
 static Socket s_localSock;
@@ -1379,7 +1379,7 @@ static bool ciscoTime(double t, String& ret)
     time_t sec = (time_t)floor(t);
     unsigned int msec = (unsigned int)(1000.0 * (t - sec));
     // we need to protect localtime/gmtime which may not be thread safe
-    static Mutex mutex;
+    static Mutex mutex(false,"YRadius::ciscoTime");
     Lock lock(mutex);
     struct tm* brokenTime = s_localTime ? localtime(&sec) : gmtime(&sec);
     if (!brokenTime)

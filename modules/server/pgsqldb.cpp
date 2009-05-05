@@ -31,24 +31,19 @@ using namespace TelEngine;
 namespace { // anonymous
 
 static ObjList s_conns;
-Mutex s_conmutex;
+Mutex s_conmutex(false,"PgSQL::conn");
 
-class DbConn : public GenObject
+class PgConn : public GenObject, public Mutex
 {
 public:
-    DbConn(const NamedList* sect);
-    ~DbConn();
+    PgConn(const NamedList* sect);
+    ~PgConn();
     virtual const String& toString() const
 	{ return m_name; }
 
     bool ok();
     int queryDb(const char* query, Message* dest = 0);
     bool initDb(int retry = 0);
-    inline Mutex& mutex()
-	{ return m_dbmutex; }
-
-protected:
-    Mutex m_dbmutex;
 
 private:
     void dropDb();
@@ -85,8 +80,9 @@ private:
 
 static PgModule module;
 
-DbConn::DbConn(const NamedList* sect)
-    : m_dbmutex(true), m_name(*sect), m_conn(0)
+PgConn::PgConn(const NamedList* sect)
+    : Mutex(true,"PgConn"),
+      m_name(*sect), m_conn(0)
 {
     m_connection = sect->getValue("connection");
     if (m_connection.null()) {
@@ -111,7 +107,7 @@ DbConn::DbConn(const NamedList* sect)
     m_encoding = sect->getValue("encoding");
 }
 
-DbConn::~DbConn()
+PgConn::~PgConn()
 { 
     s_conns.remove(this,false);
     dropDb();
@@ -119,9 +115,9 @@ DbConn::~DbConn()
 }
 
 // initialize the database connection and handler data
-bool DbConn::initDb(int retry)
+bool PgConn::initDb(int retry)
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     // allow specifying the raw connection string
     Debug(&module,DebugAll,"Initiating connection \"%s\" retry %d",m_connection.c_str(),retry);
     u_int64_t timeout = Time::now() + m_timeout;
@@ -156,9 +152,9 @@ bool DbConn::initDb(int retry)
 }
 
 // drop the connection
-void DbConn::dropDb()
+void PgConn::dropDb()
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     if (!m_conn)
 	return;
     PGconn* tmp = m_conn;
@@ -168,20 +164,20 @@ void DbConn::dropDb()
 }
 
 // test it the connection is still OK
-bool DbConn::testDb()
+bool PgConn::testDb()
 {
     return m_conn && (CONNECTION_OK == PQstatus(m_conn));
 }
 
 // public, thread safe version
-bool DbConn::ok()
+bool PgConn::ok()
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     return testDb();
 }
 
 // try to get up the connection, retry if we have to
-bool DbConn::startDb()
+bool PgConn::startDb()
 {
     if (testDb())
 	return true;
@@ -197,9 +193,9 @@ bool DbConn::startDb()
 
 // perform the query, fill the message with data
 //  return number of rows, -1 for non-retryable errors and -2 to retry
-int DbConn::queryDbInternal(const char* query, Message* dest)
+int PgConn::queryDbInternal(const char* query, Message* dest)
 {
-    Lock lock(m_dbmutex);
+    Lock lock(this);
     if (!startDb())
 	// no retry - startDb already tried and failed...
 	return -1;
@@ -303,7 +299,7 @@ static bool failure(Message* m)
     return false;
 }
 
-int DbConn::queryDb(const char* query, Message* dest)
+int PgConn::queryDb(const char* query, Message* dest)
 {
     if (TelEngine::null(query))
 	return -1;
@@ -323,12 +319,12 @@ int DbConn::queryDb(const char* query, Message* dest)
 }
 
 
-static DbConn* findDb(String& account)
+static PgConn* findDb(String& account)
 {
     if (account.null())
 	return 0;
     ObjList* l = s_conns.find(account);
-    return l ? static_cast<DbConn *>(l->get()): 0;
+    return l ? static_cast<PgConn *>(l->get()): 0;
 }
 
 bool PgHandler::received(Message& msg)
@@ -337,10 +333,10 @@ bool PgHandler::received(Message& msg)
     if (tmp.null())
 	return false;
     Lock lock(s_conmutex);
-    DbConn* db = findDb(tmp);
+    PgConn* db = findDb(tmp);
     if (!db)
 	return false;
-    Lock lo(db->mutex());
+    Lock lo(db);
     lock.drop();
     String query(msg.getValue("query"));
     db->queryDb(query,&msg);
@@ -379,7 +375,7 @@ void PgModule::initialize()
 	NamedList* sec = cfg.getSection(i);
 	if (!sec || (*sec == "general"))
 	    continue;
-	DbConn* conn = new DbConn(sec);
+	PgConn* conn = new PgConn(sec);
 	conn->initDb();
 	s_conns.insert(conn);
     }

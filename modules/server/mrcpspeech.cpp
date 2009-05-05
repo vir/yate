@@ -93,7 +93,7 @@ private:
     bool m_first;
 };
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"MrcpSpeech");
 static ObjList s_conns;
 static int s_count = 0;
 static int s_total = 0;

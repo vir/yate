@@ -172,7 +172,7 @@ void infoCallback(const SSL* ssl, int where, int retVal)
 
 // Create a SSL socket from a regular socket handle
 SslSocket::SslSocket(SOCKET handle, bool server, int verify)
-    : Socket(handle),
+    : Socket(handle), Mutex(false,"SslSocket"),
       m_ssl(0)
 {
     DDebug(DebugAll,"SslSocket::SslSocket(%d,%s,%s) [%p]",

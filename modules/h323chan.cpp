@@ -95,7 +95,7 @@ static int s_maxCleaning = 0;
 
 static Configuration s_cfg;
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"H323Chan");
 static int s_connCount = 0;
 static int s_chanCount = 0;
 
@@ -327,13 +327,13 @@ private:
     bool m_exit;
 };
 
-class YateH323AudioConsumer : public DataConsumer, public PIndirectChannel
+class YateH323AudioConsumer : public DataConsumer, public Mutex, public PIndirectChannel
 {
     PCLASSINFO(YateH323AudioConsumer, PIndirectChannel)
     YCLASS(YateH323AudioConsumer, DataConsumer)
 public:
     YateH323AudioConsumer()
-	: m_exit(false)
+	: Mutex(false,"YateH323AudioConsumer"), m_exit(false)
 	{ Debug(&hplugin,DebugAll,"YateH323AudioConsumer::YateH323AudioConsumer() [%p]",this); }
     ~YateH323AudioConsumer();
     virtual BOOL Close(); 
@@ -344,7 +344,6 @@ private:
     PAdaptiveDelay readDelay;
     DataBlock m_buffer;
     bool m_exit;
-    Mutex m_mutex;
 };
 
 class YateH323_ExternalRTPChannel;
@@ -1748,7 +1747,7 @@ YateH323AudioConsumer::~YateH323AudioConsumer()
     DDebug(&hplugin,DebugAll,"YateH323AudioConsumer::~YateH323AudioConsumer() [%p]",this);
     m_exit = true;
     // Delay actual destruction until the mutex is released
-    m_mutex.check();
+    check();
 }
 
 BOOL YateH323AudioConsumer::Close()
@@ -1767,7 +1766,7 @@ void YateH323AudioConsumer::Consume(const DataBlock &data, unsigned long tStamp)
 {
     if (m_exit)
 	return;
-    Lock lock(m_mutex);
+    Lock lock(this);
     if ((m_buffer.length() + data.length()) <= (480*5))
 	m_buffer += data;
 #ifdef DEBUG
@@ -1780,7 +1779,7 @@ BOOL YateH323AudioConsumer::Read(void *buf, PINDEX len)
 {
     readDelay.Delay(len/16);
     while (!m_exit) {
-	Lock lock(m_mutex);
+	Lock lock(this);
 	if (!getConnSource()) {
 	    ::memset(buf,0,len);
 	    break;

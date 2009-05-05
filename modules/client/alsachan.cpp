@@ -45,7 +45,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"AlsaChan");
 
 class AlsaDevice;
 

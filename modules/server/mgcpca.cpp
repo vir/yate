@@ -235,7 +235,7 @@ static String s_defaultEp;
 static MGCPPlugin splugin;
 static ObjList s_wrappers;
 static ObjList s_spans;
-static Mutex s_mutex;
+static Mutex s_mutex(false,"MGCP-CA");
 
 
 // Copy one parameter (if present) with new name

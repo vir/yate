@@ -87,7 +87,7 @@ static ParkModule s_module;
 static const char* s_prefix = "park/";
 static unsigned int s_id = 1;            // Channel id to use
 static ObjList s_chans;                  // Channel list
-static Mutex s_mutex(true);              // Global mutex
+static Mutex s_mutex(true,"Park");       // Global mutex
 
 
 // Find a parking by id

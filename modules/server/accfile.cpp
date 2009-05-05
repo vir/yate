@@ -27,7 +27,7 @@
 using namespace TelEngine;
 namespace { // anonymous
 
-static Mutex s_mutex;
+static Mutex s_mutex(false,"AccFile");
 static Configuration s_cfg(Engine::configFile("accfile"));
 
 static char s_helpOpt[] = "  accounts [reload|{login|logout|...} [account]]\r\n";

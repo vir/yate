@@ -217,7 +217,7 @@ UNLOAD_PLUGIN(unloadNow)
 QueuedCall::QueuedCall(const String& queue, const String& chan, unsigned int start,
     const char* caller, const char* called, const char* callername,
     int queuePrio, int callerPrio)
-    : Mutex(true),
+    : Mutex(true,"QueuedCall"),
     m_queue(queue), m_channelid(chan),
     m_queuePrio(m_queuePrio), m_callerPrio(callerPrio),
     m_startTime(start), m_caller(caller),

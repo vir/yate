@@ -271,8 +271,8 @@ private:
 
 static YRTPPlugin splugin;
 static ObjList s_calls;
-static Mutex s_mutex;
-static Mutex s_srcMutex;
+static Mutex s_mutex(false,"YRTPChan");
+static Mutex s_srcMutex(false,"YRTPChan::source");
 
 
 YRTPWrapper::YRTPWrapper(const char* localip, CallEndpoint* conn, const char* media, RTPSession::Direction direction, bool rtcp)

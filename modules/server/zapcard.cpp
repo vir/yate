@@ -609,8 +609,8 @@ private:
  */
 static ZapModule plugin;
 YSIGFACTORY2(ZapInterface);                      // Factory used to create zaptel interfaces and spans
-static Mutex s_ifaceNotifyMutex(true);           // ZapInterface: lock recv data notification counter
-static Mutex s_sourceAccessMutex;                // ZapSource access to pointers
+static Mutex s_ifaceNotifyMutex(true,"ZapCard::notify"); // ZapInterface: lock recv data notification counter
+static Mutex s_sourceAccessMutex(false,"ZapCard::source"); // ZapSource access to pointers
 static const char* s_chanParamsHdr = "format=Type|ZaptelType|Span|SpanPos|Alarms|UsedBy";
 static const char* s_spanParamsHdr = "format=Channels|Total|Alarms|Name|Description";
 

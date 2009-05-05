@@ -1309,7 +1309,7 @@ private:
 INIT_PLUGIN(YSocksPlugin);
 static YSocksEngine* s_engine = 0;
 static unsigned int s_bufLen = 4096;     // Read buffer length
-static Mutex s_srcMutex(true);           // Protect source/wrapper association
+static Mutex s_srcMutex(true,"YSocksChan::source"); // Protect source/wrapper association
 
 // Data transfer directions
 static TokenDict dict_conn_dir[] = {
@@ -1758,7 +1758,7 @@ SOCKSPacket* SOCKSPacket::buildUnamePwdReply(SOCKSConn* conn, unsigned char ok)
 
 // Incoming connection constructor
 SOCKSConn::SOCKSConn(SOCKSEngine* engine, Socket* sock, SOCKSEndpointDef* epDef)
-    : Mutex(true),
+    : Mutex(true,"SOCKSConn"),
     m_status(Idle), m_outgoing(false),
     m_waitMsg(0), m_engine(engine), m_socket(sock),
     m_socksTimeoutMs(0), m_epDef(epDef),
@@ -1776,7 +1776,7 @@ SOCKSConn::SOCKSConn(SOCKSEngine* engine, Socket* sock, SOCKSEndpointDef* epDef)
 // Outgoing connection constructor
 SOCKSConn::SOCKSConn(SOCKSEngine* engine, SOCKSEndpointDef* epDef, unsigned char cmd,
     unsigned char addrType, const String& addr, int port)
-    : Mutex(true),
+    : Mutex(true,"SOCKSConn"),
     m_status(Idle), m_outgoing(true),
     m_waitMsg(0), m_engine(engine), m_socket(0),
     m_socksTimeoutMs(0), m_epDef(epDef),
@@ -2473,7 +2473,7 @@ void SOCKSListener::stop(bool hard)
  * SOCKSEngine
  */
 SOCKSEngine::SOCKSEngine(NamedList& params)
-    : Mutex(true),
+    : Mutex(true,"SOCKSEngine"),
     m_exiting(false),
     m_waitMsgAuthInterval(10000), m_waitMsgReplyInterval(15000),
     m_showMsg(false), m_dumpExtended(false)
@@ -2969,7 +2969,7 @@ void YSocksEngine::socksConnError(SOCKSConn* conn, bool timeout)
 // Build a wrapper (client if epDef is non 0)
 YSocksWrapper::YSocksWrapper(const char* id, YSocksEngine* engine, CallEndpoint* cp,
 	NamedList& params, const char* notify, SOCKSEndpointDef* epDef)
-    : Mutex(true),
+    : Mutex(true,"YSocksWrapper"),
     m_state(Pending), m_client(epDef != 0), m_dir(0), m_autoStart(true),
     m_id(id), m_notify(notify), m_callEp(cp), m_dstPort(0), m_srvPort(-1),
     m_engine(engine), m_source(0), m_consumer(0), m_conn(0),

@@ -162,7 +162,7 @@ INIT_PLUGIN(SoundDriver);
 
 
 DSoundPlay::DSoundPlay(DSoundConsumer* owner, LPGUID device)
-    : Thread("DirectSound Play",High),
+    : Thread("DirectSound Play",High), Mutex(false,"DSoundPlay"),
       m_owner(0), m_device(device), m_ds(0), m_dsb(0),
       m_buffSize(0), m_start(0), m_total(0)
 {

@@ -64,7 +64,7 @@ static TranslatorCaps caps[] = {
     { 0, 0 }
 };
 
-static Mutex s_cmutex;
+static Mutex s_cmutex(false,"SpeexCodec");
 static int s_count = 0;
 
 /**

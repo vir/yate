@@ -47,7 +47,7 @@ static TranslatorCaps s_caps30[] = {
     { 0, 0 }
 };
 
-static Mutex s_cmutex;
+static Mutex s_cmutex(false,"iLBCCodec");
 static int s_count = 0;
 
 class iLBCFactory : public TranslatorFactory

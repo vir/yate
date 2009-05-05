@@ -145,7 +145,7 @@ function endRoute($callto,$ok,$err,$params)
     global $partycallid;
     global $num;
     global $collect;
-    if ($ok) {
+    if ($ok && ($callto != "-") && ($callto != "error")) {
 	Yate::Output("Overlapped got route: '$callto' for '$collect'");
 	$m = new Yate("chan.masquerade");
 	$m->params = $params;
@@ -157,8 +157,10 @@ function endRoute($callto,$ok,$err,$params)
 	$m->Dispatch();
 	return;
     }
-    if ($err != "incomplete")
+    if ($err != "incomplete") {
+	Yate::Output("Overlapped get error '$err' for '$collect'");
 	setState("noroute");
+    }
     else
 	Yate::Debug("Overlapped still incomplete: '$collect'");
 }

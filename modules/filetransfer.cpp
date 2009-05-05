@@ -99,7 +99,7 @@ public:
 	{ m_dropChan = id; }
     // Check if this data source is connected
     inline bool connected() {
-	    Lock lck(m_mutex);
+	    Lock mylock(this);
 	    return 0 != m_consumers.skipNull();
 	}
     // Initialize and start worker
@@ -394,12 +394,12 @@ void FileSource::run()
 		error = "cancelled";
 		break;
 	    }
-	    if (!m_mutex.lock(5000000)) {
+	    if (!lock(5000000)) {
 		Thread::msleep(1);
 		continue;
 	    }
 	    int cons = (0 != m_consumers.skipNull());
-	    m_mutex.unlock();
+	    unlock();
 	    Thread::yield();
 	    if (cons)
 		break;
@@ -494,13 +494,13 @@ void FileSource::run()
 // Release memory
 void FileSource::destroyed()
 {
-    m_mutex.lock();
+    lock();
     Thread* th = m_worker;
     if (m_worker) {
 	Debug(&__plugin,DebugInfo,"FileSource terminating worker [%p]",this);
 	m_worker->cancel(false);
     }
-    m_mutex.unlock();
+    unlock();
     while (m_worker)
 	Thread::yield(false);
     if (th)

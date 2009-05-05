@@ -433,7 +433,7 @@ private:
 /**
  * A data source
  */
-class YATE_API DataSource : public DataNode
+class YATE_API DataSource : public DataNode, public Mutex
 {
     friend class DataTranslator;
 
@@ -443,7 +443,8 @@ public:
      * @param format Name of the data format, default "slin" (Signed Linear)
      */
     inline DataSource(const char* format = "slin")
-	: DataNode(format), m_nextStamp(invalidStamp()), m_translator(0) { }
+	: DataNode(format), Mutex(false,"DataSource"),
+	  m_nextStamp(invalidStamp()), m_translator(0) { }
 
     /**
      * Source's destruct notification - detaches all consumers
@@ -485,13 +486,6 @@ public:
     void clear();
 
     /**
-     * Get the mutex that serializes access to this data source
-     * @return Pointer to DataSource's mutex object
-     */
-    inline Mutex* mutex()
-	{ return &m_mutex; }
-
-    /**
      * Get the master translator object if this source is part of a translator
      * @return A pointer to the DataTranslator object or NULL
      */
@@ -515,7 +509,6 @@ protected:
     unsigned long m_nextStamp;
     DataTranslator* m_translator;
     ObjList m_consumers;
-    Mutex m_mutex;
 private:
     inline void setTranslator(DataTranslator* translator)
 	{ m_translator = translator; }

@@ -336,7 +336,7 @@ void ConfRoom::delChannel(ConfChan* chan)
 {
     if (!chan)
 	return;
-    Lock lock(mutex());
+    Lock mylock(this);
     if (chan == m_record)
 	m_record = 0;
     if (m_playerId && (chan->id() == m_playerId))
@@ -344,7 +344,7 @@ void ConfRoom::delChannel(ConfChan* chan)
     if (m_chans.remove(chan,false) && chan->isCounted())
 	m_users--;
     bool alone = (m_users == 1);
-    lock.drop();
+    mylock.drop();
     if (m_notify && !chan->isUtility()) {
 	String tmp(m_users);
 	Message* m = new Message("chan.notify");
@@ -384,7 +384,7 @@ void ConfRoom::dropAll(const char* reason)
 // Retrive status information about this room
 void ConfRoom::msgStatus(Message& msg)
 {
-    Lock lock(mutex());
+    Lock mylock(this);
     msg.retValue().clear();
     msg.retValue() << "name=" << __plugin.prefix() << m_name;
     msg.retValue() << ",type=conference";
@@ -471,7 +471,7 @@ void ConfRoom::mix(ConfConsumer* cons)
 {
     unsigned int len = MAX_BUFFER;
     unsigned int mlen = 0;
-    Lock mylock(mutex());
+    Lock mylock(this);
     // find out the minimum and maximum amount of data in buffers
     ObjList* l = m_chans.skipNull();
     for (; l; l = l->skipNext()) {
@@ -575,7 +575,7 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
 	    m_noise2 = ENERGY_MIN;
     }
     // make sure looping back conferences is not fatal
-    if (!m_room->mutex()->lock(150000)) {
+    if (!m_room->lock(150000)) {
 	Debug(&__plugin,DebugWarn,"Failed to lock room '%s' - data loopback? [%p]",
 	    m_room->toString().c_str(),this);
 	// mute the channel to avoid getting back here
@@ -584,7 +584,7 @@ void ConfConsumer::Consume(const DataBlock& data, unsigned long tStamp)
     }
     if (m_buffer.length()+data.length() <= MAX_BUFFER)
 	m_buffer += data;
-    m_room->mutex()->unlock();
+    m_room->unlock();
     if (m_buffer.length() >= MIN_BUFFER)
 	m_room->mix(this);
 }

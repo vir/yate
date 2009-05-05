@@ -506,9 +506,9 @@ bool DataConsumer::synchronize(DataSource* source)
 
 void DataSource::Forward(const DataBlock& data, unsigned long tStamp)
 {
-    Lock lock(m_mutex,100000);
+    Lock mylock(this,100000);
     // we DON'T refcount here, we rely on the mutex to keep us safe
-    if (!(lock.mutex() && alive())) {
+    if (!(mylock.mutex() && alive())) {
 	DDebug(DebugInfo,"Forwarding on a dead DataSource! [%p]",this);
 	return;
     }
@@ -545,7 +545,7 @@ bool DataSource::attach(DataConsumer* consumer, bool override)
 	this,(override ? " as override" : ""),consumer);
     if (!(consumer && consumer->ref()))
 	return false;
-    Lock lock(m_mutex);
+    Lock mylock(this);
     if (override) {
 	if (consumer->m_override)
 	    consumer->m_override->detach(consumer);
@@ -571,9 +571,9 @@ bool DataSource::detach(DataConsumer* consumer)
     }
     DDebug(DebugAll,"DataSource [%p] detaching consumer [%p]",this,consumer);
     // lock the source to prevent races with the Forward method
-    m_mutex.lock();
+    lock();
     bool ok = detachInternal(consumer);
-    m_mutex.unlock();
+    unlock();
     deref();
     return ok;
 }
@@ -604,16 +604,16 @@ void DataSource::destroyed()
 void DataSource::clear()
 {
     // keep the source locked to prevent races with the Forward method
-    m_mutex.lock();
+    lock();
     while (detachInternal(static_cast<DataConsumer*>(m_consumers.get())))
 	;
-    m_mutex.unlock();
+    unlock();
 }
 
 void DataSource::synchronize(unsigned long tStamp)
 {
-    Lock lock(m_mutex,100000);
-    if (!(lock.mutex() && alive())) {
+    Lock mylock(this,100000);
+    if (!(mylock.mutex() && alive())) {
 	DDebug(DebugInfo,"Synchronizing on a dead DataSource! [%p]",this);
 	return;
     }
@@ -953,7 +953,7 @@ void ThreadedSource::destroyed()
 
 bool ThreadedSource::start(const char* name, Thread::Priority prio)
 {
-    Lock lock(mutex());
+    Lock mylock(this);
     if (!m_thread) {
 	ThreadedSourcePrivate* thread = new ThreadedSourcePrivate(this,name,prio);
 	if (thread->startup()) {
@@ -968,7 +968,7 @@ bool ThreadedSource::start(const char* name, Thread::Priority prio)
 
 void ThreadedSource::stop()
 {
-    Lock lock(mutex());
+    Lock mylock(this);
     if (!m_thread)
 	return;
     RefObject::refMutex().lock();

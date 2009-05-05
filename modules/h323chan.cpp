@@ -1737,9 +1737,9 @@ YateH323AudioSource::~YateH323AudioSource()
     DDebug(&hplugin,DebugAll,"YateH323AudioSource::~YateH323AudioSource() [%p]",this);
     m_exit = true;
     // Delay actual destruction until the mutex is released
-    m_mutex.lock();
+    lock();
     m_data.clear(false);
-    m_mutex.unlock();
+    unlock();
 }
 
 YateH323AudioConsumer::~YateH323AudioConsumer()

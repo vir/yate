@@ -335,9 +335,9 @@ void WaveSource::run()
     int r = 0;
     // wait until at least one consumer is attached
     while (!r) {
-	m_mutex.lock();
+	lock();
 	r = m_consumers.count();
-	m_mutex.unlock();
+	unlock();
 	Thread::yield();
 	if (!alive()) {
 	    notify(0,"replaced");

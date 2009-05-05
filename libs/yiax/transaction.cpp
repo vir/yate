@@ -36,7 +36,7 @@ unsigned char IAXTransaction::m_maxInFrames = 100;
 
 IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t lcallno, 
 	const SocketAddr& addr, void* data)
-    : Mutex(true),
+    : Mutex(true,"IAXTransaction"),
     m_localInitTrans(false),
     m_localReqEnd(false),
     m_type(Incorrect),
@@ -54,7 +54,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
     m_lastMiniFrameOut(0xFFFF),
     m_lastMiniFrameIn(0),
     m_lastAck(0xFFFF),
-    m_mutexInMedia(true),
+    m_mutexInMedia(true,"IAXTransaction::InMedia"),
     m_pendingEvent(0),
     m_currentEvent(0),
     m_retransCount(5),
@@ -104,7 +104,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, IAXFullFrame* frame, u_int16_t
 
 IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, const SocketAddr& addr,
 	IAXIEList& ieList, void* data)
-    : Mutex(true),
+    : Mutex(true,"IAXTransaction"),
     m_localInitTrans(true),
     m_localReqEnd(false),
     m_type(type),
@@ -122,7 +122,7 @@ IAXTransaction::IAXTransaction(IAXEngine* engine, Type type, u_int16_t lcallno, 
     m_lastMiniFrameOut(0xFFFF),
     m_lastMiniFrameIn(0),
     m_lastAck(0xFFFF),
-    m_mutexInMedia(true),
+    m_mutexInMedia(true,"IAXTransaction::InMedia"),
     m_pendingEvent(0),
     m_currentEvent(0),
     m_retransCount(5),

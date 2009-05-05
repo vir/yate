@@ -632,7 +632,7 @@ public:
  * If the engine owning this endpoint is an MGCP gateway, only 1 remote peer (Call Agent) is allowed
  * @short An MGCP endpoint
  */
-class YMGCP_API MGCPEndpoint : public RefObject, public MGCPEndpointId
+class YMGCP_API MGCPEndpoint : public RefObject, public MGCPEndpointId, public Mutex
 {
 public:
     /**
@@ -680,7 +680,7 @@ public:
      * Clear the list or remote endpoints
      */
     inline void clear()
-	{ Lock lock(m_mutex); m_remote.clear(); }
+	{ lock(); m_remote.clear(); unlock(); }
 
     /**
      * Find the info object associated with a remote peer
@@ -704,7 +704,6 @@ public:
 
 private:
     MGCPEngine* m_engine;                // The engine owning this endpoint
-    Mutex m_mutex;                       // Lock remote endpoint list
     ObjList m_remote;                    // The remote endpoints
 };
 

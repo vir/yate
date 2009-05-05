@@ -526,12 +526,6 @@ public:
 	{ return m_engine; }
 
     /**
-     * Get the mutex that protects the engine's objects
-     * @return Pointer to the engine's mutex object or NULL if none exists
-     */
-    Mutex* mutex();
-
-    /**
      * Check if this transaction was initiated by the remote peer or locally
      * @return True if the transaction was created by an outgoing message
      */
@@ -863,7 +857,7 @@ protected:
 /**
  * This object can be one for each SIPListener.
  */
-class YSIP_API SIPEngine : public DebugEnabler
+class YSIP_API SIPEngine : public DebugEnabler, public Mutex
 {
 public:
     /**
@@ -1075,20 +1069,12 @@ public:
 	{ return m_allowed; }
 
     /**
-     * Get the mutex that protects objects in this engine
-     * @return Pointer to the engine's mutex object
-     */
-    inline Mutex* mutex()
-	{ return &m_mutex; }
-
-    /**
      * TransList is the key. 
      * Is the list that holds all the transactions.
      */
     ObjList TransList;
 
 protected:
-    Mutex m_mutex;
     u_int64_t m_t1;
     u_int64_t m_t4;
     unsigned int m_maxForwards;

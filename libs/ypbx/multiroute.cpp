@@ -91,7 +91,7 @@ CallInfo* CallList::find(const CallEndpoint* call)
 
 
 MultiRouter::MultiRouter()
-    : m_mutex(true),
+    : Mutex(true,"MultiRouter"),
       m_relRoute(0), m_relExecute(0),
       m_relHangup(0), m_relDisconnected(0)
 {
@@ -125,7 +125,7 @@ bool MultiRouter::received(Message& msg, int id)
     bool first = false;
     CallInfo* info = 0;
     String chanid(msg.getValue("id"));
-    Lock lock(m_mutex);
+    Lock lock(this);
     if (call)
 	info = m_list.find(call);
     if (info) {

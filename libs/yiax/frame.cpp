@@ -1034,7 +1034,8 @@ void IAXFrameOut::adjustAuthTimeout(u_int64_t nextTransTime)
 #define IAX2_MINIFRAME_HEADERLENGTH 6
 
 IAXMetaTrunkFrame::IAXMetaTrunkFrame(IAXEngine* engine, const SocketAddr& addr)
-    : Mutex(true), m_data(0), m_dataAddIdx(IAX2_METATRUNK_HEADERLENGTH), m_engine(engine), m_addr(addr)
+    : Mutex(true,"IAXMetaTrunkFrame"),
+      m_data(0), m_dataAddIdx(IAX2_METATRUNK_HEADERLENGTH), m_engine(engine), m_addr(addr)
 {
     m_data = new u_int8_t[m_engine->maxFullFrameDataLen()];
     // Meta indicator

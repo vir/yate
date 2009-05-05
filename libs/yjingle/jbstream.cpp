@@ -106,7 +106,9 @@ inline void fixXmlType(XMLElement* xml)
 JBSocket::JBSocket(JBEngine* engine, JBStream* stream,
 	const char* address, int port)
     : m_engine(engine), m_stream(stream), m_socket(0), m_remoteDomain(address),
-    m_address(PF_INET), m_streamMutex(true), m_receiveMutex(true)
+    m_address(PF_INET),
+    m_streamMutex(true,"JBSocket::stream"),
+    m_receiveMutex(true,"JBSocket::receive")
 {
     m_address.host(address);
     m_address.port(port);

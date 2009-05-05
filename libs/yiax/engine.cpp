@@ -33,7 +33,7 @@ using namespace TelEngine;
 IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_int16_t retransCount, u_int16_t retransInterval,
 	u_int16_t authTimeout, u_int16_t transTimeout, u_int16_t maxFullFrameDataLen,
 	u_int32_t format, u_int32_t capab, u_int32_t trunkSendInterval, bool authRequired)
-    : Mutex(true),
+    : Mutex(true,"IAXEngine"),
     m_lastGetEvIndex(0),
     m_authRequired(authRequired),
     m_maxFullFrameDataLen(maxFullFrameDataLen),
@@ -45,7 +45,7 @@ IAXEngine::IAXEngine(const char* iface, int port, u_int16_t transListCount, u_in
     m_transTimeout(transTimeout),
     m_format(format),
     m_capability(capab),
-    m_mutexTrunk(true),
+    m_mutexTrunk(true,"IAXEngine::Trunk"),
     m_trunkSendInterval(trunkSendInterval)
 {
     debugName("iaxengine");

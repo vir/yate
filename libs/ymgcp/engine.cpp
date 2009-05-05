@@ -101,7 +101,7 @@ void MGCPPrivateThread::run()
  * MGCPEngine
  */
 MGCPEngine::MGCPEngine(bool gateway, const char* name, const NamedList* params)
-    : Mutex(true),
+    : Mutex(true,"MGCPEngine"),
     m_gateway(gateway),
     m_initialized(false),
     m_nextId(1),

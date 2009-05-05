@@ -665,7 +665,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 	const String& callerJID, const String& calledJID,
 	const ObjList& contents, XMLElement* extra, const char* msg,
 	const char* subject)
-    : Mutex(true),
+    : Mutex(true,"JGSession"),
     m_state(Idle),
     m_engine(engine),
     m_stream(0),
@@ -697,7 +697,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 
 // Create an incoming session
 JGSession::JGSession(JGEngine* engine, JBEvent* event, const String& id)
-    : Mutex(true),
+    : Mutex(true,"JGSession"),
     m_state(Idle),
     m_engine(engine),
     m_stream(0),

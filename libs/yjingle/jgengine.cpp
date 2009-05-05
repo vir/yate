@@ -43,8 +43,9 @@ TokenDict JGEvent::s_typeName[] = {
  * JGEngine
  */
 JGEngine::JGEngine(JBEngine* engine, const NamedList* params, int prio)
-    : JBService(engine,"jgengine",params,prio), m_sessionIdMutex(true),
-    m_sessionId(1), m_stanzaTimeout(20000)
+    : JBService(engine,"jgengine",params,prio),
+      m_sessionIdMutex(true,"JGEngine::sessionId"),
+      m_sessionId(1), m_stanzaTimeout(20000)
 {
     JBThreadList::setOwner(this);
 }

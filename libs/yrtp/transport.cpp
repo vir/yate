@@ -31,7 +31,8 @@ static unsigned long s_sleep = 5;
 
 
 RTPGroup::RTPGroup(int msec, Priority prio)
-    : Mutex(true), Thread("RTP Group",prio), m_listChanged(false)
+    : Mutex(true,"RTPGroup"),
+      Thread("RTP Group",prio), m_listChanged(false)
 {
     DDebug(DebugInfo,"RTPGroup::RTPGroup() [%p]",this);
     if (msec < 1)

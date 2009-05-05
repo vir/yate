@@ -28,7 +28,7 @@ using namespace TelEngine;
 // Construct a transaction from its first message
 MGCPTransaction::MGCPTransaction(MGCPEngine* engine, MGCPMessage* msg, bool outgoing,
 	const SocketAddr& address)
-    : Mutex(true),
+    : Mutex(true,"MGCPTransaction"),
     m_state(Invalid),
     m_outgoing(outgoing),
     m_address(address),

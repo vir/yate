@@ -289,11 +289,13 @@ void JBThreadList::cancelThreads(bool wait, bool hard)
  */
 
 JBEngine::JBEngine(Protocol proto)
-    : Mutex(true), m_protocol(proto),
+    : Mutex(true,"JBEngine"), m_protocol(proto),
     m_restartUpdateInterval(JB_RESTART_UPDATE), m_restartCount(JB_RESTART_COUNT),
     m_streamSetupInterval(JB_SETUP_INTERVAL), m_streamIdleInterval(JB_IDLE_INTERVAL),
-    m_printXml(0), m_identity(0), m_componentCheckFrom(1), m_serverMutex(true),
-    m_servicesMutex(true), m_initialized(false)
+    m_printXml(0), m_identity(0), m_componentCheckFrom(1),
+    m_serverMutex(true,"JBEngine::server"),
+    m_servicesMutex(true,"JBEngine::services"),
+    m_initialized(false)
 {
     JBThreadList::setOwner(this);
     for (int i = 0; i < ServiceCount; i++)
@@ -904,7 +906,8 @@ bool JBEngine::received(Service service, JBEvent* event)
  */
 JBService::JBService(JBEngine* engine, const char* name,
 	const NamedList* params, int prio)
-    : Mutex(true), m_initialized(false), m_engine(engine), m_priority(prio)
+    : Mutex(true,"JBService"),
+      m_initialized(false), m_engine(engine), m_priority(prio)
 {
     debugName(name);
     XDebug(this,DebugAll,"Jabber service created [%p]",this);
@@ -1296,7 +1299,8 @@ JIDResource* JIDResourceList::getAudio(bool availableOnly)
 // Constructor
 XMPPUser::XMPPUser(XMPPUserRoster* local, const char* node, const char* domain,
 	XMPPDirVal sub, bool subTo, bool sendProbe)
-    : Mutex(true), m_local(0), m_jid(node,domain), m_nextProbe(0), m_expire(0)
+    : Mutex(true,"XMPPUser"),
+      m_local(0), m_jid(node,domain), m_nextProbe(0), m_expire(0)
 {
     if (local && local->ref())
 	m_local = local;
@@ -1770,7 +1774,7 @@ void XMPPUser::updateTimeout(bool from, u_int64_t time)
  */
 XMPPUserRoster::XMPPUserRoster(JBPresence* engine, const char* node,
 	const char* domain, JBEngine::Protocol proto)
-    : Mutex(true),
+    : Mutex(true,"XMPPUserRoster"),
     m_jid(node,domain),
     m_identity(0),
     m_engine(engine)

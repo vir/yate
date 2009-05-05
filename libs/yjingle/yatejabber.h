@@ -1171,7 +1171,8 @@ protected:
      * @param owner The owner of this list
      */
     JBThreadList(DebugEnabler* owner = 0)
-	: m_owner(owner), m_mutex(true), m_cancelling(false)
+	: m_mutex(true,"JBThreadList"),
+	  m_owner(owner), m_cancelling(false)
 	{ m_threads.setDelete(false); }
 
     /**
@@ -1182,8 +1183,8 @@ protected:
 	{ m_owner = dbg; }
 
 private:
-    DebugEnabler* m_owner;               // The owner of this list
     Mutex m_mutex;                       // Lock list operations
+    DebugEnabler* m_owner;               // The owner of this list
     ObjList m_threads;                   // Private threads list
     bool m_cancelling;                   // Cancelling threads operation in progress
 };
@@ -2239,7 +2240,7 @@ public:
      * Constructor
      */
     inline JIDResourceList()
-	: Mutex(true)
+	: Mutex(true,"JIDResourceList")
 	{}
 
     /**

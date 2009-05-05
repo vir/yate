@@ -31,7 +31,7 @@ using namespace TelEngine;
 // Construct the id. Append itself to the engine's list
 MGCPEndpoint::MGCPEndpoint(MGCPEngine* engine, const char* user,
 	const char* host, int port)
-    : MGCPEndpointId(user,host,port),
+    : MGCPEndpointId(user,host,port), Mutex(false,"MGCPEndpoint"),
     m_engine(engine)
 {
     if (!m_engine) {
@@ -70,7 +70,7 @@ MGCPEpInfo* MGCPEndpoint::append(const char* endpoint, const char* host, int por
 //  Find the info object associated with a remote peer
 MGCPEpInfo* MGCPEndpoint::find(const String& epId)
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     return static_cast<MGCPEpInfo*>(m_remote[epId]);
 }
 
@@ -79,7 +79,7 @@ MGCPEpInfo* MGCPEndpoint::findAlias(const String& alias)
 {
     if (alias.null())
 	return 0;
-    Lock lock(m_mutex);
+    Lock lock(this);
     for (ObjList* o = m_remote.skipNull(); o; o = o->skipNext()) {
 	MGCPEpInfo* info = static_cast<MGCPEpInfo*>(o->get());
 	if (alias == info->alias)

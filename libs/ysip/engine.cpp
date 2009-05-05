@@ -150,10 +150,11 @@ SIPEvent::~SIPEvent()
 
 
 SIPEngine::SIPEngine(const char* userAgent)
-    : m_mutex(true),
+    : Mutex(true,"SIPEngine"),
       m_t1(500000), m_t4(5000000), m_maxForwards(70),
       m_cseq(0), m_lazyTrying(false),
-      m_userAgent(userAgent), m_nonce_time(0)
+      m_userAgent(userAgent), m_nonce_time(0),
+      m_nonce_mutex(false,"SIPEngine::nonce")
 {
     debugName("sipengine");
     DDebug(this,DebugInfo,"SIPEngine::SIPEngine() [%p]",this);
@@ -204,7 +205,7 @@ SIPTransaction* SIPEngine::addMessage(SIPMessage* message)
     String branch(br ? *br : String::empty());
     if (!branch.startsWith("z9hG4bK"))
 	branch.clear();
-    Lock lock(m_mutex);
+    Lock lock(this);
     SIPTransaction* forked = 0;
     ObjList* l = &TransList;
     for (; l; l = l->next()) {
@@ -256,7 +257,7 @@ bool SIPEngine::process()
 
 SIPEvent* SIPEngine::getEvent()
 {
-    Lock lock(m_mutex);
+    Lock lock(this);
     ObjList* l = &TransList;
     for (; l; l = l->next()) {
 	SIPTransaction* t = static_cast<SIPTransaction*>(l->get());
@@ -287,7 +288,7 @@ void SIPEngine::processEvent(SIPEvent *event)
 {
     if (!event)
 	return;
-    Lock lock(m_mutex);
+    Lock lock(this);
     const char* type = "unknown";
     if (event->isOutgoing())
 	type = "outgoing";
@@ -524,9 +525,10 @@ bool SIPEngine::isAllowed(const char* method) const
 
 void SIPEngine::addAllowed(const char* method)
 {
-    Lock lock(m_mutex);
+    lock();
     if (method && *method && !isAllowed(method))
 	m_allowed << ", " << method;
+    unlock();
 }
 
 /* vi: set ts=8 sw=4 sts=4 noet: */

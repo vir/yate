@@ -97,7 +97,7 @@ protected:
     ObjList m_calls;
 };
 
-class YPBX_API MultiRouter : public MessageReceiver
+class YPBX_API MultiRouter : public MessageReceiver, public Mutex
 {
 public:
     enum {
@@ -118,7 +118,6 @@ public:
     Message* defaultExecute(CallInfo& info, const char* route = 0);
 protected:
     CallList m_list;
-    Mutex m_mutex;
 private:
     MessageRelay* m_relRoute;
     MessageRelay* m_relExecute;

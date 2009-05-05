@@ -148,9 +148,9 @@ static String s_rejectReason = "Rejected";
 static String s_hangupReason = "User hangup";
 static String s_cancelReason = "Cancelled";
 static unsigned int s_eventLen = 0;              // Log maximum lines (0: unlimited)
-static Mutex s_debugMutex;
-static Mutex s_proxyMutex;
-static Mutex s_postponeMutex;
+static Mutex s_debugMutex(false,"ClientDebug");
+static Mutex s_proxyMutex(false,"ClientProxy");
+static Mutex s_postponeMutex(false,"ClientPostpone");
 static ObjList s_postponed;
 static NamedList* s_debugLog = 0;
 static ClientThreadProxy* s_proxy = 0;
@@ -186,7 +186,7 @@ String ClientDriver::s_confName = "conf/client"; // The name of the client's con
 bool ClientDriver::s_dropConfPeer = true;        // Drop a channel's old peer when terminated while in conference
 String ClientDriver::s_device;                   // Currently used audio device
 ObjList ClientSound::s_sounds;                   // ClientSound's list
-Mutex ClientSound::s_soundsMutex(true);          // ClientSound's list lock mutex
+Mutex ClientSound::s_soundsMutex(true,"ClientSound"); // ClientSound's list lock mutex
 String ClientSound::s_calltoPrefix = "wave/play/"; // Client sound target prefix
 
 // Client relays
@@ -3243,7 +3243,7 @@ ClientChannel* ClientDriver::findChanByPeer(const String& peer)
 // Constructor
 ClientAccount::ClientAccount(const char* proto, const char* user,
 	const char* host, bool startup)
-    : Mutex(true),
+    : Mutex(true,"ClientAccount"),
     m_port(0), m_startup(startup), m_expires(-1), m_connected(false),
     m_resource(0)
 {
@@ -3254,7 +3254,7 @@ ClientAccount::ClientAccount(const char* proto, const char* user,
 
 // Constructor. Build an account from a list of parameters.
 ClientAccount::ClientAccount(const NamedList& params)
-    : Mutex(true),
+    : Mutex(true,"ClientAccount"),
     m_port(0), m_startup(false), m_expires(-1), m_connected(false),
     m_resource(0)
 {

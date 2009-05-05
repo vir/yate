@@ -109,7 +109,7 @@ static TranslatorCaps s_stereoCaps[] = {
     { 0, 0, 0 }
 };
 
-static Mutex s_dataMutex(true);
+static Mutex s_dataMutex(true,"DataEndpoint");
 
 class ThreadedSourcePrivate : public Thread
 {
@@ -1079,7 +1079,7 @@ bool DataTranslator::synchronize(DataSource* source)
     return true;
 }
 
-Mutex DataTranslator::s_mutex(true);
+Mutex DataTranslator::s_mutex(true,"DataTranslator");
 ObjList DataTranslator::s_factories;
 unsigned int DataTranslator::s_maxChain = 3;
 static ObjList s_compose;

@@ -51,7 +51,7 @@ static unsigned int s_maxCallHistory = 20;
 
 ObjList ClientLogic::s_accOptions;
 ObjList ClientLogic::s_protocols;
-Mutex ClientLogic::s_protocolsMutex(true);
+Mutex ClientLogic::s_protocolsMutex(true,"ClientProtocols");
 // Parameters that are applied from provider template
 const char* ClientLogic::s_provParams[] = {
     "server",
@@ -177,7 +177,7 @@ inline void activatePageCalls(ClientLogic* logic, Window* wnd = 0)
  */
 // Constructor
 ClientLogic::ClientLogic(const char* name, int priority)
-    : m_durationMutex(true), m_name(name), m_prio(priority)
+    : m_durationMutex(true,"ClientLogic::duration"), m_name(name), m_prio(priority)
 {
     Debug(ClientDriver::self(),DebugAll,"ClientLogic(%s) [%p]",m_name.c_str(),this);
     Client::addLogic(this);

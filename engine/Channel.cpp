@@ -62,11 +62,11 @@ bool TelEngine::isE164(const char* str)
 }
 
 static unsigned int s_callid = 0;
-static Mutex s_callidMutex;
+static Mutex s_callidMutex(false,"CallID");
 
 // this is to protect against two threads trying to (dis)connect a pair
 //  of call endpoints at the same time
-static Mutex s_mutex(true);
+static Mutex s_mutex(true,"CallEndpoint");
 
 CallEndpoint::CallEndpoint(const char* id)
     : m_peer(0), m_id(id), m_mutex(0)
@@ -851,7 +851,7 @@ const char* Module::messageName(int id)
 }
 
 Module::Module(const char* name, const char* type, bool earlyInit)
-    : Plugin(name,earlyInit), Mutex(true),
+    : Plugin(name,earlyInit), Mutex(true,"Module"),
       m_init(false), m_relays(0), m_name(name), m_type(type), m_changed(0)
 {
     debugName(m_name);

@@ -270,7 +270,8 @@ bool MessageRelay::receivedInternal(Message& msg)
 
 
 MessageDispatcher::MessageDispatcher()
-    : m_changes(0), m_warnTime(0)
+    : Mutex(false,"MessageDispatcher"),
+      m_changes(0), m_warnTime(0)
 {
     XDebug(DebugInfo,"MessageDispatcher::MessageDispatcher() [%p]",this);
 }

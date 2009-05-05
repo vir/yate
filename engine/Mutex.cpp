@@ -49,7 +49,7 @@ namespace TelEngine {
 
 class MutexPrivate {
 public:
-    MutexPrivate(bool recursive);
+    MutexPrivate(bool recursive, const char* name);
     ~MutexPrivate();
     inline void ref()
 	{ ++m_refcount; }
@@ -57,6 +57,8 @@ public:
 	{ if (!--m_refcount) delete this; }
     inline bool recursive() const
 	{ return m_recursive; }
+    inline const char* name() const
+	{ return m_name; }
     bool locked() const
     	{ return (m_locked > 0); }
     bool lock(long maxwait);
@@ -68,6 +70,7 @@ private:
     int m_refcount;
     volatile unsigned int m_locked;
     bool m_recursive;
+    const char* m_name;
     const char* m_owner;
 };
 
@@ -140,8 +143,9 @@ void GlobalMutex::unlock()
 }
 
 
-MutexPrivate::MutexPrivate(bool recursive)
-    : m_refcount(1), m_locked(0), m_recursive(recursive), m_owner(0)
+MutexPrivate::MutexPrivate(bool recursive, const char* name)
+    : m_refcount(1), m_locked(0), m_recursive(recursive),
+      m_name(name), m_owner(0)
 {
     GlobalMutex::lock();
     s_count++;
@@ -185,11 +189,11 @@ MutexPrivate::~MutexPrivate()
 #endif
     GlobalMutex::unlock();
     if (m_locked)
-	Debug(DebugFail,"MutexPrivate owned by '%s' destroyed with %u locks [%p]",
-	    m_owner,m_locked,this);
+	Debug(DebugFail,"MutexPrivate '%s' owned by '%s' destroyed with %u locks [%p]",
+	    m_name,m_owner,m_locked,this);
     else if (warn)
-	Debug(DebugGoOn,"MutexPrivate owned by '%s' unlocked in destructor [%p]",
-	    m_owner,this);
+	Debug(DebugGoOn,"MutexPrivate '%s' owned by '%s' unlocked in destructor [%p]",
+	    m_name,m_owner,this);
 }
 
 bool MutexPrivate::lock(long maxwait)
@@ -253,8 +257,8 @@ bool MutexPrivate::lock(long maxwait)
 	deref();
     GlobalMutex::unlock();
     if (warn && !rval)
-	Debug(DebugFail,"Thread '%s' could not take lock owned by '%s' for %lu usec!",
-	    Thread::currentName(),m_owner,maxwait);
+	Debug(DebugFail,"Thread '%s' could not lock mutex '%s' owned by '%s' for %lu usec!",
+	    Thread::currentName(),m_name,m_owner,maxwait);
     return rval;
 }
 
@@ -269,8 +273,8 @@ void MutexPrivate::unlock()
 	if (!--m_locked) {
 	    const char* tname = thr ? thr->name() : 0;
 	    if (tname != m_owner) 
-		Debug(DebugFail,"MutexPrivate unlocked by '%s' but owned by '%s' [%p]",
-		    tname,m_owner,this);
+		Debug(DebugFail,"MutexPrivate '%s' unlocked by '%s' but owned by '%s' [%p]",
+		    m_name,tname,m_owner,this);
 	    m_owner = 0;
 	}
 	int locks = --s_locks;
@@ -288,21 +292,17 @@ void MutexPrivate::unlock()
 	deref();
     }
     else
-	Debug(DebugFail,"MutexPrivate::unlock called on unlocked mutex [%p]",this);
+	Debug(DebugFail,"MutexPrivate::unlock called on unlocked '%s' [%p]",m_name,this);
     GlobalMutex::unlock();
 }
 
 
-Mutex::Mutex()
+Mutex::Mutex(bool recursive, const char* name)
     : m_private(0)
 {
-    m_private = new MutexPrivate(false);
-}
-
-Mutex::Mutex(bool recursive)
-    : m_private(0)
-{
-    m_private = new MutexPrivate(recursive);
+    if (!name)
+	name = "?";
+    m_private = new MutexPrivate(recursive,name);
 }
 
 Mutex::Mutex(const Mutex &original)

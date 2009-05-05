@@ -117,7 +117,7 @@ static TokenDict s_prio[] = {
 };
 
 static ObjList s_threads;
-static Mutex s_tmutex(true);
+static Mutex s_tmutex(true,"Thread");
 
 ThreadPrivate* ThreadPrivate::create(Thread* t,const char* name,Thread::Priority prio)
 {

@@ -47,7 +47,7 @@ void srandom(unsigned int seed)
 
 int _gmtime_s(struct tm* _tm, const time_t* time)
 {
-    static TelEngine::Mutex m;
+    static TelEngine::Mutex m(false,"_gmtime_s");
     struct tm* tmp;
     if (!_tm)
 	return EINVAL;
@@ -142,8 +142,8 @@ static void dbg_colorize_func(const char* buf, int level)
 static void (*s_output)(const char*,int) = dbg_stderr_func;
 static void (*s_intout)(const char*,int) = 0;
 
-static Mutex out_mux;
-static Mutex ind_mux;
+static Mutex out_mux(false,"DebugOutput");
+static Mutex ind_mux(false,"DebugIndent");
 static Thread* s_thr = 0;
 
 static bool reentered()
@@ -610,7 +610,7 @@ void GenObject::destruct()
 }
 
 
-static Mutex s_refmutex;
+static Mutex s_refmutex(false,"RefObject");
 
 RefObject::~RefObject()
 {

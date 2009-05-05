@@ -3545,16 +3545,12 @@ class YATE_API Mutex
     friend class MutexPrivate;
 public:
     /**
-     * Construct a new unlocked fast mutex
-     */
-    Mutex();
-
-    /**
      * Construct a new unlocked mutex
      * @param recursive True if the mutex has to be recursive (reentrant),
      *  false for a normal fast mutex
+     * @param name Static name of the mutex (for debugging purpose only)
      */
-    Mutex(bool recursive);
+    Mutex(bool recursive = false, const char* name = 0);
 
     /**
      * Copy constructor creates a shared mutex

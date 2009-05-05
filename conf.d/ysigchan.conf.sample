@@ -117,6 +117,11 @@
 ; alaw is used commonly in Europe while mulaw is used commonly in US and Japan.
 ;format=alaw
 
+; number: string: Prefix of numbers we accept call setups for, empty to accept all
+; Only used in ISDN BRI CPE, makes sense when NET side is Point-to-Multipoint
+; Setups are ignored if called number is present but doesn't start with this prefix
+;number=
+
 ; print-layer2PDU: boolean: Print layer 2 (Q.921) protocol data units to output
 ; For ISDN this option is applied on reload
 ; Defaults to no

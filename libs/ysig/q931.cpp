@@ -2624,9 +2624,9 @@ void ISDNQ931::receiveData(const DataBlock& data, u_int8_t tei, ISDNLayer2* laye
 		// We are a BRI CPE with a number - check the called party field
 		ISDNQ931IE* ie = msg->getIE(ISDNQ931IE::CalledNo);
 		if (ie) {
-		    const char* number = ie->getValue("number");
-		    if (number && (m_cpeNumber != number)) {
-			DDebug(this,DebugInfo,"Setup was for '%s', not us.",number);
+		    const String* number = ie->getParam("number");
+		    if (number && !number->startsWith(m_cpeNumber)) {
+			DDebug(this,DebugInfo,"Setup was for '%s', not us.",number->c_str());
 			break;
 		    }
 		}

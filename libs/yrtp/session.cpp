@@ -221,7 +221,7 @@ void RTPReceiver::rtpData(const void* data, int len)
 	    else
 		m_seqSync = seq;
 	}
-	if (m_warn) {
+	if (m_warn && ds) {
 	    m_warn = false;
 	    Debug(DebugWarn,"RTP received SEQ %u while current is %u [%p]",seq,m_seq,this);
 	}

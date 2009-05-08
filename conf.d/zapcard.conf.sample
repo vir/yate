@@ -41,7 +41,7 @@
 ; The errors controlled by this mask are 1: RX buffer overrun 2: HDLC Align error
 ; Maximum value 255
 ; Defaults to 255 if missing or invalid
-; Ignored if type is not E1 or T1
+; Ignored if type is not E1, T1 or BRI
 ; This option can be overriden in span sections
 ;errormask=255
 
@@ -68,6 +68,7 @@
 ; Allowed values:
 ;  E1, T1:  E1/T1 signalling. Circuits belonging to this span can be
 ;           configured as voice circuits or signalling only (SS7, ISDN etc) circuits
+;  BRI:     ISDN BRI signalling. Circuits are voice and signaling
 ;  FXO:     This group's circuits are telephone sets linked to telephone exchanges
 ;  FXS:     This group's circuits are telephone exchanges linked to telephone sets
 ; Defaults to E1 if missing or invalid
@@ -86,7 +87,7 @@
 ; sigchan: integer: The circuit used for signalling (D-channel)
 ; Numbers greater then circuit count (circuit count defaults to 31 for E1 and
 ;  to 24 for T1) are not allowed
-; Defaults to 16 for E1 and to 24 for T1
+; Defaults to 16 for E1, 24 for T1 and 3 for BRI
 ; Ignored if type is FXS/FXO
 ;sigchan=16
 
@@ -98,7 +99,7 @@
 ;   then circuit count are not allowed. Circuit count defaults to 31 for E1
 ;   and to 24 for T1. For FXS/FXO spans the channel count is detected from the list)
 ; E.g. 1-15.17-31 or 1-23 or 1.2.3-15.17.18-30.31
-; If missing, will be computed from type (E1: 1-15.17-31, T1: 1-23, FXO/FXS: 1)
+; If missing, will be computed from type (E1: 1-15.17-31, T1: 1-23, BRI: 1-2, FXO/FXS: 1)
 ;voicechans=1-15.17-31
 
 ; dtmfdetect: boolean: Set/reset DTMF detection on each zaptel channel used by

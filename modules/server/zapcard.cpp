@@ -213,6 +213,7 @@ public:
 	DChan,
 	E1,
 	T1,
+	BRI,
 	FXO,
 	FXS,
 	Control,
@@ -791,6 +792,7 @@ static TokenDict s_types[] = {
     MAKE_NAME(DChan),
     MAKE_NAME(E1),
     MAKE_NAME(T1),
+    MAKE_NAME(BRI),
     MAKE_NAME(FXO),
     MAKE_NAME(FXS),
     MAKE_NAME(Control),
@@ -1557,7 +1559,7 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     }
 
     // Check span type
-    if (devType != ZapDevice::E1 && devType != ZapDevice::T1) {
+    if (devType != ZapDevice::E1 && devType != ZapDevice::T1 && devType != ZapDevice::BRI) {
 	Debug(&plugin,DebugWarn,"Section '%s'. Can't create D-channel for type='%s'",
 	    config->c_str(),sDevType.c_str());
 	return 0;
@@ -1565,8 +1567,21 @@ void* ZapInterface::create(const String& type, const NamedList& name)
     // Check channel
     String sig = config->getValue("sigchan");
     unsigned int count = (devType == ZapDevice::E1 ? 31 : 24);
-    if (!sig)
-	sig = (devType == ZapDevice::E1 ? 16 : 24);
+    if (sig.null()) {
+	switch (devType) {
+	    case ZapDevice::E1:
+		sig = 16;
+		break;
+	    case ZapDevice::T1:
+		sig = 24;
+		break;
+	    case ZapDevice::BRI:
+		sig = 3;
+		break;
+	    default:
+		break;
+	}
+    }
     unsigned int code = (unsigned int)sig.toInteger(0);
     if (!(sig && code && code <= count)) {
 	Debug(&plugin,DebugWarn,"Section '%s'. Invalid sigchan='%s' for type='%s'",
@@ -1805,6 +1820,11 @@ bool ZapSpan::init(ZapDevice::Type type, unsigned int offset,
 		voice = "1-23";
 	    chans = 24;
 	    break;
+	case ZapDevice::BRI:
+	    if (!voice)
+		voice = "1-2";
+	    chans = 3;
+	    break;
 	case ZapDevice::FXO:
 	case ZapDevice::FXS:
 	    digital = false;
@@ -1935,6 +1955,7 @@ ZapCircuit::ZapCircuit(ZapDevice::Type type, unsigned int code, unsigned int cha
 
     switch (type) {
 	case ZapDevice::E1:
+	case ZapDevice::BRI:
 	    m_format = ZapDevice::Alaw;
 	    break;
 	case ZapDevice::T1:
@@ -2053,6 +2074,7 @@ bool ZapCircuit::updateFormat(const char* format, int direction)
     switch (m_device.type()) {
 	case ZapDevice::E1:
 	case ZapDevice::T1:
+	case ZapDevice::BRI:
 	case ZapDevice::FXS:
 	case ZapDevice::FXO:
 	    if (f == ZapDevice::Alaw || f == ZapDevice::Mulaw)

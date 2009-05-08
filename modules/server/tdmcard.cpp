@@ -985,7 +985,7 @@ bool TdmDevice::checkEvents()
 	return false;
     rx_event = &m_tdm_api->wp_tdm_cmd.event;
     switch (rx_event->wp_tdm_api_event_type) {
-	case WP_TDMAPI_EVENT_FE_ALARM:
+	case WP_TDMAPI_EVENT_ALARM:
 	    if (!rx_event->wp_tdm_api_event_alarm) {
 		DDebug(m_owner,DebugWarn,"%s: Link is disconnected",tdmName().c_str());
 	    }

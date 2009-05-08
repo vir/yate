@@ -213,7 +213,7 @@ qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 
 server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate: ../libyatesig.so
 server/ysigchan.yate server/analog.yate server/ciscosm.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
-server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_HWEC_INC@
+server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_FLAGS@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
 server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate server/ciscosm.yate: LOCALLIBS = -lyatesig
 

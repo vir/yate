@@ -32,13 +32,22 @@
 extern "C" {
 
 #define INVALID_HANDLE_VALUE (-1)
+
 #define __LINUX__
+#ifdef HAVE_WANPIPE_API
+#include <if_wanpipe.h>
+#include <wanpipe_defines.h>
+#include <wanpipe_cfg.h>
+#include <wanpipe.h>
+#include <sdla_aft_te1.h>
+#else
 #include <linux/if_wanpipe.h>
 #include <linux/if.h>
 #include <linux/wanpipe_defines.h>
 #include <linux/wanpipe_cfg.h>
 #include <linux/wanpipe.h>
 #include <linux/sdla_aft_te1.h>
+#endif
 
 #ifdef HAVE_WANPIPE_HWEC
 

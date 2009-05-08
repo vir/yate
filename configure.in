@@ -371,8 +371,33 @@ AC_SUBST(HAVE_ZAP)
 AC_SUBST(ZAP_FLAGS)
 
 HAVE_WANPIPE=no
+HAVE_WANPIPE_API=no
+WANPIPE_FLAGS=""
 AC_ARG_ENABLE(wanpipe,AC_HELP_STRING([--enable-wanpipe],[Enable Wanpipe driver (default: yes)]),want_wanpipe=$enableval,want_wanpipe=yes)
 if [[ "x$want_wanpipe" = "xyes" ]]; then
+AC_MSG_CHECKING([for Wanpipe headers])
+SAVE_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -I/usr/include/wanpipe"
+AC_TRY_COMPILE([
+#define __LINUX__
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <if_wanpipe.h>
+#include <wanpipe_defines.h>
+#include <wanpipe_cfg.h>
+#include <wanpipe.h>
+#include <sdla_aft_te1.h>
+],[],
+HAVE_WANPIPE="yes"
+)
+CFLAGS="$SAVE_CFLAGS"
+AC_MSG_RESULT([$HAVE_WANPIPE])
+if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
+HAVE_WANPIPE_API="yes"
+WANPIPE_FLAGS="-DHAVE_WANPIPE_API -I/usr/include/wanpipe"
+else
 AC_MSG_CHECKING([for Wanpipe linux headers])
 AC_TRY_COMPILE([
 #define __LINUX__
@@ -391,17 +416,18 @@ HAVE_WANPIPE="yes"
 )
 AC_MSG_RESULT([$HAVE_WANPIPE])
 fi
+fi
 AC_SUBST(HAVE_WANPIPE)
+AC_SUBST(HAVE_WANPIPE_API)
 
-WANPIPE_HWEC_INC=""
 AC_ARG_WITH(wphwec,AC_HELP_STRING([--with-wphwec=DIR],[use Wanpipe/Octasic headers from DIR]),[ac_cv_use_wphwec=$withval],[ac_cv_use_wphwec=/usr/include/wanpipe])
 if [[ "x$HAVE_WANPIPE" = "xyes" ]]; then
 if [[ "x$ac_cv_use_wphwec" != "xno" ]]; then
 AC_MSG_CHECKING([for Wanpipe/Octasic headers])
 if [[ -f "$ac_cv_use_wphwec/wanec_iface.h" -a -f "$ac_cv_use_wphwec/oct6100_api/oct6100api/oct6100_api.h" ]]; then
-    WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec -I$ac_cv_use_wphwec/oct6100_api"
+    WANPIPE_FLAGS="-DHAVE_WANPIPE_HWEC -I$ac_cv_use_wphwec/oct6100_api $WANPIPE_FLAGS"
     if [[ -f "$ac_cv_use_wphwec/wanec_iface_api.h" ]]; then
-	WANPIPE_HWEC_INC="-DHAVE_WANPIPE_HWEC_API $WANPIPE_HWEC_INC"
+	WANPIPE_FLAGS="-DHAVE_WANPIPE_HWEC_API $WANPIPE_FLAGS"
     fi
     ac_cv_use_wphwec=yes
 else
@@ -410,7 +436,7 @@ fi
 AC_MSG_RESULT([$ac_cv_use_wphwec])
 fi
 fi
-AC_SUBST(WANPIPE_HWEC_INC)
+AC_SUBST(WANPIPE_FLAGS)
 
 HAVE_SOUNDCARD=no
 AC_MSG_CHECKING([for sound card headers])

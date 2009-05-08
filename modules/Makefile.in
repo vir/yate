@@ -77,6 +77,9 @@ endif
 
 ifneq (@HAVE_WANPIPE@,no)
 PROGS := $(PROGS) server/wpcard.yate
+ifeq (@HAVE_WANPIPE_API@,yes)
+PROGS := $(PROGS) server/tdmcard.yate
+endif
 endif
 
 ifneq (@HAVE_SPANDSP@,no)
@@ -207,11 +210,11 @@ qt4/%.moc: @srcdir@/qt4/%.h $(MKDEPS) $(INCFILES)
 
 # Take special care of the modules that depend on optional libs
 
-server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
+server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate: ../libyatesig.so
 server/ysigchan.yate server/analog.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig
-server/wpcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_HWEC_INC@
+server/wpcard.yate server/tdmcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @WANPIPE_HWEC_INC@
 server/zapcard.yate: LOCALFLAGS = -I@top_srcdir@/libs/ysig @ZAP_FLAGS@
-server/ysigchan.yate server/wpcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
+server/ysigchan.yate server/wpcard.yate server/tdmcard.yate server/zapcard.yate server/analog.yate: LOCALLIBS = -lyatesig
 
 server/analogdetect.yate: ../libs/ymodem/libyatemodem.a
 server/analogdetect.yate: LOCALFLAGS = -I@top_srcdir@/libs/ymodem

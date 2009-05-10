@@ -77,6 +77,8 @@ Source: "Release\yate-console.exe"; DestDir: "{app}"; Flags: replacesameversion;
 
 Source: "Release\server\accfile.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: client server
 Source: "Release\server\analog.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
+Source: "Release\server\ysigchan.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
+Source: "Release\server\ciscosm.yate"; DestDir: "{app}\modules\server"; Flags: replacesameversion; Components: server\pstn
 Source: "Release\analyzer.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server debug
 Source: "Release\callfork.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: server
 Source: "Release\callgen.yate"; DestDir: "{app}\modules"; Flags: replacesameversion; Components: debug

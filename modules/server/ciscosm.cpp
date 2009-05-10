@@ -1235,19 +1235,25 @@ void SessionManager::initSesion()
 
 bool SessionManager::insert(SessionUser* user)
 {
-    Lock mylock(this);
     if (!user)
 	return false;
+    Lock mylock(this);
     m_users.append(new UserPointer(user));
     return true;
 }
 
 void SessionManager::remove(SessionUser* user)
 {
-    Lock mylock(this);
     if (!user)
 	return;
-    m_users.remove(UserPointer(user));
+    Lock mylock(this);
+    for (ObjList* obj = m_users.skipNull(); obj; obj = obj->skipNext()) {
+	UserPointer* u = static_cast<UserPointer*>(obj->get());
+	if (static_cast<SessionUser*>(*u) == user) {
+	    obj->remove();
+	    return;
+	}
+    }
 }
 
 // Send a PDU message if state is operational else return false

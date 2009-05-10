@@ -93,6 +93,7 @@ static TokenDict dict_errors[] = {
     { "noroute", 404 },
     { "noroute", 604 },
     { "noconn", 503 },
+    { "noconn", 408 },
     { "noauth", 401 },
     { "nomedia", 415 },
     { "nocall", 481 },
@@ -2642,8 +2643,9 @@ void YateSIPConnection::hangup()
     Debug(this,DebugAll,"YateSIPConnection::hangup() state=%d trans=%p error='%s' code=%d reason='%s' [%p]",
 	m_state,m_tr,error,m_reasonCode,m_reason.c_str(),this);
     Message* m = message("chan.hangup");
+    m->copyParams(parameters());
     if (m_reason)
-	m->addParam("reason",m_reason);
+	m->setParam("reason",m_reason);
     Engine::enqueue(m);
     switch (m_state) {
 	case Cleared:
@@ -3390,6 +3392,14 @@ bool YateSIPConnection::process(SIPEvent* ev)
 	    else
 		Debug(this,DebugMild,"Received %d redirect without Contact [%p]",code,this);
 	}
+	hangup();
+    }
+    else if (code == 408) {
+	// Proxy timeout does not provide an answer message
+	if (m_dialog.remoteTag.null())
+	    m_byebye = false;
+	parameters().setParam("cause_sip","408");
+	setReason("Request Timeout",code);
 	hangup();
     }
     if (!ev->isActive()) {

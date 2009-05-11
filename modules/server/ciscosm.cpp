@@ -1964,4 +1964,16 @@ void CiscoSMModule::initialize()
     }
 }
 
+UNLOAD_PLUGIN(unloadNow)
+{
+    if (unloadNow) {
+	if (!s_sessionMutex.lock(500000))
+	    return false;
+	bool ok = (s_sessions.count() == 0);
+	s_sessionMutex.unlock();
+	return ok;
+    }
+    return true;
+}
+
 /* vi: set ts=8 sw=4 sts=4 noet: */

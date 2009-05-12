@@ -3,6 +3,9 @@
 ; resolution: keyword: Resolution for time representation: sec, msec or usec
 ;resolution=msec
 
+; guardtime: int: Time in ms to remember hungup channels to avoid race conditions
+;guardtime=5000
+
 
 [parameters]
 ; Each line consists of name=bool where name is the name of the parameter being

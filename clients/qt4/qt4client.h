@@ -138,18 +138,16 @@ public:
 	{ return QDesktopServices::openUrl(QUrl(setUtf8(url))); }
 
     /**
-     * Show a file open dialog window
-     * This method isn't using the proxy thread since it's usually called on UI action
+     * Show a file save/open dialog window. If the list of parameters contains an 'action'
+     *  parameter, an action will be raised when the dialog will be closed. The action's
+     *  parameter list pointer will be non 0 if the dialog was accepted and 0 if cancelled.
+     *  The list will contain one or more 'file' parameter(s) with selected file(s)
      * @param parent Dialog window's parent
      * @param params Dialog window's params. Parameters that can be specified include 'caption',
-     *  'dir', 'filters', 'selectedfilter', 'confirmoverwrite', 'choosedir'.
-     *  The parameter 'filters' may be a pipe ('|') separated list of filters
-     * @param files List of selected file(s). Allow multiple file selection if non 0
-     * @param file The selected file if multiple file selection is disabled
-     * @return True on success
+     *  'dir', 'filters', 'selectedfilter', 'choosefile'
+     * @return True on success (the dialog was opened)
      */
-    virtual bool chooseFile(Window* parent, NamedList& params,
-	NamedList* files, String* file);
+    virtual bool chooseFile(Window* parent, NamedList& params);
 
     /**
      * Create a sound object. Append it to the global list
@@ -450,6 +448,10 @@ public slots:
     void toggled(bool);
     // System tray actions
     void sysTrayIconAction(QSystemTrayIcon::ActivationReason reason);
+    // Choose file window was accepted
+    void chooseFileAccepted();
+    // Choose file window was cancelled
+    void chooseFileRejected();
 
 private slots:
     void openUrl(const QString& link);

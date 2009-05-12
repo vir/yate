@@ -1101,18 +1101,14 @@ public:
     bool postpone(const Message& msg, int id, bool copyUserData = false);
 
     /**
-     * Show a file open dialog window
+     * Show a file open/save dialog window
      * This method isn't using the proxy thread since it's usually called on UI action
      * @param parent Dialog window's parent
      * @param params Dialog window's params. Parameters that can be specified include 'caption',
      *  'dir', 'filters', 'selectedfilter', 'confirmoverwrite', 'choosedir'.
-     *  The parameter 'filters' may be a pipe ('|') separated list of filters
-     * @param files List of selected file(s). Allow multiple file selection if non 0
-     * @param file The selected file if multiple file selection is disabled
      * @return True on success
      */
-    virtual bool chooseFile(Window* parent, NamedList& params,
-	NamedList* files, String* file)
+    virtual bool chooseFile(Window* parent, NamedList& params)
 	{ return false; }
 
     /**

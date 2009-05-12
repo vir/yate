@@ -409,6 +409,19 @@ static unsigned int str2Params(NamedList& params, const String& buf, char sep = 
     return n;
 }
 
+// Utility: fix QT path separator on Windows
+// (display paths using only one separator to the user)
+static inline QString fixPathSep(QString str)
+{
+#ifdef _WINDOWS
+    QString tmp = str;
+    tmp.replace(QChar('/'),QtClient::setUtf8(Engine::pathSeparator()));
+    return tmp;
+#else
+    return str;
+#endif
+}
+
 // Utility: get a list row containing the given text
 static int findListRow(QListWidget& list, const String& item)
 {
@@ -1825,6 +1838,45 @@ void QtWindow::sysTrayIconAction(QSystemTrayIcon::ActivationReason reason)
 	Client::self()->action(this,action);
 }
 
+// Choose file window was accepted
+void QtWindow::chooseFileAccepted()
+{
+    QFileDialog* dlg = qobject_cast<QFileDialog*>(sender());
+    if (!dlg)
+	return;
+    String action;
+    QtClient::getUtf8(action,dlg->objectName());
+    if (!action)
+	return;
+    NamedList params("");
+    QDir dir = dlg->directory();
+    if (dir.absolutePath().length())
+	QtClient::getUtf8(params,"dir",fixPathSep(dir.absolutePath()));
+    QStringList files = dlg->selectedFiles();
+    for (int i = 0; i < files.size(); i++)
+	QtClient::getUtf8(params,"file",fixPathSep(files[i]));
+    if (dlg->fileMode() != QFileDialog::DirectoryOnly &&
+	dlg->fileMode() != QFileDialog::Directory) {
+	QString filter = dlg->selectedFilter();
+	if (filter.length())
+	    QtClient::getUtf8(params,"filter",filter);
+    }
+    Client::self()->action(this,action,&params);
+}
+
+// Choose file window was cancelled
+void QtWindow::chooseFileRejected()
+{
+    QFileDialog* dlg = qobject_cast<QFileDialog*>(sender());
+    if (!dlg)
+	return;
+    String action;
+    QtClient::getUtf8(action,dlg->objectName());
+    if (!action)
+	return;
+    Client::self()->action(this,action,0);
+}
+
 void QtWindow::openUrl(const QString& link)
 {
     QDesktopServices::openUrl(QUrl(link));
@@ -2448,68 +2500,69 @@ void QtClient::loadWindows(const char* file)
 // Open a file open dialog window
 // Parameters that can be specified include 'caption',
 //  'dir', 'filter', 'selectedfilter', 'confirmoverwrite', 'choosedir'
-// files List of selected file(s). Allow multiple file selection if non 0
-// file The selected file if multiple file selection is disabled
-bool QtClient::chooseFile(Window* parent, NamedList& params,
-    NamedList* files, String* file)
+bool QtClient::chooseFile(Window* parent, NamedList& params)
 {
-    if (!(files || file))
-	return false;
+    QtWindow* wnd = static_cast<QtWindow*>(parent);
+    // Don't set the dialog's parent: window's style sheet will be propagated to
+    //  child dialog and we might have incomplete (not full) custom styled controls
+    QFileDialog* dlg = new QFileDialog(0,setUtf8(params.getValue("caption")),
+	setUtf8(params.getValue("dir")));
+    
+    if (wnd)
+	dlg->setWindowIcon(wnd->windowIcon());
 
-    const char* caption = params.getValue("caption");
-    const char* dir = params.getValue("dir");
-    QString filters;
+    // Connect signals
+    String* action = params.getParam("action");
+    if (wnd && !null(action)) {
+	dlg->setObjectName(setUtf8(*action));
+	QtClient::connectObjects(dlg,SIGNAL(accepted()),wnd,SLOT(chooseFileAccepted()));
+	QtClient::connectObjects(dlg,SIGNAL(rejected()),wnd,SLOT(chooseFileRejected()));
+    }
+
+    // Destroy it when closed
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    // This dialog should always stay on top
+    dlg->setWindowFlags(dlg->windowFlags() | Qt::WindowStaysOnTopHint);
+
+    // Window modality doesn't work without a parent so make it application modal
+    if (params.getBoolValue("modal",true))
+	dlg->setWindowModality(Qt::ApplicationModal);
+
+    // Filters
     NamedString* f = params.getParam("filters");
     if (f) {
+	QStringList filters;
 	ObjList* obj = f->split('|',false);
-	for (ObjList* o = obj->skipNull(); o; o = o->skipNext()) {
-	    if (!filters.isEmpty())
-		filters.append(";;");
+	for (ObjList* o = obj->skipNull(); o; o = o->skipNext())
 	    filters.append(QtClient::setUtf8(o->get()->toString()));
-	}
 	TelEngine::destruct(obj);
+	dlg->setFilters(filters);
     }
-    QString filter = QtClient::setUtf8(params.getValue("selectedfilter"));
-    QFileDialog::Options options;
-    if (params.getBoolValue("choosedir"))
-	options |= QFileDialog::ShowDirsOnly;
-    if (params.getBoolValue("confirmoverwrite"))
-	options |= QFileDialog::DontConfirmOverwrite;
+    QString flt = QtClient::setUtf8(params.getValue("selectedfilter"));
+    if (flt.length())
+	dlg->selectFilter(flt);
 
-    QWidget* p = static_cast<QtWindow*>(parent);
-    bool ok = false;
-    if (files) {
-	QStringList list = QFileDialog::getOpenFileNames((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters,&filter,options);
-	ok = (list.size() != 0);
-	for (int i = 0; i < list.size(); i++)
-	    QtClient::getUtf8(*files,"file",list[i]);
-    }
-    else {
-	QString str = QFileDialog::getOpenFileName((QWidget*)p,QtClient::setUtf8(caption),
-	    QtClient::setUtf8(dir),filters,&filter,options);
-	ok = !str.isEmpty();
-	QtClient::getUtf8(*file,str);
-    }
+    if (params.getBoolValue("save"))
+	dlg->setAcceptMode(QFileDialog::AcceptSave);
+    else
+	dlg->setAcceptMode(QFileDialog::AcceptOpen);
 
-    if (ok) {
-	// Return the selected filter to the caller
-	String* tmp = params.getParam("selectedfilter");
-	if (tmp)
-	    QtClient::getUtf8(*tmp,filter);
-	// Return the last used directory to the caller
-	tmp = params.getParam("dir");
-	if (tmp) {
-	    String* f = files ? files->getParam("file") : file;
-	    if (f) {
-		int i = f->rfind('/');
-		if (i < 0)
-		    i = f->rfind('\\');
-		*tmp = (i >= 0) ? f->substr(0,i + 1) : String::empty();
-	    }
-	}
+    // Choose options
+    if (params.getBoolValue("choosefile",true)) {
+	if (params.getBoolValue("chooseanyfile"))
+	    dlg->setFileMode(QFileDialog::AnyFile);
+	else if (params.getBoolValue("multiplefiles"))
+	    dlg->setFileMode(QFileDialog::ExistingFiles);
+	else
+	    dlg->setFileMode(QFileDialog::ExistingFile);
     }
-    return ok;
+    else
+	dlg->setFileMode(QFileDialog::DirectoryOnly);
+ 
+    dlg->selectFile(QtClient::setUtf8(params.getValue("selectedfile")));
+
+    dlg->setVisible(true);
+    return true;
 }
 
 bool QtClient::action(Window* wnd, const String& name, NamedList* params)

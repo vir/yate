@@ -172,6 +172,20 @@ NamedList& NamedList::copyParams(const NamedList& original, const String& list, 
     return *this;
 }
 
+void NamedList::dump(String& str, const char* separator, char quote, bool force) const
+{
+    if (force && str.null())
+	str << separator;
+    str << quote << *this << quote;
+    const ObjList *p = m_params.skipNull();
+    for (; p; p = p->skipNext()) {
+        const NamedString* s = static_cast<const NamedString *>(p->get());
+	String tmp;
+	tmp << quote << s->name() << quote << "=" << quote << *s << quote;
+	str.append(tmp,separator);
+    }
+}
+
 int NamedList::getIndex(const NamedString* param) const
 {
     if (!param)

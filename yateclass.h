@@ -3397,6 +3397,16 @@ public:
     int replaceParams(String& str, bool sqlEsc = false, char extraEsc = 0) const;
 
     /**
+     * Dumps the name and all parameters to a string in a human readable format.
+     * No escaping takes place so this method should be used for debugging only
+     * @param str String to which the name and parameters are appended
+     * @param separator Separator string to use before each parameter
+     * @param quote String quoting character, usually single or double quote
+     * @param force True to insert the separator even in an empty string
+     */
+    void dump(String& str, const char* separator, char quote = 0, bool force = false) const;
+
+    /**
      * A static empty named list
      * @return Reference to a static empty named list
      */

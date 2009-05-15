@@ -77,9 +77,13 @@ PROGS := $(PROGS) server/zapcard.yate
 endif
 
 ifneq (@HAVE_WANPIPE@,no)
+ifeq (@BUILD_WPCARD@,yes)
 PROGS := $(PROGS) server/wpcard.yate
+endif
 ifeq (@HAVE_WANPIPE_API@,yes)
+ifeq (@BUILD_TDMCARD@,yes)
 PROGS := $(PROGS) server/tdmcard.yate
+endif
 endif
 endif
 

@@ -370,12 +370,17 @@ fi
 AC_SUBST(HAVE_ZAP)
 AC_SUBST(ZAP_FLAGS)
 
+AC_ARG_ENABLE(wpcard,AC_HELP_STRING([--enable-wpcard],[Enable Wanpipe card driver (default: yes)]),BUILD_WPCARD=$enableval,BUILD_WPCARD=yes)
+AC_ARG_ENABLE(tdmcard,AC_HELP_STRING([--enable-tdmcard],[Enable TDMV API card driver (default: yes)]),BUILD_TDMCARD=$enableval,BUILD_TDMCARD=yes)
+AC_SUBST(BUILD_WPCARD)
+AC_SUBST(BUILD_TDMCARD)
+
 HAVE_WANPIPE=no
 HAVE_WANPIPE_API=no
 WANPIPE_FLAGS=""
-AC_ARG_ENABLE(wanpipe,AC_HELP_STRING([--enable-wanpipe],[Enable Wanpipe driver (default: yes)]),want_wanpipe=$enableval,want_wanpipe=yes)
+AC_ARG_ENABLE(wanpipe,AC_HELP_STRING([--enable-wanpipe],[Enable Wanpipe support (default: yes)]),want_wanpipe=$enableval,want_wanpipe=yes)
 if [[ "x$want_wanpipe" = "xyes" ]]; then
-AC_MSG_CHECKING([for Wanpipe headers])
+AC_MSG_CHECKING([for Wanpipe generic headers])
 SAVE_CFLAGS="$CFLAGS"
 CFLAGS="$CFLAGS -I/usr/include/wanpipe"
 AC_TRY_COMPILE([

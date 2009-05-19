@@ -62,10 +62,8 @@ void JGEngine::initialize(const NamedList& params)
     if (lvl != -1)
 	debugLevel(lvl);
 
-    int timeout = params.getIntValue("stanza_timeout",10);
-    if (timeout < 10)
-	timeout = 10;
-    m_stanzaTimeout = timeout * 1000;
+    int timeout = params.getIntValue("stanza_timeout",m_stanzaTimeout);
+    m_stanzaTimeout = timeout > 10000 ? timeout : 10000;
 
     int ping = params.getIntValue("ping_interval",m_pingInterval);
     if (ping == 0)

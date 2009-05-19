@@ -667,6 +667,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 	const char* subject)
     : Mutex(true,"JGSession"),
     m_state(Idle),
+    m_timeToPing(0),
     m_engine(engine),
     m_stream(0),
     m_outgoing(true),
@@ -679,6 +680,9 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 {
     if (stream && stream->ref())
 	m_stream = stream;
+    // Make sure we don't ping before session-initiate times out
+    if (m_engine && m_engine->pingInterval())
+	m_timeToPing = Time::msecNow() + m_engine->stanzaTimeout() + m_engine->pingInterval();
     m_engine->createSessionId(m_localSid);
     m_sid = m_localSid;
     Debug(m_engine,DebugAll,"Call(%s). Outgoing msg=%s [%p]",m_sid.c_str(),msg,this);
@@ -699,6 +703,7 @@ JGSession::JGSession(JGEngine* engine, JBStream* stream,
 JGSession::JGSession(JGEngine* engine, JBEvent* event, const String& id)
     : Mutex(true,"JGSession"),
     m_state(Idle),
+    m_timeToPing(0),
     m_engine(engine),
     m_stream(0),
     m_outgoing(false),
@@ -710,6 +715,8 @@ JGSession::JGSession(JGEngine* engine, JBEvent* event, const String& id)
 {
     if (event->stream() && event->stream()->ref())
 	m_stream = event->stream();
+    if (m_engine && m_engine->pingInterval())
+	m_timeToPing = Time::msecNow() + m_engine->pingInterval();
     m_events.append(event);
     m_engine->createSessionId(m_localSid);
     Debug(m_engine,DebugAll,"Call(%s). Incoming [%p]",m_sid.c_str(),this);
@@ -1045,6 +1052,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	    "Call(%s). Dequeued Jabber event (%p,%s) in state %s [%p]",
 	    m_sid.c_str(),jbev,jbev->name(),lookupState(state()),this);
 
+	// Update ping interval
+	if (m_engine && m_engine->pingInterval())
+	    m_timeToPing = time + m_engine->pingInterval();
+	else
+	    m_timeToPing = 0;
+
 	// Process Jingle 'set' stanzas
 	if (jbev->type() == JBEvent::IqJingleSet) {
 	    // Filter some conditions in which we can't accept any jingle stanza
@@ -1263,9 +1276,20 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 			    "Call(%s). Unhandled response event (%p,%u,%s) [%p]",
 			    m_sid.c_str(),jbev,jbev->type(),jbev->name(),this);
 		}
+	    else {
+		// Terminate on ping error
+		if (sent->ping()) {
+		    terminateFail = jbev->type() == JBEvent::IqJingleErr ||
+				    jbev->type() == JBEvent::WriteFail ||
+				    jbev->type() == JBEvent::IqError;
+		    if (terminateFail)
+			m_lastEvent = new JGEvent(JGEvent::Terminated,this,
+			    jbev->type() != JBEvent::WriteFail ? jbev->releaseXML() : 0,
+			    jbev->text() ? jbev->text().c_str() : "failure");
+		}
+	    }
 	    if (m_lastEvent && !m_lastEvent->m_id)
 		m_lastEvent->m_id = *sent;
-	    m_sentStanza.remove(sent,true);
 
 	    String error;
 #ifdef DEBUG
@@ -1273,10 +1297,12 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 		error << " (error='" << jbev->text() << "')";
 #endif
 	    bool terminate = (m_lastEvent && m_lastEvent->final());
-	    Debug(m_engine,DebugAll,
-		"Call(%s). Sent element with id=%s confirmed by event=%s%s%s [%p]",
-		m_sid.c_str(),jbev->id().c_str(),jbev->name(),error.safe(),
-		terminate ? ". Terminating": "",this);
+	    Debug(m_engine,(terminatePending || terminateFail) ? DebugNote : DebugAll,
+		"Call(%s). Sent %selement with id=%s confirmed by event=%s%s%s [%p]",
+		m_sid.c_str(),sent->ping() ? "ping " : "",jbev->id().c_str(),
+		jbev->name(),error.safe(),terminate ? ". Terminating": "",this);
+
+	    m_sentStanza.remove(sent,true);
 
 	    // Gracefully terminate
 	    if (terminate && state() != Ending)
@@ -1345,11 +1371,15 @@ JGEvent* JGSession::getEvent(u_int64_t time)
 	return m_lastEvent;
     }
 
+    // Ping the remote party
+    sendPing(time);
+
     return 0;
 }
 
 // Send a stanza to the remote peer
-bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmation)
+bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmation,
+    bool ping)
 {
     if (!stanza)
 	return false;
@@ -1373,7 +1403,7 @@ bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmati
 	String id = m_localSid;
 	id << "_" << (unsigned int)m_stanzaId++;
 	JGSentStanza* sent = new JGSentStanza(id,
-	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0);
+	    m_engine->stanzaTimeout() + Time::msecNow(),stanzaId != 0,ping);
 	stanza->setAttribute("id",*sent);
 	senderId = *sent;
 	if (stanzaId)
@@ -1385,6 +1415,20 @@ bool JGSession::sendStanza(XMLElement* stanza, String* stanzaId, bool confirmati
     if (res == JBStream::ErrorNoSocket || res == JBStream::ErrorContext)
 	return false;
     return true;
+}
+
+// Send a ping (empty session info) stanza to the remote peer if it's time to do it
+bool JGSession::sendPing(u_int64_t msecNow)
+{
+    if (!m_timeToPing || m_timeToPing > msecNow)
+	return false;
+    // Update ping interval
+    if (m_engine && m_engine->pingInterval() && msecNow)
+	m_timeToPing = msecNow + m_engine->pingInterval();
+    else
+	m_timeToPing = 0;
+    // Send empty info
+    return sendStanza(createJingle(ActInfo),0,true,true);
 }
 
 // Decode a jingle stanza

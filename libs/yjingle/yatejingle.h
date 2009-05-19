@@ -1011,9 +1011,18 @@ protected:
      * @param stanza The stanza to send
      * @param stanzaId Optional string to be filled with sent stanza id (used to track the response)
      * @param confirmation True if the stanza needs confirmation (add 'id' attribute)
+     * @param ping True if the stanza is a ping one
      * @return True on success
      */
-    bool sendStanza(XMLElement* stanza, String* stanzaId = 0, bool confirmation = true);
+    bool sendStanza(XMLElement* stanza, String* stanzaId = 0, bool confirmation = true,
+	bool ping = false);
+
+    /**
+     * Send a ping (empty session info) stanza to the remote peer if it's time to do it
+     * @param msecNow The current time
+     * @return True if a ping was succesfully sent
+     */
+    bool sendPing(u_int64_t msecNow);
 
     /**
      * Decode a valid jingle set event. Set the event's data on success
@@ -1052,6 +1061,7 @@ private:
 
     // State info
     State m_state;                       // Session state
+    u_int64_t m_timeToPing;              // Time to send ping (empty session-info)
     // Links
     JGEngine* m_engine;                  // The engine that owns this session
     JBStream* m_stream;                  // The stream this session is bound to
@@ -1318,6 +1328,13 @@ public:
 	{ return m_stanzaTimeout; }
 
     /**
+     * Get the ping interval used by jingle sessions
+     * @return The interval to ping the remote party of a jingle session
+     */
+    inline u_int64_t pingInterval() const
+	{ return m_pingInterval; }
+
+    /**
      * Initialize this service
      * @param params Service's parameters
      */
@@ -1377,6 +1394,7 @@ private:
     Mutex m_sessionIdMutex;              // Session id counter lock
     u_int32_t m_sessionId;               // Session id counter
     u_int64_t m_stanzaTimeout;           // The timeout of a sent stanza
+    u_int64_t m_pingInterval;            // Interval to send ping (empty session-info)
 };
 
 
@@ -1392,9 +1410,10 @@ public:
      * @param id The sent stanza's id
      * @param time The sent time
      * @param notif True to notify stanza timeout or response
+     * @param ping True if the sent stanza is a ping one
      */
-    JGSentStanza(const char* id, u_int64_t time, bool notif = false)
-	: String(id), m_time(time), m_notify(notif)
+    JGSentStanza(const char* id, u_int64_t time, bool notif = false, bool ping = false)
+	: String(id), m_time(time), m_notify(notif), m_ping(ping)
 	{}
 
     /**
@@ -1411,9 +1430,17 @@ public:
     inline bool notify() const
 	{ return m_notify; }
 
+    /**
+     * Check if the stanza is a ping one
+     * @return True if the stanza is a ping one
+     */
+    inline bool ping() const
+	{ return m_ping; }
+
 private:
     u_int64_t m_time;                    // Timeout
     bool m_notify;                       // Notify timeout to sender
+    bool m_ping;                         // Sent stanza is a ping one
 };
 
 };

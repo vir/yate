@@ -45,7 +45,7 @@ TokenDict JGEvent::s_typeName[] = {
 JGEngine::JGEngine(JBEngine* engine, const NamedList* params, int prio)
     : JBService(engine,"jgengine",params,prio),
       m_sessionIdMutex(true,"JGEngine::sessionId"),
-      m_sessionId(1), m_stanzaTimeout(20000)
+      m_sessionId(1), m_stanzaTimeout(20000), m_pingInterval(300000)
 {
     JBThreadList::setOwner(this);
 }
@@ -67,9 +67,21 @@ void JGEngine::initialize(const NamedList& params)
 	timeout = 10;
     m_stanzaTimeout = timeout * 1000;
 
+    int ping = params.getIntValue("ping_interval",m_pingInterval);
+    if (ping == 0)
+	m_pingInterval = 0;
+    else if (ping < 60000)
+	m_pingInterval = 60000;
+    else
+	m_pingInterval = ping;
+    // Make sure we don't ping before a ping times out
+    if (m_pingInterval && m_stanzaTimeout && m_pingInterval <= m_stanzaTimeout)
+	m_pingInterval = m_stanzaTimeout + 100;
+
     if (debugAt(DebugInfo)) {
 	String s;
 	s << " stanza_timeout=" << (unsigned int)m_stanzaTimeout;
+	s << " ping_interval=" << (unsigned int)m_pingInterval;
 	Debug(this,DebugInfo,"Jabber Jingle service initialized:%s [%p]",
 	    s.c_str(),this);
     }

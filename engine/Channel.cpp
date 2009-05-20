@@ -83,7 +83,7 @@ void CallEndpoint::destroyed()
     }
 #endif
     disconnect(true,0,true,0);
-    m_data.clear();
+    clearEndpoint();
 }
 
 Mutex& CallEndpoint::commonMutex()
@@ -244,6 +244,7 @@ void CallEndpoint::clearEndpoint(const char* type)
 	    DataEndpoint* e = static_cast<DataEndpoint*>(l->get());
 	    DDebug(DebugAll,"Endpoint at %p type '%s' peer %p",e,e->name().c_str(),e->getPeer());
 	    e->disconnect();
+	    e->clearCall(this);
 	}
 	m_data.clear();
     }
@@ -252,6 +253,7 @@ void CallEndpoint::clearEndpoint(const char* type)
 	if (dat) {
 	    m_data.remove(dat,false);
 	    dat->disconnect();
+	    dat->clearCall(this);
 	    dat->destruct();
 	}
     }

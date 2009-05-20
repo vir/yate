@@ -1004,6 +1004,14 @@ public:
 	{ return m_name; }
 
     /**
+     * Clear the owner call endpoint.
+     * Works only if the caller provides the correct owner pointer
+     * @param call Pointer to the call endpoint that is to be cleared
+     */
+    inline void clearCall(const CallEndpoint* call)
+	{ if (call == m_call) m_call = 0; }
+
+    /**
      * Modify data parameters
      * @param params The list of parameters to change
      * @return True if processed

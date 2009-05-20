@@ -2061,7 +2061,7 @@ void QtWindow::keyPressEvent(QKeyEvent* event)
 // Show hide window. Notify the client
 void QtWindow::setVisible(bool visible)
 {
-    if (visible) {
+    if (visible && !isMaximized()) {
 	QWidget::move(m_x,m_y);
 	resize(m_width,m_height);
     }

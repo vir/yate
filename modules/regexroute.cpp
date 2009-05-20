@@ -253,6 +253,8 @@ static void evalFunc(String& str)
 	}
 	else if (str == "nodename")
 	    str = Engine::nodeName();
+	else if (str == "threadname")
+	    str = Thread::currentName();
 	else if ((sep >= 0) && (str == "transcode")) {
 	    str = par.substr(0,sep);
 	    par = par.substr(sep+1).trimBlanks();

@@ -111,19 +111,26 @@ bool ChanPickup::received(Message& msg)
     }
 
     // Connect parties and answer them
-    if (!called->connect(caller,msg.getValue("reason","pickup"))) {
+    const char* reason = msg.getValue("reason","pickup");
+    Debug(&s_module,DebugAll,"Channel '%s' picking up '%s' abandoning '%s', reason: '%s'",
+	caller->id().c_str(),called->id().c_str(),called->getPeerId().c_str(),reason);
+    if (!called->connect(caller,reason)) {
 	Debug(&s_module,DebugNote,"Pick up failed to connect '%s' to '%s'",
 	    caller->id().c_str(),called->id().c_str());
 	return false;
     }
+    msg.setParam("peerid",called->id());
+    msg.setParam("targetid",called->id());
 
-    Message* m = new Message("chan.masquerade");
-    m->addParam("id",caller->id());
-    m->addParam("message","call.answered");
+    Message* m = new Message("call.answered");
+    m->addParam("id",called->id());
+    m->addParam("peerid",caller->id());
+    m->addParam("reason",reason);
     Engine::enqueue(m);
     m = new Message("chan.masquerade");
-    m->addParam("id",called->id());
+    m->addParam("id",caller->id());
     m->addParam("message","call.answered");
+    m->addParam("reason",reason);
     Engine::enqueue(m);
     return true;
 }

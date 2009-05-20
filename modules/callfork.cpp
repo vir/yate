@@ -44,6 +44,8 @@ public:
     void lostSlave(ForkSlave* slave, const char* reason);
     bool msgAnswered(Message& msg, const String& dest);
     bool msgProgress(Message& msg, const String& dest);
+    const ObjList& slaves() const
+	{ return m_slaves; }
 protected:
     void clear(bool softly);
     String* getNextDest();
@@ -526,8 +528,11 @@ bool ForkModule::msgLocate(Message& msg, bool masquerade)
 	return false;
     Lock lock(s_mutex);
     CallEndpoint* c = static_cast<CallEndpoint*>(s_calls[tmp]);
-    if (!c)
-	c = static_cast<CallEndpoint*>(s_calls[tmp.substr(0,tmp.rfind('/'))]);
+    if (!c) {
+	ForkMaster* m = static_cast<ForkMaster*>(s_calls[tmp.substr(0,tmp.rfind('/'))]);
+	if (m)
+	    c = static_cast<CallEndpoint*>(m->slaves()[tmp]);
+    }
     if (!c)
 	return false;
     if (masquerade) {

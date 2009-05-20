@@ -255,6 +255,12 @@ GenObject* ObjList::remove(GenObject* obj, bool delobj)
     return n ? n->remove(delobj) : 0;
 }
 
+GenObject* ObjList::remove(const String& str, bool delobj)
+{
+    ObjList *n = find(str);
+    return n ? n->remove(delobj) : 0;
+}
+
 void ObjList::clear()
 {
 #ifdef XDEBUG

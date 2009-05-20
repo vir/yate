@@ -1173,6 +1173,14 @@ public:
     GenObject* remove(GenObject* obj, bool delobj = true);
 
     /**
+     * Delete the first list item that holds an object with a iven value
+     * @param str String value (toString) of the object to remove
+     * @param delobj True to delete the object (default)
+     * @return Pointer to the object if not destroyed
+     */
+    GenObject* remove(const String& str, bool delobj = true);
+
+    /**
      * Clear the list and optionally delete all contained objects
      */
     void clear();

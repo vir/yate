@@ -42,8 +42,8 @@ public:
     virtual ~ForkMaster();
     bool startCalling(Message& msg);
     void lostSlave(ForkSlave* slave, const char* reason);
-    void msgAnswered(Message& msg, const String& dest);
-    void msgProgress(Message& msg, const String& dest);
+    bool msgAnswered(Message& msg, const String& dest);
+    bool msgProgress(Message& msg, const String& dest);
 protected:
     void clear(bool softly);
     String* getNextDest();
@@ -317,21 +317,21 @@ void ForkMaster::lostSlave(ForkSlave* slave, const char* reason)
     disconnect(reason);
 }
 
-void ForkMaster::msgAnswered(Message& msg, const String& dest)
+bool ForkMaster::msgAnswered(Message& msg, const String& dest)
 {
     Lock lock(s_mutex);
     // make sure only the first succeeds
     if (m_answered)
-	return;
+	return false;
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
-	return;
+	return false;
     ForkSlave* slave = static_cast<ForkSlave*>(m_slaves[dest]);
     if (!slave)
-	return;
+	return false;
     RefPointer<CallEndpoint> call = slave->getPeer();
     if (!call)
-	return;
+	return false;
     m_media.clear();
     m_fake = false;
     m_answered = true;
@@ -343,22 +343,23 @@ void ForkMaster::msgAnswered(Message& msg, const String& dest)
     lock.drop();
     clearEndpoint();
     call->connect(peer);
+    return true;
 }
 
-void ForkMaster::msgProgress(Message& msg, const String& dest)
+bool ForkMaster::msgProgress(Message& msg, const String& dest)
 {
     Lock lock(s_mutex);
     if (m_answered)
-	return;
+	return false;
     if (m_ringing && (m_ringing != dest))
-	return;
+	return false;
     
     ForkSlave* slave = static_cast<ForkSlave*>(m_slaves[dest]);
     if (!slave)
-	return;
+	return false;
     RefPointer<CallEndpoint> peer = getPeer();
     if (!peer)
-	return;
+	return false;
     DataEndpoint* dataEp = getEndpoint();
     if (m_ringing.null())
 	m_ringing = dest;
@@ -408,6 +409,7 @@ void ForkMaster::msgProgress(Message& msg, const String& dest)
 	peer->id().c_str(),dest.c_str(),msg.getValue("id"),
 	(dataEp || m_fake) ? " with audio data" : "",
 	m_fake ? " (fake)" : "");
+    return true;
 }
 
 void ForkMaster::clear(bool softly)
@@ -553,12 +555,8 @@ bool ForkModule::msgToMaster(Message& msg, bool answer)
     // the fork master will be kept referenced until we finish the work
     RefPointer<ForkMaster> m = static_cast<ForkMaster*>(s_calls[dest.substr(0,slash)]);
     s_mutex.unlock();
-    if (m) {
-	if (answer)
-	    m->msgAnswered(msg,dest);
-	else
-	    m->msgProgress(msg,dest);
-    }
+    if (m)
+	return answer ? m->msgAnswered(msg,dest) : m->msgProgress(msg,dest);
     return false;
 }
 
@@ -572,10 +570,14 @@ bool ForkModule::received(Message& msg, int id)
 	case Masquerade:
 	    return msgLocate(msg,true);
 	case Answered:
-	    return msgToMaster(msg,true);
+	    while (msgToMaster(msg,true))
+		;
+	    return false;
 	case Progress:
 	case Ringing:
-	    return msgToMaster(msg,false);
+	    while (msgToMaster(msg,false))
+		;
+	    return false;
 	default:
 	    return Module::received(msg,id);
     }

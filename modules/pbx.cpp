@@ -58,6 +58,7 @@ public:
 
 
 static PbxModule s_module;
+static const String s_masquerade("chan.masquerade");
 
 
 // Utility function to get a pointer to a call endpoint (or its peer) by id
@@ -122,14 +123,27 @@ bool ChanPickup::received(Message& msg)
     msg.setParam("peerid",called->id());
     msg.setParam("targetid",called->id());
 
-    Message* m = new Message("call.answered");
+    Message* m = new Message(s_masquerade);
     m->addParam("id",called->id());
-    m->addParam("peerid",caller->id());
+    m->addParam("message","call.answered");
+    m->addParam("peerid",called->getPeerId());
     m->addParam("reason",reason);
-    Engine::enqueue(m);
-    m = new Message("chan.masquerade");
+    if (Engine::dispatch(m) || (s_masquerade != *m))
+	TelEngine::destruct(m);
+    else {
+	*m = "call.answered";
+	m->clearParam("message");
+	Engine::enqueue(m);
+    }
+    if (caller->getPeer() != called) {
+	Debug(&s_module,DebugMild,"Channel '%s' disconnected from '%s' while picking up",
+	    caller->id().c_str(),called->id().c_str());
+	return true;
+    }
+    m = new Message(s_masquerade);
     m->addParam("id",caller->id());
     m->addParam("message","call.answered");
+    m->addParam("peerid",called->getPeerId());
     m->addParam("reason",reason);
     Engine::enqueue(m);
     return true;

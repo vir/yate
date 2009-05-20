@@ -74,6 +74,8 @@ public:
     ForkSlave(ForkMaster* master, const char* id);
     virtual ~ForkSlave();
     virtual void disconnected(bool final, const char* reason);
+    inline void clearMaster()
+	{ m_master = 0; }
     inline void lostMaster(const char* reason)
 	{ m_master = 0; disconnect(reason); }
     inline Type type() const
@@ -96,6 +98,7 @@ protected:
     virtual bool received(Message& msg, int id);
     virtual void statusParams(String& str);
     bool msgExecute(Message& msg);
+    bool msgLocate(Message& msg, bool masquerade);
     bool msgToMaster(Message& msg, bool answer);
 };
 
@@ -416,6 +419,7 @@ void ForkMaster::clear(bool softly)
 	if (softly && (slave->type() == ForkSlave::Persistent))
 	    continue;
 	m_slaves.remove(slave,false);
+	slave->clearMaster();
 	s_mutex.unlock();
 	slave->lostMaster(m_reason);
 	s_mutex.lock();
@@ -469,6 +473,8 @@ void ForkModule::initialize()
     Output("Initializing module Call Forker");
     setup();
     installRelay(Execute);
+    installRelay(Masquerade,10);
+    installRelay(Locate,40);
     installRelay(Answered,20);
     installRelay(Ringing,20);
     installRelay(Progress,20);
@@ -511,9 +517,35 @@ bool ForkModule::msgExecute(Message& msg)
     return ok;
 }
 
+bool ForkModule::msgLocate(Message& msg, bool masquerade)
+{
+    String tmp(msg.getParam("id"));
+    if (!tmp.startsWith(MOD_PREFIX "/"))
+	return false;
+    Lock lock(s_mutex);
+    CallEndpoint* c = static_cast<CallEndpoint*>(s_calls[tmp]);
+    if (!c)
+	c = static_cast<CallEndpoint*>(s_calls[tmp.substr(0,tmp.rfind('/'))]);
+    if (!c)
+	return false;
+    if (masquerade) {
+	tmp = msg.getValue("message");
+	if (tmp.null())
+	    return false;
+	msg.clearParam("message");
+	msg = tmp;
+	if (c->getPeer())
+	    msg.setParam("peerid",c->getPeerId());
+    }
+    msg.userData(c);
+    return !masquerade;
+}
+
 bool ForkModule::msgToMaster(Message& msg, bool answer)
 {
-    String dest(msg.getParam("targetid"));
+    String dest(msg.getParam("peerid"));
+    if (dest.null())
+	dest = msg.getParam("targetid");
     if (!dest.startsWith(MOD_PREFIX "/"))
 	return false;
     int slash = dest.rfind('/');
@@ -535,6 +567,10 @@ bool ForkModule::received(Message& msg, int id)
     switch (id) {
 	case Execute:
 	    return msgExecute(msg);
+	case Locate:
+	    return msgLocate(msg,false);
+	case Masquerade:
+	    return msgLocate(msg,true);
 	case Answered:
 	    return msgToMaster(msg,true);
 	case Progress:

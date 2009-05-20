@@ -126,11 +126,9 @@ ForkMaster::ForkMaster(ObjList* targets)
       m_fake(false), m_targets(targets), m_exec(0), m_reason("hangup")
 {
     String tmp(MOD_PREFIX "/");
-    s_mutex.lock();
     tmp << ++s_current;
     setId(tmp);
     s_calls.append(this);
-    s_mutex.unlock();
     DDebug(&__plugin,DebugAll,"ForkMaster::ForkMaster(%p) '%s'",targets,id().c_str());
 }
 
@@ -513,10 +511,10 @@ bool ForkModule::msgExecute(Message& msg)
     ObjList* targets = dest.split(' ',false);
     if (!targets)
 	return false;
+    s_mutex.lock();
     ForkMaster* master = new ForkMaster(targets);
-    bool ok = false;
-    if (master->connect(ch,msg.getValue("reason")))
-	ok = master->startCalling(msg);
+    bool ok = master->connect(ch,msg.getValue("reason")) && master->startCalling(msg);
+    s_mutex.unlock();
     master->deref();
     return ok;
 }

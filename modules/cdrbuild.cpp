@@ -443,6 +443,8 @@ bool CdrHandler::received(Message &msg)
 			}
 		    }
 		}
+		if ((type != CdrHangup) && !msg.getBoolValue("cdrcreate",true))
+		    break;
 		b = new CdrBuilder(id);
 		s_cdrs.append(b);
 		break;

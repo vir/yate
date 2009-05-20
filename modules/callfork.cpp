@@ -539,6 +539,10 @@ bool ForkModule::msgLocate(Message& msg, bool masquerade)
 	    return false;
 	msg.clearParam("message");
 	msg = tmp;
+	if (tmp == "call.answered")
+	    msg.setParam("cdrcreate",String::boolText(false));
+	else if (tmp == "call.execute")
+	    msg.setParam("cdrtrack",String::boolText(false));
 	if (c->getPeer())
 	    msg.setParam("peerid",c->getPeerId());
     }

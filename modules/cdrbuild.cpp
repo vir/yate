@@ -163,6 +163,8 @@ static const char* const s_forbidden[] = {
     "billtime",
     "ringtime",
     "cdrwrite",
+    "cdrtrack",
+    "cdrcreate",
     "cdrid",
     "runid",
     0

@@ -62,6 +62,7 @@ TokenDict XMPPNamespace::s_value[] = {
     {"urn:ietf:params:xml:ns:xmpp-stanzas",                StanzaError},
     {"http://jabber.org/features/iq-register",             Register},
     {"jabber:iq:register",                                 IqRegister},
+    {"jabber:iq:private",                                  IqPrivate},
     {"jabber:iq:auth",                                     IqAuth},
     {"http://jabber.org/features/iq-auth",                 IqAuthFeature},
     {"urn:ietf:params:xml:ns:xmpp-tls",                    Starttls},

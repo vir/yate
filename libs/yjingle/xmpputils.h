@@ -186,6 +186,7 @@ public:
 	StanzaError,                     // urn:ietf:params:xml:ns:xmpp-stanzas
 	Register,                        // http://jabber.org/features/iq-register
 	IqRegister,                      // jabber:iq:register
+	IqPrivate,                       // jabber:iq:private
 	IqAuth,                          // jabber:iq:auth
 	IqAuthFeature,                   // http://jabber.org/features/iq-auth
 	Starttls,                        // urn:ietf:params:xml:ns:xmpp-tls

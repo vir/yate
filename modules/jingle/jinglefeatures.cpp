@@ -101,6 +101,12 @@ public:
 	    Lock lock(this);
 	    return 0 != m_apps->find(*app);
 	}
+    // Build an XML element's children from a list
+    bool addChildren(NamedList& params, XMLElement& xml);
+    // Add an XML element's children to a list
+    // The element's name will be used as message-prefix
+    bool addChildren(XMLElement& xml, NamedList& params);
+
 private:
     // Check module and target parameters of a received message
     // Optionally check the target parameter (if present, it must be one
@@ -108,6 +114,9 @@ private:
     bool acceptMsg(Message& msg, bool checkTarget);
     // Handle dynamic roster data
     bool handleXmppIqDynamicRoster(Message& msg, XMLElement& query, XMPPUtils::IqType t,
+	const JabberID& from, const JabberID& to, const String& id);
+    // Handle client private iq data
+    bool handleXmppIqPrivate(Message& msg, XMLElement& query, XMPPUtils::IqType t,
 	const JabberID& from, const JabberID& to, const String& id);
     // Handle a valid vcard element
     bool handleXmppIqVCard(Message& msg, XMLElement& vcard, XMPPUtils::IqType t,
@@ -120,6 +129,7 @@ private:
 INIT_PLUGIN(YJingleFeatures);
 static const String s_jingleAlias[] = {"jingle", "xmpp", "jabber", ""};
 static bool s_handleVCard = true;
+static bool s_handlePrivate = true;
 static bool s_handleAddrbook = true;
 // Strings used to compare or build other strings
 static const String s_customPrefix = "custom.";
@@ -309,11 +319,13 @@ void YJingleFeatures::initialize()
     if (!iq)
 	iq = &dummy;
     s_handleVCard = iq->getBoolValue("vcard",true);
+    s_handlePrivate = iq->getBoolValue("private",true);
     s_handleAddrbook = iq->getBoolValue("addressbook",true);
 
     if (debugAt(DebugAll)) {
 	String s;
 	s << "vcard=" << String::boolText(s_handleVCard);
+	s << " private=" << String::boolText(s_handlePrivate);
 	s << " addressbook=" << String::boolText(s_handleAddrbook);
 	s << " custom_applications=" << apps;
 	Debug(this,DebugAll,"Initialized %s",s.c_str());
@@ -329,7 +341,7 @@ void YJingleFeatures::initialize()
 	installRelay(Custom,"custom",100);
     }
 
-    if (s_handleVCard)
+    if (s_handleVCard || s_handlePrivate)
 	installRelay(UserInfo,"user.info",100);
     else
 	uninstallRelay(UserInfo);
@@ -372,6 +384,9 @@ bool YJingleFeatures::handleXmppIq(Message& msg)
 	    switch (ns) {
 		case XMPPNamespace::DynamicRoster:
 		    ok = handleXmppIqDynamicRoster(msg,*child,t,from,to,id);
+		    break;
+		case XMPPNamespace::IqPrivate:
+		    ok = handleXmppIqPrivate(msg,*child,t,from,to,id);
 		    break;
 		default: ;
 	    }
@@ -538,43 +553,53 @@ bool YJingleFeatures::handleUserInfo(Message& msg)
 	else
 	    return false;
     }
+    bool priv = msg.getBoolValue("private");
 
-    if (!s_handleVCard)
+    if (!s_handleVCard || (priv && !s_handlePrivate))
 	return false;
     Debug(this,DebugAll,"Processing '%s' operation=%s from=%s to=%s",
 	msg.c_str(),oper->c_str(),msg.getValue("from"),msg.getValue("to"));
 
-    XMLElement* xml = XMPPUtils::createVCard(get,msg.getValue("from"),
-	msg.getValue("to"),msg.getValue("id"));
-    XMLElement* vcard = !get ? xml->findFirstChild(XMLElement::VCard) : 0;
-    if (vcard) {
-	// Name
-	const char* first = msg.getValue("name.first");
-	const char* middle = msg.getValue("name.middle");
-	const char* last = msg.getValue("name.last");
-	String firstN, lastN;
-	// Try to build elements if missing
-	if (!(first || last || middle)) {
-	    String* tmp = msg.getParam("name");
-	    if (tmp) {
-		int pos = tmp->rfind(' ');
-		if (pos > 0) {
-		    firstN = tmp->substr(0,pos);
-		    lastN = tmp->substr(pos + 1);
+    XMLElement* xml = 0;
+    if (!priv) {
+	xml = XMPPUtils::createVCard(get,msg.getValue("from"),
+	    msg.getValue("to"),msg.getValue("id"));
+	XMLElement* vcard = !get ? xml->findFirstChild(XMLElement::VCard) : 0;
+	if (vcard) {
+	    // Name
+	    const char* first = msg.getValue("name.first");
+	    const char* middle = msg.getValue("name.middle");
+	    const char* last = msg.getValue("name.last");
+	    String firstN, lastN;
+	    // Try to build elements if missing
+	    if (!(first || last || middle)) {
+		String* tmp = msg.getParam("name");
+		if (tmp) {
+		    int pos = tmp->rfind(' ');
+		    if (pos > 0) {
+			firstN = tmp->substr(0,pos);
+			lastN = tmp->substr(pos + 1);
+		    }
+		    else
+			lastN = *tmp;
 		}
-		else
-		    lastN = *tmp;
+		first = firstN.c_str();
+		last = lastN.c_str();
 	    }
-	    first = firstN.c_str();
-	    last = lastN.c_str();
+	    XMLElement* n = new XMLElement("N");
+	    n->addChild(new XMLElement("GIVEN",0,first));
+	    n->addChild(new XMLElement("MIDDLE",0,middle));
+	    n->addChild(new XMLElement("FAMILY",0,last));
+	    vcard->addChild(n);
+	    TelEngine::destruct(vcard);
 	}
-	XMLElement* n = new XMLElement("N");
-        n->addChild(new XMLElement("GIVEN",0,first));
-        n->addChild(new XMLElement("MIDDLE",0,middle));
-        n->addChild(new XMLElement("FAMILY",0,last));
-	vcard->addChild(n);
-
-	TelEngine::destruct(vcard);
+    }
+    else {
+	xml = XMPPUtils::createIq(get ? XMPPUtils::IqGet : XMPPUtils::IqSet,
+	    msg.getValue("from"),msg.getValue("to"),msg.getValue("id"));
+	XMLElement* query = XMPPUtils::createElement(XMLElement::Query,XMPPNamespace::IqPrivate);
+	addChildren(msg,*query);
+	xml->addChild(query);
     }
 
     return xmppGenerate(msg,xml);
@@ -609,6 +634,54 @@ bool YJingleFeatures::unload()
     uninstallRelays();
     unlock();
     return true;
+}
+
+// Build an XML element's children from a list
+bool YJingleFeatures::addChildren(NamedList& params, XMLElement& xml)
+{
+    String prefix = params.getValue("message-prefix");
+    if (!prefix)
+	return false;
+    prefix << ".";
+    bool added = false;
+    for (unsigned int i = 1; i < 0xffffffff; i++) {
+	String childPrefix(prefix + String(i));
+	if (!params.getValue(childPrefix))
+	    break;
+	xml.addChild(new XMLElement(params,childPrefix));
+	added = true;
+    }
+    return added;
+}
+
+// Add an XML element's children to a list
+// The element's name will be used as message-prefix
+bool YJingleFeatures::addChildren(XMLElement& xml, NamedList& params)
+{
+    String pref = xml.name();
+    params.addParam("message-prefix",pref);
+    unsigned int n = 0;
+    pref << ".";
+    XMLElement* ch = xml.findFirstChild();
+    bool added = ch != 0;
+    for (; ch; ch = xml.findNextChild(ch)) {
+	String tmpPref = pref;
+	tmpPref << ++n;
+	params.addParam(tmpPref,ch->name());
+	tmpPref << ".";
+	const char* text = ch->getText();
+	if (!null(text))
+	    params.addParam(tmpPref,text);
+	NamedList tmp("");
+	ch->getAttributes(tmp);
+	unsigned int count = tmp.length();
+	for (unsigned int i = 0; i < count; i++) {
+	    NamedString* p = tmp.getParam(i);
+	    if (p && p->name())
+		params.addParam(tmpPref + p->name(),*p);
+	}
+    }
+    return added;
 }
 
 // Check module and target parameters of a received message
@@ -656,6 +729,32 @@ bool YJingleFeatures::handleXmppIqDynamicRoster(Message& msg, XMLElement& query,
 	    m->addParam(pref + x->name(),x->getText());
     }
     m->addParam("contact.count",String(n));
+    Engine::enqueue(m);
+    return true;
+}
+
+// Handle client private iq data responses
+bool YJingleFeatures::handleXmppIqPrivate(Message& msg, XMLElement& query,
+    XMPPUtils::IqType t, const JabberID& from, const JabberID& to, const String& id)
+{
+    if (!s_handlePrivate || t != XMPPUtils::IqResult)
+	return false;
+
+    Debug(this,DebugAll,"Processing '%s' [Private] from=%s to=%s id=%s",
+	msg.c_str(),from.c_str(),to.c_str(),id.c_str());
+
+
+    Message* m = buildMsg("user.info",&msg);
+    m->addParam("operation","notify");
+    m->addParam("private",String::boolText(true));
+    m->copyParams(msg,"from,to,id");
+    if (from.node())
+	m->addParam("username",from.node());
+    XMLElement* ch = query.findFirstChild();
+    if (ch) {
+	addChildren(*ch,*m);
+	TelEngine::destruct(ch);
+    }
     Engine::enqueue(m);
     return true;
 }

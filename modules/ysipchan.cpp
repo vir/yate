@@ -2438,8 +2438,12 @@ YateSIPConnection::YateSIPConnection(Message& msg, const String& uri, const char
 	if (line)
 	    m_externalAddr = line->getLocalAddr();
     }
-    if (tmp.null())
-	tmp = uri;
+    if (tmp.null()) {
+	int sep = uri.find(':');
+	if ((sep < 0) || ((sep > 0) && (uri.substr(sep+1).toInteger(-1) > 0)))
+	    tmp = "sip:";
+	tmp << uri;
+    }
     m_uri = tmp;
     m_uri.parse();
     SIPMessage* m = new SIPMessage("INVITE",m_uri);

@@ -1419,6 +1419,14 @@ public:
 	{ return m_string ? m_string : ""; }
 
     /**
+     * Get a valid non-NULL C string with a provided default.
+     * @param defStr Default C string to return if stored is NULL
+     * @return The stored C string, the default or a static "".
+     */
+    inline const char* safe(const char* defStr) const
+	{ return m_string ? m_string : (defStr ? defStr : ""); }
+
+    /**
      * Get the length of the stored string.
      * @return The length of the stored string, zero for NULL.
      */

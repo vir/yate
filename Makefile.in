@@ -54,16 +54,19 @@ shrdir = $(datadir)/yate
 # include optional local make rules
 -include YateLocal.mak
 
-DOCGEN :=
-DOCGEN_K :=
-DOCGEN_D :=
+DOCGEN := /bin/false
+DOCGEN_K := /bin/false
+DOCGEN_D := /bin/false
+APIDOCS :=
 ifneq (_@KDOC_BIN@,_)
 DOCGEN_K := @KDOC_BIN@ -C ./docs/doc-filter.sh -d docs/api/ $(DOCGEN_F)
 DOCGEN := $(DOCGEN_K)
+APIDOCS := apidocs
 endif
 ifneq (_@DOXYGEN_BIN@,_)
 DOCGEN_D := (cat docs/Doxyfile; echo 'INPUT = $(DOCGEN_F)') | @DOXYGEN_BIN@ -
 DOCGEN := $(DOCGEN_D)
+APIDOCS := apidocs
 endif
 
 .PHONY: all everything debug ddebug xdebug ndebug
@@ -124,21 +127,21 @@ cvsclean: check-topdir clean clean-tables clean-apidocs clean-config-files
 engine: tables library libyate.so $(PROGS)
 
 apidocs-kdoc: check-topdir
-	@if [ -n "$(DOCGEN_K)" ]; then \
+	@if [ "x$(DOCGEN_K)" != x/bin/false ]; then \
 	    $(DOCGEN_K) ; \
 	else \
 	    echo "Executable kdoc is not installed!" ; exit 1 ; \
 	fi
 
 apidocs-doxygen: check-topdir
-	@if [ -n "$(DOCGEN_D)" ]; then \
+	@if [ "x$(DOCGEN_D)" != x/bin/false ]; then \
 	    $(DOCGEN_D) ; \
 	else \
 	    echo "Executable doxygen is not installed!" ; exit 1 ; \
 	fi
 
 apidocs-build:
-	@if [ -n "$(DOCGEN)" ]; then \
+	@if [ "x$(DOCGEN)" != x/bin/false ]; then \
 	    cd @srcdir@ ; $(DOCGEN) ; \
 	else \
 	    echo "Neither kdoc or doxygen is installed!" ; exit 1 ; \
@@ -191,7 +194,7 @@ windows: check-topdir
 	@cmp -s yateiss.inc $@/yateiss.inc || cp -p yateiss.inc $@/yateiss.inc
 
 .PHONY: install install-root install-noapi install-api uninstall uninstall-root
-install install-root: all apidocs install-noapi install-api check-ldconfig
+install install-root: all $(APIDOCS) install-noapi install-api check-ldconfig
 
 install-noapi: all
 	@mkdir -p "$(DESTDIR)$(libdir)/" && \
@@ -227,9 +230,10 @@ install-noapi: all
 	    install -m 0644 @srcdir@/$$i "$(DESTDIR)$(docdir)/" ; \
 	done ;
 
-install-api: apidocs
+install-api: $(APIDOCS)
 	@mkdir -p "$(DESTDIR)$(docdir)/api/" && \
 	install -m 0644 @srcdir@/docs/*.html "$(DESTDIR)$(docdir)/" && \
+	test -z "$(APIDOCS)" || \
 	install -m 0644 @srcdir@/docs/api/*.* "$(DESTDIR)$(docdir)/api/"
 
 uninstall uninstall-root:
